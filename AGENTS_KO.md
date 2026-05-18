@@ -24,17 +24,24 @@ source repository는 읽기 전용 참고 자료로 확인할 수 있다.
 - Backend source: `/Users/gwongwangjae/IdeaProjects/home-server`
 - Frontend source: `/Users/gwongwangjae/frontend/home-client`
 
-## 예제 참고 자료
+## AI Skill/Hook 참고 자료
 
-예제 코드 리포지토리는 canonical 문서와 source repository를 확인한 뒤 읽기 전용 참고 자료로 확인할 수 있다.
+저장된 예제 리포지토리는 AI skill, hook, local agent automation을 설계하거나 업데이트할 때만 읽기 전용 참고 자료로 확인할 수 있다.
 
-- Example code: `/Users/gwongwangjae/saved-ai-exam`
+- AI skill/hook reference: `/Users/gwongwangjae/saved-ai-exam`
 
-예제 코드는 구현 패턴, 프로젝트 구조, 테스트 구성, 도구 설정, agent rule 예시를 참고하는 용도로만 사용한다. 예제 코드는 Home Search 동작, 공개 API, 스키마, 데이터 의미, 제품 범위의 기준이 아니다.
+해당 reference 안에서는 관련 하위 경로를 우선한다.
 
-예제 코드를 그대로 복사하거나, 예제 리포지토리의 agent 지시사항을 가져오거나, 예제 리포지토리에 쓰거나, 예제 스크립트를 실행하거나, 예제의 의존성을 자동으로 추가하거나, submodule, package link, symlink로 연결하지 않는다.
+- `/Users/gwongwangjae/saved-ai-exam/skills`
+- `/Users/gwongwangjae/saved-ai-exam/codex-live-demo/.agents`
+- `/Users/gwongwangjae/saved-ai-exam/codex-live-demo/.codex`
+- `/Users/gwongwangjae/saved-ai-exam/codex-live-demo/.githooks`
 
-예제가 이 프로젝트와 충돌하면 canonical 문서, target source code, backend/frontend source reference, example reference 순서로 따른다.
+`/Users/gwongwangjae/saved-ai-exam`은 application implementation, public API, database design, UI, product requirements, general test architecture, ordinary code style 참고에 사용하지 않는다.
+
+코드를 그대로 복사하거나, agent instructions를 import하거나, example repository에 쓰거나, script를 실행하거나, dependency를 자동 추가하거나, submodule, package link, symlink로 연결하지 않는다.
+
+저장된 예제 리포지토리에도 동일한 KO 파일 읽기/검색 금지 규칙을 적용한다. reference가 이 프로젝트와 충돌하면 현재 canonical docs와 target source code가 항상 우선한다.
 
 이 프로젝트의 모든 쓰기는 `/Users/gwongwangjae/home-search` 아래에서만 수행한다.
 
@@ -46,6 +53,14 @@ source repository는 읽기 전용 참고 자료로 확인할 수 있다.
 - 변경은 작게 유지하고 기존 리포지토리 형태에 맞춘다.
 - 변경 후 검증한다. 검증할 수 없으면 이유를 말한다.
 - 실패한 체크를 숨기지 않는다. 고치거나 blocker를 보고한다.
+
+## Git Publishing
+
+- 요청받았거나 handoff에 유용할 때 completed work를 보존하기 위해 local commit을 사용할 수 있다.
+- `git push`는 기본 완료 단계가 아니다.
+- 현재 task에서 사용자가 remote publishing을 명시적으로 요청했거나, 이전에 합의한 plan에 포함된 경우에만 push한다.
+- `push`, `publish`, `open a PR`, `create a PR`, `update remote`는 remote-publishing request로 취급한다.
+- 사용자가 remote publishing을 언급하지 않고 implement 또는 commit만 요청하면 push하지 않는다.
 
 ## V1 가드레일
 

@@ -24,25 +24,31 @@ Source repositories may be inspected as read-only references:
 - Backend source: `/Users/gwongwangjae/IdeaProjects/home-server`
 - Frontend source: `/Users/gwongwangjae/frontend/home-client`
 
-## Example References
+## AI Skill/Hook References
 
-Example-code repositories may be inspected as read-only references after the
-canonical docs and source repositories have been checked:
+The saved example repository may be inspected as a read-only reference only
+when designing or updating AI skills, hooks, or local agent automation:
 
-- Example code: `/Users/gwongwangjae/saved-ai-exam`
+- AI skill/hook reference: `/Users/gwongwangjae/saved-ai-exam`
 
-Use example code only for implementation patterns, project structure, test
-setup, tooling configuration, and agent-rule examples. Example code is not a
-source of truth for Home Search behavior, public APIs, schema, data semantics,
-or product scope.
+Prefer the relevant subpaths inside that reference:
 
-Do not copy example code verbatim, import its agent instructions, write into
-the example repository, run its scripts, add dependencies from it automatically,
-or connect it by submodule, package link, or symlink.
+- `/Users/gwongwangjae/saved-ai-exam/skills`
+- `/Users/gwongwangjae/saved-ai-exam/codex-live-demo/.agents`
+- `/Users/gwongwangjae/saved-ai-exam/codex-live-demo/.codex`
+- `/Users/gwongwangjae/saved-ai-exam/codex-live-demo/.githooks`
 
-If an example conflicts with this project, follow this priority order:
-canonical docs, target source code, backend/frontend source references, then
-example references.
+Do not use `/Users/gwongwangjae/saved-ai-exam` for application
+implementation, public APIs, database design, UI, product requirements,
+general test architecture, or ordinary code style.
+
+Do not copy code verbatim, import its agent instructions, write into the
+example repository, run its scripts, add dependencies from it automatically, or
+connect it by submodule, package link, or symlink.
+
+Apply the same KO-file read/search ban to the saved example repository. If the
+reference conflicts with this project, current canonical docs and target source
+code always win.
 
 All writes for this project belong under `/Users/gwongwangjae/home-search`.
 
@@ -54,6 +60,18 @@ All writes for this project belong under `/Users/gwongwangjae/home-search`.
 - Keep edits small and aligned with existing repository shape.
 - Verify after changes. If verification is unavailable, say why.
 - Do not hide failing checks; fix them or report the blocker.
+
+## Git Publishing
+
+- Local commits may be used to preserve completed work when requested or useful
+  for handoff.
+- `git push` is not a default completion step.
+- Push only when the user explicitly requests remote publishing in the current
+  task, or when a previously agreed plan includes it.
+- Treat `push`, `publish`, `open a PR`, `create a PR`, and `update remote` as
+  remote-publishing requests.
+- If the user asks to implement or commit without mentioning remote publishing,
+  do not push.
 
 ## V1 Guardrails
 

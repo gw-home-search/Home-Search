@@ -1,0 +1,32 @@
+# IDE and OS files
+.idea/
+.DS_Store
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Node/Vite artifacts
+node_modules/
+dist/
+build/
+.vite/
+.next/
+coverage/
+
+# Java/Gradle artifacts
+.gradle/
+build/
+out/
+target/
+
+# Logs and caches
+*.log
+.cache/
+tmp/
+temp/
+
+# Human-only local notes
+*_KO.local.md
+*_ko.local.md

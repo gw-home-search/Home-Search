@@ -1,0 +1,70 @@
+version = 1
+policy = "human_only_ko_docs"
+ai_may_read_manifest = true
+ai_must_not_read_ko_body = true
+
+[[docs]]
+source = "AGENTS.md"
+ko = "AGENTS_KO.md"
+source_sha256 = "a1c6844dad58c15133de92e99511dc6abd3255000595157c5727f77909319eab"
+last_synced = "2026-05-18"
+
+[[docs]]
+source = "CLAUDE.md"
+ko = "CLAUDE_KO.md"
+source_sha256 = "dcc111beedf4f5f6b87fedda3018af609d35c003e4a5afb04dacabd8405c420f"
+last_synced = "2026-05-18"
+
+[[docs]]
+source = "README.md"
+ko = "README_KO.md"
+source_sha256 = "020696178b45f6ab5b5a1f48406cd7e588f5942609842eef43c94d313d64f6c3"
+last_synced = "2026-05-18"
+
+[[docs]]
+source = "docs/README.md"
+ko = "docs/README_KO.md"
+source_sha256 = "9ea255fff414de4960b6cb85893480cbdfe1dbb1ce9e72f9f8ce3d9ab4b9639f"
+last_synced = "2026-05-18"
+
+[[docs]]
+source = "docs/MIGRATION_PLAN.md"
+ko = "docs/MIGRATION_PLAN_KO.md"
+source_sha256 = "43e75576d4ac3bee482e20c664f1b06e06a4fa9a590479c2b61f099051a94110"
+last_synced = "2026-05-18"
+
+[[docs]]
+source = "docs/ARCHITECTURE.md"
+ko = "docs/ARCHITECTURE_KO.md"
+source_sha256 = "5c8ab87b6c61f59ab6f57c9d9e82fb572bcf6f38396f0dff05a254d88e605693"
+last_synced = "2026-05-18"
+
+[[docs]]
+source = "docs/DATA_STORAGE.md"
+ko = "docs/DATA_STORAGE_KO.md"
+source_sha256 = "5187f8ed59a76c310d2b591c2e7a889f7569925c67d67c558fd717d5a84c46d8"
+last_synced = "2026-05-18"
+
+[[docs]]
+source = "docs/API_CONTRACT.md"
+ko = "docs/API_CONTRACT_KO.md"
+source_sha256 = "722909039cae6e35f96395f4b1f2a00243679c623de5cf1166a688b0c94b74a4"
+last_synced = "2026-05-18"
+
+[[docs]]
+source = "docs/MAP_DISPLAY_FLOW.md"
+ko = "docs/MAP_DISPLAY_FLOW_KO.md"
+source_sha256 = "8da7545250932f9f43364d13263eb76bada48d564dbd4868759d4458c4306081"
+last_synced = "2026-05-18"
+
+[[docs]]
+source = "docs/UI_UX_MIGRATION.md"
+ko = "docs/UI_UX_MIGRATION_KO.md"
+source_sha256 = "b0856a6265d0cd9f10f0ab5d681af648d95e19511d85b8650a77a1d534966a0f"
+last_synced = "2026-05-18"
+
+[[docs]]
+source = "docs/INFRA_AND_ENV.md"
+ko = "docs/INFRA_AND_ENV_KO.md"
+source_sha256 = "1b96c9bfdc2cd4d408cf4e2823b8e75cd51951e07ee3efc3e3d7e80fb906d390"
+last_synced = "2026-05-18"

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "disableAutoMode": "disable",
+  "permissions": {
+    "deny": [
+      "Read(*_KO.md)",
+      "Read(**/*_KO.md)",
+      "Read(*_KO.local.md)",
+      "Read(**/*_KO.local.md)",
+      "Read(*_ko.md)",
+      "Read(**/*_ko.md)",
+      "Read(*_ko.local.md)",
+      "Read(**/*_ko.local.md)"
+    ],
+    "disableBypassPermissionsMode": "disable"
+  }
+}

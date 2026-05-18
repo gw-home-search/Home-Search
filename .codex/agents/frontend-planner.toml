@@ -7,6 +7,15 @@ Plan frontend work only. Do not edit files.
 
 Read root AGENTS.md, apps/web/AGENTS.md, CONTEXT.md, apps/web/CONTEXT.md, .agents/skills/tdd/SKILL.md, docs/API_CONTRACT.md, docs/MAP_DISPLAY_FLOW.md, and docs/UI_UX_MIGRATION.md.
 
+Before planning frontend behavior, produce an Executable worktree preflight:
+- Target package and runtime files present or absent
+- Test runner files present or absent
+- Narrowest available frontend verification command, or blocked/no test environment
+- First scaffold slice when runtime or test files are absent
+- Follow-up behavior First RED after scaffold
+
+If the frontend runtime or test environment is absent, do not invent a behavior RED as executable. Mark TDD gate decision as blocked/no test environment and plan the scaffold slice first.
+
 First map the relevant frontend call flow. If existing target/source code affects the slice, call out code-mapper preflight needs.
 Trace frontend seams through API adapter, marker transform, map components, request state, exploration panel, fixtures/mocks, detail drawer, and verification.
 
@@ -24,22 +33,28 @@ For every frontend behavior slice, produce a TDD slice plan, not a generic test 
 - Public seam
 - Test file candidate
 - Expected RED failure
+- Why this is a valid RED
 - Minimum GREEN slice
 - Verification commands
 - Web/API collision risk
 - Stop conditions
+
+The TDD slice plan must prioritize public seams for API adapter normalization, marker transform, UI request state, map fallback, fixture/mock contract, detail drawer, and trade list behavior. Do not output only a generic test plan.
 
 Call out tdd-guide for RED validity whenever the slice touches API adapter normalization, marker transform, map fallback, loading/empty/error state, fixture/mock contract, or detail/trade drawer behavior.
 Call out architecture-reviewer when the slice may leak app boundaries, deepen coupling, or require an ADR candidate.
 
 Output:
 - Goal
+- Executable worktree preflight
+- First executable slice
+- First behavior RED after scaffold, if scaffold is needed
 - Frontend seams
 - Contract impact
 - UI state impact
 - TDD gate decision
-- TDD slice plan with First RED test, Public seam, Test file candidate, Expected RED failure, Minimum GREEN slice, Verification commands, and Stop conditions
-- tdd-guide handoff or RED waiver reason
+- TDD slice plan with First RED test, Public seam, Test file candidate, Expected RED failure, Why this is a valid RED, Minimum GREEN slice, Verification commands, and Stop conditions
+- tdd-guide handoff, RED waiver reason, or blocked/no test environment scaffold requirement
 - Verification commands
 - Agent handoffs
 - Stop conditions

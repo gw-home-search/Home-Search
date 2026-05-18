@@ -61,6 +61,40 @@ Before changing frontend behavior, complete this flow:
 8. Use `reviewer` or `.agents/skills/code-review` for findings-first
    self-review before claiming completion.
 
+## Frontend Execution Gate
+
+Before any frontend write, classify the work as one of:
+
+- Scaffold slice: creates or wires the Vite or test environment without
+  changing V1 UI behavior.
+- Behavior slice: changes API adapter normalization, marker transform, map
+  fallback, loading/empty/error state, fixture/mock contract, detail drawer, or
+  trade list behavior.
+- Debugging slice: starts from a failing command, API mismatch, marker
+  rendering failure, or map usability failure.
+- Review slice: inspects completed changes without editing.
+
+For a behavior slice, run the gates in this order:
+
+1. `contract-reviewer` before API client, adapter, fixture, mock, params,
+   route, field, type, unit, coordinate, error, or empty-result behavior
+   changes.
+2. `code-mapper` when existing target code or source frontend flow affects the
+   slice.
+3. `tdd-guide` to confirm the first RED, public seam, expected RED failure,
+   and minimum GREEN.
+4. Implement only the minimum GREEN inside `apps/web/**`.
+5. Use `.agents/skills/systematic-debugging` when marker fetch, adapter, UI
+   state, or map fallback behavior fails.
+6. Use `reviewer` or `.agents/skills/code-review` before claiming completion.
+
+Browser smoke verification is useful for Kakao map behavior, but it does not
+replace a deterministic RED for adapter, marker transform, UI state,
+fixture/mock, detail, or trade behavior. If no executable frontend test
+environment exists, set the TDD gate decision to
+`blocked/no test environment`, name the scaffold slice required to create it,
+and name the follow-up First RED.
+
 Every frontend behavior slice must state:
 
 - Goal/spec.
@@ -69,6 +103,7 @@ Every frontend behavior slice must state:
 - Public seam.
 - Test file candidate.
 - Expected RED failure.
+- Why this is a valid RED.
 - Minimum GREEN slice.
 - Verification commands.
 - Web/API collision risk.

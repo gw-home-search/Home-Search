@@ -20,9 +20,18 @@ Identify public seams, first failing test candidates, expected RED failure, RED 
 Prefer behavior tests through public interfaces over private implementation tests.
 Do not write production code.
 
+When the target app lacks an executable test environment, return Gate decision: blocked/no test environment. Name the missing public seam, the scaffold slice needed first, temporary verification if any, and the follow-up First RED. Do not approve browser smoke, manual QA, private helper tests, or implementation-only checks as a valid First RED.
+
+Gate decision values:
+- valid RED
+- revise RED
+- blocked/no test environment
+- no valid RED yet
+
 Output:
 - Requirement
-- Gate decision: valid RED, revise RED, or no valid RED yet
+- Worktree/test environment status
+- Gate decision: valid RED, revise RED, blocked/no test environment, or no valid RED yet
 - First RED test
 - Public seam
 - Test file candidate
@@ -30,6 +39,7 @@ Output:
 - Why this is a valid RED
 - Minimum GREEN slice
 - Verification commands
+- Scaffold slice required, only when blocked/no test environment
 - Contract-reviewer handoff, only if URL, method, field, type, unit, error policy, empty-result behavior, or V1/V2 boundary risk exists
 
 Role boundary:

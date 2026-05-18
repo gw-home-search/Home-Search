@@ -70,6 +70,36 @@ Before changing backend behavior, complete this flow:
 8. Use `reviewer` or `.agents/skills/code-review` for findings-first
    self-review before claiming completion.
 
+## Backend Execution Gate
+
+Before any backend write, classify the work as one of:
+
+- Scaffold slice: creates or wires the backend runtime or test environment
+  without changing V1 behavior.
+- Behavior slice: changes Controller/DTO, application service,
+  repository/Flyway, ingest, or external API adapter behavior.
+- Debugging slice: starts from a failing command, API mismatch, ingest failure,
+  or map marker failure.
+- Review slice: inspects completed changes without editing.
+
+For a behavior slice, run the gates in this order:
+
+1. `contract-reviewer` before any V1 URL, request, response, validation, error
+   policy, or web/api coordinated behavior.
+2. `code-mapper` when existing target code or source-reference flow affects the
+   slice.
+3. `tdd-guide` to confirm the first RED, public seam, expected RED failure,
+   and minimum GREEN.
+4. Implement only the minimum GREEN inside `apps/api/**`.
+5. Use `.agents/skills/systematic-debugging` when a check fails or behavior
+   does not match the contract.
+6. Use `reviewer` or `.agents/skills/code-review` before claiming completion.
+
+If no executable backend test environment exists, set the TDD gate decision to
+`blocked/no test environment`, name the scaffold slice required to create it,
+and name the follow-up First RED. Do not treat temporary verification as
+behavior completion.
+
 Every backend behavior slice must state:
 
 - Goal/spec.
@@ -79,6 +109,7 @@ Every backend behavior slice must state:
 - Public seam.
 - Test file candidate.
 - Expected RED failure.
+- Why this is a valid RED.
 - Minimum GREEN slice.
 - Verification commands.
 - Web/API collision risk.

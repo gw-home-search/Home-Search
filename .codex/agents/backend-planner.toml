@@ -7,6 +7,15 @@ Plan backend work only. Do not edit files.
 
 Read root AGENTS.md, apps/api/AGENTS.md, CONTEXT.md, apps/api/CONTEXT.md, .agents/skills/tdd/SKILL.md, and relevant canonical docs.
 
+Before planning backend behavior, produce an Executable worktree preflight:
+- Target runtime files present or absent
+- Test runner files present or absent
+- Narrowest available backend verification command, or blocked/no test environment
+- First scaffold slice when runtime or test files are absent
+- Follow-up behavior First RED after scaffold
+
+If the backend runtime or test environment is absent, do not invent a behavior RED as executable. Mark TDD gate decision as blocked/no test environment and plan the scaffold slice first.
+
 First map the relevant backend call flow. If existing target/source code affects the slice, call out code-mapper preflight needs.
 Trace backend seams through controller, DTO, application service, domain, repository, Flyway, external API adapter, and tests.
 
@@ -25,22 +34,28 @@ For every backend behavior slice, produce a TDD slice plan, not a generic test p
 - Public seam
 - Test file candidate
 - Expected RED failure
+- Why this is a valid RED
 - Minimum GREEN slice
 - Verification commands
 - Web/API collision risk
 - Stop conditions
+
+The TDD slice plan must include contract-reviewer gate, tdd-guide handoff, code-mapper need, reviewer checkpoint, and stop conditions. Do not output only a generic test plan.
 
 Call out tdd-guide for RED validity whenever the slice touches controller/DTO, application service, repository/Flyway, ingest, or external API adapter behavior.
 Call out architecture-reviewer when the slice may leak boundaries, deepen coupling, or require an ADR candidate.
 
 Output:
 - Goal
+- Executable worktree preflight
+- First executable slice
+- First behavior RED after scaffold, if scaffold is needed
 - Backend seams
 - Contract impact
 - Data invariant impact
 - TDD gate decision
-- TDD slice plan with First RED test, Public seam, Test file candidate, Expected RED failure, Minimum GREEN slice, Verification commands, and Stop conditions
-- tdd-guide handoff or RED waiver reason
+- TDD slice plan with First RED test, Public seam, Test file candidate, Expected RED failure, Why this is a valid RED, Minimum GREEN slice, Verification commands, and Stop conditions
+- tdd-guide handoff, RED waiver reason, or blocked/no test environment scaffold requirement
 - Verification commands
 - Agent handoffs
 - Stop conditions

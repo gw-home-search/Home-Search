@@ -25,10 +25,17 @@ Flag breaking changes to:
 - Empty result behavior
 - V1/V2 boundary
 
+When used before web/api parallel planning, review the planned backend and frontend slices together. Decide whether they can proceed in parallel without changing the V1 contract, and list contract constraints each side must preserve.
+
+For marker, detail, search, region, and trade flows, explicitly check URL, method, request fields, response fields, units, coordinate names, empty-result behavior, and error shape before allowing parallel work.
+
 Output findings first with severity and required fix.
 Also state:
 - Gate decision: pass, block, or needs contract update
+- Parallel gate decision: can proceed, sequence required, block, or needs contract update
 - Contract impact: none, compatible, or breaking
+- Backend constraints
+- Frontend constraints
 - Required test coverage
 - Whether web/api work can proceed in parallel
 - Stop condition if breaking impact exists

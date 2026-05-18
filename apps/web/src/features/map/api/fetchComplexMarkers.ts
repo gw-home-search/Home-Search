@@ -1,3 +1,5 @@
+import { resolveApiUrl } from './resolveApiUrl';
+
 export type ComplexMarkersRequest = {
   swLat: number;
   swLng: number;
@@ -48,15 +50,6 @@ export async function fetchComplexMarkers(request: ComplexMarkersRequest): Promi
   }
 
   return payload.map((item) => normalizeComplexMarker(item as ComplexMarkerResponse));
-}
-
-function resolveApiUrl(path: string): string {
-  const baseUrl = import.meta.env.VITE_API_SERVER_IP as string | undefined;
-  if (!baseUrl) {
-    return path;
-  }
-
-  return new URL(path, baseUrl).toString();
 }
 
 function normalizeComplexMarker(marker: ComplexMarkerResponse): ComplexMarker {

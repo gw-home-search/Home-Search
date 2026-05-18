@@ -1,0 +1,158 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { fetchRegionMarkers, type RegionMarkersRequest } from './fetchRegionMarkers';
+
+describe('fetchRegionMarkers', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('posts documented bounds and region level to the V1 region marker endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const request: RegionMarkersRequest = {
+      swLat: 37.45,
+      swLng: 126.85,
+      neLat: 37.7,
+      neLng: 127.2,
+      region: 'si-gun-gu',
+    };
+
+    await fetchRegionMarkers(request);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/map/regions',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      }),
+    );
+  });
+
+  it('normalizes canonical region marker response without leaking optional trend', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse([
+          {
+            id: 1,
+            name: 'Seoul',
+            lat: 37.5663,
+            lng: 126.978,
+            trend: null,
+          },
+          {
+            id: 2,
+            name: 'Gangnam-gu',
+            lat: 37.5172,
+            lng: 127.0473,
+            trend: 3.2,
+          },
+        ]),
+      ),
+    );
+
+    await expect(
+      fetchRegionMarkers({
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+        region: 'si-gun-gu',
+      }),
+    ).resolves.toEqual([
+      {
+        id: 1,
+        name: 'Seoul',
+        lat: 37.5663,
+        lng: 126.978,
+      },
+      {
+        id: 2,
+        name: 'Gangnam-gu',
+        lat: 37.5172,
+        lng: 127.0473,
+      },
+    ]);
+  });
+
+  it('keeps temporary source field variants inside the adapter', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse([
+          {
+            id: '11',
+            regionName: 'Mapo-gu',
+            latitude: '37.5662',
+            longitude: '126.9016',
+            trend: 1.1,
+          },
+        ]),
+      ),
+    );
+
+    await expect(
+      fetchRegionMarkers({
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+        region: 'si-gun-gu',
+      }),
+    ).resolves.toEqual([
+      {
+        id: 11,
+        name: 'Mapo-gu',
+        lat: 37.5662,
+        lng: 126.9016,
+      },
+    ]);
+  });
+
+  it('returns an empty marker list for a valid empty response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+
+    await expect(
+      fetchRegionMarkers({
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+        region: 'eup-myeon-dong',
+      }),
+    ).resolves.toEqual([]);
+  });
+
+  it('rejects with a clear marker fetch error when the response is not ok', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(errorResponse(500)));
+
+    await expect(
+      fetchRegionMarkers({
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+        region: 'si-do',
+      }),
+    ).rejects.toThrow('Failed to fetch region markers: 500');
+  });
+});
+
+function jsonResponse(body: unknown): Response {
+  return {
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve(body),
+  } as Response;
+}
+
+function errorResponse(status: number): Response {
+  return {
+    ok: false,
+    status,
+  } as Response;
+}

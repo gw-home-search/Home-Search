@@ -58,7 +58,9 @@ awk '
   END { emit() }
 ' "$manifest" > "$entries_file"
 
-rg --files -g '*.md' \
+rg --files --hidden -g '*.md' \
+  -g '!.git/**' \
+  -g '!ai-docs/**' \
   -g '!**/*_KO.md' \
   -g '!**/*_KO.local.md' \
   -g '!**/*_ko.md' \

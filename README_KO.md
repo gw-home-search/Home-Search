@@ -1,17 +1,13 @@
-# home-search 한국어 참조
+# home-search
 
-> 사람 전용 한국어 참조 문서입니다. 기준 문서는 `README.md`입니다.
+Home Search 마이그레이션 대상 저장소.
 
-## 개요
+- Source backend: `/Users/gwongwangjae/IdeaProjects/home-server`
+- Source frontend: `/Users/gwongwangjae/frontend/home-client`
+- Migration target: `/Users/gwongwangjae/home-search`
 
-`home-search`는 Home Search 마이그레이션 대상 저장소다.
+V1 마이그레이션 목표는 주요 API URL을 보존하면서 부동산 아파트 실거래 데이터를 수집하고, 안전하게 저장하고, 지도에 표시하는 것이다.
 
-고정 경로:
+먼저 [docs/README.md](docs/README.md)에서 시작한다.
 
-- 소스 백엔드: `/Users/gwongwangjae/IdeaProjects/home-server`
-- 소스 프론트엔드: `/Users/gwongwangjae/frontend/home-client`
-- 마이그레이션 대상: `/Users/gwongwangjae/home-search`
-
-V1 목표는 실거래 데이터를 수집하고 안전하게 저장한 뒤, 주요 API URL을 유지하면서 지도에 표시하는 것이다.
-
-작업을 시작할 때는 `docs/README.md`를 먼저 확인한다.
+AI 운영 문서는 [ai-docs/README.md](ai-docs/README.md)에서 시작한다. 이 문서는 개발 절차만 정의하며 `docs/`의 V1 제품, 아키텍처, 데이터, API, 지도, UI/UX, 인프라 계약을 대체하지 않는다.

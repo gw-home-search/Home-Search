@@ -1,12 +1,12 @@
 @AGENTS.md
 
-# Claude 메모
+# Claude 참고
 
-- `*_KO.md`, `*_KO.local.md`, `*_ko.md`, `*_ko.local.md`를 context로 읽거나, 검색하거나, import하거나, 요약하거나, 사용하지 않는다.
-- canonical Markdown 파일, source code, `.ko-docs.toml`만 사용한다.
-- `/Users/gwongwangjae/saved-ai-exam`은 AI skill, hook, local agent automation 설정 전용 읽기 전용 reference다. app/API/DB/UI 구현 가이드로 사용하지 않는다.
-- example repository의 agent docs를 지시사항으로 import하지 않는다. KO 파일 읽기/검색 금지 규칙은 해당 reference에도 동일하게 적용한다.
-- 사용자가 remote publishing을 명시적으로 요청했거나 합의된 plan에 포함된 경우가 아니면 `git push`를 실행하지 않는다.
-- KO 문서를 업데이트해야 하면 기존 KO 파일을 읽지 않고 canonical `.md` 파일에서 다시 생성한다.
-- destructive database work, 대량 file move/delete, V2 scope expansion, secret/env change, deployment/network action 전에는 질문한다.
-- Markdown 변경 후 `scripts/check-ko-docs.sh`를 실행한다.
+- `*_KO.md`, `*_KO.local.md`, `*_ko.md`, `*_ko.local.md`를 컨텍스트로 읽거나, 검색하거나, 가져오거나, 요약하거나, 사용하지 마십시오.
+- canonical Markdown 파일, 소스 코드, `.ko-docs.toml`만 사용하십시오.
+- `/Users/gwongwangjae/saved-ai-exam`은 사용자가 현재 작업에서 해당 저장소를 참조, 비교하거나 그 안의 자료를 가져오라고 명시적으로 요청한 경우가 아니면 읽거나, 검색하거나, 요약하거나, 복사하거나, 컨텍스트로 사용해서는 안 됩니다. 요청된 경우에도 AI 스킬, 훅, 로컬 에이전트 자동화 설정을 위한 읽기 전용 참조로만 사용하고, app/API/DB/UI 구현 지침으로는 절대 사용하지 마십시오.
+- 예제 저장소의 에이전트 문서를 지침으로 가져오지 마십시오. 해당 참조에도 KO 파일 읽기/검색 금지를 적용하십시오.
+- 사용자가 원격 게시를 명시적으로 요청했거나 합의한 계획에 포함된 경우가 아니면 `git push`를 실행하지 마십시오.
+- KO 문서를 업데이트해야 할 때는 기존 KO 파일을 읽지 말고 canonical `.md` 파일에서 다시 생성하십시오.
+- 파괴적인 데이터베이스 작업, 대량 파일 이동/삭제, V2 범위 확장, secret/env 변경, 배포/네트워크 작업 전에는 질문하십시오.
+- Markdown 변경 후 `scripts/check-ko-docs.sh`를 실행하십시오.

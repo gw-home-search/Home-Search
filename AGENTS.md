@@ -26,17 +26,23 @@ Source repositories may be inspected as read-only references:
 
 ## AI Skill/Hook References
 
-The saved example repository may be inspected as a read-only reference only
-when designing or updating AI skills, hooks, or local agent automation:
+The saved example repository must not be inspected, searched, summarized,
+copied from, or used as context unless the user explicitly requests in the
+current task to reference, compare, or bring material from it:
 
 - AI skill/hook reference: `/Users/gwongwangjae/saved-ai-exam`
 
-Prefer the relevant subpaths inside that reference:
+When explicitly requested, use it only as a read-only reference for AI skills,
+hooks, or local agent automation. Prefer the relevant subpaths inside that
+reference:
 
 - `/Users/gwongwangjae/saved-ai-exam/skills`
 - `/Users/gwongwangjae/saved-ai-exam/codex-live-demo/.agents`
 - `/Users/gwongwangjae/saved-ai-exam/codex-live-demo/.codex`
 - `/Users/gwongwangjae/saved-ai-exam/codex-live-demo/.githooks`
+
+Do not proactively consult it just because the work involves skills, hooks, or
+automation.
 
 Do not use `/Users/gwongwangjae/saved-ai-exam` for application
 implementation, public APIs, database design, UI, product requirements,
@@ -60,6 +66,26 @@ All writes for this project belong under `/Users/gwongwangjae/home-search`.
 - Keep edits small and aligned with existing repository shape.
 - Verify after changes. If verification is unavailable, say why.
 - Do not hide failing checks; fix them or report the blocker.
+
+## AI Development Operating Rules
+
+- Start AI workflow docs at `ai-docs/README.md`.
+- `ai-docs/` defines development procedure only. The V1 migration source of
+  truth remains the canonical `docs/*.md` documents listed above.
+- Use `.agents/skills/planning` when a `/goal` or ambiguous request needs a
+  decision-complete plan before implementation.
+- Use `.agents/skills/tdd` before production behavior changes when a valid RED
+  test can be created.
+- Use `.agents/skills/systematic-debugging` for failing checks, API mismatch,
+  ingest bugs, and map marker failures.
+- Use `.agents/skills/code-review` for findings-first review and final
+  self-review of correctness, V1 API compatibility, data safety, missing tests,
+  and KO sync.
+- Subagents are allowed only when the user explicitly requests them or when a
+  task can be split into independent read-only research work. Do not use
+  subagents to bypass local review or ownership of changes.
+- Do not claim completion without verification evidence. If a check cannot run,
+  report the reason and residual risk.
 
 ## Git Publishing
 
@@ -107,7 +133,7 @@ All writes for this project belong under `/Users/gwongwangjae/home-search`.
 - When searching Markdown, exclude KO files:
 
 ```sh
-rg --files -g '*.md' -g '!**/*_KO.md' -g '!**/*_KO.local.md' -g '!**/*_ko.md' -g '!**/*_ko.local.md'
+rg --files --hidden -g '*.md' -g '!.git/**' -g '!**/*_KO.md' -g '!**/*_KO.local.md' -g '!**/*_ko.md' -g '!**/*_ko.local.md'
 ```
 
 - `scripts/check-ko-docs.sh` must not read or print KO body content. It may only check that KO paths from `.ko-docs.toml` exist.

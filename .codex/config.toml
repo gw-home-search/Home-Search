@@ -1,0 +1,15 @@
+# Project-local Codex defaults for Home Search.
+# This file documents local coordination settings only; it does not expand
+# filesystem or network permissions.
+
+[agents]
+max_threads = 3
+max_depth = 1
+
+[features]
+goals = true
+
+[workflow]
+operating_docs = "ai-docs/README.md"
+canonical_docs = "docs/README.md"
+hooks_enabled = false

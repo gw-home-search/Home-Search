@@ -1,10 +1,36 @@
 # API Contract
 
-## Rule
+## Purpose
 
-V1 keeps the main API URLs stable. Internal implementation may change to support
-safer storage, but the frontend should not need new route names to display the
-map.
+This document is the V1 public API contract for the Home Search migration.
+It fixes the HTTP URLs, request shapes, response shapes, units, error behavior,
+and compatibility rules that the target backend and frontend must follow.
+
+Use this document as the baseline for:
+
+- Backend controllers, DTOs, repository projections, and controller tests.
+- Frontend API clients, marker adapters, detail panels, and search behavior.
+- Migration decisions when source backend fields conflict with source frontend
+  expectations.
+
+V1 keeps the main API URLs stable so the frontend can display the map without
+new route names. Internal implementation may change to support safer storage,
+but those changes must not leak into the public V1 API unless this contract is
+updated first.
+
+## Current Work Package
+
+This work package clarifies the API contract only. It does not implement
+backend code, frontend adapters, OpenAPI YAML, or new tests.
+
+The next implementation batches should use this document to build:
+
+- Backend request/response DTOs and controller tests.
+- Repository projections that emit the canonical response fields.
+- Frontend adapters that normalize temporary source-field variants.
+- Integration tests for the map, search, region, detail, and trade flows.
+
+## Fixed Paths
 
 Source backend:
 
@@ -18,13 +44,100 @@ Target repository:
 
 - `/Users/gwongwangjae/home-search`
 
+## Contract Authority
+
+The source backend and source frontend are read-only references. If source code
+and this target contract disagree, the target V1 implementation should follow
+this document and keep the source mismatch as a migration note.
+
+Do not widen V1 to include rankings, favorites, alarms, mail batches,
+recommendations, auth flows, or heavy analytics unless the migration scope is
+explicitly changed.
+
+## Common Conventions
+
+- Canonical URLs include a leading slash, for example `/api/v1/map/regions`.
+- Requests and responses use JSON.
+- Coordinates use WGS84 / EPSG:4326.
+- `lat` and `latitude` mean latitude. `lng` and `longitude` mean longitude.
+- Dates use `YYYY-MM-DD`.
+- `dealAmount` and `latestDealAmount` are integer values in 10,000 KRW units.
+- `priceEokMin` and `priceEokMax` are filter inputs in eok units. The backend
+  converts them to 10,000 KRW units before comparing with stored trade amounts.
+- Nullable filter fields mean "do not apply this filter".
+- Empty list results should return `200` with `[]` whenever the request itself
+  is valid.
+- Optional response fields may be `null` or omitted.
+
+## Compatibility Policy
+
+V1 compatible changes:
+
+- Adding an optional response field.
+- Returning `null` or omitting an optional field documented as optional.
+- Accepting legacy frontend field variants inside a temporary adapter.
+
+V1 breaking changes:
+
+- Removing a documented response field.
+- Renaming a documented field.
+- Changing a documented field type or unit.
+- Requiring a field that was previously optional.
+- Changing a public URL or HTTP method.
+
+Target V1 should expose canonical fields. Legacy variants from the source code
+may be accepted temporarily by the frontend adapter, but backend responses
+should converge on the canonical fields below.
+
+## Error Policy
+
+V1 uses Spring `ProblemDetail` style error bodies.
+
+Minimum error fields:
+
+- `type`
+- `title`
+- `status`
+- `detail`
+- `exception`
+- `timestamp`
+
+Status rules:
+
+- Invalid request body, invalid query parameter, or invalid enum: `400`.
+- Missing region, parcel, complex, detail, or trade parent resource: `404`.
+- Unexpected server error or external integration failure: `500`.
+
+Example:
+
+```json
+{
+  "type": "/docs/index.html#error-code-list",
+  "title": "C401",
+  "status": 400,
+  "detail": "Invalid parameter format.",
+  "exception": "MapApiException",
+  "timestamp": "2026-05-18T10:30:00"
+}
+```
+
 ## V1 APIs
 
 ### POST `/api/v1/map/regions`
 
+Purpose:
+
+- Return region-level markers inside the current map bounds.
+- Used when the Kakao map is zoomed out.
+
 Source controller:
 
 - `src/main/java/com/home/infrastructure/web/map/MapController.java`
+
+Frontend source consumer:
+
+- `src/App.jsx`
+- `src/components/map/RegionMarkers.jsx`
 
 Request:
 
@@ -38,29 +151,71 @@ Request:
 }
 ```
 
+Request fields:
+
+- `swLat`: required number.
+- `swLng`: required number.
+- `neLat`: required number.
+- `neLng`: required number.
+- `region`: required string.
+
 Allowed `region` values:
 
 - `si-do`
 - `si-gun-gu`
 - `eup-myeon-dong`
 
+Response:
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Seoul",
+    "lat": 37.5663,
+    "lng": 126.9780,
+    "trend": null
+  }
+]
+```
+
 Response fields:
 
-- `id`
-- `name`
-- `lat`
-- `lng`
-- `trend`
+- `id`: region id.
+- `name`: display name.
+- `lat`: marker latitude.
+- `lng`: marker longitude.
+- `trend`: optional regional trend value. V1 may return `null` or omit it.
 
-V1 note:
+Status:
 
-- `trend` can be `null` or omitted until trend migration moves to V2.
+- `200`: successful lookup. May be `[]`.
+- `400`: invalid bounds or unsupported `region`.
+- `500`: unexpected server error.
+
+Migration notes:
+
+- Regional trend calculation is not required for V1 map display.
+- Source repository aliases may not match the target field names exactly.
+  Target V1 should expose `name`, `lat`, and `lng`.
+- `unitCntSum` is not a required V1 region-marker field. Frontend code must not
+  require it to render region markers.
 
 ### POST `/api/v1/map/complexes`
+
+Purpose:
+
+- Return parcel-level apartment complex markers inside the current map bounds.
+- Used when the Kakao map is zoomed in enough to show detailed markers.
 
 Source controller:
 
 - `src/main/java/com/home/infrastructure/web/map/MapController.java`
+
+Frontend source consumer:
+
+- `src/App.jsx`
+- `src/components/map/ComplexMarkers.jsx`
 
 Request:
 
@@ -81,25 +236,94 @@ Request:
 }
 ```
 
-Response fields for frontend compatibility:
+Request fields:
 
-- `parcelId`
-- `lat`
-- `lng`
-- `latestDealAmount`
-- `unitCntSum`
+- `swLat`: required number.
+- `swLng`: required number.
+- `neLat`: required number.
+- `neLng`: required number.
+- `pyeongMin`: optional integer pyeong lower bound.
+- `pyeongMax`: optional integer pyeong upper bound.
+- `priceEokMin`: optional number eok lower bound.
+- `priceEokMax`: optional number eok upper bound.
+- `ageMin`: optional integer building age lower bound.
+- `ageMax`: optional integer building age upper bound.
+- `unitMin`: optional integer household count lower bound.
+- `unitMax`: optional integer household count upper bound.
 
-Compatibility note:
+Response:
 
-- The source code has mixed naming around `parcelId`, `id`, `latitude`, `lat`,
-  `longitude`, and `lng`. V1 should stabilize the public response to the fields
-  above while the frontend adapter may temporarily accept old variants.
+```json
+[
+  {
+    "parcelId": 1001,
+    "lat": 37.5123,
+    "lng": 127.0456,
+    "latestDealAmount": 125000,
+    "unitCntSum": 740
+  }
+]
+```
+
+Response fields:
+
+- `parcelId`: parcel id used by detail and trade APIs.
+- `lat`: marker latitude.
+- `lng`: marker longitude.
+- `latestDealAmount`: optional latest trade amount in 10,000 KRW units.
+- `unitCntSum`: total household count under the parcel.
+
+Status:
+
+- `200`: successful lookup. May be `[]`.
+- `400`: invalid bounds or invalid filter type/range.
+- `500`: unexpected server error.
+
+Migration notes:
+
+- Source code has mixed naming around `parcelId`, `id`, `latitude`, `lat`,
+  `longitude`, and `lng`.
+- Target V1 backend should return the canonical fields above.
+- Frontend adapters may temporarily accept `id`, `latitude`, and `longitude`
+  while source code is being migrated, but new target code should prefer
+  `parcelId`, `lat`, and `lng`.
+- Map marker APIs must not require ranking, trend, favorite, alarm, mail, or
+  auth state.
 
 ### GET `/api/v1/search/complexes?q=`
+
+Purpose:
+
+- Search apartment complexes by user-entered text.
+- Used by the left sidebar search flow.
 
 Source controller:
 
 - `src/main/java/com/home/infrastructure/web/search/SearchController.java`
+
+Frontend source consumers:
+
+- `src/components/sidebar/LeftSidebar.jsx`
+- `src/store/uiSlice.js`
+
+Request:
+
+- Query parameter `q`: required string, trim before search.
+
+Response:
+
+```json
+[
+  {
+    "complexId": 501,
+    "complexName": "Sample Apartment",
+    "parcelId": 1001,
+    "latitude": 37.5123,
+    "longitude": 127.0456,
+    "address": "Sample address"
+  }
+]
+```
 
 Response fields:
 
@@ -110,66 +334,227 @@ Response fields:
 - `longitude`
 - `address`
 
-Frontend source consumers:
+Status:
 
-- `src/components/sidebar/LeftSidebar.jsx`
-- `src/store/uiSlice.js`
+- `200`: successful lookup. Empty or no-match searches return `[]`.
+- `400`: invalid query parameter type.
+- `500`: unexpected server error.
+
+Migration notes:
+
+- This endpoint keeps `latitude` and `longitude` for source frontend
+  compatibility. Do not rename them to `lat` and `lng` in V1 unless the
+  frontend adapter is updated in the same batch.
 
 ### GET `/api/v1/region`
-
-Source controller:
-
-- `src/main/java/com/home/infrastructure/web/region/RegionController.java`
 
 Purpose:
 
 - Load root regions for region navigation.
 
-### GET `/api/v1/region/{regionId}`
-
 Source controller:
 
 - `src/main/java/com/home/infrastructure/web/region/RegionController.java`
-
-Purpose:
-
-- Load region detail, children, and center coordinates.
 
 Frontend source consumer:
 
 - `src/components/sidebar/region/RegionNavSidebar.jsx`
 
+Response:
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Seoul"
+  }
+]
+```
+
+Response fields:
+
+- `id`: root region id.
+- `name`: display name.
+
+Status:
+
+- `200`: successful lookup. May be `[]`.
+- `500`: unexpected server error.
+
+### GET `/api/v1/region/{regionId}`
+
+Purpose:
+
+- Load region detail, child regions, and center coordinates.
+- Used for region navigation and map recentering.
+
+Source controller:
+
+- `src/main/java/com/home/infrastructure/web/region/RegionController.java`
+
+Frontend source consumer:
+
+- `src/components/sidebar/region/RegionNavSidebar.jsx`
+
+Response:
+
+```json
+{
+  "id": 1,
+  "name": "Seoul",
+  "latitude": 37.5663,
+  "longitude": 126.9780,
+  "children": [
+    {
+      "id": 11,
+      "name": "Gangnam-gu"
+    }
+  ]
+}
+```
+
+Response fields:
+
+- `id`: region id.
+- `name`: display name.
+- `latitude`: center latitude.
+- `longitude`: center longitude.
+- `children`: child region list.
+
+Child response fields:
+
+- `id`
+- `name`
+
+Status:
+
+- `200`: successful lookup.
+- `404`: region id does not exist.
+- `500`: unexpected server error.
+
 ### GET `/api/v1/detail/{parcelId}`
+
+Purpose:
+
+- Return parcel and representative complex details for the selected marker.
 
 Source controller:
 
 - `src/main/java/com/home/infrastructure/web/detail/DetailController.java`
-
-Purpose:
-
-- Return parcel and representative complex details.
 
 Frontend source consumer:
 
 - `src/components/sidebar/detail/DetailSidebar.jsx`
 
+Response:
+
+```json
+{
+  "parcelId": 1001,
+  "latitude": 37.5123,
+  "longitude": 127.0456,
+  "address": "Sample address",
+  "tradeName": "Sample trade name",
+  "name": "Sample complex name",
+  "dongCnt": 8,
+  "unitCnt": 740,
+  "platArea": 12345.67,
+  "archArea": 2345.67,
+  "totArea": 98765.43,
+  "bcRat": 22.5,
+  "vlRat": 199.8,
+  "useDate": "2015-03-20"
+}
+```
+
+Response fields:
+
+- `parcelId`
+- `latitude`
+- `longitude`
+- `address`
+- `tradeName`
+- `name`
+- `dongCnt`
+- `unitCnt`
+- `platArea`
+- `archArea`
+- `totArea`
+- `bcRat`
+- `vlRat`
+- `useDate`
+
+Status:
+
+- `200`: successful lookup.
+- `404`: parcel or representative complex does not exist.
+- `500`: unexpected server error.
+
+Migration notes:
+
+- Source DTO omits `null` values. Target V1 may omit nullable fields rather
+  than returning explicit `null`.
+
 ### GET `/api/v1/trade/{parcelId}`
+
+Purpose:
+
+- Return trade list for complexes under the selected parcel.
 
 Source controller:
 
 - `src/main/java/com/home/infrastructure/web/detail/DetailController.java`
 
-Purpose:
-
-- Return trade list for complexes under the parcel.
-
 Frontend source consumer:
 
 - `src/components/sidebar/detail/TradeSidebar.jsx`
 
-V1 note:
+Response:
 
-- The query path should work through `complex_id` in target V1.
+```json
+{
+  "parcelId": 1001,
+  "trades": [
+    {
+      "tradeId": 9001,
+      "dealDate": "2025-12-01",
+      "exclArea": 84.93,
+      "dealAmount": 125000,
+      "aptDong": "101",
+      "floor": 12
+    }
+  ]
+}
+```
+
+Response fields:
+
+- `parcelId`
+- `trades`
+
+Trade item fields:
+
+- `tradeId`: trade id.
+- `dealDate`: `YYYY-MM-DD`.
+- `exclArea`: exclusive area in square meters.
+- `dealAmount`: trade amount in 10,000 KRW units.
+- `aptDong`: optional apartment building name or number.
+- `floor`: optional floor.
+
+Status:
+
+- `200`: successful lookup. If the parcel exists but has no trades, return an
+  empty `trades` list.
+- `404`: parcel or complex parent path does not exist.
+- `500`: unexpected server error.
+
+Migration notes:
+
+- The target V1 query path should work through `complex_id`.
+- Preserve `complex_pk`, `apt_seq`, `source`, and `source_key` for audit,
+  matching, and deduplication, but do not expose them in this public response.
+- Default ordering should be newest first: `dealDate` descending, then
+  `tradeId` descending when dates are equal.
 
 ## V2 APIs
 
@@ -182,5 +567,5 @@ Keep these out of the V1 critical path:
 - `/auth/access`
 - `/admin/batch/trade-alarm/run`
 
-They should not be deleted from source knowledge, but they should not block
+They should not be deleted from source knowledge, but they must not block
 collection, storage, and map display.

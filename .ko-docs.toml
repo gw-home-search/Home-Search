@@ -48,7 +48,7 @@ last_synced = "2026-05-18"
 [[docs]]
 source = "docs/API_CONTRACT.md"
 ko = "docs/API_CONTRACT_KO.md"
-source_sha256 = "722909039cae6e35f96395f4b1f2a00243679c623de5cf1166a688b0c94b74a4"
+source_sha256 = "0dbd8d605a7fae9ea05aca148f7bc30a24ea363ba207a1811c720c4df390b359"
 last_synced = "2026-05-18"
 
 [[docs]]

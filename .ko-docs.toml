@@ -6,13 +6,13 @@ ai_must_not_read_ko_body = true
 [[docs]]
 source = "AGENTS.md"
 ko = "AGENTS_KO.md"
-source_sha256 = "a1c6844dad58c15133de92e99511dc6abd3255000595157c5727f77909319eab"
+source_sha256 = "77205d01a50b47eaa119cd73143afe027149d22cacd6cd9108f1e5a65fe6bee6"
 last_synced = "2026-05-18"
 
 [[docs]]
 source = "CLAUDE.md"
 ko = "CLAUDE_KO.md"
-source_sha256 = "dcc111beedf4f5f6b87fedda3018af609d35c003e4a5afb04dacabd8405c420f"
+source_sha256 = "fca1561bae701c0df64d19082470031c46926a4a0896ee76da0e0668d4807210"
 last_synced = "2026-05-18"
 
 [[docs]]

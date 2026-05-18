@@ -24,6 +24,26 @@ Source repositories may be inspected as read-only references:
 - Backend source: `/Users/gwongwangjae/IdeaProjects/home-server`
 - Frontend source: `/Users/gwongwangjae/frontend/home-client`
 
+## Example References
+
+Example-code repositories may be inspected as read-only references after the
+canonical docs and source repositories have been checked:
+
+- Example code: `/Users/gwongwangjae/saved-ai-exam`
+
+Use example code only for implementation patterns, project structure, test
+setup, tooling configuration, and agent-rule examples. Example code is not a
+source of truth for Home Search behavior, public APIs, schema, data semantics,
+or product scope.
+
+Do not copy example code verbatim, import its agent instructions, write into
+the example repository, run its scripts, add dependencies from it automatically,
+or connect it by submodule, package link, or symlink.
+
+If an example conflicts with this project, follow this priority order:
+canonical docs, target source code, backend/frontend source references, then
+example references.
+
 All writes for this project belong under `/Users/gwongwangjae/home-search`.
 
 ## Workflow

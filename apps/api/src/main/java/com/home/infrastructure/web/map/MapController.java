@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.home.application.map.MapUseCase;
 import com.home.infrastructure.web.map.dto.ComplexMarkerResponse;
 import com.home.infrastructure.web.map.dto.ComplexMarkersRequest;
+import com.home.infrastructure.web.map.dto.RegionMarkerResponse;
+import com.home.infrastructure.web.map.dto.RegionMarkersRequest;
 
 import jakarta.validation.Valid;
 
@@ -29,5 +31,12 @@ public class MapController {
 		@Valid @RequestBody ComplexMarkersRequest request
 	) {
 		return ResponseEntity.ok(mapUseCase.getComplexMarkers(request));
+	}
+
+	@PostMapping("/regions")
+	public ResponseEntity<List<RegionMarkerResponse>> getRegionMarkers(
+		@Valid @RequestBody RegionMarkersRequest request
+	) {
+		return ResponseEntity.ok(mapUseCase.getRegionMarkers(request));
 	}
 }

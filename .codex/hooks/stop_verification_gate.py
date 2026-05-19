@@ -244,6 +244,21 @@ def is_markdown(path: str) -> bool:
     return lowered.endswith(".md") and not lowered.endswith(("_ko.md", "_ko.local.md"))
 
 
+def is_ko_doc(path: str) -> bool:
+    lowered = path.lower()
+    return lowered.endswith("_ko.md") and not lowered.endswith("_ko.local.md")
+
+
+def has_ko_approval_evidence(text: str, ko_paths: list[str]) -> bool:
+    if not ko_paths:
+        return True
+    if not re.search(r"KO 수정 승인\s*:\s*확인", text):
+        return False
+    if "KO 생성 기준: canonical source only" not in text:
+        return False
+    return all(path in text for path in ko_paths)
+
+
 def is_contract_related(path: str) -> bool:
     if path == "docs/API_CONTRACT.md":
         return True
@@ -311,6 +326,13 @@ def missing_evidence(files: list[str], text: str) -> list[str]:
     if any(is_markdown(path) for path in files):
         if not has_successful_command(text, KO_CHECK_RE):
             missing.append("Markdown 변경: bash scripts/check-ko-docs.sh evidence 필요")
+
+    ko_paths = sorted(path for path in files if is_ko_doc(path))
+    if ko_paths:
+        if not has_successful_command(text, KO_CHECK_RE):
+            missing.append("KO 문서 변경: bash scripts/check-ko-docs.sh evidence 필요")
+        if not has_ko_approval_evidence(text, ko_paths):
+            missing.append("KO 문서 변경: KO 수정 승인/대상/canonical source only evidence 필요")
 
     return missing
 
@@ -403,6 +425,21 @@ def run_self_test() -> int:
             ]
         ),
     )
+    ko_missing_approval = missing_evidence(
+        ["AGENTS_KO.md"],
+        "검증: bash scripts/check-ko-docs.sh = pass",
+    )
+    ko_complete = missing_evidence(
+        ["AGENTS_KO.md"],
+        "\n".join(
+            [
+                "KO 수정 승인: 확인",
+                "KO 대상: AGENTS_KO.md",
+                "KO 생성 기준: canonical source only",
+                "검증: bash scripts/check-ko-docs.sh = pass",
+            ]
+        ),
+    )
 
     tests = [
         ("missing First RED is detected", any("최초 RED" in item or "First RED" in item for item in missing_red)),
@@ -411,6 +448,8 @@ def run_self_test() -> int:
         ("markdown KO evidence passes", not markdown_complete),
         ("backendQualityCheck evidence is required", any("backendQualityCheck" in item for item in missing_backend_quality)),
         ("coverage evidence is required", any("Coverage" in item for item in missing_coverage)),
+        ("KO approval evidence is required", any("KO 수정 승인" in item for item in ko_missing_approval)),
+        ("KO approval evidence passes", not ko_complete),
     ]
     failed = [name for name, passed in tests if not passed]
     if failed:

@@ -1,5 +1,6 @@
 # Home Search Context
 
+
 This file gives agents the shortest shared vocabulary for Home Search V1. Canonical product, API, and data decisions remain in `docs/*.md`.
 
 ## Product Boundary

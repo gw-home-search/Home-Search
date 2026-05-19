@@ -1,5 +1,6 @@
 # apps/web Context
 
+
 This file defines frontend-specific Home Search V1 terms. Canonical decisions remain in root `docs/*.md`.
 
 ## Frontend Shape

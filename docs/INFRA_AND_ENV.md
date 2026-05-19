@@ -1,5 +1,6 @@
 # Infrastructure and Environment
 
+
 ## Fixed Paths
 
 - Source backend: `/Users/gwongwangjae/IdeaProjects/home-server`

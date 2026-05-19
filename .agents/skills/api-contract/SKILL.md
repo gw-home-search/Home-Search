@@ -3,6 +3,7 @@ name: api-contract
 description: Check Home Search V1 API URL, request, response, unit, and error compatibility before backend/frontend changes.
 ---
 
+
 # API Contract Skill
 
 Use this skill when work touches API clients, controllers, DTOs, marker adapters, detail/trade flows, request validation, or error handling.

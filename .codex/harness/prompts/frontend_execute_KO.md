@@ -7,10 +7,10 @@ Preset: {{PRESET}}
 Target: {{TARGET}}
 Branch: {{BRANCH_NAME}}
 
-Allowed edit scope:
+허용 편집 범위:
 - {{ALLOWED_SCOPE}}
 
-Forbidden edit scope:
+금지 편집 범위:
 - {{FORBIDDEN_SCOPE}}
 - docs/**
 - AGENTS.md
@@ -21,17 +21,17 @@ Forbidden edit scope:
 - package-lock.json
 - build output
 
-Instructions:
-- Read root AGENTS.md, apps/web/AGENTS.md, CONTEXT.md, apps/web/CONTEXT.md, docs/API_CONTRACT.md, docs/MAP_DISPLAY_FLOW.md, and docs/UI_UX_MIGRATION.md before editing.
-- Preserve V1 URLs, request fields, response fields, units, coordinate conventions, and empty/error behavior.
-- Keep the map usable on marker API failure.
-- Use the minimum GREEN slice and leave a short Korean-first gate summary.
+지시:
+- 편집 전에 root `AGENTS.md`, `apps/web/AGENTS.md`, `CONTEXT.md`, `apps/web/CONTEXT.md`, `docs/API_CONTRACT.md`, `docs/MAP_DISPLAY_FLOW.md`, `docs/UI_UX_MIGRATION.md`를 읽는다.
+- V1 URL, request fields, response fields, units, coordinate conventions, empty/error behavior를 보존한다.
+- marker API 실패 시에도 map을 사용할 수 있게 유지한다.
+- 최소 GREEN slice를 사용하고 짧은 Korean-first gate summary를 남긴다.
 
-Required verification:
+필수 검증:
 - {{VERIFICATION_COMMANDS}}
-- Use exact evidence line format: ``- `command` = pass|fail|not run (Korean reason)``.
+- 정확한 evidence line 형식을 사용한다: ``- `command` = pass|fail|not run (Korean reason)``.
 
-Final user-facing evidence labels:
+최종 사용자-facing evidence labels:
 - 상태:
 - 최초 RED:
 - 예상 RED 실패:

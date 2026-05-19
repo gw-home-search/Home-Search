@@ -1,5 +1,6 @@
 # apps/api Context
 
+
 This file defines backend-specific Home Search V1 terms. Canonical decisions remain in root `docs/*.md`.
 
 ## Backend Shape

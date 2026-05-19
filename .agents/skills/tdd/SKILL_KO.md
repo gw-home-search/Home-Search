@@ -1,22 +1,22 @@
 ---
 name: tdd
-description: Start Home Search production behavior changes with a valid RED and drive them through public seams.
+description: valid RED로 Home Search production behavior changes를 시작하고 public seams를 통해 진행한다.
 ---
 
 # TDD Skill
 
-Use this skill for backend or frontend behavior changes. The goal is to anchor implementation in a verifiable failing test before changing production code when practical.
+backend 또는 frontend behavior changes에 이 skill을 사용한다. 목표는 practical할 때 production code 변경 전에 verifiable failing test로 implementation을 고정하는 것이다.
 
 ## RED Validity
 
-- The failure is directly connected to new behavior or a reproduced bug.
-- The failure is deterministic.
-- The test verifies a public seam, not private implementation.
-- Mocks do not hide V1 API contracts or data invariants.
+- failure가 new behavior 또는 reproduced bug와 직접 연결된다.
+- failure가 deterministic이다.
+- test가 private implementation이 아니라 public seam을 검증한다.
+- mocks가 V1 API contracts 또는 data invariants를 숨기지 않는다.
 
 ## Backend Seams
 
-- Controller/DTO/API adapter: URL, method, field, type, and unit.
+- Controller/DTO/API adapter: URL, method, field, type, unit.
 - Application service: raw save, matching, normalized insert, status update.
 - Repository/Flyway: uniqueness, partitioning, latest lookup, failed match query.
 - External API adapter: parsing, source key normalization, failure mapping.
@@ -33,14 +33,14 @@ Use this skill for backend or frontend behavior changes. The goal is to anchor i
 
 ## Loop
 
-1. State the requirement in one sentence.
-2. Choose the public seam and test location.
-3. State the expected RED failure before production changes.
-4. Confirm why the RED is valid.
-5. Write the failing test and confirm the RED reason.
-6. Write the minimum production code for GREEN.
-7. Keep tests passing during any refactor.
-8. Leave verification evidence.
+1. requirement를 한 문장으로 적는다.
+2. public seam과 test location을 선택한다.
+3. production changes 전 expected RED failure를 적는다.
+4. RED가 valid한 이유를 확인한다.
+5. failing test를 작성하고 RED reason을 확인한다.
+6. GREEN을 위한 최소 production code를 작성한다.
+7. refactor 중에도 tests를 passing 상태로 유지한다.
+8. verification evidence를 남긴다.
 
 ## Required Output
 
@@ -55,7 +55,6 @@ Use this skill for backend or frontend behavior changes. The goal is to anchor i
 
 ## No Test Environment
 
-If the test environment does not exist yet, do not claim behavior completion.
-Report the needed public seam, temporary verification, and follow-up test.
-Use Korean-first prose when reporting TDD evidence to the user, but keep test
-names, paths, commands, and status tokens unchanged.
+test environment가 아직 없으면 behavior completion을 주장하지 않는다.
+필요한 public seam, temporary verification, follow-up test를 보고한다.
+사용자에게 TDD evidence를 보고할 때는 Korean-first prose를 사용하되 test names, paths, commands, status tokens는 그대로 유지한다.

@@ -62,6 +62,8 @@ POST_TOOL_USE_REVIEW_SELF_TEST = "python3 .codex/hooks/post_tool_use_review.py -
 KO_CHECK = "bash scripts/check-ko-docs.sh"
 COVERAGE_LINE_RE = re.compile(r"^\s*Coverage:\s*>=\s*90%\s*$", re.MULTILINE)
 DOCS_OPENAPI_LINE_RE = re.compile(r"^\s*Docs/OpenAPI:\s*generated\s+\+\s+verified\s*$", re.MULTILINE)
+KO_APPROVAL_RE = re.compile(r"KO 수정 승인\s*:\s*확인")
+KO_BASIS_RE = re.compile(r"KO 생성 기준\s*:\s*canonical source only")
 
 VERIFICATION_LINE_RE = re.compile(
     r"^\s*-\s+`(?P<command>[^`\n]+)`\s+=\s+"
@@ -381,6 +383,17 @@ def canonical_for_ko(path: str) -> str:
     return source
 
 
+def has_ko_approval_evidence(body: str, ko_paths: Iterable[str]) -> bool:
+    paths = tuple(ko_paths)
+    if not paths:
+        return True
+    if not KO_APPROVAL_RE.search(body):
+        return False
+    if not KO_BASIS_RE.search(body):
+        return False
+    return all(path in body for path in paths)
+
+
 def is_forbidden_path(path: str) -> str | None:
     normalized = path.strip("/")
     parts = [part for part in normalized.split("/") if part]
@@ -445,11 +458,8 @@ def required_commands_for_files(changed_files: Iterable[str], errors: list[LintM
             if ko_path not in changed:
                 add(errors, "changed-files", f"canonical Markdown 변경에 paired KO doc이 없습니다: {source} -> {ko_path}")
 
-    for path in sorted(changed):
-        if is_ko_doc(path):
-            source = canonical_for_ko(path)
-            if source not in changed:
-                add(errors, "changed-files", f"canonical source 없는 KO-only doc 변경은 금지됩니다: {path}")
+    if any(is_ko_doc(path) for path in changed):
+        required.add(KO_CHECK)
 
     return required
 
@@ -478,6 +488,10 @@ def check_evidence(
             add(errors, "evidence", "apps/api 변경에는 `Coverage: >=90%` evidence가 필요합니다")
         if not DOCS_OPENAPI_LINE_RE.search(body):
             add(errors, "evidence", "apps/api 변경에는 `Docs/OpenAPI: generated + verified` evidence가 필요합니다")
+
+    ko_paths = sorted(path for path in changed_files if is_ko_doc(path))
+    if ko_paths and not has_ko_approval_evidence(body, ko_paths):
+        add(errors, "evidence", "KO 문서 변경에는 KO 수정 승인, KO 대상, KO 생성 기준: canonical source only 근거가 필요합니다")
 
     if status == "Pass":
         for line in verification.values():
@@ -526,8 +540,20 @@ def lint_template(path: str) -> LintResult:
     return LintResult(errors)
 
 
-def valid_body(*, checklist_checked: bool = True, status: str = "Pass", risk: str = "없음") -> str:
+def valid_body(
+    *,
+    checklist_checked: bool = True,
+    status: str = "Pass",
+    risk: str = "없음",
+    ko_approval: bool = False,
+    ko_targets: tuple[str, ...] = (),
+) -> str:
     mark = "x" if checklist_checked else " "
+    if ko_approval and not ko_targets:
+        ko_targets = ("AGENTS_KO.md",)
+    ko_status = "확인" if ko_approval else "해당 없음"
+    ko_target = ", ".join(ko_targets) if ko_approval else "해당 없음"
+    ko_basis = "canonical source only" if ko_approval else "해당 없음"
     return f"""## 요약
 
 상태: {status}
@@ -568,6 +594,12 @@ Docs/OpenAPI: generated + verified
 
 contract-reviewer: not needed
 
+## KO 문서 변경
+
+KO 수정 승인: {ko_status}
+KO 대상: {ko_target}
+KO 생성 기준: {ko_basis}
+
 ## 주요 위험
 
 주요 위험: {risk}
@@ -593,7 +625,10 @@ reviewer: 지적사항 = none
 def valid_input(**overrides: object) -> PrInput:
     values = {
         "title": "V1 pr-lint-hardening integration",
-        "body": valid_body(),
+        "body": valid_body(
+            ko_approval=True,
+            ko_targets=(".github/pull_request_template_KO.md",),
+        ),
         "base": "main",
         "head": "feat/pr-lint-hardening-integration",
         "draft": True,
@@ -610,7 +645,10 @@ def valid_input(**overrides: object) -> PrInput:
 
 
 def legacy_body() -> str:
-    return valid_body().replace("## TDD 근거", "## TDD Evidence").replace(
+    return valid_body(
+        ko_approval=True,
+        ko_targets=(".github/pull_request_template_KO.md",),
+    ).replace("## TDD 근거", "## TDD Evidence").replace(
         "최초 RED:", "First RED:"
     ).replace("예상 RED 실패:", "Expected RED failure:").replace("최소 GREEN:", "Minimum GREEN:").replace(
         "## 계약 영향", "## Contract 영향"
@@ -656,6 +694,13 @@ def run_self_test() -> int:
         body=valid_body().replace(f"- `{KO_CHECK}` = pass (Markdown 동기화)", f"- `{KO_CHECK}` = not run (확인 안 함)"),
         changed_files=("docs/README.md",),
     )
+    ko_only_with_approval = valid_input(
+        body=valid_body(ko_approval=True, ko_targets=("AGENTS_KO.md",)),
+        changed_files=("AGENTS_KO.md",),
+    )
+    ko_missing_approval = valid_input(
+        changed_files=("AGENTS_KO.md",),
+    )
     pass_with_open_risk = valid_input(body=valid_body(risk="미확인 gate 위험이 남아 있습니다."))
     non_draft = valid_input(draft=False)
     forbidden_env = valid_input(changed_files=(".env.local",))
@@ -671,6 +716,8 @@ def run_self_test() -> int:
         expect_case("hook self-test evidence missing", hook_missing_self_test, "evidence", STOP_HOOK_SELF_TEST),
         expect_case("markdown KO path missing", markdown_unsynced, "changed-files", "paired KO doc"),
         expect_case("markdown KO evidence missing", markdown_unsynced, "evidence", KO_CHECK),
+        lint_pr(ko_only_with_approval).ok,
+        expect_case("KO approval missing", ko_missing_approval, "evidence", "KO 수정 승인"),
         expect_case("pass with open risk", pass_with_open_risk, "evidence", "미확인"),
         expect_case("non-draft PR", non_draft, "branch", "draft"),
         expect_case("forbidden env path", forbidden_env, "changed-files", ".env"),

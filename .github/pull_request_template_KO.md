@@ -39,6 +39,12 @@ Docs/OpenAPI: generated + verified
 
 contract-reviewer:
 
+## KO 문서 변경
+
+KO 수정 승인: 해당 없음
+KO 대상: 해당 없음
+KO 생성 기준: 해당 없음
+
 ## 주요 위험
 
 주요 위험: 없음

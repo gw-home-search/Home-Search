@@ -1,5 +1,6 @@
 # Data Storage Strategy
 
+
 ## Goal
 
 Store real-estate trade data safely enough that failed processing can be

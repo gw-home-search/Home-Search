@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { resolveApiUrl } from '../features/map/api/resolveApiUrl';
 import { App } from './App';
 
 describe('App', () => {
@@ -29,7 +30,7 @@ describe('App', () => {
     await flushAsyncState();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/map/complexes',
+      resolveApiUrl('/api/v1/map/complexes'),
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -49,7 +50,7 @@ describe('App', () => {
     await flushAsyncState();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/map/regions',
+      resolveApiUrl('/api/v1/map/regions'),
       expect.objectContaining({
         method: 'POST',
         body: expect.stringContaining('"region":"si-do"'),
@@ -71,7 +72,7 @@ describe('App', () => {
     const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/map/complexes',
+      resolveApiUrl('/api/v1/map/complexes'),
       expect.objectContaining({ method: 'POST' }),
     );
 
@@ -86,7 +87,7 @@ describe('App', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenLastCalledWith(
-      '/api/v1/map/regions',
+      resolveApiUrl('/api/v1/map/regions'),
       expect.objectContaining({
         method: 'POST',
         body: expect.stringContaining('"region":"eup-myeon-dong"'),

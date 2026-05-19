@@ -1,5 +1,6 @@
 # UI/UX Migration
 
+
 ## Goal
 
 Redesign the frontend around map exploration while preserving the V1 API

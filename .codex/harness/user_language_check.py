@@ -34,9 +34,25 @@ PROMPT_FILES = [
 ]
 
 REQUIRED_SNIPPETS = {
-    ".github/pull_request_template.md": ["## TDD 근거", "최초 RED:", "예상 RED 실패:", "최소 GREEN:", "## 계약 영향"],
+    ".github/pull_request_template.md": [
+        "## TDD 근거",
+        "최초 RED:",
+        "예상 RED 실패:",
+        "최소 GREEN:",
+        "## 계약 영향",
+        "KO 수정 승인:",
+        "KO 생성 기준:",
+    ],
     ".codex/harness/pr_body_check.py": ["## TDD 근거", "최초 RED:", "예상 RED 실패:", "최소 GREEN:", "## 계약 영향"],
-    ".codex/harness/pr_lint.py": ["## TDD 근거", "최초 RED:", "예상 RED 실패:", "최소 GREEN:", "## 계약 영향"],
+    ".codex/harness/pr_lint.py": [
+        "## TDD 근거",
+        "최초 RED:",
+        "예상 RED 실패:",
+        "최소 GREEN:",
+        "## 계약 영향",
+        "KO 수정 승인:",
+        "KO 생성 기준:",
+    ],
     ".codex/harness/v1_report.py": ["# V1 Slice 보고서", "## TDD 근거", "최초 RED:", "예상 RED 실패:", "최소 GREEN:", "## 계약 영향"],
     ".codex/hooks/stop_verification_gate.py": ["최초 RED", "예상 RED 실패", "최소 GREEN"],
     ".codex/harness/prompts/backend_execute.md": ["Final user-facing evidence labels:", "최초 RED:", "예상 RED 실패:", "최소 GREEN:"],

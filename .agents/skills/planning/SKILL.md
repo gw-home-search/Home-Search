@@ -3,6 +3,7 @@ name: planning
 description: Turn Home Search /goal or ambiguous requests into decision-complete plans with V1 guardrails.
 ---
 
+
 # Planning Skill
 
 Use this skill when a request is goal-level or has ambiguous scope. The goal is to produce an implementation-ready plan while stopping when V1 API or data invariants would change.

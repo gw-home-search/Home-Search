@@ -3,6 +3,7 @@ name: frontend-web
 description: Guide Home Search apps/web Vite React, Kakao map, API adapter, and map-first UI work.
 ---
 
+
 # Frontend Web Skill
 
 Use this skill for `apps/web` frontend planning, implementation, review, or debugging.

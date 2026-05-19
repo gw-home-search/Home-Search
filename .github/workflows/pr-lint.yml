@@ -1,7 +1,7 @@
 name: pr-lint
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, edited, reopened, synchronize, ready_for_review]
 
 permissions:
@@ -15,18 +15,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 1
 
-      - name: Collect changed files without checking out PR code
+      - name: Collect changed files
         shell: bash
         run: |
           set -euo pipefail
           git fetch --no-tags --depth=1 origin \
-            "pull/${{ github.event.pull_request.number }}/head"
-          git diff --name-only -z \
-            "${{ github.event.pull_request.base.sha }}" FETCH_HEAD \
-            > changed-files.nul
+            "${{ github.event.pull_request.base.sha }}"
+          git diff --name-only -z FETCH_HEAD HEAD > changed-files.nul
 
       - name: Lint PR metadata and evidence
         run: |

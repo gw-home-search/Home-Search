@@ -12,4 +12,4 @@ goals = true
 [workflow]
 operating_docs = "ai-docs/README.md"
 canonical_docs = "docs/README.md"
-hooks_enabled = false
+hooks_enabled = true

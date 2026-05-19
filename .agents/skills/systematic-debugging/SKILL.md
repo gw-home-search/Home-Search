@@ -3,6 +3,7 @@ name: systematic-debugging
 description: Handle Home Search failures through reproducible feedback loops, hypothesis testing, root-cause fixes, and regression evidence.
 ---
 
+
 # Systematic Debugging Skill
 
 Use this skill for failing checks, runtime bugs, API mismatches, ingest issues, and map marker failures.

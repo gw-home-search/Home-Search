@@ -1,5 +1,6 @@
 # Next Slice Planning Prompt
 
+
 $v1-slice-harness mode=next
 
 Use this prompt when the user asks for the next Home Search V1 slice without

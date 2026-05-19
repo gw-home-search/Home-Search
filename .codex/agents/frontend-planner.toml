@@ -58,4 +58,6 @@ Output:
 - Verification commands
 - Agent handoffs
 - Stop conditions
+
+When this output is summarized to the user, use Korean-first prose and labels.
 """

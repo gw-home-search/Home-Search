@@ -21,13 +21,13 @@ Instructions:
   `planning-only`.
 - For `planning-only`, do not continue into implementation automatically.
 
-Output labels:
+User-facing output labels:
 
 ```text
 상태:
 현재:
-다음 Slice:
-Acceptance Criteria:
+다음 slice 후보:
+인수 기준:
 검증:
 다음 행동:
 ```

@@ -21,5 +21,7 @@ Output:
 - Unknowns
 - Web/API collision risk
 
+When this output is summarized to the user, use Korean-first prose and labels.
+
 Do not read KO body files.
 """

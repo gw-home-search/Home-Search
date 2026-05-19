@@ -11,19 +11,20 @@ Use this skill for review requests or final self-review after implementation.
 
 Findings first. Each finding includes severity, file/line, problem, impact, and required fix.
 
-For final self-review, also report:
+Use Korean-first labels for user-facing review output:
 
-- Verification evidence reviewed.
-- Missing tests or verification gaps.
-- Residual risk.
-- KO sync status when Markdown changed.
+- 지적사항.
+- 검증 근거 확인.
+- 검증 공백.
+- 잔여 위험.
+- Markdown이 변경되었으면 KO sync 상태.
 
 Severity:
 
-- Critical.
-- High.
-- Medium.
-- Low.
+- 치명(Critical).
+- 높음(High).
+- 중간(Medium).
+- 낮음(Low).
 
 ## Review Axes
 
@@ -38,5 +39,5 @@ Severity:
 ## Rules
 
 - Report style-only comments only when they violate a documented rule or carry real risk.
-- If there are no findings, say so clearly and mention remaining test gaps or residual risk.
+- If there are no findings, say so clearly in Korean and mention remaining test gaps or residual risk.
 - Public API, DB, and ingest invariant risks take priority over style.

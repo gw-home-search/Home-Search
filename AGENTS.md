@@ -87,6 +87,27 @@ All writes for this project belong under `/Users/gwongwangjae/home-search`.
 - Do not claim completion without verification evidence. If a check cannot run,
   report the reason and residual risk.
 
+## User-Facing Language Policy
+
+- User-facing agent output, review summaries, PR body prose, hook block
+  reasons, and report headings should be Korean-first and concise.
+- Internal code, implementation comments, agent operating instructions, and
+  harness prompt instructions should remain English unless the specific text is
+  a user-facing output label or generated body.
+- Keep technical tokens in their canonical form when translation would reduce
+  precision: commands, paths, file names, CLI options, branch names, JSON keys,
+  API fields, status values such as `Pass|Partial|Fail` and
+  `pass|fail|not run`, GitHub check names, and agent ids such as
+  `contract-reviewer` or `reviewer`.
+- Prefer these Korean labels in new evidence and reviews: `지적사항`,
+  `검증 근거 확인`, `검증 공백`, `잔여 위험`, `인수 기준`, `TDD 근거`,
+  `최초 RED`, `예상 RED 실패`, `최소 GREEN`, `계약 영향`.
+- Severity labels should be Korean-first with the English term retained when
+  useful: `치명(Critical)`, `높음(High)`, `중간(Medium)`, `낮음(Low)`.
+- Validators and hooks may accept legacy English labels for compatibility, but
+  generated templates and new user-visible guidance should use Korean-first
+  labels.
+
 ## Git Publishing
 
 - Local commits may be used to preserve completed work when requested or useful

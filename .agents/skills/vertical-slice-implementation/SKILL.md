@@ -50,3 +50,6 @@ For each slice, provide:
 - Tests.
 - Verification.
 - Parallelism: can run in parallel, blocks another slice, or must run first.
+
+Use Korean-first prose in user-facing slice breakdowns while keeping commands,
+paths, API names, and status tokens unchanged.

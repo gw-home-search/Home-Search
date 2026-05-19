@@ -21,10 +21,13 @@ if hasattr(sys.stdout, "reconfigure"):
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REPORT_ROOT = REPO_ROOT / ".codex" / "harness" / "reports"
 PR_BODY_COMMANDS = [
+    "git diff --check",
     "cd apps/api && ./gradlew test",
     "cd apps/web && npm run test",
     "cd apps/web && npm run build",
-    "git diff --check",
+    "python3 .codex/harness/pr_lint.py --self-test",
+    "python3 .codex/harness/user_language_check.py --self-test",
+    "bash scripts/check-ko-docs.sh",
 ]
 
 
@@ -157,8 +160,8 @@ def pr_body_path_for(payload: dict[str, Any], explicit: str | None) -> Path:
 
 def render_matrix(verification: dict[str, Any]) -> str:
     if not verification:
-        return "| Command | Status |\n| --- | --- |\n| not run | skipped |\n"
-    lines = ["| Command | Status |", "| --- | --- |"]
+        return "| 명령 | 상태 |\n| --- | --- |\n| not run | skipped |\n"
+    lines = ["| 명령 | 상태 |", "| --- | --- |"]
     for command, result in verification.items():
         safe_command = str(command).replace("|", "\\|")
         lines.append(f"| `{safe_command}` | {command_summary(result)} |")
@@ -198,8 +201,8 @@ def render_pr_body(payload: dict[str, Any]) -> str:
     contract_text = "영향 없음" if not contract_risks else "영향 있음: " + "; ".join(str(item) for item in contract_risks)
     risk_text = "없음" if not residual_risks else "; ".join(str(item) for item in residual_risks)
     next_action = payload.get("next_action") or "GitHub PR diff와 checks를 확인한 뒤 수동 merge 결정"
-    report_link = links.get("markdown_report") or "not generated"
-    payload_link = links.get("payload_json") or "not generated"
+    report_link = links.get("markdown_report") or "생성 안 됨"
+    payload_link = links.get("payload_json") or "생성 안 됨"
     lines = "\n".join(verification_line(command, verification) for command in PR_BODY_COMMANDS)
     return f"""## 요약
 
@@ -215,30 +218,30 @@ payload: {payload_link}
 
 - backend: V1 slice payload 기준 변경 확인
 - frontend: V1 slice payload 기준 변경 확인
-- harness: integration branch push와 draft PR 생성 지원
-- docs/infra: PR template, CI workflow, PR body evidence check
+- harness: integration branch push, draft PR 생성, strict PR lint evidence 지원
+- docs/infra: PR template, pr-lint CI workflow, KO sync evidence
 
-## TDD Evidence
+## TDD 근거
 
-First RED: `.codex/harness/v1 dry map-contract-hardening --pr` 옵션 미지원 또는 PR body checker 없음
-Expected RED failure: harness가 PR 옵션과 body evidence 검사를 제공하지 않음
-Minimum GREEN: integration 성공 후 draft PR body 생성, PR body 검사, integration branch push/PR command 준비
+최초 RED: PR lint self-test fixture가 unchecked checklist, missing changed-file evidence, non-draft PR을 차단
+예상 RED 실패: pr-lint가 body/evidence/changed-files/branch group error를 출력
+최소 GREEN: integration 성공 후 strict PR body 생성, PR lint 통과, integration branch push/PR command 준비
 
 ## 검증
 
 검증:
 {lines}
 
-## Contract 영향
+## 계약 영향
 
 {contract_text}
 
-contract-reviewer: not needed unless payload lists contract risks
+contract-reviewer: contract risk 없으면 not needed, 있으면 필요
 
 ## 주요 위험
 
 주요 위험: {risk_text}
-reviewer: Findings = none unless gate report lists findings
+reviewer: 지적사항 = none, gate report에 지적사항이 있으면 listed
 
 ## 다음 행동
 
@@ -268,9 +271,9 @@ def render_report(payload: dict[str, Any]) -> str:
     commands = nested(payload, "commands", default={})
     notifications = nested(payload, "notifications", default={})
 
-    return f"""# V1 Slice Report: {slice_name}
+    return f"""# V1 Slice 보고서: {slice_name}
 
-## Summary
+## 요약
 - status: {status}
 - preset: {payload.get("preset", "unknown")}
 - targets: {targets}
@@ -278,45 +281,45 @@ def render_report(payload: dict[str, Any]) -> str:
 - finished_at: {payload.get("finished_at", "")}
 - next_action: {payload.get("next_action", "")}
 
-## Branches
+## 브랜치
 - api_branch: {branches.get("api")}
 - web_branch: {branches.get("web")}
 - integration_branch: {branches.get("integration")}
 
-## Worktrees
+## worktree
 - main: {worktrees.get("main")}
 - api: {worktrees.get("api")}
 - web: {worktrees.get("web")}
 
-## Commits
+## 커밋
 - api: {commits.get("api")}
 - web: {commits.get("web")}
 - integration_head: {commits.get("integration_head")}
 
-## Verification Matrix
+## 검증 매트릭스
 {render_matrix(nested(payload, "verification", default={}))}
-## Gate Review
-{payload.get("gate_review") or "not run"}
+## 게이트 리뷰
+{payload.get("gate_review") or "실행 안 됨"}
 
-## Risks
-### Contract Risks
+## 위험
+### 계약 위험
 {render_list(as_list(payload.get("contract_risks")))}
-### Residual Risks
+### 잔여 위험
 {render_list(as_list(payload.get("residual_risks")))}
-## Next Action
-{payload.get("next_action") or "not specified"}
+## 다음 행동
+{payload.get("next_action") or "지정 안 됨"}
 
-## Commands
-- main_merge_command: `{commands.get("main_merge_command", "not suggested")}`
-- push_command_suggestion: `{commands.get("push_command_suggestion", "not suggested")}`
+## 명령
+- main_merge_command: `{commands.get("main_merge_command", "제안 없음")}`
+- push_command_suggestion: `{commands.get("push_command_suggestion", "제안 없음")}`
 
-## Links
+## 링크
 - markdown_report: {links.get("markdown_report")}
 - payload_json: {links.get("payload_json")}
 - notion_page_url: {links.get("notion_page_url")}
 - slack_message_url: {links.get("slack_message_url")}
 
-## Notifications
+## 알림
 - notion: {notifications.get("notion", "skipped")}
 - slack: {notifications.get("slack", "skipped")}
 """
@@ -383,6 +386,8 @@ def run_reporters(
 
 
 def run_self_test() -> int:
+    from pr_lint import PrInput, lint_pr
+
     payload = {
         "slice": "self-test",
         "status": "Pass",
@@ -394,14 +399,28 @@ def run_self_test() -> int:
     }
     rendered = render_report(payload)
     pr_body = render_pr_body(payload)
+    linted_pr_body = lint_pr(
+        PrInput(
+            title="V1 self-test integration",
+            body=pr_body,
+            base="main",
+            head="feat/self-test-integration",
+            draft=True,
+            changed_files=(),
+        )
+    )
     checks = [
-        "# V1 Slice Report: self-test" in rendered,
-        "Verification Matrix" in rendered,
+        "# V1 Slice 보고서: self-test" in rendered,
+        "검증 매트릭스" in rendered,
         "`git diff --check`" in rendered,
+        "`python3 .codex/harness/pr_lint.py --self-test`" in pr_body,
+        "`python3 .codex/harness/user_language_check.py --self-test`" in pr_body,
+        "`bash scripts/check-ko-docs.sh`" in pr_body,
         "## 요약" in pr_body,
-        "First RED:" in pr_body,
+        "최초 RED:" in pr_body,
         "검증:" in pr_body,
         "영향 없음" in pr_body,
+        linted_pr_body.ok,
     ]
     if all(checks):
         print("self-test passed: v1_report")

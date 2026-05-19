@@ -25,16 +25,17 @@ Instructions:
 - Read root AGENTS.md, apps/api/AGENTS.md, CONTEXT.md, apps/api/CONTEXT.md, and relevant canonical docs before editing.
 - Preserve the V1 API contract and data invariants.
 - Do not introduce V2 ranking, favorite, alarm, mail, recommendation, auth, or heavy analytics work.
-- Use the minimum GREEN slice and leave a short Korean gate summary.
+- Use the minimum GREEN slice and leave a short Korean-first gate summary.
 
 Required verification:
 - {{VERIFICATION_COMMANDS}}
+- Use exact evidence line format: ``- `command` = pass|fail|not run (Korean reason)``.
 
-Final evidence labels:
+Final user-facing evidence labels:
 - 상태:
-- First RED:
-- Expected RED failure:
-- Minimum GREEN:
+- 최초 RED:
+- 예상 RED 실패:
+- 최소 GREEN:
 - 검증:
 - 주요 위험:
 - 다음 행동:

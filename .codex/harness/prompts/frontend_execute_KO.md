@@ -1,4 +1,4 @@
-# Frontend Slice Execute Prompt 한국어 동기화본
+# Frontend Slice Execute Prompt
 
 $v1-slice-harness mode=execute
 
@@ -7,10 +7,10 @@ Preset: {{PRESET}}
 Target: {{TARGET}}
 Branch: {{BRANCH_NAME}}
 
-허용 수정 범위:
+Allowed edit scope:
 - {{ALLOWED_SCOPE}}
 
-금지 수정 범위:
+Forbidden edit scope:
 - {{FORBIDDEN_SCOPE}}
 - docs/**
 - AGENTS.md
@@ -21,20 +21,21 @@ Branch: {{BRANCH_NAME}}
 - package-lock.json
 - build output
 
-지시:
-- 수정 전에 root AGENTS.md, apps/web/AGENTS.md, CONTEXT.md, apps/web/CONTEXT.md, docs/API_CONTRACT.md, docs/MAP_DISPLAY_FLOW.md, docs/UI_UX_MIGRATION.md를 읽는다.
-- V1 URLs, request fields, response fields, units, coordinate conventions, empty/error behavior를 보존한다.
-- marker API 실패 시에도 map을 사용할 수 있게 유지한다.
-- minimum GREEN slice만 구현하고 짧은 한국어 gate summary를 남긴다.
+Instructions:
+- Read root AGENTS.md, apps/web/AGENTS.md, CONTEXT.md, apps/web/CONTEXT.md, docs/API_CONTRACT.md, docs/MAP_DISPLAY_FLOW.md, and docs/UI_UX_MIGRATION.md before editing.
+- Preserve V1 URLs, request fields, response fields, units, coordinate conventions, and empty/error behavior.
+- Keep the map usable on marker API failure.
+- Use the minimum GREEN slice and leave a short Korean-first gate summary.
 
-필수 검증:
+Required verification:
 - {{VERIFICATION_COMMANDS}}
+- Use exact evidence line format: ``- `command` = pass|fail|not run (Korean reason)``.
 
-최종 evidence labels:
+Final user-facing evidence labels:
 - 상태:
-- First RED:
-- Expected RED failure:
-- Minimum GREEN:
+- 최초 RED:
+- 예상 RED 실패:
+- 최소 GREEN:
 - 검증:
 - 주요 위험:
 - 다음 행동:

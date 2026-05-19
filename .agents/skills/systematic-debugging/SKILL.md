@@ -30,3 +30,5 @@ Use this skill for failing checks, runtime bugs, API mismatches, ingest issues, 
 ## Stop Rule
 
 After three failed fixes, stop implementation and return to planning. Preserve the current evidence and excluded hypotheses.
+Use Korean-first prose when reporting the debugging result to the user, while
+keeping commands, paths, error identifiers, and status tokens unchanged.

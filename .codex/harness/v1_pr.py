@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from pr_body_check import check_body, format_errors
+from pr_lint import PrInput, format_grouped_errors, lint_pr, valid_body
 
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -77,11 +77,41 @@ def branch_exists(branch: str, cwd: Path) -> bool:
     return result.returncode == 0
 
 
-def check_pr_body(path: Path) -> None:
-    body = path.read_text(encoding="utf-8")
-    result = check_body(body)
+def changed_files_for_branch(main: Path, base: str, branch: str) -> tuple[str, ...]:
+    result = subprocess.run(
+        ["git", "diff", "--name-only", "-z", f"{base}...{branch}"],
+        cwd=main,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        message = (result.stderr or result.stdout).decode("utf-8", errors="replace").strip()
+        raise ValueError(f"changed file 목록을 만들 수 없습니다: {message}")
+    return tuple(part.decode("utf-8") for part in result.stdout.split(b"\0") if part)
+
+
+def check_pr_inputs(
+    args: argparse.Namespace,
+    body_path: Path,
+    changed_files: tuple[str, ...],
+    *,
+    enforce_changed_file_rules: bool,
+) -> None:
+    body = body_path.read_text(encoding="utf-8")
+    result = lint_pr(
+        PrInput(
+            title=args.title,
+            body=body,
+            base=args.base,
+            head=args.branch,
+            draft=bool(args.draft),
+            changed_files=changed_files,
+        ),
+        enforce_changed_file_rules=enforce_changed_file_rules,
+    )
     if not result.ok:
-        raise ValueError("PR body 검사 실패\n" + format_errors(result.errors))
+        raise ValueError("PR lint 검사 실패\n" + format_grouped_errors(result.errors))
 
 
 def manual_commands(args: argparse.Namespace) -> str:
@@ -163,7 +193,19 @@ def create_pr(args: argparse.Namespace) -> int:
     body_path = Path(args.body_file).resolve()
     try:
         validate_branch(args.branch)
-        check_pr_body(body_path)
+        if args.dry_run:
+            check_pr_inputs(args, body_path, (), enforce_changed_file_rules=False)
+        else:
+            if not main.exists():
+                return fail(f"main worktree not found: {main}")
+            if not branch_exists(args.branch, main):
+                return fail(f"local integration branch not found: {args.branch}", 2)
+            check_pr_inputs(
+                args,
+                body_path,
+                changed_files_for_branch(main, args.base, args.branch),
+                enforce_changed_file_rules=True,
+            )
     except (OSError, ValueError) as exc:
         return fail(str(exc), 2)
 
@@ -192,11 +234,6 @@ def create_pr(args: argparse.Namespace) -> int:
         print(f"pr: {printable(pr_command)}")
         update_payload(args.payload_json, "DRY_RUN_PR_URL", dry_run=True)
         return 0
-
-    if not main.exists():
-        return fail(f"main worktree not found: {main}")
-    if not branch_exists(args.branch, main):
-        return fail(f"local integration branch not found: {args.branch}", 2)
 
     ready, reason = gh_ready(main)
     if not ready:
@@ -252,6 +289,30 @@ def run_self_test() -> int:
         checks.append(True)
     checks.append("--draft" in manual_commands(args))
     checks.append(args.draft is True)
+    checks.append(
+        lint_pr(
+            PrInput(
+                title="V1 map-contract-hardening integration",
+                body=valid_body(),
+                base="main",
+                head=args.branch,
+                draft=True,
+                changed_files=(),
+            )
+        ).ok
+    )
+    checks.append(
+        not lint_pr(
+            PrInput(
+                title="V1 map-contract-hardening integration",
+                body=valid_body(),
+                base="main",
+                head=args.branch,
+                draft=False,
+                changed_files=(),
+            )
+        ).ok
+    )
     if all(checks):
         print("self-test passed: v1_pr")
         return 0
@@ -265,7 +326,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base", default="main")
     parser.add_argument("--title")
     parser.add_argument("--body-file")
-    parser.add_argument("--draft", action="store_true", default=True, help="Create a draft PR. Default: enabled.")
+    draft = parser.add_mutually_exclusive_group()
+    draft.add_argument("--draft", dest="draft", action="store_true", help="Create a draft PR.")
+    draft.add_argument("--no-draft", dest="draft", action="store_false", help="Rejects before PR creation; kept for lint tests.")
+    parser.set_defaults(draft=True)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--notion", action="store_true", help="Best-effort Notion report after PR URL is known.")
     parser.add_argument("--slack", action="store_true", help="Best-effort Slack report after PR URL is known.")

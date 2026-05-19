@@ -143,12 +143,13 @@ def has_successful_command(text: str, command_re: re.Pattern[str]) -> bool:
 def has_first_red_evidence(text: str) -> bool:
     if re.search(r"blocked/no test environment", text, re.IGNORECASE):
         return True
-    if re.search(r"First RED\s*:\s*(없음|no|none)", text, re.IGNORECASE):
+    first_red_label = r"(?:최초 RED|First RED)"
+    if re.search(rf"{first_red_label}\s*:\s*(없음|no|none)", text, re.IGNORECASE):
         return False
     return bool(
         re.search(
-            r"(First RED\s*:\s*(있음|yes)|valid RED|RED validity\s*=\s*Pass|"
-            r"expected RED failure|RED failure|failing test)",
+            rf"({first_red_label}\s*:\s*(있음|yes)|valid RED|RED validity\s*=\s*Pass|"
+            r"예상 RED 실패|expected RED failure|RED failure|failing test)",
             text,
             re.IGNORECASE,
         )
@@ -160,7 +161,7 @@ def has_expected_red_failure_evidence(text: str) -> bool:
         return True
     return bool(
         re.search(
-            r"Expected RED failure\s*:\s*(확인|yes|confirmed|해당 없음|n/a)",
+            r"(?:예상 RED 실패|Expected RED failure)\s*:\s*(확인|yes|confirmed|해당 없음|n/a)",
             text,
             re.IGNORECASE,
         )
@@ -172,7 +173,7 @@ def has_minimum_green_evidence(text: str) -> bool:
         return True
     return bool(
         re.search(
-            r"Minimum GREEN\s*:\s*(확인|yes|confirmed|해당 없음|n/a)",
+            r"(?:최소 GREEN|Minimum GREEN)\s*:\s*(확인|yes|confirmed|해당 없음|n/a)",
             text,
             re.IGNORECASE,
         )
@@ -190,7 +191,7 @@ def has_tdd_slice_evidence(text: str) -> bool:
 def has_contract_reviewer_evidence(text: str) -> bool:
     return bool(
         re.search(
-            r"contract-reviewer\s*:\s*Gate decision\s*=\s*(Pass|Partial|Fail)",
+            r"contract-reviewer\s*:\s*(?:게이트 결정|Gate decision)\s*=\s*(Pass|Partial|Fail)",
             text,
             re.IGNORECASE,
         )
@@ -199,14 +200,20 @@ def has_contract_reviewer_evidence(text: str) -> bool:
 
 def has_implementation_review_evidence(text: str) -> bool:
     return bool(
-        re.search(r"reviewer\s*:\s*Findings\s*=\s*(none|listed)", text, re.IGNORECASE)
+        re.search(r"reviewer\s*:\s*(?:지적사항|Findings)\s*=\s*(none|listed|없음|있음)", text, re.IGNORECASE)
         or re.search(r"tdd-guide\s*:\s*RED validity\s*=\s*(Pass|Partial|Fail)", text, re.IGNORECASE)
     )
 
 
 def has_short_korean_review(text: str) -> bool:
-    required = ("상태:", "First RED:", "검증:", "주요 위험:", "다음 행동:")
-    if not all(label in text for label in required):
+    required_groups = (
+        ("상태:",),
+        ("최초 RED:", "First RED:"),
+        ("검증:",),
+        ("주요 위험:",),
+        ("다음 행동:",),
+    )
+    if not all(any(label in text for label in labels) for labels in required_groups):
         return False
     return bool(re.search(r"상태:\s*(Pass|Partial|Fail)", text))
 
@@ -264,7 +271,7 @@ def missing_evidence(files: list[str], text: str) -> list[str]:
 
     if any(is_behavior_change(path) for path in files):
         if not has_tdd_slice_evidence(text):
-            missing.append("behavior 변경: First RED, Expected RED failure, Minimum GREEN evidence 필요")
+            missing.append("behavior 변경: 최초 RED, 예상 RED 실패, 최소 GREEN evidence 필요")
 
     if any(is_contract_related(path) for path in files):
         if not has_contract_reviewer_evidence(text):
@@ -299,9 +306,9 @@ def run_self_test() -> int:
             [
                 "상태: Partial",
                 "검증: ./gradlew test = pass",
-                "reviewer: Findings = none",
+                "reviewer: 지적사항 = 없음",
                 "주요 위험: 없음",
-                "다음 행동: First RED 보강",
+                "다음 행동: 최초 RED 보강",
             ]
         ),
     )
@@ -309,11 +316,11 @@ def run_self_test() -> int:
         [".codex/hooks/pre_tool_use_policy.py"],
         "\n".join(
             [
-                "First RED: blocked/no test environment",
-                "Expected RED failure: 해당 없음",
-                "Minimum GREEN: 확인",
+                "최초 RED: blocked/no test environment",
+                "예상 RED 실패: 해당 없음",
+                "최소 GREEN: 확인",
                 "검증: python3 .codex/hooks/pre_tool_use_policy.py --self-test = pass",
-                "reviewer: Findings = none",
+                "reviewer: 지적사항 = 없음",
             ]
         ),
     )
@@ -322,11 +329,11 @@ def run_self_test() -> int:
         "\n".join(
             [
                 "상태: Pass",
-                "First RED: blocked/no test environment",
-                "Expected RED failure: 해당 없음",
-                "Minimum GREEN: 확인",
+                "최초 RED: blocked/no test environment",
+                "예상 RED 실패: 해당 없음",
+                "최소 GREEN: 확인",
                 "검증: python3 .codex/hooks/pre_tool_use_policy.py --self-test = pass",
-                "reviewer: Findings = none",
+                "reviewer: 지적사항 = 없음",
                 "주요 위험: 없음",
                 "다음 행동: 없음",
             ]
@@ -338,7 +345,7 @@ def run_self_test() -> int:
     )
 
     tests = [
-        ("missing First RED is detected", any("First RED" in item for item in missing_red)),
+        ("missing First RED is detected", any("최초 RED" in item or "First RED" in item for item in missing_red)),
         ("missing Korean review is detected", any("짧은 한글 리뷰" in item for item in missing_review)),
         ("complete hook review passes", not complete_hook_review),
         ("markdown KO evidence passes", not markdown_complete),

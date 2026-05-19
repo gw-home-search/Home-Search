@@ -1,43 +1,19 @@
 #!/usr/bin/env python3
-"""Validate Home Search PR bodies for Korean evidence sections."""
+"""Compatibility wrapper for Home Search PR body linting."""
 
 from __future__ import annotations
 
 import argparse
 import os
-import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from pr_lint import check_body as strict_check_body
+
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
-
-REQUIRED_SECTIONS = [
-    "요약",
-    "작업 범위",
-    "TDD Evidence",
-    "검증",
-    "Contract 영향",
-    "주요 위험",
-    "다음 행동",
-    "체크리스트",
-]
-EVIDENCE_LABELS = [
-    "First RED:",
-    "Expected RED failure:",
-    "Minimum GREEN:",
-]
-VERIFICATION_COMMANDS = [
-    "cd apps/api && ./gradlew test",
-    "cd apps/web && npm run test",
-    "cd apps/web && npm run build",
-    "git diff --check",
-]
-MIN_NONSPACE_LENGTH = 120
-MIN_HANGUL_COUNT = 20
-MIN_HANGUL_RATIO = 0.08
 
 
 @dataclass(frozen=True)
@@ -57,64 +33,9 @@ def read_body(args: argparse.Namespace) -> str:
     return value
 
 
-def has_section(body: str, section: str) -> bool:
-    pattern = re.compile(rf"^\s{{0,3}}#{{1,6}}\s+{re.escape(section)}\s*$", re.MULTILINE)
-    return pattern.search(body) is not None
-
-
-def hangul_count(text: str) -> int:
-    return len(re.findall(r"[가-힣]", text))
-
-
-def nonspace_length(text: str) -> int:
-    return len(re.sub(r"\s+", "", text))
-
-
-def has_verification_command(body: str) -> bool:
-    return any(command in body for command in VERIFICATION_COMMANDS)
-
-
-def has_verification_status(body: str) -> bool:
-    return re.search(r"=\s*(pass|fail|not run)\b", body, re.IGNORECASE) is not None
-
-
 def check_body(body: str) -> CheckResult:
-    errors: list[str] = []
-    stripped = body.strip()
-    compact_length = nonspace_length(stripped)
-    hangul = hangul_count(stripped)
-    ratio = hangul / max(compact_length, 1)
-
-    if not stripped:
-        errors.append("PR 본문이 비어 있습니다.")
-    if compact_length < MIN_NONSPACE_LENGTH:
-        errors.append("PR 본문이 너무 짧습니다.")
-    if hangul < MIN_HANGUL_COUNT or ratio < MIN_HANGUL_RATIO:
-        errors.append("한국어 본문 비중이 부족합니다.")
-
-    for section in REQUIRED_SECTIONS:
-        if not has_section(body, section):
-            errors.append(f"필수 섹션 누락: {section}")
-
-    for label in EVIDENCE_LABELS:
-        if label not in body:
-            errors.append(f"evidence label 누락: {label}")
-
-    if "검증:" not in body:
-        errors.append("검증 label이 필요합니다.")
-    if not has_verification_command(body):
-        errors.append("검증 command가 필요합니다.")
-    if not has_verification_status(body):
-        errors.append("검증 결과는 pass/fail/not run 중 하나여야 합니다.")
-
-    if not re.search(r"영향\s+없음|영향\s+있음\s*:", body):
-        errors.append("Contract 영향은 '영향 없음' 또는 '영향 있음:'으로 작성하세요.")
-    if "주요 위험:" not in body:
-        errors.append("주요 위험 label이 필요합니다.")
-    if "다음 행동:" not in body:
-        errors.append("다음 행동 label이 필요합니다.")
-
-    return CheckResult(ok=not errors, errors=errors)
+    result = strict_check_body(body)
+    return CheckResult(ok=result.ok, errors=result.errors)
 
 
 def format_errors(errors: list[str]) -> str:
@@ -125,30 +46,27 @@ def valid_sample() -> str:
     return """## 요약
 
 상태: Pass
-이번 PR은 V1 harness의 integration branch push와 draft PR 생성을 추가합니다.
+이번 PR은 V1 harness의 integration branch push와 draft PR evidence 검사를 강화합니다.
 
 ## 작업 범위
 
 - backend: 없음
 - frontend: 없음
-- harness: PR 생성과 PR body 검사
+- harness: PR lint wrapper와 body evidence 검사
 - docs/infra: GitHub PR template과 CI workflow
 
-## TDD Evidence
+## TDD 근거
 
-First RED: `.codex/harness/v1 dry map-contract-hardening --pr` 옵션 미지원 실패
-Expected RED failure: argparse가 `--pr` 옵션을 인식하지 못함
-Minimum GREEN: dry-run에서 PR body 생성과 PR command 출력 확인
+최초 RED: unchecked checklist fixture fails strict PR lint
+예상 RED 실패: body group reports unchecked checklist item
+최소 GREEN: checked draft PR body fixture passes strict body lint
 
 ## 검증
 
 검증:
-- `cd apps/api && ./gradlew test` = not run (harness only)
-- `cd apps/web && npm run test` = not run (harness only)
-- `cd apps/web && npm run build` = not run (harness only)
-- `git diff --check` = pass
+- `git diff --check` = pass (정상)
 
-## Contract 영향
+## 계약 영향
 
 영향 없음
 
@@ -156,8 +74,8 @@ contract-reviewer: not needed
 
 ## 주요 위험
 
-주요 위험: gh 인증이 없으면 자동 PR 생성이 중단됩니다.
-reviewer: Findings = none
+주요 위험: 없음
+reviewer: 지적사항 = none
 
 ## 다음 행동
 
@@ -179,35 +97,19 @@ reviewer: Findings = none
 def run_self_test() -> int:
     passing = check_body(valid_sample())
     empty = check_body("")
-    english_only = check_body(
-        """## Summary
-
-Status: Pass
-This pull request adds draft pull request automation and evidence checks.
-
-## Scope
-
-- harness: pull request automation
-
-## Evidence
-
-First RED: missing option
-Expected RED failure: parser error
-Minimum GREEN: dry-run command succeeds
-
-Validation:
-- `git diff --check` = pass (ok)
-"""
-    )
-    missing_evidence = check_body(valid_sample().replace("First RED:", "First:"))
+    unchecked = check_body(valid_sample().replace("- [x] draft PR", "- [ ] draft PR"))
+    missing_diff = check_body(valid_sample().replace("- `git diff --check` = pass (정상)\n", ""))
+    pass_with_risk = check_body(valid_sample().replace("주요 위험: 없음", "주요 위험: 미확인 risk"))
     checks = [
         passing.ok,
         not empty.ok,
-        "PR 본문이 비어 있습니다." in empty.errors,
-        not english_only.ok,
-        any("한국어" in error for error in english_only.errors),
-        not missing_evidence.ok,
-        any("First RED:" in error for error in missing_evidence.errors),
+        any("empty" in error or "비어" in error for error in empty.errors),
+        not unchecked.ok,
+        any("draft PR" in error for error in unchecked.errors),
+        not missing_diff.ok,
+        any("git diff --check" in error for error in missing_diff.errors),
+        not pass_with_risk.ok,
+        any("미확인" in error for error in pass_with_risk.errors),
     ]
     if all(checks):
         print("self-test passed: pr_body_check")
@@ -219,7 +121,7 @@ Validation:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Check Korean Home Search PR body evidence.")
+    parser = argparse.ArgumentParser(description="Check Home Search PR body evidence.")
     parser.add_argument("--body-file", help="PR body Markdown file.")
     parser.add_argument("--body-env", help="Environment variable containing the PR body.")
     parser.add_argument("--self-test", action="store_true")

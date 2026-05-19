@@ -129,7 +129,8 @@ def deny(reason: str) -> None:
                     "permissionDecision": "deny",
                     "permissionDecisionReason": reason,
                 }
-            }
+            },
+            ensure_ascii=False,
         )
     )
     raise SystemExit(0)
@@ -401,17 +402,17 @@ def check_dangerous_command(command: str) -> None:
         words = shell_words(cmd)
         lowered = " ".join(words).lower()
         if any(Path(word).name == "sudo" for word in words):
-            deny("Blocked sudo: Home Search hooks do not allow privileged commands.")
+            deny("sudo 차단: Home Search hook은 privileged command를 허용하지 않습니다.")
         if re.search(r"(^|\s)git\s+reset\s+--hard(\s|$)", lowered):
-            deny("Blocked git reset --hard: destructive history/worktree reset is not allowed.")
+            deny("git reset --hard 차단: destructive history/worktree reset은 허용하지 않습니다.")
         if re.search(r"(^|\s)git\s+clean\s+-[a-z]*f[a-z]*d[a-z]*(\s|$)", lowered):
-            deny("Blocked git clean -fd/-df: destructive untracked-file cleanup is not allowed.")
+            deny("git clean -fd/-df 차단: destructive untracked-file cleanup은 허용하지 않습니다.")
         for idx, word in enumerate(words):
             if Path(word).name != "rm":
                 continue
             flags = "".join(w[1:] for w in words[idx + 1 :] if w.startswith("-"))
             if "r" in flags and "f" in flags:
-                deny("Blocked rm -rf: destructive recursive deletion is not allowed.")
+                deny("rm -rf 차단: destructive recursive deletion은 허용하지 않습니다.")
 
 
 def check_payload(
@@ -433,7 +434,7 @@ def check_payload(
 
     for path in paths:
         if is_secret_path(path):
-            deny(f"Blocked secrets/env access: {path}")
+            deny(f"secrets/env 접근 차단: {path}")
 
     is_mutation = command_is_mutation(command)
     if tool_name and re.search(r"apply_patch|write|edit|fs\.write", tool_name, re.IGNORECASE):
@@ -451,15 +452,15 @@ def check_payload(
 
     for path in paths:
         if path == "docs/API_CONTRACT.md":
-            deny("Blocked docs/API_CONTRACT.md mutation without explicit approval.")
+            deny("명시 승인 없는 docs/API_CONTRACT.md 변경 차단.")
         if is_protected_mutation_path(path):
-            deny(f"Blocked protected path mutation: {path}")
+            deny(f"protected path 변경 차단: {path}")
 
     scope = infer_worktree_scope(root, cwd, branch)
     if scope == "backend" and any(path.startswith("apps/web/") for path in paths):
-        deny("Blocked backend worktree mutation of apps/web/**.")
+        deny("backend worktree에서 apps/web/** 변경 차단.")
     if scope == "frontend" and any(path.startswith("apps/api/") for path in paths):
-        deny("Blocked frontend worktree mutation of apps/api/**.")
+        deny("frontend worktree에서 apps/api/** 변경 차단.")
 
 
 def denied_output(
@@ -492,7 +493,7 @@ def run_self_test() -> int:
     tests = [
         (
             "dangerous rm -rf is denied",
-            lambda: "Blocked rm -rf" in denied_output(
+            lambda: "rm -rf 차단" in denied_output(
                 {"cwd": str(FALLBACK_REPO_ROOT), "tool_input": {"cmd": "rm -rf apps/api/build"}},
                 repo_root=FALLBACK_REPO_ROOT,
                 branch_name="feat/root",

@@ -991,7 +991,7 @@ def run_self_test() -> int:
         pr_args.dry_run is True,
         execution_targets(backend_args) == ["backend"],
         execution_targets(planning_args) == [],
-        "First RED:" in body,
+        "최초 RED:" in body,
         "feat/api-test" == default_names(
             argparse.Namespace(
                 slice="test",

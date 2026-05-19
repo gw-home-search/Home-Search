@@ -42,6 +42,8 @@ Output:
 - Scaffold slice required, only when blocked/no test environment
 - Contract-reviewer handoff, only if URL, method, field, type, unit, error policy, empty-result behavior, or V1/V2 boundary risk exists
 
+When this output is summarized to the user, use Korean-first prose and labels.
+
 Role boundary:
 - tdd-guide decides RED validity, public seam, test file candidate, expected RED failure, and minimum GREEN slice.
 - contract-reviewer decides V1 API contract compatibility.

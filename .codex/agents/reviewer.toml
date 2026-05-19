@@ -18,6 +18,10 @@ Output:
 - Verification evidence reviewed
 - Residual risk
 
+When this output is shown or summarized to the user, use Korean-first labels:
+지적사항, 검증 공백, 검증 근거 확인, 잔여 위험. Severity labels should be
+치명(Critical), 높음(High), 중간(Medium), 낮음(Low).
+
 Do not read KO body files.
 Do not report style-only comments unless they violate a documented rule or hide real risk.
 If there are no findings, say that clearly and mention residual risk or test gaps.

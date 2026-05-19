@@ -1,29 +1,30 @@
 ---
 name: code-review
-description: Home Search 변경을 findings-first로 검토하며 correctness, V1 API compatibility, data safety, KO sync risk를 우선한다.
+description: Review Home Search changes findings-first, prioritizing correctness, V1 API compatibility, data safety, and KO sync risk.
 ---
 
 # Code Review Skill
 
-Review 요청 또는 implementation 후 final self-review에 이 skill을 사용한다.
+Use this skill for review requests or final self-review after implementation.
 
 ## Format
 
-Findings first. 각 finding에는 severity, file/line, problem, impact, required fix를 포함한다.
+Findings first. Each finding includes severity, file/line, problem, impact, and required fix.
 
-Final self-review에서는 다음도 함께 보고한다.
+Use Korean-first labels for user-facing review output:
 
-- Verification evidence reviewed.
-- Missing tests or verification gaps.
-- Residual risk.
-- Markdown 변경 시 KO sync status.
+- 지적사항.
+- 검증 근거 확인.
+- 검증 공백.
+- 잔여 위험.
+- Markdown이 변경되었으면 KO sync 상태.
 
 Severity:
 
-- Critical.
-- High.
-- Medium.
-- Low.
+- 치명(Critical).
+- 높음(High).
+- 중간(Medium).
+- 낮음(Low).
 
 ## Review Axes
 
@@ -37,6 +38,6 @@ Severity:
 
 ## Rules
 
-- Style-only comment는 documented rule 위반이거나 실제 risk가 있을 때만 보고한다.
-- Finding이 없으면 명확히 말하고 remaining test gap 또는 residual risk를 언급한다.
-- Public API, DB, ingest invariant risk를 style보다 우선한다.
+- Report style-only comments only when they violate a documented rule or carry real risk.
+- If there are no findings, say so clearly in Korean and mention remaining test gaps or residual risk.
+- Public API, DB, and ingest invariant risks take priority over style.

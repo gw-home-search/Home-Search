@@ -286,6 +286,40 @@ class MapControllerContractTest {
 		verifyNoInteractions(mapUseCase);
 	}
 
+	@Test
+	@DisplayName("POST /api/v1/map/complexes returns ProblemDetail for unexpected server errors")
+	void unexpectedComplexMarkerErrorReturnsProblemDetail() throws Exception {
+		given(mapUseCase.getComplexMarkers(any(ComplexMarkersRequest.class)))
+			.willThrow(new IllegalStateException("failed to load markers"));
+
+		mockMvc.perform(post("/api/v1/map/complexes")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "swLat": 37.45,
+					  "swLng": 126.85,
+					  "neLat": 37.70,
+					  "neLng": 127.20,
+					  "pyeongMin": null,
+					  "pyeongMax": null,
+					  "priceEokMin": null,
+					  "priceEokMax": null,
+					  "ageMin": null,
+					  "ageMax": null,
+					  "unitMin": null,
+					  "unitMax": null
+					}
+					"""))
+			.andExpect(status().isInternalServerError())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+			.andExpect(jsonPath("$.type").value("/docs/index.html#error-code-list"))
+			.andExpect(jsonPath("$.title").value("S500"))
+			.andExpect(jsonPath("$.status").value(500))
+			.andExpect(jsonPath("$.detail").value("Internal server error."))
+			.andExpect(jsonPath("$.exception").value("IllegalStateException"))
+			.andExpect(jsonPath("$.timestamp").exists());
+	}
+
 	private static Stream<Arguments> invalidComplexFilterRanges() {
 		return Stream.of(
 			Arguments.of("pyeong min greater than max", """

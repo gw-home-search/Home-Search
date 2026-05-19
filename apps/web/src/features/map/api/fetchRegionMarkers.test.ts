@@ -127,6 +127,46 @@ describe('fetchRegionMarkers', () => {
     ).resolves.toEqual([]);
   });
 
+  it('throws a clear contract error when the response is not an array', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ markers: [] })));
+
+    await expect(
+      fetchRegionMarkers({
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+        region: 'si-gun-gu',
+      }),
+    ).rejects.toThrow('Invalid V1 region marker response: expected an array');
+  });
+
+  it('throws a clear contract error when a marker has an invalid coordinate', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse([
+          {
+            id: 1,
+            name: 'Seoul',
+            lat: null,
+            lng: 126.978,
+          },
+        ]),
+      ),
+    );
+
+    await expect(
+      fetchRegionMarkers({
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+        region: 'si-gun-gu',
+      }),
+    ).rejects.toThrow('Invalid V1 region marker response: lat must be a number');
+  });
+
   it('rejects with a clear marker fetch error when the response is not ok', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(errorResponse(500)));
 

@@ -52,6 +52,12 @@ source_sha256 = "8c3b15e5b4dd503e1da3198ee4e4597953fbbea31c5e6133100ea28cd2bf584
 last_synced = "2026-05-18"
 
 [[docs]]
+source = ".agents/skills/v1-slice-harness/SKILL.md"
+ko = ".agents/skills/v1-slice-harness/SKILL_KO.md"
+source_sha256 = "edc40e47c9506a8457f8ceb8b95804783f1589b51a94bd3615f2782558a6f215"
+last_synced = "2026-05-19"
+
+[[docs]]
 source = ".agents/skills/vertical-slice-implementation/SKILL.md"
 ko = ".agents/skills/vertical-slice-implementation/SKILL_KO.md"
 source_sha256 = "a4c10f2102c126b797a64c2c845e75a956b68e5183fff32f29b5e59781f666da"

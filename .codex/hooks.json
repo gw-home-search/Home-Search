@@ -1,0 +1,45 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/gwongwangjae/home-search/.codex/hooks/pre_tool_use_policy.py",
+            "timeoutSec": 5,
+            "async": false,
+            "statusMessage": "Home Search pre-tool policy"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/gwongwangjae/home-search/.codex/hooks/post_tool_use_review.py",
+            "timeoutSec": 5,
+            "async": false,
+            "statusMessage": "Home Search post-tool review"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/gwongwangjae/home-search/.codex/hooks/stop_verification_gate.py",
+            "timeoutSec": 10,
+            "async": false,
+            "statusMessage": "Home Search verification gate"
+          }
+        ]
+      }
+    ]
+  }
+}

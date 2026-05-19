@@ -1,0 +1,548 @@
+#!/usr/bin/env python3
+"""Minimal Home Search PreToolUse guard.
+
+This hook blocks only deterministic hazards. It does not review code, run
+tests, or replace Home Search skills/subagents.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import io
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+
+FALLBACK_REPO_ROOT = Path("/Users/gwongwangjae/home-search")
+
+PROTECTED_MUTATION_PREFIXES = (
+    "ai-docs/",
+    "apps/api/AGENTS.md",
+    "apps/api/AGENTS_KO.md",
+    "apps/web/AGENTS.md",
+    "apps/web/AGENTS_KO.md",
+    "build/",
+    "dist/",
+    "infra/",
+    "scripts/",
+)
+
+PROTECTED_MUTATION_EXACT = {
+    "AGENTS.md",
+    "AGENTS_KO.md",
+    "README.md",
+    "README_KO.md",
+    "package-lock.json",
+}
+
+BUILD_OUTPUT_PARTS = {
+    ".gradle",
+    ".next",
+    ".vite",
+    "build",
+    "coverage",
+    "dist",
+    "node_modules",
+    "out",
+    "target",
+}
+
+READ_ONLY_COMMANDS = {
+    "awk",
+    "cat",
+    "date",
+    "find",
+    "grep",
+    "head",
+    "jq",
+    "ls",
+    "nl",
+    "pwd",
+    "rg",
+    "sed",
+    "sort",
+    "tail",
+    "wc",
+    "which",
+}
+
+READ_ONLY_GIT_SUBCOMMANDS = {
+    "branch",
+    "diff",
+    "grep",
+    "log",
+    "ls-files",
+    "rev-parse",
+    "show",
+    "status",
+}
+
+MUTATION_COMMANDS = {
+    "chmod",
+    "chown",
+    "cp",
+    "install",
+    "ln",
+    "mkdir",
+    "mv",
+    "perl",
+    "python",
+    "python3",
+    "rm",
+    "rmdir",
+    "ruby",
+    "sed",
+    "tee",
+    "touch",
+    "truncate",
+}
+
+SECRET_PATH_RE = re.compile(
+    r"(^|/)(\.env(?:\..*)?|[^/\s]*(?:secret|credential|token)[^/\s]*|[^/\s]*\.(?:pem|key))$",
+    re.IGNORECASE,
+)
+
+
+def load_payload() -> dict[str, Any]:
+    raw = sys.stdin.read()
+    if not raw.strip():
+        return {}
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def deny(reason: str) -> None:
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": reason,
+                }
+            }
+        )
+    )
+    raise SystemExit(0)
+
+
+def as_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, sort_keys=True)
+
+
+def tool_input(payload: dict[str, Any]) -> dict[str, Any]:
+    candidate = payload.get("tool_input") or payload.get("toolInput") or payload.get("input")
+    return candidate if isinstance(candidate, dict) else {}
+
+
+def collect_values(value: Any, keys: set[str]) -> list[str]:
+    found: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key in keys and item is not None:
+                found.append(as_text(item))
+            found.extend(collect_values(item, keys))
+    elif isinstance(value, list):
+        for item in value:
+            found.extend(collect_values(item, keys))
+    return found
+
+
+def command_from_payload(payload: dict[str, Any]) -> str:
+    data = tool_input(payload)
+    for key in ("command", "cmd", "script"):
+        if isinstance(data.get(key), str):
+            return data[key]
+    commands = collect_values(data, {"command", "cmd"})
+    return commands[0] if commands else ""
+
+
+def shell_words(command: str) -> list[str]:
+    try:
+        return shlex.split(command, posix=True)
+    except ValueError:
+        return command.split()
+
+
+def unwrap_shell(command: str) -> list[str]:
+    commands = [command]
+    words = shell_words(command)
+    if len(words) >= 3 and Path(words[0]).name in {"bash", "sh", "zsh"}:
+        for idx, word in enumerate(words[:-1]):
+            if word in {"-c", "-lc"}:
+                commands.append(words[idx + 1])
+                break
+    return commands
+
+
+def command_name(words: list[str]) -> str:
+    if not words:
+        return ""
+    return Path(words[0]).name
+
+
+def is_read_only_command(command: str) -> bool:
+    words = shell_words(command)
+    if not words:
+        return True
+    name = command_name(words)
+    if name == "git":
+        return len(words) > 1 and words[1] in READ_ONLY_GIT_SUBCOMMANDS
+    if name == "sed" and any(word.startswith("-i") for word in words[1:]):
+        return False
+    return name in READ_ONLY_COMMANDS
+
+
+def git_root(cwd: Path) -> Path | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(cwd), "rev-parse", "--show-toplevel"],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    root = result.stdout.strip()
+    return Path(root).resolve(strict=False) if root else None
+
+
+def payload_cwd(payload: dict[str, Any]) -> Path:
+    raw = payload.get("cwd")
+    if isinstance(raw, str) and raw:
+        return Path(raw)
+    return Path(os.getcwd())
+
+
+def repo_root_from_payload(payload: dict[str, Any]) -> Path:
+    cwd = payload_cwd(payload)
+    for candidate in (cwd, Path(os.getcwd())):
+        root = git_root(candidate)
+        if root is not None:
+            return root
+    return FALLBACK_REPO_ROOT
+
+
+def current_branch(repo_root: Path) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "branch", "--show-current"],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def tokens(value: str) -> set[str]:
+    return {token for token in re.split(r"[^a-z0-9]+", value.lower()) if token}
+
+
+def infer_worktree_scope(repo_root: Path, cwd: Path, branch_name: str) -> str:
+    repo_tokens = tokens(repo_root.name) | tokens(branch_name)
+    integration_signal = bool(repo_tokens & {"integration", "integrate", "integrated"})
+    backend_repo_signal = bool(repo_tokens & {"api", "backend", "server"})
+    frontend_repo_signal = bool(repo_tokens & {"web", "frontend", "client"})
+
+    if integration_signal or (backend_repo_signal and frontend_repo_signal):
+        return "integration"
+    if backend_repo_signal:
+        return "backend"
+    if frontend_repo_signal:
+        return "frontend"
+
+    try:
+        rel = cwd.resolve(strict=False).relative_to(repo_root.resolve(strict=False))
+    except ValueError:
+        return "unknown"
+    first_parts = rel.parts[:2]
+    if first_parts == ("apps", "api"):
+        return "backend"
+    if first_parts == ("apps", "web"):
+        return "frontend"
+    if repo_root.name == "home-search":
+        return "root"
+    return "unknown"
+
+
+def looks_like_path(token: str) -> bool:
+    return (
+        "/" in token
+        or token.startswith(".")
+        or token.endswith((".md", ".toml", ".json", ".py", ".java", ".ts", ".tsx", ".js", ".jsx"))
+    )
+
+
+def normalize_path(raw_path: str, cwd: Path, repo_root: Path) -> str | None:
+    cleaned = raw_path.strip("'\"")
+    if not cleaned or cleaned.startswith("-"):
+        return None
+    if "://" in cleaned:
+        return None
+    path = Path(cleaned)
+    if not path.is_absolute():
+        path = cwd / path
+    try:
+        resolved = path.resolve(strict=False)
+    except OSError:
+        return None
+    try:
+        return resolved.relative_to(repo_root.resolve(strict=False)).as_posix()
+    except ValueError:
+        return resolved.as_posix()
+
+
+def paths_from_command(command: str, cwd: Path, repo_root: Path) -> set[str]:
+    paths: set[str] = set()
+    for cmd in unwrap_shell(command):
+        for token in shell_words(cmd):
+            if looks_like_path(token):
+                normalized = normalize_path(token, cwd, repo_root)
+                if normalized:
+                    paths.add(normalized)
+    return paths
+
+
+def paths_from_patch_text(text: str, cwd: Path, repo_root: Path) -> set[str]:
+    paths: set[str] = set()
+    for line in text.splitlines():
+        match = re.match(r"\*\*\* (?:Add|Update|Delete) File: (.+)$", line.strip())
+        if not match:
+            continue
+        normalized = normalize_path(match.group(1), cwd, repo_root)
+        if normalized:
+            paths.add(normalized)
+    return paths
+
+
+def paths_from_payload(payload: dict[str, Any], cwd: Path, repo_root: Path) -> set[str]:
+    paths = set()
+    data = tool_input(payload)
+    raw_tool_input = payload.get("tool_input") or payload.get("toolInput") or payload.get("input")
+    for raw_path in collect_values(
+        data,
+        {"file", "file_path", "path", "target", "target_path", "source", "destination"},
+    ):
+        normalized = normalize_path(raw_path, cwd, repo_root)
+        if normalized:
+            paths.add(normalized)
+    command = command_from_payload(payload)
+    if command:
+        paths.update(paths_from_command(command, cwd, repo_root))
+    if isinstance(raw_tool_input, str):
+        paths.update(paths_from_patch_text(raw_tool_input, cwd, repo_root))
+    paths.update(paths_from_patch_text(as_text(payload), cwd, repo_root))
+    return paths
+
+
+def is_secret_path(path: str) -> bool:
+    return bool(SECRET_PATH_RE.search(path))
+
+
+def is_build_output(path: str) -> bool:
+    return any(part in BUILD_OUTPUT_PARTS for part in Path(path).parts)
+
+
+def is_protected_mutation_path(path: str) -> bool:
+    if path in PROTECTED_MUTATION_EXACT:
+        return True
+    if any(path.startswith(prefix) for prefix in PROTECTED_MUTATION_PREFIXES):
+        return True
+    if path.startswith("/Users/gwongwangjae/IdeaProjects/home-server/"):
+        return True
+    if path.startswith("/Users/gwongwangjae/frontend/home-client/"):
+        return True
+    if path.startswith("/Users/gwongwangjae/saved-ai-exam/"):
+        return True
+    return is_build_output(path)
+
+
+def command_is_mutation(command: str) -> bool:
+    if not command:
+        return False
+    if re.search(r"(^|[;&|]\s*)cat\b[^;&|]*>", command):
+        return True
+    for cmd in unwrap_shell(command):
+        words = shell_words(cmd)
+        name = command_name(words)
+        if name in MUTATION_COMMANDS:
+            if name == "sed" and not any(word.startswith("-i") for word in words[1:]):
+                continue
+            return True
+        if name == "git" and len(words) > 1 and words[1] not in READ_ONLY_GIT_SUBCOMMANDS:
+            return True
+    return False
+
+
+def check_dangerous_command(command: str) -> None:
+    commands = unwrap_shell(command)
+    for cmd in commands:
+        words = shell_words(cmd)
+        lowered = " ".join(words).lower()
+        if any(Path(word).name == "sudo" for word in words):
+            deny("Blocked sudo: Home Search hooks do not allow privileged commands.")
+        if re.search(r"(^|\s)git\s+reset\s+--hard(\s|$)", lowered):
+            deny("Blocked git reset --hard: destructive history/worktree reset is not allowed.")
+        if re.search(r"(^|\s)git\s+clean\s+-[a-z]*f[a-z]*d[a-z]*(\s|$)", lowered):
+            deny("Blocked git clean -fd/-df: destructive untracked-file cleanup is not allowed.")
+        for idx, word in enumerate(words):
+            if Path(word).name != "rm":
+                continue
+            flags = "".join(w[1:] for w in words[idx + 1 :] if w.startswith("-"))
+            if "r" in flags and "f" in flags:
+                deny("Blocked rm -rf: destructive recursive deletion is not allowed.")
+
+
+def check_payload(
+    payload: dict[str, Any],
+    *,
+    repo_root: Path | None = None,
+    branch_name: str | None = None,
+) -> None:
+    cwd = payload_cwd(payload)
+    root = repo_root or repo_root_from_payload(payload)
+    branch = current_branch(root) if branch_name is None else branch_name
+    data = tool_input(payload)
+    tool_name = as_text(payload.get("tool_name") or payload.get("toolName"))
+    command = command_from_payload(payload)
+    paths = paths_from_payload(payload, cwd, root)
+
+    if command:
+        check_dangerous_command(command)
+
+    for path in paths:
+        if is_secret_path(path):
+            deny(f"Blocked secrets/env access: {path}")
+
+    is_mutation = command_is_mutation(command)
+    if tool_name and re.search(r"apply_patch|write|edit|fs\.write", tool_name, re.IGNORECASE):
+        is_mutation = True
+    raw_tool_input = payload.get("tool_input") or payload.get("toolInput") or payload.get("input")
+    if isinstance(raw_tool_input, str) and paths_from_patch_text(raw_tool_input, cwd, root):
+        is_mutation = True
+    if paths_from_patch_text(as_text(payload), cwd, root):
+        is_mutation = True
+    if data and not command and paths:
+        is_mutation = True
+
+    if not is_mutation:
+        return
+
+    for path in paths:
+        if path == "docs/API_CONTRACT.md":
+            deny("Blocked docs/API_CONTRACT.md mutation without explicit approval.")
+        if is_protected_mutation_path(path):
+            deny(f"Blocked protected path mutation: {path}")
+
+    scope = infer_worktree_scope(root, cwd, branch)
+    if scope == "backend" and any(path.startswith("apps/web/") for path in paths):
+        deny("Blocked backend worktree mutation of apps/web/**.")
+    if scope == "frontend" and any(path.startswith("apps/api/") for path in paths):
+        deny("Blocked frontend worktree mutation of apps/api/**.")
+
+
+def denied_output(
+    payload: dict[str, Any],
+    *,
+    repo_root: Path | None = None,
+    branch_name: str | None = None,
+) -> str:
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        try:
+            check_payload(payload, repo_root=repo_root, branch_name=branch_name)
+        except SystemExit:
+            return output.getvalue()
+    return ""
+
+
+def patch_payload(cwd: Path, path: str) -> dict[str, Any]:
+    return {
+        "cwd": str(cwd),
+        "tool_name": "apply_patch",
+        "tool_input": f"*** Begin Patch\n*** Update File: {path}\n@@\n-old\n+new\n*** End Patch\n",
+    }
+
+
+def run_self_test() -> int:
+    backend_root = Path("/tmp/home-search-api-work")
+    frontend_root = Path("/tmp/home-search-web-work")
+
+    tests = [
+        (
+            "dangerous rm -rf is denied",
+            lambda: "Blocked rm -rf" in denied_output(
+                {"cwd": str(FALLBACK_REPO_ROOT), "tool_input": {"cmd": "rm -rf apps/api/build"}},
+                repo_root=FALLBACK_REPO_ROOT,
+                branch_name="feat/root",
+            ),
+        ),
+        (
+            "backend worktree denies apps/web mutation",
+            lambda: "apps/web/**" in denied_output(
+                patch_payload(backend_root, "apps/web/src/App.tsx"),
+                repo_root=backend_root,
+                branch_name="feat/api-region-marker-slice",
+            ),
+        ),
+        (
+            "frontend worktree denies apps/api mutation",
+            lambda: "apps/api/**" in denied_output(
+                patch_payload(frontend_root, "apps/api/src/main/java/App.java"),
+                repo_root=frontend_root,
+                branch_name="feat/web-region-marker-slice",
+            ),
+        ),
+        (
+            "integration scope allows cross-app mutation",
+            lambda: not denied_output(
+                patch_payload(Path("/tmp/home-search-integration-work"), "apps/api/src/main/java/App.java"),
+                repo_root=Path("/tmp/home-search-integration-work"),
+                branch_name="feat/region-marker-integration",
+            ),
+        ),
+        (
+            "apps/web package lock is not globally protected",
+            lambda: not is_protected_mutation_path("apps/web/package-lock.json"),
+        ),
+    ]
+
+    failed = [name for name, check in tests if not check()]
+    if failed:
+        print("self-test failed:")
+        for name in failed:
+            print(f"- {name}")
+        return 1
+    print("self-test passed: pre_tool_use_policy")
+    return 0
+
+
+def main() -> None:
+    check_payload(load_payload())
+
+
+if __name__ == "__main__":
+    if "--self-test" in sys.argv:
+        raise SystemExit(run_self_test())
+    main()

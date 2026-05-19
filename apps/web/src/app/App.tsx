@@ -1,17 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   fetchMapMarkers,
+  type MapBoundsRequest,
   type MapMarkersResult,
 } from '../features/map/api/fetchMapMarkers';
 
 type MarkerRequestState = 'loading' | 'ready' | 'empty' | 'error';
 
-const INITIAL_MARKER_BOUNDS = {
+const INITIAL_MARKER_BOUNDS: MapBoundsRequest = {
   swLat: 37.45,
   swLng: 126.85,
   neLat: 37.7,
   neLng: 127.2,
+};
+
+type MapViewport = {
+  bounds: MapBoundsRequest;
+  level: number;
 };
 
 type AppProps = {
@@ -19,22 +25,39 @@ type AppProps = {
 };
 
 export function App({ initialMapLevel = 4 }: AppProps) {
+  const [viewport, setViewport] = useState<MapViewport>(() => ({
+    bounds: INITIAL_MARKER_BOUNDS,
+    level: initialMapLevel,
+  }));
   const [markers, setMarkers] = useState<MapMarkersResult | null>(null);
   const [markerState, setMarkerState] = useState<MarkerRequestState>('loading');
   const [markerError, setMarkerError] = useState<string | null>(null);
+  const markerRequestSeq = useRef(0);
 
   useEffect(() => {
+    setViewport((current) => {
+      if (current.level === initialMapLevel) {
+        return current;
+      }
+
+      return { ...current, level: initialMapLevel };
+    });
+  }, [initialMapLevel]);
+
+  useEffect(() => {
+    const requestSeq = markerRequestSeq.current + 1;
+    markerRequestSeq.current = requestSeq;
     let ignore = false;
 
     setMarkerState('loading');
     setMarkerError(null);
 
     fetchMapMarkers({
-      bounds: INITIAL_MARKER_BOUNDS,
-      level: initialMapLevel,
+      bounds: viewport.bounds,
+      level: viewport.level,
     })
       .then((nextMarkers) => {
-        if (ignore) {
+        if (ignore || requestSeq !== markerRequestSeq.current) {
           return;
         }
 
@@ -42,7 +65,7 @@ export function App({ initialMapLevel = 4 }: AppProps) {
         setMarkerState(nextMarkers.markers.length === 0 ? 'empty' : 'ready');
       })
       .catch((error: unknown) => {
-        if (ignore) {
+        if (ignore || requestSeq !== markerRequestSeq.current) {
           return;
         }
 
@@ -54,7 +77,21 @@ export function App({ initialMapLevel = 4 }: AppProps) {
     return () => {
       ignore = true;
     };
-  }, [initialMapLevel]);
+  }, [viewport]);
+
+  function handleZoomIn() {
+    setViewport((current) => ({
+      ...current,
+      level: Math.max(1, current.level - 1),
+    }));
+  }
+
+  function handleZoomOut() {
+    setViewport((current) => ({
+      ...current,
+      level: current.level + 1,
+    }));
+  }
 
   return (
     <main>
@@ -62,6 +99,14 @@ export function App({ initialMapLevel = 4 }: AppProps) {
 
       <section aria-label="Map surface">
         <p>Map ready</p>
+        <div aria-label="Map controls">
+          <button type="button" aria-label="Zoom in" onClick={handleZoomIn}>
+            +
+          </button>
+          <button type="button" aria-label="Zoom out" onClick={handleZoomOut}>
+            -
+          </button>
+        </div>
 
         {markers?.kind === 'complex' && markers.markers.length > 0 ? (
           <ul aria-label="Complex markers">

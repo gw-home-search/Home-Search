@@ -86,6 +86,57 @@ describe('fetchComplexMarkers', () => {
       },
     ]);
   });
+
+  it('returns an empty marker list for a valid empty response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+
+    await expect(
+      fetchComplexMarkers({
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+      }),
+    ).resolves.toEqual([]);
+  });
+
+  it('throws a clear contract error when the response is not an array', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ markers: [] })));
+
+    await expect(
+      fetchComplexMarkers({
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+      }),
+    ).rejects.toThrow('Invalid V1 complex marker response: expected an array');
+  });
+
+  it('throws a clear contract error when a marker is missing unit count', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse([
+          {
+            parcelId: 1001,
+            lat: 37.5123,
+            lng: 127.0456,
+            latestDealAmount: 125000,
+          },
+        ]),
+      ),
+    );
+
+    await expect(
+      fetchComplexMarkers({
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+      }),
+    ).rejects.toThrow('Invalid V1 complex marker response: unitCntSum must be a number');
+  });
 });
 
 function jsonResponse(body: unknown): Response {

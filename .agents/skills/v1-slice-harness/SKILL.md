@@ -15,12 +15,39 @@ skills; it does not replace `planning`, `tdd`, `systematic-debugging`, or
 - Read `AGENTS.md`, `ai-docs/README.md`, and relevant non-KO canonical docs or
   skills before changing behavior.
 - Do not read, summarize, diff, or reuse `*_KO.md` bodies.
+- Prefer the short launcher `.codex/harness/v1` for slice workflow execution.
+  Use lower-level scripts only for debugging or when the launcher cannot
+  express the required operation.
 - Use `mode=execute` only when implementation or file mutation is requested.
 - In `mode=plan`, `mode=gate`, `mode=next`, and `mode=recover`, do not edit
   files by default.
 - Hooks are gates only. Do not design or claim automatic fix, retry, commit,
   merge, push, or full test/build execution from hooks.
 - Keep the final user-facing review short and Korean.
+
+## Launcher UX
+
+Map short user prompts to the launcher first:
+
+- `$v1-slice-harness <slice> dry-run 해줘`:
+  `.codex/harness/v1 dry <slice>`
+- `$v1-slice-harness <slice> 진행해줘`:
+  `.codex/harness/v1 run <slice>`
+- If the prompt mentions `notion`, append `--notion`.
+- If the prompt mentions `slack`, append `--slack`.
+- If the prompt asks for report resend, use
+  `.codex/harness/v1 report <slice>`.
+
+Launcher defaults:
+
+- User provides only the slice name in the common path.
+- Preset is resolved from slice name or `--preset`.
+- Branch and worktree names are generated automatically.
+- Default `run` performs commit, integration branch creation, and local report.
+- Main merge, push, live Open API calls, and DB migration execution are never
+  automatic.
+- Notion and Slack are optional best-effort notifications and must not break the
+  critical path.
 
 ## Mode Selection
 
@@ -177,6 +204,10 @@ reviewer: Findings = none|listed|not run
 
 ## Short Prompts
 
+- `$v1-slice-harness map-contract-hardening dry-run 해줘`
+- `$v1-slice-harness map-contract-hardening 진행해줘`
+- `$v1-slice-harness map-contract-hardening 진행해줘. notion/slack까지 알림 보내줘`
+- `$v1-slice-harness map-contract-hardening report 다시 보내줘`
 - `$v1-slice-harness 이전 gate 기준 다음 slice 플랜`
 - `$v1-slice-harness 이 worktree에서 backend slice 실행`
 - `$v1-slice-harness 현재 slice 짧은 gate review`

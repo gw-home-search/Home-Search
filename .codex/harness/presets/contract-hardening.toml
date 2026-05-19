@@ -1,0 +1,22 @@
+id = "contract-hardening"
+description = "V1 API contract hardening across backend and frontend map flows."
+aliases = ["map-contract-hardening", "contract", "contract-hardening"]
+slice_patterns = ["contract", "hardening"]
+
+[targets.backend]
+prompt = "backend_execute.md"
+allowed_scope = "apps/api/**"
+forbidden_scope = "apps/web/**"
+verification_commands = ["cd apps/api && ./gradlew test"]
+
+[targets.frontend]
+prompt = "frontend_execute.md"
+allowed_scope = "apps/web/**"
+forbidden_scope = "apps/api/**"
+verification_commands = ["cd apps/web && npm run test", "cd apps/web && npm run build"]
+
+[safety]
+allow_main_merge = false
+allow_push = false
+allow_open_api_call = false
+allow_db_migration_run = false

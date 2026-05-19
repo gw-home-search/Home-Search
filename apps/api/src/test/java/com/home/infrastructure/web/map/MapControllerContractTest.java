@@ -17,6 +17,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 import com.home.application.map.MapUseCase;
 import com.home.infrastructure.web.map.dto.ComplexMarkerResponse;
@@ -134,7 +135,7 @@ class MapControllerContractTest {
 	@Test
 	@DisplayName("POST /api/v1/map/regions rejects unsupported region values")
 	void unsupportedRegionRequestReturnsBadRequest() throws Exception {
-		mockMvc.perform(post("/api/v1/map/regions")
+		expectProblemDetail(mockMvc.perform(post("/api/v1/map/regions")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 					{
@@ -144,8 +145,111 @@ class MapControllerContractTest {
 					  "neLng": 127.20,
 					  "region": "invalid-level"
 					}
-					"""))
-			.andExpect(status().isBadRequest());
+					""")));
+
+		verifyNoInteractions(mapUseCase);
+	}
+
+	@Test
+	@DisplayName("POST /api/v1/map/regions returns ProblemDetail for invalid bounds")
+	void invalidBoundsReturnsProblemDetailForRegionMarkers() throws Exception {
+		expectProblemDetail(mockMvc.perform(post("/api/v1/map/regions")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "swLat": 37.70,
+					  "swLng": 126.85,
+					  "neLat": 37.45,
+					  "neLng": 127.20,
+					  "region": "si-gun-gu"
+					}
+					""")));
+
+		verifyNoInteractions(mapUseCase);
+	}
+
+	@Test
+	@DisplayName("POST /api/v1/map/complexes returns ProblemDetail for invalid bounds")
+	void invalidBoundsReturnsProblemDetailForComplexMarkers() throws Exception {
+		expectProblemDetail(mockMvc.perform(post("/api/v1/map/complexes")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "swLat": 37.70,
+					  "swLng": 126.85,
+					  "neLat": 37.45,
+					  "neLng": 127.20,
+					  "pyeongMin": null,
+					  "pyeongMax": null,
+					  "priceEokMin": null,
+					  "priceEokMax": null,
+					  "ageMin": null,
+					  "ageMax": null,
+					  "unitMin": null,
+					  "unitMax": null
+					}
+					""")));
+
+		verifyNoInteractions(mapUseCase);
+	}
+
+	@Test
+	@DisplayName("POST /api/v1/map/regions rejects latitude outside WGS84 range")
+	void invalidLatitudeRangeReturns400() throws Exception {
+		expectProblemDetail(mockMvc.perform(post("/api/v1/map/regions")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "swLat": -91.0,
+					  "swLng": 126.85,
+					  "neLat": 37.45,
+					  "neLng": 127.20,
+					  "region": "si-gun-gu"
+					}
+					""")));
+
+		verifyNoInteractions(mapUseCase);
+	}
+
+	@Test
+	@DisplayName("POST /api/v1/map/regions rejects longitude outside WGS84 range")
+	void invalidLongitudeRangeReturns400() throws Exception {
+		expectProblemDetail(mockMvc.perform(post("/api/v1/map/regions")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "swLat": 37.45,
+					  "swLng": 126.85,
+					  "neLat": 37.70,
+					  "neLng": 181.0,
+					  "region": "si-gun-gu"
+					}
+					""")));
+
+		verifyNoInteractions(mapUseCase);
+	}
+
+	@Test
+	@DisplayName("POST /api/v1/map/complexes rejects southwest bounds greater than northeast bounds")
+	void southwestGreaterThanNortheastReturns400() throws Exception {
+		expectProblemDetail(mockMvc.perform(post("/api/v1/map/complexes")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "swLat": 37.45,
+					  "swLng": 127.20,
+					  "neLat": 37.70,
+					  "neLng": 126.85,
+					  "pyeongMin": null,
+					  "pyeongMax": null,
+					  "priceEokMin": null,
+					  "priceEokMax": null,
+					  "ageMin": null,
+					  "ageMax": null,
+					  "unitMin": null,
+					  "unitMax": null
+					}
+					""")));
 
 		verifyNoInteractions(mapUseCase);
 	}
@@ -153,7 +257,7 @@ class MapControllerContractTest {
 	@Test
 	@DisplayName("POST /api/v1/map/regions requires the region field")
 	void missingRegionRequestReturnsBadRequest() throws Exception {
-		mockMvc.perform(post("/api/v1/map/regions")
+		expectProblemDetail(mockMvc.perform(post("/api/v1/map/regions")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 					{
@@ -162,9 +266,20 @@ class MapControllerContractTest {
 					  "neLat": 37.70,
 					  "neLng": 127.20
 					}
-					"""))
-			.andExpect(status().isBadRequest());
+					""")));
 
 		verifyNoInteractions(mapUseCase);
+	}
+
+	private void expectProblemDetail(ResultActions actions) throws Exception {
+		actions
+			.andExpect(status().isBadRequest())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+			.andExpect(jsonPath("$.type").value("/docs/index.html#error-code-list"))
+			.andExpect(jsonPath("$.title").value("C401"))
+			.andExpect(jsonPath("$.status").value(400))
+			.andExpect(jsonPath("$.detail").value("Invalid parameter format."))
+			.andExpect(jsonPath("$.exception").value("MapApiException"))
+			.andExpect(jsonPath("$.timestamp").exists());
 	}
 }

@@ -45,7 +45,7 @@ export async function fetchRegionMarkers(request: RegionMarkersRequest): Promise
 
   const payload: unknown = await response.json();
   if (!Array.isArray(payload)) {
-    return [];
+    throw new Error('Invalid V1 region marker response: expected an array');
   }
 
   return payload.map((item) => normalizeRegionMarker(item as RegionMarkerResponse));
@@ -61,9 +61,13 @@ function normalizeRegionMarker(marker: RegionMarkerResponse): RegionMarker {
 }
 
 function toRequiredNumber(value: unknown, field: string): number {
+  if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
+    throw new Error(`Invalid V1 region marker response: ${field} must be a number`);
+  }
+
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid region marker ${field}`);
+    throw new Error(`Invalid V1 region marker response: ${field} must be a number`);
   }
 
   return parsed;
@@ -71,7 +75,7 @@ function toRequiredNumber(value: unknown, field: string): number {
 
 function toRequiredString(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`Invalid region marker ${field}`);
+    throw new Error(`Invalid V1 region marker response: ${field} must be a non-empty string`);
   }
 
   return value;

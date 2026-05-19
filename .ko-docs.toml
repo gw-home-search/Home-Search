@@ -4,6 +4,30 @@ ai_may_read_manifest = true
 ai_must_not_read_ko_body = true
 
 [[docs]]
+source = ".codex/harness/prompts/backend_execute.md"
+ko = ".codex/harness/prompts/backend_execute_KO.md"
+source_sha256 = "101961e4120c4869262e11ea7c853910e4b5bd34f2520094719b26f7dfab9a5a"
+last_synced = "2026-05-19"
+
+[[docs]]
+source = ".codex/harness/prompts/frontend_execute.md"
+ko = ".codex/harness/prompts/frontend_execute_KO.md"
+source_sha256 = "3a4f6b3b2709e8038f750c3f1ff529ac35485b7401f9dd826d9e8388029fdcc0"
+last_synced = "2026-05-19"
+
+[[docs]]
+source = ".codex/harness/prompts/gate_review.md"
+ko = ".codex/harness/prompts/gate_review_KO.md"
+source_sha256 = "b562cb0f0eeb4d93fd887255e1f9424f9db5f145439bf9699da6fa291f0c3d45"
+last_synced = "2026-05-19"
+
+[[docs]]
+source = ".codex/harness/prompts/integration_review.md"
+ko = ".codex/harness/prompts/integration_review_KO.md"
+source_sha256 = "c766c6453cc81606f1c8c971c4cebb931acfdae99f7bbc783fc02ed98cf9fe5f"
+last_synced = "2026-05-19"
+
+[[docs]]
 source = ".agents/skills/api-contract/SKILL.md"
 ko = ".agents/skills/api-contract/SKILL_KO.md"
 source_sha256 = "3f05f87c8257e835f9fba5b7fdc11388190768ff90029d1353c15e3129b5b57c"
@@ -54,7 +78,7 @@ last_synced = "2026-05-18"
 [[docs]]
 source = ".agents/skills/v1-slice-harness/SKILL.md"
 ko = ".agents/skills/v1-slice-harness/SKILL_KO.md"
-source_sha256 = "edc40e47c9506a8457f8ceb8b95804783f1589b51a94bd3615f2782558a6f215"
+source_sha256 = "57aa184229f9f3f2decf0423a313ea94e3f8664c56bf150ad3f061793cc20768"
 last_synced = "2026-05-19"
 
 [[docs]]

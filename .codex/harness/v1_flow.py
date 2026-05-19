@@ -213,7 +213,7 @@ def git(cwd: Path, *args: str, dry_run: bool = False) -> dict[str, Any]:
 
 def git_output(cwd: Path, *args: str) -> str:
     result = subprocess.run(["git", *args], cwd=cwd, check=False, text=True, stdout=subprocess.PIPE)
-    return result.stdout.strip() if result.returncode == 0 else ""
+    return result.stdout.rstrip("\n") if result.returncode == 0 else ""
 
 
 def git_root(cwd: Path) -> Path | None:
@@ -407,8 +407,7 @@ def run_gate_review(
     return result
 
 
-def changed_files(worktree: Path) -> list[str]:
-    raw = git_output(worktree, "status", "--porcelain", "--untracked-files=all")
+def parse_changed_files(raw: str) -> list[str]:
     files: list[str] = []
     for line in raw.splitlines():
         path = line[3:].strip()
@@ -416,6 +415,11 @@ def changed_files(worktree: Path) -> list[str]:
             path = path.split(" -> ", 1)[1]
         files.append(path)
     return files
+
+
+def changed_files(worktree: Path) -> list[str]:
+    raw = git_output(worktree, "status", "--porcelain", "--untracked-files=all")
+    return parse_changed_files(raw)
 
 
 def commit_target(target: str, worktree: Path, branch: str, slice_name: str, *, dry_run: bool) -> str | None:
@@ -714,6 +718,8 @@ def run_self_test() -> int:
                 web_worktree=None,
             )
         )["api_branch"],
+        parse_changed_files(" M apps/api/Foo.java\n?? apps/web/Bar.tsx\nR  old.txt -> apps/api/New.java")
+        == ["apps/api/Foo.java", "apps/web/Bar.tsx", "apps/api/New.java"],
     ]
     if all(checks):
         print("self-test passed: v1_flow")

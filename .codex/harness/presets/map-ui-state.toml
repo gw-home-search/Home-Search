@@ -1,7 +1,13 @@
 id = "map-ui-state"
 description = "V1 map UI state and marker interaction work."
-aliases = ["map-ui-state", "map-state", "ui-state"]
-slice_patterns = ["map-ui", "ui-state", "map-state"]
+aliases = [
+  "map-ui-state",
+  "map-state",
+  "ui-state",
+  "kakao-map-marker-refresh-flow",
+  "marker-rendering-nonblocking-error",
+]
+slice_patterns = ["map-ui", "ui-state", "map-state", "kakao-map", "marker-rendering", "marker-refresh"]
 
 [targets.backend]
 prompt = "backend_execute.md"

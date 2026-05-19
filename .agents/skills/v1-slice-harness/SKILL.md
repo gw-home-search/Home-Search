@@ -15,39 +15,85 @@ skills; it does not replace `planning`, `tdd`, `systematic-debugging`, or
 - Read `AGENTS.md`, `ai-docs/README.md`, and relevant non-KO canonical docs or
   skills before changing behavior.
 - Do not read, summarize, diff, or reuse `*_KO.md` bodies.
+- If a KO companion must be updated, regenerate it from the canonical
+  `SKILL.md` without reading the existing KO body.
 - Prefer the short launcher `.codex/harness/v1` for slice workflow execution.
   Use lower-level scripts only for debugging or when the launcher cannot
   express the required operation.
+- If the user does not know the next slice, run `.codex/harness/v1 next`
+  or use `$v1-slice-harness 다음 slice 골라줘` before proposing work.
+- Before executing a named slice, run `.codex/harness/v1 plan <slice-id>` and
+  then `.codex/harness/v1 dry <slice-id>` unless the user explicitly asks for
+  planning only.
+- Use `run` only after the plan and dry-run evidence are clear.
 - Use `mode=execute` only when implementation or file mutation is requested.
 - In `mode=plan`, `mode=gate`, `mode=next`, and `mode=recover`, do not edit
   files by default.
+- Treat `planning-only` results as planning evidence, not permission to
+  automatically implement.
 - Hooks are gates only. Do not design or claim automatic fix, retry, commit,
   merge, push, or full test/build execution from hooks.
 - Keep the final user-facing review short and Korean.
+
+## Slice Identity
+
+- This `SKILL.md` does not define slice ids and must not be treated as a slice
+  registry.
+- `v1-slice-harness` is a slice workflow router for plan, dry-run, run, gate,
+  next, and recover operations.
+- Actual slice ids come from backlog, preset resolution, recent gate evidence,
+  or `.codex/harness/v1 next` results.
+- `<slice-id>` and `<target>` are placeholders in this document, not literal
+  values to pass to the launcher.
 
 ## Launcher UX
 
 Map short user prompts to the launcher first:
 
-- `$v1-slice-harness <slice> dry-run 해줘`:
-  `.codex/harness/v1 dry <slice>`
-- `$v1-slice-harness <slice> 진행해줘`:
-  `.codex/harness/v1 run <slice>`
+- `$v1-slice-harness 다음 slice 골라줘` or `다음 작업 추천`:
+  `.codex/harness/v1 next`
+- `$v1-slice-harness <slice-id> plan만 세워줘`:
+  `.codex/harness/v1 plan <slice-id>`
+- `$v1-slice-harness <slice-id> dry-run 해줘`:
+  `.codex/harness/v1 dry <slice-id>`
+- `$v1-slice-harness <slice-id> <target> target으로 dry-run 해줘`:
+  `.codex/harness/v1 dry <slice-id> --targets <target>`
+- `$v1-slice-harness <slice-id> 진행해줘`:
+  `.codex/harness/v1 run <slice-id>`
+- `$v1-slice-harness <slice-id> PR까지 만들어줘` or `draft PR 생성해줘`:
+  `.codex/harness/v1 run <slice-id> --pr`
+- `$v1-slice-harness <slice-id> push만 해줘`:
+  `.codex/harness/v1 run <slice-id> --push`
 - If the prompt mentions `notion`, append `--notion`.
 - If the prompt mentions `slack`, append `--slack`.
 - If the prompt asks for report resend, use
-  `.codex/harness/v1 report <slice>`.
+  `.codex/harness/v1 report <slice-id>`.
+- If the prompt names a target, append `--targets backend`,
+  `--targets frontend`, `--targets both`, or `--targets planning-only`.
 
 Launcher defaults:
 
-- User provides only the slice name in the common path.
-- Preset is resolved from slice name or `--preset`.
+- User provides only the slice id in the common path.
+- Preset and target are resolved from slice id, backlog, or explicit options.
 - Branch and worktree names are generated automatically.
 - Default `run` performs commit, integration branch creation, and local report.
-- Main merge, push, live Open API calls, and DB migration execution are never
-  automatic.
+- `backend` creates/runs only the backend worktree.
+- `frontend` creates/runs only the frontend worktree.
+- `both` creates/runs backend and frontend worktrees; `--parallel` is valid
+  only for this target.
+- `planning-only` creates no implementation worktree and must not run Codex
+  execute, verification, gate, commit, integration, push, or PR automation.
+- Main merge, main push, PR merge, approve, live Open API calls, and DB
+  migration execution are never automatic.
+- Remote push and draft PR creation happen only when the user explicitly asks
+  for PR/push in the current prompt.
+- PR requests always target the generated `feat/*-integration` branch and
+  create a draft PR by default.
 - Notion and Slack are optional best-effort notifications and must not break the
-  critical path.
+  critical path. When PR creation is requested, PR URL notification happens only
+  after the PR URL is known.
+- Users should keep prompts short and natural; the launcher expands slice,
+  preset, target, branch, worktree, and report details.
 
 ## Mode Selection
 
@@ -157,6 +203,7 @@ Minimum GREEN:
 - Recommend one to three next slices from current gate evidence.
 - Prefer unfinished risks, missing tests, and contract/data safety gaps before
   new feature expansion.
+- Use `.codex/harness/v1 next` when a backlog recommendation is needed.
 - Output labels:
 
 ```text
@@ -202,14 +249,23 @@ reviewer: Findings = none|listed|not run
 다음 행동: <one short action>
 ```
 
-## Short Prompts
+## Short Prompt Grammar
 
-- `$v1-slice-harness map-contract-hardening dry-run 해줘`
-- `$v1-slice-harness map-contract-hardening 진행해줘`
-- `$v1-slice-harness map-contract-hardening 진행해줘. notion/slack까지 알림 보내줘`
-- `$v1-slice-harness map-contract-hardening report 다시 보내줘`
-- `$v1-slice-harness 이전 gate 기준 다음 slice 플랜`
-- `$v1-slice-harness 이 worktree에서 backend slice 실행`
+- `$v1-slice-harness 다음 slice 골라줘`
+- `$v1-slice-harness <slice-id> plan만 세워줘`
+- `$v1-slice-harness <slice-id> dry-run 해줘`
+- `$v1-slice-harness <slice-id> <target> target으로 dry-run 해줘`
+- `$v1-slice-harness <slice-id> 진행해줘`
+- `$v1-slice-harness <slice-id> PR까지 만들어줘`
 - `$v1-slice-harness 현재 slice 짧은 gate review`
 - `$v1-slice-harness hook이 막은 evidence 복구`
-- `$v1-slice-harness 이전 리뷰 기준으로 plan 다시 세워줘`
+
+## Examples Only
+
+These examples explain prompt usage. They are not a slice registry and do not
+define the set of valid slice ids.
+
+- Assume `.codex/harness/v1 next` returned `kakao-map-marker-refresh-flow`.
+- `$v1-slice-harness kakao-map-marker-refresh-flow plan만 세워줘`
+- For target dry-run, replace `<slice-id>` with the same returned id:
+  `$v1-slice-harness <slice-id> frontend target으로 dry-run 해줘`

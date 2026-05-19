@@ -9,10 +9,14 @@ import re
 import subprocess
 import sys
 import tomllib
+import tempfile
+from contextlib import suppress
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from v1_report import render_pr_body
 
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -22,6 +26,7 @@ DEFAULT_MAIN = Path("/Users/gwongwangjae/home-search")
 DEFAULT_WORKTREE_PARENT = Path("/Users/gwongwangjae")
 PRESET_DIR = Path(__file__).with_name("presets")
 REPORT_ROOT = DEFAULT_MAIN / ".codex" / "harness" / "reports"
+PR_SCRIPT = Path(__file__).with_name("v1_pr.py")
 DEFAULT_TARGETS = {
     "backend": {
         "prompt": "backend_execute.md",
@@ -39,6 +44,7 @@ DEFAULT_TARGETS = {
         ],
     },
 }
+TARGET_MODES = {"backend", "frontend", "both", "planning-only"}
 KNOWN_VERIFICATION_COMMANDS = {
     "backend": {
         "cd apps/api && ./gradlew test": ("apps/api", ["./gradlew", "test"]),
@@ -97,6 +103,29 @@ def validate_safe_preset(preset: dict[str, Any]) -> None:
     enabled = [label for flag, label in FORBIDDEN_SAFETY_FLAGS.items() if safety.get(flag)]
     if enabled:
         raise PresetError(f"preset {preset.get('id')} enables forbidden automation: {', '.join(enabled)}")
+
+
+def execution_targets(args: argparse.Namespace) -> list[str]:
+    targets = getattr(args, "targets", "both")
+    if targets == "planning-only":
+        return []
+    if targets == "both":
+        return ["backend", "frontend"]
+    if targets in {"backend", "frontend"}:
+        return [targets]
+    raise RuntimeError(f"지원하지 않는 target: {targets}")
+
+
+def branch_for_target(names: dict[str, Any], target: str) -> str:
+    return names["api_branch"] if target == "backend" else names["web_branch"]
+
+
+def worktree_for_target(names: dict[str, Any], target: str) -> Path:
+    return names["api_worktree"] if target == "backend" else names["web_worktree"]
+
+
+def target_payload_key(target: str) -> str:
+    return "api" if target == "backend" else "web"
 
 
 def preset_ids() -> list[str]:
@@ -248,6 +277,13 @@ def branch_exists(main: Path, branch: str) -> bool:
         stderr=subprocess.DEVNULL,
     )
     return result.returncode == 0
+
+
+def validate_integration_branch(branch: str) -> None:
+    if branch in {"main", "master"}:
+        raise RuntimeError("main/master branch는 push 또는 PR head로 사용할 수 없습니다")
+    if not branch.startswith("feat/") or not branch.endswith("-integration"):
+        raise RuntimeError("integration branch는 feat/*-integration 형식이어야 합니다")
 
 
 def current_branch(path: Path) -> str:
@@ -469,26 +505,77 @@ def execute_target(
     }
 
 
+def merge_branch(branch: str, *, dry_run: bool) -> dict[str, Any]:
+    result = git(DEFAULT_MAIN, "merge", "--no-ff", "--no-edit", branch, dry_run=dry_run)
+    if result["status"] == "fail" and not dry_run:
+        git(DEFAULT_MAIN, "merge", "--abort")
+    return result
+
+
+def verify_integration_targets(targets: list[str], args: argparse.Namespace, *, dry_run: bool) -> dict[str, Any]:
+    checks: list[tuple[str, Path, list[str]]] = []
+    for target in targets:
+        key = "backend" if target == "backend" else "frontend"
+        configured = target_config(args, target)["verification_commands"]
+        for label in configured:
+            plan = KNOWN_VERIFICATION_COMMANDS[key].get(str(label))
+            if plan is None:
+                raise RuntimeError(f"{target} preset has unsupported verification command: {label}")
+            relative_cwd, command = plan
+            checks.append((str(label), DEFAULT_MAIN / relative_cwd, command))
+    checks.append(("git diff --check", DEFAULT_MAIN, ["git", "diff", "--check"]))
+
+    verification: dict[str, Any] = {}
+    for label, cwd, command in checks:
+        result = run_cmd(command, cwd, dry_run=dry_run)
+        verification[label] = {
+            "status": result["status"],
+            "exit_code": result["exit_code"],
+            "summary": result["summary"],
+        }
+        if result["status"] == "fail":
+            raise RuntimeError(f"integration verification failed: {label}: {result['summary']}")
+    return verification
+
+
 def call_integrate(args: argparse.Namespace, names: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
-    script = Path(__file__).with_name("v1_integrate.py")
-    command = [
-        sys.executable,
-        str(script),
-        "--api-branch",
-        names["api_branch"],
-        "--web-branch",
-        names["web_branch"],
-        "--integration-branch",
-        names["integration_branch"],
-        "--base-branch",
-        args.base_branch,
-    ]
+    targets = execution_targets(args)
+    if not targets:
+        return {"status": "skipped", "exit_code": None, "summary": "planning-only"}
     if dry_run:
-        command.append("--dry-run")
-    result = run_cmd(command, DEFAULT_MAIN, dry_run=False)
-    if result["status"] == "fail":
-        raise RuntimeError(f"integration failed: {result['summary']}")
-    return {k: result[k] for k in ("status", "exit_code", "summary")}
+        print("[DRY-RUN] integration preflight")
+        print(f"[DRY-RUN] targets: {', '.join(targets)}")
+        print(f"[DRY-RUN] integration branch: {names['integration_branch']}")
+    else:
+        if branch_exists(DEFAULT_MAIN, names["integration_branch"]):
+            raise RuntimeError(f"integration branch already exists: {names['integration_branch']}")
+        for target in targets:
+            branch = branch_for_target(names, target)
+            if not branch_exists(DEFAULT_MAIN, branch):
+                raise RuntimeError(f"branch not found: {branch}")
+
+    switch_base = git(DEFAULT_MAIN, "switch", args.base_branch, dry_run=dry_run)
+    if switch_base["status"] == "fail":
+        raise RuntimeError(f"base branch switch failed: {switch_base['summary']}")
+    create_branch = git(DEFAULT_MAIN, "switch", "-c", names["integration_branch"], dry_run=dry_run)
+    if create_branch["status"] == "fail":
+        raise RuntimeError(f"integration branch create failed: {create_branch['summary']}")
+
+    merged: list[str] = []
+    for target in targets:
+        branch = branch_for_target(names, target)
+        result = merge_branch(branch, dry_run=dry_run)
+        if result["status"] == "fail":
+            raise RuntimeError(f"{target} merge conflict or failure: {result['summary']}")
+        merged.append(target)
+
+    verification = verify_integration_targets(targets, args, dry_run=dry_run)
+    return {
+        "status": "pass",
+        "exit_code": 0,
+        "summary": f"merged targets: {', '.join(merged)}",
+        "verification": verification,
+    }
 
 
 def payload_path_for(slice_name: str) -> Path:
@@ -519,6 +606,86 @@ def call_report(payload: dict[str, Any], *, notion: bool, slack: bool, dry_run: 
     subprocess.run(command, input=json.dumps(payload), text=True, check=False)
 
 
+def load_payload(path: Path, fallback: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
+    if dry_run or not path.exists():
+        return fallback
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return fallback
+    return payload if isinstance(payload, dict) else fallback
+
+
+def pr_body_path_for(slice_name: str) -> Path:
+    return REPORT_ROOT / f"{slugify(slice_name)}-pr-body.md"
+
+
+def write_pr_body_file(payload: dict[str, Any], *, dry_run: bool) -> tuple[Path, bool]:
+    if dry_run:
+        handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix="-pr-body.md")
+        with handle:
+            handle.write(render_pr_body(payload))
+        path = Path(handle.name)
+        print(f"[DRY-RUN] temporary PR body: {path}")
+        return path, True
+    path = pr_body_path_for(str(payload.get("slice") or "unknown"))
+    payload.setdefault("links", {})["pr_body"] = str(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_pr_body(payload), encoding="utf-8")
+    return path, False
+
+
+def pr_title(args: argparse.Namespace, names: dict[str, Any]) -> str:
+    return args.pr_title or f"V1 {names['slice']} integration"
+
+
+def call_pr(
+    args: argparse.Namespace,
+    names: dict[str, Any],
+    payload_path: Path,
+    body_path: Path,
+    *,
+    dry_run: bool,
+) -> dict[str, Any]:
+    command = [
+        sys.executable,
+        str(PR_SCRIPT),
+        "--branch",
+        names["integration_branch"],
+        "--base",
+        args.base_branch,
+        "--title",
+        pr_title(args, names),
+        "--body-file",
+        str(body_path),
+        "--payload-json",
+        str(payload_path),
+        "--draft",
+    ]
+    if dry_run:
+        command.append("--dry-run")
+    if args.notion:
+        command.append("--notion")
+    if args.slack:
+        command.append("--slack")
+    result = run_cmd(command, DEFAULT_MAIN, dry_run=False)
+    if dry_run and result.get("stdout"):
+        print(str(result["stdout"]).rstrip())
+    if result["status"] == "fail":
+        if result.get("stderr"):
+            print(str(result["stderr"]).rstrip(), file=sys.stderr)
+        raise RuntimeError(f"draft PR creation failed: {result['summary']}")
+    return {k: result[k] for k in ("status", "exit_code", "summary")}
+
+
+def push_integration_branch(names: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
+    validate_integration_branch(names["integration_branch"])
+    result = git(DEFAULT_MAIN, "push", "-u", "origin", names["integration_branch"], dry_run=dry_run)
+    if result["status"] == "fail":
+        raise RuntimeError(f"integration branch push failed: {result['summary']}")
+    return {k: result[k] for k in ("status", "exit_code", "summary")}
+
+
 def build_payload(
     args: argparse.Namespace,
     names: dict[str, Any],
@@ -529,32 +696,52 @@ def build_payload(
     risk: str | None = None,
 ) -> dict[str, Any]:
     verification: dict[str, Any] = {}
-    for target_key in ("backend", "frontend"):
+    targets = execution_targets(args)
+    for target_key in targets:
         target_result = results.get(target_key, {})
         verification.update(target_result.get("verification", {}))
     if integration:
-        verification["v1_integrate.py"] = integration
+        verification.update(integration.get("verification", {}))
+    if integration:
+        verification["integration"] = {k: integration.get(k) for k in ("status", "exit_code", "summary")}
     main_merge = "not suggested"
     if integration is not None:
         main_merge = f"git -C {DEFAULT_MAIN} switch main && git -C {DEFAULT_MAIN} merge --no-ff {names['integration_branch']}"
+    if getattr(args, "pr", False):
+        main_merge = "not suggested; review and merge through GitHub PR manually"
+    push_suggestion = "git push origin <branch>"
+    if getattr(args, "pr", False):
+        push_suggestion = "handled by --pr after integration succeeds"
+    elif getattr(args, "push", False):
+        push_suggestion = f"git push -u origin {names['integration_branch']}"
     integration_head = None
     if integration is not None and not args.dry_run:
         integration_head = git_output(DEFAULT_MAIN, "rev-parse", "--short", "HEAD") or None
+    next_action = "integration branch를 눈으로 검토한 뒤 main merge/push 여부를 결정"
+    if not targets:
+        next_action = "planning-only 결과를 검토한 뒤 별도 실행 slice 여부를 결정"
+        main_merge = "not suggested; planning-only"
+        push_suggestion = "not suggested; planning-only"
+    elif getattr(args, "pr", False):
+        next_action = "GitHub draft PR diff/checks/local report를 확인한 뒤 수동 merge 결정"
+    elif getattr(args, "push", False):
+        next_action = "원격 integration branch를 확인한 뒤 PR 생성 여부를 결정"
     return {
         "slice": names["slice"],
         "preset": args.preset,
+        "targets": getattr(args, "targets", "both"),
         "status": status,
         "started_at": started,
         "finished_at": now_iso(),
         "branches": {
-            "api": names["api_branch"],
-            "web": names["web_branch"],
+            "api": names["api_branch"] if "backend" in targets else None,
+            "web": names["web_branch"] if "frontend" in targets else None,
             "integration": names["integration_branch"],
         },
         "worktrees": {
             "main": str(DEFAULT_MAIN),
-            "api": str(names["api_worktree"]),
-            "web": str(names["web_worktree"]),
+            "api": str(names["api_worktree"]) if "backend" in targets else None,
+            "web": str(names["web_worktree"]) if "frontend" in targets else None,
         },
         "commits": {
             "api": results.get("backend", {}).get("commit"),
@@ -562,13 +749,13 @@ def build_payload(
             "integration_head": integration_head,
         },
         "verification": verification,
-        "gate_review": "backend/web gate review completed" if results else "not run",
+        "gate_review": f"{'/'.join(targets)} gate review completed" if results else "planning-only; not run",
         "contract_risks": [],
         "residual_risks": [] if not risk else [risk],
-        "next_action": "integration branch를 눈으로 검토한 뒤 main merge/push 여부를 결정",
+        "next_action": next_action,
         "commands": {
             "main_merge_command": main_merge,
-            "push_command_suggestion": "git push origin <branch>",
+            "push_command_suggestion": push_suggestion,
         },
         "safety": (getattr(args, "preset_config", None) or {}).get("safety", {}),
     }
@@ -581,14 +768,36 @@ def run_flow(args: argparse.Namespace) -> int:
         return fail(str(exc))
     args.preset = preset_id
     args.preset_config = preset
+    if args.targets not in TARGET_MODES:
+        return fail(f"지원하지 않는 target: {args.targets}")
+    if getattr(args, "draft_pr", False):
+        args.pr = True
+    if args.pr and args.no_pr:
+        return fail("--pr and --no-pr cannot be used together")
+    if args.parallel and args.targets != "both":
+        return fail("--parallel은 --targets both에서만 사용할 수 있습니다")
+    if args.targets == "planning-only" and (args.commit or args.integrate or args.push or args.pr):
+        return fail("planning-only target은 commit/integration/push/PR을 실행하지 않습니다")
+    if (args.pr or args.push) and args.no_integrate:
+        return fail("--pr/--push requires integration; do not use --no-integrate")
+    if args.pr or args.push:
+        args.integrate = True
     names = default_names(args)
     started = now_iso()
     dry_run = bool(args.dry_run)
+    try:
+        if args.integrate or args.pr or args.push:
+            validate_integration_branch(names["integration_branch"])
+    except RuntimeError as exc:
+        return fail(str(exc))
 
     if dry_run:
         print("[DRY-RUN] v1_flow run")
         print(f"[DRY-RUN] preset: {args.preset} ({preset.get('description', 'no description')})")
+        print(f"[DRY-RUN] targets: {args.targets}")
         print(json.dumps({k: str(v) for k, v in names.items()}, indent=2, sort_keys=True))
+    elif args.targets == "planning-only":
+        pass
     else:
         if not DEFAULT_MAIN.exists():
             return fail(f"main worktree not found: {DEFAULT_MAIN}")
@@ -597,11 +806,29 @@ def run_flow(args: argparse.Namespace) -> int:
         if not is_clean(DEFAULT_MAIN):
             return fail("main worktree is dirty")
 
+    if args.targets == "planning-only":
+        payload = build_payload(args, names, started, {}, None, "Pass")
+        payload_path = write_payload(payload, dry_run=dry_run)
+        if args.report or args.notion or args.slack:
+            call_report(payload, notion=args.notion, slack=args.slack, dry_run=dry_run)
+        print("상태: Pass")
+        print(f"report: {payload_path}")
+        print("다음 행동:")
+        print("planning-only 결과를 검토한 뒤 별도 backend/frontend/both slice로 실행 여부를 결정하세요.")
+        return 0
+
     results: dict[str, Any] = {}
     integration_result: dict[str, Any] | None = None
     try:
-        prepare_worktree(DEFAULT_MAIN, names["api_worktree"], names["api_branch"], args.base_branch, dry_run=dry_run)
-        prepare_worktree(DEFAULT_MAIN, names["web_worktree"], names["web_branch"], args.base_branch, dry_run=dry_run)
+        selected_targets = execution_targets(args)
+        for target in selected_targets:
+            prepare_worktree(
+                DEFAULT_MAIN,
+                worktree_for_target(names, target),
+                branch_for_target(names, target),
+                args.base_branch,
+                dry_run=dry_run,
+            )
 
         if args.parallel:
             with ThreadPoolExecutor(max_workers=2) as pool:
@@ -628,22 +855,15 @@ def run_flow(args: argparse.Namespace) -> int:
                 for key, future in futures.items():
                     results[key] = future.result()
         else:
-            results["backend"] = execute_target(
-                "backend",
-                names["api_worktree"],
-                names["api_branch"],
-                args,
-                names,
-                dry_run=dry_run,
-            )
-            results["frontend"] = execute_target(
-                "frontend",
-                names["web_worktree"],
-                names["web_branch"],
-                args,
-                names,
-                dry_run=dry_run,
-            )
+            for target in selected_targets:
+                results[target] = execute_target(
+                    target,
+                    worktree_for_target(names, target),
+                    branch_for_target(names, target),
+                    args,
+                    names,
+                    dry_run=dry_run,
+                )
 
         if args.integrate and not args.no_integrate:
             integration_result = call_integrate(args, names, dry_run=dry_run)
@@ -658,16 +878,52 @@ def run_flow(args: argparse.Namespace) -> int:
 
     payload = build_payload(args, names, started, results, integration_result, "Pass")
     payload_path = write_payload(payload, dry_run=dry_run)
-    if args.report or args.notion or args.slack:
-        call_report(payload, notion=args.notion, slack=args.slack, dry_run=dry_run)
+    report_before_pr = args.report or args.pr or args.notion or args.slack
+    if report_before_pr:
+        call_report(payload, notion=(args.notion and not args.pr), slack=(args.slack and not args.pr), dry_run=dry_run)
+        payload = load_payload(payload_path, payload, dry_run=dry_run)
+    push_result: dict[str, Any] | None = None
+    pr_result: dict[str, Any] | None = None
+    temp_pr_body: Path | None = None
+    try:
+        if args.push and not args.pr:
+            push_result = push_integration_branch(names, dry_run=dry_run)
+        if args.pr:
+            body_path, is_temp = write_pr_body_file(payload, dry_run=dry_run)
+            temp_pr_body = body_path if is_temp else None
+            if not dry_run:
+                write_payload(payload, dry_run=False)
+            pr_result = call_pr(args, names, payload_path, body_path, dry_run=dry_run)
+    except RuntimeError as exc:
+        payload = build_payload(args, names, started, results, integration_result, "Fail", str(exc))
+        payload_path = write_payload(payload, dry_run=dry_run)
+        if args.report or args.notion or args.slack:
+            call_report(payload, notion=args.notion, slack=args.slack, dry_run=dry_run)
+        if temp_pr_body:
+            with suppress(OSError):
+                temp_pr_body.unlink()
+        exit_code = fail(str(exc))
+        print(f"report: {payload_path}")
+        return exit_code
+    finally:
+        if temp_pr_body:
+            with suppress(OSError):
+                temp_pr_body.unlink()
     print("상태: Pass")
     print(f"report: {payload_path}")
+    if push_result is not None:
+        print("push: Pass")
+    if pr_result is not None:
+        print("draft PR: Pass")
     print("다음 행동:")
-    if integration_result is None:
+    if args.pr:
+        print("GitHub draft PR diff/checks/local report를 확인한 뒤 수동 merge를 결정하세요.")
+    elif integration_result is None:
         print("integration skipped; main merge command is not suggested.")
     else:
         print(payload["commands"]["main_merge_command"])
-    print("push는 자동 실행하지 않습니다.")
+    if not (args.pr or args.push):
+        print("push는 자동 실행하지 않습니다.")
     return 0
 
 
@@ -685,10 +941,21 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--api-worktree")
     run.add_argument("--web-worktree")
     run.add_argument("--base-branch", default="main")
+    run.add_argument("--targets", choices=sorted(TARGET_MODES), default="both")
     run.add_argument("--parallel", action="store_true")
     run.add_argument("--commit", action="store_true")
     run.add_argument("--integrate", action="store_true")
     run.add_argument("--report", action="store_true")
+    run.add_argument("--push", action="store_true", help="Push the integration branch after successful integration.")
+    run.add_argument("--pr", action="store_true", help="Push the integration branch and create a draft PR.")
+    run.add_argument("--draft-pr", action="store_true", help="Alias for --pr; PRs are draft by default.")
+    run.add_argument("--pr-title", help="Draft PR title. Defaults to 'V1 <slice> integration'.")
+    run.add_argument(
+        "--pr-body-from-report",
+        action="store_true",
+        help="Generate the PR body from the local report payload. This is the default for --pr.",
+    )
+    run.add_argument("--no-pr", action="store_true", help="Explicitly disable PR creation.")
     run.add_argument("--notion", action="store_true")
     run.add_argument("--slack", action="store_true")
     run.add_argument("--dry-run", action="store_true")
@@ -704,10 +971,27 @@ def run_self_test() -> int:
         resolved, _ = resolve_preset("map-contract-hardening")
     except PresetError:
         resolved = ""
+    parser = build_parser()
+    pr_args = parser.parse_args(["run", "--slice", "map-contract-hardening", "--pr", "--dry-run"])
+    backend_args = parser.parse_args(["run", "--slice", "open-api-ingest-prep", "--targets", "backend", "--dry-run"])
+    planning_args = parser.parse_args(["run", "--slice", "data-architecture-checkpoint", "--targets", "planning-only"])
+    body = render_pr_body(
+        {
+            "slice": "self-test",
+            "status": "Pass",
+            "branches": {"integration": "feat/self-test-integration"},
+            "verification": {"git diff --check": {"status": "pass", "exit_code": 0}},
+        }
+    )
     checks = [
         slugify("Map Contract Hardening") == "map-contract-hardening",
         resolved == "contract-hardening",
         is_main_worktree(DEFAULT_MAIN),
+        pr_args.pr is True,
+        pr_args.dry_run is True,
+        execution_targets(backend_args) == ["backend"],
+        execution_targets(planning_args) == [],
+        "First RED:" in body,
         "feat/api-test" == default_names(
             argparse.Namespace(
                 slice="test",

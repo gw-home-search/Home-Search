@@ -6,14 +6,17 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
-from v1_flow import DEFAULT_MAIN, describe_presets, payload_path_for, resolve_preset
+from v1_flow import DEFAULT_MAIN, describe_presets, payload_path_for, resolve_preset, slugify
 
 
 HARNESS_ROOT = Path(__file__).resolve().parent
 FLOW = HARNESS_ROOT / "v1_flow.py"
+PLAN = HARNESS_ROOT / "v1_plan.py"
 REPORT = HARNESS_ROOT / "v1_report.py"
+BACKLOG = HARNESS_ROOT / "slices" / "backlog.toml"
 
 
 def fail(message: str, code: int = 1) -> int:
@@ -25,8 +28,22 @@ def printable(command: list[str]) -> str:
     return " ".join(command)
 
 
+def backlog_target_for(slice_name: str) -> str | None:
+    if not BACKLOG.exists():
+        return None
+    with BACKLOG.open("rb") as handle:
+        data = tomllib.load(handle)
+    requested = slugify(slice_name)
+    for item in data.get("slices", []):
+        if slugify(str(item.get("id", ""))) == requested:
+            target = str(item.get("targets", "")).strip()
+            return target or None
+    return None
+
+
 def flow_command(args: argparse.Namespace, *, dry_run: bool) -> list[str]:
     preset_id, _ = resolve_preset(args.slice, args.preset)
+    targets = args.targets or backlog_target_for(args.slice) or "both"
     command = [
         sys.executable,
         str(FLOW),
@@ -35,10 +52,12 @@ def flow_command(args: argparse.Namespace, *, dry_run: bool) -> list[str]:
         args.slice,
         "--preset",
         preset_id,
-        "--commit",
-        "--integrate",
+        "--targets",
+        targets,
         "--report",
     ]
+    if targets != "planning-only":
+        command.extend(["--commit", "--integrate"])
     if dry_run:
         command.append("--dry-run")
     if args.notion:
@@ -49,7 +68,51 @@ def flow_command(args: argparse.Namespace, *, dry_run: bool) -> list[str]:
         command.append("--parallel")
     if getattr(args, "no_codex", False):
         command.append("--no-codex")
+    if getattr(args, "push", False):
+        command.append("--push")
+    if getattr(args, "pr", False):
+        command.append("--pr")
+    if getattr(args, "draft_pr", False):
+        command.append("--draft-pr")
+    if getattr(args, "no_pr", False):
+        command.append("--no-pr")
+    if getattr(args, "pr_body_from_report", False):
+        command.append("--pr-body-from-report")
+    if getattr(args, "pr_title", None):
+        command.extend(["--pr-title", args.pr_title])
     return command
+
+
+def plan_command(args: argparse.Namespace, command_name: str) -> list[str]:
+    command = [sys.executable, str(PLAN), command_name]
+    if command_name == "plan":
+        command.append(args.slice)
+    if getattr(args, "limit", None) is not None:
+        command.extend(["--limit", str(args.limit)])
+    if args.json:
+        command.append("--json")
+    if args.from_report:
+        command.extend(["--from-report", args.from_report])
+    if args.from_git:
+        command.append("--from-git")
+    if args.dry_run:
+        command.append("--dry-run")
+    if args.targets:
+        command.extend(["--targets", args.targets])
+    if args.preset:
+        command.extend(["--preset", args.preset])
+    return command
+
+
+def run_plan(args: argparse.Namespace, command_name: str) -> int:
+    command = plan_command(args, command_name)
+    print(f"상태: {command_name}", flush=True)
+    print(f"command: {printable(command)}", flush=True)
+    try:
+        result = subprocess.run(command, cwd=DEFAULT_MAIN, check=False)
+    except OSError as exc:
+        return fail(str(exc))
+    return result.returncode
 
 
 def run_flow(args: argparse.Namespace, *, dry_run: bool) -> int:
@@ -106,6 +169,13 @@ def run_self_test() -> int:
                 slack=False,
                 parallel=False,
                 no_codex=False,
+                push=False,
+                pr=True,
+                draft_pr=False,
+                no_pr=False,
+                pr_body_from_report=False,
+                pr_title=None,
+                targets=None,
             ),
             dry_run=True,
         )
@@ -117,6 +187,8 @@ def run_self_test() -> int:
         "--dry-run" in command,
         "--preset" in command,
         "contract-hardening" in command,
+        "--pr" in command,
+        "--targets" in command,
     ]
     if all(checks):
         print("self-test passed: v1 launcher")
@@ -133,21 +205,50 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--self-test", action="store_true")
     subparsers = parser.add_subparsers(dest="command")
 
+    def add_planning(plan_parser: argparse.ArgumentParser) -> None:
+        plan_parser.add_argument("--json", action="store_true")
+        plan_parser.add_argument("--from-report")
+        plan_parser.add_argument("--from-git", action="store_true")
+        plan_parser.add_argument("--dry-run", action="store_true")
+        plan_parser.add_argument("--targets", choices=["backend", "both", "frontend", "planning-only"])
+        plan_parser.add_argument("--preset")
+
     def add_common(run_parser: argparse.ArgumentParser) -> None:
         run_parser.add_argument("slice")
         run_parser.add_argument("--preset", help="Preset id or alias. Defaults to slice-based resolution.")
+        run_parser.add_argument("--targets", choices=["backend", "both", "frontend", "planning-only"])
         run_parser.add_argument("--notion", action="store_true", help="Best-effort Notion report.")
         run_parser.add_argument("--slack", action="store_true", help="Best-effort Slack report.")
+
+    next_parser = subparsers.add_parser("next", help="Recommend the next V1 slice from backlog and reports.")
+    add_planning(next_parser)
+    next_parser.add_argument("--limit", type=int, default=3)
+
+    plan = subparsers.add_parser("plan", help="Render a pre-run slice plan from backlog.")
+    plan.add_argument("slice")
+    add_planning(plan)
 
     dry = subparsers.add_parser("dry", help="Show and dry-run the expanded workflow.")
     add_common(dry)
     dry.add_argument("--parallel", action="store_true")
     dry.add_argument("--no-codex", action="store_true")
+    dry.add_argument("--push", action="store_true")
+    dry.add_argument("--pr", action="store_true")
+    dry.add_argument("--draft-pr", action="store_true")
+    dry.add_argument("--pr-title")
+    dry.add_argument("--pr-body-from-report", action="store_true")
+    dry.add_argument("--no-pr", action="store_true")
 
-    run = subparsers.add_parser("run", help="Run commit + integrate + local report. No main merge or push.")
+    run = subparsers.add_parser("run", help="Run commit + integrate + local report. Push/PR only with explicit flags.")
     add_common(run)
     run.add_argument("--parallel", action="store_true")
     run.add_argument("--no-codex", action="store_true", help=argparse.SUPPRESS)
+    run.add_argument("--push", action="store_true", help="Push the integration branch after integration.")
+    run.add_argument("--pr", action="store_true", help="Push the integration branch and create a draft PR.")
+    run.add_argument("--draft-pr", action="store_true", help="Alias for --pr; PRs are draft by default.")
+    run.add_argument("--pr-title", help="Draft PR title.")
+    run.add_argument("--pr-body-from-report", action="store_true", help="Generate PR body from report payload.")
+    run.add_argument("--no-pr", action="store_true", help="Explicitly disable PR creation.")
 
     report = subparsers.add_parser("report", help="Re-render the last stored report payload for a slice.")
     report.add_argument("slice")
@@ -162,6 +263,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.self_test:
         return run_self_test()
+    if args.command == "next":
+        return run_plan(args, "next")
+    if args.command == "plan":
+        return run_plan(args, "plan")
     if args.command == "dry":
         return run_flow(args, dry_run=True)
     if args.command == "run":

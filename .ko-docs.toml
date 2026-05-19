@@ -4,6 +4,12 @@ ai_may_read_manifest = true
 ai_must_not_read_ko_body = true
 
 [[docs]]
+source = ".github/pull_request_template.md"
+ko = ".github/pull_request_template_KO.md"
+source_sha256 = "e905eec336d4290b3a4f8597a4f905f06369279a0dcf18b1d90801d7d4b24156"
+last_synced = "2026-05-19"
+
+[[docs]]
 source = ".codex/harness/prompts/backend_execute.md"
 ko = ".codex/harness/prompts/backend_execute_KO.md"
 source_sha256 = "101961e4120c4869262e11ea7c853910e4b5bd34f2520094719b26f7dfab9a5a"
@@ -25,6 +31,18 @@ last_synced = "2026-05-19"
 source = ".codex/harness/prompts/integration_review.md"
 ko = ".codex/harness/prompts/integration_review_KO.md"
 source_sha256 = "c766c6453cc81606f1c8c971c4cebb931acfdae99f7bbc783fc02ed98cf9fe5f"
+last_synced = "2026-05-19"
+
+[[docs]]
+source = ".codex/harness/prompts/next_slice.md"
+ko = ".codex/harness/prompts/next_slice_KO.md"
+source_sha256 = "6bda99f0b8a990854e7bd0e23b92393c6fe230201afce2bdec16a85bcc83e3b8"
+last_synced = "2026-05-19"
+
+[[docs]]
+source = ".codex/harness/prompts/slice_plan.md"
+ko = ".codex/harness/prompts/slice_plan_KO.md"
+source_sha256 = "2543b84db49987cba2cb11cb5af5752c9d3a9c38b3f7fe621de6fc511f3cb1a3"
 last_synced = "2026-05-19"
 
 [[docs]]
@@ -78,7 +96,7 @@ last_synced = "2026-05-18"
 [[docs]]
 source = ".agents/skills/v1-slice-harness/SKILL.md"
 ko = ".agents/skills/v1-slice-harness/SKILL_KO.md"
-source_sha256 = "57aa184229f9f3f2decf0423a313ea94e3f8664c56bf150ad3f061793cc20768"
+source_sha256 = "3f4957a19da9c67cb4de12c0fa4f51d48413cba71d0c63c7e1669d4490683f2b"
 last_synced = "2026-05-19"
 
 [[docs]]

@@ -1,0 +1,74 @@
+name: ci
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  backend-test:
+    name: backend-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Run backend tests
+        working-directory: apps/api
+        run: ./gradlew test
+
+  frontend-test-build:
+    name: frontend-test-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: apps/web
+        run: npm ci
+      - name: Run frontend tests
+        working-directory: apps/web
+        run: npm run test
+      - name: Build frontend
+        working-directory: apps/web
+        run: npm run build
+
+  diff-check:
+    name: diff-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check diff whitespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git fetch origin "${{ github.base_ref }}"
+            git diff --check "origin/${{ github.base_ref }}...HEAD"
+          elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            git diff --check HEAD^..HEAD
+          else
+            git diff --check
+          fi
+
+  pr-body-ko-check:
+    name: pr-body-ko-check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Korean PR body evidence
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python3 .codex/harness/pr_body_check.py --body-env PR_BODY

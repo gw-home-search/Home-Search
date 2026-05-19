@@ -74,6 +74,25 @@ def git_output(main: Path, *args: str) -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
+def git_root(cwd: Path) -> Path | None:
+    result = subprocess.run(
+        ["git", "-C", str(cwd), "rev-parse", "--show-toplevel"],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    if result.returncode != 0:
+        return None
+    root = result.stdout.strip()
+    return Path(root).resolve(strict=False) if root else None
+
+
+def is_current_main_worktree(main: Path) -> bool:
+    current_root = git_root(Path.cwd().resolve(strict=False))
+    return current_root == main.resolve(strict=False)
+
+
 def is_clean(main: Path) -> bool:
     status = git_output(main, "status", "--porcelain", "--untracked-files=all")
     return status == ""
@@ -153,6 +172,8 @@ def integrate(args: argparse.Namespace) -> int:
     else:
         if not main.exists():
             return fail(f"main worktree not found: {main}")
+        if not is_current_main_worktree(main):
+            return fail(f"main worktree에서 실행해야 합니다: {main}")
         if not is_clean(main):
             return fail("main worktree is dirty")
         for branch in (args.api_branch, args.web_branch):

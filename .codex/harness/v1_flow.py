@@ -216,6 +216,25 @@ def git_output(cwd: Path, *args: str) -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
+def git_root(cwd: Path) -> Path | None:
+    result = subprocess.run(
+        ["git", "-C", str(cwd), "rev-parse", "--show-toplevel"],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    if result.returncode != 0:
+        return None
+    root = result.stdout.strip()
+    return Path(root).resolve(strict=False) if root else None
+
+
+def is_main_worktree(cwd: Path) -> bool:
+    root = git_root(cwd.resolve(strict=False))
+    return root == DEFAULT_MAIN.resolve(strict=False)
+
+
 def is_clean(path: Path) -> bool:
     return git_output(path, "status", "--porcelain", "--untracked-files=all") == ""
 
@@ -569,6 +588,8 @@ def run_flow(args: argparse.Namespace) -> int:
     else:
         if not DEFAULT_MAIN.exists():
             return fail(f"main worktree not found: {DEFAULT_MAIN}")
+        if not is_main_worktree(Path.cwd()):
+            return fail(f"main worktree에서 실행해야 합니다: {DEFAULT_MAIN}")
         if not is_clean(DEFAULT_MAIN):
             return fail("main worktree is dirty")
 
@@ -682,6 +703,7 @@ def run_self_test() -> int:
     checks = [
         slugify("Map Contract Hardening") == "map-contract-hardening",
         resolved == "contract-hardening",
+        is_main_worktree(DEFAULT_MAIN),
         "feat/api-test" == default_names(
             argparse.Namespace(
                 slice="test",

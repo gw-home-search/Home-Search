@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchMapMarkers } from './fetchMapMarkers';
+import { v1FetchUrl } from './testUrl';
 
 describe('fetchMapMarkers', () => {
   afterEach(() => {
@@ -19,7 +20,7 @@ describe('fetchMapMarkers', () => {
     ).resolves.toEqual({ kind: 'complex', markers: [] });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/map/complexes',
+      v1FetchUrl('/api/v1/map/complexes'),
       expect.objectContaining({
         method: 'POST',
         body: expect.stringContaining('"unitMax":null'),
@@ -39,7 +40,7 @@ describe('fetchMapMarkers', () => {
     ).resolves.toEqual({ kind: 'region', level: 'si-do', markers: [] });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/map/regions',
+      v1FetchUrl('/api/v1/map/regions'),
       expect.objectContaining({
         method: 'POST',
         body: expect.stringContaining('"region":"si-do"'),
@@ -57,7 +58,7 @@ describe('fetchMapMarkers', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/map/regions',
+      v1FetchUrl('/api/v1/map/regions'),
       expect.objectContaining({
         body: expect.stringContaining('"region":"si-gun-gu"'),
       }),
@@ -74,7 +75,7 @@ describe('fetchMapMarkers', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/map/regions',
+      v1FetchUrl('/api/v1/map/regions'),
       expect.objectContaining({
         body: expect.stringContaining('"region":"eup-myeon-dong"'),
       }),

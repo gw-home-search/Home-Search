@@ -41,6 +41,24 @@ describe('App', () => {
     unmount(root);
   });
 
+  it('uses region markers before detailed map levels', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root } = await renderApp({ initialMapLevel: 10 });
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/map/regions',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"region":"si-do"'),
+      }),
+    );
+
+    unmount(root);
+  });
+
   it('shows a non-blocking marker error without removing the map surface', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(errorResponse(500)));
 
@@ -58,12 +76,14 @@ describe('App', () => {
   });
 });
 
-async function renderApp(): Promise<{ root: Root; rootElement: HTMLDivElement }> {
+type TestAppProps = Parameters<typeof App>[0];
+
+async function renderApp(props?: TestAppProps): Promise<{ root: Root; rootElement: HTMLDivElement }> {
   const rootElement = document.createElement('div');
   const root = createRoot(rootElement);
 
   await act(async () => {
-    root.render(<App />);
+    root.render(<App {...props} />);
   });
 
   return { root, rootElement };

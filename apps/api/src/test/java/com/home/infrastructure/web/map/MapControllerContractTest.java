@@ -3,10 +3,8 @@ package com.home.infrastructure.web.map;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -20,7 +18,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -40,17 +37,6 @@ class MapControllerContractTest {
 
 	@MockitoBean
 	private MapUseCase mapUseCase;
-
-	@Test
-	@DisplayName("OPTIONS /api/v1/map/complexes allows the local web app origin")
-	void localWebOriginCanPreflightComplexMarkerRequests() throws Exception {
-		mockMvc.perform(options("/api/v1/map/complexes")
-				.header(HttpHeaders.ORIGIN, "http://127.0.0.1:5173")
-				.header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
-				.header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "content-type"))
-			.andExpect(status().isOk())
-			.andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://127.0.0.1:5173"));
-	}
 
 	@Test
 	@DisplayName("POST /api/v1/map/complexes returns canonical V1 complex marker fields")

@@ -35,19 +35,22 @@ title_ko = "Kakao map runtime visual smoke"
 description_ko = "apps/web에서 실제 Kakao JS SDK 지도 surface를 띄우고 V1 marker fetch 연결을 브라우저로 확인할 수 있게 만든다."
 status = "planned"
 priority = 15
-targets = "frontend"
+targets = "both"
 preset = "map-ui-state"
 acceptance_criteria = [
   "VITE_KAKAO_MAP_APP_KEY가 있을 때 Kakao JS SDK를 autoload=false로 로드하고 map surface를 ready 상태로 전환한다.",
   "Kakao map idle에서 SDK bounds와 level을 읽어 기존 /api/v1/map/complexes 또는 /api/v1/map/regions marker fetch로 연결한다.",
   "SDK key 누락 또는 SDK load 실패 시 map 영역은 남기고 non-blocking alert만 노출한다.",
   "region/complex marker 응답은 CustomOverlay로 렌더링하고 marker 변경 또는 unmount 때 overlay를 정리한다.",
+  "로컬 web origin에서 V1 marker API preflight가 통과한다.",
 ]
 first_red_candidates = [
   "fake Kakao SDK loader를 mock 했을 때 map surface가 ready가 되고 SDK bounds/level 기반으로 marker API fetch가 발생해야 한다.",
   "Kakao key가 없을 때 앱 전체가 죽지 않고 map surface와 non-blocking alert가 남아야 한다.",
+  "OPTIONS /api/v1/map/complexes preflight가 local frontend origin을 허용해야 한다.",
 ]
 verification_commands = [
+  "cd apps/api && ./gradlew test",
   "cd apps/web && npm run test",
   "cd apps/web && npm run build",
   "git diff --check",
@@ -55,7 +58,7 @@ verification_commands = [
 stop_conditions = [
   "V1 API URL, request field, response field 변경이 필요하면 중단한다.",
   "source frontend의 hardcoded Kakao key 복사가 필요하면 중단한다.",
-  "backend, DB schema, ingest 흐름 변경이 필요하면 별도 slice로 분리한다.",
+  "DB schema, ingest 흐름 변경이 필요하면 별도 slice로 분리한다.",
 ]
 risk_notes = [
   "실제 browser visual smoke는 로컬 Kakao key가 없으면 partial evidence로 남긴다.",

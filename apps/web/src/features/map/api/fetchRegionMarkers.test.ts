@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchRegionMarkers, type RegionMarkersRequest } from './fetchRegionMarkers';
+import { v1FetchUrl } from './testUrl';
 
 describe('fetchRegionMarkers', () => {
   afterEach(() => {
@@ -23,7 +24,7 @@ describe('fetchRegionMarkers', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/map/regions',
+      v1FetchUrl('/api/v1/map/regions'),
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -1,30 +1,25 @@
 import { useEffect, useState } from 'react';
 
 import {
-  fetchComplexMarkers,
-  type ComplexMarker,
-  type ComplexMarkersRequest,
-} from '../features/map/api/fetchComplexMarkers';
+  fetchMapMarkers,
+  type MapMarkersResult,
+} from '../features/map/api/fetchMapMarkers';
 
 type MarkerRequestState = 'loading' | 'ready' | 'empty' | 'error';
 
-const INITIAL_MARKER_REQUEST: ComplexMarkersRequest = {
+const INITIAL_MARKER_BOUNDS = {
   swLat: 37.45,
   swLng: 126.85,
   neLat: 37.7,
   neLng: 127.2,
-  pyeongMin: null,
-  pyeongMax: null,
-  priceEokMin: null,
-  priceEokMax: null,
-  ageMin: null,
-  ageMax: null,
-  unitMin: null,
-  unitMax: null,
 };
 
-export function App() {
-  const [markers, setMarkers] = useState<ComplexMarker[]>([]);
+type AppProps = {
+  initialMapLevel?: number;
+};
+
+export function App({ initialMapLevel = 4 }: AppProps) {
+  const [markers, setMarkers] = useState<MapMarkersResult | null>(null);
   const [markerState, setMarkerState] = useState<MarkerRequestState>('loading');
   const [markerError, setMarkerError] = useState<string | null>(null);
 
@@ -34,21 +29,24 @@ export function App() {
     setMarkerState('loading');
     setMarkerError(null);
 
-    fetchComplexMarkers(INITIAL_MARKER_REQUEST)
+    fetchMapMarkers({
+      bounds: INITIAL_MARKER_BOUNDS,
+      level: initialMapLevel,
+    })
       .then((nextMarkers) => {
         if (ignore) {
           return;
         }
 
         setMarkers(nextMarkers);
-        setMarkerState(nextMarkers.length === 0 ? 'empty' : 'ready');
+        setMarkerState(nextMarkers.markers.length === 0 ? 'empty' : 'ready');
       })
       .catch((error: unknown) => {
         if (ignore) {
           return;
         }
 
-        setMarkers([]);
+        setMarkers(null);
         setMarkerState('error');
         setMarkerError(error instanceof Error ? error.message : 'Unknown marker error');
       });
@@ -56,7 +54,7 @@ export function App() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [initialMapLevel]);
 
   return (
     <main>
@@ -65,11 +63,21 @@ export function App() {
       <section aria-label="Map surface">
         <p>Map ready</p>
 
-        {markers.length > 0 ? (
+        {markers?.kind === 'complex' && markers.markers.length > 0 ? (
           <ul aria-label="Complex markers">
-            {markers.map((marker) => (
+            {markers.markers.map((marker) => (
               <li key={marker.parcelId} data-marker-id={marker.parcelId}>
                 {formatAmount(marker.latestDealAmount)} - {marker.unitCntSum} units
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        {markers?.kind === 'region' && markers.markers.length > 0 ? (
+          <ul aria-label="Region markers">
+            {markers.markers.map((marker) => (
+              <li key={marker.id} data-marker-id={marker.id}>
+                {marker.name}
               </li>
             ))}
           </ul>

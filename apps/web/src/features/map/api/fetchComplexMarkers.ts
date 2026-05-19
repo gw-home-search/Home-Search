@@ -1,4 +1,5 @@
 import { resolveApiUrl } from './resolveApiUrl';
+import { readProblemDetail } from './readProblemDetail';
 
 export type ComplexMarkersRequest = {
   swLat: number;
@@ -41,7 +42,10 @@ export async function fetchComplexMarkers(request: ComplexMarkersRequest): Promi
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch complex markers: ${response.status}`);
+    const detail = await readProblemDetail(response);
+    throw new Error(
+      `Failed to fetch complex markers: ${response.status}${detail ? ` ${detail}` : ''}`,
+    );
   }
 
   const payload: unknown = await response.json();

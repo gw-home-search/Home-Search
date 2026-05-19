@@ -137,12 +137,45 @@ describe('fetchComplexMarkers', () => {
       }),
     ).rejects.toThrow('Invalid V1 complex marker response: unitCntSum must be a number');
   });
+
+  it('preserves V1 ProblemDetail detail when the marker endpoint rejects the request', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        errorResponse(400, {
+          type: '/docs/index.html#error-code-list',
+          title: 'C401',
+          status: 400,
+          detail: 'Invalid parameter format.',
+          exception: 'MapApiException',
+          timestamp: '2026-05-18T10:30:00',
+        }),
+      ),
+    );
+
+    await expect(
+      fetchComplexMarkers({
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+      }),
+    ).rejects.toThrow('Failed to fetch complex markers: 400 Invalid parameter format.');
+  });
 });
 
 function jsonResponse(body: unknown): Response {
   return {
     ok: true,
     status: 200,
+    json: () => Promise.resolve(body),
+  } as Response;
+}
+
+function errorResponse(status: number, body: unknown): Response {
+  return {
+    ok: false,
+    status,
     json: () => Promise.resolve(body),
   } as Response;
 }

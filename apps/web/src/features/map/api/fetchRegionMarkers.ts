@@ -1,4 +1,5 @@
 import { resolveApiUrl } from './resolveApiUrl';
+import { readProblemDetail } from './readProblemDetail';
 
 export type RegionLevel = 'si-do' | 'si-gun-gu' | 'eup-myeon-dong';
 
@@ -40,7 +41,10 @@ export async function fetchRegionMarkers(request: RegionMarkersRequest): Promise
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch region markers: ${response.status}`);
+    const detail = await readProblemDetail(response);
+    throw new Error(
+      `Failed to fetch region markers: ${response.status}${detail ? ` ${detail}` : ''}`,
+    );
   }
 
   const payload: unknown = await response.json();

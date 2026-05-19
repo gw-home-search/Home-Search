@@ -1,0 +1,149 @@
+package com.home.application.ingest;
+
+import java.time.DateTimeException;
+import java.time.LocalDate;
+import java.util.Objects;
+
+public class OpenApiTradeIngestService {
+
+	private final RawTradeIngestRepository rawTradeIngestRepository;
+	private final NormalizedTradeRepository normalizedTradeRepository;
+	private final ComplexMatcher complexMatcher;
+	private final SourceKeyGenerator sourceKeyGenerator;
+
+	public OpenApiTradeIngestService(
+		RawTradeIngestRepository rawTradeIngestRepository,
+		NormalizedTradeRepository normalizedTradeRepository,
+		ComplexMatcher complexMatcher
+	) {
+		this(rawTradeIngestRepository, normalizedTradeRepository, complexMatcher, new SourceKeyGenerator());
+	}
+
+	OpenApiTradeIngestService(
+		RawTradeIngestRepository rawTradeIngestRepository,
+		NormalizedTradeRepository normalizedTradeRepository,
+		ComplexMatcher complexMatcher,
+		SourceKeyGenerator sourceKeyGenerator
+	) {
+		this.rawTradeIngestRepository = Objects.requireNonNull(rawTradeIngestRepository);
+		this.normalizedTradeRepository = Objects.requireNonNull(normalizedTradeRepository);
+		this.complexMatcher = Objects.requireNonNull(complexMatcher);
+		this.sourceKeyGenerator = Objects.requireNonNull(sourceKeyGenerator);
+	}
+
+	public IngestResult ingest(OpenApiTradeIngestBatch batch) {
+		long rawSaved = 0;
+		long normalizedInserted = 0;
+		long duplicateSkipped = 0;
+		long matchFailed = 0;
+		long parseFailed = 0;
+
+		for (OpenApiTradeItem item : batch.items()) {
+			String sourceKey = sourceKeyGenerator.generate(batch.source(), item);
+			RawTradeIngestRecord raw = rawTradeIngestRepository.save(RawTradeIngestRecord.received(
+				batch.source(),
+				sourceKey,
+				batch.lawdCd(),
+				batch.dealYmd(),
+				batch.pageNo(),
+				item.payload(),
+				sourceKeyGenerator.hashPayload(item.payload())
+			));
+			rawSaved++;
+
+			if (normalizedTradeRepository.existsBySourceAndSourceKey(batch.source(), sourceKey)) {
+				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.DUPLICATE,
+					"duplicate source/source_key");
+				duplicateSkipped++;
+				continue;
+			}
+
+			ParsedTrade parsedTrade;
+			try {
+				parsedTrade = ParsedTrade.from(item);
+			}
+			catch (IllegalArgumentException exception) {
+				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.PARSE_FAILED,
+					exception.getMessage());
+				parseFailed++;
+				continue;
+			}
+
+			ComplexMatchResult match = complexMatcher.match(item);
+			if (match == null || !match.matched()) {
+				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.MATCH_FAILED,
+					match == null ? "complex matcher returned no result" : match.failureReason());
+				matchFailed++;
+				continue;
+			}
+
+			NormalizedTradeCommand command = new NormalizedTradeCommand(
+				raw.id(),
+				match.complexId(),
+				parsedTrade.dealDate(),
+				parsedTrade.dealAmount(),
+				parsedTrade.floor(),
+				item.exclArea(),
+				item.aptDong(),
+				batch.source(),
+				sourceKey,
+				match.complexPk(),
+				item.aptSeq()
+			);
+
+			if (normalizedTradeRepository.insertIfAbsent(command)) {
+				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.NORMALIZED, null);
+				normalizedInserted++;
+			}
+			else {
+				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.DUPLICATE,
+					"duplicate source/source_key");
+				duplicateSkipped++;
+			}
+		}
+
+		return new IngestResult(
+			batch.items().size(),
+			rawSaved,
+			normalizedInserted,
+			duplicateSkipped,
+			matchFailed,
+			parseFailed
+		);
+	}
+
+	private record ParsedTrade(
+		LocalDate dealDate,
+		Long dealAmount,
+		Integer floor
+	) {
+
+		private static ParsedTrade from(OpenApiTradeItem item) {
+			try {
+				LocalDate dealDate = LocalDate.of(item.dealYear(), item.dealMonth(), item.dealDay());
+				Long dealAmount = parseDealAmount(item.dealAmount());
+				Integer floor = item.floor() != null && item.floor() == 0 ? null : item.floor();
+				return new ParsedTrade(dealDate, dealAmount, floor);
+			}
+			catch (DateTimeException | NullPointerException exception) {
+				throw new IllegalArgumentException("invalid deal date", exception);
+			}
+		}
+
+		private static Long parseDealAmount(String rawAmount) {
+			if (rawAmount == null || rawAmount.isBlank()) {
+				throw new IllegalArgumentException("dealAmount is required");
+			}
+			try {
+				long amount = Long.parseLong(rawAmount.replace(",", "").replaceAll("\\s+", ""));
+				if (amount <= 0) {
+					throw new IllegalArgumentException("dealAmount must be positive");
+				}
+				return amount;
+			}
+			catch (NumberFormatException exception) {
+				throw new IllegalArgumentException("dealAmount must be numeric", exception);
+			}
+		}
+	}
+}

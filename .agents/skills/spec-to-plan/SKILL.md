@@ -52,6 +52,8 @@ Stop and ask before planning implementation that requires:
 ## Output Rules
 
 - Prefer short, decision-complete plans.
+- Use Korean-first prose for the user-facing plan body while keeping commands,
+  paths, status tokens, and API names unchanged.
 - Do not create implementation code.
 - Do not modify `docs/API_CONTRACT.md`.
 - If the plan later needs ADR recording, mark it as an ADR candidate instead of writing `docs/adr` directly.

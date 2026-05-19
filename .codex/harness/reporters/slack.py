@@ -23,12 +23,12 @@ def message_for(payload: dict[str, Any], report_path: Path) -> str:
     report_link = payload.get("links", {}).get("notion_page_url") or str(report_path)
     return "\n".join(
         [
-            f"Home Search V1 Slice: {payload.get('slice')}",
-            f"Status: {payload.get('status')}",
-            f"Integration: {branches.get('integration')}",
-            f"Tests: {', '.join(tests) if tests else 'not run'}",
-            f"Report: {report_link}",
-            f"Next: {payload.get('next_action')}",
+            f"Home Search V1 slice: {payload.get('slice')}",
+            f"상태: {payload.get('status')}",
+            f"integration branch: {branches.get('integration')}",
+            f"검증: {', '.join(tests) if tests else 'not run'}",
+            f"보고서: {report_link}",
+            f"다음 행동: {payload.get('next_action')}",
         ]
     )
 
@@ -46,7 +46,7 @@ def _send_webhook(webhook_url: str, text: str) -> dict[str, str | None]:
                 return {"status": "sent", "url": None, "warning": None}
             return {"status": "warning", "url": None, "warning": f"Slack webhook status {response.status}"}
     except (urllib.error.URLError, OSError) as exc:
-        return {"status": "warning", "url": None, "warning": f"Slack webhook failed: {exc}"}
+        return {"status": "warning", "url": None, "warning": f"Slack webhook 실패: {exc}"}
 
 
 def _send_mcp(text: str) -> dict[str, str | None]:
@@ -84,7 +84,7 @@ After sending, print a Slack message URL if one is available; otherwise print SL
             timeout=20,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        return {"status": "warning", "url": None, "warning": f"Slack MCP reporter unavailable: {exc}"}
+        return {"status": "warning", "url": None, "warning": f"Slack MCP reporter 사용 불가: {exc}"}
 
     try:
         message = output_path.read_text(encoding="utf-8", errors="replace")
@@ -95,7 +95,7 @@ After sending, print a Slack message URL if one is available; otherwise print SL
             output_path.unlink()
 
     if result.returncode != 0:
-        return {"status": "warning", "url": None, "warning": "Slack MCP reporter command failed"}
+        return {"status": "warning", "url": None, "warning": "Slack MCP reporter command 실패"}
     if "SLACK_SKIPPED" in message:
         return {"status": "skipped", "url": None, "warning": None}
     url = next((part for part in message.split() if part.startswith("http")), None)
@@ -105,7 +105,7 @@ After sending, print a Slack message URL if one is available; otherwise print SL
 def publish(payload: dict[str, Any], report_path: Path, *, dry_run: bool) -> dict[str, str | None]:
     text = message_for(payload, report_path)
     if dry_run:
-        print("[DRY-RUN] Slack reporter: would send message if Slack MCP or webhook is configured")
+        print("[DRY-RUN] Slack reporter: Slack MCP 또는 webhook이 설정되어 있으면 message를 보냅니다")
         print(text)
         return {"status": "skipped", "url": None, "warning": None}
 

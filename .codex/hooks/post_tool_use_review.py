@@ -122,7 +122,7 @@ def review_decision(payload: dict[str, Any]) -> str | None:
         return None
 
     lines = output_summary(payload)
-    summary = "\n".join(f"- {line}" for line in lines) if lines else "- no output captured"
+    summary = "\n".join(f"- {line}" for line in lines) if lines else "- 캡처된 output 없음"
     return (
         "검증 명령이 실패했습니다.\n"
         f"명령: {command}\n"

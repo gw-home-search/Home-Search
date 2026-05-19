@@ -9,7 +9,7 @@
             "command": "python3 /Users/gwongwangjae/home-search/.codex/hooks/pre_tool_use_policy.py",
             "timeoutSec": 5,
             "async": false,
-            "statusMessage": "Home Search pre-tool policy"
+            "statusMessage": "Home Search 사전 도구 정책"
           }
         ]
       }
@@ -23,7 +23,7 @@
             "command": "python3 /Users/gwongwangjae/home-search/.codex/hooks/post_tool_use_review.py",
             "timeoutSec": 5,
             "async": false,
-            "statusMessage": "Home Search post-tool review"
+            "statusMessage": "Home Search 도구 실행 후 검토"
           }
         ]
       }
@@ -36,7 +36,7 @@
             "command": "python3 /Users/gwongwangjae/home-search/.codex/hooks/stop_verification_gate.py",
             "timeoutSec": 10,
             "async": false,
-            "statusMessage": "Home Search verification gate"
+            "statusMessage": "Home Search 검증 게이트"
           }
         ]
       }

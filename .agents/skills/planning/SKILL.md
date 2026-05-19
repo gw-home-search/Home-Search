@@ -53,5 +53,6 @@ Keep the plan short and executable. Prefer TDD slice plans over generic test
 plans for backend or frontend behavior changes. For backend/frontend behavior
 slices, name the `tdd-guide` handoff when RED validity, public seam, expected
 RED failure, or minimum GREEN is part of the plan; otherwise state the RED
-waiver reason. If the user asked for implementation and no stop condition is
-hit, proceed after the plan.
+waiver reason. Use Korean-first prose for the user-facing plan body while
+keeping commands, paths, status tokens, and API names unchanged. If the user
+asked for implementation and no stop condition is hit, proceed after the plan.

@@ -1,32 +1,59 @@
+---
+name: spec-to-plan
+description: Convert Home Search goals into decision-complete V1 implementation plans before web/api work starts.
+---
+
 # Spec To Plan Skill
 
-이 문서는 `spec-to-plan` 스킬의 한국어 companion이다. 기준은 영문 `SKILL.md`이며, AI 작업자는 기존 KO 파일을 읽지 않고 영문 원문을 기준으로 동기화한다.
+Use this skill when a Home Search request is goal-level, cross-app, ambiguous, or likely to affect both `apps/api` and `apps/web`.
 
-## 목적
+## Purpose
 
-Home Search의 목표 수준 요청을 V1 API 계약, 데이터 invariant, `apps/api`와 `apps/web` 소유 경계를 보존하는 구현 준비 완료 계획으로 바꾼다.
+Turn user intent into an implementation-ready plan that preserves the V1 API contract, data invariants, and app ownership boundaries.
 
-## 사용 시점
+This is the Home Search rewrite of spec-driven development, writing-plans, and PRD/task-breakdown patterns. Do not copy external templates; keep the output specific to Home Search V1.
 
-- 요청이 목표 수준이거나 범위가 모호할 때.
-- 백엔드와 프론트엔드가 함께 영향을 받을 때.
-- 구현 전 API contract, data invariant, 검증 기준을 고정해야 할 때.
+## Required Inputs
 
-## 필수 입력
-
-- root `AGENTS.md`.
+- Root `AGENTS.md`.
 - `docs/README.md`.
 - `docs/MIGRATION_PLAN.md`.
-- 관련 canonical docs.
-- root `CONTEXT.md`.
-- 백엔드가 관련되면 `apps/api/CONTEXT.md`.
-- 프론트엔드가 관련되면 `apps/web/CONTEXT.md`.
-- 존재하는 target 파일.
+- Relevant canonical docs.
+- Root `CONTEXT.md`.
+- `apps/api/CONTEXT.md` when backend is involved.
+- `apps/web/CONTEXT.md` when frontend is involved.
+- Existing target files if they exist.
 
-## 계획 필드
+## Plan Fields
 
-계획에는 목표, 성공 기준, 범위, 비범위, public API contract 영향, data invariant 영향, app ownership, vertical slice, test strategy, verification command, stop condition을 포함한다.
+Every plan must state:
 
-## 가드레일
+- Goal.
+- Success criteria.
+- In scope.
+- Out of scope.
+- Public API contract impact.
+- Data invariant impact.
+- Affected app ownership: `apps/api`, `apps/web`, both, or neither.
+- Vertical slices.
+- Test strategy.
+- Verification commands.
+- Stop conditions.
 
-V1 URL, method, field, type, unit 변경, 데이터 손실 가능 migration, V2 기능의 V1 critical path 진입, cross-app 변경의 API contract checkpoint 누락이 있으면 멈추고 확인한다.
+## Guardrails
+
+Stop and ask before planning implementation that requires:
+
+- Public V1 URL, method, field, type, or unit changes.
+- Data migration that loses or reinterprets existing data.
+- V2 work in the V1 critical path.
+- Cross-app changes without an API contract checkpoint.
+
+## Output Rules
+
+- Prefer short, decision-complete plans.
+- Use Korean-first prose for the user-facing plan body while keeping commands,
+  paths, status tokens, and API names unchanged.
+- Do not create implementation code.
+- Do not modify `docs/API_CONTRACT.md`.
+- If the plan later needs ADR recording, mark it as an ADR candidate instead of writing `docs/adr` directly.

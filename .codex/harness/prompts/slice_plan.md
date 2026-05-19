@@ -23,15 +23,15 @@ Instructions:
 - Keep V1 API URL and response compatibility explicit when the slice touches
   backend or frontend behavior.
 
-Output labels:
+User-facing output labels:
 
 ```text
 상태:
 목표:
-Acceptance Criteria:
-First RED:
-Expected RED failure:
-Minimum GREEN:
+인수 기준:
+최초 RED:
+예상 RED 실패:
+최소 GREEN:
 검증:
 다음 행동:
 ```

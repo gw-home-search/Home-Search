@@ -9,21 +9,24 @@
 - harness:
 - docs/infra:
 
-## TDD Evidence
+## TDD 근거
 
-First RED:
-Expected RED failure:
-Minimum GREEN:
+최초 RED:
+예상 RED 실패:
+최소 GREEN:
 
 ## 검증
 
 검증:
-- `cd apps/api && ./gradlew test` = not run ()
-- `cd apps/web && npm run test` = not run ()
-- `cd apps/web && npm run build` = not run ()
-- `git diff --check` = not run ()
+- `git diff --check` = not run (사유)
+- `cd apps/api && ./gradlew test` = not run (사유)
+- `cd apps/web && npm run test` = not run (사유)
+- `cd apps/web && npm run build` = not run (사유)
+- `python3 .codex/harness/pr_lint.py --self-test` = not run (사유)
+- `python3 .codex/harness/user_language_check.py --self-test` = not run (사유)
+- `bash scripts/check-ko-docs.sh` = not run (사유)
 
-## Contract 영향
+## 계약 영향
 
 영향 없음
 
@@ -33,7 +36,7 @@ contract-reviewer:
 
 ## 주요 위험
 
-주요 위험:
+주요 위험: 없음
 reviewer:
 
 ## 다음 행동

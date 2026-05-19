@@ -57,3 +57,5 @@ Use this skill for backend or frontend behavior changes. The goal is to anchor i
 
 If the test environment does not exist yet, do not claim behavior completion.
 Report the needed public seam, temporary verification, and follow-up test.
+Use Korean-first prose when reporting TDD evidence to the user, but keep test
+names, paths, commands, and status tokens unchanged.

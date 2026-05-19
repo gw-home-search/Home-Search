@@ -19,5 +19,7 @@ Output:
 - Risks if ignored
 - Suggested next review point
 
+When this output is summarized to the user, use Korean-first prose and labels.
+
 Do not read KO body files.
 """

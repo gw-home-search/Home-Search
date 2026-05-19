@@ -40,6 +40,7 @@ Also state:
 - Whether web/api work can proceed in parallel
 - Stop condition if breaking impact exists
 
+When this output is summarized to the user, use Korean-first prose and labels.
 If there is no contract impact, say so clearly.
 Do not read KO body files.
 """

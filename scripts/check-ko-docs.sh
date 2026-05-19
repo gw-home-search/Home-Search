@@ -61,6 +61,7 @@ awk '
 rg --files --hidden -g '*.md' \
   -g '!.git/**' \
   -g '!ai-docs/**' \
+  -g '!.codex/harness/reports/**' \
   -g '!**/*_KO.md' \
   -g '!**/*_KO.local.md' \
   -g '!**/*_ko.md' \

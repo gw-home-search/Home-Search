@@ -33,7 +33,8 @@ skills; it does not replace `planning`, `tdd`, `systematic-debugging`, or
   automatically implement.
 - Hooks are gates only. Do not design or claim automatic fix, retry, commit,
   merge, push, or full test/build execution from hooks.
-- Keep the final user-facing review short and Korean.
+- Keep the final user-facing review short and Korean-first. Keep commands,
+  paths, status tokens, and agent ids unchanged.
 
 ## Slice Identity
 
@@ -148,15 +149,15 @@ review and record the limitation in the final evidence.
 - File mutation: forbidden.
 - Convert previous gate `missing tests`, `findings`, and `주요 위험` into
   next-slice acceptance criteria.
-- Output labels:
+- User-facing output labels:
 
 ```text
 상태:
 목표:
-Acceptance Criteria:
-First RED:
-Expected RED failure:
-Minimum GREEN:
+인수 기준:
+최초 RED:
+예상 RED 실패:
+최소 GREEN:
 검증:
 다음 행동:
 ```
@@ -165,16 +166,16 @@ Minimum GREEN:
 
 - File mutation: allowed.
 - Start with a valid First RED when practical; otherwise state
-  `First RED: blocked/no test environment`.
+  `최초 RED: blocked/no test environment` in the user-facing evidence.
 - Use the minimum GREEN implementation for the slice.
 - Output labels:
 
 ```text
 상태:
 변경:
-First RED:
-Expected RED failure:
-Minimum GREEN:
+최초 RED:
+예상 RED 실패:
+최소 GREEN:
 검증:
 주요 위험:
 다음 행동:
@@ -183,14 +184,15 @@ Minimum GREEN:
 ### mode=gate
 
 - File mutation: forbidden.
-- Produce a short Korean gate review that Stop hook evidence can recognize.
+- Produce a short Korean-first gate review that Stop hook evidence can
+  recognize.
 - Output labels:
 
 ```text
 상태: Pass|Partial|Fail
-First RED:
-Expected RED failure:
-Minimum GREEN:
+최초 RED:
+예상 RED 실패:
+최소 GREEN:
 검증:
 리뷰:
 주요 위험:
@@ -209,8 +211,8 @@ Minimum GREEN:
 ```text
 상태:
 현재:
-다음 Slice:
-Acceptance Criteria:
+다음 slice 후보:
+인수 기준:
 검증:
 다음 행동:
 ```
@@ -238,13 +240,13 @@ the same evidence:
 
 ```text
 상태: Pass|Partial|Fail
-First RED: 있음|없음|blocked/no test environment
-Expected RED failure: 확인|미확인|해당 없음
-Minimum GREEN: 확인|미확인|해당 없음
-검증: <command> = pass|fail|not run (<reason>)
+최초 RED: 있음|없음|blocked/no test environment
+예상 RED 실패: 확인|미확인|해당 없음
+최소 GREEN: 확인|미확인|해당 없음
+검증: <command> = pass|fail|not run (<사유>)
 tdd-guide: RED validity = Pass|Partial|Fail|not used
-contract-reviewer: Gate decision = Pass|Partial|Fail|not needed
-reviewer: Findings = none|listed|not run
+contract-reviewer: 게이트 결정 = Pass|Partial|Fail|not needed
+reviewer: 지적사항 = none|listed|not run
 주요 위험: 없음|<short risk>
 다음 행동: <one short action>
 ```

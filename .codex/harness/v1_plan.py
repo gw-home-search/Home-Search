@@ -133,7 +133,7 @@ def read_report_evidence(path: Path | None) -> dict[str, Any]:
         "missing_tests": [],
         "contract_gaps": [],
         "data_safety_gaps": [],
-        "summary": "recent report evidence not found",
+        "summary": "최근 report evidence를 찾지 못했습니다",
     }
     if path is None or not path.exists():
         return evidence
@@ -141,10 +141,10 @@ def read_report_evidence(path: Path | None) -> dict[str, Any]:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            evidence["summary"] = f"report read failed: {exc}"
+            evidence["summary"] = f"report 읽기 실패: {exc}"
             return evidence
         if not isinstance(payload, dict):
-            evidence["summary"] = "report payload is not an object"
+            evidence["summary"] = "report payload가 object가 아닙니다"
             return evidence
         verification = payload.get("verification") if isinstance(payload.get("verification"), dict) else {}
         missing = [
@@ -159,7 +159,7 @@ def read_report_evidence(path: Path | None) -> dict[str, Any]:
                 "gate_risks": as_list(payload.get("residual_risks")),
                 "contract_gaps": as_list(payload.get("contract_risks")),
                 "missing_tests": missing,
-                "summary": str(payload.get("gate_review") or payload.get("next_action") or "JSON report loaded"),
+                "summary": str(payload.get("gate_review") or payload.get("next_action") or "JSON report 로드됨"),
             }
         )
         return evidence
@@ -178,9 +178,9 @@ def read_report_evidence(path: Path | None) -> dict[str, Any]:
             "status": "Fail" if "상태: fail" in lower else "Partial" if "partial" in lower else "unknown",
             "gate_risks": risks[:5],
             "missing_tests": missing_tests[:5],
-            "contract_gaps": ["previous report mentions contract risk"] if "contract" in lower and "risk" in lower else [],
-            "data_safety_gaps": ["previous report mentions data safety"] if "data safety" in lower or "데이터" in text else [],
-            "summary": "Markdown report loaded",
+            "contract_gaps": ["이전 report에 contract risk 언급 있음"] if "contract" in lower and "risk" in lower else [],
+            "data_safety_gaps": ["이전 report에 data safety 언급 있음"] if "data safety" in lower or "데이터" in text else [],
+            "summary": "Markdown report 로드됨",
         }
     )
     return evidence
@@ -326,7 +326,7 @@ def plan_for_slice(
         "preset": chosen_preset,
         "acceptance_criteria": view["acceptance_criteria"],
         "first_red_candidates": view["first_red_candidates"],
-        "expected_red_failure": "First RED 후보가 현재 구현 또는 evidence 부족으로 실패해야 한다.",
+        "expected_red_failure": "최초 RED 후보가 현재 구현 또는 evidence 부족으로 실패해야 한다.",
         "minimum_green": "acceptance criteria를 만족하는 최소 구현과 검증 evidence만 남긴다.",
         "verification_commands": view["verification_commands"],
         "stop_conditions": view["stop_conditions"],
@@ -345,13 +345,13 @@ def render_next_text(payload: dict[str, Any]) -> str:
     lines = [
         f"상태: {payload['status']}",
         f"현재: {payload['current']['summary']}",
-        "다음 Slice:",
+        "다음 slice 후보:",
     ]
     for index, item in enumerate(candidates, 1):
         marker = " 추천" if recommended and item["id"] == recommended["id"] else ""
         lines.append(f"{index}. {item['id']} [{item['targets']}, {item['preset']}]{marker}")
         lines.append(f"   - {item['title_ko']}")
-    lines.append("Acceptance Criteria:")
+    lines.append("인수 기준:")
     if recommended:
         lines.extend(f"- {criterion}" for criterion in recommended["acceptance_criteria"][:5])
     else:
@@ -371,16 +371,16 @@ def render_plan_text(payload: dict[str, Any]) -> str:
         f"상태: {payload['status']}",
         f"목표: {plan['title_ko']} ({plan['id']}, target={plan['targets']}, preset={plan['preset']})",
         plan["description_ko"],
-        "Acceptance Criteria:",
+        "인수 기준:",
     ]
     lines.extend(f"- {criterion}" for criterion in plan["acceptance_criteria"])
-    lines.append("First RED:")
+    lines.append("최초 RED:")
     lines.extend(f"- {candidate}" for candidate in plan["first_red_candidates"])
-    lines.append(f"Expected RED failure: {plan['expected_red_failure']}")
-    lines.append(f"Minimum GREEN: {plan['minimum_green']}")
+    lines.append(f"예상 RED 실패: {plan['expected_red_failure']}")
+    lines.append(f"최소 GREEN: {plan['minimum_green']}")
     lines.append("검증:")
     lines.extend(f"- {command}" for command in plan["verification_commands"])
-    lines.append("Stop Conditions:")
+    lines.append("중단 조건:")
     lines.extend(f"- {condition}" for condition in plan["stop_conditions"])
     lines.append(f"다음 행동: {plan['commands']['dry_run']}")
     return "\n".join(lines)

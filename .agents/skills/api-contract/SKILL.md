@@ -52,3 +52,6 @@ Report:
 - Contract impact: none, compatible, or breaking.
 - Required tests.
 - Required stop condition if any breaking change is found.
+
+Use Korean-first prose for user-facing summaries, but keep API field names,
+paths, commands, and status tokens unchanged.

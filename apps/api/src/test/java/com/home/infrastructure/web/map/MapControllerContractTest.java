@@ -9,9 +9,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -254,6 +258,17 @@ class MapControllerContractTest {
 		verifyNoInteractions(mapUseCase);
 	}
 
+	@ParameterizedTest(name = "{0}")
+	@MethodSource("invalidComplexFilterRanges")
+	@DisplayName("POST /api/v1/map/complexes rejects invalid numeric filter ranges")
+	void invalidComplexFilterRangesReturnBadRequest(String ignoredName, String filters) throws Exception {
+		expectProblemDetail(mockMvc.perform(post("/api/v1/map/complexes")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(complexRequestWithFilters(filters))));
+
+		verifyNoInteractions(mapUseCase);
+	}
+
 	@Test
 	@DisplayName("POST /api/v1/map/regions requires the region field")
 	void missingRegionRequestReturnsBadRequest() throws Exception {
@@ -269,6 +284,51 @@ class MapControllerContractTest {
 					""")));
 
 		verifyNoInteractions(mapUseCase);
+	}
+
+	private static Stream<Arguments> invalidComplexFilterRanges() {
+		return Stream.of(
+			Arguments.of("pyeong min greater than max", """
+				"pyeongMin": 40,
+				"pyeongMax": 30
+				"""),
+			Arguments.of("price min greater than max", """
+				"priceEokMin": 15.0,
+				"priceEokMax": 10.0
+				"""),
+			Arguments.of("age min greater than max", """
+				"ageMin": 30,
+				"ageMax": 10
+				"""),
+			Arguments.of("unit min greater than max", """
+				"unitMin": 900,
+				"unitMax": 100
+				"""),
+			Arguments.of("negative pyeong", """
+				"pyeongMin": -1
+				"""),
+			Arguments.of("negative price", """
+				"priceEokMin": -1.0
+				"""),
+			Arguments.of("negative age", """
+				"ageMin": -1
+				"""),
+			Arguments.of("negative unit count", """
+				"unitMin": -1
+				""")
+		);
+	}
+
+	private String complexRequestWithFilters(String filters) {
+		return """
+			{
+			  "swLat": 37.45,
+			  "swLng": 126.85,
+			  "neLat": 37.70,
+			  "neLng": 127.20,
+			  %s
+			}
+			""".formatted(filters);
 	}
 
 	private void expectProblemDetail(ResultActions actions) throws Exception {

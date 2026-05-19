@@ -365,6 +365,15 @@ def is_build_output(path: str) -> bool:
     return any(part in BUILD_OUTPUT_PARTS for part in Path(path).parts)
 
 
+def is_ko_doc_path(path: str) -> bool:
+    lowered = path.lower()
+    return lowered.endswith("_ko.md") and not lowered.endswith("_ko.local.md")
+
+
+def is_ko_local_path(path: str) -> bool:
+    return path.lower().endswith("_ko.local.md")
+
+
 def is_protected_mutation_path(path: str) -> bool:
     if path in PROTECTED_MUTATION_EXACT:
         return True
@@ -377,6 +386,36 @@ def is_protected_mutation_path(path: str) -> bool:
     if path.startswith("/Users/gwongwangjae/saved-ai-exam/"):
         return True
     return is_build_output(path)
+
+
+def transcript_text(payload: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for key in ("last_assistant_message", "lastAssistantMessage"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            parts.append(value)
+    transcript = payload.get("transcript_path") or payload.get("transcriptPath")
+    if isinstance(transcript, str):
+        transcript_path = Path(transcript)
+        try:
+            if transcript_path.exists() and transcript_path.is_file():
+                parts.append(transcript_path.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            pass
+    return "\n".join(parts)
+
+
+def has_ko_write_approval(text: str, ko_paths: list[str]) -> bool:
+    if not text:
+        return False
+    has_request = "KO 수정 요청:" in text
+    has_confirmation = bool(
+        re.search(r"(KO 수정 승인|사용자 승인)\s*:\s*(확인|승인|approved)", text, re.IGNORECASE)
+        or re.search(r"\b(ok|yes|approved|implement)\b|승인|확인|진행|해줘|해봐|좋아", text, re.IGNORECASE)
+    )
+    has_basis = "KO 생성 기준: canonical source only" in text
+    has_targets = all(path in text for path in ko_paths)
+    return has_request and has_confirmation and has_basis and has_targets
 
 
 def command_is_mutation(command: str) -> bool:
@@ -450,10 +489,19 @@ def check_payload(
     if not is_mutation:
         return
 
+    ko_paths = sorted(path for path in paths if is_ko_doc_path(path))
+    if any(is_ko_local_path(path) for path in paths):
+        deny("*_KO.local.md 변경 차단: 개인 KO notes는 건드리지 않습니다.")
+    if ko_paths and not has_ko_write_approval(transcript_text(payload), ko_paths):
+        deny(
+            "KO 수정 승인 필요: KO 변경 전 KO 수정 요청, KO 대상, "
+            "KO 생성 기준: canonical source only, 사용자 승인 evidence가 필요합니다."
+        )
+
     for path in paths:
         if path == "docs/API_CONTRACT.md":
             deny("명시 승인 없는 docs/API_CONTRACT.md 변경 차단.")
-        if is_protected_mutation_path(path):
+        if is_protected_mutation_path(path) and not is_ko_doc_path(path):
             deny(f"protected path 변경 차단: {path}")
 
     scope = infer_worktree_scope(root, cwd, branch)
@@ -526,6 +574,32 @@ def run_self_test() -> int:
         (
             "apps/web package lock is not globally protected",
             lambda: not is_protected_mutation_path("apps/web/package-lock.json"),
+        ),
+        (
+            "KO mutation without approval is denied with KO approval reason",
+            lambda: "KO 수정 승인" in denied_output(
+                patch_payload(FALLBACK_REPO_ROOT, "AGENTS_KO.md"),
+                repo_root=FALLBACK_REPO_ROOT,
+                branch_name="feat/ko-guard",
+            ),
+        ),
+        (
+            "KO mutation with task approval is allowed",
+            lambda: not denied_output(
+                {
+                    **patch_payload(FALLBACK_REPO_ROOT, "AGENTS_KO.md"),
+                    "last_assistant_message": "\n".join(
+                        [
+                            "KO 수정 요청:",
+                            "KO 대상: AGENTS_KO.md",
+                            "KO 생성 기준: canonical source only",
+                            "사용자 승인: 확인",
+                        ]
+                    ),
+                },
+                repo_root=FALLBACK_REPO_ROOT,
+                branch_name="feat/ko-guard",
+            ),
         ),
     ]
 

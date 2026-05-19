@@ -6,17 +6,17 @@ Slice: {{SLICE}}
 Preset: {{PRESET}}
 Integration branch: {{BRANCH_NAME}}
 
-Review only. Do not edit files.
+리뷰만 수행한다. 파일을 편집하지 않는다.
 
-Check the merged api/web slice together:
-- Main API URLs and response shapes remain V1 compatible.
-- Map, search, region, detail, and trade flows remain aligned.
-- Backend data invariants are preserved.
-- No V2 dependency entered the critical path.
-- Verification evidence covers api test, web test, web build, and diff check.
-- Verification evidence uses exact line format: ``- `command` = pass|fail|not run (Korean reason)``.
+병합된 api/web slice를 함께 확인한다:
+- Main API URLs와 response shapes가 V1 compatible 상태인지 확인한다.
+- map, search, region, detail, trade flows가 서로 맞게 유지되는지 확인한다.
+- Backend data invariants가 보존되는지 확인한다.
+- V2 dependency가 critical path에 들어오지 않았는지 확인한다.
+- Verification evidence가 api test, web test, web build, diff check를 포함하는지 확인한다.
+- Verification evidence가 정확한 line 형식을 사용하는지 확인한다: ``- `command` = pass|fail|not run (Korean reason)``.
 
-Output a short Korean-first integration review with these user-facing labels:
+다음 user-facing labels를 사용해 짧은 Korean-first integration review를 출력한다:
 - 상태: Pass|Partial|Fail
 - 검증:
 - 리뷰:

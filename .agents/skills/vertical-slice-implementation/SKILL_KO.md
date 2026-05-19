@@ -1,47 +1,47 @@
 ---
 name: vertical-slice-implementation
-description: Break Home Search web/api work into thin V1 slices that can be implemented and verified incrementally.
+description: Home Search web/api 작업을 점진적으로 구현하고 검증할 수 있는 얇은 V1 slices로 나눈다.
 ---
 
 # Vertical Slice Implementation Skill
 
-Use this skill after a V1 plan exists and before implementation starts.
+V1 plan이 있고 implementation 시작 전인 경우 이 skill을 사용한다.
 
 ## Purpose
 
-Convert a plan into small, independently verifiable slices. Each slice should deliver one observable path through the relevant layers.
+plan을 작고 독립적으로 검증 가능한 slices로 바꾼다. 각 slice는 관련 layers를 통과하는 하나의 observable path를 제공해야 한다.
 
-This adapts incremental implementation and issue-breakdown patterns for Home Search.
+이것은 incremental implementation과 issue-breakdown patterns를 Home Search에 맞게 조정한 것이다.
 
 ## Slice Rules
 
-Each slice must include:
+각 slice는 다음을 포함해야 한다:
 
-- User-visible or API-visible behavior.
+- User-visible 또는 API-visible behavior.
 - Exact app ownership.
 - API contract checkpoint.
-- Data invariant checkpoint if backend is involved.
+- backend가 관련되면 data invariant checkpoint.
 - Test seam.
 - Verification command.
 - Stop condition.
 
 ## Good Slice Examples
 
-- Backend: raw RTMS ingest record is saved before normalized trade insert and duplicate source keys do not create duplicate trades.
-- Backend: `/api/v1/map/complexes` returns canonical marker fields from V1 tables only.
-- Frontend: map idle fetches complex markers, normalizes fields in the adapter, and keeps the map usable on API failure.
-- Cross-app: marker click opens detail drawer using `/api/v1/detail/{parcelId}` and `/api/v1/trade/{parcelId}` without contract drift.
+- Backend: raw RTMS ingest record가 normalized trade insert보다 먼저 저장되고 duplicate source keys가 duplicate trades를 만들지 않는다.
+- Backend: `/api/v1/map/complexes`가 V1 tables만으로 canonical marker fields를 반환한다.
+- Frontend: map idle이 complex markers를 fetch하고 adapter에서 fields를 normalize하며 API failure 시 map usable 상태를 유지한다.
+- Cross-app: marker click이 `/api/v1/detail/{parcelId}`와 `/api/v1/trade/{parcelId}`를 contract drift 없이 사용해 detail drawer를 연다.
 
 ## Avoid
 
-- Horizontal slices such as "copy all backend files" or "build all UI components".
+- "copy all backend files" 또는 "build all UI components" 같은 horizontal slices.
 - V2 scope.
-- Unverified app-wide refactors.
-- Cross-app changes without `api-contract`.
+- 검증되지 않은 app-wide refactors.
+- `api-contract` 없는 cross-app changes.
 
 ## Output
 
-For each slice, provide:
+각 slice에 대해 다음을 제공한다:
 
 - Slice name.
 - App ownership.
@@ -51,5 +51,4 @@ For each slice, provide:
 - Verification.
 - Parallelism: can run in parallel, blocks another slice, or must run first.
 
-Use Korean-first prose in user-facing slice breakdowns while keeping commands,
-paths, API names, and status tokens unchanged.
+User-facing slice breakdowns는 Korean-first prose를 사용하되 commands, paths, API names, status tokens는 그대로 유지한다.

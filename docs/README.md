@@ -1,5 +1,6 @@
 # Home Search Migration Docs
 
+
 ## Fixed Paths
 
 - Source backend: `/Users/gwongwangjae/IdeaProjects/home-server`

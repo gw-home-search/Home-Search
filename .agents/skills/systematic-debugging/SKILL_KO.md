@@ -1,34 +1,31 @@
 ---
 name: systematic-debugging
-description: Handle Home Search failures through reproducible feedback loops, hypothesis testing, root-cause fixes, and regression evidence.
+description: reproducible feedback loops, hypothesis testing, root-cause fixes, regression evidence로 Home Search failures를 처리한다.
 ---
 
 # Systematic Debugging Skill
 
-Use this skill for failing checks, runtime bugs, API mismatches, ingest issues, and map marker failures.
+failing checks, runtime bugs, API mismatches, ingest issues, map marker failures에 이 skill을 사용한다.
 
 ## Loop
 
-1. Symptom capture: command, log, input, URL, and environment.
-2. Deterministic feedback loop: shortest way to reproduce the failure.
-3. Reproduction: confirm the current failure.
-4. Hypothesis: one possible cause with an observable prediction.
-5. Instrumentation: only the logs, assertions, or queries needed.
-6. Root cause fix: smallest change for the confirmed cause.
-7. Regression test: prove the same failure does not recur.
+1. Symptom capture: command, log, input, URL, environment.
+2. Deterministic feedback loop: failure를 재현하는 가장 짧은 방법.
+3. Reproduction: 현재 failure를 확인한다.
+4. Hypothesis: observable prediction이 있는 하나의 가능한 원인.
+5. Instrumentation: 필요한 logs, assertions, queries만 추가한다.
+6. Root cause fix: 확인된 원인에 대한 가장 작은 변경.
+7. Regression test: 같은 failure가 재발하지 않음을 증명한다.
 
 ## Common Cases
 
-- Gradle failure: pin task, stack trace, profile, and failing test class.
-- API mismatch: compare request/response with `docs/API_CONTRACT.md` and use
-  `contract-reviewer` before changing contract-facing code.
-- Map marker failure: isolate bounds, level, endpoint, adapter, and render state.
-- Ingest dedupe bug: trace raw ingest row, source key, unique key, and normalized insert.
-- Regression bugfix: use `tdd-guide` to confirm the first RED, expected RED
-  failure, public seam, and minimum GREEN slice before production changes.
+- Gradle failure: task, stack trace, profile, failing test class를 고정한다.
+- API mismatch: request/response를 `docs/API_CONTRACT.md`와 비교하고 contract-facing code 변경 전에 `contract-reviewer`를 사용한다.
+- Map marker failure: bounds, level, endpoint, adapter, render state를 분리한다.
+- Ingest dedupe bug: raw ingest row, source key, unique key, normalized insert를 추적한다.
+- Regression bugfix: production changes 전에 `tdd-guide`로 first RED, expected RED failure, public seam, minimum GREEN slice를 확인한다.
 
 ## Stop Rule
 
-After three failed fixes, stop implementation and return to planning. Preserve the current evidence and excluded hypotheses.
-Use Korean-first prose when reporting the debugging result to the user, while
-keeping commands, paths, error identifiers, and status tokens unchanged.
+세 번의 fix가 실패하면 implementation을 중단하고 planning으로 돌아간다. 현재 evidence와 excluded hypotheses를 보존한다.
+Debugging result를 사용자에게 보고할 때는 Korean-first prose를 사용하되 commands, paths, error identifiers, status tokens는 그대로 유지한다.

@@ -3,6 +3,7 @@ name: v1-slice-harness
 description: Orchestrate Home Search V1 slice workflow with short Korean prompts; supports mode=plan, mode=execute, mode=gate, mode=next, mode=recover. Use for "$v1-slice-harness", "다음 slice 플랜", "현재 slice gate", "짧은 gate review", "hook evidence 복구", "backend/web worktree slice 실행".
 ---
 
+
 # V1 Slice Harness
 
 Use this skill when the user wants repeatable Home Search V1 slice operation

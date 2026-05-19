@@ -149,6 +149,13 @@ All writes for this project belong under `/Users/gwongwangjae/home-search`.
 - `*_KO.md` files are human-only Korean reference files.
 - AI agents must not read, search, summarize, quote, import, diff, or use `*_KO.md` or `*_KO.local.md` as implementation context.
 - Treat lowercase variants such as `*_ko.md` the same way.
+- AI agents may modify `*_KO.md` files only after task-level confirmation for
+  the exact KO targets.
+- Before writing KO files, show a `KO 수정 요청:` note that lists `KO 대상`,
+  states `KO 생성 기준: canonical source only`, and confirms the existing KO
+  body was not read.
+- Completion evidence for any KO file change must include `KO 수정 승인: 확인`,
+  `KO 대상: <paths>`, and `KO 생성 기준: canonical source only`.
 - KO sync metadata lives in `.ko-docs.toml`, not inside KO files.
 - AI agents may read `.ko-docs.toml` and canonical `.md` files to decide whether KO docs are stale.
 - When searching Markdown, exclude KO files:
@@ -166,6 +173,8 @@ rg --files --hidden -g '*.md' -g '!.git/**' -g '!**/*_KO.md' -g '!**/*_KO.local.
 - When a canonical `.md` meaningfully changes, regenerate its `*_KO.md` from the canonical file only and update `.ko-docs.toml`.
 - When a canonical `.md` is renamed or deleted, rename or delete the paired `*_KO.md`.
 - Do not read the existing KO file to update it. Use the canonical source as the input and overwrite the KO file.
+- If the paired KO update has not been confirmed, stop before making the
+  canonical Markdown change or report the KO update as blocked.
 - Personal notes belong in `*_KO.local.md`; those files are ignored and must not be touched.
 
 ## Verification

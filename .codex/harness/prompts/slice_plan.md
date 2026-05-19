@@ -1,5 +1,6 @@
 # Slice Plan Prompt
 
+
 $v1-slice-harness mode=plan
 
 Use this prompt when the user asks for an execution brief for one Home Search V1

@@ -3,6 +3,7 @@ name: vertical-slice-implementation
 description: Break Home Search web/api work into thin V1 slices that can be implemented and verified incrementally.
 ---
 
+
 # Vertical Slice Implementation Skill
 
 Use this skill after a V1 plan exists and before implementation starts.

@@ -6,133 +6,133 @@ ai_must_not_read_ko_body = true
 [[docs]]
 source = ".github/pull_request_template.md"
 ko = ".github/pull_request_template_KO.md"
-source_sha256 = "5aa52088554652490623908eba1f1906668267b62c9a8b772a328095a97acfd7"
+source_sha256 = "021e18d6b85ef6624cbf98d6e7b5c195c573e4e37842a49adccb3729614dd2f6"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = ".codex/harness/prompts/backend_execute.md"
 ko = ".codex/harness/prompts/backend_execute_KO.md"
-source_sha256 = "bdfeab5927d61026ff9ccd75fde728af7761b218e62e205e0bcfdc0f2153e308"
+source_sha256 = "43fe91c2248a6951deb5607cf2fd4e5f4a89e06d317ff353fde9665c6050ea12"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = ".codex/harness/prompts/frontend_execute.md"
 ko = ".codex/harness/prompts/frontend_execute_KO.md"
-source_sha256 = "3b544d130e4ac989d9feffb85ca41d8617b7e03e58d1f07d7451987bda8b9df1"
+source_sha256 = "3de8a30be94c06a86c2e882f14a6fb665ee741e3c3a94b8565fc70bd7cbaeea9"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = ".codex/harness/prompts/gate_review.md"
 ko = ".codex/harness/prompts/gate_review_KO.md"
-source_sha256 = "474a6f30fd63368e7d58fbd29d4c6f37bb5e31b16059b50def3b28d2bba255e0"
+source_sha256 = "ffd6b1b0cb09d10421303e5bb56b9b934c821b3b0235b3805b4d42aeea19606a"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = ".codex/harness/prompts/integration_review.md"
 ko = ".codex/harness/prompts/integration_review_KO.md"
-source_sha256 = "26a96a9aa26a9c7220859773e8c5b4814585fdc27608e8e08edab11a969dc8b9"
+source_sha256 = "e3d1e4866dc068f74f92b43cb75c05da699d0249c1cbce30c8e32190238806dc"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = ".codex/harness/prompts/next_slice.md"
 ko = ".codex/harness/prompts/next_slice_KO.md"
-source_sha256 = "90363babbfc52fda2fbc7e1b4ab10152121b249225f74b193e82a29ddfb199e1"
+source_sha256 = "b231056977bd2fe95ba8ed8b71bed4b4f66e48bdaff31ad60472ec1ef4089e70"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = ".codex/harness/prompts/slice_plan.md"
 ko = ".codex/harness/prompts/slice_plan_KO.md"
-source_sha256 = "a149234158025132c31f636aba512f81b1d4f6b7dcd9c6580f99959353bfe656"
+source_sha256 = "bba09332f536740929813f00a17f6c7e136e8cf7a6dbfbde5e9cd63cc278937d"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = ".agents/skills/api-contract/SKILL.md"
 ko = ".agents/skills/api-contract/SKILL_KO.md"
-source_sha256 = "10b691f9d2671827df2a570fa62e7dfda9df3e903fa1cbed2bddf41ea9825f4b"
+source_sha256 = "95f78469a5034fe159c3205d69f5f7647138a5129dcbed980ec44834073bc9f5"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = ".agents/skills/backend-api/SKILL.md"
 ko = ".agents/skills/backend-api/SKILL_KO.md"
-source_sha256 = "907298769e8c803770f43cfce0f2319b87532894dcbd7d4821393dfa03d957a2"
+source_sha256 = "7242166221548d0e0dfcd94f0b1e3fb764b2e45f5844cd80c1e059d3a19fbae6"
 last_synced = "2026-05-18"
 
 [[docs]]
 source = ".agents/skills/code-review/SKILL.md"
 ko = ".agents/skills/code-review/SKILL_KO.md"
-source_sha256 = "73234b28633315c01577cfe161f208e81b875df78a465403c29e9c69358d0852"
+source_sha256 = "65253604ef3e7b3d24f6c7601e1cf1184528fe16b9ec3b0810f612fb6e0ba9e3"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = ".agents/skills/frontend-web/SKILL.md"
 ko = ".agents/skills/frontend-web/SKILL_KO.md"
-source_sha256 = "1d8fa013559144b3102b7fd8cff36d811ba6ba24750a37b9080c40b889e10a56"
+source_sha256 = "ff251c61f88052e9efd3d263689cb183c72f53f826d594d72068d9dff7b07b39"
 last_synced = "2026-05-18"
 
 [[docs]]
 source = ".agents/skills/planning/SKILL.md"
 ko = ".agents/skills/planning/SKILL_KO.md"
-source_sha256 = "b0e706fd784e478799c328b4f76470f72069b39b0ee05c358c106408e63091c6"
+source_sha256 = "e11add77edcbc39b0ed1527a268338fb658f76fc07b51ef1f3d02d8de9bd47e4"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = ".agents/skills/spec-to-plan/SKILL.md"
 ko = ".agents/skills/spec-to-plan/SKILL_KO.md"
-source_sha256 = "0278d9494d5c222146569d4177d9898b2d0a90a12457e6628de13932c167a5d4"
+source_sha256 = "9fc2a7cbe0ff5cbe6aaa3bb58e281028e92770777dc13438d7072c4be82c110c"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = ".agents/skills/systematic-debugging/SKILL.md"
 ko = ".agents/skills/systematic-debugging/SKILL_KO.md"
-source_sha256 = "b72496dfa21dd13d042e30348106d1e66e35e8f777709573403b16996fbfc621"
+source_sha256 = "76f702d14dce602ba2190b0d283f30b6e5834381a2ce94ba2942151c2375c1fa"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = ".agents/skills/tdd/SKILL.md"
 ko = ".agents/skills/tdd/SKILL_KO.md"
-source_sha256 = "1805f6716b6ff11a0a74514fd32f6d6cb07171b80e08f43568f28976af6fe97d"
+source_sha256 = "4cfb7f888690060c59b679b1e5845c086df12132582ef0b1c4ffeac82c79eed9"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = ".agents/skills/v1-slice-harness/SKILL.md"
 ko = ".agents/skills/v1-slice-harness/SKILL_KO.md"
-source_sha256 = "7dd60e29438de7cbd5e5c11566b35038e3bf8be6a94f5ba9bf3dbcaf50d0a17d"
+source_sha256 = "ef0c2893e3a8ef11bac65a39aaeebf3df11645b4745c341484153793cd8ca61d"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = ".agents/skills/vertical-slice-implementation/SKILL.md"
 ko = ".agents/skills/vertical-slice-implementation/SKILL_KO.md"
-source_sha256 = "e95af9aafd10b75027ca059bfa163a7c92b20b984a0033df89263a9bf8c84c9e"
+source_sha256 = "c899a34727a684a3f8f96a063a61f72d07dd847ad4b52cc905b773d5a31e5bce"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = "AGENTS.md"
 ko = "AGENTS_KO.md"
-source_sha256 = "1a3b4309dfe3253a3c55d9acbb5c113e516dae6f78dc6b6629f197619e868cf6"
+source_sha256 = "205c90bbf72b150ef4b24e452127070dbcfe4cff4662bf88e49872009d6aa69d"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = "CLAUDE.md"
 ko = "CLAUDE_KO.md"
-source_sha256 = "26e06417e36e2ba7ddeae0b5960c3ba58a14ad345b5d223cbd5b2583ed37c6e4"
+source_sha256 = "c9d0938d440c9455963c614d2403723a77db0eca33ca8ce994b37562e4a7bd12"
 last_synced = "2026-05-18"
 
 [[docs]]
 source = "CONTEXT.md"
 ko = "CONTEXT_KO.md"
-source_sha256 = "acf6360c6266d9cd0dc3a10de0d033530d5bd08c05e3ff5ac8c00191b7fd12c4"
+source_sha256 = "887ff281c11a80322f1e860775bb20de575cafee971d714cf85a9eb151e10fa2"
 last_synced = "2026-05-18"
 
 [[docs]]
 source = "README.md"
 ko = "README_KO.md"
-source_sha256 = "981dab9cfa3aa4a69fc8eda493eb2cd74700775b00fce9e4f57b1b820f12ff1d"
+source_sha256 = "456afb5d1f6be09e51435f81d1d29cce74d9255bd3c042b1f7c581d68d0cac09"
 last_synced = "2026-05-18"
 
 [[docs]]
 source = "apps/api/AGENTS.md"
 ko = "apps/api/AGENTS_KO.md"
-source_sha256 = "9870410e64df73063def8d709306a2629360d8de9919de93e4ec3a0a036c3756"
+source_sha256 = "fdf54985983232ee7fecb841e81d68a4c51018a40ffdc9142e9b3fdf1cda4f04"
 last_synced = "2026-05-19"
 
 [[docs]]
@@ -144,65 +144,65 @@ last_synced = "2026-05-19"
 [[docs]]
 source = "apps/api/CONTEXT.md"
 ko = "apps/api/CONTEXT_KO.md"
-source_sha256 = "a309c8250b673d0c8dfba50fe17f55b610a8eda046b2d5be118269f209007d12"
+source_sha256 = "a9102b74b366f113142bd8429fe2733bf35c9169f2c0feb7efe006adecd9dd85"
 last_synced = "2026-05-18"
 
 [[docs]]
 source = "apps/web/AGENTS.md"
 ko = "apps/web/AGENTS_KO.md"
-source_sha256 = "244e1ed88f40e0d0e5fed1f84128741aa337b144db7400f4a03e23e26f247568"
+source_sha256 = "4883b55bce6862ea941f5e71196d7d7868471657050a178f436b8ed4a4f87dff"
 last_synced = "2026-05-19"
 
 [[docs]]
 source = "apps/web/CONTEXT.md"
 ko = "apps/web/CONTEXT_KO.md"
-source_sha256 = "60f16937fd2232cb1b4f811d432a30d3cd77329267273fa8bca27d871567175f"
+source_sha256 = "5b6724d444f486a462022b0a6e11a8ef79f4f6cc70901785ee0a992a1849b2d2"
 last_synced = "2026-05-18"
 
 [[docs]]
 source = "docs/API_CONTRACT.md"
 ko = "docs/API_CONTRACT_KO.md"
-source_sha256 = "0dbd8d605a7fae9ea05aca148f7bc30a24ea363ba207a1811c720c4df390b359"
+source_sha256 = "4365e4cd78b46720b07493e92d88dcd6414debb7144301ff5a9bb6426ef4b2c2"
 last_synced = "2026-05-18"
 
 [[docs]]
 source = "docs/ARCHITECTURE.md"
 ko = "docs/ARCHITECTURE_KO.md"
-source_sha256 = "5c8ab87b6c61f59ab6f57c9d9e82fb572bcf6f38396f0dff05a254d88e605693"
+source_sha256 = "a6becc552370deeacf8059c04a6e99308b87e15488b6fd1d321e788b3cf634a6"
 last_synced = "2026-05-18"
 
 [[docs]]
 source = "docs/DATA_STORAGE.md"
 ko = "docs/DATA_STORAGE_KO.md"
-source_sha256 = "5187f8ed59a76c310d2b591c2e7a889f7569925c67d67c558fd717d5a84c46d8"
+source_sha256 = "9d94dc5a4790a3e36e308889de27609edc003c79c8028ab72f30546b51b3b6b5"
 last_synced = "2026-05-18"
 
 [[docs]]
 source = "docs/INFRA_AND_ENV.md"
 ko = "docs/INFRA_AND_ENV_KO.md"
-source_sha256 = "1b96c9bfdc2cd4d408cf4e2823b8e75cd51951e07ee3efc3e3d7e80fb906d390"
+source_sha256 = "8192e1db3771f8a842f783d8128132463f7e5585778ec4d3a2301aa495f0b25a"
 last_synced = "2026-05-18"
 
 [[docs]]
 source = "docs/MAP_DISPLAY_FLOW.md"
 ko = "docs/MAP_DISPLAY_FLOW_KO.md"
-source_sha256 = "8da7545250932f9f43364d13263eb76bada48d564dbd4868759d4458c4306081"
+source_sha256 = "f2824df09205b83be075bb360529b199d12ff8bdeab710a3096ced0db128f6d9"
 last_synced = "2026-05-18"
 
 [[docs]]
 source = "docs/MIGRATION_PLAN.md"
 ko = "docs/MIGRATION_PLAN_KO.md"
-source_sha256 = "43e75576d4ac3bee482e20c664f1b06e06a4fa9a590479c2b61f099051a94110"
+source_sha256 = "cc1dd6b5fbe2541f0caa9b4c462a43e0c51f501ebf06134b37300db7a9eae0a0"
 last_synced = "2026-05-18"
 
 [[docs]]
 source = "docs/README.md"
 ko = "docs/README_KO.md"
-source_sha256 = "9ea255fff414de4960b6cb85893480cbdfe1dbb1ce9e72f9f8ce3d9ab4b9639f"
+source_sha256 = "1ea9fe6d5d625d1eb15e805e77d186bfd23200f8f72903a6c3074d5126f612ed"
 last_synced = "2026-05-18"
 
 [[docs]]
 source = "docs/UI_UX_MIGRATION.md"
 ko = "docs/UI_UX_MIGRATION_KO.md"
-source_sha256 = "b0856a6265d0cd9f10f0ab5d681af648d95e19511d85b8650a77a1d534966a0f"
+source_sha256 = "4bf366f5c0bcd2964801eb97246a93881849bf0bad6cf2a263886400abd48939"
 last_synced = "2026-05-18"

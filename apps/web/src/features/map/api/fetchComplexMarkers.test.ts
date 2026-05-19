@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchComplexMarkers, type ComplexMarkersRequest } from './fetchComplexMarkers';
+import { resolveApiUrl } from './resolveApiUrl';
 
 describe('fetchComplexMarkers', () => {
   afterEach(() => {
@@ -30,7 +31,7 @@ describe('fetchComplexMarkers', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/map/complexes',
+      resolveApiUrl('/api/v1/map/complexes'),
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

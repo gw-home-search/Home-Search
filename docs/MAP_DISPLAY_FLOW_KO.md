@@ -1,28 +1,104 @@
-# 지도 표시 흐름 한국어 참조
+# Map Display Flow
 
-> 사람 전용 한국어 참조 문서입니다. 기준 문서는 `docs/MAP_DISPLAY_FLOW.md`입니다.
+## Goal
 
-## 목표
+stable V1 APIs를 사용해 real-estate trade data를 Kakao map에 표시한다.
 
-안정적인 V1 API를 사용해 Kakao map 위에 실거래 데이터를 표시한다.
+Source frontend:
 
-## V1 흐름
+- `/Users/gwongwangjae/frontend/home-client`
 
-지도 idle 시점에 bounds와 level을 읽고, 상세 zoom에서는 `/api/v1/map/complexes`, 넓은 zoom에서는 `/api/v1/map/regions`를 호출한다. complex marker를 클릭하면 detail drawer를 열고 `/api/v1/detail/{parcelId}`와 `/api/v1/trade/{parcelId}`를 호출한다.
+Target frontend:
 
-## Level 규칙
+- `/Users/gwongwangjae/home-search/apps/web`
 
-소스 호환성을 위해 기존 level 기준을 유지한다.
+## Current Source Flow
 
-- `level <= 4`: complex marker
-- `level >= 10`: `si-do`
-- `level >= 7`: `si-gun-gu`
-- `level >= 4`: `eup-myeon-dong`
+현재 central file:
 
-## 백엔드 경계
+- `src/App.jsx`
 
-`/api/v1/map/complexes`는 지도 표시를 위한 최소 작업만 수행한다. ranking table, trend table, 30일 aggregate, mail/favorite state에 의존하지 않는다.
+현재 behavior:
 
-## 실패 동작
+1. `KakaoMap.jsx`가 Kakao Map을 만든다.
+2. `onCreate`와 `onIdle`이 `fetchMarkers`를 호출한다.
+3. `fetchMarkers`가 map center, level, bounds를 읽는다.
+4. Map level이 endpoint를 선택한다:
+   - `level <= 4`: `api/v1/map/complexes`
+   - otherwise: `api/v1/map/regions`
+5. response를 marker coordinates로 normalize한다.
+6. Complex markers 또는 region markers를 render한다.
 
-marker API 실패 시 현재 marker를 비우고, 지도는 계속 사용할 수 있게 두며, 작은 non-blocking error state를 보여준다.
+## V1 Flow
+
+```text
+Kakao map idle
+  -> read bounds and level
+  -> if detailed level, call /api/v1/map/complexes
+  -> else call /api/v1/map/regions
+  -> render markers
+  -> complex marker click
+  -> open detail drawer
+  -> call /api/v1/detail/{parcelId}
+  -> call /api/v1/trade/{parcelId}
+```
+
+## Level Rules
+
+compatibility를 위해 current source behavior를 유지한다:
+
+- `level <= 4`: complex markers 표시.
+- `level >= 10`: `si-do` request.
+- `level >= 7`: `si-gun-gu` request.
+- `level >= 4`: `eup-myeon-dong` request.
+
+level thresholds는 나중에 조정할 수 있지만 V1 migration은 map display가 안정될 때까지 이를 보존해야 한다.
+
+## Complex Marker Contract
+
+Complex markers에 필요한 fields:
+
+- `parcelId`
+- `lat`
+- `lng`
+- `latestDealAmount`
+- `unitCntSum`
+
+Marker display:
+
+- `latestDealAmount`에서 price label.
+- `unitCntSum`에서 unit label.
+- click하면 `parcelId`의 detail drawer를 연다.
+
+## Backend Query Boundary
+
+`/api/v1/map/complexes`는 map display에 필요한 만큼만 수행해야 한다:
+
+- PostGIS bounds로 parcels filter.
+- parcel 아래 complexes join.
+- latest trade amount compute 또는 select.
+- unit count, price, area, age의 simple filters 적용.
+
+다음을 요구하지 않는다:
+
+- Ranking tables.
+- Trend tables.
+- 30-day aggregate tables.
+- Mail 또는 favorite state.
+
+## Frontend Error Behavior
+
+marker API failure 시:
+
+- current markers를 clear한다.
+- map usable 상태를 유지한다.
+- map에서 벗어나지 않는다.
+- redesigned UI에 small non-blocking error state를 보여준다.
+
+## Acceptance Criteria
+
+- map 이동 또는 zoom이 marker refresh를 trigger한다.
+- Wide zoom은 region markers를 보여준다.
+- Detailed zoom은 complex markers를 보여준다.
+- Complex marker click이 detail과 trade data를 연다.
+- Map display가 V1 data tables만으로 동작한다.

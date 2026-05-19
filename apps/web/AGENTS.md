@@ -1,5 +1,6 @@
 # apps/web Agent Rules
 
+
 ## Scope
 
 This directory owns the Home Search V1 frontend: Vite React runtime, Kakao map display, API clients/adapters, search, region navigation, filters, detail drawer, trade list/chart, and frontend verification.

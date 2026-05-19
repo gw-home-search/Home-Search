@@ -3,6 +3,7 @@ name: spec-to-plan
 description: Convert Home Search goals into decision-complete V1 implementation plans before web/api work starts.
 ---
 
+
 # Spec To Plan Skill
 
 Use this skill when a Home Search request is goal-level, cross-app, ambiguous, or likely to affect both `apps/api` and `apps/web`.

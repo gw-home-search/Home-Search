@@ -1,5 +1,6 @@
 # Map Display Flow
 
+
 ## Goal
 
 Display real-estate trade data on a Kakao map using stable V1 APIs.

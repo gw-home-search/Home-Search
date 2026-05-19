@@ -1,5 +1,6 @@
 # apps/api Agent Rules
 
+
 ## Scope
 
 This directory owns the Home Search V1 backend: Spring Boot runtime, V1 domain/application/web layers, Flyway migrations, ingest, API tests, and backend verification.

@@ -7,10 +7,10 @@ Preset: {{PRESET}}
 Target: {{TARGET}}
 Branch: {{BRANCH_NAME}}
 
-Allowed edit scope:
+허용 편집 범위:
 - {{ALLOWED_SCOPE}}
 
-Forbidden edit scope:
+금지 편집 범위:
 - {{FORBIDDEN_SCOPE}}
 - docs/**
 - AGENTS.md
@@ -21,17 +21,17 @@ Forbidden edit scope:
 - package-lock.json
 - build output
 
-Instructions:
-- Read root AGENTS.md, apps/api/AGENTS.md, CONTEXT.md, apps/api/CONTEXT.md, and relevant canonical docs before editing.
-- Preserve the V1 API contract and data invariants.
-- Do not introduce V2 ranking, favorite, alarm, mail, recommendation, auth, or heavy analytics work.
-- Use the minimum GREEN slice and leave a short Korean-first gate summary.
+지시:
+- 편집 전에 root `AGENTS.md`, `apps/api/AGENTS.md`, `CONTEXT.md`, `apps/api/CONTEXT.md`, 관련 canonical docs를 읽는다.
+- V1 API contract와 data invariants를 보존한다.
+- V2 ranking, favorite, alarm, mail, recommendation, auth, heavy analytics 작업을 도입하지 않는다.
+- 최소 GREEN slice를 사용하고 짧은 Korean-first gate summary를 남긴다.
 
-Required verification:
+필수 검증:
 - {{VERIFICATION_COMMANDS}}
-- Use exact evidence line format: ``- `command` = pass|fail|not run (Korean reason)``.
+- 정확한 evidence line 형식을 사용한다: ``- `command` = pass|fail|not run (Korean reason)``.
 
-Final user-facing evidence labels:
+최종 사용자-facing evidence labels:
 - 상태:
 - 최초 RED:
 - 예상 RED 실패:

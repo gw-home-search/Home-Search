@@ -1,28 +1,90 @@
-# UI/UX 마이그레이션 한국어 참조
+# UI/UX Migration
 
-> 사람 전용 한국어 참조 문서입니다. 기준 문서는 `docs/UI_UX_MIGRATION.md`입니다.
+## Goal
 
-## 목표
+V1 API contract를 보존하면서 frontend를 map exploration 중심으로 redesign한다.
 
-V1 API 계약을 유지하면서 프론트엔드를 지도 탐색 중심으로 재설계한다.
+Source frontend:
 
-## 대상 UX
+- `/Users/gwongwangjae/frontend/home-client`
 
-- full-screen map을 주 화면으로 둔다.
-- 얇은 app bar를 둔다.
-- 검색과 지역 탐색을 위한 collapsible exploration panel을 둔다.
-- 지도 위에 floating filter controls를 둔다.
-- complex marker 클릭 시 detail drawer를 연다.
-- detail drawer 안에 trade chart와 trade list를 둔다.
+Target frontend:
 
-## 동작 규칙
+- `/Users/gwongwangjae/home-search/apps/web`
 
-UI/UX 작업 중에도 API route는 바꾸지 않는다. 검색, 지역 navigation, complex marker, detail, trade list는 기존 V1 API 계약을 따른다.
+## Current UX
 
-## 구현 방향
+현재 source app은 다음을 가진다:
 
-먼저 소스 프론트엔드가 동작하는 형태를 마이그레이션한다. API 호환성이 확인되기 전에는 feature 구조 재편을 먼저 하지 않는다.
+- full-height page.
+- top header.
+- fixed left sidebar.
+- map 위 filter bar.
+- main content로 Kakao map.
+- left sidebar 안의 detail view.
 
-## 모바일 방향
+중요한 source files:
 
-모바일이 V1의 첫 목표는 아니지만 막히지 않게 설계한다. exploration panel과 detail drawer는 bottom sheet로 전환될 수 있어야 한다.
+- `src/App.jsx`
+- `src/components/Header.jsx`
+- `src/components/filters/FilterBar.jsx`
+- `src/components/sidebar/LeftSidebar.jsx`
+- `src/components/sidebar/SearchListSidebar.jsx`
+- `src/components/sidebar/region/RegionNavSidebar.jsx`
+- `src/components/sidebar/detail/DetailSidebar.jsx`
+- `src/components/sidebar/detail/TradeSidebar.jsx`
+
+## V1 Target UX
+
+map-first layout을 사용한다:
+
+- primary surface로 full-screen map.
+- brand, environment, account actions를 위한 thin app bar.
+- search와 region navigation을 위한 collapsible exploration panel.
+- map 위 floating filter controls.
+- complex marker에서 열리는 detail drawer.
+- detail drawer 안의 trade chart와 list.
+
+## Behavior Rules
+
+- UI/UX work에서 API routes는 바뀌지 않는다.
+- Search는 `/api/v1/search/complexes?q=` 기반으로 유지된다.
+- Region navigation은 `/api/v1/region` 및 `/api/v1/region/{regionId}` 기반으로 유지된다.
+- Complex markers는 `/api/v1/map/complexes` 기반으로 유지된다.
+- Detail drawer는 `/api/v1/detail/{parcelId}`와 `/api/v1/trade/{parcelId}`를 사용한다.
+
+## Component Direction
+
+Target feature groups:
+
+- `features/map`: Kakao map, marker layers, bounds state.
+- `features/search`: search input and results.
+- `features/region`: region navigation.
+- `features/filters`: unit, price, area, age controls.
+- `features/complex-detail`: detail drawer, trade chart, trade table.
+- `shared`: common buttons, panel shell, formatters.
+
+copied app이 동작하기 전에는 이 structure로 refactor하지 않는다. 먼저 source frontend를 migrate하고 그 뒤 redesign한다.
+
+## Visual Direction
+
+- UI를 dense하고 practical하게 유지한다.
+- marketing-page composition을 피한다.
+- compact map controls와 panels를 선호한다.
+- marker labels를 한눈에 읽기 쉽게 만든다.
+- details를 열 때 current map context를 숨기지 않는다.
+
+## Mobile Direction
+
+Mobile은 첫 V1 target은 아니지만 layout이 막으면 안 된다:
+
+- Exploration panel은 bottom sheet가 된다.
+- Detail drawer는 full-height bottom sheet가 된다.
+- Floating filters는 horizontally scrollable controls가 된다.
+
+## Acceptance Criteria
+
+- Users가 map에서 시작해 complex를 search하고, map을 움직이고, context를 잃지 않고 detail을 열 수 있다.
+- UI/UX redesign 전후로 같은 API contract가 동작한다.
+- Filter changes가 complex markers를 refresh한다.
+- Detail drawer가 complex info와 trade list를 명확히 보여준다.

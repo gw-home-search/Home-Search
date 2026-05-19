@@ -2,6 +2,9 @@ package com.home.application.ingest;
 
 import java.time.LocalDate;
 
+/**
+ * complex_id를 운영 relation으로 사용하고 source metadata를 audit/dedupe 용도로 보존하는 normalized trade insert command입니다.
+ */
 public record NormalizedTradeCommand(
 	Long rawIngestId,
 	Long complexId,

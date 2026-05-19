@@ -1,123 +1,100 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { KakaoMapsApi } from '../features/map/kakao/kakaoMapsTypes';
-import { loadKakaoMapsSdk } from '../features/map/kakao/loadKakaoMapsSdk';
-import { v1FetchUrl } from '../features/map/api/testUrl';
 import { App } from './App';
 
-vi.mock('../features/map/kakao/loadKakaoMapsSdk', () => ({
-  loadKakaoMapsSdk: vi.fn(),
-}));
-
-const loadKakaoMapsSdkMock = vi.mocked(loadKakaoMapsSdk);
-
 describe('App', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('creates a ready Kakao map surface and fetches markers from SDK bounds and level', async () => {
-    const kakao = createFakeKakaoMaps({
-      bounds: {
-        swLat: 37.1,
-        swLng: 126.8,
-        neLat: 37.8,
-        neLng: 127.3,
-      },
-      level: 4,
-    });
-    loadKakaoMapsSdkMock.mockResolvedValue(kakao.api);
+  it('shows marker loading state without blocking the map surface', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => undefined)));
+
+    const { root, rootElement } = await renderApp();
+
+    expect(rootElement.querySelector('[aria-label="Map surface"]')).not.toBeNull();
+    expect(rootElement.textContent).toContain('Loading markers');
+    expect(rootElement.textContent).toContain('Map ready');
+
+    unmount(root);
+  });
+
+  it('shows an empty marker state when the marker API returns an empty list', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 
     const { root, rootElement } = await renderApp();
     await flushAsyncState();
 
-    const mapSurface = rootElement.querySelector('[data-testid="kakao-map-surface"]');
-    expect(mapSurface).not.toBeNull();
-    expect(mapSurface?.getAttribute('data-map-state')).toBe('ready');
-    expect(mapSurface?.getAttribute('data-map-level')).toBe('4');
-    expect(mapSurface?.getAttribute('data-marker-kind')).toBe('complex');
-
-    expect(kakao.maps).toHaveLength(1);
     expect(fetchMock).toHaveBeenCalledWith(
-      v1FetchUrl('/api/v1/map/complexes'),
+      '/api/v1/map/complexes',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({
-          swLat: 37.1,
-          swLng: 126.8,
-          neLat: 37.8,
-          neLng: 127.3,
-          pyeongMin: null,
-          pyeongMax: null,
-          priceEokMin: null,
-          priceEokMax: null,
-          ageMin: null,
-          ageMax: null,
-          unitMin: null,
-          unitMax: null,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    expect(rootElement.querySelector('[aria-label="Map surface"]')).not.toBeNull();
+    expect(rootElement.textContent).toContain('No markers in this area');
+
+    unmount(root);
+  });
+
+  it('uses region markers before detailed map levels', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root } = await renderApp({ initialMapLevel: 10 });
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/map/regions',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"region":"si-do"'),
       }),
     );
 
     unmount(root);
   });
 
-  it('keeps the map surface visible when the Kakao SDK cannot load', async () => {
-    loadKakaoMapsSdkMock.mockRejectedValue(new Error('VITE_KAKAO_MAP_APP_KEY is required'));
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-
-    const { root, rootElement } = await renderApp();
-    await flushAsyncState();
-
-    const mapSurface = rootElement.querySelector('[data-testid="kakao-map-surface"]');
-    expect(mapSurface).not.toBeNull();
-    expect(mapSurface?.getAttribute('data-map-state')).toBe('error');
-    expect(rootElement.querySelector('[role="alert"]')?.textContent).toContain(
-      'Map unavailable',
-    );
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    unmount(root);
-  });
-
-  it('renders complex marker overlays and cleans them up when the marker kind changes', async () => {
-    const firstBounds = {
-      swLat: 37.1,
-      swLng: 126.8,
-      neLat: 37.8,
-      neLng: 127.3,
-    };
-    const secondBounds = {
-      swLat: 37.2,
-      swLng: 126.9,
-      neLat: 37.9,
-      neLng: 127.4,
-    };
-    const kakao = createFakeKakaoMaps({ bounds: firstBounds, level: 4 });
-    loadKakaoMapsSdkMock.mockResolvedValue(kakao.api);
+  it('refreshes markers on map zoom changes and ignores stale previous responses', async () => {
+    const staleComplexResponse = deferred<Response>();
+    const latestRegionResponse = deferred<Response>();
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(
-        jsonResponse([
-          {
-            parcelId: 1001,
-            lat: 37.5123,
-            lng: 127.0456,
-            latestDealAmount: 125000,
-            unitCntSum: 740,
-          },
-        ]),
-      )
-      .mockResolvedValueOnce(
+      .mockReturnValueOnce(staleComplexResponse.promise)
+      .mockReturnValueOnce(latestRegionResponse.promise);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/map/complexes',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    const zoomOutButton = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="Zoom out"]',
+    );
+    expect(zoomOutButton).not.toBeNull();
+
+    await act(async () => {
+      zoomOutButton?.click();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/v1/map/regions',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"region":"eup-myeon-dong"'),
+      }),
+    );
+
+    await act(async () => {
+      latestRegionResponse.resolve(
         jsonResponse([
           {
             id: 1,
@@ -127,73 +104,46 @@ describe('App', () => {
           },
         ]),
       );
-    vi.stubGlobal('fetch', fetchMock);
-
-    const { root, rootElement } = await renderApp();
-    await flushAsyncState();
-    await flushAsyncState();
-
-    expect(kakao.overlays).toHaveLength(1);
-    expect(kakao.overlays[0].kind).toBe('complex');
-    expect(kakao.overlays[0].setMap).toHaveBeenLastCalledWith(kakao.maps[0]);
-
-    kakao.maps[0].setBounds(secondBounds);
-    const zoomOutButton = rootElement.querySelector<HTMLButtonElement>(
-      'button[aria-label="Zoom out"]',
-    );
-    expect(zoomOutButton).not.toBeNull();
-
-    await act(async () => {
-      zoomOutButton?.click();
+      await latestRegionResponse.promise;
     });
     await flushAsyncState();
+
+    expect(rootElement.textContent).toContain('Seoul');
+
+    await act(async () => {
+      staleComplexResponse.resolve(
+        jsonResponse([
+          {
+            parcelId: 1001,
+            lat: 37.5123,
+            lng: 127.0456,
+            latestDealAmount: 125000,
+            unitCntSum: 740,
+          },
+        ]),
+      );
+      await staleComplexResponse.promise;
+    });
     await flushAsyncState();
 
-    expect(fetchMock).toHaveBeenLastCalledWith(
-      v1FetchUrl('/api/v1/map/regions'),
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          ...secondBounds,
-          region: 'eup-myeon-dong',
-        }),
-      }),
-    );
-    expect(kakao.overlays).toHaveLength(2);
-    expect(kakao.overlays[0].setMap).toHaveBeenCalledWith(null);
-    expect(kakao.overlays[1].kind).toBe('region');
-    expect(
-      rootElement
-        .querySelector('[data-testid="kakao-map-surface"]')
-        ?.getAttribute('data-marker-kind'),
-    ).toBe('region');
+    expect(rootElement.textContent).toContain('Seoul');
+    expect(rootElement.querySelector('[data-marker-id="1001"]')).toBeNull();
 
     unmount(root);
   });
 
   it('shows a non-blocking marker error without removing the map surface', async () => {
-    const kakao = createFakeKakaoMaps({
-      bounds: {
-        swLat: 37.1,
-        swLng: 126.8,
-        neLat: 37.8,
-        neLng: 127.3,
-      },
-      level: 4,
-    });
-    loadKakaoMapsSdkMock.mockResolvedValue(kakao.api);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(errorResponse(500)));
 
     const { root, rootElement } = await renderApp();
     await flushAsyncState();
 
-    expect(
-      rootElement.querySelector('[data-testid="kakao-map-surface"]')?.getAttribute('data-map-state'),
-    ).toBe('ready');
+    expect(rootElement.querySelector('[aria-label="Map surface"]')).not.toBeNull();
     expect(rootElement.querySelector('[role="alert"]')?.textContent).toContain(
       'Marker data unavailable',
     );
-    expect(kakao.overlays).toHaveLength(0);
+    expect(rootElement.textContent).toContain('Map remains usable');
+    expect(rootElement.querySelectorAll('[data-marker-id]')).toHaveLength(0);
 
     unmount(root);
   });
@@ -241,127 +191,17 @@ function errorResponse(status: number): Response {
   } as Response;
 }
 
-type FakeBoundsRequest = {
-  swLat: number;
-  swLng: number;
-  neLat: number;
-  neLng: number;
-};
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (error: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
 
-type FakeKakaoOptions = {
-  bounds: FakeBoundsRequest;
-  level: number;
-};
-
-function createFakeKakaoMaps(options: FakeKakaoOptions) {
-  const maps: FakeMap[] = [];
-  const overlays: FakeOverlay[] = [];
-
-  class LatLng {
-    constructor(
-      private readonly lat: number,
-      private readonly lng: number,
-    ) {}
-
-    getLat() {
-      return this.lat;
-    }
-
-    getLng() {
-      return this.lng;
-    }
-  }
-
-  class LatLngBounds {
-    constructor(private readonly bounds: FakeBoundsRequest) {}
-
-    getSouthWest() {
-      return new LatLng(this.bounds.swLat, this.bounds.swLng);
-    }
-
-    getNorthEast() {
-      return new LatLng(this.bounds.neLat, this.bounds.neLng);
-    }
-  }
-
-  class FakeMap {
-    private bounds = options.bounds;
-    private level = options.level;
-    private readonly listeners = new Map<string, Set<() => void>>();
-
-    constructor(
-      readonly container: HTMLElement,
-      readonly mapOptions: { center: LatLng; level: number },
-    ) {
-      this.level = mapOptions.level;
-      maps.push(this);
-    }
-
-    getBounds() {
-      return new LatLngBounds(this.bounds);
-    }
-
-    setBounds(bounds: FakeBoundsRequest) {
-      this.bounds = bounds;
-    }
-
-    getLevel() {
-      return this.level;
-    }
-
-    setLevel(level: number) {
-      this.level = level;
-      this.emit('idle');
-    }
-
-    addListener(name: string, listener: () => void) {
-      const listeners = this.listeners.get(name) ?? new Set<() => void>();
-      listeners.add(listener);
-      this.listeners.set(name, listeners);
-    }
-
-    removeListener(name: string, listener: () => void) {
-      this.listeners.get(name)?.delete(listener);
-    }
-
-    private emit(name: string) {
-      this.listeners.get(name)?.forEach((listener) => listener());
-    }
-  }
-
-  class FakeOverlay {
-    readonly kind: 'complex' | 'region';
-    readonly setMap = vi.fn();
-
-    constructor(readonly overlayOptions: { position: LatLng; content: HTMLElement | string }) {
-      const content =
-        typeof overlayOptions.content === 'string'
-          ? overlayOptions.content
-          : overlayOptions.content.dataset.markerKind;
-      this.kind = content === 'region' ? 'region' : 'complex';
-      overlays.push(this);
-    }
-  }
-
-  return {
-    api: {
-      Map: FakeMap,
-      LatLng,
-      LatLngBounds,
-      CustomOverlay: FakeOverlay,
-      event: {
-        addListener: vi.fn((target: FakeMap, name: string, listener: () => void) => {
-          target.addListener(name, listener);
-          return { target, name, listener };
-        }),
-        removeListener: vi.fn(
-          (handle: { target: FakeMap; name: string; listener: () => void }) => {
-            handle.target.removeListener(handle.name, handle.listener);
-          },
-        ),
-      },
-    } as unknown as KakaoMapsApi,
-    maps,
-    overlays,
-  };
+  return { promise, resolve, reject };
 }

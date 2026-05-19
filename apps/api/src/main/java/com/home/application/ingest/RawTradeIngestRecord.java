@@ -2,6 +2,9 @@ package com.home.application.ingest;
 
 import java.time.Instant;
 
+/**
+ * 외부 원천 payload와 ingest 처리 상태를 보존하는 raw trade evidence record입니다.
+ */
 public record RawTradeIngestRecord(
 	Long id,
 	String source,

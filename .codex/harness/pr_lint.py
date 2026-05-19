@@ -52,12 +52,16 @@ CHECKLIST_ITEMS = [
 ]
 
 DIFF_CHECK = "git diff --check"
-API_TEST = "cd apps/api && ./gradlew test"
+API_TEST = "cd apps/api && ./gradlew backendQualityCheck"
 WEB_TEST = "cd apps/web && npm run test"
 WEB_BUILD = "cd apps/web && npm run build"
 PR_LINT_SELF_TEST = "python3 .codex/harness/pr_lint.py --self-test"
 USER_LANGUAGE_CHECK = "python3 .codex/harness/user_language_check.py --self-test"
+STOP_HOOK_SELF_TEST = "python3 .codex/hooks/stop_verification_gate.py --self-test"
+POST_TOOL_USE_REVIEW_SELF_TEST = "python3 .codex/hooks/post_tool_use_review.py --self-test"
 KO_CHECK = "bash scripts/check-ko-docs.sh"
+COVERAGE_LINE_RE = re.compile(r"^\s*Coverage:\s*>=\s*90%\s*$", re.MULTILINE)
+DOCS_OPENAPI_LINE_RE = re.compile(r"^\s*Docs/OpenAPI:\s*generated\s+\+\s+verified\s*$", re.MULTILINE)
 
 VERIFICATION_LINE_RE = re.compile(
     r"^\s*-\s+`(?P<command>[^`\n]+)`\s+=\s+"
@@ -427,6 +431,9 @@ def required_commands_for_files(changed_files: Iterable[str], errors: list[LintM
             required.add(WEB_BUILD)
         if path.startswith(".github/") or path.startswith(".codex/harness/") or path == "scripts/check-ko-docs.sh":
             required.add(PR_LINT_SELF_TEST)
+        if path.startswith(".codex/hooks/"):
+            required.add(STOP_HOOK_SELF_TEST)
+            required.add(POST_TOOL_USE_REVIEW_SELF_TEST)
 
     canonical_markdown = sorted(path for path in changed if is_canonical_markdown(path))
     if canonical_markdown:
@@ -457,6 +464,7 @@ def check_evidence(
 ) -> None:
     status = parse_status(body)
     required = required_commands_for_files(changed_files, errors) if enforce_changed_file_rules else set()
+    backend_changed = any(path.startswith("apps/api/") for path in changed_files)
 
     for command in sorted(required):
         line = verification.get(command)
@@ -464,6 +472,12 @@ def check_evidence(
             add(errors, "evidence", f"필수 검증 근거가 없습니다: `{command}` = pass")
         elif line.status != "pass":
             add(errors, "evidence", f"필수 검증은 pass여야 합니다: `{command}` = {line.status}")
+
+    if backend_changed:
+        if not COVERAGE_LINE_RE.search(body):
+            add(errors, "evidence", "apps/api 변경에는 `Coverage: >=90%` evidence가 필요합니다")
+        if not DOCS_OPENAPI_LINE_RE.search(body):
+            add(errors, "evidence", "apps/api 변경에는 `Docs/OpenAPI: generated + verified` evidence가 필요합니다")
 
     if status == "Pass":
         for line in verification.values():
@@ -541,7 +555,12 @@ def valid_body(*, checklist_checked: bool = True, status: str = "Pass", risk: st
 - `{WEB_BUILD}` = not run (web 변경 없음)
 - `{PR_LINT_SELF_TEST}` = pass (자체 테스트)
 - `{USER_LANGUAGE_CHECK}` = pass (사용자 노출 언어 점검)
+- `{STOP_HOOK_SELF_TEST}` = pass (stop hook fixture)
+- `{POST_TOOL_USE_REVIEW_SELF_TEST}` = pass (post-tool hook fixture)
 - `{KO_CHECK}` = pass (Markdown 동기화)
+
+Coverage: >=90%
+Docs/OpenAPI: generated + verified
 
 ## 계약 영향
 
@@ -618,6 +637,21 @@ def run_self_test() -> int:
         body=valid_body().replace(f"- `{WEB_BUILD}` = not run (web 변경 없음)\n", ""),
         changed_files=("apps/web/src/app/App.tsx",),
     )
+    backend_missing_quality = valid_input(
+        body=valid_body().replace(f"- `{API_TEST}` = not run (api 변경 없음)", f"- `{API_TEST}` = not run (확인 안 함)"),
+        changed_files=("apps/api/src/main/java/com/home/App.java",),
+    )
+    backend_missing_coverage = valid_input(
+        body=valid_body().replace("Coverage: >=90%\n", ""),
+        changed_files=("apps/api/src/main/java/com/home/App.java",),
+    )
+    hook_missing_self_test = valid_input(
+        body=valid_body().replace(
+            f"- `{STOP_HOOK_SELF_TEST}` = pass (stop hook fixture)",
+            f"- `{STOP_HOOK_SELF_TEST}` = not run (확인 안 함)",
+        ),
+        changed_files=(".codex/hooks/stop_verification_gate.py",),
+    )
     markdown_unsynced = valid_input(
         body=valid_body().replace(f"- `{KO_CHECK}` = pass (Markdown 동기화)", f"- `{KO_CHECK}` = not run (확인 안 함)"),
         changed_files=("docs/README.md",),
@@ -632,6 +666,9 @@ def run_self_test() -> int:
         legacy.ok,
         expect_case("unchecked checklist", old_style_unchecked, "body", "checklist item"),
         expect_case("web build evidence missing", web_missing_build, "evidence", WEB_BUILD),
+        expect_case("backend quality evidence missing", backend_missing_quality, "evidence", API_TEST),
+        expect_case("backend coverage evidence missing", backend_missing_coverage, "evidence", "Coverage"),
+        expect_case("hook self-test evidence missing", hook_missing_self_test, "evidence", STOP_HOOK_SELF_TEST),
         expect_case("markdown KO path missing", markdown_unsynced, "changed-files", "paired KO doc"),
         expect_case("markdown KO evidence missing", markdown_unsynced, "evidence", KO_CHECK),
         expect_case("pass with open risk", pass_with_open_risk, "evidence", "미확인"),

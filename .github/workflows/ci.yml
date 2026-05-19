@@ -20,7 +20,18 @@ jobs:
           java-version: "17"
       - name: Run backend tests
         working-directory: apps/api
-        run: ./gradlew test
+        run: ./gradlew backendQualityCheck
+      - name: Upload backend quality artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-quality-artifacts
+          path: |
+            apps/api/build/reports/tests/
+            apps/api/build/reports/jacoco/
+            apps/api/build/docs/asciidoc/
+            apps/api/build/api-spec/openapi3.yaml
+          if-no-files-found: ignore
 
   frontend-test-build:
     name: frontend-test-build

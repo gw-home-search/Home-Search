@@ -118,7 +118,7 @@ def merge_branch(main: Path, branch: str, *, dry_run: bool) -> dict[str, Any]:
 
 def verify(main: Path, *, dry_run: bool) -> dict[str, Any]:
     checks: list[tuple[str, Path, list[str]]] = [
-        ("cd apps/api && ./gradlew test", main / "apps" / "api", ["./gradlew", "test"]),
+        ("cd apps/api && ./gradlew backendQualityCheck", main / "apps" / "api", ["./gradlew", "backendQualityCheck"]),
         ("cd apps/web && npm run test", main / "apps" / "web", ["npm", "run", "test"]),
         ("cd apps/web && npm run build", main / "apps" / "web", ["npm", "run", "build"]),
         ("git diff --check", main, ["git", "diff", "--check"]),

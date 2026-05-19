@@ -16,6 +16,11 @@ from typing import Any
 WATCHED_COMMANDS = (
     re.compile(r"(^|\s)(?:\./)?gradlew\s+test(\s|$)"),
     re.compile(r"(^|\s)(?:\./)?gradlew\s+verify(\s|$)"),
+    re.compile(r"(^|\s)(?:\./)?gradlew\s+backendQualityCheck(\s|$)"),
+    re.compile(r"(^|\s)(?:\./)?gradlew\s+apiDocsCheck(\s|$)"),
+    re.compile(r"(^|\s)(?:\./)?gradlew\s+coverageCheck(\s|$)"),
+    re.compile(r"(^|\s)(?:\./)?gradlew\s+jacocoTestCoverageVerification(\s|$)"),
+    re.compile(r"(^|\s)(?:\./)?gradlew\s+verifyOpenApiSpec(\s|$)"),
     re.compile(r"(^|\s)npm\s+run\s+test(\s|$)"),
     re.compile(r"(^|\s)npm\s+run\s+build(\s|$)"),
     re.compile(r"(^|\s)git\s+diff\s+--check(\s|$)"),
@@ -143,6 +148,16 @@ def run_self_test() -> int:
         "exit_code": 1,
         "stdout": "Tests failed",
     }
+    backend_quality_failure = {
+        "tool_input": {"cmd": "./gradlew backendQualityCheck"},
+        "exit_code": 1,
+        "stdout": "Coverage verification failed",
+    }
+    docs_failure = {
+        "tool_input": {"cmd": "./gradlew apiDocsCheck"},
+        "exit_code": 1,
+        "stderr": "OpenAPI spec was not generated",
+    }
     rg_failure = {
         "tool_input": {"cmd": "rg missing"},
         "exit_code": 1,
@@ -156,6 +171,8 @@ def run_self_test() -> int:
     tests = [
         ("npm failure is summarized", review_decision(npm_failure) is not None),
         ("gradle failure is summarized", review_decision(gradle_failure) is not None),
+        ("backend quality failure is summarized", review_decision(backend_quality_failure) is not None),
+        ("api docs failure is summarized", review_decision(docs_failure) is not None),
         ("unwatched rg failure is ignored", review_decision(rg_failure) is None),
         ("watched success is ignored", review_decision(npm_success) is None),
     ]

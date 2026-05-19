@@ -1,0 +1,32 @@
+= Home Search V1 API
+:doctype: book
+:icons: font
+:source-highlighter: coderay
+:toc: left
+:toclevels: 3
+:sectlinks:
+:sectnums:
+
+== Overview
+
+Home Search V1 exposes the minimum API surface needed to collect apartment
+trade data, store it safely, and display it on a map.
+
+== Map API
+
+=== Region Markers
+
+operation::map-regions-success[snippets='http-request,request-fields,http-response,response-fields']
+
+=== Complex Markers
+
+operation::map-complexes-success[snippets='http-request,request-fields,http-response,response-fields']
+
+=== Error Response
+
+operation::map-invalid-request[snippets='http-request,http-response,response-fields']
+
+[[error-code-list]]
+== Error Code List
+
+V1 error responses use Spring `ProblemDetail` style fields.

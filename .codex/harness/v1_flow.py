@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import re
 import subprocess
@@ -47,11 +48,14 @@ DEFAULT_TARGETS = {
 TARGET_MODES = {"backend", "frontend", "both", "planning-only"}
 KNOWN_VERIFICATION_COMMANDS = {
     "backend": {
+        "cd apps/api && ./gradlew backendQualityCheck": ("apps/api", ["./gradlew", "backendQualityCheck"]),
         "cd apps/api && ./gradlew test": ("apps/api", ["./gradlew", "test"]),
+        "git diff --check": (".", ["git", "diff", "--check"]),
     },
     "frontend": {
         "cd apps/web && npm run test": ("apps/web", ["npm", "run", "test"]),
         "cd apps/web && npm run build": ("apps/web", ["npm", "run", "build"]),
+        "git diff --check": (".", ["git", "diff", "--check"]),
     },
 }
 FORBIDDEN_SAFETY_FLAGS = {
@@ -458,20 +462,47 @@ def changed_files(worktree: Path) -> list[str]:
     return parse_changed_files(raw)
 
 
-def commit_target(target: str, worktree: Path, branch: str, slice_name: str, *, dry_run: bool) -> str | None:
+def scope_patterns(raw_scope: Any) -> list[str]:
+    if isinstance(raw_scope, list):
+        raw_items = [str(item) for item in raw_scope]
+    else:
+        raw_items = re.split(r"[,;\n]+", str(raw_scope))
+    return [item.strip() for item in raw_items if item.strip()]
+
+
+def path_matches_scope(path: str, patterns: list[str]) -> bool:
+    return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
+
+
+def git_add_pathspec(pattern: str) -> str:
+    if pattern.endswith("/**"):
+        return pattern[:-3]
+    return pattern
+
+
+def commit_target(
+    target: str,
+    worktree: Path,
+    branch: str,
+    slice_name: str,
+    args: argparse.Namespace,
+    *,
+    dry_run: bool,
+) -> str | None:
     files = changed_files(worktree) if not dry_run else []
-    allowed = "apps/api/" if target == "backend" else "apps/web/"
+    allowed_patterns = scope_patterns(target_config(args, target)["allowed_scope"])
+    add_pathspecs = [git_add_pathspec(pattern) for pattern in allowed_patterns]
     if dry_run:
-        print(f"[DRY-RUN] inspect changed files in {worktree}; allowed prefix {allowed}")
-        print(f"[DRY-RUN] git add -- {allowed.rstrip('/')}")
+        print(f"[DRY-RUN] inspect changed files in {worktree}; allowed scope {', '.join(allowed_patterns)}")
+        print(f"[DRY-RUN] git add -- {' '.join(add_pathspecs)}")
         print(f"[DRY-RUN] git commit -m 'feat({'api' if target == 'backend' else 'web'}): {slice_name}'")
         return None
     if not files:
         return None
-    blocked = [path for path in files if not path.startswith(allowed)]
+    blocked = [path for path in files if not path_matches_scope(path, allowed_patterns)]
     if blocked:
         raise RuntimeError(f"{target} branch has out-of-scope changes: {', '.join(blocked[:5])}")
-    git(worktree, "add", "--", allowed.rstrip("/"))
+    git(worktree, "add", "--", *add_pathspecs)
     scope = "api" if target == "backend" else "web"
     result = git(worktree, "commit", "-m", f"feat({scope}): {slice_name}")
     if result["status"] == "fail":
@@ -495,7 +526,7 @@ def execute_target(
     gate = run_gate_review(target, worktree, args, names, dry_run=dry_run)
     commit = None
     if args.commit and not args.no_commit:
-        commit = commit_target(target, worktree, branch, names["slice"], dry_run=dry_run)
+        commit = commit_target(target, worktree, branch, names["slice"], args, dry_run=dry_run)
     return {
         "status": "pass",
         "codex": {k: codex_result[k] for k in ("status", "exit_code", "summary")},
@@ -523,7 +554,8 @@ def verify_integration_targets(targets: list[str], args: argparse.Namespace, *, 
                 raise RuntimeError(f"{target} preset has unsupported verification command: {label}")
             relative_cwd, command = plan
             checks.append((str(label), DEFAULT_MAIN / relative_cwd, command))
-    checks.append(("git diff --check", DEFAULT_MAIN, ["git", "diff", "--check"]))
+    if not any(label == "git diff --check" for label, _, _ in checks):
+        checks.append(("git diff --check", DEFAULT_MAIN, ["git", "diff", "--check"]))
 
     verification: dict[str, Any] = {}
     for label, cwd, command in checks:

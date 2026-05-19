@@ -38,8 +38,17 @@ SUCCESS_RE = re.compile(
 )
 
 BACKEND_TEST_RE = re.compile(r"(\./gradlew|gradle)\s+(test|verify)\b")
+BACKEND_QUALITY_RE = re.compile(r"(\./gradlew|gradle)\s+backendQualityCheck\b")
 FRONTEND_TEST_RE = re.compile(r"npm\s+run\s+(test|build)\b")
 KO_CHECK_RE = re.compile(r"bash\s+scripts/check-ko-docs\.sh\b")
+COVERAGE_EVIDENCE_RE = re.compile(
+    r"(Coverage\s*:\s*>=?\s*90%|coverageCheck\b.*=\s*pass|jacocoTestCoverageVerification\b.*=\s*pass)",
+    re.IGNORECASE,
+)
+OPENAPI_EVIDENCE_RE = re.compile(
+    r"(Docs/OpenAPI\s*:\s*(generated|생성).*(verified|검증)|apiDocsCheck\b.*=\s*pass|openapi3\.ya?ml)",
+    re.IGNORECASE,
+)
 
 
 def load_payload() -> dict[str, Any]:
@@ -138,6 +147,18 @@ def transcript_text(payload: dict[str, Any]) -> str:
 
 def has_successful_command(text: str, command_re: re.Pattern[str]) -> bool:
     return bool(command_re.search(text) and SUCCESS_RE.search(text))
+
+
+def has_backend_quality_evidence(text: str) -> bool:
+    return has_successful_command(text, BACKEND_QUALITY_RE)
+
+
+def has_coverage_evidence(text: str) -> bool:
+    return bool(COVERAGE_EVIDENCE_RE.search(text))
+
+
+def has_openapi_evidence(text: str) -> bool:
+    return bool(OPENAPI_EVIDENCE_RE.search(text))
 
 
 def has_first_red_evidence(text: str) -> bool:
@@ -262,8 +283,12 @@ def missing_evidence(files: list[str], text: str) -> list[str]:
     missing: list[str] = []
 
     if any(path.startswith("apps/api/") for path in files):
-        if not has_successful_command(text, BACKEND_TEST_RE):
-            missing.append("apps/api 변경: backend test/verify evidence 필요")
+        if not has_backend_quality_evidence(text):
+            missing.append("apps/api 변경: backendQualityCheck evidence 필요")
+        if not has_coverage_evidence(text):
+            missing.append("apps/api 변경: Coverage >=90% evidence 필요")
+        if not has_openapi_evidence(text):
+            missing.append("apps/api 변경: Docs/OpenAPI generated + verified evidence 필요")
 
     if any(path.startswith("apps/web/") for path in files):
         if not has_successful_command(text, FRONTEND_TEST_RE):
@@ -305,7 +330,9 @@ def run_self_test() -> int:
         "\n".join(
             [
                 "상태: Partial",
-                "검증: ./gradlew test = pass",
+                "검증: ./gradlew backendQualityCheck = pass",
+                "Coverage: >=90%",
+                "Docs/OpenAPI: generated + verified",
                 "reviewer: 지적사항 = 없음",
                 "주요 위험: 없음",
                 "다음 행동: 최초 RED 보강",
@@ -343,12 +370,47 @@ def run_self_test() -> int:
         [".agents/skills/v1-slice-harness/SKILL.md"],
         "검증: bash scripts/check-ko-docs.sh = pass",
     )
+    missing_backend_quality = missing_evidence(
+        ["apps/api/src/main/java/com/home/App.java"],
+        "\n".join(
+            [
+                "상태: Pass",
+                "최초 RED: 있음",
+                "예상 RED 실패: 확인",
+                "최소 GREEN: 확인",
+                "검증: ./gradlew test = pass",
+                "Coverage: >=90%",
+                "Docs/OpenAPI: generated + verified",
+                "reviewer: 지적사항 = 없음",
+                "주요 위험: 없음",
+                "다음 행동: 없음",
+            ]
+        ),
+    )
+    missing_coverage = missing_evidence(
+        ["apps/api/src/main/java/com/home/App.java"],
+        "\n".join(
+            [
+                "상태: Pass",
+                "최초 RED: 있음",
+                "예상 RED 실패: 확인",
+                "최소 GREEN: 확인",
+                "검증: ./gradlew backendQualityCheck = pass",
+                "Docs/OpenAPI: generated + verified",
+                "reviewer: 지적사항 = 없음",
+                "주요 위험: 없음",
+                "다음 행동: 없음",
+            ]
+        ),
+    )
 
     tests = [
         ("missing First RED is detected", any("최초 RED" in item or "First RED" in item for item in missing_red)),
         ("missing Korean review is detected", any("짧은 한글 리뷰" in item for item in missing_review)),
         ("complete hook review passes", not complete_hook_review),
         ("markdown KO evidence passes", not markdown_complete),
+        ("backendQualityCheck evidence is required", any("backendQualityCheck" in item for item in missing_backend_quality)),
+        ("coverage evidence is required", any("Coverage" in item for item in missing_coverage)),
     ]
     failed = [name for name, passed in tests if not passed]
     if failed:

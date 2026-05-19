@@ -180,6 +180,32 @@ describe('fetchRegionMarkers', () => {
       }),
     ).rejects.toThrow('Failed to fetch region markers: 500');
   });
+
+  it('preserves V1 ProblemDetail detail when the region endpoint rejects the request', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        errorResponse(400, {
+          type: '/docs/index.html#error-code-list',
+          title: 'C401',
+          status: 400,
+          detail: 'Unsupported region.',
+          exception: 'MapApiException',
+          timestamp: '2026-05-18T10:30:00',
+        }),
+      ),
+    );
+
+    await expect(
+      fetchRegionMarkers({
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+        region: 'si-do',
+      }),
+    ).rejects.toThrow('Failed to fetch region markers: 400 Unsupported region.');
+  });
 });
 
 function jsonResponse(body: unknown): Response {
@@ -190,9 +216,15 @@ function jsonResponse(body: unknown): Response {
   } as Response;
 }
 
-function errorResponse(status: number): Response {
-  return {
+function errorResponse(status: number, body?: unknown): Response {
+  const response: Partial<Response> = {
     ok: false,
     status,
-  } as Response;
+  };
+
+  if (body !== undefined) {
+    response.json = () => Promise.resolve(body);
+  }
+
+  return response as Response;
 }

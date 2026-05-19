@@ -22,11 +22,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 REPORT_ROOT = REPO_ROOT / ".codex" / "harness" / "reports"
 PR_BODY_COMMANDS = [
     "git diff --check",
+    "cd apps/api && ./gradlew backendQualityCheck",
     "cd apps/api && ./gradlew test",
     "cd apps/web && npm run test",
     "cd apps/web && npm run build",
     "python3 .codex/harness/pr_lint.py --self-test",
     "python3 .codex/harness/user_language_check.py --self-test",
+    "python3 .codex/hooks/stop_verification_gate.py --self-test",
+    "python3 .codex/hooks/post_tool_use_review.py --self-test",
     "bash scripts/check-ko-docs.sh",
 ]
 

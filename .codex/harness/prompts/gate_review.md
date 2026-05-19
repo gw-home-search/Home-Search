@@ -10,7 +10,7 @@ Branch: {{BRANCH_NAME}}
 Review only. Do not edit files.
 
 Check:
-- Scope stayed inside the target app.
+- Scope stayed inside the target preset's allowed edit scope.
 - V1 API contract and data invariants were preserved.
 - Required verification evidence is present.
 - Verification evidence uses exact line format: ``- `command` = pass|fail|not run (Korean reason)``.

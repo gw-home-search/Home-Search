@@ -156,6 +156,50 @@ risk_notes = [
 ]
 
 [[slices]]
+id = "backend-quality-docs-foundation"
+title_ko = "Backend quality docs foundation"
+description_ko = "backend RestDocs/OpenAPI YAML, coverage 90%, hook/CI evidence gate를 V1 backend 품질 기준으로 고정한다."
+status = "candidate"
+priority = 45
+targets = "backend"
+preset = "backend-quality"
+acceptance_criteria = [
+  "cd apps/api && ./gradlew backendQualityCheck가 backend 단일 품질 gate가 된다.",
+  "JaCoCo line/instruction coverage 90% 미만이면 로컬과 CI에서 실패한다.",
+  "REST Docs smoke가 V1 map endpoints snippets를 생성하고 openapi3.yaml을 만든다.",
+  "openapi3.yaml은 /api/v1/map/regions, /api/v1/map/complexes와 canonical public fields를 포함한다.",
+  "openapi3.yaml은 complexPk, aptSeq, sourceKey 같은 내부 audit/dedupe field를 public response로 노출하지 않는다.",
+  "Stop/PostToolUse hook과 PR lint가 backendQualityCheck, Coverage, Docs/OpenAPI evidence를 요구한다.",
+  "DB 없는 web/docs tests와 Testcontainers PostGIS persistence tests가 profile/task로 분리된다.",
+]
+first_red_candidates = [
+  "cd apps/api && ./gradlew backendQualityCheck가 task 부재로 실패한다.",
+  "cd apps/api && ./gradlew apiDocsCheck가 RestDocs/OpenAPI task와 generated YAML 부재로 실패한다.",
+  "cd apps/api && ./gradlew coverageCheck가 JaCoCo gate 부재로 실패한다.",
+  "hook self-test에서 backendQualityCheck, Coverage, Docs/OpenAPI evidence 누락을 잡지 못하는 fixture를 먼저 추가한다.",
+]
+verification_commands = [
+  "python3 .codex/hooks/stop_verification_gate.py --self-test",
+  "python3 .codex/hooks/post_tool_use_review.py --self-test",
+  "python3 .codex/harness/pr_lint.py --self-test",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+  "bash scripts/check-ko-docs.sh",
+]
+stop_conditions = [
+  "V1 public API URL, request field, response field, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+  "Swagger UI bundle vendoring 또는 runtime /swagger 노출이 필요하면 다음 docs publishing slice로 분리한다.",
+  "Security, Mail, Batch, ranking, favorite, alarm, auth dependency가 필요하면 중단한다.",
+  "coverage 수치만 맞추는 getter/record-only 테스트가 필요하면 중단하고 coverage exclude 정책을 재검토한다.",
+]
+risk_notes = [
+  "RestDocs/OpenAPI는 이번 slice에서 map docs smoke까지만 다루고 전체 endpoint 문서화는 후속 slice로 진행한다.",
+  "backendQualityCheck는 Testcontainers를 포함하므로 Docker 실행 환경이 필요하다.",
+  "generated openapi3.yaml은 build artifact이며 repository에 commit하지 않는다.",
+]
+
+[[slices]]
 id = "raw-ingest-persistence-adapter"
 title_ko = "Raw ingest persistence adapter"
 description_ko = "open-api-ingest-prep application port를 Flyway/JDBC persistence로 연결하기 전 V1 raw/normalized 저장 invariant를 repository seam에서 검증한다."

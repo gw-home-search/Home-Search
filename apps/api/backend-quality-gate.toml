@@ -1,0 +1,36 @@
+[coverage]
+line_minimum = 0.90
+instruction_minimum = 0.90
+
+[openapi]
+spec = "build/api-spec/openapi3.yaml"
+required_paths = [
+  "/api/v1/map/regions",
+  "/api/v1/map/complexes",
+]
+required_fields = [
+  "parcelId",
+  "lat",
+  "lng",
+  "latestDealAmount",
+  "unitCntSum",
+  "type",
+  "title",
+  "status",
+  "detail",
+  "exception",
+  "timestamp",
+]
+forbidden_public_fields = [
+  "complex_pk",
+  "complexPk",
+  "apt_seq",
+  "aptSeq",
+  "source_key",
+  "sourceKey",
+]
+
+[commands]
+quality = "cd apps/api && ./gradlew backendQualityCheck"
+docs = "cd apps/api && ./gradlew apiDocsCheck"
+coverage = "cd apps/api && ./gradlew coverageCheck"

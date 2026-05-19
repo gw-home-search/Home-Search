@@ -2,6 +2,9 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.5.7'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'jacoco'
+    id 'org.asciidoctor.jvm.convert' version '4.0.5'
+    id 'com.epages.restdocs-api-spec' version '0.20.1'
 }
 
 group = 'com.home'
@@ -18,6 +21,14 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
+tasks.withType(Javadoc).configureEach {
+    options.addStringOption('Xdoclint:all,-missing', '-quiet')
+}
+
+configurations {
+    asciidoctorExt
+}
+
 dependencies {
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
@@ -28,10 +39,205 @@ dependencies {
     runtimeOnly 'org.postgresql:postgresql'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
+    testImplementation 'com.epages:restdocs-api-spec-mockmvc:0.19.4'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:postgresql'
+
+    asciidoctorExt 'org.springframework.restdocs:spring-restdocs-asciidoctor'
+}
+
+ext {
+    snippetsDir = file('build/generated-snippets')
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'restDocs'
+    }
+    exclude '**/infrastructure/persistence/**/*Test.class'
+}
+
+tasks.register('foundationTest', Test) {
+    description = 'Run backend profile and quality gate boundary tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    include '**/foundation/**/*Test.class'
+}
+
+tasks.register('apiContractTest', Test) {
+    description = 'Run V1 API controller and DTO contract tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    include '**/infrastructure/web/**/*ContractTest.class'
+}
+
+tasks.register('persistenceTest', Test) {
+    description = 'Run Flyway/JDBC/PostGIS persistence tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    include '**/infrastructure/persistence/**/*Test.class'
+}
+
+tasks.register('restDocsTest', Test) {
+    description = 'Generate Spring REST Docs snippets and API spec resource snippets.'
+    group = 'documentation'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    outputs.dir snippetsDir
+    useJUnitPlatform {
+        includeTags 'restDocs'
+    }
+}
+
+tasks.named('asciidoctor') {
+    dependsOn tasks.named('restDocsTest')
+    inputs.dir snippetsDir
+    configurations 'asciidoctorExt'
+}
+
+openapi3 {
+    server = 'http://localhost:8080'
+    title = 'Home Search V1 API'
+    description = 'Home Search V1 map and trade-data API generated from REST Docs tests.'
+    version = project.version.toString()
+    format = 'yaml'
+}
+
+tasks.matching { it.name == 'openapi3' }.configureEach {
+    dependsOn tasks.named('restDocsTest')
+}
+
+tasks.register('verifyOpenApiSpec') {
+    description = 'Verify generated OpenAPI YAML exposes only the V1 public map contract.'
+    group = 'verification'
+    dependsOn tasks.named('openapi3')
+
+    doLast {
+        def specFile = layout.buildDirectory.file('api-spec/openapi3.yaml').get().asFile
+        if (!specFile.exists()) {
+            throw new GradleException("OpenAPI spec was not generated: ${specFile}")
+        }
+
+        def content = specFile.getText('UTF-8')
+        def requiredTokens = [
+            '/api/v1/map/regions',
+            '/api/v1/map/complexes',
+            'parcelId',
+            'lat',
+            'lng',
+            'latestDealAmount',
+            'unitCntSum',
+            'exception',
+            'timestamp'
+        ]
+        requiredTokens.each { token ->
+            if (!content.contains(token)) {
+                throw new GradleException("OpenAPI spec is missing required token: ${token}")
+            }
+        }
+
+        def forbiddenPublicFields = ['complex_pk', 'complexPk', 'apt_seq', 'aptSeq', 'source_key', 'sourceKey']
+        forbiddenPublicFields.each { field ->
+            if ((content =~ /(?m)^\s+${field}\s*:/).find()) {
+                throw new GradleException("OpenAPI spec exposes internal audit field: ${field}")
+            }
+        }
+    }
+}
+
+tasks.register('apiDocsCheck') {
+    description = 'Generate and verify REST Docs HTML and OpenAPI YAML artifacts.'
+    group = 'verification'
+    dependsOn tasks.named('restDocsTest')
+    dependsOn tasks.named('asciidoctor')
+    dependsOn tasks.named('verifyOpenApiSpec')
+}
+
+jacoco {
+    toolVersion = '0.8.13'
+}
+
+def coverageExcludes = [
+    '**/HomeSearchApiApplication*',
+    '**/*Request*',
+    '**/*Response*',
+    '**/*Record*',
+    '**/*Command*',
+    '**/*Result*',
+    '**/*Status*',
+    '**/*Matcher*',
+    '**/dto/**',
+    '**/package-info*'
+]
+def coverageExecutionData = files(
+    layout.buildDirectory.file('jacoco/test.exec'),
+    layout.buildDirectory.file('jacoco/persistenceTest.exec')
+)
+
+tasks.named('jacocoTestReport') {
+    dependsOn tasks.named('test')
+    dependsOn tasks.named('persistenceTest')
+    executionData.setFrom(coverageExecutionData)
+    reports {
+        xml.required = true
+        csv.required = false
+        html.required = true
+    }
+    classDirectories.setFrom(
+        files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: coverageExcludes)
+        })
+    )
+}
+
+tasks.named('jacocoTestCoverageVerification') {
+    dependsOn tasks.named('test')
+    dependsOn tasks.named('persistenceTest')
+    executionData.setFrom(coverageExecutionData)
+    classDirectories.setFrom(
+        files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: coverageExcludes)
+        })
+    )
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.90
+            }
+            limit {
+                counter = 'INSTRUCTION'
+                value = 'COVEREDRATIO'
+                minimum = 0.90
+            }
+        }
+    }
+}
+
+tasks.register('coverageCheck') {
+    description = 'Generate JaCoCo reports and enforce 90% backend coverage.'
+    group = 'verification'
+    dependsOn tasks.named('jacocoTestReport')
+    dependsOn tasks.named('jacocoTestCoverageVerification')
+}
+
+tasks.register('backendQualityCheck') {
+    description = 'Run backend profile, contract, persistence, docs, coverage, and javadoc gates.'
+    group = 'verification'
+    dependsOn tasks.named('foundationTest')
+    dependsOn tasks.named('apiContractTest')
+    dependsOn tasks.named('persistenceTest')
+    dependsOn tasks.named('apiDocsCheck')
+    dependsOn tasks.named('coverageCheck')
+    dependsOn tasks.named('javadoc')
 }

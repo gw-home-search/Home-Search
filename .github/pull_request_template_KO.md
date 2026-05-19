@@ -19,12 +19,17 @@
 
 검증:
 - `git diff --check` = not run (사유)
-- `cd apps/api && ./gradlew test` = not run (사유)
+- `cd apps/api && ./gradlew backendQualityCheck` = not run (사유)
 - `cd apps/web && npm run test` = not run (사유)
 - `cd apps/web && npm run build` = not run (사유)
 - `python3 .codex/harness/pr_lint.py --self-test` = not run (사유)
 - `python3 .codex/harness/user_language_check.py --self-test` = not run (사유)
+- `python3 .codex/hooks/stop_verification_gate.py --self-test` = not run (사유)
+- `python3 .codex/hooks/post_tool_use_review.py --self-test` = not run (사유)
 - `bash scripts/check-ko-docs.sh` = not run (사유)
+
+Coverage: >=90%
+Docs/OpenAPI: generated + verified
 
 ## 계약 영향
 

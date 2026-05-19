@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+APP_HOME=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$APP_HOME/.gradle}"
+
+exec gradle "$@"

@@ -84,8 +84,8 @@ last_synced = "2026-05-18"
 [[docs]]
 source = "apps/api/AGENTS.md"
 ko = "apps/api/AGENTS_KO.md"
-source_sha256 = "21bfb4123f6686ecfc567666d3f52e87d6ec29995d5309450d86f39dad3bebbf"
-last_synced = "2026-05-18"
+source_sha256 = "9870410e64df73063def8d709306a2629360d8de9919de93e4ec3a0a036c3756"
+last_synced = "2026-05-19"
 
 [[docs]]
 source = "apps/api/CONTEXT.md"
@@ -96,8 +96,8 @@ last_synced = "2026-05-18"
 [[docs]]
 source = "apps/web/AGENTS.md"
 ko = "apps/web/AGENTS_KO.md"
-source_sha256 = "078c1207d9045815038c2670f1ed89bd84fff62d0bd933c690d3048cc95ee498"
-last_synced = "2026-05-18"
+source_sha256 = "244e1ed88f40e0d0e5fed1f84128741aa337b144db7400f4a03e23e26f247568"
+last_synced = "2026-05-19"
 
 [[docs]]
 source = "apps/web/CONTEXT.md"

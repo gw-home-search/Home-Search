@@ -2,7 +2,7 @@
 id = "kakao-map-marker-refresh-flow"
 title_ko = "Kakao map marker refresh flow"
 description_ko = "지도 idle/zoom/filter 변화가 V1 marker API 호출과 marker rendering으로 이어지는 frontend 흐름을 안정화한다."
-status = "candidate"
+status = "done"
 priority = 10
 targets = "frontend"
 preset = "map-ui-state"
@@ -27,6 +27,39 @@ stop_conditions = [
 risk_notes = [
   "Kakao map 객체 lifecycle과 React state update 순서가 race condition을 만들 수 있다.",
   "frontend-only slice이므로 backend worktree를 만들지 않는다.",
+]
+
+[[slices]]
+id = "kakao-map-runtime-visual-smoke"
+title_ko = "Kakao map runtime visual smoke"
+description_ko = "apps/web에서 실제 Kakao JS SDK 지도 surface를 띄우고 V1 marker fetch 연결을 브라우저로 확인할 수 있게 만든다."
+status = "planned"
+priority = 15
+targets = "frontend"
+preset = "map-ui-state"
+acceptance_criteria = [
+  "VITE_KAKAO_MAP_APP_KEY가 있을 때 Kakao JS SDK를 autoload=false로 로드하고 map surface를 ready 상태로 전환한다.",
+  "Kakao map idle에서 SDK bounds와 level을 읽어 기존 /api/v1/map/complexes 또는 /api/v1/map/regions marker fetch로 연결한다.",
+  "SDK key 누락 또는 SDK load 실패 시 map 영역은 남기고 non-blocking alert만 노출한다.",
+  "region/complex marker 응답은 CustomOverlay로 렌더링하고 marker 변경 또는 unmount 때 overlay를 정리한다.",
+]
+first_red_candidates = [
+  "fake Kakao SDK loader를 mock 했을 때 map surface가 ready가 되고 SDK bounds/level 기반으로 marker API fetch가 발생해야 한다.",
+  "Kakao key가 없을 때 앱 전체가 죽지 않고 map surface와 non-blocking alert가 남아야 한다.",
+]
+verification_commands = [
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+]
+stop_conditions = [
+  "V1 API URL, request field, response field 변경이 필요하면 중단한다.",
+  "source frontend의 hardcoded Kakao key 복사가 필요하면 중단한다.",
+  "backend, DB schema, ingest 흐름 변경이 필요하면 별도 slice로 분리한다.",
+]
+risk_notes = [
+  "실제 browser visual smoke는 로컬 Kakao key가 없으면 partial evidence로 남긴다.",
+  "backend marker 응답이 비어도 runtime smoke의 핵심은 지도 타일과 V1 marker fetch 연결이다.",
 ]
 
 [[slices]]
@@ -120,4 +153,41 @@ stop_conditions = [
 risk_notes = [
   "backend-only slice이므로 frontend worktree를 만들지 않는다.",
   "외부 service key나 secrets를 저장하지 않는다.",
+]
+
+[[slices]]
+id = "raw-ingest-persistence-adapter"
+title_ko = "Raw ingest persistence adapter"
+description_ko = "open-api-ingest-prep application port를 Flyway/JDBC persistence로 연결하기 전 V1 raw/normalized 저장 invariant를 repository seam에서 검증한다."
+status = "candidate"
+priority = 50
+targets = "backend"
+preset = "open-api-ingest-prep"
+acceptance_criteria = [
+  "raw ingest row가 normalized trade insert보다 먼저 저장되는 repository/service evidence를 남긴다.",
+  "source + source_key dedupe가 중복 normalized trade를 막는다.",
+  "source_key가 달라도 fallback identity가 같은 trade는 중복 normalized row를 만들지 않는다.",
+  "failed match는 raw_trade_ingest.status와 failure_reason으로 queryable evidence를 남긴다.",
+  "normalized trade의 operational relation은 complex_id이며 complex_pk, apt_seq, source, source_key는 audit/dedupe metadata로 보존한다.",
+]
+first_red_candidates = [
+  "JdbcRawTradeIngestRepositoryTest에서 raw save id 반환과 MATCH_FAILED 조회가 repository seam 부재로 실패한다.",
+  "JdbcNormalizedTradeRepositoryTest에서 동일 source/source_key와 fallback duplicate insert가 중복 row를 만들지 않는다는 테스트가 schema/repository 부재로 실패한다.",
+  "OpenApiTradeIngestService persistence integration test에서 duplicate raw row가 DUPLICATE로 남는 테스트가 JDBC adapter 부재로 실패한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew test",
+  "cd apps/api && ./gradlew javadoc",
+  "git diff --check",
+]
+stop_conditions = [
+  "V1 public API URL, request field, response field 변경이 필요하면 중단한다.",
+  "JPA, Security, Batch, Mail, ranking 관련 의존성이 필요하면 중단한다.",
+  "raw evidence를 unique 제약으로 손실시키는 schema 변경이 필요하면 중단한다.",
+  "DB migration이 V2 ranking, trend, favorite, alarm, mail, recommendation table을 요구하면 중단한다.",
+]
+risk_notes = [
+  "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
+  "adapter는 이번 slice에서 @Repository로 자동 등록하지 않고 다음 architecture slice에서 wiring을 결정한다.",
+  "trade partition unique 한계 때문에 global source/source_key dedupe는 trade_source_key_registry에서 보장한다.",
 ]

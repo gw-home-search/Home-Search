@@ -28,7 +28,7 @@ def printable(command: list[str]) -> str:
     return " ".join(command)
 
 
-def backlog_target_for(slice_name: str) -> str | None:
+def backlog_value_for(slice_name: str, key: str) -> str | None:
     if not BACKLOG.exists():
         return None
     with BACKLOG.open("rb") as handle:
@@ -36,13 +36,21 @@ def backlog_target_for(slice_name: str) -> str | None:
     requested = slugify(slice_name)
     for item in data.get("slices", []):
         if slugify(str(item.get("id", ""))) == requested:
-            target = str(item.get("targets", "")).strip()
-            return target or None
+            value = str(item.get(key, "")).strip()
+            return value or None
     return None
 
 
+def backlog_target_for(slice_name: str) -> str | None:
+    return backlog_value_for(slice_name, "targets")
+
+
+def backlog_preset_for(slice_name: str) -> str | None:
+    return backlog_value_for(slice_name, "preset")
+
+
 def flow_command(args: argparse.Namespace, *, dry_run: bool) -> list[str]:
-    preset_id, _ = resolve_preset(args.slice, args.preset)
+    preset_id, _ = resolve_preset(args.slice, args.preset or backlog_preset_for(args.slice))
     targets = args.targets or backlog_target_for(args.slice) or "both"
     command = [
         sys.executable,

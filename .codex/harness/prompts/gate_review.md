@@ -10,11 +10,16 @@ Branch: {{BRANCH_NAME}}
 
 Review only. Do not edit files.
 
+Skill routing:
+{{SKILL_ROUTING}}
+
 Check:
 - Scope stayed inside the target preset's allowed edit scope.
 - V1 API contract and data invariants were preserved.
 - Required verification evidence is present.
 - Verification evidence uses exact line format: ``- `command` = pass|fail|not run (Korean reason)``.
+- Changed-file PR lint evidence is present for backend, frontend, harness, hook,
+  GitHub workflow, Markdown, and KO changes.
 - No protected paths, secrets, build output, automatic main merge, or push were introduced.
 
 Output a short Korean-first gate review with these user-facing labels:

@@ -17,6 +17,26 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from pr_evidence import (
+    API_QUALITY,
+    DIFF_CHECK,
+    KO_CHECK,
+    POST_TOOL_USE_REVIEW_SELF_TEST,
+    PR_BODY_CHECK_SELF_TEST,
+    PR_LINT_SELF_TEST,
+    SKILL_ROUTING_SELF_TEST,
+    STOP_HOOK_SELF_TEST,
+    USER_LANGUAGE_CHECK,
+    V1_FLOW_SELF_TEST,
+    V1_LAUNCHER_SELF_TEST,
+    V1_PLAN_SELF_TEST,
+    V1_REPORT_SELF_TEST,
+    WEB_BUILD,
+    WEB_TEST,
+    ordered_commands,
+    requirements_for_changed_files,
+)
+from skill_routing import routing_payload, routing_text
 from v1_report import render_pr_body
 
 
@@ -33,29 +53,51 @@ DEFAULT_TARGETS = {
         "prompt": "backend_execute.md",
         "allowed_scope": "apps/api/**",
         "forbidden_scope": "apps/web/**",
-        "verification_commands": ["cd apps/api && ./gradlew test"],
+        "verification_commands": [API_QUALITY],
     },
     "frontend": {
         "prompt": "frontend_execute.md",
         "allowed_scope": "apps/web/**",
         "forbidden_scope": "apps/api/**",
         "verification_commands": [
-            "cd apps/web && npm run test",
-            "cd apps/web && npm run build",
+            WEB_TEST,
+            WEB_BUILD,
         ],
     },
 }
 TARGET_MODES = {"backend", "frontend", "both", "planning-only"}
 KNOWN_VERIFICATION_COMMANDS = {
     "backend": {
-        "cd apps/api && ./gradlew backendQualityCheck": ("apps/api", ["./gradlew", "backendQualityCheck"]),
+        API_QUALITY: ("apps/api", ["./gradlew", "backendQualityCheck"]),
         "cd apps/api && ./gradlew test": ("apps/api", ["./gradlew", "test"]),
-        "git diff --check": (".", ["git", "diff", "--check"]),
+        DIFF_CHECK: (".", ["git", "diff", "--check"]),
+        PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
+        PR_BODY_CHECK_SELF_TEST: (".", ["python3", ".codex/harness/pr_body_check.py", "--self-test"]),
+        V1_FLOW_SELF_TEST: (".", ["python3", ".codex/harness/v1_flow.py", "--self-test"]),
+        V1_PLAN_SELF_TEST: (".", ["python3", ".codex/harness/v1_plan.py", "--self-test"]),
+        V1_REPORT_SELF_TEST: (".", ["python3", ".codex/harness/v1_report.py", "--self-test"]),
+        V1_LAUNCHER_SELF_TEST: (".", [".codex/harness/v1", "--self-test"]),
+        SKILL_ROUTING_SELF_TEST: (".", ["python3", ".codex/harness/skill_routing.py", "--self-test"]),
+        USER_LANGUAGE_CHECK: (".", ["python3", ".codex/harness/user_language_check.py", "--self-test"]),
+        STOP_HOOK_SELF_TEST: (".", ["python3", ".codex/hooks/stop_verification_gate.py", "--self-test"]),
+        POST_TOOL_USE_REVIEW_SELF_TEST: (".", ["python3", ".codex/hooks/post_tool_use_review.py", "--self-test"]),
+        KO_CHECK: (".", ["bash", "scripts/check-ko-docs.sh"]),
     },
     "frontend": {
-        "cd apps/web && npm run test": ("apps/web", ["npm", "run", "test"]),
-        "cd apps/web && npm run build": ("apps/web", ["npm", "run", "build"]),
-        "git diff --check": (".", ["git", "diff", "--check"]),
+        WEB_TEST: ("apps/web", ["npm", "run", "test"]),
+        WEB_BUILD: ("apps/web", ["npm", "run", "build"]),
+        DIFF_CHECK: (".", ["git", "diff", "--check"]),
+        PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
+        PR_BODY_CHECK_SELF_TEST: (".", ["python3", ".codex/harness/pr_body_check.py", "--self-test"]),
+        V1_FLOW_SELF_TEST: (".", ["python3", ".codex/harness/v1_flow.py", "--self-test"]),
+        V1_PLAN_SELF_TEST: (".", ["python3", ".codex/harness/v1_plan.py", "--self-test"]),
+        V1_REPORT_SELF_TEST: (".", ["python3", ".codex/harness/v1_report.py", "--self-test"]),
+        V1_LAUNCHER_SELF_TEST: (".", [".codex/harness/v1", "--self-test"]),
+        SKILL_ROUTING_SELF_TEST: (".", ["python3", ".codex/harness/skill_routing.py", "--self-test"]),
+        USER_LANGUAGE_CHECK: (".", ["python3", ".codex/harness/user_language_check.py", "--self-test"]),
+        STOP_HOOK_SELF_TEST: (".", ["python3", ".codex/hooks/stop_verification_gate.py", "--self-test"]),
+        POST_TOOL_USE_REVIEW_SELF_TEST: (".", ["python3", ".codex/hooks/post_tool_use_review.py", "--self-test"]),
+        KO_CHECK: (".", ["bash", "scripts/check-ko-docs.sh"]),
     },
 }
 FORBIDDEN_SAFETY_FLAGS = {
@@ -392,6 +434,7 @@ def run_codex(
             "ALLOWED_SCOPE": str(config["allowed_scope"]),
             "FORBIDDEN_SCOPE": str(config["forbidden_scope"]),
             "VERIFICATION_COMMANDS": "; ".join(str(command) for command in config["verification_commands"]),
+            "SKILL_ROUTING": routing_text("execute", target),
         },
     )
     command = [
@@ -405,7 +448,9 @@ def run_codex(
         str(output),
         prompt,
     ]
-    return run_cmd(command, DEFAULT_MAIN, dry_run=dry_run)
+    result = run_cmd(command, DEFAULT_MAIN, dry_run=dry_run)
+    result["output_path"] = str(output)
+    return result
 
 
 def run_gate_review(
@@ -424,6 +469,7 @@ def run_gate_review(
             "PRESET": args.preset,
             "TARGET": target,
             "BRANCH_NAME": names["api_branch"] if target == "backend" else names["web_branch"],
+            "SKILL_ROUTING": routing_text("gate", target),
         },
     )
     command = [
@@ -444,7 +490,66 @@ def run_gate_review(
         text = output.read_text(encoding="utf-8", errors="replace")
         if re.search(r"상태:\s*Fail", text):
             raise RuntimeError(f"{target} gate review returned Fail")
+    result["output_path"] = str(output)
     return result
+
+
+def output_text(result: dict[str, Any]) -> str:
+    output = result.get("output_path")
+    if not output:
+        return ""
+    path = Path(str(output))
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def evidence_text(results: dict[str, Any]) -> str:
+    chunks: list[str] = []
+    for target_result in results.values():
+        if not isinstance(target_result, dict):
+            continue
+        for key in ("codex", "gate"):
+            item = target_result.get(key)
+            if isinstance(item, dict):
+                text = output_text(item)
+                if text:
+                    chunks.append(text)
+    return "\n\n".join(chunks)
+
+
+def ko_docs_payload(files: list[str], results: dict[str, Any]) -> dict[str, Any]:
+    requirements = requirements_for_changed_files(files)
+    targets = list(requirements.ko_targets)
+    if not targets:
+        return {"approved": False, "targets": [], "basis": "not applicable"}
+    text = evidence_text(results)
+    approved = bool(re.search(r"KO 수정 승인\s*:\s*확인", text))
+    basis = bool(re.search(r"KO 생성 기준\s*:\s*canonical source only", text))
+    target_match = all(target in text for target in targets)
+    return {
+        "approved": approved and basis and target_match,
+        "targets": targets,
+        "basis": "canonical source only",
+    }
+
+
+def required_evidence_payload(files: list[str]) -> dict[str, Any]:
+    requirements = requirements_for_changed_files(files)
+    return {
+        "commands": ordered_commands(requirements.commands),
+        "backend_changed": requirements.backend_changed,
+        "web_changed": requirements.web_changed,
+        "ko_targets": list(requirements.ko_targets),
+        "missing_ko_pairs": [
+            {"source": source, "ko": ko_path}
+            for source, ko_path in requirements.missing_ko_pairs
+        ],
+        "forbidden_paths": [
+            {"path": path, "reason": reason}
+            for path, reason in requirements.forbidden_paths
+        ],
+    }
 
 
 def parse_changed_files(raw: str) -> list[str]:
@@ -460,6 +565,22 @@ def parse_changed_files(raw: str) -> list[str]:
 def changed_files(worktree: Path) -> list[str]:
     raw = git_output(worktree, "status", "--porcelain", "--untracked-files=all")
     return parse_changed_files(raw)
+
+
+def changed_files_between(base: str, branch: str) -> list[str]:
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "-z", f"{base}...{branch}"],
+            cwd=DEFAULT_MAIN,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return []
+    if result.returncode != 0:
+        return []
+    return [part.decode("utf-8", errors="replace") for part in result.stdout.split(b"\0") if part]
 
 
 def scope_patterns(raw_scope: Any) -> list[str]:
@@ -529,9 +650,9 @@ def execute_target(
         commit = commit_target(target, worktree, branch, names["slice"], args, dry_run=dry_run)
     return {
         "status": "pass",
-        "codex": {k: codex_result[k] for k in ("status", "exit_code", "summary")},
+        "codex": {k: codex_result.get(k) for k in ("status", "exit_code", "summary", "output_path")},
         "verification": verification,
-        "gate": {k: gate[k] for k in ("status", "exit_code", "summary")},
+        "gate": {k: gate.get(k) for k in ("status", "exit_code", "summary", "output_path")},
         "commit": commit,
     }
 
@@ -554,8 +675,8 @@ def verify_integration_targets(targets: list[str], args: argparse.Namespace, *, 
                 raise RuntimeError(f"{target} preset has unsupported verification command: {label}")
             relative_cwd, command = plan
             checks.append((str(label), DEFAULT_MAIN / relative_cwd, command))
-    if not any(label == "git diff --check" for label, _, _ in checks):
-        checks.append(("git diff --check", DEFAULT_MAIN, ["git", "diff", "--check"]))
+    if not any(label == DIFF_CHECK for label, _, _ in checks):
+        checks.append((DIFF_CHECK, DEFAULT_MAIN, ["git", "diff", "--check"]))
 
     verification: dict[str, Any] = {}
     for label, cwd, command in checks:
@@ -749,6 +870,22 @@ def build_payload(
     integration_head = None
     if integration is not None and not args.dry_run:
         integration_head = git_output(DEFAULT_MAIN, "rev-parse", "--short", "HEAD") or None
+    integration_files = []
+    if integration is not None and not args.dry_run:
+        integration_files = changed_files_between(args.base_branch, names["integration_branch"])
+    required_evidence = required_evidence_payload(integration_files)
+    ko_docs = ko_docs_payload(integration_files, results)
+    if targets:
+        skill_routing = {
+            "execute": routing_payload("execute", targets),
+            "gate": routing_payload("gate", targets),
+            "recover": routing_payload("recover", targets),
+        }
+    else:
+        skill_routing = {
+            "plan": routing_payload("plan", getattr(args, "targets", "planning-only")),
+            "recover": routing_payload("recover", getattr(args, "targets", "planning-only")),
+        }
     next_action = "integration branch를 눈으로 검토한 뒤 main merge/push 여부를 결정"
     if not targets:
         next_action = "planning-only 결과를 검토한 뒤 별도 실행 slice 여부를 결정"
@@ -781,6 +918,10 @@ def build_payload(
             "integration_head": integration_head,
         },
         "verification": verification,
+        "changed_files": integration_files,
+        "required_evidence": required_evidence,
+        "ko_docs": ko_docs,
+        "skill_routing": skill_routing,
         "gate_review": f"{'/'.join(targets)} gate review completed" if results else "planning-only; not run",
         "contract_risks": [],
         "residual_risks": [] if not risk else [risk],
@@ -1015,6 +1156,19 @@ def run_self_test() -> int:
             "verification": {"git diff --check": {"status": "pass", "exit_code": 0}},
         }
     )
+    prompt = render_prompt(
+        "backend_execute.md",
+        {
+            "SLICE": "self-test",
+            "PRESET": "contract-hardening",
+            "TARGET": "backend",
+            "BRANCH_NAME": "feat/api-self-test",
+            "ALLOWED_SCOPE": "apps/api/**",
+            "FORBIDDEN_SCOPE": "apps/web/**",
+            "VERIFICATION_COMMANDS": API_QUALITY,
+            "SKILL_ROUTING": routing_text("execute", "backend"),
+        },
+    )
     checks = [
         slugify("Map Contract Hardening") == "map-contract-hardening",
         resolved == "contract-hardening",
@@ -1036,6 +1190,10 @@ def run_self_test() -> int:
         )["api_branch"],
         parse_changed_files(" M apps/api/Foo.java\n?? apps/web/Bar.tsx\nR  old.txt -> apps/api/New.java")
         == ["apps/api/Foo.java", "apps/web/Bar.tsx", "apps/api/New.java"],
+        "$tdd:" in prompt,
+        "$backend-api:" in prompt,
+        "$api-contract:" in prompt,
+        "{{SKILL_ROUTING}}" not in prompt,
     ]
     if all(checks):
         print("self-test passed: v1_flow")

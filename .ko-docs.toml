@@ -12,38 +12,38 @@ last_synced = "2026-05-19"
 [[docs]]
 source = ".codex/harness/prompts/backend_execute.md"
 ko = ".codex/harness/prompts/backend_execute_KO.md"
-source_sha256 = "43fe91c2248a6951deb5607cf2fd4e5f4a89e06d317ff353fde9665c6050ea12"
-last_synced = "2026-05-19"
+source_sha256 = "68e261a16a9db7ac31fe5e3a218aa380a4817a3261c261f63e5aa785861cfc47"
+last_synced = "2026-05-20"
 
 [[docs]]
 source = ".codex/harness/prompts/frontend_execute.md"
 ko = ".codex/harness/prompts/frontend_execute_KO.md"
-source_sha256 = "3de8a30be94c06a86c2e882f14a6fb665ee741e3c3a94b8565fc70bd7cbaeea9"
-last_synced = "2026-05-19"
+source_sha256 = "f3e2087a446f87468863b99f3646923e2ab1bf42ec994c1b11b85846225a43ac"
+last_synced = "2026-05-20"
 
 [[docs]]
 source = ".codex/harness/prompts/gate_review.md"
 ko = ".codex/harness/prompts/gate_review_KO.md"
-source_sha256 = "ffd6b1b0cb09d10421303e5bb56b9b934c821b3b0235b3805b4d42aeea19606a"
-last_synced = "2026-05-19"
+source_sha256 = "c5843bda78e6ca258b624699031fa162860267f1c20d3f3c2a2300edfae19f41"
+last_synced = "2026-05-20"
 
 [[docs]]
 source = ".codex/harness/prompts/integration_review.md"
 ko = ".codex/harness/prompts/integration_review_KO.md"
-source_sha256 = "e3d1e4866dc068f74f92b43cb75c05da699d0249c1cbce30c8e32190238806dc"
-last_synced = "2026-05-19"
+source_sha256 = "be7dcd521ecd905c3287fa7ab670af9f84c8dcc10ebdef4a24312c9150dfb3bf"
+last_synced = "2026-05-20"
 
 [[docs]]
 source = ".codex/harness/prompts/next_slice.md"
 ko = ".codex/harness/prompts/next_slice_KO.md"
-source_sha256 = "b231056977bd2fe95ba8ed8b71bed4b4f66e48bdaff31ad60472ec1ef4089e70"
-last_synced = "2026-05-19"
+source_sha256 = "6824e0a1bbf222c719bfb7148511040837566e0d5b3fc1b9cb4f4437d0a1c57e"
+last_synced = "2026-05-20"
 
 [[docs]]
 source = ".codex/harness/prompts/slice_plan.md"
 ko = ".codex/harness/prompts/slice_plan_KO.md"
-source_sha256 = "bba09332f536740929813f00a17f6c7e136e8cf7a6dbfbde5e9cd63cc278937d"
-last_synced = "2026-05-19"
+source_sha256 = "c5823c359daecc41799529bc84e5dc5e59280108b991c911aec34686c6df41ce"
+last_synced = "2026-05-20"
 
 [[docs]]
 source = ".agents/skills/api-contract/SKILL.md"
@@ -60,8 +60,8 @@ last_synced = "2026-05-18"
 [[docs]]
 source = ".agents/skills/code-review/SKILL.md"
 ko = ".agents/skills/code-review/SKILL_KO.md"
-source_sha256 = "65253604ef3e7b3d24f6c7601e1cf1184528fe16b9ec3b0810f612fb6e0ba9e3"
-last_synced = "2026-05-19"
+source_sha256 = "b4a250fb11f7f38d77bd22386e036c15b0d3a6d63652969589d6dbf782f0f5fc"
+last_synced = "2026-05-20"
 
 [[docs]]
 source = ".agents/skills/frontend-web/SKILL.md"
@@ -72,8 +72,8 @@ last_synced = "2026-05-18"
 [[docs]]
 source = ".agents/skills/planning/SKILL.md"
 ko = ".agents/skills/planning/SKILL_KO.md"
-source_sha256 = "e11add77edcbc39b0ed1527a268338fb658f76fc07b51ef1f3d02d8de9bd47e4"
-last_synced = "2026-05-19"
+source_sha256 = "4f0d5d6a8e9950464c93445509fbab633f3212449d4f7fbf4dcaba1e81be011e"
+last_synced = "2026-05-20"
 
 [[docs]]
 source = ".agents/skills/spec-to-plan/SKILL.md"
@@ -84,20 +84,20 @@ last_synced = "2026-05-19"
 [[docs]]
 source = ".agents/skills/systematic-debugging/SKILL.md"
 ko = ".agents/skills/systematic-debugging/SKILL_KO.md"
-source_sha256 = "76f702d14dce602ba2190b0d283f30b6e5834381a2ce94ba2942151c2375c1fa"
-last_synced = "2026-05-19"
+source_sha256 = "1bebee444afc0f1b3b65fd91abc1477646487459c0eb8ff3c7c9783c5de7dc93"
+last_synced = "2026-05-20"
 
 [[docs]]
 source = ".agents/skills/tdd/SKILL.md"
 ko = ".agents/skills/tdd/SKILL_KO.md"
-source_sha256 = "4cfb7f888690060c59b679b1e5845c086df12132582ef0b1c4ffeac82c79eed9"
-last_synced = "2026-05-19"
+source_sha256 = "663dcaab7872bd9008f03f7191129b623f00f1117780a19a07c6eff232679603"
+last_synced = "2026-05-20"
 
 [[docs]]
 source = ".agents/skills/v1-slice-harness/SKILL.md"
 ko = ".agents/skills/v1-slice-harness/SKILL_KO.md"
-source_sha256 = "ef0c2893e3a8ef11bac65a39aaeebf3df11645b4745c341484153793cd8ca61d"
-last_synced = "2026-05-19"
+source_sha256 = "947de618037e0a1afd487293d0a7d37d8457c9491f2a11587dce06415a1a00e3"
+last_synced = "2026-05-20"
 
 [[docs]]
 source = ".agents/skills/vertical-slice-implementation/SKILL.md"

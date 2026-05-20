@@ -12,6 +12,11 @@ Inputs:
   `--from-report`
 - Optional target filter from `--targets`
 
+Skill routing:
+- $planning: produce the decision-complete slice plan and acceptance criteria.
+- $tdd: define First RED, Expected RED failure, and Minimum GREEN before execution.
+- $api-contract: check V1 API URL, request, response, unit, and error compatibility when backend or frontend behavior can be affected.
+
 Instructions:
 - Render the slice goal, acceptance criteria, First RED candidates, expected RED
   failure, minimum GREEN, verification, stop conditions, and next command.

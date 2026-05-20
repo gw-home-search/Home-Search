@@ -11,6 +11,10 @@ Inputs:
 - Recent report evidence: `.codex/harness/reports/*.json` or `--from-report`
 - Optional git context: `--from-git`
 
+Skill routing:
+- $planning: turn backlog, recent report evidence, risks, and acceptance criteria into next-slice candidates.
+- $code-review: use only when recent gate findings need findings-first interpretation before choosing the next slice.
+
 Instructions:
 - Recommend one to three unfinished slices.
 - Mark exactly one slice as recommended.

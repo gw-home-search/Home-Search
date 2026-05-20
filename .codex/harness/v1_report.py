@@ -14,24 +14,28 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from pr_evidence import (
+    API_QUALITY,
+    DIFF_CHECK,
+    PR_BODY_CHECK_SELF_TEST,
+    ordered_commands,
+    PR_LINT_SELF_TEST,
+    SKILL_ROUTING_SELF_TEST,
+    USER_LANGUAGE_CHECK,
+    V1_FLOW_SELF_TEST,
+    V1_LAUNCHER_SELF_TEST,
+    V1_PLAN_SELF_TEST,
+    V1_REPORT_SELF_TEST,
+    requirements_for_changed_files,
+)
+
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REPORT_ROOT = REPO_ROOT / ".codex" / "harness" / "reports"
-PR_BODY_COMMANDS = [
-    "git diff --check",
-    "cd apps/api && ./gradlew backendQualityCheck",
-    "cd apps/api && ./gradlew test",
-    "cd apps/web && npm run test",
-    "cd apps/web && npm run build",
-    "python3 .codex/harness/pr_lint.py --self-test",
-    "python3 .codex/harness/user_language_check.py --self-test",
-    "python3 .codex/hooks/stop_verification_gate.py --self-test",
-    "python3 .codex/hooks/post_tool_use_review.py --self-test",
-    "bash scripts/check-ko-docs.sh",
-]
+FALLBACK_PR_BODY_COMMANDS = [DIFF_CHECK]
 
 
 def now_iso() -> str:
@@ -79,6 +83,71 @@ def command_summary(result: Any) -> str:
             parts.append(str(result["summary"]))
         return ", ".join(parts)
     return str(result or "skipped")
+
+
+def changed_files_from_payload(payload: dict[str, Any]) -> list[str]:
+    raw = payload.get("changed_files") or []
+    if isinstance(raw, dict):
+        raw = raw.get("files") or []
+    if not isinstance(raw, list):
+        return []
+    return [str(path) for path in raw if str(path).strip()]
+
+
+def pr_body_commands(payload: dict[str, Any]) -> list[str]:
+    changed_files = changed_files_from_payload(payload)
+    if not changed_files:
+        return FALLBACK_PR_BODY_COMMANDS
+    requirements = requirements_for_changed_files(changed_files)
+    return ordered_commands(requirements.commands)
+
+
+def has_pass(verification: dict[str, Any], command: str) -> bool:
+    return command_status(verification.get(command)).lower() == "pass"
+
+
+def backend_quality_lines(payload: dict[str, Any], verification: dict[str, Any]) -> str:
+    changed_files = changed_files_from_payload(payload)
+    requirements = requirements_for_changed_files(changed_files)
+    if not requirements.requires_backend_quality:
+        return ""
+    if not has_pass(verification, API_QUALITY):
+        return ""
+    return "\nCoverage: >=90%\nDocs/OpenAPI: generated + verified\n"
+
+
+def ko_section(payload: dict[str, Any]) -> str:
+    changed_files = changed_files_from_payload(payload)
+    requirements = requirements_for_changed_files(changed_files)
+    ko_targets = list(requirements.ko_targets)
+    ko_payload = payload.get("ko_docs") if isinstance(payload.get("ko_docs"), dict) else {}
+    payload_targets = ko_payload.get("targets") if isinstance(ko_payload, dict) else None
+    if isinstance(payload_targets, list) and payload_targets:
+        ko_targets = [str(path) for path in payload_targets]
+    approved = bool(ko_payload.get("approved")) if isinstance(ko_payload, dict) else False
+    if ko_targets and approved:
+        return "\n".join(
+            [
+                "KO 수정 승인: 확인",
+                f"KO 대상: {', '.join(ko_targets)}",
+                "KO 생성 기준: canonical source only",
+            ]
+        )
+    if ko_targets:
+        return "\n".join(
+            [
+                "KO 수정 승인: 미확인",
+                f"KO 대상: {', '.join(ko_targets)}",
+                "KO 생성 기준: canonical source only",
+            ]
+        )
+    return "\n".join(
+        [
+            "KO 수정 승인: 해당 없음",
+            "KO 대상: 해당 없음",
+            "KO 생성 기준: 해당 없음",
+        ]
+    )
 
 
 def default_payload(args: argparse.Namespace) -> dict[str, Any]:
@@ -177,6 +246,30 @@ def render_list(items: list[Any]) -> str:
     return "".join(f"- {item}\n" for item in items)
 
 
+def render_skill_routing(payload: dict[str, Any]) -> str:
+    routing = payload.get("skill_routing")
+    if not isinstance(routing, dict):
+        return "- not recorded\n"
+    lines: list[str] = []
+    for mode in ("execute", "gate", "recover", "plan"):
+        item = routing.get(mode)
+        if not isinstance(item, dict):
+            continue
+        skills = item.get("skills")
+        if not isinstance(skills, list) or not skills:
+            continue
+        names = []
+        for skill in skills:
+            if isinstance(skill, dict):
+                names.append(str(skill.get("trigger") or skill.get("name") or "").strip())
+            else:
+                names.append(str(skill).strip())
+        names = [name for name in names if name]
+        if names:
+            lines.append(f"- {mode}: {', '.join(names)}")
+    return "\n".join(lines) + ("\n" if lines else "- not recorded\n")
+
+
 def verification_line(command: str, verification: dict[str, Any]) -> str:
     result = verification.get(command)
     if isinstance(result, dict):
@@ -206,7 +299,9 @@ def render_pr_body(payload: dict[str, Any]) -> str:
     next_action = payload.get("next_action") or "GitHub PR diff와 checks를 확인한 뒤 수동 merge 결정"
     report_link = links.get("markdown_report") or "생성 안 됨"
     payload_link = links.get("payload_json") or "생성 안 됨"
-    lines = "\n".join(verification_line(command, verification) for command in PR_BODY_COMMANDS)
+    lines = "\n".join(verification_line(command, verification) for command in pr_body_commands(payload))
+    backend_evidence = backend_quality_lines(payload, verification)
+    ko_text = ko_section(payload)
     return f"""## 요약
 
 상태: {status}
@@ -234,12 +329,17 @@ payload: {payload_link}
 
 검증:
 {lines}
+{backend_evidence}
 
 ## 계약 영향
 
 {contract_text}
 
 contract-reviewer: contract risk 없으면 not needed, 있으면 필요
+
+## KO 문서 변경
+
+{ko_text}
 
 ## 주요 위험
 
@@ -301,6 +401,8 @@ def render_report(payload: dict[str, Any]) -> str:
 
 ## 검증 매트릭스
 {render_matrix(nested(payload, "verification", default={}))}
+## 사용 skill
+{render_skill_routing(payload)}
 ## 게이트 리뷰
 {payload.get("gate_review") or "실행 안 됨"}
 
@@ -398,7 +500,37 @@ def run_self_test() -> int:
         "started_at": "2026-05-19T00:00:00+09:00",
         "finished_at": "2026-05-19T00:01:00+09:00",
         "branches": {"api": "feat/api-self-test", "web": "feat/web-self-test"},
-        "verification": {"git diff --check": {"status": "pass", "exit_code": 0}},
+        "changed_files": [
+            ".codex/harness/v1_report.py",
+            ".agents/skills/v1-slice-harness/SKILL.md",
+            ".agents/skills/v1-slice-harness/SKILL_KO.md",
+            ".ko-docs.toml",
+        ],
+        "ko_docs": {
+            "approved": True,
+            "targets": [".agents/skills/v1-slice-harness/SKILL_KO.md"],
+        },
+        "skill_routing": {
+            "execute": {
+                "skills": [
+                    {"trigger": "$tdd"},
+                    {"trigger": "$api-contract"},
+                    {"trigger": "$code-review"},
+                ]
+            }
+        },
+        "verification": {
+            DIFF_CHECK: {"status": "pass", "exit_code": 0},
+            PR_LINT_SELF_TEST: {"status": "pass", "exit_code": 0},
+            PR_BODY_CHECK_SELF_TEST: {"status": "pass", "exit_code": 0},
+            V1_FLOW_SELF_TEST: {"status": "pass", "exit_code": 0},
+            V1_PLAN_SELF_TEST: {"status": "pass", "exit_code": 0},
+            V1_REPORT_SELF_TEST: {"status": "pass", "exit_code": 0},
+            V1_LAUNCHER_SELF_TEST: {"status": "pass", "exit_code": 0},
+            SKILL_ROUTING_SELF_TEST: {"status": "pass", "exit_code": 0},
+            USER_LANGUAGE_CHECK: {"status": "pass", "exit_code": 0},
+            "bash scripts/check-ko-docs.sh": {"status": "pass", "exit_code": 0},
+        },
     }
     rendered = render_report(payload)
     pr_body = render_pr_body(payload)
@@ -409,16 +541,22 @@ def run_self_test() -> int:
             base="main",
             head="feat/self-test-integration",
             draft=True,
-            changed_files=(),
+            changed_files=tuple(payload["changed_files"]),
         )
     )
     checks = [
         "# V1 Slice 보고서: self-test" in rendered,
         "검증 매트릭스" in rendered,
-        "`git diff --check`" in rendered,
-        "`python3 .codex/harness/pr_lint.py --self-test`" in pr_body,
-        "`python3 .codex/harness/user_language_check.py --self-test`" in pr_body,
+        f"`{DIFF_CHECK}`" in rendered,
+        f"`{PR_LINT_SELF_TEST}`" in pr_body,
+        f"`{PR_BODY_CHECK_SELF_TEST}`" in pr_body,
+        f"`{V1_FLOW_SELF_TEST}`" in pr_body,
+        f"`{SKILL_ROUTING_SELF_TEST}`" in pr_body,
+        f"`{USER_LANGUAGE_CHECK}`" in pr_body,
         "`bash scripts/check-ko-docs.sh`" in pr_body,
+        "$tdd, $api-contract, $code-review" in rendered,
+        "## KO 문서 변경" in pr_body,
+        "KO 수정 승인: 확인" in pr_body,
         "## 요약" in pr_body,
         "최초 RED:" in pr_body,
         "검증:" in pr_body,

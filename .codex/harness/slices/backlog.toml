@@ -143,7 +143,7 @@ first_red_candidates = [
   "complex match 실패 fixture가 explainable failed match evidence 없이 사라지는 실패를 먼저 만든다.",
 ]
 verification_commands = [
-  "cd apps/api && ./gradlew test",
+  "cd apps/api && ./gradlew backendQualityCheck",
 ]
 stop_conditions = [
   "live Open API call이 필요하면 중단하고 fixture/mocking으로 대체한다.",
@@ -220,7 +220,7 @@ first_red_candidates = [
   "OpenApiTradeIngestService persistence integration test에서 duplicate raw row가 DUPLICATE로 남는 테스트가 JDBC adapter 부재로 실패한다.",
 ]
 verification_commands = [
-  "cd apps/api && ./gradlew test",
+  "cd apps/api && ./gradlew backendQualityCheck",
   "cd apps/api && ./gradlew javadoc",
   "git diff --check",
 ]

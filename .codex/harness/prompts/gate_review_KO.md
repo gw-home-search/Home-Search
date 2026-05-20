@@ -1,22 +1,34 @@
-# 게이트 리뷰 프롬프트
+# Gate Review Prompt
 
-$v1-slice-harness mode=gate
 
-Slice: {{SLICE}}
-Preset: {{PRESET}}
-Target: {{TARGET}}
-Branch: {{BRANCH_NAME}}
+`$v1-slice-harness mode=gate`
 
-리뷰만 수행하세요. 파일을 수정하지 마세요.
+## 입력
 
-확인 항목:
-- 범위가 target preset의 허용 편집 범위 안에 머물렀는지 확인합니다.
-- V1 API contract와 data invariant가 유지되었는지 확인합니다.
-- 필요한 verification evidence가 있는지 확인합니다.
-- Verification evidence가 정확한 line format을 사용하는지 확인합니다: ``- `command` = pass|fail|not run (Korean reason)``.
-- protected path, secret, build output, automatic main merge, push가 추가되지 않았는지 확인합니다.
+- Slice: `{{SLICE}}`
+- Preset: `{{PRESET}}`
+- Target: `{{TARGET}}`
+- Branch: `{{BRANCH_NAME}}`
 
-다음 사용자 노출 label을 사용해 짧은 Korean-first gate review를 출력하세요:
+Review only. 파일을 수정하지 않는다.
+
+## Skill routing
+
+`{{SKILL_ROUTING}}`
+
+## 확인 항목
+
+- 변경 범위가 target preset의 allowed edit scope 안에 머물렀는지 확인한다.
+- V1 API contract와 data invariant가 보존되었는지 확인한다.
+- 필수 verification evidence가 존재하는지 확인한다.
+- Verification evidence가 정확한 line format을 사용하는지 확인한다: ``- `command` = pass|fail|not run (Korean reason)``.
+- backend, frontend, harness, hook, GitHub workflow, Markdown, KO 변경에 맞는 changed-file PR lint evidence가 있는지 확인한다.
+- protected paths, secrets, build output, automatic main merge, push가 추가되지 않았는지 확인한다.
+
+## 출력 label
+
+짧은 Korean-first gate review를 다음 label로 출력한다.
+
 - 상태: Pass|Partial|Fail
 - 최초 RED:
 - 예상 RED 실패:

@@ -1,12 +1,23 @@
 ---
 name: code-review
-description: Review Home Search changes findings-first, prioritizing correctness, V1 API compatibility, data safety, and KO sync risk.
+description: Review Home Search diffs, gate reviews, PRs, and completion evidence findings-first for correctness, V1 API compatibility, data safety, frontend map usability, security, missing tests, and KO sync. Use for "code review", "gate review", "PR review", "reviewer findings", "final self-review", "리뷰", "짧은 리뷰", "게이트 리뷰", "PR 리뷰", "지적사항", "검증 공백". Do not use for root-cause debugging or RED planning; route failures to systematic-debugging and RED questions to tdd/tdd-guide.
 ---
 
 
 # Code Review Skill
 
 Use this skill for review requests or final self-review after implementation.
+
+## Routes From Gate/PR
+
+- Use this skill for local final self-review, gate review, PR review, reviewer
+  findings triage, completion evidence review, and `검증 공백` checks.
+- This skill reviews the diff and evidence. It does not replace `reviewer` when
+  a read-only subagent is available and explicitly requested or allowed.
+- Route failing commands, hook blocks, CI failures, runtime bugs, and API
+  reproduction work to `systematic-debugging`.
+- Route First RED validity, expected RED failure, public seam, or minimum GREEN
+  questions to `tdd` or `tdd-guide`.
 
 ## Format
 

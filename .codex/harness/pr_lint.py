@@ -12,6 +12,26 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from pr_evidence import (
+    API_QUALITY,
+    DIFF_CHECK,
+    KO_CHECK,
+    POST_TOOL_USE_REVIEW_SELF_TEST,
+    PR_BODY_CHECK_SELF_TEST,
+    PR_LINT_SELF_TEST,
+    SKILL_ROUTING_SELF_TEST,
+    STOP_HOOK_SELF_TEST,
+    USER_LANGUAGE_CHECK,
+    V1_FLOW_SELF_TEST,
+    V1_LAUNCHER_SELF_TEST,
+    V1_PLAN_SELF_TEST,
+    V1_REPORT_SELF_TEST,
+    WEB_BUILD,
+    WEB_TEST,
+    is_ko_doc,
+    requirements_for_changed_files,
+)
+
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
@@ -31,6 +51,7 @@ REQUIRED_SECTIONS = [
     ("TDD 근거", ("TDD 근거", "TDD Evidence")),
     ("검증", ("검증",)),
     ("계약 영향", ("계약 영향", "Contract 영향")),
+    ("KO 문서 변경", ("KO 문서 변경",)),
     ("주요 위험", ("주요 위험",)),
     ("다음 행동", ("다음 행동",)),
     ("체크리스트", ("체크리스트",)),
@@ -51,15 +72,7 @@ CHECKLIST_ITEMS = [
     "secrets 저장 없음",
 ]
 
-DIFF_CHECK = "git diff --check"
-API_TEST = "cd apps/api && ./gradlew backendQualityCheck"
-WEB_TEST = "cd apps/web && npm run test"
-WEB_BUILD = "cd apps/web && npm run build"
-PR_LINT_SELF_TEST = "python3 .codex/harness/pr_lint.py --self-test"
-USER_LANGUAGE_CHECK = "python3 .codex/harness/user_language_check.py --self-test"
-STOP_HOOK_SELF_TEST = "python3 .codex/hooks/stop_verification_gate.py --self-test"
-POST_TOOL_USE_REVIEW_SELF_TEST = "python3 .codex/hooks/post_tool_use_review.py --self-test"
-KO_CHECK = "bash scripts/check-ko-docs.sh"
+API_TEST = API_QUALITY
 COVERAGE_LINE_RE = re.compile(r"^\s*Coverage:\s*>=\s*90%\s*$", re.MULTILINE)
 DOCS_OPENAPI_LINE_RE = re.compile(r"^\s*Docs/OpenAPI:\s*generated\s+\+\s+verified\s*$", re.MULTILINE)
 KO_APPROVAL_RE = re.compile(r"KO 수정 승인\s*:\s*확인")
@@ -358,31 +371,6 @@ def check_body_structure(body: str, errors: list[LintMessage], *, template: bool
     return parse_verification_lines(body, errors)
 
 
-def is_ko_local(path: str) -> bool:
-    lowered = path.lower()
-    return lowered.endswith("_ko.local.md")
-
-
-def is_ko_doc(path: str) -> bool:
-    lowered = path.lower()
-    return lowered.endswith("_ko.md") and not is_ko_local(path)
-
-
-def is_canonical_markdown(path: str) -> bool:
-    lowered = path.lower()
-    return lowered.endswith(".md") and not lowered.startswith("ai-docs/") and not is_ko_doc(path) and not is_ko_local(path)
-
-
-def paired_ko_path(source: str) -> str:
-    path = Path(source)
-    return str(path.with_name(f"{path.stem}_KO.md"))
-
-
-def canonical_for_ko(path: str) -> str:
-    source = re.sub(r"(?i)_ko\.md$", ".md", path)
-    return source
-
-
 def has_ko_approval_evidence(body: str, ko_paths: Iterable[str]) -> bool:
     paths = tuple(ko_paths)
     if not paths:
@@ -394,74 +382,16 @@ def has_ko_approval_evidence(body: str, ko_paths: Iterable[str]) -> bool:
     return all(path in body for path in paths)
 
 
-def is_forbidden_path(path: str) -> str | None:
-    normalized = path.strip("/")
-    parts = [part for part in normalized.split("/") if part]
-    basename = parts[-1].lower() if parts else normalized.lower()
-    if basename.startswith(".env"):
-        return ".env* 파일은 금지됩니다"
-    if is_ko_local(path):
-        return "*_KO.local.md 파일은 금지됩니다"
-    if "node_modules" in parts:
-        return "node_modules output은 금지됩니다"
-    build_parts = {"build", "dist", "target", "coverage", ".gradle", ".vite", ".next", "out"}
-    if any(part in build_parts for part in parts):
-        return "build output 경로는 금지됩니다"
-    secret_tokens = [
-        "secret",
-        "password",
-        "passwd",
-        "credential",
-        "private_key",
-        "private-key",
-        "id_rsa",
-        "id_dsa",
-        "id_ed25519",
-        "service-account",
-        "apikey",
-        "api-key",
-        ".pem",
-        ".p12",
-        ".key",
-        ".keystore",
-    ]
-    if any(token in basename for token in secret_tokens):
-        return "secret으로 보이는 파일명은 금지됩니다"
-    return None
-
-
 def required_commands_for_files(changed_files: Iterable[str], errors: list[LintMessage]) -> set[str]:
     changed = set(changed_files)
-    required = {DIFF_CHECK}
-    for path in sorted(changed):
-        reason = is_forbidden_path(path)
-        if reason:
-            add(errors, "changed-files", f"{path}: {reason}")
-        if path.startswith("apps/api/"):
-            required.add(API_TEST)
-        if path.startswith("apps/web/"):
-            required.add(WEB_TEST)
-            required.add(WEB_BUILD)
-        if path.startswith(".github/") or path.startswith(".codex/harness/") or path == "scripts/check-ko-docs.sh":
-            required.add(PR_LINT_SELF_TEST)
-        if path.startswith(".codex/hooks/"):
-            required.add(STOP_HOOK_SELF_TEST)
-            required.add(POST_TOOL_USE_REVIEW_SELF_TEST)
-
-    canonical_markdown = sorted(path for path in changed if is_canonical_markdown(path))
-    if canonical_markdown:
-        required.add(KO_CHECK)
-        if ".ko-docs.toml" not in changed:
-            add(errors, "changed-files", "canonical Markdown 변경 시 .ko-docs.toml도 함께 변경해야 합니다")
-        for source in canonical_markdown:
-            ko_path = paired_ko_path(source)
-            if ko_path not in changed:
-                add(errors, "changed-files", f"canonical Markdown 변경에 paired KO doc이 없습니다: {source} -> {ko_path}")
-
-    if any(is_ko_doc(path) for path in changed):
-        required.add(KO_CHECK)
-
-    return required
+    requirements = requirements_for_changed_files(changed)
+    for path, reason in requirements.forbidden_paths:
+        add(errors, "changed-files", f"{path}: {reason}")
+    if requirements.canonical_markdown and ".ko-docs.toml" not in changed:
+        add(errors, "changed-files", "canonical Markdown 변경 시 .ko-docs.toml도 함께 변경해야 합니다")
+    for source, ko_path in requirements.missing_ko_pairs:
+        add(errors, "changed-files", f"canonical Markdown 변경에 paired KO doc이 없습니다: {source} -> {ko_path}")
+    return set(requirements.commands)
 
 
 def check_evidence(
@@ -580,6 +510,12 @@ def valid_body(
 - `{WEB_TEST}` = not run (web 변경 없음)
 - `{WEB_BUILD}` = not run (web 변경 없음)
 - `{PR_LINT_SELF_TEST}` = pass (자체 테스트)
+- `{PR_BODY_CHECK_SELF_TEST}` = pass (PR body 검사 자체 테스트)
+- `{V1_FLOW_SELF_TEST}` = pass (v1 flow 자체 테스트)
+- `{V1_PLAN_SELF_TEST}` = pass (v1 plan 자체 테스트)
+- `{V1_REPORT_SELF_TEST}` = pass (v1 report 자체 테스트)
+- `{V1_LAUNCHER_SELF_TEST}` = pass (v1 launcher 자체 테스트)
+- `{SKILL_ROUTING_SELF_TEST}` = pass (skill routing 자체 테스트)
 - `{USER_LANGUAGE_CHECK}` = pass (사용자 노출 언어 점검)
 - `{STOP_HOOK_SELF_TEST}` = pass (stop hook fixture)
 - `{POST_TOOL_USE_REVIEW_SELF_TEST}` = pass (post-tool hook fixture)
@@ -679,9 +615,22 @@ def run_self_test() -> int:
         body=valid_body().replace(f"- `{API_TEST}` = not run (api 변경 없음)", f"- `{API_TEST}` = not run (확인 안 함)"),
         changed_files=("apps/api/src/main/java/com/home/App.java",),
     )
+    backend_test_only = valid_input(
+        body=valid_body().replace(
+            f"- `{API_TEST}` = not run (api 변경 없음)",
+            "- `cd apps/api && ./gradlew test` = pass (단위 테스트만 확인)",
+        ),
+        changed_files=("apps/api/src/main/java/com/home/App.java",),
+    )
     backend_missing_coverage = valid_input(
         body=valid_body().replace("Coverage: >=90%\n", ""),
         changed_files=("apps/api/src/main/java/com/home/App.java",),
+    )
+    web_without_lint = valid_input(
+        body=valid_body()
+        .replace(f"- `{WEB_TEST}` = not run (web 변경 없음)", f"- `{WEB_TEST}` = pass (frontend tests)")
+        .replace(f"- `{WEB_BUILD}` = not run (web 변경 없음)", f"- `{WEB_BUILD}` = pass (frontend build)"),
+        changed_files=("apps/web/src/app/App.tsx",),
     )
     hook_missing_self_test = valid_input(
         body=valid_body().replace(
@@ -712,7 +661,9 @@ def run_self_test() -> int:
         expect_case("unchecked checklist", old_style_unchecked, "body", "checklist item"),
         expect_case("web build evidence missing", web_missing_build, "evidence", WEB_BUILD),
         expect_case("backend quality evidence missing", backend_missing_quality, "evidence", API_TEST),
+        expect_case("backend test only is insufficient", backend_test_only, "evidence", API_TEST),
         expect_case("backend coverage evidence missing", backend_missing_coverage, "evidence", "Coverage"),
+        lint_pr(web_without_lint).ok,
         expect_case("hook self-test evidence missing", hook_missing_self_test, "evidence", STOP_HOOK_SELF_TEST),
         expect_case("markdown KO path missing", markdown_unsynced, "changed-files", "paired KO doc"),
         expect_case("markdown KO evidence missing", markdown_unsynced, "evidence", KO_CHECK),

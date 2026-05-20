@@ -238,7 +238,7 @@ describe('App', () => {
   it('keeps the map surface visible and reports a non-blocking Kakao runtime error when no key is configured', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
 
-    const { root, rootElement } = await renderApp();
+    const { root, rootElement } = await renderApp({ kakaoMapAppKey: '' });
     await flushAsyncState();
     await flushAsyncState();
 

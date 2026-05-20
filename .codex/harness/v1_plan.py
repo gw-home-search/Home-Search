@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from skill_routing import routing_payload, routing_text
+
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
@@ -328,6 +330,8 @@ def plan_for_slice(
         "first_red_candidates": view["first_red_candidates"],
         "expected_red_failure": "최초 RED 후보가 현재 구현 또는 evidence 부족으로 실패해야 한다.",
         "minimum_green": "acceptance criteria를 만족하는 최소 구현과 검증 evidence만 남긴다.",
+        "skill_routing": routing_payload("plan", view["targets"]),
+        "skill_routing_text": routing_text("plan", view["targets"]),
         "verification_commands": view["verification_commands"],
         "stop_conditions": view["stop_conditions"],
         "risk_notes": view["risk_notes"],
@@ -361,6 +365,8 @@ def render_next_text(payload: dict[str, Any]) -> str:
         lines.extend(f"- {command}" for command in recommended["verification_commands"])
     else:
         lines.append("- not run")
+    lines.append("사용 skill:")
+    lines.append(routing_text("next", recommended["targets"] if recommended else None))
     lines.append(f"다음 행동: {payload['next_command']}")
     return "\n".join(lines)
 
@@ -378,6 +384,8 @@ def render_plan_text(payload: dict[str, Any]) -> str:
     lines.extend(f"- {candidate}" for candidate in plan["first_red_candidates"])
     lines.append(f"예상 RED 실패: {plan['expected_red_failure']}")
     lines.append(f"최소 GREEN: {plan['minimum_green']}")
+    lines.append("사용 skill:")
+    lines.append(plan["skill_routing_text"])
     lines.append("검증:")
     lines.extend(f"- {command}" for command in plan["verification_commands"])
     lines.append("중단 조건:")
@@ -498,6 +506,9 @@ def run_self_test() -> int:
             payload["recommended"]["id"] == candidates[0]["id"],
             '"recommended"' in rendered,
             plan["targets"] == "frontend",
+            "$planning" in plan["skill_routing_text"],
+            "$tdd" in plan["skill_routing_text"],
+            "$api-contract" in plan["skill_routing_text"],
             target_rejected,
         ]
     except Exception as exc:  # pragma: no cover - self-test diagnostic path.

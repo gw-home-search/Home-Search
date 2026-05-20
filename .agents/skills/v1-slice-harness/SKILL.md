@@ -1,14 +1,14 @@
 ---
 name: v1-slice-harness
-description: Orchestrate Home Search V1 slice workflow with short Korean prompts; supports mode=plan, mode=execute, mode=gate, mode=next, mode=recover. Use for "$v1-slice-harness", "다음 slice 플랜", "현재 slice gate", "짧은 gate review", "hook evidence 복구", "backend/web worktree slice 실행".
+description: Route Home Search V1 slice workflow through the harness launcher for next/plan/dry-run/run/report, worktree orchestration, integration reports, push, draft PR, and PR lint evidence. Use for "V1 slice", "harness", "next slice", "dry-run", "gate review", "PR", "worktree", "다음 slice", "plan만", "진행해줘", "PR까지", "짧은 gate review", "hook evidence 복구". Does not replace planning, tdd, systematic-debugging, or code-review; routes gate/recover requests to those modes when needed.
 ---
 
 
 # V1 Slice Harness
 
 Use this skill when the user wants repeatable Home Search V1 slice operation
-without pasting a long prompt. This skill orchestrates the existing Home Search
-skills; it does not replace `planning`, `tdd`, `systematic-debugging`, or
+without pasting a long prompt. This skill is a launcher router plus routing
+guide; it does not replace `planning`, `tdd`, `systematic-debugging`, or
 `code-review`.
 
 ## Ground Rules
@@ -39,37 +39,59 @@ skills; it does not replace `planning`, `tdd`, `systematic-debugging`, or
 
 ## Slice Identity
 
+- This `SKILL.md` is not a backlog, preset, or slice registry.
 - This `SKILL.md` does not define slice ids and must not be treated as a slice
   registry.
-- `v1-slice-harness` is a slice workflow router for plan, dry-run, run, gate,
-  next, and recover operations.
+- `v1-slice-harness` is a slice workflow router for launcher operations
+  `next`, `plan`, `dry`, `run`, and `report`; `gate` and `recover` are skill
+  routing modes, not launcher subcommands.
+- Durable routing policy lives in `.codex/harness/skill_routing.py` and the
+  launcher/prompt files. This skill should stay thin so the harness can later
+  be exposed through another entrypoint without losing the same skill routing
+  behavior.
 - Actual slice ids come from backlog, preset resolution, recent gate evidence,
   or `.codex/harness/v1 next` results.
 - `<slice-id>` and `<target>` are placeholders in this document, not literal
   values to pass to the launcher.
 
-## Launcher UX
+## Short Prompt Grammar
+
+Short prompts are user input examples only. They are not slice ids, preset ids,
+or literal commands.
+
+- `$v1-slice-harness 다음 slice 골라줘`
+- `$v1-slice-harness <slice-id> plan만 세워줘`
+- `$v1-slice-harness <slice-id> dry-run 해줘`
+- `$v1-slice-harness <slice-id> <target> target으로 dry-run 해줘`
+- `$v1-slice-harness <slice-id> 진행해줘`
+- `$v1-slice-harness <slice-id> PR까지 만들어줘`
+- `$v1-slice-harness <slice-id> push만 해줘`
+- `$v1-slice-harness <slice-id> report 다시 보내줘`
+- `$v1-slice-harness 현재 slice 짧은 gate review`
+- `$v1-slice-harness hook이 막은 evidence 복구`
+
+## Launcher Mapping
 
 Map short user prompts to the launcher first:
 
-- `$v1-slice-harness 다음 slice 골라줘` or `다음 작업 추천`:
+- next:
   `.codex/harness/v1 next`
-- `$v1-slice-harness <slice-id> plan만 세워줘`:
+- plan:
   `.codex/harness/v1 plan <slice-id>`
-- `$v1-slice-harness <slice-id> dry-run 해줘`:
+- dry:
   `.codex/harness/v1 dry <slice-id>`
-- `$v1-slice-harness <slice-id> <target> target으로 dry-run 해줘`:
+- target dry:
   `.codex/harness/v1 dry <slice-id> --targets <target>`
-- `$v1-slice-harness <slice-id> 진행해줘`:
+- run:
   `.codex/harness/v1 run <slice-id>`
-- `$v1-slice-harness <slice-id> PR까지 만들어줘` or `draft PR 생성해줘`:
+- PR or draft PR:
   `.codex/harness/v1 run <slice-id> --pr`
-- `$v1-slice-harness <slice-id> push만 해줘`:
+- push:
   `.codex/harness/v1 run <slice-id> --push`
+- report:
+  `.codex/harness/v1 report <slice-id>`
 - If the prompt mentions `notion`, append `--notion`.
 - If the prompt mentions `slack`, append `--slack`.
-- If the prompt asks for report resend, use
-  `.codex/harness/v1 report <slice-id>`.
 - If the prompt names a target, append `--targets backend`,
   `--targets frontend`, `--targets both`, or `--targets planning-only`.
 
@@ -90,12 +112,59 @@ Launcher defaults:
 - Remote push and draft PR creation happen only when the user explicitly asks
   for PR/push in the current prompt.
 - PR requests always target the generated `feat/*-integration` branch and
-  create a draft PR by default.
+  create a draft PR by default. The `--pr` flow must pass strict PR lint before
+  creating the draft PR.
+- `dry --pr` is command expansion and safety preflight only. Changed-file PR
+  lint is fully enforced after a real integration branch exists.
 - Notion and Slack are optional best-effort notifications and must not break the
   critical path. When PR creation is requested, PR URL notification happens only
   after the PR URL is known.
 - Users should keep prompts short and natural; the launcher expands slice,
   preset, target, branch, worktree, and report details.
+
+## Launcher Skill Routing
+
+- `.codex/harness/v1 plan` and `.codex/harness/v1 next` render explicit
+  `사용 skill:` evidence from `.codex/harness/skill_routing.py`.
+- `.codex/harness/v1 run` injects `Skill routing:` into the Codex execute and
+  gate prompts so target agents are prompted with the relevant `$tdd`,
+  `$backend-api`, `$frontend-web`, `$api-contract`, `$systematic-debugging`,
+  and `$code-review` triggers.
+- The launcher does not pretend to own those workflows. It selects the mode and
+  target context, then routes to the specialized skill that owns planning, RED
+  validity, backend/frontend domain rules, contract checks, failure recovery,
+  or final review.
+- `planning-only` routes to planning evidence only and must not continue into
+  implementation, verification, gate, commit, integration, push, or PR
+  automation.
+- Failure or hook-block evidence routes to `systematic-debugging`; behavior
+  root causes then route to `tdd`, and completed recovery routes to
+  `code-review`.
+
+## Lint/Test/Build Handling
+
+- Frontend verification commands must come from scripts that exist in
+  `apps/web/package.json`. At this writing, use `cd apps/web && npm run test`
+  and `cd apps/web && npm run build`; do not add `npm run lint` until the
+  script exists.
+- If frontend lint is introduced, update all matching enforcement points
+  together: `.codex/harness/v1_flow.py` `KNOWN_VERIFICATION_COMMANDS`,
+  `.codex/harness/presets/*.toml`, `.codex/hooks/post_tool_use_review.py`,
+  `.codex/hooks/stop_verification_gate.py`, `.codex/harness/pr_lint.py`,
+  `.codex/harness/v1_report.py`, and `.github/workflows/ci.yml`.
+- Backend verification must not guess Gradle lint or check tasks. Use
+  `cd apps/api && ./gradlew backendQualityCheck` as the canonical backend
+  PR/CI quality gate. Use `test` only for ad-hoc debugging or explicit plans,
+  not as the canonical PR evidence for `apps/api/**` changes.
+- PR evidence is changed-file based: `apps/api/**` requires
+  `backendQualityCheck`, `Coverage: >=90%`, and
+  `Docs/OpenAPI: generated + verified`; `apps/web/**` requires `npm run test`
+  and `npm run build`; harness, hook, GitHub workflow, Markdown, and KO changes
+  require the matching self-tests and KO sync evidence.
+- Verification command failures or hook blocks route to `mode=recover` and
+  `systematic-debugging`. If the root cause is a behavior bug, route regression
+  evidence through `tdd` or `tdd-guide`; after the fix, record the exact
+  verification line and use `code-review` or `reviewer` before completion.
 
 ## Mode Selection
 
@@ -251,17 +320,6 @@ reviewer: 지적사항 = none|listed|not run
 주요 위험: 없음|<short risk>
 다음 행동: <one short action>
 ```
-
-## Short Prompt Grammar
-
-- `$v1-slice-harness 다음 slice 골라줘`
-- `$v1-slice-harness <slice-id> plan만 세워줘`
-- `$v1-slice-harness <slice-id> dry-run 해줘`
-- `$v1-slice-harness <slice-id> <target> target으로 dry-run 해줘`
-- `$v1-slice-harness <slice-id> 진행해줘`
-- `$v1-slice-harness <slice-id> PR까지 만들어줘`
-- `$v1-slice-harness 현재 slice 짧은 gate review`
-- `$v1-slice-harness hook이 막은 evidence 복구`
 
 ## Examples Only
 

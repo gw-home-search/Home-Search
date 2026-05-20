@@ -138,6 +138,7 @@ describe('App', () => {
 
     const { root, rootElement } = await renderApp();
     await flushAsyncState();
+    await flushAsyncState();
 
     expect(rootElement.querySelector('[aria-label="Map surface"]')).not.toBeNull();
     expect(rootElement.querySelector('[role="alert"]')?.textContent).toContain(
@@ -147,6 +148,202 @@ describe('App', () => {
     expect(rootElement.querySelectorAll('[data-marker-id]')).toHaveLength(0);
 
     unmount(root);
+  });
+
+  it('recovers from a marker error with a same-viewport retry on the Kakao map surface', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(errorResponse(500))
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            parcelId: 1001,
+            lat: 37.5123,
+            lng: 127.0456,
+            latestDealAmount: 125000,
+            unitCntSum: 740,
+          },
+        ]),
+      );
+    const sdk = createFakeKakaoSdk({
+      bounds: {
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+      },
+      level: 4,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root, rootElement } = await renderApp();
+    await flushAsyncState();
+    await flushAsyncState();
+
+    expect(rootElement.querySelector('[role="alert"]')?.textContent).toContain(
+      'Marker data unavailable',
+    );
+
+    const retryButton = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="Retry marker load"]',
+    );
+    expect(retryButton).not.toBeNull();
+
+    await act(async () => {
+      retryButton?.click();
+    });
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      resolveApiUrl('/api/v1/map/complexes'),
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
+    expect(rootElement.querySelector('[role="alert"]')).toBeNull();
+    expect(rootElement.querySelector('[data-marker-id="1001"]')).not.toBeNull();
+
+    unmount(root);
+  });
+
+  it('uses Kakao map runtime bounds and level when the SDK is already available', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
+    const sdk = createFakeKakaoSdk({
+      bounds: {
+        swLat: 37.1,
+        swLng: 126.7,
+        neLat: 37.8,
+        neLng: 127.3,
+      },
+      level: 10,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root } = await renderApp();
+    await flushAsyncState();
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      resolveApiUrl('/api/v1/map/regions'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          swLat: 37.1,
+          swLng: 126.7,
+          neLat: 37.8,
+          neLng: 127.3,
+          region: 'si-do',
+        }),
+      }),
+    );
+
+    unmount(root);
+  });
+
+  it('refreshes marker requests when Kakao idle reports a new viewport', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
+    const sdk = createFakeKakaoSdk({
+      bounds: {
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+      },
+      level: 4,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root } = await renderApp();
+    await flushAsyncState();
+    await flushAsyncState();
+
+    sdk.setViewport({
+      bounds: {
+        swLat: 37.2,
+        swLng: 126.8,
+        neLat: 37.9,
+        neLng: 127.4,
+      },
+      level: 7,
+    });
+
+    await act(async () => {
+      sdk.triggerIdle();
+    });
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      resolveApiUrl('/api/v1/map/regions'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          swLat: 37.2,
+          swLng: 126.8,
+          neLat: 37.9,
+          neLng: 127.4,
+          region: 'si-gun-gu',
+        }),
+      }),
+    );
+
+    unmount(root);
+  });
+
+  it('keeps the map surface visible and reports a non-blocking Kakao runtime error when no key is configured', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+
+    const { root, rootElement } = await renderApp({ kakaoMapAppKey: '' });
+    await flushAsyncState();
+    await flushAsyncState();
+
+    expect(rootElement.querySelector('[aria-label="Map surface"]')).not.toBeNull();
+    expect(rootElement.querySelector('[role="alert"]')?.textContent).toContain(
+      'Kakao map unavailable',
+    );
+
+    unmount(root);
+  });
+
+  it('renders Kakao CustomOverlay markers and clears them on unmount', async () => {
+    const sdk = createFakeKakaoSdk({
+      bounds: {
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+      },
+      level: 4,
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse([
+          {
+            parcelId: 1001,
+            lat: 37.5123,
+            lng: 127.0456,
+            latestDealAmount: 125000,
+            unitCntSum: 740,
+          },
+        ]),
+      ),
+    );
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root } = await renderApp();
+    await flushAsyncState();
+    await flushAsyncState();
+
+    expect(sdk.overlays).toHaveLength(1);
+    expect(sdk.overlays[0]?.setMap).toHaveBeenLastCalledWith(sdk.map);
+
+    unmount(root);
+
+    expect(sdk.overlays[0]?.setMap).toHaveBeenLastCalledWith(null);
   });
 });
 
@@ -205,4 +402,75 @@ function deferred<T>(): {
   });
 
   return { promise, resolve, reject };
+}
+
+type FakeBounds = {
+  swLat: number;
+  swLng: number;
+  neLat: number;
+  neLng: number;
+};
+
+type FakeOverlay = {
+  setMap: ReturnType<typeof vi.fn>;
+};
+
+function createFakeKakaoSdk(options: { bounds: FakeBounds; level: number }) {
+  const overlays: FakeOverlay[] = [];
+  let bounds = options.bounds;
+  let level = options.level;
+  const idleHandlers: Array<() => void> = [];
+  const map = {
+    getBounds: () => ({
+      getSouthWest: () => latLng(bounds.swLat, bounds.swLng),
+      getNorthEast: () => latLng(bounds.neLat, bounds.neLng),
+    }),
+    getLevel: () => level,
+  };
+  const kakao = {
+    maps: {
+      LatLng: vi.fn(function (this: unknown, lat: number, lng: number) {
+        void this;
+        return latLng(lat, lng);
+      }),
+      Map: vi.fn(function (this: unknown) {
+        void this;
+        return map;
+      }),
+      CustomOverlay: vi.fn(function (this: unknown) {
+        void this;
+        const overlay = { setMap: vi.fn() };
+        overlays.push(overlay);
+        return overlay;
+      }),
+      event: {
+        addListener: vi.fn((_target: unknown, eventName: string, handler: () => void) => {
+          if (eventName === 'idle') {
+            idleHandlers.push(handler);
+          }
+        }),
+        removeListener: vi.fn(),
+      },
+    },
+  };
+
+  return {
+    kakao,
+    map,
+    overlays,
+    setViewport(nextViewport: { bounds: FakeBounds; level: number }) {
+      bounds = nextViewport.bounds;
+      level = nextViewport.level;
+    },
+    triggerIdle() {
+      idleHandlers.forEach((handler) => handler());
+    },
+  };
+}
+
+function latLng(lat: number, lng: number) {
+  return {
+    getLat: () => lat,
+    getLng: () => lng,
+  };
 }

@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   fetchMapMarkers,
   type MapBoundsRequest,
   type MapMarkersResult,
 } from '../features/map/api/fetchMapMarkers';
+import { KakaoMapSurface } from '../features/map/KakaoMapSurface';
+import './App.css';
 
 type MarkerRequestState = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -22,9 +24,13 @@ type MapViewport = {
 
 type AppProps = {
   initialMapLevel?: number;
+  kakaoMapAppKey?: string;
 };
 
-export function App({ initialMapLevel = 4 }: AppProps) {
+export function App({
+  initialMapLevel = 4,
+  kakaoMapAppKey = getConfiguredKakaoMapAppKey(),
+}: AppProps) {
   const [viewport, setViewport] = useState<MapViewport>(() => ({
     bounds: INITIAL_MARKER_BOUNDS,
     level: initialMapLevel,
@@ -32,6 +38,8 @@ export function App({ initialMapLevel = 4 }: AppProps) {
   const [markers, setMarkers] = useState<MapMarkersResult | null>(null);
   const [markerState, setMarkerState] = useState<MarkerRequestState>('loading');
   const [markerError, setMarkerError] = useState<string | null>(null);
+  const [mapRuntimeError, setMapRuntimeError] = useState<string | null>(null);
+  const [markerRetrySeq, setMarkerRetrySeq] = useState(0);
   const markerRequestSeq = useRef(0);
 
   useEffect(() => {
@@ -77,7 +85,17 @@ export function App({ initialMapLevel = 4 }: AppProps) {
     return () => {
       ignore = true;
     };
-  }, [viewport]);
+  }, [viewport, markerRetrySeq]);
+
+  const handleViewportChange = useCallback((nextViewport: MapViewport) => {
+    setViewport((current) => {
+      if (sameViewport(current, nextViewport)) {
+        return current;
+      }
+
+      return nextViewport;
+    });
+  }, []);
 
   function handleZoomIn() {
     setViewport((current) => ({
@@ -93,13 +111,24 @@ export function App({ initialMapLevel = 4 }: AppProps) {
     }));
   }
 
+  function handleRetryMarkers() {
+    setMarkerRetrySeq((current) => current + 1);
+  }
+
   return (
-    <main>
+    <main className="app-shell">
       <h1>Home Search</h1>
 
-      <section aria-label="Map surface">
-        <p>Map ready</p>
-        <div aria-label="Map controls">
+      <section aria-label="Map surface" className="map-surface">
+        <p className="map-status">Map ready</p>
+        <KakaoMapSurface
+          appKey={kakaoMapAppKey}
+          initialLevel={initialMapLevel}
+          markers={markers}
+          onRuntimeErrorChange={setMapRuntimeError}
+          onViewportChange={handleViewportChange}
+        />
+        <div aria-label="Map controls" className="map-controls">
           <button type="button" aria-label="Zoom in" onClick={handleZoomIn}>
             +
           </button>
@@ -145,8 +174,14 @@ export function App({ initialMapLevel = 4 }: AppProps) {
         <p role="alert">
           Marker data unavailable. Map remains usable.
           {markerError ? ` ${markerError}` : null}
+          {' '}
+          <button type="button" aria-label="Retry marker load" onClick={handleRetryMarkers}>
+            Retry
+          </button>
         </p>
       ) : null}
+
+      {mapRuntimeError && markerState !== 'error' ? <p role="alert">{mapRuntimeError}</p> : null}
     </main>
   );
 }
@@ -157,4 +192,18 @@ function formatAmount(amount: number | null): string {
   }
 
   return `${amount.toLocaleString()} 10k KRW`;
+}
+
+function sameViewport(first: MapViewport, second: MapViewport): boolean {
+  return (
+    first.level === second.level &&
+    first.bounds.swLat === second.bounds.swLat &&
+    first.bounds.swLng === second.bounds.swLng &&
+    first.bounds.neLat === second.bounds.neLat &&
+    first.bounds.neLng === second.bounds.neLng
+  );
+}
+
+function getConfiguredKakaoMapAppKey(): string {
+  return import.meta.env.VITE_KAKAO_MAP_APP_KEY ?? '';
 }

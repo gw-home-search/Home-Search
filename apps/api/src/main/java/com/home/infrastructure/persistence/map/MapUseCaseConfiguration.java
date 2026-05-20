@@ -18,6 +18,9 @@ class MapUseCaseConfiguration {
 		if (jdbcClient == null) {
 			return new EmptyMapUseCase();
 		}
-		return new MapQueryUseCase(new JdbcMapMarkerRepository(jdbcClient));
+		return new MapQueryUseCase(
+			new JdbcMapMarkerRepository(jdbcClient),
+			new JdbcRegionMarkerRepository(jdbcClient)
+		);
 	}
 }

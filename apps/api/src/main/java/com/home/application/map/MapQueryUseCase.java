@@ -11,9 +11,14 @@ import com.home.infrastructure.web.map.dto.RegionMarkersRequest;
 public class MapQueryUseCase implements MapUseCase {
 
 	private final ComplexMarkerRepository complexMarkerRepository;
+	private final RegionMarkerRepository regionMarkerRepository;
 
-	public MapQueryUseCase(ComplexMarkerRepository complexMarkerRepository) {
+	public MapQueryUseCase(
+		ComplexMarkerRepository complexMarkerRepository,
+		RegionMarkerRepository regionMarkerRepository
+	) {
 		this.complexMarkerRepository = Objects.requireNonNull(complexMarkerRepository);
+		this.regionMarkerRepository = Objects.requireNonNull(regionMarkerRepository);
 	}
 
 	@Override
@@ -23,6 +28,6 @@ public class MapQueryUseCase implements MapUseCase {
 
 	@Override
 	public List<RegionMarkerResponse> getRegionMarkers(RegionMarkersRequest request) {
-		return List.of();
+		return regionMarkerRepository.findRegionMarkers(request);
 	}
 }

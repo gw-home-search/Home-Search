@@ -13,7 +13,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 @Testcontainers
-abstract class JdbcPostgresTestSupport {
+public abstract class JdbcPostgresTestSupport {
 
 	@Container
 	private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(

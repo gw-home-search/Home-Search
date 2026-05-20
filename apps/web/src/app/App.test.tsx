@@ -138,6 +138,7 @@ describe('App', () => {
 
     const { root, rootElement } = await renderApp();
     await flushAsyncState();
+    await flushAsyncState();
 
     expect(rootElement.querySelector('[aria-label="Map surface"]')).not.toBeNull();
     expect(rootElement.querySelector('[role="alert"]')?.textContent).toContain(
@@ -238,6 +239,7 @@ describe('App', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
 
     const { root, rootElement } = await renderApp();
+    await flushAsyncState();
     await flushAsyncState();
 
     expect(rootElement.querySelector('[aria-label="Map surface"]')).not.toBeNull();

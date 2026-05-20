@@ -9,12 +9,17 @@ Integration branch: {{BRANCH_NAME}}
 
 Review only. Do not edit files.
 
+Skill routing:
+- $code-review: review the merged api/web diff and completion evidence findings-first.
+- $api-contract: check V1 API URL, request, response, unit, and error compatibility across backend/frontend.
+- $tdd: verify First RED validity and Minimum GREEN evidence when behavior changed.
+
 Check the merged api/web slice together:
 - Main API URLs and response shapes remain V1 compatible.
 - Map, search, region, detail, and trade flows remain aligned.
 - Backend data invariants are preserved.
 - No V2 dependency entered the critical path.
-- Verification evidence covers api test, web test, web build, and diff check.
+- Verification evidence covers backendQualityCheck, web test, web build, and diff check.
 - Verification evidence uses exact line format: ``- `command` = pass|fail|not run (Korean reason)``.
 
 Output a short Korean-first integration review with these user-facing labels:

@@ -1,12 +1,29 @@
 ---
 name: tdd
-description: Start Home Search production behavior changes with a valid RED and drive them through public seams.
+description: Plan and drive Home Search behavior changes with First RED, Expected RED failure, Minimum GREEN, regression tests, and public seams. Use for "TDD", "RED/GREEN", "First RED", "regression test", "backend controller", "frontend adapter", "contract test", "최초 RED", "예상 RED 실패", "최소 GREEN", "회귀 테스트". Do not use for pure planning-only docs or root-cause debugging; route uncertain RED validity to tdd-guide and failures to systematic-debugging.
 ---
 
 
 # TDD Skill
 
 Use this skill for backend or frontend behavior changes. The goal is to anchor implementation in a verifiable failing test before changing production code when practical.
+
+## When To Use
+
+- Backend controller, DTO, service, repository, Flyway, ingest, or API adapter
+  behavior changes.
+- Frontend adapter, marker transform, component behavior, map fallback, or
+  detail/trade drawer behavior changes.
+- Regression tests for reproduced bugs.
+- Contract tests that protect V1 URL, request, response, unit, or error
+  behavior.
+
+## Do Not Use
+
+- Pure docs planning or next-slice comparison without behavior change.
+- Root-cause debugging of an already failing command; use
+  `systematic-debugging`.
+- Final diff, gate, or PR review; use `code-review` or `reviewer`.
 
 ## RED Validity
 
@@ -45,14 +62,25 @@ Use this skill for backend or frontend behavior changes. The goal is to anchor i
 
 ## Required Output
 
-- First RED test.
+- First RED test (`최초 RED`).
 - Public seam.
 - Test file candidate.
-- Expected RED failure.
+- Expected RED failure (`예상 RED 실패`).
 - Why this is a valid RED.
-- Minimum GREEN slice.
+- Minimum GREEN slice (`최소 GREEN`).
 - Verification commands.
 - RED waiver reason, only when no valid RED can be created.
+
+## Routes
+
+- Use `tdd-guide` when RED validity, public seam choice, expected RED failure,
+  or minimum GREEN is uncertain.
+- Use `contract-reviewer` before controller, DTO, frontend adapter, fixture,
+  field, type, unit, coordinate, error, or empty-result behavior changes can
+  affect the V1 API contract.
+- Use `systematic-debugging` when the starting point is a lint, test, build,
+  hook, CI, runtime, or API failure requiring root-cause diagnosis.
+- Use `code-review` or `reviewer` after the behavior slice is complete.
 
 ## No Test Environment
 

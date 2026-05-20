@@ -13,7 +13,7 @@ slice_patterns = ["map-ui", "ui-state", "map-state", "kakao-map", "marker-render
 prompt = "backend_execute.md"
 allowed_scope = "apps/api/**"
 forbidden_scope = "apps/web/**"
-verification_commands = ["cd apps/api && ./gradlew test"]
+verification_commands = ["cd apps/api && ./gradlew backendQualityCheck"]
 
 [targets.frontend]
 prompt = "frontend_execute.md"

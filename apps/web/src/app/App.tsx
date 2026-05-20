@@ -39,6 +39,7 @@ export function App({
   const [markerState, setMarkerState] = useState<MarkerRequestState>('loading');
   const [markerError, setMarkerError] = useState<string | null>(null);
   const [mapRuntimeError, setMapRuntimeError] = useState<string | null>(null);
+  const [markerRetrySeq, setMarkerRetrySeq] = useState(0);
   const markerRequestSeq = useRef(0);
 
   useEffect(() => {
@@ -84,7 +85,7 @@ export function App({
     return () => {
       ignore = true;
     };
-  }, [viewport]);
+  }, [viewport, markerRetrySeq]);
 
   const handleViewportChange = useCallback((nextViewport: MapViewport) => {
     setViewport((current) => {
@@ -108,6 +109,10 @@ export function App({
       ...current,
       level: current.level + 1,
     }));
+  }
+
+  function handleRetryMarkers() {
+    setMarkerRetrySeq((current) => current + 1);
   }
 
   return (
@@ -169,6 +174,10 @@ export function App({
         <p role="alert">
           Marker data unavailable. Map remains usable.
           {markerError ? ` ${markerError}` : null}
+          {' '}
+          <button type="button" aria-label="Retry marker load" onClick={handleRetryMarkers}>
+            Retry
+          </button>
         </p>
       ) : null}
 

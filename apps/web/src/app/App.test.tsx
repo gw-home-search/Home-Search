@@ -150,6 +150,64 @@ describe('App', () => {
     unmount(root);
   });
 
+  it('recovers from a marker error with a same-viewport retry on the Kakao map surface', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(errorResponse(500))
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            parcelId: 1001,
+            lat: 37.5123,
+            lng: 127.0456,
+            latestDealAmount: 125000,
+            unitCntSum: 740,
+          },
+        ]),
+      );
+    const sdk = createFakeKakaoSdk({
+      bounds: {
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+      },
+      level: 4,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root, rootElement } = await renderApp();
+    await flushAsyncState();
+    await flushAsyncState();
+
+    expect(rootElement.querySelector('[role="alert"]')?.textContent).toContain(
+      'Marker data unavailable',
+    );
+
+    const retryButton = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="Retry marker load"]',
+    );
+    expect(retryButton).not.toBeNull();
+
+    await act(async () => {
+      retryButton?.click();
+    });
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      resolveApiUrl('/api/v1/map/complexes'),
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
+    expect(rootElement.querySelector('[role="alert"]')).toBeNull();
+    expect(rootElement.querySelector('[data-marker-id="1001"]')).not.toBeNull();
+
+    unmount(root);
+  });
+
   it('uses Kakao map runtime bounds and level when the SDK is already available', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     const sdk = createFakeKakaoSdk({

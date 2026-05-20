@@ -52,17 +52,13 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 
 		Optional<Long> tradeId = insertTrade(command);
 		if (tradeId.isEmpty()) {
+			Long existingTradeId = findExistingTradeId(command)
+				.orElseThrow(() -> new IllegalStateException("fallback duplicate trade id was not found"));
+			attachTrade(registryId.get(), existingTradeId);
 			return false;
 		}
 
-		jdbcClient.sql("""
-			UPDATE trade_source_key_registry
-			SET trade_id = :tradeId
-			WHERE id = :registryId
-			""")
-			.param("tradeId", tradeId.get())
-			.param("registryId", registryId.get())
-			.update();
+		attachTrade(registryId.get(), tradeId.get());
 		return true;
 	}
 
@@ -124,6 +120,38 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 			.param("aptSeq", command.aptSeq())
 			.query(Long.class)
 			.optional();
+	}
+
+	private Optional<Long> findExistingTradeId(NormalizedTradeCommand command) {
+		return jdbcClient.sql("""
+			SELECT id
+			FROM trade
+			WHERE complex_id = :complexId
+			  AND deal_date = :dealDate
+			  AND floor IS NOT DISTINCT FROM :floor
+			  AND excl_area IS NOT DISTINCT FROM :exclArea
+			  AND deal_amount = :dealAmount
+			ORDER BY id
+			LIMIT 1
+			""")
+			.param("complexId", command.complexId())
+			.param("dealDate", command.dealDate())
+			.param("floor", command.floor())
+			.param("exclArea", decimalOrNull(command.exclArea()))
+			.param("dealAmount", command.dealAmount())
+			.query(Long.class)
+			.optional();
+	}
+
+	private void attachTrade(Long registryId, Long tradeId) {
+		jdbcClient.sql("""
+			UPDATE trade_source_key_registry
+			SET trade_id = :tradeId
+			WHERE id = :registryId
+			""")
+			.param("tradeId", tradeId)
+			.param("registryId", registryId)
+			.update();
 	}
 
 	private BigDecimal decimalOrNull(Double value) {

@@ -3,6 +3,7 @@ package com.home.infrastructure.persistence.ingest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import com.home.application.ingest.NormalizedTradeCommand;
 import com.home.application.ingest.RawTradeIngestRecord;
@@ -34,7 +35,7 @@ class JdbcNormalizedTradeRepositoryTest extends JdbcPostgresTestSupport {
 
 	@Test
 	@DisplayName("fallback identity duplicate inserts do not create duplicate normalized trades")
-	void fallbackDuplicateDoesNotCreateSecondTrade() {
+	void fallbackDuplicateDoesNotCreateSecondTradeAndKeepsSourceKeyTraceLinked() {
 		seedComplex();
 		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
 		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
@@ -50,6 +51,8 @@ class JdbcNormalizedTradeRepositoryTest extends JdbcPostgresTestSupport {
 		assertThat(firstInsert).isTrue();
 		assertThat(fallbackDuplicate).isFalse();
 		assertThat(tradeCount()).isEqualTo(1);
+		Long existingTradeId = onlyTradeId();
+		assertThat(registryTradeIds()).containsExactly(existingTradeId, existingTradeId);
 	}
 
 	private RawTradeIngestRecord rawRecord(String sourceKey) {
@@ -78,5 +81,21 @@ class JdbcNormalizedTradeRepositoryTest extends JdbcPostgresTestSupport {
 			"COMPLEX-PK-501",
 			"APT-501"
 		);
+	}
+
+	private Long onlyTradeId() {
+		return jdbcClient.sql("SELECT id FROM trade")
+			.query(Long.class)
+			.single();
+	}
+
+	private List<Long> registryTradeIds() {
+		return jdbcClient.sql("""
+			SELECT trade_id
+			FROM trade_source_key_registry
+			ORDER BY source_key
+			""")
+			.query(Long.class)
+			.list();
 	}
 }

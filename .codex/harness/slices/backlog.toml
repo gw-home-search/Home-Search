@@ -156,6 +156,45 @@ risk_notes = [
 ]
 
 [[slices]]
+id = "map-complex-marker-query-backend"
+title_ko = "Map complex marker query backend"
+description_ko = "빈 map use case를 V1 parcel/complex/trade query로 교체해 /api/v1/map/complexes marker 응답을 실제 데이터로 반환한다."
+status = "planned"
+priority = 35
+targets = "backend"
+preset = "contract-hardening"
+acceptance_criteria = [
+  "POST /api/v1/map/complexes URL, request field, response field, amount unit, empty-result behavior를 docs/API_CONTRACT.md와 동일하게 유지한다.",
+  "bounds 안의 parcel과 연결된 complex를 조회해 parcelId, lat, lng, latestDealAmount, unitCntSum canonical response만 반환한다.",
+  "latestDealAmount는 trade.complex_id -> complex.id 운영 관계 기준 최신 거래 금액이며 dealAmount/latestDealAmount 단위는 10,000 KRW이다.",
+  "priceEokMin과 priceEokMax는 eok 입력을 10,000 KRW 단위로 변환해 stored trade amount와 비교한다.",
+  "ranking, trend, favorite, alarm, mail, auth, recommendation 상태 없이 V1 core tables만으로 동작한다.",
+]
+first_red_candidates = [
+  "JdbcMapMarkerRepositoryTest에서 bounds 안 parcel/complex/trade seed가 complex marker 한 건으로 반환되어야 하나 repository seam 부재 또는 EmptyMapUseCase 때문에 실패한다.",
+  "priceEokMin/priceEokMax filter가 eok -> 10,000 KRW 변환 없이 비교되면 잘못 포함 또는 제외되는 실패를 먼저 만든다.",
+  "public contract test에서 complexPk, aptSeq, sourceKey 같은 audit/dedupe field가 /api/v1/map/complexes 응답에 노출되면 실패하게 한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew persistenceTest",
+  "cd apps/api && ./gradlew apiContractTest",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "V1 public API URL, request field, response field, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "complex_id 운영 관계를 complex_pk 중심으로 재해석해야 하면 중단하고 architecture review로 분리한다.",
+  "DB schema 변경, migration 실행, live Open API call, secrets 저장이 필요하면 중단한다.",
+  "rankings, trend, favorite, alarm, mail, auth, recommendation dependency가 필요하면 중단한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
+  "PostGIS bounds query와 null geom fallback 정책이 실제 seed data에 따라 달라질 수 있다.",
+  "latest trade lookup은 partitioned trade table과 complex_id index를 사용해야 한다.",
+]
+
+[[slices]]
 id = "backend-quality-docs-foundation"
 title_ko = "Backend quality docs foundation"
 description_ko = "backend RestDocs/OpenAPI YAML, coverage 90%, hook/CI evidence gate를 V1 backend 품질 기준으로 고정한다."

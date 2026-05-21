@@ -46,8 +46,10 @@ if hasattr(sys.stdout, "reconfigure"):
 DEFAULT_MAIN = Path("/Users/gwongwangjae/home-search")
 DEFAULT_WORKTREE_PARENT = Path("/Users/gwongwangjae")
 PRESET_DIR = Path(__file__).with_name("presets")
+BACKLOG_PATH = Path(__file__).with_name("slices") / "backlog.toml"
 REPORT_ROOT = DEFAULT_MAIN / ".codex" / "harness" / "reports"
 PR_SCRIPT = Path(__file__).with_name("v1_pr.py")
+PR_TITLE_TYPES = {"Feat", "Fix", "Chore", "Docs", "Test", "Refactor"}
 DEFAULT_TARGETS = {
     "backend": {
         "prompt": "backend_execute.md",
@@ -788,8 +790,37 @@ def write_pr_body_file(payload: dict[str, Any], *, dry_run: bool) -> tuple[Path,
     return path, False
 
 
+def backlog_pr_metadata(slice_name: str) -> tuple[str, str] | None:
+    if not BACKLOG_PATH.exists():
+        return None
+    try:
+        with BACKLOG_PATH.open("rb") as handle:
+            data = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    requested = slugify(slice_name)
+    for item in data.get("slices", []):
+        if not isinstance(item, dict) or slugify(str(item.get("id", ""))) != requested:
+            continue
+        title_type = str(item.get("pr_type") or "Feat").strip()
+        if title_type not in PR_TITLE_TYPES:
+            title_type = "Feat"
+        summary = str(item.get("pr_title_ko") or item.get("title_ko") or requested.replace("-", " ")).strip()
+        return title_type, summary
+    return None
+
+
+def default_pr_title(slice_name: str) -> str:
+    metadata = backlog_pr_metadata(slice_name)
+    if metadata:
+        title_type, summary = metadata
+    else:
+        title_type, summary = "Chore", f"{slice_name.replace('-', ' ')} 정리"
+    return f"[{title_type}] {summary}"
+
+
 def pr_title(args: argparse.Namespace, names: dict[str, Any]) -> str:
-    return args.pr_title or f"V1 {names['slice']} integration"
+    return args.pr_title or default_pr_title(names["slice"])
 
 
 def call_pr(
@@ -1146,6 +1177,7 @@ def run_self_test() -> int:
         resolved = ""
     parser = build_parser()
     pr_args = parser.parse_args(["run", "--slice", "map-contract-hardening", "--pr", "--dry-run"])
+    backlog_pr_args = parser.parse_args(["run", "--slice", "open-api-ingest-prep", "--pr", "--dry-run"])
     backend_args = parser.parse_args(["run", "--slice", "open-api-ingest-prep", "--targets", "backend", "--dry-run"])
     planning_args = parser.parse_args(["run", "--slice", "data-architecture-checkpoint", "--targets", "planning-only"])
     pr_names = default_names(pr_args)
@@ -1203,6 +1235,8 @@ def run_self_test() -> int:
         invalid_branch_blocked,
         pr_payload["commands"]["main_merge_command"] == "not suggested; review and merge through GitHub PR manually",
         pr_payload["commands"]["push_command_suggestion"] == "handled by --pr after integration succeeds",
+        pr_title(backlog_pr_args, default_names(backlog_pr_args)) == "[Feat] RTMS 수집 준비",
+        pr_title(pr_args, pr_names) == "[Chore] map contract hardening 정리",
         execution_targets(backend_args) == ["backend"],
         execution_targets(planning_args) == [],
         "최초 RED:" in body,

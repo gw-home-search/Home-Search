@@ -6,8 +6,8 @@ ai_must_not_read_ko_body = true
 [[docs]]
 source = ".github/pull_request_template.md"
 ko = ".github/pull_request_template_KO.md"
-source_sha256 = "021e18d6b85ef6624cbf98d6e7b5c195c573e4e37842a49adccb3729614dd2f6"
-last_synced = "2026-05-19"
+source_sha256 = "a33e9a900e2745ab2160c3abe42b993f7eec5bf1c9152342ecb95f27170dc9a6"
+last_synced = "2026-05-21"
 
 [[docs]]
 source = ".codex/harness/prompts/backend_execute.md"

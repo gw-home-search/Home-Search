@@ -150,6 +150,22 @@ def ko_section(payload: dict[str, Any]) -> str:
     )
 
 
+def changed_scope_summary(payload: dict[str, Any], prefix: str) -> str:
+    changed = changed_files_from_payload(payload)
+    matched = [path for path in changed if path.startswith(prefix)]
+    if matched:
+        return f"변경 있음 ({len(matched)} files)"
+    return "변경 없음"
+
+
+def pr_summary_line(payload: dict[str, Any]) -> str:
+    explicit = payload.get("pr_summary")
+    if explicit:
+        return str(explicit)
+    slice_name = payload.get("slice") or "unknown"
+    return f"`{slice_name}` slice의 변경 범위, 검증 근거, draft PR 안전장치를 정리합니다."
+
+
 def default_payload(args: argparse.Namespace) -> dict[str, Any]:
     started = args.started_at or now_iso()
     finished = args.finished_at or started
@@ -298,32 +314,31 @@ def render_pr_body(payload: dict[str, Any]) -> str:
     risk_text = "없음" if not residual_risks else "; ".join(str(item) for item in residual_risks)
     next_action = payload.get("next_action") or "GitHub PR diff와 checks를 확인한 뒤 수동 merge 결정"
     report_link = links.get("markdown_report") or "생성 안 됨"
-    payload_link = links.get("payload_json") or "생성 안 됨"
     lines = "\n".join(verification_line(command, verification) for command in pr_body_commands(payload))
     backend_evidence = backend_quality_lines(payload, verification)
     ko_text = ko_section(payload)
     return f"""## 요약
 
 상태: {status}
+{pr_summary_line(payload)}
 
-slice: {payload.get("slice", "unknown")}
-targets: {targets}
-integration branch: {branches.get("integration")}
-local report: {report_link}
-payload: {payload_link}
+- slice: {payload.get("slice", "unknown")}
+- targets: {targets}
+- integration branch: {branches.get("integration")}
+- local report: {report_link}
 
 ## 작업 범위
 
-- backend: V1 slice payload 기준 변경 확인
-- frontend: V1 slice payload 기준 변경 확인
-- harness: integration branch push, draft PR 생성, strict PR lint evidence 지원
-- docs/infra: PR template, pr-lint CI workflow, KO sync evidence
+- backend: {changed_scope_summary(payload, "apps/api/")}
+- frontend: {changed_scope_summary(payload, "apps/web/")}
+- harness: {changed_scope_summary(payload, ".codex/harness/")}
+- docs/infra: PR template, GitHub workflow, Markdown, KO sync evidence 확인
 
 ## TDD 근거
 
-최초 RED: PR lint self-test fixture가 unchecked checklist, missing changed-file evidence, non-draft PR을 차단
-예상 RED 실패: pr-lint가 body/evidence/changed-files/branch group error를 출력
-최소 GREEN: integration 성공 후 strict PR body 생성, PR lint 통과, integration branch push/PR command 준비
+최초 RED: PR lint와 harness self-test fixture로 제목, body, evidence 누락을 먼저 차단
+예상 RED 실패: pr-lint 또는 harness self-test가 title/body/evidence mismatch를 출력
+최소 GREEN: strict PR body 생성, PR lint 통과, integration branch push와 draft PR command 준비
 
 ## 검증
 
@@ -536,7 +551,7 @@ def run_self_test() -> int:
     pr_body = render_pr_body(payload)
     linted_pr_body = lint_pr(
         PrInput(
-            title="V1 self-test integration",
+            title="[Chore] 리포트 본문 생성 검증",
             body=pr_body,
             base="main",
             head="feat/self-test-integration",
@@ -558,6 +573,7 @@ def run_self_test() -> int:
         "## KO 문서 변경" in pr_body,
         "KO 수정 승인: 확인" in pr_body,
         "## 요약" in pr_body,
+        "`self-test` slice의 변경 범위" in pr_body,
         "최초 RED:" in pr_body,
         "검증:" in pr_body,
         "영향 없음" in pr_body,

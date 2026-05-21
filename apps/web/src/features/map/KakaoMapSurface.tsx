@@ -13,6 +13,8 @@ type MapViewport = {
   level: number;
 };
 
+export type KakaoMapRuntimeState = 'loading' | 'ready' | 'error';
+
 type ComplexMapMarker = Extract<MapMarkersResult, { kind: 'complex' }>['markers'][number];
 type RegionMapMarker = Extract<MapMarkersResult, { kind: 'region' }>['markers'][number];
 
@@ -22,6 +24,7 @@ type KakaoMapSurfaceProps = {
   markers: MapMarkersResult | null;
   onComplexMarkerSelect: (parcelId: number) => void;
   onRuntimeErrorChange: (message: string | null) => void;
+  onRuntimeStateChange: (state: KakaoMapRuntimeState) => void;
   onViewportChange: (viewport: MapViewport) => void;
 };
 
@@ -36,13 +39,14 @@ export function KakaoMapSurface({
   markers,
   onComplexMarkerSelect,
   onRuntimeErrorChange,
+  onRuntimeStateChange,
   onViewportChange,
 }: KakaoMapSurfaceProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<KakaoMap | null>(null);
   const mapsApiRef = useRef<KakaoMapsApi | null>(null);
   const overlaysRef = useRef<KakaoCustomOverlay[]>([]);
-  const [runtimeState, setRuntimeState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [runtimeState, setRuntimeState] = useState<KakaoMapRuntimeState>('loading');
 
   useEffect(() => {
     let disposed = false;
@@ -55,6 +59,7 @@ export function KakaoMapSurface({
     }
 
     setRuntimeState('loading');
+    onRuntimeStateChange('loading');
     onRuntimeErrorChange(null);
 
     loadKakaoMapSdk(appKey)
@@ -78,6 +83,7 @@ export function KakaoMapSurface({
         maps.event.addListener(map, 'idle', notifyViewport);
 
         setRuntimeState('ready');
+        onRuntimeStateChange('ready');
         notifyViewport();
       })
       .catch((error: unknown) => {
@@ -88,6 +94,7 @@ export function KakaoMapSurface({
         mapRef.current = null;
         mapsApiRef.current = null;
         setRuntimeState('error');
+        onRuntimeStateChange('error');
         onRuntimeErrorChange(runtimeErrorMessage(error));
       });
 
@@ -103,7 +110,7 @@ export function KakaoMapSurface({
       mapRef.current = null;
       mapsApiRef.current = null;
     };
-  }, [appKey, initialLevel, onRuntimeErrorChange, onViewportChange]);
+  }, [appKey, initialLevel, onRuntimeErrorChange, onRuntimeStateChange, onViewportChange]);
 
   useEffect(() => {
     const map = mapRef.current;

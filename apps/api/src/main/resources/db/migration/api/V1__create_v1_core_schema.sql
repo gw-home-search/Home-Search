@@ -36,6 +36,11 @@ CREATE TABLE complex (
     trade_name VARCHAR(255),
     dong_cnt INTEGER,
     unit_cnt INTEGER,
+    plat_area NUMERIC(14, 2),
+    arch_area NUMERIC(14, 2),
+    tot_area NUMERIC(14, 2),
+    bc_rat NUMERIC(6, 2),
+    vl_rat NUMERIC(6, 2),
     use_date DATE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

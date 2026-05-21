@@ -652,6 +652,7 @@ def run_self_test() -> int:
     )
     pass_with_open_risk = valid_input(body=valid_body(risk="미확인 gate 위험이 남아 있습니다."))
     non_draft = valid_input(draft=False)
+    non_integration_head = valid_input(head="feat/pr-lint-hardening")
     forbidden_env = valid_input(changed_files=(".env.local",))
     placeholder_summary = valid_input(title="feat(api): summary")
 
@@ -671,6 +672,7 @@ def run_self_test() -> int:
         expect_case("KO approval missing", ko_missing_approval, "evidence", "KO 수정 승인"),
         expect_case("pass with open risk", pass_with_open_risk, "evidence", "미확인"),
         expect_case("non-draft PR", non_draft, "branch", "draft"),
+        expect_case("non-integration head", non_integration_head, "branch", "feat/*-integration"),
         expect_case("forbidden env path", forbidden_env, "changed-files", ".env"),
         expect_case("placeholder conventional title", placeholder_summary, "title", "placeholder"),
     ]

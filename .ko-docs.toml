@@ -24,8 +24,8 @@ last_synced = "2026-05-20"
 [[docs]]
 source = ".codex/harness/prompts/gate_review.md"
 ko = ".codex/harness/prompts/gate_review_KO.md"
-source_sha256 = "c5843bda78e6ca258b624699031fa162860267f1c20d3f3c2a2300edfae19f41"
-last_synced = "2026-05-20"
+source_sha256 = "ef6074b4a997d2c40069d39334b74e9548e3a8ec1a6e19059a5e265d0d2683d6"
+last_synced = "2026-05-21"
 
 [[docs]]
 source = ".codex/harness/prompts/integration_review.md"
@@ -96,8 +96,8 @@ last_synced = "2026-05-20"
 [[docs]]
 source = ".agents/skills/v1-slice-harness/SKILL.md"
 ko = ".agents/skills/v1-slice-harness/SKILL_KO.md"
-source_sha256 = "947de618037e0a1afd487293d0a7d37d8457c9491f2a11587dce06415a1a00e3"
-last_synced = "2026-05-20"
+source_sha256 = "bbf133c3ffcca6be82bf2c573d248aef9f4e600e34993706635a024c61e75b34"
+last_synced = "2026-05-21"
 
 [[docs]]
 source = ".agents/skills/vertical-slice-implementation/SKILL.md"

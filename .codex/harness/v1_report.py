@@ -561,6 +561,10 @@ def run_self_test() -> int:
         "최초 RED:" in pr_body,
         "검증:" in pr_body,
         "영향 없음" in pr_body,
+        "- [x] main merge 자동화 없음" in pr_body,
+        "- [x] main push 없음" in pr_body,
+        "- [x] integration branch만 push" in pr_body,
+        "- [x] draft PR" in pr_body,
         linted_pr_body.ok,
     ]
     if all(checks):

@@ -65,6 +65,7 @@ or literal commands.
 - `$v1-slice-harness <slice-id> <target> target으로 dry-run 해줘`
 - `$v1-slice-harness <slice-id> 진행해줘`
 - `$v1-slice-harness <slice-id> PR까지 만들어줘`
+- `$v1-slice-harness <slice-id> merge push PR까지 해줘`
 - `$v1-slice-harness <slice-id> push만 해줘`
 - `$v1-slice-harness <slice-id> report 다시 보내줘`
 - `$v1-slice-harness 현재 slice 짧은 gate review`
@@ -85,6 +86,8 @@ Map short user prompts to the launcher first:
 - run:
   `.codex/harness/v1 run <slice-id>`
 - PR or draft PR:
+  `.codex/harness/v1 run <slice-id> --pr`
+- merge + push + PR:
   `.codex/harness/v1 run <slice-id> --pr`
 - push:
   `.codex/harness/v1 run <slice-id> --push`
@@ -107,10 +110,16 @@ Launcher defaults:
   only for this target.
 - `planning-only` creates no implementation worktree and must not run Codex
   execute, verification, gate, commit, integration, push, or PR automation.
+- In short prompts, `merge` means merging prepared target branches into the
+  generated `feat/*-integration` branch. It never means merging into `main` or
+  merging the GitHub PR.
 - Main merge, main push, PR merge, approve, live Open API calls, and DB
   migration execution are never automatic.
 - Remote push and draft PR creation happen only when the user explicitly asks
   for PR/push in the current prompt.
+- `--push` pushes only the generated `feat/*-integration` branch after
+  integration succeeds. `--pr` performs the same integration branch push, then
+  creates a draft PR.
 - PR requests always target the generated `feat/*-integration` branch and
   create a draft PR by default. The `--pr` flow must pass strict PR lint before
   creating the draft PR.

@@ -71,6 +71,7 @@ CHECKLIST_ITEMS = [
     "Open API 호출 없음",
     "secrets 저장 없음",
 ]
+TITLE_TYPES = ("Feat", "Fix", "Chore", "Docs", "Test", "Refactor")
 
 API_TEST = API_QUALITY
 COVERAGE_LINE_RE = re.compile(r"^\s*Coverage:\s*>=\s*90%\s*$", re.MULTILINE)
@@ -307,16 +308,30 @@ def check_title(title: str, errors: list[LintMessage]) -> None:
         "v1 <slice-id> integration",
         "제목",
         "요약",
+        "한글 요약",
     }
     if lowered in placeholders or conventional_summary in placeholders or "<" in stripped or ">" in stripped:
         add(errors, "title", "제목에 placeholder 문구를 남기면 안 됩니다")
     if re.search(r"\b(WIP|TODO|TBD)\b", stripped, re.IGNORECASE) or "placeholder" in lowered:
         add(errors, "title", "제목에 WIP/TODO/placeholder 문구를 남기면 안 됩니다")
 
+    bracket = re.fullmatch(r"\[(?P<type>[A-Za-z]+)\]\s*(?P<summary>.+)", stripped)
+    bracket_title = False
+    if bracket:
+        title_type = bracket.group("type")
+        summary = bracket.group("summary").strip()
+        bracket_title = title_type in TITLE_TYPES and bool(summary)
+        if title_type not in TITLE_TYPES:
+            add(errors, "title", "제목 type은 [Feat|Fix|Chore|Docs|Test|Refactor] 중 하나여야 합니다")
+        if summary.lower() in placeholders:
+            add(errors, "title", "제목에 placeholder 문구를 남기면 안 됩니다")
+        if not re.search(r"[가-힣]", summary):
+            add(errors, "title", "bracket 제목 요약에는 한글 설명이 포함되어야 합니다")
+
     v1_title = re.fullmatch(r"V1 [a-z0-9][a-z0-9-]* integration", stripped)
     conventional = re.fullmatch(r"[a-z][a-z0-9-]*\([a-z0-9_.-]+\): .+", stripped)
-    if not (v1_title or conventional):
-        add(errors, "title", "제목은 `V1 <slice-id> integration` 또는 `type(scope): summary` 형식이어야 합니다")
+    if not (bracket_title or v1_title or conventional):
+        add(errors, "title", "제목은 `[Feat] 한글 요약`, `V1 <slice-id> integration`, 또는 `type(scope): summary` 형식이어야 합니다")
 
 
 def check_branch(base: str, head: str, draft: bool, errors: list[LintMessage]) -> None:
@@ -560,7 +575,7 @@ reviewer: 지적사항 = none
 
 def valid_input(**overrides: object) -> PrInput:
     values = {
-        "title": "V1 pr-lint-hardening integration",
+        "title": "[Chore] PR lint 근거 검사 강화",
         "body": valid_body(
             ko_approval=True,
             ko_targets=(".github/pull_request_template_KO.md",),
@@ -653,6 +668,8 @@ def run_self_test() -> int:
     pass_with_open_risk = valid_input(body=valid_body(risk="미확인 gate 위험이 남아 있습니다."))
     non_draft = valid_input(draft=False)
     non_integration_head = valid_input(head="feat/pr-lint-hardening")
+    bracket_title = valid_input(title="[Feat] 한글 제목 규칙 정리")
+    bracket_without_korean = valid_input(title="[Feat] English summary")
     forbidden_env = valid_input(changed_files=(".env.local",))
     placeholder_summary = valid_input(title="feat(api): summary")
 
@@ -673,6 +690,8 @@ def run_self_test() -> int:
         expect_case("pass with open risk", pass_with_open_risk, "evidence", "미확인"),
         expect_case("non-draft PR", non_draft, "branch", "draft"),
         expect_case("non-integration head", non_integration_head, "branch", "feat/*-integration"),
+        lint_pr(bracket_title).ok,
+        expect_case("bracket title requires Korean", bracket_without_korean, "title", "한글"),
         expect_case("forbidden env path", forbidden_env, "changed-files", ".env"),
         expect_case("placeholder conventional title", placeholder_summary, "title", "placeholder"),
     ]

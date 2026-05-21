@@ -46,14 +46,14 @@ def valid_sample() -> str:
     return """## 요약
 
 상태: Pass
-이번 PR은 V1 harness의 integration branch push와 draft PR evidence 검사를 강화합니다.
+이번 PR은 V1 harness PR body evidence 검사를 정리합니다.
 
 ## 작업 범위
 
 - backend: 없음
 - frontend: 없음
 - harness: PR lint wrapper와 body evidence 검사
-- docs/infra: GitHub PR template과 CI workflow
+- docs/infra: PR template과 CI evidence 확인
 
 ## TDD 근거
 

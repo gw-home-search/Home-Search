@@ -1,6 +1,9 @@
+<!-- PR 제목 예: [Feat] 지도 마커 조회 개선 -->
+
 ## 요약
 
 상태: Pass|Partial|Fail
+이번 PR은 <변경 목적을 한 문장으로 요약합니다>.
 
 ## 작업 범위
 
@@ -52,7 +55,7 @@ reviewer:
 
 ## 다음 행동
 
-다음 행동:
+다음 행동: GitHub draft PR에서 pr-lint와 기존 CI check를 확인합니다.
 
 ## 체크리스트
 

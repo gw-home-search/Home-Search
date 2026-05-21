@@ -270,7 +270,7 @@ def run_self_test() -> int:
             "--branch",
             "feat/map-contract-hardening-integration",
             "--title",
-            "V1 map contract hardening",
+            "[Feat] 지도 계약 강화",
             "--body-file",
             ".codex/harness/reports/self-test-pr-body.md",
             "--dry-run",
@@ -297,7 +297,7 @@ def run_self_test() -> int:
     checks.append(
         lint_pr(
             PrInput(
-                title="V1 map-contract-hardening integration",
+                title="[Feat] 지도 계약 강화",
                 body=valid_body(),
                 base="main",
                 head=args.branch,
@@ -309,7 +309,7 @@ def run_self_test() -> int:
     checks.append(
         not lint_pr(
             PrInput(
-                title="V1 map-contract-hardening integration",
+                title="[Feat] 지도 계약 강화",
                 body=valid_body(),
                 base="main",
                 head=args.branch,

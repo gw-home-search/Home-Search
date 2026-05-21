@@ -1,6 +1,8 @@
 [[slices]]
 id = "kakao-map-marker-refresh-flow"
 title_ko = "Kakao map marker refresh flow"
+pr_type = "Feat"
+pr_title_ko = "Kakao 지도 마커 새로고침 안정화"
 description_ko = "지도 idle/zoom/filter 변화가 V1 marker API 호출과 marker rendering으로 이어지는 frontend 흐름을 안정화한다."
 status = "done"
 priority = 10
@@ -32,6 +34,8 @@ risk_notes = [
 [[slices]]
 id = "kakao-map-runtime-visual-smoke"
 title_ko = "Kakao map runtime visual smoke"
+pr_type = "Feat"
+pr_title_ko = "Kakao 지도 런타임 스모크 검증"
 description_ko = "apps/web에서 실제 Kakao JS SDK 지도 surface를 띄우고 V1 marker fetch 연결을 브라우저로 확인할 수 있게 만든다."
 status = "planned"
 priority = 15
@@ -65,6 +69,8 @@ risk_notes = [
 [[slices]]
 id = "marker-rendering-nonblocking-error"
 title_ko = "Marker rendering non-blocking error state"
+pr_type = "Feat"
+pr_title_ko = "마커 오류 상태 non-blocking 처리"
 description_ko = "marker API 실패 시 marker layer를 안전하게 정리하고 지도 탐색을 막지 않는 frontend error state를 만든다."
 status = "candidate"
 priority = 20
@@ -96,6 +102,8 @@ risk_notes = [
 [[slices]]
 id = "data-architecture-checkpoint"
 title_ko = "Data architecture checkpoint"
+pr_type = "Docs"
+pr_title_ko = "데이터 아키텍처 체크포인트 정리"
 description_ko = "raw ingest, normalized trade, dedupe, failed match, complex_id relation을 실행 전 checkpoint로 정리한다."
 status = "candidate"
 priority = 30
@@ -127,6 +135,8 @@ risk_notes = [
 [[slices]]
 id = "open-api-ingest-prep"
 title_ko = "Open API ingest preparation"
+pr_type = "Feat"
+pr_title_ko = "RTMS 수집 준비"
 description_ko = "RTMS ingest를 live Open API 호출 없이 준비하고 raw preservation/dedupe 실패를 테스트 가능한 backend 흐름으로 만든다."
 status = "candidate"
 priority = 40
@@ -158,6 +168,8 @@ risk_notes = [
 [[slices]]
 id = "map-complex-marker-query-backend"
 title_ko = "Map complex marker query backend"
+pr_type = "Feat"
+pr_title_ko = "단지 마커 조회 백엔드 구현"
 description_ko = "빈 map use case를 V1 parcel/complex/trade query로 교체해 /api/v1/map/complexes marker 응답을 실제 데이터로 반환한다."
 status = "planned"
 priority = 35
@@ -197,6 +209,8 @@ risk_notes = [
 [[slices]]
 id = "backend-quality-docs-foundation"
 title_ko = "Backend quality docs foundation"
+pr_type = "Chore"
+pr_title_ko = "백엔드 품질 문서 기반 정리"
 description_ko = "backend RestDocs/OpenAPI YAML, coverage 90%, hook/CI evidence gate를 V1 backend 품질 기준으로 고정한다."
 status = "candidate"
 priority = 45
@@ -241,6 +255,8 @@ risk_notes = [
 [[slices]]
 id = "map-region-marker-query-backend"
 title_ko = "Map region marker query backend"
+pr_type = "Feat"
+pr_title_ko = "지역 마커 조회 백엔드 구현"
 description_ko = "빈 region marker use case를 V1 region bounds query로 교체해 /api/v1/map/regions marker 응답을 실제 데이터로 반환한다."
 status = "planned"
 priority = 48
@@ -279,6 +295,8 @@ risk_notes = [
 [[slices]]
 id = "raw-ingest-persistence-adapter"
 title_ko = "Raw ingest persistence adapter"
+pr_type = "Feat"
+pr_title_ko = "원시 수집 저장 adapter 연결"
 description_ko = "open-api-ingest-prep application port를 Flyway/JDBC persistence로 연결하기 전 V1 raw/normalized 저장 invariant를 repository seam에서 검증한다."
 status = "candidate"
 priority = 50

@@ -72,6 +72,15 @@
   line-height: 1;
 }
 
+.marker-list-button {
+  border: 1px solid #c8d0dc;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #17202a;
+  cursor: pointer;
+  font: inherit;
+}
+
 .kakao-map-overlay {
   display: inline-flex;
   max-width: 180px;
@@ -86,6 +95,8 @@
   line-height: 1.2;
   white-space: nowrap;
   box-shadow: 0 4px 12px rgba(23, 32, 42, 0.18);
+  cursor: default;
+  font-family: inherit;
 }
 
 .kakao-map-overlay-region {
@@ -94,4 +105,106 @@
 
 .kakao-map-overlay-complex {
   border-color: #1b6b4a;
+  cursor: pointer;
+}
+
+.detail-drawer {
+  position: fixed;
+  z-index: 5;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  width: min(380px, calc(100vw - 32px));
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid #c8d0dc;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 16px 48px rgba(23, 32, 42, 0.22);
+}
+
+.detail-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.detail-drawer-kicker {
+  margin: 0;
+  color: #56616f;
+  font-size: 13px;
+}
+
+.detail-drawer-close {
+  border: 1px solid #c8d0dc;
+  border-radius: 6px;
+  background: #f6f7f9;
+  color: #17202a;
+  cursor: pointer;
+  font: inherit;
+}
+
+.detail-drawer h2 {
+  margin: 12px 0 6px;
+  font-size: 20px;
+  letter-spacing: 0;
+}
+
+.detail-address {
+  margin: 0 0 16px;
+  color: #3c4754;
+}
+
+.detail-metrics {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.detail-metric {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.detail-metric dt {
+  color: #56616f;
+  font-size: 13px;
+}
+
+.detail-metric dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.trade-list h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
+.trade-list table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.trade-list th,
+.trade-list td {
+  padding: 8px 6px;
+  border-top: 1px solid #e1e6ee;
+  text-align: left;
+}
+
+@media (max-width: 720px) {
+  .detail-drawer {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: 74vh;
+  }
 }

@@ -150,6 +150,151 @@ describe('App', () => {
     unmount(root);
   });
 
+  it('opens the detail drawer from a complex marker and loads V1 detail and trade data', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            parcelId: 1001,
+            lat: 37.5123,
+            lng: 127.0456,
+            latestDealAmount: 125000,
+            unitCntSum: 740,
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          parcelId: 1001,
+          latitude: 37.5123,
+          longitude: 127.0456,
+          address: 'Sample address',
+          tradeName: 'Sample trade name',
+          name: 'Sample complex name',
+          dongCnt: 8,
+          unitCnt: 740,
+          useDate: '2015-03-20',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          parcelId: 1001,
+          trades: [
+            {
+              tradeId: 9001,
+              dealDate: '2025-12-01',
+              exclArea: 84.93,
+              dealAmount: 125000,
+              aptDong: '101',
+              floor: 12,
+            },
+          ],
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp();
+    await flushAsyncState();
+
+    const markerButton = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="Open detail for parcel 1001"]',
+    );
+    expect(markerButton).not.toBeNull();
+
+    await act(async () => {
+      markerButton?.click();
+    });
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/detail/1001'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/trade/1001'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(rootElement.querySelector('[aria-label="Complex detail drawer"]')).not.toBeNull();
+    expect(rootElement.textContent).toContain('Sample complex name');
+    expect(rootElement.textContent).toContain('Sample address');
+    expect(rootElement.textContent).toContain('2025-12-01');
+    expect(rootElement.textContent).toContain('125,000 10k KRW');
+
+    unmount(root);
+  });
+
+  it('opens the detail drawer from a Kakao CustomOverlay complex marker', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            parcelId: 1001,
+            lat: 37.5123,
+            lng: 127.0456,
+            latestDealAmount: 125000,
+            unitCntSum: 740,
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          parcelId: 1001,
+          latitude: 37.5123,
+          longitude: 127.0456,
+          address: 'Sample address',
+          tradeName: 'Sample trade name',
+          name: 'Sample complex name',
+          dongCnt: 8,
+          unitCnt: 740,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          parcelId: 1001,
+          trades: [],
+        }),
+      );
+    const sdk = createFakeKakaoSdk({
+      bounds: {
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+      },
+      level: 4,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root, rootElement } = await renderApp();
+    await flushAsyncState();
+    await flushAsyncState();
+
+    expect(sdk.overlays[0]?.content.getAttribute('aria-label')).toBe(
+      'Open detail for parcel 1001',
+    );
+
+    await act(async () => {
+      sdk.overlays[0]?.content.click();
+    });
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/detail/1001'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/trade/1001'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(rootElement.querySelector('[aria-label="Complex detail drawer"]')).not.toBeNull();
+    expect(rootElement.textContent).toContain('Sample complex name');
+
+    unmount(root);
+  });
+
   it('recovers from a marker error with a same-viewport retry on the Kakao map surface', async () => {
     const fetchMock = vi
       .fn()
@@ -412,6 +557,7 @@ type FakeBounds = {
 };
 
 type FakeOverlay = {
+  content: HTMLElement;
   setMap: ReturnType<typeof vi.fn>;
 };
 
@@ -437,9 +583,9 @@ function createFakeKakaoSdk(options: { bounds: FakeBounds; level: number }) {
         void this;
         return map;
       }),
-      CustomOverlay: vi.fn(function (this: unknown) {
+      CustomOverlay: vi.fn(function (this: unknown, options: { content: HTMLElement }) {
         void this;
-        const overlay = { setMap: vi.fn() };
+        const overlay = { content: options.content, setMap: vi.fn() };
         overlays.push(overlay);
         return overlay;
       }),

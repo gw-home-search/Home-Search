@@ -20,6 +20,7 @@ type KakaoMapSurfaceProps = {
   appKey: string;
   initialLevel: number;
   markers: MapMarkersResult | null;
+  onComplexMarkerSelect: (parcelId: number) => void;
   onRuntimeErrorChange: (message: string | null) => void;
   onViewportChange: (viewport: MapViewport) => void;
 };
@@ -33,6 +34,7 @@ export function KakaoMapSurface({
   appKey,
   initialLevel,
   markers,
+  onComplexMarkerSelect,
   onRuntimeErrorChange,
   onViewportChange,
 }: KakaoMapSurfaceProps) {
@@ -117,7 +119,13 @@ export function KakaoMapSurface({
     const nextOverlays =
       markers.kind === 'complex'
         ? markers.markers.map((marker) =>
-            overlayForMarker(map, maps, marker.lat, marker.lng, overlayContentForComplexMarker(marker)),
+            overlayForMarker(
+              map,
+              maps,
+              marker.lat,
+              marker.lng,
+              overlayContentForComplexMarker(marker, onComplexMarkerSelect),
+            ),
           )
         : markers.markers.map((marker) =>
             overlayForMarker(map, maps, marker.lat, marker.lng, overlayContentForRegionMarker(marker)),
@@ -129,7 +137,7 @@ export function KakaoMapSurface({
       clearOverlays(overlaysRef.current);
       overlaysRef.current = [];
     };
-  }, [markers, runtimeState]);
+  }, [markers, onComplexMarkerSelect, runtimeState]);
 
   return (
     <div
@@ -180,21 +188,25 @@ function clearOverlays(overlays: KakaoCustomOverlay[]) {
   });
 }
 
-function overlayContentForComplexMarker(marker: ComplexMapMarker): HTMLElement {
-  const element = overlayElement('complex');
+function overlayContentForComplexMarker(
+  marker: ComplexMapMarker,
+  onComplexMarkerSelect: (parcelId: number) => void,
+): HTMLElement {
+  const element = document.createElement('button');
+  element.type = 'button';
+  element.className = 'kakao-map-overlay kakao-map-overlay-complex';
+  element.setAttribute('aria-label', `Open detail for parcel ${marker.parcelId}`);
   element.textContent = `${formatAmount(marker.latestDealAmount)} · ${marker.unitCntSum} units`;
+  element.addEventListener('click', () => {
+    onComplexMarkerSelect(marker.parcelId);
+  });
   return element;
 }
 
 function overlayContentForRegionMarker(marker: RegionMapMarker): HTMLElement {
-  const element = overlayElement('region');
-  element.textContent = marker.name;
-  return element;
-}
-
-function overlayElement(kind: MapMarkersResult['kind']): HTMLElement {
   const element = document.createElement('span');
-  element.className = `kakao-map-overlay kakao-map-overlay-${kind}`;
+  element.className = 'kakao-map-overlay kakao-map-overlay-region';
+  element.textContent = marker.name;
   return element;
 }
 

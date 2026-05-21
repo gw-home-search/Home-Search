@@ -156,6 +156,8 @@ def changed_scope_summary(payload: dict[str, Any], prefix: str) -> str:
     changed = changed_files_from_payload(payload)
     matched = [path for path in changed if path.startswith(prefix)]
     if matched:
+        if payload.get("changed_files_kind") == "expected":
+            return f"예상 변경 있음 ({len(matched)} paths)"
         return f"변경 있음 ({len(matched)} files)"
     return "변경 없음"
 
@@ -269,23 +271,39 @@ def render_skill_routing(payload: dict[str, Any]) -> str:
     if not isinstance(routing, dict):
         return "- not recorded\n"
     lines: list[str] = []
-    for mode in ("execute", "gate", "recover", "plan"):
+    rows: list[str] = []
+    for mode in ("next", "plan", "execute", "gate", "recover", "report"):
         item = routing.get(mode)
         if not isinstance(item, dict):
             continue
         skills = item.get("skills")
         if not isinstance(skills, list) or not skills:
             continue
-        names = []
         for skill in skills:
             if isinstance(skill, dict):
-                names.append(str(skill.get("trigger") or skill.get("name") or "").strip())
+                trigger = str(skill.get("trigger") or skill.get("name") or "").strip()
+                phase = str(skill.get("phase") or mode).strip()
+                role = str(skill.get("role") or "not recorded").strip()
+                path = str(skill.get("path") or "not recorded").strip()
+                evidence_raw = skill.get("required_evidence") or []
+                if isinstance(evidence_raw, list):
+                    evidence = "; ".join(str(item).strip() for item in evidence_raw if str(item).strip())
+                else:
+                    evidence = str(evidence_raw).strip()
             else:
-                names.append(str(skill).strip())
-        names = [name for name in names if name]
-        if names:
-            lines.append(f"- {mode}: {', '.join(names)}")
-    return "\n".join(lines) + ("\n" if lines else "- not recorded\n")
+                trigger = str(skill).strip()
+                phase = mode
+                role = "not recorded"
+                path = "not recorded"
+                evidence = "not recorded"
+            if trigger:
+                rows.append(f"| {phase} | {trigger} | {role} | {path} | {evidence or 'not recorded'} |")
+    if not rows:
+        return "- not recorded\n"
+    lines.append("| phase | skill | role | path | required evidence |")
+    lines.append("| --- | --- | --- | --- | --- |")
+    lines.extend(rows)
+    return "\n".join(lines) + "\n"
 
 
 def verification_line(command: str, verification: dict[str, Any]) -> str:
@@ -328,6 +346,8 @@ def render_pr_body(payload: dict[str, Any]) -> str:
 - targets: {targets}
 - integration branch: {branches.get("integration")}
 - local report: {report_link}
+- planning_mode: {payload.get("planning_mode", "standard")}
+- lint_policy: {payload.get("lint_policy", "not applicable")}
 
 ## 작업 범위
 
@@ -336,6 +356,9 @@ def render_pr_body(payload: dict[str, Any]) -> str:
 - harness: {changed_scope_summary(payload, ".codex/harness/")}
 - docs/infra: PR template, GitHub workflow, Markdown, KO sync evidence 확인
 
+## 사용 skill
+
+{render_skill_routing(payload)}
 ## TDD 근거
 
 최초 RED: PR lint와 harness self-test fixture로 제목, body, evidence 누락을 먼저 차단
@@ -400,6 +423,9 @@ def render_report(payload: dict[str, Any]) -> str:
 - started_at: {payload.get("started_at", "")}
 - finished_at: {payload.get("finished_at", "")}
 - next_action: {payload.get("next_action", "")}
+- planning_mode: {payload.get("planning_mode", "standard")}
+- lint_policy: {payload.get("lint_policy", "not applicable")}
+- changed_files_kind: {payload.get("changed_files_kind", "actual")}
 
 ## 브랜치
 - api_branch: {branches.get("api")}
@@ -530,9 +556,34 @@ def run_self_test() -> int:
         "skill_routing": {
             "execute": {
                 "skills": [
-                    {"trigger": "$tdd"},
-                    {"trigger": "$api-contract"},
-                    {"trigger": "$code-review"},
+                    {
+                        "trigger": "$v1-slice-harness",
+                        "phase": "execute",
+                        "role": "orchestrator",
+                        "path": ".agents/skills/v1-slice-harness/SKILL.md",
+                        "required_evidence": ["상태", "검증", "다음 행동"],
+                    },
+                    {
+                        "trigger": "$tdd",
+                        "phase": "execute",
+                        "role": "primary",
+                        "path": ".agents/skills/tdd/SKILL.md",
+                        "required_evidence": ["최초 RED", "예상 RED 실패", "최소 GREEN"],
+                    },
+                    {
+                        "trigger": "$api-contract",
+                        "phase": "execute",
+                        "role": "checkpoint",
+                        "path": ".agents/skills/api-contract/SKILL.md",
+                        "required_evidence": ["계약 영향"],
+                    },
+                    {
+                        "trigger": "$code-review",
+                        "phase": "execute",
+                        "role": "review",
+                        "path": ".agents/skills/code-review/SKILL.md",
+                        "required_evidence": ["reviewer: 지적사항"],
+                    },
                 ]
             }
         },
@@ -575,7 +626,9 @@ def run_self_test() -> int:
         f"`{SKILL_ROUTING_SELF_TEST}`" in pr_body,
         f"`{USER_LANGUAGE_CHECK}`" in pr_body,
         "`bash scripts/check-ko-docs.sh`" in pr_body,
-        "$tdd, $api-contract, $code-review" in rendered,
+        "## 사용 skill" in pr_body,
+        "| execute | $v1-slice-harness | orchestrator | .agents/skills/v1-slice-harness/SKILL.md | 상태; 검증; 다음 행동 |" in rendered,
+        "| execute | $tdd | primary | .agents/skills/tdd/SKILL.md | 최초 RED; 예상 RED 실패; 최소 GREEN |" in pr_body,
         "## KO 문서 변경" in pr_body,
         "KO 수정 승인: 확인" in pr_body,
         "## 요약" in pr_body,

@@ -7,6 +7,7 @@ import argparse
 import re
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
 
 from pr_context import PrContext, changed_files_from_sources, context_from_event, context_from_local
@@ -37,6 +38,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
 
 GROUPS = ("title", "branch", "body", "evidence", "changed-files")
+EVIDENCE_POLICIES = {"strict", "feasibility", "structure"}
 GROUP_LABELS = {
     "title": "제목",
     "branch": "브랜치",
@@ -78,6 +80,7 @@ COVERAGE_LINE_RE = re.compile(r"^\s*Coverage:\s*>=\s*90%\s*$", re.MULTILINE)
 DOCS_OPENAPI_LINE_RE = re.compile(r"^\s*Docs/OpenAPI:\s*generated\s+\+\s+verified\s*$", re.MULTILINE)
 KO_APPROVAL_RE = re.compile(r"KO 수정 승인\s*:\s*확인")
 KO_BASIS_RE = re.compile(r"KO 생성 기준\s*:\s*canonical source only")
+SKILL_TRIGGER_RE = re.compile(r"\$[a-z0-9][a-z0-9-]*")
 
 VERIFICATION_LINE_RE = re.compile(
     r"^\s*-\s+`(?P<command>[^`\n]+)`\s+=\s+"
@@ -379,26 +382,61 @@ def required_commands_for_files(changed_files: Iterable[str], errors: list[LintM
     return set(requirements.commands)
 
 
+def required_skill_triggers_for_files(changed_files: Iterable[str]) -> set[str]:
+    changed = tuple(changed_files)
+    if not changed:
+        return set()
+    required = {"$v1-slice-harness"}
+    if any(path.startswith("apps/api/") for path in changed):
+        required.update({"$backend-api", "$tdd", "$api-contract", "$code-review"})
+    if any(path.startswith("apps/web/") for path in changed):
+        required.update({"$frontend-web", "$tdd", "$api-contract", "$code-review"})
+    if any(path.startswith(".codex/harness/") for path in changed):
+        required.update({"$code-review"})
+    if any(path.startswith(".codex/hooks/") for path in changed):
+        required.update({"$systematic-debugging", "$code-review"})
+    return required
+
+
+def check_skill_evidence(body: str, changed_files: tuple[str, ...], errors: list[LintMessage]) -> None:
+    required = required_skill_triggers_for_files(changed_files)
+    if not required:
+        return
+    found = set(SKILL_TRIGGER_RE.findall(body))
+    for trigger in sorted(required):
+        if trigger not in found:
+            add(errors, "evidence", f"필수 skill evidence가 없습니다: {trigger}")
+
+
 def check_evidence(
     body: str,
     verification: dict[str, VerificationLine],
     changed_files: tuple[str, ...],
     errors: list[LintMessage],
     *,
-    enforce_changed_file_rules: bool,
+    evidence_policy: str,
 ) -> None:
+    if evidence_policy not in EVIDENCE_POLICIES:
+        raise ValueError(f"unknown evidence policy: {evidence_policy}")
     status = parse_status(body)
+    enforce_changed_file_rules = evidence_policy in {"strict", "feasibility"}
+    require_pass = evidence_policy == "strict"
     required = required_commands_for_files(changed_files, errors) if enforce_changed_file_rules else set()
     backend_changed = any(path.startswith("apps/api/") for path in changed_files)
+    if enforce_changed_file_rules:
+        check_skill_evidence(body, changed_files, errors)
 
     for command in sorted(required):
         line = verification.get(command)
         if line is None:
-            add(errors, "evidence", f"필수 검증 근거가 없습니다: `{command}` = pass")
-        elif line.status != "pass":
+            expected = "pass" if require_pass else "pass|not run"
+            add(errors, "evidence", f"필수 검증 근거가 없습니다: `{command}` = {expected}")
+        elif require_pass and line.status != "pass":
             add(errors, "evidence", f"필수 검증은 pass여야 합니다: `{command}` = {line.status}")
+        elif not require_pass and line.status == "fail":
+            add(errors, "evidence", f"feasibility 검증은 fail이면 안 됩니다: `{command}`")
 
-    if backend_changed:
+    if backend_changed and require_pass:
         if not COVERAGE_LINE_RE.search(body):
             add(errors, "evidence", "apps/api 변경에는 `Coverage: >=90%` evidence가 필요합니다")
         if not DOCS_OPENAPI_LINE_RE.search(body):
@@ -426,7 +464,14 @@ def check_evidence(
             add(errors, "body", f"{status} 상태에는 구체적인 다음 행동이 필요합니다")
 
 
-def lint_pr(data: PrInput, *, enforce_changed_file_rules: bool = True) -> LintResult:
+def lint_pr(
+    data: PrInput,
+    *,
+    enforce_changed_file_rules: bool | None = None,
+    evidence_policy: str = "strict",
+) -> LintResult:
+    if enforce_changed_file_rules is not None:
+        evidence_policy = "strict" if enforce_changed_file_rules else "structure"
     errors: list[LintMessage] = []
     check_title(data.title, errors)
     check_branch(data.base, data.head, data.draft, errors)
@@ -436,7 +481,7 @@ def lint_pr(data: PrInput, *, enforce_changed_file_rules: bool = True) -> LintRe
         verification,
         data.changed_files,
         errors,
-        enforce_changed_file_rules=enforce_changed_file_rules,
+        evidence_policy=evidence_policy,
     )
     return LintResult(errors)
 
@@ -444,7 +489,7 @@ def lint_pr(data: PrInput, *, enforce_changed_file_rules: bool = True) -> LintRe
 def check_body(body: str) -> BodyCheckResult:
     errors: list[LintMessage] = []
     verification = check_body_structure(body, errors, template=False)
-    check_evidence(body, verification, (), errors, enforce_changed_file_rules=True)
+    check_evidence(body, verification, (), errors, evidence_policy="strict")
     return BodyCheckResult(ok=not errors, errors=[error.message for error in errors])
 
 
@@ -480,6 +525,18 @@ def valid_body(
 - frontend: 없음
 - harness: PR lint validator, draft PR guard, evidence rendering
 - docs/infra: PR template, GitHub Actions workflow, KO sync metadata
+
+## 사용 skill
+
+| phase | skill | role | path | required evidence |
+| --- | --- | --- | --- | --- |
+| execute | $v1-slice-harness | orchestrator | .agents/skills/v1-slice-harness/SKILL.md | 상태; 검증; 다음 행동 |
+| execute | $tdd | primary | .agents/skills/tdd/SKILL.md | 최초 RED; 예상 RED 실패; 최소 GREEN |
+| execute | $backend-api | support | .agents/skills/backend-api/SKILL.md | backendQualityCheck; Coverage: >=90%; Docs/OpenAPI |
+| execute | $frontend-web | support | .agents/skills/frontend-web/SKILL.md | cd apps/web && npm run test; cd apps/web && npm run build |
+| execute | $api-contract | checkpoint | .agents/skills/api-contract/SKILL.md | 계약 영향 |
+| recover | $systematic-debugging | recovery | .agents/skills/systematic-debugging/SKILL.md | 차단 사유; 복구 순서; 검증 |
+| gate | $code-review | primary | .agents/skills/code-review/SKILL.md | reviewer: 지적사항; 검증 공백; 잔여 위험 |
 
 ## TDD 근거
 
@@ -593,6 +650,7 @@ def expect_case(name: str, data: PrInput, group: str, needle: str) -> bool:
 def run_self_test() -> int:
     valid = lint_pr(valid_input())
     legacy = lint_pr(valid_input(body=legacy_body()))
+    template = lint_template(".github/pull_request_template.md")
     old_style_unchecked = valid_input(body=valid_body(checklist_checked=False))
     web_missing_build = valid_input(
         body=valid_body().replace(f"- `{WEB_BUILD}` = not run (web 변경 없음)\n", ""),
@@ -618,6 +676,28 @@ def run_self_test() -> int:
         .replace(f"- `{WEB_TEST}` = not run (web 변경 없음)", f"- `{WEB_TEST}` = pass (frontend tests)")
         .replace(f"- `{WEB_BUILD}` = not run (web 변경 없음)", f"- `{WEB_BUILD}` = pass (frontend build)"),
         changed_files=("apps/web/src/app/App.tsx",),
+    )
+    web_feasibility = valid_input(
+        changed_files=("apps/web/__expected__",),
+    )
+    web_feasibility_missing_build = valid_input(
+        body=valid_body().replace(f"- `{WEB_BUILD}` = not run (web 변경 없음)\n", ""),
+        changed_files=("apps/web/__expected__",),
+    )
+    web_feasibility_fail = valid_input(
+        body=valid_body().replace(
+            f"- `{WEB_TEST}` = not run (web 변경 없음)",
+            f"- `{WEB_TEST}` = fail (dry-run fixture failure)",
+        ),
+        changed_files=("apps/web/__expected__",),
+    )
+    web_missing_skill = valid_input(
+        body=valid_body().replace("$frontend-web", "$frontend-web-missing"),
+        changed_files=("apps/web/src/app/App.tsx",),
+    )
+    hook_missing_skill = valid_input(
+        body=valid_body().replace("$systematic-debugging", "$debugging-missing"),
+        changed_files=(".codex/hooks/stop_verification_gate.py",),
     )
     hook_missing_self_test = valid_input(
         body=valid_body().replace(
@@ -648,13 +728,19 @@ def run_self_test() -> int:
     checks = [
         valid.ok,
         legacy.ok,
+        template.ok,
         expect_case("unchecked checklist", old_style_unchecked, "body", "checklist item"),
         expect_case("web build evidence missing", web_missing_build, "evidence", WEB_BUILD),
         expect_case("backend quality evidence missing", backend_missing_quality, "evidence", API_TEST),
         expect_case("backend test only is insufficient", backend_test_only, "evidence", API_TEST),
         expect_case("backend coverage evidence missing", backend_missing_coverage, "evidence", "Coverage"),
         lint_pr(web_without_lint).ok,
+        lint_pr(web_feasibility, evidence_policy="feasibility").ok,
+        not lint_pr(web_feasibility_missing_build, evidence_policy="feasibility").ok,
+        not lint_pr(web_feasibility_fail, evidence_policy="feasibility").ok,
+        expect_case("web skill evidence missing", web_missing_skill, "evidence", "$frontend-web"),
         expect_case("hook self-test evidence missing", hook_missing_self_test, "evidence", STOP_HOOK_SELF_TEST),
+        expect_case("hook skill evidence missing", hook_missing_skill, "evidence", "$systematic-debugging"),
         expect_case("markdown KO path missing", markdown_unsynced, "changed-files", "paired KO doc"),
         expect_case("markdown KO evidence missing", markdown_unsynced, "evidence", KO_CHECK),
         lint_pr(ko_only_with_approval).ok,
@@ -676,6 +762,9 @@ def run_self_test() -> int:
     if not legacy.ok:
         print("self-test failed: legacy label fixture did not pass", file=sys.stderr)
         print(format_grouped_errors(legacy.errors), file=sys.stderr)
+    if not template.ok:
+        print("self-test failed: PR template fixture did not pass", file=sys.stderr)
+        print(format_grouped_errors(template.errors), file=sys.stderr)
     return 1
 
 
@@ -690,6 +779,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--head", "--branch", dest="head")
     parser.add_argument("--body-file")
     parser.add_argument("--body-env")
+    parser.add_argument("--evidence-policy", choices=sorted(EVIDENCE_POLICIES), default="strict")
     draft = parser.add_mutually_exclusive_group()
     draft.add_argument("--draft", dest="draft", action="store_true")
     draft.add_argument("--no-draft", dest="draft", action="store_false")
@@ -723,7 +813,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             data = pr_input_from_context(context)
-            result = lint_pr(data)
+            result = lint_pr(data, evidence_policy=args.evidence_policy)
     except (OSError, ValueError) as exc:
         print(f"pr-lint 입력 읽기 실패: {exc}", file=sys.stderr)
         return 2

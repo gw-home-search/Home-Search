@@ -17,6 +17,10 @@ FLOW = HARNESS_ROOT / "v1_flow.py"
 PLAN = HARNESS_ROOT / "v1_plan.py"
 REPORT = HARNESS_ROOT / "v1_report.py"
 BACKLOG = HARNESS_ROOT / "slices" / "backlog.toml"
+PR_LINT = HARNESS_ROOT / "pr_lint.py"
+SKILL_ROUTING = HARNESS_ROOT / "skill_routing.py"
+DEFAULT_PLAN_ITERATIONS = 3
+VALID_PLANNING_MODES = {"standard", "critique", "llm-replan"}
 
 
 def fail(message: str, code: int = 1) -> int:
@@ -74,6 +78,10 @@ def flow_command(args: argparse.Namespace, *, dry_run: bool) -> list[str]:
         command.append("--slack")
     if getattr(args, "parallel", False):
         command.append("--parallel")
+    if getattr(args, "planning_mode", None):
+        command.extend(["--planning-mode", args.planning_mode])
+    if getattr(args, "codex_bin", None):
+        command.extend(["--codex-bin", args.codex_bin])
     if getattr(args, "no_codex", False):
         command.append("--no-codex")
     if getattr(args, "push", False):
@@ -109,6 +117,16 @@ def plan_command(args: argparse.Namespace, command_name: str) -> list[str]:
         command.extend(["--targets", args.targets])
     if args.preset:
         command.extend(["--preset", args.preset])
+    if getattr(args, "intent", None):
+        command.extend(["--intent", args.intent])
+    if getattr(args, "plan_iterations", None):
+        command.extend(["--plan-iterations", str(args.plan_iterations)])
+    if getattr(args, "planning_mode", None):
+        command.extend(["--planning-mode", args.planning_mode])
+    if getattr(args, "codex_bin", None):
+        command.extend(["--codex-bin", args.codex_bin])
+    if getattr(args, "skip_llm_replan", False):
+        command.append("--skip-llm-replan")
     return command
 
 
@@ -137,6 +155,208 @@ def run_flow(args: argparse.Namespace, *, dry_run: bool) -> int:
     except OSError as exc:
         return fail(str(exc))
     return result.returncode
+
+
+def intent_for(args: argparse.Namespace, *, dry_run: bool = False) -> str:
+    if getattr(args, "pr", False) or getattr(args, "draft_pr", False):
+        return "pr"
+    if getattr(args, "push", False):
+        return "push"
+    if dry_run or getattr(args, "command", "") == "dry":
+        return "dry"
+    return "run"
+
+
+def planning_mode_for(args: argparse.Namespace, intent: str) -> str:
+    explicit = getattr(args, "planning_mode", None)
+    if explicit:
+        return explicit
+    return "llm-replan" if intent in {"push", "pr"} else "standard"
+
+
+def preflight_plan_command(args: argparse.Namespace, intent: str) -> list[str]:
+    command = [
+        sys.executable,
+        str(PLAN),
+        "plan",
+        args.slice,
+        "--intent",
+        intent,
+        "--plan-iterations",
+        str(getattr(args, "plan_iterations", DEFAULT_PLAN_ITERATIONS)),
+        "--planning-mode",
+        planning_mode_for(args, intent),
+    ]
+    if args.targets:
+        command.extend(["--targets", args.targets])
+    if args.preset:
+        command.extend(["--preset", args.preset])
+    if getattr(args, "codex_bin", None):
+        command.extend(["--codex-bin", args.codex_bin])
+    if getattr(args, "no_codex", False):
+        command.append("--skip-llm-replan")
+    return command
+
+
+def run_step(label: str, command: list[str]) -> int:
+    print(f"{label}: start", flush=True)
+    print(f"command: {printable(command)}", flush=True)
+    try:
+        result = subprocess.run(command, cwd=DEFAULT_MAIN, check=False)
+    except OSError as exc:
+        return fail(str(exc))
+    if result.returncode != 0:
+        print(f"{label}: Fail", flush=True)
+        return result.returncode
+    print(f"{label}: Pass", flush=True)
+    return 0
+
+
+def run_lint_preflight() -> int:
+    checks = [
+        [sys.executable, str(PR_LINT), "--self-test"],
+        [sys.executable, str(FLOW), "--self-test"],
+        [sys.executable, str(SKILL_ROUTING), "--self-test"],
+    ]
+    for command in checks:
+        code = run_step("lint-preflight", command)
+        if code != 0:
+            return code
+    return 0
+
+
+def git_status_lines() -> list[str]:
+    result = subprocess.run(
+        ["git", "status", "--short", "--untracked-files=all"],
+        cwd=DEFAULT_MAIN,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    if result.returncode != 0:
+        return ["!! git status failed"]
+    return [line for line in result.stdout.splitlines() if line.strip()]
+
+
+def status_path(line: str) -> str:
+    raw = line[3:].strip() if len(line) > 3 else line.strip()
+    if " -> " in raw:
+        raw = raw.split(" -> ", 1)[1]
+    return raw.strip()
+
+
+def dirty_group(path: str, line: str) -> str:
+    lowered = path.lower()
+    if lowered.startswith(".env") or "/.env" in lowered:
+        return "forbidden"
+    if line.startswith("??"):
+        return "untracked"
+    if path.startswith(".codex/harness/"):
+        return "harness"
+    if path.startswith("apps/"):
+        return "apps"
+    if path.startswith("docs/") or path == ".ko-docs.toml" or lowered.endswith("_ko.md"):
+        return "docs/KO"
+    return "other"
+
+
+def grouped_dirty(lines: list[str]) -> dict[str, list[str]]:
+    groups: dict[str, list[str]] = {}
+    for line in lines:
+        path = status_path(line)
+        groups.setdefault(dirty_group(path, line), []).append(f"{line[:2].strip() or '?'} {path}")
+    return groups
+
+
+def command_passes(command: list[str]) -> tuple[bool, str]:
+    try:
+        result = subprocess.run(
+            command,
+            cwd=DEFAULT_MAIN,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError as exc:
+        return False, str(exc)
+    text = result.stderr or result.stdout
+    summary = " | ".join(line.strip() for line in text.splitlines() if line.strip())
+    return result.returncode == 0, summary
+
+
+def print_publish_readiness(
+    intent: str,
+    *,
+    dry_run: bool,
+    dirty: list[str],
+    issues: list[str],
+) -> None:
+    status = "Pass"
+    if dirty or issues:
+        status = "Partial" if dry_run else "Fail"
+    print(f"publish-readiness: {status}", flush=True)
+    if dirty:
+        print("dirty worktree:", flush=True)
+        for group, items in grouped_dirty(dirty).items():
+            print(f"- {group}: {', '.join(items[:8])}", flush=True)
+    if issues:
+        print("blocking checks:", flush=True)
+        for issue in issues:
+            print(f"- {issue}", flush=True)
+    if dirty or issues:
+        print("다음 행동:", flush=True)
+        print("- 의도한 변경이면 commit 후 같은 명령을 재실행하세요.", flush=True)
+        print("- 임시 변경이면 stash 후 같은 명령을 재실행하세요.", flush=True)
+        print("- 분리 실행이 필요하면 clean worktree에서 실행하세요.", flush=True)
+
+
+def run_publish_readiness(args: argparse.Namespace, intent: str, *, dry_run: bool) -> int:
+    if intent not in {"push", "pr"}:
+        return 0
+    dirty = git_status_lines()
+    issues: list[str] = []
+    remote_ok, remote_reason = command_passes(["git", "remote", "get-url", "--push", "origin"])
+    if not remote_ok:
+        issues.append(f"origin push remote 확인 실패: {remote_reason}")
+    if intent == "pr":
+        gh_ok, gh_reason = command_passes(["gh", "auth", "status"])
+        if not gh_ok:
+            issues.append(f"gh auth status 실패: {gh_reason}")
+    print_publish_readiness(intent, dry_run=dry_run, dirty=dirty, issues=issues)
+    if dry_run:
+        return 0
+    if dirty:
+        return fail("main worktree is dirty; publish-readiness 정리 가이드를 확인하세요")
+    if issues:
+        return fail("publish-readiness check failed: " + "; ".join(issues))
+    return 0
+
+
+def run_execution_preflight(args: argparse.Namespace, *, dry_run: bool) -> int:
+    if getattr(args, "skip_preflight", False):
+        print("preflight: skipped (--skip-preflight)", flush=True)
+        return 0
+    intent = intent_for(args, dry_run=dry_run)
+    args.planning_mode = planning_mode_for(args, intent)
+    print("상태: preflight", flush=True)
+    code = run_step("plan", preflight_plan_command(args, intent))
+    if code != 0:
+        return code
+    if intent in {"push", "pr"}:
+        code = run_publish_readiness(args, intent, dry_run=dry_run)
+        if code != 0:
+            return code
+    if not dry_run:
+        code = run_step("dry-run", flow_command(args, dry_run=True))
+        if code != 0:
+            return code
+    if intent in {"push", "pr"}:
+        code = run_lint_preflight()
+        if code != 0:
+            return code
+    return 0
 
 
 def run_report(args: argparse.Namespace) -> int:
@@ -169,24 +389,26 @@ def run_report(args: argparse.Namespace) -> int:
 
 def run_self_test() -> int:
     try:
-        command = flow_command(
-            argparse.Namespace(
-                slice="map-contract-hardening",
-                preset=None,
-                notion=False,
-                slack=False,
-                parallel=False,
-                no_codex=False,
-                push=False,
-                pr=True,
-                draft_pr=False,
-                no_pr=False,
-                pr_body_from_report=False,
-                pr_title=None,
-                targets=None,
-            ),
-            dry_run=True,
+        args = argparse.Namespace(
+            slice="map-contract-hardening",
+            preset=None,
+            notion=False,
+            slack=False,
+            parallel=False,
+            no_codex=False,
+            push=False,
+            pr=True,
+            draft_pr=False,
+            no_pr=False,
+            pr_body_from_report=False,
+            pr_title=None,
+            targets=None,
+            plan_iterations=DEFAULT_PLAN_ITERATIONS,
+            codex_bin="codex",
+            skip_llm_replan=False,
         )
+        command = flow_command(args, dry_run=True)
+        preflight = preflight_plan_command(args, "pr")
     except Exception as exc:
         print(f"self-test failed: v1 launcher: {exc}", file=sys.stderr)
         return 1
@@ -197,6 +419,17 @@ def run_self_test() -> int:
         "contract-hardening" in command,
         "--pr" in command,
         "--targets" in command,
+        "--intent" in preflight,
+        preflight[preflight.index("--intent") + 1] == "pr",
+        "--plan-iterations" in preflight,
+        preflight[preflight.index("--plan-iterations") + 1] == str(DEFAULT_PLAN_ITERATIONS),
+        "--planning-mode" in preflight,
+        preflight[preflight.index("--planning-mode") + 1] == "llm-replan",
+        "llm-replan" in VALID_PLANNING_MODES,
+        planning_mode_for(argparse.Namespace(planning_mode=None), "run") == "standard",
+        planning_mode_for(argparse.Namespace(planning_mode=None), "pr") == "llm-replan",
+        dirty_group(".codex/harness/v1", " M .codex/harness/v1") == "harness",
+        dirty_group("apps/web/src/App.tsx", " M apps/web/src/App.tsx") == "apps",
     ]
     if all(checks):
         print("self-test passed: v1 launcher")
@@ -220,6 +453,11 @@ def build_parser() -> argparse.ArgumentParser:
         plan_parser.add_argument("--dry-run", action="store_true")
         plan_parser.add_argument("--targets", choices=["backend", "both", "frontend", "planning-only"])
         plan_parser.add_argument("--preset")
+        plan_parser.add_argument("--intent", choices=["dry", "plan", "pr", "push", "recover", "report", "run"], default="plan")
+        plan_parser.add_argument("--plan-iterations", type=int, choices=(1, 2, 3), default=DEFAULT_PLAN_ITERATIONS)
+        plan_parser.add_argument("--planning-mode", choices=sorted(VALID_PLANNING_MODES), default="standard")
+        plan_parser.add_argument("--codex-bin", default="codex")
+        plan_parser.add_argument("--skip-llm-replan", action="store_true")
 
     def add_common(run_parser: argparse.ArgumentParser) -> None:
         run_parser.add_argument("slice")
@@ -227,6 +465,9 @@ def build_parser() -> argparse.ArgumentParser:
         run_parser.add_argument("--targets", choices=["backend", "both", "frontend", "planning-only"])
         run_parser.add_argument("--notion", action="store_true", help="Best-effort Notion report.")
         run_parser.add_argument("--slack", action="store_true", help="Best-effort Slack report.")
+        run_parser.add_argument("--plan-iterations", type=int, choices=(1, 2, 3), default=DEFAULT_PLAN_ITERATIONS)
+        run_parser.add_argument("--planning-mode", choices=sorted(VALID_PLANNING_MODES))
+        run_parser.add_argument("--codex-bin", default="codex")
 
     next_parser = subparsers.add_parser("next", help="Recommend the next V1 slice from backlog and reports.")
     add_planning(next_parser)
@@ -246,6 +487,7 @@ def build_parser() -> argparse.ArgumentParser:
     dry.add_argument("--pr-title")
     dry.add_argument("--pr-body-from-report", action="store_true")
     dry.add_argument("--no-pr", action="store_true")
+    dry.add_argument("--skip-preflight", action="store_true", help="Skip plan preflight; debugging only.")
 
     run = subparsers.add_parser("run", help="Run commit + integrate + local report. Push/PR only with explicit flags.")
     add_common(run)
@@ -257,6 +499,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--pr-title", help="Draft PR title.")
     run.add_argument("--pr-body-from-report", action="store_true", help="Generate PR body from report payload.")
     run.add_argument("--no-pr", action="store_true", help="Explicitly disable PR creation.")
+    run.add_argument("--dry-run", action="store_true", help="Run the expanded workflow in dry-run mode after plan preflight.")
+    run.add_argument("--skip-preflight", action="store_true", help="Skip plan/dry/lint preflight; debugging only.")
 
     report = subparsers.add_parser("report", help="Re-render the last stored report payload for a slice.")
     report.add_argument("slice")
@@ -276,9 +520,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "plan":
         return run_plan(args, "plan")
     if args.command == "dry":
+        code = run_execution_preflight(args, dry_run=True)
+        if code != 0:
+            return code
         return run_flow(args, dry_run=True)
     if args.command == "run":
-        return run_flow(args, dry_run=False)
+        dry_run = bool(getattr(args, "dry_run", False))
+        code = run_execution_preflight(args, dry_run=dry_run)
+        if code != 0:
+            return code
+        return run_flow(args, dry_run=dry_run)
     if args.command == "report":
         return run_report(args)
     parser.print_help()

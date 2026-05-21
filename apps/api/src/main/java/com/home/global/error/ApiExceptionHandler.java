@@ -10,8 +10,10 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -19,13 +21,17 @@ public class ApiExceptionHandler {
 	private static final URI ERROR_TYPE = URI.create("/docs/index.html#error-code-list");
 	private static final String BAD_REQUEST_TITLE = "C401";
 	private static final String BAD_REQUEST_DETAIL = "Invalid parameter format.";
+	private static final String NOT_FOUND_TITLE = "C404";
+	private static final String NOT_FOUND_DETAIL = "Resource not found.";
 	private static final String INTERNAL_SERVER_ERROR_TITLE = "S500";
 	private static final String INTERNAL_SERVER_ERROR_DETAIL = "Internal server error.";
 	private static final String MAP_API_EXCEPTION = "MapApiException";
 
 	@ExceptionHandler({
 		MethodArgumentNotValidException.class,
-		HttpMessageNotReadableException.class
+		HttpMessageNotReadableException.class,
+		MissingServletRequestParameterException.class,
+		MethodArgumentTypeMismatchException.class
 	})
 	public ResponseEntity<ProblemDetail> handleBadRequest(Exception exception) {
 		ProblemDetail problemDetail = createProblemDetail(
@@ -37,6 +43,21 @@ public class ApiExceptionHandler {
 
 		return ResponseEntity
 			.status(HttpStatus.BAD_REQUEST)
+			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
+			.body(problemDetail);
+	}
+
+	@ExceptionHandler(V1ResourceNotFoundException.class)
+	public ResponseEntity<ProblemDetail> handleNotFound(V1ResourceNotFoundException exception) {
+		ProblemDetail problemDetail = createProblemDetail(
+			HttpStatus.NOT_FOUND,
+			NOT_FOUND_TITLE,
+			NOT_FOUND_DETAIL,
+			V1ResourceNotFoundException.class.getSimpleName()
+		);
+
+		return ResponseEntity
+			.status(HttpStatus.NOT_FOUND)
 			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
 			.body(problemDetail);
 	}

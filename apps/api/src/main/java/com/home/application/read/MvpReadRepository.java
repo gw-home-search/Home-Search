@@ -1,0 +1,23 @@
+package com.home.application.read;
+
+import java.util.List;
+import java.util.Optional;
+
+import com.home.infrastructure.web.read.dto.ParcelDetailResponse;
+import com.home.infrastructure.web.read.dto.RegionDetailResponse;
+import com.home.infrastructure.web.read.dto.RegionSummaryResponse;
+import com.home.infrastructure.web.read.dto.SearchComplexResponse;
+import com.home.infrastructure.web.read.dto.TradeListResponse;
+
+public interface MvpReadRepository {
+
+	List<SearchComplexResponse> searchComplexes(String query);
+
+	List<RegionSummaryResponse> findRootRegions();
+
+	Optional<RegionDetailResponse> findRegionDetail(Long regionId);
+
+	Optional<ParcelDetailResponse> findParcelDetail(Long parcelId);
+
+	Optional<TradeListResponse> findTradeList(Long parcelId);
+}

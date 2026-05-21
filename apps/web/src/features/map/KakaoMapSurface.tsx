@@ -13,6 +13,13 @@ type MapViewport = {
   level: number;
 };
 
+type MapFocusTarget = {
+  lat: number;
+  lng: number;
+  level: number;
+  seq: number;
+};
+
 export type KakaoMapRuntimeState = 'loading' | 'ready' | 'error';
 
 type ComplexMapMarker = Extract<MapMarkersResult, { kind: 'complex' }>['markers'][number];
@@ -20,6 +27,7 @@ type RegionMapMarker = Extract<MapMarkersResult, { kind: 'region' }>['markers'][
 
 type KakaoMapSurfaceProps = {
   appKey: string;
+  focusTarget: MapFocusTarget | null;
   initialLevel: number;
   markers: MapMarkersResult | null;
   onComplexMarkerSelect: (parcelId: number) => void;
@@ -35,6 +43,7 @@ const INITIAL_CENTER = {
 
 export function KakaoMapSurface({
   appKey,
+  focusTarget,
   initialLevel,
   markers,
   onComplexMarkerSelect,
@@ -111,6 +120,18 @@ export function KakaoMapSurface({
       mapsApiRef.current = null;
     };
   }, [appKey, initialLevel, onRuntimeErrorChange, onRuntimeStateChange, onViewportChange]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const maps = mapsApiRef.current;
+
+    if (runtimeState !== 'ready' || !focusTarget || !map || !maps) {
+      return;
+    }
+
+    map.setCenter?.(new maps.LatLng(focusTarget.lat, focusTarget.lng));
+    map.setLevel?.(focusTarget.level);
+  }, [focusTarget, runtimeState]);
 
   useEffect(() => {
     const map = mapRef.current;

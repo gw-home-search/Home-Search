@@ -100,6 +100,46 @@ risk_notes = [
 ]
 
 [[slices]]
+id = "search-region-filter-panel"
+title_ko = "Search region filter panel"
+pr_type = "Feat"
+pr_title_ko = "검색/지역 패널과 필터 연결"
+description_ko = "map-first UI에 검색, 지역 navigation, filter controls를 연결해 V1 marker/detail 흐름과 함께 동작하게 만든다."
+status = "planned"
+priority = 25
+targets = "frontend"
+preset = "map-ui-state"
+acceptance_criteria = [
+  "검색 입력은 /api/v1/search/complexes?q=를 호출하고 결과 선택 시 parcelId/latitude/longitude 기준으로 map context와 detail drawer를 갱신한다.",
+  "지역 navigation은 /api/v1/region과 /api/v1/region/{regionId}를 호출하고 선택한 region center로 map context를 이동한다.",
+  "filter controls는 pyeongMin/pyeongMax, priceEokMin/priceEokMax, ageMin/ageMax, unitMin/unitMax를 /api/v1/map/complexes marker 요청에 연결한다.",
+  "panel loading/empty/error state는 map 탐색을 block하지 않고 다음 성공 응답에서 회복된다.",
+  "V1 API URL, request field, response field, amount unit, coordinate field compatibility를 docs/API_CONTRACT.md와 동일하게 유지한다.",
+]
+first_red_candidates = [
+  "App component behavior test에서 검색 결과 선택 후 documented search URL 호출, map recenter, detail drawer parcelId 갱신이 발생해야 하나 현재 search panel seam 부재로 실패한다.",
+  "region navigation test에서 root/detail region API 호출 후 selected region center가 map context에 반영되어야 하나 현재 region panel seam 부재로 실패한다.",
+  "filter control test에서 filter 변경 후 /api/v1/map/complexes 요청 body에 documented filter fields가 포함되어야 하나 현재 UI control wiring 부재로 실패한다.",
+]
+verification_commands = [
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+]
+stop_conditions = [
+  "V1 public API URL, request field, response field, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "backend, DB schema, ingest 흐름 변경이 필요하면 별도 slice로 분리한다.",
+  "Kakao SDK 실호출, source frontend key 복사, secrets 저장, live external network dependency가 필요하면 중단한다.",
+  "rankings, favorite, alarm, mail, recommendation, auth UX가 필요하면 중단한다.",
+  "apps/api/** 변경이 필요하면 별도 backend slice로 분리한다.",
+]
+risk_notes = [
+  "frontend-only slice이므로 apps/api/**는 건드리지 않는다.",
+  "검색/지역 선택과 marker fetch request state가 동시에 갱신되면 stale response 처리와 충돌할 수 있다.",
+  "Kakao key가 없는 환경에서는 browser visual smoke가 partial evidence로 남을 수 있다.",
+]
+
+[[slices]]
 id = "data-architecture-checkpoint"
 title_ko = "Data architecture checkpoint"
 pr_type = "Docs"

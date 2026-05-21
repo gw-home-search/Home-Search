@@ -130,11 +130,18 @@ tasks.register('verifyOpenApiSpec') {
         def requiredTokens = [
             '/api/v1/map/regions',
             '/api/v1/map/complexes',
+            '/api/v1/search/complexes',
+            '/api/v1/region',
+            '/api/v1/detail/{parcelId}',
+            '/api/v1/trade/{parcelId}',
+            'complexId',
+            'complexName',
             'parcelId',
             'lat',
             'lng',
             'latestDealAmount',
             'unitCntSum',
+            'dealAmount',
             'exception',
             'timestamp'
         ]

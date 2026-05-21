@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  fetchComplexDetail,
+  type ComplexDetail,
+} from '../features/complex-detail/api/fetchComplexDetail';
+import {
+  fetchParcelTrades,
+  type ParcelTrades,
+  type TradeItem,
+} from '../features/complex-detail/api/fetchParcelTrades';
+import {
   fetchMapMarkers,
   type MapBoundsRequest,
   type MapMarkersResult,
@@ -9,6 +18,7 @@ import { KakaoMapSurface } from '../features/map/KakaoMapSurface';
 import './App.css';
 
 type MarkerRequestState = 'loading' | 'ready' | 'empty' | 'error';
+type DetailRequestState = 'idle' | 'loading' | 'ready' | 'error';
 
 const INITIAL_MARKER_BOUNDS: MapBoundsRequest = {
   swLat: 37.45,
@@ -40,7 +50,14 @@ export function App({
   const [markerError, setMarkerError] = useState<string | null>(null);
   const [mapRuntimeError, setMapRuntimeError] = useState<string | null>(null);
   const [markerRetrySeq, setMarkerRetrySeq] = useState(0);
+  const [selectedParcelId, setSelectedParcelId] = useState<number | null>(null);
+  const [complexDetail, setComplexDetail] = useState<ComplexDetail | null>(null);
+  const [parcelTrades, setParcelTrades] = useState<ParcelTrades | null>(null);
+  const [detailState, setDetailState] = useState<DetailRequestState>('idle');
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailRetrySeq, setDetailRetrySeq] = useState(0);
   const markerRequestSeq = useRef(0);
+  const detailRequestSeq = useRef(0);
 
   useEffect(() => {
     setViewport((current) => {
@@ -87,6 +104,48 @@ export function App({
     };
   }, [viewport, markerRetrySeq]);
 
+  useEffect(() => {
+    if (selectedParcelId == null) {
+      setComplexDetail(null);
+      setParcelTrades(null);
+      setDetailState('idle');
+      setDetailError(null);
+      return undefined;
+    }
+
+    const requestSeq = detailRequestSeq.current + 1;
+    detailRequestSeq.current = requestSeq;
+    let ignore = false;
+
+    setDetailState('loading');
+    setDetailError(null);
+
+    Promise.all([fetchComplexDetail(selectedParcelId), fetchParcelTrades(selectedParcelId)])
+      .then(([nextDetail, nextTrades]) => {
+        if (ignore || requestSeq !== detailRequestSeq.current) {
+          return;
+        }
+
+        setComplexDetail(nextDetail);
+        setParcelTrades(nextTrades);
+        setDetailState('ready');
+      })
+      .catch((error: unknown) => {
+        if (ignore || requestSeq !== detailRequestSeq.current) {
+          return;
+        }
+
+        setComplexDetail(null);
+        setParcelTrades(null);
+        setDetailState('error');
+        setDetailError(error instanceof Error ? error.message : 'Unknown detail error');
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedParcelId, detailRetrySeq]);
+
   const handleViewportChange = useCallback((nextViewport: MapViewport) => {
     setViewport((current) => {
       if (sameViewport(current, nextViewport)) {
@@ -115,6 +174,18 @@ export function App({
     setMarkerRetrySeq((current) => current + 1);
   }
 
+  const handleComplexMarkerSelect = useCallback((parcelId: number) => {
+    setSelectedParcelId(parcelId);
+  }, []);
+
+  function handleCloseDetailDrawer() {
+    setSelectedParcelId(null);
+  }
+
+  function handleRetryDetail() {
+    setDetailRetrySeq((current) => current + 1);
+  }
+
   return (
     <main className="app-shell">
       <h1>Home Search</h1>
@@ -125,6 +196,7 @@ export function App({
           appKey={kakaoMapAppKey}
           initialLevel={initialMapLevel}
           markers={markers}
+          onComplexMarkerSelect={handleComplexMarkerSelect}
           onRuntimeErrorChange={setMapRuntimeError}
           onViewportChange={handleViewportChange}
         />
@@ -140,8 +212,18 @@ export function App({
         {markers?.kind === 'complex' && markers.markers.length > 0 ? (
           <ul aria-label="Complex markers">
             {markers.markers.map((marker) => (
-              <li key={marker.parcelId} data-marker-id={marker.parcelId}>
-                {formatAmount(marker.latestDealAmount)} - {marker.unitCntSum} units
+              <li key={marker.parcelId}>
+                <button
+                  type="button"
+                  aria-label={`Open detail for parcel ${marker.parcelId}`}
+                  className="marker-list-button"
+                  data-marker-id={marker.parcelId}
+                  onClick={() => {
+                    handleComplexMarkerSelect(marker.parcelId);
+                  }}
+                >
+                  {formatAmount(marker.latestDealAmount)} - {marker.unitCntSum} units
+                </button>
               </li>
             ))}
           </ul>
@@ -182,6 +264,58 @@ export function App({
       ) : null}
 
       {mapRuntimeError && markerState !== 'error' ? <p role="alert">{mapRuntimeError}</p> : null}
+
+      {selectedParcelId == null ? null : (
+        <aside aria-label="Complex detail drawer" className="detail-drawer">
+          <div className="detail-drawer-header">
+            <p className="detail-drawer-kicker">Parcel {selectedParcelId}</p>
+            <button
+              type="button"
+              aria-label="Close detail drawer"
+              className="detail-drawer-close"
+              onClick={handleCloseDetailDrawer}
+            >
+              Close
+            </button>
+          </div>
+
+          {detailState === 'loading' ? (
+            <p role="status" aria-live="polite">
+              Loading detail
+            </p>
+          ) : null}
+
+          {detailState === 'error' ? (
+            <p role="alert">
+              Detail data unavailable.
+              {detailError ? ` ${detailError}` : null}
+              {' '}
+              <button type="button" aria-label="Retry detail load" onClick={handleRetryDetail}>
+                Retry
+              </button>
+            </p>
+          ) : null}
+
+          {detailState === 'ready' && complexDetail ? (
+            <>
+              <h2>{complexDetail.name}</h2>
+              <p className="detail-address">{complexDetail.address}</p>
+              <dl className="detail-metrics">
+                {detailMetric('Trade name', complexDetail.tradeName)}
+                {detailMetric('Households', formatNumber(complexDetail.unitCnt, ' units'))}
+                {detailMetric('Buildings', formatNumber(complexDetail.dongCnt, ' buildings'))}
+                {detailMetric('Use date', complexDetail.useDate)}
+                {detailMetric('Platform area', formatNumber(complexDetail.platArea, ' sqm'))}
+                {detailMetric('Architecture area', formatNumber(complexDetail.archArea, ' sqm'))}
+                {detailMetric('Total area', formatNumber(complexDetail.totArea, ' sqm'))}
+                {detailMetric('Building coverage', formatNumber(complexDetail.bcRat, '%'))}
+                {detailMetric('Floor area ratio', formatNumber(complexDetail.vlRat, '%'))}
+              </dl>
+              <TradeList trades={parcelTrades?.trades ?? []} />
+            </>
+          ) : null}
+        </aside>
+      )}
     </main>
   );
 }
@@ -192,6 +326,64 @@ function formatAmount(amount: number | null): string {
   }
 
   return `${amount.toLocaleString()} 10k KRW`;
+}
+
+function detailMetric(label: string, value: string | null) {
+  if (value == null) {
+    return null;
+  }
+
+  return (
+    <div className="detail-metric" key={label}>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+function formatNumber(value: number | null, suffix: string): string | null {
+  if (value == null) {
+    return null;
+  }
+
+  return `${value.toLocaleString()}${suffix}`;
+}
+
+function TradeList({ trades }: { trades: TradeItem[] }) {
+  return (
+    <section className="trade-list" aria-label="Trade list">
+      <h3>Trades</h3>
+      {trades.length === 0 ? (
+        <p>No trades yet</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Amount</th>
+              <th scope="col">Area</th>
+              <th scope="col">Floor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {trades.map((trade) => (
+              <tr key={trade.tradeId}>
+                <td>{trade.dealDate}</td>
+                <td>{formatAmount(trade.dealAmount)}</td>
+                <td>{trade.exclArea.toLocaleString()} sqm</td>
+                <td>{formatTradeFloor(trade)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+function formatTradeFloor(trade: TradeItem): string {
+  const floor = trade.floor == null ? 'Unknown floor' : `${trade.floor}F`;
+  return trade.aptDong == null ? floor : `${trade.aptDong} / ${floor}`;
 }
 
 function sameViewport(first: MapViewport, second: MapViewport): boolean {

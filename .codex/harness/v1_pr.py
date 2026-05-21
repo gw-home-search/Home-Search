@@ -13,7 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from pr_lint import PrInput, format_grouped_errors, lint_pr, valid_body
+from pr_context import changed_files_for_branch, context_from_local
+from pr_lint import PrInput, format_grouped_errors, lint_pr, pr_input_from_context, valid_body
 
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -77,20 +78,6 @@ def branch_exists(branch: str, cwd: Path) -> bool:
     return result.returncode == 0
 
 
-def changed_files_for_branch(main: Path, base: str, branch: str) -> tuple[str, ...]:
-    result = subprocess.run(
-        ["git", "diff", "--name-only", "-z", f"{base}...{branch}"],
-        cwd=main,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if result.returncode != 0:
-        message = (result.stderr or result.stdout).decode("utf-8", errors="replace").strip()
-        raise ValueError(f"changed file 목록을 만들 수 없습니다: {message}")
-    return tuple(part.decode("utf-8") for part in result.stdout.split(b"\0") if part)
-
-
 def check_pr_inputs(
     args: argparse.Namespace,
     body_path: Path,
@@ -98,16 +85,17 @@ def check_pr_inputs(
     *,
     enforce_changed_file_rules: bool,
 ) -> None:
-    body = body_path.read_text(encoding="utf-8")
+    context = context_from_local(
+        title=args.title,
+        base=args.base,
+        head=args.branch,
+        draft=bool(args.draft),
+        body_file=str(body_path),
+        body_env=None,
+        changed_files=changed_files,
+    )
     result = lint_pr(
-        PrInput(
-            title=args.title,
-            body=body,
-            base=args.base,
-            head=args.branch,
-            draft=bool(args.draft),
-            changed_files=changed_files,
-        ),
+        pr_input_from_context(context),
         enforce_changed_file_rules=enforce_changed_file_rules,
     )
     if not result.ok:

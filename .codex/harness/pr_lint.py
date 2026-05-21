@@ -4,20 +4,19 @@
 from __future__ import annotations
 
 import argparse
-import json
-import os
 import re
 import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Iterable
 
+from pr_context import PrContext, changed_files_from_sources, context_from_event, context_from_local
 from pr_evidence import (
     API_QUALITY,
     DIFF_CHECK,
     KO_CHECK,
     POST_TOOL_USE_REVIEW_SELF_TEST,
     PR_BODY_CHECK_SELF_TEST,
+    PR_CONTEXT_SELF_TEST,
     PR_LINT_SELF_TEST,
     SKILL_ROUTING_SELF_TEST,
     STOP_HOOK_SELF_TEST,
@@ -25,6 +24,7 @@ from pr_evidence import (
     V1_FLOW_SELF_TEST,
     V1_LAUNCHER_SELF_TEST,
     V1_PLAN_SELF_TEST,
+    V1_PR_SELF_TEST,
     V1_REPORT_SELF_TEST,
     WEB_BUILD,
     WEB_TEST,
@@ -169,44 +169,14 @@ def print_lint_errors(errors: list[LintMessage]) -> None:
         )
 
 
-def read_body_file(path: str) -> str:
-    return Path(path).read_text(encoding="utf-8")
-
-
-def read_body_env(name: str) -> str:
-    value = os.environ.get(name)
-    if value is None:
-        raise ValueError(f"환경 변수를 찾을 수 없습니다: {name}")
-    return value
-
-
-def read_changed_files_nul(path: str | None) -> tuple[str, ...]:
-    if not path:
-        return ()
-    raw = Path(path).read_bytes()
-    return tuple(part.decode("utf-8") for part in raw.split(b"\0") if part)
-
-
-def read_changed_files_text(path: str | None) -> tuple[str, ...]:
-    if not path:
-        return ()
-    return tuple(line.strip() for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip())
-
-
-def pr_input_from_event(event_path: str, changed_files: tuple[str, ...]) -> PrInput:
-    event = json.loads(Path(event_path).read_text(encoding="utf-8"))
-    pr = event.get("pull_request")
-    if not isinstance(pr, dict):
-        raise ValueError("event JSON에 pull_request가 없습니다")
-    base = pr.get("base") if isinstance(pr.get("base"), dict) else {}
-    head = pr.get("head") if isinstance(pr.get("head"), dict) else {}
+def pr_input_from_context(context: PrContext) -> PrInput:
     return PrInput(
-        title=str(pr.get("title") or ""),
-        body=str(pr.get("body") or ""),
-        base=str(base.get("ref") or event.get("base_ref") or ""),
-        head=str(head.get("ref") or ""),
-        draft=bool(pr.get("draft")),
-        changed_files=changed_files,
+        title=context.title,
+        body=context.body,
+        base=context.base,
+        head=context.head,
+        draft=context.draft,
+        changed_files=context.changed_files,
     )
 
 
@@ -525,7 +495,9 @@ def valid_body(
 - `{WEB_TEST}` = not run (web 변경 없음)
 - `{WEB_BUILD}` = not run (web 변경 없음)
 - `{PR_LINT_SELF_TEST}` = pass (자체 테스트)
+- `{PR_CONTEXT_SELF_TEST}` = pass (PR context 공용 helper 자체 테스트)
 - `{PR_BODY_CHECK_SELF_TEST}` = pass (PR body 검사 자체 테스트)
+- `{V1_PR_SELF_TEST}` = pass (draft PR 생성 helper 자체 테스트)
 - `{V1_FLOW_SELF_TEST}` = pass (v1 flow 자체 테스트)
 - `{V1_PLAN_SELF_TEST}` = pass (v1 plan 자체 테스트)
 - `{V1_REPORT_SELF_TEST}` = pass (v1 report 자체 테스트)
@@ -707,34 +679,6 @@ def run_self_test() -> int:
     return 1
 
 
-def body_from_args(args: argparse.Namespace) -> str:
-    if bool(args.body_file) == bool(args.body_env):
-        raise ValueError("--body-file 또는 --body-env 중 하나만 지정하세요")
-    if args.body_file:
-        return read_body_file(args.body_file)
-    return read_body_env(args.body_env)
-
-
-def local_input_from_args(args: argparse.Namespace, changed_files: tuple[str, ...]) -> PrInput:
-    missing = [
-        name
-        for name in ("title", "base", "head")
-        if not getattr(args, name)
-    ]
-    if args.draft is None:
-        missing.append("draft/no-draft")
-    if missing:
-        raise ValueError("필수 인자가 없습니다: " + ", ".join(missing))
-    return PrInput(
-        title=args.title,
-        body=body_from_args(args),
-        base=args.base,
-        head=args.head,
-        draft=bool(args.draft),
-        changed_files=changed_files,
-    )
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Lint Home Search PR metadata, body, and changed-file evidence.")
     parser.add_argument("--event-json", help="GitHub event JSON path.")
@@ -764,14 +708,23 @@ def main(argv: list[str] | None = None) -> int:
         if args.template_file:
             result = lint_template(args.template_file)
         else:
-            changed_files = read_changed_files_nul(args.changed_files_nul) + read_changed_files_text(args.changed_files_file)
-            data = (
-                pr_input_from_event(args.event_json, changed_files)
+            changed_files = changed_files_from_sources(args.changed_files_nul, args.changed_files_file)
+            context = (
+                context_from_event(args.event_json, changed_files)
                 if args.event_json
-                else local_input_from_args(args, changed_files)
+                else context_from_local(
+                    title=args.title,
+                    base=args.base,
+                    head=args.head,
+                    draft=args.draft,
+                    body_file=args.body_file,
+                    body_env=args.body_env,
+                    changed_files=changed_files,
+                )
             )
+            data = pr_input_from_context(context)
             result = lint_pr(data)
-    except (OSError, ValueError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError) as exc:
         print(f"pr-lint 입력 읽기 실패: {exc}", file=sys.stderr)
         return 2
 

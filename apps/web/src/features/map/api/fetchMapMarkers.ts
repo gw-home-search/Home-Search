@@ -11,9 +11,14 @@ import {
 } from './fetchRegionMarkers';
 
 export type MapBoundsRequest = Pick<ComplexMarkersRequest, 'swLat' | 'swLng' | 'neLat' | 'neLng'>;
+export type ComplexMarkerFilters = Omit<
+  ComplexMarkersRequest,
+  'swLat' | 'swLng' | 'neLat' | 'neLng'
+>;
 
 export type MapMarkersRequest = {
   bounds: MapBoundsRequest;
+  filters?: ComplexMarkerFilters;
   level: number;
 };
 
@@ -32,14 +37,8 @@ export async function fetchMapMarkers(request: MapMarkersRequest): Promise<MapMa
   if (request.level <= 4) {
     const markers = await fetchComplexMarkers({
       ...request.bounds,
-      pyeongMin: null,
-      pyeongMax: null,
-      priceEokMin: null,
-      priceEokMax: null,
-      ageMin: null,
-      ageMax: null,
-      unitMin: null,
-      unitMax: null,
+      ...EMPTY_COMPLEX_MARKER_FILTERS,
+      ...request.filters,
     });
 
     return { kind: 'complex', markers };
@@ -53,6 +52,17 @@ export async function fetchMapMarkers(request: MapMarkersRequest): Promise<MapMa
 
   return { kind: 'region', level: region, markers };
 }
+
+const EMPTY_COMPLEX_MARKER_FILTERS: Required<ComplexMarkerFilters> = {
+  pyeongMin: null,
+  pyeongMax: null,
+  priceEokMin: null,
+  priceEokMax: null,
+  ageMin: null,
+  ageMax: null,
+  unitMin: null,
+  unitMax: null,
+};
 
 export function regionLevelForMapLevel(level: number): RegionLevel {
   if (level >= 10) {

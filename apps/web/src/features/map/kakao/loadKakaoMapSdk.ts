@@ -11,6 +11,8 @@ export type KakaoBounds = {
 export type KakaoMap = {
   getBounds: () => KakaoBounds;
   getLevel: () => number;
+  setCenter?: (center: KakaoLatLng) => void;
+  setLevel?: (level: number) => void;
 };
 
 export type KakaoCustomOverlay = {

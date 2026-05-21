@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 
 import {
   fetchComplexDetail,
@@ -11,6 +11,7 @@ import {
 } from '../features/complex-detail/api/fetchParcelTrades';
 import {
   fetchMapMarkers,
+  type ComplexMarkerFilters,
   type MapBoundsRequest,
   type MapMarkersResult,
 } from '../features/map/api/fetchMapMarkers';
@@ -18,10 +19,21 @@ import {
   KakaoMapSurface,
   type KakaoMapRuntimeState,
 } from '../features/map/KakaoMapSurface';
+import {
+  fetchRegionDetail,
+  fetchRootRegions,
+  type RegionDetail,
+  type RegionSummary,
+} from '../features/region/api/fetchRegions';
+import {
+  fetchComplexSearchResults,
+  type ComplexSearchResult,
+} from '../features/search/api/fetchComplexSearchResults';
 import './App.css';
 
 type MarkerRequestState = 'loading' | 'ready' | 'empty' | 'error';
 type DetailRequestState = 'idle' | 'loading' | 'ready' | 'error';
+type PanelRequestState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 
 const INITIAL_MARKER_BOUNDS: MapBoundsRequest = {
   swLat: 37.45,
@@ -35,10 +47,31 @@ type MapViewport = {
   level: number;
 };
 
+type MapFocusTarget = {
+  lat: number;
+  lng: number;
+  level: number;
+  seq: number;
+};
+
 type AppProps = {
   initialMapLevel?: number;
   kakaoMapAppKey?: string;
 };
+
+const EMPTY_COMPLEX_MARKER_FILTERS: Required<ComplexMarkerFilters> = {
+  pyeongMin: null,
+  pyeongMax: null,
+  priceEokMin: null,
+  priceEokMax: null,
+  ageMin: null,
+  ageMax: null,
+  unitMin: null,
+  unitMax: null,
+};
+
+const SEARCH_FOCUS_DELTA = 0.01;
+const REGION_FOCUS_DELTA = 0.05;
 
 export function App({
   initialMapLevel = 4,
@@ -48,11 +81,15 @@ export function App({
     bounds: INITIAL_MARKER_BOUNDS,
     level: initialMapLevel,
   }));
+  const [markerFilters, setMarkerFilters] = useState<ComplexMarkerFilters>(
+    EMPTY_COMPLEX_MARKER_FILTERS,
+  );
   const [markers, setMarkers] = useState<MapMarkersResult | null>(null);
   const [markerState, setMarkerState] = useState<MarkerRequestState>('loading');
   const [markerError, setMarkerError] = useState<string | null>(null);
   const [mapRuntimeState, setMapRuntimeState] = useState<KakaoMapRuntimeState>('loading');
   const [mapRuntimeError, setMapRuntimeError] = useState<string | null>(null);
+  const [mapFocusTarget, setMapFocusTarget] = useState<MapFocusTarget | null>(null);
   const [markerRetrySeq, setMarkerRetrySeq] = useState(0);
   const [selectedParcelId, setSelectedParcelId] = useState<number | null>(null);
   const [complexDetail, setComplexDetail] = useState<ComplexDetail | null>(null);
@@ -60,8 +97,17 @@ export function App({
   const [detailState, setDetailState] = useState<DetailRequestState>('idle');
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailRetrySeq, setDetailRetrySeq] = useState(0);
+  const [searchResults, setSearchResults] = useState<ComplexSearchResult[]>([]);
+  const [searchState, setSearchState] = useState<PanelRequestState>('idle');
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [rootRegions, setRootRegions] = useState<RegionSummary[]>([]);
+  const [regionDetail, setRegionDetail] = useState<RegionDetail | null>(null);
+  const [regionState, setRegionState] = useState<PanelRequestState>('idle');
+  const [regionError, setRegionError] = useState<string | null>(null);
   const markerRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
+  const searchRequestSeq = useRef(0);
+  const regionRequestSeq = useRef(0);
 
   useEffect(() => {
     setViewport((current) => {
@@ -83,6 +129,7 @@ export function App({
 
     fetchMapMarkers({
       bounds: viewport.bounds,
+      filters: markerFilters,
       level: viewport.level,
     })
       .then((nextMarkers) => {
@@ -106,7 +153,7 @@ export function App({
     return () => {
       ignore = true;
     };
-  }, [viewport, markerRetrySeq]);
+  }, [markerFilters, markerRetrySeq, viewport]);
 
   useEffect(() => {
     if (selectedParcelId == null) {
@@ -190,14 +237,281 @@ export function App({
     setDetailRetrySeq((current) => current + 1);
   }
 
+  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const query = stringFormValue(new FormData(event.currentTarget), 'q').trim();
+    const requestSeq = searchRequestSeq.current + 1;
+    searchRequestSeq.current = requestSeq;
+    setSearchError(null);
+
+    if (query.length === 0) {
+      setSearchResults([]);
+      setSearchState('idle');
+      return;
+    }
+
+    setSearchState('loading');
+    fetchComplexSearchResults(query)
+      .then((nextResults) => {
+        if (requestSeq !== searchRequestSeq.current) {
+          return;
+        }
+
+        setSearchResults(nextResults);
+        setSearchState(nextResults.length === 0 ? 'empty' : 'ready');
+      })
+      .catch((error: unknown) => {
+        if (requestSeq !== searchRequestSeq.current) {
+          return;
+        }
+
+        setSearchResults([]);
+        setSearchState('error');
+        setSearchError(error instanceof Error ? error.message : 'Unknown search error');
+      });
+  }
+
+  function handleSearchResultSelect(result: ComplexSearchResult) {
+    setSelectedParcelId(result.parcelId);
+    focusMap(result.latitude, result.longitude, 4, SEARCH_FOCUS_DELTA);
+  }
+
+  function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+
+    setMarkerFilters({
+      pyeongMin: numberFormValue(formData, 'pyeongMin'),
+      pyeongMax: numberFormValue(formData, 'pyeongMax'),
+      priceEokMin: numberFormValue(formData, 'priceEokMin'),
+      priceEokMax: numberFormValue(formData, 'priceEokMax'),
+      ageMin: numberFormValue(formData, 'ageMin'),
+      ageMax: numberFormValue(formData, 'ageMax'),
+      unitMin: numberFormValue(formData, 'unitMin'),
+      unitMax: numberFormValue(formData, 'unitMax'),
+    });
+  }
+
+  function handleLoadRootRegions() {
+    const requestSeq = regionRequestSeq.current + 1;
+    regionRequestSeq.current = requestSeq;
+
+    setRegionState('loading');
+    setRegionError(null);
+
+    fetchRootRegions()
+      .then((nextRegions) => {
+        if (requestSeq !== regionRequestSeq.current) {
+          return;
+        }
+
+        setRootRegions(nextRegions);
+        setRegionState(nextRegions.length === 0 ? 'empty' : 'ready');
+      })
+      .catch((error: unknown) => {
+        if (requestSeq !== regionRequestSeq.current) {
+          return;
+        }
+
+        setRootRegions([]);
+        setRegionDetail(null);
+        setRegionState('error');
+        setRegionError(error instanceof Error ? error.message : 'Unknown region error');
+      });
+  }
+
+  function handleRegionSelect(regionId: number) {
+    const requestSeq = regionRequestSeq.current + 1;
+    regionRequestSeq.current = requestSeq;
+
+    setRegionState('loading');
+    setRegionError(null);
+
+    fetchRegionDetail(regionId)
+      .then((nextDetail) => {
+        if (requestSeq !== regionRequestSeq.current) {
+          return;
+        }
+
+        setRegionDetail(nextDetail);
+        setRootRegions(nextDetail.children);
+        setRegionState('ready');
+        focusMap(nextDetail.latitude, nextDetail.longitude, 7, REGION_FOCUS_DELTA);
+      })
+      .catch((error: unknown) => {
+        if (requestSeq !== regionRequestSeq.current) {
+          return;
+        }
+
+        setRegionDetail(null);
+        setRegionState('error');
+        setRegionError(error instanceof Error ? error.message : 'Unknown region detail error');
+      });
+  }
+
+  function focusMap(lat: number, lng: number, level: number, delta: number) {
+    setViewport(viewportAroundPoint(lat, lng, level, delta));
+    setMapFocusTarget((current) => ({
+      lat,
+      lng,
+      level,
+      seq: (current?.seq ?? 0) + 1,
+    }));
+  }
+
   return (
     <main className="app-shell">
       <h1>Home Search</h1>
+
+      <section aria-label="Exploration panel" className="exploration-panel">
+        <form aria-label="Complex search" className="search-panel" onSubmit={handleSearchSubmit}>
+          <input
+            aria-label="Search complexes"
+            name="q"
+            placeholder="Complex name"
+            type="search"
+          />
+          <button type="submit" aria-label="Run complex search">
+            Search
+          </button>
+        </form>
+
+        {searchState === 'loading' ? (
+          <p role="status" aria-live="polite">
+            Searching complexes
+          </p>
+        ) : null}
+
+        {searchState === 'empty' ? (
+          <p role="status" aria-live="polite">
+            No search results
+          </p>
+        ) : null}
+
+        {searchState === 'error' ? (
+          <p role="alert">
+            Search unavailable.
+            {searchError ? ` ${searchError}` : null}
+          </p>
+        ) : null}
+
+        {searchResults.length > 0 ? (
+          <ul aria-label="Search results" className="panel-list">
+            {searchResults.map((result) => (
+              <li key={result.complexId}>
+                <button
+                  type="button"
+                  aria-label={`Select search result ${result.complexName}`}
+                  onClick={() => {
+                    handleSearchResultSelect(result);
+                  }}
+                >
+                  <span>{result.complexName}</span>
+                  <span>{result.address}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        <div className="region-panel">
+          <button type="button" aria-label="Load root regions" onClick={handleLoadRootRegions}>
+            Regions
+          </button>
+
+          {regionState === 'loading' ? (
+            <p role="status" aria-live="polite">
+              Loading regions
+            </p>
+          ) : null}
+
+          {regionState === 'empty' ? (
+            <p role="status" aria-live="polite">
+              No regions
+            </p>
+          ) : null}
+
+          {regionState === 'error' ? (
+            <p role="alert">
+              Region navigation unavailable.
+              {regionError ? ` ${regionError}` : null}
+            </p>
+          ) : null}
+
+          {regionDetail ? <p className="selected-region">{regionDetail.name}</p> : null}
+
+          {rootRegions.length > 0 ? (
+            <ul aria-label="Region navigation" className="panel-list">
+              {rootRegions.map((region) => (
+                <li key={region.id}>
+                  <button
+                    type="button"
+                    aria-label={`Open region ${region.name}`}
+                    onClick={() => {
+                      handleRegionSelect(region.id);
+                    }}
+                  >
+                    {region.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </section>
+
+      <form aria-label="Marker filters" className="filter-panel" onSubmit={handleFilterSubmit}>
+        <input aria-label="Minimum pyeong" name="pyeongMin" placeholder="Pyeong min" type="number" />
+        <input aria-label="Maximum pyeong" name="pyeongMax" placeholder="Pyeong max" type="number" />
+        <input
+          aria-label="Minimum price eok"
+          name="priceEokMin"
+          placeholder="Price min"
+          step="0.1"
+          type="number"
+        />
+        <input
+          aria-label="Maximum price eok"
+          name="priceEokMax"
+          placeholder="Price max"
+          step="0.1"
+          type="number"
+        />
+        <input
+          aria-label="Minimum building age"
+          name="ageMin"
+          placeholder="Age min"
+          type="number"
+        />
+        <input
+          aria-label="Maximum building age"
+          name="ageMax"
+          placeholder="Age max"
+          type="number"
+        />
+        <input
+          aria-label="Minimum unit count"
+          name="unitMin"
+          placeholder="Units min"
+          type="number"
+        />
+        <input
+          aria-label="Maximum unit count"
+          name="unitMax"
+          placeholder="Units max"
+          type="number"
+        />
+        <button type="submit" aria-label="Apply marker filters">
+          Apply
+        </button>
+      </form>
 
       <section aria-label="Map surface" className="map-surface">
         <p className="map-status">{mapRuntimeStatusLabel(mapRuntimeState)}</p>
         <KakaoMapSurface
           appKey={kakaoMapAppKey}
+          focusTarget={mapFocusTarget}
           initialLevel={initialMapLevel}
           markers={markers}
           onComplexMarkerSelect={handleComplexMarkerSelect}
@@ -331,6 +645,33 @@ function formatAmount(amount: number | null): string {
   }
 
   return `${amount.toLocaleString()} 10k KRW`;
+}
+
+function viewportAroundPoint(lat: number, lng: number, level: number, delta: number): MapViewport {
+  return {
+    bounds: {
+      swLat: lat - delta,
+      swLng: lng - delta,
+      neLat: lat + delta,
+      neLng: lng + delta,
+    },
+    level,
+  };
+}
+
+function stringFormValue(formData: FormData, field: string): string {
+  const value = formData.get(field);
+  return typeof value === 'string' ? value : '';
+}
+
+function numberFormValue(formData: FormData, field: string): number | null {
+  const value = stringFormValue(formData, field).trim();
+  if (value.length === 0) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function detailMetric(label: string, value: string | null) {

@@ -1148,6 +1148,15 @@ def run_self_test() -> int:
     pr_args = parser.parse_args(["run", "--slice", "map-contract-hardening", "--pr", "--dry-run"])
     backend_args = parser.parse_args(["run", "--slice", "open-api-ingest-prep", "--targets", "backend", "--dry-run"])
     planning_args = parser.parse_args(["run", "--slice", "data-architecture-checkpoint", "--targets", "planning-only"])
+    pr_names = default_names(pr_args)
+    pr_payload = build_payload(
+        pr_args,
+        pr_names,
+        "2026-05-19T00:00:00+09:00",
+        {},
+        {"status": "pass", "exit_code": 0, "summary": "merged targets: backend, frontend", "verification": {}},
+        "Pass",
+    )
     body = render_pr_body(
         {
             "slice": "self-test",
@@ -1169,12 +1178,31 @@ def run_self_test() -> int:
             "SKILL_ROUTING": routing_text("execute", "backend"),
         },
     )
+    gate_prompt = render_prompt(
+        "gate_review.md",
+        {
+            "SLICE": "self-test",
+            "PRESET": "contract-hardening",
+            "TARGET": "backend",
+            "BRANCH_NAME": "feat/api-self-test",
+            "SKILL_ROUTING": routing_text("gate", "backend"),
+        },
+    )
+    invalid_branch_blocked = False
+    try:
+        validate_integration_branch("feat/not-integration-branch")
+    except RuntimeError:
+        invalid_branch_blocked = True
     checks = [
         slugify("Map Contract Hardening") == "map-contract-hardening",
         resolved == "contract-hardening",
         is_main_worktree(DEFAULT_MAIN),
         pr_args.pr is True,
         pr_args.dry_run is True,
+        pr_names["integration_branch"] == "feat/map-contract-hardening-integration",
+        invalid_branch_blocked,
+        pr_payload["commands"]["main_merge_command"] == "not suggested; review and merge through GitHub PR manually",
+        pr_payload["commands"]["push_command_suggestion"] == "handled by --pr after integration succeeds",
         execution_targets(backend_args) == ["backend"],
         execution_targets(planning_args) == [],
         "최초 RED:" in body,
@@ -1194,6 +1222,7 @@ def run_self_test() -> int:
         "$backend-api:" in prompt,
         "$api-contract:" in prompt,
         "{{SKILL_ROUTING}}" not in prompt,
+        "Explicit `--pr` may push only the generated `feat/*-integration` branch." in gate_prompt,
     ]
     if all(checks):
         print("self-test passed: v1_flow")

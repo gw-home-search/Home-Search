@@ -20,7 +20,9 @@ Check:
 - Verification evidence uses exact line format: ``- `command` = pass|fail|not run (Korean reason)``.
 - Changed-file PR lint evidence is present for backend, frontend, harness, hook,
   GitHub workflow, Markdown, and KO changes.
-- No protected paths, secrets, build output, automatic main merge, or push were introduced.
+- No protected paths, secrets, build output, automatic main merge, main push,
+  or PR merge were introduced.
+- Explicit `--pr` may push only the generated `feat/*-integration` branch.
 
 Output a short Korean-first gate review with these user-facing labels:
 - 상태: Pass|Partial|Fail

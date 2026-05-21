@@ -287,6 +287,11 @@ def run_self_test() -> int:
         checks.append(False)
     except ValueError:
         checks.append(True)
+    try:
+        validate_branch("feat/map-contract-hardening")
+        checks.append(False)
+    except ValueError:
+        checks.append(True)
     checks.append("--draft" in manual_commands(args))
     checks.append(args.draft is True)
     checks.append(

@@ -44,6 +44,7 @@ REQUIRED_SNIPPETS = {
         "KO 생성 기준:",
     ],
     ".codex/harness/pr_body_check.py": [
+        "## 사용 skill",
         "## TDD 근거",
         "최초 RED:",
         "예상 RED 실패:",
@@ -52,6 +53,7 @@ REQUIRED_SNIPPETS = {
         "## KO 문서 변경",
     ],
     ".codex/harness/pr_lint.py": [
+        "## 사용 skill",
         "## TDD 근거",
         "최초 RED:",
         "예상 RED 실패:",

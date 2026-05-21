@@ -38,6 +38,7 @@ from pr_evidence import (
     ordered_commands,
     requirements_for_changed_files,
 )
+from pr_lint import PrInput, format_grouped_errors, lint_pr
 from skill_routing import routing_payload, routing_text
 from v1_report import render_pr_body
 
@@ -70,6 +71,7 @@ DEFAULT_TARGETS = {
     },
 }
 TARGET_MODES = {"backend", "frontend", "both", "planning-only"}
+PLANNING_MODES = {"standard", "critique", "llm-replan"}
 KNOWN_VERIFICATION_COMMANDS = {
     "backend": {
         API_QUALITY: ("apps/api", ["./gradlew", "backendQualityCheck"]),
@@ -591,6 +593,15 @@ def changed_files_between(base: str, branch: str) -> list[str]:
     return [part.decode("utf-8", errors="replace") for part in result.stdout.split(b"\0") if part]
 
 
+def expected_changed_files_for_targets(targets: list[str]) -> list[str]:
+    expected: list[str] = []
+    if "backend" in targets:
+        expected.append("apps/api/__expected__")
+    if "frontend" in targets:
+        expected.append("apps/web/__expected__")
+    return expected
+
+
 def scope_patterns(raw_scope: Any) -> list[str]:
     if isinstance(raw_scope, list):
         raw_items = [str(item) for item in raw_scope]
@@ -876,6 +887,50 @@ def push_integration_branch(names: dict[str, Any], *, dry_run: bool) -> dict[str
     return {k: result[k] for k in ("status", "exit_code", "summary")}
 
 
+def publish_lint_preflight(
+    args: argparse.Namespace,
+    names: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    dry_run: bool,
+) -> dict[str, Any]:
+    changed = (
+        tuple(expected_changed_files_for_targets(execution_targets(args)))
+        if dry_run
+        else tuple(changed_files_between(args.base_branch, names["integration_branch"]))
+    )
+    if not dry_run and not changed:
+        raise RuntimeError(
+            "publish lint preflight failed: integration branch 변경 파일을 찾지 못했습니다; "
+            "base/head branch와 diff evidence를 확인하세요."
+        )
+    payload_for_lint = dict(payload)
+    payload_for_lint["changed_files"] = list(changed)
+    if dry_run:
+        payload_for_lint["changed_files_kind"] = "expected"
+    result = lint_pr(
+        PrInput(
+            title=pr_title(args, names),
+            body=render_pr_body(payload_for_lint),
+            base=args.base_branch,
+            head=names["integration_branch"],
+            draft=True,
+            changed_files=changed,
+        ),
+        evidence_policy="feasibility" if dry_run else "strict",
+    )
+    if result.ok:
+        summary = (
+            f"dry-run feasibility checked: {len(changed)} expected paths"
+            if dry_run
+            else f"changed files: {len(changed)}"
+        )
+        if dry_run:
+            print("[DRY-RUN] publish lint preflight")
+        return {"status": "pass", "exit_code": 0, "summary": summary}
+    raise RuntimeError("publish lint preflight failed: " + format_grouped_errors(result.errors))
+
+
 def build_payload(
     args: argparse.Namespace,
     names: dict[str, Any],
@@ -908,8 +963,12 @@ def build_payload(
     if integration is not None and not args.dry_run:
         integration_head = git_output(DEFAULT_MAIN, "rev-parse", "--short", "HEAD") or None
     integration_files = []
+    changed_files_kind = "actual"
     if integration is not None and not args.dry_run:
         integration_files = changed_files_between(args.base_branch, names["integration_branch"])
+    elif integration is not None and args.dry_run:
+        integration_files = expected_changed_files_for_targets(targets)
+        changed_files_kind = "expected"
     required_evidence = required_evidence_payload(integration_files)
     ko_docs = ko_docs_payload(integration_files, results)
     if targets:
@@ -932,6 +991,13 @@ def build_payload(
         next_action = "GitHub draft PR diff/checks/local report를 확인한 뒤 수동 merge 결정"
     elif getattr(args, "push", False):
         next_action = "원격 integration branch를 확인한 뒤 PR 생성 여부를 결정"
+    if getattr(args, "dry_run", False):
+        if getattr(args, "pr", False):
+            next_action = "dry-run 결과와 PR lint preflight를 확인한 뒤 실제 `--pr` 실행 여부를 결정"
+        elif getattr(args, "push", False):
+            next_action = "dry-run 결과와 lint preflight를 확인한 뒤 실제 `--push` 실행 여부를 결정"
+        elif targets:
+            next_action = "dry-run 결과를 확인한 뒤 실제 run 실행 여부를 결정"
     return {
         "slice": names["slice"],
         "preset": args.preset,
@@ -956,8 +1022,11 @@ def build_payload(
         },
         "verification": verification,
         "changed_files": integration_files,
+        "changed_files_kind": changed_files_kind,
         "required_evidence": required_evidence,
         "ko_docs": ko_docs,
+        "planning_mode": getattr(args, "planning_mode", "standard"),
+        "lint_policy": "feasibility" if args.dry_run and (args.push or args.pr) else "strict" if (args.push or args.pr) else "not applicable",
         "skill_routing": skill_routing,
         "gate_review": f"{'/'.join(targets)} gate review completed" if results else "planning-only; not run",
         "contract_risks": [],
@@ -980,6 +1049,8 @@ def run_flow(args: argparse.Namespace) -> int:
     args.preset_config = preset
     if args.targets not in TARGET_MODES:
         return fail(f"지원하지 않는 target: {args.targets}")
+    if args.planning_mode not in PLANNING_MODES:
+        return fail(f"지원하지 않는 planning mode: {args.planning_mode}")
     if getattr(args, "draft_pr", False):
         args.pr = True
     if args.pr and args.no_pr:
@@ -1087,6 +1158,20 @@ def run_flow(args: argparse.Namespace) -> int:
         return exit_code
 
     payload = build_payload(args, names, started, results, integration_result, "Pass")
+    try:
+        if args.push or args.pr:
+            lint_preflight = publish_lint_preflight(args, names, payload, dry_run=dry_run)
+            payload.setdefault("verification", {})["publish lint preflight"] = lint_preflight
+            payload["lint_preflight"] = lint_preflight
+            payload["publish_action"] = "pr" if args.pr else "push"
+    except RuntimeError as exc:
+        payload = build_payload(args, names, started, results, integration_result, "Fail", str(exc))
+        payload_path = write_payload(payload, dry_run=dry_run)
+        if args.report or args.notion or args.slack:
+            call_report(payload, notion=args.notion, slack=args.slack, dry_run=dry_run)
+        exit_code = fail(str(exc))
+        print(f"report: {payload_path}")
+        return exit_code
     payload_path = write_payload(payload, dry_run=dry_run)
     report_before_pr = args.report or args.pr or args.notion or args.slack
     if report_before_pr:
@@ -1122,12 +1207,14 @@ def run_flow(args: argparse.Namespace) -> int:
     print("상태: Pass")
     print(f"report: {payload_path}")
     if push_result is not None:
-        print("push: Pass")
+        print("push: dry-run" if dry_run else "push: Pass")
     if pr_result is not None:
-        print("draft PR: Pass")
+        print("draft PR: dry-run" if dry_run else "draft PR: Pass")
     print("다음 행동:")
     if args.pr:
-        print("GitHub draft PR diff/checks/local report를 확인한 뒤 수동 merge를 결정하세요.")
+        print(payload["next_action"])
+    elif args.push:
+        print(payload["next_action"])
     elif integration_result is None:
         print("integration skipped; main merge command is not suggested.")
     else:
@@ -1152,6 +1239,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--web-worktree")
     run.add_argument("--base-branch", default="main")
     run.add_argument("--targets", choices=sorted(TARGET_MODES), default="both")
+    run.add_argument("--planning-mode", choices=sorted(PLANNING_MODES), default="standard")
     run.add_argument("--parallel", action="store_true")
     run.add_argument("--commit", action="store_true")
     run.add_argument("--integrate", action="store_true")
@@ -1241,6 +1329,8 @@ def run_self_test() -> int:
         invalid_branch_blocked,
         pr_payload["commands"]["main_merge_command"] == "not suggested; review and merge through GitHub PR manually",
         pr_payload["commands"]["push_command_suggestion"] == "handled by --pr after integration succeeds",
+        pr_payload["next_action"].startswith("dry-run 결과와 PR lint preflight"),
+        "llm-replan" in PLANNING_MODES,
         pr_title(backlog_pr_args, default_names(backlog_pr_args)) == "[Feat] RTMS 수집 준비",
         pr_title(pr_args, pr_names) == "[Chore] map contract hardening 정리",
         execution_targets(backend_args) == ["backend"],
@@ -1258,9 +1348,11 @@ def run_self_test() -> int:
         )["api_branch"],
         parse_changed_files(" M apps/api/Foo.java\n?? apps/web/Bar.tsx\nR  old.txt -> apps/api/New.java")
         == ["apps/api/Foo.java", "apps/web/Bar.tsx", "apps/api/New.java"],
-        "$tdd:" in prompt,
-        "$backend-api:" in prompt,
-        "$api-contract:" in prompt,
+        "Skill contract:" in prompt,
+        "$v1-slice-harness [orchestrator]" in prompt,
+        "$tdd [primary]" in prompt,
+        "$backend-api [support]" in prompt,
+        "$api-contract [checkpoint]" in prompt,
         "{{SKILL_ROUTING}}" not in prompt,
         "Explicit `--pr` may push only the generated `feat/*-integration` branch." in gate_prompt,
     ]

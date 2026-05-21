@@ -55,6 +55,15 @@ def valid_sample() -> str:
 - harness: PR lint wrapper와 body evidence 검사
 - docs/infra: PR template과 CI evidence 확인
 
+## 사용 skill
+
+| phase | skill | role | path | required evidence |
+| --- | --- | --- | --- | --- |
+| execute | $v1-slice-harness | orchestrator | .agents/skills/v1-slice-harness/SKILL.md | 상태; 검증; 다음 행동 |
+| execute | $tdd | primary | .agents/skills/tdd/SKILL.md | 최초 RED; 예상 RED 실패; 최소 GREEN |
+| execute | $api-contract | checkpoint | .agents/skills/api-contract/SKILL.md | 계약 영향 |
+| gate | $code-review | primary | .agents/skills/code-review/SKILL.md | reviewer: 지적사항 |
+
 ## TDD 근거
 
 최초 RED: unchecked checklist fixture fails strict PR lint

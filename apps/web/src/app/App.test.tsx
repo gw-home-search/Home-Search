@@ -17,7 +17,6 @@ describe('App', () => {
 
     expect(rootElement.querySelector('[aria-label="Map surface"]')).not.toBeNull();
     expect(rootElement.textContent).toContain('Loading markers');
-    expect(rootElement.textContent).toContain('Map ready');
 
     unmount(root);
   });
@@ -489,6 +488,45 @@ describe('App', () => {
     unmount(root);
 
     expect(sdk.overlays[0]?.setMap).toHaveBeenLastCalledWith(null);
+  });
+
+  it('shows a loading map runtime status until the Kakao SDK script resolves', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+
+    const { root, rootElement } = await renderApp({ kakaoMapAppKey: 'test-app-key' });
+    const script = document.head.querySelector<HTMLScriptElement>(
+      'script[src*="dapi.kakao.com/v2/maps/sdk.js"]',
+    );
+
+    expect(script).not.toBeNull();
+    expect(rootElement.textContent).toContain('Loading map runtime');
+    expect(rootElement.textContent).not.toContain('Map ready');
+
+    const sdk = createFakeKakaoSdk({
+      bounds: {
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+      },
+      level: 4,
+    });
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    await act(async () => {
+      script?.onload?.call(script, new Event('load'));
+    });
+    await flushAsyncState();
+
+    expect(rootElement.textContent).toContain('Map ready');
+    expect(
+      rootElement
+        .querySelector('[aria-label="Kakao map viewport"]')
+        ?.getAttribute('data-kakao-map-state'),
+    ).toBe('ready');
+
+    unmount(root);
+    script?.remove();
   });
 });
 

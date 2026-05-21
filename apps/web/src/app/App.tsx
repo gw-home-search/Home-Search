@@ -14,7 +14,10 @@ import {
   type MapBoundsRequest,
   type MapMarkersResult,
 } from '../features/map/api/fetchMapMarkers';
-import { KakaoMapSurface } from '../features/map/KakaoMapSurface';
+import {
+  KakaoMapSurface,
+  type KakaoMapRuntimeState,
+} from '../features/map/KakaoMapSurface';
 import './App.css';
 
 type MarkerRequestState = 'loading' | 'ready' | 'empty' | 'error';
@@ -48,6 +51,7 @@ export function App({
   const [markers, setMarkers] = useState<MapMarkersResult | null>(null);
   const [markerState, setMarkerState] = useState<MarkerRequestState>('loading');
   const [markerError, setMarkerError] = useState<string | null>(null);
+  const [mapRuntimeState, setMapRuntimeState] = useState<KakaoMapRuntimeState>('loading');
   const [mapRuntimeError, setMapRuntimeError] = useState<string | null>(null);
   const [markerRetrySeq, setMarkerRetrySeq] = useState(0);
   const [selectedParcelId, setSelectedParcelId] = useState<number | null>(null);
@@ -191,13 +195,14 @@ export function App({
       <h1>Home Search</h1>
 
       <section aria-label="Map surface" className="map-surface">
-        <p className="map-status">Map ready</p>
+        <p className="map-status">{mapRuntimeStatusLabel(mapRuntimeState)}</p>
         <KakaoMapSurface
           appKey={kakaoMapAppKey}
           initialLevel={initialMapLevel}
           markers={markers}
           onComplexMarkerSelect={handleComplexMarkerSelect}
           onRuntimeErrorChange={setMapRuntimeError}
+          onRuntimeStateChange={setMapRuntimeState}
           onViewportChange={handleViewportChange}
         />
         <div aria-label="Map controls" className="map-controls">
@@ -384,6 +389,17 @@ function TradeList({ trades }: { trades: TradeItem[] }) {
 function formatTradeFloor(trade: TradeItem): string {
   const floor = trade.floor == null ? 'Unknown floor' : `${trade.floor}F`;
   return trade.aptDong == null ? floor : `${trade.aptDong} / ${floor}`;
+}
+
+function mapRuntimeStatusLabel(state: KakaoMapRuntimeState): string {
+  switch (state) {
+    case 'loading':
+      return 'Loading map runtime';
+    case 'ready':
+      return 'Map ready';
+    case 'error':
+      return 'Map fallback active';
+  }
 }
 
 function sameViewport(first: MapViewport, second: MapViewport): boolean {

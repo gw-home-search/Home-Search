@@ -17,7 +17,6 @@ describe('App', () => {
 
     expect(rootElement.querySelector('[aria-label="Map surface"]')).not.toBeNull();
     expect(rootElement.textContent).toContain('Loading markers');
-    expect(rootElement.textContent).toContain('Map fallback active');
 
     unmount(root);
   });

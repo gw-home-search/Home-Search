@@ -529,3 +529,40 @@ risk_notes = [
   "adapter는 이번 slice에서 @Repository로 자동 등록하지 않고 다음 architecture slice에서 wiring을 결정한다.",
   "trade partition unique 한계 때문에 global source/source_key dedupe는 trade_source_key_registry에서 보장한다.",
 ]
+
+[[slices]]
+id = "backend-ingest-evidence-recovery"
+title_ko = "Backend ingest evidence recovery"
+pr_type = "Fix"
+pr_title_ko = "수집 저장 evidence 복구"
+description_ko = "data-architecture-checkpoint 이후 남은 backend gate 실패 위험을 raw ingest, dedupe, failed match evidence와 backendQualityCheck로 닫는다."
+status = "candidate"
+priority = 55
+targets = "backend"
+preset = "open-api-ingest-prep"
+acceptance_criteria = [
+  "mvp-e2e-runtime-smoke backend gate Fail 근거를 확인하고 재현 가능한 backend 검증 또는 명시적 stop condition으로 닫는다.",
+  "raw ingest row가 normalized trade insert보다 먼저 저장되는 service 또는 repository evidence를 유지한다.",
+  "source + source_key dedupe와 fallback identity dedupe가 중복 normalized trade를 만들지 않는 regression evidence를 유지한다.",
+  "failed match는 raw_trade_ingest.status와 failure_reason으로 queryable evidence를 유지한다.",
+  "V1 public API URL, request field, response field, unit, ProblemDetail shape를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "기존 backend gate Fail 원인이 재현되면 해당 failing check를 First RED로 고정한다.",
+  "재현 가능한 실패가 없으면 backendQualityCheck evidence 누락을 실패 조건으로 삼고 backendQualityCheck를 통과해야 GREEN으로 본다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "V1 public API URL, request field, response field 변경이 필요하면 중단한다.",
+  "DB migration 실행, live Open API call, secrets 저장이 필요하면 중단한다.",
+  "ranking, trend, favorite, alarm, mail, recommendation, auth가 필요하면 V2 scope로 분리한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
+  "이미 완료된 raw ingest implementation을 재작성하지 않고 gate failure와 missing evidence만 좁혀서 복구한다.",
+  "재현 가능한 backend gate Fail이 없으면 evidence recovery slice로 종료한다.",
+]

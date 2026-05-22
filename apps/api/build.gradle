@@ -25,6 +25,12 @@ tasks.withType(Javadoc).configureEach {
     options.addStringOption('Xdoclint:all,-missing', '-quiet')
 }
 
+tasks.withType(Test).configureEach {
+    doFirst {
+        layout.buildDirectory.dir('jacoco').get().asFile.mkdirs()
+    }
+}
+
 configurations {
     asciidoctorExt
 }

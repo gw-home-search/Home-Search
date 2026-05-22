@@ -20,6 +20,7 @@ from typing import Any
 from pr_evidence import (
     API_QUALITY,
     DIFF_CHECK,
+    DOCKER_COMPOSE_LOCAL_CONFIG,
     KO_CHECK,
     POST_TOOL_USE_REVIEW_SELF_TEST,
     PR_BODY_CHECK_SELF_TEST,
@@ -75,6 +76,7 @@ PLANNING_MODES = {"standard", "critique", "llm-replan"}
 KNOWN_VERIFICATION_COMMANDS = {
     "backend": {
         API_QUALITY: ("apps/api", ["./gradlew", "backendQualityCheck"]),
+        DOCKER_COMPOSE_LOCAL_CONFIG: (".", ["docker", "compose", "-f", "infra/docker-compose.local.yml", "config"]),
         "cd apps/api && ./gradlew test": ("apps/api", ["./gradlew", "test"]),
         DIFF_CHECK: (".", ["git", "diff", "--check"]),
         PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
@@ -94,6 +96,7 @@ KNOWN_VERIFICATION_COMMANDS = {
     "frontend": {
         WEB_TEST: ("apps/web", ["npm", "run", "test"]),
         WEB_BUILD: ("apps/web", ["npm", "run", "build"]),
+        DOCKER_COMPOSE_LOCAL_CONFIG: (".", ["docker", "compose", "-f", "infra/docker-compose.local.yml", "config"]),
         DIFF_CHECK: (".", ["git", "diff", "--check"]),
         PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
         PR_CONTEXT_SELF_TEST: (".", ["python3", ".codex/harness/pr_context.py", "--self-test"]),

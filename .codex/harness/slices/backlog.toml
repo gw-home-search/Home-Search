@@ -37,7 +37,7 @@ title_ko = "Kakao map runtime visual smoke"
 pr_type = "Feat"
 pr_title_ko = "Kakao 지도 런타임 스모크 검증"
 description_ko = "apps/web에서 실제 Kakao JS SDK 지도 surface를 띄우고 V1 marker fetch 연결을 브라우저로 확인할 수 있게 만든다."
-status = "planned"
+status = "done"
 priority = 15
 targets = "frontend"
 preset = "map-ui-state"
@@ -67,12 +67,171 @@ risk_notes = [
 ]
 
 [[slices]]
+id = "local-dev-stack-postgis-api-web"
+title_ko = "Local dev stack PostGIS API web"
+pr_type = "Feat"
+pr_title_ko = "로컬 PostGIS API Web 실행 스택"
+description_ko = "로컬 PostGIS, API, Web runtime을 repository-managed stack으로 묶어 V1 schema/seed/API/frontend를 한 번에 띄울 수 있게 만든다."
+status = "done"
+priority = 1
+targets = "both"
+preset = "local-runtime-stack"
+acceptance_criteria = [
+  "infra/** 아래에 PostGIS 16-3.4 기반 local compose stack을 두고 secrets나 .env* 파일을 commit하지 않는다.",
+  "API local runtime은 env 기반 DB 설정으로 PostGIS에 연결하고 Flyway V1 schema와 local seed를 새 DB에서 적용할 수 있다.",
+  "Frontend local runtime은 기존 VITE_API_SERVER_IP contract를 유지하며 local API base URL로 marker/search/detail/trade API를 호출할 수 있다.",
+  "Backend target은 infra/**와 apps/api/**만, frontend target은 apps/web/**만 소유해 병렬 worktree 충돌을 피한다.",
+  "live RTMS Open API 호출, DB migration 운영 실행, main merge/push/PR merge는 자동화하지 않는다.",
+]
+first_red_candidates = [
+  "docker compose -f infra/docker-compose.local.yml config가 compose file 부재로 실패한다.",
+  "local profile runtime smoke에서 API가 PostGIS JDBC URL을 받지 못하거나 Flyway V1 schema를 적용하지 못하는 실패를 먼저 만든다.",
+  "frontend env base URL smoke에서 VITE_API_SERVER_IP 누락 또는 잘못된 base URL 조합이 marker fetch를 깨뜨리는 실패를 먼저 만든다.",
+]
+verification_commands = [
+  "docker compose -f infra/docker-compose.local.yml config",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+]
+stop_conditions = [
+  "secrets, service key, .env* 파일 저장이 필요하면 중단한다.",
+  "V1 public API URL, request field, response field 변경이 필요하면 중단한다.",
+  "Docker daemon이 필요한 destructive DB operation 또는 live DB migration 실행이 필요하면 dry-run/config 검증으로 제한한다.",
+  "apps/api와 apps/web이 같은 worktree에서 같은 파일을 동시에 수정해야 하면 slice를 backend/frontend 하위 slice로 분리한다.",
+]
+risk_notes = [
+  "이 slice는 infra 중심이지만 harness target 제약상 backend target이 infra/**와 apps/api/**를 소유한다.",
+  "local compose config 검증은 Docker Compose plugin이 없는 환경에서 blocked evidence가 될 수 있다.",
+  "실제 브라우저 visual smoke는 mvp-e2e-runtime-smoke에서 별도 처리한다.",
+]
+
+[[slices]]
+id = "rtms-public-client-one-shot-ingest"
+title_ko = "RTMS public client one-shot ingest"
+pr_type = "Feat"
+pr_title_ko = "RTMS public client one-shot 수집"
+description_ko = "APT_SERVICE_KEY 기반 RTMS public client와 one-shot ingest runner를 추가하되 테스트/PR 검증은 fixture와 mocked client로 고정한다."
+status = "planned"
+priority = 2
+targets = "backend"
+preset = "open-api-ingest-prep"
+acceptance_criteria = [
+  "RTMS public API 응답을 fixture/mocked client로 파싱해 OpenApiTradeIngestBatch로 변환한다.",
+  "one-shot runner는 법정동/월 입력을 받아 existing OpenApiTradeIngestService로 raw-before-normalized ingest를 수행한다.",
+  "APT_SERVICE_KEY는 env/config로만 읽고 logs, reports, fixtures, repository files에 저장하지 않는다.",
+  "동일 source/source_key 재처리는 duplicate-safe이며 normalized trade를 중복 생성하지 않는다.",
+  "match failure와 parse failure는 raw_trade_ingest.status와 failure_reason으로 queryable evidence를 남긴다.",
+]
+first_red_candidates = [
+  "RTMS XML/JSON fixture를 batch로 변환하는 client test가 adapter 부재로 실패한다.",
+  "one-shot runner test에서 live network 없이 mocked client 결과가 OpenApiTradeIngestService로 전달되어야 하나 runner 부재로 실패한다.",
+  "APT_SERVICE_KEY 누락 시 live 호출을 시도하지 않고 명확한 configuration error로 중단해야 하나 guard 부재로 실패한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "PR 검증에서 live Open API call이 필요하면 중단하고 fixture/mocking으로 대체한다.",
+  "service key, raw production payload, local secret 저장이 필요하면 중단한다.",
+  "V1 public API URL, request field, response field 변경이 필요하면 중단한다.",
+  "DB schema 변경이 필요하면 별도 migration slice로 분리한다.",
+]
+risk_notes = [
+  "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
+  "runner는 one-shot 운영 진입점만 만들고 scheduler/batch orchestration은 V2 또는 별도 slice로 둔다.",
+  "실제 live RTMS 실행은 명시적 사람 승인과 local env가 있을 때만 가능하다.",
+]
+
+[[slices]]
+id = "mvp-e2e-runtime-smoke"
+title_ko = "MVP e2e runtime smoke"
+pr_type = "Test"
+pr_title_ko = "MVP 런타임 E2E 스모크"
+description_ko = "local PostGIS/API/Web stack 위에서 deterministic seed로 map marker, detail drawer, trade list까지 브라우저 스모크 evidence를 남긴다."
+status = "candidate"
+priority = 30
+targets = "both"
+preset = "runtime-smoke"
+acceptance_criteria = [
+  "local-dev-stack-postgis-api-web와 rtms-public-client-one-shot-ingest 완료 후 실행한다.",
+  "새 local DB에서 V1 schema/seed가 적용되고 /api/v1/map/complexes marker 한 건 이상을 반환한다.",
+  "Web runtime에서 marker click 또는 equivalent test action이 detail drawer와 trade list를 열고 documented V1 URLs만 호출한다.",
+  "duplicate ingest와 MATCH_FAILED raw row가 runtime evidence에서 queryable하거나 명시적 smoke fixture로 확인된다.",
+  "Kakao key가 없는 환경에서는 browser map tile smoke를 partial로 기록하고 API/UI state smoke는 계속 검증한다.",
+]
+first_red_candidates = [
+  "local stack이 없으면 docker compose config 또는 runtime boot smoke가 실패한다.",
+  "seed marker click 후 detail/trade request가 발생해야 하나 browser/e2e harness 부재로 실패한다.",
+  "duplicate ingest smoke에서 normalized trade count가 증가하면 실패한다.",
+]
+verification_commands = [
+  "docker compose -f infra/docker-compose.local.yml config",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+]
+stop_conditions = [
+  "local-dev-stack-postgis-api-web 또는 rtms-public-client-one-shot-ingest가 완료되지 않았으면 실행하지 않는다.",
+  "V1 API URL/field/unit 변경이 필요하면 중단한다.",
+  "live RTMS Open API 호출이나 production-like data가 필요하면 중단한다.",
+  "Kakao key가 없다는 이유로 API/runtime smoke 전체를 실패 처리하지 않고 evidence를 partial로 분리한다.",
+]
+risk_notes = [
+  "runtime smoke는 Docker, API port, Web port 충돌에 민감하다.",
+  "browser visual evidence는 local secrets 없이 가능한 범위로 제한한다.",
+  "이 slice는 검증용이며 product feature 확장을 포함하지 않는다.",
+]
+
+[[slices]]
+id = "map-first-responsive-exploration-shell"
+title_ko = "Map-first responsive exploration shell"
+pr_type = "Feat"
+pr_title_ko = "지도 중심 반응형 탐색 shell"
+description_ko = "기존 V1 frontend 흐름을 유지하면서 full-screen map, collapsible exploration panel, floating filters, detail drawer를 map-first layout으로 재배치한다."
+status = "candidate"
+priority = 35
+targets = "frontend"
+preset = "map-ui-state"
+acceptance_criteria = [
+  "첫 viewport에서 Kakao map surface가 primary surface로 보이고 탐색 panel과 filters는 overlay 또는 collapsible shell로 배치된다.",
+  "검색, 지역 navigation, filter 변경, marker fetch, detail/trade drawer는 기존 V1 API URL과 field/unit contract를 그대로 사용한다.",
+  "desktop과 mobile viewport에서 text overlap, card nesting, map context hiding 없이 주요 controls가 조작 가능하다.",
+  "Kakao SDK key 누락 또는 marker API 실패 시 map shell은 유지되고 non-blocking state만 노출된다.",
+  "trade chart는 필요 시 후속 slice로 분리하고 이번 slice는 layout shell과 기존 trade list 보존에 집중한다.",
+]
+first_red_candidates = [
+  "App layout test에서 map landmark가 exploration panel보다 먼저 primary surface로 렌더링되어야 하나 기존 padded shell 때문에 실패한다.",
+  "mobile viewport smoke에서 exploration panel이 bottom sheet/collapsible state가 아니면 controls overflow로 실패한다.",
+  "V1 URL contract test에서 layout 변경 중 search/region/detail/trade endpoint가 바뀌면 실패한다.",
+]
+verification_commands = [
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+]
+stop_conditions = [
+  "V1 API URL, request field, response field, amount unit 변경이 필요하면 중단한다.",
+  "apps/api/**, DB schema, ingest 흐름 변경이 필요하면 별도 backend slice로 분리한다.",
+  "decorative landing page, marketing hero, V2 ranking/favorite/alarm/auth UX가 필요하면 중단한다.",
+  "Kakao SDK live key나 외부 network dependency가 테스트 필수 조건이 되면 mock/browser fallback으로 분리한다.",
+]
+risk_notes = [
+  "frontend-only slice이므로 apps/api/**는 건드리지 않는다.",
+  "visual polish는 browser screenshot evidence가 없으면 residual risk로 남을 수 있다.",
+  "trade chart는 detail drawer 후속 slice로 남긴다.",
+]
+
+[[slices]]
 id = "marker-rendering-nonblocking-error"
 title_ko = "Marker rendering non-blocking error state"
 pr_type = "Feat"
 pr_title_ko = "마커 오류 상태 non-blocking 처리"
 description_ko = "marker API 실패 시 marker layer를 안전하게 정리하고 지도 탐색을 막지 않는 frontend error state를 만든다."
-status = "candidate"
+status = "done"
 priority = 20
 targets = "frontend"
 preset = "map-ui-state"
@@ -105,7 +264,7 @@ title_ko = "Search region filter panel"
 pr_type = "Feat"
 pr_title_ko = "검색/지역 패널과 필터 연결"
 description_ko = "map-first UI에 검색, 지역 navigation, filter controls를 연결해 V1 marker/detail 흐름과 함께 동작하게 만든다."
-status = "planned"
+status = "done"
 priority = 25
 targets = "frontend"
 preset = "map-ui-state"
@@ -178,7 +337,7 @@ title_ko = "Open API ingest preparation"
 pr_type = "Feat"
 pr_title_ko = "RTMS 수집 준비"
 description_ko = "RTMS ingest를 live Open API 호출 없이 준비하고 raw preservation/dedupe 실패를 테스트 가능한 backend 흐름으로 만든다."
-status = "candidate"
+status = "done"
 priority = 40
 targets = "backend"
 preset = "open-api-ingest-prep"
@@ -211,7 +370,7 @@ title_ko = "Map complex marker query backend"
 pr_type = "Feat"
 pr_title_ko = "단지 마커 조회 백엔드 구현"
 description_ko = "빈 map use case를 V1 parcel/complex/trade query로 교체해 /api/v1/map/complexes marker 응답을 실제 데이터로 반환한다."
-status = "planned"
+status = "done"
 priority = 35
 targets = "backend"
 preset = "contract-hardening"
@@ -298,7 +457,7 @@ title_ko = "Map region marker query backend"
 pr_type = "Feat"
 pr_title_ko = "지역 마커 조회 백엔드 구현"
 description_ko = "빈 region marker use case를 V1 region bounds query로 교체해 /api/v1/map/regions marker 응답을 실제 데이터로 반환한다."
-status = "planned"
+status = "done"
 priority = 48
 targets = "backend"
 preset = "contract-hardening"
@@ -338,7 +497,7 @@ title_ko = "Raw ingest persistence adapter"
 pr_type = "Feat"
 pr_title_ko = "원시 수집 저장 adapter 연결"
 description_ko = "open-api-ingest-prep application port를 Flyway/JDBC persistence로 연결하기 전 V1 raw/normalized 저장 invariant를 repository seam에서 검증한다."
-status = "candidate"
+status = "done"
 priority = 50
 targets = "backend"
 preset = "open-api-ingest-prep"

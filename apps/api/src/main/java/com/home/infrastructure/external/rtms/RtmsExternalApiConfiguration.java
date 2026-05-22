@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.OpenApiTradeIngestService;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,6 +31,16 @@ class RtmsExternalApiConfiguration {
 			connectTimeoutMillis,
 			readTimeoutMillis
 		);
+	}
+
+	@Bean
+	RtmsOneShotIngestProperties rtmsOneShotIngestProperties(
+		@Value("${home.ingest.rtms.enabled:false}") boolean enabled,
+		@Value("${home.ingest.rtms.lawd-cd:}") String lawdCd,
+		@Value("${home.ingest.rtms.deal-ymd:}") String dealYmd,
+		@Value("${home.ingest.rtms.page-no:1}") Integer pageNo
+	) {
+		return new RtmsOneShotIngestProperties(enabled, lawdCd, dealYmd, pageNo);
 	}
 
 	@Bean
@@ -68,5 +79,14 @@ class RtmsExternalApiConfiguration {
 		OpenApiTradeIngestService ingestService
 	) {
 		return new RtmsOneShotTradeIngestRunner(client, ingestService);
+	}
+
+	@Bean
+	@ConditionalOnBean(RtmsOneShotTradeIngestRunner.class)
+	ApplicationRunner rtmsOneShotIngestApplicationRunner(
+		RtmsOneShotTradeIngestRunner runner,
+		RtmsOneShotIngestProperties properties
+	) {
+		return new RtmsOneShotIngestApplicationRunner(runner, properties);
 	}
 }

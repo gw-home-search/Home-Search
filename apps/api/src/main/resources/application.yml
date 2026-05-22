@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: home-search-api
+  profiles:
+    default: local
+  flyway:
+    locations: classpath:db/migration/api
+
+apis:
+  data:
+    base-url: https://apis.data.go.kr
+    apt-service-key: "${APT_SERVICE_KEY:}"
+    apt-title-path: /1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev
+    apt-num-of-rows: 1000
+    connect-timeout-millis: 5000
+    read-timeout-millis: 5000
+
+home:
+  ingest:
+    rtms:
+      enabled: false
+      lawd-cd: ""
+      deal-ymd: ""
+      page-no: 1

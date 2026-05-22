@@ -26,6 +26,8 @@ tasks.withType(Javadoc).configureEach {
 }
 
 tasks.withType(Test).configureEach {
+    // Gradle 9.3 generic HTML reporting can double-close the result store for multi-class test tasks.
+    reports.html.required = false
     doFirst {
         layout.buildDirectory.dir('jacoco').get().asFile.mkdirs()
     }

@@ -36,6 +36,7 @@ class SkillRoute:
 
 HARNESS_EVIDENCE = ("상태", "검증", "다음 행동")
 PLAN_EVIDENCE = ("인수 기준", "중단 조건", "다음 행동")
+VERTICAL_SLICE_EVIDENCE = ("Slice name", "App ownership", "Public seam", "Tests", "Verification", "Parallelism")
 TDD_EVIDENCE = ("최초 RED", "예상 RED 실패", "최소 GREEN")
 CONTRACT_EVIDENCE = ("계약 영향", "contract-reviewer: 게이트 결정")
 BACKEND_EVIDENCE = ("backendQualityCheck", "Coverage: >=90%", "Docs/OpenAPI")
@@ -150,6 +151,8 @@ def routes_for(mode: str, targets: str | Iterable[str] | None = None) -> tuple[S
     if mode == "plan":
         routes.append(harness_route("plan", "render a non-mutating slice execution brief and next dry-run command."))
         routes.append(route("planning", "plan", "primary", "produce the decision-complete slice plan and acceptance criteria.", PLAN_EVIDENCE))
+        if has_backend(target_set) or has_frontend(target_set):
+            routes.append(route("vertical-slice-implementation", "plan", "support", "break the plan into independently verifiable V1 slices before implementation starts.", VERTICAL_SLICE_EVIDENCE))
         routes.append(route("tdd", "plan", "checkpoint", "define First RED, Expected RED failure, and Minimum GREEN before execution.", TDD_EVIDENCE))
         if has_backend(target_set) or has_frontend(target_set):
             routes.append(route("api-contract", "plan", "checkpoint", "check V1 URL, request, response, unit, and error compatibility before implementation.", CONTRACT_EVIDENCE))
@@ -248,6 +251,7 @@ def routing_payload(mode: str, targets: str | Iterable[str] | None = None) -> di
 def run_self_test() -> int:
     execute = route_names("execute", "both")
     plan = route_names("plan", "backend")
+    planning_only = route_names("plan", "planning-only")
     recover = routing_text("recover")
     payload = routing_payload("execute", "frontend")
     frontend_skills = payload["skills"]
@@ -266,6 +270,8 @@ def run_self_test() -> int:
         execute.count("$api-contract") == 1,
         "$v1-slice-harness" in plan,
         "$planning" in plan,
+        "$vertical-slice-implementation" in plan,
+        "$vertical-slice-implementation" not in planning_only,
         "$systematic-debugging" in recover,
         "Skill contract:" in routing_text("execute", "frontend"),
         frontend_web.get("role") == "support",

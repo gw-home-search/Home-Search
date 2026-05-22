@@ -16,6 +16,7 @@ from typing import Any
 
 from pr_evidence import (
     API_QUALITY,
+    BACKLOG_SYNC_SELF_TEST,
     DIFF_CHECK,
     PR_BODY_CHECK_SELF_TEST,
     PR_CONTEXT_SELF_TEST,
@@ -413,6 +414,7 @@ def render_report(payload: dict[str, Any]) -> str:
     links = nested(payload, "links", default={})
     commands = nested(payload, "commands", default={})
     notifications = nested(payload, "notifications", default={})
+    backlog_sync = nested(payload, "backlog_sync", default={})
 
     return f"""# V1 Slice 보고서: {slice_name}
 
@@ -444,6 +446,13 @@ def render_report(payload: dict[str, Any]) -> str:
 
 ## 검증 매트릭스
 {render_matrix(nested(payload, "verification", default={}))}
+## Backlog Sync
+- status: {backlog_sync.get("status", "skipped")}
+- summary: {backlog_sync.get("summary", "not recorded")}
+- old_status: {backlog_sync.get("old_status")}
+- new_status: {backlog_sync.get("new_status")}
+- commit: {backlog_sync.get("commit")}
+
 ## 사용 skill
 {render_skill_routing(payload)}
 ## 게이트 리뷰
@@ -592,6 +601,7 @@ def run_self_test() -> int:
             PR_LINT_SELF_TEST: {"status": "pass", "exit_code": 0},
             PR_CONTEXT_SELF_TEST: {"status": "pass", "exit_code": 0},
             PR_BODY_CHECK_SELF_TEST: {"status": "pass", "exit_code": 0},
+            BACKLOG_SYNC_SELF_TEST: {"status": "pass", "exit_code": 0},
             V1_PR_SELF_TEST: {"status": "pass", "exit_code": 0},
             V1_FLOW_SELF_TEST: {"status": "pass", "exit_code": 0},
             V1_PLAN_SELF_TEST: {"status": "pass", "exit_code": 0},
@@ -621,6 +631,7 @@ def run_self_test() -> int:
         f"`{PR_LINT_SELF_TEST}`" in pr_body,
         f"`{PR_CONTEXT_SELF_TEST}`" in pr_body,
         f"`{PR_BODY_CHECK_SELF_TEST}`" in pr_body,
+        f"`{BACKLOG_SYNC_SELF_TEST}`" in pr_body,
         f"`{V1_PR_SELF_TEST}`" in pr_body,
         f"`{V1_FLOW_SELF_TEST}`" in pr_body,
         f"`{SKILL_ROUTING_SELF_TEST}`" in pr_body,

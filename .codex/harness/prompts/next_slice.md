@@ -18,6 +18,9 @@ Skill routing:
 Instructions:
 - Recommend one to three unfinished slices.
 - Mark exactly one slice as recommended.
+- If a merged PR appears to be stale in backlog status, check
+  `.codex/harness/v1 sync-backlog --merged --dry-run` before recommending it
+  as unfinished work.
 - Prefer unfinished gate risks, missing tests, contract gaps, and data-safety
   gaps before new feature expansion.
 - Do not mutate files, create branches, create worktrees, commit, push, or open

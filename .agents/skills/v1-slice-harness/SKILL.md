@@ -93,6 +93,10 @@ Map short user prompts to the launcher first:
   `.codex/harness/v1 run <slice-id> --push`
 - report:
   `.codex/harness/v1 report <slice-id>`
+- sync stale backlog status from merged GitHub PRs:
+  `.codex/harness/v1 sync-backlog --merged`
+- inspect stale backlog status without writing:
+  `.codex/harness/v1 sync-backlog --merged --dry-run`
 - If the prompt mentions `notion`, append `--notion`.
 - If the prompt mentions `slack`, append `--slack`.
 - If the prompt names a target, append `--targets backend`,
@@ -104,6 +108,9 @@ Launcher defaults:
 - Preset and target are resolved from slice id, backlog, or explicit options.
 - Branch and worktree names are generated automatically.
 - Default `run` performs commit, integration branch creation, and local report.
+- After a non-planning integration succeeds, `run` marks the current backlog
+  slice `done` on the integration branch and commits that metadata change.
+  The `done` status reaches `main` only when the GitHub PR is merged.
 - `backend` creates/runs only the backend worktree.
 - `frontend` creates/runs only the frontend worktree.
 - `both` creates/runs backend and frontend worktrees; `--parallel` is valid
@@ -115,6 +122,8 @@ Launcher defaults:
   merging the GitHub PR.
 - Main merge, main push, PR merge, approve, live Open API calls, and DB
   migration execution are never automatic.
+- `sync-backlog` reads merged GitHub PR state and updates stale local backlog
+  metadata only. It never merges PRs, pushes branches, or changes app code.
 - Remote push and draft PR creation happen only when the user explicitly asks
   for PR/push in the current prompt.
 - `--push` pushes only the generated `feat/*-integration` branch after
@@ -195,6 +204,9 @@ review and record the limitation in the final evidence.
 
 - `mode=plan`:
   - Use `planning` for ambiguous goals.
+  - Use `vertical-slice-implementation` when the target is `backend`,
+    `frontend`, or `both` so the plan remains a thin independently
+    verifiable V1 slice.
   - Use `tdd` when First RED can be planned.
   - Use `code-mapper`, `backend-planner`, or `frontend-planner` only for focused
     read-only research.

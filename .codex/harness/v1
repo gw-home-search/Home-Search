@@ -16,6 +16,7 @@ HARNESS_ROOT = Path(__file__).resolve().parent
 FLOW = HARNESS_ROOT / "v1_flow.py"
 PLAN = HARNESS_ROOT / "v1_plan.py"
 REPORT = HARNESS_ROOT / "v1_report.py"
+BACKLOG_SYNC = HARNESS_ROOT / "backlog_sync.py"
 BACKLOG = HARNESS_ROOT / "slices" / "backlog.toml"
 PR_LINT = HARNESS_ROOT / "pr_lint.py"
 SKILL_ROUTING = HARNESS_ROOT / "skill_routing.py"
@@ -387,6 +388,34 @@ def run_report(args: argparse.Namespace) -> int:
     return result.returncode
 
 
+def run_sync_backlog(args: argparse.Namespace) -> int:
+    command = [
+        sys.executable,
+        str(BACKLOG_SYNC),
+        "--backlog",
+        str(BACKLOG),
+        "--base",
+        args.base,
+        "--limit",
+        str(args.limit),
+    ]
+    if args.merged:
+        command.append("--merged")
+    if args.slice:
+        command.extend(["--slice", args.slice])
+    if args.repo:
+        command.extend(["--repo", args.repo])
+    if args.dry_run:
+        command.append("--dry-run")
+    print("상태: sync-backlog", flush=True)
+    print(f"command: {printable(command)}", flush=True)
+    try:
+        result = subprocess.run(command, cwd=DEFAULT_MAIN, check=False)
+    except OSError as exc:
+        return fail(str(exc))
+    return result.returncode
+
+
 def run_self_test() -> int:
     try:
         args = argparse.Namespace(
@@ -426,6 +455,7 @@ def run_self_test() -> int:
         "--planning-mode" in preflight,
         preflight[preflight.index("--planning-mode") + 1] == "llm-replan",
         "llm-replan" in VALID_PLANNING_MODES,
+        BACKLOG_SYNC.name == "backlog_sync.py",
         planning_mode_for(argparse.Namespace(planning_mode=None), "run") == "standard",
         planning_mode_for(argparse.Namespace(planning_mode=None), "pr") == "llm-replan",
         dirty_group(".codex/harness/v1", " M .codex/harness/v1") == "harness",
@@ -507,6 +537,14 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--notion", action="store_true", help="Best-effort Notion report.")
     report.add_argument("--slack", action="store_true", help="Best-effort Slack report.")
     report.add_argument("--dry-run", action="store_true")
+
+    sync = subparsers.add_parser("sync-backlog", help="Synchronize backlog status from merged PRs.")
+    sync.add_argument("--merged", action="store_true", help="Use merged GitHub PRs as the sync source.")
+    sync.add_argument("--slice", help="Limit sync to one slice id.")
+    sync.add_argument("--base", default="main", help="Expected PR base branch.")
+    sync.add_argument("--repo", help="Optional gh --repo value.")
+    sync.add_argument("--limit", type=int, default=200)
+    sync.add_argument("--dry-run", action="store_true")
     return parser
 
 
@@ -532,6 +570,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_flow(args, dry_run=dry_run)
     if args.command == "report":
         return run_report(args)
+    if args.command == "sync-backlog":
+        return run_sync_backlog(args)
     parser.print_help()
     return 0
 

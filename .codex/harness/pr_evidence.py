@@ -15,6 +15,7 @@ WEB_BUILD = "cd apps/web && npm run build"
 PR_LINT_SELF_TEST = "python3 .codex/harness/pr_lint.py --self-test"
 PR_CONTEXT_SELF_TEST = "python3 .codex/harness/pr_context.py --self-test"
 PR_BODY_CHECK_SELF_TEST = "python3 .codex/harness/pr_body_check.py --self-test"
+BACKLOG_SYNC_SELF_TEST = "python3 .codex/harness/backlog_sync.py --self-test"
 V1_PR_SELF_TEST = "python3 .codex/harness/v1_pr.py --self-test"
 V1_FLOW_SELF_TEST = "python3 .codex/harness/v1_flow.py --self-test"
 V1_PLAN_SELF_TEST = "python3 .codex/harness/v1_plan.py --self-test"
@@ -35,6 +36,7 @@ COMMAND_ORDER = (
     PR_LINT_SELF_TEST,
     PR_CONTEXT_SELF_TEST,
     PR_BODY_CHECK_SELF_TEST,
+    BACKLOG_SYNC_SELF_TEST,
     V1_PR_SELF_TEST,
     V1_FLOW_SELF_TEST,
     V1_PLAN_SELF_TEST,
@@ -142,6 +144,8 @@ def requirements_for_changed_files(changed_files: list[str] | tuple[str, ...] | 
     changed = sorted({str(path) for path in changed_files if str(path).strip()})
     commands: set[str] = {DIFF_CHECK}
     forbidden: list[tuple[str, str]] = []
+    backlog_path = ".codex/harness/slices/backlog.toml"
+    backlog_only = changed == [backlog_path]
 
     for path in changed:
         reason = is_forbidden_path(path)
@@ -154,10 +158,16 @@ def requirements_for_changed_files(changed_files: list[str] | tuple[str, ...] | 
             commands.add(WEB_BUILD)
         if path.startswith("infra/"):
             commands.add(DOCKER_COMPOSE_LOCAL_CONFIG)
+        if path == backlog_path:
+            if backlog_only:
+                commands.add(BACKLOG_SYNC_SELF_TEST)
+                commands.add(V1_PLAN_SELF_TEST)
+            continue
         if path.startswith(".codex/harness/"):
             commands.add(PR_LINT_SELF_TEST)
             commands.add(PR_CONTEXT_SELF_TEST)
             commands.add(PR_BODY_CHECK_SELF_TEST)
+            commands.add(BACKLOG_SYNC_SELF_TEST)
             commands.add(V1_PR_SELF_TEST)
             commands.add(V1_FLOW_SELF_TEST)
             commands.add(V1_PLAN_SELF_TEST)

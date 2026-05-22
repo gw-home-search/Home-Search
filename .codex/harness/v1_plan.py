@@ -128,6 +128,12 @@ def latest_report_path() -> Path | None:
     ]
     if not candidates:
         return None
+    json_candidates = [path for path in candidates if path.suffix == ".json"]
+    if json_candidates:
+        return max(json_candidates, key=lambda path: path.stat().st_mtime)
+    paired_markdown = [path for path in candidates if path.suffix == ".md" and path.with_suffix(".json").exists()]
+    if paired_markdown:
+        return max(paired_markdown, key=lambda path: path.stat().st_mtime)
     return max(candidates, key=lambda path: path.stat().st_mtime)
 
 
@@ -180,13 +186,15 @@ def read_report_evidence(path: Path | None) -> dict[str, Any]:
     for line in text.splitlines():
         if "not run" in line.lower() or "missing test" in line.lower() or "미확인" in line:
             missing_tests.append(line.strip("- ").strip())
+    contract_gap = bool(re.search(r"(?ms)^### 계약 위험\s*\n(?!- none\s*$)-\s+.+", text))
+    data_gap = bool(re.search(r"(?ms)^### 데이터[^\n]*\n(?!- none\s*$)-\s+.+", text))
     evidence.update(
         {
             "status": "Fail" if "상태: fail" in lower else "Partial" if "partial" in lower else "unknown",
             "gate_risks": risks[:5],
             "missing_tests": missing_tests[:5],
-            "contract_gaps": ["이전 report에 contract risk 언급 있음"] if "contract" in lower and "risk" in lower else [],
-            "data_safety_gaps": ["이전 report에 data safety 언급 있음"] if "data safety" in lower or "데이터" in text else [],
+            "contract_gaps": ["이전 report에 contract risk 언급 있음"] if contract_gap else [],
+            "data_safety_gaps": ["이전 report에 data safety 언급 있음"] if data_gap else [],
             "summary": "Markdown report 로드됨",
         }
     )

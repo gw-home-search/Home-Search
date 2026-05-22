@@ -19,6 +19,7 @@ from typing import Any
 
 from pr_evidence import (
     API_QUALITY,
+    BACKLOG_SYNC_SELF_TEST,
     DIFF_CHECK,
     DOCKER_COMPOSE_LOCAL_CONFIG,
     KO_CHECK,
@@ -39,6 +40,7 @@ from pr_evidence import (
     ordered_commands,
     requirements_for_changed_files,
 )
+from backlog_sync import mark_slice_done
 from pr_lint import PrInput, format_grouped_errors, lint_pr
 from skill_routing import routing_payload, routing_text
 from v1_report import render_pr_body
@@ -82,6 +84,7 @@ KNOWN_VERIFICATION_COMMANDS = {
         PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
         PR_CONTEXT_SELF_TEST: (".", ["python3", ".codex/harness/pr_context.py", "--self-test"]),
         PR_BODY_CHECK_SELF_TEST: (".", ["python3", ".codex/harness/pr_body_check.py", "--self-test"]),
+        BACKLOG_SYNC_SELF_TEST: (".", ["python3", ".codex/harness/backlog_sync.py", "--self-test"]),
         V1_PR_SELF_TEST: (".", ["python3", ".codex/harness/v1_pr.py", "--self-test"]),
         V1_FLOW_SELF_TEST: (".", ["python3", ".codex/harness/v1_flow.py", "--self-test"]),
         V1_PLAN_SELF_TEST: (".", ["python3", ".codex/harness/v1_plan.py", "--self-test"]),
@@ -101,6 +104,7 @@ KNOWN_VERIFICATION_COMMANDS = {
         PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
         PR_CONTEXT_SELF_TEST: (".", ["python3", ".codex/harness/pr_context.py", "--self-test"]),
         PR_BODY_CHECK_SELF_TEST: (".", ["python3", ".codex/harness/pr_body_check.py", "--self-test"]),
+        BACKLOG_SYNC_SELF_TEST: (".", ["python3", ".codex/harness/backlog_sync.py", "--self-test"]),
         V1_PR_SELF_TEST: (".", ["python3", ".codex/harness/v1_pr.py", "--self-test"]),
         V1_FLOW_SELF_TEST: (".", ["python3", ".codex/harness/v1_flow.py", "--self-test"]),
         V1_PLAN_SELF_TEST: (".", ["python3", ".codex/harness/v1_plan.py", "--self-test"]),
@@ -602,6 +606,8 @@ def expected_changed_files_for_targets(targets: list[str]) -> list[str]:
         expected.append("apps/api/__expected__")
     if "frontend" in targets:
         expected.append("apps/web/__expected__")
+    if targets:
+        expected.append(".codex/harness/slices/backlog.toml")
     return expected
 
 
@@ -751,6 +757,37 @@ def call_integrate(args: argparse.Namespace, names: dict[str, Any], *, dry_run: 
         "summary": f"merged targets: {', '.join(merged)}",
         "verification": verification,
     }
+
+
+def call_backlog_sync(args: argparse.Namespace, names: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
+    if not execution_targets(args):
+        return {"status": "skipped", "exit_code": None, "summary": "planning-only"}
+    if dry_run:
+        print(f"[DRY-RUN] mark backlog slice done: {names['slice']}")
+    result = mark_slice_done(BACKLOG_PATH, names["slice"], dry_run=dry_run)
+    payload = {
+        "status": result.status,
+        "exit_code": 0 if result.status in {"pass", "skipped"} else 1,
+        "summary": result.summary,
+        "old_status": result.old_status,
+        "new_status": result.new_status,
+        "commit": None,
+    }
+    if result.status == "conflict":
+        raise RuntimeError(f"backlog sync conflict: {result.summary}")
+    if result.status == "fail":
+        raise RuntimeError(f"backlog sync failed: {result.summary}")
+    if result.status != "pass" or dry_run:
+        return payload
+    add_result = git(DEFAULT_MAIN, "add", "--", ".codex/harness/slices/backlog.toml")
+    if add_result["status"] == "fail":
+        raise RuntimeError(f"backlog sync add failed: {add_result['summary']}")
+    commit_result = git(DEFAULT_MAIN, "commit", "-m", f"chore(harness): mark {names['slice']} slice done")
+    if commit_result["status"] == "fail":
+        raise RuntimeError(f"backlog sync commit failed: {commit_result['summary']}")
+    payload["commit"] = git_output(DEFAULT_MAIN, "rev-parse", "--short", "HEAD") or None
+    payload["summary"] = f"{result.summary}; commit={payload['commit']}"
+    return payload
 
 
 def payload_path_for(slice_name: str) -> Path:
@@ -942,6 +979,7 @@ def build_payload(
     integration: dict[str, Any] | None,
     status: str,
     risk: str | None = None,
+    backlog_sync: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     verification: dict[str, Any] = {}
     targets = execution_targets(args)
@@ -952,6 +990,8 @@ def build_payload(
         verification.update(integration.get("verification", {}))
     if integration:
         verification["integration"] = {k: integration.get(k) for k in ("status", "exit_code", "summary")}
+    if backlog_sync:
+        verification["backlog sync"] = {k: backlog_sync.get(k) for k in ("status", "exit_code", "summary")}
     main_merge = "not suggested"
     if integration is not None:
         main_merge = f"git -C {DEFAULT_MAIN} switch main && git -C {DEFAULT_MAIN} merge --no-ff {names['integration_branch']}"
@@ -1022,8 +1062,10 @@ def build_payload(
             "api": results.get("backend", {}).get("commit"),
             "web": results.get("frontend", {}).get("commit"),
             "integration_head": integration_head,
+            "backlog_sync": (backlog_sync or {}).get("commit"),
         },
         "verification": verification,
+        "backlog_sync": backlog_sync or {"status": "skipped", "summary": "not run"},
         "changed_files": integration_files,
         "changed_files_kind": changed_files_kind,
         "required_evidence": required_evidence,
@@ -1103,6 +1145,7 @@ def run_flow(args: argparse.Namespace) -> int:
 
     results: dict[str, Any] = {}
     integration_result: dict[str, Any] | None = None
+    backlog_sync_result: dict[str, Any] | None = None
     try:
         selected_targets = execution_targets(args)
         for target in selected_targets:
@@ -1151,8 +1194,10 @@ def run_flow(args: argparse.Namespace) -> int:
 
         if args.integrate and not args.no_integrate:
             integration_result = call_integrate(args, names, dry_run=dry_run)
+            if integration_result.get("status") == "pass":
+                backlog_sync_result = call_backlog_sync(args, names, dry_run=dry_run)
     except RuntimeError as exc:
-        payload = build_payload(args, names, started, results, integration_result, "Fail", str(exc))
+        payload = build_payload(args, names, started, results, integration_result, "Fail", str(exc), backlog_sync_result)
         payload_path = write_payload(payload, dry_run=dry_run)
         if args.report or args.notion or args.slack:
             call_report(payload, notion=args.notion, slack=args.slack, dry_run=dry_run)
@@ -1160,7 +1205,7 @@ def run_flow(args: argparse.Namespace) -> int:
         print(f"report: {payload_path}")
         return exit_code
 
-    payload = build_payload(args, names, started, results, integration_result, "Pass")
+    payload = build_payload(args, names, started, results, integration_result, "Pass", backlog_sync=backlog_sync_result)
     try:
         if args.push or args.pr:
             lint_preflight = publish_lint_preflight(args, names, payload, dry_run=dry_run)
@@ -1168,7 +1213,7 @@ def run_flow(args: argparse.Namespace) -> int:
             payload["lint_preflight"] = lint_preflight
             payload["publish_action"] = "pr" if args.pr else "push"
     except RuntimeError as exc:
-        payload = build_payload(args, names, started, results, integration_result, "Fail", str(exc))
+        payload = build_payload(args, names, started, results, integration_result, "Fail", str(exc), backlog_sync_result)
         payload_path = write_payload(payload, dry_run=dry_run)
         if args.report or args.notion or args.slack:
             call_report(payload, notion=args.notion, slack=args.slack, dry_run=dry_run)
@@ -1193,7 +1238,7 @@ def run_flow(args: argparse.Namespace) -> int:
                 write_payload(payload, dry_run=False)
             pr_result = call_pr(args, names, payload_path, body_path, dry_run=dry_run)
     except RuntimeError as exc:
-        payload = build_payload(args, names, started, results, integration_result, "Fail", str(exc))
+        payload = build_payload(args, names, started, results, integration_result, "Fail", str(exc), backlog_sync_result)
         payload_path = write_payload(payload, dry_run=dry_run)
         if args.report or args.notion or args.slack:
             call_report(payload, notion=args.notion, slack=args.slack, dry_run=dry_run)

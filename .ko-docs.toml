@@ -36,14 +36,14 @@ last_synced = "2026-05-20"
 [[docs]]
 source = ".codex/harness/prompts/next_slice.md"
 ko = ".codex/harness/prompts/next_slice_KO.md"
-source_sha256 = "6824e0a1bbf222c719bfb7148511040837566e0d5b3fc1b9cb4f4437d0a1c57e"
-last_synced = "2026-05-20"
+source_sha256 = "11816cc6d6387420895aecba09fe7d719e4cbef6464b5456c40736b9c2b24611"
+last_synced = "2026-05-22"
 
 [[docs]]
 source = ".codex/harness/prompts/slice_plan.md"
 ko = ".codex/harness/prompts/slice_plan_KO.md"
-source_sha256 = "c5823c359daecc41799529bc84e5dc5e59280108b991c911aec34686c6df41ce"
-last_synced = "2026-05-20"
+source_sha256 = "7099c7b51ed6da96c3e40939db879e93aae3ee140f0ebb15ff2502250658d0e0"
+last_synced = "2026-05-22"
 
 [[docs]]
 source = ".agents/skills/api-contract/SKILL.md"
@@ -96,8 +96,8 @@ last_synced = "2026-05-20"
 [[docs]]
 source = ".agents/skills/v1-slice-harness/SKILL.md"
 ko = ".agents/skills/v1-slice-harness/SKILL_KO.md"
-source_sha256 = "bbf133c3ffcca6be82bf2c573d248aef9f4e600e34993706635a024c61e75b34"
-last_synced = "2026-05-21"
+source_sha256 = "622f1691b94152a5874e3e70f128a6cf0584d35cff6a964dffed5a1ad6e2c5a4"
+last_synced = "2026-05-22"
 
 [[docs]]
 source = ".agents/skills/vertical-slice-implementation/SKILL.md"

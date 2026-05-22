@@ -13,6 +13,7 @@ from typing import Iterable
 from pr_context import PrContext, changed_files_from_sources, context_from_event, context_from_local
 from pr_evidence import (
     API_QUALITY,
+    BACKLOG_SYNC_SELF_TEST,
     DIFF_CHECK,
     KO_CHECK,
     POST_TOOL_USE_REVIEW_SELF_TEST,
@@ -554,6 +555,7 @@ def valid_body(
 - `{PR_LINT_SELF_TEST}` = pass (자체 테스트)
 - `{PR_CONTEXT_SELF_TEST}` = pass (PR context 공용 helper 자체 테스트)
 - `{PR_BODY_CHECK_SELF_TEST}` = pass (PR body 검사 자체 테스트)
+- `{BACKLOG_SYNC_SELF_TEST}` = pass (backlog sync 자체 테스트)
 - `{V1_PR_SELF_TEST}` = pass (draft PR 생성 helper 자체 테스트)
 - `{V1_FLOW_SELF_TEST}` = pass (v1 flow 자체 테스트)
 - `{V1_PLAN_SELF_TEST}` = pass (v1 plan 자체 테스트)

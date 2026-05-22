@@ -14,6 +14,8 @@ Inputs:
 
 Skill routing:
 - $planning: produce the decision-complete slice plan and acceptance criteria.
+- $vertical-slice-implementation: confirm the plan is a thin independently
+  verifiable V1 slice before implementation starts.
 - $tdd: define First RED, Expected RED failure, and Minimum GREEN before execution.
 - $api-contract: check V1 API URL, request, response, unit, and error compatibility when backend or frontend behavior can be affected.
 

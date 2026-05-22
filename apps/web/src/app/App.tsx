@@ -677,6 +677,7 @@ export function App({
                 {detailMetric('Building coverage', formatNumber(complexDetail.bcRat, '%'))}
                 {detailMetric('Floor area ratio', formatNumber(complexDetail.vlRat, '%'))}
               </dl>
+              <TradeAmountChart trades={parcelTrades?.trades ?? []} />
               <TradeList trades={parcelTrades?.trades ?? []} />
             </>
           ) : null}
@@ -742,6 +743,57 @@ function formatNumber(value: number | null, suffix: string): string | null {
   return `${value.toLocaleString()}${suffix}`;
 }
 
+function TradeAmountChart({ trades }: { trades: TradeItem[] }) {
+  const points = tradeChartPoints(trades);
+
+  return (
+    <section className="trade-chart" aria-label="Trade amount chart">
+      <div className="trade-section-header">
+        <h3>Trade amount trend</h3>
+        {points.length > 0 ? <p>Recent {points.length}</p> : null}
+      </div>
+
+      {points.length === 0 ? (
+        <p className="trade-chart-empty">No trade amounts to chart</p>
+      ) : (
+        <>
+          <div
+            className="trade-chart-plot"
+            role="img"
+            aria-label={`Recent trade amounts from ${points[0]?.dealDate} to ${
+              points[points.length - 1]?.dealDate
+            }`}
+          >
+            {points.map((point) => (
+              <div
+                key={`${point.tradeId}-${point.dealDate}`}
+                className="trade-chart-point"
+                data-chart-point=""
+                data-chart-date={point.dealDate}
+              >
+                <span
+                  className="trade-chart-bar"
+                  aria-label={`${point.dealDate} ${formatAmount(point.dealAmount)}`}
+                  style={{ height: `${point.heightPercent}%` }}
+                />
+                <span className="trade-chart-date">{point.shortDate}</span>
+              </div>
+            ))}
+          </div>
+          <ol className="trade-chart-summary">
+            {points.map((point) => (
+              <li key={`${point.tradeId}-${point.dealDate}-summary`}>
+                <span>{point.dealDate}</span>
+                <strong>{formatAmount(point.dealAmount)}</strong>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+    </section>
+  );
+}
+
 function TradeList({ trades }: { trades: TradeItem[] }) {
   return (
     <section className="trade-list" aria-label="Trade list">
@@ -772,6 +824,53 @@ function TradeList({ trades }: { trades: TradeItem[] }) {
       )}
     </section>
   );
+}
+
+type TradeChartPoint = {
+  tradeId: number;
+  dealDate: string;
+  dealAmount: number;
+  shortDate: string;
+  heightPercent: number;
+};
+
+function tradeChartPoints(trades: TradeItem[]): TradeChartPoint[] {
+  const recentTrades = trades
+    .filter((trade) => Number.isFinite(trade.dealAmount))
+    .slice()
+    .sort(compareTradesNewestFirst)
+    .slice(0, 6)
+    .sort(compareTradesOldestFirst);
+
+  if (recentTrades.length === 0) {
+    return [];
+  }
+
+  const amounts = recentTrades.map((trade) => trade.dealAmount);
+  const minAmount = Math.min(...amounts);
+  const maxAmount = Math.max(...amounts);
+  const range = maxAmount - minAmount;
+
+  return recentTrades.map((trade) => ({
+    tradeId: trade.tradeId,
+    dealDate: trade.dealDate,
+    dealAmount: trade.dealAmount,
+    shortDate: shortTradeDate(trade.dealDate),
+    heightPercent: range === 0 ? 54 : 32 + ((trade.dealAmount - minAmount) / range) * 58,
+  }));
+}
+
+function compareTradesNewestFirst(first: TradeItem, second: TradeItem): number {
+  return second.dealDate.localeCompare(first.dealDate) || second.tradeId - first.tradeId;
+}
+
+function compareTradesOldestFirst(first: TradeItem, second: TradeItem): number {
+  return first.dealDate.localeCompare(second.dealDate) || first.tradeId - second.tradeId;
+}
+
+function shortTradeDate(dealDate: string): string {
+  const [, month, day] = dealDate.split('-');
+  return month && day ? `${month}/${day}` : dealDate;
 }
 
 function formatTradeFloor(trade: TradeItem): string {

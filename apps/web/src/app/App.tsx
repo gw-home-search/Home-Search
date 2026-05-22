@@ -104,6 +104,7 @@ export function App({
   const [regionDetail, setRegionDetail] = useState<RegionDetail | null>(null);
   const [regionState, setRegionState] = useState<PanelRequestState>('idle');
   const [regionError, setRegionError] = useState<string | null>(null);
+  const [isExplorationOpen, setIsExplorationOpen] = useState(true);
   const markerRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
   const searchRequestSeq = useRef(0);
@@ -362,227 +363,273 @@ export function App({
 
   return (
     <main className="app-shell">
-      <h1>Home Search</h1>
+      <header aria-label="Application bar" className="app-bar">
+        <div className="app-brand">
+          <h1>Home Search</h1>
+          <span>V1 map</span>
+        </div>
+        <button
+          type="button"
+          aria-controls="exploration-panel"
+          aria-expanded={isExplorationOpen}
+          aria-label="Toggle exploration panel"
+          className="exploration-toggle"
+          onClick={() => {
+            setIsExplorationOpen((current) => !current);
+          }}
+        >
+          Explore
+        </button>
+      </header>
 
-      <section aria-label="Exploration panel" className="exploration-panel">
-        <form aria-label="Complex search" className="search-panel" onSubmit={handleSearchSubmit}>
-          <input
-            aria-label="Search complexes"
-            name="q"
-            placeholder="Complex name"
-            type="search"
+      <div className="map-workspace" data-layout-region="map-workspace">
+        <section aria-label="Map surface" className="map-surface">
+          <p className="map-status">{mapRuntimeStatusLabel(mapRuntimeState)}</p>
+          <KakaoMapSurface
+            appKey={kakaoMapAppKey}
+            focusTarget={mapFocusTarget}
+            initialLevel={initialMapLevel}
+            markers={markers}
+            onComplexMarkerSelect={handleComplexMarkerSelect}
+            onRuntimeErrorChange={setMapRuntimeError}
+            onRuntimeStateChange={setMapRuntimeState}
+            onViewportChange={handleViewportChange}
           />
-          <button type="submit" aria-label="Run complex search">
-            Search
-          </button>
-        </form>
 
-        {searchState === 'loading' ? (
-          <p role="status" aria-live="polite">
-            Searching complexes
-          </p>
-        ) : null}
+          <form
+            aria-label="Marker filters"
+            className="filter-panel"
+            data-map-overlay="filters"
+            onSubmit={handleFilterSubmit}
+          >
+            <input
+              aria-label="Minimum pyeong"
+              name="pyeongMin"
+              placeholder="Pyeong min"
+              type="number"
+            />
+            <input
+              aria-label="Maximum pyeong"
+              name="pyeongMax"
+              placeholder="Pyeong max"
+              type="number"
+            />
+            <input
+              aria-label="Minimum price eok"
+              name="priceEokMin"
+              placeholder="Price min"
+              step="0.1"
+              type="number"
+            />
+            <input
+              aria-label="Maximum price eok"
+              name="priceEokMax"
+              placeholder="Price max"
+              step="0.1"
+              type="number"
+            />
+            <input
+              aria-label="Minimum building age"
+              name="ageMin"
+              placeholder="Age min"
+              type="number"
+            />
+            <input
+              aria-label="Maximum building age"
+              name="ageMax"
+              placeholder="Age max"
+              type="number"
+            />
+            <input
+              aria-label="Minimum unit count"
+              name="unitMin"
+              placeholder="Units min"
+              type="number"
+            />
+            <input
+              aria-label="Maximum unit count"
+              name="unitMax"
+              placeholder="Units max"
+              type="number"
+            />
+            <button type="submit" aria-label="Apply marker filters">
+              Apply
+            </button>
+          </form>
 
-        {searchState === 'empty' ? (
-          <p role="status" aria-live="polite">
-            No search results
-          </p>
-        ) : null}
+          <div aria-label="Map controls" className="map-controls">
+            <button type="button" aria-label="Zoom in" onClick={handleZoomIn}>
+              +
+            </button>
+            <button type="button" aria-label="Zoom out" onClick={handleZoomOut}>
+              -
+            </button>
+          </div>
 
-        {searchState === 'error' ? (
-          <p role="alert">
-            Search unavailable.
-            {searchError ? ` ${searchError}` : null}
-          </p>
-        ) : null}
-
-        {searchResults.length > 0 ? (
-          <ul aria-label="Search results" className="panel-list">
-            {searchResults.map((result) => (
-              <li key={result.complexId}>
-                <button
-                  type="button"
-                  aria-label={`Select search result ${result.complexName}`}
-                  onClick={() => {
-                    handleSearchResultSelect(result);
-                  }}
-                >
-                  <span>{result.complexName}</span>
-                  <span>{result.address}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
-        <div className="region-panel">
-          <button type="button" aria-label="Load root regions" onClick={handleLoadRootRegions}>
-            Regions
-          </button>
-
-          {regionState === 'loading' ? (
-            <p role="status" aria-live="polite">
-              Loading regions
+          {markerState === 'loading' ? (
+            <p className="map-feedback" role="status" aria-live="polite">
+              Loading markers
             </p>
           ) : null}
 
-          {regionState === 'empty' ? (
-            <p role="status" aria-live="polite">
-              No regions
+          {markerState === 'empty' ? (
+            <p className="map-feedback" role="status" aria-live="polite">
+              No markers in this area
             </p>
           ) : null}
 
-          {regionState === 'error' ? (
-            <p role="alert">
-              Region navigation unavailable.
-              {regionError ? ` ${regionError}` : null}
+          {markerState === 'error' ? (
+            <p className="map-feedback map-feedback-error" role="alert">
+              Marker data unavailable. Map remains usable.
+              {markerError ? ` ${markerError}` : null}
+              {' '}
+              <button type="button" aria-label="Retry marker load" onClick={handleRetryMarkers}>
+                Retry
+              </button>
             </p>
           ) : null}
 
-          {regionDetail ? <p className="selected-region">{regionDetail.name}</p> : null}
+          {mapRuntimeError && markerState !== 'error' ? (
+            <p className="map-feedback map-feedback-error" role="alert">
+              {mapRuntimeError}
+            </p>
+          ) : null}
 
-          {rootRegions.length > 0 ? (
-            <ul aria-label="Region navigation" className="panel-list">
-              {rootRegions.map((region) => (
-                <li key={region.id}>
+          {markers?.kind === 'complex' && markers.markers.length > 0 ? (
+            <ul aria-label="Complex markers" className="marker-preview-list">
+              {markers.markers.map((marker) => (
+                <li key={marker.parcelId}>
                   <button
                     type="button"
-                    aria-label={`Open region ${region.name}`}
+                    aria-label={`Open detail for parcel ${marker.parcelId}`}
+                    className="marker-list-button"
+                    data-marker-id={marker.parcelId}
                     onClick={() => {
-                      handleRegionSelect(region.id);
+                      handleComplexMarkerSelect(marker.parcelId);
                     }}
                   >
-                    {region.name}
+                    {formatAmount(marker.latestDealAmount)} - {marker.unitCntSum} units
                   </button>
                 </li>
               ))}
             </ul>
           ) : null}
-        </div>
-      </section>
 
-      <form aria-label="Marker filters" className="filter-panel" onSubmit={handleFilterSubmit}>
-        <input aria-label="Minimum pyeong" name="pyeongMin" placeholder="Pyeong min" type="number" />
-        <input aria-label="Maximum pyeong" name="pyeongMax" placeholder="Pyeong max" type="number" />
-        <input
-          aria-label="Minimum price eok"
-          name="priceEokMin"
-          placeholder="Price min"
-          step="0.1"
-          type="number"
-        />
-        <input
-          aria-label="Maximum price eok"
-          name="priceEokMax"
-          placeholder="Price max"
-          step="0.1"
-          type="number"
-        />
-        <input
-          aria-label="Minimum building age"
-          name="ageMin"
-          placeholder="Age min"
-          type="number"
-        />
-        <input
-          aria-label="Maximum building age"
-          name="ageMax"
-          placeholder="Age max"
-          type="number"
-        />
-        <input
-          aria-label="Minimum unit count"
-          name="unitMin"
-          placeholder="Units min"
-          type="number"
-        />
-        <input
-          aria-label="Maximum unit count"
-          name="unitMax"
-          placeholder="Units max"
-          type="number"
-        />
-        <button type="submit" aria-label="Apply marker filters">
-          Apply
-        </button>
-      </form>
+          {markers?.kind === 'region' && markers.markers.length > 0 ? (
+            <ul aria-label="Region markers" className="marker-preview-list">
+              {markers.markers.map((marker) => (
+                <li key={marker.id} data-marker-id={marker.id}>
+                  {marker.name}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
 
-      <section aria-label="Map surface" className="map-surface">
-        <p className="map-status">{mapRuntimeStatusLabel(mapRuntimeState)}</p>
-        <KakaoMapSurface
-          appKey={kakaoMapAppKey}
-          focusTarget={mapFocusTarget}
-          initialLevel={initialMapLevel}
-          markers={markers}
-          onComplexMarkerSelect={handleComplexMarkerSelect}
-          onRuntimeErrorChange={setMapRuntimeError}
-          onRuntimeStateChange={setMapRuntimeState}
-          onViewportChange={handleViewportChange}
-        />
-        <div aria-label="Map controls" className="map-controls">
-          <button type="button" aria-label="Zoom in" onClick={handleZoomIn}>
-            +
-          </button>
-          <button type="button" aria-label="Zoom out" onClick={handleZoomOut}>
-            -
-          </button>
-        </div>
+        <section
+          id="exploration-panel"
+          aria-label="Exploration panel"
+          aria-hidden={!isExplorationOpen}
+          className="exploration-panel"
+          data-collapsed={isExplorationOpen ? 'false' : 'true'}
+          hidden={!isExplorationOpen}
+        >
+          <form aria-label="Complex search" className="search-panel" onSubmit={handleSearchSubmit}>
+            <input
+              aria-label="Search complexes"
+              name="q"
+              placeholder="Complex name"
+              type="search"
+            />
+            <button type="submit" aria-label="Run complex search">
+              Search
+            </button>
+          </form>
 
-        {markers?.kind === 'complex' && markers.markers.length > 0 ? (
-          <ul aria-label="Complex markers">
-            {markers.markers.map((marker) => (
-              <li key={marker.parcelId}>
-                <button
-                  type="button"
-                  aria-label={`Open detail for parcel ${marker.parcelId}`}
-                  className="marker-list-button"
-                  data-marker-id={marker.parcelId}
-                  onClick={() => {
-                    handleComplexMarkerSelect(marker.parcelId);
-                  }}
-                >
-                  {formatAmount(marker.latestDealAmount)} - {marker.unitCntSum} units
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+          {searchState === 'loading' ? (
+            <p role="status" aria-live="polite">
+              Searching complexes
+            </p>
+          ) : null}
 
-        {markers?.kind === 'region' && markers.markers.length > 0 ? (
-          <ul aria-label="Region markers">
-            {markers.markers.map((marker) => (
-              <li key={marker.id} data-marker-id={marker.id}>
-                {marker.name}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
+          {searchState === 'empty' ? (
+            <p role="status" aria-live="polite">
+              No search results
+            </p>
+          ) : null}
 
-      {markerState === 'loading' ? (
-        <p role="status" aria-live="polite">
-          Loading markers
-        </p>
-      ) : null}
+          {searchState === 'error' ? (
+            <p role="alert">
+              Search unavailable.
+              {searchError ? ` ${searchError}` : null}
+            </p>
+          ) : null}
 
-      {markerState === 'empty' ? (
-        <p role="status" aria-live="polite">
-          No markers in this area
-        </p>
-      ) : null}
+          {searchResults.length > 0 ? (
+            <ul aria-label="Search results" className="panel-list">
+              {searchResults.map((result) => (
+                <li key={result.complexId}>
+                  <button
+                    type="button"
+                    aria-label={`Select search result ${result.complexName}`}
+                    onClick={() => {
+                      handleSearchResultSelect(result);
+                    }}
+                  >
+                    <span>{result.complexName}</span>
+                    <span>{result.address}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
-      {markerState === 'error' ? (
-        <p role="alert">
-          Marker data unavailable. Map remains usable.
-          {markerError ? ` ${markerError}` : null}
-          {' '}
-          <button type="button" aria-label="Retry marker load" onClick={handleRetryMarkers}>
-            Retry
-          </button>
-        </p>
-      ) : null}
+          <div className="region-panel">
+            <button type="button" aria-label="Load root regions" onClick={handleLoadRootRegions}>
+              Regions
+            </button>
 
-      {mapRuntimeError && markerState !== 'error' ? <p role="alert">{mapRuntimeError}</p> : null}
+            {regionState === 'loading' ? (
+              <p role="status" aria-live="polite">
+                Loading regions
+              </p>
+            ) : null}
+
+            {regionState === 'empty' ? (
+              <p role="status" aria-live="polite">
+                No regions
+              </p>
+            ) : null}
+
+            {regionState === 'error' ? (
+              <p role="alert">
+                Region navigation unavailable.
+                {regionError ? ` ${regionError}` : null}
+              </p>
+            ) : null}
+
+            {regionDetail ? <p className="selected-region">{regionDetail.name}</p> : null}
+
+            {rootRegions.length > 0 ? (
+              <ul aria-label="Region navigation" className="panel-list">
+                {rootRegions.map((region) => (
+                  <li key={region.id}>
+                    <button
+                      type="button"
+                      aria-label={`Open region ${region.name}`}
+                      onClick={() => {
+                        handleRegionSelect(region.id);
+                      }}
+                    >
+                      {region.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        </section>
+      </div>
 
       {selectedParcelId == null ? null : (
         <aside aria-label="Complex detail drawer" className="detail-drawer">

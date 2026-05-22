@@ -95,6 +95,19 @@ VALUES
         'MATCH_FAILED',
         'no complex matched aptSeq=APT-404',
         now()
+    ),
+    (
+        90004,
+        'RTMS',
+        'sample-rtms-20251201',
+        '11680',
+        '202512',
+        1,
+        '{"aptSeq":"APT-501","dealDate":"2025-12-01"}',
+        'sample-payload-hash-duplicate',
+        'DUPLICATE',
+        'duplicate source_key=sample-rtms-20251201',
+        now()
     )
 ON CONFLICT (id) DO NOTHING;
 

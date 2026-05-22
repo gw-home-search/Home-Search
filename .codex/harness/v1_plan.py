@@ -958,7 +958,11 @@ def run_self_test() -> int:
             "data_safety_gaps": [],
             "summary": "self-test evidence",
         }
-        candidates = select_candidates(slices, evidence, limit=3, targets=None, preset=None)
+        candidate_fixture = [dict(item) for item in slices]
+        candidate_fixture[0]["status"] = "candidate"
+        candidates = select_candidates(candidate_fixture, evidence, limit=3, targets=None, preset=None)
+        no_candidate_fixture = [dict(item, status="done") for item in slices]
+        no_candidates = select_candidates(no_candidate_fixture, evidence, limit=3, targets=None, preset=None)
         plan_item = find_slice(slices, "kakao-map-marker-refresh-flow")
         plan = plan_for_slice(plan_item, evidence, targets=None, preset=None, intent="push", planning_mode="critique")
         llm_plan = plan_for_slice(plan_item, evidence, targets=None, preset=None, intent="pr", planning_mode="llm-replan")
@@ -992,6 +996,15 @@ def run_self_test() -> int:
             intent="pr",
         )
         payload = {"status": "Pass", "current": evidence, "candidates": candidates, "recommended": candidates[0]}
+        no_candidate_rendered = render_next_text(
+            {
+                "status": "Pass",
+                "current": evidence,
+                "candidates": no_candidates,
+                "recommended": None,
+                "next_command": "backlog 후보를 추가하세요",
+            }
+        )
         rendered = json.dumps(payload, ensure_ascii=False)
         try:
             plan_for_slice(plan_item, evidence, targets="backend", preset=None)
@@ -1002,6 +1015,9 @@ def run_self_test() -> int:
             len(slices) >= 4,
             all(item["targets"] in VALID_TARGETS for item in slices),
             1 <= len(candidates) <= 3,
+            len(no_candidates) == 0,
+            "backlog 후보 없음" in no_candidate_rendered,
+            "다음 행동: backlog 후보를 추가하세요" in no_candidate_rendered,
             payload["recommended"]["id"] == candidates[0]["id"],
             '"recommended"' in rendered,
             plan["targets"] == "frontend",

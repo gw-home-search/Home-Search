@@ -80,7 +80,15 @@ export function loadKakaoMapSdk(appKey: string): Promise<KakaoMapsApi> {
       }
 
       if (typeof maps.load === 'function') {
-        maps.load(() => resolve(maps));
+        maps.load(() => {
+          if (isLoadedKakaoMapsApi(maps)) {
+            resolve(maps);
+            return;
+          }
+
+          sdkLoadPromise = null;
+          reject(new Error('Kakao map SDK did not expose map constructors'));
+        });
         return;
       }
 

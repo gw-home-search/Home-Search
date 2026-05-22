@@ -3,8 +3,9 @@ package com.home.infrastructure.external.rtms;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.OpenApiTradeIngestService;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -30,6 +31,16 @@ class RtmsExternalApiConfiguration {
 			connectTimeoutMillis,
 			readTimeoutMillis
 		);
+	}
+
+	@Bean
+	RtmsOneShotIngestProperties rtmsOneShotIngestProperties(
+		@Value("${home.ingest.rtms.enabled:false}") boolean enabled,
+		@Value("${home.ingest.rtms.lawd-cd:}") String lawdCd,
+		@Value("${home.ingest.rtms.deal-ymd:}") String dealYmd,
+		@Value("${home.ingest.rtms.page-no:1}") Integer pageNo
+	) {
+		return new RtmsOneShotIngestProperties(enabled, lawdCd, dealYmd, pageNo);
 	}
 
 	@Bean
@@ -62,11 +73,23 @@ class RtmsExternalApiConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnBean(OpenApiTradeIngestService.class)
 	RtmsOneShotTradeIngestRunner rtmsOneShotTradeIngestRunner(
 		RtmsApartmentTradeClient client,
-		OpenApiTradeIngestService ingestService
+		ObjectProvider<OpenApiTradeIngestService> ingestServiceProvider
 	) {
-		return new RtmsOneShotTradeIngestRunner(client, ingestService);
+		return new RtmsOneShotTradeIngestRunner(
+			client,
+			() -> ingestServiceProvider.getIfAvailable(() -> {
+				throw new IllegalStateException("OpenApiTradeIngestService is required for RTMS one-shot ingest");
+			})
+		);
+	}
+
+	@Bean
+	ApplicationRunner rtmsOneShotIngestApplicationRunner(
+		RtmsOneShotTradeIngestRunner runner,
+		RtmsOneShotIngestProperties properties
+	) {
+		return new RtmsOneShotIngestApplicationRunner(runner, properties);
 	}
 }

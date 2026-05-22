@@ -368,6 +368,10 @@ export function App({
           <h1>Home Search</h1>
           <span>V1 map</span>
         </div>
+        <div className="app-status" aria-label="Map status summary">
+          <span>{mapModeLabel(viewport.level)}</span>
+          <span>{markerSummaryLabel(markerState, markers)}</span>
+        </div>
         <button
           type="button"
           aria-controls="exploration-panel"
@@ -402,56 +406,100 @@ export function App({
             data-map-overlay="filters"
             onSubmit={handleFilterSubmit}
           >
-            <input
-              aria-label="Minimum pyeong"
-              name="pyeongMin"
-              placeholder="Pyeong min"
-              type="number"
-            />
-            <input
-              aria-label="Maximum pyeong"
-              name="pyeongMax"
-              placeholder="Pyeong max"
-              type="number"
-            />
-            <input
-              aria-label="Minimum price eok"
-              name="priceEokMin"
-              placeholder="Price min"
-              step="0.1"
-              type="number"
-            />
-            <input
-              aria-label="Maximum price eok"
-              name="priceEokMax"
-              placeholder="Price max"
-              step="0.1"
-              type="number"
-            />
-            <input
-              aria-label="Minimum building age"
-              name="ageMin"
-              placeholder="Age min"
-              type="number"
-            />
-            <input
-              aria-label="Maximum building age"
-              name="ageMax"
-              placeholder="Age max"
-              type="number"
-            />
-            <input
-              aria-label="Minimum unit count"
-              name="unitMin"
-              placeholder="Units min"
-              type="number"
-            />
-            <input
-              aria-label="Maximum unit count"
-              name="unitMax"
-              placeholder="Units max"
-              type="number"
-            />
+            <fieldset className="filter-group">
+              <legend>Area</legend>
+              <div className="filter-range">
+                <label>
+                  <span>Min</span>
+                  <input
+                    aria-label="Minimum pyeong"
+                    name="pyeongMin"
+                    placeholder="pyeong"
+                    type="number"
+                  />
+                </label>
+                <label>
+                  <span>Max</span>
+                  <input
+                    aria-label="Maximum pyeong"
+                    name="pyeongMax"
+                    placeholder="pyeong"
+                    type="number"
+                  />
+                </label>
+              </div>
+            </fieldset>
+            <fieldset className="filter-group">
+              <legend>Price</legend>
+              <div className="filter-range">
+                <label>
+                  <span>Min</span>
+                  <input
+                    aria-label="Minimum price eok"
+                    name="priceEokMin"
+                    placeholder="eok"
+                    step="0.1"
+                    type="number"
+                  />
+                </label>
+                <label>
+                  <span>Max</span>
+                  <input
+                    aria-label="Maximum price eok"
+                    name="priceEokMax"
+                    placeholder="eok"
+                    step="0.1"
+                    type="number"
+                  />
+                </label>
+              </div>
+            </fieldset>
+            <fieldset className="filter-group">
+              <legend>Age</legend>
+              <div className="filter-range">
+                <label>
+                  <span>Min</span>
+                  <input
+                    aria-label="Minimum building age"
+                    name="ageMin"
+                    placeholder="years"
+                    type="number"
+                  />
+                </label>
+                <label>
+                  <span>Max</span>
+                  <input
+                    aria-label="Maximum building age"
+                    name="ageMax"
+                    placeholder="years"
+                    type="number"
+                  />
+                </label>
+              </div>
+            </fieldset>
+            <fieldset className="filter-group">
+              <legend>Units</legend>
+              <div className="filter-range">
+                <label>
+                  <span>Min</span>
+                  <input
+                    aria-label="Minimum unit count"
+                    name="unitMin"
+                    placeholder="units"
+                    type="number"
+                  />
+                </label>
+                <label>
+                  <span>Max</span>
+                  <input
+                    aria-label="Maximum unit count"
+                    name="unitMax"
+                    placeholder="units"
+                    type="number"
+                  />
+                </label>
+              </div>
+            </fieldset>
             <button type="submit" aria-label="Apply marker filters">
               Apply
             </button>
@@ -534,13 +582,20 @@ export function App({
           data-collapsed={isExplorationOpen ? 'false' : 'true'}
           hidden={!isExplorationOpen}
         >
+          <div className="exploration-panel-header">
+            <p>Explore</p>
+            <span>Search</span>
+          </div>
           <form aria-label="Complex search" className="search-panel" onSubmit={handleSearchSubmit}>
-            <input
-              aria-label="Search complexes"
-              name="q"
-              placeholder="Complex name"
-              type="search"
-            />
+            <label>
+              <span>Complex</span>
+              <input
+                aria-label="Search complexes"
+                name="q"
+                placeholder="Complex name"
+                type="search"
+              />
+            </label>
             <button type="submit" aria-label="Run complex search">
               Search
             </button>
@@ -585,6 +640,10 @@ export function App({
           ) : null}
 
           <div className="region-panel">
+            <div className="panel-section-header">
+              <p>Region</p>
+              {regionDetail ? <span>{regionDetail.name}</span> : <span>Root</span>}
+            </div>
             <button type="button" aria-label="Load root regions" onClick={handleLoadRootRegions}>
               Regions
             </button>
@@ -607,8 +666,6 @@ export function App({
                 {regionError ? ` ${regionError}` : null}
               </p>
             ) : null}
-
-            {regionDetail ? <p className="selected-region">{regionDetail.name}</p> : null}
 
             {rootRegions.length > 0 ? (
               <ul aria-label="Region navigation" className="panel-list">
@@ -887,6 +944,29 @@ function mapRuntimeStatusLabel(state: KakaoMapRuntimeState): string {
     case 'error':
       return 'Map fallback active';
   }
+}
+
+function mapModeLabel(level: number): string {
+  return level <= 4 ? 'Complex view' : 'Region view';
+}
+
+function markerSummaryLabel(
+  state: MarkerRequestState,
+  markers: MapMarkersResult | null,
+): string {
+  if (state === 'loading') {
+    return 'Loading';
+  }
+
+  if (state === 'error') {
+    return 'Marker error';
+  }
+
+  if (state === 'empty' || !markers) {
+    return '0 markers';
+  }
+
+  return `${markers.markers.length.toLocaleString()} markers`;
 }
 
 function sameViewport(first: MapViewport, second: MapViewport): boolean {

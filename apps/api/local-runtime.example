@@ -1,0 +1,16 @@
+# Home Search API local runtime example. Do not put real secrets in this file.
+
+SPRING_PROFILES_ACTIVE=local
+DB_JDBC_URL=jdbc:postgresql://localhost:15432/home_search
+DB_USERNAME=home_search
+DB_PASSWORD=home_search_local_password
+SPRING_FLYWAY_LOCATIONS=classpath:db/migration/api,classpath:db/seed/local
+FRONTEND_URL=http://localhost:5173
+SERVER_PORT=8080
+
+# RTMS live ingest is off by default. Set APT_SERVICE_KEY only in your local shell.
+APT_SERVICE_KEY=
+HOME_INGEST_RTMS_ENABLED=false
+HOME_INGEST_RTMS_LAWD_CD=11680
+HOME_INGEST_RTMS_DEAL_YMD=202512
+HOME_INGEST_RTMS_PAGE_NO=1

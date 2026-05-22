@@ -41,6 +41,23 @@ describe('loadKakaoMapSdk', () => {
     await expect(loadKakaoMapSdk('')).resolves.toBe(maps);
     expect(document.head.querySelector('script[src*="dapi.kakao.com/v2/maps/sdk.js"]')).toBeNull();
   });
+
+  it('rejects after maps.load when the Kakao runtime does not expose map constructors', async () => {
+    const { loadKakaoMapSdk } = await import('./loadKakaoMapSdk');
+
+    const sdkPromise = loadKakaoMapSdk('test-app-key');
+    const script = document.head.querySelector<HTMLScriptElement>(
+      'script[src*="dapi.kakao.com/v2/maps/sdk.js"]',
+    );
+    const maps = {
+      load: vi.fn((callback: () => void) => callback()),
+    };
+    vi.stubGlobal('kakao', { maps });
+
+    script?.onload?.call(script, new Event('load'));
+
+    await expect(sdkPromise).rejects.toThrow('Kakao map SDK did not expose map constructors');
+  });
 });
 
 function fakeKakaoMapsApi(): KakaoMapsApi {

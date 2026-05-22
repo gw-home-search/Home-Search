@@ -12,6 +12,7 @@ public class OpenApiTradeIngestService {
 	private final RawTradeIngestRepository rawTradeIngestRepository;
 	private final NormalizedTradeRepository normalizedTradeRepository;
 	private final ComplexMatcher complexMatcher;
+	private final ComplexMasterBootstrapper complexMasterBootstrapper;
 	private final SourceKeyGenerator sourceKeyGenerator;
 
 	public OpenApiTradeIngestService(
@@ -19,18 +20,35 @@ public class OpenApiTradeIngestService {
 		NormalizedTradeRepository normalizedTradeRepository,
 		ComplexMatcher complexMatcher
 	) {
-		this(rawTradeIngestRepository, normalizedTradeRepository, complexMatcher, new SourceKeyGenerator());
+		this(rawTradeIngestRepository, normalizedTradeRepository, complexMatcher, ComplexMasterBootstrapper.noop());
+	}
+
+	public OpenApiTradeIngestService(
+		RawTradeIngestRepository rawTradeIngestRepository,
+		NormalizedTradeRepository normalizedTradeRepository,
+		ComplexMatcher complexMatcher,
+		ComplexMasterBootstrapper complexMasterBootstrapper
+	) {
+		this(
+			rawTradeIngestRepository,
+			normalizedTradeRepository,
+			complexMatcher,
+			complexMasterBootstrapper,
+			new SourceKeyGenerator()
+		);
 	}
 
 	OpenApiTradeIngestService(
 		RawTradeIngestRepository rawTradeIngestRepository,
 		NormalizedTradeRepository normalizedTradeRepository,
 		ComplexMatcher complexMatcher,
+		ComplexMasterBootstrapper complexMasterBootstrapper,
 		SourceKeyGenerator sourceKeyGenerator
 	) {
 		this.rawTradeIngestRepository = Objects.requireNonNull(rawTradeIngestRepository);
 		this.normalizedTradeRepository = Objects.requireNonNull(normalizedTradeRepository);
 		this.complexMatcher = Objects.requireNonNull(complexMatcher);
+		this.complexMasterBootstrapper = Objects.requireNonNull(complexMasterBootstrapper);
 		this.sourceKeyGenerator = Objects.requireNonNull(sourceKeyGenerator);
 	}
 
@@ -78,10 +96,11 @@ public class OpenApiTradeIngestService {
 				continue;
 			}
 
+			ComplexMasterBootstrapResult bootstrapResult = complexMasterBootstrapper.bootstrap(item);
 			ComplexMatchResult match = complexMatcher.match(item);
 			if (match == null || !match.matched()) {
 				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.MATCH_FAILED,
-					match == null ? "complex matcher returned no result" : match.failureReason());
+					matchFailureReason(match, bootstrapResult));
 				matchFailed++;
 				continue;
 			}
@@ -119,6 +138,20 @@ public class OpenApiTradeIngestService {
 			matchFailed,
 			parseFailed
 		);
+	}
+
+	private String matchFailureReason(ComplexMatchResult match, ComplexMasterBootstrapResult bootstrapResult) {
+		String matchFailure = match == null ? "complex matcher returned no result" : match.failureReason();
+		if (bootstrapResult == null || !bootstrapResult.hasFailureReason()) {
+			return matchFailure;
+		}
+		if (matchFailure == null || matchFailure.isBlank()) {
+			return bootstrapResult.failureReason();
+		}
+		if (matchFailure.contains(bootstrapResult.failureReason())) {
+			return matchFailure;
+		}
+		return matchFailure + "; " + bootstrapResult.failureReason();
 	}
 
 	private record ParsedTrade(

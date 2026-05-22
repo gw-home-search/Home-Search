@@ -5,9 +5,10 @@ import com.home.application.ingest.NormalizedTradeRepository;
 import com.home.application.ingest.OpenApiTradeIngestService;
 import com.home.application.ingest.RawTradeIngestRepository;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -16,28 +17,31 @@ import org.springframework.transaction.support.TransactionTemplate;
 class IngestPersistenceConfiguration {
 
 	@Bean
-	@ConditionalOnBean(JdbcClient.class)
-	RawTradeIngestRepository rawTradeIngestRepository(JdbcClient jdbcClient) {
-		return new JdbcRawTradeIngestRepository(jdbcClient);
+	@Lazy
+	RawTradeIngestRepository rawTradeIngestRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
+		return new JdbcRawTradeIngestRepository(requiredJdbcClient(jdbcClientProvider));
 	}
 
 	@Bean
-	@ConditionalOnBean({JdbcClient.class, PlatformTransactionManager.class})
+	@Lazy
 	NormalizedTradeRepository normalizedTradeRepository(
-		JdbcClient jdbcClient,
-		PlatformTransactionManager transactionManager
+		ObjectProvider<JdbcClient> jdbcClientProvider,
+		ObjectProvider<PlatformTransactionManager> transactionManagerProvider
 	) {
-		return new JdbcNormalizedTradeRepository(jdbcClient, new TransactionTemplate(transactionManager));
+		return new JdbcNormalizedTradeRepository(
+			requiredJdbcClient(jdbcClientProvider),
+			new TransactionTemplate(requiredTransactionManager(transactionManagerProvider))
+		);
 	}
 
 	@Bean
-	@ConditionalOnBean(JdbcClient.class)
-	ComplexMatcher complexMatcher(JdbcClient jdbcClient) {
-		return new JdbcComplexMatcher(jdbcClient);
+	@Lazy
+	ComplexMatcher complexMatcher(ObjectProvider<JdbcClient> jdbcClientProvider) {
+		return new JdbcComplexMatcher(requiredJdbcClient(jdbcClientProvider));
 	}
 
 	@Bean
-	@ConditionalOnBean({RawTradeIngestRepository.class, NormalizedTradeRepository.class, ComplexMatcher.class})
+	@Lazy
 	OpenApiTradeIngestService openApiTradeIngestService(
 		RawTradeIngestRepository rawTradeIngestRepository,
 		NormalizedTradeRepository normalizedTradeRepository,
@@ -48,5 +52,19 @@ class IngestPersistenceConfiguration {
 			normalizedTradeRepository,
 			complexMatcher
 		);
+	}
+
+	private JdbcClient requiredJdbcClient(ObjectProvider<JdbcClient> jdbcClientProvider) {
+		return jdbcClientProvider.getIfAvailable(() -> {
+			throw new IllegalStateException("JdbcClient is required for RTMS ingest persistence");
+		});
+	}
+
+	private PlatformTransactionManager requiredTransactionManager(
+		ObjectProvider<PlatformTransactionManager> transactionManagerProvider
+	) {
+		return transactionManagerProvider.getIfAvailable(() -> {
+			throw new IllegalStateException("PlatformTransactionManager is required for RTMS ingest persistence");
+		});
 	}
 }

@@ -49,6 +49,23 @@ class RtmsOneShotTradeIngestRunnerTest {
 	}
 
 	@Test
+	@DisplayName("one-shot runner fails before live fetch when ingest service is unavailable")
+	void runnerFailsBeforeLiveFetchWhenIngestServiceIsUnavailable() {
+		RtmsApartmentTradeClient client = mock(RtmsApartmentTradeClient.class);
+		RtmsOneShotTradeIngestRunner runner = new RtmsOneShotTradeIngestRunner(
+			client,
+			() -> {
+				throw new IllegalStateException("OpenApiTradeIngestService is required");
+			}
+		);
+
+		assertThatThrownBy(() -> runner.ingest(new RtmsApartmentTradeRequest("11680", "202512", 1)))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("OpenApiTradeIngestService");
+		verifyNoInteractions(client);
+	}
+
+	@Test
 	@DisplayName("disabled local trigger does not call the RTMS one-shot runner")
 	void disabledLocalTriggerDoesNotCallRunner() throws Exception {
 		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);

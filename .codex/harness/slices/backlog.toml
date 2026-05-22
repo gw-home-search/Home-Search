@@ -304,7 +304,7 @@ title_ko = "Data architecture checkpoint"
 pr_type = "Docs"
 pr_title_ko = "데이터 아키텍처 체크포인트 정리"
 description_ko = "raw ingest, normalized trade, dedupe, failed match, complex_id relation을 실행 전 checkpoint로 정리한다."
-status = "candidate"
+status = "done"
 priority = 30
 targets = "planning-only"
 preset = "contract-hardening"
@@ -528,4 +528,42 @@ risk_notes = [
   "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
   "adapter는 이번 slice에서 @Repository로 자동 등록하지 않고 다음 architecture slice에서 wiring을 결정한다.",
   "trade partition unique 한계 때문에 global source/source_key dedupe는 trade_source_key_registry에서 보장한다.",
+]
+
+[[slices]]
+id = "detail-trade-chart-drawer"
+title_ko = "Detail trade chart drawer"
+pr_type = "Feat"
+pr_title_ko = "상세 drawer 거래 차트 추가"
+description_ko = "detail drawer의 기존 V1 trade list에 최근 거래 금액 흐름을 보여주는 compact chart를 추가한다."
+status = "done"
+priority = 60
+targets = "frontend"
+preset = "map-ui-state"
+acceptance_criteria = [
+  "Complex marker 또는 search result 선택 후 detail drawer가 /api/v1/detail/{parcelId}와 /api/v1/trade/{parcelId}만 호출한다.",
+  "trade list 위에 최근 거래 금액 흐름을 날짜순 compact chart로 보여준다.",
+  "거래가 없거나 dealAmount가 비어 있으면 chart 영역은 레이아웃을 깨지 않고 empty state를 보여준다.",
+  "chart는 dealAmount 단위 10,000 KRW를 그대로 표시하고 backend 응답 field나 unit 변경을 요구하지 않는다.",
+  "marker API 실패, detail API 실패, search/region 흐름의 기존 non-blocking behavior를 깨지 않는다.",
+]
+first_red_candidates = [
+  "App.test.tsx에서 detail drawer가 trade chart accessible section 없이 trade list만 렌더링해 실패하는 RED를 먼저 만든다.",
+  "trade data가 empty일 때 chart empty state가 없으면 실패하는 component state test를 먼저 만든다.",
+]
+verification_commands = [
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+]
+stop_conditions = [
+  "V1 public API URL, response field, amount unit 변경이 필요하면 중단한다.",
+  "apps/api/** 변경이 필요하면 별도 backend slice로 분리한다.",
+  "chart 구현을 위해 새 dependency, analytics, ranking, trend aggregate, favorite, alarm, mail, recommendation, auth가 필요하면 중단한다.",
+  "Kakao map marker refresh 또는 search/region navigation을 깨뜨리면 중단한다.",
+]
+risk_notes = [
+  "frontend-only slice이므로 apps/api/**는 건드리지 않는다.",
+  "chart는 V1 trade list 응답만 사용하며 heavy analytics나 trend API를 추가하지 않는다.",
+  "mobile width에서 drawer text/table/chart가 겹치지 않도록 existing responsive constraints를 유지해야 한다.",
 ]

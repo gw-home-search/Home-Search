@@ -226,6 +226,14 @@ describe('App', () => {
               aptDong: '101',
               floor: 12,
             },
+            {
+              tradeId: 9000,
+              dealDate: '2025-10-15',
+              exclArea: 84.93,
+              dealAmount: 118000,
+              aptDong: '101',
+              floor: 9,
+            },
           ],
         }),
       );
@@ -257,6 +265,19 @@ describe('App', () => {
     expect(rootElement.textContent).toContain('Sample address');
     expect(rootElement.textContent).toContain('2025-12-01');
     expect(rootElement.textContent).toContain('125,000 10k KRW');
+    const chartSection = rootElement.querySelector<HTMLElement>(
+      '[aria-label="Trade amount chart"]',
+    );
+    const chartPoints = Array.from(
+      rootElement.querySelectorAll<HTMLElement>('[data-chart-point]'),
+    );
+
+    expect(chartSection).not.toBeNull();
+    expect(chartSection?.textContent).toContain('125,000 10k KRW');
+    expect(chartPoints.map((point) => point.dataset.chartDate)).toEqual([
+      '2025-10-15',
+      '2025-12-01',
+    ]);
 
     unmount(root);
   });
@@ -328,6 +349,12 @@ describe('App', () => {
     );
     expect(rootElement.querySelector('[aria-label="Complex detail drawer"]')).not.toBeNull();
     expect(rootElement.textContent).toContain('Sample complex name');
+    const emptyChartSection = rootElement.querySelector<HTMLElement>(
+      '[aria-label="Trade amount chart"]',
+    );
+
+    expect(emptyChartSection).not.toBeNull();
+    expect(emptyChartSection?.textContent).toContain('No trade amounts to chart');
 
     unmount(root);
   });

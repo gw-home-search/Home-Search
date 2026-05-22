@@ -10,6 +10,44 @@ describe('App', () => {
     vi.unstubAllGlobals();
   });
 
+  it('renders a map-first shell with collapsible exploration controls and in-map marker errors', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(errorResponse(500)));
+
+    const { root, rootElement } = await renderApp();
+    await flushAsyncState();
+    await flushAsyncState();
+
+    const mapWorkspace = rootElement.querySelector('[data-layout-region="map-workspace"]');
+    const mapSurface = rootElement.querySelector<HTMLElement>('[aria-label="Map surface"]');
+    const explorationPanel = rootElement.querySelector<HTMLElement>('#exploration-panel');
+    const filterPanel = rootElement.querySelector<HTMLElement>('form[aria-label="Marker filters"]');
+    const explorationToggle = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="Toggle exploration panel"]',
+    );
+    const markerAlert = Array.from(rootElement.querySelectorAll('[role="alert"]')).find((alert) =>
+      alert.textContent?.includes('Marker data unavailable'),
+    );
+
+    expect(mapWorkspace).not.toBeNull();
+    expect(mapSurface).not.toBeNull();
+    expect(mapWorkspace?.firstElementChild).toBe(mapSurface);
+    expect(explorationPanel).not.toBeNull();
+    expect(filterPanel?.getAttribute('data-map-overlay')).toBe('filters');
+    expect(markerAlert?.closest('[aria-label="Map surface"]')).toBe(mapSurface);
+    expect(explorationToggle?.getAttribute('aria-controls')).toBe('exploration-panel');
+    expect(explorationToggle?.getAttribute('aria-expanded')).toBe('true');
+
+    await act(async () => {
+      explorationToggle?.click();
+    });
+
+    expect(explorationToggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(explorationPanel?.getAttribute('data-collapsed')).toBe('true');
+    expect(rootElement.querySelector('[aria-label="Map surface"]')).not.toBeNull();
+
+    unmount(root);
+  });
+
   it('shows marker loading state without blocking the map surface', async () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => undefined)));
 

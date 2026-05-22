@@ -40,7 +40,7 @@ class SampleMvpSeedSqlTest extends JdbcPostgresTestSupport {
 	}
 
 	private void runSampleSeed() {
-		new ResourceDatabasePopulator(new ClassPathResource("db/seed/local/V1__sample_mvp_data.sql"))
+		new ResourceDatabasePopulator(new ClassPathResource("db/seed/local/R__sample_mvp_data.sql"))
 			.execute(dataSource);
 	}
 }

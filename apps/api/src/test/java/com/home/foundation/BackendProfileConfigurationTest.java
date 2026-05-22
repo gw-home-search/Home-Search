@@ -35,7 +35,7 @@ class BackendProfileConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("local profile wires PostgreSQL and V1 Flyway migrations through environment placeholders")
+	@DisplayName("local profile wires PostgreSQL and V1 Flyway/local seed migrations through environment placeholders")
 	void localProfileWiresPostgresAndFlywayMigrationLocation() throws IOException {
 		Properties properties = load("application-local.properties");
 
@@ -43,7 +43,8 @@ class BackendProfileConfigurationTest {
 		assertThat(properties.getProperty("spring.datasource.username")).isEqualTo("${DB_USERNAME}");
 		assertThat(properties.getProperty("spring.datasource.password")).isEqualTo("${DB_PASSWORD}");
 		assertThat(properties.getProperty("spring.flyway.enabled")).isEqualTo("true");
-		assertThat(properties.getProperty("spring.flyway.locations")).isEqualTo("classpath:db/migration/api");
+		assertThat(properties.getProperty("spring.flyway.locations"))
+			.isEqualTo("${SPRING_FLYWAY_LOCATIONS:classpath:db/migration/api,classpath:db/seed/local}");
 		assertThat(properties.getProperty("spring.flyway.clean-disabled")).isEqualTo("true");
 	}
 

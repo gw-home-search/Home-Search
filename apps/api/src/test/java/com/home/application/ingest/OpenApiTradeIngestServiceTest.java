@@ -81,6 +81,38 @@ class OpenApiTradeIngestServiceTest {
 		assertThat(failures.get(0).sourceKey()).isNotBlank();
 	}
 
+	@Test
+	@DisplayName("parse failures remain queryable raw evidence without normalized trade insert")
+	void parseFailureIsRecordedAsQueryableRawEvidence() {
+		List<String> events = new ArrayList<>();
+		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
+		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			item -> ComplexMatchResult.matched(501L, "COMPLEX-PK-501", "APTSEQ")
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(rtmsItem(null))
+		));
+
+		assertThat(result.read()).isEqualTo(1);
+		assertThat(result.rawSaved()).isEqualTo(1);
+		assertThat(result.parseFailed()).isEqualTo(1);
+		assertThat(result.normalizedInserted()).isZero();
+		assertThat(tradeRepository.savedTrades()).isEmpty();
+
+		List<RawTradeIngestRecord> failures = rawRepository.findByStatus(RawTradeIngestStatus.PARSE_FAILED);
+		assertThat(failures).hasSize(1);
+		assertThat(failures.get(0).failureReason()).isEqualTo("dealAmount is required");
+		assertThat(failures.get(0).sourceKey()).isNotBlank();
+	}
+
 	private OpenApiTradeItem rtmsItem(String dealAmount) {
 		return new OpenApiTradeItem(
 			"101",

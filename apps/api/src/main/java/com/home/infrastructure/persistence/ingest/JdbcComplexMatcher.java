@@ -4,8 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import com.home.application.ingest.ComplexMatchResult;
 import com.home.application.ingest.ComplexMatcher;
@@ -17,8 +15,6 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * RTMS trade item을 local PostGIS-backed V1 complex rows에 연결하는 matcher입니다.
  */
 public class JdbcComplexMatcher implements ComplexMatcher {
-
-	private static final Pattern JIBUN_PATTERN = Pattern.compile("(\\d+)(?:\\D+(\\d+))?");
 
 	private final JdbcClient jdbcClient;
 
@@ -45,7 +41,7 @@ public class JdbcComplexMatcher implements ComplexMatcher {
 			}
 		}
 
-		String pnu = buildPnu(item);
+		String pnu = RtmsPnuBuilder.build(item).orElse(null);
 		if (pnu != null) {
 			List<ComplexCandidate> candidates = findByPnu(pnu);
 			if (candidates.size() == 1) {
@@ -153,43 +149,6 @@ public class JdbcComplexMatcher implements ComplexMatcher {
 		return 0;
 	}
 
-	private String buildPnu(OpenApiTradeItem item) {
-		String sggCd = trimToNull(item.sggCd());
-		String umdCd = trimToNull(item.umdCd());
-		if (sggCd == null || umdCd == null || sggCd.length() != 5 || umdCd.length() != 5) {
-			return null;
-		}
-
-		JibunParts jibun = parseJibun(item.jibun());
-		if (jibun == null) {
-			return null;
-		}
-
-		String landCode = item.jibun() != null && item.jibun().contains("산") ? "2" : "1";
-		return sggCd + umdCd + landCode + pad4(jibun.bon()) + pad4(jibun.bu());
-	}
-
-	private JibunParts parseJibun(String value) {
-		String jibun = trimToNull(value);
-		if (jibun == null) {
-			return null;
-		}
-		Matcher matcher = JIBUN_PATTERN.matcher(jibun.replace("산", ""));
-		if (!matcher.find()) {
-			return null;
-		}
-		String bon = matcher.group(1);
-		String bu = matcher.group(2) == null ? "0" : matcher.group(2);
-		if (bon.length() > 4 || bu.length() > 4) {
-			return null;
-		}
-		return new JibunParts(bon, bu);
-	}
-
-	private String pad4(String value) {
-		return "0".repeat(4 - value.length()) + value;
-	}
-
 	private String normalizeName(String value) {
 		String text = trimToNull(value);
 		if (text == null) {
@@ -219,8 +178,5 @@ public class JdbcComplexMatcher implements ComplexMatcher {
 		private ComplexMatchResult matched(String path) {
 			return ComplexMatchResult.matched(complexId, complexPk, path);
 		}
-	}
-
-	private record JibunParts(String bon, String bu) {
 	}
 }

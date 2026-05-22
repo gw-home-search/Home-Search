@@ -1,6 +1,7 @@
 package com.home.infrastructure.persistence.ingest;
 
 import com.home.application.ingest.ComplexMatcher;
+import com.home.application.ingest.ComplexMasterBootstrapper;
 import com.home.application.ingest.NormalizedTradeRepository;
 import com.home.application.ingest.OpenApiTradeIngestService;
 import com.home.application.ingest.RawTradeIngestRepository;
@@ -42,15 +43,35 @@ class IngestPersistenceConfiguration {
 
 	@Bean
 	@Lazy
+	ParcelCoordinateResolver parcelCoordinateResolver() {
+		return ParcelCoordinateResolver.empty();
+	}
+
+	@Bean
+	@Lazy
+	ComplexMasterBootstrapper complexMasterBootstrapper(
+		ObjectProvider<JdbcClient> jdbcClientProvider,
+		ParcelCoordinateResolver parcelCoordinateResolver
+	) {
+		return new JdbcComplexMasterBootstrapper(
+			requiredJdbcClient(jdbcClientProvider),
+			parcelCoordinateResolver
+		);
+	}
+
+	@Bean
+	@Lazy
 	OpenApiTradeIngestService openApiTradeIngestService(
 		RawTradeIngestRepository rawTradeIngestRepository,
 		NormalizedTradeRepository normalizedTradeRepository,
-		ComplexMatcher complexMatcher
+		ComplexMatcher complexMatcher,
+		ComplexMasterBootstrapper complexMasterBootstrapper
 	) {
 		return new OpenApiTradeIngestService(
 			rawTradeIngestRepository,
 			normalizedTradeRepository,
-			complexMatcher
+			complexMatcher,
+			complexMasterBootstrapper
 		);
 	}
 

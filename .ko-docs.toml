@@ -70,6 +70,30 @@ source_sha256 = "ff251c61f88052e9efd3d263689cb183c72f53f826d594d72068d9dff7b07b3
 last_synced = "2026-05-18"
 
 [[docs]]
+source = ".agents/skills/home-search-design/SKILL.md"
+ko = ".agents/skills/home-search-design/SKILL_KO.md"
+source_sha256 = "f9b945af2e8982780eaab85cbc9a91c2058de9a2517aa2686a27c9657d351790"
+last_synced = "2026-05-22"
+
+[[docs]]
+source = ".agents/skills/home-search-design/references/figma-workflow.md"
+ko = ".agents/skills/home-search-design/references/figma-workflow_KO.md"
+source_sha256 = "e7c6a9d7e45e857c551803ba79b8ca48dd6aa637cf2193dd4c6c8ccbfc1b5b22"
+last_synced = "2026-05-22"
+
+[[docs]]
+source = ".agents/skills/home-search-design/references/map-ux-principles.md"
+ko = ".agents/skills/home-search-design/references/map-ux-principles_KO.md"
+source_sha256 = "fdf5d3b3e3481eaf8fbcb291711c2c8febba2727a032cdb408ce815a69fb16ff"
+last_synced = "2026-05-22"
+
+[[docs]]
+source = ".agents/skills/home-search-design/references/visual-qa-checklist.md"
+ko = ".agents/skills/home-search-design/references/visual-qa-checklist_KO.md"
+source_sha256 = "327aa6a54dd7386e5d881902e0c8b1eb02f89bba25a6758f57e72af940a16f28"
+last_synced = "2026-05-22"
+
+[[docs]]
 source = ".agents/skills/planning/SKILL.md"
 ko = ".agents/skills/planning/SKILL_KO.md"
 source_sha256 = "4f0d5d6a8e9950464c93445509fbab633f3212449d4f7fbf4dcaba1e81be011e"

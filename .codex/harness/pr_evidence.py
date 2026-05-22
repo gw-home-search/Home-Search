@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 DIFF_CHECK = "git diff --check"
+DOCKER_COMPOSE_LOCAL_CONFIG = "docker compose -f infra/docker-compose.local.yml config"
 API_QUALITY = "cd apps/api && ./gradlew backendQualityCheck"
 WEB_TEST = "cd apps/web && npm run test"
 WEB_BUILD = "cd apps/web && npm run build"
@@ -27,6 +28,7 @@ KO_CHECK = "bash scripts/check-ko-docs.sh"
 
 COMMAND_ORDER = (
     DIFF_CHECK,
+    DOCKER_COMPOSE_LOCAL_CONFIG,
     API_QUALITY,
     WEB_TEST,
     WEB_BUILD,
@@ -150,6 +152,8 @@ def requirements_for_changed_files(changed_files: list[str] | tuple[str, ...] | 
         if path.startswith("apps/web/"):
             commands.add(WEB_TEST)
             commands.add(WEB_BUILD)
+        if path.startswith("infra/"):
+            commands.add(DOCKER_COMPOSE_LOCAL_CONFIG)
         if path.startswith(".codex/harness/"):
             commands.add(PR_LINT_SELF_TEST)
             commands.add(PR_CONTEXT_SELF_TEST)

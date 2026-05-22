@@ -1,0 +1,35 @@
+id = "local-runtime-stack"
+description = "Local PostGIS, API, and web runtime stack automation."
+aliases = [
+  "local-runtime-stack",
+  "local-dev-stack",
+  "local-dev-stack-postgis-api-web",
+  "postgis-api-web",
+]
+slice_patterns = ["local-dev-stack", "local-postgis", "postgis-api-web", "runtime-stack"]
+
+[targets.backend]
+prompt = "backend_runtime_execute.txt"
+allowed_scope = "infra/**, apps/api/**"
+forbidden_scope = "apps/web/**"
+verification_commands = [
+  "docker compose -f infra/docker-compose.local.yml config",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+
+[targets.frontend]
+prompt = "frontend_execute.md"
+allowed_scope = "apps/web/**"
+forbidden_scope = "apps/api/**"
+verification_commands = [
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+]
+
+[safety]
+allow_main_merge = false
+allow_push = false
+allow_open_api_call = false
+allow_db_migration_run = false

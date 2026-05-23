@@ -693,3 +693,43 @@ risk_notes = [
   "Docker daemon, API/Web port, local Kakao key availability에 따라 browser visual evidence는 Partial로 남을 수 있다.",
   "live RTMS/VWorld 검증은 사람 승인과 local env가 있는 후속 manual smoke로 분리한다.",
 ]
+
+[[slices]]
+id = "v1-observability-actuator-prometheus"
+title_ko = "V1 observability actuator prometheus"
+pr_type = "Feat"
+pr_title_ko = "V1 관측성 actuator prometheus 준비"
+description_ko = "V1 local/API runtime에서 health와 Prometheus scrape endpoint를 확인할 수 있도록 Spring Boot actuator 관측성 기초를 추가한다."
+status = "candidate"
+priority = 80
+targets = "backend"
+preset = "local-runtime-stack"
+acceptance_criteria = [
+  "apps/api에 Spring Boot actuator와 Prometheus registry dependency를 추가하고 V1 public API URL contract는 변경하지 않는다.",
+  "local runtime에서 health와 prometheus endpoint가 repository-managed 설정으로 노출되며 secrets나 .env* 값을 commit하지 않는다.",
+  "map/search/region/detail/trade V1 endpoints는 actuator 설정과 무관하게 기존 controller contract를 유지한다.",
+  "관측성 scope는 backend runtime metadata로 제한하고 ranking, favorite, alarm, mail, auth, recommendation 기능을 추가하지 않는다.",
+  "API error rate와 ingest count metric은 후속 slice에서 실제 meter 이름을 확정할 수 있도록 이번 slice에서는 actuator/prometheus surface만 고정한다.",
+]
+first_red_candidates = [
+  "foundation test에서 actuator/prometheus dependency 또는 management endpoint 설정이 없어서 V1 observability readiness가 실패하는 RED를 먼저 만든다.",
+  "context smoke에서 /actuator/health 또는 /actuator/prometheus endpoint가 노출되지 않으면 실패하는 test seam을 만든다.",
+  "backendQualityCheck가 기존 V1 API contract와 OpenAPI artifact를 그대로 통과해 actuator가 public API spec에 섞이지 않는지 확인한다.",
+]
+verification_commands = [
+  "docker compose -f infra/docker-compose.local.yml config",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
+  "live RTMS, VWorld, Kakao, Prometheus server 호출이 필요하면 중단하고 local/mock/config 검증으로 제한한다.",
+  "DB schema, ingest behavior, frontend behavior 변경이 필요하면 별도 slice로 분리한다.",
+  "infra compose 변경이 backend target scope와 충돌하면 slice를 infra/backend 하위 slice로 재분리한다.",
+]
+risk_notes = [
+  "actuator endpoint exposure는 운영 보안 정책과 충돌할 수 있어 local/runtime readiness 범위로만 시작한다.",
+  "실제 business metric 이름과 dashboard는 V1 release 이후 별도 관측성 slice로 분리한다.",
+  "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
+]

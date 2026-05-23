@@ -146,6 +146,47 @@ risk_notes = [
 ]
 
 [[slices]]
+id = "live-complex-master-bootstrap"
+title_ko = "Live complex master bootstrap"
+pr_type = "Feat"
+pr_title_ko = "실거래 매칭용 단지 master bootstrap"
+description_ko = "RTMS live row가 전부 MATCH_FAILED로 끝나지 않도록 PNU/aptSeq 기반 parcel/complex master bootstrap을 추가한다."
+status = "done"
+priority = 3
+targets = "backend"
+preset = "open-api-ingest-prep"
+acceptance_criteria = [
+  "RTMS item의 sggCd, umdCd, jibun으로 PNU를 만들고 좌표가 확인된 경우에만 parcel을 upsert한다.",
+  "aptSeq와 aptName 기반으로 complex를 upsert하고 operational relation은 complex_id, audit metadata는 complex_pk와 apt_seq를 보존한다.",
+  "bootstrap은 raw ingest row 저장 이후, existing complex match와 normalized trade insert 이전에 동작한다.",
+  "좌표 또는 master 근거가 없으면 fake latitude/longitude를 넣지 않고 explainable MATCH_FAILED로 남긴다.",
+  "fixture/mocked coordinate resolver로 normalizedInserted > 0 regression을 검증하고 live public API 호출은 PR 검증에 요구하지 않는다.",
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "OpenApiTradeIngestServiceJdbcIntegrationTest에서 master가 없는 RTMS item도 mocked bootstrap 성공 시 normalized trade가 insert되어야 하나 현재 MATCH_FAILED로 남는 실패를 먼저 만든다.",
+  "bootstrap coordinate resolver가 empty를 반환하면 parcel/complex를 생성하지 않고 MATCH_FAILED failure_reason이 남아야 하는 regression을 먼저 만든다.",
+  "재실행 시 source/source_key dedupe가 normalized trade를 중복 생성하지 않는 integration test를 먼저 만든다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "PR 검증에서 live VWorld, ODC, RTMS Open API call이 필요하면 중단하고 fixture/mocking으로 대체한다.",
+  "service key, raw production payload, local secret 저장이 필요하면 중단한다.",
+  "fake latitude/longitude 또는 근거 없는 parcel geometry를 저장해야 하면 중단한다.",
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "rankings, trend, favorite, alarm, mail, auth, recommendation dependency가 필요하면 중단한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
+  "RTMS payload만으로는 좌표가 부족하므로 coordinate resolver는 테스트에서 mock하고 live 실행은 local env가 있을 때 수동 evidence로만 남긴다.",
+  "complex_pk 생성 정책이 임시값으로 흐르면 audit 품질이 떨어질 수 있어 source/source_key와 aptSeq 기반 deterministic key 정책을 테스트로 고정해야 한다.",
+]
+
+[[slices]]
 id = "mvp-e2e-runtime-smoke"
 title_ko = "MVP e2e runtime smoke"
 pr_type = "Test"

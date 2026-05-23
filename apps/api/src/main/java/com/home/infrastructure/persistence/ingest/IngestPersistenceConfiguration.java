@@ -43,12 +43,6 @@ class IngestPersistenceConfiguration {
 
 	@Bean
 	@Lazy
-	ParcelCoordinateResolver parcelCoordinateResolver() {
-		return ParcelCoordinateResolver.empty();
-	}
-
-	@Bean
-	@Lazy
 	ComplexMasterBootstrapper complexMasterBootstrapper(
 		ObjectProvider<JdbcClient> jdbcClientProvider,
 		ParcelCoordinateResolver parcelCoordinateResolver

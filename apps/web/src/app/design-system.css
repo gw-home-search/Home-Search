@@ -1,0 +1,173 @@
+:root {
+  --hs-color-ink: #17202a;
+  --hs-color-ink-soft: #27313d;
+  --hs-color-muted: #66727c;
+  --hs-color-muted-strong: #46525e;
+  --hs-color-paper: #f4f6f2;
+  --hs-color-map-paper: #dfe7e4;
+  --hs-color-surface: #ffffff;
+  --hs-color-surface-muted: #f7f9f8;
+  --hs-color-line: #d8e0dd;
+  --hs-color-line-strong: #bdc9c6;
+  --hs-color-primary: #153847;
+  --hs-color-primary-soft: #e8eff1;
+  --hs-color-complex: #0e6b5e;
+  --hs-color-complex-soft: #e7f3ef;
+  --hs-color-region: #315f83;
+  --hs-color-region-soft: #e8f1f7;
+  --hs-color-trade: #1f7a68;
+  --hs-color-warning: #a86619;
+  --hs-color-error: #af4b45;
+  --hs-color-error-soft: #f8edeb;
+  --hs-color-grid-line: rgba(255, 255, 255, 0.7);
+  --hs-color-layer: rgba(255, 255, 255, 0.97);
+
+  --hs-text-primary: var(--hs-color-ink);
+  --hs-text-secondary: var(--hs-color-muted);
+  --hs-text-strong: var(--hs-color-ink-soft);
+  --hs-surface-page: var(--hs-color-paper);
+  --hs-surface-map: var(--hs-color-map-paper);
+  --hs-surface-panel: var(--hs-color-layer);
+  --hs-surface-control: var(--hs-color-surface);
+  --hs-surface-control-muted: var(--hs-color-surface-muted);
+  --hs-border-default: var(--hs-color-line);
+  --hs-border-strong: var(--hs-color-line-strong);
+  --hs-action-primary: var(--hs-color-primary);
+  --hs-action-secondary: var(--hs-color-complex);
+  --hs-marker-complex: var(--hs-color-complex);
+  --hs-marker-region: var(--hs-color-region);
+  --hs-chart-trade: var(--hs-color-trade);
+  --hs-state-error: var(--hs-color-error);
+  --hs-state-error-surface: var(--hs-color-error-soft);
+
+  --hs-appbar-height: 56px;
+  --hs-appbar-height-compact: 52px;
+  --hs-control-height: 36px;
+  --hs-control-height-compact: 32px;
+  --hs-control-radius: 6px;
+  --hs-panel-radius: 8px;
+  --hs-marker-radius: 6px;
+  --hs-space-1: 4px;
+  --hs-space-2: 8px;
+  --hs-space-3: 12px;
+  --hs-space-4: 16px;
+  --hs-z-map-base: 1;
+  --hs-z-map-status: 2;
+  --hs-z-map-controls: 3;
+  --hs-z-panel: 4;
+  --hs-z-appbar: 10;
+  --hs-z-drawer: 12;
+  --hs-shadow-appbar: 0 2px 10px rgba(23, 32, 42, 0.08);
+  --hs-shadow-panel: 0 8px 20px rgba(23, 32, 42, 0.12);
+  --hs-shadow-drawer: 0 14px 32px rgba(23, 32, 42, 0.2);
+  --hs-shadow-marker: 0 3px 8px rgba(23, 32, 42, 0.18);
+  --hs-focus-ring: 0 0 0 3px rgba(14, 107, 94, 0.22);
+  --hs-map-grid-background:
+    linear-gradient(90deg, var(--hs-color-grid-line) 1px, transparent 1px),
+    linear-gradient(180deg, var(--hs-color-grid-line) 1px, transparent 1px),
+    var(--hs-surface-map);
+}
+
+.hs-button {
+  min-height: var(--hs-control-height);
+  border: 1px solid var(--hs-border-default);
+  border-radius: var(--hs-control-radius);
+  background: var(--hs-surface-control);
+  color: var(--hs-text-primary);
+  cursor: pointer;
+  font: inherit;
+}
+
+.hs-button:hover {
+  border-color: var(--hs-border-strong);
+  background: var(--hs-surface-control-muted);
+}
+
+.hs-button:focus-visible,
+.hs-field:focus-visible {
+  outline: 0;
+  box-shadow: var(--hs-focus-ring);
+}
+
+.hs-button-primary {
+  border-color: var(--hs-action-primary);
+  background: var(--hs-action-primary);
+  color: var(--hs-color-surface);
+}
+
+.hs-button-primary:hover {
+  border-color: var(--hs-action-primary);
+  background: var(--hs-action-primary);
+}
+
+.hs-button-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--hs-action-secondary);
+}
+
+.hs-button-ghost:hover {
+  background: var(--hs-color-complex-soft);
+}
+
+.hs-panel,
+.hs-floating-panel {
+  border: 1px solid var(--hs-border-default);
+  border-radius: var(--hs-panel-radius);
+  background: var(--hs-surface-panel);
+}
+
+.hs-floating-panel {
+  box-shadow: var(--hs-shadow-panel);
+}
+
+.hs-field {
+  min-height: var(--hs-control-height-compact);
+  border: 1px solid var(--hs-border-default);
+  border-radius: var(--hs-control-radius);
+  background: var(--hs-surface-control);
+  color: var(--hs-text-primary);
+  font: inherit;
+}
+
+.hs-status {
+  color: var(--hs-text-strong);
+  font-size: 13px;
+}
+
+.hs-status-error {
+  border-color: var(--hs-state-error);
+  background: var(--hs-state-error-surface);
+}
+
+.hs-marker {
+  border: 1px solid var(--hs-color-ink);
+  border-radius: var(--hs-marker-radius);
+  background: var(--hs-surface-control);
+  color: var(--hs-text-primary);
+  box-shadow: var(--hs-shadow-marker);
+}
+
+.hs-marker-complex {
+  border-color: var(--hs-marker-complex);
+}
+
+.hs-marker-region {
+  border-color: var(--hs-marker-region);
+}
+
+.hs-marker:focus-visible {
+  outline: 0;
+  box-shadow:
+    var(--hs-shadow-marker),
+    var(--hs-focus-ring);
+}
+
+.hs-chart-bar {
+  background: var(--hs-chart-trade);
+}
+
+.hs-data-table {
+  width: 100%;
+  border-collapse: collapse;
+}

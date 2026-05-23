@@ -650,3 +650,46 @@ risk_notes = [
   "chart는 V1 trade list 응답만 사용하며 heavy analytics나 trend API를 추가하지 않는다.",
   "mobile width에서 drawer text/table/chart가 겹치지 않도록 existing responsive constraints를 유지해야 한다.",
 ]
+
+[[slices]]
+id = "v1-release-readiness-smoke"
+title_ko = "V1 release readiness smoke"
+pr_type = "Test"
+pr_title_ko = "V1 릴리스 준비 스모크"
+description_ko = "merged V1 MVP slice 전체를 origin/main 기준으로 재검증하고 backend/web/local runtime evidence를 릴리스 후보 기준으로 정리한다."
+status = "candidate"
+priority = 70
+targets = "both"
+preset = "runtime-smoke"
+acceptance_criteria = [
+  "origin/main에 반영된 17개 V1 slice를 기준으로 backlog sync 결과가 추가 동기화 없이 clean이어야 한다.",
+  "Docker Compose local stack config, backendQualityCheck, frontend test/build, git diff whitespace 검증을 같은 기준으로 통과시킨다.",
+  "deterministic seed 또는 existing runtime smoke가 map marker, search/region/filter, detail drawer, trade list V1 URL 흐름을 깨뜨리지 않는다는 evidence를 남긴다.",
+  "RTMS, VWorld, Kakao live key 같은 외부 API/secrets가 없어도 PR 검증은 fixture, mocked client, local fallback evidence로 닫는다.",
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "ranking, trend aggregate, favorite, alarm, mail, auth, recommendation 기능을 릴리스 준비 범위에 추가하지 않는다.",
+]
+first_red_candidates = [
+  "release readiness smoke에서 backendQualityCheck 또는 frontend test/build 중 하나라도 실패하면 candidate가 Fail로 남는 검증 실패를 먼저 확인한다.",
+  "V1 URL contract가 map/search/region/detail/trade 흐름 중 하나라도 바뀌면 기존 contract/runtime smoke가 실패해야 한다.",
+  "local stack config 또는 deterministic seed smoke가 없으면 runtime readiness evidence가 Partial로 남는 gate를 먼저 확인한다.",
+]
+verification_commands = [
+  "docker compose -f infra/docker-compose.local.yml config",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+]
+stop_conditions = [
+  "새 product behavior, public API shape 변경, DB schema 변경, live Open API call이 필요하면 중단하고 별도 slice로 분리한다.",
+  "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
+  "runtime smoke를 위해 main merge, main push, PR merge, DB destructive operation이 필요하면 중단한다.",
+  "Kakao key가 없다는 이유만으로 API/backend/frontend deterministic 검증 전체를 실패 처리하지 않는다.",
+  "apps/api와 apps/web이 같은 파일을 동시에 수정해야 하면 backend/frontend 하위 slice로 분리한다.",
+]
+risk_notes = [
+  "release readiness smoke는 feature 확장이 아니라 evidence hardening slice다.",
+  "Docker daemon, API/Web port, local Kakao key availability에 따라 browser visual evidence는 Partial로 남을 수 있다.",
+  "live RTMS/VWorld 검증은 사람 승인과 local env가 있는 후속 manual smoke로 분리한다.",
+]

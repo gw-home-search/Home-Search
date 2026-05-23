@@ -733,3 +733,44 @@ risk_notes = [
   "실제 business metric 이름과 dashboard는 V1 release 이후 별도 관측성 slice로 분리한다.",
   "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
 ]
+
+[[slices]]
+id = "v1-coordinate-shp-sample-import-hardening"
+title_ko = "V1 coordinate SHP sample import hardening"
+pr_type = "Feat"
+pr_title_ko = "V1 좌표 SHP 샘플 import 검증 강화"
+description_ko = "실제 VWorld AL_D010 SHP 샘플과 기존 LSMD_CONT_LDREG 포맷을 file-first 좌표 snapshot importer에서 검증 가능한 입력으로 지원한다."
+status = "done"
+priority = 90
+targets = "backend"
+preset = "coordinate-snapshot-import"
+acceptance_criteria = [
+  "기존 LSMD_CONT_LDREG_<region>_<YYYYMM>.shp 지원을 유지한다.",
+  "AL_D010_<sido>_<YYYYMMDD>.shp와 AL_D010_<sido>_<YYYYMMDD>(N).shp 분할 파일을 지원한다.",
+  "AL_D010 포맷은 A2를 pnu, A23을 source_region_code로 정규화하고 19자리 PNU와 region match를 검증한다.",
+  "--preflight-only는 DB schema, advisory lock, truncate, insert 없이 filename, sidecar, PRJ, field mapping, region/version evidence만 검증한다.",
+  "--self-test는 실제 SHP 없이 filename parser와 포맷 detector를 검증한다.",
+  "HOME_COORDINATE_EXPECTED_REGIONS로 partial sample 검증 범위를 명시할 수 있고 기본 full import는 17개 SIDO를 요구한다.",
+  "coordinate_snapshot_run.report_json에 sourceFormat, expectedRegions, seenRegions, missingRegions, fileNames, partCounts, source/target SRID, syncParcel evidence를 남긴다.",
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "CoordinateImportOpsConfigurationTest에서 AL_D010_41_20251204(3).shp, A2/A23 mapping, HOME_COORDINATE_EXPECTED_REGIONS, --preflight-only, --self-test 기대를 추가해 기존 script가 실패하는 RED를 만든다.",
+  "샘플 preflight 명령에서 기존 LSMD_CONT_LDREG 전용 glob 때문에 AL_D010 파일을 찾지 못하는 실패를 확인한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "실제 DB import, migration execution, active snapshot truncate/insert가 필요하면 중단하고 별도 수동 smoke로 분리한다.",
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+  "AL_D010 외 신규 VWorld 포맷 지원이 필요하면 별도 parser slice로 분리한다.",
+]
+risk_notes = [
+  "샘플 경로는 로컬 실행 env로만 전달하고 repository 파일에 저장하지 않는다.",
+  "샘플은 서울/경기 partial dataset이므로 full national import 품질 evidence를 대체하지 않는다.",
+  "실제 full import 성능과 디스크 사용량은 별도 local DB smoke에서 확인해야 한다.",
+]

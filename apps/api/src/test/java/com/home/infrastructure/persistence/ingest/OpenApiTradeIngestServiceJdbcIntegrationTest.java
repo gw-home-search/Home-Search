@@ -151,6 +151,42 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
+	@DisplayName("live RTMS master bootstrap persists snapshot parcel geometry when resolver provides it")
+	void bootstrapPersistsSnapshotParcelGeometryWhenResolverProvidesIt() {
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		String pnu = "1168010300107780001";
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(
+				jdbcClient,
+				coordinatesWithGeometry(
+					pnu,
+					"37.5012345",
+					"127.0543210",
+					"MULTIPOLYGON(((127.0540 37.5010,127.0546 37.5010,127.0546 37.5015,127.0540 37.5015,127.0540 37.5010)))"
+				)
+			)
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(liveRtmsItem("APT-LIVE-502", "Live Geometry Apartment", "778-1"))
+		));
+
+		assertThat(result.normalizedInserted()).isEqualTo(1);
+		assertThat(parcelGeometryWkt(pnu)).startsWith("MULTIPOLYGON");
+	}
+
+	@Test
 	@DisplayName("live RTMS rows without resolved coordinates remain explainable match failures without fake parcel")
 	void coordinateMissingLeavesExplainableMatchFailureWithoutFakeParcel() {
 		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
@@ -227,6 +263,20 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 		return (pnu, item) -> expectedPnu.equals(pnu) ? Optional.of(coordinate) : Optional.empty();
 	}
 
+	private ParcelCoordinateResolver coordinatesWithGeometry(
+		String expectedPnu,
+		String latitude,
+		String longitude,
+		String geometryWkt
+	) {
+		ParcelCoordinate coordinate = new ParcelCoordinate(
+			new BigDecimal(latitude),
+			new BigDecimal(longitude),
+			geometryWkt
+		);
+		return (pnu, item) -> expectedPnu.equals(pnu) ? Optional.of(coordinate) : Optional.empty();
+	}
+
 	private long parcelCount(String pnu) {
 		return jdbcClient.sql("SELECT count(*) FROM parcel WHERE pnu = :pnu")
 			.param("pnu", pnu)
@@ -238,6 +288,17 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 		return jdbcClient.sql("SELECT count(*) FROM complex WHERE apt_seq = :aptSeq")
 			.param("aptSeq", aptSeq)
 			.query(Long.class)
+			.single();
+	}
+
+	private String parcelGeometryWkt(String pnu) {
+		return jdbcClient.sql("""
+			SELECT ST_AsText(geom)
+			FROM parcel
+			WHERE pnu = :pnu
+			""")
+			.param("pnu", pnu)
+			.query(String.class)
 			.single();
 	}
 

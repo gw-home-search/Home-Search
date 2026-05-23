@@ -1,0 +1,32 @@
+name: home-search-local
+
+services:
+  coordinate-importer:
+    image: postgis/postgis:16-3.4
+    container_name: home-search-coordinate-importer
+    profiles:
+      - coordinate-import
+    depends_on:
+      postgis:
+        condition: service_healthy
+    working_dir: /workspace/apps/api
+    entrypoint: ["bash", "/workspace/apps/api/ops/import-vworld-coordinate-snapshot.sh"]
+    environment:
+      PGHOST: postgis
+      PGPORT: "5432"
+      PGDATABASE: ${HOME_SEARCH_DB_NAME:-home_search}
+      PGUSER: ${HOME_SEARCH_DB_USERNAME:-home_search}
+      PGPASSWORD: ${HOME_SEARCH_DB_PASSWORD:-home_search_local_password}
+      HOME_COORDINATE_SHP_DIR: /coordinate-input
+      HOME_COORDINATE_SNAPSHOT_VERSION: ${HOME_COORDINATE_SNAPSHOT_VERSION:-}
+      HOME_COORDINATE_SOURCE_SRID: ${HOME_COORDINATE_SOURCE_SRID:-5186}
+      HOME_COORDINATE_TARGET_SRID: ${HOME_COORDINATE_TARGET_SRID:-4326}
+      HOME_COORDINATE_REQUIRE_FULL_REGIONS: ${HOME_COORDINATE_REQUIRE_FULL_REGIONS:-true}
+      HOME_COORDINATE_ALLOW_MIXED_VERSION: ${HOME_COORDINATE_ALLOW_MIXED_VERSION:-false}
+      HOME_COORDINATE_VALIDATE_PRJ: ${HOME_COORDINATE_VALIDATE_PRJ:-true}
+      HOME_COORDINATE_SYNC_PARCEL: ${HOME_COORDINATE_SYNC_PARCEL:-true}
+    volumes:
+      - ${HOME_SEARCH_REPO_DIR:-..}:/workspace:ro
+      - ${HOME_COORDINATE_HOST_SHP_DIR:-../coordinate-input}:/coordinate-input:ro
+    networks:
+      - home-search-local

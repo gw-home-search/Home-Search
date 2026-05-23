@@ -30,6 +30,8 @@ public abstract class JdbcPostgresTestSupport {
 		Flyway flyway = Flyway.configure()
 			.dataSource(dataSource)
 			.locations("classpath:db/migration/api")
+			.schemas("public", "reference")
+			.defaultSchema("public")
 			.cleanDisabled(false)
 			.load();
 		flyway.clean();

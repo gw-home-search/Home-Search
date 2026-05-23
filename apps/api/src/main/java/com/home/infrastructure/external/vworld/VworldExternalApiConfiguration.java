@@ -1,10 +1,15 @@
 package com.home.infrastructure.external.vworld;
 
 import com.home.infrastructure.persistence.ingest.ParcelCoordinateResolver;
+import com.home.infrastructure.persistence.ingest.ParcelCoordinateSnapshotRepository;
+import com.home.infrastructure.persistence.ingest.SnapshotFirstParcelCoordinateResolver;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
@@ -33,7 +38,8 @@ class VworldExternalApiConfiguration {
 	}
 
 	@Bean
-	ParcelCoordinateResolver parcelCoordinateResolver(VworldParcelCoordinateProperties properties) {
+	@Lazy
+	ParcelCoordinateResolver vworldParcelCoordinateResolver(VworldParcelCoordinateProperties properties) {
 		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
 		requestFactory.setConnectTimeout(properties.connectTimeoutMillis());
 		requestFactory.setReadTimeout(properties.readTimeoutMillis());
@@ -42,5 +48,15 @@ class VworldExternalApiConfiguration {
 			.baseUrl(properties.baseUrl())
 			.build();
 		return new VworldParcelCoordinateResolver(restClient, properties);
+	}
+
+	@Bean
+	@Primary
+	@Lazy
+	ParcelCoordinateResolver parcelCoordinateResolver(
+		ParcelCoordinateSnapshotRepository snapshotRepository,
+		@Qualifier("vworldParcelCoordinateResolver") ParcelCoordinateResolver fallbackResolver
+	) {
+		return new SnapshotFirstParcelCoordinateResolver(snapshotRepository, fallbackResolver);
 	}
 }

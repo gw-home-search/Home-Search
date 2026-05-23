@@ -90,18 +90,24 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			    region_id,
 			    pnu,
 			    latitude,
-			    longitude
+			    longitude,
+			    geom
 			)
 			VALUES (
 			    :regionId,
 			    :pnu,
 			    :latitude,
-			    :longitude
+			    :longitude,
+			    CASE
+			        WHEN CAST(:geometryWkt AS text) IS NULL THEN NULL
+			        ELSE ST_Multi(ST_GeomFromText(CAST(:geometryWkt AS text), 4326))
+			    END
 			)
 			ON CONFLICT (pnu) DO UPDATE
 			SET region_id = COALESCE(parcel.region_id, EXCLUDED.region_id),
 			    latitude = EXCLUDED.latitude,
 			    longitude = EXCLUDED.longitude,
+			    geom = COALESCE(EXCLUDED.geom, parcel.geom),
 			    updated_at = now()
 			RETURNING id
 			""")
@@ -109,6 +115,7 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			.param("pnu", pnu)
 			.param("latitude", coordinate.get().latitude())
 			.param("longitude", coordinate.get().longitude())
+			.param("geometryWkt", coordinate.get().geometryWkt())
 			.query(Long.class)
 			.optional();
 	}

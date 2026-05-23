@@ -25,6 +25,9 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("postgis/postgis:16-3.4");
 		assertThat(content).contains("coordinate-import");
 		assertThat(content).contains("HOME_COORDINATE_SHP_DIR: /coordinate-input");
+		assertThat(content).contains("HOME_COORDINATE_INPUT_FORMAT: ${HOME_COORDINATE_INPUT_FORMAT:-auto}");
+		assertThat(content).contains("HOME_COORDINATE_EXPECTED_REGIONS: ${HOME_COORDINATE_EXPECTED_REGIONS:-}");
+		assertThat(content).contains("HOME_COORDINATE_STRICT_REGION_MATCH: ${HOME_COORDINATE_STRICT_REGION_MATCH:-true}");
 		assertThat(content).contains("HOME_COORDINATE_VALIDATE_PRJ: ${HOME_COORDINATE_VALIDATE_PRJ:-true}");
 		assertThat(content).contains("${HOME_SEARCH_REPO_DIR:-..}:/workspace:ro");
 		assertThat(content).contains("${HOME_COORDINATE_HOST_SHP_DIR:-../coordinate-input}:/coordinate-input:ro");
@@ -51,6 +54,15 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("GRS[_ ]?1980");
 		assertThat(content).contains("reference.coordinate_snapshot_run");
 		assertThat(content).contains("reference.parcel_coordinate_snapshot");
+		assertThat(content).contains("AL_D010_*.shp");
+		assertThat(content).contains("vworld-al-d010");
+		assertThat(content).contains("--preflight-only");
+		assertThat(content).contains("--self-test");
+		assertThat(content).contains("A2 -> pnu");
+		assertThat(content).contains("A23 -> source_region_code");
+		assertThat(content).contains("HOME_COORDINATE_INPUT_FORMAT");
+		assertThat(content).contains("HOME_COORDINATE_EXPECTED_REGIONS");
+		assertThat(content).contains("HOME_COORDINATE_STRICT_REGION_MATCH");
 		assertThat(content).contains("ST_PointOnSurface");
 		assertThat(content).contains("ST_MakeValid");
 		assertThat(content).contains("duplicate_pnu_count");

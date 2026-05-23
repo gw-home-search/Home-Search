@@ -187,6 +187,48 @@ risk_notes = [
 ]
 
 [[slices]]
+id = "parcel-coordinate-resolver-adapter"
+title_ko = "Parcel coordinate resolver adapter"
+pr_type = "Feat"
+pr_title_ko = "지번 좌표 resolver adapter"
+description_ko = "live-complex-master-bootstrap 이후 PNU 기반 parcel 좌표 확인 adapter를 추가해 fake 좌표 없이 RTMS live row 정상화를 넓힌다."
+status = "candidate"
+priority = 4
+targets = "backend"
+preset = "open-api-ingest-prep"
+acceptance_criteria = [
+  "live-complex-master-bootstrap이 main에 반영된 뒤 ParcelCoordinateResolver public seam을 유지하며 adapter를 연결한다.",
+  "PNU 또는 RTMS item 기반 좌표 lookup 결과가 확인된 경우에만 ParcelCoordinate를 반환하고 parcel/complex bootstrap으로 이어진다.",
+  "좌표 provider가 empty, ambiguous, invalid, 또는 configuration missing이면 fake latitude/longitude 없이 Optional.empty()로 처리해 explainable MATCH_FAILED를 유지한다.",
+  "PR 검증은 fixture/mocked coordinate client로 고정하고 live VWorld, ODC, RTMS Open API 호출을 요구하지 않는다.",
+  "source/source_key dedupe, raw-before-normalized 순서, complex_id operational relation, complex_pk/apt_seq audit metadata를 변경하지 않는다.",
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "ParcelCoordinateResolver adapter test에서 fixture 좌표 응답이 ParcelCoordinate로 변환되어야 하나 adapter 부재로 실패하는 RED를 먼저 만든다.",
+  "invalid 또는 ambiguous 좌표 응답이 Optional.empty()가 되어 fake parcel을 만들지 않아야 하나 guard 부재로 실패하는 RED를 먼저 만든다.",
+  "OpenApiTradeIngestServiceJdbcIntegrationTest에서 mocked coordinate adapter 성공 시 normalizedInserted > 0, 실패 시 MATCH_FAILED가 유지되는 regression을 고정한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "live-complex-master-bootstrap PR #35가 main에 merge되지 않았으면 실행하지 않는다.",
+  "PR 검증에서 live VWorld, ODC, RTMS Open API call이 필요하면 중단하고 fixture/mocking으로 대체한다.",
+  "service key, raw production payload, local secret 저장이 필요하면 중단한다.",
+  "fake latitude/longitude 또는 근거 없는 parcel geometry를 저장해야 하면 중단한다.",
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "rankings, trend, favorite, alarm, mail, auth, recommendation dependency가 필요하면 중단한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
+  "외부 좌표 provider의 실제 응답 품질은 로컬 env와 사람 승인 기반 수동 evidence로만 확인한다.",
+  "좌표 정확도와 PNU 매칭 품질이 낮으면 normalized insert보다 explainable MATCH_FAILED를 우선한다.",
+]
+
+[[slices]]
 id = "mvp-e2e-runtime-smoke"
 title_ko = "MVP e2e runtime smoke"
 pr_type = "Test"

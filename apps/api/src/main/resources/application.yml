@@ -33,17 +33,3 @@ home:
       deal-ymd: ""
       page-no: 1
       preflight-only: false
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,prometheus
-  endpoint:
-    health:
-      probes:
-        enabled: true
-  prometheus:
-    metrics:
-      export:
-        enabled: true

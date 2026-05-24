@@ -104,7 +104,7 @@ class CoordinateImportOpsConfigurationTest {
 		String content = Files.readString(V1_BACKLOG);
 
 		assertThat(content).contains("id = \"v1-coordinate-full-import-smoke\"");
-		assertThat(content).contains("status = \"candidate\"");
+		assertThat(content).contains("status = \"done\"");
 		assertThat(content).contains("preset = \"coordinate-snapshot-import\"");
 		assertThat(content).contains("targets = \"backend\"");
 		assertThat(content).contains("verify-coordinate-snapshot-smoke.sh --self-test");

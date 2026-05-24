@@ -13,6 +13,8 @@ class CoordinateImportOpsConfigurationTest {
 
 	private static final Path COORDINATE_IMPORT_COMPOSE = Path.of("ops/docker-compose.coordinate-import.yml");
 	private static final Path COORDINATE_IMPORT_SCRIPT = Path.of("ops/import-vworld-coordinate-snapshot.sh");
+	private static final Path COORDINATE_SMOKE_SCRIPT = Path.of("ops/verify-coordinate-snapshot-smoke.sh");
+	private static final Path V1_BACKLOG = Path.of("../../.codex/harness/slices/backlog.toml");
 
 	@Test
 	@DisplayName("coordinate import compose override wires read-only SHP input without service keys")
@@ -66,5 +68,48 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("ST_PointOnSurface");
 		assertThat(content).contains("ST_MakeValid");
 		assertThat(content).contains("duplicate_pnu_count");
+	}
+
+	@Test
+	@DisplayName("coordinate full import smoke verifier checks the latest passed snapshot evidence")
+	void coordinateFullImportSmokeVerifierChecksLatestPassedSnapshotEvidence() throws IOException {
+		assertThat(COORDINATE_SMOKE_SCRIPT).exists();
+
+		String content = Files.readString(COORDINATE_SMOKE_SCRIPT);
+
+		assertThat(content).contains("HOME_COORDINATE_MIN_PNU_COUNT");
+		assertThat(content).contains("HOME_COORDINATE_REQUIRE_SYNC_PARCEL");
+		assertThat(content).contains("reference.coordinate_snapshot_run");
+		assertThat(content).contains("reference.parcel_coordinate_snapshot");
+		assertThat(content).contains("status = 'PASSED'");
+		assertThat(content).contains("region_count");
+		assertThat(content).contains("pnu_count");
+		assertThat(content).contains("invalid_count");
+		assertThat(content).contains("duplicate_pnu_count");
+		assertThat(content).contains("synced_parcel_count");
+		assertThat(content).contains("missingRegions");
+		assertThat(content).contains("ST_SRID(point) = 4326");
+		assertThat(content).contains("ST_SRID(geom) = 4326");
+		assertThat(content).contains("latitude BETWEEN 33 AND 39");
+		assertThat(content).contains("longitude BETWEEN 124 AND 132");
+		assertThat(content).contains("--self-test");
+		assertThat(content).contains("coordinate snapshot smoke passed");
+	}
+
+	@Test
+	@DisplayName("backlog registers the coordinate full import smoke slice")
+	void backlogRegistersCoordinateFullImportSmokeSlice() throws IOException {
+		assertThat(V1_BACKLOG).exists();
+
+		String content = Files.readString(V1_BACKLOG);
+
+		assertThat(content).contains("id = \"v1-coordinate-full-import-smoke\"");
+		assertThat(content).contains("status = \"candidate\"");
+		assertThat(content).contains("preset = \"coordinate-snapshot-import\"");
+		assertThat(content).contains("targets = \"backend\"");
+		assertThat(content).contains("verify-coordinate-snapshot-smoke.sh --self-test");
+		assertThat(content).contains("HOME_COORDINATE_EXPECTED_REGIONS");
+		assertThat(content).contains("coordinate_snapshot_run.status = PASSED");
+		assertThat(content).contains("full national import");
 	}
 }

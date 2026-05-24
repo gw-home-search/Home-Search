@@ -32,4 +32,13 @@ public interface RawTradeIngestRepository {
 	 * @return status가 일치하는 raw ingest records
 	 */
 	List<RawTradeIngestRecord> findByStatus(RawTradeIngestStatus status);
+
+	/**
+	 * 운영자가 raw ingest 실패/중복 evidence를 read-only summary로 조회합니다.
+	 * Raw payload와 source_key 전문은 반환하지 않습니다.
+	 *
+	 * @param query source, lawdCd, dealYmd 범위, status 조건
+	 * @return status/source/lawdCd/dealYmd/failureReason별 count summary
+	 */
+	List<RawTradeIngestFailureSummary> summarizeFailures(RawTradeIngestFailureQuery query);
 }

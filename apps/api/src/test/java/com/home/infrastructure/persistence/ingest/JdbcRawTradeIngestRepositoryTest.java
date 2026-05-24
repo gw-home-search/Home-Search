@@ -2,9 +2,12 @@ package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Arrays;
 import java.util.List;
 
 import com.home.application.ingest.RawTradeIngestRecord;
+import com.home.application.ingest.RawTradeIngestFailureQuery;
+import com.home.application.ingest.RawTradeIngestFailureSummary;
 import com.home.application.ingest.RawTradeIngestStatus;
 
 import org.junit.jupiter.api.DisplayName;
@@ -42,5 +45,90 @@ class JdbcRawTradeIngestRepositoryTest extends JdbcPostgresTestSupport {
 			assertThat(record.failureReason()).isEqualTo("no complex matched aptSeq=APT-404");
 			assertThat(record.sourceKey()).isEqualTo("rtms-source-key-1");
 		});
+	}
+
+	@Test
+	@DisplayName("failure inspection summarizes only safe read-only evidence by source and deal month")
+	void summarizesFailureEvidenceWithoutRawPayloadOrSourceKey() {
+		JdbcRawTradeIngestRepository repository = new JdbcRawTradeIngestRepository(jdbcClient);
+		mark(repository, raw(repository, "match-1", "11680", "202512", "{\"aptSeq\":\"APT-404\"}"),
+			RawTradeIngestStatus.MATCH_FAILED, "no complex matched aptSeq=APT-404");
+		mark(repository, raw(repository, "match-2", "11680", "202512", "{\"aptSeq\":\"APT-405\"}"),
+			RawTradeIngestStatus.MATCH_FAILED, "no complex matched aptSeq=APT-404");
+		mark(repository, raw(repository, "parse-1", "11680", "202512", "{\"dealAmount\":\"\"}"),
+			RawTradeIngestStatus.PARSE_FAILED, "dealAmount is required");
+		mark(repository, raw(repository, "duplicate-1", "11680", "202512", "{\"aptSeq\":\"APT-501\"}"),
+			RawTradeIngestStatus.DUPLICATE, "duplicate source/source_key");
+		mark(repository, raw(repository, "other-date", "11680", "202511", "{}"),
+			RawTradeIngestStatus.MATCH_FAILED, "outside requested month");
+		mark(repository, raw(repository, "other-source", "11680", "202512", "{}"),
+			RawTradeIngestStatus.MATCH_FAILED, "other source");
+		jdbcClient.sql("""
+			UPDATE raw_trade_ingest
+			SET source = 'MANUAL'
+			WHERE source_key = 'other-source'
+			""").update();
+
+		List<RawTradeIngestFailureSummary> summaries = repository.summarizeFailures(
+			RawTradeIngestFailureQuery.between("RTMS", "11680", "202512", "202512")
+		);
+
+		assertThat(summaries).containsExactly(
+			new RawTradeIngestFailureSummary(
+				RawTradeIngestStatus.DUPLICATE,
+				"RTMS",
+				"11680",
+				"202512",
+				"duplicate source/source_key",
+				1
+			),
+			new RawTradeIngestFailureSummary(
+				RawTradeIngestStatus.MATCH_FAILED,
+				"RTMS",
+				"11680",
+				"202512",
+				"no complex matched aptSeq=APT-404",
+				2
+			),
+			new RawTradeIngestFailureSummary(
+				RawTradeIngestStatus.PARSE_FAILED,
+				"RTMS",
+				"11680",
+				"202512",
+				"dealAmount is required",
+				1
+			)
+		);
+		assertThat(Arrays.stream(RawTradeIngestFailureSummary.class.getRecordComponents())
+			.map(component -> component.getName()))
+			.containsExactly("status", "source", "lawdCd", "dealYmd", "failureReason", "count")
+			.doesNotContain("payload", "sourceKey");
+	}
+
+	private RawTradeIngestRecord raw(
+		JdbcRawTradeIngestRepository repository,
+		String sourceKey,
+		String lawdCd,
+		String dealYmd,
+		String payload
+	) {
+		return repository.save(RawTradeIngestRecord.received(
+			"RTMS",
+			sourceKey,
+			lawdCd,
+			dealYmd,
+			1,
+			payload,
+			"payload-hash-" + sourceKey
+		));
+	}
+
+	private RawTradeIngestRecord mark(
+		JdbcRawTradeIngestRepository repository,
+		RawTradeIngestRecord record,
+		RawTradeIngestStatus status,
+		String failureReason
+	) {
+		return repository.updateStatus(record.id(), status, failureReason);
 	}
 }

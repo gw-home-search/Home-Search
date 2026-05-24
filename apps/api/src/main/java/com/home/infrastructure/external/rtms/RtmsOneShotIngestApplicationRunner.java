@@ -13,13 +13,16 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner {
 
 	private final RtmsOneShotTradeIngestRunner runner;
 	private final RtmsOneShotIngestProperties properties;
+	private final RtmsApartmentTradeProperties tradeProperties;
 
 	RtmsOneShotIngestApplicationRunner(
 		RtmsOneShotTradeIngestRunner runner,
-		RtmsOneShotIngestProperties properties
+		RtmsOneShotIngestProperties properties,
+		RtmsApartmentTradeProperties tradeProperties
 	) {
 		this.runner = runner;
 		this.properties = properties;
+		this.tradeProperties = tradeProperties;
 	}
 
 	@Override
@@ -29,6 +32,20 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner {
 		}
 
 		RtmsApartmentTradeRequest request = properties.request();
+		tradeProperties.requiredServiceKey();
+		if (properties.preflightOnly()) {
+			log.info(
+				"RTMS one-shot ingest preflight completed baseUrl={} path={} lawdCd={} dealYmd={} pageNo={} "
+					+ "numOfRows={}",
+				tradeProperties.baseUrl(),
+				tradeProperties.path(),
+				request.lawdCd(),
+				request.dealYmd(),
+				request.pageNo(),
+				tradeProperties.numOfRows()
+			);
+			return;
+		}
 		IngestResult result = runner.ingest(request);
 		log.info(
 			"RTMS one-shot ingest completed lawdCd={} dealYmd={} pageNo={} read={} rawSaved={} "

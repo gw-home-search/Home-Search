@@ -15,6 +15,12 @@ public record RtmsApartmentTradeRequest(
 		}
 		lawdCd = lawdCd.trim();
 		dealYmd = dealYmd.trim();
+		if (!lawdCd.matches("\\d{5}")) {
+			throw new IllegalArgumentException("lawdCd must be 5 digits");
+		}
+		if (!dealYmd.matches("\\d{6}") || !validMonth(dealYmd)) {
+			throw new IllegalArgumentException("dealYmd must be YYYYMM");
+		}
 		pageNo = pageNo == null ? 1 : pageNo;
 		if (pageNo < 1) {
 			throw new IllegalArgumentException("pageNo must be greater than zero");
@@ -23,5 +29,10 @@ public record RtmsApartmentTradeRequest(
 
 	private static boolean hasText(String value) {
 		return value != null && !value.isBlank();
+	}
+
+	private static boolean validMonth(String dealYmd) {
+		int month = Integer.parseInt(dealYmd.substring(4, 6));
+		return month >= 1 && month <= 12;
 	}
 }

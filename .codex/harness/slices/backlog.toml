@@ -820,3 +820,43 @@ risk_notes = [
   "샘플 경로와 full SHP 경로는 env로만 전달하고 repository 파일에 저장하지 않는다.",
   "이번 smoke는 좌표 snapshot 품질과 resolver 입력을 닫는 작업이며 RTMS daily runner는 후속 slice로 분리한다.",
 ]
+
+[[slices]]
+id = "v1-observability-ingest-map-metrics"
+title_ko = "V1 observability ingest map metrics"
+pr_type = "Feat"
+pr_title_ko = "V1 수집/지도 metric 관측성 추가"
+description_ko = "actuator/prometheus surface 위에 V1 ingest 결과 count와 map endpoint error count를 안정적인 Micrometer metric으로 노출한다."
+status = "candidate"
+priority = 100
+targets = "backend"
+preset = "local-runtime-stack"
+acceptance_criteria = [
+  "OpenApiTradeIngestService 결과의 read, rawSaved, normalizedInserted, duplicateSkipped, matchFailed, parseFailed count를 stable metric names로 기록한다.",
+  "POST /api/v1/map/regions와 POST /api/v1/map/complexes의 success/error outcome을 endpoint별 metric으로 기록한다.",
+  "Metric 추가는 V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "Prometheus scrape surface는 기존 /actuator/prometheus 설정을 사용하고 별도 Prometheus/Grafana 서버 실행을 요구하지 않는다.",
+  "metric name과 tag cardinality는 low-cardinality 값(source, endpoint, outcome)으로 제한한다.",
+]
+first_red_candidates = [
+  "ingest service test에서 SimpleMeterRegistry에 rawSaved/normalizedInserted/duplicate/matchFailed/parseFailed count가 기록되어야 하나 instrumentation 부재로 실패하는 RED를 먼저 만든다.",
+  "MapController contract/smoke test에서 marker endpoint success/error outcome metric이 기록되어야 하나 controller instrumentation 부재로 실패하는 RED를 먼저 만든다.",
+  "backendQualityCheck가 기존 V1 API contract와 OpenAPI artifact를 그대로 통과해 metric 추가가 public API spec에 섞이지 않는지 확인한다.",
+]
+verification_commands = [
+  "docker compose -f infra/docker-compose.local.yml config",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "DB schema, migration execution, live RTMS/VWorld/Kakao/Open API call, Prometheus/Grafana server 실행이 필요하면 중단한다.",
+  "metric label에 parcelId, source_key, raw payload, exception message, query text처럼 high-cardinality 또는 민감한 값을 넣어야 하면 중단한다.",
+  "ranking, trend aggregate, favorite, alarm, mail, auth, recommendation 기능이 필요하면 중단한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "metric 이름은 운영 dashboard와 결합될 수 있으므로 이번 slice에서 명확한 naming을 테스트로 고정한다.",
+  "map endpoint error rate는 controller 경계에서 outcome count로 시작하고 전체 HTTP server metric 대체물로 해석하지 않는다.",
+  "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
+]

@@ -194,6 +194,11 @@ class OpenApiTradeIngestServiceTest {
 				.filter(record -> record.status() == status)
 				.toList();
 		}
+
+		@Override
+		public List<RawTradeIngestFailureSummary> summarizeFailures(RawTradeIngestFailureQuery query) {
+			return List.of();
+		}
 	}
 
 	private static final class RecordingNormalizedTradeRepository implements NormalizedTradeRepository {

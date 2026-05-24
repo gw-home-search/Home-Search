@@ -8,6 +8,8 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
 
+import com.home.application.ingest.RawTradeIngestFailureQuery;
+import com.home.application.ingest.RawTradeIngestFailureSummary;
 import com.home.application.ingest.RawTradeIngestRecord;
 import com.home.application.ingest.RawTradeIngestRepository;
 import com.home.application.ingest.RawTradeIngestStatus;
@@ -102,6 +104,35 @@ public class JdbcRawTradeIngestRepository implements RawTradeIngestRepository {
 			.list();
 	}
 
+	@Override
+	public List<RawTradeIngestFailureSummary> summarizeFailures(RawTradeIngestFailureQuery query) {
+		Objects.requireNonNull(query, "query is required");
+		return jdbcClient.sql("""
+			SELECT
+			    status,
+			    source,
+			    lawd_cd,
+			    deal_ymd,
+			    failure_reason,
+			    count(*) AS record_count
+			FROM raw_trade_ingest
+			WHERE status IN (:statuses)
+			  AND (:source IS NULL OR source = :source)
+			  AND (:lawdCd IS NULL OR lawd_cd = :lawdCd)
+			  AND (:dealYmdFrom IS NULL OR deal_ymd >= :dealYmdFrom)
+			  AND (:dealYmdTo IS NULL OR deal_ymd <= :dealYmdTo)
+			GROUP BY status, source, lawd_cd, deal_ymd, failure_reason
+			ORDER BY status, source, lawd_cd, deal_ymd, failure_reason NULLS LAST
+			""")
+			.param("statuses", query.statusNames())
+			.param("source", query.source())
+			.param("lawdCd", query.lawdCd())
+			.param("dealYmdFrom", query.dealYmdFrom())
+			.param("dealYmdTo", query.dealYmdTo())
+			.query(this::mapFailureSummary)
+			.list();
+	}
+
 	private RawTradeIngestRecord mapRecord(ResultSet resultSet, int rowNumber) throws SQLException {
 		return new RawTradeIngestRecord(
 			resultSet.getLong("id"),
@@ -116,6 +147,17 @@ public class JdbcRawTradeIngestRepository implements RawTradeIngestRepository {
 			resultSet.getString("failure_reason"),
 			instantOrNull(resultSet, "created_at"),
 			instantOrNull(resultSet, "processed_at")
+		);
+	}
+
+	private RawTradeIngestFailureSummary mapFailureSummary(ResultSet resultSet, int rowNumber) throws SQLException {
+		return new RawTradeIngestFailureSummary(
+			RawTradeIngestStatus.valueOf(resultSet.getString("status")),
+			resultSet.getString("source"),
+			resultSet.getString("lawd_cd"),
+			resultSet.getString("deal_ymd"),
+			resultSet.getString("failure_reason"),
+			resultSet.getLong("record_count")
 		);
 	}
 

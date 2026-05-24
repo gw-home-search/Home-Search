@@ -14,6 +14,7 @@ public class OpenApiTradeIngestService {
 	private final ComplexMatcher complexMatcher;
 	private final ComplexMasterBootstrapper complexMasterBootstrapper;
 	private final SourceKeyGenerator sourceKeyGenerator;
+	private final TradeIngestMetrics tradeIngestMetrics;
 
 	public OpenApiTradeIngestService(
 		RawTradeIngestRepository rawTradeIngestRepository,
@@ -29,12 +30,24 @@ public class OpenApiTradeIngestService {
 		ComplexMatcher complexMatcher,
 		ComplexMasterBootstrapper complexMasterBootstrapper
 	) {
+		this(rawTradeIngestRepository, normalizedTradeRepository, complexMatcher, complexMasterBootstrapper,
+			TradeIngestMetrics.noop());
+	}
+
+	public OpenApiTradeIngestService(
+		RawTradeIngestRepository rawTradeIngestRepository,
+		NormalizedTradeRepository normalizedTradeRepository,
+		ComplexMatcher complexMatcher,
+		ComplexMasterBootstrapper complexMasterBootstrapper,
+		TradeIngestMetrics tradeIngestMetrics
+	) {
 		this(
 			rawTradeIngestRepository,
 			normalizedTradeRepository,
 			complexMatcher,
 			complexMasterBootstrapper,
-			new SourceKeyGenerator()
+			new SourceKeyGenerator(),
+			tradeIngestMetrics
 		);
 	}
 
@@ -43,13 +56,15 @@ public class OpenApiTradeIngestService {
 		NormalizedTradeRepository normalizedTradeRepository,
 		ComplexMatcher complexMatcher,
 		ComplexMasterBootstrapper complexMasterBootstrapper,
-		SourceKeyGenerator sourceKeyGenerator
+		SourceKeyGenerator sourceKeyGenerator,
+		TradeIngestMetrics tradeIngestMetrics
 	) {
 		this.rawTradeIngestRepository = Objects.requireNonNull(rawTradeIngestRepository);
 		this.normalizedTradeRepository = Objects.requireNonNull(normalizedTradeRepository);
 		this.complexMatcher = Objects.requireNonNull(complexMatcher);
 		this.complexMasterBootstrapper = Objects.requireNonNull(complexMasterBootstrapper);
 		this.sourceKeyGenerator = Objects.requireNonNull(sourceKeyGenerator);
+		this.tradeIngestMetrics = Objects.requireNonNull(tradeIngestMetrics);
 	}
 
 	/**
@@ -130,7 +145,7 @@ public class OpenApiTradeIngestService {
 			}
 		}
 
-		return new IngestResult(
+		IngestResult result = new IngestResult(
 			batch.items().size(),
 			rawSaved,
 			normalizedInserted,
@@ -138,6 +153,8 @@ public class OpenApiTradeIngestService {
 			matchFailed,
 			parseFailed
 		);
+		tradeIngestMetrics.record(batch.source(), result);
+		return result;
 	}
 
 	private String matchFailureReason(ComplexMatchResult match, ComplexMasterBootstrapResult bootstrapResult) {

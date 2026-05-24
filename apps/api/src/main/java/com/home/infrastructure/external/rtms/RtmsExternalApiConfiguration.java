@@ -38,9 +38,10 @@ class RtmsExternalApiConfiguration {
 		@Value("${home.ingest.rtms.enabled:false}") boolean enabled,
 		@Value("${home.ingest.rtms.lawd-cd:}") String lawdCd,
 		@Value("${home.ingest.rtms.deal-ymd:}") String dealYmd,
-		@Value("${home.ingest.rtms.page-no:1}") Integer pageNo
+		@Value("${home.ingest.rtms.page-no:1}") Integer pageNo,
+		@Value("${home.ingest.rtms.preflight-only:false}") boolean preflightOnly
 	) {
-		return new RtmsOneShotIngestProperties(enabled, lawdCd, dealYmd, pageNo);
+		return new RtmsOneShotIngestProperties(enabled, lawdCd, dealYmd, pageNo, preflightOnly);
 	}
 
 	@Bean
@@ -88,8 +89,9 @@ class RtmsExternalApiConfiguration {
 	@Bean
 	ApplicationRunner rtmsOneShotIngestApplicationRunner(
 		RtmsOneShotTradeIngestRunner runner,
-		RtmsOneShotIngestProperties properties
+		RtmsOneShotIngestProperties properties,
+		RtmsApartmentTradeProperties tradeProperties
 	) {
-		return new RtmsOneShotIngestApplicationRunner(runner, properties);
+		return new RtmsOneShotIngestApplicationRunner(runner, properties, tradeProperties);
 	}
 }

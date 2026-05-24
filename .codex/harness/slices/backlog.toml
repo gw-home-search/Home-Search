@@ -860,3 +860,118 @@ risk_notes = [
   "map endpoint error rate는 controller 경계에서 outcome count로 시작하고 전체 HTTP server metric 대체물로 해석하지 않는다.",
   "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
 ]
+
+[[slices]]
+id = "rtms-one-shot-operator-preflight"
+title_ko = "RTMS one-shot operator preflight"
+pr_type = "Feat"
+pr_title_ko = "RTMS one-shot 실행 전 preflight"
+description_ko = "RTMS one-shot ingest를 사람이 실행하기 전 env, parameter, live-call guard를 검증해 잘못된 수집 실행을 막는다."
+status = "done"
+priority = 110
+targets = "backend"
+preset = "open-api-ingest-prep"
+acceptance_criteria = [
+  "APT_SERVICE_KEY, lawdCd, dealYm, pageNo 입력을 live call 전에 검증하고 누락/invalid 값은 명확한 preflight error로 중단한다.",
+  "preflight-only 모드는 live RTMS Open API 호출, DB write, migration execution 없이 configuration과 request parameter evidence만 남긴다.",
+  "one-shot runner의 실제 ingest 경로는 기존 raw-before-normalized, source/source_key dedupe, failed match explainability invariant를 유지한다.",
+  "local secret, service key, raw production payload, .env* 값을 repository 파일이나 report에 저장하지 않는다.",
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "RtmsOneShotTradeIngestRunnerTest에서 missing APT_SERVICE_KEY 또는 invalid lawdCd/dealYm가 live client 호출 전에 실패해야 하나 preflight guard 부재로 실패하는 RED를 만든다.",
+  "preflight-only 실행이 mocked client와 DB write 없이 request evidence만 반환해야 하나 mode 부재로 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "PR 검증에서 live RTMS Open API call이 필요하면 중단하고 fixture/mocking으로 대체한다.",
+  "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
+  "DB schema 변경, migration execution, destructive DB operation이 필요하면 별도 slice로 분리한다.",
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "apps/web 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "이 slice는 실제 수집 실행이 아니라 사람이 실행하기 전 guard와 dry-run evidence를 고정하는 작업이다.",
+  "CLI/runner option surface가 커지면 scheduler 또는 운영 자동화와 분리해야 한다.",
+  "backend-only slice이므로 frontend app은 건드리지 않는다.",
+]
+
+[[slices]]
+id = "raw-ingest-failure-inspection-ops"
+title_ko = "Raw ingest failure inspection ops"
+pr_type = "Feat"
+pr_title_ko = "원시 수집 실패 조회 ops"
+description_ko = "MATCH_FAILED, PARSE_FAILED, DUPLICATE raw ingest evidence를 운영자가 조회하고 설명할 수 있는 read-only ops 경로를 추가한다."
+status = "candidate"
+priority = 120
+targets = "backend"
+preset = "open-api-ingest-prep"
+acceptance_criteria = [
+  "raw_trade_ingest의 MATCH_FAILED, PARSE_FAILED, DUPLICATE count와 failure_reason을 source, lawdCd, dealYmd 범위로 조회할 수 있다.",
+  "조회 경로는 read-only이며 raw payload 전문, service key, source_key 전체처럼 민감하거나 high-cardinality한 값을 기본 출력하지 않는다.",
+  "failed match와 parse failure는 queryable/explainable evidence로 남고 기존 raw-before-normalized ingest 순서를 변경하지 않는다.",
+  "public V1 map/search/region/detail/trade API URL과 response shape를 변경하지 않는다.",
+  "운영 조회 결과는 fixture/Testcontainers 기반 regression으로 검증하고 live Open API 호출을 요구하지 않는다.",
+]
+first_red_candidates = [
+  "JdbcRawTradeIngestRepositoryTest에서 status/source/date 조건으로 실패 row summary를 조회해야 하나 read model 부재로 실패하는 RED를 만든다.",
+  "ops script 또는 application port test에서 failure_reason summary는 보이고 raw payload 전문은 기본 출력되지 않아야 하나 guard 부재로 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "public V1 API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "raw payload 전문, service key, local secret, source_key 전체를 report나 log에 노출해야 하면 중단한다.",
+  "DB schema 변경 또는 migration execution이 필요하면 별도 persistence slice로 분리한다.",
+  "live RTMS/VWorld/Open API call이 필요하면 중단하고 fixture/mocking으로 대체한다.",
+  "apps/web 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "운영 조회는 public API가 아니라 backend ops/read-only 경로로 제한한다.",
+  "failure reason 집계가 과도하게 상세해지면 민감정보 노출과 cardinality 위험이 있다.",
+  "backend-only slice이므로 frontend app은 건드리지 않는다.",
+]
+
+[[slices]]
+id = "v1-observability-local-scrape-config"
+title_ko = "V1 observability local scrape config"
+pr_type = "Feat"
+pr_title_ko = "V1 관측성 로컬 scrape config"
+description_ko = "actuator/prometheus metric을 local compose 환경에서 Prometheus scrape target으로 확인할 수 있는 repository-managed config를 추가한다."
+status = "candidate"
+priority = 130
+targets = "backend"
+preset = "local-runtime-stack"
+acceptance_criteria = [
+  "repository-managed local Prometheus scrape config를 두고 API /actuator/prometheus target을 검증한다.",
+  "compose config 검증은 secrets, .env*, live external API, DB destructive operation 없이 통과한다.",
+  "Grafana dashboard나 analytics 화면은 포함하지 않고 V1 ingest/map metrics scrape 가능성만 고정한다.",
+  "actuator endpoint exposure는 local/runtime profile 범위로 제한하고 V1 public API spec에 섞이지 않는다.",
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "LocalRuntimeStackConfigurationTest에서 Prometheus scrape config/profile이 기대되지만 파일 또는 compose service 부재로 실패하는 RED를 만든다.",
+  "docker compose config 검증에서 scrape target이 API actuator path를 가리켜야 하나 config 부재로 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "docker compose -f infra/docker-compose.local.yml config",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "Prometheus/Grafana server live 실행, dashboard 설계, analytics 기능이 필요하면 중단하고 별도 slice로 분리한다.",
+  "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "DB schema, ingest behavior, frontend behavior 변경이 필요하면 별도 slice로 분리한다.",
+  "apps/web 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "scrape config는 local developer runtime evidence이며 운영 모니터링 배포를 대체하지 않는다.",
+  "Grafana dashboard와 heavy analytics는 V2 또는 별도 observability slice로 둔다.",
+  "backend target이 local runtime preset의 backend/infra ownership 안에서 동작한다.",
+]

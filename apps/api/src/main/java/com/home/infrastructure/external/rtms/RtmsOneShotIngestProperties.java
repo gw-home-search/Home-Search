@@ -4,7 +4,8 @@ record RtmsOneShotIngestProperties(
 	boolean enabled,
 	String lawdCd,
 	String dealYmd,
-	Integer pageNo
+	Integer pageNo,
+	boolean preflightOnly
 ) {
 
 	RtmsApartmentTradeRequest request() {

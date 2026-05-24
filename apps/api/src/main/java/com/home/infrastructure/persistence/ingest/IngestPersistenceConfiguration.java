@@ -5,6 +5,7 @@ import com.home.application.ingest.ComplexMasterBootstrapper;
 import com.home.application.ingest.NormalizedTradeRepository;
 import com.home.application.ingest.OpenApiTradeIngestService;
 import com.home.application.ingest.RawTradeIngestRepository;
+import com.home.application.ingest.TradeIngestMetrics;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
@@ -67,13 +68,15 @@ class IngestPersistenceConfiguration {
 		RawTradeIngestRepository rawTradeIngestRepository,
 		NormalizedTradeRepository normalizedTradeRepository,
 		ComplexMatcher complexMatcher,
-		ComplexMasterBootstrapper complexMasterBootstrapper
+		ComplexMasterBootstrapper complexMasterBootstrapper,
+		TradeIngestMetrics tradeIngestMetrics
 	) {
 		return new OpenApiTradeIngestService(
 			rawTradeIngestRepository,
 			normalizedTradeRepository,
 			complexMatcher,
-			complexMasterBootstrapper
+			complexMasterBootstrapper,
+			tradeIngestMetrics
 		);
 	}
 

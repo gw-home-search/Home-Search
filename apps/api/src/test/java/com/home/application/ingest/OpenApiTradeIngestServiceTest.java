@@ -113,6 +113,36 @@ class OpenApiTradeIngestServiceTest {
 		assertThat(failures.get(0).sourceKey()).isNotBlank();
 	}
 
+	@Test
+	@DisplayName("ingest records completed batch count summary to metrics")
+	void ingestRecordsCompletedBatchCountSummaryToMetrics() {
+		List<String> events = new ArrayList<>();
+		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
+		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
+		RecordingTradeIngestMetrics metrics = new RecordingTradeIngestMetrics();
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			item -> ComplexMatchResult.matched(501L, "COMPLEX-PK-501", "APTSEQ"),
+			ComplexMasterBootstrapper.noop(),
+			metrics
+		);
+
+		OpenApiTradeItem first = rtmsItem("125,000");
+		OpenApiTradeItem duplicate = rtmsItem(" 125000 ");
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(first, duplicate)
+		));
+
+		assertThat(metrics.recordedSources()).containsExactly("RTMS");
+		assertThat(metrics.recordedResults()).containsExactly(result);
+	}
+
 	private OpenApiTradeItem rtmsItem(String dealAmount) {
 		return new OpenApiTradeItem(
 			"101",
@@ -197,6 +227,25 @@ class OpenApiTradeIngestServiceTest {
 
 		private String key(String source, String sourceKey) {
 			return source + "|" + sourceKey;
+		}
+	}
+
+	private static final class RecordingTradeIngestMetrics implements TradeIngestMetrics {
+		private final List<IngestResult> recordedResults = new ArrayList<>();
+		private final List<String> recordedSources = new ArrayList<>();
+
+		@Override
+		public void record(String source, IngestResult result) {
+			recordedSources.add(source);
+			recordedResults.add(result);
+		}
+
+		private List<String> recordedSources() {
+			return recordedSources;
+		}
+
+		private List<IngestResult> recordedResults() {
+			return recordedResults;
 		}
 	}
 }

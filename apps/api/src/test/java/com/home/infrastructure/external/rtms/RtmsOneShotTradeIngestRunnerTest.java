@@ -71,7 +71,8 @@ class RtmsOneShotTradeIngestRunnerTest {
 		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
 		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
 			runner,
-			new RtmsOneShotIngestProperties(false, null, null, null)
+			new RtmsOneShotIngestProperties(false, null, null, null, false),
+			rtmsProperties("DUMMY")
 		);
 
 		applicationRunner.run(new DefaultApplicationArguments());
@@ -85,7 +86,8 @@ class RtmsOneShotTradeIngestRunnerTest {
 		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
 		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
 			runner,
-			new RtmsOneShotIngestProperties(true, " ", "202512", 1)
+			new RtmsOneShotIngestProperties(true, " ", "202512", 1, false),
+			rtmsProperties("DUMMY")
 		);
 
 		assertThatThrownBy(() -> applicationRunner.run(new DefaultApplicationArguments()))
@@ -95,12 +97,86 @@ class RtmsOneShotTradeIngestRunnerTest {
 	}
 
 	@Test
+	@DisplayName("enabled local trigger validates service key before live ingest")
+	void enabledLocalTriggerRequiresServiceKeyBeforeLiveIngest() {
+		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
+		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
+			runner,
+			new RtmsOneShotIngestProperties(true, "11680", "202512", 1, false),
+			rtmsProperties(" ")
+		);
+
+		assertThatThrownBy(() -> applicationRunner.run(new DefaultApplicationArguments()))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("APT_SERVICE_KEY");
+		verifyNoInteractions(runner);
+	}
+
+	@Test
+	@DisplayName("preflight-only mode validates configuration without live fetch or DB ingest")
+	void preflightOnlyModeValidatesConfigurationWithoutLiveFetchOrDbIngest(CapturedOutput output) throws Exception {
+		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
+		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
+			runner,
+			new RtmsOneShotIngestProperties(true, " 11680 ", " 202512 ", 2, true),
+			rtmsProperties("DUMMY")
+		);
+
+		applicationRunner.run(new DefaultApplicationArguments());
+
+		verifyNoInteractions(runner);
+		assertThat(output).contains("RTMS one-shot ingest preflight completed")
+			.contains("baseUrl=https://example.invalid")
+			.contains("path=/rtms")
+			.contains("lawdCd=11680")
+			.contains("dealYmd=202512")
+			.contains("pageNo=2")
+			.contains("numOfRows=100")
+			.doesNotContain("APT_SERVICE_KEY")
+			.doesNotContain("serviceKey")
+			.doesNotContain("payload");
+	}
+
+	@Test
+	@DisplayName("enabled local trigger rejects invalid lawdCd before live ingest")
+	void enabledLocalTriggerRejectsInvalidLawdCdBeforeLiveIngest() {
+		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
+		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
+			runner,
+			new RtmsOneShotIngestProperties(true, "1168A", "202512", 1, false),
+			rtmsProperties("DUMMY")
+		);
+
+		assertThatThrownBy(() -> applicationRunner.run(new DefaultApplicationArguments()))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("lawdCd");
+		verifyNoInteractions(runner);
+	}
+
+	@Test
+	@DisplayName("enabled local trigger rejects invalid dealYmd before live ingest")
+	void enabledLocalTriggerRejectsInvalidDealYmdBeforeLiveIngest() {
+		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
+		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
+			runner,
+			new RtmsOneShotIngestProperties(true, "11680", "202513", 1, false),
+			rtmsProperties("DUMMY")
+		);
+
+		assertThatThrownBy(() -> applicationRunner.run(new DefaultApplicationArguments()))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("dealYmd");
+		verifyNoInteractions(runner);
+	}
+
+	@Test
 	@DisplayName("enabled local trigger runs explicit RTMS request and logs only count summary")
 	void enabledLocalTriggerRunsExplicitRequestAndLogsSummary(CapturedOutput output) throws Exception {
 		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
 		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
 			runner,
-			new RtmsOneShotIngestProperties(true, " 11680 ", " 202512 ", 2)
+			new RtmsOneShotIngestProperties(true, " 11680 ", " 202512 ", 2, false),
+			rtmsProperties("DUMMY")
 		);
 		RtmsApartmentTradeRequest expectedRequest = new RtmsApartmentTradeRequest("11680", "202512", 2);
 		when(runner.ingest(expectedRequest)).thenReturn(new IngestResult(3, 3, 1, 1, 1, 0));
@@ -121,5 +197,9 @@ class RtmsOneShotTradeIngestRunnerTest {
 			.doesNotContain("APT_SERVICE_KEY")
 			.doesNotContain("serviceKey")
 			.doesNotContain("payload");
+	}
+
+	private RtmsApartmentTradeProperties rtmsProperties(String serviceKey) {
+		return new RtmsApartmentTradeProperties("https://example.invalid", "/rtms", serviceKey, 100, 1_000, 1_000);
 	}
 }

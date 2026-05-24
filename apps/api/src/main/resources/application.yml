@@ -32,6 +32,7 @@ home:
       lawd-cd: ""
       deal-ymd: ""
       page-no: 1
+      preflight-only: false
 
 management:
   endpoints:

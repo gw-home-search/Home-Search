@@ -16,13 +16,15 @@ class BackendProfileConfigurationTest {
 	private static final Path RESOURCES = Path.of("src/main/resources");
 
 	@Test
-	@DisplayName("base profile does not globally disable DataSource or Flyway auto-configuration")
+	@DisplayName("base profile keeps database auto-configuration and actuator exposure profile-scoped")
 	void baseProfileDoesNotGloballyDisableDatabaseAutoConfiguration() throws IOException {
 		Properties properties = load("application.yml");
 
 		assertThat(properties.getProperty("spring.autoconfigure.exclude")).isNull();
 		assertThat(properties.getProperty("spring.flyway.locations")).isEqualTo("classpath:db/migration/api");
 		assertThat(properties.getProperty("spring.profiles.default")).isEqualTo("local");
+		assertThat(properties.getProperty("management.endpoints.web.exposure.include")).isNull();
+		assertThat(properties.getProperty("management.prometheus.metrics.export.enabled")).isNull();
 	}
 
 	@Test
@@ -33,6 +35,8 @@ class BackendProfileConfigurationTest {
 		assertThat(properties.getProperty("spring.autoconfigure.exclude"))
 			.contains("DataSourceAutoConfiguration")
 			.contains("FlywayAutoConfiguration");
+		assertThat(properties.getProperty("management.endpoints.web.exposure.include")).isEqualTo("health,prometheus");
+		assertThat(properties.getProperty("management.prometheus.metrics.export.enabled")).isEqualTo("true");
 	}
 
 	@Test
@@ -47,6 +51,8 @@ class BackendProfileConfigurationTest {
 		assertThat(properties.getProperty("spring.flyway.locations"))
 			.isEqualTo("${SPRING_FLYWAY_LOCATIONS:classpath:db/migration/api,classpath:db/seed/local}");
 		assertThat(properties.getProperty("spring.flyway.clean-disabled")).isEqualTo("true");
+		assertThat(properties.getProperty("management.endpoints.web.exposure.include")).isEqualTo("health,prometheus");
+		assertThat(properties.getProperty("management.prometheus.metrics.export.enabled")).isEqualTo("true");
 	}
 
 	private Properties load(String fileName) throws IOException {

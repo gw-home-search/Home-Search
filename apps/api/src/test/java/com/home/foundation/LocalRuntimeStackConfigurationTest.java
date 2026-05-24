@@ -5,11 +5,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Properties;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
+import org.springframework.core.io.FileSystemResource;
 
 class LocalRuntimeStackConfigurationTest {
+
+	private static final Path LOCAL_PROMETHEUS = Path.of("..", "..", "infra", "prometheus.local.yml");
 
 	private static final Path LOCAL_COMPOSE = Path.of("../../infra/docker-compose.local.yml");
 
@@ -26,5 +31,27 @@ class LocalRuntimeStackConfigurationTest {
 		assertThat(content).contains("VITE_API_SERVER_IP: ${VITE_API_SERVER_IP:-http://localhost:8080}");
 		assertThat(content).doesNotContain("APT_SERVICE_KEY");
 		assertThat(content).doesNotContain(".env");
+	}
+
+	@Test
+	@DisplayName("local compose stack wires Prometheus to scrape the API actuator endpoint")
+	void localComposeStackWiresPrometheusScrapeConfig() throws IOException {
+		assertThat(LOCAL_PROMETHEUS).exists();
+
+		String compose = Files.readString(LOCAL_COMPOSE);
+		assertThat(compose).contains("prom/prometheus");
+		assertThat(compose).contains("./prometheus.local.yml:/etc/prometheus/prometheus.yml:ro");
+		assertThat(compose).contains("${HOME_SEARCH_PROMETHEUS_PORT:-9090}:9090");
+
+		Properties prometheus = loadYaml(LOCAL_PROMETHEUS);
+		assertThat(prometheus.getProperty("scrape_configs[0].job_name")).isEqualTo("home-search-api");
+		assertThat(prometheus.getProperty("scrape_configs[0].metrics_path")).isEqualTo("/actuator/prometheus");
+		assertThat(prometheus.getProperty("scrape_configs[0].static_configs[0].targets[0]")).isEqualTo("api:8080");
+	}
+
+	private Properties loadYaml(Path path) {
+		YamlPropertiesFactoryBean factory = new YamlPropertiesFactoryBean();
+		factory.setResources(new FileSystemResource(path));
+		return factory.getObject();
 	}
 }

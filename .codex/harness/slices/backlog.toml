@@ -774,3 +774,49 @@ risk_notes = [
   "샘플은 서울/경기 partial dataset이므로 full national import 품질 evidence를 대체하지 않는다.",
   "실제 full import 성능과 디스크 사용량은 별도 local DB smoke에서 확인해야 한다.",
 ]
+
+[[slices]]
+id = "v1-coordinate-full-import-smoke"
+title_ko = "V1 coordinate full import smoke"
+pr_type = "Test"
+pr_title_ko = "V1 좌표 전체 import 스모크"
+description_ko = "VWorld 연속지적도 SHP full national import를 local PostGIS snapshot table에 반영하고 최신 PASSED run evidence를 검증 가능한 smoke로 고정한다."
+status = "done"
+priority = 95
+targets = "backend"
+preset = "coordinate-snapshot-import"
+acceptance_criteria = [
+  "VWorld AL_D010_<sido>_<YYYYMMDD>.shp 또는 LSMD_CONT_LDREG_* 중 한 포맷만 사용하고 mixed format/version은 실패한다.",
+  "기본 HOME_COORDINATE_EXPECTED_REGIONS는 17개 SIDO 코드 전체를 요구한다.",
+  "full national import 실행 후 coordinate_snapshot_run.status = PASSED 최신 run을 검증한다.",
+  "최신 run의 region_count는 HOME_COORDINATE_EXPECTED_REGIONS count와 같고 file_count는 region_count 이상이다.",
+  "최신 run의 pnu_count는 HOME_COORDINATE_MIN_PNU_COUNT 이상이고 active reference.parcel_coordinate_snapshot row count와 일치한다.",
+  "report_json의 missingRegions는 비어 있고 seenRegions는 HOME_COORDINATE_EXPECTED_REGIONS를 모두 포함한다.",
+  "active reference.parcel_coordinate_snapshot은 expected region_code를 모두 포함하고 latitude/longitude 범위, point/geom SRID=4326, valid geometry를 만족한다.",
+  "invalid_count, duplicate_pnu_count, synced_parcel_count는 실패로 숨기지 않고 smoke output/report evidence로 남긴다.",
+  "HOME_COORDINATE_REQUIRE_SYNC_PARCEL=true일 때 synced_parcel_count > 0을 요구한다.",
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "CoordinateImportOpsConfigurationTest에서 verify-coordinate-snapshot-smoke.sh와 v1-coordinate-full-import-smoke backlog entry를 기대해 현재 부재로 실패하는 RED를 만든다.",
+  "verify-coordinate-snapshot-smoke.sh --self-test가 full national import 검증 기본값과 option validation을 통과해야 하나 script 부재로 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "bash apps/api/ops/verify-coordinate-snapshot-smoke.sh --self-test",
+  "docker compose --profile coordinate-import -f infra/docker-compose.local.yml -f apps/api/ops/docker-compose.coordinate-import.yml config",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "full national SHP data가 로컬에 없으면 실제 DB import를 실행하지 않고 self-test/config/backendQualityCheck evidence로 제한한다.",
+  "실제 DB import는 local PostGIS와 명시적인 HOME_COORDINATE_HOST_SHP_DIR가 있을 때만 수동 smoke로 실행한다.",
+  "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "DB schema, ingest behavior, frontend behavior 변경이 필요하면 별도 slice로 분리한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "full national import는 데이터 크기와 로컬 디스크/DB 상태에 민감하므로 PR 자동 검증에서는 실행하지 않는다.",
+  "샘플 경로와 full SHP 경로는 env로만 전달하고 repository 파일에 저장하지 않는다.",
+  "이번 smoke는 좌표 snapshot 품질과 resolver 입력을 닫는 작업이며 RTMS daily runner는 후속 slice로 분리한다.",
+]

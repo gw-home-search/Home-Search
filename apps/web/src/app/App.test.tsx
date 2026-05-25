@@ -5,12 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveApiUrl } from '../features/map/api/resolveApiUrl';
 import { App } from './App';
 
-describe('App', () => {
+describe('App map-first shell 화면', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('renders a map-first shell with collapsible exploration controls and in-map marker errors', async () => {
+  it('collapsible exploration control과 in-map marker error가 있는 map-first shell을 rendering한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(errorResponse(500)));
 
     const { root, rootElement } = await renderApp();
@@ -48,7 +48,7 @@ describe('App', () => {
     unmount(root);
   });
 
-  it('shows marker loading state without blocking the map surface', async () => {
+  it('map surface를 block하지 않고 marker loading state를 표시한다', async () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => undefined)));
 
     const { root, rootElement } = await renderApp();
@@ -59,7 +59,7 @@ describe('App', () => {
     unmount(root);
   });
 
-  it('shows an empty marker state when the marker API returns an empty list', async () => {
+  it('marker API가 empty list를 반환하면 empty marker state를 표시한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -79,7 +79,7 @@ describe('App', () => {
     unmount(root);
   });
 
-  it('uses region markers before detailed map levels', async () => {
+  it('detailed map level 전에는 region marker를 사용한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -97,7 +97,7 @@ describe('App', () => {
     unmount(root);
   });
 
-  it('refreshes markers on map zoom changes and ignores stale previous responses', async () => {
+  it('map zoom 변경 시 marker를 refresh하고 stale response를 무시한다', async () => {
     const staleComplexResponse = deferred<Response>();
     const latestRegionResponse = deferred<Response>();
     const fetchMock = vi
@@ -170,7 +170,7 @@ describe('App', () => {
     unmount(root);
   });
 
-  it('shows a non-blocking marker error without removing the map surface', async () => {
+  it('map surface를 제거하지 않고 non-blocking marker error를 표시한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(errorResponse(500)));
 
     const { root, rootElement } = await renderApp();
@@ -187,7 +187,7 @@ describe('App', () => {
     unmount(root);
   });
 
-  it('opens the detail drawer from a complex marker and loads V1 detail and trade data', async () => {
+  it('complex marker에서 detail drawer를 열고 V1 detail/trade data를 load한다', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -282,7 +282,7 @@ describe('App', () => {
     unmount(root);
   });
 
-  it('opens the detail drawer from a Kakao CustomOverlay complex marker', async () => {
+  it('Kakao CustomOverlay complex marker에서 detail drawer를 연다', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -359,7 +359,7 @@ describe('App', () => {
     unmount(root);
   });
 
-  it('searches complexes with the documented URL and opens the selected parcel detail', async () => {
+  it('documented URL로 complex를 search하고 선택한 parcel detail을 연다', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse([]))
@@ -458,7 +458,7 @@ describe('App', () => {
     unmount(root);
   });
 
-  it('loads region navigation and refreshes map context from selected region detail', async () => {
+  it('region navigation을 load하고 선택한 region detail로 map context를 refresh한다', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse([]))
@@ -531,7 +531,7 @@ describe('App', () => {
     unmount(root);
   });
 
-  it('applies filter controls to the documented complex marker request fields', async () => {
+  it('filter control을 documented complex marker request field에 적용한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -585,7 +585,7 @@ describe('App', () => {
     unmount(root);
   });
 
-  it('recovers from a marker error with a same-viewport retry on the Kakao map surface', async () => {
+  it('Kakao map surface에서 same-viewport retry로 marker error를 복구한다', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(errorResponse(500))
@@ -643,7 +643,7 @@ describe('App', () => {
     unmount(root);
   });
 
-  it('uses Kakao map runtime bounds and level when the SDK is already available', async () => {
+  it('SDK가 이미 있으면 Kakao map runtime bounds와 level을 사용한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     const sdk = createFakeKakaoSdk({
       bounds: {
@@ -678,7 +678,7 @@ describe('App', () => {
     unmount(root);
   });
 
-  it('refreshes marker requests when Kakao idle reports a new viewport', async () => {
+  it('Kakao idle이 새 viewport를 보고하면 marker request를 refresh한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     const sdk = createFakeKakaoSdk({
       bounds: {
@@ -728,7 +728,7 @@ describe('App', () => {
     unmount(root);
   });
 
-  it('keeps the map surface visible and reports a non-blocking Kakao runtime error when no key is configured', async () => {
+  it('key가 없으면 map surface를 유지하고 non-blocking Kakao runtime error를 보고한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
 
     const { root, rootElement } = await renderApp({ kakaoMapAppKey: '' });
@@ -743,7 +743,7 @@ describe('App', () => {
     unmount(root);
   });
 
-  it('renders Kakao CustomOverlay markers and clears them on unmount', async () => {
+  it('Kakao CustomOverlay marker를 rendering하고 unmount 시 clear한다', async () => {
     const sdk = createFakeKakaoSdk({
       bounds: {
         swLat: 37.45,
@@ -781,7 +781,7 @@ describe('App', () => {
     expect(sdk.overlays[0]?.setMap).toHaveBeenLastCalledWith(null);
   });
 
-  it('shows a loading map runtime status until the Kakao SDK script resolves', async () => {
+  it('Kakao SDK script가 resolve될 때까지 loading map runtime status를 표시한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
 
     const { root, rootElement } = await renderApp({ kakaoMapAppKey: 'test-app-key' });

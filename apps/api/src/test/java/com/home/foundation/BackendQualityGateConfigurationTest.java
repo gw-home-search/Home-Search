@@ -14,7 +14,7 @@ class BackendQualityGateConfigurationTest {
 	private static final Path QUALITY_GATE = Path.of("backend-quality-gate.toml");
 
 	@Test
-	@DisplayName("quality gate records 90 percent coverage, OpenAPI paths, forbidden fields, and commands")
+	@DisplayName("quality gate는 90 percent coverage, OpenAPI path, forbidden field, command를 기록한다")
 	void qualityGateDocumentsBackendQualityRequirements() throws IOException {
 		String content = Files.readString(QUALITY_GATE);
 

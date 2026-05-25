@@ -9,6 +9,16 @@ permissions:
   pull-requests: read
 
 jobs:
+  test-display-name-policy:
+    name: test-display-name-policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run test display name policy self-test
+        run: python3 scripts/check-test-display-names.py --self-test
+      - name: Check test display names
+        run: python3 scripts/check-test-display-names.py
+
   backend-test:
     name: backend-test
     runs-on: ubuntu-latest

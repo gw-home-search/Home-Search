@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSupport {
 
 	@Test
-	@DisplayName("raw rows are saved before normalized insert and duplicate raw rows remain queryable")
+	@DisplayName("raw row는 normalized insert 전에 저장되고 duplicate raw row는 queryable하게 남는다")
 	void rawRowsPrecedeNormalizedInsertAndDuplicateRawRowsRemainQueryable() {
 		seedComplex();
 		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
@@ -52,7 +52,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
-	@DisplayName("local PostGIS matcher keeps failed RTMS matches queryable")
+	@DisplayName("local PostGIS matcher는 failed RTMS match를 queryable하게 유지한다")
 	void localPostgisMatcherKeepsFailedRtmsMatchesQueryable() {
 		seedComplex();
 		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
@@ -101,7 +101,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
-	@DisplayName("live RTMS rows bootstrap parcel and complex master before normalized insert when coordinates resolve")
+	@DisplayName("live RTMS row는 coordinate가 resolve되면 normalized insert 전에 parcel/complex master를 bootstrap한다")
 	void bootstrapsParcelAndComplexMasterBeforeNormalizedInsertWhenCoordinatesResolve() {
 		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
 		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
@@ -151,7 +151,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
-	@DisplayName("live RTMS master bootstrap persists snapshot parcel geometry when resolver provides it")
+	@DisplayName("live RTMS master bootstrap은 resolver가 제공한 snapshot parcel geometry를 저장한다")
 	void bootstrapPersistsSnapshotParcelGeometryWhenResolverProvidesIt() {
 		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
 		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
@@ -187,7 +187,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
-	@DisplayName("live RTMS rows without resolved coordinates remain explainable match failures without fake parcel")
+	@DisplayName("coordinate가 resolve되지 않은 live RTMS row는 fake parcel 없이 explainable match failure로 남는다")
 	void coordinateMissingLeavesExplainableMatchFailureWithoutFakeParcel() {
 		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
 		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(

@@ -53,7 +53,7 @@ class MvpRuntimeSmokeTest {
 	}
 
 	@Test
-	@DisplayName("local runtime seed supports marker, detail, trade, duplicate, and failed-match smoke")
+	@DisplayName("local runtime seed는 marker/detail/trade/duplicate/failed-match smoke를 지원한다")
 	void localRuntimeSeedSupportsMvpE2eBackendSmoke() throws Exception {
 		mockMvc.perform(post("/api/v1/map/complexes")
 				.contentType(MediaType.APPLICATION_JSON)

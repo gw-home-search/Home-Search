@@ -13,7 +13,7 @@ class EmptyMapUseCaseTest {
 	private final EmptyMapUseCase useCase = new EmptyMapUseCase();
 
 	@Test
-	@DisplayName("placeholder map use case returns empty complex and region marker lists")
+	@DisplayName("placeholder map use case는 empty complex/region marker list를 반환한다")
 	void placeholderMapUseCaseReturnsEmptyMarkerLists() {
 		assertThat(useCase.getComplexMarkers(new ComplexMarkersRequest(
 			37.45,

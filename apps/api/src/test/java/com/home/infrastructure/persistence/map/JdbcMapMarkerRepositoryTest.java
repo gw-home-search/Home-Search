@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
 	@Test
-	@DisplayName("bounds query returns parcel complex markers with latest trade amount and unit sum")
+	@DisplayName("bounds query는 latest trade amount와 unit sum이 있는 parcel complex marker를 반환한다")
 	void boundsQueryReturnsComplexMarkers() {
 		seedMapData();
 		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
@@ -34,7 +34,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
-	@DisplayName("price eok filters are converted to 10,000 KRW trade amount units")
+	@DisplayName("price eok filter는 10,000 KRW trade amount unit으로 변환된다")
 	void priceEokFiltersUseTradeAmountUnits() {
 		seedMapData();
 		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);

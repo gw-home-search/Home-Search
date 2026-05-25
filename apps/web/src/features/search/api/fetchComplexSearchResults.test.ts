@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchComplexSearchResults } from './fetchComplexSearchResults';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
 
-describe('fetchComplexSearchResults', () => {
+describe('fetchComplexSearchResults API 어댑터', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('gets documented V1 complex search results with the q query parameter', async () => {
+  it('q query parameter로 documented V1 complex search result를 가져온다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse([
         {
@@ -40,7 +40,7 @@ describe('fetchComplexSearchResults', () => {
     );
   });
 
-  it('does not call the API for an empty query', async () => {
+  it('empty query에서는 API를 호출하지 않는다', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
@@ -48,7 +48,7 @@ describe('fetchComplexSearchResults', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('rejects invalid V1 search response shapes', async () => {
+  it('invalid V1 search response shape를 reject한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ results: [] })));
 
     await expect(fetchComplexSearchResults('Sample')).rejects.toThrow(
@@ -56,7 +56,7 @@ describe('fetchComplexSearchResults', () => {
     );
   });
 
-  it('preserves V1 ProblemDetail detail when search fails', async () => {
+  it('search 실패 시 V1 ProblemDetail detail을 보존한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(

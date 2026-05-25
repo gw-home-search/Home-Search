@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchParcelTrades } from './fetchParcelTrades';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
 
-describe('fetchParcelTrades', () => {
+describe('fetchParcelTrades API 어댑터', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('gets documented V1 trade data for the selected parcel', async () => {
+  it('선택한 parcel의 documented V1 trade data를 가져온다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         parcelId: '1001',
@@ -46,7 +46,7 @@ describe('fetchParcelTrades', () => {
     );
   });
 
-  it('keeps a valid empty V1 trade list as an empty array', async () => {
+  it('valid empty V1 trade list를 empty array로 유지한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -63,7 +63,7 @@ describe('fetchParcelTrades', () => {
     });
   });
 
-  it('rejects invalid V1 trade item objects', async () => {
+  it('invalid V1 trade item object를 reject한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -79,7 +79,7 @@ describe('fetchParcelTrades', () => {
     );
   });
 
-  it('rejects with V1 ProblemDetail detail when trade lookup fails', async () => {
+  it('trade lookup 실패 시 V1 ProblemDetail detail로 reject한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(

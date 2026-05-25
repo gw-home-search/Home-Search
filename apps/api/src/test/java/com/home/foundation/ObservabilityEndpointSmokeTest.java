@@ -31,7 +31,7 @@ class ObservabilityEndpointSmokeTest {
 	private TradeIngestMetrics tradeIngestMetrics;
 
 	@Test
-	@DisplayName("GET /actuator/health returns readiness status without database auto-configuration")
+	@DisplayName("GET /actuator/health는 database auto-configuration 없이 readiness status를 반환한다")
 	void actuatorHealthIsAvailableWithoutDatabaseAutoConfiguration() throws Exception {
 		mockMvc.perform(get("/actuator/health"))
 			.andExpect(status().isOk())
@@ -39,7 +39,7 @@ class ObservabilityEndpointSmokeTest {
 	}
 
 	@Test
-	@DisplayName("GET /actuator/prometheus exposes a local scrape surface")
+	@DisplayName("GET /actuator/prometheus는 local scrape surface를 노출한다")
 	void prometheusScrapeEndpointIsAvailable() throws Exception {
 		mockMvc.perform(get("/actuator/prometheus"))
 			.andExpect(status().isOk())
@@ -48,7 +48,7 @@ class ObservabilityEndpointSmokeTest {
 	}
 
 	@Test
-	@DisplayName("GET /actuator/prometheus exposes V1 RTMS ingest counters")
+	@DisplayName("GET /actuator/prometheus는 V1 RTMS ingest counter를 노출한다")
 	void prometheusExposesV1IngestCounters() throws Exception {
 		tradeIngestMetrics.record("RTMS", new IngestResult(3, 3, 1, 1, 1, 0));
 
@@ -65,7 +65,7 @@ class ObservabilityEndpointSmokeTest {
 	}
 
 	@Test
-	@DisplayName("GET /actuator/prometheus exposes V1 map endpoint success and error counters")
+	@DisplayName("GET /actuator/prometheus는 V1 map endpoint success/error counter를 노출한다")
 	void prometheusExposesV1MapEndpointCounters() throws Exception {
 		mockMvc.perform(post("/api/v1/map/complexes")
 				.contentType(MediaType.APPLICATION_JSON)

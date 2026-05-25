@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 class JdbcNormalizedTradeRepositoryTest extends JdbcPostgresTestSupport {
 
 	@Test
-	@DisplayName("source/source_key duplicate inserts do not create duplicate normalized trades")
+	@DisplayName("source/source_key duplicate insert는 normalized trade를 중복 생성하지 않는다")
 	void sourceKeyDuplicateDoesNotCreateSecondTrade() {
 		seedComplex();
 		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
@@ -34,7 +34,7 @@ class JdbcNormalizedTradeRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
-	@DisplayName("fallback identity duplicate inserts do not create duplicate normalized trades")
+	@DisplayName("fallback identity duplicate insert는 normalized trade를 중복 생성하지 않는다")
 	void fallbackDuplicateDoesNotCreateSecondTradeAndKeepsSourceKeyTraceLinked() {
 		seedComplex();
 		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);

@@ -12,6 +12,7 @@ DOCKER_COMPOSE_LOCAL_CONFIG = "docker compose -f infra/docker-compose.local.yml 
 API_QUALITY = "cd apps/api && ./gradlew backendQualityCheck"
 WEB_TEST = "cd apps/web && npm run test"
 WEB_BUILD = "cd apps/web && npm run build"
+TEST_DISPLAY_NAME_POLICY = "python3 scripts/check-test-display-names.py"
 PR_LINT_SELF_TEST = "python3 .codex/harness/pr_lint.py --self-test"
 PR_CONTEXT_SELF_TEST = "python3 .codex/harness/pr_context.py --self-test"
 PR_BODY_CHECK_SELF_TEST = "python3 .codex/harness/pr_body_check.py --self-test"
@@ -33,6 +34,7 @@ COMMAND_ORDER = (
     API_QUALITY,
     WEB_TEST,
     WEB_BUILD,
+    TEST_DISPLAY_NAME_POLICY,
     PR_LINT_SELF_TEST,
     PR_CONTEXT_SELF_TEST,
     PR_BODY_CHECK_SELF_TEST,
@@ -156,6 +158,16 @@ def requirements_for_changed_files(changed_files: list[str] | tuple[str, ...] | 
         if path.startswith("apps/web/"):
             commands.add(WEB_TEST)
             commands.add(WEB_BUILD)
+        if (
+            path.startswith("apps/api/src/test/java/")
+            or (
+                path.startswith("apps/web/src/")
+                and (path.endswith(".test.ts") or path.endswith(".test.tsx"))
+            )
+            or path == "scripts/check-test-display-names.py"
+            or path == ".github/workflows/ci.yml"
+        ):
+            commands.add(TEST_DISPLAY_NAME_POLICY)
         if path.startswith("infra/"):
             commands.add(DOCKER_COMPOSE_LOCAL_CONFIG)
         if path == backlog_path:

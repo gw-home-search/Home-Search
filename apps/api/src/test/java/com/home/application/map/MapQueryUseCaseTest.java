@@ -37,7 +37,7 @@ class MapQueryUseCaseTest {
 	);
 
 	@Test
-	@DisplayName("map query use case delegates complex and region marker lookups")
+	@DisplayName("map query use case는 complex/region marker lookup을 위임한다")
 	void delegatesComplexAndRegionMarkerLookups() {
 		var complexMarkers = List.of(new ComplexMarkerResponse(1001L, 37.5123, 127.0456, 125000L, 740L));
 		var regionMarkers = List.of(new RegionMarkerResponse(11L, "Gangnam-gu", 37.5172, 127.0473, null));

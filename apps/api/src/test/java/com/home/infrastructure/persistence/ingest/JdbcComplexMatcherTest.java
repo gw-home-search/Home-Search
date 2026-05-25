@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 class JdbcComplexMatcherTest extends JdbcPostgresTestSupport {
 
 	@Test
-	@DisplayName("aptSeq resolves to operational complex_id and audit complex_pk")
+	@DisplayName("aptSeq는 operational complex_id와 audit complex_pk로 resolve된다")
 	void matchesByAptSeq() {
 		seedComplex();
 
@@ -24,7 +24,7 @@ class JdbcComplexMatcherTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
-	@DisplayName("RTMS jibun builds PNU and resolves a single parcel complex when aptSeq is missing")
+	@DisplayName("RTMS jibun은 aptSeq가 없을 때 PNU를 만들고 single parcel complex를 resolve한다")
 	void matchesUniqueParcelPnuFromRtmsJibun() {
 		seedComplex();
 
@@ -37,7 +37,7 @@ class JdbcComplexMatcherTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
-	@DisplayName("PNU candidates are narrowed by RTMS apartment name")
+	@DisplayName("PNU candidate는 RTMS apartment name으로 좁혀진다")
 	void matchesPnuCandidateByName() {
 		seedComplex();
 		jdbcClient.sql("""
@@ -54,7 +54,7 @@ class JdbcComplexMatcherTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
-	@DisplayName("unmatched RTMS trade returns explainable failure")
+	@DisplayName("unmatched RTMS trade는 explainable failure를 반환한다")
 	void returnsExplainableFailureWhenNoComplexMatches() {
 		seedComplex();
 

@@ -19,7 +19,7 @@ class LocalRuntimeStackConfigurationTest {
 	private static final Path LOCAL_COMPOSE = Path.of("../../infra/docker-compose.local.yml");
 
 	@Test
-	@DisplayName("local compose stack wires PostGIS, API, Web, and V1 local seed without secrets")
+	@DisplayName("local compose stack은 secret 없이 PostGIS, API, Web, V1 local seed를 연결한다")
 	void localComposeStackWiresPostgisApiWebAndSeed() throws IOException {
 		assertThat(LOCAL_COMPOSE).exists();
 
@@ -34,7 +34,7 @@ class LocalRuntimeStackConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("local compose stack wires Prometheus to scrape the API actuator endpoint")
+	@DisplayName("local compose stack은 Prometheus가 API actuator endpoint를 scrape하도록 연결한다")
 	void localComposeStackWiresPrometheusScrapeConfig() throws IOException {
 		assertThat(LOCAL_PROMETHEUS).exists();
 

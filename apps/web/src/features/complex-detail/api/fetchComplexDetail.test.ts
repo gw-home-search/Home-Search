@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchComplexDetail } from './fetchComplexDetail';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
 
-describe('fetchComplexDetail', () => {
+describe('fetchComplexDetail API 어댑터', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('gets documented V1 detail data for the selected parcel', async () => {
+  it('선택한 parcel의 documented V1 detail data를 가져온다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         parcelId: '1001',
@@ -52,7 +52,7 @@ describe('fetchComplexDetail', () => {
     );
   });
 
-  it('rejects with V1 ProblemDetail detail when detail lookup fails', async () => {
+  it('detail lookup 실패 시 V1 ProblemDetail detail로 reject한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(

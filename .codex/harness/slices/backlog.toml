@@ -975,3 +975,46 @@ risk_notes = [
   "Grafana dashboard와 heavy analytics는 V2 또는 별도 observability slice로 둔다.",
   "backend target이 local runtime preset의 backend/infra ownership 안에서 동작한다.",
 ]
+
+[[slices]]
+id = "v1-mvp-final-runtime-smoke"
+title_ko = "V1 MVP final runtime smoke"
+pr_type = "Test"
+pr_title_ko = "V1 MVP 최종 런타임 스모크"
+description_ko = "merged main 기준으로 V1 MVP의 backend/web/local runtime evidence를 재확인하고 release handoff용 최종 smoke 결과를 고정한다."
+status = "done"
+priority = 140
+targets = "both"
+preset = "runtime-smoke"
+acceptance_criteria = [
+  "origin/main에 반영된 모든 V1 MVP slice 기준으로 backlog 후보가 의도적으로 비어 있거나 이번 final smoke 후보만 남아 있음을 확인한다.",
+  "Docker Compose local stack config, backendQualityCheck, frontend test/build, git diff whitespace 검증을 main 기준으로 통과시킨다.",
+  "map/search/region/detail/trade V1 URL 흐름이 deterministic test 또는 local runtime smoke evidence에서 깨지지 않는다는 결과를 남긴다.",
+  "Kakao key, RTMS key, VWorld key 같은 local secret이 없어도 fixture, mocked client, local fallback evidence로 자동 검증을 닫는다.",
+  "live Open API 호출, DB destructive operation, main push, PR merge를 자동화하지 않는다.",
+  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "final smoke plan에서 backendQualityCheck, frontend test/build, compose config 중 하나라도 실패하면 MVP readiness가 Fail로 남는 검증 실패를 확인한다.",
+  "V1 URL contract가 map/search/region/detail/trade 흐름 중 하나라도 바뀌면 기존 contract/runtime smoke가 실패해야 한다.",
+  "Kakao key 또는 live Open API key가 없다는 이유로 deterministic backend/web 검증 전체가 Fail 처리되면 Partial evidence 분리가 필요하다는 gate 실패를 확인한다.",
+]
+verification_commands = [
+  "docker compose -f infra/docker-compose.local.yml config",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+]
+stop_conditions = [
+  "새 product behavior, public API shape 변경, DB schema 변경이 필요하면 중단하고 별도 slice로 분리한다.",
+  "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
+  "live RTMS/VWorld/Kakao API 호출이 필요하면 사람 승인 기반 manual smoke로 분리한다.",
+  "runtime smoke를 위해 main merge, main push, PR merge, DB destructive operation이 필요하면 중단한다.",
+  "apps/api와 apps/web이 같은 문제를 동시에 수정해야 하면 하위 backend/frontend slice로 분리한다.",
+]
+risk_notes = [
+  "final smoke는 feature 확장이 아니라 release handoff evidence hardening이다.",
+  "Docker daemon, API/Web port, local Kakao key availability에 따라 browser visual evidence는 Partial로 남을 수 있다.",
+  "live RTMS/VWorld 검증은 local env와 사람 승인 후 별도 manual evidence로 남긴다.",
+]

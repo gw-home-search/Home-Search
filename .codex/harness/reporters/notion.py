@@ -1,4 +1,4 @@
-"""Best-effort Notion reporter for V1 harness reports."""
+"""Best-effort Notion reporter for Home Search harness reports."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def _summary(payload: dict[str, Any]) -> str:
     branches = payload.get("branches", {})
     verification = payload.get("verification", {})
     lines = [
-        f"slice: {payload.get('slice')}",
+        f"work item: {payload.get('work_id') or payload.get('slice')}",
         f"상태: {payload.get('status')}",
         f"integration branch: {branches.get('integration')}",
         "검증:",
@@ -33,7 +33,7 @@ def _summary(payload: dict[str, Any]) -> str:
 
 
 def _prompt(payload: dict[str, Any], report_path: Path) -> str:
-    title = f"Home Search V1 slice 보고서 - {payload.get('slice')}"
+    title = f"Home Search work item 보고서 - {payload.get('work_id') or payload.get('slice')}"
     parent_page = os.environ.get("NOTION_PARENT_PAGE_ID")
     data_source = os.environ.get("NOTION_DATA_SOURCE_ID")
     target = "standalone private page"
@@ -72,7 +72,7 @@ After creating the page, print only the Notion page URL on its own line.
 def publish(payload: dict[str, Any], report_path: Path, *, dry_run: bool) -> dict[str, str | None]:
     if dry_run:
         print("[DRY-RUN] Notion reporter: Notion MCP를 확인하고 가능하면 page를 만듭니다")
-        print(f"[DRY-RUN] Notion title: Home Search V1 slice 보고서 - {payload.get('slice')}")
+        print(f"[DRY-RUN] Notion title: Home Search work item 보고서 - {payload.get('work_id') or payload.get('slice')}")
         return {"status": "skipped", "url": None, "warning": None}
 
     codex_bin = os.environ.get("CODEX_BIN", "codex")

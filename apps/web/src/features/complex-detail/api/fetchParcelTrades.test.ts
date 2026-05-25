@@ -8,7 +8,7 @@ describe('fetchParcelTrades API 어댑터', () => {
     vi.unstubAllGlobals();
   });
 
-  it('선택한 parcel의 documented V1 trade data를 가져온다', async () => {
+  it('선택한 parcel의 documented trade data를 가져온다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         parcelId: '1001',
@@ -46,7 +46,7 @@ describe('fetchParcelTrades API 어댑터', () => {
     );
   });
 
-  it('valid empty V1 trade list를 empty array로 유지한다', async () => {
+  it('valid empty trade list를 empty array로 유지한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -63,7 +63,7 @@ describe('fetchParcelTrades API 어댑터', () => {
     });
   });
 
-  it('invalid V1 trade item object를 reject한다', async () => {
+  it('invalid trade item object를 reject한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -75,11 +75,11 @@ describe('fetchParcelTrades API 어댑터', () => {
     );
 
     await expect(fetchParcelTrades(1001)).rejects.toThrow(
-      'Invalid V1 parcel trade response: trade item must be an object',
+      'Invalid public API parcel trade response: trade item must be an object',
     );
   });
 
-  it('trade lookup 실패 시 V1 ProblemDetail detail로 reject한다', async () => {
+  it('trade lookup 실패 시 public API ProblemDetail detail로 reject한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(

@@ -2,7 +2,7 @@ package com.home.infrastructure.web.read;
 
 import java.util.List;
 
-import com.home.application.read.MvpReadUseCase;
+import com.home.application.read.PropertyReadUseCase;
 import com.home.infrastructure.web.read.dto.RegionDetailResponse;
 import com.home.infrastructure.web.read.dto.RegionSummaryResponse;
 
@@ -14,9 +14,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class RegionController {
 
-	private final MvpReadUseCase readUseCase;
+	private final PropertyReadUseCase readUseCase;
 
-	public RegionController(MvpReadUseCase readUseCase) {
+	public RegionController(PropertyReadUseCase readUseCase) {
 		this.readUseCase = readUseCase;
 	}
 

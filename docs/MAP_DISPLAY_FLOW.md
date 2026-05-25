@@ -3,7 +3,7 @@
 
 ## Goal
 
-Display real-estate trade data on a Kakao map using stable V1 APIs.
+Display real-estate trade data on a Kakao map using stable public APIs.
 
 Source frontend:
 
@@ -25,12 +25,12 @@ Current behavior:
 2. `onCreate` and `onIdle` call `fetchMarkers`.
 3. `fetchMarkers` reads map center, level, and bounds.
 4. Map level chooses endpoint:
-   - `level <= 4`: `api/v1/map/complexes`
-   - otherwise: `api/v1/map/regions`
+   - `level <= 4`: `/api/v1/map/complexes`
+   - otherwise: `/api/v1/map/regions`
 5. The response is normalized into marker coordinates.
 6. Complex markers or region markers are rendered.
 
-## V1 Flow
+## Project Flow
 
 ```text
 Kakao map idle
@@ -53,7 +53,7 @@ Keep current source behavior for compatibility:
 - `level >= 7`: request `si-gun-gu`.
 - `level >= 4`: request `eup-myeon-dong`.
 
-The level thresholds can be tuned later, but V1 migration should preserve them
+The level thresholds can be tuned later, but project baseline should preserve them
 until map display is stable.
 
 ## Complex Marker Contract
@@ -103,4 +103,4 @@ On marker API failure:
 - Wide zoom shows region markers.
 - Detailed zoom shows complex markers.
 - Complex marker click opens detail and trade data.
-- Map display works with only V1 data tables.
+- Map display works with only project data tables.

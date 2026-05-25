@@ -9,7 +9,7 @@ import com.home.infrastructure.web.read.dto.RegionSummaryResponse;
 import com.home.infrastructure.web.read.dto.SearchComplexResponse;
 import com.home.infrastructure.web.read.dto.TradeListResponse;
 
-public interface MvpReadRepository {
+public interface PropertyReadRepository {
 
 	List<SearchComplexResponse> searchComplexes(String query);
 

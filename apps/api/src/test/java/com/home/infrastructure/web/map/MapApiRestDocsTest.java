@@ -192,10 +192,10 @@ class MapApiRestDocsTest {
 			.andDo(document("map-invalid-request",
 				responseFields(
 					fieldWithPath("type").type(JsonFieldType.STRING).description("Documentation anchor for the error list."),
-					fieldWithPath("title").type(JsonFieldType.STRING).description("V1 error code."),
+					fieldWithPath("title").type(JsonFieldType.STRING).description("public API error code."),
 					fieldWithPath("status").type(JsonFieldType.NUMBER).description("HTTP status code."),
 					fieldWithPath("detail").type(JsonFieldType.STRING).description("Human-readable error detail."),
-					fieldWithPath("exception").type(JsonFieldType.STRING).description("Exception or V1 error category."),
+					fieldWithPath("exception").type(JsonFieldType.STRING).description("Exception or public API error category."),
 					fieldWithPath("timestamp").type(JsonFieldType.STRING).description("Server-side error timestamp."),
 					fieldWithPath("instance").type(JsonFieldType.STRING).optional().description("Request path that produced the error.")
 				),
@@ -205,10 +205,10 @@ class MapApiRestDocsTest {
 					.description("Returns ProblemDetail when a map request is invalid.")
 					.responseFields(
 						fieldWithPath("type").type(JsonFieldType.STRING).description("Documentation anchor for the error list."),
-						fieldWithPath("title").type(JsonFieldType.STRING).description("V1 error code."),
+						fieldWithPath("title").type(JsonFieldType.STRING).description("public API error code."),
 						fieldWithPath("status").type(JsonFieldType.NUMBER).description("HTTP status code."),
 						fieldWithPath("detail").type(JsonFieldType.STRING).description("Human-readable error detail."),
-						fieldWithPath("exception").type(JsonFieldType.STRING).description("Exception or V1 error category."),
+						fieldWithPath("exception").type(JsonFieldType.STRING).description("Exception or public API error category."),
 						fieldWithPath("timestamp").type(JsonFieldType.STRING).description("Server-side error timestamp."),
 						fieldWithPath("instance").type(JsonFieldType.STRING).optional().description("Request path that produced the error.")
 					)

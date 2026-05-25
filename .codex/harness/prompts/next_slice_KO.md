@@ -1,37 +1,54 @@
-# Next Slice Planning Prompt
+# Next Work Planning Prompt KO
+
+> KO 생성 기준: canonical source only
+> Source: `.codex/harness/prompts/next_slice.md`
+> Generated: 2026-05-25
+> 기존 KO 본문은 읽지 않고 canonical source만 기준으로 재생성했습니다.
+
+## 동기화 기준
+
+이 문서는 `.codex/harness/prompts/next_slice.md`의 현재 canonical 내용을 기준으로 한 한국어 동기화본입니다.
+명령, 경로, API URL, JSON key, status 값, class/function 이름은 정밀성을 위해 원문 표기를 유지합니다.
+
+## Canonical 내용
+
+# Next Work Planning Prompt
 
 
-$v1-slice-harness mode=next
+home-search-harness mode=next
 
-사용자가 slice id를 모르는 상태에서 다음 Home Search V1 slice를 요청할 때
-이 prompt를 사용한다.
+Use this prompt when the user asks for the next Home Search work item without
+knowing the work id.
 
-입력:
-- Backlog: `.codex/harness/slices/backlog.toml`
-- Recent report evidence: `.codex/harness/reports/*.json` 또는 `--from-report`
+Inputs:
+- Worklog: `.codex/harness/worklog.toml`
+- Recent report evidence: `.codex/harness/reports/*.json` or `--from-report`
 - Optional git context: `--from-git`
 
 Skill routing:
-- $planning: backlog, recent report evidence, risks, acceptance criteria를 다음 slice 후보로 바꾼다.
-- $code-review: 최근 gate findings가 다음 slice 선택 전에 findings-first 해석이 필요할 때만 사용한다.
+- $planning: turn worklog, recent report evidence, risks, and acceptance criteria into next-work candidates.
+- $code-review: use only when recent gate findings need findings-first interpretation before choosing the next work item.
 
-지시:
-- unfinished slice를 1개에서 3개까지 추천한다.
-- 추천 slice는 정확히 하나만 표시한다.
-- merged PR이 있는데 backlog status가 stale로 보이면 unfinished work로 추천하기 전에
-  `.codex/harness/v1 sync-backlog --merged --dry-run`으로 확인한다.
-- 새 기능 확장보다 unfinished gate risks, missing tests, contract gaps,
-  data-safety gaps를 우선한다.
-- 파일 수정, branch/worktree 생성, commit, push, PR 생성을 하지 않는다.
-- 각 candidate target을 `backend`, `frontend`, `both`, `planning-only`로 명시한다.
-- `planning-only`는 자동 구현으로 이어가지 않는다.
+Instructions:
+- Recommend one to three unfinished work items.
+- Mark exactly one work item as recommended.
+- If a merged PR appears to be stale in worklog status, check
+  `.codex/harness/home sync-worklog --merged --dry-run` before recommending it
+  as unfinished work.
+- Prefer unfinished gate risks, missing tests, contract gaps, and data-safety
+  gaps before new feature expansion.
+- Do not mutate files, create branches, create worktrees, commit, push, or open
+  PRs.
+- Keep each candidate target explicit: `backend`, `frontend`, `both`, or
+  `planning-only`.
+- For `planning-only`, do not continue into implementation automatically.
 
-사용자 노출 output labels:
+User-facing output labels:
 
 ```text
 상태:
 현재:
-다음 slice 후보:
+다음 작업 후보:
 인수 기준:
 검증:
 다음 행동:

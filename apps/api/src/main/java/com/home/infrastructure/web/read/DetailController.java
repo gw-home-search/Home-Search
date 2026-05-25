@@ -1,6 +1,6 @@
 package com.home.infrastructure.web.read;
 
-import com.home.application.read.MvpReadUseCase;
+import com.home.application.read.PropertyReadUseCase;
 import com.home.infrastructure.web.read.dto.ParcelDetailResponse;
 import com.home.infrastructure.web.read.dto.TradeListResponse;
 
@@ -12,9 +12,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class DetailController {
 
-	private final MvpReadUseCase readUseCase;
+	private final PropertyReadUseCase readUseCase;
 
-	public DetailController(MvpReadUseCase readUseCase) {
+	public DetailController(PropertyReadUseCase readUseCase) {
 		this.readUseCase = readUseCase;
 	}
 

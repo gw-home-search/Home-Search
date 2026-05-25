@@ -366,7 +366,7 @@ export function App({
       <header aria-label="Application bar" className="app-bar">
         <div className="app-brand">
           <h1>Home Search</h1>
-          <span>V1 map</span>
+          <span>Map</span>
         </div>
         <div className="app-status" aria-label="Map status summary">
           <span>{mapModeLabel(viewport.level)}</span>

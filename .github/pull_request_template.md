@@ -63,7 +63,7 @@ reviewer:
 - [ ] main push 없음
 - [ ] integration branch만 push
 - [ ] draft PR
-- [ ] V1 API URL/response 영향 확인
+- [ ] public API URL/response 영향 확인
 - [ ] DB migration 실행 없음
 - [ ] Open API 호출 없음
 - [ ] secrets 저장 없음

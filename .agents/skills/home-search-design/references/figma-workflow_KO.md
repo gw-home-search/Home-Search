@@ -1,50 +1,70 @@
+<!-- AUTO-GENERATED: canonical source only. Do not edit manually. -->
+
+# KO Sync
+
+- KO 생성 기준: canonical source only
+- 원문: `.agents/skills/home-search-design/references/figma-workflow.md`
+- 동기화일: 2026-05-25
+
+아래 내용은 canonical source에서 재생성한 동기화본입니다. 명령, 경로, API, 필드명 같은 기술 토큰은 원문을 유지합니다.
+
 # Home Search Figma Workflow
 
-Home Search 디자인 작업에 Figma input이 있거나 Figma frame을 `apps/web`으로 옮기라는 요청이 있을 때만 이 reference를 사용한다.
+Use this reference only when a Home Search design task includes Figma input or
+asks to translate a Figma frame into `apps/web`.
 
 ## Boundary
 
-Figma는 design evidence이지 product contract가 아니다. V1 API contract와 Home Search map workflow가 계속 authoritative하다.
+Figma is design evidence, not the product contract. The public API contract and
+Home Search map workflow remain authoritative.
 
-Figma가 V1 밖의 data나 behavior를 요구하면 UI를 줄이거나 gap으로 표시한다. Visual comp를 만족하기 위해 public API shape를 바꾸지 않는다.
+If Figma asks for data or behavior outside the current project scope, reduce the
+UI or mark the gap.
+Do not change public API shape to satisfy a visual comp.
 
 ## Required Flow
 
-1. 정확한 Figma node 또는 selected frame을 추출한다.
-2. 해당 node의 structured design context를 가져온다.
-3. visual comparison을 위한 screenshot을 캡처한다.
-4. node가 너무 크면 metadata를 확인하고 필요한 child node만 가져온다.
-5. 디자인이 어떤 Home Search UI unit에 영향을 주는지 식별한다.
-6. 화면에 보이는 data를 문서화된 V1 endpoint field에 매핑한다.
-7. generated React 또는 utility class를 직접 복사하지 말고 project convention으로 번역한다.
-8. 구현 후 browser screenshot으로 검증한다.
+1. Extract the exact Figma node or selected frame.
+2. Fetch structured design context for that node.
+3. Capture a screenshot for visual comparison.
+4. If the node is too large, inspect metadata and fetch only the needed child
+   nodes.
+5. Identify which Home Search UI unit the design affects.
+6. Map visible data to documented Home Search endpoint fields.
+7. Translate the design into project conventions rather than copying generated
+   React or utility classes directly.
+8. Validate with browser screenshots after implementation.
 
 ## Translation Rules
 
-- `apps/web` API adapter boundary를 보존한다.
-- canonical marker field를 보존한다: `parcelId`, `lat`, `lng`, `latestDealAmount`, `unitCntSum`.
-- temporary source variant는 adapter 내부에만 둔다.
-- 새 primitive를 만들기 전에 기존 map shell, panel, filter, marker, drawer, table pattern을 우선 사용한다.
-- literal Figma decoration보다 Home Search의 restrained operational style을 선호한다.
+- Preserve `apps/web` API adapter boundaries.
+- Preserve canonical marker fields: `parcelId`, `lat`, `lng`,
+  `latestDealAmount`, and `unitCntSum`.
+- Keep temporary source variants inside adapters only.
+- Use existing map shell, panel, filter, marker, drawer, and table patterns
+  before creating new primitives.
+- Prefer Home Search's restrained operational style over literal Figma
+  decoration.
 
 ## Figma Conflict Handling
 
-Figma가 아래를 요구하면 멈추거나 디자인을 수정한다.
+Stop or revise the design if Figma requires:
 
-- Ranking, favorite, alarm, mail, recommendation, auth, heavy analytics.
-- Public UI의 backend audit field.
-- 새 public response field.
-- Hero, content card, dashboard tile이 map보다 우선하는 구조.
+- Ranking, favorites, alarms, mail, recommendation, auth, or heavy analytics.
+- Backend audit fields in public UI.
+- New public response fields.
+- Map secondary to hero, content cards, or dashboard tiles.
 - Color-only state communication.
 
 ## Visual Parity Priority
 
-유용한 parity를 목표로 한다.
+Aim for useful parity:
 
 1. Task flow and information hierarchy.
-2. V1 data compatibility.
+2. Home Search data compatibility.
 3. Responsive behavior.
 4. Accessibility and keyboard behavior.
 5. Pixel-level spacing and color similarity.
 
-Pixel parity가 API compatibility, map usability, accessibility보다 우선할 수 없다.
+Pixel parity must not override API compatibility, map usability, or
+accessibility.

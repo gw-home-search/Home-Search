@@ -19,7 +19,7 @@ class LocalRuntimeStackConfigurationTest {
 	private static final Path LOCAL_COMPOSE = Path.of("../../infra/docker-compose.local.yml");
 
 	@Test
-	@DisplayName("local compose stack은 secret 없이 PostGIS, API, Web, V1 local seed를 연결한다")
+	@DisplayName("local compose stack은 secret 없이 PostGIS, API, Web, local seed를 연결한다")
 	void localComposeStackWiresPostgisApiWebAndSeed() throws IOException {
 		assertThat(LOCAL_COMPOSE).exists();
 

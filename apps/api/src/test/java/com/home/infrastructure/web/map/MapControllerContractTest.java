@@ -41,7 +41,7 @@ class MapControllerContractTest {
 	private MapUseCase mapUseCase;
 
 	@Test
-	@DisplayName("POST /api/v1/map/complexes는 canonical V1 complex marker field를 반환한다")
+	@DisplayName("POST /api/v1/map/complexes는 canonical complex marker field를 반환한다")
 	void validComplexMarkerRequestReturnsCanonicalMarkerFields() throws Exception {
 		given(mapUseCase.getComplexMarkers(any(ComplexMarkersRequest.class)))
 			.willReturn(List.of(new ComplexMarkerResponse(1001L, 37.5123, 127.0456, 125000L, 740L)));
@@ -81,7 +81,7 @@ class MapControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/map/regions는 canonical V1 region marker field를 반환한다")
+	@DisplayName("POST /api/v1/map/regions는 canonical region marker field를 반환한다")
 	void validRegionMarkerRequestReturnsCanonicalRegionFields() throws Exception {
 		given(mapUseCase.getRegionMarkers(any(RegionMarkersRequest.class)))
 			.willReturn(List.of(new RegionMarkerResponse(1L, "Seoul", 37.5663, 126.9780, null)));

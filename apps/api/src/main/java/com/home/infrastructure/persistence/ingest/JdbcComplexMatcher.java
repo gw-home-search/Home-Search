@@ -12,7 +12,7 @@ import com.home.application.ingest.OpenApiTradeItem;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
- * RTMS trade item을 local PostGIS-backed V1 complex rows에 연결하는 matcher입니다.
+ * RTMS trade item을 local PostGIS-backed canonical complex rows에 연결하는 matcher입니다.
  */
 public class JdbcComplexMatcher implements ComplexMatcher {
 

@@ -1,5 +1,5 @@
 id = "map-ui-state"
-description = "V1 map UI state and marker interaction work."
+description = "Home Search map UI state and marker interaction work."
 aliases = [
   "map-ui-state",
   "map-state",

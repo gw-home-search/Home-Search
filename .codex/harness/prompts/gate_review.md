@@ -1,9 +1,9 @@
 # Gate Review Prompt
 
 
-$v1-slice-harness mode=gate
+home-search-harness mode=gate
 
-Slice: {{SLICE}}
+Work item: {{WORK_ID}}
 Preset: {{PRESET}}
 Target: {{TARGET}}
 Branch: {{BRANCH_NAME}}
@@ -15,7 +15,7 @@ Skill routing:
 
 Check:
 - Scope stayed inside the target preset's allowed edit scope.
-- V1 API contract and data invariants were preserved.
+- public API contract and data invariants were preserved.
 - Required verification evidence is present.
 - Verification evidence uses exact line format: ``- `command` = pass|fail|not run (Korean reason)``.
 - Changed-file PR lint evidence is present for backend, frontend, harness, hook,

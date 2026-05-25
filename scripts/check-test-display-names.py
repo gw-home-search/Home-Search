@@ -189,7 +189,7 @@ def run_self_test() -> int:
     good_java = """
 class SampleTest {
     @Test
-    @DisplayName("V1 API는 성공 응답을 반환한다")
+    @DisplayName("public API는 성공 응답을 반환한다")
     void ok() {
     }
 
@@ -230,7 +230,7 @@ class SampleTest {
     }
 }
 """
-    good_web = "describe('fetchMapMarkers API 어댑터', () => { it('V1 marker를 반환한다', () => {}) })"
+    good_web = "describe('fetchMapMarkers API 어댑터', () => { it('project marker를 반환한다', () => {}) })"
     bad_web = "describe('fetchMapMarkers', () => { it('returns markers', () => {}) })"
     checks = [
         not scan_java_text(java_path, good_java),

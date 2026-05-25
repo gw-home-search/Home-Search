@@ -10,7 +10,7 @@ Read root AGENTS.md, CONTEXT.md, relevant app CONTEXT.md files, docs/ARCHITECTUR
 Use before implementation when a change may cross app ownership, move layer responsibilities, add shared abstractions, reinterpret `complex_id` or `complex_pk`, couple web/api behavior, or require an ADR candidate.
 
 Look for app boundary leaks, shallow modules, hidden coupling, unclear seams, and decisions that should become ADR candidates.
-Do not propose broad refactors unless they directly reduce V1 implementation risk.
+Do not propose broad refactors unless they directly reduce project implementation risk.
 
 Output:
 - Findings

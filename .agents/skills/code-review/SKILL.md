@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Review Home Search diffs, gate reviews, PRs, and completion evidence findings-first for correctness, V1 API compatibility, data safety, frontend map usability, security, missing tests, and KO sync. Use for "code review", "gate review", "PR review", "reviewer findings", "final self-review", "리뷰", "짧은 리뷰", "게이트 리뷰", "PR 리뷰", "지적사항", "검증 공백". Do not use for root-cause debugging or RED planning; route failures to systematic-debugging and RED questions to tdd/tdd-guide.
+description: Review Home Search diffs, gate reviews, PRs, and completion evidence findings-first for correctness, public API compatibility, data safety, frontend map usability, security, missing tests, and KO sync. Use for "code review", "gate review", "PR review", "reviewer findings", "final self-review", "리뷰", "짧은 리뷰", "게이트 리뷰", "PR 리뷰", "지적사항", "검증 공백". Do not use for root-cause debugging or RED planning; route failures to systematic-debugging and RED questions to tdd/tdd-guide.
 ---
 
 
@@ -41,7 +41,7 @@ Severity:
 ## Review Axes
 
 - Correctness.
-- V1 API compatibility.
+- public API compatibility.
 - Data safety.
 - Frontend map usability.
 - Security/secrets.

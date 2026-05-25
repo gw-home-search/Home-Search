@@ -1,39 +1,54 @@
+# apps/web Context KO
+
+> KO 생성 기준: canonical source only
+> Source: `apps/web/CONTEXT.md`
+> Generated: 2026-05-25
+> 기존 KO 본문은 읽지 않고 canonical source만 기준으로 재생성했습니다.
+
+## 동기화 기준
+
+이 문서는 `apps/web/CONTEXT.md`의 현재 canonical 내용을 기준으로 한 한국어 동기화본입니다.
+명령, 경로, API URL, JSON key, status 값, class/function 이름은 정밀성을 위해 원문 표기를 유지합니다.
+
+## Canonical 내용
+
 # apps/web Context
 
-이 파일은 frontend-specific Home Search V1 terms를 정의한다. canonical decisions는 root `docs/*.md`에 남아 있다.
+
+This file defines frontend-specific Home Search terms. Canonical decisions remain in root `docs/*.md`.
 
 ## Frontend Shape
 
-**Web app**은 `apps/web` 아래의 Vite React frontend다.
+**Web app** is the Vite React frontend under `apps/web`.
 
-**Map-first layout**은 Kakao map이 primary screen이고 search, filters, region navigation, details가 그 주변에 배치된다는 뜻이다.
+**Map-first layout** means the Kakao map is the primary screen, with search, filters, region navigation, and details arranged around it.
 
-**API adapter**는 V1 APIs를 호출하고 temporary source field variants를 normalize하는 frontend boundary다.
+**API adapter** is the frontend boundary that calls public APIs and normalizes temporary source field variants.
 
-**Marker adapter**는 rendering을 위해 region 및 complex marker responses를 normalize한다.
+**Marker adapter** normalizes region and complex marker responses for rendering.
 
 ## Map Terms
 
-**Kakao map**은 interactive map surface다.
+**Kakao map** is the interactive map surface.
 
-**Map level**은 region markers와 complex markers 중 무엇을 보여줄지 결정하는 Kakao zoom level이다.
+**Map level** is the Kakao zoom level used to decide region markers versus complex markers.
 
-**Region marker**는 `/api/v1/map/regions`에서 반환된다.
+**Region marker** is returned by `/api/v1/map/regions`.
 
-**Complex marker**는 `/api/v1/map/complexes`에서 반환된다.
+**Complex marker** is returned by `/api/v1/map/complexes`.
 
-**Complex marker canonical fields**는 `parcelId`, `lat`, `lng`, `latestDealAmount`, `unitCntSum`이다.
+**Complex marker canonical fields** are `parcelId`, `lat`, `lng`, `latestDealAmount`, and `unitCntSum`.
 
-**Exploration panel**은 compact search와 region navigation surface다.
+**Exploration panel** is the compact search and region navigation surface.
 
-**Filter controls**는 unit, price, area, age filters를 위한 map controls다.
+**Filter controls** are map controls for unit, price, area, and age filters.
 
-**Detail drawer**는 complex marker에서 열리며 `parcelId`의 detail과 trade data를 보여준다.
+**Detail drawer** opens from a complex marker and shows detail and trade data for a `parcelId`.
 
-**Trade list**는 `/api/v1/trade/{parcelId}`의 frontend view다.
+**Trade list** is the frontend view of `/api/v1/trade/{parcelId}`.
 
-**Non-blocking map error**는 marker API failure가 map에서 벗어나게 하거나 map을 unusable하게 만들지 않는다는 뜻이다.
+**Non-blocking map error** means marker API failure does not navigate away from the map or make the map unusable.
 
 ## Frontend Non-Scope
 
-web app은 V2 ranking, favorite, alarm, mail, recommendation, auth flows를 V1 map/trade display path에 도입하면 안 된다.
+The web app must not introduce later-scope ranking, favorite, alarm, mail, recommendation, or auth flows into the map/trade display path.

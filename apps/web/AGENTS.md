@@ -3,7 +3,7 @@
 
 ## Scope
 
-This directory owns the Home Search V1 frontend: Vite React runtime, Kakao map display, API clients/adapters, search, region navigation, filters, detail drawer, trade list/chart, and frontend verification.
+This directory owns the Home Search frontend: Vite React runtime, Kakao map display, API clients/adapters, search, region navigation, filters, detail drawer, trade list/chart, and frontend verification.
 
 ## Must Read
 
@@ -36,7 +36,7 @@ Do not edit outside `apps/web/**` unless the user explicitly approves it.
 
 ## API Contract Guardrail
 
-Call the V1 API routes exactly as documented.
+Call the public API routes exactly as documented.
 
 Temporary source field variants such as `id`, `latitude`, and `longitude` belong in frontend adapters only. New target code should prefer canonical fields.
 
@@ -44,7 +44,7 @@ Temporary source field variants such as `id`, `latitude`, and `longitude` belong
 
 Before changing frontend behavior, complete this flow:
 
-1. Confirm the goal/spec and affected V1 UI/API surface.
+1. Confirm the goal/spec and affected project UI/API surface.
 2. Read root `AGENTS.md`, canonical docs listed above, `CONTEXT.md`, and
    `apps/web/CONTEXT.md`.
 3. Map the current call flow with `code-mapper` when existing frontend code or
@@ -67,7 +67,7 @@ Before changing frontend behavior, complete this flow:
 Before any frontend write, classify the work as one of:
 
 - Scaffold slice: creates or wires the Vite or test environment without
-  changing V1 UI behavior.
+  changing project UI behavior.
 - Behavior slice: changes API adapter normalization, marker transform, map
   fallback, loading/empty/error state, fixture/mock contract, detail drawer, or
   trade list behavior.
@@ -118,7 +118,7 @@ Preferred frontend RED candidates:
   non-blocking error state.
 - Loading, empty, and error states exist for marker fetch, search, region
   navigation, detail, and trade list.
-- Fixtures and mocks preserve documented V1 URLs, fields, types, units,
+- Fixtures and mocks preserve documented public API URLs, fields, types, units,
   coordinate conventions, and empty-result behavior.
 
 ## Frontend TDD Usage
@@ -146,7 +146,7 @@ No RED exception:
 
 Prefer these frontend public seams:
 
-- API adapter normalization: V1 route, params, canonical fields, and temporary
+- API adapter normalization: project route, params, canonical fields, and temporary
   source variants such as `id`, `latitude`, and `longitude`.
 - Marker transform: region marker fields, complex marker fields, coordinate
   normalization, `parcelId`, `latestDealAmount`, and `unitCntSum`.
@@ -154,7 +154,7 @@ Prefer these frontend public seams:
   usable, and shows a non-blocking error state.
 - UI request state: loading, empty, and error states for marker fetch, search,
   region navigation, detail, and trade list flows.
-- Fixture/mock contract: mocks and fixtures must preserve documented V1 URLs,
+- Fixture/mock contract: mocks and fixtures must preserve documented public API URLs,
   fields, types, coordinate conventions, amount units, and empty-result
   behavior.
 - Detail/trade drawer: complex marker click uses `parcelId`, opens detail

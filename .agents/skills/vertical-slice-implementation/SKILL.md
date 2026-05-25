@@ -1,12 +1,12 @@
 ---
 name: vertical-slice-implementation
-description: Break Home Search web/api work into thin V1 slices that can be implemented and verified incrementally.
+description: Break Home Search web/api work into thin project slices that can be implemented and verified incrementally.
 ---
 
 
 # Vertical Slice Implementation Skill
 
-Use this skill after a V1 plan exists and before implementation starts.
+Use this skill after a project plan exists and before implementation starts.
 
 ## Purpose
 
@@ -29,14 +29,14 @@ Each slice must include:
 ## Good Slice Examples
 
 - Backend: raw RTMS ingest record is saved before normalized trade insert and duplicate source keys do not create duplicate trades.
-- Backend: `/api/v1/map/complexes` returns canonical marker fields from V1 tables only.
+- Backend: `/api/v1/map/complexes` returns canonical marker fields from baseline tables only.
 - Frontend: map idle fetches complex markers, normalizes fields in the adapter, and keeps the map usable on API failure.
 - Cross-app: marker click opens detail drawer using `/api/v1/detail/{parcelId}` and `/api/v1/trade/{parcelId}` without contract drift.
 
 ## Avoid
 
 - Horizontal slices such as "copy all backend files" or "build all UI components".
-- V2 scope.
+- later-scope.
 - Unverified app-wide refactors.
 - Cross-app changes without `api-contract`.
 

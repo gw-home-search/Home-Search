@@ -1,35 +1,42 @@
+# Integration Review Prompt KO
+
+> KO 생성 기준: canonical source only
+> Source: `.codex/harness/prompts/integration_review.md`
+> Generated: 2026-05-25
+> 기존 KO 본문은 읽지 않고 canonical source만 기준으로 재생성했습니다.
+
+## 동기화 기준
+
+이 문서는 `.codex/harness/prompts/integration_review.md`의 현재 canonical 내용을 기준으로 한 한국어 동기화본입니다.
+명령, 경로, API URL, JSON key, status 값, class/function 이름은 정밀성을 위해 원문 표기를 유지합니다.
+
+## Canonical 내용
+
 # Integration Review Prompt
 
 
-`$v1-slice-harness mode=gate`
+home-search-harness mode=gate
 
-## 입력
+Work item: {{WORK_ID}}
+Preset: {{PRESET}}
+Integration branch: {{BRANCH_NAME}}
 
-- Slice: `{{SLICE}}`
-- Preset: `{{PRESET}}`
-- Integration branch: `{{BRANCH_NAME}}`
+Review only. Do not edit files.
 
-Review only. 파일을 수정하지 않는다.
+Skill routing:
+- $code-review: review the merged api/web diff and completion evidence findings-first.
+- $api-contract: check public API URL, request, response, unit, and error compatibility across backend/frontend.
+- $tdd: verify First RED validity and Minimum GREEN evidence when behavior changed.
 
-## Skill routing
+Check the merged api/web work item together:
+- Main API URLs and response shapes remain public API compatible.
+- Map, search, region, detail, and trade flows remain aligned.
+- Backend data invariants are preserved.
+- No later-scope dependency entered the critical path.
+- Verification evidence covers backendQualityCheck, web test, web build, and diff check.
+- Verification evidence uses exact line format: ``- `command` = pass|fail|not run (Korean reason)``.
 
-- `$code-review`: merged api/web diff와 completion evidence를 findings-first로 review한다.
-- `$api-contract`: backend/frontend 전체에서 V1 API URL, request, response, unit, error compatibility를 확인한다.
-- `$tdd`: behavior 변경이 있을 때 First RED validity와 Minimum GREEN evidence를 확인한다.
-
-## 확인 항목
-
-- main API URL과 response shape가 V1 compatible한지 확인한다.
-- Map, search, region, detail, trade flow가 정렬되어 있는지 확인한다.
-- Backend data invariant가 보존되었는지 확인한다.
-- V2 dependency가 critical path에 들어오지 않았는지 확인한다.
-- Verification evidence가 backendQualityCheck, web test, web build, diff check를 포괄하는지 확인한다.
-- Verification evidence가 정확한 line format을 사용하는지 확인한다: ``- `command` = pass|fail|not run (Korean reason)``.
-
-## 출력 label
-
-짧은 Korean-first integration review를 다음 label로 출력한다.
-
+Output a short Korean-first integration review with these user-facing labels:
 - 상태: Pass|Partial|Fail
 - 검증:
 - 리뷰:

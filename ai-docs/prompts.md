@@ -18,7 +18,7 @@
 
 영향 영역:
 
-관련 V1 문서:
+관련 project 문서:
 
 검증 증거:
 
@@ -39,11 +39,11 @@ Home Search backend 작업을 수행해라.
 
 요구사항:
 - AGENTS.md, docs/README.md, docs/ARCHITECTURE.md, docs/DATA_STORAGE.md, docs/API_CONTRACT.md, docs/INFRA_AND_ENV.md를 읽어라.
-- V1 API URL과 response shape를 변경하지 마라.
+- public API URL과 response shape를 변경하지 마라.
 - raw ingest record 저장 후 normalized trade 저장 순서를 지켜라.
 - duplicate-safe ingest와 failed match queryability를 보존하라.
 - operational relation은 complex_id이며 complex_pk, apt_seq, source, source_key는 audit/dedupe용으로 보존하라.
-- ranking, favorite, alarm, mail, recommendation, heavy analytics는 V2로 남겨라.
+- ranking, favorite, alarm, mail, recommendation, heavy analytics는 later-scope로 남겨라.
 - behavior 변경은 valid RED test에서 시작하라. 테스트 환경이 없으면 그 이유와 필요한 seam을 기록하라.
 - 변경 후 가능한 backend 검증 명령과 scripts/check-ko-docs.sh, git diff --check를 실행하라.
 ```
@@ -92,7 +92,7 @@ Home Search frontend 작업을 수행해라.
 요구사항:
 - Findings first 형식으로 답하라.
 - severity는 Critical, High, Medium, Low를 사용하라.
-- correctness, V1 API compatibility, data safety, frontend map usability, security/secrets, missing tests, KO sync를 확인하라.
+- correctness, public API compatibility, data safety, frontend map usability, security/secrets, missing tests, KO sync를 확인하라.
 - style-only comment는 documented rule 위반이나 실제 risk가 있을 때만 보고하라.
 - findings가 없으면 명확히 말하고 residual risk 또는 test gap을 적어라.
 ```

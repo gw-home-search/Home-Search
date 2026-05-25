@@ -11,9 +11,9 @@ These paths are the anchors for every migration document. If a document
 mentions "source backend", "source frontend", or "target repository", it means
 the paths above.
 
-## V1 Goal
+## Project Goal
 
-V1 migrates only the product surface needed to collect real-estate apartment
+Home Search migrates only the product surface needed to collect real-estate apartment
 trade data, store it safely, and display it on a map.
 
 Included:
@@ -28,7 +28,7 @@ Included:
 - Search, region navigation, complex detail, and trade list APIs.
 - Frontend map UX using the existing API contract.
 
-Excluded from V1:
+Excluded from the current project scope:
 
 - Ranking APIs and screens.
 - Trade trend tables and calculations.
@@ -66,11 +66,11 @@ Excluded from V1:
 
 ## Non-Negotiable Decisions
 
-- Main API URLs stay stable in V1.
-- Backend behavior outside the V1 map and trade-data surface is not migrated
-  until V2.
+- Main API URLs stay stable.
+- Backend behavior outside the map and trade-data surface is not migrated
+  until later-scope.
 - Data safety is more important than aggregate features.
 - The `complex_id` versus `complex_pk` mismatch in the source backend must be
   resolved explicitly during backend migration.
-- UI/UX may change, but frontend calls must remain compatible with the V1 API
+- UI/UX may change, but frontend calls must remain compatible with the public API
   contract.

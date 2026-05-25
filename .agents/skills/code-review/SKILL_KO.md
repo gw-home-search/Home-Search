@@ -1,30 +1,43 @@
+# Code Review Skill KO
+
+> KO 생성 기준: canonical source only
+> Source: `.agents/skills/code-review/SKILL.md`
+> Generated: 2026-05-25
+> 기존 KO 본문은 읽지 않고 canonical source만 기준으로 재생성했습니다.
+
+## 동기화 기준
+
+이 문서는 `.agents/skills/code-review/SKILL.md`의 현재 canonical 내용을 기준으로 한 한국어 동기화본입니다.
+명령, 경로, API URL, JSON key, status 값, class/function 이름은 정밀성을 위해 원문 표기를 유지합니다.
+
+## Canonical 내용
+
 ---
 name: code-review
-description: Home Search diff, gate review, PR, completion evidence를 findings-first 방식으로 검토하여 correctness, V1 API compatibility, data safety, frontend map usability, security, missing tests, KO sync를 확인합니다. "code review", "gate review", "PR review", "reviewer findings", "final self-review", "리뷰", "짧은 리뷰", "게이트 리뷰", "PR 리뷰", "지적사항", "검증 공백"에 사용합니다. root-cause debugging이나 RED planning에는 사용하지 말고, failure는 systematic-debugging으로, RED 질문은 tdd/tdd-guide로 라우팅합니다.
+description: Review Home Search diffs, gate reviews, PRs, and completion evidence findings-first for correctness, public API compatibility, data safety, frontend map usability, security, missing tests, and KO sync. Use for "code review", "gate review", "PR review", "reviewer findings", "final self-review", "리뷰", "짧은 리뷰", "게이트 리뷰", "PR 리뷰", "지적사항", "검증 공백". Do not use for root-cause debugging or RED planning; route failures to systematic-debugging and RED questions to tdd/tdd-guide.
 ---
 
 
 # Code Review Skill
 
-구현 후 review 요청이나 final self-review에 이 skill을 사용합니다.
+Use this skill for review requests or final self-review after implementation.
 
 ## Routes From Gate/PR
 
-- local final self-review, gate review, PR review, reviewer findings triage,
-  completion evidence review, `검증 공백` 확인에 이 skill을 사용합니다.
-- 이 skill은 diff와 evidence를 검토합니다. read-only subagent가 사용 가능하고
-  명시적으로 요청되었거나 허용된 경우 `reviewer`를 대체하지 않습니다.
-- failing command, hook block, CI failure, runtime bug, API reproduction work는
-  `systematic-debugging`으로 라우팅합니다.
-- First RED validity, expected RED failure, public seam, minimum GREEN 질문은
-  `tdd` 또는 `tdd-guide`로 라우팅합니다.
+- Use this skill for local final self-review, gate review, PR review, reviewer
+  findings triage, completion evidence review, and `검증 공백` checks.
+- This skill reviews the diff and evidence. It does not replace `reviewer` when
+  a read-only subagent is available and explicitly requested or allowed.
+- Route failing commands, hook blocks, CI failures, runtime bugs, and API
+  reproduction work to `systematic-debugging`.
+- Route First RED validity, expected RED failure, public seam, or minimum GREEN
+  questions to `tdd` or `tdd-guide`.
 
 ## Format
 
-지적사항을 먼저 제시합니다. 각 지적사항에는 severity, file/line, problem,
-impact, required fix를 포함합니다.
+Findings first. Each finding includes severity, file/line, problem, impact, and required fix.
 
-user-facing review output에는 Korean-first label을 사용합니다.
+Use Korean-first labels for user-facing review output:
 
 - 지적사항.
 - 검증 근거 확인.
@@ -42,7 +55,7 @@ Severity:
 ## Review Axes
 
 - Correctness.
-- V1 API compatibility.
+- public API compatibility.
 - Data safety.
 - Frontend map usability.
 - Security/secrets.
@@ -51,8 +64,6 @@ Severity:
 
 ## Rules
 
-- style-only comment는 문서화된 규칙을 위반하거나 실제 risk가 있을 때만
-  보고합니다.
-- 지적사항이 없으면 한국어로 명확히 말하고 remaining test gap 또는 residual
-  risk를 언급합니다.
-- Public API, DB, ingest invariant risk를 style보다 우선합니다.
+- Report style-only comments only when they violate a documented rule or carry real risk.
+- If there are no findings, say so clearly in Korean and mention remaining test gaps or residual risk.
+- Public API, DB, and ingest invariant risks take priority over style.

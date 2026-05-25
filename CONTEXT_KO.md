@@ -1,43 +1,58 @@
+# Home Search Context KO
+
+> KO 생성 기준: canonical source only
+> Source: `CONTEXT.md`
+> Generated: 2026-05-25
+> 기존 KO 본문은 읽지 않고 canonical source만 기준으로 재생성했습니다.
+
+## 동기화 기준
+
+이 문서는 `CONTEXT.md`의 현재 canonical 내용을 기준으로 한 한국어 동기화본입니다.
+명령, 경로, API URL, JSON key, status 값, class/function 이름은 정밀성을 위해 원문 표기를 유지합니다.
+
+## Canonical 내용
+
 # Home Search Context
 
-이 파일은 agents가 Home Search V1을 이해하는 데 필요한 가장 짧은 shared vocabulary를 제공한다. canonical product, API, data decisions는 `docs/*.md`에 남아 있다.
+
+This file gives agents the shortest shared vocabulary for Home Search. Canonical product, API, and data decisions remain in `docs/*.md`.
 
 ## Product Boundary
 
-**Home Search V1**은 real-estate apartment trade data를 수집하고, 안전하게 저장하고, map에 표시하기 위한 migration target이다.
+**Home Search** is the migration target for collecting real-estate apartment trade data, storing it safely, and displaying it on a map.
 
-**V2 work**에는 rankings, favorites, alarms, mail batches, recommendations, insights, auth-dependent UX, heavy analytics가 포함된다. 명시적으로 rescope되지 않는 한 V2 work는 V1 critical path에 들어오면 안 된다.
+**later-scope work** includes rankings, favorites, alarms, mail batches, recommendations, insights, auth-dependent UX, and heavy analytics. later-scope work must not enter the current critical path unless explicitly re-scoped.
 
 ## Repositories
 
-**Source backend**는 `/Users/gwongwangjae/IdeaProjects/home-server`를 뜻한다. read-only reference material이다.
+**Source backend** means `/Users/gwongwangjae/IdeaProjects/home-server`. It is read-only reference material.
 
-**Source frontend**는 `/Users/gwongwangjae/frontend/home-client`를 뜻한다. read-only reference material이다.
+**Source frontend** means `/Users/gwongwangjae/frontend/home-client`. It is read-only reference material.
 
-**Target api**는 `apps/api`를 뜻한다.
+**Target api** means `apps/api`.
 
-**Target web**은 `apps/web`을 뜻한다.
+**Target web** means `apps/web`.
 
 ## Shared Terms
 
-**Canonical API contract**는 `docs/API_CONTRACT.md`를 뜻한다. Backend와 frontend work는 이를 보존해야 한다.
+**Canonical API contract** means `docs/API_CONTRACT.md`. Backend and frontend work must preserve it.
 
-**Map marker**는 V1 map endpoints에서 Kakao map에 렌더링되는 region 또는 complex marker다.
+**Map marker** is a region or complex marker rendered on the Kakao map from map endpoints.
 
-**Parcel**은 detail과 trade APIs에서 사용하는 map/display location unit이다.
+**Parcel** is the map/display location unit used by detail and trade APIs.
 
-**parcelId**는 marker click, detail, trade flows에서 사용하는 public API identifier다.
+**parcelId** is the public API identifier used by marker click, detail, and trade flows.
 
-**Complex**는 parcel과 연결된 apartment complex다.
+**Complex** is an apartment complex associated with a parcel.
 
-**complex_id**는 normalized trades에서 complexes로 이어지는 operational backend relation이다.
+**complex_id** is the operational backend relation from normalized trades to complexes.
 
-**complex_pk**는 audit, matching, deduplication을 위해 보존되는 source identifier다.
+**complex_pk** is a source identifier retained for audit, matching, and deduplication.
 
-**source_key**는 duplicate-safe ingest를 위한 deterministic source identity다.
+**source_key** is the deterministic source identity for duplicate-safe ingest.
 
-**Raw ingest**는 normalized trade rows보다 먼저 저장되는 preserved external source data다.
+**Raw ingest** is preserved external source data saved before normalized trade rows.
 
-**Normalized trade**는 map/detail/trade APIs가 사용하는 operational trade row다.
+**Normalized trade** is the operational trade row used by map/detail/trade APIs.
 
-**Failed match**는 complex로 resolve되지 못한 ingest result이며 explainable하고 queryable해야 한다.
+**Failed match** is an ingest result that could not resolve to a complex and must remain explainable and queryable.

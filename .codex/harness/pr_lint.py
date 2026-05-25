@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Strict PR metadata and evidence lint for Home Search V1."""
+"""Strict PR metadata and evidence lint for Home Search."""
 
 from __future__ import annotations
 
@@ -13,22 +13,25 @@ from typing import Iterable
 from pr_context import PrContext, changed_files_from_sources, context_from_event, context_from_local
 from pr_evidence import (
     API_QUALITY,
-    BACKLOG_SYNC_SELF_TEST,
+    WORKLOG_SYNC_SELF_TEST,
     DIFF_CHECK,
     KO_CHECK,
     POST_TOOL_USE_REVIEW_SELF_TEST,
     PR_BODY_CHECK_SELF_TEST,
     PR_CONTEXT_SELF_TEST,
+    PROJECT_TERMS_CHECK,
+    PROJECT_TERMS_SELF_TEST,
     PR_LINT_SELF_TEST,
     SKILL_ROUTING_SELF_TEST,
     STOP_HOOK_SELF_TEST,
     TEST_DISPLAY_NAME_POLICY,
     USER_LANGUAGE_CHECK,
-    V1_FLOW_SELF_TEST,
-    V1_LAUNCHER_SELF_TEST,
-    V1_PLAN_SELF_TEST,
-    V1_PR_SELF_TEST,
-    V1_REPORT_SELF_TEST,
+    HARNESS_FLOW_SELF_TEST,
+    HARNESS_INTEGRATE_SELF_TEST,
+    HARNESS_LAUNCHER_SELF_TEST,
+    HARNESS_PLAN_SELF_TEST,
+    HARNESS_PR_SELF_TEST,
+    HARNESS_REPORT_SELF_TEST,
     WEB_BUILD,
     WEB_TEST,
     is_ko_doc,
@@ -70,7 +73,7 @@ CHECKLIST_ITEMS = [
     "main push 없음",
     "integration branch만 push",
     "draft PR",
-    "V1 API URL/response 영향 확인",
+    "public API URL/response 영향 확인",
     "DB migration 실행 없음",
     "Open API 호출 없음",
     "secrets 저장 없음",
@@ -280,7 +283,6 @@ def check_title(title: str, errors: list[LintMessage]) -> None:
         "pr title",
         "summary",
         "type(scope): summary",
-        "v1 <slice-id> integration",
         "제목",
         "요약",
         "한글 요약",
@@ -303,10 +305,9 @@ def check_title(title: str, errors: list[LintMessage]) -> None:
         if not re.search(r"[가-힣]", summary):
             add(errors, "title", "bracket 제목 요약에는 한글 설명이 포함되어야 합니다")
 
-    v1_title = re.fullmatch(r"V1 [a-z0-9][a-z0-9-]* integration", stripped)
     conventional = re.fullmatch(r"[a-z][a-z0-9-]*\([a-z0-9_.-]+\): .+", stripped)
-    if not (bracket_title or v1_title or conventional):
-        add(errors, "title", "제목은 `[Feat] 한글 요약`, `V1 <slice-id> integration`, 또는 `type(scope): summary` 형식이어야 합니다")
+    if not (bracket_title or conventional):
+        add(errors, "title", "제목은 `[Feat] 한글 요약` 또는 `type(scope): summary` 형식이어야 합니다")
 
 
 def check_branch(base: str, head: str, draft: bool, errors: list[LintMessage]) -> None:
@@ -388,7 +389,7 @@ def required_skill_triggers_for_files(changed_files: Iterable[str]) -> set[str]:
     changed = tuple(changed_files)
     if not changed:
         return set()
-    required = {"$v1-slice-harness"}
+    required = {"home-search-harness"}
     if any(path.startswith("apps/api/") for path in changed):
         required.update({"$backend-api", "$tdd", "$api-contract", "$code-review"})
     if any(path.startswith("apps/web/") for path in changed):
@@ -405,6 +406,8 @@ def check_skill_evidence(body: str, changed_files: tuple[str, ...], errors: list
     if not required:
         return
     found = set(SKILL_TRIGGER_RE.findall(body))
+    if "home-search-harness" in body:
+        found.add("home-search-harness")
     for trigger in sorted(required):
         if trigger not in found:
             add(errors, "evidence", f"필수 skill evidence가 없습니다: {trigger}")
@@ -519,7 +522,7 @@ def valid_body(
     return f"""## 요약
 
 상태: {status}
-이번 PR은 V1 PR lint CI와 harness evidence 검사를 강화합니다.
+이번 PR은 Home Search PR lint CI와 harness evidence 검사를 강화합니다.
 
 ## 작업 범위
 
@@ -532,7 +535,7 @@ def valid_body(
 
 | phase | skill | role | path | required evidence |
 | --- | --- | --- | --- | --- |
-| execute | $v1-slice-harness | orchestrator | .agents/skills/v1-slice-harness/SKILL.md | 상태; 검증; 다음 행동 |
+| execute | home-search-harness | orchestrator | .codex/harness/home | 상태; 검증; 다음 행동 |
 | execute | $tdd | primary | .agents/skills/tdd/SKILL.md | 최초 RED; 예상 RED 실패; 최소 GREEN |
 | execute | $backend-api | support | .agents/skills/backend-api/SKILL.md | backendQualityCheck; Coverage: >=90%; Docs/OpenAPI |
 | execute | $frontend-web | support | .agents/skills/frontend-web/SKILL.md | cd apps/web && npm run test; cd apps/web && npm run build |
@@ -557,14 +560,17 @@ def valid_body(
 - `{PR_LINT_SELF_TEST}` = pass (자체 테스트)
 - `{PR_CONTEXT_SELF_TEST}` = pass (PR context 공용 helper 자체 테스트)
 - `{PR_BODY_CHECK_SELF_TEST}` = pass (PR body 검사 자체 테스트)
-- `{BACKLOG_SYNC_SELF_TEST}` = pass (backlog sync 자체 테스트)
-- `{V1_PR_SELF_TEST}` = pass (draft PR 생성 helper 자체 테스트)
-- `{V1_FLOW_SELF_TEST}` = pass (v1 flow 자체 테스트)
-- `{V1_PLAN_SELF_TEST}` = pass (v1 plan 자체 테스트)
-- `{V1_REPORT_SELF_TEST}` = pass (v1 report 자체 테스트)
-- `{V1_LAUNCHER_SELF_TEST}` = pass (v1 launcher 자체 테스트)
+- `{WORKLOG_SYNC_SELF_TEST}` = pass (worklog sync 자체 테스트)
+- `{HARNESS_PR_SELF_TEST}` = pass (draft PR 생성 helper 자체 테스트)
+- `{HARNESS_FLOW_SELF_TEST}` = pass (harness flow 자체 테스트)
+- `{HARNESS_INTEGRATE_SELF_TEST}` = pass (harness integration 자체 테스트)
+- `{HARNESS_PLAN_SELF_TEST}` = pass (harness plan 자체 테스트)
+- `{HARNESS_REPORT_SELF_TEST}` = pass (harness report 자체 테스트)
+- `{HARNESS_LAUNCHER_SELF_TEST}` = pass (harness launcher 자체 테스트)
 - `{SKILL_ROUTING_SELF_TEST}` = pass (skill routing 자체 테스트)
 - `{USER_LANGUAGE_CHECK}` = pass (사용자 노출 언어 점검)
+- `{PROJECT_TERMS_SELF_TEST}` = pass (용어 점검 자체 테스트)
+- `{PROJECT_TERMS_CHECK}` = pass (프로젝트 용어 점검)
 - `{STOP_HOOK_SELF_TEST}` = pass (stop hook fixture)
 - `{POST_TOOL_USE_REVIEW_SELF_TEST}` = pass (post-tool hook fixture)
 - `{KO_CHECK}` = pass (Markdown 동기화)
@@ -599,7 +605,7 @@ reviewer: 지적사항 = none
 - [{mark}] main push 없음
 - [{mark}] integration branch만 push
 - [{mark}] draft PR
-- [{mark}] V1 API URL/response 영향 확인
+- [{mark}] public API URL/response 영향 확인
 - [{mark}] DB migration 실행 없음
 - [{mark}] Open API 호출 없음
 - [{mark}] secrets 저장 없음
@@ -721,6 +727,10 @@ def run_self_test() -> int:
         body=valid_body().replace(f"- `{KO_CHECK}` = pass (Markdown 동기화)", f"- `{KO_CHECK}` = not run (확인 안 함)"),
         changed_files=("docs/README.md",),
     )
+    markdown_missing_terms_check = valid_input(
+        body=valid_body().replace(f"- `{PROJECT_TERMS_CHECK}` = pass (프로젝트 용어 점검)\n", ""),
+        changed_files=("docs/README.md", "docs/README_KO.md"),
+    )
     ko_only_with_approval = valid_input(
         body=valid_body(ko_approval=True, ko_targets=("AGENTS_KO.md",)),
         changed_files=("AGENTS_KO.md",),
@@ -760,6 +770,7 @@ def run_self_test() -> int:
         ),
         expect_case("markdown KO path missing", markdown_unsynced, "changed-files", "paired KO doc"),
         expect_case("markdown KO evidence missing", markdown_unsynced, "evidence", KO_CHECK),
+        expect_case("markdown project terms evidence missing", markdown_missing_terms_check, "evidence", PROJECT_TERMS_CHECK),
         lint_pr(ko_only_with_approval).ok,
         expect_case("KO approval missing", ko_missing_approval, "evidence", "KO 수정 승인"),
         expect_case("pass with open risk", pass_with_open_risk, "evidence", "미확인"),

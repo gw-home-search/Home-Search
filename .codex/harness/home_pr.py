@@ -145,7 +145,7 @@ def update_payload(path: str | None, pr_url: str, *, dry_run: bool) -> None:
         print(f"warning: payload 업데이트 실패: {exc}", file=sys.stderr)
         return
     payload.setdefault("links", {})["pr_url"] = pr_url
-    payload.setdefault("commands", {})["push_command_suggestion"] = "completed by v1_pr.py"
+    payload.setdefault("commands", {})["push_command_suggestion"] = "completed by home_pr.py"
     payload["next_action"] = "GitHub PR diff/checks/local report를 확인한 뒤 수동 merge 결정"
     events = payload.setdefault("events", [])
     if isinstance(events, list):
@@ -158,7 +158,7 @@ def run_reporters(args: argparse.Namespace) -> None:
         if args.notion or args.slack:
             print("warning: payload JSON이 없어 Notion/Slack PR URL 반영을 건너뜁니다.", file=sys.stderr)
         return
-    script = Path(__file__).with_name("v1_report.py")
+    script = Path(__file__).with_name("home_report.py")
     command = [
         sys.executable,
         str(script),
@@ -307,9 +307,9 @@ def run_self_test() -> int:
         ).ok
     )
     if all(checks):
-        print("self-test passed: v1_pr")
+        print("self-test passed: home_pr")
         return 0
-    print("self-test failed: v1_pr", file=sys.stderr)
+    print("self-test failed: home_pr", file=sys.stderr)
     return 1
 
 

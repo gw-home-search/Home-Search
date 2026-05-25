@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan Home Search V1 slices before running the execution harness."""
+"""Plan Home Search work items before running the execution harness."""
 
 from __future__ import annotations
 
@@ -21,9 +21,9 @@ if hasattr(sys.stdout, "reconfigure"):
 
 HARNESS_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = HARNESS_ROOT.parents[1]
-BACKLOG_PATH = HARNESS_ROOT / "slices" / "backlog.toml"
+WORKLOG_PATH = HARNESS_ROOT / "worklog.toml"
 REPORT_ROOT = HARNESS_ROOT / "reports"
-LLM_REPLAN_ROOT = Path("/private/tmp/home-search-v1-llm-replan")
+LLM_REPLAN_ROOT = Path("/private/tmp/home-search-harness-llm-replan")
 VALID_STATUSES = {"candidate", "planned", "running", "done", "blocked"}
 VALID_TARGETS = {"backend", "frontend", "both", "planning-only"}
 VALID_INTENTS = {"plan", "dry", "run", "push", "pr", "report", "recover"}
@@ -33,7 +33,7 @@ DEFAULT_PLAN_ITERATIONS = 3
 
 
 class PlanError(ValueError):
-    """Raised when backlog or planning input is invalid."""
+    """Raised when worklog or planning input is invalid."""
 
 
 def now_iso() -> str:
@@ -43,7 +43,7 @@ def now_iso() -> str:
 def slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
     if not slug:
-        raise PlanError("slice id must contain at least one alphanumeric character")
+        raise PlanError("work id must contain at least one alphanumeric character")
     return slug
 
 
@@ -55,25 +55,25 @@ def as_list(value: Any) -> list[str]:
     return [str(value)]
 
 
-def load_backlog(path: Path = BACKLOG_PATH) -> list[dict[str, Any]]:
+def load_worklog(path: Path = WORKLOG_PATH) -> list[dict[str, Any]]:
     if not path.exists():
-        raise PlanError(f"backlog file not found: {path}")
+        raise PlanError(f"worklog file not found: {path}")
     with path.open("rb") as handle:
         data = tomllib.load(handle)
-    raw_slices = data.get("slices")
-    if not isinstance(raw_slices, list):
-        raise PlanError("backlog must contain [[slices]] entries")
-    slices = [normalize_slice(item) for item in raw_slices]
-    ids = [item["id"] for item in slices]
+    raw_items = data.get("items")
+    if not isinstance(raw_items, list):
+        raise PlanError("worklog must contain [[items]] entries")
+    items = [normalize_work_item(item) for item in raw_items]
+    ids = [item["id"] for item in items]
     duplicates = sorted({item for item in ids if ids.count(item) > 1})
     if duplicates:
-        raise PlanError(f"duplicate slice ids: {', '.join(duplicates)}")
-    return slices
+        raise PlanError(f"duplicate work ids: {', '.join(duplicates)}")
+    return items
 
 
-def normalize_slice(raw: Any) -> dict[str, Any]:
+def normalize_work_item(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
-        raise PlanError("each backlog slice must be a table")
+        raise PlanError("each worklog item must be a table")
     required = [
         "id",
         "title_ko",
@@ -90,7 +90,7 @@ def normalize_slice(raw: Any) -> dict[str, Any]:
     ]
     missing = [field for field in required if field not in raw]
     if missing:
-        raise PlanError(f"slice missing required fields: {', '.join(missing)}")
+        raise PlanError(f"worklog item missing required fields: {', '.join(missing)}")
     item = dict(raw)
     item["id"] = slugify(str(item["id"]))
     item["status"] = str(item["status"])
@@ -140,7 +140,7 @@ def latest_report_path() -> Path | None:
 def read_report_evidence(path: Path | None) -> dict[str, Any]:
     evidence: dict[str, Any] = {
         "report_path": str(path) if path else None,
-        "report_slice": None,
+        "report_work_id": None,
         "status": "not found",
         "gate_risks": [],
         "missing_tests": [],
@@ -167,7 +167,7 @@ def read_report_evidence(path: Path | None) -> dict[str, Any]:
         ]
         evidence.update(
             {
-                "report_slice": payload.get("slice"),
+                "report_work_id": payload.get("work_id") or payload.get("slice"),
                 "status": payload.get("status") or "unknown",
                 "gate_risks": as_list(payload.get("residual_risks")),
                 "contract_gaps": as_list(payload.get("contract_risks")),
@@ -236,8 +236,8 @@ def evidence_additions(evidence: dict[str, Any]) -> tuple[list[str], list[str]]:
         criteria.append(f"누락되었거나 통과하지 못한 검증을 acceptance evidence에 포함한다: {command}")
         red.append(f"검증 누락을 먼저 실패로 확인한다: {command}")
     for gap in evidence.get("contract_gaps", [])[:3]:
-        criteria.append(f"V1 API URL/request/response/unit/error contract gap을 변경 전 테스트로 고정한다: {gap}")
-        red.append("V1 API contract mismatch를 실패하는 public seam 테스트로 먼저 고정한다.")
+        criteria.append(f"public API URL/request/response/unit/error contract gap을 변경 전 테스트로 고정한다: {gap}")
+        red.append("public API contract mismatch를 실패하는 public seam 테스트로 먼저 고정한다.")
     for gap in evidence.get("data_safety_gaps", [])[:3]:
         criteria.append(f"raw-before-normalized, dedupe, failed-match explainability gap을 acceptance에 포함한다: {gap}")
         red.append("중복 ingest 또는 failed match explainability 실패를 먼저 재현한다.")
@@ -283,7 +283,7 @@ def candidate_view(item: dict[str, Any], evidence: dict[str, Any]) -> dict[str, 
 
 
 def select_candidates(
-    slices: list[dict[str, Any]],
+    items: list[dict[str, Any]],
     evidence: dict[str, Any],
     *,
     limit: int,
@@ -293,7 +293,7 @@ def select_candidates(
     if targets and targets not in VALID_TARGETS:
         raise PlanError(f"invalid --targets: {targets}")
     filtered = []
-    for item in slices:
+    for item in items:
         if targets and item["targets"] != targets:
             continue
         if preset and slugify(str(item["preset"])) != slugify(preset):
@@ -305,12 +305,12 @@ def select_candidates(
     return filtered[: max(1, min(limit, 3))]
 
 
-def find_slice(slices: list[dict[str, Any]], slice_name: str) -> dict[str, Any]:
-    requested = slugify(slice_name)
-    matches = [item for item in slices if item["id"] == requested]
+def find_work_item(items: list[dict[str, Any]], work_id: str) -> dict[str, Any]:
+    requested = slugify(work_id)
+    matches = [item for item in items if item["id"] == requested]
     if len(matches) == 1:
         return matches[0]
-    raise PlanError(f"slice not found in backlog: {requested}")
+    raise PlanError(f"work item not found in worklog: {requested}")
 
 
 def printable(command: list[str]) -> str:
@@ -326,27 +326,27 @@ def target_flag_for(targets: str) -> str:
     return f" --targets {targets}"
 
 
-def action_commands(slice_id: str, targets: str, *, preset: str | None = None) -> dict[str, str]:
+def action_commands(work_id: str, targets: str, *, preset: str | None = None) -> dict[str, str]:
     target_flag = target_flag_for(targets)
     preset_flag = f" --preset {preset}" if preset else ""
     if targets == "planning-only":
         return {
-            "plan": f".codex/harness/v1 plan {slice_id}{target_flag}{preset_flag}",
-            "dry": "planning-only slice: 구현 dry-run 대신 계획 evidence만 검토",
-            "run": "planning-only slice: 자동 구현 실행 금지",
-            "push": "planning-only slice: push 금지",
-            "pr": "planning-only slice: PR 자동화 금지",
-            "report": f".codex/harness/v1 report {slice_id}",
-            "recover": ".codex/harness/v1 hook이 막은 evidence 복구",
+            "plan": f".codex/harness/home plan {work_id}{target_flag}{preset_flag}",
+            "dry": "planning-only work item: 구현 dry-run 대신 계획 evidence만 검토",
+            "run": "planning-only work item: 자동 구현 실행 금지",
+            "push": "planning-only work item: push 금지",
+            "pr": "planning-only work item: PR 자동화 금지",
+            "report": f".codex/harness/home report {work_id}",
+            "recover": ".codex/harness/home hook이 막은 evidence 복구",
         }
     return {
-        "plan": f".codex/harness/v1 plan {slice_id}{target_flag}{preset_flag}",
-        "dry": f".codex/harness/v1 dry {slice_id}{target_flag}{preset_flag}",
-        "run": f".codex/harness/v1 run {slice_id}{target_flag}{preset_flag}",
-        "push": f".codex/harness/v1 run {slice_id}{target_flag}{preset_flag} --push",
-        "pr": f".codex/harness/v1 run {slice_id}{target_flag}{preset_flag} --pr",
-        "report": f".codex/harness/v1 report {slice_id}",
-        "recover": ".codex/harness/v1 hook이 막은 evidence 복구",
+        "plan": f".codex/harness/home plan {work_id}{target_flag}{preset_flag}",
+        "dry": f".codex/harness/home dry {work_id}{target_flag}{preset_flag}",
+        "run": f".codex/harness/home run {work_id}{target_flag}{preset_flag}",
+        "push": f".codex/harness/home run {work_id}{target_flag}{preset_flag} --push",
+        "pr": f".codex/harness/home run {work_id}{target_flag}{preset_flag} --pr",
+        "report": f".codex/harness/home report {work_id}",
+        "recover": ".codex/harness/home hook이 막은 evidence 복구",
     }
 
 
@@ -462,7 +462,7 @@ def planning_iterations(
             {
                 "pass": 1,
                 "name": "LLM 초안 재계획",
-                "purpose": "Codex exec read-only pass가 backlog, target, preset, 최근 evidence로 실행 계획을 다시 만든다.",
+                "purpose": "Codex exec read-only pass가 worklog, target, preset, 최근 evidence로 실행 계획을 다시 만든다.",
                 "additions": [
                     f"target={view['targets']}",
                     f"preset={view['preset']}",
@@ -476,7 +476,7 @@ def planning_iterations(
                 "purpose": "Codex exec read-only pass가 pass 1 output을 입력으로 받아 누락된 guardrail을 비판하고 보강한다.",
                 "additions": [
                     "First RED, 예상 RED 실패, 최소 GREEN 재검토",
-                    "V1 API URL/request/response/unit/error 영향 재검토",
+                    "public API URL/request/response/unit/error 영향 재검토",
                     "target별 검증 명령과 publish/readiness 중단 조건 재검토",
                 ],
                 "decision": "구현 전 stop condition과 verification evidence를 더 엄격하게 만든다.",
@@ -497,7 +497,7 @@ def planning_iterations(
         {
             "pass": 1,
             "name": "초안",
-            "purpose": "backlog, target, preset, 최근 report evidence를 모아 기본 실행 계획을 만든다.",
+            "purpose": "worklog, target, preset, 최근 report evidence를 모아 기본 실행 계획을 만든다.",
             "additions": [
                 f"target={view['targets']}",
                 f"preset={view['preset']}",
@@ -511,7 +511,7 @@ def planning_iterations(
             "purpose": "planning/tdd/api-contract/target skill contract로 누락된 guardrail을 보강한다.",
             "additions": [
                 "First RED, 예상 RED 실패, 최소 GREEN 확인",
-                "V1 API URL/request/response/unit/error 영향 확인",
+                "public API URL/request/response/unit/error 영향 확인",
                 "target별 검증 명령과 중단 조건 확인",
             ],
             "decision": "구현 전 stop condition과 verification evidence를 명확히 한다.",
@@ -573,16 +573,16 @@ def critique_plan(view: dict[str, Any], profile: dict[str, Any], commands: dict[
     }
 
 
-def llm_replan_output_path(slice_id: str, pass_number: int) -> Path:
-    return LLM_REPLAN_ROOT / f"{slugify(slice_id)}-llm-replan-pass{pass_number}.md"
+def llm_replan_output_path(work_id: str, pass_number: int) -> Path:
+    return LLM_REPLAN_ROOT / f"{slugify(work_id)}-llm-replan-pass{pass_number}.md"
 
 
 def llm_replan_prompt(seed_payload: dict[str, Any], pass_number: int, total_passes: int, previous_output: str) -> str:
     previous = previous_output.strip() or "없음: 이번 pass가 첫 LLM 재계획입니다."
     seed = json.dumps(seed_payload, ensure_ascii=False, indent=2, sort_keys=True)
-    return f"""# Home Search V1 LLM Recursive Replan
+    return f"""# Home Search Harness Recursive Replan
 
-$v1-slice-harness mode=plan
+$home-search-harness mode=plan
 $planning
 $tdd
 $api-contract
@@ -695,7 +695,7 @@ def run_llm_replans(
     return passes
 
 
-def plan_for_slice(
+def plan_for_work_item(
     item: dict[str, Any],
     evidence: dict[str, Any],
     *,
@@ -710,7 +710,7 @@ def plan_for_slice(
     if planning_mode not in VALID_PLANNING_MODES:
         raise PlanError(f"invalid --planning-mode: {planning_mode}")
     if targets and targets != item["targets"]:
-        raise PlanError(f"{item['id']} backlog target is {item['targets']}, not {targets}")
+        raise PlanError(f"{item['id']} worklog target is {item['targets']}, not {targets}")
     view = candidate_view(item, evidence)
     chosen_preset = slugify(preset) if preset else view["preset"]
     commands = action_commands(view["id"], view["targets"], preset=slugify(preset) if preset else None)
@@ -749,7 +749,7 @@ def render_next_text(payload: dict[str, Any]) -> str:
     lines = [
         f"상태: {payload['status']}",
         f"현재: {payload['current']['summary']}",
-        "다음 slice 후보:",
+        "다음 작업 후보:",
     ]
     for index, item in enumerate(candidates, 1):
         marker = " 추천" if recommended and item["id"] == recommended["id"] else ""
@@ -759,7 +759,7 @@ def render_next_text(payload: dict[str, Any]) -> str:
     if recommended:
         lines.extend(f"- {criterion}" for criterion in recommended["acceptance_criteria"][:5])
     else:
-        lines.append("- backlog 후보 없음")
+        lines.append("- worklog 후보 없음")
     lines.append("검증:")
     if recommended:
         lines.extend(f"- {command}" for command in recommended["verification_commands"])
@@ -833,12 +833,12 @@ def report_path_from_args(args: argparse.Namespace) -> Path | None:
 
 def run_next(args: argparse.Namespace) -> int:
     try:
-        slices = load_backlog()
+        items = load_worklog()
         evidence = read_report_evidence(report_path_from_args(args))
         current = dict(evidence)
         current["git"] = git_context(args.from_git)
         candidates = select_candidates(
-            slices,
+            items,
             evidence,
             limit=args.limit,
             targets=args.targets,
@@ -847,7 +847,7 @@ def run_next(args: argparse.Namespace) -> int:
     except PlanError as exc:
         return fail(str(exc))
     recommended = candidates[0] if candidates else None
-    next_command = ".codex/harness/v1 plan " + recommended["id"] if recommended else "backlog 후보를 추가하세요"
+    next_command = ".codex/harness/home plan " + recommended["id"] if recommended else "worklog 후보를 추가하세요"
     payload = {
         "status": "dry-run" if args.dry_run else "Pass",
         "current": current,
@@ -864,10 +864,10 @@ def run_next(args: argparse.Namespace) -> int:
 
 def run_plan(args: argparse.Namespace) -> int:
     try:
-        slices = load_backlog()
+        items = load_worklog()
         evidence = read_report_evidence(report_path_from_args(args))
-        plan = plan_for_slice(
-            find_slice(slices, args.slice),
+        plan = plan_for_work_item(
+            find_work_item(items, args.work_id),
             evidence,
             targets=args.targets,
             preset=args.preset,
@@ -900,7 +900,7 @@ def run_plan(args: argparse.Namespace) -> int:
 
 
 def fail(message: str, code: int = 1) -> int:
-    print(f"상태: Fail\n차단 사유: {message}\n다음 행동: backlog 또는 option을 확인한 뒤 다시 실행하세요.")
+    print(f"상태: Fail\n차단 사유: {message}\n다음 행동: worklog 또는 option을 확인한 뒤 다시 실행하세요.")
     return code
 
 
@@ -934,23 +934,23 @@ def add_common(parser: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Plan Home Search V1 slices before execution.")
+    parser = argparse.ArgumentParser(description="Plan Home Search work items before execution.")
     parser.add_argument("--self-test", action="store_true")
     subparsers = parser.add_subparsers(dest="command")
 
-    next_parser = subparsers.add_parser("next", help="Recommend one to three next slice candidates.")
+    next_parser = subparsers.add_parser("next", help="Recommend one to three next work candidates.")
     add_common(next_parser)
     next_parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="Candidate limit, clamped to 1..3.")
 
-    plan_parser = subparsers.add_parser("plan", help="Render an execution brief for one backlog slice.")
-    plan_parser.add_argument("slice")
+    plan_parser = subparsers.add_parser("plan", help="Render an execution brief for one worklog item.")
+    plan_parser.add_argument("work_id")
     add_common(plan_parser)
     return parser
 
 
 def run_self_test() -> int:
     try:
-        slices = load_backlog()
+        items = load_worklog()
         evidence = {
             "gate_risks": ["marker API failure hides current markers"],
             "missing_tests": ["cd apps/web && npm run test"],
@@ -958,14 +958,14 @@ def run_self_test() -> int:
             "data_safety_gaps": [],
             "summary": "self-test evidence",
         }
-        candidate_fixture = [dict(item) for item in slices]
+        candidate_fixture = [dict(item) for item in items]
         candidate_fixture[0]["status"] = "candidate"
         candidates = select_candidates(candidate_fixture, evidence, limit=3, targets=None, preset=None)
-        no_candidate_fixture = [dict(item, status="done") for item in slices]
+        no_candidate_fixture = [dict(item, status="done") for item in items]
         no_candidates = select_candidates(no_candidate_fixture, evidence, limit=3, targets=None, preset=None)
-        plan_item = find_slice(slices, "kakao-map-marker-refresh-flow")
-        plan = plan_for_slice(plan_item, evidence, targets=None, preset=None, intent="push", planning_mode="critique")
-        llm_plan = plan_for_slice(plan_item, evidence, targets=None, preset=None, intent="pr", planning_mode="llm-replan")
+        plan_item = find_work_item(items, "kakao-map-marker-refresh-flow")
+        plan = plan_for_work_item(plan_item, evidence, targets=None, preset=None, intent="push", planning_mode="critique")
+        llm_plan = plan_for_work_item(plan_item, evidence, targets=None, preset=None, intent="pr", planning_mode="llm-replan")
 
         llm_commands: list[list[str]] = []
 
@@ -988,7 +988,7 @@ def run_self_test() -> int:
         )
         for item in llm_replans:
             Path(str(item["output_path"])).unlink(missing_ok=True)
-        explicit_preset_plan = plan_for_slice(
+        explicit_preset_plan = plan_for_work_item(
             plan_item,
             evidence,
             targets=None,
@@ -1002,22 +1002,22 @@ def run_self_test() -> int:
                 "current": evidence,
                 "candidates": no_candidates,
                 "recommended": None,
-                "next_command": "backlog 후보를 추가하세요",
+                "next_command": "worklog 후보를 추가하세요",
             }
         )
         rendered = json.dumps(payload, ensure_ascii=False)
         try:
-            plan_for_slice(plan_item, evidence, targets="backend", preset=None)
+            plan_for_work_item(plan_item, evidence, targets="backend", preset=None)
             target_rejected = False
         except PlanError:
             target_rejected = True
         checks = [
-            len(slices) >= 4,
-            all(item["targets"] in VALID_TARGETS for item in slices),
+            len(items) >= 4,
+            all(item["targets"] in VALID_TARGETS for item in items),
             1 <= len(candidates) <= 3,
             len(no_candidates) == 0,
-            "backlog 후보 없음" in no_candidate_rendered,
-            "다음 행동: backlog 후보를 추가하세요" in no_candidate_rendered,
+            "worklog 후보 없음" in no_candidate_rendered,
+            "다음 행동: worklog 후보를 추가하세요" in no_candidate_rendered,
             payload["recommended"]["id"] == candidates[0]["id"],
             '"recommended"' in rendered,
             plan["targets"] == "frontend",
@@ -1044,12 +1044,12 @@ def run_self_test() -> int:
             target_rejected,
         ]
     except Exception as exc:  # pragma: no cover - self-test diagnostic path.
-        print(f"self-test failed: v1_plan: {exc}", file=sys.stderr)
+        print(f"self-test failed: home_plan: {exc}", file=sys.stderr)
         return 1
     if all(checks):
-        print("self-test passed: v1_plan")
+        print("self-test passed: home_plan")
         return 0
-    print("self-test failed: v1_plan", file=sys.stderr)
+    print("self-test failed: home_plan", file=sys.stderr)
     return 1
 
 

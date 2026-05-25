@@ -37,7 +37,7 @@ export async function fetchRootRegions(): Promise<RegionSummary[]> {
 
   const payload: unknown = await response.json();
   if (!Array.isArray(payload)) {
-    throw new Error('Invalid V1 root region response: expected an array');
+    throw new Error('Invalid public API root region response: expected an array');
   }
 
   return payload.map((item) => normalizeRegionSummary(item as RegionSummaryResponse, 'root region'));
@@ -57,7 +57,7 @@ export async function fetchRegionDetail(regionId: number): Promise<RegionDetail>
 
   const payload: unknown = await response.json();
   if (!isRecord(payload)) {
-    throw new Error('Invalid V1 region detail response: expected an object');
+    throw new Error('Invalid public API region detail response: expected an object');
   }
 
   return normalizeRegionDetail(payload);
@@ -65,7 +65,7 @@ export async function fetchRegionDetail(regionId: number): Promise<RegionDetail>
 
 function normalizeRegionDetail(detail: RegionDetailResponse): RegionDetail {
   if (!Array.isArray(detail.children)) {
-    throw new Error('Invalid V1 region detail response: children must be an array');
+    throw new Error('Invalid public API region detail response: children must be an array');
   }
 
   return {
@@ -98,12 +98,12 @@ function toRequiredNumber(
   responseName: 'root region' | 'region detail' | 'region child',
 ): number {
   if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
-    throw new Error(`Invalid V1 ${responseName} response: ${field} must be a number`);
+    throw new Error(`Invalid public API ${responseName} response: ${field} must be a number`);
   }
 
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid V1 ${responseName} response: ${field} must be a number`);
+    throw new Error(`Invalid public API ${responseName} response: ${field} must be a number`);
   }
 
   return parsed;
@@ -115,7 +115,7 @@ function toRequiredString(
   responseName: 'root region' | 'region detail' | 'region child',
 ): string {
   if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`Invalid V1 ${responseName} response: ${field} must be a non-empty string`);
+    throw new Error(`Invalid public API ${responseName} response: ${field} must be a non-empty string`);
   }
 
   return value;

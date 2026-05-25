@@ -9,15 +9,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 
-class SampleMvpSeedSqlTest extends JdbcPostgresTestSupport {
+class SamplePropertySeedSqlTest extends JdbcPostgresTestSupport {
 
 	@Test
-	@DisplayName("sample MVP seed SQL은 idempotent하며 map detail/trade read를 지원한다")
-	void sampleMvpSeedSqlIsIdempotentAndQueryable() {
+	@DisplayName("sample Home Search seed SQL은 idempotent하며 map detail/trade read를 지원한다")
+	void samplePropertySeedSqlIsIdempotentAndQueryable() {
 		runSampleSeed();
 		runSampleSeed();
 
-		JdbcMvpReadRepository repository = new JdbcMvpReadRepository(jdbcClient);
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
 
 		assertThat(repository.searchComplexes("Sample Apartment"))
 			.singleElement()
@@ -40,7 +40,7 @@ class SampleMvpSeedSqlTest extends JdbcPostgresTestSupport {
 	}
 
 	private void runSampleSeed() {
-		new ResourceDatabasePopulator(new ClassPathResource("db/seed/local/R__sample_mvp_data.sql"))
+		new ResourceDatabasePopulator(new ClassPathResource("db/seed/local/R__sample_home_search_data.sql"))
 			.execute(dataSource);
 	}
 }

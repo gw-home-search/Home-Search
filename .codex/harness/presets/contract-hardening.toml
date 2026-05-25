@@ -1,5 +1,5 @@
 id = "contract-hardening"
-description = "V1 API contract hardening across backend and frontend map flows."
+description = "public API contract hardening across backend and frontend map flows."
 aliases = ["map-contract-hardening", "contract", "contract-hardening", "data-architecture-checkpoint"]
 slice_patterns = ["contract", "hardening", "data-architecture", "architecture-checkpoint"]
 

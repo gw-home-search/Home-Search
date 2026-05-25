@@ -1,4 +1,4 @@
-= Home Search V1 API
+= Home Search public API
 :doctype: book
 :icons: font
 :source-highlighter: coderay
@@ -9,7 +9,7 @@
 
 == Overview
 
-Home Search V1 exposes the minimum API surface needed to collect apartment
+Home Search exposes the minimum API surface needed to collect apartment
 trade data, store it safely, and display it on a map.
 
 == Map API
@@ -29,4 +29,4 @@ operation::map-invalid-request[snippets='http-request,http-response,response-fie
 [[error-code-list]]
 == Error Code List
 
-V1 error responses use Spring `ProblemDetail` style fields.
+Public API error responses use Spring `ProblemDetail` style fields.

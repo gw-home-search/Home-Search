@@ -1,13 +1,13 @@
 # Home Search Context
 
 
-This file gives agents the shortest shared vocabulary for Home Search V1. Canonical product, API, and data decisions remain in `docs/*.md`.
+This file gives agents the shortest shared vocabulary for Home Search. Canonical product, API, and data decisions remain in `docs/*.md`.
 
 ## Product Boundary
 
-**Home Search V1** is the migration target for collecting real-estate apartment trade data, storing it safely, and displaying it on a map.
+**Home Search** is the migration target for collecting real-estate apartment trade data, storing it safely, and displaying it on a map.
 
-**V2 work** includes rankings, favorites, alarms, mail batches, recommendations, insights, auth-dependent UX, and heavy analytics. V2 work must not enter the V1 critical path unless explicitly re-scoped.
+**later-scope work** includes rankings, favorites, alarms, mail batches, recommendations, insights, auth-dependent UX, and heavy analytics. later-scope work must not enter the current critical path unless explicitly re-scoped.
 
 ## Repositories
 
@@ -23,7 +23,7 @@ This file gives agents the shortest shared vocabulary for Home Search V1. Canoni
 
 **Canonical API contract** means `docs/API_CONTRACT.md`. Backend and frontend work must preserve it.
 
-**Map marker** is a region or complex marker rendered on the Kakao map from V1 map endpoints.
+**Map marker** is a region or complex marker rendered on the Kakao map from map endpoints.
 
 **Parcel** is the map/display location unit used by detail and trade APIs.
 

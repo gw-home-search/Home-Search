@@ -3,18 +3,18 @@ package com.home.application.read;
 import java.util.List;
 import java.util.Objects;
 
-import com.home.global.error.V1ResourceNotFoundException;
+import com.home.global.error.ResourceNotFoundException;
 import com.home.infrastructure.web.read.dto.ParcelDetailResponse;
 import com.home.infrastructure.web.read.dto.RegionDetailResponse;
 import com.home.infrastructure.web.read.dto.RegionSummaryResponse;
 import com.home.infrastructure.web.read.dto.SearchComplexResponse;
 import com.home.infrastructure.web.read.dto.TradeListResponse;
 
-public class MvpReadUseCase {
+public class PropertyReadUseCase {
 
-	private final MvpReadRepository repository;
+	private final PropertyReadRepository repository;
 
-	public MvpReadUseCase(MvpReadRepository repository) {
+	public PropertyReadUseCase(PropertyReadRepository repository) {
 		this.repository = Objects.requireNonNull(repository);
 	}
 
@@ -32,16 +32,16 @@ public class MvpReadUseCase {
 
 	public RegionDetailResponse getRegionDetail(Long regionId) {
 		return repository.findRegionDetail(regionId)
-			.orElseThrow(() -> new V1ResourceNotFoundException("region not found: " + regionId));
+			.orElseThrow(() -> new ResourceNotFoundException("region not found: " + regionId));
 	}
 
 	public ParcelDetailResponse getParcelDetail(Long parcelId) {
 		return repository.findParcelDetail(parcelId)
-			.orElseThrow(() -> new V1ResourceNotFoundException("parcel detail not found: " + parcelId));
+			.orElseThrow(() -> new ResourceNotFoundException("parcel detail not found: " + parcelId));
 	}
 
 	public TradeListResponse getTradeList(Long parcelId) {
 		return repository.findTradeList(parcelId)
-			.orElseThrow(() -> new V1ResourceNotFoundException("parcel trade parent not found: " + parcelId));
+			.orElseThrow(() -> new ResourceNotFoundException("parcel trade parent not found: " + parcelId));
 	}
 }

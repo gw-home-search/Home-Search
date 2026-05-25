@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Short launcher for the Home Search V1 slice harness."""
+"""Short launcher for the Home Search harness."""
 
 from __future__ import annotations
 
@@ -9,15 +9,15 @@ import sys
 import tomllib
 from pathlib import Path
 
-from v1_flow import DEFAULT_MAIN, describe_presets, payload_path_for, resolve_preset, slugify
+from home_flow import DEFAULT_MAIN, describe_presets, payload_path_for, resolve_preset, slugify
 
 
 HARNESS_ROOT = Path(__file__).resolve().parent
-FLOW = HARNESS_ROOT / "v1_flow.py"
-PLAN = HARNESS_ROOT / "v1_plan.py"
-REPORT = HARNESS_ROOT / "v1_report.py"
-BACKLOG_SYNC = HARNESS_ROOT / "backlog_sync.py"
-BACKLOG = HARNESS_ROOT / "slices" / "backlog.toml"
+FLOW = HARNESS_ROOT / "home_flow.py"
+PLAN = HARNESS_ROOT / "home_plan.py"
+REPORT = HARNESS_ROOT / "home_report.py"
+WORKLOG_SYNC = HARNESS_ROOT / "worklog_sync.py"
+WORKLOG = HARNESS_ROOT / "worklog.toml"
 PR_LINT = HARNESS_ROOT / "pr_lint.py"
 SKILL_ROUTING = HARNESS_ROOT / "skill_routing.py"
 DEFAULT_PLAN_ITERATIONS = 3
@@ -33,36 +33,36 @@ def printable(command: list[str]) -> str:
     return " ".join(command)
 
 
-def backlog_value_for(slice_name: str, key: str) -> str | None:
-    if not BACKLOG.exists():
+def worklog_value_for(work_id: str, key: str) -> str | None:
+    if not WORKLOG.exists():
         return None
-    with BACKLOG.open("rb") as handle:
+    with WORKLOG.open("rb") as handle:
         data = tomllib.load(handle)
-    requested = slugify(slice_name)
-    for item in data.get("slices", []):
+    requested = slugify(work_id)
+    for item in data.get("items", []):
         if slugify(str(item.get("id", ""))) == requested:
             value = str(item.get(key, "")).strip()
             return value or None
     return None
 
 
-def backlog_target_for(slice_name: str) -> str | None:
-    return backlog_value_for(slice_name, "targets")
+def worklog_target_for(work_id: str) -> str | None:
+    return worklog_value_for(work_id, "targets")
 
 
-def backlog_preset_for(slice_name: str) -> str | None:
-    return backlog_value_for(slice_name, "preset")
+def worklog_preset_for(work_id: str) -> str | None:
+    return worklog_value_for(work_id, "preset")
 
 
 def flow_command(args: argparse.Namespace, *, dry_run: bool) -> list[str]:
-    preset_id, _ = resolve_preset(args.slice, args.preset or backlog_preset_for(args.slice))
-    targets = args.targets or backlog_target_for(args.slice) or "both"
+    preset_id, _ = resolve_preset(args.work_id, args.preset or worklog_preset_for(args.work_id))
+    targets = args.targets or worklog_target_for(args.work_id) or "both"
     command = [
         sys.executable,
         str(FLOW),
         "run",
-        "--slice",
-        args.slice,
+        "--work-id",
+        args.work_id,
         "--preset",
         preset_id,
         "--targets",
@@ -103,7 +103,7 @@ def flow_command(args: argparse.Namespace, *, dry_run: bool) -> list[str]:
 def plan_command(args: argparse.Namespace, command_name: str) -> list[str]:
     command = [sys.executable, str(PLAN), command_name]
     if command_name == "plan":
-        command.append(args.slice)
+        command.append(args.work_id)
     if getattr(args, "limit", None) is not None:
         command.extend(["--limit", str(args.limit)])
     if args.json:
@@ -180,7 +180,7 @@ def preflight_plan_command(args: argparse.Namespace, intent: str) -> list[str]:
         sys.executable,
         str(PLAN),
         "plan",
-        args.slice,
+        args.work_id,
         "--intent",
         intent,
         "--plan-iterations",
@@ -361,7 +361,7 @@ def run_execution_preflight(args: argparse.Namespace, *, dry_run: bool) -> int:
 
 
 def run_report(args: argparse.Namespace) -> int:
-    payload = payload_path_for(args.slice)
+    payload = payload_path_for(args.work_id)
     if not payload.exists():
         return fail(f"실행 payload 없음: {payload}", 2)
     command = [
@@ -388,12 +388,12 @@ def run_report(args: argparse.Namespace) -> int:
     return result.returncode
 
 
-def run_sync_backlog(args: argparse.Namespace) -> int:
+def run_sync_worklog(args: argparse.Namespace) -> int:
     command = [
         sys.executable,
-        str(BACKLOG_SYNC),
-        "--backlog",
-        str(BACKLOG),
+        str(WORKLOG_SYNC),
+        "--worklog",
+        str(WORKLOG),
         "--base",
         args.base,
         "--limit",
@@ -401,13 +401,13 @@ def run_sync_backlog(args: argparse.Namespace) -> int:
     ]
     if args.merged:
         command.append("--merged")
-    if args.slice:
-        command.extend(["--slice", args.slice])
+    if args.work_id:
+        command.extend(["--work-id", args.work_id])
     if args.repo:
         command.extend(["--repo", args.repo])
     if args.dry_run:
         command.append("--dry-run")
-    print("상태: sync-backlog", flush=True)
+    print("상태: sync-worklog", flush=True)
     print(f"command: {printable(command)}", flush=True)
     try:
         result = subprocess.run(command, cwd=DEFAULT_MAIN, check=False)
@@ -419,7 +419,7 @@ def run_sync_backlog(args: argparse.Namespace) -> int:
 def run_self_test() -> int:
     try:
         args = argparse.Namespace(
-            slice="map-contract-hardening",
+            work_id="map-contract-hardening",
             preset=None,
             notion=False,
             slack=False,
@@ -439,7 +439,7 @@ def run_self_test() -> int:
         command = flow_command(args, dry_run=True)
         preflight = preflight_plan_command(args, "pr")
     except Exception as exc:
-        print(f"self-test failed: v1 launcher: {exc}", file=sys.stderr)
+        print(f"self-test failed: home launcher: {exc}", file=sys.stderr)
         return 1
     checks = [
         str(FLOW) in command,
@@ -455,22 +455,22 @@ def run_self_test() -> int:
         "--planning-mode" in preflight,
         preflight[preflight.index("--planning-mode") + 1] == "llm-replan",
         "llm-replan" in VALID_PLANNING_MODES,
-        BACKLOG_SYNC.name == "backlog_sync.py",
+        WORKLOG_SYNC.name == "worklog_sync.py",
         planning_mode_for(argparse.Namespace(planning_mode=None), "run") == "standard",
         planning_mode_for(argparse.Namespace(planning_mode=None), "pr") == "llm-replan",
-        dirty_group(".codex/harness/v1", " M .codex/harness/v1") == "harness",
+        dirty_group(".codex/harness/home", " M .codex/harness/home") == "harness",
         dirty_group("apps/web/src/App.tsx", " M apps/web/src/App.tsx") == "apps",
     ]
     if all(checks):
-        print("self-test passed: v1 launcher")
+        print("self-test passed: home launcher")
         return 0
-    print("self-test failed: v1 launcher", file=sys.stderr)
+    print("self-test failed: home launcher", file=sys.stderr)
     return 1
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Short Home Search V1 harness launcher.",
+        description="Short Home Search harness launcher.",
         epilog=f"available presets: {describe_presets()}",
     )
     parser.add_argument("--self-test", action="store_true")
@@ -490,8 +490,8 @@ def build_parser() -> argparse.ArgumentParser:
         plan_parser.add_argument("--skip-llm-replan", action="store_true")
 
     def add_common(run_parser: argparse.ArgumentParser) -> None:
-        run_parser.add_argument("slice")
-        run_parser.add_argument("--preset", help="Preset id or alias. Defaults to slice-based resolution.")
+        run_parser.add_argument("work_id")
+        run_parser.add_argument("--preset", help="Preset id or alias. Defaults to work-id based resolution.")
         run_parser.add_argument("--targets", choices=["backend", "both", "frontend", "planning-only"])
         run_parser.add_argument("--notion", action="store_true", help="Best-effort Notion report.")
         run_parser.add_argument("--slack", action="store_true", help="Best-effort Slack report.")
@@ -499,12 +499,12 @@ def build_parser() -> argparse.ArgumentParser:
         run_parser.add_argument("--planning-mode", choices=sorted(VALID_PLANNING_MODES))
         run_parser.add_argument("--codex-bin", default="codex")
 
-    next_parser = subparsers.add_parser("next", help="Recommend the next V1 slice from backlog and reports.")
+    next_parser = subparsers.add_parser("next", help="Recommend the next work item from worklog and reports.")
     add_planning(next_parser)
     next_parser.add_argument("--limit", type=int, default=3)
 
-    plan = subparsers.add_parser("plan", help="Render a pre-run slice plan from backlog.")
-    plan.add_argument("slice")
+    plan = subparsers.add_parser("plan", help="Render a pre-run work plan from worklog.")
+    plan.add_argument("work_id")
     add_planning(plan)
 
     dry = subparsers.add_parser("dry", help="Show and dry-run the expanded workflow.")
@@ -532,15 +532,15 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--dry-run", action="store_true", help="Run the expanded workflow in dry-run mode after plan preflight.")
     run.add_argument("--skip-preflight", action="store_true", help="Skip plan/dry/lint preflight; debugging only.")
 
-    report = subparsers.add_parser("report", help="Re-render the last stored report payload for a slice.")
-    report.add_argument("slice")
+    report = subparsers.add_parser("report", help="Re-render the last stored report payload for a work item.")
+    report.add_argument("work_id")
     report.add_argument("--notion", action="store_true", help="Best-effort Notion report.")
     report.add_argument("--slack", action="store_true", help="Best-effort Slack report.")
     report.add_argument("--dry-run", action="store_true")
 
-    sync = subparsers.add_parser("sync-backlog", help="Synchronize backlog status from merged PRs.")
+    sync = subparsers.add_parser("sync-worklog", help="Synchronize worklog status from merged PRs.")
     sync.add_argument("--merged", action="store_true", help="Use merged GitHub PRs as the sync source.")
-    sync.add_argument("--slice", help="Limit sync to one slice id.")
+    sync.add_argument("--work-id", help="Limit sync to one work id.")
     sync.add_argument("--base", default="main", help="Expected PR base branch.")
     sync.add_argument("--repo", help="Optional gh --repo value.")
     sync.add_argument("--limit", type=int, default=200)
@@ -570,8 +570,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_flow(args, dry_run=dry_run)
     if args.command == "report":
         return run_report(args)
-    if args.command == "sync-backlog":
-        return run_sync_backlog(args)
+    if args.command == "sync-worklog":
+        return run_sync_worklog(args)
     parser.print_help()
     return 0
 

@@ -1,6 +1,6 @@
 # 프론트엔드 작업 노트
 
-이 문서는 `apps/web`에 Vite React/Kakao map V1 frontend를 만들거나 수정할 때 참고하는 개인 노트다.
+이 문서는 `apps/web`에 Vite React/Kakao map project frontend를 만들거나 수정할 때 참고하는 개인 노트다.
 
 ## 읽기 순서
 
@@ -11,7 +11,7 @@
 5. 관련 target frontend 파일
 6. 필요한 경우 source frontend read-only reference
 
-## V1 Guardrails
+## Project Guardrails
 
 - `/api/v1/map/regions`와 `/api/v1/map/complexes` 호출 호환성을 유지한다.
 - search, region, detail, trade API compatibility를 유지한다.

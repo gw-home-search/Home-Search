@@ -28,7 +28,7 @@ import org.testcontainers.utility.DockerImageName;
 @AutoConfigureMockMvc
 @ActiveProfiles("runtime-smoke")
 @Testcontainers
-class MvpRuntimeSmokeTest {
+class BaselineRuntimeSmokeTest {
 
 	@Container
 	private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
@@ -54,7 +54,7 @@ class MvpRuntimeSmokeTest {
 
 	@Test
 	@DisplayName("local runtime seed는 marker/detail/trade/duplicate/failed-match smoke를 지원한다")
-	void localRuntimeSeedSupportsMvpE2eBackendSmoke() throws Exception {
+	void localRuntimeSeedSupportsBaselineBackendSmoke() throws Exception {
 		mockMvc.perform(post("/api/v1/map/complexes")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""

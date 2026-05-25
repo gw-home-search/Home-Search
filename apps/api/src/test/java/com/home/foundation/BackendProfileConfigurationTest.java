@@ -40,7 +40,7 @@ class BackendProfileConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("local profile은 PostgreSQL과 V1 Flyway/local seed migration을 environment placeholder로 연결한다")
+	@DisplayName("local profile은 PostgreSQL과 Flyway/local seed migration을 environment placeholder로 연결한다")
 	void localProfileWiresPostgresAndFlywayMigrationLocation() throws IOException {
 		Properties properties = load("application-local.yml");
 

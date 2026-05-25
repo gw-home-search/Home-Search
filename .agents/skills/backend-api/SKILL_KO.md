@@ -1,11 +1,26 @@
+# Backend API Skill KO
+
+> KO 생성 기준: canonical source only
+> Source: `.agents/skills/backend-api/SKILL.md`
+> Generated: 2026-05-25
+> 기존 KO 본문은 읽지 않고 canonical source만 기준으로 재생성했습니다.
+
+## 동기화 기준
+
+이 문서는 `.agents/skills/backend-api/SKILL.md`의 현재 canonical 내용을 기준으로 한 한국어 동기화본입니다.
+명령, 경로, API URL, JSON key, status 값, class/function 이름은 정밀성을 위해 원문 표기를 유지합니다.
+
+## Canonical 내용
+
 ---
 name: backend-api
-description: Home Search apps/api Spring Boot, Flyway, ingest, V1 API 작업을 안내한다.
+description: Guide Home Search apps/api Spring Boot, Flyway, ingest, and public API work.
 ---
+
 
 # Backend API Skill
 
-`apps/api` backend planning, implementation, review, debugging에 이 skill을 사용한다.
+Use this skill for `apps/api` backend planning, implementation, review, or debugging.
 
 ## Required Inputs
 
@@ -20,37 +35,37 @@ description: Home Search apps/api Spring Boot, Flyway, ingest, V1 API 작업을 
 
 ## Writable Scope
 
-사용자가 더 넓은 범위를 명시 승인하지 않는 한 `apps/api/**`만 수정한다.
+Only `apps/api/**`, unless the user explicitly approves a broader scope.
 
 ## Backend Guardrails
 
-- V1 API URLs와 response shapes를 보존한다.
-- normalized trades보다 raw ingest records를 먼저 저장한다.
-- Duplicate ingest가 duplicate normalized trades를 만들면 안 된다.
-- Failed matches는 explainable하고 queryable해야 한다.
-- `complex_id`를 operational trade relation으로 사용한다.
-- audit, matching, dedupe를 위해 `complex_pk`, `apt_seq`, `source`, `source_key`를 보존한다.
-- rankings, favorites, alarms, mail, recommendations, auth-dependent UX, heavy analytics를 V1 map/trade work 밖에 둔다.
+- Preserve public API URLs and response shapes.
+- Save raw ingest records before normalized trades.
+- Duplicate ingest must not create duplicate normalized trades.
+- Failed matches must be explainable and queryable.
+- Use `complex_id` as the operational trade relation.
+- Preserve `complex_pk`, `apt_seq`, `source`, and `source_key` for audit, matching, and dedupe.
+- Keep rankings, favorites, alarms, mail, recommendations, auth-dependent UX, and heavy analytics out of map/trade work.
 
 ## Testing
 
-public seams를 우선한다:
+Prefer public seams:
 
-- API contract behavior를 위한 Controller와 DTO tests.
-- ingest ordering과 status transitions를 위한 Application service tests.
-- uniqueness, partitioning, latest lookup, failed match queryability를 위한 Repository/Flyway tests.
-- parsing과 source-key normalization을 위한 External API adapter tests.
+- Controller and DTO tests for API contract behavior.
+- Application service tests for ingest ordering and status transitions.
+- Repository/Flyway tests for uniqueness, partitioning, latest lookup, and failed match queryability.
+- External API adapter tests for parsing and source-key normalization.
 
 ## Verification
 
-`apps/api`가 있으면 먼저 사용 가능한 Gradle tasks를 확인한다. 가장 좁은 관련 test를 실행한 뒤, 있으면 `./gradlew test` 또는 `./gradlew verify`를 실행한다.
+When `apps/api` exists, inspect available Gradle tasks first. Run the narrowest relevant test, then `./gradlew test` or `./gradlew verify` if present.
 
 ## Stop Conditions
 
-다음 전에 중단한다:
+Stop before:
 
 - Public API breaking change.
 - Data-loss migration.
-- `complex_id` 또는 `complex_pk` reinterpretation.
-- map endpoints에 V2 dependencies 추가.
-- secrets 또는 local env values 도입.
+- `complex_id` or `complex_pk` reinterpretation.
+- Adding later-scope dependencies to map endpoints.
+- Introducing secrets or local env values.

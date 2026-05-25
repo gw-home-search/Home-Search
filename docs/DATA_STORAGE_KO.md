@@ -1,8 +1,21 @@
+<!-- AUTO-GENERATED: canonical source only. Do not edit manually. -->
+
+# KO Sync
+
+- KO 생성 기준: canonical source only
+- 원문: `docs/DATA_STORAGE.md`
+- 동기화일: 2026-05-25
+
+아래 내용은 canonical source에서 재생성한 동기화본입니다. 명령, 경로, API, 필드명 같은 기술 토큰은 원문을 유지합니다.
+
 # Data Storage Strategy
+
 
 ## Goal
 
-failed processing을 explain하고 repeat할 수 있을 정도로 real-estate trade data를 안전하게 저장한다. V1은 aggregate analytics보다 correctness, traceability, map display를 우선한다.
+Store real-estate trade data safely enough that failed processing can be
+explained and repeated. Home Search prioritizes correctness, traceability, and map
+display over aggregate analytics.
 
 Fixed paths:
 
@@ -11,7 +24,7 @@ Fixed paths:
 
 ## Source Findings
 
-현재 trade collection code:
+Current trade collection code:
 
 - `ApisClient.getAptTrade(...)`
 - `TradeDailyCollectService`
@@ -20,18 +33,20 @@ Fixed paths:
 - `ComplexResolveService`
 - `TradeBulkWriter`
 
-현재 persistence mismatch:
+Current persistence mismatch:
 
-- `domain/trade/Trade.java`는 `trade.complex_id`를 mapping한다.
-- `DetailUseCase.findAllTradeByParcelId(...)`는 complex IDs로 query한다.
-- `TradeBulkWriter`는 `complex_pk`, `apt_seq`, `source`, `source_key`를 insert한다.
-- Batch migration `V12__create_trade_partitioned_table.sql`은 `complex_pk`를 중심으로 partitioned `trade` table을 만든다.
+- `domain/trade/Trade.java` maps `trade.complex_id`.
+- `DetailUseCase.findAllTradeByParcelId(...)` queries by complex IDs.
+- `TradeBulkWriter` inserts `complex_pk`, `apt_seq`, `source`, `source_key`.
+- Batch migration `V12__create_trade_partitioned_table.sql` creates a
+  partitioned `trade` table around `complex_pk`.
 
-V1은 `complex_id`를 operational relation으로 사용하고 source identifiers를 audit와 deduplication을 위해 유지함으로써 이를 해결한다.
+Home Search resolves this by using `complex_id` as the operational relation and keeping
+source identifiers for audit and deduplication.
 
-## V1 Storage Model
+## Project Storage Model
 
-두 layers를 사용한다:
+Use two layers:
 
 1. Raw ingest records.
 2. Normalized operational trades.
@@ -40,10 +55,10 @@ V1은 `complex_id`를 operational relation으로 사용하고 source identifiers
 
 Purpose:
 
-- external API source data를 보존한다.
-- code changes 후 replay를 지원한다.
-- failed parsing 또는 failed complex matching을 설명한다.
-- external fields가 이상하지만 복구 가능한 경우 data loss를 피한다.
+- Preserve external API source data.
+- Support replay after code changes.
+- Explain failed parsing or failed complex matching.
+- Avoid losing data when external fields are odd but recoverable.
 
 Minimum raw record fields:
 
@@ -73,9 +88,9 @@ Recommended statuses:
 
 Purpose:
 
-- map marker와 detail APIs를 제공한다.
-- 실제 trade event마다 하나의 clean row를 유지한다.
-- row를 debug할 수 있는 source metadata를 충분히 유지한다.
+- Serve map marker and detail APIs.
+- Maintain one clean row per real trade event.
+- Keep enough source metadata to debug the row.
 
 Minimum normalized fields:
 
@@ -99,17 +114,20 @@ Minimum normalized fields:
 
 Primary dedupe rule:
 
-- `source + source_key`로 unique.
+- Unique by `source + source_key`.
 
 Fallback dedupe rule:
 
-- `complex_id + deal_date + floor + excl_area + deal_amount`로 unique.
+- Unique by `complex_id + deal_date + floor + excl_area + deal_amount`.
 
-historical RTMS data가 항상 완벽하게 stable한 source key를 제공하지 않을 수 있어 fallback이 존재한다. 이는 main identity가 아니라 safety net으로 취급해야 한다.
+The fallback exists because historical RTMS data may not always provide a
+perfect stable source key. It should be treated as a safety net, not the main
+identity.
 
 ## Source Key
 
-source fields에서 deterministic하게 `source_key`를 생성한다. RTMS apartment trades의 경우 trade event를 최대한 식별하는 모든 fields를 포함한다:
+Generate `source_key` deterministically from source fields. For RTMS apartment
+trades, include all fields that identify a trade event as closely as possible:
 
 - `source`
 - `aptSeq`
@@ -124,49 +142,50 @@ source fields에서 deterministic하게 `source_key`를 생성한다. RTMS apart
 - `aptDong`
 - `jibun`
 
-hashing 또는 joining 전에 whitespace와 comma-formatted amounts를 normalize한다.
+Normalize whitespace and comma-formatted amounts before hashing or joining.
 
 ## Complex Matching
 
-source code의 현재 matching order:
+Current matching order in source code:
 
 1. `aptSeq -> complex.complex_pk`
 2. PNU exact single match.
 3. PNU plus apartment name score.
 4. Name plus `umdCd` fallback in `TradeInitTasklet`.
 
-V1은 matching intent를 보존하되 match outcomes를 기록해야 한다:
+Home Search should preserve the matching intent but record match outcomes:
 
 - Match path.
 - Matched `complex_id`.
 - Matched `complex_pk`.
 - Failure reason if no match.
 
-raw record 또는 failed-match record 없이 trade가 사라지면 안 된다.
+No trade should disappear without a raw record or a failed-match record.
 
 ## Partitioning
 
-`deal_date` 기준 trade partitioning을 유지한다.
+Keep trade partitioning by `deal_date`.
 
 Required behavior:
 
-- supported historical years를 위한 yearly partitions.
-- unexpected dates를 위한 `trade_default` partition.
-- complex별 latest trade lookup을 위한 index.
-- map/detail query paths를 위한 index.
+- Yearly partitions for supported historical years.
+- `trade_default` partition for unexpected dates.
+- Index for latest trade lookup by complex.
+- Index for map/detail query paths.
 
-정확한 partition year range는 migration 중 안전하게 생성되거나 확장되어야 한다. 마지막 year 이후 조용히 실패하는 range를 hard-code하지 않는다.
+The exact partition year range should be generated or extended safely during
+migration. Do not hard-code a range that fails silently after the last year.
 
 ## Map Display Query Boundary
 
-V1 map display에는 다음만 필요하다:
+map display only needs:
 
 - Parcel position.
 - Parcel geometry bounds filter.
 - Complex unit count.
-- parcel 또는 complex의 latest available trade amount.
+- Latest available trade amount for the parcel or complex.
 
-다음 때문에 V1을 막지 않는다:
+Do not block project on:
 
 - Regional trend calculations.
 - 30-day top price.
@@ -175,8 +194,8 @@ V1 map display에는 다음만 필요하다:
 
 ## Acceptance Criteria
 
-- Raw rows가 normalized insert보다 먼저 생성된다.
-- Duplicate collection이 duplicate normalized trades를 만들지 않는다.
-- Failed matches가 queryable하다.
-- Normalized trades를 `complex_id`로 complex 및 parcel에 join할 수 있다.
-- Map marker APIs가 ranking 또는 trend tables 없이 동작한다.
+- Raw rows are created before normalized insert.
+- Duplicate collection does not create duplicate normalized trades.
+- Failed matches are queryable.
+- Normalized trades can be joined to complex and parcel by `complex_id`.
+- Map marker APIs work without ranking or trend tables.

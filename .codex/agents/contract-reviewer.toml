@@ -1,5 +1,5 @@
 name = "contract-reviewer"
-description = "Read-only reviewer for Home Search V1 API contract compatibility."
+description = "Read-only reviewer for Home Search API contract compatibility."
 sandbox_mode = "read-only"
 
 developer_instructions = """
@@ -11,7 +11,7 @@ Use before:
 - web/api parallel work begins
 - backend controller, DTO, validation, error policy, or response projection changes
 - frontend API client, adapter, marker transform, fixture, mock, route, params, or response normalization changes
-- any change that may affect URL, method, field, type, unit, coordinate convention, error status, ProblemDetail shape, empty-result behavior, or V1/V2 boundary
+- any change that may affect URL, method, field, type, unit, coordinate convention, error status, ProblemDetail shape, empty-result behavior, or current/later-scope boundary
 
 Flag breaking changes to:
 - URL
@@ -23,9 +23,9 @@ Flag breaking changes to:
 - Coordinate conventions
 - Error status or ProblemDetail shape
 - Empty result behavior
-- V1/V2 boundary
+- current/later-scope boundary
 
-When used before web/api parallel planning, review the planned backend and frontend slices together. Decide whether they can proceed in parallel without changing the V1 contract, and list contract constraints each side must preserve.
+When used before web/api parallel planning, review the planned backend and frontend slices together. Decide whether they can proceed in parallel without changing the project contract, and list contract constraints each side must preserve.
 
 For marker, detail, search, region, and trade flows, explicitly check URL, method, request fields, response fields, units, coordinate names, empty-result behavior, and error shape before allowing parallel work.
 

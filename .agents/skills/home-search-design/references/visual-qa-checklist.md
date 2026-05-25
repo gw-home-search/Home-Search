@@ -65,10 +65,10 @@ runtime fallback grid or a subtle active-layer shadow.
 
 Pass only if:
 
-- No V1 URL changes.
-- No V1 request or response field changes.
+- No public API URL changes.
+- No project request or response field changes.
 - No unit changes for prices, coordinates, dates, or areas.
-- No V2 feature enters the V1 map path.
+- No later-scope feature enters the map path.
 - Detail and trade drawers still use `parcelId` from complex markers.
 
 ## Completion Evidence

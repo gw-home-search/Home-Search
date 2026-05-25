@@ -8,7 +8,7 @@ describe('fetchComplexSearchResults API 어댑터', () => {
     vi.unstubAllGlobals();
   });
 
-  it('q query parameter로 documented V1 complex search result를 가져온다', async () => {
+  it('q query parameter로 documented complex search result를 가져온다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse([
         {
@@ -48,15 +48,15 @@ describe('fetchComplexSearchResults API 어댑터', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('invalid V1 search response shape를 reject한다', async () => {
+  it('invalid search response shape를 reject한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ results: [] })));
 
     await expect(fetchComplexSearchResults('Sample')).rejects.toThrow(
-      'Invalid V1 complex search response: expected an array',
+      'Invalid public API complex search response: expected an array',
     );
   });
 
-  it('search 실패 시 V1 ProblemDetail detail을 보존한다', async () => {
+  it('search 실패 시 public API ProblemDetail detail을 보존한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(

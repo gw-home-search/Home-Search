@@ -43,7 +43,7 @@ export async function fetchComplexSearchResults(query: string): Promise<ComplexS
 
   const payload: unknown = await response.json();
   if (!Array.isArray(payload)) {
-    throw new Error('Invalid V1 complex search response: expected an array');
+    throw new Error('Invalid public API complex search response: expected an array');
   }
 
   return payload.map((item) => normalizeComplexSearchResult(item as ComplexSearchResultResponse));
@@ -62,12 +62,12 @@ function normalizeComplexSearchResult(result: ComplexSearchResultResponse): Comp
 
 function toRequiredNumber(value: unknown, field: string): number {
   if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
-    throw new Error(`Invalid V1 complex search response: ${field} must be a number`);
+    throw new Error(`Invalid public API complex search response: ${field} must be a number`);
   }
 
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid V1 complex search response: ${field} must be a number`);
+    throw new Error(`Invalid public API complex search response: ${field} must be a number`);
   }
 
   return parsed;
@@ -75,7 +75,7 @@ function toRequiredNumber(value: unknown, field: string): number {
 
 function toRequiredString(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`Invalid V1 complex search response: ${field} must be a non-empty string`);
+    throw new Error(`Invalid public API complex search response: ${field} must be a non-empty string`);
   }
 
   return value;

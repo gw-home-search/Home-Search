@@ -1,9 +1,9 @@
-# V1 Migration Plan
+# Project Migration Plan
 
 
 ## Summary
 
-V1 migrates the minimum safe product: collect apartment trade data, preserve the
+Home Search migrates the minimum safe product: collect apartment trade data, preserve the
 source data, normalize it into operational tables, and show it on the map.
 
 Fixed locations:
@@ -21,7 +21,7 @@ are the migration contract for future backend and frontend work.
 
 Done when:
 
-- The V1 included and excluded scope is explicit.
+- The project included and excluded scope is explicit.
 - Source and target paths are documented.
 - The API surface to preserve is documented.
 - The trade storage model is decided.
@@ -56,12 +56,12 @@ Source references:
 
 Target behavior:
 
-- Keep `region`, `parcel`, `complex`, and `trade` as V1 core tables.
+- Keep `region`, `parcel`, `complex`, and `trade` as project core tables.
 - Keep PostGIS for parcel bounds lookup.
 - Add or formalize raw trade preservation before normalized trade insert.
 - Resolve the source mismatch between `complex_id` and `complex_pk`.
 
-V1 excludes:
+Home Search excludes:
 
 - `trade_top_price_30d`
 - `trade_top_volume_30d`
@@ -71,7 +71,7 @@ V1 excludes:
 
 Done when:
 
-- A fresh database can run V1 migrations.
+- A fresh database can run project baselines.
 - A seed set of region, parcel, complex, and trade rows supports map APIs.
 - Duplicate ingest is prevented.
 - Failed matches are inspectable.
@@ -86,14 +86,14 @@ Migrate in this order:
 
 1. Build/runtime baseline: Gradle, Spring Boot app entrypoint, profiles.
 2. Domain baseline: `region`, `parcel`, `complex`, `trade`.
-3. DB baseline: Flyway V1 schema and PostGIS setup.
+3. DB baseline: Flyway project schema and PostGIS setup.
 4. Public data client: RTMS apartment trade collection.
 5. Ingest service: raw save, resolve complex, normalized trade insert.
 6. API controllers: map, region, search, detail, trade.
 7. Error handling and validation.
-8. V1 tests.
+8. Project tests.
 
-Do not migrate V2 features into the critical path. Keep rankings, favorites,
+Do not migrate later-scope features into the critical path. Keep rankings, favorites,
 OAuth-dependent user flows, and mail alarms separate.
 
 ## Phase 4 - Frontend Migration
@@ -112,7 +112,7 @@ Migrate in this order:
 6. Detail and trade side panel.
 7. UI/UX redesign around full-map exploration.
 
-The frontend must continue to call the V1 API URLs documented in
+The frontend must continue to call the public API URLs documented in
 `API_CONTRACT.md`.
 
 ## Phase 5 - Integration
@@ -133,9 +133,9 @@ Done when:
 - Duplicate ingest does not create duplicate rows.
 - Raw data can be used to explain or replay an ingest.
 
-## V2 Backlog
+## Later-Scope Worklog
 
-Keep these out of V1 implementation unless explicitly re-scoped:
+Keep these out of project implementation unless explicitly re-scoped:
 
 - Rankings and top lists.
 - Trade trend calculations.

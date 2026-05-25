@@ -24,7 +24,7 @@ Only `apps/web/**`, unless the user explicitly approves a broader scope.
 
 ## Frontend Guardrails
 
-- Preserve V1 API calls for map, search, region, detail, and trade flows.
+- Preserve public API calls for map, search, region, detail, and trade flows.
 - Keep API normalization inside adapters.
 - Use canonical marker fields: `parcelId`, `lat`, `lng`, `latestDealAmount`, `unitCntSum`.
 - During migration, accept `id`, `latitude`, and `longitude` variants only in adapter code.
@@ -50,7 +50,7 @@ When `apps/web/package.json` exists, inspect scripts and run existing commands o
 
 Stop before:
 
-- Changing a V1 URL, field name, type, or unit.
+- Changing a public API URL, field name, type, or unit.
 - Requiring backend response changes for UI-only work.
 - Adding tracking, analytics, secrets, or unrelated external scripts.
-- Expanding into V2 ranking, favorite, alarm, mail, recommendation, or auth flows.
+- Expanding into later-scope ranking, favorite, alarm, mail, recommendation, or auth flows.

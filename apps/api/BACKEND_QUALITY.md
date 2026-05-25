@@ -11,7 +11,7 @@ Run the single backend gate:
 cd apps/api && ./gradlew backendQualityCheck
 ```
 
-The gate runs profile boundary tests, V1 API contract tests, PostGIS/Flyway
+The gate runs profile boundary tests, public API contract tests, PostGIS/Flyway
 persistence tests, REST Docs/OpenAPI generation, JaCoCo coverage verification,
 and Javadoc.
 
@@ -34,7 +34,7 @@ generated from those snippets at:
 apps/api/build/api-spec/openapi3.yaml
 ```
 
-The YAML must include the current V1 map paths and canonical public fields. It
+The YAML must include the current map paths and canonical public fields. It
 must not expose audit or dedupe fields such as `complexPk`, `aptSeq`,
 `sourceKey`, or their snake_case variants.
 

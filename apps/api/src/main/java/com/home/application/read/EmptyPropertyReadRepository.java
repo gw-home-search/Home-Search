@@ -9,7 +9,7 @@ import com.home.infrastructure.web.read.dto.RegionSummaryResponse;
 import com.home.infrastructure.web.read.dto.SearchComplexResponse;
 import com.home.infrastructure.web.read.dto.TradeListResponse;
 
-public class EmptyMvpReadRepository implements MvpReadRepository {
+public class EmptyPropertyReadRepository implements PropertyReadRepository {
 
 	@Override
 	public List<SearchComplexResponse> searchComplexes(String query) {

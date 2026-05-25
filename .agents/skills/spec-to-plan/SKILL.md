@@ -1,6 +1,6 @@
 ---
 name: spec-to-plan
-description: Convert Home Search goals into decision-complete V1 implementation plans before web/api work starts.
+description: Convert Home Search goals into decision-complete project implementation plans before web/api work starts.
 ---
 
 
@@ -10,9 +10,9 @@ Use this skill when a Home Search request is goal-level, cross-app, ambiguous, o
 
 ## Purpose
 
-Turn user intent into an implementation-ready plan that preserves the V1 API contract, data invariants, and app ownership boundaries.
+Turn user intent into an implementation-ready plan that preserves the public API contract, data invariants, and app ownership boundaries.
 
-This is the Home Search rewrite of spec-driven development, writing-plans, and PRD/task-breakdown patterns. Do not copy external templates; keep the output specific to Home Search V1.
+This is the Home Search rewrite of spec-driven development, writing-plans, and PRD/task-breakdown patterns. Do not copy external templates; keep the output specific to Home Search.
 
 ## Required Inputs
 
@@ -45,9 +45,9 @@ Every plan must state:
 
 Stop and ask before planning implementation that requires:
 
-- Public V1 URL, method, field, type, or unit changes.
+- Public API URL, method, field, type, or unit changes.
 - Data migration that loses or reinterprets existing data.
-- V2 work in the V1 critical path.
+- later-scope work in the current critical path.
 - Cross-app changes without an API contract checkpoint.
 
 ## Output Rules

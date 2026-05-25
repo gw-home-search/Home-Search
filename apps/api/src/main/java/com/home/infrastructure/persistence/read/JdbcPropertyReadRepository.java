@@ -9,7 +9,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
-import com.home.application.read.MvpReadRepository;
+import com.home.application.read.PropertyReadRepository;
 import com.home.infrastructure.web.read.dto.ParcelDetailResponse;
 import com.home.infrastructure.web.read.dto.RegionDetailResponse;
 import com.home.infrastructure.web.read.dto.RegionSummaryResponse;
@@ -19,11 +19,11 @@ import com.home.infrastructure.web.read.dto.TradeResponse;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
-public class JdbcMvpReadRepository implements MvpReadRepository {
+public class JdbcPropertyReadRepository implements PropertyReadRepository {
 
 	private final JdbcClient jdbcClient;
 
-	public JdbcMvpReadRepository(JdbcClient jdbcClient) {
+	public JdbcPropertyReadRepository(JdbcClient jdbcClient) {
 		this.jdbcClient = Objects.requireNonNull(jdbcClient);
 	}
 

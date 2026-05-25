@@ -32,7 +32,7 @@ public class MicrometerTradeIngestMetrics implements TradeIngestMetrics {
 
 	private Counter counter(String source, String result) {
 		return Counter.builder(METRIC_NAME)
-			.description("V1 RTMS ingest item counts")
+			.description("RTMS ingest item counts")
 			.tag("source", source)
 			.tag("result", result)
 			.register(meterRegistry);

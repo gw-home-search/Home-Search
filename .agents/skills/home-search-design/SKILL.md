@@ -1,6 +1,6 @@
 ---
 name: home-search-design
-description: Guide Home Search apps/web map-first UI/UX design, Figma-to-code translation, visual QA, marker/filter/detail drawer layout, V1 API-compatible frontend design decisions, and removal of generic AI-like gradient or card-heavy UI.
+description: Guide Home Search apps/web map-first UI/UX design, Figma-to-code translation, visual QA, marker/filter/detail drawer layout, public API-compatible frontend design decisions, and removal of generic AI-like gradient or card-heavy UI.
 ---
 
 # Home Search Design Skill
@@ -9,7 +9,7 @@ Use this skill for Home Search `apps/web` design planning, Figma-to-code
 translation, visual QA, map-first layout decisions, and AI-like UI cleanup.
 
 This skill defines design direction only. It does not replace `frontend-web`
-for React implementation, `api-contract` for V1 compatibility, `tdd` for
+for React implementation, `api-contract` for project compatibility, `tdd` for
 behavior tests, or `code-review` for final findings.
 
 ## Required Inputs
@@ -32,10 +32,10 @@ behavior tests, or `code-review` for final findings.
 
 ## Design Role
 
-Act as the V1 map workflow owner, not a generic visual decorator.
+Act as the map workflow owner, not a generic visual decorator.
 
 - Keep the Kakao map as the primary surface.
-- Preserve V1 API URLs, fields, units, and error behavior.
+- Preserve public API URLs, fields, units, and error behavior.
 - Design for repeated operational use: compact, readable, predictable.
 - Prefer restrained surfaces, borders, and dense data display over decoration.
 - Keep detail and trade flows visible without hiding the current map context.
@@ -47,7 +47,7 @@ Act as the V1 map workflow owner, not a generic visual decorator.
    cleanup, mobile adaptation, or implementation handoff.
 3. Identify the affected UI unit: app bar, map surface, marker layer, filter
    controls, exploration panel, detail drawer, trade list, or mobile sheet.
-4. Map every visible data need to a documented V1 endpoint and field.
+4. Map every visible data need to a documented Home Search endpoint and field.
 5. Apply the visual doctrine in `references/map-ux-principles.md`.
 6. If Figma is involved, follow `references/figma-workflow.md`.
 7. Before claiming completion, use `references/visual-qa-checklist.md`.
@@ -83,11 +83,11 @@ state, or subtle depth that separates an active drawer from the map.
 
 Stop and use the proper Home Search skill before proceeding if:
 
-- A design requires changing a V1 URL, response field, request field, type, or
+- A design requires changing a public API URL, response field, request field, type, or
   unit.
 - A design depends on ranking, favorite, alarm, mail, recommendation, auth, or
   heavy analytics flows.
-- Figma asks for data not available in the V1 contract.
+- Figma asks for data not available in the project contract.
 - The map becomes secondary to a panel, drawer, hero, or card layout.
 - Screenshot evidence is unavailable for a meaningful visual change.
 

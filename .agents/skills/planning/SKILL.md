@@ -1,19 +1,19 @@
 ---
 name: planning
-description: Convert Home Search /goal, ambiguous requests, next-slice choices, acceptance criteria, and V1 API/data guardrail questions into decision-complete plans. Use for "plan", "planning", "next slice comparison", "acceptance criteria", "API contract impact", "목표", "플랜", "계획", "다음 slice 비교", "인수 기준". Do not use for failed command debugging or final diff review; route failures to systematic-debugging and review to code-review/reviewer.
+description: Convert Home Search /goal, ambiguous requests, next-slice choices, acceptance criteria, and public API/data guardrail questions into decision-complete plans. Use for "plan", "planning", "next slice comparison", "acceptance criteria", "API contract impact", "목표", "플랜", "계획", "다음 slice 비교", "인수 기준". Do not use for failed command debugging or final diff review; route failures to systematic-debugging and review to code-review/reviewer.
 ---
 
 
 # Planning Skill
 
-Use this skill when a request is goal-level or has ambiguous scope. The goal is to produce an implementation-ready plan while stopping when V1 API or data invariants would change.
+Use this skill when a request is goal-level or has ambiguous scope. The goal is to produce an implementation-ready plan while stopping when public API or data invariants would change.
 
 ## When To Use
 
 - `/goal`, ambiguous requests, or next-slice selection.
 - Comparing candidate slices or turning gate findings into acceptance criteria.
-- Questions about V1 API contract impact, data invariant impact, or whether a
-  request belongs in V1 or V2.
+- Questions about public API contract impact, data invariant impact, or whether a
+  request belongs in project or later-scope.
 
 ## Do Not Use
 
@@ -59,11 +59,11 @@ Use this skill when a request is goal-level or has ambiguous scope. The goal is 
 
 ## Backend Checklist
 
-- V1 API URLs and response shapes remain stable.
+- public API URLs and response shapes remain stable.
 - Raw ingest -> normalized trade ordering is preserved.
 - Duplicate-safe ingest and failed match queryability are preserved.
 - The `complex_id` operational relation is clear.
-- V2 features do not enter the critical path.
+- later-scope features do not enter the critical path.
 
 ## Frontend Checklist
 

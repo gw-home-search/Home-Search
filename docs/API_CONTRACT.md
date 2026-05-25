@@ -3,7 +3,7 @@
 
 ## Purpose
 
-This document is the V1 public API contract for the Home Search migration.
+This document is the Home Search public API contract.
 It fixes the HTTP URLs, request shapes, response shapes, units, error behavior,
 and compatibility rules that the target backend and frontend must follow.
 
@@ -14,9 +14,9 @@ Use this document as the baseline for:
 - Migration decisions when source backend fields conflict with source frontend
   expectations.
 
-V1 keeps the main API URLs stable so the frontend can display the map without
+Home Search keeps the main API URLs stable so the frontend can display the map without
 new route names. Internal implementation may change to support safer storage,
-but those changes must not leak into the public V1 API unless this contract is
+but those changes must not leak into the public API unless this contract is
 updated first.
 
 ## Current Work Package
@@ -48,10 +48,10 @@ Target repository:
 ## Contract Authority
 
 The source backend and source frontend are read-only references. If source code
-and this target contract disagree, the target V1 implementation should follow
+and this target contract disagree, the Home Search implementation should follow
 this document and keep the source mismatch as a migration note.
 
-Do not widen V1 to include rankings, favorites, alarms, mail batches,
+Do not widen Home Search to include rankings, favorites, alarms, mail batches,
 recommendations, auth flows, or heavy analytics unless the migration scope is
 explicitly changed.
 
@@ -72,13 +72,13 @@ explicitly changed.
 
 ## Compatibility Policy
 
-V1 compatible changes:
+Compatible changes:
 
 - Adding an optional response field.
 - Returning `null` or omitting an optional field documented as optional.
 - Accepting legacy frontend field variants inside a temporary adapter.
 
-V1 breaking changes:
+Breaking changes:
 
 - Removing a documented response field.
 - Renaming a documented field.
@@ -86,13 +86,13 @@ V1 breaking changes:
 - Requiring a field that was previously optional.
 - Changing a public URL or HTTP method.
 
-Target V1 should expose canonical fields. Legacy variants from the source code
+Target Home Search should expose canonical fields. Legacy variants from the source code
 may be accepted temporarily by the frontend adapter, but backend responses
 should converge on the canonical fields below.
 
 ## Error Policy
 
-V1 uses Spring `ProblemDetail` style error bodies.
+Home Search uses Spring `ProblemDetail` style error bodies.
 
 Minimum error fields:
 
@@ -122,7 +122,7 @@ Example:
 }
 ```
 
-## V1 APIs
+## Public APIs
 
 ### POST `/api/v1/map/regions`
 
@@ -186,7 +186,7 @@ Response fields:
 - `name`: display name.
 - `lat`: marker latitude.
 - `lng`: marker longitude.
-- `trend`: optional regional trend value. V1 may return `null` or omit it.
+- `trend`: optional regional trend value. Home Search may return `null` or omit it.
 
 Status:
 
@@ -196,10 +196,10 @@ Status:
 
 Migration notes:
 
-- Regional trend calculation is not required for V1 map display.
+- Regional trend calculation is not required for map display.
 - Source repository aliases may not match the target field names exactly.
-  Target V1 should expose `name`, `lat`, and `lng`.
-- `unitCntSum` is not a required V1 region-marker field. Frontend code must not
+  Target Home Search should expose `name`, `lat`, and `lng`.
+- `unitCntSum` is not required for Home Search region markers. Frontend code must not
   require it to render region markers.
 
 ### POST `/api/v1/map/complexes`
@@ -284,7 +284,7 @@ Migration notes:
 
 - Source code has mixed naming around `parcelId`, `id`, `latitude`, `lat`,
   `longitude`, and `lng`.
-- Target V1 backend should return the canonical fields above.
+- Target Home Search backend should return the canonical fields above.
 - Frontend adapters may temporarily accept `id`, `latitude`, and `longitude`
   while source code is being migrated, but new target code should prefer
   `parcelId`, `lat`, and `lng`.
@@ -344,7 +344,7 @@ Status:
 Migration notes:
 
 - This endpoint keeps `latitude` and `longitude` for source frontend
-  compatibility. Do not rename them to `lat` and `lng` in V1 unless the
+  compatibility. Do not rename them to `lat` and `lng` in Home Search unless the
   frontend adapter is updated in the same batch.
 
 ### GET `/api/v1/region`
@@ -493,7 +493,7 @@ Status:
 
 Migration notes:
 
-- Source DTO omits `null` values. Target V1 may omit nullable fields rather
+- Source DTO omits `null` values. Target Home Search may omit nullable fields rather
   than returning explicit `null`.
 
 ### GET `/api/v1/trade/{parcelId}`
@@ -551,15 +551,15 @@ Status:
 
 Migration notes:
 
-- The target V1 query path should work through `complex_id`.
+- The Home Search query path should work through `complex_id`.
 - Preserve `complex_pk`, `apt_seq`, `source`, and `source_key` for audit,
   matching, and deduplication, but do not expose them in this public response.
 - Default ordering should be newest first: `dealDate` descending, then
   `tradeId` descending when dates are equal.
 
-## V2 APIs
+## later-scope APIs
 
-Keep these out of the V1 critical path:
+Keep these out of the current critical path:
 
 - `/api/v1/rankings/top-price-30d`
 - `/api/v1/rankings/top-volume-30d`

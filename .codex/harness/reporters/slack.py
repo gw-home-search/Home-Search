@@ -1,4 +1,4 @@
-"""Best-effort Slack reporter for V1 harness reports."""
+"""Best-effort Slack reporter for Home Search harness reports."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def message_for(payload: dict[str, Any], report_path: Path) -> str:
     report_link = payload.get("links", {}).get("notion_page_url") or str(report_path)
     return "\n".join(
         [
-            f"Home Search V1 slice: {payload.get('slice')}",
+            f"Home Search work item: {payload.get('work_id') or payload.get('slice')}",
             f"상태: {payload.get('status')}",
             f"integration branch: {branches.get('integration')}",
             f"검증: {', '.join(tests) if tests else 'not run'}",

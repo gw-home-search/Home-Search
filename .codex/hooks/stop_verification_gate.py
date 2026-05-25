@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stop hook verification gate for Home Search V1.
+"""Stop hook verification gate for Home Search.
 
 The hook checks for evidence. It does not run tests, perform review, or call
 AI services.
@@ -201,7 +201,7 @@ def has_minimum_green_evidence(text: str) -> bool:
     )
 
 
-def has_tdd_slice_evidence(text: str) -> bool:
+def has_tdd_work_evidence(text: str) -> bool:
     return (
         has_first_red_evidence(text)
         and has_expected_red_failure_evidence(text)
@@ -310,7 +310,7 @@ def missing_evidence(files: list[str], text: str) -> list[str]:
             missing.append("apps/web 변경: npm run test/build evidence 필요")
 
     if any(is_behavior_change(path) for path in files):
-        if not has_tdd_slice_evidence(text):
+        if not has_tdd_work_evidence(text):
             missing.append("behavior 변경: 최초 RED, 예상 RED 실패, 최소 GREEN evidence 필요")
 
     if any(is_contract_related(path) for path in files):
@@ -389,7 +389,7 @@ def run_self_test() -> int:
         ),
     )
     markdown_complete = missing_evidence(
-        [".agents/skills/v1-slice-harness/SKILL.md"],
+        [".codex/harness/home"],
         "검증: bash scripts/check-ko-docs.sh = pass",
     )
     missing_backend_quality = missing_evidence(

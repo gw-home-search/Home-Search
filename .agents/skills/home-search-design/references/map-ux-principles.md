@@ -1,6 +1,6 @@
 # Home Search Map UX Principles
 
-Use this reference when designing Home Search V1 map UI, layout hierarchy,
+Use this reference when designing Home Search map UI, layout hierarchy,
 markers, panels, filters, drawers, and mobile adaptations.
 
 ## Product Posture
@@ -42,7 +42,7 @@ markers, or makes panning feel secondary, the design is wrong.
 
 - Complex labels show the most useful scan data: latest trade amount and unit
   count.
-- Region labels show the region name only unless a documented V1 field is
+- Region labels show the region name only unless a documented project field is
   needed.
 - Keep labels short, high contrast, and stable in size.
 - Prefer border and solid fill over glow, blurred shadows, or translucent glass.
@@ -104,7 +104,7 @@ A design is acceptable when:
 - The map remains the strongest first-viewport signal.
 - A user can search, filter, pan, click a marker, and inspect trades without
   losing context.
-- The same V1 API contract works before and after the visual change.
+- The same public API contract works before and after the visual change.
 - Error and empty states are visible, short, and non-blocking.
 - The UI still works at desktop and mobile widths without overlap or clipped
   text.

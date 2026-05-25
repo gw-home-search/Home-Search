@@ -22,16 +22,16 @@
 - 성공 기준
 - 범위와 비범위
 - 영향 영역
-- 관련 V1 문서
+- 관련 project 문서
 - 검증 증거
 - 중단 조건
 
 다음 상황은 구현 전에 멈춘다.
 
-- V1 API URL 또는 response shape 변경이 필요하다.
+- public API URL 또는 response shape 변경이 필요하다.
 - DB 변경이 기존 데이터를 잃거나 재해석할 수 있다.
 - source repo와 target docs가 충돌한다.
-- V2 기능이 V1 critical path에 들어갈 수 있다.
+- later-scope 기능이 current critical path에 들어갈 수 있다.
 
 ## TDD 작업
 
@@ -59,12 +59,12 @@ Bug나 failing check는 추측으로 고치지 않는다.
 
 Review는 findings first로 한다.
 
-- Critical: 데이터 손실, 보안 사고, V1 API 중단, 배포 불가.
+- Critical: 데이터 손실, 보안 사고, public API 중단, 배포 불가.
 - High: 주요 사용자 흐름 실패, duplicate-safe ingest 파손, map display 불능.
 - Medium: edge case bug, missing regression test, degraded fallback.
 - Low: 실제 위험이 있는 maintainability 또는 documented rule 위반.
 
-검토 축은 correctness, V1 API compatibility, data safety, frontend map usability, security/secrets, missing tests, KO sync다.
+검토 축은 correctness, public API compatibility, data safety, frontend map usability, security/secrets, missing tests, KO sync다.
 
 ## 코드베이스 맵
 

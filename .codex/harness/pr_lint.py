@@ -22,6 +22,7 @@ from pr_evidence import (
     PR_LINT_SELF_TEST,
     SKILL_ROUTING_SELF_TEST,
     STOP_HOOK_SELF_TEST,
+    TEST_DISPLAY_NAME_POLICY,
     USER_LANGUAGE_CHECK,
     V1_FLOW_SELF_TEST,
     V1_LAUNCHER_SELF_TEST,
@@ -552,6 +553,7 @@ def valid_body(
 - `{API_TEST}` = not run (api 변경 없음)
 - `{WEB_TEST}` = not run (web 변경 없음)
 - `{WEB_BUILD}` = not run (web 변경 없음)
+- `{TEST_DISPLAY_NAME_POLICY}` = not run (테스트 표시 이름 변경 없음)
 - `{PR_LINT_SELF_TEST}` = pass (자체 테스트)
 - `{PR_CONTEXT_SELF_TEST}` = pass (PR context 공용 helper 자체 테스트)
 - `{PR_BODY_CHECK_SELF_TEST}` = pass (PR body 검사 자체 테스트)
@@ -708,6 +710,13 @@ def run_self_test() -> int:
         ),
         changed_files=(".codex/hooks/stop_verification_gate.py",),
     )
+    test_display_name_missing = valid_input(
+        body=valid_body()
+        .replace(f"- `{WEB_TEST}` = not run (web 변경 없음)", f"- `{WEB_TEST}` = pass (frontend tests)")
+        .replace(f"- `{WEB_BUILD}` = not run (web 변경 없음)", f"- `{WEB_BUILD}` = pass (frontend build)")
+        .replace(f"- `{TEST_DISPLAY_NAME_POLICY}` = not run (테스트 표시 이름 변경 없음)\n", ""),
+        changed_files=("apps/web/src/app/App.test.tsx",),
+    )
     markdown_unsynced = valid_input(
         body=valid_body().replace(f"- `{KO_CHECK}` = pass (Markdown 동기화)", f"- `{KO_CHECK}` = not run (확인 안 함)"),
         changed_files=("docs/README.md",),
@@ -743,6 +752,12 @@ def run_self_test() -> int:
         expect_case("web skill evidence missing", web_missing_skill, "evidence", "$frontend-web"),
         expect_case("hook self-test evidence missing", hook_missing_self_test, "evidence", STOP_HOOK_SELF_TEST),
         expect_case("hook skill evidence missing", hook_missing_skill, "evidence", "$systematic-debugging"),
+        expect_case(
+            "test display name evidence missing",
+            test_display_name_missing,
+            "evidence",
+            TEST_DISPLAY_NAME_POLICY,
+        ),
         expect_case("markdown KO path missing", markdown_unsynced, "changed-files", "paired KO doc"),
         expect_case("markdown KO evidence missing", markdown_unsynced, "evidence", KO_CHECK),
         lint_pr(ko_only_with_approval).ok,

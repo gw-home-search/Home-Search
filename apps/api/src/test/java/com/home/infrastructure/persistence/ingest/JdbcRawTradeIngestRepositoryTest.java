@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 class JdbcRawTradeIngestRepositoryTest extends JdbcPostgresTestSupport {
 
 	@Test
-	@DisplayName("raw save returns an id and failed matches are queryable with a reason")
+	@DisplayName("raw save는 id를 반환하고 failed match는 reason과 함께 queryable하다")
 	void savesRawAndFindsMatchFailuresByStatus() {
 		JdbcRawTradeIngestRepository repository = new JdbcRawTradeIngestRepository(jdbcClient);
 
@@ -48,7 +48,7 @@ class JdbcRawTradeIngestRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
-	@DisplayName("failure inspection summarizes only safe read-only evidence by source and deal month")
+	@DisplayName("failure inspection은 source와 deal month별 safe read-only evidence만 summarize한다")
 	void summarizesFailureEvidenceWithoutRawPayloadOrSourceKey() {
 		JdbcRawTradeIngestRepository repository = new JdbcRawTradeIngestRepository(jdbcClient);
 		mark(repository, raw(repository, "match-1", "11680", "202512", "{\"aptSeq\":\"APT-404\"}"),

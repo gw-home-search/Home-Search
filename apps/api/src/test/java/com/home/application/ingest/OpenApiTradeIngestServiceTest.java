@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 class OpenApiTradeIngestServiceTest {
 
 	@Test
-	@DisplayName("raw ingest is saved before normalized insert and source_key duplicates do not create duplicate trades")
+	@DisplayName("raw ingest는 normalized insert 전에 저장되고 source_key 중복은 normalized trade를 중복 생성하지 않는다")
 	void duplicateSourceKeyDoesNotCreateSecondNormalizedTradeAndRawPrecedesInsert() {
 		List<String> events = new ArrayList<>();
 		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
@@ -50,7 +50,7 @@ class OpenApiTradeIngestServiceTest {
 	}
 
 	@Test
-	@DisplayName("complex match failures remain queryable with failure reason")
+	@DisplayName("complex match 실패는 failure reason과 함께 queryable하게 남는다")
 	void matchFailureIsRecordedAsQueryableRawEvidence() {
 		List<String> events = new ArrayList<>();
 		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
@@ -82,7 +82,7 @@ class OpenApiTradeIngestServiceTest {
 	}
 
 	@Test
-	@DisplayName("parse failures remain queryable raw evidence without normalized trade insert")
+	@DisplayName("parse 실패는 normalized trade insert 없이 raw evidence로 queryable하게 남는다")
 	void parseFailureIsRecordedAsQueryableRawEvidence() {
 		List<String> events = new ArrayList<>();
 		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
@@ -114,7 +114,7 @@ class OpenApiTradeIngestServiceTest {
 	}
 
 	@Test
-	@DisplayName("ingest records completed batch count summary to metrics")
+	@DisplayName("ingest는 completed batch count summary를 metrics에 기록한다")
 	void ingestRecordsCompletedBatchCountSummaryToMetrics() {
 		List<String> events = new ArrayList<>();
 		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);

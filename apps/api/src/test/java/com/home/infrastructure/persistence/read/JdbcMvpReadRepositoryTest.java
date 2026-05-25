@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 class JdbcMvpReadRepositoryTest extends JdbcPostgresTestSupport {
 
 	@Test
-	@DisplayName("search, region, detail, and trade read APIs are backed by V1 core tables")
+	@DisplayName("search/region/detail/trade read API는 V1 core table로 backing된다")
 	void readsMvpMapExplorationDataFromV1Tables() {
 		seedMvpExplorationData();
 		JdbcMvpReadRepository repository = new JdbcMvpReadRepository(jdbcClient);
@@ -66,7 +66,7 @@ class JdbcMvpReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
-	@DisplayName("trade read API returns an empty trade list when a parcel has complexes but no trades")
+	@DisplayName("trade read API는 parcel에 complex가 있지만 trade가 없으면 empty trade list를 반환한다")
 	void tradeListReturnsEmptyWhenParcelAndComplexExistWithoutTrades() {
 		seedComplex();
 		JdbcMvpReadRepository repository = new JdbcMvpReadRepository(jdbcClient);
@@ -79,7 +79,7 @@ class JdbcMvpReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
-	@DisplayName("detail and trade read APIs are empty when parcel or complex parent path is missing")
+	@DisplayName("detail/trade read API는 parcel 또는 complex parent path가 없으면 empty가 된다")
 	void missingParentPathReturnsEmpty() {
 		seedMvpExplorationData();
 		JdbcMvpReadRepository repository = new JdbcMvpReadRepository(jdbcClient);

@@ -22,7 +22,7 @@ import org.springframework.web.client.RestClient;
 class VworldParcelCoordinateResolverTest {
 
 	@Test
-	@DisplayName("VWorld WFS bbox response resolves a parcel coordinate without a live API call")
+	@DisplayName("VWorld WFS bbox response는 live API call 없이 parcel coordinate를 resolve한다")
 	void resolvesParcelCoordinateFromVworldWfsBboxResponse() {
 		VworldParcelCoordinateProperties properties = new VworldParcelCoordinateProperties(
 			"https://api.example.test",
@@ -56,7 +56,7 @@ class VworldParcelCoordinateResolverTest {
 	}
 
 	@Test
-	@DisplayName("blank VWorld service key skips HTTP lookup and returns empty coordinate")
+	@DisplayName("blank VWorld service key는 HTTP lookup을 건너뛰고 empty coordinate를 반환한다")
 	void blankServiceKeySkipsHttpLookupAndReturnsEmpty() {
 		VworldParcelCoordinateProperties properties = new VworldParcelCoordinateProperties(
 			"https://api.example.test",
@@ -79,7 +79,7 @@ class VworldParcelCoordinateResolverTest {
 	}
 
 	@Test
-	@DisplayName("missing or mismatched VWorld features return empty coordinate")
+	@DisplayName("missing 또는 mismatched VWorld feature는 empty coordinate를 반환한다")
 	void missingOrMismatchedFeaturesReturnEmpty() {
 		VworldParcelCoordinateProperties properties = new VworldParcelCoordinateProperties(
 			"https://api.example.test",
@@ -116,7 +116,7 @@ class VworldParcelCoordinateResolverTest {
 	}
 
 	@Test
-	@DisplayName("ambiguous matching VWorld features return empty coordinate")
+	@DisplayName("ambiguous matching VWorld feature는 empty coordinate를 반환한다")
 	void ambiguousMatchingFeaturesReturnEmpty() {
 		VworldParcelCoordinateProperties properties = new VworldParcelCoordinateProperties(
 			"https://api.example.test",
@@ -147,7 +147,7 @@ class VworldParcelCoordinateResolverTest {
 	}
 
 	@Test
-	@DisplayName("VWorld HTTP failure returns empty coordinate so ingest can keep a queryable match failure")
+	@DisplayName("VWorld HTTP failure는 ingest가 queryable match failure를 유지하도록 empty coordinate를 반환한다")
 	void vworldHttpFailureReturnsEmptyCoordinate() {
 		VworldParcelCoordinateProperties properties = new VworldParcelCoordinateProperties(
 			"https://api.example.test",
@@ -170,7 +170,7 @@ class VworldParcelCoordinateResolverTest {
 	}
 
 	@Test
-	@DisplayName("blank PNU returns empty coordinate before HTTP lookup")
+	@DisplayName("blank PNU는 HTTP lookup 전에 empty coordinate를 반환한다")
 	void blankPnuReturnsEmptyBeforeHttpLookup() {
 		VworldParcelCoordinateProperties properties = new VworldParcelCoordinateProperties(
 			"https://api.example.test",

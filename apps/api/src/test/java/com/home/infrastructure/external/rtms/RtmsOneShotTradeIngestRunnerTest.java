@@ -24,7 +24,7 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 class RtmsOneShotTradeIngestRunnerTest {
 
 	@Test
-	@DisplayName("one-shot runner fetches RTMS batch and delegates to OpenApiTradeIngestService")
+	@DisplayName("one-shot runner는 RTMS batch를 fetch하고 OpenApiTradeIngestService에 위임한다")
 	void runnerDelegatesFetchedBatchToIngestService() {
 		RtmsApartmentTradeClient client = mock(RtmsApartmentTradeClient.class);
 		OpenApiTradeIngestService ingestService = mock(OpenApiTradeIngestService.class);
@@ -49,7 +49,7 @@ class RtmsOneShotTradeIngestRunnerTest {
 	}
 
 	@Test
-	@DisplayName("one-shot runner fails before live fetch when ingest service is unavailable")
+	@DisplayName("one-shot runner는 ingest service가 없으면 live fetch 전에 실패한다")
 	void runnerFailsBeforeLiveFetchWhenIngestServiceIsUnavailable() {
 		RtmsApartmentTradeClient client = mock(RtmsApartmentTradeClient.class);
 		RtmsOneShotTradeIngestRunner runner = new RtmsOneShotTradeIngestRunner(
@@ -66,7 +66,7 @@ class RtmsOneShotTradeIngestRunnerTest {
 	}
 
 	@Test
-	@DisplayName("disabled local trigger does not call the RTMS one-shot runner")
+	@DisplayName("disabled local trigger는 RTMS one-shot runner를 호출하지 않는다")
 	void disabledLocalTriggerDoesNotCallRunner() throws Exception {
 		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
 		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
@@ -81,7 +81,7 @@ class RtmsOneShotTradeIngestRunnerTest {
 	}
 
 	@Test
-	@DisplayName("enabled local trigger fails before live ingest when request properties are missing")
+	@DisplayName("enabled local trigger는 request property가 없으면 live ingest 전에 실패한다")
 	void enabledLocalTriggerRequiresExplicitRequestProperties() {
 		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
 		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
@@ -97,7 +97,7 @@ class RtmsOneShotTradeIngestRunnerTest {
 	}
 
 	@Test
-	@DisplayName("enabled local trigger validates service key before live ingest")
+	@DisplayName("enabled local trigger는 live ingest 전에 service key를 검증한다")
 	void enabledLocalTriggerRequiresServiceKeyBeforeLiveIngest() {
 		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
 		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
@@ -113,7 +113,7 @@ class RtmsOneShotTradeIngestRunnerTest {
 	}
 
 	@Test
-	@DisplayName("preflight-only mode validates configuration without live fetch or DB ingest")
+	@DisplayName("preflight-only mode는 live fetch나 DB ingest 없이 configuration을 검증한다")
 	void preflightOnlyModeValidatesConfigurationWithoutLiveFetchOrDbIngest(CapturedOutput output) throws Exception {
 		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
 		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
@@ -138,7 +138,7 @@ class RtmsOneShotTradeIngestRunnerTest {
 	}
 
 	@Test
-	@DisplayName("enabled local trigger rejects invalid lawdCd before live ingest")
+	@DisplayName("enabled local trigger는 live ingest 전에 잘못된 lawdCd를 거부한다")
 	void enabledLocalTriggerRejectsInvalidLawdCdBeforeLiveIngest() {
 		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
 		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
@@ -154,7 +154,7 @@ class RtmsOneShotTradeIngestRunnerTest {
 	}
 
 	@Test
-	@DisplayName("enabled local trigger rejects invalid dealYmd before live ingest")
+	@DisplayName("enabled local trigger는 live ingest 전에 잘못된 dealYmd를 거부한다")
 	void enabledLocalTriggerRejectsInvalidDealYmdBeforeLiveIngest() {
 		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
 		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
@@ -170,7 +170,7 @@ class RtmsOneShotTradeIngestRunnerTest {
 	}
 
 	@Test
-	@DisplayName("enabled local trigger runs explicit RTMS request and logs only count summary")
+	@DisplayName("enabled local trigger는 explicit RTMS request를 실행하고 count summary만 log한다")
 	void enabledLocalTriggerRunsExplicitRequestAndLogsSummary(CapturedOutput output) throws Exception {
 		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
 		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(

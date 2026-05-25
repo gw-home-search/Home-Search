@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class JdbcParcelCoordinateSnapshotRepositoryTest extends JdbcPostgresTestSupport {
 
 	@Test
-	@DisplayName("VWorld SHP coordinate snapshot resolves PNU coordinates and geometry from DB")
+	@DisplayName("VWorld SHP coordinate snapshot은 DB에서 PNU coordinate와 geometry를 resolve한다")
 	void findsCoordinateSnapshotByPnu() {
 		Long runId = jdbcClient.sql("""
 			INSERT INTO reference.coordinate_snapshot_run (
@@ -65,7 +65,7 @@ class JdbcParcelCoordinateSnapshotRepositoryTest extends JdbcPostgresTestSupport
 	}
 
 	@Test
-	@DisplayName("blank PNU never returns a coordinate snapshot")
+	@DisplayName("blank PNU는 coordinate snapshot을 반환하지 않는다")
 	void blankPnuReturnsEmpty() {
 		JdbcParcelCoordinateSnapshotRepository repository = new JdbcParcelCoordinateSnapshotRepository(jdbcClient);
 

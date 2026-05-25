@@ -10,7 +10,7 @@ class SourceKeyGeneratorTest {
 	private final SourceKeyGenerator generator = new SourceKeyGenerator();
 
 	@Test
-	@DisplayName("source keys normalize source, whitespace, comma amounts, and decimal scale")
+	@DisplayName("source key는 source, whitespace, comma amount, decimal scale을 normalize한다")
 	void sourceKeyNormalizesExternalTradeIdentityFields() {
 		OpenApiTradeItem first = item("APT-501", "125,000", 84.930, " 101 ", "140-1");
 		OpenApiTradeItem equivalent = item(" APT-501 ", "125000", 84.93, "101", "140-1");
@@ -21,7 +21,7 @@ class SourceKeyGeneratorTest {
 	}
 
 	@Test
-	@DisplayName("payload hash is deterministic and treats null as an empty payload")
+	@DisplayName("payload hash는 deterministic하며 null을 empty payload로 처리한다")
 	void payloadHashIsDeterministic() {
 		assertThat(generator.hashPayload("{\"a\":1}")).isEqualTo(generator.hashPayload("{\"a\":1}"));
 		assertThat(generator.hashPayload(null)).isEqualTo(generator.hashPayload(""));

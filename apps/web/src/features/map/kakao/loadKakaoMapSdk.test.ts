@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { KakaoMapsApi } from './loadKakaoMapSdk';
 
-describe('loadKakaoMapSdk', () => {
+describe('loadKakaoMapSdk helper 동작', () => {
   afterEach(() => {
     vi.resetModules();
     vi.unstubAllGlobals();
@@ -11,7 +11,7 @@ describe('loadKakaoMapSdk', () => {
       .forEach((script) => script.remove());
   });
 
-  it('loads the Kakao SDK with autoload disabled and resolves after maps.load', async () => {
+  it('autoload disabled로 Kakao SDK를 load하고 maps.load 후 resolve한다', async () => {
     const { loadKakaoMapSdk } = await import('./loadKakaoMapSdk');
 
     const sdkPromise = loadKakaoMapSdk('test-app-key');
@@ -33,7 +33,7 @@ describe('loadKakaoMapSdk', () => {
     expect(maps.load).toHaveBeenCalledTimes(1);
   });
 
-  it('uses an already available Kakao map runtime without requiring an app key', async () => {
+  it('이미 사용 가능한 Kakao map runtime은 app key 없이 사용한다', async () => {
     const maps = fakeKakaoMapsApi();
     vi.stubGlobal('kakao', { maps });
     const { loadKakaoMapSdk } = await import('./loadKakaoMapSdk');
@@ -42,7 +42,7 @@ describe('loadKakaoMapSdk', () => {
     expect(document.head.querySelector('script[src*="dapi.kakao.com/v2/maps/sdk.js"]')).toBeNull();
   });
 
-  it('rejects after maps.load when the Kakao runtime does not expose map constructors', async () => {
+  it('Kakao runtime이 map constructor를 노출하지 않으면 maps.load 후 reject한다', async () => {
     const { loadKakaoMapSdk } = await import('./loadKakaoMapSdk');
 
     const sdkPromise = loadKakaoMapSdk('test-app-key');

@@ -53,7 +53,7 @@ class ReadApiRestDocsTest {
 	private MvpReadUseCase readUseCase;
 
 	@Test
-	@DisplayName("documents GET /api/v1/search/complexes")
+	@DisplayName("GET /api/v1/search/complexes REST Docs를 생성한다")
 	void documentSearchComplexes() throws Exception {
 		given(readUseCase.searchComplexes(eq("Sample")))
 			.willReturn(List.of(new SearchComplexResponse(
@@ -97,7 +97,7 @@ class ReadApiRestDocsTest {
 	}
 
 	@Test
-	@DisplayName("documents GET /api/v1/region and GET /api/v1/region/{regionId}")
+	@DisplayName("GET /api/v1/region과 GET /api/v1/region/{regionId} REST Docs를 생성한다")
 	void documentRegionNavigation() throws Exception {
 		given(readUseCase.getRootRegions())
 			.willReturn(List.of(new RegionSummaryResponse(1L, "Seoul")));
@@ -162,7 +162,7 @@ class ReadApiRestDocsTest {
 	}
 
 	@Test
-	@DisplayName("documents GET /api/v1/detail/{parcelId} and GET /api/v1/trade/{parcelId}")
+	@DisplayName("GET /api/v1/detail/{parcelId}와 GET /api/v1/trade/{parcelId} REST Docs를 생성한다")
 	void documentDetailAndTrade() throws Exception {
 		given(readUseCase.getParcelDetail(1001L))
 			.willReturn(new ParcelDetailResponse(

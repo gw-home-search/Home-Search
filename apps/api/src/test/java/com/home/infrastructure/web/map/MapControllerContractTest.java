@@ -41,7 +41,7 @@ class MapControllerContractTest {
 	private MapUseCase mapUseCase;
 
 	@Test
-	@DisplayName("POST /api/v1/map/complexes returns canonical V1 complex marker fields")
+	@DisplayName("POST /api/v1/map/complexes는 canonical V1 complex marker field를 반환한다")
 	void validComplexMarkerRequestReturnsCanonicalMarkerFields() throws Exception {
 		given(mapUseCase.getComplexMarkers(any(ComplexMarkersRequest.class)))
 			.willReturn(List.of(new ComplexMarkerResponse(1001L, 37.5123, 127.0456, 125000L, 740L)));
@@ -81,7 +81,7 @@ class MapControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/map/regions returns canonical V1 region marker fields")
+	@DisplayName("POST /api/v1/map/regions는 canonical V1 region marker field를 반환한다")
 	void validRegionMarkerRequestReturnsCanonicalRegionFields() throws Exception {
 		given(mapUseCase.getRegionMarkers(any(RegionMarkersRequest.class)))
 			.willReturn(List.of(new RegionMarkerResponse(1L, "Seoul", 37.5663, 126.9780, null)));
@@ -117,7 +117,7 @@ class MapControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/map/regions returns an empty array when no region markers match")
+	@DisplayName("POST /api/v1/map/regions는 matching region marker가 없으면 empty array를 반환한다")
 	void validRegionMarkerRequestCanReturnEmptyArray() throws Exception {
 		given(mapUseCase.getRegionMarkers(any(RegionMarkersRequest.class)))
 			.willReturn(List.of());
@@ -139,7 +139,7 @@ class MapControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/map/regions rejects unsupported region values")
+	@DisplayName("POST /api/v1/map/regions는 unsupported region value를 거부한다")
 	void unsupportedRegionRequestReturnsBadRequest() throws Exception {
 		expectProblemDetail(mockMvc.perform(post("/api/v1/map/regions")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -157,7 +157,7 @@ class MapControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/map/regions returns ProblemDetail for invalid bounds")
+	@DisplayName("POST /api/v1/map/regions는 invalid bounds를 ProblemDetail로 반환한다")
 	void invalidBoundsReturnsProblemDetailForRegionMarkers() throws Exception {
 		expectProblemDetail(mockMvc.perform(post("/api/v1/map/regions")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -175,7 +175,7 @@ class MapControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/map/complexes returns ProblemDetail for invalid bounds")
+	@DisplayName("POST /api/v1/map/complexes는 invalid bounds를 ProblemDetail로 반환한다")
 	void invalidBoundsReturnsProblemDetailForComplexMarkers() throws Exception {
 		expectProblemDetail(mockMvc.perform(post("/api/v1/map/complexes")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -200,7 +200,7 @@ class MapControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/map/regions rejects latitude outside WGS84 range")
+	@DisplayName("POST /api/v1/map/regions는 WGS84 범위 밖 latitude를 거부한다")
 	void invalidLatitudeRangeReturns400() throws Exception {
 		expectProblemDetail(mockMvc.perform(post("/api/v1/map/regions")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -218,7 +218,7 @@ class MapControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/map/regions rejects longitude outside WGS84 range")
+	@DisplayName("POST /api/v1/map/regions는 WGS84 범위 밖 longitude를 거부한다")
 	void invalidLongitudeRangeReturns400() throws Exception {
 		expectProblemDetail(mockMvc.perform(post("/api/v1/map/regions")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -236,7 +236,7 @@ class MapControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/map/complexes rejects southwest bounds greater than northeast bounds")
+	@DisplayName("POST /api/v1/map/complexes는 southwest bounds가 northeast bounds보다 크면 거부한다")
 	void southwestGreaterThanNortheastReturns400() throws Exception {
 		expectProblemDetail(mockMvc.perform(post("/api/v1/map/complexes")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -262,7 +262,7 @@ class MapControllerContractTest {
 
 	@ParameterizedTest(name = "{0}")
 	@MethodSource("invalidComplexFilterRanges")
-	@DisplayName("POST /api/v1/map/complexes rejects invalid numeric filter ranges")
+	@DisplayName("POST /api/v1/map/complexes는 invalid numeric filter range를 거부한다")
 	void invalidComplexFilterRangesReturnBadRequest(String ignoredName, String filters) throws Exception {
 		expectProblemDetail(mockMvc.perform(post("/api/v1/map/complexes")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -272,7 +272,7 @@ class MapControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/map/regions requires the region field")
+	@DisplayName("POST /api/v1/map/regions는 region field를 요구한다")
 	void missingRegionRequestReturnsBadRequest() throws Exception {
 		expectProblemDetail(mockMvc.perform(post("/api/v1/map/regions")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -289,7 +289,7 @@ class MapControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("POST /api/v1/map/complexes returns ProblemDetail for unexpected server errors")
+	@DisplayName("POST /api/v1/map/complexes는 unexpected server error를 ProblemDetail로 반환한다")
 	void unexpectedComplexMarkerErrorReturnsProblemDetail() throws Exception {
 		given(mapUseCase.getComplexMarkers(any(ComplexMarkersRequest.class)))
 			.willThrow(new IllegalStateException("failed to load markers"));
@@ -324,32 +324,32 @@ class MapControllerContractTest {
 
 	private static Stream<Arguments> invalidComplexFilterRanges() {
 		return Stream.of(
-			Arguments.of("pyeong min greater than max", """
+			Arguments.of("pyeong 최소값이 최대값보다 크다", """
 				"pyeongMin": 40,
 				"pyeongMax": 30
 				"""),
-			Arguments.of("price min greater than max", """
+			Arguments.of("price 최소값이 최대값보다 크다", """
 				"priceEokMin": 15.0,
 				"priceEokMax": 10.0
 				"""),
-			Arguments.of("age min greater than max", """
+			Arguments.of("age 최소값이 최대값보다 크다", """
 				"ageMin": 30,
 				"ageMax": 10
 				"""),
-			Arguments.of("unit min greater than max", """
+			Arguments.of("unit 최소값이 최대값보다 크다", """
 				"unitMin": 900,
 				"unitMax": 100
 				"""),
-			Arguments.of("negative pyeong", """
+			Arguments.of("pyeong이 음수다", """
 				"pyeongMin": -1
 				"""),
-			Arguments.of("negative price", """
+			Arguments.of("price가 음수다", """
 				"priceEokMin": -1.0
 				"""),
-			Arguments.of("negative age", """
+			Arguments.of("age가 음수다", """
 				"ageMin": -1
 				"""),
-			Arguments.of("negative unit count", """
+			Arguments.of("unit count가 음수다", """
 				"unitMin": -1
 				""")
 		);

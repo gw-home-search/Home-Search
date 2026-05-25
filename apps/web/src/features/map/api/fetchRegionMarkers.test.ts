@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchRegionMarkers, type RegionMarkersRequest } from './fetchRegionMarkers';
 import { resolveApiUrl } from './resolveApiUrl';
 
-describe('fetchRegionMarkers', () => {
+describe('fetchRegionMarkers API 어댑터', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('posts documented bounds and region level to the V1 region marker endpoint', async () => {
+  it('documented bounds와 region level을 V1 region marker endpoint에 post한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -33,7 +33,7 @@ describe('fetchRegionMarkers', () => {
     );
   });
 
-  it('normalizes canonical region marker response without leaking optional trend', async () => {
+  it('optional trend를 leak하지 않고 canonical region marker response를 normalize한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -80,7 +80,7 @@ describe('fetchRegionMarkers', () => {
     ]);
   });
 
-  it('keeps temporary source field variants inside the adapter', async () => {
+  it('temporary source field variant를 adapter 내부에 유지한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -114,7 +114,7 @@ describe('fetchRegionMarkers', () => {
     ]);
   });
 
-  it('returns an empty marker list for a valid empty response', async () => {
+  it('valid empty response에서 empty marker list를 반환한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
 
     await expect(
@@ -128,7 +128,7 @@ describe('fetchRegionMarkers', () => {
     ).resolves.toEqual([]);
   });
 
-  it('throws a clear contract error when the response is not an array', async () => {
+  it('response가 array가 아니면 clear contract error를 throw한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ markers: [] })));
 
     await expect(
@@ -142,7 +142,7 @@ describe('fetchRegionMarkers', () => {
     ).rejects.toThrow('Invalid V1 region marker response: expected an array');
   });
 
-  it('throws a clear contract error when a marker has an invalid coordinate', async () => {
+  it('marker coordinate가 invalid하면 clear contract error를 throw한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -168,7 +168,7 @@ describe('fetchRegionMarkers', () => {
     ).rejects.toThrow('Invalid V1 region marker response: lat must be a number');
   });
 
-  it('rejects with a clear marker fetch error when the response is not ok', async () => {
+  it('response가 ok가 아니면 clear marker fetch error로 reject한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(errorResponse(500)));
 
     await expect(
@@ -182,7 +182,7 @@ describe('fetchRegionMarkers', () => {
     ).rejects.toThrow('Failed to fetch region markers: 500');
   });
 
-  it('preserves V1 ProblemDetail detail when the region endpoint rejects the request', async () => {
+  it('region endpoint가 request를 reject하면 V1 ProblemDetail detail을 보존한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(

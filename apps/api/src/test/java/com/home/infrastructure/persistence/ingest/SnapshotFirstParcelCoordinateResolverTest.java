@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class SnapshotFirstParcelCoordinateResolverTest {
 
 	@Test
-	@DisplayName("coordinate snapshot is used before VWorld fallback")
+	@DisplayName("coordinate snapshot은 VWorld fallback보다 먼저 사용된다")
 	void snapshotCoordinateIsUsedBeforeVworldFallback() {
 		ParcelCoordinate snapshot = new ParcelCoordinate(
 			new BigDecimal("37.5012345"),
@@ -35,7 +35,7 @@ class SnapshotFirstParcelCoordinateResolverTest {
 	}
 
 	@Test
-	@DisplayName("VWorld fallback is used only when coordinate snapshot misses")
+	@DisplayName("VWorld fallback은 coordinate snapshot이 miss될 때만 사용된다")
 	void vworldFallbackIsUsedWhenSnapshotMisses() {
 		ParcelCoordinate fallback = new ParcelCoordinate(
 			new BigDecimal("37.5012345"),

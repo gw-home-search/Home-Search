@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 class RawTradeIngestFailureQueryTest {
 
 	@Test
-	@DisplayName("failure query trims filters and defaults to inspection statuses")
+	@DisplayName("failure query는 filter를 trim하고 inspection status를 기본값으로 사용한다")
 	void trimsFiltersAndDefaultsToInspectionStatuses() {
 		RawTradeIngestFailureQuery query = RawTradeIngestFailureQuery.between(
 			" RTMS ",
@@ -31,7 +31,7 @@ class RawTradeIngestFailureQueryTest {
 	}
 
 	@Test
-	@DisplayName("failure query rejects non inspection statuses and invalid deal month range")
+	@DisplayName("failure query는 inspection이 아닌 status와 잘못된 deal month 범위를 거부한다")
 	void rejectsUnsafeInspectionConditions() {
 		assertThatThrownBy(() -> new RawTradeIngestFailureQuery(
 			"RTMS",

@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchComplexMarkers, type ComplexMarkersRequest } from './fetchComplexMarkers';
 import { resolveApiUrl } from './resolveApiUrl';
 
-describe('fetchComplexMarkers', () => {
+describe('fetchComplexMarkers API 어댑터', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('posts documented bounds and filters to the V1 complex marker endpoint', async () => {
+  it('documented bounds와 filter를 V1 complex marker endpoint에 post한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -40,7 +40,7 @@ describe('fetchComplexMarkers', () => {
     );
   });
 
-  it('normalizes canonical and temporary legacy marker variants to canonical fields', async () => {
+  it('canonical/temporary legacy marker variant를 canonical field로 normalize한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -88,7 +88,7 @@ describe('fetchComplexMarkers', () => {
     ]);
   });
 
-  it('returns an empty marker list for a valid empty response', async () => {
+  it('valid empty response에서 empty marker list를 반환한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
 
     await expect(
@@ -101,7 +101,7 @@ describe('fetchComplexMarkers', () => {
     ).resolves.toEqual([]);
   });
 
-  it('throws a clear contract error when the response is not an array', async () => {
+  it('response가 array가 아니면 clear contract error를 throw한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ markers: [] })));
 
     await expect(
@@ -114,7 +114,7 @@ describe('fetchComplexMarkers', () => {
     ).rejects.toThrow('Invalid V1 complex marker response: expected an array');
   });
 
-  it('throws a clear contract error when a marker is missing unit count', async () => {
+  it('marker에 unit count가 없으면 clear contract error를 throw한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -139,7 +139,7 @@ describe('fetchComplexMarkers', () => {
     ).rejects.toThrow('Invalid V1 complex marker response: unitCntSum must be a number');
   });
 
-  it('preserves V1 ProblemDetail detail when the marker endpoint rejects the request', async () => {
+  it('marker endpoint가 request를 reject하면 V1 ProblemDetail detail을 보존한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(

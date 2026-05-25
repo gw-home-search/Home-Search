@@ -44,7 +44,7 @@ class MapApiRestDocsTest {
 	private MapUseCase mapUseCase;
 
 	@Test
-	@DisplayName("documents POST /api/v1/map/regions")
+	@DisplayName("POST /api/v1/map/regions REST Docs를 생성한다")
 	void documentRegionMarkers() throws Exception {
 		given(mapUseCase.getRegionMarkers(any(RegionMarkersRequest.class)))
 			.willReturn(List.of(new RegionMarkerResponse(1L, "Seoul", 37.5663, 126.9780, null)));
@@ -99,7 +99,7 @@ class MapApiRestDocsTest {
 	}
 
 	@Test
-	@DisplayName("documents POST /api/v1/map/complexes")
+	@DisplayName("POST /api/v1/map/complexes REST Docs를 생성한다")
 	void documentComplexMarkers() throws Exception {
 		given(mapUseCase.getComplexMarkers(any(ComplexMarkersRequest.class)))
 			.willReturn(List.of(new ComplexMarkerResponse(1001L, 37.5123, 127.0456, 125000L, 740L)));
@@ -175,7 +175,7 @@ class MapApiRestDocsTest {
 	}
 
 	@Test
-	@DisplayName("documents map ProblemDetail errors")
+	@DisplayName("map ProblemDetail error REST Docs를 생성한다")
 	void documentProblemDetail() throws Exception {
 		mockMvc.perform(post("/api/v1/map/regions")
 				.contentType(MediaType.APPLICATION_JSON)

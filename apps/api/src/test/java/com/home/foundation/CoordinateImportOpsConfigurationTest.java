@@ -17,7 +17,7 @@ class CoordinateImportOpsConfigurationTest {
 	private static final Path V1_BACKLOG = Path.of("../../.codex/harness/slices/backlog.toml");
 
 	@Test
-	@DisplayName("coordinate import compose override wires read-only SHP input without service keys")
+	@DisplayName("coordinate import compose override는 service key 없이 read-only SHP input을 연결한다")
 	void coordinateImportComposeOverrideWiresReadOnlyShpInputWithoutSecrets() throws IOException {
 		assertThat(COORDINATE_IMPORT_COMPOSE).exists();
 
@@ -40,7 +40,7 @@ class CoordinateImportOpsConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("coordinate import script keeps VWorld SHP preflight and snapshot evidence checks")
+	@DisplayName("coordinate import script는 VWorld SHP preflight와 snapshot evidence check를 유지한다")
 	void coordinateImportScriptKeepsPreflightAndEvidenceChecks() throws IOException {
 		assertThat(COORDINATE_IMPORT_SCRIPT).exists();
 
@@ -71,7 +71,7 @@ class CoordinateImportOpsConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("coordinate full import smoke verifier checks the latest passed snapshot evidence")
+	@DisplayName("coordinate full import smoke verifier는 최신 passed snapshot evidence를 확인한다")
 	void coordinateFullImportSmokeVerifierChecksLatestPassedSnapshotEvidence() throws IOException {
 		assertThat(COORDINATE_SMOKE_SCRIPT).exists();
 
@@ -97,7 +97,7 @@ class CoordinateImportOpsConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("backlog registers the coordinate full import smoke slice")
+	@DisplayName("backlog는 coordinate full import smoke slice를 등록한다")
 	void backlogRegistersCoordinateFullImportSmokeSlice() throws IOException {
 		assertThat(V1_BACKLOG).exists();
 

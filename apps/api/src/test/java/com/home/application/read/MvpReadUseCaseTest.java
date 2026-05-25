@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 class MvpReadUseCaseTest {
 
 	@Test
-	@DisplayName("read use case trims search queries and delegates non-empty searches")
+	@DisplayName("read use case는 search query를 trim하고 non-empty search를 위임한다")
 	void trimsAndDelegatesSearchQueries() {
 		CapturingRepository repository = new CapturingRepository();
 		MvpReadUseCase useCase = new MvpReadUseCase(repository);
@@ -32,7 +32,7 @@ class MvpReadUseCaseTest {
 	}
 
 	@Test
-	@DisplayName("read use case returns empty search result without querying repository for blank input")
+	@DisplayName("read use case는 blank input에서 repository query 없이 empty search result를 반환한다")
 	void blankSearchDoesNotQueryRepository() {
 		CapturingRepository repository = new CapturingRepository();
 		MvpReadUseCase useCase = new MvpReadUseCase(repository);
@@ -43,7 +43,7 @@ class MvpReadUseCaseTest {
 	}
 
 	@Test
-	@DisplayName("read use case delegates region, detail, and trade reads")
+	@DisplayName("read use case는 region/detail/trade read를 위임한다")
 	void delegatesReadApis() {
 		CapturingRepository repository = new CapturingRepository();
 		MvpReadUseCase useCase = new MvpReadUseCase(repository);
@@ -55,7 +55,7 @@ class MvpReadUseCaseTest {
 	}
 
 	@Test
-	@DisplayName("read use case converts missing parent paths to V1 not found exceptions")
+	@DisplayName("read use case는 missing parent path를 V1 not found exception으로 변환한다")
 	void missingParentsThrowV1NotFound() {
 		MvpReadUseCase useCase = new MvpReadUseCase(new EmptyMvpReadRepository());
 
@@ -71,7 +71,7 @@ class MvpReadUseCaseTest {
 	}
 
 	@Test
-	@DisplayName("empty read repository returns empty public read seams")
+	@DisplayName("empty read repository는 empty public read seam을 반환한다")
 	void emptyRepositoryReturnsEmptyReadSeams() {
 		EmptyMvpReadRepository repository = new EmptyMvpReadRepository();
 

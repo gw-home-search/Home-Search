@@ -16,7 +16,7 @@ class BackendProfileConfigurationTest {
 	private static final Path RESOURCES = Path.of("src/main/resources");
 
 	@Test
-	@DisplayName("base profile keeps database auto-configuration and actuator exposure profile-scoped")
+	@DisplayName("base profile은 database auto-configuration과 actuator exposure를 profile scope로 유지한다")
 	void baseProfileDoesNotGloballyDisableDatabaseAutoConfiguration() throws IOException {
 		Properties properties = load("application.yml");
 
@@ -28,7 +28,7 @@ class BackendProfileConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("test profile is the only profile that disables database auto-configuration")
+	@DisplayName("test profile만 database auto-configuration을 비활성화한다")
 	void testProfileDisablesDatabaseAutoConfiguration() throws IOException {
 		Properties properties = load("application-test.yml");
 
@@ -40,7 +40,7 @@ class BackendProfileConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("local profile wires PostgreSQL and V1 Flyway/local seed migrations through environment placeholders")
+	@DisplayName("local profile은 PostgreSQL과 V1 Flyway/local seed migration을 environment placeholder로 연결한다")
 	void localProfileWiresPostgresAndFlywayMigrationLocation() throws IOException {
 		Properties properties = load("application-local.yml");
 

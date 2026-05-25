@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 class JdbcRegionMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
 	@Test
-	@DisplayName("bounds query returns canonical region markers for the requested region level")
+	@DisplayName("bounds query는 요청한 region level의 canonical region marker를 반환한다")
 	void boundsQueryReturnsRegionMarkersForRequestedLevel() {
 		seedRegionMarkers();
 		JdbcRegionMarkerRepository repository = new JdbcRegionMarkerRepository(jdbcClient);
@@ -32,7 +32,7 @@ class JdbcRegionMarkerRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
-	@DisplayName("bounds query excludes other region levels and regions without marker coordinates")
+	@DisplayName("bounds query는 다른 region level과 marker coordinate가 없는 region을 제외한다")
 	void boundsQueryExcludesOtherLevelsAndNullCoordinates() {
 		seedRegionMarkers();
 		JdbcRegionMarkerRepository repository = new JdbcRegionMarkerRepository(jdbcClient);

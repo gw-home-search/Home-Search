@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchMapMarkers } from './fetchMapMarkers';
 import { resolveApiUrl } from './resolveApiUrl';
 
-describe('fetchMapMarkers', () => {
+describe('fetchMapMarkers API 어댑터', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('uses the complex marker endpoint at detailed map levels', async () => {
+  it('detailed map level에서 complex marker endpoint를 사용한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -28,7 +28,7 @@ describe('fetchMapMarkers', () => {
     );
   });
 
-  it('uses si-do region markers for wide map levels', async () => {
+  it('wide map level에서 si-do region marker를 사용한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -48,7 +48,7 @@ describe('fetchMapMarkers', () => {
     );
   });
 
-  it('uses si-gun-gu region markers for middle-wide map levels', async () => {
+  it('middle-wide map level에서 si-gun-gu region marker를 사용한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -65,7 +65,7 @@ describe('fetchMapMarkers', () => {
     );
   });
 
-  it('uses eup-myeon-dong region markers before detailed complex levels', async () => {
+  it('detailed complex level 전에는 eup-myeon-dong region marker를 사용한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 

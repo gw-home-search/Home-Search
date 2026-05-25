@@ -23,7 +23,7 @@ class RtmsApartmentTradeClientTest {
 	private final RtmsApartmentTradeResponseParser parser = new RtmsApartmentTradeResponseParser(new ObjectMapper());
 
 	@Test
-	@DisplayName("RTMS JSON response is parsed into an OpenApiTradeIngestBatch without a live API call")
+	@DisplayName("RTMS JSON response는 live API call 없이 OpenApiTradeIngestBatch로 parse된다")
 	void parseRtmsJsonResponseIntoOpenApiTradeIngestBatch() {
 		String payload = """
 			{
@@ -84,7 +84,7 @@ class RtmsApartmentTradeClientTest {
 	}
 
 	@Test
-	@DisplayName("blank RTMS service key fails before an HTTP request can be created")
+	@DisplayName("blank RTMS service key는 HTTP request 생성 전에 실패한다")
 	void blankServiceKeyFailsBeforeHttpRequest() {
 		RtmsApartmentTradeProperties properties = new RtmsApartmentTradeProperties(
 			"https://example.invalid",
@@ -112,7 +112,7 @@ class RtmsApartmentTradeClientTest {
 	}
 
 	@Test
-	@DisplayName("public RTMS client calls the configured endpoint and parses the response")
+	@DisplayName("public RTMS client는 configured endpoint를 호출하고 response를 parse한다")
 	void publicClientFetchesConfiguredEndpointAndParsesResponse() {
 		RtmsApartmentTradeProperties properties = new RtmsApartmentTradeProperties(
 			"https://api.example.test",
@@ -145,7 +145,7 @@ class RtmsApartmentTradeClientTest {
 	}
 
 	@Test
-	@DisplayName("textual or missing RTMS items are treated as an empty batch")
+	@DisplayName("textual 또는 missing RTMS item은 empty batch로 처리된다")
 	void textualItemsAreEmptyBatch() {
 		String payload = """
 			{

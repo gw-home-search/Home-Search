@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchRegionDetail, fetchRootRegions } from './fetchRegions';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
 
-describe('fetchRegions', () => {
+describe('fetchRegions API 어댑터', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('gets documented V1 root regions', async () => {
+  it('documented V1 root region을 가져온다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse([
         {
@@ -32,7 +32,7 @@ describe('fetchRegions', () => {
     );
   });
 
-  it('gets documented V1 region detail and child regions', async () => {
+  it('documented V1 region detail과 child region을 가져온다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         id: '1',
@@ -68,7 +68,7 @@ describe('fetchRegions', () => {
     );
   });
 
-  it('rejects invalid V1 region detail children shapes', async () => {
+  it('invalid V1 region detail children shape를 reject한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -87,7 +87,7 @@ describe('fetchRegions', () => {
     );
   });
 
-  it('preserves V1 ProblemDetail detail when region detail fails', async () => {
+  it('region detail 실패 시 V1 ProblemDetail detail을 보존한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(

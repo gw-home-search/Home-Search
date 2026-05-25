@@ -44,7 +44,7 @@ class ReadApiControllerContractTest {
 	private MvpReadUseCase readUseCase;
 
 	@Test
-	@DisplayName("GET /api/v1/search/complexes returns canonical V1 search fields")
+	@DisplayName("GET /api/v1/search/complexes는 canonical V1 search field를 반환한다")
 	void searchComplexesReturnsCanonicalFields() throws Exception {
 		given(readUseCase.searchComplexes(eq("Sample")))
 			.willReturn(List.of(new SearchComplexResponse(
@@ -71,7 +71,7 @@ class ReadApiControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("GET /api/v1/search/complexes returns an empty array for blank search")
+	@DisplayName("GET /api/v1/search/complexes는 blank search에서 empty array를 반환한다")
 	void blankSearchReturnsEmptyArray() throws Exception {
 		given(readUseCase.searchComplexes(eq("")))
 			.willReturn(List.of());
@@ -82,7 +82,7 @@ class ReadApiControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("GET /api/v1/region returns root regions")
+	@DisplayName("GET /api/v1/region은 root region을 반환한다")
 	void rootRegionsReturnCanonicalFields() throws Exception {
 		given(readUseCase.getRootRegions())
 			.willReturn(List.of(new RegionSummaryResponse(1L, "Seoul")));
@@ -95,7 +95,7 @@ class ReadApiControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("GET /api/v1/region/{regionId} returns region detail and children")
+	@DisplayName("GET /api/v1/region/{regionId}는 region detail과 child region을 반환한다")
 	void regionDetailReturnsChildrenAndCenter() throws Exception {
 		given(readUseCase.getRegionDetail(1L))
 			.willReturn(new RegionDetailResponse(
@@ -117,7 +117,7 @@ class ReadApiControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("GET /api/v1/detail/{parcelId} returns parcel and representative complex detail")
+	@DisplayName("GET /api/v1/detail/{parcelId}는 parcel과 representative complex detail을 반환한다")
 	void parcelDetailReturnsCanonicalFields() throws Exception {
 		given(readUseCase.getParcelDetail(1001L))
 			.willReturn(new ParcelDetailResponse(
@@ -159,7 +159,7 @@ class ReadApiControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("GET /api/v1/trade/{parcelId} returns trades newest first")
+	@DisplayName("GET /api/v1/trade/{parcelId}는 trade를 newest first로 반환한다")
 	void tradeListReturnsCanonicalFields() throws Exception {
 		given(readUseCase.getTradeList(1001L))
 			.willReturn(new TradeListResponse(1001L, List.of(
@@ -182,7 +182,7 @@ class ReadApiControllerContractTest {
 	}
 
 	@Test
-	@DisplayName("GET read endpoints return ProblemDetail 404 for missing parents")
+	@DisplayName("GET read endpoint는 missing parent에서 ProblemDetail 404를 반환한다")
 	void missingReadResourceReturnsProblemDetail404() throws Exception {
 		given(readUseCase.getRegionDetail(404L))
 			.willThrow(new V1ResourceNotFoundException("region not found"));

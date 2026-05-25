@@ -12,7 +12,7 @@ import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 class SampleMvpSeedSqlTest extends JdbcPostgresTestSupport {
 
 	@Test
-	@DisplayName("sample MVP seed SQL is idempotent and supports map detail/trade reads")
+	@DisplayName("sample MVP seed SQL은 idempotent하며 map detail/trade read를 지원한다")
 	void sampleMvpSeedSqlIsIdempotentAndQueryable() {
 		runSampleSeed();
 		runSampleSeed();

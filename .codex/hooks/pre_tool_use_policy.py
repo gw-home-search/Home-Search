@@ -83,6 +83,10 @@ READ_ONLY_GIT_SUBCOMMANDS = {
     "status",
 }
 
+READ_ONLY_PYTHON_SCRIPTS = {
+    "scripts/" + "check-test-display-names.py",
+}
+
 MUTATION_COMMANDS = {
     "chmod",
     "chown",
@@ -162,6 +166,42 @@ def collect_values(value: Any, keys: set[str]) -> list[str]:
     return found
 
 
+def text_from_content(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "\n".join(part for part in (text_from_content(item) for item in value) if part)
+    if isinstance(value, dict):
+        for key in ("text", "content", "message", "value"):
+            text = text_from_content(value.get(key))
+            if text:
+                return text
+    return ""
+
+
+def message_role(value: dict[str, Any]) -> str:
+    role = value.get("role") or value.get("type")
+    if isinstance(role, str):
+        return role.lower()
+    message = value.get("message")
+    if isinstance(message, dict):
+        role = message.get("role") or message.get("type")
+        if isinstance(role, str):
+            return role.lower()
+    return ""
+
+
+def message_text(value: dict[str, Any]) -> str:
+    message = value.get("message")
+    if isinstance(message, dict):
+        text = text_from_content(message)
+        if text:
+            return text
+    return text_from_content(value)
+
+
 def command_from_payload(payload: dict[str, Any]) -> str:
     data = tool_input(payload)
     for key in ("command", "cmd", "script"):
@@ -193,6 +233,14 @@ def command_name(words: list[str]) -> str:
     if not words:
         return ""
     return Path(words[0]).name
+
+
+def first_script_arg(words: list[str]) -> str:
+    for word in words[1:]:
+        if word.startswith("-"):
+            continue
+        return word.removeprefix("./")
+    return ""
 
 
 def is_read_only_command(command: str) -> bool:
@@ -388,20 +436,54 @@ def is_protected_mutation_path(path: str) -> bool:
     return is_build_output(path)
 
 
-def transcript_text(payload: dict[str, Any]) -> str:
+def latest_user_message_from_transcript(path: Path) -> str:
+    try:
+        raw = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+    user_messages: list[str] = []
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            value = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict) and message_role(value) == "user":
+            text = message_text(value)
+            if text:
+                user_messages.append(text)
+    if user_messages:
+        return user_messages[-1]
+
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return ""
+    if isinstance(value, list):
+        for item in reversed(value):
+            if isinstance(item, dict) and message_role(item) == "user":
+                return message_text(item)
+    if isinstance(value, dict) and message_role(value) == "user":
+        return message_text(value)
+    return ""
+
+
+def current_user_text(payload: dict[str, Any]) -> str:
     parts: list[str] = []
-    for key in ("last_assistant_message", "lastAssistantMessage"):
+    for key in ("last_user_message", "lastUserMessage", "user_message", "userMessage", "prompt"):
         value = payload.get(key)
         if isinstance(value, str):
             parts.append(value)
     transcript = payload.get("transcript_path") or payload.get("transcriptPath")
     if isinstance(transcript, str):
         transcript_path = Path(transcript)
-        try:
-            if transcript_path.exists() and transcript_path.is_file():
-                parts.append(transcript_path.read_text(encoding="utf-8", errors="replace"))
-        except OSError:
-            pass
+        if transcript_path.exists() and transcript_path.is_file():
+            text = latest_user_message_from_transcript(transcript_path)
+            if text:
+                parts.append(text)
     return "\n".join(parts)
 
 
@@ -418,6 +500,26 @@ def has_ko_write_approval(text: str, ko_paths: list[str]) -> bool:
     return has_request and has_confirmation and has_basis and has_targets
 
 
+def has_protected_write_approval(text: str, protected_paths: list[str]) -> bool:
+    if not text:
+        return False
+    has_request = "보호 경로 변경 요청:" in text or "Protected path 변경 요청:" in text
+    has_confirmation = bool(
+        re.search(r"(보호 경로 변경 승인|Protected path 변경 승인|사용자 승인)\s*:\s*(확인|승인|approved)", text, re.IGNORECASE)
+    )
+    has_basis = "보호 경로 변경 기준: current task approval only" in text
+    has_targets = all(path in text for path in protected_paths)
+    return has_request and has_confirmation and has_basis and has_targets
+
+
+def is_external_reference_path(path: str) -> bool:
+    return (
+        path.startswith("/Users/gwongwangjae/IdeaProjects/home-server/")
+        or path.startswith("/Users/gwongwangjae/frontend/home-client/")
+        or path.startswith("/Users/gwongwangjae/saved-ai-exam/")
+    )
+
+
 def command_is_mutation(command: str) -> bool:
     if not command:
         return False
@@ -427,6 +529,8 @@ def command_is_mutation(command: str) -> bool:
         words = shell_words(cmd)
         name = command_name(words)
         if name in MUTATION_COMMANDS:
+            if name in {"python", "python3"} and first_script_arg(words) in READ_ONLY_PYTHON_SCRIPTS:
+                continue
             if name == "sed" and not any(word.startswith("-i") for word in words[1:]):
                 continue
             return True
@@ -492,17 +596,25 @@ def check_payload(
     ko_paths = sorted(path for path in paths if is_ko_doc_path(path))
     if any(is_ko_local_path(path) for path in paths):
         deny("*_KO.local.md 변경 차단: 개인 KO notes는 건드리지 않습니다.")
-    if ko_paths and not has_ko_write_approval(transcript_text(payload), ko_paths):
+    approval_text = current_user_text(payload)
+    if ko_paths and not has_ko_write_approval(approval_text, ko_paths):
         deny(
             "KO 수정 승인 필요: KO 변경 전 KO 수정 요청, KO 대상, "
             "KO 생성 기준: canonical source only, 사용자 승인 evidence가 필요합니다."
         )
 
     for path in paths:
-        if path == "docs/API_CONTRACT.md":
-            deny("명시 승인 없는 docs/API_CONTRACT.md 변경 차단.")
-        if is_protected_mutation_path(path) and not is_ko_doc_path(path):
-            deny(f"protected path 변경 차단: {path}")
+        if is_external_reference_path(path):
+            deny(f"read-only reference 변경 차단: {path}")
+        if is_build_output(path):
+            deny(f"build output 변경 차단: {path}")
+
+    protected_paths = sorted(
+        path for path in paths
+        if path == "docs/API_CONTRACT.md" or (is_protected_mutation_path(path) and not is_ko_doc_path(path))
+    )
+    if protected_paths and not has_protected_write_approval(approval_text, protected_paths):
+        deny(f"protected path 변경 차단: {', '.join(protected_paths)}")
 
     scope = infer_worktree_scope(root, cwd, branch)
     if scope == "backend" and any(path.startswith("apps/web/") for path in paths):
@@ -548,6 +660,17 @@ def run_self_test() -> int:
             ),
         ),
         (
+            "read-only Python validator is allowed",
+            lambda: not denied_output(
+                {
+                    "cwd": str(FALLBACK_REPO_ROOT),
+                    "tool_input": {"cmd": "python3 " + "scripts/" + "check-test-display-names.py"},
+                },
+                repo_root=FALLBACK_REPO_ROOT,
+                branch_name="feat/root",
+            ),
+        ),
+        (
             "backend worktree denies apps/web mutation",
             lambda: "apps/web/**" in denied_output(
                 patch_payload(backend_root, "apps/web/src/App.tsx"),
@@ -588,7 +711,7 @@ def run_self_test() -> int:
             lambda: not denied_output(
                 {
                     **patch_payload(FALLBACK_REPO_ROOT, "AGENTS_KO.md"),
-                    "last_assistant_message": "\n".join(
+                    "last_user_message": "\n".join(
                         [
                             "KO 수정 요청:",
                             "KO 대상: AGENTS_KO.md",
@@ -599,6 +722,79 @@ def run_self_test() -> int:
                 },
                 repo_root=FALLBACK_REPO_ROOT,
                 branch_name="feat/ko-guard",
+            ),
+        ),
+        (
+            "protected mutation without approval is denied",
+            lambda: "protected path 변경 차단" in denied_output(
+                patch_payload(FALLBACK_REPO_ROOT, "docs/API_CONTRACT.md"),
+                repo_root=FALLBACK_REPO_ROOT,
+                branch_name="feat/protected-guard",
+            ),
+        ),
+        (
+            "stale protected transcript text is not approval",
+            lambda: "protected path 변경 차단" in denied_output(
+                {
+                    **patch_payload(FALLBACK_REPO_ROOT, "docs/API_CONTRACT.md"),
+                    "last_assistant_message": "이전 출력: protected path 변경 차단. User said Implement the plan.",
+                },
+                repo_root=FALLBACK_REPO_ROOT,
+                branch_name="feat/protected-guard",
+            ),
+        ),
+        (
+            "assistant-only protected approval is denied",
+            lambda: "protected path 변경 차단" in denied_output(
+                {
+                    **patch_payload(FALLBACK_REPO_ROOT, "docs/API_CONTRACT.md"),
+                    "last_assistant_message": "\n".join(
+                        [
+                            "보호 경로 변경 요청:",
+                            "보호 경로 대상: docs/API_CONTRACT.md",
+                            "보호 경로 변경 기준: current task approval only",
+                            "사용자 승인: 확인",
+                        ]
+                    ),
+                },
+                repo_root=FALLBACK_REPO_ROOT,
+                branch_name="feat/protected-guard",
+            ),
+        ),
+        (
+            "protected mutation with path-specific approval is allowed",
+            lambda: not denied_output(
+                {
+                    **patch_payload(FALLBACK_REPO_ROOT, "docs/API_CONTRACT.md"),
+                    "last_user_message": "\n".join(
+                        [
+                            "보호 경로 변경 요청:",
+                            "보호 경로 대상: docs/API_CONTRACT.md",
+                            "보호 경로 변경 기준: current task approval only",
+                            "사용자 승인: 확인",
+                        ]
+                    ),
+                },
+                repo_root=FALLBACK_REPO_ROOT,
+                branch_name="feat/protected-guard",
+            ),
+        ),
+        (
+            "build output mutation is denied before protected approval",
+            lambda: "build output 변경 차단" in denied_output(
+                {
+                    **patch_payload(FALLBACK_REPO_ROOT, "apps/api/build/generated.txt"),
+                    "last_assistant_message": "\n".join(
+                        [
+                            "보호 경로 변경 요청:",
+                            "보호 경로 대상: apps/api/build/generated.txt",
+                            "보호 경로 변경 기준: current task approval only",
+                            "사용자 승인: 확인",
+                        ]
+                    ),
+                },
+                repo_root=FALLBACK_REPO_ROOT,
+                branch_name="feat/protected-guard",
             ),
         ),
     ]

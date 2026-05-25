@@ -45,7 +45,7 @@ export async function fetchParcelTrades(parcelId: number): Promise<ParcelTrades>
 
   const payload: unknown = await response.json();
   if (!isRecord(payload)) {
-    throw new Error('Invalid V1 parcel trade response: expected an object');
+    throw new Error('Invalid public API parcel trade response: expected an object');
   }
 
   return normalizeParcelTrades(payload);
@@ -53,14 +53,14 @@ export async function fetchParcelTrades(parcelId: number): Promise<ParcelTrades>
 
 function normalizeParcelTrades(payload: ParcelTradesResponse): ParcelTrades {
   if (!Array.isArray(payload.trades)) {
-    throw new Error('Invalid V1 parcel trade response: trades must be an array');
+    throw new Error('Invalid public API parcel trade response: trades must be an array');
   }
 
   return {
     parcelId: toRequiredNumber(payload.parcelId, 'parcelId'),
     trades: payload.trades.map((trade) => {
       if (!isTradeItemResponse(trade)) {
-        throw new Error('Invalid V1 parcel trade response: trade item must be an object');
+        throw new Error('Invalid public API parcel trade response: trade item must be an object');
       }
 
       return normalizeTradeItem(trade);
@@ -89,12 +89,12 @@ function isTradeItemResponse(value: unknown): value is TradeItemResponse {
 
 function toRequiredNumber(value: unknown, field: string): number {
   if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
-    throw new Error(`Invalid V1 parcel trade response: ${field} must be a number`);
+    throw new Error(`Invalid public API parcel trade response: ${field} must be a number`);
   }
 
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid V1 parcel trade response: ${field} must be a number`);
+    throw new Error(`Invalid public API parcel trade response: ${field} must be a number`);
   }
 
   return parsed;
@@ -106,12 +106,12 @@ function toNullableNumber(value: unknown, field: string): number | null {
   }
 
   if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
-    throw new Error(`Invalid V1 parcel trade response: ${field} must be a number`);
+    throw new Error(`Invalid public API parcel trade response: ${field} must be a number`);
   }
 
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid V1 parcel trade response: ${field} must be a number`);
+    throw new Error(`Invalid public API parcel trade response: ${field} must be a number`);
   }
 
   return parsed;
@@ -119,7 +119,7 @@ function toNullableNumber(value: unknown, field: string): number | null {
 
 function toRequiredString(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`Invalid V1 parcel trade response: ${field} must be a non-empty string`);
+    throw new Error(`Invalid public API parcel trade response: ${field} must be a non-empty string`);
   }
 
   return value;

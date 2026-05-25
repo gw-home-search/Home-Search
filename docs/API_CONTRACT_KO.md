@@ -1,27 +1,45 @@
+<!-- AUTO-GENERATED: canonical source only. Do not edit manually. -->
+
+# KO Sync
+
+- KO 생성 기준: canonical source only
+- 원문: `docs/API_CONTRACT.md`
+- 동기화일: 2026-05-25
+
+아래 내용은 canonical source에서 재생성한 동기화본입니다. 명령, 경로, API, 필드명 같은 기술 토큰은 원문을 유지합니다.
+
 # API Contract
+
 
 ## Purpose
 
-이 문서는 Home Search migration을 위한 V1 public API contract다. target backend와 frontend가 따라야 하는 HTTP URLs, request shapes, response shapes, units, error behavior, compatibility rules를 고정한다.
+This document is the Home Search public API contract.
+It fixes the HTTP URLs, request shapes, response shapes, units, error behavior,
+and compatibility rules that the target backend and frontend must follow.
 
-이 문서를 다음의 baseline으로 사용한다:
+Use this document as the baseline for:
 
-- Backend controllers, DTOs, repository projections, controller tests.
-- Frontend API clients, marker adapters, detail panels, search behavior.
-- source backend fields가 source frontend expectations와 충돌할 때 migration decisions.
+- Backend controllers, DTOs, repository projections, and controller tests.
+- Frontend API clients, marker adapters, detail panels, and search behavior.
+- Migration decisions when source backend fields conflict with source frontend
+  expectations.
 
-V1은 frontend가 새 route names 없이 map을 표시할 수 있도록 main API URLs를 안정적으로 유지한다. safer storage를 지원하기 위해 internal implementation은 바뀔 수 있지만, 이 contract가 먼저 업데이트되지 않는 한 그 changes가 public V1 API로 새어나오면 안 된다.
+Home Search keeps the main API URLs stable so the frontend can display the map without
+new route names. Internal implementation may change to support safer storage,
+but those changes must not leak into the public API unless this contract is
+updated first.
 
 ## Current Work Package
 
-이 work package는 API contract만 명확히 한다. backend code, frontend adapters, OpenAPI YAML, new tests를 구현하지 않는다.
+This work package clarifies the API contract only. It does not implement
+backend code, frontend adapters, OpenAPI YAML, or new tests.
 
-다음 implementation batches는 이 문서를 사용해 다음을 만들어야 한다:
+The next implementation batches should use this document to build:
 
 - Backend request/response DTOs and controller tests.
-- canonical response fields를 emit하는 Repository projections.
-- temporary source-field variants를 normalize하는 Frontend adapters.
-- map, search, region, detail, trade flows를 위한 Integration tests.
+- Repository projections that emit the canonical response fields.
+- Frontend adapters that normalize temporary source-field variants.
+- Integration tests for the map, search, region, detail, and trade flows.
 
 ## Fixed Paths
 
@@ -39,44 +57,52 @@ Target repository:
 
 ## Contract Authority
 
-source backend와 source frontend는 read-only references다. source code와 이 target contract가 다르면 target V1 implementation은 이 문서를 따르고 source mismatch를 migration note로 남겨야 한다.
+The source backend and source frontend are read-only references. If source code
+and this target contract disagree, the Home Search implementation should follow
+this document and keep the source mismatch as a migration note.
 
-migration scope가 명시적으로 바뀌지 않는 한 rankings, favorites, alarms, mail batches, recommendations, auth flows, heavy analytics를 V1에 넓히지 않는다.
+Do not widen Home Search to include rankings, favorites, alarms, mail batches,
+recommendations, auth flows, or heavy analytics unless the migration scope is
+explicitly changed.
 
 ## Common Conventions
 
-- Canonical URLs는 leading slash를 포함한다. 예: `/api/v1/map/regions`.
-- Requests와 responses는 JSON을 사용한다.
-- Coordinates는 WGS84 / EPSG:4326을 사용한다.
-- `lat`와 `latitude`는 latitude를 뜻한다. `lng`와 `longitude`는 longitude를 뜻한다.
-- Dates는 `YYYY-MM-DD`를 사용한다.
-- `dealAmount`와 `latestDealAmount`는 10,000 KRW units의 integer values다.
-- `priceEokMin`와 `priceEokMax`는 eok units의 filter inputs다. backend는 stored trade amounts와 비교하기 전에 이를 10,000 KRW units로 변환한다.
-- Nullable filter fields는 "이 filter를 적용하지 않는다"를 뜻한다.
-- request 자체가 valid하면 empty list results는 `200`과 `[]`를 반환해야 한다.
-- Optional response fields는 `null`이거나 omitted될 수 있다.
+- Canonical URLs include a leading slash, for example `/api/v1/map/regions`.
+- Requests and responses use JSON.
+- Coordinates use WGS84 / EPSG:4326.
+- `lat` and `latitude` mean latitude. `lng` and `longitude` mean longitude.
+- Dates use `YYYY-MM-DD`.
+- `dealAmount` and `latestDealAmount` are integer values in 10,000 KRW units.
+- `priceEokMin` and `priceEokMax` are filter inputs in eok units. The backend
+  converts them to 10,000 KRW units before comparing with stored trade amounts.
+- Nullable filter fields mean "do not apply this filter".
+- Empty list results should return `200` with `[]` whenever the request itself
+  is valid.
+- Optional response fields may be `null` or omitted.
 
 ## Compatibility Policy
 
-V1 compatible changes:
+Compatible changes:
 
-- optional response field 추가.
-- optional로 문서화된 field를 `null`로 반환하거나 omit.
-- temporary adapter 안에서 legacy frontend field variants 허용.
+- Adding an optional response field.
+- Returning `null` or omitting an optional field documented as optional.
+- Accepting legacy frontend field variants inside a temporary adapter.
 
-V1 breaking changes:
+Breaking changes:
 
-- documented response field 제거.
-- documented field rename.
-- documented field type 또는 unit 변경.
-- 이전에 optional이던 field를 required로 만들기.
-- public URL 또는 HTTP method 변경.
+- Removing a documented response field.
+- Renaming a documented field.
+- Changing a documented field type or unit.
+- Requiring a field that was previously optional.
+- Changing a public URL or HTTP method.
 
-Target V1은 canonical fields를 expose해야 한다. source code의 legacy variants는 frontend adapter에서 일시적으로 허용할 수 있지만 backend responses는 아래 canonical fields로 converge해야 한다.
+Target Home Search should expose canonical fields. Legacy variants from the source code
+may be accepted temporarily by the frontend adapter, but backend responses
+should converge on the canonical fields below.
 
 ## Error Policy
 
-V1은 Spring `ProblemDetail` style error bodies를 사용한다.
+Home Search uses Spring `ProblemDetail` style error bodies.
 
 Minimum error fields:
 
@@ -89,9 +115,9 @@ Minimum error fields:
 
 Status rules:
 
-- Invalid request body, invalid query parameter, invalid enum: `400`.
-- Missing region, parcel, complex, detail, trade parent resource: `404`.
-- Unexpected server error 또는 external integration failure: `500`.
+- Invalid request body, invalid query parameter, or invalid enum: `400`.
+- Missing region, parcel, complex, detail, or trade parent resource: `404`.
+- Unexpected server error or external integration failure: `500`.
 
 Example:
 
@@ -106,14 +132,14 @@ Example:
 }
 ```
 
-## V1 APIs
+## Public APIs
 
 ### POST `/api/v1/map/regions`
 
 Purpose:
 
-- current map bounds 안의 region-level markers를 반환한다.
-- Kakao map이 zoomed out 상태일 때 사용된다.
+- Return region-level markers inside the current map bounds.
+- Used when the Kakao map is zoomed out.
 
 Source controller:
 
@@ -170,26 +196,28 @@ Response fields:
 - `name`: display name.
 - `lat`: marker latitude.
 - `lng`: marker longitude.
-- `trend`: optional regional trend value. V1은 `null`을 반환하거나 omit할 수 있다.
+- `trend`: optional regional trend value. Home Search may return `null` or omit it.
 
 Status:
 
-- `200`: successful lookup. `[]`일 수 있다.
-- `400`: invalid bounds 또는 unsupported `region`.
+- `200`: successful lookup. May be `[]`.
+- `400`: invalid bounds or unsupported `region`.
 - `500`: unexpected server error.
 
 Migration notes:
 
-- Regional trend calculation은 V1 map display에 required가 아니다.
-- Source repository aliases는 target field names와 정확히 일치하지 않을 수 있다. Target V1은 `name`, `lat`, `lng`를 expose해야 한다.
-- `unitCntSum`은 required V1 region-marker field가 아니다. Frontend code는 region markers를 render하기 위해 이를 요구하면 안 된다.
+- Regional trend calculation is not required for map display.
+- Source repository aliases may not match the target field names exactly.
+  Target Home Search should expose `name`, `lat`, and `lng`.
+- `unitCntSum` is not required for Home Search region markers. Frontend code must not
+  require it to render region markers.
 
 ### POST `/api/v1/map/complexes`
 
 Purpose:
 
-- current map bounds 안의 parcel-level apartment complex markers를 반환한다.
-- Kakao map이 detailed markers를 보여줄 만큼 zoomed in 상태일 때 사용된다.
+- Return parcel-level apartment complex markers inside the current map bounds.
+- Used when the Kakao map is zoomed in enough to show detailed markers.
 
 Source controller:
 
@@ -250,31 +278,35 @@ Response:
 
 Response fields:
 
-- `parcelId`: detail 및 trade APIs에서 사용하는 parcel id.
+- `parcelId`: parcel id used by detail and trade APIs.
 - `lat`: marker latitude.
 - `lng`: marker longitude.
 - `latestDealAmount`: optional latest trade amount in 10,000 KRW units.
-- `unitCntSum`: parcel 아래 total household count.
+- `unitCntSum`: total household count under the parcel.
 
 Status:
 
-- `200`: successful lookup. `[]`일 수 있다.
-- `400`: invalid bounds 또는 invalid filter type/range.
+- `200`: successful lookup. May be `[]`.
+- `400`: invalid bounds or invalid filter type/range.
 - `500`: unexpected server error.
 
 Migration notes:
 
-- source code에는 `parcelId`, `id`, `latitude`, `lat`, `longitude`, `lng` naming이 섞여 있다.
-- Target V1 backend는 위 canonical fields를 반환해야 한다.
-- Frontend adapters는 source code가 migrate되는 동안 `id`, `latitude`, `longitude`를 일시적으로 허용할 수 있지만 새 target code는 `parcelId`, `lat`, `lng`를 선호해야 한다.
-- Map marker APIs는 ranking, trend, favorite, alarm, mail, auth state를 요구하면 안 된다.
+- Source code has mixed naming around `parcelId`, `id`, `latitude`, `lat`,
+  `longitude`, and `lng`.
+- Target Home Search backend should return the canonical fields above.
+- Frontend adapters may temporarily accept `id`, `latitude`, and `longitude`
+  while source code is being migrated, but new target code should prefer
+  `parcelId`, `lat`, and `lng`.
+- Map marker APIs must not require ranking, trend, favorite, alarm, mail, or
+  auth state.
 
 ### GET `/api/v1/search/complexes?q=`
 
 Purpose:
 
-- user-entered text로 apartment complexes를 search한다.
-- left sidebar search flow에서 사용된다.
+- Search apartment complexes by user-entered text.
+- Used by the left sidebar search flow.
 
 Source controller:
 
@@ -287,7 +319,7 @@ Frontend source consumers:
 
 Request:
 
-- Query parameter `q`: required string, search 전에 trim한다.
+- Query parameter `q`: required string, trim before search.
 
 Response:
 
@@ -315,19 +347,21 @@ Response fields:
 
 Status:
 
-- `200`: successful lookup. empty 또는 no-match searches는 `[]`를 반환한다.
+- `200`: successful lookup. Empty or no-match searches return `[]`.
 - `400`: invalid query parameter type.
 - `500`: unexpected server error.
 
 Migration notes:
 
-- 이 endpoint는 source frontend compatibility를 위해 `latitude`와 `longitude`를 유지한다. frontend adapter를 같은 batch에서 update하지 않는 한 V1에서 이를 `lat`와 `lng`로 rename하지 않는다.
+- This endpoint keeps `latitude` and `longitude` for source frontend
+  compatibility. Do not rename them to `lat` and `lng` in Home Search unless the
+  frontend adapter is updated in the same batch.
 
 ### GET `/api/v1/region`
 
 Purpose:
 
-- region navigation을 위한 root regions를 load한다.
+- Load root regions for region navigation.
 
 Source controller:
 
@@ -355,15 +389,15 @@ Response fields:
 
 Status:
 
-- `200`: successful lookup. `[]`일 수 있다.
+- `200`: successful lookup. May be `[]`.
 - `500`: unexpected server error.
 
 ### GET `/api/v1/region/{regionId}`
 
 Purpose:
 
-- region detail, child regions, center coordinates를 load한다.
-- region navigation과 map recentering에 사용된다.
+- Load region detail, child regions, and center coordinates.
+- Used for region navigation and map recentering.
 
 Source controller:
 
@@ -413,7 +447,7 @@ Status:
 
 Purpose:
 
-- selected marker의 parcel 및 representative complex details를 반환한다.
+- Return parcel and representative complex details for the selected marker.
 
 Source controller:
 
@@ -464,18 +498,19 @@ Response fields:
 Status:
 
 - `200`: successful lookup.
-- `404`: parcel 또는 representative complex does not exist.
+- `404`: parcel or representative complex does not exist.
 - `500`: unexpected server error.
 
 Migration notes:
 
-- Source DTO는 `null` values를 omit한다. Target V1도 nullable fields를 explicit `null`로 반환하기보다 omit할 수 있다.
+- Source DTO omits `null` values. Target Home Search may omit nullable fields rather
+  than returning explicit `null`.
 
 ### GET `/api/v1/trade/{parcelId}`
 
 Purpose:
 
-- selected parcel 아래 complexes의 trade list를 반환한다.
+- Return trade list for complexes under the selected parcel.
 
 Source controller:
 
@@ -519,19 +554,22 @@ Trade item fields:
 
 Status:
 
-- `200`: successful lookup. parcel은 존재하지만 trades가 없으면 empty `trades` list를 반환한다.
-- `404`: parcel 또는 complex parent path does not exist.
+- `200`: successful lookup. If the parcel exists but has no trades, return an
+  empty `trades` list.
+- `404`: parcel or complex parent path does not exist.
 - `500`: unexpected server error.
 
 Migration notes:
 
-- target V1 query path는 `complex_id`를 통해 동작해야 한다.
-- audit, matching, deduplication을 위해 `complex_pk`, `apt_seq`, `source`, `source_key`를 보존하되 public response에는 노출하지 않는다.
-- default ordering은 newest first여야 한다: `dealDate` descending, dates가 같으면 `tradeId` descending.
+- The Home Search query path should work through `complex_id`.
+- Preserve `complex_pk`, `apt_seq`, `source`, and `source_key` for audit,
+  matching, and deduplication, but do not expose them in this public response.
+- Default ordering should be newest first: `dealDate` descending, then
+  `tradeId` descending when dates are equal.
 
-## V2 APIs
+## later-scope APIs
 
-다음은 V1 critical path 밖에 둔다:
+Keep these out of the current critical path:
 
 - `/api/v1/rankings/top-price-30d`
 - `/api/v1/rankings/top-volume-30d`
@@ -540,4 +578,5 @@ Migration notes:
 - `/auth/access`
 - `/admin/batch/trade-alarm/run`
 
-source knowledge에서 삭제해서는 안 되지만 collection, storage, map display를 막으면 안 된다.
+They should not be deleted from source knowledge, but they must not block
+collection, storage, and map display.

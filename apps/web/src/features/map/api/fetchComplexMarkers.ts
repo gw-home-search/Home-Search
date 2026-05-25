@@ -50,7 +50,7 @@ export async function fetchComplexMarkers(request: ComplexMarkersRequest): Promi
 
   const payload: unknown = await response.json();
   if (!Array.isArray(payload)) {
-    throw new Error('Invalid V1 complex marker response: expected an array');
+    throw new Error('Invalid public API complex marker response: expected an array');
   }
 
   return payload.map((item) => normalizeComplexMarker(item as ComplexMarkerResponse));
@@ -68,12 +68,12 @@ function normalizeComplexMarker(marker: ComplexMarkerResponse): ComplexMarker {
 
 function toRequiredNumber(value: unknown, field: string): number {
   if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
-    throw new Error(`Invalid V1 complex marker response: ${field} must be a number`);
+    throw new Error(`Invalid public API complex marker response: ${field} must be a number`);
   }
 
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid V1 complex marker response: ${field} must be a number`);
+    throw new Error(`Invalid public API complex marker response: ${field} must be a number`);
   }
 
   return parsed;
@@ -85,12 +85,12 @@ function toNullableNumber(value: unknown): number | null {
   }
 
   if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
-    throw new Error('Invalid V1 complex marker response: latestDealAmount must be a number');
+    throw new Error('Invalid public API complex marker response: latestDealAmount must be a number');
   }
 
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
-    throw new Error('Invalid V1 complex marker response: latestDealAmount must be a number');
+    throw new Error('Invalid public API complex marker response: latestDealAmount must be a number');
   }
 
   return parsed;

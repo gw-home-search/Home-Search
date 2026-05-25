@@ -17,7 +17,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-import com.home.application.read.MvpReadUseCase;
+import com.home.application.read.PropertyReadUseCase;
 import com.home.infrastructure.web.read.dto.ParcelDetailResponse;
 import com.home.infrastructure.web.read.dto.RegionDetailResponse;
 import com.home.infrastructure.web.read.dto.RegionSummaryResponse;
@@ -50,7 +50,7 @@ class ReadApiRestDocsTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private MvpReadUseCase readUseCase;
+	private PropertyReadUseCase readUseCase;
 
 	@Test
 	@DisplayName("GET /api/v1/search/complexes REST Docs를 생성한다")

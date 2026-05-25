@@ -48,8 +48,8 @@ class ObservabilityEndpointSmokeTest {
 	}
 
 	@Test
-	@DisplayName("GET /actuator/prometheus는 V1 RTMS ingest counter를 노출한다")
-	void prometheusExposesV1IngestCounters() throws Exception {
+	@DisplayName("GET /actuator/prometheus는 RTMS ingest counter를 노출한다")
+	void prometheusExposesIngestCounters() throws Exception {
 		tradeIngestMetrics.record("RTMS", new IngestResult(3, 3, 1, 1, 1, 0));
 
 		mockMvc.perform(get("/actuator/prometheus"))
@@ -65,8 +65,8 @@ class ObservabilityEndpointSmokeTest {
 	}
 
 	@Test
-	@DisplayName("GET /actuator/prometheus는 V1 map endpoint success/error counter를 노출한다")
-	void prometheusExposesV1MapEndpointCounters() throws Exception {
+	@DisplayName("GET /actuator/prometheus는 map endpoint success/error counter를 노출한다")
+	void prometheusExposesMapEndpointCounters() throws Exception {
 		mockMvc.perform(post("/api/v1/map/complexes")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""

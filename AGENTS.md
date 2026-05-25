@@ -2,7 +2,7 @@
 
 ## Mission
 
-This repository is the Home Search V1 migration target. The V1 goal is to collect real-estate apartment trade data, store it safely, and display it on a map while preserving the main API URLs.
+This repository is the Home Search migration target. The project goal is to collect real-estate apartment trade data, store it safely, and display it on a map while preserving the main API URLs.
 
 Correctness, traceability, and API compatibility matter more than fast feature expansion.
 
@@ -70,7 +70,7 @@ All writes for this project belong under `/Users/gwongwangjae/home-search`.
 ## AI Development Operating Rules
 
 - Start AI workflow docs at `ai-docs/README.md`.
-- `ai-docs/` defines development procedure only. The V1 migration source of
+- `ai-docs/` defines development procedure only. The project baseline source of
   truth remains the canonical `docs/*.md` documents listed above.
 - Use `.agents/skills/planning` when a `/goal` or ambiguous request needs a
   decision-complete plan before implementation.
@@ -79,7 +79,7 @@ All writes for this project belong under `/Users/gwongwangjae/home-search`.
 - Use `.agents/skills/systematic-debugging` for failing checks, API mismatch,
   ingest bugs, and map marker failures.
 - Use `.agents/skills/code-review` for findings-first review and final
-  self-review of correctness, V1 API compatibility, data safety, missing tests,
+  self-review of correctness, public API compatibility, data safety, missing tests,
   and KO sync.
 - Subagents are allowed only when the user explicitly requests them or when a
   task can be split into independent read-only research work. Do not use
@@ -120,12 +120,12 @@ All writes for this project belong under `/Users/gwongwangjae/home-search`.
 - If the user asks to implement or commit without mentioning remote publishing,
   do not push.
 
-## V1 Guardrails
+## Project Guardrails
 
-- Keep the V1 API URLs documented in `docs/API_CONTRACT.md`.
-- Implement only the V1 map and trade-data surface unless explicitly re-scoped.
-- Keep V2 work out of the critical path: rankings, favorites, alarms, mail batches, recommendations, insights, and heavy analytics.
-- UI/UX may change, but frontend calls must remain compatible with the V1 API contract.
+- Keep the public API URLs documented in `docs/API_CONTRACT.md`.
+- Implement only the map and trade-data surface unless explicitly re-scoped.
+- Keep later-scope work out of the critical path: rankings, favorites, alarms, mail batches, recommendations, insights, and heavy analytics.
+- UI/UX may change, but frontend calls must remain compatible with the public API contract.
 
 ## Data/API Invariants
 
@@ -188,7 +188,7 @@ rg --files --hidden -g '*.md' -g '!.git/**' -g '!**/*_KO.md' -g '!**/*_KO.local.
 
 Ask before changing behavior when:
 
-- V1/V2 scope is unclear.
+- The current/later-scope boundary is unclear.
 - A public API URL or response shape must change.
 - A database change may lose or reinterpret data.
 - Source repositories conflict with target docs.

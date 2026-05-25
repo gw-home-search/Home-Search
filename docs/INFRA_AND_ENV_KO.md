@@ -1,4 +1,15 @@
+<!-- AUTO-GENERATED: canonical source only. Do not edit manually. -->
+
+# KO Sync
+
+- KO 생성 기준: canonical source only
+- 원문: `docs/INFRA_AND_ENV.md`
+- 동기화일: 2026-05-25
+
+아래 내용은 canonical source에서 재생성한 동기화본입니다. 명령, 경로, API, 필드명 같은 기술 토큰은 원문을 유지합니다.
+
 # Infrastructure and Environment
+
 
 ## Fixed Paths
 
@@ -8,7 +19,7 @@
 
 ## Source Infrastructure
 
-source backend에는 다음이 포함된다:
+The source backend includes:
 
 - `docker-compose.yml`
 - `docker-compose-prod.yml`
@@ -20,13 +31,13 @@ source backend에는 다음이 포함된다:
   - `prod`
   - `batch`
 
-local database image:
+The local database image is:
 
 - `postgis/postgis:16-3.4`
 
-## V1 Required Infrastructure
+## Required Infrastructure
 
-V1에는 다음이 필요하다:
+Home Search needs:
 
 - PostgreSQL with PostGIS.
 - API application runtime.
@@ -42,32 +53,34 @@ Optional but recommended:
 
 ## Required Backend Environment
 
-V1 backend collection과 map display에는 다음이 필요하다:
+Home Search backend collection and map display need:
 
-- `DB_HOST` 또는 JDBC URL equivalent.
+- `DB_HOST` or JDBC URL equivalent.
 - `DB_PASSWORD`
 - `APT_SERVICE_KEY`
-- building data enrichment가 V1에 migrate되면 `BLD_SERVICE_KEY`.
-- complex reference enrichment가 V1에 migrate되면 `ODC_SERVICE_KEY`.
-- GIS/building data calls가 V1에 migrate되면 `VW_SERVICE_KEY`.
-- authenticated endpoints가 enabled일 때만 `JWT_SECRET`.
+- `BLD_SERVICE_KEY` if building data enrichment is included in the current scope.
+- `ODC_SERVICE_KEY` if complex reference enrichment is included in the current scope.
+- `VW_SERVICE_KEY` if GIS/building data calls are included in the current scope.
+- `JWT_SECRET` only if authenticated endpoints are enabled.
 - `FRONTEND_URL`
 
-V1에서는 authentication이 core map-display path 밖에 남아 있을 수 있다.
+Authentication can remain outside the core map-display path unless a later
+work item explicitly brings authenticated endpoints into scope.
 
 ## Required Frontend Environment
 
-source frontend는 다음을 사용한다:
+The source frontend uses:
 
 - `VITE_API_SERVER_IP`
 
-V1 target frontend는 equivalent API base URL variable을 유지해야 한다. migration risk를 줄이기 위해 name은 그대로 둘 수 있다.
+Home Search target frontend should keep an equivalent API base URL variable. The name can
+stay the same during migration to reduce risk.
 
 ## Flyway Strategy
 
-V1 migrations와 V2 migrations를 분리한다.
+Separate project baselines from later-scope migrations.
 
-V1:
+Project baseline:
 
 - region
 - parcel
@@ -77,7 +90,7 @@ V1:
 - failed trade match tracking
 - PostGIS extension and indexes
 
-V2:
+later-scope:
 
 - rankings
 - top price and top volume tables
@@ -87,7 +100,7 @@ V2:
 
 ## Monitoring
 
-Minimum V1 metrics/logs:
+Minimum project metrics/logs:
 
 - Trade ingest read count.
 - Raw saved count.
@@ -97,12 +110,13 @@ Minimum V1 metrics/logs:
 - Parse failure count.
 - API error rate for map endpoints.
 
-source backend에는 이미 actuator/prometheus dependencies가 있다. `apps/api`로 이동할 때 그 capability를 보존한다.
+The source backend already has actuator/prometheus dependencies. Preserve that
+capability when moving to `apps/api`.
 
 ## Acceptance Criteria
 
-- Local PostGIS가 start할 수 있다.
-- API가 database에 connect할 수 있다.
-- Flyway가 V1 tables를 fresh 상태에서 만들 수 있다.
-- Frontend가 env base URL을 통해 API를 호출할 수 있다.
-- Ingest logs가 read, inserted, duplicate, failed counts를 보여준다.
+- Local PostGIS can start.
+- API can connect to the database.
+- Flyway can create baseline tables from scratch.
+- Frontend can call the API through its env base URL.
+- Ingest logs show read, inserted, duplicate, and failed counts.

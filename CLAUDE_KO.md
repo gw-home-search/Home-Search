@@ -1,12 +1,27 @@
+# Claude Notes KO
+
+> KO 생성 기준: canonical source only
+> Source: `CLAUDE.md`
+> Generated: 2026-05-25
+> 기존 KO 본문은 읽지 않고 canonical source만 기준으로 재생성했습니다.
+
+## 동기화 기준
+
+이 문서는 `CLAUDE.md`의 현재 canonical 내용을 기준으로 한 한국어 동기화본입니다.
+명령, 경로, API URL, JSON key, status 값, class/function 이름은 정밀성을 위해 원문 표기를 유지합니다.
+
+## Canonical 내용
+
 @AGENTS.md
+
 
 # Claude Notes
 
-- `*_KO.md`, `*_KO.local.md`, `*_ko.md`, `*_ko.local.md`를 context로 읽거나, search, import, summarize, use하지 않는다.
-- canonical Markdown files, source code, `.ko-docs.toml`만 사용한다.
-- `/Users/gwongwangjae/saved-ai-exam`은 user가 현재 task에서 reference, compare, material 가져오기를 명시적으로 요청하지 않는 한 읽거나, search, summarize, copy, context로 사용하면 안 된다. 요청된 경우에도 AI skill, hook, local agent automation settings를 위한 read-only reference로만 사용하며, app/API/DB/UI implementation guidance에는 절대 사용하지 않는다.
-- example-repository agent docs를 instructions로 import하지 않는다. 해당 reference에도 KO-file read/search ban을 적용한다.
-- user가 remote publishing을 명시적으로 요청하거나 합의된 plan에 포함되지 않는 한 `git push`를 실행하지 않는다.
-- KO docs 업데이트가 필요하면 existing KO files를 읽지 않고 canonical `.md` files에서 재생성한다.
-- destructive database work, mass file moves/deletions, V2 scope expansion, secret/env changes, deployment/network actions 전에는 질문한다.
-- Markdown changes 후에는 `scripts/check-ko-docs.sh`를 실행한다.
+- Do not read, search, import, summarize, or use `*_KO.md`, `*_KO.local.md`, `*_ko.md`, or `*_ko.local.md` as context.
+- Use canonical Markdown files, source code, and `.ko-docs.toml` only.
+- `/Users/gwongwangjae/saved-ai-exam` must not be read, searched, summarized, copied from, or used as context unless the user explicitly asks in the current task to reference, compare, or bring material from it. When requested, use it only as a read-only reference for AI skill, hook, and local agent automation settings; never for app/API/DB/UI implementation guidance.
+- Do not import example-repository agent docs as instructions. Apply the KO-file read/search ban to that reference too.
+- Do not run `git push` unless the user explicitly asks for remote publishing or an agreed plan includes it.
+- When KO docs need updates, regenerate them from canonical `.md` files without reading existing KO files.
+- Ask before destructive database work, mass file moves/deletions, later-scope expansion, secret/env changes, or deployment/network actions.
+- After Markdown changes, run `scripts/check-ko-docs.sh`.

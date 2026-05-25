@@ -1,78 +1,96 @@
+# Home Search Visual QA Checklist KO
+
+> KO 생성 기준: canonical source only
+> Source: `.agents/skills/home-search-design/references/visual-qa-checklist.md`
+> Generated: 2026-05-25
+> 기존 KO 본문은 읽지 않고 canonical source만 기준으로 재생성했습니다.
+
+## 동기화 기준
+
+이 문서는 `.agents/skills/home-search-design/references/visual-qa-checklist.md`의 현재 canonical 내용을 기준으로 한 한국어 동기화본입니다.
+명령, 경로, API URL, JSON key, status 값, class/function 이름은 정밀성을 위해 원문 표기를 유지합니다.
+
+## Canonical 내용
+
 # Home Search Visual QA Checklist
 
-Home Search 디자인 변경 또는 Figma translation을 수용하기 전에 이 checklist를 사용한다.
+Use this checklist before accepting a Home Search design change or Figma
+translation.
 
 ## Required Screens
 
-다음 화면 폭이나 browser output을 확인한다.
+Check screenshots or browser output at:
 
-- Exploration panel이 열린 desktop width.
-- Detail drawer가 열린 desktop width.
-- Bottom-sheet behavior가 적용된 narrow width.
-- 변경이 map fetch behavior를 건드렸다면 marker loading, empty, error, ready states.
+- Desktop width with exploration panel open.
+- Desktop width with detail drawer open.
+- Narrow width with bottom-sheet behavior.
+- Marker loading, empty, error, and ready states when the change touches map
+  fetch behavior.
 
 ## Map Priority
 
-다음 조건을 만족해야 통과다.
+Pass only if:
 
-- map이 visible하고 dominant하다.
-- panel이 기본 상태에서 중요한 marker cluster를 가리지 않는다.
-- detail drawer가 spatial context를 파괴하지 않고 열린다.
-- zoom controls와 marker labels에 접근 가능하다.
-- non-blocking error가 map 밖으로 navigation하지 않는다.
+- The map remains visible and dominant.
+- Panels do not cover critical marker clusters by default.
+- Detail drawer opens without destroying spatial context.
+- Zoom controls and marker labels remain reachable.
+- Non-blocking errors do not navigate away from the map.
 
 ## Readability
 
-다음 조건을 만족해야 통과다.
+Pass only if:
 
-- marker label이 짧고 한눈에 읽힌다.
-- button과 input text가 clipped되지 않는다.
-- panel row와 trade table column이 예측 가능하게 정렬된다.
-- numeric value는 consistent units를 유지한다.
-- surface와 map fallback state 위에서 text contrast가 충분하다.
+- Marker labels are short and readable at a glance.
+- Button and input text fits without clipping.
+- Panel rows and trade table columns align predictably.
+- Numeric values keep consistent units.
+- Text contrast is sufficient against surfaces and map fallback states.
 
 ## Accessibility
 
-다음 조건을 만족해야 통과다.
+Pass only if:
 
-- Interactive element는 native button, input, link 또는 이에 준하는 accessible control이다.
-- Form field에는 usable label이 있다.
-- Alert와 status message에는 적절한 live region semantics가 있다.
-- Focus order는 visible task flow를 따른다.
-- 의미를 color만으로 전달하지 않는다.
+- Interactive elements are native buttons, inputs, links, or equivalent
+  accessible controls.
+- Form fields have usable labels.
+- Alert and status messages use appropriate live region semantics.
+- Focus order follows the visible task flow.
+- Meaning is not communicated by color alone.
 
 ## Anti-AI Visual Review
 
-다음 항목이 있으면 실패다.
+Fail if the design includes:
 
 - Decorative gradient wash.
-- Glass 또는 blurred translucent panel.
-- Control 또는 marker 주변 glow effect.
-- Panel 또는 drawer 내부 nested cards.
-- Generic bento grid section.
-- Hero-scale typography 또는 marketing slogan.
-- Decorative blob, orb, abstract background art, generated filler image.
-- Layer separation이 아닌 decoration 목적의 large soft shadow.
-- Gradient text 또는 glowing primary button.
+- Glass or blurred translucent panels.
+- Glow effects around controls or markers.
+- Nested cards inside panels or drawers.
+- Generic bento grid sections.
+- Hero-scale typography or marketing slogans.
+- Decorative blobs, orbs, abstract background art, or generated filler images.
+- Large soft shadows used as decoration rather than layer separation.
+- Gradient text or glowing primary buttons.
 
-허용 예외는 simple map runtime fallback grid나 subtle active-layer shadow처럼 기능적이고 문서화된 경우뿐이다.
+Allowed exceptions must be functional and documented, such as a simple map
+runtime fallback grid or a subtle active-layer shadow.
 
 ## Contract Review
 
-다음 조건을 만족해야 통과다.
+Pass only if:
 
-- V1 URL 변경 없음.
-- V1 request 또는 response field 변경 없음.
-- Price, coordinate, date, area unit 변경 없음.
-- V2 feature가 V1 map path에 들어오지 않음.
-- Detail과 trade drawer는 complex marker의 `parcelId`를 계속 사용함.
+- No public API URL changes.
+- No project request or response field changes.
+- No unit changes for prices, coordinates, dates, or areas.
+- No later-scope feature enters the map path.
+- Detail and trade drawers still use `parcelId` from complex markers.
 
 ## Completion Evidence
 
-최종 디자인 review에는 다음을 보고한다.
+Final design review should report:
 
 - `지적사항`
 - `검증 근거 확인`
 - `검증 공백`
 - `잔여 위험`
-- Markdown이 변경되었으면 `KO sync 상태`
+- `KO sync 상태` when Markdown changed

@@ -1,7 +1,7 @@
 # apps/api Context
 
 
-This file defines backend-specific Home Search V1 terms. Canonical decisions remain in root `docs/*.md`.
+This file defines backend-specific Home Search terms. Canonical decisions remain in root `docs/*.md`.
 
 ## Backend Shape
 
@@ -9,7 +9,7 @@ This file defines backend-specific Home Search V1 terms. Canonical decisions rem
 
 **Layered backend** means `application`, `domain`, `infrastructure`, and `global` responsibilities remain separate.
 
-**Web layer** owns controllers, DTOs, validation, and V1 HTTP behavior.
+**Web layer** owns controllers, DTOs, validation, and project HTTP behavior.
 
 **Application layer** owns use cases such as map marker lookup, region navigation, search, detail, trade list, and ingest orchestration.
 
@@ -31,12 +31,12 @@ This file defines backend-specific Home Search V1 terms. Canonical decisions rem
 
 **Failed match** means complex matching failed and the result remains queryable with a reason.
 
-**ProblemDetail** is the V1 backend error response style.
+**ProblemDetail** is the project backend error response style.
 
 **PostGIS bounds query** finds parcels or marker candidates inside map bounds.
 
-**Flyway V1 migration** creates only V1 tables and indexes needed for collection, storage, and map display.
+**Flyway project baseline** creates only baseline tables and indexes needed for collection, storage, and map display.
 
 ## Backend Non-Scope
 
-The API app must not make V1 map or trade endpoints depend on ranking, trend, favorite, alarm, mail, recommendation, auth, or heavy analytics state.
+The API app must not make map or trade endpoints depend on ranking, trend, favorite, alarm, mail, recommendation, auth, or heavy analytics state.

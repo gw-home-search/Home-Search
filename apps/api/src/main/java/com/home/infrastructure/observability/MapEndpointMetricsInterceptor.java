@@ -34,7 +34,7 @@ class MapEndpointMetricsInterceptor implements HandlerInterceptor {
 		int status = response.getStatus();
 		String outcome = ex != null || status >= 400 ? "error" : "success";
 		Counter.builder(METRIC_NAME)
-			.description("V1 map endpoint request counts")
+			.description("map endpoint request counts")
 			.tag("endpoint", endpoint)
 			.tag("outcome", outcome)
 			.register(meterRegistry)

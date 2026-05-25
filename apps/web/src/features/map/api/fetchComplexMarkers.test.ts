@@ -8,7 +8,7 @@ describe('fetchComplexMarkers API 어댑터', () => {
     vi.unstubAllGlobals();
   });
 
-  it('documented bounds와 filter를 V1 complex marker endpoint에 post한다', async () => {
+  it('documented bounds와 filter를 documented complex marker endpoint에 post한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -111,7 +111,7 @@ describe('fetchComplexMarkers API 어댑터', () => {
         neLat: 37.7,
         neLng: 127.2,
       }),
-    ).rejects.toThrow('Invalid V1 complex marker response: expected an array');
+    ).rejects.toThrow('Invalid public API complex marker response: expected an array');
   });
 
   it('marker에 unit count가 없으면 clear contract error를 throw한다', async () => {
@@ -136,10 +136,10 @@ describe('fetchComplexMarkers API 어댑터', () => {
         neLat: 37.7,
         neLng: 127.2,
       }),
-    ).rejects.toThrow('Invalid V1 complex marker response: unitCntSum must be a number');
+    ).rejects.toThrow('Invalid public API complex marker response: unitCntSum must be a number');
   });
 
-  it('marker endpoint가 request를 reject하면 V1 ProblemDetail detail을 보존한다', async () => {
+  it('marker endpoint가 request를 reject하면 public API ProblemDetail detail을 보존한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(

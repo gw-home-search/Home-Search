@@ -78,7 +78,7 @@ public abstract class JdbcPostgresTestSupport {
 			""").update();
 	}
 
-	protected void seedMvpExplorationData() {
+	protected void seedPropertyExplorationData() {
 		jdbcClient.sql("""
 			INSERT INTO region (id, code, name, region_type, center_lat, center_lng)
 			VALUES (1, '11', 'Seoul', 'si-do', 37.5663, 126.9780)

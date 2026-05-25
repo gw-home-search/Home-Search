@@ -3,7 +3,7 @@
 
 ## Goal
 
-Redesign the frontend around map exploration while preserving the V1 API
+Redesign the frontend around map exploration while preserving the public API
 contract.
 
 Source frontend:
@@ -36,7 +36,7 @@ Important source files:
 - `src/components/sidebar/detail/DetailSidebar.jsx`
 - `src/components/sidebar/detail/TradeSidebar.jsx`
 
-## V1 Target UX
+## Project Target UX
 
 Use a map-first layout:
 
@@ -81,7 +81,7 @@ the source frontend, then redesign.
 
 ## Mobile Direction
 
-Mobile is not the first V1 target, but the layout should not block it:
+Mobile is not the first project target, but the layout should not block it:
 
 - Exploration panel becomes a bottom sheet.
 - Detail drawer becomes a full-height bottom sheet.

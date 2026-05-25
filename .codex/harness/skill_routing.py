@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Skill routing policy for Home Search V1 harness prompts."""
+"""Skill routing policy for Home Search harness prompts."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ class SkillRoute:
 
 HARNESS_EVIDENCE = ("상태", "검증", "다음 행동")
 PLAN_EVIDENCE = ("인수 기준", "중단 조건", "다음 행동")
-VERTICAL_SLICE_EVIDENCE = ("Slice name", "App ownership", "Public seam", "Tests", "Verification", "Parallelism")
+WORK_ITEM_EVIDENCE = ("Work id", "App ownership", "Public seam", "Tests", "Verification", "Parallelism")
 TDD_EVIDENCE = ("최초 RED", "예상 RED 실패", "최소 GREEN")
 CONTRACT_EVIDENCE = ("계약 영향", "contract-reviewer: 게이트 결정")
 BACKEND_EVIDENCE = ("backendQualityCheck", "Coverage: >=90%", "Docs/OpenAPI")
@@ -109,7 +109,18 @@ def route(
 
 
 def harness_route(phase: str, reason: str, evidence: Iterable[str] = HARNESS_EVIDENCE) -> SkillRoute:
-    return route("v1-slice-harness", phase, "orchestrator", reason, evidence)
+    path = ".codex/harness/home"
+    return SkillRoute(
+        skill="home-search-harness",
+        phase=phase,
+        role="orchestrator",
+        reason=reason,
+        required_evidence=tuple(evidence),
+        fallback="Use planning/tdd/systematic-debugging/code-review skills directly if the launcher is unavailable.",
+        path=path,
+        description="Internal Home Search harness that routes worklog items to the relevant project skills.",
+        available=(REPO_ROOT / path).exists(),
+    )
 
 
 def normalize_targets(targets: str | Iterable[str] | None) -> tuple[str, ...]:
@@ -143,19 +154,19 @@ def routes_for(mode: str, targets: str | Iterable[str] | None = None) -> tuple[S
     routes: list[SkillRoute] = []
 
     if mode == "next":
-        routes.append(harness_route("next", "resolve backlog, report evidence, target filters, and next command boundaries."))
-        routes.append(route("planning", "next", "primary", "turn backlog, recent report evidence, risks, and acceptance criteria into next-slice candidates.", PLAN_EVIDENCE))
+        routes.append(harness_route("next", "resolve worklog, report evidence, target filters, and next command boundaries."))
+        routes.append(route("planning", "next", "primary", "turn worklog, recent report evidence, risks, and acceptance criteria into next work candidates.", PLAN_EVIDENCE))
         routes.append(route("code-review", "next", "support", "interpret recent gate findings only when report evidence contains review findings.", REVIEW_EVIDENCE, "not needed when no recent findings exist."))
         return dedupe(routes)
 
     if mode == "plan":
-        routes.append(harness_route("plan", "render a non-mutating slice execution brief and next dry-run command."))
-        routes.append(route("planning", "plan", "primary", "produce the decision-complete slice plan and acceptance criteria.", PLAN_EVIDENCE))
+        routes.append(harness_route("plan", "render a non-mutating work-item execution brief and next dry-run command."))
+        routes.append(route("planning", "plan", "primary", "produce the decision-complete work plan and acceptance criteria.", PLAN_EVIDENCE))
         if has_backend(target_set) or has_frontend(target_set):
-            routes.append(route("vertical-slice-implementation", "plan", "support", "break the plan into independently verifiable V1 slices before implementation starts.", VERTICAL_SLICE_EVIDENCE))
+            routes.append(route("vertical-slice-implementation", "plan", "support", "break the work into independently verifiable increments before implementation starts.", WORK_ITEM_EVIDENCE))
         routes.append(route("tdd", "plan", "checkpoint", "define First RED, Expected RED failure, and Minimum GREEN before execution.", TDD_EVIDENCE))
         if has_backend(target_set) or has_frontend(target_set):
-            routes.append(route("api-contract", "plan", "checkpoint", "check V1 URL, request, response, unit, and error compatibility before implementation.", CONTRACT_EVIDENCE))
+            routes.append(route("api-contract", "plan", "checkpoint", "check public API URL, request, response, unit, and error compatibility before implementation.", CONTRACT_EVIDENCE))
         return dedupe(routes)
 
     if mode == "execute":
@@ -163,10 +174,10 @@ def routes_for(mode: str, targets: str | Iterable[str] | None = None) -> tuple[S
         routes.append(route("tdd", "execute", "primary", "drive behavior changes through First RED, Expected RED failure, Minimum GREEN, and regression evidence.", TDD_EVIDENCE))
         if has_backend(target_set):
             routes.append(route("backend-api", "execute", "support", "apply apps/api Spring Boot, persistence, ingest, Flyway, and backendQualityCheck rules.", BACKEND_EVIDENCE))
-            routes.append(route("api-contract", "execute", "checkpoint", "preserve V1 API request, response, unit, and error contracts.", CONTRACT_EVIDENCE))
+            routes.append(route("api-contract", "execute", "checkpoint", "preserve public API request, response, unit, and error contracts.", CONTRACT_EVIDENCE))
         if has_frontend(target_set):
             routes.append(route("frontend-web", "execute", "support", "apply apps/web Vite React, Kakao map, adapter, and map-first UI rules.", FRONTEND_EVIDENCE))
-            routes.append(route("api-contract", "execute", "checkpoint", "preserve frontend compatibility with V1 URLs, fields, units, and error behavior.", CONTRACT_EVIDENCE))
+            routes.append(route("api-contract", "execute", "checkpoint", "preserve frontend compatibility with public API URLs, fields, units, and error behavior.", CONTRACT_EVIDENCE))
         routes.append(route("systematic-debugging", "execute", "recovery", "use only when lint/test/build/hook/CI/runtime evidence fails and a reproducible loop is needed.", DEBUG_EVIDENCE, "not used when all verification passes."))
         routes.append(route("code-review", "execute", "review", "perform findings-first local review before completion or PR evidence.", REVIEW_EVIDENCE))
         return dedupe(routes)
@@ -261,14 +272,14 @@ def run_self_test() -> int:
     )
     all_routes = routes_for("execute", "both") + routes_for("plan", "backend") + routes_for("gate", "frontend")
     checks = [
-        "$v1-slice-harness" in execute,
+        "home-search-harness" in execute,
         "$tdd" in execute,
         "$backend-api" in execute,
         "$frontend-web" in execute,
         "$api-contract" in execute,
         "$code-review" in execute,
         execute.count("$api-contract") == 1,
-        "$v1-slice-harness" in plan,
+        "home-search-harness" in plan,
         "$planning" in plan,
         "$vertical-slice-implementation" in plan,
         "$vertical-slice-implementation" not in planning_only,
@@ -279,7 +290,7 @@ def run_self_test() -> int:
         "cd apps/web && npm run test" in frontend_web.get("required_evidence", []),
         all(item.available for item in all_routes),
         not load_skill_definition("missing-skill").available,
-        not load_skill_definition("v1-slice-harness").path.lower().endswith("_ko.md"),
+        load_skill_definition("home-search-harness").available is False,
     ]
     if all(checks):
         print("self-test passed: skill_routing")

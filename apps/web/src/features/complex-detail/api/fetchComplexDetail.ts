@@ -51,7 +51,7 @@ export async function fetchComplexDetail(parcelId: number): Promise<ComplexDetai
 
   const payload: unknown = await response.json();
   if (!isRecord(payload)) {
-    throw new Error('Invalid V1 complex detail response: expected an object');
+    throw new Error('Invalid public API complex detail response: expected an object');
   }
 
   return normalizeComplexDetail(payload);
@@ -82,12 +82,12 @@ function isRecord(value: unknown): value is ComplexDetailResponse {
 
 function toRequiredNumber(value: unknown, field: string): number {
   if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
-    throw new Error(`Invalid V1 complex detail response: ${field} must be a number`);
+    throw new Error(`Invalid public API complex detail response: ${field} must be a number`);
   }
 
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid V1 complex detail response: ${field} must be a number`);
+    throw new Error(`Invalid public API complex detail response: ${field} must be a number`);
   }
 
   return parsed;
@@ -99,12 +99,12 @@ function toNullableNumber(value: unknown, field: string): number | null {
   }
 
   if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
-    throw new Error(`Invalid V1 complex detail response: ${field} must be a number`);
+    throw new Error(`Invalid public API complex detail response: ${field} must be a number`);
   }
 
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid V1 complex detail response: ${field} must be a number`);
+    throw new Error(`Invalid public API complex detail response: ${field} must be a number`);
   }
 
   return parsed;
@@ -112,7 +112,7 @@ function toNullableNumber(value: unknown, field: string): number | null {
 
 function toRequiredString(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`Invalid V1 complex detail response: ${field} must be a non-empty string`);
+    throw new Error(`Invalid public API complex detail response: ${field} must be a non-empty string`);
   }
 
   return value;

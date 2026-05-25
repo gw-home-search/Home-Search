@@ -1,50 +1,56 @@
-# Backend Slice 실행 Prompt
+# Backend Work Execute Prompt KO
+
+> KO 생성 기준: canonical source only
+> Source: `.codex/harness/prompts/backend_execute.md`
+> Generated: 2026-05-25
+> 기존 KO 본문은 읽지 않고 canonical source만 기준으로 재생성했습니다.
+
+## 동기화 기준
+
+이 문서는 `.codex/harness/prompts/backend_execute.md`의 현재 canonical 내용을 기준으로 한 한국어 동기화본입니다.
+명령, 경로, API URL, JSON key, status 값, class/function 이름은 정밀성을 위해 원문 표기를 유지합니다.
+
+## Canonical 내용
+
+# Backend Work Execute Prompt
 
 
-`$v1-slice-harness mode=execute`
+home-search-harness mode=execute
 
-## 입력
+Work item: {{WORK_ID}}
+Preset: {{PRESET}}
+Target: {{TARGET}}
+Branch: {{BRANCH_NAME}}
 
-- Slice: `{{SLICE}}`
-- Preset: `{{PRESET}}`
-- Target: `{{TARGET}}`
-- Branch: `{{BRANCH_NAME}}`
+Allowed edit scope:
+- {{ALLOWED_SCOPE}}
 
-## 허용 수정 범위
-
-- `{{ALLOWED_SCOPE}}`
-
-## 금지 수정 범위
-
-- `{{FORBIDDEN_SCOPE}}`
-- `docs/**`
-- `AGENTS.md`
-- `README.md`
-- `ai-docs/**`
-- `scripts/**`
-- `infra/**`
-- `package-lock.json`
+Forbidden edit scope:
+- {{FORBIDDEN_SCOPE}}
+- docs/**
+- AGENTS.md
+- README.md
+- ai-docs/**
+- scripts/**
+- infra/**
+- package-lock.json
 - build output
 
-## 지시사항
+Instructions:
+- Read root AGENTS.md, apps/api/AGENTS.md, CONTEXT.md, apps/api/CONTEXT.md, and relevant canonical docs before editing.
+- Preserve the public API contract and data invariants.
+- Do not introduce later-scope ranking, favorite, alarm, mail, recommendation, auth, or heavy analytics work.
+- Treat `cd apps/api && ./gradlew backendQualityCheck` as the backend canonical PR/CI gate.
+- Use the minimum GREEN work item and leave a short Korean-first gate summary.
 
-- 편집 전 root `AGENTS.md`, `apps/api/AGENTS.md`, `CONTEXT.md`, `apps/api/CONTEXT.md`, 관련 canonical docs를 읽는다.
-- V1 API contract와 data invariant를 보존한다.
-- V2 ranking, favorite, alarm, mail, recommendation, auth, heavy analytics 작업을 추가하지 않는다.
-- backend canonical PR/CI gate는 `cd apps/api && ./gradlew backendQualityCheck`로 취급한다.
-- 최소 GREEN slice를 적용하고 짧은 Korean-first gate summary를 남긴다.
+Skill routing:
+{{SKILL_ROUTING}}
 
-## Skill routing
+Required verification:
+- {{VERIFICATION_COMMANDS}}
+- Use exact evidence line format: ``- `command` = pass|fail|not run (Korean reason)``.
 
-`{{SKILL_ROUTING}}`
-
-## 필수 검증
-
-- `{{VERIFICATION_COMMANDS}}`
-- 정확한 evidence line 형식: ``- `command` = pass|fail|not run (Korean reason)``.
-
-## 최종 사용자 evidence label
-
+Final user-facing evidence labels:
 - 상태:
 - 최초 RED:
 - 예상 RED 실패:

@@ -20,7 +20,7 @@ USER_VISIBLE_FILES = [
     ".github/pull_request_template.md",
     ".codex/harness/pr_body_check.py",
     ".codex/harness/pr_lint.py",
-    ".codex/harness/v1_report.py",
+    ".codex/harness/home_report.py",
     ".codex/hooks/stop_verification_gate.py",
 ]
 
@@ -62,8 +62,8 @@ REQUIRED_SNIPPETS = {
         "KO 수정 승인:",
         "KO 생성 기준:",
     ],
-    ".codex/harness/v1_report.py": [
-        "# V1 Slice 보고서",
+    ".codex/harness/home_report.py": [
+        "# Home Search 작업 보고서",
         "## 사용 skill",
         "## TDD 근거",
         "최초 RED:",
@@ -77,7 +77,7 @@ REQUIRED_SNIPPETS = {
     ".codex/harness/prompts/frontend_execute.md": ["Skill routing:", "Final user-facing evidence labels:", "최초 RED:", "예상 RED 실패:", "최소 GREEN:"],
     ".codex/harness/prompts/gate_review.md": ["Skill routing:", "최초 RED:", "예상 RED 실패:", "최소 GREEN:"],
     ".codex/harness/prompts/integration_review.md": ["Skill routing:", "contract-reviewer: 게이트 결정", "reviewer: 지적사항"],
-    ".codex/harness/prompts/next_slice.md": ["Skill routing:", "다음 slice 후보:", "인수 기준:"],
+    ".codex/harness/prompts/next_slice.md": ["Skill routing:", "다음 작업 후보:", "인수 기준:"],
     ".codex/harness/prompts/slice_plan.md": ["Skill routing:", "인수 기준:", "최초 RED:", "예상 RED 실패:", "최소 GREEN:"],
 }
 

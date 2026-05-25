@@ -1,3 +1,17 @@
+# 요약 KO
+
+> KO 생성 기준: canonical source only
+> Source: `.github/pull_request_template.md`
+> Generated: 2026-05-25
+> 기존 KO 본문은 읽지 않고 canonical source만 기준으로 재생성했습니다.
+
+## 동기화 기준
+
+이 문서는 `.github/pull_request_template.md`의 현재 canonical 내용을 기준으로 한 한국어 동기화본입니다.
+명령, 경로, API URL, JSON key, status 값, class/function 이름은 정밀성을 위해 원문 표기를 유지합니다.
+
+## Canonical 내용
+
 <!-- PR 제목 예: [Feat] 지도 마커 조회 개선 -->
 
 ## 요약
@@ -63,7 +77,7 @@ reviewer:
 - [ ] main push 없음
 - [ ] integration branch만 push
 - [ ] draft PR
-- [ ] V1 API URL/response 영향 확인
+- [ ] public API URL/response 영향 확인
 - [ ] DB migration 실행 없음
 - [ ] Open API 호출 없음
 - [ ] secrets 저장 없음

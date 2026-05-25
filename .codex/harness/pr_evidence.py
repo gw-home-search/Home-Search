@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared PR evidence policy for Home Search V1 harness checks."""
+"""Shared PR evidence policy for Home Search harness checks."""
 
 from __future__ import annotations
 
@@ -16,14 +16,17 @@ TEST_DISPLAY_NAME_POLICY = "python3 scripts/check-test-display-names.py"
 PR_LINT_SELF_TEST = "python3 .codex/harness/pr_lint.py --self-test"
 PR_CONTEXT_SELF_TEST = "python3 .codex/harness/pr_context.py --self-test"
 PR_BODY_CHECK_SELF_TEST = "python3 .codex/harness/pr_body_check.py --self-test"
-BACKLOG_SYNC_SELF_TEST = "python3 .codex/harness/backlog_sync.py --self-test"
-V1_PR_SELF_TEST = "python3 .codex/harness/v1_pr.py --self-test"
-V1_FLOW_SELF_TEST = "python3 .codex/harness/v1_flow.py --self-test"
-V1_PLAN_SELF_TEST = "python3 .codex/harness/v1_plan.py --self-test"
-V1_REPORT_SELF_TEST = "python3 .codex/harness/v1_report.py --self-test"
-V1_LAUNCHER_SELF_TEST = ".codex/harness/v1 --self-test"
+WORKLOG_SYNC_SELF_TEST = "python3 .codex/harness/worklog_sync.py --self-test"
+HARNESS_PR_SELF_TEST = "python3 .codex/harness/home_pr.py --self-test"
+HARNESS_FLOW_SELF_TEST = "python3 .codex/harness/home_flow.py --self-test"
+HARNESS_INTEGRATE_SELF_TEST = "python3 .codex/harness/home_integrate.py --self-test"
+HARNESS_PLAN_SELF_TEST = "python3 .codex/harness/home_plan.py --self-test"
+HARNESS_REPORT_SELF_TEST = "python3 .codex/harness/home_report.py --self-test"
+HARNESS_LAUNCHER_SELF_TEST = ".codex/harness/home --self-test"
 SKILL_ROUTING_SELF_TEST = "python3 .codex/harness/skill_routing.py --self-test"
 USER_LANGUAGE_CHECK = "python3 .codex/harness/user_language_check.py --self-test"
+PROJECT_TERMS_CHECK = "python3 .codex/harness/project_terms_check.py"
+PROJECT_TERMS_SELF_TEST = "python3 .codex/harness/project_terms_check.py --self-test"
 STOP_HOOK_SELF_TEST = "python3 .codex/hooks/stop_verification_gate.py --self-test"
 POST_TOOL_USE_REVIEW_SELF_TEST = "python3 .codex/hooks/post_tool_use_review.py --self-test"
 KO_CHECK = "bash scripts/check-ko-docs.sh"
@@ -38,14 +41,17 @@ COMMAND_ORDER = (
     PR_LINT_SELF_TEST,
     PR_CONTEXT_SELF_TEST,
     PR_BODY_CHECK_SELF_TEST,
-    BACKLOG_SYNC_SELF_TEST,
-    V1_PR_SELF_TEST,
-    V1_FLOW_SELF_TEST,
-    V1_PLAN_SELF_TEST,
-    V1_REPORT_SELF_TEST,
-    V1_LAUNCHER_SELF_TEST,
+    WORKLOG_SYNC_SELF_TEST,
+    HARNESS_PR_SELF_TEST,
+    HARNESS_FLOW_SELF_TEST,
+    HARNESS_INTEGRATE_SELF_TEST,
+    HARNESS_PLAN_SELF_TEST,
+    HARNESS_REPORT_SELF_TEST,
+    HARNESS_LAUNCHER_SELF_TEST,
     SKILL_ROUTING_SELF_TEST,
     USER_LANGUAGE_CHECK,
+    PROJECT_TERMS_CHECK,
+    PROJECT_TERMS_SELF_TEST,
     STOP_HOOK_SELF_TEST,
     POST_TOOL_USE_REVIEW_SELF_TEST,
     KO_CHECK,
@@ -97,6 +103,26 @@ def is_canonical_markdown(path: str) -> bool:
     )
 
 
+def requires_project_terms_check(path: str) -> bool:
+    lowered = path.lower()
+    if is_ko_doc(path) or is_ko_local(path):
+        return False
+    if lowered.endswith(".md") and (
+        path in {"AGENTS.md", "README.md", "CONTEXT.md", "CLAUDE.md"}
+        or path.startswith("docs/")
+        or path.startswith("ai-docs/")
+        or path.startswith("apps/api/")
+        or path.startswith("apps/web/")
+        or path.startswith(".agents/skills/")
+        or path.startswith(".codex/harness/prompts/")
+        or path.startswith(".github/")
+    ):
+        return True
+    if path.startswith(".codex/agents/"):
+        return True
+    return False
+
+
 def paired_ko_path(source: str) -> str:
     path = Path(source)
     return str(path.with_name(f"{path.stem}_KO.md"))
@@ -146,8 +172,8 @@ def requirements_for_changed_files(changed_files: list[str] | tuple[str, ...] | 
     changed = sorted({str(path) for path in changed_files if str(path).strip()})
     commands: set[str] = {DIFF_CHECK}
     forbidden: list[tuple[str, str]] = []
-    backlog_path = ".codex/harness/slices/backlog.toml"
-    backlog_only = changed == [backlog_path]
+    worklog_path = ".codex/harness/worklog.toml"
+    worklog_only = changed == [worklog_path]
 
     for path in changed:
         reason = is_forbidden_path(path)
@@ -170,23 +196,28 @@ def requirements_for_changed_files(changed_files: list[str] | tuple[str, ...] | 
             commands.add(TEST_DISPLAY_NAME_POLICY)
         if path.startswith("infra/"):
             commands.add(DOCKER_COMPOSE_LOCAL_CONFIG)
-        if path == backlog_path:
-            if backlog_only:
-                commands.add(BACKLOG_SYNC_SELF_TEST)
-                commands.add(V1_PLAN_SELF_TEST)
+        if requires_project_terms_check(path):
+            commands.add(PROJECT_TERMS_CHECK)
+        if path == worklog_path:
+            if worklog_only:
+                commands.add(WORKLOG_SYNC_SELF_TEST)
+                commands.add(HARNESS_PLAN_SELF_TEST)
             continue
         if path.startswith(".codex/harness/"):
             commands.add(PR_LINT_SELF_TEST)
             commands.add(PR_CONTEXT_SELF_TEST)
             commands.add(PR_BODY_CHECK_SELF_TEST)
-            commands.add(BACKLOG_SYNC_SELF_TEST)
-            commands.add(V1_PR_SELF_TEST)
-            commands.add(V1_FLOW_SELF_TEST)
-            commands.add(V1_PLAN_SELF_TEST)
-            commands.add(V1_REPORT_SELF_TEST)
-            commands.add(V1_LAUNCHER_SELF_TEST)
+            commands.add(WORKLOG_SYNC_SELF_TEST)
+            commands.add(HARNESS_PR_SELF_TEST)
+            commands.add(HARNESS_FLOW_SELF_TEST)
+            commands.add(HARNESS_INTEGRATE_SELF_TEST)
+            commands.add(HARNESS_PLAN_SELF_TEST)
+            commands.add(HARNESS_REPORT_SELF_TEST)
+            commands.add(HARNESS_LAUNCHER_SELF_TEST)
             commands.add(SKILL_ROUTING_SELF_TEST)
             commands.add(USER_LANGUAGE_CHECK)
+            commands.add(PROJECT_TERMS_SELF_TEST)
+            commands.add(PROJECT_TERMS_CHECK)
         if path.startswith(".github/") or path == "scripts/check-ko-docs.sh":
             commands.add(PR_LINT_SELF_TEST)
             commands.add(USER_LANGUAGE_CHECK)

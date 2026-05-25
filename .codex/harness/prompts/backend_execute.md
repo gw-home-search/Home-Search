@@ -1,9 +1,9 @@
-# Backend Slice Execute Prompt
+# Backend Work Execute Prompt
 
 
-$v1-slice-harness mode=execute
+home-search-harness mode=execute
 
-Slice: {{SLICE}}
+Work item: {{WORK_ID}}
 Preset: {{PRESET}}
 Target: {{TARGET}}
 Branch: {{BRANCH_NAME}}
@@ -24,10 +24,10 @@ Forbidden edit scope:
 
 Instructions:
 - Read root AGENTS.md, apps/api/AGENTS.md, CONTEXT.md, apps/api/CONTEXT.md, and relevant canonical docs before editing.
-- Preserve the V1 API contract and data invariants.
-- Do not introduce V2 ranking, favorite, alarm, mail, recommendation, auth, or heavy analytics work.
+- Preserve the public API contract and data invariants.
+- Do not introduce later-scope ranking, favorite, alarm, mail, recommendation, auth, or heavy analytics work.
 - Treat `cd apps/api && ./gradlew backendQualityCheck` as the backend canonical PR/CI gate.
-- Use the minimum GREEN slice and leave a short Korean-first gate summary.
+- Use the minimum GREEN work item and leave a short Korean-first gate summary.
 
 Skill routing:
 {{SKILL_ROUTING}}

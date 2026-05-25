@@ -1,6 +1,6 @@
 ---
 name: backend-api
-description: Guide Home Search apps/api Spring Boot, Flyway, ingest, and V1 API work.
+description: Guide Home Search apps/api Spring Boot, Flyway, ingest, and public API work.
 ---
 
 
@@ -25,13 +25,13 @@ Only `apps/api/**`, unless the user explicitly approves a broader scope.
 
 ## Backend Guardrails
 
-- Preserve V1 API URLs and response shapes.
+- Preserve public API URLs and response shapes.
 - Save raw ingest records before normalized trades.
 - Duplicate ingest must not create duplicate normalized trades.
 - Failed matches must be explainable and queryable.
 - Use `complex_id` as the operational trade relation.
 - Preserve `complex_pk`, `apt_seq`, `source`, and `source_key` for audit, matching, and dedupe.
-- Keep rankings, favorites, alarms, mail, recommendations, auth-dependent UX, and heavy analytics out of V1 map/trade work.
+- Keep rankings, favorites, alarms, mail, recommendations, auth-dependent UX, and heavy analytics out of map/trade work.
 
 ## Testing
 
@@ -53,5 +53,5 @@ Stop before:
 - Public API breaking change.
 - Data-loss migration.
 - `complex_id` or `complex_pk` reinterpretation.
-- Adding V2 dependencies to map endpoints.
+- Adding later-scope dependencies to map endpoints.
 - Introducing secrets or local env values.

@@ -9,7 +9,7 @@ plugins {
 
 group = 'com.home'
 version = '0.0.1-SNAPSHOT'
-description = 'Home Search V1 API'
+description = 'Home Search public API'
 
 java {
     toolchain {
@@ -79,7 +79,7 @@ tasks.register('foundationTest', Test) {
 }
 
 tasks.register('apiContractTest', Test) {
-    description = 'Run V1 API controller and DTO contract tests.'
+    description = 'Run public API controller and DTO contract tests.'
     group = 'verification'
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
@@ -115,8 +115,8 @@ tasks.named('asciidoctor') {
 
 openapi3 {
     server = 'http://localhost:8080'
-    title = 'Home Search V1 API'
-    description = 'Home Search V1 map and trade-data API generated from REST Docs tests.'
+    title = 'Home Search public API'
+    description = 'Home Search map and trade-data API generated from REST Docs tests.'
     version = project.version.toString()
     format = 'yaml'
 }
@@ -126,7 +126,7 @@ tasks.matching { it.name == 'openapi3' }.configureEach {
 }
 
 tasks.register('verifyOpenApiSpec') {
-    description = 'Verify generated OpenAPI YAML exposes only the V1 public map contract.'
+    description = 'Verify generated OpenAPI YAML exposes only the public map API contract.'
     group = 'verification'
     dependsOn tasks.named('openapi3')
 

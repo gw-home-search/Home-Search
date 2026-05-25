@@ -47,13 +47,13 @@ public class ApiExceptionHandler {
 			.body(problemDetail);
 	}
 
-	@ExceptionHandler(V1ResourceNotFoundException.class)
-	public ResponseEntity<ProblemDetail> handleNotFound(V1ResourceNotFoundException exception) {
+	@ExceptionHandler(ResourceNotFoundException.class)
+	public ResponseEntity<ProblemDetail> handleNotFound(ResourceNotFoundException exception) {
 		ProblemDetail problemDetail = createProblemDetail(
 			HttpStatus.NOT_FOUND,
 			NOT_FOUND_TITLE,
 			NOT_FOUND_DETAIL,
-			V1ResourceNotFoundException.class.getSimpleName()
+			ResourceNotFoundException.class.getSimpleName()
 		);
 
 		return ResponseEntity

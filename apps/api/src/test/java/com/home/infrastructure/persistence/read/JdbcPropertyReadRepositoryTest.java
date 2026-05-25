@@ -10,13 +10,13 @@ import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class JdbcMvpReadRepositoryTest extends JdbcPostgresTestSupport {
+class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 
 	@Test
-	@DisplayName("search/region/detail/trade read API는 V1 core table로 backing된다")
-	void readsMvpMapExplorationDataFromV1Tables() {
-		seedMvpExplorationData();
-		JdbcMvpReadRepository repository = new JdbcMvpReadRepository(jdbcClient);
+	@DisplayName("search/region/detail/trade read API는 baseline core table로 backing된다")
+	void readsPropertyMapExplorationDataFromBaselineTables() {
+		seedPropertyExplorationData();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
 
 		assertThat(repository.searchComplexes("sample"))
 			.singleElement()
@@ -69,7 +69,7 @@ class JdbcMvpReadRepositoryTest extends JdbcPostgresTestSupport {
 	@DisplayName("trade read API는 parcel에 complex가 있지만 trade가 없으면 empty trade list를 반환한다")
 	void tradeListReturnsEmptyWhenParcelAndComplexExistWithoutTrades() {
 		seedComplex();
-		JdbcMvpReadRepository repository = new JdbcMvpReadRepository(jdbcClient);
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
 
 		assertThat(repository.findTradeList(1001L))
 			.hasValueSatisfying(tradeList -> {
@@ -81,8 +81,8 @@ class JdbcMvpReadRepositoryTest extends JdbcPostgresTestSupport {
 	@Test
 	@DisplayName("detail/trade read API는 parcel 또는 complex parent path가 없으면 empty가 된다")
 	void missingParentPathReturnsEmpty() {
-		seedMvpExplorationData();
-		JdbcMvpReadRepository repository = new JdbcMvpReadRepository(jdbcClient);
+		seedPropertyExplorationData();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
 
 		assertThat(repository.findParcelDetail(404L)).isEmpty();
 		assertThat(repository.findTradeList(404L)).isEmpty();

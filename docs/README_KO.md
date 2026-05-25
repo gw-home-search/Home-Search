@@ -1,4 +1,15 @@
+<!-- AUTO-GENERATED: canonical source only. Do not edit manually. -->
+
+# KO Sync
+
+- KO 생성 기준: canonical source only
+- 원문: `docs/README.md`
+- 동기화일: 2026-05-25
+
+아래 내용은 canonical source에서 재생성한 동기화본입니다. 명령, 경로, API, 필드명 같은 기술 토큰은 원문을 유지합니다.
+
 # Home Search Migration Docs
+
 
 ## Fixed Paths
 
@@ -6,33 +17,36 @@
 - Source frontend: `/Users/gwongwangjae/frontend/home-client`
 - Migration target: `/Users/gwongwangjae/home-search`
 
-이 paths는 모든 migration document의 anchors다. 문서에서 "source backend", "source frontend", "target repository"를 언급하면 위 paths를 뜻한다.
+These paths are the anchors for every migration document. If a document
+mentions "source backend", "source frontend", or "target repository", it means
+the paths above.
 
-## V1 Goal
+## Project Goal
 
-V1은 real-estate apartment trade data를 수집하고, 안전하게 저장하고, map에 표시하는 데 필요한 product surface만 migrate한다.
+Home Search migrates only the product surface needed to collect real-estate apartment
+trade data, store it safely, and display it on a map.
 
 Included:
 
-- Region, parcel, complex, trade domain data.
-- existing public data client를 통한 RTMS apartment trade collection.
-- reprocessing과 audit를 위한 raw source preservation.
-- map과 detail APIs를 위한 normalized trade storage.
+- Region, parcel, complex, and trade domain data.
+- RTMS apartment trade collection through the existing public data client.
+- Raw source preservation for reprocessing and audit.
+- Normalized trade storage for map and detail APIs.
 - Duplicate-safe ingest.
 - Failed match tracking.
-- map bounds 기반 region 및 complex marker APIs.
-- Search, region navigation, complex detail, trade list APIs.
-- existing API contract를 사용하는 frontend map UX.
+- Map bounds based region and complex marker APIs.
+- Search, region navigation, complex detail, and trade list APIs.
+- Frontend map UX using the existing API contract.
 
-Excluded from V1:
+Excluded from the current project scope:
 
 - Ranking APIs and screens.
 - Trade trend tables and calculations.
-- Top price 또는 top volume 30-day aggregate tables.
+- Top price or top volume 30-day aggregate tables.
 - Favorite and trade alarm workflows.
 - Mail target generation and mail sending batch.
-- Recommendation 또는 insight features.
-- map display와 무관한 query-heavy analytical optimizations.
+- Recommendation or insight features.
+- Query-heavy analytical optimizations unrelated to map display.
 
 ## Target Repository Shape
 
@@ -48,7 +62,7 @@ Excluded from V1:
 - `docs/`: migration decisions and implementation guide.
 - `apps/api/`: future backend location.
 - `apps/web/`: future frontend location.
-- `infra/`: Postgres/PostGIS, Docker Compose, monitoring, env docs.
+- `infra/`: Postgres/PostGIS, Docker Compose, monitoring, and env docs.
 
 ## Reading Order
 
@@ -62,8 +76,11 @@ Excluded from V1:
 
 ## Non-Negotiable Decisions
 
-- Main API URLs는 V1에서 안정적으로 유지된다.
-- V1 map 및 trade-data surface 밖의 backend behavior는 V2까지 migrate하지 않는다.
-- Data safety가 aggregate features보다 중요하다.
-- source backend의 `complex_id`와 `complex_pk` mismatch는 backend migration 중 명시적으로 해결해야 한다.
-- UI/UX는 바뀔 수 있지만 frontend calls는 V1 API contract와 compatible해야 한다.
+- Main API URLs stay stable.
+- Backend behavior outside the map and trade-data surface is not migrated
+  until later-scope.
+- Data safety is more important than aggregate features.
+- The `complex_id` versus `complex_pk` mismatch in the source backend must be
+  resolved explicitly during backend migration.
+- UI/UX may change, but frontend calls must remain compatible with the public API
+  contract.

@@ -1,50 +1,56 @@
-# Frontend Slice 실행 Prompt
+# Frontend Work Execute Prompt KO
+
+> KO 생성 기준: canonical source only
+> Source: `.codex/harness/prompts/frontend_execute.md`
+> Generated: 2026-05-25
+> 기존 KO 본문은 읽지 않고 canonical source만 기준으로 재생성했습니다.
+
+## 동기화 기준
+
+이 문서는 `.codex/harness/prompts/frontend_execute.md`의 현재 canonical 내용을 기준으로 한 한국어 동기화본입니다.
+명령, 경로, API URL, JSON key, status 값, class/function 이름은 정밀성을 위해 원문 표기를 유지합니다.
+
+## Canonical 내용
+
+# Frontend Work Execute Prompt
 
 
-`$v1-slice-harness mode=execute`
+home-search-harness mode=execute
 
-## 입력
+Work item: {{WORK_ID}}
+Preset: {{PRESET}}
+Target: {{TARGET}}
+Branch: {{BRANCH_NAME}}
 
-- Slice: `{{SLICE}}`
-- Preset: `{{PRESET}}`
-- Target: `{{TARGET}}`
-- Branch: `{{BRANCH_NAME}}`
+Allowed edit scope:
+- {{ALLOWED_SCOPE}}
 
-## 허용 수정 범위
-
-- `{{ALLOWED_SCOPE}}`
-
-## 금지 수정 범위
-
-- `{{FORBIDDEN_SCOPE}}`
-- `docs/**`
-- `AGENTS.md`
-- `README.md`
-- `ai-docs/**`
-- `scripts/**`
-- `infra/**`
-- `package-lock.json`
+Forbidden edit scope:
+- {{FORBIDDEN_SCOPE}}
+- docs/**
+- AGENTS.md
+- README.md
+- ai-docs/**
+- scripts/**
+- infra/**
+- package-lock.json
 - build output
 
-## 지시사항
+Instructions:
+- Read root AGENTS.md, apps/web/AGENTS.md, CONTEXT.md, apps/web/CONTEXT.md, docs/API_CONTRACT.md, docs/MAP_DISPLAY_FLOW.md, and docs/UI_UX_MIGRATION.md before editing.
+- Preserve public API URLs, request fields, response fields, units, coordinate conventions, and empty/error behavior.
+- Keep the map usable on marker API failure.
+- Use only scripts that exist in `apps/web/package.json`; currently PR/CI evidence requires `npm run test` and `npm run build`, not `npm run lint`.
+- Use the minimum GREEN work item and leave a short Korean-first gate summary.
 
-- 편집 전 root `AGENTS.md`, `apps/web/AGENTS.md`, `CONTEXT.md`, `apps/web/CONTEXT.md`, `docs/API_CONTRACT.md`, `docs/MAP_DISPLAY_FLOW.md`, `docs/UI_UX_MIGRATION.md`를 읽는다.
-- V1 URL, request fields, response fields, units, coordinate conventions, empty/error behavior를 보존한다.
-- marker API failure 상황에서도 map이 usable해야 한다.
-- `apps/web/package.json`에 존재하는 script만 사용한다. 현재 PR/CI evidence는 `npm run test`, `npm run build`가 필요하고 `npm run lint`는 필요하지 않다.
-- 최소 GREEN slice를 적용하고 짧은 Korean-first gate summary를 남긴다.
+Skill routing:
+{{SKILL_ROUTING}}
 
-## Skill routing
+Required verification:
+- {{VERIFICATION_COMMANDS}}
+- Use exact evidence line format: ``- `command` = pass|fail|not run (Korean reason)``.
 
-`{{SKILL_ROUTING}}`
-
-## 필수 검증
-
-- `{{VERIFICATION_COMMANDS}}`
-- 정확한 evidence line 형식: ``- `command` = pass|fail|not run (Korean reason)``.
-
-## 최종 사용자 evidence label
-
+Final user-facing evidence labels:
 - 상태:
 - 최초 RED:
 - 예상 RED 실패:

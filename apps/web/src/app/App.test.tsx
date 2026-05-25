@@ -187,7 +187,7 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
-  it('complex marker에서 detail drawer를 열고 V1 detail/trade data를 load한다', async () => {
+  it('complex marker에서 detail drawer를 열고 documented detail/trade data를 load한다', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(

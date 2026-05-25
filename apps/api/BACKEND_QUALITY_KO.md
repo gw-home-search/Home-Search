@@ -1,46 +1,60 @@
-# 백엔드 품질 게이트
+# Backend Quality Gate KO
 
-이 파일은 agent, hook, CI가 backend slice 완료를 판단하기 전에 사용할
-백엔드 품질 흐름을 정의한다.
+> KO 생성 기준: canonical source only
+> Source: `apps/api/BACKEND_QUALITY.md`
+> Generated: 2026-05-25
+> 기존 KO 본문은 읽지 않고 canonical source만 기준으로 재생성했습니다.
 
-## 필수 게이트
+## 동기화 기준
 
-단일 backend gate를 실행한다.
+이 문서는 `apps/api/BACKEND_QUALITY.md`의 현재 canonical 내용을 기준으로 한 한국어 동기화본입니다.
+명령, 경로, API URL, JSON key, status 값, class/function 이름은 정밀성을 위해 원문 표기를 유지합니다.
+
+## Canonical 내용
+
+# Backend Quality Gate
+
+This file defines the backend quality flow that agents, hooks, and CI should
+use before claiming a backend slice is complete.
+
+## Required Gate
+
+Run the single backend gate:
 
 ```sh
 cd apps/api && ./gradlew backendQualityCheck
 ```
 
-이 게이트는 profile 경계 테스트, V1 API 계약 테스트, PostGIS/Flyway
-persistence 테스트, REST Docs/OpenAPI 생성, JaCoCo coverage 검증, Javadoc을
-실행한다.
+The gate runs profile boundary tests, public API contract tests, PostGIS/Flyway
+persistence tests, REST Docs/OpenAPI generation, JaCoCo coverage verification,
+and Javadoc.
 
-## 커버리지
+## Coverage
 
-backend line coverage와 instruction coverage는 90% 이상이어야 한다.
+Backend line and instruction coverage must stay at or above 90%.
 
-커버리지는 public seam을 통한 behavior test로 올린다. 수치만 맞추기 위한
-record/getter 전용 테스트를 추가하지 않는다.
+Coverage should be raised by behavior tests through public seams. Do not add
+record/getter-only tests just to increase the percentage.
 
-제외 대상은 application entrypoint, DTO record, package-info 파일,
-generated/build output으로 제한한다.
+Excluded code is limited to the application entrypoint, DTO records,
+package-info files, and generated/build output.
 
 ## Docs And OpenAPI
 
-REST Docs 테스트는 MockMvc web test에서 snippets를 생성한다. OpenAPI YAML은
-그 snippets에서 생성되며 위치는 다음과 같다.
+REST Docs tests generate snippets from MockMvc web tests. The OpenAPI YAML is
+generated from those snippets at:
 
 ```text
 apps/api/build/api-spec/openapi3.yaml
 ```
 
-YAML에는 현재 V1 map path와 canonical public field가 포함되어야 한다.
-`complexPk`, `aptSeq`, `sourceKey` 또는 snake_case 변형 같은 audit/dedupe
-필드는 public response로 노출하면 안 된다.
+The YAML must include the current map paths and canonical public fields. It
+must not expose audit or dedupe fields such as `complexPk`, `aptSeq`,
+`sourceKey`, or their snake_case variants.
 
 ## Evidence
 
-backend PR에는 다음 evidence line을 포함한다.
+Backend PRs should include these evidence lines:
 
 ```text
 Coverage: >=90%

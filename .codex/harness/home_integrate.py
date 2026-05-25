@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Merge prepared Home Search V1 slice branches into an integration branch."""
+"""Merge prepared Home Search work item branches into an integration branch."""
 
 from __future__ import annotations
 
@@ -137,12 +137,12 @@ def verify(main: Path, *, dry_run: bool) -> dict[str, Any]:
 
 
 def payload_path_for(payload: dict[str, Any]) -> Path:
-    slice_name = str(payload.get("slice") or "unknown").strip() or "unknown"
-    return REPORT_ROOT / f"{slice_name}.json"
+    work_id = str(payload.get("work_id") or payload.get("slice") or "unknown").strip() or "unknown"
+    return REPORT_ROOT / f"{work_id}.json"
 
 
 def call_report(payload: dict[str, Any], *, notion: bool, slack: bool, dry_run: bool) -> None:
-    script = Path(__file__).with_name("v1_report.py")
+    script = Path(__file__).with_name("home_report.py")
     cmd = [sys.executable, str(script), "--input-json", "-", "--payload-out", str(payload_path_for(payload))]
     if notion:
         cmd.append("--notion")
@@ -162,7 +162,7 @@ def integrate(args: argparse.Namespace) -> int:
     started = now_iso()
 
     if args.allow_main_merge:
-        return fail("--allow-main-merge is intentionally unsupported in v1", 1)
+        return fail("--allow-main-merge is intentionally unsupported by the harness", 1)
     if args.dry_run:
         print("[DRY-RUN] integration preflight")
         print(f"[DRY-RUN] main worktree: {main}")
@@ -243,7 +243,7 @@ def payload_for(
 ) -> dict[str, Any]:
     integration_head = "" if args.dry_run else git_output(main, "rev-parse", "--short", "HEAD")
     return {
-        "slice": args.integration_branch.replace("feat/", "").replace("-integration", ""),
+        "work_id": args.integration_branch.replace("feat/", "").replace("-integration", ""),
         "preset": "integration",
         "status": status,
         "started_at": started,
@@ -268,10 +268,10 @@ def payload_for(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Merge api/web V1 branches into an integration branch.")
-    parser.add_argument("--api-branch", required=True)
-    parser.add_argument("--web-branch", required=True)
-    parser.add_argument("--integration-branch", required=True)
+    parser = argparse.ArgumentParser(description="Merge api/web work branches into an integration branch.")
+    parser.add_argument("--api-branch")
+    parser.add_argument("--web-branch")
+    parser.add_argument("--integration-branch")
     parser.add_argument("--main-worktree", default=str(DEFAULT_MAIN))
     parser.add_argument("--base-branch", default="main")
     parser.add_argument("--dry-run", action="store_true")
@@ -280,11 +280,57 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--notion", action="store_true")
     parser.add_argument("--slack", action="store_true")
     parser.add_argument("--allow-main-merge", action="store_true")
+    parser.add_argument("--self-test", action="store_true")
     return parser
 
 
+def run_self_test() -> int:
+    parser = build_parser()
+    args = parser.parse_args([
+        "--api-branch",
+        "feat/api-work",
+        "--web-branch",
+        "feat/web-work",
+        "--integration-branch",
+        "feat/sample-integration",
+        "--dry-run",
+        "--verify-only",
+    ])
+    payload = payload_for(
+        args,
+        DEFAULT_MAIN,
+        "2026-05-25T00:00:00+09:00",
+        "Pass",
+        {"git diff --check": {"status": "pass"}},
+        {"api": "skipped", "web": "skipped"},
+        "없음",
+    )
+    checks = [
+        args.dry_run,
+        args.verify_only,
+        payload["work_id"] == "sample",
+        payload["branches"]["api"] == "feat/api-work",
+        "git -C" in main_merge_command(DEFAULT_MAIN, "feat/sample-integration"),
+    ]
+    if all(checks):
+        print("self-test passed: home_integrate")
+        return 0
+    print("self-test failed: home_integrate", file=sys.stderr)
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
-    return integrate(build_parser().parse_args(argv))
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.self_test:
+        return run_self_test()
+    missing = [
+        name for name in ("api_branch", "web_branch", "integration_branch")
+        if not getattr(args, name)
+    ]
+    if missing:
+        parser.error("the following arguments are required: " + ", ".join(f"--{name.replace('_', '-')}" for name in missing))
+    return integrate(args)
 
 
 if __name__ == "__main__":

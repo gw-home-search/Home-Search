@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run Home Search V1 slice automation from the main worktree."""
+"""Run Home Search work automation from the main worktree."""
 
 from __future__ import annotations
 
@@ -19,31 +19,33 @@ from typing import Any
 
 from pr_evidence import (
     API_QUALITY,
-    BACKLOG_SYNC_SELF_TEST,
+    WORKLOG_SYNC_SELF_TEST,
     DIFF_CHECK,
     DOCKER_COMPOSE_LOCAL_CONFIG,
     KO_CHECK,
     POST_TOOL_USE_REVIEW_SELF_TEST,
     PR_BODY_CHECK_SELF_TEST,
     PR_CONTEXT_SELF_TEST,
+    PROJECT_TERMS_CHECK,
+    PROJECT_TERMS_SELF_TEST,
     PR_LINT_SELF_TEST,
     SKILL_ROUTING_SELF_TEST,
     STOP_HOOK_SELF_TEST,
     USER_LANGUAGE_CHECK,
-    V1_FLOW_SELF_TEST,
-    V1_LAUNCHER_SELF_TEST,
-    V1_PLAN_SELF_TEST,
-    V1_PR_SELF_TEST,
-    V1_REPORT_SELF_TEST,
+    HARNESS_FLOW_SELF_TEST,
+    HARNESS_LAUNCHER_SELF_TEST,
+    HARNESS_PLAN_SELF_TEST,
+    HARNESS_PR_SELF_TEST,
+    HARNESS_REPORT_SELF_TEST,
     WEB_BUILD,
     WEB_TEST,
     ordered_commands,
     requirements_for_changed_files,
 )
-from backlog_sync import mark_slice_done
+from worklog_sync import mark_work_item_done
 from pr_lint import PrInput, format_grouped_errors, lint_pr
 from skill_routing import routing_payload, routing_text
-from v1_report import render_pr_body
+from home_report import render_pr_body
 
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -52,9 +54,9 @@ if hasattr(sys.stdout, "reconfigure"):
 DEFAULT_MAIN = Path("/Users/gwongwangjae/home-search")
 DEFAULT_WORKTREE_PARENT = Path("/Users/gwongwangjae")
 PRESET_DIR = Path(__file__).with_name("presets")
-BACKLOG_PATH = Path(__file__).with_name("slices") / "backlog.toml"
+WORKLOG_PATH = Path(__file__).with_name("worklog.toml")
 REPORT_ROOT = DEFAULT_MAIN / ".codex" / "harness" / "reports"
-PR_SCRIPT = Path(__file__).with_name("v1_pr.py")
+PR_SCRIPT = Path(__file__).with_name("home_pr.py")
 PR_TITLE_TYPES = {"Feat", "Fix", "Chore", "Docs", "Test", "Refactor"}
 DEFAULT_TARGETS = {
     "backend": {
@@ -84,14 +86,16 @@ KNOWN_VERIFICATION_COMMANDS = {
         PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
         PR_CONTEXT_SELF_TEST: (".", ["python3", ".codex/harness/pr_context.py", "--self-test"]),
         PR_BODY_CHECK_SELF_TEST: (".", ["python3", ".codex/harness/pr_body_check.py", "--self-test"]),
-        BACKLOG_SYNC_SELF_TEST: (".", ["python3", ".codex/harness/backlog_sync.py", "--self-test"]),
-        V1_PR_SELF_TEST: (".", ["python3", ".codex/harness/v1_pr.py", "--self-test"]),
-        V1_FLOW_SELF_TEST: (".", ["python3", ".codex/harness/v1_flow.py", "--self-test"]),
-        V1_PLAN_SELF_TEST: (".", ["python3", ".codex/harness/v1_plan.py", "--self-test"]),
-        V1_REPORT_SELF_TEST: (".", ["python3", ".codex/harness/v1_report.py", "--self-test"]),
-        V1_LAUNCHER_SELF_TEST: (".", [".codex/harness/v1", "--self-test"]),
+        WORKLOG_SYNC_SELF_TEST: (".", ["python3", ".codex/harness/worklog_sync.py", "--self-test"]),
+        HARNESS_PR_SELF_TEST: (".", ["python3", ".codex/harness/home_pr.py", "--self-test"]),
+        HARNESS_FLOW_SELF_TEST: (".", ["python3", ".codex/harness/home_flow.py", "--self-test"]),
+        HARNESS_PLAN_SELF_TEST: (".", ["python3", ".codex/harness/home_plan.py", "--self-test"]),
+        HARNESS_REPORT_SELF_TEST: (".", ["python3", ".codex/harness/home_report.py", "--self-test"]),
+        HARNESS_LAUNCHER_SELF_TEST: (".", [".codex/harness/home", "--self-test"]),
         SKILL_ROUTING_SELF_TEST: (".", ["python3", ".codex/harness/skill_routing.py", "--self-test"]),
         USER_LANGUAGE_CHECK: (".", ["python3", ".codex/harness/user_language_check.py", "--self-test"]),
+        PROJECT_TERMS_SELF_TEST: (".", ["python3", ".codex/harness/project_terms_check.py", "--self-test"]),
+        PROJECT_TERMS_CHECK: (".", ["python3", ".codex/harness/project_terms_check.py"]),
         STOP_HOOK_SELF_TEST: (".", ["python3", ".codex/hooks/stop_verification_gate.py", "--self-test"]),
         POST_TOOL_USE_REVIEW_SELF_TEST: (".", ["python3", ".codex/hooks/post_tool_use_review.py", "--self-test"]),
         KO_CHECK: (".", ["bash", "scripts/check-ko-docs.sh"]),
@@ -104,14 +108,16 @@ KNOWN_VERIFICATION_COMMANDS = {
         PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
         PR_CONTEXT_SELF_TEST: (".", ["python3", ".codex/harness/pr_context.py", "--self-test"]),
         PR_BODY_CHECK_SELF_TEST: (".", ["python3", ".codex/harness/pr_body_check.py", "--self-test"]),
-        BACKLOG_SYNC_SELF_TEST: (".", ["python3", ".codex/harness/backlog_sync.py", "--self-test"]),
-        V1_PR_SELF_TEST: (".", ["python3", ".codex/harness/v1_pr.py", "--self-test"]),
-        V1_FLOW_SELF_TEST: (".", ["python3", ".codex/harness/v1_flow.py", "--self-test"]),
-        V1_PLAN_SELF_TEST: (".", ["python3", ".codex/harness/v1_plan.py", "--self-test"]),
-        V1_REPORT_SELF_TEST: (".", ["python3", ".codex/harness/v1_report.py", "--self-test"]),
-        V1_LAUNCHER_SELF_TEST: (".", [".codex/harness/v1", "--self-test"]),
+        WORKLOG_SYNC_SELF_TEST: (".", ["python3", ".codex/harness/worklog_sync.py", "--self-test"]),
+        HARNESS_PR_SELF_TEST: (".", ["python3", ".codex/harness/home_pr.py", "--self-test"]),
+        HARNESS_FLOW_SELF_TEST: (".", ["python3", ".codex/harness/home_flow.py", "--self-test"]),
+        HARNESS_PLAN_SELF_TEST: (".", ["python3", ".codex/harness/home_plan.py", "--self-test"]),
+        HARNESS_REPORT_SELF_TEST: (".", ["python3", ".codex/harness/home_report.py", "--self-test"]),
+        HARNESS_LAUNCHER_SELF_TEST: (".", [".codex/harness/home", "--self-test"]),
         SKILL_ROUTING_SELF_TEST: (".", ["python3", ".codex/harness/skill_routing.py", "--self-test"]),
         USER_LANGUAGE_CHECK: (".", ["python3", ".codex/harness/user_language_check.py", "--self-test"]),
+        PROJECT_TERMS_SELF_TEST: (".", ["python3", ".codex/harness/project_terms_check.py", "--self-test"]),
+        PROJECT_TERMS_CHECK: (".", ["python3", ".codex/harness/project_terms_check.py"]),
         STOP_HOOK_SELF_TEST: (".", ["python3", ".codex/hooks/stop_verification_gate.py", "--self-test"]),
         POST_TOOL_USE_REVIEW_SELF_TEST: (".", ["python3", ".codex/hooks/post_tool_use_review.py", "--self-test"]),
         KO_CHECK: (".", ["bash", "scripts/check-ko-docs.sh"]),
@@ -126,7 +132,7 @@ FORBIDDEN_SAFETY_FLAGS = {
 
 
 class PresetError(ValueError):
-    """Raised when a slice cannot be mapped to exactly one safe preset."""
+    """Raised when a work item cannot be mapped to exactly one safe preset."""
 
 
 def now_iso() -> str:
@@ -136,7 +142,7 @@ def now_iso() -> str:
 def slugify(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
     if not slug:
-        raise ValueError("--slice must contain at least one alphanumeric character")
+        raise ValueError("--work-id must contain at least one alphanumeric character")
     return slug
 
 
@@ -208,7 +214,7 @@ def _preset_exact_names(preset: dict[str, Any]) -> set[str]:
     return names
 
 
-def resolve_preset(slice_name: str, explicit: str | None = None) -> tuple[str, dict[str, Any]]:
+def resolve_preset(work_id: str, explicit: str | None = None) -> tuple[str, dict[str, Any]]:
     presets = load_presets()
     if not presets:
         raise PresetError("preset 파일을 찾을 수 없습니다")
@@ -226,28 +232,28 @@ def resolve_preset(slice_name: str, explicit: str | None = None) -> tuple[str, d
             raise PresetError(f"preset 옵션이 여러 항목과 일치합니다: {explicit}")
         raise PresetError(f"지원하지 않는 preset: {explicit}. 가능: {describe_presets(presets)}")
 
-    slice_slug = slugify(slice_name)
+    work_slug = slugify(work_id)
     exact_matches = [
         (preset_id, preset)
         for preset_id, preset in presets.items()
-        if slice_slug in _preset_exact_names(preset)
+        if work_slug in _preset_exact_names(preset)
     ]
     if len(exact_matches) == 1:
         return exact_matches[0]
     if len(exact_matches) > 1:
-        raise PresetError(f"slice 이름이 여러 preset alias와 일치합니다: {slice_slug}")
+        raise PresetError(f"work id가 여러 preset alias와 일치합니다: {work_slug}")
 
     pattern_matches = []
     for preset_id, preset in presets.items():
         patterns = [slugify(str(pattern)) for pattern in preset.get("slice_patterns", [])]
-        if any(pattern and pattern in slice_slug for pattern in patterns):
+        if any(pattern and pattern in work_slug for pattern in patterns):
             pattern_matches.append((preset_id, preset))
     if len(pattern_matches) == 1:
         return pattern_matches[0]
     if len(pattern_matches) > 1:
         matched = ", ".join(preset_id for preset_id, _ in pattern_matches)
-        raise PresetError(f"slice 이름이 여러 preset pattern과 일치합니다: {matched}")
-    raise PresetError(f"preset을 결정할 수 없습니다: {slice_slug}. 가능: {describe_presets(presets)}")
+        raise PresetError(f"work id가 여러 preset pattern과 일치합니다: {matched}")
+    raise PresetError(f"preset을 결정할 수 없습니다: {work_slug}. 가능: {describe_presets(presets)}")
 
 
 def target_config(args: argparse.Namespace, target: str) -> dict[str, Any]:
@@ -362,9 +368,10 @@ def render_prompt(name: str, variables: dict[str, str]) -> str:
 
 
 def default_names(args: argparse.Namespace) -> dict[str, Any]:
-    slug = slugify(args.slice)
+    work_id = getattr(args, "work_id", None) or getattr(args, "slice", None)
+    slug = slugify(str(work_id))
     return {
-        "slice": slug,
+        "work_id": slug,
         "api_branch": args.api_branch or f"feat/api-{slug}",
         "web_branch": args.web_branch or f"feat/web-{slug}",
         "integration_branch": args.integration_branch or f"feat/{slug}-integration",
@@ -438,13 +445,14 @@ def run_codex(
 ) -> dict[str, Any]:
     if args.no_codex:
         return {"status": "skipped", "exit_code": None, "summary": "--no-codex"}
-    output = DEFAULT_MAIN / ".codex" / "harness" / "reports" / f"{names['slice']}-{target}-last.md"
+    output = DEFAULT_MAIN / ".codex" / "harness" / "reports" / f"{names['work_id']}-{target}-last.md"
     config = target_config(args, target)
     prompt_name = str(config["prompt"])
     prompt = render_prompt(
         prompt_name,
         {
-            "SLICE": names["slice"],
+            "WORK_ID": names["work_id"],
+            "SLICE": names["work_id"],
             "PRESET": args.preset,
             "TARGET": target,
             "BRANCH_NAME": branch,
@@ -478,11 +486,12 @@ def run_gate_review(
     *,
     dry_run: bool,
 ) -> dict[str, Any]:
-    output = DEFAULT_MAIN / ".codex" / "harness" / "reports" / f"{names['slice']}-{target}-gate.md"
+    output = DEFAULT_MAIN / ".codex" / "harness" / "reports" / f"{names['work_id']}-{target}-gate.md"
     prompt = render_prompt(
         "gate_review.md",
         {
-            "SLICE": names["slice"],
+            "WORK_ID": names["work_id"],
+            "SLICE": names["work_id"],
             "PRESET": args.preset,
             "TARGET": target,
             "BRANCH_NAME": names["api_branch"] if target == "backend" else names["web_branch"],
@@ -607,7 +616,7 @@ def expected_changed_files_for_targets(targets: list[str]) -> list[str]:
     if "frontend" in targets:
         expected.append("apps/web/__expected__")
     if targets:
-        expected.append(".codex/harness/slices/backlog.toml")
+        expected.append(".codex/harness/worklog.toml")
     return expected
 
 
@@ -633,7 +642,7 @@ def commit_target(
     target: str,
     worktree: Path,
     branch: str,
-    slice_name: str,
+    work_id: str,
     args: argparse.Namespace,
     *,
     dry_run: bool,
@@ -644,7 +653,7 @@ def commit_target(
     if dry_run:
         print(f"[DRY-RUN] inspect changed files in {worktree}; allowed scope {', '.join(allowed_patterns)}")
         print(f"[DRY-RUN] git add -- {' '.join(add_pathspecs)}")
-        print(f"[DRY-RUN] git commit -m 'feat({'api' if target == 'backend' else 'web'}): {slice_name}'")
+        print(f"[DRY-RUN] git commit -m 'feat({'api' if target == 'backend' else 'web'}): {work_id}'")
         return None
     if not files:
         return None
@@ -653,7 +662,7 @@ def commit_target(
         raise RuntimeError(f"{target} branch has out-of-scope changes: {', '.join(blocked[:5])}")
     git(worktree, "add", "--", *add_pathspecs)
     scope = "api" if target == "backend" else "web"
-    result = git(worktree, "commit", "-m", f"feat({scope}): {slice_name}")
+    result = git(worktree, "commit", "-m", f"feat({scope}): {work_id}")
     if result["status"] == "fail":
         raise RuntimeError(f"{target} commit failed: {result['summary']}")
     return git_output(worktree, "rev-parse", "--short", "HEAD")
@@ -675,7 +684,7 @@ def execute_target(
     gate = run_gate_review(target, worktree, args, names, dry_run=dry_run)
     commit = None
     if args.commit and not args.no_commit:
-        commit = commit_target(target, worktree, branch, names["slice"], args, dry_run=dry_run)
+        commit = commit_target(target, worktree, branch, names["work_id"], args, dry_run=dry_run)
     return {
         "status": "pass",
         "codex": {k: codex_result.get(k) for k in ("status", "exit_code", "summary", "output_path")},
@@ -759,12 +768,12 @@ def call_integrate(args: argparse.Namespace, names: dict[str, Any], *, dry_run: 
     }
 
 
-def call_backlog_sync(args: argparse.Namespace, names: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
+def call_worklog_sync(args: argparse.Namespace, names: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
     if not execution_targets(args):
         return {"status": "skipped", "exit_code": None, "summary": "planning-only"}
     if dry_run:
-        print(f"[DRY-RUN] mark backlog slice done: {names['slice']}")
-    result = mark_slice_done(BACKLOG_PATH, names["slice"], dry_run=dry_run)
+        print(f"[DRY-RUN] mark worklog item done: {names['work_id']}")
+    result = mark_work_item_done(WORKLOG_PATH, names["work_id"], dry_run=dry_run)
     payload = {
         "status": result.status,
         "exit_code": 0 if result.status in {"pass", "skipped"} else 1,
@@ -774,28 +783,28 @@ def call_backlog_sync(args: argparse.Namespace, names: dict[str, Any], *, dry_ru
         "commit": None,
     }
     if result.status == "conflict":
-        raise RuntimeError(f"backlog sync conflict: {result.summary}")
+        raise RuntimeError(f"worklog sync conflict: {result.summary}")
     if result.status == "fail":
-        raise RuntimeError(f"backlog sync failed: {result.summary}")
+        raise RuntimeError(f"worklog sync failed: {result.summary}")
     if result.status != "pass" or dry_run:
         return payload
-    add_result = git(DEFAULT_MAIN, "add", "--", ".codex/harness/slices/backlog.toml")
+    add_result = git(DEFAULT_MAIN, "add", "--", ".codex/harness/worklog.toml")
     if add_result["status"] == "fail":
-        raise RuntimeError(f"backlog sync add failed: {add_result['summary']}")
-    commit_result = git(DEFAULT_MAIN, "commit", "-m", f"chore(harness): mark {names['slice']} slice done")
+        raise RuntimeError(f"worklog sync add failed: {add_result['summary']}")
+    commit_result = git(DEFAULT_MAIN, "commit", "-m", f"chore(harness): mark {names['work_id']} done")
     if commit_result["status"] == "fail":
-        raise RuntimeError(f"backlog sync commit failed: {commit_result['summary']}")
+        raise RuntimeError(f"worklog sync commit failed: {commit_result['summary']}")
     payload["commit"] = git_output(DEFAULT_MAIN, "rev-parse", "--short", "HEAD") or None
     payload["summary"] = f"{result.summary}; commit={payload['commit']}"
     return payload
 
 
-def payload_path_for(slice_name: str) -> Path:
-    return REPORT_ROOT / f"{slugify(slice_name)}.json"
+def payload_path_for(work_id: str) -> Path:
+    return REPORT_ROOT / f"{slugify(work_id)}.json"
 
 
 def write_payload(payload: dict[str, Any], *, dry_run: bool) -> Path:
-    path = payload_path_for(str(payload.get("slice") or "unknown"))
+    path = payload_path_for(str(payload.get("work_id") or payload.get("slice") or "unknown"))
     payload.setdefault("links", {})["payload_json"] = str(path)
     if dry_run:
         print(f"[DRY-RUN] write payload JSON: {path}")
@@ -806,8 +815,8 @@ def write_payload(payload: dict[str, Any], *, dry_run: bool) -> Path:
 
 
 def call_report(payload: dict[str, Any], *, notion: bool, slack: bool, dry_run: bool) -> None:
-    script = Path(__file__).with_name("v1_report.py")
-    payload_path = payload_path_for(str(payload.get("slice") or "unknown"))
+    script = Path(__file__).with_name("home_report.py")
+    payload_path = payload_path_for(str(payload.get("work_id") or payload.get("slice") or "unknown"))
     command = [sys.executable, str(script), "--input-json", "-", "--payload-out", str(payload_path)]
     if notion:
         command.append("--notion")
@@ -828,8 +837,8 @@ def load_payload(path: Path, fallback: dict[str, Any], *, dry_run: bool) -> dict
     return payload if isinstance(payload, dict) else fallback
 
 
-def pr_body_path_for(slice_name: str) -> Path:
-    return REPORT_ROOT / f"{slugify(slice_name)}-pr-body.md"
+def pr_body_path_for(work_id: str) -> Path:
+    return REPORT_ROOT / f"{slugify(work_id)}-pr-body.md"
 
 
 def write_pr_body_file(payload: dict[str, Any], *, dry_run: bool) -> tuple[Path, bool]:
@@ -840,23 +849,23 @@ def write_pr_body_file(payload: dict[str, Any], *, dry_run: bool) -> tuple[Path,
         path = Path(handle.name)
         print(f"[DRY-RUN] temporary PR body: {path}")
         return path, True
-    path = pr_body_path_for(str(payload.get("slice") or "unknown"))
+    path = pr_body_path_for(str(payload.get("work_id") or payload.get("slice") or "unknown"))
     payload.setdefault("links", {})["pr_body"] = str(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(render_pr_body(payload), encoding="utf-8")
     return path, False
 
 
-def backlog_pr_metadata(slice_name: str) -> tuple[str, str] | None:
-    if not BACKLOG_PATH.exists():
+def worklog_pr_metadata(work_id: str) -> tuple[str, str] | None:
+    if not WORKLOG_PATH.exists():
         return None
     try:
-        with BACKLOG_PATH.open("rb") as handle:
+        with WORKLOG_PATH.open("rb") as handle:
             data = tomllib.load(handle)
     except (OSError, tomllib.TOMLDecodeError):
         return None
-    requested = slugify(slice_name)
-    for item in data.get("slices", []):
+    requested = slugify(work_id)
+    for item in data.get("items", []):
         if not isinstance(item, dict) or slugify(str(item.get("id", ""))) != requested:
             continue
         title_type = str(item.get("pr_type") or "Feat").strip()
@@ -867,17 +876,17 @@ def backlog_pr_metadata(slice_name: str) -> tuple[str, str] | None:
     return None
 
 
-def default_pr_title(slice_name: str) -> str:
-    metadata = backlog_pr_metadata(slice_name)
+def default_pr_title(work_id: str) -> str:
+    metadata = worklog_pr_metadata(work_id)
     if metadata:
         title_type, summary = metadata
     else:
-        title_type, summary = "Chore", f"{slice_name.replace('-', ' ')} 정리"
+        title_type, summary = "Chore", f"{work_id.replace('-', ' ')} 정리"
     return f"[{title_type}] {summary}"
 
 
 def pr_title(args: argparse.Namespace, names: dict[str, Any]) -> str:
-    return args.pr_title or default_pr_title(names["slice"])
+    return args.pr_title or default_pr_title(names["work_id"])
 
 
 def call_pr(
@@ -979,7 +988,7 @@ def build_payload(
     integration: dict[str, Any] | None,
     status: str,
     risk: str | None = None,
-    backlog_sync: dict[str, Any] | None = None,
+    worklog_sync: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     verification: dict[str, Any] = {}
     targets = execution_targets(args)
@@ -990,8 +999,8 @@ def build_payload(
         verification.update(integration.get("verification", {}))
     if integration:
         verification["integration"] = {k: integration.get(k) for k in ("status", "exit_code", "summary")}
-    if backlog_sync:
-        verification["backlog sync"] = {k: backlog_sync.get(k) for k in ("status", "exit_code", "summary")}
+    if worklog_sync:
+        verification["worklog sync"] = {k: worklog_sync.get(k) for k in ("status", "exit_code", "summary")}
     main_merge = "not suggested"
     if integration is not None:
         main_merge = f"git -C {DEFAULT_MAIN} switch main && git -C {DEFAULT_MAIN} merge --no-ff {names['integration_branch']}"
@@ -1027,7 +1036,7 @@ def build_payload(
         }
     next_action = "integration branch를 눈으로 검토한 뒤 main merge/push 여부를 결정"
     if not targets:
-        next_action = "planning-only 결과를 검토한 뒤 별도 실행 slice 여부를 결정"
+        next_action = "planning-only 결과를 검토한 뒤 별도 실행 work item 여부를 결정"
         main_merge = "not suggested; planning-only"
         push_suggestion = "not suggested; planning-only"
     elif getattr(args, "pr", False):
@@ -1042,7 +1051,7 @@ def build_payload(
         elif targets:
             next_action = "dry-run 결과를 확인한 뒤 실제 run 실행 여부를 결정"
     return {
-        "slice": names["slice"],
+        "work_id": names["work_id"],
         "preset": args.preset,
         "targets": getattr(args, "targets", "both"),
         "status": status,
@@ -1062,10 +1071,10 @@ def build_payload(
             "api": results.get("backend", {}).get("commit"),
             "web": results.get("frontend", {}).get("commit"),
             "integration_head": integration_head,
-            "backlog_sync": (backlog_sync or {}).get("commit"),
+            "worklog_sync": (worklog_sync or {}).get("commit"),
         },
         "verification": verification,
-        "backlog_sync": backlog_sync or {"status": "skipped", "summary": "not run"},
+        "worklog_sync": worklog_sync or {"status": "skipped", "summary": "not run"},
         "changed_files": integration_files,
         "changed_files_kind": changed_files_kind,
         "required_evidence": required_evidence,
@@ -1087,7 +1096,7 @@ def build_payload(
 
 def run_flow(args: argparse.Namespace) -> int:
     try:
-        preset_id, preset = resolve_preset(args.slice, args.preset)
+        preset_id, preset = resolve_preset(args.work_id, args.preset)
     except (PresetError, ValueError) as exc:
         return fail(str(exc))
     args.preset = preset_id
@@ -1118,7 +1127,7 @@ def run_flow(args: argparse.Namespace) -> int:
         return fail(str(exc))
 
     if dry_run:
-        print("[DRY-RUN] v1_flow run")
+        print("[DRY-RUN] home_flow run")
         print(f"[DRY-RUN] preset: {args.preset} ({preset.get('description', 'no description')})")
         print(f"[DRY-RUN] targets: {args.targets}")
         print(json.dumps({k: str(v) for k, v in names.items()}, indent=2, sort_keys=True))
@@ -1140,12 +1149,12 @@ def run_flow(args: argparse.Namespace) -> int:
         print("상태: Pass")
         print(f"report: {payload_path}")
         print("다음 행동:")
-        print("planning-only 결과를 검토한 뒤 별도 backend/frontend/both slice로 실행 여부를 결정하세요.")
+        print("planning-only 결과를 검토한 뒤 별도 backend/frontend/both work item으로 실행 여부를 결정하세요.")
         return 0
 
     results: dict[str, Any] = {}
     integration_result: dict[str, Any] | None = None
-    backlog_sync_result: dict[str, Any] | None = None
+    worklog_sync_result: dict[str, Any] | None = None
     try:
         selected_targets = execution_targets(args)
         for target in selected_targets:
@@ -1195,9 +1204,9 @@ def run_flow(args: argparse.Namespace) -> int:
         if args.integrate and not args.no_integrate:
             integration_result = call_integrate(args, names, dry_run=dry_run)
             if integration_result.get("status") == "pass":
-                backlog_sync_result = call_backlog_sync(args, names, dry_run=dry_run)
+                worklog_sync_result = call_worklog_sync(args, names, dry_run=dry_run)
     except RuntimeError as exc:
-        payload = build_payload(args, names, started, results, integration_result, "Fail", str(exc), backlog_sync_result)
+        payload = build_payload(args, names, started, results, integration_result, "Fail", str(exc), worklog_sync_result)
         payload_path = write_payload(payload, dry_run=dry_run)
         if args.report or args.notion or args.slack:
             call_report(payload, notion=args.notion, slack=args.slack, dry_run=dry_run)
@@ -1205,7 +1214,7 @@ def run_flow(args: argparse.Namespace) -> int:
         print(f"report: {payload_path}")
         return exit_code
 
-    payload = build_payload(args, names, started, results, integration_result, "Pass", backlog_sync=backlog_sync_result)
+    payload = build_payload(args, names, started, results, integration_result, "Pass", worklog_sync=worklog_sync_result)
     try:
         if args.push or args.pr:
             lint_preflight = publish_lint_preflight(args, names, payload, dry_run=dry_run)
@@ -1213,7 +1222,7 @@ def run_flow(args: argparse.Namespace) -> int:
             payload["lint_preflight"] = lint_preflight
             payload["publish_action"] = "pr" if args.pr else "push"
     except RuntimeError as exc:
-        payload = build_payload(args, names, started, results, integration_result, "Fail", str(exc), backlog_sync_result)
+        payload = build_payload(args, names, started, results, integration_result, "Fail", str(exc), worklog_sync_result)
         payload_path = write_payload(payload, dry_run=dry_run)
         if args.report or args.notion or args.slack:
             call_report(payload, notion=args.notion, slack=args.slack, dry_run=dry_run)
@@ -1238,7 +1247,7 @@ def run_flow(args: argparse.Namespace) -> int:
                 write_payload(payload, dry_run=False)
             pr_result = call_pr(args, names, payload_path, body_path, dry_run=dry_run)
     except RuntimeError as exc:
-        payload = build_payload(args, names, started, results, integration_result, "Fail", str(exc), backlog_sync_result)
+        payload = build_payload(args, names, started, results, integration_result, "Fail", str(exc), worklog_sync_result)
         payload_path = write_payload(payload, dry_run=dry_run)
         if args.report or args.notion or args.slack:
             call_report(payload, notion=args.notion, slack=args.slack, dry_run=dry_run)
@@ -1273,13 +1282,14 @@ def run_flow(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Home Search V1 slice orchestrator.")
+    parser = argparse.ArgumentParser(description="Home Search work orchestrator.")
     parser.add_argument("--self-test", action="store_true")
     subparsers = parser.add_subparsers(dest="command")
 
-    run = subparsers.add_parser("run", help="Run a V1 slice workflow.")
-    run.add_argument("--slice", required=True)
-    run.add_argument("--preset", help="Preset id or alias. Defaults to slice-based resolution.")
+    run = subparsers.add_parser("run", help="Run a Home Search work item workflow.")
+    run.add_argument("--work-id", required=True)
+    run.add_argument("--slice", dest="work_id", help=argparse.SUPPRESS)
+    run.add_argument("--preset", help="Preset id or alias. Defaults to work-id based resolution.")
     run.add_argument("--api-branch")
     run.add_argument("--web-branch")
     run.add_argument("--integration-branch")
@@ -1295,7 +1305,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--push", action="store_true", help="Push the integration branch after successful integration.")
     run.add_argument("--pr", action="store_true", help="Push the integration branch and create a draft PR.")
     run.add_argument("--draft-pr", action="store_true", help="Alias for --pr; PRs are draft by default.")
-    run.add_argument("--pr-title", help="Draft PR title. Defaults to 'V1 <slice> integration'.")
+    run.add_argument("--pr-title", help="Draft PR title. Defaults to the worklog PR title or work id summary.")
     run.add_argument(
         "--pr-body-from-report",
         action="store_true",
@@ -1318,10 +1328,10 @@ def run_self_test() -> int:
     except PresetError:
         resolved = ""
     parser = build_parser()
-    pr_args = parser.parse_args(["run", "--slice", "map-contract-hardening", "--pr", "--dry-run"])
-    backlog_pr_args = parser.parse_args(["run", "--slice", "open-api-ingest-prep", "--pr", "--dry-run"])
-    backend_args = parser.parse_args(["run", "--slice", "open-api-ingest-prep", "--targets", "backend", "--dry-run"])
-    planning_args = parser.parse_args(["run", "--slice", "data-architecture-checkpoint", "--targets", "planning-only"])
+    pr_args = parser.parse_args(["run", "--work-id", "map-contract-hardening", "--pr", "--dry-run"])
+    worklog_pr_args = parser.parse_args(["run", "--work-id", "open-api-ingest-prep", "--pr", "--dry-run"])
+    backend_args = parser.parse_args(["run", "--work-id", "open-api-ingest-prep", "--targets", "backend", "--dry-run"])
+    planning_args = parser.parse_args(["run", "--work-id", "data-architecture-checkpoint", "--targets", "planning-only"])
     pr_names = default_names(pr_args)
     pr_payload = build_payload(
         pr_args,
@@ -1333,7 +1343,7 @@ def run_self_test() -> int:
     )
     body = render_pr_body(
         {
-            "slice": "self-test",
+            "work_id": "self-test",
             "status": "Pass",
             "branches": {"integration": "feat/self-test-integration"},
             "verification": {"git diff --check": {"status": "pass", "exit_code": 0}},
@@ -1379,14 +1389,14 @@ def run_self_test() -> int:
         pr_payload["commands"]["push_command_suggestion"] == "handled by --pr after integration succeeds",
         pr_payload["next_action"].startswith("dry-run 결과와 PR lint preflight"),
         "llm-replan" in PLANNING_MODES,
-        pr_title(backlog_pr_args, default_names(backlog_pr_args)) == "[Feat] RTMS 수집 준비",
+        pr_title(worklog_pr_args, default_names(worklog_pr_args)) == "[Feat] RTMS 수집 준비",
         pr_title(pr_args, pr_names) == "[Chore] map contract hardening 정리",
         execution_targets(backend_args) == ["backend"],
         execution_targets(planning_args) == [],
         "최초 RED:" in body,
         "feat/api-test" == default_names(
             argparse.Namespace(
-                slice="test",
+                work_id="test",
                 api_branch=None,
                 web_branch=None,
                 integration_branch=None,
@@ -1397,7 +1407,7 @@ def run_self_test() -> int:
         parse_changed_files(" M apps/api/Foo.java\n?? apps/web/Bar.tsx\nR  old.txt -> apps/api/New.java")
         == ["apps/api/Foo.java", "apps/web/Bar.tsx", "apps/api/New.java"],
         "Skill contract:" in prompt,
-        "$v1-slice-harness [orchestrator]" in prompt,
+        "home-search-harness [orchestrator]" in prompt,
         "$tdd [primary]" in prompt,
         "$backend-api [support]" in prompt,
         "$api-contract [checkpoint]" in prompt,
@@ -1405,9 +1415,9 @@ def run_self_test() -> int:
         "Explicit `--pr` may push only the generated `feat/*-integration` branch." in gate_prompt,
     ]
     if all(checks):
-        print("self-test passed: v1_flow")
+        print("self-test passed: home_flow")
         return 0
-    print("self-test failed: v1_flow", file=sys.stderr)
+    print("self-test failed: home_flow", file=sys.stderr)
     return 1
 
 

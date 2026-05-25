@@ -1,4 +1,15 @@
+<!-- AUTO-GENERATED: canonical source only. Do not edit manually. -->
+
+# KO Sync
+
+- KO 생성 기준: canonical source only
+- 원문: `docs/ARCHITECTURE.md`
+- 동기화일: 2026-05-25
+
+아래 내용은 canonical source에서 재생성한 동기화본입니다. 명령, 경로, API, 필드명 같은 기술 토큰은 원문을 유지합니다.
+
 # Architecture Baseline
+
 
 ## Source System
 
@@ -16,7 +27,7 @@ Migration target:
 
 ## Backend Current Shape
 
-source backend는 layered Spring Boot structure를 따른다:
+The source backend follows a layered Spring Boot structure:
 
 ```text
 src/main/java/com/home
@@ -26,23 +37,24 @@ src/main/java/com/home
 └── infrastructure/
 ```
 
-중요한 V1 packages:
+Important project packages:
 
 - `application/map`: map marker use case.
 - `application/region`: region navigation use case.
 - `application/search`: complex search use case.
 - `application/detail`: complex detail and trade list use case.
 - `domain/region`: region hierarchy.
-- `domain/parcel`: parcel, coordinates, map bounds queries.
+- `domain/parcel`: parcel, coordinates, and map bounds queries.
 - `domain/complex`: apartment complex metadata.
 - `domain/trade`: trade data model.
-- `infrastructure/external/apis`: RTMS와 building public data client.
+- `infrastructure/external/apis`: RTMS and building public data client.
 - `infrastructure/batch/trade`: trade collection and bulk insert flow.
 - `infrastructure/web`: HTTP API controllers.
 
-## Backend V1 Target
+## Backend Project Target
 
-`/Users/gwongwangjae/home-search/apps/api`에서는 backend를 layered로 유지하되 V1 boundary를 더 명확하게 만든다:
+In `/Users/gwongwangjae/home-search/apps/api`, keep the backend layered but
+make the project boundary clearer:
 
 ```text
 apps/api
@@ -58,11 +70,13 @@ apps/api
 └── src/main/resources/db/migration/
 ```
 
-첫 이동 중에는 existing package names를 유지해도 된다. 중요한 결정은 package rename이 아니라 V1을 collection, storage, map display에 집중시키는 것이다.
+The implementation can keep existing package names during the first move. The
+important decision is not package renaming; it is keeping project focused on
+collection, storage, and map display.
 
 ## Frontend Current Shape
 
-source frontend는 Vite React app이다:
+The source frontend is a Vite React app:
 
 ```text
 src
@@ -76,9 +90,9 @@ src
 └── store/
 ```
 
-중요한 V1 files:
+Important project files:
 
-- `src/App.jsx`: map level logic과 marker API calls.
+- `src/App.jsx`: map level logic and marker API calls.
 - `src/axiosInstance/AxiosInstance.jsx`: `VITE_API_SERVER_IP` base URL.
 - `src/store/uiSlice.js`: map state, filters, selected parcel, sidebar mode.
 - `src/components/map/KakaoMap.jsx`: Kakao map wrapper.
@@ -88,9 +102,10 @@ src
 - `src/components/sidebar/detail/DetailSidebar.jsx`: detail API consumer.
 - `src/components/sidebar/detail/TradeSidebar.jsx`: trade API consumer.
 
-## Frontend V1 Target
+## Frontend Project Target
 
-`/Users/gwongwangjae/home-search/apps/web`에서는 map exploration 중심으로 UI/UX를 다시 만들면서 API calls compatibility를 유지한다:
+In `/Users/gwongwangjae/home-search/apps/web`, keep API calls compatible while
+reworking UI/UX around map exploration:
 
 ```text
 apps/web/src
@@ -105,13 +120,17 @@ apps/web/src
 └── store/
 ```
 
-이는 target direction이며 mandatory first-copy layout은 아니다. source code를 먼저 copy하는 것이 더 빠르면 source code를 그대로 migrate한 뒤 API compatibility가 확인된 후 이 shape로 refactor한다.
+This is the target direction, not a mandatory first-copy layout. If copying
+source code first is faster, migrate source code as-is, then refactor toward
+this shape after API compatibility is verified.
 
 ## Critical Risk
 
-source backend는 두 trade relationship models를 섞고 있다:
+The source backend mixes two trade relationship models:
 
-- Detail과 JPA paths는 `trade.complex_id -> complex.id`를 사용한다.
-- Batch insert paths는 `trade.complex_pk -> complex.complex_pk`를 사용한다.
+- Detail and JPA paths use `trade.complex_id -> complex.id`.
+- Batch insert paths use `trade.complex_pk -> complex.complex_pk`.
 
-V1은 이 ambiguity를 조용히 가져가면 안 된다. target operational query model은 `complex_id`를 사용해야 하며, `complex_pk`, `apt_seq`, `source`, `source_key`는 source tracking columns로 유지한다.
+Home Search must not carry this ambiguity forward silently. The target operational query
+model should use `complex_id`, while retaining `complex_pk`, `apt_seq`,
+`source`, and `source_key` as source tracking columns.

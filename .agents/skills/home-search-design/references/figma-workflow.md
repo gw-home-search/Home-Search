@@ -5,10 +5,11 @@ asks to translate a Figma frame into `apps/web`.
 
 ## Boundary
 
-Figma is design evidence, not the product contract. The V1 API contract and
+Figma is design evidence, not the product contract. The public API contract and
 Home Search map workflow remain authoritative.
 
-If Figma asks for data or behavior outside V1, reduce the UI or mark the gap.
+If Figma asks for data or behavior outside the current project scope, reduce the
+UI or mark the gap.
 Do not change public API shape to satisfy a visual comp.
 
 ## Required Flow
@@ -19,7 +20,7 @@ Do not change public API shape to satisfy a visual comp.
 4. If the node is too large, inspect metadata and fetch only the needed child
    nodes.
 5. Identify which Home Search UI unit the design affects.
-6. Map visible data to documented V1 endpoint fields.
+6. Map visible data to documented Home Search endpoint fields.
 7. Translate the design into project conventions rather than copying generated
    React or utility classes directly.
 8. Validate with browser screenshots after implementation.
@@ -50,7 +51,7 @@ Stop or revise the design if Figma requires:
 Aim for useful parity:
 
 1. Task flow and information hierarchy.
-2. V1 data compatibility.
+2. Home Search data compatibility.
 3. Responsive behavior.
 4. Accessibility and keyboard behavior.
 5. Pixel-level spacing and color similarity.

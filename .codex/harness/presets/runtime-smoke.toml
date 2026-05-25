@@ -2,11 +2,11 @@ id = "runtime-smoke"
 description = "Local full-stack runtime smoke for PostGIS, API, and web integration."
 aliases = [
   "runtime-smoke",
-  "mvp-e2e-runtime-smoke",
+  "baseline-e2e-runtime-smoke",
   "e2e-runtime-smoke",
   "full-stack-smoke",
 ]
-slice_patterns = ["runtime-smoke", "e2e-runtime", "mvp-e2e", "full-stack-smoke"]
+slice_patterns = ["runtime-smoke", "e2e-runtime", "baseline-e2e", "full-stack-smoke"]
 
 [targets.backend]
 prompt = "backend_runtime_execute.txt"

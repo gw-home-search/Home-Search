@@ -2,7 +2,7 @@ package com.home.infrastructure.web.read;
 
 import java.util.List;
 
-import com.home.application.read.MvpReadUseCase;
+import com.home.application.read.PropertyReadUseCase;
 import com.home.infrastructure.web.read.dto.SearchComplexResponse;
 
 import org.springframework.http.ResponseEntity;
@@ -13,9 +13,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class SearchController {
 
-	private final MvpReadUseCase readUseCase;
+	private final PropertyReadUseCase readUseCase;
 
-	public SearchController(MvpReadUseCase readUseCase) {
+	public SearchController(PropertyReadUseCase readUseCase) {
 		this.readUseCase = readUseCase;
 	}
 

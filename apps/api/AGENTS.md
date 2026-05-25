@@ -3,7 +3,7 @@
 
 ## Scope
 
-This directory owns the Home Search V1 backend: Spring Boot runtime, V1 domain/application/web layers, Flyway migrations, ingest, API tests, and backend verification.
+This directory owns the Home Search backend: Spring Boot runtime, domain/application/web layers, Flyway migrations, ingest, API tests, and backend verification.
 
 ## Must Read
 
@@ -38,7 +38,7 @@ Do not edit outside `apps/api/**` unless the user explicitly approves it.
 
 ## API Contract Guardrail
 
-Keep every V1 URL, method, field name, field type, unit, and error policy documented in `docs/API_CONTRACT.md`.
+Keep every public API URL, method, field name, field type, unit, and error policy documented in `docs/API_CONTRACT.md`.
 
 Stop before changing public contract.
 
@@ -54,7 +54,7 @@ Stop before changing public contract.
 
 Before changing backend behavior, complete this flow:
 
-1. Confirm the goal/spec and affected V1 surface.
+1. Confirm the goal/spec and affected project surface.
 2. Read root `AGENTS.md`, canonical docs listed above, `CONTEXT.md`, and
    `apps/api/CONTEXT.md`.
 3. Map the current call flow with `code-mapper` when existing backend code or
@@ -76,7 +76,7 @@ Before changing backend behavior, complete this flow:
 Before any backend write, classify the work as one of:
 
 - Scaffold slice: creates or wires the backend runtime or test environment
-  without changing V1 behavior.
+  without changing project behavior.
 - Behavior slice: changes Controller/DTO, application service,
   repository/Flyway, ingest, or external API adapter behavior.
 - Debugging slice: starts from a failing command, API mismatch, ingest failure,
@@ -85,7 +85,7 @@ Before any backend write, classify the work as one of:
 
 For a behavior slice, run the gates in this order:
 
-1. `contract-reviewer` before any V1 URL, request, response, validation, error
+1. `contract-reviewer` before any public API URL, request, response, validation, error
    policy, or web/api coordinated behavior.
 2. `code-mapper` when existing target code or source-reference flow affects the
    slice.
@@ -143,7 +143,7 @@ No RED exception:
 
 Prefer these backend public seams:
 
-- Controller/DTO/API contract: V1 URL, method, request field, response field,
+- Controller/DTO/API contract: public API URL, method, request field, response field,
   field type, amount unit, coordinate convention, empty-result behavior, and
   ProblemDetail error shape.
 - Application service: raw ingest save before normalized insert, complex
@@ -154,7 +154,7 @@ Prefer these backend public seams:
 - External API adapter: RTMS parsing, source key normalization, invalid source
   data handling, and external failure mapping.
 
-If the first RED would require changing a V1 public URL, field, type, unit, or
+If the first RED would require changing a project public URL, field, type, unit, or
 error policy, stop before implementation and run an API contract review.
 
 ## Verification Rule

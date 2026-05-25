@@ -1,9 +1,9 @@
 # Integration Review Prompt
 
 
-$v1-slice-harness mode=gate
+home-search-harness mode=gate
 
-Slice: {{SLICE}}
+Work item: {{WORK_ID}}
 Preset: {{PRESET}}
 Integration branch: {{BRANCH_NAME}}
 
@@ -11,14 +11,14 @@ Review only. Do not edit files.
 
 Skill routing:
 - $code-review: review the merged api/web diff and completion evidence findings-first.
-- $api-contract: check V1 API URL, request, response, unit, and error compatibility across backend/frontend.
+- $api-contract: check public API URL, request, response, unit, and error compatibility across backend/frontend.
 - $tdd: verify First RED validity and Minimum GREEN evidence when behavior changed.
 
-Check the merged api/web slice together:
-- Main API URLs and response shapes remain V1 compatible.
+Check the merged api/web work item together:
+- Main API URLs and response shapes remain public API compatible.
 - Map, search, region, detail, and trade flows remain aligned.
 - Backend data invariants are preserved.
-- No V2 dependency entered the critical path.
+- No later-scope dependency entered the critical path.
 - Verification evidence covers backendQualityCheck, web test, web build, and diff check.
 - Verification evidence uses exact line format: ``- `command` = pass|fail|not run (Korean reason)``.
 

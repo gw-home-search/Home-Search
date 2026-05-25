@@ -14,7 +14,7 @@ class CoordinateImportOpsConfigurationTest {
 	private static final Path COORDINATE_IMPORT_COMPOSE = Path.of("ops/docker-compose.coordinate-import.yml");
 	private static final Path COORDINATE_IMPORT_SCRIPT = Path.of("ops/import-vworld-coordinate-snapshot.sh");
 	private static final Path COORDINATE_SMOKE_SCRIPT = Path.of("ops/verify-coordinate-snapshot-smoke.sh");
-	private static final Path V1_BACKLOG = Path.of("../../.codex/harness/slices/backlog.toml");
+	private static final Path WORKLOG = Path.of("../../.codex/harness/worklog.toml");
 
 	@Test
 	@DisplayName("coordinate import compose override는 service key 없이 read-only SHP input을 연결한다")
@@ -97,13 +97,13 @@ class CoordinateImportOpsConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("backlog는 coordinate full import smoke slice를 등록한다")
-	void backlogRegistersCoordinateFullImportSmokeSlice() throws IOException {
-		assertThat(V1_BACKLOG).exists();
+	@DisplayName("worklog는 coordinate full import smoke 작업을 등록한다")
+	void worklogRegistersCoordinateFullImportSmokeWork() throws IOException {
+		assertThat(WORKLOG).exists();
 
-		String content = Files.readString(V1_BACKLOG);
+		String content = Files.readString(WORKLOG);
 
-		assertThat(content).contains("id = \"v1-coordinate-full-import-smoke\"");
+		assertThat(content).contains("id = \"baseline-coordinate-full-import-smoke\"");
 		assertThat(content).contains("status = \"done\"");
 		assertThat(content).contains("preset = \"coordinate-snapshot-import\"");
 		assertThat(content).contains("targets = \"backend\"");

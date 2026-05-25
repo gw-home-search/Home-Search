@@ -4,7 +4,7 @@
 ## Goal
 
 Store real-estate trade data safely enough that failed processing can be
-explained and repeated. V1 prioritizes correctness, traceability, and map
+explained and repeated. Home Search prioritizes correctness, traceability, and map
 display over aggregate analytics.
 
 Fixed paths:
@@ -31,10 +31,10 @@ Current persistence mismatch:
 - Batch migration `V12__create_trade_partitioned_table.sql` creates a
   partitioned `trade` table around `complex_pk`.
 
-V1 resolves this by using `complex_id` as the operational relation and keeping
+Home Search resolves this by using `complex_id` as the operational relation and keeping
 source identifiers for audit and deduplication.
 
-## V1 Storage Model
+## Project Storage Model
 
 Use two layers:
 
@@ -143,7 +143,7 @@ Current matching order in source code:
 3. PNU plus apartment name score.
 4. Name plus `umdCd` fallback in `TradeInitTasklet`.
 
-V1 should preserve the matching intent but record match outcomes:
+Home Search should preserve the matching intent but record match outcomes:
 
 - Match path.
 - Matched `complex_id`.
@@ -168,14 +168,14 @@ migration. Do not hard-code a range that fails silently after the last year.
 
 ## Map Display Query Boundary
 
-V1 map display only needs:
+map display only needs:
 
 - Parcel position.
 - Parcel geometry bounds filter.
 - Complex unit count.
 - Latest available trade amount for the parcel or complex.
 
-Do not block V1 on:
+Do not block project on:
 
 - Regional trend calculations.
 - 30-day top price.

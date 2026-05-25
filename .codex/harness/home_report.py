@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render Home Search V1 slice reports.
+"""Render Home Search work reports.
 
 Markdown is the canonical local report. Notion and Slack are optional
 best-effort reporters and never change the core workflow result.
@@ -16,19 +16,24 @@ from typing import Any
 
 from pr_evidence import (
     API_QUALITY,
-    BACKLOG_SYNC_SELF_TEST,
+    WORKLOG_SYNC_SELF_TEST,
     DIFF_CHECK,
     PR_BODY_CHECK_SELF_TEST,
     PR_CONTEXT_SELF_TEST,
+    POST_TOOL_USE_REVIEW_SELF_TEST,
+    PROJECT_TERMS_CHECK,
+    PROJECT_TERMS_SELF_TEST,
     ordered_commands,
     PR_LINT_SELF_TEST,
     SKILL_ROUTING_SELF_TEST,
+    STOP_HOOK_SELF_TEST,
     USER_LANGUAGE_CHECK,
-    V1_FLOW_SELF_TEST,
-    V1_LAUNCHER_SELF_TEST,
-    V1_PLAN_SELF_TEST,
-    V1_PR_SELF_TEST,
-    V1_REPORT_SELF_TEST,
+    HARNESS_FLOW_SELF_TEST,
+    HARNESS_INTEGRATE_SELF_TEST,
+    HARNESS_LAUNCHER_SELF_TEST,
+    HARNESS_PLAN_SELF_TEST,
+    HARNESS_PR_SELF_TEST,
+    HARNESS_REPORT_SELF_TEST,
     requirements_for_changed_files,
 )
 
@@ -167,15 +172,15 @@ def pr_summary_line(payload: dict[str, Any]) -> str:
     explicit = payload.get("pr_summary")
     if explicit:
         return str(explicit)
-    slice_name = payload.get("slice") or "unknown"
-    return f"`{slice_name}` slice의 변경 범위, 검증 근거, draft PR 안전장치를 정리합니다."
+    work_id = payload.get("work_id") or payload.get("slice") or "unknown"
+    return f"`{work_id}` work item의 변경 범위, 검증 근거, draft PR 안전장치를 정리합니다."
 
 
 def default_payload(args: argparse.Namespace) -> dict[str, Any]:
     started = args.started_at or now_iso()
     finished = args.finished_at or started
     return {
-        "slice": args.slice or "unknown",
+        "work_id": args.work_id or "unknown",
         "preset": args.preset or "unknown",
         "targets": args.targets or "both",
         "status": status_text(args.status),
@@ -228,7 +233,7 @@ def load_payload(args: argparse.Namespace) -> dict[str, Any]:
 def report_path_for(payload: dict[str, Any], explicit: str | None) -> Path:
     if explicit:
         return Path(explicit).resolve()
-    slug = str(payload.get("slice") or "unknown").strip() or "unknown"
+    slug = str(payload.get("work_id") or payload.get("slice") or "unknown").strip() or "unknown"
     return REPORT_ROOT / f"{slug}.md"
 
 
@@ -247,7 +252,7 @@ def write_payload(path: str | None, payload: dict[str, Any], *, dry_run: bool) -
 def pr_body_path_for(payload: dict[str, Any], explicit: str | None) -> Path:
     if explicit:
         return Path(explicit).resolve()
-    slug = str(payload.get("slice") or "unknown").strip() or "unknown"
+    slug = str(payload.get("work_id") or payload.get("slice") or "unknown").strip() or "unknown"
     return REPORT_ROOT / f"{slug}-pr-body.md"
 
 
@@ -343,7 +348,7 @@ def render_pr_body(payload: dict[str, Any]) -> str:
 상태: {status}
 {pr_summary_line(payload)}
 
-- slice: {payload.get("slice", "unknown")}
+- work item: {payload.get("work_id") or payload.get("slice", "unknown")}
 - targets: {targets}
 - integration branch: {branches.get("integration")}
 - local report: {report_link}
@@ -397,7 +402,7 @@ reviewer: 지적사항 = none, gate report에 지적사항이 있으면 listed
 - [x] main push 없음
 - [x] integration branch만 push
 - [x] draft PR
-- [x] V1 API URL/response 영향 확인
+- [x] public API URL/response 영향 확인
 - [x] DB migration 실행 없음
 - [x] Open API 호출 없음
 - [x] secrets 저장 없음
@@ -405,7 +410,7 @@ reviewer: 지적사항 = none, gate report에 지적사항이 있으면 listed
 
 
 def render_report(payload: dict[str, Any]) -> str:
-    slice_name = payload.get("slice", "unknown")
+    work_id = payload.get("work_id") or payload.get("slice") or "unknown"
     status = status_text(payload.get("status"))
     targets = payload.get("targets") or "both"
     branches = nested(payload, "branches", default={})
@@ -414,9 +419,9 @@ def render_report(payload: dict[str, Any]) -> str:
     links = nested(payload, "links", default={})
     commands = nested(payload, "commands", default={})
     notifications = nested(payload, "notifications", default={})
-    backlog_sync = nested(payload, "backlog_sync", default={})
+    worklog_sync = nested(payload, "worklog_sync", default={})
 
-    return f"""# V1 Slice 보고서: {slice_name}
+    return f"""# Home Search 작업 보고서: {work_id}
 
 ## 요약
 - status: {status}
@@ -446,12 +451,12 @@ def render_report(payload: dict[str, Any]) -> str:
 
 ## 검증 매트릭스
 {render_matrix(nested(payload, "verification", default={}))}
-## Backlog Sync
-- status: {backlog_sync.get("status", "skipped")}
-- summary: {backlog_sync.get("summary", "not recorded")}
-- old_status: {backlog_sync.get("old_status")}
-- new_status: {backlog_sync.get("new_status")}
-- commit: {backlog_sync.get("commit")}
+## Worklog Sync
+- status: {worklog_sync.get("status", "skipped")}
+- summary: {worklog_sync.get("summary", "not recorded")}
+- old_status: {worklog_sync.get("old_status")}
+- new_status: {worklog_sync.get("new_status")}
+- commit: {worklog_sync.get("commit")}
 
 ## 사용 skill
 {render_skill_routing(payload)}
@@ -546,30 +551,30 @@ def run_self_test() -> int:
     from pr_lint import PrInput, lint_pr
 
     payload = {
-        "slice": "self-test",
+        "work_id": "self-test",
         "status": "Pass",
         "preset": "contract-hardening",
         "started_at": "2026-05-19T00:00:00+09:00",
         "finished_at": "2026-05-19T00:01:00+09:00",
         "branches": {"api": "feat/api-self-test", "web": "feat/web-self-test"},
         "changed_files": [
-            ".codex/harness/v1_report.py",
-            ".agents/skills/v1-slice-harness/SKILL.md",
-            ".agents/skills/v1-slice-harness/SKILL_KO.md",
+            ".codex/harness/home_report.py",
+            ".codex/harness/home_report.py",
+            ".codex/harness/skill_routing.py",
             ".ko-docs.toml",
         ],
         "ko_docs": {
             "approved": True,
-            "targets": [".agents/skills/v1-slice-harness/SKILL_KO.md"],
+            "targets": [],
         },
         "skill_routing": {
             "execute": {
                 "skills": [
                     {
-                        "trigger": "$v1-slice-harness",
+                        "trigger": "home-search-harness",
                         "phase": "execute",
                         "role": "orchestrator",
-                        "path": ".agents/skills/v1-slice-harness/SKILL.md",
+                        "path": ".codex/harness/home",
                         "required_evidence": ["상태", "검증", "다음 행동"],
                     },
                     {
@@ -601,14 +606,19 @@ def run_self_test() -> int:
             PR_LINT_SELF_TEST: {"status": "pass", "exit_code": 0},
             PR_CONTEXT_SELF_TEST: {"status": "pass", "exit_code": 0},
             PR_BODY_CHECK_SELF_TEST: {"status": "pass", "exit_code": 0},
-            BACKLOG_SYNC_SELF_TEST: {"status": "pass", "exit_code": 0},
-            V1_PR_SELF_TEST: {"status": "pass", "exit_code": 0},
-            V1_FLOW_SELF_TEST: {"status": "pass", "exit_code": 0},
-            V1_PLAN_SELF_TEST: {"status": "pass", "exit_code": 0},
-            V1_REPORT_SELF_TEST: {"status": "pass", "exit_code": 0},
-            V1_LAUNCHER_SELF_TEST: {"status": "pass", "exit_code": 0},
+            WORKLOG_SYNC_SELF_TEST: {"status": "pass", "exit_code": 0},
+            HARNESS_PR_SELF_TEST: {"status": "pass", "exit_code": 0},
+            HARNESS_FLOW_SELF_TEST: {"status": "pass", "exit_code": 0},
+            HARNESS_INTEGRATE_SELF_TEST: {"status": "pass", "exit_code": 0},
+            HARNESS_PLAN_SELF_TEST: {"status": "pass", "exit_code": 0},
+            HARNESS_REPORT_SELF_TEST: {"status": "pass", "exit_code": 0},
+            HARNESS_LAUNCHER_SELF_TEST: {"status": "pass", "exit_code": 0},
             SKILL_ROUTING_SELF_TEST: {"status": "pass", "exit_code": 0},
             USER_LANGUAGE_CHECK: {"status": "pass", "exit_code": 0},
+            PROJECT_TERMS_SELF_TEST: {"status": "pass", "exit_code": 0},
+            PROJECT_TERMS_CHECK: {"status": "pass", "exit_code": 0},
+            STOP_HOOK_SELF_TEST: {"status": "pass", "exit_code": 0},
+            POST_TOOL_USE_REVIEW_SELF_TEST: {"status": "pass", "exit_code": 0},
             "bash scripts/check-ko-docs.sh": {"status": "pass", "exit_code": 0},
         },
     }
@@ -625,25 +635,25 @@ def run_self_test() -> int:
         )
     )
     checks = [
-        "# V1 Slice 보고서: self-test" in rendered,
+        "# Home Search 작업 보고서: self-test" in rendered,
         "검증 매트릭스" in rendered,
         f"`{DIFF_CHECK}`" in rendered,
         f"`{PR_LINT_SELF_TEST}`" in pr_body,
         f"`{PR_CONTEXT_SELF_TEST}`" in pr_body,
         f"`{PR_BODY_CHECK_SELF_TEST}`" in pr_body,
-        f"`{BACKLOG_SYNC_SELF_TEST}`" in pr_body,
-        f"`{V1_PR_SELF_TEST}`" in pr_body,
-        f"`{V1_FLOW_SELF_TEST}`" in pr_body,
+        f"`{WORKLOG_SYNC_SELF_TEST}`" in pr_body,
+        f"`{HARNESS_PR_SELF_TEST}`" in pr_body,
+        f"`{HARNESS_FLOW_SELF_TEST}`" in pr_body,
+        f"`{HARNESS_INTEGRATE_SELF_TEST}`" in pr_body,
         f"`{SKILL_ROUTING_SELF_TEST}`" in pr_body,
         f"`{USER_LANGUAGE_CHECK}`" in pr_body,
-        "`bash scripts/check-ko-docs.sh`" in pr_body,
         "## 사용 skill" in pr_body,
-        "| execute | $v1-slice-harness | orchestrator | .agents/skills/v1-slice-harness/SKILL.md | 상태; 검증; 다음 행동 |" in rendered,
+        "| execute | home-search-harness | orchestrator | .codex/harness/home | 상태; 검증; 다음 행동 |" in rendered,
         "| execute | $tdd | primary | .agents/skills/tdd/SKILL.md | 최초 RED; 예상 RED 실패; 최소 GREEN |" in pr_body,
         "## KO 문서 변경" in pr_body,
-        "KO 수정 승인: 확인" in pr_body,
+        "KO 수정 승인: 해당 없음" in pr_body,
         "## 요약" in pr_body,
-        "`self-test` slice의 변경 범위" in pr_body,
+        "`self-test` work item의 변경 범위" in pr_body,
         "최초 RED:" in pr_body,
         "검증:" in pr_body,
         "영향 없음" in pr_body,
@@ -654,19 +664,20 @@ def run_self_test() -> int:
         linted_pr_body.ok,
     ]
     if all(checks):
-        print("self-test passed: v1_report")
+        print("self-test passed: home_report")
         return 0
-    print("self-test failed: v1_report", file=sys.stderr)
+    print("self-test failed: home_report", file=sys.stderr)
     return 1
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Render Home Search V1 slice reports.")
+    parser = argparse.ArgumentParser(description="Render Home Search work reports.")
     parser.add_argument("--input-json", help="JSON payload file, or '-' for stdin.")
     parser.add_argument("--report-path", help="Override Markdown report path.")
     parser.add_argument("--payload-out", help="Write normalized payload JSON after reporters.")
     parser.add_argument("--pr-body-out", help="Write a GitHub PR body Markdown file.")
-    parser.add_argument("--slice")
+    parser.add_argument("--work-id")
+    parser.add_argument("--slice", dest="work_id", help=argparse.SUPPRESS)
     parser.add_argument("--preset")
     parser.add_argument("--targets")
     parser.add_argument("--status", default="Partial")

@@ -1,7 +1,7 @@
 # apps/web Context
 
 
-This file defines frontend-specific Home Search V1 terms. Canonical decisions remain in root `docs/*.md`.
+This file defines frontend-specific Home Search terms. Canonical decisions remain in root `docs/*.md`.
 
 ## Frontend Shape
 
@@ -9,7 +9,7 @@ This file defines frontend-specific Home Search V1 terms. Canonical decisions re
 
 **Map-first layout** means the Kakao map is the primary screen, with search, filters, region navigation, and details arranged around it.
 
-**API adapter** is the frontend boundary that calls V1 APIs and normalizes temporary source field variants.
+**API adapter** is the frontend boundary that calls public APIs and normalizes temporary source field variants.
 
 **Marker adapter** normalizes region and complex marker responses for rendering.
 
@@ -37,4 +37,4 @@ This file defines frontend-specific Home Search V1 terms. Canonical decisions re
 
 ## Frontend Non-Scope
 
-The web app must not introduce V2 ranking, favorite, alarm, mail, recommendation, or auth flows into the V1 map/trade display path.
+The web app must not introduce later-scope ranking, favorite, alarm, mail, recommendation, or auth flows into the map/trade display path.

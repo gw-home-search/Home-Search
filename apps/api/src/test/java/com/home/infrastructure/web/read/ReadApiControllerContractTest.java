@@ -11,8 +11,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-import com.home.application.read.MvpReadUseCase;
-import com.home.global.error.V1ResourceNotFoundException;
+import com.home.application.read.PropertyReadUseCase;
+import com.home.global.error.ResourceNotFoundException;
 import com.home.infrastructure.web.read.dto.ParcelDetailResponse;
 import com.home.infrastructure.web.read.dto.RegionDetailResponse;
 import com.home.infrastructure.web.read.dto.RegionSummaryResponse;
@@ -41,10 +41,10 @@ class ReadApiControllerContractTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private MvpReadUseCase readUseCase;
+	private PropertyReadUseCase readUseCase;
 
 	@Test
-	@DisplayName("GET /api/v1/search/complexes는 canonical V1 search field를 반환한다")
+	@DisplayName("GET /api/v1/search/complexes는 canonical search field를 반환한다")
 	void searchComplexesReturnsCanonicalFields() throws Exception {
 		given(readUseCase.searchComplexes(eq("Sample")))
 			.willReturn(List.of(new SearchComplexResponse(
@@ -185,14 +185,14 @@ class ReadApiControllerContractTest {
 	@DisplayName("GET read endpoint는 missing parent에서 ProblemDetail 404를 반환한다")
 	void missingReadResourceReturnsProblemDetail404() throws Exception {
 		given(readUseCase.getRegionDetail(404L))
-			.willThrow(new V1ResourceNotFoundException("region not found"));
+			.willThrow(new ResourceNotFoundException("region not found"));
 
 		mockMvc.perform(get("/api/v1/region/404"))
 			.andExpect(status().isNotFound())
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
 			.andExpect(jsonPath("$.status").value(404))
 			.andExpect(jsonPath("$.detail").value("Resource not found."))
-			.andExpect(jsonPath("$.exception").value("V1ResourceNotFoundException"))
+			.andExpect(jsonPath("$.exception").value("ResourceNotFoundException"))
 			.andExpect(jsonPath("$.timestamp").exists());
 	}
 }

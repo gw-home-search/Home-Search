@@ -1,30 +1,44 @@
+# Gate Review Prompt KO
+
+> KO 생성 기준: canonical source only
+> Source: `.codex/harness/prompts/gate_review.md`
+> Generated: 2026-05-25
+> 기존 KO 본문은 읽지 않고 canonical source만 기준으로 재생성했습니다.
+
+## 동기화 기준
+
+이 문서는 `.codex/harness/prompts/gate_review.md`의 현재 canonical 내용을 기준으로 한 한국어 동기화본입니다.
+명령, 경로, API URL, JSON key, status 값, class/function 이름은 정밀성을 위해 원문 표기를 유지합니다.
+
+## Canonical 내용
+
 # Gate Review Prompt
 
 
-$v1-slice-harness mode=gate
+home-search-harness mode=gate
 
-Slice: {{SLICE}}
+Work item: {{WORK_ID}}
 Preset: {{PRESET}}
 Target: {{TARGET}}
 Branch: {{BRANCH_NAME}}
 
-리뷰만 수행한다. 파일을 수정하지 않는다.
+Review only. Do not edit files.
 
 Skill routing:
 {{SKILL_ROUTING}}
 
-확인 항목:
-- 변경 범위가 target preset의 허용 edit scope 안에 머물렀다.
-- V1 API contract와 data invariant가 보존되었다.
-- 필요한 verification evidence가 있다.
-- Verification evidence는 정확한 line format을 사용한다: ``- `command` = pass|fail|not run (Korean reason)``.
-- backend, frontend, harness, hook, GitHub workflow, Markdown, KO 변경에 대한
-  changed-file PR lint evidence가 있다.
-- protected path, secrets, build output, automatic main merge, main push,
-  PR merge가 추가되지 않았다.
-- 명시적 `--pr`은 생성된 `feat/*-integration` branch만 push할 수 있다.
+Check:
+- Scope stayed inside the target preset's allowed edit scope.
+- public API contract and data invariants were preserved.
+- Required verification evidence is present.
+- Verification evidence uses exact line format: ``- `command` = pass|fail|not run (Korean reason)``.
+- Changed-file PR lint evidence is present for backend, frontend, harness, hook,
+  GitHub workflow, Markdown, and KO changes.
+- No protected paths, secrets, build output, automatic main merge, main push,
+  or PR merge were introduced.
+- Explicit `--pr` may push only the generated `feat/*-integration` branch.
 
-다음 user-facing label로 짧은 Korean-first gate review를 출력한다:
+Output a short Korean-first gate review with these user-facing labels:
 - 상태: Pass|Partial|Fail
 - 최초 RED:
 - 예상 RED 실패:

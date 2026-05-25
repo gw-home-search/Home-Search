@@ -27,7 +27,7 @@ src/main/java/com/home
 └── infrastructure/
 ```
 
-Important V1 packages:
+Important project packages:
 
 - `application/map`: map marker use case.
 - `application/region`: region navigation use case.
@@ -41,10 +41,10 @@ Important V1 packages:
 - `infrastructure/batch/trade`: trade collection and bulk insert flow.
 - `infrastructure/web`: HTTP API controllers.
 
-## Backend V1 Target
+## Backend Project Target
 
 In `/Users/gwongwangjae/home-search/apps/api`, keep the backend layered but
-make the V1 boundary clearer:
+make the project boundary clearer:
 
 ```text
 apps/api
@@ -61,7 +61,7 @@ apps/api
 ```
 
 The implementation can keep existing package names during the first move. The
-important decision is not package renaming; it is keeping V1 focused on
+important decision is not package renaming; it is keeping project focused on
 collection, storage, and map display.
 
 ## Frontend Current Shape
@@ -80,7 +80,7 @@ src
 └── store/
 ```
 
-Important V1 files:
+Important project files:
 
 - `src/App.jsx`: map level logic and marker API calls.
 - `src/axiosInstance/AxiosInstance.jsx`: `VITE_API_SERVER_IP` base URL.
@@ -92,7 +92,7 @@ Important V1 files:
 - `src/components/sidebar/detail/DetailSidebar.jsx`: detail API consumer.
 - `src/components/sidebar/detail/TradeSidebar.jsx`: trade API consumer.
 
-## Frontend V1 Target
+## Frontend Project Target
 
 In `/Users/gwongwangjae/home-search/apps/web`, keep API calls compatible while
 reworking UI/UX around map exploration:
@@ -121,6 +121,6 @@ The source backend mixes two trade relationship models:
 - Detail and JPA paths use `trade.complex_id -> complex.id`.
 - Batch insert paths use `trade.complex_pk -> complex.complex_pk`.
 
-V1 must not carry this ambiguity forward silently. The target operational query
+Home Search must not carry this ambiguity forward silently. The target operational query
 model should use `complex_id`, while retaining `complex_pk`, `apt_seq`,
 `source`, and `source_key` as source tracking columns.

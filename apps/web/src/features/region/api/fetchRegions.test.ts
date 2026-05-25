@@ -8,7 +8,7 @@ describe('fetchRegions API 어댑터', () => {
     vi.unstubAllGlobals();
   });
 
-  it('documented V1 root region을 가져온다', async () => {
+  it('documented root region을 가져온다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse([
         {
@@ -32,7 +32,7 @@ describe('fetchRegions API 어댑터', () => {
     );
   });
 
-  it('documented V1 region detail과 child region을 가져온다', async () => {
+  it('documented region detail과 child region을 가져온다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         id: '1',
@@ -68,7 +68,7 @@ describe('fetchRegions API 어댑터', () => {
     );
   });
 
-  it('invalid V1 region detail children shape를 reject한다', async () => {
+  it('invalid region detail children shape를 reject한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -83,11 +83,11 @@ describe('fetchRegions API 어댑터', () => {
     );
 
     await expect(fetchRegionDetail(1)).rejects.toThrow(
-      'Invalid V1 region detail response: children must be an array',
+      'Invalid public API region detail response: children must be an array',
     );
   });
 
-  it('region detail 실패 시 V1 ProblemDetail detail을 보존한다', async () => {
+  it('region detail 실패 시 public API ProblemDetail detail을 보존한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(

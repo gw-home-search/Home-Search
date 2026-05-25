@@ -46,7 +46,7 @@ def valid_sample() -> str:
     return """## 요약
 
 상태: Pass
-이번 PR은 V1 harness PR body evidence 검사를 정리합니다.
+이번 PR은 Home Search harness PR body evidence 검사를 정리합니다.
 
 ## 작업 범위
 
@@ -59,7 +59,7 @@ def valid_sample() -> str:
 
 | phase | skill | role | path | required evidence |
 | --- | --- | --- | --- | --- |
-| execute | $v1-slice-harness | orchestrator | .agents/skills/v1-slice-harness/SKILL.md | 상태; 검증; 다음 행동 |
+| execute | home-search-harness | orchestrator | .codex/harness/home | 상태; 검증; 다음 행동 |
 | execute | $tdd | primary | .agents/skills/tdd/SKILL.md | 최초 RED; 예상 RED 실패; 최소 GREEN |
 | execute | $api-contract | checkpoint | .agents/skills/api-contract/SKILL.md | 계약 영향 |
 | gate | $code-review | primary | .agents/skills/code-review/SKILL.md | reviewer: 지적사항 |
@@ -102,7 +102,7 @@ reviewer: 지적사항 = none
 - [x] main push 없음
 - [x] integration branch만 push
 - [x] draft PR
-- [x] V1 API URL/response 영향 확인
+- [x] public API URL/response 영향 확인
 - [x] DB migration 실행 없음
 - [x] Open API 호출 없음
 - [x] secrets 저장 없음

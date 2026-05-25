@@ -15,7 +15,7 @@ Use this skill for backend or frontend behavior changes. The goal is to anchor i
 - Frontend adapter, marker transform, component behavior, map fallback, or
   detail/trade drawer behavior changes.
 - Regression tests for reproduced bugs.
-- Contract tests that protect V1 URL, request, response, unit, or error
+- Contract tests that protect public API URL, request, response, unit, or error
   behavior.
 
 ## Do Not Use
@@ -30,7 +30,7 @@ Use this skill for backend or frontend behavior changes. The goal is to anchor i
 - The failure is directly connected to new behavior or a reproduced bug.
 - The failure is deterministic.
 - The test verifies a public seam, not private implementation.
-- Mocks do not hide V1 API contracts or data invariants.
+- Mocks do not hide public API contracts or data invariants.
 
 ## Backend Seams
 
@@ -77,7 +77,7 @@ Use this skill for backend or frontend behavior changes. The goal is to anchor i
   or minimum GREEN is uncertain.
 - Use `contract-reviewer` before controller, DTO, frontend adapter, fixture,
   field, type, unit, coordinate, error, or empty-result behavior changes can
-  affect the V1 API contract.
+  affect the public API contract.
 - Use `systematic-debugging` when the starting point is a lint, test, build,
   hook, CI, runtime, or API failure requiring root-cause diagnosis.
 - Use `code-review` or `reviewer` after the behavior slice is complete.

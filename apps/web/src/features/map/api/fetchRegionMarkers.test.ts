@@ -8,7 +8,7 @@ describe('fetchRegionMarkers API 어댑터', () => {
     vi.unstubAllGlobals();
   });
 
-  it('documented bounds와 region level을 V1 region marker endpoint에 post한다', async () => {
+  it('documented bounds와 region level을 documented region marker endpoint에 post한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -139,7 +139,7 @@ describe('fetchRegionMarkers API 어댑터', () => {
         neLng: 127.2,
         region: 'si-gun-gu',
       }),
-    ).rejects.toThrow('Invalid V1 region marker response: expected an array');
+    ).rejects.toThrow('Invalid public API region marker response: expected an array');
   });
 
   it('marker coordinate가 invalid하면 clear contract error를 throw한다', async () => {
@@ -165,7 +165,7 @@ describe('fetchRegionMarkers API 어댑터', () => {
         neLng: 127.2,
         region: 'si-gun-gu',
       }),
-    ).rejects.toThrow('Invalid V1 region marker response: lat must be a number');
+    ).rejects.toThrow('Invalid public API region marker response: lat must be a number');
   });
 
   it('response가 ok가 아니면 clear marker fetch error로 reject한다', async () => {
@@ -182,7 +182,7 @@ describe('fetchRegionMarkers API 어댑터', () => {
     ).rejects.toThrow('Failed to fetch region markers: 500');
   });
 
-  it('region endpoint가 request를 reject하면 V1 ProblemDetail detail을 보존한다', async () => {
+  it('region endpoint가 request를 reject하면 public API ProblemDetail detail을 보존한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(

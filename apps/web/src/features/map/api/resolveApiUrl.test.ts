@@ -15,7 +15,7 @@ describe('resolveApiUrl helper 동작', () => {
     );
   });
 
-  it('V1 API path에 configured VITE_API_SERVER_IP를 보존한다', () => {
+  it('public API path에 configured VITE_API_SERVER_IP를 보존한다', () => {
     vi.stubEnv('VITE_API_SERVER_IP', 'http://127.0.0.1:18080/');
 
     expect(resolveApiUrl('/api/v1/search/complexes?q=Sample')).toBe(

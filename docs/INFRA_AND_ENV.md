@@ -25,9 +25,9 @@ The local database image is:
 
 - `postgis/postgis:16-3.4`
 
-## V1 Required Infrastructure
+## Required Infrastructure
 
-V1 needs:
+Home Search needs:
 
 - PostgreSQL with PostGIS.
 - API application runtime.
@@ -43,18 +43,19 @@ Optional but recommended:
 
 ## Required Backend Environment
 
-V1 backend collection and map display need:
+Home Search backend collection and map display need:
 
 - `DB_HOST` or JDBC URL equivalent.
 - `DB_PASSWORD`
 - `APT_SERVICE_KEY`
-- `BLD_SERVICE_KEY` if building data enrichment is migrated in V1.
-- `ODC_SERVICE_KEY` if complex reference enrichment is migrated in V1.
-- `VW_SERVICE_KEY` if GIS/building data calls are migrated in V1.
+- `BLD_SERVICE_KEY` if building data enrichment is included in the current scope.
+- `ODC_SERVICE_KEY` if complex reference enrichment is included in the current scope.
+- `VW_SERVICE_KEY` if GIS/building data calls are included in the current scope.
 - `JWT_SECRET` only if authenticated endpoints are enabled.
 - `FRONTEND_URL`
 
-For V1, authentication can remain outside the core map-display path.
+Authentication can remain outside the core map-display path unless a later
+work item explicitly brings authenticated endpoints into scope.
 
 ## Required Frontend Environment
 
@@ -62,14 +63,14 @@ The source frontend uses:
 
 - `VITE_API_SERVER_IP`
 
-V1 target frontend should keep an equivalent API base URL variable. The name can
+Home Search target frontend should keep an equivalent API base URL variable. The name can
 stay the same during migration to reduce risk.
 
 ## Flyway Strategy
 
-Separate V1 migrations from V2 migrations.
+Separate project baselines from later-scope migrations.
 
-V1:
+Project baseline:
 
 - region
 - parcel
@@ -79,7 +80,7 @@ V1:
 - failed trade match tracking
 - PostGIS extension and indexes
 
-V2:
+later-scope:
 
 - rankings
 - top price and top volume tables
@@ -89,7 +90,7 @@ V2:
 
 ## Monitoring
 
-Minimum V1 metrics/logs:
+Minimum project metrics/logs:
 
 - Trade ingest read count.
 - Raw saved count.
@@ -106,6 +107,6 @@ capability when moving to `apps/api`.
 
 - Local PostGIS can start.
 - API can connect to the database.
-- Flyway can create V1 tables from scratch.
+- Flyway can create baseline tables from scratch.
 - Frontend can call the API through its env base URL.
 - Ingest logs show read, inserted, duplicate, and failed counts.

@@ -1,5 +1,5 @@
 name = "backend-planner"
-description = "Read-only planner for Home Search apps/api V1 backend slices."
+description = "Read-only planner for Home Search apps/api project backend slices."
 sandbox_mode = "read-only"
 
 developer_instructions = """
@@ -20,8 +20,8 @@ First map the relevant backend call flow. If existing target/source code affects
 Trace backend seams through controller, DTO, application service, domain, repository, Flyway, external API adapter, and tests.
 
 Before parallel web/api work or any controller/DTO/API contract behavior, require a contract-reviewer checkpoint.
-Preserve the V1 API contract and data invariants.
-Keep V2 work out of the critical path.
+Preserve the public API contract and data invariants.
+Keep later-scope work out of the critical path.
 
 For every backend behavior slice, produce a TDD slice plan, not a generic test plan:
 - Goal/spec

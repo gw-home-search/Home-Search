@@ -1,45 +1,56 @@
+# Planning Skill KO
+
+> KO 생성 기준: canonical source only
+> Source: `.agents/skills/planning/SKILL.md`
+> Generated: 2026-05-25
+> 기존 KO 본문은 읽지 않고 canonical source만 기준으로 재생성했습니다.
+
+## 동기화 기준
+
+이 문서는 `.agents/skills/planning/SKILL.md`의 현재 canonical 내용을 기준으로 한 한국어 동기화본입니다.
+명령, 경로, API URL, JSON key, status 값, class/function 이름은 정밀성을 위해 원문 표기를 유지합니다.
+
+## Canonical 내용
+
 ---
 name: planning
-description: Home Search /goal, ambiguous requests, next-slice choices, acceptance criteria, V1 API/data guardrail questions를 decision-complete plan으로 변환합니다. "plan", "planning", "next slice comparison", "acceptance criteria", "API contract impact", "목표", "플랜", "계획", "다음 slice 비교", "인수 기준"에 사용합니다. failed command debugging이나 final diff review에는 사용하지 말고, failure는 systematic-debugging으로, review는 code-review/reviewer로 라우팅합니다.
+description: Convert Home Search /goal, ambiguous requests, next-slice choices, acceptance criteria, and public API/data guardrail questions into decision-complete plans. Use for "plan", "planning", "next slice comparison", "acceptance criteria", "API contract impact", "목표", "플랜", "계획", "다음 slice 비교", "인수 기준". Do not use for failed command debugging or final diff review; route failures to systematic-debugging and review to code-review/reviewer.
 ---
 
 
 # Planning Skill
 
-요청이 goal-level이거나 scope가 모호할 때 이 skill을 사용합니다. 목표는 V1 API
-또는 data invariant가 바뀌는 지점에서는 멈추면서 implementation-ready plan을
-만드는 것입니다.
+Use this skill when a request is goal-level or has ambiguous scope. The goal is to produce an implementation-ready plan while stopping when public API or data invariants would change.
 
 ## When To Use
 
-- `/goal`, ambiguous requests, next-slice selection.
-- candidate slice 비교 또는 gate findings를 acceptance criteria로 변환.
-- V1 API contract impact, data invariant impact, 요청이 V1/V2 중 어디에
-  속하는지에 대한 질문.
+- `/goal`, ambiguous requests, or next-slice selection.
+- Comparing candidate slices or turning gate findings into acceptance criteria.
+- Questions about public API contract impact, data invariant impact, or whether a
+  request belongs in project or later-scope.
 
 ## Do Not Use
 
-- failed lint, test, build, hook, CI, runtime, API reproduction work에는
-  `systematic-debugging`을 사용합니다.
-- final diff, gate, PR review에는 `code-review` 또는 `reviewer`를 사용합니다.
-- First RED/GREEN loop 실행에는 사용하지 말고 behavior change는 `tdd`로
-  라우팅합니다.
+- Failed lint, test, build, hook, CI, runtime, or API reproduction work; use
+  `systematic-debugging`.
+- Final diff, gate, or PR review; use `code-review` or `reviewer`.
+- Running First RED/GREEN loops; route behavior changes to `tdd`.
 
 ## Routes To
 
-- plan에 First RED, expected RED failure, public seam, minimum GREEN 결정이
-  필요하면 `tdd` 또는 `tdd-guide`.
-- URL, request, response, unit, error compatibility가 바뀔 수 있으면
-  `contract-reviewer`.
-- plan이 concrete failure에서 시작하면 `systematic-debugging`.
-- plan이 completed diff review로 넘어가면 `code-review` 또는 `reviewer`.
+- `tdd` or `tdd-guide` when the plan needs First RED, expected RED failure,
+  public seam, or minimum GREEN decisions.
+- `contract-reviewer` when URL, request, response, unit, or error compatibility
+  can change.
+- `systematic-debugging` when the plan starts from a concrete failure.
+- `code-review` or `reviewer` when the plan becomes a completed diff review.
 
 ## Inputs
 
-- User request 또는 `/goal` brief.
+- User request or `/goal` brief.
 - `AGENTS.md`.
-- 관련 canonical `docs/*.md`.
-- 필요 시 target code 또는 source backend/frontend read-only reference.
+- Relevant canonical `docs/*.md`.
+- Target code or source backend/frontend read-only references when needed.
 
 ## Required Plan Fields
 
@@ -62,25 +73,25 @@ description: Home Search /goal, ambiguous requests, next-slice choices, acceptan
 
 ## Backend Checklist
 
-- V1 API URL과 response shape는 stable하게 유지합니다.
-- Raw ingest -> normalized trade ordering을 보존합니다.
-- Duplicate-safe ingest와 failed match queryability를 보존합니다.
-- `complex_id` operational relation을 명확히 합니다.
-- V2 feature를 critical path에 넣지 않습니다.
+- public API URLs and response shapes remain stable.
+- Raw ingest -> normalized trade ordering is preserved.
+- Duplicate-safe ingest and failed match queryability are preserved.
+- The `complex_id` operational relation is clear.
+- later-scope features do not enter the critical path.
 
 ## Frontend Checklist
 
-- Map, search, region, detail, trade API compatibility를 보존합니다.
-- Marker adapter field가 canonical contract와 일치합니다.
-- Map failure handling은 map을 계속 usable하게 둡니다.
-- Verification은 실제 존재하는 package script만 포함합니다.
+- Map, search, region, detail, and trade API compatibility is preserved.
+- Marker adapter fields match the canonical contract.
+- Map failure handling keeps the map usable.
+- Verification includes only package scripts that exist.
 
 ## Output Rule
 
-plan은 짧고 실행 가능하게 유지합니다. backend 또는 frontend behavior change에는
-generic test plan보다 TDD slice plan을 선호합니다. backend/frontend behavior
-slice에서는 RED validity, public seam, expected RED failure, minimum GREEN이
-plan의 일부이면 `tdd-guide` handoff를 명시하고, 아니면 RED waiver reason을
-적습니다. user-facing plan body는 Korean-first prose로 작성하되 commands, paths,
-status tokens, API names는 그대로 유지합니다. 사용자가 implementation을 요청했고
-stop condition이 없으면 plan 이후 진행합니다.
+Keep the plan short and executable. Prefer TDD slice plans over generic test
+plans for backend or frontend behavior changes. For backend/frontend behavior
+slices, name the `tdd-guide` handoff when RED validity, public seam, expected
+RED failure, or minimum GREEN is part of the plan; otherwise state the RED
+waiver reason. Use Korean-first prose for the user-facing plan body while
+keeping commands, paths, status tokens, and API names unchanged. If the user
+asked for implementation and no stop condition is hit, proceed after the plan.

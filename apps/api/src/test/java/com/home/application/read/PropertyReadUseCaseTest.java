@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.List;
 import java.util.Optional;
 
-import com.home.global.error.V1ResourceNotFoundException;
+import com.home.global.error.ResourceNotFoundException;
 import com.home.infrastructure.web.read.dto.ParcelDetailResponse;
 import com.home.infrastructure.web.read.dto.RegionDetailResponse;
 import com.home.infrastructure.web.read.dto.RegionSummaryResponse;
@@ -16,13 +16,13 @@ import com.home.infrastructure.web.read.dto.TradeListResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class MvpReadUseCaseTest {
+class PropertyReadUseCaseTest {
 
 	@Test
 	@DisplayName("read use case는 search query를 trim하고 non-empty search를 위임한다")
 	void trimsAndDelegatesSearchQueries() {
 		CapturingRepository repository = new CapturingRepository();
-		MvpReadUseCase useCase = new MvpReadUseCase(repository);
+		PropertyReadUseCase useCase = new PropertyReadUseCase(repository);
 
 		assertThat(useCase.searchComplexes("  Sample  "))
 			.singleElement()
@@ -35,7 +35,7 @@ class MvpReadUseCaseTest {
 	@DisplayName("read use case는 blank input에서 repository query 없이 empty search result를 반환한다")
 	void blankSearchDoesNotQueryRepository() {
 		CapturingRepository repository = new CapturingRepository();
-		MvpReadUseCase useCase = new MvpReadUseCase(repository);
+		PropertyReadUseCase useCase = new PropertyReadUseCase(repository);
 
 		assertThat(useCase.searchComplexes(" ")).isEmpty();
 		assertThat(useCase.searchComplexes(null)).isEmpty();
@@ -46,7 +46,7 @@ class MvpReadUseCaseTest {
 	@DisplayName("read use case는 region/detail/trade read를 위임한다")
 	void delegatesReadApis() {
 		CapturingRepository repository = new CapturingRepository();
-		MvpReadUseCase useCase = new MvpReadUseCase(repository);
+		PropertyReadUseCase useCase = new PropertyReadUseCase(repository);
 
 		assertThat(useCase.getRootRegions()).containsExactly(new RegionSummaryResponse(1L, "Seoul"));
 		assertThat(useCase.getRegionDetail(1L).name()).isEqualTo("Seoul");
@@ -55,25 +55,25 @@ class MvpReadUseCaseTest {
 	}
 
 	@Test
-	@DisplayName("read use case는 missing parent path를 V1 not found exception으로 변환한다")
-	void missingParentsThrowV1NotFound() {
-		MvpReadUseCase useCase = new MvpReadUseCase(new EmptyMvpReadRepository());
+	@DisplayName("read use case는 missing parent path를 resource not found exception으로 변환한다")
+	void missingParentsThrowResourceNotFound() {
+		PropertyReadUseCase useCase = new PropertyReadUseCase(new EmptyPropertyReadRepository());
 
 		assertThatThrownBy(() -> useCase.getRegionDetail(404L))
-			.isInstanceOf(V1ResourceNotFoundException.class)
+			.isInstanceOf(ResourceNotFoundException.class)
 			.hasMessageContaining("region not found");
 		assertThatThrownBy(() -> useCase.getParcelDetail(404L))
-			.isInstanceOf(V1ResourceNotFoundException.class)
+			.isInstanceOf(ResourceNotFoundException.class)
 			.hasMessageContaining("parcel detail not found");
 		assertThatThrownBy(() -> useCase.getTradeList(404L))
-			.isInstanceOf(V1ResourceNotFoundException.class)
+			.isInstanceOf(ResourceNotFoundException.class)
 			.hasMessageContaining("parcel trade parent not found");
 	}
 
 	@Test
 	@DisplayName("empty read repository는 empty public read seam을 반환한다")
 	void emptyRepositoryReturnsEmptyReadSeams() {
-		EmptyMvpReadRepository repository = new EmptyMvpReadRepository();
+		EmptyPropertyReadRepository repository = new EmptyPropertyReadRepository();
 
 		assertThat(repository.searchComplexes("Sample")).isEmpty();
 		assertThat(repository.findRootRegions()).isEmpty();
@@ -82,7 +82,7 @@ class MvpReadUseCaseTest {
 		assertThat(repository.findTradeList(1001L)).isEmpty();
 	}
 
-	private static class CapturingRepository implements MvpReadRepository {
+	private static class CapturingRepository implements PropertyReadRepository {
 
 		private String searchQuery;
 

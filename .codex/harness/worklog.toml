@@ -1,9 +1,9 @@
-[[slices]]
+[[items]]
 id = "kakao-map-marker-refresh-flow"
 title_ko = "Kakao map marker refresh flow"
 pr_type = "Feat"
 pr_title_ko = "Kakao 지도 마커 새로고침 안정화"
-description_ko = "지도 idle/zoom/filter 변화가 V1 marker API 호출과 marker rendering으로 이어지는 frontend 흐름을 안정화한다."
+description_ko = "지도 idle/zoom/filter 변화가 public marker API 호출과 marker rendering으로 이어지는 frontend 흐름을 안정화한다."
 status = "done"
 priority = 10
 targets = "frontend"
@@ -16,14 +16,14 @@ acceptance_criteria = [
 ]
 first_red_candidates = [
   "marker fetch adapter 단위 테스트에서 늦게 도착한 이전 응답이 최신 marker state를 덮어쓰는 실패를 먼저 만든다.",
-  "map level별 endpoint 선택 테스트에서 V1 URL이 바뀌면 실패하게 한다.",
+  "map level별 endpoint 선택 테스트에서 public API URL이 바뀌면 실패하게 한다.",
 ]
 verification_commands = [
   "cd apps/web && npm run test",
   "cd apps/web && npm run build",
 ]
 stop_conditions = [
-  "V1 API URL, request field, response field 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field 변경이 필요하면 중단한다.",
   "Kakao SDK 실호출이나 외부 네트워크 의존이 필요하면 mock/test seam으로 되돌린다.",
 ]
 risk_notes = [
@@ -31,12 +31,12 @@ risk_notes = [
   "frontend-only slice이므로 backend worktree를 만들지 않는다.",
 ]
 
-[[slices]]
+[[items]]
 id = "kakao-map-runtime-visual-smoke"
 title_ko = "Kakao map runtime visual smoke"
 pr_type = "Feat"
 pr_title_ko = "Kakao 지도 런타임 스모크 검증"
-description_ko = "apps/web에서 실제 Kakao JS SDK 지도 surface를 띄우고 V1 marker fetch 연결을 브라우저로 확인할 수 있게 만든다."
+description_ko = "apps/web에서 실제 Kakao JS SDK 지도 surface를 띄우고 public marker fetch 연결을 브라우저로 확인할 수 있게 만든다."
 status = "done"
 priority = 15
 targets = "frontend"
@@ -57,35 +57,35 @@ verification_commands = [
   "git diff --check",
 ]
 stop_conditions = [
-  "V1 API URL, request field, response field 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field 변경이 필요하면 중단한다.",
   "source frontend의 hardcoded Kakao key 복사가 필요하면 중단한다.",
   "backend, DB schema, ingest 흐름 변경이 필요하면 별도 slice로 분리한다.",
 ]
 risk_notes = [
   "실제 browser visual smoke는 로컬 Kakao key가 없으면 partial evidence로 남긴다.",
-  "backend marker 응답이 비어도 runtime smoke의 핵심은 지도 타일과 V1 marker fetch 연결이다.",
+  "backend marker 응답이 비어도 runtime smoke의 핵심은 지도 타일과 public marker fetch 연결이다.",
 ]
 
-[[slices]]
+[[items]]
 id = "local-dev-stack-postgis-api-web"
 title_ko = "Local dev stack PostGIS API web"
 pr_type = "Feat"
 pr_title_ko = "로컬 PostGIS API Web 실행 스택"
-description_ko = "로컬 PostGIS, API, Web runtime을 repository-managed stack으로 묶어 V1 schema/seed/API/frontend를 한 번에 띄울 수 있게 만든다."
+description_ko = "로컬 PostGIS, API, Web runtime을 repository-managed stack으로 묶어 baseline schema/seed/API/frontend를 한 번에 띄울 수 있게 만든다."
 status = "done"
 priority = 1
 targets = "both"
 preset = "local-runtime-stack"
 acceptance_criteria = [
   "infra/** 아래에 PostGIS 16-3.4 기반 local compose stack을 두고 secrets나 .env* 파일을 commit하지 않는다.",
-  "API local runtime은 env 기반 DB 설정으로 PostGIS에 연결하고 Flyway V1 schema와 local seed를 새 DB에서 적용할 수 있다.",
+  "API local runtime은 env 기반 DB 설정으로 PostGIS에 연결하고 Flyway baseline schema와 local seed를 새 DB에서 적용할 수 있다.",
   "Frontend local runtime은 기존 VITE_API_SERVER_IP contract를 유지하며 local API base URL로 marker/search/detail/trade API를 호출할 수 있다.",
   "Backend target은 infra/**와 apps/api/**만, frontend target은 apps/web/**만 소유해 병렬 worktree 충돌을 피한다.",
   "live RTMS Open API 호출, DB migration 운영 실행, main merge/push/PR merge는 자동화하지 않는다.",
 ]
 first_red_candidates = [
   "docker compose -f infra/docker-compose.local.yml config가 compose file 부재로 실패한다.",
-  "local profile runtime smoke에서 API가 PostGIS JDBC URL을 받지 못하거나 Flyway V1 schema를 적용하지 못하는 실패를 먼저 만든다.",
+  "local profile runtime smoke에서 API가 PostGIS JDBC URL을 받지 못하거나 Flyway baseline schema를 적용하지 못하는 실패를 먼저 만든다.",
   "frontend env base URL smoke에서 VITE_API_SERVER_IP 누락 또는 잘못된 base URL 조합이 marker fetch를 깨뜨리는 실패를 먼저 만든다.",
 ]
 verification_commands = [
@@ -97,17 +97,17 @@ verification_commands = [
 ]
 stop_conditions = [
   "secrets, service key, .env* 파일 저장이 필요하면 중단한다.",
-  "V1 public API URL, request field, response field 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field 변경이 필요하면 중단한다.",
   "Docker daemon이 필요한 destructive DB operation 또는 live DB migration 실행이 필요하면 dry-run/config 검증으로 제한한다.",
   "apps/api와 apps/web이 같은 worktree에서 같은 파일을 동시에 수정해야 하면 slice를 backend/frontend 하위 slice로 분리한다.",
 ]
 risk_notes = [
   "이 slice는 infra 중심이지만 harness target 제약상 backend target이 infra/**와 apps/api/**를 소유한다.",
   "local compose config 검증은 Docker Compose plugin이 없는 환경에서 blocked evidence가 될 수 있다.",
-  "실제 브라우저 visual smoke는 mvp-e2e-runtime-smoke에서 별도 처리한다.",
+  "실제 브라우저 visual smoke는 baseline-e2e-runtime-smoke에서 별도 처리한다.",
 ]
 
-[[slices]]
+[[items]]
 id = "rtms-public-client-one-shot-ingest"
 title_ko = "RTMS public client one-shot ingest"
 pr_type = "Feat"
@@ -136,16 +136,16 @@ verification_commands = [
 stop_conditions = [
   "PR 검증에서 live Open API call이 필요하면 중단하고 fixture/mocking으로 대체한다.",
   "service key, raw production payload, local secret 저장이 필요하면 중단한다.",
-  "V1 public API URL, request field, response field 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field 변경이 필요하면 중단한다.",
   "DB schema 변경이 필요하면 별도 migration slice로 분리한다.",
 ]
 risk_notes = [
   "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
-  "runner는 one-shot 운영 진입점만 만들고 scheduler/batch orchestration은 V2 또는 별도 slice로 둔다.",
+  "runner는 one-shot 운영 진입점만 만들고 scheduler/batch orchestration은 later-scope 또는 별도 slice로 둔다.",
   "실제 live RTMS 실행은 명시적 사람 승인과 local env가 있을 때만 가능하다.",
 ]
 
-[[slices]]
+[[items]]
 id = "live-complex-master-bootstrap"
 title_ko = "Live complex master bootstrap"
 pr_type = "Feat"
@@ -161,7 +161,7 @@ acceptance_criteria = [
   "bootstrap은 raw ingest row 저장 이후, existing complex match와 normalized trade insert 이전에 동작한다.",
   "좌표 또는 master 근거가 없으면 fake latitude/longitude를 넣지 않고 explainable MATCH_FAILED로 남긴다.",
   "fixture/mocked coordinate resolver로 normalizedInserted > 0 regression을 검증하고 live public API 호출은 PR 검증에 요구하지 않는다.",
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
 ]
 first_red_candidates = [
   "OpenApiTradeIngestServiceJdbcIntegrationTest에서 master가 없는 RTMS item도 mocked bootstrap 성공 시 normalized trade가 insert되어야 하나 현재 MATCH_FAILED로 남는 실패를 먼저 만든다.",
@@ -176,7 +176,7 @@ stop_conditions = [
   "PR 검증에서 live VWorld, ODC, RTMS Open API call이 필요하면 중단하고 fixture/mocking으로 대체한다.",
   "service key, raw production payload, local secret 저장이 필요하면 중단한다.",
   "fake latitude/longitude 또는 근거 없는 parcel geometry를 저장해야 하면 중단한다.",
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
   "rankings, trend, favorite, alarm, mail, auth, recommendation dependency가 필요하면 중단한다.",
   "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
 ]
@@ -186,7 +186,7 @@ risk_notes = [
   "complex_pk 생성 정책이 임시값으로 흐르면 audit 품질이 떨어질 수 있어 source/source_key와 aptSeq 기반 deterministic key 정책을 테스트로 고정해야 한다.",
 ]
 
-[[slices]]
+[[items]]
 id = "parcel-coordinate-resolver-adapter"
 title_ko = "Parcel coordinate resolver adapter"
 pr_type = "Feat"
@@ -202,7 +202,7 @@ acceptance_criteria = [
   "좌표 provider가 empty, ambiguous, invalid, 또는 configuration missing이면 fake latitude/longitude 없이 Optional.empty()로 처리해 explainable MATCH_FAILED를 유지한다.",
   "PR 검증은 fixture/mocked coordinate client로 고정하고 live VWorld, ODC, RTMS Open API 호출을 요구하지 않는다.",
   "source/source_key dedupe, raw-before-normalized 순서, complex_id operational relation, complex_pk/apt_seq audit metadata를 변경하지 않는다.",
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
 ]
 first_red_candidates = [
   "ParcelCoordinateResolver adapter test에서 fixture 좌표 응답이 ParcelCoordinate로 변환되어야 하나 adapter 부재로 실패하는 RED를 먼저 만든다.",
@@ -218,7 +218,7 @@ stop_conditions = [
   "PR 검증에서 live VWorld, ODC, RTMS Open API call이 필요하면 중단하고 fixture/mocking으로 대체한다.",
   "service key, raw production payload, local secret 저장이 필요하면 중단한다.",
   "fake latitude/longitude 또는 근거 없는 parcel geometry를 저장해야 하면 중단한다.",
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
   "rankings, trend, favorite, alarm, mail, auth, recommendation dependency가 필요하면 중단한다.",
   "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
 ]
@@ -228,11 +228,11 @@ risk_notes = [
   "좌표 정확도와 PNU 매칭 품질이 낮으면 normalized insert보다 explainable MATCH_FAILED를 우선한다.",
 ]
 
-[[slices]]
-id = "mvp-e2e-runtime-smoke"
-title_ko = "MVP e2e runtime smoke"
+[[items]]
+id = "baseline-e2e-runtime-smoke"
+title_ko = "baseline e2e runtime smoke"
 pr_type = "Test"
-pr_title_ko = "MVP 런타임 E2E 스모크"
+pr_title_ko = "baseline 런타임 E2E 스모크"
 description_ko = "local PostGIS/API/Web stack 위에서 deterministic seed로 map marker, detail drawer, trade list까지 브라우저 스모크 evidence를 남긴다."
 status = "done"
 priority = 30
@@ -240,8 +240,8 @@ targets = "both"
 preset = "runtime-smoke"
 acceptance_criteria = [
   "local-dev-stack-postgis-api-web와 rtms-public-client-one-shot-ingest 완료 후 실행한다.",
-  "새 local DB에서 V1 schema/seed가 적용되고 /api/v1/map/complexes marker 한 건 이상을 반환한다.",
-  "Web runtime에서 marker click 또는 equivalent test action이 detail drawer와 trade list를 열고 documented V1 URLs만 호출한다.",
+  "새 local DB에서 baseline schema/seed가 적용되고 /api/v1/map/complexes marker 한 건 이상을 반환한다.",
+  "Web runtime에서 marker click 또는 equivalent test action이 detail drawer와 trade list를 열고 documented public API URLs만 호출한다.",
   "duplicate ingest와 MATCH_FAILED raw row가 runtime evidence에서 queryable하거나 명시적 smoke fixture로 확인된다.",
   "Kakao key가 없는 환경에서는 browser map tile smoke를 partial로 기록하고 API/UI state smoke는 계속 검증한다.",
 ]
@@ -259,7 +259,7 @@ verification_commands = [
 ]
 stop_conditions = [
   "local-dev-stack-postgis-api-web 또는 rtms-public-client-one-shot-ingest가 완료되지 않았으면 실행하지 않는다.",
-  "V1 API URL/field/unit 변경이 필요하면 중단한다.",
+  "public API URL/field/unit 변경이 필요하면 중단한다.",
   "live RTMS Open API 호출이나 production-like data가 필요하면 중단한다.",
   "Kakao key가 없다는 이유로 API/runtime smoke 전체를 실패 처리하지 않고 evidence를 partial로 분리한다.",
 ]
@@ -269,19 +269,19 @@ risk_notes = [
   "이 slice는 검증용이며 product feature 확장을 포함하지 않는다.",
 ]
 
-[[slices]]
+[[items]]
 id = "map-first-responsive-exploration-shell"
 title_ko = "Map-first responsive exploration shell"
 pr_type = "Feat"
 pr_title_ko = "지도 중심 반응형 탐색 shell"
-description_ko = "기존 V1 frontend 흐름을 유지하면서 full-screen map, collapsible exploration panel, floating filters, detail drawer를 map-first layout으로 재배치한다."
+description_ko = "기존 Home Search frontend 흐름을 유지하면서 full-screen map, collapsible exploration panel, floating filters, detail drawer를 map-first layout으로 재배치한다."
 status = "done"
 priority = 35
 targets = "frontend"
 preset = "map-ui-state"
 acceptance_criteria = [
   "첫 viewport에서 Kakao map surface가 primary surface로 보이고 탐색 panel과 filters는 overlay 또는 collapsible shell로 배치된다.",
-  "검색, 지역 navigation, filter 변경, marker fetch, detail/trade drawer는 기존 V1 API URL과 field/unit contract를 그대로 사용한다.",
+  "검색, 지역 navigation, filter 변경, marker fetch, detail/trade drawer는 기존 public API URL과 field/unit contract를 그대로 사용한다.",
   "desktop과 mobile viewport에서 text overlap, card nesting, map context hiding 없이 주요 controls가 조작 가능하다.",
   "Kakao SDK key 누락 또는 marker API 실패 시 map shell은 유지되고 non-blocking state만 노출된다.",
   "trade chart는 필요 시 후속 slice로 분리하고 이번 slice는 layout shell과 기존 trade list 보존에 집중한다.",
@@ -289,7 +289,7 @@ acceptance_criteria = [
 first_red_candidates = [
   "App layout test에서 map landmark가 exploration panel보다 먼저 primary surface로 렌더링되어야 하나 기존 padded shell 때문에 실패한다.",
   "mobile viewport smoke에서 exploration panel이 bottom sheet/collapsible state가 아니면 controls overflow로 실패한다.",
-  "V1 URL contract test에서 layout 변경 중 search/region/detail/trade endpoint가 바뀌면 실패한다.",
+  "public API URL contract test에서 layout 변경 중 search/region/detail/trade endpoint가 바뀌면 실패한다.",
 ]
 verification_commands = [
   "cd apps/web && npm run test",
@@ -297,9 +297,9 @@ verification_commands = [
   "git diff --check",
 ]
 stop_conditions = [
-  "V1 API URL, request field, response field, amount unit 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit 변경이 필요하면 중단한다.",
   "apps/api/**, DB schema, ingest 흐름 변경이 필요하면 별도 backend slice로 분리한다.",
-  "decorative landing page, marketing hero, V2 ranking/favorite/alarm/auth UX가 필요하면 중단한다.",
+  "decorative landing page, marketing hero, later-scope ranking/favorite/alarm/auth UX가 필요하면 중단한다.",
   "Kakao SDK live key나 외부 network dependency가 테스트 필수 조건이 되면 mock/browser fallback으로 분리한다.",
 ]
 risk_notes = [
@@ -308,7 +308,7 @@ risk_notes = [
   "trade chart는 detail drawer 후속 slice로 남긴다.",
 ]
 
-[[slices]]
+[[items]]
 id = "marker-rendering-nonblocking-error"
 title_ko = "Marker rendering non-blocking error state"
 pr_type = "Feat"
@@ -322,7 +322,7 @@ acceptance_criteria = [
   "region/complex marker API 실패 시 현재 marker state가 explainable한 빈 상태 또는 이전 안전 상태로 전환된다.",
   "실패 상태가 지도 이동, zoom, 검색 panel 조작을 block하지 않는다.",
   "사용자에게 작은 non-blocking error affordance를 노출하고 다음 성공 응답에서 자동으로 회복한다.",
-  "V1 response shape 변경 없이 frontend adapter 내부에서 처리한다.",
+  "Home Search response shape 변경 없이 frontend adapter 내부에서 처리한다.",
 ]
 first_red_candidates = [
   "marker API rejection 이후 map interaction handler가 계속 동작하는지 실패 테스트를 먼저 만든다.",
@@ -341,12 +341,12 @@ risk_notes = [
   "frontend-only slice이므로 backend worktree를 만들지 않는다.",
 ]
 
-[[slices]]
+[[items]]
 id = "search-region-filter-panel"
 title_ko = "Search region filter panel"
 pr_type = "Feat"
 pr_title_ko = "검색/지역 패널과 필터 연결"
-description_ko = "map-first UI에 검색, 지역 navigation, filter controls를 연결해 V1 marker/detail 흐름과 함께 동작하게 만든다."
+description_ko = "map-first UI에 검색, 지역 navigation, filter controls를 연결해 public marker/detail 흐름과 함께 동작하게 만든다."
 status = "done"
 priority = 25
 targets = "frontend"
@@ -356,7 +356,7 @@ acceptance_criteria = [
   "지역 navigation은 /api/v1/region과 /api/v1/region/{regionId}를 호출하고 선택한 region center로 map context를 이동한다.",
   "filter controls는 pyeongMin/pyeongMax, priceEokMin/priceEokMax, ageMin/ageMax, unitMin/unitMax를 /api/v1/map/complexes marker 요청에 연결한다.",
   "panel loading/empty/error state는 map 탐색을 block하지 않고 다음 성공 응답에서 회복된다.",
-  "V1 API URL, request field, response field, amount unit, coordinate field compatibility를 docs/API_CONTRACT.md와 동일하게 유지한다.",
+  "public API URL, request field, response field, amount unit, coordinate field compatibility를 docs/API_CONTRACT.md와 동일하게 유지한다.",
 ]
 first_red_candidates = [
   "App component behavior test에서 검색 결과 선택 후 documented search URL 호출, map recenter, detail drawer parcelId 갱신이 발생해야 하나 현재 search panel seam 부재로 실패한다.",
@@ -369,7 +369,7 @@ verification_commands = [
   "git diff --check",
 ]
 stop_conditions = [
-  "V1 public API URL, request field, response field, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field, ProblemDetail shape 변경이 필요하면 중단한다.",
   "backend, DB schema, ingest 흐름 변경이 필요하면 별도 slice로 분리한다.",
   "Kakao SDK 실호출, source frontend key 복사, secrets 저장, live external network dependency가 필요하면 중단한다.",
   "rankings, favorite, alarm, mail, recommendation, auth UX가 필요하면 중단한다.",
@@ -381,7 +381,7 @@ risk_notes = [
   "Kakao key가 없는 환경에서는 browser visual smoke가 partial evidence로 남을 수 있다.",
 ]
 
-[[slices]]
+[[items]]
 id = "data-architecture-checkpoint"
 title_ko = "Data architecture checkpoint"
 pr_type = "Docs"
@@ -402,19 +402,19 @@ first_red_candidates = [
   "MATCH_FAILED raw row 또는 failed match record를 조회할 수 없으면 실패하는 backend test 후보를 정의한다.",
 ]
 verification_commands = [
-  "python3 .codex/harness/v1_plan.py --self-test",
+  "python3 .codex/harness/home_plan.py --self-test",
   "git diff --check",
 ]
 stop_conditions = [
   "DB schema 변경 또는 migration 실행이 필요하면 planning-only를 종료하고 별도 backend slice로 분리한다.",
-  "V1/V2 scope가 섞이면 rankings, favorite, alarm, mail, recommendation 항목을 제외한다.",
+  "current/later-scope boundary가 섞이면 rankings, favorite, alarm, mail, recommendation 항목을 제외한다.",
 ]
 risk_notes = [
   "planning-only slice는 codex execute, verification, gate, commit, integration, push, PR을 자동 실행하지 않는다.",
   "실제 backend 구현은 별도 backend target slice로 진행한다.",
 ]
 
-[[slices]]
+[[items]]
 id = "open-api-ingest-prep"
 title_ko = "Open API ingest preparation"
 pr_type = "Feat"
@@ -440,19 +440,19 @@ verification_commands = [
 stop_conditions = [
   "live Open API call이 필요하면 중단하고 fixture/mocking으로 대체한다.",
   "DB migration 실행이 필요하면 별도 migration slice로 분리한다.",
-  "V1 API URL 변경이 필요하면 중단한다.",
+  "public API URL 변경이 필요하면 중단한다.",
 ]
 risk_notes = [
   "backend-only slice이므로 frontend worktree를 만들지 않는다.",
   "외부 service key나 secrets를 저장하지 않는다.",
 ]
 
-[[slices]]
+[[items]]
 id = "map-complex-marker-query-backend"
 title_ko = "Map complex marker query backend"
 pr_type = "Feat"
 pr_title_ko = "단지 마커 조회 백엔드 구현"
-description_ko = "빈 map use case를 V1 parcel/complex/trade query로 교체해 /api/v1/map/complexes marker 응답을 실제 데이터로 반환한다."
+description_ko = "빈 map use case를 Home Search parcel/complex/trade query로 교체해 /api/v1/map/complexes marker 응답을 실제 데이터로 반환한다."
 status = "done"
 priority = 35
 targets = "backend"
@@ -462,7 +462,7 @@ acceptance_criteria = [
   "bounds 안의 parcel과 연결된 complex를 조회해 parcelId, lat, lng, latestDealAmount, unitCntSum canonical response만 반환한다.",
   "latestDealAmount는 trade.complex_id -> complex.id 운영 관계 기준 최신 거래 금액이며 dealAmount/latestDealAmount 단위는 10,000 KRW이다.",
   "priceEokMin과 priceEokMax는 eok 입력을 10,000 KRW 단위로 변환해 stored trade amount와 비교한다.",
-  "ranking, trend, favorite, alarm, mail, auth, recommendation 상태 없이 V1 core tables만으로 동작한다.",
+  "ranking, trend, favorite, alarm, mail, auth, recommendation 상태 없이 Home Search core tables만으로 동작한다.",
 ]
 first_red_candidates = [
   "JdbcMapMarkerRepositoryTest에서 bounds 안 parcel/complex/trade seed가 complex marker 한 건으로 반환되어야 하나 repository seam 부재 또는 EmptyMapUseCase 때문에 실패한다.",
@@ -476,7 +476,7 @@ verification_commands = [
   "git diff --check",
 ]
 stop_conditions = [
-  "V1 public API URL, request field, response field, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field, ProblemDetail shape 변경이 필요하면 중단한다.",
   "complex_id 운영 관계를 complex_pk 중심으로 재해석해야 하면 중단하고 architecture review로 분리한다.",
   "DB schema 변경, migration 실행, live Open API call, secrets 저장이 필요하면 중단한다.",
   "rankings, trend, favorite, alarm, mail, auth, recommendation dependency가 필요하면 중단한다.",
@@ -488,12 +488,12 @@ risk_notes = [
   "latest trade lookup은 partitioned trade table과 complex_id index를 사용해야 한다.",
 ]
 
-[[slices]]
+[[items]]
 id = "backend-quality-docs-foundation"
 title_ko = "Backend quality docs foundation"
 pr_type = "Chore"
 pr_title_ko = "백엔드 품질 문서 기반 정리"
-description_ko = "backend RestDocs/OpenAPI YAML, coverage 90%, hook/CI evidence gate를 V1 backend 품질 기준으로 고정한다."
+description_ko = "backend RestDocs/OpenAPI YAML, coverage 90%, hook/CI evidence gate를 Home Search backend 품질 기준으로 고정한다."
 status = "done"
 priority = 45
 targets = "backend"
@@ -501,7 +501,7 @@ preset = "backend-quality"
 acceptance_criteria = [
   "cd apps/api && ./gradlew backendQualityCheck가 backend 단일 품질 gate가 된다.",
   "JaCoCo line/instruction coverage 90% 미만이면 로컬과 CI에서 실패한다.",
-  "REST Docs smoke가 V1 map endpoints snippets를 생성하고 openapi3.yaml을 만든다.",
+  "REST Docs smoke가 Home Search map endpoints snippets를 생성하고 openapi3.yaml을 만든다.",
   "openapi3.yaml은 /api/v1/map/regions, /api/v1/map/complexes와 canonical public fields를 포함한다.",
   "openapi3.yaml은 complexPk, aptSeq, sourceKey 같은 내부 audit/dedupe field를 public response로 노출하지 않는다.",
   "Stop/PostToolUse hook과 PR lint가 backendQualityCheck, Coverage, Docs/OpenAPI evidence를 요구한다.",
@@ -522,7 +522,7 @@ verification_commands = [
   "bash scripts/check-ko-docs.sh",
 ]
 stop_conditions = [
-  "V1 public API URL, request field, response field, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field, ProblemDetail shape 변경이 필요하면 중단한다.",
   "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
   "Swagger UI bundle vendoring 또는 runtime /swagger 노출이 필요하면 다음 docs publishing slice로 분리한다.",
   "Security, Mail, Batch, ranking, favorite, alarm, auth dependency가 필요하면 중단한다.",
@@ -534,12 +534,12 @@ risk_notes = [
   "generated openapi3.yaml은 build artifact이며 repository에 commit하지 않는다.",
 ]
 
-[[slices]]
+[[items]]
 id = "map-region-marker-query-backend"
 title_ko = "Map region marker query backend"
 pr_type = "Feat"
 pr_title_ko = "지역 마커 조회 백엔드 구현"
-description_ko = "빈 region marker use case를 V1 region bounds query로 교체해 /api/v1/map/regions marker 응답을 실제 데이터로 반환한다."
+description_ko = "빈 region marker use case를 Home Search region bounds query로 교체해 /api/v1/map/regions marker 응답을 실제 데이터로 반환한다."
 status = "done"
 priority = 48
 targets = "backend"
@@ -548,7 +548,7 @@ acceptance_criteria = [
   "POST /api/v1/map/regions URL, request field, response field, empty-result behavior, ProblemDetail 정책을 docs/API_CONTRACT.md와 동일하게 유지한다.",
   "region 요청값 si-do, si-gun-gu, eup-myeon-dong을 region.region_type 기준으로 조회한다.",
   "center_lat와 center_lng가 bounds 안에 있는 region만 id, name, lat, lng, trend canonical response로 반환한다.",
-  "trend는 V1에서 계산하지 않고 null로 유지하며 ranking, trend aggregate, favorite, alarm, mail, auth, recommendation 상태 없이 동작한다.",
+  "trend는 current scope에서 계산하지 않고 null로 유지하며 ranking, trend aggregate, favorite, alarm, mail, auth, recommendation 상태 없이 동작한다.",
   "기존 POST /api/v1/map/complexes 응답과 query behavior를 변경하지 않는다.",
 ]
 first_red_candidates = [
@@ -563,7 +563,7 @@ verification_commands = [
   "git diff --check",
 ]
 stop_conditions = [
-  "V1 public API URL, request field, response field, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field, ProblemDetail shape 변경이 필요하면 중단한다.",
   "region marker 조회를 위해 ranking, trend aggregate, favorite, alarm, mail, auth, recommendation dependency가 필요하면 중단한다.",
   "DB schema 변경, migration 실행, live Open API call, secrets 저장이 필요하면 중단한다.",
   "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
@@ -571,15 +571,15 @@ stop_conditions = [
 risk_notes = [
   "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
   "center_lat 또는 center_lng가 null인 region의 marker 제외 정책을 repository test로 고정해야 한다.",
-  "launcher backlog 등록은 기존 frontend worktree 변경과 독립적으로 관리한다.",
+  "launcher worklog 등록은 기존 frontend worktree 변경과 독립적으로 관리한다.",
 ]
 
-[[slices]]
+[[items]]
 id = "raw-ingest-persistence-adapter"
 title_ko = "Raw ingest persistence adapter"
 pr_type = "Feat"
 pr_title_ko = "원시 수집 저장 adapter 연결"
-description_ko = "open-api-ingest-prep application port를 Flyway/JDBC persistence로 연결하기 전 V1 raw/normalized 저장 invariant를 repository seam에서 검증한다."
+description_ko = "open-api-ingest-prep application port를 Flyway/JDBC persistence로 연결하기 전 Home Search raw/normalized 저장 invariant를 repository seam에서 검증한다."
 status = "done"
 priority = 50
 targets = "backend"
@@ -602,10 +602,10 @@ verification_commands = [
   "git diff --check",
 ]
 stop_conditions = [
-  "V1 public API URL, request field, response field 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field 변경이 필요하면 중단한다.",
   "JPA, Security, Batch, Mail, ranking 관련 의존성이 필요하면 중단한다.",
   "raw evidence를 unique 제약으로 손실시키는 schema 변경이 필요하면 중단한다.",
-  "DB migration이 V2 ranking, trend, favorite, alarm, mail, recommendation table을 요구하면 중단한다.",
+  "DB migration이 later-scope ranking, trend, favorite, alarm, mail, recommendation table을 요구하면 중단한다.",
 ]
 risk_notes = [
   "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
@@ -613,12 +613,12 @@ risk_notes = [
   "trade partition unique 한계 때문에 global source/source_key dedupe는 trade_source_key_registry에서 보장한다.",
 ]
 
-[[slices]]
+[[items]]
 id = "detail-trade-chart-drawer"
 title_ko = "Detail trade chart drawer"
 pr_type = "Feat"
 pr_title_ko = "상세 drawer 거래 차트 추가"
-description_ko = "detail drawer의 기존 V1 trade list에 최근 거래 금액 흐름을 보여주는 compact chart를 추가한다."
+description_ko = "detail drawer의 기존 Home Search trade list에 최근 거래 금액 흐름을 보여주는 compact chart를 추가한다."
 status = "done"
 priority = 60
 targets = "frontend"
@@ -640,38 +640,38 @@ verification_commands = [
   "git diff --check",
 ]
 stop_conditions = [
-  "V1 public API URL, response field, amount unit 변경이 필요하면 중단한다.",
+  "public API URL, response field, amount unit 변경이 필요하면 중단한다.",
   "apps/api/** 변경이 필요하면 별도 backend slice로 분리한다.",
   "chart 구현을 위해 새 dependency, analytics, ranking, trend aggregate, favorite, alarm, mail, recommendation, auth가 필요하면 중단한다.",
   "Kakao map marker refresh 또는 search/region navigation을 깨뜨리면 중단한다.",
 ]
 risk_notes = [
   "frontend-only slice이므로 apps/api/**는 건드리지 않는다.",
-  "chart는 V1 trade list 응답만 사용하며 heavy analytics나 trend API를 추가하지 않는다.",
+  "chart는 Home Search trade list 응답만 사용하며 heavy analytics나 trend API를 추가하지 않는다.",
   "mobile width에서 drawer text/table/chart가 겹치지 않도록 existing responsive constraints를 유지해야 한다.",
 ]
 
-[[slices]]
-id = "v1-release-readiness-smoke"
-title_ko = "V1 release readiness smoke"
+[[items]]
+id = "baseline-release-readiness-smoke"
+title_ko = "Home Search release readiness smoke"
 pr_type = "Test"
-pr_title_ko = "V1 릴리스 준비 스모크"
-description_ko = "merged V1 MVP slice 전체를 origin/main 기준으로 재검증하고 backend/web/local runtime evidence를 릴리스 후보 기준으로 정리한다."
+pr_title_ko = "Home Search 릴리스 준비 스모크"
+description_ko = "merged Home Search baseline work item 전체를 origin/main 기준으로 재검증하고 backend/web/local runtime evidence를 릴리스 후보 기준으로 정리한다."
 status = "done"
 priority = 70
 targets = "both"
 preset = "runtime-smoke"
 acceptance_criteria = [
-  "origin/main에 반영된 17개 V1 slice를 기준으로 backlog sync 결과가 추가 동기화 없이 clean이어야 한다.",
+  "origin/main에 반영된 17개 Home Search work item를 기준으로 worklog sync 결과가 추가 동기화 없이 clean이어야 한다.",
   "Docker Compose local stack config, backendQualityCheck, frontend test/build, git diff whitespace 검증을 같은 기준으로 통과시킨다.",
-  "deterministic seed 또는 existing runtime smoke가 map marker, search/region/filter, detail drawer, trade list V1 URL 흐름을 깨뜨리지 않는다는 evidence를 남긴다.",
+  "deterministic seed 또는 existing runtime smoke가 map marker, search/region/filter, detail drawer, trade list public API URL 흐름을 깨뜨리지 않는다는 evidence를 남긴다.",
   "RTMS, VWorld, Kakao live key 같은 외부 API/secrets가 없어도 PR 검증은 fixture, mocked client, local fallback evidence로 닫는다.",
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
   "ranking, trend aggregate, favorite, alarm, mail, auth, recommendation 기능을 릴리스 준비 범위에 추가하지 않는다.",
 ]
 first_red_candidates = [
   "release readiness smoke에서 backendQualityCheck 또는 frontend test/build 중 하나라도 실패하면 candidate가 Fail로 남는 검증 실패를 먼저 확인한다.",
-  "V1 URL contract가 map/search/region/detail/trade 흐름 중 하나라도 바뀌면 기존 contract/runtime smoke가 실패해야 한다.",
+  "public API URL contract가 map/search/region/detail/trade 흐름 중 하나라도 바뀌면 기존 contract/runtime smoke가 실패해야 한다.",
   "local stack config 또는 deterministic seed smoke가 없으면 runtime readiness evidence가 Partial로 남는 gate를 먼저 확인한다.",
 ]
 verification_commands = [
@@ -694,27 +694,27 @@ risk_notes = [
   "live RTMS/VWorld 검증은 사람 승인과 local env가 있는 후속 manual smoke로 분리한다.",
 ]
 
-[[slices]]
-id = "v1-observability-actuator-prometheus"
-title_ko = "V1 observability actuator prometheus"
+[[items]]
+id = "baseline-observability-actuator-prometheus"
+title_ko = "Home Search observability actuator prometheus"
 pr_type = "Feat"
-pr_title_ko = "V1 관측성 actuator prometheus 준비"
-description_ko = "V1 local/API runtime에서 health와 Prometheus scrape endpoint를 확인할 수 있도록 Spring Boot actuator 관측성 기초를 추가한다."
+pr_title_ko = "Home Search 관측성 actuator prometheus 준비"
+description_ko = "Home Search local/API runtime에서 health와 Prometheus scrape endpoint를 확인할 수 있도록 Spring Boot actuator 관측성 기초를 추가한다."
 status = "done"
 priority = 80
 targets = "backend"
 preset = "local-runtime-stack"
 acceptance_criteria = [
-  "apps/api에 Spring Boot actuator와 Prometheus registry dependency를 추가하고 V1 public API URL contract는 변경하지 않는다.",
+  "apps/api에 Spring Boot actuator와 Prometheus registry dependency를 추가하고 public API URL contract는 변경하지 않는다.",
   "local runtime에서 health와 prometheus endpoint가 repository-managed 설정으로 노출되며 secrets나 .env* 값을 commit하지 않는다.",
-  "map/search/region/detail/trade V1 endpoints는 actuator 설정과 무관하게 기존 controller contract를 유지한다.",
+  "map/search/region/detail/trade Home Search endpoints는 actuator 설정과 무관하게 기존 controller contract를 유지한다.",
   "관측성 scope는 backend runtime metadata로 제한하고 ranking, favorite, alarm, mail, auth, recommendation 기능을 추가하지 않는다.",
   "API error rate와 ingest count metric은 후속 slice에서 실제 meter 이름을 확정할 수 있도록 이번 slice에서는 actuator/prometheus surface만 고정한다.",
 ]
 first_red_candidates = [
-  "foundation test에서 actuator/prometheus dependency 또는 management endpoint 설정이 없어서 V1 observability readiness가 실패하는 RED를 먼저 만든다.",
+  "foundation test에서 actuator/prometheus dependency 또는 management endpoint 설정이 없어서 Home Search observability readiness가 실패하는 RED를 먼저 만든다.",
   "context smoke에서 /actuator/health 또는 /actuator/prometheus endpoint가 노출되지 않으면 실패하는 test seam을 만든다.",
-  "backendQualityCheck가 기존 V1 API contract와 OpenAPI artifact를 그대로 통과해 actuator가 public API spec에 섞이지 않는지 확인한다.",
+  "backendQualityCheck가 기존 public API contract와 OpenAPI artifact를 그대로 통과해 actuator가 public API spec에 섞이지 않는지 확인한다.",
 ]
 verification_commands = [
   "docker compose -f infra/docker-compose.local.yml config",
@@ -722,7 +722,7 @@ verification_commands = [
   "git diff --check",
 ]
 stop_conditions = [
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
   "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
   "live RTMS, VWorld, Kakao, Prometheus server 호출이 필요하면 중단하고 local/mock/config 검증으로 제한한다.",
   "DB schema, ingest behavior, frontend behavior 변경이 필요하면 별도 slice로 분리한다.",
@@ -730,15 +730,15 @@ stop_conditions = [
 ]
 risk_notes = [
   "actuator endpoint exposure는 운영 보안 정책과 충돌할 수 있어 local/runtime readiness 범위로만 시작한다.",
-  "실제 business metric 이름과 dashboard는 V1 release 이후 별도 관측성 slice로 분리한다.",
+  "실제 business metric 이름과 dashboard는 Home Search release 이후 별도 관측성 slice로 분리한다.",
   "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
 ]
 
-[[slices]]
-id = "v1-coordinate-shp-sample-import-hardening"
-title_ko = "V1 coordinate SHP sample import hardening"
+[[items]]
+id = "baseline-coordinate-shp-sample-import-hardening"
+title_ko = "Home Search coordinate SHP sample import hardening"
 pr_type = "Feat"
-pr_title_ko = "V1 좌표 SHP 샘플 import 검증 강화"
+pr_title_ko = "Home Search 좌표 SHP 샘플 import 검증 강화"
 description_ko = "실제 VWorld AL_D010 SHP 샘플과 기존 LSMD_CONT_LDREG 포맷을 file-first 좌표 snapshot importer에서 검증 가능한 입력으로 지원한다."
 status = "done"
 priority = 90
@@ -752,7 +752,7 @@ acceptance_criteria = [
   "--self-test는 실제 SHP 없이 filename parser와 포맷 detector를 검증한다.",
   "HOME_COORDINATE_EXPECTED_REGIONS로 partial sample 검증 범위를 명시할 수 있고 기본 full import는 17개 SIDO를 요구한다.",
   "coordinate_snapshot_run.report_json에 sourceFormat, expectedRegions, seenRegions, missingRegions, fileNames, partCounts, source/target SRID, syncParcel evidence를 남긴다.",
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
 ]
 first_red_candidates = [
   "CoordinateImportOpsConfigurationTest에서 AL_D010_41_20251204(3).shp, A2/A23 mapping, HOME_COORDINATE_EXPECTED_REGIONS, --preflight-only, --self-test 기대를 추가해 기존 script가 실패하는 RED를 만든다.",
@@ -764,7 +764,7 @@ verification_commands = [
 ]
 stop_conditions = [
   "실제 DB import, migration execution, active snapshot truncate/insert가 필요하면 중단하고 별도 수동 smoke로 분리한다.",
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
   "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
   "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
   "AL_D010 외 신규 VWorld 포맷 지원이 필요하면 별도 parser slice로 분리한다.",
@@ -775,11 +775,11 @@ risk_notes = [
   "실제 full import 성능과 디스크 사용량은 별도 local DB smoke에서 확인해야 한다.",
 ]
 
-[[slices]]
-id = "v1-coordinate-full-import-smoke"
-title_ko = "V1 coordinate full import smoke"
+[[items]]
+id = "baseline-coordinate-full-import-smoke"
+title_ko = "Home Search coordinate full import smoke"
 pr_type = "Test"
-pr_title_ko = "V1 좌표 전체 import 스모크"
+pr_title_ko = "Home Search 좌표 전체 import 스모크"
 description_ko = "VWorld 연속지적도 SHP full national import를 local PostGIS snapshot table에 반영하고 최신 PASSED run evidence를 검증 가능한 smoke로 고정한다."
 status = "done"
 priority = 95
@@ -795,10 +795,10 @@ acceptance_criteria = [
   "active reference.parcel_coordinate_snapshot은 expected region_code를 모두 포함하고 latitude/longitude 범위, point/geom SRID=4326, valid geometry를 만족한다.",
   "invalid_count, duplicate_pnu_count, synced_parcel_count는 실패로 숨기지 않고 smoke output/report evidence로 남긴다.",
   "HOME_COORDINATE_REQUIRE_SYNC_PARCEL=true일 때 synced_parcel_count > 0을 요구한다.",
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
 ]
 first_red_candidates = [
-  "CoordinateImportOpsConfigurationTest에서 verify-coordinate-snapshot-smoke.sh와 v1-coordinate-full-import-smoke backlog entry를 기대해 현재 부재로 실패하는 RED를 만든다.",
+  "CoordinateImportOpsConfigurationTest에서 verify-coordinate-snapshot-smoke.sh와 baseline-coordinate-full-import-smoke worklog item를 기대해 현재 부재로 실패하는 RED를 만든다.",
   "verify-coordinate-snapshot-smoke.sh --self-test가 full national import 검증 기본값과 option validation을 통과해야 하나 script 부재로 실패하는 RED를 만든다.",
 ]
 verification_commands = [
@@ -811,7 +811,7 @@ stop_conditions = [
   "full national SHP data가 로컬에 없으면 실제 DB import를 실행하지 않고 self-test/config/backendQualityCheck evidence로 제한한다.",
   "실제 DB import는 local PostGIS와 명시적인 HOME_COORDINATE_HOST_SHP_DIR가 있을 때만 수동 smoke로 실행한다.",
   "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
   "DB schema, ingest behavior, frontend behavior 변경이 필요하면 별도 slice로 분리한다.",
   "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
 ]
@@ -821,12 +821,12 @@ risk_notes = [
   "이번 smoke는 좌표 snapshot 품질과 resolver 입력을 닫는 작업이며 RTMS daily runner는 후속 slice로 분리한다.",
 ]
 
-[[slices]]
-id = "v1-observability-ingest-map-metrics"
-title_ko = "V1 observability ingest map metrics"
+[[items]]
+id = "baseline-observability-ingest-map-metrics"
+title_ko = "Home Search observability ingest map metrics"
 pr_type = "Feat"
-pr_title_ko = "V1 수집/지도 metric 관측성 추가"
-description_ko = "actuator/prometheus surface 위에 V1 ingest 결과 count와 map endpoint error count를 안정적인 Micrometer metric으로 노출한다."
+pr_title_ko = "Home Search 수집/지도 metric 관측성 추가"
+description_ko = "actuator/prometheus surface 위에 Home Search ingest 결과 count와 map endpoint error count를 안정적인 Micrometer metric으로 노출한다."
 status = "done"
 priority = 100
 targets = "backend"
@@ -834,14 +834,14 @@ preset = "local-runtime-stack"
 acceptance_criteria = [
   "OpenApiTradeIngestService 결과의 read, rawSaved, normalizedInserted, duplicateSkipped, matchFailed, parseFailed count를 stable metric names로 기록한다.",
   "POST /api/v1/map/regions와 POST /api/v1/map/complexes의 success/error outcome을 endpoint별 metric으로 기록한다.",
-  "Metric 추가는 V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "Metric 추가는 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
   "Prometheus scrape surface는 기존 /actuator/prometheus 설정을 사용하고 별도 Prometheus/Grafana 서버 실행을 요구하지 않는다.",
   "metric name과 tag cardinality는 low-cardinality 값(source, endpoint, outcome)으로 제한한다.",
 ]
 first_red_candidates = [
   "ingest service test에서 SimpleMeterRegistry에 rawSaved/normalizedInserted/duplicate/matchFailed/parseFailed count가 기록되어야 하나 instrumentation 부재로 실패하는 RED를 먼저 만든다.",
   "MapController contract/smoke test에서 marker endpoint success/error outcome metric이 기록되어야 하나 controller instrumentation 부재로 실패하는 RED를 먼저 만든다.",
-  "backendQualityCheck가 기존 V1 API contract와 OpenAPI artifact를 그대로 통과해 metric 추가가 public API spec에 섞이지 않는지 확인한다.",
+  "backendQualityCheck가 기존 public API contract와 OpenAPI artifact를 그대로 통과해 metric 추가가 public API spec에 섞이지 않는지 확인한다.",
 ]
 verification_commands = [
   "docker compose -f infra/docker-compose.local.yml config",
@@ -849,7 +849,7 @@ verification_commands = [
   "git diff --check",
 ]
 stop_conditions = [
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
   "DB schema, migration execution, live RTMS/VWorld/Kakao/Open API call, Prometheus/Grafana server 실행이 필요하면 중단한다.",
   "metric label에 parcelId, source_key, raw payload, exception message, query text처럼 high-cardinality 또는 민감한 값을 넣어야 하면 중단한다.",
   "ranking, trend aggregate, favorite, alarm, mail, auth, recommendation 기능이 필요하면 중단한다.",
@@ -861,7 +861,7 @@ risk_notes = [
   "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
 ]
 
-[[slices]]
+[[items]]
 id = "rtms-one-shot-operator-preflight"
 title_ko = "RTMS one-shot operator preflight"
 pr_type = "Feat"
@@ -876,7 +876,7 @@ acceptance_criteria = [
   "preflight-only 모드는 live RTMS Open API 호출, DB write, migration execution 없이 configuration과 request parameter evidence만 남긴다.",
   "one-shot runner의 실제 ingest 경로는 기존 raw-before-normalized, source/source_key dedupe, failed match explainability invariant를 유지한다.",
   "local secret, service key, raw production payload, .env* 값을 repository 파일이나 report에 저장하지 않는다.",
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
 ]
 first_red_candidates = [
   "RtmsOneShotTradeIngestRunnerTest에서 missing APT_SERVICE_KEY 또는 invalid lawdCd/dealYm가 live client 호출 전에 실패해야 하나 preflight guard 부재로 실패하는 RED를 만든다.",
@@ -890,7 +890,7 @@ stop_conditions = [
   "PR 검증에서 live RTMS Open API call이 필요하면 중단하고 fixture/mocking으로 대체한다.",
   "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
   "DB schema 변경, migration execution, destructive DB operation이 필요하면 별도 slice로 분리한다.",
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
   "apps/web 변경이 필요하면 별도 frontend slice로 분리한다.",
 ]
 risk_notes = [
@@ -899,7 +899,7 @@ risk_notes = [
   "backend-only slice이므로 frontend app은 건드리지 않는다.",
 ]
 
-[[slices]]
+[[items]]
 id = "raw-ingest-failure-inspection-ops"
 title_ko = "Raw ingest failure inspection ops"
 pr_type = "Feat"
@@ -913,7 +913,7 @@ acceptance_criteria = [
   "raw_trade_ingest의 MATCH_FAILED, PARSE_FAILED, DUPLICATE count와 failure_reason을 source, lawdCd, dealYmd 범위로 조회할 수 있다.",
   "조회 경로는 read-only이며 raw payload 전문, service key, source_key 전체처럼 민감하거나 high-cardinality한 값을 기본 출력하지 않는다.",
   "failed match와 parse failure는 queryable/explainable evidence로 남고 기존 raw-before-normalized ingest 순서를 변경하지 않는다.",
-  "public V1 map/search/region/detail/trade API URL과 response shape를 변경하지 않는다.",
+  "public Home Search map/search/region/detail/trade API URL과 response shape를 변경하지 않는다.",
   "운영 조회 결과는 fixture/Testcontainers 기반 regression으로 검증하고 live Open API 호출을 요구하지 않는다.",
 ]
 first_red_candidates = [
@@ -925,7 +925,7 @@ verification_commands = [
   "git diff --check",
 ]
 stop_conditions = [
-  "public V1 API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
   "raw payload 전문, service key, local secret, source_key 전체를 report나 log에 노출해야 하면 중단한다.",
   "DB schema 변경 또는 migration execution이 필요하면 별도 persistence slice로 분리한다.",
   "live RTMS/VWorld/Open API call이 필요하면 중단하고 fixture/mocking으로 대체한다.",
@@ -937,11 +937,11 @@ risk_notes = [
   "backend-only slice이므로 frontend app은 건드리지 않는다.",
 ]
 
-[[slices]]
-id = "v1-observability-local-scrape-config"
-title_ko = "V1 observability local scrape config"
+[[items]]
+id = "baseline-observability-local-scrape-config"
+title_ko = "Home Search observability local scrape config"
 pr_type = "Feat"
-pr_title_ko = "V1 관측성 로컬 scrape config"
+pr_title_ko = "Home Search 관측성 로컬 scrape config"
 description_ko = "actuator/prometheus metric을 local compose 환경에서 Prometheus scrape target으로 확인할 수 있는 repository-managed config를 추가한다."
 status = "done"
 priority = 130
@@ -950,9 +950,9 @@ preset = "local-runtime-stack"
 acceptance_criteria = [
   "repository-managed local Prometheus scrape config를 두고 API /actuator/prometheus target을 검증한다.",
   "compose config 검증은 secrets, .env*, live external API, DB destructive operation 없이 통과한다.",
-  "Grafana dashboard나 analytics 화면은 포함하지 않고 V1 ingest/map metrics scrape 가능성만 고정한다.",
-  "actuator endpoint exposure는 local/runtime profile 범위로 제한하고 V1 public API spec에 섞이지 않는다.",
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "Grafana dashboard나 analytics 화면은 포함하지 않고 ingest/map metrics scrape 가능성만 고정한다.",
+  "actuator endpoint exposure는 local/runtime profile 범위로 제한하고 public API spec에 섞이지 않는다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
 ]
 first_red_candidates = [
   "LocalRuntimeStackConfigurationTest에서 Prometheus scrape config/profile이 기대되지만 파일 또는 compose service 부재로 실패하는 RED를 만든다.",
@@ -966,37 +966,37 @@ verification_commands = [
 stop_conditions = [
   "Prometheus/Grafana server live 실행, dashboard 설계, analytics 기능이 필요하면 중단하고 별도 slice로 분리한다.",
   "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
   "DB schema, ingest behavior, frontend behavior 변경이 필요하면 별도 slice로 분리한다.",
   "apps/web 변경이 필요하면 별도 frontend slice로 분리한다.",
 ]
 risk_notes = [
   "scrape config는 local developer runtime evidence이며 운영 모니터링 배포를 대체하지 않는다.",
-  "Grafana dashboard와 heavy analytics는 V2 또는 별도 observability slice로 둔다.",
+  "Grafana dashboard와 heavy analytics는 later-scope 또는 별도 observability slice로 둔다.",
   "backend target이 local runtime preset의 backend/infra ownership 안에서 동작한다.",
 ]
 
-[[slices]]
-id = "v1-mvp-final-runtime-smoke"
-title_ko = "V1 MVP final runtime smoke"
+[[items]]
+id = "baseline-baseline-final-runtime-smoke"
+title_ko = "Home Search baseline final runtime smoke"
 pr_type = "Test"
-pr_title_ko = "V1 MVP 최종 런타임 스모크"
-description_ko = "merged main 기준으로 V1 MVP의 backend/web/local runtime evidence를 재확인하고 release handoff용 최종 smoke 결과를 고정한다."
+pr_title_ko = "Home Search baseline 최종 런타임 스모크"
+description_ko = "merged main 기준으로 Home Search baseline의 backend/web/local runtime evidence를 재확인하고 release handoff용 최종 smoke 결과를 고정한다."
 status = "done"
 priority = 140
 targets = "both"
 preset = "runtime-smoke"
 acceptance_criteria = [
-  "origin/main에 반영된 모든 V1 MVP slice 기준으로 backlog 후보가 의도적으로 비어 있거나 이번 final smoke 후보만 남아 있음을 확인한다.",
+  "origin/main에 반영된 모든 Home Search baseline work item 기준으로 worklog 후보가 의도적으로 비어 있거나 이번 final smoke 후보만 남아 있음을 확인한다.",
   "Docker Compose local stack config, backendQualityCheck, frontend test/build, git diff whitespace 검증을 main 기준으로 통과시킨다.",
-  "map/search/region/detail/trade V1 URL 흐름이 deterministic test 또는 local runtime smoke evidence에서 깨지지 않는다는 결과를 남긴다.",
+  "map/search/region/detail/trade public API URL 흐름이 deterministic test 또는 local runtime smoke evidence에서 깨지지 않는다는 결과를 남긴다.",
   "Kakao key, RTMS key, VWorld key 같은 local secret이 없어도 fixture, mocked client, local fallback evidence로 자동 검증을 닫는다.",
   "live Open API 호출, DB destructive operation, main push, PR merge를 자동화하지 않는다.",
-  "V1 public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape를 변경하지 않는다.",
 ]
 first_red_candidates = [
-  "final smoke plan에서 backendQualityCheck, frontend test/build, compose config 중 하나라도 실패하면 MVP readiness가 Fail로 남는 검증 실패를 확인한다.",
-  "V1 URL contract가 map/search/region/detail/trade 흐름 중 하나라도 바뀌면 기존 contract/runtime smoke가 실패해야 한다.",
+  "final smoke plan에서 backendQualityCheck, frontend test/build, compose config 중 하나라도 실패하면 baseline readiness가 Fail로 남는 검증 실패를 확인한다.",
+  "public API URL contract가 map/search/region/detail/trade 흐름 중 하나라도 바뀌면 기존 contract/runtime smoke가 실패해야 한다.",
   "Kakao key 또는 live Open API key가 없다는 이유로 deterministic backend/web 검증 전체가 Fail 처리되면 Partial evidence 분리가 필요하다는 gate 실패를 확인한다.",
 ]
 verification_commands = [

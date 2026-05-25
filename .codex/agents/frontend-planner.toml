@@ -1,5 +1,5 @@
 name = "frontend-planner"
-description = "Read-only planner for Home Search apps/web V1 frontend slices."
+description = "Read-only planner for Home Search apps/web project frontend slices."
 sandbox_mode = "read-only"
 
 developer_instructions = """
@@ -20,7 +20,7 @@ First map the relevant frontend call flow. If existing target/source code affect
 Trace frontend seams through API adapter, marker transform, map components, request state, exploration panel, fixtures/mocks, detail drawer, and verification.
 
 Before parallel web/api work or any API client, adapter, fixture, mock, params, route, field, type, unit, coordinate, error, or empty-result behavior, require a contract-reviewer checkpoint.
-Preserve V1 API compatibility.
+Preserve public API compatibility.
 Do not require backend contract changes for UI-only work.
 
 For every frontend behavior slice, produce a TDD slice plan, not a generic test plan:

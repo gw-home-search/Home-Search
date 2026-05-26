@@ -821,6 +821,49 @@ risk_notes = [
 ]
 
 [[items]]
+id = "coordinate-input-package-layout"
+title_ko = "Coordinate input package layout"
+pr_type = "Feat"
+pr_title_ko = "좌표 입력 패키지 폴더 구조 지원"
+description_ko = "VWorld 좌표 SHP 입력을 기존 flat 폴더와 source/version/sido 패키지 폴더 구조 모두에서 안전하게 탐색하고 evidence로 추적한다."
+status = "done"
+priority = 97
+targets = "backend"
+preset = "coordinate-snapshot-import"
+acceptance_criteria = [
+  "기존 flat coordinate-input/*.shp 입력은 계속 지원한다.",
+  "AL_D010 package layout은 coordinate-input/AL_D010/<YYYYMMDD>/<sido>/AL_D010_<sido>_<YYYYMMDD>*.shp를 지원한다.",
+  "LSMD_CONT_LDREG package layout은 coordinate-input/LSMD_CONT_LDREG/<YYYYMM>/<sido>/LSMD_CONT_LDREG_<region>_<YYYYMM>.shp를 지원한다.",
+  "package layout의 source, version, sido 폴더는 filename에서 파싱한 source format, version token, normalized region code와 일치해야 한다.",
+  ".shx, .dbf, .prj sidecar는 각 .shp와 같은 폴더에 있어야 하며 누락 오류는 HOME_COORDINATE_SHP_DIR 기준 상대경로로 출력한다.",
+  "서로 다른 경로에 같은 SHP basename이 있으면 중복 입력으로 실패한다.",
+  "coordinate_snapshot_run.report_json은 기존 fileNames를 유지하고 relativeFilePaths를 추가해 package layout evidence를 남긴다.",
+  "preflight output과 report_json에는 로컬 절대경로를 노출하지 않는다.",
+  "mixed format, mixed version 기본 금지, 17개 SIDO 기본 요구, PRJ validation, public API contract를 유지한다.",
+]
+first_red_candidates = [
+  "CoordinateImportOpsConfigurationTest에서 bounded package layout, relativeFilePaths evidence, duplicate basename guard 기대를 추가해 기존 maxdepth 1 탐색이 실패하는 RED를 만든다.",
+  "import-vworld-coordinate-snapshot.sh --self-test에 nested package path validation을 추가해 기존 discovery helper 부재로 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "bash apps/api/ops/import-vworld-coordinate-snapshot.sh --self-test",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "실제 DB import, migration execution, active snapshot truncate/insert가 필요하면 중단하고 별도 수동 smoke로 분리한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
+  "apps/web/**, docs/**, Markdown 변경이 필요하면 별도 slice로 분리한다.",
+  "무제한 recursive scan이나 backup/archive 폴더 자동 포함이 필요하면 중단하고 입력 layout 정책을 다시 정한다.",
+]
+risk_notes = [
+  "패키지 폴더명은 운영자가 관리하기 위한 검증 대상이며 importer의 정규 identity는 filename parser 결과를 기준으로 유지한다.",
+  "실제 coordinate-input 데이터는 repository에 저장하지 않고 HOME_COORDINATE_HOST_SHP_DIR로만 전달한다.",
+  "이 slice는 VWorld 좌표 입력 편의성과 evidence를 개선하며 RTMS live ingest나 frontend runtime smoke는 후속 작업에서 검증한다.",
+]
+
+[[items]]
 id = "baseline-observability-ingest-map-metrics"
 title_ko = "Home Search observability ingest map metrics"
 pr_type = "Feat"

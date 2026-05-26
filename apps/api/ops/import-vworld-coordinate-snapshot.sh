@@ -10,6 +10,9 @@ Usage:
 
 Required:
   HOME_COORDINATE_SHP_DIR        Directory containing VWorld SHP files.
+                                  Supports flat files or package layout:
+                                  coordinate-input/AL_D010/<YYYYMMDD>/<sido>/
+                                  coordinate-input/LSMD_CONT_LDREG/<YYYYMM>/<sido>/
 
 Database connection:
   PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD are consumed by psql.
@@ -109,6 +112,21 @@ append_csv_token() {
   fi
 }
 
+source_dir_for_format() {
+  local format="$1"
+  case "${format}" in
+    vworld-al-d010)
+      printf 'AL_D010'
+      ;;
+    vworld-lsmd-cont-ldreg)
+      printf 'LSMD_CONT_LDREG'
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 increment_part_count() {
   local current="$1"
   local region="$2"
@@ -167,6 +185,41 @@ parse_supported_filename() {
   return 1
 }
 
+PACKAGE_LAYOUT_ERROR=""
+
+validate_package_layout() {
+  local relative_path="$1"
+  local base_name="$2"
+  local format="$3"
+  local region_code="$4"
+  local version_token="$5"
+  local source_dir version_dir sido_dir file_name extra expected_source
+  PACKAGE_LAYOUT_ERROR=""
+  if [[ "${relative_path}" == "${base_name}" ]]; then
+    return 0
+  fi
+  IFS="/" read -r source_dir version_dir sido_dir file_name extra <<<"${relative_path}"
+  if [[ -z "${source_dir}" || -z "${version_dir}" || -z "${sido_dir}" || -z "${file_name}" ||
+        -n "${extra}" || "${file_name}" != "${base_name}" ]]; then
+    PACKAGE_LAYOUT_ERROR="unsupported coordinate-input package layout: ${relative_path}. Expected flat file or coordinate-input/AL_D010/<YYYYMMDD>/<sido>/<file>.shp / coordinate-input/LSMD_CONT_LDREG/<YYYYMM>/<sido>/<file>.shp"
+    return 1
+  fi
+  expected_source="$(source_dir_for_format "${format}")"
+  if [[ "${source_dir}" != "${expected_source}" ]]; then
+    PACKAGE_LAYOUT_ERROR="coordinate-input package source mismatch for ${relative_path}: expected ${expected_source}, got ${source_dir}"
+    return 1
+  fi
+  if [[ "${version_dir}" != "${version_token}" ]]; then
+    PACKAGE_LAYOUT_ERROR="coordinate-input package version mismatch for ${relative_path}: expected ${version_token}, got ${version_dir}"
+    return 1
+  fi
+  if [[ "${sido_dir}" != "${region_code}" ]]; then
+    PACKAGE_LAYOUT_ERROR="coordinate-input package SIDO mismatch for ${relative_path}: expected ${region_code}, got ${sido_dir}"
+    return 1
+  fi
+  return 0
+}
+
 assert_parse_supported_filename() {
   local file_name="$1"
   local expected_format="$2"
@@ -184,6 +237,34 @@ assert_parse_supported_filename() {
   fi
 }
 
+assert_package_layout() {
+  local relative_path="$1"
+  local base_name
+  base_name="$(basename "${relative_path}")"
+  if ! parse_supported_filename "${base_name}"; then
+    echo "self-test failed: parser rejected package path ${relative_path}" >&2
+    exit 1
+  fi
+  if ! validate_package_layout "${relative_path}" "${base_name}" "${PARSED_FORMAT}" "${PARSED_REGION_CODE}" "${PARSED_VERSION_TOKEN}"; then
+    echo "self-test failed: package layout rejected ${relative_path}: ${PACKAGE_LAYOUT_ERROR}" >&2
+    exit 1
+  fi
+}
+
+assert_rejected_package_layout() {
+  local relative_path="$1"
+  local base_name
+  base_name="$(basename "${relative_path}")"
+  if ! parse_supported_filename "${base_name}"; then
+    echo "self-test failed: parser rejected rejection fixture ${relative_path}" >&2
+    exit 1
+  fi
+  if validate_package_layout "${relative_path}" "${base_name}" "${PARSED_FORMAT}" "${PARSED_REGION_CODE}" "${PARSED_VERSION_TOKEN}"; then
+    echo "self-test failed: invalid package layout was accepted: ${relative_path}" >&2
+    exit 1
+  fi
+}
+
 run_self_test() {
   assert_parse_supported_filename "LSMD_CONT_LDREG_11_202512.shp" "vworld-lsmd-cont-ldreg" "11" "202512"
   assert_parse_supported_filename "LSMD_CONT_LDREG_36110_202512.shp" "vworld-lsmd-cont-ldreg" "36" "202512"
@@ -194,6 +275,13 @@ run_self_test() {
     exit 1
   fi
   echo "self-test passed: VWorld coordinate snapshot importer parser"
+  assert_package_layout "AL_D010_11_20251204.shp"
+  assert_package_layout "AL_D010/20251204/11/AL_D010_11_20251204.shp"
+  assert_package_layout "AL_D010/20251204/41/AL_D010_41_20251204(3).shp"
+  assert_package_layout "LSMD_CONT_LDREG/202512/36/LSMD_CONT_LDREG_36110_202512.shp"
+  assert_rejected_package_layout "AL_D010/20251205/11/AL_D010_11_20251204.shp"
+  assert_rejected_package_layout "backup/AL_D010/20251204/11/AL_D010_11_20251204.shp"
+  echo "self-test passed: VWorld coordinate snapshot importer package layout"
 }
 
 if [[ "${SELF_TEST}" == "true" ]]; then
@@ -293,6 +381,81 @@ validate_file_columns() {
       ;;
   esac
 }
+
+discover_shp_files() {
+  SHP_FILES=()
+  SHP_RELATIVE_PATHS=()
+  local -a candidate_paths=()
+  local file relative_path base_name duplicate_basenames seen_basenames
+  duplicate_basenames=""
+  seen_basenames=""
+
+  case "${INPUT_FORMAT}" in
+    auto)
+      while IFS= read -r file; do
+        [[ -n "${file}" ]] && candidate_paths+=("${file#${SHP_DIR}/}")
+      done < <(find "${SHP_DIR}" -maxdepth 1 -type f \( -name 'LSMD_CONT_LDREG_*.shp' -o -name 'AL_D010_*.shp' \))
+      ;;
+    vworld-al-d010)
+      while IFS= read -r file; do
+        [[ -n "${file}" ]] && candidate_paths+=("${file#${SHP_DIR}/}")
+      done < <(find "${SHP_DIR}" -maxdepth 1 -type f -name 'AL_D010_*.shp')
+      ;;
+    vworld-lsmd-cont-ldreg)
+      while IFS= read -r file; do
+        [[ -n "${file}" ]] && candidate_paths+=("${file#${SHP_DIR}/}")
+      done < <(find "${SHP_DIR}" -maxdepth 1 -type f -name 'LSMD_CONT_LDREG_*.shp')
+      ;;
+  esac
+
+  if [[ "${INPUT_FORMAT}" == "auto" || "${INPUT_FORMAT}" == "vworld-al-d010" ]]; then
+    if [[ -d "${SHP_DIR}/AL_D010" ]]; then
+      while IFS= read -r file; do
+        [[ -n "${file}" ]] && candidate_paths+=("${file#${SHP_DIR}/}")
+      done < <(find "${SHP_DIR}/AL_D010" -mindepth 3 -maxdepth 3 -type f -name 'AL_D010_*.shp')
+    fi
+  fi
+  if [[ "${INPUT_FORMAT}" == "auto" || "${INPUT_FORMAT}" == "vworld-lsmd-cont-ldreg" ]]; then
+    if [[ -d "${SHP_DIR}/LSMD_CONT_LDREG" ]]; then
+      while IFS= read -r file; do
+        [[ -n "${file}" ]] && candidate_paths+=("${file#${SHP_DIR}/}")
+      done < <(find "${SHP_DIR}/LSMD_CONT_LDREG" -mindepth 3 -maxdepth 3 -type f -name 'LSMD_CONT_LDREG_*.shp')
+    fi
+  fi
+
+  if [[ "${#candidate_paths[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  while IFS= read -r relative_path; do
+    [[ -n "${relative_path}" ]] || continue
+    base_name="$(basename "${relative_path}")"
+    if ! parse_supported_filename "${base_name}"; then
+      echo "ERROR: unexpected VWorld cadastral filename: ${base_name}" >&2
+      exit 2
+    fi
+    if [[ "${INPUT_FORMAT}" != "auto" && "${PARSED_FORMAT}" != "${INPUT_FORMAT}" ]]; then
+      echo "ERROR: ${base_name} does not match HOME_COORDINATE_INPUT_FORMAT=${INPUT_FORMAT}" >&2
+      exit 2
+    fi
+    if ! validate_package_layout "${relative_path}" "${base_name}" "${PARSED_FORMAT}" "${PARSED_REGION_CODE}" "${PARSED_VERSION_TOKEN}"; then
+      echo "ERROR: ${PACKAGE_LAYOUT_ERROR}" >&2
+      exit 2
+    fi
+    if contains_token "${seen_basenames}" "${base_name}"; then
+      duplicate_basenames="$(append_unique_token "${duplicate_basenames}" "${base_name}")"
+      continue
+    fi
+    seen_basenames="$(append_unique_token "${seen_basenames}" "${base_name}")"
+    SHP_RELATIVE_PATHS+=("${relative_path}")
+    SHP_FILES+=("${SHP_DIR}/${relative_path}")
+  done < <(printf '%s\n' "${candidate_paths[@]}" | sort)
+
+  if [[ -n "${duplicate_basenames}" ]]; then
+    echo "ERROR: duplicate SHP basenames in coordinate input: ${duplicate_basenames}" >&2
+    exit 2
+  fi
+}
 trap release_lock EXIT
 
 mark_failed() {
@@ -338,20 +501,8 @@ SQL
 }
 
 SHP_FILES=()
-case "${INPUT_FORMAT}" in
-  auto)
-    find_expr=(find "${SHP_DIR}" -maxdepth 1 -type f \( -name 'LSMD_CONT_LDREG_*.shp' -o -name 'AL_D010_*.shp' \))
-    ;;
-  vworld-al-d010)
-    find_expr=(find "${SHP_DIR}" -maxdepth 1 -type f -name 'AL_D010_*.shp')
-    ;;
-  vworld-lsmd-cont-ldreg)
-    find_expr=(find "${SHP_DIR}" -maxdepth 1 -type f -name 'LSMD_CONT_LDREG_*.shp')
-    ;;
-esac
-while IFS= read -r file; do
-  [[ -n "${file}" ]] && SHP_FILES+=("${file}")
-done < <("${find_expr[@]}" | sort)
+SHP_RELATIVE_PATHS=()
+discover_shp_files
 
 if [[ "${#SHP_FILES[@]}" -eq 0 ]]; then
   echo "ERROR: no VWorld coordinate SHP files found in ${SHP_DIR} for input format ${INPUT_FORMAT}. Expected LSMD_CONT_LDREG_*.shp or AL_D010_*.shp." >&2
@@ -363,10 +514,15 @@ seen_regions=""
 seen_versions=""
 seen_formats=""
 file_names=""
+relative_file_paths=""
 part_counts=""
 missing_sidecars=""
+file_index=0
 for file in "${SHP_FILES[@]}"; do
+  relative_path="${SHP_RELATIVE_PATHS[$file_index]}"
+  file_index="$((file_index + 1))"
   base_name="$(basename "${file}")"
+  file_has_missing_sidecar="false"
   if ! parse_supported_filename "${base_name}"; then
     echo "ERROR: unexpected VWorld cadastral filename: ${base_name}" >&2
     exit 2
@@ -382,15 +538,22 @@ for file in "${SHP_FILES[@]}"; do
   seen_versions="$(append_unique_token "${seen_versions}" "${version_token}")"
   seen_formats="$(append_unique_token "${seen_formats}" "${PARSED_FORMAT}")"
   file_names="$(append_csv_token "${file_names}" "${base_name}")"
+  relative_file_paths="$(append_csv_token "${relative_file_paths}" "${relative_path}")"
   part_counts="$(increment_part_count "${part_counts}" "${region_code}")"
 
   for sidecar_ext in shx dbf prj; do
     if [[ ! -f "${file%.shp}.${sidecar_ext}" ]]; then
-      missing_sidecars="${missing_sidecars}${base_name%.shp}.${sidecar_ext} "
+      missing_sidecars="${missing_sidecars}${relative_path%.shp}.${sidecar_ext} "
+      file_has_missing_sidecar="true"
     fi
   done
-  validate_prj_for_source_srid "${file%.shp}.prj" "${base_name}"
-  validate_file_columns "${file}" "${PARSED_FORMAT}" "${base_name}"
+  if [[ "${file_has_missing_sidecar}" == "true" ]]; then
+    continue
+  fi
+  if [[ -f "${file%.shp}.prj" ]]; then
+    validate_prj_for_source_srid "${file%.shp}.prj" "${relative_path}"
+  fi
+  validate_file_columns "${file}" "${PARSED_FORMAT}" "${relative_path}"
 done
 
 if [[ -n "${missing_sidecars}" ]]; then
@@ -427,7 +590,7 @@ REGION_COUNT="$(wc -w <<<"${seen_regions}" | tr -d ' ')"
 SOURCE_FORMAT="${seen_formats}"
 
 if [[ "${PRE_FLIGHT_ONLY}" == "true" ]]; then
-  echo "coordinate snapshot preflight passed: source_format=${SOURCE_FORMAT}, version=${SNAPSHOT_VERSION}, files=${FILE_COUNT}, regions=${seen_regions}, expected_regions=${EXPECTED_REGIONS}, part_counts=${part_counts}"
+  echo "coordinate snapshot preflight passed: source_format=${SOURCE_FORMAT}, version=${SNAPSHOT_VERSION}, files=${FILE_COUNT}, regions=${seen_regions}, expected_regions=${EXPECTED_REGIONS}, part_counts=${part_counts}, relative_file_paths=${relative_file_paths}"
   exit 0
 fi
 
@@ -652,6 +815,7 @@ if [[ "${SYNC_PARCEL}" == "true" ]]; then
 	    -v missing_regions="${missing_regions}" \
 	    -v source_format="${SOURCE_FORMAT}" \
 	    -v file_names="${file_names}" \
+	    -v relative_file_paths="${relative_file_paths}" \
 	    -v part_counts="${part_counts}" \
 	    -v source_srid="${SRC_SRID}" \
 	    -v target_srid="${DST_SRID}" \
@@ -716,6 +880,7 @@ SET status = 'PASSED',
         'seenRegions', :'seen_regions',
         'missingRegions', :'missing_regions',
         'fileNames', to_jsonb(string_to_array(:'file_names', ',')),
+        'relativeFilePaths', to_jsonb(string_to_array(:'relative_file_paths', ',')),
         'partCounts', :'part_counts',
         'sourceSrid', (:'source_srid')::integer,
         'targetSrid', (:'target_srid')::integer,
@@ -741,6 +906,7 @@ else
 	    -v missing_regions="${missing_regions}" \
 	    -v source_format="${SOURCE_FORMAT}" \
 	    -v file_names="${file_names}" \
+	    -v relative_file_paths="${relative_file_paths}" \
 	    -v part_counts="${part_counts}" \
 	    -v source_srid="${SRC_SRID}" \
 	    -v target_srid="${DST_SRID}" \
@@ -791,6 +957,7 @@ SET status = 'PASSED',
         'seenRegions', :'seen_regions',
         'missingRegions', :'missing_regions',
         'fileNames', to_jsonb(string_to_array(:'file_names', ',')),
+        'relativeFilePaths', to_jsonb(string_to_array(:'relative_file_paths', ',')),
         'partCounts', :'part_counts',
         'sourceSrid', (:'source_srid')::integer,
         'targetSrid', (:'target_srid')::integer,

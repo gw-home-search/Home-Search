@@ -284,6 +284,20 @@ run_self_test() {
   echo "self-test passed: VWorld coordinate snapshot importer package layout"
 }
 
+ensure_shp2pgsql_runtime() {
+  if command -v shp2pgsql >/dev/null 2>&1 && shp2pgsql >/dev/null 2>&1; then
+    return 0
+  fi
+  if command -v apk >/dev/null 2>&1 && [[ "$(id -u)" == "0" ]]; then
+    echo "INFO: installing gettext-libs for shp2pgsql runtime" >&2
+    apk add --no-cache gettext-libs >/dev/null
+  fi
+  if ! command -v shp2pgsql >/dev/null 2>&1 || ! shp2pgsql >/dev/null 2>&1; then
+    echo "ERROR: shp2pgsql is required on PATH and must be executable" >&2
+    exit 2
+  fi
+}
+
 if [[ "${SELF_TEST}" == "true" ]]; then
   run_self_test
   exit 0
@@ -306,10 +320,7 @@ if [[ ! -d "${SHP_DIR}" ]]; then
   exit 2
 fi
 
-if ! command -v shp2pgsql >/dev/null 2>&1; then
-  echo "ERROR: shp2pgsql is required on PATH" >&2
-  exit 2
-fi
+ensure_shp2pgsql_runtime
 if [[ "${PRE_FLIGHT_ONLY}" != "true" ]] && ! command -v psql >/dev/null 2>&1; then
   echo "ERROR: psql is required on PATH" >&2
   exit 2
@@ -606,7 +617,7 @@ fi
 
 acquire_lock
 
-RUN_ID="$("${PSQL[@]}" -At \
+RUN_ID="$("${PSQL[@]}" -q -At \
   -v snapshot_version="${SNAPSHOT_VERSION}" \
   -v source_dir="${SHP_DIR}" \
   -v source_srid="${SRC_SRID}" \
@@ -628,6 +639,10 @@ VALUES (
 RETURNING id;
 SQL
 )"
+if [[ ! "${RUN_ID}" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: coordinate_snapshot_run id must be numeric, got: ${RUN_ID}" >&2
+  exit 2
+fi
 
 echo "coordinate snapshot import started: run_id=${RUN_ID}, version=${SNAPSHOT_VERSION}, files=${FILE_COUNT}"
 

@@ -71,6 +71,24 @@ class CoordinateImportOpsConfigurationTest {
 	}
 
 	@Test
+	@DisplayName("coordinate import script는 bounded package layout과 상대경로 evidence를 지원한다")
+	void coordinateImportScriptSupportsBoundedPackageLayoutAndRelativePathEvidence() throws IOException {
+		assertThat(COORDINATE_IMPORT_SCRIPT).exists();
+
+		String content = Files.readString(COORDINATE_IMPORT_SCRIPT);
+
+		assertThat(content).contains("discover_shp_files");
+		assertThat(content).contains("validate_package_layout");
+		assertThat(content).contains("SHP_RELATIVE_PATHS");
+		assertThat(content).contains("relativeFilePaths");
+		assertThat(content).contains("duplicate SHP basenames");
+		assertThat(content).contains("coordinate-input/AL_D010/<YYYYMMDD>/<sido>");
+		assertThat(content).contains("coordinate-input/LSMD_CONT_LDREG/<YYYYMM>/<sido>");
+		assertThat(content).contains("self-test passed: VWorld coordinate snapshot importer package layout");
+		assertThat(content).doesNotContain("find_expr=");
+	}
+
+	@Test
 	@DisplayName("coordinate full import smoke verifier는 최신 passed snapshot evidence를 확인한다")
 	void coordinateFullImportSmokeVerifierChecksLatestPassedSnapshotEvidence() throws IOException {
 		assertThat(COORDINATE_SMOKE_SCRIPT).exists();

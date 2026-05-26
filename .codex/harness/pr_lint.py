@@ -79,6 +79,7 @@ CHECKLIST_ITEMS = [
     "secrets 저장 없음",
 ]
 TITLE_TYPES = ("Feat", "Fix", "Chore", "Docs", "Test", "Refactor")
+INTEGRATION_BRANCH_RE = re.compile(r"feat/.+-integration")
 
 API_TEST = API_QUALITY
 COVERAGE_LINE_RE = re.compile(r"^\s*Coverage:\s*>=\s*90%\s*$", re.MULTILINE)
@@ -311,11 +312,13 @@ def check_title(title: str, errors: list[LintMessage]) -> None:
 
 
 def check_branch(base: str, head: str, draft: bool, errors: list[LintMessage]) -> None:
-    if base != "main":
-        add(errors, "branch", "base branch는 main이어야 합니다")
+    if base != "main" and not INTEGRATION_BRANCH_RE.fullmatch(base or ""):
+        add(errors, "branch", "base branch는 main 또는 feat/*-integration이어야 합니다")
+    if base and head and base == head:
+        add(errors, "branch", "base branch와 head branch는 같을 수 없습니다")
     if head in {"main", "master"}:
         add(errors, "branch", "head branch는 main/master일 수 없습니다")
-    if not re.fullmatch(r"feat/.+-integration", head or ""):
+    if not INTEGRATION_BRANCH_RE.fullmatch(head or ""):
         add(errors, "branch", "head branch는 feat/*-integration 형식이어야 합니다")
     if not draft:
         add(errors, "branch", "PR은 draft여야 합니다")
@@ -741,6 +744,12 @@ def run_self_test() -> int:
     pass_with_open_risk = valid_input(body=valid_body(risk="미확인 gate 위험이 남아 있습니다."))
     non_draft = valid_input(draft=False)
     non_integration_head = valid_input(head="feat/pr-lint-hardening")
+    stacked_draft = valid_input(base="feat/coordinate-input-package-layout-integration")
+    unsupported_base = valid_input(base="release/coordinate-import")
+    same_base_and_head = valid_input(
+        base="feat/pr-lint-hardening-integration",
+        head="feat/pr-lint-hardening-integration",
+    )
     bracket_title = valid_input(title="[Feat] 한글 제목 규칙 정리")
     bracket_without_korean = valid_input(title="[Feat] English summary")
     forbidden_env = valid_input(changed_files=(".env.local",))
@@ -776,6 +785,9 @@ def run_self_test() -> int:
         expect_case("pass with open risk", pass_with_open_risk, "evidence", "미확인"),
         expect_case("non-draft PR", non_draft, "branch", "draft"),
         expect_case("non-integration head", non_integration_head, "branch", "feat/*-integration"),
+        lint_pr(stacked_draft).ok,
+        expect_case("unsupported base", unsupported_base, "branch", "base branch"),
+        expect_case("same base and head", same_base_and_head, "branch", "같을 수 없습니다"),
         lint_pr(bracket_title).ok,
         expect_case("bracket title requires Korean", bracket_without_korean, "title", "한글"),
         expect_case("forbidden env path", forbidden_env, "changed-files", ".env"),

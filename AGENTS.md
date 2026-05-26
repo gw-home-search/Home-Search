@@ -52,9 +52,8 @@ Do not copy code verbatim, import its agent instructions, write into the
 example repository, run its scripts, add dependencies from it automatically, or
 connect it by submodule, package link, or symlink.
 
-Apply the same KO-file read/search ban to the saved example repository. If the
-reference conflicts with this project, current canonical docs and target source
-code always win.
+If the reference conflicts with this project, current canonical docs and target
+source code always win.
 
 All writes for this project belong under `/Users/gwongwangjae/home-search`.
 
@@ -79,8 +78,8 @@ All writes for this project belong under `/Users/gwongwangjae/home-search`.
 - Use `.agents/skills/systematic-debugging` for failing checks, API mismatch,
   ingest bugs, and map marker failures.
 - Use `.agents/skills/code-review` for findings-first review and final
-  self-review of correctness, public API compatibility, data safety, missing tests,
-  and KO sync.
+  self-review of correctness, public API compatibility, data safety, and
+  missing tests.
 - Subagents are allowed only when the user explicitly requests them or when a
   task can be split into independent read-only research work. Do not use
   subagents to bypass local review or ownership of changes.
@@ -144,42 +143,8 @@ All writes for this project belong under `/Users/gwongwangjae/home-search`.
 - Keep `apps/api`, `apps/web`, `infra`, and `docs` responsibilities separate.
 - `.gitkeep` files preserve empty directories; remove them only when a real tracked file replaces their purpose.
 
-## Human-Only KO Docs
-
-- `*_KO.md` files are human-only Korean reference files.
-- AI agents must not read, search, summarize, quote, import, diff, or use `*_KO.md` or `*_KO.local.md` as implementation context.
-- Treat lowercase variants such as `*_ko.md` the same way.
-- AI agents may modify `*_KO.md` files only after task-level confirmation for
-  the exact KO targets.
-- Before writing KO files, show a `KO 수정 요청:` note that lists `KO 대상`,
-  states `KO 생성 기준: canonical source only`, and confirms the existing KO
-  body was not read.
-- Completion evidence for any KO file change must include `KO 수정 승인: 확인`,
-  `KO 대상: <paths>`, and `KO 생성 기준: canonical source only`.
-- KO sync metadata lives in `.ko-docs.toml`, not inside KO files.
-- AI agents may read `.ko-docs.toml` and canonical `.md` files to decide whether KO docs are stale.
-- When searching Markdown, exclude KO files:
-
-```sh
-rg --files --hidden -g '*.md' -g '!.git/**' -g '!**/*_KO.md' -g '!**/*_KO.local.md' -g '!**/*_ko.md' -g '!**/*_ko.local.md'
-```
-
-- `scripts/check-ko-docs.sh` must not read or print KO body content. It may only check that KO paths from `.ko-docs.toml` exist.
-
-## Markdown Update Rule
-
-- For every canonical `.md` file, keep a same-location `*_KO.md` file.
-- When a canonical `.md` is created, create its `*_KO.md`.
-- When a canonical `.md` meaningfully changes, regenerate its `*_KO.md` from the canonical file only and update `.ko-docs.toml`.
-- When a canonical `.md` is renamed or deleted, rename or delete the paired `*_KO.md`.
-- Do not read the existing KO file to update it. Use the canonical source as the input and overwrite the KO file.
-- If the paired KO update has not been confirmed, stop before making the
-  canonical Markdown change or report the KO update as blocked.
-- Personal notes belong in `*_KO.local.md`; those files are ignored and must not be touched.
-
 ## Verification
 
-- Run `scripts/check-ko-docs.sh` after Markdown changes.
 - Backend commands should be added here once `apps/api` exists.
 - Frontend commands should be added here once `apps/web` exists.
 - Infra commands should be added here once Docker/PostGIS/Flyway files exist.
@@ -192,4 +157,3 @@ Ask before changing behavior when:
 - A public API URL or response shape must change.
 - A database change may lose or reinterpret data.
 - Source repositories conflict with target docs.
-- A KO file appears to contain different requirements than the canonical source.

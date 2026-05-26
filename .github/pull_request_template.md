@@ -29,7 +29,6 @@
 - `python3 .codex/harness/user_language_check.py --self-test` = not run (사유)
 - `python3 .codex/hooks/stop_verification_gate.py --self-test` = not run (사유)
 - `python3 .codex/hooks/post_tool_use_review.py --self-test` = not run (사유)
-- `bash scripts/check-ko-docs.sh` = not run (사유)
 
 Coverage: >=90%
 Docs/OpenAPI: generated + verified
@@ -41,12 +40,6 @@ Docs/OpenAPI: generated + verified
 <!-- 또는: 영향 있음: <요약> -->
 
 contract-reviewer:
-
-## KO 문서 변경
-
-KO 수정 승인: 해당 없음
-KO 대상: 해당 없음
-KO 생성 기준: 해당 없음
 
 ## 주요 위험
 

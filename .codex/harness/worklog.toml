@@ -821,6 +821,45 @@ risk_notes = [
 ]
 
 [[items]]
+id = "coordinate-snapshot-storage-verification"
+title_ko = "Coordinate snapshot storage verification"
+pr_type = "Test"
+pr_title_ko = "좌표 snapshot 저장 검증 compose smoke"
+description_ko = "VWorld 연속지적도 full input을 local PostGIS coordinate snapshot table에 저장하고 compose verifier로 최신 PASSED run과 active snapshot 품질을 확인한다."
+status = "done"
+priority = 96
+targets = "backend"
+preset = "coordinate-snapshot-import"
+acceptance_criteria = [
+  "compose coordinate-importer는 bash, psql, shp2pgsql를 모두 가진 image로 실행된다.",
+  "compose preflight가 LSMD_CONT_LDREG/202605 17개 SIDO package layout을 통과한다.",
+  "local full import 후 최신 coordinate_snapshot_run.status = PASSED를 확인한다.",
+  "active reference.parcel_coordinate_snapshot row count가 latest run pnu_count와 일치한다.",
+  "seenRegions와 active region_code가 17개 SIDO를 모두 포함하고 missingRegions는 비어 있다.",
+  "latitude/longitude 범위, point/geom SRID=4326, valid geometry를 verifier가 검증한다.",
+]
+first_red_candidates = [
+  "CoordinateImportOpsConfigurationTest에서 alpine tool image, explicit platform, coordinate-smoke-verifier service를 기대해 현재 compose가 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "bash apps/api/ops/import-vworld-coordinate-snapshot.sh --self-test",
+  "bash apps/api/ops/verify-coordinate-snapshot-smoke.sh --self-test",
+  "docker compose --profile coordinate-import -f infra/docker-compose.local.yml -f apps/api/ops/docker-compose.coordinate-import.yml config",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "remote DB 연결, production DB import, DB schema 변경, public API 변경, frontend 변경이 필요하면 중단한다.",
+  "coordinate-input/, .env*, secrets, DB dump, raw SHP payload를 Git에 올려야 하면 중단한다.",
+  "HOME_COORDINATE_REQUIRE_SYNC_PARCEL=true가 기본값으로 필요하면 local seed 상태를 먼저 확인하고 별도 수동 검증으로 분리한다.",
+]
+risk_notes = [
+  "17GB full import는 PR 자동 검증에서 실행하지 않고 local manual smoke evidence로만 분리한다.",
+  "compose verifier는 SHP mount 없이 DB에 저장된 latest PASSED snapshot과 active snapshot table만 읽는다.",
+  "backend-only slice이므로 apps/web/**는 건드리지 않는다.",
+]
+
+[[items]]
 id = "coordinate-input-package-layout"
 title_ko = "Coordinate input package layout"
 pr_type = "Feat"

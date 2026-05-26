@@ -2,7 +2,8 @@ name: home-search-local
 
 services:
   coordinate-importer:
-    image: postgis/postgis:16-3.4
+    image: postgis/postgis:16-3.4-alpine
+    platform: ${HOME_COORDINATE_IMPORT_PLATFORM:-linux/amd64}
     container_name: home-search-coordinate-importer
     profiles:
       - coordinate-import
@@ -31,5 +32,30 @@ services:
     volumes:
       - ${HOME_SEARCH_REPO_DIR:-..}:/workspace:ro
       - ${HOME_COORDINATE_HOST_SHP_DIR:-../coordinate-input}:/coordinate-input:ro
+    networks:
+      - home-search-local
+
+  coordinate-smoke-verifier:
+    image: postgis/postgis:16-3.4-alpine
+    platform: ${HOME_COORDINATE_IMPORT_PLATFORM:-linux/amd64}
+    container_name: home-search-coordinate-smoke-verifier
+    profiles:
+      - coordinate-import
+    depends_on:
+      postgis:
+        condition: service_healthy
+    working_dir: /workspace/apps/api
+    entrypoint: ["bash", "/workspace/apps/api/ops/verify-coordinate-snapshot-smoke.sh"]
+    environment:
+      PGHOST: postgis
+      PGPORT: "5432"
+      PGDATABASE: ${HOME_SEARCH_DB_NAME:-home_search}
+      PGUSER: ${HOME_SEARCH_DB_USERNAME:-home_search}
+      PGPASSWORD: ${HOME_SEARCH_DB_PASSWORD:-home_search_local_password}
+      HOME_COORDINATE_EXPECTED_REGIONS: ${HOME_COORDINATE_EXPECTED_REGIONS:-}
+      HOME_COORDINATE_MIN_PNU_COUNT: ${HOME_COORDINATE_MIN_PNU_COUNT:-1}
+      HOME_COORDINATE_REQUIRE_SYNC_PARCEL: ${HOME_COORDINATE_REQUIRE_SYNC_PARCEL:-false}
+    volumes:
+      - ${HOME_SEARCH_REPO_DIR:-..}:/workspace:ro
     networks:
       - home-search-local

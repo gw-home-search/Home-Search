@@ -591,7 +591,7 @@ You are running pass {pass_number} of an exactly {total_passes}-pass recursive L
 
 Rules:
 - Read-only planning only. Do not edit files, create branches, create worktrees, commit, push, open PRs, or run product verification.
-- Do not read, search, summarize, quote, or use `*_KO.md`, `*_KO.local.md`, lowercase variants, or `/Users/gwongwangjae/saved-ai-exam`.
+- Do not read, search, summarize, quote, or use `/Users/gwongwangjae/saved-ai-exam`.
 - Use the seed JSON and previous pass output below as the planning context.
 - Pass 1 must produce a revised execution plan from the seed plan.
 - Pass 2 must critique pass 1 and produce a revised plan.

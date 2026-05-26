@@ -27,8 +27,6 @@ behavior tests, or `code-review` for final findings.
 - Design skill work: `.agents/skills/home-search-design/**`.
 - Frontend design implementation work: `apps/web/**`, only when the user asks
   for frontend changes and `frontend-web` rules are also followed.
-- KO companion and manifest work only when the task explicitly includes those
-  exact targets.
 
 ## Design Role
 
@@ -99,4 +97,3 @@ Use Korean-first concise review labels:
 - `검증 근거 확인`
 - `검증 공백`
 - `잔여 위험`
-- `KO sync 상태`

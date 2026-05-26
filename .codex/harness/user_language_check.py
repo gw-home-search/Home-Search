@@ -40,8 +40,6 @@ REQUIRED_SNIPPETS = {
         "예상 RED 실패:",
         "최소 GREEN:",
         "## 계약 영향",
-        "KO 수정 승인:",
-        "KO 생성 기준:",
     ],
     ".codex/harness/pr_body_check.py": [
         "## 사용 skill",
@@ -50,7 +48,6 @@ REQUIRED_SNIPPETS = {
         "예상 RED 실패:",
         "최소 GREEN:",
         "## 계약 영향",
-        "## KO 문서 변경",
     ],
     ".codex/harness/pr_lint.py": [
         "## 사용 skill",
@@ -59,8 +56,6 @@ REQUIRED_SNIPPETS = {
         "예상 RED 실패:",
         "최소 GREEN:",
         "## 계약 영향",
-        "KO 수정 승인:",
-        "KO 생성 기준:",
     ],
     ".codex/harness/home_report.py": [
         "# Home Search 작업 보고서",
@@ -70,7 +65,6 @@ REQUIRED_SNIPPETS = {
         "예상 RED 실패:",
         "최소 GREEN:",
         "## 계약 영향",
-        "## KO 문서 변경",
     ],
     ".codex/hooks/stop_verification_gate.py": ["최초 RED", "예상 RED 실패", "최소 GREEN"],
     ".codex/harness/prompts/backend_execute.md": ["Skill routing:", "Final user-facing evidence labels:", "최초 RED:", "예상 RED 실패:", "최소 GREEN:"],
@@ -108,11 +102,6 @@ class Violation:
     pattern: str
 
 
-def is_ko_path(path: Path) -> bool:
-    lowered = path.name.lower()
-    return lowered.endswith("_ko.md") or lowered.endswith("_ko.local.md")
-
-
 def rel(path: Path) -> str:
     return path.relative_to(REPO_ROOT).as_posix()
 
@@ -121,7 +110,7 @@ def iter_target_files() -> list[Path]:
     files: set[Path] = set()
     for raw in USER_VISIBLE_FILES + PROMPT_FILES:
         path = REPO_ROOT / raw
-        if path.exists() and not is_ko_path(path):
+        if path.exists():
             files.add(path)
     return sorted(files)
 

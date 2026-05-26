@@ -5,7 +5,7 @@ slice_patterns = ["backend-quality", "quality-docs", "docs-foundation"]
 
 [targets.backend]
 prompt = "backend_execute.md"
-allowed_scope = "apps/api/**, .codex/harness/**, .codex/hooks/**, .github/**, .ko-docs.toml"
+allowed_scope = "apps/api/**, .codex/harness/**, .codex/hooks/**, .github/**"
 forbidden_scope = "apps/web/**"
 verification_commands = [
   "cd apps/api && ./gradlew backendQualityCheck",

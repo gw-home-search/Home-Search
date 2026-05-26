@@ -33,14 +33,13 @@ IGNORED_PARTS = {
 
 SUCCESS_RE = re.compile(
     r"(Process exited with code 0|exit(?:_| )code[\"']?\s*[:=]\s*0|\bBUILD SUCCESSFUL\b|"
-    r"\btests? passed\b|KO docs manifest is synchronized|=\s*pass\b)",
+    r"\btests? passed\b|=\s*pass\b)",
     re.IGNORECASE,
 )
 
 BACKEND_TEST_RE = re.compile(r"(\./gradlew|gradle)\s+(test|verify)\b")
 BACKEND_QUALITY_RE = re.compile(r"(\./gradlew|gradle)\s+backendQualityCheck\b")
 FRONTEND_TEST_RE = re.compile(r"npm\s+run\s+(test|build)\b")
-KO_CHECK_RE = re.compile(r"bash\s+scripts/check-ko-docs\.sh\b")
 COVERAGE_EVIDENCE_RE = re.compile(
     r"(Coverage\s*:\s*>=?\s*90%|coverageCheck\b.*=\s*pass|jacocoTestCoverageVerification\b.*=\s*pass)",
     re.IGNORECASE,
@@ -240,23 +239,7 @@ def has_short_korean_review(text: str) -> bool:
 
 
 def is_markdown(path: str) -> bool:
-    lowered = path.lower()
-    return lowered.endswith(".md") and not lowered.endswith(("_ko.md", "_ko.local.md"))
-
-
-def is_ko_doc(path: str) -> bool:
-    lowered = path.lower()
-    return lowered.endswith("_ko.md") and not lowered.endswith("_ko.local.md")
-
-
-def has_ko_approval_evidence(text: str, ko_paths: list[str]) -> bool:
-    if not ko_paths:
-        return True
-    if not re.search(r"KO 수정 승인\s*:\s*확인", text):
-        return False
-    if "KO 생성 기준: canonical source only" not in text:
-        return False
-    return all(path in text for path in ko_paths)
+    return path.lower().endswith(".md")
 
 
 def is_contract_related(path: str) -> bool:
@@ -323,17 +306,6 @@ def missing_evidence(files: list[str], text: str) -> list[str]:
         if not has_short_korean_review(text):
             missing.append("짧은 한글 리뷰 형식 필요")
 
-    if any(is_markdown(path) for path in files):
-        if not has_successful_command(text, KO_CHECK_RE):
-            missing.append("Markdown 변경: bash scripts/check-ko-docs.sh evidence 필요")
-
-    ko_paths = sorted(path for path in files if is_ko_doc(path))
-    if ko_paths:
-        if not has_successful_command(text, KO_CHECK_RE):
-            missing.append("KO 문서 변경: bash scripts/check-ko-docs.sh evidence 필요")
-        if not has_ko_approval_evidence(text, ko_paths):
-            missing.append("KO 문서 변경: KO 수정 승인/대상/canonical source only evidence 필요")
-
     return missing
 
 
@@ -388,10 +360,7 @@ def run_self_test() -> int:
             ]
         ),
     )
-    markdown_complete = missing_evidence(
-        [".codex/harness/home"],
-        "검증: bash scripts/check-ko-docs.sh = pass",
-    )
+    markdown_complete = missing_evidence([".codex/harness/home"], "검증: git diff --check = pass")
     missing_backend_quality = missing_evidence(
         ["apps/api/src/main/java/com/home/App.java"],
         "\n".join(
@@ -425,31 +394,13 @@ def run_self_test() -> int:
             ]
         ),
     )
-    ko_missing_approval = missing_evidence(
-        ["AGENTS_KO.md"],
-        "검증: bash scripts/check-ko-docs.sh = pass",
-    )
-    ko_complete = missing_evidence(
-        ["AGENTS_KO.md"],
-        "\n".join(
-            [
-                "KO 수정 승인: 확인",
-                "KO 대상: AGENTS_KO.md",
-                "KO 생성 기준: canonical source only",
-                "검증: bash scripts/check-ko-docs.sh = pass",
-            ]
-        ),
-    )
-
     tests = [
         ("missing First RED is detected", any("최초 RED" in item or "First RED" in item for item in missing_red)),
         ("missing Korean review is detected", any("짧은 한글 리뷰" in item for item in missing_review)),
         ("complete hook review passes", not complete_hook_review),
-        ("markdown KO evidence passes", not markdown_complete),
+        ("markdown changes do not require companion evidence", not markdown_complete),
         ("backendQualityCheck evidence is required", any("backendQualityCheck" in item for item in missing_backend_quality)),
         ("coverage evidence is required", any("Coverage" in item for item in missing_coverage)),
-        ("KO approval evidence is required", any("KO 수정 승인" in item for item in ko_missing_approval)),
-        ("KO approval evidence passes", not ko_complete),
     ]
     failed = [name for name, passed in tests if not passed]
     if failed:

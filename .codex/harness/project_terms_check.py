@@ -77,18 +77,11 @@ class Finding:
     pattern: str
 
 
-def is_ko_path(path: Path) -> bool:
-    name = path.name.lower()
-    return name.endswith("_ko.md") or name.endswith("_ko.local.md")
-
-
 def should_skip(path: Path) -> bool:
     rel = path.relative_to(REPO_ROOT).as_posix()
     if rel == ".codex/harness/project_terms_check.py":
         return True
     if rel.startswith(".codex/harness/reports/"):
-        return True
-    if is_ko_path(path):
         return True
     return any(part in SKIP_DIRS for part in path.parts)
 

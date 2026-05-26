@@ -257,8 +257,8 @@ def dirty_group(path: str, line: str) -> str:
         return "harness"
     if path.startswith("apps/"):
         return "apps"
-    if path.startswith("docs/") or path == ".ko-docs.toml" or lowered.endswith("_ko.md"):
-        return "docs/KO"
+    if path.startswith("docs/"):
+        return "docs"
     return "other"
 
 

@@ -26,7 +26,3 @@ target/
 .cache/
 tmp/
 temp/
-
-# Human-only local notes
-*_KO.local.md
-*_ko.local.md

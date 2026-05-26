@@ -124,40 +124,6 @@ def backend_quality_lines(payload: dict[str, Any], verification: dict[str, Any])
     return "\nCoverage: >=90%\nDocs/OpenAPI: generated + verified\n"
 
 
-def ko_section(payload: dict[str, Any]) -> str:
-    changed_files = changed_files_from_payload(payload)
-    requirements = requirements_for_changed_files(changed_files)
-    ko_targets = list(requirements.ko_targets)
-    ko_payload = payload.get("ko_docs") if isinstance(payload.get("ko_docs"), dict) else {}
-    payload_targets = ko_payload.get("targets") if isinstance(ko_payload, dict) else None
-    if isinstance(payload_targets, list) and payload_targets:
-        ko_targets = [str(path) for path in payload_targets]
-    approved = bool(ko_payload.get("approved")) if isinstance(ko_payload, dict) else False
-    if ko_targets and approved:
-        return "\n".join(
-            [
-                "KO 수정 승인: 확인",
-                f"KO 대상: {', '.join(ko_targets)}",
-                "KO 생성 기준: canonical source only",
-            ]
-        )
-    if ko_targets:
-        return "\n".join(
-            [
-                "KO 수정 승인: 미확인",
-                f"KO 대상: {', '.join(ko_targets)}",
-                "KO 생성 기준: canonical source only",
-            ]
-        )
-    return "\n".join(
-        [
-            "KO 수정 승인: 해당 없음",
-            "KO 대상: 해당 없음",
-            "KO 생성 기준: 해당 없음",
-        ]
-    )
-
-
 def changed_scope_summary(payload: dict[str, Any], prefix: str) -> str:
     changed = changed_files_from_payload(payload)
     matched = [path for path in changed if path.startswith(prefix)]
@@ -342,7 +308,6 @@ def render_pr_body(payload: dict[str, Any]) -> str:
     report_link = links.get("markdown_report") or "생성 안 됨"
     lines = "\n".join(verification_line(command, verification) for command in pr_body_commands(payload))
     backend_evidence = backend_quality_lines(payload, verification)
-    ko_text = ko_section(payload)
     return f"""## 요약
 
 상태: {status}
@@ -360,7 +325,7 @@ def render_pr_body(payload: dict[str, Any]) -> str:
 - backend: {changed_scope_summary(payload, "apps/api/")}
 - frontend: {changed_scope_summary(payload, "apps/web/")}
 - harness: {changed_scope_summary(payload, ".codex/harness/")}
-- docs/infra: PR template, GitHub workflow, Markdown, KO sync evidence 확인
+- docs/infra: PR template, GitHub workflow, Markdown policy 확인
 
 ## 사용 skill
 
@@ -382,10 +347,6 @@ def render_pr_body(payload: dict[str, Any]) -> str:
 {contract_text}
 
 contract-reviewer: contract risk 없으면 not needed, 있으면 필요
-
-## KO 문서 변경
-
-{ko_text}
 
 ## 주요 위험
 
@@ -561,12 +522,7 @@ def run_self_test() -> int:
             ".codex/harness/home_report.py",
             ".codex/harness/home_report.py",
             ".codex/harness/skill_routing.py",
-            ".ko-docs.toml",
         ],
-        "ko_docs": {
-            "approved": True,
-            "targets": [],
-        },
         "skill_routing": {
             "execute": {
                 "skills": [
@@ -619,7 +575,6 @@ def run_self_test() -> int:
             PROJECT_TERMS_CHECK: {"status": "pass", "exit_code": 0},
             STOP_HOOK_SELF_TEST: {"status": "pass", "exit_code": 0},
             POST_TOOL_USE_REVIEW_SELF_TEST: {"status": "pass", "exit_code": 0},
-            "bash scripts/check-ko-docs.sh": {"status": "pass", "exit_code": 0},
         },
     }
     rendered = render_report(payload)
@@ -650,8 +605,6 @@ def run_self_test() -> int:
         "## 사용 skill" in pr_body,
         "| execute | home-search-harness | orchestrator | .codex/harness/home | 상태; 검증; 다음 행동 |" in rendered,
         "| execute | $tdd | primary | .agents/skills/tdd/SKILL.md | 최초 RED; 예상 RED 실패; 최소 GREEN |" in pr_body,
-        "## KO 문서 변경" in pr_body,
-        "KO 수정 승인: 해당 없음" in pr_body,
         "## 요약" in pr_body,
         "`self-test` work item의 변경 범위" in pr_body,
         "최초 RED:" in pr_body,

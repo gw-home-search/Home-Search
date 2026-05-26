@@ -519,7 +519,6 @@ verification_commands = [
   "python3 .codex/harness/pr_lint.py --self-test",
   "cd apps/api && ./gradlew backendQualityCheck",
   "git diff --check",
-  "bash scripts/check-ko-docs.sh",
 ]
 stop_conditions = [
   "public API URL, request field, response field, ProblemDetail shape 변경이 필요하면 중단한다.",

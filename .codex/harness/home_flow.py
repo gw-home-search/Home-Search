@@ -22,7 +22,6 @@ from pr_evidence import (
     WORKLOG_SYNC_SELF_TEST,
     DIFF_CHECK,
     DOCKER_COMPOSE_LOCAL_CONFIG,
-    KO_CHECK,
     POST_TOOL_USE_REVIEW_SELF_TEST,
     PR_BODY_CHECK_SELF_TEST,
     PR_CONTEXT_SELF_TEST,
@@ -98,7 +97,6 @@ KNOWN_VERIFICATION_COMMANDS = {
         PROJECT_TERMS_CHECK: (".", ["python3", ".codex/harness/project_terms_check.py"]),
         STOP_HOOK_SELF_TEST: (".", ["python3", ".codex/hooks/stop_verification_gate.py", "--self-test"]),
         POST_TOOL_USE_REVIEW_SELF_TEST: (".", ["python3", ".codex/hooks/post_tool_use_review.py", "--self-test"]),
-        KO_CHECK: (".", ["bash", "scripts/check-ko-docs.sh"]),
     },
     "frontend": {
         WEB_TEST: ("apps/web", ["npm", "run", "test"]),
@@ -120,7 +118,6 @@ KNOWN_VERIFICATION_COMMANDS = {
         PROJECT_TERMS_CHECK: (".", ["python3", ".codex/harness/project_terms_check.py"]),
         STOP_HOOK_SELF_TEST: (".", ["python3", ".codex/hooks/stop_verification_gate.py", "--self-test"]),
         POST_TOOL_USE_REVIEW_SELF_TEST: (".", ["python3", ".codex/hooks/post_tool_use_review.py", "--self-test"]),
-        KO_CHECK: (".", ["bash", "scripts/check-ko-docs.sh"]),
     },
 }
 FORBIDDEN_SAFETY_FLAGS = {
@@ -544,33 +541,12 @@ def evidence_text(results: dict[str, Any]) -> str:
     return "\n\n".join(chunks)
 
 
-def ko_docs_payload(files: list[str], results: dict[str, Any]) -> dict[str, Any]:
-    requirements = requirements_for_changed_files(files)
-    targets = list(requirements.ko_targets)
-    if not targets:
-        return {"approved": False, "targets": [], "basis": "not applicable"}
-    text = evidence_text(results)
-    approved = bool(re.search(r"KO 수정 승인\s*:\s*확인", text))
-    basis = bool(re.search(r"KO 생성 기준\s*:\s*canonical source only", text))
-    target_match = all(target in text for target in targets)
-    return {
-        "approved": approved and basis and target_match,
-        "targets": targets,
-        "basis": "canonical source only",
-    }
-
-
 def required_evidence_payload(files: list[str]) -> dict[str, Any]:
     requirements = requirements_for_changed_files(files)
     return {
         "commands": ordered_commands(requirements.commands),
         "backend_changed": requirements.backend_changed,
         "web_changed": requirements.web_changed,
-        "ko_targets": list(requirements.ko_targets),
-        "missing_ko_pairs": [
-            {"source": source, "ko": ko_path}
-            for source, ko_path in requirements.missing_ko_pairs
-        ],
         "forbidden_paths": [
             {"path": path, "reason": reason}
             for path, reason in requirements.forbidden_paths
@@ -1022,7 +998,6 @@ def build_payload(
         integration_files = expected_changed_files_for_targets(targets)
         changed_files_kind = "expected"
     required_evidence = required_evidence_payload(integration_files)
-    ko_docs = ko_docs_payload(integration_files, results)
     if targets:
         skill_routing = {
             "execute": routing_payload("execute", targets),
@@ -1078,7 +1053,6 @@ def build_payload(
         "changed_files": integration_files,
         "changed_files_kind": changed_files_kind,
         "required_evidence": required_evidence,
-        "ko_docs": ko_docs,
         "planning_mode": getattr(args, "planning_mode", "standard"),
         "lint_policy": "feasibility" if args.dry_run and (args.push or args.pr) else "strict" if (args.push or args.pr) else "not applicable",
         "skill_routing": skill_routing,

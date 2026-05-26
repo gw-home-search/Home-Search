@@ -79,4 +79,3 @@ Final design review should report:
 - `검증 근거 확인`
 - `검증 공백`
 - `잔여 위험`
-- `KO sync 상태` when Markdown changed

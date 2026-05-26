@@ -24,7 +24,6 @@ WATCHED_COMMANDS = (
     re.compile(r"(^|\s)npm\s+run\s+test(\s|$)"),
     re.compile(r"(^|\s)npm\s+run\s+build(\s|$)"),
     re.compile(r"(^|\s)git\s+diff\s+--check(\s|$)"),
-    re.compile(r"(^|\s)bash\s+scripts/check-ko-docs\.sh(\s|$)"),
 )
 
 

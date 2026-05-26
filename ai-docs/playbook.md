@@ -10,7 +10,7 @@
 4. 변경 전 entrypoint, adapter, public contract, test seam을 확인한다.
 5. public behavior 변경이면 가능한 한 RED 테스트에서 시작한다.
 6. bug/failure는 재현 가능한 feedback loop부터 만든다.
-7. 변경 후 review 관점으로 API, 데이터, 테스트, KO sync 영향을 확인한다.
+7. 변경 후 review 관점으로 API, 데이터, 테스트 영향을 확인한다.
 8. 최종 응답에는 실행한 검증과 남은 위험을 남긴다.
 
 ## 목표 기반 작업
@@ -64,7 +64,7 @@ Review는 findings first로 한다.
 - Medium: edge case bug, missing regression test, degraded fallback.
 - Low: 실제 위험이 있는 maintainability 또는 documented rule 위반.
 
-검토 축은 correctness, public API compatibility, data safety, frontend map usability, security/secrets, missing tests, KO sync다.
+검토 축은 correctness, public API compatibility, data safety, frontend map usability, security/secrets, missing tests다.
 
 ## 코드베이스 맵
 
@@ -80,7 +80,6 @@ Codemap이 실제 코드와 다르면 코드와 canonical docs가 우선한다.
 
 공통 검증:
 
-- `scripts/check-ko-docs.sh`
 - `git diff --check`
 - `git status --short`
 

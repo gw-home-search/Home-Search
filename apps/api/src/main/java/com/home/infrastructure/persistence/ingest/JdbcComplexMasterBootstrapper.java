@@ -34,8 +34,25 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 		String aptName = trimToNull(item.aptName());
 		List<Long> existingComplexIds = findComplexIdsByAptSeq(aptSeq);
 		if (existingComplexIds.size() == 1) {
+			Long complexId = existingComplexIds.get(0);
+			Optional<String> pnu = RtmsPnuBuilder.build(item);
+			if (pnu.isEmpty()) {
+				return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: pnu unavailable aptSeq=" + aptSeq);
+			}
+			Optional<String> complexPnu = findComplexParcelPnu(complexId);
+			if (complexPnu.isEmpty()) {
+				return ComplexMasterBootstrapResult.skipped(
+					"master bootstrap skipped: complex parcel unavailable aptSeq=" + aptSeq
+				);
+			}
+			if (!pnu.get().equals(complexPnu.get())) {
+				return ComplexMasterBootstrapResult.skipped(
+					"master bootstrap skipped: aptSeq parcel pnu conflict aptSeq=%s derivedPnu=%s complexPnu=%s"
+						.formatted(aptSeq, pnu.get(), complexPnu.get())
+				);
+			}
 			if (aptName != null) {
-				upsertAlias(existingComplexIds.get(0), "RTMS_APT_NAME", aptName, "RTMS");
+				upsertAlias(complexId, "RTMS_APT_NAME", aptName, "RTMS");
 			}
 			return ComplexMasterBootstrapResult.alreadyPresent();
 		}
@@ -87,6 +104,18 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			""")
 			.param("pnu", pnu)
 			.query(Long.class)
+			.optional();
+	}
+
+	private Optional<String> findComplexParcelPnu(Long complexId) {
+		return jdbcClient.sql("""
+			SELECT p.pnu
+			FROM complex c
+			JOIN parcel p ON p.id = c.parcel_id
+			WHERE c.id = :complexId
+			""")
+			.param("complexId", complexId)
+			.query(String.class)
 			.optional();
 	}
 

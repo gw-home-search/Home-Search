@@ -1099,3 +1099,64 @@ risk_notes = [
   "Docker daemon, API/Web port, local Kakao key availability에 따라 browser visual evidence는 Partial로 남을 수 있다.",
   "live RTMS/VWorld 검증은 local env와 사람 승인 후 별도 manual evidence로 남긴다.",
 ]
+
+[[items]]
+id = "rtms-jibun-pnu-match-policy"
+title_ko = "RTMS jibun PNU match policy"
+pr_type = "Feat"
+pr_title_ko = "RTMS 지번/PNU 매칭 정책과 evidence 기반"
+description_ko = "RTMS item의 jibun, sggCd, umdCd source와 derived PNU 세팅 규칙을 문서화하고, PNU/name conflict branch를 normalized trade 오염 없이 evidence와 테스트로 고정한다."
+status = "done"
+priority = 150
+targets = "backend"
+preset = "open-api-ingest-prep"
+acceptance_criteria = [
+  "docs/RTMS_JIBUN_PNU_MATCHING.md가 RTMS item.jibun, item.sggCd, item.umdCd, item.aptNm, item.aptSeq source와 request LAWD_CD fallback 금지 원칙을 명시한다.",
+  "docs/DATA_STORAGE.md와 docs/MIGRATION_PLAN.md가 display-safe trade rule, match evidence layer, 후속 admin review slice 경계를 설명한다.",
+  "jibun normalizer는 raw_jibun, normalized_jibun, land_code, bonbun, bubun, derived_pnu 또는 pnu_unavailable reason을 deterministic하게 만든다.",
+  "raw_trade_ingest 저장 이후 parsed non-duplicate item의 match attempt는 지번/PNU evidence와 apt_seq, apt_name, match_status, match_path, candidate_count를 남긴다.",
+  "aptSeq unique match도 derived PNU가 기존 complex parcel PNU와 충돌하면 PNU_CONFLICT evidence를 남기고 normalized trade를 만들지 않는다.",
+  "PNU 단일 후보라도 RTMS aptNm이 master name/alias와 맞지 않으면 NAME_CONFLICT evidence를 남기고 normalized trade를 만들지 않는다.",
+  "aptSeq unique + PNU 일치 + RTMS name variant는 master name을 덮어쓰지 않고 MATCHED_NAME_VARIANT evidence와 alias 후보를 남기며 normalized insert를 허용한다.",
+  "PNU 후보가 여러 개이고 이름/alias로 좁히지 못하면 AMBIGUOUS evidence와 candidate_count, failure_reason을 저장하며 임의 normalized trade를 만들지 않는다.",
+  "jibun/PNU 생성 실패, parcel/complex 후보 없음, coordinate bootstrap 실패는 PNU_UNAVAILABLE 또는 UNMATCHED evidence로 조회 가능하게 남긴다.",
+  "docs의 모든 branch/status 위험은 unit, repository, integration regression test로 최소 한 번 이상 고정한다.",
+  "evidence에는 raw payload 전문, service key, source_key 전체, local secret을 기본 조회/로그로 노출하지 않는다.",
+  "public map/search/region/detail/trade API URL, request/response field, amount unit, ProblemDetail shape는 변경하지 않는다.",
+  "이번 slice는 admin UI 구현, raw page checkpoint, daily cron, live RTMS call, bulk initial ingest 실행을 포함하지 않는다.",
+]
+first_red_candidates = [
+  "RtmsJibunPnuNormalizerTest에서 140-1, 산 12-3, invalid jibun, invalid sggCd/umdCd branch가 deterministic PNU/evidence reason을 만들어야 하나 normalizer seam 부재로 실패하는 RED를 만든다.",
+  "JdbcTradeMatchEvidenceRepositoryTest에서 raw_ingest_id 기준 MATCHED/MATCHED_NAME_VARIANT/PNU_CONFLICT/NAME_CONFLICT/AMBIGUOUS/PNU_UNAVAILABLE/UNMATCHED evidence를 insert/query해야 하나 schema/repository 부재로 실패하는 RED를 만든다.",
+  "OpenApiTradeIngestServiceJdbcIntegrationTest에서 aptSeq unique라도 derived PNU가 complex parcel PNU와 다르면 raw status MATCH_FAILED, evidence PNU_CONFLICT, tradeCount 0이어야 하나 현재 aptSeq 우선 match로 normalized insert되는 실패를 만든다.",
+  "OpenApiTradeIngestServiceJdbcIntegrationTest에서 PNU 단일 후보라도 RTMS aptNm이 master/alias와 다르면 NAME_CONFLICT evidence와 tradeCount 0이어야 하나 현재 PNU_UNIQUE로 insert되는 실패를 만든다.",
+  "OpenApiTradeIngestServiceJdbcIntegrationTest에서 aptSeq unique + PNU 일치 + name variant는 MATCHED_NAME_VARIANT evidence와 normalized insert를 남겨야 하나 evidence write 부재로 실패하는 RED를 만든다.",
+  "OpenApiTradeIngestServiceJdbcIntegrationTest에서 PNU 후보가 여러 개인데 이름 evidence가 없을 때 raw status MATCH_FAILED와 AMBIGUOUS match evidence가 함께 남아야 하나 evidence write 부재로 실패하는 RED를 만든다.",
+  "JdbcComplexMatcherTest 또는 matcher result contract test에서 match_status, candidate_count, candidate ids, derived_pnu가 result/evidence command로 전달되어야 하나 현재 ComplexMatchResult가 결과만 반환해 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew test --tests com.home.application.ingest.RtmsJibunPnuNormalizerTest",
+  "cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.ingest.JdbcTradeMatchEvidenceRepositoryTest",
+  "cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.ingest.OpenApiTradeIngestServiceJdbcIntegrationTest",
+  "cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.ingest.JdbcComplexMatcherTest",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 .codex/harness/project_terms_check.py",
+  "python3 .codex/harness/home_plan.py --self-test",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "admin UI, admin public endpoint, frontend 화면 변경이 필요하면 별도 slice로 분리한다.",
+  "raw page checkpoint, scheduler, daily cron, live RTMS Open API call, initial bulk ingest 실행이 필요하면 별도 slice로 분리한다.",
+  "자동 매칭 정책을 보수적 no-guessing에서 임의 후보 선택으로 바꿔야 하면 중단한다.",
+  "request LAWD_CD를 item.sggCd 누락 fallback으로 자동 적용해야 하면 별도 data policy review로 분리한다.",
+  "RTMS observed name으로 complex.name 또는 trade_name을 자동 overwrite해야 하면 중단한다.",
+  "raw payload 전문, service key, local secret, .env* 파일 저장 또는 로그 노출이 필요하면 중단한다.",
+  "기존 raw-before-normalized 순서, source/source_key dedupe, complex_id operational relation을 바꿔야 하면 중단한다.",
+]
+risk_notes = [
+  "이 slice는 관리자 화면이 아니라 관리자 검수를 가능하게 할 policy docs와 evidence 저장 기반이다.",
+  "candidate snapshot은 후보 id/path/count 중심으로 제한하고 raw payload 전문 복제는 피한다.",
+  "display-safe rule 때문에 일부 live RTMS row가 MATCH_FAILED로 남을 수 있지만 잘못된 latest marker 노출보다 보수적 보류를 우선한다.",
+  "지번 문자열 보정, 수동 override, 신규 complex 생성 action은 후속 admin slice에서 다루고 이번 slice는 자동 match attempt의 설명 가능성만 고정한다.",
+]

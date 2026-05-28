@@ -4,14 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 
+import com.home.application.ingest.ComplexMasterBootstrapper;
 import com.home.application.ingest.IngestResult;
 import com.home.application.ingest.OpenApiTradeIngestBatch;
 import com.home.application.ingest.OpenApiTradeIngestService;
 import com.home.application.ingest.OpenApiTradeItem;
 import com.home.application.ingest.RawTradeIngestStatus;
+import com.home.application.ingest.TradeMatchEvidenceRecord;
+import com.home.application.ingest.TradeMatchStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,10 +31,13 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			jdbcClient,
 			transactionTemplate
 		);
+		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
 		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
 			rawRepository,
 			tradeRepository,
-			new JdbcComplexMatcher(jdbcClient)
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty()),
+			evidenceRepository
 		);
 
 		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
@@ -49,6 +56,12 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.NORMALIZED)).hasSize(1);
 		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.DUPLICATE)).hasSize(1);
 		assertThat(firstRawCreatedAt()).isBeforeOrEqualTo(firstTradeCreatedAt());
+		TradeMatchEvidenceRecord evidence = firstEvidence(evidenceRepository);
+		assertThat(evidence.matchStatus()).isEqualTo(TradeMatchStatus.MATCHED);
+		assertThat(evidence.matchPath()).isEqualTo("APTSEQ");
+		assertThat(evidence.derivedPnu()).isEqualTo("1168010300101400001");
+		assertThat(evidence.candidateCount()).isEqualTo(1);
+		assertThat(evidence.candidateComplexIds()).containsExactly(501L);
 	}
 
 	@Test
@@ -60,10 +73,13 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			jdbcClient,
 			transactionTemplate
 		);
+		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
 		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
 			rawRepository,
 			tradeRepository,
-			new JdbcComplexMatcher(jdbcClient)
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty()),
+			evidenceRepository
 		);
 
 		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
@@ -98,6 +114,11 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 				assertThat(record.failureReason()).contains("APT-404");
 				assertThat(record.failureReason()).contains("1168010300109990001");
 			});
+		TradeMatchEvidenceRecord evidence = firstEvidence(evidenceRepository);
+		assertThat(evidence.matchStatus()).isEqualTo(TradeMatchStatus.UNMATCHED);
+		assertThat(evidence.derivedPnu()).isEqualTo("1168010300109990001");
+		assertThat(evidence.candidateCount()).isZero();
+		assertThat(evidence.candidateComplexIds()).isEmpty();
 	}
 
 	@Test
@@ -280,6 +301,194 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			});
 	}
 
+	@Test
+	@DisplayName("aptSeq가 unique여도 derived PNU가 complex parcel과 다르면 normalized trade를 만들지 않고 PNU_CONFLICT evidence로 보류한다")
+	void holdsAptSeqMatchWhenDerivedPnuConflictsWithComplexParcel() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty()),
+			evidenceRepository
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(liveRtmsItem("APT-501", "Conflicting Alias Name", "999-1"))
+		));
+
+		assertThat(result.rawSaved()).isEqualTo(1);
+		assertThat(result.normalizedInserted()).isZero();
+		assertThat(result.matchFailed()).isEqualTo(1);
+		assertThat(tradeCount()).isZero();
+		TradeMatchEvidenceRecord evidence = firstEvidence(evidenceRepository);
+		assertThat(evidence.matchStatus()).isEqualTo(TradeMatchStatus.PNU_CONFLICT);
+		assertThat(evidence.derivedPnu()).isEqualTo("1168010300109990001");
+		assertThat(evidence.candidateCount()).isEqualTo(1);
+		assertThat(evidence.candidateComplexIds()).containsExactly(501L);
+		assertThat(complexAliasCount("APT-501", "RTMS_APT_NAME", "conflictingaliasname")).isZero();
+	}
+
+	@Test
+	@DisplayName("PNU 단일 후보라도 RTMS 이름이 master/alias와 다르면 NAME_CONFLICT evidence로 보류한다")
+	void holdsSinglePnuCandidateWhenNameConflicts() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			ComplexMasterBootstrapper.noop(),
+			evidenceRepository
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(liveRtmsItem(null, "Different Apartment", "140-1"))
+		));
+
+		assertThat(result.rawSaved()).isEqualTo(1);
+		assertThat(result.normalizedInserted()).isZero();
+		assertThat(result.matchFailed()).isEqualTo(1);
+		assertThat(tradeCount()).isZero();
+		TradeMatchEvidenceRecord evidence = firstEvidence(evidenceRepository);
+		assertThat(evidence.matchStatus()).isEqualTo(TradeMatchStatus.NAME_CONFLICT);
+		assertThat(evidence.candidateCount()).isEqualTo(1);
+		assertThat(evidence.candidateComplexIds()).containsExactly(501L);
+	}
+
+	@Test
+	@DisplayName("aptSeq unique와 PNU가 일치하면 RTMS 이름 variant를 alias/evidence로 남기고 normalized trade를 허용한다")
+	void insertsAptSeqMatchWithNameVariantAsEvidenceAndAlias() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty()),
+			evidenceRepository
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(liveRtmsItem("APT-501", "Observed Sample Tower", "140-1"))
+		));
+
+		assertThat(result.rawSaved()).isEqualTo(1);
+		assertThat(result.normalizedInserted()).isEqualTo(1);
+		assertThat(result.matchFailed()).isZero();
+		assertThat(tradeCount()).isEqualTo(1);
+		TradeMatchEvidenceRecord evidence = firstEvidence(evidenceRepository);
+		assertThat(evidence.matchStatus()).isEqualTo(TradeMatchStatus.MATCHED_NAME_VARIANT);
+		assertThat(evidence.matchPath()).isEqualTo("APTSEQ");
+		assertThat(evidence.matchedComplexId()).isEqualTo(501L);
+		assertThat(complexAliasCount("APT-501", "RTMS_APT_NAME", "observedsampletower")).isEqualTo(1);
+		assertThat(complexMasterNames("APT-501")).containsEntry("name", "Sample Apartment");
+	}
+
+	@Test
+	@DisplayName("PNU 후보가 여러 개이고 이름 evidence가 없으면 AMBIGUOUS evidence로 보류한다")
+	void holdsAmbiguousPnuCandidatesWithEvidence() {
+		seedComplex();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt)
+			VALUES (502, 1001, 'COMPLEX-PK-502', 'APT-502', 'Other Apartment', 'Other trade name', 120)
+			""").update();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			ComplexMasterBootstrapper.noop(),
+			evidenceRepository
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(liveRtmsItem(null, "Unknown Apartment", "140-1"))
+		));
+
+		assertThat(result.rawSaved()).isEqualTo(1);
+		assertThat(result.normalizedInserted()).isZero();
+		assertThat(result.matchFailed()).isEqualTo(1);
+		assertThat(tradeCount()).isZero();
+		TradeMatchEvidenceRecord evidence = firstEvidence(evidenceRepository);
+		assertThat(evidence.matchStatus()).isEqualTo(TradeMatchStatus.AMBIGUOUS);
+		assertThat(evidence.candidateCount()).isEqualTo(2);
+		assertThat(evidence.candidateComplexIds()).containsExactly(501L, 502L);
+	}
+
+	@Test
+	@DisplayName("PNU를 만들 수 없는 RTMS 지번은 PNU_UNAVAILABLE evidence로 보류한다")
+	void holdsPnuUnavailableRowsWithEvidence() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			ComplexMasterBootstrapper.noop(),
+			evidenceRepository
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(liveRtmsItem(null, "Sample Apartment", "번지없음"))
+		));
+
+		assertThat(result.rawSaved()).isEqualTo(1);
+		assertThat(result.normalizedInserted()).isZero();
+		assertThat(result.matchFailed()).isEqualTo(1);
+		assertThat(tradeCount()).isZero();
+		TradeMatchEvidenceRecord evidence = firstEvidence(evidenceRepository);
+		assertThat(evidence.matchStatus()).isEqualTo(TradeMatchStatus.PNU_UNAVAILABLE);
+		assertThat(evidence.derivedPnu()).isNull();
+		assertThat(evidence.pnuUnavailableReason()).isEqualTo("invalid jibun");
+	}
+
 	private OpenApiTradeItem rtmsItem(String dealAmount) {
 		return new OpenApiTradeItem(
 			"101",
@@ -381,10 +590,12 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			WHERE apt_seq = :aptSeq
 			""")
 			.param("aptSeq", aptSeq)
-			.query((resultSet, rowNumber) -> java.util.Map.<String, Object>of(
-				"name", resultSet.getString("name"),
-				"trade_name", resultSet.getString("trade_name")
-			))
+			.query((resultSet, rowNumber) -> {
+				java.util.Map<String, Object> values = new HashMap<>();
+				values.put("name", resultSet.getString("name"));
+				values.put("trade_name", resultSet.getString("trade_name"));
+				return values;
+			})
 			.single();
 	}
 
@@ -402,6 +613,13 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			.param("normalizedName", normalizedName)
 			.query(Long.class)
 			.single();
+	}
+
+	private TradeMatchEvidenceRecord firstEvidence(JdbcTradeMatchEvidenceRepository repository) {
+		Long rawIngestId = jdbcClient.sql("SELECT id FROM raw_trade_ingest ORDER BY id LIMIT 1")
+			.query(Long.class)
+			.single();
+		return repository.findByRawIngestId(rawIngestId).orElseThrow();
 	}
 
 	private OffsetDateTime firstRawCreatedAt() {

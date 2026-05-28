@@ -96,6 +96,11 @@ Migrate in this order:
 Do not migrate later-scope features into the critical path. Keep rankings, favorites,
 OAuth-dependent user flows, and mail alarms separate.
 
+The RTMS ingest service must apply the jibun/PNU match policy before normalized
+trade insert. Uncertain rows remain raw/evidence records until a later admin
+review or data correction slice resolves them. Admin UI, manual override, and
+bulk live replay are not part of the baseline backend migration step.
+
 ## Phase 4 - Frontend Migration
 
 Source frontend: `/Users/gwongwangjae/frontend/home-client`
@@ -125,6 +130,8 @@ Use a small deterministic dataset:
 - Multiple trades for the complex.
 - One duplicate trade ingest attempt.
 - One failed match ingest case.
+- One RTMS jibun/PNU conflict or ambiguous candidate case that remains held out
+  of normalized `trade` while preserving review evidence.
 
 Done when:
 

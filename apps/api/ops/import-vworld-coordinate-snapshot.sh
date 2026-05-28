@@ -30,6 +30,8 @@ Optional:
   HOME_COORDINATE_VALIDATE_PRJ           Defaults to true.
   HOME_COORDINATE_SYNC_PARCEL            Defaults to true.
   HOME_COORDINATE_KEEP_STAGING           Defaults to false.
+  HOME_COORDINATE_RESUME_RUN_ID          Explicit coordinate_snapshot_run id to resume.
+  HOME_COORDINATE_CHUNK_PREFIX_LENGTH    PNU prefix length for resumable chunks. Defaults to 5.
 EOF
 }
 
@@ -75,10 +77,15 @@ STRICT_REGION_MATCH="${HOME_COORDINATE_STRICT_REGION_MATCH:-true}"
 VALIDATE_PRJ="${HOME_COORDINATE_VALIDATE_PRJ:-true}"
 SYNC_PARCEL="${HOME_COORDINATE_SYNC_PARCEL:-true}"
 KEEP_STAGING="${HOME_COORDINATE_KEEP_STAGING:-false}"
+RESUME_RUN_ID="${HOME_COORDINATE_RESUME_RUN_ID:-}"
+CHUNK_PREFIX_LENGTH="${HOME_COORDINATE_CHUNK_PREFIX_LENGTH:-5}"
 EXPECTED_REGIONS="${HOME_COORDINATE_EXPECTED_REGIONS:-11 26 27 28 29 30 31 36 41 43 44 46 47 48 50 51 52}"
 LOCK_KEY="home_search_coordinate_snapshot_import"
 LOCK_ACQUIRED="false"
 RUN_ID=""
+CURRENT_REGION_CODE=""
+CURRENT_CHUNK_CODE=""
+CURRENT_REGION_MANIFEST=""
 PARSED_FORMAT=""
 PARSED_REGION_CODE=""
 PARSED_VERSION_TOKEN=""
@@ -315,6 +322,10 @@ if [[ -z "${SHP_DIR}" ]]; then
   usage >&2
   exit 2
 fi
+if [[ ! "${CHUNK_PREFIX_LENGTH}" =~ ^[0-9]+$ || "${CHUNK_PREFIX_LENGTH}" -lt 2 || "${CHUNK_PREFIX_LENGTH}" -gt 8 ]]; then
+  echo "ERROR: HOME_COORDINATE_CHUNK_PREFIX_LENGTH must be an integer between 2 and 8, got: ${CHUNK_PREFIX_LENGTH}" >&2
+  exit 2
+fi
 if [[ ! -d "${SHP_DIR}" ]]; then
   echo "ERROR: HOME_COORDINATE_SHP_DIR does not exist: ${SHP_DIR}" >&2
   exit 2
@@ -328,9 +339,18 @@ fi
 
 release_lock() {
   if [[ "${LOCK_ACQUIRED}" == "true" ]]; then
-    printf "\\set lock_key '%s'\nSELECT pg_advisory_unlock(hashtext(:'lock_key'));\n\\q\n" "${LOCK_KEY}" >&"${LOCK_PSQL[1]}" || true
-    IFS= read -r _ <&"${LOCK_PSQL[0]}" || true
-    wait "${LOCK_PSQL_PID}" 2>/dev/null || true
+    local unlock_written="false"
+    if [[ -n "${LOCK_PSQL[1]+set}" ]]; then
+      if printf "\\set lock_key '%s'\nSELECT pg_advisory_unlock(hashtext(:'lock_key'));\n\\q\n" "${LOCK_KEY}" >&"${LOCK_PSQL[1]}"; then
+        unlock_written="true"
+      fi
+    fi
+    if [[ "${unlock_written}" == "true" && -n "${LOCK_PSQL[0]+set}" ]]; then
+      IFS= read -r _ <&"${LOCK_PSQL[0]}" || true
+    fi
+    if [[ -n "${LOCK_PSQL_PID:-}" ]]; then
+      wait "${LOCK_PSQL_PID}" 2>/dev/null || true
+    fi
     LOCK_ACQUIRED="false"
   fi
 }
@@ -474,6 +494,44 @@ mark_failed() {
   local line_number="${1:-unknown}"
   trap - ERR
   if [[ -n "${RUN_ID}" ]]; then
+    if [[ -n "${CURRENT_REGION_CODE}" ]]; then
+      "${PSQL[@]}" \
+        -v run_id="${RUN_ID}" \
+        -v region_code="${CURRENT_REGION_CODE}" \
+        -v chunk_code="${CURRENT_CHUNK_CODE}" \
+        -v failure_reason="import failed near line ${line_number}" <<'SQL' >/dev/null || true
+UPDATE reference.coordinate_snapshot_stage_chunk_checkpoint
+SET status = 'FAILED',
+    failure_reason = :'failure_reason',
+    finished_at = now()
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code'
+  AND chunk_code = :'chunk_code'
+  AND status = 'STARTED';
+UPDATE reference.coordinate_snapshot_publish_chunk_checkpoint
+SET status = 'FAILED',
+    failure_reason = :'failure_reason',
+    finished_at = now()
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code'
+  AND chunk_code = :'chunk_code'
+  AND status = 'STARTED';
+UPDATE reference.coordinate_snapshot_region_checkpoint
+SET status = 'FAILED',
+    failure_reason = :'failure_reason',
+    finished_at = now()
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code'
+  AND status = 'STARTED';
+UPDATE reference.coordinate_snapshot_publish_checkpoint
+SET status = 'FAILED',
+    failure_reason = :'failure_reason',
+    finished_at = now()
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code'
+  AND status = 'STARTED';
+SQL
+    fi
     "${PSQL[@]}" \
       -v run_id="${RUN_ID}" \
       -v failure_reason="import failed near line ${line_number}" <<'SQL' >/dev/null || true
@@ -511,8 +569,151 @@ SQL
   exit 1
 }
 
+collect_file_stats() {
+  local source_format="$1"
+  case "${source_format}" in
+    vworld-al-d010)
+      "${PSQL[@]}" -q -At -F $'\t' -v strict_region_match="${STRICT_REGION_MATCH}" <<'SQL'
+WITH normalized AS (
+    SELECT
+        NULLIF(btrim(a2::text), '') AS pnu,
+        NULLIF(btrim(a23::text), '') AS source_region_code,
+        geom IS NULL AS geom_is_null
+    FROM reference.land_parcel_file_raw
+),
+valid_raw AS (
+    SELECT pnu
+    FROM normalized
+    WHERE pnu IS NOT NULL
+      AND pnu::text ~ '^[0-9]{19}$'
+      AND NOT geom_is_null
+      AND (
+          :'strict_region_match' <> 'true'
+          OR (
+              source_region_code IS NOT NULL
+              AND left(pnu::text, 5) = left(source_region_code::text, 5)
+          )
+      )
+),
+duplicate_pnus AS (
+    SELECT pnu
+    FROM valid_raw
+    GROUP BY pnu
+    HAVING count(*) > 1
+)
+SELECT
+    (SELECT count(*) FROM normalized)::text,
+    (
+        SELECT count(*)
+        FROM normalized
+        WHERE pnu IS NULL
+           OR pnu::text !~ '^[0-9]{19}$'
+           OR geom_is_null
+           OR (
+               :'strict_region_match' = 'true'
+               AND (
+                   source_region_code IS NULL
+                   OR left(pnu::text, 5) <> left(source_region_code::text, 5)
+               )
+           )
+    )::text,
+    (SELECT count(*) FROM duplicate_pnus)::text;
+SQL
+      ;;
+    vworld-lsmd-cont-ldreg)
+      "${PSQL[@]}" -q -At -F $'\t' -v strict_region_match="${STRICT_REGION_MATCH}" <<'SQL'
+WITH normalized AS (
+    SELECT
+        NULLIF(btrim(pnu::text), '') AS pnu,
+        left(NULLIF(btrim(pnu::text), ''), 5) AS source_region_code,
+        geom IS NULL AS geom_is_null
+    FROM reference.land_parcel_file_raw
+),
+valid_raw AS (
+    SELECT pnu
+    FROM normalized
+    WHERE pnu IS NOT NULL
+      AND pnu::text ~ '^[0-9]{19}$'
+      AND NOT geom_is_null
+      AND (
+          :'strict_region_match' <> 'true'
+          OR (
+              source_region_code IS NOT NULL
+              AND left(pnu::text, 5) = left(source_region_code::text, 5)
+          )
+      )
+),
+duplicate_pnus AS (
+    SELECT pnu
+    FROM valid_raw
+    GROUP BY pnu
+    HAVING count(*) > 1
+)
+SELECT
+    (SELECT count(*) FROM normalized)::text,
+    (
+        SELECT count(*)
+        FROM normalized
+        WHERE pnu IS NULL
+           OR pnu::text !~ '^[0-9]{19}$'
+           OR geom_is_null
+           OR (
+               :'strict_region_match' = 'true'
+               AND (
+                   source_region_code IS NULL
+                   OR left(pnu::text, 5) <> left(source_region_code::text, 5)
+               )
+           )
+    )::text,
+    (SELECT count(*) FROM duplicate_pnus)::text;
+SQL
+      ;;
+    *)
+      echo "ERROR: unsupported source format for file stats: ${source_format}" >&2
+      return 2
+      ;;
+  esac
+}
+
+file_size_bytes() {
+  local file="$1"
+  local size=""
+  if size="$(stat -c '%s' "${file}" 2>/dev/null)"; then
+    printf '%s' "${size}"
+    return 0
+  fi
+  if size="$(stat -f '%z' "${file}" 2>/dev/null)"; then
+    printf '%s' "${size}"
+    return 0
+  fi
+  wc -c <"${file}" | tr -d '[:space:]'
+}
+
+region_source_manifest() {
+  local region="$1"
+  local manifest=""
+  local file_index file relative_path sidecar_ext sidecar_path relative_sidecar size
+  for file_index in "${!SHP_FILES[@]}"; do
+    if [[ "${SHP_REGION_CODES[$file_index]}" != "${region}" ]]; then
+      continue
+    fi
+    file="${SHP_FILES[$file_index]}"
+    relative_path="${SHP_RELATIVE_PATHS[$file_index]}"
+    for sidecar_ext in shp shx dbf prj; do
+      sidecar_path="${file%.shp}.${sidecar_ext}"
+      relative_sidecar="${relative_path%.shp}.${sidecar_ext}"
+      if [[ -f "${sidecar_path}" ]]; then
+        size="$(file_size_bytes "${sidecar_path}")"
+        manifest="$(append_csv_token "${manifest}" "${relative_sidecar}:${size}")"
+      fi
+    done
+  done
+  printf '%s' "${manifest}"
+}
+
 SHP_FILES=()
 SHP_RELATIVE_PATHS=()
+SHP_REGION_CODES=()
 discover_shp_files
 
 if [[ "${#SHP_FILES[@]}" -eq 0 ]]; then
@@ -544,6 +745,7 @@ for file in "${SHP_FILES[@]}"; do
   fi
   SHP_FORMATS+=("${PARSED_FORMAT}")
   region_code="${PARSED_REGION_CODE}"
+  SHP_REGION_CODES+=("${region_code}")
   version_token="${PARSED_VERSION_TOKEN}"
   seen_regions="$(append_unique_token "${seen_regions}" "${region_code}")"
   seen_versions="$(append_unique_token "${seen_versions}" "${version_token}")"
@@ -607,7 +809,13 @@ fi
 
 schema_ready="$("${PSQL[@]}" -At <<'SQL'
 SELECT to_regclass('reference.coordinate_snapshot_run') IS NOT NULL
-   AND to_regclass('reference.parcel_coordinate_snapshot') IS NOT NULL;
+   AND to_regclass('reference.parcel_coordinate_snapshot') IS NOT NULL
+   AND to_regclass('reference.parcel_coordinate_snapshot_stage') IS NOT NULL
+   AND to_regclass('reference.coordinate_snapshot_region_checkpoint') IS NOT NULL
+   AND to_regclass('reference.coordinate_snapshot_stage_chunk_checkpoint') IS NOT NULL
+   AND to_regclass('reference.parcel_coordinate_snapshot_publish') IS NOT NULL
+   AND to_regclass('reference.coordinate_snapshot_publish_checkpoint') IS NOT NULL
+   AND to_regclass('reference.coordinate_snapshot_publish_chunk_checkpoint') IS NOT NULL;
 SQL
 )"
 if [[ "${schema_ready}" != "t" ]]; then
@@ -617,11 +825,39 @@ fi
 
 acquire_lock
 
-RUN_ID="$("${PSQL[@]}" -q -At \
-  -v snapshot_version="${SNAPSHOT_VERSION}" \
-  -v source_dir="${SHP_DIR}" \
-  -v source_srid="${SRC_SRID}" \
-  -v target_srid="${DST_SRID}" <<'SQL'
+if [[ -n "${RESUME_RUN_ID}" ]]; then
+  if [[ ! "${RESUME_RUN_ID}" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: HOME_COORDINATE_RESUME_RUN_ID must be numeric, got: ${RESUME_RUN_ID}" >&2
+    exit 2
+  fi
+  RUN_ID="$("${PSQL[@]}" -q -At \
+    -v run_id="${RESUME_RUN_ID}" \
+    -v snapshot_version="${SNAPSHOT_VERSION}" \
+    -v source_srid="${SRC_SRID}" \
+    -v target_srid="${DST_SRID}" <<'SQL'
+UPDATE reference.coordinate_snapshot_run
+SET status = 'STARTED',
+    failure_reason = NULL,
+    finished_at = NULL
+WHERE id = (:'run_id')::bigint
+  AND snapshot_version = :'snapshot_version'
+  AND source_srid = (:'source_srid')::integer
+  AND target_srid = (:'target_srid')::integer
+  AND status IN ('STARTED', 'FAILED', 'PASSED')
+RETURNING id;
+SQL
+  )"
+  if [[ "${RUN_ID}" != "${RESUME_RUN_ID}" ]]; then
+    echo "ERROR: HOME_COORDINATE_RESUME_RUN_ID=${RESUME_RUN_ID} is not resumable for version=${SNAPSHOT_VERSION}, source_srid=${SRC_SRID}, target_srid=${DST_SRID}" >&2
+    exit 2
+  fi
+  echo "coordinate snapshot import resumed: run_id=${RUN_ID}, version=${SNAPSHOT_VERSION}, files=${FILE_COUNT}"
+else
+  RUN_ID="$("${PSQL[@]}" -q -At \
+    -v snapshot_version="${SNAPSHOT_VERSION}" \
+    -v source_dir="${SHP_DIR}" \
+    -v source_srid="${SRC_SRID}" \
+    -v target_srid="${DST_SRID}" <<'SQL'
 INSERT INTO reference.coordinate_snapshot_run (
     snapshot_version,
     source_dir,
@@ -638,20 +874,77 @@ VALUES (
 )
 RETURNING id;
 SQL
-)"
+  )"
+fi
 if [[ ! "${RUN_ID}" =~ ^[0-9]+$ ]]; then
   echo "ERROR: coordinate_snapshot_run id must be numeric, got: ${RUN_ID}" >&2
   exit 2
 fi
 
-echo "coordinate snapshot import started: run_id=${RUN_ID}, version=${SNAPSHOT_VERSION}, files=${FILE_COUNT}"
+echo "coordinate snapshot import started: run_id=${RUN_ID}, version=${SNAPSHOT_VERSION}, files=${FILE_COUNT}, chunk_prefix_length=${CHUNK_PREFIX_LENGTH}"
 
 "${PSQL[@]}" <<'SQL'
 DROP TABLE IF EXISTS reference.land_parcel_file_raw;
 DROP TABLE IF EXISTS reference.land_parcel_snapshot_raw_next;
 DROP TABLE IF EXISTS reference.parcel_coordinate_snapshot_next;
+SQL
 
-CREATE TABLE reference.land_parcel_snapshot_raw_next (
+RAW_FEATURE_COUNT=0
+INVALID_COUNT=0
+DUPLICATE_PNU_COUNT=0
+PNU_COUNT=0
+
+for region_code in ${EXPECTED_REGIONS}; do
+  CURRENT_REGION_CODE="${region_code}"
+  CURRENT_CHUNK_CODE=""
+  CURRENT_REGION_MANIFEST="$(region_source_manifest "${region_code}")"
+  checkpoint_row="$("${PSQL[@]}" -q -At -F $'\t' \
+    -v run_id="${RUN_ID}" \
+    -v region_code="${region_code}" \
+    -v snapshot_version="${SNAPSHOT_VERSION}" \
+    -v source_format="${SOURCE_FORMAT}" \
+    -v source_manifest="${CURRENT_REGION_MANIFEST}" \
+    -v source_srid="${SRC_SRID}" \
+    -v target_srid="${DST_SRID}" \
+    -v strict_region_match="${STRICT_REGION_MATCH}" <<'SQL'
+SELECT raw_feature_count, pnu_count, invalid_count, duplicate_pnu_count
+FROM reference.coordinate_snapshot_region_checkpoint
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code'
+  AND snapshot_version = :'snapshot_version'
+  AND source_format = :'source_format'
+  AND source_manifest = :'source_manifest'
+  AND source_srid = (:'source_srid')::integer
+  AND target_srid = (:'target_srid')::integer
+  AND strict_region_match = (:'strict_region_match')::boolean
+  AND status = 'PASSED'
+  AND (
+      pnu_count = 0
+      OR EXISTS (
+      SELECT 1
+      FROM reference.parcel_coordinate_snapshot_stage
+      WHERE run_id = (:'run_id')::bigint
+        AND region_code = :'region_code'
+      LIMIT 1
+      )
+  );
+SQL
+  )"
+  if [[ -n "${checkpoint_row}" ]]; then
+    IFS=$'\t' read -r checkpoint_raw_count checkpoint_pnu_count checkpoint_invalid_count checkpoint_duplicate_pnu_count <<<"${checkpoint_row}"
+    RAW_FEATURE_COUNT="$((RAW_FEATURE_COUNT + checkpoint_raw_count))"
+    PNU_COUNT="$((PNU_COUNT + checkpoint_pnu_count))"
+    INVALID_COUNT="$((INVALID_COUNT + checkpoint_invalid_count))"
+    DUPLICATE_PNU_COUNT="$((DUPLICATE_PNU_COUNT + checkpoint_duplicate_pnu_count))"
+    echo "coordinate snapshot region import skipped: run_id=${RUN_ID}, region_code=${region_code}, reason=checkpoint_passed, rows=${checkpoint_pnu_count}"
+    CURRENT_CHUNK_CODE=""
+    continue
+  fi
+
+  "${PSQL[@]}" <<'SQL' >/dev/null
+DROP TABLE IF EXISTS reference.land_parcel_file_raw;
+DROP TABLE IF EXISTS reference.land_parcel_snapshot_raw_next;
+CREATE UNLOGGED TABLE reference.land_parcel_snapshot_raw_next (
     pnu VARCHAR(19),
     source_region_code VARCHAR(8),
     source_file TEXT NOT NULL,
@@ -659,21 +952,29 @@ CREATE TABLE reference.land_parcel_snapshot_raw_next (
 );
 SQL
 
-file_index=0
-for file in "${SHP_FILES[@]}"; do
-  base_name="$(basename "${file}")"
-  source_format_for_file="${SHP_FORMATS[$file_index]}"
-  file_index="$((file_index + 1))"
-  echo "importing ${base_name}"
-  "${PSQL[@]}" <<'SQL' >/dev/null
+  region_file_count=0
+  region_raw_count=0
+  region_invalid_count=0
+  region_duplicate_pnu_count=0
+  for file_index in "${!SHP_FILES[@]}"; do
+    file="${SHP_FILES[$file_index]}"
+    source_region_for_file="${SHP_REGION_CODES[$file_index]}"
+    if [[ "${source_region_for_file}" != "${region_code}" ]]; then
+      continue
+    fi
+    base_name="$(basename "${file}")"
+    source_format_for_file="${SHP_FORMATS[$file_index]}"
+    region_file_count="$((region_file_count + 1))"
+    echo "importing ${base_name}"
+    "${PSQL[@]}" <<'SQL' >/dev/null
 DROP TABLE IF EXISTS reference.land_parcel_file_raw;
 SQL
-  shp2pgsql -W "${ENCODING}" -D -s "${SRC_SRID}:${DST_SRID}" \
-    "${file}" "reference.land_parcel_file_raw" \
-    | "${PSQL[@]}" >/dev/null
+    shp2pgsql -W "${ENCODING}" -D -s "${SRC_SRID}:${DST_SRID}" \
+      "${file}" "reference.land_parcel_file_raw" \
+      | "${PSQL[@]}" >/dev/null
 
-  if [[ "${source_format_for_file}" == "vworld-al-d010" ]]; then
-    "${PSQL[@]}" -v source_file="${base_name}" <<'SQL'
+    if [[ "${source_format_for_file}" == "vworld-al-d010" ]]; then
+      "${PSQL[@]}" -v source_file="${base_name}" <<'SQL'
 INSERT INTO reference.land_parcel_snapshot_raw_next (
     pnu,
     source_region_code,
@@ -687,8 +988,8 @@ SELECT
     geom::geometry(MultiPolygon, 4326)
 FROM reference.land_parcel_file_raw;
 SQL
-  else
-    "${PSQL[@]}" -v source_file="${base_name}" <<'SQL'
+    else
+      "${PSQL[@]}" -v source_file="${base_name}" <<'SQL'
 INSERT INTO reference.land_parcel_snapshot_raw_next (
     pnu,
     source_region_code,
@@ -702,18 +1003,252 @@ SELECT
     geom::geometry(MultiPolygon, 4326)
 FROM reference.land_parcel_file_raw;
 SQL
-  fi
-done
+    fi
 
-"${PSQL[@]}" <<'SQL'
+    file_stats="$(collect_file_stats "${source_format_for_file}")"
+    IFS=$'\t' read -r file_feature_count file_invalid_count file_duplicate_pnu_count <<<"${file_stats}"
+    if [[ ! "${file_feature_count}" =~ ^[0-9]+$ ||
+          ! "${file_invalid_count}" =~ ^[0-9]+$ ||
+          ! "${file_duplicate_pnu_count}" =~ ^[0-9]+$ ]]; then
+      fail_run "invalid coordinate file stats for ${base_name}: ${file_stats}"
+    fi
+    RAW_FEATURE_COUNT="$((RAW_FEATURE_COUNT + file_feature_count))"
+    INVALID_COUNT="$((INVALID_COUNT + file_invalid_count))"
+    DUPLICATE_PNU_COUNT="$((DUPLICATE_PNU_COUNT + file_duplicate_pnu_count))"
+    region_raw_count="$((region_raw_count + file_feature_count))"
+    region_invalid_count="$((region_invalid_count + file_invalid_count))"
+    region_duplicate_pnu_count="$((region_duplicate_pnu_count + file_duplicate_pnu_count))"
+    echo "coordinate snapshot raw file imported: run_id=${RUN_ID}, file=${base_name}, region_code=${region_code}, rows=${file_feature_count}, invalid_rows=${file_invalid_count}, duplicate_pnus=${file_duplicate_pnu_count}, raw_rows_total=${RAW_FEATURE_COUNT}"
+    "${PSQL[@]}" <<'SQL' >/dev/null
+DROP TABLE IF EXISTS reference.land_parcel_file_raw;
+SQL
+  done
+
+  if [[ "${region_file_count}" -eq 0 ]]; then
+    echo "coordinate snapshot region import skipped: run_id=${RUN_ID}, region_code=${region_code}, reason=no_matching_file"
+    CURRENT_CHUNK_CODE=""
+    CURRENT_REGION_CODE=""
+    CURRENT_REGION_MANIFEST=""
+    continue
+  fi
+
+  "${PSQL[@]}" \
+    -v run_id="${RUN_ID}" \
+    -v region_code="${region_code}" \
+    -v snapshot_version="${SNAPSHOT_VERSION}" \
+    -v source_format="${SOURCE_FORMAT}" \
+    -v source_manifest="${CURRENT_REGION_MANIFEST}" \
+    -v source_file_count="${region_file_count}" \
+    -v source_srid="${SRC_SRID}" \
+    -v target_srid="${DST_SRID}" \
+    -v strict_region_match="${STRICT_REGION_MATCH}" <<'SQL' >/dev/null
+DELETE FROM reference.coordinate_snapshot_publish_checkpoint
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code';
+DELETE FROM reference.coordinate_snapshot_publish_chunk_checkpoint
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code';
+DELETE FROM reference.parcel_coordinate_snapshot_publish
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code';
+DELETE FROM reference.parcel_coordinate_snapshot_stage
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code'
+  AND source_manifest <> :'source_manifest';
+DELETE FROM reference.coordinate_snapshot_stage_chunk_checkpoint
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code'
+  AND source_manifest <> :'source_manifest';
+INSERT INTO reference.coordinate_snapshot_region_checkpoint (
+    run_id,
+    region_code,
+    snapshot_version,
+    source_format,
+    source_manifest,
+    source_file_count,
+    source_srid,
+    target_srid,
+    strict_region_match,
+    status,
+    started_at,
+    finished_at
+)
+VALUES (
+    (:'run_id')::bigint,
+    :'region_code',
+    :'snapshot_version',
+    :'source_format',
+    :'source_manifest',
+    (:'source_file_count')::integer,
+    (:'source_srid')::integer,
+    (:'target_srid')::integer,
+    (:'strict_region_match')::boolean,
+    'STARTED',
+    now(),
+    NULL
+)
+ON CONFLICT (run_id, region_code) DO UPDATE
+SET snapshot_version = EXCLUDED.snapshot_version,
+    source_format = EXCLUDED.source_format,
+    source_manifest = EXCLUDED.source_manifest,
+    source_file_count = EXCLUDED.source_file_count,
+    source_srid = EXCLUDED.source_srid,
+    target_srid = EXCLUDED.target_srid,
+    strict_region_match = EXCLUDED.strict_region_match,
+    status = 'STARTED',
+    raw_feature_count = 0,
+    pnu_count = 0,
+    invalid_count = 0,
+    duplicate_pnu_count = 0,
+    failure_reason = NULL,
+    started_at = now(),
+    finished_at = NULL;
+SQL
+
+  "${PSQL[@]}" <<'SQL'
 ANALYZE reference.land_parcel_snapshot_raw_next;
 SQL
 
-"${PSQL[@]}" \
-  -v snapshot_version="${SNAPSHOT_VERSION}" \
-  -v run_id="${RUN_ID}" \
-  -v strict_region_match="${STRICT_REGION_MATCH}" <<'SQL'
-CREATE TABLE reference.parcel_coordinate_snapshot_next AS
+  echo "coordinate snapshot region import started: run_id=${RUN_ID}, region_code=${region_code}, files=${region_file_count}, raw_rows=${region_raw_count}"
+  chunk_codes="$("${PSQL[@]}" -q -At \
+    -v strict_region_match="${STRICT_REGION_MATCH}" \
+    -v region_code="${region_code}" \
+    -v chunk_prefix_length="${CHUNK_PREFIX_LENGTH}" <<'SQL'
+SELECT COALESCE(string_agg(chunk_code, ' ' ORDER BY chunk_code), '')
+FROM (
+    SELECT DISTINCT left(pnu::text, (:'chunk_prefix_length')::integer)::varchar(8) AS chunk_code
+    FROM reference.land_parcel_snapshot_raw_next
+    WHERE pnu IS NOT NULL
+      AND pnu::text ~ '^[0-9]{19}$'
+      AND geom IS NOT NULL
+      AND (
+          :'strict_region_match' <> 'true'
+          OR (
+              source_region_code IS NOT NULL
+              AND left(pnu::text, 5) = left(source_region_code::text, 5)
+          )
+      )
+      AND left(pnu::text, 2) = :'region_code'
+) chunks;
+SQL
+  )"
+  for chunk_code in ${chunk_codes}; do
+    CURRENT_CHUNK_CODE="${chunk_code}"
+    stage_chunk_checkpoint_row="$("${PSQL[@]}" -q -At -F $'\t' \
+      -v run_id="${RUN_ID}" \
+      -v region_code="${region_code}" \
+      -v chunk_code="${chunk_code}" \
+      -v snapshot_version="${SNAPSHOT_VERSION}" \
+      -v source_format="${SOURCE_FORMAT}" \
+      -v source_manifest="${CURRENT_REGION_MANIFEST}" \
+      -v source_srid="${SRC_SRID}" \
+      -v target_srid="${DST_SRID}" \
+      -v strict_region_match="${STRICT_REGION_MATCH}" <<'SQL'
+SELECT raw_feature_count, pnu_count
+FROM reference.coordinate_snapshot_stage_chunk_checkpoint
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code'
+  AND chunk_code = :'chunk_code'
+  AND snapshot_version = :'snapshot_version'
+  AND source_format = :'source_format'
+  AND source_manifest = :'source_manifest'
+  AND source_srid = (:'source_srid')::integer
+  AND target_srid = (:'target_srid')::integer
+  AND strict_region_match = (:'strict_region_match')::boolean
+  AND status = 'PASSED'
+  AND (
+      pnu_count = 0
+      OR EXISTS (
+          SELECT 1
+          FROM reference.parcel_coordinate_snapshot_stage
+          WHERE run_id = (:'run_id')::bigint
+            AND region_code = :'region_code'
+            AND chunk_code = :'chunk_code'
+          LIMIT 1
+      )
+  );
+SQL
+    )"
+    if [[ -n "${stage_chunk_checkpoint_row}" ]]; then
+      IFS=$'\t' read -r stage_chunk_raw_count stage_chunk_pnu_count <<<"${stage_chunk_checkpoint_row}"
+      echo "coordinate snapshot stage chunk skipped: run_id=${RUN_ID}, region_code=${region_code}, chunk_code=${chunk_code}, reason=checkpoint_passed, rows=${stage_chunk_pnu_count}"
+      continue
+    fi
+
+    echo "coordinate snapshot stage chunk started: run_id=${RUN_ID}, region_code=${region_code}, chunk_code=${chunk_code}"
+    stage_chunk_result="$("${PSQL[@]}" -q -At -F $'\t' \
+      -v snapshot_version="${SNAPSHOT_VERSION}" \
+      -v run_id="${RUN_ID}" \
+      -v strict_region_match="${STRICT_REGION_MATCH}" \
+      -v source_manifest="${CURRENT_REGION_MANIFEST}" \
+      -v source_format="${SOURCE_FORMAT}" \
+      -v source_srid="${SRC_SRID}" \
+      -v target_srid="${DST_SRID}" \
+      -v region_code="${region_code}" \
+      -v chunk_code="${chunk_code}" \
+      -v chunk_prefix_length="${CHUNK_PREFIX_LENGTH}" <<'SQL'
+BEGIN;
+SET LOCAL jit = off;
+SET LOCAL max_parallel_workers_per_gather = 0;
+SET LOCAL work_mem = '128MB';
+
+INSERT INTO reference.coordinate_snapshot_stage_chunk_checkpoint (
+    run_id,
+    region_code,
+    chunk_code,
+    snapshot_version,
+    source_format,
+    source_manifest,
+    source_srid,
+    target_srid,
+    strict_region_match,
+    status,
+    started_at,
+    finished_at
+)
+VALUES (
+    (:'run_id')::bigint,
+    :'region_code',
+    :'chunk_code',
+    :'snapshot_version',
+    :'source_format',
+    :'source_manifest',
+    (:'source_srid')::integer,
+    (:'target_srid')::integer,
+    (:'strict_region_match')::boolean,
+    'STARTED',
+    now(),
+    NULL
+)
+ON CONFLICT (run_id, region_code, chunk_code) DO UPDATE
+SET snapshot_version = EXCLUDED.snapshot_version,
+    source_format = EXCLUDED.source_format,
+    source_manifest = EXCLUDED.source_manifest,
+    source_srid = EXCLUDED.source_srid,
+    target_srid = EXCLUDED.target_srid,
+    strict_region_match = EXCLUDED.strict_region_match,
+    raw_feature_count = 0,
+    pnu_count = 0,
+    status = 'STARTED',
+    failure_reason = NULL,
+    started_at = now(),
+    finished_at = NULL;
+
+DELETE FROM reference.parcel_coordinate_snapshot_publish
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code'
+  AND chunk_code = :'chunk_code';
+
+DELETE FROM reference.coordinate_snapshot_publish_chunk_checkpoint
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code'
+  AND chunk_code = :'chunk_code';
+
+DELETE FROM reference.parcel_coordinate_snapshot_stage
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code'
+  AND chunk_code = :'chunk_code';
+
 WITH valid_raw AS (
     SELECT
         pnu::varchar(19) AS pnu,
@@ -730,11 +1265,18 @@ WITH valid_raw AS (
               AND left(pnu::text, 5) = left(source_region_code::text, 5)
           )
       )
+      AND left(pnu::text, 2) = :'region_code'
+      AND left(pnu::text, (:'chunk_prefix_length')::integer) = :'chunk_code'
+),
+raw_count AS (
+    SELECT count(*)::bigint AS row_count
+    FROM valid_raw
 ),
 aggregated AS (
     SELECT
         pnu,
         left(pnu, 2) AS region_code,
+        (:'chunk_code')::varchar(8) AS chunk_code,
         min(source_file) AS source_file,
         ST_Multi(
             ST_CollectionExtract(
@@ -749,71 +1291,418 @@ with_point AS (
     SELECT
         pnu,
         region_code,
+        chunk_code,
         source_file,
         geom,
         ST_PointOnSurface(geom)::geometry(Point, 4326) AS point
     FROM aggregated
     WHERE NOT ST_IsEmpty(geom)
       AND ST_IsValid(geom)
+),
+inserted AS (
+    INSERT INTO reference.parcel_coordinate_snapshot_stage (
+        run_id,
+        pnu,
+        region_code,
+        chunk_code,
+        latitude,
+        longitude,
+        point,
+        geom,
+        snapshot_version,
+        source_file,
+        source_manifest,
+        created_at,
+        updated_at
+    )
+    SELECT
+        (:'run_id')::bigint AS run_id,
+        pnu,
+        region_code,
+        chunk_code,
+        ST_Y(point)::numeric(10, 7) AS latitude,
+        ST_X(point)::numeric(10, 7) AS longitude,
+        point,
+        geom,
+        (:'snapshot_version')::varchar(64) AS snapshot_version,
+        source_file,
+        (:'source_manifest')::text AS source_manifest,
+        now() AS created_at,
+        now() AS updated_at
+    FROM with_point
+    WHERE ST_Y(point) BETWEEN 33 AND 39
+      AND ST_X(point) BETWEEN 124 AND 132
+    RETURNING 1
+),
+updated AS (
+    UPDATE reference.coordinate_snapshot_stage_chunk_checkpoint
+    SET status = 'PASSED',
+        raw_feature_count = (SELECT row_count FROM raw_count),
+        pnu_count = (SELECT count(*) FROM inserted),
+        failure_reason = NULL,
+        finished_at = now()
+    WHERE run_id = (:'run_id')::bigint
+      AND region_code = :'region_code'
+      AND chunk_code = :'chunk_code'
+    RETURNING raw_feature_count, pnu_count
 )
-SELECT
-    pnu,
-    region_code,
-    ST_Y(point)::numeric(10, 7) AS latitude,
-    ST_X(point)::numeric(10, 7) AS longitude,
-    point,
-    geom,
-    (:'snapshot_version')::varchar(64) AS snapshot_version,
-    source_file,
-    (:'run_id')::bigint AS run_id,
-    now() AS created_at,
-    now() AS updated_at
-FROM with_point
-WHERE ST_Y(point) BETWEEN 33 AND 39
-  AND ST_X(point) BETWEEN 124 AND 132;
+SELECT raw_feature_count::text, pnu_count::text FROM updated;
 
-ANALYZE reference.parcel_coordinate_snapshot_next;
+COMMIT;
 SQL
+    )"
+    IFS=$'\t' read -r stage_chunk_raw_count stage_chunk_pnu_count <<<"${stage_chunk_result}"
+    if [[ ! "${stage_chunk_raw_count}" =~ ^[0-9]+$ || ! "${stage_chunk_pnu_count}" =~ ^[0-9]+$ ]]; then
+      fail_run "invalid coordinate stage chunk result for region ${region_code}, chunk ${chunk_code}: ${stage_chunk_result}"
+    fi
+    echo "coordinate snapshot stage chunk passed: run_id=${RUN_ID}, region_code=${region_code}, chunk_code=${chunk_code}, raw_rows=${stage_chunk_raw_count}, rows=${stage_chunk_pnu_count}"
+  done
+  CURRENT_CHUNK_CODE=""
+  region_row_count="$("${PSQL[@]}" -q -At \
+    -v run_id="${RUN_ID}" \
+    -v region_code="${region_code}" \
+    -v snapshot_version="${SNAPSHOT_VERSION}" \
+    -v source_format="${SOURCE_FORMAT}" \
+    -v source_manifest="${CURRENT_REGION_MANIFEST}" \
+    -v source_srid="${SRC_SRID}" \
+    -v target_srid="${DST_SRID}" \
+    -v strict_region_match="${STRICT_REGION_MATCH}" <<'SQL'
+SELECT COALESCE(sum(pnu_count), 0)::text
+FROM reference.coordinate_snapshot_stage_chunk_checkpoint
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code'
+  AND snapshot_version = :'snapshot_version'
+  AND source_format = :'source_format'
+  AND source_manifest = :'source_manifest'
+  AND source_srid = (:'source_srid')::integer
+  AND target_srid = (:'target_srid')::integer
+  AND strict_region_match = (:'strict_region_match')::boolean
+  AND status = 'PASSED';
+SQL
+  )"
+  if [[ ! "${region_row_count}" =~ ^[0-9]+$ ]]; then
+    fail_run "invalid coordinate region import row count for region ${region_code}: ${region_row_count}"
+  fi
+  PNU_COUNT="$((PNU_COUNT + region_row_count))"
+  "${PSQL[@]}" \
+    -v run_id="${RUN_ID}" \
+    -v region_code="${region_code}" \
+    -v raw_feature_count="${region_raw_count}" \
+    -v pnu_count="${region_row_count}" \
+    -v invalid_count="${region_invalid_count}" \
+    -v duplicate_pnu_count="${region_duplicate_pnu_count}" <<'SQL' >/dev/null
+UPDATE reference.coordinate_snapshot_region_checkpoint
+SET status = 'PASSED',
+    raw_feature_count = (:'raw_feature_count')::bigint,
+    pnu_count = (:'pnu_count')::bigint,
+    invalid_count = (:'invalid_count')::bigint,
+    duplicate_pnu_count = (:'duplicate_pnu_count')::bigint,
+    failure_reason = NULL,
+    finished_at = now()
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code';
+SQL
+  echo "coordinate snapshot region import passed: run_id=${RUN_ID}, region_code=${region_code}, rows=${region_row_count}"
+  if [[ "${KEEP_STAGING}" != "true" ]]; then
+    "${PSQL[@]}" <<'SQL' >/dev/null
+DROP TABLE IF EXISTS reference.land_parcel_snapshot_raw_next;
+SQL
+  fi
+  CURRENT_REGION_CODE=""
+  CURRENT_REGION_MANIFEST=""
+done
 
-RAW_FEATURE_COUNT="$("${PSQL[@]}" -At -c "SELECT count(*) FROM reference.land_parcel_snapshot_raw_next")"
-INVALID_COUNT="$("${PSQL[@]}" -At -v strict_region_match="${STRICT_REGION_MATCH}" <<'SQL'
-SELECT count(*)
-FROM reference.land_parcel_snapshot_raw_next
-WHERE pnu IS NULL
-   OR pnu::text !~ '^[0-9]{19}$'
-   OR geom IS NULL
-   OR (
-       :'strict_region_match' = 'true'
-       AND (
-           source_region_code IS NULL
-           OR left(pnu::text, 5) <> left(source_region_code::text, 5)
-       )
-   );
+"${PSQL[@]}" -v run_id="${RUN_ID}" <<'SQL'
+ANALYZE reference.parcel_coordinate_snapshot_stage;
 SQL
-)"
-DUPLICATE_PNU_COUNT="$("${PSQL[@]}" -At -v strict_region_match="${STRICT_REGION_MATCH}" <<'SQL'
-SELECT count(*)
-FROM (
-    SELECT pnu
-    FROM reference.land_parcel_snapshot_raw_next
-    WHERE pnu IS NOT NULL
-      AND pnu::text ~ '^[0-9]{19}$'
-      AND (
-          :'strict_region_match' <> 'true'
-          OR (
-              source_region_code IS NOT NULL
-              AND left(pnu::text, 5) = left(source_region_code::text, 5)
-          )
-      )
-    GROUP BY pnu
-    HAVING count(*) > 1
-) duplicates;
-SQL
-)"
-PNU_COUNT="$("${PSQL[@]}" -At -c "SELECT count(*) FROM reference.parcel_coordinate_snapshot_next")"
 
 if [[ "${PNU_COUNT}" -eq 0 ]]; then
   fail_run "no valid coordinate rows were produced from SHP input"
+fi
+
+echo "coordinate snapshot staging totals: run_id=${RUN_ID}, raw_feature_count=${RAW_FEATURE_COUNT}, pnu_count=${PNU_COUNT}, invalid_count=${INVALID_COUNT}, duplicate_pnu_count=${DUPLICATE_PNU_COUNT}"
+
+if [[ "${KEEP_STAGING}" != "true" ]]; then
+  echo "coordinate snapshot raw staging cleanup started: run_id=${RUN_ID}"
+  "${PSQL[@]}" <<'SQL' >/dev/null
+DROP TABLE IF EXISTS reference.land_parcel_file_raw;
+DROP TABLE IF EXISTS reference.land_parcel_snapshot_raw_next;
+SQL
+fi
+
+PUBLISH_COUNT=0
+for region_code in ${EXPECTED_REGIONS}; do
+  CURRENT_REGION_CODE="${region_code}"
+  CURRENT_CHUNK_CODE=""
+  CURRENT_REGION_MANIFEST="$(region_source_manifest "${region_code}")"
+  publish_checkpoint_row="$("${PSQL[@]}" -q -At -F $'\t' \
+    -v run_id="${RUN_ID}" \
+    -v region_code="${region_code}" \
+    -v source_manifest="${CURRENT_REGION_MANIFEST}" <<'SQL'
+SELECT pc.row_count
+FROM reference.coordinate_snapshot_publish_checkpoint pc
+JOIN reference.coordinate_snapshot_region_checkpoint rc
+  ON rc.run_id = pc.run_id
+ AND rc.region_code = pc.region_code
+WHERE pc.run_id = (:'run_id')::bigint
+  AND pc.region_code = :'region_code'
+  AND pc.source_manifest = :'source_manifest'
+  AND pc.status = 'PASSED'
+  AND rc.status = 'PASSED'
+  AND pc.row_count = rc.pnu_count
+  AND (
+      pc.row_count = 0
+      OR EXISTS (
+      SELECT 1
+      FROM reference.parcel_coordinate_snapshot_publish
+      WHERE run_id = (:'run_id')::bigint
+        AND region_code = :'region_code'
+      LIMIT 1
+      )
+  );
+SQL
+  )"
+  if [[ -n "${publish_checkpoint_row}" ]]; then
+    PUBLISH_COUNT="$((PUBLISH_COUNT + publish_checkpoint_row))"
+    echo "coordinate snapshot publish region skipped: run_id=${RUN_ID}, region_code=${region_code}, reason=checkpoint_passed, rows=${publish_checkpoint_row}"
+    CURRENT_CHUNK_CODE=""
+    CURRENT_REGION_CODE=""
+    CURRENT_REGION_MANIFEST=""
+    continue
+  fi
+
+  echo "coordinate snapshot publish region started: run_id=${RUN_ID}, region_code=${region_code}"
+  "${PSQL[@]}" \
+    -v run_id="${RUN_ID}" \
+    -v region_code="${region_code}" \
+    -v source_manifest="${CURRENT_REGION_MANIFEST}" <<'SQL' >/dev/null
+INSERT INTO reference.coordinate_snapshot_publish_checkpoint (
+    run_id,
+    region_code,
+    source_manifest,
+    status,
+    started_at,
+    finished_at
+)
+VALUES (
+    (:'run_id')::bigint,
+    :'region_code',
+    :'source_manifest',
+    'STARTED',
+    now(),
+    NULL
+)
+ON CONFLICT (run_id, region_code) DO UPDATE
+SET source_manifest = EXCLUDED.source_manifest,
+    row_count = 0,
+    status = 'STARTED',
+    failure_reason = NULL,
+    started_at = now(),
+    finished_at = NULL;
+SQL
+
+  publish_chunk_codes="$("${PSQL[@]}" -q -At \
+    -v run_id="${RUN_ID}" \
+    -v region_code="${region_code}" \
+    -v source_manifest="${CURRENT_REGION_MANIFEST}" <<'SQL'
+SELECT COALESCE(string_agg(sc.chunk_code, ' ' ORDER BY sc.chunk_code), '')
+FROM reference.coordinate_snapshot_stage_chunk_checkpoint sc
+JOIN reference.coordinate_snapshot_region_checkpoint rc
+  ON rc.run_id = sc.run_id
+ AND rc.region_code = sc.region_code
+WHERE sc.run_id = (:'run_id')::bigint
+  AND sc.region_code = :'region_code'
+  AND sc.source_manifest = :'source_manifest'
+  AND sc.status = 'PASSED'
+  AND rc.status = 'PASSED';
+SQL
+  )"
+  for chunk_code in ${publish_chunk_codes}; do
+    CURRENT_CHUNK_CODE="${chunk_code}"
+    publish_chunk_checkpoint_row="$("${PSQL[@]}" -q -At -F $'\t' \
+      -v run_id="${RUN_ID}" \
+      -v region_code="${region_code}" \
+      -v chunk_code="${chunk_code}" \
+      -v source_manifest="${CURRENT_REGION_MANIFEST}" <<'SQL'
+SELECT pc.row_count
+FROM reference.coordinate_snapshot_publish_chunk_checkpoint pc
+JOIN reference.coordinate_snapshot_stage_chunk_checkpoint sc
+  ON sc.run_id = pc.run_id
+ AND sc.region_code = pc.region_code
+ AND sc.chunk_code = pc.chunk_code
+WHERE pc.run_id = (:'run_id')::bigint
+  AND pc.region_code = :'region_code'
+  AND pc.chunk_code = :'chunk_code'
+  AND pc.source_manifest = :'source_manifest'
+  AND pc.status = 'PASSED'
+  AND sc.status = 'PASSED'
+  AND pc.row_count = sc.pnu_count
+  AND (
+      pc.row_count = 0
+      OR EXISTS (
+          SELECT 1
+          FROM reference.parcel_coordinate_snapshot_publish
+          WHERE run_id = (:'run_id')::bigint
+            AND region_code = :'region_code'
+            AND chunk_code = :'chunk_code'
+          LIMIT 1
+      )
+  );
+SQL
+    )"
+    if [[ -n "${publish_chunk_checkpoint_row}" ]]; then
+      echo "coordinate snapshot publish chunk skipped: run_id=${RUN_ID}, region_code=${region_code}, chunk_code=${chunk_code}, reason=checkpoint_passed, rows=${publish_chunk_checkpoint_row}"
+      continue
+    fi
+
+    echo "coordinate snapshot publish chunk started: run_id=${RUN_ID}, region_code=${region_code}, chunk_code=${chunk_code}"
+    publish_chunk_row_count="$("${PSQL[@]}" -q -At \
+      -v run_id="${RUN_ID}" \
+      -v region_code="${region_code}" \
+      -v chunk_code="${chunk_code}" \
+      -v source_manifest="${CURRENT_REGION_MANIFEST}" <<'SQL'
+BEGIN;
+
+INSERT INTO reference.coordinate_snapshot_publish_chunk_checkpoint (
+    run_id,
+    region_code,
+    chunk_code,
+    source_manifest,
+    status,
+    started_at,
+    finished_at
+)
+VALUES (
+    (:'run_id')::bigint,
+    :'region_code',
+    :'chunk_code',
+    :'source_manifest',
+    'STARTED',
+    now(),
+    NULL
+)
+ON CONFLICT (run_id, region_code, chunk_code) DO UPDATE
+SET source_manifest = EXCLUDED.source_manifest,
+    row_count = 0,
+    status = 'STARTED',
+    failure_reason = NULL,
+    started_at = now(),
+    finished_at = NULL;
+
+DELETE FROM reference.parcel_coordinate_snapshot_publish
+WHERE run_id = (:'run_id')::bigint
+  AND region_code = :'region_code'
+  AND chunk_code = :'chunk_code';
+
+WITH inserted AS (
+    INSERT INTO reference.parcel_coordinate_snapshot_publish (
+        run_id,
+        pnu,
+        region_code,
+        chunk_code,
+        latitude,
+        longitude,
+        point,
+        geom,
+        snapshot_version,
+        source_file,
+        created_at,
+        updated_at
+    )
+    SELECT
+        run_id,
+        pnu,
+        region_code,
+        chunk_code,
+        latitude,
+        longitude,
+        point,
+        geom,
+        snapshot_version,
+        source_file,
+        created_at,
+        updated_at
+    FROM reference.parcel_coordinate_snapshot_stage
+    WHERE run_id = (:'run_id')::bigint
+      AND region_code = :'region_code'
+      AND chunk_code = :'chunk_code'
+    RETURNING 1
+),
+updated AS (
+    UPDATE reference.coordinate_snapshot_publish_chunk_checkpoint
+    SET status = 'PASSED',
+        row_count = (SELECT count(*) FROM inserted),
+        failure_reason = NULL,
+        finished_at = now()
+    WHERE run_id = (:'run_id')::bigint
+      AND region_code = :'region_code'
+      AND chunk_code = :'chunk_code'
+    RETURNING row_count
+)
+SELECT row_count FROM updated;
+
+COMMIT;
+SQL
+    )"
+    if [[ ! "${publish_chunk_row_count}" =~ ^[0-9]+$ ]]; then
+      fail_run "invalid coordinate publish chunk row count for region ${region_code}, chunk ${chunk_code}: ${publish_chunk_row_count}"
+    fi
+    echo "coordinate snapshot publish chunk passed: run_id=${RUN_ID}, region_code=${region_code}, chunk_code=${chunk_code}, rows=${publish_chunk_row_count}"
+  done
+  CURRENT_CHUNK_CODE=""
+  publish_row_count="$("${PSQL[@]}" -q -At \
+    -v run_id="${RUN_ID}" \
+    -v region_code="${region_code}" \
+    -v source_manifest="${CURRENT_REGION_MANIFEST}" <<'SQL'
+WITH expected AS (
+    SELECT pnu_count
+    FROM reference.coordinate_snapshot_region_checkpoint
+    WHERE run_id = (:'run_id')::bigint
+      AND region_code = :'region_code'
+      AND source_manifest = :'source_manifest'
+      AND status = 'PASSED'
+),
+published AS (
+    SELECT COALESCE(sum(row_count), 0)::bigint AS row_count
+    FROM reference.coordinate_snapshot_publish_chunk_checkpoint
+    WHERE run_id = (:'run_id')::bigint
+      AND region_code = :'region_code'
+      AND source_manifest = :'source_manifest'
+      AND status = 'PASSED'
+),
+updated AS (
+    UPDATE reference.coordinate_snapshot_publish_checkpoint
+    SET status = 'PASSED',
+        row_count = (SELECT row_count FROM published),
+        failure_reason = CASE
+            WHEN (SELECT row_count FROM published) = (SELECT pnu_count FROM expected)
+            THEN NULL
+            ELSE 'publish chunk row count does not match staged region pnu_count'
+        END,
+        finished_at = now()
+    WHERE run_id = (:'run_id')::bigint
+      AND region_code = :'region_code'
+      AND (SELECT row_count FROM published) = (SELECT pnu_count FROM expected)
+    RETURNING row_count
+)
+SELECT row_count FROM updated;
+SQL
+  )"
+  if [[ ! "${publish_row_count}" =~ ^[0-9]+$ ]]; then
+    fail_run "invalid coordinate publish row count for region ${region_code}: ${publish_row_count}"
+  fi
+  PUBLISH_COUNT="$((PUBLISH_COUNT + publish_row_count))"
+  echo "coordinate snapshot publish region passed: run_id=${RUN_ID}, region_code=${region_code}, rows=${publish_row_count}"
+  CURRENT_REGION_CODE=""
+  CURRENT_REGION_MANIFEST=""
+done
+
+"${PSQL[@]}" -v run_id="${RUN_ID}" <<'SQL'
+ANALYZE reference.parcel_coordinate_snapshot_publish;
+SQL
+
+if [[ "${PUBLISH_COUNT}" -ne "${PNU_COUNT}" ]]; then
+  fail_run "published coordinate rows ${PUBLISH_COUNT} did not match staged pnu_count ${PNU_COUNT}"
 fi
 
 if [[ "${SYNC_PARCEL}" == "true" ]]; then
@@ -834,6 +1723,7 @@ if [[ "${SYNC_PARCEL}" == "true" ]]; then
 	    -v part_counts="${part_counts}" \
 	    -v source_srid="${SRC_SRID}" \
 	    -v target_srid="${DST_SRID}" \
+	    -v chunk_prefix_length="${CHUNK_PREFIX_LENGTH}" \
 	    -v strict_region_match="${STRICT_REGION_MATCH}" <<'SQL'
 BEGIN;
 
@@ -864,7 +1754,8 @@ SELECT
     run_id,
     created_at,
     updated_at
-FROM reference.parcel_coordinate_snapshot_next;
+FROM reference.parcel_coordinate_snapshot_publish
+WHERE run_id = (:'run_id')::bigint;
 
 CREATE TEMP TABLE coordinate_sync_result ON COMMIT DROP AS
 WITH updated AS (
@@ -899,6 +1790,7 @@ SET status = 'PASSED',
         'partCounts', :'part_counts',
         'sourceSrid', (:'source_srid')::integer,
         'targetSrid', (:'target_srid')::integer,
+        'chunkPrefixLength', (:'chunk_prefix_length')::integer,
         'strictRegionMatch', :'strict_region_match',
         'syncParcel', true
     ),
@@ -925,6 +1817,7 @@ else
 	    -v part_counts="${part_counts}" \
 	    -v source_srid="${SRC_SRID}" \
 	    -v target_srid="${DST_SRID}" \
+	    -v chunk_prefix_length="${CHUNK_PREFIX_LENGTH}" \
 	    -v strict_region_match="${STRICT_REGION_MATCH}" <<'SQL'
 BEGIN;
 
@@ -955,7 +1848,8 @@ SELECT
     run_id,
     created_at,
     updated_at
-FROM reference.parcel_coordinate_snapshot_next;
+FROM reference.parcel_coordinate_snapshot_publish
+WHERE run_id = (:'run_id')::bigint;
 
 UPDATE reference.coordinate_snapshot_run
 SET status = 'PASSED',
@@ -976,6 +1870,7 @@ SET status = 'PASSED',
         'partCounts', :'part_counts',
         'sourceSrid', (:'source_srid')::integer,
         'targetSrid', (:'target_srid')::integer,
+        'chunkPrefixLength', (:'chunk_prefix_length')::integer,
         'strictRegionMatch', :'strict_region_match',
         'syncParcel', false
     ),

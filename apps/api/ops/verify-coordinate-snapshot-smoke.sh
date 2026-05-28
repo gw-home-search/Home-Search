@@ -15,6 +15,7 @@ Optional:
   HOME_COORDINATE_EXPECTED_REGIONS      Space-separated SIDO region list. Defaults to all 17 SIDO codes.
   HOME_COORDINATE_MIN_PNU_COUNT         Minimum active snapshot PNU count. Defaults to 1.
   HOME_COORDINATE_REQUIRE_SYNC_PARCEL   Require synced_parcel_count > 0. Defaults to false.
+  HOME_COORDINATE_VERIFY_ACTIVE_COUNT   Run exact active table count scan. Defaults to false.
 EOF
 }
 
@@ -46,6 +47,7 @@ PSQL=(psql -X -v ON_ERROR_STOP=1)
 EXPECTED_REGIONS="${HOME_COORDINATE_EXPECTED_REGIONS:-11 26 27 28 29 30 31 36 41 43 44 46 47 48 50 51 52}"
 MIN_PNU_COUNT="${HOME_COORDINATE_MIN_PNU_COUNT:-1}"
 REQUIRE_SYNC_PARCEL="${HOME_COORDINATE_REQUIRE_SYNC_PARCEL:-false}"
+VERIFY_ACTIVE_COUNT="${HOME_COORDINATE_VERIFY_ACTIVE_COUNT:-false}"
 
 contains_token() {
   case " $1 " in
@@ -92,6 +94,7 @@ run_self_test() {
   fi
   require_unsigned_integer "HOME_COORDINATE_MIN_PNU_COUNT" "${MIN_PNU_COUNT}"
   require_boolean "HOME_COORDINATE_REQUIRE_SYNC_PARCEL" "${REQUIRE_SYNC_PARCEL}"
+  require_boolean "HOME_COORDINATE_VERIFY_ACTIVE_COUNT" "${VERIFY_ACTIVE_COUNT}"
   echo "self-test passed: coordinate snapshot smoke verifier"
 }
 
@@ -102,6 +105,7 @@ fi
 
 require_unsigned_integer "HOME_COORDINATE_MIN_PNU_COUNT" "${MIN_PNU_COUNT}"
 require_boolean "HOME_COORDINATE_REQUIRE_SYNC_PARCEL" "${REQUIRE_SYNC_PARCEL}"
+require_boolean "HOME_COORDINATE_VERIFY_ACTIVE_COUNT" "${VERIFY_ACTIVE_COUNT}"
 
 if ! command -v psql >/dev/null 2>&1; then
   echo "ERROR: psql is required on PATH" >&2
@@ -110,7 +114,10 @@ fi
 
 SCHEMA_READY="$("${PSQL[@]}" -At <<'SQL'
 SELECT to_regclass('reference.coordinate_snapshot_run') IS NOT NULL
-   AND to_regclass('reference.parcel_coordinate_snapshot') IS NOT NULL;
+   AND to_regclass('reference.parcel_coordinate_snapshot') IS NOT NULL
+   AND to_regclass('reference.coordinate_snapshot_publish_checkpoint') IS NOT NULL
+   AND to_regclass('reference.coordinate_snapshot_publish_chunk_checkpoint') IS NOT NULL
+   AND to_regclass('reference.coordinate_snapshot_stage_chunk_checkpoint') IS NOT NULL;
 SQL
 )"
 if [[ "${SCHEMA_READY}" != "t" ]]; then
@@ -125,19 +132,6 @@ WITH latest AS (
     WHERE status = 'PASSED'
     ORDER BY finished_at DESC NULLS LAST, started_at DESC, id DESC
     LIMIT 1
-),
-snapshot_counts AS (
-    SELECT
-        count(*)::bigint AS snapshot_count,
-        count(*) FILTER (
-            WHERE NOT (latitude BETWEEN 33 AND 39)
-               OR NOT (longitude BETWEEN 124 AND 132)
-        )::bigint AS out_of_bounds_count,
-        count(*) FILTER (WHERE NOT (ST_SRID(point) = 4326))::bigint AS point_srid_mismatch_count,
-        count(*) FILTER (WHERE NOT (ST_SRID(geom) = 4326))::bigint AS geom_srid_mismatch_count,
-        count(*) FILTER (WHERE NOT ST_IsValid(geom))::bigint AS invalid_geom_count,
-        COALESCE(string_agg(DISTINCT region_code, ' ' ORDER BY region_code), '') AS snapshot_regions
-    FROM reference.parcel_coordinate_snapshot
 )
 SELECT
     latest.id,
@@ -155,15 +149,8 @@ SELECT
     latest.source_srid,
     latest.target_srid,
     COALESCE(latest.report_json->>'strictRegionMatch', ''),
-    COALESCE(latest.report_json->>'syncParcel', ''),
-    snapshot_counts.snapshot_count,
-    snapshot_counts.out_of_bounds_count,
-    snapshot_counts.point_srid_mismatch_count,
-    snapshot_counts.geom_srid_mismatch_count,
-    snapshot_counts.invalid_geom_count,
-    snapshot_counts.snapshot_regions
-FROM latest
-CROSS JOIN snapshot_counts;
+    COALESCE(latest.report_json->>'syncParcel', '')
+FROM latest;
 SQL
 )"
 
@@ -188,24 +175,118 @@ IFS='|' read -r \
   SOURCE_SRID \
   TARGET_SRID \
   STRICT_REGION_MATCH \
-  SYNC_PARCEL \
-  SNAPSHOT_COUNT \
-  OUT_OF_BOUNDS_COUNT \
-  POINT_SRID_MISMATCH_COUNT \
-  GEOM_SRID_MISMATCH_COUNT \
-  INVALID_GEOM_COUNT \
-  SNAPSHOT_REGIONS <<<"${REPORT}"
+  SYNC_PARCEL <<<"${REPORT}"
+
+CONSTRAINT_REPORT="$("${PSQL[@]}" -At -F '|' <<'SQL'
+WITH required_coordinate_constraints(name, expected_check) AS (
+    VALUES
+        ('parcel_coordinate_snapshot_pkey', 'pnu primary key'),
+        ('parcel_coordinate_snapshot_pnu_check', 'pnu format'),
+        ('parcel_coordinate_snapshot_latitude_check', 'latitude BETWEEN 33 AND 39'),
+        ('parcel_coordinate_snapshot_longitude_check', 'longitude BETWEEN 124 AND 132'),
+        ('ck_parcel_coordinate_snapshot_point_srid', 'ST_SRID(point) = 4326'),
+        ('ck_parcel_coordinate_snapshot_geom_srid', 'ST_SRID(geom) = 4326'),
+        ('ck_parcel_coordinate_snapshot_geom_valid', 'ST_IsValid(geom)')
+),
+constraint_state AS (
+    SELECT
+        required_coordinate_constraints.name,
+        COALESCE(pg_constraint.convalidated, false) AS validated
+    FROM required_coordinate_constraints
+    LEFT JOIN pg_constraint
+      ON pg_constraint.conrelid = 'reference.parcel_coordinate_snapshot'::regclass
+     AND pg_constraint.conname = required_coordinate_constraints.name
+)
+SELECT
+    count(*) FILTER (WHERE validated)::integer,
+    COALESCE(string_agg(name, ' ' ORDER BY name) FILTER (WHERE NOT validated), '')
+FROM constraint_state;
+SQL
+)"
+IFS='|' read -r VALIDATED_CONSTRAINT_COUNT INVALID_CONSTRAINTS <<<"${CONSTRAINT_REPORT}"
+
+PUBLISH_REPORT="$("${PSQL[@]}" -v run_id="${RUN_ID}" -At -F '|' <<'SQL'
+SELECT
+    count(*) FILTER (WHERE status = 'PASSED')::integer,
+    count(*) FILTER (WHERE status <> 'PASSED')::integer,
+    COALESCE(sum(row_count) FILTER (WHERE status = 'PASSED'), 0)::bigint,
+    COALESCE(string_agg(region_code, ' ' ORDER BY region_code) FILTER (WHERE status = 'PASSED'), '')
+FROM reference.coordinate_snapshot_publish_checkpoint
+WHERE run_id = (:'run_id')::bigint;
+SQL
+)"
+IFS='|' read -r PUBLISH_REGION_COUNT PUBLISH_FAILED_REGION_COUNT PUBLISH_ROW_COUNT PUBLISH_REGIONS <<<"${PUBLISH_REPORT}"
+
+PUBLISH_CHUNK_REPORT="$("${PSQL[@]}" -v run_id="${RUN_ID}" -At -F '|' <<'SQL'
+SELECT
+    count(*) FILTER (WHERE status = 'PASSED')::integer,
+    count(*) FILTER (WHERE status <> 'PASSED')::integer,
+    COALESCE(sum(row_count) FILTER (WHERE status = 'PASSED'), 0)::bigint
+FROM reference.coordinate_snapshot_publish_chunk_checkpoint
+WHERE run_id = (:'run_id')::bigint;
+SQL
+)"
+IFS='|' read -r PUBLISH_CHUNK_COUNT PUBLISH_FAILED_CHUNK_COUNT PUBLISH_CHUNK_ROW_COUNT <<<"${PUBLISH_CHUNK_REPORT}"
+
+STAGE_CHUNK_REPORT="$("${PSQL[@]}" -v run_id="${RUN_ID}" -At -F '|' <<'SQL'
+SELECT
+    count(*) FILTER (WHERE status = 'PASSED')::integer,
+    count(*) FILTER (WHERE status <> 'PASSED')::integer,
+    COALESCE(sum(pnu_count) FILTER (WHERE status = 'PASSED'), 0)::bigint
+FROM reference.coordinate_snapshot_stage_chunk_checkpoint
+WHERE run_id = (:'run_id')::bigint;
+SQL
+)"
+IFS='|' read -r STAGE_CHUNK_COUNT STAGE_FAILED_CHUNK_COUNT STAGE_CHUNK_PNU_COUNT <<<"${STAGE_CHUNK_REPORT}"
+
+ACTIVE_COUNT_MODE="checkpoint"
+if [[ "${VERIFY_ACTIVE_COUNT}" == "true" ]]; then
+  ACTIVE_COUNT_MODE="exact"
+  SNAPSHOT_COUNT="$("${PSQL[@]}" -q -At <<'SQL'
+SET max_parallel_workers_per_gather = 0;
+SELECT count(*)::bigint
+FROM reference.parcel_coordinate_snapshot;
+SQL
+)"
+else
+  SNAPSHOT_COUNT="${PUBLISH_ROW_COUNT}"
+fi
+
+SAMPLE_VIOLATION_COUNT="$("${PSQL[@]}" -q -At <<'SQL'
+SET max_parallel_workers_per_gather = 0;
+SELECT count(*)::bigint
+FROM (
+    SELECT latitude, longitude, point, geom
+    FROM reference.parcel_coordinate_snapshot
+    ORDER BY pnu
+    LIMIT 5
+) AS active_sample
+WHERE NOT (latitude BETWEEN 33 AND 39)
+   OR NOT (longitude BETWEEN 124 AND 132)
+   OR NOT (ST_SRID(point) = 4326)
+   OR NOT (ST_SRID(geom) = 4326)
+   OR NOT ST_IsValid(geom);
+SQL
+)"
 
 EXPECTED_REGION_COUNT="$(token_count "${EXPECTED_REGIONS}")"
+REQUIRED_CONSTRAINT_COUNT="7"
 
 require_unsigned_integer "file_count" "${FILE_COUNT}"
 require_unsigned_integer "region_count" "${REGION_COUNT}"
 require_unsigned_integer "pnu_count" "${PNU_COUNT}"
 require_unsigned_integer "snapshot_count" "${SNAPSHOT_COUNT}"
-require_unsigned_integer "out_of_bounds_count" "${OUT_OF_BOUNDS_COUNT}"
-require_unsigned_integer "point_srid_mismatch_count" "${POINT_SRID_MISMATCH_COUNT}"
-require_unsigned_integer "geom_srid_mismatch_count" "${GEOM_SRID_MISMATCH_COUNT}"
-require_unsigned_integer "invalid_geom_count" "${INVALID_GEOM_COUNT}"
+require_unsigned_integer "validated_constraint_count" "${VALIDATED_CONSTRAINT_COUNT}"
+require_unsigned_integer "publish_region_count" "${PUBLISH_REGION_COUNT}"
+require_unsigned_integer "publish_failed_region_count" "${PUBLISH_FAILED_REGION_COUNT}"
+require_unsigned_integer "publish_row_count" "${PUBLISH_ROW_COUNT}"
+require_unsigned_integer "publish_chunk_count" "${PUBLISH_CHUNK_COUNT}"
+require_unsigned_integer "publish_failed_chunk_count" "${PUBLISH_FAILED_CHUNK_COUNT}"
+require_unsigned_integer "publish_chunk_row_count" "${PUBLISH_CHUNK_ROW_COUNT}"
+require_unsigned_integer "stage_chunk_count" "${STAGE_CHUNK_COUNT}"
+require_unsigned_integer "stage_failed_chunk_count" "${STAGE_FAILED_CHUNK_COUNT}"
+require_unsigned_integer "stage_chunk_pnu_count" "${STAGE_CHUNK_PNU_COUNT}"
+require_unsigned_integer "sample_violation_count" "${SAMPLE_VIOLATION_COUNT}"
 require_unsigned_integer "synced_parcel_count" "${SYNCED_PARCEL_COUNT}"
 
 case "${SOURCE_FORMAT}" in
@@ -229,7 +310,31 @@ if [[ "${PNU_COUNT}" -lt "${MIN_PNU_COUNT}" ]]; then
   exit 1
 fi
 if [[ "${SNAPSHOT_COUNT}" -ne "${PNU_COUNT}" ]]; then
-  echo "ERROR: active parcel_coordinate_snapshot count=${SNAPSHOT_COUNT}, latest run pnu_count=${PNU_COUNT}." >&2
+  echo "ERROR: coordinate snapshot count=${SNAPSHOT_COUNT}, latest run pnu_count=${PNU_COUNT}, active_count_mode=${ACTIVE_COUNT_MODE}." >&2
+  exit 1
+fi
+if [[ "${VALIDATED_CONSTRAINT_COUNT}" -ne "${REQUIRED_CONSTRAINT_COUNT}" ]]; then
+  echo "ERROR: active parcel_coordinate_snapshot validated constraints=${VALIDATED_CONSTRAINT_COUNT}, expected ${REQUIRED_CONSTRAINT_COUNT}. Missing/invalid: ${INVALID_CONSTRAINTS}" >&2
+  exit 1
+fi
+if [[ "${PUBLISH_REGION_COUNT}" -ne "${EXPECTED_REGION_COUNT}" || "${PUBLISH_FAILED_REGION_COUNT}" -ne 0 ]]; then
+  echo "ERROR: publish checkpoint region status mismatch: passed=${PUBLISH_REGION_COUNT}, failed=${PUBLISH_FAILED_REGION_COUNT}, expected=${EXPECTED_REGION_COUNT}." >&2
+  exit 1
+fi
+if [[ "${PUBLISH_ROW_COUNT}" -ne "${PNU_COUNT}" || "${PUBLISH_CHUNK_ROW_COUNT}" -ne "${PNU_COUNT}" || "${STAGE_CHUNK_PNU_COUNT}" -ne "${PNU_COUNT}" ]]; then
+  echo "ERROR: checkpoint row counts do not match latest pnu_count=${PNU_COUNT}: publish_regions=${PUBLISH_ROW_COUNT}, publish_chunks=${PUBLISH_CHUNK_ROW_COUNT}, stage_chunks=${STAGE_CHUNK_PNU_COUNT}." >&2
+  exit 1
+fi
+if [[ "${PUBLISH_FAILED_CHUNK_COUNT}" -ne 0 || "${STAGE_FAILED_CHUNK_COUNT}" -ne 0 ]]; then
+  echo "ERROR: coordinate snapshot checkpoint has failed chunks: publish=${PUBLISH_FAILED_CHUNK_COUNT}, stage=${STAGE_FAILED_CHUNK_COUNT}." >&2
+  exit 1
+fi
+if [[ "${PUBLISH_CHUNK_COUNT}" -lt "${EXPECTED_REGION_COUNT}" || "${STAGE_CHUNK_COUNT}" -lt "${EXPECTED_REGION_COUNT}" ]]; then
+  echo "ERROR: coordinate snapshot checkpoint chunk counts are too small: publish=${PUBLISH_CHUNK_COUNT}, stage=${STAGE_CHUNK_COUNT}, expected at least ${EXPECTED_REGION_COUNT}." >&2
+  exit 1
+fi
+if [[ "${SAMPLE_VIOLATION_COUNT}" -ne 0 ]]; then
+  echo "ERROR: active parcel_coordinate_snapshot sample has ${SAMPLE_VIOLATION_COUNT} coordinate/SRID/geometry violations." >&2
   exit 1
 fi
 if [[ -n "${MISSING_REGIONS}" ]]; then
@@ -238,18 +343,6 @@ if [[ -n "${MISSING_REGIONS}" ]]; then
 fi
 if [[ "${SOURCE_SRID}" != "5186" || "${TARGET_SRID}" != "4326" ]]; then
   echo "ERROR: latest coordinate snapshot SRID mismatch: source=${SOURCE_SRID}, target=${TARGET_SRID}." >&2
-  exit 1
-fi
-if [[ "${OUT_OF_BOUNDS_COUNT}" -ne 0 ]]; then
-  echo "ERROR: parcel_coordinate_snapshot has ${OUT_OF_BOUNDS_COUNT} rows outside Korea WGS84 bounds." >&2
-  exit 1
-fi
-if [[ "${POINT_SRID_MISMATCH_COUNT}" -ne 0 || "${GEOM_SRID_MISMATCH_COUNT}" -ne 0 ]]; then
-  echo "ERROR: parcel_coordinate_snapshot has SRID mismatches: point=${POINT_SRID_MISMATCH_COUNT}, geom=${GEOM_SRID_MISMATCH_COUNT}." >&2
-  exit 1
-fi
-if [[ "${INVALID_GEOM_COUNT}" -ne 0 ]]; then
-  echo "ERROR: parcel_coordinate_snapshot has ${INVALID_GEOM_COUNT} invalid geometries." >&2
   exit 1
 fi
 if [[ "${REQUIRE_SYNC_PARCEL}" == "true" && "${SYNCED_PARCEL_COUNT}" -le 0 ]]; then
@@ -262,10 +355,26 @@ for region in ${EXPECTED_REGIONS}; do
     echo "ERROR: latest coordinate_snapshot_run.report_json seenRegions is missing ${region}." >&2
     exit 1
   fi
-  if ! contains_token "${SNAPSHOT_REGIONS}" "${region}"; then
+  if ! contains_token "${PUBLISH_REGIONS}" "${region}"; then
+    echo "ERROR: publish checkpoint is missing region_code ${region}." >&2
+    exit 1
+  fi
+
+  ACTIVE_REGION_PRESENT="$("${PSQL[@]}" -v region="${region}" -q -At <<'SQL'
+SET max_parallel_workers_per_gather = 0;
+SET enable_seqscan = off;
+SELECT EXISTS (
+    SELECT 1
+    FROM reference.parcel_coordinate_snapshot
+    WHERE region_code = :'region'
+    LIMIT 1
+);
+SQL
+)"
+  if [[ "${ACTIVE_REGION_PRESENT}" != "t" ]]; then
     echo "ERROR: active parcel_coordinate_snapshot is missing region_code ${region}." >&2
     exit 1
   fi
 done
 
-echo "coordinate snapshot smoke passed: run_id=${RUN_ID}, version=${SNAPSHOT_VERSION}, source_format=${SOURCE_FORMAT}, files=${FILE_COUNT}, regions=${REGION_COUNT}, raw_features=${RAW_FEATURE_COUNT}, pnu_count=${PNU_COUNT}, invalid_count=${INVALID_COUNT}, duplicate_pnu_count=${DUPLICATE_PNU_COUNT}, synced_parcel_count=${SYNCED_PARCEL_COUNT}, strict_region_match=${STRICT_REGION_MATCH}, sync_parcel=${SYNC_PARCEL}"
+echo "coordinate snapshot smoke passed: run_id=${RUN_ID}, version=${SNAPSHOT_VERSION}, source_format=${SOURCE_FORMAT}, files=${FILE_COUNT}, regions=${REGION_COUNT}, raw_features=${RAW_FEATURE_COUNT}, pnu_count=${PNU_COUNT}, invalid_count=${INVALID_COUNT}, duplicate_pnu_count=${DUPLICATE_PNU_COUNT}, synced_parcel_count=${SYNCED_PARCEL_COUNT}, strict_region_match=${STRICT_REGION_MATCH}, sync_parcel=${SYNC_PARCEL}, publish_chunks=${PUBLISH_CHUNK_COUNT}, stage_chunks=${STAGE_CHUNK_COUNT}, constraints_validated=${VALIDATED_CONSTRAINT_COUNT}, active_count_mode=${ACTIVE_COUNT_MODE}"

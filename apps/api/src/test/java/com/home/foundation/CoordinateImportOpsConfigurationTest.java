@@ -14,6 +14,8 @@ class CoordinateImportOpsConfigurationTest {
 	private static final Path COORDINATE_IMPORT_COMPOSE = Path.of("ops/docker-compose.coordinate-import.yml");
 	private static final Path COORDINATE_IMPORT_SCRIPT = Path.of("ops/import-vworld-coordinate-snapshot.sh");
 	private static final Path COORDINATE_SMOKE_SCRIPT = Path.of("ops/verify-coordinate-snapshot-smoke.sh");
+	private static final Path COORDINATE_RESUMABLE_MIGRATION =
+			Path.of("src/main/resources/db/migration/api/V3__create_coordinate_snapshot_resumable_import_schema.sql");
 	private static final Path WORKLOG = Path.of("../../.codex/harness/worklog.toml");
 
 	@Test
@@ -34,6 +36,8 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("HOME_COORDINATE_EXPECTED_REGIONS: ${HOME_COORDINATE_EXPECTED_REGIONS:-}");
 		assertThat(content).contains("HOME_COORDINATE_STRICT_REGION_MATCH: ${HOME_COORDINATE_STRICT_REGION_MATCH:-true}");
 		assertThat(content).contains("HOME_COORDINATE_VALIDATE_PRJ: ${HOME_COORDINATE_VALIDATE_PRJ:-true}");
+		assertThat(content).contains("HOME_COORDINATE_RESUME_RUN_ID: ${HOME_COORDINATE_RESUME_RUN_ID:-}");
+		assertThat(content).contains("HOME_COORDINATE_CHUNK_PREFIX_LENGTH: ${HOME_COORDINATE_CHUNK_PREFIX_LENGTH:-5}");
 		assertThat(content).contains("${HOME_SEARCH_REPO_DIR:-..}:/workspace:ro");
 		assertThat(content).contains("${HOME_COORDINATE_HOST_SHP_DIR:-../coordinate-input}:/coordinate-input:ro");
 		assertThat(content).contains("bash\", \"/workspace/apps/api/ops/import-vworld-coordinate-snapshot.sh");
@@ -48,6 +52,7 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(verifier).contains("HOME_COORDINATE_EXPECTED_REGIONS: ${HOME_COORDINATE_EXPECTED_REGIONS:-}");
 		assertThat(verifier).contains("HOME_COORDINATE_MIN_PNU_COUNT: ${HOME_COORDINATE_MIN_PNU_COUNT:-1}");
 		assertThat(verifier).contains("HOME_COORDINATE_REQUIRE_SYNC_PARCEL: ${HOME_COORDINATE_REQUIRE_SYNC_PARCEL:-false}");
+		assertThat(verifier).contains("HOME_COORDINATE_VERIFY_ACTIVE_COUNT: ${HOME_COORDINATE_VERIFY_ACTIVE_COUNT:-false}");
 		assertThat(verifier).contains("${HOME_SEARCH_REPO_DIR:-..}:/workspace:ro");
 		assertThat(verifier).doesNotContain("/coordinate-input");
 		assertThat(content).doesNotContain("APT_SERVICE_KEY");
@@ -68,6 +73,8 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("HOME_COORDINATE_VALIDATE_PRJ");
 		assertThat(content).contains("pg_try_advisory_lock");
 		assertThat(content).contains("pg_advisory_unlock");
+		assertThat(content).contains("LOCK_PSQL[1]+set");
+		assertThat(content).contains("LOCK_PSQL_PID:-");
 		assertThat(content).contains("\"${PSQL[@]}\" -q -At");
 		assertThat(content).contains("coordinate_snapshot_run id must be numeric");
 		assertThat(content).contains("ensure_shp2pgsql_runtime");
@@ -89,6 +96,59 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("ST_PointOnSurface");
 		assertThat(content).contains("ST_MakeValid");
 		assertThat(content).contains("duplicate_pnu_count");
+		assertThat(content).contains("CREATE UNLOGGED TABLE reference.land_parcel_snapshot_raw_next");
+		assertThat(content).contains("reference.parcel_coordinate_snapshot_stage");
+		assertThat(content).contains("reference.coordinate_snapshot_region_checkpoint");
+		assertThat(content).contains("reference.parcel_coordinate_snapshot_publish");
+		assertThat(content).contains("reference.coordinate_snapshot_publish_checkpoint");
+		assertThat(content).contains("reference.coordinate_snapshot_stage_chunk_checkpoint");
+		assertThat(content).contains("reference.coordinate_snapshot_publish_chunk_checkpoint");
+		assertThat(content).contains("HOME_COORDINATE_RESUME_RUN_ID");
+		assertThat(content).contains("HOME_COORDINATE_CHUNK_PREFIX_LENGTH");
+		assertThat(content).contains("coordinate snapshot region import skipped");
+		assertThat(content).contains("coordinate snapshot stage chunk skipped");
+		assertThat(content).contains("coordinate snapshot stage chunk passed");
+		assertThat(content).contains("coordinate snapshot publish chunk skipped");
+		assertThat(content).contains("coordinate snapshot publish chunk passed");
+		assertThat(content).contains("coordinate snapshot publish region passed");
+		assertThat(content).contains("source_manifest");
+		assertThat(content).contains("chunk_code");
+		assertThat(content).doesNotContain("land_parcel_snapshot_raw_next_region_pnu_idx");
+		assertThat(content).contains("SET LOCAL jit = off");
+		assertThat(content).contains("SET LOCAL max_parallel_workers_per_gather = 0");
+		assertThat(content).contains("for region_code in ${EXPECTED_REGIONS}; do");
+		assertThat(content).contains("for chunk_code in ${chunk_codes}; do");
+		assertThat(content).contains("SHP_REGION_CODES");
+		assertThat(content).contains("for file_index in \"${!SHP_FILES[@]}\"; do");
+		assertThat(content).contains("source_region_for_file");
+		assertThat(content).contains("coordinate snapshot region import started");
+		assertThat(content).contains("collect_file_stats");
+		assertThat(content).contains("RAW_FEATURE_COUNT=\"$((RAW_FEATURE_COUNT + file_feature_count))\"");
+		assertThat(content).contains("PNU_COUNT=\"$((PNU_COUNT + region_row_count))\"");
+		assertThat(content).contains("coordinate snapshot raw staging cleanup started");
+	}
+
+	@Test
+	@DisplayName("coordinate snapshot resumable import schema는 durable stage와 checkpoint를 제공한다")
+	void coordinateSnapshotResumableImportSchemaProvidesDurableStageAndCheckpoints() throws IOException {
+		assertThat(COORDINATE_RESUMABLE_MIGRATION).exists();
+
+		String content = Files.readString(COORDINATE_RESUMABLE_MIGRATION);
+
+		assertThat(content).contains("CREATE TABLE reference.parcel_coordinate_snapshot_stage");
+		assertThat(content).contains("CREATE TABLE reference.coordinate_snapshot_region_checkpoint");
+		assertThat(content).contains("CREATE TABLE reference.coordinate_snapshot_stage_chunk_checkpoint");
+		assertThat(content).contains("CREATE TABLE reference.parcel_coordinate_snapshot_publish");
+		assertThat(content).contains("CREATE TABLE reference.coordinate_snapshot_publish_checkpoint");
+		assertThat(content).contains("CREATE TABLE reference.coordinate_snapshot_publish_chunk_checkpoint");
+		assertThat(content).contains("status IN ('STARTED', 'PASSED', 'FAILED')");
+		assertThat(content).contains("source_manifest TEXT NOT NULL");
+		assertThat(content).contains("chunk_code VARCHAR(8) NOT NULL");
+		assertThat(content).contains("PRIMARY KEY (run_id, region_code)");
+		assertThat(content).contains("PRIMARY KEY (run_id, region_code, chunk_code)");
+		assertThat(content).contains("PRIMARY KEY (run_id, pnu)");
+		assertThat(content).contains("USING GIST (geom)");
+		assertThat(content).contains("USING GIST (point)");
 	}
 
 	@Test
@@ -118,6 +178,7 @@ class CoordinateImportOpsConfigurationTest {
 
 		assertThat(content).contains("HOME_COORDINATE_MIN_PNU_COUNT");
 		assertThat(content).contains("HOME_COORDINATE_REQUIRE_SYNC_PARCEL");
+		assertThat(content).contains("HOME_COORDINATE_VERIFY_ACTIVE_COUNT");
 		assertThat(content).contains("reference.coordinate_snapshot_run");
 		assertThat(content).contains("reference.parcel_coordinate_snapshot");
 		assertThat(content).contains("status = 'PASSED'");
@@ -131,6 +192,15 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("ST_SRID(geom) = 4326");
 		assertThat(content).contains("latitude BETWEEN 33 AND 39");
 		assertThat(content).contains("longitude BETWEEN 124 AND 132");
+		assertThat(content).contains("reference.coordinate_snapshot_publish_checkpoint");
+		assertThat(content).contains("reference.coordinate_snapshot_publish_chunk_checkpoint");
+		assertThat(content).contains("pg_constraint");
+		assertThat(content).contains("parcel_coordinate_snapshot_latitude_check");
+		assertThat(content).contains("parcel_coordinate_snapshot_longitude_check");
+		assertThat(content).contains("SELECT count(*)::bigint");
+		assertThat(content).contains("active_count_mode");
+		assertThat(content).doesNotContain("count(*) FILTER (WHERE NOT ST_IsValid(geom))");
+		assertThat(content).doesNotContain("string_agg(DISTINCT region_code");
 		assertThat(content).contains("--self-test");
 		assertThat(content).contains("coordinate snapshot smoke passed");
 	}

@@ -1,5 +1,7 @@
 package com.home.infrastructure.persistence.ingest;
 
+import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -29,11 +31,18 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 		if (aptSeq == null) {
 			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: aptSeq unavailable");
 		}
-		if (existsByAptSeq(aptSeq)) {
+		String aptName = trimToNull(item.aptName());
+		List<Long> existingComplexIds = findComplexIdsByAptSeq(aptSeq);
+		if (existingComplexIds.size() == 1) {
+			if (aptName != null) {
+				upsertAlias(existingComplexIds.get(0), "RTMS_APT_NAME", aptName, "RTMS");
+			}
 			return ComplexMasterBootstrapResult.alreadyPresent();
 		}
+		if (existingComplexIds.size() > 1) {
+			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: ambiguous aptSeq=" + aptSeq);
+		}
 
-		String aptName = trimToNull(item.aptName());
 		if (aptName == null) {
 			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: aptName unavailable aptSeq=" + aptSeq);
 		}
@@ -52,21 +61,22 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 		if (complexPk.length() > COMPLEX_PK_MAX_LENGTH) {
 			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: complex_pk too long aptSeq=" + aptSeq);
 		}
-		upsertComplex(parcelId.get(), complexPk, aptSeq, aptName);
+		Long complexId = upsertComplex(parcelId.get(), complexPk, aptSeq, aptName);
+		upsertAlias(complexId, "RTMS_APT_NAME", aptName, "RTMS");
 		return ComplexMasterBootstrapResult.bootstrapped();
 	}
 
-	private boolean existsByAptSeq(String aptSeq) {
-		return Boolean.TRUE.equals(jdbcClient.sql("""
-			SELECT EXISTS (
-			    SELECT 1
-			    FROM complex
-			    WHERE apt_seq = :aptSeq
-			)
+	private List<Long> findComplexIdsByAptSeq(String aptSeq) {
+		return jdbcClient.sql("""
+			SELECT id
+			FROM complex
+			WHERE apt_seq = :aptSeq
+			ORDER BY id
+			LIMIT 2
 			""")
 			.param("aptSeq", aptSeq)
-			.query(Boolean.class)
-			.single());
+			.query(Long.class)
+			.list();
 	}
 
 	private Optional<Long> findParcelId(String pnu) {
@@ -169,8 +179,52 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			.single();
 	}
 
+	private void upsertAlias(Long complexId, String aliasType, String aliasName, String source) {
+		String normalizedName = normalizeName(aliasName);
+		if (normalizedName.isBlank()) {
+			return;
+		}
+		jdbcClient.sql("""
+			INSERT INTO complex_name_alias (
+			    complex_id,
+			    alias_type,
+			    alias_name,
+			    normalized_name,
+			    source
+			)
+			VALUES (
+			    :complexId,
+			    :aliasType,
+			    :aliasName,
+			    :normalizedName,
+			    :source
+			)
+			ON CONFLICT (complex_id, alias_type, normalized_name) DO UPDATE
+			SET alias_name = EXCLUDED.alias_name,
+			    source = COALESCE(complex_name_alias.source, EXCLUDED.source),
+			    last_seen_at = now(),
+			    updated_at = now()
+			""")
+			.param("complexId", complexId)
+			.param("aliasType", aliasType)
+			.param("aliasName", aliasName)
+			.param("normalizedName", normalizedName)
+			.param("source", source)
+			.update();
+	}
+
 	private String complexPk(String aptSeq) {
 		return "RTMS:" + aptSeq;
+	}
+
+	private String normalizeName(String value) {
+		String text = trimToNull(value);
+		if (text == null) {
+			return "";
+		}
+		return text.replaceAll("\\s+", "")
+			.replaceAll("[()\\[\\]{}.,·\\-_/]", "")
+			.toLowerCase(Locale.ROOT);
 	}
 
 	private String trimToNull(String value) {

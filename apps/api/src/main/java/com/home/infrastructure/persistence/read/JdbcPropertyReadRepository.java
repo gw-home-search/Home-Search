@@ -33,7 +33,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 		return jdbcClient.sql("""
 			SELECT
 			    c.id AS complex_id,
-			    c.name AS complex_name,
+			    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name) AS complex_name,
 			    p.id AS parcel_id,
 			    p.latitude,
 			    p.longitude,
@@ -43,7 +43,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			WHERE lower(c.name) LIKE :pattern
 			   OR lower(COALESCE(c.trade_name, '')) LIKE :pattern
 			   OR lower(COALESCE(p.address, '')) LIKE :pattern
-			ORDER BY c.name, c.id
+			ORDER BY COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name), c.id
 			LIMIT 20
 			""")
 			.param("pattern", pattern)

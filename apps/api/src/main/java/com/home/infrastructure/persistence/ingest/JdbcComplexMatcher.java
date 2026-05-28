@@ -48,9 +48,9 @@ public class JdbcComplexMatcher implements ComplexMatcher {
 				return candidates.get(0).matched("PNU_UNIQUE");
 			}
 			if (candidates.size() > 1) {
-				ComplexCandidate chosen = chooseByName(item.aptName(), candidates);
+				CandidateNameMatch chosen = chooseByName(item.aptName(), candidates);
 				if (chosen != null) {
-					return chosen.matched("PNU_NAME");
+					return chosen.candidate().matched(chosen.matchPath());
 				}
 				failures.add("ambiguous pnu=" + pnu + " aptName=" + valueOrUnknown(item.aptName()));
 			}
@@ -81,7 +81,8 @@ public class JdbcComplexMatcher implements ComplexMatcher {
 				resultSet.getLong("complex_id"),
 				resultSet.getString("complex_pk"),
 				resultSet.getString("trade_name"),
-				resultSet.getString("name")
+				resultSet.getString("name"),
+				List.of()
 			))
 			.list();
 	}
@@ -91,10 +92,13 @@ public class JdbcComplexMatcher implements ComplexMatcher {
 			SELECT c.id AS complex_id,
 			       c.complex_pk,
 			       c.trade_name,
-			       c.name
+			       c.name,
+			       COALESCE(string_agg(a.normalized_name, '|' ORDER BY a.id), '') AS normalized_aliases
 			FROM complex c
 			JOIN parcel p ON p.id = c.parcel_id
+			LEFT JOIN complex_name_alias a ON a.complex_id = c.id
 			WHERE p.pnu = :pnu
+			GROUP BY c.id, c.complex_pk, c.trade_name, c.name
 			ORDER BY c.id
 			""")
 			.param("pnu", pnu)
@@ -102,51 +106,71 @@ public class JdbcComplexMatcher implements ComplexMatcher {
 				resultSet.getLong("complex_id"),
 				resultSet.getString("complex_pk"),
 				resultSet.getString("trade_name"),
-				resultSet.getString("name")
+				resultSet.getString("name"),
+				parseAliases(resultSet.getString("normalized_aliases"))
 			))
 			.list();
 	}
 
-	private ComplexCandidate chooseByName(String aptName, List<ComplexCandidate> candidates) {
+	private CandidateNameMatch chooseByName(String aptName, List<ComplexCandidate> candidates) {
 		String target = normalizeName(aptName);
 		if (target.isBlank()) {
 			return null;
 		}
 
 		int bestScore = 0;
-		ComplexCandidate best = null;
+		CandidateNameMatch best = null;
 		boolean tie = false;
 		for (ComplexCandidate candidate : candidates) {
-			int score = scoreName(target, candidate);
-			if (score == 0) {
+			NameScore score = scoreName(target, candidate);
+			if (score.value() == 0) {
 				continue;
 			}
-			if (score > bestScore) {
-				bestScore = score;
-				best = candidate;
+			if (score.value() > bestScore) {
+				bestScore = score.value();
+				best = new CandidateNameMatch(candidate, score.matchPath());
 				tie = false;
 			}
-			else if (score == bestScore) {
+			else if (score.value() == bestScore) {
 				tie = true;
 			}
 		}
 		return bestScore > 0 && !tie ? best : null;
 	}
 
-	private int scoreName(String target, ComplexCandidate candidate) {
+	private NameScore scoreName(String target, ComplexCandidate candidate) {
 		String tradeName = normalizeName(candidate.tradeName());
 		String name = normalizeName(candidate.name());
 
 		if (target.equals(tradeName) || target.equals(name)) {
-			return 3;
+			return new NameScore(4, "PNU_NAME");
+		}
+		if (candidate.normalizedAliases().contains(target)) {
+			return new NameScore(3, "PNU_ALIAS_NAME");
 		}
 		if (!tradeName.isBlank() && (tradeName.contains(target) || target.contains(tradeName))) {
-			return 2;
+			return new NameScore(2, "PNU_NAME");
 		}
 		if (!name.isBlank() && (name.contains(target) || target.contains(name))) {
-			return 2;
+			return new NameScore(2, "PNU_NAME");
 		}
-		return 0;
+		for (String alias : candidate.normalizedAliases()) {
+			if (!alias.isBlank() && (alias.contains(target) || target.contains(alias))) {
+				return new NameScore(1, "PNU_ALIAS_NAME");
+			}
+		}
+		return new NameScore(0, "PNU_NAME");
+	}
+
+	private List<String> parseAliases(String normalizedAliases) {
+		String text = trimToNull(normalizedAliases);
+		if (text == null) {
+			return List.of();
+		}
+		return List.of(text.split("\\|"))
+			.stream()
+			.filter(alias -> !alias.isBlank())
+			.toList();
 	}
 
 	private String normalizeName(String value) {
@@ -172,11 +196,24 @@ public class JdbcComplexMatcher implements ComplexMatcher {
 		Long complexId,
 		String complexPk,
 		String tradeName,
-		String name
+		String name,
+		List<String> normalizedAliases
 	) {
 
 		private ComplexMatchResult matched(String path) {
 			return ComplexMatchResult.matched(complexId, complexPk, path);
 		}
+	}
+
+	private record CandidateNameMatch(
+		ComplexCandidate candidate,
+		String matchPath
+	) {
+	}
+
+	private record NameScore(
+		int value,
+		String matchPath
+	) {
 	}
 }

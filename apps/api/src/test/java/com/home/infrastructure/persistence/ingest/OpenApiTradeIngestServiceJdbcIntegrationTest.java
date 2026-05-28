@@ -148,6 +148,64 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 		assertThat(normalizedTradeAudit("APT-LIVE-501"))
 			.containsEntry("apt_seq", "APT-LIVE-501")
 			.containsEntry("complex_pk", "RTMS:APT-LIVE-501");
+		assertThat(complexAliasCount("APT-LIVE-501", "RTMS_APT_NAME", "livesampleapartment")).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("RTMS aptNm은 기존 complex master 이름을 덮어쓰지 않고 alias로 보존된다")
+	void recordsRtmsObservedNameAsAliasWithoutOverwritingMasterNames() {
+		seedComplex();
+		jdbcClient.sql("""
+			UPDATE complex
+			SET name = 'Building Register Name',
+			    trade_name = 'Official Trade Name'
+			WHERE apt_seq = 'APT-501'
+			""").update();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty())
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(liveRtmsItem("APT-501", "RTMS Wobbly Name", "140-1"))
+		));
+
+		assertThat(result.normalizedInserted()).isEqualTo(1);
+		assertThat(complexMasterNames("APT-501"))
+			.containsEntry("name", "Building Register Name")
+			.containsEntry("trade_name", "Official Trade Name");
+		assertThat(complexAliasCount("APT-501", "RTMS_APT_NAME", "rtmswobblyname")).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("RTMS alias는 중복 aptSeq master에 임의로 붙지 않는다")
+	void skipsRtmsAliasWhenAptSeqIsAmbiguous() {
+		seedComplex();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt)
+			VALUES (502, 1001, 'COMPLEX-PK-502', 'APT-501', 'Other Register Name', 'Other Trade Name', 120)
+			""").update();
+		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
+			jdbcClient,
+			(pnu, item) -> Optional.empty()
+		);
+
+		var result = bootstrapper.bootstrap(liveRtmsItem("APT-501", "RTMS Wobbly Name", "140-1"));
+
+		assertThat(result.hasFailureReason()).isTrue();
+		assertThat(result.failureReason()).contains("ambiguous aptSeq=APT-501");
+		assertThat(complexAliasCount("APT-501", "RTMS_APT_NAME", "rtmswobblyname")).isZero();
 	}
 
 	@Test
@@ -313,6 +371,36 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 				"complex_pk", resultSet.getString("complex_pk"),
 				"apt_seq", resultSet.getString("apt_seq")
 			))
+			.single();
+	}
+
+	private java.util.Map<String, Object> complexMasterNames(String aptSeq) {
+		return jdbcClient.sql("""
+			SELECT name, trade_name
+			FROM complex
+			WHERE apt_seq = :aptSeq
+			""")
+			.param("aptSeq", aptSeq)
+			.query((resultSet, rowNumber) -> java.util.Map.<String, Object>of(
+				"name", resultSet.getString("name"),
+				"trade_name", resultSet.getString("trade_name")
+			))
+			.single();
+	}
+
+	private long complexAliasCount(String aptSeq, String aliasType, String normalizedName) {
+		return jdbcClient.sql("""
+			SELECT count(*)
+			FROM complex_name_alias a
+			JOIN complex c ON c.id = a.complex_id
+			WHERE c.apt_seq = :aptSeq
+			  AND a.alias_type = :aliasType
+			  AND a.normalized_name = :normalizedName
+			""")
+			.param("aptSeq", aptSeq)
+			.param("aliasType", aliasType)
+			.param("normalizedName", normalizedName)
+			.query(Long.class)
 			.single();
 	}
 

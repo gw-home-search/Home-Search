@@ -22,7 +22,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			.singleElement()
 			.satisfies(result -> {
 				assertThat(result.complexId()).isEqualTo(501L);
-				assertThat(result.complexName()).isEqualTo("Sample Apartment");
+				assertThat(result.complexName()).isEqualTo("Sample trade name");
 				assertThat(result.parcelId()).isEqualTo(1001L);
 				assertThat(result.latitude()).isEqualTo(37.5123);
 				assertThat(result.longitude()).isEqualTo(127.0456);
@@ -76,6 +76,40 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 				assertThat(tradeList.parcelId()).isEqualTo(1001L);
 				assertThat(tradeList.trades()).isEmpty();
 			});
+	}
+
+	@Test
+	@DisplayName("search API complexName은 레거시처럼 trade_name을 name보다 우선한다")
+	void searchComplexesUsesLegacyDisplayNamePolicy() {
+		seedComplex();
+		jdbcClient.sql("""
+			UPDATE complex
+			SET name = 'Building Register Name',
+			    trade_name = 'Legacy Trade Display Name'
+			WHERE id = 501
+			""").update();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.searchComplexes("legacy"))
+			.singleElement()
+			.satisfies(result -> assertThat(result.complexName()).isEqualTo("Legacy Trade Display Name"));
+	}
+
+	@Test
+	@DisplayName("search API complexName은 trade_name이 blank이면 name으로 fallback한다")
+	void searchComplexesFallsBackToNameWhenTradeNameIsBlank() {
+		seedComplex();
+		jdbcClient.sql("""
+			UPDATE complex
+			SET name = 'Building Register Name',
+			    trade_name = '   '
+			WHERE id = 501
+			""").update();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.searchComplexes("building"))
+			.singleElement()
+			.satisfies(result -> assertThat(result.complexName()).isEqualTo("Building Register Name"));
 	}
 
 	@Test

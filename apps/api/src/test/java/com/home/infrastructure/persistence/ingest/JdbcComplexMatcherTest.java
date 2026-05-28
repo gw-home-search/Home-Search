@@ -54,6 +54,88 @@ class JdbcComplexMatcherTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("PNU candidate는 보존된 RTMS alias name으로도 좁혀진다")
+	void matchesPnuCandidateByNameAlias() {
+		seedComplex();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt)
+			VALUES (502, 1001, 'COMPLEX-PK-502', 'APT-502', 'Building Register Name', 'Official Trade Name', 120)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_name_alias (
+			    complex_id,
+			    alias_type,
+			    alias_name,
+			    normalized_name,
+			    source
+			)
+			VALUES (
+			    502,
+			    'RTMS_APT_NAME',
+			    'RTMS Wobbly Name',
+			    'rtmswobblyname',
+			    'RTMS'
+			)
+			""").update();
+
+		ComplexMatchResult result = matcher().match(rtmsItem(null, "RTMS Wobbly Name", "140-1"));
+
+		assertThat(result.matched()).isTrue();
+		assertThat(result.complexId()).isEqualTo(502L);
+		assertThat(result.complexPk()).isEqualTo("COMPLEX-PK-502");
+		assertThat(result.matchPath()).isEqualTo("PNU_ALIAS_NAME");
+	}
+
+	@Test
+	@DisplayName("PNU candidate는 alias보다 master exact name을 우선한다")
+	void prefersMasterExactNameOverAliasName() {
+		seedComplex();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt)
+			VALUES (502, 1001, 'COMPLEX-PK-502', 'APT-502', 'Building Register Name', 'Official Trade Name', 120)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_name_alias (
+			    complex_id,
+			    alias_type,
+			    alias_name,
+			    normalized_name,
+			    source
+			)
+			VALUES (
+			    501,
+			    'RTMS_APT_NAME',
+			    'Official Trade Name',
+			    'officialtradename',
+			    'RTMS'
+			)
+			""").update();
+
+		ComplexMatchResult result = matcher().match(rtmsItem(null, "Official Trade Name", "140-1"));
+
+		assertThat(result.matched()).isTrue();
+		assertThat(result.complexId()).isEqualTo(502L);
+		assertThat(result.complexPk()).isEqualTo("COMPLEX-PK-502");
+		assertThat(result.matchPath()).isEqualTo("PNU_NAME");
+	}
+
+	@Test
+	@DisplayName("PNU candidate가 여러 개이고 이름 evidence가 없으면 임의 매칭하지 않는다")
+	void returnsFailureWhenPnuCandidatesCannotBeDisambiguatedByNameOrAlias() {
+		seedComplex();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt)
+			VALUES (502, 1001, 'COMPLEX-PK-502', 'APT-502', 'Other Apartment', 'Other trade name', 120)
+			""").update();
+
+		ComplexMatchResult result = matcher().match(rtmsItem(null, "Unknown Apartment", "140-1"));
+
+		assertThat(result.matched()).isFalse();
+		assertThat(result.failureReason()).contains("ambiguous pnu=1168010300101400001");
+		assertThat(result.failureReason()).contains("aptName=Unknown Apartment");
+	}
+
+	@Test
 	@DisplayName("unmatched RTMS trade는 explainable failure를 반환한다")
 	void returnsExplainableFailureWhenNoComplexMatches() {
 		seedComplex();

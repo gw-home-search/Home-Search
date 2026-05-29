@@ -78,7 +78,7 @@ def is_removed_companion_doc(path: str) -> bool:
 
 def is_canonical_markdown(path: str) -> bool:
     lowered = path.lower()
-    return lowered.endswith(".md") and not lowered.startswith("ai-docs/") and not is_removed_companion_doc(path)
+    return lowered.endswith(".md") and not is_removed_companion_doc(path)
 
 
 def requires_project_terms_check(path: str) -> bool:
@@ -88,7 +88,6 @@ def requires_project_terms_check(path: str) -> bool:
     if lowered.endswith(".md") and (
         path in {"AGENTS.md", "README.md", "CONTEXT.md", "CLAUDE.md"}
         or path.startswith("docs/")
-        or path.startswith("ai-docs/")
         or path.startswith("apps/api/")
         or path.startswith("apps/web/")
         or path.startswith(".agents/skills/")

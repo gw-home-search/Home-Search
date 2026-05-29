@@ -15,7 +15,6 @@ Forbidden edit scope:
 - docs/**
 - AGENTS.md
 - README.md
-- ai-docs/**
 - package-lock.json
 - build output
 

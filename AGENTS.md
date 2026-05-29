@@ -68,9 +68,8 @@ All writes for this project belong under `/Users/gwongwangjae/home-search`.
 
 ## AI Development Operating Rules
 
-- Start AI workflow docs at `ai-docs/README.md`.
-- `ai-docs/` defines development procedure only. The project baseline source of
-  truth remains the canonical `docs/*.md` documents listed above.
+- The project baseline source of truth remains the canonical `docs/*.md`
+  documents listed above.
 - Use `.agents/skills/planning` when a `/goal` or ambiguous request needs a
   decision-complete plan before implementation.
 - Use `.agents/skills/tdd` before production behavior changes when a valid RED

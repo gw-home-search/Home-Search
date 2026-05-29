@@ -31,7 +31,6 @@ Do not edit outside `apps/api/**` unless the user explicitly approves it.
 - `docs/API_CONTRACT.md`
 - Root `AGENTS.md`
 - Root `README.md`
-- `ai-docs/**`
 - Source backend repository
 - Source frontend repository
 - Secrets or local env values

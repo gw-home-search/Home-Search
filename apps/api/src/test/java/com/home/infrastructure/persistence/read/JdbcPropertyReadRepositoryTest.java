@@ -1,6 +1,7 @@
 package com.home.infrastructure.persistence.read;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -153,6 +154,36 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("search API alias substring 검색은 pg_trgm GIN index 기반을 가진다")
+	void complexAliasSubstringSearchHasTrigramIndexes() {
+		assertThat(extensionExists("pg_trgm")).isTrue();
+		assertThat(indexDefinition("ix_complex_name_alias_normalized_name_trgm"))
+			.contains("USING gin")
+			.contains("normalized_name gin_trgm_ops");
+		assertThat(indexDefinition("ix_complex_name_alias_alias_name_lower_trgm"))
+			.contains("USING gin")
+			.contains("lower((alias_name)::text) gin_trgm_ops");
+	}
+
+	@Test
+	@DisplayName("search API는 complex 단위 결과라 같은 parcelId를 여러 결과에서 반환할 수 있다")
+	void searchComplexesCanReturnMultipleComplexesForSameParcel() {
+		seedComplex();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt)
+			VALUES (502, 1001, 'COMPLEX-PK-502', 'APT-502', 'Sample River Tower', 'Sample River Trade', 120)
+			""").update();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.searchComplexes("sample"))
+			.extracting("complexId", "parcelId")
+			.containsExactly(
+				tuple(501L, 1001L),
+				tuple(502L, 1001L)
+			);
+	}
+
+	@Test
 	@DisplayName("detail/trade read API는 parcel 또는 complex parent path가 없으면 empty가 된다")
 	void missingParentPathReturnsEmpty() {
 		seedPropertyExplorationData();
@@ -160,5 +191,31 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 
 		assertThat(repository.findParcelDetail(404L)).isEmpty();
 		assertThat(repository.findTradeList(404L)).isEmpty();
+	}
+
+	private boolean extensionExists(String extensionName) {
+		return Boolean.TRUE.equals(jdbcClient.sql("""
+			SELECT EXISTS (
+			    SELECT 1
+			    FROM pg_extension
+			    WHERE extname = :extensionName
+			)
+			""")
+			.param("extensionName", extensionName)
+			.query(Boolean.class)
+			.single());
+	}
+
+	private String indexDefinition(String indexName) {
+		return jdbcClient.sql("""
+			SELECT indexdef
+			FROM pg_indexes
+			WHERE schemaname = 'public'
+			  AND indexname = :indexName
+			""")
+			.param("indexName", indexName)
+			.query(String.class)
+			.optional()
+			.orElse("");
 	}
 }

@@ -15,6 +15,8 @@ import com.home.application.ingest.RtmsIngestRunRepository;
 
 class RtmsMonthlyRefreshRunner {
 
+	private static final int MAX_FAILURE_REASON_LENGTH = 500;
+
 	private final RtmsApartmentTradeClient client;
 	private final Supplier<OpenApiTradeIngestService> ingestServiceSupplier;
 	private final RtmsIngestRunRepository ingestRunRepository;
@@ -70,29 +72,69 @@ class RtmsMonthlyRefreshRunner {
 		RtmsApartmentTradeRequest currentRequest = firstRequest;
 		IngestResult total = IngestResult.empty();
 		int pageCount = 0;
-		while (true) {
-			RtmsApartmentTradePage page = client.fetchPage(currentRequest);
-			OpenApiTradeIngestBatch batch = page.batch();
-			total = total.plus(ingestService.ingest(batch));
-			pageCount++;
-			if (!page.hasNextPage()) {
-				Instant completedAt = clock.instant();
-				ingestRunRepository.save(RtmsIngestRunRecord.completed(
-					currentRequest.lawdCd(),
-					currentRequest.dealYmd(),
-					pageCount,
-					total,
-					startedAt,
-					completedAt
-				));
-				return RtmsMonthlyRefreshRunSummary.completed(
-					currentRequest.lawdCd(),
-					currentRequest.dealYmd(),
-					pageCount,
-					total
-				);
+		try {
+			while (true) {
+				RtmsApartmentTradePage page = client.fetchPage(currentRequest);
+				OpenApiTradeIngestBatch batch = page.batch();
+				total = total.plus(ingestService.ingest(batch));
+				pageCount++;
+				if (!page.hasNextPage()) {
+					Instant completedAt = clock.instant();
+					ingestRunRepository.save(RtmsIngestRunRecord.completed(
+						currentRequest.lawdCd(),
+						currentRequest.dealYmd(),
+						pageCount,
+						total,
+						startedAt,
+						completedAt
+					));
+					return RtmsMonthlyRefreshRunSummary.completed(
+						currentRequest.lawdCd(),
+						currentRequest.dealYmd(),
+						pageCount,
+						total
+					);
+				}
+				currentRequest = page.nextRequest();
 			}
-			currentRequest = page.nextRequest();
 		}
+		catch (RuntimeException exception) {
+			Instant completedAt = clock.instant();
+			String failureReason = failureReason(exception);
+			ingestRunRepository.save(RtmsIngestRunRecord.failed(
+				firstRequest.lawdCd(),
+				firstRequest.dealYmd(),
+				pageCount,
+				total,
+				failureReason,
+				startedAt,
+				completedAt
+			));
+			return RtmsMonthlyRefreshRunSummary.failed(
+				firstRequest.lawdCd(),
+				firstRequest.dealYmd(),
+				pageCount,
+				total,
+				failureReason
+			);
+		}
+	}
+
+	private String failureReason(RuntimeException exception) {
+		String message = exception.getMessage();
+		String reason = exception.getClass().getSimpleName();
+		if (message != null && !message.isBlank()) {
+			reason = reason + ": " + redactSensitiveQueryValues(message);
+		}
+		if (reason.length() <= MAX_FAILURE_REASON_LENGTH) {
+			return reason;
+		}
+		return reason.substring(0, MAX_FAILURE_REASON_LENGTH);
+	}
+
+	private String redactSensitiveQueryValues(String value) {
+		return value
+			.replaceAll("(?i)(serviceKey=)[^&\\s]+", "$1[REDACTED]")
+			.replaceAll("(?i)(service_key=)[^&\\s]+", "$1[REDACTED]");
 	}
 }

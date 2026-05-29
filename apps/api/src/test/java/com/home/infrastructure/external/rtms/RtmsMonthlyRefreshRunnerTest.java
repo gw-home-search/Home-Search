@@ -62,7 +62,8 @@ class RtmsMonthlyRefreshRunnerTest {
 			0,
 			0,
 			1,
-			RtmsMonthlyRefreshRunStatus.COMPLETED
+			RtmsMonthlyRefreshRunStatus.COMPLETED,
+			null
 		));
 		assertThat(secondRun).isEqualTo(new RtmsMonthlyRefreshRunSummary(
 			"11680",
@@ -74,7 +75,8 @@ class RtmsMonthlyRefreshRunnerTest {
 			0,
 			0,
 			2,
-			RtmsMonthlyRefreshRunStatus.COMPLETED
+			RtmsMonthlyRefreshRunStatus.COMPLETED,
+			null
 		));
 		assertThat(secondRun.hasNewData()).isTrue();
 		assertThat(runRepository.saved()).hasSize(2);
@@ -111,6 +113,55 @@ class RtmsMonthlyRefreshRunnerTest {
 		assertThat(report.totalResult()).isEqualTo(new IngestResult(3, 3, 1, 2, 0, 0));
 		assertThat(report.totalPageCount()).isEqualTo(2);
 		assertThat(report.hasNewData()).isTrue();
+		verify(client).fetchPage(currentMonth);
+		verify(client).fetchPage(previousMonth);
+	}
+
+	@Test
+	@DisplayName("monthly refresh runner는 한 월의 fetch 실패를 FAILED run으로 저장하고 다음 월을 계속 실행한다")
+	void monthlyRefreshRunnerRecordsFailedMonthAndContinuesNextMonth() {
+		RtmsApartmentTradeClient client = mock(RtmsApartmentTradeClient.class);
+		OpenApiTradeIngestService ingestService = mock(OpenApiTradeIngestService.class);
+		RecordingRtmsIngestRunRepository runRepository = new RecordingRtmsIngestRunRepository();
+		RtmsMonthlyRefreshRunner runner = new RtmsMonthlyRefreshRunner(
+			client,
+			() -> ingestService,
+			runRepository,
+			Clock.fixed(Instant.parse("2026-05-29T00:00:00Z"), ZoneOffset.UTC)
+		);
+		RtmsApartmentTradeRequest currentMonth = new RtmsApartmentTradeRequest("11680", "202501", 1);
+		RtmsApartmentTradeRequest previousMonth = new RtmsApartmentTradeRequest("11680", "202412", 1);
+		when(client.fetchPage(currentMonth))
+			.thenThrow(new IllegalStateException("fetch failed serviceKey=sample-value"));
+		when(client.fetchPage(previousMonth)).thenReturn(RtmsApartmentTradePage.single(batch("202412", 1)));
+		when(ingestService.ingest(any(OpenApiTradeIngestBatch.class)))
+			.thenReturn(new IngestResult(2, 2, 1, 1, 0, 0));
+
+		RtmsMonthlyRefreshReport report = runner.refresh(new RtmsMonthlyRefreshPlan("11680", "202501", 1));
+
+		assertThat(report.runs()).hasSize(2);
+		assertThat(report.runs().get(0)).satisfies(run -> {
+			assertThat(run.dealYmd()).isEqualTo("202501");
+			assertThat(run.status()).isEqualTo(RtmsMonthlyRefreshRunStatus.FAILED);
+			assertThat(run.failureReason())
+				.contains("IllegalStateException")
+				.contains("serviceKey=[REDACTED]")
+				.doesNotContain("sample-value");
+		});
+		assertThat(report.runs().get(1)).satisfies(run -> {
+			assertThat(run.dealYmd()).isEqualTo("202412");
+			assertThat(run.status()).isEqualTo(RtmsMonthlyRefreshRunStatus.COMPLETED);
+			assertThat(run.normalizedInserted()).isEqualTo(1);
+		});
+		assertThat(report.totalResult()).isEqualTo(new IngestResult(2, 2, 1, 1, 0, 0));
+		assertThat(runRepository.saved()).hasSize(2);
+		assertThat(runRepository.saved().get(0)).satisfies(record -> {
+			assertThat(record.status()).isEqualTo("FAILED");
+			assertThat(record.dealYmd()).isEqualTo("202501");
+			assertThat(record.pageCount()).isZero();
+			assertThat(record.failureReason()).contains("serviceKey=[REDACTED]");
+		});
+		assertThat(runRepository.saved().get(1).status()).isEqualTo("COMPLETED");
 		verify(client).fetchPage(currentMonth);
 		verify(client).fetchPage(previousMonth);
 	}

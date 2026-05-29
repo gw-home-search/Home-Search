@@ -12,7 +12,8 @@ record RtmsMonthlyRefreshRunSummary(
 	long matchFailed,
 	long parseFailed,
 	int pageCount,
-	RtmsMonthlyRefreshRunStatus status
+	RtmsMonthlyRefreshRunStatus status,
+	String failureReason
 ) {
 
 	static RtmsMonthlyRefreshRunSummary completed(String lawdCd, String dealYmd, int pageCount, IngestResult result) {
@@ -26,7 +27,30 @@ record RtmsMonthlyRefreshRunSummary(
 			result.matchFailed(),
 			result.parseFailed(),
 			pageCount,
-			RtmsMonthlyRefreshRunStatus.COMPLETED
+			RtmsMonthlyRefreshRunStatus.COMPLETED,
+			null
+		);
+	}
+
+	static RtmsMonthlyRefreshRunSummary failed(
+		String lawdCd,
+		String dealYmd,
+		int pageCount,
+		IngestResult result,
+		String failureReason
+	) {
+		return new RtmsMonthlyRefreshRunSummary(
+			lawdCd,
+			dealYmd,
+			result.read(),
+			result.rawSaved(),
+			result.normalizedInserted(),
+			result.duplicateSkipped(),
+			result.matchFailed(),
+			result.parseFailed(),
+			pageCount,
+			RtmsMonthlyRefreshRunStatus.FAILED,
+			failureReason
 		);
 	}
 

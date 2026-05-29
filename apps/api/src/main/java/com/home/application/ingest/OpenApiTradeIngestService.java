@@ -15,6 +15,7 @@ public class OpenApiTradeIngestService {
 	private final ComplexMasterBootstrapper complexMasterBootstrapper;
 	private final SourceKeyGenerator sourceKeyGenerator;
 	private final TradeIngestMetrics tradeIngestMetrics;
+	private final TradeMatchEvidenceRepository tradeMatchEvidenceRepository;
 
 	public OpenApiTradeIngestService(
 		RawTradeIngestRepository rawTradeIngestRepository,
@@ -39,7 +40,30 @@ public class OpenApiTradeIngestService {
 		NormalizedTradeRepository normalizedTradeRepository,
 		ComplexMatcher complexMatcher,
 		ComplexMasterBootstrapper complexMasterBootstrapper,
+		TradeMatchEvidenceRepository tradeMatchEvidenceRepository
+	) {
+		this(rawTradeIngestRepository, normalizedTradeRepository, complexMatcher, complexMasterBootstrapper,
+			TradeIngestMetrics.noop(), tradeMatchEvidenceRepository);
+	}
+
+	public OpenApiTradeIngestService(
+		RawTradeIngestRepository rawTradeIngestRepository,
+		NormalizedTradeRepository normalizedTradeRepository,
+		ComplexMatcher complexMatcher,
+		ComplexMasterBootstrapper complexMasterBootstrapper,
 		TradeIngestMetrics tradeIngestMetrics
+	) {
+		this(rawTradeIngestRepository, normalizedTradeRepository, complexMatcher, complexMasterBootstrapper,
+			tradeIngestMetrics, TradeMatchEvidenceRepository.noop());
+	}
+
+	public OpenApiTradeIngestService(
+		RawTradeIngestRepository rawTradeIngestRepository,
+		NormalizedTradeRepository normalizedTradeRepository,
+		ComplexMatcher complexMatcher,
+		ComplexMasterBootstrapper complexMasterBootstrapper,
+		TradeIngestMetrics tradeIngestMetrics,
+		TradeMatchEvidenceRepository tradeMatchEvidenceRepository
 	) {
 		this(
 			rawTradeIngestRepository,
@@ -47,7 +71,8 @@ public class OpenApiTradeIngestService {
 			complexMatcher,
 			complexMasterBootstrapper,
 			new SourceKeyGenerator(),
-			tradeIngestMetrics
+			tradeIngestMetrics,
+			tradeMatchEvidenceRepository
 		);
 	}
 
@@ -57,7 +82,8 @@ public class OpenApiTradeIngestService {
 		ComplexMatcher complexMatcher,
 		ComplexMasterBootstrapper complexMasterBootstrapper,
 		SourceKeyGenerator sourceKeyGenerator,
-		TradeIngestMetrics tradeIngestMetrics
+		TradeIngestMetrics tradeIngestMetrics,
+		TradeMatchEvidenceRepository tradeMatchEvidenceRepository
 	) {
 		this.rawTradeIngestRepository = Objects.requireNonNull(rawTradeIngestRepository);
 		this.normalizedTradeRepository = Objects.requireNonNull(normalizedTradeRepository);
@@ -65,6 +91,7 @@ public class OpenApiTradeIngestService {
 		this.complexMasterBootstrapper = Objects.requireNonNull(complexMasterBootstrapper);
 		this.sourceKeyGenerator = Objects.requireNonNull(sourceKeyGenerator);
 		this.tradeIngestMetrics = Objects.requireNonNull(tradeIngestMetrics);
+		this.tradeMatchEvidenceRepository = Objects.requireNonNull(tradeMatchEvidenceRepository);
 	}
 
 	/**
@@ -113,6 +140,7 @@ public class OpenApiTradeIngestService {
 
 			ComplexMasterBootstrapResult bootstrapResult = complexMasterBootstrapper.bootstrap(item);
 			ComplexMatchResult match = complexMatcher.match(item);
+			tradeMatchEvidenceRepository.save(TradeMatchEvidenceCommand.from(raw.id(), batch.source(), item, match));
 			if (match == null || !match.matched()) {
 				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.MATCH_FAILED,
 					matchFailureReason(match, bootstrapResult));

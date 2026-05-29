@@ -6,6 +6,7 @@ import com.home.application.ingest.NormalizedTradeRepository;
 import com.home.application.ingest.OpenApiTradeIngestService;
 import com.home.application.ingest.RawTradeIngestRepository;
 import com.home.application.ingest.TradeIngestMetrics;
+import com.home.application.ingest.TradeMatchEvidenceRepository;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
@@ -44,6 +45,12 @@ class IngestPersistenceConfiguration {
 
 	@Bean
 	@Lazy
+	TradeMatchEvidenceRepository tradeMatchEvidenceRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
+		return new JdbcTradeMatchEvidenceRepository(requiredJdbcClient(jdbcClientProvider));
+	}
+
+	@Bean
+	@Lazy
 	ParcelCoordinateSnapshotRepository parcelCoordinateSnapshotRepository(
 		ObjectProvider<JdbcClient> jdbcClientProvider
 	) {
@@ -69,6 +76,7 @@ class IngestPersistenceConfiguration {
 		NormalizedTradeRepository normalizedTradeRepository,
 		ComplexMatcher complexMatcher,
 		ComplexMasterBootstrapper complexMasterBootstrapper,
+		TradeMatchEvidenceRepository tradeMatchEvidenceRepository,
 		TradeIngestMetrics tradeIngestMetrics
 	) {
 		return new OpenApiTradeIngestService(
@@ -76,7 +84,8 @@ class IngestPersistenceConfiguration {
 			normalizedTradeRepository,
 			complexMatcher,
 			complexMasterBootstrapper,
-			tradeIngestMetrics
+			tradeIngestMetrics,
+			tradeMatchEvidenceRepository
 		);
 	}
 

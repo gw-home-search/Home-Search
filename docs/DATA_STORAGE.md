@@ -41,6 +41,10 @@ Use two layers:
 1. Raw ingest records.
 2. Normalized operational trades.
 
+RTMS match attempts also keep a review evidence layer between raw ingest and
+normalized trades. See [RTMS_JIBUN_PNU_MATCHING.md](RTMS_JIBUN_PNU_MATCHING.md)
+for the detailed jibun/PNU and conflict policy.
+
 ### Raw Layer
 
 Purpose:
@@ -81,6 +85,8 @@ Purpose:
 - Serve map marker and detail APIs.
 - Maintain one clean row per real trade event.
 - Keep enough source metadata to debug the row.
+- Include only display-safe rows whose parcel and complex match is sufficiently
+  certain for public latest price, detail, and trade-list display.
 
 Minimum normalized fields:
 
@@ -148,9 +154,16 @@ Home Search should preserve the matching intent but record match outcomes:
 - Match path.
 - Matched `complex_id`.
 - Matched `complex_pk`.
+- RTMS raw `jibun`, normalized jibun parts, and derived PNU.
+- Candidate count and limited candidate complex ids.
 - Failure reason if no match.
 
 No trade should disappear without a raw record or a failed-match record.
+
+Normalized `trade` rows should not be created for uncertain matches. Rows are
+held as queryable evidence when PNU cannot be derived, no candidate exists,
+multiple candidates cannot be narrowed by name/alias, or the derived PNU
+conflicts with an otherwise matching `aptSeq`.
 
 ## Partitioning
 

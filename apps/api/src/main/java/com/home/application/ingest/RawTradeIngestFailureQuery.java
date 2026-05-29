@@ -20,7 +20,8 @@ public record RawTradeIngestFailureQuery(
 	private static final List<RawTradeIngestStatus> DEFAULT_FAILURE_STATUSES = List.of(
 		RawTradeIngestStatus.MATCH_FAILED,
 		RawTradeIngestStatus.PARSE_FAILED,
-		RawTradeIngestStatus.DUPLICATE
+		RawTradeIngestStatus.DUPLICATE,
+		RawTradeIngestStatus.CANCELED
 	);
 	private static final Set<RawTradeIngestStatus> ALLOWED_STATUSES = Set.copyOf(DEFAULT_FAILURE_STATUSES);
 
@@ -57,7 +58,7 @@ public record RawTradeIngestFailureQuery(
 		LinkedHashSet<RawTradeIngestStatus> unique = new LinkedHashSet<>(statuses);
 		if (!ALLOWED_STATUSES.containsAll(unique)) {
 			throw new IllegalArgumentException(
-				"statuses must be one of MATCH_FAILED, PARSE_FAILED, DUPLICATE"
+				"statuses must be one of MATCH_FAILED, PARSE_FAILED, DUPLICATE, CANCELED"
 			);
 		}
 		return List.copyOf(unique);

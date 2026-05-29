@@ -43,6 +43,23 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 		assertThat(repository.findComplexMarkers(request(13.0, null))).isEmpty();
 	}
 
+	@Test
+	@DisplayName("bounds query는 canceled trade를 latest amount 후보에서 제외한다")
+	void boundsQueryExcludesCanceledTradeFromLatestAmount() {
+		seedMapData();
+		jdbcClient.sql("""
+			UPDATE trade
+			SET deleted_at = now()
+			WHERE source_key = 'rtms-map-marker-2'
+			""").update();
+		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+
+		assertThat(repository.findComplexMarkers(request(null, null)))
+			.singleElement()
+			.extracting(ComplexMarkerResponse::latestDealAmount)
+			.isEqualTo(111000L);
+	}
+
 	private ComplexMarkersRequest request(Double priceEokMin, Double priceEokMax) {
 		return new ComplexMarkersRequest(
 			37.45,

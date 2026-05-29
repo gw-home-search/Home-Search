@@ -121,6 +121,43 @@ class OpenApiTradeIngestServiceTest {
 	}
 
 	@Test
+	@DisplayName("이미 normalized 된 source_key의 해제 row는 기존 거래를 public 조회에서 제외하고 raw canceled evidence로 남긴다")
+	void cancellationRowCancelsExistingNormalizedTrade() {
+		List<String> events = new ArrayList<>();
+		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
+		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			item -> ComplexMatchResult.matched(501L, "COMPLEX-PK-501", "APTSEQ")
+		);
+
+		IngestResult inserted = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(rtmsItem("125,000", 1))
+		));
+		IngestResult canceled = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(canceledRtmsItem("125,000", 1))
+		));
+
+		assertThat(inserted).isEqualTo(new IngestResult(1, 1, 1, 0, 0, 0, 0));
+		assertThat(canceled).isEqualTo(new IngestResult(1, 1, 0, 0, 1, 0, 0));
+		assertThat(tradeRepository.activeTrades()).isEmpty();
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.NORMALIZED)).hasSize(1);
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.CANCELED))
+			.singleElement()
+			.extracting(RawTradeIngestRecord::failureReason)
+			.isEqualTo("canceled source/source_key");
+	}
+
+	@Test
 	@DisplayName("complex match 실패는 failure reason과 함께 queryable하게 남는다")
 	void matchFailureIsRecordedAsQueryableRawEvidence() {
 		List<String> events = new ArrayList<>();
@@ -150,6 +187,103 @@ class OpenApiTradeIngestServiceTest {
 		assertThat(failures).hasSize(1);
 		assertThat(failures.get(0).failureReason()).isEqualTo("no complex matched aptSeq=APT-404");
 		assertThat(failures.get(0).sourceKey()).isNotBlank();
+	}
+
+	@Test
+	@DisplayName("이미 실패 evidence가 있는 source_key 재수집은 duplicate로 남기고 match evidence를 반복 생성하지 않는다")
+	void repeatedMatchFailureSourceKeyIsMarkedDuplicateWithoutRepeatedEvidence() {
+		List<String> events = new ArrayList<>();
+		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
+		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
+		RecordingTradeMatchEvidenceRepository evidenceRepository = new RecordingTradeMatchEvidenceRepository();
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			item -> ComplexMatchResult.failed("no complex matched aptSeq=APT-404"),
+			ComplexMasterBootstrapper.noop(),
+			evidenceRepository
+		);
+		OpenApiTradeIngestBatch batch = new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(rtmsItem("125,000"))
+		);
+
+		IngestResult first = service.ingest(batch);
+		IngestResult second = service.ingest(batch);
+
+		assertThat(first).isEqualTo(new IngestResult(1, 1, 0, 0, 1, 0));
+		assertThat(second).isEqualTo(new IngestResult(1, 1, 0, 1, 0, 0));
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.MATCH_FAILED)).hasSize(1);
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.DUPLICATE))
+			.singleElement()
+			.extracting(RawTradeIngestRecord::failureReason)
+			.isEqualTo("duplicate source/source_key");
+		assertThat(evidenceRepository.savedCommands()).hasSize(1);
+	}
+
+	@Test
+	@DisplayName("같은 아파트의 서로 다른 failed trade identity는 duplicate로 합치지 않는다")
+	void differentFailedTradeIdentityInSameApartmentIsNotMarkedDuplicate() {
+		List<String> events = new ArrayList<>();
+		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
+		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
+		RecordingTradeMatchEvidenceRepository evidenceRepository = new RecordingTradeMatchEvidenceRepository();
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			item -> ComplexMatchResult.failed("no complex matched aptSeq=APT-501"),
+			ComplexMasterBootstrapper.noop(),
+			evidenceRepository
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(rtmsItem("125,000", 1), rtmsItem("130,000", 2))
+		));
+
+		assertThat(result).isEqualTo(new IngestResult(2, 2, 0, 0, 2, 0));
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.MATCH_FAILED)).hasSize(2);
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.DUPLICATE)).isEmpty();
+		assertThat(evidenceRepository.savedCommands()).hasSize(2);
+	}
+
+	@Test
+	@DisplayName("같은 source_key여도 payload가 달라진 failed row는 duplicate로 합치지 않고 evidence를 남긴다")
+	void changedPayloadWithSameFailedSourceKeyKeepsSeparateEvidence() {
+		List<String> events = new ArrayList<>();
+		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
+		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
+		RecordingTradeMatchEvidenceRepository evidenceRepository = new RecordingTradeMatchEvidenceRepository();
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			item -> ComplexMatchResult.failed("no complex matched aptSeq=APT-501"),
+			ComplexMasterBootstrapper.noop(),
+			evidenceRepository
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(
+				rtmsItem("125,000", 1, "{\"aptSeq\":\"APT-501\",\"dealDay\":1,\"dealAmount\":\"125,000\"}"),
+				rtmsItem("125,000", 1,
+					"{\"aptSeq\":\"APT-501\",\"dealDay\":1,\"dealAmount\":\"125,000\",\"cdealType\":\"O\",\"cdealDay\":\"26.03.12\"}")
+			)
+		));
+
+		assertThat(result).isEqualTo(new IngestResult(2, 2, 0, 0, 2, 0));
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.MATCH_FAILED)).hasSize(2);
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.DUPLICATE)).isEmpty();
+		assertThat(evidenceRepository.savedCommands()).hasSize(2);
 	}
 
 	@Test
@@ -219,6 +353,11 @@ class OpenApiTradeIngestServiceTest {
 	}
 
 	private OpenApiTradeItem rtmsItem(String dealAmount, int dealDay) {
+		return rtmsItem(dealAmount, dealDay,
+			"{\"aptSeq\":\"APT-501\",\"dealDay\":%d,\"dealAmount\":\"%s\"}".formatted(dealDay, dealAmount));
+	}
+
+	private OpenApiTradeItem rtmsItem(String dealAmount, int dealDay, String payload) {
 		return new OpenApiTradeItem(
 			"101",
 			"Sample Apartment",
@@ -232,7 +371,29 @@ class OpenApiTradeIngestServiceTest {
 			"140-1",
 			"11680",
 			"10300",
-			"{\"aptSeq\":\"APT-501\",\"dealDay\":%d,\"dealAmount\":\"%s\"}".formatted(dealDay, dealAmount)
+			payload
+		);
+	}
+
+	private OpenApiTradeItem canceledRtmsItem(String dealAmount, int dealDay) {
+		return new OpenApiTradeItem(
+			"101",
+			"Sample Apartment",
+			"APT-501",
+			dealAmount,
+			dealDay,
+			12,
+			2025,
+			84.93,
+			12,
+			"140-1",
+			"11680",
+			"10300",
+			"{\"aptSeq\":\"APT-501\",\"dealDay\":%d,\"dealAmount\":\"%s\",\"cdealType\":\"O\",\"cdealDay\":\"26.03.12\"}"
+				.formatted(dealDay, dealAmount),
+			"O",
+			"26.03.12",
+			null
 		);
 	}
 
@@ -271,6 +432,21 @@ class OpenApiTradeIngestServiceTest {
 		}
 
 		@Override
+		public boolean existsProcessedBySourceAndSourceKeyAndPayloadHashBefore(
+			Long rawIngestId,
+			String source,
+			String sourceKey,
+			String payloadHash
+		) {
+			return records.values().stream()
+				.anyMatch(record -> record.id() < rawIngestId
+					&& record.source().equals(source)
+					&& record.sourceKey().equals(sourceKey)
+					&& record.payloadHash().equals(payloadHash)
+					&& record.status() != RawTradeIngestStatus.RECEIVED);
+		}
+
+		@Override
 		public List<RawTradeIngestFailureSummary> summarizeFailures(RawTradeIngestFailureQuery query) {
 			return List.of();
 		}
@@ -301,8 +477,17 @@ class OpenApiTradeIngestServiceTest {
 			return true;
 		}
 
+		@Override
+		public boolean cancelBySourceAndSourceKey(String source, String sourceKey, Long rawIngestId) {
+			return tradesBySourceKey.remove(key(source, sourceKey)) != null;
+		}
+
 		private List<NormalizedTradeCommand> savedTrades() {
 			return List.copyOf(tradesBySourceKey.values());
+		}
+
+		private List<NormalizedTradeCommand> activeTrades() {
+			return savedTrades();
 		}
 
 		private String key(String source, String sourceKey) {
@@ -326,6 +511,25 @@ class OpenApiTradeIngestServiceTest {
 
 		private List<IngestResult> recordedResults() {
 			return recordedResults;
+		}
+	}
+
+	private static final class RecordingTradeMatchEvidenceRepository implements TradeMatchEvidenceRepository {
+		private final List<TradeMatchEvidenceCommand> savedCommands = new ArrayList<>();
+
+		@Override
+		public TradeMatchEvidenceRecord save(TradeMatchEvidenceCommand command) {
+			savedCommands.add(command);
+			return null;
+		}
+
+		@Override
+		public Optional<TradeMatchEvidenceRecord> findByRawIngestId(Long rawIngestId) {
+			return Optional.empty();
+		}
+
+		private List<TradeMatchEvidenceCommand> savedCommands() {
+			return savedCommands;
 		}
 	}
 }

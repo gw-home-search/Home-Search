@@ -105,6 +105,42 @@ class JdbcRawTradeIngestRepositoryTest extends JdbcPostgresTestSupport {
 			.doesNotContain("payload", "sourceKey");
 	}
 
+	@Test
+	@DisplayName("processed raw source_key 존재 여부는 현재 row 이전 처리 완료 evidence만 중복 후보로 본다")
+	void findsProcessedRawSourceKeyBeforeCurrentRowOnly() {
+		JdbcRawTradeIngestRepository repository = new JdbcRawTradeIngestRepository(jdbcClient);
+		RawTradeIngestRecord first = raw(repository, "repeat-source-key", "11680", "202512", "{}");
+		RawTradeIngestRecord second = raw(repository, "repeat-source-key", "11680", "202512", "{}");
+
+		assertThat(repository.existsProcessedBySourceAndSourceKeyAndPayloadHashBefore(
+			second.id(),
+			"RTMS",
+			"repeat-source-key",
+			"payload-hash-repeat-source-key"
+		)).isFalse();
+
+		mark(repository, first, RawTradeIngestStatus.MATCH_FAILED, "no complex matched");
+
+		assertThat(repository.existsProcessedBySourceAndSourceKeyAndPayloadHashBefore(
+			second.id(),
+			"RTMS",
+			"repeat-source-key",
+			"payload-hash-repeat-source-key"
+		)).isTrue();
+		assertThat(repository.existsProcessedBySourceAndSourceKeyAndPayloadHashBefore(
+			second.id(),
+			"RTMS",
+			"repeat-source-key",
+			"changed-payload-hash"
+		)).isFalse();
+		assertThat(repository.existsProcessedBySourceAndSourceKeyAndPayloadHashBefore(
+			first.id(),
+			"RTMS",
+			"repeat-source-key",
+			"payload-hash-repeat-source-key"
+		)).isFalse();
+	}
+
 	private RawTradeIngestRecord raw(
 		JdbcRawTradeIngestRepository repository,
 		String sourceKey,

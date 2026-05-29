@@ -13,6 +13,7 @@ import com.home.application.ingest.IngestResult;
 import com.home.application.ingest.OpenApiTradeIngestBatch;
 import com.home.application.ingest.OpenApiTradeIngestService;
 import com.home.application.ingest.OpenApiTradeItem;
+import com.home.application.ingest.RawTradeIngestRecord;
 import com.home.application.ingest.RawTradeIngestStatus;
 import com.home.application.ingest.TradeMatchEvidenceRecord;
 import com.home.application.ingest.TradeMatchStatus;
@@ -119,6 +120,139 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 		assertThat(evidence.derivedPnu()).isEqualTo("1168010300109990001");
 		assertThat(evidence.candidateCount()).isZero();
 		assertThat(evidence.candidateComplexIds()).isEmpty();
+	}
+
+	@Test
+	@DisplayName("같은 source_key의 failed RTMS match 재수집은 duplicate raw로 남기고 match evidence를 반복 생성하지 않는다")
+	void repeatedFailedRtmsMatchSourceKeyBecomesDuplicateWithoutRepeatedEvidence() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty()),
+			evidenceRepository
+		);
+		OpenApiTradeItem missingItem = new OpenApiTradeItem(
+			"101",
+			"Missing Apartment",
+			"APT-404",
+			"125,000",
+			1,
+			12,
+			2025,
+			84.93,
+			12,
+			"999-1",
+			"11680",
+			"10300",
+			"{\"aptSeq\":\"APT-404\",\"jibun\":\"999-1\"}"
+		);
+		OpenApiTradeIngestBatch batch = new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(missingItem)
+		);
+
+		IngestResult first = service.ingest(batch);
+		IngestResult second = service.ingest(batch);
+
+		assertThat(first).isEqualTo(new IngestResult(1, 1, 0, 0, 1, 0));
+		assertThat(second).isEqualTo(new IngestResult(1, 1, 0, 1, 0, 0));
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.MATCH_FAILED)).hasSize(1);
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.DUPLICATE))
+			.singleElement()
+			.extracting(RawTradeIngestRecord::failureReason)
+			.isEqualTo("duplicate source/source_key");
+		assertThat(tradeCount()).isZero();
+		assertThat(tradeMatchEvidenceCount()).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("normalized 이후 도착한 RTMS 해제 row는 기존 trade를 public 조회에서 제외하고 canceled raw로 남긴다")
+	void cancellationRowAfterNormalizedTradeMarksTradeDeleted() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty())
+		);
+
+		IngestResult inserted = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(rtmsItem("125,000"))
+		));
+		IngestResult canceled = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(canceledRtmsItem("125,000"))
+		));
+
+		assertThat(inserted).isEqualTo(new IngestResult(1, 1, 1, 0, 0, 0, 0));
+		assertThat(canceled).isEqualTo(new IngestResult(1, 1, 0, 0, 1, 0, 0));
+		assertThat(activeTradeCount()).isZero();
+		assertThat(deletedTradeCount()).isEqualTo(1);
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.CANCELED))
+			.singleElement()
+			.extracting(RawTradeIngestRecord::failureReason)
+			.isEqualTo("canceled source/source_key");
+	}
+
+	@Test
+	@DisplayName("RTMS 해제 row가 먼저 오면 source_key registry를 선점해 이후 정상 row도 public trade로 만들지 않는다")
+	void cancellationRowBeforeNormalizedTradePreventsLaterInsert() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty())
+		);
+
+		IngestResult canceled = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(canceledRtmsItem("125,000"))
+		));
+		IngestResult duplicate = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(rtmsItem("125,000"))
+		));
+
+		assertThat(canceled).isEqualTo(new IngestResult(1, 1, 0, 0, 1, 0, 0));
+		assertThat(duplicate).isEqualTo(new IngestResult(1, 1, 0, 1, 0, 0, 0));
+		assertThat(tradeCount()).isZero();
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.CANCELED)).hasSize(1);
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.DUPLICATE)).hasSize(1);
 	}
 
 	@Test
@@ -507,6 +641,28 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 		);
 	}
 
+	private OpenApiTradeItem canceledRtmsItem(String dealAmount) {
+		return new OpenApiTradeItem(
+			"101",
+			"Sample Apartment",
+			"APT-501",
+			dealAmount,
+			1,
+			12,
+			2025,
+			84.93,
+			12,
+			"140-1",
+			"11680",
+			"10300",
+			"{\"aptSeq\":\"APT-501\",\"dealAmount\":\"%s\",\"cdealType\":\"O\",\"cdealDay\":\"26.03.12\"}"
+				.formatted(dealAmount),
+			"O",
+			"26.03.12",
+			null
+		);
+	}
+
 	private OpenApiTradeItem liveRtmsItem(String aptSeq, String aptName, String jibun) {
 		return new OpenApiTradeItem(
 			"101",
@@ -620,6 +776,24 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			.query(Long.class)
 			.single();
 		return repository.findByRawIngestId(rawIngestId).orElseThrow();
+	}
+
+	private long tradeMatchEvidenceCount() {
+		return jdbcClient.sql("SELECT count(*) FROM trade_match_evidence")
+			.query(Long.class)
+			.single();
+	}
+
+	private long activeTradeCount() {
+		return jdbcClient.sql("SELECT count(*) FROM trade WHERE deleted_at IS NULL")
+			.query(Long.class)
+			.single();
+	}
+
+	private long deletedTradeCount() {
+		return jdbcClient.sql("SELECT count(*) FROM trade WHERE deleted_at IS NOT NULL")
+			.query(Long.class)
+			.single();
 	}
 
 	private OffsetDateTime firstRawCreatedAt() {

@@ -46,6 +46,9 @@ class RtmsApartmentTradeClientTest {
 			            "excluUseAr": 84.93,
 			            "floor": 12,
 			            "jibun": "140-1",
+			            "cdealType": "O",
+			            "cdealDay": "26.03.12",
+			            "rgstDate": "26.04.09",
 			            "sggCd": "11680",
 			            "umdCd": "10300"
 			          }
@@ -78,6 +81,9 @@ class RtmsApartmentTradeClientTest {
 		assertThat(item.exclArea()).isEqualTo(84.93);
 		assertThat(item.floor()).isEqualTo(12);
 		assertThat(item.jibun()).isEqualTo("140-1");
+		assertThat(item.cancelDealType()).isEqualTo("O");
+		assertThat(item.cancelDealDay()).isEqualTo("26.03.12");
+		assertThat(item.registrationDate()).isEqualTo("26.04.09");
 		assertThat(item.sggCd()).isEqualTo("11680");
 		assertThat(item.umdCd()).isEqualTo("10300");
 		assertThat(item.payload()).contains("\"aptSeq\":\"11680-123\"");

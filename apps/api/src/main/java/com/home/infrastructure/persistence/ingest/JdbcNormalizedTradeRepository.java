@@ -44,6 +44,12 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 		return Boolean.TRUE.equals(transactionTemplate.execute(status -> insertInTransaction(command)));
 	}
 
+	@Override
+	public boolean cancelBySourceAndSourceKey(String source, String sourceKey, Long rawIngestId) {
+		return Boolean.TRUE.equals(transactionTemplate.execute(status -> cancelInTransaction(source, sourceKey,
+			rawIngestId)));
+	}
+
 	private boolean insertInTransaction(NormalizedTradeCommand command) {
 		Optional<Long> registryId = insertRegistry(command);
 		if (registryId.isEmpty()) {
@@ -63,17 +69,39 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 	}
 
 	private Optional<Long> insertRegistry(NormalizedTradeCommand command) {
+		return insertRegistry(command.source(), command.sourceKey(), command.rawIngestId());
+	}
+
+	private Optional<Long> insertRegistry(String source, String sourceKey, Long rawIngestId) {
 		return jdbcClient.sql("""
 			INSERT INTO trade_source_key_registry (source, source_key, raw_ingest_id)
 			VALUES (:source, :sourceKey, :rawIngestId)
 			ON CONFLICT (source, source_key) DO NOTHING
 			RETURNING id
 			""")
-			.param("source", command.source())
-			.param("sourceKey", command.sourceKey())
-			.param("rawIngestId", command.rawIngestId())
+			.param("source", source)
+			.param("sourceKey", sourceKey)
+			.param("rawIngestId", rawIngestId)
 			.query(Long.class)
 			.optional();
+	}
+
+	private boolean cancelInTransaction(String source, String sourceKey, Long rawIngestId) {
+		insertRegistry(source, sourceKey, rawIngestId);
+		int updated = jdbcClient.sql("""
+			UPDATE trade t
+			SET deleted_at = now(),
+			    updated_at = now()
+			FROM trade_source_key_registry r
+			WHERE r.trade_id = t.id
+			  AND r.source = :source
+			  AND r.source_key = :sourceKey
+			  AND t.deleted_at IS NULL
+			""")
+			.param("source", source)
+			.param("sourceKey", sourceKey)
+			.update();
+		return updated > 0;
 	}
 
 	private Optional<Long> insertTrade(NormalizedTradeCommand command) {

@@ -57,7 +57,7 @@ class ObservabilityEndpointSmokeTest {
 	@Test
 	@DisplayName("GET /actuator/prometheus는 RTMS ingest counter를 노출한다")
 	void prometheusExposesIngestCounters() throws Exception {
-		tradeIngestMetrics.record("RTMS", new IngestResult(3, 3, 1, 1, 1, 0));
+		tradeIngestMetrics.record("RTMS", new IngestResult(4, 4, 1, 1, 1, 1, 0));
 
 		mockMvc.perform(get("/actuator/prometheus"))
 			.andExpect(status().isOk())
@@ -67,6 +67,7 @@ class ObservabilityEndpointSmokeTest {
 			.andExpect(content().string(containsString("result=\"raw_saved\"")))
 			.andExpect(content().string(containsString("result=\"normalized_inserted\"")))
 			.andExpect(content().string(containsString("result=\"duplicate_skipped\"")))
+			.andExpect(content().string(containsString("result=\"canceled_skipped\"")))
 			.andExpect(content().string(containsString("result=\"match_failed\"")))
 			.andExpect(content().string(containsString("result=\"parse_failed\"")));
 	}

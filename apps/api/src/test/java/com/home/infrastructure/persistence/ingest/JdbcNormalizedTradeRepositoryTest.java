@@ -55,6 +55,45 @@ class JdbcNormalizedTradeRepositoryTest extends JdbcPostgresTestSupport {
 		assertThat(registryTradeIds()).containsExactly(existingTradeId, existingTradeId);
 	}
 
+	@Test
+	@DisplayName("canceled source_key는 연결된 normalized trade를 public 조회에서 제외한다")
+	void cancelSourceKeyMarksLinkedTradeDeleted() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		Long rawId = rawRepository.save(rawRecord("rtms-source-key-1")).id();
+		tradeRepository.insertIfAbsent(command(rawId, "rtms-source-key-1"));
+
+		boolean canceled = tradeRepository.cancelBySourceAndSourceKey("RTMS", "rtms-source-key-1", rawId);
+
+		assertThat(canceled).isTrue();
+		assertThat(activeTradeCount()).isZero();
+		assertThat(deletedTradeCount()).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("canceled source_key가 먼저 오면 registry를 선점해 이후 normalized insert를 막는다")
+	void cancelSourceKeyBeforeNormalizedInsertReservesRegistry() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		Long cancelRawId = rawRepository.save(rawRecord("rtms-source-key-1")).id();
+
+		boolean canceled = tradeRepository.cancelBySourceAndSourceKey("RTMS", "rtms-source-key-1", cancelRawId);
+		boolean inserted = tradeRepository.insertIfAbsent(command(cancelRawId, "rtms-source-key-1"));
+
+		assertThat(canceled).isFalse();
+		assertThat(inserted).isFalse();
+		assertThat(tradeRepository.existsBySourceAndSourceKey("RTMS", "rtms-source-key-1")).isTrue();
+		assertThat(tradeCount()).isZero();
+	}
+
 	private RawTradeIngestRecord rawRecord(String sourceKey) {
 		return RawTradeIngestRecord.received(
 			"RTMS",
@@ -97,5 +136,17 @@ class JdbcNormalizedTradeRepositoryTest extends JdbcPostgresTestSupport {
 			""")
 			.query(Long.class)
 			.list();
+	}
+
+	private long activeTradeCount() {
+		return jdbcClient.sql("SELECT count(*) FROM trade WHERE deleted_at IS NULL")
+			.query(Long.class)
+			.single();
+	}
+
+	private long deletedTradeCount() {
+		return jdbcClient.sql("SELECT count(*) FROM trade WHERE deleted_at IS NOT NULL")
+			.query(Long.class)
+			.single();
 	}
 }

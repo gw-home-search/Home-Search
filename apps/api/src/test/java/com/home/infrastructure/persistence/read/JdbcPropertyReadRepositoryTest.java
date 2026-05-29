@@ -80,6 +80,23 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("trade read API는 canceled trade를 목록에서 제외한다")
+	void tradeListExcludesCanceledTrade() {
+		seedPropertyExplorationData();
+		jdbcClient.sql("""
+			UPDATE trade
+			SET deleted_at = now()
+			WHERE id = 9002
+			""").update();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.findTradeList(1001L))
+			.hasValueSatisfying(tradeList -> assertThat(tradeList.trades())
+				.extracting("tradeId")
+				.containsExactly(9001L));
+	}
+
+	@Test
 	@DisplayName("search API complexName은 레거시처럼 trade_name을 name보다 우선한다")
 	void searchComplexesUsesLegacyDisplayNamePolicy() {
 		seedComplex();

@@ -288,6 +288,15 @@ Migration notes:
 - Frontend adapters may temporarily accept `id`, `latitude`, and `longitude`
   while source code is being migrated, but new target code should prefer
   `parcelId`, `lat`, and `lng`.
+- This endpoint returns one marker per parcel, even when the parcel contains
+  multiple complexes.
+- `unitCntSum` is the sum of household counts for all complexes under the
+  parcel.
+- `latestDealAmount` is the newest normalized `trade` amount under any complex
+  in the parcel.
+- Price and area filters use the same trade row selected for the parcel
+  marker's latest trade policy. A future per-complex marker or per-complex
+  filter policy would be a contract change.
 - Map marker APIs must not require ranking, trend, favorite, alarm, mail, or
   auth state.
 
@@ -346,6 +355,11 @@ Migration notes:
 - This endpoint keeps `latitude` and `longitude` for source frontend
   compatibility. Do not rename them to `lat` and `lng` in Home Search unless the
   frontend adapter is updated in the same batch.
+- Search results are complex-level results. Multiple results may have the same
+  `parcelId` when several complexes share one parcel.
+- Search may use preserved `complex_name_alias` rows and normalized alias text
+  internally, but those audit/search helper fields are not exposed in this
+  response.
 
 ### GET `/api/v1/region`
 
@@ -495,6 +509,10 @@ Migration notes:
 
 - Source DTO omits `null` values. Target Home Search may omit nullable fields rather
   than returning explicit `null`.
+- If a parcel has multiple complexes, this endpoint returns one representative
+  complex detail for the selected `parcelId`. The baseline representative policy
+  is deterministic and implementation-defined; clients should not treat it as a
+  list of every complex under the parcel.
 
 ### GET `/api/v1/trade/{parcelId}`
 
@@ -552,6 +570,8 @@ Status:
 Migration notes:
 
 - The Home Search query path should work through `complex_id`.
+- The response includes normalized trades for all complexes under the requested
+  `parcelId`, ordered newest first.
 - Preserve `complex_pk`, `apt_seq`, `source`, and `source_key` for audit,
   matching, and deduplication, but do not expose them in this public response.
 - Default ordering should be newest first: `dealDate` descending, then

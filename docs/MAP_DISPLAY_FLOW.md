@@ -72,6 +72,24 @@ Marker display:
 - Unit label from `unitCntSum`.
 - Click opens detail drawer for `parcelId`.
 
+## Parcel And Complex Policy
+
+`/api/v1/map/complexes` returns one marker per parcel, not one marker per
+complex. When a parcel contains multiple apartment complexes:
+
+- `unitCntSum` is the sum of household counts for all complexes under the
+  parcel.
+- `latestDealAmount` is selected from the newest normalized `trade` under any
+  complex in the parcel.
+- Price and area filters use the same trade row selected for the parcel marker's
+  latest trade policy. Unit and age filters use parcel-level aggregate or
+  representative values.
+- Marker click still uses `parcelId`.
+- The detail drawer shows a representative complex for the parcel.
+- The trade list shows normalized trades for all complexes under the parcel.
+- Search results remain complex-level results, so multiple search results may
+  point to the same `parcelId`.
+
 ## Backend Query Boundary
 
 `/api/v1/map/complexes` should only do enough work for map display:

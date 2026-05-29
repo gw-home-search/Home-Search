@@ -1160,3 +1160,90 @@ risk_notes = [
   "display-safe rule 때문에 일부 live RTMS row가 MATCH_FAILED로 남을 수 있지만 잘못된 latest marker 노출보다 보수적 보류를 우선한다.",
   "지번 문자열 보정, 수동 override, 신규 complex 생성 action은 후속 admin slice에서 다루고 이번 slice는 자동 match attempt의 설명 가능성만 고정한다.",
 ]
+
+[[items]]
+id = "read-search-trgm-and-multi-complex-policy"
+title_ko = "Read search trigram and multi complex policy"
+pr_type = "Feat"
+pr_title_ko = "검색 trigram 인덱스와 다중 단지 표시 정책"
+description_ko = "complex alias 검색 경로의 substring 검색 성능 기반을 pg_trgm/GIN index로 고정하고 parcel↔다중 complex 표시 정책을 API/지도 문서에 명문화한다."
+status = "done"
+priority = 160
+targets = "backend"
+preset = "contract-hardening"
+acceptance_criteria = [
+  "GET /api/v1/search/complexes?q= URL, request field, response field, empty-result behavior를 유지한다.",
+  "complex_name_alias.normalized_name substring 검색을 위한 pg_trgm extension과 GIN trigram index가 Flyway baseline에 포함된다.",
+  "lower(alias_name) 검색 경로도 alias_name 원문 substring 검색을 위해 index-backed 후보로 검증한다.",
+  "검색 결과의 public response shape와 display name 우선순위는 기존 trade_name fallback 정책을 유지한다.",
+  "parcel↔다중 complex 정책을 docs/MAP_DISPLAY_FLOW.md와 docs/API_CONTRACT.md에 명문화한다.",
+  "다중 complex parcel에서 map marker는 parcel 단위 1개, unitCntSum은 complex unit 합산, latestDealAmount는 parcel 내 최신 normalized trade 기준임을 고정한다.",
+  "detail은 대표 complex 1개, trade list는 parcel 내 모든 complex 거래, search result는 complex 단위이며 같은 parcelId가 여러 결과에 나타날 수 있음을 명시한다.",
+]
+first_red_candidates = [
+  "JdbcPropertyReadRepositoryTest에서 complex_name_alias trigram index와 pg_trgm extension 존재를 검증해 현재 migration이 GIN trigram index를 만들지 않아 실패하는 RED를 만든다.",
+  "JdbcMapMarkerRepositoryTest에서 같은 parcel 아래 여러 complex가 있을 때 marker 1개, unitCntSum 합산, latestDealAmount 최신 거래 정책을 regression으로 고정한다.",
+  "JdbcPropertyReadRepositoryTest에서 search result가 complex 단위라 같은 parcelId를 가진 여러 result를 반환할 수 있음을 고정한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.read.JdbcPropertyReadRepositoryTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 .codex/harness/project_terms_check.py",
+  "python3 .codex/harness/pr_lint.py --self-test",
+  "python3 .codex/harness/home_pr.py --self-test",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "검색 ranking을 similarity() 또는 score 기반으로 바꿔야 하면 별도 search ranking slice로 분리한다.",
+  "운영 DB에서 CREATE EXTENSION pg_trgm 권한 또는 허용 정책이 불명확하면 migration 적용 전략을 재검토한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+  "ranking, trend aggregate, favorite, alarm, mail, auth, recommendation 기능이 필요하면 중단한다.",
+]
+risk_notes = [
+  "pg_trgm extension은 Postgres extension 권한 정책에 영향을 받을 수 있어 local/Testcontainers baseline에서 먼저 검증한다.",
+  "이번 slice는 검색 품질/ranking 개선이 아니라 기존 substring 검색 경로의 성능 기반과 contract 문서화를 고정한다.",
+  "문서 명문화는 기존 암묵 동작을 설명하며 public API field를 추가하지 않는다.",
+]
+
+[[items]]
+id = "rtms-monthly-refresh-run-evidence"
+title_ko = "RTMS monthly refresh run evidence"
+pr_type = "Feat"
+pr_title_ko = "RTMS 월별 재수집 실행 evidence"
+description_ko = "매일 같은 법정동/월을 다시 수집해도 기존 거래는 duplicate로 남기고 새 거래만 normalized insert되며 실행 summary로 신규 데이터 추가 여부를 확인할 수 있게 만든다."
+status = "candidate"
+priority = 170
+targets = "backend"
+preset = "open-api-ingest-prep"
+acceptance_criteria = [
+  "같은 lawdCd/dealYmd를 반복 실행하면 기존 거래는 duplicate 처리되고 새 거래만 normalized insert된다.",
+  "월별 수집은 page 1부터 RTMS page metadata 기준 마지막 page까지 실행한다.",
+  "실행 summary는 read, rawSaved, normalizedInserted, duplicateSkipped, matchFailed, parseFailed, pageCount, status를 남긴다.",
+  "normalizedInserted > 0을 이번 실행에서 신규 데이터가 추가된 신호로 사용할 수 있다.",
+  "service key, raw payload 전문, local secret, .env* 값을 repository 파일, log, report에 저장하지 않는다.",
+  "public map/search/region/detail/trade API URL, response shape, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "daily cron/scheduler 자동 실행은 후속 slice로 분리하고 이번 작업은 월별 refresh 실행 단위와 evidence만 고정한다.",
+]
+first_red_candidates = [
+  "RtmsMonthlyRefreshRunnerTest에서 같은 월 첫 실행 후 두 번째 실행은 기존 1건 duplicate와 신규 1건 insert summary를 반환해야 하나 runner/run summary가 없어 실패하는 RED를 만든다.",
+  "RtmsMonthlyRefreshPlanTest에서 current month와 lookback month 요청 목록을 deterministic하게 만들어야 하나 planner가 없어 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew test --tests com.home.infrastructure.external.rtms.RtmsMonthlyRefreshRunnerTest",
+  "cd apps/api && ./gradlew test --tests com.home.application.ingest.OpenApiTradeIngestServiceTest",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "PR 검증에서 live RTMS Open API call이 필요하면 중단하고 fixture/mocking으로 대체한다.",
+  "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "scheduler, cron, distributed lock, 운영 배치 orchestration이 필요하면 별도 slice로 분리한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "월별 refresh는 매일 같은 월을 page 1부터 재수집하는 단순하고 안전한 구조로 시작한다.",
+  "checkpoint 기반 증분 수집은 RTMS 월별 데이터 정정 가능성을 놓칠 수 있으므로 후속 정책 검토 전에는 도입하지 않는다.",
+  "실제 daily trigger는 local env와 운영 스케줄 정책이 필요하므로 다음 slice 이후로 둔다.",
+]

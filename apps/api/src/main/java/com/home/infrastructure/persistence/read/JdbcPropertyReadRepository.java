@@ -30,6 +30,8 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	@Override
 	public List<SearchComplexResponse> searchComplexes(String query) {
 		String pattern = "%" + query.toLowerCase(Locale.ROOT) + "%";
+		String normalizedQuery = normalizeName(query);
+		String normalizedPattern = normalizedQuery.isBlank() ? null : "%" + normalizedQuery + "%";
 		return jdbcClient.sql("""
 			SELECT
 			    c.id AS complex_id,
@@ -43,10 +45,23 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			WHERE lower(c.name) LIKE :pattern
 			   OR lower(COALESCE(c.trade_name, '')) LIKE :pattern
 			   OR lower(COALESCE(p.address, '')) LIKE :pattern
+			   OR EXISTS (
+			       SELECT 1
+			       FROM complex_name_alias a
+			       WHERE a.complex_id = c.id
+			         AND (
+			             lower(a.alias_name) LIKE :pattern
+			             OR (
+			                 CAST(:normalizedPattern AS VARCHAR) IS NOT NULL
+			                 AND a.normalized_name LIKE :normalizedPattern
+			             )
+			         )
+			   )
 			ORDER BY COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name), c.id
 			LIMIT 20
 			""")
 			.param("pattern", pattern)
+			.param("normalizedPattern", normalizedPattern)
 			.query(this::mapSearchComplex)
 			.list();
 	}
@@ -228,6 +243,13 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	private Double doubleOrNull(ResultSet resultSet, String column) throws SQLException {
 		BigDecimal value = resultSet.getBigDecimal(column);
 		return value == null ? null : value.doubleValue();
+	}
+
+	private String normalizeName(String value) {
+		String text = value == null ? "" : value.trim();
+		return text.replaceAll("\\s+", "")
+			.replaceAll("[()\\[\\]{}.,·\\-_/]", "")
+			.toLowerCase(Locale.ROOT);
 	}
 
 	private record RegionRow(

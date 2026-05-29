@@ -113,6 +113,46 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("search API는 보존된 complex alias도 검색 evidence로 사용한다")
+	void searchComplexesFindsComplexByPreservedAlias() {
+		seedComplex();
+		jdbcClient.sql("""
+			UPDATE complex
+			SET name = 'Building Register Name',
+			    trade_name = 'Official Trade Name'
+			WHERE id = 501
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_name_alias (
+			    complex_id,
+			    alias_type,
+			    alias_name,
+			    normalized_name,
+			    source
+			)
+			VALUES (
+			    501,
+			    'RTMS_APT_NAME',
+			    'RTMS Wobbly Name',
+			    'rtmswobblyname',
+			    'RTMS'
+			)
+			""").update();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.searchComplexes("wobbly"))
+			.singleElement()
+			.satisfies(result -> {
+				assertThat(result.complexId()).isEqualTo(501L);
+				assertThat(result.complexName()).isEqualTo("Official Trade Name");
+				assertThat(result.parcelId()).isEqualTo(1001L);
+			});
+		assertThat(repository.searchComplexes("rtmswobbly"))
+			.singleElement()
+			.satisfies(result -> assertThat(result.complexId()).isEqualTo(501L));
+	}
+
+	@Test
 	@DisplayName("detail/trade read API는 parcel 또는 complex parent path가 없으면 empty가 된다")
 	void missingParentPathReturnsEmpty() {
 		seedPropertyExplorationData();

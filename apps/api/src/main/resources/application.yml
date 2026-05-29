@@ -29,7 +29,9 @@ home:
   ingest:
     rtms:
       enabled: false
+      mode: one-shot
       lawd-cd: ""
       deal-ymd: ""
       page-no: 1
+      lookback-months: 0
       preflight-only: false

@@ -229,6 +229,71 @@ class RtmsOneShotTradeIngestRunnerTest {
 			.doesNotContain("payload");
 	}
 
+	@Test
+	@DisplayName("monthly-refresh preflight는 live fetch나 DB ingest 없이 월별 plan만 log한다")
+	void monthlyRefreshPreflightLogsPlanWithoutLiveFetchOrDbIngest(CapturedOutput output) throws Exception {
+		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner = mock(RtmsMonthlyRefreshRunner.class);
+		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
+			runner,
+			monthlyRefreshRunner,
+			new RtmsOneShotIngestProperties(true, " 11680 ", " 202501 ", 1, true, "monthly-refresh", 1),
+			rtmsProperties("DUMMY")
+		);
+
+		applicationRunner.run(new DefaultApplicationArguments());
+
+		verifyNoInteractions(runner, monthlyRefreshRunner);
+		assertThat(output).contains("RTMS monthly refresh preflight completed")
+			.contains("baseUrl=https://example.invalid")
+			.contains("path=/rtms")
+			.contains("lawdCd=11680")
+			.contains("dealYmds=[202501, 202412]")
+			.contains("lookbackMonths=1")
+			.contains("numOfRows=100")
+			.doesNotContain("APT_SERVICE_KEY")
+			.doesNotContain("serviceKey")
+			.doesNotContain("payload");
+	}
+
+	@Test
+	@DisplayName("monthly-refresh mode는 plan을 실행하고 aggregate summary만 log한다")
+	void monthlyRefreshModeRunsPlanAndLogsAggregateSummary(CapturedOutput output) throws Exception {
+		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner = mock(RtmsMonthlyRefreshRunner.class);
+		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
+			runner,
+			monthlyRefreshRunner,
+			new RtmsOneShotIngestProperties(true, " 11680 ", " 202501 ", 1, false, "monthly-refresh", 1),
+			rtmsProperties("DUMMY")
+		);
+		RtmsMonthlyRefreshPlan expectedPlan = new RtmsMonthlyRefreshPlan("11680", "202501", 1);
+		when(monthlyRefreshRunner.refresh(expectedPlan)).thenReturn(new RtmsMonthlyRefreshReport(List.of(
+			RtmsMonthlyRefreshRunSummary.completed("11680", "202501", 1, new IngestResult(2, 2, 1, 1, 0, 0)),
+			RtmsMonthlyRefreshRunSummary.completed("11680", "202412", 2, new IngestResult(3, 3, 0, 2, 1, 0))
+		)));
+
+		applicationRunner.run(new DefaultApplicationArguments());
+
+		verifyNoInteractions(runner);
+		verify(monthlyRefreshRunner).refresh(expectedPlan);
+		assertThat(output).contains("RTMS monthly refresh completed")
+			.contains("lawdCd=11680")
+			.contains("dealYmds=[202501, 202412]")
+			.contains("monthCount=2")
+			.contains("pageCount=3")
+			.contains("read=5")
+			.contains("rawSaved=5")
+			.contains("normalizedInserted=1")
+			.contains("duplicateSkipped=3")
+			.contains("matchFailed=1")
+			.contains("parseFailed=0")
+			.contains("hasNewData=true")
+			.doesNotContain("APT_SERVICE_KEY")
+			.doesNotContain("serviceKey")
+			.doesNotContain("payload");
+	}
+
 	private RtmsApartmentTradeProperties rtmsProperties(String serviceKey) {
 		return new RtmsApartmentTradeProperties("https://example.invalid", "/rtms", serviceKey, 100, 1_000, 1_000);
 	}

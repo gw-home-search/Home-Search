@@ -22,7 +22,6 @@ from typing import Any
 FALLBACK_REPO_ROOT = Path("/Users/gwongwangjae/home-search")
 
 PROTECTED_MUTATION_PREFIXES = (
-    "ai-docs/",
     "apps/api/AGENTS.md",
     "apps/web/AGENTS.md",
     "build/",

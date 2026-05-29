@@ -16,7 +16,6 @@ Forbidden edit scope:
 - docs/**
 - AGENTS.md
 - README.md
-- ai-docs/**
 - scripts/**
 - infra/**
 - package-lock.json

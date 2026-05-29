@@ -38,14 +38,44 @@ class RtmsOneShotTradeIngestRunnerTest {
 			List.of()
 		);
 		IngestResult expected = new IngestResult(0, 0, 0, 0, 0, 0);
-		when(client.fetch(request)).thenReturn(batch);
+		when(client.fetchPage(request)).thenReturn(RtmsApartmentTradePage.single(batch));
 		when(ingestService.ingest(batch)).thenReturn(expected);
 
 		IngestResult result = runner.ingest(request);
 
 		assertThat(result).isEqualTo(expected);
-		verify(client).fetch(request);
+		verify(client).fetchPage(request);
 		verify(ingestService).ingest(batch);
+	}
+
+	@Test
+	@DisplayName("one-shot runner는 RTMS page metadata에 따라 모든 page를 수집하고 ingest result를 누적한다")
+	void runnerFetchesAllPagesAndAggregatesIngestResults() {
+		RtmsApartmentTradeClient client = mock(RtmsApartmentTradeClient.class);
+		OpenApiTradeIngestService ingestService = mock(OpenApiTradeIngestService.class);
+		RtmsOneShotTradeIngestRunner runner = new RtmsOneShotTradeIngestRunner(client, ingestService);
+		RtmsApartmentTradeRequest firstRequest = new RtmsApartmentTradeRequest("11680", "202512", 1);
+		RtmsApartmentTradeRequest secondRequest = new RtmsApartmentTradeRequest("11680", "202512", 2);
+		RtmsApartmentTradeRequest thirdRequest = new RtmsApartmentTradeRequest("11680", "202512", 3);
+		OpenApiTradeIngestBatch firstBatch = new OpenApiTradeIngestBatch("RTMS", "11680", "202512", 1, List.of());
+		OpenApiTradeIngestBatch secondBatch = new OpenApiTradeIngestBatch("RTMS", "11680", "202512", 2, List.of());
+		OpenApiTradeIngestBatch thirdBatch = new OpenApiTradeIngestBatch("RTMS", "11680", "202512", 3, List.of());
+		when(client.fetchPage(firstRequest)).thenReturn(new RtmsApartmentTradePage(firstBatch, 1, 100, 250));
+		when(client.fetchPage(secondRequest)).thenReturn(new RtmsApartmentTradePage(secondBatch, 2, 100, 250));
+		when(client.fetchPage(thirdRequest)).thenReturn(new RtmsApartmentTradePage(thirdBatch, 3, 100, 250));
+		when(ingestService.ingest(firstBatch)).thenReturn(new IngestResult(100, 100, 80, 10, 5, 5));
+		when(ingestService.ingest(secondBatch)).thenReturn(new IngestResult(100, 100, 90, 5, 4, 1));
+		when(ingestService.ingest(thirdBatch)).thenReturn(new IngestResult(50, 50, 45, 2, 2, 1));
+
+		IngestResult result = runner.ingest(firstRequest);
+
+		assertThat(result).isEqualTo(new IngestResult(250, 250, 215, 17, 11, 7));
+		verify(client).fetchPage(firstRequest);
+		verify(client).fetchPage(secondRequest);
+		verify(client).fetchPage(thirdRequest);
+		verify(ingestService).ingest(firstBatch);
+		verify(ingestService).ingest(secondBatch);
+		verify(ingestService).ingest(thirdBatch);
 	}
 
 	@Test

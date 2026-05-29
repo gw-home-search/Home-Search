@@ -22,6 +22,11 @@ public class RtmsPublicApartmentTradeClient implements RtmsApartmentTradeClient 
 
 	@Override
 	public OpenApiTradeIngestBatch fetch(RtmsApartmentTradeRequest request) {
+		return fetchPage(request).batch();
+	}
+
+	@Override
+	public RtmsApartmentTradePage fetchPage(RtmsApartmentTradeRequest request) {
 		String serviceKey = properties.requiredServiceKey();
 		String payload = restClient.get()
 			.uri(uriBuilder -> uriBuilder
@@ -35,6 +40,6 @@ public class RtmsPublicApartmentTradeClient implements RtmsApartmentTradeClient 
 				.build())
 			.retrieve()
 			.body(String.class);
-		return parser.parse(request.lawdCd(), request.dealYmd(), request.pageNo(), payload);
+		return parser.parsePage(request.lawdCd(), request.dealYmd(), request.pageNo(), payload);
 	}
 }

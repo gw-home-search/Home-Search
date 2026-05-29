@@ -50,6 +50,77 @@ class OpenApiTradeIngestServiceTest {
 	}
 
 	@Test
+	@DisplayName("같은 월을 다시 수집하면 기존 거래는 duplicate로 남기고 새 거래만 추가 normalized insert한다")
+	void repeatedMonthlyCollectionSkipsExistingTradesAndInsertsOnlyNewTrades() {
+		List<String> events = new ArrayList<>();
+		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
+		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			item -> ComplexMatchResult.matched(501L, "COMPLEX-PK-501", "APTSEQ")
+		);
+
+		IngestResult firstRun = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(rtmsItem("125,000", 1))
+		));
+		IngestResult secondRun = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(rtmsItem("125,000", 1), rtmsItem("130,000", 2))
+		));
+
+		assertThat(firstRun).isEqualTo(new IngestResult(1, 1, 1, 0, 0, 0));
+		assertThat(secondRun).isEqualTo(new IngestResult(2, 2, 1, 1, 0, 0));
+		assertThat(tradeRepository.savedTrades())
+			.extracting(NormalizedTradeCommand::dealAmount)
+			.containsExactly(125000L, 130000L);
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.NORMALIZED)).hasSize(2);
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.DUPLICATE))
+			.singleElement()
+			.extracting(RawTradeIngestRecord::failureReason)
+			.isEqualTo("duplicate source/source_key");
+	}
+
+	@Test
+	@DisplayName("fallback identity 중복은 source_key 중복과 다른 raw failure reason으로 남긴다")
+	void fallbackIdentityDuplicateUsesSpecificRawFailureReason() {
+		List<String> events = new ArrayList<>();
+		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
+		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events) {
+			@Override
+			public boolean insertIfAbsent(NormalizedTradeCommand command) {
+				return false;
+			}
+		};
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			item -> ComplexMatchResult.matched(501L, "COMPLEX-PK-501", "APTSEQ")
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(rtmsItem("125,000", 1))
+		));
+
+		assertThat(result).isEqualTo(new IngestResult(1, 1, 0, 1, 0, 0));
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.DUPLICATE))
+			.singleElement()
+			.extracting(RawTradeIngestRecord::failureReason)
+			.isEqualTo("duplicate fallback identity");
+	}
+
+	@Test
 	@DisplayName("complex match 실패는 failure reason과 함께 queryable하게 남는다")
 	void matchFailureIsRecordedAsQueryableRawEvidence() {
 		List<String> events = new ArrayList<>();
@@ -144,12 +215,16 @@ class OpenApiTradeIngestServiceTest {
 	}
 
 	private OpenApiTradeItem rtmsItem(String dealAmount) {
+		return rtmsItem(dealAmount, 1);
+	}
+
+	private OpenApiTradeItem rtmsItem(String dealAmount, int dealDay) {
 		return new OpenApiTradeItem(
 			"101",
 			"Sample Apartment",
 			"APT-501",
 			dealAmount,
-			1,
+			dealDay,
 			12,
 			2025,
 			84.93,
@@ -157,7 +232,7 @@ class OpenApiTradeIngestServiceTest {
 			"140-1",
 			"11680",
 			"10300",
-			"{\"aptSeq\":\"APT-501\",\"dealAmount\":\"%s\"}".formatted(dealAmount)
+			"{\"aptSeq\":\"APT-501\",\"dealDay\":%d,\"dealAmount\":\"%s\"}".formatted(dealDay, dealAmount)
 		);
 	}
 
@@ -201,7 +276,7 @@ class OpenApiTradeIngestServiceTest {
 		}
 	}
 
-	private static final class RecordingNormalizedTradeRepository implements NormalizedTradeRepository {
+	private static class RecordingNormalizedTradeRepository implements NormalizedTradeRepository {
 		private final List<String> events;
 		private final Map<String, NormalizedTradeCommand> tradesBySourceKey = new LinkedHashMap<>();
 

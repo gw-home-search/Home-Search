@@ -29,7 +29,16 @@ public class RtmsOneShotTradeIngestRunner {
 
 	public IngestResult ingest(RtmsApartmentTradeRequest request) {
 		OpenApiTradeIngestService ingestService = ingestServiceSupplier.get();
-		OpenApiTradeIngestBatch batch = client.fetch(request);
-		return ingestService.ingest(batch);
+		RtmsApartmentTradeRequest currentRequest = request;
+		IngestResult total = IngestResult.empty();
+		while (true) {
+			RtmsApartmentTradePage page = client.fetchPage(currentRequest);
+			OpenApiTradeIngestBatch batch = page.batch();
+			total = total.plus(ingestService.ingest(batch));
+			if (!page.hasNextPage()) {
+				return total;
+			}
+			currentRequest = page.nextRequest();
+		}
 	}
 }

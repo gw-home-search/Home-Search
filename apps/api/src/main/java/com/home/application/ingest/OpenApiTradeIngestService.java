@@ -9,6 +9,9 @@ import java.util.Objects;
  */
 public class OpenApiTradeIngestService {
 
+	private static final String SOURCE_KEY_DUPLICATE_REASON = "duplicate source/source_key";
+	private static final String FALLBACK_IDENTITY_DUPLICATE_REASON = "duplicate fallback identity";
+
 	private final RawTradeIngestRepository rawTradeIngestRepository;
 	private final NormalizedTradeRepository normalizedTradeRepository;
 	private final ComplexMatcher complexMatcher;
@@ -122,7 +125,7 @@ public class OpenApiTradeIngestService {
 
 			if (normalizedTradeRepository.existsBySourceAndSourceKey(batch.source(), sourceKey)) {
 				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.DUPLICATE,
-					"duplicate source/source_key");
+					SOURCE_KEY_DUPLICATE_REASON);
 				duplicateSkipped++;
 				continue;
 			}
@@ -168,7 +171,7 @@ public class OpenApiTradeIngestService {
 			}
 			else {
 				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.DUPLICATE,
-					"duplicate source/source_key");
+					FALLBACK_IDENTITY_DUPLICATE_REASON);
 				duplicateSkipped++;
 			}
 		}

@@ -84,6 +84,75 @@ class RtmsApartmentTradeClientTest {
 	}
 
 	@Test
+	@DisplayName("RTMS JSON response의 page metadata는 다음 page 수집 여부를 결정한다")
+	void parseRtmsJsonResponsePageMetadata() {
+		String payload = """
+			{
+			  "response": {
+			    "header": {
+			      "resultCode": "000",
+			      "resultMsg": "OK"
+			    },
+			    "body": {
+			      "items": {
+			        "item": [
+			          {
+			            "aptNm": "Sample Apartment",
+			            "aptSeq": "11680-123",
+			            "dealAmount": "128,500",
+			            "dealDay": 15,
+			            "dealMonth": 12,
+			            "dealYear": 2025,
+			            "excluUseAr": 84.93,
+			            "floor": 12,
+			            "jibun": "140-1",
+			            "sggCd": "11680",
+			            "umdCd": "10300"
+			          }
+			        ]
+			      },
+			      "numOfRows": 100,
+			      "pageNo": 2,
+			      "totalCount": 250
+			    }
+			  }
+			}
+			""";
+
+		RtmsApartmentTradePage page = parser.parsePage("11680", "202512", 2, payload);
+
+		assertThat(page.batch().pageNo()).isEqualTo(2);
+		assertThat(page.pageNo()).isEqualTo(2);
+		assertThat(page.numOfRows()).isEqualTo(100);
+		assertThat(page.totalCount()).isEqualTo(250);
+		assertThat(page.hasNextPage()).isTrue();
+		assertThat(page.nextRequest()).isEqualTo(new RtmsApartmentTradeRequest("11680", "202512", 3));
+	}
+
+	@Test
+	@DisplayName("마지막 RTMS page metadata는 추가 fetch 없이 수집을 종료시킨다")
+	void lastRtmsPageMetadataStopsPagination() {
+		String payload = """
+			{
+			  "response": {
+			    "header": {"resultCode": "000", "resultMsg": "OK"},
+			    "body": {
+			      "items": "",
+			      "numOfRows": 100,
+			      "pageNo": 3,
+			      "totalCount": 250
+			    }
+			  }
+			}
+			""";
+
+		RtmsApartmentTradePage page = parser.parsePage("11680", "202512", 3, payload);
+
+		assertThat(page.batch().items()).isEmpty();
+		assertThat(page.hasNextPage()).isFalse();
+	}
+
+	@Test
 	@DisplayName("blank RTMS service key는 HTTP request 생성 전에 실패한다")
 	void blankServiceKeyFailsBeforeHttpRequest() {
 		RtmsApartmentTradeProperties properties = new RtmsApartmentTradeProperties(

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Stop hook verification gate for Home Search.
 
-The hook checks for evidence. It does not run tests, perform review, or call
-AI services.
+The hook checks for evidence on completion-like responses. It does not run
+tests, perform review, or call AI services.
 """
 
 from __future__ import annotations
@@ -47,6 +47,27 @@ COVERAGE_EVIDENCE_RE = re.compile(
 OPENAPI_EVIDENCE_RE = re.compile(
     r"(Docs/OpenAPI\s*:\s*(generated|생성).*(verified|검증)|apiDocsCheck\b.*=\s*pass|openapi3\.ya?ml)",
     re.IGNORECASE,
+)
+COMPLETION_INTENT_RE = re.compile(
+    r"("
+    r"작업\s*완료|완료(?:했습니다|했어요|됐습니다|되었습니다|됨)|"
+    r"(?:수정|변경|반영|구현|추가|삭제|정리)(?:했습니다|했어요|되었습니다|됨)|"
+    r"(?:고쳤|마쳤)(?:습니다|어요)|"
+    r"(?:커밋|commit)(?:했습니다|했어요|됨|:)|"
+    r"\bpush(?:ed)?\b|"
+    r"(?:\bPR\b|PR[은는을를이가]?|\bpull request\b).{0,80}(?:열었습니다|생성했습니다|created|opened)|"
+    r"reviewer\s*:\s*(?:지적사항|Findings)|"
+    r"상태:\s*(?:Pass|Partial|Fail).{0,400}(?:검증:|최초 RED:)"
+    r")",
+    re.IGNORECASE | re.DOTALL,
+)
+PUBLISH_HANDOFF_RE = re.compile(
+    r"("
+    r"(?:커밋|commit)(?:했습니다|했어요|됨|:)|"
+    r"\bpush(?:ed)?\b|"
+    r"(?:\bPR\b|PR[은는을를이가]?|\bpull request\b).{0,80}(?:열었습니다|생성했습니다|created|opened)"
+    r")",
+    re.IGNORECASE | re.DOTALL,
 )
 
 
@@ -123,6 +144,15 @@ def changed_files(repo_root: Path) -> list[str]:
     return sorted(path for path in paths if not ignored_path(path))
 
 
+def branch_diff_files(repo_root: Path) -> list[str]:
+    for base in ("origin/main", "main", "origin/master", "master"):
+        paths = run_git(["diff", "--name-only", f"{base}...HEAD"], repo_root)
+        scoped = sorted(path for path in paths if not ignored_path(path))
+        if scoped:
+            return scoped
+    return []
+
+
 def ignored_path(path: str) -> bool:
     parts = set(Path(path).parts)
     return bool(parts & IGNORED_PARTS)
@@ -130,8 +160,8 @@ def ignored_path(path: str) -> bool:
 
 def transcript_text(payload: dict[str, Any]) -> str:
     parts: list[str] = []
-    last = payload.get("last_assistant_message") or payload.get("lastAssistantMessage")
-    if isinstance(last, str):
+    last = last_assistant_text(payload)
+    if last:
         parts.append(last)
     transcript = payload.get("transcript_path") or payload.get("transcriptPath")
     if isinstance(transcript, str):
@@ -142,6 +172,11 @@ def transcript_text(payload: dict[str, Any]) -> str:
         except OSError:
             pass
     return "\n".join(parts)
+
+
+def last_assistant_text(payload: dict[str, Any]) -> str:
+    last = payload.get("last_assistant_message") or payload.get("lastAssistantMessage")
+    return last if isinstance(last, str) else ""
 
 
 def has_successful_command(text: str, command_re: re.Pattern[str]) -> bool:
@@ -309,6 +344,24 @@ def missing_evidence(files: list[str], text: str) -> list[str]:
     return missing
 
 
+def should_enforce_stop_gate(files: list[str], last_message: str) -> bool:
+    if not files:
+        return False
+    return bool(COMPLETION_INTENT_RE.search(last_message))
+
+
+def scope_files_for_stop_gate(files: list[str], last_message: str, branch_files: list[str]) -> list[str]:
+    if branch_files and PUBLISH_HANDOFF_RE.search(last_message):
+        return branch_files
+    return files
+
+
+def gated_missing_evidence(files: list[str], last_message: str, evidence_text: str) -> list[str]:
+    if not should_enforce_stop_gate(files, last_message):
+        return []
+    return missing_evidence(files, evidence_text)
+
+
 def block(lines: list[str]) -> None:
     prompt_lines = ["완료 전 evidence가 부족합니다."]
     prompt_lines.extend(f"- {line}" for line in lines[:7])
@@ -394,6 +447,68 @@ def run_self_test() -> int:
             ]
         ),
     )
+    informational_answer = gated_missing_evidence(
+        ["apps/api/src/main/java/com/home/App.java"],
+        "원인: Stop hook이 dirty worktree 전체를 보고 있습니다. 고치려면 완료 응답에만 gate를 적용해야 합니다.",
+        "",
+    )
+    completion_without_evidence = gated_missing_evidence(
+        ["apps/api/src/main/java/com/home/App.java"],
+        "수정했습니다.",
+        "수정했습니다.",
+    )
+    completion_with_evidence = gated_missing_evidence(
+        ["apps/api/src/main/java/com/home/App.java"],
+        "\n".join(
+            [
+                "상태: Pass",
+                "최초 RED: 있음",
+                "예상 RED 실패: 확인",
+                "최소 GREEN: 확인",
+                "검증: ./gradlew backendQualityCheck = pass",
+                "Coverage: >=90%",
+                "Docs/OpenAPI: generated + verified",
+                "reviewer: 지적사항 = 없음",
+                "주요 위험: 없음",
+                "다음 행동: 없음",
+            ]
+        ),
+        "\n".join(
+            [
+                "상태: Pass",
+                "최초 RED: 있음",
+                "예상 RED 실패: 확인",
+                "최소 GREEN: 확인",
+                "검증: ./gradlew backendQualityCheck = pass",
+                "Coverage: >=90%",
+                "Docs/OpenAPI: generated + verified",
+                "reviewer: 지적사항 = 없음",
+                "주요 위험: 없음",
+                "다음 행동: 없음",
+            ]
+        ),
+    )
+    publish_scope_files = scope_files_for_stop_gate(
+        [".codex/hooks/stop_verification_gate.py", "apps/api/src/main/java/com/home/App.java"],
+        "PR을 열었습니다.",
+        [".codex/hooks/stop_verification_gate.py"],
+    )
+    publish_scope_missing = gated_missing_evidence(
+        publish_scope_files,
+        "PR을 열었습니다.",
+        "\n".join(
+            [
+                "상태: Pass",
+                "최초 RED: 있음",
+                "예상 RED 실패: 확인",
+                "최소 GREEN: 확인",
+                "검증: python3 .codex/hooks/stop_verification_gate.py --self-test = pass",
+                "reviewer: 지적사항 = 없음",
+                "주요 위험: 없음",
+                "다음 행동: 없음",
+            ]
+        ),
+    )
     tests = [
         ("missing First RED is detected", any("최초 RED" in item or "First RED" in item for item in missing_red)),
         ("missing Korean review is detected", any("짧은 한글 리뷰" in item for item in missing_review)),
@@ -401,6 +516,11 @@ def run_self_test() -> int:
         ("markdown changes do not require companion evidence", not markdown_complete),
         ("backendQualityCheck evidence is required", any("backendQualityCheck" in item for item in missing_backend_quality)),
         ("coverage evidence is required", any("Coverage" in item for item in missing_coverage)),
+        ("informational stop answer is not gated", not informational_answer),
+        ("completion answer still requires evidence", bool(completion_without_evidence)),
+        ("completion answer with evidence passes", not completion_with_evidence),
+        ("publish handoff uses branch diff scope", publish_scope_files == [".codex/hooks/stop_verification_gate.py"]),
+        ("publish handoff scoped evidence passes", not publish_scope_missing),
     ]
     failed = [name for name, passed in tests if not passed]
     if failed:
@@ -419,7 +539,10 @@ def main() -> None:
     if not files:
         return
 
-    missing = missing_evidence(files, transcript_text(payload))
+    evidence_text = transcript_text(payload)
+    last_message = last_assistant_text(payload) or evidence_text
+    scoped_files = scope_files_for_stop_gate(files, last_message, branch_diff_files(repo_root))
+    missing = gated_missing_evidence(scoped_files, last_message, evidence_text)
     if missing:
         block(missing)
 

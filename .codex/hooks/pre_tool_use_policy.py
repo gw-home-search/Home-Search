@@ -107,6 +107,7 @@ SECRET_PATH_RE = re.compile(
     r"(^|/)(\.env(?:\..*)?|[^/\s]*(?:secret|credential|token)[^/\s]*|[^/\s]*\.(?:pem|key))$",
     re.IGNORECASE,
 )
+DIRECT_PR_CREATE_RE = re.compile(r"(^|\s)gh\s+pr\s+create(\s|$)", re.IGNORECASE)
 
 
 def load_payload() -> dict[str, Any]:
@@ -532,6 +533,16 @@ def check_dangerous_command(command: str) -> None:
                 deny("rm -rf 차단: destructive recursive deletion은 허용하지 않습니다.")
 
 
+def check_pr_publish_command(command: str) -> None:
+    for cmd in unwrap_shell(command):
+        if DIRECT_PR_CREATE_RE.search(cmd):
+            deny(
+                "PR 생성 차단: raw `gh pr create`는 PR lint를 우회할 수 있습니다. "
+                "`.codex/harness/home run ... --pr` 또는 "
+                "`python3 .codex/harness/home_pr.py ...`를 사용하세요."
+            )
+
+
 def check_payload(
     payload: dict[str, Any],
     *,
@@ -548,6 +559,7 @@ def check_payload(
 
     if command:
         check_dangerous_command(command)
+        check_pr_publish_command(command)
 
     for path in paths:
         if is_secret_path(path):
@@ -735,6 +747,35 @@ def run_self_test() -> int:
                 },
                 repo_root=FALLBACK_REPO_ROOT,
                 branch_name="feat/protected-guard",
+            ),
+        ),
+        (
+            "direct gh pr create is denied",
+            lambda: "PR 생성 차단" in denied_output(
+                {
+                    "cwd": str(FALLBACK_REPO_ROOT),
+                    "tool_input": {
+                        "cmd": "gh pr create --draft --base main --head feat/x-integration --title '[Fix] x' --body-file /tmp/body.md"
+                    },
+                },
+                repo_root=FALLBACK_REPO_ROOT,
+                branch_name="feat/x-integration",
+            ),
+        ),
+        (
+            "harness PR helper is allowed",
+            lambda: not denied_output(
+                {
+                    "cwd": str(FALLBACK_REPO_ROOT),
+                    "tool_input": {
+                        "cmd": (
+                            "python3 .codex/harness/home_pr.py --branch feat/x-integration "
+                            "--title '[Fix] x' --body-file /tmp/body.md --dry-run"
+                        )
+                    },
+                },
+                repo_root=FALLBACK_REPO_ROOT,
+                branch_name="feat/x-integration",
             ),
         ),
     ]

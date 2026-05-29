@@ -214,6 +214,35 @@ class RtmsApartmentTradeClientTest {
 	}
 
 	@Test
+	@DisplayName("public RTMS client는 포털 Encoding service key를 이중 인코딩하지 않는다")
+	void publicClientDoesNotDoubleEncodePortalEncodedServiceKey() {
+		RtmsApartmentTradeProperties properties = new RtmsApartmentTradeProperties(
+			"https://api.example.test",
+			"/rtms",
+			"abc%2Fdef%2Bghi%3D",
+			100,
+			1_000,
+			1_000
+		);
+		RestClient.Builder builder = RestClient.builder().baseUrl(properties.baseUrl());
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		RestClient restClient = builder.build();
+		RtmsPublicApartmentTradeClient client = new RtmsPublicApartmentTradeClient(
+			restClient,
+			properties,
+			parser
+		);
+		server.expect(requestTo(
+				"https://api.example.test/rtms?_type=json&serviceKey=abc%2Fdef%2Bghi%3D&LAWD_CD=11680&DEAL_YMD=202512&pageNo=1&numOfRows=100"
+			))
+			.andRespond(withSuccess(jsonPayload("11680-777"), MediaType.APPLICATION_JSON));
+
+		client.fetch(new RtmsApartmentTradeRequest("11680", "202512", 1));
+
+		server.verify();
+	}
+
+	@Test
 	@DisplayName("textual 또는 missing RTMS item은 empty batch로 처리된다")
 	void textualItemsAreEmptyBatch() {
 		String payload = """

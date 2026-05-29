@@ -1,5 +1,6 @@
 package com.home.infrastructure.persistence.ingest;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.ComplexMatcher;
 import com.home.application.ingest.ComplexMasterBootstrapper;
 import com.home.application.ingest.NormalizedTradeRepository;
@@ -47,8 +48,11 @@ class IngestPersistenceConfiguration {
 
 	@Bean
 	@Lazy
-	TradeMatchEvidenceRepository tradeMatchEvidenceRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
-		return new JdbcTradeMatchEvidenceRepository(requiredJdbcClient(jdbcClientProvider));
+	TradeMatchEvidenceRepository tradeMatchEvidenceRepository(
+		ObjectProvider<JdbcClient> jdbcClientProvider,
+		ObjectMapper objectMapper
+	) {
+		return new JdbcTradeMatchEvidenceRepository(requiredJdbcClient(jdbcClientProvider), objectMapper);
 	}
 
 	@Bean

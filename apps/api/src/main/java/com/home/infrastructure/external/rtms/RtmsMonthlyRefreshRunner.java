@@ -21,6 +21,7 @@ class RtmsMonthlyRefreshRunner {
 	private final Supplier<OpenApiTradeIngestService> ingestServiceSupplier;
 	private final RtmsIngestRunRepository ingestRunRepository;
 	private final Clock clock;
+	private final RtmsMonthlyRefreshRetryPolicy retryPolicy;
 
 	RtmsMonthlyRefreshRunner(
 		RtmsApartmentTradeClient client,
@@ -42,10 +43,27 @@ class RtmsMonthlyRefreshRunner {
 		RtmsIngestRunRepository ingestRunRepository,
 		Clock clock
 	) {
+		this(
+			client,
+			ingestServiceSupplier,
+			ingestRunRepository,
+			clock,
+			RtmsMonthlyRefreshRetryPolicy.noBackoffDefault()
+		);
+	}
+
+	RtmsMonthlyRefreshRunner(
+		RtmsApartmentTradeClient client,
+		Supplier<OpenApiTradeIngestService> ingestServiceSupplier,
+		RtmsIngestRunRepository ingestRunRepository,
+		Clock clock,
+		RtmsMonthlyRefreshRetryPolicy retryPolicy
+	) {
 		this.client = Objects.requireNonNull(client);
 		this.ingestServiceSupplier = Objects.requireNonNull(ingestServiceSupplier);
 		this.ingestRunRepository = Objects.requireNonNull(ingestRunRepository);
 		this.clock = Objects.requireNonNull(clock);
+		this.retryPolicy = Objects.requireNonNull(retryPolicy);
 	}
 
 	RtmsMonthlyRefreshRunSummary refresh(String lawdCd, String dealYmd) {
@@ -74,7 +92,7 @@ class RtmsMonthlyRefreshRunner {
 		int pageCount = 0;
 		try {
 			while (true) {
-				RtmsApartmentTradePage page = client.fetchPage(currentRequest);
+				RtmsApartmentTradePage page = fetchPageWithRetry(currentRequest);
 				OpenApiTradeIngestBatch batch = page.batch();
 				total = total.plus(ingestService.ingest(batch));
 				pageCount++;
@@ -101,6 +119,24 @@ class RtmsMonthlyRefreshRunner {
 		catch (RuntimeException exception) {
 			Instant completedAt = clock.instant();
 			String failureReason = failureReason(exception);
+			if (pageCount > 0) {
+				ingestRunRepository.save(RtmsIngestRunRecord.partiallyFailed(
+					firstRequest.lawdCd(),
+					firstRequest.dealYmd(),
+					pageCount,
+					total,
+					failureReason,
+					startedAt,
+					completedAt
+				));
+				return RtmsMonthlyRefreshRunSummary.partiallyFailed(
+					firstRequest.lawdCd(),
+					firstRequest.dealYmd(),
+					pageCount,
+					total,
+					failureReason
+				);
+			}
 			ingestRunRepository.save(RtmsIngestRunRecord.failed(
 				firstRequest.lawdCd(),
 				firstRequest.dealYmd(),
@@ -117,6 +153,36 @@ class RtmsMonthlyRefreshRunner {
 				total,
 				failureReason
 			);
+		}
+	}
+
+	private RtmsApartmentTradePage fetchPageWithRetry(RtmsApartmentTradeRequest request) {
+		RuntimeException lastException = null;
+		for (int attempt = 1; attempt <= retryPolicy.maxAttempts(); attempt++) {
+			try {
+				return client.fetchPage(request);
+			}
+			catch (RuntimeException exception) {
+				lastException = exception;
+				if (attempt >= retryPolicy.maxAttempts()) {
+					throw exception;
+				}
+				sleepBeforeRetry();
+			}
+		}
+		throw lastException;
+	}
+
+	private void sleepBeforeRetry() {
+		if (retryPolicy.backoffMillis() == 0) {
+			return;
+		}
+		try {
+			Thread.sleep(retryPolicy.backoffMillis());
+		}
+		catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("Interrupted during RTMS monthly refresh retry backoff", exception);
 		}
 	}
 

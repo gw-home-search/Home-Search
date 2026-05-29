@@ -79,6 +79,33 @@ class VworldParcelCoordinateResolverTest {
 	}
 
 	@Test
+	@DisplayName("VWorld resolver는 포털 Encoding service key를 이중 인코딩하지 않는다")
+	void vworldResolverDoesNotDoubleEncodePortalEncodedServiceKey() {
+		VworldParcelCoordinateProperties properties = new VworldParcelCoordinateProperties(
+			"https://api.example.test",
+			"/vworld/wfs",
+			"abc%2Fdef%2Bghi%3D",
+			"http://localhost:8080/test",
+			100,
+			1_000,
+			1_000
+		);
+		RestClient.Builder builder = RestClient.builder().baseUrl(properties.baseUrl());
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		RestClient restClient = builder.build();
+		VworldParcelCoordinateResolver resolver = new VworldParcelCoordinateResolver(restClient, properties);
+		server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
+			.andExpect(request -> assertThat(request.getURI().getRawQuery())
+				.contains("key=abc%2Fdef%2Bghi%3D")
+				.doesNotContain("key=abc%252F"))
+			.andRespond(withSuccess(jsonPayload(), MediaType.APPLICATION_JSON));
+
+		assertThat(resolver.resolve("1168010300107770001", rtmsItem())).isPresent();
+
+		server.verify();
+	}
+
+	@Test
 	@DisplayName("missing 또는 mismatched VWorld feature는 empty coordinate를 반환한다")
 	void missingOrMismatchedFeaturesReturnEmpty() {
 		VworldParcelCoordinateProperties properties = new VworldParcelCoordinateProperties(

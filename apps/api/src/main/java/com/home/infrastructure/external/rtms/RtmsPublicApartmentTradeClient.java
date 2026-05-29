@@ -1,6 +1,7 @@
 package com.home.infrastructure.external.rtms;
 
 import com.home.application.ingest.OpenApiTradeIngestBatch;
+import com.home.infrastructure.external.ExternalApiUri;
 
 import org.springframework.web.client.RestClient;
 
@@ -27,17 +28,14 @@ public class RtmsPublicApartmentTradeClient implements RtmsApartmentTradeClient 
 
 	@Override
 	public RtmsApartmentTradePage fetchPage(RtmsApartmentTradeRequest request) {
-		String serviceKey = properties.requiredServiceKey();
+		String query = "_type=json"
+			+ "&serviceKey=" + ExternalApiUri.serviceKeyQueryValue(properties.requiredServiceKey())
+			+ "&LAWD_CD=" + ExternalApiUri.queryValue(request.lawdCd())
+			+ "&DEAL_YMD=" + ExternalApiUri.queryValue(request.dealYmd())
+			+ "&pageNo=" + ExternalApiUri.queryValue(request.pageNo())
+			+ "&numOfRows=" + ExternalApiUri.queryValue(properties.numOfRows());
 		String payload = restClient.get()
-			.uri(uriBuilder -> uriBuilder
-				.path(properties.path())
-				.queryParam("_type", "json")
-				.queryParam("serviceKey", serviceKey)
-				.queryParam("LAWD_CD", request.lawdCd())
-				.queryParam("DEAL_YMD", request.dealYmd())
-				.queryParam("pageNo", request.pageNo())
-				.queryParam("numOfRows", properties.numOfRows())
-				.build())
+			.uri(ExternalApiUri.create(properties.baseUrl(), properties.path(), query))
 			.retrieve()
 			.body(String.class);
 		return parser.parsePage(request.lawdCd(), request.dealYmd(), request.pageNo(), payload);

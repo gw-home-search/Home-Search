@@ -1,6 +1,7 @@
 [coverage]
 line_minimum = 0.90
 instruction_minimum = 0.90
+branch_minimum = 0.65
 
 [openapi]
 spec = "build/api-spec/openapi3.yaml"

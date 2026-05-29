@@ -54,6 +54,28 @@ record RtmsMonthlyRefreshRunSummary(
 		);
 	}
 
+	static RtmsMonthlyRefreshRunSummary partiallyFailed(
+		String lawdCd,
+		String dealYmd,
+		int pageCount,
+		IngestResult result,
+		String failureReason
+	) {
+		return new RtmsMonthlyRefreshRunSummary(
+			lawdCd,
+			dealYmd,
+			result.read(),
+			result.rawSaved(),
+			result.normalizedInserted(),
+			result.duplicateSkipped(),
+			result.matchFailed(),
+			result.parseFailed(),
+			pageCount,
+			RtmsMonthlyRefreshRunStatus.PARTIAL,
+			failureReason
+		);
+	}
+
 	boolean hasNewData() {
 		return normalizedInserted > 0;
 	}

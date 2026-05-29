@@ -74,4 +74,29 @@ class JdbcRtmsIngestRunRepositoryTest extends JdbcPostgresTestSupport {
 		assertThat(saved.failureReason()).isEqualTo("IllegalStateException: fetch failed");
 		assertThat(saved.createdAt()).isNotNull();
 	}
+
+	@Test
+	@DisplayName("RTMS 수집 실행 일부 성공 후 실패는 PARTIAL status와 누적 count로 저장된다")
+	void savesPartialRtmsIngestRunSummaryWithAccumulatedCounts() {
+		JdbcRtmsIngestRunRepository repository = new JdbcRtmsIngestRunRepository(jdbcClient);
+		RtmsIngestRunRecord record = RtmsIngestRunRecord.partiallyFailed(
+			"11680",
+			"202512",
+			1,
+			new IngestResult(3, 3, 2, 1, 0, 0),
+			"IllegalStateException: temporary 503",
+			Instant.parse("2026-05-29T00:00:00Z"),
+			Instant.parse("2026-05-29T00:00:05Z")
+		);
+
+		RtmsIngestRunRecord saved = repository.save(record);
+
+		assertThat(saved.id()).isNotNull();
+		assertThat(saved.status()).isEqualTo("PARTIAL");
+		assertThat(saved.pageCount()).isEqualTo(1);
+		assertThat(saved.read()).isEqualTo(3);
+		assertThat(saved.normalizedInserted()).isEqualTo(2);
+		assertThat(saved.duplicateSkipped()).isEqualTo(1);
+		assertThat(saved.failureReason()).isEqualTo("IllegalStateException: temporary 503");
+	}
 }

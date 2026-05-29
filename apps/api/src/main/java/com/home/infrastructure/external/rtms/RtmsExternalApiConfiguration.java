@@ -93,7 +93,9 @@ class RtmsExternalApiConfiguration {
 	RtmsMonthlyRefreshRunner rtmsMonthlyRefreshRunner(
 		RtmsApartmentTradeClient client,
 		ObjectProvider<OpenApiTradeIngestService> ingestServiceProvider,
-		ObjectProvider<RtmsIngestRunRepository> ingestRunRepositoryProvider
+		ObjectProvider<RtmsIngestRunRepository> ingestRunRepositoryProvider,
+		@Value("${home.ingest.rtms.refresh-retry-attempts:3}") int refreshRetryAttempts,
+		@Value("${home.ingest.rtms.refresh-retry-backoff-millis:250}") long refreshRetryBackoffMillis
 	) {
 		return new RtmsMonthlyRefreshRunner(
 			client,
@@ -101,7 +103,8 @@ class RtmsExternalApiConfiguration {
 				throw new IllegalStateException("OpenApiTradeIngestService is required for RTMS monthly refresh ingest");
 			}),
 			ingestRunRepositoryProvider.getIfAvailable(RtmsIngestRunRepository::noop),
-			java.time.Clock.systemUTC()
+			java.time.Clock.systemUTC(),
+			new RtmsMonthlyRefreshRetryPolicy(refreshRetryAttempts, refreshRetryBackoffMillis)
 		);
 	}
 

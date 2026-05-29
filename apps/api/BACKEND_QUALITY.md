@@ -17,7 +17,9 @@ and Javadoc.
 
 ## Coverage
 
-Backend line and instruction coverage must stay at or above 90%.
+Backend line and instruction coverage must stay at or above 90%. Branch
+coverage must stay at or above the configured baseline in
+`backend-quality-gate.toml`.
 
 Coverage should be raised by behavior tests through public seams. Do not add
 record/getter-only tests just to increase the percentage.
@@ -37,6 +39,13 @@ apps/api/build/api-spec/openapi3.yaml
 The YAML must include the current map paths and canonical public fields. It
 must not expose audit or dedupe fields such as `complexPk`, `aptSeq`,
 `sourceKey`, or their snake_case variants.
+
+## External Service Keys
+
+`APT_SERVICE_KEY` and `VW_SERVICE_KEY` may use either the portal Decoding key
+or Encoding key. The runtime normalizes percent-encoded service keys before
+building the external query string, so `%` characters are not encoded again as
+`%25`.
 
 ## Evidence
 

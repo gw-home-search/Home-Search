@@ -12,6 +12,7 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner {
 	private static final Logger log = LoggerFactory.getLogger(RtmsOneShotIngestApplicationRunner.class);
 
 	private final RtmsOneShotTradeIngestRunner runner;
+	private final RtmsMonthlyRefreshRunner monthlyRefreshRunner;
 	private final RtmsOneShotIngestProperties properties;
 	private final RtmsApartmentTradeProperties tradeProperties;
 
@@ -20,7 +21,17 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner {
 		RtmsOneShotIngestProperties properties,
 		RtmsApartmentTradeProperties tradeProperties
 	) {
+		this(runner, null, properties, tradeProperties);
+	}
+
+	RtmsOneShotIngestApplicationRunner(
+		RtmsOneShotTradeIngestRunner runner,
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
+		RtmsOneShotIngestProperties properties,
+		RtmsApartmentTradeProperties tradeProperties
+	) {
 		this.runner = runner;
+		this.monthlyRefreshRunner = monthlyRefreshRunner;
 		this.properties = properties;
 		this.tradeProperties = tradeProperties;
 	}
@@ -31,8 +42,17 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner {
 			return;
 		}
 
-		RtmsApartmentTradeRequest request = properties.request();
+		RtmsIngestMode mode = properties.ingestMode();
 		tradeProperties.requiredServiceKey();
+		if (mode == RtmsIngestMode.MONTHLY_REFRESH) {
+			runMonthlyRefresh();
+			return;
+		}
+		runOneShot();
+	}
+
+	private void runOneShot() {
+		RtmsApartmentTradeRequest request = properties.request();
 		if (properties.preflightOnly()) {
 			log.info(
 				"RTMS one-shot ingest preflight completed baseUrl={} path={} lawdCd={} dealYmd={} pageNo={} "
@@ -59,6 +79,43 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner {
 			result.duplicateSkipped(),
 			result.matchFailed(),
 			result.parseFailed()
+		);
+	}
+
+	private void runMonthlyRefresh() {
+		RtmsMonthlyRefreshPlan plan = properties.monthlyRefreshPlan();
+		if (properties.preflightOnly()) {
+			log.info(
+				"RTMS monthly refresh preflight completed baseUrl={} path={} lawdCd={} dealYmds={} "
+					+ "lookbackMonths={} numOfRows={}",
+				tradeProperties.baseUrl(),
+				tradeProperties.path(),
+				plan.lawdCd(),
+				plan.dealYmds(),
+				plan.lookbackMonths(),
+				tradeProperties.numOfRows()
+			);
+			return;
+		}
+		if (monthlyRefreshRunner == null) {
+			throw new IllegalStateException("RtmsMonthlyRefreshRunner is required for RTMS monthly refresh ingest");
+		}
+		RtmsMonthlyRefreshReport report = monthlyRefreshRunner.refresh(plan);
+		IngestResult total = report.totalResult();
+		log.info(
+			"RTMS monthly refresh completed lawdCd={} dealYmds={} monthCount={} pageCount={} read={} rawSaved={} "
+				+ "normalizedInserted={} duplicateSkipped={} matchFailed={} parseFailed={} hasNewData={}",
+			plan.lawdCd(),
+			plan.dealYmds(),
+			report.runs().size(),
+			report.totalPageCount(),
+			total.read(),
+			total.rawSaved(),
+			total.normalizedInserted(),
+			total.duplicateSkipped(),
+			total.matchFailed(),
+			total.parseFailed(),
+			report.hasNewData()
 		);
 	}
 }

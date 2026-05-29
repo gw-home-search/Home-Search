@@ -5,9 +5,11 @@ import com.home.application.ingest.ComplexMasterBootstrapper;
 import com.home.application.ingest.NormalizedTradeRepository;
 import com.home.application.ingest.OpenApiTradeIngestService;
 import com.home.application.ingest.RawTradeIngestRepository;
+import com.home.application.ingest.RtmsIngestRunRepository;
 import com.home.application.ingest.TradeIngestMetrics;
 import com.home.application.ingest.TradeMatchEvidenceRepository;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -47,6 +49,13 @@ class IngestPersistenceConfiguration {
 	@Lazy
 	TradeMatchEvidenceRepository tradeMatchEvidenceRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
 		return new JdbcTradeMatchEvidenceRepository(requiredJdbcClient(jdbcClientProvider));
+	}
+
+	@Bean
+	@Lazy
+	@ConditionalOnBean(JdbcClient.class)
+	RtmsIngestRunRepository rtmsIngestRunRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
+		return new JdbcRtmsIngestRunRepository(requiredJdbcClient(jdbcClientProvider));
 	}
 
 	@Bean

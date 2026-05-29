@@ -2,6 +2,7 @@ package com.home.infrastructure.external.rtms;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.OpenApiTradeIngestService;
+import com.home.application.ingest.RtmsIngestRunRepository;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,9 +40,11 @@ class RtmsExternalApiConfiguration {
 		@Value("${home.ingest.rtms.lawd-cd:}") String lawdCd,
 		@Value("${home.ingest.rtms.deal-ymd:}") String dealYmd,
 		@Value("${home.ingest.rtms.page-no:1}") Integer pageNo,
-		@Value("${home.ingest.rtms.preflight-only:false}") boolean preflightOnly
+		@Value("${home.ingest.rtms.preflight-only:false}") boolean preflightOnly,
+		@Value("${home.ingest.rtms.mode:one-shot}") String mode,
+		@Value("${home.ingest.rtms.lookback-months:0}") Integer lookbackMonths
 	) {
-		return new RtmsOneShotIngestProperties(enabled, lawdCd, dealYmd, pageNo, preflightOnly);
+		return new RtmsOneShotIngestProperties(enabled, lawdCd, dealYmd, pageNo, preflightOnly, mode, lookbackMonths);
 	}
 
 	@Bean
@@ -87,11 +90,28 @@ class RtmsExternalApiConfiguration {
 	}
 
 	@Bean
+	RtmsMonthlyRefreshRunner rtmsMonthlyRefreshRunner(
+		RtmsApartmentTradeClient client,
+		ObjectProvider<OpenApiTradeIngestService> ingestServiceProvider,
+		ObjectProvider<RtmsIngestRunRepository> ingestRunRepositoryProvider
+	) {
+		return new RtmsMonthlyRefreshRunner(
+			client,
+			() -> ingestServiceProvider.getIfAvailable(() -> {
+				throw new IllegalStateException("OpenApiTradeIngestService is required for RTMS monthly refresh ingest");
+			}),
+			ingestRunRepositoryProvider.getIfAvailable(RtmsIngestRunRepository::noop),
+			java.time.Clock.systemUTC()
+		);
+	}
+
+	@Bean
 	ApplicationRunner rtmsOneShotIngestApplicationRunner(
 		RtmsOneShotTradeIngestRunner runner,
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
 		RtmsOneShotIngestProperties properties,
 		RtmsApartmentTradeProperties tradeProperties
 	) {
-		return new RtmsOneShotIngestApplicationRunner(runner, properties, tradeProperties);
+		return new RtmsOneShotIngestApplicationRunner(runner, monthlyRefreshRunner, properties, tradeProperties);
 	}
 }

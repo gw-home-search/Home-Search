@@ -74,4 +74,32 @@ public record RtmsIngestRunRecord(
 			null
 		);
 	}
+
+	public static RtmsIngestRunRecord partiallyFailed(
+		String lawdCd,
+		String dealYmd,
+		int pageCount,
+		IngestResult result,
+		String failureReason,
+		Instant startedAt,
+		Instant completedAt
+	) {
+		return new RtmsIngestRunRecord(
+			null,
+			lawdCd,
+			dealYmd,
+			"PARTIAL",
+			pageCount,
+			result.read(),
+			result.rawSaved(),
+			result.normalizedInserted(),
+			result.duplicateSkipped(),
+			result.matchFailed(),
+			result.parseFailed(),
+			failureReason,
+			startedAt,
+			completedAt,
+			null
+		);
+	}
 }

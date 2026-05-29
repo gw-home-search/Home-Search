@@ -34,4 +34,6 @@ home:
       deal-ymd: ""
       page-no: 1
       lookback-months: 0
+      refresh-retry-attempts: 3
+      refresh-retry-backoff-millis: 250
       preflight-only: false

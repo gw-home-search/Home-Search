@@ -9,6 +9,7 @@ FRONTEND_URL=http://localhost:5173
 SERVER_PORT=8080
 
 # RTMS live ingest is off by default. Set Open API service keys only in your local shell.
+# Decoding keys are easiest to inspect, but portal Encoding keys are accepted too.
 APT_SERVICE_KEY=
 VW_SERVICE_KEY=
 HOME_INGEST_RTMS_ENABLED=false

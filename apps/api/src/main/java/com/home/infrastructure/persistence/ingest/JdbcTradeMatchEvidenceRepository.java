@@ -8,6 +8,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.TradeMatchEvidenceCommand;
 import com.home.application.ingest.TradeMatchEvidenceRecord;
 import com.home.application.ingest.TradeMatchEvidenceRepository;
@@ -17,10 +20,19 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class JdbcTradeMatchEvidenceRepository implements TradeMatchEvidenceRepository {
 
+	private static final TypeReference<List<Long>> LONG_LIST = new TypeReference<>() {
+	};
+
 	private final JdbcClient jdbcClient;
+	private final ObjectMapper objectMapper;
 
 	public JdbcTradeMatchEvidenceRepository(JdbcClient jdbcClient) {
+		this(jdbcClient, new ObjectMapper());
+	}
+
+	public JdbcTradeMatchEvidenceRepository(JdbcClient jdbcClient, ObjectMapper objectMapper) {
 		this.jdbcClient = Objects.requireNonNull(jdbcClient);
+		this.objectMapper = Objects.requireNonNull(objectMapper);
 	}
 
 	@Override
@@ -157,26 +169,24 @@ public class JdbcTradeMatchEvidenceRepository implements TradeMatchEvidenceRepos
 	}
 
 	private String candidateJson(List<Long> candidateComplexIds) {
-		return "[" + candidateComplexIds.stream()
-			.map(String::valueOf)
-			.reduce((left, right) -> left + "," + right)
-			.orElse("") + "]";
+		try {
+			return objectMapper.writeValueAsString(candidateComplexIds);
+		}
+		catch (JsonProcessingException exception) {
+			throw new IllegalStateException("Failed to serialize trade match candidate ids", exception);
+		}
 	}
 
 	private List<Long> parseCandidateIds(String json) {
-		if (json == null || json.equals("[]")) {
+		if (json == null || json.isBlank()) {
 			return List.of();
 		}
-		String content = json.replace("[", "").replace("]", "").trim();
-		if (content.isEmpty()) {
-			return List.of();
+		try {
+			return objectMapper.readValue(json, LONG_LIST);
 		}
-		return List.of(content.split(","))
-			.stream()
-			.map(String::trim)
-			.filter(value -> !value.isBlank())
-			.map(Long::valueOf)
-			.toList();
+		catch (JsonProcessingException exception) {
+			throw new IllegalStateException("Failed to parse trade match candidate ids", exception);
+		}
 	}
 
 	private Long longOrNull(ResultSet resultSet, String column) throws SQLException {

@@ -237,12 +237,17 @@ tasks.named('jacocoTestCoverageVerification') {
                 value = 'COVEREDRATIO'
                 minimum = 0.90
             }
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.65
+            }
         }
     }
 }
 
 tasks.register('coverageCheck') {
-    description = 'Generate JaCoCo reports and enforce 90% backend coverage.'
+    description = 'Generate JaCoCo reports and enforce backend coverage gates.'
     group = 'verification'
     dependsOn tasks.named('jacocoTestReport')
     dependsOn tasks.named('jacocoTestCoverageVerification')

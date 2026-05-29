@@ -1,6 +1,8 @@
 package com.home.foundation;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -8,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.home.application.ingest.IngestResult;
+import com.home.application.map.MapUseCase;
 import com.home.application.ingest.TradeIngestMetrics;
 
 import org.junit.jupiter.api.DisplayName;
@@ -17,6 +20,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
@@ -29,6 +33,9 @@ class ObservabilityEndpointSmokeTest {
 
 	@Autowired
 	private TradeIngestMetrics tradeIngestMetrics;
+
+	@MockitoBean
+	private MapUseCase mapUseCase;
 
 	@Test
 	@DisplayName("GET /actuator/health는 database auto-configuration 없이 readiness status를 반환한다")
@@ -67,6 +74,8 @@ class ObservabilityEndpointSmokeTest {
 	@Test
 	@DisplayName("GET /actuator/prometheus는 map endpoint success/error counter를 노출한다")
 	void prometheusExposesMapEndpointCounters() throws Exception {
+		given(mapUseCase.getComplexMarkers(any())).willReturn(java.util.List.of());
+
 		mockMvc.perform(post("/api/v1/map/complexes")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""

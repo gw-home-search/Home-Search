@@ -4,6 +4,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import com.home.application.ingest.OpenApiTradeItem;
+import com.home.infrastructure.external.ExternalApiUri;
 import com.home.infrastructure.persistence.ingest.ParcelCoordinate;
 import com.home.infrastructure.persistence.ingest.ParcelCoordinateResolver;
 
@@ -30,17 +31,15 @@ public class VworldParcelCoordinateResolver implements ParcelCoordinateResolver 
 			return Optional.empty();
 		}
 		try {
+			String query = "key=" + ExternalApiUri.serviceKeyQueryValue(properties.serviceKey())
+				+ "&output=" + ExternalApiUri.queryValue("application/json")
+				+ "&pnu=" + ExternalApiUri.queryValue(normalizedPnu)
+				+ "&domain=" + ExternalApiUri.queryValue(properties.domain())
+				+ "&srsName=" + ExternalApiUri.queryValue("EPSG:4326")
+				+ "&pageNo=" + ExternalApiUri.queryValue(1)
+				+ "&numOfRows=" + ExternalApiUri.queryValue(properties.numOfRows());
 			VworldParcelCoordinateResponse response = restClient.get()
-				.uri(uriBuilder -> uriBuilder
-					.path(properties.wfsPath())
-					.queryParam("key", properties.serviceKey())
-					.queryParam("output", "application/json")
-					.queryParam("pnu", normalizedPnu)
-					.queryParam("domain", properties.domain())
-					.queryParam("srsName", "EPSG:4326")
-					.queryParam("pageNo", 1)
-					.queryParam("numOfRows", properties.numOfRows())
-					.build())
+				.uri(ExternalApiUri.create(properties.baseUrl(), properties.wfsPath(), query))
 				.retrieve()
 				.body(VworldParcelCoordinateResponse.class);
 			return response != null ? response.center(normalizedPnu) : Optional.empty();

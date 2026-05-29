@@ -166,6 +166,27 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("search API primary substring 검색은 complex와 parcel trigram index 기반을 가진다")
+	void searchComplexesPrimarySubstringSearchHasTrigramIndexes() {
+		assertThat(extensionExists("pg_trgm")).isTrue();
+		assertThat(indexDefinition("ix_complex_name_lower_trgm"))
+			.contains("USING gin")
+			.contains("lower")
+			.contains("name")
+			.contains("gin_trgm_ops");
+		assertThat(indexDefinition("ix_complex_trade_name_lower_trgm"))
+			.contains("USING gin")
+			.contains("lower")
+			.contains("trade_name")
+			.contains("gin_trgm_ops");
+		assertThat(indexDefinition("ix_parcel_address_lower_trgm"))
+			.contains("USING gin")
+			.contains("lower")
+			.contains("address")
+			.contains("gin_trgm_ops");
+	}
+
+	@Test
 	@DisplayName("search API는 complex 단위 결과라 같은 parcelId를 여러 결과에서 반환할 수 있다")
 	void searchComplexesCanReturnMultipleComplexesForSameParcel() {
 		seedComplex();
@@ -181,6 +202,72 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 				tuple(501L, 1001L),
 				tuple(502L, 1001L)
 			);
+	}
+
+	@Test
+	@DisplayName("detail은 parcel 대표 complex를 반환하고 trade는 parcel 하위 모든 complex 거래를 반환한다")
+	void detailUsesRepresentativeComplexAndTradeListIncludesAllParcelComplexTrades() {
+		seedPropertyExplorationData();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt)
+			VALUES (502, 1001, 'COMPLEX-PK-502', 'APT-502', 'Secondary Complex', 'Secondary Trade Name', 120)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO raw_trade_ingest (
+			    id,
+			    source,
+			    source_key,
+			    lawd_cd,
+			    deal_ymd,
+			    page_no,
+			    payload,
+			    payload_hash,
+			    status,
+			    processed_at
+			)
+			VALUES (90003, 'RTMS', 'sample-rtms-20251220', '11680', '202512', 1, '{}', 'hash-3', 'NORMALIZED', now())
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO trade (
+			    id,
+			    complex_id,
+			    deal_date,
+			    deal_amount,
+			    floor,
+			    excl_area,
+			    apt_dong,
+			    source,
+			    source_key,
+			    complex_pk,
+			    apt_seq,
+			    raw_ingest_id
+			)
+			VALUES (
+			    9003,
+			    502,
+			    DATE '2025-12-20',
+			    150000,
+			    20,
+			    114.93,
+			    '201',
+			    'RTMS',
+			    'sample-rtms-20251220',
+			    'COMPLEX-PK-502',
+			    'APT-502',
+			    90003
+			)
+			""").update();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.findParcelDetail(1001L))
+			.hasValueSatisfying(detail -> {
+				assertThat(detail.name()).isEqualTo("Sample Apartment");
+				assertThat(detail.tradeName()).isEqualTo("Sample trade name");
+			});
+		assertThat(repository.findTradeList(1001L))
+			.hasValueSatisfying(tradeList -> assertThat(tradeList.trades())
+				.extracting("tradeId")
+				.containsExactly(9003L, 9002L, 9001L));
 	}
 
 	@Test

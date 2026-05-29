@@ -1,5 +1,6 @@
 package com.home.infrastructure.web.map;
 
+import static org.hamcrest.Matchers.matchesPattern;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -33,6 +34,9 @@ import com.home.infrastructure.web.map.dto.RegionMarkersRequest;
 @WebMvcTest(MapController.class)
 @ActiveProfiles("test")
 class MapControllerContractTest {
+
+	private static final String OFFSET_TIMESTAMP_PATTERN =
+		"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:Z|[+-]\\d{2}:\\d{2})$";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -319,7 +323,7 @@ class MapControllerContractTest {
 			.andExpect(jsonPath("$.status").value(500))
 			.andExpect(jsonPath("$.detail").value("Internal server error."))
 			.andExpect(jsonPath("$.exception").value("IllegalStateException"))
-			.andExpect(jsonPath("$.timestamp").exists());
+			.andExpect(jsonPath("$.timestamp").value(matchesPattern(OFFSET_TIMESTAMP_PATTERN)));
 	}
 
 	private static Stream<Arguments> invalidComplexFilterRanges() {
@@ -376,6 +380,6 @@ class MapControllerContractTest {
 			.andExpect(jsonPath("$.status").value(400))
 			.andExpect(jsonPath("$.detail").value("Invalid parameter format."))
 			.andExpect(jsonPath("$.exception").value("MapApiException"))
-			.andExpect(jsonPath("$.timestamp").exists());
+			.andExpect(jsonPath("$.timestamp").value(matchesPattern(OFFSET_TIMESTAMP_PATTERN)));
 	}
 }

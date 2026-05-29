@@ -193,26 +193,26 @@ class MapApiRestDocsTest {
 				responseFields(
 					fieldWithPath("type").type(JsonFieldType.STRING).description("Documentation anchor for the error list."),
 					fieldWithPath("title").type(JsonFieldType.STRING).description("public API error code."),
-					fieldWithPath("status").type(JsonFieldType.NUMBER).description("HTTP status code."),
-					fieldWithPath("detail").type(JsonFieldType.STRING).description("Human-readable error detail."),
-					fieldWithPath("exception").type(JsonFieldType.STRING).description("Exception or public API error category."),
-					fieldWithPath("timestamp").type(JsonFieldType.STRING).description("Server-side error timestamp."),
-					fieldWithPath("instance").type(JsonFieldType.STRING).optional().description("Request path that produced the error.")
-				),
-				resource(builder()
+						fieldWithPath("status").type(JsonFieldType.NUMBER).description("HTTP status code."),
+						fieldWithPath("detail").type(JsonFieldType.STRING).description("Human-readable error detail."),
+						fieldWithPath("exception").type(JsonFieldType.STRING).description("Exception or public API error category."),
+						fieldWithPath("timestamp").type(JsonFieldType.STRING).description("UTC offset error timestamp."),
+						fieldWithPath("instance").type(JsonFieldType.STRING).optional().description("Request path that produced the error.")
+					),
+					resource(builder()
 					.tag("Map")
 					.summary("Map request validation error")
 					.description("Returns ProblemDetail when a map request is invalid.")
 					.responseFields(
 						fieldWithPath("type").type(JsonFieldType.STRING).description("Documentation anchor for the error list."),
 						fieldWithPath("title").type(JsonFieldType.STRING).description("public API error code."),
-						fieldWithPath("status").type(JsonFieldType.NUMBER).description("HTTP status code."),
-						fieldWithPath("detail").type(JsonFieldType.STRING).description("Human-readable error detail."),
-						fieldWithPath("exception").type(JsonFieldType.STRING).description("Exception or public API error category."),
-						fieldWithPath("timestamp").type(JsonFieldType.STRING).description("Server-side error timestamp."),
-						fieldWithPath("instance").type(JsonFieldType.STRING).optional().description("Request path that produced the error.")
-					)
-					.build())
+							fieldWithPath("status").type(JsonFieldType.NUMBER).description("HTTP status code."),
+							fieldWithPath("detail").type(JsonFieldType.STRING).description("Human-readable error detail."),
+							fieldWithPath("exception").type(JsonFieldType.STRING).description("Exception or public API error category."),
+							fieldWithPath("timestamp").type(JsonFieldType.STRING).description("UTC offset error timestamp."),
+							fieldWithPath("instance").type(JsonFieldType.STRING).optional().description("Request path that produced the error.")
+						)
+						.build())
 			));
 	}
 }

@@ -3,6 +3,7 @@ package com.home.global.error;
 import java.net.URI;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 
 import org.springframework.http.HttpStatus;
@@ -27,6 +28,8 @@ public class ApiExceptionHandler {
 	private static final String INTERNAL_SERVER_ERROR_TITLE = "S500";
 	private static final String INTERNAL_SERVER_ERROR_DETAIL = "Internal server error.";
 	private static final String MAP_API_EXCEPTION = "MapApiException";
+	private static final DateTimeFormatter ERROR_TIMESTAMP_FORMATTER =
+		DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
 
 	@ExceptionHandler({
 		MethodArgumentNotValidException.class,
@@ -90,7 +93,8 @@ public class ApiExceptionHandler {
 		problemDetail.setProperty("exception", exception);
 		problemDetail.setProperty(
 			"timestamp",
-			OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toString()
+			OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS)
+				.format(ERROR_TIMESTAMP_FORMATTER)
 		);
 
 		return problemDetail;

@@ -11,6 +11,7 @@ public class OpenApiTradeIngestService {
 
 	private static final String SOURCE_KEY_DUPLICATE_REASON = "duplicate source/source_key";
 	private static final String FALLBACK_IDENTITY_DUPLICATE_REASON = "duplicate fallback identity";
+	private static final String CANCELED_TRADE_REASON = "canceled source/source_key";
 
 	private final RawTradeIngestRepository rawTradeIngestRepository;
 	private final NormalizedTradeRepository normalizedTradeRepository;
@@ -107,11 +108,13 @@ public class OpenApiTradeIngestService {
 		long rawSaved = 0;
 		long normalizedInserted = 0;
 		long duplicateSkipped = 0;
+		long canceledSkipped = 0;
 		long matchFailed = 0;
 		long parseFailed = 0;
 
 		for (OpenApiTradeItem item : batch.items()) {
 			String sourceKey = sourceKeyGenerator.generate(batch.source(), item);
+			String payloadHash = sourceKeyGenerator.hashPayload(item.payload());
 			RawTradeIngestRecord raw = rawTradeIngestRepository.save(RawTradeIngestRecord.received(
 				batch.source(),
 				sourceKey,
@@ -119,9 +122,37 @@ public class OpenApiTradeIngestService {
 				batch.dealYmd(),
 				batch.pageNo(),
 				item.payload(),
-				sourceKeyGenerator.hashPayload(item.payload())
+				payloadHash
 			));
 			rawSaved++;
+
+			if (rawTradeIngestRepository.existsProcessedBySourceAndSourceKeyAndPayloadHashBefore(
+				raw.id(),
+				batch.source(),
+				sourceKey,
+				payloadHash
+			)) {
+				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.DUPLICATE,
+					SOURCE_KEY_DUPLICATE_REASON);
+				duplicateSkipped++;
+				continue;
+			}
+
+			if (item.isCanceled()) {
+				try {
+					ParsedTrade.from(item);
+				}
+				catch (IllegalArgumentException exception) {
+					rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.PARSE_FAILED,
+						exception.getMessage());
+					parseFailed++;
+					continue;
+				}
+				normalizedTradeRepository.cancelBySourceAndSourceKey(batch.source(), sourceKey, raw.id());
+				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.CANCELED, CANCELED_TRADE_REASON);
+				canceledSkipped++;
+				continue;
+			}
 
 			if (normalizedTradeRepository.existsBySourceAndSourceKey(batch.source(), sourceKey)) {
 				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.DUPLICATE,
@@ -181,6 +212,7 @@ public class OpenApiTradeIngestService {
 			rawSaved,
 			normalizedInserted,
 			duplicateSkipped,
+			canceledSkipped,
 			matchFailed,
 			parseFailed
 		);

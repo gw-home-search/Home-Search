@@ -21,7 +21,7 @@ class JdbcRtmsIngestRunRepositoryTest extends JdbcPostgresTestSupport {
 			"11680",
 			"202512",
 			2,
-			new IngestResult(3, 3, 1, 1, 1, 0),
+			new IngestResult(4, 4, 1, 1, 1, 1, 0),
 			Instant.parse("2026-05-29T00:00:00Z"),
 			Instant.parse("2026-05-29T00:00:05Z")
 		);
@@ -31,10 +31,11 @@ class JdbcRtmsIngestRunRepositoryTest extends JdbcPostgresTestSupport {
 		assertThat(saved.id()).isNotNull();
 		assertThat(saved.status()).isEqualTo("COMPLETED");
 		assertThat(saved.pageCount()).isEqualTo(2);
-		assertThat(saved.read()).isEqualTo(3);
-		assertThat(saved.rawSaved()).isEqualTo(3);
+		assertThat(saved.read()).isEqualTo(4);
+		assertThat(saved.rawSaved()).isEqualTo(4);
 		assertThat(saved.normalizedInserted()).isEqualTo(1);
 		assertThat(saved.duplicateSkipped()).isEqualTo(1);
+		assertThat(saved.canceledSkipped()).isEqualTo(1);
 		assertThat(saved.matchFailed()).isEqualTo(1);
 		assertThat(saved.parseFailed()).isZero();
 		assertThat(saved.failureReason()).isNull();

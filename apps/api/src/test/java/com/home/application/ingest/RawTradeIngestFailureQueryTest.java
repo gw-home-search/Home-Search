@@ -25,9 +25,10 @@ class RawTradeIngestFailureQueryTest {
 		assertThat(query.statuses()).containsExactly(
 			RawTradeIngestStatus.MATCH_FAILED,
 			RawTradeIngestStatus.PARSE_FAILED,
-			RawTradeIngestStatus.DUPLICATE
+			RawTradeIngestStatus.DUPLICATE,
+			RawTradeIngestStatus.CANCELED
 		);
-		assertThat(query.statusNames()).containsExactly("MATCH_FAILED", "PARSE_FAILED", "DUPLICATE");
+		assertThat(query.statusNames()).containsExactly("MATCH_FAILED", "PARSE_FAILED", "DUPLICATE", "CANCELED");
 	}
 
 	@Test

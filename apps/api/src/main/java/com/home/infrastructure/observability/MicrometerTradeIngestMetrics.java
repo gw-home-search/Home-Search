@@ -26,6 +26,7 @@ public class MicrometerTradeIngestMetrics implements TradeIngestMetrics {
 		increment(counter(sourceTag, "raw_saved"), result.rawSaved());
 		increment(counter(sourceTag, "normalized_inserted"), result.normalizedInserted());
 		increment(counter(sourceTag, "duplicate_skipped"), result.duplicateSkipped());
+		increment(counter(sourceTag, "canceled_skipped"), result.canceledSkipped());
 		increment(counter(sourceTag, "match_failed"), result.matchFailed());
 		increment(counter(sourceTag, "parse_failed"), result.parseFailed());
 	}

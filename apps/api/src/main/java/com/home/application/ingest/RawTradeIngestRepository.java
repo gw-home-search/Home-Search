@@ -16,6 +16,22 @@ public interface RawTradeIngestRepository {
 	RawTradeIngestRecord save(RawTradeIngestRecord record);
 
 	/**
+	 * 같은 source/source_key/payload_hash가 이미 처리된 raw evidence로 존재하는지 확인합니다.
+	 *
+	 * @param rawIngestId 현재 raw ingest id. 이 id보다 앞선 row만 중복 후보로 봅니다.
+	 * @param source 외부 원천
+	 * @param sourceKey 원천 identity
+	 * @param payloadHash 원천 payload hash
+	 * @return 현재 row보다 먼저 처리된 같은 source/source_key/payload_hash raw evidence 존재 여부
+	 */
+	boolean existsProcessedBySourceAndSourceKeyAndPayloadHashBefore(
+		Long rawIngestId,
+		String source,
+		String sourceKey,
+		String payloadHash
+	);
+
+	/**
 	 * raw ingest row의 처리 결과와 실패 사유를 갱신합니다.
 	 *
 	 * @param id raw ingest id

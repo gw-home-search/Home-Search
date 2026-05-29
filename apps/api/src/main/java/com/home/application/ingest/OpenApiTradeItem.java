@@ -13,8 +13,46 @@ public record OpenApiTradeItem(
 	String jibun,
 	String sggCd,
 	String umdCd,
-	String payload
+	String payload,
+	String cancelDealType,
+	String cancelDealDay,
+	String registrationDate
 ) {
+
+	public OpenApiTradeItem(
+		String aptDong,
+		String aptName,
+		String aptSeq,
+		String dealAmount,
+		Integer dealDay,
+		Integer dealMonth,
+		Integer dealYear,
+		Double exclArea,
+		Integer floor,
+		String jibun,
+		String sggCd,
+		String umdCd,
+		String payload
+	) {
+		this(
+			aptDong,
+			aptName,
+			aptSeq,
+			dealAmount,
+			dealDay,
+			dealMonth,
+			dealYear,
+			exclArea,
+			floor,
+			jibun,
+			sggCd,
+			umdCd,
+			payload,
+			null,
+			null,
+			null
+		);
+	}
 
 	public OpenApiTradeItem {
 		aptDong = trimToNull(aptDong);
@@ -25,6 +63,13 @@ public record OpenApiTradeItem(
 		sggCd = trimToNull(sggCd);
 		umdCd = trimToNull(umdCd);
 		payload = trimToNull(payload);
+		cancelDealType = trimToNull(cancelDealType);
+		cancelDealDay = trimToNull(cancelDealDay);
+		registrationDate = trimToNull(registrationDate);
+	}
+
+	public boolean isCanceled() {
+		return "O".equalsIgnoreCase(cancelDealType);
 	}
 
 	private static String trimToNull(String value) {

@@ -9,12 +9,42 @@ record RtmsMonthlyRefreshRunSummary(
 	long rawSaved,
 	long normalizedInserted,
 	long duplicateSkipped,
+	long canceledSkipped,
 	long matchFailed,
 	long parseFailed,
 	int pageCount,
 	RtmsMonthlyRefreshRunStatus status,
 	String failureReason
 ) {
+
+	RtmsMonthlyRefreshRunSummary(
+		String lawdCd,
+		String dealYmd,
+		long read,
+		long rawSaved,
+		long normalizedInserted,
+		long duplicateSkipped,
+		long matchFailed,
+		long parseFailed,
+		int pageCount,
+		RtmsMonthlyRefreshRunStatus status,
+		String failureReason
+	) {
+		this(
+			lawdCd,
+			dealYmd,
+			read,
+			rawSaved,
+			normalizedInserted,
+			duplicateSkipped,
+			0,
+			matchFailed,
+			parseFailed,
+			pageCount,
+			status,
+			failureReason
+		);
+	}
 
 	static RtmsMonthlyRefreshRunSummary completed(String lawdCd, String dealYmd, int pageCount, IngestResult result) {
 		return new RtmsMonthlyRefreshRunSummary(
@@ -24,6 +54,7 @@ record RtmsMonthlyRefreshRunSummary(
 			result.rawSaved(),
 			result.normalizedInserted(),
 			result.duplicateSkipped(),
+			result.canceledSkipped(),
 			result.matchFailed(),
 			result.parseFailed(),
 			pageCount,
@@ -46,6 +77,7 @@ record RtmsMonthlyRefreshRunSummary(
 			result.rawSaved(),
 			result.normalizedInserted(),
 			result.duplicateSkipped(),
+			result.canceledSkipped(),
 			result.matchFailed(),
 			result.parseFailed(),
 			pageCount,
@@ -68,6 +100,7 @@ record RtmsMonthlyRefreshRunSummary(
 			result.rawSaved(),
 			result.normalizedInserted(),
 			result.duplicateSkipped(),
+			result.canceledSkipped(),
 			result.matchFailed(),
 			result.parseFailed(),
 			pageCount,
@@ -86,6 +119,7 @@ record RtmsMonthlyRefreshRunSummary(
 			rawSaved,
 			normalizedInserted,
 			duplicateSkipped,
+			canceledSkipped,
 			matchFailed,
 			parseFailed
 		);

@@ -69,7 +69,7 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner {
 		IngestResult result = runner.ingest(request);
 		log.info(
 			"RTMS one-shot ingest completed lawdCd={} dealYmd={} pageNo={} read={} rawSaved={} "
-				+ "normalizedInserted={} duplicateSkipped={} matchFailed={} parseFailed={}",
+				+ "normalizedInserted={} duplicateSkipped={} canceledSkipped={} matchFailed={} parseFailed={}",
 			request.lawdCd(),
 			request.dealYmd(),
 			request.pageNo(),
@@ -77,6 +77,7 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner {
 			result.rawSaved(),
 			result.normalizedInserted(),
 			result.duplicateSkipped(),
+			result.canceledSkipped(),
 			result.matchFailed(),
 			result.parseFailed()
 		);
@@ -104,7 +105,7 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner {
 		IngestResult total = report.totalResult();
 		log.info(
 			"RTMS monthly refresh completed lawdCd={} dealYmds={} monthCount={} pageCount={} read={} rawSaved={} "
-				+ "normalizedInserted={} duplicateSkipped={} matchFailed={} parseFailed={} hasNewData={}",
+				+ "normalizedInserted={} duplicateSkipped={} canceledSkipped={} matchFailed={} parseFailed={} hasNewData={}",
 			plan.lawdCd(),
 			plan.dealYmds(),
 			report.runs().size(),
@@ -113,6 +114,7 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner {
 			total.rawSaved(),
 			total.normalizedInserted(),
 			total.duplicateSkipped(),
+			total.canceledSkipped(),
 			total.matchFailed(),
 			total.parseFailed(),
 			report.hasNewData()

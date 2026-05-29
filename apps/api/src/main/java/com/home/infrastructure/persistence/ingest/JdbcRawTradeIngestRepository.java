@@ -74,6 +74,32 @@ public class JdbcRawTradeIngestRepository implements RawTradeIngestRepository {
 	}
 
 	@Override
+	public boolean existsProcessedBySourceAndSourceKeyAndPayloadHashBefore(
+		Long rawIngestId,
+		String source,
+		String sourceKey,
+		String payloadHash
+	) {
+		return Boolean.TRUE.equals(jdbcClient.sql("""
+			SELECT EXISTS (
+			    SELECT 1
+			    FROM raw_trade_ingest
+			    WHERE id < :rawIngestId
+			      AND source = :source
+			      AND source_key = :sourceKey
+			      AND payload_hash = :payloadHash
+			      AND status <> 'RECEIVED'
+			)
+			""")
+			.param("rawIngestId", rawIngestId)
+			.param("source", source)
+			.param("sourceKey", sourceKey)
+			.param("payloadHash", payloadHash)
+			.query(Boolean.class)
+			.single());
+	}
+
+	@Override
 	public RawTradeIngestRecord updateStatus(Long id, RawTradeIngestStatus status, String failureReason) {
 		return jdbcClient.sql("""
 			UPDATE raw_trade_ingest

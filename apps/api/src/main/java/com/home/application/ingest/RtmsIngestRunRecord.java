@@ -12,6 +12,7 @@ public record RtmsIngestRunRecord(
 	long rawSaved,
 	long normalizedInserted,
 	long duplicateSkipped,
+	long canceledSkipped,
 	long matchFailed,
 	long parseFailed,
 	String failureReason,
@@ -19,6 +20,43 @@ public record RtmsIngestRunRecord(
 	Instant completedAt,
 	Instant createdAt
 ) {
+
+	public RtmsIngestRunRecord(
+		Long id,
+		String lawdCd,
+		String dealYmd,
+		String status,
+		int pageCount,
+		long read,
+		long rawSaved,
+		long normalizedInserted,
+		long duplicateSkipped,
+		long matchFailed,
+		long parseFailed,
+		String failureReason,
+		Instant startedAt,
+		Instant completedAt,
+		Instant createdAt
+	) {
+		this(
+			id,
+			lawdCd,
+			dealYmd,
+			status,
+			pageCount,
+			read,
+			rawSaved,
+			normalizedInserted,
+			duplicateSkipped,
+			0,
+			matchFailed,
+			parseFailed,
+			failureReason,
+			startedAt,
+			completedAt,
+			createdAt
+		);
+	}
 
 	public static RtmsIngestRunRecord completed(
 		String lawdCd,
@@ -38,6 +76,7 @@ public record RtmsIngestRunRecord(
 			result.rawSaved(),
 			result.normalizedInserted(),
 			result.duplicateSkipped(),
+			result.canceledSkipped(),
 			result.matchFailed(),
 			result.parseFailed(),
 			null,
@@ -66,6 +105,7 @@ public record RtmsIngestRunRecord(
 			result.rawSaved(),
 			result.normalizedInserted(),
 			result.duplicateSkipped(),
+			result.canceledSkipped(),
 			result.matchFailed(),
 			result.parseFailed(),
 			failureReason,
@@ -94,6 +134,7 @@ public record RtmsIngestRunRecord(
 			result.rawSaved(),
 			result.normalizedInserted(),
 			result.duplicateSkipped(),
+			result.canceledSkipped(),
 			result.matchFailed(),
 			result.parseFailed(),
 			failureReason,

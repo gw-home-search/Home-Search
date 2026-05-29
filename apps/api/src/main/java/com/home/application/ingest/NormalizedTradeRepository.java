@@ -15,6 +15,17 @@ public interface NormalizedTradeRepository {
 	boolean existsBySourceAndSourceKey(String source, String sourceKey);
 
 	/**
+	 * source_key 해제 row를 처리하고, 연결된 normalized trade가 있으면 public 조회에서 제외합니다.
+	 * 아직 normalized row가 없더라도 registry를 선점해 이후 정상 row insert를 막습니다.
+	 *
+	 * @param source 원천 source 이름
+	 * @param sourceKey 원천 trade identity
+	 * @param rawIngestId 해제 raw ingest id
+	 * @return 활성 normalized trade가 이번 호출로 제외되면 true
+	 */
+	boolean cancelBySourceAndSourceKey(String source, String sourceKey, Long rawIngestId);
+
+	/**
 	 * source_key registry와 fallback identity를 모두 통과한 경우에만 normalized trade를 저장합니다.
 	 *
 	 * @param command normalized trade insert command

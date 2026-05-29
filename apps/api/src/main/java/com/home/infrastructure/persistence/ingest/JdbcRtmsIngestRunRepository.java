@@ -33,6 +33,7 @@ public class JdbcRtmsIngestRunRepository implements RtmsIngestRunRepository {
 			    raw_saved_count,
 			    normalized_inserted_count,
 			    duplicate_skipped_count,
+			    canceled_skipped_count,
 			    match_failed_count,
 			    parse_failed_count,
 			    failure_reason,
@@ -48,6 +49,7 @@ public class JdbcRtmsIngestRunRepository implements RtmsIngestRunRepository {
 			    :rawSavedCount,
 			    :normalizedInsertedCount,
 			    :duplicateSkippedCount,
+			    :canceledSkippedCount,
 			    :matchFailedCount,
 			    :parseFailedCount,
 			    :failureReason,
@@ -64,6 +66,7 @@ public class JdbcRtmsIngestRunRepository implements RtmsIngestRunRepository {
 			.param("rawSavedCount", record.rawSaved())
 			.param("normalizedInsertedCount", record.normalizedInserted())
 			.param("duplicateSkippedCount", record.duplicateSkipped())
+			.param("canceledSkippedCount", record.canceledSkipped())
 			.param("matchFailedCount", record.matchFailed())
 			.param("parseFailedCount", record.parseFailed())
 			.param("failureReason", record.failureReason())
@@ -84,6 +87,7 @@ public class JdbcRtmsIngestRunRepository implements RtmsIngestRunRepository {
 			resultSet.getLong("raw_saved_count"),
 			resultSet.getLong("normalized_inserted_count"),
 			resultSet.getLong("duplicate_skipped_count"),
+			resultSet.getLong("canceled_skipped_count"),
 			resultSet.getLong("match_failed_count"),
 			resultSet.getLong("parse_failed_count"),
 			resultSet.getString("failure_reason"),

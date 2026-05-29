@@ -101,7 +101,7 @@ Minimum error fields:
 - `status`
 - `detail`
 - `exception`
-- `timestamp`
+- `timestamp`: ISO-8601 offset date-time in UTC.
 
 Status rules:
 
@@ -118,7 +118,7 @@ Example:
   "status": 400,
   "detail": "Invalid parameter format.",
   "exception": "MapApiException",
-  "timestamp": "2026-05-18T10:30:00"
+  "timestamp": "2026-05-18T10:30:00Z"
 }
 ```
 

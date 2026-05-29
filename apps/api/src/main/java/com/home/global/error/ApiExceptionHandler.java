@@ -1,7 +1,8 @@
 package com.home.global.error;
 
 import java.net.URI;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 
 import org.springframework.http.HttpStatus;
@@ -87,7 +88,10 @@ public class ApiExceptionHandler {
 		problemDetail.setType(ERROR_TYPE);
 		problemDetail.setTitle(title);
 		problemDetail.setProperty("exception", exception);
-		problemDetail.setProperty("timestamp", LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS).toString());
+		problemDetail.setProperty(
+			"timestamp",
+			OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toString()
+		);
 
 		return problemDetail;
 	}

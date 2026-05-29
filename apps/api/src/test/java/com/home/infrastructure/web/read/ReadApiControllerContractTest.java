@@ -1,5 +1,6 @@
 package com.home.infrastructure.web.read;
 
+import static org.hamcrest.Matchers.matchesPattern;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -36,6 +37,9 @@ import org.springframework.test.web.servlet.MockMvc;
 })
 @ActiveProfiles("test")
 class ReadApiControllerContractTest {
+
+	private static final String OFFSET_TIMESTAMP_PATTERN =
+		"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:Z|[+-]\\d{2}:\\d{2})$";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -193,6 +197,6 @@ class ReadApiControllerContractTest {
 			.andExpect(jsonPath("$.status").value(404))
 			.andExpect(jsonPath("$.detail").value("Resource not found."))
 			.andExpect(jsonPath("$.exception").value("ResourceNotFoundException"))
-			.andExpect(jsonPath("$.timestamp").exists());
+			.andExpect(jsonPath("$.timestamp").value(matchesPattern(OFFSET_TIMESTAMP_PATTERN)));
 	}
 }

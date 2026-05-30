@@ -6,6 +6,7 @@ import com.home.application.ingest.ComplexMasterBootstrapper;
 import com.home.application.ingest.NormalizedTradeRepository;
 import com.home.application.ingest.OpenApiTradeIngestService;
 import com.home.application.ingest.RawTradeIngestRepository;
+import com.home.application.ingest.RtmsIngestRunReportRepository;
 import com.home.application.ingest.RtmsIngestRunRepository;
 import com.home.application.ingest.TradeIngestMetrics;
 import com.home.application.ingest.TradeMatchEvidenceRepository;
@@ -60,6 +61,13 @@ class IngestPersistenceConfiguration {
 	@ConditionalOnBean(JdbcClient.class)
 	RtmsIngestRunRepository rtmsIngestRunRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
 		return new JdbcRtmsIngestRunRepository(requiredJdbcClient(jdbcClientProvider));
+	}
+
+	@Bean
+	@Lazy
+	@ConditionalOnBean(JdbcClient.class)
+	RtmsIngestRunReportRepository rtmsIngestRunReportRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
+		return new JdbcRtmsIngestRunReportRepository(requiredJdbcClient(jdbcClientProvider));
 	}
 
 	@Bean

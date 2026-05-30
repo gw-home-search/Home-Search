@@ -1,6 +1,7 @@
 package com.home.infrastructure.persistence.ingest;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -14,6 +15,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * source_key registry와 fallback identity를 함께 사용해 normalized trade 중복 생성을 막는 JDBC adapter입니다.
  */
 public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository {
+
+	private static final int FALLBACK_IDENTITY_LOCK_NAMESPACE = 0x48534D45;
 
 	private final JdbcClient jdbcClient;
 	private final TransactionTemplate transactionTemplate;
@@ -56,16 +59,38 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 			return false;
 		}
 
+		lockFallbackIdentity(command);
+		FallbackMatch existingTrade = findFallbackMatch(command);
+		if (existingTrade.tradeId().isPresent()) {
+			attachTrade(registryId.get(), existingTrade.tradeId().get());
+			return false;
+		}
+		if (existingTrade.ambiguous()) {
+			return false;
+		}
+
 		Optional<Long> tradeId = insertTrade(command);
 		if (tradeId.isEmpty()) {
-			Long existingTradeId = findExistingTradeId(command)
-				.orElseThrow(() -> new IllegalStateException("fallback duplicate trade id was not found"));
-			attachTrade(registryId.get(), existingTradeId);
+			FallbackMatch conflictedTrade = findFallbackMatch(command);
+			if (conflictedTrade.tradeId().isPresent()) {
+				attachTrade(registryId.get(), conflictedTrade.tradeId().get());
+			}
+			else if (!conflictedTrade.ambiguous()) {
+				throw new IllegalStateException("fallback duplicate trade id was not found");
+			}
 			return false;
 		}
 
 		attachTrade(registryId.get(), tradeId.get());
 		return true;
+	}
+
+	private void lockFallbackIdentity(NormalizedTradeCommand command) {
+		jdbcClient.sql("SELECT pg_advisory_xact_lock(:namespace, :lockKey)")
+			.param("namespace", FALLBACK_IDENTITY_LOCK_NAMESPACE)
+			.param("lockKey", fallbackIdentityLockKey(command))
+			.query((resultSet, rowNumber) -> 0)
+			.single();
 	}
 
 	private Optional<Long> insertRegistry(NormalizedTradeCommand command) {
@@ -150,7 +175,25 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 			.optional();
 	}
 
-	private Optional<Long> findExistingTradeId(NormalizedTradeCommand command) {
+	private FallbackMatch findFallbackMatch(NormalizedTradeCommand command) {
+		if (command.aptDong() == null) {
+			List<Long> candidates = findFallbackCandidateIds(command);
+			if (candidates.size() == 1) {
+				return FallbackMatch.matched(candidates.get(0));
+			}
+			return candidates.isEmpty() ? FallbackMatch.none() : FallbackMatch.ambiguousMatch();
+		}
+
+		Optional<Long> exactAptDong = findExistingTradeIdByAptDong(command);
+		if (exactAptDong.isPresent()) {
+			return FallbackMatch.matched(exactAptDong.get());
+		}
+		return findExistingTradeIdWithMissingAptDong(command)
+			.map(FallbackMatch::matched)
+			.orElseGet(FallbackMatch::none);
+	}
+
+	private Optional<Long> findExistingTradeIdByAptDong(NormalizedTradeCommand command) {
 		return jdbcClient.sql("""
 			SELECT id
 			FROM trade
@@ -159,6 +202,30 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 			  AND floor IS NOT DISTINCT FROM :floor
 			  AND excl_area IS NOT DISTINCT FROM :exclArea
 			  AND deal_amount = :dealAmount
+			  AND apt_dong = :aptDong
+			ORDER BY id
+			LIMIT 1
+			""")
+			.param("complexId", command.complexId())
+			.param("dealDate", command.dealDate())
+			.param("floor", command.floor())
+			.param("exclArea", decimalOrNull(command.exclArea()))
+			.param("dealAmount", command.dealAmount())
+			.param("aptDong", command.aptDong())
+			.query(Long.class)
+			.optional();
+	}
+
+	private Optional<Long> findExistingTradeIdWithMissingAptDong(NormalizedTradeCommand command) {
+		return jdbcClient.sql("""
+			SELECT id
+			FROM trade
+			WHERE complex_id = :complexId
+			  AND deal_date = :dealDate
+			  AND floor IS NOT DISTINCT FROM :floor
+			  AND excl_area IS NOT DISTINCT FROM :exclArea
+			  AND deal_amount = :dealAmount
+			  AND apt_dong IS NULL
 			ORDER BY id
 			LIMIT 1
 			""")
@@ -169,6 +236,39 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 			.param("dealAmount", command.dealAmount())
 			.query(Long.class)
 			.optional();
+	}
+
+	private List<Long> findFallbackCandidateIds(NormalizedTradeCommand command) {
+		return jdbcClient.sql("""
+			SELECT id
+			FROM trade
+			WHERE complex_id = :complexId
+			  AND deal_date = :dealDate
+			  AND floor IS NOT DISTINCT FROM :floor
+			  AND excl_area IS NOT DISTINCT FROM :exclArea
+			  AND deal_amount = :dealAmount
+			ORDER BY id
+			LIMIT 2
+			""")
+			.param("complexId", command.complexId())
+			.param("dealDate", command.dealDate())
+			.param("floor", command.floor())
+			.param("exclArea", decimalOrNull(command.exclArea()))
+			.param("dealAmount", command.dealAmount())
+			.query(Long.class)
+			.list();
+	}
+
+	private int fallbackIdentityLockKey(NormalizedTradeCommand command) {
+		BigDecimal exclArea = decimalOrNull(command.exclArea());
+		String material = "%s|%s|%s|%s|%s".formatted(
+			command.complexId(),
+			command.dealDate(),
+			command.floor(),
+			exclArea == null ? "" : exclArea.stripTrailingZeros().toPlainString(),
+			command.dealAmount()
+		);
+		return material.hashCode();
 	}
 
 	private void attachTrade(Long registryId, Long tradeId) {
@@ -184,5 +284,23 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 
 	private BigDecimal decimalOrNull(Double value) {
 		return value == null ? null : BigDecimal.valueOf(value);
+	}
+
+	private record FallbackMatch(
+		Optional<Long> tradeId,
+		boolean ambiguous
+	) {
+
+		private static FallbackMatch matched(Long tradeId) {
+			return new FallbackMatch(Optional.of(tradeId), false);
+		}
+
+		private static FallbackMatch none() {
+			return new FallbackMatch(Optional.empty(), false);
+		}
+
+		private static FallbackMatch ambiguousMatch() {
+			return new FallbackMatch(Optional.empty(), true);
+		}
 	}
 }

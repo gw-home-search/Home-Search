@@ -56,6 +56,110 @@ class JdbcNormalizedTradeRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("fallback identity는 같은 조건이어도 aptDong이 다르면 별도 거래로 보존한다")
+	void fallbackIdentityKeepsDifferentAptDongTradesSeparate() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		Long firstRawId = rawRepository.save(rawRecord("rtms-source-key-1")).id();
+		Long secondRawId = rawRepository.save(rawRecord("rtms-source-key-2")).id();
+
+		boolean firstInsert = tradeRepository.insertIfAbsent(command(firstRawId, "rtms-source-key-1", "101"));
+		boolean secondInsert = tradeRepository.insertIfAbsent(command(secondRawId, "rtms-source-key-2", "102"));
+
+		assertThat(firstInsert).isTrue();
+		assertThat(secondInsert).isTrue();
+		assertThat(tradeCount()).isEqualTo(2);
+		assertThat(activeAptDongs()).containsExactly("101", "102");
+	}
+
+	@Test
+	@DisplayName("fallback identity는 aptDong이 누락된 기존 거래와 보강된 거래를 duplicate로 처리한다")
+	void fallbackIdentityTreatsMissingAptDongAsUnknownDuplicate() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		Long firstRawId = rawRepository.save(rawRecord("rtms-source-key-missing-dong")).id();
+		Long secondRawId = rawRepository.save(rawRecord("rtms-source-key-filled-dong")).id();
+
+		boolean firstInsert = tradeRepository.insertIfAbsent(command(firstRawId, "rtms-source-key-missing-dong", null));
+		boolean filledDongDuplicate = tradeRepository.insertIfAbsent(
+			command(secondRawId, "rtms-source-key-filled-dong", "101")
+		);
+
+		assertThat(firstInsert).isTrue();
+		assertThat(filledDongDuplicate).isFalse();
+		assertThat(tradeCount()).isEqualTo(1);
+		assertThat(activeAptDongs()).containsExactly((String) null);
+		assertThat(registryTradeIds()).containsExactly(onlyTradeId(), onlyTradeId());
+	}
+
+	@Test
+	@DisplayName("fallback identity는 aptDong이 보강된 기존 거래와 누락된 거래도 duplicate로 처리한다")
+	void fallbackIdentityTreatsLaterMissingAptDongAsUnknownDuplicate() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		Long firstRawId = rawRepository.save(rawRecord("rtms-source-key-filled-dong")).id();
+		Long secondRawId = rawRepository.save(rawRecord("rtms-source-key-missing-dong")).id();
+
+		boolean firstInsert = tradeRepository.insertIfAbsent(command(firstRawId, "rtms-source-key-filled-dong", "101"));
+		boolean missingDongDuplicate = tradeRepository.insertIfAbsent(
+			command(secondRawId, "rtms-source-key-missing-dong", null)
+		);
+
+		assertThat(firstInsert).isTrue();
+		assertThat(missingDongDuplicate).isFalse();
+		assertThat(tradeCount()).isEqualTo(1);
+		assertThat(activeAptDongs()).containsExactly("101");
+		assertThat(registryTradeIds()).containsExactly(onlyTradeId(), onlyTradeId());
+	}
+
+	@Test
+	@DisplayName("fallback identity는 aptDong이 없는 row가 복수 동 후보에 걸리면 임의 거래에 연결하지 않는다")
+	void fallbackIdentityDoesNotAttachMissingAptDongToAmbiguousCandidates() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		Long firstRawId = rawRepository.save(rawRecord("rtms-source-key-101")).id();
+		Long secondRawId = rawRepository.save(rawRecord("rtms-source-key-102")).id();
+		Long missingDongRawId = rawRepository.save(rawRecord("rtms-source-key-missing-dong")).id();
+
+		boolean firstInsert = tradeRepository.insertIfAbsent(command(firstRawId, "rtms-source-key-101", "101"));
+		boolean secondInsert = tradeRepository.insertIfAbsent(command(secondRawId, "rtms-source-key-102", "102"));
+		boolean ambiguousMissingDong = tradeRepository.insertIfAbsent(
+			command(missingDongRawId, "rtms-source-key-missing-dong", null)
+		);
+		boolean canceled = tradeRepository.cancelBySourceAndSourceKey(
+			"RTMS",
+			"rtms-source-key-missing-dong",
+			missingDongRawId
+		);
+
+		assertThat(firstInsert).isTrue();
+		assertThat(secondInsert).isTrue();
+		assertThat(ambiguousMissingDong).isFalse();
+		assertThat(canceled).isFalse();
+		assertThat(tradeCount()).isEqualTo(2);
+		assertThat(activeTradeCount()).isEqualTo(2);
+		assertThat(deletedTradeCount()).isZero();
+		assertThat(activeAptDongs()).containsExactly("101", "102");
+		assertThat(registryTradeId("rtms-source-key-missing-dong")).isNull();
+	}
+
+	@Test
 	@DisplayName("canceled source_key는 연결된 normalized trade를 public 조회에서 제외한다")
 	void cancelSourceKeyMarksLinkedTradeDeleted() {
 		seedComplex();
@@ -107,6 +211,10 @@ class JdbcNormalizedTradeRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	private NormalizedTradeCommand command(Long rawIngestId, String sourceKey) {
+		return command(rawIngestId, sourceKey, "101");
+	}
+
+	private NormalizedTradeCommand command(Long rawIngestId, String sourceKey, String aptDong) {
 		return new NormalizedTradeCommand(
 			rawIngestId,
 			501L,
@@ -114,7 +222,7 @@ class JdbcNormalizedTradeRepositoryTest extends JdbcPostgresTestSupport {
 			125000L,
 			12,
 			84.93,
-			"101",
+			aptDong,
 			"RTMS",
 			sourceKey,
 			"COMPLEX-PK-501",
@@ -135,6 +243,29 @@ class JdbcNormalizedTradeRepositoryTest extends JdbcPostgresTestSupport {
 			ORDER BY source_key
 			""")
 			.query(Long.class)
+			.list();
+	}
+
+	private Long registryTradeId(String sourceKey) {
+		Long tradeId = jdbcClient.sql("""
+			SELECT COALESCE(trade_id, -1) AS trade_id
+			FROM trade_source_key_registry
+			WHERE source_key = :sourceKey
+			""")
+			.param("sourceKey", sourceKey)
+			.query(Long.class)
+			.single();
+		return tradeId < 0 ? null : tradeId;
+	}
+
+	private List<String> activeAptDongs() {
+		return jdbcClient.sql("""
+			SELECT apt_dong
+			FROM trade
+			WHERE deleted_at IS NULL
+			ORDER BY apt_dong
+			""")
+			.query(String.class)
 			.list();
 	}
 

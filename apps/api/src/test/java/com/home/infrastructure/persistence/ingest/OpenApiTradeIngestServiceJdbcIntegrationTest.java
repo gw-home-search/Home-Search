@@ -177,6 +177,110 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
+	@DisplayName("RTMS source_key가 다른 동일 조건 거래는 aptDong이 다르면 각각 normalized trade로 보존된다")
+	void ingestKeepsSameConditionTradesSeparateWhenAptDongDiffers() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty())
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(
+				liveRtmsItem("APT-501", "Sample Apartment", "140-1", "101"),
+				liveRtmsItem("APT-501", "Sample Apartment", "140-1", "102")
+			)
+		));
+
+		assertThat(result.rawSaved()).isEqualTo(2);
+		assertThat(result.normalizedInserted()).isEqualTo(2);
+		assertThat(result.duplicateSkipped()).isZero();
+		assertThat(tradeCount()).isEqualTo(2);
+		assertThat(activeAptDongs()).containsExactly("101", "102");
+	}
+
+	@Test
+	@DisplayName("RTMS aptDong이 누락된 거래와 보강된 거래는 fallback duplicate로 처리된다")
+	void ingestTreatsMissingAndFilledAptDongAsFallbackDuplicate() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty())
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(
+				liveRtmsItem("APT-501", "Sample Apartment", "140-1", "   "),
+				liveRtmsItem("APT-501", "Sample Apartment", "140-1", "101")
+			)
+		));
+
+		assertThat(result.rawSaved()).isEqualTo(2);
+		assertThat(result.normalizedInserted()).isEqualTo(1);
+		assertThat(result.duplicateSkipped()).isEqualTo(1);
+		assertThat(tradeCount()).isEqualTo(1);
+		assertThat(activeAptDongs()).containsExactly((String) null);
+	}
+
+	@Test
+	@DisplayName("RTMS aptDong 없는 row가 복수 동 후보에 걸리면 duplicate로 남기되 기존 거래를 연결하지 않는다")
+	void ingestDoesNotAttachMissingAptDongToAmbiguousDongCandidates() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty())
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(
+				liveRtmsItem("APT-501", "Sample Apartment", "140-1", "101"),
+				liveRtmsItem("APT-501", "Sample Apartment", "140-1", "102"),
+				liveRtmsItem("APT-501", "Sample Apartment", "140-1", "   ")
+			)
+		));
+
+		assertThat(result.rawSaved()).isEqualTo(3);
+		assertThat(result.normalizedInserted()).isEqualTo(2);
+		assertThat(result.duplicateSkipped()).isEqualTo(1);
+		assertThat(tradeCount()).isEqualTo(2);
+		assertThat(activeAptDongs()).containsExactly("101", "102");
+		assertThat(registryTradeIds()).containsExactlyInAnyOrder(onlyTradeId("101"), onlyTradeId("102"), null);
+	}
+
+	@Test
 	@DisplayName("normalized 이후 도착한 RTMS 해제 row는 기존 trade를 public 조회에서 제외하고 canceled raw로 남긴다")
 	void cancellationRowAfterNormalizedTradeMarksTradeDeleted() {
 		seedComplex();
@@ -251,6 +355,54 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 		assertThat(canceled).isEqualTo(new IngestResult(1, 1, 0, 0, 1, 0, 0));
 		assertThat(duplicate).isEqualTo(new IngestResult(1, 1, 0, 1, 0, 0, 0));
 		assertThat(tradeCount()).isZero();
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.CANCELED)).hasSize(1);
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.DUPLICATE)).hasSize(1);
+	}
+
+	@Test
+	@DisplayName("RTMS 해제 이후 같은 source_key 정상 row가 다시 와도 terminal cancellation 정책상 revive하지 않는다")
+	void activeRowAfterCancellationDoesNotReviveTerminalCanceledTrade() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty())
+		);
+
+		IngestResult inserted = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(rtmsItem("125,000"))
+		));
+		IngestResult canceled = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(canceledRtmsItem("125,000"))
+		));
+		IngestResult reappeared = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(rtmsItem("125,000"))
+		));
+
+		assertThat(inserted).isEqualTo(new IngestResult(1, 1, 1, 0, 0, 0, 0));
+		assertThat(canceled).isEqualTo(new IngestResult(1, 1, 0, 0, 1, 0, 0));
+		assertThat(reappeared).isEqualTo(new IngestResult(1, 1, 0, 1, 0, 0, 0));
+		assertThat(activeTradeCount()).isZero();
+		assertThat(deletedTradeCount()).isEqualTo(1);
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.NORMALIZED)).hasSize(1);
 		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.CANCELED)).hasSize(1);
 		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.DUPLICATE)).hasSize(1);
 	}
@@ -664,8 +816,12 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 	}
 
 	private OpenApiTradeItem liveRtmsItem(String aptSeq, String aptName, String jibun) {
+		return liveRtmsItem(aptSeq, aptName, jibun, "101");
+	}
+
+	private OpenApiTradeItem liveRtmsItem(String aptSeq, String aptName, String jibun, String aptDong) {
 		return new OpenApiTradeItem(
-			"101",
+			aptDong,
 			aptName,
 			aptSeq,
 			"125,000",
@@ -677,7 +833,8 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			jibun,
 			"11680",
 			"10300",
-			"{\"aptSeq\":\"%s\",\"aptNm\":\"%s\",\"jibun\":\"%s\"}".formatted(aptSeq, aptName, jibun)
+			"{\"aptSeq\":\"%s\",\"aptNm\":\"%s\",\"jibun\":\"%s\",\"aptDong\":\"%s\"}"
+				.formatted(aptSeq, aptName, jibun, aptDong)
 		);
 	}
 
@@ -788,6 +945,41 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 		return jdbcClient.sql("SELECT count(*) FROM trade WHERE deleted_at IS NULL")
 			.query(Long.class)
 			.single();
+	}
+
+	private Long onlyTradeId(String aptDong) {
+		return jdbcClient.sql("""
+			SELECT id
+			FROM trade
+			WHERE apt_dong = :aptDong
+			""")
+			.param("aptDong", aptDong)
+			.query(Long.class)
+			.single();
+	}
+
+	private List<Long> registryTradeIds() {
+		return jdbcClient.sql("""
+			SELECT COALESCE(trade_id, -1) AS trade_id
+			FROM trade_source_key_registry
+			ORDER BY source_key
+			""")
+			.query(Long.class)
+			.list()
+			.stream()
+			.map(tradeId -> tradeId < 0 ? null : tradeId)
+			.toList();
+	}
+
+	private List<String> activeAptDongs() {
+		return jdbcClient.sql("""
+			SELECT apt_dong
+			FROM trade
+			WHERE deleted_at IS NULL
+			ORDER BY apt_dong
+			""")
+			.query(String.class)
+			.list();
 	}
 
 	private long deletedTradeCount() {

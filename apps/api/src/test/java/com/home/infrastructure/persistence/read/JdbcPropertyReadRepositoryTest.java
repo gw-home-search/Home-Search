@@ -97,6 +97,57 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("trade read API는 동일 조건이어도 aptDong이 다른 거래를 모두 반환한다")
+	void tradeListKeepsSameConditionTradesWhenAptDongDiffers() {
+		seedComplex();
+		jdbcClient.sql("""
+			INSERT INTO raw_trade_ingest (
+			    id,
+			    source,
+			    source_key,
+			    lawd_cd,
+			    deal_ymd,
+			    page_no,
+			    payload,
+			    payload_hash,
+			    status,
+			    processed_at
+			)
+			VALUES
+			    (90001, 'RTMS', 'same-condition-101', '11680', '202512', 1, '{}', 'hash-101', 'NORMALIZED', now()),
+			    (90002, 'RTMS', 'same-condition-102', '11680', '202512', 1, '{}', 'hash-102', 'NORMALIZED', now())
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO trade (
+			    id,
+			    complex_id,
+			    deal_date,
+			    deal_amount,
+			    floor,
+			    excl_area,
+			    apt_dong,
+			    source,
+			    source_key,
+			    complex_pk,
+			    apt_seq,
+			    raw_ingest_id
+			)
+			VALUES
+			    (9001, 501, DATE '2025-12-01', 125000, 12, 84.93, '101', 'RTMS', 'same-condition-101', 'COMPLEX-PK-501', 'APT-501', 90001),
+			    (9002, 501, DATE '2025-12-01', 125000, 12, 84.93, '102', 'RTMS', 'same-condition-102', 'COMPLEX-PK-501', 'APT-501', 90002)
+			""").update();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.findTradeList(1001L))
+			.hasValueSatisfying(tradeList -> assertThat(tradeList.trades())
+				.extracting("tradeId", "aptDong")
+				.containsExactly(
+					tuple(9002L, "102"),
+					tuple(9001L, "101")
+				));
+	}
+
+	@Test
 	@DisplayName("search API complexName은 레거시처럼 trade_name을 name보다 우선한다")
 	void searchComplexesUsesLegacyDisplayNamePolicy() {
 		seedComplex();

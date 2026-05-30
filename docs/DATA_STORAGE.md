@@ -114,11 +114,60 @@ Primary dedupe rule:
 
 Fallback dedupe rule:
 
-- Unique by `complex_id + deal_date + floor + excl_area + deal_amount`.
+- Unique by `complex_id + deal_date + floor + excl_area + deal_amount +
+  apt_dong` when `apt_dong` is present on both compared rows.
+- When either side has missing `apt_dong`, treat the dong as unknown. A missing
+  `apt_dong` row may be linked as a duplicate only when the same fallback base
+  identity has exactly one existing normalized trade candidate. If multiple
+  `apt_dong` candidates already exist, the missing-dong source key must not be
+  attached to an arbitrary trade.
 
 The fallback exists because historical RTMS data may not always provide a
 perfect stable source key. It should be treated as a safety net, not the main
 identity.
+
+RTMS ingest counters should be read as row outcomes, not as proof that every
+source field was identical:
+
+- `normalizedInserted`: raw row produced a new public normalized `trade`.
+- `duplicateSkipped`: raw row was preserved but did not create a new public
+  normalized `trade`, either because the exact `source_key` was already handled,
+  a fallback duplicate was found, or a cancellation-reserved source key blocked
+  reinsertion.
+- `matchFailed`: raw row was preserved with queryable match evidence but could
+  not safely attach to a `complex_id`.
+
+### RTMS Deduplication Scenarios
+
+| Scenario | Storage result | Reason |
+| --- | --- | --- |
+| Same `source + source_key` arrives again with the same payload | Save raw duplicate evidence; do not insert another `trade` | primary source-key dedupe |
+| Same complex/date/floor/area/amount but different non-null `apt_dong` | Insert separate `trade` rows | RTMS has no unit number, so `apt_dong` is the only remaining discriminator for same-condition trades in different buildings |
+| Existing row has missing `apt_dong`, later row has one non-null `apt_dong` for the same fallback base identity | Treat later row as duplicate and attach its registry entry to the one existing trade | missing `apt_dong` means unknown, not a separate building |
+| Existing row has one non-null `apt_dong`, later row is missing `apt_dong` for the same fallback base identity | Treat later row as duplicate and attach it to the one existing trade | the missing value can safely point to a single candidate |
+| Existing rows have multiple non-null `apt_dong` values for the same fallback base identity, later row is missing `apt_dong` | Save raw duplicate evidence, but leave the registry `trade_id` unlinked | attaching to the lowest `trade.id` would let a later cancellation delete the wrong building |
+| Same condition and same non-null `apt_dong` arrives through a different source key | Treat as fallback duplicate | this is the duplicate the fallback identity is allowed to catch |
+
+## Cancellation Policy
+
+RTMS cancellation rows are terminal in the current storage contract:
+
+- A cancellation row with the same `source + source_key` soft-deletes the
+  linked normalized trade by setting `trade.deleted_at`.
+- The `source_key` registry remains reserved after cancellation. If the same
+  active row reappears later, it is stored as raw duplicate evidence and does
+  not revive the soft-deleted trade.
+- Soft-deleted rows still occupy fallback identity. Add an explicit revive
+  policy only after confirming RTMS publishes real cancellation reversals that
+  should restore public display.
+
+Cancellation scenarios:
+
+| Scenario | Storage result | Public display result |
+| --- | --- | --- |
+| Active row normalized, then cancellation row with the same `source_key` arrives | Linked `trade` is soft-deleted and cancellation raw row is marked `CANCELED` | trade disappears from map/detail/trade-list APIs |
+| Cancellation row arrives before the active row | Registry reserves the `source_key`; later active row becomes raw duplicate evidence | no public trade is created |
+| Active row is canceled, then the same active row reappears with the same `source_key` | Reappeared active row becomes raw duplicate evidence | canceled trade is not revived in the current policy |
 
 ## Source Key
 
@@ -164,6 +213,14 @@ Normalized `trade` rows should not be created for uncertain matches. Rows are
 held as queryable evidence when PNU cannot be derived, no candidate exists,
 multiple candidates cannot be narrowed by name/alias, or the derived PNU
 conflicts with an otherwise matching `aptSeq`.
+
+Operationally monitor `MATCH_FAILED`, `PNU_UNAVAILABLE`, `UNMATCHED`, and
+`AMBIGUOUS` outcomes. Backlogged raw/evidence rows should be eligible for a
+future DB-side rematch job after parcel coordinate or complex master coverage
+improves, without requiring another external RTMS fetch.
+
+PNU derivation must stay centralized through `RtmsJibunPnuNormalizer` so
+bootstrap and matching do not diverge.
 
 ## Partitioning
 

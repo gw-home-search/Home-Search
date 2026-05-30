@@ -77,6 +77,10 @@ Raw ingest evidence is always saved first. Parsed non-duplicate rows then create
 match evidence. Only rows with a safe match are inserted into normalized
 `trade`.
 
+This document decides whether a row is safe to match to a complex. The storage
+identity, duplicate, `apt_dong`, and cancellation rules are fixed in
+[DATA_STORAGE.md](DATA_STORAGE.md#deduplication).
+
 ## Match Status Decision Table
 
 | Situation | Normalized `trade` | Evidence status | Notes |

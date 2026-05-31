@@ -7,6 +7,8 @@ import java.util.Optional;
 
 import com.home.application.ingest.ComplexMasterBootstrapResult;
 import com.home.application.ingest.ComplexMasterBootstrapper;
+import com.home.application.ingest.ComplexMetadata;
+import com.home.application.ingest.ComplexMetadataResolver;
 import com.home.application.ingest.OpenApiTradeItem;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -17,10 +19,20 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 
 	private final JdbcClient jdbcClient;
 	private final ParcelCoordinateResolver coordinateResolver;
+	private final ComplexMetadataResolver metadataResolver;
 
 	public JdbcComplexMasterBootstrapper(JdbcClient jdbcClient, ParcelCoordinateResolver coordinateResolver) {
+		this(jdbcClient, coordinateResolver, ComplexMetadataResolver.noop());
+	}
+
+	public JdbcComplexMasterBootstrapper(
+		JdbcClient jdbcClient,
+		ParcelCoordinateResolver coordinateResolver,
+		ComplexMetadataResolver metadataResolver
+	) {
 		this.jdbcClient = Objects.requireNonNull(jdbcClient);
 		this.coordinateResolver = Objects.requireNonNull(coordinateResolver);
+		this.metadataResolver = Objects.requireNonNull(metadataResolver);
 	}
 
 	@Override
@@ -51,6 +63,7 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 						.formatted(aptSeq, pnu.get(), complexPnu.get())
 				);
 			}
+			enrichComplexMetadata(complexId, item, pnu.get());
 			if (aptName != null) {
 				upsertAlias(complexId, "RTMS_APT_NAME", aptName, "RTMS");
 			}
@@ -78,7 +91,8 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 		if (complexPk.length() > COMPLEX_PK_MAX_LENGTH) {
 			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: complex_pk too long aptSeq=" + aptSeq);
 		}
-		Long complexId = upsertComplex(parcelId.get(), complexPk, aptSeq, aptName);
+		ComplexMetadata metadata = resolveMetadata(item, pnu.get());
+		Long complexId = upsertComplex(parcelId.get(), complexPk, aptSeq, aptName, metadata);
 		upsertAlias(complexId, "RTMS_APT_NAME", aptName, "RTMS");
 		return ComplexMasterBootstrapResult.bootstrapped();
 	}
@@ -104,6 +118,17 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			""")
 			.param("pnu", pnu)
 			.query(Long.class)
+			.optional();
+	}
+
+	private Optional<String> findParcelAddress(String pnu) {
+		return jdbcClient.sql("""
+			SELECT address
+			FROM parcel
+			WHERE pnu = :pnu
+			""")
+			.param("pnu", pnu)
+			.query(String.class)
 			.optional();
 	}
 
@@ -175,27 +200,57 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			.optional();
 	}
 
-	private Long upsertComplex(Long parcelId, String complexPk, String aptSeq, String aptName) {
+	private Long upsertComplex(
+		Long parcelId,
+		String complexPk,
+		String aptSeq,
+		String aptName,
+		ComplexMetadata metadata
+	) {
 		return jdbcClient.sql("""
 			INSERT INTO complex (
 			    parcel_id,
 			    complex_pk,
 			    apt_seq,
 			    name,
-			    trade_name
+			    trade_name,
+			    dong_cnt,
+			    unit_cnt,
+			    plat_area,
+			    arch_area,
+			    tot_area,
+			    bc_rat,
+			    vl_rat,
+			    use_date
 			)
 			VALUES (
 			    :parcelId,
 			    :complexPk,
 			    :aptSeq,
 			    :name,
-			    :tradeName
+			    :tradeName,
+			    :dongCnt,
+			    :unitCnt,
+			    :platArea,
+			    :archArea,
+			    :totArea,
+			    :bcRat,
+			    :vlRat,
+			    :useDate
 			)
 			ON CONFLICT (complex_pk) DO UPDATE
 			SET parcel_id = EXCLUDED.parcel_id,
 			    apt_seq = COALESCE(complex.apt_seq, EXCLUDED.apt_seq),
 			    name = complex.name,
 			    trade_name = COALESCE(complex.trade_name, EXCLUDED.trade_name),
+			    dong_cnt = COALESCE(complex.dong_cnt, EXCLUDED.dong_cnt),
+			    unit_cnt = COALESCE(complex.unit_cnt, EXCLUDED.unit_cnt),
+			    plat_area = COALESCE(complex.plat_area, EXCLUDED.plat_area),
+			    arch_area = COALESCE(complex.arch_area, EXCLUDED.arch_area),
+			    tot_area = COALESCE(complex.tot_area, EXCLUDED.tot_area),
+			    bc_rat = COALESCE(complex.bc_rat, EXCLUDED.bc_rat),
+			    vl_rat = COALESCE(complex.vl_rat, EXCLUDED.vl_rat),
+			    use_date = COALESCE(complex.use_date, EXCLUDED.use_date),
 			    updated_at = now()
 			RETURNING id
 			""")
@@ -204,8 +259,51 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			.param("aptSeq", aptSeq)
 			.param("name", aptName)
 			.param("tradeName", aptName)
+			.param("dongCnt", metadata == null ? null : metadata.dongCnt())
+			.param("unitCnt", metadata == null ? null : metadata.unitCnt())
+			.param("platArea", metadata == null ? null : metadata.platArea())
+			.param("archArea", metadata == null ? null : metadata.archArea())
+			.param("totArea", metadata == null ? null : metadata.totArea())
+			.param("bcRat", metadata == null ? null : metadata.bcRat())
+			.param("vlRat", metadata == null ? null : metadata.vlRat())
+			.param("useDate", metadata == null ? null : metadata.useDate())
 			.query(Long.class)
 			.single();
+	}
+
+	private void enrichComplexMetadata(Long complexId, OpenApiTradeItem item, String pnu) {
+		ComplexMetadata metadata = resolveMetadata(item, pnu);
+		if (metadata == null) {
+			return;
+		}
+		jdbcClient.sql("""
+			UPDATE complex
+			SET dong_cnt = COALESCE(dong_cnt, :dongCnt),
+			    unit_cnt = COALESCE(unit_cnt, :unitCnt),
+			    plat_area = COALESCE(plat_area, :platArea),
+			    arch_area = COALESCE(arch_area, :archArea),
+			    tot_area = COALESCE(tot_area, :totArea),
+			    bc_rat = COALESCE(bc_rat, :bcRat),
+			    vl_rat = COALESCE(vl_rat, :vlRat),
+			    use_date = COALESCE(use_date, :useDate),
+			    updated_at = now()
+			WHERE id = :complexId
+			""")
+			.param("complexId", complexId)
+			.param("dongCnt", metadata.dongCnt())
+			.param("unitCnt", metadata.unitCnt())
+			.param("platArea", metadata.platArea())
+			.param("archArea", metadata.archArea())
+			.param("totArea", metadata.totArea())
+			.param("bcRat", metadata.bcRat())
+			.param("vlRat", metadata.vlRat())
+			.param("useDate", metadata.useDate())
+			.update();
+	}
+
+	private ComplexMetadata resolveMetadata(OpenApiTradeItem item, String pnu) {
+		Optional<String> parcelAddress = findParcelAddress(pnu);
+		return metadataResolver.resolve(item, pnu, parcelAddress.orElse(null)).orElse(null);
 	}
 
 	private void upsertAlias(Long complexId, String aliasType, String aliasName, String source) {

@@ -7,6 +7,7 @@ import java.util.Optional;
 
 import com.home.application.ingest.NormalizedTradeCommand;
 import com.home.application.ingest.NormalizedTradeRepository;
+import com.home.application.ingest.TradeExclAreaNormalizer;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -283,7 +284,7 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 	}
 
 	private BigDecimal decimalOrNull(Double value) {
-		return value == null ? null : BigDecimal.valueOf(value);
+		return TradeExclAreaNormalizer.normalize(value);
 	}
 
 	private record FallbackMatch(

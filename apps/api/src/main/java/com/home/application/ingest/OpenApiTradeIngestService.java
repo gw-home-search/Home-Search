@@ -188,7 +188,7 @@ public class OpenApiTradeIngestService {
 				parsedTrade.dealDate(),
 				parsedTrade.dealAmount(),
 				parsedTrade.floor(),
-				item.exclArea(),
+				TradeExclAreaNormalizer.normalizeToDouble(item.exclArea()),
 				item.aptDong(),
 				batch.source(),
 				sourceKey,

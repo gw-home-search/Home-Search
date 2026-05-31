@@ -21,6 +21,16 @@ class SourceKeyGeneratorTest {
 	}
 
 	@Test
+	@DisplayName("source key는 excl_area를 2자리 반올림으로 정규화한다")
+	void sourceKeyRoundsExclAreaToTwoDecimals() {
+		OpenApiTradeItem roundedDown = item("APT-501", "125,000", 84.931, "101", "140-1");
+		OpenApiTradeItem roundedValue = item("APT-501", "125,000", 84.93, "101", "140-1");
+
+		assertThat(generator.generate("RTMS", roundedDown))
+			.isEqualTo(generator.generate("RTMS", roundedValue));
+	}
+
+	@Test
 	@DisplayName("source key는 같은 아파트의 서로 다른 거래를 같은 중복으로 보지 않는다")
 	void sourceKeySeparatesDifferentTradeEventsInSameApartment() {
 		OpenApiTradeItem firstDeal = item("APT-501", "125,000", 84.93, "101", "140-1", 1, 12);

@@ -1,6 +1,7 @@
 package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -53,6 +54,29 @@ class JdbcNormalizedTradeRepositoryTest extends JdbcPostgresTestSupport {
 		assertThat(tradeCount()).isEqualTo(1);
 		Long existingTradeId = onlyTradeId();
 		assertThat(registryTradeIds()).containsExactly(existingTradeId, existingTradeId);
+	}
+
+	@Test
+	@DisplayName("fallback identity는 3자리+ excl_area가 2자리 반올림으로 같아지면 duplicate로 처리한다")
+	void fallbackDuplicateRoundsExclAreaBeforeMatchingAndInsert() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		Long firstRawId = rawRepository.save(rawRecord("rtms-source-key-1")).id();
+		Long secondRawId = rawRepository.save(rawRecord("rtms-source-key-2")).id();
+
+		boolean firstInsert = tradeRepository.insertIfAbsent(command(firstRawId, "rtms-source-key-1", "101", 84.93));
+
+		assertThat(firstInsert).isTrue();
+		assertThatCode(() -> tradeRepository.insertIfAbsent(
+			command(secondRawId, "rtms-source-key-2", "101", 84.931)
+		))
+			.doesNotThrowAnyException();
+		assertThat(tradeCount()).isEqualTo(1);
+		assertThat(registryTradeIds()).containsExactly(onlyTradeId(), onlyTradeId());
 	}
 
 	@Test
@@ -215,13 +239,17 @@ class JdbcNormalizedTradeRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	private NormalizedTradeCommand command(Long rawIngestId, String sourceKey, String aptDong) {
+		return command(rawIngestId, sourceKey, aptDong, 84.93);
+	}
+
+	private NormalizedTradeCommand command(Long rawIngestId, String sourceKey, String aptDong, Double exclArea) {
 		return new NormalizedTradeCommand(
 			rawIngestId,
 			501L,
 			LocalDate.of(2025, 12, 1),
 			125000L,
 			12,
-			84.93,
+			exclArea,
 			aptDong,
 			"RTMS",
 			sourceKey,

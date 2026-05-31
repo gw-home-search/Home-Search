@@ -41,10 +41,8 @@ final class SourceKeyGenerator {
 	}
 
 	private static String normalizeDecimal(Double value) {
-		if (value == null) {
-			return "";
-		}
-		return BigDecimal.valueOf(value).stripTrailingZeros().toPlainString();
+		BigDecimal normalized = TradeExclAreaNormalizer.normalize(value);
+		return normalized == null ? "" : normalized.toPlainString();
 	}
 
 	private static String normalizeAmount(String value) {

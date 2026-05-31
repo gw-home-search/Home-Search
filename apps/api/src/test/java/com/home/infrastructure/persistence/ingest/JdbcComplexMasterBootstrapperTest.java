@@ -6,8 +6,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
 
-import com.home.application.ingest.ComplexMetadata;
-import com.home.application.ingest.ComplexMetadataResolver;
 import com.home.application.ingest.OpenApiTradeItem;
 
 import org.junit.jupiter.api.DisplayName;
@@ -16,8 +14,8 @@ import org.junit.jupiter.api.Test;
 class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 
 	@Test
-	@DisplayName("RTMS bootstrap은 resolver metadata를 새 complex insert에 함께 저장한다")
-	void bootstrapsNewComplexWithResolverMetadata() {
+	@DisplayName("RTMS bootstrap은 외부 metadata resolver 없이 identity-only complex를 PENDING으로 만든다")
+	void bootstrapsIdentityOnlyComplexWithoutMetadataResolver() {
 		jdbcClient.sql("""
 			INSERT INTO region (id, code, name, region_type)
 			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
@@ -27,8 +25,36 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 			(pnu, item) -> expectedPnu().equals(pnu) ? Optional.of(new ParcelCoordinate(
 				new BigDecimal("37.5012345"),
 				new BigDecimal("127.0543210")
-			)) : Optional.empty(),
-			metadataResolver()
+			)) : Optional.empty()
+		);
+
+		var result = bootstrapper.bootstrap(rtmsItem("APT-LIVE-501", "Live Sample Apartment", "777-1"));
+
+		assertThat(result.attempted()).isTrue();
+		assertThat(result.changed()).isTrue();
+		assertThat(complexBootstrapRow("APT-LIVE-501"))
+			.containsEntry("complex_pk", "RTMS:APT-LIVE-501")
+			.containsEntry("name", "Live Sample Apartment")
+			.containsEntry("trade_name", "Live Sample Apartment")
+			.containsEntry("metadata_status", "PENDING")
+			.containsEntry("dong_cnt", null)
+			.containsEntry("unit_cnt", null);
+		assertThat(complexAliasCount("APT-LIVE-501", "RTMS_APT_NAME", "livesampleapartment")).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("RTMS bootstrap은 신규 complex를 identity-only로 만들고 metadata는 PENDING으로 남긴다")
+	void bootstrapsNewComplexWithPendingMetadata() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
+			jdbcClient,
+			(pnu, item) -> expectedPnu().equals(pnu) ? Optional.of(new ParcelCoordinate(
+				new BigDecimal("37.5012345"),
+				new BigDecimal("127.0543210")
+			)) : Optional.empty()
 		);
 
 		var result = bootstrapper.bootstrap(rtmsItem("APT-LIVE-501", "Live Sample Apartment", "777-1"));
@@ -36,19 +62,20 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 		assertThat(result.attempted()).isTrue();
 		assertThat(result.changed()).isTrue();
 		assertThat(complexMetadata("APT-LIVE-501"))
-			.containsEntry("dong_cnt", 8)
-			.containsEntry("unit_cnt", 740)
-			.containsEntry("plat_area", new BigDecimal("12345.67"))
-			.containsEntry("arch_area", new BigDecimal("2345.67"))
-			.containsEntry("tot_area", new BigDecimal("98765.43"))
-			.containsEntry("bc_rat", new BigDecimal("22.50"))
-			.containsEntry("vl_rat", new BigDecimal("199.80"))
-			.containsEntry("use_date", LocalDate.of(2015, 3, 20));
+			.containsEntry("metadata_status", "PENDING")
+			.containsEntry("dong_cnt", null)
+			.containsEntry("unit_cnt", null)
+			.containsEntry("plat_area", null)
+			.containsEntry("arch_area", null)
+			.containsEntry("tot_area", null)
+			.containsEntry("bc_rat", null)
+			.containsEntry("vl_rat", null)
+			.containsEntry("use_date", null);
 	}
 
 	@Test
-	@DisplayName("RTMS bootstrap은 이미 존재하는 complex의 비어 있는 metadata도 보강한다")
-	void enrichesExistingComplexMetadata() {
+	@DisplayName("RTMS bootstrap은 이미 존재하는 complex의 metadata를 동기 보강하지 않고 alias만 갱신한다")
+	void leavesExistingComplexMetadataPendingAndUpsertsAlias() {
 		jdbcClient.sql("""
 			INSERT INTO region (id, code, name, region_type)
 			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
@@ -63,8 +90,7 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 			""").update();
 		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
 			jdbcClient,
-			(pnu, item) -> Optional.empty(),
-			metadataResolver()
+			(pnu, item) -> Optional.empty()
 		);
 
 		var result = bootstrapper.bootstrap(rtmsItem("APT-501", "Sample Apartment", "140-1"));
@@ -72,27 +98,16 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 		assertThat(result.attempted()).isTrue();
 		assertThat(result.changed()).isFalse();
 		assertThat(complexMetadata("APT-501"))
-			.containsEntry("dong_cnt", 8)
-			.containsEntry("unit_cnt", 740)
-			.containsEntry("plat_area", new BigDecimal("12345.67"))
-			.containsEntry("arch_area", new BigDecimal("2345.67"))
-			.containsEntry("tot_area", new BigDecimal("98765.43"))
-			.containsEntry("bc_rat", new BigDecimal("22.50"))
-			.containsEntry("vl_rat", new BigDecimal("199.80"))
-			.containsEntry("use_date", LocalDate.of(2015, 3, 20));
-	}
-
-	private ComplexMetadataResolver metadataResolver() {
-		return (item, pnu, parcelAddress) -> Optional.of(new ComplexMetadata(
-			8,
-			740,
-			new BigDecimal("12345.67"),
-			new BigDecimal("2345.67"),
-			new BigDecimal("98765.43"),
-			new BigDecimal("22.50"),
-			new BigDecimal("199.80"),
-			LocalDate.of(2015, 3, 20)
-		));
+			.containsEntry("metadata_status", "PENDING")
+			.containsEntry("dong_cnt", null)
+			.containsEntry("unit_cnt", null)
+			.containsEntry("plat_area", null)
+			.containsEntry("arch_area", null)
+			.containsEntry("tot_area", null)
+			.containsEntry("bc_rat", null)
+			.containsEntry("vl_rat", null)
+			.containsEntry("use_date", null);
+		assertThat(complexAliasCount("APT-501", "RTMS_APT_NAME", "sampleapartment")).isEqualTo(1);
 	}
 
 	private OpenApiTradeItem rtmsItem(String aptSeq, String aptName, String jibun) {
@@ -120,21 +135,60 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 
 	private java.util.Map<String, Object> complexMetadata(String aptSeq) {
 		return jdbcClient.sql("""
-			SELECT dong_cnt, unit_cnt, plat_area, arch_area, tot_area, bc_rat, vl_rat, use_date
+			SELECT metadata_status, dong_cnt, unit_cnt, plat_area, arch_area, tot_area, bc_rat, vl_rat, use_date
 			FROM complex
 			WHERE apt_seq = :aptSeq
 			""")
 			.param("aptSeq", aptSeq)
-			.query((resultSet, rowNumber) -> java.util.Map.<String, Object>of(
-				"dong_cnt", resultSet.getObject("dong_cnt"),
-				"unit_cnt", resultSet.getObject("unit_cnt"),
-				"plat_area", resultSet.getBigDecimal("plat_area"),
-				"arch_area", resultSet.getBigDecimal("arch_area"),
-				"tot_area", resultSet.getBigDecimal("tot_area"),
-				"bc_rat", resultSet.getBigDecimal("bc_rat"),
-				"vl_rat", resultSet.getBigDecimal("vl_rat"),
-				"use_date", resultSet.getObject("use_date", LocalDate.class)
-			))
+			.query((resultSet, rowNumber) -> {
+				java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+				row.put("metadata_status", resultSet.getString("metadata_status"));
+				row.put("dong_cnt", resultSet.getObject("dong_cnt"));
+				row.put("unit_cnt", resultSet.getObject("unit_cnt"));
+				row.put("plat_area", resultSet.getBigDecimal("plat_area"));
+				row.put("arch_area", resultSet.getBigDecimal("arch_area"));
+				row.put("tot_area", resultSet.getBigDecimal("tot_area"));
+				row.put("bc_rat", resultSet.getBigDecimal("bc_rat"));
+				row.put("vl_rat", resultSet.getBigDecimal("vl_rat"));
+				row.put("use_date", resultSet.getObject("use_date", LocalDate.class));
+				return row;
+			})
+			.single();
+	}
+
+	private java.util.Map<String, Object> complexBootstrapRow(String aptSeq) {
+		return jdbcClient.sql("""
+			SELECT complex_pk, name, trade_name, metadata_status, dong_cnt, unit_cnt
+			FROM complex
+			WHERE apt_seq = :aptSeq
+			""")
+			.param("aptSeq", aptSeq)
+			.query((resultSet, rowNumber) -> {
+				java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+				row.put("complex_pk", resultSet.getString("complex_pk"));
+				row.put("name", resultSet.getString("name"));
+				row.put("trade_name", resultSet.getString("trade_name"));
+				row.put("metadata_status", resultSet.getString("metadata_status"));
+				row.put("dong_cnt", resultSet.getObject("dong_cnt"));
+				row.put("unit_cnt", resultSet.getObject("unit_cnt"));
+				return row;
+			})
+			.single();
+	}
+
+	private long complexAliasCount(String aptSeq, String aliasType, String normalizedName) {
+		return jdbcClient.sql("""
+			SELECT count(*)
+			FROM complex c
+			JOIN complex_name_alias a ON a.complex_id = c.id
+			WHERE c.apt_seq = :aptSeq
+			  AND a.alias_type = :aliasType
+			  AND a.normalized_name = :normalizedName
+			""")
+			.param("aptSeq", aptSeq)
+			.param("aliasType", aliasType)
+			.param("normalizedName", normalizedName)
+			.query(Long.class)
 			.single();
 	}
 }

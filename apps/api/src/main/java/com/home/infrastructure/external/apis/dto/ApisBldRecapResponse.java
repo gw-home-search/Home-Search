@@ -2,6 +2,7 @@ package com.home.infrastructure.external.apis.dto;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -45,6 +46,7 @@ public class ApisBldRecapResponse {
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	public static class Items {
+		@JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY)
 		private List<Item> item;
 
 		public List<Item> getItem() {

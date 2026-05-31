@@ -42,10 +42,10 @@ must not expose audit or dedupe fields such as `complexPk`, `aptSeq`,
 
 ## External Service Keys
 
-`APT_SERVICE_KEY` and `VW_SERVICE_KEY` may use either the portal Decoding key
-or Encoding key. The runtime normalizes percent-encoded service keys before
-building the external query string, so `%` characters are not encoded again as
-`%25`.
+`APT_SERVICE_KEY`, `VW_SERVICE_KEY`, `ODC_SERVICE_KEY`, and `BLD_SERVICE_KEY`
+may use either the portal Decoding key or Encoding key. The runtime normalizes
+percent-encoded service keys before building the external query string, so `%`
+characters are not encoded again as `%25`.
 
 ## Evidence
 

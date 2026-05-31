@@ -23,7 +23,10 @@ INSERT INTO complex (
     tot_area,
     bc_rat,
     vl_rat,
-    use_date
+    use_date,
+    metadata_status,
+    metadata_source,
+    metadata_checked_at
 )
 VALUES (
     501,
@@ -39,7 +42,10 @@ VALUES (
     98765.43,
     22.50,
     199.80,
-    DATE '2015-03-20'
+    DATE '2015-03-20',
+    'RESOLVED',
+    'SEED',
+    now()
 )
 ON CONFLICT (complex_pk) DO NOTHING;
 

@@ -1289,3 +1289,53 @@ risk_notes = [
   "기존 좌표 DB manual smoke는 evidence로만 남기고 CI/PR gate는 deterministic test로 닫는다.",
   "같은 parcel에 여러 complex가 있는 케이스는 데이터 오류가 아니라 marker grouping 정책으로 고정한다.",
 ]
+
+[[items]]
+id = "complex-metadata-enrichment-hardening"
+title_ko = "Complex metadata enrichment hardening"
+pr_type = "Feat"
+pr_title_ko = "단지 메타 보강 분리와 aptSeq 정체성 강화"
+description_ko = "RTMS ingest critical path에서 단지 메타 보강을 분리하고 ODC/건축물대장 보강을 best-effort job으로 격리하며 aptSeq/PNU 기반 단지 관계 판정을 내부 use-case로 고정한다."
+status = "done"
+priority = 190
+targets = "backend"
+preset = "open-api-ingest-prep"
+acceptance_criteria = [
+  "RTMS ingest와 JdbcComplexMasterBootstrapper는 외부 ODC/건축물대장 HTTP를 호출하지 않고 parcel_id, complex_pk, apt_seq, name, trade_name, alias만 identity-only로 생성한다.",
+  "complex는 metadata_status, metadata_source, metadata_checked_at, metadata_failure_reason을 가지며 신규 RTMS bootstrap complex는 기본 PENDING으로 생성된다.",
+  "ComplexMetadataEnrichmentRunner는 기본 OFF이며 complex.metadata.enrich.enabled=true일 때만 PENDING complex 배치를 best-effort로 처리한다.",
+  "보강 job은 단일 확정 후보만 메타를 저장하고 다중 후보는 AMBIGUOUS, 데이터 없음은 UNAVAILABLE, 건별 예외는 FAILED로 기록한 뒤 다음 행을 계속 처리한다.",
+  "ODC 아파트 식별정보는 PNU exact match가 정확히 1건일 때만 채택하고, 건축물대장 총괄표제부/표제부 fallback은 별도 property가 켜진 경우에만 단일 공동주택 후보를 채택한다.",
+  "메타 저장은 NULL 컬럼만 COALESCE로 채워 기존 값과 공개 read path 결과를 덮어쓰지 않는다.",
+  "같은 PNU의 동시 존재 단지와 재건축 세대 교체는 metadata 추측이 아니라 complex별 거래 firstDeal, lastDeal, tradeCount, useDate 보조 신호로 내부 분류한다.",
+  "공개 map/search/region/detail/trade API URL, response shape, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "raw ingest, trade_match_evidence, normalized_trade dedupe, cancellation 처리와 complex_id 운영 relation은 변경하지 않는다.",
+]
+first_red_candidates = [
+  "JdbcComplexMasterBootstrapperTest에서 resolver가 예외를 던져도 bootstrap이 identity-only complex를 PENDING으로 만들고 ingest가 통과해야 하나 현재 3-arg resolver 경로가 동기 보강을 시도해 실패하는 RED를 만든다.",
+  "PublicComplexMetadataResolverTest에서 같은 PNU ODC 후보 2건은 AMBIGUOUS와 empty metadata여야 하나 현재 첫 후보를 채택해 실패하는 RED를 만든다.",
+  "ComplexMetadataEnrichmentServiceTest에서 RESOLVED/AMBIGUOUS/UNAVAILABLE/FAILED 상태별 repository 호출을 고정하는 application seam RED를 만든다.",
+  "JdbcComplexMetadataEnrichmentRepositoryTest에서 PENDING 선택, COALESCE metadata 적용, 상태 기록이 아직 없어 실패하는 persistence RED를 만든다.",
+  "ComplexRelationClassifierTest에서 같은 PNU 2개 단지의 거래기간 overlap은 CONCURRENT, 충분한 공백 순차 span은 REDEVELOPED로 분류해야 하나 classifier가 없어 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew test",
+  "cd apps/api && ./gradlew persistenceTest",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 .codex/harness/project_terms_check.py",
+  "python3 .codex/harness/pr_lint.py --self-test",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "ODC 또는 건축물대장 후보 다중 상황에서 이름 유사도 등 추측 기반 자동 병합이 필요하면 중단하고 별도 identity-resolution slice로 분리한다.",
+  "건축물대장 API를 ingest 기본 임계경로에 넣어야 한다면 중단한다.",
+  "apt_seq를 단지 정체성 척추로 사용할 수 없다는 live evidence가 나오면 identity policy를 재검토한다.",
+  "운영 데이터 삭제, destructive migration, live Open API 호출, service key 저장이 필요하면 중단한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "이번 slice는 외부 메타 품질을 신뢰하지 않고 확정 가능한 경우만 NULL 보강하는 방어적 구조로 고정한다.",
+  "ODC는 기본 보강 소스로 두되 건축물대장은 property-gated fallback으로 유지해 불안정한 API가 ingest 신뢰도를 막지 않게 한다.",
+  "동시 존재와 재건축 판정은 public API에 노출하지 않고 내부 감사/use-case로만 추가한다.",
+]

@@ -2,6 +2,9 @@ package com.home.infrastructure.persistence.ingest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.ComplexMatcher;
+import com.home.application.ingest.ComplexMetadataEnrichmentClient;
+import com.home.application.ingest.ComplexMetadataEnrichmentRepository;
+import com.home.application.ingest.ComplexMetadataEnrichmentService;
 import com.home.application.ingest.ComplexMasterBootstrapper;
 import com.home.application.ingest.NormalizedTradeRepository;
 import com.home.application.ingest.OpenApiTradeIngestService;
@@ -87,6 +90,26 @@ class IngestPersistenceConfiguration {
 		return new JdbcComplexMasterBootstrapper(
 			requiredJdbcClient(jdbcClientProvider),
 			parcelCoordinateResolver
+		);
+	}
+
+	@Bean
+	@Lazy
+	ComplexMetadataEnrichmentRepository complexMetadataEnrichmentRepository(
+		ObjectProvider<JdbcClient> jdbcClientProvider
+	) {
+		return new JdbcComplexMetadataEnrichmentRepository(requiredJdbcClient(jdbcClientProvider));
+	}
+
+	@Bean
+	@Lazy
+	ComplexMetadataEnrichmentService complexMetadataEnrichmentService(
+		ComplexMetadataEnrichmentRepository complexMetadataEnrichmentRepository,
+		ObjectProvider<ComplexMetadataEnrichmentClient> metadataEnrichmentClientProvider
+	) {
+		return new ComplexMetadataEnrichmentService(
+			complexMetadataEnrichmentRepository,
+			metadataEnrichmentClientProvider.getIfAvailable(ComplexMetadataEnrichmentClient::noop)
 		);
 	}
 

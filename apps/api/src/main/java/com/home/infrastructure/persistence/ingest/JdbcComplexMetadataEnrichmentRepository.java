@@ -34,6 +34,11 @@ public class JdbcComplexMetadataEnrichmentRepository implements ComplexMetadataE
 			FROM complex c
 			JOIN parcel p ON p.id = c.parcel_id
 			WHERE c.metadata_status = 'PENDING'
+			   OR (
+			       c.metadata_status IN ('FAILED', 'PARTIAL', 'UNAVAILABLE')
+			       AND c.metadata_next_attempt_at IS NOT NULL
+			       AND c.metadata_next_attempt_at <= now()
+			   )
 			ORDER BY c.id
 			LIMIT :limit
 			""")

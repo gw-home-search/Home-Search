@@ -74,6 +74,34 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("RTMS bootstrap은 숫자 지번 PNU를 만들 수 없을 때 opt-in identity resolver PNU로 complex를 만든다")
+	void bootstrapsWithIdentityResolverPnuWhenJibunCannotDerivePnu() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1153011200', 'Block-dong', 'eup-myeon-dong')
+			""").update();
+		String fallbackPnu = "1153011200102380000";
+		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
+			jdbcClient,
+			(pnu, item) -> fallbackPnu.equals(pnu) ? Optional.of(new ParcelCoordinate(
+				new BigDecimal("37.5012345"),
+				new BigDecimal("127.0543210")
+			)) : Optional.empty(),
+			item -> Optional.of(fallbackPnu)
+		);
+
+		var result = bootstrapper.bootstrap(rtmsItem("11530-4350", "하버라인4단지", "가-238"));
+
+		assertThat(result.attempted()).isTrue();
+		assertThat(result.changed()).isTrue();
+		assertThat(complexBootstrapRow("11530-4350"))
+			.containsEntry("complex_pk", "RTMS:11530-4350")
+			.containsEntry("name", "하버라인4단지")
+			.containsEntry("metadata_status", "PENDING");
+		assertThat(complexParcelPnu("RTMS:11530-4350")).isEqualTo(fallbackPnu);
+	}
+
+	@Test
 	@DisplayName("RTMS bootstrap은 region 8자리 법정동 코드 fallback으로 parcel address를 저장한다")
 	void bootstrapsParcelAddressFromRegionFallbackCodeAndPnuLotNumber() {
 		jdbcClient.sql("""

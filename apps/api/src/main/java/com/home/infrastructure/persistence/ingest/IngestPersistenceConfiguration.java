@@ -6,6 +6,7 @@ import com.home.application.ingest.ComplexMetadataEnrichmentClient;
 import com.home.application.ingest.ComplexMetadataEnrichmentRepository;
 import com.home.application.ingest.ComplexMetadataEnrichmentService;
 import com.home.application.ingest.ComplexMasterBootstrapper;
+import com.home.application.ingest.ComplexIdentityResolver;
 import com.home.application.ingest.NormalizedTradeRepository;
 import com.home.application.ingest.OpenApiTradeIngestService;
 import com.home.application.ingest.RawIngestReconciliationRepository;
@@ -92,11 +93,13 @@ class IngestPersistenceConfiguration {
 	@Lazy
 	ComplexMasterBootstrapper complexMasterBootstrapper(
 		ObjectProvider<JdbcClient> jdbcClientProvider,
-		ParcelCoordinateResolver parcelCoordinateResolver
+		ParcelCoordinateResolver parcelCoordinateResolver,
+		ObjectProvider<ComplexIdentityResolver> identityResolverProvider
 	) {
 		return new JdbcComplexMasterBootstrapper(
 			requiredJdbcClient(jdbcClientProvider),
-			parcelCoordinateResolver
+			parcelCoordinateResolver,
+			identityResolverProvider.getIfAvailable(ComplexIdentityResolver::noop)
 		);
 	}
 

@@ -1,5 +1,8 @@
 package com.home.infrastructure.persistence.ingest;
 
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
 
@@ -26,7 +29,8 @@ public class JdbcComplexMetadataEnrichmentRepository implements ComplexMetadataE
 			    c.apt_seq,
 			    c.name,
 			    p.pnu,
-			    p.address
+			    p.address,
+			    c.metadata_attempts
 			FROM complex c
 			JOIN parcel p ON p.id = c.parcel_id
 			WHERE c.metadata_status = 'PENDING'
@@ -39,32 +43,57 @@ public class JdbcComplexMetadataEnrichmentRepository implements ComplexMetadataE
 				resultSet.getString("apt_seq"),
 				resultSet.getString("name"),
 				resultSet.getString("pnu"),
-				resultSet.getString("address")
+				resultSet.getString("address"),
+				resultSet.getInt("metadata_attempts")
 			))
 			.list();
 	}
 
 	@Override
-	public void saveResolution(Long complexId, ComplexMetadataResolution resolution) {
+	public void saveResolution(Long complexId, ComplexMetadataResolution resolution, Instant nextAttemptAt) {
 		Objects.requireNonNull(complexId, "complexId is required");
 		Objects.requireNonNull(resolution, "resolution is required");
 		ComplexMetadata metadata = resolution.metadata();
 		jdbcClient.sql("""
-			UPDATE complex
-			SET dong_cnt = COALESCE(dong_cnt, :dongCnt),
-			    unit_cnt = COALESCE(unit_cnt, :unitCnt),
-			    plat_area = COALESCE(plat_area, :platArea),
-			    arch_area = COALESCE(arch_area, :archArea),
-			    tot_area = COALESCE(tot_area, :totArea),
-			    bc_rat = COALESCE(bc_rat, :bcRat),
-			    vl_rat = COALESCE(vl_rat, :vlRat),
-			    use_date = COALESCE(use_date, :useDate),
-			    metadata_status = :metadataStatus,
-			    metadata_source = :metadataSource,
-			    metadata_checked_at = now(),
-			    metadata_failure_reason = :metadataFailureReason,
-			    updated_at = now()
-			WHERE id = :complexId
+			WITH updated AS (
+			    UPDATE complex
+			    SET dong_cnt = COALESCE(dong_cnt, :dongCnt),
+			        unit_cnt = COALESCE(unit_cnt, :unitCnt),
+			        plat_area = COALESCE(plat_area, :platArea),
+			        arch_area = COALESCE(arch_area, :archArea),
+			        tot_area = COALESCE(tot_area, :totArea),
+			        bc_rat = COALESCE(bc_rat, :bcRat),
+			        vl_rat = COALESCE(vl_rat, :vlRat),
+			        use_date = COALESCE(use_date, :useDate),
+			        metadata_attempts = metadata_attempts + 1,
+			        metadata_status = :metadataStatus,
+			        metadata_source = :metadataSource,
+			        metadata_checked_at = now(),
+			        metadata_failure_reason = :metadataFailureReason,
+			        metadata_failure_kind = :metadataFailureKind,
+			        metadata_next_attempt_at = :metadataNextAttemptAt,
+			        updated_at = now()
+			    WHERE id = :complexId
+			    RETURNING metadata_attempts
+			)
+			INSERT INTO complex_metadata_enrichment_attempt (
+			    complex_id,
+			    attempt_no,
+			    status,
+			    source,
+			    failure_kind,
+			    failure_reason,
+			    next_attempt_at
+			)
+			SELECT
+			    :complexId,
+			    updated.metadata_attempts,
+			    :metadataStatus,
+			    :metadataSource,
+			    :metadataFailureKind,
+			    :metadataFailureReason,
+			    :metadataNextAttemptAt
+			FROM updated
 			""")
 			.param("complexId", complexId)
 			.param("dongCnt", metadata == null ? null : metadata.dongCnt())
@@ -78,6 +107,12 @@ public class JdbcComplexMetadataEnrichmentRepository implements ComplexMetadataE
 			.param("metadataStatus", resolution.status().name())
 			.param("metadataSource", resolution.source())
 			.param("metadataFailureReason", resolution.failureReason())
+			.param("metadataFailureKind", resolution.failureKind() == null ? null : resolution.failureKind().name())
+			.param("metadataNextAttemptAt", offsetDateTime(nextAttemptAt))
 			.update();
+	}
+
+	private OffsetDateTime offsetDateTime(Instant instant) {
+		return instant == null ? null : instant.atOffset(ZoneOffset.UTC);
 	}
 }

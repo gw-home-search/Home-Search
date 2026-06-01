@@ -17,4 +17,12 @@ public record ComplexMetadata(
 	public static ComplexMetadata empty() {
 		return new ComplexMetadata(null, null, null, null, null, null, null, null);
 	}
+
+	public boolean hasAllCriticalFields() {
+		return positive(dongCnt) && positive(unitCnt) && useDate != null;
+	}
+
+	private boolean positive(Integer value) {
+		return value != null && value > 0;
+	}
 }

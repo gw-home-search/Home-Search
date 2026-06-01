@@ -2,6 +2,7 @@ package com.home.infrastructure.external.complex;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,7 +27,7 @@ class ComplexMetadataEnrichmentRunnerTest {
 		));
 		ComplexMetadataEnrichmentService service = new ComplexMetadataEnrichmentService(
 			repository,
-			lookup -> ComplexMetadataResolution.resolved("ODC", ComplexMetadata.empty())
+			lookup -> ComplexMetadataResolution.partial("ODC", ComplexMetadata.empty())
 		);
 		ComplexMetadataEnrichmentRunner runner = new ComplexMetadataEnrichmentRunner(service, 1);
 
@@ -60,7 +61,7 @@ class ComplexMetadataEnrichmentRunnerTest {
 		}
 
 		@Override
-		public void saveResolution(Long complexId, ComplexMetadataResolution resolution) {
+		public void saveResolution(Long complexId, ComplexMetadataResolution resolution, Instant nextAttemptAt) {
 			savedComplexIds.add(complexId);
 		}
 	}

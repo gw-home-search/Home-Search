@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.home.application.ingest.ComplexMetadata;
+import com.home.application.ingest.ComplexMetadataFailureKind;
 import com.home.application.ingest.ComplexMetadataLookup;
 import com.home.application.ingest.ComplexMetadataResolution;
 import com.home.application.ingest.ComplexMetadataStatus;
@@ -139,6 +140,7 @@ class PublicComplexMetadataResolverTest {
 
 		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.AMBIGUOUS);
 		assertThat(resolution.metadata()).isNull();
+		assertThat(resolution.failureKind()).isEqualTo(ComplexMetadataFailureKind.AMBIGUOUS);
 		assertThat(resolution.failureReason()).contains("ODC PNU candidate ambiguous");
 		odcloudServer.verify();
 	}
@@ -178,6 +180,7 @@ class PublicComplexMetadataResolverTest {
 		));
 
 		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.UNAVAILABLE);
+		assertThat(resolution.failureKind()).isEqualTo(ComplexMetadataFailureKind.SOURCE_MISSING);
 		odcloudServer.verify();
 	}
 
@@ -205,7 +208,7 @@ class PublicComplexMetadataResolverTest {
 				.contains("serviceKey=abc%2Fdef%2Bghi%3D")
 				.doesNotContain("serviceKey=abc%252F"))
 			.andRespond(withSuccess("""
-				{"data": [{"PNU": "1168010300107770001", "DONG_CNT": 8, "UNIT_CNT": 740}]}
+				{"data": [{"PNU": "1168010300107770001", "DONG_CNT": 8, "UNIT_CNT": 740, "USEAPR_DT": "20150320"}]}
 				""", MediaType.APPLICATION_JSON));
 		bldServer.expect(requestTo(startsWith("https://apis.example.test/1613000/BldRgstHubService/getBrRecapTitleInfo")))
 			.andExpect(request -> assertThat(request.getURI().getRawQuery())
@@ -272,12 +275,13 @@ class PublicComplexMetadataResolverTest {
 		));
 
 		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.AMBIGUOUS);
+		assertThat(resolution.failureKind()).isEqualTo(ComplexMetadataFailureKind.AMBIGUOUS);
 		assertThat(resolution.failureReason()).contains("building apartment candidate ambiguous");
 		bldServer.verify();
 	}
 
 	@Test
-	@DisplayName("blank service key는 HTTP lookup을 건너뛰고 empty metadata를 반환한다")
+	@DisplayName("blank service key는 HTTP lookup을 건너뛰고 input insufficient unavailable을 반환한다")
 	void blankServiceKeySkipsHttpLookup() {
 		RestClient odcloudClient = RestClient.builder()
 			.baseUrl("https://odcloud.example.test")
@@ -301,13 +305,15 @@ class PublicComplexMetadataResolverTest {
 			"/1613000/BldRgstHubService/getBrTitleInfo"
 		);
 
-		assertThat(resolver.resolve("1168010300107770001", "Sample address").status())
-			.isEqualTo(ComplexMetadataStatus.UNAVAILABLE);
+		ComplexMetadataResolution resolution = resolver.resolve("1168010300107770001", "Sample address");
+
+		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.UNAVAILABLE);
+		assertThat(resolution.failureKind()).isEqualTo(ComplexMetadataFailureKind.INPUT_INSUFFICIENT);
 	}
 
 	@Test
-	@DisplayName("address가 없으면 ODC는 건너뛰고 building metadata만 반환한다")
-	void returnsBuildingMetadataWhenAddressIsMissing() {
+	@DisplayName("address가 없으면 ODC는 건너뛰고 building metadata PARTIAL을 반환한다")
+	void returnsPartialBuildingMetadataWhenAddressIsMissing() {
 		RestClient.Builder bldBuilder = RestClient.builder().baseUrl("https://apis.example.test");
 		MockRestServiceServer bldServer = MockRestServiceServer.bindTo(bldBuilder).build();
 		PublicComplexMetadataResolver resolver = new PublicComplexMetadataResolver(
@@ -364,10 +370,46 @@ class PublicComplexMetadataResolverTest {
 
 		ComplexMetadataResolution resolution = resolver.resolve("1168010300107770001", null);
 
-		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.RESOLVED);
+		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.PARTIAL);
+		assertThat(resolution.failureKind()).isNull();
 		assertThat(resolution.metadata().dongCnt()).isNull();
 		assertThat(resolution.metadata().unitCnt()).isEqualTo(740);
 		assertThat(resolution.metadata().platArea()).isEqualByComparingTo(new BigDecimal("12345.67"));
 		bldServer.verify();
+	}
+
+	@Test
+	@DisplayName("ODC RestClientException은 transient failed로 구조화한다")
+	void odcloudRestClientExceptionReturnsTransientFailedResolution() {
+		RestClient odcloudClient = RestClient.builder()
+			.baseUrl("https://odcloud.example.test")
+			.requestFactory((uri, method) -> {
+				throw new org.springframework.web.client.ResourceAccessException("timeout serviceKey=secret-value");
+			})
+			.build();
+		RestClient bldClient = RestClient.builder()
+			.baseUrl("https://apis.example.test")
+			.requestFactory((uri, method) -> {
+				throw new AssertionError("BLD fallback must not hide an ODC transient failure");
+			})
+			.build();
+		PublicComplexMetadataResolver resolver = new PublicComplexMetadataResolver(
+			odcloudClient,
+			"https://odcloud.example.test",
+			"ODC-KEY",
+			ODC_APT_PATH,
+			bldClient,
+			"https://apis.example.test",
+			"BLD-KEY",
+			"/1613000/BldRgstHubService/getBrRecapTitleInfo",
+			"/1613000/BldRgstHubService/getBrTitleInfo",
+			true
+		);
+
+		ComplexMetadataResolution resolution = resolver.resolve("1168010300107770001", "Sample address");
+
+		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.FAILED);
+		assertThat(resolution.failureKind()).isEqualTo(ComplexMetadataFailureKind.TRANSIENT);
+		assertThat(resolution.failureReason()).contains("serviceKey=[REDACTED]");
 	}
 }

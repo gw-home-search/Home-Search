@@ -1339,3 +1339,48 @@ risk_notes = [
   "ODC는 기본 보강 소스로 두되 건축물대장은 property-gated fallback으로 유지해 불안정한 API가 ingest 신뢰도를 막지 않게 한다.",
   "동시 존재와 재건축 판정은 public API에 노출하지 않고 내부 감사/use-case로만 추가한다.",
 ]
+
+[[items]]
+id = "complex-metadata-retry-state"
+title_ko = "Complex metadata retry state"
+pr_type = "Feat"
+pr_title_ko = "단지 메타 재처리 상태 저장 포맷 개선"
+description_ko = "단지 메타 enrichment 결과를 PARTIAL, failure_kind, attempts, next_attempt_at, append-only 이력으로 저장해 후속 재처리 실행기가 소비할 수 있는 데이터 포맷을 고정한다."
+status = "done"
+priority = 195
+targets = "backend"
+preset = "open-api-ingest-prep"
+acceptance_criteria = [
+  "complex metadata_status는 PARTIAL을 포함하고 핵심 메타 기준은 dong_cnt > 0, unit_cnt > 0, use_date IS NOT NULL로 고정한다.",
+  "metadata_failure_kind는 TRANSIENT, PERMANENT, SOURCE_MISSING, INPUT_INSUFFICIENT, AMBIGUOUS로 구조화해 자유 텍스트 파싱 없이 재처리 판단이 가능해야 한다.",
+  "metadata_attempts와 metadata_next_attempt_at을 complex snapshot에 저장하고, 각 결과는 complex_metadata_enrichment_attempt append-only 이력으로 남긴다.",
+  "FAILED+TRANSIENT는 짧은 backoff, PARTIAL과 UNAVAILABLE+SOURCE_MISSING은 긴 backoff, AMBIGUOUS/RESOLVED/INPUT_INSUFFICIENT/PERMANENT는 자동 재시도를 예약하지 않는다.",
+  "메타 저장은 기존 COALESCE 정책을 유지해 non-null 값을 덮어쓰지 않는다.",
+  "이번 slice는 next_attempt_at을 계산·저장만 하며 due selection scheduler나 cron은 추가하지 않는다.",
+  "공개 map/search/region/detail/trade API URL, response shape, amount unit, ProblemDetail shape를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "ComplexMetadataRetryPolicyTest에서 status/kind/attemptNo별 next_attempt_at 매핑이 클래스 부재로 실패하는 RED를 만든다.",
+  "ComplexMetadataResolutionTest에서 dong_cnt, unit_cnt, use_date 핵심 필드와 PARTIAL 분기가 없어 실패하는 RED를 만든다.",
+  "JdbcComplexMetadataEnrichmentRepositoryTest에서 attempts 증가, failure_kind, next_attempt_at, append-only attempt history 저장이 없어 실패하는 persistence RED를 만든다.",
+  "PublicComplexMetadataResolverTest에서 BLD 단독 metadata는 PARTIAL, skipped lookup은 INPUT_INSUFFICIENT, RestClientException은 TRANSIENT로 구조화되지 않아 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew test",
+  "cd apps/api && ./gradlew persistenceTest",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "metadata_next_attempt_at <= now()를 실제로 소비하는 scheduler, cron, due selection이 필요하면 후속 slice로 분리한다.",
+  "외부 ODC/건축물대장 live 호출, service key, raw production payload 저장이 필요하면 중단한다.",
+  "non-null complex metadata overwrite가 필요하면 중단한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "이번 slice는 저장 포맷과 정책 계산만 활성화하고 자동 재처리 실행은 후속 작업으로 남긴다.",
+  "핵심 필드 기준이 엄격해져 기존 LEGACY RESOLVED 일부가 V14에서 PARTIAL로 재분류될 수 있다.",
+  "metadata_attempts는 새 enrichment 저장부터 증가하며 legacy backfill은 이력을 소급 생성하지 않는다.",
+]

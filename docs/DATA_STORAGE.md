@@ -222,6 +222,59 @@ improves, without requiring another external RTMS fetch.
 PNU derivation must stay centralized through `RtmsJibunPnuNormalizer` so
 bootstrap and matching do not diverge.
 
+## Complex Metadata Enrichment
+
+`complex` rows keep identity data on the ingest path. Optional complex
+metadata, such as household count, building count, approval date, and building
+areas, is enriched outside the RTMS ingest critical path.
+
+Core metadata is considered complete only when all of these fields are present:
+
+- `dong_cnt > 0`
+- `unit_cnt > 0`
+- `use_date IS NOT NULL`
+
+Area and ratio fields are useful detail metadata, but missing area values do
+not block a core `RESOLVED` status:
+
+- `plat_area`
+- `arch_area`
+- `tot_area`
+- `bc_rat`
+- `vl_rat`
+
+Metadata enrichment status values:
+
+| Status | Meaning |
+| --- | --- |
+| `PENDING` | Metadata enrichment has not been attempted yet. |
+| `RESOLVED` | A single source candidate supplied all core metadata. |
+| `PARTIAL` | A single source candidate supplied some metadata, but core metadata is incomplete. |
+| `AMBIGUOUS` | Multiple candidates exist and Home Search must not guess. |
+| `UNAVAILABLE` | The lookup ran, but no usable candidate was available. |
+| `FAILED` | The lookup failed due to a transient or permanent processing error. |
+
+`metadata_failure_kind` gives retry policy a structured reason instead of
+parsing free text:
+
+| Failure kind | Meaning |
+| --- | --- |
+| `TRANSIENT` | Temporary HTTP, timeout, or parsing failure; retry can help. |
+| `PERMANENT` | A deterministic failure that should not be retried automatically. |
+| `SOURCE_MISSING` | The external source does not currently expose the candidate. |
+| `INPUT_INSUFFICIENT` | Home Search lacks enough lookup input, such as PNU or address. |
+| `AMBIGUOUS` | Candidate selection is unsafe without operational review. |
+
+`complex.metadata_attempts` stores the number of persisted enrichment attempts.
+`complex.metadata_next_attempt_at` stores the next policy-calculated retry time.
+The current storage slice calculates and stores this timestamp only; a future
+runner may consume rows where `metadata_next_attempt_at <= now()`.
+
+Every persisted enrichment result also appends a row to
+`complex_metadata_enrichment_attempt`. This history keeps each attempt
+queryable even though the latest status snapshot remains on `complex` for cheap
+map and detail reads.
+
 ## Partitioning
 
 Keep trade partitioning by `deal_date`.

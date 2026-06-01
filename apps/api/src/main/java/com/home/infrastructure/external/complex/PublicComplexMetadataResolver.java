@@ -9,6 +9,7 @@ import java.util.Objects;
 
 import com.home.application.ingest.ComplexMetadata;
 import com.home.application.ingest.ComplexMetadataEnrichmentClient;
+import com.home.application.ingest.ComplexMetadataFailureKind;
 import com.home.application.ingest.ComplexMetadataLookup;
 import com.home.application.ingest.ComplexMetadataResolution;
 import com.home.application.ingest.ComplexMetadataResolver;
@@ -85,16 +86,19 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 		if (odcloud.status() == ComplexMetadataStatus.AMBIGUOUS) {
 			return odcloud;
 		}
-		if (odcloud.status() == ComplexMetadataStatus.RESOLVED) {
+		if (odcloud.status() == ComplexMetadataStatus.FAILED) {
+			return odcloud;
+		}
+		if (hasMetadata(odcloud)) {
 			if (!buildingFallbackEnabled) {
 				return odcloud;
 			}
 			ComplexMetadataResolution building = resolveBuildingMetadata(lookup.pnu());
-			if (building.status() == ComplexMetadataStatus.RESOLVED) {
+			if (hasMetadata(building)) {
 				if (conflicts(odcloud.metadata(), building.metadata())) {
 					return ComplexMetadataResolution.ambiguous("ODC+BLD", "complex metadata source conflict pnu=" + lookup.pnu());
 				}
-				return ComplexMetadataResolution.resolved("ODC+BLD", merge(odcloud.metadata(), building.metadata()));
+				return ComplexMetadataResolution.classify("ODC+BLD", merge(odcloud.metadata(), building.metadata()));
 			}
 			if (building.status() == ComplexMetadataStatus.AMBIGUOUS) {
 				return building;
@@ -106,7 +110,11 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 
 	private ComplexMetadataResolution resolveOdcloud(String pnu, String parcelAddress) {
 		if (odcloudServiceKey == null || trimToNull(parcelAddress) == null || trimToNull(pnu) == null) {
-			return ComplexMetadataResolution.unavailable("ODC", "ODC lookup skipped");
+			return ComplexMetadataResolution.unavailable(
+				"ODC",
+				ComplexMetadataFailureKind.INPUT_INSUFFICIENT,
+				"ODC lookup skipped"
+			);
 		}
 		try {
 			OdcloudAptResponse response = getBody(
@@ -130,7 +138,7 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 				return ComplexMetadataResolution.unavailable("ODC", "ODC exact PNU candidate unavailable pnu=" + pnu);
 			}
 			OdcloudAptResponse.Item selected = matches.get(0);
-			return ComplexMetadataResolution.resolved("ODC", new ComplexMetadata(
+			return ComplexMetadataResolution.classify("ODC", new ComplexMetadata(
 				selected.getDongCnt(),
 				selected.getUnitCnt(),
 				null,
@@ -143,13 +151,21 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 		}
 		catch (RestClientException exception) {
 			log.warn("ODC complex metadata lookup failed pnu={} address={}", pnu, parcelAddress, exception);
-			return ComplexMetadataResolution.failed("ODC", redactSensitive(exception.getMessage()));
+			return ComplexMetadataResolution.failed(
+				"ODC",
+				ComplexMetadataFailureKind.TRANSIENT,
+				redactSensitive(exception.getMessage())
+			);
 		}
 	}
 
 	private ComplexMetadataResolution resolveBuildingMetadata(String pnu) {
 		if (bldServiceKey == null || pnu == null || pnu.length() < 19) {
-			return ComplexMetadataResolution.unavailable("BLD", "building metadata lookup skipped");
+			return ComplexMetadataResolution.unavailable(
+				"BLD",
+				ComplexMetadataFailureKind.INPUT_INSUFFICIENT,
+				"building metadata lookup skipped"
+			);
 		}
 		try {
 			ComplexMetadataResolution recap = fetchBuildingMetadata(bldRecapPath, pnu);
@@ -160,7 +176,11 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 		}
 		catch (RestClientException exception) {
 			log.warn("Building complex metadata lookup failed pnu={}", pnu, exception);
-			return ComplexMetadataResolution.failed("BLD", redactSensitive(exception.getMessage()));
+			return ComplexMetadataResolution.failed(
+				"BLD",
+				ComplexMetadataFailureKind.TRANSIENT,
+				redactSensitive(exception.getMessage())
+			);
 		}
 	}
 
@@ -190,7 +210,7 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 			return ComplexMetadataResolution.unavailable("BLD", "building apartment candidate unavailable");
 		}
 		ApisBldRecapResponse.Item item = apartmentItems.get(0);
-		return ComplexMetadataResolution.resolved("BLD", new ComplexMetadata(
+		return ComplexMetadataResolution.classify("BLD", new ComplexMetadata(
 			null,
 			item.getHhldCnt(),
 			bd(item.getPlatArea()),
@@ -200,6 +220,11 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 			bd(item.getVlRat()),
 			null
 		));
+	}
+
+	private boolean hasMetadata(ComplexMetadataResolution resolution) {
+		return resolution.status() == ComplexMetadataStatus.RESOLVED
+			|| resolution.status() == ComplexMetadataStatus.PARTIAL;
 	}
 
 	private <T> T getBody(RestClient restClient, String baseUrl, String path, String query, Class<T> bodyType) {

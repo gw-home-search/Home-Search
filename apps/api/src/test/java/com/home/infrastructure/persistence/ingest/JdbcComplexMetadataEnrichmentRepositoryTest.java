@@ -5,11 +5,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
 import com.home.application.ingest.ComplexMetadata;
 import com.home.application.ingest.ComplexMetadataFailureKind;
+import com.home.application.ingest.ComplexMetadataLookup;
 import com.home.application.ingest.ComplexMetadataResolution;
 
 import org.junit.jupiter.api.DisplayName;
@@ -153,6 +156,57 @@ class JdbcComplexMetadataEnrichmentRepositoryTest extends JdbcPostgresTestSuppor
 			.containsExactly(2, 1);
 	}
 
+	@Test
+	@DisplayName("metadata enrichment repository는 next_attempt_at이 지난 재시도 대상만 다시 조회한다")
+	void findsDueRetryableComplexesButSkipsTerminalAndFutureRows() {
+		seedPendingComplex();
+		seedComplex(
+			502,
+			1002,
+			"1168010300101410000",
+			"APT-502",
+			"Failed Apartment",
+			"FAILED",
+			1,
+			Instant.parse("2026-05-31T00:00:00Z")
+		);
+		seedComplex(
+			503,
+			1003,
+			"1168010300101420000",
+			"APT-503",
+			"Future Failed Apartment",
+			"FAILED",
+			1,
+			Instant.parse("2999-06-30T00:00:00Z")
+		);
+		seedComplex(
+			504,
+			1004,
+			"1168010300101430000",
+			"APT-504",
+			"Ambiguous Apartment",
+			"AMBIGUOUS",
+			1,
+			null
+		);
+		seedComplex(
+			505,
+			1005,
+			"1168010300101440000",
+			"APT-505",
+			"Resolved Apartment",
+			"RESOLVED",
+			1,
+			null
+		);
+		JdbcComplexMetadataEnrichmentRepository repository = new JdbcComplexMetadataEnrichmentRepository(jdbcClient);
+
+		assertThat(repository.findPending(10))
+			.extracting(ComplexMetadataLookup::complexId)
+			.containsExactly(501L, 502L);
+	}
+
 	private void seedPendingComplex() {
 		jdbcClient.sql("""
 			INSERT INTO region (id, code, name, region_type)
@@ -166,6 +220,59 @@ class JdbcComplexMetadataEnrichmentRepositoryTest extends JdbcPostgresTestSuppor
 			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt)
 			VALUES (501, 1001, 'COMPLEX-PK-501', 'APT-501', 'Sample Apartment', 'Sample Apartment', 740)
 			""").update();
+	}
+
+	private void seedComplex(
+		long complexId,
+		long parcelId,
+		String pnu,
+		String aptSeq,
+		String aptName,
+		String metadataStatus,
+		int attempts,
+		Instant nextAttemptAt
+	) {
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (:parcelId, 1, :pnu, :address, 37.5123, 127.0456)
+			""")
+			.param("parcelId", parcelId)
+			.param("pnu", pnu)
+			.param("address", aptName + " address")
+			.update();
+		jdbcClient.sql("""
+			INSERT INTO complex (
+			    id,
+			    parcel_id,
+			    complex_pk,
+			    apt_seq,
+			    name,
+			    trade_name,
+			    metadata_status,
+			    metadata_attempts,
+			    metadata_next_attempt_at
+			)
+			VALUES (
+			    :complexId,
+			    :parcelId,
+			    :complexPk,
+			    :aptSeq,
+			    :aptName,
+			    :aptName,
+			    :metadataStatus,
+			    :attempts,
+			    :nextAttemptAt
+			)
+			""")
+			.param("complexId", complexId)
+			.param("parcelId", parcelId)
+			.param("complexPk", "COMPLEX-PK-" + complexId)
+			.param("aptSeq", aptSeq)
+			.param("aptName", aptName)
+			.param("metadataStatus", metadataStatus)
+			.param("attempts", attempts)
+			.param("nextAttemptAt", nextAttemptAt == null ? null : OffsetDateTime.ofInstant(nextAttemptAt, ZoneOffset.UTC))
+			.update();
 	}
 
 	private Map<String, Object> complexMetadataState(long complexId) {

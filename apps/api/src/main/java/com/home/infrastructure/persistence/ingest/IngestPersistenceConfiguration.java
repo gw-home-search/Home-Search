@@ -15,7 +15,10 @@ import com.home.application.ingest.TradeIngestMetrics;
 import com.home.application.ingest.TradeMatchEvidenceRepository;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
@@ -110,6 +113,33 @@ class IngestPersistenceConfiguration {
 		return new ComplexMetadataEnrichmentService(
 			complexMetadataEnrichmentRepository,
 			metadataEnrichmentClientProvider.getIfAvailable(ComplexMetadataEnrichmentClient::noop)
+		);
+	}
+
+	@Bean
+	@Lazy
+	@ConditionalOnBean(JdbcClient.class)
+	JdbcTradePartitionMaintenanceRepository tradePartitionMaintenanceRepository(
+		ObjectProvider<JdbcClient> jdbcClientProvider
+	) {
+		return new JdbcTradePartitionMaintenanceRepository(requiredJdbcClient(jdbcClientProvider));
+	}
+
+	@Bean
+	@ConditionalOnBean(JdbcTradePartitionMaintenanceRepository.class)
+	@ConditionalOnProperty(
+		name = "home.trade.partition.maintenance.enabled",
+		havingValue = "true",
+		matchIfMissing = true
+	)
+	ApplicationRunner tradePartitionMaintenanceRunner(
+		JdbcTradePartitionMaintenanceRepository tradePartitionMaintenanceRepository,
+		@Value("${home.trade.partition.maintenance.years-ahead:5}") int yearsAhead
+	) {
+		return new TradePartitionMaintenanceRunner(
+			tradePartitionMaintenanceRepository,
+			java.time.Clock.systemUTC(),
+			yearsAhead
 		);
 	}
 

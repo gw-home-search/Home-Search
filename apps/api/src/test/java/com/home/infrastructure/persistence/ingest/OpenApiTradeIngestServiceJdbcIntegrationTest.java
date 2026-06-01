@@ -626,6 +626,48 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
+	@DisplayName("aptSeq unique에서 PNU 차이가 sggCd뿐이면 보정 evidence로 normalized trade를 허용한다")
+	void insertsAptSeqMatchWhenOnlySggCdConflictsWithComplexParcel() {
+		seedComplexWithPnu(
+			"1132010800",
+			"1132010800106420000",
+			"11320-87",
+			"현대성우"
+		);
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty()),
+			evidenceRepository
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11305",
+			"202508",
+			1,
+			List.of(liveRtmsItem("11320-87", "현대성우", "642", "101", "11305", "10800"))
+		));
+
+		assertThat(result.rawSaved()).isEqualTo(1);
+		assertThat(result.normalizedInserted()).isEqualTo(1);
+		assertThat(result.matchFailed()).isZero();
+		assertThat(tradeCount()).isEqualTo(1);
+		TradeMatchEvidenceRecord evidence = firstEvidence(evidenceRepository);
+		assertThat(evidence.matchStatus()).isEqualTo(TradeMatchStatus.MATCHED_PNU_SGG_CORRECTED);
+		assertThat(evidence.matchPath()).isEqualTo("APTSEQ_PNU_SGG_CORRECTED");
+		assertThat(evidence.derivedPnu()).isEqualTo("1130510800106420000");
+		assertThat(evidence.matchedComplexId()).isEqualTo(501L);
+	}
+
+	@Test
 	@DisplayName("PNU 단일 후보라도 RTMS 이름이 master/alias와 다르면 NAME_CONFLICT evidence로 보류한다")
 	void holdsSinglePnuCandidateWhenNameConflicts() {
 		seedComplex();
@@ -820,6 +862,17 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 	}
 
 	private OpenApiTradeItem liveRtmsItem(String aptSeq, String aptName, String jibun, String aptDong) {
+		return liveRtmsItem(aptSeq, aptName, jibun, aptDong, "11680", "10300");
+	}
+
+	private OpenApiTradeItem liveRtmsItem(
+		String aptSeq,
+		String aptName,
+		String jibun,
+		String aptDong,
+		String sggCd,
+		String umdCd
+	) {
 		return new OpenApiTradeItem(
 			aptDong,
 			aptName,
@@ -831,10 +884,10 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			84.93,
 			12,
 			jibun,
-			"11680",
-			"10300",
-			"{\"aptSeq\":\"%s\",\"aptNm\":\"%s\",\"jibun\":\"%s\",\"aptDong\":\"%s\"}"
-				.formatted(aptSeq, aptName, jibun, aptDong)
+			sggCd,
+			umdCd,
+			"{\"aptSeq\":\"%s\",\"aptNm\":\"%s\",\"jibun\":\"%s\",\"aptDong\":\"%s\",\"sggCd\":\"%s\",\"umdCd\":\"%s\"}"
+				.formatted(aptSeq, aptName, jibun, aptDong, sggCd, umdCd)
 		);
 	}
 
@@ -862,6 +915,28 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			.param("pnu", pnu)
 			.query(Long.class)
 			.single();
+	}
+
+	private void seedComplexWithPnu(String regionCode, String pnu, String aptSeq, String aptName) {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, :regionCode, 'Sample-dong', 'eup-myeon-dong')
+			""")
+			.param("regionCode", regionCode)
+			.update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (1001, 1, :pnu, 'Sample address', 37.5123, 127.0456)
+			""")
+			.param("pnu", pnu)
+			.update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt)
+			VALUES (501, 1001, 'COMPLEX-PK-501', :aptSeq, :aptName, 740)
+			""")
+			.param("aptSeq", aptSeq)
+			.param("aptName", aptName)
+			.update();
 	}
 
 	private long complexCountByAptSeq(String aptSeq) {

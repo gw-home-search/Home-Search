@@ -43,6 +43,40 @@ class JdbcComplexMatcherTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("aptSeq가 unique이고 PNU 차이가 sggCd뿐이면 aptSeq prefix로 보정해 매칭한다")
+	void matchesUniqueAptSeqWhenOnlyRtmsSggCdConflictsWithComplexParcel() {
+		seedComplexWithPnu(
+			"1132010800",
+			"1132010800106420000",
+			"11320-87",
+			"현대성우"
+		);
+
+		ComplexMatchResult result = matcher().match(new OpenApiTradeItem(
+			"101",
+			"현대성우",
+			"11320-87",
+			"49,000",
+			1,
+			8,
+			2025,
+			84.39,
+			5,
+			"642",
+			"11305",
+			"10800",
+			"{\"aptSeq\":\"11320-87\",\"aptNm\":\"현대성우\",\"jibun\":\"642\",\"sggCd\":\"11305\"}"
+		));
+
+		assertThat(result.matched()).isTrue();
+		assertThat(result.complexId()).isEqualTo(501L);
+		assertThat(result.matchPath()).isEqualTo("APTSEQ_PNU_SGG_CORRECTED");
+		assertThat(result.matchStatus()).isEqualTo(TradeMatchStatus.MATCHED_PNU_SGG_CORRECTED);
+		assertThat(result.derivedPnu()).isEqualTo("1130510800106420000");
+		assertThat(result.failureReason()).contains("RTMS sggCd corrected by aptSeq prefix");
+	}
+
+	@Test
 	@DisplayName("RTMS jibun은 aptSeq가 없을 때 PNU를 만들고 single parcel complex를 resolve한다")
 	void matchesUniqueParcelPnuFromRtmsJibun() {
 		seedComplex();
@@ -224,5 +258,27 @@ class JdbcComplexMatcherTest extends JdbcPostgresTestSupport {
 			"10300",
 			"{\"aptSeq\":\"%s\",\"aptNm\":\"%s\",\"jibun\":\"%s\"}".formatted(aptSeq, aptName, jibun)
 		);
+	}
+
+	private void seedComplexWithPnu(String regionCode, String pnu, String aptSeq, String aptName) {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, :regionCode, 'Sample-dong', 'eup-myeon-dong')
+			""")
+			.param("regionCode", regionCode)
+			.update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (1001, 1, :pnu, 'Sample address', 37.5123, 127.0456)
+			""")
+			.param("pnu", pnu)
+			.update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt)
+			VALUES (501, 1001, 'COMPLEX-PK-501', :aptSeq, :aptName, 740)
+			""")
+			.param("aptSeq", aptSeq)
+			.param("aptName", aptName)
+			.update();
 	}
 }

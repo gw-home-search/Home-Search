@@ -3,6 +3,7 @@ package com.home.application.ingest;
 public enum TradeMatchStatus {
 	MATCHED,
 	MATCHED_NAME_VARIANT,
+	MATCHED_PNU_SGG_CORRECTED,
 	PNU_CONFLICT,
 	NAME_CONFLICT,
 	AMBIGUOUS,

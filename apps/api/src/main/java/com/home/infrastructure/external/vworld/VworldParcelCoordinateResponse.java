@@ -18,24 +18,30 @@ public record VworldParcelCoordinateResponse(
 			return Optional.empty();
 		}
 
-		ParcelCoordinate matched = null;
+		BigDecimal minLongitude = null;
+		BigDecimal minLatitude = null;
+		BigDecimal maxLongitude = null;
+		BigDecimal maxLatitude = null;
 
 		for (Feature feature : features) {
-			Optional<ParcelCoordinate> center = feature.center(pnu);
-			if (center.isEmpty()) {
+			Optional<Bbox> bbox = feature.bbox(pnu);
+			if (bbox.isEmpty()) {
 				continue;
 			}
-			if (matched != null) {
-				return Optional.empty();
-			}
-			matched = center.get();
+			minLongitude = min(minLongitude, bbox.get().minLongitude());
+			minLatitude = min(minLatitude, bbox.get().minLatitude());
+			maxLongitude = max(maxLongitude, bbox.get().maxLongitude());
+			maxLatitude = max(maxLatitude, bbox.get().maxLatitude());
 		}
 
-		if (matched == null) {
+		if (minLongitude == null || minLatitude == null || maxLongitude == null || maxLatitude == null) {
 			return Optional.empty();
 		}
 
-		return Optional.of(matched);
+		return Optional.of(new ParcelCoordinate(
+			minLatitude.add(maxLatitude).divide(BigDecimal.valueOf(2), MathContext.DECIMAL64),
+			minLongitude.add(maxLongitude).divide(BigDecimal.valueOf(2), MathContext.DECIMAL64)
+		));
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
@@ -44,7 +50,7 @@ public record VworldParcelCoordinateResponse(
 		Properties properties
 	) {
 
-		private Optional<ParcelCoordinate> center(String expectedPnu) {
+		private Optional<Bbox> bbox(String expectedPnu) {
 			if (bbox == null || bbox.size() < 4) {
 				return Optional.empty();
 			}
@@ -60,11 +66,16 @@ public record VworldParcelCoordinateResponse(
 				return Optional.empty();
 			}
 
-			return Optional.of(new ParcelCoordinate(
-				minLatitude.add(maxLatitude).divide(BigDecimal.valueOf(2), MathContext.DECIMAL64),
-				minLongitude.add(maxLongitude).divide(BigDecimal.valueOf(2), MathContext.DECIMAL64)
-			));
+			return Optional.of(new Bbox(minLongitude, minLatitude, maxLongitude, maxLatitude));
 		}
+	}
+
+	private record Bbox(
+		BigDecimal minLongitude,
+		BigDecimal minLatitude,
+		BigDecimal maxLongitude,
+		BigDecimal maxLatitude
+	) {
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
@@ -75,5 +86,19 @@ public record VworldParcelCoordinateResponse(
 
 	private static boolean hasText(String value) {
 		return value != null && !value.isBlank();
+	}
+
+	private static BigDecimal min(BigDecimal current, BigDecimal candidate) {
+		if (current == null) {
+			return candidate;
+		}
+		return current.compareTo(candidate) <= 0 ? current : candidate;
+	}
+
+	private static BigDecimal max(BigDecimal current, BigDecimal candidate) {
+		if (current == null) {
+			return candidate;
+		}
+		return current.compareTo(candidate) >= 0 ? current : candidate;
 	}
 }

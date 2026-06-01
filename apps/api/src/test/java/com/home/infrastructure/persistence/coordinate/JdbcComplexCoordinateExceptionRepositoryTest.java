@@ -33,6 +33,25 @@ class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
+	@DisplayName("좌표 readiness는 PENDING coordinate case parcelId만 순서와 limit에 맞게 조회한다")
+	void findsOnlyPendingCoordinateCaseParcelIds() {
+		seedSingleComplexParcel();
+		seedConcurrentComplexParcel();
+		seedResolvedCaseParcel();
+		jdbcClient.sql("""
+			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, reason)
+			VALUES
+			    (1001, '1168010300101400001', 'PENDING', 'pending first'),
+			    (1002, '1168010300101400002', 'PENDING', 'pending second'),
+			    (1003, '1168010300101400003', 'RESOLVED', 'resolved')
+			""").update();
+		JdbcComplexCoordinateExceptionRepository repository = new JdbcComplexCoordinateExceptionRepository(jdbcClient);
+
+		assertThat(repository.findPendingCaseParcelIds(1)).containsExactly(1001L);
+		assertThat(repository.findPendingCaseParcelIds(10)).containsExactly(1001L, 1002L);
+	}
+
+	@Test
 	@DisplayName("같은 PNU의 동시 존재 complex는 apt_dong과 건물 동명으로 서로 다른 표시 좌표를 저장한다")
 	void storesDifferentDisplayCoordinatesForConcurrentComplexesUnderSamePnu() {
 		seedConcurrentComplexParcel();
@@ -105,6 +124,18 @@ class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSuppo
 			VALUES
 			    (601, 1002, 'COMPLEX-PK-601', 'APT-601', 'Tower A'),
 			    (602, 1002, 'COMPLEX-PK-602', 'APT-602', 'Tower B')
+			""").update();
+	}
+
+	private void seedResolvedCaseParcel() {
+		seedRegion();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (1003, 1, '1168010300101400003', 'Resolved address', 37.5125, 127.0458)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name)
+			VALUES (701, 1003, 'COMPLEX-PK-701', 'APT-701', 'Resolved Apartment')
 			""").update();
 	}
 

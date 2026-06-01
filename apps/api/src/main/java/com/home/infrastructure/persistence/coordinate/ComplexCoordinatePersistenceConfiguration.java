@@ -3,12 +3,17 @@ package com.home.infrastructure.persistence.coordinate;
 import com.home.application.complex.ComplexRelationClassifier;
 import com.home.application.coordinate.ComplexCoordinateExceptionRepository;
 import com.home.application.coordinate.ComplexCoordinateExceptionService;
+import com.home.application.coordinate.ComplexCoordinateReadinessRepository;
+import com.home.application.coordinate.ComplexCoordinateReadinessService;
 import com.home.application.coordinate.ComplexDisplayCoordinateProjectionRepository;
 import com.home.application.coordinate.ComplexDisplayCoordinateProjectionService;
 import com.home.infrastructure.persistence.complex.JdbcComplexRelationRepository;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -19,6 +24,14 @@ class ComplexCoordinatePersistenceConfiguration {
 	@Bean
 	@ConditionalOnBean(JdbcClient.class)
 	ComplexCoordinateExceptionRepository complexCoordinateExceptionRepository(
+		ObjectProvider<JdbcClient> jdbcClientProvider
+	) {
+		return new JdbcComplexCoordinateExceptionRepository(requiredJdbcClient(jdbcClientProvider));
+	}
+
+	@Bean
+	@ConditionalOnBean(JdbcClient.class)
+	ComplexCoordinateReadinessRepository complexCoordinateReadinessRepository(
 		ObjectProvider<JdbcClient> jdbcClientProvider
 	) {
 		return new JdbcComplexCoordinateExceptionRepository(requiredJdbcClient(jdbcClientProvider));
@@ -49,6 +62,36 @@ class ComplexCoordinatePersistenceConfiguration {
 		ComplexDisplayCoordinateProjectionRepository repository
 	) {
 		return new ComplexDisplayCoordinateProjectionService(repository);
+	}
+
+	@Bean
+	@ConditionalOnBean(JdbcClient.class)
+	ComplexCoordinateReadinessService complexCoordinateReadinessService(
+		ComplexCoordinateExceptionService complexCoordinateExceptionService,
+		ComplexCoordinateReadinessRepository complexCoordinateReadinessRepository,
+		ComplexDisplayCoordinateProjectionService complexDisplayCoordinateProjectionService
+	) {
+		return new ComplexCoordinateReadinessService(
+			complexCoordinateExceptionService,
+			complexCoordinateReadinessRepository,
+			complexDisplayCoordinateProjectionService
+		);
+	}
+
+	@Bean
+	@ConditionalOnProperty(name = "home.coordinate.readiness.enabled", havingValue = "true")
+	ApplicationRunner complexCoordinateReadinessRunner(
+		ComplexCoordinateReadinessService complexCoordinateReadinessService,
+		@Value("${home.coordinate.readiness.stage-limit:500}") int stageLimit,
+		@Value("${home.coordinate.readiness.resolve-limit:500}") int resolveLimit,
+		@Value("${home.coordinate.readiness.project-limit:1000}") int projectLimit
+	) {
+		return new ComplexCoordinateReadinessRunner(
+			complexCoordinateReadinessService,
+			stageLimit,
+			resolveLimit,
+			projectLimit
+		);
 	}
 
 	private JdbcClient requiredJdbcClient(ObjectProvider<JdbcClient> jdbcClientProvider) {

@@ -18,6 +18,7 @@ class ComplexRelationClassifierTest {
 		var classification = classifier.classify(List.of(span(501L, "APT-501", "A", "2025-01-01", "2025-12-01", null)));
 
 		assertThat(classification.type()).isEqualTo(ComplexRelationType.SINGLE);
+		assertThat(classification.confidence()).isEqualTo(ComplexRelationConfidence.HIGH);
 	}
 
 	@Test
@@ -29,17 +30,57 @@ class ComplexRelationClassifierTest {
 		));
 
 		assertThat(classification.type()).isEqualTo(ComplexRelationType.CONCURRENT);
+		assertThat(classification.confidence()).isEqualTo(ComplexRelationConfidence.HIGH);
 	}
 
 	@Test
-	@DisplayName("complex relation classifier는 충분한 거래 공백이 있으면 REDEVELOPED로 분류한다")
-	void classifiesRedevelopedComplexesWhenSequentialGapIsLargeEnough() {
+	@DisplayName("complex relation classifier는 거래 span 경계일이 같으면 CONCURRENT로 분류한다")
+	void classifiesConcurrentWhenTradeSpanBoundaryTouches() {
+		var classification = classifier.classify(List.of(
+			span(501L, "APT-501", "A", "2024-01-01", "2025-01-01", null),
+			span(502L, "APT-502", "B", "2025-01-01", "2025-12-01", null)
+		));
+
+		assertThat(classification.type()).isEqualTo(ComplexRelationType.CONCURRENT);
+		assertThat(classification.confidence()).isEqualTo(ComplexRelationConfidence.HIGH);
+	}
+
+	@Test
+	@DisplayName("complex relation classifier는 준공일 격차와 순차 거래 span이 충분하면 REDEVELOPED로 분류한다")
+	void classifiesRedevelopedComplexesWhenUseDateEvidenceIsStrong() {
 		var classification = classifier.classify(List.of(
 			span(501L, "APT-501", "Old", "2016-01-01", "2018-01-01", "1995-01-01"),
 			span(502L, "APT-502", "New", "2020-01-01", "2025-01-01", "2020-01-01")
 		));
 
 		assertThat(classification.type()).isEqualTo(ComplexRelationType.REDEVELOPED);
+		assertThat(classification.confidence()).isEqualTo(ComplexRelationConfidence.HIGH);
+		assertThat(classification.reason()).contains("use_date");
+	}
+
+	@Test
+	@DisplayName("complex relation classifier는 준공일 없는 충분한 거래 공백을 낮은 신뢰도 REDEVELOPED로 분류한다")
+	void classifiesRedevelopedComplexesWithLowConfidenceWhenOnlyTradeGapIsAvailable() {
+		var classification = classifier.classify(List.of(
+			span(501L, "APT-501", "Old", "2016-01-01", "2018-01-01", null),
+			span(502L, "APT-502", "New", "2020-01-01", "2025-01-01", null)
+		));
+
+		assertThat(classification.type()).isEqualTo(ComplexRelationType.REDEVELOPED);
+		assertThat(classification.confidence()).isEqualTo(ComplexRelationConfidence.LOW);
+		assertThat(classification.reason()).contains("heuristic");
+	}
+
+	@Test
+	@DisplayName("complex relation classifier는 준공일 없는 정확히 12개월 거래 공백을 낮은 신뢰도 REDEVELOPED로 분류한다")
+	void classifiesRedevelopedWithLowConfidenceWhenTradeGapEqualsThreshold() {
+		var classification = classifier.classify(List.of(
+			span(501L, "APT-501", "Old", "2023-01-01", "2024-01-01", null),
+			span(502L, "APT-502", "New", "2025-01-01", "2025-12-01", null)
+		));
+
+		assertThat(classification.type()).isEqualTo(ComplexRelationType.REDEVELOPED);
+		assertThat(classification.confidence()).isEqualTo(ComplexRelationConfidence.LOW);
 	}
 
 	@Test
@@ -51,6 +92,67 @@ class ComplexRelationClassifierTest {
 		));
 
 		assertThat(classification.type()).isEqualTo(ComplexRelationType.UNKNOWN);
+	}
+
+	@Test
+	@DisplayName("complex relation classifier는 complex가 없으면 UNKNOWN으로 남긴다")
+	void keepsUnknownWhenComplexIsEmpty() {
+		var classification = classifier.classify(List.of());
+
+		assertThat(classification.type()).isEqualTo(ComplexRelationType.UNKNOWN);
+		assertThat(classification.confidence()).isEqualTo(ComplexRelationConfidence.NONE);
+	}
+
+	@Test
+	@DisplayName("complex relation classifier는 작은 거래 공백과 단순 준공일 증가만으로 REDEVELOPED를 확정하지 않는다")
+	void keepsUnknownWhenOnlyWeakUseDateTieBreakExists() {
+		var classification = classifier.classify(List.of(
+			span(501L, "APT-501", "A", "2024-01-01", "2024-12-01", "2010-01-01"),
+			span(502L, "APT-502", "B", "2025-06-01", "2025-12-01", "2015-01-01")
+		));
+
+		assertThat(classification.type()).isEqualTo(ComplexRelationType.UNKNOWN);
+		assertThat(classification.confidence()).isEqualTo(ComplexRelationConfidence.NONE);
+		assertThat(classification.reason()).contains("use_date evidence is weak");
+	}
+
+	@Test
+	@DisplayName("complex relation classifier는 거래 1건짜리 span만으로 REDEVELOPED를 분류하지 않는다")
+	void keepsUnknownWhenTradeGapUsesTooFewTrades() {
+		var classification = classifier.classify(List.of(
+			span(501L, "APT-501", "A", "2016-01-01", "2016-01-01", 1, null),
+			span(502L, "APT-502", "B", "2020-01-01", "2020-01-01", 1, null)
+		));
+
+		assertThat(classification.type()).isEqualTo(ComplexRelationType.UNKNOWN);
+		assertThat(classification.confidence()).isEqualTo(ComplexRelationConfidence.NONE);
+		assertThat(classification.reason()).contains("sample too small");
+	}
+
+	@Test
+	@DisplayName("complex relation classifier는 거래 기간 overlap을 준공일보다 우선해 CONCURRENT로 분류한다")
+	void classifiesConcurrentWhenTradeSpansOverlapEvenWithUseDateRedevelopmentSignal() {
+		var classification = classifier.classify(List.of(
+			span(501L, "APT-501", "Old", "2024-01-01", "2025-06-01", "1990-01-01"),
+			span(502L, "APT-502", "New", "2025-01-01", "2025-12-01", "2020-01-01")
+		));
+
+		assertThat(classification.type()).isEqualTo(ComplexRelationType.CONCURRENT);
+		assertThat(classification.confidence()).isEqualTo(ComplexRelationConfidence.HIGH);
+	}
+
+	@Test
+	@DisplayName("complex relation classifier는 3개 이상 sequential complex를 자동 REDEVELOPED로 단정하지 않는다")
+	void keepsUnknownForThreeOrMoreSequentialComplexes() {
+		var classification = classifier.classify(List.of(
+			span(501L, "APT-501", "A", "2010-01-01", "2012-01-01", "1980-01-01"),
+			span(502L, "APT-502", "B", "2014-01-01", "2016-01-01", "2000-01-01"),
+			span(503L, "APT-503", "C", "2018-01-01", "2025-01-01", "2020-01-01")
+		));
+
+		assertThat(classification.type()).isEqualTo(ComplexRelationType.UNKNOWN);
+		assertThat(classification.confidence()).isEqualTo(ComplexRelationConfidence.NONE);
+		assertThat(classification.reason()).contains("multiple complex generations");
 	}
 
 	private ComplexTradeSpan span(
@@ -68,6 +170,26 @@ class ComplexRelationClassifierTest {
 			LocalDate.parse(firstDeal),
 			LocalDate.parse(lastDeal),
 			3,
+			useDate == null ? null : LocalDate.parse(useDate)
+		);
+	}
+
+	private ComplexTradeSpan span(
+		Long complexId,
+		String aptSeq,
+		String name,
+		String firstDeal,
+		String lastDeal,
+		long tradeCount,
+		String useDate
+	) {
+		return new ComplexTradeSpan(
+			complexId,
+			aptSeq,
+			name,
+			LocalDate.parse(firstDeal),
+			LocalDate.parse(lastDeal),
+			tradeCount,
 			useDate == null ? null : LocalDate.parse(useDate)
 		);
 	}

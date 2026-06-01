@@ -3,6 +3,8 @@ package com.home.infrastructure.persistence.coordinate;
 import com.home.application.complex.ComplexRelationClassifier;
 import com.home.application.coordinate.ComplexCoordinateExceptionRepository;
 import com.home.application.coordinate.ComplexCoordinateExceptionService;
+import com.home.application.coordinate.ComplexDisplayCoordinateProjectionRepository;
+import com.home.application.coordinate.ComplexDisplayCoordinateProjectionService;
 import com.home.infrastructure.persistence.complex.JdbcComplexRelationRepository;
 
 import org.springframework.beans.factory.ObjectProvider;
@@ -31,6 +33,22 @@ class ComplexCoordinatePersistenceConfiguration {
 			new JdbcComplexRelationRepository(jdbcClient),
 			new ComplexRelationClassifier()
 		);
+	}
+
+	@Bean
+	@ConditionalOnBean(JdbcClient.class)
+	ComplexDisplayCoordinateProjectionRepository complexDisplayCoordinateProjectionRepository(
+		ObjectProvider<JdbcClient> jdbcClientProvider
+	) {
+		return new JdbcComplexDisplayCoordinateProjectionRepository(requiredJdbcClient(jdbcClientProvider));
+	}
+
+	@Bean
+	@ConditionalOnBean(JdbcClient.class)
+	ComplexDisplayCoordinateProjectionService complexDisplayCoordinateProjectionService(
+		ComplexDisplayCoordinateProjectionRepository repository
+	) {
+		return new ComplexDisplayCoordinateProjectionService(repository);
 	}
 
 	private JdbcClient requiredJdbcClient(ObjectProvider<JdbcClient> jdbcClientProvider) {

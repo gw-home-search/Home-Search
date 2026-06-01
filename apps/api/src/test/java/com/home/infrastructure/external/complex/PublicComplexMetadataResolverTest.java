@@ -281,6 +281,72 @@ class PublicComplexMetadataResolverTest {
 	}
 
 	@Test
+	@DisplayName("ODC 단일 metadata가 있으면 building 후보가 애매해도 ODC metadata를 보존한다")
+	void preservesOdcloudMetadataWhenBuildingSupplementIsAmbiguous() {
+		RestClient.Builder odcloudBuilder = RestClient.builder().baseUrl("https://odcloud.example.test");
+		MockRestServiceServer odcloudServer = MockRestServiceServer.bindTo(odcloudBuilder).build();
+		RestClient.Builder bldBuilder = RestClient.builder().baseUrl("https://apis.example.test");
+		MockRestServiceServer bldServer = MockRestServiceServer.bindTo(bldBuilder).build();
+		PublicComplexMetadataResolver resolver = new PublicComplexMetadataResolver(
+			odcloudBuilder.build(),
+			"https://odcloud.example.test",
+			"ODC-KEY",
+			ODC_APT_PATH,
+			bldBuilder.build(),
+			"https://apis.example.test",
+			"BLD-KEY",
+			"/1613000/BldRgstHubService/getBrRecapTitleInfo",
+			"/1613000/BldRgstHubService/getBrTitleInfo",
+			true
+		);
+
+		odcloudServer.expect(requestTo(startsWith("https://odcloud.example.test" + ODC_APT_PATH)))
+			.andRespond(withSuccess("""
+				{
+				  "data": [
+				    {
+				      "PNU": "1168010300107770001",
+				      "DONG_CNT": 8,
+				      "UNIT_CNT": 740,
+				      "USEAPR_DT": "20150320"
+				    }
+				  ]
+				}
+				""", MediaType.APPLICATION_JSON));
+		bldServer.expect(requestTo(startsWith("https://apis.example.test/1613000/BldRgstHubService/getBrRecapTitleInfo")))
+			.andRespond(withSuccess("""
+				{
+				  "response": {
+				    "body": {
+				      "items": {
+				        "item": [
+				          {"mainPurpsCd": "02000", "hhldCnt": 740},
+				          {"mainPurpsCd": "02000", "hhldCnt": 741}
+				        ]
+				      }
+				    }
+				  }
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		var resolution = resolver.resolve(new ComplexMetadataLookup(
+			501L,
+			"APT-LIVE-501",
+			"Live Sample Apartment",
+			"1168010300107770001",
+			"Sample address"
+		));
+
+		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.RESOLVED);
+		assertThat(resolution.failureKind()).isNull();
+		assertThat(resolution.metadata().dongCnt()).isEqualTo(8);
+		assertThat(resolution.metadata().unitCnt()).isEqualTo(740);
+		assertThat(resolution.metadata().useDate()).isEqualTo(LocalDate.of(2015, 3, 20));
+		odcloudServer.verify();
+		bldServer.verify();
+	}
+
+	@Test
 	@DisplayName("blank service key는 HTTP lookup을 건너뛰고 input insufficient unavailable을 반환한다")
 	void blankServiceKeySkipsHttpLookup() {
 		RestClient odcloudClient = RestClient.builder()

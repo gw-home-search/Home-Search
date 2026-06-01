@@ -48,6 +48,24 @@ class JdbcRawTradeIngestRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("raw status 조회는 DB query 단계에서 limit을 적용한다")
+	void findsRawByStatusWithDatabaseLimit() {
+		JdbcRawTradeIngestRepository repository = new JdbcRawTradeIngestRepository(jdbcClient);
+		mark(repository, raw(repository, "match-1", "11680", "202512", "{}"),
+			RawTradeIngestStatus.MATCH_FAILED, "first");
+		mark(repository, raw(repository, "match-2", "11680", "202512", "{}"),
+			RawTradeIngestStatus.MATCH_FAILED, "second");
+		mark(repository, raw(repository, "match-3", "11680", "202512", "{}"),
+			RawTradeIngestStatus.MATCH_FAILED, "third");
+
+		List<RawTradeIngestRecord> failures = repository.findByStatus(RawTradeIngestStatus.MATCH_FAILED, 2);
+
+		assertThat(failures).hasSize(2);
+		assertThat(failures).extracting(RawTradeIngestRecord::sourceKey)
+			.containsExactly("match-1", "match-2");
+	}
+
+	@Test
 	@DisplayName("failure inspection은 source와 deal month별 safe read-only evidence만 summarize한다")
 	void summarizesFailureEvidenceWithoutRawPayloadOrSourceKey() {
 		JdbcRawTradeIngestRepository repository = new JdbcRawTradeIngestRepository(jdbcClient);

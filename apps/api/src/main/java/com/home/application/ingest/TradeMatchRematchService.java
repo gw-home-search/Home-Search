@@ -34,13 +34,8 @@ public class TradeMatchRematchService {
 			return TradeMatchRematchResult.empty();
 		}
 		TradeMatchRematchResult result = TradeMatchRematchResult.empty();
-		int processed = 0;
-		for (RawTradeIngestRecord raw : rawTradeIngestRepository.findByStatus(RawTradeIngestStatus.MATCH_FAILED)) {
-			if (processed >= limit) {
-				break;
-			}
+		for (RawTradeIngestRecord raw : rawTradeIngestRepository.findByStatus(RawTradeIngestStatus.MATCH_FAILED, limit)) {
 			result = rematchOne(raw, result);
-			processed++;
 		}
 		return result;
 	}

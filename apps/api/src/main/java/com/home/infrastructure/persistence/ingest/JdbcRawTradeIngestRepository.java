@@ -131,6 +131,24 @@ public class JdbcRawTradeIngestRepository implements RawTradeIngestRepository {
 	}
 
 	@Override
+	public List<RawTradeIngestRecord> findByStatus(RawTradeIngestStatus status, int limit) {
+		if (limit <= 0) {
+			return List.of();
+		}
+		return jdbcClient.sql("""
+			SELECT *
+			FROM raw_trade_ingest
+			WHERE status = :status
+			ORDER BY id
+			LIMIT :limit
+			""")
+			.param("status", status.name())
+			.param("limit", limit)
+			.query(this::mapRecord)
+			.list();
+	}
+
+	@Override
 	public List<RawTradeIngestFailureSummary> summarizeFailures(RawTradeIngestFailureQuery query) {
 		Objects.requireNonNull(query, "query is required");
 		return jdbcClient.sql("""

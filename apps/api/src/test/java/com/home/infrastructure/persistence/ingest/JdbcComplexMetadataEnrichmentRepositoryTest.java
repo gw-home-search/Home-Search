@@ -1,6 +1,7 @@
 package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -17,6 +18,7 @@ import com.home.application.ingest.ComplexMetadataResolution;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 
 class JdbcComplexMetadataEnrichmentRepositoryTest extends JdbcPostgresTestSupport {
 
@@ -205,6 +207,16 @@ class JdbcComplexMetadataEnrichmentRepositoryTest extends JdbcPostgresTestSuppor
 		assertThat(repository.findPending(10))
 			.extracting(ComplexMetadataLookup::complexId)
 			.containsExactly(501L, 502L);
+	}
+
+	@Test
+	@DisplayName("parcel pnu는 신규 저장 시 19자리 숫자만 허용한다")
+	void rejectsInvalidParcelPnuForNewRows() {
+		assertThatThrownBy(() -> jdbcClient.sql("""
+			INSERT INTO parcel (pnu, address, latitude, longitude)
+			VALUES ('invalid-pnu', 'Invalid address', 37.5123, 127.0456)
+			""").update())
+			.isInstanceOf(DataIntegrityViolationException.class);
 	}
 
 	private void seedPendingComplex() {

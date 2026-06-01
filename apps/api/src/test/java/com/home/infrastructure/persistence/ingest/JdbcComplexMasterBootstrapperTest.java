@@ -74,6 +74,29 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("RTMS bootstrap은 region 8자리 법정동 코드 fallback으로 parcel address를 저장한다")
+	void bootstrapsParcelAddressFromRegionFallbackCodeAndPnuLotNumber() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '11680103', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
+			jdbcClient,
+			(pnu, item) -> expectedPnu().equals(pnu) ? Optional.of(new ParcelCoordinate(
+				new BigDecimal("37.5012345"),
+				new BigDecimal("127.0543210")
+			)) : Optional.empty()
+		);
+
+		var result = bootstrapper.bootstrap(rtmsItem("APT-LIVE-501", "Live Sample Apartment", "777-1"));
+
+		assertThat(result.changed()).isTrue();
+		assertThat(parcelRow(expectedPnu()))
+			.containsEntry("region_id", 1L)
+			.containsEntry("address", "Sample-dong 777-1");
+	}
+
+	@Test
 	@DisplayName("RTMS bootstrap은 이미 존재하는 complex의 metadata를 동기 보강하지 않고 alias만 갱신한다")
 	void leavesExistingComplexMetadataPendingAndUpsertsAlias() {
 		jdbcClient.sql("""
@@ -241,6 +264,22 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 			""")
 			.param("pnu", pnu)
 			.query(Long.class)
+			.single();
+	}
+
+	private java.util.Map<String, Object> parcelRow(String pnu) {
+		return jdbcClient.sql("""
+			SELECT region_id, address
+			FROM parcel
+			WHERE pnu = :pnu
+			""")
+			.param("pnu", pnu)
+			.query((resultSet, rowNumber) -> {
+				java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+				row.put("region_id", resultSet.getObject("region_id", Long.class));
+				row.put("address", resultSet.getString("address"));
+				return row;
+			})
 			.single();
 	}
 }

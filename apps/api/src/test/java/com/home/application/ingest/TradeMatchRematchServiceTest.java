@@ -30,6 +30,7 @@ class TradeMatchRematchServiceTest {
 
 		assertThat(result).isEqualTo(TradeMatchRematchResult.empty());
 		assertThat(rawRepository.findByStatusCalls).isEmpty();
+		assertThat(rawRepository.findByStatusLimitCalls).isEmpty();
 	}
 
 	@Test
@@ -202,6 +203,12 @@ class TradeMatchRematchServiceTest {
 
 		assertThat(result.processed()).isEqualTo(1);
 		assertThat(result.normalized()).isEqualTo(1);
+		assertThat(rawRepository.findByStatusLimitCalls)
+			.singleElement()
+			.satisfies(call -> {
+				assertThat(call.status()).isEqualTo(RawTradeIngestStatus.MATCH_FAILED);
+				assertThat(call.limit()).isEqualTo(1);
+			});
 		assertThat(normalizedRepository.insertedCommands)
 			.singleElement()
 			.satisfies(command -> assertThat(command.floor()).isNull());
@@ -308,6 +315,7 @@ class TradeMatchRematchServiceTest {
 		private final Map<Long, RawTradeIngestRecord> records = new LinkedHashMap<>();
 		private final List<StatusUpdate> updatedStatuses = new ArrayList<>();
 		private final List<RawTradeIngestStatus> findByStatusCalls = new ArrayList<>();
+		private final List<StatusLimitCall> findByStatusLimitCalls = new ArrayList<>();
 
 		private FakeRawRepository(List<RawTradeIngestRecord> records) {
 			records.forEach(record -> this.records.put(record.id(), record));
@@ -341,6 +349,15 @@ class TradeMatchRematchServiceTest {
 			findByStatusCalls.add(status);
 			return records.values().stream()
 				.filter(record -> record.status() == status)
+				.toList();
+		}
+
+		@Override
+		public List<RawTradeIngestRecord> findByStatus(RawTradeIngestStatus status, int limit) {
+			findByStatusLimitCalls.add(new StatusLimitCall(status, limit));
+			return records.values().stream()
+				.filter(record -> record.status() == status)
+				.limit(limit)
 				.toList();
 		}
 
@@ -391,6 +408,12 @@ class TradeMatchRematchServiceTest {
 		Long rawIngestId,
 		RawTradeIngestStatus status,
 		String failureReason
+	) {
+	}
+
+	private record StatusLimitCall(
+		RawTradeIngestStatus status,
+		int limit
 	) {
 	}
 }

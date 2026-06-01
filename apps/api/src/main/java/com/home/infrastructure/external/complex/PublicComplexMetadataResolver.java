@@ -101,7 +101,7 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 				return ComplexMetadataResolution.classify("ODC+BLD", merge(odcloud.metadata(), building.metadata()));
 			}
 			if (building.status() == ComplexMetadataStatus.AMBIGUOUS) {
-				return building;
+				return odcloud;
 			}
 			return odcloud;
 		}

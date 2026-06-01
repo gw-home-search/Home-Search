@@ -5,6 +5,7 @@ import static org.assertj.core.groups.Tuple.tuple;
 
 import java.time.LocalDate;
 
+import com.home.application.complex.ComplexRelationConfidence;
 import com.home.application.complex.ComplexRelationClassifier;
 import com.home.application.complex.ComplexRelationType;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
@@ -59,8 +60,27 @@ class JdbcComplexRelationRepositoryTest extends JdbcPostgresTestSupport {
 
 		assertThat(classifier.classify(repository.findTradeSpansByParcelId(1001L)).type())
 			.isEqualTo(ComplexRelationType.CONCURRENT);
-		assertThat(classifier.classify(repository.findTradeSpansByParcelId(1002L)).type())
-			.isEqualTo(ComplexRelationType.REDEVELOPED);
+		var redevelopment = classifier.classify(repository.findTradeSpansByParcelId(1002L));
+		assertThat(redevelopment.type()).isEqualTo(ComplexRelationType.REDEVELOPED);
+		assertThat(redevelopment.confidence()).isEqualTo(ComplexRelationConfidence.HIGH);
+	}
+
+	@Test
+	@DisplayName("complex relation classifier는 JDBC span의 거래 표본이 작으면 큰 공백도 UNKNOWN으로 남긴다")
+	void keepsUnknownForSparseJdbcTradeSpans() {
+		seedParcelComplexes();
+		seedSparseTradeParcel();
+		Long rawId = insertRawIngest("relation-sparse-trade");
+		insertTrade(rawId, 701L, LocalDate.of(2016, 1, 1), "rtms-sparse-701-1");
+		insertTrade(rawId, 702L, LocalDate.of(2020, 1, 1), "rtms-sparse-702-1");
+		JdbcComplexRelationRepository repository = new JdbcComplexRelationRepository(jdbcClient);
+		ComplexRelationClassifier classifier = new ComplexRelationClassifier();
+
+		var classification = classifier.classify(repository.findTradeSpansByParcelId(1003L));
+
+		assertThat(classification.type()).isEqualTo(ComplexRelationType.UNKNOWN);
+		assertThat(classification.confidence()).isEqualTo(ComplexRelationConfidence.NONE);
+		assertThat(classification.reason()).contains("sample too small");
 	}
 
 	private void seedParcelComplexes() {
@@ -90,6 +110,19 @@ class JdbcComplexRelationRepositoryTest extends JdbcPostgresTestSupport {
 			VALUES
 			    (601, 1002, 'COMPLEX-PK-601', 'APT-601', 'Old Apartment', DATE '1995-01-01'),
 			    (602, 1002, 'COMPLEX-PK-602', 'APT-602', 'New Apartment', DATE '2020-01-01')
+			""").update();
+	}
+
+	private void seedSparseTradeParcel() {
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (1003, 1, '1168010300101400003', 'Sparse trade address', 37.5125, 127.0458)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, use_date)
+			VALUES
+			    (701, 1003, 'COMPLEX-PK-701', 'APT-701', 'Sparse Apartment A', NULL),
+			    (702, 1003, 'COMPLEX-PK-702', 'APT-702', 'Sparse Apartment B', NULL)
 			""").update();
 	}
 

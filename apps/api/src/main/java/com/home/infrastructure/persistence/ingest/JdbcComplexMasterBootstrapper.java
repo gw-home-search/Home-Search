@@ -69,12 +69,28 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: pnu unavailable aptSeq=" + aptSeq);
 		}
 
+		String complexPk = complexPk(aptSeq);
+		Optional<Long> existingComplexIdByPk = findComplexIdByComplexPk(complexPk);
+		if (existingComplexIdByPk.isPresent()) {
+			Optional<String> complexPnu = findComplexParcelPnu(existingComplexIdByPk.get());
+			if (complexPnu.isEmpty()) {
+				return ComplexMasterBootstrapResult.skipped(
+					"master bootstrap skipped: complex parcel unavailable complexPk=" + complexPk
+				);
+			}
+			if (!pnu.get().equals(complexPnu.get())) {
+				return ComplexMasterBootstrapResult.skipped(
+					"master bootstrap skipped: complex_pk parcel pnu conflict complexPk=%s derivedPnu=%s complexPnu=%s"
+						.formatted(complexPk, pnu.get(), complexPnu.get())
+				);
+			}
+		}
+
 		Optional<Long> parcelId = findParcelId(pnu.get()).or(() -> createParcel(pnu.get(), item));
 		if (parcelId.isEmpty()) {
 			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: coordinate unavailable pnu=" + pnu.get());
 		}
 
-		String complexPk = complexPk(aptSeq);
 		if (complexPk.length() > COMPLEX_PK_MAX_LENGTH) {
 			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: complex_pk too long aptSeq=" + aptSeq);
 		}
@@ -103,6 +119,17 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			WHERE pnu = :pnu
 			""")
 			.param("pnu", pnu)
+			.query(Long.class)
+			.optional();
+	}
+
+	private Optional<Long> findComplexIdByComplexPk(String complexPk) {
+		return jdbcClient.sql("""
+			SELECT id
+			FROM complex
+			WHERE complex_pk = :complexPk
+			""")
+			.param("complexPk", complexPk)
 			.query(Long.class)
 			.optional();
 	}
@@ -213,8 +240,7 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			    :useDate
 			)
 			ON CONFLICT (complex_pk) DO UPDATE
-			SET parcel_id = EXCLUDED.parcel_id,
-			    apt_seq = COALESCE(complex.apt_seq, EXCLUDED.apt_seq),
+			SET apt_seq = COALESCE(complex.apt_seq, EXCLUDED.apt_seq),
 			    name = complex.name,
 			    trade_name = COALESCE(complex.trade_name, EXCLUDED.trade_name),
 			    dong_cnt = COALESCE(complex.dong_cnt, EXCLUDED.dong_cnt),

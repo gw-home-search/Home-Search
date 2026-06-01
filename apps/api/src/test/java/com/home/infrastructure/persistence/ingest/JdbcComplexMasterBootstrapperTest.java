@@ -110,6 +110,35 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 		assertThat(complexAliasCount("APT-501", "RTMS_APT_NAME", "sampleapartment")).isEqualTo(1);
 	}
 
+	@Test
+	@DisplayName("RTMS bootstrap은 complex_pk 충돌 시 기존 complex의 parcel_id를 재할당하지 않는다")
+	void doesNotReassignExistingComplexPkToDifferentParcel() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (1001, 1, '1168010300101400001', 'Original address', 37.5123, 127.0456)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name)
+			VALUES (501, 1001, 'RTMS:APT-501', NULL, 'Original Apartment', 'Original Apartment')
+			""").update();
+		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
+			jdbcClient,
+			(pnu, item) -> Optional.of(new ParcelCoordinate(new BigDecimal("37.5012345"), new BigDecimal("127.0543210")))
+		);
+
+		var result = bootstrapper.bootstrap(rtmsItem("APT-501", "Moved Apartment", "777-1"));
+
+		assertThat(result.attempted()).isTrue();
+		assertThat(result.failureReason()).contains("complex_pk parcel pnu conflict");
+		assertThat(complexParcelPnu("RTMS:APT-501")).isEqualTo("1168010300101400001");
+		assertThat(parcelCount("1168010300107770001")).isZero();
+		assertThat(complexAliasCount("APT-501", "RTMS_APT_NAME", "movedapartment")).isZero();
+	}
+
 	private OpenApiTradeItem rtmsItem(String aptSeq, String aptName, String jibun) {
 		return new OpenApiTradeItem(
 			"101",
@@ -188,6 +217,29 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 			.param("aptSeq", aptSeq)
 			.param("aliasType", aliasType)
 			.param("normalizedName", normalizedName)
+			.query(Long.class)
+			.single();
+	}
+
+	private String complexParcelPnu(String complexPk) {
+		return jdbcClient.sql("""
+			SELECT p.pnu
+			FROM complex c
+			JOIN parcel p ON p.id = c.parcel_id
+			WHERE c.complex_pk = :complexPk
+			""")
+			.param("complexPk", complexPk)
+			.query(String.class)
+			.single();
+	}
+
+	private long parcelCount(String pnu) {
+		return jdbcClient.sql("""
+			SELECT count(*)
+			FROM parcel
+			WHERE pnu = :pnu
+			""")
+			.param("pnu", pnu)
 			.query(Long.class)
 			.single();
 	}

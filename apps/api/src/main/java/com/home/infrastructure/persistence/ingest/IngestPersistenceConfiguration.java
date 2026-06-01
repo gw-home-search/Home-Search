@@ -8,10 +8,14 @@ import com.home.application.ingest.ComplexMetadataEnrichmentService;
 import com.home.application.ingest.ComplexMasterBootstrapper;
 import com.home.application.ingest.NormalizedTradeRepository;
 import com.home.application.ingest.OpenApiTradeIngestService;
+import com.home.application.ingest.RawIngestReconciliationRepository;
+import com.home.application.ingest.RawIngestReconciliationService;
+import com.home.application.ingest.RawTradeItemParser;
 import com.home.application.ingest.RawTradeIngestRepository;
 import com.home.application.ingest.RtmsIngestRunReportRepository;
 import com.home.application.ingest.RtmsIngestRunRepository;
 import com.home.application.ingest.TradeIngestMetrics;
+import com.home.application.ingest.TradeMatchRematchService;
 import com.home.application.ingest.TradeMatchEvidenceRepository;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -141,6 +145,65 @@ class IngestPersistenceConfiguration {
 			java.time.Clock.systemUTC(),
 			yearsAhead
 		);
+	}
+
+	@Bean
+	@Lazy
+	RawIngestReconciliationRepository rawIngestReconciliationRepository(
+		ObjectProvider<JdbcClient> jdbcClientProvider
+	) {
+		return new JdbcRawIngestReconciliationRepository(requiredJdbcClient(jdbcClientProvider));
+	}
+
+	@Bean
+	@Lazy
+	RawIngestReconciliationService rawIngestReconciliationService(
+		RawIngestReconciliationRepository rawIngestReconciliationRepository,
+		RawTradeIngestRepository rawTradeIngestRepository
+	) {
+		return new RawIngestReconciliationService(rawIngestReconciliationRepository, rawTradeIngestRepository);
+	}
+
+	@Bean
+	@ConditionalOnProperty(name = "home.ingest.raw-reconcile.enabled", havingValue = "true")
+	ApplicationRunner rawIngestReconciliationRunner(
+		RawIngestReconciliationService rawIngestReconciliationService,
+		@Value("${home.ingest.raw-reconcile.batch-size:100}") int batchSize
+	) {
+		return new RawIngestReconciliationRunner(rawIngestReconciliationService, batchSize);
+	}
+
+	@Bean
+	@Lazy
+	RawTradeItemParser rawTradeItemParser(ObjectMapper objectMapper) {
+		return new RtmsRawTradeItemParser(objectMapper);
+	}
+
+	@Bean
+	@Lazy
+	TradeMatchRematchService tradeMatchRematchService(
+		RawTradeIngestRepository rawTradeIngestRepository,
+		NormalizedTradeRepository normalizedTradeRepository,
+		ComplexMatcher complexMatcher,
+		TradeMatchEvidenceRepository tradeMatchEvidenceRepository,
+		RawTradeItemParser rawTradeItemParser
+	) {
+		return new TradeMatchRematchService(
+			rawTradeIngestRepository,
+			normalizedTradeRepository,
+			complexMatcher,
+			tradeMatchEvidenceRepository,
+			rawTradeItemParser
+		);
+	}
+
+	@Bean
+	@ConditionalOnProperty(name = "home.ingest.match-rematch.enabled", havingValue = "true")
+	ApplicationRunner tradeMatchRematchRunner(
+		TradeMatchRematchService tradeMatchRematchService,
+		@Value("${home.ingest.match-rematch.batch-size:100}") int batchSize
+	) {
+		return new TradeMatchRematchRunner(tradeMatchRematchService, batchSize);
 	}
 
 	@Bean

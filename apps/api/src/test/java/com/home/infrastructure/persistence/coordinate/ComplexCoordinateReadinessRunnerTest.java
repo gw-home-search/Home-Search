@@ -9,6 +9,7 @@ import com.home.application.coordinate.ComplexCoordinateReadinessRepository;
 import com.home.application.coordinate.ComplexCoordinateReadinessResult;
 import com.home.application.coordinate.ComplexCoordinateReadinessService;
 import com.home.application.coordinate.ComplexDisplayCoordinateProjectionService;
+import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,20 @@ class ComplexCoordinateReadinessRunnerTest {
 		assertThat(service.stageLimit).isEqualTo(3);
 		assertThat(service.resolveLimit).isEqualTo(5);
 		assertThat(service.projectLimit).isEqualTo(7);
+	}
+
+	@Test
+	@DisplayName("coordinate readiness runner는 RTMS one-shot ingest 이후 실행된다")
+	void runnerRunsAfterRtmsOneShotIngest() {
+		ComplexCoordinateReadinessRunner runner = new ComplexCoordinateReadinessRunner(
+			new FakeReadinessService(),
+			3,
+			5,
+			7
+		);
+
+		assertThat(runner.getOrder()).isEqualTo(ApplicationRunnerOrders.COORDINATE_READINESS);
+		assertThat(runner.getOrder()).isGreaterThan(ApplicationRunnerOrders.RTMS_ONE_SHOT_INGEST);
 	}
 
 	private static final class FakeReadinessService extends ComplexCoordinateReadinessService {

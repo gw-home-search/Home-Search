@@ -1,13 +1,15 @@
 package com.home.infrastructure.external.rtms;
 
 import com.home.application.ingest.IngestResult;
+import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.Ordered;
 
-class RtmsOneShotIngestApplicationRunner implements ApplicationRunner {
+class RtmsOneShotIngestApplicationRunner implements ApplicationRunner, Ordered {
 
 	private static final Logger log = LoggerFactory.getLogger(RtmsOneShotIngestApplicationRunner.class);
 
@@ -49,6 +51,11 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner {
 			return;
 		}
 		runOneShot();
+	}
+
+	@Override
+	public int getOrder() {
+		return ApplicationRunnerOrders.RTMS_ONE_SHOT_INGEST;
 	}
 
 	private void runOneShot() {

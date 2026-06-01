@@ -12,6 +12,7 @@ import java.util.List;
 import com.home.application.ingest.IngestResult;
 import com.home.application.ingest.OpenApiTradeIngestBatch;
 import com.home.application.ingest.OpenApiTradeIngestService;
+import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -108,6 +109,20 @@ class RtmsOneShotTradeIngestRunnerTest {
 		applicationRunner.run(new DefaultApplicationArguments());
 
 		verifyNoInteractions(runner);
+	}
+
+	@Test
+	@DisplayName("RTMS one-shot application runner는 coordinate readiness보다 먼저 실행된다")
+	void rtmsApplicationRunnerRunsBeforeCoordinateReadiness() {
+		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
+		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
+			runner,
+			new RtmsOneShotIngestProperties(false, null, null, null, false),
+			rtmsProperties("DUMMY")
+		);
+
+		assertThat(applicationRunner.getOrder()).isEqualTo(ApplicationRunnerOrders.RTMS_ONE_SHOT_INGEST);
+		assertThat(applicationRunner.getOrder()).isLessThan(ApplicationRunnerOrders.COORDINATE_READINESS);
 	}
 
 	@Test

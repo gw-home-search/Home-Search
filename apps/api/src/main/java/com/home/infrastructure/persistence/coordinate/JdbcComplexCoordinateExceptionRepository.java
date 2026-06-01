@@ -9,15 +9,18 @@ import java.util.Set;
 
 import com.home.application.coordinate.BuildingFootprintCandidate;
 import com.home.application.coordinate.ComplexCoordinateCaseCandidate;
+import com.home.application.coordinate.ComplexCoordinateCaseStatus;
 import com.home.application.coordinate.ComplexCoordinateCaseUpdate;
 import com.home.application.coordinate.ComplexCoordinateExceptionRepository;
 import com.home.application.coordinate.ComplexCoordinateParcelTargets;
+import com.home.application.coordinate.ComplexCoordinateReadinessRepository;
 import com.home.application.coordinate.ComplexCoordinateTarget;
 import com.home.application.coordinate.ResolvedDisplayCoordinate;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
-public class JdbcComplexCoordinateExceptionRepository implements ComplexCoordinateExceptionRepository {
+public class JdbcComplexCoordinateExceptionRepository
+	implements ComplexCoordinateExceptionRepository, ComplexCoordinateReadinessRepository {
 
 	private final JdbcClient jdbcClient;
 
@@ -47,6 +50,32 @@ public class JdbcComplexCoordinateExceptionRepository implements ComplexCoordina
 			.param("limit", limit)
 			.query((resultSet, rowNumber) -> new ComplexCoordinateCaseCandidate(resultSet.getLong("parcel_id")))
 			.list();
+	}
+
+	@Override
+	public List<Long> findPendingCaseParcelIds(int limit) {
+		if (limit < 1) {
+			return List.of();
+		}
+		return jdbcClient.sql("""
+			SELECT parcel_id
+			FROM complex_coordinate_case
+			WHERE status = 'PENDING'
+			ORDER BY id
+			LIMIT :limit
+			""")
+			.param("limit", limit)
+			.query(Long.class)
+			.list();
+	}
+
+	@Override
+	public void markCaseFailed(Long parcelId, String reason) {
+		saveCaseUpdate(new ComplexCoordinateCaseUpdate(
+			parcelId,
+			ComplexCoordinateCaseStatus.FAILED,
+			reason
+		));
 	}
 
 	@Override

@@ -5,6 +5,7 @@ import com.home.infrastructure.persistence.ingest.ParcelCoordinateSnapshotReposi
 import com.home.infrastructure.persistence.ingest.SnapshotFirstParcelCoordinateResolver;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
@@ -52,7 +53,14 @@ class VworldExternalApiConfiguration {
 	@Bean
 	@Primary
 	@Lazy
-	ParcelCoordinateResolver parcelCoordinateResolver(ParcelCoordinateSnapshotRepository snapshotRepository) {
-		return new SnapshotFirstParcelCoordinateResolver(snapshotRepository, ParcelCoordinateResolver.empty());
+	ParcelCoordinateResolver parcelCoordinateResolver(
+		ParcelCoordinateSnapshotRepository snapshotRepository,
+		@Qualifier("vworldParcelCoordinateResolver") ParcelCoordinateResolver vworldParcelCoordinateResolver,
+		@Value("${home.coordinate.vworld-fallback.enabled:false}") boolean vworldFallbackEnabled
+	) {
+		ParcelCoordinateResolver fallbackResolver = vworldFallbackEnabled
+			? vworldParcelCoordinateResolver
+			: ParcelCoordinateResolver.empty();
+		return new SnapshotFirstParcelCoordinateResolver(snapshotRepository, fallbackResolver);
 	}
 }

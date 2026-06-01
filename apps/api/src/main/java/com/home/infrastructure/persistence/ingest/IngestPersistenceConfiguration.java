@@ -68,14 +68,12 @@ class IngestPersistenceConfiguration {
 
 	@Bean
 	@Lazy
-	@ConditionalOnBean(JdbcClient.class)
 	RtmsIngestRunRepository rtmsIngestRunRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
 		return new JdbcRtmsIngestRunRepository(requiredJdbcClient(jdbcClientProvider));
 	}
 
 	@Bean
 	@Lazy
-	@ConditionalOnBean(JdbcClient.class)
 	RtmsIngestRunReportRepository rtmsIngestRunReportRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
 		return new JdbcRtmsIngestRunReportRepository(requiredJdbcClient(jdbcClientProvider));
 	}

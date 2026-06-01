@@ -24,6 +24,7 @@ public class JdbcComplexRelationRepository implements ComplexRelationRepository 
 		return jdbcClient.sql("""
 			SELECT
 			    c.id AS complex_id,
+			    c.complex_pk,
 			    c.apt_seq,
 			    c.name,
 			    MIN(t.deal_date) AS first_deal,
@@ -34,12 +35,13 @@ public class JdbcComplexRelationRepository implements ComplexRelationRepository 
 			LEFT JOIN trade t ON t.complex_id = c.id
 			    AND t.deleted_at IS NULL
 			WHERE c.parcel_id = :parcelId
-			GROUP BY c.id, c.apt_seq, c.name, c.use_date
+			GROUP BY c.id, c.complex_pk, c.apt_seq, c.name, c.use_date
 			ORDER BY c.id
 			""")
 			.param("parcelId", parcelId)
 			.query((resultSet, rowNumber) -> new ComplexTradeSpan(
 				resultSet.getLong("complex_id"),
+				resultSet.getString("complex_pk"),
 				resultSet.getString("apt_seq"),
 				resultSet.getString("name"),
 				toLocalDate(resultSet.getDate("first_deal")),

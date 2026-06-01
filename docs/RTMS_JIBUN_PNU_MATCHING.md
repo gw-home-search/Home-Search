@@ -30,6 +30,8 @@ Canonical source mapping:
 | RTMS JSON item field | Home Search field | Purpose |
 | --- | --- | --- |
 | `item.jibun` | `OpenApiTradeItem.jibun` | raw land lot text |
+| `item.bonbun` | `OpenApiTradeItem.bonbun` | source main lot number fallback |
+| `item.bubun` | `OpenApiTradeItem.bubun` | source sub lot number fallback |
 | `item.sggCd` | `OpenApiTradeItem.sggCd` | legal district prefix |
 | `item.umdCd` | `OpenApiTradeItem.umdCd` | legal dong code |
 | `item.aptNm` | `OpenApiTradeItem.aptName` | observed apartment name |
@@ -64,8 +66,16 @@ Examples:
 | `11680` | `10300` | `140` | `1168010300101400000` |
 | `11680` | `10300` | `산 12-3` | `1168010300200120003` |
 
-Invalid cases include blank `jibun`, non-numeric lot parts, lot parts longer
-than four digits, and non-5-digit `sggCd` or `umdCd`.
+When `item.jibun` is a block-style value that cannot be parsed as numeric lot
+text, the normalizer may derive `derived_pnu` from source `item.bonbun` and
+`item.bubun` if those source lot parts are numeric and at most four digits. The
+raw and normalized `jibun` evidence remain the original source text. This turns
+rows such as `BL-3-1` or `가-238` from `PNU_UNAVAILABLE` into a derived PNU that
+can still be matched later by coordinate or complex-master coverage.
+
+Invalid cases include blank `jibun` without usable source lot parts,
+non-numeric lot parts, lot parts longer than four digits, and non-5-digit
+`sggCd` or `umdCd`.
 
 ## Display-Safe Trade Rule
 
@@ -178,6 +188,8 @@ The implementation must cover each policy branch with deterministic tests:
 - Regression tests for `PNU_CONFLICT`, `NAME_CONFLICT`, `AMBIGUOUS`,
   `PNU_UNAVAILABLE`, `UNMATCHED`, `MATCHED`, `MATCHED_NAME_VARIANT`, and
   `MATCHED_PNU_SGG_CORRECTED`.
+- Regression tests showing block-style `jibun` can still produce PNU evidence
+  from RTMS source `bonbun` and `bubun`.
 
 No test may require live RTMS, VWorld, Kakao, production data, secrets, or a
 manual admin UI.

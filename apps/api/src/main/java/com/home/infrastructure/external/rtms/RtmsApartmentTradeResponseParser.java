@@ -85,7 +85,9 @@ public class RtmsApartmentTradeResponseParser {
 				objectMapper.writeValueAsString(node),
 				text(node.path("cdealType")),
 				text(node.path("cdealDay")),
-				text(node.path("rgstDate"))
+				text(node.path("rgstDate")),
+				text(node.path("bonbun")),
+				text(node.path("bubun"))
 			));
 		}
 		return List.copyOf(items);

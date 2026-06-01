@@ -41,7 +41,9 @@ public class RtmsRawTradeItemParser implements RawTradeItemParser {
 				raw.payload(),
 				text(node, "cdealType"),
 				text(node, "cdealDay"),
-				text(node, "rgstDate")
+				text(node, "rgstDate"),
+				text(node, "bonbun"),
+				text(node, "bubun")
 			));
 		}
 		catch (IOException | IllegalArgumentException exception) {

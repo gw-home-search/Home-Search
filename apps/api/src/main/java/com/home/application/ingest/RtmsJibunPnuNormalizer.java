@@ -1,5 +1,6 @@
 package com.home.application.ingest;
 
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -33,7 +34,8 @@ public final class RtmsJibunPnuNormalizer {
 		String lotText = normalizedJibun.replace("산", "");
 		Matcher matcher = JIBUN_PATTERN.matcher(lotText);
 		if (!matcher.matches()) {
-			return RtmsJibunPnu.unavailable(rawJibun, normalizedJibun, sggCd, umdCd, "invalid jibun");
+			return sourceLotParts(item, rawJibun, normalizedJibun, sggCd, umdCd, landCode)
+				.orElseGet(() -> RtmsJibunPnu.unavailable(rawJibun, normalizedJibun, sggCd, umdCd, "invalid jibun"));
 		}
 		String bon = matcher.group(1);
 		String bu = matcher.group(2) == null ? "0" : matcher.group(2);
@@ -41,6 +43,35 @@ public final class RtmsJibunPnuNormalizer {
 			return RtmsJibunPnu.unavailable(rawJibun, normalizedJibun, sggCd, umdCd, "jibun part too long");
 		}
 		return RtmsJibunPnu.available(rawJibun, normalizedJibun, sggCd, umdCd, landCode, pad4(bon), pad4(bu));
+	}
+
+	private static Optional<RtmsJibunPnu> sourceLotParts(
+		OpenApiTradeItem item,
+		String rawJibun,
+		String normalizedJibun,
+		String sggCd,
+		String umdCd,
+		String landCode
+	) {
+		String bon = trimToNull(item.bonbun());
+		String bu = trimToNull(item.bubun());
+		if (!validLotPart(bon) || (bu != null && !validLotPart(bu))) {
+			return Optional.empty();
+		}
+		String bubun = bu == null ? "0" : bu;
+		return Optional.of(RtmsJibunPnu.available(
+			rawJibun,
+			normalizedJibun,
+			sggCd,
+			umdCd,
+			landCode,
+			pad4(bon),
+			pad4(bubun)
+		));
+	}
+
+	private static boolean validLotPart(String value) {
+		return value != null && value.length() <= 4 && value.chars().allMatch(Character::isDigit);
 	}
 
 	private static boolean validDistrictCode(String value) {

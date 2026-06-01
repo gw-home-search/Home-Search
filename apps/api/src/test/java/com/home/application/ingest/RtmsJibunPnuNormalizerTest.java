@@ -79,7 +79,31 @@ class RtmsJibunPnuNormalizerTest {
 		assertThat(pnu.pnuUnavailableReason()).isEqualTo("invalid jibun");
 	}
 
+	@Test
+	@DisplayName("block 지번이라도 RTMS source 본번과 부번이 있으면 PNU evidence를 만든다")
+	void derivesPnuFromSourceLotPartsWhenBlockJibunCannotBeParsed() {
+		RtmsJibunPnu pnu = RtmsJibunPnuNormalizer.normalize(item(
+			"11740",
+			"10200",
+			"BL-3-1",
+			"0003",
+			"0001"
+		));
+
+		assertThat(pnu.available()).isTrue();
+		assertThat(pnu.rawJibun()).isEqualTo("BL-3-1");
+		assertThat(pnu.normalizedJibun()).isEqualTo("BL-3-1");
+		assertThat(pnu.landCode()).isEqualTo("1");
+		assertThat(pnu.bonbun()).isEqualTo("0003");
+		assertThat(pnu.bubun()).isEqualTo("0001");
+		assertThat(pnu.derivedPnu()).isEqualTo("1174010200100030001");
+	}
+
 	private OpenApiTradeItem item(String sggCd, String umdCd, String jibun) {
+		return item(sggCd, umdCd, jibun, null, null);
+	}
+
+	private OpenApiTradeItem item(String sggCd, String umdCd, String jibun, String bonbun, String bubun) {
 		return new OpenApiTradeItem(
 			"101",
 			"Sample Apartment",
@@ -93,7 +117,12 @@ class RtmsJibunPnuNormalizerTest {
 			jibun,
 			sggCd,
 			umdCd,
-			"{\"jibun\":\"%s\"}".formatted(jibun)
+			"{\"jibun\":\"%s\"}".formatted(jibun),
+			null,
+			null,
+			null,
+			bonbun,
+			bubun
 		);
 	}
 }

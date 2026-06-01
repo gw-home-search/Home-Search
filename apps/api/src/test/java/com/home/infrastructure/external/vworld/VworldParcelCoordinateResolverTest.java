@@ -143,8 +143,8 @@ class VworldParcelCoordinateResolverTest {
 	}
 
 	@Test
-	@DisplayName("ambiguous matching VWorld feature는 empty coordinate를 반환한다")
-	void ambiguousMatchingFeaturesReturnEmpty() {
+	@DisplayName("동일 PNU의 여러 VWorld feature는 union bbox 중심 좌표로 resolve한다")
+	void multipleMatchingFeaturesResolveToUnionBboxCenter() {
 		VworldParcelCoordinateProperties properties = new VworldParcelCoordinateProperties(
 			"https://api.example.test",
 			"/vworld/wfs",
@@ -169,7 +169,11 @@ class VworldParcelCoordinateResolverTest {
 				}
 				""", MediaType.APPLICATION_JSON));
 
-		assertThat(resolver.resolve("1168010300107770001", rtmsItem())).isEmpty();
+		Optional<ParcelCoordinate> coordinate = resolver.resolve("1168010300107770001", rtmsItem());
+
+		assertThat(coordinate).isPresent();
+		assertThat(coordinate.get().latitude()).isEqualByComparingTo(new BigDecimal("37.2000"));
+		assertThat(coordinate.get().longitude()).isEqualByComparingTo(new BigDecimal("127.2000"));
 		server.verify();
 	}
 

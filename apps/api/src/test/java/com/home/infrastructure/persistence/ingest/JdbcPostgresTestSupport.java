@@ -8,17 +8,17 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
-@Testcontainers
 public abstract class JdbcPostgresTestSupport {
 
-	@Container
 	private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
 		DockerImageName.parse("postgis/postgis:16-3.4").asCompatibleSubstituteFor("postgres")
 	);
+
+	static {
+		POSTGRES.start();
+	}
 
 	protected DataSource dataSource;
 	protected JdbcClient jdbcClient;

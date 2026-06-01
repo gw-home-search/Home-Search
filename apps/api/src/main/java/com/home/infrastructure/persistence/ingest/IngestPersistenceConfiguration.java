@@ -122,6 +122,33 @@ class IngestPersistenceConfiguration {
 
 	@Bean
 	@Lazy
+	@ConditionalOnBean(JdbcClient.class)
+	JdbcTradePartitionMaintenanceRepository tradePartitionMaintenanceRepository(
+		ObjectProvider<JdbcClient> jdbcClientProvider
+	) {
+		return new JdbcTradePartitionMaintenanceRepository(requiredJdbcClient(jdbcClientProvider));
+	}
+
+	@Bean
+	@ConditionalOnBean(JdbcTradePartitionMaintenanceRepository.class)
+	@ConditionalOnProperty(
+		name = "home.trade.partition.maintenance.enabled",
+		havingValue = "true",
+		matchIfMissing = true
+	)
+	ApplicationRunner tradePartitionMaintenanceRunner(
+		JdbcTradePartitionMaintenanceRepository tradePartitionMaintenanceRepository,
+		@Value("${home.trade.partition.maintenance.years-ahead:5}") int yearsAhead
+	) {
+		return new TradePartitionMaintenanceRunner(
+			tradePartitionMaintenanceRepository,
+			java.time.Clock.systemUTC(),
+			yearsAhead
+		);
+	}
+
+	@Bean
+	@Lazy
 	RawIngestReconciliationRepository rawIngestReconciliationRepository(
 		ObjectProvider<JdbcClient> jdbcClientProvider
 	) {

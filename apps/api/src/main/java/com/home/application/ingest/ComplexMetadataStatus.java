@@ -4,6 +4,7 @@ public enum ComplexMetadataStatus {
 
 	PENDING,
 	RESOLVED,
+	PARTIAL,
 	AMBIGUOUS,
 	UNAVAILABLE,
 	FAILED

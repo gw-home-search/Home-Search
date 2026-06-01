@@ -24,9 +24,10 @@ class ComplexMetadataEnrichmentRunner implements ApplicationRunner {
 	public void run(ApplicationArguments args) {
 		ComplexMetadataEnrichmentResult result = enrichmentService.enrichPending(batchSize);
 		log.info(
-			"complex metadata enrichment completed processed={} resolved={} ambiguous={} unavailable={} failed={}",
+			"complex metadata enrichment completed processed={} resolved={} partial={} ambiguous={} unavailable={} failed={}",
 			result.processed(),
 			result.resolved(),
+			result.partial(),
 			result.ambiguous(),
 			result.unavailable(),
 			result.failed()

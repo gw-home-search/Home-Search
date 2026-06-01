@@ -1,5 +1,6 @@
 package com.home.application.ingest;
 
+import java.time.Instant;
 import java.util.Objects;
 
 import org.slf4j.Logger;
@@ -11,13 +12,23 @@ public class ComplexMetadataEnrichmentService {
 
 	private final ComplexMetadataEnrichmentRepository repository;
 	private final ComplexMetadataEnrichmentClient client;
+	private final ComplexMetadataRetryPolicy retryPolicy;
 
 	public ComplexMetadataEnrichmentService(
 		ComplexMetadataEnrichmentRepository repository,
 		ComplexMetadataEnrichmentClient client
 	) {
+		this(repository, client, new ComplexMetadataRetryPolicy());
+	}
+
+	ComplexMetadataEnrichmentService(
+		ComplexMetadataEnrichmentRepository repository,
+		ComplexMetadataEnrichmentClient client,
+		ComplexMetadataRetryPolicy retryPolicy
+	) {
 		this.repository = Objects.requireNonNull(repository);
 		this.client = Objects.requireNonNull(client);
+		this.retryPolicy = Objects.requireNonNull(retryPolicy);
 	}
 
 	public ComplexMetadataEnrichmentResult enrichPending(int limit) {
@@ -37,7 +48,7 @@ public class ComplexMetadataEnrichmentService {
 			if (resolution == null) {
 				resolution = ComplexMetadataResolution.unavailable(null, "complex metadata resolver returned no result");
 			}
-			repository.saveResolution(lookup.complexId(), resolution);
+			repository.saveResolution(lookup.complexId(), resolution, nextAttemptAt(lookup, resolution));
 			return resolution;
 		}
 		catch (RuntimeException exception) {
@@ -49,7 +60,7 @@ public class ComplexMetadataEnrichmentService {
 
 	private void markFailed(ComplexMetadataLookup lookup, ComplexMetadataResolution failed, RuntimeException exception) {
 		try {
-			repository.saveResolution(lookup.complexId(), failed);
+			repository.saveResolution(lookup.complexId(), failed, nextAttemptAt(lookup, failed));
 		}
 		catch (RuntimeException saveException) {
 			log.warn(
@@ -59,6 +70,16 @@ public class ComplexMetadataEnrichmentService {
 			);
 		}
 		log.warn("complex metadata enrichment failed complexId={}", lookup.complexId(), exception);
+	}
+
+	private Instant nextAttemptAt(ComplexMetadataLookup lookup, ComplexMetadataResolution resolution) {
+		int attemptNo = lookup.attempts() + 1;
+		return retryPolicy.nextAttemptAt(
+			resolution.status(),
+			resolution.failureKind(),
+			attemptNo,
+			Instant.now()
+		).orElse(null);
 	}
 
 	private String redactSensitive(String message) {

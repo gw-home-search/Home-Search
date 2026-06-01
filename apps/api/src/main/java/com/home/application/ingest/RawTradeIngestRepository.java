@@ -50,6 +50,22 @@ public interface RawTradeIngestRepository {
 	List<RawTradeIngestRecord> findByStatus(RawTradeIngestStatus status);
 
 	/**
+	 * failed match rematch처럼 대량 backlog를 배치로 소비하는 경로에서 DB 조회 단계부터 제한합니다.
+	 *
+	 * @param status 조회할 raw ingest status
+	 * @param limit 최대 조회 건수
+	 * @return status가 일치하는 raw ingest records. limit이 0 이하면 빈 목록
+	 */
+	default List<RawTradeIngestRecord> findByStatus(RawTradeIngestStatus status, int limit) {
+		if (limit <= 0) {
+			return List.of();
+		}
+		return findByStatus(status).stream()
+			.limit(limit)
+			.toList();
+	}
+
+	/**
 	 * 운영자가 raw ingest 실패/중복 evidence를 read-only summary로 조회합니다.
 	 * Raw payload와 source_key 전문은 반환하지 않습니다.
 	 *

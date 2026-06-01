@@ -36,6 +36,24 @@ class ComplexMetadataEnrichmentRunnerTest {
 		assertThat(repository.savedComplexIds).containsExactly(501L);
 	}
 
+	@Test
+	@DisplayName("metadata enrichment scheduler는 configured batch size로 due enrichment를 실행한다")
+	void schedulerExecutesDueEnrichmentWithConfiguredBatchSize() {
+		FakeRepository repository = new FakeRepository(List.of(
+			lookup(501),
+			lookup(502)
+		));
+		ComplexMetadataEnrichmentService service = new ComplexMetadataEnrichmentService(
+			repository,
+			lookup -> ComplexMetadataResolution.partial("ODC", ComplexMetadata.empty())
+		);
+		ComplexMetadataEnrichmentScheduler scheduler = new ComplexMetadataEnrichmentScheduler(service, 1);
+
+		scheduler.runDue();
+
+		assertThat(repository.savedComplexIds).containsExactly(501L);
+	}
+
 	private ComplexMetadataLookup lookup(long complexId) {
 		return new ComplexMetadataLookup(
 			complexId,

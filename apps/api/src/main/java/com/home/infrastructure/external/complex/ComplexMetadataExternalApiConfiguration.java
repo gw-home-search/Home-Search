@@ -9,6 +9,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.web.client.RestClient;
 
 @Configuration(proxyBeanMethods = false)
@@ -54,6 +55,20 @@ class ComplexMetadataExternalApiConfiguration {
 		@Value("${complex.metadata.enrich.batch-size:100}") int batchSize
 	) {
 		return new ComplexMetadataEnrichmentRunner(enrichmentService, batchSize);
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	@EnableScheduling
+	@ConditionalOnProperty(name = "complex.metadata.enrich.scheduler.enabled", havingValue = "true")
+	static class ComplexMetadataEnrichmentSchedulingConfiguration {
+
+		@Bean
+		ComplexMetadataEnrichmentScheduler complexMetadataEnrichmentScheduler(
+			ComplexMetadataEnrichmentService enrichmentService,
+			@Value("${complex.metadata.enrich.batch-size:100}") int batchSize
+		) {
+			return new ComplexMetadataEnrichmentScheduler(enrichmentService, batchSize);
+		}
 	}
 
 	private RestClient buildRestClient(String baseUrl, int connectTimeoutMillis, int readTimeoutMillis) {

@@ -151,10 +151,14 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 		if (coordinate.isEmpty()) {
 			return Optional.empty();
 		}
+		Optional<RegionLookup> region = findRegion(item);
+		String address = region.flatMap(candidate -> RtmsParcelAddressFormatter.format(candidate.name(), pnu))
+			.orElse(null);
 		return jdbcClient.sql("""
 			INSERT INTO parcel (
 			    region_id,
 			    pnu,
+			    address,
 			    latitude,
 			    longitude,
 			    geom
@@ -162,6 +166,7 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			VALUES (
 			    :regionId,
 			    :pnu,
+			    :address,
 			    :latitude,
 			    :longitude,
 			    CASE
@@ -171,14 +176,16 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			)
 			ON CONFLICT (pnu) DO UPDATE
 			SET region_id = COALESCE(parcel.region_id, EXCLUDED.region_id),
+			    address = COALESCE(parcel.address, EXCLUDED.address),
 			    latitude = EXCLUDED.latitude,
 			    longitude = EXCLUDED.longitude,
 			    geom = COALESCE(EXCLUDED.geom, parcel.geom),
 			    updated_at = now()
 			RETURNING id
 			""")
-			.param("regionId", findRegionId(item).orElse(null))
+			.param("regionId", region.map(RegionLookup::id).orElse(null))
 			.param("pnu", pnu)
+			.param("address", address)
 			.param("latitude", coordinate.get().latitude())
 			.param("longitude", coordinate.get().longitude())
 			.param("geometryWkt", coordinate.get().geometryWkt())
@@ -186,20 +193,35 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			.optional();
 	}
 
-	private Optional<Long> findRegionId(OpenApiTradeItem item) {
+	private Optional<RegionLookup> findRegion(OpenApiTradeItem item) {
 		String sggCd = trimToNull(item.sggCd());
 		String umdCd = trimToNull(item.umdCd());
 		if (sggCd == null || umdCd == null) {
 			return Optional.empty();
 		}
+		String fullCode = sggCd + umdCd;
+		String compactCode = compactRegionCode(sggCd, umdCd);
 		return jdbcClient.sql("""
-			SELECT id
+			SELECT id, name
 			FROM region
-			WHERE code = :code
+			WHERE code IN (:fullCode, :compactCode)
+			ORDER BY CASE WHEN code = :fullCode THEN 0 ELSE 1 END
+			LIMIT 1
 			""")
-			.param("code", sggCd + umdCd)
-			.query(Long.class)
+			.param("fullCode", fullCode)
+			.param("compactCode", compactCode)
+			.query((resultSet, rowNumber) -> new RegionLookup(
+				resultSet.getLong("id"),
+				resultSet.getString("name")
+			))
 			.optional();
+	}
+
+	private String compactRegionCode(String sggCd, String umdCd) {
+		if (umdCd.length() == 5 && umdCd.endsWith("00")) {
+			return sggCd + umdCd.substring(0, 3);
+		}
+		return sggCd + umdCd;
 	}
 
 	private Long upsertComplex(
@@ -321,5 +343,11 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 
 	private String trimToNull(String value) {
 		return value != null && !value.isBlank() ? value.trim() : null;
+	}
+
+	private record RegionLookup(
+		Long id,
+		String name
+	) {
 	}
 }

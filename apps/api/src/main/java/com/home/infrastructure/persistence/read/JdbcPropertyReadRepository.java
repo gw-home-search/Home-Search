@@ -37,11 +37,12 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			    c.id AS complex_id,
 			    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name) AS complex_name,
 			    p.id AS parcel_id,
-			    p.latitude,
-			    p.longitude,
+			    COALESCE(display_coordinate.latitude, p.latitude) AS latitude,
+			    COALESCE(display_coordinate.longitude, p.longitude) AS longitude,
 			    p.address
 			FROM complex c
 			JOIN parcel p ON p.id = c.parcel_id
+			LEFT JOIN complex_display_coordinate display_coordinate ON display_coordinate.complex_id = c.id
 			WHERE lower(c.name) LIKE :pattern
 			   OR lower(COALESCE(c.trade_name, '')) LIKE :pattern
 			   OR lower(COALESCE(p.address, '')) LIKE :pattern
@@ -115,8 +116,8 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 		return jdbcClient.sql("""
 			SELECT
 			    p.id AS parcel_id,
-			    p.latitude,
-			    p.longitude,
+			    COALESCE(display_coordinate.latitude, p.latitude) AS latitude,
+			    COALESCE(display_coordinate.longitude, p.longitude) AS longitude,
 			    p.address,
 			    c.trade_name,
 			    c.name,
@@ -130,6 +131,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			    c.use_date
 			FROM parcel p
 			JOIN complex c ON c.parcel_id = p.id
+			LEFT JOIN complex_display_coordinate display_coordinate ON display_coordinate.complex_id = c.id
 			WHERE p.id = :parcelId
 			ORDER BY c.id
 			LIMIT 1

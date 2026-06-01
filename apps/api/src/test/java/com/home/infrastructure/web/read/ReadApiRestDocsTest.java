@@ -194,8 +194,8 @@ class ReadApiRestDocsTest {
 				),
 				responseFields(
 					fieldWithPath("parcelId").type(JsonFieldType.NUMBER).description("Parcel id."),
-					fieldWithPath("latitude").type(JsonFieldType.NUMBER).description("Parcel latitude."),
-					fieldWithPath("longitude").type(JsonFieldType.NUMBER).description("Parcel longitude."),
+					fieldWithPath("latitude").type(JsonFieldType.NUMBER).description("Detail display latitude."),
+					fieldWithPath("longitude").type(JsonFieldType.NUMBER).description("Detail display longitude."),
 					fieldWithPath("address").type(JsonFieldType.STRING).optional().description("Parcel address."),
 					fieldWithPath("tradeName").type(JsonFieldType.STRING).optional().description("Representative trade name."),
 					fieldWithPath("name").type(JsonFieldType.STRING).description("Representative complex name."),
@@ -215,8 +215,8 @@ class ReadApiRestDocsTest {
 					.pathParameters(parameterWithName("parcelId").description("Parcel id."))
 					.responseFields(
 						fieldWithPath("parcelId").type(JsonFieldType.NUMBER).description("Parcel id."),
-						fieldWithPath("latitude").type(JsonFieldType.NUMBER).description("Parcel latitude."),
-						fieldWithPath("longitude").type(JsonFieldType.NUMBER).description("Parcel longitude."),
+						fieldWithPath("latitude").type(JsonFieldType.NUMBER).description("Detail display latitude."),
+						fieldWithPath("longitude").type(JsonFieldType.NUMBER).description("Detail display longitude."),
 						fieldWithPath("address").type(JsonFieldType.STRING).optional().description("Parcel address."),
 						fieldWithPath("tradeName").type(JsonFieldType.STRING).optional().description("Representative trade name."),
 						fieldWithPath("name").type(JsonFieldType.STRING).description("Representative complex name."),

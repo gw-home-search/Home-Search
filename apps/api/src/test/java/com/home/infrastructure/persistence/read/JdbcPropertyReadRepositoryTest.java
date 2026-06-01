@@ -273,6 +273,36 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("search/detail read API는 complex 표시 좌표가 있으면 parcel 좌표보다 우선한다")
+	void searchAndDetailPreferComplexDisplayCoordinate() {
+		seedPropertyExplorationData();
+		jdbcClient.sql("""
+			INSERT INTO complex_display_coordinate (
+			    complex_id,
+			    latitude,
+			    longitude,
+			    coordinate_source,
+			    confidence,
+			    reason
+			)
+			VALUES (501, 37.6010, 127.1010, 'PARCEL_FALLBACK', 70, 'test display coordinate')
+			""").update();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.searchComplexes("sample"))
+			.singleElement()
+			.satisfies(result -> {
+				assertThat(result.latitude()).isEqualTo(37.6010);
+				assertThat(result.longitude()).isEqualTo(127.1010);
+			});
+		assertThat(repository.findParcelDetail(1001L))
+			.hasValueSatisfying(detail -> {
+				assertThat(detail.latitude()).isEqualTo(37.6010);
+				assertThat(detail.longitude()).isEqualTo(127.1010);
+			});
+	}
+
+	@Test
 	@DisplayName("detail은 parcel 대표 complex를 반환하고 trade는 parcel 하위 모든 complex 거래를 반환한다")
 	void detailUsesRepresentativeComplexAndTradeListIncludesAllParcelComplexTrades() {
 		seedPropertyExplorationData();

@@ -114,6 +114,25 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	@Override
 	public Optional<ParcelDetailResponse> findParcelDetail(Long parcelId) {
 		return jdbcClient.sql("""
+			WITH redeveloped_parcel AS (
+			    SELECT parcel_id
+			    FROM complex_coordinate_case
+			    WHERE relation_type = 'REDEVELOPED'
+			),
+			superseded_complex AS (
+			    SELECT c.id AS complex_id
+			    FROM complex c
+			    JOIN redeveloped_parcel rp ON rp.parcel_id = c.parcel_id
+			    WHERE c.id <> (
+			        SELECT c2.id
+			        FROM complex c2
+			        LEFT JOIN trade t2 ON t2.complex_id = c2.id AND t2.deleted_at IS NULL
+			        WHERE c2.parcel_id = c.parcel_id
+			        GROUP BY c2.id
+			        ORDER BY MIN(t2.deal_date) DESC NULLS LAST, c2.id DESC
+			        LIMIT 1
+			    )
+			)
 			SELECT
 			    p.id AS parcel_id,
 			    COALESCE(display_coordinate.latitude, p.latitude) AS latitude,
@@ -132,8 +151,9 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			FROM parcel p
 			JOIN complex c ON c.parcel_id = p.id
 			LEFT JOIN complex_display_coordinate display_coordinate ON display_coordinate.complex_id = c.id
+			LEFT JOIN superseded_complex sc ON sc.complex_id = c.id
 			WHERE p.id = :parcelId
-			ORDER BY c.id
+			ORDER BY (sc.complex_id IS NOT NULL), c.id
 			LIMIT 1
 			""")
 			.param("parcelId", parcelId)

@@ -13,6 +13,9 @@ import com.home.application.coordinate.ComplexCoordinateReadinessService;
 import com.home.application.coordinate.ComplexDisplayCoordinateProjectionService;
 import com.home.infrastructure.persistence.complex.JdbcComplexRelationRepository;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
+import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
+import com.home.infrastructure.web.map.dto.ComplexMarkerResponse;
+import com.home.infrastructure.web.map.dto.ComplexMarkersRequest;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -63,6 +66,12 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 				tuple(602L, "BUILDING_FOOTPRINT", 90, bd("37.5020000"), bd("127.0020000")),
 				tuple(701L, "PARCEL_FALLBACK", 40, bd("37.5125000"), bd("127.0458000")),
 				tuple(702L, "PARCEL_FALLBACK", 40, bd("37.5125000"), bd("127.0458000"))
+			);
+		assertThat(new JdbcMapMarkerRepository(jdbcClient).findComplexMarkers(bounds()))
+			.extracting(ComplexMarkerResponse::parcelId, ComplexMarkerResponse::lat, ComplexMarkerResponse::lng)
+			.contains(
+				tuple(1002L, 37.5020, 127.0020),
+				tuple(1003L, 37.5125, 127.0458)
 			);
 
 		ComplexCoordinateReadinessResult secondRun = service.prepare(10, 10, 10);
@@ -245,6 +254,23 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 		return jdbcClient.sql("SELECT count(*) FROM complex_display_coordinate")
 			.query(Long.class)
 			.single();
+	}
+
+	private ComplexMarkersRequest bounds() {
+		return new ComplexMarkersRequest(
+			37.45,
+			126.85,
+			37.70,
+			127.20,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null
+		);
 	}
 
 	private static BigDecimal bd(String value) {

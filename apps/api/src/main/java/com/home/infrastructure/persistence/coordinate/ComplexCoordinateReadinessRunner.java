@@ -2,13 +2,15 @@ package com.home.infrastructure.persistence.coordinate;
 
 import com.home.application.coordinate.ComplexCoordinateReadinessResult;
 import com.home.application.coordinate.ComplexCoordinateReadinessService;
+import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.Ordered;
 
-class ComplexCoordinateReadinessRunner implements ApplicationRunner {
+class ComplexCoordinateReadinessRunner implements ApplicationRunner, Ordered {
 
 	private static final Logger log = LoggerFactory.getLogger(ComplexCoordinateReadinessRunner.class);
 
@@ -46,5 +48,10 @@ class ComplexCoordinateReadinessRunner implements ApplicationRunner {
 			result.projectionSkipped(),
 			result.projectionMissing()
 		);
+	}
+
+	@Override
+	public int getOrder() {
+		return ApplicationRunnerOrders.COORDINATE_READINESS;
 	}
 }

@@ -369,6 +369,56 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("detail은 재건축 필지에서 철거된 구단지 대신 생존(신축) 단지를 대표로 반환한다")
+	void detailPrefersSurvivingComplexForRedevelopedParcel() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (1001, 1, '1168010300101400009', 'Redeveloped lot', 37.5123, 127.0456)
+			""").update();
+		// 구단지가 더 낮은 c.id (501) → 현행 ORDER BY c.id LIMIT 1이면 철거 단지가 대표가 됨.
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt, use_date)
+			VALUES
+			    (501, 1001, 'COMPLEX-PK-501', 'APT-501', 'Old Mansion', NULL, 500, DATE '1985-01-01'),
+			    (502, 1001, 'COMPLEX-PK-502', 'APT-502', 'New Tower', 'New Tower Trade', 900, DATE '2022-06-01')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, relation_type, relation_confidence)
+			VALUES (1001, '1168010300101400009', 'SKIPPED', 'REDEVELOPED', 'HIGH')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO raw_trade_ingest (
+			    id, source, source_key, lawd_cd, deal_ymd, page_no, payload, payload_hash, status, processed_at
+			)
+			VALUES (90100, 'RTMS', 'redev-detail', '11680', '202501', 1, '{}', 'hash-redev-detail', 'NORMALIZED', now())
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO trade (
+			    id, complex_id, deal_date, deal_amount, floor, excl_area, apt_dong,
+			    source, source_key, complex_pk, apt_seq, raw_ingest_id
+			)
+			VALUES
+			    (9101, 501, DATE '2016-01-01', 80000, 5, 84.93, '101', 'RTMS', 'redev-d-501-1', 'COMPLEX-PK-501', 'APT-501', 90100),
+			    (9102, 501, DATE '2018-01-01', 90000, 6, 84.93, '101', 'RTMS', 'redev-d-501-2', 'COMPLEX-PK-501', 'APT-501', 90100),
+			    (9103, 502, DATE '2023-01-01', 180000, 15, 84.93, '101', 'RTMS', 'redev-d-502-1', 'COMPLEX-PK-502', 'APT-502', 90100),
+			    (9104, 502, DATE '2025-01-01', 190000, 16, 84.93, '101', 'RTMS', 'redev-d-502-2', 'COMPLEX-PK-502', 'APT-502', 90100)
+			""").update();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.findParcelDetail(1001L))
+			.hasValueSatisfying(detail -> {
+				assertThat(detail.name()).isEqualTo("New Tower");
+				assertThat(detail.tradeName()).isEqualTo("New Tower Trade");
+				assertThat(detail.unitCnt()).isEqualTo(900);
+				assertThat(detail.useDate()).isEqualTo(LocalDate.of(2022, 6, 1));
+			});
+	}
+
+	@Test
 	@DisplayName("detail/trade read API는 parcel 또는 complex parent path가 없으면 empty가 된다")
 	void missingParentPathReturnsEmpty() {
 		seedPropertyExplorationData();

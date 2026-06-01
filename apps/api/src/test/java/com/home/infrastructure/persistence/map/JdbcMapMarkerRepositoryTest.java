@@ -60,6 +60,23 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 			.isEqualTo(111000L);
 	}
 
+	@Test
+	@DisplayName("재건축 필지 마커는 문서화된 parcel 집계를 유지하고 대표 complex 표시 좌표를 사용한다")
+	void redevelopmentMarkerKeepsDocumentedParcelAggregationAndUsesRepresentativeDisplayCoordinate() {
+		seedRedevelopmentParcel();
+		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+
+		assertThat(repository.findComplexMarkers(request(null, null)))
+			.extracting(
+				ComplexMarkerResponse::parcelId,
+				ComplexMarkerResponse::lat,
+				ComplexMarkerResponse::lng,
+				ComplexMarkerResponse::latestDealAmount,
+				ComplexMarkerResponse::unitCntSum
+			)
+			.containsExactly(tuple(2001L, 37.6010, 127.1010, 91000L, 1400L));
+	}
+
 	private ComplexMarkersRequest request(Double priceEokMin, Double priceEokMax) {
 		return new ComplexMarkersRequest(
 			37.45,
@@ -75,6 +92,46 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 			null,
 			null
 		);
+	}
+
+	private void seedRedevelopmentParcel() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (2001, 1, '1168010300101400009', 'Redeveloped lot', 37.5123, 127.0456)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt, use_date)
+			VALUES
+			    (801, 2001, 'COMPLEX-PK-801', 'APT-801', 'Old Mansion', 500, DATE '1985-01-01'),
+			    (802, 2001, 'COMPLEX-PK-802', 'APT-802', 'New Tower', 900, DATE '2022-06-01')
+			""").update();
+		// 좌표 readiness staging이 남기는 parcel 단위 분류 증거.
+		jdbcClient.sql("""
+			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, relation_type, relation_confidence)
+			VALUES (2001, '1168010300101400009', 'SKIPPED', 'REDEVELOPED', 'HIGH')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_display_coordinate (
+			    complex_id,
+			    latitude,
+			    longitude,
+			    coordinate_source,
+			    confidence,
+			    reason
+			)
+			VALUES
+			    (801, 37.5990, 127.0990, 'PARCEL_FALLBACK', 40, 'old fallback'),
+			    (802, 37.6010, 127.1010, 'BUILDING_FOOTPRINT', 90, 'new representative footprint')
+			""").update();
+		Long rawId = insertRawIngest("rtms-redev");
+		insertTrade(rawId, 801L, LocalDate.of(2016, 1, 1), 80000L, "rtms-redev-801-1", "COMPLEX-PK-801");
+		insertTrade(rawId, 801L, LocalDate.of(2026, 1, 1), 91000L, "rtms-redev-801-2", "COMPLEX-PK-801");
+		insertTrade(rawId, 802L, LocalDate.of(2023, 1, 1), 180000L, "rtms-redev-802-1", "COMPLEX-PK-802");
+		insertTrade(rawId, 802L, LocalDate.of(2025, 1, 1), 190000L, "rtms-redev-802-2", "COMPLEX-PK-802");
 	}
 
 	private void seedMapData() {

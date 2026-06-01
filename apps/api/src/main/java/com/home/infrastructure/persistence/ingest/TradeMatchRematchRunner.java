@@ -2,13 +2,15 @@ package com.home.infrastructure.persistence.ingest;
 
 import com.home.application.ingest.TradeMatchRematchResult;
 import com.home.application.ingest.TradeMatchRematchService;
+import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.Ordered;
 
-class TradeMatchRematchRunner implements ApplicationRunner {
+class TradeMatchRematchRunner implements ApplicationRunner, Ordered {
 
 	private static final Logger log = LoggerFactory.getLogger(TradeMatchRematchRunner.class);
 
@@ -32,5 +34,10 @@ class TradeMatchRematchRunner implements ApplicationRunner {
 			result.parseFailed(),
 			result.skipped()
 		);
+	}
+
+	@Override
+	public int getOrder() {
+		return ApplicationRunnerOrders.TRADE_MATCH_REMATCH;
 	}
 }

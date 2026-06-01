@@ -54,6 +54,30 @@ class ComplexMetadataEnrichmentServiceTest {
 		assertThat(repository.saved.get(3).resolution().failureReason()).contains("serviceKey=[REDACTED]");
 	}
 
+	@Test
+	@DisplayName("metadata enrichment service는 외부 client가 미설정이면 pending row를 조회하거나 오염시키지 않는다")
+	void skipsPendingLookupWhenClientIsNotConfigured() {
+		FakeRepository repository = new FakeRepository(List.of(lookup(501, 0)));
+		ComplexMetadataEnrichmentClient client = new ComplexMetadataEnrichmentClient() {
+			@Override
+			public boolean isConfigured() {
+				return false;
+			}
+
+			@Override
+			public ComplexMetadataResolution resolve(ComplexMetadataLookup lookup) {
+				throw new AssertionError("metadata lookup must not run when client is not configured");
+			}
+		};
+		ComplexMetadataEnrichmentService service = new ComplexMetadataEnrichmentService(repository, client);
+
+		ComplexMetadataEnrichmentResult result = service.enrichPending(10);
+
+		assertThat(result).isEqualTo(ComplexMetadataEnrichmentResult.empty());
+		assertThat(repository.findPendingCalls).isZero();
+		assertThat(repository.saved).isEmpty();
+	}
+
 	private ComplexMetadataLookup lookup(long complexId, int attempts) {
 		return new ComplexMetadataLookup(
 			complexId,
@@ -86,6 +110,7 @@ class ComplexMetadataEnrichmentServiceTest {
 
 		private final List<ComplexMetadataLookup> pending;
 		private final List<SavedResolution> saved = new ArrayList<>();
+		private int findPendingCalls;
 
 		private FakeRepository(List<ComplexMetadataLookup> pending) {
 			this.pending = pending;
@@ -93,6 +118,7 @@ class ComplexMetadataEnrichmentServiceTest {
 
 		@Override
 		public List<ComplexMetadataLookup> findPending(int limit) {
+			findPendingCalls++;
 			return pending.stream().limit(limit).toList();
 		}
 

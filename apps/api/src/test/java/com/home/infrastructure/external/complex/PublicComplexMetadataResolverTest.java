@@ -378,6 +378,51 @@ class PublicComplexMetadataResolverTest {
 	}
 
 	@Test
+	@DisplayName("metadata resolver는 ODC key나 enabled building key가 없으면 미설정 상태로 보고된다")
+	void resolverReportsNotConfiguredWithoutUsableExternalKey() {
+		PublicComplexMetadataResolver notConfigured = new PublicComplexMetadataResolver(
+			RestClient.builder().baseUrl("https://odcloud.example.test").build(),
+			"https://odcloud.example.test",
+			" ",
+			ODC_APT_PATH,
+			RestClient.builder().baseUrl("https://apis.example.test").build(),
+			"https://apis.example.test",
+			"BLD-KEY",
+			"/1613000/BldRgstHubService/getBrRecapTitleInfo",
+			"/1613000/BldRgstHubService/getBrTitleInfo",
+			false
+		);
+		PublicComplexMetadataResolver odcloudConfigured = new PublicComplexMetadataResolver(
+			RestClient.builder().baseUrl("https://odcloud.example.test").build(),
+			"https://odcloud.example.test",
+			"ODC-KEY",
+			ODC_APT_PATH,
+			RestClient.builder().baseUrl("https://apis.example.test").build(),
+			"https://apis.example.test",
+			" ",
+			"/1613000/BldRgstHubService/getBrRecapTitleInfo",
+			"/1613000/BldRgstHubService/getBrTitleInfo",
+			false
+		);
+		PublicComplexMetadataResolver buildingConfigured = new PublicComplexMetadataResolver(
+			RestClient.builder().baseUrl("https://odcloud.example.test").build(),
+			"https://odcloud.example.test",
+			" ",
+			ODC_APT_PATH,
+			RestClient.builder().baseUrl("https://apis.example.test").build(),
+			"https://apis.example.test",
+			"BLD-KEY",
+			"/1613000/BldRgstHubService/getBrRecapTitleInfo",
+			"/1613000/BldRgstHubService/getBrTitleInfo",
+			true
+		);
+
+		assertThat(notConfigured.isConfigured()).isFalse();
+		assertThat(odcloudConfigured.isConfigured()).isTrue();
+		assertThat(buildingConfigured.isConfigured()).isTrue();
+	}
+
+	@Test
 	@DisplayName("address가 없으면 ODC는 건너뛰고 building metadata PARTIAL을 반환한다")
 	void returnsPartialBuildingMetadataWhenAddressIsMissing() {
 		RestClient.Builder bldBuilder = RestClient.builder().baseUrl("https://apis.example.test");

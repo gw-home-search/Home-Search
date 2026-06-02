@@ -117,6 +117,12 @@ class ComplexCoordinateReadinessRunnerTest {
 		}
 
 		@Override
+		public void saveBuildingFootprints(
+			List<com.home.application.coordinate.BuildingFootprintImportCandidate> footprints
+		) {
+		}
+
+		@Override
 		public void saveResolvedDisplayCoordinate(com.home.application.coordinate.ResolvedDisplayCoordinate coordinate) {
 		}
 	}

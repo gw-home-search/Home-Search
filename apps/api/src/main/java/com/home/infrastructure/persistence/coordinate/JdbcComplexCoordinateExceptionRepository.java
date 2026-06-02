@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import com.home.application.coordinate.BuildingFootprintCandidate;
+import com.home.application.coordinate.BuildingFootprintImportCandidate;
 import com.home.application.coordinate.ComplexCoordinateCaseCandidate;
 import com.home.application.coordinate.ComplexCoordinateCaseStatus;
 import com.home.application.coordinate.ComplexCoordinateCaseUpdate;
@@ -199,6 +200,53 @@ public class JdbcComplexCoordinateExceptionRepository
 				resultSet.getBigDecimal("centroid_lng")
 			))
 			.list();
+	}
+
+	@Override
+	public void saveBuildingFootprints(List<BuildingFootprintImportCandidate> footprints) {
+		Objects.requireNonNull(footprints, "footprints is required");
+		for (BuildingFootprintImportCandidate footprint : footprints) {
+			jdbcClient.sql("""
+				INSERT INTO building_footprint_snapshot (
+				    pnu,
+				    building_name,
+				    dong_name,
+				    source_building_key,
+				    centroid_lat,
+				    centroid_lng,
+				    source,
+				    snapshot_version,
+				    updated_at
+				)
+				VALUES (
+				    :pnu,
+				    :buildingName,
+				    :dongName,
+				    :sourceBuildingKey,
+				    :latitude,
+				    :longitude,
+				    :source,
+				    :snapshotVersion,
+				    now()
+				)
+				ON CONFLICT (source, snapshot_version, source_building_key) DO UPDATE SET
+				    pnu = EXCLUDED.pnu,
+				    building_name = EXCLUDED.building_name,
+				    dong_name = EXCLUDED.dong_name,
+				    centroid_lat = EXCLUDED.centroid_lat,
+				    centroid_lng = EXCLUDED.centroid_lng,
+				    updated_at = now()
+				""")
+				.param("pnu", footprint.pnu())
+				.param("buildingName", footprint.buildingName())
+				.param("dongName", footprint.dongName())
+				.param("sourceBuildingKey", footprint.sourceBuildingKey())
+				.param("latitude", footprint.latitude())
+				.param("longitude", footprint.longitude())
+				.param("source", footprint.source())
+				.param("snapshotVersion", footprint.snapshotVersion())
+				.update();
+		}
 	}
 
 	@Override

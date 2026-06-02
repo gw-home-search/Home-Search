@@ -162,6 +162,10 @@ class ComplexCoordinateReadinessServiceTest {
 		}
 
 		@Override
+		public void saveBuildingFootprints(List<BuildingFootprintImportCandidate> footprints) {
+		}
+
+		@Override
 		public void saveResolvedDisplayCoordinate(ResolvedDisplayCoordinate coordinate) {
 		}
 	}

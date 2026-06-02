@@ -1,5 +1,6 @@
 package com.home.infrastructure.external.vworld;
 
+import com.home.application.coordinate.BuildingFootprintSource;
 import com.home.infrastructure.persistence.ingest.ParcelCoordinateResolver;
 import com.home.infrastructure.persistence.ingest.CoordinateSourceFirstParcelCoordinateResolver;
 import com.home.infrastructure.persistence.ingest.ParcelCoordinateOverrideRepository;
@@ -48,6 +49,19 @@ class VworldExternalApiConfiguration {
 			.baseUrl(properties.baseUrl())
 			.build();
 		return new VworldParcelCoordinateResolver(restClient, properties);
+	}
+
+	@Bean
+	@Lazy
+	BuildingFootprintSource vworldBuildingFootprintSource(VworldParcelCoordinateProperties properties) {
+		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+		requestFactory.setConnectTimeout(properties.connectTimeoutMillis());
+		requestFactory.setReadTimeout(properties.readTimeoutMillis());
+		RestClient restClient = RestClient.builder()
+			.requestFactory(requestFactory)
+			.baseUrl(properties.baseUrl())
+			.build();
+		return new VworldBuildingFootprintSource(restClient, properties);
 	}
 
 	@Bean

@@ -1,6 +1,7 @@
 package com.home.infrastructure.persistence.coordinate;
 
 import com.home.application.complex.ComplexRelationClassifier;
+import com.home.application.coordinate.BuildingFootprintSource;
 import com.home.application.coordinate.ComplexCoordinateExceptionRepository;
 import com.home.application.coordinate.ComplexCoordinateExceptionService;
 import com.home.application.coordinate.ComplexCoordinateIdentityVerifier;
@@ -42,14 +43,16 @@ class ComplexCoordinatePersistenceConfiguration {
 	@Lazy
 	ComplexCoordinateExceptionService complexCoordinateExceptionService(
 		ObjectProvider<JdbcClient> jdbcClientProvider,
-		ObjectProvider<ComplexCoordinateIdentityVerifier> identityVerifierProvider
+		ObjectProvider<ComplexCoordinateIdentityVerifier> identityVerifierProvider,
+		ObjectProvider<BuildingFootprintSource> buildingFootprintSourceProvider
 	) {
 		JdbcClient jdbcClient = requiredJdbcClient(jdbcClientProvider);
 		return new ComplexCoordinateExceptionService(
 			new JdbcComplexCoordinateExceptionRepository(jdbcClient),
 			new JdbcComplexRelationRepository(jdbcClient),
 			new ComplexRelationClassifier(),
-			identityVerifierProvider.getIfAvailable(ComplexCoordinateIdentityVerifier::trusting)
+			identityVerifierProvider.getIfAvailable(ComplexCoordinateIdentityVerifier::trusting),
+			buildingFootprintSourceProvider.getIfAvailable(BuildingFootprintSource::unavailable)
 		);
 	}
 

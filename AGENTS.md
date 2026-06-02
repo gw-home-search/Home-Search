@@ -134,6 +134,17 @@ All writes for this project belong under `/Users/gwongwangjae/home-search`.
 - Preserve `complex_pk`, `apt_seq`, `source`, and `source_key` for audit, matching, and dedupe support.
 - Map endpoints must not require ranking, trend, favorite, or mail state.
 
+## Docker/Data Safety
+
+- Never delete Docker volumes without explicit user approval in the current task.
+- Forbidden unless explicitly approved: `docker volume rm`, `docker volume prune`,
+  `docker system prune --volumes`, and `docker compose down -v`.
+- Prefer `docker compose stop` or `docker compose down` without `-v`.
+- Before any destructive Docker command, state the exact command, affected
+  volume names, expected data loss, and recovery or backup option.
+- If database state must be reset, ask first and prefer backup/export before
+  deletion.
+
 ## Repo Hygiene
 
 - Never revert user changes unless explicitly asked.

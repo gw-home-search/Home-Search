@@ -19,7 +19,7 @@ class RtmsMonthlyRefreshRunner {
 
 	private final RtmsApartmentTradeClient client;
 	private final Supplier<OpenApiTradeIngestService> ingestServiceSupplier;
-	private final RtmsIngestRunRepository ingestRunRepository;
+	private final Supplier<RtmsIngestRunRepository> ingestRunRepositorySupplier;
 	private final Clock clock;
 	private final RtmsMonthlyRefreshRetryPolicy retryPolicy;
 
@@ -46,7 +46,7 @@ class RtmsMonthlyRefreshRunner {
 		this(
 			client,
 			ingestServiceSupplier,
-			ingestRunRepository,
+			() -> ingestRunRepository,
 			clock,
 			RtmsMonthlyRefreshRetryPolicy.noBackoffDefault()
 		);
@@ -55,13 +55,13 @@ class RtmsMonthlyRefreshRunner {
 	RtmsMonthlyRefreshRunner(
 		RtmsApartmentTradeClient client,
 		Supplier<OpenApiTradeIngestService> ingestServiceSupplier,
-		RtmsIngestRunRepository ingestRunRepository,
+		Supplier<RtmsIngestRunRepository> ingestRunRepositorySupplier,
 		Clock clock,
 		RtmsMonthlyRefreshRetryPolicy retryPolicy
 	) {
 		this.client = Objects.requireNonNull(client);
 		this.ingestServiceSupplier = Objects.requireNonNull(ingestServiceSupplier);
-		this.ingestRunRepository = Objects.requireNonNull(ingestRunRepository);
+		this.ingestRunRepositorySupplier = Objects.requireNonNull(ingestRunRepositorySupplier);
 		this.clock = Objects.requireNonNull(clock);
 		this.retryPolicy = Objects.requireNonNull(retryPolicy);
 	}
@@ -87,6 +87,7 @@ class RtmsMonthlyRefreshRunner {
 		RtmsApartmentTradeRequest firstRequest
 	) {
 		Instant startedAt = clock.instant();
+		RtmsIngestRunRepository ingestRunRepository = ingestRunRepositorySupplier.get();
 		RtmsApartmentTradeRequest currentRequest = firstRequest;
 		IngestResult total = IngestResult.empty();
 		int pageCount = 0;

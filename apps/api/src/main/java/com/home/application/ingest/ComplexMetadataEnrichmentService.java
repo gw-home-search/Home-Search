@@ -35,6 +35,10 @@ public class ComplexMetadataEnrichmentService {
 		if (limit <= 0) {
 			return ComplexMetadataEnrichmentResult.empty();
 		}
+		if (!client.isConfigured()) {
+			log.warn("complex metadata enrichment skipped because external client is not configured");
+			return ComplexMetadataEnrichmentResult.empty();
+		}
 		ComplexMetadataEnrichmentResult result = ComplexMetadataEnrichmentResult.empty();
 		for (ComplexMetadataLookup lookup : repository.findPending(limit)) {
 			result = result.plus(enrichOne(lookup).status());

@@ -102,7 +102,7 @@ class RtmsExternalApiConfiguration {
 			() -> ingestServiceProvider.getIfAvailable(() -> {
 				throw new IllegalStateException("OpenApiTradeIngestService is required for RTMS monthly refresh ingest");
 			}),
-			ingestRunRepositoryProvider.getIfAvailable(RtmsIngestRunRepository::noop),
+			() -> ingestRunRepositoryProvider.getIfAvailable(RtmsIngestRunRepository::noop),
 			java.time.Clock.systemUTC(),
 			new RtmsMonthlyRefreshRetryPolicy(refreshRetryAttempts, refreshRetryBackoffMillis)
 		);

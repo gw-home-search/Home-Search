@@ -152,6 +152,35 @@ class TradeMatchRematchServiceTest {
 	}
 
 	@Test
+	@DisplayName("trade rematch service는 MATCH_FAILED raw를 다시 matching하기 전에 complex bootstrap을 먼저 수행한다")
+	void bootstrapsHeldRawBeforeMatching() {
+		FakeRawRepository rawRepository = new FakeRawRepository(List.of(raw(101L, "source-101")));
+		FakeNormalizedRepository normalizedRepository = new FakeNormalizedRepository();
+		List<String> events = new ArrayList<>();
+		TradeMatchRematchService service = service(
+			rawRepository,
+			normalizedRepository,
+			item -> {
+				assertThat(events).containsExactly("bootstrap");
+				events.add("match");
+				return ComplexMatchResult.matched(501L, "COMPLEX-501", "APT_SEQ");
+			},
+			item -> {
+				events.add("bootstrap");
+				return ComplexMasterBootstrapResult.bootstrapped();
+			},
+			TradeMatchEvidenceRepository.noop(),
+			raw -> Optional.of(validItem())
+		);
+
+		TradeMatchRematchResult result = service.rematchHeld(10);
+
+		assertThat(result.normalized()).isEqualTo(1);
+		assertThat(events).containsExactly("bootstrap", "match");
+		assertThat(normalizedRepository.insertedCommands).hasSize(1);
+	}
+
+	@Test
 	@DisplayName("trade rematch service는 fallback identity 중복이면 DUPLICATE로 남긴다")
 	void marksDuplicateWhenFallbackIdentityAlreadyExists() {
 		FakeRawRepository rawRepository = new FakeRawRepository(List.of(raw(101L, "source-101")));
@@ -224,10 +253,29 @@ class TradeMatchRematchServiceTest {
 		TradeMatchEvidenceRepository evidenceRepository,
 		RawTradeItemParser rawTradeItemParser
 	) {
+		return service(
+			rawRepository,
+			normalizedTradeRepository,
+			complexMatcher,
+			ComplexMasterBootstrapper.noop(),
+			evidenceRepository,
+			rawTradeItemParser
+		);
+	}
+
+	private TradeMatchRematchService service(
+		RawTradeIngestRepository rawRepository,
+		NormalizedTradeRepository normalizedTradeRepository,
+		ComplexMatcher complexMatcher,
+		ComplexMasterBootstrapper complexMasterBootstrapper,
+		TradeMatchEvidenceRepository evidenceRepository,
+		RawTradeItemParser rawTradeItemParser
+	) {
 		return new TradeMatchRematchService(
 			rawRepository,
 			normalizedTradeRepository,
 			complexMatcher,
+			complexMasterBootstrapper,
 			evidenceRepository,
 			rawTradeItemParser
 		);

@@ -76,6 +76,11 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 	}
 
 	@Override
+	public boolean isConfigured() {
+		return odcloudServiceKey != null || (buildingFallbackEnabled && bldServiceKey != null);
+	}
+
+	@Override
 	public ComplexMetadataResolution resolve(String pnu, String parcelAddress) {
 		return resolve(new ComplexMetadataLookup(null, null, null, pnu, parcelAddress));
 	}

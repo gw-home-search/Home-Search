@@ -6,6 +6,7 @@ import com.home.application.ingest.ComplexMetadataEnrichmentClient;
 import com.home.application.ingest.ComplexMetadataEnrichmentRepository;
 import com.home.application.ingest.ComplexMetadataEnrichmentService;
 import com.home.application.ingest.ComplexMasterBootstrapper;
+import com.home.application.ingest.ComplexIdentityResolver;
 import com.home.application.ingest.NormalizedTradeRepository;
 import com.home.application.ingest.OpenApiTradeIngestService;
 import com.home.application.ingest.RawIngestReconciliationRepository;
@@ -68,14 +69,12 @@ class IngestPersistenceConfiguration {
 
 	@Bean
 	@Lazy
-	@ConditionalOnBean(JdbcClient.class)
 	RtmsIngestRunRepository rtmsIngestRunRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
 		return new JdbcRtmsIngestRunRepository(requiredJdbcClient(jdbcClientProvider));
 	}
 
 	@Bean
 	@Lazy
-	@ConditionalOnBean(JdbcClient.class)
 	RtmsIngestRunReportRepository rtmsIngestRunReportRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
 		return new JdbcRtmsIngestRunReportRepository(requiredJdbcClient(jdbcClientProvider));
 	}
@@ -100,11 +99,13 @@ class IngestPersistenceConfiguration {
 	@Lazy
 	ComplexMasterBootstrapper complexMasterBootstrapper(
 		ObjectProvider<JdbcClient> jdbcClientProvider,
-		ParcelCoordinateResolver parcelCoordinateResolver
+		ParcelCoordinateResolver parcelCoordinateResolver,
+		ObjectProvider<ComplexIdentityResolver> identityResolverProvider
 	) {
 		return new JdbcComplexMasterBootstrapper(
 			requiredJdbcClient(jdbcClientProvider),
-			parcelCoordinateResolver
+			parcelCoordinateResolver,
+			identityResolverProvider.getIfAvailable(ComplexIdentityResolver::noop)
 		);
 	}
 
@@ -193,6 +194,7 @@ class IngestPersistenceConfiguration {
 		RawTradeIngestRepository rawTradeIngestRepository,
 		NormalizedTradeRepository normalizedTradeRepository,
 		ComplexMatcher complexMatcher,
+		ComplexMasterBootstrapper complexMasterBootstrapper,
 		TradeMatchEvidenceRepository tradeMatchEvidenceRepository,
 		RawTradeItemParser rawTradeItemParser
 	) {
@@ -200,6 +202,7 @@ class IngestPersistenceConfiguration {
 			rawTradeIngestRepository,
 			normalizedTradeRepository,
 			complexMatcher,
+			complexMasterBootstrapper,
 			tradeMatchEvidenceRepository,
 			rawTradeItemParser
 		);

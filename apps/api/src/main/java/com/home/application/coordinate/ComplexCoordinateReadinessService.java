@@ -45,7 +45,7 @@ public class ComplexCoordinateReadinessService {
 			? coordinateExceptionService.stageExceptionCases(stageLimit)
 			: ComplexCoordinateExceptionResult.empty();
 		ResolutionSummary resolutionSummary = resolvePending(resolveLimit);
-		RetryOutcome retryOutcome = retryFailed();
+		RetryOutcome retryOutcome = retryCases();
 		ResolutionSummary combined = resolutionSummary.plus(retryOutcome.summary());
 		ComplexDisplayCoordinateProjectionResult projectionResult = projectLimit > 0
 			? projectionService.project(projectLimit)
@@ -66,14 +66,14 @@ public class ComplexCoordinateReadinessService {
 		);
 	}
 
-	private RetryOutcome retryFailed() {
+	private RetryOutcome retryCases() {
 		if (retryLimit < 1) {
 			return RetryOutcome.empty();
 		}
 		Instant retryBefore = Instant.now().minus(retryAfter);
 		ResolutionSummary summary = ResolutionSummary.empty();
 		int retried = 0;
-		for (Long parcelId : readinessRepository.findRetryableFailedCaseParcelIds(retryLimit, retryBefore)) {
+		for (Long parcelId : readinessRepository.findRetryableCaseParcelIds(retryLimit, retryBefore)) {
 			retried++;
 			try {
 				ComplexCoordinateResolutionResult result = coordinateExceptionService.resolveExceptionCase(parcelId);

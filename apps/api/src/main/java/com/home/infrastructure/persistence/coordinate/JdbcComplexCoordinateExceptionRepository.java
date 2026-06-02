@@ -77,14 +77,14 @@ public class JdbcComplexCoordinateExceptionRepository
 	}
 
 	@Override
-	public List<Long> findRetryableFailedCaseParcelIds(int limit, java.time.Instant retryBefore) {
+	public List<Long> findRetryableCaseParcelIds(int limit, java.time.Instant retryBefore) {
 		if (limit < 1) {
 			return List.of();
 		}
 		return jdbcClient.sql("""
 			SELECT parcel_id
 			FROM complex_coordinate_case
-			WHERE status = 'FAILED'
+			WHERE status IN ('FAILED', 'UNAVAILABLE')
 			  AND checked_at < :retryBefore
 			ORDER BY checked_at, id
 			LIMIT :limit

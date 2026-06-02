@@ -65,8 +65,8 @@ class ComplexCoordinateReadinessServiceTest {
 	}
 
 	@Test
-	@DisplayName("coordinate readiness는 retry가 활성화되면 FAILED 케이스를 backoff 후보로 재시도한다")
-	void retriesFailedCasesWhenRetryEnabled() {
+	@DisplayName("coordinate readiness는 retry가 활성화되면 retryable 케이스를 backoff 후보로 재시도한다")
+	void retriesCasesWhenRetryEnabled() {
 		FakeReadinessRepository repository = new FakeReadinessRepository(List.of());
 		repository.retryableParcelIds = List.of(1001L);
 		FakeCoordinateExceptionService exceptionService = new FakeCoordinateExceptionService();
@@ -88,7 +88,7 @@ class ComplexCoordinateReadinessServiceTest {
 	}
 
 	@Test
-	@DisplayName("coordinate readiness는 retry가 비활성(기본)이면 FAILED 후보를 조회하지 않는다")
+	@DisplayName("coordinate readiness는 retry가 비활성(기본)이면 retryable 후보를 조회하지 않는다")
 	void doesNotRetryWhenRetryDisabled() {
 		FakeReadinessRepository repository = new FakeReadinessRepository(List.of());
 		repository.retryableParcelIds = List.of(1001L);
@@ -145,7 +145,7 @@ class ComplexCoordinateReadinessServiceTest {
 		}
 
 		@Override
-		public List<Long> findRetryableFailedCaseParcelIds(int limit, java.time.Instant retryBefore) {
+		public List<Long> findRetryableCaseParcelIds(int limit, java.time.Instant retryBefore) {
 			retryLimit = limit;
 			return retryableParcelIds.stream().limit(limit).toList();
 		}

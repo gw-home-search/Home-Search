@@ -9,7 +9,7 @@ public interface ComplexCoordinateReadinessRepository {
 
 	void markCaseFailed(Long parcelId, String reason);
 
-	default List<Long> findRetryableFailedCaseParcelIds(int limit, Instant retryBefore) {
+	default List<Long> findRetryableCaseParcelIds(int limit, Instant retryBefore) {
 		return List.of();
 	}
 }

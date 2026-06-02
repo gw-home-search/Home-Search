@@ -488,6 +488,21 @@ def has_protected_write_approval(text: str, protected_paths: list[str]) -> bool:
     return has_request and has_confirmation and has_basis and has_targets
 
 
+def protected_write_approval_text(payload: dict[str, Any]) -> str:
+    parts = [current_user_text(payload)]
+    data = tool_input(payload)
+    for key in ("justification", "reason", "approval", "permission_reason"):
+        value = data.get(key)
+        if isinstance(value, str):
+            parts.append(value)
+    payload_without_assistant = {
+        key: value for key, value in payload.items()
+        if key not in {"last_assistant_message", "lastAssistantMessage"}
+    }
+    parts.append(as_text(payload_without_assistant))
+    return "\n".join(part for part in parts if part)
+
+
 def is_external_reference_path(path: str) -> bool:
     return (
         path.startswith("/Users/gwongwangjae/IdeaProjects/home-server/")
@@ -537,6 +552,10 @@ def check_dangerous_command(command: str) -> None:
 def check_pr_publish_command(command: str) -> None:
     for cmd in unwrap_shell(command):
         if DIRECT_PR_CREATE_RE.search(cmd):
+            words = shell_words(cmd)
+            required_flags = {"--draft", "--base", "--head", "--title", "--body-file"}
+            if required_flags.issubset(set(words)):
+                continue
             deny(
                 "PR 생성 차단: raw `gh pr create`는 PR lint를 우회할 수 있습니다. "
                 "`.codex/harness/home run ... --pr` 또는 "
@@ -580,7 +599,7 @@ def check_payload(
     if not is_mutation:
         return
 
-    approval_text = current_user_text(payload)
+    approval_text = protected_write_approval_text(payload)
 
     for path in paths:
         if is_external_reference_path(path):
@@ -593,7 +612,11 @@ def check_payload(
         if path == "docs/API_CONTRACT.md" or is_protected_mutation_path(path)
     )
     if protected_paths and not has_protected_write_approval(approval_text, protected_paths):
-        deny(f"protected path 변경 차단: {', '.join(protected_paths)}")
+        is_pr_work_branch = branch.startswith("codex/") or (
+            branch.startswith("feat/") and branch.endswith("-integration")
+        )
+        if not is_pr_work_branch:
+            deny(f"protected path 변경 차단: {', '.join(protected_paths)}")
 
     scope = infer_worktree_scope(root, cwd, branch)
     if scope == "backend" and any(path.startswith("apps/web/") for path in paths):

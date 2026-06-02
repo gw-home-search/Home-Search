@@ -12,6 +12,7 @@ public class TradeMatchRematchService {
 	private final RawTradeIngestRepository rawTradeIngestRepository;
 	private final NormalizedTradeRepository normalizedTradeRepository;
 	private final ComplexMatcher complexMatcher;
+	private final ComplexMasterBootstrapper complexMasterBootstrapper;
 	private final TradeMatchEvidenceRepository tradeMatchEvidenceRepository;
 	private final RawTradeItemParser rawTradeItemParser;
 
@@ -22,9 +23,28 @@ public class TradeMatchRematchService {
 		TradeMatchEvidenceRepository tradeMatchEvidenceRepository,
 		RawTradeItemParser rawTradeItemParser
 	) {
+		this(
+			rawTradeIngestRepository,
+			normalizedTradeRepository,
+			complexMatcher,
+			ComplexMasterBootstrapper.noop(),
+			tradeMatchEvidenceRepository,
+			rawTradeItemParser
+		);
+	}
+
+	public TradeMatchRematchService(
+		RawTradeIngestRepository rawTradeIngestRepository,
+		NormalizedTradeRepository normalizedTradeRepository,
+		ComplexMatcher complexMatcher,
+		ComplexMasterBootstrapper complexMasterBootstrapper,
+		TradeMatchEvidenceRepository tradeMatchEvidenceRepository,
+		RawTradeItemParser rawTradeItemParser
+	) {
 		this.rawTradeIngestRepository = Objects.requireNonNull(rawTradeIngestRepository);
 		this.normalizedTradeRepository = Objects.requireNonNull(normalizedTradeRepository);
 		this.complexMatcher = Objects.requireNonNull(complexMatcher);
+		this.complexMasterBootstrapper = Objects.requireNonNull(complexMasterBootstrapper);
 		this.tradeMatchEvidenceRepository = Objects.requireNonNull(tradeMatchEvidenceRepository);
 		this.rawTradeItemParser = Objects.requireNonNull(rawTradeItemParser);
 	}
@@ -65,11 +85,12 @@ public class TradeMatchRematchService {
 			return result.plusParseFailed();
 		}
 
+		ComplexMasterBootstrapResult bootstrapResult = complexMasterBootstrapper.bootstrap(item);
 		ComplexMatchResult match = complexMatcher.match(item);
 		tradeMatchEvidenceRepository.save(TradeMatchEvidenceCommand.from(raw.id(), raw.source(), item, match));
 		if (match == null || !match.matched()) {
 			rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.MATCH_FAILED,
-				rematchFailureReason(match));
+				rematchFailureReason(match, bootstrapResult));
 			return result.plusStillFailed();
 		}
 
@@ -95,9 +116,16 @@ public class TradeMatchRematchService {
 		return result.plusDuplicate();
 	}
 
-	private String rematchFailureReason(ComplexMatchResult match) {
+	private String rematchFailureReason(ComplexMatchResult match, ComplexMasterBootstrapResult bootstrapResult) {
 		String reason = match == null ? "complex matcher returned no result" : match.failureReason();
-		return reason == null || reason.isBlank() ? "rematch failed" : "rematch failed: " + reason;
+		String failureReason = reason == null || reason.isBlank() ? "rematch failed" : "rematch failed: " + reason;
+		if (bootstrapResult == null || !bootstrapResult.hasFailureReason()) {
+			return failureReason;
+		}
+		if (failureReason.contains(bootstrapResult.failureReason())) {
+			return failureReason;
+		}
+		return failureReason + "; " + bootstrapResult.failureReason();
 	}
 
 	private record ParsedTrade(

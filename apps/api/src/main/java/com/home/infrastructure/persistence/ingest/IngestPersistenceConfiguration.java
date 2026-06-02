@@ -183,6 +183,7 @@ class IngestPersistenceConfiguration {
 		RawTradeIngestRepository rawTradeIngestRepository,
 		NormalizedTradeRepository normalizedTradeRepository,
 		ComplexMatcher complexMatcher,
+		ComplexMasterBootstrapper complexMasterBootstrapper,
 		TradeMatchEvidenceRepository tradeMatchEvidenceRepository,
 		RawTradeItemParser rawTradeItemParser
 	) {
@@ -190,6 +191,7 @@ class IngestPersistenceConfiguration {
 			rawTradeIngestRepository,
 			normalizedTradeRepository,
 			complexMatcher,
+			complexMasterBootstrapper,
 			tradeMatchEvidenceRepository,
 			rawTradeItemParser
 		);

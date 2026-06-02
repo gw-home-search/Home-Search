@@ -34,4 +34,32 @@ class IngestPersistenceConfigurationTest {
 			assertThat(context.getBean(RtmsIngestRunRepository.class)).isInstanceOf(JdbcRtmsIngestRunRepository.class);
 		});
 	}
+
+	@Test
+	@DisplayName("Coordinate Source DB URL이 없으면 coordinate source lookup은 empty repository로 남는다")
+	void coordinateSourceRepositoryIsEmptyWithoutSourceDbUrl() {
+		contextRunner.run(context -> {
+			assertThat(context).hasNotFailed();
+			assertThat(context).hasSingleBean(ParcelCoordinateSourceRepository.class);
+			assertThat(context.getBean(ParcelCoordinateSourceRepository.class).findByPnu("1168010300107770001"))
+				.isEmpty();
+		});
+	}
+
+	@Test
+	@DisplayName("Coordinate Source DB URL이 있으면 전용 source lookup repository를 등록한다")
+	void coordinateSourceRepositoryUsesDedicatedSourceDbWhenUrlConfigured() {
+		contextRunner
+			.withPropertyValues(
+				"home.coordinate-source.db.jdbc-url=jdbc:postgresql://localhost:15432/home_search_coordinate_source",
+				"home.coordinate-source.db.username=home_search",
+				"home.coordinate-source.db.password=home_search_local_password"
+			)
+			.run(context -> {
+				assertThat(context).hasNotFailed();
+				assertThat(context).hasSingleBean(ParcelCoordinateSourceRepository.class);
+				assertThat(context.getBean(ParcelCoordinateSourceRepository.class))
+					.isInstanceOf(JdbcCoordinateSourceParcelCoordinateRepository.class);
+			});
+	}
 }

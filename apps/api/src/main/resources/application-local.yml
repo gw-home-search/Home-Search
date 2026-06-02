@@ -22,3 +22,10 @@ management:
     metrics:
       export:
         enabled: true
+
+home:
+  coordinate-source:
+    db:
+      jdbc-url: "${COORDINATE_SOURCE_DB_JDBC_URL:}"
+      username: "${COORDINATE_SOURCE_DB_USERNAME:${DB_USERNAME}}"
+      password: "${COORDINATE_SOURCE_DB_PASSWORD:${DB_PASSWORD}}"

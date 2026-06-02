@@ -51,12 +51,24 @@ class BackendProfileConfigurationTest {
 		assertThat(properties.getProperty("spring.flyway.locations"))
 			.isEqualTo("${SPRING_FLYWAY_LOCATIONS:classpath:db/migration/api,classpath:db/seed/local}");
 		assertThat(properties.getProperty("spring.flyway.clean-disabled")).isEqualTo("true");
+		assertThat(properties.getProperty("spring.flyway.ignore-migration-patterns"))
+			.isEqualTo("${SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS:*:missing}");
 		assertThat(properties.getProperty("home.coordinate-source.db.jdbc-url"))
 			.isEqualTo("${COORDINATE_SOURCE_DB_JDBC_URL:}");
 		assertThat(properties.getProperty("home.coordinate-source.db.username"))
 			.isEqualTo("${COORDINATE_SOURCE_DB_USERNAME:${DB_USERNAME}}");
 		assertThat(properties.getProperty("home.coordinate-source.db.password"))
 			.isEqualTo("${COORDINATE_SOURCE_DB_PASSWORD:${DB_PASSWORD}}");
+		assertThat(properties.getProperty("home.coordinate-source.db.connect-timeout-seconds"))
+			.isEqualTo("${COORDINATE_SOURCE_DB_CONNECT_TIMEOUT_SECONDS:5}");
+		assertThat(properties.getProperty("home.coordinate-source.db.socket-timeout-seconds"))
+			.isEqualTo("${COORDINATE_SOURCE_DB_SOCKET_TIMEOUT_SECONDS:10}");
+		assertThat(properties.getProperty("home.coordinate-source.db.lock-timeout-millis"))
+			.isEqualTo("${COORDINATE_SOURCE_DB_LOCK_TIMEOUT_MILLIS:1000}");
+		assertThat(properties.getProperty("home.coordinate-source.db.statement-timeout-millis"))
+			.isEqualTo("${COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS:3000}");
+		assertThat(properties.getProperty("home.coordinate-source.db.read-only"))
+			.isEqualTo("${COORDINATE_SOURCE_DB_READ_ONLY:true}");
 		assertThat(properties.getProperty("management.endpoints.web.exposure.include")).isEqualTo("health,prometheus");
 		assertThat(properties.getProperty("management.prometheus.metrics.export.enabled")).isEqualTo("true");
 	}

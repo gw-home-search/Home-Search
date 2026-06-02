@@ -8,6 +8,7 @@ spring:
     enabled: true
     locations: "${SPRING_FLYWAY_LOCATIONS:classpath:db/migration/api,classpath:db/seed/local}"
     clean-disabled: true
+    ignore-migration-patterns: "${SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS:*:missing}"
 
 management:
   endpoints:
@@ -29,3 +30,8 @@ home:
       jdbc-url: "${COORDINATE_SOURCE_DB_JDBC_URL:}"
       username: "${COORDINATE_SOURCE_DB_USERNAME:${DB_USERNAME}}"
       password: "${COORDINATE_SOURCE_DB_PASSWORD:${DB_PASSWORD}}"
+      connect-timeout-seconds: "${COORDINATE_SOURCE_DB_CONNECT_TIMEOUT_SECONDS:5}"
+      socket-timeout-seconds: "${COORDINATE_SOURCE_DB_SOCKET_TIMEOUT_SECONDS:10}"
+      lock-timeout-millis: "${COORDINATE_SOURCE_DB_LOCK_TIMEOUT_MILLIS:1000}"
+      statement-timeout-millis: "${COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS:3000}"
+      read-only: "${COORDINATE_SOURCE_DB_READ_ONLY:true}"

@@ -62,4 +62,27 @@ class IngestPersistenceConfigurationTest {
 					.isInstanceOf(JdbcCoordinateSourceParcelCoordinateRepository.class);
 			});
 	}
+
+	@Test
+	@DisplayName("Coordinate Source DB connection은 read-only와 짧은 timeout option을 사용한다")
+	void coordinateSourcePropertiesBuildReadOnlyTimeoutConnectionOptions() {
+		CoordinateSourceDbProperties properties = new CoordinateSourceDbProperties(
+			"jdbc:postgresql://localhost:15432/home_search_coordinate_source",
+			"home_search",
+			"home_search_local_password",
+			5,
+			10,
+			1000,
+			3000,
+			true
+		);
+
+		java.util.Properties connectionProperties = properties.connectionProperties();
+
+		assertThat(connectionProperties.getProperty("connectTimeout")).isEqualTo("5");
+		assertThat(connectionProperties.getProperty("socketTimeout")).isEqualTo("10");
+		assertThat(connectionProperties.getProperty("readOnly")).isEqualTo("true");
+		assertThat(connectionProperties.getProperty("options"))
+			.isEqualTo("-c lock_timeout=1000 -c statement_timeout=3000");
+	}
 }

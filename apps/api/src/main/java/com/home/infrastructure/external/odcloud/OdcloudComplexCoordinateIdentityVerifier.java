@@ -15,10 +15,15 @@ import org.springframework.web.client.RestClientException;
 
 public class OdcloudComplexCoordinateIdentityVerifier implements ComplexCoordinateIdentityVerifier {
 
+	private static final int DEFAULT_MAX_ATTEMPTS = 2;
+	private static final long DEFAULT_RETRY_BACKOFF_MILLIS = 100L;
+
 	private final RestClient restClient;
 	private final String baseUrl;
 	private final String serviceKey;
 	private final String aptPath;
+	private final int maxAttempts;
+	private final long retryBackoffMillis;
 
 	public OdcloudComplexCoordinateIdentityVerifier(
 		RestClient restClient,
@@ -26,10 +31,23 @@ public class OdcloudComplexCoordinateIdentityVerifier implements ComplexCoordina
 		String serviceKey,
 		String aptPath
 	) {
+		this(restClient, baseUrl, serviceKey, aptPath, DEFAULT_MAX_ATTEMPTS, DEFAULT_RETRY_BACKOFF_MILLIS);
+	}
+
+	OdcloudComplexCoordinateIdentityVerifier(
+		RestClient restClient,
+		String baseUrl,
+		String serviceKey,
+		String aptPath,
+		int maxAttempts,
+		long retryBackoffMillis
+	) {
 		this.restClient = Objects.requireNonNull(restClient);
 		this.baseUrl = trimToNull(baseUrl);
 		this.serviceKey = trimToNull(serviceKey);
 		this.aptPath = Objects.requireNonNull(aptPath);
+		this.maxAttempts = Math.max(1, maxAttempts);
+		this.retryBackoffMillis = Math.max(0L, retryBackoffMillis);
 	}
 
 	@Override
@@ -74,6 +92,22 @@ public class OdcloudComplexCoordinateIdentityVerifier implements ComplexCoordina
 	}
 
 	private OdcloudAptResponse getBody(String query) {
+		RestClientException lastException = null;
+		for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+			try {
+				return getBodyOnce(query);
+			}
+			catch (RestClientException exception) {
+				lastException = exception;
+				if (attempt < maxAttempts) {
+					backoff();
+				}
+			}
+		}
+		throw lastException;
+	}
+
+	private OdcloudAptResponse getBodyOnce(String query) {
 		if (baseUrl != null) {
 			return restClient.get()
 				.uri(ExternalApiUri.create(baseUrl, aptPath, query))
@@ -85,6 +119,19 @@ public class OdcloudComplexCoordinateIdentityVerifier implements ComplexCoordina
 			.uri(normalizedPath + "?" + query)
 			.retrieve()
 			.body(OdcloudAptResponse.class);
+	}
+
+	private void backoff() {
+		if (retryBackoffMillis == 0L) {
+			return;
+		}
+		try {
+			Thread.sleep(retryBackoffMillis);
+		}
+		catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("Interrupted during ODC identity retry backoff", exception);
+		}
 	}
 
 	private String odcloudQuery(String aptSeq) {

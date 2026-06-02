@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.queryParam;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.util.List;
@@ -72,6 +73,39 @@ class OdcloudComplexCoordinateIdentityVerifierTest {
 
 		assertThat(verification.status()).isEqualTo(ComplexCoordinateIdentityVerificationStatus.AMBIGUOUS);
 		assertThat(verification.reason()).contains("conflicts");
+		server.verify();
+	}
+
+	@Test
+	@DisplayName("ODC coordinate identity transient 실패는 호출 단위 retry 후 CONFIRMED를 반환한다")
+	void retriesTransientOdcloudIdentityFailure() {
+		RestClient.Builder builder = RestClient.builder().baseUrl("https://odcloud.example.test");
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		OdcloudComplexCoordinateIdentityVerifier verifier = new OdcloudComplexCoordinateIdentityVerifier(
+			builder.build(),
+			"https://odcloud.example.test",
+			"ODC-KEY",
+			ODC_APT_PATH,
+			2,
+			0
+		);
+		server.expect(requestTo(startsWith("https://odcloud.example.test" + ODC_APT_PATH)))
+			.andRespond(withServerError());
+		server.expect(requestTo(startsWith("https://odcloud.example.test" + ODC_APT_PATH)))
+			.andRespond(withSuccess("""
+				{
+				  "data": [
+				    {"COMPLEX_PK": "11530-4350", "PNU": "1153011200102380000"}
+				  ]
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		var verification = verifier.verify(
+			targets("1153011200102380000"),
+			new ComplexCoordinateTarget(501L, "11530-4350", "Sample", Set.of("101"))
+		);
+
+		assertThat(verification.status()).isEqualTo(ComplexCoordinateIdentityVerificationStatus.CONFIRMED);
 		server.verify();
 	}
 

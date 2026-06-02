@@ -74,6 +74,22 @@ class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
+	@DisplayName("building footprint 저장은 좌표 범위가 벗어난 row를 건너뛰고 유효 row를 보존한다")
+	void saveBuildingFootprintsSkipsInvalidCoordinateRows() {
+		JdbcComplexCoordinateExceptionRepository repository = new JdbcComplexCoordinateExceptionRepository(jdbcClient);
+
+		repository.saveBuildingFootprints(java.util.List.of(
+			importFootprint("1168010300101400002", "101동", "37.5010000", "127.0010000"),
+			importFootprint("1168010300101400002", "999동", "41.0000000", "127.9990000")
+		));
+
+		assertThat(footprintCount("1168010300101400002")).isEqualTo(1L);
+		assertThat(repository.findBuildingFootprintsByPnu("1168010300101400002"))
+			.extracting(BuildingFootprintCandidate::dongName)
+			.containsExactly("101동");
+	}
+
+	@Test
 	@DisplayName("같은 PNU의 동시 존재 complex는 apt_dong과 건물 동명으로 서로 다른 표시 좌표를 저장한다")
 	void storesDifferentDisplayCoordinatesForConcurrentComplexesUnderSamePnu() {
 		seedConcurrentComplexParcel();

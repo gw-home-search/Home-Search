@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.queryParam;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.util.List;
@@ -111,13 +112,102 @@ class VworldBuildingFootprintSourceTest {
 		assertThat(source.fetchByPnu("4128510200115660000")).isEmpty();
 	}
 
+	@Test
+	@DisplayName("VWorld WFS transient 실패는 호출 단위 retry 후 성공 결과를 반환한다")
+	void retriesTransientVworldFailure() {
+		VworldParcelCoordinateProperties properties = properties("DUMMY");
+		RestClient.Builder builder = RestClient.builder().baseUrl(properties.baseUrl());
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		VworldBuildingFootprintSource source = new VworldBuildingFootprintSource(builder.build(), properties, 2, 0);
+		server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
+			.andRespond(withServerError());
+		server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
+			.andRespond(withSuccess("""
+				{
+				  "features": [
+				    {
+				      "id": "dt_d010.retry",
+				      "bbox": [126.7780, 37.6875, 126.7782, 37.6877],
+				      "properties": {
+				        "pnu": "4128510200115660000",
+				        "buld_nm": "중산마을",
+				        "dong_nm": "1001동"
+				      }
+				    }
+				  ]
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		List<BuildingFootprintImportCandidate> footprints = source.fetchByPnu("4128510200115660000");
+
+		assertThat(footprints).hasSize(1);
+		assertThat(footprints.get(0).sourceBuildingKey()).isEqualTo("dt_d010.retry");
+		server.verify();
+	}
+
+	@Test
+	@DisplayName("VWorld WFS totalCount가 numOfRows보다 크면 다음 page를 이어서 조회한다")
+	void fetchesAdditionalVworldPagesWhenTotalCountExceedsPageSize() {
+		VworldParcelCoordinateProperties properties = properties("DUMMY", 1);
+		RestClient.Builder builder = RestClient.builder().baseUrl(properties.baseUrl());
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		VworldBuildingFootprintSource source = new VworldBuildingFootprintSource(builder.build(), properties, 1, 0);
+		server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
+			.andExpect(queryParam("pageNo", "1"))
+			.andExpect(queryParam("numOfRows", "1"))
+			.andRespond(withSuccess("""
+				{
+				  "totalCount": 2,
+				  "features": [
+				    {
+				      "id": "dt_d010.page1",
+				      "bbox": [126.7780, 37.6875, 126.7782, 37.6877],
+				      "properties": {
+				        "pnu": "4128510200115660000",
+				        "dong_nm": "1001동"
+				      }
+				    }
+				  ]
+				}
+				""", MediaType.APPLICATION_JSON));
+		server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
+			.andExpect(queryParam("pageNo", "2"))
+			.andExpect(queryParam("numOfRows", "1"))
+			.andRespond(withSuccess("""
+				{
+				  "totalCount": 2,
+				  "features": [
+				    {
+				      "id": "dt_d010.page2",
+				      "bbox": [126.7790, 37.6885, 126.7792, 37.6887],
+				      "properties": {
+				        "pnu": "4128510200115660000",
+				        "dong_nm": "1002동"
+				      }
+				    }
+				  ]
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		List<BuildingFootprintImportCandidate> footprints = source.fetchByPnu("4128510200115660000");
+
+		assertThat(footprints)
+			.extracting(BuildingFootprintImportCandidate::sourceBuildingKey)
+			.containsExactly("dt_d010.page1", "dt_d010.page2");
+		server.verify();
+	}
+
 	private VworldParcelCoordinateProperties properties(String serviceKey) {
+		return properties(serviceKey, 100);
+	}
+
+	private VworldParcelCoordinateProperties properties(String serviceKey, int numOfRows) {
 		return new VworldParcelCoordinateProperties(
 			"https://api.example.test",
 			"/vworld/wfs",
 			serviceKey,
 			"http://localhost:8080/test",
-			100,
+			numOfRows,
 			1_000,
 			1_000
 		);

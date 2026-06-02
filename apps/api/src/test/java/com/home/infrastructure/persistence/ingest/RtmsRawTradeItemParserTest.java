@@ -30,6 +30,8 @@ class RtmsRawTradeItemParserTest {
 			  "exclArea": "84.93",
 			  "floor": "12",
 			  "jibun": "140-1",
+			  "bonbun": "0140",
+			  "bubun": "0001",
 			  "sggCd": "11680",
 			  "umdCd": "10300",
 			  "cdealType": "O",
@@ -49,6 +51,8 @@ class RtmsRawTradeItemParserTest {
 				assertThat(item.dealYear()).isEqualTo(2025);
 				assertThat(item.exclArea()).isEqualTo(84.93);
 				assertThat(item.floor()).isEqualTo(12);
+				assertThat(item.bonbun()).isEqualTo("0140");
+				assertThat(item.bubun()).isEqualTo("0001");
 				assertThat(item.isCanceled()).isTrue();
 				assertThat(item.cancelDealDay()).isEqualTo("26.03.12");
 				assertThat(item.registrationDate()).isEqualTo("25.12.20");

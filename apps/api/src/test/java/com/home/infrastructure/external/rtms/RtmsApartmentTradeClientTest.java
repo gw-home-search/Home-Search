@@ -46,6 +46,8 @@ class RtmsApartmentTradeClientTest {
 			            "excluUseAr": 84.93,
 			            "floor": 12,
 			            "jibun": "140-1",
+			            "bonbun": "0140",
+			            "bubun": "0001",
 			            "cdealType": "O",
 			            "cdealDay": "26.03.12",
 			            "rgstDate": "26.04.09",
@@ -81,6 +83,8 @@ class RtmsApartmentTradeClientTest {
 		assertThat(item.exclArea()).isEqualTo(84.93);
 		assertThat(item.floor()).isEqualTo(12);
 		assertThat(item.jibun()).isEqualTo("140-1");
+		assertThat(item.bonbun()).isEqualTo("0140");
+		assertThat(item.bubun()).isEqualTo("0001");
 		assertThat(item.cancelDealType()).isEqualTo("O");
 		assertThat(item.cancelDealDay()).isEqualTo("26.03.12");
 		assertThat(item.registrationDate()).isEqualTo("26.04.09");

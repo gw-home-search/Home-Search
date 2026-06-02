@@ -206,7 +206,7 @@ Migration notes:
 
 Purpose:
 
-- Return parcel-level apartment complex markers inside the current map bounds.
+- Return apartment complex markers inside the current map bounds.
 - Used when the Kakao map is zoomed in enough to show detailed markers.
 
 Source controller:
@@ -258,6 +258,7 @@ Response:
 [
   {
     "parcelId": 1001,
+    "complexId": 501,
     "lat": 37.5123,
     "lng": 127.0456,
     "latestDealAmount": 125000,
@@ -269,10 +270,13 @@ Response:
 Response fields:
 
 - `parcelId`: parcel id used by detail and trade APIs.
+- `complexId`: optional complex id used to scope detail and trade APIs. This is
+  present for complex-level markers and may be `null` for parcel representative
+  fallback markers.
 - `lat`: marker latitude.
 - `lng`: marker longitude.
 - `latestDealAmount`: optional latest trade amount in 10,000 KRW units.
-- `unitCntSum`: total household count under the parcel.
+- `unitCntSum`: household count represented by this marker.
 
 Status:
 
@@ -288,15 +292,16 @@ Migration notes:
 - Frontend adapters may temporarily accept `id`, `latitude`, and `longitude`
   while source code is being migrated, but new target code should prefer
   `parcelId`, `lat`, and `lng`.
-- This endpoint returns one marker per parcel, even when the parcel contains
-  multiple complexes.
-- `unitCntSum` is the sum of household counts for all complexes under the
-  parcel.
-- `latestDealAmount` is the newest normalized `trade` amount under any complex
-  in the parcel.
-- Price and area filters use the same trade row selected for the parcel
-  marker's latest trade policy. A future per-complex marker or per-complex
-  filter policy would be a contract change.
+- Normal parcels still return one representative marker. Concurrent same-PNU
+  complexes with resolved high-confidence building coordinates may return one
+  marker per complex. Redeveloped parcels return the current-generation complex
+  marker. Unresolved or ambiguous cases fall back to one representative marker.
+- `unitCntSum` is the household count for a complex-level marker and the sum of
+  household counts for a representative fallback marker.
+- `latestDealAmount` is the newest normalized `trade` amount for the marker's
+  `complexId` when present, otherwise the newest trade under the parcel.
+- Price, area, unit, and age filters are applied to the marker row actually
+  returned by this endpoint.
 - Map marker APIs must not require ranking, trend, favorite, alarm, mail, or
   auth state.
 
@@ -451,7 +456,7 @@ Status:
 
 Purpose:
 
-- Return parcel and representative complex details for the selected marker.
+- Return parcel and complex details for the selected marker.
 
 Source controller:
 
@@ -461,11 +466,17 @@ Frontend source consumer:
 
 - `src/components/sidebar/detail/DetailSidebar.jsx`
 
+Request:
+
+- Optional query parameter `complexId`: selected complex id. When omitted, the
+  backend returns the deterministic representative complex for the parcel.
+
 Response:
 
 ```json
 {
   "parcelId": 1001,
+  "complexId": 501,
   "latitude": 37.5123,
   "longitude": 127.0456,
   "address": "Sample address",
@@ -485,6 +496,7 @@ Response:
 Response fields:
 
 - `parcelId`
+- `complexId`: selected or representative complex id.
 - `latitude`
 - `longitude`
 - `address`
@@ -509,16 +521,16 @@ Migration notes:
 
 - Source DTO omits `null` values. Target Home Search may omit nullable fields rather
   than returning explicit `null`.
-- If a parcel has multiple complexes, this endpoint returns one representative
-  complex detail for the selected `parcelId`. The baseline representative policy
-  is deterministic and implementation-defined; clients should not treat it as a
-  list of every complex under the parcel.
+- If `complexId` is provided, this endpoint returns that complex only when it
+  belongs to the requested `parcelId`; otherwise it returns `404`. If omitted,
+  this endpoint returns one representative complex detail for the selected
+  `parcelId`.
 
 ### GET `/api/v1/trade/{parcelId}`
 
 Purpose:
 
-- Return trade list for complexes under the selected parcel.
+- Return trade list for the selected parcel or selected complex.
 
 Source controller:
 
@@ -528,11 +540,17 @@ Frontend source consumer:
 
 - `src/components/sidebar/detail/TradeSidebar.jsx`
 
+Request:
+
+- Optional query parameter `complexId`: selected complex id. When omitted, the
+  backend returns trades for all complexes under the parcel.
+
 Response:
 
 ```json
 {
   "parcelId": 1001,
+  "complexId": 501,
   "trades": [
     {
       "tradeId": 9001,
@@ -549,6 +567,7 @@ Response:
 Response fields:
 
 - `parcelId`
+- `complexId`: selected complex id when scoped; otherwise nullable.
 - `trades`
 
 Trade item fields:
@@ -570,8 +589,10 @@ Status:
 Migration notes:
 
 - The Home Search query path should work through `complex_id`.
-- The response includes normalized trades for all complexes under the requested
-  `parcelId`, ordered newest first.
+- If `complexId` is provided, the response includes normalized trades only for
+  that complex after verifying it belongs to the requested `parcelId`. If
+  omitted, the response includes normalized trades for all complexes under the
+  requested `parcelId`, ordered newest first.
 - Preserve `complex_pk`, `apt_seq`, `source`, and `source_key` for audit,
   matching, and deduplication, but do not expose them in this public response.
 - Default ordering should be newest first: `dealDate` descending, then

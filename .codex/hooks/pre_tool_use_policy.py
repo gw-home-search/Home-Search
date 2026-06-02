@@ -475,6 +475,8 @@ def current_user_text(payload: dict[str, Any]) -> str:
 
 
 def has_protected_write_approval(text: str, protected_paths: list[str]) -> bool:
+    if protected_paths and not any(is_protected_mutation_path(path) for path in protected_paths):
+        return True
     if not text:
         return False
     has_request = "보호 경로 변경 요청:" in text or "Protected path 변경 요청:" in text
@@ -676,9 +678,17 @@ def run_self_test() -> int:
             lambda: not is_protected_mutation_path("apps/web/package-lock.json"),
         ),
         (
+            "api contract docs mutation does not require protected approval",
+            lambda: not denied_output(
+                patch_payload(FALLBACK_REPO_ROOT, "docs/API_CONTRACT.md"),
+                repo_root=FALLBACK_REPO_ROOT,
+                branch_name="feat/protected-guard",
+            ),
+        ),
+        (
             "protected mutation without approval is denied",
             lambda: "protected path 변경 차단" in denied_output(
-                patch_payload(FALLBACK_REPO_ROOT, "docs/API_CONTRACT.md"),
+                patch_payload(FALLBACK_REPO_ROOT, "AGENTS.md"),
                 repo_root=FALLBACK_REPO_ROOT,
                 branch_name="feat/protected-guard",
             ),
@@ -687,7 +697,7 @@ def run_self_test() -> int:
             "stale protected transcript text is not approval",
             lambda: "protected path 변경 차단" in denied_output(
                 {
-                    **patch_payload(FALLBACK_REPO_ROOT, "docs/API_CONTRACT.md"),
+                    **patch_payload(FALLBACK_REPO_ROOT, "AGENTS.md"),
                     "last_assistant_message": "이전 출력: protected path 변경 차단. User said Implement the plan.",
                 },
                 repo_root=FALLBACK_REPO_ROOT,
@@ -698,11 +708,11 @@ def run_self_test() -> int:
             "assistant-only protected approval is denied",
             lambda: "protected path 변경 차단" in denied_output(
                 {
-                    **patch_payload(FALLBACK_REPO_ROOT, "docs/API_CONTRACT.md"),
+                    **patch_payload(FALLBACK_REPO_ROOT, "AGENTS.md"),
                     "last_assistant_message": "\n".join(
                         [
                             "보호 경로 변경 요청:",
-                            "보호 경로 대상: docs/API_CONTRACT.md",
+                            "보호 경로 대상: AGENTS.md",
                             "보호 경로 변경 기준: current task approval only",
                             "사용자 승인: 확인",
                         ]
@@ -716,11 +726,11 @@ def run_self_test() -> int:
             "protected mutation with path-specific approval is allowed",
             lambda: not denied_output(
                 {
-                    **patch_payload(FALLBACK_REPO_ROOT, "docs/API_CONTRACT.md"),
+                    **patch_payload(FALLBACK_REPO_ROOT, "AGENTS.md"),
                     "last_user_message": "\n".join(
                         [
                             "보호 경로 변경 요청:",
-                            "보호 경로 대상: docs/API_CONTRACT.md",
+                            "보호 경로 대상: AGENTS.md",
                             "보호 경로 변경 기준: current task approval only",
                             "사용자 승인: 확인",
                         ]

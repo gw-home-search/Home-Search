@@ -222,6 +222,22 @@ improves, without requiring another external RTMS fetch.
 PNU derivation must stay centralized through `RtmsJibunPnuNormalizer` so
 bootstrap and matching do not diverge.
 
+## Parcel Coordinate Resolution
+
+Parcel bootstrap resolves display coordinates from the local VWorld SHP snapshot
+before any opt-in live fallback. Exact PNU snapshot rows are always preferred.
+
+If the exact PNU is absent, the snapshot resolver may use rows with the same
+first 15 PNU digits, which means the same legal district, land code, and main
+lot number. The coordinate is the centroid of the unioned same-bonbun
+geometries, and the parcel keeps the original derived PNU. This covers RTMS
+rows where the trade source reports a main lot or block lot while the cadastral
+snapshot contains only subdivided sub-lots.
+
+The resolver must not fall back to nearby or adjacent main lot numbers. If no
+exact or same-bonbun snapshot row exists, the row remains held until live
+VWorld fallback, a newer snapshot, or manual master-data coverage resolves it.
+
 ## Complex Metadata Enrichment
 
 `complex` rows keep identity data on the ingest path. Optional complex

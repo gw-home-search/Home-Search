@@ -7,6 +7,7 @@ import java.util.Optional;
 
 import com.home.application.ingest.ComplexMasterBootstrapResult;
 import com.home.application.ingest.ComplexMasterBootstrapper;
+import com.home.application.ingest.ComplexIdentityResolver;
 import com.home.application.ingest.OpenApiTradeItem;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -17,10 +18,20 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 
 	private final JdbcClient jdbcClient;
 	private final ParcelCoordinateResolver coordinateResolver;
+	private final ComplexIdentityResolver identityResolver;
 
 	public JdbcComplexMasterBootstrapper(JdbcClient jdbcClient, ParcelCoordinateResolver coordinateResolver) {
+		this(jdbcClient, coordinateResolver, ComplexIdentityResolver.noop());
+	}
+
+	public JdbcComplexMasterBootstrapper(
+		JdbcClient jdbcClient,
+		ParcelCoordinateResolver coordinateResolver,
+		ComplexIdentityResolver identityResolver
+	) {
 		this.jdbcClient = Objects.requireNonNull(jdbcClient);
 		this.coordinateResolver = Objects.requireNonNull(coordinateResolver);
+		this.identityResolver = Objects.requireNonNull(identityResolver);
 	}
 
 	@Override
@@ -35,7 +46,7 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 		List<Long> existingComplexIds = findComplexIdsByAptSeq(aptSeq);
 		if (existingComplexIds.size() == 1) {
 			Long complexId = existingComplexIds.get(0);
-			Optional<String> pnu = RtmsPnuBuilder.build(item);
+			Optional<String> pnu = resolvePnu(item);
 			if (pnu.isEmpty()) {
 				return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: pnu unavailable aptSeq=" + aptSeq);
 			}
@@ -64,7 +75,7 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: aptName unavailable aptSeq=" + aptSeq);
 		}
 
-		Optional<String> pnu = RtmsPnuBuilder.build(item);
+		Optional<String> pnu = resolvePnu(item);
 		if (pnu.isEmpty()) {
 			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: pnu unavailable aptSeq=" + aptSeq);
 		}
@@ -121,6 +132,16 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			.param("pnu", pnu)
 			.query(Long.class)
 			.optional();
+	}
+
+	private Optional<String> resolvePnu(OpenApiTradeItem item) {
+		return RtmsPnuBuilder.build(item).or(() -> identityResolver.resolvePnu(item)
+			.map(String::trim)
+			.filter(this::validPnu));
+	}
+
+	private boolean validPnu(String value) {
+		return value.matches("\\d{19}");
 	}
 
 	private Optional<Long> findComplexIdByComplexPk(String complexPk) {

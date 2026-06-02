@@ -64,6 +64,30 @@ The implementation can keep existing package names during the first move. The
 important decision is not package renaming; it is keeping project focused on
 collection, storage, and map display.
 
+## Coordinate Source Boundary
+
+Home Search uses two database roles:
+
+- `home_search`: operational database for API, RTMS ingest, map display, and
+  evidence.
+- `home_search_coordinate_full_durable_*`: coordinate source database used only
+  as a read-only PNU coordinate lookup source.
+
+The backend should connect to the coordinate source database through a dedicated
+coordinate lookup component. It should not copy nationwide coordinate snapshots
+into `home_search`, and it should not treat
+`home_search.reference.parcel_coordinate_snapshot` as the operational coordinate
+model.
+
+RTMS master bootstrap should flow through:
+
+```text
+RTMS row -> PNU -> Coordinate Source DB lookup -> parcel -> complex -> trade
+```
+
+VWorld VM/WFS is reserved for same-PNU multi-complex marker disambiguation and
+stores any confident complex-level result in `complex_display_coordinate`.
+
 ## Frontend Current Shape
 
 The source frontend is a Vite React app:

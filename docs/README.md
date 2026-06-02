@@ -59,10 +59,12 @@ Excluded from the current project scope:
 1. [MIGRATION_PLAN.md](MIGRATION_PLAN.md)
 2. [ARCHITECTURE.md](ARCHITECTURE.md)
 3. [DATA_STORAGE.md](DATA_STORAGE.md)
-4. [API_CONTRACT.md](API_CONTRACT.md)
-5. [MAP_DISPLAY_FLOW.md](MAP_DISPLAY_FLOW.md)
-6. [UI_UX_MIGRATION.md](UI_UX_MIGRATION.md)
-7. [INFRA_AND_ENV.md](INFRA_AND_ENV.md)
+4. [COORDINATE_SOURCE_STRATEGY.md](COORDINATE_SOURCE_STRATEGY.md)
+5. [DATA_MODEL_ERD.md](DATA_MODEL_ERD.md)
+6. [API_CONTRACT.md](API_CONTRACT.md)
+7. [MAP_DISPLAY_FLOW.md](MAP_DISPLAY_FLOW.md)
+8. [UI_UX_MIGRATION.md](UI_UX_MIGRATION.md)
+9. [INFRA_AND_ENV.md](INFRA_AND_ENV.md)
 
 ## Non-Negotiable Decisions
 
@@ -72,5 +74,8 @@ Excluded from the current project scope:
 - Data safety is more important than aggregate features.
 - The `complex_id` versus `complex_pk` mismatch in the source backend must be
   resolved explicitly during backend migration.
+- Coordinate source storage is separate from the operational `home_search`
+  database. The coordinate source database is read by PNU; nationwide coordinate
+  snapshots are not copied into the operational database.
 - UI/UX may change, but frontend calls must remain compatible with the public API
   contract.

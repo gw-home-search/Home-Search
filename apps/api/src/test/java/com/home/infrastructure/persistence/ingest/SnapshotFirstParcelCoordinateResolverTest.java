@@ -48,4 +48,25 @@ class SnapshotFirstParcelCoordinateResolverTest {
 
 		assertThat(resolver.resolve("1168010300107770001", null)).contains(fallback);
 	}
+
+	@Test
+	@DisplayName("승인된 수동 좌표는 snapshot miss 이후 VWorld fallback보다 먼저 사용된다")
+	void approvedOverrideIsUsedBeforeVworldFallbackWhenSnapshotMisses() {
+		ParcelCoordinate approved = new ParcelCoordinate(
+			new BigDecimal("37.6012345"),
+			new BigDecimal("127.1543210")
+		);
+		AtomicBoolean fallbackCalled = new AtomicBoolean(false);
+		ParcelCoordinateResolver resolver = new SnapshotFirstParcelCoordinateResolver(
+			pnu -> Optional.empty(),
+			pnu -> Optional.of(approved),
+			(pnu, item) -> {
+				fallbackCalled.set(true);
+				return Optional.empty();
+			}
+		);
+
+		assertThat(resolver.resolve("1168010300107770001", null)).contains(approved);
+		assertThat(fallbackCalled).isFalse();
+	}
 }

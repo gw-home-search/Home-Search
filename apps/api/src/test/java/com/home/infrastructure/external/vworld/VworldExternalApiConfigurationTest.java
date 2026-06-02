@@ -15,7 +15,10 @@ class VworldExternalApiConfigurationTest {
 	@DisplayName("RTMS ingest용 primary coordinate resolver는 snapshot miss에서 VWorld fallback을 호출하지 않는다")
 	void primaryCoordinateResolverDoesNotCallVworldFallbackOnSnapshotMiss() {
 		VworldExternalApiConfiguration configuration = new VworldExternalApiConfiguration();
-		ParcelCoordinateResolver resolver = configuration.parcelCoordinateResolver(pnu -> Optional.empty());
+		ParcelCoordinateResolver resolver = configuration.parcelCoordinateResolver(
+			pnu -> Optional.empty(),
+			pnu -> Optional.empty()
+		);
 
 		assertThat(resolver.resolve("1168010300107770001", null)).isEmpty();
 	}

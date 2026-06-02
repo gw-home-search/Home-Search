@@ -1,6 +1,7 @@
 package com.home.infrastructure.external.vworld;
 
 import com.home.infrastructure.persistence.ingest.ParcelCoordinateResolver;
+import com.home.infrastructure.persistence.ingest.ParcelCoordinateOverrideRepository;
 import com.home.infrastructure.persistence.ingest.ParcelCoordinateSnapshotRepository;
 import com.home.infrastructure.persistence.ingest.SnapshotFirstParcelCoordinateResolver;
 
@@ -52,7 +53,14 @@ class VworldExternalApiConfiguration {
 	@Bean
 	@Primary
 	@Lazy
-	ParcelCoordinateResolver parcelCoordinateResolver(ParcelCoordinateSnapshotRepository snapshotRepository) {
-		return new SnapshotFirstParcelCoordinateResolver(snapshotRepository, ParcelCoordinateResolver.empty());
+	ParcelCoordinateResolver parcelCoordinateResolver(
+		ParcelCoordinateSnapshotRepository snapshotRepository,
+		ParcelCoordinateOverrideRepository overrideRepository
+	) {
+		return new SnapshotFirstParcelCoordinateResolver(
+			snapshotRepository,
+			overrideRepository,
+			ParcelCoordinateResolver.empty()
+		);
 	}
 }

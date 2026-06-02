@@ -26,6 +26,9 @@ vworld:
     read-timeout-millis: 5000
 
 home:
+  coordinate:
+    vworld-fallback:
+      enabled: false
   ingest:
     rtms:
       enabled: false

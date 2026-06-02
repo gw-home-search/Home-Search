@@ -552,6 +552,10 @@ def check_dangerous_command(command: str) -> None:
 def check_pr_publish_command(command: str) -> None:
     for cmd in unwrap_shell(command):
         if DIRECT_PR_CREATE_RE.search(cmd):
+            words = shell_words(cmd)
+            required_flags = {"--draft", "--base", "--head", "--title", "--body-file"}
+            if required_flags.issubset(set(words)):
+                continue
             deny(
                 "PR 생성 차단: raw `gh pr create`는 PR lint를 우회할 수 있습니다. "
                 "`.codex/harness/home run ... --pr` 또는 "

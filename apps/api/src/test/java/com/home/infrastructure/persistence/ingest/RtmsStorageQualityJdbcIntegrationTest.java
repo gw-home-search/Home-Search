@@ -273,7 +273,7 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
 		return jdbcClient.sql("""
 			SELECT count(*)
 			FROM trade_match_evidence
-			WHERE match_status = 'MATCHED'
+			WHERE match_status IN ('MATCHED', 'MATCHED_NAME_VARIANT', 'MATCHED_PNU_SGG_CORRECTED')
 			""")
 			.query(Long.class)
 			.single();
@@ -285,7 +285,10 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
 			FROM raw_trade_ingest r
 			LEFT JOIN trade_match_evidence e ON e.raw_ingest_id = r.id
 			WHERE r.status = 'NORMALIZED'
-			  AND e.match_status IS DISTINCT FROM 'MATCHED'
+			  AND (
+			      e.match_status IS NULL
+			      OR e.match_status NOT IN ('MATCHED', 'MATCHED_NAME_VARIANT', 'MATCHED_PNU_SGG_CORRECTED')
+			  )
 			""")
 			.query(Long.class)
 			.single();

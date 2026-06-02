@@ -87,6 +87,7 @@ identity, duplicate, `apt_dong`, and cancellation rules are fixed in
 | --- | --- | --- | --- |
 | `aptSeq` unique, derived PNU matches the complex parcel PNU, and name matches master or alias | insert | `MATCHED` | strongest safe path |
 | `aptSeq` unique, derived PNU matches, but RTMS name is a new variant | insert | `MATCHED_NAME_VARIANT` | keep master name; preserve observed name as alias evidence |
+| `aptSeq` unique, derived PNU differs only by the first 5-digit `sggCd`, the complex parcel PNU starts with the `aptSeq` prefix, and RTMS name matches master or alias | insert | `MATCHED_PNU_SGG_CORRECTED` | handles observed RTMS item `sggCd` drift while preserving the raw derived PNU evidence |
 | `aptSeq` unique, derived PNU does not match the complex parcel PNU | hold | `PNU_CONFLICT` | prevents latest price from attaching to the wrong parcel |
 | PNU has one complex and RTMS name matches master or alias | insert | `MATCHED` | safe PNU/name path |
 | PNU has one complex but RTMS name does not match master or alias | hold | `NAME_CONFLICT` | same land lot can still contain name ambiguity |
@@ -142,6 +143,7 @@ Future review queues should include:
 - `NAME_CONFLICT`
 - `PNU_CONFLICT`
 - `MATCHED_NAME_VARIANT`
+- `MATCHED_PNU_SGG_CORRECTED`
 
 Future admin detail views should show:
 
@@ -174,7 +176,8 @@ The implementation must cover each policy branch with deterministic tests:
 - Integration tests showing held rows do not create normalized `trade`.
 - Integration tests showing safe rows create normalized `trade` and evidence.
 - Regression tests for `PNU_CONFLICT`, `NAME_CONFLICT`, `AMBIGUOUS`,
-  `PNU_UNAVAILABLE`, `UNMATCHED`, `MATCHED`, and `MATCHED_NAME_VARIANT`.
+  `PNU_UNAVAILABLE`, `UNMATCHED`, `MATCHED`, `MATCHED_NAME_VARIANT`, and
+  `MATCHED_PNU_SGG_CORRECTED`.
 
 No test may require live RTMS, VWorld, Kakao, production data, secrets, or a
 manual admin UI.

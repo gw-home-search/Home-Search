@@ -123,6 +123,16 @@ public class JdbcComplexMatcher implements ComplexMatcher {
 			);
 		}
 		if (!jibunPnu.derivedPnu().equals(candidate.parcelPnu())) {
+			if (sggOnlyMismatchCanBeCorrected(item, aptSeq, candidate, jibunPnu)) {
+				return candidate.matched(
+					"APTSEQ_PNU_SGG_CORRECTED",
+					TradeMatchStatus.MATCHED_PNU_SGG_CORRECTED,
+					jibunPnu,
+					1,
+					List.of(candidate.complexId()),
+					"RTMS sggCd corrected by aptSeq prefix"
+				);
+			}
 			List<ComplexCandidate> pnuCandidates = findByPnu(jibunPnu.derivedPnu());
 			List<Long> candidateIds = conflictCandidateIds(candidate, pnuCandidates);
 			return ComplexMatchResult.failed(
@@ -144,6 +154,35 @@ public class JdbcComplexMatcher implements ComplexMatcher {
 			? "observed RTMS name differs from master name"
 			: null;
 		return candidate.matched("APTSEQ", status, jibunPnu, 1, List.of(candidate.complexId()), failureReason);
+	}
+
+	private boolean sggOnlyMismatchCanBeCorrected(
+		OpenApiTradeItem item,
+		String aptSeq,
+		ComplexCandidate candidate,
+		RtmsJibunPnu jibunPnu
+	) {
+		String aptSeqSgg = aptSeqSgg(aptSeq);
+		if (aptSeqSgg == null || !nameMatches(item.aptName(), candidate)) {
+			return false;
+		}
+		String candidatePnu = candidate.parcelPnu();
+		String derivedPnu = jibunPnu.derivedPnu();
+		if (candidatePnu == null || derivedPnu == null || candidatePnu.length() != 19 || derivedPnu.length() != 19) {
+			return false;
+		}
+		if (!candidatePnu.startsWith(aptSeqSgg) || derivedPnu.startsWith(aptSeqSgg)) {
+			return false;
+		}
+		return candidatePnu.substring(5).equals(derivedPnu.substring(5));
+	}
+
+	private String aptSeqSgg(String aptSeq) {
+		if (aptSeq == null || aptSeq.length() < 6 || aptSeq.charAt(5) != '-') {
+			return null;
+		}
+		String prefix = aptSeq.substring(0, 5);
+		return prefix.chars().allMatch(Character::isDigit) ? prefix : null;
 	}
 
 	private List<ComplexCandidate> findByAptSeq(String aptSeq) {

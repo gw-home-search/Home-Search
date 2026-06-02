@@ -45,6 +45,12 @@ RTMS match attempts also keep a review evidence layer between raw ingest and
 normalized trades. See [RTMS_JIBUN_PNU_MATCHING.md](RTMS_JIBUN_PNU_MATCHING.md)
 for the detailed jibun/PNU and conflict policy.
 
+Coordinate source storage is a separate lookup dependency, not a third
+operational storage layer. Home Search reads PNU coordinates from the coordinate
+source database and stores only the resulting operational parcel coordinates in
+`parcel`. See [COORDINATE_SOURCE_STRATEGY.md](COORDINATE_SOURCE_STRATEGY.md)
+and [DATA_MODEL_ERD.md](DATA_MODEL_ERD.md).
+
 ### Raw Layer
 
 Purpose:
@@ -221,6 +227,24 @@ improves, without requiring another external RTMS fetch.
 
 PNU derivation must stay centralized through `RtmsJibunPnuNormalizer` so
 bootstrap and matching do not diverge.
+
+### Coordinate Lookup For Bootstrap
+
+RTMS bootstrap must use the coordinate source database as a read-only PNU
+coordinate provider:
+
+1. Derive a 19 digit PNU from the RTMS row.
+2. Lookup `latitude`, `longitude`, and `geom` in the coordinate source database.
+3. Upsert `parcel` in the operational `home_search` database.
+4. Upsert `complex` and continue normal matching.
+
+The operational database must not be filled with nationwide coordinate snapshot
+tables. In particular, `home_search.reference.parcel_coordinate_snapshot` is not
+the target coordinate model.
+
+VWorld VM/WFS is reserved for same-PNU multi-complex marker disambiguation. It
+is not the default coordinate provider for ordinary single-complex RTMS
+bootstrap.
 
 ## Complex Metadata Enrichment
 

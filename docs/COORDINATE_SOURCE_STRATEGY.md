@@ -1,0 +1,172 @@
+# Coordinate Source Strategy
+
+
+## Purpose
+
+This document fixes how Home Search obtains parcel coordinates during RTMS
+ingest and map display.
+
+Home Search has two separate database roles:
+
+- `home_search`: operational database for public APIs and ingest results.
+- `home_search_coordinate_full_durable_*`: coordinate source database used as a
+  read-only PNU coordinate lookup source.
+
+The coordinate source database is not the operational database. Its internal
+tables are not part of the `home_search` operational ERD, even when those table
+names contain `reference`.
+
+## Fixed Decision
+
+Home Search must not populate or depend on
+`home_search.reference.parcel_coordinate_snapshot` as the operational coordinate
+path.
+
+Instead, the backend should connect directly to the coordinate source database
+and read coordinates by PNU.
+
+```text
+RTMS row
+  -> derive PNU
+  -> lookup PNU in Coordinate Source DB
+  -> upsert home_search.parcel
+  -> bootstrap home_search.complex
+  -> insert home_search.trade
+```
+
+The coordinate source database may physically store its coordinate rows in a
+table named `reference.parcel_coordinate_snapshot`. That physical table name is
+an implementation detail of the coordinate source database only.
+
+## Coordinate Lookup Contract
+
+Lookup key:
+
+- `pnu`: 19 digit PNU derived from RTMS `sggCd`, `umdCd`, and `jibun`.
+
+Lookup result:
+
+- `latitude`: required.
+- `longitude`: required.
+- `geom`: preferred when available.
+
+The operational database stores the lookup result in `parcel`:
+
+- `parcel.pnu`
+- `parcel.latitude`
+- `parcel.longitude`
+- `parcel.geom`
+
+`parcel.geom` is nullable because the public map display can still operate with
+lat/lng, but source geometry should be copied when the coordinate source lookup
+provides it.
+
+## Coordinate Source Priority
+
+Default coordinate source:
+
+1. Coordinate Source DB lookup by PNU.
+
+VWorld VM/WFS is not the default coordinate provider for ordinary RTMS ingest.
+Do not call VWorld VM/WFS for a normal single-complex PNU bootstrap when the
+coordinate source database has parcel coordinates.
+
+## VWorld VM/WFS Policy
+
+Use VWorld VM/WFS only for same-PNU multi-complex display disambiguation.
+
+Allowed case:
+
+- The PNU exists in the Coordinate Source DB.
+- `home_search` has, or is creating, two or more `complex` rows under the same
+  `parcel.pnu`.
+- Parcel-level coordinates would collapse distinct complex markers onto one
+  location.
+
+Storage target for VWorld VM/WFS results:
+
+- `complex_display_coordinate`
+
+Marker coordinate selection:
+
+```text
+if complex_display_coordinate exists:
+    use complex-level coordinate
+else:
+    use parcel.latitude / parcel.longitude
+```
+
+When VWorld VM/WFS cannot confidently split same-PNU complexes, keep the parcel
+coordinate fallback and leave explainable evidence instead of guessing a
+complex-level marker.
+
+## Operational Database Boundary
+
+The operational database owns:
+
+- `region`
+- `parcel`
+- `complex`
+- `complex_display_coordinate`
+- `raw_trade_ingest`
+- `trade_match_evidence`
+- `trade_source_key_registry`
+- `trade`
+
+The operational database does not own:
+
+- Nationwide coordinate snapshots.
+- Coordinate source import stage tables.
+- Coordinate source publish/checkpoint tables.
+- Coordinate source run evidence.
+
+Those belong to the coordinate source database or to offline coordinate data
+preparation.
+
+## Ingest Invariants
+
+- Raw RTMS rows are saved before normalized trades.
+- A normalized `trade` row is created only after a `complex_id` is certain.
+- Coordinate lookup failure must not create fake coordinates.
+- Coordinate lookup failure must leave queryable raw/evidence state.
+- `complex_id` remains the operational relation.
+- `complex_pk`, `apt_seq`, `source`, and `source_key` remain audit and dedupe
+  metadata.
+
+## Configuration Direction
+
+Operational DB:
+
+```text
+DB_JDBC_URL=jdbc:postgresql://postgis:5432/home_search
+DB_USERNAME=home_search
+DB_PASSWORD=...
+```
+
+Coordinate Source DB:
+
+```text
+COORDINATE_SOURCE_DB_JDBC_URL=jdbc:postgresql://postgis:5432/home_search_coordinate_full_durable_20260527182147
+COORDINATE_SOURCE_DB_USERNAME=home_search
+COORDINATE_SOURCE_DB_PASSWORD=...
+```
+
+The coordinate source connection should be treated as read-only by application
+code.
+
+## Current Implementation Gap
+
+Current backend code still has a path that reads
+`home_search.reference.parcel_coordinate_snapshot`. That path is a migration
+artifact and should be replaced by a coordinate source database lookup provider.
+
+Target implementation:
+
+```text
+JdbcComplexMasterBootstrapper
+  -> ParcelCoordinateProvider
+  -> CoordinateSourceDbParcelCoordinateLookup
+```
+
+VWorld VM/WFS is attached to same-PNU multi-complex display disambiguation, not
+to ordinary parcel bootstrap.

@@ -608,7 +608,10 @@ def check_payload(
         if path == "docs/API_CONTRACT.md" or is_protected_mutation_path(path)
     )
     if protected_paths and not has_protected_write_approval(approval_text, protected_paths):
-        if not branch.startswith("codex/"):
+        is_pr_work_branch = branch.startswith("codex/") or (
+            branch.startswith("feat/") and branch.endswith("-integration")
+        )
+        if not is_pr_work_branch:
             deny(f"protected path 변경 차단: {', '.join(protected_paths)}")
 
     scope = infer_worktree_scope(root, cwd, branch)

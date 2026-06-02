@@ -46,8 +46,8 @@ class ComplexCoordinatePersistenceConfiguration {
 		ObjectProvider<JdbcClient> jdbcClientProvider,
 		ObjectProvider<ComplexCoordinateIdentityVerifier> identityVerifierProvider,
 		ObjectProvider<BuildingFootprintSource> buildingFootprintSourceProvider,
-		@Value("${complex.coordinate.identity.block-on-unavailable:false}") boolean blockOnUnavailableIdentity,
-		@Value("${complex.coordinate.identity.block-on-failed:false}") boolean blockOnFailedIdentity
+		@Value("${complex.coordinate.identity.block-on-unavailable:true}") boolean blockOnUnavailableIdentity,
+		@Value("${complex.coordinate.identity.block-on-failed:true}") boolean blockOnFailedIdentity
 	) {
 		JdbcClient jdbcClient = requiredJdbcClient(jdbcClientProvider);
 		return new ComplexCoordinateExceptionService(

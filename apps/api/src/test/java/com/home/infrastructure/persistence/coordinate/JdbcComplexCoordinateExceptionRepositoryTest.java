@@ -54,8 +54,8 @@ class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
-	@DisplayName("좌표 readiness는 backoff 이전의 FAILED case만 재시도 후보로 조회한다")
-	void findsOnlyRetryableFailedCasesBeforeBackoff() {
+	@DisplayName("좌표 readiness는 backoff 이전의 FAILED/UNAVAILABLE case만 재시도 후보로 조회한다")
+	void findsOnlyRetryableCasesBeforeBackoff() {
 		seedSingleComplexParcel();
 		seedConcurrentComplexParcel();
 		seedResolvedCaseParcel();
@@ -64,13 +64,29 @@ class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSuppo
 			VALUES
 			    (1001, '1168010300101400001', 'FAILED', 'stale failure', now() - INTERVAL '2 days'),
 			    (1002, '1168010300101400002', 'FAILED', 'fresh failure', now()),
-			    (1003, '1168010300101400003', 'AMBIGUOUS', 'ambiguous not retried', now() - INTERVAL '2 days')
+			    (1003, '1168010300101400003', 'UNAVAILABLE', 'stale unavailable', now() - INTERVAL '2 days')
 			""").update();
 		JdbcComplexCoordinateExceptionRepository repository = new JdbcComplexCoordinateExceptionRepository(jdbcClient);
 
 		java.time.Instant retryBefore = java.time.Instant.now().minus(java.time.Duration.ofDays(1));
-		assertThat(repository.findRetryableFailedCaseParcelIds(10, retryBefore)).containsExactly(1001L);
-		assertThat(repository.findRetryableFailedCaseParcelIds(0, retryBefore)).isEmpty();
+		assertThat(repository.findRetryableCaseParcelIds(10, retryBefore)).containsExactly(1001L, 1003L);
+		assertThat(repository.findRetryableCaseParcelIds(0, retryBefore)).isEmpty();
+	}
+
+	@Test
+	@DisplayName("building footprint 저장은 좌표 범위가 벗어난 row를 건너뛰고 유효 row를 보존한다")
+	void saveBuildingFootprintsSkipsInvalidCoordinateRows() {
+		JdbcComplexCoordinateExceptionRepository repository = new JdbcComplexCoordinateExceptionRepository(jdbcClient);
+
+		repository.saveBuildingFootprints(java.util.List.of(
+			importFootprint("1168010300101400002", "101동", "37.5010000", "127.0010000"),
+			importFootprint("1168010300101400002", "999동", "41.0000000", "127.9990000")
+		));
+
+		assertThat(footprintCount("1168010300101400002")).isEqualTo(1L);
+		assertThat(repository.findBuildingFootprintsByPnu("1168010300101400002"))
+			.extracting(BuildingFootprintCandidate::dongName)
+			.containsExactly("101동");
 	}
 
 	@Test

@@ -1,5 +1,6 @@
 package com.home.infrastructure.persistence.coordinate;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -22,6 +23,11 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class JdbcComplexCoordinateExceptionRepository
 	implements ComplexCoordinateExceptionRepository, ComplexCoordinateReadinessRepository {
+
+	private static final BigDecimal MIN_LATITUDE = new BigDecimal("33");
+	private static final BigDecimal MAX_LATITUDE = new BigDecimal("39");
+	private static final BigDecimal MIN_LONGITUDE = new BigDecimal("124");
+	private static final BigDecimal MAX_LONGITUDE = new BigDecimal("132");
 
 	private final JdbcClient jdbcClient;
 
@@ -71,14 +77,14 @@ public class JdbcComplexCoordinateExceptionRepository
 	}
 
 	@Override
-	public List<Long> findRetryableFailedCaseParcelIds(int limit, java.time.Instant retryBefore) {
+	public List<Long> findRetryableCaseParcelIds(int limit, java.time.Instant retryBefore) {
 		if (limit < 1) {
 			return List.of();
 		}
 		return jdbcClient.sql("""
 			SELECT parcel_id
 			FROM complex_coordinate_case
-			WHERE status = 'FAILED'
+			WHERE status IN ('FAILED', 'UNAVAILABLE')
 			  AND checked_at < :retryBefore
 			ORDER BY checked_at, id
 			LIMIT :limit
@@ -225,6 +231,9 @@ public class JdbcComplexCoordinateExceptionRepository
 	public void saveBuildingFootprints(List<BuildingFootprintImportCandidate> footprints) {
 		Objects.requireNonNull(footprints, "footprints is required");
 		for (BuildingFootprintImportCandidate footprint : footprints) {
+			if (!validCoordinate(footprint)) {
+				continue;
+			}
 			jdbcClient.sql("""
 				INSERT INTO building_footprint_snapshot (
 				    pnu,
@@ -266,6 +275,15 @@ public class JdbcComplexCoordinateExceptionRepository
 				.param("snapshotVersion", footprint.snapshotVersion())
 				.update();
 		}
+	}
+
+	private boolean validCoordinate(BuildingFootprintImportCandidate footprint) {
+		return inRange(footprint.latitude(), MIN_LATITUDE, MAX_LATITUDE)
+			&& inRange(footprint.longitude(), MIN_LONGITUDE, MAX_LONGITUDE);
+	}
+
+	private boolean inRange(BigDecimal value, BigDecimal min, BigDecimal max) {
+		return value != null && value.compareTo(min) >= 0 && value.compareTo(max) <= 0;
 	}
 
 	@Override

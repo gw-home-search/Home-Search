@@ -118,6 +118,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			    SELECT parcel_id
 			    FROM complex_coordinate_case
 			    WHERE relation_type = 'REDEVELOPED'
+			      AND relation_confidence = 'HIGH'
 			),
 			superseded_complex AS (
 			    SELECT c.id AS complex_id
@@ -129,7 +130,11 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			        LEFT JOIN trade t2 ON t2.complex_id = c2.id AND t2.deleted_at IS NULL
 			        WHERE c2.parcel_id = c.parcel_id
 			        GROUP BY c2.id
-			        ORDER BY MIN(t2.deal_date) DESC NULLS LAST, c2.id DESC
+			        ORDER BY
+			            c2.use_date DESC NULLS LAST,
+			            MAX(t2.deal_date) DESC NULLS LAST,
+			            MIN(t2.deal_date) DESC NULLS LAST,
+			            c2.id DESC
 			        LIMIT 1
 			    )
 			)

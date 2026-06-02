@@ -11,8 +11,20 @@ import com.home.application.coordinate.BuildingFootprintImportCandidate;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 record VworldBuildingFootprintResponse(
+	Integer totalCount,
+	Integer totalFeatures,
 	List<Feature> features
 ) {
+
+	int totalCountOr(int fallback) {
+		if (totalCount != null && totalCount > 0) {
+			return totalCount;
+		}
+		if (totalFeatures != null && totalFeatures > 0) {
+			return totalFeatures;
+		}
+		return fallback;
+	}
 
 	List<BuildingFootprintImportCandidate> footprints(String expectedPnu, String source, String snapshotVersion) {
 		if (features == null || features.isEmpty()) {

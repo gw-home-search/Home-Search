@@ -443,6 +443,37 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("detail은 LOW confidence 재건축 필지를 확정 신축 대표로 승격하지 않는다")
+	void detailDoesNotPromoteLowConfidenceRedevelopmentRepresentative() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (1001, 1, '1168010300101400010', 'Low confidence redeveloped lot', 37.5123, 127.0456)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt, use_date)
+			VALUES
+			    (501, 1001, 'COMPLEX-PK-501', 'APT-501', 'Old Mansion', 'Old Trade', 500, DATE '1985-01-01'),
+			    (502, 1001, 'COMPLEX-PK-502', 'APT-502', 'New Tower', 'New Tower Trade', 900, DATE '2022-06-01')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, relation_type, relation_confidence)
+			VALUES (1001, '1168010300101400010', 'SKIPPED', 'REDEVELOPED', 'LOW')
+			""").update();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.findParcelDetail(1001L))
+			.hasValueSatisfying(detail -> {
+				assertThat(detail.complexId()).isEqualTo(501L);
+				assertThat(detail.name()).isEqualTo("Old Mansion");
+				assertThat(detail.tradeName()).isEqualTo("Old Trade");
+			});
+	}
+
+	@Test
 	@DisplayName("detail/trade read API는 parcel 또는 complex parent path가 없으면 empty가 된다")
 	void missingParentPathReturnsEmpty() {
 		seedPropertyExplorationData();

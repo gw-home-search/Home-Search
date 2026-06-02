@@ -1,4 +1,54 @@
 [[items]]
+id = "coordinate-marker-confidence-hardening"
+title_ko = "Coordinate marker confidence hardening"
+pr_type = "Feat"
+pr_title_ko = "좌표 마커 확신도 정책 강화"
+description_ko = "RTMS 저장 실증 전에 same-PNU, 재건축, ODC identity 실패 같은 어려운 케이스에서 실거래가가 좌표 marker/detail/trade로 과확신 노출되지 않도록 내부 좌표/마커 정책을 보강한다."
+status = "done"
+priority = 200
+targets = "backend"
+preset = "backend-quality"
+acceptance_criteria = [
+  "ODC service key가 있는 기본 경로에서 AMBIGUOUS, UNAVAILABLE, FAILED identity verification은 complex_display_coordinate 승격을 차단한다.",
+  "ODC service key가 없는 local/dev 경로는 non-blocking trusting fallback을 유지하고, 명시적 property로 degrade 정책을 다시 허용할 수 있다.",
+  "REDEVELOPED/HIGH만 현재 세대 확정 marker로 노출하고, REDEVELOPED/LOW는 철거 세대 숨김과 단위수 제거를 확정하지 않는다.",
+  "same-PNU CONCURRENT parcel에서 일부 complex만 BUILDING_FOOTPRINT 좌표가 있어도 확정된 complex marker는 노출하고, unresolved remainder는 parcel fallback marker 1개로 묶는다.",
+  "partial split marker에서 latestDealAmount, unitCntSum, complexId scope가 중복 계산되지 않고 detail/trade click path와 일치한다.",
+  "detail 대표 complex는 complexId가 없을 때 marker 대표 기준과 충돌하지 않고, complexId가 있으면 선택 complex를 우선한다.",
+  "public /api/v1/map/complexes, /api/v1/detail/{parcelId}, /api/v1/trade/{parcelId} URL, request/response shape, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "raw ingest, trade_match_evidence, normalized trade dedupe/cancel invariant와 complex_id 운영 relation은 변경하지 않는다.",
+]
+first_red_candidates = [
+  "ComplexCoordinateExceptionServiceTest에서 ODC UNAVAILABLE 또는 FAILED가 기본 설정에서 display coordinate 저장으로 이어지면 실패하는 RED를 만든다.",
+  "ComplexCoordinatePersistenceConfigurationTest에서 ODC strict 기본값과 explicit degrade property를 고정하는 RED를 만든다.",
+  "JdbcMapMarkerRepositoryTest에서 REDEVELOPED/LOW가 current-generation 단일 marker로 확정 처리되면 실패하는 RED를 만든다.",
+  "JdbcMapMarkerRepositoryTest에서 same-PNU CONCURRENT 3개 complex 중 2개만 building coordinate가 있을 때 전체가 parcel marker 하나로 collapse되면 실패하는 RED를 만든다.",
+  "JdbcPropertyReadRepositoryTest에서 marker가 선택하는 current-generation 기준과 detail 대표 complex가 어긋나면 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew test --tests 'com.home.application.coordinate.ComplexCoordinateExceptionServiceTest' --tests 'com.home.infrastructure.external.odcloud.OdcloudIdentityExternalApiConfigurationTest' --tests 'com.home.infrastructure.persistence.coordinate.ComplexCoordinatePersistenceConfigurationTest'",
+  "cd apps/api && ./gradlew persistenceTest --tests 'com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest' --tests 'com.home.infrastructure.persistence.read.JdbcPropertyReadRepositoryTest'",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 scripts/check-test-display-names.py",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "새 DB column 또는 migration 없이는 구현이 불가능하면 중단하고 data slice로 분리한다.",
+  "partial split marker가 기존 frontend adapter에서 parcelId, complexId, lat, lng, latestDealAmount, unitCntSum만으로 표현 불가능하면 중단한다.",
+  "ODC strict 기본값이 live ingest를 과도하게 막는 운영 정책 충돌로 판단되면 중단하고 정책 결정을 다시 받는다.",
+  "RTMS live 호출, VWorld live 호출, service key, raw production payload, .env* 저장이 필요하면 중단한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "이번 slice는 좌표 확신도와 marker grouping 정책을 보강하지만 live RTMS 저장 실증은 후속 단계로 둔다.",
+  "ODC strict 기본화는 잘못된 좌표 승격 위험을 낮추는 대신 일부 same-PNU split marker가 보류될 수 있다.",
+  "REDEVELOPED/LOW를 확정 marker에서 제외하면 일부 재건축 parcel은 더 보수적인 fallback marker로 보일 수 있다.",
+  "partial split marker는 지도 완성도를 높이지만 unresolved remainder의 unit/trade 집계가 resolved marker와 겹치지 않도록 SQL을 신중히 나눠야 한다.",
+]
+
+[[items]]
 id = "kakao-map-marker-refresh-flow"
 title_ko = "Kakao map marker refresh flow"
 pr_type = "Feat"

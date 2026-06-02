@@ -42,6 +42,7 @@ class ComplexCoordinateReadinessRunnerTest {
 
 		assertThat(runner.getOrder()).isEqualTo(ApplicationRunnerOrders.COORDINATE_READINESS);
 		assertThat(runner.getOrder()).isGreaterThan(ApplicationRunnerOrders.RTMS_ONE_SHOT_INGEST);
+		assertThat(runner.getOrder()).isGreaterThan(ApplicationRunnerOrders.TRADE_MATCH_REMATCH);
 	}
 
 	private static final class FakeReadinessService extends ComplexCoordinateReadinessService {

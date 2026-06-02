@@ -20,10 +20,12 @@ import com.home.application.ingest.RawTradeIngestRepository;
 import com.home.application.ingest.RawTradeIngestStatus;
 import com.home.application.ingest.TradeMatchEvidenceRepository;
 import com.home.application.ingest.TradeMatchRematchService;
+import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
+import org.springframework.core.Ordered;
 
 class IngestRecoveryRunnerTest {
 
@@ -72,6 +74,23 @@ class IngestRecoveryRunnerTest {
 		runner.run(new DefaultApplicationArguments());
 
 		assertThat(rawRepository.findByStatusCalls).containsExactly(RawTradeIngestStatus.MATCH_FAILED);
+	}
+
+	@Test
+	@DisplayName("trade match rematch runner는 RTMS ingest 이후 coordinate readiness 이전에 실행된다")
+	void tradeMatchRematchRunnerRunsBeforeCoordinateReadiness() {
+		TradeMatchRematchRunner runner = new TradeMatchRematchRunner(new TradeMatchRematchService(
+			new EmptyRawRepository(),
+			new NoopNormalizedRepository(),
+			item -> ComplexMatchResult.failed("not used"),
+			TradeMatchEvidenceRepository.noop(),
+			raw -> Optional.empty()
+		), 3);
+
+		assertThat(runner).isInstanceOf(Ordered.class);
+		assertThat(((Ordered) runner).getOrder()).isEqualTo(ApplicationRunnerOrders.TRADE_MATCH_REMATCH);
+		assertThat(((Ordered) runner).getOrder()).isGreaterThan(ApplicationRunnerOrders.RTMS_ONE_SHOT_INGEST);
+		assertThat(((Ordered) runner).getOrder()).isLessThan(ApplicationRunnerOrders.COORDINATE_READINESS);
 	}
 
 	private static final class FakeReconciliationRepository implements RawIngestReconciliationRepository {

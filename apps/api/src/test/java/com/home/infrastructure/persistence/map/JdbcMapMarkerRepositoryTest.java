@@ -111,6 +111,63 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 			.containsExactly(tuple(4001L, 900L));
 	}
 
+	@Test
+	@DisplayName("동시 존재 단지의 building 좌표 confidence가 낮으면 parcel fallback marker를 반환한다")
+	void concurrentComplexesWithLowConfidenceBuildingCoordinatesReturnParcelFallbackMarker() {
+		seedLowConfidenceConcurrentComplexMarkers();
+		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+
+		assertThat(repository.findComplexMarkers(request(null, null)))
+			.extracting(
+				ComplexMarkerResponse::parcelId,
+				ComplexMarkerResponse::complexId,
+				ComplexMarkerResponse::lat,
+				ComplexMarkerResponse::lng,
+				ComplexMarkerResponse::latestDealAmount,
+				ComplexMarkerResponse::unitCntSum
+			)
+			.containsExactly(tuple(5001L, null, 37.5133, 127.0466, 210000L, 900L));
+	}
+
+	@Test
+	@DisplayName("동시 존재 단지의 building 좌표 confidence가 섞이면 확정 marker와 fallback marker를 분리한다")
+	void concurrentComplexesWithMixedConfidenceBuildingCoordinatesReturnPartialSplitMarkers() {
+		seedMixedConfidenceConcurrentComplexMarkers();
+		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+
+		assertThat(repository.findComplexMarkers(request(null, null)))
+			.extracting(
+				ComplexMarkerResponse::parcelId,
+				ComplexMarkerResponse::complexId,
+				ComplexMarkerResponse::lat,
+				ComplexMarkerResponse::lng,
+				ComplexMarkerResponse::latestDealAmount,
+				ComplexMarkerResponse::unitCntSum
+			)
+			.containsExactly(
+				tuple(6001L, 1201L, 37.6310, 127.1310, 145000L, 420L),
+				tuple(6001L, null, 37.5144, 127.0477, 215000L, 510L)
+			);
+	}
+
+	@Test
+	@DisplayName("LOW confidence 재건축 필지는 현재 세대 확정 marker로 노출하지 않는다")
+	void lowConfidenceRedevelopmentReturnsParcelFallbackMarker() {
+		seedLowConfidenceRedevelopmentParcel();
+		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+
+		assertThat(repository.findComplexMarkers(request(null, null)))
+			.extracting(
+				ComplexMarkerResponse::parcelId,
+				ComplexMarkerResponse::complexId,
+				ComplexMarkerResponse::lat,
+				ComplexMarkerResponse::lng,
+				ComplexMarkerResponse::latestDealAmount,
+				ComplexMarkerResponse::unitCntSum
+			)
+			.containsExactly(tuple(7001L, null, 37.5155, 127.0488, 190000L, 1400L));
+	}
+
 	private ComplexMarkersRequest request(Double priceEokMin, Double priceEokMax) {
 		return new ComplexMarkersRequest(
 			37.45,
@@ -245,6 +302,117 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 		insertTrade(rawId, 1102L, LocalDate.of(2016, 1, 1), 95000L, "rtms-multigen-1102-2", "COMPLEX-PK-1102");
 		insertTrade(rawId, 1103L, LocalDate.of(2022, 1, 1), 180000L, "rtms-multigen-1103-1", "COMPLEX-PK-1103");
 		insertTrade(rawId, 1103L, LocalDate.of(2025, 1, 1), 190000L, "rtms-multigen-1103-2", "COMPLEX-PK-1103");
+	}
+
+	private void seedLowConfidenceConcurrentComplexMarkers() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (5001, 1, '1168010300101400012', 'Low confidence concurrent lot', 37.5133, 127.0466)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt, use_date)
+			VALUES
+			    (1101, 5001, 'COMPLEX-PK-1101', 'APT-1101', 'Low Confidence A', 400, DATE '2019-01-01'),
+			    (1102, 5001, 'COMPLEX-PK-1102', 'APT-1102', 'Low Confidence B', 500, DATE '2020-01-01')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, relation_type, relation_confidence)
+			VALUES (5001, '1168010300101400012', 'RESOLVED', 'CONCURRENT', 'HIGH')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_display_coordinate (
+			    complex_id,
+			    latitude,
+			    longitude,
+			    coordinate_source,
+			    confidence,
+			    reason
+			)
+			VALUES
+			    (1101, 37.6210, 127.1210, 'BUILDING_FOOTPRINT', 60, 'low confidence tower A footprint'),
+			    (1102, 37.6220, 127.1220, 'BUILDING_FOOTPRINT', 60, 'low confidence tower B footprint')
+			""").update();
+		Long rawId = insertRawIngest("rtms-low-confidence-concurrent");
+		insertTrade(rawId, 1101L, LocalDate.of(2025, 1, 1), 140000L, "rtms-low-confidence-1101", "COMPLEX-PK-1101");
+		insertTrade(rawId, 1102L, LocalDate.of(2025, 2, 1), 210000L, "rtms-low-confidence-1102", "COMPLEX-PK-1102");
+	}
+
+	private void seedMixedConfidenceConcurrentComplexMarkers() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (6001, 1, '1168010300101400013', 'Mixed confidence concurrent lot', 37.5144, 127.0477)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt, use_date)
+			VALUES
+			    (1201, 6001, 'COMPLEX-PK-1201', 'APT-1201', 'Mixed Confidence A', 420, DATE '2019-01-01'),
+			    (1202, 6001, 'COMPLEX-PK-1202', 'APT-1202', 'Mixed Confidence B', 510, DATE '2020-01-01')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, relation_type, relation_confidence)
+			VALUES (6001, '1168010300101400013', 'RESOLVED', 'CONCURRENT', 'HIGH')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_display_coordinate (
+			    complex_id,
+			    latitude,
+			    longitude,
+			    coordinate_source,
+			    confidence,
+			    reason
+			)
+			VALUES
+			    (1201, 37.6310, 127.1310, 'BUILDING_FOOTPRINT', 90, 'trusted tower A footprint'),
+			    (1202, 37.6320, 127.1320, 'BUILDING_FOOTPRINT', 60, 'low confidence tower B footprint')
+			""").update();
+		Long rawId = insertRawIngest("rtms-mixed-confidence-concurrent");
+		insertTrade(rawId, 1201L, LocalDate.of(2025, 1, 1), 145000L, "rtms-mixed-confidence-1201", "COMPLEX-PK-1201");
+		insertTrade(rawId, 1202L, LocalDate.of(2025, 2, 1), 215000L, "rtms-mixed-confidence-1202", "COMPLEX-PK-1202");
+	}
+
+	private void seedLowConfidenceRedevelopmentParcel() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (7001, 1, '1168010300101400014', 'Low confidence redevelopment lot', 37.5155, 127.0488)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt, use_date)
+			VALUES
+			    (1301, 7001, 'COMPLEX-PK-1301', 'APT-1301', 'Low Old Mansion', 500, DATE '1985-01-01'),
+			    (1302, 7001, 'COMPLEX-PK-1302', 'APT-1302', 'Low New Tower', 900, DATE '2022-06-01')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, relation_type, relation_confidence)
+			VALUES (7001, '1168010300101400014', 'SKIPPED', 'REDEVELOPED', 'LOW')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_display_coordinate (
+			    complex_id,
+			    latitude,
+			    longitude,
+			    coordinate_source,
+			    confidence,
+			    reason
+			)
+			VALUES
+			    (1301, 37.6410, 127.1410, 'PARCEL_FALLBACK', 40, 'old fallback'),
+			    (1302, 37.6420, 127.1420, 'BUILDING_FOOTPRINT', 90, 'new footprint not enough for LOW redevelopment')
+			""").update();
+		Long rawId = insertRawIngest("rtms-low-redev");
+		insertTrade(rawId, 1301L, LocalDate.of(2016, 1, 1), 80000L, "rtms-low-redev-1301", "COMPLEX-PK-1301");
+		insertTrade(rawId, 1302L, LocalDate.of(2025, 1, 1), 190000L, "rtms-low-redev-1302", "COMPLEX-PK-1302");
 	}
 
 	private void seedMapData() {

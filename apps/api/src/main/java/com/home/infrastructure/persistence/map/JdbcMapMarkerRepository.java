@@ -16,6 +16,7 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 
 	private static final BigDecimal TRADE_AMOUNT_UNITS_PER_EOK = BigDecimal.valueOf(10_000L);
 	private static final BigDecimal SQUARE_METERS_PER_PYEONG = new BigDecimal("3.305785");
+	private static final int TRUSTED_BUILDING_COORDINATE_CONFIDENCE = 80;
 
 	private final JdbcClient jdbcClient;
 
@@ -35,7 +36,9 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			        c.id AS complex_id,
 			        c.unit_cnt,
 			        c.use_date,
+			        coordinate_case.status AS coordinate_case_status,
 			        coordinate_case.relation_type,
+			        coordinate_case.relation_confidence,
 			        COALESCE(display_coordinate.latitude, p.latitude) AS lat,
 			        COALESCE(display_coordinate.longitude, p.longitude) AS lng,
 			        display_coordinate.coordinate_source,
@@ -48,6 +51,10 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			    JOIN complex c ON c.parcel_id = p.id
 			    LEFT JOIN complex_display_coordinate display_coordinate
 			      ON display_coordinate.complex_id = c.id
+			     AND (
+			         display_coordinate.coordinate_source <> 'BUILDING_FOOTPRINT'
+			         OR display_coordinate.confidence >= :trustedBuildingCoordinateConfidence
+			     )
 			    LEFT JOIN complex_coordinate_case coordinate_case
 			      ON coordinate_case.parcel_id = p.id
 			    LEFT JOIN trade t ON t.complex_id = c.id
@@ -70,7 +77,9 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			        c.id,
 			        c.unit_cnt,
 			        c.use_date,
+			        coordinate_case.status,
 			        coordinate_case.relation_type,
+			        coordinate_case.relation_confidence,
 			        display_coordinate.latitude,
 			        display_coordinate.longitude,
 			        display_coordinate.coordinate_source,
@@ -83,9 +92,15 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			    SELECT
 			        parcel_id,
 			        count(*) AS complex_count,
-			        count(*) FILTER (WHERE coordinate_source = 'BUILDING_FOOTPRINT') AS building_coordinate_count,
-			        COALESCE(bool_or(relation_type = 'CONCURRENT'), false) AS is_concurrent,
-			        COALESCE(bool_or(relation_type = 'REDEVELOPED'), false) AS is_redeveloped
+			        COALESCE(bool_or(
+			            coordinate_case_status = 'RESOLVED'
+			            AND relation_type = 'CONCURRENT'
+			            AND relation_confidence = 'HIGH'
+			        ), false) AS is_concurrent,
+			        COALESCE(bool_or(
+			            relation_type = 'REDEVELOPED'
+			            AND relation_confidence = 'HIGH'
+			        ), false) AS is_redeveloped
 			    FROM complex_base
 			    GROUP BY parcel_id
 			),
@@ -122,7 +137,7 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			    WHERE (
 			        flags.is_concurrent
 			        AND flags.complex_count > 1
-			        AND flags.building_coordinate_count = flags.complex_count
+			        AND base.coordinate_source = 'BUILDING_FOOTPRINT'
 			    )
 			       OR (
 			           flags.is_redeveloped
@@ -146,6 +161,19 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			        base.latest_complex_deal_date DESC NULLS LAST,
 			        base.complex_id DESC
 			),
+			parcel_marker_base AS (
+			    SELECT base.*
+			    FROM complex_base base
+			    JOIN parcel_flags flags ON flags.parcel_id = base.parcel_id
+			    WHERE NOT flags.is_redeveloped
+			      AND (
+			          NOT (
+			              flags.is_concurrent
+			              AND flags.complex_count > 1
+			          )
+			          OR base.coordinate_source IS DISTINCT FROM 'BUILDING_FOOTPRINT'
+			      )
+			),
 			parcel_marker AS (
 			    SELECT
 			        base.parcel_id,
@@ -153,8 +181,14 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			            WHEN flags.complex_count = 1 THEN representative_coordinate.complex_id
 			            ELSE NULL
 			        END AS complex_id,
-			        representative_coordinate.lat,
-			        representative_coordinate.lng,
+			        CASE
+			            WHEN flags.complex_count = 1 THEN representative_coordinate.lat
+			            ELSE MAX(base.parcel_lat)
+			        END AS lat,
+			        CASE
+			            WHEN flags.complex_count = 1 THEN representative_coordinate.lng
+			            ELSE MAX(base.parcel_lng)
+			        END AS lng,
 			        COALESCE(SUM(base.unit_cnt), 0)::bigint AS unit_cnt_sum,
 			        MAX(
 			            CASE
@@ -162,16 +196,10 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			                ELSE EXTRACT(YEAR FROM age(CURRENT_DATE, base.use_date))
 			            END
 			        ) AS building_age
-			    FROM complex_base base
+			    FROM parcel_marker_base base
 			    JOIN representative_coordinate
 			      ON representative_coordinate.parcel_id = base.parcel_id
 			    JOIN parcel_flags flags ON flags.parcel_id = base.parcel_id
-			    WHERE NOT (
-			        flags.is_concurrent
-			        AND flags.complex_count > 1
-			        AND flags.building_coordinate_count = flags.complex_count
-			    )
-			      AND NOT flags.is_redeveloped
 			    GROUP BY
 			        base.parcel_id,
 			        flags.complex_count,
@@ -185,6 +213,9 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			        base.latest_complex_deal_amount AS latest_deal_amount,
 			        base.latest_complex_excl_area AS excl_area
 			    FROM complex_base base
+			    JOIN parcel_marker_base marker_base
+			      ON marker_base.parcel_id = base.parcel_id
+			     AND marker_base.complex_id = base.complex_id
 			    WHERE base.latest_complex_deal_date IS NOT NULL
 			    ORDER BY base.parcel_id, base.latest_complex_deal_date DESC, base.complex_id DESC
 			),
@@ -267,6 +298,7 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			.param("swLng", request.swLng())
 			.param("neLat", request.neLat())
 			.param("neLng", request.neLng())
+			.param("trustedBuildingCoordinateConfidence", TRUSTED_BUILDING_COORDINATE_CONFIDENCE)
 			.param("unitMin", request.unitMin())
 			.param("unitMax", request.unitMax())
 			.param("priceMin", eokToTradeAmount(request.priceEokMin()))

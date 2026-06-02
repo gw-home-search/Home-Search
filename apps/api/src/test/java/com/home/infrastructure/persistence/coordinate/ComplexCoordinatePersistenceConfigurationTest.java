@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 
 import javax.sql.DataSource;
 
+import com.home.application.coordinate.ComplexCoordinateExceptionService;
 import com.home.application.coordinate.ComplexCoordinateReadinessService;
 
 import org.junit.jupiter.api.DisplayName;
@@ -13,6 +14,7 @@ import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.jdbc.JdbcClientAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class ComplexCoordinatePersistenceConfigurationTest {
 
@@ -63,6 +65,33 @@ class ComplexCoordinatePersistenceConfigurationTest {
 			.run(context -> {
 				assertThat(context).hasNotFailed();
 				assertThat(context).doesNotHaveBean("complexCoordinateReadinessScheduler");
+			});
+	}
+
+	@Test
+	@DisplayName("ODC identity strict block은 기본 설정에서 unavailable과 failed를 모두 차단한다")
+	void odcloudIdentityStrictBlockIsDefaultOn() {
+		contextRunner.run(context -> {
+			ComplexCoordinateExceptionService service = context.getBean(ComplexCoordinateExceptionService.class);
+
+			assertThat(ReflectionTestUtils.getField(service, "blockOnUnavailableIdentity")).isEqualTo(true);
+			assertThat(ReflectionTestUtils.getField(service, "blockOnFailedIdentity")).isEqualTo(true);
+		});
+	}
+
+	@Test
+	@DisplayName("ODC identity strict block은 명시 property로 unavailable과 failed degrade를 허용할 수 있다")
+	void odcloudIdentityStrictBlockCanBeExplicitlyDisabled() {
+		contextRunner
+			.withPropertyValues(
+				"complex.coordinate.identity.block-on-unavailable=false",
+				"complex.coordinate.identity.block-on-failed=false"
+			)
+			.run(context -> {
+				ComplexCoordinateExceptionService service = context.getBean(ComplexCoordinateExceptionService.class);
+
+				assertThat(ReflectionTestUtils.getField(service, "blockOnUnavailableIdentity")).isEqualTo(false);
+				assertThat(ReflectionTestUtils.getField(service, "blockOnFailedIdentity")).isEqualTo(false);
 			});
 	}
 }

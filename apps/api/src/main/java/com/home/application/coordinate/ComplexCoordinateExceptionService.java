@@ -26,6 +26,8 @@ public class ComplexCoordinateExceptionService {
 	private final ComplexRelationClassifier relationClassifier;
 	private final ComplexCoordinateIdentityVerifier identityVerifier;
 	private final BuildingFootprintSource buildingFootprintSource;
+	private final boolean blockOnUnavailableIdentity;
+	private final boolean blockOnFailedIdentity;
 
 	public ComplexCoordinateExceptionService(
 		ComplexCoordinateExceptionRepository repository,
@@ -63,11 +65,25 @@ public class ComplexCoordinateExceptionService {
 		ComplexCoordinateIdentityVerifier identityVerifier,
 		BuildingFootprintSource buildingFootprintSource
 	) {
+		this(repository, relationRepository, relationClassifier, identityVerifier, buildingFootprintSource, false, false);
+	}
+
+	public ComplexCoordinateExceptionService(
+		ComplexCoordinateExceptionRepository repository,
+		ComplexRelationRepository relationRepository,
+		ComplexRelationClassifier relationClassifier,
+		ComplexCoordinateIdentityVerifier identityVerifier,
+		BuildingFootprintSource buildingFootprintSource,
+		boolean blockOnUnavailableIdentity,
+		boolean blockOnFailedIdentity
+	) {
 		this.repository = Objects.requireNonNull(repository);
 		this.relationRepository = Objects.requireNonNull(relationRepository);
 		this.relationClassifier = Objects.requireNonNull(relationClassifier);
 		this.identityVerifier = Objects.requireNonNull(identityVerifier);
 		this.buildingFootprintSource = Objects.requireNonNull(buildingFootprintSource);
+		this.blockOnUnavailableIdentity = blockOnUnavailableIdentity;
+		this.blockOnFailedIdentity = blockOnFailedIdentity;
 	}
 
 	public ComplexCoordinateExceptionResult stageExceptionCases(int limit) {
@@ -169,7 +185,7 @@ public class ComplexCoordinateExceptionService {
 		ComplexCoordinateTarget target
 	) {
 		ComplexCoordinateIdentityVerification verification = identityVerifier.verify(targets, target);
-		if (verification.status() == ComplexCoordinateIdentityVerificationStatus.CONFIRMED) {
+		if (!shouldBlock(verification.status())) {
 			return null;
 		}
 		ComplexCoordinateCaseStatus status = switch (verification.status()) {
@@ -183,6 +199,15 @@ public class ComplexCoordinateExceptionService {
 			+ (verification.reason() == null ? "" : " reason=" + verification.reason());
 		repository.saveCaseUpdate(new ComplexCoordinateCaseUpdate(targets.parcelId(), status, reason));
 		return new ComplexCoordinateResolutionResult(targets.parcelId(), status, 0, reason);
+	}
+
+	private boolean shouldBlock(ComplexCoordinateIdentityVerificationStatus status) {
+		return switch (status) {
+			case CONFIRMED -> false;
+			case AMBIGUOUS -> true;
+			case UNAVAILABLE -> blockOnUnavailableIdentity;
+			case FAILED -> blockOnFailedIdentity;
+		};
 	}
 
 	private ResolvedCoordinateMatch resolveCoordinate(

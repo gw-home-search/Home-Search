@@ -54,6 +54,26 @@ class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
+	@DisplayName("좌표 readiness는 backoff 이전의 FAILED case만 재시도 후보로 조회한다")
+	void findsOnlyRetryableFailedCasesBeforeBackoff() {
+		seedSingleComplexParcel();
+		seedConcurrentComplexParcel();
+		seedResolvedCaseParcel();
+		jdbcClient.sql("""
+			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, reason, checked_at)
+			VALUES
+			    (1001, '1168010300101400001', 'FAILED', 'stale failure', now() - INTERVAL '2 days'),
+			    (1002, '1168010300101400002', 'FAILED', 'fresh failure', now()),
+			    (1003, '1168010300101400003', 'AMBIGUOUS', 'ambiguous not retried', now() - INTERVAL '2 days')
+			""").update();
+		JdbcComplexCoordinateExceptionRepository repository = new JdbcComplexCoordinateExceptionRepository(jdbcClient);
+
+		java.time.Instant retryBefore = java.time.Instant.now().minus(java.time.Duration.ofDays(1));
+		assertThat(repository.findRetryableFailedCaseParcelIds(10, retryBefore)).containsExactly(1001L);
+		assertThat(repository.findRetryableFailedCaseParcelIds(0, retryBefore)).isEmpty();
+	}
+
+	@Test
 	@DisplayName("같은 PNU의 동시 존재 complex는 apt_dong과 건물 동명으로 서로 다른 표시 좌표를 저장한다")
 	void storesDifferentDisplayCoordinatesForConcurrentComplexesUnderSamePnu() {
 		seedConcurrentComplexParcel();

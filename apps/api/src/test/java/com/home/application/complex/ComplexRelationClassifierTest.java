@@ -142,17 +142,45 @@ class ComplexRelationClassifierTest {
 	}
 
 	@Test
-	@DisplayName("complex relation classifier는 3개 이상 sequential complex를 자동 REDEVELOPED로 단정하지 않는다")
-	void keepsUnknownForThreeOrMoreSequentialComplexes() {
+	@DisplayName("complex relation classifier는 3개 이상이라도 준공일이 근접하면 공존 가능성으로 UNKNOWN을 남긴다")
+	void keepsUnknownForThreeOrMoreComplexesWhenUseDatesAreClose() {
 		var classification = classifier.classify(List.of(
-			span(501L, "APT-501", "A", "2010-01-01", "2012-01-01", "1980-01-01"),
-			span(502L, "APT-502", "B", "2014-01-01", "2016-01-01", "2000-01-01"),
+			span(501L, "APT-501", "A", "2010-01-01", "2012-01-01", "2015-01-01"),
+			span(502L, "APT-502", "B", "2014-01-01", "2016-01-01", "2018-01-01"),
 			span(503L, "APT-503", "C", "2018-01-01", "2025-01-01", "2020-01-01")
 		));
 
 		assertThat(classification.type()).isEqualTo(ComplexRelationType.UNKNOWN);
 		assertThat(classification.confidence()).isEqualTo(ComplexRelationConfidence.NONE);
 		assertThat(classification.reason()).contains("multiple complex generations");
+	}
+
+	@Test
+	@DisplayName("complex relation classifier는 전 세대 준공일 격차가 순차면 3개 이상도 REDEVELOPED로 분류한다")
+	void classifiesMultiGenerationRedevelopmentWhenUseDateChainIsSequential() {
+		var classification = classifier.classify(List.of(
+			span(501L, "APT-501", "A", "2010-01-01", "2012-01-01", "1980-01-01"),
+			span(502L, "APT-502", "B", "2014-01-01", "2016-01-01", "2000-01-01"),
+			span(503L, "APT-503", "C", "2018-01-01", "2025-01-01", "2020-01-01")
+		));
+
+		assertThat(classification.type()).isEqualTo(ComplexRelationType.REDEVELOPED);
+		assertThat(classification.confidence()).isEqualTo(ComplexRelationConfidence.HIGH);
+		assertThat(classification.reason()).contains("all generations");
+	}
+
+	@Test
+	@DisplayName("complex relation classifier는 준공일이 없어도 전 구간 거래공백이 충분하면 3개 이상도 REDEVELOPED(LOW)로 분류한다")
+	void classifiesMultiGenerationRedevelopmentByTradeGapWhenUseDateAbsent() {
+		var classification = classifier.classify(List.of(
+			span(501L, "APT-501", "A", "2008-01-01", "2010-01-01", null),
+			span(502L, "APT-502", "B", "2014-01-01", "2016-01-01", null),
+			span(503L, "APT-503", "C", "2020-01-01", "2025-01-01", null)
+		));
+
+		assertThat(classification.type()).isEqualTo(ComplexRelationType.REDEVELOPED);
+		assertThat(classification.confidence()).isEqualTo(ComplexRelationConfidence.LOW);
+		assertThat(classification.reason()).contains("trade gap");
 	}
 
 	private ComplexTradeSpan span(

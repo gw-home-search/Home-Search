@@ -19,6 +19,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Configuration(proxyBeanMethods = false)
 class ComplexCoordinatePersistenceConfiguration {
@@ -44,7 +45,9 @@ class ComplexCoordinatePersistenceConfiguration {
 	ComplexCoordinateExceptionService complexCoordinateExceptionService(
 		ObjectProvider<JdbcClient> jdbcClientProvider,
 		ObjectProvider<ComplexCoordinateIdentityVerifier> identityVerifierProvider,
-		ObjectProvider<BuildingFootprintSource> buildingFootprintSourceProvider
+		ObjectProvider<BuildingFootprintSource> buildingFootprintSourceProvider,
+		@Value("${complex.coordinate.identity.block-on-unavailable:false}") boolean blockOnUnavailableIdentity,
+		@Value("${complex.coordinate.identity.block-on-failed:false}") boolean blockOnFailedIdentity
 	) {
 		JdbcClient jdbcClient = requiredJdbcClient(jdbcClientProvider);
 		return new ComplexCoordinateExceptionService(
@@ -52,7 +55,9 @@ class ComplexCoordinatePersistenceConfiguration {
 			new JdbcComplexRelationRepository(jdbcClient),
 			new ComplexRelationClassifier(),
 			identityVerifierProvider.getIfAvailable(ComplexCoordinateIdentityVerifier::trusting),
-			buildingFootprintSourceProvider.getIfAvailable(BuildingFootprintSource::unavailable)
+			buildingFootprintSourceProvider.getIfAvailable(BuildingFootprintSource::unavailable),
+			blockOnUnavailableIdentity,
+			blockOnFailedIdentity
 		);
 	}
 
@@ -77,12 +82,16 @@ class ComplexCoordinatePersistenceConfiguration {
 	ComplexCoordinateReadinessService complexCoordinateReadinessService(
 		ComplexCoordinateExceptionService complexCoordinateExceptionService,
 		ComplexCoordinateReadinessRepository complexCoordinateReadinessRepository,
-		ComplexDisplayCoordinateProjectionService complexDisplayCoordinateProjectionService
+		ComplexDisplayCoordinateProjectionService complexDisplayCoordinateProjectionService,
+		@Value("${home.coordinate.readiness.retry-limit:200}") int retryLimit,
+		@Value("${home.coordinate.readiness.retry-after-millis:21600000}") long retryAfterMillis
 	) {
 		return new ComplexCoordinateReadinessService(
 			complexCoordinateExceptionService,
 			complexCoordinateReadinessRepository,
-			complexDisplayCoordinateProjectionService
+			complexDisplayCoordinateProjectionService,
+			retryLimit,
+			java.time.Duration.ofMillis(retryAfterMillis)
 		);
 	}
 
@@ -106,5 +115,31 @@ class ComplexCoordinatePersistenceConfiguration {
 		return jdbcClientProvider.getIfAvailable(() -> {
 			throw new IllegalStateException("JdbcClient is required for complex coordinate persistence");
 		});
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	@EnableScheduling
+	@ConditionalOnProperty(name = "home.coordinate.readiness.enabled", havingValue = "true")
+	static class ComplexCoordinateReadinessSchedulingConfiguration {
+
+		@Bean
+		@ConditionalOnProperty(
+			name = "home.coordinate.readiness.scheduler.enabled",
+			havingValue = "true",
+			matchIfMissing = true
+		)
+		ComplexCoordinateReadinessScheduler complexCoordinateReadinessScheduler(
+			ComplexCoordinateReadinessService complexCoordinateReadinessService,
+			@Value("${home.coordinate.readiness.stage-limit:500}") int stageLimit,
+			@Value("${home.coordinate.readiness.resolve-limit:500}") int resolveLimit,
+			@Value("${home.coordinate.readiness.project-limit:1000}") int projectLimit
+		) {
+			return new ComplexCoordinateReadinessScheduler(
+				complexCoordinateReadinessService,
+				stageLimit,
+				resolveLimit,
+				projectLimit
+			);
+		}
 	}
 }

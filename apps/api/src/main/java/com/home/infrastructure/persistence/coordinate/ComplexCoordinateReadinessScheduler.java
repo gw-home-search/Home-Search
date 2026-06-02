@@ -2,24 +2,21 @@ package com.home.infrastructure.persistence.coordinate;
 
 import com.home.application.coordinate.ComplexCoordinateReadinessResult;
 import com.home.application.coordinate.ComplexCoordinateReadinessService;
-import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
-import org.springframework.core.Ordered;
+import org.springframework.scheduling.annotation.Scheduled;
 
-class ComplexCoordinateReadinessRunner implements ApplicationRunner, Ordered {
+class ComplexCoordinateReadinessScheduler {
 
-	private static final Logger log = LoggerFactory.getLogger(ComplexCoordinateReadinessRunner.class);
+	private static final Logger log = LoggerFactory.getLogger(ComplexCoordinateReadinessScheduler.class);
 
 	private final ComplexCoordinateReadinessService readinessService;
 	private final int stageLimit;
 	private final int resolveLimit;
 	private final int projectLimit;
 
-	ComplexCoordinateReadinessRunner(
+	ComplexCoordinateReadinessScheduler(
 		ComplexCoordinateReadinessService readinessService,
 		int stageLimit,
 		int resolveLimit,
@@ -31,11 +28,14 @@ class ComplexCoordinateReadinessRunner implements ApplicationRunner, Ordered {
 		this.projectLimit = projectLimit;
 	}
 
-	@Override
-	public void run(ApplicationArguments args) {
+	@Scheduled(
+		initialDelayString = "${home.coordinate.readiness.scheduler.initial-delay-millis:60000}",
+		fixedDelayString = "${home.coordinate.readiness.scheduler.fixed-delay-millis:3600000}"
+	)
+	void runDue() {
 		ComplexCoordinateReadinessResult result = readinessService.prepare(stageLimit, resolveLimit, projectLimit);
 		log.info(
-			"complex coordinate readiness completed staged={} pending={} skipped={} resolved={} ambiguous={} unavailable={} failed={} retried={} projectedBuildingFootprint={} projectedParcelFallback={} projectionSkipped={} projectionMissing={}",
+			"complex coordinate readiness scheduled run completed staged={} pending={} skipped={} resolved={} ambiguous={} unavailable={} failed={} retried={} projectedBuildingFootprint={} projectedParcelFallback={} projectionSkipped={} projectionMissing={}",
 			result.staged(),
 			result.pending(),
 			result.skipped(),
@@ -49,10 +49,5 @@ class ComplexCoordinateReadinessRunner implements ApplicationRunner, Ordered {
 			result.projectionSkipped(),
 			result.projectionMissing()
 		);
-	}
-
-	@Override
-	public int getOrder() {
-		return ApplicationRunnerOrders.COORDINATE_READINESS;
 	}
 }

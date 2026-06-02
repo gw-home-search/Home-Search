@@ -32,13 +32,50 @@ class OdcloudIdentityExternalApiConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("ODC coordinate identity gate는 opt-in property가 true일 때만 verifier bean을 만든다")
+	@DisplayName("ODC coordinate identity gate는 enable property가 true이고 key가 있으면 verifier bean을 만든다")
 	void odcloudCoordinateIdentityGateCreatesVerifierWhenEnabled() {
 		contextRunner
 			.withPropertyValues(
 				"complex.coordinate.identity.odcloud.enabled=true",
 				"odcloud.data.od-service-key=ODC-KEY"
 			)
-			.run(context -> assertThat(context).hasSingleBean(ComplexCoordinateIdentityVerifier.class));
+			.run(context -> {
+				assertThat(context).hasSingleBean(ComplexCoordinateIdentityVerifier.class);
+				assertThat(context.getBean(ComplexCoordinateIdentityVerifier.class))
+					.isInstanceOf(OdcloudComplexCoordinateIdentityVerifier.class);
+			});
+	}
+
+	@Test
+	@DisplayName("ODC coordinate identity verifier는 service key가 있으면 enable 플래그 없이 기본 등록된다")
+	void odcloudCoordinateIdentityVerifierIsDefaultWhenServiceKeyConfigured() {
+		contextRunner
+			.withPropertyValues("odcloud.data.od-service-key=ODC-KEY")
+			.run(context -> {
+				assertThat(context).hasSingleBean(ComplexCoordinateIdentityVerifier.class);
+				assertThat(context.getBean(ComplexCoordinateIdentityVerifier.class))
+					.isInstanceOf(OdcloudComplexCoordinateIdentityVerifier.class);
+			});
+	}
+
+	@Test
+	@DisplayName("ODC coordinate identity verifier는 service key가 없으면 non-blocking trusting fallback으로 등록된다")
+	void odcloudCoordinateIdentityVerifierFallsBackToTrustingWithoutServiceKey() {
+		contextRunner.run(context -> {
+			assertThat(context).hasSingleBean(ComplexCoordinateIdentityVerifier.class);
+			assertThat(context.getBean(ComplexCoordinateIdentityVerifier.class))
+				.isNotInstanceOf(OdcloudComplexCoordinateIdentityVerifier.class);
+		});
+	}
+
+	@Test
+	@DisplayName("ODC coordinate identity verifier는 명시적으로 비활성화하면 등록되지 않는다")
+	void odcloudCoordinateIdentityVerifierCanBeExplicitlyDisabled() {
+		contextRunner
+			.withPropertyValues(
+				"complex.coordinate.identity.odcloud.enabled=false",
+				"odcloud.data.od-service-key=ODC-KEY"
+			)
+			.run(context -> assertThat(context).doesNotHaveBean(ComplexCoordinateIdentityVerifier.class));
 	}
 }

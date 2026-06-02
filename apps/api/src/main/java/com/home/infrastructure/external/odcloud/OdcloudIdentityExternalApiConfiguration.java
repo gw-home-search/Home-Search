@@ -37,7 +37,11 @@ class OdcloudIdentityExternalApiConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnProperty(name = "complex.coordinate.identity.odcloud.enabled", havingValue = "true")
+	@ConditionalOnProperty(
+		name = "complex.coordinate.identity.odcloud.enabled",
+		havingValue = "true",
+		matchIfMissing = true
+	)
 	ComplexCoordinateIdentityVerifier odcloudComplexCoordinateIdentityVerifier(
 		@Value("${odcloud.data.base-url:https://api.odcloud.kr}") String odcloudBaseUrl,
 		@Value("${odcloud.data.od-service-key:${ODC_SERVICE_KEY:}}") String odcloudServiceKey,
@@ -45,6 +49,9 @@ class OdcloudIdentityExternalApiConfiguration {
 		@Value("${complex.coordinate.identity.connect-timeout-millis:5000}") int connectTimeoutMillis,
 		@Value("${complex.coordinate.identity.read-timeout-millis:5000}") int readTimeoutMillis
 	) {
+		if (odcloudServiceKey == null || odcloudServiceKey.isBlank()) {
+			return ComplexCoordinateIdentityVerifier.trusting();
+		}
 		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
 		requestFactory.setConnectTimeout(connectTimeoutMillis);
 		requestFactory.setReadTimeout(readTimeoutMillis);
@@ -54,7 +61,7 @@ class OdcloudIdentityExternalApiConfiguration {
 				.baseUrl(odcloudBaseUrl)
 				.build(),
 			odcloudBaseUrl,
-			odcloudServiceKey,
+			odcloudServiceKey.trim(),
 			defaultOdcloudAptPath(odcloudAptPath)
 		);
 	}

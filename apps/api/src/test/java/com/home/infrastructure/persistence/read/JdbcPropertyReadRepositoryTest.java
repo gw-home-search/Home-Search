@@ -404,7 +404,6 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
 			VALUES (1001, 1, '1168010300101400009', 'Redeveloped lot', 37.5123, 127.0456)
 			""").update();
-		// 구단지가 더 낮은 c.id (501) → 현행 ORDER BY c.id LIMIT 1이면 철거 단지가 대표가 됨.
 		jdbcClient.sql("""
 			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt, use_date)
 			VALUES

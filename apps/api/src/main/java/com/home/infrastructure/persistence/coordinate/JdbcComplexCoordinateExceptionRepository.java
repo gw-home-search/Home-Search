@@ -71,6 +71,25 @@ public class JdbcComplexCoordinateExceptionRepository
 	}
 
 	@Override
+	public List<Long> findRetryableFailedCaseParcelIds(int limit, java.time.Instant retryBefore) {
+		if (limit < 1) {
+			return List.of();
+		}
+		return jdbcClient.sql("""
+			SELECT parcel_id
+			FROM complex_coordinate_case
+			WHERE status = 'FAILED'
+			  AND checked_at < :retryBefore
+			ORDER BY checked_at, id
+			LIMIT :limit
+			""")
+			.param("retryBefore", java.sql.Timestamp.from(retryBefore))
+			.param("limit", limit)
+			.query(Long.class)
+			.list();
+	}
+
+	@Override
 	public void markCaseFailed(Long parcelId, String reason) {
 		saveCaseUpdate(new ComplexCoordinateCaseUpdate(
 			parcelId,

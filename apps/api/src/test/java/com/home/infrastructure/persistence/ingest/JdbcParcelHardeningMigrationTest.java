@@ -2,12 +2,11 @@ package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class JdbcParcelHardeningMigrationTest extends JdbcPostgresTestSupport {
+class JdbcParcelHardeningMigrationTest extends JdbcMigrationTestSupport {
 
 	@Test
 	@DisplayName("V15 migration은 PNU prefix로 기존 parcel region_id와 address를 보강한다")
@@ -39,28 +38,14 @@ class JdbcParcelHardeningMigrationTest extends JdbcPostgresTestSupport {
 	}
 
 	private void migrateToVersion14() {
-		Flyway flyway = flyway(MigrationVersion.fromVersion("14"));
+		var flyway = flyway(MigrationVersion.fromVersion("14"));
 		flyway.clean();
 		flyway.migrate();
 		jdbcClient = org.springframework.jdbc.core.simple.JdbcClient.create(dataSource);
 	}
 
 	private void migrateToLatest() {
-		Flyway flyway = flyway(null);
-		flyway.migrate();
+		flyway(null).migrate();
 		jdbcClient = org.springframework.jdbc.core.simple.JdbcClient.create(dataSource);
-	}
-
-	private Flyway flyway(MigrationVersion target) {
-		var configuration = Flyway.configure()
-			.dataSource(dataSource)
-			.locations("classpath:db/migration/api")
-			.schemas("public", "reference")
-			.defaultSchema("public")
-			.cleanDisabled(false);
-		if (target != null) {
-			configuration.target(target);
-		}
-		return configuration.load();
 	}
 }

@@ -1,54 +1,57 @@
 package com.home.infrastructure.persistence.ingest;
 
-import javax.sql.DataSource;
+import java.util.List;
 
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
-import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
-public abstract class JdbcPostgresTestSupport {
+public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSupport {
 
-	private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
-		DockerImageName.parse("postgis/postgis:16-3.4").asCompatibleSubstituteFor("postgres")
-	);
+	private static final PostgreSQLContainer<?> POSTGRES = newPostgisContainer();
+	private static final Object MIGRATION_LOCK = new Object();
+	private static boolean migrated;
 
 	static {
 		POSTGRES.start();
 	}
 
-	protected DataSource dataSource;
-	protected JdbcClient jdbcClient;
-	protected TransactionTemplate transactionTemplate;
-
 	@BeforeEach
-	void resetDatabase() {
-		dataSource = dataSource();
-		Flyway flyway = Flyway.configure()
-			.dataSource(dataSource)
-			.locations("classpath:db/migration/api")
-			.schemas("public", "reference")
-			.defaultSchema("public")
-			.cleanDisabled(false)
-			.load();
-		flyway.clean();
-		flyway.migrate();
-		jdbcClient = JdbcClient.create(dataSource);
-		transactionTemplate = new TransactionTemplate(new org.springframework.jdbc.datasource.DataSourceTransactionManager(
-			dataSource
-		));
+	protected void resetDatabase() {
+		initializeJdbc(POSTGRES);
+		migrateLatestOnce();
+		truncateTables();
 	}
 
-	private DataSource dataSource() {
-		DriverManagerDataSource dataSource = new DriverManagerDataSource();
-		dataSource.setDriverClassName(POSTGRES.getDriverClassName());
-		dataSource.setUrl(POSTGRES.getJdbcUrl());
-		dataSource.setUsername(POSTGRES.getUsername());
-		dataSource.setPassword(POSTGRES.getPassword());
-		return dataSource;
+	private void migrateLatestOnce() {
+		if (migrated) {
+			return;
+		}
+		synchronized (MIGRATION_LOCK) {
+			if (migrated) {
+				return;
+			}
+			flyway(null).clean();
+			flyway(null).migrate();
+			migrated = true;
+		}
+	}
+
+	private void truncateTables() {
+		List<String> tables = jdbcClient.sql("""
+			SELECT format('%I.%I', namespace.nspname, relation.relname)
+			FROM pg_class relation
+			JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+			WHERE namespace.nspname IN ('public', 'reference')
+			  AND relation.relkind IN ('r', 'p')
+			  AND relation.relispartition = false
+			  AND relation.relname <> 'flyway_schema_history'
+			ORDER BY namespace.nspname, relation.relname
+			""").query(String.class).list();
+		if (tables.isEmpty()) {
+			return;
+		}
+		jdbcClient.sql("TRUNCATE TABLE " + String.join(", ", tables) + " RESTART IDENTITY CASCADE")
+			.update();
 	}
 
 	protected long tradeCount() {

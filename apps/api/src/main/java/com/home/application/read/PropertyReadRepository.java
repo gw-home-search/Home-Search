@@ -17,7 +17,15 @@ public interface PropertyReadRepository {
 
 	Optional<RegionDetailResponse> findRegionDetail(Long regionId);
 
-	Optional<ParcelDetailResponse> findParcelDetail(Long parcelId);
+	default Optional<ParcelDetailResponse> findParcelDetail(Long parcelId) {
+		return findParcelDetail(parcelId, null);
+	}
 
-	Optional<TradeListResponse> findTradeList(Long parcelId);
+	Optional<ParcelDetailResponse> findParcelDetail(Long parcelId, Long complexId);
+
+	default Optional<TradeListResponse> findTradeList(Long parcelId) {
+		return findTradeList(parcelId, null);
+	}
+
+	Optional<TradeListResponse> findTradeList(Long parcelId, Long complexId);
 }

@@ -27,12 +27,12 @@ public class EmptyPropertyReadRepository implements PropertyReadRepository {
 	}
 
 	@Override
-	public Optional<ParcelDetailResponse> findParcelDetail(Long parcelId) {
+	public Optional<ParcelDetailResponse> findParcelDetail(Long parcelId, Long complexId) {
 		return Optional.empty();
 	}
 
 	@Override
-	public Optional<TradeListResponse> findTradeList(Long parcelId) {
+	public Optional<TradeListResponse> findTradeList(Long parcelId, Long complexId) {
 		return Optional.empty();
 	}
 }

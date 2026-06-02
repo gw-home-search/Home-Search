@@ -12,6 +12,7 @@ describe('fetchParcelTrades API 어댑터', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         parcelId: '1001',
+        complexId: '501',
         trades: [
           {
             tradeId: '9001',
@@ -28,6 +29,7 @@ describe('fetchParcelTrades API 어댑터', () => {
 
     await expect(fetchParcelTrades(1001)).resolves.toEqual({
       parcelId: 1001,
+      complexId: 501,
       trades: [
         {
           tradeId: 9001,
@@ -52,6 +54,7 @@ describe('fetchParcelTrades API 어댑터', () => {
       vi.fn().mockResolvedValue(
         jsonResponse({
           parcelId: 1001,
+          complexId: null,
           trades: [],
         }),
       ),
@@ -59,8 +62,31 @@ describe('fetchParcelTrades API 어댑터', () => {
 
     await expect(fetchParcelTrades(1001)).resolves.toEqual({
       parcelId: 1001,
+      complexId: null,
       trades: [],
     });
+  });
+
+  it('complexId가 있으면 trade URL에 query parameter로 전달한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        parcelId: 1001,
+        complexId: 502,
+        trades: [],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchParcelTrades(1001, 502)).resolves.toEqual({
+      parcelId: 1001,
+      complexId: 502,
+      trades: [],
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/trade/1001?complexId=502'),
+      expect.objectContaining({ method: 'GET' }),
+    );
   });
 
   it('invalid trade item object를 reject한다', async () => {

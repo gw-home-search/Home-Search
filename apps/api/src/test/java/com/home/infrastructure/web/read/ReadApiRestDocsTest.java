@@ -164,9 +164,10 @@ class ReadApiRestDocsTest {
 	@Test
 	@DisplayName("GET /api/v1/detail/{parcelId}와 GET /api/v1/trade/{parcelId} REST Docs를 생성한다")
 	void documentDetailAndTrade() throws Exception {
-		given(readUseCase.getParcelDetail(1001L))
+		given(readUseCase.getParcelDetail(1001L, 501L))
 			.willReturn(new ParcelDetailResponse(
 				1001L,
+				501L,
 				37.5123,
 				127.0456,
 				"Sample address",
@@ -181,19 +182,23 @@ class ReadApiRestDocsTest {
 				new BigDecimal("199.80"),
 				LocalDate.of(2015, 3, 20)
 			));
-		given(readUseCase.getTradeList(1001L))
-			.willReturn(new TradeListResponse(1001L, List.of(
+		given(readUseCase.getTradeList(1001L, 501L))
+			.willReturn(new TradeListResponse(1001L, 501L, List.of(
 				new TradeResponse(9002L, LocalDate.of(2025, 12, 15), new BigDecimal("84.93"), 130000L, "101", 15)
 			)));
 
-		mockMvc.perform(get("/api/v1/detail/{parcelId}", 1001L))
+		mockMvc.perform(get("/api/v1/detail/{parcelId}", 1001L).param("complexId", "501"))
 			.andExpect(status().isOk())
 			.andDo(document("read-detail-success",
 				pathParameters(
 					parameterWithName("parcelId").description("Parcel id.")
 				),
+				queryParameters(
+					parameterWithName("complexId").optional().description("Optional selected complex id.")
+				),
 				responseFields(
 					fieldWithPath("parcelId").type(JsonFieldType.NUMBER).description("Parcel id."),
+					fieldWithPath("complexId").type(JsonFieldType.NUMBER).optional().description("Selected or representative complex id."),
 					fieldWithPath("latitude").type(JsonFieldType.NUMBER).description("Detail display latitude."),
 					fieldWithPath("longitude").type(JsonFieldType.NUMBER).description("Detail display longitude."),
 					fieldWithPath("address").type(JsonFieldType.STRING).optional().description("Parcel address."),
@@ -211,10 +216,12 @@ class ReadApiRestDocsTest {
 				resource(builder()
 					.tag("Read")
 					.summary("Get parcel detail")
-					.description("Returns parcel and representative complex details.")
+					.description("Returns parcel and selected or representative complex details.")
 					.pathParameters(parameterWithName("parcelId").description("Parcel id."))
+					.queryParameters(parameterWithName("complexId").optional().description("Optional selected complex id."))
 					.responseFields(
 						fieldWithPath("parcelId").type(JsonFieldType.NUMBER).description("Parcel id."),
+						fieldWithPath("complexId").type(JsonFieldType.NUMBER).optional().description("Selected or representative complex id."),
 						fieldWithPath("latitude").type(JsonFieldType.NUMBER).description("Detail display latitude."),
 						fieldWithPath("longitude").type(JsonFieldType.NUMBER).description("Detail display longitude."),
 						fieldWithPath("address").type(JsonFieldType.STRING).optional().description("Parcel address."),
@@ -232,14 +239,18 @@ class ReadApiRestDocsTest {
 					.build())
 			));
 
-		mockMvc.perform(get("/api/v1/trade/{parcelId}", 1001L))
+		mockMvc.perform(get("/api/v1/trade/{parcelId}", 1001L).param("complexId", "501"))
 			.andExpect(status().isOk())
 			.andDo(document("read-trade-success",
 				pathParameters(
 					parameterWithName("parcelId").description("Parcel id.")
 				),
+				queryParameters(
+					parameterWithName("complexId").optional().description("Optional selected complex id.")
+				),
 				responseFields(
 					fieldWithPath("parcelId").type(JsonFieldType.NUMBER).description("Parcel id."),
+					fieldWithPath("complexId").type(JsonFieldType.NUMBER).optional().description("Selected complex id when scoped."),
 					fieldWithPath("trades").type(JsonFieldType.ARRAY).description("Trades under the parcel complexes."),
 					fieldWithPath("trades[].tradeId").type(JsonFieldType.NUMBER).description("Trade id."),
 					fieldWithPath("trades[].dealDate").type(JsonFieldType.STRING).description("Deal date."),
@@ -251,10 +262,12 @@ class ReadApiRestDocsTest {
 				resource(builder()
 					.tag("Read")
 					.summary("Get parcel trades")
-					.description("Returns trades newest first for complexes under a parcel.")
+					.description("Returns trades newest first for selected complex or complexes under a parcel.")
 					.pathParameters(parameterWithName("parcelId").description("Parcel id."))
+					.queryParameters(parameterWithName("complexId").optional().description("Optional selected complex id."))
 					.responseFields(
 						fieldWithPath("parcelId").type(JsonFieldType.NUMBER).description("Parcel id."),
+						fieldWithPath("complexId").type(JsonFieldType.NUMBER).optional().description("Selected complex id when scoped."),
 						fieldWithPath("trades").type(JsonFieldType.ARRAY).description("Trades under the parcel complexes."),
 						fieldWithPath("trades[].tradeId").type(JsonFieldType.NUMBER).description("Trade id."),
 						fieldWithPath("trades[].dealDate").type(JsonFieldType.STRING).description("Deal date."),

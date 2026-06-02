@@ -133,6 +133,41 @@ class ComplexCoordinateExceptionServiceTest {
 			.containsExactly(ComplexCoordinateCaseStatus.AMBIGUOUS);
 	}
 
+	@Test
+	@DisplayName("ODC identity가 애매하면 동명 후보가 맞아도 complex 좌표를 추측하지 않는다")
+	void blocksCoordinateResolutionWhenOdcloudIdentityIsAmbiguous() {
+		InMemoryCoordinateRepository repository = new InMemoryCoordinateRepository();
+		repository.targets = Map.of(
+			1001L,
+			new ComplexCoordinateParcelTargets(
+				1001L,
+				"1168010300101400001",
+				List.of(new ComplexCoordinateTarget(501L, "APT-501", "Tower A", Set.of("101")))
+			)
+		);
+		repository.footprints = Map.of(
+			"1168010300101400001",
+			List.of(new BuildingFootprintCandidate(9001L, "1168010300101400001", "Tower A", "101동", bd("37.5010000"), bd("127.0010000")))
+		);
+		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
+			repository,
+			parcelId -> List.of(),
+			new ComplexRelationClassifier(),
+			(parcelTargets, target) -> ComplexCoordinateIdentityVerification.ambiguous("ODC has multiple PNU candidates")
+		);
+
+		ComplexCoordinateResolutionResult result = service.resolveExceptionCase(1001L);
+
+		assertThat(result.status()).isEqualTo(ComplexCoordinateCaseStatus.AMBIGUOUS);
+		assertThat(repository.displayCoordinates).isEmpty();
+		assertThat(repository.caseUpdates)
+			.extracting(ComplexCoordinateCaseUpdate::status, ComplexCoordinateCaseUpdate::reason)
+			.containsExactly(org.assertj.core.groups.Tuple.tuple(
+				ComplexCoordinateCaseStatus.AMBIGUOUS,
+				"identity verification ambiguous complexId=501 reason=ODC has multiple PNU candidates"
+			));
+	}
+
 	private static ComplexTradeSpan span(
 		Long complexId,
 		String aptSeq,

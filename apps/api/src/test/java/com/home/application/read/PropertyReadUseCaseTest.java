@@ -52,6 +52,10 @@ class PropertyReadUseCaseTest {
 		assertThat(useCase.getRegionDetail(1L).name()).isEqualTo("Seoul");
 		assertThat(useCase.getParcelDetail(1001L).name()).isEqualTo("Sample Apartment");
 		assertThat(useCase.getTradeList(1001L).trades()).isEmpty();
+		assertThat(useCase.getParcelDetail(1001L, 501L).complexId()).isEqualTo(501L);
+		assertThat(useCase.getTradeList(1001L, 501L).complexId()).isEqualTo(501L);
+		assertThat(repository.detailComplexId).isEqualTo(501L);
+		assertThat(repository.tradeComplexId).isEqualTo(501L);
 	}
 
 	@Test
@@ -85,6 +89,8 @@ class PropertyReadUseCaseTest {
 	private static class CapturingRepository implements PropertyReadRepository {
 
 		private String searchQuery;
+		private Long detailComplexId;
+		private Long tradeComplexId;
 
 		@Override
 		public List<SearchComplexResponse> searchComplexes(String query) {
@@ -110,9 +116,11 @@ class PropertyReadUseCaseTest {
 		}
 
 		@Override
-		public Optional<ParcelDetailResponse> findParcelDetail(Long parcelId) {
+		public Optional<ParcelDetailResponse> findParcelDetail(Long parcelId, Long complexId) {
+			this.detailComplexId = complexId;
 			return Optional.of(new ParcelDetailResponse(
 				1001L,
+				complexId,
 				37.5123,
 				127.0456,
 				"Sample address",
@@ -130,8 +138,9 @@ class PropertyReadUseCaseTest {
 		}
 
 		@Override
-		public Optional<TradeListResponse> findTradeList(Long parcelId) {
-			return Optional.of(new TradeListResponse(1001L, List.of()));
+		public Optional<TradeListResponse> findTradeList(Long parcelId, Long complexId) {
+			this.tradeComplexId = complexId;
+			return Optional.of(new TradeListResponse(1001L, complexId, List.of()));
 		}
 	}
 }

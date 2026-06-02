@@ -1,6 +1,7 @@
 package com.home.infrastructure.external.odcloud;
 
 import com.home.application.ingest.ComplexIdentityResolver;
+import com.home.application.coordinate.ComplexCoordinateIdentityVerifier;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -25,6 +26,29 @@ class OdcloudIdentityExternalApiConfiguration {
 		requestFactory.setConnectTimeout(connectTimeoutMillis);
 		requestFactory.setReadTimeout(readTimeoutMillis);
 		return new OdcloudComplexIdentityResolver(
+			RestClient.builder()
+				.requestFactory(requestFactory)
+				.baseUrl(odcloudBaseUrl)
+				.build(),
+			odcloudBaseUrl,
+			odcloudServiceKey,
+			defaultOdcloudAptPath(odcloudAptPath)
+		);
+	}
+
+	@Bean
+	@ConditionalOnProperty(name = "complex.coordinate.identity.odcloud.enabled", havingValue = "true")
+	ComplexCoordinateIdentityVerifier odcloudComplexCoordinateIdentityVerifier(
+		@Value("${odcloud.data.base-url:https://api.odcloud.kr}") String odcloudBaseUrl,
+		@Value("${odcloud.data.od-service-key:${ODC_SERVICE_KEY:}}") String odcloudServiceKey,
+		@Value("${odcloud.data.apt-title-path:}") String odcloudAptPath,
+		@Value("${complex.coordinate.identity.connect-timeout-millis:5000}") int connectTimeoutMillis,
+		@Value("${complex.coordinate.identity.read-timeout-millis:5000}") int readTimeoutMillis
+	) {
+		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+		requestFactory.setConnectTimeout(connectTimeoutMillis);
+		requestFactory.setReadTimeout(readTimeoutMillis);
+		return new OdcloudComplexCoordinateIdentityVerifier(
 			RestClient.builder()
 				.requestFactory(requestFactory)
 				.baseUrl(odcloudBaseUrl)

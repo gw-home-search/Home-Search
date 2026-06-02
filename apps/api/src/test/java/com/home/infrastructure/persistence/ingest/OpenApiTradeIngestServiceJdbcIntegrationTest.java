@@ -516,8 +516,8 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
-	@DisplayName("live RTMS master bootstrap은 resolver가 제공한 snapshot parcel geometry를 저장한다")
-	void bootstrapPersistsSnapshotParcelGeometryWhenResolverProvidesIt() {
+	@DisplayName("live RTMS master bootstrap은 resolver가 제공한 source parcel geometry를 저장한다")
+	void bootstrapPersistsSourceParcelGeometryWhenResolverProvidesIt() {
 		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
 		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
 			jdbcClient,
@@ -552,8 +552,8 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
-	@DisplayName("승인된 좌표 override는 snapshot miss 이후 live RTMS parcel bootstrap에 사용된다")
-	void approvedCoordinateOverrideBootstrapsLiveRtmsParcelAfterSnapshotMiss() {
+	@DisplayName("승인된 좌표 override는 Coordinate Source DB miss 이후 live RTMS parcel bootstrap에 사용된다")
+	void approvedCoordinateOverrideBootstrapsLiveRtmsParcelAfterCoordinateSourceMiss() {
 		String pnu = "1168010300107790001";
 		insertCoordinateOverride(
 			pnu,
@@ -569,10 +569,9 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			jdbcClient,
 			transactionTemplate
 		);
-		ParcelCoordinateResolver resolver = new SnapshotFirstParcelCoordinateResolver(
-			snapshotPnu -> Optional.empty(),
-			new JdbcParcelCoordinateOverrideRepository(jdbcClient),
-			(fallbackPnu, item) -> Optional.empty()
+		ParcelCoordinateResolver resolver = new CoordinateSourceFirstParcelCoordinateResolver(
+			pnuCandidate -> Optional.empty(),
+			new JdbcParcelCoordinateOverrideRepository(jdbcClient)
 		);
 		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
 			rawRepository,
@@ -616,10 +615,9 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			jdbcClient,
 			transactionTemplate
 		);
-		ParcelCoordinateResolver resolver = new SnapshotFirstParcelCoordinateResolver(
-			snapshotPnu -> Optional.empty(),
-			new JdbcParcelCoordinateOverrideRepository(jdbcClient),
-			(fallbackPnu, item) -> Optional.empty()
+		ParcelCoordinateResolver resolver = new CoordinateSourceFirstParcelCoordinateResolver(
+			pnuCandidate -> Optional.empty(),
+			new JdbcParcelCoordinateOverrideRepository(jdbcClient)
 		);
 		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
 			rawRepository,

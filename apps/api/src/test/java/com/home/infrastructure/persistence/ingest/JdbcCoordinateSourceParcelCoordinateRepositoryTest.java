@@ -7,11 +7,11 @@ import java.math.BigDecimal;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class JdbcParcelCoordinateSnapshotRepositoryTest extends JdbcPostgresTestSupport {
+class JdbcCoordinateSourceParcelCoordinateRepositoryTest extends JdbcPostgresTestSupport {
 
 	@Test
-	@DisplayName("VWorld SHP coordinate snapshot은 DB에서 PNU coordinate와 geometry를 resolve한다")
-	void findsCoordinateSnapshotByPnu() {
+	@DisplayName("Coordinate Source DB에서 PNU coordinate와 geometry를 read-only lookup 한다")
+	void findsCoordinateFromCoordinateSourceByPnu() {
 		Long runId = jdbcClient.sql("""
 			INSERT INTO reference.coordinate_snapshot_run (
 			    snapshot_version,
@@ -54,7 +54,8 @@ class JdbcParcelCoordinateSnapshotRepositoryTest extends JdbcPostgresTestSupport
 			""")
 			.param("runId", runId)
 			.update();
-		JdbcParcelCoordinateSnapshotRepository repository = new JdbcParcelCoordinateSnapshotRepository(jdbcClient);
+		JdbcCoordinateSourceParcelCoordinateRepository repository =
+			new JdbcCoordinateSourceParcelCoordinateRepository(jdbcClient);
 
 		assertThat(repository.findByPnu(" 1168010300107770001 "))
 			.hasValueSatisfying(coordinate -> {
@@ -65,9 +66,10 @@ class JdbcParcelCoordinateSnapshotRepositoryTest extends JdbcPostgresTestSupport
 	}
 
 	@Test
-	@DisplayName("blank PNU는 coordinate snapshot을 반환하지 않는다")
+	@DisplayName("blank PNU는 Coordinate Source DB lookup을 수행하지 않는다")
 	void blankPnuReturnsEmpty() {
-		JdbcParcelCoordinateSnapshotRepository repository = new JdbcParcelCoordinateSnapshotRepository(jdbcClient);
+		JdbcCoordinateSourceParcelCoordinateRepository repository =
+			new JdbcCoordinateSourceParcelCoordinateRepository(jdbcClient);
 
 		assertThat(repository.findByPnu(" ")).isEmpty();
 	}

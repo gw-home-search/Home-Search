@@ -47,6 +47,9 @@ Home Search backend collection and map display need:
 
 - `DB_HOST` or JDBC URL equivalent.
 - `DB_PASSWORD`
+- `COORDINATE_SOURCE_DB_JDBC_URL` for read-only PNU coordinate lookup.
+- `COORDINATE_SOURCE_DB_USERNAME`
+- `COORDINATE_SOURCE_DB_PASSWORD`
 - `APT_SERVICE_KEY`
 - `BLD_SERVICE_KEY` if building data enrichment is included in the current scope.
 - `ODC_SERVICE_KEY` if complex reference enrichment is included in the current scope.

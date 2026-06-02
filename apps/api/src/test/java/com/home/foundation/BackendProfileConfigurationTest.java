@@ -51,6 +51,12 @@ class BackendProfileConfigurationTest {
 		assertThat(properties.getProperty("spring.flyway.locations"))
 			.isEqualTo("${SPRING_FLYWAY_LOCATIONS:classpath:db/migration/api,classpath:db/seed/local}");
 		assertThat(properties.getProperty("spring.flyway.clean-disabled")).isEqualTo("true");
+		assertThat(properties.getProperty("home.coordinate-source.db.jdbc-url"))
+			.isEqualTo("${COORDINATE_SOURCE_DB_JDBC_URL:}");
+		assertThat(properties.getProperty("home.coordinate-source.db.username"))
+			.isEqualTo("${COORDINATE_SOURCE_DB_USERNAME:${DB_USERNAME}}");
+		assertThat(properties.getProperty("home.coordinate-source.db.password"))
+			.isEqualTo("${COORDINATE_SOURCE_DB_PASSWORD:${DB_PASSWORD}}");
 		assertThat(properties.getProperty("management.endpoints.web.exposure.include")).isEqualTo("health,prometheus");
 		assertThat(properties.getProperty("management.prometheus.metrics.export.enabled")).isEqualTo("true");
 	}

@@ -6,11 +6,11 @@ import java.util.Optional;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
-class JdbcParcelCoordinateSnapshotRepository implements ParcelCoordinateSnapshotRepository {
+public class JdbcCoordinateSourceParcelCoordinateRepository implements ParcelCoordinateSourceRepository {
 
 	private final JdbcClient jdbcClient;
 
-	JdbcParcelCoordinateSnapshotRepository(JdbcClient jdbcClient) {
+	public JdbcCoordinateSourceParcelCoordinateRepository(JdbcClient jdbcClient) {
 		this.jdbcClient = Objects.requireNonNull(jdbcClient);
 	}
 

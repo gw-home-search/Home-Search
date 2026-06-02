@@ -113,3 +113,20 @@ capability when moving to `apps/api`.
 - Flyway can create baseline tables from scratch.
 - Frontend can call the API through its env base URL.
 - Ingest logs show read, inserted, duplicate, and failed counts.
+
+## Local Flyway History
+
+Durable local databases can contain seed migrations from an older local runtime,
+for example `sample home search data`. Local API startup should not require a
+Flyway `repair` just because that historical seed file is no longer present in
+the repository.
+
+The local profile uses:
+
+```text
+SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS=*:missing
+```
+
+This is a local runtime guard only. Do not use it as a substitute for reviewing
+production migration history, and do not run Flyway `repair` or delete local
+database state without explicit approval.

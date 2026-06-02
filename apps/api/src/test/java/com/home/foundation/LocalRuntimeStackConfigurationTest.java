@@ -28,7 +28,10 @@ class LocalRuntimeStackConfigurationTest {
 		assertThat(content).contains("postgis/postgis:16-3.4");
 		assertThat(content).contains("DB_JDBC_URL: jdbc:postgresql://postgis:5432/${HOME_SEARCH_DB_NAME:-home_search}");
 		assertThat(content).contains("COORDINATE_SOURCE_DB_JDBC_URL: ${COORDINATE_SOURCE_DB_JDBC_URL:-}");
+		assertThat(content).contains("COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS: ${COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS:-3000}");
+		assertThat(content).contains("COORDINATE_SOURCE_DB_READ_ONLY: ${COORDINATE_SOURCE_DB_READ_ONLY:-true}");
 		assertThat(content).contains("SPRING_FLYWAY_LOCATIONS: classpath:db/migration/api,classpath:db/seed/local");
+		assertThat(content).contains("SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS: ${SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS:-*:missing}");
 		assertThat(content).contains("VITE_API_SERVER_IP: ${VITE_API_SERVER_IP:-http://localhost:8080}");
 		assertThat(content).doesNotContain("APT_SERVICE_KEY");
 		assertThat(content).doesNotContain(".env");

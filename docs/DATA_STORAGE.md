@@ -246,6 +246,11 @@ VWorld VM/WFS is reserved for same-PNU multi-complex marker disambiguation. It
 is not the default coordinate provider for ordinary single-complex RTMS
 bootstrap.
 
+Coordinate source database inspection must not use nationwide `count(*)` or
+other broad scans in the application path. Use exact 19 digit PNU lookup only.
+For diagnostics, prefer `pg_class.reltuples`, indexed sample lookup, or bounded
+queries with `LIMIT` and a short `statement_timeout`.
+
 ## Complex Metadata Enrichment
 
 `complex` rows keep identity data on the ingest path. Optional complex

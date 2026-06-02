@@ -1,11 +1,14 @@
 package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.math.BigDecimal;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 class JdbcCoordinateSourceParcelCoordinateRepositoryTest extends JdbcPostgresTestSupport {
 
@@ -72,5 +75,18 @@ class JdbcCoordinateSourceParcelCoordinateRepositoryTest extends JdbcPostgresTes
 			new JdbcCoordinateSourceParcelCoordinateRepository(jdbcClient);
 
 		assertThat(repository.findByPnu(" ")).isEmpty();
+	}
+
+	@Test
+	@DisplayName("19자리 숫자가 아닌 PNU는 source DB query를 수행하지 않는다")
+	void invalidPnuReturnsEmptyWithoutQuery() {
+		JdbcClient jdbcClient = mock(JdbcClient.class);
+		JdbcCoordinateSourceParcelCoordinateRepository repository =
+			new JdbcCoordinateSourceParcelCoordinateRepository(jdbcClient);
+
+		assertThat(repository.findByPnu("11680%")).isEmpty();
+		assertThat(repository.findByPnu("116801030010777000")).isEmpty();
+		assertThat(repository.findByPnu("11680103001077700010")).isEmpty();
+		verifyNoInteractions(jdbcClient);
 	}
 }

@@ -8,6 +8,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class JdbcCoordinateSourceParcelCoordinateRepository implements ParcelCoordinateSourceRepository {
 
+	private static final String PNU_PATTERN = "\\d{19}";
+
 	private final JdbcClient jdbcClient;
 
 	public JdbcCoordinateSourceParcelCoordinateRepository(JdbcClient jdbcClient) {
@@ -17,7 +19,7 @@ public class JdbcCoordinateSourceParcelCoordinateRepository implements ParcelCoo
 	@Override
 	public Optional<ParcelCoordinate> findByPnu(String pnu) {
 		String normalizedPnu = trimToNull(pnu);
-		if (normalizedPnu == null) {
+		if (normalizedPnu == null || !normalizedPnu.matches(PNU_PATTERN)) {
 			return Optional.empty();
 		}
 		return jdbcClient.sql("""

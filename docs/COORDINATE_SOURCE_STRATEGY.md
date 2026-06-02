@@ -154,17 +154,21 @@ COORDINATE_SOURCE_DB_PASSWORD=...
 The coordinate source connection should be treated as read-only by application
 code.
 
-## Current Implementation Gap
+Coordinate source queries must stay narrow:
 
-Current backend code still has a path that reads
-`home_search.reference.parcel_coordinate_snapshot`. That path is a migration
-artifact and should be replaced by a coordinate source database lookup provider.
+- Lookup only by exact 19 digit `pnu`.
+- Do not run application queries that count or scan the nationwide source table.
+- Use `LIMIT` and estimated catalog metadata for diagnostics instead of
+  `count(*)`.
+- Keep short `statement_timeout`, `lock_timeout`, and socket timeout values on
+  the coordinate source connection.
 
-Target implementation:
+## Current Implementation
 
 ```text
 JdbcComplexMasterBootstrapper
-  -> ParcelCoordinateProvider
+  -> ParcelCoordinateResolver
+  -> CoordinateSourceFirstParcelCoordinateResolver
   -> CoordinateSourceDbParcelCoordinateLookup
 ```
 

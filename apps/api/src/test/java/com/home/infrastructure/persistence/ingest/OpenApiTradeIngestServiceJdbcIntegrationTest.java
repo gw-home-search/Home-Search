@@ -552,6 +552,101 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
+	@DisplayName("승인된 좌표 override는 snapshot miss 이후 live RTMS parcel bootstrap에 사용된다")
+	void approvedCoordinateOverrideBootstrapsLiveRtmsParcelAfterSnapshotMiss() {
+		String pnu = "1168010300107790001";
+		insertCoordinateOverride(
+			pnu,
+			"APT-LIVE-503",
+			"APPROVED",
+			"MANUAL",
+			"HIGH",
+			"37.6112345",
+			"127.1643210"
+		);
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		ParcelCoordinateResolver resolver = new SnapshotFirstParcelCoordinateResolver(
+			snapshotPnu -> Optional.empty(),
+			new JdbcParcelCoordinateOverrideRepository(jdbcClient),
+			(fallbackPnu, item) -> Optional.empty()
+		);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(jdbcClient, resolver)
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(liveRtmsItem("APT-LIVE-503", "Approved Override Apartment", "779-1"))
+		));
+
+		assertThat(result.normalizedInserted()).isEqualTo(1);
+		assertThat(result.matchFailed()).isZero();
+		assertThat(parcelCount(pnu)).isEqualTo(1);
+		assertThat(parcelCoordinate(pnu))
+			.containsEntry("latitude", new BigDecimal("37.6112345"))
+			.containsEntry("longitude", new BigDecimal("127.1643210"));
+		assertThat(complexCountByAptSeq("APT-LIVE-503")).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("주소 검색 좌표 후보는 승인 전 live RTMS parcel bootstrap에 사용하지 않는다")
+	void coordinateCandidateDoesNotBootstrapLiveRtmsParcelBeforeApproval() {
+		String pnu = "1168010300108890001";
+		insertCoordinateOverride(
+			pnu,
+			"APT-LIVE-889",
+			"CANDIDATE",
+			"VWORLD_ADDRESS_SEARCH",
+			"LOW",
+			"37.7112345",
+			"127.2643210"
+		);
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
+			jdbcClient,
+			transactionTemplate
+		);
+		ParcelCoordinateResolver resolver = new SnapshotFirstParcelCoordinateResolver(
+			snapshotPnu -> Optional.empty(),
+			new JdbcParcelCoordinateOverrideRepository(jdbcClient),
+			(fallbackPnu, item) -> Optional.empty()
+		);
+		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+			rawRepository,
+			tradeRepository,
+			new JdbcComplexMatcher(jdbcClient),
+			new JdbcComplexMasterBootstrapper(jdbcClient, resolver)
+		);
+
+		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
+			"RTMS",
+			"11680",
+			"202512",
+			1,
+			List.of(liveRtmsItem("APT-LIVE-889", "Candidate Coordinate Apartment", "889-1"))
+		));
+
+		assertThat(result.normalizedInserted()).isZero();
+		assertThat(result.matchFailed()).isEqualTo(1);
+		assertThat(parcelCount(pnu)).isZero();
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.MATCH_FAILED))
+			.singleElement()
+			.extracting(RawTradeIngestRecord::failureReason)
+			.asString()
+			.contains("coordinate unavailable");
+	}
+
+	@Test
 	@DisplayName("coordinate가 resolve되지 않은 live RTMS row는 fake parcel 없이 explainable match failure로 남는다")
 	void coordinateMissingLeavesExplainableMatchFailureWithoutFakeParcel() {
 		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
@@ -880,6 +975,69 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			.param("pnu", pnu)
 			.query(String.class)
 			.single();
+	}
+
+	private java.util.Map<String, Object> parcelCoordinate(String pnu) {
+		return jdbcClient.sql("""
+			SELECT latitude, longitude
+			FROM parcel
+			WHERE pnu = :pnu
+			""")
+			.param("pnu", pnu)
+			.query((resultSet, rowNumber) -> java.util.Map.<String, Object>of(
+				"latitude", resultSet.getBigDecimal("latitude"),
+				"longitude", resultSet.getBigDecimal("longitude")
+			))
+			.single();
+	}
+
+	private void insertCoordinateOverride(
+		String pnu,
+		String aptSeq,
+		String status,
+		String source,
+		String confidence,
+		String latitude,
+		String longitude
+	) {
+		jdbcClient.sql("""
+			INSERT INTO parcel_coordinate_override (
+			    pnu,
+			    apt_seq,
+			    apt_name,
+			    address_text,
+			    latitude,
+			    longitude,
+			    source,
+			    confidence,
+			    status,
+			    reason,
+			    approved_by,
+			    approved_at
+			)
+			VALUES (
+			    :pnu,
+			    :aptSeq,
+			    'Coordinate Override Apartment',
+			    'Sample-dong coordinate override',
+			    :latitude,
+			    :longitude,
+			    :source,
+			    :confidence,
+			    :status,
+			    'test coordinate override',
+			    CASE WHEN :status = 'APPROVED' THEN 'test-operator' ELSE NULL END,
+			    CASE WHEN :status = 'APPROVED' THEN now() ELSE NULL END
+			)
+			""")
+			.param("pnu", pnu)
+			.param("aptSeq", aptSeq)
+			.param("latitude", new BigDecimal(latitude))
+			.param("longitude", new BigDecimal(longitude))
+			.param("source", source)
+			.param("confidence", confidence)
+			.param("status", status)
+			.update();
 	}
 
 	private java.util.Map<String, Object> normalizedTradeAudit(String aptSeq) {

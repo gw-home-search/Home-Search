@@ -21,6 +21,7 @@ class VworldExternalApiConfigurationTest {
 		AtomicBoolean fallbackCalled = new AtomicBoolean(false);
 		ParcelCoordinateResolver resolver = configuration.parcelCoordinateResolver(
 			pnu -> Optional.empty(),
+			pnu -> Optional.empty(),
 			(pnu, item) -> {
 				fallbackCalled.set(true);
 				return Optional.of(new ParcelCoordinate(new BigDecimal("37.5012345"), new BigDecimal("127.0543210")));
@@ -33,11 +34,32 @@ class VworldExternalApiConfigurationTest {
 	}
 
 	@Test
+	@DisplayName("RTMS ingest용 primary coordinate resolver는 approved override를 VWorld fallback보다 먼저 사용한다")
+	void primaryCoordinateResolverUsesApprovedOverrideBeforeVworldFallback() {
+		VworldExternalApiConfiguration configuration = new VworldExternalApiConfiguration();
+		ParcelCoordinate override = new ParcelCoordinate(new BigDecimal("37.6012345"), new BigDecimal("127.1543210"));
+		AtomicBoolean fallbackCalled = new AtomicBoolean(false);
+		ParcelCoordinateResolver resolver = configuration.parcelCoordinateResolver(
+			pnu -> Optional.empty(),
+			pnu -> Optional.of(override),
+			(pnu, item) -> {
+				fallbackCalled.set(true);
+				return Optional.of(new ParcelCoordinate(new BigDecimal("37.5012345"), new BigDecimal("127.0543210")));
+			},
+			true
+		);
+
+		assertThat(resolver.resolve("1168010300107770001", null)).contains(override);
+		assertThat(fallbackCalled).isFalse();
+	}
+
+	@Test
 	@DisplayName("RTMS ingest용 primary coordinate resolver는 opt-in이면 snapshot miss에서 VWorld fallback을 호출한다")
 	void primaryCoordinateResolverCallsVworldFallbackWhenEnabled() {
 		VworldExternalApiConfiguration configuration = new VworldExternalApiConfiguration();
 		ParcelCoordinate fallback = new ParcelCoordinate(new BigDecimal("37.5012345"), new BigDecimal("127.0543210"));
 		ParcelCoordinateResolver resolver = configuration.parcelCoordinateResolver(
+			pnu -> Optional.empty(),
 			pnu -> Optional.empty(),
 			(pnu, item) -> Optional.of(fallback),
 			true

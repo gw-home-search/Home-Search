@@ -1,6 +1,7 @@
 package com.home.infrastructure.external.vworld;
 
 import com.home.infrastructure.persistence.ingest.ParcelCoordinateResolver;
+import com.home.infrastructure.persistence.ingest.ParcelCoordinateOverrideRepository;
 import com.home.infrastructure.persistence.ingest.ParcelCoordinateSnapshotRepository;
 import com.home.infrastructure.persistence.ingest.SnapshotFirstParcelCoordinateResolver;
 
@@ -55,12 +56,13 @@ class VworldExternalApiConfiguration {
 	@Lazy
 	ParcelCoordinateResolver parcelCoordinateResolver(
 		ParcelCoordinateSnapshotRepository snapshotRepository,
+		ParcelCoordinateOverrideRepository overrideRepository,
 		@Qualifier("vworldParcelCoordinateResolver") ParcelCoordinateResolver vworldParcelCoordinateResolver,
 		@Value("${home.coordinate.vworld-fallback.enabled:false}") boolean vworldFallbackEnabled
 	) {
 		ParcelCoordinateResolver fallbackResolver = vworldFallbackEnabled
 			? vworldParcelCoordinateResolver
 			: ParcelCoordinateResolver.empty();
-		return new SnapshotFirstParcelCoordinateResolver(snapshotRepository, fallbackResolver);
+		return new SnapshotFirstParcelCoordinateResolver(snapshotRepository, overrideRepository, fallbackResolver);
 	}
 }

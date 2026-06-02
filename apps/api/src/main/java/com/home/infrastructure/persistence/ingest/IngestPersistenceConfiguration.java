@@ -89,6 +89,14 @@ class IngestPersistenceConfiguration {
 
 	@Bean
 	@Lazy
+	ParcelCoordinateOverrideRepository parcelCoordinateOverrideRepository(
+		ObjectProvider<JdbcClient> jdbcClientProvider
+	) {
+		return new JdbcParcelCoordinateOverrideRepository(requiredJdbcClient(jdbcClientProvider));
+	}
+
+	@Bean
+	@Lazy
 	ComplexMasterBootstrapper complexMasterBootstrapper(
 		ObjectProvider<JdbcClient> jdbcClientProvider,
 		ParcelCoordinateResolver parcelCoordinateResolver,

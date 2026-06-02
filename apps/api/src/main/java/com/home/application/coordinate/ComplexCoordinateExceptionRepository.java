@@ -13,5 +13,7 @@ public interface ComplexCoordinateExceptionRepository {
 
 	List<BuildingFootprintCandidate> findBuildingFootprintsByPnu(String pnu);
 
+	void saveBuildingFootprints(List<BuildingFootprintImportCandidate> footprints);
+
 	void saveResolvedDisplayCoordinate(ResolvedDisplayCoordinate coordinate);
 }

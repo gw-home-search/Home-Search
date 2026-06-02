@@ -9,6 +9,8 @@ import java.time.LocalDate;
 import com.home.application.complex.ComplexRelationClassifier;
 import com.home.application.complex.ComplexRelationRepository;
 import com.home.application.coordinate.BuildingFootprintCandidate;
+import com.home.application.coordinate.BuildingFootprintImportCandidate;
+import com.home.application.coordinate.BuildingFootprintSource;
 import com.home.application.coordinate.ComplexCoordinateCaseStatus;
 import com.home.application.coordinate.ComplexCoordinateExceptionService;
 import com.home.application.coordinate.ResolvedDisplayCoordinate;
@@ -97,6 +99,49 @@ class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSuppo
 			.containsExactly(
 				tuple(601L, bd("37.5010000"), bd("127.0010000")),
 				tuple(602L, bd("37.5020000"), bd("127.0020000"))
+			);
+		assertThat(caseStatus(1002L)).isEqualTo("RESOLVED");
+	}
+
+	@Test
+	@DisplayName("VWorld에서 가져온 여러 동 footprint를 저장하고 단지별 집계 표시 좌표로 resolve한다")
+	void savesFetchedVworldFootprintsAndStoresAggregatedDisplayCoordinates() {
+		seedConcurrentComplexParcel();
+		Long rawId = insertRawIngest("coordinate-aggregate");
+		insertTrade(rawId, 601L, LocalDate.of(2025, 1, 1), "rtms-coordinate-601-1", "1001");
+		insertTrade(rawId, 601L, LocalDate.of(2025, 1, 2), "rtms-coordinate-601-2", "1002");
+		insertTrade(rawId, 602L, LocalDate.of(2025, 1, 3), "rtms-coordinate-602-1", "1006");
+		insertTrade(rawId, 602L, LocalDate.of(2025, 1, 4), "rtms-coordinate-602-2", "1008");
+		JdbcComplexCoordinateExceptionRepository repository = new JdbcComplexCoordinateExceptionRepository(jdbcClient);
+		BuildingFootprintSource source = pnu -> java.util.List.of(
+			importFootprint(pnu, "1001동", "37.6875000", "126.7780000"),
+			importFootprint(pnu, "1002동", "37.6885000", "126.7786000"),
+			importFootprint(pnu, "1006동", "37.6890000", "126.7779000"),
+			importFootprint(pnu, "1008동", "37.6896000", "126.7781000")
+		);
+		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
+			repository,
+			new JdbcComplexRelationRepository(jdbcClient),
+			new ComplexRelationClassifier(),
+			com.home.application.coordinate.ComplexCoordinateIdentityVerifier.trusting(),
+			source
+		);
+
+		service.stageExceptionCases(10);
+		var resolution = service.resolveExceptionCase(1002L);
+
+		assertThat(resolution.status()).isEqualTo(ComplexCoordinateCaseStatus.RESOLVED);
+		assertThat(footprintCount("1168010300101400002")).isEqualTo(4);
+		assertThat(findResolvedDisplayCoordinates())
+			.extracting(
+				ResolvedDisplayCoordinate::complexId,
+				ResolvedDisplayCoordinate::latitude,
+				ResolvedDisplayCoordinate::longitude,
+				ResolvedDisplayCoordinate::reason
+			)
+			.containsExactly(
+				tuple(601L, bd("37.6880000"), bd("126.7783000"), "apt_dong matched building dong_name aggregate footprint_count=2"),
+				tuple(602L, bd("37.6893000"), bd("126.7780000"), "apt_dong matched building dong_name aggregate footprint_count=2")
 			);
 		assertThat(caseStatus(1002L)).isEqualTo("RESOLVED");
 	}
@@ -251,6 +296,35 @@ class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSuppo
 			.param("latitude", footprint.latitude())
 			.param("longitude", footprint.longitude())
 			.update();
+	}
+
+	private BuildingFootprintImportCandidate importFootprint(
+		String pnu,
+		String dongName,
+		String latitude,
+		String longitude
+	) {
+		return new BuildingFootprintImportCandidate(
+			pnu,
+			"중산마을",
+			dongName,
+			"VWORLD-" + pnu + "-" + dongName,
+			bd(latitude),
+			bd(longitude),
+			"VWORLD_WFS",
+			"LIVE"
+		);
+	}
+
+	private Long footprintCount(String pnu) {
+		return jdbcClient.sql("""
+			SELECT count(*)
+			FROM building_footprint_snapshot
+			WHERE pnu = :pnu
+			""")
+			.param("pnu", pnu)
+			.query(Long.class)
+			.single();
 	}
 
 	private java.util.List<ResolvedDisplayCoordinate> findResolvedDisplayCoordinates() {

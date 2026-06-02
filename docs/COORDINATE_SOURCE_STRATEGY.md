@@ -100,6 +100,27 @@ When VWorld VM/WFS cannot confidently split same-PNU complexes, keep the parcel
 coordinate fallback and leave explainable evidence instead of guessing a
 complex-level marker.
 
+VWorld VM/WFS is used only after the normal PNU coordinate source succeeds and
+the operational DB has a same-PNU multi-complex candidate. The readiness flow
+may fetch VWorld building footprints for the exact 19 digit PNU, store them in
+`building_footprint_snapshot`, and then resolve complex display coordinates.
+
+Identity and matching rules:
+
+- If ODC identity verification is enabled, each `complex.apt_seq` must confirm
+  the same parcel PNU before a VWorld coordinate is promoted to public display.
+- If ODC returns multiple PNU candidates, a conflicting PNU, no exact candidate,
+  or an external failure, keep the case as `AMBIGUOUS`, `UNAVAILABLE`, or
+  `FAILED` instead of storing a guessed display coordinate.
+- VWorld footprint `dong_nm` is matched to RTMS `trade.apt_dong` after
+  normalization such as `1001동 -> 1001`.
+- A complex may match multiple building footprints. In that case Home Search
+  stores an aggregate complex display coordinate from the matched footprints.
+- If the same footprint matches multiple complexes, or one normalized dong token
+  maps to duplicate footprint candidates, the case is `AMBIGUOUS`.
+- `REDEVELOPED` relation cases are not split into concurrent markers by
+  default; they keep the current-generation representative marker policy.
+
 ## Operational Database Boundary
 
 The operational database owns:

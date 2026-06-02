@@ -1,6 +1,7 @@
 package com.home.application.coordinate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -63,11 +64,75 @@ class ComplexCoordinateReadinessServiceTest {
 		assertThat(projectionService.projectLimit).isZero();
 	}
 
+	@Test
+	@DisplayName("coordinate readiness는 retry가 활성화되면 FAILED 케이스를 backoff 후보로 재시도한다")
+	void retriesFailedCasesWhenRetryEnabled() {
+		FakeReadinessRepository repository = new FakeReadinessRepository(List.of());
+		repository.retryableParcelIds = List.of(1001L);
+		FakeCoordinateExceptionService exceptionService = new FakeCoordinateExceptionService();
+		FakeProjectionService projectionService = new FakeProjectionService();
+		ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
+			exceptionService,
+			repository,
+			projectionService,
+			10,
+			java.time.Duration.ofHours(6)
+		);
+
+		ComplexCoordinateReadinessResult result = service.prepare(0, 0, 0);
+
+		assertThat(repository.retryLimit).isEqualTo(10);
+		assertThat(exceptionService.resolvedParcelIds).containsExactly(1001L);
+		assertThat(result.retried()).isEqualTo(1);
+		assertThat(result.resolved()).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("coordinate readiness는 retry가 비활성(기본)이면 FAILED 후보를 조회하지 않는다")
+	void doesNotRetryWhenRetryDisabled() {
+		FakeReadinessRepository repository = new FakeReadinessRepository(List.of());
+		repository.retryableParcelIds = List.of(1001L);
+		ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
+			new FakeCoordinateExceptionService(),
+			repository,
+			new FakeProjectionService()
+		);
+
+		ComplexCoordinateReadinessResult result = service.prepare(0, 0, 0);
+
+		assertThat(repository.retryLimit).isZero();
+		assertThat(result.retried()).isZero();
+	}
+
+	@Test
+	@DisplayName("coordinate readiness는 retry 설정이 음수이면 시작하지 않는다")
+	void rejectsNegativeRetryConfiguration() {
+		assertThatThrownBy(() -> new ComplexCoordinateReadinessService(
+			new FakeCoordinateExceptionService(),
+			new FakeReadinessRepository(List.of()),
+			new FakeProjectionService(),
+			-1,
+			java.time.Duration.ZERO
+		)).isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("retryLimit");
+
+		assertThatThrownBy(() -> new ComplexCoordinateReadinessService(
+			new FakeCoordinateExceptionService(),
+			new FakeReadinessRepository(List.of()),
+			new FakeProjectionService(),
+			1,
+			java.time.Duration.ofMillis(-1)
+		)).isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("retryAfter");
+	}
+
 	private static final class FakeReadinessRepository implements ComplexCoordinateReadinessRepository {
 
 		private final List<Long> pendingParcelIds;
 		private int pendingLimit;
 		private final List<Long> failedParcelIds = new ArrayList<>();
+		private List<Long> retryableParcelIds = List.of();
+		private int retryLimit;
 
 		private FakeReadinessRepository(List<Long> pendingParcelIds) {
 			this.pendingParcelIds = pendingParcelIds;
@@ -77,6 +142,12 @@ class ComplexCoordinateReadinessServiceTest {
 		public List<Long> findPendingCaseParcelIds(int limit) {
 			pendingLimit = limit;
 			return pendingParcelIds.stream().limit(limit).toList();
+		}
+
+		@Override
+		public List<Long> findRetryableFailedCaseParcelIds(int limit, java.time.Instant retryBefore) {
+			retryLimit = limit;
+			return retryableParcelIds.stream().limit(limit).toList();
 		}
 
 		@Override

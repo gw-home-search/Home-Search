@@ -107,11 +107,19 @@ may fetch VWorld building footprints for the exact 19 digit PNU, store them in
 
 Identity and matching rules:
 
-- If ODC identity verification is enabled, each `complex.apt_seq` must confirm
-  the same parcel PNU before a VWorld coordinate is promoted to public display.
-- If ODC returns multiple PNU candidates, a conflicting PNU, no exact candidate,
-  or an external failure, keep the case as `AMBIGUOUS`, `UNAVAILABLE`, or
-  `FAILED` instead of storing a guessed display coordinate.
+- ODC identity verification is the default path: when an ODC service key is
+  configured, Home Search attempts to confirm that each `complex.apt_seq`
+  belongs to the same parcel PNU before VWorld coordinates are promoted.
+  Without a key it degrades to a non-blocking fallback, and
+  `complex.coordinate.identity.odcloud.enabled=false` disables it explicitly.
+- If ODC returns multiple PNU candidates or a conflicting PNU, keep the case as
+  `AMBIGUOUS` instead of storing a guessed display coordinate.
+- If ODC returns no exact candidate or an external failure, the default policy
+  continues with VWorld footprint matching and records the result from that
+  matching step. Strict deployments may set
+  `complex.coordinate.identity.block-on-unavailable=true` or
+  `complex.coordinate.identity.block-on-failed=true` to hold those cases as
+  `UNAVAILABLE` or `FAILED`.
 - VWorld footprint `dong_nm` is matched to RTMS `trade.apt_dong` after
   normalization such as `1001동 -> 1001`.
 - A complex may match multiple building footprints. In that case Home Search

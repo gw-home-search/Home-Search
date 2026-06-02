@@ -68,11 +68,30 @@ public class ComplexRelationClassifier {
 				ComplexRelationConfidence.HIGH
 			);
 		}
-		if (spans.size() > 2) {
-			return unknown(spans, "multiple complex generations require manual review");
-		}
 		if (!hasEnoughTradeSamplesForRedevelopment(tradeSpans)) {
 			return unknown(spans, "trade span sample too small for redevelopment classification");
+		}
+		if (spans.size() > 2) {
+			if (hasSequentialUseDateChain(tradeSpans)) {
+				return new ComplexRelationClassification(
+					ComplexRelationType.REDEVELOPED,
+					spans,
+					"use_date gaps across all generations support sequential redevelopment",
+					ComplexRelationConfidence.HIGH
+				);
+			}
+			if (hasWeakUseDateEvidence(tradeSpans)) {
+				return unknown(spans, "multiple complex generations require manual review");
+			}
+			if (hasSequentialTradeGapChain(tradeSpans)) {
+				return new ComplexRelationClassification(
+					ComplexRelationType.REDEVELOPED,
+					spans,
+					"sequential trade gaps across all generations support redevelopment; trade gap is heuristic",
+					ComplexRelationConfidence.LOW
+				);
+			}
+			return unknown(spans, "multiple complex generations require manual review");
 		}
 		if (hasStrongUseDateEvidence(tradeSpans)) {
 			return new ComplexRelationClassification(
@@ -131,6 +150,17 @@ public class ComplexRelationClassifier {
 		return false;
 	}
 
+	private boolean hasSequentialTradeGapChain(List<ComplexTradeSpan> spans) {
+		for (int i = 1; i < spans.size(); i++) {
+			LocalDate previousLast = spans.get(i - 1).lastDeal();
+			LocalDate nextFirst = spans.get(i).firstDeal();
+			if (previousLast.plusMonths(redevelopmentGapMonths).isAfter(nextFirst)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	private boolean hasEnoughTradeSamplesForRedevelopment(List<ComplexTradeSpan> spans) {
 		return spans.stream()
 			.allMatch(span -> span.tradeCount() >= minTradeCountForRedevelopment);
@@ -149,6 +179,21 @@ public class ComplexRelationClassifier {
 			}
 		}
 		return false;
+	}
+
+	private boolean hasSequentialUseDateChain(List<ComplexTradeSpan> spans) {
+		for (int i = 1; i < spans.size(); i++) {
+			LocalDate previousUseDate = spans.get(i - 1).useDate();
+			LocalDate nextUseDate = spans.get(i).useDate();
+			if (
+				previousUseDate == null
+					|| nextUseDate == null
+					|| previousUseDate.plusYears(useDateGapYears).isAfter(nextUseDate)
+			) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	private boolean hasWeakUseDateEvidence(List<ComplexTradeSpan> spans) {

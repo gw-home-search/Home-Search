@@ -100,6 +100,17 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 			);
 	}
 
+	@Test
+	@DisplayName("3세대+ 순차 재건축 마커는 현재 세대 단위수만 반영하고 철거 세대를 합산하지 않는다")
+	void multiGenerationRedevelopmentMarkerMustNotSumDemolishedUnits() {
+		seedMultiGenerationRedevelopmentParcel();
+		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+
+		assertThat(repository.findComplexMarkers(request(null, null)))
+			.extracting(ComplexMarkerResponse::parcelId, ComplexMarkerResponse::unitCntSum)
+			.containsExactly(tuple(4001L, 900L));
+	}
+
 	private ComplexMarkersRequest request(Double priceEokMin, Double priceEokMax) {
 		return new ComplexMarkersRequest(
 			37.45,
@@ -132,7 +143,6 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 			    (801, 2001, 'COMPLEX-PK-801', 'APT-801', 'Old Mansion', 500, DATE '1985-01-01'),
 			    (802, 2001, 'COMPLEX-PK-802', 'APT-802', 'New Tower', 900, DATE '2022-06-01')
 			""").update();
-		// 좌표 readiness staging이 남기는 parcel 단위 분류 증거.
 		jdbcClient.sql("""
 			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, relation_type, relation_confidence)
 			VALUES (2001, '1168010300101400009', 'SKIPPED', 'REDEVELOPED', 'HIGH')
@@ -192,6 +202,49 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 		Long rawId = insertRawIngest("rtms-concurrent");
 		insertTrade(rawId, 901L, LocalDate.of(2025, 1, 1), 150000L, "rtms-concurrent-901", "COMPLEX-PK-901");
 		insertTrade(rawId, 902L, LocalDate.of(2025, 2, 1), 220000L, "rtms-concurrent-902", "COMPLEX-PK-902");
+	}
+
+	private void seedMultiGenerationRedevelopmentParcel() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (4001, 1, '1168010300101400011', 'Multi-generation redevelopment lot', 37.5123, 127.0456)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt, use_date)
+			VALUES
+			    (1101, 4001, 'COMPLEX-PK-1101', 'APT-1101', 'Gen1 demolished', 300, DATE '1985-01-01'),
+			    (1102, 4001, 'COMPLEX-PK-1102', 'APT-1102', 'Gen2 demolished', 500, DATE '2000-01-01'),
+			    (1103, 4001, 'COMPLEX-PK-1103', 'APT-1103', 'Gen3 current', 900, DATE '2020-01-01')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, relation_type, relation_confidence)
+			VALUES (4001, '1168010300101400011', 'SKIPPED', 'REDEVELOPED', 'HIGH')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_display_coordinate (
+			    complex_id,
+			    latitude,
+			    longitude,
+			    coordinate_source,
+			    confidence,
+			    reason
+			)
+			VALUES
+			    (1101, 37.5101, 127.0101, 'PARCEL_FALLBACK', 40, 'gen1 fallback'),
+			    (1102, 37.5102, 127.0102, 'PARCEL_FALLBACK', 40, 'gen2 fallback'),
+			    (1103, 37.5103, 127.0103, 'PARCEL_FALLBACK', 40, 'gen3 fallback')
+			""").update();
+		Long rawId = insertRawIngest("rtms-multigen");
+		insertTrade(rawId, 1101L, LocalDate.of(2010, 1, 1), 60000L, "rtms-multigen-1101-1", "COMPLEX-PK-1101");
+		insertTrade(rawId, 1101L, LocalDate.of(2012, 1, 1), 65000L, "rtms-multigen-1101-2", "COMPLEX-PK-1101");
+		insertTrade(rawId, 1102L, LocalDate.of(2014, 1, 1), 90000L, "rtms-multigen-1102-1", "COMPLEX-PK-1102");
+		insertTrade(rawId, 1102L, LocalDate.of(2016, 1, 1), 95000L, "rtms-multigen-1102-2", "COMPLEX-PK-1102");
+		insertTrade(rawId, 1103L, LocalDate.of(2022, 1, 1), 180000L, "rtms-multigen-1103-1", "COMPLEX-PK-1103");
+		insertTrade(rawId, 1103L, LocalDate.of(2025, 1, 1), 190000L, "rtms-multigen-1103-2", "COMPLEX-PK-1103");
 	}
 
 	private void seedMapData() {

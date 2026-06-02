@@ -34,4 +34,35 @@ class ComplexCoordinatePersistenceConfigurationTest {
 			assertThat(context).hasSingleBean(ComplexCoordinateReadinessRunner.class);
 		});
 	}
+
+	@Test
+	@DisplayName("coordinate readiness scheduler는 scheduler.enabled=true일 때 주기 실행 bean으로 등록된다")
+	void coordinateReadinessSchedulerIsRegisteredForPeriodicRefresh() {
+		contextRunner
+			.withPropertyValues("home.coordinate.readiness.scheduler.enabled=true")
+			.run(context -> {
+				assertThat(context).hasNotFailed();
+				assertThat(context).hasBean("complexCoordinateReadinessScheduler");
+			});
+	}
+
+	@Test
+	@DisplayName("coordinate readiness scheduler는 readiness만 켜도 기본 등록된다(default-on)")
+	void coordinateReadinessSchedulerIsDefaultOnWhenReadinessEnabled() {
+		contextRunner.run(context -> {
+			assertThat(context).hasNotFailed();
+			assertThat(context).hasBean("complexCoordinateReadinessScheduler");
+		});
+	}
+
+	@Test
+	@DisplayName("coordinate readiness scheduler는 scheduler.enabled=false면 등록되지 않는다")
+	void coordinateReadinessSchedulerCanBeDisabled() {
+		contextRunner
+			.withPropertyValues("home.coordinate.readiness.scheduler.enabled=false")
+			.run(context -> {
+				assertThat(context).hasNotFailed();
+				assertThat(context).doesNotHaveBean("complexCoordinateReadinessScheduler");
+			});
+	}
 }

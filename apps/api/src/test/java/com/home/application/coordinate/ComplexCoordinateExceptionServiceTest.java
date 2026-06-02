@@ -310,8 +310,8 @@ class ComplexCoordinateExceptionServiceTest {
 	}
 
 	@Test
-	@DisplayName("ODC identity를 확인할 수 없으면 VWorld 동명 후보가 맞아도 public 표시 좌표로 승격하지 않는다")
-	void blocksCoordinateResolutionWhenOdcloudIdentityIsUnavailable() {
+	@DisplayName("ODC identity를 확인할 수 없으면(기본 degrade) VWorld 동명 후보로 해석을 진행한다")
+	void degradesToResolutionWhenOdcloudIdentityIsUnavailable() {
 		InMemoryCoordinateRepository repository = new InMemoryCoordinateRepository();
 		repository.targets = Map.of(
 			1001L,
@@ -334,6 +334,40 @@ class ComplexCoordinateExceptionServiceTest {
 
 		ComplexCoordinateResolutionResult result = service.resolveExceptionCase(1001L);
 
+		assertThat(result.status()).isEqualTo(ComplexCoordinateCaseStatus.RESOLVED);
+		assertThat(repository.displayCoordinates)
+			.extracting(ResolvedDisplayCoordinate::complexId)
+			.containsExactly(501L);
+	}
+
+	@Test
+	@DisplayName("block-on-unavailable strict 모드면 ODC UNAVAILABLE에서 좌표를 추측하지 않는다")
+	void blocksCoordinateResolutionWhenOdcloudIdentityIsUnavailableAndStrict() {
+		InMemoryCoordinateRepository repository = new InMemoryCoordinateRepository();
+		repository.targets = Map.of(
+			1001L,
+			new ComplexCoordinateParcelTargets(
+				1001L,
+				"1168010300101400001",
+				List.of(new ComplexCoordinateTarget(501L, "APT-501", "Tower A", Set.of("101")))
+			)
+		);
+		repository.footprints = Map.of(
+			"1168010300101400001",
+			List.of(new BuildingFootprintCandidate(9001L, "1168010300101400001", "Tower A", "101동", bd("37.5010000"), bd("127.0010000")))
+		);
+		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
+			repository,
+			parcelId -> List.of(),
+			new ComplexRelationClassifier(),
+			(parcelTargets, target) -> ComplexCoordinateIdentityVerification.unavailable("ODC identity candidate unavailable"),
+			BuildingFootprintSource.unavailable(),
+			true,
+			false
+		);
+
+		ComplexCoordinateResolutionResult result = service.resolveExceptionCase(1001L);
+
 		assertThat(result.status()).isEqualTo(ComplexCoordinateCaseStatus.UNAVAILABLE);
 		assertThat(repository.displayCoordinates).isEmpty();
 		assertThat(repository.caseUpdates)
@@ -342,6 +376,37 @@ class ComplexCoordinateExceptionServiceTest {
 				ComplexCoordinateCaseStatus.UNAVAILABLE,
 				"identity verification unavailable complexId=501 reason=ODC identity candidate unavailable"
 			));
+	}
+
+	@Test
+	@DisplayName("ODC identity 조회가 실패해도(기본 degrade) VWorld 동명 후보로 해석을 진행한다")
+	void degradesToResolutionWhenOdcloudIdentityFails() {
+		InMemoryCoordinateRepository repository = new InMemoryCoordinateRepository();
+		repository.targets = Map.of(
+			1001L,
+			new ComplexCoordinateParcelTargets(
+				1001L,
+				"1168010300101400001",
+				List.of(new ComplexCoordinateTarget(501L, "APT-501", "Tower A", Set.of("101")))
+			)
+		);
+		repository.footprints = Map.of(
+			"1168010300101400001",
+			List.of(new BuildingFootprintCandidate(9001L, "1168010300101400001", "Tower A", "101동", bd("37.5010000"), bd("127.0010000")))
+		);
+		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
+			repository,
+			parcelId -> List.of(),
+			new ComplexRelationClassifier(),
+			(parcelTargets, target) -> ComplexCoordinateIdentityVerification.failed("ODC identity lookup failed")
+		);
+
+		ComplexCoordinateResolutionResult result = service.resolveExceptionCase(1001L);
+
+		assertThat(result.status()).isEqualTo(ComplexCoordinateCaseStatus.RESOLVED);
+		assertThat(repository.displayCoordinates)
+			.extracting(ResolvedDisplayCoordinate::complexId)
+			.containsExactly(501L);
 	}
 
 	private static ComplexTradeSpan span(

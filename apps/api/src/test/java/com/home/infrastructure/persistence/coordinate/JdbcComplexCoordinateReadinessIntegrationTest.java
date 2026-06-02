@@ -80,6 +80,36 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 		assertThat(displayRowCount()).isEqualTo(5);
 	}
 
+	@Test
+	@DisplayName("coordinate readiness는 retry가 활성화되면 backoff 지난 FAILED 케이스를 재해석해 RESOLVED로 만든다")
+	void retriesStaleFailedCaseToResolved() {
+		seedCoordinateReadinessData();
+		jdbcClient.sql("""
+			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, relation_type, relation_confidence, reason, checked_at)
+			VALUES (1002, '1168010300101400002', 'FAILED', 'CONCURRENT', 'HIGH', 'transient failure', now() - INTERVAL '2 days')
+			""").update();
+		JdbcComplexCoordinateExceptionRepository coordinateRepository = new JdbcComplexCoordinateExceptionRepository(
+			jdbcClient
+		);
+		ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
+			new com.home.application.coordinate.ComplexCoordinateExceptionService(
+				coordinateRepository,
+				new JdbcComplexRelationRepository(jdbcClient),
+				new ComplexRelationClassifier()
+			),
+			coordinateRepository,
+			new ComplexDisplayCoordinateProjectionService(new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient)),
+			10,
+			java.time.Duration.ofDays(1)
+		);
+
+		ComplexCoordinateReadinessResult result = service.prepare(0, 0, 10);
+
+		assertThat(result.retried()).isEqualTo(1);
+		assertThat(result.resolved()).isEqualTo(1);
+		assertThat(caseStatuses()).contains(tuple(1002L, "RESOLVED"));
+	}
+
 	private void seedCoordinateReadinessData() {
 		seedRegion();
 		jdbcClient.sql("""

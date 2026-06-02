@@ -12,11 +12,13 @@ export type TradeItem = {
 
 export type ParcelTrades = {
   parcelId: number;
+  complexId: number | null;
   trades: TradeItem[];
 };
 
 type ParcelTradesResponse = {
   parcelId?: number | string;
+  complexId?: number | string | null;
   trades?: unknown;
 };
 
@@ -31,8 +33,11 @@ type TradeItemResponse = {
 
 const TRADE_PATH = '/api/v1/trade';
 
-export async function fetchParcelTrades(parcelId: number): Promise<ParcelTrades> {
-  const response = await fetch(resolveApiUrl(`${TRADE_PATH}/${parcelId}`), {
+export async function fetchParcelTrades(
+  parcelId: number,
+  complexId?: number | null,
+): Promise<ParcelTrades> {
+  const response = await fetch(resolveApiUrl(scopedPath(`${TRADE_PATH}/${parcelId}`, complexId)), {
     method: 'GET',
   });
 
@@ -58,6 +63,7 @@ function normalizeParcelTrades(payload: ParcelTradesResponse): ParcelTrades {
 
   return {
     parcelId: toRequiredNumber(payload.parcelId, 'parcelId'),
+    complexId: toNullableNumber(payload.complexId, 'complexId'),
     trades: payload.trades.map((trade) => {
       if (!isTradeItemResponse(trade)) {
         throw new Error('Invalid public API parcel trade response: trade item must be an object');
@@ -66,6 +72,10 @@ function normalizeParcelTrades(payload: ParcelTradesResponse): ParcelTrades {
       return normalizeTradeItem(trade);
     }),
   };
+}
+
+function scopedPath(path: string, complexId?: number | null): string {
+  return complexId == null ? path : `${path}?complexId=${encodeURIComponent(complexId)}`;
 }
 
 function normalizeTradeItem(trade: TradeItemResponse): TradeItem {

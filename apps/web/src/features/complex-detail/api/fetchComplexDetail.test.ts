@@ -12,6 +12,7 @@ describe('fetchComplexDetail API 어댑터', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         parcelId: '1001',
+        complexId: '501',
         latitude: '37.5123',
         longitude: '127.0456',
         address: 'Sample address',
@@ -31,6 +32,7 @@ describe('fetchComplexDetail API 어댑터', () => {
 
     await expect(fetchComplexDetail(1001)).resolves.toEqual({
       parcelId: 1001,
+      complexId: 501,
       latitude: 37.5123,
       longitude: 127.0456,
       address: 'Sample address',
@@ -48,6 +50,31 @@ describe('fetchComplexDetail API 어댑터', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       resolveApiUrl('/api/v1/detail/1001'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('complexId가 있으면 detail URL에 query parameter로 전달한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        parcelId: 1001,
+        complexId: 502,
+        latitude: 37.5123,
+        longitude: 127.0456,
+        address: 'Sample address',
+        name: 'Selected complex',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchComplexDetail(1001, 502)).resolves.toMatchObject({
+      parcelId: 1001,
+      complexId: 502,
+      name: 'Selected complex',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/detail/1001?complexId=502'),
       expect.objectContaining({ method: 'GET' }),
     );
   });

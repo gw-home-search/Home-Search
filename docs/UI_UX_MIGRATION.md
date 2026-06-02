@@ -55,7 +55,9 @@ Use a map-first layout:
   `/api/v1/region/{regionId}`.
 - Complex markers remain backed by `/api/v1/map/complexes`.
 - Detail drawer uses `/api/v1/detail/{parcelId}` and
-  `/api/v1/trade/{parcelId}`.
+  `/api/v1/trade/{parcelId}`. When a marker or search result includes
+  `complexId`, the drawer passes `?complexId={complexId}` to keep detail and
+  trade data scoped to the selected complex.
 
 ## Component Direction
 

@@ -40,8 +40,8 @@ Kakao map idle
   -> render markers
   -> complex marker click
   -> open detail drawer
-  -> call /api/v1/detail/{parcelId}
-  -> call /api/v1/trade/{parcelId}
+  -> call /api/v1/detail/{parcelId}?complexId={complexId} when marker has complexId
+  -> call /api/v1/trade/{parcelId}?complexId={complexId} when marker has complexId
 ```
 
 ## Level Rules
@@ -61,6 +61,7 @@ until map display is stable.
 Complex markers need:
 
 - `parcelId`
+- `complexId` when the marker is scoped to a specific complex
 - `lat`
 - `lng`
 - `latestDealAmount`
@@ -70,25 +71,26 @@ Marker display:
 
 - Price label from `latestDealAmount`.
 - Unit label from `unitCntSum`.
-- Click opens detail drawer for `parcelId`.
+- Click opens detail drawer for `parcelId` and optional `complexId`.
 
 ## Parcel And Complex Policy
 
-`/api/v1/map/complexes` returns one marker per parcel, not one marker per
-complex. When a parcel contains multiple apartment complexes:
+`/api/v1/map/complexes` keeps the same URL but can return complex-scoped
+markers when the backend has enough coordinate confidence:
 
-- `unitCntSum` is the sum of household counts for all complexes under the
-  parcel.
-- `latestDealAmount` is selected from the newest normalized `trade` under any
-  complex in the parcel.
-- Price and area filters use the same trade row selected for the parcel marker's
-  latest trade policy. Unit and age filters use parcel-level aggregate or
-  representative values.
-- Marker click still uses `parcelId`.
-- The detail drawer shows a representative complex for the parcel.
-- The trade list shows normalized trades for all complexes under the parcel.
+- Normal parcels use one representative marker.
+- Concurrent same-PNU complexes with resolved building-footprint coordinates can
+  return one marker per complex.
+- Redeveloped parcels return the current-generation complex marker.
+- Ambiguous or unresolved same-PNU cases fall back to one representative marker.
+- Marker click uses `parcelId` plus optional `complexId`.
+- The detail drawer shows the selected complex when `complexId` is present;
+  otherwise it shows the parcel representative complex.
+- The trade list is scoped to the selected `complexId` when present; otherwise
+  it shows normalized trades for all complexes under the parcel.
 - Search results remain complex-level results, so multiple search results may
-  point to the same `parcelId`.
+  point to the same `parcelId` and should pass their `complexId` into the
+  detail/trade flow.
 
 ## Backend Query Boundary
 

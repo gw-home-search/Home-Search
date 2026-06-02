@@ -18,6 +18,7 @@ export type ComplexMarkersRequest = {
 
 export type ComplexMarker = {
   parcelId: number;
+  complexId: number | null;
   lat: number;
   lng: number;
   latestDealAmount: number | null;
@@ -59,6 +60,7 @@ export async function fetchComplexMarkers(request: ComplexMarkersRequest): Promi
 function normalizeComplexMarker(marker: ComplexMarkerResponse): ComplexMarker {
   return {
     parcelId: toRequiredNumber(marker.parcelId ?? marker.id, 'parcelId'),
+    complexId: toNullableNumber(marker.complexId, 'complexId'),
     lat: toRequiredNumber(marker.lat ?? marker.latitude, 'lat'),
     lng: toRequiredNumber(marker.lng ?? marker.longitude, 'lng'),
     latestDealAmount: toNullableNumber(marker.latestDealAmount),
@@ -79,18 +81,18 @@ function toRequiredNumber(value: unknown, field: string): number {
   return parsed;
 }
 
-function toNullableNumber(value: unknown): number | null {
+function toNullableNumber(value: unknown, field = 'latestDealAmount'): number | null {
   if (value == null) {
     return null;
   }
 
   if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
-    throw new Error('Invalid public API complex marker response: latestDealAmount must be a number');
+    throw new Error(`Invalid public API complex marker response: ${field} must be a number`);
   }
 
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
-    throw new Error('Invalid public API complex marker response: latestDealAmount must be a number');
+    throw new Error(`Invalid public API complex marker response: ${field} must be a number`);
   }
 
   return parsed;

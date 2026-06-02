@@ -153,6 +153,7 @@ describe('App map-first shell 화면', () => {
         jsonResponse([
           {
             parcelId: 1001,
+            complexId: 501,
             lat: 37.5123,
             lng: 127.0456,
             latestDealAmount: 125000,
@@ -194,6 +195,7 @@ describe('App map-first shell 화면', () => {
         jsonResponse([
           {
             parcelId: 1001,
+            complexId: 501,
             lat: 37.5123,
             lng: 127.0456,
             latestDealAmount: 125000,
@@ -204,6 +206,7 @@ describe('App map-first shell 화면', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           parcelId: 1001,
+          complexId: 501,
           latitude: 37.5123,
           longitude: 127.0456,
           address: 'Sample address',
@@ -217,6 +220,7 @@ describe('App map-first shell 화면', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           parcelId: 1001,
+          complexId: 501,
           trades: [
             {
               tradeId: 9001,
@@ -243,7 +247,7 @@ describe('App map-first shell 화면', () => {
     await flushAsyncState();
 
     const markerButton = rootElement.querySelector<HTMLButtonElement>(
-      'button[aria-label="Open detail for parcel 1001"]',
+      'button[aria-label="Open detail for complex 501 in parcel 1001"]',
     );
     expect(markerButton).not.toBeNull();
 
@@ -253,11 +257,11 @@ describe('App map-first shell 화면', () => {
     await flushAsyncState();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/detail/1001'),
+      resolveApiUrl('/api/v1/detail/1001?complexId=501'),
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/trade/1001'),
+      resolveApiUrl('/api/v1/trade/1001?complexId=501'),
       expect.objectContaining({ method: 'GET' }),
     );
     expect(rootElement.querySelector('[aria-label="Complex detail drawer"]')).not.toBeNull();
@@ -289,6 +293,7 @@ describe('App map-first shell 화면', () => {
         jsonResponse([
           {
             parcelId: 1001,
+            complexId: 501,
             lat: 37.5123,
             lng: 127.0456,
             latestDealAmount: 125000,
@@ -299,6 +304,7 @@ describe('App map-first shell 화면', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           parcelId: 1001,
+          complexId: 501,
           latitude: 37.5123,
           longitude: 127.0456,
           address: 'Sample address',
@@ -311,6 +317,7 @@ describe('App map-first shell 화면', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           parcelId: 1001,
+          complexId: 501,
           trades: [],
         }),
       );
@@ -331,7 +338,7 @@ describe('App map-first shell 화면', () => {
     await flushAsyncState();
 
     expect(sdk.overlays[0]?.content.getAttribute('aria-label')).toBe(
-      'Open detail for parcel 1001',
+      'Open detail for complex 501 in parcel 1001',
     );
 
     await act(async () => {
@@ -340,11 +347,11 @@ describe('App map-first shell 화면', () => {
     await flushAsyncState();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/detail/1001'),
+      resolveApiUrl('/api/v1/detail/1001?complexId=501'),
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/trade/1001'),
+      resolveApiUrl('/api/v1/trade/1001?complexId=501'),
       expect.objectContaining({ method: 'GET' }),
     );
     expect(rootElement.querySelector('[aria-label="Complex detail drawer"]')).not.toBeNull();
@@ -379,6 +386,7 @@ describe('App map-first shell 화면', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           parcelId: 1001,
+          complexId: 501,
           latitude: 37.5123,
           longitude: 127.0456,
           address: 'Sample address',
@@ -389,6 +397,7 @@ describe('App map-first shell 화면', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           parcelId: 1001,
+          complexId: 501,
           trades: [],
         }),
       );
@@ -434,15 +443,15 @@ describe('App map-first shell 화면', () => {
     await flushAsyncState();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/detail/1001'),
+      resolveApiUrl('/api/v1/detail/1001?complexId=501'),
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/trade/1001'),
+      resolveApiUrl('/api/v1/trade/1001?complexId=501'),
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenLastCalledWith(
-      resolveApiUrl('/api/v1/trade/1001'),
+      resolveApiUrl('/api/v1/trade/1001?complexId=501'),
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(

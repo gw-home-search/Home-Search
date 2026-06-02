@@ -112,7 +112,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	}
 
 	@Override
-	public Optional<ParcelDetailResponse> findParcelDetail(Long parcelId) {
+	public Optional<ParcelDetailResponse> findParcelDetail(Long parcelId, Long complexId) {
 		return jdbcClient.sql("""
 			WITH redeveloped_parcel AS (
 			    SELECT parcel_id
@@ -135,6 +135,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			)
 			SELECT
 			    p.id AS parcel_id,
+			    c.id AS complex_id,
 			    COALESCE(display_coordinate.latitude, p.latitude) AS latitude,
 			    COALESCE(display_coordinate.longitude, p.longitude) AS longitude,
 			    p.address,
@@ -153,17 +154,19 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			LEFT JOIN complex_display_coordinate display_coordinate ON display_coordinate.complex_id = c.id
 			LEFT JOIN superseded_complex sc ON sc.complex_id = c.id
 			WHERE p.id = :parcelId
+			  AND (CAST(:complexId AS BIGINT) IS NULL OR c.id = :complexId)
 			ORDER BY (sc.complex_id IS NOT NULL), c.id
 			LIMIT 1
 			""")
 			.param("parcelId", parcelId)
+			.param("complexId", complexId)
 			.query(this::mapParcelDetail)
 			.optional();
 	}
 
 	@Override
-	public Optional<TradeListResponse> findTradeList(Long parcelId) {
-		if (!hasComplexParent(parcelId)) {
+	public Optional<TradeListResponse> findTradeList(Long parcelId, Long complexId) {
+		if (!hasComplexParent(parcelId, complexId)) {
 			return Optional.empty();
 		}
 		List<TradeResponse> trades = jdbcClient.sql("""
@@ -177,25 +180,29 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			FROM trade t
 			JOIN complex c ON c.id = t.complex_id
 			WHERE c.parcel_id = :parcelId
+			  AND (CAST(:complexId AS BIGINT) IS NULL OR c.id = :complexId)
 			  AND t.deleted_at IS NULL
 			ORDER BY t.deal_date DESC, t.id DESC
 			""")
 			.param("parcelId", parcelId)
+			.param("complexId", complexId)
 			.query(this::mapTrade)
 			.list();
-		return Optional.of(new TradeListResponse(parcelId, trades));
+		return Optional.of(new TradeListResponse(parcelId, complexId, trades));
 	}
 
-	private boolean hasComplexParent(Long parcelId) {
+	private boolean hasComplexParent(Long parcelId, Long complexId) {
 		return Boolean.TRUE.equals(jdbcClient.sql("""
 			SELECT EXISTS (
 			    SELECT 1
 			    FROM parcel p
 			    JOIN complex c ON c.parcel_id = p.id
 			    WHERE p.id = :parcelId
+			      AND (CAST(:complexId AS BIGINT) IS NULL OR c.id = :complexId)
 			)
 			""")
 			.param("parcelId", parcelId)
+			.param("complexId", complexId)
 			.query(Boolean.class)
 			.single());
 	}
@@ -230,6 +237,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	private ParcelDetailResponse mapParcelDetail(ResultSet resultSet, int rowNumber) throws SQLException {
 		return new ParcelDetailResponse(
 			resultSet.getLong("parcel_id"),
+			resultSet.getLong("complex_id"),
 			resultSet.getDouble("latitude"),
 			resultSet.getDouble("longitude"),
 			resultSet.getString("address"),

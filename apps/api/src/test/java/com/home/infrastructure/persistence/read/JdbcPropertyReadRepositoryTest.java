@@ -97,6 +97,31 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("detail/trade read API는 complexId가 있으면 같은 parcel의 선택 complex로 범위를 좁힌다")
+	void detailAndTradeCanBeScopedToSelectedComplex() {
+		seedTwoComplexParcel();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.findParcelDetail(2001L, 702L))
+			.hasValueSatisfying(detail -> {
+				assertThat(detail.parcelId()).isEqualTo(2001L);
+				assertThat(detail.complexId()).isEqualTo(702L);
+				assertThat(detail.name()).isEqualTo("Complex B");
+				assertThat(detail.unitCnt()).isEqualTo(320);
+			});
+		assertThat(repository.findTradeList(2001L, 702L))
+			.hasValueSatisfying(tradeList -> {
+				assertThat(tradeList.parcelId()).isEqualTo(2001L);
+				assertThat(tradeList.complexId()).isEqualTo(702L);
+				assertThat(tradeList.trades())
+					.extracting("tradeId")
+					.containsExactly(9702L);
+			});
+		assertThat(repository.findParcelDetail(2001L, 999L)).isEmpty();
+		assertThat(repository.findTradeList(2001L, 999L)).isEmpty();
+	}
+
+	@Test
 	@DisplayName("trade read API는 동일 조건이어도 aptDong이 다른 거래를 모두 반환한다")
 	void tradeListKeepsSameConditionTradesWhenAptDongDiffers() {
 		seedComplex();
@@ -452,5 +477,58 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			.query(String.class)
 			.optional()
 			.orElse("");
+	}
+
+	private void seedTwoComplexParcel() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (2001, 1, '1168010300101400099', 'Two complex address', 37.5123, 127.0456)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt)
+			VALUES
+			    (701, 2001, 'COMPLEX-PK-701', 'APT-701', 'Complex A', 'Complex A trade', 210),
+			    (702, 2001, 'COMPLEX-PK-702', 'APT-702', 'Complex B', 'Complex B trade', 320)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO raw_trade_ingest (
+			    id,
+			    source,
+			    source_key,
+			    lawd_cd,
+			    deal_ymd,
+			    page_no,
+			    payload,
+			    payload_hash,
+			    status,
+			    processed_at
+			)
+			VALUES
+			    (9701, 'RTMS', 'scoped-701', '11680', '202512', 1, '{}', 'hash-scoped-701', 'NORMALIZED', now()),
+			    (9702, 'RTMS', 'scoped-702', '11680', '202512', 1, '{}', 'hash-scoped-702', 'NORMALIZED', now())
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO trade (
+			    id,
+			    complex_id,
+			    deal_date,
+			    deal_amount,
+			    floor,
+			    excl_area,
+			    apt_dong,
+			    source,
+			    source_key,
+			    complex_pk,
+			    apt_seq,
+			    raw_ingest_id
+			)
+			VALUES
+			    (9701, 701, DATE '2025-12-01', 125000, 12, 84.93, '101', 'RTMS', 'scoped-701', 'COMPLEX-PK-701', 'APT-701', 9701),
+			    (9702, 702, DATE '2025-12-15', 130000, 15, 59.93, '201', 'RTMS', 'scoped-702', 'COMPLEX-PK-702', 'APT-702', 9702)
+			""").update();
 	}
 }

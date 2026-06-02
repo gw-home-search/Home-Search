@@ -20,15 +20,31 @@ public class ComplexCoordinateExceptionService {
 	private final ComplexCoordinateExceptionRepository repository;
 	private final ComplexRelationRepository relationRepository;
 	private final ComplexRelationClassifier relationClassifier;
+	private final ComplexCoordinateIdentityVerifier identityVerifier;
 
 	public ComplexCoordinateExceptionService(
 		ComplexCoordinateExceptionRepository repository,
 		ComplexRelationRepository relationRepository,
 		ComplexRelationClassifier relationClassifier
 	) {
+		this(
+			repository,
+			relationRepository,
+			relationClassifier,
+			ComplexCoordinateIdentityVerifier.trusting()
+		);
+	}
+
+	public ComplexCoordinateExceptionService(
+		ComplexCoordinateExceptionRepository repository,
+		ComplexRelationRepository relationRepository,
+		ComplexRelationClassifier relationClassifier,
+		ComplexCoordinateIdentityVerifier identityVerifier
+	) {
 		this.repository = Objects.requireNonNull(repository);
 		this.relationRepository = Objects.requireNonNull(relationRepository);
 		this.relationClassifier = Objects.requireNonNull(relationClassifier);
+		this.identityVerifier = Objects.requireNonNull(identityVerifier);
 	}
 
 	public ComplexCoordinateExceptionResult stageExceptionCases(int limit) {
@@ -72,6 +88,10 @@ public class ComplexCoordinateExceptionService {
 		}
 		ArrayList<ResolvedDisplayCoordinate> coordinates = new ArrayList<>();
 		for (ComplexCoordinateTarget target : targets.complexes()) {
+			ComplexCoordinateResolutionResult blockedByIdentity = blockIfIdentityUnverified(targets, target);
+			if (blockedByIdentity != null) {
+				return blockedByIdentity;
+			}
 			ResolvedDisplayCoordinate coordinate = resolveCoordinate(target, footprints);
 			if (coordinate == null) {
 				String reason = "building dong candidates are ambiguous or unavailable";
@@ -102,6 +122,27 @@ public class ComplexCoordinateExceptionService {
 			coordinates.size(),
 			reason
 		);
+	}
+
+	private ComplexCoordinateResolutionResult blockIfIdentityUnverified(
+		ComplexCoordinateParcelTargets targets,
+		ComplexCoordinateTarget target
+	) {
+		ComplexCoordinateIdentityVerification verification = identityVerifier.verify(targets, target);
+		if (verification.status() == ComplexCoordinateIdentityVerificationStatus.CONFIRMED) {
+			return null;
+		}
+		ComplexCoordinateCaseStatus status = switch (verification.status()) {
+			case AMBIGUOUS -> ComplexCoordinateCaseStatus.AMBIGUOUS;
+			case UNAVAILABLE -> ComplexCoordinateCaseStatus.UNAVAILABLE;
+			case FAILED -> ComplexCoordinateCaseStatus.FAILED;
+			case CONFIRMED -> throw new IllegalStateException("confirmed identity must not be blocked");
+		};
+		String reason = "identity verification " + verification.status().name().toLowerCase()
+			+ " complexId=" + target.complexId()
+			+ (verification.reason() == null ? "" : " reason=" + verification.reason());
+		repository.saveCaseUpdate(new ComplexCoordinateCaseUpdate(targets.parcelId(), status, reason));
+		return new ComplexCoordinateResolutionResult(targets.parcelId(), status, 0, reason);
 	}
 
 	private ResolvedDisplayCoordinate resolveCoordinate(

@@ -3,6 +3,7 @@ package com.home.infrastructure.persistence.coordinate;
 import com.home.application.complex.ComplexRelationClassifier;
 import com.home.application.coordinate.ComplexCoordinateExceptionRepository;
 import com.home.application.coordinate.ComplexCoordinateExceptionService;
+import com.home.application.coordinate.ComplexCoordinateIdentityVerifier;
 import com.home.application.coordinate.ComplexCoordinateReadinessRepository;
 import com.home.application.coordinate.ComplexCoordinateReadinessService;
 import com.home.application.coordinate.ComplexDisplayCoordinateProjectionRepository;
@@ -39,12 +40,16 @@ class ComplexCoordinatePersistenceConfiguration {
 
 	@Bean
 	@Lazy
-	ComplexCoordinateExceptionService complexCoordinateExceptionService(ObjectProvider<JdbcClient> jdbcClientProvider) {
+	ComplexCoordinateExceptionService complexCoordinateExceptionService(
+		ObjectProvider<JdbcClient> jdbcClientProvider,
+		ObjectProvider<ComplexCoordinateIdentityVerifier> identityVerifierProvider
+	) {
 		JdbcClient jdbcClient = requiredJdbcClient(jdbcClientProvider);
 		return new ComplexCoordinateExceptionService(
 			new JdbcComplexCoordinateExceptionRepository(jdbcClient),
 			new JdbcComplexRelationRepository(jdbcClient),
-			new ComplexRelationClassifier()
+			new ComplexRelationClassifier(),
+			identityVerifierProvider.getIfAvailable(ComplexCoordinateIdentityVerifier::trusting)
 		);
 	}
 

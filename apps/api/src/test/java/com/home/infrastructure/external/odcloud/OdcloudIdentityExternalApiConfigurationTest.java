@@ -2,6 +2,7 @@ package com.home.infrastructure.external.odcloud;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.home.application.coordinate.ComplexCoordinateIdentityVerifier;
 import com.home.application.ingest.ComplexIdentityResolver;
 
 import org.junit.jupiter.api.DisplayName;
@@ -28,5 +29,16 @@ class OdcloudIdentityExternalApiConfigurationTest {
 				"odcloud.data.od-service-key=ODC-KEY"
 			)
 			.run(context -> assertThat(context).hasSingleBean(ComplexIdentityResolver.class));
+	}
+
+	@Test
+	@DisplayName("ODC coordinate identity gate는 opt-in property가 true일 때만 verifier bean을 만든다")
+	void odcloudCoordinateIdentityGateCreatesVerifierWhenEnabled() {
+		contextRunner
+			.withPropertyValues(
+				"complex.coordinate.identity.odcloud.enabled=true",
+				"odcloud.data.od-service-key=ODC-KEY"
+			)
+			.run(context -> assertThat(context).hasSingleBean(ComplexCoordinateIdentityVerifier.class));
 	}
 }

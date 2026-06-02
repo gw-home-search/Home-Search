@@ -36,12 +36,20 @@ public class PropertyReadUseCase {
 	}
 
 	public ParcelDetailResponse getParcelDetail(Long parcelId) {
-		return repository.findParcelDetail(parcelId)
+		return getParcelDetail(parcelId, null);
+	}
+
+	public ParcelDetailResponse getParcelDetail(Long parcelId, Long complexId) {
+		return repository.findParcelDetail(parcelId, complexId)
 			.orElseThrow(() -> new ResourceNotFoundException("parcel detail not found: " + parcelId));
 	}
 
 	public TradeListResponse getTradeList(Long parcelId) {
-		return repository.findTradeList(parcelId)
+		return getTradeList(parcelId, null);
+	}
+
+	public TradeListResponse getTradeList(Long parcelId, Long complexId) {
+		return repository.findTradeList(parcelId, complexId)
 			.orElseThrow(() -> new ResourceNotFoundException("parcel trade parent not found: " + parcelId));
 	}
 }

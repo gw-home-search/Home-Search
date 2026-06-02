@@ -30,7 +30,7 @@ type KakaoMapSurfaceProps = {
   focusTarget: MapFocusTarget | null;
   initialLevel: number;
   markers: MapMarkersResult | null;
-  onComplexMarkerSelect: (parcelId: number) => void;
+  onComplexMarkerSelect: (marker: ComplexMapMarker) => void;
   onRuntimeErrorChange: (message: string | null) => void;
   onRuntimeStateChange: (state: KakaoMapRuntimeState) => void;
   onViewportChange: (viewport: MapViewport) => void;
@@ -218,17 +218,23 @@ function clearOverlays(overlays: KakaoCustomOverlay[]) {
 
 function overlayContentForComplexMarker(
   marker: ComplexMapMarker,
-  onComplexMarkerSelect: (parcelId: number) => void,
+  onComplexMarkerSelect: (marker: ComplexMapMarker) => void,
 ): HTMLElement {
   const element = document.createElement('button');
   element.type = 'button';
   element.className = 'kakao-map-overlay kakao-map-overlay-complex';
-  element.setAttribute('aria-label', `Open detail for parcel ${marker.parcelId}`);
+  element.setAttribute('aria-label', complexMarkerAriaLabel(marker));
   element.textContent = `${formatAmount(marker.latestDealAmount)} · ${marker.unitCntSum} units`;
   element.addEventListener('click', () => {
-    onComplexMarkerSelect(marker.parcelId);
+    onComplexMarkerSelect(marker);
   });
   return element;
+}
+
+function complexMarkerAriaLabel(marker: ComplexMapMarker): string {
+  return marker.complexId == null
+    ? `Open detail for parcel ${marker.parcelId}`
+    : `Open detail for complex ${marker.complexId} in parcel ${marker.parcelId}`;
 }
 
 function overlayContentForRegionMarker(marker: RegionMapMarker): HTMLElement {

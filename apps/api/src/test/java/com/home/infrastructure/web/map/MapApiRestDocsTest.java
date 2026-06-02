@@ -102,7 +102,7 @@ class MapApiRestDocsTest {
 	@DisplayName("POST /api/v1/map/complexes REST Docs를 생성한다")
 	void documentComplexMarkers() throws Exception {
 		given(mapUseCase.getComplexMarkers(any(ComplexMarkersRequest.class)))
-			.willReturn(List.of(new ComplexMarkerResponse(1001L, 37.5123, 127.0456, 125000L, 740L)));
+			.willReturn(List.of(new ComplexMarkerResponse(1001L, 501L, 37.5123, 127.0456, 125000L, 740L)));
 
 		mockMvc.perform(post("/api/v1/map/complexes")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -140,6 +140,7 @@ class MapApiRestDocsTest {
 				),
 				responseFields(
 					fieldWithPath("[].parcelId").type(JsonFieldType.NUMBER).description("Parcel id used by detail and trade APIs."),
+					fieldWithPath("[].complexId").type(JsonFieldType.NUMBER).optional().description("Complex id used to scope detail and trade APIs when present."),
 					fieldWithPath("[].lat").type(JsonFieldType.NUMBER).description("Marker latitude."),
 					fieldWithPath("[].lng").type(JsonFieldType.NUMBER).description("Marker longitude."),
 					fieldWithPath("[].latestDealAmount").type(JsonFieldType.NUMBER).description("Latest trade amount in 10,000 KRW units."),
@@ -148,7 +149,7 @@ class MapApiRestDocsTest {
 				resource(builder()
 					.tag("Map")
 					.summary("Get complex markers")
-					.description("Returns parcel-level apartment complex markers inside map bounds.")
+					.description("Returns apartment complex markers inside map bounds. Markers can be complex-scoped when complexId is present.")
 					.requestFields(
 						fieldWithPath("swLat").type(JsonFieldType.NUMBER).description("Southwest latitude."),
 						fieldWithPath("swLng").type(JsonFieldType.NUMBER).description("Southwest longitude."),
@@ -165,6 +166,7 @@ class MapApiRestDocsTest {
 					)
 					.responseFields(
 						fieldWithPath("[].parcelId").type(JsonFieldType.NUMBER).description("Parcel id."),
+						fieldWithPath("[].complexId").type(JsonFieldType.NUMBER).optional().description("Optional complex id."),
 						fieldWithPath("[].lat").type(JsonFieldType.NUMBER).description("Marker latitude."),
 						fieldWithPath("[].lng").type(JsonFieldType.NUMBER).description("Marker longitude."),
 						fieldWithPath("[].latestDealAmount").type(JsonFieldType.NUMBER).description("Latest trade amount."),

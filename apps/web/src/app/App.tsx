@@ -54,6 +54,13 @@ type MapFocusTarget = {
   seq: number;
 };
 
+type ComplexSelection = {
+  parcelId: number;
+  complexId: number | null;
+};
+
+type ComplexMapMarker = Extract<MapMarkersResult, { kind: 'complex' }>['markers'][number];
+
 type AppProps = {
   initialMapLevel?: number;
   kakaoMapAppKey?: string;
@@ -91,7 +98,7 @@ export function App({
   const [mapRuntimeError, setMapRuntimeError] = useState<string | null>(null);
   const [mapFocusTarget, setMapFocusTarget] = useState<MapFocusTarget | null>(null);
   const [markerRetrySeq, setMarkerRetrySeq] = useState(0);
-  const [selectedParcelId, setSelectedParcelId] = useState<number | null>(null);
+  const [selectedComplex, setSelectedComplex] = useState<ComplexSelection | null>(null);
   const [complexDetail, setComplexDetail] = useState<ComplexDetail | null>(null);
   const [parcelTrades, setParcelTrades] = useState<ParcelTrades | null>(null);
   const [detailState, setDetailState] = useState<DetailRequestState>('idle');
@@ -157,7 +164,7 @@ export function App({
   }, [markerFilters, markerRetrySeq, viewport]);
 
   useEffect(() => {
-    if (selectedParcelId == null) {
+    if (selectedComplex == null) {
       setComplexDetail(null);
       setParcelTrades(null);
       setDetailState('idle');
@@ -172,7 +179,10 @@ export function App({
     setDetailState('loading');
     setDetailError(null);
 
-    Promise.all([fetchComplexDetail(selectedParcelId), fetchParcelTrades(selectedParcelId)])
+    Promise.all([
+      fetchComplexDetail(selectedComplex.parcelId, selectedComplex.complexId),
+      fetchParcelTrades(selectedComplex.parcelId, selectedComplex.complexId),
+    ])
       .then(([nextDetail, nextTrades]) => {
         if (ignore || requestSeq !== detailRequestSeq.current) {
           return;
@@ -196,7 +206,7 @@ export function App({
     return () => {
       ignore = true;
     };
-  }, [selectedParcelId, detailRetrySeq]);
+  }, [selectedComplex, detailRetrySeq]);
 
   const handleViewportChange = useCallback((nextViewport: MapViewport) => {
     setViewport((current) => {
@@ -226,12 +236,15 @@ export function App({
     setMarkerRetrySeq((current) => current + 1);
   }
 
-  const handleComplexMarkerSelect = useCallback((parcelId: number) => {
-    setSelectedParcelId(parcelId);
+  const handleComplexMarkerSelect = useCallback((marker: ComplexMapMarker) => {
+    setSelectedComplex({
+      parcelId: marker.parcelId,
+      complexId: marker.complexId,
+    });
   }, []);
 
   function handleCloseDetailDrawer() {
-    setSelectedParcelId(null);
+    setSelectedComplex(null);
   }
 
   function handleRetryDetail() {
@@ -274,7 +287,10 @@ export function App({
   }
 
   function handleSearchResultSelect(result: ComplexSearchResult) {
-    setSelectedParcelId(result.parcelId);
+    setSelectedComplex({
+      parcelId: result.parcelId,
+      complexId: result.complexId,
+    });
     focusMap(result.latitude, result.longitude, 4, SEARCH_FOCUS_DELTA);
   }
 
@@ -546,14 +562,14 @@ export function App({
           {markers?.kind === 'complex' && markers.markers.length > 0 ? (
             <ul aria-label="Complex markers" className="marker-preview-list">
               {markers.markers.map((marker) => (
-                <li key={marker.parcelId}>
+                <li key={complexMarkerKey(marker)}>
                   <button
                     type="button"
-                    aria-label={`Open detail for parcel ${marker.parcelId}`}
+                    aria-label={complexMarkerAriaLabel(marker)}
                     className="marker-list-button"
-                    data-marker-id={marker.parcelId}
+                    data-marker-id={complexMarkerKey(marker)}
                     onClick={() => {
-                      handleComplexMarkerSelect(marker.parcelId);
+                      handleComplexMarkerSelect(marker);
                     }}
                   >
                     {formatAmount(marker.latestDealAmount)} - {marker.unitCntSum} units
@@ -688,10 +704,10 @@ export function App({
         </section>
       </div>
 
-      {selectedParcelId == null ? null : (
+      {selectedComplex == null ? null : (
         <aside aria-label="Complex detail drawer" className="detail-drawer">
           <div className="detail-drawer-header">
-            <p className="detail-drawer-kicker">Parcel {selectedParcelId}</p>
+            <p className="detail-drawer-kicker">{detailDrawerKicker(selectedComplex)}</p>
             <button
               type="button"
               aria-label="Close detail drawer"
@@ -750,6 +766,24 @@ function formatAmount(amount: number | null): string {
   }
 
   return `${amount.toLocaleString()} 10k KRW`;
+}
+
+function complexMarkerKey(marker: ComplexMapMarker): string {
+  return marker.complexId == null
+    ? `${marker.parcelId}`
+    : `${marker.parcelId}-${marker.complexId}`;
+}
+
+function complexMarkerAriaLabel(marker: ComplexMapMarker): string {
+  return marker.complexId == null
+    ? `Open detail for parcel ${marker.parcelId}`
+    : `Open detail for complex ${marker.complexId} in parcel ${marker.parcelId}`;
+}
+
+function detailDrawerKicker(selection: ComplexSelection): string {
+  return selection.complexId == null
+    ? `Parcel ${selection.parcelId}`
+    : `Complex ${selection.complexId} / Parcel ${selection.parcelId}`;
 }
 
 function viewportAroundPoint(lat: number, lng: number, level: number, delta: number): MapViewport {

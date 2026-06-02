@@ -2,6 +2,7 @@ package com.home.infrastructure.web.read;
 
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -123,9 +124,10 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/detail/{parcelId}는 parcel과 representative complex detail을 반환한다")
 	void parcelDetailReturnsCanonicalFields() throws Exception {
-		given(readUseCase.getParcelDetail(1001L))
+		given(readUseCase.getParcelDetail(eq(1001L), isNull()))
 			.willReturn(new ParcelDetailResponse(
 				1001L,
+				501L,
 				37.5123,
 				127.0456,
 				"Sample address",
@@ -144,6 +146,7 @@ class ReadApiControllerContractTest {
 		mockMvc.perform(get("/api/v1/detail/1001"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.parcelId").value(1001))
+			.andExpect(jsonPath("$.complexId").value(501))
 			.andExpect(jsonPath("$.latitude").value(37.5123))
 			.andExpect(jsonPath("$.longitude").value(127.0456))
 			.andExpect(jsonPath("$.address").value("Sample address"))
@@ -163,10 +166,42 @@ class ReadApiControllerContractTest {
 	}
 
 	@Test
+	@DisplayName("GET /api/v1/detail/{parcelId}?complexId= 는 선택한 complex detail을 반환한다")
+	void complexScopedParcelDetailReturnsSelectedComplex() throws Exception {
+		given(readUseCase.getParcelDetail(1001L, 502L))
+			.willReturn(new ParcelDetailResponse(
+				1001L,
+				502L,
+				37.6123,
+				127.1456,
+				"Sample address",
+				"Tower B",
+				"Sample Tower B",
+				5,
+				320,
+				null,
+				null,
+				null,
+				null,
+				null,
+				LocalDate.of(2020, 1, 1)
+			));
+
+		mockMvc.perform(get("/api/v1/detail/1001").param("complexId", "502"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.parcelId").value(1001))
+			.andExpect(jsonPath("$.complexId").value(502))
+			.andExpect(jsonPath("$.latitude").value(37.6123))
+			.andExpect(jsonPath("$.longitude").value(127.1456))
+			.andExpect(jsonPath("$.name").value("Sample Tower B"))
+			.andExpect(jsonPath("$.unitCnt").value(320));
+	}
+
+	@Test
 	@DisplayName("GET /api/v1/trade/{parcelId}는 trade를 newest first로 반환한다")
 	void tradeListReturnsCanonicalFields() throws Exception {
-		given(readUseCase.getTradeList(1001L))
-			.willReturn(new TradeListResponse(1001L, List.of(
+		given(readUseCase.getTradeList(eq(1001L), isNull()))
+			.willReturn(new TradeListResponse(1001L, null, List.of(
 				new TradeResponse(9002L, LocalDate.of(2025, 12, 15), new BigDecimal("84.93"), 130000L, "101", 15),
 				new TradeResponse(9001L, LocalDate.of(2025, 12, 1), new BigDecimal("84.93"), 125000L, "101", 12)
 			)));
@@ -174,6 +209,7 @@ class ReadApiControllerContractTest {
 		mockMvc.perform(get("/api/v1/trade/1001"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.parcelId").value(1001))
+			.andExpect(jsonPath("$.complexId").isEmpty())
 			.andExpect(jsonPath("$.trades[0].tradeId").value(9002))
 			.andExpect(jsonPath("$.trades[0].dealDate").value("2025-12-15"))
 			.andExpect(jsonPath("$.trades[0].exclArea").value(84.93))
@@ -183,6 +219,22 @@ class ReadApiControllerContractTest {
 			.andExpect(jsonPath("$.trades[0].complexPk").doesNotExist())
 			.andExpect(jsonPath("$.trades[0].aptSeq").doesNotExist())
 			.andExpect(jsonPath("$.trades[0].sourceKey").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/trade/{parcelId}?complexId= 는 선택한 complex trade만 반환한다")
+	void complexScopedTradeListReturnsSelectedComplexTrades() throws Exception {
+		given(readUseCase.getTradeList(1001L, 502L))
+			.willReturn(new TradeListResponse(1001L, 502L, List.of(
+				new TradeResponse(9101L, LocalDate.of(2025, 12, 20), new BigDecimal("59.93"), 90000L, "201", 9)
+			)));
+
+		mockMvc.perform(get("/api/v1/trade/1001").param("complexId", "502"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.parcelId").value(1001))
+			.andExpect(jsonPath("$.complexId").value(502))
+			.andExpect(jsonPath("$.trades[0].tradeId").value(9101))
+			.andExpect(jsonPath("$.trades[0].aptDong").value("201"));
 	}
 
 	@Test

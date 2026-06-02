@@ -5,6 +5,7 @@ import java.time.LocalDate;
 
 public record ParcelDetailResponse(
 	Long parcelId,
+	Long complexId,
 	Double latitude,
 	Double longitude,
 	String address,
@@ -19,4 +20,39 @@ public record ParcelDetailResponse(
 	BigDecimal vlRat,
 	LocalDate useDate
 ) {
+
+	public ParcelDetailResponse(
+		Long parcelId,
+		Double latitude,
+		Double longitude,
+		String address,
+		String tradeName,
+		String name,
+		Integer dongCnt,
+		Integer unitCnt,
+		BigDecimal platArea,
+		BigDecimal archArea,
+		BigDecimal totArea,
+		BigDecimal bcRat,
+		BigDecimal vlRat,
+		LocalDate useDate
+	) {
+		this(
+			parcelId,
+			null,
+			latitude,
+			longitude,
+			address,
+			tradeName,
+			name,
+			dongCnt,
+			unitCnt,
+			platArea,
+			archArea,
+			totArea,
+			bcRat,
+			vlRat,
+			useDate
+		);
+	}
 }

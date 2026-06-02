@@ -25,12 +25,13 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 		assertThat(markers)
 			.extracting(
 				ComplexMarkerResponse::parcelId,
+				ComplexMarkerResponse::complexId,
 				ComplexMarkerResponse::lat,
 				ComplexMarkerResponse::lng,
 				ComplexMarkerResponse::latestDealAmount,
 				ComplexMarkerResponse::unitCntSum
 			)
-			.containsExactly(tuple(1001L, 37.5123, 127.0456, 125000L, 860L));
+			.containsExactly(tuple(1001L, null, 37.5123, 127.0456, 125000L, 860L));
 	}
 
 	@Test
@@ -61,20 +62,42 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
-	@DisplayName("재건축 필지 마커는 문서화된 parcel 집계를 유지하고 대표 complex 표시 좌표를 사용한다")
-	void redevelopmentMarkerKeepsDocumentedParcelAggregationAndUsesRepresentativeDisplayCoordinate() {
+	@DisplayName("재건축 필지 마커는 현재 세대 complex 기준 좌표와 거래값을 반환한다")
+	void redevelopmentMarkerUsesCurrentGenerationComplexCoordinateAndTrade() {
 		seedRedevelopmentParcel();
 		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
 
 		assertThat(repository.findComplexMarkers(request(null, null)))
 			.extracting(
 				ComplexMarkerResponse::parcelId,
+				ComplexMarkerResponse::complexId,
 				ComplexMarkerResponse::lat,
 				ComplexMarkerResponse::lng,
 				ComplexMarkerResponse::latestDealAmount,
 				ComplexMarkerResponse::unitCntSum
 			)
-			.containsExactly(tuple(2001L, 37.6010, 127.1010, 91000L, 1400L));
+			.containsExactly(tuple(2001L, 802L, 37.6010, 127.1010, 190000L, 900L));
+	}
+
+	@Test
+	@DisplayName("동시 존재 단지가 building 좌표로 확정되면 complex별 marker를 반환한다")
+	void concurrentComplexesWithBuildingCoordinatesReturnComplexLevelMarkers() {
+		seedConcurrentComplexMarkers();
+		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+
+		assertThat(repository.findComplexMarkers(request(null, null)))
+			.extracting(
+				ComplexMarkerResponse::parcelId,
+				ComplexMarkerResponse::complexId,
+				ComplexMarkerResponse::lat,
+				ComplexMarkerResponse::lng,
+				ComplexMarkerResponse::latestDealAmount,
+				ComplexMarkerResponse::unitCntSum
+			)
+			.containsExactly(
+				tuple(3001L, 901L, 37.6110, 127.1110, 150000L, 410L),
+				tuple(3001L, 902L, 37.6120, 127.1120, 220000L, 520L)
+			);
 	}
 
 	private ComplexMarkersRequest request(Double priceEokMin, Double priceEokMax) {
@@ -132,6 +155,43 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 		insertTrade(rawId, 801L, LocalDate.of(2026, 1, 1), 91000L, "rtms-redev-801-2", "COMPLEX-PK-801");
 		insertTrade(rawId, 802L, LocalDate.of(2023, 1, 1), 180000L, "rtms-redev-802-1", "COMPLEX-PK-802");
 		insertTrade(rawId, 802L, LocalDate.of(2025, 1, 1), 190000L, "rtms-redev-802-2", "COMPLEX-PK-802");
+	}
+
+	private void seedConcurrentComplexMarkers() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (3001, 1, '1168010300101400010', 'Concurrent lot', 37.5123, 127.0456)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt, use_date)
+			VALUES
+			    (901, 3001, 'COMPLEX-PK-901', 'APT-901', 'Concurrent A', 410, DATE '2018-01-01'),
+			    (902, 3001, 'COMPLEX-PK-902', 'APT-902', 'Concurrent B', 520, DATE '2020-01-01')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, relation_type, relation_confidence)
+			VALUES (3001, '1168010300101400010', 'RESOLVED', 'CONCURRENT', 'HIGH')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_display_coordinate (
+			    complex_id,
+			    latitude,
+			    longitude,
+			    coordinate_source,
+			    confidence,
+			    reason
+			)
+			VALUES
+			    (901, 37.6110, 127.1110, 'BUILDING_FOOTPRINT', 90, 'tower A footprint'),
+			    (902, 37.6120, 127.1120, 'BUILDING_FOOTPRINT', 90, 'tower B footprint')
+			""").update();
+		Long rawId = insertRawIngest("rtms-concurrent");
+		insertTrade(rawId, 901L, LocalDate.of(2025, 1, 1), 150000L, "rtms-concurrent-901", "COMPLEX-PK-901");
+		insertTrade(rawId, 902L, LocalDate.of(2025, 2, 1), 220000L, "rtms-concurrent-902", "COMPLEX-PK-902");
 	}
 
 	private void seedMapData() {

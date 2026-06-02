@@ -235,12 +235,23 @@ coordinate provider:
 
 1. Derive a 19 digit PNU from the RTMS row.
 2. Lookup `latitude`, `longitude`, and `geom` in the coordinate source database.
-3. Upsert `parcel` in the operational `home_search` database.
-4. Upsert `complex` and continue normal matching.
+3. If coordinates are present, upsert `parcel` with coordinates in the
+   operational `home_search` database.
+4. If coordinates are missing but `aptSeq`, `aptName`, and PNU provide a safe
+   identity, upsert a coordinate-pending `parcel` shell with nullable
+   coordinates.
+5. Upsert `complex` and continue normal matching.
 
 The operational database must not be filled with nationwide coordinate snapshot
 tables. In particular, `home_search.reference.parcel_coordinate_snapshot` is not
 the target coordinate model.
+
+Coordinate-pending parcels are storage-safe but not marker-safe. They allow
+normalized `trade` rows to preserve real RTMS history under a certain
+`complex_id`, while public map marker queries continue to require a final
+lat/lng or geometry. Coordinate-pending rows should be surfaced to future
+operator tooling so an approved `parcel_coordinate_override` or coordinate
+source backfill can fill the missing coordinates.
 
 VWorld VM/WFS is reserved for same-PNU multi-complex marker disambiguation. It
 is not the default coordinate provider for ordinary single-complex RTMS

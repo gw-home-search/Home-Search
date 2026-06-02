@@ -217,8 +217,8 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			resultSet.getLong("complex_id"),
 			resultSet.getString("complex_name"),
 			resultSet.getLong("parcel_id"),
-			resultSet.getDouble("latitude"),
-			resultSet.getDouble("longitude"),
+			doubleOrNull(resultSet, "latitude"),
+			doubleOrNull(resultSet, "longitude"),
 			resultSet.getString("address")
 		);
 	}
@@ -243,8 +243,8 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 		return new ParcelDetailResponse(
 			resultSet.getLong("parcel_id"),
 			resultSet.getLong("complex_id"),
-			resultSet.getDouble("latitude"),
-			resultSet.getDouble("longitude"),
+			doubleOrNull(resultSet, "latitude"),
+			doubleOrNull(resultSet, "longitude"),
 			resultSet.getString("address"),
 			resultSet.getString("trade_name"),
 			resultSet.getString("name"),

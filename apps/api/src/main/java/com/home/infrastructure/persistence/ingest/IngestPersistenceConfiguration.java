@@ -212,7 +212,8 @@ class IngestPersistenceConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnProperty(name = "home.ingest.raw-reconcile.enabled", havingValue = "true")
+	@ConditionalOnBean(JdbcClient.class)
+	@ConditionalOnProperty(name = "home.ingest.raw-reconcile.enabled", havingValue = "true", matchIfMissing = true)
 	ApplicationRunner rawIngestReconciliationRunner(
 		RawIngestReconciliationService rawIngestReconciliationService,
 		@Value("${home.ingest.raw-reconcile.batch-size:100}") int batchSize

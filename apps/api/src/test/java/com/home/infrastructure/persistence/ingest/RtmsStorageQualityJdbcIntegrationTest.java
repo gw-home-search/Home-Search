@@ -130,17 +130,16 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
 		)));
 
 		Map<String, Long> statusCounts = rawStatusCounts();
-		assertThat(result).isEqualTo(new IngestResult(5, 5, 1, 1, 1, 1, 1));
+		assertThat(result).isEqualTo(new IngestResult(5, 5, 2, 1, 1, 0, 1));
 		assertThat(rawCount()).isEqualTo(5);
 		assertThat(rawOutcomeCount(statusCounts)).isEqualTo(rawCount());
 		assertThat(statusCounts)
-			.containsEntry("NORMALIZED", 1L)
+			.containsEntry("NORMALIZED", 2L)
 			.containsEntry("CANCELED", 1L)
 			.containsEntry("DUPLICATE", 1L)
-			.containsEntry("MATCH_FAILED", 1L)
 			.containsEntry("PARSE_FAILED", 1L)
-			.hasSize(5);
-		assertThat(activeTradeCount()).isZero();
+			.hasSize(4);
+		assertThat(activeTradeCount()).isEqualTo(1);
 		assertThat(deletedTradeCount()).isEqualTo(1);
 		assertThat(normalizedRawWithoutMatchedEvidence()).isZero();
 		assertThat(activeTradeWithoutComplexParcel()).isZero();

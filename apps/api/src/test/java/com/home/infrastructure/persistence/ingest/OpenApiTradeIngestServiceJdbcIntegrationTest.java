@@ -66,8 +66,8 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
-	@DisplayName("local PostGIS matcher는 failed RTMS match를 queryable하게 유지한다")
-	void localPostgisMatcherKeepsFailedRtmsMatchesQueryable() {
+	@DisplayName("local PostGIS matcher는 PNU_CONFLICT RTMS match를 queryable하게 유지한다")
+	void localPostgisMatcherKeepsPnuConflictRtmsMatchesQueryable() {
 		seedComplex();
 		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
 		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
@@ -90,8 +90,8 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			1,
 			List.of(new OpenApiTradeItem(
 				"101",
-				"Missing Apartment",
-				"APT-404",
+				"Conflicting Apartment",
+				"APT-501",
 				"125,000",
 				1,
 				12,
@@ -101,7 +101,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 				"999-1",
 				"11680",
 				"10300",
-				"{\"aptSeq\":\"APT-404\",\"jibun\":\"999-1\"}"
+				"{\"aptSeq\":\"APT-501\",\"jibun\":\"999-1\"}"
 			))
 		));
 
@@ -112,14 +112,14 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			.singleElement()
 			.satisfies(record -> {
 				assertThat(record.source()).isEqualTo("RTMS");
-				assertThat(record.failureReason()).contains("APT-404");
+				assertThat(record.failureReason()).contains("APT-501");
 				assertThat(record.failureReason()).contains("1168010300109990001");
 			});
 		TradeMatchEvidenceRecord evidence = firstEvidence(evidenceRepository);
-		assertThat(evidence.matchStatus()).isEqualTo(TradeMatchStatus.UNMATCHED);
+		assertThat(evidence.matchStatus()).isEqualTo(TradeMatchStatus.PNU_CONFLICT);
 		assertThat(evidence.derivedPnu()).isEqualTo("1168010300109990001");
-		assertThat(evidence.candidateCount()).isZero();
-		assertThat(evidence.candidateComplexIds()).isEmpty();
+		assertThat(evidence.candidateCount()).isEqualTo(1);
+		assertThat(evidence.candidateComplexIds()).containsExactly(501L);
 	}
 
 	@Test
@@ -139,10 +139,10 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty()),
 			evidenceRepository
 		);
-		OpenApiTradeItem missingItem = new OpenApiTradeItem(
+		OpenApiTradeItem pnuConflictItem = new OpenApiTradeItem(
 			"101",
-			"Missing Apartment",
-			"APT-404",
+			"Conflicting Apartment",
+			"APT-501",
 			"125,000",
 			1,
 			12,
@@ -152,14 +152,14 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			"999-1",
 			"11680",
 			"10300",
-			"{\"aptSeq\":\"APT-404\",\"jibun\":\"999-1\"}"
+			"{\"aptSeq\":\"APT-501\",\"jibun\":\"999-1\"}"
 		);
 		OpenApiTradeIngestBatch batch = new OpenApiTradeIngestBatch(
 			"RTMS",
 			"11680",
 			"202512",
 			1,
-			List.of(missingItem)
+			List.of(pnuConflictItem)
 		);
 
 		IngestResult first = service.ingest(batch);
@@ -598,8 +598,8 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 	}
 
 	@Test
-	@DisplayName("주소 검색 좌표 후보는 승인 전 live RTMS parcel bootstrap에 사용하지 않는다")
-	void coordinateCandidateDoesNotBootstrapLiveRtmsParcelBeforeApproval() {
+	@DisplayName("주소 검색 좌표 후보는 승인 전 live RTMS parcel 좌표로 사용하지 않지만 identity 저장은 허용한다")
+	void coordinateCandidateDoesNotProvideCoordinateButIdentityStillBootstrapsBeforeApproval() {
 		String pnu = "1168010300108890001";
 		insertCoordinateOverride(
 			pnu,
@@ -634,19 +634,18 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			List.of(liveRtmsItem("APT-LIVE-889", "Candidate Coordinate Apartment", "889-1"))
 		));
 
-		assertThat(result.normalizedInserted()).isZero();
-		assertThat(result.matchFailed()).isEqualTo(1);
-		assertThat(parcelCount(pnu)).isZero();
-		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.MATCH_FAILED))
-			.singleElement()
-			.extracting(RawTradeIngestRecord::failureReason)
-			.asString()
-			.contains("coordinate unavailable");
+		assertThat(result.normalizedInserted()).isEqualTo(1);
+		assertThat(result.matchFailed()).isZero();
+		assertThat(parcelCount(pnu)).isEqualTo(1);
+		assertThat(parcelCoordinate(pnu))
+			.containsEntry("latitude", null)
+			.containsEntry("longitude", null);
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.NORMALIZED)).hasSize(1);
 	}
 
 	@Test
-	@DisplayName("coordinate가 resolve되지 않은 live RTMS row는 fake parcel 없이 explainable match failure로 남는다")
-	void coordinateMissingLeavesExplainableMatchFailureWithoutFakeParcel() {
+	@DisplayName("coordinate가 resolve되지 않은 live RTMS row는 좌표 없는 parcel shell로 저장되고 normalized trade가 된다")
+	void coordinateMissingStoresCoordinatePendingParcelShellAndNormalizedTrade() {
 		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
 		JdbcNormalizedTradeRepository tradeRepository = new JdbcNormalizedTradeRepository(
 			jdbcClient,
@@ -668,16 +667,14 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 		));
 
 		assertThat(result.rawSaved()).isEqualTo(1);
-		assertThat(result.normalizedInserted()).isZero();
-		assertThat(result.matchFailed()).isEqualTo(1);
-		assertThat(parcelCount("1168010300108880001")).isZero();
-		assertThat(complexCountByAptSeq("APT-LIVE-404")).isZero();
-		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.MATCH_FAILED))
-			.singleElement()
-			.satisfies(record -> {
-				assertThat(record.failureReason()).contains("1168010300108880001");
-				assertThat(record.failureReason()).contains("coordinate unavailable");
-			});
+		assertThat(result.normalizedInserted()).isEqualTo(1);
+		assertThat(result.matchFailed()).isZero();
+		assertThat(parcelCount("1168010300108880001")).isEqualTo(1);
+		assertThat(parcelCoordinate("1168010300108880001"))
+			.containsEntry("latitude", null)
+			.containsEntry("longitude", null);
+		assertThat(complexCountByAptSeq("APT-LIVE-404")).isEqualTo(1);
+		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.NORMALIZED)).hasSize(1);
 	}
 
 	@Test
@@ -982,10 +979,12 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			WHERE pnu = :pnu
 			""")
 			.param("pnu", pnu)
-			.query((resultSet, rowNumber) -> java.util.Map.<String, Object>of(
-				"latitude", resultSet.getBigDecimal("latitude"),
-				"longitude", resultSet.getBigDecimal("longitude")
-			))
+			.query((resultSet, rowNumber) -> {
+				java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+				row.put("latitude", resultSet.getBigDecimal("latitude"));
+				row.put("longitude", resultSet.getBigDecimal("longitude"));
+				return row;
+			})
 			.single();
 	}
 

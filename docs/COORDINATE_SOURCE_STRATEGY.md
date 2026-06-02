@@ -57,19 +57,43 @@ The operational database stores the lookup result in `parcel`:
 - `parcel.longitude`
 - `parcel.geom`
 
-`parcel.geom` is nullable because the public map display can still operate with
-lat/lng, but source geometry should be copied when the coordinate source lookup
-provides it.
+`parcel.latitude`, `parcel.longitude`, and `parcel.geom` are nullable in the
+operational database. A nullable coordinate means the RTMS identity was
+display-safe enough to store, but the parcel is still coordinate-pending and
+must not produce a map marker until a trusted coordinate is supplied.
+
+`parcel.geom` remains nullable because the public map display can operate with
+lat/lng when those are available. Source geometry should be copied when the
+coordinate source lookup provides it.
 
 ## Coordinate Source Priority
 
 Default coordinate source:
 
 1. Coordinate Source DB lookup by PNU.
+2. Approved `parcel_coordinate_override` by PNU.
 
 VWorld VM/WFS is not the default coordinate provider for ordinary RTMS ingest.
 Do not call VWorld VM/WFS for a normal single-complex PNU bootstrap when the
 coordinate source database has parcel coordinates.
+
+If both the coordinate source database and approved override miss, Home Search
+may still create a coordinate-pending `parcel` and `complex` when `aptSeq`,
+`aptName`, and derived PNU are sufficient for a safe complex identity. This
+improves storage completeness without inventing coordinates.
+
+Coordinate-pending storage rules:
+
+- `parcel.pnu`, address evidence, `complex.apt_seq`, `complex.complex_pk`, and
+  aliases are stored.
+- `parcel.latitude`, `parcel.longitude`, and `parcel.geom` remain `NULL`.
+- Normalized `trade` may be inserted because it has a certain `complex_id`.
+- Public map marker queries must exclude rows whose final marker coordinate is
+  missing.
+- Detail and trade read paths may return the stored identity and trade rows, but
+  coordinate fields remain nullable until an approved coordinate is available.
+- Later approved overrides or coordinate source backfill may update the existing
+  parcel instead of creating a second parcel or complex.
 
 ## VWorld VM/WFS Policy
 
@@ -157,7 +181,12 @@ preparation.
 - Raw RTMS rows are saved before normalized trades.
 - A normalized `trade` row is created only after a `complex_id` is certain.
 - Coordinate lookup failure must not create fake coordinates.
-- Coordinate lookup failure must leave queryable raw/evidence state.
+- Coordinate lookup failure must not block identity-safe master/trade storage
+  when `aptSeq`, `aptName`, and PNU are certain.
+- Coordinate-pending rows must stay out of public map markers until coordinates
+  are supplied.
+- True identity failures such as PNU conflict, ambiguous candidates, missing
+  PNU, or name conflict must leave queryable raw/evidence state.
 - `complex_id` remains the operational relation.
 - `complex_pk`, `apt_seq`, `source`, and `source_key` remain audit and dedupe
   metadata.
@@ -203,3 +232,7 @@ JdbcComplexMasterBootstrapper
 
 VWorld VM/WFS is attached to same-PNU multi-complex display disambiguation, not
 to ordinary parcel bootstrap.
+
+When `ParcelCoordinateResolver` returns empty, `JdbcComplexMasterBootstrapper`
+creates a coordinate-pending parcel shell instead of failing the master
+bootstrap, as long as the RTMS row has a valid PNU and stable complex identity.

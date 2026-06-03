@@ -99,7 +99,7 @@ class RtmsMonthlyRefreshRunner {
 				pageCount++;
 				if (!page.hasNextPage()) {
 					Instant completedAt = clock.instant();
-					ingestRunRepository.save(RtmsIngestRunRecord.completed(
+					RtmsIngestRunRecord saved = ingestRunRepository.save(RtmsIngestRunRecord.completed(
 						currentRequest.lawdCd(),
 						currentRequest.dealYmd(),
 						pageCount,
@@ -111,7 +111,8 @@ class RtmsMonthlyRefreshRunner {
 						currentRequest.lawdCd(),
 						currentRequest.dealYmd(),
 						pageCount,
-						total
+						total,
+						saved.id()
 					);
 				}
 				currentRequest = page.nextRequest();
@@ -121,7 +122,7 @@ class RtmsMonthlyRefreshRunner {
 			Instant completedAt = clock.instant();
 			String failureReason = failureReason(exception);
 			if (pageCount > 0) {
-				ingestRunRepository.save(RtmsIngestRunRecord.partiallyFailed(
+				RtmsIngestRunRecord saved = ingestRunRepository.save(RtmsIngestRunRecord.partiallyFailed(
 					firstRequest.lawdCd(),
 					firstRequest.dealYmd(),
 					pageCount,
@@ -135,10 +136,11 @@ class RtmsMonthlyRefreshRunner {
 					firstRequest.dealYmd(),
 					pageCount,
 					total,
-					failureReason
+					failureReason,
+					saved.id()
 				);
 			}
-			ingestRunRepository.save(RtmsIngestRunRecord.failed(
+			RtmsIngestRunRecord saved = ingestRunRepository.save(RtmsIngestRunRecord.failed(
 				firstRequest.lawdCd(),
 				firstRequest.dealYmd(),
 				pageCount,
@@ -152,7 +154,8 @@ class RtmsMonthlyRefreshRunner {
 				firstRequest.dealYmd(),
 				pageCount,
 				total,
-				failureReason
+				failureReason,
+				saved.id()
 			);
 		}
 	}

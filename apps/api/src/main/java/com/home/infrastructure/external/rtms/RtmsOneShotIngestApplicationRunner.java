@@ -15,6 +15,7 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner, Ordered {
 
 	private final RtmsOneShotTradeIngestRunner runner;
 	private final RtmsMonthlyRefreshRunner monthlyRefreshRunner;
+	private final RtmsNationwideBackfillRunner nationwideBackfillRunner;
 	private final RtmsOneShotIngestProperties properties;
 	private final RtmsApartmentTradeProperties tradeProperties;
 	private final RtmsCoordinateSourcePreflight coordinateSourcePreflight;
@@ -24,7 +25,7 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner, Ordered {
 		RtmsOneShotIngestProperties properties,
 		RtmsApartmentTradeProperties tradeProperties
 	) {
-		this(runner, null, properties, tradeProperties, RtmsCoordinateSourcePreflight.noop());
+		this(runner, null, null, properties, tradeProperties, RtmsCoordinateSourcePreflight.noop());
 	}
 
 	RtmsOneShotIngestApplicationRunner(
@@ -33,7 +34,7 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner, Ordered {
 		RtmsApartmentTradeProperties tradeProperties,
 		RtmsCoordinateSourcePreflight coordinateSourcePreflight
 	) {
-		this(runner, null, properties, tradeProperties, coordinateSourcePreflight);
+		this(runner, null, null, properties, tradeProperties, coordinateSourcePreflight);
 	}
 
 	RtmsOneShotIngestApplicationRunner(
@@ -42,7 +43,7 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner, Ordered {
 		RtmsOneShotIngestProperties properties,
 		RtmsApartmentTradeProperties tradeProperties
 	) {
-		this(runner, monthlyRefreshRunner, properties, tradeProperties, RtmsCoordinateSourcePreflight.noop());
+		this(runner, monthlyRefreshRunner, null, properties, tradeProperties, RtmsCoordinateSourcePreflight.noop());
 	}
 
 	RtmsOneShotIngestApplicationRunner(
@@ -52,8 +53,20 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner, Ordered {
 		RtmsApartmentTradeProperties tradeProperties,
 		RtmsCoordinateSourcePreflight coordinateSourcePreflight
 	) {
+		this(runner, monthlyRefreshRunner, null, properties, tradeProperties, coordinateSourcePreflight);
+	}
+
+	RtmsOneShotIngestApplicationRunner(
+		RtmsOneShotTradeIngestRunner runner,
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
+		RtmsNationwideBackfillRunner nationwideBackfillRunner,
+		RtmsOneShotIngestProperties properties,
+		RtmsApartmentTradeProperties tradeProperties,
+		RtmsCoordinateSourcePreflight coordinateSourcePreflight
+	) {
 		this.runner = runner;
 		this.monthlyRefreshRunner = monthlyRefreshRunner;
+		this.nationwideBackfillRunner = nationwideBackfillRunner;
 		this.properties = properties;
 		this.tradeProperties = tradeProperties;
 		this.coordinateSourcePreflight = coordinateSourcePreflight;
@@ -70,6 +83,10 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner, Ordered {
 		coordinateSourcePreflight.verify();
 		if (mode == RtmsIngestMode.MONTHLY_REFRESH) {
 			runMonthlyRefresh();
+			return;
+		}
+		if (mode == RtmsIngestMode.NATIONWIDE_BACKFILL) {
+			runNationwideBackfill();
 			return;
 		}
 		runOneShot();
@@ -147,6 +164,43 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner, Ordered {
 			total.matchFailed(),
 			total.parseFailed(),
 			report.hasNewData()
+		);
+	}
+
+	private void runNationwideBackfill() {
+		RtmsNationwideBackfillPlan plan = properties.nationwideBackfillPlan();
+		RtmsNationwideBackfillOptions options = properties.nationwideBackfillOptions();
+		if (properties.preflightOnly()) {
+			log.info(
+				"RTMS nationwide backfill preflight completed baseUrl={} path={} jobKey={} dealYmdFrom={} "
+					+ "dealYmdTo={} lawdCount={} chunkCount={} workerId={} chunkLimit={} numOfRows={}",
+				tradeProperties.baseUrl(),
+				tradeProperties.path(),
+				plan.jobKey(),
+				plan.dealYmdFrom(),
+				plan.dealYmdTo(),
+				plan.lawdCds().size(),
+				plan.chunks().size(),
+				options.workerId(),
+				options.chunkLimit(),
+				tradeProperties.numOfRows()
+			);
+			return;
+		}
+		if (nationwideBackfillRunner == null) {
+			throw new IllegalStateException("RtmsNationwideBackfillRunner is required for RTMS nationwide backfill");
+		}
+		RtmsNationwideBackfillReport report = nationwideBackfillRunner.run(plan);
+		log.info(
+			"RTMS nationwide backfill completed jobId={} jobStatus={} completedChunks={} failedChunks={} "
+				+ "partialChunks={} blockedChunks={} recoveredStaleChunks={}",
+			report.jobId(),
+			report.jobStatus(),
+			report.statusCounts().completed(),
+			report.statusCounts().failed(),
+			report.statusCounts().partial(),
+			report.statusCounts().blocked(),
+			report.recoveredStaleCount()
 		);
 	}
 }

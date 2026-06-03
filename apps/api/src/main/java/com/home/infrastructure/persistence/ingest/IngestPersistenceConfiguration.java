@@ -13,6 +13,8 @@ import com.home.application.ingest.RawIngestReconciliationRepository;
 import com.home.application.ingest.RawIngestReconciliationService;
 import com.home.application.ingest.RawTradeItemParser;
 import com.home.application.ingest.RawTradeIngestRepository;
+import com.home.application.ingest.RtmsBackfillChunkRepository;
+import com.home.application.ingest.RtmsBackfillJobRepository;
 import com.home.application.ingest.RtmsIngestRunReportRepository;
 import com.home.application.ingest.RtmsIngestRunRepository;
 import com.home.application.ingest.TradeIngestMetrics;
@@ -78,6 +80,20 @@ class IngestPersistenceConfiguration {
 	@Lazy
 	RtmsIngestRunReportRepository rtmsIngestRunReportRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
 		return new JdbcRtmsIngestRunReportRepository(requiredJdbcClient(jdbcClientProvider));
+	}
+
+	@Bean
+	@Lazy
+	@ConditionalOnBean(JdbcClient.class)
+	RtmsBackfillJobRepository rtmsBackfillJobRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
+		return new JdbcRtmsBackfillJobRepository(requiredJdbcClient(jdbcClientProvider), java.time.Clock.systemUTC());
+	}
+
+	@Bean
+	@Lazy
+	@ConditionalOnBean(JdbcClient.class)
+	RtmsBackfillChunkRepository rtmsBackfillChunkRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
+		return new JdbcRtmsBackfillChunkRepository(requiredJdbcClient(jdbcClientProvider), java.time.Clock.systemUTC());
 	}
 
 	@Bean

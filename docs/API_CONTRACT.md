@@ -620,11 +620,20 @@ Response:
     "aptSeq": "APT-501",
     "aptName": "Pending Apartment",
     "address": "Pending address",
+    "reason": "PNU_COORDINATE_MISSING",
     "tradeCount": 3,
     "createdAt": "2026-06-03T00:00:00Z"
   }
 ]
 ```
+
+`reason` is an operational correction code for the admin surface:
+
+- `PNU_COORDINATE_MISSING`: the parcel/PNU has no marker-safe coordinate.
+- `SAME_PNU_MULTI_COMPLEX`: one PNU has multiple complexes and no trusted
+  building-footprint display coordinates.
+- `COMPLEX_DISPLAY_COORDINATE_MISSING`: another same-PNU complex has a trusted
+  building-footprint display coordinate, but this complex still needs one.
 
 ### PUT `/api/v1/admin/coordinates/{pnu}/override`
 

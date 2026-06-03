@@ -1,4 +1,118 @@
 [[items]]
+id = "map-marker-read-path-readiness-hardening"
+title_ko = "Map marker read path readiness hardening"
+pr_type = "Feat"
+pr_title_ko = "지도 마커 read-path 성능과 분리 정책 보강"
+description_ko = "RTMS 특수지역 10년치 readiness에서 확인된 /api/v1/map/complexes 지연과 same-PNU fallback 과다 노출을 줄이기 위해 bounds-first marker query와 저장된 고신뢰 complex_display_coordinate split 정책을 보강한다."
+status = "done"
+priority = 220
+targets = "backend"
+preset = "backend-quality"
+acceptance_criteria = [
+  "POST /api/v1/map/complexes URL, request field, response field, amount unit, empty-result behavior를 변경하지 않는다.",
+  "marker query는 bounds 안 parcel을 먼저 좁힌 뒤 complex/latest trade/coordinate CTE를 계산한다.",
+  "고신뢰 BUILDING_FOOTPRINT complex_display_coordinate가 이미 저장된 same-PNU complex는 coordinate case가 누락돼도 complex marker로 분리한다.",
+  "고신뢰 display coordinate가 없는 same-PNU remainder는 좌표를 추측하지 않고 parcel fallback marker로 유지한다.",
+  "LOW confidence REDEVELOPED case는 building coordinate가 있어도 current-generation 확정 marker로 승격하지 않는다.",
+  "coordinate-pending parcel은 거래가 있어도 marker-safe로 노출하지 않는다.",
+  "raw-before-normalized, duplicate-safe ingest, failed match queryability, complex_id operational relation을 변경하지 않는다.",
+]
+first_red_candidates = [
+  "JdbcMapMarkerRepositoryTest에서 고신뢰 BUILDING_FOOTPRINT complex_display_coordinate가 있지만 coordinate case가 없는 same-PNU parcel이 parcel fallback 하나로만 반환되면 실패하는 RED를 만든다.",
+  "JdbcMapMarkerRepositoryTest에서 parcel은 bounds 안이지만 split marker 좌표가 bounds 밖이면 out-of-bounds marker가 반환되어 실패하는 RED를 만든다.",
+  "JdbcMapMarkerRepositoryTest에서 LOW confidence REDEVELOPED case가 trusted display coordinate 때문에 split marker로 노출되면 실패하는 regression을 유지한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+verification_evidence = [
+  "- `예상 RED 실패` = pass (고신뢰 BUILDING_FOOTPRINT 좌표가 bounds 밖인 split marker는 기존 최종 bounds 필터 부재 때문에 반환되어야 하며, 이 실패를 RED로 고정)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest` = fail (최초 RED: parcel은 bounds 안이지만 split marker 좌표가 bounds 밖인 케이스가 out-of-bounds marker를 반환해 실패)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest` = pass (최소 GREEN: marker 실제 lat/lng bounds 필터와 same-PNU split/fallback 회귀 통과)",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, coverage, persistence, foundation guardrail 통과)",
+  "- `docker compose -f infra/docker-compose.local.yml config` = pass (tracked non-secret env example 기본 경로로 compose config 렌더링 통과)",
+  "- `python3 .codex/harness/pr_lint.py --self-test` = pass (PR lint self-test 통과)",
+  "- `python3 .codex/harness/pr_context.py --self-test` = pass (PR context self-test 통과)",
+  "- `python3 .codex/harness/pr_body_check.py --self-test` = pass (PR body check self-test 통과)",
+  "- `python3 .codex/harness/worklog_sync.py --self-test` = pass (worklog sync self-test 통과)",
+  "- `python3 .codex/harness/home_pr.py --self-test` = pass (harness PR helper self-test 통과)",
+  "- `python3 .codex/harness/home_flow.py --self-test` = pass (harness flow self-test 통과)",
+  "- `python3 .codex/harness/home_integrate.py --self-test` = pass (harness integration self-test 통과)",
+  "- `python3 .codex/harness/home_plan.py --self-test` = pass (harness plan self-test 통과)",
+  "- `python3 .codex/harness/home_report.py --self-test` = pass (harness report self-test 통과)",
+  "- `.codex/harness/home --self-test` = pass (harness launcher self-test 통과)",
+  "- `python3 .codex/harness/skill_routing.py --self-test` = pass (skill routing self-test 통과)",
+  "- `python3 .codex/harness/user_language_check.py --self-test` = pass (user-facing language self-test 통과)",
+  "- `python3 .codex/harness/project_terms_check.py` = pass (canonical docs/user-facing term check 통과)",
+  "- `python3 .codex/harness/project_terms_check.py --self-test` = pass (project terms self-test 통과)",
+  "- `python3 scripts/check-test-display-names.py` = pass (Korean display name policy 통과)",
+  "- `git diff --check` = pass (공백 오류 없음)",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "좌표 추측이나 낮은 confidence coordinate 승격이 필요하면 중단한다.",
+  "새 DB column 또는 data-loss migration이 필요하면 중단한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+  "live RTMS 재수집 결과에서 평균 점수 9점 미만이면 다음 /goal 보강 slice로 분리한다.",
+]
+risk_notes = [
+  "bounds-first SQL은 read-path 성능을 개선하지만 실제 전국 저장 규모에서는 추가 explain 기반 index 보강이 필요할 수 있다.",
+  "stored display coordinate split은 이미 저장된 확정 좌표만 사용하므로 좌표 미보유 same-PNU 단지는 계속 fallback marker로 남는다.",
+  "이번 slice는 API read-path, compose runtime preflight, docs policy, worklog evidence를 함께 닫기 때문에 backend-quality preset 허용 범위를 infra/docs까지 확장하고 harness self-test evidence로 고정한다.",
+]
+
+[[items]]
+id = "rtms-special-region-readiness-gate"
+title_ko = "RTMS 특수지역 저장 직전 readiness gate"
+pr_type = "Test"
+pr_title_ko = "RTMS 특수지역 저장 직전 readiness gate"
+description_ko = "전체 데이터 저장 직전 단계에서 특수 지역 10년치 RTMS 실증을 raw/evidence/trade/coordinate/marker/detail/trade API 점수표로 검증하고, 평균 9점 미만 결함은 별도 TDD 보강 slice와 harness -pr로 분리한다."
+status = "planned"
+priority = 210
+targets = "backend"
+preset = "runtime-smoke"
+acceptance_criteria = [
+  "전체/전국 데이터 저장은 실행하지 않고 특수 지역 readiness 판단에서 멈춘다.",
+  "실행 전 APT_SERVICE_KEY, VW_SERVICE_KEY, COORDINATE_SOURCE_DB_JDBC_URL, HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY=false runtime env와 coordinate source snapshot PASSED 상태를 확인한다.",
+  "각 실증 배치 전 RAW_MAX, RUN_MAX, RUN_START 기준점을 기록하고 실험으로 생성한 raw/evidence/trade/run 데이터만 cleanup할 수 있어야 한다.",
+  "고양시 일산서구 3개월 smoke, 12개월 확대, 10년치 단일지역, 다지역 10년치 순서로 확장하며 이전 단계 점수가 9점 미만이면 다음 단계로 진행하지 않는다.",
+  "raw 저장, match evidence 설명 가능성, normalized trade 전환, duplicate/cancel, coordinate 연결, coordinate-pending, marker 노출, same-PNU multi-complex, detail/trade API, cleanup 안전성을 10점 척도로 산정한다.",
+  "확실한 거래는 좌표가 없어도 저장 가능하지만 coordinate-pending은 marker-safe로 노출되지 않아야 한다.",
+  "좌표가 있는 거래는 /api/v1/map/complexes marker와 같은 parcelId/complexId 기반 /api/v1/detail/{parcelId}, /api/v1/trade/{parcelId} 응답으로 연결되어야 한다.",
+  "문제가 발견되면 /goal 분석으로 원인을 분해하고 production behavior 수정은 First RED, Minimum GREEN, docs 반영, harness -pr 상세 설명으로 별도 slice 처리한다.",
+  "public map/search/region/detail/trade API URL, request/response shape, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "raw-before-normalized, duplicate-safe ingest, failed match queryability, complex_id operational relation을 유지한다.",
+]
+first_red_candidates = [
+  "PNU_UNAVAILABLE 또는 UNMATCHED 비율이 높은 live evidence가 나오면 RtmsJibunPnuNormalizer 또는 master bootstrap fixture RED를 만든다.",
+  "raw는 저장됐지만 trade_match_evidence가 비는 edge가 나오면 ingest status/evidence lifecycle regression RED를 만든다.",
+  "coordinate-pending row가 marker-safe query에 노출되면 map marker repository regression RED를 만든다.",
+  "same-PNU multi-complex가 좌표 확신도 없이 임의 complex marker로 분리되면 coordinate confidence regression RED를 만든다.",
+  "duplicate/cancel이 source-key registry 또는 fallback identity를 잘못 연결하면 storage quality integration RED를 만든다.",
+]
+verification_commands = [
+  "docker compose -f infra/docker-compose.local.yml config",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "API key, coordinate source DB env, coordinate source snapshot PASSED 중 하나라도 누락되면 실증을 중단한다.",
+  "HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY=true 상태이면 marker-display validation을 중단한다.",
+  "cleanup 범위를 실험 데이터로 한정하지 못하면 다음 배치나 전체 저장 판단으로 진행하지 않는다.",
+  "raw row가 생성됐는데 evidence가 비거나 normalized trade가 불확실한 complex_id에 연결되면 중단하고 /goal 분석으로 전환한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "평균 점수 9점 미만 또는 치명(Critical)/높음(High) 결함이 있으면 전체 저장 준비 완료로 판정하지 않는다.",
+  "RTMS live 호출, 실험 DB 생성/삭제, PR publishing은 사람의 명시적 요청 없이 harness 자동 실행에 포함하지 않는다.",
+]
+risk_notes = [
+  "harness preset은 PR 검증 안전장치 때문에 live Open API 호출과 DB migration 실행을 자동화하지 않는다.",
+  "이번 item은 전체 저장 직전 readiness gate이며 전체 데이터 저장 실행 item이 아니다.",
+  "결함 수정 PR은 이 item에서 직접 섞지 않고 원인별 별도 work item으로 분리해 상세 PR 설명을 남긴다.",
+]
+
+[[items]]
 id = "coordinate-marker-confidence-hardening"
 title_ko = "Coordinate marker confidence hardening"
 pr_type = "Feat"

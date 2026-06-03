@@ -1,12 +1,15 @@
 package com.home.infrastructure.external.rtms;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.home.application.ingest.RtmsBackfillChunkRepository;
+import com.home.application.ingest.RtmsBackfillJobRepository;
 import com.home.application.ingest.OpenApiTradeIngestService;
 import com.home.application.ingest.RtmsIngestRunRepository;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -43,7 +46,15 @@ class RtmsExternalApiConfiguration {
 		@Value("${home.ingest.rtms.preflight-only:false}") boolean preflightOnly,
 		@Value("${home.ingest.rtms.mode:one-shot}") String mode,
 		@Value("${home.ingest.rtms.lookback-months:0}") Integer lookbackMonths,
-		@Value("${home.ingest.rtms.allow-coordinate-pending-only:false}") boolean allowCoordinatePendingOnly
+		@Value("${home.ingest.rtms.allow-coordinate-pending-only:false}") boolean allowCoordinatePendingOnly,
+		@Value("${home.ingest.rtms.nationwide.lawd-cds:}") String nationwideLawdCds,
+		@Value("${home.ingest.rtms.nationwide.deal-ymd-from:201201}") String nationwideDealYmdFrom,
+		@Value("${home.ingest.rtms.nationwide.deal-ymd-to:202606}") String nationwideDealYmdTo,
+		@Value("${home.ingest.rtms.nationwide.job-key:}") String nationwideJobKey,
+		@Value("${home.ingest.rtms.nationwide.worker-id:rtms-backfill-worker}") String nationwideWorkerId,
+		@Value("${home.ingest.rtms.nationwide.lease-minutes:30}") Integer nationwideLeaseMinutes,
+		@Value("${home.ingest.rtms.nationwide.max-attempt-count:3}") Integer nationwideMaxAttemptCount,
+		@Value("${home.ingest.rtms.nationwide.chunk-limit:2147483647}") Integer nationwideChunkLimit
 	) {
 		return new RtmsOneShotIngestProperties(
 			enabled,
@@ -53,7 +64,15 @@ class RtmsExternalApiConfiguration {
 			preflightOnly,
 			mode,
 			lookbackMonths,
-			allowCoordinatePendingOnly
+			allowCoordinatePendingOnly,
+			nationwideLawdCds,
+			nationwideDealYmdFrom,
+			nationwideDealYmdTo,
+			nationwideJobKey,
+			nationwideWorkerId,
+			nationwideLeaseMinutes,
+			nationwideMaxAttemptCount,
+			nationwideChunkLimit
 		);
 	}
 
@@ -119,6 +138,23 @@ class RtmsExternalApiConfiguration {
 	}
 
 	@Bean
+	@ConditionalOnBean({RtmsBackfillJobRepository.class, RtmsBackfillChunkRepository.class})
+	RtmsNationwideBackfillRunner rtmsNationwideBackfillRunner(
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
+		RtmsBackfillJobRepository backfillJobRepository,
+		RtmsBackfillChunkRepository backfillChunkRepository,
+		RtmsOneShotIngestProperties properties
+	) {
+		return new RtmsNationwideBackfillRunner(
+			backfillJobRepository,
+			backfillChunkRepository,
+			request -> summaryToBackfillResult(monthlyRefreshRunner.refresh(request.lawdCd(), request.dealYmd())),
+			java.time.Clock.systemUTC(),
+			properties.nationwideBackfillOptions()
+		);
+	}
+
+	@Bean
 	RtmsCoordinateSourcePreflight rtmsCoordinateSourcePreflight(
 		RtmsOneShotIngestProperties ingestProperties,
 		@Value("${home.coordinate-source.db.jdbc-url:${COORDINATE_SOURCE_DB_JDBC_URL:}}") String jdbcUrl,
@@ -152,6 +188,7 @@ class RtmsExternalApiConfiguration {
 	ApplicationRunner rtmsOneShotIngestApplicationRunner(
 		RtmsOneShotTradeIngestRunner runner,
 		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
+		ObjectProvider<RtmsNationwideBackfillRunner> nationwideBackfillRunnerProvider,
 		RtmsOneShotIngestProperties properties,
 		RtmsApartmentTradeProperties tradeProperties,
 		RtmsCoordinateSourcePreflight coordinateSourcePreflight
@@ -159,9 +196,35 @@ class RtmsExternalApiConfiguration {
 		return new RtmsOneShotIngestApplicationRunner(
 			runner,
 			monthlyRefreshRunner,
+			nationwideBackfillRunnerProvider.getIfAvailable(),
 			properties,
 			tradeProperties,
 			coordinateSourcePreflight
 		);
+	}
+
+	private RtmsBackfillChunkExecutionResult summaryToBackfillResult(RtmsMonthlyRefreshRunSummary summary) {
+		return switch (summary.status()) {
+			case COMPLETED -> RtmsBackfillChunkExecutionResult.completed(
+				summary.lawdCd(),
+				summary.dealYmd(),
+				summary.runId(),
+				summary.ingestResult()
+			);
+			case PARTIAL -> RtmsBackfillChunkExecutionResult.partial(
+				summary.lawdCd(),
+				summary.dealYmd(),
+				summary.runId(),
+				summary.failureReason(),
+				summary.ingestResult()
+			);
+			case FAILED -> RtmsBackfillChunkExecutionResult.failed(
+				summary.lawdCd(),
+				summary.dealYmd(),
+				summary.runId(),
+				summary.failureReason(),
+				summary.ingestResult()
+			);
+		};
 	}
 }

@@ -328,7 +328,181 @@ class RtmsOneShotTradeIngestRunnerTest {
 			.doesNotContain("payload");
 	}
 
+	@Test
+	@DisplayName("nationwide-backfill preflight는 live fetch나 DB write 없이 chunk 계획만 log한다")
+	void nationwideBackfillPreflightLogsChunkPlanWithoutLiveFetchOrDbWrite(CapturedOutput output) throws Exception {
+		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner = mock(RtmsMonthlyRefreshRunner.class);
+		RtmsNationwideBackfillRunner nationwideBackfillRunner = mock(RtmsNationwideBackfillRunner.class);
+		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
+			runner,
+			monthlyRefreshRunner,
+			nationwideBackfillRunner,
+			nationwideProperties(true),
+			rtmsProperties("DUMMY"),
+			RtmsCoordinateSourcePreflight.noop()
+		);
+
+		applicationRunner.run(new DefaultApplicationArguments());
+
+		verifyNoInteractions(runner, monthlyRefreshRunner, nationwideBackfillRunner);
+		assertThat(output).contains("RTMS nationwide backfill preflight completed")
+			.contains("jobKey=rtms-national-test")
+			.contains("dealYmdFrom=201201")
+			.contains("dealYmdTo=201202")
+			.contains("lawdCount=2")
+			.contains("chunkCount=4")
+			.contains("workerId=worker-1")
+			.contains("chunkLimit=5")
+			.doesNotContain("APT_SERVICE_KEY")
+			.doesNotContain("serviceKey")
+			.doesNotContain("payload");
+	}
+
+	@Test
+	@DisplayName("nationwide-backfill mode는 backfill runner를 실행하고 실패 chunk summary만 log한다")
+	void nationwideBackfillModeRunsBackfillRunnerAndLogsSummary(CapturedOutput output) throws Exception {
+		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner = mock(RtmsMonthlyRefreshRunner.class);
+		RtmsNationwideBackfillRunner nationwideBackfillRunner = mock(RtmsNationwideBackfillRunner.class);
+		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
+			runner,
+			monthlyRefreshRunner,
+			nationwideBackfillRunner,
+			nationwideProperties(false),
+			rtmsProperties("DUMMY"),
+			RtmsCoordinateSourcePreflight.noop()
+		);
+		RtmsNationwideBackfillPlan expectedPlan = new RtmsNationwideBackfillPlan(
+			"rtms-national-test",
+			List.of("11110", "11680"),
+			"201201",
+			"201202"
+		);
+		when(nationwideBackfillRunner.run(expectedPlan)).thenReturn(new RtmsNationwideBackfillReport(
+			1L,
+			com.home.application.ingest.RtmsBackfillJobStatus.PARTIAL,
+			new com.home.application.ingest.RtmsBackfillChunkStatusCounts(0, 0, 2, 1, 1, 1, 0),
+			1
+		));
+
+		applicationRunner.run(new DefaultApplicationArguments());
+
+		verifyNoInteractions(runner, monthlyRefreshRunner);
+		verify(nationwideBackfillRunner).run(expectedPlan);
+		assertThat(output).contains("RTMS nationwide backfill completed")
+			.contains("jobId=1")
+			.contains("jobStatus=PARTIAL")
+			.contains("completedChunks=2")
+			.contains("failedChunks=1")
+			.contains("partialChunks=1")
+			.contains("blockedChunks=1")
+			.contains("recoveredStaleChunks=1")
+			.doesNotContain("APT_SERVICE_KEY")
+			.doesNotContain("serviceKey")
+			.doesNotContain("payload");
+	}
+
+	@Test
+	@DisplayName("nationwide-backfill mode는 backfill runner bean이 없으면 live fetch 전에 실패한다")
+	void nationwideBackfillModeRequiresBackfillRunnerBeforeLiveFetch() {
+		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner = mock(RtmsMonthlyRefreshRunner.class);
+		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
+			runner,
+			monthlyRefreshRunner,
+			null,
+			nationwideProperties(false),
+			rtmsProperties("DUMMY"),
+			RtmsCoordinateSourcePreflight.noop()
+		);
+
+		assertThatThrownBy(() -> applicationRunner.run(new DefaultApplicationArguments()))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("RtmsNationwideBackfillRunner");
+		verifyNoInteractions(runner, monthlyRefreshRunner);
+	}
+
+	@Test
+	@DisplayName("nationwide-backfill properties는 lawd 목록, 기간, lease, retry, chunk limit을 실행 plan으로 변환한다")
+	void nationwideBackfillPropertiesBuildPlanAndOptions() {
+		RtmsOneShotIngestProperties properties = nationwideProperties(false);
+
+		assertThat(properties.ingestMode()).isEqualTo(RtmsIngestMode.NATIONWIDE_BACKFILL);
+		assertThat(properties.nationwideBackfillPlan()).satisfies(plan -> {
+			assertThat(plan.jobKey()).isEqualTo("rtms-national-test");
+			assertThat(plan.dealYmds()).containsExactly("201201", "201202");
+			assertThat(plan.chunks()).hasSize(4);
+		});
+		assertThat(properties.nationwideBackfillOptions()).satisfies(options -> {
+			assertThat(options.workerId()).isEqualTo("worker-1");
+			assertThat(options.leaseDuration()).isEqualTo(java.time.Duration.ofMinutes(30));
+			assertThat(options.maxAttemptCount()).isEqualTo(3);
+			assertThat(options.chunkLimit()).isEqualTo(5);
+		});
+	}
+
+	@Test
+	@DisplayName("nationwide-backfill properties는 lawd 목록과 option validation을 live fetch 전에 거부한다")
+	void nationwideBackfillPropertiesRejectMissingLawdAndInvalidOptions() {
+		RtmsOneShotIngestProperties missingLawdCds = new RtmsOneShotIngestProperties(
+			true,
+			"11680",
+			"202606",
+			1,
+			false,
+			"nationwide-backfill",
+			0,
+			false,
+			" ",
+			"201201",
+			"201202",
+			"rtms-national-test",
+			"worker-1",
+			30,
+			3,
+			5
+		);
+
+		assertThatThrownBy(missingLawdCds::nationwideBackfillPlan)
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("nationwide.lawd-cds");
+		assertThatThrownBy(() -> new RtmsNationwideBackfillOptions(" ", java.time.Duration.ofMinutes(30), 3, 5))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("workerId");
+		assertThatThrownBy(() -> new RtmsNationwideBackfillOptions("worker-1", java.time.Duration.ofMinutes(-1), 3, 5))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("leaseDuration");
+		assertThatThrownBy(() -> new RtmsNationwideBackfillOptions("worker-1", java.time.Duration.ofMinutes(30), 0, 5))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("maxAttemptCount");
+		assertThatThrownBy(() -> new RtmsNationwideBackfillOptions("worker-1", java.time.Duration.ofMinutes(30), 3, 0))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessageContaining("chunkLimit");
+	}
+
 	private RtmsApartmentTradeProperties rtmsProperties(String serviceKey) {
 		return new RtmsApartmentTradeProperties("https://example.invalid", "/rtms", serviceKey, 100, 1_000, 1_000);
+	}
+
+	private RtmsOneShotIngestProperties nationwideProperties(boolean preflightOnly) {
+		return new RtmsOneShotIngestProperties(
+			true,
+			"11680",
+			"202606",
+			1,
+			preflightOnly,
+			"nationwide-backfill",
+			0,
+			false,
+			"11110,11680",
+			"201201",
+			"201202",
+			"rtms-national-test",
+			"worker-1",
+			30,
+			3,
+			5
+		);
 	}
 }

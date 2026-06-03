@@ -160,6 +160,27 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("고신뢰 building 좌표가 이미 있으면 coordinate case가 없어도 확정 complex marker를 분리한다")
+	void trustedBuildingCoordinatesWithoutCoordinateCaseReturnSplitMarkers() {
+		seedTrustedBuildingCoordinatesWithoutCoordinateCase();
+		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+
+		assertThat(repository.findComplexMarkers(request(null, null)))
+			.extracting(
+				ComplexMarkerResponse::parcelId,
+				ComplexMarkerResponse::complexId,
+				ComplexMarkerResponse::lat,
+				ComplexMarkerResponse::lng,
+				ComplexMarkerResponse::latestDealAmount,
+				ComplexMarkerResponse::unitCntSum
+			)
+			.containsExactly(
+				tuple(8001L, 1401L, 37.6510, 127.1510, 155000L, 430L),
+				tuple(8001L, null, 37.5166, 127.0499, 225000L, 530L)
+			);
+	}
+
+	@Test
 	@DisplayName("LOW confidence 재건축 필지는 현재 세대 확정 marker로 노출하지 않는다")
 	void lowConfidenceRedevelopmentReturnsParcelFallbackMarker() {
 		seedLowConfidenceRedevelopmentParcel();
@@ -385,6 +406,37 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 		Long rawId = insertRawIngest("rtms-mixed-confidence-concurrent");
 		insertTrade(rawId, 1201L, LocalDate.of(2025, 1, 1), 145000L, "rtms-mixed-confidence-1201", "COMPLEX-PK-1201");
 		insertTrade(rawId, 1202L, LocalDate.of(2025, 2, 1), 215000L, "rtms-mixed-confidence-1202", "COMPLEX-PK-1202");
+	}
+
+	private void seedTrustedBuildingCoordinatesWithoutCoordinateCase() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (8001, 1, '1168010300101400015', 'Projected coordinate lot', 37.5166, 127.0499)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt, use_date)
+			VALUES
+			    (1401, 8001, 'COMPLEX-PK-1401', 'APT-1401', 'Projected A', 430, DATE '2019-01-01'),
+			    (1402, 8001, 'COMPLEX-PK-1402', 'APT-1402', 'Projected B', 530, DATE '2020-01-01')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_display_coordinate (
+			    complex_id,
+			    latitude,
+			    longitude,
+			    coordinate_source,
+			    confidence,
+			    reason
+			)
+			VALUES (1401, 37.6510, 127.1510, 'BUILDING_FOOTPRINT', 90, 'projected trusted footprint')
+			""").update();
+		Long rawId = insertRawIngest("rtms-projected-coordinate");
+		insertTrade(rawId, 1401L, LocalDate.of(2025, 1, 1), 155000L, "rtms-projected-1401", "COMPLEX-PK-1401");
+		insertTrade(rawId, 1402L, LocalDate.of(2025, 2, 1), 225000L, "rtms-projected-1402", "COMPLEX-PK-1402");
 	}
 
 	private void seedLowConfidenceRedevelopmentParcel() {

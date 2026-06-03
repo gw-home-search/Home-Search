@@ -27,7 +27,30 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 	@Override
 	public List<ComplexMarkerResponse> findComplexMarkers(ComplexMarkersRequest request) {
 		return jdbcClient.sql("""
-			WITH complex_base AS (
+			WITH requested_bounds AS (
+			    SELECT ST_MakeEnvelope(
+			        CAST(:swLng AS DOUBLE PRECISION),
+			        CAST(:swLat AS DOUBLE PRECISION),
+			        CAST(:neLng AS DOUBLE PRECISION),
+			        CAST(:neLat AS DOUBLE PRECISION),
+			        4326
+			    ) AS geom
+			),
+			bounded_parcel AS (
+			    SELECT p.*
+			    FROM parcel p
+			    CROSS JOIN requested_bounds bounds
+			    WHERE (
+			        p.geom IS NOT NULL
+			        AND ST_Intersects(p.geom, bounds.geom)
+			    )
+			       OR (
+			           p.geom IS NULL
+			           AND p.latitude BETWEEN :swLat AND :neLat
+			           AND p.longitude BETWEEN :swLng AND :neLng
+			       )
+			),
+			complex_base AS (
 			    SELECT
 			        p.id AS parcel_id,
 			        p.geom AS parcel_geom,
@@ -46,8 +69,8 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			        latest_complex_trade.deal_date AS latest_complex_deal_date,
 			        latest_complex_trade.deal_amount AS latest_complex_deal_amount,
 			        latest_complex_trade.excl_area AS latest_complex_excl_area,
-			        MIN(t.deal_date) FILTER (WHERE t.deleted_at IS NULL) AS first_deal
-			    FROM parcel p
+			        first_complex_trade.deal_date AS first_deal
+			    FROM bounded_parcel p
 			    JOIN complex c ON c.parcel_id = p.id
 			    LEFT JOIN complex_display_coordinate display_coordinate
 			      ON display_coordinate.complex_id = c.id
@@ -57,7 +80,6 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			     )
 			    LEFT JOIN complex_coordinate_case coordinate_case
 			      ON coordinate_case.parcel_id = p.id
-			    LEFT JOIN trade t ON t.complex_id = c.id
 			    LEFT JOIN LATERAL (
 			        SELECT
 			            trade.deal_date,
@@ -69,6 +91,14 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			        ORDER BY trade.deal_date DESC, trade.id DESC
 			        LIMIT 1
 			    ) latest_complex_trade ON true
+			    LEFT JOIN LATERAL (
+			        SELECT trade.deal_date
+			        FROM trade
+			        WHERE trade.complex_id = c.id
+			          AND trade.deleted_at IS NULL
+			        ORDER BY trade.deal_date ASC, trade.id ASC
+			        LIMIT 1
+			    ) first_complex_trade ON true
 			    GROUP BY
 			        p.id,
 			        p.geom,
@@ -86,12 +116,16 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			        display_coordinate.confidence,
 			        latest_complex_trade.deal_date,
 			        latest_complex_trade.deal_amount,
-			        latest_complex_trade.excl_area
+			        latest_complex_trade.excl_area,
+			        first_complex_trade.deal_date
 			),
 			parcel_flags AS (
 			    SELECT
 			        parcel_id,
 			        count(*) AS complex_count,
+			        count(*) FILTER (
+			            WHERE coordinate_source = 'BUILDING_FOOTPRINT'
+			        ) AS trusted_building_coordinate_count,
 			        COALESCE(bool_or(
 			            coordinate_case_status = 'RESOLVED'
 			            AND relation_type = 'CONCURRENT'
@@ -100,7 +134,10 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			        COALESCE(bool_or(
 			            relation_type = 'REDEVELOPED'
 			            AND relation_confidence = 'HIGH'
-			        ), false) AS is_redeveloped
+			        ), false) AS is_redeveloped,
+			        COALESCE(bool_or(
+			            relation_type = 'REDEVELOPED'
+			        ), false) AS is_redevelopment_candidate
 			    FROM complex_base
 			    GROUP BY parcel_id
 			),
@@ -135,7 +172,15 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			    LEFT JOIN current_generation current_generation
 			      ON current_generation.parcel_id = base.parcel_id
 			    WHERE (
-			        flags.is_concurrent
+			        NOT flags.is_redeveloped
+			        AND
+			        (
+			            flags.is_concurrent
+			            OR (
+			                NOT flags.is_redevelopment_candidate
+			                AND flags.trusted_building_coordinate_count > 0
+			            )
+			        )
 			        AND flags.complex_count > 1
 			        AND base.coordinate_source = 'BUILDING_FOOTPRINT'
 			    )
@@ -168,7 +213,13 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			    WHERE NOT flags.is_redeveloped
 			      AND (
 			          NOT (
-			              flags.is_concurrent
+			              (
+			                  flags.is_concurrent
+			                  OR (
+			                      NOT flags.is_redevelopment_candidate
+			                      AND flags.trusted_building_coordinate_count > 0
+			                  )
+			              )
 			              AND flags.complex_count > 1
 			          )
 			          OR base.coordinate_source IS DISTINCT FROM 'BUILDING_FOOTPRINT'
@@ -264,27 +315,7 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			    markers.latest_deal_amount,
 			    markers.unit_cnt_sum
 			FROM markers
-			    WHERE (
-			        (
-			            markers.parcel_geom IS NOT NULL
-			            AND ST_Intersects(
-			                markers.parcel_geom,
-			                ST_MakeEnvelope(
-			                    CAST(:swLng AS DOUBLE PRECISION),
-			                    CAST(:swLat AS DOUBLE PRECISION),
-			                    CAST(:neLng AS DOUBLE PRECISION),
-			                    CAST(:neLat AS DOUBLE PRECISION),
-			                    4326
-			                )
-			            )
-			        )
-			        OR (
-			            markers.parcel_geom IS NULL
-			            AND markers.lat BETWEEN :swLat AND :neLat
-			            AND markers.lng BETWEEN :swLng AND :neLng
-			        )
-			    )
-			  AND (CAST(:unitMin AS BIGINT) IS NULL OR markers.unit_cnt_sum >= :unitMin)
+			WHERE (CAST(:unitMin AS BIGINT) IS NULL OR markers.unit_cnt_sum >= :unitMin)
 			  AND (CAST(:unitMax AS BIGINT) IS NULL OR markers.unit_cnt_sum <= :unitMax)
 			  AND (CAST(:priceMin AS NUMERIC) IS NULL OR markers.latest_deal_amount >= :priceMin)
 			  AND (CAST(:priceMax AS NUMERIC) IS NULL OR markers.latest_deal_amount <= :priceMax)

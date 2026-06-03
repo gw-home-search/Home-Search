@@ -1,4 +1,44 @@
 [[items]]
+id = "map-marker-read-path-readiness-hardening"
+title_ko = "Map marker read path readiness hardening"
+pr_type = "Feat"
+pr_title_ko = "지도 마커 read-path 성능과 분리 정책 보강"
+description_ko = "RTMS 특수지역 10년치 readiness에서 확인된 /api/v1/map/complexes 지연과 same-PNU fallback 과다 노출을 줄이기 위해 bounds-first marker query와 저장된 고신뢰 complex_display_coordinate split 정책을 보강한다."
+status = "planned"
+priority = 220
+targets = "backend"
+preset = "backend-quality"
+acceptance_criteria = [
+  "POST /api/v1/map/complexes URL, request field, response field, amount unit, empty-result behavior를 변경하지 않는다.",
+  "marker query는 bounds 안 parcel을 먼저 좁힌 뒤 complex/latest trade/coordinate CTE를 계산한다.",
+  "고신뢰 BUILDING_FOOTPRINT complex_display_coordinate가 이미 저장된 same-PNU complex는 coordinate case가 누락돼도 complex marker로 분리한다.",
+  "고신뢰 display coordinate가 없는 same-PNU remainder는 좌표를 추측하지 않고 parcel fallback marker로 유지한다.",
+  "LOW confidence REDEVELOPED case는 building coordinate가 있어도 current-generation 확정 marker로 승격하지 않는다.",
+  "coordinate-pending parcel은 거래가 있어도 marker-safe로 노출하지 않는다.",
+  "raw-before-normalized, duplicate-safe ingest, failed match queryability, complex_id operational relation을 변경하지 않는다.",
+]
+first_red_candidates = [
+  "JdbcMapMarkerRepositoryTest에서 고신뢰 BUILDING_FOOTPRINT complex_display_coordinate가 있지만 coordinate case가 없는 same-PNU parcel이 parcel fallback 하나로만 반환되면 실패하는 RED를 만든다.",
+  "JdbcMapMarkerRepositoryTest에서 LOW confidence REDEVELOPED case가 trusted display coordinate 때문에 split marker로 노출되면 실패하는 regression을 유지한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "좌표 추측이나 낮은 confidence coordinate 승격이 필요하면 중단한다.",
+  "새 DB column 또는 data-loss migration이 필요하면 중단한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+  "live RTMS 재수집 결과에서 평균 점수 9점 미만이면 다음 /goal 보강 slice로 분리한다.",
+]
+risk_notes = [
+  "bounds-first SQL은 read-path 성능을 개선하지만 실제 전국 저장 규모에서는 추가 explain 기반 index 보강이 필요할 수 있다.",
+  "stored display coordinate split은 이미 저장된 확정 좌표만 사용하므로 좌표 미보유 same-PNU 단지는 계속 fallback marker로 남는다.",
+]
+
+[[items]]
 id = "rtms-special-region-readiness-gate"
 title_ko = "RTMS 특수지역 저장 직전 readiness gate"
 pr_type = "Test"

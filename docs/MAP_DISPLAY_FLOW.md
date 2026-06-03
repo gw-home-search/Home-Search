@@ -81,6 +81,15 @@ markers when the backend has enough coordinate confidence:
 - Normal parcels use one representative marker.
 - Concurrent same-PNU complexes with resolved building-footprint coordinates can
   return one marker per complex.
+- Stored `complex_display_coordinate` rows from `BUILDING_FOOTPRINT` can also
+  split same-PNU complexes when confidence is high enough and the parcel is not
+  a redevelopment candidate.
+- Split markers must still use coordinates inside the requested map bounds;
+  an in-bounds parcel does not justify returning an out-of-bounds complex marker.
+- Same-PNU complexes without trusted per-complex coordinates stay as one parcel
+  fallback marker instead of guessed complex markers.
+- Coordinate-pending parcels can keep matched trade data in storage, but they
+  are not marker-safe until a display coordinate is available.
 - Redeveloped parcels return the current-generation complex marker.
 - Ambiguous or unresolved same-PNU cases fall back to one representative marker.
 - Marker click uses `parcelId` plus optional `complexId`.

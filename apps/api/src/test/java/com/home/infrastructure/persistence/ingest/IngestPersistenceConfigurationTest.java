@@ -13,6 +13,7 @@ import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.jdbc.JdbcClientAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 class IngestPersistenceConfigurationTest {
 
@@ -84,5 +85,24 @@ class IngestPersistenceConfigurationTest {
 		assertThat(connectionProperties.getProperty("readOnly")).isEqualTo("true");
 		assertThat(connectionProperties.getProperty("options"))
 			.isEqualTo("-c lock_timeout=1000 -c statement_timeout=3000");
+	}
+
+	@Test
+	@DisplayName("raw reconciliation runner는 JDBC 환경에서 기본 등록되고 명시적으로 끌 수 있다")
+	void rawReconciliationRunnerIsEnabledByDefaultInJdbcContext() {
+		contextRunner
+			.withBean(JdbcClient.class, () -> mock(JdbcClient.class))
+			.run(context -> {
+				assertThat(context).hasNotFailed();
+				assertThat(context).hasSingleBean(RawIngestReconciliationRunner.class);
+			});
+
+		contextRunner
+			.withBean(JdbcClient.class, () -> mock(JdbcClient.class))
+			.withPropertyValues("home.ingest.raw-reconcile.enabled=false")
+			.run(context -> {
+				assertThat(context).hasNotFailed();
+				assertThat(context).doesNotHaveBean(RawIngestReconciliationRunner.class);
+			});
 	}
 }

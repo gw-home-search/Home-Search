@@ -328,6 +328,37 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("search/detail read API는 좌표 대기 parcel의 null 좌표를 0으로 바꾸지 않는다")
+	void searchAndDetailKeepNullCoordinatesForCoordinatePendingParcel() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '4128110100', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (3001, 1, '4128110100100010001', 'Coordinate pending address', NULL, NULL)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt)
+			VALUES (801, 3001, 'COMPLEX-PK-801', 'APT-801', 'Coordinate Pending Complex', 'Coordinate Pending Trade', 180)
+			""").update();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.searchComplexes("pending"))
+			.singleElement()
+			.satisfies(result -> {
+				assertThat(result.parcelId()).isEqualTo(3001L);
+				assertThat(result.latitude()).isNull();
+				assertThat(result.longitude()).isNull();
+			});
+		assertThat(repository.findParcelDetail(3001L, 801L))
+			.hasValueSatisfying(detail -> {
+				assertThat(detail.latitude()).isNull();
+				assertThat(detail.longitude()).isNull();
+			});
+	}
+
+	@Test
 	@DisplayName("detail은 parcel 대표 complex를 반환하고 trade는 parcel 하위 모든 complex 거래를 반환한다")
 	void detailUsesRepresentativeComplexAndTradeListIncludesAllParcelComplexTrades() {
 		seedPropertyExplorationData();

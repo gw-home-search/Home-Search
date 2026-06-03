@@ -125,6 +125,33 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("RTMS bootstrap은 좌표가 없어도 PNU identity parcel shell과 complex를 만든다")
+	void bootstrapsCoordinatePendingParcelShellWhenCoordinateIsUnavailable() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
+			jdbcClient,
+			(pnu, item) -> Optional.empty()
+		);
+
+		var result = bootstrapper.bootstrap(rtmsItem("APT-LIVE-404", "Missing Coordinate Apartment", "888-1"));
+
+		assertThat(result.attempted()).isTrue();
+		assertThat(result.changed()).isTrue();
+		assertThat(parcelRow("1168010300108880001"))
+			.containsEntry("region_id", 1L)
+			.containsEntry("address", "Sample-dong 888-1")
+			.containsEntry("latitude", null)
+			.containsEntry("longitude", null);
+		assertThat(complexBootstrapRow("APT-LIVE-404"))
+			.containsEntry("complex_pk", "RTMS:APT-LIVE-404")
+			.containsEntry("name", "Missing Coordinate Apartment")
+			.containsEntry("metadata_status", "PENDING");
+	}
+
+	@Test
 	@DisplayName("RTMS bootstrap은 이미 존재하는 complex의 metadata를 동기 보강하지 않고 alias만 갱신한다")
 	void leavesExistingComplexMetadataPendingAndUpsertsAlias() {
 		jdbcClient.sql("""
@@ -297,7 +324,7 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 
 	private java.util.Map<String, Object> parcelRow(String pnu) {
 		return jdbcClient.sql("""
-			SELECT region_id, address
+			SELECT region_id, address, latitude, longitude
 			FROM parcel
 			WHERE pnu = :pnu
 			""")
@@ -306,6 +333,8 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 				java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
 				row.put("region_id", resultSet.getObject("region_id", Long.class));
 				row.put("address", resultSet.getString("address"));
+				row.put("latitude", resultSet.getBigDecimal("latitude"));
+				row.put("longitude", resultSet.getBigDecimal("longitude"));
 				return row;
 			})
 			.single();

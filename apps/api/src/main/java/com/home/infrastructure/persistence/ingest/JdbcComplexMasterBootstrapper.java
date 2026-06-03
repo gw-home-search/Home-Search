@@ -99,7 +99,7 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 
 		Optional<Long> parcelId = findParcelId(pnu.get()).or(() -> createParcel(pnu.get(), item));
 		if (parcelId.isEmpty()) {
-			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: coordinate unavailable pnu=" + pnu.get());
+			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: parcel unavailable pnu=" + pnu.get());
 		}
 
 		if (complexPk.length() > COMPLEX_PK_MAX_LENGTH) {
@@ -169,9 +169,6 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 
 	private Optional<Long> createParcel(String pnu, OpenApiTradeItem item) {
 		Optional<ParcelCoordinate> coordinate = coordinateResolver.resolve(pnu, item);
-		if (coordinate.isEmpty()) {
-			return Optional.empty();
-		}
 		Optional<RegionLookup> region = findRegion(item);
 		String address = region.flatMap(candidate -> RtmsParcelAddressFormatter.format(candidate.name(), pnu))
 			.orElse(null);
@@ -198,8 +195,8 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			ON CONFLICT (pnu) DO UPDATE
 			SET region_id = COALESCE(parcel.region_id, EXCLUDED.region_id),
 			    address = COALESCE(parcel.address, EXCLUDED.address),
-			    latitude = EXCLUDED.latitude,
-			    longitude = EXCLUDED.longitude,
+			    latitude = COALESCE(EXCLUDED.latitude, parcel.latitude),
+			    longitude = COALESCE(EXCLUDED.longitude, parcel.longitude),
 			    geom = COALESCE(EXCLUDED.geom, parcel.geom),
 			    updated_at = now()
 			RETURNING id
@@ -207,9 +204,9 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			.param("regionId", region.map(RegionLookup::id).orElse(null))
 			.param("pnu", pnu)
 			.param("address", address)
-			.param("latitude", coordinate.get().latitude())
-			.param("longitude", coordinate.get().longitude())
-			.param("geometryWkt", coordinate.get().geometryWkt())
+			.param("latitude", coordinate.map(ParcelCoordinate::latitude).orElse(null))
+			.param("longitude", coordinate.map(ParcelCoordinate::longitude).orElse(null))
+			.param("geometryWkt", coordinate.map(ParcelCoordinate::geometryWkt).orElse(null))
 			.query(Long.class)
 			.optional();
 	}

@@ -45,6 +45,15 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("좌표가 없는 coordinate-pending parcel은 거래가 있어도 marker로 반환하지 않는다")
+	void coordinatePendingParcelWithTradeIsExcludedFromMarkers() {
+		seedCoordinatePendingMapData();
+		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+
+		assertThat(repository.findComplexMarkers(request(null, null))).isEmpty();
+	}
+
+	@Test
 	@DisplayName("bounds query는 canceled trade를 latest amount 후보에서 제외한다")
 	void boundsQueryExcludesCanceledTradeFromLatestAmount() {
 		seedMapData();
@@ -437,6 +446,30 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 		insertTrade(rawId, 501L, LocalDate.of(2025, 11, 1), 111000L, "rtms-map-marker-1", "COMPLEX-PK-501");
 		insertTrade(rawId, 502L, LocalDate.of(2025, 12, 1), 125000L, "rtms-map-marker-2", "COMPLEX-PK-502");
 		insertTrade(rawId, 503L, LocalDate.of(2025, 12, 2), 200000L, "rtms-map-marker-3", "COMPLEX-PK-503");
+	}
+
+	private void seedCoordinatePendingMapData() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (1001, 1, '1168010300108880001', 'Coordinate pending', NULL, NULL)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt)
+			VALUES (501, 1001, 'RTMS:APT-PENDING-501', 'APT-PENDING-501', 'Coordinate Pending Apartment', 740)
+			""").update();
+		Long rawId = insertRawIngest("rtms-coordinate-pending-marker");
+		insertTrade(
+			rawId,
+			501L,
+			LocalDate.of(2025, 12, 1),
+			125000L,
+			"rtms-coordinate-pending-marker",
+			"RTMS:APT-PENDING-501"
+		);
 	}
 
 	private Long insertRawIngest(String sourceKey) {

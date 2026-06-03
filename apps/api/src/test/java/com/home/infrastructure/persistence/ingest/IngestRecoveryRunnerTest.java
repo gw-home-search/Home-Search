@@ -20,6 +20,7 @@ import com.home.application.ingest.RawTradeIngestRepository;
 import com.home.application.ingest.RawTradeIngestStatus;
 import com.home.application.ingest.TradeMatchEvidenceRepository;
 import com.home.application.ingest.TradeMatchRematchService;
+import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,7 @@ class IngestRecoveryRunnerTest {
 		runner.run(new DefaultApplicationArguments());
 
 		assertThat(reconciliationRepository.requestedLimits).containsExactly(25);
+		assertThat(runner.getOrder()).isEqualTo(ApplicationRunnerOrders.RAW_INGEST_RECONCILIATION);
 	}
 
 	@Test

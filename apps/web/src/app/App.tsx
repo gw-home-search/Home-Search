@@ -9,6 +9,7 @@ import {
   type ParcelTrades,
   type TradeItem,
 } from '../features/complex-detail/api/fetchParcelTrades';
+import { CoordinateOverrideAdminPage } from '../features/admin/CoordinateOverrideAdminPage';
 import {
   fetchMapMarkers,
   type ComplexMarkerFilters,
@@ -81,6 +82,17 @@ const SEARCH_FOCUS_DELTA = 0.01;
 const REGION_FOCUS_DELTA = 0.05;
 
 export function App({
+  initialMapLevel,
+  kakaoMapAppKey,
+}: AppProps) {
+  if (isCoordinateAdminPath()) {
+    return <CoordinateOverrideAdminPage />;
+  }
+
+  return <MapApp initialMapLevel={initialMapLevel} kakaoMapAppKey={kakaoMapAppKey} />;
+}
+
+function MapApp({
   initialMapLevel = 4,
   kakaoMapAppKey = getConfiguredKakaoMapAppKey(),
 }: AppProps) {
@@ -1015,4 +1027,8 @@ function sameViewport(first: MapViewport, second: MapViewport): boolean {
 
 function getConfiguredKakaoMapAppKey(): string {
   return import.meta.env.VITE_KAKAO_MAP_APP_KEY ?? '';
+}
+
+function isCoordinateAdminPath(): boolean {
+  return window.location.pathname.startsWith('/admin/coordinates');
 }

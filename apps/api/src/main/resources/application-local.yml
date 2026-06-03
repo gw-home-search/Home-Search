@@ -25,6 +25,9 @@ management:
         enabled: true
 
 home:
+  admin:
+    coordinate-override:
+      enabled: true
   coordinate-source:
     db:
       jdbc-url: "${COORDINATE_SOURCE_DB_JDBC_URL:}"

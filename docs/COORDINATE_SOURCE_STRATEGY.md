@@ -82,6 +82,18 @@ may still create a coordinate-pending `parcel` and `complex` when `aptSeq`,
 `aptName`, and derived PNU are sufficient for a safe complex identity. This
 improves storage completeness without inventing coordinates.
 
+Approved override policy:
+
+- `parcel_coordinate_override` is an operator-approved correction source for
+  identity-safe parcels whose coordinate source lookup is missing or stale.
+- Approved override rows must be `HIGH` confidence and must record the operator
+  and reason.
+- Approval updates the existing `parcel.latitude` and `parcel.longitude` by
+  PNU. It must not create a new parcel, complex, or trade row.
+- After approval, existing `complex_id` and normalized `trade` rows remain the
+  operational relation, and the marker query may return the parcel through the
+  normal lat/lng fallback path.
+
 Coordinate-pending storage rules:
 
 - `parcel.pnu`, address evidence, `complex.apt_seq`, `complex.complex_pk`, and
@@ -94,6 +106,18 @@ Coordinate-pending storage rules:
   coordinate fields remain nullable until an approved coordinate is available.
 - Later approved overrides or coordinate source backfill may update the existing
   parcel instead of creating a second parcel or complex.
+
+RTMS ingest preflight:
+
+- When RTMS ingest is enabled, the application must verify that
+  `COORDINATE_SOURCE_DB_JDBC_URL` is configured and that the coordinate source
+  database exposes `reference.parcel_coordinate_snapshot`.
+- The preflight runs before live RTMS fetch and DB ingest so an environment
+  mistake cannot silently store every identity-safe row as coordinate-pending.
+- Storage-only experiments may bypass this check only by explicitly setting
+  `HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY=true`.
+- The bypass is not marker-safe. It allows raw/master/trade storage but leaves
+  public map markers hidden until approved coordinates are supplied.
 
 ## VWorld VM/WFS Policy
 
@@ -207,6 +231,7 @@ Coordinate Source DB:
 COORDINATE_SOURCE_DB_JDBC_URL=jdbc:postgresql://postgis:5432/home_search_coordinate_full_durable_20260527182147
 COORDINATE_SOURCE_DB_USERNAME=home_search
 COORDINATE_SOURCE_DB_PASSWORD=...
+HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY=false
 ```
 
 The coordinate source connection should be treated as read-only by application

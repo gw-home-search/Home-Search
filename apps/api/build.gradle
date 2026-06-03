@@ -196,11 +196,13 @@ def coverageExcludes = [
 ]
 def coverageExecutionData = files(
     layout.buildDirectory.file('jacoco/test.exec'),
+    layout.buildDirectory.file('jacoco/apiContractTest.exec'),
     layout.buildDirectory.file('jacoco/persistenceTest.exec')
 )
 
 tasks.named('jacocoTestReport') {
     dependsOn tasks.named('test')
+    dependsOn tasks.named('apiContractTest')
     dependsOn tasks.named('persistenceTest')
     executionData.setFrom(coverageExecutionData)
     reports {
@@ -217,6 +219,7 @@ tasks.named('jacocoTestReport') {
 
 tasks.named('jacocoTestCoverageVerification') {
     dependsOn tasks.named('test')
+    dependsOn tasks.named('apiContractTest')
     dependsOn tasks.named('persistenceTest')
     executionData.setFrom(coverageExecutionData)
     classDirectories.setFrom(

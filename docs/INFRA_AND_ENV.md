@@ -50,6 +50,8 @@ Home Search backend collection and map display need:
 - `COORDINATE_SOURCE_DB_JDBC_URL` for read-only PNU coordinate lookup.
 - `COORDINATE_SOURCE_DB_USERNAME`
 - `COORDINATE_SOURCE_DB_PASSWORD`
+- `HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY=false` for marker-display
+  validation; set it to `true` only for storage-only experiments.
 - `APT_SERVICE_KEY`
 - `BLD_SERVICE_KEY` if building data enrichment is included in the current scope.
 - `ODC_SERVICE_KEY` if complex reference enrichment is included in the current scope.

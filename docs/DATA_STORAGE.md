@@ -253,6 +253,17 @@ lat/lng or geometry. Coordinate-pending rows should be surfaced to future
 operator tooling so an approved `parcel_coordinate_override` or coordinate
 source backfill can fill the missing coordinates.
 
+Operational RTMS ingest should fail preflight when the coordinate source
+database is not configured. A storage-only experiment may explicitly allow
+coordinate-pending-only ingest, but that mode is not a marker-display
+validation.
+
+Approved `parcel_coordinate_override` rows are manual coordinate corrections by
+PNU. They update the existing `parcel` coordinates and keep existing
+`complex_id`, raw ingest records, match evidence, and normalized `trade` rows
+unchanged. They must not be used to invent coordinates for an identity-unsafe
+row.
+
 VWorld VM/WFS is reserved for same-PNU multi-complex marker disambiguation. It
 is not the default coordinate provider for ordinary single-complex RTMS
 bootstrap.

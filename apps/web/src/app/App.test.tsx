@@ -8,6 +8,82 @@ import { App } from './App';
 describe('App map-first shell 화면', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    window.history.pushState({}, '', '/');
+  });
+
+  it('admin coordinate route는 pending 조회와 override 승인을 호출한다', async () => {
+    window.history.pushState({}, '', '/admin/coordinates');
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            parcelId: 1001,
+            complexId: 501,
+            pnu: '1168010300101400001',
+            aptSeq: 'APT-501',
+            aptName: 'Pending Apartment',
+            address: 'Pending address',
+            tradeCount: 3,
+            createdAt: '2026-06-03T00:00:00Z',
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          pnu: '1168010300101400001',
+          latitude: 37.5123,
+          longitude: 127.0456,
+          parcelUpdated: true,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp();
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/admin/coordinates/pending?limit=50'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(rootElement.textContent).toContain('Coordinate Overrides');
+    expect(rootElement.textContent).toContain('Pending Apartment');
+
+    const selectButton = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="Select coordinate override 1168010300101400001"]',
+    );
+    await act(async () => {
+      selectButton?.click();
+    });
+
+    setInputValue(rootElement, 'input[name="latitude"]', '37.5123');
+    setInputValue(rootElement, 'input[name="longitude"]', '127.0456');
+    setInputValue(rootElement, 'textarea[name="reason"]', 'operator verified missing coordinate');
+    const approveForm = rootElement.querySelector<HTMLFormElement>(
+      'form[aria-label="Approve coordinate override"]',
+    );
+
+    await act(async () => {
+      submitForm(approveForm);
+    });
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/admin/coordinates/1168010300101400001/override'),
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          latitude: 37.5123,
+          longitude: 127.0456,
+          reason: 'operator verified missing coordinate',
+          approvedBy: 'local-operator',
+        }),
+      }),
+    );
+    expect(rootElement.textContent).toContain('Coordinate approved');
+
+    unmount(root);
   });
 
   it('collapsible exploration control과 in-map marker error가 있는 map-first shell을 rendering한다', async () => {

@@ -15,6 +15,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
@@ -35,7 +36,8 @@ public class ApiExceptionHandler {
 		MethodArgumentNotValidException.class,
 		HttpMessageNotReadableException.class,
 		MissingServletRequestParameterException.class,
-		MethodArgumentTypeMismatchException.class
+		MethodArgumentTypeMismatchException.class,
+		HandlerMethodValidationException.class
 	})
 	public ResponseEntity<ProblemDetail> handleBadRequest(Exception exception) {
 		ProblemDetail problemDetail = createProblemDetail(

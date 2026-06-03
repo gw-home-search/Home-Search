@@ -11,6 +11,143 @@ body {
   overflow: hidden;
 }
 
+.admin-shell {
+  box-sizing: border-box;
+  height: 100vh;
+  min-height: 100vh;
+  overflow: auto;
+  background: var(--hs-surface-page);
+  color: var(--hs-text-primary);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.admin-shell *,
+.admin-shell *::before,
+.admin-shell *::after {
+  box-sizing: border-box;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 28px;
+  border-bottom: 1px solid var(--hs-border-default);
+  background: var(--hs-surface-control);
+}
+
+.admin-header h1 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 0;
+}
+
+.admin-header p {
+  margin: 4px 0 0;
+  color: var(--hs-text-secondary);
+}
+
+.admin-header a {
+  color: var(--hs-action-primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.admin-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 20px;
+  padding: 24px 28px;
+}
+
+.admin-list-panel,
+.admin-override-form {
+  min-width: 0;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--hs-border-default);
+  background: var(--hs-surface-panel);
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--hs-border-default);
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-table th {
+  color: var(--hs-text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.admin-table td strong,
+.admin-table td span {
+  display: block;
+}
+
+.admin-table td span {
+  margin-top: 3px;
+  color: var(--hs-text-secondary);
+  font-size: 13px;
+}
+
+.admin-override-form {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--hs-border-default);
+  background: var(--hs-surface-panel);
+}
+
+.admin-override-form label {
+  display: grid;
+  gap: 5px;
+}
+
+.admin-override-form label span {
+  color: var(--hs-text-secondary);
+  font-size: 13px;
+}
+
+.admin-override-form input,
+.admin-override-form textarea {
+  width: 100%;
+}
+
+.admin-table button,
+.admin-override-form button {
+  min-height: var(--hs-control-height);
+  border: 1px solid var(--hs-border-default);
+  border-radius: var(--hs-control-radius);
+  background: var(--hs-surface-control);
+  color: var(--hs-text-primary);
+  cursor: pointer;
+  font: inherit;
+}
+
+.admin-table button:hover,
+.admin-override-form button:hover {
+  border-color: var(--hs-border-strong);
+  background: var(--hs-surface-control-muted);
+}
+
+.admin-table button:focus-visible,
+.admin-override-form button:focus-visible,
+.admin-override-form input:focus-visible,
+.admin-override-form textarea:focus-visible {
+  outline: 0;
+  box-shadow: var(--hs-focus-ring);
+}
+
 .app-shell {
   box-sizing: border-box;
   width: 100vw;

@@ -315,7 +315,9 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			    markers.latest_deal_amount,
 			    markers.unit_cnt_sum
 			FROM markers
-			WHERE (CAST(:unitMin AS BIGINT) IS NULL OR markers.unit_cnt_sum >= :unitMin)
+			WHERE markers.lat BETWEEN :swLat AND :neLat
+			  AND markers.lng BETWEEN :swLng AND :neLng
+			  AND (CAST(:unitMin AS BIGINT) IS NULL OR markers.unit_cnt_sum >= :unitMin)
 			  AND (CAST(:unitMax AS BIGINT) IS NULL OR markers.unit_cnt_sum <= :unitMax)
 			  AND (CAST(:priceMin AS NUMERIC) IS NULL OR markers.latest_deal_amount >= :priceMin)
 			  AND (CAST(:priceMax AS NUMERIC) IS NULL OR markers.latest_deal_amount <= :priceMax)

@@ -4,7 +4,7 @@ title_ko = "Map marker read path readiness hardening"
 pr_type = "Feat"
 pr_title_ko = "지도 마커 read-path 성능과 분리 정책 보강"
 description_ko = "RTMS 특수지역 10년치 readiness에서 확인된 /api/v1/map/complexes 지연과 same-PNU fallback 과다 노출을 줄이기 위해 bounds-first marker query와 저장된 고신뢰 complex_display_coordinate split 정책을 보강한다."
-status = "planned"
+status = "done"
 priority = 220
 targets = "backend"
 preset = "backend-quality"
@@ -19,12 +19,36 @@ acceptance_criteria = [
 ]
 first_red_candidates = [
   "JdbcMapMarkerRepositoryTest에서 고신뢰 BUILDING_FOOTPRINT complex_display_coordinate가 있지만 coordinate case가 없는 same-PNU parcel이 parcel fallback 하나로만 반환되면 실패하는 RED를 만든다.",
+  "JdbcMapMarkerRepositoryTest에서 parcel은 bounds 안이지만 split marker 좌표가 bounds 밖이면 out-of-bounds marker가 반환되어 실패하는 RED를 만든다.",
   "JdbcMapMarkerRepositoryTest에서 LOW confidence REDEVELOPED case가 trusted display coordinate 때문에 split marker로 노출되면 실패하는 regression을 유지한다.",
 ]
 verification_commands = [
   "cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest",
   "cd apps/api && ./gradlew backendQualityCheck",
   "git diff --check",
+]
+verification_evidence = [
+  "- `예상 RED 실패` = pass (고신뢰 BUILDING_FOOTPRINT 좌표가 bounds 밖인 split marker는 기존 최종 bounds 필터 부재 때문에 반환되어야 하며, 이 실패를 RED로 고정)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest` = fail (최초 RED: parcel은 bounds 안이지만 split marker 좌표가 bounds 밖인 케이스가 out-of-bounds marker를 반환해 실패)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest` = pass (최소 GREEN: marker 실제 lat/lng bounds 필터와 same-PNU split/fallback 회귀 통과)",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, coverage, persistence, foundation guardrail 통과)",
+  "- `docker compose -f infra/docker-compose.local.yml config` = pass (tracked non-secret env example 기본 경로로 compose config 렌더링 통과)",
+  "- `python3 .codex/harness/pr_lint.py --self-test` = pass (PR lint self-test 통과)",
+  "- `python3 .codex/harness/pr_context.py --self-test` = pass (PR context self-test 통과)",
+  "- `python3 .codex/harness/pr_body_check.py --self-test` = pass (PR body check self-test 통과)",
+  "- `python3 .codex/harness/worklog_sync.py --self-test` = pass (worklog sync self-test 통과)",
+  "- `python3 .codex/harness/home_pr.py --self-test` = pass (harness PR helper self-test 통과)",
+  "- `python3 .codex/harness/home_flow.py --self-test` = pass (harness flow self-test 통과)",
+  "- `python3 .codex/harness/home_integrate.py --self-test` = pass (harness integration self-test 통과)",
+  "- `python3 .codex/harness/home_plan.py --self-test` = pass (harness plan self-test 통과)",
+  "- `python3 .codex/harness/home_report.py --self-test` = pass (harness report self-test 통과)",
+  "- `.codex/harness/home --self-test` = pass (harness launcher self-test 통과)",
+  "- `python3 .codex/harness/skill_routing.py --self-test` = pass (skill routing self-test 통과)",
+  "- `python3 .codex/harness/user_language_check.py --self-test` = pass (user-facing language self-test 통과)",
+  "- `python3 .codex/harness/project_terms_check.py` = pass (canonical docs/user-facing term check 통과)",
+  "- `python3 .codex/harness/project_terms_check.py --self-test` = pass (project terms self-test 통과)",
+  "- `python3 scripts/check-test-display-names.py` = pass (Korean display name policy 통과)",
+  "- `git diff --check` = pass (공백 오류 없음)",
 ]
 stop_conditions = [
   "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
@@ -36,6 +60,7 @@ stop_conditions = [
 risk_notes = [
   "bounds-first SQL은 read-path 성능을 개선하지만 실제 전국 저장 규모에서는 추가 explain 기반 index 보강이 필요할 수 있다.",
   "stored display coordinate split은 이미 저장된 확정 좌표만 사용하므로 좌표 미보유 same-PNU 단지는 계속 fallback marker로 남는다.",
+  "이번 slice는 API read-path, compose runtime preflight, docs policy, worklog evidence를 함께 닫기 때문에 backend-quality preset 허용 범위를 infra/docs까지 확장하고 harness self-test evidence로 고정한다.",
 ]
 
 [[items]]

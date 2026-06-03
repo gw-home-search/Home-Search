@@ -28,7 +28,7 @@ class LocalRuntimeStackConfigurationTest {
 		assertThat(content).contains("postgis/postgis:16-3.4");
 		assertThat(content).contains("DB_JDBC_URL: jdbc:postgresql://postgis:5432/${HOME_SEARCH_DB_NAME:-home_search}");
 		assertThat(content).contains("env_file:");
-		assertThat(content).contains("../apps/api/.env");
+		assertThat(content).contains("${HOME_SEARCH_API_ENV_FILE:-../apps/api/ops/local-runtime.env.example}");
 		assertThat(content).contains("COORDINATE_SOURCE_DB_JDBC_URL: jdbc:postgresql://postgis:5432/${COORDINATE_SOURCE_DB_NAME:-home_search_coordinate_full_durable_20260527182147}");
 		assertThat(content).contains("COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS: ${COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS:-3000}");
 		assertThat(content).contains("COORDINATE_SOURCE_DB_READ_ONLY: ${COORDINATE_SOURCE_DB_READ_ONLY:-true}");

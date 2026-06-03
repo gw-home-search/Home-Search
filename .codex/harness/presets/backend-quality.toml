@@ -5,10 +5,25 @@ slice_patterns = ["backend-quality", "quality-docs", "docs-foundation"]
 
 [targets.backend]
 prompt = "backend_execute.md"
-allowed_scope = "apps/api/**, .codex/harness/**, .codex/hooks/**, .github/**"
+allowed_scope = "apps/api/**, docs/**, .codex/harness/**, .codex/hooks/**, .github/**"
 forbidden_scope = "apps/web/**"
 verification_commands = [
   "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 scripts/check-test-display-names.py",
+  "python3 .codex/harness/pr_lint.py --self-test",
+  "python3 .codex/harness/pr_context.py --self-test",
+  "python3 .codex/harness/pr_body_check.py --self-test",
+  "python3 .codex/harness/worklog_sync.py --self-test",
+  "python3 .codex/harness/home_pr.py --self-test",
+  "python3 .codex/harness/home_flow.py --self-test",
+  "python3 .codex/harness/home_integrate.py --self-test",
+  "python3 .codex/harness/home_plan.py --self-test",
+  "python3 .codex/harness/home_report.py --self-test",
+  ".codex/harness/home --self-test",
+  "python3 .codex/harness/skill_routing.py --self-test",
+  "python3 .codex/harness/user_language_check.py --self-test",
+  "python3 .codex/harness/project_terms_check.py",
+  "python3 .codex/harness/project_terms_check.py --self-test",
   "git diff --check",
 ]
 

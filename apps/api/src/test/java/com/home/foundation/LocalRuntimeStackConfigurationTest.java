@@ -27,14 +27,17 @@ class LocalRuntimeStackConfigurationTest {
 
 		assertThat(content).contains("postgis/postgis:16-3.4");
 		assertThat(content).contains("DB_JDBC_URL: jdbc:postgresql://postgis:5432/${HOME_SEARCH_DB_NAME:-home_search}");
-		assertThat(content).contains("COORDINATE_SOURCE_DB_JDBC_URL: ${COORDINATE_SOURCE_DB_JDBC_URL:-}");
+		assertThat(content).contains("env_file:");
+		assertThat(content).contains("${HOME_SEARCH_API_ENV_FILE:-../apps/api/ops/local-runtime.env.example}");
+		assertThat(content).contains("COORDINATE_SOURCE_DB_JDBC_URL: jdbc:postgresql://postgis:5432/${COORDINATE_SOURCE_DB_NAME:-home_search_coordinate_full_durable_20260527182147}");
 		assertThat(content).contains("COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS: ${COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS:-3000}");
 		assertThat(content).contains("COORDINATE_SOURCE_DB_READ_ONLY: ${COORDINATE_SOURCE_DB_READ_ONLY:-true}");
+		assertThat(content).contains("HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY: ${HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY:-false}");
 		assertThat(content).contains("SPRING_FLYWAY_LOCATIONS: classpath:db/migration/api,classpath:db/seed/local");
 		assertThat(content).contains("SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS: ${SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS:-*:missing}");
 		assertThat(content).contains("VITE_API_SERVER_IP: ${VITE_API_SERVER_IP:-http://localhost:8080}");
-		assertThat(content).doesNotContain("APT_SERVICE_KEY");
-		assertThat(content).doesNotContain(".env");
+		assertThat(content).doesNotContain("APT_SERVICE_KEY:");
+		assertThat(content).doesNotContain("VW_SERVICE_KEY:");
 	}
 
 	@Test

@@ -42,9 +42,19 @@ class RtmsExternalApiConfiguration {
 		@Value("${home.ingest.rtms.page-no:1}") Integer pageNo,
 		@Value("${home.ingest.rtms.preflight-only:false}") boolean preflightOnly,
 		@Value("${home.ingest.rtms.mode:one-shot}") String mode,
-		@Value("${home.ingest.rtms.lookback-months:0}") Integer lookbackMonths
+		@Value("${home.ingest.rtms.lookback-months:0}") Integer lookbackMonths,
+		@Value("${home.ingest.rtms.allow-coordinate-pending-only:false}") boolean allowCoordinatePendingOnly
 	) {
-		return new RtmsOneShotIngestProperties(enabled, lawdCd, dealYmd, pageNo, preflightOnly, mode, lookbackMonths);
+		return new RtmsOneShotIngestProperties(
+			enabled,
+			lawdCd,
+			dealYmd,
+			pageNo,
+			preflightOnly,
+			mode,
+			lookbackMonths,
+			allowCoordinatePendingOnly
+		);
 	}
 
 	@Bean
@@ -109,12 +119,49 @@ class RtmsExternalApiConfiguration {
 	}
 
 	@Bean
+	RtmsCoordinateSourcePreflight rtmsCoordinateSourcePreflight(
+		RtmsOneShotIngestProperties ingestProperties,
+		@Value("${home.coordinate-source.db.jdbc-url:${COORDINATE_SOURCE_DB_JDBC_URL:}}") String jdbcUrl,
+		@Value("${home.coordinate-source.db.username:${COORDINATE_SOURCE_DB_USERNAME:${DB_USERNAME:}}}") String username,
+		@Value("${home.coordinate-source.db.password:${COORDINATE_SOURCE_DB_PASSWORD:${DB_PASSWORD:}}}") String password,
+		@Value("${home.coordinate-source.db.connect-timeout-seconds:${COORDINATE_SOURCE_DB_CONNECT_TIMEOUT_SECONDS:5}}")
+		int connectTimeoutSeconds,
+		@Value("${home.coordinate-source.db.socket-timeout-seconds:${COORDINATE_SOURCE_DB_SOCKET_TIMEOUT_SECONDS:10}}")
+		int socketTimeoutSeconds,
+		@Value("${home.coordinate-source.db.lock-timeout-millis:${COORDINATE_SOURCE_DB_LOCK_TIMEOUT_MILLIS:1000}}")
+		int lockTimeoutMillis,
+		@Value("${home.coordinate-source.db.statement-timeout-millis:${COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS:3000}}")
+		int statementTimeoutMillis
+	) {
+		return new RequiredRtmsCoordinateSourcePreflight(
+			jdbcUrl,
+			ingestProperties.allowCoordinatePendingOnly(),
+			new JdbcRtmsCoordinateSourceAvailabilityProbe(
+				jdbcUrl,
+				username,
+				password,
+				connectTimeoutSeconds,
+				socketTimeoutSeconds,
+				lockTimeoutMillis,
+				statementTimeoutMillis
+			)
+		);
+	}
+
+	@Bean
 	ApplicationRunner rtmsOneShotIngestApplicationRunner(
 		RtmsOneShotTradeIngestRunner runner,
 		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
 		RtmsOneShotIngestProperties properties,
-		RtmsApartmentTradeProperties tradeProperties
+		RtmsApartmentTradeProperties tradeProperties,
+		RtmsCoordinateSourcePreflight coordinateSourcePreflight
 	) {
-		return new RtmsOneShotIngestApplicationRunner(runner, monthlyRefreshRunner, properties, tradeProperties);
+		return new RtmsOneShotIngestApplicationRunner(
+			runner,
+			monthlyRefreshRunner,
+			properties,
+			tradeProperties,
+			coordinateSourcePreflight
+		);
 	}
 }

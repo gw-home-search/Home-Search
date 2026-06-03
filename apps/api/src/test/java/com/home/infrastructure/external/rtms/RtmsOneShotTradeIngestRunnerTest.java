@@ -158,6 +158,25 @@ class RtmsOneShotTradeIngestRunnerTest {
 	}
 
 	@Test
+	@DisplayName("enabled RTMS ingest는 live fetch 전에 coordinate source preflight를 통과해야 한다")
+	void enabledRtmsIngestRequiresCoordinateSourcePreflightBeforeLiveFetch() {
+		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);
+		RtmsOneShotIngestApplicationRunner applicationRunner = new RtmsOneShotIngestApplicationRunner(
+			runner,
+			new RtmsOneShotIngestProperties(true, "11680", "202512", 1, false),
+			rtmsProperties("DUMMY"),
+			() -> {
+				throw new IllegalStateException("COORDINATE_SOURCE_DB_JDBC_URL is required for RTMS ingest");
+			}
+		);
+
+		assertThatThrownBy(() -> applicationRunner.run(new DefaultApplicationArguments()))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("COORDINATE_SOURCE_DB_JDBC_URL");
+		verifyNoInteractions(runner);
+	}
+
+	@Test
 	@DisplayName("preflight-only mode는 live fetch나 DB ingest 없이 configuration을 검증한다")
 	void preflightOnlyModeValidatesConfigurationWithoutLiveFetchOrDbIngest(CapturedOutput output) throws Exception {
 		RtmsOneShotTradeIngestRunner runner = mock(RtmsOneShotTradeIngestRunner.class);

@@ -9,6 +9,8 @@ import com.home.application.coordinate.ComplexCoordinateReadinessRepository;
 import com.home.application.coordinate.ComplexCoordinateReadinessService;
 import com.home.application.coordinate.ComplexDisplayCoordinateProjectionRepository;
 import com.home.application.coordinate.ComplexDisplayCoordinateProjectionService;
+import com.home.application.coordinate.CoordinateOverrideAdminRepository;
+import com.home.application.coordinate.CoordinateOverrideAdminService;
 import com.home.infrastructure.persistence.complex.JdbcComplexRelationRepository;
 
 import org.springframework.beans.factory.ObjectProvider;
@@ -75,6 +77,22 @@ class ComplexCoordinatePersistenceConfiguration {
 		ComplexDisplayCoordinateProjectionRepository repository
 	) {
 		return new ComplexDisplayCoordinateProjectionService(repository);
+	}
+
+	@Bean
+	@Lazy
+	CoordinateOverrideAdminRepository coordinateOverrideAdminRepository(
+		ObjectProvider<JdbcClient> jdbcClientProvider
+	) {
+		return new JdbcCoordinateOverrideAdminRepository(requiredJdbcClient(jdbcClientProvider));
+	}
+
+	@Bean
+	@Lazy
+	CoordinateOverrideAdminService coordinateOverrideAdminService(
+		CoordinateOverrideAdminRepository repository
+	) {
+		return new CoordinateOverrideAdminService(repository);
 	}
 
 	@Bean

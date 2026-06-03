@@ -7,7 +7,8 @@ record RtmsOneShotIngestProperties(
 	Integer pageNo,
 	boolean preflightOnly,
 	String mode,
-	Integer lookbackMonths
+	Integer lookbackMonths,
+	boolean allowCoordinatePendingOnly
 ) {
 
 	RtmsOneShotIngestProperties(
@@ -17,7 +18,19 @@ record RtmsOneShotIngestProperties(
 		Integer pageNo,
 		boolean preflightOnly
 	) {
-		this(enabled, lawdCd, dealYmd, pageNo, preflightOnly, "one-shot", 0);
+		this(enabled, lawdCd, dealYmd, pageNo, preflightOnly, "one-shot", 0, false);
+	}
+
+	RtmsOneShotIngestProperties(
+		boolean enabled,
+		String lawdCd,
+		String dealYmd,
+		Integer pageNo,
+		boolean preflightOnly,
+		String mode,
+		Integer lookbackMonths
+	) {
+		this(enabled, lawdCd, dealYmd, pageNo, preflightOnly, mode, lookbackMonths, false);
 	}
 
 	RtmsApartmentTradeRequest request() {

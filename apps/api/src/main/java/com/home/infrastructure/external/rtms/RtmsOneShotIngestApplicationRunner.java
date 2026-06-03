@@ -17,13 +17,23 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner, Ordered {
 	private final RtmsMonthlyRefreshRunner monthlyRefreshRunner;
 	private final RtmsOneShotIngestProperties properties;
 	private final RtmsApartmentTradeProperties tradeProperties;
+	private final RtmsCoordinateSourcePreflight coordinateSourcePreflight;
 
 	RtmsOneShotIngestApplicationRunner(
 		RtmsOneShotTradeIngestRunner runner,
 		RtmsOneShotIngestProperties properties,
 		RtmsApartmentTradeProperties tradeProperties
 	) {
-		this(runner, null, properties, tradeProperties);
+		this(runner, null, properties, tradeProperties, RtmsCoordinateSourcePreflight.noop());
+	}
+
+	RtmsOneShotIngestApplicationRunner(
+		RtmsOneShotTradeIngestRunner runner,
+		RtmsOneShotIngestProperties properties,
+		RtmsApartmentTradeProperties tradeProperties,
+		RtmsCoordinateSourcePreflight coordinateSourcePreflight
+	) {
+		this(runner, null, properties, tradeProperties, coordinateSourcePreflight);
 	}
 
 	RtmsOneShotIngestApplicationRunner(
@@ -32,10 +42,21 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner, Ordered {
 		RtmsOneShotIngestProperties properties,
 		RtmsApartmentTradeProperties tradeProperties
 	) {
+		this(runner, monthlyRefreshRunner, properties, tradeProperties, RtmsCoordinateSourcePreflight.noop());
+	}
+
+	RtmsOneShotIngestApplicationRunner(
+		RtmsOneShotTradeIngestRunner runner,
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
+		RtmsOneShotIngestProperties properties,
+		RtmsApartmentTradeProperties tradeProperties,
+		RtmsCoordinateSourcePreflight coordinateSourcePreflight
+	) {
 		this.runner = runner;
 		this.monthlyRefreshRunner = monthlyRefreshRunner;
 		this.properties = properties;
 		this.tradeProperties = tradeProperties;
+		this.coordinateSourcePreflight = coordinateSourcePreflight;
 	}
 
 	@Override
@@ -46,6 +67,7 @@ class RtmsOneShotIngestApplicationRunner implements ApplicationRunner, Ordered {
 
 		RtmsIngestMode mode = properties.ingestMode();
 		tradeProperties.requiredServiceKey();
+		coordinateSourcePreflight.verify();
 		if (mode == RtmsIngestMode.MONTHLY_REFRESH) {
 			runMonthlyRefresh();
 			return;

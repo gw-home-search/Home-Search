@@ -598,6 +598,76 @@ Migration notes:
 - Default ordering should be newest first: `dealDate` descending, then
   `tradeId` descending when dates are equal.
 
+## Admin APIs
+
+### GET `/api/v1/admin/coordinates/pending`
+
+Purpose:
+
+- Return coordinate-pending complexes that have stored identity/trade data but
+  no marker-safe parcel coordinates.
+- This endpoint is an operational correction surface and is disabled unless
+  coordinate override admin is explicitly enabled.
+
+Response:
+
+```json
+[
+  {
+    "parcelId": 1001,
+    "complexId": 501,
+    "pnu": "1168010300101400001",
+    "aptSeq": "APT-501",
+    "aptName": "Pending Apartment",
+    "address": "Pending address",
+    "tradeCount": 3,
+    "createdAt": "2026-06-03T00:00:00Z"
+  }
+]
+```
+
+### PUT `/api/v1/admin/coordinates/{pnu}/override`
+
+Purpose:
+
+- Approve a manual coordinate override for an identity-safe PNU.
+- The override updates the existing `parcel` coordinates and does not create a
+  new parcel, complex, or trade row.
+
+Request:
+
+```json
+{
+  "latitude": 37.5123,
+  "longitude": 127.0456,
+  "reason": "operator verified missing coordinate",
+  "approvedBy": "local-operator"
+}
+```
+
+Response:
+
+```json
+{
+  "pnu": "1168010300101400001",
+  "latitude": 37.5123,
+  "longitude": 127.0456,
+  "parcelUpdated": true
+}
+```
+
+Status:
+
+- `200`: override approved.
+- `400`: invalid PNU or coordinate range.
+- `500`: unexpected server error.
+
+Migration notes:
+
+- This is not part of the public map/search/detail/trade user flow.
+- Existing `/api/v1/map/complexes`, `/api/v1/detail/{parcelId}`, and
+  `/api/v1/trade/{parcelId}` response shapes do not change.
+
 ## later-scope APIs
 
 Keep these out of the current critical path:

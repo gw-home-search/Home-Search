@@ -9,6 +9,7 @@ public record CoordinatePendingComplex(
 	String aptSeq,
 	String aptName,
 	String address,
+	CoordinatePendingReason reason,
 	Long tradeCount,
 	OffsetDateTime createdAt
 ) {

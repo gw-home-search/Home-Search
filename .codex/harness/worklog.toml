@@ -1,4 +1,74 @@
 [[items]]
+id = "coordinate-admin-minimal-reason-queue"
+title_ko = "Coordinate admin minimal reason queue"
+pr_type = "Feat"
+pr_title_ko = "좌표 관리자 큐 최소 reason 분류"
+description_ko = "RTMS 전체 저장 직전에 marker-pending/fallback 좌표 예외를 과하게 자동 해결하지 않고 관리자 override로 넘길 수 있도록 3개 최소 reason과 marker 재노출 경로를 고정한다."
+status = "done"
+priority = 230
+targets = "backend"
+preset = "backend-quality"
+acceptance_criteria = [
+  "GET /api/v1/admin/coordinates/pending은 marker-safe가 아닌 저장 row를 PNU_COORDINATE_MISSING, SAME_PNU_MULTI_COMPLEX, COMPLEX_DISPLAY_COORDINATE_MISSING 중 하나로 분류한다.",
+  "좌표 없는 확정 매칭 거래는 저장 가능하며 public marker에는 노출되지 않는다.",
+  "same-PNU multi-complex는 고신뢰 complex display coordinate 없이는 임의 split하지 않는다.",
+  "일부 same-PNU complex만 display coordinate가 있으면 좌표가 없는 complex만 COMPLEX_DISPLAY_COORDINATE_MISSING으로 관리자 큐에 남긴다.",
+  "PARCEL_FALLBACK display coordinate는 same-PNU complex split 완료 증거로 보지 않고 관리자 큐 reason을 유지한다.",
+  "기존 PUT /api/v1/admin/coordinates/{pnu}/override가 parcel 좌표를 채운 뒤 marker-safe 경로를 복구한다.",
+  "public /api/v1/map/complexes, /api/v1/detail/{parcelId}, /api/v1/trade/{parcelId} URL, request/response shape, amount unit을 변경하지 않는다.",
+  "raw ingest, trade_match_evidence, normalized trade dedupe/cancel invariant와 complex_id 운영 relation은 변경하지 않는다.",
+]
+first_red_candidates = [
+  "JdbcCoordinateOverrideAdminRepositoryTest에서 reason field가 없거나 PNU 좌표 누락 reason을 반환하지 못하면 실패하는 RED를 만든다.",
+  "JdbcCoordinateOverrideAdminRepositoryTest에서 same-PNU 2개 complex에 display coordinate가 없는데 관리자 큐 reason이 SAME_PNU_MULTI_COMPLEX가 아니면 실패하는 RED를 만든다.",
+  "JdbcCoordinateOverrideAdminRepositoryTest에서 일부 same-PNU complex만 display coordinate가 있을 때 좌표 없는 complex가 COMPLEX_DISPLAY_COORDINATE_MISSING으로 남지 않으면 실패하는 RED를 만든다.",
+  "JdbcCoordinateOverrideAdminRepositoryTest에서 same-PNU 2개 complex에 PARCEL_FALLBACK 좌표만 있는데 관리자 큐에서 사라지면 실패하는 regression RED를 만든다.",
+  "CoordinateOverrideAdminControllerContractTest에서 admin pending response에 optional reason이 없으면 실패하는 contract RED를 만든다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.coordinate.JdbcCoordinateOverrideAdminRepositoryTest",
+  "cd apps/api && ./gradlew apiContractTest --tests com.home.infrastructure.web.admin.CoordinateOverrideAdminControllerContractTest",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 scripts/check-test-display-names.py",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+verification_evidence = [
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.coordinate.JdbcCoordinateOverrideAdminRepositoryTest` = fail (최초 RED: CoordinatePendingComplex reason field가 production mapper에 없어 compile 실패)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.coordinate.JdbcCoordinateOverrideAdminRepositoryTest` = pass (최소 GREEN: PNU_COORDINATE_MISSING, SAME_PNU_MULTI_COMPLEX, COMPLEX_DISPLAY_COORDINATE_MISSING 분류 통과)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.coordinate.JdbcCoordinateOverrideAdminRepositoryTest` = pass (gate 보강: PARCEL_FALLBACK-only와 BUILDING_FOOTPRINT+PARCEL_FALLBACK mixed regression 통과)",
+  "- `cd apps/api && ./gradlew apiContractTest --tests com.home.infrastructure.web.admin.CoordinateOverrideAdminControllerContractTest` = pass (admin pending response optional reason contract 통과)",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, coverage, persistence, foundation guardrail 통과)",
+  "- `python3 scripts/check-test-display-names.py` = pass (test display name policy 통과)",
+  "- `python3 .codex/harness/pr_lint.py --self-test` = pass (PR lint self-test 통과)",
+  "- `python3 .codex/harness/pr_context.py --self-test` = pass (PR context self-test 통과)",
+  "- `python3 .codex/harness/pr_body_check.py --self-test` = pass (PR body check self-test 통과)",
+  "- `python3 .codex/harness/worklog_sync.py --self-test` = pass (worklog sync self-test 통과)",
+  "- `python3 .codex/harness/home_pr.py --self-test` = pass (harness PR helper self-test 통과)",
+  "- `python3 .codex/harness/home_flow.py --self-test` = pass (harness flow self-test 통과)",
+  "- `python3 .codex/harness/home_integrate.py --self-test` = pass (harness integration self-test 통과)",
+  "- `python3 .codex/harness/home_plan.py --self-test` = pass (harness plan self-test 통과)",
+  "- `python3 .codex/harness/home_report.py --self-test` = pass (harness report self-test 통과)",
+  "- `.codex/harness/home --self-test` = pass (harness launcher self-test 통과)",
+  "- `python3 .codex/harness/skill_routing.py --self-test` = pass (skill routing self-test 통과)",
+  "- `python3 .codex/harness/user_language_check.py --self-test` = pass (user-facing language self-test 통과)",
+  "- `python3 .codex/harness/project_terms_check.py` = pass (canonical docs/user-facing term check 통과)",
+  "- `python3 .codex/harness/project_terms_check.py --self-test` = pass (project terms self-test 통과)",
+  "- `git diff --check` = pass (공백 오류 없음)",
+]
+stop_conditions = [
+  "public map/detail/trade API URL, request field, response field, amount unit 변경이 필요하면 중단한다.",
+  "좌표 추측이나 낮은 confidence coordinate 승격이 필요하면 중단한다.",
+  "reason 3개를 넘어서는 source failure, ambiguous candidate, redevelopment taxonomy가 필요하면 후속 slice로 분리한다.",
+  "새 migration이나 data reinterpretation이 필요하면 중단한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "이번 slice는 좌표를 더 많이 자동 해결하지 않고 관리자에게 넘길 원인을 최소 분류한다.",
+  "same-PNU fallback 자체는 유지되며, 관리자가 override하거나 trusted display coordinate가 backfill된 뒤 marker 품질이 올라간다.",
+]
+
+[[items]]
 id = "coordinate-marker-confidence-hardening"
 title_ko = "Coordinate marker confidence hardening"
 pr_type = "Feat"

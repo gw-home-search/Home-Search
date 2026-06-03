@@ -83,6 +83,9 @@ markers when the backend has enough coordinate confidence:
   return one marker per complex.
 - Redeveloped parcels return the current-generation complex marker.
 - Ambiguous or unresolved same-PNU cases fall back to one representative marker.
+- Marker-pending or fallback cases are sent to the admin coordinate queue with
+  one of the minimal reasons documented in `DATA_STORAGE.md`; the map does not
+  guess missing complex coordinates.
 - Marker click uses `parcelId` plus optional `complexId`.
 - The detail drawer shows the selected complex when `complexId` is present;
   otherwise it shows the parcel representative complex.

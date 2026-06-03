@@ -253,6 +253,20 @@ lat/lng or geometry. Coordinate-pending rows should be surfaced to future
 operator tooling so an approved `parcel_coordinate_override` or coordinate
 source backfill can fill the missing coordinates.
 
+The admin correction queue should keep the reason taxonomy intentionally small
+before nationwide storage:
+
+- `PNU_COORDINATE_MISSING`: the PNU/parcel coordinate itself is missing.
+- `SAME_PNU_MULTI_COMPLEX`: the parcel has multiple complexes and no trusted
+  building-footprint display coordinate, so automatic split would be a guess.
+- `COMPLEX_DISPLAY_COORDINATE_MISSING`: at least one same-PNU complex has a
+  trusted building-footprint display coordinate, but this complex still needs
+  one before it can be shown as a complex-scoped marker.
+
+These reasons must not block RTMS storage. They only explain why a stored trade
+is not yet marker-safe or why it remains a parcel fallback marker until an
+operator override or trusted coordinate backfill is approved.
+
 Operational RTMS ingest should fail preflight when the coordinate source
 database is not configured. A storage-only experiment may explicitly allow
 coordinate-pending-only ingest, but that mode is not a marker-display

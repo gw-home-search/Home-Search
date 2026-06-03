@@ -17,6 +17,7 @@ import java.util.List;
 import com.home.application.coordinate.CoordinateOverrideAdminService;
 import com.home.application.coordinate.CoordinateOverrideApprovalResult;
 import com.home.application.coordinate.CoordinatePendingComplex;
+import com.home.application.coordinate.CoordinatePendingReason;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,6 +53,7 @@ class CoordinateOverrideAdminControllerContractTest {
 			"APT-501",
 			"Pending Apartment",
 			"Pending address",
+			CoordinatePendingReason.PNU_COORDINATE_MISSING,
 			1L,
 			OffsetDateTime.parse("2026-06-03T00:00:00Z")
 		)));
@@ -65,6 +67,7 @@ class CoordinateOverrideAdminControllerContractTest {
 			.andExpect(jsonPath("$[0].aptSeq").value("APT-501"))
 			.andExpect(jsonPath("$[0].aptName").value("Pending Apartment"))
 			.andExpect(jsonPath("$[0].address").value("Pending address"))
+			.andExpect(jsonPath("$[0].reason").value("PNU_COORDINATE_MISSING"))
 			.andExpect(jsonPath("$[0].tradeCount").value(1))
 			.andExpect(jsonPath("$[0].createdAt").value("2026-06-03T00:00:00Z"));
 	}

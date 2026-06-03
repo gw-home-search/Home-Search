@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.math.BigDecimal;
 
 import com.home.application.coordinate.CoordinateOverrideApprovalCommand;
+import com.home.application.coordinate.CoordinatePendingReason;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
 
@@ -27,8 +28,57 @@ class JdbcCoordinateOverrideAdminRepositoryTest extends JdbcPostgresTestSupport 
 				assertThat(pending.pnu()).isEqualTo("1168010300101400001");
 				assertThat(pending.aptSeq()).isEqualTo("APT-501");
 				assertThat(pending.aptName()).isEqualTo("Pending Apartment");
+				assertThat(pending.reason()).isEqualTo(CoordinatePendingReason.PNU_COORDINATE_MISSING);
 				assertThat(pending.tradeCount()).isEqualTo(1L);
 			});
+	}
+
+	@Test
+	@DisplayName("coordinate-pending 목록은 같은 PNU 다중 단지 reason을 반환한다")
+	void findsSamePnuMultiComplexReason() {
+		seedSamePnuMultiComplexWithoutDisplayCoordinate();
+		JdbcCoordinateOverrideAdminRepository repository = new JdbcCoordinateOverrideAdminRepository(jdbcClient);
+
+		assertThat(repository.findPendingComplexes(20))
+			.extracting(
+				"complexId",
+				"reason"
+			)
+			.containsExactlyInAnyOrder(
+				org.assertj.core.groups.Tuple.tuple(601L, CoordinatePendingReason.SAME_PNU_MULTI_COMPLEX),
+				org.assertj.core.groups.Tuple.tuple(602L, CoordinatePendingReason.SAME_PNU_MULTI_COMPLEX)
+			);
+	}
+
+	@Test
+	@DisplayName("coordinate-pending 목록은 일부 단지만 display 좌표가 없으면 complex display missing reason을 반환한다")
+	void findsComplexDisplayCoordinateMissingReason() {
+		seedSamePnuPartialDisplayCoordinate();
+		JdbcCoordinateOverrideAdminRepository repository = new JdbcCoordinateOverrideAdminRepository(jdbcClient);
+
+		assertThat(repository.findPendingComplexes(20))
+			.singleElement()
+			.satisfies(pending -> {
+				assertThat(pending.complexId()).isEqualTo(702L);
+				assertThat(pending.reason()).isEqualTo(CoordinatePendingReason.COMPLEX_DISPLAY_COORDINATE_MISSING);
+			});
+	}
+
+	@Test
+	@DisplayName("coordinate-pending 목록은 같은 PNU 다중 단지에 fallback 좌표만 있으면 same-PNU reason으로 남긴다")
+	void keepsSamePnuMultiComplexReasonWhenOnlyFallbackCoordinatesExist() {
+		seedSamePnuMultiComplexWithOnlyFallbackCoordinates();
+		JdbcCoordinateOverrideAdminRepository repository = new JdbcCoordinateOverrideAdminRepository(jdbcClient);
+
+		assertThat(repository.findPendingComplexes(20))
+			.extracting(
+				"complexId",
+				"reason"
+			)
+			.containsExactlyInAnyOrder(
+				org.assertj.core.groups.Tuple.tuple(801L, CoordinatePendingReason.SAME_PNU_MULTI_COMPLEX),
+				org.assertj.core.groups.Tuple.tuple(802L, CoordinatePendingReason.SAME_PNU_MULTI_COMPLEX)
+			);
 	}
 
 	@Test
@@ -112,6 +162,155 @@ class JdbcCoordinateOverrideAdminRepositoryTest extends JdbcPostgresTestSupport 
 			    90001
 			)
 			""").update();
+	}
+
+	private void seedSamePnuMultiComplexWithoutDisplayCoordinate() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (2001, 1, '1168010300101400002', 'Same PNU address', 37.5123, 127.0456)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt)
+			VALUES
+			    (601, 2001, 'COMPLEX-PK-601', 'APT-601', 'Same PNU A', 300),
+			    (602, 2001, 'COMPLEX-PK-602', 'APT-602', 'Same PNU B', 400)
+			""").update();
+		insertRawAndTrade(90002L, 601L, "same-pnu-601", "COMPLEX-PK-601", "APT-601");
+		insertRawAndTrade(90003L, 602L, "same-pnu-602", "COMPLEX-PK-602", "APT-602");
+	}
+
+	private void seedSamePnuPartialDisplayCoordinate() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (3001, 1, '1168010300101400003', 'Partial display coordinate address', 37.5123, 127.0456)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt)
+			VALUES
+			    (701, 3001, 'COMPLEX-PK-701', 'APT-701', 'Display Ready A', 300),
+			    (702, 3001, 'COMPLEX-PK-702', 'APT-702', 'Display Missing B', 400)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_display_coordinate (
+			    complex_id,
+			    latitude,
+			    longitude,
+			    coordinate_source,
+			    confidence,
+			    reason
+			)
+			VALUES (701, 37.5130, 127.0460, 'BUILDING_FOOTPRINT', 90, 'trusted display coordinate')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_display_coordinate (
+			    complex_id,
+			    latitude,
+			    longitude,
+			    coordinate_source,
+			    confidence,
+			    reason
+			)
+			VALUES (702, 37.5123, 127.0456, 'PARCEL_FALLBACK', 60, 'parcel fallback marker coordinate')
+			""").update();
+		insertRawAndTrade(90004L, 701L, "partial-display-701", "COMPLEX-PK-701", "APT-701");
+		insertRawAndTrade(90005L, 702L, "partial-display-702", "COMPLEX-PK-702", "APT-702");
+	}
+
+	private void seedSamePnuMultiComplexWithOnlyFallbackCoordinates() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (4001, 1, '1168010300101400004', 'Fallback display coordinate address', 37.5123, 127.0456)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt)
+			VALUES
+			    (801, 4001, 'COMPLEX-PK-801', 'APT-801', 'Fallback A', 300),
+			    (802, 4001, 'COMPLEX-PK-802', 'APT-802', 'Fallback B', 400)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_display_coordinate (
+			    complex_id,
+			    latitude,
+			    longitude,
+			    coordinate_source,
+			    confidence,
+			    reason
+			)
+			VALUES
+			    (801, 37.5123, 127.0456, 'PARCEL_FALLBACK', 60, 'parcel fallback marker coordinate'),
+			    (802, 37.5123, 127.0456, 'PARCEL_FALLBACK', 80, 'parcel fallback marker coordinate')
+			""").update();
+		insertRawAndTrade(90006L, 801L, "fallback-display-801", "COMPLEX-PK-801", "APT-801");
+		insertRawAndTrade(90007L, 802L, "fallback-display-802", "COMPLEX-PK-802", "APT-802");
+	}
+
+	private void insertRawAndTrade(Long rawId, Long complexId, String sourceKey, String complexPk, String aptSeq) {
+		jdbcClient.sql("""
+			INSERT INTO raw_trade_ingest (
+			    id,
+			    source,
+			    source_key,
+			    lawd_cd,
+			    deal_ymd,
+			    page_no,
+			    payload,
+			    payload_hash,
+			    status,
+			    processed_at
+			)
+			VALUES (:rawId, 'RTMS', :sourceKey, '11680', '202512', 1, '{}', :payloadHash, 'NORMALIZED', now())
+			""")
+			.param("rawId", rawId)
+			.param("sourceKey", sourceKey + "-raw")
+			.param("payloadHash", sourceKey + "-hash")
+			.update();
+		jdbcClient.sql("""
+			INSERT INTO trade (
+			    id,
+			    complex_id,
+			    deal_date,
+			    deal_amount,
+			    floor,
+			    excl_area,
+			    source,
+			    source_key,
+			    complex_pk,
+			    apt_seq,
+			    raw_ingest_id
+			)
+			VALUES (
+			    :tradeId,
+			    :complexId,
+			    DATE '2025-12-01',
+			    125000,
+			    12,
+			    84.93,
+			    'RTMS',
+			    :sourceKey,
+			    :complexPk,
+			    :aptSeq,
+			    :rawId
+			)
+			""")
+			.param("tradeId", rawId + 1000)
+			.param("complexId", complexId)
+			.param("sourceKey", sourceKey)
+			.param("complexPk", complexPk)
+			.param("aptSeq", aptSeq)
+			.param("rawId", rawId)
+			.update();
 	}
 
 	private com.home.infrastructure.web.map.dto.ComplexMarkersRequest bounds() {

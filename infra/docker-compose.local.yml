@@ -32,7 +32,8 @@ services:
     working_dir: /workspace/apps/api
     command: [ "./gradlew", "bootRun", "--no-daemon" ]
     env_file:
-      - ${HOME_SEARCH_API_ENV_FILE:-../apps/api/ops/local-runtime.env.example}
+      - ../apps/api/ops/local-runtime.env.example
+      - ${HOME_SEARCH_API_ENV_FILE:-../apps/api/.env}
     environment:
       SPRING_PROFILES_ACTIVE: local
       DB_JDBC_URL: jdbc:postgresql://postgis:5432/${HOME_SEARCH_DB_NAME:-home_search}
@@ -48,6 +49,8 @@ services:
       COORDINATE_SOURCE_DB_READ_ONLY: ${COORDINATE_SOURCE_DB_READ_ONLY:-true}
       SPRING_FLYWAY_LOCATIONS: classpath:db/migration/api,classpath:db/seed/local
       SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS: ${SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS:-*:missing}
+      HOME_INGEST_RTMS_ENABLED: ${HOME_INGEST_RTMS_ENABLED:-false}
+      HOME_INGEST_RTMS_MODE: ${HOME_INGEST_RTMS_MODE:-one-shot}
       HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY: ${HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY:-false}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       SERVER_PORT: "8080"

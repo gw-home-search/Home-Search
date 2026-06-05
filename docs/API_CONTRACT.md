@@ -259,6 +259,7 @@ Response:
   {
     "parcelId": 1001,
     "complexId": 501,
+    "name": "Sample Apartment",
     "lat": 37.5123,
     "lng": 127.0456,
     "latestDealAmount": 125000,
@@ -273,6 +274,7 @@ Response fields:
 - `complexId`: optional complex id used to scope detail and trade APIs. This is
   present for complex-level markers and may be `null` for parcel representative
   fallback markers.
+- `name`: optional apartment complex name for marker display.
 - `lat`: marker latitude.
 - `lng`: marker longitude.
 - `latestDealAmount`: optional latest trade amount in 10,000 KRW units.

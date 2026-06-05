@@ -48,7 +48,15 @@ class MapControllerContractTest {
 	@DisplayName("POST /api/v1/map/complexes는 canonical complex marker field를 반환한다")
 	void validComplexMarkerRequestReturnsCanonicalMarkerFields() throws Exception {
 		given(mapUseCase.getComplexMarkers(any(ComplexMarkersRequest.class)))
-			.willReturn(List.of(new ComplexMarkerResponse(1001L, 501L, 37.5123, 127.0456, 125000L, 740L)));
+			.willReturn(List.of(new ComplexMarkerResponse(
+				1001L,
+				501L,
+				"Sample Apartment",
+				37.5123,
+				127.0456,
+				125000L,
+				740L
+			)));
 
 		mockMvc.perform(post("/api/v1/map/complexes")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -72,6 +80,7 @@ class MapControllerContractTest {
 			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
 			.andExpect(jsonPath("$[0].parcelId").value(1001))
 			.andExpect(jsonPath("$[0].complexId").value(501))
+			.andExpect(jsonPath("$[0].name").value("Sample Apartment"))
 			.andExpect(jsonPath("$[0].lat").value(37.5123))
 			.andExpect(jsonPath("$[0].lng").value(127.0456))
 			.andExpect(jsonPath("$[0].latestDealAmount").value(125000))

@@ -96,7 +96,7 @@ export function CoordinateOverrideAdminPage() {
         }
         setPending([]);
         setState('error');
-        setError(nextError instanceof Error ? nextError.message : 'Unknown admin coordinate error');
+        setError(nextError instanceof Error ? nextError.message : '알 수 없는 관리자 좌표 오류');
       });
 
     return () => {
@@ -157,7 +157,7 @@ export function CoordinateOverrideAdminPage() {
       setSelectedPnu('');
       setReloadSeq((current) => current + 1);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Unknown admin coordinate error');
+      setError(nextError instanceof Error ? nextError.message : '알 수 없는 관리자 좌표 오류');
     }
   }
 
@@ -169,13 +169,13 @@ export function CoordinateOverrideAdminPage() {
             <h1>관리자 접근</h1>
             <p>좌표 보강 관리는 관리자 전용 화면입니다.</p>
           </div>
-          <nav className="admin-header-actions" aria-label="Admin navigation">
-            <a href="/" aria-label="Back to map">지도로 돌아가기</a>
+          <nav className="admin-header-actions" aria-label="관리자 화면 이동">
+            <a href="/" aria-label="지도로 돌아가기">지도로 돌아가기</a>
           </nav>
         </header>
 
-        <section className="admin-access-panel" aria-label="Admin access gate">
-          <form className="admin-override-form" aria-label="Admin access" onSubmit={handleAdminAccess}>
+        <section className="admin-access-panel" aria-label="관리자 접근 확인">
+          <form className="admin-override-form" aria-label="관리자 접근" onSubmit={handleAdminAccess}>
             <div className="panel-section-header">
               <p>접근 코드 확인</p>
               <span>관리자 전용</span>
@@ -203,16 +203,16 @@ export function CoordinateOverrideAdminPage() {
           <h1>좌표 보강 관리</h1>
           <p>거래 데이터는 저장됐지만 지도 마커로 표시하기 어려운 대상을 확인합니다.</p>
         </div>
-        <nav className="admin-header-actions" aria-label="Admin navigation">
+        <nav className="admin-header-actions" aria-label="관리자 화면 이동">
           <a href="/admin/coordinates/reasons">보강 사유 정리</a>
-          <a href="/" aria-label="Back to map">지도로 돌아가기</a>
+          <a href="/" aria-label="지도로 돌아가기">지도로 돌아가기</a>
           <button type="button" onClick={handleAdminSignOut}>관리자 잠금</button>
         </nav>
       </header>
 
-      <section className="admin-workspace" aria-label="Coordinate override workspace">
+      <section className="admin-workspace" aria-label="좌표 보강 작업 영역">
         <div className="admin-list-panel">
-          <section className="admin-overview" aria-label="Coordinate pending overview">
+          <section className="admin-overview" aria-label="좌표 보강 대기 요약">
             <div>
               <p className="admin-kicker">운영 기준</p>
               <h2>마커 표시를 막는 보강 사유를 먼저 확인합니다</h2>
@@ -233,7 +233,7 @@ export function CoordinateOverrideAdminPage() {
             </dl>
           </section>
 
-          <section className="reason-summary" aria-label="Coordinate pending reason summary">
+          <section className="reason-summary" aria-label="좌표 보강 사유 요약">
             {COORDINATE_REASON_GUIDES.map((guide) => (
               <article className="reason-summary-item" key={guide.code}>
                 <div>
@@ -281,7 +281,7 @@ export function CoordinateOverrideAdminPage() {
                     <td>
                       <button
                         type="button"
-                        aria-label={`Select coordinate override ${item.pnu}`}
+                        aria-label={`좌표 보강 선택 ${item.pnu}`}
                         disabled={!canApproveParcelCoordinate(item)}
                         onClick={() => {
                           setSelectedPnu(item.pnu);
@@ -296,7 +296,7 @@ export function CoordinateOverrideAdminPage() {
             </table>
           ) : null}
 
-          <nav className="admin-pagination" aria-label="Coordinate pending pagination">
+          <nav className="admin-pagination" aria-label="좌표 보강 대기 페이지 이동">
             <button
               type="button"
               disabled={pageIndex === 0}
@@ -319,7 +319,7 @@ export function CoordinateOverrideAdminPage() {
           </nav>
         </div>
 
-        <form className="admin-override-form" aria-label="Approve coordinate override" onSubmit={handleApprove}>
+        <form className="admin-override-form" aria-label="좌표 보강 승인" onSubmit={handleApprove}>
           <div className="panel-section-header">
             <p>수동 좌표 승인</p>
             <span>PNU 좌표 없음만 처리</span>
@@ -350,7 +350,7 @@ export function CoordinateOverrideAdminPage() {
             <span>승인자</span>
             <input name="approvedBy" required defaultValue="local-operator" />
           </label>
-          <button type="submit" aria-label="Approve coordinate override">
+          <button type="submit" aria-label="좌표 보강 승인">
             승인
           </button>
           {submitMessage ? <p role="status">{submitMessage}</p> : null}
@@ -411,14 +411,14 @@ export function CoordinateReasonGuidePage() {
           <h1>보강 사유 정리</h1>
           <p>좌표 보강 대기 목록의 reason이 어떤 작업을 요구하는지 정리합니다.</p>
         </div>
-        <nav className="admin-header-actions" aria-label="Admin navigation">
+        <nav className="admin-header-actions" aria-label="관리자 화면 이동">
           <a href="/admin/coordinates">좌표 보강 관리</a>
-          <a href="/" aria-label="Back to map">지도로 돌아가기</a>
+          <a href="/" aria-label="지도로 돌아가기">지도로 돌아가기</a>
           <button type="button" onClick={handleAdminSignOut}>관리자 잠금</button>
         </nav>
       </header>
 
-      <section className="reason-guide-page" aria-label="Coordinate pending reason guide">
+      <section className="reason-guide-page" aria-label="좌표 보강 사유 안내">
         <div className="reason-guide-intro">
           <p className="admin-kicker">사유 안내</p>
           <h2>지도 마커에 바로 쓸 수 없는 이유를 세 가지로만 나눕니다</h2>
@@ -469,13 +469,13 @@ function AdminAccessScreen({
           <h1>관리자 접근</h1>
           <p>좌표 보강 관리는 관리자 전용 화면입니다.</p>
         </div>
-        <nav className="admin-header-actions" aria-label="Admin navigation">
-          <a href="/" aria-label="Back to map">지도로 돌아가기</a>
+        <nav className="admin-header-actions" aria-label="관리자 화면 이동">
+          <a href="/" aria-label="지도로 돌아가기">지도로 돌아가기</a>
         </nav>
       </header>
 
-      <section className="admin-access-panel" aria-label="Admin access gate">
-        <form className="admin-override-form" aria-label="Admin access" onSubmit={onSubmit}>
+      <section className="admin-access-panel" aria-label="관리자 접근 확인">
+        <form className="admin-override-form" aria-label="관리자 접근" onSubmit={onSubmit}>
           <div className="panel-section-header">
             <p>접근 코드 확인</p>
             <span>관리자 전용</span>

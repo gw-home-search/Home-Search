@@ -597,7 +597,7 @@ body {
   position: absolute;
   z-index: var(--hs-z-map-controls);
   right: 16px;
-  top: 88px;
+  bottom: 72px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -776,6 +776,8 @@ body {
 }
 
 .marker-list-button {
+  display: grid;
+  gap: 3px;
   width: 100%;
   padding: 7px 9px;
   border: 1px solid var(--hs-border-default);
@@ -787,20 +789,33 @@ body {
   text-align: left;
 }
 
-.kakao-map-overlay {
-  display: inline-flex;
-  max-width: 180px;
-  align-items: center;
-  padding: 5px 8px;
-  border: 1px solid var(--hs-color-ink);
-  border-radius: var(--hs-marker-radius);
-  background: var(--hs-surface-control);
+.marker-list-price {
   color: var(--hs-text-primary);
+  font-weight: 800;
+}
+
+.marker-list-subtitle {
+  color: var(--hs-text-secondary);
   font-size: 12px;
-  font-weight: 700;
+}
+
+.kakao-map-overlay {
+  display: grid;
+  min-width: 96px;
+  max-width: 148px;
+  gap: 2px;
+  justify-items: start;
+  padding: 6px 8px 7px;
+  border: 1px solid var(--hs-marker-complex);
+  border-radius: var(--hs-marker-radius);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--hs-text-primary);
+  font-size: 11px;
   line-height: 1.2;
-  white-space: nowrap;
-  box-shadow: var(--hs-shadow-marker);
+  white-space: normal;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    var(--hs-shadow-marker);
   cursor: default;
   font-family: inherit;
 }
@@ -809,14 +824,37 @@ body {
   background: var(--hs-color-complex-soft);
 }
 
+.kakao-map-overlay-kicker {
+  color: var(--hs-action-secondary);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.kakao-map-overlay-price {
+  color: var(--hs-text-primary);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.kakao-map-overlay-subtitle {
+  color: var(--hs-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
 .kakao-map-overlay-region {
   border-color: var(--hs-marker-region);
   background: var(--hs-color-region-soft);
+  color: var(--hs-text-primary);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .kakao-map-overlay-complex {
   border-color: var(--hs-marker-complex);
-  background: var(--hs-color-complex-soft);
+  border-left-width: 4px;
   cursor: pointer;
 }
 

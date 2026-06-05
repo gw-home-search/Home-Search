@@ -28,6 +28,7 @@ home:
   admin:
     coordinate-override:
       enabled: true
+      access-code: "${ADMIN_COORDINATE_ACCESS_CODE:local-admin}"
   coordinate-source:
     db:
       jdbc-url: "${COORDINATE_SOURCE_DB_JDBC_URL:}"

@@ -18,7 +18,13 @@ public class CoordinateOverrideAdminService {
 
 	public List<CoordinatePendingComplex> findPendingComplexes(Integer requestedLimit) {
 		int limit = normalizeLimit(requestedLimit);
-		return repository.findPendingComplexes(limit);
+		return repository.findPendingComplexes(limit, 0);
+	}
+
+	public List<CoordinatePendingComplex> findPendingComplexes(Integer requestedLimit, Integer requestedOffset) {
+		int limit = normalizeLimit(requestedLimit);
+		int offset = normalizeOffset(requestedOffset);
+		return repository.findPendingComplexes(limit, offset);
 	}
 
 	@Transactional
@@ -39,14 +45,24 @@ public class CoordinateOverrideAdminService {
 			return DEFAULT_LIMIT;
 		}
 		if (requestedLimit < 1) {
-			return DEFAULT_LIMIT;
+			throw new InvalidCoordinateOverrideException("limit must be greater than 0");
 		}
 		return Math.min(requestedLimit, MAX_LIMIT);
 	}
 
+	private int normalizeOffset(Integer requestedOffset) {
+		if (requestedOffset == null) {
+			return 0;
+		}
+		if (requestedOffset < 0) {
+			throw new InvalidCoordinateOverrideException("offset must be greater than or equal to 0");
+		}
+		return requestedOffset;
+	}
+
 	private String normalizePnu(String pnu) {
 		if (pnu == null || !pnu.trim().matches("\\d{19}")) {
-			throw new IllegalArgumentException("pnu must be a 19 digit value");
+			throw new InvalidCoordinateOverrideException("pnu must be a 19 digit value");
 		}
 		return pnu.trim();
 	}

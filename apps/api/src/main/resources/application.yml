@@ -29,6 +29,7 @@ home:
   admin:
     coordinate-override:
       enabled: false
+      access-code: "${ADMIN_COORDINATE_ACCESS_CODE:local-admin}"
   coordinate:
     vworld-fallback:
       enabled: false

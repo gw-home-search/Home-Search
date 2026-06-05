@@ -13,19 +13,34 @@ import org.junit.jupiter.api.Test;
 class CoordinateOverrideAdminServiceTest {
 
 	@Test
-	@DisplayName("coordinate override admin service는 기본 limit과 최대 limit을 보정한다")
+	@DisplayName("coordinate override admin service는 기본 limit, 최대 limit, offset을 정규화한다")
 	void normalizesPendingListLimit() {
 		FakeRepository repository = new FakeRepository();
 		CoordinateOverrideAdminService service = new CoordinateOverrideAdminService(repository);
 
 		service.findPendingComplexes(null);
 		assertThat(repository.lastLimit).isEqualTo(50);
-
-		service.findPendingComplexes(0);
-		assertThat(repository.lastLimit).isEqualTo(50);
+		assertThat(repository.lastOffset).isZero();
 
 		service.findPendingComplexes(500);
 		assertThat(repository.lastLimit).isEqualTo(200);
+
+		service.findPendingComplexes(25, 50);
+		assertThat(repository.lastLimit).isEqualTo(25);
+		assertThat(repository.lastOffset).isEqualTo(50);
+	}
+
+	@Test
+	@DisplayName("coordinate override admin service는 invalid limit과 offset을 거부한다")
+	void rejectsInvalidPendingPagingParameters() {
+		CoordinateOverrideAdminService service = new CoordinateOverrideAdminService(new FakeRepository());
+
+		assertThatThrownBy(() -> service.findPendingComplexes(0))
+			.isInstanceOf(InvalidCoordinateOverrideException.class)
+			.hasMessageContaining("limit");
+		assertThatThrownBy(() -> service.findPendingComplexes(25, -1))
+			.isInstanceOf(InvalidCoordinateOverrideException.class)
+			.hasMessageContaining("offset");
 	}
 
 	@Test
@@ -69,18 +84,20 @@ class CoordinateOverrideAdminServiceTest {
 		);
 
 		assertThatThrownBy(() -> service.approve("invalid", command))
-			.isInstanceOf(IllegalArgumentException.class)
+			.isInstanceOf(InvalidCoordinateOverrideException.class)
 			.hasMessageContaining("pnu");
 	}
 
 	private static final class FakeRepository implements CoordinateOverrideAdminRepository {
 
 		private int lastLimit;
+		private int lastOffset;
 		private final List<CoordinateOverrideApprovalCommand> approvedCommands = new ArrayList<>();
 
 		@Override
-		public List<CoordinatePendingComplex> findPendingComplexes(int limit) {
+		public List<CoordinatePendingComplex> findPendingComplexes(int limit, int offset) {
 			lastLimit = limit;
+			lastOffset = offset;
 			return List.of();
 		}
 

@@ -27,6 +27,10 @@ public class CoordinateOverrideAdminService {
 		return repository.findPendingComplexes(limit, offset);
 	}
 
+	public CoordinatePendingSummary findPendingSummary() {
+		return repository.findPendingSummary();
+	}
+
 	@Transactional
 	public CoordinateOverrideApprovalResult approve(String pnu, CoordinateOverrideApprovalCommand command) {
 		Objects.requireNonNull(command, "command is required");

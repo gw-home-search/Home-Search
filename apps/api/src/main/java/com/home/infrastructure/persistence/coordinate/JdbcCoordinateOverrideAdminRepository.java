@@ -12,6 +12,7 @@ import com.home.application.coordinate.CoordinateOverrideApprovalCommand;
 import com.home.application.coordinate.CoordinateOverrideApprovalResult;
 import com.home.application.coordinate.CoordinatePendingComplex;
 import com.home.application.coordinate.CoordinatePendingReason;
+import com.home.application.coordinate.CoordinatePendingSummary;
 import com.home.application.coordinate.InvalidCoordinateOverrideException;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -153,6 +154,92 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 	}
 
 	@Override
+	public CoordinatePendingSummary findPendingSummary() {
+		return jdbcClient.sql("""
+			WITH multi_parcel AS (
+			    SELECT parcel_id
+			    FROM complex
+			    GROUP BY parcel_id
+			    HAVING count(*) > 1
+			),
+			pending_candidate AS (
+			    SELECT
+			        'PNU_COORDINATE_MISSING' AS reason
+			    FROM parcel p
+			    JOIN complex c ON c.parcel_id = p.id
+			    WHERE (p.latitude IS NULL OR p.longitude IS NULL)
+			      AND EXISTS (
+			          SELECT 1
+			          FROM trade t
+			          WHERE t.complex_id = c.id
+			            AND t.deleted_at IS NULL
+			      )
+			    UNION ALL
+			    SELECT
+			        'SAME_PNU_MULTI_COMPLEX' AS reason
+			    FROM multi_parcel
+			    JOIN parcel p ON p.id = multi_parcel.parcel_id
+			    JOIN complex c ON c.parcel_id = p.id
+			    WHERE p.latitude IS NOT NULL
+			      AND p.longitude IS NOT NULL
+			      AND EXISTS (
+			          SELECT 1
+			          FROM trade t
+			          WHERE t.complex_id = c.id
+			            AND t.deleted_at IS NULL
+			      )
+			      AND NOT EXISTS (
+			          SELECT 1
+			          FROM complex parcel_complex
+			          JOIN complex_display_coordinate display_coordinate
+			            ON display_coordinate.complex_id = parcel_complex.id
+			           AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
+			           AND display_coordinate.confidence >= 80
+			          WHERE parcel_complex.parcel_id = p.id
+			      )
+			    UNION ALL
+			    SELECT
+			        'COMPLEX_DISPLAY_COORDINATE_MISSING' AS reason
+			    FROM multi_parcel
+			    JOIN parcel p ON p.id = multi_parcel.parcel_id
+			    JOIN complex c ON c.parcel_id = p.id
+			    WHERE p.latitude IS NOT NULL
+			      AND p.longitude IS NOT NULL
+			      AND EXISTS (
+			          SELECT 1
+			          FROM trade t
+			          WHERE t.complex_id = c.id
+			            AND t.deleted_at IS NULL
+			      )
+			      AND EXISTS (
+			          SELECT 1
+			          FROM complex parcel_complex
+			          JOIN complex_display_coordinate display_coordinate
+			            ON display_coordinate.complex_id = parcel_complex.id
+			           AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
+			           AND display_coordinate.confidence >= 80
+			          WHERE parcel_complex.parcel_id = p.id
+			      )
+			      AND NOT EXISTS (
+			          SELECT 1
+			          FROM complex_display_coordinate display_coordinate
+			          WHERE display_coordinate.complex_id = c.id
+			            AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
+			            AND display_coordinate.confidence >= 80
+			      )
+			)
+			SELECT
+			    count(*) AS total_count,
+			    count(*) FILTER (WHERE reason = 'PNU_COORDINATE_MISSING') AS pnu_coordinate_missing_count,
+			    count(*) FILTER (WHERE reason = 'SAME_PNU_MULTI_COMPLEX') AS same_pnu_multi_complex_count,
+			    count(*) FILTER (WHERE reason = 'COMPLEX_DISPLAY_COORDINATE_MISSING') AS complex_display_coordinate_missing_count
+			FROM pending_candidate
+			""")
+			.query(this::mapPendingSummary)
+			.single();
+	}
+
+	@Override
 	public CoordinateOverrideApprovalResult approve(CoordinateOverrideApprovalCommand command) {
 		if (!canApproveParcelCoordinate(command.pnu())) {
 			throw new InvalidCoordinateOverrideException(
@@ -272,6 +359,15 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			CoordinatePendingReason.valueOf(resultSet.getString("reason")),
 			resultSet.getLong("trade_count"),
 			resultSet.getObject("created_at", OffsetDateTime.class)
+		);
+	}
+
+	private CoordinatePendingSummary mapPendingSummary(ResultSet resultSet, int rowNumber) throws SQLException {
+		return new CoordinatePendingSummary(
+			resultSet.getLong("total_count"),
+			resultSet.getLong("pnu_coordinate_missing_count"),
+			resultSet.getLong("same_pnu_multi_complex_count"),
+			resultSet.getLong("complex_display_coordinate_missing_count")
 		);
 	}
 }

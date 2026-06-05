@@ -58,6 +58,7 @@ describe('App map-first shell 화면', () => {
           ),
         ]),
       )
+      .mockResolvedValueOnce(jsonResponse(coordinatePendingSummaryFixture()))
       .mockResolvedValueOnce(
         jsonResponse({
           pnu: '1168010300101400001',
@@ -66,7 +67,13 @@ describe('App map-first shell 화면', () => {
           parcelUpdated: true,
         }),
       )
-      .mockResolvedValueOnce(jsonResponse([]));
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse(coordinatePendingSummaryFixture({
+        totalCount: 1428,
+        pnuCoordinateMissing: 320,
+        samePnuMultiComplex: 1001,
+        complexDisplayCoordinateMissing: 107,
+      })));
     vi.stubGlobal('fetch', fetchMock);
 
     const { root, rootElement } = await renderApp();
@@ -96,9 +103,20 @@ describe('App map-first shell 화면', () => {
         headers: { 'X-Admin-Access-Code': 'test-admin' },
       }),
     );
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/admin/coordinates/pending/summary'),
+      expect.objectContaining({
+        method: 'GET',
+        headers: { 'X-Admin-Access-Code': 'test-admin' },
+      }),
+    );
     expect(rootElement.textContent).toContain('좌표 보강 관리');
     expect(rootElement.textContent).toContain('마커 표시를 막는 보강 사유를 먼저 확인합니다');
     expect(rootElement.textContent).toContain('보강 사유 정리');
+    expect(rootElement.textContent).toContain('전체 대기 항목');
+    expect(rootElement.textContent).toContain('현재 페이지 항목');
+    expect(rootElement.textContent).toContain('전체 사유 분포');
+    expect(rootElement.textContent).toContain('1,429');
     expect(rootElement.textContent).toContain('Pending Apartment');
     expect(rootElement.textContent).toContain('PNU 좌표 없음');
     expect(rootElement.textContent).toContain('동일 PNU 다중 단지');
@@ -165,11 +183,13 @@ describe('App map-first shell 화면', () => {
           ),
         ]),
       )
+      .mockResolvedValueOnce(jsonResponse(coordinatePendingSummaryFixture()))
       .mockResolvedValueOnce(
         jsonResponse([
           coordinatePendingFixture(3001, '1168010300101500001', 'Second Page Apartment', 'PNU_COORDINATE_MISSING'),
         ]),
-      );
+      )
+      .mockResolvedValueOnce(jsonResponse(coordinatePendingSummaryFixture()));
     vi.stubGlobal('fetch', fetchMock);
 
     const { root, rootElement } = await renderApp();
@@ -183,7 +203,7 @@ describe('App map-first shell 화면', () => {
     await flushAsyncState();
 
     expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       resolveApiUrl('/api/v1/admin/coordinates/pending?limit=51&offset=50'),
       expect.objectContaining({
         method: 'GET',
@@ -1128,6 +1148,22 @@ function coordinatePendingFixture(
     reason,
     tradeCount: 3,
     createdAt: '2026-06-03T00:00:00Z',
+  };
+}
+
+function coordinatePendingSummaryFixture(overrides: {
+  totalCount?: number;
+  pnuCoordinateMissing?: number;
+  samePnuMultiComplex?: number;
+  complexDisplayCoordinateMissing?: number;
+} = {}): Record<string, unknown> {
+  return {
+    totalCount: overrides.totalCount ?? 1429,
+    reasonCounts: {
+      PNU_COORDINATE_MISSING: overrides.pnuCoordinateMissing ?? 321,
+      SAME_PNU_MULTI_COMPLEX: overrides.samePnuMultiComplex ?? 1001,
+      COMPLEX_DISPLAY_COORDINATE_MISSING: overrides.complexDisplayCoordinateMissing ?? 107,
+    },
   };
 }
 

@@ -44,6 +44,19 @@ class CoordinateOverrideAdminServiceTest {
 	}
 
 	@Test
+	@DisplayName("coordinate override admin service는 전체 pending summary를 조회한다")
+	void findsPendingSummary() {
+		FakeRepository repository = new FakeRepository();
+		CoordinateOverrideAdminService service = new CoordinateOverrideAdminService(repository);
+
+		CoordinatePendingSummary summary = service.findPendingSummary();
+
+		assertThat(summary.totalCount()).isEqualTo(3L);
+		assertThat(summary.count(CoordinatePendingReason.PNU_COORDINATE_MISSING)).isEqualTo(1L);
+		assertThat(summary.count(CoordinatePendingReason.SAME_PNU_MULTI_COMPLEX)).isEqualTo(2L);
+	}
+
+	@Test
 	@DisplayName("coordinate override admin service는 path PNU를 정규화해 승인 command에 사용한다")
 	void approvesWithNormalizedPathPnu() {
 		FakeRepository repository = new FakeRepository();
@@ -99,6 +112,11 @@ class CoordinateOverrideAdminServiceTest {
 			lastLimit = limit;
 			lastOffset = offset;
 			return List.of();
+		}
+
+		@Override
+		public CoordinatePendingSummary findPendingSummary() {
+			return new CoordinatePendingSummary(3L, 1L, 2L, 0L);
 		}
 
 		@Override

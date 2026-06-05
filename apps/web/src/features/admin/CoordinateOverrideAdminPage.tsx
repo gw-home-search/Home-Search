@@ -3,15 +3,13 @@ import { useEffect, useState, type FormEvent } from 'react';
 import {
   approveCoordinateOverride,
   fetchCoordinatePendingComplexes,
+  fetchCoordinatePendingSummary,
   type CoordinatePendingComplex,
+  type CoordinatePendingReasonCode,
+  type CoordinatePendingSummary,
 } from './api/fetchCoordinatePendingComplexes';
 
 type AdminRequestState = 'loading' | 'ready' | 'empty' | 'error';
-
-type CoordinatePendingReasonCode =
-  | 'PNU_COORDINATE_MISSING'
-  | 'SAME_PNU_MULTI_COMPLEX'
-  | 'COMPLEX_DISPLAY_COORDINATE_MISSING';
 
 type CoordinateReasonGuide = {
   code: CoordinatePendingReasonCode;
@@ -54,6 +52,7 @@ const ADMIN_ACCESS_CODE_STORAGE_KEY = 'home-search-admin-coordinate-access-code'
 
 export function CoordinateOverrideAdminPage() {
   const [pending, setPending] = useState<CoordinatePendingComplex[]>([]);
+  const [summary, setSummary] = useState<CoordinatePendingSummary | null>(null);
   const [state, setState] = useState<AdminRequestState>('loading');
   const [error, setError] = useState<string | null>(null);
   const [selectedPnu, setSelectedPnu] = useState('');
@@ -68,6 +67,7 @@ export function CoordinateOverrideAdminPage() {
   useEffect(() => {
     if (!isAdminAuthorized) {
       setPending([]);
+      setSummary(null);
       setState('ready');
       setError(null);
       return undefined;
@@ -76,18 +76,24 @@ export function CoordinateOverrideAdminPage() {
     let ignore = false;
     setState('loading');
     setError(null);
+    setSummary(null);
 
-    fetchCoordinatePendingComplexes({
-      limit: ADMIN_PAGE_SIZE + 1,
-      offset: pageIndex * ADMIN_PAGE_SIZE,
-      adminAccessCode: getStoredAdminAccessCode(),
-    })
-      .then((items) => {
+    const adminAccessCode = getStoredAdminAccessCode();
+    Promise.all([
+      fetchCoordinatePendingComplexes({
+        limit: ADMIN_PAGE_SIZE + 1,
+        offset: pageIndex * ADMIN_PAGE_SIZE,
+        adminAccessCode,
+      }),
+      fetchCoordinatePendingSummary(adminAccessCode),
+    ])
+      .then(([items, nextSummary]) => {
         if (ignore) {
           return;
         }
         setHasNextPage(items.length > ADMIN_PAGE_SIZE);
         setPending(items.slice(0, ADMIN_PAGE_SIZE));
+        setSummary(nextSummary);
         setState(items.length === 0 ? 'empty' : 'ready');
       })
       .catch((nextError: unknown) => {
@@ -223,22 +229,26 @@ export function CoordinateOverrideAdminPage() {
             </div>
             <dl className="admin-summary">
               <div>
-                <dt>현재 페이지</dt>
-                <dd>{pending.length.toLocaleString()}</dd>
+                <dt>전체 대기 항목</dt>
+                <dd>{(summary?.totalCount ?? pending.length).toLocaleString()}</dd>
               </div>
               <div>
-                <dt>수동 승인 가능</dt>
-                <dd>{pending.filter(canApproveParcelCoordinate).length.toLocaleString()}</dd>
+                <dt>현재 페이지 항목</dt>
+                <dd>{pending.length.toLocaleString()}</dd>
               </div>
             </dl>
           </section>
 
+          <div className="panel-section-header">
+            <p>전체 사유 분포</p>
+            <span>{hasNextPage ? '다음 페이지 있음' : '마지막 페이지'}</span>
+          </div>
           <section className="reason-summary" aria-label="Coordinate pending reason summary">
             {COORDINATE_REASON_GUIDES.map((guide) => (
               <article className="reason-summary-item" key={guide.code}>
                 <div>
                   <span className="reason-badge">{guide.label}</span>
-                  <strong>{reasonCount(pending, guide.code).toLocaleString()}</strong>
+                  <strong>{summaryReasonCount(summary, guide.code, pending).toLocaleString()}</strong>
                 </div>
                 <p>{guide.actionLabel}</p>
               </article>
@@ -523,6 +533,14 @@ function reasonGuide(reason: string): CoordinateReasonGuide {
 
 function reasonCount(pending: CoordinatePendingComplex[], reason: CoordinatePendingReasonCode): number {
   return pending.filter((item) => item.reason === reason).length;
+}
+
+function summaryReasonCount(
+  summary: CoordinatePendingSummary | null,
+  reason: CoordinatePendingReasonCode,
+  pending: CoordinatePendingComplex[],
+): number {
+  return summary?.reasonCounts[reason] ?? reasonCount(pending, reason);
 }
 
 function hasStoredAdminAccess(): boolean {

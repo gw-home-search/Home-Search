@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   approveCoordinateOverride,
   fetchCoordinatePendingComplexes,
+  fetchCoordinatePendingSummary,
 } from './fetchCoordinatePendingComplexes';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
 
@@ -89,6 +90,36 @@ describe('coordinate override admin API client 계약', () => {
           reason: 'operator verified missing coordinate',
           approvedBy: 'test-operator',
         }),
+      }),
+    );
+
+    vi.unstubAllGlobals();
+  });
+
+  it('coordinate-pending 전체 사유 집계를 summary endpoint에서 조회한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      totalCount: 1429,
+      reasonCounts: {
+        PNU_COORDINATE_MISSING: 321,
+        SAME_PNU_MULTI_COMPLEX: 1001,
+        COMPLEX_DISPLAY_COORDINATE_MISSING: 107,
+      },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchCoordinatePendingSummary('test-admin')).resolves.toEqual({
+      totalCount: 1429,
+      reasonCounts: {
+        PNU_COORDINATE_MISSING: 321,
+        SAME_PNU_MULTI_COMPLEX: 1001,
+        COMPLEX_DISPLAY_COORDINATE_MISSING: 107,
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/admin/coordinates/pending/summary'),
+      expect.objectContaining({
+        method: 'GET',
+        headers: { 'X-Admin-Access-Code': 'test-admin' },
       }),
     );
 

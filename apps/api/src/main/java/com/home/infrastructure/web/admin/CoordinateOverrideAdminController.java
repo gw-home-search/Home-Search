@@ -7,6 +7,7 @@ import com.home.application.coordinate.CoordinateOverrideAdminService;
 import com.home.application.coordinate.CoordinateOverrideApprovalCommand;
 import com.home.application.coordinate.CoordinateOverrideApprovalResult;
 import com.home.application.coordinate.CoordinatePendingComplex;
+import com.home.application.coordinate.CoordinatePendingSummary;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
@@ -43,6 +44,11 @@ public class CoordinateOverrideAdminController {
 		@RequestParam(value = "offset", defaultValue = "0") Integer offset
 	) {
 		return ResponseEntity.ok(service.findPendingComplexes(limit, offset));
+	}
+
+	@GetMapping("/pending/summary")
+	public ResponseEntity<CoordinatePendingSummary> getPendingCoordinateSummary() {
+		return ResponseEntity.ok(service.findPendingSummary());
 	}
 
 	@PutMapping("/{pnu}/override")

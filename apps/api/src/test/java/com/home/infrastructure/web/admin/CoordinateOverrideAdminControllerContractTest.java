@@ -20,6 +20,7 @@ import com.home.application.coordinate.CoordinateOverrideAdminService;
 import com.home.application.coordinate.CoordinateOverrideApprovalResult;
 import com.home.application.coordinate.CoordinatePendingComplex;
 import com.home.application.coordinate.CoordinatePendingReason;
+import com.home.application.coordinate.CoordinatePendingSummary;
 import com.home.application.coordinate.InvalidCoordinateOverrideException;
 import com.home.infrastructure.web.WebCorsConfiguration;
 
@@ -94,6 +95,26 @@ class CoordinateOverrideAdminControllerContractTest {
 				.header(ACCESS_CODE_HEADER, "test-admin"))
 			.andExpect(status().isOk())
 			.andExpect(content().json("[]"));
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/admin/coordinates/pending/summary는 전체 coordinate-pending 사유 집계를 반환한다")
+	void getPendingCoordinateSummaryReturnsWholePendingReasonCounts() throws Exception {
+		given(service.findPendingSummary()).willReturn(new CoordinatePendingSummary(
+			1429L,
+			321L,
+			1001L,
+			107L
+		));
+
+		mockMvc.perform(get("/api/v1/admin/coordinates/pending/summary")
+				.header(ACCESS_CODE_HEADER, "test-admin"))
+			.andExpect(status().isOk())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(jsonPath("$.totalCount").value(1429))
+			.andExpect(jsonPath("$.reasonCounts.PNU_COORDINATE_MISSING").value(321))
+			.andExpect(jsonPath("$.reasonCounts.SAME_PNU_MULTI_COMPLEX").value(1001))
+			.andExpect(jsonPath("$.reasonCounts.COMPLEX_DISPLAY_COORDINATE_MISSING").value(107));
 	}
 
 	@Test

@@ -8,6 +8,7 @@ export type CoordinatePendingComplex = {
   aptSeq: string | null;
   aptName: string;
   address: string | null;
+  reason: string;
   tradeCount: number;
   createdAt: string;
 };
@@ -26,12 +27,27 @@ export type CoordinateOverrideApprovalResult = {
   parcelUpdated: boolean;
 };
 
-export async function fetchCoordinatePendingComplexes(
+export type CoordinatePendingRequest = {
+  limit?: number;
+  offset?: number;
+  adminAccessCode?: string;
+};
+
+export async function fetchCoordinatePendingComplexes({
   limit = 50,
-): Promise<CoordinatePendingComplex[]> {
+  offset = 0,
+  adminAccessCode,
+}: CoordinatePendingRequest = {}): Promise<CoordinatePendingComplex[]> {
+  const searchParams = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
   const response = await fetch(
-    resolveApiUrl(`/api/v1/admin/coordinates/pending?limit=${encodeURIComponent(limit)}`),
-    { method: 'GET' },
+    resolveApiUrl(`/api/v1/admin/coordinates/pending?${searchParams.toString()}`),
+    {
+      method: 'GET',
+      headers: adminHeaders(adminAccessCode),
+    },
   );
   if (!response.ok) {
     const detail = await readProblemDetail(response);
@@ -47,12 +63,13 @@ export async function fetchCoordinatePendingComplexes(
 export async function approveCoordinateOverride(
   pnu: string,
   request: CoordinateOverrideApprovalRequest,
+  adminAccessCode?: string,
 ): Promise<CoordinateOverrideApprovalResult> {
   const response = await fetch(
     resolveApiUrl(`/api/v1/admin/coordinates/${encodeURIComponent(pnu)}/override`),
     {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: adminHeaders(adminAccessCode, { 'Content-Type': 'application/json' }),
       body: JSON.stringify(request),
     },
   );
@@ -61,6 +78,16 @@ export async function approveCoordinateOverride(
     throw new Error(`Failed to approve coordinate override: ${response.status}${detail ? ` ${detail}` : ''}`);
   }
   return normalizeApprovalResult(await response.json());
+}
+
+function adminHeaders(adminAccessCode: string | undefined, baseHeaders: Record<string, string> = {}): Record<string, string> {
+  if (!adminAccessCode) {
+    return baseHeaders;
+  }
+  return {
+    ...baseHeaders,
+    'X-Admin-Access-Code': adminAccessCode,
+  };
 }
 
 function normalizePendingComplex(value: unknown): CoordinatePendingComplex {
@@ -75,6 +102,7 @@ function normalizePendingComplex(value: unknown): CoordinatePendingComplex {
     aptSeq: nullableString(value.aptSeq, 'aptSeq'),
     aptName: requiredString(value.aptName, 'aptName'),
     address: nullableString(value.address, 'address'),
+    reason: requiredString(value.reason, 'reason'),
     tradeCount: requiredNumber(value.tradeCount, 'tradeCount'),
     createdAt: requiredString(value.createdAt, 'createdAt'),
   };

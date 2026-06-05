@@ -1,11 +1,13 @@
 package com.home.infrastructure.persistence.coordinate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 
 import com.home.application.coordinate.CoordinateOverrideApprovalCommand;
 import com.home.application.coordinate.CoordinatePendingReason;
+import com.home.application.coordinate.InvalidCoordinateOverrideException;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
 
@@ -20,7 +22,7 @@ class JdbcCoordinateOverrideAdminRepositoryTest extends JdbcPostgresTestSupport 
 		seedCoordinatePendingComplex();
 		JdbcCoordinateOverrideAdminRepository repository = new JdbcCoordinateOverrideAdminRepository(jdbcClient);
 
-		assertThat(repository.findPendingComplexes(20))
+		assertThat(repository.findPendingComplexes(20, 0))
 			.singleElement()
 			.satisfies(pending -> {
 				assertThat(pending.parcelId()).isEqualTo(1001L);
@@ -34,12 +36,21 @@ class JdbcCoordinateOverrideAdminRepositoryTest extends JdbcPostgresTestSupport 
 	}
 
 	@Test
+	@DisplayName("coordinate-pending 목록은 거래가 없는 좌표 미완성 단지를 제외한다")
+	void excludesCoordinatePendingComplexesWithoutTrades() {
+		seedCoordinatePendingComplexWithoutTrade();
+		JdbcCoordinateOverrideAdminRepository repository = new JdbcCoordinateOverrideAdminRepository(jdbcClient);
+
+		assertThat(repository.findPendingComplexes(20, 0)).isEmpty();
+	}
+
+	@Test
 	@DisplayName("coordinate-pending 목록은 같은 PNU 다중 단지 reason을 반환한다")
 	void findsSamePnuMultiComplexReason() {
 		seedSamePnuMultiComplexWithoutDisplayCoordinate();
 		JdbcCoordinateOverrideAdminRepository repository = new JdbcCoordinateOverrideAdminRepository(jdbcClient);
 
-		assertThat(repository.findPendingComplexes(20))
+		assertThat(repository.findPendingComplexes(20, 0))
 			.extracting(
 				"complexId",
 				"reason"
@@ -51,12 +62,23 @@ class JdbcCoordinateOverrideAdminRepositoryTest extends JdbcPostgresTestSupport 
 	}
 
 	@Test
+	@DisplayName("coordinate-pending 목록은 offset으로 다음 page를 조회한다")
+	void findsPendingComplexesWithOffset() {
+		seedSamePnuMultiComplexWithoutDisplayCoordinate();
+		JdbcCoordinateOverrideAdminRepository repository = new JdbcCoordinateOverrideAdminRepository(jdbcClient);
+
+		assertThat(repository.findPendingComplexes(1, 1))
+			.singleElement()
+			.satisfies(pending -> assertThat(pending.complexId()).isEqualTo(602L));
+	}
+
+	@Test
 	@DisplayName("coordinate-pending 목록은 일부 단지만 display 좌표가 없으면 complex display missing reason을 반환한다")
 	void findsComplexDisplayCoordinateMissingReason() {
 		seedSamePnuPartialDisplayCoordinate();
 		JdbcCoordinateOverrideAdminRepository repository = new JdbcCoordinateOverrideAdminRepository(jdbcClient);
 
-		assertThat(repository.findPendingComplexes(20))
+		assertThat(repository.findPendingComplexes(20, 0))
 			.singleElement()
 			.satisfies(pending -> {
 				assertThat(pending.complexId()).isEqualTo(702L);
@@ -70,7 +92,7 @@ class JdbcCoordinateOverrideAdminRepositoryTest extends JdbcPostgresTestSupport 
 		seedSamePnuMultiComplexWithOnlyFallbackCoordinates();
 		JdbcCoordinateOverrideAdminRepository repository = new JdbcCoordinateOverrideAdminRepository(jdbcClient);
 
-		assertThat(repository.findPendingComplexes(20))
+		assertThat(repository.findPendingComplexes(20, 0))
 			.extracting(
 				"complexId",
 				"reason"
@@ -104,6 +126,51 @@ class JdbcCoordinateOverrideAdminRepositoryTest extends JdbcPostgresTestSupport 
 				assertThat(marker.lat()).isEqualTo(37.5123);
 				assertThat(marker.lng()).isEqualTo(127.0456);
 			});
+	}
+
+	@Test
+	@DisplayName("approved override는 이미 좌표가 있는 PNU를 거부한다")
+	void approvedOverrideRejectsAlreadyCoordinateReadyParcel() {
+		seedSamePnuMultiComplexWithoutDisplayCoordinate();
+		JdbcCoordinateOverrideAdminRepository repository = new JdbcCoordinateOverrideAdminRepository(jdbcClient);
+
+		assertThatThrownBy(() -> repository.approve(new CoordinateOverrideApprovalCommand(
+			"1168010300101400002",
+			new BigDecimal("37.5123000"),
+			new BigDecimal("127.0456000"),
+			"operator verified missing coordinate",
+			"test-operator"
+		))).isInstanceOf(InvalidCoordinateOverrideException.class);
+
+		assertThat(approvedOverrideCount("1168010300101400002")).isZero();
+	}
+
+	@Test
+	@DisplayName("approved override는 존재하지 않는 PNU를 거부한다")
+	void approvedOverrideRejectsUnknownPnu() {
+		JdbcCoordinateOverrideAdminRepository repository = new JdbcCoordinateOverrideAdminRepository(jdbcClient);
+
+		assertThatThrownBy(() -> repository.approve(new CoordinateOverrideApprovalCommand(
+			"1168010300101400999",
+			new BigDecimal("37.5123000"),
+			new BigDecimal("127.0456000"),
+			"operator verified missing coordinate",
+			"test-operator"
+		))).isInstanceOf(InvalidCoordinateOverrideException.class);
+
+		assertThat(approvedOverrideCount("1168010300101400999")).isZero();
+	}
+
+	private int approvedOverrideCount(String pnu) {
+		return jdbcClient.sql("""
+			SELECT count(*)
+			FROM parcel_coordinate_override
+			WHERE pnu = :pnu
+			  AND status = 'APPROVED'
+			""")
+			.param("pnu", pnu)
+			.query(Integer.class)
+			.single();
 	}
 
 	private void seedCoordinatePendingComplex() {
@@ -161,6 +228,21 @@ class JdbcCoordinateOverrideAdminRepositoryTest extends JdbcPostgresTestSupport 
 			    'APT-501',
 			    90001
 			)
+			""").update();
+	}
+
+	private void seedCoordinatePendingComplexWithoutTrade() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (1002, 1, '1168010300101400002', 'Pending address without trade', NULL, NULL)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt)
+			VALUES (502, 1002, 'COMPLEX-PK-502', 'APT-502', 'Pending Apartment Without Trade', 740)
 			""").update();
 	}
 

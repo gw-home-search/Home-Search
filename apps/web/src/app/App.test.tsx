@@ -8,25 +8,54 @@ import { App } from './App';
 describe('App map-first shell 화면', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    window.sessionStorage.clear();
     window.history.pushState({}, '', '/');
   });
 
+  it('public surface admin coordinate route는 관리자 화면을 노출하지 않는다', async () => {
+    window.history.pushState({}, '', '/admin/coordinates');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp();
+
+    expect(rootElement.textContent).toContain('페이지를 찾을 수 없습니다');
+    expect(rootElement.textContent).not.toContain('관리자 접근');
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    unmount(root);
+  });
+
+  it('admin surface coordinate route는 관리자 접근 코드 입력 전 pending API를 호출하지 않는다', async () => {
+    vi.stubEnv('VITE_APP_SURFACE', 'admin');
+    window.history.pushState({}, '', '/admin/coordinates');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp();
+    await flushLazyRoute();
+
+    expect(rootElement.textContent).toContain('관리자 접근');
+    expect(rootElement.textContent).toContain('좌표 보강 관리는 관리자 전용 화면입니다');
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    unmount(root);
+  });
+
   it('admin coordinate route는 pending 조회와 override 승인을 호출한다', async () => {
+    vi.stubEnv('VITE_APP_SURFACE', 'admin');
     window.history.pushState({}, '', '/admin/coordinates');
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce(jsonResponse([]))
       .mockResolvedValueOnce(
         jsonResponse([
-          {
-            parcelId: 1001,
-            complexId: 501,
-            pnu: '1168010300101400001',
-            aptSeq: 'APT-501',
-            aptName: 'Pending Apartment',
-            address: 'Pending address',
-            tradeCount: 3,
-            createdAt: '2026-06-03T00:00:00Z',
-          },
+          coordinatePendingFixture(1001, '1168010300101400001', 'Pending Apartment', 'PNU_COORDINATE_MISSING'),
+          coordinatePendingFixture(1002, '1168010300101400002', 'Same PNU Apartment', 'SAME_PNU_MULTI_COMPLEX'),
+          ...Array.from({ length: 49 }, (_, index) =>
+            coordinatePendingFixture(2000 + index, `116801030010140${String(index + 10).padStart(4, '0')}`, `Extra ${index}`, 'PNU_COORDINATE_MISSING'),
+          ),
         ]),
       )
       .mockResolvedValueOnce(
@@ -41,18 +70,49 @@ describe('App map-first shell 화면', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const { root, rootElement } = await renderApp();
+    await flushLazyRoute();
+
+    setInputValue(rootElement, 'input[name="accessCode"]', 'test-admin');
+    const accessForm = rootElement.querySelector<HTMLFormElement>(
+      'form[aria-label="Admin access"]',
+    );
+    await act(async () => {
+      submitForm(accessForm);
+    });
     await flushAsyncState();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/admin/coordinates/pending?limit=50'),
-      expect.objectContaining({ method: 'GET' }),
+      resolveApiUrl('/api/v1/admin/coordinates/pending?limit=51&offset=0'),
+      expect.objectContaining({
+        method: 'GET',
+        headers: { 'X-Admin-Access-Code': 'test-admin' },
+      }),
     );
-    expect(rootElement.textContent).toContain('Coordinate Overrides');
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      resolveApiUrl('/api/v1/admin/coordinates/pending?limit=1&offset=0'),
+      expect.objectContaining({
+        method: 'GET',
+        headers: { 'X-Admin-Access-Code': 'test-admin' },
+      }),
+    );
+    expect(rootElement.textContent).toContain('좌표 보강 관리');
+    expect(rootElement.textContent).toContain('마커 표시를 막는 보강 사유를 먼저 확인합니다');
+    expect(rootElement.textContent).toContain('보강 사유 정리');
     expect(rootElement.textContent).toContain('Pending Apartment');
+    expect(rootElement.textContent).toContain('PNU 좌표 없음');
+    expect(rootElement.textContent).toContain('동일 PNU 다중 단지');
 
     const selectButton = rootElement.querySelector<HTMLButtonElement>(
       'button[aria-label="Select coordinate override 1168010300101400001"]',
     );
+    const displayFlowButton = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="Select coordinate override 1168010300101400002"]',
+    );
+    expect(displayFlowButton?.disabled).toBe(true);
+    expect(rootElement.textContent).toContain('1페이지');
+    expect(rootElement.textContent).toContain('다음');
+
     await act(async () => {
       selectButton?.click();
     });
@@ -73,6 +133,10 @@ describe('App map-first shell 화면', () => {
       resolveApiUrl('/api/v1/admin/coordinates/1168010300101400001/override'),
       expect.objectContaining({
         method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Access-Code': 'test-admin',
+        },
         body: JSON.stringify({
           latitude: 37.5123,
           longitude: 127.0456,
@@ -81,7 +145,89 @@ describe('App map-first shell 화면', () => {
         }),
       }),
     );
-    expect(rootElement.textContent).toContain('Coordinate approved');
+    expect(rootElement.textContent).toContain('좌표 승인이 완료되었습니다');
+
+    unmount(root);
+  });
+
+  it('admin coordinate route는 다음 page에서 offset을 증가시켜 조회한다', async () => {
+    vi.stubEnv('VITE_APP_SURFACE', 'admin');
+    window.history.pushState({}, '', '/admin/coordinates');
+    window.sessionStorage.setItem('home-search-admin-coordinate-access', 'granted');
+    window.sessionStorage.setItem('home-search-admin-coordinate-access-code', 'test-admin');
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse([
+          coordinatePendingFixture(1001, '1168010300101400001', 'Pending Apartment', 'PNU_COORDINATE_MISSING'),
+          ...Array.from({ length: 50 }, (_, index) =>
+            coordinatePendingFixture(2000 + index, `116801030010141${String(index + 10).padStart(4, '0')}`, `Extra ${index}`, 'PNU_COORDINATE_MISSING'),
+          ),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          coordinatePendingFixture(3001, '1168010300101500001', 'Second Page Apartment', 'PNU_COORDINATE_MISSING'),
+        ]),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp();
+    await flushLazyRoute();
+
+    const nextButton = Array.from(rootElement.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent === '다음');
+    await act(async () => {
+      nextButton?.click();
+    });
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      resolveApiUrl('/api/v1/admin/coordinates/pending?limit=51&offset=50'),
+      expect.objectContaining({
+        method: 'GET',
+        headers: { 'X-Admin-Access-Code': 'test-admin' },
+      }),
+    );
+    expect(rootElement.textContent).toContain('Second Page Apartment');
+    expect(rootElement.textContent).toContain('2페이지');
+
+    unmount(root);
+  });
+
+  it('admin reason route는 coordinate pending reason 설명을 한국어로 표시한다', async () => {
+    vi.stubEnv('VITE_APP_SURFACE', 'admin');
+    window.history.pushState({}, '', '/admin/coordinates/reasons');
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp();
+    await flushLazyRoute();
+
+    setInputValue(rootElement, 'input[name="accessCode"]', 'test-admin');
+    const accessForm = rootElement.querySelector<HTMLFormElement>(
+      'form[aria-label="Admin access"]',
+    );
+    await act(async () => {
+      submitForm(accessForm);
+    });
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/admin/coordinates/pending?limit=1&offset=0'),
+      expect.objectContaining({
+        method: 'GET',
+        headers: { 'X-Admin-Access-Code': 'test-admin' },
+      }),
+    );
+    expect(rootElement.textContent).toContain('보강 사유 정리');
+    expect(rootElement.textContent).toContain('PNU_COORDINATE_MISSING');
+    expect(rootElement.textContent).toContain('PNU 좌표 없음');
+    expect(rootElement.textContent).toContain('SAME_PNU_MULTI_COMPLEX');
+    expect(rootElement.textContent).toContain('COMPLEX_DISPLAY_COORDINATE_MISSING');
+    expect(rootElement.textContent).toContain('수동 승인 가능');
+    expect(rootElement.textContent).toContain('단지별 표시 좌표 처리 필요');
 
     unmount(root);
   });
@@ -927,6 +1073,11 @@ async function flushAsyncState(): Promise<void> {
   });
 }
 
+async function flushLazyRoute(): Promise<void> {
+  await flushAsyncState();
+  await flushAsyncState();
+}
+
 function unmount(root: Root): void {
   act(() => {
     root.unmount();
@@ -959,6 +1110,25 @@ function errorResponse(status: number): Response {
     ok: false,
     status,
   } as Response;
+}
+
+function coordinatePendingFixture(
+  id: number,
+  pnu: string,
+  aptName: string,
+  reason: string,
+): Record<string, unknown> {
+  return {
+    parcelId: id,
+    complexId: id + 500,
+    pnu,
+    aptSeq: `APT-${id}`,
+    aptName,
+    address: `${aptName} address`,
+    reason,
+    tradeCount: 3,
+    createdAt: '2026-06-03T00:00:00Z',
+  };
 }
 
 function deferred<T>(): {

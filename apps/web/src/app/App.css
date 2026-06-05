@@ -49,8 +49,26 @@ body {
   color: var(--hs-text-secondary);
 }
 
-.admin-header a {
+.admin-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.admin-header a,
+.admin-header-actions a,
+.admin-header-actions button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--hs-border-default);
+  border-radius: var(--hs-control-radius);
+  padding: 0 12px;
+  background: var(--hs-surface-control-muted);
   color: var(--hs-action-primary);
+  cursor: pointer;
+  font: inherit;
   font-weight: 700;
   text-decoration: none;
 }
@@ -62,9 +80,127 @@ body {
   padding: 24px 28px;
 }
 
+.admin-access-panel {
+  display: grid;
+  max-width: 420px;
+  padding: 24px 28px;
+}
+
 .admin-list-panel,
 .admin-override-form {
   min-width: 0;
+}
+
+.admin-list-panel {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.admin-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid var(--hs-border-default);
+  background: var(--hs-surface-panel);
+}
+
+.admin-kicker {
+  margin: 0 0 6px;
+  color: var(--hs-action-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-overview h2,
+.reason-guide-intro h2 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 0;
+}
+
+.admin-overview p:not(.admin-kicker),
+.reason-guide-intro p:not(.admin-kicker),
+.admin-form-note {
+  margin: 8px 0 0;
+  color: var(--hs-text-secondary);
+  line-height: 1.5;
+}
+
+.admin-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.admin-summary div {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-height: 82px;
+  padding: 12px;
+  border: 1px solid var(--hs-border-default);
+  background: var(--hs-surface-control-muted);
+}
+
+.admin-summary dt {
+  color: var(--hs-text-secondary);
+  font-size: 12px;
+}
+
+.admin-summary dd {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.reason-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reason-summary-item {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--hs-border-default);
+  background: var(--hs-surface-panel);
+}
+
+.reason-summary-item div,
+.reason-guide-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.reason-summary-item strong {
+  font-size: 20px;
+}
+
+.reason-summary-item p {
+  margin: 0;
+  color: var(--hs-text-secondary);
+  font-size: 13px;
+}
+
+.reason-badge {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  border: 1px solid var(--hs-border-default);
+  border-radius: 999px;
+  padding: 0 9px;
+  background: var(--hs-color-primary-soft);
+  color: var(--hs-action-primary);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .admin-table {
@@ -99,6 +235,12 @@ body {
   font-size: 13px;
 }
 
+.reason-cell-label {
+  margin: 0 0 3px;
+  color: var(--hs-text-primary) !important;
+  font-weight: 700;
+}
+
 .admin-override-form {
   display: grid;
   align-content: start;
@@ -124,7 +266,8 @@ body {
 }
 
 .admin-table button,
-.admin-override-form button {
+.admin-override-form button,
+.admin-pagination button {
   min-height: var(--hs-control-height);
   border: 1px solid var(--hs-border-default);
   border-radius: var(--hs-control-radius);
@@ -135,17 +278,112 @@ body {
 }
 
 .admin-table button:hover,
-.admin-override-form button:hover {
+.admin-override-form button:hover,
+.admin-pagination button:hover {
   border-color: var(--hs-border-strong);
   background: var(--hs-surface-control-muted);
 }
 
+.admin-table button:disabled,
+.admin-pagination button:disabled {
+  color: var(--hs-text-secondary);
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
 .admin-table button:focus-visible,
 .admin-override-form button:focus-visible,
+.admin-pagination button:focus-visible,
 .admin-override-form input:focus-visible,
 .admin-override-form textarea:focus-visible {
   outline: 0;
   box-shadow: var(--hs-focus-ring);
+}
+
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.admin-pagination span {
+  color: var(--hs-text-secondary);
+  font-size: 13px;
+}
+
+.reason-guide-page {
+  display: grid;
+  gap: 18px;
+  padding: 24px 28px;
+}
+
+.reason-guide-intro {
+  max-width: 860px;
+  padding: 18px;
+  border: 1px solid var(--hs-border-default);
+  background: var(--hs-surface-panel);
+}
+
+.reason-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.reason-guide-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--hs-border-default);
+  background: var(--hs-surface-panel);
+}
+
+.reason-guide-card-header > span:last-child {
+  color: var(--hs-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.reason-guide-card h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.reason-guide-card p {
+  margin: 0;
+  color: var(--hs-text-strong);
+  line-height: 1.5;
+}
+
+.reason-guide-card dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.reason-guide-card dl div {
+  display: grid;
+  gap: 3px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hs-border-default);
+}
+
+.reason-guide-card dt {
+  color: var(--hs-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.reason-guide-card dd {
+  margin: 0;
+  color: var(--hs-text-primary);
+  line-height: 1.45;
 }
 
 .app-shell {
@@ -762,6 +1000,16 @@ body {
 }
 
 @media (max-width: 1100px) {
+  .admin-workspace,
+  .admin-overview,
+  .reason-guide-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .reason-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .filter-panel {
     left: 16px;
     grid-template-columns: repeat(2, minmax(180px, 1fr)) auto;
@@ -806,6 +1054,34 @@ body {
 }
 
 @media (max-width: 720px) {
+  .admin-header {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 16px;
+  }
+
+  .admin-header-actions {
+    justify-content: flex-start;
+  }
+
+  .admin-workspace,
+  .reason-guide-page {
+    padding: 16px;
+  }
+
+  .admin-summary,
+  .reason-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-table {
+    min-width: 760px;
+  }
+
+  .admin-list-panel {
+    overflow-x: auto;
+  }
+
   .app-bar {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;

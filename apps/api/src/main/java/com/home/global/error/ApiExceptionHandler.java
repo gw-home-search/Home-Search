@@ -6,6 +6,9 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 
+import com.home.application.coordinate.InvalidCoordinateOverrideException;
+import com.home.infrastructure.web.admin.AdminCoordinateAccessDeniedException;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -24,6 +27,7 @@ public class ApiExceptionHandler {
 	private static final URI ERROR_TYPE = URI.create("/docs/index.html#error-code-list");
 	private static final String BAD_REQUEST_TITLE = "C401";
 	private static final String BAD_REQUEST_DETAIL = "Invalid parameter format.";
+	private static final String UNAUTHORIZED_DETAIL = "Unauthorized admin access.";
 	private static final String NOT_FOUND_TITLE = "C404";
 	private static final String NOT_FOUND_DETAIL = "Resource not found.";
 	private static final String INTERNAL_SERVER_ERROR_TITLE = "S500";
@@ -37,7 +41,8 @@ public class ApiExceptionHandler {
 		HttpMessageNotReadableException.class,
 		MissingServletRequestParameterException.class,
 		MethodArgumentTypeMismatchException.class,
-		HandlerMethodValidationException.class
+		HandlerMethodValidationException.class,
+		InvalidCoordinateOverrideException.class
 	})
 	public ResponseEntity<ProblemDetail> handleBadRequest(Exception exception) {
 		ProblemDetail problemDetail = createProblemDetail(
@@ -49,6 +54,21 @@ public class ApiExceptionHandler {
 
 		return ResponseEntity
 			.status(HttpStatus.BAD_REQUEST)
+			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
+			.body(problemDetail);
+	}
+
+	@ExceptionHandler(AdminCoordinateAccessDeniedException.class)
+	public ResponseEntity<ProblemDetail> handleUnauthorized(AdminCoordinateAccessDeniedException exception) {
+		ProblemDetail problemDetail = createProblemDetail(
+			HttpStatus.UNAUTHORIZED,
+			BAD_REQUEST_TITLE,
+			UNAUTHORIZED_DETAIL,
+			AdminCoordinateAccessDeniedException.class.getSimpleName()
+		);
+
+		return ResponseEntity
+			.status(HttpStatus.UNAUTHORIZED)
 			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
 			.body(problemDetail);
 	}

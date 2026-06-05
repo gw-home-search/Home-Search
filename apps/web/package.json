@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:admin": "VITE_APP_SURFACE=admin vite",
     "build": "tsc -b && vite build",
+    "build:admin": "VITE_APP_SURFACE=admin tsc -b && VITE_APP_SURFACE=admin vite build",
     "test": "vitest run",
     "test:watch": "vitest"
   },

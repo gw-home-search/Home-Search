@@ -12,6 +12,7 @@ import com.home.application.coordinate.CoordinateOverrideApprovalCommand;
 import com.home.application.coordinate.CoordinateOverrideApprovalResult;
 import com.home.application.coordinate.CoordinatePendingComplex;
 import com.home.application.coordinate.CoordinatePendingReason;
+import com.home.application.coordinate.InvalidCoordinateOverrideException;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -24,9 +25,15 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 	}
 
 	@Override
-	public List<CoordinatePendingComplex> findPendingComplexes(int limit) {
+	public List<CoordinatePendingComplex> findPendingComplexes(int limit, int offset) {
 		return jdbcClient.sql("""
-			WITH pending_base AS (
+			WITH multi_parcel AS (
+			    SELECT parcel_id
+			    FROM complex
+			    GROUP BY parcel_id
+			    HAVING count(*) > 1
+			),
+			pending_candidate AS (
 			    SELECT
 			        p.id AS parcel_id,
 			        c.id AS complex_id,
@@ -35,23 +42,90 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			        COALESCE(c.trade_name, c.name) AS apt_name,
 			        p.address,
 			        c.created_at,
-			        display_coordinate.complex_id IS NOT NULL AS has_display_coordinate,
-			        count(*) OVER (PARTITION BY p.id) AS complex_count,
-			        count(display_coordinate.complex_id) OVER (PARTITION BY p.id) AS display_coordinate_count,
-			        CASE
-			            WHEN p.latitude IS NULL OR p.longitude IS NULL THEN 'PNU_COORDINATE_MISSING'
-			            WHEN count(*) OVER (PARTITION BY p.id) > 1
-			             AND count(display_coordinate.complex_id) OVER (PARTITION BY p.id) = 0 THEN 'SAME_PNU_MULTI_COMPLEX'
-			            WHEN count(*) OVER (PARTITION BY p.id) > 1
-			             AND display_coordinate.complex_id IS NULL THEN 'COMPLEX_DISPLAY_COORDINATE_MISSING'
-			            ELSE NULL
-			        END AS reason
+			        'PNU_COORDINATE_MISSING' AS reason
 			    FROM parcel p
 			    JOIN complex c ON c.parcel_id = p.id
-			    LEFT JOIN complex_display_coordinate display_coordinate
-			      ON display_coordinate.complex_id = c.id
-			     AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
-			     AND display_coordinate.confidence >= 80
+			    WHERE (p.latitude IS NULL OR p.longitude IS NULL)
+			      AND EXISTS (
+			          SELECT 1
+			          FROM trade t
+			          WHERE t.complex_id = c.id
+			            AND t.deleted_at IS NULL
+			      )
+			    UNION ALL
+			    SELECT
+			        p.id AS parcel_id,
+			        c.id AS complex_id,
+			        p.pnu,
+			        c.apt_seq,
+			        COALESCE(c.trade_name, c.name) AS apt_name,
+			        p.address,
+			        c.created_at,
+			        'SAME_PNU_MULTI_COMPLEX' AS reason
+			    FROM multi_parcel
+			    JOIN parcel p ON p.id = multi_parcel.parcel_id
+			    JOIN complex c ON c.parcel_id = p.id
+			    WHERE p.latitude IS NOT NULL
+			      AND p.longitude IS NOT NULL
+			      AND EXISTS (
+			          SELECT 1
+			          FROM trade t
+			          WHERE t.complex_id = c.id
+			            AND t.deleted_at IS NULL
+			      )
+			      AND NOT EXISTS (
+			          SELECT 1
+			          FROM complex parcel_complex
+			          JOIN complex_display_coordinate display_coordinate
+			            ON display_coordinate.complex_id = parcel_complex.id
+			           AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
+			           AND display_coordinate.confidence >= 80
+			          WHERE parcel_complex.parcel_id = p.id
+			      )
+			    UNION ALL
+			    SELECT
+			        p.id AS parcel_id,
+			        c.id AS complex_id,
+			        p.pnu,
+			        c.apt_seq,
+			        COALESCE(c.trade_name, c.name) AS apt_name,
+			        p.address,
+			        c.created_at,
+			        'COMPLEX_DISPLAY_COORDINATE_MISSING' AS reason
+			    FROM multi_parcel
+			    JOIN parcel p ON p.id = multi_parcel.parcel_id
+			    JOIN complex c ON c.parcel_id = p.id
+			    WHERE p.latitude IS NOT NULL
+			      AND p.longitude IS NOT NULL
+			      AND EXISTS (
+			          SELECT 1
+			          FROM trade t
+			          WHERE t.complex_id = c.id
+			            AND t.deleted_at IS NULL
+			      )
+			      AND EXISTS (
+			          SELECT 1
+			          FROM complex parcel_complex
+			          JOIN complex_display_coordinate display_coordinate
+			            ON display_coordinate.complex_id = parcel_complex.id
+			           AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
+			           AND display_coordinate.confidence >= 80
+			          WHERE parcel_complex.parcel_id = p.id
+			      )
+			      AND NOT EXISTS (
+			          SELECT 1
+			          FROM complex_display_coordinate display_coordinate
+			          WHERE display_coordinate.complex_id = c.id
+			            AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
+			            AND display_coordinate.confidence >= 80
+			      )
+			),
+			pending_base AS (
+			    SELECT *
+			    FROM pending_candidate
+			    ORDER BY created_at DESC, parcel_id, complex_id
+			    LIMIT :limit
+			    OFFSET :offset
 			)
 			SELECT
 			    pending_base.parcel_id,
@@ -61,30 +135,30 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			    pending_base.apt_name,
 			    pending_base.address,
 			    pending_base.reason,
-			    count(t.id) AS trade_count,
+			    active_trade.trade_count,
 			    pending_base.created_at
 			FROM pending_base
-			LEFT JOIN trade t ON t.complex_id = pending_base.complex_id AND t.deleted_at IS NULL
-			WHERE pending_base.reason IS NOT NULL
-			GROUP BY
-			    pending_base.parcel_id,
-			    pending_base.complex_id,
-			    pending_base.pnu,
-			    pending_base.apt_seq,
-			    pending_base.apt_name,
-			    pending_base.address,
-			    pending_base.reason,
-			    pending_base.created_at
-			ORDER BY count(t.id) DESC, pending_base.created_at DESC, pending_base.parcel_id, pending_base.complex_id
-			LIMIT :limit
+			JOIN LATERAL (
+			    SELECT count(*) AS trade_count
+			    FROM trade t
+			    WHERE t.complex_id = pending_base.complex_id
+			      AND t.deleted_at IS NULL
+			) active_trade ON true
+			ORDER BY pending_base.created_at DESC, pending_base.parcel_id, pending_base.complex_id
 			""")
 			.param("limit", limit)
+			.param("offset", offset)
 			.query(this::mapPendingComplex)
 			.list();
 	}
 
 	@Override
 	public CoordinateOverrideApprovalResult approve(CoordinateOverrideApprovalCommand command) {
+		if (!canApproveParcelCoordinate(command.pnu())) {
+			throw new InvalidCoordinateOverrideException(
+				"coordinate override requires a PNU coordinate missing parcel with active trades"
+			);
+		}
 		int updatedOverride = updateApprovedOverride(command);
 		if (updatedOverride == 0) {
 			insertApprovedOverride(command);
@@ -106,6 +180,27 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			command.longitude(),
 			updatedParcel > 0
 		);
+	}
+
+	private boolean canApproveParcelCoordinate(String pnu) {
+		return Boolean.TRUE.equals(jdbcClient.sql("""
+			SELECT EXISTS (
+			    SELECT 1
+			    FROM parcel p
+			    JOIN complex c ON c.parcel_id = p.id
+			    WHERE p.pnu = :pnu
+			      AND (p.latitude IS NULL OR p.longitude IS NULL)
+			      AND EXISTS (
+			          SELECT 1
+			          FROM trade t
+			          WHERE t.complex_id = c.id
+			            AND t.deleted_at IS NULL
+			      )
+			)
+			""")
+			.param("pnu", pnu)
+			.query(Boolean.class)
+			.single());
 	}
 
 	private int updateApprovedOverride(CoordinateOverrideApprovalCommand command) {

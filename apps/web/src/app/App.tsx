@@ -9,7 +9,10 @@ import {
   type ParcelTrades,
   type TradeItem,
 } from '../features/complex-detail/api/fetchParcelTrades';
-import { CoordinateOverrideAdminPage } from '../features/admin/CoordinateOverrideAdminPage';
+import {
+  CoordinateOverrideAdminPage,
+  CoordinateReasonGuidePage,
+} from '../features/admin/CoordinateOverrideAdminPage';
 import {
   fetchMapMarkers,
   type ComplexMarkerFilters,
@@ -85,11 +88,35 @@ export function App({
   initialMapLevel,
   kakaoMapAppKey,
 }: AppProps) {
+  if (isCoordinateAdminPath() && !isAdminSurfaceEnabled()) {
+    return <NotFoundPage />;
+  }
+
+  if (isCoordinateReasonGuidePath()) {
+    return <CoordinateReasonGuidePage />;
+  }
+
   if (isCoordinateAdminPath()) {
     return <CoordinateOverrideAdminPage />;
   }
 
   return <MapApp initialMapLevel={initialMapLevel} kakaoMapAppKey={kakaoMapAppKey} />;
+}
+
+function NotFoundPage() {
+  return (
+    <main className="admin-shell">
+      <header className="admin-header">
+        <div>
+          <h1>페이지를 찾을 수 없습니다</h1>
+          <p>요청한 주소가 없거나 현재 화면에서 사용할 수 없습니다.</p>
+        </div>
+        <nav className="admin-header-actions" aria-label="Page navigation">
+          <a href="/" aria-label="Back to map">지도로 돌아가기</a>
+        </nav>
+      </header>
+    </main>
+  );
 }
 
 function MapApp({
@@ -1031,4 +1058,13 @@ function getConfiguredKakaoMapAppKey(): string {
 
 function isCoordinateAdminPath(): boolean {
   return window.location.pathname.startsWith('/admin/coordinates');
+}
+
+function isCoordinateReasonGuidePath(): boolean {
+  return window.location.pathname === '/admin/coordinates/reasons';
+}
+
+function isAdminSurfaceEnabled(): boolean {
+  return import.meta.env.VITE_APP_SURFACE === 'admin'
+    || import.meta.env.VITE_ENABLE_ADMIN_SURFACE === 'true';
 }

@@ -58,6 +58,7 @@ Home Search backend collection and map display need:
 - `VW_SERVICE_KEY` if GIS/building data calls are included in the current scope.
 - `JWT_SECRET` only if authenticated endpoints are enabled.
 - `FRONTEND_URL`
+- `ADMIN_COORDINATE_ACCESS_CODE` when coordinate override admin is enabled.
 
 Authentication can remain outside the core map-display path unless a later
 work item explicitly brings authenticated endpoints into scope.
@@ -67,6 +68,8 @@ work item explicitly brings authenticated endpoints into scope.
 The source frontend uses:
 
 - `VITE_API_SERVER_IP`
+- `VITE_APP_SURFACE=public|admin`; omit or set `public` for the public map
+  frontend. Set `admin` only for the admin coordinate frontend runtime.
 
 Home Search target frontend should keep an equivalent API base URL variable. The name can
 stay the same during migration to reduce risk.

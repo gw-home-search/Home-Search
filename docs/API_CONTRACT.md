@@ -608,6 +608,19 @@ Purpose:
   no marker-safe parcel coordinates.
 - This endpoint is an operational correction surface and is disabled unless
   coordinate override admin is explicitly enabled.
+- Requires the `X-Admin-Access-Code` request header when enabled.
+
+Query parameters:
+
+- `limit`: optional page size. Defaults to `50`.
+- `offset`: optional zero-based row offset for paging. Defaults to `0`.
+- Invalid `limit` values below `1` or invalid `offset` values below `0`
+  return `400` with the standard `ProblemDetail` body.
+
+Errors:
+
+- Missing or invalid `X-Admin-Access-Code` returns `401` with the standard
+  `ProblemDetail` body.
 
 Response:
 
@@ -642,6 +655,12 @@ Purpose:
 - Approve a manual coordinate override for an identity-safe PNU.
 - The override updates the existing `parcel` coordinates and does not create a
   new parcel, complex, or trade row.
+- Requires the `X-Admin-Access-Code` request header when enabled.
+
+Errors:
+
+- Missing or invalid `X-Admin-Access-Code` returns `401` with the standard
+  `ProblemDetail` body.
 
 Request:
 

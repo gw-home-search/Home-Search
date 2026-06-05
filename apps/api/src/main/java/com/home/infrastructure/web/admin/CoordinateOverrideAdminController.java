@@ -39,9 +39,10 @@ public class CoordinateOverrideAdminController {
 
 	@GetMapping("/pending")
 	public ResponseEntity<List<CoordinatePendingComplex>> getPendingCoordinates(
-		@RequestParam(value = "limit", defaultValue = "50") Integer limit
+		@RequestParam(value = "limit", defaultValue = "50") Integer limit,
+		@RequestParam(value = "offset", defaultValue = "0") Integer offset
 	) {
-		return ResponseEntity.ok(service.findPendingComplexes(limit));
+		return ResponseEntity.ok(service.findPendingComplexes(limit, offset));
 	}
 
 	@PutMapping("/{pnu}/override")

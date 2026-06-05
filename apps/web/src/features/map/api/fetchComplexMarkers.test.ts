@@ -48,6 +48,7 @@ describe('fetchComplexMarkers API 어댑터', () => {
           {
             parcelId: 1001,
             complexId: 501,
+            name: 'Sample Apartment',
             lat: 37.5123,
             lng: 127.0456,
             latestDealAmount: 125000,
@@ -56,6 +57,7 @@ describe('fetchComplexMarkers API 어댑터', () => {
           {
             id: '1002',
             complexId: null,
+            complexName: 'Legacy Apartment',
             latitude: '37.6',
             longitude: '127.1',
             latestDealAmount: null,
@@ -76,6 +78,7 @@ describe('fetchComplexMarkers API 어댑터', () => {
       {
         parcelId: 1001,
         complexId: 501,
+        name: 'Sample Apartment',
         lat: 37.5123,
         lng: 127.0456,
         latestDealAmount: 125000,
@@ -84,6 +87,7 @@ describe('fetchComplexMarkers API 어댑터', () => {
       {
         parcelId: 1002,
         complexId: null,
+        name: 'Legacy Apartment',
         lat: 37.6,
         lng: 127.1,
         latestDealAmount: null,

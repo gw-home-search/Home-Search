@@ -29,6 +29,7 @@ type KakaoMapSurfaceProps = {
   appKey: string;
   focusTarget: MapFocusTarget | null;
   initialLevel: number;
+  level: number;
   markers: MapMarkersResult | null;
   onComplexMarkerSelect: (marker: ComplexMapMarker) => void;
   onRuntimeErrorChange: (message: string | null) => void;
@@ -45,6 +46,7 @@ export function KakaoMapSurface({
   appKey,
   focusTarget,
   initialLevel,
+  level,
   markers,
   onComplexMarkerSelect,
   onRuntimeErrorChange,
@@ -135,6 +137,16 @@ export function KakaoMapSurface({
 
   useEffect(() => {
     const map = mapRef.current;
+
+    if (runtimeState !== 'ready' || !map || map.getLevel() === level) {
+      return;
+    }
+
+    map.setLevel?.(level);
+  }, [level, runtimeState]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     const maps = mapsApiRef.current;
 
     clearOverlays(overlaysRef.current);
@@ -170,7 +182,7 @@ export function KakaoMapSurface({
   return (
     <div
       ref={hostRef}
-      aria-label="Kakao map viewport"
+      aria-label="카카오 지도 화면"
       className="kakao-map-host"
       data-kakao-map-state={runtimeState}
     />
@@ -221,10 +233,26 @@ function overlayContentForComplexMarker(
   onComplexMarkerSelect: (marker: ComplexMapMarker) => void,
 ): HTMLElement {
   const element = document.createElement('button');
+  const kicker = document.createElement('span');
+  const price = document.createElement('strong');
+  const subtitle = markerSubtitle(marker);
+
   element.type = 'button';
   element.className = 'kakao-map-overlay kakao-map-overlay-complex';
   element.setAttribute('aria-label', complexMarkerAriaLabel(marker));
-  element.textContent = `${formatAmount(marker.latestDealAmount)} · ${marker.unitCntSum} units`;
+
+  kicker.className = 'kakao-map-overlay-kicker';
+  kicker.textContent = marker.latestDealAmount == null ? '거래 없음' : '최근 실거래';
+  price.className = 'kakao-map-overlay-price';
+  price.textContent = formatMarkerAmount(marker.latestDealAmount);
+
+  element.append(kicker, price);
+  if (subtitle) {
+    const subtitleElement = document.createElement('span');
+    subtitleElement.className = 'kakao-map-overlay-subtitle';
+    subtitleElement.textContent = subtitle;
+    element.append(subtitleElement);
+  }
   element.addEventListener('click', () => {
     onComplexMarkerSelect(marker);
   });
@@ -233,8 +261,8 @@ function overlayContentForComplexMarker(
 
 function complexMarkerAriaLabel(marker: ComplexMapMarker): string {
   return marker.complexId == null
-    ? `Open detail for parcel ${marker.parcelId}`
-    : `Open detail for complex ${marker.complexId} in parcel ${marker.parcelId}`;
+    ? `필지 ${marker.parcelId} 상세 열기`
+    : `필지 ${marker.parcelId} 단지 ${marker.complexId} 상세 열기`;
 }
 
 function overlayContentForRegionMarker(marker: RegionMapMarker): HTMLElement {
@@ -244,15 +272,33 @@ function overlayContentForRegionMarker(marker: RegionMapMarker): HTMLElement {
   return element;
 }
 
-function formatAmount(amount: number | null): string {
+function formatMarkerAmount(amount: number | null): string {
   if (amount == null) {
-    return 'No recent trade';
+    return '최근 거래 없음';
   }
 
-  return `${amount.toLocaleString()} 10k KRW`;
+  if (amount >= 10000) {
+    const eok = amount / 10000;
+    const formatted = Number.isInteger(eok) ? eok.toLocaleString() : eok.toFixed(1);
+    return `${formatted}억`;
+  }
+
+  return `${amount.toLocaleString()}만`;
+}
+
+function markerSubtitle(marker: ComplexMapMarker): string | null {
+  if (marker.name) {
+    return marker.name;
+  }
+
+  if (marker.unitCntSum > 0) {
+    return `${marker.unitCntSum.toLocaleString()}세대`;
+  }
+
+  return null;
 }
 
 function runtimeErrorMessage(error: unknown): string {
   const detail = error instanceof Error ? ` ${error.message}` : '';
-  return `Kakao map unavailable.${detail}`;
+  return `카카오 지도를 불러오지 못했습니다.${detail}`;
 }

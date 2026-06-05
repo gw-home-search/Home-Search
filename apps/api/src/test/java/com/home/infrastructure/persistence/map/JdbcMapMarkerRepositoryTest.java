@@ -26,12 +26,13 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 			.extracting(
 				ComplexMarkerResponse::parcelId,
 				ComplexMarkerResponse::complexId,
+				ComplexMarkerResponse::name,
 				ComplexMarkerResponse::lat,
 				ComplexMarkerResponse::lng,
 				ComplexMarkerResponse::latestDealAmount,
 				ComplexMarkerResponse::unitCntSum
 			)
-			.containsExactly(tuple(1001L, null, 37.5123, 127.0456, 125000L, 860L));
+			.containsExactly(tuple(1001L, null, "Sample Apartment B", 37.5123, 127.0456, 125000L, 860L));
 	}
 
 	@Test

@@ -19,6 +19,7 @@ export type ComplexMarkersRequest = {
 export type ComplexMarker = {
   parcelId: number;
   complexId: number | null;
+  name: string | null;
   lat: number;
   lng: number;
   latestDealAmount: number | null;
@@ -26,6 +27,7 @@ export type ComplexMarker = {
 };
 
 type ComplexMarkerResponse = Partial<ComplexMarker> & {
+  complexName?: string | null;
   id?: number | string;
   latitude?: number | string;
   longitude?: number | string;
@@ -61,11 +63,25 @@ function normalizeComplexMarker(marker: ComplexMarkerResponse): ComplexMarker {
   return {
     parcelId: toRequiredNumber(marker.parcelId ?? marker.id, 'parcelId'),
     complexId: toNullableNumber(marker.complexId, 'complexId'),
+    name: toNullableString(marker.name ?? marker.complexName, 'name'),
     lat: toRequiredNumber(marker.lat ?? marker.latitude, 'lat'),
     lng: toRequiredNumber(marker.lng ?? marker.longitude, 'lng'),
     latestDealAmount: toNullableNumber(marker.latestDealAmount),
     unitCntSum: toRequiredNumber(marker.unitCntSum, 'unitCntSum'),
   };
+}
+
+function toNullableString(value: unknown, field: string): string | null {
+  if (value == null) {
+    return null;
+  }
+
+  if (typeof value !== 'string') {
+    throw new Error(`Invalid public API complex marker response: ${field} must be a string`);
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
 }
 
 function toRequiredNumber(value: unknown, field: string): number {

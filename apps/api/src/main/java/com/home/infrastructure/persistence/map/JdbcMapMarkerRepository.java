@@ -57,6 +57,7 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			        p.latitude AS parcel_lat,
 			        p.longitude AS parcel_lng,
 			        c.id AS complex_id,
+			        c.name AS complex_name,
 			        c.unit_cnt,
 			        c.use_date,
 			        coordinate_case.status AS coordinate_case_status,
@@ -105,6 +106,7 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			        p.latitude,
 			        p.longitude,
 			        c.id,
+			        c.name,
 			        c.unit_cnt,
 			        c.use_date,
 			        coordinate_case.status,
@@ -157,6 +159,7 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			    SELECT
 			        base.parcel_id,
 			        base.complex_id,
+			        base.complex_name,
 			        base.lat,
 			        base.lng,
 			        base.latest_complex_deal_amount AS latest_deal_amount,
@@ -262,7 +265,8 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			    SELECT DISTINCT ON (base.parcel_id)
 			        base.parcel_id,
 			        base.latest_complex_deal_amount AS latest_deal_amount,
-			        base.latest_complex_excl_area AS excl_area
+			        base.latest_complex_excl_area AS excl_area,
+			        base.complex_name
 			    FROM complex_base base
 			    JOIN parcel_marker_base marker_base
 			      ON marker_base.parcel_id = base.parcel_id
@@ -274,6 +278,7 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			    SELECT
 			        split_complex_marker.parcel_id,
 			        split_complex_marker.complex_id,
+			        split_complex_marker.complex_name,
 			        split_complex_marker.lat,
 			        split_complex_marker.lng,
 			        split_complex_marker.latest_deal_amount,
@@ -286,6 +291,7 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			    SELECT
 			        parcel_marker.parcel_id,
 			        parcel_marker.complex_id,
+			        latest_parcel_trade.complex_name,
 			        parcel_marker.lat,
 			        parcel_marker.lng,
 			        latest_parcel_trade.latest_deal_amount,
@@ -301,6 +307,7 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			        parcel_marker.complex_id,
 			        parcel_marker.lat,
 			        parcel_marker.lng,
+			        latest_parcel_trade.complex_name,
 			        latest_parcel_trade.latest_deal_amount,
 			        latest_parcel_trade.excl_area,
 			        parcel_marker.unit_cnt_sum,
@@ -310,6 +317,7 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			SELECT
 			    markers.parcel_id,
 			    markers.complex_id,
+			    markers.complex_name,
 			    markers.lat,
 			    markers.lng,
 			    markers.latest_deal_amount,
@@ -348,6 +356,7 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 		return new ComplexMarkerResponse(
 			resultSet.getLong("parcel_id"),
 			longOrNull(resultSet, "complex_id"),
+			resultSet.getString("complex_name"),
 			resultSet.getDouble("lat"),
 			resultSet.getDouble("lng"),
 			longOrNull(resultSet, "latest_deal_amount"),

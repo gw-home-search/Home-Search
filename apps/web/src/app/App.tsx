@@ -111,8 +111,8 @@ function NotFoundPage() {
           <h1>페이지를 찾을 수 없습니다</h1>
           <p>요청한 주소가 없거나 현재 화면에서 사용할 수 없습니다.</p>
         </div>
-        <nav className="admin-header-actions" aria-label="Page navigation">
-          <a href="/" aria-label="Back to map">지도로 돌아가기</a>
+        <nav className="admin-header-actions" aria-label="페이지 이동">
+          <a href="/" aria-label="지도로 돌아가기">지도로 돌아가기</a>
         </nav>
       </header>
     </main>
@@ -194,7 +194,7 @@ function MapApp({
 
         setMarkers(null);
         setMarkerState('error');
-        setMarkerError(error instanceof Error ? error.message : 'Unknown marker error');
+        setMarkerError(error instanceof Error ? error.message : '알 수 없는 마커 오류');
       });
 
     return () => {
@@ -239,7 +239,7 @@ function MapApp({
         setComplexDetail(null);
         setParcelTrades(null);
         setDetailState('error');
-        setDetailError(error instanceof Error ? error.message : 'Unknown detail error');
+        setDetailError(error instanceof Error ? error.message : '알 수 없는 상세 정보 오류');
       });
 
     return () => {
@@ -321,7 +321,7 @@ function MapApp({
 
         setSearchResults([]);
         setSearchState('error');
-        setSearchError(error instanceof Error ? error.message : 'Unknown search error');
+        setSearchError(error instanceof Error ? error.message : '알 수 없는 검색 오류');
       });
   }
 
@@ -373,7 +373,7 @@ function MapApp({
         setRootRegions([]);
         setRegionDetail(null);
         setRegionState('error');
-        setRegionError(error instanceof Error ? error.message : 'Unknown region error');
+        setRegionError(error instanceof Error ? error.message : '알 수 없는 지역 오류');
       });
   }
 
@@ -402,7 +402,7 @@ function MapApp({
 
         setRegionDetail(null);
         setRegionState('error');
-        setRegionError(error instanceof Error ? error.message : 'Unknown region detail error');
+        setRegionError(error instanceof Error ? error.message : '알 수 없는 지역 상세 오류');
       });
   }
 
@@ -418,12 +418,12 @@ function MapApp({
 
   return (
     <main className="app-shell">
-      <header aria-label="Application bar" className="app-bar">
+      <header aria-label="상단 앱 바" className="app-bar">
         <div className="app-brand">
           <h1>Home Search</h1>
-          <span>Map</span>
+          <span>지도</span>
         </div>
-        <div className="app-status" aria-label="Map status summary">
+        <div className="app-status" aria-label="지도 상태 요약">
           <span>{mapModeLabel(viewport.level)}</span>
           <span>{markerSummaryLabel(markerState, markers)}</span>
         </div>
@@ -431,23 +431,24 @@ function MapApp({
           type="button"
           aria-controls="exploration-panel"
           aria-expanded={isExplorationOpen}
-          aria-label="Toggle exploration panel"
+          aria-label="탐색 패널 접기"
           className="exploration-toggle"
           onClick={() => {
             setIsExplorationOpen((current) => !current);
           }}
         >
-          Explore
+          탐색
         </button>
       </header>
 
       <div className="map-workspace" data-layout-region="map-workspace">
-        <section aria-label="Map surface" className="map-surface">
+        <section aria-label="지도 화면" className="map-surface">
           <p className="map-status">{mapRuntimeStatusLabel(mapRuntimeState)}</p>
           <KakaoMapSurface
             appKey={kakaoMapAppKey}
             focusTarget={mapFocusTarget}
             initialLevel={initialMapLevel}
+            level={viewport.level}
             markers={markers}
             onComplexMarkerSelect={handleComplexMarkerSelect}
             onRuntimeErrorChange={setMapRuntimeError}
@@ -456,53 +457,53 @@ function MapApp({
           />
 
           <form
-            aria-label="Marker filters"
+            aria-label="마커 필터"
             className="filter-panel"
             data-map-overlay="filters"
             onSubmit={handleFilterSubmit}
           >
             <fieldset className="filter-group">
-              <legend>Area</legend>
+              <legend>면적</legend>
               <div className="filter-range">
                 <label>
-                  <span>Min</span>
+                  <span>최소</span>
                   <input
-                    aria-label="Minimum pyeong"
+                    aria-label="최소 평형"
                     name="pyeongMin"
-                    placeholder="pyeong"
+                    placeholder="평"
                     type="number"
                   />
                 </label>
                 <label>
-                  <span>Max</span>
+                  <span>최대</span>
                   <input
-                    aria-label="Maximum pyeong"
+                    aria-label="최대 평형"
                     name="pyeongMax"
-                    placeholder="pyeong"
+                    placeholder="평"
                     type="number"
                   />
                 </label>
               </div>
             </fieldset>
             <fieldset className="filter-group">
-              <legend>Price</legend>
+              <legend>가격</legend>
               <div className="filter-range">
                 <label>
-                  <span>Min</span>
+                  <span>최소</span>
                   <input
-                    aria-label="Minimum price eok"
+                    aria-label="최소 가격 억"
                     name="priceEokMin"
-                    placeholder="eok"
+                    placeholder="억"
                     step="0.1"
                     type="number"
                   />
                 </label>
                 <label>
-                  <span>Max</span>
+                  <span>최대</span>
                   <input
-                    aria-label="Maximum price eok"
+                    aria-label="최대 가격 억"
                     name="priceEokMax"
-                    placeholder="eok"
+                    placeholder="억"
                     step="0.1"
                     type="number"
                   />
@@ -510,84 +511,84 @@ function MapApp({
               </div>
             </fieldset>
             <fieldset className="filter-group">
-              <legend>Age</legend>
+              <legend>연식</legend>
               <div className="filter-range">
                 <label>
-                  <span>Min</span>
+                  <span>최소</span>
                   <input
-                    aria-label="Minimum building age"
+                    aria-label="최소 연식"
                     name="ageMin"
-                    placeholder="years"
+                    placeholder="년"
                     type="number"
                   />
                 </label>
                 <label>
-                  <span>Max</span>
+                  <span>최대</span>
                   <input
-                    aria-label="Maximum building age"
+                    aria-label="최대 연식"
                     name="ageMax"
-                    placeholder="years"
+                    placeholder="년"
                     type="number"
                   />
                 </label>
               </div>
             </fieldset>
             <fieldset className="filter-group">
-              <legend>Units</legend>
+              <legend>세대수</legend>
               <div className="filter-range">
                 <label>
-                  <span>Min</span>
+                  <span>최소</span>
                   <input
-                    aria-label="Minimum unit count"
+                    aria-label="최소 세대수"
                     name="unitMin"
-                    placeholder="units"
+                    placeholder="세대"
                     type="number"
                   />
                 </label>
                 <label>
-                  <span>Max</span>
+                  <span>최대</span>
                   <input
-                    aria-label="Maximum unit count"
+                    aria-label="최대 세대수"
                     name="unitMax"
-                    placeholder="units"
+                    placeholder="세대"
                     type="number"
                   />
                 </label>
               </div>
             </fieldset>
-            <button type="submit" aria-label="Apply marker filters">
-              Apply
+            <button type="submit" aria-label="마커 필터 적용">
+              적용
             </button>
           </form>
 
-          <div aria-label="Map controls" className="map-controls">
-            <button type="button" aria-label="Zoom in" onClick={handleZoomIn}>
+          <div aria-label="지도 조작" className="map-controls">
+            <button type="button" aria-label="지도 확대" onClick={handleZoomIn}>
               +
             </button>
-            <button type="button" aria-label="Zoom out" onClick={handleZoomOut}>
+            <button type="button" aria-label="지도 축소" onClick={handleZoomOut}>
               -
             </button>
           </div>
 
           {markerState === 'loading' ? (
             <p className="map-feedback" role="status" aria-live="polite">
-              Loading markers
+              마커 불러오는 중
             </p>
           ) : null}
 
           {markerState === 'empty' ? (
             <p className="map-feedback" role="status" aria-live="polite">
-              No markers in this area
+              이 영역에는 마커가 없습니다
             </p>
           ) : null}
 
           {markerState === 'error' ? (
             <p className="map-feedback map-feedback-error" role="alert">
-              Marker data unavailable. Map remains usable.
+              마커 데이터를 불러오지 못했습니다. 지도는 계속 사용할 수 있습니다.
               {markerError ? ` ${markerError}` : null}
               {' '}
-              <button type="button" aria-label="Retry marker load" onClick={handleRetryMarkers}>
-                Retry
+              <button type="button" aria-label="마커 다시 불러오기" onClick={handleRetryMarkers}>
+                다시 시도
               </button>
             </p>
           ) : null}
@@ -599,7 +600,7 @@ function MapApp({
           ) : null}
 
           {markers?.kind === 'complex' && markers.markers.length > 0 ? (
-            <ul aria-label="Complex markers" className="marker-preview-list">
+            <ul aria-label="단지 마커" className="marker-preview-list">
               {markers.markers.map((marker) => (
                 <li key={complexMarkerKey(marker)}>
                   <button
@@ -611,7 +612,12 @@ function MapApp({
                       handleComplexMarkerSelect(marker);
                     }}
                   >
-                    {formatAmount(marker.latestDealAmount)} - {marker.unitCntSum} units
+                    <span className="marker-list-price">
+                      최근 실거래 {formatMarkerAmount(marker.latestDealAmount)}
+                    </span>
+                    {markerSubtitle(marker) ? (
+                      <span className="marker-list-subtitle">{markerSubtitle(marker)}</span>
+                    ) : null}
                   </button>
                 </li>
               ))}
@@ -619,7 +625,7 @@ function MapApp({
           ) : null}
 
           {markers?.kind === 'region' && markers.markers.length > 0 ? (
-            <ul aria-label="Region markers" className="marker-preview-list">
+            <ul aria-label="지역 마커" className="marker-preview-list">
               {markers.markers.map((marker) => (
                 <li key={marker.id} data-marker-id={marker.id}>
                   {marker.name}
@@ -631,57 +637,57 @@ function MapApp({
 
         <section
           id="exploration-panel"
-          aria-label="Exploration panel"
+          aria-label="탐색 패널"
           aria-hidden={!isExplorationOpen}
           className="exploration-panel"
           data-collapsed={isExplorationOpen ? 'false' : 'true'}
           hidden={!isExplorationOpen}
         >
           <div className="exploration-panel-header">
-            <p>Explore</p>
-            <span>Search</span>
+            <p>탐색</p>
+            <span>검색</span>
           </div>
-          <form aria-label="Complex search" className="search-panel" onSubmit={handleSearchSubmit}>
+          <form aria-label="단지 검색" className="search-panel" onSubmit={handleSearchSubmit}>
             <label>
-              <span>Complex</span>
+              <span>단지</span>
               <input
-                aria-label="Search complexes"
+                aria-label="단지 검색"
                 name="q"
-                placeholder="Complex name"
+                placeholder="단지명"
                 type="search"
               />
             </label>
-            <button type="submit" aria-label="Run complex search">
-              Search
+            <button type="submit" aria-label="단지 검색 실행">
+              검색
             </button>
           </form>
 
           {searchState === 'loading' ? (
             <p role="status" aria-live="polite">
-              Searching complexes
+              단지 검색 중
             </p>
           ) : null}
 
           {searchState === 'empty' ? (
             <p role="status" aria-live="polite">
-              No search results
+              검색 결과가 없습니다
             </p>
           ) : null}
 
           {searchState === 'error' ? (
             <p role="alert">
-              Search unavailable.
+              검색을 사용할 수 없습니다.
               {searchError ? ` ${searchError}` : null}
             </p>
           ) : null}
 
           {searchResults.length > 0 ? (
-            <ul aria-label="Search results" className="panel-list">
+            <ul aria-label="검색 결과" className="panel-list">
               {searchResults.map((result) => (
                 <li key={result.complexId}>
                   <button
                     type="button"
-                    aria-label={`Select search result ${result.complexName}`}
+                    aria-label={`검색 결과 선택 ${result.complexName}`}
                     onClick={() => {
                       handleSearchResultSelect(result);
                     }}
@@ -696,39 +702,39 @@ function MapApp({
 
           <div className="region-panel">
             <div className="panel-section-header">
-              <p>Region</p>
-              {regionDetail ? <span>{regionDetail.name}</span> : <span>Root</span>}
+              <p>지역</p>
+              {regionDetail ? <span>{regionDetail.name}</span> : <span>전체</span>}
             </div>
-            <button type="button" aria-label="Load root regions" onClick={handleLoadRootRegions}>
-              Regions
+            <button type="button" aria-label="상위 지역 불러오기" onClick={handleLoadRootRegions}>
+              지역 보기
             </button>
 
             {regionState === 'loading' ? (
               <p role="status" aria-live="polite">
-                Loading regions
+                지역 불러오는 중
               </p>
             ) : null}
 
             {regionState === 'empty' ? (
               <p role="status" aria-live="polite">
-                No regions
+                지역이 없습니다
               </p>
             ) : null}
 
             {regionState === 'error' ? (
               <p role="alert">
-                Region navigation unavailable.
+                지역 탐색을 사용할 수 없습니다.
                 {regionError ? ` ${regionError}` : null}
               </p>
             ) : null}
 
             {rootRegions.length > 0 ? (
-              <ul aria-label="Region navigation" className="panel-list">
+              <ul aria-label="지역 탐색" className="panel-list">
                 {rootRegions.map((region) => (
                   <li key={region.id}>
                     <button
                       type="button"
-                      aria-label={`Open region ${region.name}`}
+                      aria-label={`지역 열기 ${region.name}`}
                       onClick={() => {
                         handleRegionSelect(region.id);
                       }}
@@ -744,32 +750,32 @@ function MapApp({
       </div>
 
       {selectedComplex == null ? null : (
-        <aside aria-label="Complex detail drawer" className="detail-drawer">
+        <aside aria-label="단지 상세 패널" className="detail-drawer">
           <div className="detail-drawer-header">
             <p className="detail-drawer-kicker">{detailDrawerKicker(selectedComplex)}</p>
             <button
               type="button"
-              aria-label="Close detail drawer"
+              aria-label="상세 패널 닫기"
               className="detail-drawer-close"
               onClick={handleCloseDetailDrawer}
             >
-              Close
+              닫기
             </button>
           </div>
 
           {detailState === 'loading' ? (
             <p role="status" aria-live="polite">
-              Loading detail
+              상세 정보 불러오는 중
             </p>
           ) : null}
 
           {detailState === 'error' ? (
             <p role="alert">
-              Detail data unavailable.
+              상세 정보를 불러오지 못했습니다.
               {detailError ? ` ${detailError}` : null}
               {' '}
-              <button type="button" aria-label="Retry detail load" onClick={handleRetryDetail}>
-                Retry
+              <button type="button" aria-label="상세 정보 다시 불러오기" onClick={handleRetryDetail}>
+                다시 시도
               </button>
             </p>
           ) : null}
@@ -779,15 +785,15 @@ function MapApp({
               <h2>{complexDetail.name}</h2>
               <p className="detail-address">{complexDetail.address}</p>
               <dl className="detail-metrics">
-                {detailMetric('Trade name', complexDetail.tradeName)}
-                {detailMetric('Households', formatNumber(complexDetail.unitCnt, ' units'))}
-                {detailMetric('Buildings', formatNumber(complexDetail.dongCnt, ' buildings'))}
-                {detailMetric('Use date', complexDetail.useDate)}
-                {detailMetric('Platform area', formatNumber(complexDetail.platArea, ' sqm'))}
-                {detailMetric('Architecture area', formatNumber(complexDetail.archArea, ' sqm'))}
-                {detailMetric('Total area', formatNumber(complexDetail.totArea, ' sqm'))}
-                {detailMetric('Building coverage', formatNumber(complexDetail.bcRat, '%'))}
-                {detailMetric('Floor area ratio', formatNumber(complexDetail.vlRat, '%'))}
+                {detailMetric('거래명', complexDetail.tradeName)}
+                {detailMetric('세대수', formatNumber(complexDetail.unitCnt, '세대'))}
+                {detailMetric('동수', formatNumber(complexDetail.dongCnt, '개동'))}
+                {detailMetric('사용승인일', complexDetail.useDate)}
+                {detailMetric('대지면적', formatNumber(complexDetail.platArea, '㎡'))}
+                {detailMetric('건축면적', formatNumber(complexDetail.archArea, '㎡'))}
+                {detailMetric('연면적', formatNumber(complexDetail.totArea, '㎡'))}
+                {detailMetric('건폐율', formatNumber(complexDetail.bcRat, '%'))}
+                {detailMetric('용적률', formatNumber(complexDetail.vlRat, '%'))}
               </dl>
               <TradeAmountChart trades={parcelTrades?.trades ?? []} />
               <TradeList trades={parcelTrades?.trades ?? []} />
@@ -801,10 +807,36 @@ function MapApp({
 
 function formatAmount(amount: number | null): string {
   if (amount == null) {
-    return 'No recent trade';
+    return '최근 거래 없음';
   }
 
-  return `${amount.toLocaleString()} 10k KRW`;
+  return `${amount.toLocaleString()}만원`;
+}
+
+function formatMarkerAmount(amount: number | null): string {
+  if (amount == null) {
+    return '최근 거래 없음';
+  }
+
+  if (amount >= 10000) {
+    const eok = amount / 10000;
+    const formatted = Number.isInteger(eok) ? eok.toLocaleString() : eok.toFixed(1);
+    return `${formatted}억`;
+  }
+
+  return `${amount.toLocaleString()}만`;
+}
+
+function markerSubtitle(marker: ComplexMapMarker): string | null {
+  if (marker.name) {
+    return marker.name;
+  }
+
+  if (marker.unitCntSum > 0) {
+    return `${marker.unitCntSum.toLocaleString()}세대`;
+  }
+
+  return null;
 }
 
 function complexMarkerKey(marker: ComplexMapMarker): string {
@@ -815,14 +847,14 @@ function complexMarkerKey(marker: ComplexMapMarker): string {
 
 function complexMarkerAriaLabel(marker: ComplexMapMarker): string {
   return marker.complexId == null
-    ? `Open detail for parcel ${marker.parcelId}`
-    : `Open detail for complex ${marker.complexId} in parcel ${marker.parcelId}`;
+    ? `필지 ${marker.parcelId} 상세 열기`
+    : `필지 ${marker.parcelId} 단지 ${marker.complexId} 상세 열기`;
 }
 
 function detailDrawerKicker(selection: ComplexSelection): string {
   return selection.complexId == null
-    ? `Parcel ${selection.parcelId}`
-    : `Complex ${selection.complexId} / Parcel ${selection.parcelId}`;
+    ? `필지 ${selection.parcelId}`
+    : `단지 ${selection.complexId} / 필지 ${selection.parcelId}`;
 }
 
 function viewportAroundPoint(lat: number, lng: number, level: number, delta: number): MapViewport {
@@ -877,22 +909,22 @@ function TradeAmountChart({ trades }: { trades: TradeItem[] }) {
   const points = tradeChartPoints(trades);
 
   return (
-    <section className="trade-chart" aria-label="Trade amount chart">
+    <section className="trade-chart" aria-label="거래가 차트">
       <div className="trade-section-header">
-        <h3>Trade amount trend</h3>
-        {points.length > 0 ? <p>Recent {points.length}</p> : null}
+        <h3>실거래가 흐름</h3>
+        {points.length > 0 ? <p>최근 {points.length}건</p> : null}
       </div>
 
       {points.length === 0 ? (
-        <p className="trade-chart-empty">No trade amounts to chart</p>
+        <p className="trade-chart-empty">표시할 거래가 없습니다</p>
       ) : (
         <>
           <div
             className="trade-chart-plot"
             role="img"
-            aria-label={`Recent trade amounts from ${points[0]?.dealDate} to ${
+            aria-label={`${points[0]?.dealDate}부터 ${
               points[points.length - 1]?.dealDate
-            }`}
+            }까지 최근 거래가`}
           >
             {points.map((point) => (
               <div
@@ -926,18 +958,18 @@ function TradeAmountChart({ trades }: { trades: TradeItem[] }) {
 
 function TradeList({ trades }: { trades: TradeItem[] }) {
   return (
-    <section className="trade-list" aria-label="Trade list">
-      <h3>Trades</h3>
+    <section className="trade-list" aria-label="거래 목록">
+      <h3>거래 내역</h3>
       {trades.length === 0 ? (
-        <p>No trades yet</p>
+        <p>거래 내역이 없습니다</p>
       ) : (
         <table>
           <thead>
             <tr>
-              <th scope="col">Date</th>
-              <th scope="col">Amount</th>
-              <th scope="col">Area</th>
-              <th scope="col">Floor</th>
+              <th scope="col">일자</th>
+              <th scope="col">금액</th>
+              <th scope="col">면적</th>
+              <th scope="col">층</th>
             </tr>
           </thead>
           <tbody>
@@ -945,7 +977,7 @@ function TradeList({ trades }: { trades: TradeItem[] }) {
               <tr key={trade.tradeId}>
                 <td>{trade.dealDate}</td>
                 <td>{formatAmount(trade.dealAmount)}</td>
-                <td>{trade.exclArea.toLocaleString()} sqm</td>
+                <td>{trade.exclArea.toLocaleString()}㎡</td>
                 <td>{formatTradeFloor(trade)}</td>
               </tr>
             ))}
@@ -1004,23 +1036,23 @@ function shortTradeDate(dealDate: string): string {
 }
 
 function formatTradeFloor(trade: TradeItem): string {
-  const floor = trade.floor == null ? 'Unknown floor' : `${trade.floor}F`;
+  const floor = trade.floor == null ? '층 정보 없음' : `${trade.floor}층`;
   return trade.aptDong == null ? floor : `${trade.aptDong} / ${floor}`;
 }
 
 function mapRuntimeStatusLabel(state: KakaoMapRuntimeState): string {
   switch (state) {
     case 'loading':
-      return 'Loading map runtime';
+      return '지도 준비 중';
     case 'ready':
-      return 'Map ready';
+      return '지도 준비 완료';
     case 'error':
-      return 'Map fallback active';
+      return '지도 대체 화면';
   }
 }
 
 function mapModeLabel(level: number): string {
-  return level <= 4 ? 'Complex view' : 'Region view';
+  return level <= 4 ? '단지 보기' : '지역 보기';
 }
 
 function markerSummaryLabel(
@@ -1028,18 +1060,18 @@ function markerSummaryLabel(
   markers: MapMarkersResult | null,
 ): string {
   if (state === 'loading') {
-    return 'Loading';
+    return '불러오는 중';
   }
 
   if (state === 'error') {
-    return 'Marker error';
+    return '마커 오류';
   }
 
   if (state === 'empty' || !markers) {
-    return '0 markers';
+    return '마커 0개';
   }
 
-  return `${markers.markers.length.toLocaleString()} markers`;
+  return `마커 ${markers.markers.length.toLocaleString()}개`;
 }
 
 function sameViewport(first: MapViewport, second: MapViewport): boolean {

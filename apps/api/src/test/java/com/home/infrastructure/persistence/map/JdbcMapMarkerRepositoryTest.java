@@ -46,6 +46,18 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("unit filter는 반환 marker의 세대수 합계를 기준으로 적용된다")
+	void unitFilterUsesReturnedMarkerUnitSum() {
+		seedMapData();
+		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+
+		assertThat(repository.findComplexMarkers(unitRequest(800L, 900L)))
+			.extracting(ComplexMarkerResponse::parcelId, ComplexMarkerResponse::complexId, ComplexMarkerResponse::unitCntSum)
+			.containsExactly(tuple(1001L, null, 860L));
+		assertThat(repository.findComplexMarkers(unitRequest(861L, null))).isEmpty();
+	}
+
+	@Test
 	@DisplayName("좌표가 없는 coordinate-pending parcel은 거래가 있어도 marker로 반환하지 않는다")
 	void coordinatePendingParcelWithTradeIsExcludedFromMarkers() {
 		seedCoordinatePendingMapData();
@@ -231,6 +243,23 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 			null,
 			null,
 			null
+		);
+	}
+
+	private ComplexMarkersRequest unitRequest(Long unitMin, Long unitMax) {
+		return new ComplexMarkersRequest(
+			37.45,
+			126.85,
+			37.70,
+			127.20,
+			null,
+			null,
+			null,
+			null,
+			null,
+			null,
+			unitMin,
+			unitMax
 		);
 	}
 

@@ -650,6 +650,53 @@ Response:
 - `COMPLEX_DISPLAY_COORDINATE_MISSING`: another same-PNU complex has a trusted
   building-footprint display coordinate, but this complex still needs one.
 
+### GET `/api/v1/admin/coordinates/pending/summary`
+
+Purpose:
+
+- Return whole-query coordinate-pending counts for the admin correction surface.
+- This endpoint is an operational summary for the paged pending list. It is
+  disabled unless coordinate override admin is explicitly enabled.
+- Requires the `X-Admin-Access-Code` request header when enabled.
+
+Request:
+
+- No request body.
+- No query parameters.
+
+Errors:
+
+- Missing or invalid `X-Admin-Access-Code` returns `401` with the standard
+  `ProblemDetail` body.
+
+Response:
+
+```json
+{
+  "totalCount": 1429,
+  "reasonCounts": {
+    "PNU_COORDINATE_MISSING": 579,
+    "SAME_PNU_MULTI_COMPLEX": 850,
+    "COMPLEX_DISPLAY_COORDINATE_MISSING": 0
+  }
+}
+```
+
+Response fields:
+
+- `totalCount`: total number of coordinate-pending complexes in the whole
+  pending query, not the current page.
+- `reasonCounts`: object keyed by the documented coordinate pending `reason`
+  values. Missing data should be represented as `0`, not by omitting a reason
+  key.
+
+Status:
+
+- `200`: successful summary lookup. If no coordinate-pending complexes exist,
+  return `totalCount: 0` and `0` for every documented reason key.
+- `401`: missing or invalid admin access code.
+- `500`: unexpected server error.
+
 ### PUT `/api/v1/admin/coordinates/{pnu}/override`
 
 Purpose:

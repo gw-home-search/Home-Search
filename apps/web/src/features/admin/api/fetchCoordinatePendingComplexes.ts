@@ -13,6 +13,16 @@ export type CoordinatePendingComplex = {
   createdAt: string;
 };
 
+export type CoordinatePendingReasonCode =
+  | 'PNU_COORDINATE_MISSING'
+  | 'SAME_PNU_MULTI_COMPLEX'
+  | 'COMPLEX_DISPLAY_COORDINATE_MISSING';
+
+export type CoordinatePendingSummary = {
+  totalCount: number;
+  reasonCounts: Record<CoordinatePendingReasonCode, number>;
+};
+
 export type CoordinateOverrideApprovalRequest = {
   latitude: number;
   longitude: number;
@@ -60,6 +70,23 @@ export async function fetchCoordinatePendingComplexes({
   return payload.map(normalizePendingComplex);
 }
 
+export async function fetchCoordinatePendingSummary(
+  adminAccessCode?: string,
+): Promise<CoordinatePendingSummary> {
+  const response = await fetch(
+    resolveApiUrl('/api/v1/admin/coordinates/pending/summary'),
+    {
+      method: 'GET',
+      headers: adminHeaders(adminAccessCode),
+    },
+  );
+  if (!response.ok) {
+    const detail = await readProblemDetail(response);
+    throw new Error(`Failed to fetch coordinate pending summary: ${response.status}${detail ? ` ${detail}` : ''}`);
+  }
+  return normalizePendingSummary(await response.json());
+}
+
 export async function approveCoordinateOverride(
   pnu: string,
   request: CoordinateOverrideApprovalRequest,
@@ -105,6 +132,24 @@ function normalizePendingComplex(value: unknown): CoordinatePendingComplex {
     reason: requiredString(value.reason, 'reason'),
     tradeCount: requiredNumber(value.tradeCount, 'tradeCount'),
     createdAt: requiredString(value.createdAt, 'createdAt'),
+  };
+}
+
+function normalizePendingSummary(value: unknown): CoordinatePendingSummary {
+  if (!isRecord(value)) {
+    throw new Error('Invalid admin coordinate pending summary response: expected an object');
+  }
+  if (!isRecord(value.reasonCounts)) {
+    throw new Error('Invalid admin coordinate pending summary response: reasonCounts must be an object');
+  }
+
+  return {
+    totalCount: requiredNumber(value.totalCount, 'totalCount'),
+    reasonCounts: {
+      PNU_COORDINATE_MISSING: requiredNumber(value.reasonCounts.PNU_COORDINATE_MISSING, 'reasonCounts.PNU_COORDINATE_MISSING'),
+      SAME_PNU_MULTI_COMPLEX: requiredNumber(value.reasonCounts.SAME_PNU_MULTI_COMPLEX, 'reasonCounts.SAME_PNU_MULTI_COMPLEX'),
+      COMPLEX_DISPLAY_COORDINATE_MISSING: requiredNumber(value.reasonCounts.COMPLEX_DISPLAY_COORDINATE_MISSING, 'reasonCounts.COMPLEX_DISPLAY_COORDINATE_MISSING'),
+    },
   };
 }
 

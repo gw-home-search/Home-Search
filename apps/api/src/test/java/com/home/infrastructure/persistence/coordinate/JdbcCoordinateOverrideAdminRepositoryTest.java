@@ -87,6 +87,20 @@ class JdbcCoordinateOverrideAdminRepositoryTest extends JdbcPostgresTestSupport 
 	}
 
 	@Test
+	@DisplayName("coordinate-pending summary는 전체 사유별 건수를 반환한다")
+	void findsPendingSummaryReasonCounts() {
+		seedCoordinatePendingSummaryData();
+		JdbcCoordinateOverrideAdminRepository repository = new JdbcCoordinateOverrideAdminRepository(jdbcClient);
+
+		var summary = repository.findPendingSummary();
+
+		assertThat(summary.totalCount()).isEqualTo(4L);
+		assertThat(summary.count(CoordinatePendingReason.PNU_COORDINATE_MISSING)).isEqualTo(1L);
+		assertThat(summary.count(CoordinatePendingReason.SAME_PNU_MULTI_COMPLEX)).isEqualTo(2L);
+		assertThat(summary.count(CoordinatePendingReason.COMPLEX_DISPLAY_COORDINATE_MISSING)).isEqualTo(1L);
+	}
+
+	@Test
 	@DisplayName("coordinate-pending 목록은 같은 PNU 다중 단지에 fallback 좌표만 있으면 same-PNU reason으로 남긴다")
 	void keepsSamePnuMultiComplexReasonWhenOnlyFallbackCoordinatesExist() {
 		seedSamePnuMultiComplexWithOnlyFallbackCoordinates();
@@ -336,6 +350,45 @@ class JdbcCoordinateOverrideAdminRepositoryTest extends JdbcPostgresTestSupport 
 			""").update();
 		insertRawAndTrade(90006L, 801L, "fallback-display-801", "COMPLEX-PK-801", "APT-801");
 		insertRawAndTrade(90007L, 802L, "fallback-display-802", "COMPLEX-PK-802", "APT-802");
+	}
+
+	private void seedCoordinatePendingSummaryData() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES
+			    (5001, 1, '1168010300101400101', 'Missing coordinate address', NULL, NULL),
+			    (5002, 1, '1168010300101400102', 'Same PNU address', 37.5123, 127.0456),
+			    (5003, 1, '1168010300101400103', 'Partial display coordinate address', 37.5123, 127.0456)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt)
+			VALUES
+			    (1501, 5001, 'SUMMARY-PK-1501', 'APT-1501', 'Summary Missing Coordinate', 100),
+			    (1601, 5002, 'SUMMARY-PK-1601', 'APT-1601', 'Summary Same PNU A', 100),
+			    (1602, 5002, 'SUMMARY-PK-1602', 'APT-1602', 'Summary Same PNU B', 100),
+			    (1701, 5003, 'SUMMARY-PK-1701', 'APT-1701', 'Summary Display Ready', 100),
+			    (1702, 5003, 'SUMMARY-PK-1702', 'APT-1702', 'Summary Display Missing', 100)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_display_coordinate (
+			    complex_id,
+			    latitude,
+			    longitude,
+			    coordinate_source,
+			    confidence,
+			    reason
+			)
+			VALUES (1701, 37.5130, 127.0460, 'BUILDING_FOOTPRINT', 90, 'trusted display coordinate')
+			""").update();
+		insertRawAndTrade(91001L, 1501L, "summary-missing-1501", "SUMMARY-PK-1501", "APT-1501");
+		insertRawAndTrade(91002L, 1601L, "summary-same-1601", "SUMMARY-PK-1601", "APT-1601");
+		insertRawAndTrade(91003L, 1602L, "summary-same-1602", "SUMMARY-PK-1602", "APT-1602");
+		insertRawAndTrade(91004L, 1701L, "summary-display-1701", "SUMMARY-PK-1701", "APT-1701");
+		insertRawAndTrade(91005L, 1702L, "summary-display-1702", "SUMMARY-PK-1702", "APT-1702");
 	}
 
 	private void insertRawAndTrade(Long rawId, Long complexId, String sourceKey, String complexPk, String aptSeq) {

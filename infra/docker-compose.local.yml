@@ -22,6 +22,21 @@ services:
     networks:
       - home-search-local
 
+  redis:
+    image: redis:7.4-alpine
+    container_name: home-search-redis
+    restart: unless-stopped
+    ports:
+      - "${HOME_SEARCH_REDIS_PORT:-16379}:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - home-search-local
+
   api:
     image: eclipse-temurin:17-jdk
     container_name: home-search-api
@@ -52,6 +67,10 @@ services:
       HOME_INGEST_RTMS_ENABLED: ${HOME_INGEST_RTMS_ENABLED:-false}
       HOME_INGEST_RTMS_MODE: ${HOME_INGEST_RTMS_MODE:-one-shot}
       HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY: ${HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY:-false}
+      HOME_MAP_MARKER_CACHE_ENABLED: ${HOME_MAP_MARKER_CACHE_ENABLED:-false}
+      HOME_MAP_MARKER_CACHE_TTL: ${HOME_MAP_MARKER_CACHE_TTL:-5m}
+      SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${SPRING_DATA_REDIS_PORT:-6379}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       SERVER_PORT: "8080"
     ports:

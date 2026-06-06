@@ -62,7 +62,7 @@ Home Search backend collection and map display need:
 - `ADMIN_COORDINATE_ACCESS_CODE` when coordinate override admin is enabled.
 - `HOME_MAP_MARKER_CACHE_ENABLED=true` when Redis-backed map marker caching is
   enabled.
-- `HOME_MAP_MARKER_CACHE_TTL`, for example `60s`, to bound stale marker data.
+- `HOME_MAP_MARKER_CACHE_TTL`, for example `5m`, to bound stale marker data.
 - `SPRING_DATA_REDIS_HOST` and `SPRING_DATA_REDIS_PORT` when marker caching is
   enabled outside the local Docker network.
 
@@ -121,6 +121,7 @@ capability when moving to `apps/api`.
 
 - Local PostGIS can start.
 - API can connect to the database.
+- Local Redis can start and respond to `redis-cli ping`.
 - Flyway can create baseline tables from scratch.
 - Frontend can call the API through its env base URL.
 - Ingest logs show read, inserted, duplicate, and failed counts.
@@ -141,3 +142,36 @@ SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS=*:missing
 This is a local runtime guard only. Do not use it as a substitute for reviewing
 production migration history, and do not run Flyway `repair` or delete local
 database state without explicit approval.
+
+## Local Redis
+
+`infra/docker-compose.local.yml` includes a local Redis service for short-lived
+map marker response caching.
+
+- Container name: `home-search-redis`.
+- Docker network address: `redis:6379`.
+- Host address: `localhost:${HOME_SEARCH_REDIS_PORT:-16379}`.
+- Healthcheck command: `redis-cli ping`.
+
+The local `api` service receives Redis connection variables by default:
+
+```text
+HOME_MAP_MARKER_CACHE_ENABLED=false
+HOME_MAP_MARKER_CACHE_TTL=5m
+SPRING_DATA_REDIS_HOST=redis
+SPRING_DATA_REDIS_PORT=6379
+```
+
+Marker response caching remains opt-in. To run the local API with Redis-backed
+marker caching enabled:
+
+```bash
+HOME_MAP_MARKER_CACHE_ENABLED=true docker compose -f infra/docker-compose.local.yml up -d redis api
+```
+
+To verify Redis itself:
+
+```bash
+docker compose -f infra/docker-compose.local.yml up -d redis
+docker exec home-search-redis redis-cli ping
+```

@@ -66,6 +66,13 @@ Excluded from the current project scope:
 8. [UI_UX_MIGRATION.md](UI_UX_MIGRATION.md)
 9. [INFRA_AND_ENV.md](INFRA_AND_ENV.md)
 
+## Later-Scope Planning Docs
+
+- [NEWS_SIGNAL_PIPELINE.md](NEWS_SIGNAL_PIPELINE.md): planning baseline for
+  metadata-only real-estate news signals, prediction-time date handling, and
+  Obsidian/RAG exports. This does not change the current map and trade-data
+  migration scope.
+
 ## Non-Negotiable Decisions
 
 - Main API URLs stay stable.

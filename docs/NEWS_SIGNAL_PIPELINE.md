@@ -248,18 +248,84 @@ Every RAG query that supports a historical prediction must include a cutoff:
 first_seen_at <= prediction_cutoff
 ```
 
+## Dataset Contract
+
+Model and RAG consumers should read prediction-safe rows from a stable dataset
+contract, not from ad hoc joins over operational tables.
+
+`news_signal_dataset_view` exposes:
+
+- Article identity: `source`, `source_key`, `publisher`, `title`, `url`.
+- Time safety: `published_at`, `provider_pub_at`, `first_seen_at`,
+  `feature_date_kst`, `news_date_kst`.
+- Model features: `region_tags`, `complex_candidates`, `topic_tags`,
+  `impact_target`, `impact_direction`, `sentiment`, `confidence`,
+  `extraction_version`, `evidence_level`.
+
+It must not expose:
+
+- `raw_provider_payload`
+- article body fields such as `content`, `body`, `full_text`, or `html`
+- internally generated replacement summaries
+
+Historical prediction datasets must always apply:
+
+```text
+first_seen_at <= prediction_cutoff
+```
+
+This rule is stricter than `published_at <= prediction_cutoff` and prevents a
+future-discovered historical article from leaking into a past backtest.
+
+## Retention And Cleanup
+
+Cleanup should remove provider payloads before deleting source identities.
+
+Rows in `news_article_observation` keep the minimum dedupe/audit identity:
+
+- `source`
+- `source_key`
+- `publisher`
+- `title`
+- `url`
+- `published_at`
+- `first_seen_at`
+- `ingest_status`
+- `failure_reason`
+
+Recommended retention actions:
+
+- `FEATURED`: keep signal rows and source metadata, purge `raw_provider_payload`.
+- `DUPLICATE`: keep `source + source_key` for dedupe, purge payload.
+- `SKIPPED_IRRELEVANT`: keep collection trace, purge payload.
+- `TERMS_BLOCKED`: keep failure reason and source identity, purge payload.
+- `FETCH_FAILED` and `PARSE_FAILED`: keep payload during retry window, then
+  purge payload after the retention cutoff.
+
+The database provides:
+
+- `news_article_observation_cleanup_candidate_view`: explains rows whose
+  provider payload is eligible for cleanup.
+- `purge_news_article_observation_payloads(retention_cutoff)`: purges provider
+  payloads while preserving dedupe identities.
+
+Hard-deleting observation rows is a later policy decision. Do it only when
+dedupe, backtest reproducibility, source terms, and audit requirements remain
+explainable without the row.
+
 ## Implementation Slices
 
 1. Add this planning document and keep it linked as later-scope.
 2. Add Flyway tables for `news_article_observation`, `news_signal_feature`,
    and `news_source_policy`.
-3. Implement one metadata-only source adapter, preferably Naver News Search API
+3. Add dataset and cleanup lifecycle contracts for model/RAG consumers.
+4. Implement one metadata-only source adapter, preferably Naver News Search API
    or one official RSS feed.
-4. Add dedupe tests for repeated article observations.
-5. Add cutoff tests for prediction-time feature retrieval.
-6. Add title/snippet feature extraction with deterministic labels.
-7. Add Obsidian daily markdown export from structured features.
-8. Add RAG retrieval over markdown or database chunks with cutoff enforcement.
+5. Add dedupe tests for repeated article observations.
+6. Add cutoff tests for prediction-time feature retrieval.
+7. Add title/snippet feature extraction with deterministic labels.
+8. Add Obsidian daily markdown export from structured features.
+9. Add RAG retrieval over markdown or database chunks with cutoff enforcement.
 
 ## TDD Starting Points
 

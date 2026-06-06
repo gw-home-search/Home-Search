@@ -34,7 +34,7 @@ home:
   map:
     marker-cache:
       enabled: false
-      ttl: 60s
+      ttl: 5m
   admin:
     coordinate-override:
       enabled: false

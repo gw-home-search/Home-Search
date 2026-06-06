@@ -86,6 +86,50 @@ k6 run \
   apps/api/perf/k6/map-marker-baseline.js
 ```
 
+Redis cache 운영 후보를 비교할 때는 같은 요청으로 off/cold/warm을 분리한다.
+
+```bash
+# Redis off
+k6 run \
+  -e SCENARIO=baseline \
+  -e BASE_URL=http://localhost:18080 \
+  -e TARGET_RPS=1 \
+  -e COMPLEX_WEIGHT=1 \
+  -e REGION_WEIGHT=0 \
+  -e COMPLEX_CASE=seed-wide \
+  -e RAMP_UP=1s \
+  -e STEADY=10s \
+  -e RAMP_DOWN=1s \
+  apps/api/perf/k6/map-marker-baseline.js
+
+# Redis cold miss: Redis FLUSHALL 후 1회
+k6 run \
+  -e SCENARIO=smoke \
+  -e BASE_URL=http://localhost:18080 \
+  -e SMOKE_ITERATIONS=1 \
+  -e COMPLEX_WEIGHT=1 \
+  -e REGION_WEIGHT=0 \
+  -e COMPLEX_CASE=seed-wide \
+  apps/api/perf/k6/map-marker-baseline.js
+
+# Redis warm hit: cold miss로 cache가 채워진 뒤 반복 실행
+k6 run \
+  -e SCENARIO=baseline \
+  -e BASE_URL=http://localhost:18080 \
+  -e TARGET_RPS=1 \
+  -e COMPLEX_WEIGHT=1 \
+  -e REGION_WEIGHT=0 \
+  -e COMPLEX_CASE=seed-wide \
+  -e RAMP_UP=1s \
+  -e STEADY=10s \
+  -e RAMP_DOWN=1s \
+  apps/api/perf/k6/map-marker-baseline.js
+```
+
+Redis cache 관측 지표:
+
+- `home.search.map.marker.cache.requests`: `endpoint=complexes`, `result=hit|miss|fallback`
+
 ## 계약 확인
 
 스크립트는 다음을 체크한다.

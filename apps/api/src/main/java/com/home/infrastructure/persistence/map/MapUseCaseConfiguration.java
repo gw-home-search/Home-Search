@@ -7,6 +7,8 @@ import com.home.application.map.ComplexMarkerRepository;
 import com.home.application.map.MapQueryUseCase;
 import com.home.application.map.MapUseCase;
 
+import io.micrometer.core.instrument.MeterRegistry;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -25,14 +27,16 @@ class MapUseCaseConfiguration {
 		ObjectProvider<JdbcClient> jdbcClientProvider,
 		ObjectProvider<StringRedisTemplate> redisTemplateProvider,
 		ObjectProvider<ObjectMapper> objectMapperProvider,
+		ObjectProvider<MeterRegistry> meterRegistryProvider,
 		@Value("${home.map.marker-cache.enabled:false}") boolean markerCacheEnabled,
-		@Value("${home.map.marker-cache.ttl:60s}") String markerCacheTtl
+		@Value("${home.map.marker-cache.ttl:5m}") String markerCacheTtl
 	) {
 		JdbcClient jdbcClient = requiredJdbcClient(jdbcClientProvider);
 		ComplexMarkerRepository complexMarkerRepository = complexMarkerRepository(
 			jdbcClient,
 			redisTemplateProvider,
 			objectMapperProvider,
+			meterRegistryProvider,
 			markerCacheEnabled,
 			markerCacheTtl(markerCacheTtl)
 		);
@@ -46,6 +50,7 @@ class MapUseCaseConfiguration {
 		JdbcClient jdbcClient,
 		ObjectProvider<StringRedisTemplate> redisTemplateProvider,
 		ObjectProvider<ObjectMapper> objectMapperProvider,
+		ObjectProvider<MeterRegistry> meterRegistryProvider,
 		boolean markerCacheEnabled,
 		Duration markerCacheTtl
 	) {
@@ -55,10 +60,11 @@ class MapUseCaseConfiguration {
 		}
 		StringRedisTemplate redisTemplate = redisTemplateProvider.getIfAvailable();
 		ObjectMapper objectMapper = objectMapperProvider.getIfAvailable();
-		if (redisTemplate == null || objectMapper == null) {
+		MeterRegistry meterRegistry = meterRegistryProvider.getIfAvailable();
+		if (redisTemplate == null || objectMapper == null || meterRegistry == null) {
 			return repository;
 		}
-		return new RedisCachingComplexMarkerRepository(repository, redisTemplate, objectMapper, markerCacheTtl);
+		return new RedisCachingComplexMarkerRepository(repository, redisTemplate, objectMapper, markerCacheTtl, meterRegistry);
 	}
 
 	private JdbcClient requiredJdbcClient(ObjectProvider<JdbcClient> jdbcClientProvider) {

@@ -134,30 +134,39 @@ EXPLAIN evidence:
 - `/api/v1/map/complexes` read path에 Redis read-through cache decorator 추가.
 - cache key는 bounds와 `pyeong`, `priceEok`, `age`, `unit` 전체 필터를 포함한다.
 - 기본값은 `home.map.marker-cache.enabled=false`이며, 활성화 시 `home.map.marker-cache.ttl`로 stale window를 제한한다.
+- 운영 후보 TTL 기본값은 `5m`로 둔다. `60s`는 실험 반복에는 안전하지만 실제 지도 이동/재조회 cache hit window가 짧다.
 - Redis read/write 장애는 API 실패로 전파하지 않고 JDBC 조회로 fallback한다.
+- Redis cache 결과는 `home.search.map.marker.cache.requests` metric으로 기록한다.
+  - tags: `endpoint=complexes`, `result=hit|miss|fallback`
 - k6에 `COMPLEX_CASE`, `REGION_CASE` 옵션을 추가해 cache hit 효과를 같은 요청으로 분리 측정할 수 있게 했다.
 
 검증 결과:
 
-| case | no Redis | Redis warm hit | change |
-| --- | ---: | ---: | ---: |
-| complex seed-wide curl | 4,092ms cold miss | 56ms warm hit | 약 99% 개선 |
-| k6 `TARGET_RPS=1`, `COMPLEX_CASE=seed-wide`, 10s p95 | 3,201ms | 68ms | 약 98% 개선 |
-| k6 fail rate | 0% | 0% | 유지 |
+| case | p95 | reqs | fail rate | checks |
+| --- | ---: | ---: | ---: | ---: |
+| Redis off, k6 `TARGET_RPS=1`, `COMPLEX_CASE=seed-wide`, 10s | 4,062.09ms | 11 | 0% | 100% |
+| Redis cold miss, Redis `FLUSHALL` 후 k6 smoke 1회 | 3,995.38ms | 1 | 0% | 100% |
+| Redis warm hit, k6 `TARGET_RPS=1`, `COMPLEX_CASE=seed-wide`, 10s | 52.75ms | 10 | 0% | 100% |
 
 측정 조건:
 
-- no Redis: existing local API `http://localhost:8080`
-- Redis cache: local API `http://localhost:18080`
+- API: local API `http://localhost:18080`
 - Redis: temporary `redis:7.4-alpine`, `localhost:16379`
-- request count: k6 10 requests, `COMPLEX_WEIGHT=1`, `REGION_WEIGHT=0`, `RAMP_UP=1s`, `STEADY=10s`, `RAMP_DOWN=1s`
+- data: local `home_search`, complex marker 평균 `8,701`건
+- warm/off: k6 10 requests, `COMPLEX_WEIGHT=1`, `REGION_WEIGHT=0`, `RAMP_UP=1s`, `STEADY=10s`, `RAMP_DOWN=1s`
+- cold: Redis `FLUSHALL` 후 k6 smoke 1 request
+
+성능 해석:
+
+- Redis cold miss는 DB 조회가 그대로 수행되어 off와 같은 비용 구간에 있다.
+- Redis warm hit는 반복 broad-bounds 요청 p95를 `4,062.09ms`에서 `52.75ms`로 약 98.7% 단축했다.
 
 주의:
 
 - cache miss는 여전히 DB 조회 비용을 그대로 가진다.
-- 현재 TTL 기본값은 `60s`라 warm-up 후 긴 테스트를 돌리면 중간 만료가 p95에 섞일 수 있다.
+- TTL `5m`은 지도 반복 이동/재조회에는 충분한 cache hit window를 주지만, 데이터 변경 직후 stale marker 허용 시간을 의미한다.
 - 데이터 변경 직후 stale marker가 노출될 수 있으므로 production 적용 시 TTL과 ingest 후 invalidation 정책을 별도로 결정해야 한다.
 
 이력서 한 줄 후보:
 
-- k6 고정 케이스와 Redis read-through cache를 도입해 지도 marker API의 반복 broad-bounds 요청 p95를 3.2s에서 68ms로 약 98% 단축하고, Redis 장애 시 DB fallback으로 API 가용성을 보존.
+- k6 고정 케이스와 Redis read-through cache를 도입해 지도 marker API의 반복 broad-bounds 요청 p95를 4.06s에서 52.75ms로 약 98.7% 단축하고, Redis 장애 시 DB fallback과 cache hit/miss/fallback metric으로 API 가용성과 관측 가능성을 보강.

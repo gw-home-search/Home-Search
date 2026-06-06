@@ -3,9 +3,13 @@ package com.home.infrastructure.persistence.map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import java.time.Duration;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.map.MapQueryUseCase;
 import com.home.application.map.MapUseCase;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,10 +55,28 @@ class MapUseCaseConfigurationTest {
 			.withBean(JdbcClient.class, () -> mock(JdbcClient.class))
 			.withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
 			.withBean(ObjectMapper.class, ObjectMapper::new)
+			.withBean(SimpleMeterRegistry.class, SimpleMeterRegistry::new)
 			.run(context -> {
 				assertThat(context).hasSingleBean(MapUseCase.class);
 				assertThat(complexMarkerRepository(context.getBean(MapUseCase.class)))
 					.isInstanceOf(RedisCachingComplexMarkerRepository.class);
+			});
+	}
+
+	@Test
+	@DisplayName("marker cache TTL 기본값은 운영 후보인 5분이다")
+	void markerCacheDefaultTtlIsFiveMinutes() {
+		contextRunner
+			.withPropertyValues("home.map.marker-cache.enabled=true")
+			.withBean(JdbcClient.class, () -> mock(JdbcClient.class))
+			.withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
+			.withBean(ObjectMapper.class, ObjectMapper::new)
+			.withBean(SimpleMeterRegistry.class, SimpleMeterRegistry::new)
+			.run(context -> {
+				Object repository = complexMarkerRepository(context.getBean(MapUseCase.class));
+
+				assertThat(ReflectionTestUtils.getField(repository, "ttl"))
+					.isEqualTo(Duration.ofMinutes(5));
 			});
 	}
 

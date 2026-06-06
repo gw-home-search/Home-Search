@@ -40,6 +40,7 @@ Optional but recommended:
 - Prometheus endpoint.
 - Grafana dashboard.
 - Batch execution logs.
+- Redis for short-lived map marker response caching.
 
 ## Required Backend Environment
 
@@ -59,6 +60,11 @@ Home Search backend collection and map display need:
 - `JWT_SECRET` only if authenticated endpoints are enabled.
 - `FRONTEND_URL`
 - `ADMIN_COORDINATE_ACCESS_CODE` when coordinate override admin is enabled.
+- `HOME_MAP_MARKER_CACHE_ENABLED=true` when Redis-backed map marker caching is
+  enabled.
+- `HOME_MAP_MARKER_CACHE_TTL`, for example `60s`, to bound stale marker data.
+- `SPRING_DATA_REDIS_HOST` and `SPRING_DATA_REDIS_PORT` when marker caching is
+  enabled outside the local Docker network.
 
 Authentication can remain outside the core map-display path unless a later
 work item explicitly brings authenticated endpoints into scope.

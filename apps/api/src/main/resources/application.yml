@@ -25,7 +25,16 @@ vworld:
     connect-timeout-millis: 5000
     read-timeout-millis: 5000
 
+management:
+  health:
+    redis:
+      enabled: false
+
 home:
+  map:
+    marker-cache:
+      enabled: false
+      ttl: 60s
   admin:
     coordinate-override:
       enabled: false

@@ -62,6 +62,8 @@ k6 run \
 - `SMOKE_MAX_DURATION`: smoke 최대 실행 시간. 기본값은 `2m`.
 - `P95_THRESHOLD_MS`: 지정하면 endpoint별 `http_req_duration p(95)` threshold를 추가한다.
 - `SUMMARY_EXPORT`: 지정하면 k6 summary JSON을 해당 경로에 저장한다.
+- `COMPLEX_CASE`: `seed-wide`, `seed-narrow`, `price-filter`, `unit-filter` 중 하나로 고정한다.
+- `REGION_CASE`: `si-do`, `si-gun-gu`, `eup-myeon-dong` 중 하나로 고정한다.
 - `RAMP_UP`, `STEADY`, `RAMP_DOWN`, `STRESS_STEADY`: stage duration override.
 
 endpoint를 따로 보고 싶으면 한쪽 weight를 `0`으로 둔다.
@@ -69,6 +71,19 @@ endpoint를 따로 보고 싶으면 한쪽 weight를 `0`으로 둔다.
 ```bash
 k6 run -e SCENARIO=smoke -e COMPLEX_WEIGHT=1 -e REGION_WEIGHT=0 apps/api/perf/k6/map-marker-baseline.js
 k6 run -e SCENARIO=smoke -e COMPLEX_WEIGHT=0 -e REGION_WEIGHT=1 apps/api/perf/k6/map-marker-baseline.js
+```
+
+Redis cache hit 효과를 분리해서 보고 싶으면 같은 complex 요청을 고정한다.
+
+```bash
+k6 run \
+  -e SCENARIO=baseline \
+  -e BASE_URL=http://localhost:8080 \
+  -e TARGET_RPS=1 \
+  -e COMPLEX_WEIGHT=1 \
+  -e REGION_WEIGHT=0 \
+  -e COMPLEX_CASE=seed-wide \
+  apps/api/perf/k6/map-marker-baseline.js
 ```
 
 ## 계약 확인

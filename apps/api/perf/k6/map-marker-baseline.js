@@ -11,6 +11,8 @@ const REGION_WEIGHT = nonNegativeNumberFromEnv('REGION_WEIGHT', 1);
 const P95_THRESHOLD_MS = positiveNumberFromEnv('P95_THRESHOLD_MS', 0);
 const REQUEST_TIMEOUT = __ENV.REQUEST_TIMEOUT || '60s';
 const GRACEFUL_STOP = __ENV.GRACEFUL_STOP || '1m';
+const COMPLEX_CASE = __ENV.COMPLEX_CASE || '';
+const REGION_CASE = __ENV.REGION_CASE || '';
 
 const COMPLEX_MARKER_DURATION = new Trend('complex_marker_duration', true);
 const REGION_MARKER_DURATION = new Trend('region_marker_duration', true);
@@ -203,10 +205,10 @@ export default function () {
   }
 
   if (chooseEndpoint()) {
-    requestComplexMarkers(randomItem(complexMarkerRequests));
+    requestComplexMarkers(selectedRequestCase(complexMarkerRequests, COMPLEX_CASE));
     return;
   }
-  requestRegionMarkers(randomItem(regionMarkerRequests));
+  requestRegionMarkers(selectedRequestCase(regionMarkerRequests, REGION_CASE));
 }
 
 function requestComplexMarkers(requestCase) {
@@ -344,6 +346,13 @@ function randomItem(items) {
   return items[Math.floor(Math.random() * items.length)];
 }
 
+function selectedRequestCase(items, caseName) {
+  if (!caseName) {
+    return randomItem(items);
+  }
+  return items.find((item) => item.name === caseName) || randomItem(items);
+}
+
 function isNumber(value) {
   return typeof value === 'number' && Number.isFinite(value);
 }
@@ -387,6 +396,8 @@ function textSummary(data) {
     'Home Search map marker k6 summary',
     `scenario=${SCENARIO}`,
     `base_url=${BASE_URL}`,
+    `complex_case=${COMPLEX_CASE || 'random'}`,
+    `region_case=${REGION_CASE || 'random'}`,
     `request_timeout=${REQUEST_TIMEOUT}`,
     `graceful_stop=${GRACEFUL_STOP}`,
     metricLine(metrics, 'http_reqs', 'count'),

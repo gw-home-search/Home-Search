@@ -3,13 +3,16 @@ package com.home.infrastructure.persistence.map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.map.MapQueryUseCase;
 import com.home.application.map.MapUseCase;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class MapUseCaseConfigurationTest {
 
@@ -35,6 +38,27 @@ class MapUseCaseConfigurationTest {
 			.run(context -> {
 				assertThat(context).hasSingleBean(MapUseCase.class);
 				assertThat(context.getBean(MapUseCase.class)).isInstanceOf(MapQueryUseCase.class);
+				assertThat(complexMarkerRepository(context.getBean(MapUseCase.class)))
+					.isInstanceOf(JdbcMapMarkerRepository.class);
 			});
+	}
+
+	@Test
+	@DisplayName("marker cache가 켜지면 Redis cache repository로 JDBC marker repository를 감싼다")
+	void markerCacheWrapsJdbcMarkerRepositoryWhenEnabled() {
+		contextRunner
+			.withPropertyValues("home.map.marker-cache.enabled=true")
+			.withBean(JdbcClient.class, () -> mock(JdbcClient.class))
+			.withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
+			.withBean(ObjectMapper.class, ObjectMapper::new)
+			.run(context -> {
+				assertThat(context).hasSingleBean(MapUseCase.class);
+				assertThat(complexMarkerRepository(context.getBean(MapUseCase.class)))
+					.isInstanceOf(RedisCachingComplexMarkerRepository.class);
+			});
+	}
+
+	private Object complexMarkerRepository(MapUseCase mapUseCase) {
+		return ReflectionTestUtils.getField(mapUseCase, "complexMarkerRepository");
 	}
 }

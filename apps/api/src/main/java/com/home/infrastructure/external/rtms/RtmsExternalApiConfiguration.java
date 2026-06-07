@@ -7,6 +7,7 @@ import com.home.application.ingest.OpenApiTradeIngestService;
 import com.home.application.ingest.RtmsIngestRunRepository;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -94,6 +95,7 @@ class RtmsExternalApiConfiguration {
 
 	@Bean
 	RtmsApartmentTradeClient rtmsApartmentTradeClient(
+		@Qualifier("rtmsApartmentTradeRestClient")
 		RestClient rtmsApartmentTradeRestClient,
 		RtmsApartmentTradeProperties properties,
 		RtmsApartmentTradeResponseParser parser

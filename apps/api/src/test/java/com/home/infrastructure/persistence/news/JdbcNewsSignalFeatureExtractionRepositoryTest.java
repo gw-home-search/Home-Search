@@ -46,9 +46,13 @@ class JdbcNewsSignalFeatureExtractionRepositoryTest extends JdbcPostgresTestSupp
 		);
 
 		assertThat(candidates).extracting(NewsSignalFeatureExtractionCandidate::sourceKey)
-			.containsExactly("naver-news:keep", "naver-news:review");
+			.containsExactly("naver-news:keep", "naver-news:review", "naver-news:featured");
 		assertThat(candidates).extracting(NewsSignalFeatureExtractionCandidate::relevanceDecisionType)
-			.containsExactly(NewsArticleRelevanceDecisionType.KEEP, NewsArticleRelevanceDecisionType.REVIEW);
+			.containsExactly(
+				NewsArticleRelevanceDecisionType.KEEP,
+				NewsArticleRelevanceDecisionType.REVIEW,
+				NewsArticleRelevanceDecisionType.KEEP
+			);
 
 		assertThat(repository.saveFeatureIfAbsent(command(keepId, "naver-news:keep"))).isTrue();
 		assertThat(repository.saveFeatureIfAbsent(command(keepId, "naver-news:keep"))).isFalse();
@@ -56,6 +60,7 @@ class JdbcNewsSignalFeatureExtractionRepositoryTest extends JdbcPostgresTestSupp
 		assertThat(repository.markFeaturedIfObserved(keepId)).isFalse();
 
 		assertThat(featureCount()).isEqualTo(1L);
+		assertThat(titleKeywordsOf("naver-news:keep")).isEqualTo("[\"강남\", \"재건축\"]");
 		assertThat(statusOf(keepId)).isEqualTo("FEATURED");
 	}
 
@@ -170,6 +175,7 @@ class JdbcNewsSignalFeatureExtractionRepositoryTest extends JdbcPostgresTestSupp
 			sourceKey,
 			java.time.LocalDate.parse("2026-06-07"),
 			OffsetDateTime.parse("2026-06-07T09:35:00+09:00"),
+			List.of("강남", "재건축"),
 			List.of("seoul", "gangnam-gu"),
 			List.of(Map.of("complexId", 501, "confidence", 0.42)),
 			List.of("policy", "reconstruction"),
@@ -185,6 +191,17 @@ class JdbcNewsSignalFeatureExtractionRepositoryTest extends JdbcPostgresTestSupp
 	private long featureCount() {
 		return jdbcClient.sql("SELECT count(*) FROM news_signal_feature")
 			.query(Long.class)
+			.single();
+	}
+
+	private String titleKeywordsOf(String sourceKey) {
+		return jdbcClient.sql("""
+			SELECT title_keywords::text
+			FROM news_signal_feature
+			WHERE source_key = :sourceKey
+			""")
+			.param("sourceKey", sourceKey)
+			.query(String.class)
 			.single();
 	}
 

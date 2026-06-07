@@ -9,6 +9,7 @@ import java.util.Map;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.news.NewsSignalDatasetRow;
+import com.home.application.news.NewsSignalFeatureExtractionPolicy;
 import com.home.application.news.NewsSignalObsidianExportRepository;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -54,6 +55,7 @@ class JdbcNewsSignalObsidianExportRepository implements NewsSignalObsidianExport
 			    feature_date_kst,
 			    news_date_kst,
 			    article_collected_at,
+			    title_keywords::text AS title_keywords,
 			    region_tags::text AS region_tags,
 			    complex_candidates::text AS complex_candidates,
 			    topic_tags::text AS topic_tags,
@@ -67,11 +69,13 @@ class JdbcNewsSignalObsidianExportRepository implements NewsSignalObsidianExport
 			FROM news_signal_dataset_view
 			WHERE first_seen_at >= :startInclusive
 			  AND first_seen_at < :endExclusive
+			  AND extraction_version = :extractionVersion
 			ORDER BY first_seen_at, feature_id
 			LIMIT :limit
 			""")
 			.param("startInclusive", startInclusive)
 			.param("endExclusive", endExclusive)
+			.param("extractionVersion", NewsSignalFeatureExtractionPolicy.DEFAULT_EXTRACTION_VERSION)
 			.param("limit", limit)
 			.query((resultSet, rowNumber) -> new NewsSignalDatasetRow(
 				resultSet.getLong("feature_id"),
@@ -89,6 +93,7 @@ class JdbcNewsSignalObsidianExportRepository implements NewsSignalObsidianExport
 				resultSet.getObject("feature_date_kst", LocalDate.class),
 				resultSet.getObject("news_date_kst", LocalDate.class),
 				resultSet.getObject("article_collected_at", OffsetDateTime.class),
+				readStringList(resultSet.getString("title_keywords")),
 				readStringList(resultSet.getString("region_tags")),
 				readMapList(resultSet.getString("complex_candidates")),
 				readStringList(resultSet.getString("topic_tags")),

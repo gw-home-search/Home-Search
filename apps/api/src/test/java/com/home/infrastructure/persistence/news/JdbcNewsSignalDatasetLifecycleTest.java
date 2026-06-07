@@ -42,7 +42,15 @@ class JdbcNewsSignalDatasetLifecycleTest extends JdbcPostgresTestSupport {
 		assertThat(datasetSourceKeysAtOrBefore("2026-06-07T23:59:59+09:00"))
 			.containsExactly("naver-news:visible");
 		assertThat(datasetColumns())
-			.contains("feature_id", "article_observation_id", "source_key", "title", "url", "snippet")
+			.contains(
+				"feature_id",
+				"article_observation_id",
+				"source_key",
+				"title",
+				"title_keywords",
+				"url",
+				"snippet"
+			)
 			.doesNotContain("raw_provider_payload")
 			.doesNotContain("content")
 			.doesNotContain("body")

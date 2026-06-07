@@ -95,6 +95,7 @@ class NewsSignalObsidianExportServiceTest {
 			LocalDate.parse("2026-06-07"),
 			LocalDate.parse("2026-06-07"),
 			OffsetDateTime.parse("2026-06-07T09:15:00+09:00"),
+			List.of("강남", "재건축", "집값"),
 			List.of("seoul", "gangnam-gu"),
 			List.of(Map.of()),
 			List.of("policy", "reconstruction"),
@@ -102,7 +103,7 @@ class NewsSignalObsidianExportServiceTest {
 			"up",
 			"positive",
 			0.82,
-			"title-snippet-signal-20260607-r1",
+			NewsSignalFeatureExtractionPolicy.DEFAULT_EXTRACTION_VERSION,
 			"title",
 			OffsetDateTime.parse("2026-06-07T09:16:00+09:00")
 		);

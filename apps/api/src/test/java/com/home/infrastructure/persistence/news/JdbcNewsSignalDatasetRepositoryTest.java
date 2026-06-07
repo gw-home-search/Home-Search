@@ -7,6 +7,7 @@ import java.time.OffsetDateTime;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.news.NewsSignalDatasetRepository;
 import com.home.application.news.NewsSignalDatasetRow;
+import com.home.application.news.NewsSignalFeatureExtractionPolicy;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 
 import org.junit.jupiter.api.DisplayName;
@@ -30,17 +31,34 @@ class JdbcNewsSignalDatasetRepositoryTest extends JdbcPostgresTestSupport {
 			"2026-06-01T09:00:00+09:00",
 			"2026-06-08T09:00:00+09:00"
 		);
-		insertSignalFeature(visibleArticleId, "naver-news:visible", "2026-06-07T09:00:00+09:00");
+		insertSignalFeature(
+			visibleArticleId,
+			"naver-news:visible",
+			"2026-06-07T09:00:00+09:00",
+			"title-snippet-signal-20260607-r1"
+		);
+		insertSignalFeature(
+			visibleArticleId,
+			"naver-news:visible",
+			"2026-06-07T09:00:00+09:00",
+			NewsSignalFeatureExtractionPolicy.DEFAULT_EXTRACTION_VERSION
+		);
 		insertSignalFeature(
 			futureDiscoveredArticleId,
 			"naver-news:future-discovered",
-			"2026-06-08T09:00:00+09:00"
+			"2026-06-08T09:00:00+09:00",
+			NewsSignalFeatureExtractionPolicy.DEFAULT_EXTRACTION_VERSION
 		);
 		NewsSignalDatasetRepository repository = new JdbcNewsSignalDatasetRepository(jdbcClient, objectMapper);
 
 		assertThat(repository.findAtOrBefore(OffsetDateTime.parse("2026-06-07T23:59:59+09:00"), 100))
-			.extracting(NewsSignalDatasetRow::sourceKey)
-			.containsExactly("naver-news:visible");
+			.singleElement()
+			.satisfies(row -> {
+				assertThat(row.sourceKey()).isEqualTo("naver-news:visible");
+				assertThat(row.titleKeywords()).containsExactly("강남", "재건축", "집값");
+				assertThat(row.extractionVersion())
+					.isEqualTo(NewsSignalFeatureExtractionPolicy.DEFAULT_EXTRACTION_VERSION);
+			});
 		assertThat(repository.findAtOrBefore(OffsetDateTime.parse("2026-06-09T00:00:00+09:00"), 100))
 			.extracting(NewsSignalDatasetRow::sourceKey)
 			.containsExactly("naver-news:visible", "naver-news:future-discovered");
@@ -115,7 +133,12 @@ class JdbcNewsSignalDatasetRepositoryTest extends JdbcPostgresTestSupport {
 			.single();
 	}
 
-	private void insertSignalFeature(Long articleObservationId, String sourceKey, String firstSeenAt) {
+	private void insertSignalFeature(
+		Long articleObservationId,
+		String sourceKey,
+		String firstSeenAt,
+		String extractionVersion
+	) {
 		jdbcClient.sql("""
 			INSERT INTO news_signal_feature (
 			    article_observation_id,
@@ -123,6 +146,7 @@ class JdbcNewsSignalDatasetRepositoryTest extends JdbcPostgresTestSupport {
 			    source_key,
 			    feature_date_kst,
 			    first_seen_at,
+			    title_keywords,
 			    region_tags,
 			    complex_candidates,
 			    topic_tags,
@@ -139,6 +163,7 @@ class JdbcNewsSignalDatasetRepositoryTest extends JdbcPostgresTestSupport {
 			    :sourceKey,
 			    (:firstSeenAt::timestamptz AT TIME ZONE 'Asia/Seoul')::date,
 			    :firstSeenAt::timestamptz,
+			    '["강남", "재건축", "집값"]'::jsonb,
 			    '["seoul", "gangnam-gu"]'::jsonb,
 			    '[]'::jsonb,
 			    '["policy", "reconstruction"]'::jsonb,
@@ -146,13 +171,14 @@ class JdbcNewsSignalDatasetRepositoryTest extends JdbcPostgresTestSupport {
 			    'up',
 			    'positive',
 			    0.8400,
-			    'title-snippet-signal-20260607-r1',
+			    :extractionVersion,
 			    'snippet'
 			)
 			""")
 			.param("articleObservationId", articleObservationId)
 			.param("sourceKey", sourceKey)
 			.param("firstSeenAt", firstSeenAt)
+			.param("extractionVersion", extractionVersion)
 			.update();
 	}
 }

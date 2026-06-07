@@ -49,7 +49,7 @@ class JdbcNewsSignalFeatureExtractionRepository implements NewsSignalFeatureExtr
 			FROM news_article_observation observation
 			JOIN latest_decision
 			  ON latest_decision.article_observation_id = observation.id
-			WHERE observation.ingest_status = 'OBSERVED'
+			WHERE observation.ingest_status IN ('OBSERVED', 'FEATURED')
 			  AND latest_decision.decision IN ('KEEP', 'REVIEW')
 			  AND NOT EXISTS (
 			      SELECT 1
@@ -86,6 +86,7 @@ class JdbcNewsSignalFeatureExtractionRepository implements NewsSignalFeatureExtr
 			        source_key,
 			        feature_date_kst,
 			        first_seen_at,
+			        title_keywords,
 			        region_tags,
 			        complex_candidates,
 			        topic_tags,
@@ -102,6 +103,7 @@ class JdbcNewsSignalFeatureExtractionRepository implements NewsSignalFeatureExtr
 			        :sourceKey,
 			        :featureDateKst,
 			        :firstSeenAt,
+			        :titleKeywords::jsonb,
 			        :regionTags::jsonb,
 			        :complexCandidates::jsonb,
 			        :topicTags::jsonb,
@@ -122,6 +124,7 @@ class JdbcNewsSignalFeatureExtractionRepository implements NewsSignalFeatureExtr
 			.param("sourceKey", command.sourceKey())
 			.param("featureDateKst", command.featureDateKst())
 			.param("firstSeenAt", command.firstSeenAt())
+			.param("titleKeywords", json(command.titleKeywords()))
 			.param("regionTags", json(command.regionTags()))
 			.param("complexCandidates", json(command.complexCandidates()))
 			.param("topicTags", json(command.topicTags()))

@@ -3,8 +3,11 @@ package com.home.infrastructure.persistence.news;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.news.NewsArticleObservationIngestService;
 import com.home.application.news.NewsArticleObservationRepository;
+import com.home.application.news.NewsArticleRelevanceGateService;
+import com.home.application.news.NewsArticleRelevanceRepository;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +31,8 @@ class NewsPersistenceConfigurationTest {
 			assertThat(context).hasNotFailed();
 			assertThat(context).hasSingleBean(NewsArticleObservationRepository.class);
 			assertThat(context).hasSingleBean(NewsArticleObservationIngestService.class);
+			assertThat(context).hasSingleBean(NewsArticleRelevanceRepository.class);
+			assertThat(context).hasSingleBean(NewsArticleRelevanceGateService.class);
 		});
 	}
 
@@ -37,6 +42,11 @@ class NewsPersistenceConfigurationTest {
 		@Bean
 		JdbcClient jdbcClient() {
 			return mock(JdbcClient.class);
+		}
+
+		@Bean
+		ObjectMapper objectMapper() {
+			return new ObjectMapper();
 		}
 	}
 }

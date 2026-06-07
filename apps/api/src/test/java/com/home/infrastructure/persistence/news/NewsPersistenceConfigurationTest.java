@@ -8,6 +8,9 @@ import com.home.application.news.NewsArticleObservationIngestService;
 import com.home.application.news.NewsArticleObservationRepository;
 import com.home.application.news.NewsArticleRelevanceGateService;
 import com.home.application.news.NewsArticleRelevanceRepository;
+import com.home.application.news.NewsSignalDatasetRepository;
+import com.home.application.news.NewsSignalFeatureExtractionRepository;
+import com.home.application.news.NewsSignalFeatureExtractionService;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +36,9 @@ class NewsPersistenceConfigurationTest {
 			assertThat(context).hasSingleBean(NewsArticleObservationIngestService.class);
 			assertThat(context).hasSingleBean(NewsArticleRelevanceRepository.class);
 			assertThat(context).hasSingleBean(NewsArticleRelevanceGateService.class);
+			assertThat(context).hasSingleBean(NewsSignalFeatureExtractionRepository.class);
+			assertThat(context).hasSingleBean(NewsSignalFeatureExtractionService.class);
+			assertThat(context).hasSingleBean(NewsSignalDatasetRepository.class);
 		});
 	}
 

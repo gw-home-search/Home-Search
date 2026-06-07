@@ -8,6 +8,10 @@ import com.home.application.news.NewsArticleObservationRepository;
 import com.home.application.news.NewsArticleRelevanceGateService;
 import com.home.application.news.NewsArticleRelevancePolicy;
 import com.home.application.news.NewsArticleRelevanceRepository;
+import com.home.application.news.NewsSignalDatasetRepository;
+import com.home.application.news.NewsSignalFeatureExtractionPolicy;
+import com.home.application.news.NewsSignalFeatureExtractionRepository;
+import com.home.application.news.NewsSignalFeatureExtractionService;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,6 +63,38 @@ class NewsPersistenceConfiguration {
 	}
 
 	@Bean
+	@Lazy
+	NewsSignalFeatureExtractionRepository newsSignalFeatureExtractionRepository(
+		ObjectProvider<JdbcClient> jdbcClientProvider,
+		ObjectMapper objectMapper
+	) {
+		return new JdbcNewsSignalFeatureExtractionRepository(requiredJdbcClient(jdbcClientProvider), objectMapper);
+	}
+
+	@Bean
+	NewsSignalFeatureExtractionPolicy newsSignalFeatureExtractionPolicy() {
+		return NewsSignalFeatureExtractionPolicy.defaultPolicy();
+	}
+
+	@Bean
+	@Lazy
+	NewsSignalFeatureExtractionService newsSignalFeatureExtractionService(
+		NewsSignalFeatureExtractionRepository repository,
+		NewsSignalFeatureExtractionPolicy policy
+	) {
+		return new NewsSignalFeatureExtractionService(repository, policy);
+	}
+
+	@Bean
+	@Lazy
+	NewsSignalDatasetRepository newsSignalDatasetRepository(
+		ObjectProvider<JdbcClient> jdbcClientProvider,
+		ObjectMapper objectMapper
+	) {
+		return new JdbcNewsSignalDatasetRepository(requiredJdbcClient(jdbcClientProvider), objectMapper);
+	}
+
+	@Bean
 	NewsRelevanceGateProperties newsRelevanceGateProperties(
 		@Value("${home.news.relevance.enabled:false}") boolean enabled,
 		@Value("${home.news.relevance.limit:100}") int limit
@@ -73,6 +109,23 @@ class NewsPersistenceConfiguration {
 		NewsRelevanceGateProperties properties
 	) {
 		return new NewsRelevanceGateApplicationRunner(service, properties);
+	}
+
+	@Bean
+	NewsSignalFeatureExtractionProperties newsSignalFeatureExtractionProperties(
+		@Value("${home.news.signal.extraction.enabled:false}") boolean enabled,
+		@Value("${home.news.signal.extraction.limit:100}") int limit
+	) {
+		return new NewsSignalFeatureExtractionProperties(enabled, limit);
+	}
+
+	@Bean
+	@ConditionalOnProperty(name = "home.news.signal.extraction.enabled", havingValue = "true")
+	ApplicationRunner newsSignalFeatureExtractionApplicationRunner(
+		NewsSignalFeatureExtractionService service,
+		NewsSignalFeatureExtractionProperties properties
+	) {
+		return new NewsSignalFeatureExtractionApplicationRunner(service, properties);
 	}
 
 	private static JdbcClient requiredJdbcClient(ObjectProvider<JdbcClient> jdbcClientProvider) {

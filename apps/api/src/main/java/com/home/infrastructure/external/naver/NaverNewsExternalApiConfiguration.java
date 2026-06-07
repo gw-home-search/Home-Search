@@ -1,13 +1,20 @@
 package com.home.infrastructure.external.naver;
 
+import java.nio.file.Path;
 import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneId;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.news.NewsArticleObservationIngestService;
+import com.home.application.news.NewsArticleRelevanceGateService;
+import com.home.application.news.NewsSignalFeatureExtractionService;
+import com.home.application.news.NewsSignalObsidianExportService;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -49,6 +56,27 @@ class NaverNewsExternalApiConfiguration {
 	}
 
 	@Bean
+	NaverNewsSignalPipelineProperties naverNewsSignalPipelineProperties(
+		@Value("${home.news.pipeline.enabled:false}") boolean enabled,
+		@Value("${home.news.relevance.limit:100}") int relevanceLimit,
+		@Value("${home.news.signal.extraction.limit:100}") int featureExtractionLimit,
+		@Value("${home.news.obsidian.export.output-root:}") String obsidianOutputRoot,
+		@Value("${home.news.obsidian.export.date:}") String obsidianDate,
+		@Value("${home.news.obsidian.export.zone:Asia/Seoul}") String obsidianZone,
+		@Value("${home.news.obsidian.export.max-rows:1000}") int obsidianMaxRows
+	) {
+		return new NaverNewsSignalPipelineProperties(
+			enabled,
+			relevanceLimit,
+			featureExtractionLimit,
+			Path.of(obsidianOutputRoot),
+			parseNullableDate(obsidianDate),
+			ZoneId.of(obsidianZone),
+			obsidianMaxRows
+		);
+	}
+
+	@Bean
 	NaverNewsSearchResponseParser naverNewsSearchResponseParser(ObjectMapper objectMapper) {
 		return new NaverNewsSearchResponseParser(objectMapper);
 	}
@@ -80,7 +108,7 @@ class NaverNewsExternalApiConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnProperty(name = "home.news.naver.enabled", havingValue = "true")
+	@ConditionalOnExpression("${home.news.naver.enabled:false} || ${home.news.pipeline.enabled:false}")
 	NaverNewsOneShotIngestRunner naverNewsOneShotIngestRunner(
 		NaverNewsSearchClient client,
 		NaverNewsObservationMapper mapper,
@@ -90,12 +118,42 @@ class NaverNewsExternalApiConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnProperty(name = "home.news.naver.enabled", havingValue = "true")
+	@ConditionalOnExpression("${home.news.naver.enabled:false} && !${home.news.pipeline.enabled:false}")
 	ApplicationRunner naverNewsOneShotIngestApplicationRunner(
 		NaverNewsOneShotIngestRunner runner,
 		NaverNewsOneShotIngestProperties properties,
 		NaverNewsSearchProperties searchProperties
 	) {
 		return new NaverNewsOneShotIngestApplicationRunner(runner, properties, searchProperties);
+	}
+
+	@Bean
+	@ConditionalOnProperty(name = "home.news.pipeline.enabled", havingValue = "true")
+	ApplicationRunner naverNewsSignalPipelineApplicationRunner(
+		NaverNewsOneShotIngestRunner ingestRunner,
+		NewsArticleRelevanceGateService relevanceGateService,
+		NewsSignalFeatureExtractionService featureExtractionService,
+		NewsSignalObsidianExportService obsidianExportService,
+		NaverNewsSignalPipelineProperties pipelineProperties,
+		NaverNewsOneShotIngestProperties ingestProperties,
+		NaverNewsSearchProperties searchProperties
+	) {
+		return new NaverNewsSignalPipelineApplicationRunner(
+			ingestRunner,
+			relevanceGateService,
+			featureExtractionService,
+			obsidianExportService,
+			pipelineProperties,
+			ingestProperties,
+			searchProperties,
+			Clock.systemUTC()
+		);
+	}
+
+	private static LocalDate parseNullableDate(String value) {
+		if (value == null || value.isBlank()) {
+			return null;
+		}
+		return LocalDate.parse(value);
 	}
 }

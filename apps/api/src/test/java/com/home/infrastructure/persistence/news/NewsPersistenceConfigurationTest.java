@@ -75,6 +75,25 @@ class NewsPersistenceConfigurationTest {
 			});
 	}
 
+	@Test
+	@DisplayName("News persistence configuration은 pipeline 설정이면 개별 signal stage runner를 등록하지 않는다")
+	void pipelineSuppressesIndividualSignalStageRunners() {
+		contextRunner
+			.withPropertyValues(
+				"home.news.pipeline.enabled=true",
+				"home.news.relevance.enabled=true",
+				"home.news.signal.extraction.enabled=true",
+				"home.news.obsidian.export.enabled=true",
+				"home.news.obsidian.export.output-root=/tmp/home-search-obsidian-test"
+			)
+			.run(context -> {
+				assertThat(context).hasNotFailed();
+				assertThat(context).doesNotHaveBean(NewsRelevanceGateApplicationRunner.class);
+				assertThat(context).doesNotHaveBean(NewsSignalFeatureExtractionApplicationRunner.class);
+				assertThat(context).doesNotHaveBean(NewsSignalObsidianExportApplicationRunner.class);
+			});
+	}
+
 	@Configuration(proxyBeanMethods = false)
 	static class LateJdbcClientConfiguration {
 

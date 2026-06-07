@@ -26,6 +26,7 @@ import com.home.application.news.NewsSignalObsidianMarkdownRenderer;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.convert.DurationStyle;
 import org.springframework.context.annotation.Bean;
@@ -159,7 +160,7 @@ class NewsPersistenceConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnProperty(name = "home.news.relevance.enabled", havingValue = "true")
+	@ConditionalOnExpression("${home.news.relevance.enabled:false} && !${home.news.pipeline.enabled:false}")
 	ApplicationRunner newsRelevanceGateApplicationRunner(
 		NewsArticleRelevanceGateService service,
 		NewsRelevanceGateProperties properties
@@ -176,7 +177,7 @@ class NewsPersistenceConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnProperty(name = "home.news.signal.extraction.enabled", havingValue = "true")
+	@ConditionalOnExpression("${home.news.signal.extraction.enabled:false} && !${home.news.pipeline.enabled:false}")
 	ApplicationRunner newsSignalFeatureExtractionApplicationRunner(
 		NewsSignalFeatureExtractionService service,
 		NewsSignalFeatureExtractionProperties properties
@@ -219,7 +220,7 @@ class NewsPersistenceConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnProperty(name = "home.news.obsidian.export.enabled", havingValue = "true")
+	@ConditionalOnExpression("${home.news.obsidian.export.enabled:false} && !${home.news.pipeline.enabled:false}")
 	ApplicationRunner newsSignalObsidianExportApplicationRunner(
 		NewsSignalObsidianExportService service,
 		NewsSignalObsidianExportProperties properties

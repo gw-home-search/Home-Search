@@ -1,9 +1,13 @@
 package com.home.infrastructure.external.naver;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.news.NewsArticleObservationIngestService;
+import com.home.application.news.NewsArticleRelevanceGateService;
+import com.home.application.news.NewsSignalFeatureExtractionService;
+import com.home.application.news.NewsSignalObsidianExportService;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,6 +39,20 @@ class NaverNewsExternalApiConfigurationContextTest {
 			"naver.news.client-token=client-token"
 		);
 
+	private final ApplicationContextRunner pipelineContextRunner = new ApplicationContextRunner()
+		.withUserConfiguration(
+			NaverNewsExternalApiConfiguration.class,
+			PipelineDependenciesConfiguration.class
+		)
+		.withPropertyValues(
+			"naver.news.client-id=client-id",
+			"naver.news.client-token=client-token",
+			"home.news.pipeline.enabled=true",
+			"home.news.naver.enabled=true",
+			"home.news.naver.query=강남 재건축",
+			"home.news.obsidian.export.output-root=/tmp/home-search-obsidian-test"
+		);
+
 	@Test
 	@DisplayName("Naver News one-shot runner는 ingest service bean 선언 순서와 무관하게 등록된다")
 	void oneShotRunnerIsRegisteredWhenIngestServiceBeanDefinitionComesLater() {
@@ -57,6 +75,19 @@ class NaverNewsExternalApiConfigurationContextTest {
 		});
 	}
 
+	@Test
+	@DisplayName("Naver News signal pipeline runner는 pipeline 설정이면 개별 one-shot application runner 대신 등록된다")
+	void pipelineRunnerIsRegisteredInsteadOfIndividualOneShotApplicationRunner() {
+		pipelineContextRunner.run(context -> {
+			assertThat(context).hasNotFailed();
+			assertThat(context).hasSingleBean(NaverNewsOneShotIngestRunner.class);
+			assertThat(context).hasBean("naverNewsSignalPipelineApplicationRunner");
+			assertThat(context.getBean("naverNewsSignalPipelineApplicationRunner"))
+				.isInstanceOf(ApplicationRunner.class);
+			assertThat(context).doesNotHaveBean("naverNewsOneShotIngestApplicationRunner");
+		});
+	}
+
 	@Configuration(proxyBeanMethods = false)
 	static class ObjectMapperConfiguration {
 
@@ -72,6 +103,25 @@ class NaverNewsExternalApiConfigurationContextTest {
 		@Bean
 		NewsArticleObservationIngestService newsArticleObservationIngestService() {
 			return new NewsArticleObservationIngestService(command -> true);
+		}
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	static class PipelineDependenciesConfiguration extends LateNewsIngestConfiguration {
+
+		@Bean
+		NewsArticleRelevanceGateService newsArticleRelevanceGateService() {
+			return mock(NewsArticleRelevanceGateService.class);
+		}
+
+		@Bean
+		NewsSignalFeatureExtractionService newsSignalFeatureExtractionService() {
+			return mock(NewsSignalFeatureExtractionService.class);
+		}
+
+		@Bean
+		NewsSignalObsidianExportService newsSignalObsidianExportService() {
+			return mock(NewsSignalObsidianExportService.class);
 		}
 	}
 }

@@ -10,6 +10,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.news.NewsSignalDatasetRepository;
 import com.home.application.news.NewsSignalDatasetRow;
+import com.home.application.news.NewsSignalFeatureExtractionPolicy;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -50,6 +51,7 @@ class JdbcNewsSignalDatasetRepository implements NewsSignalDatasetRepository {
 			    feature_date_kst,
 			    news_date_kst,
 			    article_collected_at,
+			    title_keywords::text AS title_keywords,
 			    region_tags::text AS region_tags,
 			    complex_candidates::text AS complex_candidates,
 			    topic_tags::text AS topic_tags,
@@ -62,10 +64,12 @@ class JdbcNewsSignalDatasetRepository implements NewsSignalDatasetRepository {
 			    feature_created_at
 			FROM news_signal_dataset_view
 			WHERE first_seen_at <= :predictionCutoff
+			  AND extraction_version = :extractionVersion
 			ORDER BY first_seen_at, feature_id
 			LIMIT :limit
 			""")
 			.param("predictionCutoff", predictionCutoff)
+			.param("extractionVersion", NewsSignalFeatureExtractionPolicy.DEFAULT_EXTRACTION_VERSION)
 			.param("limit", limit)
 			.query((resultSet, rowNumber) -> new NewsSignalDatasetRow(
 				resultSet.getLong("feature_id"),
@@ -83,6 +87,7 @@ class JdbcNewsSignalDatasetRepository implements NewsSignalDatasetRepository {
 				resultSet.getObject("feature_date_kst", LocalDate.class),
 				resultSet.getObject("news_date_kst", LocalDate.class),
 				resultSet.getObject("article_collected_at", OffsetDateTime.class),
+				readStringList(resultSet.getString("title_keywords")),
 				readStringList(resultSet.getString("region_tags")),
 				readMapList(resultSet.getString("complex_candidates")),
 				readStringList(resultSet.getString("topic_tags")),

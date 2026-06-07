@@ -38,9 +38,11 @@ class NewsSignalObsidianMarkdownRendererTest {
 			"publishers: [Sample Publisher]",
 			"regions: [gangnam-gu, seoul]",
 			"topics: [policy, reconstruction]",
+			"title_keywords: [강남, 재건축, 집값]",
 			"truncated: false",
 			"# News Signals - 2026-06-07",
 			"- [강남 재건축 규제 완화 기대감](<https://example.com/news/1>)",
+			"  - title_keywords: 강남, 재건축, 집값",
 			"  - impact: sale_price / up",
 			"  - sentiment: positive",
 			"  - confidence: 0.82",
@@ -71,6 +73,7 @@ class NewsSignalObsidianMarkdownRendererTest {
 			LocalDate.parse("2026-06-07"),
 			LocalDate.parse("2026-06-07"),
 			OffsetDateTime.parse("2026-06-07T09:15:00+09:00"),
+			List.of("강남", "재건축", "집값"),
 			List.of("seoul", "gangnam-gu"),
 			List.of(Map.of("name", "Sample Complex")),
 			List.of("policy", "reconstruction"),
@@ -78,7 +81,7 @@ class NewsSignalObsidianMarkdownRendererTest {
 			"up",
 			"positive",
 			0.82,
-			"title-snippet-signal-20260607-r1",
+			NewsSignalFeatureExtractionPolicy.DEFAULT_EXTRACTION_VERSION,
 			"title",
 			OffsetDateTime.parse("2026-06-07T09:16:00+09:00")
 		);

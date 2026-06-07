@@ -11,6 +11,7 @@ public record NewsSignalFeatureCommand(
 	String sourceKey,
 	LocalDate featureDateKst,
 	OffsetDateTime firstSeenAt,
+	List<String> titleKeywords,
 	List<String> regionTags,
 	List<Map<String, Object>> complexCandidates,
 	List<String> topicTags,
@@ -23,6 +24,7 @@ public record NewsSignalFeatureCommand(
 ) {
 
 	public NewsSignalFeatureCommand {
+		titleKeywords = List.copyOf(titleKeywords);
 		regionTags = List.copyOf(regionTags);
 		complexCandidates = List.copyOf(complexCandidates);
 		topicTags = List.copyOf(topicTags);

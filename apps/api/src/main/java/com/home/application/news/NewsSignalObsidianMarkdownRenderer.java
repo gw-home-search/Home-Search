@@ -59,6 +59,9 @@ public class NewsSignalObsidianMarkdownRenderer {
 		builder.append("topics: ").append(yamlArray(flatten(rows.stream()
 			.map(NewsSignalDatasetRow::topicTags)
 			.toList()))).append('\n');
+		builder.append("title_keywords: ").append(yamlArray(flatten(rows.stream()
+			.map(NewsSignalDatasetRow::titleKeywords)
+			.toList()))).append('\n');
 		builder.append("truncated: ").append(truncated).append('\n');
 		builder.append("---\n");
 	}
@@ -71,6 +74,7 @@ public class NewsSignalObsidianMarkdownRenderer {
 		builder.append("  - first_seen_at: ").append(format(row.firstSeenAt().atZoneSameInstant(command.zoneId())
 			.toOffsetDateTime())).append('\n');
 		builder.append("  - published_at: ").append(formatNullable(row.publishedAt(), command)).append('\n');
+		builder.append("  - title_keywords: ").append(join(row.titleKeywords())).append('\n');
 		builder.append("  - regions: ").append(join(row.regionTags())).append('\n');
 		builder.append("  - topics: ").append(join(row.topicTags())).append('\n');
 		builder.append("  - impact: ").append(safeLine(row.impactTarget()))

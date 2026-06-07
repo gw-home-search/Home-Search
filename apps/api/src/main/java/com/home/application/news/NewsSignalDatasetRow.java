@@ -21,6 +21,7 @@ public record NewsSignalDatasetRow(
 	LocalDate featureDateKst,
 	LocalDate newsDateKst,
 	OffsetDateTime articleCollectedAt,
+	List<String> titleKeywords,
 	List<String> regionTags,
 	List<Map<String, Object>> complexCandidates,
 	List<String> topicTags,
@@ -34,6 +35,7 @@ public record NewsSignalDatasetRow(
 ) {
 
 	public NewsSignalDatasetRow {
+		titleKeywords = List.copyOf(titleKeywords);
 		regionTags = List.copyOf(regionTags);
 		complexCandidates = List.copyOf(complexCandidates);
 		topicTags = List.copyOf(topicTags);

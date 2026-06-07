@@ -35,6 +35,8 @@ class NewsSignalFeatureExtractionServiceTest {
 			assertThat(feature.articleObservationId()).isEqualTo(1L);
 			assertThat(feature.featureDateKst()).isEqualTo(LocalDate.parse("2026-06-07"));
 			assertThat(feature.firstSeenAt()).isEqualTo(FIRST_SEEN_AT);
+			assertThat(feature.titleKeywords())
+				.containsExactly("강남", "재건축", "규제", "아파트", "집값", "상승");
 			assertThat(feature.regionTags()).contains("seoul", "gangnam-gu");
 			assertThat(feature.topicTags()).contains("reconstruction", "policy");
 			assertThat(feature.impactTarget()).isEqualTo("sale_price");
@@ -46,6 +48,24 @@ class NewsSignalFeatureExtractionServiceTest {
 			assertThat(feature.evidenceLevel()).isEqualTo("snippet");
 		});
 		assertThat(repository.featuredIds).containsExactly(1L);
+	}
+
+	@Test
+	@DisplayName("news signal feature extraction service는 title keyword를 snippet이 아닌 제목에서만 추출한다")
+	void extractsTitleKeywordsOnlyFromTitle() {
+		RecordingNewsSignalFeatureExtractionRepository repository = new RecordingNewsSignalFeatureExtractionRepository(
+			List.of(candidate(1L, "한국은행 기준금리 동결", "강남 집값 상승"))
+		);
+		NewsSignalFeatureExtractionService service = new NewsSignalFeatureExtractionService(
+			repository,
+			NewsSignalFeatureExtractionPolicy.defaultPolicy()
+		);
+
+		service.extractPending(10);
+
+		assertThat(repository.savedFeatures).singleElement()
+			.extracting(NewsSignalFeatureCommand::titleKeywords)
+			.isEqualTo(List.of("금리"));
 	}
 
 	@Test

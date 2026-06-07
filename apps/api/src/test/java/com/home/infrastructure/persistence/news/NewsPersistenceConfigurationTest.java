@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.home.application.news.NewsArticleObservationCleanupRepository;
+import com.home.application.news.NewsArticleObservationCleanupService;
 import com.home.application.news.NewsArticleObservationIngestService;
 import com.home.application.news.NewsArticleObservationRepository;
 import com.home.application.news.NewsArticleRelevanceGateService;
@@ -34,6 +36,8 @@ class NewsPersistenceConfigurationTest {
 			assertThat(context).hasNotFailed();
 			assertThat(context).hasSingleBean(NewsArticleObservationRepository.class);
 			assertThat(context).hasSingleBean(NewsArticleObservationIngestService.class);
+			assertThat(context).hasSingleBean(NewsArticleObservationCleanupRepository.class);
+			assertThat(context).hasSingleBean(NewsArticleObservationCleanupService.class);
 			assertThat(context).hasSingleBean(NewsArticleRelevanceRepository.class);
 			assertThat(context).hasSingleBean(NewsArticleRelevanceGateService.class);
 			assertThat(context).hasSingleBean(NewsSignalFeatureExtractionRepository.class);

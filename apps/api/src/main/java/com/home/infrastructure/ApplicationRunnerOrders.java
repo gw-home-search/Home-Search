@@ -8,6 +8,7 @@ public final class ApplicationRunnerOrders {
 	public static final int NEWS_ONE_SHOT_INGEST = 300;
 	public static final int NEWS_RELEVANCE_GATE = 350;
 	public static final int NEWS_SIGNAL_FEATURE_EXTRACTION = 360;
+	public static final int NEWS_OBSERVATION_CLEANUP = 370;
 
 	private ApplicationRunnerOrders() {
 	}

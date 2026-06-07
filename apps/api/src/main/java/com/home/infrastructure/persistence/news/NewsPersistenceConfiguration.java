@@ -1,7 +1,10 @@
 package com.home.infrastructure.persistence.news;
 
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZoneId;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.news.NewsArticleObservationCleanupRepository;
@@ -15,6 +18,10 @@ import com.home.application.news.NewsSignalDatasetRepository;
 import com.home.application.news.NewsSignalFeatureExtractionPolicy;
 import com.home.application.news.NewsSignalFeatureExtractionRepository;
 import com.home.application.news.NewsSignalFeatureExtractionService;
+import com.home.application.news.NewsSignalObsidianExportRepository;
+import com.home.application.news.NewsSignalObsidianExportService;
+import com.home.application.news.NewsSignalObsidianExportWriter;
+import com.home.application.news.NewsSignalObsidianMarkdownRenderer;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -115,6 +122,35 @@ class NewsPersistenceConfiguration {
 	}
 
 	@Bean
+	@Lazy
+	NewsSignalObsidianExportRepository newsSignalObsidianExportRepository(
+		ObjectProvider<JdbcClient> jdbcClientProvider,
+		ObjectMapper objectMapper
+	) {
+		return new JdbcNewsSignalObsidianExportRepository(requiredJdbcClient(jdbcClientProvider), objectMapper);
+	}
+
+	@Bean
+	NewsSignalObsidianMarkdownRenderer newsSignalObsidianMarkdownRenderer() {
+		return new NewsSignalObsidianMarkdownRenderer();
+	}
+
+	@Bean
+	NewsSignalObsidianExportWriter newsSignalObsidianExportWriter() {
+		return new FileSystemNewsSignalObsidianExportWriter();
+	}
+
+	@Bean
+	@Lazy
+	NewsSignalObsidianExportService newsSignalObsidianExportService(
+		NewsSignalObsidianExportRepository repository,
+		NewsSignalObsidianMarkdownRenderer renderer,
+		NewsSignalObsidianExportWriter writer
+	) {
+		return new NewsSignalObsidianExportService(repository, renderer, writer);
+	}
+
+	@Bean
 	NewsRelevanceGateProperties newsRelevanceGateProperties(
 		@Value("${home.news.relevance.enabled:false}") boolean enabled,
 		@Value("${home.news.relevance.limit:100}") int limit
@@ -165,9 +201,42 @@ class NewsPersistenceConfiguration {
 		return new NewsArticleObservationCleanupApplicationRunner(service, properties, Clock.systemUTC());
 	}
 
+	@Bean
+	NewsSignalObsidianExportProperties newsSignalObsidianExportProperties(
+		@Value("${home.news.obsidian.export.enabled:false}") boolean enabled,
+		@Value("${home.news.obsidian.export.output-root:}") String outputRoot,
+		@Value("${home.news.obsidian.export.date:}") String date,
+		@Value("${home.news.obsidian.export.zone:Asia/Seoul}") String zone,
+		@Value("${home.news.obsidian.export.max-rows:1000}") int maxRows
+	) {
+		return new NewsSignalObsidianExportProperties(
+			enabled,
+			Path.of(outputRoot),
+			parseNullableDate(date),
+			ZoneId.of(zone),
+			maxRows
+		);
+	}
+
+	@Bean
+	@ConditionalOnProperty(name = "home.news.obsidian.export.enabled", havingValue = "true")
+	ApplicationRunner newsSignalObsidianExportApplicationRunner(
+		NewsSignalObsidianExportService service,
+		NewsSignalObsidianExportProperties properties
+	) {
+		return new NewsSignalObsidianExportApplicationRunner(service, properties, Clock.systemUTC());
+	}
+
 	private static JdbcClient requiredJdbcClient(ObjectProvider<JdbcClient> jdbcClientProvider) {
 		return jdbcClientProvider.getIfAvailable(() -> {
 			throw new IllegalStateException("JdbcClient is required for news persistence");
 		});
+	}
+
+	private static LocalDate parseNullableDate(String value) {
+		if (value == null || value.isBlank()) {
+			return null;
+		}
+		return LocalDate.parse(value);
 	}
 }

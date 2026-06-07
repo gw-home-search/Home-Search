@@ -13,9 +13,14 @@ import com.home.application.news.NewsArticleRelevanceRepository;
 import com.home.application.news.NewsSignalDatasetRepository;
 import com.home.application.news.NewsSignalFeatureExtractionRepository;
 import com.home.application.news.NewsSignalFeatureExtractionService;
+import com.home.application.news.NewsSignalObsidianExportRepository;
+import com.home.application.news.NewsSignalObsidianExportService;
+import com.home.application.news.NewsSignalObsidianExportWriter;
+import com.home.application.news.NewsSignalObsidianMarkdownRenderer;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -43,7 +48,31 @@ class NewsPersistenceConfigurationTest {
 			assertThat(context).hasSingleBean(NewsSignalFeatureExtractionRepository.class);
 			assertThat(context).hasSingleBean(NewsSignalFeatureExtractionService.class);
 			assertThat(context).hasSingleBean(NewsSignalDatasetRepository.class);
+			assertThat(context).hasSingleBean(NewsSignalObsidianExportRepository.class);
+			assertThat(context).hasSingleBean(NewsSignalObsidianMarkdownRenderer.class);
+			assertThat(context).hasSingleBean(NewsSignalObsidianExportWriter.class);
+			assertThat(context).hasSingleBean(NewsSignalObsidianExportService.class);
 		});
+	}
+
+	@Test
+	@DisplayName("News persistence configuration은 obsidian export가 enabled일 때만 runner를 등록한다")
+	void obsidianExportRunnerIsRegisteredOnlyWhenEnabled() {
+		contextRunner.run(context -> {
+			assertThat(context).hasNotFailed();
+			assertThat(context).doesNotHaveBean(NewsSignalObsidianExportApplicationRunner.class);
+		});
+
+		contextRunner
+			.withPropertyValues(
+				"home.news.obsidian.export.enabled=true",
+				"home.news.obsidian.export.output-root=/tmp/home-search-obsidian-test"
+			)
+			.run(context -> {
+				assertThat(context).hasNotFailed();
+				assertThat(context).hasSingleBean(NewsSignalObsidianExportApplicationRunner.class);
+				assertThat(context).hasSingleBean(ApplicationRunner.class);
+			});
 	}
 
 	@Configuration(proxyBeanMethods = false)

@@ -448,8 +448,8 @@ class JdbcCoordinateOverrideAdminRepositoryTest extends JdbcPostgresTestSupport 
 			.update();
 	}
 
-	private com.home.infrastructure.web.map.dto.ComplexMarkersRequest bounds() {
-		return new com.home.infrastructure.web.map.dto.ComplexMarkersRequest(
+	private com.home.application.map.ComplexMarkerQuery bounds() {
+		return new com.home.application.map.ComplexMarkerQuery(
 			37.45,
 			126.85,
 			37.70,

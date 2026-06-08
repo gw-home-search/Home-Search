@@ -9,13 +9,13 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.home.application.read.ParcelDetailResult;
 import com.home.application.read.PropertyReadRepository;
-import com.home.infrastructure.web.read.dto.ParcelDetailResponse;
-import com.home.infrastructure.web.read.dto.RegionDetailResponse;
-import com.home.infrastructure.web.read.dto.RegionSummaryResponse;
-import com.home.infrastructure.web.read.dto.SearchComplexResponse;
-import com.home.infrastructure.web.read.dto.TradeListResponse;
-import com.home.infrastructure.web.read.dto.TradeResponse;
+import com.home.application.read.RegionDetailResult;
+import com.home.application.read.RegionSummaryResult;
+import com.home.application.read.SearchComplexResult;
+import com.home.application.read.TradeListResult;
+import com.home.application.read.TradeResult;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -28,7 +28,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	}
 
 	@Override
-	public List<SearchComplexResponse> searchComplexes(String query) {
+	public List<SearchComplexResult> searchComplexes(String query) {
 		String pattern = "%" + query.toLowerCase(Locale.ROOT) + "%";
 		String normalizedQuery = normalizeName(query);
 		String normalizedPattern = normalizedQuery.isBlank() ? null : "%" + normalizedQuery + "%";
@@ -68,7 +68,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	}
 
 	@Override
-	public List<RegionSummaryResponse> findRootRegions() {
+	public List<RegionSummaryResult> findRootRegions() {
 		return jdbcClient.sql("""
 			SELECT id, name
 			FROM region
@@ -80,7 +80,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	}
 
 	@Override
-	public Optional<RegionDetailResponse> findRegionDetail(Long regionId) {
+	public Optional<RegionDetailResult> findRegionDetail(Long regionId) {
 		Optional<RegionRow> region = jdbcClient.sql("""
 			SELECT id, name, center_lat, center_lng
 			FROM region
@@ -92,7 +92,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 		if (region.isEmpty()) {
 			return Optional.empty();
 		}
-		List<RegionSummaryResponse> children = jdbcClient.sql("""
+		List<RegionSummaryResult> children = jdbcClient.sql("""
 			SELECT id, name
 			FROM region
 			WHERE parent_id = :regionId
@@ -102,7 +102,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			.query(this::mapRegionSummary)
 			.list();
 		RegionRow row = region.get();
-		return Optional.of(new RegionDetailResponse(
+		return Optional.of(new RegionDetailResult(
 			row.id(),
 			row.name(),
 			row.latitude(),
@@ -112,7 +112,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	}
 
 	@Override
-	public Optional<ParcelDetailResponse> findParcelDetail(Long parcelId, Long complexId) {
+	public Optional<ParcelDetailResult> findParcelDetail(Long parcelId, Long complexId) {
 		return jdbcClient.sql("""
 			WITH redeveloped_parcel AS (
 			    SELECT parcel_id
@@ -170,11 +170,11 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	}
 
 	@Override
-	public Optional<TradeListResponse> findTradeList(Long parcelId, Long complexId) {
+	public Optional<TradeListResult> findTradeList(Long parcelId, Long complexId) {
 		if (!hasComplexParent(parcelId, complexId)) {
 			return Optional.empty();
 		}
-		List<TradeResponse> trades = jdbcClient.sql("""
+		List<TradeResult> trades = jdbcClient.sql("""
 			SELECT
 			    t.id AS trade_id,
 			    t.deal_date,
@@ -193,7 +193,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			.param("complexId", complexId)
 			.query(this::mapTrade)
 			.list();
-		return Optional.of(new TradeListResponse(parcelId, complexId, trades));
+		return Optional.of(new TradeListResult(parcelId, complexId, trades));
 	}
 
 	private boolean hasComplexParent(Long parcelId, Long complexId) {
@@ -212,8 +212,8 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			.single());
 	}
 
-	private SearchComplexResponse mapSearchComplex(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new SearchComplexResponse(
+	private SearchComplexResult mapSearchComplex(ResultSet resultSet, int rowNumber) throws SQLException {
+		return new SearchComplexResult(
 			resultSet.getLong("complex_id"),
 			resultSet.getString("complex_name"),
 			resultSet.getLong("parcel_id"),
@@ -223,8 +223,8 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 		);
 	}
 
-	private RegionSummaryResponse mapRegionSummary(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new RegionSummaryResponse(
+	private RegionSummaryResult mapRegionSummary(ResultSet resultSet, int rowNumber) throws SQLException {
+		return new RegionSummaryResult(
 			resultSet.getLong("id"),
 			resultSet.getString("name")
 		);
@@ -239,8 +239,8 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 		);
 	}
 
-	private ParcelDetailResponse mapParcelDetail(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new ParcelDetailResponse(
+	private ParcelDetailResult mapParcelDetail(ResultSet resultSet, int rowNumber) throws SQLException {
+		return new ParcelDetailResult(
 			resultSet.getLong("parcel_id"),
 			resultSet.getLong("complex_id"),
 			doubleOrNull(resultSet, "latitude"),
@@ -259,8 +259,8 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 		);
 	}
 
-	private TradeResponse mapTrade(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new TradeResponse(
+	private TradeResult mapTrade(ResultSet resultSet, int rowNumber) throws SQLException {
+		return new TradeResult(
 			resultSet.getLong("trade_id"),
 			resultSet.getObject("deal_date", LocalDate.class),
 			resultSet.getBigDecimal("excl_area"),

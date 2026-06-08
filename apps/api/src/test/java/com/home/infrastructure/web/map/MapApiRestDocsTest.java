@@ -26,10 +26,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.home.application.map.MapUseCase;
-import com.home.infrastructure.web.map.dto.ComplexMarkerResponse;
-import com.home.infrastructure.web.map.dto.ComplexMarkersRequest;
-import com.home.infrastructure.web.map.dto.RegionMarkerResponse;
-import com.home.infrastructure.web.map.dto.RegionMarkersRequest;
+import com.home.application.map.ComplexMarkerResult;
+import com.home.application.map.ComplexMarkerQuery;
+import com.home.application.map.RegionMarkerResult;
+import com.home.application.map.RegionMarkerQuery;
 
 @Tag("restDocs")
 @WebMvcTest(MapController.class)
@@ -46,8 +46,8 @@ class MapApiRestDocsTest {
 	@Test
 	@DisplayName("POST /api/v1/map/regions REST Docs를 생성한다")
 	void documentRegionMarkers() throws Exception {
-		given(mapUseCase.getRegionMarkers(any(RegionMarkersRequest.class)))
-			.willReturn(List.of(new RegionMarkerResponse(1L, "Seoul", 37.5663, 126.9780, null)));
+		given(mapUseCase.getRegionMarkers(any(RegionMarkerQuery.class)))
+			.willReturn(List.of(new RegionMarkerResult(1L, "Seoul", 37.5663, 126.9780, null)));
 
 		mockMvc.perform(post("/api/v1/map/regions")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -101,8 +101,8 @@ class MapApiRestDocsTest {
 	@Test
 	@DisplayName("POST /api/v1/map/complexes REST Docs를 생성한다")
 	void documentComplexMarkers() throws Exception {
-		given(mapUseCase.getComplexMarkers(any(ComplexMarkersRequest.class)))
-			.willReturn(List.of(new ComplexMarkerResponse(
+		given(mapUseCase.getComplexMarkers(any(ComplexMarkerQuery.class)))
+			.willReturn(List.of(new ComplexMarkerResult(
 				1001L,
 				501L,
 				"Sample Apartment",

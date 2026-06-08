@@ -15,8 +15,8 @@ import java.util.Map;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.map.ComplexMarkerRepository;
-import com.home.infrastructure.web.map.dto.ComplexMarkerResponse;
-import com.home.infrastructure.web.map.dto.ComplexMarkersRequest;
+import com.home.application.map.ComplexMarkerResult;
+import com.home.application.map.ComplexMarkerQuery;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
@@ -34,7 +34,7 @@ class RedisCachingComplexMarkerRepositoryTest {
 	@Test
 	@DisplayName("Redis cache hit는 동일 marker 요청의 DB repository 조회를 건너뛴다")
 	void cacheHitSkipsDelegateLookup() {
-		var markers = List.of(new ComplexMarkerResponse(1001L, 37.5123, 127.0456, 125000L, 740L));
+		var markers = List.of(new ComplexMarkerResult(1001L, 37.5123, 127.0456, 125000L, 740L));
 		var delegate = new CountingComplexMarkerRepository(markers);
 		var repository = new RedisCachingComplexMarkerRepository(
 			delegate,
@@ -53,8 +53,8 @@ class RedisCachingComplexMarkerRepositoryTest {
 	@Test
 	@DisplayName("Redis cache key는 marker 필터가 다르면 별도 요청으로 취급한다")
 	void cacheKeyIncludesMarkerFilters() {
-		var seedWideMarkers = List.of(new ComplexMarkerResponse(1001L, 37.5123, 127.0456, 125000L, 740L));
-		var unitFilteredMarkers = List.of(new ComplexMarkerResponse(2001L, 37.6010, 127.1010, 190000L, 900L));
+		var seedWideMarkers = List.of(new ComplexMarkerResult(1001L, 37.5123, 127.0456, 125000L, 740L));
+		var unitFilteredMarkers = List.of(new ComplexMarkerResult(2001L, 37.6010, 127.1010, 190000L, 900L));
 		var delegate = new SequencedComplexMarkerRepository(seedWideMarkers, unitFilteredMarkers);
 		var repository = new RedisCachingComplexMarkerRepository(
 			delegate,
@@ -113,7 +113,7 @@ class RedisCachingComplexMarkerRepositoryTest {
 	@Test
 	@DisplayName("Redis 장애는 marker API 실패로 전파하지 않고 DB repository 조회로 fallback한다")
 	void redisFailureFallsBackToDelegateLookup() {
-		var markers = List.of(new ComplexMarkerResponse(1001L, 37.5123, 127.0456, 125000L, 740L));
+		var markers = List.of(new ComplexMarkerResult(1001L, 37.5123, 127.0456, 125000L, 740L));
 		var delegate = new CountingComplexMarkerRepository(markers);
 		var redisTemplate = mock(StringRedisTemplate.class);
 		when(redisTemplate.opsForValue()).thenThrow(new IllegalStateException("redis unavailable"));
@@ -133,7 +133,7 @@ class RedisCachingComplexMarkerRepositoryTest {
 	@Test
 	@DisplayName("Redis cache는 hit miss fallback 결과를 metric으로 기록한다")
 	void recordsCacheResultMetrics() {
-		var markers = List.of(new ComplexMarkerResponse(1001L, 37.5123, 127.0456, 125000L, 740L));
+		var markers = List.of(new ComplexMarkerResult(1001L, 37.5123, 127.0456, 125000L, 740L));
 		var meterRegistry = new SimpleMeterRegistry();
 		var healthyDelegate = new CountingComplexMarkerRepository(markers);
 		var repository = new RedisCachingComplexMarkerRepository(
@@ -170,7 +170,7 @@ class RedisCachingComplexMarkerRepositoryTest {
 	@Test
 	@DisplayName("Redis cache write 실패는 fallback metric으로 기록하고 marker 응답은 유지한다")
 	void recordsFallbackMetricWhenCacheWriteFails() {
-		var markers = List.of(new ComplexMarkerResponse(1001L, 37.5123, 127.0456, 125000L, 740L));
+		var markers = List.of(new ComplexMarkerResult(1001L, 37.5123, 127.0456, 125000L, 740L));
 		var meterRegistry = new SimpleMeterRegistry();
 		var delegate = new CountingComplexMarkerRepository(markers);
 		var redisTemplate = mock(StringRedisTemplate.class);
@@ -209,7 +209,7 @@ class RedisCachingComplexMarkerRepositoryTest {
 		return redisTemplate;
 	}
 
-	private static ComplexMarkersRequest seedWideRequest() {
+	private static ComplexMarkerQuery seedWideRequest() {
 		return request(
 			37.45,
 			126.85,
@@ -226,7 +226,7 @@ class RedisCachingComplexMarkerRepositoryTest {
 		);
 	}
 
-	private static ComplexMarkersRequest unitFilterRequest() {
+	private static ComplexMarkerQuery unitFilterRequest() {
 		return request(
 			37.45,
 			126.85,
@@ -243,7 +243,7 @@ class RedisCachingComplexMarkerRepositoryTest {
 		);
 	}
 
-	private static ComplexMarkersRequest request(
+	private static ComplexMarkerQuery request(
 		Double swLat,
 		Double swLng,
 		Double neLat,
@@ -257,7 +257,7 @@ class RedisCachingComplexMarkerRepositoryTest {
 		Long unitMin,
 		Long unitMax
 	) {
-		return new ComplexMarkersRequest(
+		return new ComplexMarkerQuery(
 			swLat,
 			swLng,
 			neLat,
@@ -273,21 +273,21 @@ class RedisCachingComplexMarkerRepositoryTest {
 		);
 	}
 
-	private static List<ComplexMarkerResponse> markers(long parcelId) {
-		return List.of(new ComplexMarkerResponse(parcelId, 37.5123, 127.0456, 125000L, 740L));
+	private static List<ComplexMarkerResult> markers(long parcelId) {
+		return List.of(new ComplexMarkerResult(parcelId, 37.5123, 127.0456, 125000L, 740L));
 	}
 
 	private static class CountingComplexMarkerRepository implements ComplexMarkerRepository {
 
-		private final List<ComplexMarkerResponse> markers;
+		private final List<ComplexMarkerResult> markers;
 		private int callCount;
 
-		CountingComplexMarkerRepository(List<ComplexMarkerResponse> markers) {
+		CountingComplexMarkerRepository(List<ComplexMarkerResult> markers) {
 			this.markers = markers;
 		}
 
 		@Override
-		public List<ComplexMarkerResponse> findComplexMarkers(ComplexMarkersRequest request) {
+		public List<ComplexMarkerResult> findComplexMarkers(ComplexMarkerQuery request) {
 			callCount++;
 			return markers;
 		}
@@ -295,20 +295,20 @@ class RedisCachingComplexMarkerRepositoryTest {
 
 	private static class SequencedComplexMarkerRepository implements ComplexMarkerRepository {
 
-		private final List<List<ComplexMarkerResponse>> responses;
+		private final List<List<ComplexMarkerResult>> responses;
 		private int callCount;
 
-		SequencedComplexMarkerRepository(List<List<ComplexMarkerResponse>> responses) {
+		SequencedComplexMarkerRepository(List<List<ComplexMarkerResult>> responses) {
 			this.responses = responses;
 		}
 
 		@SafeVarargs
-		SequencedComplexMarkerRepository(List<ComplexMarkerResponse>... responses) {
+		SequencedComplexMarkerRepository(List<ComplexMarkerResult>... responses) {
 			this.responses = List.of(responses);
 		}
 
 		@Override
-		public List<ComplexMarkerResponse> findComplexMarkers(ComplexMarkersRequest request) {
+		public List<ComplexMarkerResult> findComplexMarkers(ComplexMarkerQuery request) {
 			return responses.get(callCount++);
 		}
 	}

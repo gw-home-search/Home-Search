@@ -15,8 +15,8 @@ import com.home.application.ingest.RawTradeIngestStatus;
 import com.home.application.ingest.TradeMatchStatus;
 import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
 import com.home.infrastructure.persistence.read.JdbcPropertyReadRepository;
-import com.home.infrastructure.web.map.dto.ComplexMarkerResponse;
-import com.home.infrastructure.web.map.dto.ComplexMarkersRequest;
+import com.home.application.map.ComplexMarkerResult;
+import com.home.application.map.ComplexMarkerQuery;
 
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.DisplayName;
@@ -62,9 +62,9 @@ class IngestToReadPathJdbcIntegrationTest extends JdbcPostgresTestSupport {
 		JdbcMapMarkerRepository mapRepository = new JdbcMapMarkerRepository(jdbcClient);
 		assertThat(mapRepository.findComplexMarkers(boundsRequest()))
 			.extracting(
-				ComplexMarkerResponse::parcelId,
-				ComplexMarkerResponse::latestDealAmount,
-				ComplexMarkerResponse::unitCntSum
+				ComplexMarkerResult::parcelId,
+				ComplexMarkerResult::latestDealAmount,
+				ComplexMarkerResult::unitCntSum
 			)
 			.containsExactly(tuple(1001L, 130000L, 740L));
 
@@ -124,7 +124,7 @@ class IngestToReadPathJdbcIntegrationTest extends JdbcPostgresTestSupport {
 		JdbcMapMarkerRepository mapRepository = new JdbcMapMarkerRepository(jdbcClient);
 		assertThat(mapRepository.findComplexMarkers(boundsRequest()))
 			.singleElement()
-			.extracting(ComplexMarkerResponse::latestDealAmount)
+			.extracting(ComplexMarkerResult::latestDealAmount)
 			.isEqualTo(125000L);
 
 		JdbcPropertyReadRepository readRepository = new JdbcPropertyReadRepository(jdbcClient);
@@ -244,8 +244,8 @@ class IngestToReadPathJdbcIntegrationTest extends JdbcPostgresTestSupport {
 		);
 	}
 
-	private ComplexMarkersRequest boundsRequest() {
-		return new ComplexMarkersRequest(
+	private ComplexMarkerQuery boundsRequest() {
+		return new ComplexMarkerQuery(
 			37.45,
 			126.85,
 			37.70,

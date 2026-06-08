@@ -124,10 +124,10 @@ public class ComplexCoordinateReadinessService {
 
 		private ResolutionSummary plus(ComplexCoordinateCaseStatus status) {
 			return new ResolutionSummary(
-				resolved + (status == ComplexCoordinateCaseStatus.RESOLVED ? 1 : 0),
-				ambiguous + (status == ComplexCoordinateCaseStatus.AMBIGUOUS ? 1 : 0),
-				unavailable + (status == ComplexCoordinateCaseStatus.UNAVAILABLE ? 1 : 0),
-				failed + (status == ComplexCoordinateCaseStatus.FAILED ? 1 : 0)
+				resolved + (status.isResolved() ? 1 : 0),
+				ambiguous + (status.isAmbiguous() ? 1 : 0),
+				unavailable + (status.isUnavailable() ? 1 : 0),
+				failed + (status.isFailed() ? 1 : 0)
 			);
 		}
 

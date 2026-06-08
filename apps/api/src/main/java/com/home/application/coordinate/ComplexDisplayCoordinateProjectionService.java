@@ -80,9 +80,8 @@ public class ComplexDisplayCoordinateProjectionService {
 		if (target.parcelComplexCount() <= 1) {
 			return SINGLE_COMPLEX_FALLBACK_CONFIDENCE;
 		}
-		if (target.coordinateCaseStatus() == ComplexCoordinateCaseStatus.AMBIGUOUS
-			|| target.coordinateCaseStatus() == ComplexCoordinateCaseStatus.UNAVAILABLE
-			|| target.coordinateCaseStatus() == ComplexCoordinateCaseStatus.FAILED) {
+		if (target.coordinateCaseStatus() != null
+			&& target.coordinateCaseStatus().usesUnresolvedFallbackConfidence()) {
 			return UNRESOLVED_CASE_FALLBACK_CONFIDENCE;
 		}
 		return MULTI_COMPLEX_FALLBACK_CONFIDENCE;

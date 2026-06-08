@@ -47,7 +47,7 @@ public class ComplexMetadataRetryPolicy {
 		int attemptNo,
 		Instant now
 	) {
-		if (failureKind == ComplexMetadataFailureKind.SOURCE_MISSING) {
+		if (failureKind != null && failureKind.isSourceMissing()) {
 			return next(now, SOURCE_MISSING_BACKOFF, attemptNo);
 		}
 		return Optional.empty();
@@ -58,7 +58,7 @@ public class ComplexMetadataRetryPolicy {
 		int attemptNo,
 		Instant now
 	) {
-		if (failureKind == ComplexMetadataFailureKind.TRANSIENT) {
+		if (failureKind != null && failureKind.isTransient()) {
 			return next(now, TRANSIENT_FAILURE_BACKOFF, attemptNo);
 		}
 		return Optional.empty();

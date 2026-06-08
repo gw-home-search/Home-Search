@@ -14,11 +14,10 @@ public record ComplexMetadataResolution(
 		Objects.requireNonNull(status, "status is required");
 		source = trimToNull(source);
 		failureReason = trimToNull(failureReason);
-		if ((status == ComplexMetadataStatus.RESOLVED || status == ComplexMetadataStatus.PARTIAL)
-			&& metadata == null) {
+		if (status.requiresMetadataPayload() && metadata == null) {
 			throw new IllegalArgumentException("resolved or partial metadata is required");
 		}
-		if (status == ComplexMetadataStatus.RESOLVED && !metadata.hasAllCriticalFields()) {
+		if (status.requiresCompleteCriticalFields() && !metadata.hasAllCriticalFields()) {
 			throw new IllegalArgumentException("resolved metadata must include critical fields");
 		}
 	}

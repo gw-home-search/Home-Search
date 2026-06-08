@@ -42,13 +42,13 @@ public class NewsArticleRelevanceGateService {
 				decisionDuplicateSkipped++;
 				continue;
 			}
-			if (decision.decisionType() == NewsArticleRelevanceDecisionType.KEEP) {
+			if (decision.decisionType().isKeep()) {
 				kept++;
 			}
-			else if (decision.decisionType() == NewsArticleRelevanceDecisionType.REVIEW) {
+			else if (decision.decisionType().isReview()) {
 				reviewed++;
 			}
-			else if (decision.decisionType() == NewsArticleRelevanceDecisionType.SKIP_IRRELEVANT) {
+			else if (decision.decisionType().isSkipIrrelevant()) {
 				skippedIrrelevant++;
 				if (repository.markSkippedIrrelevantIfObserved(
 					decision.articleObservationId(),

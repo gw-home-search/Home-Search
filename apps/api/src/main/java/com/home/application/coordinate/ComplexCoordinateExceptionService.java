@@ -188,12 +188,7 @@ public class ComplexCoordinateExceptionService {
 		if (!shouldBlock(verification.status())) {
 			return null;
 		}
-		ComplexCoordinateCaseStatus status = switch (verification.status()) {
-			case AMBIGUOUS -> ComplexCoordinateCaseStatus.AMBIGUOUS;
-			case UNAVAILABLE -> ComplexCoordinateCaseStatus.UNAVAILABLE;
-			case FAILED -> ComplexCoordinateCaseStatus.FAILED;
-			case CONFIRMED -> throw new IllegalStateException("confirmed identity must not be blocked");
-		};
+		ComplexCoordinateCaseStatus status = verification.status().toBlockedCaseStatus();
 		String reason = "identity verification " + verification.status().name().toLowerCase()
 			+ " complexId=" + target.complexId()
 			+ (verification.reason() == null ? "" : " reason=" + verification.reason());
@@ -202,12 +197,7 @@ public class ComplexCoordinateExceptionService {
 	}
 
 	private boolean shouldBlock(ComplexCoordinateIdentityVerificationStatus status) {
-		return switch (status) {
-			case CONFIRMED -> false;
-			case AMBIGUOUS -> true;
-			case UNAVAILABLE -> blockOnUnavailableIdentity;
-			case FAILED -> blockOnFailedIdentity;
-		};
+		return status.shouldBlock(blockOnUnavailableIdentity, blockOnFailedIdentity);
 	}
 
 	private ResolvedCoordinateMatch resolveCoordinate(
@@ -288,7 +278,7 @@ public class ComplexCoordinateExceptionService {
 	}
 
 	private ComplexCoordinateCaseStatus stageStatusFor(ComplexRelationType type) {
-		if (type == ComplexRelationType.CONCURRENT || type == ComplexRelationType.UNKNOWN) {
+		if (type.requiresCoordinateExceptionResolution()) {
 			return ComplexCoordinateCaseStatus.PENDING;
 		}
 		return ComplexCoordinateCaseStatus.SKIPPED;

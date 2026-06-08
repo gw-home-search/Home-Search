@@ -16,11 +16,11 @@ public record ComplexMetadataEnrichmentResult(
 	ComplexMetadataEnrichmentResult plus(ComplexMetadataStatus status) {
 		return new ComplexMetadataEnrichmentResult(
 			processed + 1,
-			resolved + (status == ComplexMetadataStatus.RESOLVED ? 1 : 0),
-			partial + (status == ComplexMetadataStatus.PARTIAL ? 1 : 0),
-			ambiguous + (status == ComplexMetadataStatus.AMBIGUOUS ? 1 : 0),
-			unavailable + (status == ComplexMetadataStatus.UNAVAILABLE ? 1 : 0),
-			failed + (status == ComplexMetadataStatus.FAILED ? 1 : 0)
+			resolved + (status.isResolved() ? 1 : 0),
+			partial + (status.isPartial() ? 1 : 0),
+			ambiguous + (status.isAmbiguous() ? 1 : 0),
+			unavailable + (status.isUnavailable() ? 1 : 0),
+			failed + (status.isFailed() ? 1 : 0)
 		);
 	}
 }

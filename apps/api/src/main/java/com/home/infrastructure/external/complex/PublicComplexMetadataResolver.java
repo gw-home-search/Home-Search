@@ -88,10 +88,10 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 	@Override
 	public ComplexMetadataResolution resolve(ComplexMetadataLookup lookup) {
 		ComplexMetadataResolution odcloud = resolveOdcloud(lookup.pnu(), lookup.parcelAddress());
-		if (odcloud.status() == ComplexMetadataStatus.AMBIGUOUS) {
+		if (odcloud.status().isAmbiguous()) {
 			return odcloud;
 		}
-		if (odcloud.status() == ComplexMetadataStatus.FAILED) {
+		if (odcloud.status().isFailed()) {
 			return odcloud;
 		}
 		if (hasMetadata(odcloud)) {
@@ -105,7 +105,7 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 				}
 				return ComplexMetadataResolution.classify("ODC+BLD", merge(odcloud.metadata(), building.metadata()));
 			}
-			if (building.status() == ComplexMetadataStatus.AMBIGUOUS) {
+			if (building.status().isAmbiguous()) {
 				return odcloud;
 			}
 			return odcloud;
@@ -174,7 +174,7 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 		}
 		try {
 			ComplexMetadataResolution recap = fetchBuildingMetadata(bldRecapPath, pnu);
-			if (recap.status() != ComplexMetadataStatus.UNAVAILABLE) {
+			if (!recap.status().isUnavailable()) {
 				return recap;
 			}
 			return fetchBuildingMetadata(recapPath, pnu);
@@ -228,8 +228,7 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 	}
 
 	private boolean hasMetadata(ComplexMetadataResolution resolution) {
-		return resolution.status() == ComplexMetadataStatus.RESOLVED
-			|| resolution.status() == ComplexMetadataStatus.PARTIAL;
+		return resolution.status().isResolvedLike();
 	}
 
 	private <T> T getBody(RestClient restClient, String baseUrl, String path, String query, Class<T> bodyType) {

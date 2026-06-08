@@ -255,12 +255,7 @@ public class NewsSignalFeatureExtractionPolicy {
 		if (!"unknown".equals(impactDirection)) {
 			value += 0.10;
 		}
-		if (candidate.relevanceDecisionType() == NewsArticleRelevanceDecisionType.KEEP) {
-			value += 0.10;
-		}
-		else if (candidate.relevanceDecisionType() == NewsArticleRelevanceDecisionType.REVIEW) {
-			value += 0.02;
-		}
+		value += candidate.relevanceDecisionType().signalConfidenceBonus();
 		if (!candidate.snippet().isBlank()) {
 			value += 0.05;
 		}

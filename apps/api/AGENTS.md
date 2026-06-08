@@ -142,6 +142,36 @@ Package refactor gate:
   below.
 - Do not mix later-scope packages or behavior into the map/trade critical path.
 
+## JavaDoc And Enum Conventions
+
+Backend JavaDoc should be Korean-first for application and domain concepts that
+encode project decisions, statuses, reasons, or user-visible report semantics.
+Keep Java identifiers, API fields, database columns, CLI tokens, and persisted
+enum values in their canonical English form.
+
+Application or domain enums that model a project state, reason, classification,
+decision, confidence, or mode must:
+
+- Keep enum constants stable unless a migration or API contract change is
+  explicitly approved.
+- Declare Korean `titleKo` and `descriptionKo` metadata for every constant.
+- Expose `titleKo()` and `descriptionKo()` accessors.
+- Include Korean class-level JavaDoc that states the project meaning and storage
+  boundary for the enum.
+- Own repeated predicates, transition checks, count helpers, retry checks, and
+  decision-specific score adjustments when that logic naturally belongs to the
+  enum.
+- Avoid exposing enum title or description through public DTOs unless
+  `docs/API_CONTRACT.md` is changed first.
+
+Do not create a generic enum-description framework unless repeated local enum
+metadata becomes a real maintenance cost. Prefer small enum-owned methods such
+as `isResolved()`, `isRetryable()`, `requiresManualReview()`, or
+`confidenceBonus()` when they remove duplicated branching from services.
+
+Enum documentation or logic changes should have narrow tests. Run `javadoc`
+when adding or changing JavaDoc.
+
 ## Backend Work Start Flow
 
 Before changing backend behavior, complete this flow:

@@ -15,12 +15,12 @@ import java.util.List;
 
 import com.home.application.read.PropertyReadUseCase;
 import com.home.global.error.ResourceNotFoundException;
-import com.home.infrastructure.web.read.dto.ParcelDetailResponse;
-import com.home.infrastructure.web.read.dto.RegionDetailResponse;
-import com.home.infrastructure.web.read.dto.RegionSummaryResponse;
-import com.home.infrastructure.web.read.dto.SearchComplexResponse;
-import com.home.infrastructure.web.read.dto.TradeListResponse;
-import com.home.infrastructure.web.read.dto.TradeResponse;
+import com.home.application.read.ParcelDetailResult;
+import com.home.application.read.RegionDetailResult;
+import com.home.application.read.RegionSummaryResult;
+import com.home.application.read.SearchComplexResult;
+import com.home.application.read.TradeListResult;
+import com.home.application.read.TradeResult;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,7 +52,7 @@ class ReadApiControllerContractTest {
 	@DisplayName("GET /api/v1/search/complexes는 canonical search field를 반환한다")
 	void searchComplexesReturnsCanonicalFields() throws Exception {
 		given(readUseCase.searchComplexes(eq("Sample")))
-			.willReturn(List.of(new SearchComplexResponse(
+			.willReturn(List.of(new SearchComplexResult(
 				501L,
 				"Sample Apartment",
 				1001L,
@@ -90,7 +90,7 @@ class ReadApiControllerContractTest {
 	@DisplayName("GET /api/v1/region은 root region을 반환한다")
 	void rootRegionsReturnCanonicalFields() throws Exception {
 		given(readUseCase.getRootRegions())
-			.willReturn(List.of(new RegionSummaryResponse(1L, "Seoul")));
+			.willReturn(List.of(new RegionSummaryResult(1L, "Seoul")));
 
 		mockMvc.perform(get("/api/v1/region"))
 			.andExpect(status().isOk())
@@ -103,12 +103,12 @@ class ReadApiControllerContractTest {
 	@DisplayName("GET /api/v1/region/{regionId}는 region detail과 child region을 반환한다")
 	void regionDetailReturnsChildrenAndCenter() throws Exception {
 		given(readUseCase.getRegionDetail(1L))
-			.willReturn(new RegionDetailResponse(
+			.willReturn(new RegionDetailResult(
 				1L,
 				"Seoul",
 				37.5663,
 				126.9780,
-				List.of(new RegionSummaryResponse(11L, "Gangnam-gu"))
+				List.of(new RegionSummaryResult(11L, "Gangnam-gu"))
 			));
 
 		mockMvc.perform(get("/api/v1/region/1"))
@@ -125,7 +125,7 @@ class ReadApiControllerContractTest {
 	@DisplayName("GET /api/v1/detail/{parcelId}는 parcel과 representative complex detail을 반환한다")
 	void parcelDetailReturnsCanonicalFields() throws Exception {
 		given(readUseCase.getParcelDetail(eq(1001L), isNull()))
-			.willReturn(new ParcelDetailResponse(
+			.willReturn(new ParcelDetailResult(
 				1001L,
 				501L,
 				37.5123,
@@ -169,7 +169,7 @@ class ReadApiControllerContractTest {
 	@DisplayName("GET /api/v1/detail/{parcelId}?complexId= 는 선택한 complex detail을 반환한다")
 	void complexScopedParcelDetailReturnsSelectedComplex() throws Exception {
 		given(readUseCase.getParcelDetail(1001L, 502L))
-			.willReturn(new ParcelDetailResponse(
+			.willReturn(new ParcelDetailResult(
 				1001L,
 				502L,
 				37.6123,
@@ -201,9 +201,9 @@ class ReadApiControllerContractTest {
 	@DisplayName("GET /api/v1/trade/{parcelId}는 trade를 newest first로 반환한다")
 	void tradeListReturnsCanonicalFields() throws Exception {
 		given(readUseCase.getTradeList(eq(1001L), isNull()))
-			.willReturn(new TradeListResponse(1001L, null, List.of(
-				new TradeResponse(9002L, LocalDate.of(2025, 12, 15), new BigDecimal("84.93"), 130000L, "101", 15),
-				new TradeResponse(9001L, LocalDate.of(2025, 12, 1), new BigDecimal("84.93"), 125000L, "101", 12)
+			.willReturn(new TradeListResult(1001L, null, List.of(
+				new TradeResult(9002L, LocalDate.of(2025, 12, 15), new BigDecimal("84.93"), 130000L, "101", 15),
+				new TradeResult(9001L, LocalDate.of(2025, 12, 1), new BigDecimal("84.93"), 125000L, "101", 12)
 			)));
 
 		mockMvc.perform(get("/api/v1/trade/1001"))
@@ -225,8 +225,8 @@ class ReadApiControllerContractTest {
 	@DisplayName("GET /api/v1/trade/{parcelId}?complexId= 는 선택한 complex trade만 반환한다")
 	void complexScopedTradeListReturnsSelectedComplexTrades() throws Exception {
 		given(readUseCase.getTradeList(1001L, 502L))
-			.willReturn(new TradeListResponse(1001L, 502L, List.of(
-				new TradeResponse(9101L, LocalDate.of(2025, 12, 20), new BigDecimal("59.93"), 90000L, "201", 9)
+			.willReturn(new TradeListResult(1001L, 502L, List.of(
+				new TradeResult(9101L, LocalDate.of(2025, 12, 20), new BigDecimal("59.93"), 90000L, "201", 9)
 			)));
 
 		mockMvc.perform(get("/api/v1/trade/1001").param("complexId", "502"))

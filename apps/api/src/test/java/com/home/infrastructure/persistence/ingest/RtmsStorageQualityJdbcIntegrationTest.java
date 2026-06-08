@@ -14,9 +14,9 @@ import com.home.application.ingest.OpenApiTradeIngestService;
 import com.home.application.ingest.OpenApiTradeItem;
 import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
 import com.home.infrastructure.persistence.read.JdbcPropertyReadRepository;
-import com.home.infrastructure.web.map.dto.ComplexMarkerResponse;
-import com.home.infrastructure.web.map.dto.ComplexMarkersRequest;
-import com.home.infrastructure.web.read.dto.TradeResponse;
+import com.home.application.map.ComplexMarkerResult;
+import com.home.application.map.ComplexMarkerQuery;
+import com.home.application.read.TradeResult;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,7 +57,7 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
 				tuple("11680-578", "RTMS:11680-578", "RTMS", "RTMS:", true)
 			);
 
-		List<ComplexMarkerResponse> markers = new JdbcMapMarkerRepository(jdbcClient).findComplexMarkers(bounds());
+		List<ComplexMarkerResult> markers = new JdbcMapMarkerRepository(jdbcClient).findComplexMarkers(bounds());
 		assertThat(markers)
 			.singleElement()
 			.satisfies(marker -> {
@@ -66,7 +66,7 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
 			});
 		assertThat(new JdbcPropertyReadRepository(jdbcClient).findTradeList(parcelId("1168010300101850000")))
 			.hasValueSatisfying(response -> assertThat(response.trades())
-				.extracting(TradeResponse::dealAmount, TradeResponse::aptDong)
+				.extracting(TradeResult::dealAmount, TradeResult::aptDong)
 				.containsExactly(tuple(318000L, "605"), tuple(342000L, "707")));
 	}
 
@@ -111,7 +111,7 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
 			.hasValueSatisfying(response -> assertThat(response.trades()).isEmpty());
 		assertThat(new JdbcMapMarkerRepository(jdbcClient).findComplexMarkers(bounds()))
 			.singleElement()
-			.extracting(ComplexMarkerResponse::latestDealAmount)
+			.extracting(ComplexMarkerResult::latestDealAmount)
 			.isNull();
 	}
 
@@ -224,8 +224,8 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
 		);
 	}
 
-	private ComplexMarkersRequest bounds() {
-		return new ComplexMarkersRequest(
+	private ComplexMarkerQuery bounds() {
+		return new ComplexMarkerQuery(
 			37.45,
 			127.00,
 			37.55,

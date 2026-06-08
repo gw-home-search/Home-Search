@@ -6,9 +6,9 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Objects;
 
+import com.home.application.map.ComplexMarkerQuery;
 import com.home.application.map.ComplexMarkerRepository;
-import com.home.infrastructure.web.map.dto.ComplexMarkerResponse;
-import com.home.infrastructure.web.map.dto.ComplexMarkersRequest;
+import com.home.application.map.ComplexMarkerResult;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -25,14 +25,14 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 	}
 
 	@Override
-	public List<ComplexMarkerResponse> findComplexMarkers(ComplexMarkersRequest request) {
-		if (hasMarkerShapeFilter(request)) {
-			return findComplexMarkersWithMarkerShapeFilter(request);
+	public List<ComplexMarkerResult> findComplexMarkers(ComplexMarkerQuery query) {
+		if (hasMarkerShapeFilter(query)) {
+			return findComplexMarkersWithMarkerShapeFilter(query);
 		}
-		return findComplexMarkersWithTradeFirst(request);
+		return findComplexMarkersWithTradeFirst(query);
 	}
 
-	private List<ComplexMarkerResponse> findComplexMarkersWithMarkerShapeFilter(ComplexMarkersRequest request) {
+	private List<ComplexMarkerResult> findComplexMarkersWithMarkerShapeFilter(ComplexMarkerQuery query) {
 		return jdbcClient.sql("""
 			WITH requested_bounds AS (
 			    SELECT ST_MakeEnvelope(
@@ -369,24 +369,24 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			  AND (CAST(:areaMax AS NUMERIC) IS NULL OR markers_with_trade.excl_area <= :areaMax)
 			ORDER BY markers_with_trade.parcel_id, markers_with_trade.complex_id
 			""")
-			.param("swLat", request.swLat())
-			.param("swLng", request.swLng())
-			.param("neLat", request.neLat())
-			.param("neLng", request.neLng())
+			.param("swLat", query.swLat())
+			.param("swLng", query.swLng())
+			.param("neLat", query.neLat())
+			.param("neLng", query.neLng())
 			.param("trustedBuildingCoordinateConfidence", TRUSTED_BUILDING_COORDINATE_CONFIDENCE)
-			.param("unitMin", request.unitMin())
-			.param("unitMax", request.unitMax())
-			.param("priceMin", eokToTradeAmount(request.priceEokMin()))
-			.param("priceMax", eokToTradeAmount(request.priceEokMax()))
-			.param("areaMin", pyeongToSquareMeters(request.pyeongMin()))
-			.param("areaMax", pyeongToSquareMeters(request.pyeongMax()))
-			.param("ageMin", request.ageMin())
-			.param("ageMax", request.ageMax())
+			.param("unitMin", query.unitMin())
+			.param("unitMax", query.unitMax())
+			.param("priceMin", eokToTradeAmount(query.priceEokMin()))
+			.param("priceMax", eokToTradeAmount(query.priceEokMax()))
+			.param("areaMin", pyeongToSquareMeters(query.pyeongMin()))
+			.param("areaMax", pyeongToSquareMeters(query.pyeongMax()))
+			.param("ageMin", query.ageMin())
+			.param("ageMax", query.ageMax())
 			.query(this::mapMarker)
 			.list();
 	}
 
-	private List<ComplexMarkerResponse> findComplexMarkersWithTradeFirst(ComplexMarkersRequest request) {
+	private List<ComplexMarkerResult> findComplexMarkersWithTradeFirst(ComplexMarkerQuery query) {
 		return jdbcClient.sql("""
 			WITH requested_bounds AS (
 			    SELECT ST_MakeEnvelope(
@@ -699,28 +699,28 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			  AND (CAST(:areaMax AS NUMERIC) IS NULL OR markers.excl_area <= :areaMax)
 			ORDER BY markers.parcel_id, markers.complex_id
 			""")
-			.param("swLat", request.swLat())
-			.param("swLng", request.swLng())
-			.param("neLat", request.neLat())
-			.param("neLng", request.neLng())
+			.param("swLat", query.swLat())
+			.param("swLng", query.swLng())
+			.param("neLat", query.neLat())
+			.param("neLng", query.neLng())
 			.param("trustedBuildingCoordinateConfidence", TRUSTED_BUILDING_COORDINATE_CONFIDENCE)
-			.param("priceMin", eokToTradeAmount(request.priceEokMin()))
-			.param("priceMax", eokToTradeAmount(request.priceEokMax()))
-			.param("areaMin", pyeongToSquareMeters(request.pyeongMin()))
-			.param("areaMax", pyeongToSquareMeters(request.pyeongMax()))
+			.param("priceMin", eokToTradeAmount(query.priceEokMin()))
+			.param("priceMax", eokToTradeAmount(query.priceEokMax()))
+			.param("areaMin", pyeongToSquareMeters(query.pyeongMin()))
+			.param("areaMax", pyeongToSquareMeters(query.pyeongMax()))
 			.query(this::mapMarker)
 			.list();
 	}
 
-	private boolean hasMarkerShapeFilter(ComplexMarkersRequest request) {
-		return request.unitMin() != null
-			|| request.unitMax() != null
-			|| request.ageMin() != null
-			|| request.ageMax() != null;
+	private boolean hasMarkerShapeFilter(ComplexMarkerQuery query) {
+		return query.unitMin() != null
+			|| query.unitMax() != null
+			|| query.ageMin() != null
+			|| query.ageMax() != null;
 	}
 
-	private ComplexMarkerResponse mapMarker(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new ComplexMarkerResponse(
+	private ComplexMarkerResult mapMarker(ResultSet resultSet, int rowNumber) throws SQLException {
+		return new ComplexMarkerResult(
 			resultSet.getLong("parcel_id"),
 			longOrNull(resultSet, "complex_id"),
 			resultSet.getString("complex_name"),

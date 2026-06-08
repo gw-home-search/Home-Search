@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.home.infrastructure.web.map.dto.ComplexMarkersRequest;
-import com.home.infrastructure.web.map.dto.RegionMarkersRequest;
+import com.home.application.map.ComplexMarkerQuery;
+import com.home.application.map.RegionMarkerQuery;
 
 class EmptyMapUseCaseTest {
 
@@ -15,7 +15,7 @@ class EmptyMapUseCaseTest {
 	@Test
 	@DisplayName("placeholder map use case는 empty complex/region marker list를 반환한다")
 	void placeholderMapUseCaseReturnsEmptyMarkerLists() {
-		assertThat(useCase.getComplexMarkers(new ComplexMarkersRequest(
+		assertThat(useCase.getComplexMarkers(new ComplexMarkerQuery(
 			37.45,
 			126.85,
 			37.70,
@@ -29,7 +29,7 @@ class EmptyMapUseCaseTest {
 			null,
 			null
 		))).isEmpty();
-		assertThat(useCase.getRegionMarkers(new RegionMarkersRequest(
+		assertThat(useCase.getRegionMarkers(new RegionMarkerQuery(
 			37.45,
 			126.85,
 			37.70,

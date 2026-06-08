@@ -8,9 +8,9 @@ import java.util.Objects;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.home.application.map.ComplexMarkerQuery;
 import com.home.application.map.ComplexMarkerRepository;
-import com.home.infrastructure.web.map.dto.ComplexMarkerResponse;
-import com.home.infrastructure.web.map.dto.ComplexMarkersRequest;
+import com.home.application.map.ComplexMarkerResult;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -24,7 +24,7 @@ final class RedisCachingComplexMarkerRepository implements ComplexMarkerReposito
 	private static final Logger log = LoggerFactory.getLogger(RedisCachingComplexMarkerRepository.class);
 	private static final String CACHE_KEY_PREFIX = "home-search:map:complex:schema-a";
 	static final String CACHE_REQUEST_METRIC_NAME = "home.search.map.marker.cache.requests";
-	private static final TypeReference<List<ComplexMarkerResponse>> MARKER_LIST_TYPE = new TypeReference<>() {
+	private static final TypeReference<List<ComplexMarkerResult>> MARKER_LIST_TYPE = new TypeReference<>() {
 	};
 
 	private final ComplexMarkerRepository delegate;
@@ -51,15 +51,15 @@ final class RedisCachingComplexMarkerRepository implements ComplexMarkerReposito
 	}
 
 	@Override
-	public List<ComplexMarkerResponse> findComplexMarkers(ComplexMarkersRequest request) {
-		String cacheKey = cacheKey(request);
+	public List<ComplexMarkerResult> findComplexMarkers(ComplexMarkerQuery query) {
+		String cacheKey = cacheKey(query);
 		CacheLookup cachedMarkers = findCachedMarkers(cacheKey);
 		if (cachedMarkers.status() == CacheLookupStatus.HIT) {
 			recordCacheRequest("hit");
 			return cachedMarkers.markers();
 		}
 
-		List<ComplexMarkerResponse> markers = delegate.findComplexMarkers(request);
+		List<ComplexMarkerResult> markers = delegate.findComplexMarkers(query);
 		boolean stored = storeMarkers(cacheKey, markers);
 		if (cachedMarkers.status() == CacheLookupStatus.ERROR || !stored) {
 			recordCacheRequest("fallback");
@@ -82,7 +82,7 @@ final class RedisCachingComplexMarkerRepository implements ComplexMarkerReposito
 		}
 	}
 
-	private boolean storeMarkers(String cacheKey, List<ComplexMarkerResponse> markers) {
+	private boolean storeMarkers(String cacheKey, List<ComplexMarkerResult> markers) {
 		try {
 			String serializedMarkers = objectMapper.writeValueAsString(markers);
 			redisTemplate.opsForValue().set(cacheKey, serializedMarkers, ttl);
@@ -102,21 +102,21 @@ final class RedisCachingComplexMarkerRepository implements ComplexMarkerReposito
 			.increment();
 	}
 
-	private String cacheKey(ComplexMarkersRequest request) {
+	private String cacheKey(ComplexMarkerQuery query) {
 		return String.join("|",
 			CACHE_KEY_PREFIX,
-			"swLat=" + canonicalDouble(request.swLat()),
-			"swLng=" + canonicalDouble(request.swLng()),
-			"neLat=" + canonicalDouble(request.neLat()),
-			"neLng=" + canonicalDouble(request.neLng()),
-			"pyeongMin=" + canonicalValue(request.pyeongMin()),
-			"pyeongMax=" + canonicalValue(request.pyeongMax()),
-			"priceEokMin=" + canonicalDouble(request.priceEokMin()),
-			"priceEokMax=" + canonicalDouble(request.priceEokMax()),
-			"ageMin=" + canonicalValue(request.ageMin()),
-			"ageMax=" + canonicalValue(request.ageMax()),
-			"unitMin=" + canonicalValue(request.unitMin()),
-			"unitMax=" + canonicalValue(request.unitMax())
+			"swLat=" + canonicalDouble(query.swLat()),
+			"swLng=" + canonicalDouble(query.swLng()),
+			"neLat=" + canonicalDouble(query.neLat()),
+			"neLng=" + canonicalDouble(query.neLng()),
+			"pyeongMin=" + canonicalValue(query.pyeongMin()),
+			"pyeongMax=" + canonicalValue(query.pyeongMax()),
+			"priceEokMin=" + canonicalDouble(query.priceEokMin()),
+			"priceEokMax=" + canonicalDouble(query.priceEokMax()),
+			"ageMin=" + canonicalValue(query.ageMin()),
+			"ageMax=" + canonicalValue(query.ageMax()),
+			"unitMin=" + canonicalValue(query.unitMin()),
+			"unitMax=" + canonicalValue(query.unitMax())
 		);
 	}
 
@@ -134,9 +134,9 @@ final class RedisCachingComplexMarkerRepository implements ComplexMarkerReposito
 		return value == null ? "_" : value.toString();
 	}
 
-	private record CacheLookup(CacheLookupStatus status, List<ComplexMarkerResponse> markers) {
+	private record CacheLookup(CacheLookupStatus status, List<ComplexMarkerResult> markers) {
 
-		private static CacheLookup hit(List<ComplexMarkerResponse> markers) {
+		private static CacheLookup hit(List<ComplexMarkerResult> markers) {
 			return new CacheLookup(CacheLookupStatus.HIT, markers);
 		}
 

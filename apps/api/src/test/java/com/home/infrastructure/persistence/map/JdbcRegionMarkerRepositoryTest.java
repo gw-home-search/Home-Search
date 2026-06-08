@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.groups.Tuple.tuple;
 
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
-import com.home.infrastructure.web.map.dto.RegionMarkerResponse;
-import com.home.infrastructure.web.map.dto.RegionMarkersRequest;
+import com.home.application.map.RegionMarkerResult;
+import com.home.application.map.RegionMarkerQuery;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,11 +22,11 @@ class JdbcRegionMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
 		assertThat(markers)
 			.extracting(
-				RegionMarkerResponse::id,
-				RegionMarkerResponse::name,
-				RegionMarkerResponse::lat,
-				RegionMarkerResponse::lng,
-				RegionMarkerResponse::trend
+				RegionMarkerResult::id,
+				RegionMarkerResult::name,
+				RegionMarkerResult::lat,
+				RegionMarkerResult::lng,
+				RegionMarkerResult::trend
 			)
 			.containsExactly(tuple(11L, "Gangnam-gu", 37.5172, 127.0473, null));
 	}
@@ -40,12 +40,12 @@ class JdbcRegionMarkerRepositoryTest extends JdbcPostgresTestSupport {
 		var markers = repository.findRegionMarkers(request("eup-myeon-dong"));
 
 		assertThat(markers)
-			.extracting(RegionMarkerResponse::id, RegionMarkerResponse::name)
+			.extracting(RegionMarkerResult::id, RegionMarkerResult::name)
 			.containsExactly(tuple(111L, "Cheongdam-dong"));
 	}
 
-	private RegionMarkersRequest request(String region) {
-		return new RegionMarkersRequest(
+	private RegionMarkerQuery request(String region) {
+		return new RegionMarkerQuery(
 			37.45,
 			126.85,
 			37.70,

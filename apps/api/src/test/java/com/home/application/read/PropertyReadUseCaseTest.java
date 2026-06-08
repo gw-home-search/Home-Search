@@ -7,11 +7,11 @@ import java.util.List;
 import java.util.Optional;
 
 import com.home.global.error.ResourceNotFoundException;
-import com.home.infrastructure.web.read.dto.ParcelDetailResponse;
-import com.home.infrastructure.web.read.dto.RegionDetailResponse;
-import com.home.infrastructure.web.read.dto.RegionSummaryResponse;
-import com.home.infrastructure.web.read.dto.SearchComplexResponse;
-import com.home.infrastructure.web.read.dto.TradeListResponse;
+import com.home.application.read.ParcelDetailResult;
+import com.home.application.read.RegionDetailResult;
+import com.home.application.read.RegionSummaryResult;
+import com.home.application.read.SearchComplexResult;
+import com.home.application.read.TradeListResult;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,7 +26,7 @@ class PropertyReadUseCaseTest {
 
 		assertThat(useCase.searchComplexes("  Sample  "))
 			.singleElement()
-			.extracting(SearchComplexResponse::complexName)
+			.extracting(SearchComplexResult::complexName)
 			.isEqualTo("Sample Apartment");
 		assertThat(repository.searchQuery).isEqualTo("Sample");
 	}
@@ -48,7 +48,7 @@ class PropertyReadUseCaseTest {
 		CapturingRepository repository = new CapturingRepository();
 		PropertyReadUseCase useCase = new PropertyReadUseCase(repository);
 
-		assertThat(useCase.getRootRegions()).containsExactly(new RegionSummaryResponse(1L, "Seoul"));
+		assertThat(useCase.getRootRegions()).containsExactly(new RegionSummaryResult(1L, "Seoul"));
 		assertThat(useCase.getRegionDetail(1L).name()).isEqualTo("Seoul");
 		assertThat(useCase.getParcelDetail(1001L).name()).isEqualTo("Sample Apartment");
 		assertThat(useCase.getTradeList(1001L).trades()).isEmpty();
@@ -93,9 +93,9 @@ class PropertyReadUseCaseTest {
 		private Long tradeComplexId;
 
 		@Override
-		public List<SearchComplexResponse> searchComplexes(String query) {
+		public List<SearchComplexResult> searchComplexes(String query) {
 			this.searchQuery = query;
-			return List.of(new SearchComplexResponse(
+			return List.of(new SearchComplexResult(
 				501L,
 				"Sample Apartment",
 				1001L,
@@ -106,19 +106,19 @@ class PropertyReadUseCaseTest {
 		}
 
 		@Override
-		public List<RegionSummaryResponse> findRootRegions() {
-			return List.of(new RegionSummaryResponse(1L, "Seoul"));
+		public List<RegionSummaryResult> findRootRegions() {
+			return List.of(new RegionSummaryResult(1L, "Seoul"));
 		}
 
 		@Override
-		public Optional<RegionDetailResponse> findRegionDetail(Long regionId) {
-			return Optional.of(new RegionDetailResponse(1L, "Seoul", 37.5663, 126.9780, List.of()));
+		public Optional<RegionDetailResult> findRegionDetail(Long regionId) {
+			return Optional.of(new RegionDetailResult(1L, "Seoul", 37.5663, 126.9780, List.of()));
 		}
 
 		@Override
-		public Optional<ParcelDetailResponse> findParcelDetail(Long parcelId, Long complexId) {
+		public Optional<ParcelDetailResult> findParcelDetail(Long parcelId, Long complexId) {
 			this.detailComplexId = complexId;
-			return Optional.of(new ParcelDetailResponse(
+			return Optional.of(new ParcelDetailResult(
 				1001L,
 				complexId,
 				37.5123,
@@ -138,9 +138,9 @@ class PropertyReadUseCaseTest {
 		}
 
 		@Override
-		public Optional<TradeListResponse> findTradeList(Long parcelId, Long complexId) {
+		public Optional<TradeListResult> findTradeList(Long parcelId, Long complexId) {
 			this.tradeComplexId = complexId;
-			return Optional.of(new TradeListResponse(1001L, complexId, List.of()));
+			return Optional.of(new TradeListResult(1001L, complexId, List.of()));
 		}
 	}
 }

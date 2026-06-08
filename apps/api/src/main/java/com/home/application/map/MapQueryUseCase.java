@@ -3,11 +3,6 @@ package com.home.application.map;
 import java.util.List;
 import java.util.Objects;
 
-import com.home.infrastructure.web.map.dto.ComplexMarkerResponse;
-import com.home.infrastructure.web.map.dto.ComplexMarkersRequest;
-import com.home.infrastructure.web.map.dto.RegionMarkerResponse;
-import com.home.infrastructure.web.map.dto.RegionMarkersRequest;
-
 public class MapQueryUseCase implements MapUseCase {
 
 	private final ComplexMarkerRepository complexMarkerRepository;
@@ -22,12 +17,12 @@ public class MapQueryUseCase implements MapUseCase {
 	}
 
 	@Override
-	public List<ComplexMarkerResponse> getComplexMarkers(ComplexMarkersRequest request) {
-		return complexMarkerRepository.findComplexMarkers(request);
+	public List<ComplexMarkerResult> getComplexMarkers(ComplexMarkerQuery query) {
+		return complexMarkerRepository.findComplexMarkers(query);
 	}
 
 	@Override
-	public List<RegionMarkerResponse> getRegionMarkers(RegionMarkersRequest request) {
-		return regionMarkerRepository.findRegionMarkers(request);
+	public List<RegionMarkerResult> getRegionMarkers(RegionMarkerQuery query) {
+		return regionMarkerRepository.findRegionMarkers(query);
 	}
 }

@@ -5,9 +5,9 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Objects;
 
+import com.home.application.map.RegionMarkerQuery;
 import com.home.application.map.RegionMarkerRepository;
-import com.home.infrastructure.web.map.dto.RegionMarkerResponse;
-import com.home.infrastructure.web.map.dto.RegionMarkersRequest;
+import com.home.application.map.RegionMarkerResult;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -20,7 +20,7 @@ public class JdbcRegionMarkerRepository implements RegionMarkerRepository {
 	}
 
 	@Override
-	public List<RegionMarkerResponse> findRegionMarkers(RegionMarkersRequest request) {
+	public List<RegionMarkerResult> findRegionMarkers(RegionMarkerQuery query) {
 		return jdbcClient.sql("""
 			SELECT
 			    r.id,
@@ -36,17 +36,17 @@ public class JdbcRegionMarkerRepository implements RegionMarkerRepository {
 			  AND r.center_lng BETWEEN :swLng AND :neLng
 			ORDER BY r.id
 			""")
-			.param("region", request.region())
-			.param("swLat", request.swLat())
-			.param("swLng", request.swLng())
-			.param("neLat", request.neLat())
-			.param("neLng", request.neLng())
+			.param("region", query.region())
+			.param("swLat", query.swLat())
+			.param("swLng", query.swLng())
+			.param("neLat", query.neLat())
+			.param("neLng", query.neLng())
 			.query(this::mapMarker)
 			.list();
 	}
 
-	private RegionMarkerResponse mapMarker(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new RegionMarkerResponse(
+	private RegionMarkerResult mapMarker(ResultSet resultSet, int rowNumber) throws SQLException {
+		return new RegionMarkerResult(
 			resultSet.getLong("id"),
 			resultSet.getString("name"),
 			resultSet.getDouble("lat"),

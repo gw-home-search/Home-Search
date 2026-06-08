@@ -6,8 +6,8 @@ import static org.assertj.core.groups.Tuple.tuple;
 import java.time.LocalDate;
 
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
-import com.home.infrastructure.web.map.dto.ComplexMarkerResponse;
-import com.home.infrastructure.web.map.dto.ComplexMarkersRequest;
+import com.home.application.map.ComplexMarkerResult;
+import com.home.application.map.ComplexMarkerQuery;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,13 +24,13 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
 		assertThat(markers)
 			.extracting(
-				ComplexMarkerResponse::parcelId,
-				ComplexMarkerResponse::complexId,
-				ComplexMarkerResponse::name,
-				ComplexMarkerResponse::lat,
-				ComplexMarkerResponse::lng,
-				ComplexMarkerResponse::latestDealAmount,
-				ComplexMarkerResponse::unitCntSum
+				ComplexMarkerResult::parcelId,
+				ComplexMarkerResult::complexId,
+				ComplexMarkerResult::name,
+				ComplexMarkerResult::lat,
+				ComplexMarkerResult::lng,
+				ComplexMarkerResult::latestDealAmount,
+				ComplexMarkerResult::unitCntSum
 			)
 			.containsExactly(tuple(1001L, null, "Sample Apartment B", 37.5123, 127.0456, 125000L, 860L));
 	}
@@ -52,7 +52,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
 
 		assertThat(repository.findComplexMarkers(unitRequest(800L, 900L)))
-			.extracting(ComplexMarkerResponse::parcelId, ComplexMarkerResponse::complexId, ComplexMarkerResponse::unitCntSum)
+			.extracting(ComplexMarkerResult::parcelId, ComplexMarkerResult::complexId, ComplexMarkerResult::unitCntSum)
 			.containsExactly(tuple(1001L, null, 860L));
 		assertThat(repository.findComplexMarkers(unitRequest(861L, null))).isEmpty();
 	}
@@ -79,7 +79,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
 		assertThat(repository.findComplexMarkers(request(null, null)))
 			.singleElement()
-			.extracting(ComplexMarkerResponse::latestDealAmount)
+			.extracting(ComplexMarkerResult::latestDealAmount)
 			.isEqualTo(111000L);
 	}
 
@@ -91,12 +91,12 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
 		assertThat(repository.findComplexMarkers(request(null, null)))
 			.extracting(
-				ComplexMarkerResponse::parcelId,
-				ComplexMarkerResponse::complexId,
-				ComplexMarkerResponse::lat,
-				ComplexMarkerResponse::lng,
-				ComplexMarkerResponse::latestDealAmount,
-				ComplexMarkerResponse::unitCntSum
+				ComplexMarkerResult::parcelId,
+				ComplexMarkerResult::complexId,
+				ComplexMarkerResult::lat,
+				ComplexMarkerResult::lng,
+				ComplexMarkerResult::latestDealAmount,
+				ComplexMarkerResult::unitCntSum
 			)
 			.containsExactly(tuple(2001L, 802L, 37.6010, 127.1010, 190000L, 900L));
 	}
@@ -109,12 +109,12 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
 		assertThat(repository.findComplexMarkers(request(null, null)))
 			.extracting(
-				ComplexMarkerResponse::parcelId,
-				ComplexMarkerResponse::complexId,
-				ComplexMarkerResponse::lat,
-				ComplexMarkerResponse::lng,
-				ComplexMarkerResponse::latestDealAmount,
-				ComplexMarkerResponse::unitCntSum
+				ComplexMarkerResult::parcelId,
+				ComplexMarkerResult::complexId,
+				ComplexMarkerResult::lat,
+				ComplexMarkerResult::lng,
+				ComplexMarkerResult::latestDealAmount,
+				ComplexMarkerResult::unitCntSum
 			)
 			.containsExactly(
 				tuple(3001L, 901L, 37.6110, 127.1110, 150000L, 410L),
@@ -129,7 +129,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
 
 		assertThat(repository.findComplexMarkers(request(null, null)))
-			.extracting(ComplexMarkerResponse::parcelId, ComplexMarkerResponse::unitCntSum)
+			.extracting(ComplexMarkerResult::parcelId, ComplexMarkerResult::unitCntSum)
 			.containsExactly(tuple(4001L, 900L));
 	}
 
@@ -141,12 +141,12 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
 		assertThat(repository.findComplexMarkers(request(null, null)))
 			.extracting(
-				ComplexMarkerResponse::parcelId,
-				ComplexMarkerResponse::complexId,
-				ComplexMarkerResponse::lat,
-				ComplexMarkerResponse::lng,
-				ComplexMarkerResponse::latestDealAmount,
-				ComplexMarkerResponse::unitCntSum
+				ComplexMarkerResult::parcelId,
+				ComplexMarkerResult::complexId,
+				ComplexMarkerResult::lat,
+				ComplexMarkerResult::lng,
+				ComplexMarkerResult::latestDealAmount,
+				ComplexMarkerResult::unitCntSum
 			)
 			.containsExactly(tuple(5001L, null, 37.5133, 127.0466, 210000L, 900L));
 	}
@@ -159,12 +159,12 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
 		assertThat(repository.findComplexMarkers(request(null, null)))
 			.extracting(
-				ComplexMarkerResponse::parcelId,
-				ComplexMarkerResponse::complexId,
-				ComplexMarkerResponse::lat,
-				ComplexMarkerResponse::lng,
-				ComplexMarkerResponse::latestDealAmount,
-				ComplexMarkerResponse::unitCntSum
+				ComplexMarkerResult::parcelId,
+				ComplexMarkerResult::complexId,
+				ComplexMarkerResult::lat,
+				ComplexMarkerResult::lng,
+				ComplexMarkerResult::latestDealAmount,
+				ComplexMarkerResult::unitCntSum
 			)
 			.containsExactly(
 				tuple(6001L, 1201L, 37.6310, 127.1310, 145000L, 420L),
@@ -180,12 +180,12 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
 		assertThat(repository.findComplexMarkers(request(null, null)))
 			.extracting(
-				ComplexMarkerResponse::parcelId,
-				ComplexMarkerResponse::complexId,
-				ComplexMarkerResponse::lat,
-				ComplexMarkerResponse::lng,
-				ComplexMarkerResponse::latestDealAmount,
-				ComplexMarkerResponse::unitCntSum
+				ComplexMarkerResult::parcelId,
+				ComplexMarkerResult::complexId,
+				ComplexMarkerResult::lat,
+				ComplexMarkerResult::lng,
+				ComplexMarkerResult::latestDealAmount,
+				ComplexMarkerResult::unitCntSum
 			)
 			.containsExactly(
 				tuple(8001L, 1401L, 37.6510, 127.1510, 155000L, 430L),
@@ -201,12 +201,12 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
 		assertThat(repository.findComplexMarkers(request(null, null)))
 			.extracting(
-				ComplexMarkerResponse::parcelId,
-				ComplexMarkerResponse::complexId,
-				ComplexMarkerResponse::lat,
-				ComplexMarkerResponse::lng,
-				ComplexMarkerResponse::latestDealAmount,
-				ComplexMarkerResponse::unitCntSum
+				ComplexMarkerResult::parcelId,
+				ComplexMarkerResult::complexId,
+				ComplexMarkerResult::lat,
+				ComplexMarkerResult::lng,
+				ComplexMarkerResult::latestDealAmount,
+				ComplexMarkerResult::unitCntSum
 			)
 			.containsExactly(tuple(8101L, null, 37.5167, 127.0498, 226000L, 540L));
 	}
@@ -219,18 +219,18 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
 		assertThat(repository.findComplexMarkers(request(null, null)))
 			.extracting(
-				ComplexMarkerResponse::parcelId,
-				ComplexMarkerResponse::complexId,
-				ComplexMarkerResponse::lat,
-				ComplexMarkerResponse::lng,
-				ComplexMarkerResponse::latestDealAmount,
-				ComplexMarkerResponse::unitCntSum
+				ComplexMarkerResult::parcelId,
+				ComplexMarkerResult::complexId,
+				ComplexMarkerResult::lat,
+				ComplexMarkerResult::lng,
+				ComplexMarkerResult::latestDealAmount,
+				ComplexMarkerResult::unitCntSum
 			)
 			.containsExactly(tuple(7001L, null, 37.5155, 127.0488, 190000L, 1400L));
 	}
 
-	private ComplexMarkersRequest request(Double priceEokMin, Double priceEokMax) {
-		return new ComplexMarkersRequest(
+	private ComplexMarkerQuery request(Double priceEokMin, Double priceEokMax) {
+		return new ComplexMarkerQuery(
 			37.45,
 			126.85,
 			37.70,
@@ -246,8 +246,8 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 		);
 	}
 
-	private ComplexMarkersRequest unitRequest(Long unitMin, Long unitMax) {
-		return new ComplexMarkersRequest(
+	private ComplexMarkerQuery unitRequest(Long unitMin, Long unitMax) {
+		return new ComplexMarkerQuery(
 			37.45,
 			126.85,
 			37.70,

@@ -18,12 +18,12 @@ import java.time.LocalDate;
 import java.util.List;
 
 import com.home.application.read.PropertyReadUseCase;
-import com.home.infrastructure.web.read.dto.ParcelDetailResponse;
-import com.home.infrastructure.web.read.dto.RegionDetailResponse;
-import com.home.infrastructure.web.read.dto.RegionSummaryResponse;
-import com.home.infrastructure.web.read.dto.SearchComplexResponse;
-import com.home.infrastructure.web.read.dto.TradeListResponse;
-import com.home.infrastructure.web.read.dto.TradeResponse;
+import com.home.application.read.ParcelDetailResult;
+import com.home.application.read.RegionDetailResult;
+import com.home.application.read.RegionSummaryResult;
+import com.home.application.read.SearchComplexResult;
+import com.home.application.read.TradeListResult;
+import com.home.application.read.TradeResult;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -56,7 +56,7 @@ class ReadApiRestDocsTest {
 	@DisplayName("GET /api/v1/search/complexes REST Docs를 생성한다")
 	void documentSearchComplexes() throws Exception {
 		given(readUseCase.searchComplexes(eq("Sample")))
-			.willReturn(List.of(new SearchComplexResponse(
+			.willReturn(List.of(new SearchComplexResult(
 				501L,
 				"Sample Apartment",
 				1001L,
@@ -100,14 +100,14 @@ class ReadApiRestDocsTest {
 	@DisplayName("GET /api/v1/region과 GET /api/v1/region/{regionId} REST Docs를 생성한다")
 	void documentRegionNavigation() throws Exception {
 		given(readUseCase.getRootRegions())
-			.willReturn(List.of(new RegionSummaryResponse(1L, "Seoul")));
+			.willReturn(List.of(new RegionSummaryResult(1L, "Seoul")));
 		given(readUseCase.getRegionDetail(1L))
-			.willReturn(new RegionDetailResponse(
+			.willReturn(new RegionDetailResult(
 				1L,
 				"Seoul",
 				37.5663,
 				126.9780,
-				List.of(new RegionSummaryResponse(11L, "Gangnam-gu"))
+				List.of(new RegionSummaryResult(11L, "Gangnam-gu"))
 			));
 
 		mockMvc.perform(get("/api/v1/region"))
@@ -165,7 +165,7 @@ class ReadApiRestDocsTest {
 	@DisplayName("GET /api/v1/detail/{parcelId}와 GET /api/v1/trade/{parcelId} REST Docs를 생성한다")
 	void documentDetailAndTrade() throws Exception {
 		given(readUseCase.getParcelDetail(1001L, 501L))
-			.willReturn(new ParcelDetailResponse(
+			.willReturn(new ParcelDetailResult(
 				1001L,
 				501L,
 				37.5123,
@@ -183,8 +183,8 @@ class ReadApiRestDocsTest {
 				LocalDate.of(2015, 3, 20)
 			));
 		given(readUseCase.getTradeList(1001L, 501L))
-			.willReturn(new TradeListResponse(1001L, 501L, List.of(
-				new TradeResponse(9002L, LocalDate.of(2025, 12, 15), new BigDecimal("84.93"), 130000L, "101", 15)
+			.willReturn(new TradeListResult(1001L, 501L, List.of(
+				new TradeResult(9002L, LocalDate.of(2025, 12, 15), new BigDecimal("84.93"), 130000L, "101", 15)
 			)));
 
 		mockMvc.perform(get("/api/v1/detail/{parcelId}", 1001L).param("complexId", "501"))

@@ -68,6 +68,7 @@ tasks.named('test') {
         excludeTags 'restDocs'
     }
     exclude '**/infrastructure/persistence/**/*Test.class'
+    exclude '**/*JdbcIntegrationTest.class'
 }
 
 tasks.register('foundationTest', Test) {
@@ -95,6 +96,7 @@ tasks.register('persistenceTest', Test) {
     classpath = sourceSets.test.runtimeClasspath
     useJUnitPlatform()
     include '**/infrastructure/persistence/**/*Test.class'
+    include '**/*JdbcIntegrationTest.class'
 }
 
 tasks.register('restDocsTest', Test) {

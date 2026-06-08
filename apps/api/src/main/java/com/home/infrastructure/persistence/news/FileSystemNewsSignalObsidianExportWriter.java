@@ -7,7 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 
-import com.home.application.news.NewsSignalObsidianExportWriter;
+import com.home.application.news.export.NewsSignalObsidianExportWriter;
 
 class FileSystemNewsSignalObsidianExportWriter implements NewsSignalObsidianExportWriter {
 

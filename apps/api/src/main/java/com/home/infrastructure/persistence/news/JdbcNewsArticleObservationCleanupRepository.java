@@ -3,8 +3,8 @@ package com.home.infrastructure.persistence.news;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-import com.home.application.news.NewsArticleObservationCleanupRecord;
-import com.home.application.news.NewsArticleObservationCleanupRepository;
+import com.home.application.news.observation.NewsArticleObservationCleanupRecord;
+import com.home.application.news.observation.NewsArticleObservationCleanupRepository;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

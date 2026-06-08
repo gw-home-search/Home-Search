@@ -6,9 +6,9 @@ import java.math.BigDecimal;
 import java.util.Optional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.application.ingest.RawTradeIngestStatus;
-import com.home.application.ingest.TradeMatchRematchService;
-import com.home.application.ingest.TradeMatchStatus;
+import com.home.application.ingest.raw.RawTradeIngestStatus;
+import com.home.application.ingest.matching.TradeMatchRematchService;
+import com.home.application.ingest.matching.TradeMatchStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

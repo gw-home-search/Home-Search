@@ -6,8 +6,8 @@ import static org.assertj.core.groups.Tuple.tuple;
 import java.math.BigDecimal;
 import java.util.List;
 
-import com.home.application.coordinate.ComplexDisplayCoordinateCommand;
-import com.home.application.coordinate.ComplexDisplayCoordinateProjectionService;
+import com.home.application.coordinate.display.ComplexDisplayCoordinateCommand;
+import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionService;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 
 import org.junit.jupiter.api.DisplayName;

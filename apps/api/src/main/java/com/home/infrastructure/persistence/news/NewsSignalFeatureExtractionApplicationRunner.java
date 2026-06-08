@@ -1,7 +1,7 @@
 package com.home.infrastructure.persistence.news;
 
-import com.home.application.news.NewsSignalFeatureExtractionResult;
-import com.home.application.news.NewsSignalFeatureExtractionService;
+import com.home.application.news.signal.NewsSignalFeatureExtractionResult;
+import com.home.application.news.signal.NewsSignalFeatureExtractionService;
 import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.slf4j.Logger;

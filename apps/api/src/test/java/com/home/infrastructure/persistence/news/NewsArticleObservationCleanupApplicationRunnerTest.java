@@ -12,8 +12,8 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
-import com.home.application.news.NewsArticleObservationCleanupResult;
-import com.home.application.news.NewsArticleObservationCleanupService;
+import com.home.application.news.observation.NewsArticleObservationCleanupResult;
+import com.home.application.news.observation.NewsArticleObservationCleanupService;
 import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.junit.jupiter.api.DisplayName;

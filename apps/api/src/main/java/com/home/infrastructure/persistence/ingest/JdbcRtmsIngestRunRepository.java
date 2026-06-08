@@ -7,8 +7,8 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Objects;
 
-import com.home.application.ingest.RtmsIngestRunRecord;
-import com.home.application.ingest.RtmsIngestRunRepository;
+import com.home.application.ingest.run.RtmsIngestRunRecord;
+import com.home.application.ingest.run.RtmsIngestRunRepository;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

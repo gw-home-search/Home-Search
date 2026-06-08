@@ -8,9 +8,9 @@ import java.time.LocalDate;
 import java.util.List;
 
 import com.home.application.complex.ComplexRelationClassifier;
-import com.home.application.coordinate.ComplexCoordinateReadinessResult;
-import com.home.application.coordinate.ComplexCoordinateReadinessService;
-import com.home.application.coordinate.ComplexDisplayCoordinateProjectionService;
+import com.home.application.coordinate.readiness.ComplexCoordinateReadinessResult;
+import com.home.application.coordinate.readiness.ComplexCoordinateReadinessService;
+import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionService;
 import com.home.infrastructure.persistence.complex.JdbcComplexRelationRepository;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
@@ -19,6 +19,7 @@ import com.home.application.map.ComplexMarkerQuery;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;
 
 class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupport {
 
@@ -30,7 +31,7 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 			jdbcClient
 		);
 		ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
-			new com.home.application.coordinate.ComplexCoordinateExceptionService(
+			new com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService(
 				coordinateRepository,
 				new JdbcComplexRelationRepository(jdbcClient),
 				new ComplexRelationClassifier()
@@ -92,7 +93,7 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 			jdbcClient
 		);
 		ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
-			new com.home.application.coordinate.ComplexCoordinateExceptionService(
+			new com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService(
 				coordinateRepository,
 				new JdbcComplexRelationRepository(jdbcClient),
 				new ComplexRelationClassifier()
@@ -122,7 +123,7 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 			jdbcClient
 		);
 		ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
-			new com.home.application.coordinate.ComplexCoordinateExceptionService(
+			new com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService(
 				coordinateRepository,
 				new JdbcComplexRelationRepository(jdbcClient),
 				new ComplexRelationClassifier()

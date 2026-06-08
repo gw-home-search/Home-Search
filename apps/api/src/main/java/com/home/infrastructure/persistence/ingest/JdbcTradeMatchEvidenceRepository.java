@@ -11,10 +11,10 @@ import java.util.Optional;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.application.ingest.TradeMatchEvidenceCommand;
-import com.home.application.ingest.TradeMatchEvidenceRecord;
-import com.home.application.ingest.TradeMatchEvidenceRepository;
-import com.home.application.ingest.TradeMatchStatus;
+import com.home.application.ingest.matching.TradeMatchEvidenceCommand;
+import com.home.application.ingest.matching.TradeMatchEvidenceRecord;
+import com.home.application.ingest.matching.TradeMatchEvidenceRepository;
+import com.home.application.ingest.matching.TradeMatchStatus;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

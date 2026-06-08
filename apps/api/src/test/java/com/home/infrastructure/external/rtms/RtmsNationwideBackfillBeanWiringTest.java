@@ -5,8 +5,8 @@ import static org.mockito.Mockito.mock;
 
 import javax.sql.DataSource;
 
-import com.home.application.ingest.RtmsBackfillChunkRepository;
-import com.home.application.ingest.RtmsBackfillJobRepository;
+import com.home.application.ingest.backfill.RtmsBackfillChunkRepository;
+import com.home.application.ingest.backfill.RtmsBackfillJobRepository;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

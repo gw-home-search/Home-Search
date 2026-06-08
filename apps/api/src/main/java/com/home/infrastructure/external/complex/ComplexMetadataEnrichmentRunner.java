@@ -1,7 +1,7 @@
 package com.home.infrastructure.external.complex;
 
-import com.home.application.ingest.ComplexMetadataEnrichmentResult;
-import com.home.application.ingest.ComplexMetadataEnrichmentService;
+import com.home.application.ingest.metadata.ComplexMetadataEnrichmentResult;
+import com.home.application.ingest.metadata.ComplexMetadataEnrichmentService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

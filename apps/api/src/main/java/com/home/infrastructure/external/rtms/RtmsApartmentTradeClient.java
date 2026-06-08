@@ -1,6 +1,6 @@
 package com.home.infrastructure.external.rtms;
 
-import com.home.application.ingest.OpenApiTradeIngestBatch;
+import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
 
 public interface RtmsApartmentTradeClient {
 

@@ -9,7 +9,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import java.util.List;
 
-import com.home.application.coordinate.BuildingFootprintImportCandidate;
+import com.home.application.coordinate.footprint.BuildingFootprintImportCandidate;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

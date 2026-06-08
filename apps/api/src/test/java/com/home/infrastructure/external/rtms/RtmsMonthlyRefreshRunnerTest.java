@@ -15,13 +15,14 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.home.application.ingest.IngestResult;
-import com.home.application.ingest.OpenApiTradeIngestBatch;
-import com.home.application.ingest.OpenApiTradeIngestService;
-import com.home.application.ingest.RtmsIngestRunRecord;
+import com.home.application.ingest.trade.IngestResult;
+import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
+import com.home.application.ingest.trade.OpenApiTradeIngestService;
+import com.home.application.ingest.run.RtmsIngestRunRecord;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.home.application.ingest.run.RtmsIngestRunRepository;
 
 class RtmsMonthlyRefreshRunnerTest {
 
@@ -258,7 +259,7 @@ class RtmsMonthlyRefreshRunnerTest {
 	}
 
 	private static final class RecordingRtmsIngestRunRepository
-		implements com.home.application.ingest.RtmsIngestRunRepository {
+		implements com.home.application.ingest.run.RtmsIngestRunRepository {
 
 		private final List<RtmsIngestRunRecord> saved = new ArrayList<>();
 

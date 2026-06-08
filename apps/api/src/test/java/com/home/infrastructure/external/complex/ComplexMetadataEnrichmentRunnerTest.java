@@ -6,11 +6,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.home.application.ingest.ComplexMetadata;
-import com.home.application.ingest.ComplexMetadataEnrichmentRepository;
-import com.home.application.ingest.ComplexMetadataEnrichmentService;
-import com.home.application.ingest.ComplexMetadataLookup;
-import com.home.application.ingest.ComplexMetadataResolution;
+import com.home.application.ingest.metadata.ComplexMetadata;
+import com.home.application.ingest.metadata.ComplexMetadataEnrichmentRepository;
+import com.home.application.ingest.metadata.ComplexMetadataEnrichmentService;
+import com.home.application.ingest.metadata.ComplexMetadataLookup;
+import com.home.application.ingest.metadata.ComplexMetadataResolution;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

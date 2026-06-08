@@ -9,13 +9,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import com.home.application.ingest.RtmsIngestRunRecord;
-import com.home.application.ingest.RtmsIngestRunReport;
-import com.home.application.ingest.RtmsIngestRunReportQuery;
-import com.home.application.ingest.RtmsIngestRunReportRepository;
-import com.home.application.ingest.RtmsIngestRunReportTotals;
-import com.home.application.ingest.RtmsIngestRunStatus;
-import com.home.application.ingest.RtmsIngestRunStatusSummary;
+import com.home.application.ingest.run.RtmsIngestRunRecord;
+import com.home.application.ingest.run.RtmsIngestRunReport;
+import com.home.application.ingest.run.RtmsIngestRunReportQuery;
+import com.home.application.ingest.run.RtmsIngestRunReportRepository;
+import com.home.application.ingest.run.RtmsIngestRunReportTotals;
+import com.home.application.ingest.run.RtmsIngestRunStatus;
+import com.home.application.ingest.run.RtmsIngestRunStatusSummary;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

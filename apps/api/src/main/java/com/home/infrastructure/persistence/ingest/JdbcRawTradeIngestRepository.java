@@ -8,11 +8,11 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
 
-import com.home.application.ingest.RawTradeIngestFailureQuery;
-import com.home.application.ingest.RawTradeIngestFailureSummary;
-import com.home.application.ingest.RawTradeIngestRecord;
-import com.home.application.ingest.RawTradeIngestRepository;
-import com.home.application.ingest.RawTradeIngestStatus;
+import com.home.application.ingest.raw.RawTradeIngestFailureQuery;
+import com.home.application.ingest.raw.RawTradeIngestFailureSummary;
+import com.home.application.ingest.raw.RawTradeIngestRecord;
+import com.home.application.ingest.raw.RawTradeIngestRepository;
+import com.home.application.ingest.raw.RawTradeIngestStatus;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

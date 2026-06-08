@@ -1,7 +1,7 @@
 package com.home.infrastructure.external.odcloud;
 
-import com.home.application.ingest.ComplexIdentityResolver;
-import com.home.application.coordinate.ComplexCoordinateIdentityVerifier;
+import com.home.application.ingest.matching.ComplexIdentityResolver;
+import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

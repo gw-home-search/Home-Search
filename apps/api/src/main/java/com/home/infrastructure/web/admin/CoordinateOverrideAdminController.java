@@ -3,11 +3,11 @@ package com.home.infrastructure.web.admin;
 import java.math.BigDecimal;
 import java.util.List;
 
-import com.home.application.coordinate.CoordinateOverrideAdminService;
-import com.home.application.coordinate.CoordinateOverrideApprovalCommand;
-import com.home.application.coordinate.CoordinateOverrideApprovalResult;
-import com.home.application.coordinate.CoordinatePendingComplex;
-import com.home.application.coordinate.CoordinatePendingSummary;
+import com.home.application.coordinate.override.CoordinateOverrideAdminService;
+import com.home.application.coordinate.override.CoordinateOverrideApprovalCommand;
+import com.home.application.coordinate.override.CoordinateOverrideApprovalResult;
+import com.home.application.coordinate.override.CoordinatePendingComplex;
+import com.home.application.coordinate.override.CoordinatePendingSummary;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;

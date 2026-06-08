@@ -8,15 +8,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 
-import com.home.application.ingest.ComplexMasterBootstrapper;
-import com.home.application.ingest.IngestResult;
-import com.home.application.ingest.OpenApiTradeIngestBatch;
-import com.home.application.ingest.OpenApiTradeIngestService;
-import com.home.application.ingest.OpenApiTradeItem;
-import com.home.application.ingest.RawTradeIngestRecord;
-import com.home.application.ingest.RawTradeIngestStatus;
-import com.home.application.ingest.TradeMatchEvidenceRecord;
-import com.home.application.ingest.TradeMatchStatus;
+import com.home.application.ingest.matching.ComplexMasterBootstrapper;
+import com.home.application.ingest.trade.IngestResult;
+import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
+import com.home.application.ingest.trade.OpenApiTradeIngestService;
+import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.application.ingest.raw.RawTradeIngestRecord;
+import com.home.application.ingest.raw.RawTradeIngestStatus;
+import com.home.application.ingest.matching.TradeMatchEvidenceRecord;
+import com.home.application.ingest.matching.TradeMatchStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

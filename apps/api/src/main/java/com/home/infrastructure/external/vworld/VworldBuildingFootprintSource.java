@@ -4,8 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import com.home.application.coordinate.BuildingFootprintImportCandidate;
-import com.home.application.coordinate.BuildingFootprintSource;
+import com.home.application.coordinate.footprint.BuildingFootprintImportCandidate;
+import com.home.application.coordinate.footprint.BuildingFootprintSource;
 import com.home.infrastructure.external.ExternalApiUri;
 
 import org.springframework.web.client.RestClient;

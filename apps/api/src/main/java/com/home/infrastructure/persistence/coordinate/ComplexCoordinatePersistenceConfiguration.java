@@ -1,16 +1,16 @@
 package com.home.infrastructure.persistence.coordinate;
 
 import com.home.application.complex.ComplexRelationClassifier;
-import com.home.application.coordinate.BuildingFootprintSource;
-import com.home.application.coordinate.ComplexCoordinateExceptionRepository;
-import com.home.application.coordinate.ComplexCoordinateExceptionService;
-import com.home.application.coordinate.ComplexCoordinateIdentityVerifier;
-import com.home.application.coordinate.ComplexCoordinateReadinessRepository;
-import com.home.application.coordinate.ComplexCoordinateReadinessService;
-import com.home.application.coordinate.ComplexDisplayCoordinateProjectionRepository;
-import com.home.application.coordinate.ComplexDisplayCoordinateProjectionService;
-import com.home.application.coordinate.CoordinateOverrideAdminRepository;
-import com.home.application.coordinate.CoordinateOverrideAdminService;
+import com.home.application.coordinate.footprint.BuildingFootprintSource;
+import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionRepository;
+import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;
+import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
+import com.home.application.coordinate.readiness.ComplexCoordinateReadinessRepository;
+import com.home.application.coordinate.readiness.ComplexCoordinateReadinessService;
+import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionRepository;
+import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionService;
+import com.home.application.coordinate.override.CoordinateOverrideAdminRepository;
+import com.home.application.coordinate.override.CoordinateOverrideAdminService;
 import com.home.infrastructure.persistence.complex.JdbcComplexRelationRepository;
 
 import org.springframework.beans.factory.ObjectProvider;

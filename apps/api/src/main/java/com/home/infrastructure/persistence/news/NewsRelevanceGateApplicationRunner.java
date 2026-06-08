@@ -1,7 +1,7 @@
 package com.home.infrastructure.persistence.news;
 
-import com.home.application.news.NewsArticleRelevanceGateResult;
-import com.home.application.news.NewsArticleRelevanceGateService;
+import com.home.application.news.relevance.NewsArticleRelevanceGateResult;
+import com.home.application.news.relevance.NewsArticleRelevanceGateService;
 import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.slf4j.Logger;

@@ -3,10 +3,10 @@ package com.home.infrastructure.external.odcloud;
 import java.util.List;
 import java.util.Objects;
 
-import com.home.application.coordinate.ComplexCoordinateIdentityVerification;
-import com.home.application.coordinate.ComplexCoordinateIdentityVerifier;
-import com.home.application.coordinate.ComplexCoordinateParcelTargets;
-import com.home.application.coordinate.ComplexCoordinateTarget;
+import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerification;
+import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
+import com.home.application.coordinate.identity.ComplexCoordinateParcelTargets;
+import com.home.application.coordinate.identity.ComplexCoordinateTarget;
 import com.home.infrastructure.external.ExternalApiUri;
 import com.home.infrastructure.external.odcloud.dto.OdcloudAptResponse;
 

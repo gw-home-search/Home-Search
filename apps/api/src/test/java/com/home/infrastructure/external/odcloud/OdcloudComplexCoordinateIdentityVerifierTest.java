@@ -10,9 +10,9 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import java.util.List;
 import java.util.Set;
 
-import com.home.application.coordinate.ComplexCoordinateIdentityVerificationStatus;
-import com.home.application.coordinate.ComplexCoordinateParcelTargets;
-import com.home.application.coordinate.ComplexCoordinateTarget;
+import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerificationStatus;
+import com.home.application.coordinate.identity.ComplexCoordinateParcelTargets;
+import com.home.application.coordinate.identity.ComplexCoordinateTarget;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

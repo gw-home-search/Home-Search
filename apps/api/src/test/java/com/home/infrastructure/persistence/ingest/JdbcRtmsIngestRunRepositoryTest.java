@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Instant;
 import java.util.Arrays;
 
-import com.home.application.ingest.IngestResult;
-import com.home.application.ingest.RtmsIngestRunRecord;
+import com.home.application.ingest.trade.IngestResult;
+import com.home.application.ingest.run.RtmsIngestRunRecord;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

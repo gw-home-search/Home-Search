@@ -10,7 +10,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import java.math.BigDecimal;
 import java.util.Optional;
 
-import com.home.application.ingest.OpenApiTradeItem;
+import com.home.application.ingest.trade.OpenApiTradeItem;
 import com.home.infrastructure.persistence.ingest.ParcelCoordinate;
 
 import org.junit.jupiter.api.DisplayName;

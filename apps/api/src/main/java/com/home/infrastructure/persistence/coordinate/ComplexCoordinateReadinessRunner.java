@@ -1,7 +1,7 @@
 package com.home.infrastructure.persistence.coordinate;
 
-import com.home.application.coordinate.ComplexCoordinateReadinessResult;
-import com.home.application.coordinate.ComplexCoordinateReadinessService;
+import com.home.application.coordinate.readiness.ComplexCoordinateReadinessResult;
+import com.home.application.coordinate.readiness.ComplexCoordinateReadinessService;
 import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.slf4j.Logger;

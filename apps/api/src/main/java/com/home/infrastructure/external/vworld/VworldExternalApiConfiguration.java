@@ -1,6 +1,6 @@
 package com.home.infrastructure.external.vworld;
 
-import com.home.application.coordinate.BuildingFootprintSource;
+import com.home.application.coordinate.footprint.BuildingFootprintSource;
 import com.home.infrastructure.persistence.ingest.ParcelCoordinateResolver;
 import com.home.infrastructure.persistence.ingest.CoordinateSourceFirstParcelCoordinateResolver;
 import com.home.infrastructure.persistence.ingest.ParcelCoordinateOverrideRepository;

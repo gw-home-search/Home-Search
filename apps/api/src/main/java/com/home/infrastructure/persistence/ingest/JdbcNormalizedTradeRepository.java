@@ -5,9 +5,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-import com.home.application.ingest.NormalizedTradeCommand;
-import com.home.application.ingest.NormalizedTradeRepository;
-import com.home.application.ingest.TradeExclAreaNormalizer;
+import com.home.application.ingest.normalization.NormalizedTradeCommand;
+import com.home.application.ingest.normalization.NormalizedTradeRepository;
+import com.home.application.ingest.normalization.TradeExclAreaNormalizer;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;

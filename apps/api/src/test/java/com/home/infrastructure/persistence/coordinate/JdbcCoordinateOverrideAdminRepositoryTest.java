@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 
-import com.home.application.coordinate.CoordinateOverrideApprovalCommand;
-import com.home.application.coordinate.CoordinatePendingReason;
-import com.home.application.coordinate.InvalidCoordinateOverrideException;
+import com.home.application.coordinate.override.CoordinateOverrideApprovalCommand;
+import com.home.application.coordinate.override.CoordinatePendingReason;
+import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
 

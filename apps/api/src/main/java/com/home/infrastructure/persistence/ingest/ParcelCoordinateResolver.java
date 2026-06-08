@@ -2,7 +2,7 @@ package com.home.infrastructure.persistence.ingest;
 
 import java.util.Optional;
 
-import com.home.application.ingest.OpenApiTradeItem;
+import com.home.application.ingest.trade.OpenApiTradeItem;
 
 @FunctionalInterface
 public interface ParcelCoordinateResolver {

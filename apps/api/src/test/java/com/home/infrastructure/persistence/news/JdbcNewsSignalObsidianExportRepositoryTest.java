@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.OffsetDateTime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.application.news.NewsSignalDatasetRow;
-import com.home.application.news.NewsSignalFeatureExtractionPolicy;
-import com.home.application.news.NewsSignalObsidianExportRepository;
+import com.home.application.news.signal.NewsSignalDatasetRow;
+import com.home.application.news.signal.NewsSignalFeatureExtractionPolicy;
+import com.home.application.news.export.NewsSignalObsidianExportRepository;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 
 import org.junit.jupiter.api.DisplayName;

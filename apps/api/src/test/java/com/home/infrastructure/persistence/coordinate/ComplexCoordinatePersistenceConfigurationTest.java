@@ -5,8 +5,8 @@ import static org.mockito.Mockito.mock;
 
 import javax.sql.DataSource;
 
-import com.home.application.coordinate.ComplexCoordinateExceptionService;
-import com.home.application.coordinate.ComplexCoordinateReadinessService;
+import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;
+import com.home.application.coordinate.readiness.ComplexCoordinateReadinessService;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -1,6 +1,6 @@
 package com.home.infrastructure.external.rtms;
 
-import com.home.application.ingest.RtmsBackfillChunkRequest;
+import com.home.application.ingest.backfill.RtmsBackfillChunkRequest;
 
 @FunctionalInterface
 interface RtmsBackfillChunkExecutor {

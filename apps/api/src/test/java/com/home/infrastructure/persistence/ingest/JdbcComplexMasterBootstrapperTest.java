@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
 
-import com.home.application.ingest.OpenApiTradeItem;
+import com.home.application.ingest.trade.OpenApiTradeItem;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

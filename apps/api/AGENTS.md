@@ -130,6 +130,26 @@ New class placement rules:
 - Do not create new top-level feature packages outside `application`,
   `domain`, `infrastructure`, or `global`.
 
+Application capability package rules:
+
+- Keep `application/**` feature-first. The first child under `application` must
+  stay a project feature such as `map`, `read`, `ingest`, `complex`,
+  `coordinate`, or `news`.
+- Split inside `application/<feature>` when that feature has roughly 20 or more
+  classes, or when it clearly contains three or more independent capabilities.
+- Use business capability package names, not generic role package names. Avoid
+  `common`, `dto`, `model`, `service`, and `util` under `application/**`.
+- Keep use cases, commands/results, policies, enums, and ports close to the
+  capability that owns their reason to change.
+- Do not introduce a generic `port` subpackage by default. Use one only when
+  a single capability has enough ports that colocating them with the capability
+  logic becomes harder to scan.
+- Keep small feature packages such as `map`, `read`, and `complex` flat until
+  they cross the same size or capability threshold.
+- Tests should mirror the production package after package moves.
+- Package moves must be behavior-preserving and must not be mixed with public
+  API, Flyway, data interpretation, or later-scope feature changes.
+
 Package refactor gate:
 
 - Documentation-only package guidance does not require TDD.

@@ -1,7 +1,7 @@
 package com.home.infrastructure.persistence.ingest;
 
-import com.home.application.ingest.TradeMatchRematchResult;
-import com.home.application.ingest.TradeMatchRematchService;
+import com.home.application.ingest.matching.TradeMatchRematchResult;
+import com.home.application.ingest.matching.TradeMatchRematchService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

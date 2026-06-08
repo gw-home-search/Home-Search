@@ -6,8 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import java.time.LocalDate;
 import java.util.List;
 
-import com.home.application.ingest.NormalizedTradeCommand;
-import com.home.application.ingest.RawTradeIngestRecord;
+import com.home.application.ingest.normalization.NormalizedTradeCommand;
+import com.home.application.ingest.raw.RawTradeIngestRecord;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

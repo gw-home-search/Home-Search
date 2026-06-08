@@ -3,7 +3,7 @@ package com.home.infrastructure.external.vworld;
 import java.util.Objects;
 import java.util.Optional;
 
-import com.home.application.ingest.OpenApiTradeItem;
+import com.home.application.ingest.trade.OpenApiTradeItem;
 import com.home.infrastructure.external.ExternalApiUri;
 import com.home.infrastructure.persistence.ingest.ParcelCoordinate;
 import com.home.infrastructure.persistence.ingest.ParcelCoordinateResolver;

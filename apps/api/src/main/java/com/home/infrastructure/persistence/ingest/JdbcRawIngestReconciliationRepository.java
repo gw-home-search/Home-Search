@@ -3,8 +3,8 @@ package com.home.infrastructure.persistence.ingest;
 import java.util.List;
 import java.util.Objects;
 
-import com.home.application.ingest.RawIngestReconciliationCandidate;
-import com.home.application.ingest.RawIngestReconciliationRepository;
+import com.home.application.ingest.reconciliation.RawIngestReconciliationCandidate;
+import com.home.application.ingest.reconciliation.RawIngestReconciliationRepository;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

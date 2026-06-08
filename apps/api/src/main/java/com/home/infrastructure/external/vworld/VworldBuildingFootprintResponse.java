@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.home.application.coordinate.BuildingFootprintImportCandidate;
+import com.home.application.coordinate.footprint.BuildingFootprintImportCandidate;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 record VworldBuildingFootprintResponse(

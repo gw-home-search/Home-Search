@@ -253,6 +253,56 @@ risk_notes = [
 ]
 
 [[items]]
+id = "backend-package-boundary-application-decoupling"
+title_ko = "Backend package boundary application decoupling"
+pr_type = "Refactor"
+pr_title_ko = "백엔드 application 계층 DTO 의존 제거"
+description_ko = "설계한 layered-first 패키지 경계를 실제 코드에 적용하기 위해 application/map과 application/read가 infrastructure.web DTO를 직접 참조하지 않게 분리하고, public API 응답 shape는 controller contract test로 고정한다."
+status = "planned"
+priority = 205
+targets = "backend"
+preset = "backend-quality"
+acceptance_criteria = [
+  "application/map과 application/read에서 com.home.infrastructure.web.* import가 0건이다.",
+  "application 계층에는 map/read 전용 query/result record만 남고 public web DTO는 infrastructure/web/**/dto에만 남는다.",
+  "MapController, SearchController, RegionController, DetailController가 web request/response DTO와 application query/result 사이 mapping을 담당한다.",
+  "JdbcMapMarkerRepository, JdbcRegionMarkerRepository, JdbcPropertyReadRepository는 application result type을 반환한다.",
+  "POST /api/v1/map/regions, POST /api/v1/map/complexes, GET /api/v1/search/complexes, GET /api/v1/region, GET /api/v1/region/{regionId}, GET /api/v1/detail/{parcelId}, GET /api/v1/trade/{parcelId} URL과 response shape를 변경하지 않는다.",
+  "lat/lng, latitude/longitude, latestDealAmount, unitCntSum, dealAmount amount unit, empty-result behavior, ProblemDetail shape를 유지한다.",
+  "raw-before-normalized, duplicate-safe ingest, failed match queryability, complex_id operational relation을 변경하지 않는다.",
+  "PR #131의 Backend Package Boundary 문서가 main에 반영되지 않았으면 이 item은 PR #131 위에 stack하거나 merge 후 실행한다.",
+]
+first_red_candidates = [
+  "BackendPackageBoundaryTest에서 application/** source가 com.home.infrastructure.web를 import하면 실패하는 RED를 만든다.",
+  "MapControllerContractTest에서 application result 전환 중 complex marker canonical fields가 누락되면 실패하는 contract RED를 유지한다.",
+  "ReadApiControllerContractTest에서 search/detail/trade response field 또는 ProblemDetail shape가 흔들리면 실패하는 contract RED를 유지한다.",
+  "JdbcMapMarkerRepositoryTest, JdbcRegionMarkerRepositoryTest, JdbcPropertyReadRepositoryTest에서 repository result type 전환 후 SQL-backed read path가 같은 값을 반환하는지 확인한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew foundationTest --tests '*BackendPackageBoundaryTest'",
+  "cd apps/api && ./gradlew apiContractTest --tests '*MapControllerContractTest'",
+  "cd apps/api && ./gradlew apiContractTest --tests '*ReadApiControllerContractTest'",
+  "cd apps/api && ./gradlew persistenceTest --tests '*JdbcMapMarkerRepositoryTest' --tests '*JdbcRegionMarkerRepositoryTest' --tests '*JdbcPropertyReadRepositoryTest'",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "DB schema, Flyway migration, repository SQL 의미 변경이 필요하면 중단하고 별도 data/backend behavior slice로 분리한다.",
+  "raw ingest 저장 순서, duplicate handling, failed match evidence, complex_id/complex_pk 의미 변경이 필요하면 중단한다.",
+  "domain/** 추출, news package 정리, coordinate/ingest 대량 이동이 같은 PR에 섞이면 중단한다.",
+  "application/**에서 infrastructure 의존을 제거하는 과정에서 순환 의존이 생기면 중단하고 architecture plan으로 되돌린다.",
+  "PR #131 package boundary 문서가 main에 없고 stack PR로 진행하지 않는 상태이면 implementation을 시작하지 않는다.",
+]
+risk_notes = [
+  "이번 item은 package boundary refactor이며 public API behavior 변경을 목표로 하지 않는다.",
+  "controller mapping 위치가 바뀌므로 response field 누락 위험이 있어 apiContractTest를 핵심 gate로 둔다.",
+  "현재 main 기준 domain/**은 비어 있으므로 domain 대량 추출보다 application의 web DTO 의존 제거를 첫 slice로 둔다.",
+  "GitHub Actions backend-test는 Testcontainers image fetch가 일시 실패할 수 있어 실패 시 rerun evidence와 실제 assertion failure를 구분한다.",
+]
+
+[[items]]
 id = "coordinate-marker-confidence-hardening"
 title_ko = "Coordinate marker confidence hardening"
 pr_type = "Feat"

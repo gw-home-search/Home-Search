@@ -1,6 +1,7 @@
 package com.home.infrastructure.external.naver;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -100,6 +101,43 @@ class NaverNewsSignalPipelineApplicationRunnerTest {
 		assertThat(commandCaptor.getValue().outputRoot()).isEqualTo(Path.of("/tmp/obsidian"));
 		assertThat(commandCaptor.getValue().date()).isEqualTo(LocalDate.parse("2026-06-07"));
 		assertThat(commandCaptor.getValue().maxRows()).isEqualTo(200);
+	}
+
+	@Test
+	@DisplayName("Naver News signal pipeline runner는 Obsidian export가 truncated이면 완료로 처리하지 않는다")
+	void truncatedObsidianExportFailsPipeline() {
+		NaverNewsOneShotIngestRunner ingestRunner = mock(NaverNewsOneShotIngestRunner.class);
+		NewsArticleRelevanceGateService relevanceGateService = mock(NewsArticleRelevanceGateService.class);
+		NewsSignalFeatureExtractionService featureExtractionService = mock(NewsSignalFeatureExtractionService.class);
+		NewsSignalObsidianExportService exportService = mock(NewsSignalObsidianExportService.class);
+		when(ingestRunner.ingest(any()))
+			.thenReturn(new NewsArticleObservationIngestResult(3, 3, 0));
+		when(relevanceGateService.evaluateObserved(40))
+			.thenReturn(new NewsArticleRelevanceGateResult(3, 3, 0, 0, 0, 0));
+		when(featureExtractionService.extractPending(30))
+			.thenReturn(new NewsSignalFeatureExtractionResult(3, 3, 3, 0));
+		when(exportService.exportDaily(any()))
+			.thenReturn(new NewsSignalObsidianExportResult(
+				LocalDate.parse("2026-06-07"),
+				Path.of("/tmp/obsidian/news-signals/daily/2026-06-07.md"),
+				1,
+				1,
+				true
+			));
+		NaverNewsSignalPipelineApplicationRunner runner = new NaverNewsSignalPipelineApplicationRunner(
+			ingestRunner,
+			relevanceGateService,
+			featureExtractionService,
+			exportService,
+			pipelineProperties(true),
+			new NaverNewsOneShotIngestProperties(true, "강남 재건축", 10, 2, "date", false),
+			searchProperties(),
+			CLOCK
+		);
+
+		assertThatThrownBy(() -> runner.run(null))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("truncated");
 	}
 
 	@Test

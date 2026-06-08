@@ -1,4 +1,74 @@
 [[items]]
+id = "news-obsidian-pipeline-e2e-hardening"
+title_ko = "News Obsidian pipeline E2E hardening"
+pr_type = "Test"
+pr_title_ko = "뉴스 Obsidian pipeline E2E 검증 강화"
+description_ko = "Naver News metadata-only 수집부터 relevance gate, feature extraction, Obsidian daily export까지 실제 DB와 파일 시스템을 거치는 통합 검증을 추가하고, truncated export를 완료로 오인하지 않게 막는다."
+status = "done"
+priority = 240
+targets = "backend"
+preset = "open-api-ingest-prep"
+acceptance_criteria = [
+  "fake Naver response가 실제 JDBC repository를 통해 news_article_observation으로 저장된다.",
+  "relevance gate와 feature extraction이 실제 repository를 거쳐 news_signal_feature를 만든다.",
+  "temp Obsidian root에 news-signals/daily/YYYY-MM-DD.md가 생성되고 title_keywords, regions, topics, source_key, extraction_version을 포함한다.",
+  "markdown은 snippet, raw_provider_payload, content, body, full_text, html을 노출하지 않는다.",
+  "같은 fake response를 재실행해도 observation과 feature가 중복 생성되지 않는다.",
+  "pipeline export가 maxRows 초과로 truncated=true가 되면 완료로 처리하지 않는다.",
+  "live Naver API 호출, credentials, secrets 저장 없이 검증한다.",
+  "public map/search/region/detail/trade API URL, request/response shape, amount unit, ProblemDetail shape를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "NaverNewsSignalPipelineJdbcIntegrationTest에서 accepted fake news 2건과 obsidianMaxRows=1로 pipeline을 실행했을 때 현재 runner가 truncated export를 성공 처리하면 실패하는 RED를 만든다.",
+  "NaverNewsSignalPipelineJdbcIntegrationTest에서 fake Naver response 2건이 DB feature와 Obsidian daily note로 이어지지 않으면 실패하는 integration RED를 만든다.",
+  "NaverNewsSignalPipelineJdbcIntegrationTest에서 같은 fake response 재실행 후 observation/feature 중복이 생기면 실패하는 regression RED를 만든다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew persistenceTest --tests '*NaverNewsSignalPipelineJdbcIntegrationTest'",
+  "cd apps/api && ./gradlew test --tests '*News*'",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 scripts/check-test-display-names.py",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+verification_evidence = [
+  "- `cd apps/api && ./gradlew test --tests '*NaverNewsSignalPipelineApplicationRunnerTest.truncatedObsidianExportFailsPipeline'` = fail (최초 RED: truncated Obsidian export를 pipeline runner가 성공 처리해 assertion 실패)",
+  "- `cd apps/api && ./gradlew test --tests '*NaverNewsSignalPipelineApplicationRunnerTest.truncatedObsidianExportFailsPipeline'` = pass (최소 GREEN: truncated export를 IllegalStateException으로 실패 처리)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests '*NaverNewsSignalPipelineJdbcIntegrationTest'` = pass (fake Naver response -> JDBC observation/feature -> Obsidian daily note E2E 통과)",
+  "- `cd apps/api && ./gradlew test --tests '*News*'` = pass (뉴스 unit/config/runner 회귀 통과)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests '*News*'` = pass (뉴스 JDBC/Flyway persistence 회귀 통과)",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, persistence, coverage, javadoc gate 통과)",
+  "- `python3 scripts/check-test-display-names.py` = pass (test display name policy 통과)",
+  "- `python3 .codex/harness/project_terms_check.py` = pass (프로젝트 용어 점검 통과)",
+  "- `python3 .codex/harness/pr_lint.py --self-test` = pass (PR lint 자체 테스트 통과)",
+  "- `python3 .codex/harness/pr_context.py --self-test` = pass (PR context 자체 테스트 통과)",
+  "- `python3 .codex/harness/pr_body_check.py --self-test` = pass (PR body check 자체 테스트 통과)",
+  "- `python3 .codex/harness/worklog_sync.py --self-test` = pass (worklog sync 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_pr.py --self-test` = pass (draft PR helper 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_flow.py --self-test` = pass (harness flow 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_integrate.py --self-test` = pass (harness integrate 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_plan.py --self-test` = pass (harness plan 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_report.py --self-test` = pass (harness report 자체 테스트 통과)",
+  "- `.codex/harness/home --self-test` = pass (harness launcher 자체 테스트 통과)",
+  "- `python3 .codex/harness/skill_routing.py --self-test` = pass (skill routing 자체 테스트 통과)",
+  "- `python3 .codex/harness/user_language_check.py --self-test` = pass (user-facing language 자체 테스트 통과)",
+  "- `python3 .codex/harness/project_terms_check.py --self-test` = pass (project terms 자체 테스트 통과)",
+  "- `git diff --check` = pass (공백 오류 없음)",
+]
+stop_conditions = [
+  "Docker/Testcontainers를 실행할 수 없으면 persistence/E2E 완료로 주장하지 않는다.",
+  "live Naver API 호출이나 credentials가 필요해지면 중단한다.",
+  "기사 본문/full text/html 또는 replacement summary 저장이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "daily note를 여러 파일로 paging해야 하는 수준이면 후속 slice로 분리한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "이번 slice는 뉴스 later-scope 검증 강화이며 현재 map/trade public API 경로에는 영향을 주지 않는다.",
+  "Obsidian은 operational source of truth가 아니라 DB structured feature의 export로 유지한다.",
+]
+
+[[items]]
 id = "coordinate-admin-minimal-reason-queue"
 title_ko = "Coordinate admin minimal reason queue"
 pr_type = "Feat"

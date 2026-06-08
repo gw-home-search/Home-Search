@@ -93,6 +93,12 @@ class NaverNewsSignalPipelineApplicationRunner implements ApplicationRunner, Ord
 				pipelineProperties.obsidianMaxRows()
 			)
 		);
+		if (exportResult.truncated()) {
+			throw new IllegalStateException(
+				"News signal pipeline Obsidian export was truncated: path=%s maxRows=%d features=%d"
+					.formatted(exportResult.path(), pipelineProperties.obsidianMaxRows(), exportResult.featureCount())
+			);
+		}
 
 		log.info(
 			"Naver News signal pipeline completed query={} read={} observed={} duplicateSkipped={} relevanceEvaluated={} relevanceKept={} relevanceSkippedIrrelevant={} extractionEvaluated={} extracted={} exportDate={} exportPath={} exportFeatures={} exportArticles={} exportTruncated={}",

@@ -49,6 +49,99 @@ Stop before changing public contract.
 - The operational trade relation is `complex_id`.
 - Preserve `complex_pk`, `apt_seq`, `source`, and `source_key`.
 
+## Backend Package Boundary
+
+Keep the backend `layered-first` and use feature names only under the layer:
+
+```text
+com.home
+├── application/
+│   ├── map/
+│   ├── read/
+│   ├── ingest/
+│   ├── complex/
+│   ├── coordinate/
+│   └── news/
+├── domain/
+│   ├── region/
+│   ├── parcel/
+│   ├── complex/
+│   ├── trade/
+│   ├── ingest/
+│   └── coordinate/
+├── infrastructure/
+│   ├── web/
+│   ├── persistence/
+│   ├── external/
+│   └── observability/
+└── global/
+```
+
+Package responsibilities:
+
+- `application/**` owns use cases, application services, commands/results,
+  policies, and repository or external-system ports. It may depend on
+  `domain/**`, but must not depend on `infrastructure/**`, Spring Web DTOs,
+  JDBC row mapping, or external API response DTOs.
+- `domain/**` owns pure project concepts and rules for region, parcel,
+  complex, trade, ingest identity, and coordinate decisions. It must not depend
+  on Spring, JDBC, HTTP clients, Flyway, external API DTOs, or web DTOs.
+- `infrastructure/web/**` owns controllers, public request/response DTOs,
+  validation, interceptors, and ProblemDetail mapping. Any public field, unit,
+  status, or error shape here must match `docs/API_CONTRACT.md`.
+- `infrastructure/persistence/**` owns JDBC, SQL, PostGIS, Redis cache
+  adapters, Flyway-facing repository implementations, and persistence
+  configuration.
+- `infrastructure/external/**` owns RTMS, VWorld, ODCloud, Naver, and other
+  external API adapters. Provider response DTOs stay inside the provider
+  package, usually under `dto`.
+- `infrastructure/observability/**` owns metrics, actuator-facing
+  instrumentation, and endpoint interceptors that do not change business
+  behavior.
+- `global/**` is limited to cross-cutting runtime support such as shared error
+  handling. Do not place feature logic, repositories, DTOs, or domain policies
+  in `global/**`.
+
+Dependency direction:
+
+- Default direction is `infrastructure -> application -> domain`.
+- `application/**` defines ports; `infrastructure/**` implements them.
+- `domain/**` is the lowest layer and must not import `application/**` or
+  `infrastructure/**`.
+- `infrastructure/web/**` maps public DTOs to application commands or queries;
+  public DTOs must not be reused as application or domain models.
+- `infrastructure/persistence/**` maps database rows to application/domain
+  results; database table shape must not leak into public API DTOs.
+
+New class placement rules:
+
+- Put a new class in the layer that owns the reason it changes, then choose the
+  feature package under that layer.
+- Keep repository interfaces and external-client ports in `application/<feature>`
+  unless the package becomes too large; introduce `port` subpackages only as a
+  focused follow-up refactor.
+- Put controller request/response DTOs in the matching `infrastructure/web`
+  feature package, usually under `dto`.
+- Put JDBC repository implementations in the matching
+  `infrastructure/persistence` feature package with a `Jdbc` prefix when that
+  matches the existing naming pattern.
+- Put external provider DTOs and parsers under the provider package in
+  `infrastructure/external`.
+- Do not create new top-level feature packages outside `application`,
+  `domain`, `infrastructure`, or `global`.
+
+Package refactor gate:
+
+- Documentation-only package guidance does not require TDD.
+- Before moving Java packages, map the affected flow with `code-mapper` and
+  keep the move behavior-preserving.
+- If a move touches controllers, DTOs, validation, error policy, or response
+  fields, run a contract checkpoint before implementation.
+- If a move changes application, repository, ingest, or external adapter
+  behavior, treat it as a behavior slice and use the Backend Execution Gate
+  below.
+- Do not mix later-scope packages or behavior into the map/trade critical path.
+
 ## Backend Work Start Flow
 
 Before changing backend behavior, complete this flow:

@@ -84,14 +84,12 @@ class IngestPersistenceConfiguration {
 
 	@Bean
 	@Lazy
-	@ConditionalOnBean(JdbcClient.class)
 	RtmsBackfillJobRepository rtmsBackfillJobRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
 		return new JdbcRtmsBackfillJobRepository(requiredJdbcClient(jdbcClientProvider), java.time.Clock.systemUTC());
 	}
 
 	@Bean
 	@Lazy
-	@ConditionalOnBean(JdbcClient.class)
 	RtmsBackfillChunkRepository rtmsBackfillChunkRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
 		return new JdbcRtmsBackfillChunkRepository(requiredJdbcClient(jdbcClientProvider), java.time.Clock.systemUTC());
 	}

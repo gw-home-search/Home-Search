@@ -10,7 +10,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -140,16 +139,19 @@ class RtmsExternalApiConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnBean({RtmsBackfillJobRepository.class, RtmsBackfillChunkRepository.class})
 	RtmsNationwideBackfillRunner rtmsNationwideBackfillRunner(
 		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
-		RtmsBackfillJobRepository backfillJobRepository,
-		RtmsBackfillChunkRepository backfillChunkRepository,
+		ObjectProvider<RtmsBackfillJobRepository> backfillJobRepositoryProvider,
+		ObjectProvider<RtmsBackfillChunkRepository> backfillChunkRepositoryProvider,
 		RtmsOneShotIngestProperties properties
 	) {
 		return new RtmsNationwideBackfillRunner(
-			backfillJobRepository,
-			backfillChunkRepository,
+			() -> backfillJobRepositoryProvider.getIfAvailable(() -> {
+				throw new IllegalStateException("RtmsBackfillJobRepository is required for RTMS nationwide backfill");
+			}),
+			() -> backfillChunkRepositoryProvider.getIfAvailable(() -> {
+				throw new IllegalStateException("RtmsBackfillChunkRepository is required for RTMS nationwide backfill");
+			}),
 			request -> summaryToBackfillResult(monthlyRefreshRunner.refresh(request.lawdCd(), request.dealYmd())),
 			java.time.Clock.systemUTC(),
 			properties.nationwideBackfillOptions()

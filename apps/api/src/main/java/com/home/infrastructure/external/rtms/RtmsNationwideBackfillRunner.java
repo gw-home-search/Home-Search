@@ -2,6 +2,7 @@ package com.home.infrastructure.external.rtms;
 
 import java.time.Clock;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 import com.home.application.ingest.RtmsBackfillChunkClaim;
 import com.home.application.ingest.RtmsBackfillChunkRepository;
@@ -13,8 +14,8 @@ import com.home.application.ingest.RtmsBackfillJobStatus;
 
 class RtmsNationwideBackfillRunner {
 
-	private final RtmsBackfillJobRepository jobRepository;
-	private final RtmsBackfillChunkRepository chunkRepository;
+	private final Supplier<RtmsBackfillJobRepository> jobRepositorySupplier;
+	private final Supplier<RtmsBackfillChunkRepository> chunkRepositorySupplier;
 	private final RtmsBackfillChunkExecutor chunkExecutor;
 	private final Clock clock;
 	private final RtmsNationwideBackfillOptions options;
@@ -26,8 +27,18 @@ class RtmsNationwideBackfillRunner {
 		Clock clock,
 		RtmsNationwideBackfillOptions options
 	) {
-		this.jobRepository = Objects.requireNonNull(jobRepository);
-		this.chunkRepository = Objects.requireNonNull(chunkRepository);
+		this(() -> jobRepository, () -> chunkRepository, chunkExecutor, clock, options);
+	}
+
+	RtmsNationwideBackfillRunner(
+		Supplier<RtmsBackfillJobRepository> jobRepositorySupplier,
+		Supplier<RtmsBackfillChunkRepository> chunkRepositorySupplier,
+		RtmsBackfillChunkExecutor chunkExecutor,
+		Clock clock,
+		RtmsNationwideBackfillOptions options
+	) {
+		this.jobRepositorySupplier = Objects.requireNonNull(jobRepositorySupplier);
+		this.chunkRepositorySupplier = Objects.requireNonNull(chunkRepositorySupplier);
 		this.chunkExecutor = Objects.requireNonNull(chunkExecutor);
 		this.clock = Objects.requireNonNull(clock);
 		this.options = Objects.requireNonNull(options);
@@ -35,6 +46,8 @@ class RtmsNationwideBackfillRunner {
 
 	RtmsNationwideBackfillReport run(RtmsNationwideBackfillPlan plan) {
 		Objects.requireNonNull(plan, "plan is required");
+		RtmsBackfillJobRepository jobRepository = jobRepositorySupplier.get();
+		RtmsBackfillChunkRepository chunkRepository = chunkRepositorySupplier.get();
 		RtmsBackfillJobRecord job = jobRepository.createIfAbsent(
 			plan.jobKey(),
 			"RTMS",
@@ -58,7 +71,7 @@ class RtmsNationwideBackfillRunner {
 				break;
 			}
 			RtmsBackfillChunkExecutionResult result = chunkExecutor.execute(claim.request());
-			markChunk(claim, result);
+			markChunk(chunkRepository, claim, result);
 			executed++;
 		}
 
@@ -73,7 +86,11 @@ class RtmsNationwideBackfillRunner {
 		return new RtmsNationwideBackfillReport(job.id(), status, counts, recovered);
 	}
 
-	private void markChunk(RtmsBackfillChunkClaim claim, RtmsBackfillChunkExecutionResult result) {
+	private void markChunk(
+		RtmsBackfillChunkRepository chunkRepository,
+		RtmsBackfillChunkClaim claim,
+		RtmsBackfillChunkExecutionResult result
+	) {
 		if (result.status() == RtmsBackfillChunkStatus.COMPLETED) {
 			chunkRepository.markCompleted(claim.id(), result.runId());
 			return;

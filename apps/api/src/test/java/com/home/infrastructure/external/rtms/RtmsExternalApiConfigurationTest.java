@@ -18,6 +18,8 @@ import com.home.application.ingest.RtmsBackfillJobStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
 class RtmsExternalApiConfigurationTest {
 
@@ -120,8 +122,8 @@ class RtmsExternalApiConfigurationTest {
 
 		RtmsNationwideBackfillRunner runner = configuration.rtmsNationwideBackfillRunner(
 			monthlyRefreshRunner,
-			jobRepository,
-			chunkRepository,
+			provider(RtmsBackfillJobRepository.class, jobRepository),
+			provider(RtmsBackfillChunkRepository.class, chunkRepository),
 			properties
 		);
 
@@ -132,5 +134,11 @@ class RtmsExternalApiConfigurationTest {
 		verify(chunkRepository).markPartial(102L, 12L, "IllegalStateException: page failed");
 		verify(chunkRepository).markFailed(103L, 13L, "IllegalStateException: fetch failed");
 		verify(jobRepository).markPartial(1L, "RTMS backfill finished with failed, partial, or blocked chunks");
+	}
+
+	private static <T> ObjectProvider<T> provider(Class<T> type, T bean) {
+		StaticListableBeanFactory beanFactory = new StaticListableBeanFactory();
+		beanFactory.addBean(type.getName(), bean);
+		return beanFactory.getBeanProvider(type);
 	}
 }

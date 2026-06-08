@@ -1,7 +1,7 @@
 package com.home.infrastructure.external.complex;
 
-import com.home.application.ingest.ComplexMetadataEnrichmentClient;
-import com.home.application.ingest.ComplexMetadataEnrichmentService;
+import com.home.application.ingest.metadata.ComplexMetadataEnrichmentClient;
+import com.home.application.ingest.metadata.ComplexMetadataEnrichmentService;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.beans.factory.annotation.Value;

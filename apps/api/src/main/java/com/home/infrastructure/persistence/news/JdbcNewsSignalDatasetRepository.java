@@ -8,9 +8,9 @@ import java.util.Map;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.application.news.NewsSignalDatasetRepository;
-import com.home.application.news.NewsSignalDatasetRow;
-import com.home.application.news.NewsSignalFeatureExtractionPolicy;
+import com.home.application.news.signal.NewsSignalDatasetRepository;
+import com.home.application.news.signal.NewsSignalDatasetRow;
+import com.home.application.news.signal.NewsSignalFeatureExtractionPolicy;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

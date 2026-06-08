@@ -2,8 +2,8 @@ package com.home.infrastructure.observability;
 
 import java.util.Objects;
 
-import com.home.application.ingest.IngestResult;
-import com.home.application.ingest.TradeIngestMetrics;
+import com.home.application.ingest.trade.IngestResult;
+import com.home.application.ingest.trade.TradeIngestMetrics;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;

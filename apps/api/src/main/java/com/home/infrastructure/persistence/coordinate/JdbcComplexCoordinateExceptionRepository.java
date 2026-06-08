@@ -8,16 +8,16 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-import com.home.application.coordinate.BuildingFootprintCandidate;
-import com.home.application.coordinate.BuildingFootprintImportCandidate;
-import com.home.application.coordinate.ComplexCoordinateCaseCandidate;
-import com.home.application.coordinate.ComplexCoordinateCaseStatus;
-import com.home.application.coordinate.ComplexCoordinateCaseUpdate;
-import com.home.application.coordinate.ComplexCoordinateExceptionRepository;
-import com.home.application.coordinate.ComplexCoordinateParcelTargets;
-import com.home.application.coordinate.ComplexCoordinateReadinessRepository;
-import com.home.application.coordinate.ComplexCoordinateTarget;
-import com.home.application.coordinate.ResolvedDisplayCoordinate;
+import com.home.application.coordinate.footprint.BuildingFootprintCandidate;
+import com.home.application.coordinate.footprint.BuildingFootprintImportCandidate;
+import com.home.application.coordinate.caseflow.ComplexCoordinateCaseCandidate;
+import com.home.application.coordinate.caseflow.ComplexCoordinateCaseStatus;
+import com.home.application.coordinate.caseflow.ComplexCoordinateCaseUpdate;
+import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionRepository;
+import com.home.application.coordinate.identity.ComplexCoordinateParcelTargets;
+import com.home.application.coordinate.readiness.ComplexCoordinateReadinessRepository;
+import com.home.application.coordinate.identity.ComplexCoordinateTarget;
+import com.home.application.coordinate.display.ResolvedDisplayCoordinate;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

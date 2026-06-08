@@ -3,10 +3,10 @@ package com.home.infrastructure.persistence.coordinate;
 import java.util.List;
 import java.util.Objects;
 
-import com.home.application.coordinate.ComplexCoordinateCaseStatus;
-import com.home.application.coordinate.ComplexDisplayCoordinateCommand;
-import com.home.application.coordinate.ComplexDisplayCoordinateProjectionRepository;
-import com.home.application.coordinate.ComplexDisplayCoordinateProjectionTarget;
+import com.home.application.coordinate.caseflow.ComplexCoordinateCaseStatus;
+import com.home.application.coordinate.display.ComplexDisplayCoordinateCommand;
+import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionRepository;
+import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionTarget;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

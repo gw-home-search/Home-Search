@@ -15,8 +15,8 @@ import java.util.Map;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.application.news.NewsArticleObservationCommand;
-import com.home.application.news.NewsArticleObservationStatus;
+import com.home.application.news.observation.NewsArticleObservationCommand;
+import com.home.application.news.observation.NewsArticleObservationStatus;
 
 import org.springframework.web.util.HtmlUtils;
 

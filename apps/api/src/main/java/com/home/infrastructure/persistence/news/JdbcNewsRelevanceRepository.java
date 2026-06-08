@@ -4,9 +4,9 @@ import java.util.List;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.application.news.NewsArticleRelevanceCandidate;
-import com.home.application.news.NewsArticleRelevanceDecision;
-import com.home.application.news.NewsArticleRelevanceRepository;
+import com.home.application.news.relevance.NewsArticleRelevanceCandidate;
+import com.home.application.news.relevance.NewsArticleRelevanceDecision;
+import com.home.application.news.relevance.NewsArticleRelevanceRepository;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

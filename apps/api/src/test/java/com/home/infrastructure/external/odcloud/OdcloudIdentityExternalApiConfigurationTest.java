@@ -2,8 +2,8 @@ package com.home.infrastructure.external.odcloud;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.home.application.coordinate.ComplexCoordinateIdentityVerifier;
-import com.home.application.ingest.ComplexIdentityResolver;
+import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
+import com.home.application.ingest.matching.ComplexIdentityResolver;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

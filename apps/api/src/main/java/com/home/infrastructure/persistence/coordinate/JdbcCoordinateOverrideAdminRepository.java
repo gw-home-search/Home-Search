@@ -7,13 +7,13 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 
-import com.home.application.coordinate.CoordinateOverrideAdminRepository;
-import com.home.application.coordinate.CoordinateOverrideApprovalCommand;
-import com.home.application.coordinate.CoordinateOverrideApprovalResult;
-import com.home.application.coordinate.CoordinatePendingComplex;
-import com.home.application.coordinate.CoordinatePendingReason;
-import com.home.application.coordinate.CoordinatePendingSummary;
-import com.home.application.coordinate.InvalidCoordinateOverrideException;
+import com.home.application.coordinate.override.CoordinateOverrideAdminRepository;
+import com.home.application.coordinate.override.CoordinateOverrideApprovalCommand;
+import com.home.application.coordinate.override.CoordinateOverrideApprovalResult;
+import com.home.application.coordinate.override.CoordinatePendingComplex;
+import com.home.application.coordinate.override.CoordinatePendingReason;
+import com.home.application.coordinate.override.CoordinatePendingSummary;
+import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

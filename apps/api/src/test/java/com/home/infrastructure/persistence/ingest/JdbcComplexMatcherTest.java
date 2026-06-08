@@ -2,9 +2,9 @@ package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.home.application.ingest.ComplexMatchResult;
-import com.home.application.ingest.OpenApiTradeItem;
-import com.home.application.ingest.TradeMatchStatus;
+import com.home.application.ingest.matching.ComplexMatchResult;
+import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.application.ingest.matching.TradeMatchStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

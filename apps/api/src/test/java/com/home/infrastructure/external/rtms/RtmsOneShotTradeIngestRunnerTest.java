@@ -9,9 +9,9 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 
-import com.home.application.ingest.IngestResult;
-import com.home.application.ingest.OpenApiTradeIngestBatch;
-import com.home.application.ingest.OpenApiTradeIngestService;
+import com.home.application.ingest.trade.IngestResult;
+import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
+import com.home.application.ingest.trade.OpenApiTradeIngestService;
 import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.junit.jupiter.api.DisplayName;
@@ -20,6 +20,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import com.home.application.ingest.backfill.RtmsBackfillChunkStatusCounts;
+import com.home.application.ingest.backfill.RtmsBackfillJobStatus;
 
 @ExtendWith(OutputCaptureExtension.class)
 class RtmsOneShotTradeIngestRunnerTest {
@@ -381,8 +383,8 @@ class RtmsOneShotTradeIngestRunnerTest {
 		);
 		when(nationwideBackfillRunner.run(expectedPlan)).thenReturn(new RtmsNationwideBackfillReport(
 			1L,
-			com.home.application.ingest.RtmsBackfillJobStatus.PARTIAL,
-			new com.home.application.ingest.RtmsBackfillChunkStatusCounts(0, 0, 2, 1, 1, 1, 0),
+			com.home.application.ingest.backfill.RtmsBackfillJobStatus.PARTIAL,
+			new com.home.application.ingest.backfill.RtmsBackfillChunkStatusCounts(0, 0, 2, 1, 1, 1, 0),
 			1
 		));
 

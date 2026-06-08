@@ -14,14 +14,14 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 
-import com.home.application.news.NewsArticleObservationIngestResult;
-import com.home.application.news.NewsArticleRelevanceGateResult;
-import com.home.application.news.NewsArticleRelevanceGateService;
-import com.home.application.news.NewsSignalFeatureExtractionResult;
-import com.home.application.news.NewsSignalFeatureExtractionService;
-import com.home.application.news.NewsSignalObsidianExportCommand;
-import com.home.application.news.NewsSignalObsidianExportResult;
-import com.home.application.news.NewsSignalObsidianExportService;
+import com.home.application.news.observation.NewsArticleObservationIngestResult;
+import com.home.application.news.relevance.NewsArticleRelevanceGateResult;
+import com.home.application.news.relevance.NewsArticleRelevanceGateService;
+import com.home.application.news.signal.NewsSignalFeatureExtractionResult;
+import com.home.application.news.signal.NewsSignalFeatureExtractionService;
+import com.home.application.news.export.NewsSignalObsidianExportCommand;
+import com.home.application.news.export.NewsSignalObsidianExportResult;
+import com.home.application.news.export.NewsSignalObsidianExportService;
 import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.junit.jupiter.api.DisplayName;

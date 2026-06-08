@@ -7,12 +7,12 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
-import com.home.application.ingest.IngestResult;
-import com.home.application.ingest.OpenApiTradeIngestBatch;
-import com.home.application.ingest.OpenApiTradeIngestService;
-import com.home.application.ingest.OpenApiTradeItem;
-import com.home.application.ingest.RawTradeIngestStatus;
-import com.home.application.ingest.TradeMatchStatus;
+import com.home.application.ingest.trade.IngestResult;
+import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
+import com.home.application.ingest.trade.OpenApiTradeIngestService;
+import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.application.ingest.raw.RawTradeIngestStatus;
+import com.home.application.ingest.matching.TradeMatchStatus;
 import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
 import com.home.infrastructure.persistence.read.JdbcPropertyReadRepository;
 import com.home.application.map.ComplexMarkerResult;

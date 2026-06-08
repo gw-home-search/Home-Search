@@ -6,10 +6,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.application.news.NewsArticleObservationIngestService;
-import com.home.application.news.NewsArticleRelevanceGateService;
-import com.home.application.news.NewsSignalFeatureExtractionService;
-import com.home.application.news.NewsSignalObsidianExportService;
+import com.home.application.news.observation.NewsArticleObservationIngestService;
+import com.home.application.news.relevance.NewsArticleRelevanceGateService;
+import com.home.application.news.signal.NewsSignalFeatureExtractionService;
+import com.home.application.news.export.NewsSignalObsidianExportService;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;

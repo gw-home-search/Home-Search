@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
-import com.home.application.news.NewsArticleObservationCommand;
-import com.home.application.news.NewsArticleObservationStatus;
+import com.home.application.news.observation.NewsArticleObservationCommand;
+import com.home.application.news.observation.NewsArticleObservationStatus;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 
 import org.junit.jupiter.api.DisplayName;

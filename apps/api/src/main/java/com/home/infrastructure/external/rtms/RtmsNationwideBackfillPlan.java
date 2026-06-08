@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import com.home.application.ingest.RtmsBackfillChunkRequest;
+import com.home.application.ingest.backfill.RtmsBackfillChunkRequest;
 
 record RtmsNationwideBackfillPlan(
 	String jobKey,

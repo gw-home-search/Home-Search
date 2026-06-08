@@ -5,10 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.Arrays;
 import java.util.List;
 
-import com.home.application.ingest.RawTradeIngestRecord;
-import com.home.application.ingest.RawTradeIngestFailureQuery;
-import com.home.application.ingest.RawTradeIngestFailureSummary;
-import com.home.application.ingest.RawTradeIngestStatus;
+import com.home.application.ingest.raw.RawTradeIngestRecord;
+import com.home.application.ingest.raw.RawTradeIngestFailureQuery;
+import com.home.application.ingest.raw.RawTradeIngestFailureSummary;
+import com.home.application.ingest.raw.RawTradeIngestStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

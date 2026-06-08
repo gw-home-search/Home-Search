@@ -8,17 +8,18 @@ import java.time.LocalDate;
 
 import com.home.application.complex.ComplexRelationClassifier;
 import com.home.application.complex.ComplexRelationRepository;
-import com.home.application.coordinate.BuildingFootprintCandidate;
-import com.home.application.coordinate.BuildingFootprintImportCandidate;
-import com.home.application.coordinate.BuildingFootprintSource;
-import com.home.application.coordinate.ComplexCoordinateCaseStatus;
-import com.home.application.coordinate.ComplexCoordinateExceptionService;
-import com.home.application.coordinate.ResolvedDisplayCoordinate;
+import com.home.application.coordinate.footprint.BuildingFootprintCandidate;
+import com.home.application.coordinate.footprint.BuildingFootprintImportCandidate;
+import com.home.application.coordinate.footprint.BuildingFootprintSource;
+import com.home.application.coordinate.caseflow.ComplexCoordinateCaseStatus;
+import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;
+import com.home.application.coordinate.display.ResolvedDisplayCoordinate;
 import com.home.infrastructure.persistence.complex.JdbcComplexRelationRepository;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
 
 class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSupport {
 
@@ -159,7 +160,7 @@ class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSuppo
 			repository,
 			new JdbcComplexRelationRepository(jdbcClient),
 			new ComplexRelationClassifier(),
-			com.home.application.coordinate.ComplexCoordinateIdentityVerifier.trusting(),
+			com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier.trusting(),
 			source
 		);
 

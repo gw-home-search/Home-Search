@@ -7,11 +7,11 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 
-import com.home.application.ingest.IngestResult;
-import com.home.application.ingest.RtmsIngestRunRecord;
-import com.home.application.ingest.RtmsIngestRunReport;
-import com.home.application.ingest.RtmsIngestRunReportQuery;
-import com.home.application.ingest.RtmsIngestRunStatus;
+import com.home.application.ingest.trade.IngestResult;
+import com.home.application.ingest.run.RtmsIngestRunRecord;
+import com.home.application.ingest.run.RtmsIngestRunReport;
+import com.home.application.ingest.run.RtmsIngestRunReportQuery;
+import com.home.application.ingest.run.RtmsIngestRunStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

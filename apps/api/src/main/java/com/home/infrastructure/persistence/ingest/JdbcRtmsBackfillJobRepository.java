@@ -8,9 +8,9 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Objects;
 
-import com.home.application.ingest.RtmsBackfillJobRecord;
-import com.home.application.ingest.RtmsBackfillJobRepository;
-import com.home.application.ingest.RtmsBackfillJobStatus;
+import com.home.application.ingest.backfill.RtmsBackfillJobRecord;
+import com.home.application.ingest.backfill.RtmsBackfillJobRepository;
+import com.home.application.ingest.backfill.RtmsBackfillJobStatus;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

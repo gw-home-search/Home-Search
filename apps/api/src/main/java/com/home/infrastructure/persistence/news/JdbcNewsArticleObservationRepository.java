@@ -1,7 +1,7 @@
 package com.home.infrastructure.persistence.news;
 
-import com.home.application.news.NewsArticleObservationCommand;
-import com.home.application.news.NewsArticleObservationRepository;
+import com.home.application.news.observation.NewsArticleObservationCommand;
+import com.home.application.news.observation.NewsArticleObservationRepository;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

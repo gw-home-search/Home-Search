@@ -3,8 +3,8 @@ package com.home.infrastructure.persistence.news;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 
-import com.home.application.news.NewsArticleObservationCleanupResult;
-import com.home.application.news.NewsArticleObservationCleanupService;
+import com.home.application.news.observation.NewsArticleObservationCleanupResult;
+import com.home.application.news.observation.NewsArticleObservationCleanupService;
 import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.slf4j.Logger;

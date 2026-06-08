@@ -7,11 +7,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
 
-import com.home.application.ingest.IngestResult;
-import com.home.application.ingest.OpenApiTradeIngestBatch;
-import com.home.application.ingest.OpenApiTradeIngestService;
-import com.home.application.ingest.RtmsIngestRunRecord;
-import com.home.application.ingest.RtmsIngestRunRepository;
+import com.home.application.ingest.trade.IngestResult;
+import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
+import com.home.application.ingest.trade.OpenApiTradeIngestService;
+import com.home.application.ingest.run.RtmsIngestRunRecord;
+import com.home.application.ingest.run.RtmsIngestRunRepository;
 
 class RtmsMonthlyRefreshRunner {
 

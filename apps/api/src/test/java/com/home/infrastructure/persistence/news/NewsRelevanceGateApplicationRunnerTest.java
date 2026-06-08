@@ -6,8 +6,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.home.application.news.NewsArticleRelevanceGateResult;
-import com.home.application.news.NewsArticleRelevanceGateService;
+import com.home.application.news.relevance.NewsArticleRelevanceGateResult;
+import com.home.application.news.relevance.NewsArticleRelevanceGateService;
 import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.junit.jupiter.api.DisplayName;

@@ -1,6 +1,6 @@
 package com.home.infrastructure.observability;
 
-import com.home.application.ingest.TradeIngestMetrics;
+import com.home.application.ingest.trade.TradeIngestMetrics;
 
 import io.micrometer.core.instrument.MeterRegistry;
 

@@ -2,7 +2,7 @@ package com.home.infrastructure.external.rtms;
 
 import java.util.List;
 
-import com.home.application.ingest.IngestResult;
+import com.home.application.ingest.trade.IngestResult;
 
 record RtmsMonthlyRefreshReport(
 	List<RtmsMonthlyRefreshRunSummary> runs

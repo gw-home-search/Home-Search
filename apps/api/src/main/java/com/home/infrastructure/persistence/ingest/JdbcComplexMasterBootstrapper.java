@@ -5,10 +5,10 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
-import com.home.application.ingest.ComplexMasterBootstrapResult;
-import com.home.application.ingest.ComplexMasterBootstrapper;
-import com.home.application.ingest.ComplexIdentityResolver;
-import com.home.application.ingest.OpenApiTradeItem;
+import com.home.application.ingest.matching.ComplexMasterBootstrapResult;
+import com.home.application.ingest.matching.ComplexMasterBootstrapper;
+import com.home.application.ingest.matching.ComplexIdentityResolver;
+import com.home.application.ingest.trade.OpenApiTradeItem;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

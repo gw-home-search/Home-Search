@@ -8,12 +8,12 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 
-import com.home.application.ingest.IngestResult;
-import com.home.application.ingest.RtmsBackfillChunkClaim;
-import com.home.application.ingest.RtmsBackfillChunkRequest;
-import com.home.application.ingest.RtmsBackfillChunkStatus;
-import com.home.application.ingest.RtmsIngestRunRecord;
-import com.home.application.ingest.RtmsBackfillJobRecord;
+import com.home.application.ingest.trade.IngestResult;
+import com.home.application.ingest.backfill.RtmsBackfillChunkClaim;
+import com.home.application.ingest.backfill.RtmsBackfillChunkRequest;
+import com.home.application.ingest.backfill.RtmsBackfillChunkStatus;
+import com.home.application.ingest.run.RtmsIngestRunRecord;
+import com.home.application.ingest.backfill.RtmsBackfillJobRecord;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

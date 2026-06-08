@@ -6,10 +6,10 @@ import java.util.List;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.application.news.NewsArticleRelevanceDecisionType;
-import com.home.application.news.NewsSignalFeatureCommand;
-import com.home.application.news.NewsSignalFeatureExtractionCandidate;
-import com.home.application.news.NewsSignalFeatureExtractionRepository;
+import com.home.application.news.relevance.NewsArticleRelevanceDecisionType;
+import com.home.application.news.signal.NewsSignalFeatureCommand;
+import com.home.application.news.signal.NewsSignalFeatureExtractionCandidate;
+import com.home.application.news.signal.NewsSignalFeatureExtractionRepository;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

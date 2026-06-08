@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.OffsetDateTime;
 
-import com.home.application.news.NewsArticleObservationCleanupRecord;
+import com.home.application.news.observation.NewsArticleObservationCleanupRecord;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 
 import org.junit.jupiter.api.DisplayName;

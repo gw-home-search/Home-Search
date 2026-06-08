@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.application.news.NewsArticleObservationIngestService;
-import com.home.application.news.NewsArticleRelevanceGateService;
-import com.home.application.news.NewsSignalFeatureExtractionService;
-import com.home.application.news.NewsSignalObsidianExportService;
+import com.home.application.news.observation.NewsArticleObservationIngestService;
+import com.home.application.news.relevance.NewsArticleRelevanceGateService;
+import com.home.application.news.signal.NewsSignalFeatureExtractionService;
+import com.home.application.news.export.NewsSignalObsidianExportService;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

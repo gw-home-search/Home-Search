@@ -6,7 +6,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 
-import com.home.application.coordinate.InvalidCoordinateOverrideException;
+import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
 import com.home.infrastructure.web.admin.AdminCoordinateAccessDeniedException;
 
 import org.springframework.http.HttpStatus;

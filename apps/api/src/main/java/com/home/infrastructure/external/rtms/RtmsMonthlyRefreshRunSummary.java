@@ -1,6 +1,6 @@
 package com.home.infrastructure.external.rtms;
 
-import com.home.application.ingest.IngestResult;
+import com.home.application.ingest.trade.IngestResult;
 
 record RtmsMonthlyRefreshRunSummary(
 	String lawdCd,

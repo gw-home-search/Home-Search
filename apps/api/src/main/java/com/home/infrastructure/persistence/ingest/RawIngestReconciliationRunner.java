@@ -1,7 +1,7 @@
 package com.home.infrastructure.persistence.ingest;
 
-import com.home.application.ingest.RawIngestReconciliationResult;
-import com.home.application.ingest.RawIngestReconciliationService;
+import com.home.application.ingest.reconciliation.RawIngestReconciliationResult;
+import com.home.application.ingest.reconciliation.RawIngestReconciliationService;
 import com.home.infrastructure.ApplicationRunnerOrders;
 
 import org.slf4j.Logger;

@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 
-import com.home.application.ingest.RtmsBackfillChunkRequest;
+import com.home.application.ingest.backfill.RtmsBackfillChunkRequest;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

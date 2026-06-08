@@ -2,7 +2,7 @@ package com.home.infrastructure.external.rtms;
 
 import java.util.Objects;
 
-import com.home.application.ingest.OpenApiTradeIngestBatch;
+import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
 
 public record RtmsApartmentTradePage(
 	OpenApiTradeIngestBatch batch,

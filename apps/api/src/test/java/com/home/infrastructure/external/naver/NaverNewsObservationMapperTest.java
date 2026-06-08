@@ -8,8 +8,8 @@ import java.time.ZoneOffset;
 import java.util.List;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.application.news.NewsArticleObservationCommand;
-import com.home.application.news.NewsArticleObservationStatus;
+import com.home.application.news.observation.NewsArticleObservationCommand;
+import com.home.application.news.observation.NewsArticleObservationStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

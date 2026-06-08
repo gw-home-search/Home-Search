@@ -10,7 +10,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 import com.home.HomeSearchApiApplication;
-import com.home.application.news.NewsSignalFeatureExtractionPolicy;
+import com.home.application.news.signal.NewsSignalFeatureExtractionPolicy;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

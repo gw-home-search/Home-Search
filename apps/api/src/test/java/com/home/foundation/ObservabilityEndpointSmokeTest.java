@@ -9,9 +9,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.home.application.ingest.IngestResult;
+import com.home.application.ingest.trade.IngestResult;
 import com.home.application.map.MapUseCase;
-import com.home.application.ingest.TradeIngestMetrics;
+import com.home.application.ingest.trade.TradeIngestMetrics;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

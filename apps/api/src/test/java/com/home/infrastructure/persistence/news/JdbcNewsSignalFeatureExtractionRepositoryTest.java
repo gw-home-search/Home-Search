@@ -7,10 +7,10 @@ import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.application.news.NewsArticleRelevanceDecisionType;
-import com.home.application.news.NewsSignalFeatureCommand;
-import com.home.application.news.NewsSignalFeatureExtractionCandidate;
-import com.home.application.news.NewsSignalFeatureExtractionPolicy;
+import com.home.application.news.relevance.NewsArticleRelevanceDecisionType;
+import com.home.application.news.signal.NewsSignalFeatureCommand;
+import com.home.application.news.signal.NewsSignalFeatureExtractionCandidate;
+import com.home.application.news.signal.NewsSignalFeatureExtractionPolicy;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 
 import org.junit.jupiter.api.DisplayName;

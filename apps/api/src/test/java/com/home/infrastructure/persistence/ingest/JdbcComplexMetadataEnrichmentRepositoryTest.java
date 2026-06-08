@@ -11,10 +11,10 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
-import com.home.application.ingest.ComplexMetadata;
-import com.home.application.ingest.ComplexMetadataFailureKind;
-import com.home.application.ingest.ComplexMetadataLookup;
-import com.home.application.ingest.ComplexMetadataResolution;
+import com.home.application.ingest.metadata.ComplexMetadata;
+import com.home.application.ingest.metadata.ComplexMetadataFailureKind;
+import com.home.application.ingest.metadata.ComplexMetadataLookup;
+import com.home.application.ingest.metadata.ComplexMetadataResolution;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

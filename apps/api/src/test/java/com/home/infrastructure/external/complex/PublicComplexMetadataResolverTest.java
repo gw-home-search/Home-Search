@@ -9,11 +9,11 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-import com.home.application.ingest.ComplexMetadata;
-import com.home.application.ingest.ComplexMetadataFailureKind;
-import com.home.application.ingest.ComplexMetadataLookup;
-import com.home.application.ingest.ComplexMetadataResolution;
-import com.home.application.ingest.ComplexMetadataStatus;
+import com.home.application.ingest.metadata.ComplexMetadata;
+import com.home.application.ingest.metadata.ComplexMetadataFailureKind;
+import com.home.application.ingest.metadata.ComplexMetadataLookup;
+import com.home.application.ingest.metadata.ComplexMetadataResolution;
+import com.home.application.ingest.metadata.ComplexMetadataStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

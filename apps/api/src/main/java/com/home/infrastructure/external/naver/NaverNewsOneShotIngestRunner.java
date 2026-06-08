@@ -1,7 +1,7 @@
 package com.home.infrastructure.external.naver;
 
-import com.home.application.news.NewsArticleObservationIngestResult;
-import com.home.application.news.NewsArticleObservationIngestService;
+import com.home.application.news.observation.NewsArticleObservationIngestResult;
+import com.home.application.news.observation.NewsArticleObservationIngestService;
 
 class NaverNewsOneShotIngestRunner {
 

@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Instant;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.application.ingest.RawTradeIngestRecord;
-import com.home.application.ingest.RawTradeIngestStatus;
+import com.home.application.ingest.raw.RawTradeIngestRecord;
+import com.home.application.ingest.raw.RawTradeIngestStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

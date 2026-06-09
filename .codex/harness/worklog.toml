@@ -1766,6 +1766,51 @@ risk_notes = [
 ]
 
 [[items]]
+id = "rtms-daily-refresh-slack-summary"
+title_ko = "RTMS daily refresh Slack summary"
+pr_type = "Feat"
+pr_title_ko = "RTMS 일일 재수집과 Slack 저장 요약"
+description_ko = "기존 월별 refresh runner를 daily scheduler로 안전하게 실행하고 신규 저장/중복/실패 결과를 Slack summary로 알린다."
+status = "planned"
+priority = 175
+targets = "backend"
+preset = "open-api-ingest-prep"
+acceptance_criteria = [
+  "daily scheduler는 기본 disabled이며 home.ingest.rtms.daily.enabled=true일 때만 등록 또는 실행된다.",
+  "enabled 상태에서는 configured lawdCd 목록마다 KST 현재월부터 lookbackMonths까지 RtmsMonthlyRefreshPlan을 만들어 기존 RtmsMonthlyRefreshRunner를 호출한다.",
+  "같은 월을 매일 page 1부터 재수집해도 기존 거래는 duplicate 처리되고 신규 거래만 normalizedInserted로 집계된다.",
+  "Slack summary는 lawdCd, dealYmds, status, pageCount, read, rawSaved, normalizedInserted, duplicateSkipped, canceledSkipped, matchFailed, parseFailed, runId를 포함한다.",
+  "normalizedInserted=0이면 신규 저장 없음으로 요약하고 PARTIAL/FAILED run은 Slack에서 부분 실패 또는 실패로 드러난다.",
+  "Slack 전송 실패는 RTMS ingest 결과를 rollback하거나 failed로 뒤집지 않고 log/evidence에만 남긴다.",
+  "service key, raw payload 전문, local secret, .env* 값, 민감한 source key를 repository 파일, log, report, Slack message에 저장하지 않는다.",
+  "public map/search/region/detail/trade API URL, response shape, amount unit, ProblemDetail shape를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "RtmsDailyRefreshSchedulerTest에서 daily.enabled=false 기본값이면 scheduler bean 또는 실행이 monthly refresh를 호출하지 않아야 하나 daily scheduler가 없어 실패하는 RED를 만든다.",
+  "RtmsDailyRefreshSchedulerTest에서 enabled + lawdCds=11680,11710이면 각 법정동에 대해 KST 현재월/lookback plan을 실행해야 하나 orchestration이 없어 실패하는 RED를 만든다.",
+  "RtmsDailyRefreshSlackSummaryFormatterTest에서 신규 저장/신규 없음/PARTIAL/FAILED summary와 secret redaction을 기대하지만 formatter/notifier가 없어 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew test --tests '*RtmsDailyRefresh*' --tests '*RtmsMonthlyRefresh*'",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 scripts/check-test-display-names.py",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+stop_conditions = [
+  "PR 검증에서 live RTMS Open API call 또는 real Slack webhook이 필요하면 중단하고 fixture/mocking으로 대체한다.",
+  "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "전국 daily 자동 수집, checkpoint 기반 증분 수집, distributed lock이 필요하면 후속 slice로 분리한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "harness Slack reporter는 PR/report 알림 전용이고 이번 slice의 Slack은 운영 batch 결과 알림이다.",
+  "월별 데이터 정정과 취소를 놓치지 않기 위해 checkpoint 증분 대신 기존 monthly refresh를 daily trigger에서 재사용한다.",
+  "multi-instance exact-once 실행은 이번 slice의 critical path가 아니며 단일 runtime scheduler 기준으로 시작한다.",
+]
+
+[[items]]
 id = "rtms-storage-quality-verification"
 title_ko = "RTMS storage quality verification"
 pr_type = "Test"

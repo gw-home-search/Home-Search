@@ -4,7 +4,7 @@ title_ko = "Map marker Redis performance gate"
 pr_type = "Test"
 pr_title_ko = "지도 마커 Redis 성능 gate 검증"
 description_ko = "POST /api/v1/map/complexes Redis read-through cache의 off/cold/warm 성능 차이와 hit/miss/fallback metric을 재현 가능한 k6/Prometheus evidence로 고정한다."
-status = "planned"
+status = "done"
 priority = 250
 targets = "backend"
 preset = "runtime-smoke"
@@ -29,6 +29,21 @@ verification_commands = [
   "k6 run -e SCENARIO=smoke -e BASE_URL=http://localhost:8080 -e COMPLEX_WEIGHT=1 -e REGION_WEIGHT=0 -e COMPLEX_CASE=seed-wide apps/api/perf/k6/map-marker-baseline.js",
   "k6 run -e SCENARIO=baseline -e BASE_URL=http://localhost:8080 -e TARGET_RPS=1 -e COMPLEX_WEIGHT=1 -e REGION_WEIGHT=0 -e COMPLEX_CASE=seed-wide -e RAMP_UP=1s -e STEADY=10s -e RAMP_DOWN=1s apps/api/perf/k6/map-marker-baseline.js",
   "git diff --check",
+]
+verification_evidence = [
+  "- `production behavior RED` = not run (이번 slice는 새 runtime behavior 없이 Redis performance gate 기준과 local evidence를 고정)",
+  "- `docker compose -f infra/docker-compose.local.yml config` = pass (tracked local-runtime.override.env.example fallback으로 local API env_file 렌더링 통과)",
+  "- `cd apps/api && ./gradlew foundationTest --tests com.home.foundation.LocalRuntimeStackConfigurationTest` = pass (local compose env_file fallback 기대값 통과)",
+  "- `cd apps/api && ./gradlew foundationTest --tests com.home.foundation.ObservabilityEndpointSmokeTest` = pass (Prometheus scrape surface와 marker cache metric exposure smoke 통과)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.RedisCachingComplexMarkerRepositoryTest` = pass (Redis hit/miss/fallback metric과 read/write 장애 fallback 회귀 통과)",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, persistence, coverage, foundation, javadoc gate 통과)",
+  "- `python3 scripts/check-test-display-names.py` = pass (test display name policy 통과)",
+  "- `python3 .codex/harness/project_terms_check.py` = pass (프로젝트 용어 점검 통과)",
+  "- `git diff --check` = pass (공백 오류 없음)",
+  "- `k6 run -e SCENARIO=baseline -e BASE_URL=http://localhost:8080 -e TARGET_RPS=1 -e COMPLEX_WEIGHT=1 -e REGION_WEIGHT=0 -e COMPLEX_CASE=seed-wide -e RAMP_UP=1s -e STEADY=10s -e RAMP_DOWN=1s apps/api/perf/k6/map-marker-baseline.js` = pass (3차 Redis cache 결과: Redis off p95 4,062.09ms, fail rate 0%, checks 100%)",
+  "- `k6 run -e SCENARIO=smoke -e BASE_URL=http://localhost:8080 -e SMOKE_ITERATIONS=1 -e COMPLEX_WEIGHT=1 -e REGION_WEIGHT=0 -e COMPLEX_CASE=seed-wide apps/api/perf/k6/map-marker-baseline.js` = pass (3차 Redis cache 결과: Redis cold miss p95 3,995.38ms, fail rate 0%, checks 100%)",
+  "- `k6 run -e SCENARIO=baseline -e BASE_URL=http://localhost:8080 -e TARGET_RPS=1 -e COMPLEX_WEIGHT=1 -e REGION_WEIGHT=0 -e COMPLEX_CASE=seed-wide -e RAMP_UP=1s -e STEADY=10s -e RAMP_DOWN=1s apps/api/perf/k6/map-marker-baseline.js` = pass (3차 Redis cache 결과: Redis warm hit p95 52.75ms, fail rate 0%, checks 100%)",
+  "- `curl -fsS http://localhost:8080/actuator/prometheus | rg 'home_search_map_marker_cache_requests_total'` = pass (ObservabilityEndpointSmokeTest가 actuator Prometheus scrape에서 result=hit|miss|fallback 노출 확인)",
 ]
 stop_conditions = [
   "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",

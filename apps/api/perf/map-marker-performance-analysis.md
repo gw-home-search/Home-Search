@@ -197,6 +197,22 @@ Required local evidence:
 - Redis off/cold/warm k6 fixed-case runs
 - Prometheus marker cache metric scrape
 
+Recorded gate evidence:
+
+- `production behavior RED` = not run (이번 slice는 새 runtime behavior 없이 Redis performance gate 기준과 local evidence를 고정)
+- `local compose config render` = pass (tracked local-runtime override fallback으로 API env_file 렌더링 통과)
+- `cd apps/api && ./gradlew foundationTest --tests com.home.foundation.LocalRuntimeStackConfigurationTest` = pass (local compose env_file fallback 기대값 통과)
+- `cd apps/api && ./gradlew foundationTest --tests com.home.foundation.ObservabilityEndpointSmokeTest` = pass (Prometheus scrape surface와 marker cache metric exposure smoke 통과)
+- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.RedisCachingComplexMarkerRepositoryTest` = pass (Redis hit/miss/fallback metric과 read/write 장애 fallback 회귀 통과)
+- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, persistence, coverage, foundation, javadoc gate 통과)
+- `test display name policy` = pass (test display name policy 통과)
+- `project terms check` = pass (프로젝트 용어 점검 통과)
+- `git diff --check` = pass (공백 오류 없음)
+- `k6 Redis off fixed-case baseline` = pass (3차 Redis cache 결과: Redis off p95 4,062.09ms, fail rate 0%, checks 100%)
+- `k6 Redis cold miss fixed-case smoke` = pass (3차 Redis cache 결과: Redis cold miss p95 3,995.38ms, fail rate 0%, checks 100%)
+- `k6 Redis warm hit fixed-case baseline` = pass (3차 Redis cache 결과: Redis warm hit p95 52.75ms, fail rate 0%, checks 100%)
+- `Prometheus marker cache metric scrape` = pass (ObservabilityEndpointSmokeTest가 actuator Prometheus scrape에서 result=hit|miss|fallback 노출 확인)
+
 Redis off:
 
 ```bash

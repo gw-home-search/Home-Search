@@ -3,8 +3,6 @@ package com.home.application.coordinate.override;
 import java.util.List;
 import java.util.Objects;
 
-import org.springframework.transaction.annotation.Transactional;
-
 public class CoordinateOverrideAdminService {
 
 	private static final int DEFAULT_LIMIT = 50;
@@ -31,7 +29,6 @@ public class CoordinateOverrideAdminService {
 		return repository.findPendingSummary();
 	}
 
-	@Transactional
 	public CoordinateOverrideApprovalResult approve(String pnu, CoordinateOverrideApprovalCommand command) {
 		Objects.requireNonNull(command, "command is required");
 		String normalizedPnu = normalizePnu(pnu);

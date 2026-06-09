@@ -16,13 +16,20 @@ import com.home.application.coordinate.override.CoordinatePendingSummary;
 import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRepository {
 
 	private final JdbcClient jdbcClient;
+	private final TransactionTemplate transactionTemplate;
 
 	JdbcCoordinateOverrideAdminRepository(JdbcClient jdbcClient) {
+		this(jdbcClient, null);
+	}
+
+	JdbcCoordinateOverrideAdminRepository(JdbcClient jdbcClient, TransactionTemplate transactionTemplate) {
 		this.jdbcClient = Objects.requireNonNull(jdbcClient);
+		this.transactionTemplate = transactionTemplate;
 	}
 
 	@Override
@@ -241,6 +248,17 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 
 	@Override
 	public CoordinateOverrideApprovalResult approve(CoordinateOverrideApprovalCommand command) {
+		if (transactionTemplate == null) {
+			return approveInTransaction(command);
+		}
+		CoordinateOverrideApprovalResult result = transactionTemplate.execute(status -> approveInTransaction(command));
+		if (result == null) {
+			throw new IllegalStateException("coordinate override approval transaction returned no result");
+		}
+		return result;
+	}
+
+	private CoordinateOverrideApprovalResult approveInTransaction(CoordinateOverrideApprovalCommand command) {
 		if (!canApproveParcelCoordinate(command.pnu())) {
 			throw new InvalidCoordinateOverrideException(
 				"coordinate override requires a PNU coordinate missing parcel with active trades"

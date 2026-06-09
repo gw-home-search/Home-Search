@@ -22,6 +22,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration(proxyBeanMethods = false)
 class ComplexCoordinatePersistenceConfiguration {
@@ -82,9 +84,13 @@ class ComplexCoordinatePersistenceConfiguration {
 	@Bean
 	@Lazy
 	CoordinateOverrideAdminRepository coordinateOverrideAdminRepository(
-		ObjectProvider<JdbcClient> jdbcClientProvider
+		ObjectProvider<JdbcClient> jdbcClientProvider,
+		ObjectProvider<PlatformTransactionManager> transactionManagerProvider
 	) {
-		return new JdbcCoordinateOverrideAdminRepository(requiredJdbcClient(jdbcClientProvider));
+		return new JdbcCoordinateOverrideAdminRepository(
+			requiredJdbcClient(jdbcClientProvider),
+			new TransactionTemplate(requiredTransactionManager(transactionManagerProvider))
+		);
 	}
 
 	@Bean
@@ -132,6 +138,14 @@ class ComplexCoordinatePersistenceConfiguration {
 	private JdbcClient requiredJdbcClient(ObjectProvider<JdbcClient> jdbcClientProvider) {
 		return jdbcClientProvider.getIfAvailable(() -> {
 			throw new IllegalStateException("JdbcClient is required for complex coordinate persistence");
+		});
+	}
+
+	private PlatformTransactionManager requiredTransactionManager(
+		ObjectProvider<PlatformTransactionManager> transactionManagerProvider
+	) {
+		return transactionManagerProvider.getIfAvailable(() -> {
+			throw new IllegalStateException("PlatformTransactionManager is required for complex coordinate persistence");
 		});
 	}
 

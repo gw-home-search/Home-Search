@@ -12,6 +12,8 @@ import com.home.application.ingest.run.RtmsIngestRunRecord;
 import com.home.application.ingest.run.RtmsIngestRunReport;
 import com.home.application.ingest.run.RtmsIngestRunReportQuery;
 import com.home.domain.ingest.run.RtmsIngestRunStatus;
+import com.home.infrastructure.persistence.ingest.run.JdbcRtmsIngestRunReportRepository;
+import com.home.infrastructure.persistence.ingest.run.JdbcRtmsIngestRunRepository;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

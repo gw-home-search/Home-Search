@@ -7,6 +7,10 @@ import javax.sql.DataSource;
 
 import com.home.application.coordinate.lookup.ParcelCoordinateSourceRepository;
 import com.home.application.ingest.run.RtmsIngestRunRepository;
+import com.home.infrastructure.persistence.ingest.coordinate.CoordinateSourceDbProperties;
+import com.home.infrastructure.persistence.ingest.coordinate.JdbcCoordinateSourceParcelCoordinateRepository;
+import com.home.infrastructure.persistence.ingest.raw.RawIngestReconciliationRunner;
+import com.home.infrastructure.persistence.ingest.run.JdbcRtmsIngestRunRepository;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

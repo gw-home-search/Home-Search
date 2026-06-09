@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.home.application.ingest.reconciliation.RawIngestReconciliationService;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
+import com.home.infrastructure.persistence.ingest.raw.JdbcRawIngestReconciliationRepository;
+import com.home.infrastructure.persistence.ingest.raw.JdbcRawTradeIngestRepository;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

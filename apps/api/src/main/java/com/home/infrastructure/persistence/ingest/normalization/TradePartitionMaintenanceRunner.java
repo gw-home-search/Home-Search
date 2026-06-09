@@ -1,4 +1,4 @@
-package com.home.infrastructure.persistence.ingest;
+package com.home.infrastructure.persistence.ingest.normalization;
 
 import java.time.Clock;
 import java.time.Year;
@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 
-class TradePartitionMaintenanceRunner implements ApplicationRunner {
+public class TradePartitionMaintenanceRunner implements ApplicationRunner {
 
 	private static final Logger log = LoggerFactory.getLogger(TradePartitionMaintenanceRunner.class);
 
@@ -17,7 +17,7 @@ class TradePartitionMaintenanceRunner implements ApplicationRunner {
 	private final Clock clock;
 	private final int yearsAhead;
 
-	TradePartitionMaintenanceRunner(
+	public TradePartitionMaintenanceRunner(
 		JdbcTradePartitionMaintenanceRepository repository,
 		Clock clock,
 		int yearsAhead

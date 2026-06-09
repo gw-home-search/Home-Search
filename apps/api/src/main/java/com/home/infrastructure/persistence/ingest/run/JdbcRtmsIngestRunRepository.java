@@ -1,4 +1,4 @@
-package com.home.infrastructure.persistence.ingest;
+package com.home.infrastructure.persistence.ingest.run;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;

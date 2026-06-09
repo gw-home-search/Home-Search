@@ -1,4 +1,4 @@
-package com.home.infrastructure.persistence.ingest;
+package com.home.infrastructure.persistence.ingest.matching;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;

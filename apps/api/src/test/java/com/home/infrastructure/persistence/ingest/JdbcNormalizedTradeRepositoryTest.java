@@ -8,6 +8,8 @@ import java.util.List;
 
 import com.home.application.ingest.normalization.NormalizedTradeCommand;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
+import com.home.infrastructure.persistence.ingest.normalization.JdbcNormalizedTradeRepository;
+import com.home.infrastructure.persistence.ingest.raw.JdbcRawTradeIngestRepository;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

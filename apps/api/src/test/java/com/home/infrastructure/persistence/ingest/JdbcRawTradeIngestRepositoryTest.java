@@ -9,6 +9,7 @@ import com.home.application.ingest.raw.RawTradeIngestRecord;
 import com.home.application.ingest.raw.RawTradeIngestFailureQuery;
 import com.home.application.ingest.raw.RawTradeIngestFailureSummary;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
+import com.home.infrastructure.persistence.ingest.raw.JdbcRawTradeIngestRepository;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

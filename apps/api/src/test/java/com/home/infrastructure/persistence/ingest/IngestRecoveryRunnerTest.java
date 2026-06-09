@@ -21,6 +21,8 @@ import com.home.domain.ingest.raw.RawTradeIngestStatus;
 import com.home.application.ingest.matching.TradeMatchEvidenceRepository;
 import com.home.application.ingest.matching.TradeMatchRematchService;
 import com.home.infrastructure.ApplicationRunnerOrders;
+import com.home.infrastructure.persistence.ingest.matching.TradeMatchRematchRunner;
+import com.home.infrastructure.persistence.ingest.raw.RawIngestReconciliationRunner;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

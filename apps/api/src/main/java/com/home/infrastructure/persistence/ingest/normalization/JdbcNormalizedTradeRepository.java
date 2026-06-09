@@ -1,4 +1,4 @@
-package com.home.infrastructure.persistence.ingest;
+package com.home.infrastructure.persistence.ingest.normalization;
 
 import java.math.BigDecimal;
 import java.util.List;

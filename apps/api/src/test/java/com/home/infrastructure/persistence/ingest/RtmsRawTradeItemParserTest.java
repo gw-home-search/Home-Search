@@ -7,6 +7,7 @@ import java.time.Instant;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
+import com.home.infrastructure.persistence.ingest.raw.RtmsRawTradeItemParser;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

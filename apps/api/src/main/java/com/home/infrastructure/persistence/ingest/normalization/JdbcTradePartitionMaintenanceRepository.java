@@ -1,4 +1,4 @@
-package com.home.infrastructure.persistence.ingest;
+package com.home.infrastructure.persistence.ingest.normalization;
 
 import java.time.LocalDate;
 import java.util.Objects;

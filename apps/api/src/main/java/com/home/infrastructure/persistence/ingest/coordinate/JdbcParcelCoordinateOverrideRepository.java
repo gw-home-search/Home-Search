@@ -1,43 +1,40 @@
-package com.home.infrastructure.persistence.ingest;
+package com.home.infrastructure.persistence.ingest.coordinate;
 
 import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.Optional;
 
 import com.home.application.coordinate.lookup.ParcelCoordinate;
-import com.home.application.coordinate.lookup.ParcelCoordinateSourceRepository;
+import com.home.application.coordinate.lookup.ParcelCoordinateOverrideRepository;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
-public class JdbcCoordinateSourceParcelCoordinateRepository implements ParcelCoordinateSourceRepository {
-
-	private static final String PNU_PATTERN = "\\d{19}";
+public class JdbcParcelCoordinateOverrideRepository implements ParcelCoordinateOverrideRepository {
 
 	private final JdbcClient jdbcClient;
 
-	public JdbcCoordinateSourceParcelCoordinateRepository(JdbcClient jdbcClient) {
+	public JdbcParcelCoordinateOverrideRepository(JdbcClient jdbcClient) {
 		this.jdbcClient = Objects.requireNonNull(jdbcClient);
 	}
 
 	@Override
-	public Optional<ParcelCoordinate> findByPnu(String pnu) {
+	public Optional<ParcelCoordinate> findApprovedByPnu(String pnu) {
 		String normalizedPnu = trimToNull(pnu);
-		if (normalizedPnu == null || !normalizedPnu.matches(PNU_PATTERN)) {
+		if (normalizedPnu == null) {
 			return Optional.empty();
 		}
 		return jdbcClient.sql("""
-			SELECT
-			    latitude,
-			    longitude,
-			    ST_AsText(geom) AS geometry_wkt
-			FROM reference.parcel_coordinate_snapshot
+			SELECT latitude, longitude
+			FROM parcel_coordinate_override
 			WHERE pnu = :pnu
+			  AND status = 'APPROVED'
+			ORDER BY approved_at DESC, id DESC
+			LIMIT 1
 			""")
 			.param("pnu", normalizedPnu)
 			.query((resultSet, rowNumber) -> new ParcelCoordinate(
 				resultSet.getObject("latitude", BigDecimal.class),
-				resultSet.getObject("longitude", BigDecimal.class),
-				resultSet.getString("geometry_wkt")
+				resultSet.getObject("longitude", BigDecimal.class)
 			))
 			.optional();
 	}

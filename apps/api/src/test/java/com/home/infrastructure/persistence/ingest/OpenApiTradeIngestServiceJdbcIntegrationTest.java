@@ -20,6 +20,12 @@ import com.home.application.ingest.raw.RawTradeIngestRecord;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
 import com.home.application.ingest.matching.TradeMatchEvidenceRecord;
 import com.home.domain.ingest.matching.TradeMatchStatus;
+import com.home.infrastructure.persistence.ingest.coordinate.JdbcParcelCoordinateOverrideRepository;
+import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMasterBootstrapper;
+import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMatcher;
+import com.home.infrastructure.persistence.ingest.matching.JdbcTradeMatchEvidenceRepository;
+import com.home.infrastructure.persistence.ingest.normalization.JdbcNormalizedTradeRepository;
+import com.home.infrastructure.persistence.ingest.raw.JdbcRawTradeIngestRepository;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

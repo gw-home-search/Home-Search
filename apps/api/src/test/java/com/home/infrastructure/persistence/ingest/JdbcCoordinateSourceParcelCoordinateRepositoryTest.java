@@ -6,6 +6,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.math.BigDecimal;
 
+import com.home.infrastructure.persistence.ingest.coordinate.JdbcCoordinateSourceParcelCoordinateRepository;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;

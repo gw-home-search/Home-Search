@@ -1,4 +1,4 @@
-package com.home.infrastructure.persistence.ingest;
+package com.home.infrastructure.persistence.ingest.raw;
 
 import java.util.List;
 import java.util.Objects;

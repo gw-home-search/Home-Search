@@ -1,8 +1,8 @@
-package com.home.infrastructure.persistence.ingest;
+package com.home.infrastructure.persistence.ingest.coordinate;
 
 import java.util.Properties;
 
-record CoordinateSourceDbProperties(
+public record CoordinateSourceDbProperties(
 	String jdbcUrl,
 	String username,
 	String password,
@@ -13,11 +13,11 @@ record CoordinateSourceDbProperties(
 	boolean readOnly
 ) {
 
-	boolean enabled() {
+	public boolean enabled() {
 		return jdbcUrl != null && !jdbcUrl.isBlank();
 	}
 
-	Properties connectionProperties() {
+	public Properties connectionProperties() {
 		Properties properties = new Properties();
 		properties.setProperty("connectTimeout", Integer.toString(connectTimeoutSeconds));
 		properties.setProperty("socketTimeout", Integer.toString(socketTimeoutSeconds));

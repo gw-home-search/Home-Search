@@ -1,6 +1,8 @@
 package com.home.application.ingest.raw;
 
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
+import com.home.domain.ingest.rtms.RtmsDealMonth;
+import com.home.domain.ingest.rtms.RtmsLawdCode;
 import com.home.domain.ingest.source.IngestSource;
 
 /**
@@ -20,17 +22,11 @@ public record RawTradeIngestFailureSummary(
 			throw new IllegalArgumentException("status is required");
 		}
 		source = IngestSource.of(source).value();
-		if (!hasText(lawdCd)) {
-			throw new IllegalArgumentException("lawdCd is required");
-		}
-		if (!hasText(dealYmd)) {
-			throw new IllegalArgumentException("dealYmd is required");
-		}
+		lawdCd = RtmsLawdCode.of(lawdCd).value();
+		dealYmd = RtmsDealMonth.of(dealYmd).value();
 		if (count < 1) {
 			throw new IllegalArgumentException("count must be positive");
 		}
-		lawdCd = lawdCd.trim();
-		dealYmd = dealYmd.trim();
 		failureReason = trimToNull(failureReason);
 	}
 

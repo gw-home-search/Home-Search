@@ -3,9 +3,9 @@ package com.home.application.ingest.raw;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
+import com.home.domain.ingest.rtms.RtmsDealMonth;
 
 /**
  * read-only raw ingest failure inspection 조건입니다.
@@ -18,7 +18,6 @@ public record RawTradeIngestFailureQuery(
 	List<RawTradeIngestStatus> statuses
 ) {
 
-	private static final Pattern DEAL_YMD = Pattern.compile("\\d{6}");
 	private static final List<RawTradeIngestStatus> DEFAULT_FAILURE_STATUSES = List.of(
 		RawTradeIngestStatus.MATCH_FAILED,
 		RawTradeIngestStatus.PARSE_FAILED,
@@ -67,13 +66,9 @@ public record RawTradeIngestFailureQuery(
 	}
 
 	private static String validateDealYmd(String value, String fieldName) {
-		if (value == null) {
-			return null;
-		}
-		if (!DEAL_YMD.matcher(value).matches()) {
-			throw new IllegalArgumentException(fieldName + " must use yyyyMM format");
-		}
-		return value;
+		return RtmsDealMonth.optional(value, fieldName + " must use yyyyMM format")
+			.map(RtmsDealMonth::value)
+			.orElse(null);
 	}
 
 	private static String trimToNull(String value) {

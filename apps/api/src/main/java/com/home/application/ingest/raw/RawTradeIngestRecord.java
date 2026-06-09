@@ -2,6 +2,8 @@ package com.home.application.ingest.raw;
 
 import java.time.Instant;
 
+import com.home.domain.ingest.rtms.RtmsDealMonth;
+import com.home.domain.ingest.rtms.RtmsLawdCode;
 import com.home.domain.ingest.source.IngestSource;
 import com.home.domain.ingest.source.IngestSourceKey;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
@@ -52,17 +54,11 @@ public record RawTradeIngestRecord(
 	public RawTradeIngestRecord {
 		source = IngestSource.of(source).value();
 		sourceKey = IngestSourceKey.of(sourceKey).value();
-		if (!hasText(lawdCd)) {
-			throw new IllegalArgumentException("lawdCd is required");
-		}
-		if (!hasText(dealYmd)) {
-			throw new IllegalArgumentException("dealYmd is required");
-		}
+		lawdCd = RtmsLawdCode.of(lawdCd).value();
+		dealYmd = RtmsDealMonth.of(dealYmd).value();
 		if (status == null) {
 			throw new IllegalArgumentException("status is required");
 		}
-		lawdCd = lawdCd.trim();
-		dealYmd = dealYmd.trim();
 		payload = trimToNull(payload);
 		payloadHash = trimToNull(payloadHash);
 		failureReason = trimToNull(failureReason);

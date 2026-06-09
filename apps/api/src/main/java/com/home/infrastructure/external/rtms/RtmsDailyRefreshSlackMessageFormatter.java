@@ -35,6 +35,10 @@ class RtmsDailyRefreshSlackMessageFormatter {
 		return value
 			.replaceAll("(?i)(serviceKey=)[^&\\s]+", "$1[REDACTED]")
 			.replaceAll("(?i)(service_key=)[^&\\s]+", "$1[REDACTED]")
+			.replaceAll("(?i)(sourceKey=)[^&\\s]+", "$1[REDACTED]")
+			.replaceAll("(?i)(source_key=)[^&\\s]+", "$1[REDACTED]")
+			.replaceAll("(?i)(payload=)\\{[^}]*}", "$1[REDACTED]")
+			.replaceAll("(?i)(payload=)[^&\\s]+", "$1[REDACTED]")
 			.replaceAll("https://hooks\\.slack\\.com/services/[^\\s]+", "https://hooks.slack.com/services/[REDACTED]");
 	}
 

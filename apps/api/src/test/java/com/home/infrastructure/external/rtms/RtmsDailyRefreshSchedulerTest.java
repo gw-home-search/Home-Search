@@ -75,6 +75,29 @@ class RtmsDailyRefreshSchedulerTest {
 		verify(monthlyRefreshRunner).refresh(plan);
 	}
 
+	@Test
+	@DisplayName("daily refresh scheduler는 invalid 법정동을 실패 summary로 남기고 다음 법정동을 계속 실행한다")
+	void schedulerKeepsRunningNextLawdWhenOneLawdCodeIsInvalid() {
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner = mock(RtmsMonthlyRefreshRunner.class);
+		CapturingDailyRefreshNotifier notifier = new CapturingDailyRefreshNotifier();
+		RtmsDailyRefreshScheduler scheduler = scheduler(monthlyRefreshRunner, notifier, List.of("invalid", "11680"));
+		RtmsMonthlyRefreshPlan validPlan = new RtmsMonthlyRefreshPlan("11680", "202606", 1);
+		when(monthlyRefreshRunner.refresh(validPlan)).thenReturn(new RtmsMonthlyRefreshReport(List.of(
+			RtmsMonthlyRefreshRunSummary.completed("11680", "202606", 1, new IngestResult(1, 1, 0, 1, 0, 0), 41L),
+			RtmsMonthlyRefreshRunSummary.completed("11680", "202605", 1, new IngestResult(1, 1, 0, 1, 0, 0), 42L)
+		)));
+
+		scheduler.runDue();
+
+		verify(monthlyRefreshRunner).refresh(validPlan);
+		assertThat(notifier.messages()).hasSize(1);
+		assertThat(notifier.messages().get(0))
+			.contains("lawdCd=invalid")
+			.contains("status=FAILED")
+			.contains("lawdCd=11680")
+			.contains("status=PARTIAL");
+	}
+
 	private static RtmsDailyRefreshScheduler scheduler(
 		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
 		RtmsDailyRefreshNotifier notifier

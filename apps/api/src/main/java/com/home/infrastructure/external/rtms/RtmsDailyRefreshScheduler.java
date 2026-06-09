@@ -64,12 +64,17 @@ class RtmsDailyRefreshScheduler {
 		String baseDealYmd = YearMonth.now(clock.withZone(properties.zoneId())).format(DEAL_YMD_FORMATTER);
 		List<RtmsDailyRefreshResult> results = new ArrayList<>();
 		for (String lawdCd : properties.lawdCds()) {
-			RtmsMonthlyRefreshPlan plan = new RtmsMonthlyRefreshPlan(lawdCd, baseDealYmd, properties.lookbackMonths());
 			try {
+				RtmsMonthlyRefreshPlan plan = new RtmsMonthlyRefreshPlan(lawdCd, baseDealYmd, properties.lookbackMonths());
 				results.add(RtmsDailyRefreshResult.from(plan, monthlyRefreshRunner.refresh(plan)));
 			}
 			catch (RuntimeException exception) {
-				results.add(RtmsDailyRefreshResult.failed(plan, exception));
+				results.add(RtmsDailyRefreshResult.failed(
+					lawdCd,
+					baseDealYmd,
+					properties.lookbackMonths(),
+					exception
+				));
 			}
 		}
 		return new RtmsDailyRefreshExecution(results);

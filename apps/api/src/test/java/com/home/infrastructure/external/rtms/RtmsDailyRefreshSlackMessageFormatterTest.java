@@ -62,4 +62,21 @@ class RtmsDailyRefreshSlackMessageFormatterTest {
 			.doesNotContain("PRIVATE_VALUE_2")
 			.doesNotContain("payload");
 	}
+
+	@Test
+	@DisplayName("daily refresh Slack summary는 source key와 raw payload 값을 가린다")
+	void slackSummaryRedactsSourceKeyAndRawPayloadValues() {
+		String message = formatter.format(new RtmsDailyRefreshExecution(List.of(
+			RtmsDailyRefreshResult.failed(
+				new RtmsMonthlyRefreshPlan("11680", "202606", 0),
+				new IllegalStateException("failed sourceKey=RTMS:PRIVATE_SOURCE_KEY payload={raw-private-payload}")
+			)
+		)));
+
+		assertThat(message)
+			.contains("sourceKey=[REDACTED]")
+			.contains("payload=[REDACTED]")
+			.doesNotContain("PRIVATE_SOURCE_KEY")
+			.doesNotContain("raw-private-payload");
+	}
 }

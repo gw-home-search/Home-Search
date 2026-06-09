@@ -1,8 +1,11 @@
 package com.home.infrastructure.external.rtms;
 
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import com.home.application.ingest.trade.IngestResult;
 
@@ -15,6 +18,8 @@ record RtmsDailyRefreshResult(
 	List<Long> runIds,
 	String failureReason
 ) {
+
+	private static final DateTimeFormatter DEAL_YMD_FORMATTER = DateTimeFormatter.ofPattern("yyyyMM");
 
 	RtmsDailyRefreshResult {
 		lawdCd = Objects.requireNonNull(lawdCd, "lawdCd is required");
@@ -55,19 +60,43 @@ record RtmsDailyRefreshResult(
 	}
 
 	static RtmsDailyRefreshResult failed(RtmsMonthlyRefreshPlan plan, RuntimeException exception) {
+		return failed(plan.lawdCd(), plan.dealYmds(), exception);
+	}
+
+	static RtmsDailyRefreshResult failed(
+		String lawdCd,
+		String baseDealYmd,
+		int lookbackMonths,
+		RuntimeException exception
+	) {
+		return failed(lawdCd, dealYmds(baseDealYmd, lookbackMonths), exception);
+	}
+
+	private static RtmsDailyRefreshResult failed(
+		String lawdCd,
+		List<String> dealYmds,
+		RuntimeException exception
+	) {
 		String reason = exception.getClass().getSimpleName();
 		if (exception.getMessage() != null && !exception.getMessage().isBlank()) {
 			reason = reason + ": " + exception.getMessage();
 		}
 		return new RtmsDailyRefreshResult(
-			plan.lawdCd(),
-			plan.dealYmds(),
+			lawdCd,
+			dealYmds,
 			RtmsMonthlyRefreshRunStatus.FAILED,
 			IngestResult.empty(),
 			0,
 			List.of(),
 			reason
 		);
+	}
+
+	private static List<String> dealYmds(String baseDealYmd, int lookbackMonths) {
+		YearMonth baseMonth = YearMonth.parse(baseDealYmd, DEAL_YMD_FORMATTER);
+		return IntStream.rangeClosed(0, lookbackMonths)
+			.mapToObj(offset -> baseMonth.minusMonths(offset).format(DEAL_YMD_FORMATTER))
+			.toList();
 	}
 
 	private static RtmsMonthlyRefreshRunStatus aggregateStatus(List<RtmsMonthlyRefreshRunSummary> runs) {

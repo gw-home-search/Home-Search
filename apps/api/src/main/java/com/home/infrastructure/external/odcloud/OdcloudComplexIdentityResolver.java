@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.home.application.coordinate.identity.ComplexIdentityCandidate;
+import com.home.application.coordinate.identity.ComplexIdentityCandidatePolicy;
 import com.home.application.ingest.matching.ComplexIdentityResolver;
 import com.home.application.ingest.trade.OpenApiTradeItem;
 import com.home.infrastructure.external.ExternalApiUri;
@@ -18,6 +20,7 @@ public class OdcloudComplexIdentityResolver implements ComplexIdentityResolver {
 	private final String baseUrl;
 	private final String serviceKey;
 	private final String aptPath;
+	private final ComplexIdentityCandidatePolicy identityCandidatePolicy;
 
 	public OdcloudComplexIdentityResolver(
 		RestClient restClient,
@@ -29,6 +32,7 @@ public class OdcloudComplexIdentityResolver implements ComplexIdentityResolver {
 		this.baseUrl = trimToNull(baseUrl);
 		this.serviceKey = trimToNull(serviceKey);
 		this.aptPath = Objects.requireNonNull(aptPath);
+		this.identityCandidatePolicy = new ComplexIdentityCandidatePolicy();
 	}
 
 	@Override
@@ -39,22 +43,21 @@ public class OdcloudComplexIdentityResolver implements ComplexIdentityResolver {
 		}
 		try {
 			OdcloudAptResponse response = getBody(odcloudQuery(aptSeq));
-			if (response == null || response.getData() == null || response.getData().isEmpty()) {
-				return Optional.empty();
-			}
-			List<String> pnus = response.getData().stream()
-				.filter(Objects::nonNull)
-				.filter(candidate -> aptSeq.equals(trimToNull(candidate.getComplexPk())))
-				.map(OdcloudAptResponse.Item::getPnu)
-				.map(this::trimToNull)
-				.filter(this::validPnu)
-				.distinct()
-				.toList();
-			return pnus.size() == 1 ? Optional.of(pnus.get(0)) : Optional.empty();
+			return identityCandidatePolicy.resolveUniquePnu(aptSeq, candidates(response));
 		}
 		catch (RestClientException exception) {
 			return Optional.empty();
 		}
+	}
+
+	private List<ComplexIdentityCandidate> candidates(OdcloudAptResponse response) {
+		if (response == null || response.getData() == null) {
+			return List.of();
+		}
+		return response.getData().stream()
+			.filter(Objects::nonNull)
+			.map(item -> new ComplexIdentityCandidate(item.getComplexPk(), item.getPnu()))
+			.toList();
 	}
 
 	private OdcloudAptResponse getBody(String query) {
@@ -76,10 +79,6 @@ public class OdcloudComplexIdentityResolver implements ComplexIdentityResolver {
 			+ "&perPage=" + ExternalApiUri.queryValue(20)
 			+ "&cond%5BCOMPLEX_PK::EQ%5D=" + ExternalApiUri.queryValue(aptSeq)
 			+ "&serviceKey=" + ExternalApiUri.serviceKeyQueryValue(serviceKey);
-	}
-
-	private boolean validPnu(String value) {
-		return value != null && value.matches("\\d{19}");
 	}
 
 	private String trimToNull(String value) {

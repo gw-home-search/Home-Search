@@ -5,6 +5,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.home.application.ingest.matching.ComplexMasterBootstrapPolicy;
 import com.home.application.ingest.matching.ComplexMasterBootstrapResult;
 import com.home.application.ingest.matching.ComplexMasterBootstrapper;
 import com.home.application.ingest.matching.ComplexIdentityResolver;
@@ -14,11 +15,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper {
 
-	private static final int COMPLEX_PK_MAX_LENGTH = 64;
-
 	private final JdbcClient jdbcClient;
 	private final ParcelCoordinateResolver coordinateResolver;
 	private final ComplexIdentityResolver identityResolver;
+	private final ComplexMasterBootstrapPolicy policy;
 
 	public JdbcComplexMasterBootstrapper(JdbcClient jdbcClient, ParcelCoordinateResolver coordinateResolver) {
 		this(jdbcClient, coordinateResolver, ComplexIdentityResolver.noop());
@@ -29,9 +29,19 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 		ParcelCoordinateResolver coordinateResolver,
 		ComplexIdentityResolver identityResolver
 	) {
+		this(jdbcClient, coordinateResolver, identityResolver, new ComplexMasterBootstrapPolicy());
+	}
+
+	JdbcComplexMasterBootstrapper(
+		JdbcClient jdbcClient,
+		ParcelCoordinateResolver coordinateResolver,
+		ComplexIdentityResolver identityResolver,
+		ComplexMasterBootstrapPolicy policy
+	) {
 		this.jdbcClient = Objects.requireNonNull(jdbcClient);
 		this.coordinateResolver = Objects.requireNonNull(coordinateResolver);
 		this.identityResolver = Objects.requireNonNull(identityResolver);
+		this.policy = Objects.requireNonNull(policy);
 	}
 
 	@Override
@@ -39,71 +49,60 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 		Objects.requireNonNull(item, "item is required");
 
 		String aptSeq = trimToNull(item.aptSeq());
-		if (aptSeq == null) {
-			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: aptSeq unavailable");
+		Optional<ComplexMasterBootstrapResult> skip = policy.validateAptSeq(aptSeq);
+		if (skip.isPresent()) {
+			return skip.get();
 		}
 		String aptName = trimToNull(item.aptName());
 		List<Long> existingComplexIds = findComplexIdsByAptSeq(aptSeq);
+		skip = policy.validateExistingAptSeqCandidateCount(aptSeq, existingComplexIds.size());
+		if (skip.isPresent()) {
+			return skip.get();
+		}
 		if (existingComplexIds.size() == 1) {
 			Long complexId = existingComplexIds.get(0);
 			Optional<String> pnu = resolvePnu(item);
-			if (pnu.isEmpty()) {
-				return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: pnu unavailable aptSeq=" + aptSeq);
-			}
-			Optional<String> complexPnu = findComplexParcelPnu(complexId);
-			if (complexPnu.isEmpty()) {
-				return ComplexMasterBootstrapResult.skipped(
-					"master bootstrap skipped: complex parcel unavailable aptSeq=" + aptSeq
-				);
-			}
-			if (!pnu.get().equals(complexPnu.get())) {
-				return ComplexMasterBootstrapResult.skipped(
-					"master bootstrap skipped: aptSeq parcel pnu conflict aptSeq=%s derivedPnu=%s complexPnu=%s"
-						.formatted(aptSeq, pnu.get(), complexPnu.get())
-				);
+			Optional<String> complexPnu = pnu.isPresent() ? findComplexParcelPnu(complexId) : Optional.empty();
+			skip = policy.validateExistingAptSeqPnu(aptSeq, pnu, complexPnu);
+			if (skip.isPresent()) {
+				return skip.get();
 			}
 			if (aptName != null) {
 				upsertAlias(complexId, "RTMS_APT_NAME", aptName, "RTMS");
 			}
 			return ComplexMasterBootstrapResult.alreadyPresent();
 		}
-		if (existingComplexIds.size() > 1) {
-			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: ambiguous aptSeq=" + aptSeq);
-		}
 
-		if (aptName == null) {
-			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: aptName unavailable aptSeq=" + aptSeq);
+		skip = policy.validateNewAptName(aptSeq, aptName);
+		if (skip.isPresent()) {
+			return skip.get();
 		}
 
 		Optional<String> pnu = resolvePnu(item);
-		if (pnu.isEmpty()) {
-			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: pnu unavailable aptSeq=" + aptSeq);
+		skip = policy.validateNewPnu(aptSeq, pnu);
+		if (skip.isPresent()) {
+			return skip.get();
 		}
 
-		String complexPk = complexPk(aptSeq);
+		String complexPk = policy.complexPk(aptSeq);
 		Optional<Long> existingComplexIdByPk = findComplexIdByComplexPk(complexPk);
 		if (existingComplexIdByPk.isPresent()) {
 			Optional<String> complexPnu = findComplexParcelPnu(existingComplexIdByPk.get());
-			if (complexPnu.isEmpty()) {
-				return ComplexMasterBootstrapResult.skipped(
-					"master bootstrap skipped: complex parcel unavailable complexPk=" + complexPk
-				);
-			}
-			if (!pnu.get().equals(complexPnu.get())) {
-				return ComplexMasterBootstrapResult.skipped(
-					"master bootstrap skipped: complex_pk parcel pnu conflict complexPk=%s derivedPnu=%s complexPnu=%s"
-						.formatted(complexPk, pnu.get(), complexPnu.get())
-				);
+			skip = policy.validateExistingComplexPkPnu(complexPk, pnu.get(), complexPnu);
+			if (skip.isPresent()) {
+				return skip.get();
 			}
 		}
 
 		Optional<Long> parcelId = findParcelId(pnu.get()).or(() -> createParcel(pnu.get(), item));
-		if (parcelId.isEmpty()) {
-			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: parcel unavailable pnu=" + pnu.get());
+		skip = policy.validateParcel(pnu.get(), parcelId);
+		if (skip.isPresent()) {
+			return skip.get();
 		}
 
-		if (complexPk.length() > COMPLEX_PK_MAX_LENGTH) {
-			return ComplexMasterBootstrapResult.skipped("master bootstrap skipped: complex_pk too long aptSeq=" + aptSeq);
+		skip = policy.validateComplexPkLength(aptSeq, complexPk);
+		if (skip.isPresent()) {
+			return skip.get();
 		}
 		Long complexId = upsertComplex(parcelId.get(), complexPk, aptSeq, aptName);
 		upsertAlias(complexId, "RTMS_APT_NAME", aptName, "RTMS");
@@ -343,10 +342,6 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			.param("normalizedName", normalizedName)
 			.param("source", source)
 			.update();
-	}
-
-	private String complexPk(String aptSeq) {
-		return "RTMS:" + aptSeq;
 	}
 
 	private String normalizeName(String value) {

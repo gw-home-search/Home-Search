@@ -6,6 +6,8 @@ import java.util.Objects;
 import java.util.Optional;
 
 import com.home.application.ingest.normalization.NormalizedTradeCommand;
+import com.home.application.ingest.normalization.NormalizedTradeDuplicateMatch;
+import com.home.application.ingest.normalization.NormalizedTradeDuplicatePolicy;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
 import com.home.domain.trade.TradeExclAreaNormalizer;
 
@@ -21,10 +23,20 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 
 	private final JdbcClient jdbcClient;
 	private final TransactionTemplate transactionTemplate;
+	private final NormalizedTradeDuplicatePolicy duplicatePolicy;
 
 	public JdbcNormalizedTradeRepository(JdbcClient jdbcClient, TransactionTemplate transactionTemplate) {
+		this(jdbcClient, transactionTemplate, new NormalizedTradeDuplicatePolicy());
+	}
+
+	JdbcNormalizedTradeRepository(
+		JdbcClient jdbcClient,
+		TransactionTemplate transactionTemplate,
+		NormalizedTradeDuplicatePolicy duplicatePolicy
+	) {
 		this.jdbcClient = Objects.requireNonNull(jdbcClient);
 		this.transactionTemplate = Objects.requireNonNull(transactionTemplate);
+		this.duplicatePolicy = Objects.requireNonNull(duplicatePolicy);
 	}
 
 	@Override
@@ -61,7 +73,7 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 		}
 
 		lockFallbackIdentity(command);
-		FallbackMatch existingTrade = findFallbackMatch(command);
+		NormalizedTradeDuplicateMatch existingTrade = findFallbackMatch(command);
 		if (existingTrade.tradeId().isPresent()) {
 			attachTrade(registryId.get(), existingTrade.tradeId().get());
 			return false;
@@ -72,7 +84,7 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 
 		Optional<Long> tradeId = insertTrade(command);
 		if (tradeId.isEmpty()) {
-			FallbackMatch conflictedTrade = findFallbackMatch(command);
+			NormalizedTradeDuplicateMatch conflictedTrade = findFallbackMatch(command);
 			if (conflictedTrade.tradeId().isPresent()) {
 				attachTrade(registryId.get(), conflictedTrade.tradeId().get());
 			}
@@ -176,22 +188,16 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 			.optional();
 	}
 
-	private FallbackMatch findFallbackMatch(NormalizedTradeCommand command) {
+	private NormalizedTradeDuplicateMatch findFallbackMatch(NormalizedTradeCommand command) {
 		if (command.aptDong() == null) {
-			List<Long> candidates = findFallbackCandidateIds(command);
-			if (candidates.size() == 1) {
-				return FallbackMatch.matched(candidates.get(0));
-			}
-			return candidates.isEmpty() ? FallbackMatch.none() : FallbackMatch.ambiguousMatch();
+			return duplicatePolicy.resolve(null, Optional.empty(), Optional.empty(), findFallbackCandidateIds(command));
 		}
 
 		Optional<Long> exactAptDong = findExistingTradeIdByAptDong(command);
-		if (exactAptDong.isPresent()) {
-			return FallbackMatch.matched(exactAptDong.get());
-		}
-		return findExistingTradeIdWithMissingAptDong(command)
-			.map(FallbackMatch::matched)
-			.orElseGet(FallbackMatch::none);
+		Optional<Long> missingAptDong = exactAptDong.isPresent()
+			? Optional.empty()
+			: findExistingTradeIdWithMissingAptDong(command);
+		return duplicatePolicy.resolve(command.aptDong(), exactAptDong, missingAptDong, List.of());
 	}
 
 	private Optional<Long> findExistingTradeIdByAptDong(NormalizedTradeCommand command) {
@@ -287,21 +293,4 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 		return TradeExclAreaNormalizer.normalize(value);
 	}
 
-	private record FallbackMatch(
-		Optional<Long> tradeId,
-		boolean ambiguous
-	) {
-
-		private static FallbackMatch matched(Long tradeId) {
-			return new FallbackMatch(Optional.of(tradeId), false);
-		}
-
-		private static FallbackMatch none() {
-			return new FallbackMatch(Optional.empty(), false);
-		}
-
-		private static FallbackMatch ambiguousMatch() {
-			return new FallbackMatch(Optional.empty(), true);
-		}
-	}
 }

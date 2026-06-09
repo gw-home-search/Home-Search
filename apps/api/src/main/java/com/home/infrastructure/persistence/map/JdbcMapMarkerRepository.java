@@ -9,6 +9,7 @@ import java.util.Objects;
 import com.home.application.map.ComplexMarkerQuery;
 import com.home.application.map.ComplexMarkerRepository;
 import com.home.application.map.ComplexMarkerResult;
+import com.home.domain.coordinate.CoordinateDisplayPolicy;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -16,7 +17,6 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 
 	private static final BigDecimal TRADE_AMOUNT_UNITS_PER_EOK = BigDecimal.valueOf(10_000L);
 	private static final BigDecimal SQUARE_METERS_PER_PYEONG = new BigDecimal("3.305785");
-	private static final int TRUSTED_BUILDING_COORDINATE_CONFIDENCE = 80;
 
 	private final JdbcClient jdbcClient;
 
@@ -373,7 +373,8 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			.param("swLng", query.swLng())
 			.param("neLat", query.neLat())
 			.param("neLng", query.neLng())
-			.param("trustedBuildingCoordinateConfidence", TRUSTED_BUILDING_COORDINATE_CONFIDENCE)
+			.param("trustedBuildingCoordinateConfidence",
+				CoordinateDisplayPolicy.TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE)
 			.param("unitMin", query.unitMin())
 			.param("unitMax", query.unitMax())
 			.param("priceMin", eokToTradeAmount(query.priceEokMin()))
@@ -703,7 +704,8 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			.param("swLng", query.swLng())
 			.param("neLat", query.neLat())
 			.param("neLng", query.neLng())
-			.param("trustedBuildingCoordinateConfidence", TRUSTED_BUILDING_COORDINATE_CONFIDENCE)
+			.param("trustedBuildingCoordinateConfidence",
+				CoordinateDisplayPolicy.TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE)
 			.param("priceMin", eokToTradeAmount(query.priceEokMin()))
 			.param("priceMax", eokToTradeAmount(query.priceEokMax()))
 			.param("areaMin", pyeongToSquareMeters(query.pyeongMin()))

@@ -12,8 +12,8 @@ import com.home.application.ingest.metadata.ComplexMetadataEnrichmentClient;
 import com.home.domain.complex.metadata.ComplexMetadataFailureKind;
 import com.home.application.ingest.metadata.ComplexMetadataLookup;
 import com.home.application.ingest.metadata.ComplexMetadataResolution;
+import com.home.application.ingest.metadata.ComplexMetadataResolutionPolicy;
 import com.home.application.ingest.metadata.ComplexMetadataResolver;
-import com.home.domain.complex.metadata.ComplexMetadataStatus;
 import com.home.infrastructure.external.ExternalApiUri;
 import com.home.infrastructure.external.apis.dto.ApisBldRecapResponse;
 import com.home.infrastructure.external.odcloud.dto.OdcloudAptResponse;
@@ -37,6 +37,7 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 	private final String bldRecapPath;
 	private final String recapPath;
 	private final boolean buildingFallbackEnabled;
+	private final ComplexMetadataResolutionPolicy resolutionPolicy;
 
 	public PublicComplexMetadataResolver(
 		RestClient odcloudRestClient,
@@ -48,7 +49,7 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 		String recapPath
 	) {
 		this(odcloudRestClient, null, odcloudServiceKey, odcloudAptPath, bldRestClient, null, bldServiceKey,
-			bldRecapPath, recapPath, true);
+			bldRecapPath, recapPath, true, new ComplexMetadataResolutionPolicy());
 	}
 
 	public PublicComplexMetadataResolver(
@@ -63,6 +64,34 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 		String recapPath,
 		boolean buildingFallbackEnabled
 	) {
+		this(
+			odcloudRestClient,
+			odcloudBaseUrl,
+			odcloudServiceKey,
+			odcloudAptPath,
+			bldRestClient,
+			bldBaseUrl,
+			bldServiceKey,
+			bldRecapPath,
+			recapPath,
+			buildingFallbackEnabled,
+			new ComplexMetadataResolutionPolicy()
+		);
+	}
+
+	PublicComplexMetadataResolver(
+		RestClient odcloudRestClient,
+		String odcloudBaseUrl,
+		String odcloudServiceKey,
+		String odcloudAptPath,
+		RestClient bldRestClient,
+		String bldBaseUrl,
+		String bldServiceKey,
+		String bldRecapPath,
+		String recapPath,
+		boolean buildingFallbackEnabled,
+		ComplexMetadataResolutionPolicy resolutionPolicy
+	) {
 		this.odcloudRestClient = Objects.requireNonNull(odcloudRestClient);
 		this.odcloudBaseUrl = trimToNull(odcloudBaseUrl);
 		this.odcloudServiceKey = trimToNull(odcloudServiceKey);
@@ -73,6 +102,7 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 		this.bldRecapPath = Objects.requireNonNull(bldRecapPath);
 		this.recapPath = Objects.requireNonNull(recapPath);
 		this.buildingFallbackEnabled = buildingFallbackEnabled;
+		this.resolutionPolicy = Objects.requireNonNull(resolutionPolicy);
 	}
 
 	@Override
@@ -88,29 +118,8 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 	@Override
 	public ComplexMetadataResolution resolve(ComplexMetadataLookup lookup) {
 		ComplexMetadataResolution odcloud = resolveOdcloud(lookup.pnu(), lookup.parcelAddress());
-		if (odcloud.status().isAmbiguous()) {
-			return odcloud;
-		}
-		if (odcloud.status().isFailed()) {
-			return odcloud;
-		}
-		if (hasMetadata(odcloud)) {
-			if (!buildingFallbackEnabled) {
-				return odcloud;
-			}
-			ComplexMetadataResolution building = resolveBuildingMetadata(lookup.pnu());
-			if (hasMetadata(building)) {
-				if (conflicts(odcloud.metadata(), building.metadata())) {
-					return ComplexMetadataResolution.ambiguous("ODC+BLD", "complex metadata source conflict pnu=" + lookup.pnu());
-				}
-				return ComplexMetadataResolution.classify("ODC+BLD", merge(odcloud.metadata(), building.metadata()));
-			}
-			if (building.status().isAmbiguous()) {
-				return odcloud;
-			}
-			return odcloud;
-		}
-		return buildingFallbackEnabled ? resolveBuildingMetadata(lookup.pnu()) : odcloud;
+		return resolutionPolicy.resolve(lookup.pnu(), buildingFallbackEnabled, odcloud,
+			() -> resolveBuildingMetadata(lookup.pnu()));
 	}
 
 	private ComplexMetadataResolution resolveOdcloud(String pnu, String parcelAddress) {
@@ -227,10 +236,6 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 		));
 	}
 
-	private boolean hasMetadata(ComplexMetadataResolution resolution) {
-		return resolution.status().isResolvedLike();
-	}
-
 	private <T> T getBody(RestClient restClient, String baseUrl, String path, String query, Class<T> bodyType) {
 		if (baseUrl != null) {
 			return restClient.get()
@@ -263,46 +268,6 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 			+ "&bjdongCd=" + ExternalApiUri.queryValue(bjdongCd)
 			+ "&bun=" + ExternalApiUri.queryValue(bun)
 			+ "&ji=" + ExternalApiUri.queryValue(ji);
-	}
-
-	private ComplexMetadata merge(ComplexMetadata odcloudMetadata, ComplexMetadata buildingMetadata) {
-		if (odcloudMetadata == null) {
-			return buildingMetadata;
-		}
-		if (buildingMetadata == null) {
-			return odcloudMetadata;
-		}
-		return new ComplexMetadata(
-			firstNonNull(odcloudMetadata.dongCnt(), buildingMetadata.dongCnt()),
-			firstNonNull(odcloudMetadata.unitCnt(), buildingMetadata.unitCnt()),
-			firstNonNull(odcloudMetadata.platArea(), buildingMetadata.platArea()),
-			firstNonNull(odcloudMetadata.archArea(), buildingMetadata.archArea()),
-			firstNonNull(odcloudMetadata.totArea(), buildingMetadata.totArea()),
-			firstNonNull(odcloudMetadata.bcRat(), buildingMetadata.bcRat()),
-			firstNonNull(odcloudMetadata.vlRat(), buildingMetadata.vlRat()),
-			firstNonNull(odcloudMetadata.useDate(), buildingMetadata.useDate())
-		);
-	}
-
-	private boolean conflicts(ComplexMetadata first, ComplexMetadata second) {
-		if (first == null || second == null) {
-			return false;
-		}
-		return conflict(first.dongCnt(), second.dongCnt())
-			|| conflict(first.unitCnt(), second.unitCnt())
-			|| conflict(first.platArea(), second.platArea())
-			|| conflict(first.archArea(), second.archArea())
-			|| conflict(first.totArea(), second.totArea())
-			|| conflict(first.bcRat(), second.bcRat())
-			|| conflict(first.vlRat(), second.vlRat())
-			|| conflict(first.useDate(), second.useDate());
-	}
-
-	private boolean conflict(Object first, Object second) {
-		if (first instanceof BigDecimal firstNumber && second instanceof BigDecimal secondNumber) {
-			return firstNumber.compareTo(secondNumber) != 0;
-		}
-		return first != null && second != null && !first.equals(second);
 	}
 
 	private BigDecimal bd(Double value) {
@@ -349,7 +314,4 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 		return message.replaceAll("(?i)(serviceKey=)[^&\\s]+", "$1[REDACTED]");
 	}
 
-	private <T> T firstNonNull(T first, T second) {
-		return first != null ? first : second;
-	}
 }

@@ -2,6 +2,8 @@ package com.home.application.coordinate.caseflow;
 
 import java.util.Objects;
 
+import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
+
 public record ComplexCoordinateResolutionResult(
 	Long parcelId,
 	ComplexCoordinateCaseStatus status,

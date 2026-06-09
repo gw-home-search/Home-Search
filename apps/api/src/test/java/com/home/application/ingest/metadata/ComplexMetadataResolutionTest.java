@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
 
+import com.home.domain.complex.metadata.ComplexMetadataFailureKind;
+import com.home.domain.complex.metadata.ComplexMetadataStatus;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

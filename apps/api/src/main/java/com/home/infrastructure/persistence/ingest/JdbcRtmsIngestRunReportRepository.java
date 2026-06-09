@@ -14,7 +14,7 @@ import com.home.application.ingest.run.RtmsIngestRunReport;
 import com.home.application.ingest.run.RtmsIngestRunReportQuery;
 import com.home.application.ingest.run.RtmsIngestRunReportRepository;
 import com.home.application.ingest.run.RtmsIngestRunReportTotals;
-import com.home.application.ingest.run.RtmsIngestRunStatus;
+import com.home.domain.ingest.run.RtmsIngestRunStatus;
 import com.home.application.ingest.run.RtmsIngestRunStatusSummary;
 
 import org.springframework.jdbc.core.simple.JdbcClient;

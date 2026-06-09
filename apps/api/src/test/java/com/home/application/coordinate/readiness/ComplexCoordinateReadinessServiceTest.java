@@ -9,7 +9,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import com.home.application.coordinate.caseflow.ComplexCoordinateCaseCandidate;
-import com.home.application.coordinate.caseflow.ComplexCoordinateCaseStatus;
+import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 import com.home.application.coordinate.caseflow.ComplexCoordinateCaseUpdate;
 import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionRepository;
 import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionResult;
@@ -178,7 +178,7 @@ class ComplexCoordinateReadinessServiceTest {
 		private final List<Long> resolvedParcelIds = new ArrayList<>();
 
 		private FakeCoordinateExceptionService() {
-			super(new NoopCoordinateExceptionRepository(), parcelId -> List.of(), new com.home.application.complex.ComplexRelationClassifier());
+			super(new NoopCoordinateExceptionRepository(), parcelId -> List.of(), new com.home.domain.complex.relation.ComplexRelationClassifier());
 		}
 
 		@Override

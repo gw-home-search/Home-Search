@@ -2,6 +2,8 @@ package com.home.application.ingest.raw;
 
 import java.util.List;
 
+import com.home.domain.ingest.raw.RawTradeIngestStatus;
+
 /**
  * raw trade ingest evidence를 normalized insert보다 먼저 저장하고 status별로 조회하는 application port입니다.
  */

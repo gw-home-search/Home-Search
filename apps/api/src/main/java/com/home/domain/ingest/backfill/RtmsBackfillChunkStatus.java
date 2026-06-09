@@ -1,4 +1,4 @@
-package com.home.application.ingest.backfill;
+package com.home.domain.ingest.backfill;
 
 /**
  * RTMS backfill job의 월/지역 chunk 처리 상태를 나타낸다. job 집계와 재시도 후보 선별의 기준으로 사용한다.
@@ -40,6 +40,20 @@ public enum RtmsBackfillChunkStatus {
 	 */
 	public boolean isFinished() {
 		return this == COMPLETED || this == PARTIAL || this == FAILED || this == BLOCKED || this == SKIPPED;
+	}
+
+	/**
+	 * 대상 범위 수집이 성공적으로 끝난 chunk 상태인지 판단한다.
+	 */
+	public boolean isCompleted() {
+		return this == COMPLETED;
+	}
+
+	/**
+	 * 일부 수집만 성공해 partial 처리해야 하는 chunk 상태인지 판단한다.
+	 */
+	public boolean isPartial() {
+		return this == PARTIAL;
 	}
 
 	/**

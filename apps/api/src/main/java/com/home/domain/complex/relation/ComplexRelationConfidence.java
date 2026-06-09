@@ -1,4 +1,4 @@
-package com.home.application.complex;
+package com.home.domain.complex.relation;
 
 /**
  * 단지 관계 판정의 신뢰도를 나타낸다. 저장되는 값은 enum 상수명이며, 한글 설명은 내부 검토와 리포트용 메타데이터로만 사용한다.

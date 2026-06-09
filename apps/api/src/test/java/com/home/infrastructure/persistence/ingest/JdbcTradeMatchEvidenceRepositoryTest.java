@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 
 import com.home.application.ingest.matching.TradeMatchEvidenceCommand;
-import com.home.application.ingest.matching.TradeMatchStatus;
+import com.home.domain.ingest.matching.TradeMatchStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

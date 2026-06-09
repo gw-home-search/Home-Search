@@ -1,4 +1,4 @@
-package com.home.application.coordinate.caseflow;
+package com.home.domain.coordinate;
 
 /**
  * 동일 필지 다중 단지의 표시 좌표 예외 처리 상태를 나타낸다. 저장 값은 enum 상수명이며 지도 API 응답 필드로 노출하지 않는다.

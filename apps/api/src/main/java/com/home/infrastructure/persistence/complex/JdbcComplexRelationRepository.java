@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Objects;
 
 import com.home.application.complex.ComplexRelationRepository;
-import com.home.application.complex.ComplexTradeSpan;
+import com.home.domain.complex.relation.ComplexTradeSpan;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

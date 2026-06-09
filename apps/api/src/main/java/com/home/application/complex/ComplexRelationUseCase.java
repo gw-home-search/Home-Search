@@ -2,6 +2,9 @@ package com.home.application.complex;
 
 import java.util.Objects;
 
+import com.home.domain.complex.relation.ComplexRelationClassification;
+import com.home.domain.complex.relation.ComplexRelationClassifier;
+
 public class ComplexRelationUseCase {
 
 	private final ComplexRelationRepository repository;

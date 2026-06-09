@@ -1,4 +1,4 @@
-package com.home.application.complex;
+package com.home.domain.complex.relation;
 
 import java.util.List;
 import java.util.Objects;

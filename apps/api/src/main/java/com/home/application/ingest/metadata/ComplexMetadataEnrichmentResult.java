@@ -1,5 +1,7 @@
 package com.home.application.ingest.metadata;
 
+import com.home.domain.complex.metadata.ComplexMetadataStatus;
+
 public record ComplexMetadataEnrichmentResult(
 	int processed,
 	int resolved,

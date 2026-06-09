@@ -2,6 +2,8 @@ package com.home.application.ingest.raw;
 
 import java.time.Instant;
 
+import com.home.domain.ingest.raw.RawTradeIngestStatus;
+
 /**
  * 외부 원천 payload와 ingest 처리 상태를 보존하는 raw trade evidence record입니다.
  */

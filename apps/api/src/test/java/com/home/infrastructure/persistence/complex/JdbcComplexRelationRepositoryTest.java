@@ -5,9 +5,9 @@ import static org.assertj.core.groups.Tuple.tuple;
 
 import java.time.LocalDate;
 
-import com.home.application.complex.ComplexRelationConfidence;
-import com.home.application.complex.ComplexRelationClassifier;
-import com.home.application.complex.ComplexRelationType;
+import com.home.domain.complex.relation.ComplexRelationConfidence;
+import com.home.domain.complex.relation.ComplexRelationClassifier;
+import com.home.domain.complex.relation.ComplexRelationType;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 
 import org.junit.jupiter.api.DisplayName;

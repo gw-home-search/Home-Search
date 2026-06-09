@@ -6,12 +6,12 @@ import static org.assertj.core.groups.Tuple.tuple;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-import com.home.application.complex.ComplexRelationClassifier;
+import com.home.domain.complex.relation.ComplexRelationClassifier;
 import com.home.application.complex.ComplexRelationRepository;
 import com.home.application.coordinate.footprint.BuildingFootprintCandidate;
 import com.home.application.coordinate.footprint.BuildingFootprintImportCandidate;
 import com.home.application.coordinate.footprint.BuildingFootprintSource;
-import com.home.application.coordinate.caseflow.ComplexCoordinateCaseStatus;
+import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;
 import com.home.application.coordinate.display.ResolvedDisplayCoordinate;
 import com.home.infrastructure.persistence.complex.JdbcComplexRelationRepository;

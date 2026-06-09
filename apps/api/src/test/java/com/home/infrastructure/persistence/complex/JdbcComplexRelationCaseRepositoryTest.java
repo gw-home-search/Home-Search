@@ -6,13 +6,13 @@ import static org.assertj.core.groups.Tuple.tuple;
 import java.time.LocalDate;
 import java.util.List;
 
-import com.home.application.complex.ComplexRelationClassifier;
+import com.home.domain.complex.relation.ComplexRelationClassifier;
 import com.home.application.complex.ComplexRelationCaseRecord;
-import com.home.application.complex.ComplexRelationClassification;
-import com.home.application.complex.ComplexRelationConfidence;
-import com.home.application.complex.ComplexRelationType;
+import com.home.domain.complex.relation.ComplexRelationClassification;
+import com.home.domain.complex.relation.ComplexRelationConfidence;
+import com.home.domain.complex.relation.ComplexRelationType;
 import com.home.application.complex.ComplexRelationCaseMember;
-import com.home.application.complex.ComplexTradeSpan;
+import com.home.domain.complex.relation.ComplexTradeSpan;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 
 import org.junit.jupiter.api.DisplayName;

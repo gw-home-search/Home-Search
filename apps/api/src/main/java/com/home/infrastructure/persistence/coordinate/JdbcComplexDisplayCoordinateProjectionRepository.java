@@ -3,7 +3,7 @@ package com.home.infrastructure.persistence.coordinate;
 import java.util.List;
 import java.util.Objects;
 
-import com.home.application.coordinate.caseflow.ComplexCoordinateCaseStatus;
+import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 import com.home.application.coordinate.display.ComplexDisplayCoordinateCommand;
 import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionRepository;
 import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionTarget;

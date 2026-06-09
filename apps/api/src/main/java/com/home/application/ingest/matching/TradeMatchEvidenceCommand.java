@@ -2,7 +2,9 @@ package com.home.application.ingest.matching;
 
 import java.util.List;
 import java.util.Objects;
-import com.home.application.ingest.normalization.RtmsJibunPnu;
+
+import com.home.domain.ingest.matching.TradeMatchStatus;
+import com.home.domain.trade.RtmsJibunPnu;
 import com.home.application.ingest.normalization.RtmsJibunPnuNormalizer;
 import com.home.application.ingest.trade.OpenApiTradeItem;
 

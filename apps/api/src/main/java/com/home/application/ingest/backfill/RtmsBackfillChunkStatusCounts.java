@@ -4,6 +4,8 @@ import java.util.Collection;
 import java.util.EnumMap;
 import java.util.Map;
 
+import com.home.domain.ingest.backfill.RtmsBackfillChunkStatus;
+
 public record RtmsBackfillChunkStatusCounts(
 	long pending,
 	long running,

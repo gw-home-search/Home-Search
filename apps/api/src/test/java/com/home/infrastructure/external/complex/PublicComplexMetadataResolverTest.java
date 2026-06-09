@@ -10,10 +10,10 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.home.application.ingest.metadata.ComplexMetadata;
-import com.home.application.ingest.metadata.ComplexMetadataFailureKind;
+import com.home.domain.complex.metadata.ComplexMetadataFailureKind;
 import com.home.application.ingest.metadata.ComplexMetadataLookup;
 import com.home.application.ingest.metadata.ComplexMetadataResolution;
-import com.home.application.ingest.metadata.ComplexMetadataStatus;
+import com.home.domain.complex.metadata.ComplexMetadataStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

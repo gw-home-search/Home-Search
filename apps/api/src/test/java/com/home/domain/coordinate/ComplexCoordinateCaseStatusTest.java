@@ -1,11 +1,11 @@
-package com.home.application.coordinate.caseflow;
+package com.home.domain.coordinate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerificationStatus;
+import com.home.domain.coordinate.ComplexCoordinateIdentityVerificationStatus;
 
 class ComplexCoordinateCaseStatusTest {
 

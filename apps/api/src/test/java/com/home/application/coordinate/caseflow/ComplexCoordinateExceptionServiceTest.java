@@ -10,11 +10,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import com.home.application.complex.ComplexRelationClassifier;
-import com.home.application.complex.ComplexRelationConfidence;
+import com.home.domain.complex.relation.ComplexRelationClassifier;
+import com.home.domain.complex.relation.ComplexRelationConfidence;
 import com.home.application.complex.ComplexRelationRepository;
-import com.home.application.complex.ComplexRelationType;
-import com.home.application.complex.ComplexTradeSpan;
+import com.home.domain.complex.relation.ComplexRelationType;
+import com.home.domain.complex.relation.ComplexTradeSpan;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,6 +26,7 @@ import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerific
 import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
 import com.home.application.coordinate.identity.ComplexCoordinateParcelTargets;
 import com.home.application.coordinate.identity.ComplexCoordinateTarget;
+import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 
 class ComplexCoordinateExceptionServiceTest {
 

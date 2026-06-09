@@ -9,11 +9,11 @@ import java.util.Objects;
 
 import com.home.application.ingest.metadata.ComplexMetadata;
 import com.home.application.ingest.metadata.ComplexMetadataEnrichmentClient;
-import com.home.application.ingest.metadata.ComplexMetadataFailureKind;
+import com.home.domain.complex.metadata.ComplexMetadataFailureKind;
 import com.home.application.ingest.metadata.ComplexMetadataLookup;
 import com.home.application.ingest.metadata.ComplexMetadataResolution;
 import com.home.application.ingest.metadata.ComplexMetadataResolver;
-import com.home.application.ingest.metadata.ComplexMetadataStatus;
+import com.home.domain.complex.metadata.ComplexMetadataStatus;
 import com.home.infrastructure.external.ExternalApiUri;
 import com.home.infrastructure.external.apis.dto.ApisBldRecapResponse;
 import com.home.infrastructure.external.odcloud.dto.OdcloudAptResponse;

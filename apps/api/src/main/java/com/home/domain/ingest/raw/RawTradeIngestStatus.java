@@ -1,4 +1,4 @@
-package com.home.application.ingest.raw;
+package com.home.domain.ingest.raw;
 
 /**
  * 원천 거래 row의 수집 및 정규화 처리 상태를 나타낸다. raw 저장 이후의 감사와 재처리 대상을 구분하는 내부 상태다.

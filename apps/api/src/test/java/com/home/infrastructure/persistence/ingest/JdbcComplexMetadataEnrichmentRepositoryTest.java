@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.home.application.ingest.metadata.ComplexMetadata;
-import com.home.application.ingest.metadata.ComplexMetadataFailureKind;
+import com.home.domain.complex.metadata.ComplexMetadataFailureKind;
 import com.home.application.ingest.metadata.ComplexMetadataLookup;
 import com.home.application.ingest.metadata.ComplexMetadataResolution;
 

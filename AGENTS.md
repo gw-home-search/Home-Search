@@ -134,6 +134,42 @@ All writes for this project belong under `/Users/gwongwangjae/home-search`.
 - Preserve `complex_pk`, `apt_seq`, `source`, and `source_key` for audit, matching, and dedupe support.
 - Map endpoints must not require ranking, trend, favorite, or mail state.
 
+## Domain Principles
+
+These rules apply to every backend code addition, not only to package
+refactors. The `domain` layer owns project business meaning and must keep
+stored state, operational identifiers, and policy distinctions explicit.
+
+- Put persisted business states, reasons, classifications, confidence values,
+  source identifiers, matching outcomes, dedupe identities, and
+  state-transition rules under `com.home.domain.<feature>` when they are shared
+  across application and persistence or used as stored operational evidence.
+- Keep use-case commands, queries, orchestration results, ports, and execution
+  summaries in `application/**` when they do not define durable business
+  meaning by themselves.
+- Keep provider modes, scheduler options, cache lookup states, HTTP DTOs, JDBC
+  row mapping, SQL, locks, and external response shapes in
+  `infrastructure/**`.
+- Domain code must not import `application/**`, `infrastructure/**`, Spring,
+  JDBC, HTTP clients, Flyway, or external provider DTOs.
+- Application services should ask domain objects or domain policies for
+  decisions before writing durable state. Application code may orchestrate
+  repositories and ports, but repeated `status == ...` branching around stored
+  business meaning belongs in domain-owned methods or policy objects.
+- Persistence adapters enforce database constraints, uniqueness, transactions,
+  and locks as implementation safeguards. They should not be the only place
+  where business distinctions such as duplicate, ambiguous, canceled,
+  match-failed, marker-safe, or manual-review-required are defined.
+- Domain enums that model project states, reasons, classifications, confidence,
+  or stored modes must keep enum constants stable, provide Korean
+  `titleKo()`/`descriptionKo()` metadata, own repeated predicates or transition
+  checks, and avoid public API exposure unless the public API contract is
+  intentionally updated first.
+- Stop before implementation if a domain placement decision requires renaming a
+  persisted enum constant, changing a public API URL or response shape, adding a
+  data-loss migration, reinterpreting `complex_id`/`complex_pk`, or making
+  `domain/**` depend on application or infrastructure.
+
 ## Docker/Data Safety
 
 - Never delete Docker volumes without explicit user approval in the current task.

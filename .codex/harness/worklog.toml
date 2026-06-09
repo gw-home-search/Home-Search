@@ -253,6 +253,63 @@ risk_notes = [
 ]
 
 [[items]]
+id = "backend-domain-principles-foundation"
+title_ko = "Backend domain principles foundation"
+pr_type = "Policy"
+pr_title_ko = "백엔드 domain 원칙과 guardrail 정착"
+description_ko = "앞으로 같은 브랜치에서 backend 코드를 추가할 때 저장 상태, 구분자, 상태 전이, dedupe/match/coordinate 정책 의미를 application이나 persistence에 흩어두지 않고 domain이 소유하도록 root AGENTS 원칙과 foundation guardrail을 고정한다."
+status = "done"
+priority = 203
+targets = "backend"
+preset = "backend-quality"
+acceptance_criteria = [
+  "root AGENTS.md에 Domain Principles가 있고 이번 refactor 한정이 아니라 모든 backend code addition에 적용되는 규칙으로 설명한다.",
+  "Domain Principles는 persisted business state, reason, classification, confidence, source identity, matching outcome, dedupe identity, state-transition rule의 domain 소유 기준을 명시한다.",
+  "Application은 orchestration과 port/use-case result를 맡고, domain decision 없이 durable state를 쓰는 반복 status branching을 늘리지 않는다는 규칙을 명시한다.",
+  "Infrastructure는 SQL, JDBC row mapping, provider DTO, cache state, locks, transaction, DB constraint adapter 역할을 맡고 business distinction의 유일한 정의처가 되지 않는다는 규칙을 명시한다.",
+  "domain/**은 application/**, infrastructure/**, Spring, JDBC, HTTP client, Flyway, external provider DTO를 import하지 않는 guardrail을 foundation test로 고정한다.",
+  "domain enum도 application enum과 동일하게 Korean JavaDoc, titleKo(), descriptionKo(), stable constants, repeated predicate ownership 규칙을 검증한다.",
+  "public map/search/region/detail/trade API URL, request/response shape, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "raw-before-normalized, duplicate-safe ingest, failed match queryability, complex_id operational relation, complex_pk/apt_seq/source/source_key 보존 의미를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "BackendDomainPackageBoundaryTest를 추가해 domain/**이 application/** 또는 infrastructure/**를 import하면 실패하도록 만들고, 현재 domain guardrail이 없어서 RED로 확인한다.",
+  "BackendEnumDocumentationTest를 domain root까지 확장해 domain enum이 titleKo()/descriptionKo() 또는 class JavaDoc 없이 추가되면 실패하도록 만든다.",
+  "BackendApplicationPackageStructureTest 또는 신규 foundation test에서 root AGENTS.md의 Domain Principles section이 없으면 실패하도록 만들어 운영 규칙 누락을 RED로 고정한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew foundationTest",
+  "cd apps/api && ./gradlew test",
+  "cd apps/api && ./gradlew javadoc",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+verification_evidence = [
+  "- `cd apps/api && ./gradlew foundationTest --tests '*BackendPackageBoundaryTest' --tests '*BackendEnumDocumentationTest' --tests '*BackendDomainPrinciplesTest'` = fail (최초 RED: `domain package is missing`으로 BackendPackageBoundaryTest 실패)",
+  "- `cd apps/api && ./gradlew foundationTest --tests '*BackendPackageBoundaryTest' --tests '*BackendEnumDocumentationTest' --tests '*BackendDomainPrinciplesTest'` = pass (최소 GREEN: `com.home.domain` root package-info 추가 후 domain boundary/documentation guardrail 통과)",
+  "- `cd apps/api && ./gradlew foundationTest` = pass (foundation guardrail 전체 통과)",
+  "- `cd apps/api && ./gradlew test` = pass (non-persistence unit suite 통과)",
+  "- `cd apps/api && ./gradlew javadoc` = pass (JavaDoc gate 통과)",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = fail (초기 검증 공백: Docker daemon 미기동으로 Testcontainers가 valid Docker environment를 찾지 못함)",
+  "- `open -a Docker` 후 `docker ps` = pass (Docker daemon 연결 확인)",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, persistence, coverage, foundation, javadoc gate 통과)",
+  "- `python3 .codex/harness/project_terms_check.py` = pass (프로젝트 용어 점검 통과)",
+  "- `git diff --check` = pass (공백 오류 없음)",
+]
+stop_conditions = [
+  "production behavior, public API URL/field/unit/error policy 변경이 필요하면 중단하고 별도 behavior slice로 분리한다.",
+  "DB schema, Flyway migration, persisted enum constant rename, data reinterpretation이 필요하면 중단한다.",
+  "domain/** 추출 대상이 ingest, coordinate, complex, trade 전체로 커지면 foundation guardrail과 실제 domain move를 분리한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+  "same branch에서 진행하더라도 unrelated cleanup, news later-scope domain화, source repo style import를 섞지 않는다.",
+]
+risk_notes = [
+  "이번 item은 앞으로 모든 backend code addition에 적용할 domain 원칙과 guardrail을 만드는 정책/테스트 slice다.",
+  "실제 enum/value object 이동은 후속 domain extraction slice에서 TDD로 분리한다.",
+]
+
+[[items]]
 id = "backend-package-boundary-application-decoupling"
 title_ko = "Backend package boundary application decoupling"
 pr_type = "Refactor"

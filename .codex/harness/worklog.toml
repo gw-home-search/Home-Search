@@ -1797,6 +1797,16 @@ verification_commands = [
   "python3 .codex/harness/project_terms_check.py",
   "git diff --check",
 ]
+verification_evidence = [
+  "- `cd apps/api && ./gradlew test --tests '*RtmsDailyRefresh*' --tests '*RtmsMonthlyRefresh*'` = fail (최초 RED: RtmsDailyRefresh scheduler/formatter/notifier production type 부재로 compileTestJava 실패)",
+  "- `cd apps/api && ./gradlew test --tests com.home.infrastructure.external.rtms.RtmsDailyRefreshSlackMessageFormatterTest` = fail (보안 RED: sourceKey와 raw payload 값이 Slack summary에 노출되는 회귀 실패)",
+  "- `cd apps/api && ./gradlew test --tests '*RtmsDailyRefresh*' --tests '*RtmsMonthlyRefresh*'` = pass (daily scheduler, Slack summary/notifier, monthly refresh 회귀 통과)",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, persistence, coverage, javadoc gate 통과)",
+  "- `python3 scripts/check-test-display-names.py` = pass (test display name policy 통과)",
+  "- `python3 .codex/harness/project_terms_check.py` = pass (프로젝트 용어 점검 통과)",
+  "- `python3 .codex/harness/pr_lint.py --self-test` = pass (PR lint 자체 테스트 통과)",
+  "- `git diff --check` = pass (공백 오류 없음)",
+]
 stop_conditions = [
   "PR 검증에서 live RTMS Open API call 또는 real Slack webhook이 필요하면 중단하고 fixture/mocking으로 대체한다.",
   "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",

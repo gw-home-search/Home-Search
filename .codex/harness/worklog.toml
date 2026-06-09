@@ -1,4 +1,49 @@
 [[items]]
+id = "map-marker-redis-performance-gate"
+title_ko = "Map marker Redis performance gate"
+pr_type = "Test"
+pr_title_ko = "지도 마커 Redis 성능 gate 검증"
+description_ko = "POST /api/v1/map/complexes Redis read-through cache의 off/cold/warm 성능 차이와 hit/miss/fallback metric을 재현 가능한 k6/Prometheus evidence로 고정한다."
+status = "planned"
+priority = 250
+targets = "backend"
+preset = "runtime-smoke"
+acceptance_criteria = [
+  "POST /api/v1/map/complexes URL, request field, response field, amount unit, empty-result behavior를 변경하지 않는다.",
+  "Redis cache 기본값은 off로 유지하고, enable 상태에서만 read-through cache가 동작한다.",
+  "같은 COMPLEX_CASE=seed-wide 요청으로 Redis off baseline, Redis cold miss 1회, Redis warm hit baseline을 분리 측정한다.",
+  "k6 측정은 checks 100%, http_req_failed 0%를 만족해야 한다.",
+  "Redis warm hit p95가 Redis off p95 대비 명확히 개선된 수치로 기록된다.",
+  "Prometheus metric home_search_map_marker_cache_requests_total 또는 동등 metric에서 result=hit|miss|fallback 관측 가능성을 확인한다.",
+  "Redis 장애 또는 미연결은 marker API 실패가 아니라 JDBC fallback으로 남는다.",
+  "성능 결과와 실행 명령은 apps/api/perf 문서 또는 results 파일에 남기며 secrets, service key, production payload를 저장하지 않는다.",
+  "raw-before-normalized, duplicate-safe ingest, failed match queryability, complex_id operational relation을 변경하지 않는다.",
+]
+first_red_candidates = [
+  "Redis cache metric 또는 TTL/key/fallback 코드가 바뀌어야 하면 RedisCachingComplexMarkerRepositoryTest에 hit/miss/fallback RED를 먼저 추가한다.",
+  "runtime evidence 문서만 보강하는 경우 production behavior RED는 not applicable이며 k6 smoke/baseline과 Prometheus scrape를 gate evidence로 사용한다.",
+]
+verification_commands = [
+  "docker compose -f infra/docker-compose.local.yml config",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "k6 run -e SCENARIO=smoke -e BASE_URL=http://localhost:8080 -e COMPLEX_WEIGHT=1 -e REGION_WEIGHT=0 -e COMPLEX_CASE=seed-wide apps/api/perf/k6/map-marker-baseline.js",
+  "k6 run -e SCENARIO=baseline -e BASE_URL=http://localhost:8080 -e TARGET_RPS=1 -e COMPLEX_WEIGHT=1 -e REGION_WEIGHT=0 -e COMPLEX_CASE=seed-wide -e RAMP_UP=1s -e STEADY=10s -e RAMP_DOWN=1s apps/api/perf/k6/map-marker-baseline.js",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "Docker volume 삭제, DB reset, docker compose down -v, Redis/DB destructive cleanup이 필요하면 중단한다.",
+  "production default cache enable 또는 ingest 후 cache invalidation 정책 구현이 필요하면 후속 slice로 분리한다.",
+  "live RTMS/Open API 호출, service key, local secret, raw production payload 저장이 필요하면 중단한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "Redis cold miss는 DB 조회 비용을 그대로 가진다.",
+  "TTL은 데이터 변경 직후 stale marker 허용 시간을 의미하므로 production rollout은 별도 invalidation/TTL 정책 판단이 필요하다.",
+  "이번 slice는 performance gate/evidence 고정이며 새 read model이나 SQL 재설계는 포함하지 않는다.",
+]
+
+[[items]]
 id = "news-obsidian-pipeline-e2e-hardening"
 title_ko = "News Obsidian pipeline E2E hardening"
 pr_type = "Test"

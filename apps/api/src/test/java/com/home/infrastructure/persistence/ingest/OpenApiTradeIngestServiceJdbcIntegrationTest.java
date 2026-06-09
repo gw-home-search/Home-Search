@@ -15,6 +15,7 @@ import com.home.application.ingest.matching.ComplexMasterBootstrapper;
 import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
 import com.home.application.ingest.trade.OpenApiTradeIngestService;
+import com.home.application.ingest.trade.OpenApiTradeIngestServiceFixture;
 import com.home.application.ingest.trade.OpenApiTradeItem;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
@@ -42,7 +43,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			transactionTemplate
 		);
 		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -84,7 +85,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			transactionTemplate
 		);
 		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -141,7 +142,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			transactionTemplate
 		);
 		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -194,7 +195,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			jdbcClient,
 			transactionTemplate
 		);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -228,7 +229,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			jdbcClient,
 			transactionTemplate
 		);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -262,7 +263,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			jdbcClient,
 			transactionTemplate
 		);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -298,7 +299,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			jdbcClient,
 			transactionTemplate
 		);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -339,7 +340,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			jdbcClient,
 			transactionTemplate
 		);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -377,7 +378,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			jdbcClient,
 			transactionTemplate
 		);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -424,7 +425,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			jdbcClient,
 			transactionTemplate
 		);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -482,7 +483,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			jdbcClient,
 			transactionTemplate
 		);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -533,7 +534,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			transactionTemplate
 		);
 		String pnu = "1168010300107780001";
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -582,7 +583,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			pnuCandidate -> Optional.empty(),
 			new JdbcParcelCoordinateOverrideRepository(jdbcClient)
 		);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -628,7 +629,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			pnuCandidate -> Optional.empty(),
 			new JdbcParcelCoordinateOverrideRepository(jdbcClient)
 		);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -660,7 +661,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			jdbcClient,
 			transactionTemplate
 		);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -696,7 +697,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			transactionTemplate
 		);
 		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -734,7 +735,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			transactionTemplate
 		);
 		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -770,7 +771,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			transactionTemplate
 		);
 		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -812,7 +813,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			transactionTemplate
 		);
 		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
@@ -848,7 +849,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			transactionTemplate
 		);
 		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),

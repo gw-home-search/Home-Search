@@ -50,6 +50,21 @@ checks. Put reusable rules in the feature and layer that own the reason they
 change, and keep provider DTOs, JDBC row mapping, and public web DTOs out of
 domain value objects.
 
+**Ingest item processing** keeps batch orchestration separate from item
+outcomes. `OpenApiTradeIngestService` should coordinate a batch and metrics,
+while item-level raw save, duplicate/cancel/parse/match/evidence/normalized
+insert decisions belong in an application processor under `application/ingest`.
+
+**Raw ingest transitions** are domain-owned status/reason pairs. When
+application code updates raw ingest evidence, prefer a domain transition object
+over repeating `RawTradeIngestStatus` and stored `failure_reason` string
+combinations in service branches.
+
+**Large JDBC SQL** may stay in infrastructure, but repository classes should
+focus on choosing a query, binding parameters, and row mapping. Long SQL text
+blocks can be held by feature-local SQL provider classes under the same
+`infrastructure/persistence/<feature>` package.
+
 ## Backend Non-Scope
 
 The API app must not make map or trade endpoints depend on ranking, trend, favorite, alarm, mail, recommendation, auth, or heavy analytics state.

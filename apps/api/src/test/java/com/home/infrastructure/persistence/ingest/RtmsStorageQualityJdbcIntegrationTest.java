@@ -13,6 +13,7 @@ import com.home.application.coordinate.lookup.ParcelCoordinateResolver;
 import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
 import com.home.application.ingest.trade.OpenApiTradeIngestService;
+import com.home.application.ingest.trade.OpenApiTradeIngestServiceFixture;
 import com.home.application.ingest.trade.OpenApiTradeItem;
 import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
 import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMasterBootstrapper;
@@ -153,7 +154,7 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
 	}
 
 	private OpenApiTradeIngestService ingestService(ParcelCoordinateResolver coordinateResolver) {
-		return new OpenApiTradeIngestService(
+		return OpenApiTradeIngestServiceFixture.service(
 			new JdbcRawTradeIngestRepository(jdbcClient),
 			new JdbcNormalizedTradeRepository(jdbcClient, transactionTemplate),
 			new JdbcComplexMatcher(jdbcClient),

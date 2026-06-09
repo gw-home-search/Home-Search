@@ -2,6 +2,7 @@ package com.home.application.ingest.raw;
 
 import java.util.List;
 
+import com.home.domain.ingest.raw.RawTradeIngestTransition;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
 
 /**
@@ -42,6 +43,17 @@ public interface RawTradeIngestRepository {
 	 * @return 갱신된 raw ingest record
 	 */
 	RawTradeIngestRecord updateStatus(Long id, RawTradeIngestStatus status, String failureReason);
+
+	/**
+	 * domain transition이 소유하는 status/reason 조합으로 raw ingest row를 갱신합니다.
+	 *
+	 * @param id raw ingest id
+	 * @param transition raw ingest 처리 결과
+	 * @return 갱신된 raw ingest record
+	 */
+	default RawTradeIngestRecord updateStatus(Long id, RawTradeIngestTransition transition) {
+		return updateStatus(id, transition.status(), transition.failureReason());
+	}
 
 	/**
 	 * failed match처럼 운영자가 설명해야 하는 raw evidence를 status 기준으로 조회합니다.

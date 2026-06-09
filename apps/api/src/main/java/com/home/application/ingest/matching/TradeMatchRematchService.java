@@ -1,16 +1,15 @@
 package com.home.application.ingest.matching;
 
-import java.time.DateTimeException;
-import java.time.LocalDate;
 import java.util.Objects;
+import com.home.application.ingest.raw.RawTradeItemParser;
 import com.home.application.ingest.normalization.NormalizedTradeCommand;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
-import com.home.domain.ingest.raw.RawTradeIngestFailureReason;
-import com.home.domain.ingest.raw.RawTradeIngestStatus;
-import com.home.application.ingest.raw.RawTradeItemParser;
 import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.application.ingest.trade.ParsedRtmsTrade;
+import com.home.domain.ingest.raw.RawTradeIngestStatus;
+import com.home.domain.ingest.raw.RawTradeIngestTransition;
 import com.home.domain.trade.TradeExclAreaNormalizer;
 
 public class TradeMatchRematchService {
@@ -69,25 +68,26 @@ public class TradeMatchRematchService {
 	private TradeMatchRematchResult rematchOne(RawTradeIngestRecord raw, TradeMatchRematchResult result) {
 		OpenApiTradeItem item = rawTradeItemParser.parse(raw).orElse(null);
 		if (item == null) {
-			rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.PARSE_FAILED,
-				"rematch raw payload cannot be parsed");
+			rawTradeIngestRepository.updateStatus(
+				raw.id(),
+				RawTradeIngestTransition.parseFailed("rematch raw payload cannot be parsed")
+			);
 			return result.plusParseFailed();
 		}
 		if (item.isCanceled()) {
 			return result.plusSkipped();
 		}
 		if (normalizedTradeRepository.existsBySourceAndSourceKey(raw.source(), raw.sourceKey())) {
-			rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.DUPLICATE,
-				RawTradeIngestFailureReason.REMATCH_SOURCE_KEY_DUPLICATE.value());
+			rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestTransition.rematchSourceKeyDuplicate());
 			return result.plusDuplicate();
 		}
 
-		ParsedTrade parsedTrade;
+		ParsedRtmsTrade parsedTrade;
 		try {
-			parsedTrade = ParsedTrade.from(item);
+			parsedTrade = ParsedRtmsTrade.from(item);
 		}
 		catch (IllegalArgumentException exception) {
-			rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.PARSE_FAILED, exception.getMessage());
+			rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestTransition.parseFailed(exception.getMessage()));
 			return result.plusParseFailed();
 		}
 
@@ -95,8 +95,10 @@ public class TradeMatchRematchService {
 		ComplexMatchResult match = complexMatcher.match(item);
 		tradeMatchEvidenceRepository.save(TradeMatchEvidenceCommand.from(raw.id(), raw.source(), item, match));
 		if (match == null || !match.matched()) {
-			rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.MATCH_FAILED,
-				rematchFailureReason(match, bootstrapResult));
+			rawTradeIngestRepository.updateStatus(
+				raw.id(),
+				RawTradeIngestTransition.matchFailed(rematchFailureReason(match, bootstrapResult))
+			);
 			return result.plusStillFailed();
 		}
 
@@ -114,11 +116,10 @@ public class TradeMatchRematchService {
 			item.aptSeq()
 		);
 		if (normalizedTradeRepository.insertIfAbsent(command)) {
-			rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.NORMALIZED, null);
+			rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestTransition.normalized());
 			return result.plusNormalized();
 		}
-		rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.DUPLICATE,
-			RawTradeIngestFailureReason.REMATCH_FALLBACK_IDENTITY_DUPLICATE.value());
+		rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestTransition.rematchFallbackIdentityDuplicate());
 		return result.plusDuplicate();
 	}
 
@@ -132,40 +133,5 @@ public class TradeMatchRematchService {
 			return failureReason;
 		}
 		return failureReason + "; " + bootstrapResult.failureReason();
-	}
-
-	private record ParsedTrade(
-		LocalDate dealDate,
-		Long dealAmount,
-		Integer floor
-	) {
-
-		private static ParsedTrade from(OpenApiTradeItem item) {
-			try {
-				LocalDate dealDate = LocalDate.of(item.dealYear(), item.dealMonth(), item.dealDay());
-				Long dealAmount = parseDealAmount(item.dealAmount());
-				Integer floor = item.floor() != null && item.floor() == 0 ? null : item.floor();
-				return new ParsedTrade(dealDate, dealAmount, floor);
-			}
-			catch (DateTimeException | NullPointerException exception) {
-				throw new IllegalArgumentException("invalid deal date", exception);
-			}
-		}
-
-		private static Long parseDealAmount(String rawAmount) {
-			if (rawAmount == null || rawAmount.isBlank()) {
-				throw new IllegalArgumentException("dealAmount is required");
-			}
-			try {
-				long amount = Long.parseLong(rawAmount.replace(",", "").replaceAll("\\s+", ""));
-				if (amount <= 0) {
-					throw new IllegalArgumentException("dealAmount must be positive");
-				}
-				return amount;
-			}
-			catch (NumberFormatException exception) {
-				throw new IllegalArgumentException("dealAmount must be numeric", exception);
-			}
-		}
 	}
 }

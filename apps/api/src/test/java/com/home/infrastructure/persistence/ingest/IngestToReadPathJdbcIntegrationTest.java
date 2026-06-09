@@ -139,7 +139,7 @@ class IngestToReadPathJdbcIntegrationTest extends JdbcPostgresTestSupport {
 			new JdbcRawTradeIngestRepository(jdbcClient),
 			new JdbcNormalizedTradeRepository(jdbcClient, transactionTemplate),
 			new JdbcComplexMatcher(jdbcClient),
-			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty()),
+			new JdbcComplexMasterBootstrapper(jdbcClient, pnu -> Optional.empty()),
 			new JdbcTradeMatchEvidenceRepository(jdbcClient)
 		);
 	}

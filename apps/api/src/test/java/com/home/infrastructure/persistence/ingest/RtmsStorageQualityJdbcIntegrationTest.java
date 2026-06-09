@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.home.application.coordinate.lookup.ParcelCoordinate;
+import com.home.application.coordinate.lookup.ParcelCoordinateResolver;
 import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
 import com.home.application.ingest.trade.OpenApiTradeIngestService;
@@ -74,7 +76,7 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
 	@DisplayName("RTMS cancellation은 CANCELED raw로 남고 기존 trade를 soft-delete해 public read path에서 제외한다")
 	void cancellationStaysAsRawEvidenceAndDeletesPublicTrade() {
 		seedComplex();
-		OpenApiTradeIngestService service = ingestService((pnu, item) -> Optional.empty());
+		OpenApiTradeIngestService service = ingestService(pnu -> Optional.empty());
 
 		IngestResult inserted = service.ingest(batch(List.of(rtmsItem(
 			"APT-501",
@@ -119,7 +121,7 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
 	@DisplayName("raw outcome count는 NORMALIZED, CANCELED, DUPLICATE, MATCH_FAILED, PARSE_FAILED status 합계로 설명된다")
 	void rawOutcomeCountsExplainEveryStoredRawRow() {
 		seedComplex();
-		OpenApiTradeIngestService service = ingestService((pnu, item) -> Optional.empty());
+		OpenApiTradeIngestService service = ingestService(pnu -> Optional.empty());
 
 		IngestResult result = service.ingest(batch(List.of(
 			rtmsItem("APT-501", "Sample Apartment", 1, "125,000", 12, "84.93", "101", "140-1"),
@@ -156,7 +158,7 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
 	}
 
 	private ParcelCoordinateResolver coordinates(Map<String, ParcelCoordinate> coordinates) {
-		return (pnu, item) -> Optional.ofNullable(coordinates.get(pnu));
+		return pnu -> Optional.ofNullable(coordinates.get(pnu));
 	}
 
 	private OpenApiTradeIngestBatch batch(List<OpenApiTradeItem> items) {

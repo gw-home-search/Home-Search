@@ -3,10 +3,9 @@ package com.home.infrastructure.external.vworld;
 import java.util.Objects;
 import java.util.Optional;
 
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.application.coordinate.lookup.ParcelCoordinate;
+import com.home.application.coordinate.lookup.ParcelCoordinateResolver;
 import com.home.infrastructure.external.ExternalApiUri;
-import com.home.infrastructure.persistence.ingest.ParcelCoordinate;
-import com.home.infrastructure.persistence.ingest.ParcelCoordinateResolver;
 
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -25,7 +24,7 @@ public class VworldParcelCoordinateResolver implements ParcelCoordinateResolver 
 	}
 
 	@Override
-	public Optional<ParcelCoordinate> resolve(String pnu, OpenApiTradeItem item) {
+	public Optional<ParcelCoordinate> resolve(String pnu) {
 		String normalizedPnu = trimToNull(pnu);
 		if (normalizedPnu == null || !properties.hasServiceKey()) {
 			return Optional.empty();

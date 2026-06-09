@@ -4,6 +4,9 @@ import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.home.application.coordinate.lookup.ParcelCoordinate;
+import com.home.application.coordinate.lookup.ParcelCoordinateSourceRepository;
+
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class JdbcCoordinateSourceParcelCoordinateRepository implements ParcelCoordinateSourceRepository {

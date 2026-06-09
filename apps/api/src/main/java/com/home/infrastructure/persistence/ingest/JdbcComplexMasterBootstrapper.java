@@ -5,6 +5,8 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.home.application.coordinate.lookup.ParcelCoordinate;
+import com.home.application.coordinate.lookup.ParcelCoordinateResolver;
 import com.home.application.ingest.matching.ComplexMasterBootstrapPolicy;
 import com.home.application.ingest.matching.ComplexMasterBootstrapResult;
 import com.home.application.ingest.matching.ComplexMasterBootstrapper;
@@ -167,7 +169,7 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 	}
 
 	private Optional<Long> createParcel(String pnu, OpenApiTradeItem item) {
-		Optional<ParcelCoordinate> coordinate = coordinateResolver.resolve(pnu, item);
+		Optional<ParcelCoordinate> coordinate = coordinateResolver.resolve(pnu);
 		Optional<RegionLookup> region = findRegion(item);
 		String address = region.flatMap(candidate -> RtmsParcelAddressFormatter.format(candidate.name(), pnu))
 			.orElse(null);

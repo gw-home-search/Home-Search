@@ -10,8 +10,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import java.math.BigDecimal;
 import java.util.Optional;
 
-import com.home.application.ingest.trade.OpenApiTradeItem;
-import com.home.infrastructure.persistence.ingest.ParcelCoordinate;
+import com.home.application.coordinate.lookup.ParcelCoordinate;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,7 +46,7 @@ class VworldParcelCoordinateResolverTest {
 			.andExpect(queryParam("numOfRows", "100"))
 			.andRespond(withSuccess(jsonPayload(), MediaType.APPLICATION_JSON));
 
-		Optional<ParcelCoordinate> coordinate = resolver.resolve(" 1168010300107770001 ", rtmsItem());
+		Optional<ParcelCoordinate> coordinate = resolver.resolve(" 1168010300107770001 ");
 
 		assertThat(coordinate).isPresent();
 		assertThat(coordinate.get().latitude()).isEqualByComparingTo(new BigDecimal("37.1000"));
@@ -75,7 +74,7 @@ class VworldParcelCoordinateResolverTest {
 			.build();
 		VworldParcelCoordinateResolver resolver = new VworldParcelCoordinateResolver(restClient, properties);
 
-		assertThat(resolver.resolve("1168010300107770001", rtmsItem())).isEmpty();
+		assertThat(resolver.resolve("1168010300107770001")).isEmpty();
 	}
 
 	@Test
@@ -100,7 +99,7 @@ class VworldParcelCoordinateResolverTest {
 				.doesNotContain("key=abc%252F"))
 			.andRespond(withSuccess(jsonPayload(), MediaType.APPLICATION_JSON));
 
-		assertThat(resolver.resolve("1168010300107770001", rtmsItem())).isPresent();
+		assertThat(resolver.resolve("1168010300107770001")).isPresent();
 
 		server.verify();
 	}
@@ -138,7 +137,7 @@ class VworldParcelCoordinateResolverTest {
 				}
 				""", MediaType.APPLICATION_JSON));
 
-		assertThat(resolver.resolve("1168010300107770001", rtmsItem())).isEmpty();
+		assertThat(resolver.resolve("1168010300107770001")).isEmpty();
 		server.verify();
 	}
 
@@ -169,7 +168,7 @@ class VworldParcelCoordinateResolverTest {
 				}
 				""", MediaType.APPLICATION_JSON));
 
-		Optional<ParcelCoordinate> coordinate = resolver.resolve("1168010300107770001", rtmsItem());
+		Optional<ParcelCoordinate> coordinate = resolver.resolve("1168010300107770001");
 
 		assertThat(coordinate).isPresent();
 		assertThat(coordinate.get().latitude()).isEqualByComparingTo(new BigDecimal("37.2000"));
@@ -196,7 +195,7 @@ class VworldParcelCoordinateResolverTest {
 		server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
 			.andRespond(withServerError());
 
-		assertThat(resolver.resolve("1168010300107770001", rtmsItem())).isEmpty();
+		assertThat(resolver.resolve("1168010300107770001")).isEmpty();
 		server.verify();
 	}
 
@@ -220,7 +219,7 @@ class VworldParcelCoordinateResolverTest {
 			.build();
 		VworldParcelCoordinateResolver resolver = new VworldParcelCoordinateResolver(restClient, properties);
 
-		assertThat(resolver.resolve(" ", rtmsItem())).isEmpty();
+		assertThat(resolver.resolve(" ")).isEmpty();
 	}
 
 	private String jsonPayload() {
@@ -236,21 +235,4 @@ class VworldParcelCoordinateResolverTest {
 			""";
 	}
 
-	private OpenApiTradeItem rtmsItem() {
-		return new OpenApiTradeItem(
-			"101",
-			"Live Sample Apartment",
-			"APT-LIVE-501",
-			"125,000",
-			1,
-			12,
-			2025,
-			84.93,
-			12,
-			"777-1",
-			"11680",
-			"10300",
-			"{\"aptSeq\":\"APT-LIVE-501\",\"jibun\":\"777-1\"}"
-		);
-	}
 }

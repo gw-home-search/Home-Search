@@ -1,9 +1,7 @@
-package com.home.infrastructure.persistence.ingest;
+package com.home.application.coordinate.lookup;
 
 import java.util.Objects;
 import java.util.Optional;
-
-import com.home.application.ingest.trade.OpenApiTradeItem;
 
 public class CoordinateSourceFirstParcelCoordinateResolver implements ParcelCoordinateResolver {
 
@@ -19,7 +17,7 @@ public class CoordinateSourceFirstParcelCoordinateResolver implements ParcelCoor
 	}
 
 	@Override
-	public Optional<ParcelCoordinate> resolve(String pnu, OpenApiTradeItem item) {
+	public Optional<ParcelCoordinate> resolve(String pnu) {
 		Optional<ParcelCoordinate> sourceCoordinate = coordinateSourceRepository.findByPnu(pnu);
 		if (sourceCoordinate.isPresent()) {
 			return sourceCoordinate;

@@ -1,6 +1,9 @@
 package com.home.infrastructure.persistence.ingest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.home.application.coordinate.lookup.ParcelCoordinateOverrideRepository;
+import com.home.application.coordinate.lookup.ParcelCoordinateResolver;
+import com.home.application.coordinate.lookup.ParcelCoordinateSourceRepository;
 import com.home.application.ingest.matching.ComplexMatcher;
 import com.home.application.ingest.metadata.ComplexMetadataEnrichmentClient;
 import com.home.application.ingest.metadata.ComplexMetadataEnrichmentRepository;

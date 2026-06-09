@@ -8,6 +8,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 
+import com.home.application.coordinate.lookup.CoordinateSourceFirstParcelCoordinateResolver;
+import com.home.application.coordinate.lookup.ParcelCoordinate;
+import com.home.application.coordinate.lookup.ParcelCoordinateResolver;
 import com.home.application.ingest.matching.ComplexMasterBootstrapper;
 import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
@@ -37,7 +40,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
-			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty()),
+			new JdbcComplexMasterBootstrapper(jdbcClient, pnu -> Optional.empty()),
 			evidenceRepository
 		);
 
@@ -79,7 +82,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
-			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty()),
+			new JdbcComplexMasterBootstrapper(jdbcClient, pnu -> Optional.empty()),
 			evidenceRepository
 		);
 
@@ -136,7 +139,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
-			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty()),
+			new JdbcComplexMasterBootstrapper(jdbcClient, pnu -> Optional.empty()),
 			evidenceRepository
 		);
 		OpenApiTradeItem pnuConflictItem = new OpenApiTradeItem(
@@ -189,7 +192,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
-			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty())
+			new JdbcComplexMasterBootstrapper(jdbcClient, pnu -> Optional.empty())
 		);
 
 		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
@@ -223,7 +226,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
-			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty())
+			new JdbcComplexMasterBootstrapper(jdbcClient, pnu -> Optional.empty())
 		);
 
 		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
@@ -257,7 +260,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
-			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty())
+			new JdbcComplexMasterBootstrapper(jdbcClient, pnu -> Optional.empty())
 		);
 
 		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
@@ -293,7 +296,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
-			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty())
+			new JdbcComplexMasterBootstrapper(jdbcClient, pnu -> Optional.empty())
 		);
 
 		IngestResult inserted = service.ingest(new OpenApiTradeIngestBatch(
@@ -334,7 +337,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
-			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty())
+			new JdbcComplexMasterBootstrapper(jdbcClient, pnu -> Optional.empty())
 		);
 
 		IngestResult canceled = service.ingest(new OpenApiTradeIngestBatch(
@@ -372,7 +375,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
-			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty())
+			new JdbcComplexMasterBootstrapper(jdbcClient, pnu -> Optional.empty())
 		);
 
 		IngestResult inserted = service.ingest(new OpenApiTradeIngestBatch(
@@ -477,7 +480,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
-			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty())
+			new JdbcComplexMasterBootstrapper(jdbcClient, pnu -> Optional.empty())
 		);
 
 		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
@@ -505,7 +508,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			""").update();
 		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
 			jdbcClient,
-			(pnu, item) -> Optional.empty()
+			pnu -> Optional.empty()
 		);
 
 		var result = bootstrapper.bootstrap(liveRtmsItem("APT-501", "RTMS Wobbly Name", "140-1"));
@@ -655,7 +658,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
-			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty())
+			new JdbcComplexMasterBootstrapper(jdbcClient, pnu -> Optional.empty())
 		);
 
 		IngestResult result = service.ingest(new OpenApiTradeIngestBatch(
@@ -691,7 +694,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
-			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty()),
+			new JdbcComplexMasterBootstrapper(jdbcClient, pnu -> Optional.empty()),
 			evidenceRepository
 		);
 
@@ -765,7 +768,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			rawRepository,
 			tradeRepository,
 			new JdbcComplexMatcher(jdbcClient),
-			new JdbcComplexMasterBootstrapper(jdbcClient, (pnu, item) -> Optional.empty()),
+			new JdbcComplexMasterBootstrapper(jdbcClient, pnu -> Optional.empty()),
 			evidenceRepository
 		);
 
@@ -930,7 +933,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 
 	private ParcelCoordinateResolver coordinates(String expectedPnu, String latitude, String longitude) {
 		ParcelCoordinate coordinate = new ParcelCoordinate(new BigDecimal(latitude), new BigDecimal(longitude));
-		return (pnu, item) -> expectedPnu.equals(pnu) ? Optional.of(coordinate) : Optional.empty();
+		return pnu -> expectedPnu.equals(pnu) ? Optional.of(coordinate) : Optional.empty();
 	}
 
 	private ParcelCoordinateResolver coordinatesWithGeometry(
@@ -944,7 +947,7 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			new BigDecimal(longitude),
 			geometryWkt
 		);
-		return (pnu, item) -> expectedPnu.equals(pnu) ? Optional.of(coordinate) : Optional.empty();
+		return pnu -> expectedPnu.equals(pnu) ? Optional.of(coordinate) : Optional.empty();
 	}
 
 	private long parcelCount(String pnu) {

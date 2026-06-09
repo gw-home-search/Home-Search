@@ -6,9 +6,10 @@ import java.math.BigDecimal;
 import java.util.Optional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.domain.ingest.raw.RawTradeIngestStatus;
+import com.home.application.coordinate.lookup.ParcelCoordinate;
 import com.home.application.ingest.matching.TradeMatchRematchService;
 import com.home.domain.ingest.matching.TradeMatchStatus;
+import com.home.domain.ingest.raw.RawTradeIngestStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -111,7 +112,7 @@ class TradeMatchRematchServiceJdbcIntegrationTest extends JdbcPostgresTestSuppor
 			new JdbcComplexMatcher(jdbcClient),
 			new JdbcComplexMasterBootstrapper(
 				jdbcClient,
-				(pnu, item) -> "1168010300101400001".equals(pnu)
+				pnu -> "1168010300101400001".equals(pnu)
 					? Optional.of(new ParcelCoordinate(new BigDecimal("37.5123000"), new BigDecimal("127.0456000")))
 					: Optional.empty()
 			),

@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Optional;
 
-import com.home.infrastructure.persistence.ingest.CoordinateSourceFirstParcelCoordinateResolver;
-import com.home.infrastructure.persistence.ingest.ParcelCoordinate;
-import com.home.infrastructure.persistence.ingest.ParcelCoordinateResolver;
+import com.home.application.coordinate.lookup.CoordinateSourceFirstParcelCoordinateResolver;
+import com.home.application.coordinate.lookup.ParcelCoordinate;
+import com.home.application.coordinate.lookup.ParcelCoordinateResolver;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,7 +23,7 @@ class VworldExternalApiConfigurationTest {
 		);
 
 		assertThat(resolver).isInstanceOf(CoordinateSourceFirstParcelCoordinateResolver.class);
-		assertThat(resolver.resolve("1168010300107770001", null)).isEmpty();
+		assertThat(resolver.resolve("1168010300107770001")).isEmpty();
 	}
 
 	@Test
@@ -39,7 +39,7 @@ class VworldExternalApiConfigurationTest {
 			pnu -> Optional.of(override)
 		);
 
-		assertThat(resolver.resolve("1168010300107770001", null)).contains(override);
+		assertThat(resolver.resolve("1168010300107770001")).contains(override);
 	}
 
 	@Test
@@ -47,8 +47,8 @@ class VworldExternalApiConfigurationTest {
 	void primaryCoordinateResolverDoesNotExposeVworldFallbackSwitch() throws NoSuchMethodException {
 		VworldExternalApiConfiguration.class.getDeclaredMethod(
 			"parcelCoordinateResolver",
-			com.home.infrastructure.persistence.ingest.ParcelCoordinateSourceRepository.class,
-			com.home.infrastructure.persistence.ingest.ParcelCoordinateOverrideRepository.class
+			com.home.application.coordinate.lookup.ParcelCoordinateSourceRepository.class,
+			com.home.application.coordinate.lookup.ParcelCoordinateOverrideRepository.class
 		);
 	}
 }

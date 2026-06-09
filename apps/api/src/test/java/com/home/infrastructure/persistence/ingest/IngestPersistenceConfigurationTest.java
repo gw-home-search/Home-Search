@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 
 import javax.sql.DataSource;
 
+import com.home.application.coordinate.lookup.ParcelCoordinateSourceRepository;
 import com.home.application.ingest.run.RtmsIngestRunRepository;
 
 import org.junit.jupiter.api.DisplayName;

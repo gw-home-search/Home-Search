@@ -1,4 +1,4 @@
-package com.home.application.coordinate.override;
+package com.home.domain.coordinate;
 
 /**
  * 좌표 운영 화면에서 수동 확인이 필요한 대기 사유를 나타낸다. API 응답에는 상수명만 유지하고 한글 설명은 내부 안내용이다.

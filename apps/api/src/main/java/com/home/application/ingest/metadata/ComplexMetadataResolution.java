@@ -2,6 +2,9 @@ package com.home.application.ingest.metadata;
 
 import java.util.Objects;
 
+import com.home.domain.complex.metadata.ComplexMetadataFailureKind;
+import com.home.domain.complex.metadata.ComplexMetadataStatus;
+
 public record ComplexMetadataResolution(
 	ComplexMetadataStatus status,
 	ComplexMetadata metadata,

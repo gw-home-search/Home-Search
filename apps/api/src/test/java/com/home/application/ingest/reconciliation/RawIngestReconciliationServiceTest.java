@@ -11,7 +11,7 @@ import com.home.application.ingest.raw.RawTradeIngestFailureQuery;
 import com.home.application.ingest.raw.RawTradeIngestFailureSummary;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
-import com.home.application.ingest.raw.RawTradeIngestStatus;
+import com.home.domain.ingest.raw.RawTradeIngestStatus;
 
 class RawIngestReconciliationServiceTest {
 

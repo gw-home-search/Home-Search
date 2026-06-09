@@ -14,9 +14,9 @@ import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
 import com.home.application.ingest.trade.OpenApiTradeIngestService;
 import com.home.application.ingest.trade.OpenApiTradeItem;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
-import com.home.application.ingest.raw.RawTradeIngestStatus;
+import com.home.domain.ingest.raw.RawTradeIngestStatus;
 import com.home.application.ingest.matching.TradeMatchEvidenceRecord;
-import com.home.application.ingest.matching.TradeMatchStatus;
+import com.home.domain.ingest.matching.TradeMatchStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

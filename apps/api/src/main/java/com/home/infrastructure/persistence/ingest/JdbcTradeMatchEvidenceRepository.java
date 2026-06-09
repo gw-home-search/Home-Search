@@ -14,7 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.matching.TradeMatchEvidenceCommand;
 import com.home.application.ingest.matching.TradeMatchEvidenceRecord;
 import com.home.application.ingest.matching.TradeMatchEvidenceRepository;
-import com.home.application.ingest.matching.TradeMatchStatus;
+import com.home.domain.ingest.matching.TradeMatchStatus;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

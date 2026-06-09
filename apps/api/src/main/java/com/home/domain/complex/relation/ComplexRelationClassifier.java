@@ -1,4 +1,4 @@
-package com.home.application.complex;
+package com.home.domain.complex.relation;
 
 import java.time.LocalDate;
 import java.util.Comparator;

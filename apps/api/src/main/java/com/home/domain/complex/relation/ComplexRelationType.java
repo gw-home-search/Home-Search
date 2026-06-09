@@ -1,4 +1,4 @@
-package com.home.application.complex;
+package com.home.domain.complex.relation;
 
 /**
  * 같은 필지 또는 근접 단지 사이의 운영 관계 유형을 나타낸다. 이 값은 좌표 예외 처리의 분기 기준으로도 사용된다.

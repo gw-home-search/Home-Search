@@ -1,4 +1,4 @@
-package com.home.application.ingest.normalization;
+package com.home.domain.trade;
 
 /**
  * RTMS item의 지번 source에서 만든 PNU evidence입니다.

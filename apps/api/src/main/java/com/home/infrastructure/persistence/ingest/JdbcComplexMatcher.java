@@ -8,9 +8,9 @@ import java.util.Objects;
 import com.home.application.ingest.matching.ComplexMatchResult;
 import com.home.application.ingest.matching.ComplexMatcher;
 import com.home.application.ingest.trade.OpenApiTradeItem;
-import com.home.application.ingest.normalization.RtmsJibunPnu;
+import com.home.domain.trade.RtmsJibunPnu;
 import com.home.application.ingest.normalization.RtmsJibunPnuNormalizer;
-import com.home.application.ingest.matching.TradeMatchStatus;
+import com.home.domain.ingest.matching.TradeMatchStatus;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -140,7 +140,7 @@ public class JdbcComplexMatcher implements ComplexMatcher {
 		TradeMatchStatus status = nameVariant(item.aptName(), candidate)
 			? TradeMatchStatus.MATCHED_NAME_VARIANT
 			: TradeMatchStatus.MATCHED;
-		String failureReason = status == TradeMatchStatus.MATCHED_NAME_VARIANT
+		String failureReason = status.isMatchedNameVariant()
 			? "observed RTMS name differs from master name"
 			: null;
 		return candidate.matched("APTSEQ", status, jibunPnu, 1, List.of(candidate.complexId()), failureReason);

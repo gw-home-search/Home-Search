@@ -2,8 +2,9 @@ package com.home.application.coordinate.caseflow;
 
 import java.util.Objects;
 
-import com.home.application.complex.ComplexRelationConfidence;
-import com.home.application.complex.ComplexRelationType;
+import com.home.domain.complex.relation.ComplexRelationConfidence;
+import com.home.domain.complex.relation.ComplexRelationType;
+import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 
 public record ComplexCoordinateCaseUpdate(
 	Long parcelId,

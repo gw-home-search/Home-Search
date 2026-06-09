@@ -2,7 +2,9 @@ package com.home.application.ingest.normalization;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.domain.trade.RtmsJibunPnu;
 
 /**
  * RTMS item-level district code and jibun text를 display-safe PNU evidence로 정규화합니다.

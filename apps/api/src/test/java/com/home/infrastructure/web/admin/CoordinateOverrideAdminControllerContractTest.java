@@ -19,7 +19,7 @@ import java.util.List;
 import com.home.application.coordinate.override.CoordinateOverrideAdminService;
 import com.home.application.coordinate.override.CoordinateOverrideApprovalResult;
 import com.home.application.coordinate.override.CoordinatePendingComplex;
-import com.home.application.coordinate.override.CoordinatePendingReason;
+import com.home.domain.coordinate.CoordinatePendingReason;
 import com.home.application.coordinate.override.CoordinatePendingSummary;
 import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
 import com.home.infrastructure.web.WebCorsConfiguration;

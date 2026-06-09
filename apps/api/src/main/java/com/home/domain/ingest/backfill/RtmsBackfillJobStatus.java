@@ -1,4 +1,4 @@
-package com.home.application.ingest.backfill;
+package com.home.domain.ingest.backfill;
 
 /**
  * RTMS backfill job 전체 처리 상태를 나타낸다. 개별 chunk 집계를 job 관점으로 요약할 때 사용한다.
@@ -38,5 +38,12 @@ public enum RtmsBackfillJobStatus {
 	 */
 	public boolean isFinished() {
 		return this == COMPLETED || this == PARTIAL || this == FAILED;
+	}
+
+	/**
+	 * 모든 chunk가 성공적으로 끝난 job 상태인지 판단한다.
+	 */
+	public boolean isCompleted() {
+		return this == COMPLETED;
 	}
 }

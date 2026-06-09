@@ -1,6 +1,6 @@
 package com.home.infrastructure.persistence.coordinate;
 
-import com.home.application.complex.ComplexRelationClassifier;
+import com.home.domain.complex.relation.ComplexRelationClassifier;
 import com.home.application.coordinate.footprint.BuildingFootprintSource;
 import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionRepository;
 import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;

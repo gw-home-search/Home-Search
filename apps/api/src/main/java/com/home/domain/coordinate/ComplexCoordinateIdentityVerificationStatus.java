@@ -1,6 +1,6 @@
-package com.home.application.coordinate.identity;
+package com.home.domain.coordinate;
 
-import com.home.application.coordinate.caseflow.ComplexCoordinateCaseStatus;
+import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 
 /**
  * 외부 단지 식별 검증 결과를 나타낸다. 표시 좌표 확정 전에 단지 정체성이 안전한지 판단하는 내부 상태다.

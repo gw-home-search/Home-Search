@@ -2,7 +2,7 @@ package com.home.application.coordinate.display;
 
 import java.math.BigDecimal;
 import java.util.Objects;
-import com.home.application.coordinate.caseflow.ComplexCoordinateCaseStatus;
+import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 
 public record ComplexDisplayCoordinateProjectionTarget(
 	Long complexId,

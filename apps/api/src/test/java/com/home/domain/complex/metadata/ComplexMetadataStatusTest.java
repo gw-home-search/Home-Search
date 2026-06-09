@@ -1,4 +1,4 @@
-package com.home.application.ingest.metadata;
+package com.home.domain.complex.metadata;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

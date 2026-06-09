@@ -8,6 +8,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.home.domain.complex.relation.ComplexRelationClassification;
+import com.home.domain.complex.relation.ComplexRelationClassifier;
+import com.home.domain.complex.relation.ComplexRelationConfidence;
+import com.home.domain.complex.relation.ComplexRelationType;
+import com.home.domain.complex.relation.ComplexTradeSpan;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

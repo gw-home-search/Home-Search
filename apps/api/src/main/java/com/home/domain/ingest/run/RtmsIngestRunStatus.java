@@ -1,4 +1,4 @@
-package com.home.application.ingest.run;
+package com.home.domain.ingest.run;
 
 import java.util.List;
 

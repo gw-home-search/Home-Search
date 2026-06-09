@@ -1,7 +1,7 @@
 package com.home.infrastructure.external.rtms;
 
 import com.home.application.ingest.backfill.RtmsBackfillChunkStatusCounts;
-import com.home.application.ingest.backfill.RtmsBackfillJobStatus;
+import com.home.domain.ingest.backfill.RtmsBackfillJobStatus;
 
 record RtmsNationwideBackfillReport(
 	long jobId,

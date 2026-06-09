@@ -1,6 +1,6 @@
 package com.home.infrastructure.persistence.complex;
 
-import com.home.application.complex.ComplexRelationClassifier;
+import com.home.domain.complex.relation.ComplexRelationClassifier;
 import com.home.application.complex.ComplexRelationCaseRepository;
 import com.home.application.complex.ComplexRelationCaseService;
 import com.home.application.complex.ComplexRelationRepository;

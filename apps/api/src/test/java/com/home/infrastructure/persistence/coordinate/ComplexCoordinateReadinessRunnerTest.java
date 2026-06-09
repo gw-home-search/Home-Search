@@ -65,7 +65,7 @@ class ComplexCoordinateReadinessRunnerTest {
 				new ComplexCoordinateExceptionService(
 					new NoopCoordinateExceptionRepository(),
 					parcelId -> List.of(),
-					new com.home.application.complex.ComplexRelationClassifier()
+					new com.home.domain.complex.relation.ComplexRelationClassifier()
 				),
 				new NoopReadinessRepository(),
 				new ComplexDisplayCoordinateProjectionService(new NoopProjectionRepository())

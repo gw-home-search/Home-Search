@@ -1,4 +1,4 @@
-package com.home.application.ingest.metadata;
+package com.home.domain.complex.metadata;
 
 /**
  * 단지 메타데이터 보강 실패의 원인 분류를 나타낸다. 재시도 정책은 이 enum의 의미 메서드를 기준으로 판단한다.

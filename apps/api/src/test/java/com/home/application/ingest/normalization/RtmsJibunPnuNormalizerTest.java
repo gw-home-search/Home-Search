@@ -2,6 +2,8 @@ package com.home.application.ingest.normalization;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.home.domain.trade.RtmsJibunPnu;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import com.home.application.ingest.trade.OpenApiTradeItem;

@@ -17,11 +17,11 @@ import com.home.application.ingest.backfill.RtmsBackfillChunkClaim;
 import com.home.application.ingest.backfill.RtmsBackfillChunkRecord;
 import com.home.application.ingest.backfill.RtmsBackfillChunkRepository;
 import com.home.application.ingest.backfill.RtmsBackfillChunkRequest;
-import com.home.application.ingest.backfill.RtmsBackfillChunkStatus;
+import com.home.domain.ingest.backfill.RtmsBackfillChunkStatus;
 import com.home.application.ingest.backfill.RtmsBackfillChunkStatusCounts;
 import com.home.application.ingest.backfill.RtmsBackfillJobRecord;
 import com.home.application.ingest.backfill.RtmsBackfillJobRepository;
-import com.home.application.ingest.backfill.RtmsBackfillJobStatus;
+import com.home.domain.ingest.backfill.RtmsBackfillJobStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

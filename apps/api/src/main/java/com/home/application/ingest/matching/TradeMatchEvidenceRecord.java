@@ -3,6 +3,8 @@ package com.home.application.ingest.matching;
 import java.time.Instant;
 import java.util.List;
 
+import com.home.domain.ingest.matching.TradeMatchStatus;
+
 public record TradeMatchEvidenceRecord(
 	Long id,
 	Long rawIngestId,

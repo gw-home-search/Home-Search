@@ -6,7 +6,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Locale;
-import com.home.application.ingest.normalization.TradeExclAreaNormalizer;
+import com.home.domain.trade.TradeExclAreaNormalizer;
 
 final class SourceKeyGenerator {
 

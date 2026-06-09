@@ -2,6 +2,8 @@ package com.home.application.coordinate.override;
 
 import java.time.OffsetDateTime;
 
+import com.home.domain.coordinate.CoordinatePendingReason;
+
 public record CoordinatePendingComplex(
 	Long parcelId,
 	Long complexId,

@@ -1,4 +1,4 @@
-package com.home.application.ingest.matching;
+package com.home.domain.ingest.matching;
 
 /**
  * raw 거래 row가 내부 단지와 매칭된 결과를 나타낸다. failed match evidence의 queryable 상태로 보존된다.
@@ -39,5 +39,12 @@ public enum TradeMatchStatus {
 	 */
 	public boolean isMatched() {
 		return this == MATCHED || this == MATCHED_NAME_VARIANT;
+	}
+
+	/**
+	 * PNU는 맞지만 단지명 표기 차이를 허용한 매칭인지 판단한다.
+	 */
+	public boolean isMatchedNameVariant() {
+		return this == MATCHED_NAME_VARIANT;
 	}
 }

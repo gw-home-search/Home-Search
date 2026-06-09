@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-import com.home.application.complex.ComplexRelationClassifier;
+import com.home.domain.complex.relation.ComplexRelationClassifier;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessResult;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessService;
 import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionService;

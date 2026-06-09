@@ -1,4 +1,4 @@
-package com.home.application.ingest.normalization;
+package com.home.domain.trade;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

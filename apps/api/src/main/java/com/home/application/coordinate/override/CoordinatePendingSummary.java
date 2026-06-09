@@ -2,6 +2,8 @@ package com.home.application.coordinate.override;
 
 import java.util.Map;
 
+import com.home.domain.coordinate.CoordinatePendingReason;
+
 public record CoordinatePendingSummary(
 	long totalCount,
 	Map<CoordinatePendingReason, Long> reasonCounts

@@ -11,7 +11,7 @@ import com.home.application.coordinate.override.CoordinateOverrideAdminRepositor
 import com.home.application.coordinate.override.CoordinateOverrideApprovalCommand;
 import com.home.application.coordinate.override.CoordinateOverrideApprovalResult;
 import com.home.application.coordinate.override.CoordinatePendingComplex;
-import com.home.application.coordinate.override.CoordinatePendingReason;
+import com.home.domain.coordinate.CoordinatePendingReason;
 import com.home.application.coordinate.override.CoordinatePendingSummary;
 import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
 

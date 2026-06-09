@@ -10,7 +10,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import java.util.List;
 import java.util.Set;
 
-import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerificationStatus;
+import com.home.domain.coordinate.ComplexCoordinateIdentityVerificationStatus;
 import com.home.application.coordinate.identity.ComplexCoordinateParcelTargets;
 import com.home.application.coordinate.identity.ComplexCoordinateTarget;
 

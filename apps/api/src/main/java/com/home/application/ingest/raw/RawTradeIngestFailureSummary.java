@@ -1,5 +1,7 @@
 package com.home.application.ingest.raw;
 
+import com.home.domain.ingest.raw.RawTradeIngestStatus;
+
 /**
  * 운영 조회용 raw ingest 실패 요약입니다. Raw payload와 source_key는 포함하지 않습니다.
  */

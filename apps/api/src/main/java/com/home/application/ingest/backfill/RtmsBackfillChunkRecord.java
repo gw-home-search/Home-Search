@@ -1,5 +1,7 @@
 package com.home.application.ingest.backfill;
 
+import com.home.domain.ingest.backfill.RtmsBackfillChunkStatus;
+
 public record RtmsBackfillChunkRecord(
 	Long id,
 	Long jobId,

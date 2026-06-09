@@ -1,5 +1,7 @@
 package com.home.application.ingest.run;
 
+import com.home.domain.ingest.run.RtmsIngestRunStatus;
+
 /**
  * Run count grouped by RTMS ingest run status.
  */

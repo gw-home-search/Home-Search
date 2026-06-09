@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import com.home.domain.ingest.raw.RawTradeIngestStatus;
+
 /**
  * read-only raw ingest failure inspection 조건입니다.
  */

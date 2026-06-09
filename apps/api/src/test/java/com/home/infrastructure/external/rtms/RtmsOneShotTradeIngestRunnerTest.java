@@ -21,7 +21,7 @@ import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import com.home.application.ingest.backfill.RtmsBackfillChunkStatusCounts;
-import com.home.application.ingest.backfill.RtmsBackfillJobStatus;
+import com.home.domain.ingest.backfill.RtmsBackfillJobStatus;
 
 @ExtendWith(OutputCaptureExtension.class)
 class RtmsOneShotTradeIngestRunnerTest {
@@ -383,7 +383,7 @@ class RtmsOneShotTradeIngestRunnerTest {
 		);
 		when(nationwideBackfillRunner.run(expectedPlan)).thenReturn(new RtmsNationwideBackfillReport(
 			1L,
-			com.home.application.ingest.backfill.RtmsBackfillJobStatus.PARTIAL,
+			com.home.domain.ingest.backfill.RtmsBackfillJobStatus.PARTIAL,
 			new com.home.application.ingest.backfill.RtmsBackfillChunkStatusCounts(0, 0, 2, 1, 1, 1, 0),
 			1
 		));

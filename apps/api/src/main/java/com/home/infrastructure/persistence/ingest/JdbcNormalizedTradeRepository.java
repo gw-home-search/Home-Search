@@ -7,7 +7,7 @@ import java.util.Optional;
 
 import com.home.application.ingest.normalization.NormalizedTradeCommand;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
-import com.home.application.ingest.normalization.TradeExclAreaNormalizer;
+import com.home.domain.trade.TradeExclAreaNormalizer;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;

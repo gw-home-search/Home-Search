@@ -3,7 +3,7 @@ package com.home.application.coordinate.readiness;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
-import com.home.application.coordinate.caseflow.ComplexCoordinateCaseStatus;
+import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionResult;
 import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;
 import com.home.application.coordinate.caseflow.ComplexCoordinateResolutionResult;

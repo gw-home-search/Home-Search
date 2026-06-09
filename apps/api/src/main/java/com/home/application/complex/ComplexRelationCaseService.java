@@ -3,6 +3,10 @@ package com.home.application.complex;
 import java.util.List;
 import java.util.Objects;
 
+import com.home.domain.complex.relation.ComplexRelationClassification;
+import com.home.domain.complex.relation.ComplexRelationClassifier;
+import com.home.domain.complex.relation.ComplexTradeSpan;
+
 public class ComplexRelationCaseService {
 
 	private final ComplexRelationRepository relationRepository;

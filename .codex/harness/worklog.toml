@@ -360,6 +360,67 @@ risk_notes = [
 ]
 
 [[items]]
+id = "backend-domain-core-model-consolidation"
+title_ko = "Backend domain core model consolidation"
+pr_type = "Refactor"
+pr_title_ko = "백엔드 core domain model 이동과 중복 판단 통합"
+description_ko = "application/complex, application/coordinate, application/ingest에 흩어진 저장 상태, 매칭 결과, 사유, 신뢰도, source identity 판단을 domain/**으로 이동하고 반복되는 상태 분기와 durable reason 문자열을 domain-owned method/policy로 합친다."
+status = "done"
+priority = 204
+targets = "backend"
+preset = "backend-quality"
+acceptance_criteria = [
+  "core persisted/domain enum 후보가 domain/**으로 이동되고 enum constant 이름은 변경하지 않는다.",
+  "domain/**은 application/**, infrastructure/**, Spring, JDBC, HTTP client, Flyway, external provider DTO를 import하지 않는다.",
+  "application/**은 use-case orchestration, commands, results, ports를 맡고 저장 의미 판단은 domain method/policy를 호출한다.",
+  "ComplexRelationType, ComplexRelationConfidence, ComplexRelationClassifier, ComplexRelationClassification, ComplexTradeSpan은 domain.complex.relation 계열로 이동한다.",
+  "ComplexCoordinateCaseStatus, ComplexCoordinateIdentityVerificationStatus, CoordinatePendingReason은 domain.coordinate 계열로 이동한다.",
+  "RawTradeIngestStatus, TradeMatchStatus, RtmsIngestRunStatus, RtmsBackfillJobStatus, RtmsBackfillChunkStatus는 domain.ingest 계열로 이동한다.",
+  "ComplexMetadataStatus, ComplexMetadataFailureKind는 domain.complex.metadata 또는 domain.ingest.metadata 중 하나로 이동하되 retry/status 의미가 흩어지지 않는다.",
+  "RtmsJibunPnu, TradeExclAreaNormalizer처럼 provider DTO를 몰라도 되는 pure value/normalizer만 domain.trade 또는 domain.ingest로 이동한다.",
+  "RtmsJibunPnuNormalizer와 SourceKeyGenerator는 OpenApiTradeItem에 묶여 있으므로 이번 slice에서 domain으로 옮기지 않는다.",
+  "duplicate source/source_key, duplicate fallback identity, canceled source/source_key, rematch duplicate reason 문자열은 값 변경 없이 domain-owned outcome/policy에서 관리한다.",
+  "반복 status comparison은 기존 테스트로 고정된 범위에서 isMatched, isFinished, isProblem, shouldBlock, toBlockedCaseStatus 같은 domain method/policy 호출로 줄인다.",
+  "news/** later-scope domain 이동은 이번 slice에 포함하지 않는다.",
+  "public map/search/region/detail/trade API URL, request/response shape, amount unit, ProblemDetail shape를 변경하지 않는다.",
+  "raw-before-normalized, duplicate-safe ingest, failed match queryability, complex_id operational relation, complex_pk/apt_seq/source/source_key 보존 의미를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "OpenApiTradeIngestServiceTest에서 raw-before-normalized, duplicate source_key, fallback duplicate, canceled row, match_failed evidence 문자열이 이동 후에도 동일해야 하는 회귀 RED를 유지한다.",
+  "TradeMatchRematchServiceTest에서 rematch duplicate source_key/fallback identity reason과 MATCH_FAILED 유지 동작이 domain policy 통합 중 바뀌면 실패하는 RED를 유지한다.",
+  "ComplexRelationClassifierTest와 ComplexRelationTypeTest에서 relation classifier/type predicate 이동 후 분류 결과와 requiresCoordinateExceptionResolution이 바뀌면 실패하는 RED를 유지한다.",
+  "ComplexCoordinateCaseStatusTest에서 identity verification shouldBlock/toBlockedCaseStatus와 coordinate case predicate가 이동 후 깨지면 실패하는 RED를 유지한다.",
+  "ComplexMetadataStatusTest와 ComplexMetadataRetryPolicyTest에서 metadata payload requirement, retry backoff, failure kind predicate가 이동 후 깨지면 실패하는 RED를 유지한다.",
+  "RtmsNationwideBackfillRunnerTest에서 backfill job/chunk status reconciliation과 PENDING/RUNNING/COMPLETED/PARTIAL 판단이 이동 중 바뀌면 실패하는 RED를 유지한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew test --tests '*OpenApiTradeIngestServiceTest' --tests '*TradeMatchRematchServiceTest' --tests '*ComplexRelationClassifierTest' --tests '*ComplexRelationTypeTest' --tests '*ComplexCoordinateCaseStatusTest' --tests '*ComplexMetadataStatusTest' --tests '*ComplexMetadataRetryPolicyTest'",
+  "cd apps/api && ./gradlew test",
+  "cd apps/api && ./gradlew persistenceTest",
+  "cd apps/api && ./gradlew apiContractTest",
+  "cd apps/api && ./gradlew javadoc",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 scripts/check-test-display-names.py",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+stop_conditions = [
+  "enum constant rename, persisted enum value rewrite, DB check constraint 변경이 필요하면 중단한다.",
+  "DB schema, Flyway migration, SQL 의미 변경, source_key 생성 결과 변경이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "domain/**이 application/**, infrastructure/**, Spring, JDBC, HTTP client, Flyway, external provider DTO를 import해야 하면 중단한다.",
+  "RtmsJibunPnuNormalizer 또는 SourceKeyGenerator를 domain으로 옮기려면 OpenApiTradeItem 의존을 먼저 끊는 별도 slice로 분리한다.",
+  "news/**, ranking, trend aggregate, favorite, alarm, mail, auth, recommendation 기능이 섞이면 중단한다.",
+  "중복 제거가 generic enum framework, common util, 대규모 추상화로 커지면 중단한다.",
+  "Docker/Testcontainers를 실행할 수 없으면 persistence/backendQualityCheck 완료로 주장하지 않는다.",
+]
+risk_notes = [
+  "이번 slice는 하나의 PR로 진행하되 내부 /goal checkpoint를 complex relation, coordinate decision, ingest state/reason, metadata state, pure value move 순서로 둔다.",
+  "package move만으로 끝내지 않고 기존 테스트로 고정된 중복 상태 판단과 durable reason 문자열만 domain-owned method/policy로 합친다.",
+  "behavior 변경이 아니라 보존 refactor가 목표이며 모든 변경은 기존 테스트와 backendQualityCheck evidence로 닫는다.",
+]
+
+[[items]]
 id = "coordinate-marker-confidence-hardening"
 title_ko = "Coordinate marker confidence hardening"
 pr_type = "Feat"

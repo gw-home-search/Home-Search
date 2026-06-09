@@ -3,6 +3,9 @@ package com.home.application.complex;
 import java.util.List;
 import java.util.Objects;
 
+import com.home.domain.complex.relation.ComplexRelationConfidence;
+import com.home.domain.complex.relation.ComplexRelationType;
+
 public record ComplexRelationCaseRecord(
 	Long id,
 	String caseKey,

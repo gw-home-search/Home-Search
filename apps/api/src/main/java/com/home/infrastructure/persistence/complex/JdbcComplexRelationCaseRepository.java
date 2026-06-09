@@ -9,10 +9,10 @@ import java.util.Optional;
 import com.home.application.complex.ComplexRelationCaseMember;
 import com.home.application.complex.ComplexRelationCaseRecord;
 import com.home.application.complex.ComplexRelationCaseRepository;
-import com.home.application.complex.ComplexRelationClassification;
-import com.home.application.complex.ComplexRelationConfidence;
-import com.home.application.complex.ComplexRelationType;
-import com.home.application.complex.ComplexTradeSpan;
+import com.home.domain.complex.relation.ComplexRelationClassification;
+import com.home.domain.complex.relation.ComplexRelationConfidence;
+import com.home.domain.complex.relation.ComplexRelationType;
+import com.home.domain.complex.relation.ComplexTradeSpan;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;

@@ -4,6 +4,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import com.home.domain.ingest.run.RtmsIngestRunStatus;
+
 /**
  * Read-only RTMS ingest run report criteria.
  */

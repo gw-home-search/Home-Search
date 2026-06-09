@@ -1,4 +1,4 @@
-package com.home.application.ingest.metadata;
+package com.home.domain.complex.metadata;
 
 /**
  * 단지 메타데이터 보강 상태를 나타낸다. 저장 값은 enum 상수명이며, 보강 결과 집계와 재시도 정책의 기준으로 사용한다.

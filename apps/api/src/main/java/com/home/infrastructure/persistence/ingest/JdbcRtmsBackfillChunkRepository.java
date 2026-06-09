@@ -15,7 +15,7 @@ import com.home.application.ingest.backfill.RtmsBackfillChunkClaim;
 import com.home.application.ingest.backfill.RtmsBackfillChunkRecord;
 import com.home.application.ingest.backfill.RtmsBackfillChunkRepository;
 import com.home.application.ingest.backfill.RtmsBackfillChunkRequest;
-import com.home.application.ingest.backfill.RtmsBackfillChunkStatus;
+import com.home.domain.ingest.backfill.RtmsBackfillChunkStatus;
 import com.home.application.ingest.backfill.RtmsBackfillChunkStatusCounts;
 
 import org.springframework.jdbc.core.simple.JdbcClient;

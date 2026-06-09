@@ -11,19 +11,16 @@ import com.home.application.ingest.matching.TradeMatchEvidenceCommand;
 import com.home.application.ingest.matching.TradeMatchEvidenceRepository;
 import com.home.application.ingest.normalization.NormalizedTradeCommand;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
-import com.home.application.ingest.normalization.TradeExclAreaNormalizer;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
-import com.home.application.ingest.raw.RawTradeIngestStatus;
+import com.home.domain.ingest.raw.RawTradeIngestFailureReason;
+import com.home.domain.ingest.raw.RawTradeIngestStatus;
+import com.home.domain.trade.TradeExclAreaNormalizer;
 
 /**
  * Open API trade item을 raw evidence로 먼저 저장한 뒤 complex match와 normalized trade insert를 수행하는 ingest service입니다.
  */
 public class OpenApiTradeIngestService {
-
-	private static final String SOURCE_KEY_DUPLICATE_REASON = "duplicate source/source_key";
-	private static final String FALLBACK_IDENTITY_DUPLICATE_REASON = "duplicate fallback identity";
-	private static final String CANCELED_TRADE_REASON = "canceled source/source_key";
 
 	private final RawTradeIngestRepository rawTradeIngestRepository;
 	private final NormalizedTradeRepository normalizedTradeRepository;
@@ -145,7 +142,7 @@ public class OpenApiTradeIngestService {
 				payloadHash
 			)) {
 				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.DUPLICATE,
-					SOURCE_KEY_DUPLICATE_REASON);
+					RawTradeIngestFailureReason.SOURCE_KEY_DUPLICATE.value());
 				duplicateSkipped++;
 				continue;
 			}
@@ -161,14 +158,15 @@ public class OpenApiTradeIngestService {
 					continue;
 				}
 				normalizedTradeRepository.cancelBySourceAndSourceKey(batch.source(), sourceKey, raw.id());
-				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.CANCELED, CANCELED_TRADE_REASON);
+				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.CANCELED,
+					RawTradeIngestFailureReason.CANCELED_SOURCE_KEY.value());
 				canceledSkipped++;
 				continue;
 			}
 
 			if (normalizedTradeRepository.existsBySourceAndSourceKey(batch.source(), sourceKey)) {
 				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.DUPLICATE,
-					SOURCE_KEY_DUPLICATE_REASON);
+					RawTradeIngestFailureReason.SOURCE_KEY_DUPLICATE.value());
 				duplicateSkipped++;
 				continue;
 			}
@@ -214,7 +212,7 @@ public class OpenApiTradeIngestService {
 			}
 			else {
 				rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.DUPLICATE,
-					FALLBACK_IDENTITY_DUPLICATE_REASON);
+					RawTradeIngestFailureReason.FALLBACK_IDENTITY_DUPLICATE.value());
 				duplicateSkipped++;
 			}
 		}

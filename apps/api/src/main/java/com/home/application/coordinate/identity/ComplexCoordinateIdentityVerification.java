@@ -2,6 +2,8 @@ package com.home.application.coordinate.identity;
 
 import java.util.Objects;
 
+import com.home.domain.coordinate.ComplexCoordinateIdentityVerificationStatus;
+
 public record ComplexCoordinateIdentityVerification(
 	ComplexCoordinateIdentityVerificationStatus status,
 	String reason

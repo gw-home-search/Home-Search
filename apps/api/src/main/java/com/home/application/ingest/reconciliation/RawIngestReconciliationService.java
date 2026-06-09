@@ -2,7 +2,7 @@ package com.home.application.ingest.reconciliation;
 
 import java.util.Objects;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
-import com.home.application.ingest.raw.RawTradeIngestStatus;
+import com.home.domain.ingest.raw.RawTradeIngestStatus;
 
 public class RawIngestReconciliationService {
 

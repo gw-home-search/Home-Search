@@ -1,7 +1,7 @@
 package com.home.infrastructure.external.rtms;
 
 import com.home.application.ingest.trade.IngestResult;
-import com.home.application.ingest.backfill.RtmsBackfillChunkStatus;
+import com.home.domain.ingest.backfill.RtmsBackfillChunkStatus;
 
 record RtmsBackfillChunkExecutionResult(
 	String lawdCd,

@@ -6,11 +6,11 @@ import java.util.function.Supplier;
 
 import com.home.application.ingest.backfill.RtmsBackfillChunkClaim;
 import com.home.application.ingest.backfill.RtmsBackfillChunkRepository;
-import com.home.application.ingest.backfill.RtmsBackfillChunkStatus;
+import com.home.domain.ingest.backfill.RtmsBackfillChunkStatus;
 import com.home.application.ingest.backfill.RtmsBackfillChunkStatusCounts;
 import com.home.application.ingest.backfill.RtmsBackfillJobRecord;
 import com.home.application.ingest.backfill.RtmsBackfillJobRepository;
-import com.home.application.ingest.backfill.RtmsBackfillJobStatus;
+import com.home.domain.ingest.backfill.RtmsBackfillJobStatus;
 
 class RtmsNationwideBackfillRunner {
 
@@ -77,7 +77,7 @@ class RtmsNationwideBackfillRunner {
 
 		RtmsBackfillChunkStatusCounts counts = chunkRepository.countStatuses(job.id());
 		RtmsBackfillJobStatus status = reconcileJobStatus(counts);
-		if (status == RtmsBackfillJobStatus.COMPLETED) {
+		if (status.isCompleted()) {
 			jobRepository.markCompleted(job.id());
 		}
 		else {
@@ -91,11 +91,11 @@ class RtmsNationwideBackfillRunner {
 		RtmsBackfillChunkClaim claim,
 		RtmsBackfillChunkExecutionResult result
 	) {
-		if (result.status() == RtmsBackfillChunkStatus.COMPLETED) {
+		if (result.status().isCompleted()) {
 			chunkRepository.markCompleted(claim.id(), result.runId());
 			return;
 		}
-		if (result.status() == RtmsBackfillChunkStatus.PARTIAL) {
+		if (result.status().isPartial()) {
 			chunkRepository.markPartial(claim.id(), result.runId(), result.failureReason());
 			return;
 		}

@@ -10,7 +10,7 @@ import java.util.Objects;
 
 import com.home.application.ingest.backfill.RtmsBackfillJobRecord;
 import com.home.application.ingest.backfill.RtmsBackfillJobRepository;
-import com.home.application.ingest.backfill.RtmsBackfillJobStatus;
+import com.home.domain.ingest.backfill.RtmsBackfillJobStatus;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

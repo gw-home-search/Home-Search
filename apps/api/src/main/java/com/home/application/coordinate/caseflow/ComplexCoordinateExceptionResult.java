@@ -1,5 +1,7 @@
 package com.home.application.coordinate.caseflow;
 
+import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
+
 public record ComplexCoordinateExceptionResult(
 	int processed,
 	int pending,

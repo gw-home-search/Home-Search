@@ -11,7 +11,7 @@ import java.util.List;
 import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.backfill.RtmsBackfillChunkClaim;
 import com.home.application.ingest.backfill.RtmsBackfillChunkRequest;
-import com.home.application.ingest.backfill.RtmsBackfillChunkStatus;
+import com.home.domain.ingest.backfill.RtmsBackfillChunkStatus;
 import com.home.application.ingest.run.RtmsIngestRunRecord;
 import com.home.application.ingest.backfill.RtmsBackfillJobRecord;
 

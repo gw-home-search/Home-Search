@@ -3,7 +3,7 @@ package com.home.infrastructure.persistence.ingest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.home.application.ingest.reconciliation.RawIngestReconciliationService;
-import com.home.application.ingest.raw.RawTradeIngestStatus;
+import com.home.domain.ingest.raw.RawTradeIngestStatus;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

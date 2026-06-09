@@ -11,7 +11,7 @@ import java.util.Set;
 import com.home.application.coordinate.footprint.BuildingFootprintCandidate;
 import com.home.application.coordinate.footprint.BuildingFootprintImportCandidate;
 import com.home.application.coordinate.caseflow.ComplexCoordinateCaseCandidate;
-import com.home.application.coordinate.caseflow.ComplexCoordinateCaseStatus;
+import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 import com.home.application.coordinate.caseflow.ComplexCoordinateCaseUpdate;
 import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionRepository;
 import com.home.application.coordinate.identity.ComplexCoordinateParcelTargets;

@@ -5,17 +5,15 @@ import java.time.LocalDate;
 import java.util.Objects;
 import com.home.application.ingest.normalization.NormalizedTradeCommand;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
-import com.home.application.ingest.normalization.TradeExclAreaNormalizer;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
-import com.home.application.ingest.raw.RawTradeIngestStatus;
+import com.home.domain.ingest.raw.RawTradeIngestFailureReason;
+import com.home.domain.ingest.raw.RawTradeIngestStatus;
 import com.home.application.ingest.raw.RawTradeItemParser;
 import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.domain.trade.TradeExclAreaNormalizer;
 
 public class TradeMatchRematchService {
-
-	private static final String SOURCE_KEY_DUPLICATE_REASON = "rematch duplicate source/source_key";
-	private static final String FALLBACK_IDENTITY_DUPLICATE_REASON = "rematch duplicate fallback identity";
 
 	private final RawTradeIngestRepository rawTradeIngestRepository;
 	private final NormalizedTradeRepository normalizedTradeRepository;
@@ -80,7 +78,7 @@ public class TradeMatchRematchService {
 		}
 		if (normalizedTradeRepository.existsBySourceAndSourceKey(raw.source(), raw.sourceKey())) {
 			rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.DUPLICATE,
-				SOURCE_KEY_DUPLICATE_REASON);
+				RawTradeIngestFailureReason.REMATCH_SOURCE_KEY_DUPLICATE.value());
 			return result.plusDuplicate();
 		}
 
@@ -120,7 +118,7 @@ public class TradeMatchRematchService {
 			return result.plusNormalized();
 		}
 		rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestStatus.DUPLICATE,
-			FALLBACK_IDENTITY_DUPLICATE_REASON);
+			RawTradeIngestFailureReason.REMATCH_FALLBACK_IDENTITY_DUPLICATE.value());
 		return result.plusDuplicate();
 	}
 

@@ -14,6 +14,7 @@ import com.home.application.coordinate.override.CoordinatePendingComplex;
 import com.home.domain.coordinate.CoordinatePendingReason;
 import com.home.application.coordinate.override.CoordinatePendingSummary;
 import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
+import com.home.domain.coordinate.CoordinateDisplayPolicy;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -87,7 +88,7 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			          JOIN complex_display_coordinate display_coordinate
 			            ON display_coordinate.complex_id = parcel_complex.id
 			           AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
-			           AND display_coordinate.confidence >= 80
+			           AND display_coordinate.confidence >= :trustedBuildingCoordinateConfidence
 			          WHERE parcel_complex.parcel_id = p.id
 			      )
 			    UNION ALL
@@ -117,7 +118,7 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			          JOIN complex_display_coordinate display_coordinate
 			            ON display_coordinate.complex_id = parcel_complex.id
 			           AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
-			           AND display_coordinate.confidence >= 80
+			           AND display_coordinate.confidence >= :trustedBuildingCoordinateConfidence
 			          WHERE parcel_complex.parcel_id = p.id
 			      )
 			      AND NOT EXISTS (
@@ -125,7 +126,7 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			          FROM complex_display_coordinate display_coordinate
 			          WHERE display_coordinate.complex_id = c.id
 			            AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
-			            AND display_coordinate.confidence >= 80
+			            AND display_coordinate.confidence >= :trustedBuildingCoordinateConfidence
 			      )
 			),
 			pending_base AS (
@@ -156,6 +157,8 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			""")
 			.param("limit", limit)
 			.param("offset", offset)
+			.param("trustedBuildingCoordinateConfidence",
+				CoordinateDisplayPolicy.TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE)
 			.query(this::mapPendingComplex)
 			.list();
 	}
@@ -201,7 +204,7 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			          JOIN complex_display_coordinate display_coordinate
 			            ON display_coordinate.complex_id = parcel_complex.id
 			           AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
-			           AND display_coordinate.confidence >= 80
+			           AND display_coordinate.confidence >= :trustedBuildingCoordinateConfidence
 			          WHERE parcel_complex.parcel_id = p.id
 			      )
 			    UNION ALL
@@ -224,7 +227,7 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			          JOIN complex_display_coordinate display_coordinate
 			            ON display_coordinate.complex_id = parcel_complex.id
 			           AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
-			           AND display_coordinate.confidence >= 80
+			           AND display_coordinate.confidence >= :trustedBuildingCoordinateConfidence
 			          WHERE parcel_complex.parcel_id = p.id
 			      )
 			      AND NOT EXISTS (
@@ -232,7 +235,7 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			          FROM complex_display_coordinate display_coordinate
 			          WHERE display_coordinate.complex_id = c.id
 			            AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
-			            AND display_coordinate.confidence >= 80
+			            AND display_coordinate.confidence >= :trustedBuildingCoordinateConfidence
 			      )
 			)
 			SELECT
@@ -242,6 +245,8 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			    count(*) FILTER (WHERE reason = 'COMPLEX_DISPLAY_COORDINATE_MISSING') AS complex_display_coordinate_missing_count
 			FROM pending_candidate
 			""")
+			.param("trustedBuildingCoordinateConfidence",
+				CoordinateDisplayPolicy.TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE)
 			.query(this::mapPendingSummary)
 			.single();
 	}

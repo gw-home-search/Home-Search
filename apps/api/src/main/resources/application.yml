@@ -53,3 +53,14 @@ home:
       refresh-retry-attempts: 3
       refresh-retry-backoff-millis: 250
       preflight-only: false
+      daily:
+        enabled: false
+        lawd-cds: ""
+        lookback-months: 1
+        cron: "0 15 5 * * *"
+        zone: Asia/Seoul
+        slack:
+          enabled: false
+          webhook-url: "${SLACK_WEBHOOK_URL:}"
+          connect-timeout-millis: 3000
+          read-timeout-millis: 3000

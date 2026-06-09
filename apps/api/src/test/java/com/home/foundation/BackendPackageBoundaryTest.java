@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 class BackendPackageBoundaryTest {
 
 	private static final Path APPLICATION_ROOT = Path.of("src/main/java/com/home/application");
+	private static final Path INFRASTRUCTURE_EXTERNAL_ROOT = Path.of("src/main/java/com/home/infrastructure/external");
 
 	@Test
 	@DisplayName("application layer는 infrastructure package를 import하지 않는다")
@@ -44,16 +45,35 @@ class BackendPackageBoundaryTest {
 		assertThat(violations).isEmpty();
 	}
 
+	@Test
+	@DisplayName("external adapter는 persistence adapter package를 import하지 않는다")
+	void externalAdaptersDoNotImportPersistenceAdapters() throws IOException {
+		List<String> violations;
+		try (var paths = Files.walk(INFRASTRUCTURE_EXTERNAL_ROOT)) {
+			violations = paths
+				.filter(Files::isRegularFile)
+				.filter(path -> path.toString().endsWith(".java"))
+				.flatMap(path -> matchingImports(path, INFRASTRUCTURE_EXTERNAL_ROOT, "import com.home.infrastructure.persistence."))
+				.toList();
+		}
+
+		assertThat(violations).isEmpty();
+	}
+
 	private static java.util.stream.Stream<String> infrastructureImports(Path path) {
 		return matchingImports(path, "import com.home.infrastructure.");
 	}
 
 	private static java.util.stream.Stream<String> matchingImports(Path path, String forbiddenImport) {
+		return matchingImports(path, APPLICATION_ROOT, forbiddenImport);
+	}
+
+	private static java.util.stream.Stream<String> matchingImports(Path path, Path root, String forbiddenImport) {
 		try {
 			return Files.readAllLines(path)
 				.stream()
 				.filter(line -> line.contains(forbiddenImport))
-				.map(line -> APPLICATION_ROOT.relativize(path) + ": " + line.trim());
+				.map(line -> root.relativize(path) + ": " + line.trim());
 		} catch (IOException ex) {
 			throw new IllegalStateException("Failed to inspect source file: " + path, ex);
 		}

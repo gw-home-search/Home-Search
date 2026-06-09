@@ -2,6 +2,9 @@ package com.home.application.ingest.normalization;
 
 import java.time.LocalDate;
 
+import com.home.domain.ingest.source.IngestSource;
+import com.home.domain.ingest.source.IngestSourceKey;
+
 /**
  * complex_id를 운영 relation으로 사용하고 source metadata를 audit/dedupe 용도로 보존하는 normalized trade insert command입니다.
  */
@@ -32,17 +35,11 @@ public record NormalizedTradeCommand(
 		if (dealAmount == null || dealAmount <= 0) {
 			throw new IllegalArgumentException("dealAmount must be positive");
 		}
-		if (!hasText(source)) {
-			throw new IllegalArgumentException("source is required");
-		}
-		if (!hasText(sourceKey)) {
-			throw new IllegalArgumentException("sourceKey is required");
-		}
+		source = IngestSource.of(source).value();
+		sourceKey = IngestSourceKey.of(sourceKey).value();
 		if (!hasText(complexPk)) {
 			throw new IllegalArgumentException("complexPk is required");
 		}
-		source = source.trim();
-		sourceKey = sourceKey.trim();
 		complexPk = complexPk.trim();
 		aptSeq = trimToNull(aptSeq);
 		aptDong = trimToNull(aptDong);

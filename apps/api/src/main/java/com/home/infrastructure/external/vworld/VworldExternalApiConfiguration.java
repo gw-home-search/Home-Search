@@ -1,10 +1,10 @@
 package com.home.infrastructure.external.vworld;
 
 import com.home.application.coordinate.footprint.BuildingFootprintSource;
-import com.home.infrastructure.persistence.ingest.ParcelCoordinateResolver;
-import com.home.infrastructure.persistence.ingest.CoordinateSourceFirstParcelCoordinateResolver;
-import com.home.infrastructure.persistence.ingest.ParcelCoordinateOverrideRepository;
-import com.home.infrastructure.persistence.ingest.ParcelCoordinateSourceRepository;
+import com.home.application.coordinate.lookup.ParcelCoordinateResolver;
+import com.home.application.coordinate.lookup.CoordinateSourceFirstParcelCoordinateResolver;
+import com.home.application.coordinate.lookup.ParcelCoordinateOverrideRepository;
+import com.home.application.coordinate.lookup.ParcelCoordinateSourceRepository;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;

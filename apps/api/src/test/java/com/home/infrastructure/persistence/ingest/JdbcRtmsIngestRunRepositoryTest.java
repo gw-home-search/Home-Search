@@ -7,6 +7,7 @@ import java.util.Arrays;
 
 import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.run.RtmsIngestRunRecord;
+import com.home.infrastructure.persistence.ingest.run.JdbcRtmsIngestRunRepository;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

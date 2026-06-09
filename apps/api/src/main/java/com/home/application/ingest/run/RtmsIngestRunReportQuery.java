@@ -2,8 +2,8 @@ package com.home.application.ingest.run;
 
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.regex.Pattern;
 
+import com.home.domain.ingest.rtms.RtmsDealMonth;
 import com.home.domain.ingest.run.RtmsIngestRunStatus;
 
 /**
@@ -17,7 +17,6 @@ public record RtmsIngestRunReportQuery(
 	int recentRunLimit
 ) {
 
-	private static final Pattern DEAL_YMD = Pattern.compile("\\d{6}");
 	private static final int DEFAULT_RECENT_RUN_LIMIT = 10;
 	private static final int MAX_RECENT_RUN_LIMIT = 100;
 
@@ -66,13 +65,9 @@ public record RtmsIngestRunReportQuery(
 	}
 
 	private static String validateDealYmd(String value, String fieldName) {
-		if (value == null) {
-			return null;
-		}
-		if (!DEAL_YMD.matcher(value).matches()) {
-			throw new IllegalArgumentException(fieldName + " must use yyyyMM format");
-		}
-		return value;
+		return RtmsDealMonth.optional(value, fieldName + " must use yyyyMM format")
+			.map(RtmsDealMonth::value)
+			.orElse(null);
 	}
 
 	private static String trimToNull(String value) {

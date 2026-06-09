@@ -1,24 +1,18 @@
 package com.home.infrastructure.persistence.map;
 
-import java.math.BigDecimal;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.List;
 import java.util.Objects;
 
 import com.home.application.map.ComplexMarkerQuery;
 import com.home.application.map.ComplexMarkerRepository;
 import com.home.application.map.ComplexMarkerResult;
-import com.home.domain.coordinate.CoordinateDisplayPolicy;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 
-	private static final BigDecimal TRADE_AMOUNT_UNITS_PER_EOK = BigDecimal.valueOf(10_000L);
-	private static final BigDecimal SQUARE_METERS_PER_PYEONG = new BigDecimal("3.305785");
-
 	private final JdbcClient jdbcClient;
+	private final ComplexMarkerRowMapper rowMapper = new ComplexMarkerRowMapper();
 
 	public JdbcMapMarkerRepository(JdbcClient jdbcClient) {
 		this.jdbcClient = Objects.requireNonNull(jdbcClient);
@@ -33,7 +27,8 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 	}
 
 	private List<ComplexMarkerResult> findComplexMarkersWithMarkerShapeFilter(ComplexMarkerQuery query) {
-		return jdbcClient.sql("""
+		ComplexMarkerJdbcParameters parameters = ComplexMarkerJdbcParameters.from(query);
+		return parameters.bindMarkerShapeFilter(jdbcClient.sql("""
 			WITH requested_bounds AS (
 			    SELECT ST_MakeEnvelope(
 			        CAST(:swLng AS DOUBLE PRECISION),
@@ -368,27 +363,14 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			  AND (CAST(:areaMin AS NUMERIC) IS NULL OR markers_with_trade.excl_area >= :areaMin)
 			  AND (CAST(:areaMax AS NUMERIC) IS NULL OR markers_with_trade.excl_area <= :areaMax)
 			ORDER BY markers_with_trade.parcel_id, markers_with_trade.complex_id
-			""")
-			.param("swLat", query.swLat())
-			.param("swLng", query.swLng())
-			.param("neLat", query.neLat())
-			.param("neLng", query.neLng())
-			.param("trustedBuildingCoordinateConfidence",
-				CoordinateDisplayPolicy.TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE)
-			.param("unitMin", query.unitMin())
-			.param("unitMax", query.unitMax())
-			.param("priceMin", eokToTradeAmount(query.priceEokMin()))
-			.param("priceMax", eokToTradeAmount(query.priceEokMax()))
-			.param("areaMin", pyeongToSquareMeters(query.pyeongMin()))
-			.param("areaMax", pyeongToSquareMeters(query.pyeongMax()))
-			.param("ageMin", query.ageMin())
-			.param("ageMax", query.ageMax())
-			.query(this::mapMarker)
+			"""))
+			.query(rowMapper::map)
 			.list();
 	}
 
 	private List<ComplexMarkerResult> findComplexMarkersWithTradeFirst(ComplexMarkerQuery query) {
-		return jdbcClient.sql("""
+		ComplexMarkerJdbcParameters parameters = ComplexMarkerJdbcParameters.from(query);
+		return parameters.bindTradeFirst(jdbcClient.sql("""
 			WITH requested_bounds AS (
 			    SELECT ST_MakeEnvelope(
 			        CAST(:swLng AS DOUBLE PRECISION),
@@ -699,18 +681,8 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			  AND (CAST(:areaMin AS NUMERIC) IS NULL OR markers.excl_area >= :areaMin)
 			  AND (CAST(:areaMax AS NUMERIC) IS NULL OR markers.excl_area <= :areaMax)
 			ORDER BY markers.parcel_id, markers.complex_id
-			""")
-			.param("swLat", query.swLat())
-			.param("swLng", query.swLng())
-			.param("neLat", query.neLat())
-			.param("neLng", query.neLng())
-			.param("trustedBuildingCoordinateConfidence",
-				CoordinateDisplayPolicy.TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE)
-			.param("priceMin", eokToTradeAmount(query.priceEokMin()))
-			.param("priceMax", eokToTradeAmount(query.priceEokMax()))
-			.param("areaMin", pyeongToSquareMeters(query.pyeongMin()))
-			.param("areaMax", pyeongToSquareMeters(query.pyeongMax()))
-			.query(this::mapMarker)
+			"""))
+			.query(rowMapper::map)
 			.list();
 	}
 
@@ -719,30 +691,5 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 			|| query.unitMax() != null
 			|| query.ageMin() != null
 			|| query.ageMax() != null;
-	}
-
-	private ComplexMarkerResult mapMarker(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new ComplexMarkerResult(
-			resultSet.getLong("parcel_id"),
-			longOrNull(resultSet, "complex_id"),
-			resultSet.getString("complex_name"),
-			resultSet.getDouble("lat"),
-			resultSet.getDouble("lng"),
-			longOrNull(resultSet, "latest_deal_amount"),
-			resultSet.getLong("unit_cnt_sum")
-		);
-	}
-
-	private Long longOrNull(ResultSet resultSet, String columnName) throws SQLException {
-		long value = resultSet.getLong(columnName);
-		return resultSet.wasNull() ? null : value;
-	}
-
-	private BigDecimal eokToTradeAmount(Double eok) {
-		return eok == null ? null : BigDecimal.valueOf(eok).multiply(TRADE_AMOUNT_UNITS_PER_EOK);
-	}
-
-	private BigDecimal pyeongToSquareMeters(Integer pyeong) {
-		return pyeong == null ? null : BigDecimal.valueOf(pyeong).multiply(SQUARE_METERS_PER_PYEONG);
 	}
 }

@@ -2,6 +2,8 @@ package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.home.infrastructure.persistence.ingest.normalization.JdbcTradePartitionMaintenanceRepository;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

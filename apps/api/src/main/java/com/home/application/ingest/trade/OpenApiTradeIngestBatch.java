@@ -2,6 +2,10 @@ package com.home.application.ingest.trade;
 
 import java.util.List;
 
+import com.home.domain.ingest.rtms.RtmsDealMonth;
+import com.home.domain.ingest.rtms.RtmsLawdCode;
+import com.home.domain.ingest.source.IngestSource;
+
 public record OpenApiTradeIngestBatch(
 	String source,
 	String lawdCd,
@@ -11,20 +15,10 @@ public record OpenApiTradeIngestBatch(
 ) {
 
 	public OpenApiTradeIngestBatch {
-		source = hasText(source) ? source.trim() : "RTMS";
-		if (!hasText(lawdCd)) {
-			throw new IllegalArgumentException("lawdCd is required");
-		}
-		if (!hasText(dealYmd)) {
-			throw new IllegalArgumentException("dealYmd is required");
-		}
-		lawdCd = lawdCd.trim();
-		dealYmd = dealYmd.trim();
+		source = IngestSource.ofOrDefault(source, "RTMS").value();
+		lawdCd = RtmsLawdCode.of(lawdCd).value();
+		dealYmd = RtmsDealMonth.of(dealYmd).value();
 		pageNo = pageNo == null ? 1 : pageNo;
 		items = items == null ? List.of() : List.copyOf(items);
-	}
-
-	private static boolean hasText(String value) {
-		return value != null && !value.isBlank();
 	}
 }

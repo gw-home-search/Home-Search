@@ -15,6 +15,7 @@ import com.home.application.ingest.metadata.ComplexMetadata;
 import com.home.domain.complex.metadata.ComplexMetadataFailureKind;
 import com.home.application.ingest.metadata.ComplexMetadataLookup;
 import com.home.application.ingest.metadata.ComplexMetadataResolution;
+import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMetadataEnrichmentRepository;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

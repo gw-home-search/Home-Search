@@ -1,6 +1,9 @@
 package com.home.application.ingest.raw;
 
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
+import com.home.domain.ingest.rtms.RtmsDealMonth;
+import com.home.domain.ingest.rtms.RtmsLawdCode;
+import com.home.domain.ingest.source.IngestSource;
 
 /**
  * 운영 조회용 raw ingest 실패 요약입니다. Raw payload와 source_key는 포함하지 않습니다.
@@ -18,21 +21,12 @@ public record RawTradeIngestFailureSummary(
 		if (status == null) {
 			throw new IllegalArgumentException("status is required");
 		}
-		if (!hasText(source)) {
-			throw new IllegalArgumentException("source is required");
-		}
-		if (!hasText(lawdCd)) {
-			throw new IllegalArgumentException("lawdCd is required");
-		}
-		if (!hasText(dealYmd)) {
-			throw new IllegalArgumentException("dealYmd is required");
-		}
+		source = IngestSource.of(source).value();
+		lawdCd = RtmsLawdCode.of(lawdCd).value();
+		dealYmd = RtmsDealMonth.of(dealYmd).value();
 		if (count < 1) {
 			throw new IllegalArgumentException("count must be positive");
 		}
-		source = source.trim();
-		lawdCd = lawdCd.trim();
-		dealYmd = dealYmd.trim();
 		failureReason = trimToNull(failureReason);
 	}
 

@@ -14,6 +14,9 @@ import com.home.application.ingest.backfill.RtmsBackfillChunkRequest;
 import com.home.domain.ingest.backfill.RtmsBackfillChunkStatus;
 import com.home.application.ingest.run.RtmsIngestRunRecord;
 import com.home.application.ingest.backfill.RtmsBackfillJobRecord;
+import com.home.infrastructure.persistence.ingest.backfill.JdbcRtmsBackfillChunkRepository;
+import com.home.infrastructure.persistence.ingest.backfill.JdbcRtmsBackfillJobRepository;
+import com.home.infrastructure.persistence.ingest.run.JdbcRtmsIngestRunRepository;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

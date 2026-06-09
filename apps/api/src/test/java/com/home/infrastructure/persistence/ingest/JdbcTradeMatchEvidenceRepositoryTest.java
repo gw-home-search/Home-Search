@@ -6,6 +6,7 @@ import java.util.List;
 
 import com.home.application.ingest.matching.TradeMatchEvidenceCommand;
 import com.home.domain.ingest.matching.TradeMatchStatus;
+import com.home.infrastructure.persistence.ingest.matching.JdbcTradeMatchEvidenceRepository;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

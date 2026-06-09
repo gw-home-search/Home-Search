@@ -6,7 +6,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
 
+import com.home.application.coordinate.lookup.ParcelCoordinate;
 import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMasterBootstrapper;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,7 +24,7 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 			""").update();
 		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
 			jdbcClient,
-			(pnu, item) -> expectedPnu().equals(pnu) ? Optional.of(new ParcelCoordinate(
+			pnu -> expectedPnu().equals(pnu) ? Optional.of(new ParcelCoordinate(
 				new BigDecimal("37.5012345"),
 				new BigDecimal("127.0543210")
 			)) : Optional.empty()
@@ -51,7 +53,7 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 			""").update();
 		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
 			jdbcClient,
-			(pnu, item) -> expectedPnu().equals(pnu) ? Optional.of(new ParcelCoordinate(
+			pnu -> expectedPnu().equals(pnu) ? Optional.of(new ParcelCoordinate(
 				new BigDecimal("37.5012345"),
 				new BigDecimal("127.0543210")
 			)) : Optional.empty()
@@ -83,7 +85,7 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 		String fallbackPnu = "1153011200102380000";
 		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
 			jdbcClient,
-			(pnu, item) -> fallbackPnu.equals(pnu) ? Optional.of(new ParcelCoordinate(
+			pnu -> fallbackPnu.equals(pnu) ? Optional.of(new ParcelCoordinate(
 				new BigDecimal("37.5012345"),
 				new BigDecimal("127.0543210")
 			)) : Optional.empty(),
@@ -110,7 +112,7 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 			""").update();
 		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
 			jdbcClient,
-			(pnu, item) -> expectedPnu().equals(pnu) ? Optional.of(new ParcelCoordinate(
+			pnu -> expectedPnu().equals(pnu) ? Optional.of(new ParcelCoordinate(
 				new BigDecimal("37.5012345"),
 				new BigDecimal("127.0543210")
 			)) : Optional.empty()
@@ -133,7 +135,7 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 			""").update();
 		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
 			jdbcClient,
-			(pnu, item) -> Optional.empty()
+			pnu -> Optional.empty()
 		);
 
 		var result = bootstrapper.bootstrap(rtmsItem("APT-LIVE-404", "Missing Coordinate Apartment", "888-1"));
@@ -168,7 +170,7 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 			""").update();
 		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
 			jdbcClient,
-			(pnu, item) -> Optional.empty()
+			pnu -> Optional.empty()
 		);
 
 		var result = bootstrapper.bootstrap(rtmsItem("APT-501", "Sample Apartment", "140-1"));
@@ -205,7 +207,7 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 			""").update();
 		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
 			jdbcClient,
-			(pnu, item) -> Optional.of(new ParcelCoordinate(new BigDecimal("37.5012345"), new BigDecimal("127.0543210")))
+			pnu -> Optional.of(new ParcelCoordinate(new BigDecimal("37.5012345"), new BigDecimal("127.0543210")))
 		);
 
 		var result = bootstrapper.bootstrap(rtmsItem("APT-501", "Moved Apartment", "777-1"));

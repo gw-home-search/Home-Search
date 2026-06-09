@@ -31,7 +31,7 @@ class OpenApiTradeIngestServiceTest {
 		List<String> events = new ArrayList<>();
 		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
 		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			item -> ComplexMatchResult.matched(501L, "COMPLEX-PK-501", "APTSEQ")
@@ -67,7 +67,7 @@ class OpenApiTradeIngestServiceTest {
 		List<String> events = new ArrayList<>();
 		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
 		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			item -> ComplexMatchResult.matched(501L, "COMPLEX-PK-501", "APTSEQ")
@@ -111,7 +111,7 @@ class OpenApiTradeIngestServiceTest {
 				return false;
 			}
 		};
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			item -> ComplexMatchResult.matched(501L, "COMPLEX-PK-501", "APTSEQ")
@@ -138,7 +138,7 @@ class OpenApiTradeIngestServiceTest {
 		List<String> events = new ArrayList<>();
 		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
 		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			item -> ComplexMatchResult.matched(501L, "COMPLEX-PK-501", "APTSEQ")
@@ -175,7 +175,7 @@ class OpenApiTradeIngestServiceTest {
 		List<String> events = new ArrayList<>();
 		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
 		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			item -> ComplexMatchResult.failed("no complex matched aptSeq=APT-404")
@@ -208,7 +208,7 @@ class OpenApiTradeIngestServiceTest {
 		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
 		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
 		RecordingTradeMatchEvidenceRepository evidenceRepository = new RecordingTradeMatchEvidenceRepository();
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			item -> ComplexMatchResult.failed("no complex matched aptSeq=APT-404"),
@@ -243,7 +243,7 @@ class OpenApiTradeIngestServiceTest {
 		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
 		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
 		RecordingTradeMatchEvidenceRepository evidenceRepository = new RecordingTradeMatchEvidenceRepository();
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			item -> ComplexMatchResult.failed("no complex matched aptSeq=APT-501"),
@@ -272,7 +272,7 @@ class OpenApiTradeIngestServiceTest {
 		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
 		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
 		RecordingTradeMatchEvidenceRepository evidenceRepository = new RecordingTradeMatchEvidenceRepository();
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			item -> ComplexMatchResult.failed("no complex matched aptSeq=APT-501"),
@@ -304,7 +304,7 @@ class OpenApiTradeIngestServiceTest {
 		List<String> events = new ArrayList<>();
 		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
 		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			item -> ComplexMatchResult.matched(501L, "COMPLEX-PK-501", "APTSEQ")
@@ -337,7 +337,7 @@ class OpenApiTradeIngestServiceTest {
 		RecordingRawTradeIngestRepository rawRepository = new RecordingRawTradeIngestRepository(events);
 		RecordingNormalizedTradeRepository tradeRepository = new RecordingNormalizedTradeRepository(events);
 		RecordingTradeIngestMetrics metrics = new RecordingTradeIngestMetrics();
-		OpenApiTradeIngestService service = new OpenApiTradeIngestService(
+		OpenApiTradeIngestService service = OpenApiTradeIngestServiceFixture.service(
 			rawRepository,
 			tradeRepository,
 			item -> ComplexMatchResult.matched(501L, "COMPLEX-PK-501", "APTSEQ"),

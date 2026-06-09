@@ -26,7 +26,8 @@ class BackendPersistencePackageStructureTest {
 			rootClassCount = rootFiles
 				.filter(Files::isRegularFile)
 				.filter(path -> path.toString().endsWith(".java"))
-				.filter(path -> !path.getFileName().toString().equals("IngestPersistenceConfiguration.java"))
+				.filter(path -> !path.getFileName().toString().endsWith("PersistenceConfiguration.java"))
+				.filter(path -> !path.getFileName().toString().equals("IngestPersistenceJdbcSupport.java"))
 				.filter(path -> !path.getFileName().toString().equals("package-info.java"))
 				.count();
 		}

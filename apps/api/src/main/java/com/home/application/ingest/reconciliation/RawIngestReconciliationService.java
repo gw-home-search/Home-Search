@@ -2,7 +2,7 @@ package com.home.application.ingest.reconciliation;
 
 import java.util.Objects;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
-import com.home.domain.ingest.raw.RawTradeIngestStatus;
+import com.home.domain.ingest.raw.RawTradeIngestTransition;
 
 public class RawIngestReconciliationService {
 
@@ -24,7 +24,7 @@ public class RawIngestReconciliationService {
 		RawIngestReconciliationResult result = RawIngestReconciliationResult.empty();
 		for (RawIngestReconciliationCandidate candidate
 			: reconciliationRepository.findReceivedRowsLinkedToActiveTrade(limit)) {
-			rawTradeIngestRepository.updateStatus(candidate.rawIngestId(), RawTradeIngestStatus.NORMALIZED, null);
+			rawTradeIngestRepository.updateStatus(candidate.rawIngestId(), RawTradeIngestTransition.normalized());
 			result = result.plusNormalized();
 		}
 		return result;

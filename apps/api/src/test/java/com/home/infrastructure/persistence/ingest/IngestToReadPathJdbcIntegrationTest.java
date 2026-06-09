@@ -10,6 +10,7 @@ import java.util.Optional;
 import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
 import com.home.application.ingest.trade.OpenApiTradeIngestService;
+import com.home.application.ingest.trade.OpenApiTradeIngestServiceFixture;
 import com.home.application.ingest.trade.OpenApiTradeItem;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
 import com.home.domain.ingest.matching.TradeMatchStatus;
@@ -140,7 +141,7 @@ class IngestToReadPathJdbcIntegrationTest extends JdbcPostgresTestSupport {
 	}
 
 	private OpenApiTradeIngestService ingestService() {
-		return new OpenApiTradeIngestService(
+		return OpenApiTradeIngestServiceFixture.service(
 			new JdbcRawTradeIngestRepository(jdbcClient),
 			new JdbcNormalizedTradeRepository(jdbcClient, transactionTemplate),
 			new JdbcComplexMatcher(jdbcClient),

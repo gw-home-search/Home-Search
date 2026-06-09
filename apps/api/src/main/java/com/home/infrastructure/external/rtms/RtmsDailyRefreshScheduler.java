@@ -1,0 +1,91 @@
+package com.home.infrastructure.external.rtms;
+
+import java.time.Clock;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
+
+class RtmsDailyRefreshScheduler {
+
+	private static final Logger log = LoggerFactory.getLogger(RtmsDailyRefreshScheduler.class);
+	private static final DateTimeFormatter DEAL_YMD_FORMATTER = DateTimeFormatter.ofPattern("yyyyMM");
+
+	private final RtmsMonthlyRefreshRunner monthlyRefreshRunner;
+	private final RtmsDailyRefreshProperties properties;
+	private final RtmsDailyRefreshSlackMessageFormatter formatter;
+	private final RtmsDailyRefreshNotifier notifier;
+	private final Clock clock;
+	private final AtomicBoolean running = new AtomicBoolean(false);
+
+	RtmsDailyRefreshScheduler(
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
+		RtmsDailyRefreshProperties properties,
+		RtmsDailyRefreshSlackMessageFormatter formatter,
+		RtmsDailyRefreshNotifier notifier,
+		Clock clock
+	) {
+		this.monthlyRefreshRunner = Objects.requireNonNull(monthlyRefreshRunner);
+		this.properties = Objects.requireNonNull(properties);
+		this.formatter = Objects.requireNonNull(formatter);
+		this.notifier = Objects.requireNonNull(notifier);
+		this.clock = Objects.requireNonNull(clock);
+	}
+
+	@Scheduled(
+		cron = "${home.ingest.rtms.daily.cron:0 15 5 * * *}",
+		zone = "${home.ingest.rtms.daily.zone:Asia/Seoul}"
+	)
+	void runDue() {
+		if (!running.compareAndSet(false, true)) {
+			log.warn("RTMS daily refresh skipped because a previous run is still active");
+			return;
+		}
+		try {
+			RtmsDailyRefreshExecution execution = runOnce();
+			if (execution.results().isEmpty()) {
+				log.warn("RTMS daily refresh skipped because configured lawdCds is empty");
+				return;
+			}
+			notifySlack(execution);
+		}
+		finally {
+			running.set(false);
+		}
+	}
+
+	RtmsDailyRefreshExecution runOnce() {
+		String baseDealYmd = YearMonth.now(clock.withZone(properties.zoneId())).format(DEAL_YMD_FORMATTER);
+		List<RtmsDailyRefreshResult> results = new ArrayList<>();
+		for (String lawdCd : properties.lawdCds()) {
+			RtmsMonthlyRefreshPlan plan = new RtmsMonthlyRefreshPlan(lawdCd, baseDealYmd, properties.lookbackMonths());
+			try {
+				results.add(RtmsDailyRefreshResult.from(plan, monthlyRefreshRunner.refresh(plan)));
+			}
+			catch (RuntimeException exception) {
+				results.add(RtmsDailyRefreshResult.failed(plan, exception));
+			}
+		}
+		return new RtmsDailyRefreshExecution(results);
+	}
+
+	private void notifySlack(RtmsDailyRefreshExecution execution) {
+		String message = formatter.format(execution);
+		try {
+			notifier.send(message);
+		}
+		catch (RuntimeException exception) {
+			log.warn(
+				"RTMS daily refresh Slack notification failed status={} reason={}",
+				execution.status(),
+				formatter.sanitizeSensitiveValues(exception.getMessage())
+			);
+		}
+	}
+}

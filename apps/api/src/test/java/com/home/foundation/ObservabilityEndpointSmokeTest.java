@@ -10,8 +10,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.home.application.ingest.trade.IngestResult;
-import com.home.application.map.MapUseCase;
 import com.home.application.ingest.trade.TradeIngestMetrics;
+import com.home.application.map.MapUseCase;
+
+import io.micrometer.core.instrument.MeterRegistry;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +35,9 @@ class ObservabilityEndpointSmokeTest {
 
 	@Autowired
 	private TradeIngestMetrics tradeIngestMetrics;
+
+	@Autowired
+	private MeterRegistry meterRegistry;
 
 	@MockitoBean
 	private MapUseCase mapUseCase;
@@ -70,6 +75,25 @@ class ObservabilityEndpointSmokeTest {
 			.andExpect(content().string(containsString("result=\"canceled_skipped\"")))
 			.andExpect(content().string(containsString("result=\"match_failed\"")))
 			.andExpect(content().string(containsString("result=\"parse_failed\"")));
+	}
+
+	@Test
+	@DisplayName("GET /actuator/prometheus는 map marker cache hit miss fallback counter를 노출한다")
+	void prometheusExposesMapMarkerCacheCounters() throws Exception {
+		meterRegistry.counter("home.search.map.marker.cache.requests", "endpoint", "complexes", "result", "hit")
+			.increment();
+		meterRegistry.counter("home.search.map.marker.cache.requests", "endpoint", "complexes", "result", "miss")
+			.increment();
+		meterRegistry.counter("home.search.map.marker.cache.requests", "endpoint", "complexes", "result", "fallback")
+			.increment();
+
+		mockMvc.perform(get("/actuator/prometheus"))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("home_search_map_marker_cache_requests_total")))
+			.andExpect(content().string(containsString("endpoint=\"complexes\"")))
+			.andExpect(content().string(containsString("result=\"hit\"")))
+			.andExpect(content().string(containsString("result=\"miss\"")))
+			.andExpect(content().string(containsString("result=\"fallback\"")));
 	}
 
 	@Test

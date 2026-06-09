@@ -205,12 +205,15 @@ Recorded gate evidence:
 - `cd apps/api && ./gradlew foundationTest --tests com.home.foundation.ObservabilityEndpointSmokeTest` = pass (Prometheus scrape surface와 marker cache metric exposure smoke 통과)
 - `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.RedisCachingComplexMarkerRepositoryTest` = pass (Redis hit/miss/fallback metric과 read/write 장애 fallback 회귀 통과)
 - `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, persistence, coverage, foundation, javadoc gate 통과)
+- `Coverage: >=90%` = pass (`backendQualityCheck`의 jacoco coverage verification과 coverageCheck 통과)
+- `Docs/OpenAPI: generated + verified` = pass (`backendQualityCheck`의 REST Docs, openapi3, verifyOpenApiSpec, apiDocsCheck 통과)
 - `test display name policy` = pass (test display name policy 통과)
 - `project terms check` = pass (프로젝트 용어 점검 통과)
 - `git diff --check` = pass (공백 오류 없음)
-- `k6 Redis off fixed-case baseline` = pass (3차 Redis cache 결과: Redis off p95 4,062.09ms, fail rate 0%, checks 100%)
-- `k6 Redis cold miss fixed-case smoke` = pass (3차 Redis cache 결과: Redis cold miss p95 3,995.38ms, fail rate 0%, checks 100%)
-- `k6 Redis warm hit fixed-case baseline` = pass (3차 Redis cache 결과: Redis warm hit p95 52.75ms, fail rate 0%, checks 100%)
+- `HOME_MAP_MARKER_CACHE_ENABLED=false k6 Redis off fixed-case baseline` = pass (3차 Redis cache 결과: Redis off p95 4,062.09ms, fail rate 0%, checks 100%)
+- `redis-cli -p 16379 FLUSHALL` = pass (3차 Redis cold miss 측정 전 cache clear precondition)
+- `HOME_MAP_MARKER_CACHE_ENABLED=true k6 Redis cold miss fixed-case smoke` = pass (3차 Redis cache 결과: Redis cold miss p95 3,995.38ms, fail rate 0%, checks 100%)
+- `HOME_MAP_MARKER_CACHE_ENABLED=true k6 Redis warm hit fixed-case baseline after cache warm-up` = pass (3차 Redis cache 결과: Redis warm hit p95 52.75ms, fail rate 0%, checks 100%)
 - `Prometheus marker cache metric scrape` = pass (ObservabilityEndpointSmokeTest가 actuator Prometheus scrape에서 result=hit|miss|fallback 노출 확인)
 
 Redis off:

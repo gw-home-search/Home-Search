@@ -7,6 +7,8 @@ import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerific
 import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
 import com.home.application.coordinate.identity.ComplexCoordinateParcelTargets;
 import com.home.application.coordinate.identity.ComplexCoordinateTarget;
+import com.home.application.coordinate.identity.ComplexIdentityCandidate;
+import com.home.application.coordinate.identity.ComplexIdentityCandidatePolicy;
 import com.home.infrastructure.external.ExternalApiUri;
 import com.home.infrastructure.external.odcloud.dto.OdcloudAptResponse;
 
@@ -24,6 +26,7 @@ public class OdcloudComplexCoordinateIdentityVerifier implements ComplexCoordina
 	private final String aptPath;
 	private final int maxAttempts;
 	private final long retryBackoffMillis;
+	private final ComplexIdentityCandidatePolicy identityCandidatePolicy;
 
 	public OdcloudComplexCoordinateIdentityVerifier(
 		RestClient restClient,
@@ -48,6 +51,7 @@ public class OdcloudComplexCoordinateIdentityVerifier implements ComplexCoordina
 		this.aptPath = Objects.requireNonNull(aptPath);
 		this.maxAttempts = Math.max(1, maxAttempts);
 		this.retryBackoffMillis = Math.max(0L, retryBackoffMillis);
+		this.identityCandidatePolicy = new ComplexIdentityCandidatePolicy();
 	}
 
 	@Override
@@ -64,31 +68,21 @@ public class OdcloudComplexCoordinateIdentityVerifier implements ComplexCoordina
 		}
 		try {
 			OdcloudAptResponse response = getBody(odcloudQuery(aptSeq));
-			if (response == null || response.getData() == null || response.getData().isEmpty()) {
-				return ComplexCoordinateIdentityVerification.unavailable("ODC identity candidate unavailable");
-			}
-			List<String> pnus = response.getData().stream()
-				.filter(Objects::nonNull)
-				.filter(candidate -> aptSeq.equals(trimToNull(candidate.getComplexPk())))
-				.map(OdcloudAptResponse.Item::getPnu)
-				.map(this::trimToNull)
-				.filter(this::validPnu)
-				.distinct()
-				.toList();
-			if (pnus.isEmpty()) {
-				return ComplexCoordinateIdentityVerification.unavailable("ODC exact COMPLEX_PK candidate unavailable");
-			}
-			if (pnus.size() > 1) {
-				return ComplexCoordinateIdentityVerification.ambiguous("ODC exact COMPLEX_PK has multiple PNU candidates");
-			}
-			if (!pnu.equals(pnus.get(0))) {
-				return ComplexCoordinateIdentityVerification.ambiguous("ODC PNU conflicts with parcel PNU");
-			}
-			return ComplexCoordinateIdentityVerification.confirmed("ODC aptSeq/PNU identity confirmed");
+			return identityCandidatePolicy.verify(aptSeq, pnu, candidates(response));
 		}
 		catch (RestClientException exception) {
 			return ComplexCoordinateIdentityVerification.failed("ODC identity lookup failed");
 		}
+	}
+
+	private List<ComplexIdentityCandidate> candidates(OdcloudAptResponse response) {
+		if (response == null || response.getData() == null) {
+			return List.of();
+		}
+		return response.getData().stream()
+			.filter(Objects::nonNull)
+			.map(item -> new ComplexIdentityCandidate(item.getComplexPk(), item.getPnu()))
+			.toList();
 	}
 
 	private OdcloudAptResponse getBody(String query) {
@@ -139,10 +133,6 @@ public class OdcloudComplexCoordinateIdentityVerifier implements ComplexCoordina
 			+ "&perPage=" + ExternalApiUri.queryValue(20)
 			+ "&cond%5BCOMPLEX_PK::EQ%5D=" + ExternalApiUri.queryValue(aptSeq)
 			+ "&serviceKey=" + ExternalApiUri.serviceKeyQueryValue(serviceKey);
-	}
-
-	private boolean validPnu(String value) {
-		return value != null && value.matches("\\d{19}");
 	}
 
 	private String trimToNull(String value) {

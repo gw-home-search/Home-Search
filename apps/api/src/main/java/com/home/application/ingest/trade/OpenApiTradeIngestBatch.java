@@ -2,6 +2,8 @@ package com.home.application.ingest.trade;
 
 import java.util.List;
 
+import com.home.domain.ingest.source.IngestSource;
+
 public record OpenApiTradeIngestBatch(
 	String source,
 	String lawdCd,
@@ -11,7 +13,7 @@ public record OpenApiTradeIngestBatch(
 ) {
 
 	public OpenApiTradeIngestBatch {
-		source = hasText(source) ? source.trim() : "RTMS";
+		source = IngestSource.ofOrDefault(source, "RTMS").value();
 		if (!hasText(lawdCd)) {
 			throw new IllegalArgumentException("lawdCd is required");
 		}

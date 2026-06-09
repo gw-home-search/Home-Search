@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Objects;
 
 import com.home.domain.ingest.matching.TradeMatchStatus;
+import com.home.domain.ingest.source.IngestSource;
 import com.home.domain.trade.RtmsJibunPnu;
 import com.home.application.ingest.normalization.RtmsJibunPnuNormalizer;
 import com.home.application.ingest.trade.OpenApiTradeItem;
@@ -38,16 +39,13 @@ public record TradeMatchEvidenceCommand(
 		if (rawIngestId == null) {
 			throw new IllegalArgumentException("rawIngestId is required");
 		}
-		if (!hasText(source)) {
-			throw new IllegalArgumentException("source is required");
-		}
+		source = IngestSource.of(source).value();
 		if (matchStatus == null) {
 			throw new IllegalArgumentException("matchStatus is required");
 		}
 		if (candidateCount < 0) {
 			throw new IllegalArgumentException("candidateCount must be non-negative");
 		}
-		source = source.trim();
 		rawJibun = trimToNull(rawJibun);
 		normalizedJibun = trimToNull(normalizedJibun);
 		sggCd = trimToNull(sggCd);

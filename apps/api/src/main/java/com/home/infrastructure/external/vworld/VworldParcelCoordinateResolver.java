@@ -42,7 +42,10 @@ public class VworldParcelCoordinateResolver implements ParcelCoordinateResolver 
 				.uri(ExternalApiUri.create(properties.baseUrl(), properties.wfsPath(), query))
 				.retrieve()
 				.body(VworldParcelCoordinateResponse.class);
-			return response != null ? response.center(normalizedPnu) : Optional.empty();
+			return response != null
+				? response.center(normalizedPnu)
+					.map(center -> new ParcelCoordinate(center.latitude(), center.longitude()))
+				: Optional.empty();
 		}
 		catch (RestClientException exception) {
 			return Optional.empty();

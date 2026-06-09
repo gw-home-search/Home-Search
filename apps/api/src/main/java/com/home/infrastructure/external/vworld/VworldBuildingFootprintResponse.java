@@ -1,13 +1,12 @@
 package com.home.infrastructure.external.vworld;
 
 import java.math.BigDecimal;
-import java.math.MathContext;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.home.application.coordinate.footprint.BuildingFootprintFeatureCandidate;
 import com.home.application.coordinate.footprint.BuildingFootprintImportCandidate;
+import com.home.application.coordinate.footprint.CoordinateGeometryPolicy;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 record VworldBuildingFootprintResponse(
@@ -15,6 +14,8 @@ record VworldBuildingFootprintResponse(
 	Integer totalFeatures,
 	List<Feature> features
 ) {
+
+	private static final CoordinateGeometryPolicy GEOMETRY_POLICY = new CoordinateGeometryPolicy();
 
 	int totalCountOr(int fallback) {
 		if (totalCount != null && totalCount > 0) {
@@ -27,14 +28,10 @@ record VworldBuildingFootprintResponse(
 	}
 
 	List<BuildingFootprintImportCandidate> footprints(String expectedPnu, String source, String snapshotVersion) {
-		if (features == null || features.isEmpty()) {
-			return List.of();
-		}
-		ArrayList<BuildingFootprintImportCandidate> results = new ArrayList<>();
-		for (Feature feature : features) {
-			feature.footprint(expectedPnu, source, snapshotVersion).ifPresent(results::add);
-		}
-		return results;
+		return GEOMETRY_POLICY.footprints(expectedPnu, source, snapshotVersion, features == null ? List.of() : features
+			.stream()
+			.map(Feature::candidate)
+			.toList());
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
@@ -44,38 +41,17 @@ record VworldBuildingFootprintResponse(
 		Properties properties
 	) {
 
-		private Optional<BuildingFootprintImportCandidate> footprint(
-			String expectedPnu,
-			String source,
-			String snapshotVersion
-		) {
-			if (properties == null || !expectedPnu.equals(trimToNull(properties.pnu()))) {
-				return Optional.empty();
-			}
-			if (bbox == null || bbox.size() < 4) {
-				return Optional.empty();
-			}
-			String sourceBuildingKey = firstText(id, properties.gisIdntfcNo(), properties.refrnSystmCntcNo());
-			if (sourceBuildingKey == null) {
-				return Optional.empty();
-			}
-			BigDecimal minLongitude = bbox.get(0);
-			BigDecimal minLatitude = bbox.get(1);
-			BigDecimal maxLongitude = bbox.get(2);
-			BigDecimal maxLatitude = bbox.get(3);
-			if (minLongitude == null || minLatitude == null || maxLongitude == null || maxLatitude == null) {
-				return Optional.empty();
-			}
-			return Optional.of(new BuildingFootprintImportCandidate(
-				expectedPnu,
-				trimToNull(properties.buldNm()),
-				trimToNull(properties.dongNm()),
-				sourceBuildingKey,
-				minLatitude.add(maxLatitude).divide(BigDecimal.valueOf(2), MathContext.DECIMAL64),
-				minLongitude.add(maxLongitude).divide(BigDecimal.valueOf(2), MathContext.DECIMAL64),
-				source,
-				snapshotVersion
-			));
+		private BuildingFootprintFeatureCandidate candidate() {
+			return new BuildingFootprintFeatureCandidate(
+				id,
+				properties == null ? null : properties.pnu(),
+				properties == null ? null : properties.buldNm(),
+				properties == null ? null : properties.dongNm(),
+				properties == null
+					? List.of()
+					: java.util.Arrays.asList(properties.gisIdntfcNo(), properties.refrnSystmCntcNo()),
+				bbox
+			);
 		}
 	}
 
@@ -89,17 +65,4 @@ record VworldBuildingFootprintResponse(
 	) {
 	}
 
-	private static String firstText(String... values) {
-		for (String value : values) {
-			String normalized = trimToNull(value);
-			if (normalized != null) {
-				return normalized;
-			}
-		}
-		return null;
-	}
-
-	private static String trimToNull(String value) {
-		return value != null && !value.isBlank() ? value.trim() : null;
-	}
 }

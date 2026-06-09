@@ -1771,7 +1771,7 @@ title_ko = "RTMS daily refresh Slack summary"
 pr_type = "Feat"
 pr_title_ko = "RTMS 일일 재수집과 Slack 저장 요약"
 description_ko = "기존 월별 refresh runner를 daily scheduler로 안전하게 실행하고 신규 저장/중복/실패 결과를 Slack summary로 알린다."
-status = "planned"
+status = "done"
 priority = 175
 targets = "backend"
 preset = "open-api-ingest-prep"
@@ -1798,6 +1798,8 @@ verification_commands = [
   "git diff --check",
 ]
 verification_evidence = [
+  "상태: Pass (local TDD RED/GREEN, backendQualityCheck, policy checks 통과)",
+  "예상 RED 실패: daily scheduler/formatter/notifier production type 부재로 compileTestJava 실패하고, sourceKey/raw payload redaction 누락은 formatter assertion 실패로 드러나야 한다.",
   "- `cd apps/api && ./gradlew test --tests '*RtmsDailyRefresh*' --tests '*RtmsMonthlyRefresh*'` = fail (최초 RED: RtmsDailyRefresh scheduler/formatter/notifier production type 부재로 compileTestJava 실패)",
   "- `cd apps/api && ./gradlew test --tests com.home.infrastructure.external.rtms.RtmsDailyRefreshSlackMessageFormatterTest` = fail (보안 RED: sourceKey와 raw payload 값이 Slack summary에 노출되는 회귀 실패)",
   "- `cd apps/api && ./gradlew test --tests '*RtmsDailyRefresh*' --tests '*RtmsMonthlyRefresh*'` = pass (daily scheduler, Slack summary/notifier, monthly refresh 회귀 통과)",
@@ -1806,6 +1808,9 @@ verification_evidence = [
   "- `python3 .codex/harness/project_terms_check.py` = pass (프로젝트 용어 점검 통과)",
   "- `python3 .codex/harness/pr_lint.py --self-test` = pass (PR lint 자체 테스트 통과)",
   "- `git diff --check` = pass (공백 오류 없음)",
+  "contract-reviewer: 게이트 결정 = Pass (public API URL/request/response/unit/ProblemDetail 변경 없음)",
+  "reviewer: 지적사항 = none; 검증 공백 = live RTMS API와 real Slack webhook은 fixture/mock으로 대체; 잔여 위험 = 운영 webhook secret 설정은 배포 환경에서 별도 주입 필요",
+  "다음 행동: harness --pr로 integration branch와 draft PR을 생성하고 GitHub에서 수동 review/merge한다.",
 ]
 stop_conditions = [
   "PR 검증에서 live RTMS Open API call 또는 real Slack webhook이 필요하면 중단하고 fixture/mocking으로 대체한다.",

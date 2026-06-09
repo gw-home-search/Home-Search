@@ -170,3 +170,103 @@ EXPLAIN evidence:
 이력서 한 줄 후보:
 
 - k6 고정 케이스와 Redis read-through cache를 도입해 지도 marker API의 반복 broad-bounds 요청 p95를 4.06s에서 52.75ms로 약 98.7% 단축하고, Redis 장애 시 DB fallback과 cache hit/miss/fallback metric으로 API 가용성과 관측 가능성을 보강.
+
+## 4차 Redis performance gate 기준
+
+이번 gate는 새 runtime behavior를 추가하지 않고, Redis marker cache를 켜는 운영 후보가
+최소한 어떤 evidence를 가져야 하는지 고정한다.
+
+Gate acceptance:
+
+- `POST /api/v1/map/complexes` URL, request field, response field, amount unit,
+  empty-result behavior를 변경하지 않는다.
+- Redis cache 기본값은 off로 유지한다.
+- 같은 `COMPLEX_CASE=seed-wide` 요청으로 Redis off, cold miss, warm hit를
+  분리 측정한다.
+- k6 `checks`는 100%, `http_req_failed`는 0%여야 한다.
+- warm hit p95는 Redis off p95 대비 명확히 개선되어야 한다.
+- `home_search_map_marker_cache_requests_total` 또는 동등 Prometheus metric에서
+  `result=hit|miss|fallback`을 확인한다.
+- Redis 장애 또는 미연결은 marker API 실패가 아니라 JDBC fallback으로 남아야 한다.
+- cache miss 비용과 TTL stale window는 운영 rollout 전 별도 판단 대상으로 남긴다.
+
+Required local evidence:
+
+- local compose config 렌더링
+- `cd apps/api && ./gradlew backendQualityCheck`
+- Redis off/cold/warm k6 fixed-case runs
+- Prometheus marker cache metric scrape
+
+Recorded gate evidence:
+
+- `production behavior RED` = not run (이번 slice는 새 runtime behavior 없이 Redis performance gate 기준과 local evidence를 고정)
+- `local compose config render` = pass (tracked local-runtime override fallback으로 API env_file 렌더링 통과)
+- `cd apps/api && ./gradlew foundationTest --tests com.home.foundation.LocalRuntimeStackConfigurationTest` = pass (local compose env_file fallback 기대값 통과)
+- `cd apps/api && ./gradlew foundationTest --tests com.home.foundation.ObservabilityEndpointSmokeTest` = pass (Prometheus scrape surface와 marker cache metric exposure smoke 통과)
+- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.RedisCachingComplexMarkerRepositoryTest` = pass (Redis hit/miss/fallback metric과 read/write 장애 fallback 회귀 통과)
+- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, persistence, coverage, foundation, javadoc gate 통과)
+- `Coverage: >=90%` = pass (`backendQualityCheck`의 jacoco coverage verification과 coverageCheck 통과)
+- `Docs/OpenAPI: generated + verified` = pass (`backendQualityCheck`의 REST Docs, openapi3, verifyOpenApiSpec, apiDocsCheck 통과)
+- `test display name policy` = pass (test display name policy 통과)
+- `project terms check` = pass (프로젝트 용어 점검 통과)
+- `git diff --check` = pass (공백 오류 없음)
+- `HOME_MAP_MARKER_CACHE_ENABLED=false k6 Redis off fixed-case baseline` = pass (3차 Redis cache 결과: Redis off p95 4,062.09ms, fail rate 0%, checks 100%)
+- `redis-cli -p 16379 FLUSHALL` = pass (3차 Redis cold miss 측정 전 cache clear precondition)
+- `HOME_MAP_MARKER_CACHE_ENABLED=true k6 Redis cold miss fixed-case smoke` = pass (3차 Redis cache 결과: Redis cold miss p95 3,995.38ms, fail rate 0%, checks 100%)
+- `HOME_MAP_MARKER_CACHE_ENABLED=true k6 Redis warm hit fixed-case baseline after cache warm-up` = pass (3차 Redis cache 결과: Redis warm hit p95 52.75ms, fail rate 0%, checks 100%)
+- `Prometheus marker cache metric scrape` = pass (ObservabilityEndpointSmokeTest가 actuator Prometheus scrape에서 result=hit|miss|fallback 노출 확인)
+
+Redis off:
+
+```bash
+k6 run \
+  -e SCENARIO=baseline \
+  -e BASE_URL=http://localhost:8080 \
+  -e TARGET_RPS=1 \
+  -e COMPLEX_WEIGHT=1 \
+  -e REGION_WEIGHT=0 \
+  -e COMPLEX_CASE=seed-wide \
+  -e RAMP_UP=1s \
+  -e STEADY=10s \
+  -e RAMP_DOWN=1s \
+  apps/api/perf/k6/map-marker-baseline.js
+```
+
+Redis cold miss:
+
+```bash
+k6 run \
+  -e SCENARIO=smoke \
+  -e BASE_URL=http://localhost:8080 \
+  -e SMOKE_ITERATIONS=1 \
+  -e COMPLEX_WEIGHT=1 \
+  -e REGION_WEIGHT=0 \
+  -e COMPLEX_CASE=seed-wide \
+  apps/api/perf/k6/map-marker-baseline.js
+```
+
+Redis warm hit:
+
+```bash
+k6 run \
+  -e SCENARIO=baseline \
+  -e BASE_URL=http://localhost:8080 \
+  -e TARGET_RPS=1 \
+  -e COMPLEX_WEIGHT=1 \
+  -e REGION_WEIGHT=0 \
+  -e COMPLEX_CASE=seed-wide \
+  -e RAMP_UP=1s \
+  -e STEADY=10s \
+  -e RAMP_DOWN=1s \
+  apps/api/perf/k6/map-marker-baseline.js
+```
+
+Metric check:
+
+```bash
+curl -fsS http://localhost:8080/actuator/prometheus \
+  | rg 'home_search_map_marker_cache_requests_total'
+```
+
+Production rollout is not part of this gate. Ingest-triggered invalidation,
+shorter TTL, or marker read model work should be handled as a separate slice.

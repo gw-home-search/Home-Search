@@ -5,12 +5,24 @@ import static org.mockito.Mockito.mock;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.core.io.ClassPathResource;
 
 class RtmsDailyRefreshConfigurationTest {
 
 	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
 		.withUserConfiguration(RtmsDailyRefreshConfiguration.class);
+
+	@Test
+	@DisplayName("application.yml daily refresh cron 기본값은 매일 새벽 3시다")
+	void applicationYamlDailyRefreshCronDefaultsToThreeAm() {
+		YamlPropertiesFactoryBean yaml = new YamlPropertiesFactoryBean();
+		yaml.setResources(new ClassPathResource("application.yml"));
+
+		assertThat(yaml.getObject())
+			.containsEntry("home.ingest.rtms.daily.cron", "0 0 3 * * *");
+	}
 
 	@Test
 	@DisplayName("daily refresh scheduler는 기본 설정에서 등록되지 않는다")

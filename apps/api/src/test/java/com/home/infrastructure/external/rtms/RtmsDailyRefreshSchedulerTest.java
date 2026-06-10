@@ -11,12 +11,14 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import com.home.application.ingest.trade.IngestResult;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.scheduling.annotation.Scheduled;
 
 class RtmsDailyRefreshSchedulerTest {
 
@@ -24,6 +26,18 @@ class RtmsDailyRefreshSchedulerTest {
 		Instant.parse("2026-06-09T16:00:00Z"),
 		ZoneOffset.UTC
 	);
+
+	@Test
+	@DisplayName("daily refresh scheduler는 기본 cron을 매일 새벽 3시 KST로 둔다")
+	void schedulerDefaultCronRunsAtThreeAmKst() throws NoSuchMethodException {
+		Scheduled scheduled = Arrays.stream(RtmsDailyRefreshScheduler.class.getDeclaredMethod("runDue")
+				.getAnnotationsByType(Scheduled.class))
+			.findFirst()
+			.orElseThrow();
+
+		assertThat(scheduled.cron()).isEqualTo("${home.ingest.rtms.daily.cron:0 0 3 * * *}");
+		assertThat(scheduled.zone()).isEqualTo("${home.ingest.rtms.daily.zone:Asia/Seoul}");
+	}
 
 	@Test
 	@DisplayName("daily refresh scheduler는 configured 법정동마다 KST 현재월 lookback plan을 실행하고 Slack summary를 보낸다")

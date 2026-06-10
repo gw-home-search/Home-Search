@@ -1860,6 +1860,95 @@ risk_notes = [
 ]
 
 [[items]]
+id = "rtms-daily-refresh-3am-schedule"
+title_ko = "RTMS daily refresh 3AM schedule"
+pr_type = "Feat"
+pr_title_ko = "RTMS 일일 실거래가 3시 저장 스케줄"
+description_ko = "Hermes Slack 알림이 연결된 RTMS daily refresh를 매일 새벽 3시 KST 기본 스케줄로 고정해 운영 가능한 일일 실거래가 저장 흐름을 닫는다."
+status = "done"
+priority = 178
+targets = "backend"
+preset = "backend-quality"
+acceptance_criteria = [
+  "RtmsDailyRefreshScheduler의 기본 cron은 매일 03:00 KST를 뜻하는 0 0 3 * * * 이다.",
+  "application.yml의 home.ingest.rtms.daily.cron 기본값도 0 0 3 * * * 이다.",
+  "home.ingest.rtms.daily.enabled=false 기본값은 유지되어 운영 설정 없이는 scheduler가 등록되지 않는다.",
+  "enabled 상태에서는 configured lawdCd 목록마다 KST 현재월부터 lookbackMonths까지 기존 RtmsMonthlyRefreshRunner를 실행한다.",
+  "매일 같은 월을 재수집해도 기존 거래는 duplicate skip되고 신규 거래만 normalizedInserted로 집계된다.",
+  "Hermes Slack summary는 신규 저장, 신규 저장 없음, 부분 실패, 실패를 드러내며 전송 실패가 ingest 결과를 failed로 뒤집지 않는다.",
+  "service key, raw payload 전문, local secret, .env* 값, 민감한 source key를 repository 파일, log, report, Slack message에 저장하지 않는다.",
+  "public map/search/region/detail/trade API URL, response shape, amount unit, ProblemDetail shape를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "RtmsDailyRefreshSchedulerTest에서 @Scheduled cron 기본값이 0 0 3 * * * 이어야 하나 현재 0 15 5 * * * 라서 실패하는 RED를 만든다.",
+  "RtmsDailyRefreshConfigurationTest 또는 application.yml check에서 daily cron 기본값이 0 0 3 * * * 이어야 하나 현재 0 15 5 * * * 라서 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "docker compose -f infra/docker-compose.local.yml config",
+  "cd apps/api && ./gradlew test --tests '*RtmsDailyRefresh*' --tests '*RtmsMonthlyRefresh*'",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 scripts/check-test-display-names.py",
+  "python3 .codex/harness/pr_lint.py --self-test",
+  "python3 .codex/harness/pr_context.py --self-test",
+  "python3 .codex/harness/pr_body_check.py --self-test",
+  "python3 .codex/harness/worklog_sync.py --self-test",
+  "python3 .codex/harness/home_pr.py --self-test",
+  "python3 .codex/harness/home_flow.py --self-test",
+  "python3 .codex/harness/home_integrate.py --self-test",
+  "python3 .codex/harness/home_plan.py --self-test",
+  "python3 .codex/harness/home_report.py --self-test",
+  ".codex/harness/home --self-test",
+  "python3 .codex/harness/skill_routing.py --self-test",
+  "python3 .codex/harness/user_language_check.py --self-test",
+  "python3 .codex/harness/project_terms_check.py",
+  "python3 .codex/harness/project_terms_check.py --self-test",
+  "git diff --check",
+]
+verification_evidence = [
+  "상태: Pass (03:00 KST default cron RED/GREEN, backendQualityCheck, policy checks 통과)",
+  "최초 RED: RtmsDailyRefreshSchedulerTest와 RtmsDailyRefreshConfigurationTest에서 기본 cron이 0 0 3 * * * 이어야 하나 기존 0 15 5 * * * 라서 실패하도록 고정했다.",
+  "예상 RED 실패: scheduler @Scheduled cron과 application.yml cron 기본값 assertion이 각각 실패해야 한다.",
+  "- `cd apps/api && ./gradlew test --tests '*RtmsDailyRefresh*'` = fail (최초 RED: scheduler/application.yml 기본 cron이 0 15 5 * * * 라서 03:00 KST assertion 2건 실패)",
+  "- `docker compose -f infra/docker-compose.local.yml config` = pass (local compose 설정 렌더링 통과)",
+  "- `cd apps/api && ./gradlew test --tests '*RtmsDailyRefresh*' --tests '*RtmsMonthlyRefresh*'` = pass (03:00 KST 기본 cron, daily scheduler, Hermes Slack notifier, monthly refresh 회귀 통과)",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, persistence, coverage, javadoc gate 통과)",
+  "Coverage: >=90%",
+  "Docs/OpenAPI: generated + verified",
+  "- `python3 scripts/check-test-display-names.py` = pass (test display name policy 통과)",
+  "- `python3 .codex/harness/pr_lint.py --self-test` = pass (PR lint 자체 테스트 통과)",
+  "- `python3 .codex/harness/pr_context.py --self-test` = pass (PR context 자체 테스트 통과)",
+  "- `python3 .codex/harness/pr_body_check.py --self-test` = pass (PR body 검사 자체 테스트 통과)",
+  "- `python3 .codex/harness/worklog_sync.py --self-test` = pass (worklog sync 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_pr.py --self-test` = pass (draft PR helper 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_flow.py --self-test` = pass (harness flow 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_integrate.py --self-test` = pass (integration helper 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_plan.py --self-test` = pass (plan helper 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_report.py --self-test` = pass (report helper 자체 테스트 통과)",
+  "- `.codex/harness/home --self-test` = pass (harness launcher 자체 테스트 통과)",
+  "- `python3 .codex/harness/skill_routing.py --self-test` = pass (skill routing 자체 테스트 통과)",
+  "- `python3 .codex/harness/user_language_check.py --self-test` = pass (사용자 노출 언어 점검 통과)",
+  "- `python3 .codex/harness/project_terms_check.py` = pass (프로젝트 용어 점검 통과)",
+  "- `python3 .codex/harness/project_terms_check.py --self-test` = pass (프로젝트 용어 self-test 통과)",
+  "- `git diff --check` = pass (공백 오류 없음)",
+  "contract-reviewer: 게이트 결정 = Pass (public API URL/request/response/unit/ProblemDetail 변경 없음)",
+  "reviewer: 지적사항 = none; 검증 공백 = live RTMS API와 real Hermes/Slack endpoint는 fixture/mock으로 대체; 잔여 위험 = 운영 env에서 enabled/lawdCds/Hermes 설정 주입 필요",
+  "다음 행동: harness --pr로 integration branch와 draft PR을 생성하고 GitHub에서 수동 review/merge한다.",
+]
+stop_conditions = [
+  "Spring Batch 도입, 전국 자동 lawdCd 생성, checkpoint 기반 증분 수집, distributed lock이 필요하면 별도 slice로 분리한다.",
+  "PR 검증에서 live RTMS Open API call 또는 real Hermes/Slack endpoint가 필요하면 중단하고 fixture/mocking으로 대체한다.",
+  "service key, local secret, raw production payload, .env* 파일 저장이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "DB/Flyway 변경 또는 Docker volume 삭제가 필요하면 중단하고 별도 승인/계획을 받는다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "이번 slice는 일일 저장 스케줄 마무리 작업이며 Spring Batch, 전국 대상 생성, exact-once multi-instance 실행은 포함하지 않는다.",
+  "03:00 KST 기본값은 운영 env에서 HOME_INGEST_RTMS_DAILY_CRON으로 override 가능해야 한다.",
+  "실제 운영 실행은 HOME_INGEST_RTMS_DAILY_ENABLED, HOME_INGEST_RTMS_DAILY_LAWD_CDS, Hermes endpoint/token/channel 설정 주입이 필요하다.",
+]
+
+[[items]]
 id = "rtms-storage-quality-verification"
 title_ko = "RTMS storage quality verification"
 pr_type = "Test"

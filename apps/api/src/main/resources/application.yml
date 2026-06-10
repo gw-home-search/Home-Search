@@ -57,7 +57,7 @@ home:
         enabled: false
         lawd-cds: ""
         lookback-months: 1
-        cron: "0 15 5 * * *"
+        cron: "0 0 3 * * *"
         zone: Asia/Seoul
         hermes:
           enabled: false

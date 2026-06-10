@@ -7,6 +7,7 @@ import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 import com.home.application.coordinate.display.ComplexDisplayCoordinateCommand;
 import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionRepository;
 import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionTarget;
+import com.home.domain.coordinate.CoordinateSource;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -64,13 +65,14 @@ public class JdbcComplexDisplayCoordinateProjectionRepository implements Complex
 			) resolved_link ON true
 			WHERE display_coordinate.complex_id IS NULL
 			   OR (
-			       display_coordinate.coordinate_source <> 'BUILDING_FOOTPRINT'
+			       display_coordinate.coordinate_source <> :buildingFootprintSource
 			       AND resolved_link.building_footprint_id IS NOT NULL
 			   )
 			ORDER BY c.id
 			LIMIT :limit
 			""")
 			.param("limit", limit)
+			.param("buildingFootprintSource", CoordinateSource.BUILDING_FOOTPRINT.storedValue())
 			.query((resultSet, rowNumber) -> new ComplexDisplayCoordinateProjectionTarget(
 				resultSet.getLong("complex_id"),
 				resultSet.getLong("parcel_id"),
@@ -123,14 +125,15 @@ public class JdbcComplexDisplayCoordinateProjectionRepository implements Complex
 			    reason = EXCLUDED.reason,
 			    checked_at = now(),
 			    updated_at = now()
-			WHERE complex_display_coordinate.coordinate_source <> 'BUILDING_FOOTPRINT'
-			   OR EXCLUDED.coordinate_source = 'BUILDING_FOOTPRINT'
+			WHERE complex_display_coordinate.coordinate_source <> :buildingFootprintSource
+			   OR EXCLUDED.coordinate_source = :buildingFootprintSource
 			""")
 			.param("complexId", command.complexId())
 			.param("buildingFootprintId", command.buildingFootprintId())
 			.param("latitude", command.latitude())
 			.param("longitude", command.longitude())
 			.param("coordinateSource", command.coordinateSource())
+			.param("buildingFootprintSource", CoordinateSource.BUILDING_FOOTPRINT.storedValue())
 			.param("confidence", command.confidence())
 			.param("reason", command.reason())
 			.update();

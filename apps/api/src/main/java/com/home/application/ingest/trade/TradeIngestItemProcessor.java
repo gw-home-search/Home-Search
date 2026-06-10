@@ -1,6 +1,7 @@
 package com.home.application.ingest.trade;
 
 import java.util.Objects;
+import java.util.Optional;
 
 import com.home.application.ingest.matching.ComplexMasterBootstrapResult;
 import com.home.application.ingest.matching.ComplexMasterBootstrapper;
@@ -61,74 +62,125 @@ public class TradeIngestItemProcessor {
 	}
 
 	public TradeIngestItemOutcome process(OpenApiTradeIngestBatch batch, OpenApiTradeItem item) {
-		String sourceKey = sourceKeyGenerator.generate(batch.source(), item);
-		String payloadHash = sourceKeyGenerator.hashPayload(item.payload());
+		TradeIdentity identity = identity(batch, item);
+		RawTradeIngestRecord raw = saveReceivedRaw(batch, item, identity);
+
+		if (hasProcessedDuplicate(raw, batch, identity)) {
+			return sourceKeyDuplicate(raw.id());
+		}
+
+		if (item.isCanceled()) {
+			return cancelTrade(batch, item, raw.id(), identity.sourceKey());
+		}
+
+		if (normalizedTradeRepository.existsBySourceAndSourceKey(batch.source(), identity.sourceKey())) {
+			return sourceKeyDuplicate(raw.id());
+		}
+
+		Optional<ParsedRtmsTrade> parsedTrade = parseOrMarkFailed(raw.id(), item);
+		if (parsedTrade.isEmpty()) {
+			return TradeIngestItemOutcome.parseFailed();
+		}
+
+		MatchAttempt matchAttempt = matchAndRecordEvidence(raw.id(), batch.source(), item);
+		if (!matchAttempt.matched()) {
+			return matchFailed(raw.id(), matchAttempt);
+		}
+
+		return normalizeTrade(raw.id(), batch, item, identity.sourceKey(), parsedTrade.get(), matchAttempt.match());
+	}
+
+	private TradeIdentity identity(OpenApiTradeIngestBatch batch, OpenApiTradeItem item) {
+		return new TradeIdentity(
+			sourceKeyGenerator.generate(batch.source(), item),
+			sourceKeyGenerator.hashPayload(item.payload())
+		);
+	}
+
+	private RawTradeIngestRecord saveReceivedRaw(
+		OpenApiTradeIngestBatch batch,
+		OpenApiTradeItem item,
+		TradeIdentity identity
+	) {
 		RawTradeIngestRecord raw = rawTradeIngestRepository.save(RawTradeIngestRecord.received(
 			batch.source(),
-			sourceKey,
+			identity.sourceKey(),
 			batch.lawdCd(),
 			batch.dealYmd(),
 			batch.pageNo(),
 			item.payload(),
-			payloadHash
+			identity.payloadHash()
 		));
+		return raw;
+	}
 
-		if (rawTradeIngestRepository.existsProcessedBySourceAndSourceKeyAndPayloadHashBefore(
+	private boolean hasProcessedDuplicate(
+		RawTradeIngestRecord raw,
+		OpenApiTradeIngestBatch batch,
+		TradeIdentity identity
+	) {
+		return rawTradeIngestRepository.existsProcessedBySourceAndSourceKeyAndPayloadHashBefore(
 			raw.id(),
 			batch.source(),
-			sourceKey,
-			payloadHash
-		)) {
-			rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestTransition.sourceKeyDuplicate());
-			return TradeIngestItemOutcome.duplicate();
-		}
+			identity.sourceKey(),
+			identity.payloadHash()
+		);
+	}
 
-		if (item.isCanceled()) {
-			try {
-				ParsedRtmsTrade.from(item);
-			}
-			catch (IllegalArgumentException exception) {
-				rawTradeIngestRepository.updateStatus(
-					raw.id(),
-					RawTradeIngestTransition.parseFailed(exception.getMessage())
-				);
-				return TradeIngestItemOutcome.parseFailed();
-			}
-			normalizedTradeRepository.cancelBySourceAndSourceKey(batch.source(), sourceKey, raw.id());
-			rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestTransition.canceledSourceKey());
-			return TradeIngestItemOutcome.canceled();
+	private TradeIngestItemOutcome cancelTrade(
+		OpenApiTradeIngestBatch batch,
+		OpenApiTradeItem item,
+		long rawId,
+		String sourceKey
+	) {
+		if (parseOrMarkFailed(rawId, item).isEmpty()) {
+			return TradeIngestItemOutcome.parseFailed();
 		}
+		normalizedTradeRepository.cancelBySourceAndSourceKey(batch.source(), sourceKey, rawId);
+		rawTradeIngestRepository.updateStatus(rawId, RawTradeIngestTransition.canceledSourceKey());
+		return TradeIngestItemOutcome.canceled();
+	}
 
-		if (normalizedTradeRepository.existsBySourceAndSourceKey(batch.source(), sourceKey)) {
-			rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestTransition.sourceKeyDuplicate());
-			return TradeIngestItemOutcome.duplicate();
-		}
-
-		ParsedRtmsTrade parsedTrade;
+	private Optional<ParsedRtmsTrade> parseOrMarkFailed(long rawId, OpenApiTradeItem item) {
 		try {
-			parsedTrade = ParsedRtmsTrade.from(item);
+			return Optional.of(ParsedRtmsTrade.from(item));
 		}
 		catch (IllegalArgumentException exception) {
 			rawTradeIngestRepository.updateStatus(
-				raw.id(),
+				rawId,
 				RawTradeIngestTransition.parseFailed(exception.getMessage())
 			);
-			return TradeIngestItemOutcome.parseFailed();
+			return Optional.empty();
 		}
+	}
 
+	private MatchAttempt matchAndRecordEvidence(long rawId, String source, OpenApiTradeItem item) {
 		ComplexMasterBootstrapResult bootstrapResult = complexMasterBootstrapper.bootstrap(item);
 		ComplexMatchResult match = complexMatcher.match(item);
-		tradeMatchEvidenceRepository.save(TradeMatchEvidenceCommand.from(raw.id(), batch.source(), item, match));
-		if (match == null || !match.matched()) {
-			rawTradeIngestRepository.updateStatus(
-				raw.id(),
-				RawTradeIngestTransition.matchFailed(matchFailureReason(match, bootstrapResult))
-			);
-			return TradeIngestItemOutcome.matchFailed();
-		}
+		tradeMatchEvidenceRepository.save(TradeMatchEvidenceCommand.from(rawId, source, item, match));
+		return new MatchAttempt(bootstrapResult, match);
+	}
 
+	private TradeIngestItemOutcome matchFailed(long rawId, MatchAttempt matchAttempt) {
+		rawTradeIngestRepository.updateStatus(
+			rawId,
+			RawTradeIngestTransition.matchFailed(
+				matchFailureReason(matchAttempt.match(), matchAttempt.bootstrapResult())
+			)
+		);
+		return TradeIngestItemOutcome.matchFailed();
+	}
+
+	private TradeIngestItemOutcome normalizeTrade(
+		long rawId,
+		OpenApiTradeIngestBatch batch,
+		OpenApiTradeItem item,
+		String sourceKey,
+		ParsedRtmsTrade parsedTrade,
+		ComplexMatchResult match
+	) {
 		NormalizedTradeCommand command = new NormalizedTradeCommand(
-			raw.id(),
+			rawId,
 			match.complexId(),
 			parsedTrade.dealDate(),
 			parsedTrade.dealAmount(),
@@ -142,10 +194,15 @@ public class TradeIngestItemProcessor {
 		);
 
 		if (normalizedTradeRepository.insertIfAbsent(command)) {
-			rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestTransition.normalized());
+			rawTradeIngestRepository.updateStatus(rawId, RawTradeIngestTransition.normalized());
 			return TradeIngestItemOutcome.normalized();
 		}
-		rawTradeIngestRepository.updateStatus(raw.id(), RawTradeIngestTransition.fallbackIdentityDuplicate());
+		rawTradeIngestRepository.updateStatus(rawId, RawTradeIngestTransition.fallbackIdentityDuplicate());
+		return TradeIngestItemOutcome.duplicate();
+	}
+
+	private TradeIngestItemOutcome sourceKeyDuplicate(long rawId) {
+		rawTradeIngestRepository.updateStatus(rawId, RawTradeIngestTransition.sourceKeyDuplicate());
 		return TradeIngestItemOutcome.duplicate();
 	}
 
@@ -161,5 +218,15 @@ public class TradeIngestItemProcessor {
 			return matchFailure;
 		}
 		return matchFailure + "; " + bootstrapResult.failureReason();
+	}
+
+	private record TradeIdentity(String sourceKey, String payloadHash) {
+	}
+
+	private record MatchAttempt(ComplexMasterBootstrapResult bootstrapResult, ComplexMatchResult match) {
+
+		private boolean matched() {
+			return match != null && match.matched();
+		}
 	}
 }

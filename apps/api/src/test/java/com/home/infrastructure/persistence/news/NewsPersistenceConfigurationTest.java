@@ -76,6 +76,24 @@ class NewsPersistenceConfigurationTest {
 	}
 
 	@Test
+	@DisplayName("News persistence configuration은 standalone relevance/signal stage enabled일 때 runner를 등록한다")
+	void standaloneSignalStageRunnersAreRegisteredWhenEnabled() {
+		contextRunner
+			.withPropertyValues("home.news.relevance.enabled=true")
+			.run(context -> {
+				assertThat(context).hasNotFailed();
+				assertThat(context).hasSingleBean(NewsRelevanceGateApplicationRunner.class);
+			});
+
+		contextRunner
+			.withPropertyValues("home.news.signal.extraction.enabled=true")
+			.run(context -> {
+				assertThat(context).hasNotFailed();
+				assertThat(context).hasSingleBean(NewsSignalFeatureExtractionApplicationRunner.class);
+			});
+	}
+
+	@Test
 	@DisplayName("News persistence configuration은 pipeline 설정이면 개별 signal stage runner를 등록하지 않는다")
 	void pipelineSuppressesIndividualSignalStageRunners() {
 		contextRunner

@@ -35,18 +35,6 @@ public enum ComplexCoordinateIdentityVerificationStatus {
 	}
 
 	/**
-	 * 현재 검증 결과가 표시 좌표 확정을 막아야 하는지 판단한다.
-	 */
-	public boolean shouldBlock(boolean blockOnUnavailableIdentity, boolean blockOnFailedIdentity) {
-		return switch (this) {
-			case CONFIRMED -> false;
-			case AMBIGUOUS -> true;
-			case UNAVAILABLE -> blockOnUnavailableIdentity;
-			case FAILED -> blockOnFailedIdentity;
-		};
-	}
-
-	/**
 	 * 차단된 검증 결과를 좌표 예외 상태로 변환한다.
 	 */
 	public ComplexCoordinateCaseStatus toBlockedCaseStatus() {

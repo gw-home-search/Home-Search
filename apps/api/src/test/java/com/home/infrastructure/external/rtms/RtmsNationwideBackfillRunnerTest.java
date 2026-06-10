@@ -47,8 +47,7 @@ class RtmsNationwideBackfillRunnerTest {
 			"201201"
 		);
 		RtmsNationwideBackfillRunner runner = new RtmsNationwideBackfillRunner(
-			jobRepository,
-			chunkRepository,
+			RtmsBackfillRepositories.of(jobRepository, chunkRepository),
 			request -> {
 				if (request.lawdCd().equals("11680")) {
 					return RtmsBackfillChunkExecutionResult.failed(
@@ -100,8 +99,7 @@ class RtmsNationwideBackfillRunnerTest {
 			"201201"
 		);
 		RtmsNationwideBackfillRunner runner = new RtmsNationwideBackfillRunner(
-			jobRepository,
-			chunkRepository,
+			RtmsBackfillRepositories.of(jobRepository, chunkRepository),
 			request -> RtmsBackfillChunkExecutionResult.completed(
 				request.lawdCd(),
 				request.dealYmd(),

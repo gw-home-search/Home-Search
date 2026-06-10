@@ -23,12 +23,18 @@ class ComplexCoordinateCaseStatusTest {
 	@Test
 	@DisplayName("identity verification status는 차단 정책과 case status 변환을 직접 담당한다")
 	void identityVerificationStatusOwnsBlockingDecision() {
-		assertThat(ComplexCoordinateIdentityVerificationStatus.CONFIRMED.shouldBlock(true, true)).isFalse();
-		assertThat(ComplexCoordinateIdentityVerificationStatus.AMBIGUOUS.shouldBlock(false, false)).isTrue();
-		assertThat(ComplexCoordinateIdentityVerificationStatus.UNAVAILABLE.shouldBlock(true, false)).isTrue();
-		assertThat(ComplexCoordinateIdentityVerificationStatus.UNAVAILABLE.shouldBlock(false, true)).isFalse();
-		assertThat(ComplexCoordinateIdentityVerificationStatus.FAILED.shouldBlock(false, true)).isTrue();
-		assertThat(ComplexCoordinateIdentityVerificationStatus.FAILED.shouldBlock(true, false)).isFalse();
+		assertThat(CoordinateIdentityBlockingPolicy.strict()
+			.shouldBlock(ComplexCoordinateIdentityVerificationStatus.CONFIRMED)).isFalse();
+		assertThat(CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
+			.shouldBlock(ComplexCoordinateIdentityVerificationStatus.AMBIGUOUS)).isTrue();
+		assertThat(new CoordinateIdentityBlockingPolicy(true, false)
+			.shouldBlock(ComplexCoordinateIdentityVerificationStatus.UNAVAILABLE)).isTrue();
+		assertThat(new CoordinateIdentityBlockingPolicy(false, true)
+			.shouldBlock(ComplexCoordinateIdentityVerificationStatus.UNAVAILABLE)).isFalse();
+		assertThat(new CoordinateIdentityBlockingPolicy(false, true)
+			.shouldBlock(ComplexCoordinateIdentityVerificationStatus.FAILED)).isTrue();
+		assertThat(new CoordinateIdentityBlockingPolicy(true, false)
+			.shouldBlock(ComplexCoordinateIdentityVerificationStatus.FAILED)).isFalse();
 
 		assertThat(ComplexCoordinateIdentityVerificationStatus.AMBIGUOUS.toBlockedCaseStatus())
 			.isEqualTo(ComplexCoordinateCaseStatus.AMBIGUOUS);

@@ -23,7 +23,10 @@ import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectio
 import com.home.application.coordinate.display.ResolvedDisplayCoordinate;
 import com.home.application.coordinate.footprint.BuildingFootprintCandidate;
 import com.home.application.coordinate.footprint.BuildingFootprintImportCandidate;
+import com.home.application.coordinate.footprint.BuildingFootprintSource;
+import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
 import com.home.application.coordinate.identity.ComplexCoordinateParcelTargets;
+import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
 
 class ComplexCoordinateReadinessServiceTest {
 
@@ -174,12 +177,19 @@ class ComplexCoordinateReadinessServiceTest {
 
 	private static final class FakeCoordinateExceptionService extends ComplexCoordinateExceptionService {
 
-		private int stageLimit;
-		private final List<Long> resolvedParcelIds = new ArrayList<>();
+			private int stageLimit;
+			private final List<Long> resolvedParcelIds = new ArrayList<>();
 
-		private FakeCoordinateExceptionService() {
-			super(new NoopCoordinateExceptionRepository(), parcelId -> List.of(), new com.home.domain.complex.relation.ComplexRelationClassifier());
-		}
+			private FakeCoordinateExceptionService() {
+				super(
+					new NoopCoordinateExceptionRepository(),
+					parcelId -> List.of(),
+					new com.home.domain.complex.relation.ComplexRelationClassifier(),
+					ComplexCoordinateIdentityVerifier.trusting(),
+					BuildingFootprintSource.unavailable(),
+					CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
+				);
+			}
 
 		@Override
 		public ComplexCoordinateExceptionResult stageExceptionCases(int limit) {

@@ -16,6 +16,9 @@ import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
 import com.home.application.map.ComplexMarkerResult;
 import com.home.application.map.ComplexMarkerQuery;
+import com.home.application.coordinate.footprint.BuildingFootprintSource;
+import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
+import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,11 +34,14 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 			jdbcClient
 		);
 		ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
-			new com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService(
-				coordinateRepository,
-				new JdbcComplexRelationRepository(jdbcClient),
-				new ComplexRelationClassifier()
-			),
+				new com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService(
+					coordinateRepository,
+					new JdbcComplexRelationRepository(jdbcClient),
+					new ComplexRelationClassifier(),
+					ComplexCoordinateIdentityVerifier.trusting(),
+					BuildingFootprintSource.unavailable(),
+					CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
+				),
 			coordinateRepository,
 			new ComplexDisplayCoordinateProjectionService(new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient))
 		);
@@ -93,11 +99,14 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 			jdbcClient
 		);
 		ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
-			new com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService(
-				coordinateRepository,
-				new JdbcComplexRelationRepository(jdbcClient),
-				new ComplexRelationClassifier()
-			),
+				new com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService(
+					coordinateRepository,
+					new JdbcComplexRelationRepository(jdbcClient),
+					new ComplexRelationClassifier(),
+					ComplexCoordinateIdentityVerifier.trusting(),
+					BuildingFootprintSource.unavailable(),
+					CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
+				),
 			coordinateRepository,
 			new ComplexDisplayCoordinateProjectionService(new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient)),
 			10,
@@ -123,11 +132,14 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 			jdbcClient
 		);
 		ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
-			new com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService(
-				coordinateRepository,
-				new JdbcComplexRelationRepository(jdbcClient),
-				new ComplexRelationClassifier()
-			),
+				new com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService(
+					coordinateRepository,
+					new JdbcComplexRelationRepository(jdbcClient),
+					new ComplexRelationClassifier(),
+					ComplexCoordinateIdentityVerifier.trusting(),
+					BuildingFootprintSource.unavailable(),
+					CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
+				),
 			coordinateRepository,
 			new ComplexDisplayCoordinateProjectionService(new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient)),
 			10,

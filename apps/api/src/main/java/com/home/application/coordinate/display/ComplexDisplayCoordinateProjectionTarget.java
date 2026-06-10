@@ -3,6 +3,7 @@ package com.home.application.coordinate.display;
 import java.math.BigDecimal;
 import java.util.Objects;
 import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
+import com.home.domain.coordinate.CoordinateSource;
 
 public record ComplexDisplayCoordinateProjectionTarget(
 	Long complexId,
@@ -28,7 +29,7 @@ public record ComplexDisplayCoordinateProjectionTarget(
 	}
 
 	public boolean hasExistingBuildingFootprintCoordinate() {
-		return "BUILDING_FOOTPRINT".equals(existingCoordinateSource);
+		return CoordinateSource.BUILDING_FOOTPRINT.matches(existingCoordinateSource);
 	}
 
 	public boolean hasResolvedBuildingCoordinate() {

@@ -113,9 +113,9 @@ class RtmsExternalApiConfiguration {
 	) {
 		return new RtmsOneShotTradeIngestRunner(
 			client,
-			() -> ingestServiceProvider.getIfAvailable(() -> {
+			RtmsTradeIngestServiceReference.lazy(() -> ingestServiceProvider.getIfAvailable(() -> {
 				throw new IllegalStateException("OpenApiTradeIngestService is required for RTMS one-shot ingest");
-			})
+			}))
 		);
 	}
 
@@ -129,10 +129,12 @@ class RtmsExternalApiConfiguration {
 	) {
 		return new RtmsMonthlyRefreshRunner(
 			client,
-			() -> ingestServiceProvider.getIfAvailable(() -> {
+			RtmsTradeIngestServiceReference.lazy(() -> ingestServiceProvider.getIfAvailable(() -> {
 				throw new IllegalStateException("OpenApiTradeIngestService is required for RTMS monthly refresh ingest");
-			}),
-			() -> ingestRunRepositoryProvider.getIfAvailable(RtmsIngestRunRepository::noop),
+			})),
+			RtmsIngestRunRepositoryReference.lazy(() -> ingestRunRepositoryProvider.getIfAvailable(
+				RtmsIngestRunRepository::noop
+			)),
 			java.time.Clock.systemUTC(),
 			new RtmsMonthlyRefreshRetryPolicy(refreshRetryAttempts, refreshRetryBackoffMillis)
 		);
@@ -146,12 +148,18 @@ class RtmsExternalApiConfiguration {
 		RtmsOneShotIngestProperties properties
 	) {
 		return new RtmsNationwideBackfillRunner(
-			() -> backfillJobRepositoryProvider.getIfAvailable(() -> {
-				throw new IllegalStateException("RtmsBackfillJobRepository is required for RTMS nationwide backfill");
-			}),
-			() -> backfillChunkRepositoryProvider.getIfAvailable(() -> {
-				throw new IllegalStateException("RtmsBackfillChunkRepository is required for RTMS nationwide backfill");
-			}),
+			RtmsBackfillRepositories.lazy(
+				() -> backfillJobRepositoryProvider.getIfAvailable(() -> {
+					throw new IllegalStateException(
+						"RtmsBackfillJobRepository is required for RTMS nationwide backfill"
+					);
+				}),
+				() -> backfillChunkRepositoryProvider.getIfAvailable(() -> {
+					throw new IllegalStateException(
+						"RtmsBackfillChunkRepository is required for RTMS nationwide backfill"
+					);
+				})
+			),
 			request -> summaryToBackfillResult(monthlyRefreshRunner.refresh(request.lawdCd(), request.dealYmd())),
 			java.time.Clock.systemUTC(),
 			properties.nationwideBackfillOptions()

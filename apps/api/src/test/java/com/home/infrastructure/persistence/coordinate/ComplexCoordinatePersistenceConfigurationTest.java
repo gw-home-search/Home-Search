@@ -7,6 +7,7 @@ import javax.sql.DataSource;
 
 import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessService;
+import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -74,8 +75,8 @@ class ComplexCoordinatePersistenceConfigurationTest {
 		contextRunner.run(context -> {
 			ComplexCoordinateExceptionService service = context.getBean(ComplexCoordinateExceptionService.class);
 
-			assertThat(ReflectionTestUtils.getField(service, "blockOnUnavailableIdentity")).isEqualTo(true);
-			assertThat(ReflectionTestUtils.getField(service, "blockOnFailedIdentity")).isEqualTo(true);
+			assertThat(ReflectionTestUtils.getField(service, "identityBlockingPolicy"))
+				.isEqualTo(CoordinateIdentityBlockingPolicy.strict());
 		});
 	}
 
@@ -90,8 +91,8 @@ class ComplexCoordinatePersistenceConfigurationTest {
 			.run(context -> {
 				ComplexCoordinateExceptionService service = context.getBean(ComplexCoordinateExceptionService.class);
 
-				assertThat(ReflectionTestUtils.getField(service, "blockOnUnavailableIdentity")).isEqualTo(false);
-				assertThat(ReflectionTestUtils.getField(service, "blockOnFailedIdentity")).isEqualTo(false);
+				assertThat(ReflectionTestUtils.getField(service, "identityBlockingPolicy"))
+					.isEqualTo(CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed());
 			});
 	}
 }

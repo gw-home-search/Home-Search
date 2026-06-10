@@ -22,61 +22,22 @@ import com.home.application.coordinate.footprint.BuildingFootprintSource;
 import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerification;
 import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 import com.home.domain.coordinate.ComplexCoordinateIdentityVerificationStatus;
+import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
 import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
 import com.home.application.coordinate.identity.ComplexCoordinateParcelTargets;
 import com.home.application.coordinate.identity.ComplexCoordinateTarget;
+import com.home.domain.coordinate.CoordinateSource;
 
 public class ComplexCoordinateExceptionService {
 
 	private static final int BUILDING_DONG_MATCH_CONFIDENCE = 90;
-	private static final String BUILDING_FOOTPRINT_SOURCE = "BUILDING_FOOTPRINT";
 
 	private final ComplexCoordinateExceptionRepository repository;
 	private final ComplexRelationRepository relationRepository;
 	private final ComplexRelationClassifier relationClassifier;
 	private final ComplexCoordinateIdentityVerifier identityVerifier;
 	private final BuildingFootprintSource buildingFootprintSource;
-	private final boolean blockOnUnavailableIdentity;
-	private final boolean blockOnFailedIdentity;
-
-	public ComplexCoordinateExceptionService(
-		ComplexCoordinateExceptionRepository repository,
-		ComplexRelationRepository relationRepository,
-		ComplexRelationClassifier relationClassifier
-	) {
-		this(
-			repository,
-			relationRepository,
-			relationClassifier,
-			ComplexCoordinateIdentityVerifier.trusting(),
-			BuildingFootprintSource.unavailable()
-		);
-	}
-
-	public ComplexCoordinateExceptionService(
-		ComplexCoordinateExceptionRepository repository,
-		ComplexRelationRepository relationRepository,
-		ComplexRelationClassifier relationClassifier,
-		ComplexCoordinateIdentityVerifier identityVerifier
-	) {
-		this(
-			repository,
-			relationRepository,
-			relationClassifier,
-			identityVerifier,
-			BuildingFootprintSource.unavailable()
-		);
-	}
-
-	public ComplexCoordinateExceptionService(
-		ComplexCoordinateExceptionRepository repository,
-		ComplexRelationRepository relationRepository,
-		ComplexRelationClassifier relationClassifier,
-		ComplexCoordinateIdentityVerifier identityVerifier,
-		BuildingFootprintSource buildingFootprintSource
-	) {
-		this(repository, relationRepository, relationClassifier, identityVerifier, buildingFootprintSource, false, false);
-	}
+	private final CoordinateIdentityBlockingPolicy identityBlockingPolicy;
 
 	public ComplexCoordinateExceptionService(
 		ComplexCoordinateExceptionRepository repository,
@@ -84,16 +45,14 @@ public class ComplexCoordinateExceptionService {
 		ComplexRelationClassifier relationClassifier,
 		ComplexCoordinateIdentityVerifier identityVerifier,
 		BuildingFootprintSource buildingFootprintSource,
-		boolean blockOnUnavailableIdentity,
-		boolean blockOnFailedIdentity
+		CoordinateIdentityBlockingPolicy identityBlockingPolicy
 	) {
 		this.repository = Objects.requireNonNull(repository);
 		this.relationRepository = Objects.requireNonNull(relationRepository);
 		this.relationClassifier = Objects.requireNonNull(relationClassifier);
 		this.identityVerifier = Objects.requireNonNull(identityVerifier);
 		this.buildingFootprintSource = Objects.requireNonNull(buildingFootprintSource);
-		this.blockOnUnavailableIdentity = blockOnUnavailableIdentity;
-		this.blockOnFailedIdentity = blockOnFailedIdentity;
+		this.identityBlockingPolicy = Objects.requireNonNull(identityBlockingPolicy);
 	}
 
 	public ComplexCoordinateExceptionResult stageExceptionCases(int limit) {
@@ -207,7 +166,7 @@ public class ComplexCoordinateExceptionService {
 	}
 
 	private boolean shouldBlock(ComplexCoordinateIdentityVerificationStatus status) {
-		return status.shouldBlock(blockOnUnavailableIdentity, blockOnFailedIdentity);
+		return identityBlockingPolicy.shouldBlock(status);
 	}
 
 	private ResolvedCoordinateMatch resolveCoordinate(
@@ -230,7 +189,7 @@ public class ComplexCoordinateExceptionService {
 				representativeBuildingFootprintId(matches),
 				averageLatitude(matches),
 				averageLongitude(matches),
-				BUILDING_FOOTPRINT_SOURCE,
+				CoordinateSource.BUILDING_FOOTPRINT.storedValue(),
 				BUILDING_DONG_MATCH_CONFIDENCE,
 				matches.size() == 1
 					? "apt_dong matched building dong_name"

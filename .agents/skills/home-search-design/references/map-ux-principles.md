@@ -9,6 +9,21 @@ Home Search is an operational real-estate map tool. The UI should feel quiet,
 trustworthy, dense, and repeatable. It should not feel like a SaaS landing
 page, portfolio page, or generated marketing mockup.
 
+Before proposing a visual direction, state:
+
+- Purpose: the map workflow or decision the screen must support.
+- Audience: the repeating user and the first information they need to scan.
+- Tone: operational, calm, trustworthy, dense, or another explicit product
+  tone that still keeps the map primary.
+- Memorable detail: one small visual or interaction choice that helps the map
+  workflow, such as stable marker labels, a clearer active filter state, or a
+  drawer transition that preserves spatial context.
+- Constraints: public API fields, Kakao map behavior, mobile sheet limits, and
+  existing frontend components.
+
+The memorable detail must serve the workflow. Do not introduce a decorative
+theme just to make the screen look more designed.
+
 ## Visual Hierarchy
 
 Layer the interface by task importance:
@@ -84,6 +99,10 @@ markers, or makes panning feel secondary, the design is wrong.
 - Spacing: use dense but breathable gaps. Avoid oversized empty bands.
 - Color: neutral base with role accents for action, complex markers, region
   markers, and errors.
+- Numbers: use stable alignment for prices, counts, areas, and dates so labels,
+  rows, and counters do not jump while data changes.
+- States: hover, focus, active, loading, empty, and error states should feel
+  designed, but remain quiet enough for repeated map work.
 
 ## Anti-Patterns
 

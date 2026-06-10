@@ -290,6 +290,74 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
+  it('public map UI는 map-first design landmarks와 active filter state를 고정한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp();
+    await flushAsyncState();
+
+    expect(rootElement.querySelector('[data-ui-surface="map-first"]')).not.toBeNull();
+    expect(rootElement.querySelector('[data-ui-layer="filter-controls"]')).not.toBeNull();
+    expect(rootElement.querySelector('[data-ui-layer="exploration-panel"]')).not.toBeNull();
+    expect(rootElement.textContent).toContain('필터 없음');
+
+    setInputValue(rootElement, 'input[aria-label="최소 평형"]', '20');
+    setInputValue(rootElement, 'input[aria-label="최대 가격 억"]', '15');
+    setInputValue(rootElement, 'input[aria-label="최소 세대수"]', '300');
+
+    const filterForm = rootElement.querySelector<HTMLFormElement>(
+      'form[aria-label="마커 필터"]',
+    );
+    await act(async () => {
+      submitForm(filterForm);
+    });
+    await flushAsyncState();
+
+    const filterPanel = rootElement.querySelector<HTMLElement>(
+      '[data-ui-layer="filter-controls"]',
+    );
+    expect(filterPanel?.dataset.filterState).toBe('active');
+    expect(filterPanel?.textContent).toContain('필터 3개 적용');
+
+    const resetButton = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="마커 필터 초기화"]',
+    );
+    expect(resetButton).not.toBeNull();
+    await act(async () => {
+      resetButton?.click();
+    });
+    await flushAsyncState();
+
+    const resetFilterPanel = rootElement.querySelector<HTMLElement>(
+      '[data-ui-layer="filter-controls"]',
+    );
+    expect(resetFilterPanel?.dataset.filterState).toBe('idle');
+    expect(resetFilterPanel?.textContent).toContain('필터 없음');
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      resolveApiUrl('/api/v1/map/complexes'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          swLat: 37.45,
+          swLng: 126.85,
+          neLat: 37.7,
+          neLng: 127.2,
+          pyeongMin: null,
+          pyeongMax: null,
+          priceEokMin: null,
+          priceEokMax: null,
+          ageMin: null,
+          ageMax: null,
+          unitMin: null,
+          unitMax: null,
+        }),
+      }),
+    );
+
+    unmount(root);
+  });
+
   it('map surface를 block하지 않고 marker loading state를 표시한다', async () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => undefined)));
 
@@ -535,6 +603,9 @@ describe('App map-first shell 화면', () => {
       expect.objectContaining({ method: 'GET' }),
     );
     expect(rootElement.querySelector('[aria-label="단지 상세 패널"]')).not.toBeNull();
+    expect(rootElement.querySelector('[data-ui-layer="detail-drawer"]')).not.toBeNull();
+    expect(rootElement.querySelector('[data-detail-section="identity"]')).not.toBeNull();
+    expect(rootElement.querySelector('[data-detail-section="trade-history"]')).not.toBeNull();
     expect(rootElement.textContent).toContain('Sample complex name');
     expect(rootElement.textContent).toContain('Sample address');
     expect(rootElement.textContent).toContain('2025-12-01');
@@ -552,6 +623,11 @@ describe('App map-first shell 화면', () => {
       '2025-10-15',
       '2025-12-01',
     ]);
+    expect(
+      Array.from(rootElement.querySelectorAll('[data-trade-cell="amount"]')).map((cell) =>
+        cell.textContent,
+      ),
+    ).toEqual(['125,000만원', '118,000만원']);
 
     unmount(root);
   });

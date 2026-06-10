@@ -1,4 +1,73 @@
 [[items]]
+id = "web-map-uiux-polish"
+title_ko = "Web map UI/UX polish"
+pr_type = "Feat"
+pr_title_ko = "지도 map-first UI/UX polish"
+description_ko = "apps/web public map surface에 map-first design landmark, 필터 active/reset 상태, detail drawer/trade table 구조, responsive error polish, 고정 디자인 결정 문서를 추가한다."
+status = "done"
+priority = 270
+targets = "frontend"
+preset = "map-ui-state"
+acceptance_criteria = [
+  "public map shell은 data-ui-surface=\"map-first\" test seam으로 고정된다.",
+  "floating filter controls는 active filter count와 reset 상태를 색상만이 아니라 텍스트로도 표시한다.",
+  "marker API 실패는 map을 막지 않고 non-blocking error와 retry를 유지한다.",
+  "detail drawer는 selected complex identity와 trade history section을 안정적인 test seam으로 노출한다.",
+  "trade amount/area/date 같은 숫자 데이터는 tabular alignment와 compact table 중심으로 표시한다.",
+  "mobile viewport에서 marker error text가 exploration bottom sheet와 겹치거나 잘리지 않는다.",
+  "UI 고정 기준은 apps/web/DESIGN_DECISIONS.md에 정리한다.",
+  "public API URL, request field, response field, amount unit, empty-result behavior를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "App.test.tsx에서 data-ui-surface=\"map-first\", filter-controls/exploration-panel layer, active filter count/reset 상태가 없으면 실패하는 RED를 만든다.",
+  "App.test.tsx에서 detail drawer identity/trade-history section seam과 trade amount cell alignment seam이 없으면 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "cd apps/web && npm run test -- App.test.tsx",
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+  "python3 .codex/harness/project_terms_check.py",
+  "python3 .codex/harness/pr_lint.py --self-test",
+  "python3 .codex/harness/pr_context.py --self-test",
+  "python3 .codex/harness/pr_body_check.py --self-test",
+]
+verification_evidence = [
+  "- `cd apps/web && npm run test -- App.test.tsx` = fail (최초 RED: map-first design landmark와 detail drawer section seam이 없어 assertion 실패)",
+  "- `cd apps/web && npm run test -- App.test.tsx` = pass (최소 GREEN: design landmark, filter state/reset, drawer/trade seam 통과)",
+  "- `cd apps/web && npm run test` = pass (11 files, 68 tests)",
+  "- `cd apps/web && npm run build` = pass (tsc -b + vite build)",
+  "- `git diff --check` = pass (공백 오류 없음)",
+  "- `python3 .codex/harness/project_terms_check.py` = pass (프로젝트 용어 점검 통과)",
+  "- `python3 .codex/harness/pr_lint.py --self-test` = pass (PR lint 자체 테스트 통과)",
+  "- `python3 .codex/harness/pr_context.py --self-test` = pass (PR context 자체 테스트 통과)",
+  "- `python3 .codex/harness/pr_body_check.py --self-test` = pass (PR body check 자체 테스트 통과)",
+  "- `python3 .codex/harness/worklog_sync.py --self-test` = pass (worklog sync 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_pr.py --self-test` = pass (harness PR helper 자체 테스트 통과)",
+  "- `.codex/harness/home --self-test` = pass (harness launcher 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_flow.py --self-test` = pass (harness flow 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_integrate.py --self-test` = pass (harness integrate 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_plan.py --self-test` = pass (harness plan 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_report.py --self-test` = pass (harness report 자체 테스트 통과)",
+  "- `python3 .codex/harness/skill_routing.py --self-test` = pass (skill routing 자체 테스트 통과)",
+  "- `python3 .codex/harness/user_language_check.py --self-test` = pass (user-facing language 자체 테스트 통과)",
+  "- `python3 .codex/harness/project_terms_check.py --self-test` = pass (project terms 자체 테스트 통과)",
+  "- `Chrome headless 1440x900 screenshot` = pass (map dominant, panel/filter/error visible)",
+  "- `Chrome headless 390x844 screenshot` = pass (mobile error wraps, bottom sheet와 incoherent overlap 없음)",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit 변경이 필요하면 중단한다.",
+  "backend 응답 변경이 필요하면 중단한다.",
+  "ranking, favorite, alarm, mail, recommendation, auth, heavy analytics가 UI 흐름에 들어오면 중단한다.",
+  "map보다 panel/drawer/card layout이 primary surface가 되면 중단한다.",
+  "browser screenshot evidence 없이 visual completion을 주장해야 하면 중단한다.",
+]
+risk_notes = [
+  "Kakao app key와 backend 없이 local smoke를 실행하면 map fallback과 marker API error 상태가 표시된다.",
+  "이번 slice는 public map UI polish이며 API adapter field normalization은 변경하지 않는다.",
+]
+
+[[items]]
 id = "home-search-designer-skill-hardening"
 title_ko = "Home Search designer skill hardening"
 pr_type = "Docs"

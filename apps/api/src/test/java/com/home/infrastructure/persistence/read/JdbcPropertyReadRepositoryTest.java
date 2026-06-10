@@ -247,6 +247,37 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("search API는 exact, prefix, alias, address match 순서로 관련도를 우선한다")
+	void searchComplexesRanksExactPrefixAliasBeforeAddressMatches() {
+		seedSearchRankingData();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.searchComplexes("river"))
+			.extracting("complexId", "complexName")
+			.containsExactly(
+				tuple(801L, "River"),
+				tuple(802L, "River Heights"),
+				tuple(803L, "ZZZ Alias Display"),
+				tuple(804L, "AAA Address Only")
+			);
+	}
+
+	@Test
+	@DisplayName("suggestion API는 search ranking과 같은 관련도 순서를 사용하고 limit을 지킨다")
+	void suggestComplexesUsesSearchRankingAndLimit() {
+		seedSearchRankingData();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.suggestComplexes("river", 3))
+			.extracting("complexId", "complexName")
+			.containsExactly(
+				tuple(801L, "River"),
+				tuple(802L, "River Heights"),
+				tuple(803L, "ZZZ Alias Display")
+			);
+	}
+
+	@Test
 	@DisplayName("search API alias substring 검색은 pg_trgm GIN index 기반을 가진다")
 	void complexAliasSubstringSearchHasTrigramIndexes() {
 		assertThat(extensionExists("pg_trgm")).isTrue();
@@ -538,6 +569,45 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			.query(String.class)
 			.optional()
 			.orElse("");
+	}
+
+	private void seedSearchRankingData() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES
+			    (3001, 1, '1168010300101400101', 'Quiet address 1', 37.5001, 127.0001),
+			    (3002, 1, '1168010300101400102', 'Quiet address 2', 37.5002, 127.0002),
+			    (3003, 1, '1168010300101400103', 'Quiet address 3', 37.5003, 127.0003),
+			    (3004, 1, '1168010300101400104', 'River address only', 37.5004, 127.0004)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt)
+			VALUES
+			    (801, 3001, 'COMPLEX-PK-801', 'APT-801', 'River', NULL, 100),
+			    (802, 3002, 'COMPLEX-PK-802', 'APT-802', 'River Heights', NULL, 200),
+			    (803, 3003, 'COMPLEX-PK-803', 'APT-803', 'ZZZ Alias Display', NULL, 300),
+			    (804, 3004, 'COMPLEX-PK-804', 'APT-804', 'AAA Address Only', NULL, 400)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_name_alias (
+			    complex_id,
+			    alias_type,
+			    alias_name,
+			    normalized_name,
+			    source
+			)
+			VALUES (
+			    803,
+			    'RTMS_APT_NAME',
+			    'River Palace',
+			    'riverpalace',
+			    'RTMS'
+			)
+			""").update();
 	}
 
 	private void seedTwoComplexParcel() {

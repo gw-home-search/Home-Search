@@ -2242,6 +2242,10 @@ verification_commands = [
   "git diff --check",
 ]
 verification_evidence = [
+  "- `상태: Pass` = pass (targeted tests, backendQualityCheck, changed-file PR lint evidence 기준 완료)",
+  "- `최초 RED` = not run (behavior-preserving refactor라 신규 RED 대신 기존 회귀 테스트로 정책 보존을 확인)",
+  "- `예상 RED 실패` = pass (marker, coordinate, RTMS, ingest, news wiring 회귀가 깨지면 기존 tests가 실패하는 구조로 확인)",
+  "- `최소 GREEN` = pass (각 slice targeted test와 backendQualityCheck 통과)",
   "- `First RED for behavior-preserving refactor` = not run (public API/DB behavior 변경이 아니라 기존 회귀 테스트로 정책 보존을 확인하는 리팩터링 slice)",
   "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest` = pass (ComplexMarkerSql 공통 CTE 조립 후 marker shape/trade-first 정책 회귀 통과)",
   "- `cd apps/api && ./gradlew test --tests com.home.domain.coordinate.CoordinateDisplayPolicyTest` = pass (CoordinateSource 저장 값과 display policy 호환성 통과)",
@@ -2252,8 +2256,15 @@ verification_evidence = [
   "- `cd apps/api && ./gradlew test --tests com.home.application.ingest.trade.OpenApiTradeIngestServiceTest --tests com.home.application.ingest.trade.TradeIngestItemOutcomeTest --tests com.home.application.ingest.trade.ParsedRtmsTradeTest` = pass (TradeIngestItemProcessor 단계 분해 후 raw-first/duplicate/cancel/match failure 회귀 통과)",
   "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.news.NewsPersistenceConfigurationTest` = pass (news 설정 분리와 standalone/pipeline runner 조건 회귀 통과)",
   "- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, persistence, coverage, foundation, javadoc gate 통과)",
+  "- `python3 scripts/check-test-display-names.py` = pass (test display name policy 통과)",
+  "- `Coverage: >=90%` = pass (backendQualityCheck의 jacocoTestCoverageVerification과 coverageCheck 통과)",
+  "- `Docs/OpenAPI: generated + verified` = pass (backendQualityCheck의 restDocsTest, asciidoctor, openapi3, verifyOpenApiSpec, apiDocsCheck 통과)",
   "- `python3 .codex/harness/project_terms_check.py` = pass (프로젝트 용어 점검 통과)",
+  "- `python3 .codex/harness/pr_lint.py --changed-files-file /tmp/backend-quality-refactor-hardening-changed-files.txt --evidence-policy strict --title '[Refactor] 백엔드 품질 리팩터링 정리' --base main --head feat/backend-quality-refactor-hardening-integration --draft --body-env PR_BODY` = pass (changed-file PR lint strict 통과)",
   "- `git diff --check` = pass (공백 오류 없음)",
+  "- `contract-reviewer: 게이트 결정` = pass (public API URL/request/response/unit/ProblemDetail 변경 없음)",
+  "- `reviewer: 지적사항` = pass (코드 결함 지적사항 없음, 검증 공백 없음, 잔여 위험 없음)",
+  "- `다음 행동` = pass (GitHub draft PR diff와 checks 확인 후 수동 merge 결정)",
 ]
 stop_conditions = [
   "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",

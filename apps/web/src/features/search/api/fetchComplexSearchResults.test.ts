@@ -48,6 +48,35 @@ describe('fetchComplexSearchResults API 어댑터', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('coordinate-pending search result의 null 좌표를 보존한다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse([
+          {
+            complexId: 801,
+            complexName: 'Coordinate Pending Complex',
+            parcelId: 3001,
+            latitude: null,
+            longitude: null,
+            address: 'Coordinate pending address',
+          },
+        ]),
+      ),
+    );
+
+    await expect(fetchComplexSearchResults('pending')).resolves.toEqual([
+      {
+        complexId: 801,
+        complexName: 'Coordinate Pending Complex',
+        parcelId: 3001,
+        latitude: null,
+        longitude: null,
+        address: 'Coordinate pending address',
+      },
+    ]);
+  });
+
   it('invalid search response shape를 reject한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ results: [] })));
 

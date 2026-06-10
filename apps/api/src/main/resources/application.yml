@@ -5,6 +5,10 @@ spring:
     default: local
   flyway:
     locations: classpath:db/migration/api
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
 
 apis:
   data:

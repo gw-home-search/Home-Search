@@ -79,6 +79,31 @@ describe('fetchComplexDetail API 어댑터', () => {
     );
   });
 
+  it('coordinate-pending detail의 null 좌표를 보존한다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          parcelId: 3001,
+          complexId: 801,
+          latitude: null,
+          longitude: null,
+          address: 'Coordinate pending address',
+          name: 'Coordinate Pending Complex',
+        }),
+      ),
+    );
+
+    await expect(fetchComplexDetail(3001, 801)).resolves.toMatchObject({
+      parcelId: 3001,
+      complexId: 801,
+      latitude: null,
+      longitude: null,
+      address: 'Coordinate pending address',
+      name: 'Coordinate Pending Complex',
+    });
+  });
+
   it('detail lookup 실패 시 public API ProblemDetail detail로 reject한다', async () => {
     vi.stubGlobal(
       'fetch',

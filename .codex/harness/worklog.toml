@@ -2428,3 +2428,57 @@ risk_notes = [
   "가장 큰 collision risk는 frontend가 search/marker selection에서 complexId를 잃어 backend scoped read와 화면 표시가 어긋나는 것이다.",
   "final runtime smoke는 local environment availability에 따라 Partial evidence가 가능하지만 deterministic backend/frontend tests는 통과해야 한다.",
 ]
+
+[[items]]
+id = "public-read-api-e2e-implementation-completion"
+title_ko = "Public read API E2E implementation completion"
+pr_type = "Feat"
+pr_title_ko = "Public read API E2E 구현 완료"
+description_ko = "마커 API를 제외한 1차 public read API 5개를 backend contract, frontend 표시, 사용자 흐름 기준으로 처음부터 끝까지 구현·보강하고 기능별 /goal 검증과 final smoke로 완료한다."
+status = "planned"
+priority = 247
+targets = "both"
+preset = "contract-hardening"
+acceptance_criteria = [
+  "시작 시 /goal로 public-read-api-e2e-implementation-completion 구현 목표를 생성하고, 기능별 /goal 완료 결과를 최종 PR evidence로 묶는다.",
+  "대상 API는 GET /api/v1/detail/{parcelId}, GET /api/v1/trade/{parcelId}, GET /api/v1/search/complexes?q=, GET /api/v1/region, GET /api/v1/region/{regionId}로 제한한다.",
+  "첫 단계에서 legacy backend/frontend와 target backend/frontend를 대조해 5개 API별 OK, backend gap, frontend gap, visual gap, later-scope matrix를 작성한다.",
+  "detail/trade /goal에서는 wrong parcelId + complexId가 404 ProblemDetail인지, complexId scoped trade가 해당 complex 거래만 반환하는지, empty trades가 200 + trades: []인지 검증하고 필요 시 구현한다.",
+  "detail/trade frontend /goal에서는 marker/search 선택 후 detail/trade URL에 ?complexId=가 유지되고 drawer ready/loading/error/empty 상태가 화면을 깨지 않는지 검증하고 필요 시 구현한다.",
+  "search /goal에서는 blank query [], complex.name/trade_name/address/alias 검색, same parcel multi-complex 결과 보존, result 선택 후 map 이동과 detail/trade scope 전달을 검증하고 필요 시 구현한다.",
+  "region /goal에서는 root/detail/children response shape, missing region 404 ProblemDetail, frontend region 선택 후 map center/level 갱신과 marker refresh 연결을 검증하고 필요 시 구현한다.",
+  "final smoke /goal에서는 검색 결과 표시, 검색/marker 선택 후 detail drawer, trade list/chart, region navigation, API failure fallback을 deterministic test 또는 local runtime evidence로 확인한다.",
+  "public URL, method, query parameter, response field/type/unit, ProblemDetail shape를 변경하지 않는다.",
+  "complex_pk, apt_seq, source, source_key는 audit/dedupe metadata로 보존하되 public response에 노출하지 않는다.",
+  "normalized trade read path는 complex_id operational relation을 유지한다.",
+  "각 기능 /goal은 First RED 또는 명시적 RED waiver, 예상 RED 실패, 최소 GREEN, 검증 명령 결과, code-review findings를 남긴다.",
+]
+first_red_candidates = [
+  "ReadApiControllerContractTest에서 wrong parcelId + complexId 조합이 404 ProblemDetail이 아니면 실패하는 RED를 만든다.",
+  "JdbcPropertyReadRepositoryTest에서 complexId scoped trade 요청이 다른 complex 거래를 섞으면 실패하는 RED를 만든다.",
+  "JdbcPropertyReadRepositoryTest에서 같은 parcelId를 가진 여러 complexId 검색 결과가 하나로 collapse되면 실패하는 RED를 만든다.",
+  "App.test.tsx에서 marker 또는 search result 선택 후 /api/v1/detail/{parcelId}?complexId={complexId}와 /api/v1/trade/{parcelId}?complexId={complexId} 호출이 없으면 실패하는 RED를 만든다.",
+  "App.test.tsx에서 region 선택 후 map center/level 갱신 또는 marker refresh가 이어지지 않으면 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew apiContractTest --tests '*ReadApiControllerContractTest'",
+  "cd apps/api && ./gradlew persistenceTest --tests '*JdbcPropertyReadRepositoryTest'",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "docker compose -f infra/docker-compose.local.yml config",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단하고 별도 contract review로 분리한다.",
+  "complex_id operational relation 변경, complex_pk/apt_seq/source/source_key public 노출, raw ingest/dedupe 정책 변경이 필요하면 중단한다.",
+  "ranking, trend aggregate, favorite, alarm, mail, auth, recommendation 기능이 필요하면 later-scope로 분리한다.",
+  "DB reset, Docker volume 삭제, 기존 저장 데이터 cleanup, live RTMS/VWorld/Kakao secret 사용이 필요하면 중단하고 별도 승인으로 분리한다.",
+  "한 기능 /goal 변경 범위가 review 불가능할 정도로 커지면 detail/trade, search, region, smoke 하위 PR로 분리한다.",
+]
+risk_notes = [
+  "umbrella implementation slice이므로 가장 큰 위험은 여러 기능을 한 PR에 담아 review 범위가 커지는 것이다.",
+  "frontend가 search/marker selection에서 complexId를 잃으면 backend scoped read와 화면 표시가 어긋나므로 propagation test를 핵심 gate로 둔다.",
+  "runtime visual smoke는 environment에 따라 Partial일 수 있지만 backend/frontend deterministic tests와 contract gates는 반드시 통과해야 한다.",
+]

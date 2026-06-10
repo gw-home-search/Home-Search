@@ -5,7 +5,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -31,9 +30,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 
 	@Override
 	public List<SearchComplexResult> searchComplexes(String query) {
-		String pattern = "%" + query.toLowerCase(Locale.ROOT) + "%";
-		String normalizedQuery = normalizeName(query);
-		String normalizedPattern = normalizedQuery.isBlank() ? null : "%" + normalizedQuery + "%";
+		PropertySearchTerms terms = PropertySearchTerms.from(query);
 		return jdbcClient.sql("""
 			SELECT
 			    c.id AS complex_id,
@@ -60,20 +57,63 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			             )
 			         )
 			   )
-			ORDER BY COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name), c.id
+			ORDER BY
+			    CASE
+			        WHEN lower(c.name) = :lowerQuery
+			            OR lower(COALESCE(c.trade_name, '')) = :lowerQuery THEN 0
+			        WHEN lower(c.name) LIKE :prefixPattern
+			            OR lower(COALESCE(c.trade_name, '')) LIKE :prefixPattern THEN 1
+			        WHEN EXISTS (
+			            SELECT 1
+			            FROM complex_name_alias a
+			            WHERE a.complex_id = c.id
+			              AND (
+			                  lower(a.alias_name) = :lowerQuery
+			                  OR lower(a.alias_name) LIKE :prefixPattern
+			                  OR (
+			                      CAST(:normalizedQuery AS VARCHAR) IS NOT NULL
+			                      AND (
+			                          a.normalized_name = :normalizedQuery
+			                          OR a.normalized_name LIKE :normalizedPrefixPattern
+			                      )
+			                  )
+			              )
+			        ) THEN 2
+			        WHEN lower(c.name) LIKE :pattern
+			            OR lower(COALESCE(c.trade_name, '')) LIKE :pattern THEN 3
+			        WHEN EXISTS (
+			            SELECT 1
+			            FROM complex_name_alias a
+			            WHERE a.complex_id = c.id
+			              AND (
+			                  lower(a.alias_name) LIKE :pattern
+			                  OR (
+			                      CAST(:normalizedPattern AS VARCHAR) IS NOT NULL
+			                      AND a.normalized_name LIKE :normalizedPattern
+			                  )
+			              )
+			        ) THEN 4
+			        WHEN lower(COALESCE(p.address, '')) LIKE :prefixPattern THEN 5
+			        WHEN lower(COALESCE(p.address, '')) LIKE :pattern THEN 6
+			        ELSE 7
+			    END,
+			    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name),
+			    c.id
 			LIMIT 20
 			""")
-			.param("pattern", pattern)
-			.param("normalizedPattern", normalizedPattern)
+			.param("lowerQuery", terms.lowerQuery())
+			.param("pattern", terms.pattern())
+			.param("prefixPattern", terms.prefixPattern())
+			.param("normalizedQuery", terms.normalizedQuery())
+			.param("normalizedPattern", terms.normalizedPattern())
+			.param("normalizedPrefixPattern", terms.normalizedPrefixPattern())
 			.query(this::mapSearchComplex)
 			.list();
 	}
 
 	@Override
 	public List<ComplexSuggestionResult> suggestComplexes(String query, int limit) {
-		String pattern = "%" + query.toLowerCase(Locale.ROOT) + "%";
-		String normalizedQuery = normalizeName(query);
-		String normalizedPattern = normalizedQuery.isBlank() ? null : "%" + normalizedQuery + "%";
+		PropertySearchTerms terms = PropertySearchTerms.from(query);
 		return jdbcClient.sql("""
 			SELECT
 			    c.id AS complex_id,
@@ -97,11 +137,56 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			             )
 			         )
 			   )
-			ORDER BY COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name), c.id
+			ORDER BY
+			    CASE
+			        WHEN lower(c.name) = :lowerQuery
+			            OR lower(COALESCE(c.trade_name, '')) = :lowerQuery THEN 0
+			        WHEN lower(c.name) LIKE :prefixPattern
+			            OR lower(COALESCE(c.trade_name, '')) LIKE :prefixPattern THEN 1
+			        WHEN EXISTS (
+			            SELECT 1
+			            FROM complex_name_alias a
+			            WHERE a.complex_id = c.id
+			              AND (
+			                  lower(a.alias_name) = :lowerQuery
+			                  OR lower(a.alias_name) LIKE :prefixPattern
+			                  OR (
+			                      CAST(:normalizedQuery AS VARCHAR) IS NOT NULL
+			                      AND (
+			                          a.normalized_name = :normalizedQuery
+			                          OR a.normalized_name LIKE :normalizedPrefixPattern
+			                      )
+			                  )
+			              )
+			        ) THEN 2
+			        WHEN lower(c.name) LIKE :pattern
+			            OR lower(COALESCE(c.trade_name, '')) LIKE :pattern THEN 3
+			        WHEN EXISTS (
+			            SELECT 1
+			            FROM complex_name_alias a
+			            WHERE a.complex_id = c.id
+			              AND (
+			                  lower(a.alias_name) LIKE :pattern
+			                  OR (
+			                      CAST(:normalizedPattern AS VARCHAR) IS NOT NULL
+			                      AND a.normalized_name LIKE :normalizedPattern
+			                  )
+			              )
+			        ) THEN 4
+			        WHEN lower(COALESCE(p.address, '')) LIKE :prefixPattern THEN 5
+			        WHEN lower(COALESCE(p.address, '')) LIKE :pattern THEN 6
+			        ELSE 7
+			    END,
+			    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name),
+			    c.id
 			LIMIT :limit
 			""")
-			.param("pattern", pattern)
-			.param("normalizedPattern", normalizedPattern)
+			.param("lowerQuery", terms.lowerQuery())
+			.param("pattern", terms.pattern())
+			.param("prefixPattern", terms.prefixPattern())
+			.param("normalizedQuery", terms.normalizedQuery())
+			.param("normalizedPattern", terms.normalizedPattern())
+			.param("normalizedPrefixPattern", terms.normalizedPrefixPattern())
 			.param("limit", limit)
 			.query(this::mapComplexSuggestion)
 			.list();
@@ -496,13 +581,6 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	private Double doubleOrNull(ResultSet resultSet, String column) throws SQLException {
 		BigDecimal value = resultSet.getBigDecimal(column);
 		return value == null ? null : value.doubleValue();
-	}
-
-	private String normalizeName(String value) {
-		String text = value == null ? "" : value.trim();
-		return text.replaceAll("\\s+", "")
-			.replaceAll("[()\\[\\]{}.,·\\-_/]", "")
-			.toLowerCase(Locale.ROOT);
 	}
 
 	private record RegionRow(

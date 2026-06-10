@@ -6,7 +6,7 @@ spring:
     driver-class-name: org.postgresql.Driver
   flyway:
     enabled: true
-    locations: "${SPRING_FLYWAY_LOCATIONS:classpath:db/migration/api,classpath:db/seed/local}"
+    locations: "${SPRING_FLYWAY_LOCATIONS:classpath:db/migration/api}"
     clean-disabled: true
     ignore-migration-patterns: "${SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS:*:missing}"
 

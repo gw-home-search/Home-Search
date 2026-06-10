@@ -20,8 +20,8 @@
   --hs-color-error: #af4b45;
   --hs-color-error-soft: #f8edeb;
   --hs-color-grid-line: rgba(255, 255, 255, 0.7);
-  --hs-color-layer: rgba(255, 255, 255, 0.97);
-  --hs-color-layer-strong: rgba(255, 255, 255, 0.99);
+  --hs-color-layer: #ffffff;
+  --hs-color-layer-strong: #ffffff;
 
   --hs-text-primary: var(--hs-color-ink);
   --hs-text-secondary: var(--hs-color-muted);

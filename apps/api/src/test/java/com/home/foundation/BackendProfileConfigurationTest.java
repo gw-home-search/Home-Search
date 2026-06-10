@@ -40,7 +40,7 @@ class BackendProfileConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("local profile은 PostgreSQL과 Flyway/local seed migration을 environment placeholder로 연결한다")
+	@DisplayName("local profile은 PostgreSQL과 Flyway project migration을 environment placeholder로 연결한다")
 	void localProfileWiresPostgresAndFlywayMigrationLocation() throws IOException {
 		Properties properties = load("application-local.yml");
 
@@ -49,7 +49,7 @@ class BackendProfileConfigurationTest {
 		assertThat(properties.getProperty("spring.datasource.password")).isEqualTo("${DB_PASSWORD}");
 		assertThat(properties.getProperty("spring.flyway.enabled")).isEqualTo("true");
 		assertThat(properties.getProperty("spring.flyway.locations"))
-			.isEqualTo("${SPRING_FLYWAY_LOCATIONS:classpath:db/migration/api,classpath:db/seed/local}");
+			.isEqualTo("${SPRING_FLYWAY_LOCATIONS:classpath:db/migration/api}");
 		assertThat(properties.getProperty("spring.flyway.clean-disabled")).isEqualTo("true");
 		assertThat(properties.getProperty("spring.flyway.ignore-migration-patterns"))
 			.isEqualTo("${SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS:*:missing}");

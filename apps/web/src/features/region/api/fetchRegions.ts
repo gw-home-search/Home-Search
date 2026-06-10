@@ -18,7 +18,7 @@ export type RegionComplexSummary = {
   parcelId: number;
   latitude: number | null;
   longitude: number | null;
-  address: string;
+  address: string | null;
   dongCnt: number | null;
   unitCnt: number | null;
   useDate: string | null;
@@ -148,7 +148,7 @@ function normalizeRegionComplex(item: RegionComplexSummaryResponse): RegionCompl
     parcelId: toRequiredNumber(item.parcelId, 'parcelId', 'region complexes'),
     latitude: toNullableNumber(item.latitude, 'latitude', 'region complexes'),
     longitude: toNullableNumber(item.longitude, 'longitude', 'region complexes'),
-    address: toRequiredString(item.address, 'address', 'region complexes'),
+    address: toNullableString(item.address),
     dongCnt: toNullableNumber(item.dongCnt, 'dongCnt', 'region complexes'),
     unitCnt: toNullableNumber(item.unitCnt, 'unitCnt', 'region complexes'),
     useDate: toNullableString(item.useDate),

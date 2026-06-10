@@ -129,6 +129,30 @@ describe('fetchComplexDetail API 어댑터', () => {
     });
   });
 
+  it('주소가 없는 detail도 거래 UI를 막지 않도록 null address를 보존한다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          parcelId: 4669,
+          complexId: 4368,
+          latitude: 37.567994,
+          longitude: 126.9930772,
+          address: null,
+          tradeName: '힐스테이트세운센트럴1단지',
+          name: '힐스테이트세운센트럴1단지',
+        }),
+      ),
+    );
+
+    await expect(fetchComplexDetail(4669, 4368)).resolves.toMatchObject({
+      parcelId: 4669,
+      complexId: 4368,
+      address: null,
+      name: '힐스테이트세운센트럴1단지',
+    });
+  });
+
   it('detail lookup 실패 시 public API ProblemDetail detail로 reject한다', async () => {
     vi.stubGlobal(
       'fetch',

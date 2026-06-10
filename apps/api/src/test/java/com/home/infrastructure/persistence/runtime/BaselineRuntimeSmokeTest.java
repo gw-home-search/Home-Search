@@ -48,13 +48,13 @@ class BaselineRuntimeSmokeTest {
 		registry.add("spring.datasource.password", POSTGRES::getPassword);
 		registry.add("spring.datasource.driver-class-name", POSTGRES::getDriverClassName);
 		registry.add("spring.flyway.enabled", () -> "true");
-		registry.add("spring.flyway.locations", () -> "classpath:db/migration/api,classpath:db/seed/local");
+		registry.add("spring.flyway.locations", () -> "classpath:db/migration/api");
 		registry.add("spring.flyway.clean-disabled", () -> "true");
 	}
 
 	@Test
-	@DisplayName("local runtime seed는 marker/detail/trade/duplicate/failed-match smoke를 지원한다")
-	void localRuntimeSeedSupportsBaselineBackendSmoke() throws Exception {
+	@DisplayName("local runtime은 synthetic sample seed 없이 public read API를 시작한다")
+	void localRuntimeStartsWithoutSyntheticSampleSeed() throws Exception {
 		mockMvc.perform(post("/api/v1/map/complexes")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
@@ -74,43 +74,24 @@ class BaselineRuntimeSmokeTest {
 					}
 					"""))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$[0].parcelId").value(1001))
-			.andExpect(jsonPath("$[0].lat").value(37.5123))
-			.andExpect(jsonPath("$[0].lng").value(127.0456))
-			.andExpect(jsonPath("$[0].latestDealAmount").value(130000))
-			.andExpect(jsonPath("$[0].unitCntSum").value(740))
-			.andExpect(jsonPath("$[0].complexPk").doesNotExist())
-			.andExpect(jsonPath("$[0].sourceKey").doesNotExist());
+			.andExpect(jsonPath("$").isEmpty());
 
-		mockMvc.perform(get("/api/v1/detail/1001"))
+		mockMvc.perform(get("/api/v1/region"))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.parcelId").value(1001))
-			.andExpect(jsonPath("$.name").value("Sample Apartment"))
-			.andExpect(jsonPath("$.tradeName").value("Sample trade name"))
-			.andExpect(jsonPath("$.complexPk").doesNotExist())
-			.andExpect(jsonPath("$.sourceKey").doesNotExist());
+			.andExpect(jsonPath("$").isEmpty());
 
-		mockMvc.perform(get("/api/v1/trade/1001"))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.parcelId").value(1001))
-			.andExpect(jsonPath("$.trades[0].tradeId").value(9002))
-			.andExpect(jsonPath("$.trades[0].dealAmount").value(130000))
-			.andExpect(jsonPath("$.trades[0].complexPk").doesNotExist())
-			.andExpect(jsonPath("$.trades[0].sourceKey").doesNotExist());
-
-		assertThat(rawCount("DUPLICATE")).isEqualTo(1L);
-		assertThat(rawCount("MATCH_FAILED")).isEqualTo(1L);
-		assertThat(normalizedTradeCount()).isEqualTo(2L);
+		assertThat(syntheticSamplePublicDataCount()).isZero();
+		assertThat(normalizedTradeCount()).isZero();
 	}
 
-	private Long rawCount(String status) {
+	private Long syntheticSamplePublicDataCount() {
 		return jdbcClient.sql("""
-			SELECT count(*)
-			FROM raw_trade_ingest
-			WHERE status = :status
-			  AND failure_reason IS NOT NULL
+			SELECT
+			    (SELECT count(*) FROM region WHERE name ILIKE 'Sample%')
+			  + (SELECT count(*) FROM parcel WHERE address ILIKE 'Sample%')
+			  + (SELECT count(*) FROM complex WHERE name ILIKE 'Sample%' OR trade_name ILIKE 'Sample%')
+			  + (SELECT count(*) FROM raw_trade_ingest WHERE source_key LIKE 'sample-rtms-%')
 			""")
-			.param("status", status)
 			.query(Long.class)
 			.single();
 	}

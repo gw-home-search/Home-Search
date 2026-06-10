@@ -7,7 +7,7 @@ export type ComplexSearchResult = {
   parcelId: number;
   latitude: number | null;
   longitude: number | null;
-  address: string;
+  address: string | null;
 };
 
 type ComplexSearchResultResponse = {
@@ -16,7 +16,7 @@ type ComplexSearchResultResponse = {
   parcelId?: number | string;
   latitude?: number | string | null;
   longitude?: number | string | null;
-  address?: string;
+  address?: string | null;
 };
 
 const SEARCH_COMPLEXES_PATH = '/api/v1/search/complexes';
@@ -56,7 +56,7 @@ function normalizeComplexSearchResult(result: ComplexSearchResultResponse): Comp
     parcelId: toRequiredNumber(result.parcelId, 'parcelId'),
     latitude: toNullableNumber(result.latitude, 'latitude'),
     longitude: toNullableNumber(result.longitude, 'longitude'),
-    address: toRequiredString(result.address, 'address'),
+    address: toNullableString(result.address),
   };
 }
 
@@ -87,4 +87,16 @@ function toRequiredString(value: unknown, field: string): string {
   }
 
   return value;
+}
+
+function toNullableString(value: unknown): string | null {
+  if (value == null) {
+    return null;
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  return value.length > 0 ? value : null;
 }

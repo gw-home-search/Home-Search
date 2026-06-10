@@ -5,14 +5,14 @@ export type ComplexSuggestion = {
   complexId: number;
   complexName: string;
   parcelId: number;
-  address: string;
+  address: string | null;
 };
 
 type ComplexSuggestionResponse = {
   complexId?: number | string;
   complexName?: string;
   parcelId?: number | string;
-  address?: string;
+  address?: string | null;
 };
 
 const SEARCH_SUGGESTIONS_PATH = '/api/v1/search/complexes/suggestions';
@@ -50,7 +50,7 @@ function normalizeComplexSuggestion(item: ComplexSuggestionResponse): ComplexSug
     complexId: toRequiredNumber(item.complexId, 'complexId'),
     complexName: toRequiredString(item.complexName, 'complexName'),
     parcelId: toRequiredNumber(item.parcelId, 'parcelId'),
-    address: toRequiredString(item.address, 'address'),
+    address: toNullableString(item.address),
   };
 }
 
@@ -73,4 +73,16 @@ function toRequiredString(value: unknown, field: string): string {
   }
 
   return value;
+}
+
+function toNullableString(value: unknown): string | null {
+  if (value == null) {
+    return null;
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  return value.length > 0 ? value : null;
 }

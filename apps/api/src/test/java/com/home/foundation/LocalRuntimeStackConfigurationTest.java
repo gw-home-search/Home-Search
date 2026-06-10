@@ -30,7 +30,7 @@ class LocalRuntimeStackConfigurationTest {
 	);
 
 	@Test
-	@DisplayName("local compose stack은 secret 없이 PostGIS, API, Web, local seed를 연결한다")
+	@DisplayName("local compose stack은 secret 없이 PostGIS, API, Web, project migration을 연결한다")
 	void localComposeStackWiresPostgisApiWebAndSeed() throws IOException {
 		assertThat(LOCAL_COMPOSE).exists();
 
@@ -47,7 +47,7 @@ class LocalRuntimeStackConfigurationTest {
 		assertThat(content).contains("HOME_INGEST_RTMS_ENABLED: ${HOME_INGEST_RTMS_ENABLED:-false}");
 		assertThat(content).contains("HOME_INGEST_RTMS_MODE: ${HOME_INGEST_RTMS_MODE:-one-shot}");
 		assertThat(content).contains("HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY: ${HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY:-false}");
-		assertThat(content).contains("SPRING_FLYWAY_LOCATIONS: classpath:db/migration/api,classpath:db/seed/local");
+		assertThat(content).contains("SPRING_FLYWAY_LOCATIONS: classpath:db/migration/api");
 		assertThat(content).contains("SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS: ${SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS:-*:missing}");
 		assertThat(content).contains("VITE_API_SERVER_IP: ${VITE_API_SERVER_IP:-http://localhost:8080}");
 		assertThat(content).doesNotContain("APT_SERVICE_KEY:");

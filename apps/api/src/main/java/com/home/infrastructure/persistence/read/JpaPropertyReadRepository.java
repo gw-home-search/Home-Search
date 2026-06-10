@@ -4,7 +4,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -30,9 +29,7 @@ public class JpaPropertyReadRepository implements PropertyReadRepository {
 
 	@Override
 	public List<SearchComplexResult> searchComplexes(String query) {
-		String pattern = "%" + query.toLowerCase(Locale.ROOT) + "%";
-		String normalizedQuery = normalizeName(query);
-		String normalizedPattern = normalizedQuery.isBlank() ? null : "%" + normalizedQuery + "%";
+		PropertySearchTerms terms = PropertySearchTerms.from(query);
 		return entityManager.createQuery("""
 			SELECT c, p, displayCoordinate
 			FROM ComplexReadEntity c
@@ -51,11 +48,51 @@ public class JpaPropertyReadRepository implements PropertyReadRepository {
 			         )
 			   )
 			ORDER BY
+			    CASE
+			        WHEN lower(c.name) = :lowerQuery
+			            OR lower(COALESCE(c.tradeName, '')) = :lowerQuery THEN 0
+			        WHEN lower(c.name) LIKE :prefixPattern
+			            OR lower(COALESCE(c.tradeName, '')) LIKE :prefixPattern THEN 1
+			        WHEN EXISTS (
+			            SELECT 1
+			            FROM ComplexNameAliasReadEntity nameAlias
+			            WHERE nameAlias.complexId = c.id
+			              AND (
+			                  lower(nameAlias.aliasName) = :lowerQuery
+			                  OR lower(nameAlias.aliasName) LIKE :prefixPattern
+			                  OR (
+			                      :normalizedQuery IS NOT NULL
+			                      AND (
+			                          nameAlias.normalizedName = :normalizedQuery
+			                          OR nameAlias.normalizedName LIKE :normalizedPrefixPattern
+			                      )
+			                  )
+			              )
+			        ) THEN 2
+			        WHEN lower(c.name) LIKE :pattern
+			            OR lower(COALESCE(c.tradeName, '')) LIKE :pattern THEN 3
+			        WHEN EXISTS (
+			            SELECT 1
+			            FROM ComplexNameAliasReadEntity nameAlias
+			            WHERE nameAlias.complexId = c.id
+			              AND (
+			                  lower(nameAlias.aliasName) LIKE :pattern
+			                  OR (:normalizedPattern IS NOT NULL AND nameAlias.normalizedName LIKE :normalizedPattern)
+			              )
+			        ) THEN 4
+			        WHEN lower(COALESCE(p.address, '')) LIKE :prefixPattern THEN 5
+			        WHEN lower(COALESCE(p.address, '')) LIKE :pattern THEN 6
+			        ELSE 7
+			    END,
 			    CASE WHEN c.tradeName IS NOT NULL AND trim(c.tradeName) <> '' THEN c.tradeName ELSE c.name END,
 			    c.id
 			""", Object[].class)
-			.setParameter("pattern", pattern)
-			.setParameter("normalizedPattern", normalizedPattern)
+			.setParameter("lowerQuery", terms.lowerQuery())
+			.setParameter("pattern", terms.pattern())
+			.setParameter("prefixPattern", terms.prefixPattern())
+			.setParameter("normalizedQuery", terms.normalizedQuery())
+			.setParameter("normalizedPattern", terms.normalizedPattern())
+			.setParameter("normalizedPrefixPattern", terms.normalizedPrefixPattern())
 			.setMaxResults(20)
 			.getResultList()
 			.stream()
@@ -65,9 +102,7 @@ public class JpaPropertyReadRepository implements PropertyReadRepository {
 
 	@Override
 	public List<ComplexSuggestionResult> suggestComplexes(String query, int limit) {
-		String pattern = "%" + query.toLowerCase(Locale.ROOT) + "%";
-		String normalizedQuery = normalizeName(query);
-		String normalizedPattern = normalizedQuery.isBlank() ? null : "%" + normalizedQuery + "%";
+		PropertySearchTerms terms = PropertySearchTerms.from(query);
 		return entityManager.createQuery("""
 			SELECT new com.home.application.read.ComplexSuggestionResult(
 			    c.id,
@@ -90,11 +125,51 @@ public class JpaPropertyReadRepository implements PropertyReadRepository {
 			         )
 			   )
 			ORDER BY
+			    CASE
+			        WHEN lower(c.name) = :lowerQuery
+			            OR lower(COALESCE(c.tradeName, '')) = :lowerQuery THEN 0
+			        WHEN lower(c.name) LIKE :prefixPattern
+			            OR lower(COALESCE(c.tradeName, '')) LIKE :prefixPattern THEN 1
+			        WHEN EXISTS (
+			            SELECT 1
+			            FROM ComplexNameAliasReadEntity nameAlias
+			            WHERE nameAlias.complexId = c.id
+			              AND (
+			                  lower(nameAlias.aliasName) = :lowerQuery
+			                  OR lower(nameAlias.aliasName) LIKE :prefixPattern
+			                  OR (
+			                      :normalizedQuery IS NOT NULL
+			                      AND (
+			                          nameAlias.normalizedName = :normalizedQuery
+			                          OR nameAlias.normalizedName LIKE :normalizedPrefixPattern
+			                      )
+			                  )
+			              )
+			        ) THEN 2
+			        WHEN lower(c.name) LIKE :pattern
+			            OR lower(COALESCE(c.tradeName, '')) LIKE :pattern THEN 3
+			        WHEN EXISTS (
+			            SELECT 1
+			            FROM ComplexNameAliasReadEntity nameAlias
+			            WHERE nameAlias.complexId = c.id
+			              AND (
+			                  lower(nameAlias.aliasName) LIKE :pattern
+			                  OR (:normalizedPattern IS NOT NULL AND nameAlias.normalizedName LIKE :normalizedPattern)
+			              )
+			        ) THEN 4
+			        WHEN lower(COALESCE(p.address, '')) LIKE :prefixPattern THEN 5
+			        WHEN lower(COALESCE(p.address, '')) LIKE :pattern THEN 6
+			        ELSE 7
+			    END,
 			    CASE WHEN c.tradeName IS NOT NULL AND trim(c.tradeName) <> '' THEN c.tradeName ELSE c.name END,
 			    c.id
 			""", ComplexSuggestionResult.class)
-			.setParameter("pattern", pattern)
-			.setParameter("normalizedPattern", normalizedPattern)
+			.setParameter("lowerQuery", terms.lowerQuery())
+			.setParameter("pattern", terms.pattern())
+			.setParameter("prefixPattern", terms.prefixPattern())
+			.setParameter("normalizedQuery", terms.normalizedQuery())
+			.setParameter("normalizedPattern", terms.normalizedPattern())
+			.setParameter("normalizedPrefixPattern", terms.normalizedPrefixPattern())
 			.setMaxResults(limit)
 			.getResultList();
 	}
@@ -445,13 +520,6 @@ public class JpaPropertyReadRepository implements PropertyReadRepository {
 
 	private Double longitude(ComplexDisplayCoordinateReadEntity displayCoordinate, ParcelReadEntity parcel) {
 		return displayCoordinate == null ? parcel.longitude() : displayCoordinate.longitude();
-	}
-
-	private String normalizeName(String value) {
-		String text = value == null ? "" : value.trim();
-		return text.replaceAll("\\s+", "")
-			.replaceAll("[()\\[\\]{}.,·\\-_/]", "")
-			.toLowerCase(Locale.ROOT);
 	}
 
 	private record DetailCandidate(

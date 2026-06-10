@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class JdbcParcelHardeningMigrationTest extends JdbcMigrationTestSupport {
 
 	@Test
-	@DisplayName("V15 migration은 PNU prefix로 기존 parcel region_id와 address를 보강한다")
+	@DisplayName("migration chain은 PNU prefix로 기존 parcel region_id와 개포동 address를 보강한다")
 	void migrationBackfillsRegionAndAddressFromPnuPrefix() {
 		migrateToVersion14();
 		jdbcClient.sql("""
@@ -34,7 +34,11 @@ class JdbcParcelHardeningMigrationTest extends JdbcMigrationTestSupport {
 			))
 			.single())
 			.containsEntry("region_id", 1L)
-			.containsEntry("address", "Sample-dong 777-1");
+			.containsEntry("address", "개포동 777-1");
+
+		assertThat(jdbcClient.sql("SELECT name FROM region WHERE id = 1")
+			.query(String.class)
+			.single()).isEqualTo("개포동");
 	}
 
 	private void migrateToVersion14() {

@@ -39,6 +39,7 @@ Optional but recommended:
 
 - Prometheus endpoint.
 - Grafana dashboard.
+- Loki log aggregation for local runtime logs.
 - Batch execution logs.
 - Redis for short-lived map marker response caching.
 
@@ -117,6 +118,38 @@ Minimum project metrics/logs:
 The source backend already has actuator/prometheus dependencies. Preserve that
 capability when moving to `apps/api`.
 
+Local monitoring stack:
+
+- Prometheus scrapes `api:8080/actuator/prometheus`.
+- Loki stores local Docker container logs with filesystem storage.
+- Grafana Alloy reads Docker logs from the local Docker socket and forwards
+  only `home-search-*` containers to Loki.
+- Grafana provisions Prometheus and Loki datasources plus the
+  `Home Search Local Overview` dashboard from `infra/grafana`.
+
+Local monitoring ports are bound to host loopback by default:
+
+- Prometheus: `localhost:${HOME_SEARCH_PROMETHEUS_PORT:-9090}`.
+- Loki: `localhost:${HOME_SEARCH_LOKI_PORT:-3100}`.
+- Alloy UI: `localhost:${HOME_SEARCH_ALLOY_PORT:-12345}`.
+- Grafana: `localhost:${HOME_SEARCH_GRAFANA_PORT:-3000}`.
+
+Grafana local credentials default to:
+
+```text
+HOME_SEARCH_GRAFANA_ADMIN_USER=admin
+HOME_SEARCH_GRAFANA_ADMIN_PASSWORD=home_search_local_admin
+```
+
+Override these in a private local environment before exposing Grafana outside
+the local machine. The Docker socket mount used by Alloy is a local-only
+diagnostic surface; do not copy it to production deployment files without a
+separate security review.
+
+Monitoring labels must stay low-cardinality. Do not put `source_key`, raw
+payloads, service keys, user search text, or full request query strings in
+metric labels or Loki labels.
+
 ## Acceptance Criteria
 
 - Local PostGIS can start.
@@ -125,6 +158,11 @@ capability when moving to `apps/api`.
 - Flyway can create baseline tables from scratch.
 - Frontend can call the API through its env base URL.
 - Ingest logs show read, inserted, duplicate, and failed counts.
+- Prometheus can scrape `home_search_ingest_items_total`,
+  `home_search_map_requests_total`, and
+  `home_search_map_marker_cache_requests_total`.
+- Grafana can load provisioned Prometheus and Loki datasources.
+- Loki can query `home-search-api` logs without exposing secrets in labels.
 
 ## Local Flyway History
 
@@ -175,3 +213,24 @@ To verify Redis itself:
 docker compose -f infra/docker-compose.local.yml up -d redis
 docker exec home-search-redis redis-cli ping
 ```
+
+## Local Monitoring
+
+Start the local monitoring stack without deleting volumes:
+
+```bash
+docker compose -f infra/docker-compose.local.yml up -d postgis redis api prometheus loki alloy grafana
+```
+
+Verify the main endpoints:
+
+```bash
+curl -fsS http://localhost:8080/actuator/prometheus
+curl -fsS http://localhost:${HOME_SEARCH_PROMETHEUS_PORT:-9090}/-/ready
+curl -fsS http://localhost:${HOME_SEARCH_LOKI_PORT:-3100}/ready
+curl -fsS http://localhost:${HOME_SEARCH_GRAFANA_PORT:-3000}/api/health
+```
+
+Use `docker compose stop` or `docker compose down` without `-v` when shutting
+down the local stack. Do not use `docker compose down -v` unless a current task
+explicitly approves volume deletion.

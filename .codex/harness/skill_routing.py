@@ -43,6 +43,7 @@ BACKEND_EVIDENCE = ("backendQualityCheck", "Coverage: >=90%", "Docs/OpenAPI")
 FRONTEND_EVIDENCE = ("cd apps/web && npm run test", "cd apps/web && npm run build")
 DEBUG_EVIDENCE = ("차단 사유", "복구 순서", "검증")
 REVIEW_EVIDENCE = ("reviewer: 지적사항", "검증 공백", "잔여 위험")
+SECURITY_EVIDENCE = ("security-audit: 지적사항", "보안 잔여 위험")
 
 
 def skill_name(value: str) -> str:
@@ -167,6 +168,7 @@ def routes_for(mode: str, targets: str | Iterable[str] | None = None) -> tuple[S
         routes.append(route("tdd", "plan", "checkpoint", "define First RED, Expected RED failure, and Minimum GREEN before execution.", TDD_EVIDENCE))
         if has_backend(target_set) or has_frontend(target_set):
             routes.append(route("api-contract", "plan", "checkpoint", "check public API URL, request, response, unit, and error compatibility before implementation.", CONTRACT_EVIDENCE))
+            routes.append(route("security-audit", "plan", "checkpoint", "surface security impact, secrets handling, and abuse paths before implementation.", SECURITY_EVIDENCE))
         return dedupe(routes)
 
     if mode == "execute":
@@ -179,12 +181,14 @@ def routes_for(mode: str, targets: str | Iterable[str] | None = None) -> tuple[S
             routes.append(route("frontend-web", "execute", "support", "apply apps/web Vite React, Kakao map, adapter, and map-first UI rules.", FRONTEND_EVIDENCE))
             routes.append(route("api-contract", "execute", "checkpoint", "preserve frontend compatibility with public API URLs, fields, units, and error behavior.", CONTRACT_EVIDENCE))
         routes.append(route("systematic-debugging", "execute", "recovery", "use only when lint/test/build/hook/CI/runtime evidence fails and a reproducible loop is needed.", DEBUG_EVIDENCE, "not used when all verification passes."))
+        routes.append(route("security-audit", "execute", "checkpoint", "apply secure-by-default rules and record security findings before completion evidence.", SECURITY_EVIDENCE))
         routes.append(route("code-review", "execute", "review", "perform findings-first local review before completion or PR evidence.", REVIEW_EVIDENCE))
         return dedupe(routes)
 
     if mode == "gate":
         routes.append(harness_route("gate", "run read-only gate review against completed target diff and recorded evidence."))
         routes.append(route("code-review", "gate", "primary", "review completed diffs and evidence findings-first before completion or PR.", REVIEW_EVIDENCE))
+        routes.append(route("security-audit", "gate", "checkpoint", "review the completed diff for security findings and record the security evidence line.", SECURITY_EVIDENCE))
         routes.append(route("tdd", "gate", "checkpoint", "verify First RED validity and Minimum GREEN evidence when behavior changed.", TDD_EVIDENCE))
         if has_backend(target_set) or has_frontend(target_set):
             routes.append(route("api-contract", "gate", "checkpoint", "check contract-adjacent changes before gate Pass.", CONTRACT_EVIDENCE))
@@ -277,12 +281,18 @@ def run_self_test() -> int:
         "$backend-api" in execute,
         "$frontend-web" in execute,
         "$api-contract" in execute,
+        "$security-audit" in execute,
         "$code-review" in execute,
         execute.count("$api-contract") == 1,
+        "$security-audit" in route_names("gate", "backend"),
+        "$security-audit" in route_names("gate"),
+        "$security-audit" in route_names("execute"),
         "home-search-harness" in plan,
         "$planning" in plan,
+        "$security-audit" in plan,
         "$vertical-slice-implementation" in plan,
         "$vertical-slice-implementation" not in planning_only,
+        "$security-audit" not in planning_only,
         "$systematic-debugging" in recover,
         "Skill contract:" in routing_text("execute", "frontend"),
         frontend_web.get("role") == "support",

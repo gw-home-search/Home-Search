@@ -9,6 +9,8 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.home.application.read.ComplexSummaryResult;
+import com.home.application.read.ComplexSuggestionResult;
 import com.home.application.read.ParcelDetailResult;
 import com.home.application.read.PropertyReadRepository;
 import com.home.application.read.RegionDetailResult;
@@ -68,6 +70,44 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	}
 
 	@Override
+	public List<ComplexSuggestionResult> suggestComplexes(String query, int limit) {
+		String pattern = "%" + query.toLowerCase(Locale.ROOT) + "%";
+		String normalizedQuery = normalizeName(query);
+		String normalizedPattern = normalizedQuery.isBlank() ? null : "%" + normalizedQuery + "%";
+		return jdbcClient.sql("""
+			SELECT
+			    c.id AS complex_id,
+			    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name) AS complex_name,
+			    p.id AS parcel_id,
+			    p.address
+			FROM complex c
+			JOIN parcel p ON p.id = c.parcel_id
+			WHERE lower(c.name) LIKE :pattern
+			   OR lower(COALESCE(c.trade_name, '')) LIKE :pattern
+			   OR lower(COALESCE(p.address, '')) LIKE :pattern
+			   OR EXISTS (
+			       SELECT 1
+			       FROM complex_name_alias a
+			       WHERE a.complex_id = c.id
+			         AND (
+			             lower(a.alias_name) LIKE :pattern
+			             OR (
+			                 CAST(:normalizedPattern AS VARCHAR) IS NOT NULL
+			                 AND a.normalized_name LIKE :normalizedPattern
+			             )
+			         )
+			   )
+			ORDER BY COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name), c.id
+			LIMIT :limit
+			""")
+			.param("pattern", pattern)
+			.param("normalizedPattern", normalizedPattern)
+			.param("limit", limit)
+			.query(this::mapComplexSuggestion)
+			.list();
+	}
+
+	@Override
 	public List<RegionSummaryResult> findRootRegions() {
 		return jdbcClient.sql("""
 			SELECT id, name
@@ -109,6 +149,46 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			row.longitude(),
 			children
 		));
+	}
+
+	@Override
+	public Optional<List<ComplexSummaryResult>> findRegionComplexes(Long regionId, int limit, int offset) {
+		if (!hasRegion(regionId)) {
+			return Optional.empty();
+		}
+		List<ComplexSummaryResult> complexes = jdbcClient.sql("""
+			WITH RECURSIVE region_tree AS (
+			    SELECT id
+			    FROM region
+			    WHERE id = :regionId
+			    UNION ALL
+			    SELECT child.id
+			    FROM region child
+			    JOIN region_tree parent ON parent.id = child.parent_id
+			)
+			SELECT
+			    c.id AS complex_id,
+			    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name) AS complex_name,
+			    p.id AS parcel_id,
+			    COALESCE(display_coordinate.latitude, p.latitude) AS latitude,
+			    COALESCE(display_coordinate.longitude, p.longitude) AS longitude,
+			    p.address,
+			    c.dong_cnt,
+			    c.unit_cnt,
+			    c.use_date
+			FROM complex c
+			JOIN parcel p ON p.id = c.parcel_id
+			LEFT JOIN complex_display_coordinate display_coordinate ON display_coordinate.complex_id = c.id
+			WHERE p.region_id IN (SELECT id FROM region_tree)
+			ORDER BY COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name), c.id
+			LIMIT :limit OFFSET :offset
+			""")
+			.param("regionId", regionId)
+			.param("limit", limit)
+			.param("offset", offset)
+			.query(this::mapComplexSummary)
+			.list();
+		return Optional.of(complexes);
 	}
 
 	@Override
@@ -170,6 +250,63 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	}
 
 	@Override
+	public Optional<List<ComplexSummaryResult>> findParcelComplexes(Long parcelId) {
+		if (!hasParcel(parcelId)) {
+			return Optional.empty();
+		}
+		List<ComplexSummaryResult> complexes = jdbcClient.sql("""
+			SELECT
+			    c.id AS complex_id,
+			    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name) AS complex_name,
+			    p.id AS parcel_id,
+			    COALESCE(display_coordinate.latitude, p.latitude) AS latitude,
+			    COALESCE(display_coordinate.longitude, p.longitude) AS longitude,
+			    p.address,
+			    c.dong_cnt,
+			    c.unit_cnt,
+			    c.use_date
+			FROM complex c
+			JOIN parcel p ON p.id = c.parcel_id
+			LEFT JOIN complex_display_coordinate display_coordinate ON display_coordinate.complex_id = c.id
+			WHERE p.id = :parcelId
+			ORDER BY COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name), c.id
+			""")
+			.param("parcelId", parcelId)
+			.query(this::mapComplexSummary)
+			.list();
+		return Optional.of(complexes);
+	}
+
+	@Override
+	public Optional<ParcelDetailResult> findComplexDetail(Long complexId) {
+		return jdbcClient.sql("""
+			SELECT
+			    p.id AS parcel_id,
+			    c.id AS complex_id,
+			    COALESCE(display_coordinate.latitude, p.latitude) AS latitude,
+			    COALESCE(display_coordinate.longitude, p.longitude) AS longitude,
+			    p.address,
+			    c.trade_name,
+			    c.name,
+			    c.dong_cnt,
+			    c.unit_cnt,
+			    c.plat_area,
+			    c.arch_area,
+			    c.tot_area,
+			    c.bc_rat,
+			    c.vl_rat,
+			    c.use_date
+			FROM complex c
+			JOIN parcel p ON p.id = c.parcel_id
+			LEFT JOIN complex_display_coordinate display_coordinate ON display_coordinate.complex_id = c.id
+			WHERE c.id = :complexId
+			""")
+			.param("complexId", complexId)
+			.query(this::mapParcelDetail)
+			.optional();
+	}
+
+	@Override
 	public Optional<TradeListResult> findTradeList(Long parcelId, Long complexId) {
 		if (!hasComplexParent(parcelId, complexId)) {
 			return Optional.empty();
@@ -196,6 +333,64 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 		return Optional.of(new TradeListResult(parcelId, complexId, trades));
 	}
 
+	@Override
+	public Optional<TradeListResult> findComplexTradeList(Long complexId) {
+		Optional<Long> parcelId = jdbcClient.sql("""
+			SELECT parcel_id
+			FROM complex
+			WHERE id = :complexId
+			""")
+			.param("complexId", complexId)
+			.query(Long.class)
+			.optional();
+		if (parcelId.isEmpty()) {
+			return Optional.empty();
+		}
+		List<TradeResult> trades = jdbcClient.sql("""
+			SELECT
+			    t.id AS trade_id,
+			    t.deal_date,
+			    t.excl_area,
+			    t.deal_amount,
+			    t.apt_dong,
+			    t.floor
+			FROM trade t
+			WHERE t.complex_id = :complexId
+			  AND t.deleted_at IS NULL
+			ORDER BY t.deal_date DESC, t.id DESC
+			""")
+			.param("complexId", complexId)
+			.query(this::mapTrade)
+			.list();
+		return Optional.of(new TradeListResult(parcelId.get(), complexId, trades));
+	}
+
+	private boolean hasRegion(Long regionId) {
+		return Boolean.TRUE.equals(jdbcClient.sql("""
+			SELECT EXISTS (
+			    SELECT 1
+			    FROM region
+			    WHERE id = :regionId
+			)
+			""")
+			.param("regionId", regionId)
+			.query(Boolean.class)
+			.single());
+	}
+
+	private boolean hasParcel(Long parcelId) {
+		return Boolean.TRUE.equals(jdbcClient.sql("""
+			SELECT EXISTS (
+			    SELECT 1
+			    FROM parcel
+			    WHERE id = :parcelId
+			)
+			""")
+			.param("parcelId", parcelId)
+			.query(Boolean.class)
+			.single());
+	}
+
 	private boolean hasComplexParent(Long parcelId, Long complexId) {
 		return Boolean.TRUE.equals(jdbcClient.sql("""
 			SELECT EXISTS (
@@ -219,6 +414,29 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			resultSet.getLong("parcel_id"),
 			doubleOrNull(resultSet, "latitude"),
 			doubleOrNull(resultSet, "longitude"),
+			resultSet.getString("address")
+		);
+	}
+
+	private ComplexSummaryResult mapComplexSummary(ResultSet resultSet, int rowNumber) throws SQLException {
+		return new ComplexSummaryResult(
+			resultSet.getLong("complex_id"),
+			resultSet.getString("complex_name"),
+			resultSet.getLong("parcel_id"),
+			doubleOrNull(resultSet, "latitude"),
+			doubleOrNull(resultSet, "longitude"),
+			resultSet.getString("address"),
+			integerOrNull(resultSet, "dong_cnt"),
+			integerOrNull(resultSet, "unit_cnt"),
+			resultSet.getObject("use_date", LocalDate.class)
+		);
+	}
+
+	private ComplexSuggestionResult mapComplexSuggestion(ResultSet resultSet, int rowNumber) throws SQLException {
+		return new ComplexSuggestionResult(
+			resultSet.getLong("complex_id"),
+			resultSet.getString("complex_name"),
+			resultSet.getLong("parcel_id"),
 			resultSet.getString("address")
 		);
 	}

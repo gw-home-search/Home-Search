@@ -578,6 +578,19 @@ describe('App map-first shell 화면', () => {
             },
           ],
         }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            complexId: 501,
+            complexName: 'Sample complex name',
+            parcelId: 1001,
+            latitude: 37.5123,
+            longitude: 127.0456,
+            address: 'Sample address',
+            unitCnt: 740,
+          },
+        ]),
       );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -600,6 +613,10 @@ describe('App map-first shell 화면', () => {
     );
     expect(fetchMock).toHaveBeenCalledWith(
       resolveApiUrl('/api/v1/trade/1001?complexId=501'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/detail/1001/complexes'),
       expect.objectContaining({ method: 'GET' }),
     );
     expect(rootElement.querySelector('[aria-label="단지 상세 패널"]')).not.toBeNull();
@@ -666,6 +683,18 @@ describe('App map-first shell 화면', () => {
           complexId: 501,
           trades: [],
         }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            complexId: 501,
+            complexName: 'Sample complex name',
+            parcelId: 1001,
+            latitude: 37.5123,
+            longitude: 127.0456,
+            address: 'Sample address',
+          },
+        ]),
       );
     const sdk = createFakeKakaoSdk({
       bounds: {
@@ -746,6 +775,18 @@ describe('App map-first shell 화면', () => {
           complexId: 501,
           trades: [],
         }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            complexId: 501,
+            complexName: 'Sample Apartment',
+            parcelId: 1001,
+            latitude: 37.5123,
+            longitude: 127.0456,
+            address: 'Sample address',
+          },
+        ]),
       );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -797,7 +838,7 @@ describe('App map-first shell 화면', () => {
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenLastCalledWith(
-      resolveApiUrl('/api/v1/trade/1001?complexId=501'),
+      resolveApiUrl('/api/v1/detail/1001/complexes'),
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
@@ -846,6 +887,18 @@ describe('App map-first shell 화면', () => {
           complexId: 801,
           trades: [],
         }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            complexId: 801,
+            complexName: 'Coordinate Pending Complex',
+            parcelId: 3001,
+            latitude: null,
+            longitude: null,
+            address: 'Coordinate pending address',
+          },
+        ]),
       );
     vi.stubGlobal('fetch', fetchMock);
 
@@ -885,7 +938,7 @@ describe('App map-first shell 화면', () => {
       resolveApiUrl('/api/v1/trade/3001?complexId=801'),
       expect.objectContaining({ method: 'GET' }),
     );
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(rootElement.querySelector('[aria-label="단지 상세 패널"]')).not.toBeNull();
     expect(rootElement.textContent).toContain('Coordinate Pending Complex');
     expect(rootElement.textContent).toContain('거래 내역이 없습니다');
@@ -918,6 +971,19 @@ describe('App map-first shell 화면', () => {
             },
           ],
         }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            complexId: 701,
+            complexName: 'Region Complex',
+            parcelId: 2001,
+            latitude: 37.5123,
+            longitude: 127.0456,
+            address: 'Region address',
+            unitCnt: 740,
+          },
+        ]),
       )
       .mockResolvedValueOnce(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
@@ -954,6 +1020,10 @@ describe('App map-first shell 화면', () => {
       resolveApiUrl('/api/v1/region/1'),
       expect.objectContaining({ method: 'GET' }),
     );
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/region/1/complexes?limit=20&offset=0'),
+      expect.objectContaining({ method: 'GET' }),
+    );
     expect(fetchMock).toHaveBeenLastCalledWith(
       resolveApiUrl('/api/v1/map/regions'),
       expect.objectContaining({
@@ -962,6 +1032,183 @@ describe('App map-first shell 화면', () => {
       }),
     );
     expect(rootElement.textContent).toContain('Gangnam-gu');
+    expect(rootElement.textContent).toContain('Region Complex');
+
+    unmount(root);
+  });
+
+  it('complexId query parameter로 direct detail/trade를 열고 같은 parcel complex를 전환한다', async () => {
+    window.history.pushState({}, '', '/?complexId=502');
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          parcelId: 1001,
+          complexId: 502,
+          latitude: 37.6123,
+          longitude: 127.1456,
+          address: 'Sample address',
+          tradeName: 'Tower B',
+          name: 'Sample Tower B',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          parcelId: 1001,
+          complexId: 502,
+          trades: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            complexId: 501,
+            complexName: 'Tower A',
+            parcelId: 1001,
+            latitude: 37.5123,
+            longitude: 127.0456,
+            address: 'Sample address',
+            unitCnt: 320,
+          },
+          {
+            complexId: 502,
+            complexName: 'Tower B',
+            parcelId: 1001,
+            latitude: 37.6123,
+            longitude: 127.1456,
+            address: 'Sample address',
+            unitCnt: 410,
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          parcelId: 1001,
+          complexId: 501,
+          latitude: 37.5123,
+          longitude: 127.0456,
+          address: 'Sample address',
+          name: 'Sample Tower A',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          parcelId: 1001,
+          complexId: 501,
+          trades: [],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp();
+    await flushAsyncState();
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/complex/502'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/complex/502/trades'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/detail/1001/complexes'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(rootElement.textContent).toContain('Sample Tower B');
+    expect(rootElement.textContent).toContain('Tower A');
+
+    const switchButton = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="같은 필지 단지 선택 Tower A"]',
+    );
+    await act(async () => {
+      switchButton?.click();
+    });
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/detail/1001?complexId=501'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/trade/1001?complexId=501'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(rootElement.textContent).toContain('Sample Tower A');
+
+    unmount(root);
+  });
+
+  it('단지 검색 입력은 suggestion API를 사용하고 suggestion 선택으로 detail을 연다', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            complexId: 501,
+            complexName: 'Suggested Apartment',
+            parcelId: 1001,
+            address: 'Suggestion address',
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          parcelId: 1001,
+          complexId: 501,
+          latitude: 37.5123,
+          longitude: 127.0456,
+          address: 'Suggestion address',
+          name: 'Suggested Apartment',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          parcelId: 1001,
+          complexId: 501,
+          trades: [],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp();
+    await flushAsyncState();
+
+    const searchInput = rootElement.querySelector<HTMLInputElement>(
+      'input[aria-label="단지 검색"]',
+    );
+    await act(async () => {
+      if (searchInput) {
+        searchInput.value = 'Suggested';
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/search/complexes/suggestions?q=Suggested'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    const suggestion = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="검색 제안 선택 Suggested Apartment"]',
+    );
+    expect(suggestion).not.toBeNull();
+
+    await act(async () => {
+      suggestion?.click();
+    });
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/detail/1001?complexId=501'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(rootElement.textContent).toContain('Suggested Apartment');
 
     unmount(root);
   });

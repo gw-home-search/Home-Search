@@ -81,6 +81,11 @@ def valid_sample() -> str:
 
 contract-reviewer: not needed
 
+## 보안 영향
+
+보안 영향: 없음
+security-audit: 지적사항 = none
+
 ## 주요 위험
 
 주요 위험: 없음
@@ -109,6 +114,7 @@ def run_self_test() -> int:
     unchecked = check_body(valid_sample().replace("- [x] draft PR", "- [ ] draft PR"))
     missing_diff = check_body(valid_sample().replace("- `git diff --check` = pass (정상)\n", ""))
     pass_with_risk = check_body(valid_sample().replace("주요 위험: 없음", "주요 위험: 미확인 risk"))
+    missing_security = check_body(valid_sample().replace("security-audit: 지적사항 = none\n", ""))
     checks = [
         passing.ok,
         not empty.ok,
@@ -119,6 +125,8 @@ def run_self_test() -> int:
         any("git diff --check" in error for error in missing_diff.errors),
         not pass_with_risk.ok,
         any("미확인" in error for error in pass_with_risk.errors),
+        not missing_security.ok,
+        any("security-audit" in error for error in missing_security.errors),
     ]
     if all(checks):
         print("self-test passed: pr_body_check")

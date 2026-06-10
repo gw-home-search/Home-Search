@@ -302,8 +302,11 @@ def render_pr_body(payload: dict[str, Any]) -> str:
     verification = nested(payload, "verification", default={})
     contract_risks = as_list(payload.get("contract_risks"))
     residual_risks = as_list(payload.get("residual_risks"))
+    security_risks = as_list(payload.get("security_risks"))
     contract_text = "영향 없음" if not contract_risks else "영향 있음: " + "; ".join(str(item) for item in contract_risks)
     risk_text = "없음" if not residual_risks else "; ".join(str(item) for item in residual_risks)
+    security_text = "없음" if not security_risks else "있음: " + "; ".join(str(item) for item in security_risks)
+    security_findings = "none" if not security_risks else "listed"
     next_action = payload.get("next_action") or "GitHub PR diff와 checks를 확인한 뒤 수동 merge 결정"
     report_link = links.get("markdown_report") or "생성 안 됨"
     lines = "\n".join(verification_line(command, verification) for command in pr_body_commands(payload))
@@ -347,6 +350,11 @@ def render_pr_body(payload: dict[str, Any]) -> str:
 {contract_text}
 
 contract-reviewer: contract risk 없으면 not needed, 있으면 필요
+
+## 보안 영향
+
+보안 영향: {security_text}
+security-audit: 지적사항 = {security_findings}, 보안 audit에서 지적사항이 나오면 listed
 
 ## 주요 위험
 
@@ -548,6 +556,13 @@ def run_self_test() -> int:
                         "required_evidence": ["계약 영향"],
                     },
                     {
+                        "trigger": "$security-audit",
+                        "phase": "execute",
+                        "role": "checkpoint",
+                        "path": ".agents/skills/security-audit/SKILL.md",
+                        "required_evidence": ["security-audit: 지적사항", "보안 잔여 위험"],
+                    },
+                    {
                         "trigger": "$code-review",
                         "phase": "execute",
                         "role": "review",
@@ -579,6 +594,7 @@ def run_self_test() -> int:
     }
     rendered = render_report(payload)
     pr_body = render_pr_body(payload)
+    security_listed_body = render_pr_body({**payload, "security_risks": ["unescaped news title reaches Slack sink"]})
     linted_pr_body = lint_pr(
         PrInput(
             title="[Chore] 리포트 본문 생성 검증",
@@ -605,6 +621,11 @@ def run_self_test() -> int:
         "## 사용 skill" in pr_body,
         "| execute | home-search-harness | orchestrator | .codex/harness/home | 상태; 검증; 다음 행동 |" in rendered,
         "| execute | $tdd | primary | .agents/skills/tdd/SKILL.md | 최초 RED; 예상 RED 실패; 최소 GREEN |" in pr_body,
+        "| execute | $security-audit | checkpoint | .agents/skills/security-audit/SKILL.md | security-audit: 지적사항; 보안 잔여 위험 |" in pr_body,
+        "## 보안 영향" in pr_body,
+        "security-audit: 지적사항 = none" in pr_body,
+        "security-audit: 지적사항 = listed" in security_listed_body,
+        "보안 영향: 있음" in security_listed_body,
         "## 요약" in pr_body,
         "`self-test` work item의 변경 범위" in pr_body,
         "최초 RED:" in pr_body,

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchComplexDetail } from './fetchComplexDetail';
+import { fetchComplexDetail, fetchComplexDetailByComplexId } from './fetchComplexDetail';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
 
 describe('fetchComplexDetail API 어댑터', () => {
@@ -75,6 +75,31 @@ describe('fetchComplexDetail API 어댑터', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       resolveApiUrl('/api/v1/detail/1001?complexId=502'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('complexId 단독 detail URL을 호출한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        parcelId: 1001,
+        complexId: 502,
+        latitude: 37.6123,
+        longitude: 127.1456,
+        address: 'Sample address',
+        name: 'Selected complex',
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchComplexDetailByComplexId(502)).resolves.toMatchObject({
+      parcelId: 1001,
+      complexId: 502,
+      name: 'Selected complex',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/complex/502'),
       expect.objectContaining({ method: 'GET' }),
     );
   });

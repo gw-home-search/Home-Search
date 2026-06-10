@@ -260,6 +260,16 @@ def has_implementation_review_evidence(text: str) -> bool:
     )
 
 
+def has_security_audit_evidence(text: str) -> bool:
+    return bool(
+        re.search(
+            r"security-audit\s*:\s*(?:지적사항|Findings)\s*=\s*(none|listed|없음|있음)",
+            text,
+            re.IGNORECASE,
+        )
+    )
+
+
 def has_short_korean_review(text: str) -> bool:
     required_groups = (
         ("상태:",),
@@ -330,6 +340,8 @@ def missing_evidence(files: list[str], text: str) -> list[str]:
     if any(is_behavior_change(path) for path in files):
         if not has_tdd_work_evidence(text):
             missing.append("behavior 변경: 최초 RED, 예상 RED 실패, 최소 GREEN evidence 필요")
+        if not has_security_audit_evidence(text):
+            missing.append("apps 코드 변경: security-audit 지적사항 evidence 필요")
 
     if any(is_contract_related(path) for path in files):
         if not has_contract_reviewer_evidence(text):
@@ -381,6 +393,7 @@ def run_self_test() -> int:
                 "Coverage: >=90%",
                 "Docs/OpenAPI: generated + verified",
                 "reviewer: 지적사항 = 없음",
+                "security-audit: 지적사항 = 없음",
                 "주요 위험: 없음",
                 "다음 행동: 최초 RED 보강",
             ]
@@ -426,6 +439,7 @@ def run_self_test() -> int:
                 "Coverage: >=90%",
                 "Docs/OpenAPI: generated + verified",
                 "reviewer: 지적사항 = 없음",
+                "security-audit: 지적사항 = 없음",
                 "주요 위험: 없음",
                 "다음 행동: 없음",
             ]
@@ -440,6 +454,24 @@ def run_self_test() -> int:
                 "예상 RED 실패: 확인",
                 "최소 GREEN: 확인",
                 "검증: ./gradlew backendQualityCheck = pass",
+                "Docs/OpenAPI: generated + verified",
+                "reviewer: 지적사항 = 없음",
+                "security-audit: 지적사항 = 없음",
+                "주요 위험: 없음",
+                "다음 행동: 없음",
+            ]
+        ),
+    )
+    missing_security = missing_evidence(
+        ["apps/api/src/main/java/com/home/App.java"],
+        "\n".join(
+            [
+                "상태: Pass",
+                "최초 RED: 있음",
+                "예상 RED 실패: 확인",
+                "최소 GREEN: 확인",
+                "검증: ./gradlew backendQualityCheck = pass",
+                "Coverage: >=90%",
                 "Docs/OpenAPI: generated + verified",
                 "reviewer: 지적사항 = 없음",
                 "주요 위험: 없음",
@@ -469,6 +501,7 @@ def run_self_test() -> int:
                 "Coverage: >=90%",
                 "Docs/OpenAPI: generated + verified",
                 "reviewer: 지적사항 = 없음",
+                "security-audit: 지적사항 = 없음",
                 "주요 위험: 없음",
                 "다음 행동: 없음",
             ]
@@ -483,6 +516,7 @@ def run_self_test() -> int:
                 "Coverage: >=90%",
                 "Docs/OpenAPI: generated + verified",
                 "reviewer: 지적사항 = 없음",
+                "security-audit: 지적사항 = 없음",
                 "주요 위험: 없음",
                 "다음 행동: 없음",
             ]
@@ -516,6 +550,8 @@ def run_self_test() -> int:
         ("markdown changes do not require companion evidence", not markdown_complete),
         ("backendQualityCheck evidence is required", any("backendQualityCheck" in item for item in missing_backend_quality)),
         ("coverage evidence is required", any("Coverage" in item for item in missing_coverage)),
+        ("security-audit evidence is required", any("security-audit" in item for item in missing_security)),
+        ("complete backend evidence has no security gap", not any("security-audit" in item for item in missing_backend_quality)),
         ("informational stop answer is not gated", not informational_answer),
         ("completion answer still requires evidence", bool(completion_without_evidence)),
         ("completion answer with evidence passes", not completion_with_evidence),

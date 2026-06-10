@@ -7,6 +7,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 
 import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
+import com.home.application.read.InvalidReadRequestException;
 import com.home.infrastructure.web.admin.AdminCoordinateAccessDeniedException;
 
 import org.springframework.http.HttpStatus;
@@ -42,7 +43,8 @@ public class ApiExceptionHandler {
 		MissingServletRequestParameterException.class,
 		MethodArgumentTypeMismatchException.class,
 		HandlerMethodValidationException.class,
-		InvalidCoordinateOverrideException.class
+		InvalidCoordinateOverrideException.class,
+		InvalidReadRequestException.class
 	})
 	public ResponseEntity<ProblemDetail> handleBadRequest(Exception exception) {
 		ProblemDetail problemDetail = createProblemDetail(

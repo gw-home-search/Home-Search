@@ -1,12 +1,15 @@
 package com.home.infrastructure.persistence.read;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.home.application.read.ComplexSummaryResult;
+import com.home.application.read.ComplexSuggestionResult;
 import com.home.application.read.ParcelDetailResult;
 import com.home.application.read.PropertyReadRepository;
 import com.home.application.read.RegionDetailResult;
@@ -61,6 +64,42 @@ public class JpaPropertyReadRepository implements PropertyReadRepository {
 	}
 
 	@Override
+	public List<ComplexSuggestionResult> suggestComplexes(String query, int limit) {
+		String pattern = "%" + query.toLowerCase(Locale.ROOT) + "%";
+		String normalizedQuery = normalizeName(query);
+		String normalizedPattern = normalizedQuery.isBlank() ? null : "%" + normalizedQuery + "%";
+		return entityManager.createQuery("""
+			SELECT new com.home.application.read.ComplexSuggestionResult(
+			    c.id,
+			    CASE WHEN c.tradeName IS NOT NULL AND trim(c.tradeName) <> '' THEN c.tradeName ELSE c.name END,
+			    p.id,
+			    p.address
+			)
+			FROM ComplexReadEntity c
+			JOIN ParcelReadEntity p ON p.id = c.parcelId
+			WHERE lower(c.name) LIKE :pattern
+			   OR lower(COALESCE(c.tradeName, '')) LIKE :pattern
+			   OR lower(COALESCE(p.address, '')) LIKE :pattern
+			   OR EXISTS (
+			       SELECT 1
+			       FROM ComplexNameAliasReadEntity nameAlias
+			       WHERE nameAlias.complexId = c.id
+			         AND (
+			             lower(nameAlias.aliasName) LIKE :pattern
+			             OR (:normalizedPattern IS NOT NULL AND nameAlias.normalizedName LIKE :normalizedPattern)
+			         )
+			   )
+			ORDER BY
+			    CASE WHEN c.tradeName IS NOT NULL AND trim(c.tradeName) <> '' THEN c.tradeName ELSE c.name END,
+			    c.id
+			""", ComplexSuggestionResult.class)
+			.setParameter("pattern", pattern)
+			.setParameter("normalizedPattern", normalizedPattern)
+			.setMaxResults(limit)
+			.getResultList();
+	}
+
+	@Override
 	public List<RegionSummaryResult> findRootRegions() {
 		return entityManager.createQuery("""
 			SELECT r
@@ -101,6 +140,32 @@ public class JpaPropertyReadRepository implements PropertyReadRepository {
 	}
 
 	@Override
+	public Optional<List<ComplexSummaryResult>> findRegionComplexes(Long regionId, int limit, int offset) {
+		if (entityManager.find(RegionReadEntity.class, regionId) == null) {
+			return Optional.empty();
+		}
+		List<Long> regionIds = findRegionTreeIds(regionId);
+		List<ComplexSummaryResult> complexes = entityManager.createQuery("""
+			SELECT c, p, displayCoordinate
+			FROM ComplexReadEntity c
+			JOIN ParcelReadEntity p ON p.id = c.parcelId
+			LEFT JOIN ComplexDisplayCoordinateReadEntity displayCoordinate ON displayCoordinate.complexId = c.id
+			WHERE p.regionId IN :regionIds
+			ORDER BY
+			    CASE WHEN c.tradeName IS NOT NULL AND trim(c.tradeName) <> '' THEN c.tradeName ELSE c.name END,
+			    c.id
+			""", Object[].class)
+			.setParameter("regionIds", regionIds)
+			.setFirstResult(offset)
+			.setMaxResults(limit)
+			.getResultList()
+			.stream()
+			.map(this::mapComplexSummary)
+			.toList();
+		return Optional.of(complexes);
+	}
+
+	@Override
 	public Optional<ParcelDetailResult> findParcelDetail(Long parcelId, Long complexId) {
 		ParcelReadEntity parcel = entityManager.find(ParcelReadEntity.class, parcelId);
 		if (parcel == null) {
@@ -114,6 +179,50 @@ public class JpaPropertyReadRepository implements PropertyReadRepository {
 			? representativeCandidate(parcelId, candidates)
 			: candidates.get(0);
 		return Optional.of(mapParcelDetail(parcel, candidate));
+	}
+
+	@Override
+	public Optional<List<ComplexSummaryResult>> findParcelComplexes(Long parcelId) {
+		if (entityManager.find(ParcelReadEntity.class, parcelId) == null) {
+			return Optional.empty();
+		}
+		List<ComplexSummaryResult> complexes = entityManager.createQuery("""
+			SELECT c, p, displayCoordinate
+			FROM ComplexReadEntity c
+			JOIN ParcelReadEntity p ON p.id = c.parcelId
+			LEFT JOIN ComplexDisplayCoordinateReadEntity displayCoordinate ON displayCoordinate.complexId = c.id
+			WHERE p.id = :parcelId
+			ORDER BY
+			    CASE WHEN c.tradeName IS NOT NULL AND trim(c.tradeName) <> '' THEN c.tradeName ELSE c.name END,
+			    c.id
+			""", Object[].class)
+			.setParameter("parcelId", parcelId)
+			.getResultList()
+			.stream()
+			.map(this::mapComplexSummary)
+			.toList();
+		return Optional.of(complexes);
+	}
+
+	@Override
+	public Optional<ParcelDetailResult> findComplexDetail(Long complexId) {
+		List<Object[]> rows = entityManager.createQuery("""
+			SELECT c, p, displayCoordinate
+			FROM ComplexReadEntity c
+			JOIN ParcelReadEntity p ON p.id = c.parcelId
+			LEFT JOIN ComplexDisplayCoordinateReadEntity displayCoordinate ON displayCoordinate.complexId = c.id
+			WHERE c.id = :complexId
+			""", Object[].class)
+			.setParameter("complexId", complexId)
+			.getResultList();
+		if (rows.isEmpty()) {
+			return Optional.empty();
+		}
+		Object[] row = rows.get(0);
+		return Optional.of(mapParcelDetail(
+			(ParcelReadEntity) row[1],
+			new DetailCandidate((ComplexReadEntity) row[0], (ComplexDisplayCoordinateReadEntity) row[2], null, null)
+		));
 	}
 
 	@Override
@@ -143,6 +252,31 @@ public class JpaPropertyReadRepository implements PropertyReadRepository {
 		return Optional.of(new TradeListResult(parcelId, complexId, trades));
 	}
 
+	@Override
+	public Optional<TradeListResult> findComplexTradeList(Long complexId) {
+		ComplexReadEntity complex = entityManager.find(ComplexReadEntity.class, complexId);
+		if (complex == null) {
+			return Optional.empty();
+		}
+		List<TradeResult> trades = entityManager.createQuery("""
+			SELECT new com.home.application.read.TradeResult(
+			    t.id,
+			    t.dealDate,
+			    t.exclArea,
+			    t.dealAmount,
+			    t.aptDong,
+			    t.floor
+			)
+			FROM TradeReadEntity t
+			WHERE t.complexId = :complexId
+			  AND t.deletedAt IS NULL
+			ORDER BY t.dealDate DESC, t.id DESC
+			""", TradeResult.class)
+			.setParameter("complexId", complexId)
+			.getResultList();
+		return Optional.of(new TradeListResult(complex.parcelId(), complexId, trades));
+	}
+
 	private SearchComplexResult mapSearchComplex(Object[] row) {
 		ComplexReadEntity complex = (ComplexReadEntity) row[0];
 		ParcelReadEntity parcel = (ParcelReadEntity) row[1];
@@ -154,6 +288,23 @@ public class JpaPropertyReadRepository implements PropertyReadRepository {
 			latitude(displayCoordinate, parcel),
 			longitude(displayCoordinate, parcel),
 			parcel.address()
+		);
+	}
+
+	private ComplexSummaryResult mapComplexSummary(Object[] row) {
+		ComplexReadEntity complex = (ComplexReadEntity) row[0];
+		ParcelReadEntity parcel = (ParcelReadEntity) row[1];
+		ComplexDisplayCoordinateReadEntity displayCoordinate = (ComplexDisplayCoordinateReadEntity) row[2];
+		return new ComplexSummaryResult(
+			complex.id(),
+			complex.displayName(),
+			parcel.id(),
+			latitude(displayCoordinate, parcel),
+			longitude(displayCoordinate, parcel),
+			parcel.address(),
+			complex.dongCnt(),
+			complex.unitCnt(),
+			complex.useDate()
 		);
 	}
 
@@ -269,6 +420,23 @@ public class JpaPropertyReadRepository implements PropertyReadRepository {
 			.setParameter("complexId", complexId)
 			.getSingleResult();
 		return count > 0;
+	}
+
+	private List<Long> findRegionTreeIds(Long rootRegionId) {
+		List<Long> regionIds = new ArrayList<>();
+		List<Long> frontier = List.of(rootRegionId);
+		while (!frontier.isEmpty()) {
+			regionIds.addAll(frontier);
+			frontier = entityManager.createQuery("""
+				SELECT r.id
+				FROM RegionReadEntity r
+				WHERE r.parentId IN :parentIds
+				ORDER BY r.id
+				""", Long.class)
+				.setParameter("parentIds", frontier)
+				.getResultList();
+		}
+		return regionIds;
 	}
 
 	private Double latitude(ComplexDisplayCoordinateReadEntity displayCoordinate, ParcelReadEntity parcel) {

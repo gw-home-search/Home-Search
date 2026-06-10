@@ -32,12 +32,33 @@ type TradeItemResponse = {
 };
 
 const TRADE_PATH = '/api/v1/trade';
+const COMPLEX_PATH = '/api/v1/complex';
 
 export async function fetchParcelTrades(
   parcelId: number,
   complexId?: number | null,
 ): Promise<ParcelTrades> {
   const response = await fetch(resolveApiUrl(scopedPath(`${TRADE_PATH}/${parcelId}`, complexId)), {
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    const detail = await readProblemDetail(response);
+    throw new Error(
+      `Failed to fetch parcel trades: ${response.status}${detail ? ` ${detail}` : ''}`,
+    );
+  }
+
+  const payload: unknown = await response.json();
+  if (!isRecord(payload)) {
+    throw new Error('Invalid public API parcel trade response: expected an object');
+  }
+
+  return normalizeParcelTrades(payload);
+}
+
+export async function fetchComplexTrades(complexId: number): Promise<ParcelTrades> {
+  const response = await fetch(resolveApiUrl(`${COMPLEX_PATH}/${complexId}/trades`), {
     method: 'GET',
   });
 

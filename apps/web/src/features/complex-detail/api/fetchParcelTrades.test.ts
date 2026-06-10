@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchParcelTrades } from './fetchParcelTrades';
+import { fetchComplexTrades, fetchParcelTrades } from './fetchParcelTrades';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
 
 describe('fetchParcelTrades API 어댑터', () => {
@@ -85,6 +85,28 @@ describe('fetchParcelTrades API 어댑터', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       resolveApiUrl('/api/v1/trade/1001?complexId=502'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('complexId 단독 trade URL을 호출한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        parcelId: 1001,
+        complexId: 502,
+        trades: [],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchComplexTrades(502)).resolves.toEqual({
+      parcelId: 1001,
+      complexId: 502,
+      trades: [],
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/complex/502/trades'),
       expect.objectContaining({ method: 'GET' }),
     );
   });

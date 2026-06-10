@@ -1,9 +1,13 @@
 package com.home.infrastructure.web.read;
 
+import java.util.List;
+
+import com.home.application.read.ComplexSummaryResult;
 import com.home.application.read.ParcelDetailResult;
 import com.home.application.read.PropertyReadUseCase;
 import com.home.application.read.TradeListResult;
 import com.home.application.read.TradeResult;
+import com.home.infrastructure.web.read.dto.ComplexSummaryResponse;
 import com.home.infrastructure.web.read.dto.ParcelDetailResponse;
 import com.home.infrastructure.web.read.dto.TradeListResponse;
 import com.home.infrastructure.web.read.dto.TradeResponse;
@@ -31,12 +35,44 @@ public class DetailController {
 		return ResponseEntity.ok(toResponse(readUseCase.getParcelDetail(parcelId, complexId)));
 	}
 
+	@GetMapping("/api/v1/detail/{parcelId}/complexes")
+	public ResponseEntity<List<ComplexSummaryResponse>> getParcelComplexes(@PathVariable Long parcelId) {
+		return ResponseEntity.ok(readUseCase.getParcelComplexes(parcelId)
+			.stream()
+			.map(DetailController::toResponse)
+			.toList());
+	}
+
 	@GetMapping("/api/v1/trade/{parcelId}")
 	public ResponseEntity<TradeListResponse> getTradeList(
 		@PathVariable Long parcelId,
 		@RequestParam(required = false) Long complexId
 	) {
 		return ResponseEntity.ok(toResponse(readUseCase.getTradeList(parcelId, complexId)));
+	}
+
+	@GetMapping("/api/v1/complex/{complexId}")
+	public ResponseEntity<ParcelDetailResponse> getComplexDetail(@PathVariable Long complexId) {
+		return ResponseEntity.ok(toResponse(readUseCase.getComplexDetail(complexId)));
+	}
+
+	@GetMapping("/api/v1/complex/{complexId}/trades")
+	public ResponseEntity<TradeListResponse> getComplexTradeList(@PathVariable Long complexId) {
+		return ResponseEntity.ok(toResponse(readUseCase.getComplexTradeList(complexId)));
+	}
+
+	private static ComplexSummaryResponse toResponse(ComplexSummaryResult result) {
+		return new ComplexSummaryResponse(
+			result.complexId(),
+			result.complexName(),
+			result.parcelId(),
+			result.latitude(),
+			result.longitude(),
+			result.address(),
+			result.dongCnt(),
+			result.unitCnt(),
+			result.useDate()
+		);
 	}
 
 	private static ParcelDetailResponse toResponse(ParcelDetailResult result) {

@@ -12,6 +12,15 @@ Check screenshots or browser output at:
 - Narrow width with bottom-sheet behavior.
 - Marker loading, empty, error, and ready states when the change touches map
   fetch behavior.
+- At least one interaction state for the changed control: hover, focus,
+  active, expanded, selected, or disabled.
+
+When browser automation is available, also check:
+
+- Console has no critical runtime errors.
+- Network has no unexpected `4xx` or `5xx` for the touched public API flow.
+- No visible overflow, clipped labels, or incoherent overlap at desktop and
+  narrow widths.
 
 ## Map Priority
 
@@ -31,6 +40,7 @@ Pass only if:
 - Button and input text fits without clipping.
 - Panel rows and trade table columns align predictably.
 - Numeric values keep consistent units.
+- Prices, counts, dates, and table numbers use stable alignment.
 - Text contrast is sufficient against surfaces and map fallback states.
 
 ## Accessibility
@@ -40,8 +50,10 @@ Pass only if:
 - Interactive elements are native buttons, inputs, links, or equivalent
   accessible controls.
 - Form fields have usable labels.
+- Icon-only buttons have accessible names.
 - Alert and status messages use appropriate live region semantics.
 - Focus order follows the visible task flow.
+- Focus indicators are visible against map, panel, and drawer surfaces.
 - Meaning is not communicated by color alone.
 
 ## Anti-AI Visual Review
@@ -57,6 +69,9 @@ Fail if the design includes:
 - Decorative blobs, orbs, abstract background art, or generated filler images.
 - Large soft shadows used as decoration rather than layer separation.
 - Gradient text or glowing primary buttons.
+- Unmodified library defaults presented as final design.
+- Uniform card/grid styling where rows, tables, or map controls would be more
+  scannable.
 
 Allowed exceptions must be functional and documented, such as a simple map
 runtime fallback grid or a subtle active-layer shadow.

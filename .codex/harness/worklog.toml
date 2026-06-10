@@ -1,4 +1,57 @@
 [[items]]
+id = "home-search-designer-skill-hardening"
+title_ko = "Home Search designer skill hardening"
+pr_type = "Docs"
+pr_title_ko = "Home Search 디자이너 skill 기준 보강"
+description_ko = "saved-ai-exam의 interface polish, design-system audit, accessibility, motion, browser QA 원칙을 Home Search map-first 제약 안으로 재작성해 home-search-design skill을 map product designer 기준으로 보강한다."
+status = "done"
+priority = 260
+targets = "planning-only"
+preset = "contract-hardening"
+acceptance_criteria = [
+  "home-search-design은 generic visual decorator가 아니라 map product designer와 workflow owner 역할을 명시한다.",
+  "saved-ai-exam 자료는 read-only 참고로만 사용하고 원문을 그대로 복사하지 않고 Home Search 문맥으로 재작성한다.",
+  "interface polish, design-system audit, accessibility/motion 기준은 references 파일로 분리해 progressive disclosure를 유지한다.",
+  "Kakao map, marker, filter, exploration panel, detail drawer, trade list가 primary UI 단위로 유지된다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경을 요구하지 않는다.",
+  "ranking, favorite, alarm, mail, recommendation, auth, heavy analytics는 stop condition 또는 anti-pattern으로만 남긴다.",
+  "실제 apps/web 구현은 frontend-web, API 영향은 api-contract, 동작 테스트는 tdd로 handoff하도록 유지한다.",
+  "visual QA는 desktop/mobile screenshot, interaction state, console/network smoke, accessibility focus evidence를 요구하도록 보강한다.",
+]
+first_red_candidates = [
+  "문서/skill workflow 변경 slice이므로 production behavior First RED는 not applicable이다.",
+  "후속 apps/web 구현 slice에서는 adapter, marker transform, map fallback, drawer/sheet behavior에 대해 frontend-web + tdd로 First RED를 만든다.",
+]
+verification_commands = [
+  "git diff --check",
+  "python3 .codex/harness/project_terms_check.py",
+  "python3 .codex/harness/pr_lint.py --self-test",
+  "python3 .codex/harness/pr_context.py --self-test",
+  "python3 .codex/harness/pr_body_check.py --self-test",
+]
+verification_evidence = [
+  "- `git diff --check` = pass (공백 오류 없음)",
+  "- `python3 .codex/harness/project_terms_check.py` = pass (프로젝트 용어 점검 통과)",
+  "- `python3 .codex/harness/pr_lint.py --self-test` = pass (PR lint 자체 테스트 통과)",
+  "- `python3 .codex/harness/pr_context.py --self-test` = pass (PR context 자체 테스트 통과)",
+  "- `python3 .codex/harness/pr_body_check.py --self-test` = pass (PR body check 자체 테스트 통과)",
+  "- `python3 .codex/harness/worklog_sync.py --self-test` = pass (worklog sync 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_pr.py --self-test` = pass (harness PR helper 자체 테스트 통과)",
+  "- `python3 - <<'PY' ... PY` = pass (home-search-design SKILL.md reference 경로가 모두 존재함)",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "새 designer 기준이 map보다 panel, drawer, hero, card layout을 primary surface로 만들면 중단한다.",
+  "saved-ai-exam 내용을 verbatim copy해야 하면 중단하고 Home Search 문맥으로 다시 재작성한다.",
+  "apps/web/** 실제 구현이 필요하면 별도 frontend slice로 분리한다.",
+  "decorative dependency, liquid glass, generic bento/hero, ranking/favorite/alarm/mail/recommendation/auth 흐름이 필요하면 중단한다.",
+]
+risk_notes = [
+  "이번 slice는 agent skill 문서 보강이며 앱 런타임 동작을 변경하지 않는다.",
+  "디자인을 풍성하게 하는 기준은 추가됐지만, 실제 화면 개선은 후속 apps/web slice와 screenshot evidence가 필요하다.",
+]
+
+[[items]]
 id = "map-marker-redis-performance-gate"
 title_ko = "Map marker Redis performance gate"
 pr_type = "Test"

@@ -151,10 +151,12 @@ function MapApp({
   const [regionState, setRegionState] = useState<PanelRequestState>('idle');
   const [regionError, setRegionError] = useState<string | null>(null);
   const [isExplorationOpen, setIsExplorationOpen] = useState(true);
+  const [filterFormKey, setFilterFormKey] = useState(0);
   const markerRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
   const searchRequestSeq = useRef(0);
   const regionRequestSeq = useRef(0);
+  const activeFilterCount = countActiveFilters(markerFilters);
 
   useEffect(() => {
     setViewport((current) => {
@@ -351,6 +353,11 @@ function MapApp({
     });
   }
 
+  function handleFilterReset() {
+    setMarkerFilters(EMPTY_COMPLEX_MARKER_FILTERS);
+    setFilterFormKey((current) => current + 1);
+  }
+
   function handleLoadRootRegions() {
     const requestSeq = regionRequestSeq.current + 1;
     regionRequestSeq.current = requestSeq;
@@ -419,7 +426,7 @@ function MapApp({
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-ui-surface="map-first">
       <header aria-label="상단 앱 바" className="app-bar">
         <div className="app-brand">
           <h1>Home Search</h1>
@@ -433,7 +440,7 @@ function MapApp({
           type="button"
           aria-controls="exploration-panel"
           aria-expanded={isExplorationOpen}
-          aria-label="탐색 패널 접기"
+          aria-label={isExplorationOpen ? '탐색 패널 접기' : '탐색 패널 열기'}
           className="exploration-toggle"
           onClick={() => {
             setIsExplorationOpen((current) => !current);
@@ -459,9 +466,12 @@ function MapApp({
           />
 
           <form
+            key={filterFormKey}
             aria-label="마커 필터"
             className="filter-panel"
+            data-filter-state={activeFilterCount > 0 ? 'active' : 'idle'}
             data-map-overlay="filters"
+            data-ui-layer="filter-controls"
             onSubmit={handleFilterSubmit}
           >
             <fieldset className="filter-group">
@@ -558,9 +568,17 @@ function MapApp({
                 </label>
               </div>
             </fieldset>
-            <button type="submit" aria-label="마커 필터 적용">
-              적용
-            </button>
+            <div className="filter-actions">
+              <p className="filter-status" aria-live="polite">
+                {activeFilterCount > 0 ? `필터 ${activeFilterCount}개 적용` : '필터 없음'}
+              </p>
+              <button type="submit" aria-label="마커 필터 적용">
+                적용
+              </button>
+              <button type="button" aria-label="마커 필터 초기화" onClick={handleFilterReset}>
+                초기화
+              </button>
+            </div>
           </form>
 
           <div aria-label="지도 조작" className="map-controls">
@@ -587,7 +605,7 @@ function MapApp({
           {markerState === 'error' ? (
             <p className="map-feedback map-feedback-error" role="alert">
               마커 데이터를 불러오지 못했습니다. 지도는 계속 사용할 수 있습니다.
-              {markerError ? ` ${markerError}` : null}
+              {markerError ? <span className="map-feedback-detail">{markerError}</span> : null}
               {' '}
               <button type="button" aria-label="마커 다시 불러오기" onClick={handleRetryMarkers}>
                 다시 시도
@@ -643,6 +661,7 @@ function MapApp({
           aria-hidden={!isExplorationOpen}
           className="exploration-panel"
           data-collapsed={isExplorationOpen ? 'false' : 'true'}
+          data-ui-layer="exploration-panel"
           hidden={!isExplorationOpen}
         >
           <div className="exploration-panel-header">
@@ -752,7 +771,7 @@ function MapApp({
       </div>
 
       {selectedComplex == null ? null : (
-        <aside aria-label="단지 상세 패널" className="detail-drawer">
+        <aside aria-label="단지 상세 패널" className="detail-drawer" data-ui-layer="detail-drawer">
           <div className="detail-drawer-header">
             <p className="detail-drawer-kicker">{detailDrawerKicker(selectedComplex)}</p>
             <button
@@ -784,19 +803,21 @@ function MapApp({
 
           {detailState === 'ready' && complexDetail ? (
             <>
-              <h2>{complexDetail.name}</h2>
-              <p className="detail-address">{complexDetail.address}</p>
-              <dl className="detail-metrics">
-                {detailMetric('거래명', complexDetail.tradeName)}
-                {detailMetric('세대수', formatNumber(complexDetail.unitCnt, '세대'))}
-                {detailMetric('동수', formatNumber(complexDetail.dongCnt, '개동'))}
-                {detailMetric('사용승인일', complexDetail.useDate)}
-                {detailMetric('대지면적', formatNumber(complexDetail.platArea, '㎡'))}
-                {detailMetric('건축면적', formatNumber(complexDetail.archArea, '㎡'))}
-                {detailMetric('연면적', formatNumber(complexDetail.totArea, '㎡'))}
-                {detailMetric('건폐율', formatNumber(complexDetail.bcRat, '%'))}
-                {detailMetric('용적률', formatNumber(complexDetail.vlRat, '%'))}
-              </dl>
+              <section className="detail-identity" data-detail-section="identity">
+                <h2>{complexDetail.name}</h2>
+                <p className="detail-address">{complexDetail.address}</p>
+                <dl className="detail-metrics">
+                  {detailMetric('거래명', complexDetail.tradeName)}
+                  {detailMetric('세대수', formatNumber(complexDetail.unitCnt, '세대'))}
+                  {detailMetric('동수', formatNumber(complexDetail.dongCnt, '개동'))}
+                  {detailMetric('사용승인일', complexDetail.useDate)}
+                  {detailMetric('대지면적', formatNumber(complexDetail.platArea, '㎡'))}
+                  {detailMetric('건축면적', formatNumber(complexDetail.archArea, '㎡'))}
+                  {detailMetric('연면적', formatNumber(complexDetail.totArea, '㎡'))}
+                  {detailMetric('건폐율', formatNumber(complexDetail.bcRat, '%'))}
+                  {detailMetric('용적률', formatNumber(complexDetail.vlRat, '%'))}
+                </dl>
+              </section>
               <TradeAmountChart trades={parcelTrades?.trades ?? []} />
               <TradeList trades={parcelTrades?.trades ?? []} />
             </>
@@ -892,6 +913,10 @@ function numberFormValue(formData: FormData, field: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function countActiveFilters(filters: ComplexMarkerFilters): number {
+  return Object.values(filters).filter((value) => value != null).length;
+}
+
 function detailMetric(label: string, value: string | null) {
   if (value == null) {
     return null;
@@ -966,12 +991,13 @@ function TradeAmountChart({ trades }: { trades: TradeItem[] }) {
 
 function TradeList({ trades }: { trades: TradeItem[] }) {
   return (
-    <section className="trade-list" aria-label="거래 목록">
+    <section className="trade-list" aria-label="거래 목록" data-detail-section="trade-history">
       <h3>거래 내역</h3>
       {trades.length === 0 ? (
         <p>거래 내역이 없습니다</p>
       ) : (
         <table>
+          <caption className="sr-only">선택한 단지 또는 필지의 실거래 목록</caption>
           <thead>
             <tr>
               <th scope="col">일자</th>
@@ -984,8 +1010,8 @@ function TradeList({ trades }: { trades: TradeItem[] }) {
             {trades.map((trade) => (
               <tr key={trade.tradeId}>
                 <td>{trade.dealDate}</td>
-                <td>{formatAmount(trade.dealAmount)}</td>
-                <td>{trade.exclArea.toLocaleString()}㎡</td>
+                <td data-trade-cell="amount">{formatAmount(trade.dealAmount)}</td>
+                <td data-trade-cell="area">{trade.exclArea.toLocaleString()}㎡</td>
                 <td>{formatTradeFloor(trade)}</td>
               </tr>
             ))}

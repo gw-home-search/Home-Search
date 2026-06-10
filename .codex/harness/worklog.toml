@@ -2383,3 +2383,48 @@ risk_notes = [
   "브라우저 smoke는 deterministic tests를 대체하지 않으며, test seam이 없으면 먼저 frontend RED를 추가한다.",
   "local environment availability에 따라 visual evidence는 Partial일 수 있지만 contract/test gate는 통과해야 한다.",
 ]
+
+[[items]]
+id = "public-read-api-e2e-completion-runbook"
+title_ko = "Public read API E2E completion runbook"
+pr_type = "Chore"
+pr_title_ko = "Public read API E2E 완료 실행 runbook"
+description_ko = "1차 public read API 5개를 inventory부터 detail/trade, search, region, runtime visual smoke까지 /goal 단위로 순차 실행하고 완료 판정하는 운영 계획을 고정한다."
+status = "planned"
+priority = 246
+targets = "planning-only"
+preset = "contract-hardening"
+acceptance_criteria = [
+  "시작 시 /goal로 public-read-api-e2e-completion-runbook 실행 목표를 생성하고, 완료 시 다음 실행 대상과 stop condition 여부를 기록한다.",
+  "실행 순서는 public-read-api-e2e-inventory -> detail-trade-drawer-e2e-parity -> search-to-detail-e2e-parity -> region-navigation-e2e-parity -> public-read-api-runtime-visual-smoke로 고정한다.",
+  "각 하위 slice 시작 시 별도 /goal을 생성하고, 해당 /goal 안에서 code-mapper preflight, contract-reviewer checkpoint, TDD gate, verification, code-review gate를 진행한다.",
+  "public-read-api-e2e-inventory는 legacy backend/frontend, target backend/frontend, docs/API_CONTRACT.md matrix를 만들고 각 API를 OK, backend gap, frontend gap, visual gap, later-scope로 분류해야 한다.",
+  "detail-trade-drawer-e2e-parity는 marker/search 선택 후 detail/trade drawer에서 parcelId와 complexId scope가 유지되는지 backend contract와 frontend 표시를 함께 검토해야 한다.",
+  "search-to-detail-e2e-parity는 검색 결과가 complex 단위로 표시되고 선택 시 map 이동과 detail/trade scope가 유지되는지 검토해야 한다.",
+  "region-navigation-e2e-parity는 root/child region navigation이 map recenter와 marker refresh 흐름까지 이어지는지 검토해야 한다.",
+  "public-read-api-runtime-visual-smoke는 검색, 지역 navigation, detail drawer, trade list/chart가 local runtime 또는 deterministic smoke evidence로 실제 화면 흐름에서 확인되는지 검토해야 한다.",
+  "각 구현 slice는 First RED 또는 RED waiver 근거, 예상 RED 실패, 최소 GREEN, 검증 명령 결과를 worklog/report/PR body에 남겨야 한다.",
+  "최종 완료 판정은 5개 public read API가 public URL, query parameter, response field/type/unit, ProblemDetail shape 변경 없이 backend contract와 frontend 표시에서 모두 연결될 때만 허용한다.",
+]
+first_red_candidates = [
+  "planning-only runbook slice이므로 First RED는 not applicable이며, 하위 구현 slice에서 기능별 RED를 필수로 만든다.",
+  "하위 slice가 test seam 없이 runtime smoke만 요구하면 해당 slice의 첫 작업을 RED seam 추가로 전환한다.",
+]
+verification_commands = [
+  "python3 .codex/harness/worklog_sync.py --self-test",
+  "python3 .codex/harness/home_plan.py --self-test",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단하고 별도 contract review로 분리한다.",
+  "complex_id operational relation 변경, complex_pk/apt_seq/source/source_key public 노출, raw ingest/dedupe 정책 변경이 필요하면 중단한다.",
+  "ranking, trend aggregate, favorite, alarm, mail, auth, recommendation 기능이 필요하면 later-scope로 분리한다.",
+  "DB reset, Docker volume 삭제, 기존 저장 데이터 cleanup, live RTMS/VWorld/Kakao secret 사용이 필요하면 중단하고 별도 승인으로 분리한다.",
+  "한 하위 slice가 detail/trade, search, region을 동시에 크게 수정해야 하면 기능별 /goal로 다시 쪼갠다.",
+]
+risk_notes = [
+  "이 runbook은 직접 구현이 아니라 5개 하위 slice를 멈추지 않고 순서대로 닫기 위한 실행 기준이다.",
+  "가장 큰 collision risk는 frontend가 search/marker selection에서 complexId를 잃어 backend scoped read와 화면 표시가 어긋나는 것이다.",
+  "final runtime smoke는 local environment availability에 따라 Partial evidence가 가능하지만 deterministic backend/frontend tests는 통과해야 한다.",
+]

@@ -46,6 +46,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-web'
 
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'
@@ -55,6 +58,8 @@ dependencies {
     testImplementation 'com.epages:restdocs-api-spec-mockmvc:0.19.4'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:postgresql'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
 
     asciidoctorExt 'org.springframework.restdocs:spring-restdocs-asciidoctor'
 }

@@ -5,8 +5,16 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
+
 import org.hibernate.annotations.Immutable;
 
+@Getter(AccessLevel.PACKAGE)
+@Accessors(fluent = true)
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Immutable
 @Table(name = "complex_name_alias")
@@ -23,7 +31,4 @@ public class ComplexNameAliasReadEntity {
 
 	@Column(name = "normalized_name")
 	private String normalizedName;
-
-	protected ComplexNameAliasReadEntity() {
-	}
 }

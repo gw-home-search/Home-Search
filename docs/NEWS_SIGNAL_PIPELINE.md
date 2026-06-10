@@ -176,6 +176,61 @@ Fallback identity:
 Repeated collection must not create duplicate `news_signal_feature` rows for
 the same `source + source_key + extraction_version`.
 
+## Daily Collection Pipeline
+
+The daily pipeline is a later-scope backend batch. It must remain independent of
+the public map, detail, region, search, and trade APIs.
+
+Default schedule:
+
+```yaml
+home.news.pipeline.daily.enabled: false
+home.news.pipeline.daily.cron: "0 0 4 * * *"
+home.news.pipeline.daily.zone: Asia/Seoul
+```
+
+Execution order:
+
+```text
+DB keyword planner
+  -> Naver News metadata observation per due keyword
+  -> relevance gate
+  -> feature extraction
+  -> Obsidian daily export
+  -> Hermes Slack notification
+  -> durable run history finalize
+```
+
+Daily keyword selection reads from `news_collection_keyword`. The table is the
+operational keyword source for future RAG and Tool lookup alignment:
+
+- `query_text`: exact query sent to the provider.
+- `keyword_type`: `TOPIC`, `REGION`, `COMPLEX`, or `ALIAS`.
+- `source_table` and `source_id`: optional DB source identity for generated
+  region or complex keywords.
+- `priority`, `cadence`, `enabled`, `next_due_at`, and `last_collected_at`:
+  scheduler selection and rotation controls.
+
+The first release must bound API usage with `max-keywords` and `display`.
+Do not search every region or complex name every day unless quota, noise, and
+duplicate behavior are reviewed first.
+
+Run history is durable:
+
+- `news_collection_run`: total status, counts, Obsidian export path, and Hermes
+  notification result.
+- `news_collection_run_keyword`: per-keyword query snapshot and outcome.
+- `news_collection_run_article`: article provenance for each keyword discovery.
+
+`news_collection_run_article` is intentionally separate from
+`news_article_observation`. Repeated article discovery must keep
+`source + source_key` dedupe intact while preserving which keyword found the
+article again.
+
+Hermes notification failure must not turn a completed collection into a failed
+pipeline. Store `notification_status = FAILED`, log a sanitized warning, and
+preserve the run result.
+
 ## Feature Extraction Rules
 
 Minimum first-release extraction should use only title and official snippet:

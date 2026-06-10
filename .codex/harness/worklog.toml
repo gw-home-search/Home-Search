@@ -2212,7 +2212,7 @@ title_ko = "Backend quality refactor hardening"
 pr_type = "Refactor"
 pr_title_ko = "백엔드 품질 리팩터링 정리"
 description_ko = "High~Medium 코드 스멜로 확인된 marker SQL 중복, coordinate source 문자열 산재, 텔레스코핑 생성자, RTMS lazy dependency 노출, ingest processor 긴 흐름, news persistence 설정 비대를 API 계약 변경 없이 정리한다."
-status = "planned"
+status = "done"
 priority = 205
 targets = "backend"
 preset = "backend-quality"
@@ -2240,6 +2240,20 @@ verification_commands = [
   "cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.news.NewsPersistenceConfigurationTest",
   "cd apps/api && ./gradlew backendQualityCheck",
   "git diff --check",
+]
+verification_evidence = [
+  "- `First RED for behavior-preserving refactor` = not run (public API/DB behavior 변경이 아니라 기존 회귀 테스트로 정책 보존을 확인하는 리팩터링 slice)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest` = pass (ComplexMarkerSql 공통 CTE 조립 후 marker shape/trade-first 정책 회귀 통과)",
+  "- `cd apps/api && ./gradlew test --tests com.home.domain.coordinate.CoordinateDisplayPolicyTest` = pass (CoordinateSource 저장 값과 display policy 호환성 통과)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest --tests com.home.infrastructure.persistence.coordinate.JdbcComplexDisplayCoordinateProjectionRepositoryTest --tests com.home.infrastructure.persistence.coordinate.JdbcCoordinateOverrideAdminRepositoryTest` = pass (coordinate source parameter binding과 marker/override SQL 회귀 통과)",
+  "- `cd apps/api && ./gradlew test --tests com.home.domain.coordinate.ComplexCoordinateCaseStatusTest --tests com.home.application.coordinate.caseflow.ComplexCoordinateExceptionServiceTest --tests com.home.application.coordinate.readiness.ComplexCoordinateReadinessServiceTest` = pass (identity blocking policy와 readiness service 회귀 통과)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.coordinate.ComplexCoordinatePersistenceConfigurationTest --tests com.home.infrastructure.persistence.coordinate.ComplexCoordinateReadinessRunnerTest --tests com.home.infrastructure.persistence.coordinate.JdbcComplexCoordinateExceptionRepositoryTest --tests com.home.infrastructure.persistence.coordinate.JdbcComplexCoordinateReadinessIntegrationTest` = pass (coordinate persistence wiring과 JDBC 회귀 통과)",
+  "- `cd apps/api && ./gradlew test --tests com.home.infrastructure.external.rtms.RtmsOneShotTradeIngestRunnerTest --tests com.home.infrastructure.external.rtms.RtmsMonthlyRefreshRunnerTest --tests com.home.infrastructure.external.rtms.RtmsNationwideBackfillRunnerTest --tests com.home.infrastructure.external.rtms.RtmsNationwideBackfillBeanWiringTest --tests com.home.infrastructure.external.rtms.RtmsExternalApiConfigurationTest` = pass (RTMS lazy dependency reference와 no-DB boot 지연 실패 회귀 통과)",
+  "- `cd apps/api && ./gradlew test --tests com.home.application.ingest.trade.OpenApiTradeIngestServiceTest --tests com.home.application.ingest.trade.TradeIngestItemOutcomeTest --tests com.home.application.ingest.trade.ParsedRtmsTradeTest` = pass (TradeIngestItemProcessor 단계 분해 후 raw-first/duplicate/cancel/match failure 회귀 통과)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.news.NewsPersistenceConfigurationTest` = pass (news 설정 분리와 standalone/pipeline runner 조건 회귀 통과)",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, persistence, coverage, foundation, javadoc gate 통과)",
+  "- `python3 .codex/harness/project_terms_check.py` = pass (프로젝트 용어 점검 통과)",
+  "- `git diff --check` = pass (공백 오류 없음)",
 ]
 stop_conditions = [
   "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",

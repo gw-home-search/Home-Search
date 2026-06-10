@@ -77,6 +77,35 @@ describe('fetchComplexSearchResults API 어댑터', () => {
     ]);
   });
 
+  it('주소가 없는 search result의 null address를 보존한다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse([
+          {
+            complexId: 4368,
+            complexName: '힐스테이트세운센트럴1단지',
+            parcelId: 4669,
+            latitude: 37.567994,
+            longitude: 126.9930772,
+            address: null,
+          },
+        ]),
+      ),
+    );
+
+    await expect(fetchComplexSearchResults('힐스테이트세운센트럴')).resolves.toEqual([
+      {
+        complexId: 4368,
+        complexName: '힐스테이트세운센트럴1단지',
+        parcelId: 4669,
+        latitude: 37.567994,
+        longitude: 126.9930772,
+        address: null,
+      },
+    ]);
+  });
+
   it('invalid search response shape를 reject한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ results: [] })));
 

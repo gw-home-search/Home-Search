@@ -7,7 +7,7 @@ export type ParcelComplexSummary = {
   parcelId: number;
   latitude: number | null;
   longitude: number | null;
-  address: string;
+  address: string | null;
   dongCnt: number | null;
   unitCnt: number | null;
   useDate: string | null;
@@ -54,7 +54,7 @@ function normalizeParcelComplex(item: ParcelComplexSummaryResponse): ParcelCompl
     parcelId: toRequiredNumber(item.parcelId, 'parcelId'),
     latitude: toNullableNumber(item.latitude, 'latitude'),
     longitude: toNullableNumber(item.longitude, 'longitude'),
-    address: toRequiredString(item.address, 'address'),
+    address: toNullableString(item.address),
     dongCnt: toNullableNumber(item.dongCnt, 'dongCnt'),
     unitCnt: toNullableNumber(item.unitCnt, 'unitCnt'),
     useDate: toNullableString(item.useDate),

@@ -6,7 +6,7 @@ export type ComplexDetail = {
   complexId: number | null;
   latitude: number | null;
   longitude: number | null;
-  address: string;
+  address: string | null;
   tradeName: string | null;
   name: string;
   dongCnt: number | null;
@@ -89,7 +89,7 @@ function normalizeComplexDetail(detail: ComplexDetailResponse): ComplexDetail {
     complexId: toNullableNumber(detail.complexId, 'complexId'),
     latitude: toNullableNumber(detail.latitude, 'latitude'),
     longitude: toNullableNumber(detail.longitude, 'longitude'),
-    address: toRequiredString(detail.address, 'address'),
+    address: toNullableString(detail.address),
     tradeName: toNullableString(detail.tradeName),
     name: toRequiredString(detail.name, 'name'),
     dongCnt: toNullableNumber(detail.dongCnt, 'dongCnt'),

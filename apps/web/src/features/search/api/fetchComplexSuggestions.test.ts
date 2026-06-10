@@ -43,6 +43,31 @@ describe('fetchComplexSuggestions API 어댑터', () => {
     await expect(fetchComplexSuggestions(' ')).resolves.toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it('주소가 없는 suggestion의 null address를 보존한다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse([
+          {
+            complexId: 4368,
+            complexName: '힐스테이트세운센트럴1단지',
+            parcelId: 4669,
+            address: null,
+          },
+        ]),
+      ),
+    );
+
+    await expect(fetchComplexSuggestions('힐스테이트세운센트럴')).resolves.toEqual([
+      {
+        complexId: 4368,
+        complexName: '힐스테이트세운센트럴1단지',
+        parcelId: 4669,
+        address: null,
+      },
+    ]);
+  });
 });
 
 function jsonResponse(body: unknown): Response {

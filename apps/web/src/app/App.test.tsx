@@ -1142,6 +1142,88 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
+  it('null address direct detail도 실제 API 데이터 요약과 거래 내역을 표시한다', async () => {
+    window.history.pushState({}, '', '/?complexId=4368');
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          parcelId: 4669,
+          complexId: 4368,
+          latitude: 37.5681,
+          longitude: 126.9976,
+          address: null,
+          tradeName: '힐스테이트세운센트럴1단지',
+          name: '힐스테이트세운센트럴1단지',
+          dongCnt: 1,
+          unitCnt: 206,
+          useDate: '2023-02-15',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          parcelId: 4669,
+          complexId: 4368,
+          trades: [
+            {
+              tradeId: 9901,
+              dealDate: '2026-05-01',
+              exclArea: 59.98,
+              dealAmount: 154000,
+              aptDong: null,
+              floor: 12,
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            complexId: 4368,
+            complexName: '힐스테이트세운센트럴1단지',
+            parcelId: 4669,
+            latitude: 37.5681,
+            longitude: 126.9976,
+            address: null,
+            unitCnt: 206,
+          },
+        ]),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp();
+    await flushAsyncState();
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/complex/4368'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/complex/4368/trades'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/detail/4669/complexes'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(rootElement.querySelector('[data-api-flow="detail"]')?.textContent).toContain(
+      '상세 완료',
+    );
+    expect(rootElement.querySelector('[data-api-flow="detail"]')?.textContent).toContain(
+      '실거래 1건',
+    );
+    expect(rootElement.querySelector('[data-api-flow="detail"]')?.textContent).toContain(
+      '같은 필지 1개',
+    );
+    expect(rootElement.textContent).toContain('주소 정보 없음');
+    expect(rootElement.textContent).toContain('154,000만원');
+    expect(rootElement.textContent).not.toContain('상세 정보를 불러오지 못했습니다');
+
+    unmount(root);
+  });
+
   it('단지 검색 입력은 suggestion API를 사용하고 suggestion 선택으로 detail을 연다', async () => {
     const fetchMock = vi
       .fn()

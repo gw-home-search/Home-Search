@@ -79,6 +79,10 @@ All writes for this project belong under `/Users/gwongwangjae/home-search`.
 - Use `.agents/skills/code-review` for findings-first review and final
   self-review of correctness, public API compatibility, data safety, and
   missing tests.
+- Use `.agents/skills/security-audit` for security reviews, security audits,
+  threat modeling, and as the mandatory security checkpoint: production code
+  completion claims and PR bodies must record
+  `security-audit: 지적사항 = none|listed` in the `보안 영향` section.
 - Subagents are allowed only when the user explicitly requests them or when a
   task can be split into independent read-only research work. Do not use
   subagents to bypass local review or ownership of changes.

@@ -57,6 +57,7 @@ REQUIRED_SECTIONS = [
     ("TDD 근거", ("TDD 근거", "TDD Evidence")),
     ("검증", ("검증",)),
     ("계약 영향", ("계약 영향", "Contract 영향")),
+    ("보안 영향", ("보안 영향",)),
     ("주요 위험", ("주요 위험",)),
     ("다음 행동", ("다음 행동",)),
     ("체크리스트", ("체크리스트",)),
@@ -88,6 +89,10 @@ VERIFICATION_LINE_RE = re.compile(
     r"^\s*-\s+`(?P<command>[^`\n]+)`\s+=\s+"
     r"(?P<status>pass|fail|not run)"
     r"(?:\s+\((?P<reason>[^)\n]*)\))?\s*$",
+    re.IGNORECASE,
+)
+SECURITY_EVIDENCE_RE = re.compile(
+    r"security-audit\s*:\s*(?:지적사항|Findings)\s*=\s*(none|listed|없음|있음)",
     re.IGNORECASE,
 )
 HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(?P<title>.+?)\s*$", re.MULTILINE)
@@ -337,6 +342,13 @@ def check_body_structure(body: str, errors: list[LintMessage], *, template: bool
         add(errors, "body", "검증 label이 필요합니다")
     if not re.search(r"영향\s+없음|영향\s+있음\s*:", body):
         add(errors, "body", "계약 영향에는 '영향 없음' 또는 '영향 있음:'이 필요합니다")
+    if "보안 영향:" not in body:
+        add(errors, "body", "보안 영향 label이 필요합니다")
+    if template:
+        if "security-audit:" not in body:
+            add(errors, "body", "template에는 security-audit: label이 필요합니다")
+    elif not SECURITY_EVIDENCE_RE.search(body):
+        add(errors, "body", "security-audit: 지적사항 = none|listed evidence가 필요합니다")
     if "주요 위험:" not in body:
         add(errors, "body", "주요 위험 label이 필요합니다")
     if "다음 행동:" not in body:
@@ -375,9 +387,9 @@ def required_skill_triggers_for_files(changed_files: Iterable[str]) -> set[str]:
         return set()
     required = {"home-search-harness"}
     if any(path.startswith("apps/api/") and not is_removed_companion_doc(path) for path in changed):
-        required.update({"$backend-api", "$tdd", "$api-contract", "$code-review"})
+        required.update({"$backend-api", "$tdd", "$api-contract", "$code-review", "$security-audit"})
     if any(path.startswith("apps/web/") and not is_removed_companion_doc(path) for path in changed):
-        required.update({"$frontend-web", "$tdd", "$api-contract", "$code-review"})
+        required.update({"$frontend-web", "$tdd", "$api-contract", "$code-review", "$security-audit"})
     if any(path.startswith(".codex/harness/") for path in changed):
         required.update({"$code-review"})
     if any(path.startswith(".codex/hooks/") for path in changed):
@@ -515,6 +527,7 @@ def valid_body(
 | execute | $api-contract | checkpoint | .agents/skills/api-contract/SKILL.md | 계약 영향 |
 | recover | $systematic-debugging | recovery | .agents/skills/systematic-debugging/SKILL.md | 차단 사유; 복구 순서; 검증 |
 | gate | $code-review | primary | .agents/skills/code-review/SKILL.md | reviewer: 지적사항; 검증 공백; 잔여 위험 |
+| gate | $security-audit | checkpoint | .agents/skills/security-audit/SKILL.md | security-audit: 지적사항; 보안 잔여 위험 |
 
 ## TDD 근거
 
@@ -555,6 +568,11 @@ Docs/OpenAPI: generated + verified
 영향 없음
 
 contract-reviewer: not needed
+
+## 보안 영향
+
+보안 영향: 없음
+security-audit: 지적사항 = none
 
 ## 주요 위험
 
@@ -685,6 +703,22 @@ def run_self_test() -> int:
         body=valid_body().replace(f"- `{PROJECT_TERMS_CHECK}` = pass (프로젝트 용어 점검)\n", ""),
         changed_files=("docs/README.md",),
     )
+    missing_security_section = valid_input(
+        body=valid_body().replace(
+            "## 보안 영향\n\n보안 영향: 없음\nsecurity-audit: 지적사항 = none\n\n",
+            "",
+        ),
+    )
+    missing_security_evidence = valid_input(
+        body=valid_body().replace("security-audit: 지적사항 = none\n", ""),
+    )
+    backend_missing_security_skill = valid_input(
+        body=valid_body().replace(
+            "| gate | $security-audit | checkpoint | .agents/skills/security-audit/SKILL.md | security-audit: 지적사항; 보안 잔여 위험 |\n",
+            "",
+        ),
+        changed_files=("apps/api/src/main/java/com/home/App.java",),
+    )
     pass_with_open_risk = valid_input(body=valid_body(risk="미확인 gate 위험이 남아 있습니다."))
     non_draft = valid_input(draft=False)
     non_integration_head = valid_input(head="feat/pr-lint-hardening")
@@ -722,6 +756,9 @@ def run_self_test() -> int:
             TEST_DISPLAY_NAME_POLICY,
         ),
         expect_case("markdown project terms evidence missing", markdown_missing_terms_check, "evidence", PROJECT_TERMS_CHECK),
+        expect_case("security section missing", missing_security_section, "body", "보안 영향"),
+        expect_case("security evidence missing", missing_security_evidence, "body", "security-audit"),
+        expect_case("backend security skill evidence missing", backend_missing_security_skill, "evidence", "$security-audit"),
         expect_case("pass with open risk", pass_with_open_risk, "evidence", "미확인"),
         expect_case("non-draft PR", non_draft, "branch", "draft"),
         expect_case("non-integration head", non_integration_head, "branch", "feat/*-integration"),

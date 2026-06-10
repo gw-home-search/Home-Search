@@ -38,12 +38,33 @@ type ComplexDetailResponse = {
 };
 
 const DETAIL_PATH = '/api/v1/detail';
+const COMPLEX_PATH = '/api/v1/complex';
 
 export async function fetchComplexDetail(
   parcelId: number,
   complexId?: number | null,
 ): Promise<ComplexDetail> {
   const response = await fetch(resolveApiUrl(scopedPath(`${DETAIL_PATH}/${parcelId}`, complexId)), {
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    const detail = await readProblemDetail(response);
+    throw new Error(
+      `Failed to fetch complex detail: ${response.status}${detail ? ` ${detail}` : ''}`,
+    );
+  }
+
+  const payload: unknown = await response.json();
+  if (!isRecord(payload)) {
+    throw new Error('Invalid public API complex detail response: expected an object');
+  }
+
+  return normalizeComplexDetail(payload);
+}
+
+export async function fetchComplexDetailByComplexId(complexId: number): Promise<ComplexDetail> {
+  const response = await fetch(resolveApiUrl(`${COMPLEX_PATH}/${complexId}`), {
     method: 'GET',
   });
 

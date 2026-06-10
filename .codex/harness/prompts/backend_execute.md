@@ -41,5 +41,7 @@ Final user-facing evidence labels:
 - 예상 RED 실패:
 - 최소 GREEN:
 - 검증:
+- 보안 영향:
+- security-audit: 지적사항 = none|listed
 - 주요 위험:
 - 다음 행동:

@@ -368,6 +368,50 @@ Migration notes:
   internally, but those audit/search helper fields are not exposed in this
   response.
 
+### GET `/api/v1/search/complexes/suggestions?q=`
+
+Purpose:
+
+- Return lightweight autocomplete candidates for the complex search box.
+- This endpoint is optimized for suggestion text and selection identity, not
+  full map focusing.
+
+Request:
+
+- Query parameter `q`: required string, trim before search. Blank queries return
+  `[]`.
+
+Response:
+
+```json
+[
+  {
+    "complexId": 501,
+    "complexName": "Sample Apartment",
+    "parcelId": 1001,
+    "address": "Sample address"
+  }
+]
+```
+
+Response fields:
+
+- `complexId`
+- `complexName`
+- `parcelId`
+- `address`
+
+Status:
+
+- `200`: successful lookup. Empty or no-match searches return `[]`.
+- `400`: invalid query parameter type.
+- `500`: unexpected server error.
+
+Migration notes:
+
+- This endpoint must not expose `complex_pk`, `apt_seq`, `source`, or
+  `source_key`.
+
 ### GET `/api/v1/region`
 
 Purpose:
@@ -454,6 +498,65 @@ Status:
 - `404`: region id does not exist.
 - `500`: unexpected server error.
 
+### GET `/api/v1/region/{regionId}/complexes`
+
+Purpose:
+
+- Return a paged list of complexes under the selected region and its child
+  regions.
+- Used by the region navigation panel to select a complex without relying on
+  marker visibility.
+
+Request:
+
+- Path parameter `regionId`: selected region id.
+- Query parameter `limit`: optional page size. Defaults to `50`; values above
+  the server cap may be reduced.
+- Query parameter `offset`: optional zero-based row offset. Defaults to `0`.
+
+Response:
+
+```json
+[
+  {
+    "complexId": 701,
+    "complexName": "Region Complex",
+    "parcelId": 2001,
+    "latitude": 37.5123,
+    "longitude": 127.0456,
+    "address": "Region address",
+    "dongCnt": 8,
+    "unitCnt": 740,
+    "useDate": "2018-05-01"
+  }
+]
+```
+
+Response fields:
+
+- `complexId`
+- `complexName`
+- `parcelId`
+- `latitude`
+- `longitude`
+- `address`
+- `dongCnt`
+- `unitCnt`
+- `useDate`
+
+Status:
+
+- `200`: successful lookup. A valid region with no complexes returns `[]`.
+- `400`: invalid `limit` or `offset`.
+- `404`: region id does not exist.
+- `500`: unexpected server error.
+
+Migration notes:
+
+- Region complex list is still a map/read-path helper. It must not depend on
+  ranking, trend, favorite, alarm, mail, recommendation, or auth state.
+- This endpoint must not expose audit/source fields.
+
 ### GET `/api/v1/detail/{parcelId}`
 
 Purpose:
@@ -528,6 +631,61 @@ Migration notes:
   this endpoint returns one representative complex detail for the selected
   `parcelId`.
 
+### GET `/api/v1/detail/{parcelId}/complexes`
+
+Purpose:
+
+- Return all selectable complexes under one parcel.
+- Used by the detail drawer to switch between same-PNU or same-parcel
+  complexes.
+
+Response:
+
+```json
+[
+  {
+    "complexId": 501,
+    "complexName": "Tower A",
+    "parcelId": 1001,
+    "latitude": 37.5123,
+    "longitude": 127.0456,
+    "address": "Sample address",
+    "dongCnt": 5,
+    "unitCnt": 320,
+    "useDate": "2015-03-20"
+  }
+]
+```
+
+Status:
+
+- `200`: successful lookup. A valid parcel with no complexes returns `[]`.
+- `404`: parcel id does not exist.
+- `500`: unexpected server error.
+
+Migration notes:
+
+- Coordinates may be `null` for coordinate-pending parcels.
+- This endpoint must not expose audit/source fields.
+
+### GET `/api/v1/complex/{complexId}`
+
+Purpose:
+
+- Return the same canonical detail shape as `/api/v1/detail/{parcelId}`, but
+  addressed directly by `complexId`.
+- Used for direct URL state restoration and search/region list selection.
+
+Response:
+
+- Same body shape as `GET /api/v1/detail/{parcelId}`.
+
+Status:
+
+- `200`: successful lookup.
+- `404`: complex id does not exist.
+- `500`: unexpected server error.
+
 ### GET `/api/v1/trade/{parcelId}`
 
 Purpose:
@@ -599,6 +757,32 @@ Migration notes:
   matching, and deduplication, but do not expose them in this public response.
 - Default ordering should be newest first: `dealDate` descending, then
   `tradeId` descending when dates are equal.
+
+### GET `/api/v1/complex/{complexId}/trades`
+
+Purpose:
+
+- Return the same canonical trade-list shape as `/api/v1/trade/{parcelId}`, but
+  addressed directly by `complexId`.
+- Used by direct complex detail flows and chart/list refreshes.
+
+Response:
+
+- Same body shape as `GET /api/v1/trade/{parcelId}`. `complexId` is always the
+  requested complex id when the response is successful.
+
+Status:
+
+- `200`: successful lookup. If the complex exists but has no active trades,
+  return an empty `trades` list.
+- `404`: complex id does not exist.
+- `500`: unexpected server error.
+
+Migration notes:
+
+- The query path must use normalized `trade.complex_id` and exclude
+  soft-deleted rows where `deleted_at IS NOT NULL`.
+- This endpoint must not expose audit/source fields.
 
 ## Admin APIs
 

@@ -41,6 +41,14 @@ Docs/OpenAPI: generated + verified
 
 contract-reviewer:
 
+## 보안 영향
+
+보안 영향: 없음
+
+<!-- 또는: 보안 영향: 있음: <요약> -->
+
+security-audit:
+
 ## 주요 위험
 
 주요 위험: 없음

@@ -15,6 +15,9 @@ import java.util.List;
 
 import com.home.application.read.PropertyReadUseCase;
 import com.home.global.error.ResourceNotFoundException;
+import com.home.application.read.ComplexSummaryResult;
+import com.home.application.read.ComplexSuggestionResult;
+import com.home.application.read.InvalidReadRequestException;
 import com.home.application.read.ParcelDetailResult;
 import com.home.application.read.RegionDetailResult;
 import com.home.application.read.RegionSummaryResult;
@@ -235,6 +238,162 @@ class ReadApiControllerContractTest {
 			.andExpect(jsonPath("$.complexId").value(502))
 			.andExpect(jsonPath("$.trades[0].tradeId").value(9101))
 			.andExpect(jsonPath("$.trades[0].aptDong").value("201"));
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/detail/{parcelId}/complexes는 같은 parcel의 complex 목록을 반환한다")
+	void parcelComplexesReturnSelectableComplexSummaries() throws Exception {
+		given(readUseCase.getParcelComplexes(1001L))
+			.willReturn(List.of(
+				new ComplexSummaryResult(501L, "Tower A", 1001L, 37.5123, 127.0456, "Sample address", 5, 320,
+					LocalDate.of(2015, 3, 20)),
+				new ComplexSummaryResult(502L, "Tower B", 1001L, 37.6123, 127.1456, "Sample address", 6, 410,
+					LocalDate.of(2020, 1, 1))
+			));
+
+		mockMvc.perform(get("/api/v1/detail/1001/complexes"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$[0].complexId").value(501))
+			.andExpect(jsonPath("$[0].complexName").value("Tower A"))
+			.andExpect(jsonPath("$[0].parcelId").value(1001))
+			.andExpect(jsonPath("$[0].latitude").value(37.5123))
+			.andExpect(jsonPath("$[0].longitude").value(127.0456))
+			.andExpect(jsonPath("$[0].address").value("Sample address"))
+			.andExpect(jsonPath("$[0].dongCnt").value(5))
+			.andExpect(jsonPath("$[0].unitCnt").value(320))
+			.andExpect(jsonPath("$[0].useDate").value("2015-03-20"))
+			.andExpect(jsonPath("$[0].complexPk").doesNotExist())
+			.andExpect(jsonPath("$[0].aptSeq").doesNotExist())
+			.andExpect(jsonPath("$[0].sourceKey").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/complex/{complexId}는 complexId 단독 detail을 반환한다")
+	void complexDetailByComplexIdReturnsCanonicalDetail() throws Exception {
+		given(readUseCase.getComplexDetail(502L))
+			.willReturn(new ParcelDetailResult(
+				1001L,
+				502L,
+				37.6123,
+				127.1456,
+				"Sample address",
+				"Tower B",
+				"Sample Tower B",
+				6,
+				410,
+				null,
+				null,
+				null,
+				null,
+				null,
+				LocalDate.of(2020, 1, 1)
+			));
+
+		mockMvc.perform(get("/api/v1/complex/502"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.parcelId").value(1001))
+			.andExpect(jsonPath("$.complexId").value(502))
+			.andExpect(jsonPath("$.latitude").value(37.6123))
+			.andExpect(jsonPath("$.longitude").value(127.1456))
+			.andExpect(jsonPath("$.address").value("Sample address"))
+			.andExpect(jsonPath("$.tradeName").value("Tower B"))
+			.andExpect(jsonPath("$.name").value("Sample Tower B"))
+			.andExpect(jsonPath("$.unitCnt").value(410))
+			.andExpect(jsonPath("$.complexPk").doesNotExist())
+			.andExpect(jsonPath("$.aptSeq").doesNotExist())
+			.andExpect(jsonPath("$.sourceKey").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/complex/{complexId}/trades는 complexId 단독 trade list를 반환한다")
+	void complexTradeListByComplexIdReturnsCanonicalTrades() throws Exception {
+		given(readUseCase.getComplexTradeList(502L))
+			.willReturn(new TradeListResult(1001L, 502L, List.of(
+				new TradeResult(9101L, LocalDate.of(2025, 12, 20), new BigDecimal("59.93"), 90000L, "201", 9)
+			)));
+
+		mockMvc.perform(get("/api/v1/complex/502/trades"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.parcelId").value(1001))
+			.andExpect(jsonPath("$.complexId").value(502))
+			.andExpect(jsonPath("$.trades[0].tradeId").value(9101))
+			.andExpect(jsonPath("$.trades[0].dealAmount").value(90000))
+			.andExpect(jsonPath("$.trades[0].complexPk").doesNotExist())
+			.andExpect(jsonPath("$.trades[0].aptSeq").doesNotExist())
+			.andExpect(jsonPath("$.trades[0].sourceKey").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/search/complexes/suggestions는 autocomplete field를 반환한다")
+	void complexSuggestionsReturnAutocompleteFields() throws Exception {
+		given(readUseCase.suggestComplexes("Sample"))
+			.willReturn(List.of(new ComplexSuggestionResult(501L, "Sample Apartment", 1001L, "Sample address")));
+
+		mockMvc.perform(get("/api/v1/search/complexes/suggestions").param("q", "  Sample  "))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$[0].complexId").value(501))
+			.andExpect(jsonPath("$[0].complexName").value("Sample Apartment"))
+			.andExpect(jsonPath("$[0].parcelId").value(1001))
+			.andExpect(jsonPath("$[0].address").value("Sample address"))
+			.andExpect(jsonPath("$[0].complexPk").doesNotExist())
+			.andExpect(jsonPath("$[0].aptSeq").doesNotExist())
+			.andExpect(jsonPath("$[0].sourceKey").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/search/complexes/suggestions는 blank query에서 empty array를 반환한다")
+	void blankComplexSuggestionsReturnEmptyArray() throws Exception {
+		given(readUseCase.suggestComplexes(""))
+			.willReturn(List.of());
+
+		mockMvc.perform(get("/api/v1/search/complexes/suggestions").param("q", " "))
+			.andExpect(status().isOk())
+			.andExpect(content().json("[]"));
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/region/{regionId}/complexes는 region complex page를 반환한다")
+	void regionComplexesReturnPagedComplexSummaries() throws Exception {
+		given(readUseCase.getRegionComplexes(11L, 25, 50))
+			.willReturn(List.of(new ComplexSummaryResult(
+				701L,
+				"Region Complex",
+				2001L,
+				37.5123,
+				127.0456,
+				"Region address",
+				8,
+				740,
+				LocalDate.of(2018, 5, 1)
+			)));
+
+		mockMvc.perform(get("/api/v1/region/11/complexes")
+				.param("limit", "25")
+				.param("offset", "50"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$[0].complexId").value(701))
+			.andExpect(jsonPath("$[0].complexName").value("Region Complex"))
+			.andExpect(jsonPath("$[0].parcelId").value(2001))
+			.andExpect(jsonPath("$[0].latitude").value(37.5123))
+			.andExpect(jsonPath("$[0].longitude").value(127.0456))
+			.andExpect(jsonPath("$[0].address").value("Region address"))
+			.andExpect(jsonPath("$[0].unitCnt").value(740));
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/region/{regionId}/complexes는 invalid page request를 ProblemDetail 400으로 반환한다")
+	void invalidRegionComplexPageReturnsProblemDetail400() throws Exception {
+		given(readUseCase.getRegionComplexes(11L, 0, 0))
+			.willThrow(new InvalidReadRequestException("limit must be greater than 0"));
+
+		mockMvc.perform(get("/api/v1/region/11/complexes")
+				.param("limit", "0")
+				.param("offset", "0"))
+			.andExpect(status().isBadRequest())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+			.andExpect(jsonPath("$.status").value(400))
+			.andExpect(jsonPath("$.detail").value("Invalid parameter format."))
+			.andExpect(jsonPath("$.exception").value("MapApiException"));
 	}
 
 	@Test

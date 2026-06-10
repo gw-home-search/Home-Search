@@ -106,6 +106,49 @@ class JpaPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("JPA read repository는 추가 public read API 5개를 조회한다")
+	void jpaRepositoryReadsExpandedPublicReadApis() {
+		seedTwoComplexParcel();
+		JpaPropertyReadRepository repository = new JpaPropertyReadRepository(entityManager);
+
+		assertThat(repository.findParcelComplexes(2001L))
+			.hasValueSatisfying(complexes -> assertThat(complexes)
+				.extracting("complexId", "complexName", "parcelId", "unitCnt")
+				.containsExactly(
+					tuple(701L, "Complex A trade", 2001L, 210),
+					tuple(702L, "Complex B trade", 2001L, 320)
+				));
+		assertThat(repository.findComplexDetail(702L))
+			.hasValueSatisfying(detail -> {
+				assertThat(detail.parcelId()).isEqualTo(2001L);
+				assertThat(detail.complexId()).isEqualTo(702L);
+				assertThat(detail.name()).isEqualTo("Complex B");
+			});
+		assertThat(repository.findComplexTradeList(702L))
+			.hasValueSatisfying(tradeList -> {
+				assertThat(tradeList.parcelId()).isEqualTo(2001L);
+				assertThat(tradeList.complexId()).isEqualTo(702L);
+				assertThat(tradeList.trades())
+					.extracting("tradeId")
+					.containsExactly(9702L);
+			});
+		assertThat(repository.suggestComplexes("complex", 5))
+			.extracting("complexId", "complexName", "parcelId")
+			.containsExactly(
+				tuple(701L, "Complex A trade", 2001L),
+				tuple(702L, "Complex B trade", 2001L)
+			);
+		assertThat(repository.findRegionComplexes(1L, 1, 1))
+			.hasValueSatisfying(complexes -> assertThat(complexes)
+				.extracting("complexId")
+				.containsExactly(702L));
+		assertThat(repository.findParcelComplexes(9999L)).isEmpty();
+		assertThat(repository.findComplexDetail(9999L)).isEmpty();
+		assertThat(repository.findComplexTradeList(9999L)).isEmpty();
+		assertThat(repository.findRegionComplexes(9999L, 10, 0)).isEmpty();
+	}
+
+	@Test
 	@DisplayName("JPA read repository는 좌표 대기 parcel의 null 좌표를 유지한다")
 	void jpaRepositoryKeepsNullCoordinatesForCoordinatePendingParcel() {
 		jdbcClient.sql("""

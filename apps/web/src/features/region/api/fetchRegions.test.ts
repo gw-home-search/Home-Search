@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchRegionDetail, fetchRootRegions } from './fetchRegions';
+import { fetchRegionComplexes, fetchRegionDetail, fetchRootRegions } from './fetchRegions';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
 
 describe('fetchRegions API 어댑터', () => {
@@ -99,6 +99,44 @@ describe('fetchRegions API 어댑터', () => {
 
     await expect(fetchRegionDetail(1)).rejects.toThrow(
       'Failed to fetch region detail: 404 Region not found.',
+    );
+  });
+
+  it('regionId 아래 complex page를 가져온다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse([
+        {
+          complexId: '701',
+          complexName: 'Region Complex',
+          parcelId: '2001',
+          latitude: '37.5123',
+          longitude: '127.0456',
+          address: 'Region address',
+          dongCnt: '8',
+          unitCnt: '740',
+          useDate: '2018-05-01',
+        },
+      ]),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchRegionComplexes(11, { limit: 25, offset: 50 })).resolves.toEqual([
+      {
+        complexId: 701,
+        complexName: 'Region Complex',
+        parcelId: 2001,
+        latitude: 37.5123,
+        longitude: 127.0456,
+        address: 'Region address',
+        dongCnt: 8,
+        unitCnt: 740,
+        useDate: '2018-05-01',
+      },
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/region/11/complexes?limit=25&offset=50'),
+      expect.objectContaining({ method: 'GET' }),
     );
   });
 });

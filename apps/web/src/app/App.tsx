@@ -2,9 +2,15 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 
 import {
   fetchComplexDetail,
+  fetchComplexDetailByComplexId,
   type ComplexDetail,
 } from '../features/complex-detail/api/fetchComplexDetail';
 import {
+  fetchParcelComplexes,
+  type ParcelComplexSummary,
+} from '../features/complex-detail/api/fetchParcelComplexes';
+import {
+  fetchComplexTrades,
   fetchParcelTrades,
   type ParcelTrades,
   type TradeItem,
@@ -24,11 +30,17 @@ import {
   type KakaoMapRuntimeState,
 } from '../features/map/KakaoMapSurface';
 import {
+  fetchRegionComplexes,
   fetchRegionDetail,
   fetchRootRegions,
+  type RegionComplexSummary,
   type RegionDetail,
   type RegionSummary,
 } from '../features/region/api/fetchRegions';
+import {
+  fetchComplexSuggestions,
+  type ComplexSuggestion,
+} from '../features/search/api/fetchComplexSuggestions';
 import {
   fetchComplexSearchResults,
   type ComplexSearchResult,
@@ -59,7 +71,7 @@ type MapFocusTarget = {
 };
 
 type ComplexSelection = {
-  parcelId: number;
+  parcelId: number | null;
   complexId: number | null;
 };
 
@@ -137,24 +149,31 @@ function MapApp({
   const [mapRuntimeError, setMapRuntimeError] = useState<string | null>(null);
   const [mapFocusTarget, setMapFocusTarget] = useState<MapFocusTarget | null>(null);
   const [markerRetrySeq, setMarkerRetrySeq] = useState(0);
-  const [selectedComplex, setSelectedComplex] = useState<ComplexSelection | null>(null);
+  const [selectedComplex, setSelectedComplex] = useState<ComplexSelection | null>(
+    initialComplexSelectionFromUrl,
+  );
   const [complexDetail, setComplexDetail] = useState<ComplexDetail | null>(null);
   const [parcelTrades, setParcelTrades] = useState<ParcelTrades | null>(null);
+  const [parcelComplexes, setParcelComplexes] = useState<ParcelComplexSummary[]>([]);
   const [detailState, setDetailState] = useState<DetailRequestState>('idle');
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailRetrySeq, setDetailRetrySeq] = useState(0);
   const [searchResults, setSearchResults] = useState<ComplexSearchResult[]>([]);
+  const [complexSuggestions, setComplexSuggestions] = useState<ComplexSuggestion[]>([]);
   const [searchState, setSearchState] = useState<PanelRequestState>('idle');
   const [searchError, setSearchError] = useState<string | null>(null);
   const [rootRegions, setRootRegions] = useState<RegionSummary[]>([]);
   const [regionDetail, setRegionDetail] = useState<RegionDetail | null>(null);
+  const [regionComplexes, setRegionComplexes] = useState<RegionComplexSummary[]>([]);
   const [regionState, setRegionState] = useState<PanelRequestState>('idle');
   const [regionError, setRegionError] = useState<string | null>(null);
   const [isExplorationOpen, setIsExplorationOpen] = useState(true);
   const [filterFormKey, setFilterFormKey] = useState(0);
   const markerRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
+  const parcelComplexRequestSeq = useRef(0);
   const searchRequestSeq = useRef(0);
+  const suggestionRequestSeq = useRef(0);
   const regionRequestSeq = useRef(0);
   const activeFilterCount = countActiveFilters(markerFilters);
 
@@ -208,6 +227,7 @@ function MapApp({
     if (selectedComplex == null) {
       setComplexDetail(null);
       setParcelTrades(null);
+      setParcelComplexes([]);
       setDetailState('idle');
       setDetailError(null);
       return undefined;
@@ -220,10 +240,14 @@ function MapApp({
     setDetailState('loading');
     setDetailError(null);
 
-    Promise.all([
-      fetchComplexDetail(selectedComplex.parcelId, selectedComplex.complexId),
-      fetchParcelTrades(selectedComplex.parcelId, selectedComplex.complexId),
-    ])
+    const detailRequest = selectedComplex.parcelId == null && selectedComplex.complexId != null
+      ? fetchComplexDetailByComplexId(selectedComplex.complexId)
+      : fetchComplexDetail(requiredParcelId(selectedComplex), selectedComplex.complexId);
+    const tradeRequest = selectedComplex.parcelId == null && selectedComplex.complexId != null
+      ? fetchComplexTrades(selectedComplex.complexId)
+      : fetchParcelTrades(requiredParcelId(selectedComplex), selectedComplex.complexId);
+
+    Promise.all([detailRequest, tradeRequest])
       .then(([nextDetail, nextTrades]) => {
         if (ignore || requestSeq !== detailRequestSeq.current) {
           return;
@@ -248,6 +272,35 @@ function MapApp({
       ignore = true;
     };
   }, [selectedComplex, detailRetrySeq]);
+
+  useEffect(() => {
+    if (complexDetail == null || detailState !== 'ready') {
+      setParcelComplexes([]);
+      return undefined;
+    }
+
+    const requestSeq = parcelComplexRequestSeq.current + 1;
+    parcelComplexRequestSeq.current = requestSeq;
+    let ignore = false;
+
+    fetchParcelComplexes(complexDetail.parcelId)
+      .then((nextComplexes) => {
+        if (ignore || requestSeq !== parcelComplexRequestSeq.current) {
+          return;
+        }
+        setParcelComplexes(nextComplexes);
+      })
+      .catch(() => {
+        if (ignore || requestSeq !== parcelComplexRequestSeq.current) {
+          return;
+        }
+        setParcelComplexes([]);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [complexDetail, detailState]);
 
   const handleViewportChange = useCallback((nextViewport: MapViewport) => {
     setViewport((current) => {
@@ -327,6 +380,31 @@ function MapApp({
       });
   }
 
+  function handleSearchInputChange(value: string) {
+    const requestSeq = suggestionRequestSeq.current + 1;
+    suggestionRequestSeq.current = requestSeq;
+    const query = value.trim();
+
+    if (query.length === 0) {
+      setComplexSuggestions([]);
+      return;
+    }
+
+    fetchComplexSuggestions(query)
+      .then((nextSuggestions) => {
+        if (requestSeq !== suggestionRequestSeq.current) {
+          return;
+        }
+        setComplexSuggestions(nextSuggestions);
+      })
+      .catch(() => {
+        if (requestSeq !== suggestionRequestSeq.current) {
+          return;
+        }
+        setComplexSuggestions([]);
+      });
+  }
+
   function handleSearchResultSelect(result: ComplexSearchResult) {
     setSelectedComplex({
       parcelId: result.parcelId,
@@ -334,6 +412,28 @@ function MapApp({
     });
     if (hasDisplayCoordinate(result)) {
       focusMap(result.latitude, result.longitude, 4, SEARCH_FOCUS_DELTA);
+    }
+  }
+
+  function handleSuggestionSelect(suggestion: ComplexSuggestion) {
+    setSelectedComplex({
+      parcelId: suggestion.parcelId,
+      complexId: suggestion.complexId,
+    });
+    setComplexSuggestions([]);
+  }
+
+  function handleComplexSummarySelect(complex: ParcelComplexSummary | RegionComplexSummary) {
+    setSelectedComplex({
+      parcelId: complex.parcelId,
+      complexId: complex.complexId,
+    });
+  }
+
+  function handleRegionComplexSelect(complex: RegionComplexSummary) {
+    handleComplexSummarySelect(complex);
+    if (hasDisplayCoordinate(complex)) {
+      focusMap(complex.latitude, complex.longitude, 4, SEARCH_FOCUS_DELTA);
     }
   }
 
@@ -364,6 +464,7 @@ function MapApp({
 
     setRegionState('loading');
     setRegionError(null);
+    setRegionComplexes([]);
 
     fetchRootRegions()
       .then((nextRegions) => {
@@ -372,6 +473,7 @@ function MapApp({
         }
 
         setRootRegions(nextRegions);
+        setRegionComplexes([]);
         setRegionState(nextRegions.length === 0 ? 'empty' : 'ready');
       })
       .catch((error: unknown) => {
@@ -381,6 +483,7 @@ function MapApp({
 
         setRootRegions([]);
         setRegionDetail(null);
+        setRegionComplexes([]);
         setRegionState('error');
         setRegionError(error instanceof Error ? error.message : '알 수 없는 지역 오류');
       });
@@ -393,13 +496,17 @@ function MapApp({
     setRegionState('loading');
     setRegionError(null);
 
-    fetchRegionDetail(regionId)
-      .then((nextDetail) => {
+    Promise.all([
+      fetchRegionDetail(regionId),
+      fetchRegionComplexes(regionId, { limit: 20, offset: 0 }),
+    ])
+      .then(([nextDetail, nextComplexes]) => {
         if (requestSeq !== regionRequestSeq.current) {
           return;
         }
 
         setRegionDetail(nextDetail);
+        setRegionComplexes(nextComplexes);
         setRootRegions(nextDetail.children);
         setRegionState('ready');
         focusMap(nextDetail.latitude, nextDetail.longitude, 7, REGION_FOCUS_DELTA);
@@ -410,6 +517,7 @@ function MapApp({
         }
 
         setRegionDetail(null);
+        setRegionComplexes([]);
         setRegionState('error');
         setRegionError(error instanceof Error ? error.message : '알 수 없는 지역 상세 오류');
       });
@@ -674,6 +782,9 @@ function MapApp({
               <input
                 aria-label="단지 검색"
                 name="q"
+                onInput={(event) => {
+                  handleSearchInputChange(event.currentTarget.value);
+                }}
                 placeholder="단지명"
                 type="search"
               />
@@ -715,6 +826,25 @@ function MapApp({
                   >
                     <span>{result.complexName}</span>
                     <span>{result.address}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {complexSuggestions.length > 0 ? (
+            <ul aria-label="검색 제안" className="panel-list">
+              {complexSuggestions.map((suggestion) => (
+                <li key={suggestion.complexId}>
+                  <button
+                    type="button"
+                    aria-label={`검색 제안 선택 ${suggestion.complexName}`}
+                    onClick={() => {
+                      handleSuggestionSelect(suggestion);
+                    }}
+                  >
+                    <span>{suggestion.complexName}</span>
+                    <span>{suggestion.address}</span>
                   </button>
                 </li>
               ))}
@@ -766,6 +896,25 @@ function MapApp({
                 ))}
               </ul>
             ) : null}
+
+            {regionComplexes.length > 0 ? (
+              <ul aria-label="지역 단지 목록" className="panel-list">
+                {regionComplexes.map((complex) => (
+                  <li key={complex.complexId}>
+                    <button
+                      type="button"
+                      aria-label={`지역 단지 선택 ${complex.complexName}`}
+                      onClick={() => {
+                        handleRegionComplexSelect(complex);
+                      }}
+                    >
+                      <span>{complex.complexName}</span>
+                      <span>{complex.address}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         </section>
       </div>
@@ -806,6 +955,28 @@ function MapApp({
               <section className="detail-identity" data-detail-section="identity">
                 <h2>{complexDetail.name}</h2>
                 <p className="detail-address">{complexDetail.address}</p>
+                {parcelComplexes.length > 1 ? (
+                  <section aria-label="같은 필지 단지 선택" className="detail-complex-switcher">
+                    <h3>같은 필지 단지</h3>
+                    <ul>
+                      {parcelComplexes.map((complex) => (
+                        <li key={complex.complexId}>
+                          <button
+                            type="button"
+                            aria-label={`같은 필지 단지 선택 ${complex.complexName}`}
+                            aria-current={complex.complexId === complexDetail.complexId ? 'true' : undefined}
+                            onClick={() => {
+                              handleComplexSummarySelect(complex);
+                            }}
+                          >
+                            <span>{complex.complexName}</span>
+                            <span>{formatNumber(complex.unitCnt, '세대')}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
                 <dl className="detail-metrics">
                   {detailMetric('거래명', complexDetail.tradeName)}
                   {detailMetric('세대수', formatNumber(complexDetail.unitCnt, '세대'))}
@@ -875,6 +1046,10 @@ function complexMarkerAriaLabel(marker: ComplexMapMarker): string {
 }
 
 function detailDrawerKicker(selection: ComplexSelection): string {
+  if (selection.parcelId == null) {
+    return `단지 ${selection.complexId}`;
+  }
+
   return selection.complexId == null
     ? `필지 ${selection.parcelId}`
     : `단지 ${selection.complexId} / 필지 ${selection.parcelId}`;
@@ -892,10 +1067,33 @@ function viewportAroundPoint(lat: number, lng: number, level: number, delta: num
   };
 }
 
-function hasDisplayCoordinate(
-  result: ComplexSearchResult,
-): result is ComplexSearchResult & { latitude: number; longitude: number } {
+type DisplayCoordinateCandidate = {
+  latitude: number | null;
+  longitude: number | null;
+};
+
+function hasDisplayCoordinate<T extends DisplayCoordinateCandidate>(
+  result: T,
+): result is T & { latitude: number; longitude: number } {
   return result.latitude != null && result.longitude != null;
+}
+
+function requiredParcelId(selection: ComplexSelection): number {
+  if (selection.parcelId == null) {
+    throw new Error('parcelId is required for parcel-scoped detail request');
+  }
+  return selection.parcelId;
+}
+
+function initialComplexSelectionFromUrl(): ComplexSelection | null {
+  const complexId = Number(new URLSearchParams(window.location.search).get('complexId'));
+  if (!Number.isSafeInteger(complexId) || complexId <= 0) {
+    return null;
+  }
+  return {
+    parcelId: null,
+    complexId,
+  };
 }
 
 function stringFormValue(formData: FormData, field: string): string {

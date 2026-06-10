@@ -1065,6 +1065,7 @@ def build_payload(
         "gate_review": f"{'/'.join(targets)} gate review completed" if results else "planning-only; not run",
         "contract_risks": [],
         "residual_risks": [] if not risk else [risk],
+        "security_risks": [],
         "next_action": next_action,
         "commands": {
             "main_merge_command": main_merge,

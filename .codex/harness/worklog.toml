@@ -2157,3 +2157,229 @@ risk_notes = [
   "RTMS no-DB boot는 직접 bean을 요구하지 않고 실행 시점 지연 실패를 유지한다.",
   "News pipeline은 later-scope지만 설정 비대와 runner 조건 중복만 정리한다.",
 ]
+
+[[items]]
+id = "public-read-api-e2e-inventory"
+title_ko = "Public read API E2E inventory"
+pr_type = "Chore"
+pr_title_ko = "Public read API E2E 검토 계획 정리"
+description_ko = "마커 API를 제외한 1차 public read API 5개를 legacy backend/frontend, target backend/frontend, API contract 기준으로 기능 흐름별 대조하고 후속 /goal 실행 slice를 결정한다."
+status = "planned"
+priority = 245
+targets = "planning-only"
+preset = "contract-hardening"
+acceptance_criteria = [
+  "시작 시 /goal로 legacy와 target의 public read API 5개 E2E inventory 목표를 생성하고, 완료 시 검토 matrix와 후속 slice 결정을 기록한다.",
+  "대상 API는 GET /api/v1/detail/{parcelId}, GET /api/v1/trade/{parcelId}, GET /api/v1/search/complexes?q=, GET /api/v1/region, GET /api/v1/region/{regionId}로 제한한다.",
+  "legacy backend controller/DTO, legacy frontend consumer, target docs/API_CONTRACT.md, target backend controller/usecase/repository, target frontend adapter/UI 표시 흐름을 API별로 대조한다.",
+  "각 API를 OK, backend gap, frontend gap, visual gap, later-scope 중 하나 이상으로 분류하고 근거 파일/테스트 후보를 남긴다.",
+  "App AGENTS.md와 CONTEXT.md 확인 범위는 root, apps/api, apps/web로 명시한다.",
+  "code-mapper preflight 필요 여부를 API별로 기록하고, 구현 slice에서는 controller -> usecase -> repository -> frontend adapter 흐름을 먼저 확인하도록 한다.",
+  "contract-reviewer checkpoint는 모든 구현 slice 시작 전에 public URL, request/query, response field/type/unit, ProblemDetail shape 변경 없음으로 통과해야 한다.",
+  "public contract impact는 None이어야 하며 새 URL이나 response field가 필요하면 구현으로 넘어가지 않고 중단한다.",
+  "data invariant impact는 read-only로 제한하며 raw-before-normalized, source/source_key dedupe, failed match queryability, complex_id operational relation을 변경하지 않는다.",
+  "favorites, users, auth, rankings, trend, mail, alarm, recommendation은 later-scope로 분류하고 1차 read path에 넣지 않는다.",
+]
+first_red_candidates = [
+  "planning-only slice이므로 First RED는 not applicable이며, 후속 구현 slice별로 backend contract RED와 frontend UI/API RED를 분리해 기록한다.",
+  "inventory matrix에서 target test seam이 없으면 해당 기능 slice의 첫 acceptance로 RED 후보 추가를 요구한다.",
+]
+verification_commands = [
+  "python3 .codex/harness/worklog_sync.py --self-test",
+  "python3 .codex/harness/home_plan.py --self-test",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "legacy source repository를 수정해야 하면 중단한다.",
+  "ranking, trend aggregate, favorite, alarm, mail, auth, recommendation 기능이 필요하면 later-scope로 분리한다.",
+  "DB reset, Docker volume 삭제, 기존 저장 데이터 cleanup이 필요하면 중단하고 별도 승인으로 분리한다.",
+  "backend/frontend 동시 변경 범위가 한 기능 흐름을 넘어가면 별도 /goal slice로 분리한다.",
+]
+risk_notes = [
+  "이 slice는 구현이 아니라 E2E 검토 matrix와 후속 /goal 실행 순서를 고정한다.",
+  "기능 구현은 detail/trade, search, region, runtime smoke로 나누어 진행한다.",
+  "legacy parity가 docs/API_CONTRACT.md와 충돌하면 target contract가 우선한다.",
+]
+
+[[items]]
+id = "detail-trade-drawer-e2e-parity"
+title_ko = "Detail trade drawer E2E parity"
+pr_type = "Feat"
+pr_title_ko = "상세/거래 drawer E2E parity 보강"
+description_ko = "complex marker 또는 search result 선택 후 detail drawer가 detail/trade API를 complex scope로 불러와 상세 정보, 거래 목록, 차트를 화면에 정확히 표시하는지 backend와 frontend를 함께 검토하고 보강한다."
+status = "candidate"
+priority = 243
+targets = "both"
+preset = "contract-hardening"
+acceptance_criteria = [
+  "시작 시 /goal로 marker/search 선택 -> detail drawer open -> detail/trade fetch -> 화면 표시 흐름을 기능 단위로 추적한다.",
+  "GET /api/v1/detail/{parcelId}와 GET /api/v1/trade/{parcelId} URL, method, query param, response field/type/unit을 변경하지 않는다.",
+  "complexId가 제공되면 요청한 parcel 소속 complex만 detail/trade 응답으로 반환한다.",
+  "complexId가 없으면 detail은 deterministic representative complex를, trade는 parcel 아래 active complex 거래 전체를 반환한다.",
+  "wrong parcelId + complexId parent 조합은 404 ProblemDetail을 반환하고 empty object나 다른 complex fallback으로 성공 처리하지 않는다.",
+  "parcel은 존재하지만 거래가 없으면 GET /api/v1/trade/{parcelId}는 200과 trades: []를 반환한다.",
+  "trade ordering은 dealDate DESC, tradeId DESC를 유지한다.",
+  "frontend marker click과 search result 선택은 complexId가 있을 때 detail/trade URL에 ?complexId=를 유지한다.",
+  "detail drawer는 loading, error, empty trade, ready 상태에서 layout과 텍스트가 겹치지 않고 지도 사용성을 막지 않는다.",
+  "dealAmount는 10,000 KRW 단위 그대로 표시하고 ranking/trend aggregate API를 요구하지 않는다.",
+]
+first_red_candidates = [
+  "ReadApiControllerContractTest에서 wrong parcelId + complexId 조합이 404 ProblemDetail이 아니면 실패하는 RED를 만든다.",
+  "JdbcPropertyReadRepositoryTest에서 complexId scoped trade 요청이 다른 complex 거래를 섞으면 실패하는 RED를 만든다.",
+  "App.test.tsx에서 marker 또는 search result 선택 후 /api/v1/detail/{parcelId}?complexId={complexId}와 /api/v1/trade/{parcelId}?complexId={complexId} 호출이 없으면 실패하는 RED를 만든다.",
+  "App.test.tsx 또는 detail feature test에서 trades: [] 응답이 drawer empty state로 표시되지 않으면 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew apiContractTest --tests '*ReadApiControllerContractTest'",
+  "cd apps/api && ./gradlew persistenceTest --tests '*JdbcPropertyReadRepositoryTest'",
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "complex_id operational relation이 아닌 complex_pk, apt_seq, source_key 기반 public join으로 바꿔야 하면 중단한다.",
+  "chart 표시를 위해 ranking, trend aggregate, analytics API가 필요하면 중단한다.",
+  "backend와 frontend 변경 범위가 detail/trade 흐름을 넘어 search/region behavior까지 확장되면 별도 slice로 분리한다.",
+  "DB reset, Docker volume 삭제, 기존 저장 데이터 cleanup이 필요하면 중단한다.",
+]
+risk_notes = [
+  "same-PNU multi-complex에서 complexId를 잃으면 사용자가 다른 단지 거래를 볼 수 있어 frontend propagation을 핵심 gate로 둔다.",
+  "backend 404와 frontend error state가 동시에 맞아야 해서 apiContractTest와 web test를 같은 PR gate로 둔다.",
+  "legacy frontend의 parcelId-only 흐름은 target에서는 fallback case로만 허용한다.",
+]
+
+[[items]]
+id = "search-to-detail-e2e-parity"
+title_ko = "Search to detail E2E parity"
+pr_type = "Feat"
+pr_title_ko = "검색에서 상세까지 E2E parity 보강"
+description_ko = "검색어 입력부터 complex 단위 검색 결과 표시, 지도 이동, detail/trade drawer 연결까지 backend search contract와 frontend 선택 흐름을 함께 검토하고 보강한다."
+status = "candidate"
+priority = 241
+targets = "both"
+preset = "contract-hardening"
+acceptance_criteria = [
+  "시작 시 /goal로 검색 입력 -> GET /api/v1/search/complexes?q= -> 결과 목록 -> map 이동 -> detail/trade open 흐름을 기능 단위로 추적한다.",
+  "GET /api/v1/search/complexes?q= URL, q query parameter, response field/type, empty-result behavior를 변경하지 않는다.",
+  "blank 또는 trim 후 빈 q는 backend/frontend 모두 200과 [] 흐름으로 처리하고 불필요한 detail/trade 호출을 만들지 않는다.",
+  "complex.name, trade_name, parcel.address, complex_name_alias alias_name/normalized_name 검색 경로를 유지한다.",
+  "검색 결과는 complex 단위이며 같은 parcelId를 가진 여러 complexId 결과가 collapse되지 않는다.",
+  "response field는 complexId, complexName, parcelId, latitude, longitude, address를 유지한다.",
+  "frontend 검색 결과 목록은 complexName과 address를 표시하고, 선택 시 latitude/longitude로 map context를 이동한다.",
+  "frontend 검색 결과 선택은 parcelId와 complexId를 detail/trade drawer까지 전달한다.",
+  "legacy variant 대응이 필요하면 frontend adapter에서만 처리하고 backend public contract를 넓히지 않는다.",
+]
+first_red_candidates = [
+  "JdbcPropertyReadRepositoryTest에서 같은 parcelId를 가진 여러 complexId 검색 결과가 하나로 collapse되면 실패하는 RED를 만든다.",
+  "JdbcPropertyReadRepositoryTest에서 alias normalized search가 결과를 반환하지 못하면 실패하는 RED를 만든다.",
+  "fetchComplexSearchResults.test.ts에서 blank query가 fetch를 호출하거나 []가 아니면 실패하는 RED를 유지한다.",
+  "App.test.tsx에서 search result 선택 후 detail/trade URL에 complexId가 빠지면 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew persistenceTest --tests '*JdbcPropertyReadRepositoryTest'",
+  "cd apps/api && ./gradlew apiContractTest --tests '*ReadApiControllerContractTest'",
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+]
+stop_conditions = [
+  "검색 ranking, similarity score, pagination, sorting public field 추가가 필요하면 후속 search ranking slice로 분리한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "favorites, auth user state, recommendation, ranking, trend aggregate가 검색 결과에 필요하면 중단한다.",
+  "apps/api와 apps/web 변경이 검색 흐름 밖 detail/trade/region behavior까지 커지면 별도 /goal로 분리한다.",
+]
+risk_notes = [
+  "검색 결과가 complex 단위라는 정책은 same-PNU parcel에서 detail/trade scope를 지키기 위한 핵심 전제다.",
+  "기존 read-search-trgm-and-multi-complex-policy는 done 상태이므로 이번 slice는 E2E 표시와 propagation gap에 집중한다.",
+  "검색 품질 개선이 아니라 public contract parity와 화면 연결 검토가 목표다.",
+]
+
+[[items]]
+id = "region-navigation-e2e-parity"
+title_ko = "Region navigation E2E parity"
+pr_type = "Feat"
+pr_title_ko = "지역 navigation E2E parity 보강"
+description_ko = "지역 패널 root/child navigation이 region API와 연결되고 map recenter 및 marker refresh까지 이어지는지 backend region contract와 frontend 표시 흐름을 함께 검토하고 보강한다."
+status = "candidate"
+priority = 239
+targets = "both"
+preset = "contract-hardening"
+acceptance_criteria = [
+  "시작 시 /goal로 root region load -> child region drilldown -> map recenter -> marker refresh 흐름을 기능 단위로 추적한다.",
+  "GET /api/v1/region과 GET /api/v1/region/{regionId} URL, method, response field/type을 변경하지 않는다.",
+  "root region 응답은 id, name을 유지한다.",
+  "region detail 응답은 id, name, latitude, longitude, children을 유지하고 children item은 id, name을 유지한다.",
+  "missing regionId는 404 ProblemDetail을 반환하고 empty object나 500으로 처리하지 않는다.",
+  "frontend region panel은 root loading, child loading, empty, error 상태에서 탐색 UI를 깨지 않는다.",
+  "region 선택 시 latitude/longitude가 있으면 map center와 level을 갱신하고 marker refresh 흐름으로 연결된다.",
+  "region API 또는 UI는 ranking, trend, favorite, alarm, mail, auth, recommendation 상태에 의존하지 않는다.",
+]
+first_red_candidates = [
+  "ReadApiControllerContractTest에서 missing region이 404 ProblemDetail이 아니면 실패하는 RED를 유지하거나 보강한다.",
+  "JdbcPropertyReadRepositoryTest에서 region detail children shape 또는 center coordinate가 깨지면 실패하는 RED를 만든다.",
+  "App.test.tsx에서 region 선택 후 map context가 갱신되지 않거나 marker API refresh로 이어지지 않으면 실패하는 RED를 만든다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew apiContractTest --tests '*ReadApiControllerContractTest'",
+  "cd apps/api && ./gradlew persistenceTest --tests '*JdbcPropertyReadRepositoryTest'",
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+]
+stop_conditions = [
+  "region trend, ranking, aggregate field를 public response에 추가해야 하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "Kakao map marker refresh threshold나 marker response contract 변경이 필요하면 별도 map marker slice로 분리한다.",
+  "지역 navigation 외 search/detail/trade UI 변경이 필요하면 별도 /goal slice로 분리한다.",
+]
+risk_notes = [
+  "region navigation은 marker API와 이어지지만 이번 slice는 region read contract와 frontend map context 연결에 집중한다.",
+  "좌표가 없는 region 데이터는 frontend가 지도 이동을 생략할 수 있으나 API contract를 바꾸지는 않는다.",
+  "wide zoom marker aggregation이나 trend 계산은 non-scope다.",
+]
+
+[[items]]
+id = "public-read-api-runtime-visual-smoke"
+title_ko = "Public read API runtime visual smoke"
+pr_type = "Test"
+pr_title_ko = "Public read API 런타임 화면 스모크"
+description_ko = "1차 public read API 5개가 local runtime에서 검색, 지역 navigation, detail drawer, trade list/chart 화면 흐름으로 실제로 잘 보이는지 deterministic evidence를 남긴다."
+status = "candidate"
+priority = 237
+targets = "both"
+preset = "runtime-smoke"
+acceptance_criteria = [
+  "시작 시 /goal로 5개 public read API의 runtime visual smoke 목표와 seed/runtime 전제 조건을 생성한다.",
+  "검색 결과 목록이 실제 화면에 표시되고 결과 선택 시 map context와 detail drawer가 연결된다.",
+  "detail drawer가 detail API 응답을 표시하고 missing/error/loading 상태에서 화면이 깨지지 않는다.",
+  "trade list와 chart가 ready, empty, error 상태에서 레이아웃을 유지한다.",
+  "region navigation이 root/child를 표시하고 선택 시 map context를 갱신한다.",
+  "API 실패 시 marker/map 사용성이 유지되고 frontend가 전체 앱을 navigation away 하지 않는다.",
+  "runtime smoke는 public API URL, response shape, amount unit, ProblemDetail shape를 변경하지 않고 evidence만 남긴다.",
+  "Kakao key나 live external API secret이 없으면 deterministic API/frontend tests와 가능한 local browser evidence로 Partial 사유를 명시한다.",
+]
+first_red_candidates = [
+  "기존 deterministic frontend test가 검색 -> detail/trade, region -> map refresh 흐름 중 하나라도 커버하지 못하면 runtime smoke 전에 해당 App.test.tsx RED를 먼저 만든다.",
+  "local runtime smoke가 seed data 부재로 detail/trade 화면을 열 수 없으면 seed/runtime evidence gap을 RED 또는 blocked/no test environment 근거로 기록한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "docker compose -f infra/docker-compose.local.yml config",
+  "git diff --check",
+]
+stop_conditions = [
+  "runtime smoke를 위해 DB reset, Docker volume 삭제, production data cleanup이 필요하면 중단하고 별도 승인으로 분리한다.",
+  "live RTMS, VWorld, Kakao secret, raw production payload 저장이 필요하면 중단한다.",
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "ranking, trend aggregate, favorite, alarm, mail, auth, recommendation 기능이 필요하면 중단한다.",
+]
+risk_notes = [
+  "이 slice는 기능 확장이 아니라 기존 public read path가 실제 화면에서 연결되는지 확인하는 smoke evidence slice다.",
+  "브라우저 smoke는 deterministic tests를 대체하지 않으며, test seam이 없으면 먼저 frontend RED를 추가한다.",
+  "local environment availability에 따라 visual evidence는 Partial일 수 있지만 contract/test gate는 통과해야 한다.",
+]

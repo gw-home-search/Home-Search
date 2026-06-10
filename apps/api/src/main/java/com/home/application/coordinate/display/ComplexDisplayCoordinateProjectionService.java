@@ -2,10 +2,10 @@ package com.home.application.coordinate.display;
 
 import java.util.Objects;
 
+import com.home.domain.coordinate.CoordinateSource;
+
 public class ComplexDisplayCoordinateProjectionService {
 
-	private static final String BUILDING_FOOTPRINT_SOURCE = "BUILDING_FOOTPRINT";
-	private static final String PARCEL_FALLBACK_SOURCE = "PARCEL_FALLBACK";
 	private static final int DEFAULT_BUILDING_CONFIDENCE = 90;
 	private static final int SINGLE_COMPLEX_FALLBACK_CONFIDENCE = 70;
 	private static final int MULTI_COMPLEX_FALLBACK_CONFIDENCE = 50;
@@ -41,7 +41,7 @@ public class ComplexDisplayCoordinateProjectionService {
 				target.resolvedBuildingFootprintId(),
 				target.resolvedLatitude(),
 				target.resolvedLongitude(),
-				BUILDING_FOOTPRINT_SOURCE,
+				CoordinateSource.BUILDING_FOOTPRINT.storedValue(),
 				buildingConfidence(target),
 				buildingReason(target)
 			));
@@ -55,7 +55,7 @@ public class ComplexDisplayCoordinateProjectionService {
 			null,
 			target.parcelLatitude(),
 			target.parcelLongitude(),
-			PARCEL_FALLBACK_SOURCE,
+			CoordinateSource.PARCEL_FALLBACK.storedValue(),
 			fallbackConfidence(target),
 			fallbackReason(target)
 		));

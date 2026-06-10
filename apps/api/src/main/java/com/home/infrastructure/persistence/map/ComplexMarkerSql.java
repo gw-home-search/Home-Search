@@ -6,8 +6,52 @@ final class ComplexMarkerSql {
 	}
 
 	static String markerShapeFilter() {
+		return withCtes(
+			requestedBounds(),
+			boundedParcel(),
+			complexBase("", "", ""),
+			parcelFlags(),
+			redevelopmentGenerationBase(),
+			currentGeneration("redevelopment_generation_base", "latest_generation_deal_date"),
+			splitComplexMarker(""),
+			representativeCoordinate("base.use_date DESC NULLS LAST"),
+			parcelMarkerBase(),
+			parcelMarker(true),
+			markerShapeFilterTail()
+		);
+	}
+
+	static String tradeFirst() {
+		return withCtes(
+			requestedBounds(),
+			boundedParcel(),
+			complexBase(tradeFirstColumns(), tradeFirstJoins(), tradeFirstGroupByColumns()),
+			parcelFlags(),
+			currentGeneration("complex_base", "latest_complex_deal_date"),
+			splitComplexMarker("""
+				        base.latest_complex_deal_amount AS latest_deal_amount,
+				        base.latest_complex_excl_area AS excl_area,
+				"""),
+			representativeCoordinate("base.latest_complex_deal_date DESC NULLS LAST"),
+			parcelMarkerBase(),
+			parcelMarker(false),
+			tradeFirstTail()
+		);
+	}
+
+	private static String withCtes(String first, String... ctesAndSelect) {
+		StringBuilder sql = new StringBuilder("WITH ");
+		sql.append(first);
+		for (String cte : ctesAndSelect) {
+			sql.append(",\n");
+			sql.append(cte);
+		}
+		return sql.toString();
+	}
+
+	private static String requestedBounds() {
 		return """
-			WITH requested_bounds AS (
+			requested_bounds AS (
 			    SELECT ST_MakeEnvelope(
 			        CAST(:swLng AS DOUBLE PRECISION),
 			        CAST(:swLat AS DOUBLE PRECISION),
@@ -15,7 +59,11 @@ final class ComplexMarkerSql {
 			        CAST(:neLat AS DOUBLE PRECISION),
 			        4326
 			    ) AS geom
-			),
+			)""";
+	}
+
+	private static String boundedParcel() {
+		return """
 			bounded_parcel AS (
 			    SELECT p.*
 			    FROM parcel p
@@ -29,7 +77,15 @@ final class ComplexMarkerSql {
 			           AND p.latitude BETWEEN :swLat AND :neLat
 			           AND p.longitude BETWEEN :swLng AND :neLng
 			       )
-			),
+			)""";
+	}
+
+	private static String complexBase(
+		String additionalSelectColumns,
+		String additionalJoins,
+		String additionalGroupByColumns
+	) {
+		return """
 			complex_base AS (
 			    SELECT
 			        p.id AS parcel_id,
@@ -46,18 +102,18 @@ final class ComplexMarkerSql {
 			        COALESCE(display_coordinate.latitude, p.latitude) AS lat,
 			        COALESCE(display_coordinate.longitude, p.longitude) AS lng,
 			        display_coordinate.coordinate_source,
-			        display_coordinate.confidence
+			        display_coordinate.confidence%s
 			    FROM bounded_parcel p
 			    JOIN complex c ON c.parcel_id = p.id
 			    LEFT JOIN complex_display_coordinate display_coordinate
 			      ON display_coordinate.complex_id = c.id
 			     AND (
-			         display_coordinate.coordinate_source <> 'BUILDING_FOOTPRINT'
+			         display_coordinate.coordinate_source <> %s
 			         OR display_coordinate.confidence >= :trustedBuildingCoordinateConfidence
 			    )
 			    LEFT JOIN complex_coordinate_case coordinate_case
 			      ON coordinate_case.parcel_id = p.id
-			    GROUP BY
+			%s    GROUP BY
 			        p.id,
 			        p.geom,
 			        p.latitude,
@@ -72,14 +128,72 @@ final class ComplexMarkerSql {
 			        display_coordinate.latitude,
 			        display_coordinate.longitude,
 			        display_coordinate.coordinate_source,
-			        display_coordinate.confidence
-			),
+			        display_coordinate.confidence%s
+			)""".formatted(
+			additionalSelectColumns,
+			buildingFootprintSql(),
+			additionalJoins,
+			additionalGroupByColumns
+		);
+	}
+
+	private static String tradeFirstColumns() {
+		return """
+				,
+				        latest_complex_trade.deal_date AS latest_complex_deal_date,
+				        latest_complex_trade.deal_amount AS latest_complex_deal_amount,
+				        latest_complex_trade.excl_area AS latest_complex_excl_area,
+				        first_complex_trade.deal_date AS first_deal""";
+	}
+
+	private static String tradeFirstJoins() {
+		return """
+			    LEFT JOIN LATERAL (
+			        SELECT
+			            trade.deal_date,
+			            trade.deal_amount,
+			            trade.excl_area
+			        FROM trade
+			        WHERE trade.complex_id = c.id
+			          AND trade.deleted_at IS NULL
+			        ORDER BY trade.deal_date DESC, trade.id DESC
+			        LIMIT 1
+			    ) latest_complex_trade ON true
+			    LEFT JOIN LATERAL (
+			        SELECT trade.deal_date
+			        FROM trade
+			        WHERE trade.complex_id = c.id
+			          AND trade.deleted_at IS NULL
+			          AND EXISTS (
+			              SELECT 1
+			              FROM complex_coordinate_case first_trade_case
+			              WHERE first_trade_case.parcel_id = p.id
+			                AND first_trade_case.relation_type = 'REDEVELOPED'
+			                AND first_trade_case.relation_confidence = 'HIGH'
+			          )
+			        ORDER BY trade.deal_date ASC, trade.id ASC
+			        LIMIT 1
+			    ) first_complex_trade ON true
+			""";
+	}
+
+	private static String tradeFirstGroupByColumns() {
+		return """
+				,
+				        latest_complex_trade.deal_date,
+				        latest_complex_trade.deal_amount,
+				        latest_complex_trade.excl_area,
+				        first_complex_trade.deal_date""";
+	}
+
+	private static String parcelFlags() {
+		return """
 			parcel_flags AS (
 			    SELECT
 			        parcel_id,
 			        count(*) AS complex_count,
 			        count(*) FILTER (
-			            WHERE coordinate_source = 'BUILDING_FOOTPRINT'
+			            WHERE coordinate_source = %s
 			        ) AS trusted_building_coordinate_count,
 			        COALESCE(bool_or(
 			            coordinate_case_status = 'RESOLVED'
@@ -95,7 +209,11 @@ final class ComplexMarkerSql {
 			        ), false) AS is_redevelopment_candidate
 			    FROM complex_base
 			    GROUP BY parcel_id
-			),
+			)""".formatted(buildingFootprintSql());
+	}
+
+	private static String redevelopmentGenerationBase() {
+		return """
 			redevelopment_generation_base AS (
 			    SELECT
 			        base.parcel_id,
@@ -123,19 +241,27 @@ final class ComplexMarkerSql {
 			        ORDER BY trade.deal_date ASC, trade.id ASC
 			        LIMIT 1
 			    ) first_generation_trade ON true
-			),
+			)""";
+	}
+
+	private static String currentGeneration(String sourceCte, String latestDealColumn) {
+		return """
 			current_generation AS (
 			    SELECT DISTINCT ON (parcel_id)
 			        parcel_id,
 			        complex_id
-			    FROM redevelopment_generation_base
+			    FROM %s
 			    ORDER BY
 			        parcel_id,
 			        use_date DESC NULLS LAST,
-			        latest_generation_deal_date DESC NULLS LAST,
+			        %s DESC NULLS LAST,
 			        first_deal DESC NULLS LAST,
 			        complex_id DESC
-			),
+			)""".formatted(sourceCte, latestDealColumn);
+	}
+
+	private static String splitComplexMarker(String tradeColumns) {
+		return """
 			split_complex_marker AS (
 			    SELECT
 			        base.parcel_id,
@@ -143,7 +269,7 @@ final class ComplexMarkerSql {
 			        base.complex_name,
 			        base.lat,
 			        base.lng,
-			        COALESCE(base.unit_cnt, 0)::bigint AS unit_cnt_sum,
+			%s        COALESCE(base.unit_cnt, 0)::bigint AS unit_cnt_sum,
 			        CASE
 			            WHEN base.use_date IS NULL THEN NULL
 			            ELSE EXTRACT(YEAR FROM age(CURRENT_DATE, base.use_date))
@@ -164,13 +290,17 @@ final class ComplexMarkerSql {
 			            )
 			        )
 			        AND flags.complex_count > 1
-			        AND base.coordinate_source = 'BUILDING_FOOTPRINT'
+			        AND base.coordinate_source = %s
 			    )
 			       OR (
 			           flags.is_redeveloped
 			           AND base.complex_id = current_generation.complex_id
 			       )
-			),
+			)""".formatted(tradeColumns, buildingFootprintSql());
+	}
+
+	private static String representativeCoordinate(String lastTieBreaker) {
+		return """
 			representative_coordinate AS (
 			    SELECT DISTINCT ON (base.parcel_id)
 			        base.parcel_id,
@@ -181,13 +311,17 @@ final class ComplexMarkerSql {
 			    ORDER BY
 			        base.parcel_id,
 			        CASE base.coordinate_source
-			            WHEN 'BUILDING_FOOTPRINT' THEN 0
+			            WHEN %s THEN 0
 			            ELSE 1
 			        END,
 			        base.confidence DESC NULLS LAST,
-			        base.use_date DESC NULLS LAST,
+			        %s,
 			        base.complex_id DESC
-			),
+			)""".formatted(buildingFootprintSql(), lastTieBreaker);
+	}
+
+	private static String parcelMarkerBase() {
+		return """
 			parcel_marker_base AS (
 			    SELECT base.*
 			    FROM complex_base base
@@ -204,9 +338,15 @@ final class ComplexMarkerSql {
 			              )
 			              AND flags.complex_count > 1
 			          )
-			          OR base.coordinate_source IS DISTINCT FROM 'BUILDING_FOOTPRINT'
+			          OR base.coordinate_source IS DISTINCT FROM %s
 			      )
-			),
+			)""".formatted(buildingFootprintSql());
+	}
+
+	private static String parcelMarker(boolean includeParcelGeometry) {
+		String parcelGeomSelect = includeParcelGeometry ? ",\n			        base.parcel_geom" : "";
+		String parcelGeomGroupBy = includeParcelGeometry ? ",\n			        base.parcel_geom" : "";
+		return """
 			parcel_marker AS (
 			    SELECT
 			        base.parcel_id,
@@ -228,8 +368,7 @@ final class ComplexMarkerSql {
 			                WHEN base.use_date IS NULL THEN NULL
 			                ELSE EXTRACT(YEAR FROM age(CURRENT_DATE, base.use_date))
 			            END
-			        ) AS building_age,
-			        base.parcel_geom
+			        ) AS building_age%s
 			    FROM parcel_marker_base base
 			    JOIN representative_coordinate
 			      ON representative_coordinate.parcel_id = base.parcel_id
@@ -239,9 +378,12 @@ final class ComplexMarkerSql {
 			        flags.complex_count,
 			        representative_coordinate.complex_id,
 			        representative_coordinate.lat,
-			        representative_coordinate.lng,
-			        base.parcel_geom
-			),
+			        representative_coordinate.lng%s
+			)""".formatted(parcelGeomSelect, parcelGeomGroupBy);
+	}
+
+	private static String markerShapeFilterTail() {
+		return """
 			marker_candidates AS (
 			    SELECT
 			        split_complex_marker.parcel_id,
@@ -344,249 +486,8 @@ final class ComplexMarkerSql {
 			""";
 	}
 
-	static String tradeFirst() {
+	private static String tradeFirstTail() {
 		return """
-			WITH requested_bounds AS (
-			    SELECT ST_MakeEnvelope(
-			        CAST(:swLng AS DOUBLE PRECISION),
-			        CAST(:swLat AS DOUBLE PRECISION),
-			        CAST(:neLng AS DOUBLE PRECISION),
-			        CAST(:neLat AS DOUBLE PRECISION),
-			        4326
-			    ) AS geom
-			),
-			bounded_parcel AS (
-			    SELECT p.*
-			    FROM parcel p
-			    CROSS JOIN requested_bounds bounds
-			    WHERE (
-			        p.geom IS NOT NULL
-			        AND ST_Intersects(p.geom, bounds.geom)
-			    )
-			       OR (
-			           p.geom IS NULL
-			           AND p.latitude BETWEEN :swLat AND :neLat
-			           AND p.longitude BETWEEN :swLng AND :neLng
-			       )
-			),
-			complex_base AS (
-			    SELECT
-			        p.id AS parcel_id,
-			        p.geom AS parcel_geom,
-			        p.latitude AS parcel_lat,
-			        p.longitude AS parcel_lng,
-			        c.id AS complex_id,
-			        c.name AS complex_name,
-			        c.unit_cnt,
-			        c.use_date,
-			        coordinate_case.status AS coordinate_case_status,
-			        coordinate_case.relation_type,
-			        coordinate_case.relation_confidence,
-			        COALESCE(display_coordinate.latitude, p.latitude) AS lat,
-			        COALESCE(display_coordinate.longitude, p.longitude) AS lng,
-			        display_coordinate.coordinate_source,
-			        display_coordinate.confidence,
-			        latest_complex_trade.deal_date AS latest_complex_deal_date,
-			        latest_complex_trade.deal_amount AS latest_complex_deal_amount,
-			        latest_complex_trade.excl_area AS latest_complex_excl_area,
-			        first_complex_trade.deal_date AS first_deal
-			    FROM bounded_parcel p
-			    JOIN complex c ON c.parcel_id = p.id
-			    LEFT JOIN complex_display_coordinate display_coordinate
-			      ON display_coordinate.complex_id = c.id
-			     AND (
-			         display_coordinate.coordinate_source <> 'BUILDING_FOOTPRINT'
-			         OR display_coordinate.confidence >= :trustedBuildingCoordinateConfidence
-			     )
-			    LEFT JOIN complex_coordinate_case coordinate_case
-			      ON coordinate_case.parcel_id = p.id
-			    LEFT JOIN LATERAL (
-			        SELECT
-			            trade.deal_date,
-			            trade.deal_amount,
-			            trade.excl_area
-			        FROM trade
-			        WHERE trade.complex_id = c.id
-			          AND trade.deleted_at IS NULL
-			        ORDER BY trade.deal_date DESC, trade.id DESC
-			        LIMIT 1
-			    ) latest_complex_trade ON true
-			    LEFT JOIN LATERAL (
-			        SELECT trade.deal_date
-			        FROM trade
-			        WHERE trade.complex_id = c.id
-			          AND trade.deleted_at IS NULL
-			          AND EXISTS (
-			              SELECT 1
-			              FROM complex_coordinate_case first_trade_case
-			              WHERE first_trade_case.parcel_id = p.id
-			                AND first_trade_case.relation_type = 'REDEVELOPED'
-			                AND first_trade_case.relation_confidence = 'HIGH'
-			          )
-			        ORDER BY trade.deal_date ASC, trade.id ASC
-			        LIMIT 1
-			    ) first_complex_trade ON true
-			    GROUP BY
-			        p.id,
-			        p.geom,
-			        p.latitude,
-			        p.longitude,
-			        c.id,
-			        c.name,
-			        c.unit_cnt,
-			        c.use_date,
-			        coordinate_case.status,
-			        coordinate_case.relation_type,
-			        coordinate_case.relation_confidence,
-			        display_coordinate.latitude,
-			        display_coordinate.longitude,
-			        display_coordinate.coordinate_source,
-			        display_coordinate.confidence,
-			        latest_complex_trade.deal_date,
-			        latest_complex_trade.deal_amount,
-			        latest_complex_trade.excl_area,
-			        first_complex_trade.deal_date
-			),
-			parcel_flags AS (
-			    SELECT
-			        parcel_id,
-			        count(*) AS complex_count,
-			        count(*) FILTER (
-			            WHERE coordinate_source = 'BUILDING_FOOTPRINT'
-			        ) AS trusted_building_coordinate_count,
-			        COALESCE(bool_or(
-			            coordinate_case_status = 'RESOLVED'
-			            AND relation_type = 'CONCURRENT'
-			            AND relation_confidence = 'HIGH'
-			        ), false) AS is_concurrent,
-			        COALESCE(bool_or(
-			            relation_type = 'REDEVELOPED'
-			            AND relation_confidence = 'HIGH'
-			        ), false) AS is_redeveloped,
-			        COALESCE(bool_or(
-			            relation_type = 'REDEVELOPED'
-			        ), false) AS is_redevelopment_candidate
-			    FROM complex_base
-			    GROUP BY parcel_id
-			),
-			current_generation AS (
-			    SELECT DISTINCT ON (parcel_id)
-			        parcel_id,
-			        complex_id
-			    FROM complex_base
-			    ORDER BY
-			        parcel_id,
-			        use_date DESC NULLS LAST,
-			        latest_complex_deal_date DESC NULLS LAST,
-			        first_deal DESC NULLS LAST,
-			        complex_id DESC
-			),
-			split_complex_marker AS (
-			    SELECT
-			        base.parcel_id,
-			        base.complex_id,
-			        base.complex_name,
-			        base.lat,
-			        base.lng,
-			        base.latest_complex_deal_amount AS latest_deal_amount,
-			        base.latest_complex_excl_area AS excl_area,
-			        COALESCE(base.unit_cnt, 0)::bigint AS unit_cnt_sum,
-			        CASE
-			            WHEN base.use_date IS NULL THEN NULL
-			            ELSE EXTRACT(YEAR FROM age(CURRENT_DATE, base.use_date))
-			        END AS building_age,
-			        base.parcel_geom
-			    FROM complex_base base
-			    JOIN parcel_flags flags ON flags.parcel_id = base.parcel_id
-			    LEFT JOIN current_generation current_generation
-			      ON current_generation.parcel_id = base.parcel_id
-			    WHERE (
-			        NOT flags.is_redeveloped
-			        AND
-			        (
-			            flags.is_concurrent
-			            OR (
-			                NOT flags.is_redevelopment_candidate
-			                AND flags.trusted_building_coordinate_count > 0
-			            )
-			        )
-			        AND flags.complex_count > 1
-			        AND base.coordinate_source = 'BUILDING_FOOTPRINT'
-			    )
-			       OR (
-			           flags.is_redeveloped
-			           AND base.complex_id = current_generation.complex_id
-			       )
-			),
-			representative_coordinate AS (
-			    SELECT DISTINCT ON (base.parcel_id)
-			        base.parcel_id,
-			        base.complex_id,
-			        base.lat,
-			        base.lng
-			    FROM complex_base base
-			    ORDER BY
-			        base.parcel_id,
-			        CASE base.coordinate_source
-			            WHEN 'BUILDING_FOOTPRINT' THEN 0
-			            ELSE 1
-			        END,
-			        base.confidence DESC NULLS LAST,
-			        base.latest_complex_deal_date DESC NULLS LAST,
-			        base.complex_id DESC
-			),
-			parcel_marker_base AS (
-			    SELECT base.*
-			    FROM complex_base base
-			    JOIN parcel_flags flags ON flags.parcel_id = base.parcel_id
-			    WHERE NOT flags.is_redeveloped
-			      AND (
-			          NOT (
-			              (
-			                  flags.is_concurrent
-			                  OR (
-			                      NOT flags.is_redevelopment_candidate
-			                      AND flags.trusted_building_coordinate_count > 0
-			                  )
-			              )
-			              AND flags.complex_count > 1
-			          )
-			          OR base.coordinate_source IS DISTINCT FROM 'BUILDING_FOOTPRINT'
-			      )
-			),
-			parcel_marker AS (
-			    SELECT
-			        base.parcel_id,
-			        CASE
-			            WHEN flags.complex_count = 1 THEN representative_coordinate.complex_id
-			            ELSE NULL
-			        END AS complex_id,
-			        CASE
-			            WHEN flags.complex_count = 1 THEN representative_coordinate.lat
-			            ELSE MAX(base.parcel_lat)
-			        END AS lat,
-			        CASE
-			            WHEN flags.complex_count = 1 THEN representative_coordinate.lng
-			            ELSE MAX(base.parcel_lng)
-			        END AS lng,
-			        COALESCE(SUM(base.unit_cnt), 0)::bigint AS unit_cnt_sum,
-			        MAX(
-			            CASE
-			                WHEN base.use_date IS NULL THEN NULL
-			                ELSE EXTRACT(YEAR FROM age(CURRENT_DATE, base.use_date))
-			            END
-			        ) AS building_age
-			    FROM parcel_marker_base base
-			    JOIN representative_coordinate
-			      ON representative_coordinate.parcel_id = base.parcel_id
-			    JOIN parcel_flags flags ON flags.parcel_id = base.parcel_id
-			    GROUP BY
-			        base.parcel_id,
-			        flags.complex_count,
-			        representative_coordinate.complex_id,
-			        representative_coordinate.lat,
-			        representative_coordinate.lng
-			),
 			latest_parcel_trade AS (
 			    SELECT DISTINCT ON (base.parcel_id)
 			        base.parcel_id,
@@ -657,5 +558,9 @@ final class ComplexMarkerSql {
 			  AND (CAST(:areaMax AS NUMERIC) IS NULL OR markers.excl_area <= :areaMax)
 			ORDER BY markers.parcel_id, markers.complex_id
 			""";
+	}
+
+	private static String buildingFootprintSql() {
+		return ":buildingFootprintSource";
 	}
 }

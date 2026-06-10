@@ -23,7 +23,10 @@ import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectio
 import com.home.application.coordinate.display.ResolvedDisplayCoordinate;
 import com.home.application.coordinate.footprint.BuildingFootprintCandidate;
 import com.home.application.coordinate.footprint.BuildingFootprintImportCandidate;
+import com.home.application.coordinate.footprint.BuildingFootprintSource;
+import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
 import com.home.application.coordinate.identity.ComplexCoordinateParcelTargets;
+import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
 
 class ComplexCoordinateReadinessRunnerTest {
 
@@ -62,11 +65,14 @@ class ComplexCoordinateReadinessRunnerTest {
 
 		private FakeReadinessService() {
 			super(
-				new ComplexCoordinateExceptionService(
-					new NoopCoordinateExceptionRepository(),
-					parcelId -> List.of(),
-					new com.home.domain.complex.relation.ComplexRelationClassifier()
-				),
+					new ComplexCoordinateExceptionService(
+						new NoopCoordinateExceptionRepository(),
+						parcelId -> List.of(),
+						new com.home.domain.complex.relation.ComplexRelationClassifier(),
+						ComplexCoordinateIdentityVerifier.trusting(),
+						BuildingFootprintSource.unavailable(),
+						CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
+					),
 				new NoopReadinessRepository(),
 				new ComplexDisplayCoordinateProjectionService(new NoopProjectionRepository())
 			);

@@ -254,7 +254,7 @@ title_ko = "RTMS 특수지역 저장 직전 readiness gate"
 pr_type = "Test"
 pr_title_ko = "RTMS 특수지역 저장 직전 readiness gate"
 description_ko = "전체 데이터 저장 직전 단계에서 특수 지역 10년치 RTMS 실증을 raw/evidence/trade/coordinate/marker/detail/trade API 점수표로 검증하고, 평균 9점 미만 결함은 별도 TDD 보강 slice와 harness -pr로 분리한다."
-status = "planned"
+status = "done"
 priority = 210
 targets = "backend"
 preset = "runtime-smoke"
@@ -295,6 +295,127 @@ risk_notes = [
   "harness preset은 PR 검증 안전장치 때문에 live Open API 호출과 DB migration 실행을 자동화하지 않는다.",
   "이번 item은 전체 저장 직전 readiness gate이며 전체 데이터 저장 실행 item이 아니다.",
   "결함 수정 PR은 이 item에서 직접 섞지 않고 원인별 별도 work item으로 분리해 상세 PR 설명을 남긴다.",
+]
+
+[[items]]
+id = "rtms-experiment-delta-cleanup-guard"
+title_ko = "RTMS experiment delta cleanup guard"
+pr_type = "Chore"
+pr_title_ko = "RTMS 실험 delta cleanup guard"
+description_ko = "기존 저장 데이터는 baseline으로 보존하고, readiness나 재실험이 새로 만든 delta row만 식별 가능한 경우 삭제할 수 있도록 inventory, dry-run count, FK-safe cleanup 순서를 고정한다."
+status = "candidate"
+priority = 216
+targets = "backend"
+preset = "runtime-smoke"
+acceptance_criteria = [
+  "cleanup 전 raw_trade_ingest, trade_match_evidence, trade_source_key_registry, trade, parcel, complex, rtms_ingest_run의 baseline count와 MAX(id)를 기록한다.",
+  "기존 저장 데이터는 삭제 대상이 아니며 readiness 이후 새로 생성된 delta row만 삭제 대상으로 분리한다.",
+  "cleanup은 dry-run count를 먼저 출력하고, id 기준점과 RUN_START 이후 생성 row라는 두 조건을 만족하지 않으면 실행하지 않는다.",
+  "FK-safe 삭제 순서는 trade_source_key_registry, trade, trade_match_evidence, raw_trade_ingest, rtms_ingest_run, unreferenced complex_name_alias/complex/parcel 순서를 따른다.",
+  "새로 bootstrap된 complex/parcel은 기존 row가 아니고 trade/detail/marker 참조가 없을 때만 삭제 후보가 된다.",
+  "Docker volume 삭제, DB reset, docker compose down -v, production payload 저장은 하지 않는다.",
+  "public map/search/region/detail/trade API URL, request/response shape, amount unit, ProblemDetail shape를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "cleanup dry-run SQL 또는 helper가 실험 delta와 기존 baseline을 구분하지 못하면 실패하는 ops fixture를 만든다.",
+  "FK 삭제 순서가 trade_source_key_registry 또는 trade FK 때문에 실패하면 cleanup order regression을 고정한다.",
+  "complex/parcel 삭제 후보가 기존 marker/detail/read path row를 포함하면 safety assertion으로 실패시킨다.",
+]
+verification_commands = [
+  "docker compose -f infra/docker-compose.local.yml config",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+stop_conditions = [
+  "실험 delta row를 baseline row와 분리할 기준점이 없으면 중단한다.",
+  "삭제 대상 row가 public marker/detail/trade API에서 기존 데이터로 쓰이는지 판별할 수 없으면 중단한다.",
+  "Docker volume 삭제, DB reset, destructive migration이 필요하면 중단한다.",
+  "cleanup helper가 service key, local secret, raw production payload 저장을 요구하면 중단한다.",
+]
+risk_notes = [
+  "이미 저장된 RTMS 데이터는 cleanup 대상이 아니라 readiness 평가 baseline이다.",
+  "cleanup guard가 통과하기 전에는 추가 live ingest 실험을 반복하지 않는다.",
+]
+
+[[items]]
+id = "rtms-controlled-full-backfill-execution"
+title_ko = "RTMS controlled full backfill execution"
+pr_type = "Ops"
+pr_title_ko = "RTMS 전체 저장 controlled backfill 실행"
+description_ko = "readiness gate와 cleanup guard 이후 RTMS 전체 저장을 chunk 단위로 실행하되, 중간 점수와 문제 row를 확인하며 resumable backfill 상태로 운영 데이터를 남긴다."
+status = "candidate"
+priority = 214
+targets = "backend"
+preset = "runtime-smoke"
+acceptance_criteria = [
+  "rtms-special-region-readiness-gate와 rtms-experiment-delta-cleanup-guard가 완료된 상태에서만 시작한다.",
+  "실행 전 APT_SERVICE_KEY, COORDINATE_SOURCE_DB_JDBC_URL, HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY=false, coordinate source snapshot PASSED를 확인한다.",
+  "backfill은 chunk/job 상태로 재개 가능해야 하며, read/rawSaved/normalizedInserted/duplicateSkipped/canceled/matchFailed/parseFailed를 chunk별로 기록한다.",
+  "운영 저장이 목적이므로 성공한 full backfill row는 cleanup하지 않고 durable evidence로 남긴다.",
+  "실험 재시도나 실패한 임시 실행 row는 delta cleanup guard 기준을 만족할 때만 삭제한다.",
+  "평균 score 9점 미만, High 이상 결함, evidence 누락, 불확실한 complex_id normalized 연결이 나오면 전체 저장을 중단한다.",
+  "public map/search/region/detail/trade API URL, request/response shape, amount unit, ProblemDetail shape를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "backfill chunk status count가 pending/running/problem 상태를 설명하지 못하면 RtmsNationwideBackfillRunnerTest 또는 repository regression을 만든다.",
+  "raw row가 저장됐는데 trade_match_evidence가 없는 edge가 나오면 ingest lifecycle RED로 분리한다.",
+  "duplicate/cancel이 source-key registry나 fallback identity를 잘못 연결하면 storage quality integration RED로 분리한다.",
+]
+verification_commands = [
+  "docker compose -f infra/docker-compose.local.yml config",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "cleanup guard 없이 추가 live ingest를 반복해야 하면 중단한다.",
+  "API key, coordinate source DB env, coordinate source snapshot PASSED 중 하나라도 누락되면 중단한다.",
+  "운영 저장 row를 삭제해야만 다음 단계로 갈 수 있으면 중단한다.",
+  "public API URL, request field, response field, amount unit 변경이 필요하면 중단한다.",
+]
+risk_notes = [
+  "이 item은 실제 운영 데이터 적재 실행 후보이므로 PR 자동 검증으로 대체하지 않는다.",
+  "성공 row는 지우지 않고, 실패한 실험 delta만 cleanup guard를 통해 제한적으로 정리한다.",
+]
+
+[[items]]
+id = "post-rtms-backfill-read-path-smoke"
+title_ko = "Post RTMS backfill read path smoke"
+pr_type = "Test"
+pr_title_ko = "RTMS 저장 후 read path 스모크"
+description_ko = "대량 RTMS 저장 후 map/search/region/detail/trade read path가 저장된 운영 데이터 위에서 같은 parcelId/complexId 기준으로 연결되는지 검증하고, marker-safe 정책과 성능 기준을 evidence로 남긴다."
+status = "candidate"
+priority = 212
+targets = "both"
+preset = "runtime-smoke"
+acceptance_criteria = [
+  "좌표가 있는 active trade는 /api/v1/map/complexes marker에 노출되고 marker의 parcelId/complexId로 detail/trade API가 연결된다.",
+  "coordinate-pending parcel과 낮은 confidence coordinate는 public marker로 노출되지 않는다.",
+  "same-PNU multi-complex는 trusted complex_display_coordinate가 있을 때만 split marker로 노출된다.",
+  "검색 결과가 같은 parcel의 다른 complex를 가리킬 수 있으며 detail/trade 호출은 complexId scope를 유지한다.",
+  "대표 bounds query와 detail/trade query의 latency와 row count를 기록하되 ranking/trend/favorite/mail state에 의존하지 않는다.",
+  "frontend smoke를 실행할 경우 기존 public API adapter field를 변경하지 않고 browser evidence만 남긴다.",
+]
+first_red_candidates = [
+  "coordinate-pending row가 marker-safe query에 노출되면 JdbcMapMarkerRepositoryTest regression RED를 만든다.",
+  "marker complexId로 detail/trade가 scope되지 않으면 ReadApiControllerContractTest 또는 frontend adapter RED를 만든다.",
+  "same-PNU split/fallback policy가 저장 데이터에서 흔들리면 coordinate marker confidence regression으로 분리한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit 변경이 필요하면 중단한다.",
+  "read path smoke가 ranking, trend, favorite, alarm, mail, recommendation state를 요구하면 중단한다.",
+  "Docker volume 삭제, DB reset, 운영 저장 row cleanup이 필요하면 중단한다.",
+  "Kakao live browser 검증에 local key나 session secret 저장이 필요하면 중단한다.",
+]
+risk_notes = [
+  "이 item은 저장 후 사용자 관점 검증이며 데이터 적재 자체를 수행하지 않는다.",
+  "성능 문제는 SQL/index TDD 보강 slice로 분리하고 smoke PR에 섞지 않는다.",
 ]
 
 [[items]]
@@ -2083,4 +2204,52 @@ risk_notes = [
   "이번 slice는 저장 포맷과 정책 계산만 활성화하고 자동 재처리 실행은 후속 작업으로 남긴다.",
   "핵심 필드 기준이 엄격해져 기존 LEGACY RESOLVED 일부가 V14에서 PARTIAL로 재분류될 수 있다.",
   "metadata_attempts는 새 enrichment 저장부터 증가하며 legacy backfill은 이력을 소급 생성하지 않는다.",
+]
+
+[[items]]
+id = "backend-quality-refactor-hardening"
+title_ko = "Backend quality refactor hardening"
+pr_type = "Refactor"
+pr_title_ko = "백엔드 품질 리팩터링 정리"
+description_ko = "High~Medium 코드 스멜로 확인된 marker SQL 중복, coordinate source 문자열 산재, 텔레스코핑 생성자, RTMS lazy dependency 노출, ingest processor 긴 흐름, news persistence 설정 비대를 API 계약 변경 없이 정리한다."
+status = "planned"
+priority = 205
+targets = "backend"
+preset = "backend-quality"
+acceptance_criteria = [
+  "POST /api/v1/map/complexes URL, request field, response field, amount unit, empty-result behavior를 변경하지 않는다.",
+  "ComplexMarkerSql의 markerShapeFilter/tradeFirst는 공통 CTE 조립을 공유하고 same-PNU/redevelopment/footprint confidence marker 정책을 유지한다.",
+  "BUILDING_FOOTPRINT/PARCEL_FALLBACK 저장 값은 domain CoordinateSource에서 소유하고 production SQL/서비스에 문자열 리터럴을 반복하지 않는다.",
+  "ComplexCoordinateExceptionService의 identity blocking boolean pair는 domain policy 객체로 묶고 production 생성자는 전체 의존성 1개 형태로 좁힌다.",
+  "RtmsMonthlyRefreshRunner의 테스트 편의 생성자와 RTMS runner의 Supplier<Repository/Service> 노출을 제거하되 no-DB boot 지연 실패 동작은 유지한다.",
+  "TradeIngestItemProcessor.process()는 raw 저장, duplicate, cancellation, parse, match evidence, normalize 단계를 읽을 수 있게 분해하고 raw-before-normalized invariant를 유지한다.",
+  "NewsPersistenceConfiguration은 observation/relevance/signal/export 설정으로 분리하고 standalone stage runner 조건은 반복 SpEL 대신 조건 객체로 고정한다.",
+  "raw ingest, trade_match_evidence, normalized trade dedupe/cancel invariant와 complex_id 운영 relation은 변경하지 않는다.",
+]
+first_red_candidates = [
+  "ComplexMarkerSql refactor는 JdbcMapMarkerRepositoryTest 회귀로 marker 정책을 고정한다.",
+  "CoordinateSource 도입은 CoordinateDisplayPolicyTest와 coordinate/map persistence tests로 저장 값 호환성을 고정한다.",
+  "identity blocking policy 변경은 ComplexCoordinateExceptionServiceTest와 persistence configuration tests로 strict/degrade 정책을 고정한다.",
+  "RTMS dependency 변경은 RtmsMonthlyRefreshRunnerTest, RtmsOneShotTradeIngestRunnerTest, RtmsNationwideBackfillRunnerTest, bean wiring test로 no-DB boot 지연 실패를 고정한다.",
+  "TradeIngestItemProcessor 분해는 OpenApiTradeIngestServiceTest로 raw-first, duplicate, cancellation, match-failure evidence를 고정한다.",
+  "News 설정 분리는 NewsPersistenceConfigurationTest로 standalone runner 등록과 pipeline suppress 동작을 고정한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest",
+  "cd apps/api && ./gradlew test --tests com.home.domain.coordinate.CoordinateDisplayPolicyTest",
+  "cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.news.NewsPersistenceConfigurationTest",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "DB 저장 enum 값을 rename하거나 기존 data reinterpretation이 필요하면 중단한다.",
+  "domain/**에서 application, infrastructure, Spring, JDBC, HTTP dependency가 필요하면 중단한다.",
+  "Spring Batch 도입, worker/api 프로세스 분리, scheduler 구조 변경은 후속 slice로 분리한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "이번 slice는 behavior-preserving refactor가 중심이므로 public API와 DB migration은 건드리지 않는다.",
+  "RTMS no-DB boot는 직접 bean을 요구하지 않고 실행 시점 지연 실패를 유지한다.",
+  "News pipeline은 later-scope지만 설정 비대와 runner 조건 중복만 정리한다.",
 ]

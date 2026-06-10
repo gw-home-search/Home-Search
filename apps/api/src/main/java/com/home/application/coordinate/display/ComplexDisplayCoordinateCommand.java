@@ -3,6 +3,8 @@ package com.home.application.coordinate.display;
 import java.math.BigDecimal;
 import java.util.Objects;
 
+import com.home.domain.coordinate.CoordinateSource;
+
 public record ComplexDisplayCoordinateCommand(
 	Long complexId,
 	Long buildingFootprintId,
@@ -18,7 +20,7 @@ public record ComplexDisplayCoordinateCommand(
 		Objects.requireNonNull(latitude, "latitude is required");
 		Objects.requireNonNull(longitude, "longitude is required");
 		Objects.requireNonNull(coordinateSource, "coordinateSource is required");
-		if ("BUILDING_FOOTPRINT".equals(coordinateSource)) {
+		if (CoordinateSource.BUILDING_FOOTPRINT.matches(coordinateSource)) {
 			Objects.requireNonNull(buildingFootprintId, "buildingFootprintId is required for building coordinates");
 		}
 		if (confidence < 0 || confidence > 100) {

@@ -9,7 +9,7 @@
 
 - `k6`가 로컬에 설치되어 있어야 한다.
 - API가 실행 중이어야 한다.
-- local profile 기준 smoke 데이터는 `classpath:db/seed/local`의 `R__sample_home_search_data.sql`를 사용한다.
+- local profile은 기본 seed를 주입하지 않는다. 성능 기준선은 현재 local DB에 저장된 실제 read data 상태를 기준으로 해석한다.
 
 ```bash
 docker compose -f <local-compose-yml> up -d postgis api

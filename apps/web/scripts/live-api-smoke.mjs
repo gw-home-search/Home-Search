@@ -1,5 +1,6 @@
 const DEFAULT_API_BASE_URL = 'http://127.0.0.1:8080';
 const DEFAULT_QUERY = '힐스테이트세운센트럴';
+const FORBIDDEN_SYNTHETIC_SAMPLE_PATTERN = /\bSample(?:-dong| Apartment| address)?\b|Sample-dong|Sample address|Sample Apartment/i;
 const SEOUL_BOUNDS = {
   swLat: 37.45,
   swLng: 126.85,
@@ -187,7 +188,16 @@ async function fetchJson(path, options = {}) {
     throw new Error(`${options.method ?? 'GET'} ${path} failed: ${response.status} ${body}`);
   }
 
-  return response.json();
+  const payload = await response.json();
+  assertNoSyntheticSamplePayload(payload, `${options.method ?? 'GET'} ${path}`);
+  return payload;
+}
+
+function assertNoSyntheticSamplePayload(payload, sourceName) {
+  const serialized = JSON.stringify(payload);
+  if (FORBIDDEN_SYNTHETIC_SAMPLE_PATTERN.test(serialized)) {
+    throw new Error(`${sourceName} returned legacy local sample data.`);
+  }
 }
 
 function chooseComplex(searchResults, suggestions) {

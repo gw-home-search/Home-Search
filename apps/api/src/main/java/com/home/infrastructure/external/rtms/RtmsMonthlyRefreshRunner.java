@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.Supplier;
 
 import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
@@ -18,63 +17,34 @@ class RtmsMonthlyRefreshRunner {
 	private static final int MAX_FAILURE_REASON_LENGTH = 500;
 
 	private final RtmsApartmentTradeClient client;
-	private final Supplier<OpenApiTradeIngestService> ingestServiceSupplier;
-	private final Supplier<RtmsIngestRunRepository> ingestRunRepositorySupplier;
+	private final RtmsTradeIngestServiceReference ingestServiceReference;
+	private final RtmsIngestRunRepositoryReference ingestRunRepositoryReference;
 	private final Clock clock;
 	private final RtmsMonthlyRefreshRetryPolicy retryPolicy;
 
 	RtmsMonthlyRefreshRunner(
 		RtmsApartmentTradeClient client,
-		OpenApiTradeIngestService ingestService
-	) {
-		this(client, () -> ingestService, RtmsIngestRunRepository.noop(), Clock.systemUTC());
-	}
-
-	RtmsMonthlyRefreshRunner(
-		RtmsApartmentTradeClient client,
-		Supplier<OpenApiTradeIngestService> ingestServiceSupplier
-	) {
-		this(client, ingestServiceSupplier, RtmsIngestRunRepository.noop(), Clock.systemUTC());
-	}
-
-	RtmsMonthlyRefreshRunner(
-		RtmsApartmentTradeClient client,
-		Supplier<OpenApiTradeIngestService> ingestServiceSupplier,
-		RtmsIngestRunRepository ingestRunRepository,
-		Clock clock
-	) {
-		this(
-			client,
-			ingestServiceSupplier,
-			() -> ingestRunRepository,
-			clock,
-			RtmsMonthlyRefreshRetryPolicy.noBackoffDefault()
-		);
-	}
-
-	RtmsMonthlyRefreshRunner(
-		RtmsApartmentTradeClient client,
-		Supplier<OpenApiTradeIngestService> ingestServiceSupplier,
-		Supplier<RtmsIngestRunRepository> ingestRunRepositorySupplier,
+		RtmsTradeIngestServiceReference ingestServiceReference,
+		RtmsIngestRunRepositoryReference ingestRunRepositoryReference,
 		Clock clock,
 		RtmsMonthlyRefreshRetryPolicy retryPolicy
 	) {
 		this.client = Objects.requireNonNull(client);
-		this.ingestServiceSupplier = Objects.requireNonNull(ingestServiceSupplier);
-		this.ingestRunRepositorySupplier = Objects.requireNonNull(ingestRunRepositorySupplier);
+		this.ingestServiceReference = Objects.requireNonNull(ingestServiceReference);
+		this.ingestRunRepositoryReference = Objects.requireNonNull(ingestRunRepositoryReference);
 		this.clock = Objects.requireNonNull(clock);
 		this.retryPolicy = Objects.requireNonNull(retryPolicy);
 	}
 
 	RtmsMonthlyRefreshRunSummary refresh(String lawdCd, String dealYmd) {
-		OpenApiTradeIngestService ingestService = ingestServiceSupplier.get();
+		OpenApiTradeIngestService ingestService = ingestServiceReference.get();
 		RtmsApartmentTradeRequest currentRequest = new RtmsApartmentTradeRequest(lawdCd, dealYmd, 1);
 		return refreshMonth(ingestService, currentRequest);
 	}
 
 	RtmsMonthlyRefreshReport refresh(RtmsMonthlyRefreshPlan plan) {
 		Objects.requireNonNull(plan, "plan is required");
-		OpenApiTradeIngestService ingestService = ingestServiceSupplier.get();
+		OpenApiTradeIngestService ingestService = ingestServiceReference.get();
 		List<RtmsMonthlyRefreshRunSummary> summaries = new ArrayList<>();
 		for (RtmsApartmentTradeRequest request : plan.monthlyRequests()) {
 			summaries.add(refreshMonth(ingestService, request));
@@ -87,7 +57,7 @@ class RtmsMonthlyRefreshRunner {
 		RtmsApartmentTradeRequest firstRequest
 	) {
 		Instant startedAt = clock.instant();
-		RtmsIngestRunRepository ingestRunRepository = ingestRunRepositorySupplier.get();
+		RtmsIngestRunRepository ingestRunRepository = ingestRunRepositoryReference.get();
 		RtmsApartmentTradeRequest currentRequest = firstRequest;
 		IngestResult total = IngestResult.empty();
 		int pageCount = 0;

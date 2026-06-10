@@ -11,6 +11,7 @@ import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectio
 import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionService;
 import com.home.application.coordinate.override.CoordinateOverrideAdminRepository;
 import com.home.application.coordinate.override.CoordinateOverrideAdminService;
+import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
 import com.home.infrastructure.persistence.complex.JdbcComplexRelationRepository;
 
 import org.springframework.beans.factory.ObjectProvider;
@@ -60,8 +61,7 @@ class ComplexCoordinatePersistenceConfiguration {
 			new ComplexRelationClassifier(),
 			identityVerifierProvider.getIfAvailable(ComplexCoordinateIdentityVerifier::trusting),
 			buildingFootprintSourceProvider.getIfAvailable(BuildingFootprintSource::unavailable),
-			blockOnUnavailableIdentity,
-			blockOnFailedIdentity
+			new CoordinateIdentityBlockingPolicy(blockOnUnavailableIdentity, blockOnFailedIdentity)
 		);
 	}
 

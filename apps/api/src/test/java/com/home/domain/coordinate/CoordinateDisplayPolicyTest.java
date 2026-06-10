@@ -15,4 +15,13 @@ class CoordinateDisplayPolicyTest {
 		assertThat(CoordinateDisplayPolicy.isTrustedBuildingFootprintConfidence(80)).isTrue();
 		assertThat(CoordinateDisplayPolicy.isTrustedBuildingFootprintConfidence(90)).isTrue();
 	}
+
+	@Test
+	@DisplayName("coordinate source 저장 값은 기존 DB constraint 값을 유지한다")
+	void keepsStoredCoordinateSourceValues() {
+		assertThat(CoordinateSource.BUILDING_FOOTPRINT.storedValue()).isEqualTo("BUILDING_FOOTPRINT");
+		assertThat(CoordinateSource.PARCEL_FALLBACK.storedValue()).isEqualTo("PARCEL_FALLBACK");
+		assertThat(CoordinateSource.BUILDING_FOOTPRINT.matches("BUILDING_FOOTPRINT")).isTrue();
+		assertThat(CoordinateSource.BUILDING_FOOTPRINT.matches("PARCEL_FALLBACK")).isFalse();
+	}
 }

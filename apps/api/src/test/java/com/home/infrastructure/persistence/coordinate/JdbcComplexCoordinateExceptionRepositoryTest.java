@@ -16,6 +16,7 @@ import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionServic
 import com.home.application.coordinate.display.ResolvedDisplayCoordinate;
 import com.home.infrastructure.persistence.complex.JdbcComplexRelationRepository;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
+import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -120,7 +121,10 @@ class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSuppo
 		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
 			repository,
 			relationRepository,
-			new ComplexRelationClassifier()
+			new ComplexRelationClassifier(),
+			ComplexCoordinateIdentityVerifier.trusting(),
+			BuildingFootprintSource.unavailable(),
+			CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
 		);
 
 		service.stageExceptionCases(10);
@@ -161,7 +165,8 @@ class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSuppo
 			new JdbcComplexRelationRepository(jdbcClient),
 			new ComplexRelationClassifier(),
 			com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier.trusting(),
-			source
+			source,
+			CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
 		);
 
 		service.stageExceptionCases(10);

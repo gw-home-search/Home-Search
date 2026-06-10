@@ -15,6 +15,7 @@ import com.home.domain.coordinate.CoordinatePendingReason;
 import com.home.application.coordinate.override.CoordinatePendingSummary;
 import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
 import com.home.domain.coordinate.CoordinateDisplayPolicy;
+import com.home.domain.coordinate.CoordinateSource;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -87,7 +88,7 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			          FROM complex parcel_complex
 			          JOIN complex_display_coordinate display_coordinate
 			            ON display_coordinate.complex_id = parcel_complex.id
-			           AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
+			           AND display_coordinate.coordinate_source = :buildingFootprintSource
 			           AND display_coordinate.confidence >= :trustedBuildingCoordinateConfidence
 			          WHERE parcel_complex.parcel_id = p.id
 			      )
@@ -117,7 +118,7 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			          FROM complex parcel_complex
 			          JOIN complex_display_coordinate display_coordinate
 			            ON display_coordinate.complex_id = parcel_complex.id
-			           AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
+			           AND display_coordinate.coordinate_source = :buildingFootprintSource
 			           AND display_coordinate.confidence >= :trustedBuildingCoordinateConfidence
 			          WHERE parcel_complex.parcel_id = p.id
 			      )
@@ -125,7 +126,7 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			          SELECT 1
 			          FROM complex_display_coordinate display_coordinate
 			          WHERE display_coordinate.complex_id = c.id
-			            AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
+			            AND display_coordinate.coordinate_source = :buildingFootprintSource
 			            AND display_coordinate.confidence >= :trustedBuildingCoordinateConfidence
 			      )
 			),
@@ -159,6 +160,7 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			.param("offset", offset)
 			.param("trustedBuildingCoordinateConfidence",
 				CoordinateDisplayPolicy.TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE)
+			.param("buildingFootprintSource", CoordinateSource.BUILDING_FOOTPRINT.storedValue())
 			.query(this::mapPendingComplex)
 			.list();
 	}
@@ -203,7 +205,7 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			          FROM complex parcel_complex
 			          JOIN complex_display_coordinate display_coordinate
 			            ON display_coordinate.complex_id = parcel_complex.id
-			           AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
+			           AND display_coordinate.coordinate_source = :buildingFootprintSource
 			           AND display_coordinate.confidence >= :trustedBuildingCoordinateConfidence
 			          WHERE parcel_complex.parcel_id = p.id
 			      )
@@ -226,7 +228,7 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			          FROM complex parcel_complex
 			          JOIN complex_display_coordinate display_coordinate
 			            ON display_coordinate.complex_id = parcel_complex.id
-			           AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
+			           AND display_coordinate.coordinate_source = :buildingFootprintSource
 			           AND display_coordinate.confidence >= :trustedBuildingCoordinateConfidence
 			          WHERE parcel_complex.parcel_id = p.id
 			      )
@@ -234,7 +236,7 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			          SELECT 1
 			          FROM complex_display_coordinate display_coordinate
 			          WHERE display_coordinate.complex_id = c.id
-			            AND display_coordinate.coordinate_source = 'BUILDING_FOOTPRINT'
+			            AND display_coordinate.coordinate_source = :buildingFootprintSource
 			            AND display_coordinate.confidence >= :trustedBuildingCoordinateConfidence
 			      )
 			)
@@ -247,6 +249,7 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			""")
 			.param("trustedBuildingCoordinateConfidence",
 				CoordinateDisplayPolicy.TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE)
+			.param("buildingFootprintSource", CoordinateSource.BUILDING_FOOTPRINT.storedValue())
 			.query(this::mapPendingSummary)
 			.single();
 	}

@@ -27,6 +27,7 @@ import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifie
 import com.home.application.coordinate.identity.ComplexCoordinateParcelTargets;
 import com.home.application.coordinate.identity.ComplexCoordinateTarget;
 import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
+import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
 
 class ComplexCoordinateExceptionServiceTest {
 
@@ -50,11 +51,7 @@ class ComplexCoordinateExceptionServiceTest {
 				span(602L, "APT-602", "New", LocalDate.of(2020, 1, 1), LocalDate.of(2025, 1, 1), 2, LocalDate.of(2020, 1, 1))
 			)
 		));
-		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
-			repository,
-			relationRepository,
-			new ComplexRelationClassifier()
-		);
+		ComplexCoordinateExceptionService service = service(repository, relationRepository);
 
 		ComplexCoordinateExceptionResult result = service.stageExceptionCases(10);
 
@@ -91,11 +88,7 @@ class ComplexCoordinateExceptionServiceTest {
 				new BuildingFootprintCandidate(9002L, "1168010300101400001", "Tower B", "201동", bd("37.5020000"), bd("127.0020000"))
 			)
 		);
-		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
-			repository,
-			parcelId -> List.of(),
-			new ComplexRelationClassifier()
-		);
+		ComplexCoordinateExceptionService service = service(repository);
 
 		ComplexCoordinateResolutionResult result = service.resolveExceptionCase(1001L);
 
@@ -133,11 +126,7 @@ class ComplexCoordinateExceptionServiceTest {
 				new BuildingFootprintCandidate(9008L, "4128510200115660000", "중산마을", "1008동", bd("37.6896000"), bd("126.7781000"))
 			)
 		);
-		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
-			repository,
-			parcelId -> List.of(),
-			new ComplexRelationClassifier()
-		);
+		ComplexCoordinateExceptionService service = service(repository);
 
 		ComplexCoordinateResolutionResult result = service.resolveExceptionCase(1001L);
 
@@ -188,11 +177,7 @@ class ComplexCoordinateExceptionServiceTest {
 				new BuildingFootprintCandidate(9006L, "4128510200115660000", "중산마을", "1006동", bd("37.6890000"), bd("126.7779000"))
 			)
 		);
-		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
-			repository,
-			parcelId -> List.of(),
-			new ComplexRelationClassifier()
-		);
+		ComplexCoordinateExceptionService service = service(repository);
 
 		ComplexCoordinateResolutionResult result = service.resolveExceptionCase(1001L);
 
@@ -228,10 +213,8 @@ class ComplexCoordinateExceptionServiceTest {
 				importFootprint("4128510200115660000", "1006동", "37.6890000", "126.7779000")
 			)
 		));
-		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
+		ComplexCoordinateExceptionService service = service(
 			repository,
-			parcelId -> List.of(),
-			new ComplexRelationClassifier(),
 			ComplexCoordinateIdentityVerifier.trusting(),
 			footprintSource
 		);
@@ -268,11 +251,7 @@ class ComplexCoordinateExceptionServiceTest {
 				new BuildingFootprintCandidate(9002L, "1168010300101400001", "Tower A Annex", "101", bd("37.5020000"), bd("127.0020000"))
 			)
 		);
-		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
-			repository,
-			parcelId -> List.of(),
-			new ComplexRelationClassifier()
-		);
+		ComplexCoordinateExceptionService service = service(repository);
 
 		ComplexCoordinateResolutionResult result = service.resolveExceptionCase(1001L);
 
@@ -299,10 +278,8 @@ class ComplexCoordinateExceptionServiceTest {
 			"1168010300101400001",
 			List.of(new BuildingFootprintCandidate(9001L, "1168010300101400001", "Tower A", "101동", bd("37.5010000"), bd("127.0010000")))
 		);
-		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
+		ComplexCoordinateExceptionService service = service(
 			repository,
-			parcelId -> List.of(),
-			new ComplexRelationClassifier(),
 			(parcelTargets, target) -> ComplexCoordinateIdentityVerification.ambiguous("ODC has multiple PNU candidates")
 		);
 
@@ -334,10 +311,8 @@ class ComplexCoordinateExceptionServiceTest {
 			"1168010300101400001",
 			List.of(new BuildingFootprintCandidate(9001L, "1168010300101400001", "Tower A", "101동", bd("37.5010000"), bd("127.0010000")))
 		);
-		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
+		ComplexCoordinateExceptionService service = service(
 			repository,
-			parcelId -> List.of(),
-			new ComplexRelationClassifier(),
 			(parcelTargets, target) -> ComplexCoordinateIdentityVerification.unavailable("ODC identity candidate unavailable")
 		);
 
@@ -365,14 +340,11 @@ class ComplexCoordinateExceptionServiceTest {
 			"1168010300101400001",
 			List.of(new BuildingFootprintCandidate(9001L, "1168010300101400001", "Tower A", "101동", bd("37.5010000"), bd("127.0010000")))
 		);
-		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
+		ComplexCoordinateExceptionService service = service(
 			repository,
-			parcelId -> List.of(),
-			new ComplexRelationClassifier(),
 			(parcelTargets, target) -> ComplexCoordinateIdentityVerification.unavailable("ODC identity candidate unavailable"),
 			BuildingFootprintSource.unavailable(),
-			true,
-			false
+			new CoordinateIdentityBlockingPolicy(true, false)
 		);
 
 		ComplexCoordinateResolutionResult result = service.resolveExceptionCase(1001L);
@@ -403,10 +375,8 @@ class ComplexCoordinateExceptionServiceTest {
 			"1168010300101400001",
 			List.of(new BuildingFootprintCandidate(9001L, "1168010300101400001", "Tower A", "101동", bd("37.5010000"), bd("127.0010000")))
 		);
-		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
+		ComplexCoordinateExceptionService service = service(
 			repository,
-			parcelId -> List.of(),
-			new ComplexRelationClassifier(),
 			(parcelTargets, target) -> ComplexCoordinateIdentityVerification.failed("ODC identity lookup failed")
 		);
 
@@ -449,6 +419,76 @@ class ComplexCoordinateExceptionServiceTest {
 			bd(longitude),
 			"VWORLD_WFS",
 			"test"
+		);
+	}
+
+	private static ComplexCoordinateExceptionService service(InMemoryCoordinateRepository repository) {
+		return service(repository, parcelId -> List.of());
+	}
+
+	private static ComplexCoordinateExceptionService service(
+		InMemoryCoordinateRepository repository,
+		ComplexRelationRepository relationRepository
+	) {
+		return service(
+			repository,
+			relationRepository,
+			ComplexCoordinateIdentityVerifier.trusting(),
+			BuildingFootprintSource.unavailable(),
+			CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
+		);
+	}
+
+	private static ComplexCoordinateExceptionService service(
+		InMemoryCoordinateRepository repository,
+		ComplexCoordinateIdentityVerifier identityVerifier
+	) {
+		return service(repository, identityVerifier, BuildingFootprintSource.unavailable());
+	}
+
+	private static ComplexCoordinateExceptionService service(
+		InMemoryCoordinateRepository repository,
+		ComplexCoordinateIdentityVerifier identityVerifier,
+		BuildingFootprintSource buildingFootprintSource
+	) {
+		return service(
+			repository,
+			parcelId -> List.of(),
+			identityVerifier,
+			buildingFootprintSource,
+			CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
+		);
+	}
+
+	private static ComplexCoordinateExceptionService service(
+		InMemoryCoordinateRepository repository,
+		ComplexCoordinateIdentityVerifier identityVerifier,
+		BuildingFootprintSource buildingFootprintSource,
+		CoordinateIdentityBlockingPolicy identityBlockingPolicy
+	) {
+		return service(
+			repository,
+			parcelId -> List.of(),
+			identityVerifier,
+			buildingFootprintSource,
+			identityBlockingPolicy
+		);
+	}
+
+	private static ComplexCoordinateExceptionService service(
+		InMemoryCoordinateRepository repository,
+		ComplexRelationRepository relationRepository,
+		ComplexCoordinateIdentityVerifier identityVerifier,
+		BuildingFootprintSource buildingFootprintSource,
+		CoordinateIdentityBlockingPolicy identityBlockingPolicy
+	) {
+		return new ComplexCoordinateExceptionService(
+			repository,
+			relationRepository,
+			new ComplexRelationClassifier(),
+			identityVerifier,
+			buildingFootprintSource,
+			identityBlockingPolicy
 		);
 	}
 

@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 
 import com.home.application.map.ComplexMarkerQuery;
 import com.home.domain.coordinate.CoordinateDisplayPolicy;
+import com.home.domain.coordinate.CoordinateSource;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -20,7 +21,8 @@ record ComplexMarkerJdbcParameters(
 	BigDecimal areaMax,
 	Integer ageMin,
 	Integer ageMax,
-	Integer trustedBuildingCoordinateConfidence
+	Integer trustedBuildingCoordinateConfidence,
+	String buildingFootprintSource
 ) {
 
 	private static final BigDecimal TRADE_AMOUNT_UNITS_PER_EOK = BigDecimal.valueOf(10_000L);
@@ -40,7 +42,8 @@ record ComplexMarkerJdbcParameters(
 			pyeongToSquareMeters(query.pyeongMax()),
 			query.ageMin(),
 			query.ageMax(),
-			CoordinateDisplayPolicy.TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE
+			CoordinateDisplayPolicy.TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE,
+			CoordinateSource.BUILDING_FOOTPRINT.storedValue()
 		);
 	}
 
@@ -63,6 +66,7 @@ record ComplexMarkerJdbcParameters(
 			.param("neLat", neLat)
 			.param("neLng", neLng)
 			.param("trustedBuildingCoordinateConfidence", trustedBuildingCoordinateConfidence)
+			.param("buildingFootprintSource", buildingFootprintSource)
 			.param("priceMin", priceMin)
 			.param("priceMax", priceMax)
 			.param("areaMin", areaMin)

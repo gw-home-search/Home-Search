@@ -2084,3 +2084,76 @@ risk_notes = [
   "핵심 필드 기준이 엄격해져 기존 LEGACY RESOLVED 일부가 V14에서 PARTIAL로 재분류될 수 있다.",
   "metadata_attempts는 새 enrichment 저장부터 증가하며 legacy backfill은 이력을 소급 생성하지 않는다.",
 ]
+
+[[items]]
+id = "backend-quality-refactor-hardening"
+title_ko = "Backend quality refactor hardening"
+pr_type = "Refactor"
+pr_title_ko = "백엔드 품질 리팩터링 정리"
+description_ko = "High~Medium 코드 스멜로 확인된 marker SQL 중복, coordinate source 문자열 산재, 텔레스코핑 생성자, RTMS lazy dependency 노출, ingest processor 긴 흐름, news persistence 설정 비대를 API 계약 변경 없이 정리한다."
+status = "done"
+priority = 205
+targets = "backend"
+preset = "backend-quality"
+acceptance_criteria = [
+  "POST /api/v1/map/complexes URL, request field, response field, amount unit, empty-result behavior를 변경하지 않는다.",
+  "ComplexMarkerSql의 markerShapeFilter/tradeFirst는 공통 CTE 조립을 공유하고 same-PNU/redevelopment/footprint confidence marker 정책을 유지한다.",
+  "BUILDING_FOOTPRINT/PARCEL_FALLBACK 저장 값은 domain CoordinateSource에서 소유하고 production SQL/서비스에 문자열 리터럴을 반복하지 않는다.",
+  "ComplexCoordinateExceptionService의 identity blocking boolean pair는 domain policy 객체로 묶고 production 생성자는 전체 의존성 1개 형태로 좁힌다.",
+  "RtmsMonthlyRefreshRunner의 테스트 편의 생성자와 RTMS runner의 Supplier<Repository/Service> 노출을 제거하되 no-DB boot 지연 실패 동작은 유지한다.",
+  "TradeIngestItemProcessor.process()는 raw 저장, duplicate, cancellation, parse, match evidence, normalize 단계를 읽을 수 있게 분해하고 raw-before-normalized invariant를 유지한다.",
+  "NewsPersistenceConfiguration은 observation/relevance/signal/export 설정으로 분리하고 standalone stage runner 조건은 반복 SpEL 대신 조건 객체로 고정한다.",
+  "raw ingest, trade_match_evidence, normalized trade dedupe/cancel invariant와 complex_id 운영 relation은 변경하지 않는다.",
+]
+first_red_candidates = [
+  "ComplexMarkerSql refactor는 JdbcMapMarkerRepositoryTest 회귀로 marker 정책을 고정한다.",
+  "CoordinateSource 도입은 CoordinateDisplayPolicyTest와 coordinate/map persistence tests로 저장 값 호환성을 고정한다.",
+  "identity blocking policy 변경은 ComplexCoordinateExceptionServiceTest와 persistence configuration tests로 strict/degrade 정책을 고정한다.",
+  "RTMS dependency 변경은 RtmsMonthlyRefreshRunnerTest, RtmsOneShotTradeIngestRunnerTest, RtmsNationwideBackfillRunnerTest, bean wiring test로 no-DB boot 지연 실패를 고정한다.",
+  "TradeIngestItemProcessor 분해는 OpenApiTradeIngestServiceTest로 raw-first, duplicate, cancellation, match-failure evidence를 고정한다.",
+  "News 설정 분리는 NewsPersistenceConfigurationTest로 standalone runner 등록과 pipeline suppress 동작을 고정한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest",
+  "cd apps/api && ./gradlew test --tests com.home.domain.coordinate.CoordinateDisplayPolicyTest",
+  "cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.news.NewsPersistenceConfigurationTest",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+verification_evidence = [
+  "- `상태: Pass` = pass (targeted tests, backendQualityCheck, changed-file PR lint evidence 기준 완료)",
+  "- `최초 RED` = not run (behavior-preserving refactor라 신규 RED 대신 기존 회귀 테스트로 정책 보존을 확인)",
+  "- `예상 RED 실패` = pass (marker, coordinate, RTMS, ingest, news wiring 회귀가 깨지면 기존 tests가 실패하는 구조로 확인)",
+  "- `최소 GREEN` = pass (각 slice targeted test와 backendQualityCheck 통과)",
+  "- `First RED for behavior-preserving refactor` = not run (public API/DB behavior 변경이 아니라 기존 회귀 테스트로 정책 보존을 확인하는 리팩터링 slice)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest` = pass (ComplexMarkerSql 공통 CTE 조립 후 marker shape/trade-first 정책 회귀 통과)",
+  "- `cd apps/api && ./gradlew test --tests com.home.domain.coordinate.CoordinateDisplayPolicyTest` = pass (CoordinateSource 저장 값과 display policy 호환성 통과)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest --tests com.home.infrastructure.persistence.coordinate.JdbcComplexDisplayCoordinateProjectionRepositoryTest --tests com.home.infrastructure.persistence.coordinate.JdbcCoordinateOverrideAdminRepositoryTest` = pass (coordinate source parameter binding과 marker/override SQL 회귀 통과)",
+  "- `cd apps/api && ./gradlew test --tests com.home.domain.coordinate.ComplexCoordinateCaseStatusTest --tests com.home.application.coordinate.caseflow.ComplexCoordinateExceptionServiceTest --tests com.home.application.coordinate.readiness.ComplexCoordinateReadinessServiceTest` = pass (identity blocking policy와 readiness service 회귀 통과)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.coordinate.ComplexCoordinatePersistenceConfigurationTest --tests com.home.infrastructure.persistence.coordinate.ComplexCoordinateReadinessRunnerTest --tests com.home.infrastructure.persistence.coordinate.JdbcComplexCoordinateExceptionRepositoryTest --tests com.home.infrastructure.persistence.coordinate.JdbcComplexCoordinateReadinessIntegrationTest` = pass (coordinate persistence wiring과 JDBC 회귀 통과)",
+  "- `cd apps/api && ./gradlew test --tests com.home.infrastructure.external.rtms.RtmsOneShotTradeIngestRunnerTest --tests com.home.infrastructure.external.rtms.RtmsMonthlyRefreshRunnerTest --tests com.home.infrastructure.external.rtms.RtmsNationwideBackfillRunnerTest --tests com.home.infrastructure.external.rtms.RtmsNationwideBackfillBeanWiringTest --tests com.home.infrastructure.external.rtms.RtmsExternalApiConfigurationTest` = pass (RTMS lazy dependency reference와 no-DB boot 지연 실패 회귀 통과)",
+  "- `cd apps/api && ./gradlew test --tests com.home.application.ingest.trade.OpenApiTradeIngestServiceTest --tests com.home.application.ingest.trade.TradeIngestItemOutcomeTest --tests com.home.application.ingest.trade.ParsedRtmsTradeTest` = pass (TradeIngestItemProcessor 단계 분해 후 raw-first/duplicate/cancel/match failure 회귀 통과)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.news.NewsPersistenceConfigurationTest` = pass (news 설정 분리와 standalone/pipeline runner 조건 회귀 통과)",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, persistence, coverage, foundation, javadoc gate 통과)",
+  "- `python3 scripts/check-test-display-names.py` = pass (test display name policy 통과)",
+  "- `Coverage: >=90%` = pass (backendQualityCheck의 jacocoTestCoverageVerification과 coverageCheck 통과)",
+  "- `Docs/OpenAPI: generated + verified` = pass (backendQualityCheck의 restDocsTest, asciidoctor, openapi3, verifyOpenApiSpec, apiDocsCheck 통과)",
+  "- `python3 .codex/harness/project_terms_check.py` = pass (프로젝트 용어 점검 통과)",
+  "- `python3 .codex/harness/pr_lint.py --changed-files-file /tmp/backend-quality-refactor-hardening-changed-files.txt --evidence-policy strict --title '[Refactor] 백엔드 품질 리팩터링 정리' --base main --head feat/backend-quality-refactor-hardening-integration --draft --body-env PR_BODY` = pass (changed-file PR lint strict 통과)",
+  "- `git diff --check` = pass (공백 오류 없음)",
+  "- `contract-reviewer: 게이트 결정` = pass (public API URL/request/response/unit/ProblemDetail 변경 없음)",
+  "- `reviewer: 지적사항` = pass (코드 결함 지적사항 없음, 검증 공백 없음, 잔여 위험 없음)",
+  "- `다음 행동` = pass (GitHub draft PR diff와 checks 확인 후 수동 merge 결정)",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "DB 저장 enum 값을 rename하거나 기존 data reinterpretation이 필요하면 중단한다.",
+  "domain/**에서 application, infrastructure, Spring, JDBC, HTTP dependency가 필요하면 중단한다.",
+  "Spring Batch 도입, worker/api 프로세스 분리, scheduler 구조 변경은 후속 slice로 분리한다.",
+  "apps/web/** 변경이 필요하면 별도 frontend slice로 분리한다.",
+]
+risk_notes = [
+  "이번 slice는 behavior-preserving refactor가 중심이므로 public API와 DB migration은 건드리지 않는다.",
+  "RTMS no-DB boot는 직접 bean을 요구하지 않고 실행 시점 지연 실패를 유지한다.",
+  "News pipeline은 later-scope지만 설정 비대와 runner 조건 중복만 정리한다.",
+]

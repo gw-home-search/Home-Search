@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "build:admin": "VITE_APP_SURFACE=admin tsc -b && VITE_APP_SURFACE=admin vite build",
     "test": "vitest run",
+    "test:live-api": "node scripts/live-api-smoke.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {

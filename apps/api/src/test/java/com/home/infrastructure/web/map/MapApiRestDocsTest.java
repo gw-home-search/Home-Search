@@ -47,7 +47,7 @@ class MapApiRestDocsTest {
 	@DisplayName("POST /api/v1/map/regions REST Docs를 생성한다")
 	void documentRegionMarkers() throws Exception {
 		given(mapUseCase.getRegionMarkers(any(RegionMarkerQuery.class)))
-			.willReturn(List.of(new RegionMarkerResult(1L, "Seoul", 37.5663, 126.9780, null)));
+			.willReturn(List.of(new RegionMarkerResult(1L, "Seoul", 37.5663, 126.9780, null, 1200L)));
 
 		mockMvc.perform(post("/api/v1/map/regions")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -74,7 +74,8 @@ class MapApiRestDocsTest {
 					fieldWithPath("[].name").type(JsonFieldType.STRING).description("Region display name."),
 					fieldWithPath("[].lat").type(JsonFieldType.NUMBER).description("Marker latitude."),
 					fieldWithPath("[].lng").type(JsonFieldType.NUMBER).description("Marker longitude."),
-					fieldWithPath("[].trend").type(JsonFieldType.NULL).optional().description("Optional regional trend value.")
+					fieldWithPath("[].trend").type(JsonFieldType.NULL).optional().description("Optional regional trend value."),
+					fieldWithPath("[].unitCntSum").type(JsonFieldType.NUMBER).optional().description("Total household count under the region marker.")
 				),
 				resource(builder()
 					.tag("Map")
@@ -92,7 +93,8 @@ class MapApiRestDocsTest {
 						fieldWithPath("[].name").type(JsonFieldType.STRING).description("Region display name."),
 						fieldWithPath("[].lat").type(JsonFieldType.NUMBER).description("Marker latitude."),
 						fieldWithPath("[].lng").type(JsonFieldType.NUMBER).description("Marker longitude."),
-						fieldWithPath("[].trend").type(JsonFieldType.NULL).optional().description("Optional regional trend value.")
+						fieldWithPath("[].trend").type(JsonFieldType.NULL).optional().description("Optional regional trend value."),
+						fieldWithPath("[].unitCntSum").type(JsonFieldType.NUMBER).optional().description("Total household count under the region marker.")
 					)
 					.build())
 			));
@@ -153,7 +155,7 @@ class MapApiRestDocsTest {
 					fieldWithPath("[].lat").type(JsonFieldType.NUMBER).description("Marker latitude."),
 					fieldWithPath("[].lng").type(JsonFieldType.NUMBER).description("Marker longitude."),
 					fieldWithPath("[].latestDealAmount").type(JsonFieldType.NUMBER).description("Latest trade amount in 10,000 KRW units."),
-					fieldWithPath("[].unitCntSum").type(JsonFieldType.NUMBER).description("Total household count under the parcel.")
+					fieldWithPath("[].unitCntSum").type(JsonFieldType.VARIES).optional().description("Total household count under the parcel. May be null when metadata is unavailable.")
 				),
 				resource(builder()
 					.tag("Map")
@@ -180,7 +182,7 @@ class MapApiRestDocsTest {
 						fieldWithPath("[].lat").type(JsonFieldType.NUMBER).description("Marker latitude."),
 						fieldWithPath("[].lng").type(JsonFieldType.NUMBER).description("Marker longitude."),
 						fieldWithPath("[].latestDealAmount").type(JsonFieldType.NUMBER).description("Latest trade amount."),
-						fieldWithPath("[].unitCntSum").type(JsonFieldType.NUMBER).description("Total household count.")
+						fieldWithPath("[].unitCntSum").type(JsonFieldType.VARIES).optional().description("Total household count. May be null when metadata is unavailable.")
 					)
 					.build())
 			));

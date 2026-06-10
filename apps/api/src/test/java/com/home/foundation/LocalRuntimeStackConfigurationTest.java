@@ -49,7 +49,9 @@ class LocalRuntimeStackConfigurationTest {
 		assertThat(content).contains("HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY: ${HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY:-false}");
 		assertThat(content).contains("SPRING_FLYWAY_LOCATIONS: classpath:db/migration/api");
 		assertThat(content).contains("SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS: ${SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS:-*:missing}");
+		assertThat(content).contains("SPRING_FLYWAY_VALIDATE_ON_MIGRATE: ${SPRING_FLYWAY_VALIDATE_ON_MIGRATE:-false}");
 		assertThat(content).contains("VITE_API_SERVER_IP: ${VITE_API_SERVER_IP:-http://localhost:8080}");
+		assertThat(content).doesNotContain("VITE_KAKAO_MAP_APP_KEY: ${VITE_KAKAO_MAP_APP_KEY:-}");
 		assertThat(content).doesNotContain("APT_SERVICE_KEY:");
 		assertThat(content).doesNotContain("VW_SERVICE_KEY:");
 	}

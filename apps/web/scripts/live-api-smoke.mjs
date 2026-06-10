@@ -232,7 +232,7 @@ function assertComplexMarker(marker) {
   toRequiredNumber(marker.lat ?? marker.latitude, 'complex marker lat');
   toRequiredNumber(marker.lng ?? marker.longitude, 'complex marker lng');
   toNullableNumber(marker.latestDealAmount, 'complex marker latestDealAmount');
-  toRequiredNumber(marker.unitCntSum, 'complex marker unitCntSum');
+  toNullableNumber(marker.unitCntSum, 'complex marker unitCntSum');
 }
 
 function assertRegionMarker(marker) {

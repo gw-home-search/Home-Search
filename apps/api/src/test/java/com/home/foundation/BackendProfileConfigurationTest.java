@@ -53,6 +53,8 @@ class BackendProfileConfigurationTest {
 		assertThat(properties.getProperty("spring.flyway.clean-disabled")).isEqualTo("true");
 		assertThat(properties.getProperty("spring.flyway.ignore-migration-patterns"))
 			.isEqualTo("${SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS:*:missing}");
+		assertThat(properties.getProperty("spring.flyway.validate-on-migrate"))
+			.isEqualTo("${SPRING_FLYWAY_VALIDATE_ON_MIGRATE:false}");
 		assertThat(properties.getProperty("home.coordinate-source.db.jdbc-url"))
 			.isEqualTo("${COORDINATE_SOURCE_DB_JDBC_URL:}");
 		assertThat(properties.getProperty("home.coordinate-source.db.username"))

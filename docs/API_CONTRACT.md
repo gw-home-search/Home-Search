@@ -175,7 +175,8 @@ Response:
     "name": "Seoul",
     "lat": 37.5663,
     "lng": 126.9780,
-    "trend": null
+    "trend": null,
+    "unitCntSum": 1200
   }
 ]
 ```
@@ -187,6 +188,7 @@ Response fields:
 - `lat`: marker latitude.
 - `lng`: marker longitude.
 - `trend`: optional regional trend value. Home Search may return `null` or omit it.
+- `unitCntSum`: optional household count represented by this region marker.
 
 Status:
 
@@ -200,7 +202,7 @@ Migration notes:
 - Source repository aliases may not match the target field names exactly.
   Target Home Search should expose `name`, `lat`, and `lng`.
 - `unitCntSum` is not required for Home Search region markers. Frontend code must not
-  require it to render region markers.
+  require it to render region markers, but should display it when present.
 
 ### POST `/api/v1/map/complexes`
 
@@ -278,7 +280,8 @@ Response fields:
 - `lat`: marker latitude.
 - `lng`: marker longitude.
 - `latestDealAmount`: optional latest trade amount in 10,000 KRW units.
-- `unitCntSum`: household count represented by this marker.
+- `unitCntSum`: optional household count represented by this marker. May be
+  `null` when complex metadata has not been enriched yet.
 
 Status:
 
@@ -299,7 +302,9 @@ Migration notes:
   marker per complex. Redeveloped parcels return the current-generation complex
   marker. Unresolved or ambiguous cases fall back to one representative marker.
 - `unitCntSum` is the household count for a complex-level marker and the sum of
-  household counts for a representative fallback marker.
+  household counts for a representative fallback marker. It is `null` when the
+  marker has no household-count metadata; the backend must not turn missing
+  metadata into `0`.
 - `latestDealAmount` is the newest normalized `trade` amount for the marker's
   `complexId` when present, otherwise the newest trade under the parcel.
 - Price, area, unit, and age filters are applied to the marker row actually

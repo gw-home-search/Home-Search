@@ -96,6 +96,61 @@ describe('fetchComplexMarkers API 어댑터', () => {
     ]);
   });
 
+  it('marker 세대수 metadata가 없으면 unitCntSum을 null로 normalize한다', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse([
+          {
+            parcelId: 1001,
+            complexId: 501,
+            name: 'Sample Apartment',
+            lat: 37.5123,
+            lng: 127.0456,
+            latestDealAmount: 125000,
+            unitCntSum: null,
+          },
+          {
+            parcelId: 1002,
+            complexId: 502,
+            name: 'Legacy Apartment',
+            lat: 37.6,
+            lng: 127.1,
+            latestDealAmount: null,
+          },
+        ]),
+      ),
+    );
+
+    await expect(
+      fetchComplexMarkers({
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+      }),
+    ).resolves.toEqual([
+      {
+        parcelId: 1001,
+        complexId: 501,
+        name: 'Sample Apartment',
+        lat: 37.5123,
+        lng: 127.0456,
+        latestDealAmount: 125000,
+        unitCntSum: null,
+      },
+      {
+        parcelId: 1002,
+        complexId: 502,
+        name: 'Legacy Apartment',
+        lat: 37.6,
+        lng: 127.1,
+        latestDealAmount: null,
+        unitCntSum: null,
+      },
+    ]);
+  });
+
   it('valid empty response에서 empty marker list를 반환한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
 
@@ -122,7 +177,7 @@ describe('fetchComplexMarkers API 어댑터', () => {
     ).rejects.toThrow('Invalid public API complex marker response: expected an array');
   });
 
-  it('marker에 unit count가 없으면 clear contract error를 throw한다', async () => {
+  it('marker에 숫자가 아닌 unit count가 있으면 clear contract error를 throw한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -132,6 +187,7 @@ describe('fetchComplexMarkers API 어댑터', () => {
             lat: 37.5123,
             lng: 127.0456,
             latestDealAmount: 125000,
+            unitCntSum: 'many',
           },
         ]),
       ),

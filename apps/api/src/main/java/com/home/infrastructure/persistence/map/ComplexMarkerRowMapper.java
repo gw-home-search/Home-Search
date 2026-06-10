@@ -15,7 +15,7 @@ final class ComplexMarkerRowMapper {
 			resultSet.getDouble("lat"),
 			resultSet.getDouble("lng"),
 			longOrNull(resultSet, "latest_deal_amount"),
-			resultSet.getLong("unit_cnt_sum")
+			longOrNull(resultSet, "unit_cnt_sum")
 		);
 	}
 

@@ -23,7 +23,7 @@ export type ComplexMarker = {
   lat: number;
   lng: number;
   latestDealAmount: number | null;
-  unitCntSum: number;
+  unitCntSum: number | null;
 };
 
 type ComplexMarkerResponse = Partial<ComplexMarker> & {
@@ -67,7 +67,7 @@ function normalizeComplexMarker(marker: ComplexMarkerResponse): ComplexMarker {
     lat: toRequiredNumber(marker.lat ?? marker.latitude, 'lat'),
     lng: toRequiredNumber(marker.lng ?? marker.longitude, 'lng'),
     latestDealAmount: toNullableNumber(marker.latestDealAmount),
-    unitCntSum: toRequiredNumber(marker.unitCntSum, 'unitCntSum'),
+    unitCntSum: toNullableNumber(marker.unitCntSum, 'unitCntSum'),
   };
 }
 

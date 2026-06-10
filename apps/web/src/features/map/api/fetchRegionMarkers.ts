@@ -16,6 +16,7 @@ export type RegionMarker = {
   name: string;
   lat: number;
   lng: number;
+  unitCntSum: number | null;
 };
 
 type RegionMarkerResponse = {
@@ -26,6 +27,7 @@ type RegionMarkerResponse = {
   lng?: number | string;
   latitude?: number | string;
   longitude?: number | string;
+  unitCntSum?: number | string | null;
   trend?: unknown;
 };
 
@@ -61,6 +63,7 @@ function normalizeRegionMarker(marker: RegionMarkerResponse): RegionMarker {
     name: toRequiredString(marker.name ?? marker.regionName, 'name'),
     lat: toRequiredNumber(marker.lat ?? marker.latitude, 'lat'),
     lng: toRequiredNumber(marker.lng ?? marker.longitude, 'lng'),
+    unitCntSum: toOptionalNumber(marker.unitCntSum, 'unitCntSum'),
   };
 }
 
@@ -83,4 +86,12 @@ function toRequiredString(value: unknown, field: string): string {
   }
 
   return value;
+}
+
+function toOptionalNumber(value: unknown, field: string): number | null {
+  if (value == null) {
+    return null;
+  }
+
+  return toRequiredNumber(value, field);
 }

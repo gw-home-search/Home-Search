@@ -9,6 +9,7 @@ spring:
     locations: "${SPRING_FLYWAY_LOCATIONS:classpath:db/migration/api}"
     clean-disabled: true
     ignore-migration-patterns: "${SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS:*:missing}"
+    validate-on-migrate: "${SPRING_FLYWAY_VALIDATE_ON_MIGRATE:false}"
 
 management:
   endpoints:

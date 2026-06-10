@@ -1865,7 +1865,7 @@ title_ko = "RTMS daily refresh 3AM schedule"
 pr_type = "Feat"
 pr_title_ko = "RTMS 일일 실거래가 3시 저장 스케줄"
 description_ko = "Hermes Slack 알림이 연결된 RTMS daily refresh를 매일 새벽 3시 KST 기본 스케줄로 고정해 운영 가능한 일일 실거래가 저장 흐름을 닫는다."
-status = "planned"
+status = "done"
 priority = 178
 targets = "backend"
 preset = "backend-quality"
@@ -1903,6 +1903,36 @@ verification_commands = [
   "python3 .codex/harness/project_terms_check.py",
   "python3 .codex/harness/project_terms_check.py --self-test",
   "git diff --check",
+]
+verification_evidence = [
+  "상태: Pass (03:00 KST default cron RED/GREEN, backendQualityCheck, policy checks 통과)",
+  "최초 RED: RtmsDailyRefreshSchedulerTest와 RtmsDailyRefreshConfigurationTest에서 기본 cron이 0 0 3 * * * 이어야 하나 기존 0 15 5 * * * 라서 실패하도록 고정했다.",
+  "예상 RED 실패: scheduler @Scheduled cron과 application.yml cron 기본값 assertion이 각각 실패해야 한다.",
+  "- `cd apps/api && ./gradlew test --tests '*RtmsDailyRefresh*'` = fail (최초 RED: scheduler/application.yml 기본 cron이 0 15 5 * * * 라서 03:00 KST assertion 2건 실패)",
+  "- `docker compose -f infra/docker-compose.local.yml config` = pass (local compose 설정 렌더링 통과)",
+  "- `cd apps/api && ./gradlew test --tests '*RtmsDailyRefresh*' --tests '*RtmsMonthlyRefresh*'` = pass (03:00 KST 기본 cron, daily scheduler, Hermes Slack notifier, monthly refresh 회귀 통과)",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, persistence, coverage, javadoc gate 통과)",
+  "Coverage: >=90%",
+  "Docs/OpenAPI: generated + verified",
+  "- `python3 scripts/check-test-display-names.py` = pass (test display name policy 통과)",
+  "- `python3 .codex/harness/pr_lint.py --self-test` = pass (PR lint 자체 테스트 통과)",
+  "- `python3 .codex/harness/pr_context.py --self-test` = pass (PR context 자체 테스트 통과)",
+  "- `python3 .codex/harness/pr_body_check.py --self-test` = pass (PR body 검사 자체 테스트 통과)",
+  "- `python3 .codex/harness/worklog_sync.py --self-test` = pass (worklog sync 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_pr.py --self-test` = pass (draft PR helper 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_flow.py --self-test` = pass (harness flow 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_integrate.py --self-test` = pass (integration helper 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_plan.py --self-test` = pass (plan helper 자체 테스트 통과)",
+  "- `python3 .codex/harness/home_report.py --self-test` = pass (report helper 자체 테스트 통과)",
+  "- `.codex/harness/home --self-test` = pass (harness launcher 자체 테스트 통과)",
+  "- `python3 .codex/harness/skill_routing.py --self-test` = pass (skill routing 자체 테스트 통과)",
+  "- `python3 .codex/harness/user_language_check.py --self-test` = pass (사용자 노출 언어 점검 통과)",
+  "- `python3 .codex/harness/project_terms_check.py` = pass (프로젝트 용어 점검 통과)",
+  "- `python3 .codex/harness/project_terms_check.py --self-test` = pass (프로젝트 용어 self-test 통과)",
+  "- `git diff --check` = pass (공백 오류 없음)",
+  "contract-reviewer: 게이트 결정 = Pass (public API URL/request/response/unit/ProblemDetail 변경 없음)",
+  "reviewer: 지적사항 = none; 검증 공백 = live RTMS API와 real Hermes/Slack endpoint는 fixture/mock으로 대체; 잔여 위험 = 운영 env에서 enabled/lawdCds/Hermes 설정 주입 필요",
+  "다음 행동: harness --pr로 integration branch와 draft PR을 생성하고 GitHub에서 수동 review/merge한다.",
 ]
 stop_conditions = [
   "Spring Batch 도입, 전국 자동 lawdCd 생성, checkpoint 기반 증분 수집, distributed lock이 필요하면 별도 slice로 분리한다.",

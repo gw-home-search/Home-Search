@@ -330,7 +330,9 @@ function MapApp({
       parcelId: result.parcelId,
       complexId: result.complexId,
     });
-    focusMap(result.latitude, result.longitude, 4, SEARCH_FOCUS_DELTA);
+    if (hasDisplayCoordinate(result)) {
+      focusMap(result.latitude, result.longitude, 4, SEARCH_FOCUS_DELTA);
+    }
   }
 
   function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
@@ -867,6 +869,12 @@ function viewportAroundPoint(lat: number, lng: number, level: number, delta: num
     },
     level,
   };
+}
+
+function hasDisplayCoordinate(
+  result: ComplexSearchResult,
+): result is ComplexSearchResult & { latitude: number; longitude: number } {
+  return result.latitude != null && result.longitude != null;
 }
 
 function stringFormValue(formData: FormData, field: string): string {

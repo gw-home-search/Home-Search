@@ -737,6 +737,86 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
+  it('좌표 대기 search result도 complexId scope를 유지하고 detail/trade drawer를 연다', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            complexId: 801,
+            complexName: 'Coordinate Pending Complex',
+            parcelId: 3001,
+            latitude: null,
+            longitude: null,
+            address: 'Coordinate pending address',
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          parcelId: 3001,
+          complexId: 801,
+          latitude: null,
+          longitude: null,
+          address: 'Coordinate pending address',
+          tradeName: 'Coordinate Pending Trade',
+          name: 'Coordinate Pending Complex',
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          parcelId: 3001,
+          complexId: 801,
+          trades: [],
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp();
+    await flushAsyncState();
+
+    const searchInput = rootElement.querySelector<HTMLInputElement>(
+      'input[aria-label="단지 검색"]',
+    );
+    const searchForm = rootElement.querySelector<HTMLFormElement>(
+      'form[aria-label="단지 검색"]',
+    );
+
+    await act(async () => {
+      if (searchInput) {
+        searchInput.value = 'pending';
+      }
+      submitForm(searchForm);
+    });
+    await flushAsyncState();
+
+    const searchResult = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="검색 결과 선택 Coordinate Pending Complex"]',
+    );
+    expect(searchResult).not.toBeNull();
+
+    await act(async () => {
+      searchResult?.click();
+    });
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/detail/3001?complexId=801'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/trade/3001?complexId=801'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(rootElement.querySelector('[aria-label="단지 상세 패널"]')).not.toBeNull();
+    expect(rootElement.textContent).toContain('Coordinate Pending Complex');
+    expect(rootElement.textContent).toContain('거래 내역이 없습니다');
+
+    unmount(root);
+  });
+
   it('region navigation을 load하고 선택한 region detail로 map context를 refresh한다', async () => {
     const fetchMock = vi
       .fn()

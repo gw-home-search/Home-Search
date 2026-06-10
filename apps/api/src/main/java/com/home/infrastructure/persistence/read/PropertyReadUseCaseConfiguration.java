@@ -4,16 +4,29 @@ import com.home.application.read.EmptyPropertyReadRepository;
 import com.home.application.read.PropertyReadRepository;
 import com.home.application.read.PropertyReadUseCase;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.orm.jpa.SharedEntityManagerCreator;
 
 @Configuration(proxyBeanMethods = false)
 class PropertyReadUseCaseConfiguration {
 
 	@Bean
-	PropertyReadUseCase propertyReadUseCase(ObjectProvider<JdbcClient> jdbcClientProvider) {
+	PropertyReadUseCase propertyReadUseCase(
+		ObjectProvider<EntityManagerFactory> entityManagerFactoryProvider,
+		ObjectProvider<JdbcClient> jdbcClientProvider
+	) {
+		EntityManagerFactory entityManagerFactory = entityManagerFactoryProvider.getIfAvailable();
+		if (entityManagerFactory != null) {
+			EntityManager entityManager = SharedEntityManagerCreator.createSharedEntityManager(entityManagerFactory);
+			return new PropertyReadUseCase(new JpaPropertyReadRepository(entityManager));
+		}
+
 		JdbcClient jdbcClient = jdbcClientProvider.getIfAvailable();
 		PropertyReadRepository repository = jdbcClient == null
 			? new EmptyPropertyReadRepository()

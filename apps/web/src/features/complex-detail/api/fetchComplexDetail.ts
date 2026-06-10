@@ -4,8 +4,8 @@ import { resolveApiUrl } from '../../map/api/resolveApiUrl';
 export type ComplexDetail = {
   parcelId: number;
   complexId: number | null;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
   address: string;
   tradeName: string | null;
   name: string;
@@ -22,8 +22,8 @@ export type ComplexDetail = {
 type ComplexDetailResponse = {
   parcelId?: number | string;
   complexId?: number | string | null;
-  latitude?: number | string;
-  longitude?: number | string;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
   address?: string | null;
   tradeName?: string | null;
   name?: string | null;
@@ -66,8 +66,8 @@ function normalizeComplexDetail(detail: ComplexDetailResponse): ComplexDetail {
   return {
     parcelId: toRequiredNumber(detail.parcelId, 'parcelId'),
     complexId: toNullableNumber(detail.complexId, 'complexId'),
-    latitude: toRequiredNumber(detail.latitude, 'latitude'),
-    longitude: toRequiredNumber(detail.longitude, 'longitude'),
+    latitude: toNullableNumber(detail.latitude, 'latitude'),
+    longitude: toNullableNumber(detail.longitude, 'longitude'),
     address: toRequiredString(detail.address, 'address'),
     tradeName: toNullableString(detail.tradeName),
     name: toRequiredString(detail.name, 'name'),

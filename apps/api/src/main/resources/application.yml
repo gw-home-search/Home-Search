@@ -59,8 +59,10 @@ home:
         lookback-months: 1
         cron: "0 15 5 * * *"
         zone: Asia/Seoul
-        slack:
+        hermes:
           enabled: false
-          webhook-url: "${SLACK_WEBHOOK_URL:}"
+          url: "${HERMES_SLACK_URL:}"
+          auth-token: "${HERMES_AUTH_TOKEN:}"
+          channel: "${HERMES_SLACK_CHANNEL:}"
           connect-timeout-millis: 3000
           read-timeout-millis: 3000

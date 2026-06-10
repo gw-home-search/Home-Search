@@ -29,15 +29,23 @@ class RtmsDailyRefreshConfiguration {
 
 	@Bean
 	RtmsDailyRefreshNotifier rtmsDailyRefreshNotifier(
-		@Value("${home.ingest.rtms.daily.slack.enabled:false}") boolean enabled,
-		@Value("${home.ingest.rtms.daily.slack.webhook-url:${SLACK_WEBHOOK_URL:}}") String webhookUrl,
-		@Value("${home.ingest.rtms.daily.slack.connect-timeout-millis:3000}") int connectTimeoutMillis,
-		@Value("${home.ingest.rtms.daily.slack.read-timeout-millis:3000}") int readTimeoutMillis
+		@Value("${home.ingest.rtms.daily.hermes.enabled:false}") boolean enabled,
+		@Value("${home.ingest.rtms.daily.hermes.url:${HERMES_SLACK_URL:}}") String url,
+		@Value("${home.ingest.rtms.daily.hermes.auth-token:${HERMES_AUTH_TOKEN:}}") String authToken,
+		@Value("${home.ingest.rtms.daily.hermes.channel:${HERMES_SLACK_CHANNEL:}}") String channel,
+		@Value("${home.ingest.rtms.daily.hermes.connect-timeout-millis:3000}") int connectTimeoutMillis,
+		@Value("${home.ingest.rtms.daily.hermes.read-timeout-millis:3000}") int readTimeoutMillis
 	) {
-		if (!enabled || webhookUrl == null || webhookUrl.isBlank()) {
+		if (!enabled || url == null || url.isBlank() || channel == null || channel.isBlank()) {
 			return RtmsDailyRefreshNotifier.noop();
 		}
-		return new RtmsDailyRefreshWebhookNotifier(webhookUrl.trim(), connectTimeoutMillis, readTimeoutMillis);
+		return new RtmsDailyRefreshHermesNotifier(
+			url.trim(),
+			authToken == null ? "" : authToken.trim(),
+			channel.trim(),
+			connectTimeoutMillis,
+			readTimeoutMillis
+		);
 	}
 
 	@Bean

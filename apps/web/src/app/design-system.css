@@ -21,6 +21,7 @@
   --hs-color-error-soft: #f8edeb;
   --hs-color-grid-line: rgba(255, 255, 255, 0.7);
   --hs-color-layer: rgba(255, 255, 255, 0.97);
+  --hs-color-layer-strong: rgba(255, 255, 255, 0.99);
 
   --hs-text-primary: var(--hs-color-ink);
   --hs-text-secondary: var(--hs-color-muted);
@@ -62,6 +63,7 @@
   --hs-shadow-drawer: 0 14px 32px rgba(23, 32, 42, 0.2);
   --hs-shadow-marker: 0 3px 8px rgba(23, 32, 42, 0.18);
   --hs-focus-ring: 0 0 0 3px rgba(14, 107, 94, 0.22);
+  --hs-focus-ring-strong: 0 0 0 3px rgba(21, 56, 71, 0.28);
   --hs-map-grid-background:
     linear-gradient(90deg, var(--hs-color-grid-line) 1px, transparent 1px),
     linear-gradient(180deg, var(--hs-color-grid-line) 1px, transparent 1px),

@@ -39,7 +39,7 @@ class RtmsDailyRefreshScheduler {
 	}
 
 	@Scheduled(
-		cron = "${home.ingest.rtms.daily.cron:0 15 5 * * *}",
+		cron = "${home.ingest.rtms.daily.cron:0 0 3 * * *}",
 		zone = "${home.ingest.rtms.daily.zone:Asia/Seoul}"
 	)
 	void runDue() {

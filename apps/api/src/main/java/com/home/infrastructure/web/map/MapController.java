@@ -95,7 +95,8 @@ public class MapController {
 			result.name(),
 			result.lat(),
 			result.lng(),
-			result.trend()
+			result.trend(),
+			result.unitCntSum()
 		);
 	}
 }

@@ -294,7 +294,7 @@ describe('App map-first shell 화면', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 
-    const { root, rootElement } = await renderApp();
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
     await flushAsyncState();
 
     expect(rootElement.querySelector('[data-ui-surface="map-first"]')).not.toBeNull();
@@ -358,6 +358,161 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
+  it('초기 탐색 패널은 레거시처럼 검색 입력과 지역 내비게이션을 기본으로 연다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+
+    const { root, rootElement } = await renderApp();
+    await flushAsyncState();
+
+    expect(rootElement.querySelector('[role="tablist"]')).toBeNull();
+    expect(rootElement.querySelector('input[aria-label="단지 검색"]')).not.toBeNull();
+    expect(rootElement.querySelector('#exploration-panel-region')?.hasAttribute('hidden')).toBe(false);
+
+    unmount(root);
+  });
+
+  it('단지 검색 입력은 레거시처럼 debounce 후 검색 목록 모드로 전환한다', async () => {
+    const fetchMock = vi.fn((url: RequestInfo | URL) => {
+      const requestUrl = String(url);
+
+      if (requestUrl === resolveApiUrl('/api/v1/map/regions')) {
+        return Promise.resolve(jsonResponse([]));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/search/complexes/suggestions?q=Sample')) {
+        return Promise.resolve(jsonResponse([]));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/search/complexes?q=Sample')) {
+        return Promise.resolve(jsonResponse([
+          {
+            complexId: 501,
+            complexName: 'Sample Apartment',
+            parcelId: 1001,
+            latitude: 37.5123,
+            longitude: 127.0456,
+            address: 'Sample address',
+          },
+        ]));
+      }
+
+      return Promise.resolve(errorResponse(404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp();
+    await flushAsyncState();
+
+    const searchInput = rootElement.querySelector<HTMLInputElement>(
+      'input[aria-label="단지 검색"]',
+    );
+    await act(async () => {
+      if (searchInput) {
+        searchInput.value = 'Sample';
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+    await waitForMillis(350);
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/search/complexes?q=Sample'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(rootElement.querySelector<HTMLElement>('#exploration-panel')?.dataset.sidebarMode).toBe(
+      'search',
+    );
+    expect(rootElement.querySelector('#exploration-panel-search')?.hasAttribute('hidden')).toBe(
+      false,
+    );
+    expect(rootElement.querySelector('#exploration-panel-region')?.hasAttribute('hidden')).toBe(
+      true,
+    );
+    expect(
+      rootElement.querySelector('button[aria-label="검색 결과 선택 Sample Apartment"]'),
+    ).not.toBeNull();
+
+    unmount(root);
+  });
+
+  it('단지 선택은 레거시처럼 왼쪽 sidebar를 상세 모드로 바꾸고 뒤로가기로 지역 탐색에 복귀한다', async () => {
+    const fetchMock = vi.fn((url: RequestInfo | URL) => {
+      const requestUrl = String(url);
+
+      if (requestUrl === resolveApiUrl('/api/v1/map/complexes')) {
+        return Promise.resolve(jsonResponse([
+          {
+            parcelId: 1001,
+            complexId: 501,
+            lat: 37.5123,
+            lng: 127.0456,
+            latestDealAmount: 125000,
+            unitCntSum: 740,
+          },
+        ]));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/detail/1001?complexId=501')) {
+        return Promise.resolve(jsonResponse({
+          parcelId: 1001,
+          complexId: 501,
+          latitude: 37.5123,
+          longitude: 127.0456,
+          address: 'Sample address',
+          tradeName: 'Sample trade name',
+          name: 'Sample complex name',
+          unitCnt: 740,
+        }));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/trade/1001?complexId=501')) {
+        return Promise.resolve(jsonResponse({
+          parcelId: 1001,
+          complexId: 501,
+          trades: [],
+        }));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/detail/1001/complexes')) {
+        return Promise.resolve(jsonResponse([]));
+      }
+
+      return Promise.resolve(errorResponse(404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+    await flushAsyncState();
+
+    const markerButton = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="필지 1001 단지 501 상세 열기"]',
+    );
+    await act(async () => {
+      markerButton?.click();
+    });
+    await flushAsyncState();
+
+    const explorationPanel = rootElement.querySelector<HTMLElement>('#exploration-panel');
+    expect(explorationPanel?.dataset.sidebarMode).toBe('detail');
+    expect(rootElement.querySelector('[data-ui-layer="detail-sidebar"]')).not.toBeNull();
+    expect(rootElement.querySelector('.detail-drawer')).toBeNull();
+    expect(rootElement.textContent).toContain('Sample complex name');
+
+    const backButton = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="상세에서 뒤로가기"]',
+    );
+    await act(async () => {
+      backButton?.click();
+    });
+
+    expect(explorationPanel?.dataset.sidebarMode).toBe('region');
+    expect(rootElement.querySelector('#exploration-panel-region')?.hasAttribute('hidden')).toBe(
+      false,
+    );
+
+    unmount(root);
+  });
+
   it('map surface를 block하지 않고 marker loading state를 표시한다', async () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => undefined)));
 
@@ -377,10 +532,11 @@ describe('App map-first shell 화면', () => {
     await flushAsyncState();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/map/complexes'),
+      resolveApiUrl('/api/v1/map/regions'),
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: expect.stringContaining('"region":"si-do"'),
       }),
     );
     expect(rootElement.querySelector('[aria-label="지도 화면"]')).not.toBeNull();
@@ -512,7 +668,7 @@ describe('App map-first shell 화면', () => {
   it('map surface를 제거하지 않고 non-blocking marker error를 표시한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(errorResponse(500)));
 
-    const { root, rootElement } = await renderApp();
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
     await flushAsyncState();
     await flushAsyncState();
 
@@ -526,7 +682,7 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
-  it('complex marker에서 detail drawer를 열고 documented detail/trade data를 load한다', async () => {
+  it('complex marker에서 detail sidebar를 열고 documented detail/trade data를 load한다', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -594,7 +750,7 @@ describe('App map-first shell 화면', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
 
-    const { root, rootElement } = await renderApp();
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
     await flushAsyncState();
 
     const markerButton = rootElement.querySelector<HTMLButtonElement>(
@@ -620,7 +776,7 @@ describe('App map-first shell 화면', () => {
       expect.objectContaining({ method: 'GET' }),
     );
     expect(rootElement.querySelector('[aria-label="단지 상세 패널"]')).not.toBeNull();
-    expect(rootElement.querySelector('[data-ui-layer="detail-drawer"]')).not.toBeNull();
+    expect(rootElement.querySelector('[data-ui-layer="detail-sidebar"]')).not.toBeNull();
     expect(rootElement.querySelector('[data-detail-section="identity"]')).not.toBeNull();
     expect(rootElement.querySelector('[data-detail-section="trade-history"]')).not.toBeNull();
     expect(rootElement.textContent).toContain('Sample complex name');
@@ -649,7 +805,7 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
-  it('Kakao CustomOverlay complex marker에서 detail drawer를 연다', async () => {
+  it('Kakao CustomOverlay complex marker에서 detail sidebar를 연다', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -708,7 +864,7 @@ describe('App map-first shell 화면', () => {
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('kakao', sdk.kakao);
 
-    const { root, rootElement } = await renderApp();
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
     await flushAsyncState();
     await flushAsyncState();
 
@@ -790,7 +946,7 @@ describe('App map-first shell 화면', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
 
-    const { root, rootElement } = await renderApp();
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
     await flushAsyncState();
 
     const searchInput = rootElement.querySelector<HTMLInputElement>(
@@ -854,7 +1010,7 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
-  it('좌표 대기 search result도 complexId scope를 유지하고 detail/trade drawer를 연다', async () => {
+  it('좌표 대기 search result도 complexId scope를 유지하고 detail/trade sidebar를 연다', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse([]))
@@ -1007,7 +1163,7 @@ describe('App map-first shell 화면', () => {
     );
 
     const regionButton = rootElement.querySelector<HTMLButtonElement>(
-      'button[aria-label="지역 열기 Seoul"]',
+      'button[aria-label="지역 이동 Seoul"]',
     );
     expect(regionButton).not.toBeNull();
 
@@ -1033,6 +1189,144 @@ describe('App map-first shell 화면', () => {
     );
     expect(rootElement.textContent).toContain('Gangnam-gu');
     expect(rootElement.textContent).toContain('Region Complex');
+
+    unmount(root);
+  });
+
+  it('탐색 패널은 레거시처럼 지역 목록을 바로 불러오고 단계적으로 drill-down한다', async () => {
+    const fetchMock = vi.fn((url: RequestInfo | URL) => {
+      const requestUrl = String(url);
+
+      if (requestUrl === resolveApiUrl('/api/v1/map/complexes')) {
+        return Promise.resolve(jsonResponse([]));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/map/regions')) {
+        return Promise.resolve(jsonResponse([]));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/region')) {
+        return Promise.resolve(jsonResponse([{ id: 1, name: 'Seoul' }]));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/region/1')) {
+        return Promise.resolve(jsonResponse({
+          id: 1,
+          name: 'Seoul',
+          latitude: 37.5663,
+          longitude: 126.978,
+          children: [{ id: 11, name: 'Gangnam-gu' }],
+        }));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/region/1/complexes?limit=20&offset=0')) {
+        return Promise.resolve(jsonResponse([]));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/region/11')) {
+        return Promise.resolve(jsonResponse({
+          id: 11,
+          name: 'Gangnam-gu',
+          latitude: 37.5172,
+          longitude: 127.0473,
+          children: [{ id: 111, name: 'Apgujeong-dong' }],
+        }));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/region/11/complexes?limit=20&offset=0')) {
+        return Promise.resolve(jsonResponse([]));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/region/111')) {
+        return Promise.resolve(jsonResponse({
+          id: 111,
+          name: 'Apgujeong-dong',
+          latitude: 37.5271,
+          longitude: 127.0287,
+          children: [],
+        }));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/region/111/complexes?limit=20&offset=0')) {
+        return Promise.resolve(jsonResponse([
+          {
+            complexId: 901,
+            complexName: 'Apgujeong Region Complex',
+            parcelId: 3001,
+            latitude: 37.5271,
+            longitude: 127.0287,
+            address: 'Apgujeong address',
+            unitCnt: 810,
+          },
+        ]));
+      }
+
+      return Promise.resolve(errorResponse(404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp({ initialRegionLoad: true });
+    await flushAsyncState();
+    await flushAsyncState();
+
+    expect(rootElement.querySelector('[role="tablist"]')).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/region'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(rootElement.textContent).toContain('시도 선택');
+
+    const sidoButton = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="지역 이동 Seoul"]',
+    );
+    await act(async () => {
+      sidoButton?.click();
+    });
+    await flushAsyncState();
+
+    expect(rootElement.textContent).toContain('Seoul');
+    expect(rootElement.textContent).toContain('시군구 선택');
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      resolveApiUrl('/api/v1/map/regions'),
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"region":"si-gun-gu"'),
+      }),
+    );
+
+    const sigunguButton = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="지역 이동 Gangnam-gu"]',
+    );
+    await act(async () => {
+      sigunguButton?.click();
+    });
+    await flushAsyncState();
+
+    expect(rootElement.textContent).toContain('Gangnam-gu');
+    expect(rootElement.textContent).toContain('읍면동 선택');
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      resolveApiUrl('/api/v1/map/regions'),
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"region":"eup-myeon-dong"'),
+      }),
+    );
+
+    const emdButton = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="지역 이동 Apgujeong-dong"]',
+    );
+    await act(async () => {
+      emdButton?.click();
+    });
+    await flushAsyncState();
+
+    expect(rootElement.textContent).toContain('Apgujeong Region Complex');
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      resolveApiUrl('/api/v1/map/complexes'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    expect(rootElement.querySelector('input[aria-label="단지 검색"]')).not.toBeNull();
 
     unmount(root);
   });
@@ -1299,7 +1593,7 @@ describe('App map-first shell 화면', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 
-    const { root, rootElement } = await renderApp();
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
     await flushAsyncState();
 
     setInputValue(rootElement, 'input[aria-label="최소 평형"]', '20');
@@ -1377,7 +1671,7 @@ describe('App map-first shell 화면', () => {
     vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('kakao', sdk.kakao);
 
-    const { root, rootElement } = await renderApp();
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
     await flushAsyncState();
     await flushAsyncState();
 
@@ -1508,6 +1802,83 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
+  it('key가 없어도 대체 지도 위에 지역 marker를 표시하고 바로 다음 단계로 이동한다', async () => {
+    const fetchMock = vi.fn((url: RequestInfo | URL) => {
+      if (String(url) === resolveApiUrl('/api/v1/map/regions')) {
+        return Promise.resolve(jsonResponse([
+          {
+            id: 1,
+            name: 'Seoul',
+            lat: 37.5663,
+            lng: 126.978,
+            unitCntSum: 1200,
+          },
+        ]));
+      }
+
+      return Promise.resolve(jsonResponse([]));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp({ kakaoMapAppKey: '' });
+    await flushAsyncState();
+    await flushAsyncState();
+
+    const fallbackMarkerLayer = rootElement.querySelector('[aria-label="대체 지도 마커"]');
+    const fallbackMarker = rootElement.querySelector<HTMLButtonElement>(
+      '[data-fallback-marker-id="region-1"]',
+    );
+    expect(fallbackMarkerLayer).not.toBeNull();
+    expect(fallbackMarker?.textContent).toContain('Seoul');
+    expect(fallbackMarker?.textContent).toContain('1,200세대');
+
+    await act(async () => {
+      fallbackMarker?.click();
+    });
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      resolveApiUrl('/api/v1/map/regions'),
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"region":"si-gun-gu"'),
+      }),
+    );
+
+    unmount(root);
+  });
+
+  it('지역 marker 세대수가 없으면 0세대 대신 세대수 없음으로 표시한다', async () => {
+    const fetchMock = vi.fn((url: RequestInfo | URL) => {
+      if (String(url) === resolveApiUrl('/api/v1/map/regions')) {
+        return Promise.resolve(jsonResponse([
+          {
+            id: 1,
+            name: 'Seoul',
+            lat: 37.5663,
+            lng: 126.978,
+            unitCntSum: null,
+          },
+        ]));
+      }
+
+      return Promise.resolve(jsonResponse([]));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp({ kakaoMapAppKey: '' });
+    await flushAsyncState();
+    await flushAsyncState();
+
+    const fallbackMarker = rootElement.querySelector<HTMLButtonElement>(
+      '[data-fallback-marker-id="region-1"]',
+    );
+    expect(fallbackMarker?.textContent).toContain('세대수 없음');
+    expect(fallbackMarker?.textContent).not.toContain('0세대');
+
+    unmount(root);
+  });
+
   it('Kakao CustomOverlay marker를 rendering하고 unmount 시 clear한다', async () => {
     const sdk = createFakeKakaoSdk({
       bounds: {
@@ -1590,6 +1961,65 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
+  it('Kakao CustomOverlay region marker 클릭은 레거시처럼 바로 다음 지도 단계로 이동한다', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            id: 1,
+            name: 'Seoul',
+            lat: 37.5663,
+            lng: 126.978,
+            unitCntSum: 1200,
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse([]));
+    const sdk = createFakeKakaoSdk({
+      bounds: {
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+      },
+      level: 10,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 10 });
+    await flushAsyncState();
+    await flushAsyncState();
+
+    const regionOverlayButton = sdk.overlays[0]?.content as HTMLButtonElement | undefined;
+    expect(regionOverlayButton).not.toBeNull();
+    expect(regionOverlayButton?.getAttribute('aria-label')).toBe('지역 이동 Seoul');
+    expect(regionOverlayButton?.textContent).toContain('1,200세대');
+
+    await act(async () => {
+      regionOverlayButton?.click();
+    });
+    await flushAsyncState();
+
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/region/1'),
+      expect.anything(),
+    );
+    expect(sdk.map.setCenter).toHaveBeenCalled();
+    expect(sdk.map.setLevel).toHaveBeenLastCalledWith(8);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      resolveApiUrl('/api/v1/map/regions'),
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"region":"si-gun-gu"'),
+      }),
+    );
+
+    unmount(root);
+  });
+
   it('Kakao SDK script가 resolve될 때까지 loading map runtime status를 표시한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
 
@@ -1637,7 +2067,7 @@ async function renderApp(props?: TestAppProps): Promise<{ root: Root; rootElemen
   const root = createRoot(rootElement);
 
   await act(async () => {
-    root.render(<App {...props} />);
+    root.render(<App initialRegionLoad={false} {...props} />);
   });
 
   return { root, rootElement };
@@ -1654,6 +2084,14 @@ async function flushAsyncState(): Promise<void> {
 async function flushLazyRoute(): Promise<void> {
   await flushAsyncState();
   await flushAsyncState();
+}
+
+async function waitForMillis(ms: number): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  });
 }
 
 function unmount(root: Root): void {
@@ -1763,6 +2201,7 @@ function createFakeKakaoSdk(options: { bounds: FakeBounds; level: number }) {
       getNorthEast: () => latLng(bounds.neLat, bounds.neLng),
     }),
     getLevel: () => level,
+    setCenter: vi.fn(),
     setLevel: vi.fn((nextLevel: number) => {
       level = nextLevel;
     }),

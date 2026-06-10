@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from 'react';
 
 import {
   fetchComplexDetail,
@@ -50,6 +57,7 @@ import './App.css';
 type MarkerRequestState = 'loading' | 'ready' | 'empty' | 'error';
 type DetailRequestState = 'idle' | 'loading' | 'ready' | 'error';
 type PanelRequestState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
+type SidebarMode = 'region' | 'search' | 'detail';
 
 const INITIAL_MARKER_BOUNDS: MapBoundsRequest = {
   swLat: 37.45,
@@ -76,9 +84,16 @@ type ComplexSelection = {
 };
 
 type ComplexMapMarker = Extract<MapMarkersResult, { kind: 'complex' }>['markers'][number];
+type RegionMapMarker = Extract<MapMarkersResult, { kind: 'region' }>['markers'][number];
+
+type RegionTrailItem = {
+  id: number;
+  name: string;
+};
 
 type AppProps = {
   initialMapLevel?: number;
+  initialRegionLoad?: boolean;
   kakaoMapAppKey?: string;
 };
 
@@ -94,10 +109,11 @@ const EMPTY_COMPLEX_MARKER_FILTERS: Required<ComplexMarkerFilters> = {
 };
 
 const SEARCH_FOCUS_DELTA = 0.01;
-const REGION_FOCUS_DELTA = 0.05;
+const SEARCH_DEBOUNCE_MILLIS = 300;
 
 export function App({
   initialMapLevel,
+  initialRegionLoad = true,
   kakaoMapAppKey,
 }: AppProps) {
   if (isCoordinateAdminPath() && !isAdminSurfaceEnabled()) {
@@ -112,7 +128,13 @@ export function App({
     return <CoordinateOverrideAdminPage />;
   }
 
-  return <MapApp initialMapLevel={initialMapLevel} kakaoMapAppKey={kakaoMapAppKey} />;
+  return (
+    <MapApp
+      initialMapLevel={initialMapLevel}
+      initialRegionLoad={initialRegionLoad}
+      kakaoMapAppKey={kakaoMapAppKey}
+    />
+  );
 }
 
 function NotFoundPage() {
@@ -132,7 +154,8 @@ function NotFoundPage() {
 }
 
 function MapApp({
-  initialMapLevel = 4,
+  initialMapLevel = 10,
+  initialRegionLoad = true,
   kakaoMapAppKey = getConfiguredKakaoMapAppKey(),
 }: AppProps) {
   const [viewport, setViewport] = useState<MapViewport>(() => ({
@@ -167,6 +190,7 @@ function MapApp({
   const [regionComplexes, setRegionComplexes] = useState<RegionComplexSummary[]>([]);
   const [regionState, setRegionState] = useState<PanelRequestState>('idle');
   const [regionError, setRegionError] = useState<string | null>(null);
+  const [regionTrail, setRegionTrail] = useState<RegionTrailItem[]>([]);
   const [isExplorationOpen, setIsExplorationOpen] = useState(true);
   const [filterFormKey, setFilterFormKey] = useState(0);
   const markerRequestSeq = useRef(0);
@@ -174,8 +198,15 @@ function MapApp({
   const parcelComplexRequestSeq = useRef(0);
   const searchRequestSeq = useRef(0);
   const suggestionRequestSeq = useRef(0);
+  const searchDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const regionRequestSeq = useRef(0);
+  const initialRegionLoadStarted = useRef(false);
   const activeFilterCount = countActiveFilters(markerFilters);
+  const isSearchPanelActive =
+    searchState !== 'idle' || searchResults.length > 0 || complexSuggestions.length > 0;
+  const sidebarMode: SidebarMode = selectedComplex == null
+    ? isSearchPanelActive ? 'search' : 'region'
+    : 'detail';
 
   useEffect(() => {
     setViewport((current) => {
@@ -302,6 +333,19 @@ function MapApp({
     };
   }, [complexDetail, detailState]);
 
+  useEffect(() => {
+    if (!initialRegionLoad || initialRegionLoadStarted.current) {
+      return;
+    }
+
+    initialRegionLoadStarted.current = true;
+    loadRootRegions();
+  }, [initialRegionLoad]);
+
+  useEffect(() => () => {
+    clearSearchDebounceTimer();
+  }, []);
+
   const handleViewportChange = useCallback((nextViewport: MapViewport) => {
     setViewport((current) => {
       if (sameViewport(current, nextViewport)) {
@@ -345,10 +389,24 @@ function MapApp({
     setDetailRetrySeq((current) => current + 1);
   }
 
+  function clearSearchDebounceTimer() {
+    if (searchDebounceTimer.current == null) {
+      return;
+    }
+
+    clearTimeout(searchDebounceTimer.current);
+    searchDebounceTimer.current = null;
+  }
+
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const query = stringFormValue(new FormData(event.currentTarget), 'q').trim();
+    clearSearchDebounceTimer();
+    runComplexSearch(query);
+  }
+
+  function runComplexSearch(query: string) {
     const requestSeq = searchRequestSeq.current + 1;
     searchRequestSeq.current = requestSeq;
     setSearchError(null);
@@ -381,14 +439,23 @@ function MapApp({
   }
 
   function handleSearchInputChange(value: string) {
+    clearSearchDebounceTimer();
+
     const requestSeq = suggestionRequestSeq.current + 1;
     suggestionRequestSeq.current = requestSeq;
     const query = value.trim();
 
     if (query.length === 0) {
       setComplexSuggestions([]);
+      setSearchResults([]);
+      setSearchState('idle');
+      setSearchError(null);
+      searchRequestSeq.current += 1;
       return;
     }
+
+    setSearchState('loading');
+    setSearchError(null);
 
     fetchComplexSuggestions(query)
       .then((nextSuggestions) => {
@@ -403,9 +470,15 @@ function MapApp({
         }
         setComplexSuggestions([]);
       });
+
+    searchDebounceTimer.current = setTimeout(() => {
+      searchDebounceTimer.current = null;
+      runComplexSearch(query);
+    }, SEARCH_DEBOUNCE_MILLIS);
   }
 
   function handleSearchResultSelect(result: ComplexSearchResult) {
+    clearSearchDebounceTimer();
     setSelectedComplex({
       parcelId: result.parcelId,
       complexId: result.complexId,
@@ -416,6 +489,7 @@ function MapApp({
   }
 
   function handleSuggestionSelect(suggestion: ComplexSuggestion) {
+    clearSearchDebounceTimer();
     setSelectedComplex({
       parcelId: suggestion.parcelId,
       complexId: suggestion.complexId,
@@ -424,6 +498,7 @@ function MapApp({
   }
 
   function handleComplexSummarySelect(complex: ParcelComplexSummary | RegionComplexSummary) {
+    clearSearchDebounceTimer();
     setSelectedComplex({
       parcelId: complex.parcelId,
       complexId: complex.complexId,
@@ -459,12 +534,18 @@ function MapApp({
   }
 
   function handleLoadRootRegions() {
+    loadRootRegions();
+  }
+
+  function loadRootRegions() {
     const requestSeq = regionRequestSeq.current + 1;
     regionRequestSeq.current = requestSeq;
 
     setRegionState('loading');
     setRegionError(null);
+    setRegionDetail(null);
     setRegionComplexes([]);
+    setRegionTrail([]);
 
     fetchRootRegions()
       .then((nextRegions) => {
@@ -484,21 +565,24 @@ function MapApp({
         setRootRegions([]);
         setRegionDetail(null);
         setRegionComplexes([]);
+        setRegionTrail([]);
         setRegionState('error');
         setRegionError(error instanceof Error ? error.message : '알 수 없는 지역 오류');
       });
   }
 
-  function handleRegionSelect(regionId: number) {
+  function handleRegionSelect(region: RegionTrailItem) {
     const requestSeq = regionRequestSeq.current + 1;
     regionRequestSeq.current = requestSeq;
+    const nextTrail = [...regionTrail, region];
+    const nextMapLevel = regionFocusLevel(nextTrail.length);
 
     setRegionState('loading');
     setRegionError(null);
 
     Promise.all([
-      fetchRegionDetail(regionId),
-      fetchRegionComplexes(regionId, { limit: 20, offset: 0 }),
+      fetchRegionDetail(region.id),
+      fetchRegionComplexes(region.id, { limit: 20, offset: 0 }),
     ])
       .then(([nextDetail, nextComplexes]) => {
         if (requestSeq !== regionRequestSeq.current) {
@@ -508,8 +592,20 @@ function MapApp({
         setRegionDetail(nextDetail);
         setRegionComplexes(nextComplexes);
         setRootRegions(nextDetail.children);
+        setRegionTrail([
+          ...regionTrail,
+          {
+            id: nextDetail.id,
+            name: nextDetail.name,
+          },
+        ]);
         setRegionState('ready');
-        focusMap(nextDetail.latitude, nextDetail.longitude, 7, REGION_FOCUS_DELTA);
+        focusMap(
+          nextDetail.latitude,
+          nextDetail.longitude,
+          nextMapLevel,
+          mapFocusDeltaForLevel(nextMapLevel),
+        );
       })
       .catch((error: unknown) => {
         if (requestSeq !== regionRequestSeq.current) {
@@ -522,6 +618,13 @@ function MapApp({
         setRegionError(error instanceof Error ? error.message : '알 수 없는 지역 상세 오류');
       });
   }
+
+  const handleRegionMarkerSelect = useCallback((marker: RegionMapMarker) => {
+    const nextLevel = nextRegionMarkerLevel(viewport.level);
+
+    setIsExplorationOpen(true);
+    focusMap(marker.lat, marker.lng, nextLevel, mapFocusDeltaForLevel(nextLevel));
+  }, [viewport.level]);
 
   function focusMap(lat: number, lng: number, level: number, delta: number) {
     setViewport(viewportAroundPoint(lat, lng, level, delta));
@@ -573,10 +676,19 @@ function MapApp({
             level={viewport.level}
             markers={markers}
             onComplexMarkerSelect={handleComplexMarkerSelect}
+            onRegionMarkerSelect={handleRegionMarkerSelect}
             onRuntimeErrorChange={setMapRuntimeError}
             onRuntimeStateChange={setMapRuntimeState}
             onViewportChange={handleViewportChange}
           />
+          {mapRuntimeState === 'ready' || markers == null ? null : (
+            <FallbackMarkerLayer
+              bounds={viewport.bounds}
+              markers={markers}
+              onComplexMarkerSelect={handleComplexMarkerSelect}
+              onRegionMarkerSelect={handleRegionMarkerSelect}
+            />
+          )}
 
           <form
             key={filterFormKey}
@@ -761,7 +873,19 @@ function MapApp({
             <ul aria-label="지역 마커" className="marker-preview-list">
               {markers.markers.map((marker) => (
                 <li key={marker.id} data-marker-id={marker.id}>
-                  {marker.name}
+                  <button
+                    type="button"
+                    aria-label={`지역 이동 ${marker.name}`}
+                    className="marker-list-button marker-list-button-region"
+                    onClick={() => {
+                      handleRegionMarkerSelect(marker);
+                    }}
+                  >
+                    <span className="marker-list-price">{marker.name}</span>
+                    <span className="marker-list-subtitle">
+                      {regionMarkerUnitOrActionLabel(marker, viewport.level)}
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -774,36 +898,63 @@ function MapApp({
           aria-hidden={!isExplorationOpen}
           className="exploration-panel"
           data-collapsed={isExplorationOpen ? 'false' : 'true'}
+          data-sidebar-mode={sidebarMode}
           data-ui-layer="exploration-panel"
           hidden={!isExplorationOpen}
         >
-          <div className="exploration-panel-header">
+          <div className="exploration-panel-header" hidden={sidebarMode === 'detail'}>
             <p>탐색</p>
             <span>{explorationSummaryLabel(searchResults.length, regionComplexes.length)}</span>
           </div>
 
-          <section className="panel-section" data-api-flow="search">
+          <form
+            aria-label="단지 검색"
+            className="search-panel exploration-search-panel"
+            hidden={sidebarMode === 'detail'}
+            onSubmit={handleSearchSubmit}
+          >
+            <label>
+              <span>단지</span>
+              <input
+                aria-label="단지 검색"
+                name="q"
+                onInput={(event) => {
+                  handleSearchInputChange(event.currentTarget.value);
+                }}
+                placeholder="아파트명을 검색해보세요."
+                type="search"
+              />
+            </label>
+            <button type="submit" aria-label="단지 검색 실행">
+              검색
+            </button>
+          </form>
+
+          {selectedComplex == null ? null : (
+            <DetailSidebar
+              complexDetail={complexDetail}
+              detailError={detailError}
+              detailState={detailState}
+              onBack={handleCloseDetailDrawer}
+              onComplexSelect={handleComplexSummarySelect}
+              onRetryDetail={handleRetryDetail}
+              parcelComplexes={parcelComplexes}
+              parcelTrades={parcelTrades}
+              selection={selectedComplex}
+            />
+          )}
+
+          <section
+            id="exploration-panel-search"
+            aria-label="검색 결과 패널"
+            className="panel-section"
+            data-api-flow="search"
+            hidden={sidebarMode !== 'search'}
+          >
             <div className="panel-section-header">
-              <p>검색</p>
+              <p>검색 결과</p>
               <span>{panelRequestLabel(searchState)}</span>
             </div>
-            <form aria-label="단지 검색" className="search-panel" onSubmit={handleSearchSubmit}>
-              <label>
-                <span>단지</span>
-                <input
-                  aria-label="단지 검색"
-                  name="q"
-                  onInput={(event) => {
-                    handleSearchInputChange(event.currentTarget.value);
-                  }}
-                  placeholder="단지명"
-                  type="search"
-                />
-              </label>
-              <button type="submit" aria-label="단지 검색 실행">
-                검색
-              </button>
-            </form>
 
             <DataCountStrip
               items={[
@@ -870,14 +1021,31 @@ function MapApp({
             ) : null}
           </section>
 
-          <section className="panel-section region-panel" data-api-flow="region">
+          <section
+            id="exploration-panel-region"
+            aria-label="지역 탐색 패널"
+            className="panel-section region-panel"
+            data-api-flow="region"
+            hidden={sidebarMode !== 'region'}
+          >
             <div className="panel-section-header">
               <p>지역</p>
               {regionDetail ? <span>{regionDetail.name}</span> : <span>전체</span>}
             </div>
-            <button type="button" aria-label="상위 지역 불러오기" onClick={handleLoadRootRegions}>
-              지역 보기
-            </button>
+            <nav aria-label="지역 단계" className="region-breadcrumb">
+              <button type="button" aria-label="지역 처음으로" onClick={handleLoadRootRegions}>
+                시도 선택
+              </button>
+              {regionTrail.map((region) => (
+                <span key={region.id}>{region.name}</span>
+              ))}
+            </nav>
+            <div className="region-step-summary">
+              <p>{regionStepLabel(regionTrail.length)}</p>
+              <button type="button" aria-label="상위 지역 불러오기" onClick={handleLoadRootRegions}>
+                처음부터
+              </button>
+            </div>
             <DataCountStrip
               items={[
                 ['하위 지역', rootRegions.length],
@@ -905,14 +1073,14 @@ function MapApp({
             ) : null}
 
             {rootRegions.length > 0 ? (
-              <ul aria-label="지역 탐색" className="panel-list">
+              <ul aria-label="지역 탐색" className="panel-list region-grid-list">
                 {rootRegions.map((region) => (
                   <li key={region.id}>
                     <button
                       type="button"
-                      aria-label={`지역 열기 ${region.name}`}
+                      aria-label={`지역 이동 ${region.name}`}
                       onClick={() => {
-                        handleRegionSelect(region.id);
+                        handleRegionSelect(region);
                       }}
                     >
                       {region.name}
@@ -944,103 +1112,183 @@ function MapApp({
         </section>
       </div>
 
-      {selectedComplex == null ? null : (
-        <aside aria-label="단지 상세 패널" className="detail-drawer" data-ui-layer="detail-drawer">
-          <div className="detail-drawer-header">
-            <div>
-              <p className="detail-drawer-kicker">{detailDrawerKicker(selectedComplex)}</p>
-              <p className="detail-drawer-state">{detailRequestLabel(detailState)}</p>
-            </div>
-            <button
-              type="button"
-              aria-label="상세 패널 닫기"
-              className="detail-drawer-close"
-              onClick={handleCloseDetailDrawer}
-            >
-              닫기
-            </button>
-          </div>
-
-          <DataStatusList
-            ariaLabel="상세 API 데이터 요약"
-            flow="detail"
-            items={[
-              ['상세', detailRequestLabel(detailState)],
-              ['실거래', parcelTrades == null ? '대기' : `${parcelTrades.trades.length.toLocaleString()}건`],
-              ['같은 필지', detailState === 'ready' ? `${parcelComplexes.length.toLocaleString()}개` : '대기'],
-            ]}
-          />
-
-          {detailState === 'loading' ? (
-            <p className="detail-message" role="status" aria-live="polite">
-              상세 정보 불러오는 중
-            </p>
-          ) : null}
-
-          {detailState === 'error' ? (
-            <p className="detail-message detail-message-error" role="alert">
-              상세 정보를 불러오지 못했습니다.
-              {detailError ? ` ${detailError}` : null}
-              {' '}
-              <button type="button" aria-label="상세 정보 다시 불러오기" onClick={handleRetryDetail}>
-                다시 시도
-              </button>
-            </p>
-          ) : null}
-
-          {detailState === 'ready' && complexDetail ? (
-            <>
-              <section className="detail-identity" data-detail-section="identity">
-                <h2>{complexDetail.name}</h2>
-                <p className="detail-address">{formatAddress(complexDetail.address)}</p>
-                <dl className="detail-key-stats">
-                  {detailMetric('최근 거래', latestTradeAmountLabel(parcelTrades?.trades ?? []))}
-                  {detailMetric('실거래', `${(parcelTrades?.trades.length ?? 0).toLocaleString()}건`)}
-                  {detailMetric('세대수', formatNumber(complexDetail.unitCnt, '세대'))}
-                </dl>
-                {parcelComplexes.length > 0 ? (
-                  <section aria-label="같은 필지 단지 선택" className="detail-complex-switcher">
-                    <div className="detail-section-heading">
-                      <h3>같은 필지 단지</h3>
-                      <span>{parcelComplexes.length.toLocaleString()}개</span>
-                    </div>
-                    <ul>
-                      {parcelComplexes.map((complex) => (
-                        <li key={complex.complexId}>
-                          <button
-                            type="button"
-                            aria-label={`같은 필지 단지 선택 ${complex.complexName}`}
-                            aria-current={complex.complexId === complexDetail.complexId ? 'true' : undefined}
-                            onClick={() => {
-                              handleComplexSummarySelect(complex);
-                            }}
-                          >
-                            <span>{complex.complexName}</span>
-                            <span>{complexSummaryMeta(complex)}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ) : null}
-                <dl className="detail-metrics">
-                  {detailMetric('거래명', complexDetail.tradeName)}
-                  {detailMetric('동수', formatNumber(complexDetail.dongCnt, '개동'))}
-                  {detailMetric('사용승인일', complexDetail.useDate)}
-                  {detailMetric('대지면적', formatNumber(complexDetail.platArea, '㎡'))}
-                  {detailMetric('건축면적', formatNumber(complexDetail.archArea, '㎡'))}
-                  {detailMetric('연면적', formatNumber(complexDetail.totArea, '㎡'))}
-                  {detailMetric('건폐율', formatNumber(complexDetail.bcRat, '%'))}
-                  {detailMetric('용적률', formatNumber(complexDetail.vlRat, '%'))}
-                </dl>
-              </section>
-              <TradeAmountChart trades={parcelTrades?.trades ?? []} />
-              <TradeList trades={parcelTrades?.trades ?? []} />
-            </>
-          ) : null}
-        </aside>
-      )}
     </main>
+  );
+}
+
+function DetailSidebar({
+  complexDetail,
+  detailError,
+  detailState,
+  onBack,
+  onComplexSelect,
+  onRetryDetail,
+  parcelComplexes,
+  parcelTrades,
+  selection,
+}: {
+  complexDetail: ComplexDetail | null;
+  detailError: string | null;
+  detailState: DetailRequestState;
+  onBack: () => void;
+  onComplexSelect: (complex: ParcelComplexSummary | RegionComplexSummary) => void;
+  onRetryDetail: () => void;
+  parcelComplexes: ParcelComplexSummary[];
+  parcelTrades: ParcelTrades | null;
+  selection: ComplexSelection;
+}) {
+  return (
+    <section aria-label="단지 상세 패널" className="detail-sidebar" data-ui-layer="detail-sidebar">
+      <div className="detail-drawer-header">
+        <button
+          type="button"
+          aria-label="상세에서 뒤로가기"
+          className="detail-back-button"
+          onClick={onBack}
+        >
+          ←
+        </button>
+        <div>
+          <p className="detail-drawer-kicker">{detailDrawerKicker(selection)}</p>
+          <p className="detail-drawer-state">{detailRequestLabel(detailState)}</p>
+        </div>
+      </div>
+
+      <DataStatusList
+        ariaLabel="상세 API 데이터 요약"
+        flow="detail"
+        items={[
+          ['상세', detailRequestLabel(detailState)],
+          ['실거래', parcelTrades == null ? '대기' : `${parcelTrades.trades.length.toLocaleString()}건`],
+          ['같은 필지', detailState === 'ready' ? `${parcelComplexes.length.toLocaleString()}개` : '대기'],
+        ]}
+      />
+
+      {detailState === 'loading' ? (
+        <p className="detail-message" role="status" aria-live="polite">
+          상세 정보 불러오는 중
+        </p>
+      ) : null}
+
+      {detailState === 'error' ? (
+        <p className="detail-message detail-message-error" role="alert">
+          상세 정보를 불러오지 못했습니다.
+          {detailError ? ` ${detailError}` : null}
+          {' '}
+          <button type="button" aria-label="상세 정보 다시 불러오기" onClick={onRetryDetail}>
+            다시 시도
+          </button>
+        </p>
+      ) : null}
+
+      {detailState === 'ready' && complexDetail ? (
+        <>
+          <section className="detail-identity" data-detail-section="identity">
+            <h2>{complexDetail.name}</h2>
+            <p className="detail-address">{formatAddress(complexDetail.address)}</p>
+            <dl className="detail-key-stats">
+              {detailMetric('최근 거래', latestTradeAmountLabel(parcelTrades?.trades ?? []))}
+              {detailMetric('실거래', `${(parcelTrades?.trades.length ?? 0).toLocaleString()}건`)}
+              {detailMetric('세대수', formatNumber(complexDetail.unitCnt, '세대'))}
+            </dl>
+            {parcelComplexes.length > 0 ? (
+              <section aria-label="같은 필지 단지 선택" className="detail-complex-switcher">
+                <div className="detail-section-heading">
+                  <h3>같은 필지 단지</h3>
+                  <span>{parcelComplexes.length.toLocaleString()}개</span>
+                </div>
+                <ul>
+                  {parcelComplexes.map((complex) => (
+                    <li key={complex.complexId}>
+                      <button
+                        type="button"
+                        aria-label={`같은 필지 단지 선택 ${complex.complexName}`}
+                        aria-current={complex.complexId === complexDetail.complexId ? 'true' : undefined}
+                        onClick={() => {
+                          onComplexSelect(complex);
+                        }}
+                      >
+                        <span>{complex.complexName}</span>
+                        <span>{complexSummaryMeta(complex)}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            <dl className="detail-metrics">
+              {detailMetric('거래명', complexDetail.tradeName)}
+              {detailMetric('동수', formatNumber(complexDetail.dongCnt, '개동'))}
+              {detailMetric('사용승인일', complexDetail.useDate)}
+              {detailMetric('대지면적', formatNumber(complexDetail.platArea, '㎡'))}
+              {detailMetric('건축면적', formatNumber(complexDetail.archArea, '㎡'))}
+              {detailMetric('연면적', formatNumber(complexDetail.totArea, '㎡'))}
+              {detailMetric('건폐율', formatNumber(complexDetail.bcRat, '%'))}
+              {detailMetric('용적률', formatNumber(complexDetail.vlRat, '%'))}
+            </dl>
+          </section>
+          <TradeAmountChart trades={parcelTrades?.trades ?? []} />
+          <TradeList trades={parcelTrades?.trades ?? []} />
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function FallbackMarkerLayer({
+  bounds,
+  markers,
+  onComplexMarkerSelect,
+  onRegionMarkerSelect,
+}: {
+  bounds: MapBoundsRequest;
+  markers: MapMarkersResult;
+  onComplexMarkerSelect: (marker: ComplexMapMarker) => void;
+  onRegionMarkerSelect: (marker: RegionMapMarker) => void;
+}) {
+  if (markers.markers.length === 0) {
+    return null;
+  }
+
+  return (
+    <ul aria-label="대체 지도 마커" className="fallback-marker-layer">
+      {markers.kind === 'complex'
+        ? markers.markers.map((marker) => (
+            <li key={complexMarkerKey(marker)} style={mapMarkerPointStyle(marker.lat, marker.lng, bounds)}>
+              <button
+                type="button"
+                aria-label={complexMarkerAriaLabel(marker)}
+                className="fallback-map-marker fallback-map-marker-complex"
+                data-fallback-marker-id={`complex-${complexMarkerKey(marker)}`}
+                onClick={() => {
+                  onComplexMarkerSelect(marker);
+                }}
+              >
+                <span className="fallback-map-marker-kicker">
+                  {marker.latestDealAmount == null ? '거래 없음' : '최근 실거래'}
+                </span>
+                <strong>{formatMarkerAmount(marker.latestDealAmount)}</strong>
+                {markerSubtitle(marker) ? <span>{markerSubtitle(marker)}</span> : null}
+              </button>
+            </li>
+          ))
+        : markers.markers.map((marker) => (
+            <li key={marker.id} style={mapMarkerPointStyle(marker.lat, marker.lng, bounds)}>
+              <button
+                type="button"
+                aria-label={`지역 이동 ${marker.name}`}
+                className="fallback-map-marker fallback-map-marker-region"
+                data-fallback-marker-id={`region-${marker.id}`}
+                onClick={() => {
+                  onRegionMarkerSelect(marker);
+                }}
+              >
+                <strong>{marker.name}</strong>
+                <span>{regionMarkerUnitOrActionLabel(marker)}</span>
+              </button>
+            </li>
+          ))}
+    </ul>
   );
 }
 
@@ -1111,7 +1359,7 @@ function markerSubtitle(marker: ComplexMapMarker): string | null {
     return marker.name;
   }
 
-  if (marker.unitCntSum > 0) {
+  if (marker.unitCntSum != null && marker.unitCntSum > 0) {
     return `${marker.unitCntSum.toLocaleString()}세대`;
   }
 
@@ -1197,7 +1445,7 @@ function explorationSummaryLabel(searchCount: number, regionComplexCount: number
     return `지역 ${regionComplexCount.toLocaleString()}`;
   }
 
-  return '검색 / 지역';
+  return '지역 탐색';
 }
 
 function latestTradeAmountLabel(trades: TradeItem[]): string {
@@ -1225,6 +1473,82 @@ function viewportAroundPoint(lat: number, lng: number, level: number, delta: num
     },
     level,
   };
+}
+
+function mapMarkerPointStyle(lat: number, lng: number, bounds: MapBoundsRequest): CSSProperties {
+  const lngRange = bounds.neLng - bounds.swLng;
+  const latRange = bounds.neLat - bounds.swLat;
+  const x = lngRange === 0 ? 50 : ((lng - bounds.swLng) / lngRange) * 100;
+  const y = latRange === 0 ? 50 : 100 - ((lat - bounds.swLat) / latRange) * 100;
+
+  return {
+    left: `${clampPercent(x, 8, 92)}%`,
+    top: `${clampPercent(y, 14, 88)}%`,
+  };
+}
+
+function clampPercent(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return 50;
+  }
+
+  return Math.min(max, Math.max(min, value));
+}
+
+function regionFocusLevel(depth: number): number {
+  if (depth <= 1) {
+    return 9;
+  }
+
+  if (depth === 2) {
+    return 6;
+  }
+
+  return 4;
+}
+
+function nextRegionMarkerLevel(level: number): number {
+  return Math.max(1, level - 2);
+}
+
+function mapFocusDeltaForLevel(level: number): number {
+  if (level >= 8) {
+    return 0.2;
+  }
+
+  if (level >= 6) {
+    return 0.08;
+  }
+
+  return SEARCH_FOCUS_DELTA;
+}
+
+function regionStepLabel(depth: number): string {
+  if (depth === 0) {
+    return '시도 선택';
+  }
+
+  if (depth === 1) {
+    return '시군구 선택';
+  }
+
+  if (depth === 2) {
+    return '읍면동 선택';
+  }
+
+  return '단지 선택';
+}
+
+function regionMarkerActionLabel(level: number): string {
+  return level <= 4 ? '단지 보기' : '지도 이동';
+}
+
+function regionMarkerUnitOrActionLabel(marker: RegionMapMarker, level?: number): string {
+  if (marker.unitCntSum != null && marker.unitCntSum > 0) {
+    return `${marker.unitCntSum.toLocaleString()}세대`;
+  }
+
+  return level == null ? '세대수 없음' : regionMarkerActionLabel(level);
 }
 
 type DisplayCoordinateCandidate = {

@@ -43,6 +43,7 @@ describe('fetchRegionMarkers API 어댑터', () => {
             name: 'Seoul',
             lat: 37.5663,
             lng: 126.978,
+            unitCntSum: 1200,
             trend: null,
           },
           {
@@ -70,12 +71,14 @@ describe('fetchRegionMarkers API 어댑터', () => {
         name: 'Seoul',
         lat: 37.5663,
         lng: 126.978,
+        unitCntSum: 1200,
       },
       {
         id: 2,
         name: 'Gangnam-gu',
         lat: 37.5172,
         lng: 127.0473,
+        unitCntSum: null,
       },
     ]);
   });
@@ -110,6 +113,7 @@ describe('fetchRegionMarkers API 어댑터', () => {
         name: 'Mapo-gu',
         lat: 37.5662,
         lng: 126.9016,
+        unitCntSum: null,
       },
     ]);
   });

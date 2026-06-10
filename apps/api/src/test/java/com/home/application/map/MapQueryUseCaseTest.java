@@ -40,7 +40,7 @@ class MapQueryUseCaseTest {
 	@DisplayName("map query use case는 complex/region marker lookup을 위임한다")
 	void delegatesComplexAndRegionMarkerLookups() {
 		var complexMarkers = List.of(new ComplexMarkerResult(1001L, 37.5123, 127.0456, 125000L, 740L));
-		var regionMarkers = List.of(new RegionMarkerResult(11L, "Gangnam-gu", 37.5172, 127.0473, null));
+		var regionMarkers = List.of(new RegionMarkerResult(11L, "Gangnam-gu", 37.5172, 127.0473, null, 1200L));
 		var complexRepository = new CapturingComplexMarkerRepository(complexMarkers);
 		var regionRepository = new CapturingRegionMarkerRepository(regionMarkers);
 		MapQueryUseCase useCase = new MapQueryUseCase(complexRepository, regionRepository);

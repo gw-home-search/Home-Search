@@ -78,10 +78,12 @@ class BaselineRuntimeSmokeTest {
 
 		mockMvc.perform(get("/api/v1/region"))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$").isEmpty());
+			.andExpect(jsonPath("$[?(@.name == '서울특별시')]").exists())
+			.andExpect(jsonPath("$[?(@.name == '부산광역시')]").exists());
 
 		assertThat(syntheticSamplePublicDataCount()).isZero();
 		assertThat(normalizedTradeCount()).isZero();
+		assertThat(rootRegionCount()).isGreaterThanOrEqualTo(17);
 	}
 
 	private Long syntheticSamplePublicDataCount() {
@@ -98,6 +100,12 @@ class BaselineRuntimeSmokeTest {
 
 	private Long normalizedTradeCount() {
 		return jdbcClient.sql("SELECT count(*) FROM trade")
+			.query(Long.class)
+			.single();
+	}
+
+	private Long rootRegionCount() {
+		return jdbcClient.sql("SELECT count(*) FROM region WHERE parent_id IS NULL")
 			.query(Long.class)
 			.single();
 	}

@@ -175,11 +175,14 @@ The local profile uses:
 
 ```text
 SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS=*:missing
+SPRING_FLYWAY_VALIDATE_ON_MIGRATE=false
 ```
 
 This is a local runtime guard only. Do not use it as a substitute for reviewing
 production migration history, and do not run Flyway `repair` or delete local
-database state without explicit approval.
+database state without explicit approval. Production-like validation can be
+restored locally by setting `SPRING_FLYWAY_VALIDATE_ON_MIGRATE=true` after the
+local Flyway history has been reviewed.
 
 ## Local Redis
 

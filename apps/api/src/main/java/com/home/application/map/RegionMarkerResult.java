@@ -5,6 +5,7 @@ public record RegionMarkerResult(
 	String name,
 	Double lat,
 	Double lng,
-	Double trend
+	Double trend,
+	Long unitCntSum
 ) {
 }

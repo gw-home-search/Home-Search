@@ -269,7 +269,7 @@ final class ComplexMarkerSql {
 			        base.complex_name,
 			        base.lat,
 			        base.lng,
-			%s        COALESCE(base.unit_cnt, 0)::bigint AS unit_cnt_sum,
+			%s        base.unit_cnt::bigint AS unit_cnt_sum,
 			        CASE
 			            WHEN base.use_date IS NULL THEN NULL
 			            ELSE EXTRACT(YEAR FROM age(CURRENT_DATE, base.use_date))
@@ -362,7 +362,7 @@ final class ComplexMarkerSql {
 			            WHEN flags.complex_count = 1 THEN representative_coordinate.lng
 			            ELSE MAX(base.parcel_lng)
 			        END AS lng,
-			        COALESCE(SUM(base.unit_cnt), 0)::bigint AS unit_cnt_sum,
+			        SUM(base.unit_cnt)::bigint AS unit_cnt_sum,
 			        MAX(
 			            CASE
 			                WHEN base.use_date IS NULL THEN NULL

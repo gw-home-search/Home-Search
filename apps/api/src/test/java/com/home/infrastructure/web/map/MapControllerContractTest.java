@@ -98,7 +98,7 @@ class MapControllerContractTest {
 	@DisplayName("POST /api/v1/map/regions는 canonical region marker field를 반환한다")
 	void validRegionMarkerRequestReturnsCanonicalRegionFields() throws Exception {
 		given(mapUseCase.getRegionMarkers(any(RegionMarkerQuery.class)))
-			.willReturn(List.of(new RegionMarkerResult(1L, "Seoul", 37.5663, 126.9780, null)));
+			.willReturn(List.of(new RegionMarkerResult(1L, "Seoul", 37.5663, 126.9780, null, 1200L)));
 
 		mockMvc.perform(post("/api/v1/map/regions")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -118,9 +118,9 @@ class MapControllerContractTest {
 			.andExpect(jsonPath("$[0].lat").value(37.5663))
 			.andExpect(jsonPath("$[0].lng").value(126.9780))
 			.andExpect(jsonPath("$[0].trend").isEmpty())
+			.andExpect(jsonPath("$[0].unitCntSum").value(1200))
 			.andExpect(jsonPath("$[0].parcelId").doesNotExist())
 			.andExpect(jsonPath("$[0].latestDealAmount").doesNotExist())
-			.andExpect(jsonPath("$[0].unitCntSum").doesNotExist())
 			.andExpect(jsonPath("$[0].regionName").doesNotExist())
 			.andExpect(jsonPath("$[0].latitude").doesNotExist())
 			.andExpect(jsonPath("$[0].longitude").doesNotExist())
@@ -128,6 +128,44 @@ class MapControllerContractTest {
 			.andExpect(jsonPath("$[0].aptSeq").doesNotExist())
 			.andExpect(jsonPath("$[0].source").doesNotExist())
 			.andExpect(jsonPath("$[0].sourceKey").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("POST /api/v1/map/complexes는 세대수 metadata가 없으면 unitCntSum null을 보존한다")
+	void complexMarkerUnitCountCanBeNullWhenMetadataIsMissing() throws Exception {
+		given(mapUseCase.getComplexMarkers(any(ComplexMarkerQuery.class)))
+			.willReturn(List.of(new ComplexMarkerResult(
+				1001L,
+				501L,
+				"Sample Apartment",
+				37.5123,
+				127.0456,
+				125000L,
+				null
+			)));
+
+		mockMvc.perform(post("/api/v1/map/complexes")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "swLat": 37.45,
+					  "swLng": 126.85,
+					  "neLat": 37.70,
+					  "neLng": 127.20,
+					  "pyeongMin": null,
+					  "pyeongMax": null,
+					  "priceEokMin": null,
+					  "priceEokMax": null,
+					  "ageMin": null,
+					  "ageMax": null,
+					  "unitMin": null,
+					  "unitMax": null
+					}
+					"""))
+			.andExpect(status().isOk())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(jsonPath("$[0].parcelId").value(1001))
+			.andExpect(jsonPath("$[0].unitCntSum").isEmpty());
 	}
 
 	@Test

@@ -58,6 +58,17 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("bounds query는 complex 세대수 metadata가 없으면 marker unitCntSum을 null로 반환한다")
+	void boundsQueryReturnsNullUnitCountWhenComplexMetadataIsMissing() {
+		seedMissingUnitCountMapData();
+		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+
+		assertThat(repository.findComplexMarkers(request(null, null)))
+			.extracting(ComplexMarkerResult::parcelId, ComplexMarkerResult::complexId, ComplexMarkerResult::unitCntSum)
+			.containsExactly(tuple(9001L, 1901L, null));
+	}
+
+	@Test
 	@DisplayName("좌표가 없는 coordinate-pending parcel은 거래가 있어도 marker로 반환하지 않는다")
 	void coordinatePendingParcelWithTradeIsExcludedFromMarkers() {
 		seedCoordinatePendingMapData();
@@ -600,6 +611,30 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 			125000L,
 			"rtms-coordinate-pending-marker",
 			"RTMS:APT-PENDING-501"
+		);
+	}
+
+	private void seedMissingUnitCountMapData() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (9001, 1, '1168010300101400017', 'Missing unit count lot', 37.5123, 127.0456)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt)
+			VALUES (1901, 9001, 'COMPLEX-PK-1901', 'APT-1901', 'Missing Unit Count Apartment', NULL)
+			""").update();
+		Long rawId = insertRawIngest("rtms-missing-unit-count-marker");
+		insertTrade(
+			rawId,
+			1901L,
+			LocalDate.of(2025, 12, 1),
+			125000L,
+			"rtms-missing-unit-count-marker",
+			"COMPLEX-PK-1901"
 		);
 	}
 

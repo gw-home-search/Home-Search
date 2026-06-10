@@ -32,6 +32,7 @@ type KakaoMapSurfaceProps = {
   level: number;
   markers: MapMarkersResult | null;
   onComplexMarkerSelect: (marker: ComplexMapMarker) => void;
+  onRegionMarkerSelect: (marker: RegionMapMarker) => void;
   onRuntimeErrorChange: (message: string | null) => void;
   onRuntimeStateChange: (state: KakaoMapRuntimeState) => void;
   onViewportChange: (viewport: MapViewport) => void;
@@ -49,6 +50,7 @@ export function KakaoMapSurface({
   level,
   markers,
   onComplexMarkerSelect,
+  onRegionMarkerSelect,
   onRuntimeErrorChange,
   onRuntimeStateChange,
   onViewportChange,
@@ -168,7 +170,13 @@ export function KakaoMapSurface({
             ),
           )
         : markers.markers.map((marker) =>
-            overlayForMarker(map, maps, marker.lat, marker.lng, overlayContentForRegionMarker(marker)),
+            overlayForMarker(
+              map,
+              maps,
+              marker.lat,
+              marker.lng,
+              overlayContentForRegionMarker(marker, onRegionMarkerSelect),
+            ),
           );
 
     overlaysRef.current = nextOverlays;
@@ -177,7 +185,7 @@ export function KakaoMapSurface({
       clearOverlays(overlaysRef.current);
       overlaysRef.current = [];
     };
-  }, [markers, onComplexMarkerSelect, runtimeState]);
+  }, [markers, onComplexMarkerSelect, onRegionMarkerSelect, runtimeState]);
 
   return (
     <div
@@ -265,11 +273,36 @@ function complexMarkerAriaLabel(marker: ComplexMapMarker): string {
     : `필지 ${marker.parcelId} 단지 ${marker.complexId} 상세 열기`;
 }
 
-function overlayContentForRegionMarker(marker: RegionMapMarker): HTMLElement {
-  const element = document.createElement('span');
+function overlayContentForRegionMarker(
+  marker: RegionMapMarker,
+  onRegionMarkerSelect: (marker: RegionMapMarker) => void,
+): HTMLElement {
+  const element = document.createElement('button');
+  const name = document.createElement('strong');
+  const action = document.createElement('span');
+
+  element.type = 'button';
   element.className = 'kakao-map-overlay kakao-map-overlay-region';
-  element.textContent = marker.name;
+  element.setAttribute('aria-label', `지역 이동 ${marker.name}`);
+
+  name.className = 'kakao-map-overlay-region-name';
+  name.textContent = marker.name;
+  action.className = 'kakao-map-overlay-region-action';
+  action.textContent = regionMarkerUnitLabel(marker);
+
+  element.append(name, action);
+  element.addEventListener('click', () => {
+    onRegionMarkerSelect(marker);
+  });
   return element;
+}
+
+function regionMarkerUnitLabel(marker: RegionMapMarker): string {
+  if (marker.unitCntSum == null || marker.unitCntSum <= 0) {
+    return '세대수 없음';
+  }
+
+  return `${marker.unitCntSum.toLocaleString()}세대`;
 }
 
 function formatMarkerAmount(amount: number | null): string {
@@ -291,7 +324,7 @@ function markerSubtitle(marker: ComplexMapMarker): string | null {
     return marker.name;
   }
 
-  if (marker.unitCntSum > 0) {
+  if (marker.unitCntSum != null && marker.unitCntSum > 0) {
     return `${marker.unitCntSum.toLocaleString()}세대`;
   }
 

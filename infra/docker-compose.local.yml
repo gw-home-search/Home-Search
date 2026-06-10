@@ -91,10 +91,65 @@ services:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
     ports:
-      - "${HOME_SEARCH_PROMETHEUS_PORT:-9090}:9090"
+      - "127.0.0.1:${HOME_SEARCH_PROMETHEUS_PORT:-9090}:9090"
     volumes:
       - ./prometheus.local.yml:/etc/prometheus/prometheus.yml:ro
       - home-search-prometheus-data:/prometheus
+    networks:
+      - home-search-local
+
+  loki:
+    image: grafana/loki:3.7.0
+    container_name: home-search-loki
+    restart: unless-stopped
+    command:
+      - "-config.file=/etc/loki/local-config.yml"
+    ports:
+      - "127.0.0.1:${HOME_SEARCH_LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./loki.local.yml:/etc/loki/local-config.yml:ro
+      - home-search-loki-data:/loki
+    networks:
+      - home-search-local
+
+  alloy:
+    image: grafana/alloy:${HOME_SEARCH_ALLOY_IMAGE_TAG:-v${HOME_SEARCH_ALLOY_VERSION:-1.16.3}}
+    container_name: home-search-alloy
+    restart: unless-stopped
+    depends_on:
+      - loki
+    command:
+      - "run"
+      - "/etc/alloy/config.alloy"
+      - "--server.http.listen-addr=0.0.0.0:12345"
+      - "--storage.path=/var/lib/alloy/data"
+    ports:
+      - "127.0.0.1:${HOME_SEARCH_ALLOY_PORT:-12345}:12345"
+    volumes:
+      - ./alloy.local.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - home-search-alloy-data:/var/lib/alloy/data
+    networks:
+      - home-search-local
+
+  grafana:
+    image: grafana/grafana:13.0.2
+    container_name: home-search-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - loki
+    environment:
+      GF_SECURITY_ADMIN_USER: ${HOME_SEARCH_GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${HOME_SEARCH_GRAFANA_ADMIN_PASSWORD:-home_search_local_admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: ${HOME_SEARCH_GRAFANA_ANONYMOUS_ENABLED:-false}
+    ports:
+      - "127.0.0.1:${HOME_SEARCH_GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - home-search-grafana-data:/var/lib/grafana
     networks:
       - home-search-local
 
@@ -121,6 +176,9 @@ volumes:
   home-search-postgis-data:
   home-search-gradle-cache:
   home-search-prometheus-data:
+  home-search-loki-data:
+  home-search-alloy-data:
+  home-search-grafana-data:
   home-search-web-node-modules:
 
 networks:

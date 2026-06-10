@@ -3,34 +3,53 @@ package com.home.infrastructure.external.rtms;
 import java.util.Map;
 import java.util.Objects;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
-class RtmsDailyRefreshWebhookNotifier implements RtmsDailyRefreshNotifier {
+class RtmsDailyRefreshHermesNotifier implements RtmsDailyRefreshNotifier {
+
+	private static final String SOURCE = "home-search";
+	private static final String TARGET = "slack";
+	private static final String EVENT_TYPE = "rtms-daily-refresh";
 
 	private final RestClient restClient;
-	private final String webhookUrl;
+	private final String url;
+	private final String authToken;
+	private final String channel;
 	private final int connectTimeoutMillis;
 	private final int readTimeoutMillis;
 
-	RtmsDailyRefreshWebhookNotifier(String webhookUrl, int connectTimeoutMillis, int readTimeoutMillis) {
+	RtmsDailyRefreshHermesNotifier(
+		String url,
+		String authToken,
+		String channel,
+		int connectTimeoutMillis,
+		int readTimeoutMillis
+	) {
 		this(
 			restClient(connectTimeoutMillis, readTimeoutMillis),
-			webhookUrl,
+			url,
+			authToken,
+			channel,
 			connectTimeoutMillis,
 			readTimeoutMillis
 		);
 	}
 
-	RtmsDailyRefreshWebhookNotifier(
+	RtmsDailyRefreshHermesNotifier(
 		RestClient restClient,
-		String webhookUrl,
+		String url,
+		String authToken,
+		String channel,
 		int connectTimeoutMillis,
 		int readTimeoutMillis
 	) {
 		this.restClient = Objects.requireNonNull(restClient);
-		this.webhookUrl = Objects.requireNonNull(webhookUrl);
+		this.url = requireText(url, "url");
+		this.authToken = authToken == null ? "" : authToken.trim();
+		this.channel = requireText(channel, "channel");
 		if (connectTimeoutMillis <= 0) {
 			throw new IllegalArgumentException("connectTimeoutMillis must be positive");
 		}
@@ -43,12 +62,26 @@ class RtmsDailyRefreshWebhookNotifier implements RtmsDailyRefreshNotifier {
 
 	@Override
 	public void send(String message) {
-		restClient.post()
-			.uri(webhookUrl)
-			.contentType(MediaType.APPLICATION_JSON)
-			.body(Map.of("text", message))
+		RestClient.RequestBodySpec request = restClient.post()
+			.uri(url)
+			.contentType(MediaType.APPLICATION_JSON);
+		if (!authToken.isBlank()) {
+			request = request.header(HttpHeaders.AUTHORIZATION, "Bearer " + authToken);
+		}
+		request
+			.body(Map.of(
+				"target", TARGET,
+				"channel", channel,
+				"source", SOURCE,
+				"eventType", EVENT_TYPE,
+				"text", Objects.requireNonNull(message)
+			))
 			.retrieve()
 			.toBodilessEntity();
+	}
+
+	String channel() {
+		return channel;
 	}
 
 	int connectTimeoutMillis() {
@@ -66,5 +99,12 @@ class RtmsDailyRefreshWebhookNotifier implements RtmsDailyRefreshNotifier {
 		return RestClient.builder()
 			.requestFactory(requestFactory)
 			.build();
+	}
+
+	private static String requireText(String value, String name) {
+		if (value == null || value.isBlank()) {
+			throw new IllegalArgumentException(name + " must not be blank");
+		}
+		return value.trim();
 	}
 }

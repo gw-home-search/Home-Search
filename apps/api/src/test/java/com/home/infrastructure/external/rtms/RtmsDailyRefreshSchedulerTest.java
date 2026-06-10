@@ -58,11 +58,11 @@ class RtmsDailyRefreshSchedulerTest {
 	}
 
 	@Test
-	@DisplayName("daily refresh scheduler는 Slack 전송 실패가 나도 ingest 결과를 예외로 뒤집지 않는다")
+	@DisplayName("daily refresh scheduler는 Hermes Slack 전송 실패가 나도 ingest 결과를 예외로 뒤집지 않는다")
 	void schedulerDoesNotFailWhenSlackNotificationFails() {
 		RtmsMonthlyRefreshRunner monthlyRefreshRunner = mock(RtmsMonthlyRefreshRunner.class);
 		RtmsDailyRefreshScheduler scheduler = scheduler(monthlyRefreshRunner, message -> {
-			throw new IllegalStateException("slack webhook failed serviceKey=PRIVATE_VALUE");
+			throw new IllegalStateException("Hermes Slack send failed serviceKey=PRIVATE_VALUE");
 		}, List.of("11680"));
 		RtmsMonthlyRefreshPlan plan = new RtmsMonthlyRefreshPlan("11680", "202606", 1);
 		when(monthlyRefreshRunner.refresh(plan)).thenReturn(new RtmsMonthlyRefreshReport(List.of(

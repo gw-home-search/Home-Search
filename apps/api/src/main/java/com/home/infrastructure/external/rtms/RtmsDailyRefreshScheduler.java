@@ -87,7 +87,7 @@ class RtmsDailyRefreshScheduler {
 		}
 		catch (RuntimeException exception) {
 			log.warn(
-				"RTMS daily refresh Slack notification failed status={} reason={}",
+				"RTMS daily refresh Hermes Slack notification failed status={} reason={}",
 				execution.status(),
 				formatter.sanitizeSensitiveValues(exception.getMessage())
 			);

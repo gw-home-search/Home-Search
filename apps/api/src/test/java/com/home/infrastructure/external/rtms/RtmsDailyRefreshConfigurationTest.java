@@ -40,22 +40,25 @@ class RtmsDailyRefreshConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("daily refresh Slack webhook notifier는 configured timeout으로 등록된다")
-	void dailyRefreshSlackWebhookNotifierUsesConfiguredTimeouts() {
+	@DisplayName("daily refresh Hermes notifier는 configured routing과 timeout으로 등록된다")
+	void dailyRefreshHermesNotifierUsesConfiguredRoutingAndTimeouts() {
 		contextRunner
 			.withBean(RtmsMonthlyRefreshRunner.class, () -> mock(RtmsMonthlyRefreshRunner.class))
 			.withPropertyValues(
 				"home.ingest.rtms.daily.enabled=true",
 				"home.ingest.rtms.daily.lawd-cds=11680",
-				"home.ingest.rtms.daily.slack.enabled=true",
-				"home.ingest.rtms.daily.slack.webhook-url=https://slack.example.invalid/webhook",
-				"home.ingest.rtms.daily.slack.connect-timeout-millis=1234",
-				"home.ingest.rtms.daily.slack.read-timeout-millis=2345"
+				"home.ingest.rtms.daily.hermes.enabled=true",
+				"home.ingest.rtms.daily.hermes.url=https://hermes.example.invalid/api/notifications/slack",
+				"home.ingest.rtms.daily.hermes.auth-token=test-token",
+				"home.ingest.rtms.daily.hermes.channel=#home-search",
+				"home.ingest.rtms.daily.hermes.connect-timeout-millis=1234",
+				"home.ingest.rtms.daily.hermes.read-timeout-millis=2345"
 			)
 			.run(context -> {
 				assertThat(context).hasNotFailed();
 				assertThat(context.getBean(RtmsDailyRefreshNotifier.class))
-					.isInstanceOfSatisfying(RtmsDailyRefreshWebhookNotifier.class, notifier -> {
+					.isInstanceOfSatisfying(RtmsDailyRefreshHermesNotifier.class, notifier -> {
+						assertThat(notifier.channel()).isEqualTo("#home-search");
 						assertThat(notifier.connectTimeoutMillis()).isEqualTo(1234);
 						assertThat(notifier.readTimeoutMillis()).isEqualTo(2345);
 					});

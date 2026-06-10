@@ -12,20 +12,30 @@ public class NewsArticleObservationIngestService {
 	}
 
 	public NewsArticleObservationIngestResult ingest(List<NewsArticleObservationCommand> commands) {
+		return ingestDetailed(commands).result();
+	}
+
+	public NewsArticleObservationDetailedIngestResult ingestDetailed(List<NewsArticleObservationCommand> commands) {
 		if (commands == null || commands.isEmpty()) {
-			return NewsArticleObservationIngestResult.empty();
+			return NewsArticleObservationDetailedIngestResult.empty();
 		}
 
 		long observed = 0;
 		long duplicateSkipped = 0;
+		var outcomes = new java.util.ArrayList<NewsArticleObservationDetailedIngestResult.ArticleOutcome>();
 		for (NewsArticleObservationCommand command : commands) {
-			if (repository.insertIfAbsent(command)) {
+			boolean inserted = repository.insertIfAbsent(command);
+			outcomes.add(new NewsArticleObservationDetailedIngestResult.ArticleOutcome(command, inserted));
+			if (inserted) {
 				observed++;
 			}
 			else {
 				duplicateSkipped++;
 			}
 		}
-		return new NewsArticleObservationIngestResult(commands.size(), observed, duplicateSkipped);
+		return new NewsArticleObservationDetailedIngestResult(
+			new NewsArticleObservationIngestResult(commands.size(), observed, duplicateSkipped),
+			outcomes
+		);
 	}
 }

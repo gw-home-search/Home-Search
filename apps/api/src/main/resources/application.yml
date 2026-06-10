@@ -66,3 +66,46 @@ home:
           channel: "${HERMES_SLACK_CHANNEL:}"
           connect-timeout-millis: 3000
           read-timeout-millis: 3000
+  news:
+    naver:
+      enabled: false
+      query: ""
+      display: 100
+      start: 1
+      sort: date
+      preflight-only: false
+    pipeline:
+      enabled: false
+      daily:
+        enabled: false
+        cron: "0 0 4 * * *"
+        zone: Asia/Seoul
+        max-keywords: 25
+        display: 100
+        sort: date
+        relevance-limit: 100
+        feature-extraction-limit: 100
+        obsidian-output-root: ""
+        obsidian-date: ""
+        obsidian-max-rows: 1000
+        hermes:
+          enabled: false
+          url: "${HERMES_SLACK_URL:}"
+          auth-token: "${HERMES_AUTH_TOKEN:}"
+          channel: "${HERMES_SLACK_CHANNEL:}"
+          connect-timeout-millis: 3000
+          read-timeout-millis: 3000
+    relevance:
+      enabled: false
+      limit: 100
+    signal:
+      extraction:
+        enabled: false
+        limit: 100
+    obsidian:
+      export:
+        enabled: false
+        output-root: ""
+        date: ""
+        zone: Asia/Seoul
+        max-rows: 1000

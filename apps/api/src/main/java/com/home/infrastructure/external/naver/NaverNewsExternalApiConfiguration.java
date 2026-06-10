@@ -108,7 +108,7 @@ class NaverNewsExternalApiConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnExpression("${home.news.naver.enabled:false} || ${home.news.pipeline.enabled:false}")
+	@ConditionalOnExpression("${home.news.naver.enabled:false} || ${home.news.pipeline.enabled:false} || ${home.news.pipeline.daily.enabled:false}")
 	NaverNewsOneShotIngestRunner naverNewsOneShotIngestRunner(
 		NaverNewsSearchClient client,
 		NaverNewsObservationMapper mapper,

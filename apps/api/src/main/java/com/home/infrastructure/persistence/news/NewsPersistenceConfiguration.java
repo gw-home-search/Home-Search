@@ -11,6 +11,7 @@ import com.home.application.news.observation.NewsArticleObservationCleanupReposi
 import com.home.application.news.observation.NewsArticleObservationCleanupService;
 import com.home.application.news.observation.NewsArticleObservationIngestService;
 import com.home.application.news.observation.NewsArticleObservationRepository;
+import com.home.application.news.collection.NewsCollectionRepository;
 import com.home.application.news.relevance.NewsArticleRelevanceGateService;
 import com.home.application.news.relevance.NewsArticleRelevancePolicy;
 import com.home.application.news.relevance.NewsArticleRelevanceRepository;
@@ -41,6 +42,12 @@ class NewsPersistenceConfiguration {
 	@Lazy
 	NewsArticleObservationRepository newsArticleObservationRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
 		return new JdbcNewsArticleObservationRepository(requiredJdbcClient(jdbcClientProvider));
+	}
+
+	@Bean
+	@Lazy
+	NewsCollectionRepository newsCollectionRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
+		return new JdbcNewsCollectionRepository(requiredJdbcClient(jdbcClientProvider));
 	}
 
 	@Bean

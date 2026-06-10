@@ -20,6 +20,12 @@ class NaverNewsOneShotIngestRunner {
 	}
 
 	NewsArticleObservationIngestResult ingest(NaverNewsSearchRequest request) {
-		return ingestService.ingest(mapper.toObservationCommands(client.search(request)));
+		return ingestDetailed(request).detailedResult().result();
+	}
+
+	NaverNewsOneShotIngestOutcome ingestDetailed(NaverNewsSearchRequest request) {
+		return new NaverNewsOneShotIngestOutcome(
+			ingestService.ingestDetailed(mapper.toObservationCommands(client.search(request)))
+		);
 	}
 }

@@ -1,7 +1,7 @@
 package com.home.infrastructure.external.rtms;
 
 @FunctionalInterface
-interface RtmsCoordinateSourcePreflight {
+public interface RtmsCoordinateSourcePreflight {
 
 	void verify();
 

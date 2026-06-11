@@ -17,7 +17,7 @@ public record RtmsApartmentTradeProperties(
 		readTimeoutMillis = readTimeoutMillis > 0 ? readTimeoutMillis : 5_000;
 	}
 
-	String requiredServiceKey() {
+	public String requiredServiceKey() {
 		if (!hasText(serviceKey)) {
 			throw new IllegalStateException("APT_SERVICE_KEY is required for live RTMS calls");
 		}

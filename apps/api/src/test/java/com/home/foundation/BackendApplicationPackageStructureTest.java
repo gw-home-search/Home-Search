@@ -17,16 +17,18 @@ class BackendApplicationPackageStructureTest {
 	private static final Path COORDINATE_EXCEPTION_SERVICE =
 		APPLICATION_ROOT.resolve("coordinate/caseflow/ComplexCoordinateExceptionService.java");
 	private static final Path RTMS_MONTHLY_REFRESH_RUNNER =
-		Path.of("src/main/java/com/home/infrastructure/external/rtms/RtmsMonthlyRefreshRunner.java");
+		Path.of("src/main/java/com/home/infrastructure/scheduling/rtms/RtmsMonthlyRefreshRunner.java");
 	private static final Path RTMS_EXTERNAL_API_CONFIGURATION =
 		Path.of("src/main/java/com/home/infrastructure/external/rtms/RtmsExternalApiConfiguration.java");
+	private static final Path RTMS_BATCH_ORCHESTRATION_CONFIGURATION =
+		Path.of("src/main/java/com/home/infrastructure/scheduling/rtms/RtmsBatchOrchestrationConfiguration.java");
 	private static final Path NAVER_NEWS_DAILY_PIPELINE_RUNNER =
 		Path.of("src/main/java/com/home/infrastructure/scheduling/news/NaverNewsDailyPipelineRunner.java");
 	private static final Path DATA_STORAGE_DOC = Path.of("../../docs/DATA_STORAGE.md");
 	private static final List<Path> SCHEDULERS = List.of(
 		Path.of("src/main/java/com/home/infrastructure/external/complex/ComplexMetadataEnrichmentScheduler.java"),
 		Path.of("src/main/java/com/home/infrastructure/scheduling/news/NaverNewsDailyPipelineScheduler.java"),
-		Path.of("src/main/java/com/home/infrastructure/external/rtms/RtmsDailyRefreshScheduler.java"),
+		Path.of("src/main/java/com/home/infrastructure/scheduling/rtms/RtmsDailyRefreshScheduler.java"),
 		Path.of("src/main/java/com/home/infrastructure/scheduling/coordinate/ComplexCoordinateReadinessScheduler.java")
 	);
 	private static final Set<String> SPLIT_REQUIRED_FEATURES = Set.of("coordinate", "ingest", "news");
@@ -99,6 +101,34 @@ class BackendApplicationPackageStructureTest {
 		assertThat(Files.readString(Path.of(
 			"src/main/java/com/home/infrastructure/persistence/coordinate/ComplexCoordinatePersistenceConfiguration.java"
 		))).doesNotContain("ComplexCoordinateReadinessScheduler");
+
+		assertThat(Path.of(
+			"src/main/java/com/home/infrastructure/external/rtms/RtmsMonthlyRefreshRunner.java"
+		)).doesNotExist();
+		assertThat(Path.of(
+			"src/main/java/com/home/infrastructure/external/rtms/RtmsNationwideBackfillRunner.java"
+		)).doesNotExist();
+		assertThat(Path.of(
+			"src/main/java/com/home/infrastructure/external/rtms/RtmsDailyRefreshScheduler.java"
+		)).doesNotExist();
+		assertThat(Path.of(
+			"src/main/java/com/home/infrastructure/external/rtms/RtmsOneShotIngestApplicationRunner.java"
+		)).doesNotExist();
+		assertThat(RTMS_MONTHLY_REFRESH_RUNNER).exists();
+		assertThat(Path.of(
+			"src/main/java/com/home/infrastructure/scheduling/rtms/RtmsNationwideBackfillRunner.java"
+		)).exists();
+		assertThat(Path.of(
+			"src/main/java/com/home/infrastructure/scheduling/rtms/RtmsDailyRefreshScheduler.java"
+		)).exists();
+		assertThat(Path.of(
+			"src/main/java/com/home/infrastructure/scheduling/rtms/RtmsOneShotIngestApplicationRunner.java"
+		)).exists();
+		assertThat(RTMS_BATCH_ORCHESTRATION_CONFIGURATION).exists();
+		assertThat(Files.readString(RTMS_EXTERNAL_API_CONFIGURATION))
+			.doesNotContain("RtmsMonthlyRefreshRunner")
+			.doesNotContain("RtmsNationwideBackfillRunner")
+			.doesNotContain("RtmsOneShotIngestApplicationRunner");
 	}
 
 	@Test
@@ -143,7 +173,7 @@ class BackendApplicationPackageStructureTest {
 	@DisplayName("RTMS monthly 상태 변환은 status별 평행 switch 대신 단일 팩토리를 사용한다")
 	void rtmsMonthlyStatusConversionsUseSingleFactories() throws IOException {
 		String runner = Files.readString(RTMS_MONTHLY_REFRESH_RUNNER);
-		String configuration = Files.readString(RTMS_EXTERNAL_API_CONFIGURATION);
+		String configuration = Files.readString(RTMS_BATCH_ORCHESTRATION_CONFIGURATION);
 
 		assertThat(runner)
 			.contains("RtmsIngestRunRecord.of(")
@@ -168,7 +198,7 @@ class BackendApplicationPackageStructureTest {
 			"src/main/java/com/home/application/ingest/matching/ComplexMatchCandidatePolicy.java"
 		));
 		String backfillRunner = Files.readString(Path.of(
-			"src/main/java/com/home/infrastructure/external/rtms/RtmsNationwideBackfillRunner.java"
+			"src/main/java/com/home/infrastructure/scheduling/rtms/RtmsNationwideBackfillRunner.java"
 		));
 		assertThat(matchPolicy)
 			.doesNotContain("\"PNU_NAME\"", "\"PNU_ALIAS_NAME\"", "\"APTSEQ\"", "\"PNU_UNIQUE\"");
@@ -180,7 +210,7 @@ class BackendApplicationPackageStructureTest {
 	@DisplayName("news completion과 RTMS 설정은 의미 단위 객체로 조립한다")
 	void largePositionalAssemblyUsesSemanticGroups() throws IOException {
 		String newsRunner = Files.readString(NAVER_NEWS_DAILY_PIPELINE_RUNNER);
-		String rtmsConfiguration = Files.readString(RTMS_EXTERNAL_API_CONFIGURATION);
+		String rtmsConfiguration = Files.readString(RTMS_BATCH_ORCHESTRATION_CONFIGURATION);
 
 		assertThat(newsRunner)
 			.contains("NewsCollectionRunCompletion.from(")

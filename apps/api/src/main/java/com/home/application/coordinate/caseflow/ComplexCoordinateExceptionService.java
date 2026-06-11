@@ -97,13 +97,13 @@ public class ComplexCoordinateExceptionService {
 		ArrayList<ResolvedDisplayCoordinate> coordinates = new ArrayList<>();
 		Set<Long> assignedFootprintIds = new HashSet<>();
 		for (ComplexCoordinateTarget target : targets.complexes()) {
-			ComplexCoordinateResolutionResult blockedByIdentity = blockIfIdentityUnverified(targets, target);
-			if (blockedByIdentity != null) {
-				return blockedByIdentity;
+			Optional<ComplexCoordinateResolutionResult> blockedByIdentity = blockIfIdentityUnverified(targets, target);
+			if (blockedByIdentity.isPresent()) {
+				return blockedByIdentity.get();
 			}
-			ResolvedCoordinateMatch coordinate = resolveCoordinate(target, footprints);
-			if (coordinate == null || overlaps(assignedFootprintIds, coordinate.footprintIds())) {
-				String reason = coordinate == null
+			Optional<ResolvedCoordinateMatch> coordinate = resolveCoordinate(target, footprints);
+			if (coordinate.isEmpty() || overlaps(assignedFootprintIds, coordinate.get().footprintIds())) {
+				String reason = coordinate.isEmpty()
 					? "building dong candidates are ambiguous or unavailable"
 					: "building dong candidates overlap across complexes";
 				repository.saveCaseUpdate(new ComplexCoordinateCaseUpdate(
@@ -118,8 +118,8 @@ public class ComplexCoordinateExceptionService {
 					reason
 				);
 			}
-			assignedFootprintIds.addAll(coordinate.footprintIds());
-			coordinates.add(coordinate.coordinate());
+			assignedFootprintIds.addAll(coordinate.get().footprintIds());
+			coordinates.add(coordinate.get().coordinate());
 		}
 		coordinates.forEach(repository::saveResolvedDisplayCoordinate);
 		String reason = "building footprint matched by apt_dong";
@@ -149,41 +149,41 @@ public class ComplexCoordinateExceptionService {
 		return repository.findBuildingFootprintsByPnu(pnu);
 	}
 
-	private ComplexCoordinateResolutionResult blockIfIdentityUnverified(
+	private Optional<ComplexCoordinateResolutionResult> blockIfIdentityUnverified(
 		ComplexCoordinateParcelTargets targets,
 		ComplexCoordinateTarget target
 	) {
 		ComplexCoordinateIdentityVerification verification = identityVerifier.verify(targets, target);
 		if (!shouldBlock(verification.status())) {
-			return null;
+			return Optional.empty();
 		}
 		ComplexCoordinateCaseStatus status = verification.status().toBlockedCaseStatus();
 		String reason = "identity verification " + verification.status().name().toLowerCase()
 			+ " complexId=" + target.complexId()
 			+ (verification.reason() == null ? "" : " reason=" + verification.reason());
 		repository.saveCaseUpdate(new ComplexCoordinateCaseUpdate(targets.parcelId(), status, reason));
-		return new ComplexCoordinateResolutionResult(targets.parcelId(), status, 0, reason);
+		return Optional.of(new ComplexCoordinateResolutionResult(targets.parcelId(), status, 0, reason));
 	}
 
 	private boolean shouldBlock(ComplexCoordinateIdentityVerificationStatus status) {
 		return identityBlockingPolicy.shouldBlock(status);
 	}
 
-	private ResolvedCoordinateMatch resolveCoordinate(
+	private Optional<ResolvedCoordinateMatch> resolveCoordinate(
 		ComplexCoordinateTarget target,
 		List<BuildingFootprintCandidate> footprints
 	) {
 		Set<String> targetDongs = normalizeDongTokens(target.aptDongs());
 		if (targetDongs.isEmpty()) {
-			return null;
+			return Optional.empty();
 		}
 		List<BuildingFootprintCandidate> matches = footprints.stream()
 			.filter(footprint -> targetDongs.contains(normalizeDongToken(footprint.dongName())))
 			.toList();
 		if (matches.isEmpty() || hasDuplicateDongToken(matches)) {
-			return null;
+			return Optional.empty();
 		}
-		return new ResolvedCoordinateMatch(
+		return Optional.of(new ResolvedCoordinateMatch(
 			new ResolvedDisplayCoordinate(
 				target.complexId(),
 				representativeBuildingFootprintId(matches),
@@ -196,7 +196,7 @@ public class ComplexCoordinateExceptionService {
 					: "apt_dong matched building dong_name aggregate footprint_count=" + matches.size()
 			),
 			matches.stream().map(BuildingFootprintCandidate::id).collect(java.util.stream.Collectors.toSet())
-		);
+		));
 	}
 
 	private boolean overlaps(Set<Long> assignedFootprintIds, Set<Long> candidateFootprintIds) {

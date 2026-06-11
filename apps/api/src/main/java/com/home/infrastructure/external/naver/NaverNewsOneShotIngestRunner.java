@@ -3,7 +3,7 @@ package com.home.infrastructure.external.naver;
 import com.home.application.news.observation.NewsArticleObservationIngestResult;
 import com.home.application.news.observation.NewsArticleObservationIngestService;
 
-class NaverNewsOneShotIngestRunner {
+public class NaverNewsOneShotIngestRunner {
 
 	private final NaverNewsSearchClient client;
 	private final NaverNewsObservationMapper mapper;
@@ -23,7 +23,7 @@ class NaverNewsOneShotIngestRunner {
 		return ingestDetailed(request).detailedResult().result();
 	}
 
-	NaverNewsOneShotIngestOutcome ingestDetailed(NaverNewsSearchRequest request) {
+	public NaverNewsOneShotIngestOutcome ingestDetailed(NaverNewsSearchRequest request) {
 		return new NaverNewsOneShotIngestOutcome(
 			ingestService.ingestDetailed(mapper.toObservationCommands(client.search(request)))
 		);

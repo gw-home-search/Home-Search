@@ -1,5 +1,7 @@
 package com.home.infrastructure.web.admin;
 
+import com.home.application.coordinate.override.AdminCoordinateAccessDeniedException;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 

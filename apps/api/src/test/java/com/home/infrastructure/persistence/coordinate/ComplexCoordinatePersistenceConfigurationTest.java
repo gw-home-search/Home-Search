@@ -8,6 +8,7 @@ import javax.sql.DataSource;
 import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessService;
 import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
+import com.home.infrastructure.scheduling.coordinate.ComplexCoordinateReadinessSchedulingConfiguration;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,7 +25,10 @@ class ComplexCoordinatePersistenceConfigurationTest {
 			JdbcTemplateAutoConfiguration.class,
 			JdbcClientAutoConfiguration.class
 		))
-		.withUserConfiguration(ComplexCoordinatePersistenceConfiguration.class)
+		.withUserConfiguration(
+			ComplexCoordinatePersistenceConfiguration.class,
+			ComplexCoordinateReadinessSchedulingConfiguration.class
+		)
 		.withPropertyValues("home.coordinate.readiness.enabled=true")
 		.withBean(DataSource.class, () -> mock(DataSource.class));
 

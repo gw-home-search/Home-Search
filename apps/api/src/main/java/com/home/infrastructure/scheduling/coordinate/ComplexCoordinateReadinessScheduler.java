@@ -1,13 +1,14 @@
-package com.home.infrastructure.persistence.coordinate;
+package com.home.infrastructure.scheduling.coordinate;
 
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessResult;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessService;
+import com.home.infrastructure.scheduling.ScheduledJobExecutionTemplate;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 
-class ComplexCoordinateReadinessScheduler {
+public class ComplexCoordinateReadinessScheduler {
 
 	private static final Logger log = LoggerFactory.getLogger(ComplexCoordinateReadinessScheduler.class);
 
@@ -15,8 +16,10 @@ class ComplexCoordinateReadinessScheduler {
 	private final int stageLimit;
 	private final int resolveLimit;
 	private final int projectLimit;
+	private final ScheduledJobExecutionTemplate execution =
+		new ScheduledJobExecutionTemplate("complex coordinate readiness");
 
-	ComplexCoordinateReadinessScheduler(
+	public ComplexCoordinateReadinessScheduler(
 		ComplexCoordinateReadinessService readinessService,
 		int stageLimit,
 		int resolveLimit,
@@ -33,6 +36,10 @@ class ComplexCoordinateReadinessScheduler {
 		fixedDelayString = "${home.coordinate.readiness.scheduler.fixed-delay-millis:3600000}"
 	)
 	void runDue() {
+		execution.execute(this::runScheduledExecution);
+	}
+
+	private void runScheduledExecution() {
 		ComplexCoordinateReadinessResult result = readinessService.prepare(stageLimit, resolveLimit, projectLimit);
 		log.info(
 			"complex coordinate readiness scheduled run completed staged={} pending={} skipped={} resolved={} ambiguous={} unavailable={} failed={} retried={} projectedBuildingFootprint={} projectedParcelFallback={} projectionSkipped={} projectionMissing={}",

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Objects;
 
 import com.home.domain.ingest.matching.TradeMatchStatus;
+import com.home.domain.ingest.matching.TradeMatchPath;
 import com.home.domain.ingest.source.IngestSource;
 import com.home.domain.trade.RtmsJibunPnu;
 import com.home.application.ingest.normalization.RtmsJibunPnuNormalizer;
@@ -57,7 +58,7 @@ public record TradeMatchEvidenceCommand(
 		pnuUnavailableReason = trimToNull(pnuUnavailableReason);
 		aptSeq = trimToNull(aptSeq);
 		aptName = trimToNull(aptName);
-		matchPath = trimToNull(matchPath);
+		matchPath = normalizeMatchPath(matchPath);
 		matchedComplexPk = trimToNull(matchedComplexPk);
 		candidateComplexIds = List.copyOf(Objects.requireNonNullElse(candidateComplexIds, List.of()));
 		failureReason = trimToNull(failureReason);
@@ -99,6 +100,10 @@ public record TradeMatchEvidenceCommand(
 
 	private static boolean hasText(String value) {
 		return value != null && !value.isBlank();
+	}
+
+	private static String normalizeMatchPath(String value) {
+		return hasText(value) ? TradeMatchPath.fromStoredValue(value).storedValue() : null;
 	}
 
 	private static String trimToNull(String value) {

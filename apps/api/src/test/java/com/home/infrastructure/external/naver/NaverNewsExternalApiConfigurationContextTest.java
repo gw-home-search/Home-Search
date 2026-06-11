@@ -9,6 +9,9 @@ import com.home.application.news.observation.NewsArticleObservationIngestService
 import com.home.application.news.relevance.NewsArticleRelevanceGateService;
 import com.home.application.news.signal.NewsSignalFeatureExtractionService;
 import com.home.application.news.export.NewsSignalObsidianExportService;
+import com.home.infrastructure.scheduling.news.NaverNewsDailyPipelineConfiguration;
+import com.home.infrastructure.scheduling.news.NaverNewsDailyPipelineRunner;
+import com.home.infrastructure.scheduling.news.NaverNewsDailyPipelineScheduler;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -61,4 +61,15 @@ record RtmsBackfillChunkExecutionResult(
 			result
 		);
 	}
+
+	static RtmsBackfillChunkExecutionResult from(RtmsMonthlyRefreshRunSummary summary) {
+		return new RtmsBackfillChunkExecutionResult(
+			summary.lawdCd(),
+			summary.dealYmd(),
+			summary.runId(),
+			summary.status().backfillStatus(),
+			summary.status().failureReason(summary.failureReason()),
+			summary.ingestResult()
+		);
+	}
 }

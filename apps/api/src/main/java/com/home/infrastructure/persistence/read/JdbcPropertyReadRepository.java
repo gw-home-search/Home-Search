@@ -22,6 +22,92 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class JdbcPropertyReadRepository implements PropertyReadRepository {
 
+	private static final String COMPLEX_SEARCH_SQL = """
+		SELECT
+		    c.id AS complex_id,
+		    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name) AS complex_name,
+		    p.id AS parcel_id,
+		    COALESCE(display_coordinate.latitude, p.latitude) AS latitude,
+		    COALESCE(display_coordinate.longitude, p.longitude) AS longitude,
+		    p.address
+		FROM complex c
+		JOIN parcel p ON p.id = c.parcel_id
+		LEFT JOIN complex_display_coordinate display_coordinate ON display_coordinate.complex_id = c.id
+		WHERE lower(c.name) LIKE :pattern
+		   OR lower(COALESCE(c.trade_name, '')) LIKE :pattern
+		   OR lower(COALESCE(p.address, '')) LIKE :pattern
+		   OR EXISTS (
+		       SELECT 1
+		       FROM complex_name_alias a
+		       WHERE a.complex_id = c.id
+		         AND (
+		             lower(a.alias_name) LIKE :pattern
+		             OR (
+		                 CAST(:normalizedPattern AS VARCHAR) IS NOT NULL
+		                 AND a.normalized_name LIKE :normalizedPattern
+		             )
+		         )
+		   )
+		ORDER BY
+		    CASE
+		        WHEN lower(c.name) = :lowerQuery
+		            OR lower(COALESCE(c.trade_name, '')) = :lowerQuery THEN 0
+		        WHEN lower(c.name) LIKE :prefixPattern
+		            OR lower(COALESCE(c.trade_name, '')) LIKE :prefixPattern THEN 1
+		        WHEN EXISTS (
+		            SELECT 1
+		            FROM complex_name_alias a
+		            WHERE a.complex_id = c.id
+		              AND (
+		                  lower(a.alias_name) = :lowerQuery
+		                  OR lower(a.alias_name) LIKE :prefixPattern
+		                  OR (
+		                      CAST(:normalizedQuery AS VARCHAR) IS NOT NULL
+		                      AND (
+		                          a.normalized_name = :normalizedQuery
+		                          OR a.normalized_name LIKE :normalizedPrefixPattern
+		                      )
+		                  )
+		              )
+		        ) THEN 2
+		        WHEN lower(c.name) LIKE :pattern
+		            OR lower(COALESCE(c.trade_name, '')) LIKE :pattern THEN 3
+		        WHEN EXISTS (
+		            SELECT 1
+		            FROM complex_name_alias a
+		            WHERE a.complex_id = c.id
+		              AND (
+		                  lower(a.alias_name) LIKE :pattern
+		                  OR (
+		                      CAST(:normalizedPattern AS VARCHAR) IS NOT NULL
+		                      AND a.normalized_name LIKE :normalizedPattern
+		                  )
+		              )
+		        ) THEN 4
+		        WHEN lower(COALESCE(p.address, '')) LIKE :prefixPattern THEN 5
+		        WHEN lower(COALESCE(p.address, '')) LIKE :pattern THEN 6
+		        ELSE 7
+		    END,
+		    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name),
+		    c.id
+		LIMIT :limit
+		""";
+	private static final String TRADE_LIST_SQL = """
+		SELECT
+		    t.id AS trade_id,
+		    t.deal_date,
+		    t.excl_area,
+		    t.deal_amount,
+		    t.apt_dong,
+		    t.floor
+		FROM trade t
+		JOIN complex c ON c.id = t.complex_id
+		WHERE (CAST(:parcelId AS BIGINT) IS NULL OR c.parcel_id = :parcelId)
+		  AND (CAST(:complexId AS BIGINT) IS NULL OR c.id = :complexId)
+		  AND t.deleted_at IS NULL
+		ORDER BY t.deal_date DESC, t.id DESC
+		""";
+
 	private final JdbcClient jdbcClient;
 
 	public JdbcPropertyReadRepository(JdbcClient jdbcClient) {
@@ -31,82 +117,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	@Override
 	public List<SearchComplexResult> searchComplexes(String query) {
 		PropertySearchTerms terms = PropertySearchTerms.from(query);
-		return jdbcClient.sql("""
-			SELECT
-			    c.id AS complex_id,
-			    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name) AS complex_name,
-			    p.id AS parcel_id,
-			    COALESCE(display_coordinate.latitude, p.latitude) AS latitude,
-			    COALESCE(display_coordinate.longitude, p.longitude) AS longitude,
-			    p.address
-			FROM complex c
-			JOIN parcel p ON p.id = c.parcel_id
-			LEFT JOIN complex_display_coordinate display_coordinate ON display_coordinate.complex_id = c.id
-			WHERE lower(c.name) LIKE :pattern
-			   OR lower(COALESCE(c.trade_name, '')) LIKE :pattern
-			   OR lower(COALESCE(p.address, '')) LIKE :pattern
-			   OR EXISTS (
-			       SELECT 1
-			       FROM complex_name_alias a
-			       WHERE a.complex_id = c.id
-			         AND (
-			             lower(a.alias_name) LIKE :pattern
-			             OR (
-			                 CAST(:normalizedPattern AS VARCHAR) IS NOT NULL
-			                 AND a.normalized_name LIKE :normalizedPattern
-			             )
-			         )
-			   )
-			ORDER BY
-			    CASE
-			        WHEN lower(c.name) = :lowerQuery
-			            OR lower(COALESCE(c.trade_name, '')) = :lowerQuery THEN 0
-			        WHEN lower(c.name) LIKE :prefixPattern
-			            OR lower(COALESCE(c.trade_name, '')) LIKE :prefixPattern THEN 1
-			        WHEN EXISTS (
-			            SELECT 1
-			            FROM complex_name_alias a
-			            WHERE a.complex_id = c.id
-			              AND (
-			                  lower(a.alias_name) = :lowerQuery
-			                  OR lower(a.alias_name) LIKE :prefixPattern
-			                  OR (
-			                      CAST(:normalizedQuery AS VARCHAR) IS NOT NULL
-			                      AND (
-			                          a.normalized_name = :normalizedQuery
-			                          OR a.normalized_name LIKE :normalizedPrefixPattern
-			                      )
-			                  )
-			              )
-			        ) THEN 2
-			        WHEN lower(c.name) LIKE :pattern
-			            OR lower(COALESCE(c.trade_name, '')) LIKE :pattern THEN 3
-			        WHEN EXISTS (
-			            SELECT 1
-			            FROM complex_name_alias a
-			            WHERE a.complex_id = c.id
-			              AND (
-			                  lower(a.alias_name) LIKE :pattern
-			                  OR (
-			                      CAST(:normalizedPattern AS VARCHAR) IS NOT NULL
-			                      AND a.normalized_name LIKE :normalizedPattern
-			                  )
-			              )
-			        ) THEN 4
-			        WHEN lower(COALESCE(p.address, '')) LIKE :prefixPattern THEN 5
-			        WHEN lower(COALESCE(p.address, '')) LIKE :pattern THEN 6
-			        ELSE 7
-			    END,
-			    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name),
-			    c.id
-			LIMIT 20
-			""")
-			.param("lowerQuery", terms.lowerQuery())
-			.param("pattern", terms.pattern())
-			.param("prefixPattern", terms.prefixPattern())
-			.param("normalizedQuery", terms.normalizedQuery())
-			.param("normalizedPattern", terms.normalizedPattern())
-			.param("normalizedPrefixPattern", terms.normalizedPrefixPattern())
+		return searchStatement(terms, 20)
 			.query(this::mapSearchComplex)
 			.list();
 	}
@@ -114,80 +125,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	@Override
 	public List<ComplexSuggestionResult> suggestComplexes(String query, int limit) {
 		PropertySearchTerms terms = PropertySearchTerms.from(query);
-		return jdbcClient.sql("""
-			SELECT
-			    c.id AS complex_id,
-			    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name) AS complex_name,
-			    p.id AS parcel_id,
-			    p.address
-			FROM complex c
-			JOIN parcel p ON p.id = c.parcel_id
-			WHERE lower(c.name) LIKE :pattern
-			   OR lower(COALESCE(c.trade_name, '')) LIKE :pattern
-			   OR lower(COALESCE(p.address, '')) LIKE :pattern
-			   OR EXISTS (
-			       SELECT 1
-			       FROM complex_name_alias a
-			       WHERE a.complex_id = c.id
-			         AND (
-			             lower(a.alias_name) LIKE :pattern
-			             OR (
-			                 CAST(:normalizedPattern AS VARCHAR) IS NOT NULL
-			                 AND a.normalized_name LIKE :normalizedPattern
-			             )
-			         )
-			   )
-			ORDER BY
-			    CASE
-			        WHEN lower(c.name) = :lowerQuery
-			            OR lower(COALESCE(c.trade_name, '')) = :lowerQuery THEN 0
-			        WHEN lower(c.name) LIKE :prefixPattern
-			            OR lower(COALESCE(c.trade_name, '')) LIKE :prefixPattern THEN 1
-			        WHEN EXISTS (
-			            SELECT 1
-			            FROM complex_name_alias a
-			            WHERE a.complex_id = c.id
-			              AND (
-			                  lower(a.alias_name) = :lowerQuery
-			                  OR lower(a.alias_name) LIKE :prefixPattern
-			                  OR (
-			                      CAST(:normalizedQuery AS VARCHAR) IS NOT NULL
-			                      AND (
-			                          a.normalized_name = :normalizedQuery
-			                          OR a.normalized_name LIKE :normalizedPrefixPattern
-			                      )
-			                  )
-			              )
-			        ) THEN 2
-			        WHEN lower(c.name) LIKE :pattern
-			            OR lower(COALESCE(c.trade_name, '')) LIKE :pattern THEN 3
-			        WHEN EXISTS (
-			            SELECT 1
-			            FROM complex_name_alias a
-			            WHERE a.complex_id = c.id
-			              AND (
-			                  lower(a.alias_name) LIKE :pattern
-			                  OR (
-			                      CAST(:normalizedPattern AS VARCHAR) IS NOT NULL
-			                      AND a.normalized_name LIKE :normalizedPattern
-			                  )
-			              )
-			        ) THEN 4
-			        WHEN lower(COALESCE(p.address, '')) LIKE :prefixPattern THEN 5
-			        WHEN lower(COALESCE(p.address, '')) LIKE :pattern THEN 6
-			        ELSE 7
-			    END,
-			    COALESCE(NULLIF(BTRIM(c.trade_name), ''), c.name),
-			    c.id
-			LIMIT :limit
-			""")
-			.param("lowerQuery", terms.lowerQuery())
-			.param("pattern", terms.pattern())
-			.param("prefixPattern", terms.prefixPattern())
-			.param("normalizedQuery", terms.normalizedQuery())
-			.param("normalizedPattern", terms.normalizedPattern())
-			.param("normalizedPrefixPattern", terms.normalizedPrefixPattern())
-			.param("limit", limit)
+		return searchStatement(terms, limit)
 			.query(this::mapComplexSuggestion)
 			.list();
 	}
@@ -396,25 +334,7 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 		if (!hasComplexParent(parcelId, complexId)) {
 			return Optional.empty();
 		}
-		List<TradeResult> trades = jdbcClient.sql("""
-			SELECT
-			    t.id AS trade_id,
-			    t.deal_date,
-			    t.excl_area,
-			    t.deal_amount,
-			    t.apt_dong,
-			    t.floor
-			FROM trade t
-			JOIN complex c ON c.id = t.complex_id
-			WHERE c.parcel_id = :parcelId
-			  AND (CAST(:complexId AS BIGINT) IS NULL OR c.id = :complexId)
-			  AND t.deleted_at IS NULL
-			ORDER BY t.deal_date DESC, t.id DESC
-			""")
-			.param("parcelId", parcelId)
-			.param("complexId", complexId)
-			.query(this::mapTrade)
-			.list();
+		List<TradeResult> trades = findTrades(parcelId, complexId);
 		return Optional.of(new TradeListResult(parcelId, complexId, trades));
 	}
 
@@ -431,23 +351,27 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 		if (parcelId.isEmpty()) {
 			return Optional.empty();
 		}
-		List<TradeResult> trades = jdbcClient.sql("""
-			SELECT
-			    t.id AS trade_id,
-			    t.deal_date,
-			    t.excl_area,
-			    t.deal_amount,
-			    t.apt_dong,
-			    t.floor
-			FROM trade t
-			WHERE t.complex_id = :complexId
-			  AND t.deleted_at IS NULL
-			ORDER BY t.deal_date DESC, t.id DESC
-			""")
+		List<TradeResult> trades = findTrades(null, complexId);
+		return Optional.of(new TradeListResult(parcelId.get(), complexId, trades));
+	}
+
+	private JdbcClient.StatementSpec searchStatement(PropertySearchTerms terms, int limit) {
+		return jdbcClient.sql(COMPLEX_SEARCH_SQL)
+			.param("lowerQuery", terms.lowerQuery())
+			.param("pattern", terms.pattern())
+			.param("prefixPattern", terms.prefixPattern())
+			.param("normalizedQuery", terms.normalizedQuery())
+			.param("normalizedPattern", terms.normalizedPattern())
+			.param("normalizedPrefixPattern", terms.normalizedPrefixPattern())
+			.param("limit", limit);
+	}
+
+	private List<TradeResult> findTrades(Long parcelId, Long complexId) {
+		return jdbcClient.sql(TRADE_LIST_SQL)
+			.param("parcelId", parcelId)
 			.param("complexId", complexId)
 			.query(this::mapTrade)
 			.list();
-		return Optional.of(new TradeListResult(parcelId.get(), complexId, trades));
 	}
 
 	private boolean hasRegion(Long regionId) {

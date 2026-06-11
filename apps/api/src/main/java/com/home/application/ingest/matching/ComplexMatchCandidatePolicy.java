@@ -6,6 +6,7 @@ import java.util.Locale;
 import java.util.Objects;
 
 import com.home.domain.ingest.matching.TradeMatchStatus;
+import com.home.domain.ingest.matching.TradeMatchPath;
 import com.home.domain.trade.RtmsJibunPnu;
 
 /**
@@ -69,7 +70,7 @@ public class ComplexMatchCandidatePolicy {
 					candidateIds(pnuMatches)
 				);
 			}
-			return matched(candidate, "PNU_UNIQUE", TradeMatchStatus.MATCHED, jibunPnu, 1, candidateIds(pnuMatches),
+			return matched(candidate, TradeMatchPath.PNU_UNIQUE, TradeMatchStatus.MATCHED, jibunPnu, 1, candidateIds(pnuMatches),
 				null);
 		}
 
@@ -130,7 +131,7 @@ public class ComplexMatchCandidatePolicy {
 		String failureReason = status.isMatchedNameVariant()
 			? "observed RTMS name differs from master name"
 			: null;
-		return matched(candidate, "APTSEQ", status, jibunPnu, 1, List.of(candidate.complexId()), failureReason);
+		return matched(candidate, TradeMatchPath.APTSEQ, status, jibunPnu, 1, List.of(candidate.complexId()), failureReason);
 	}
 
 	private CandidateNameMatch chooseByName(String aptName, List<ComplexMatchCandidate> candidates) {
@@ -174,28 +175,28 @@ public class ComplexMatchCandidatePolicy {
 		String name = normalizeName(candidate.name());
 
 		if (target.equals(tradeName) || target.equals(name)) {
-			return new NameScore(4, "PNU_NAME");
+			return new NameScore(4, TradeMatchPath.PNU_NAME);
 		}
 		if (candidate.normalizedAliases().contains(target)) {
-			return new NameScore(3, "PNU_ALIAS_NAME");
+			return new NameScore(3, TradeMatchPath.PNU_ALIAS_NAME);
 		}
 		if (!tradeName.isBlank() && (tradeName.contains(target) || target.contains(tradeName))) {
-			return new NameScore(2, "PNU_NAME");
+			return new NameScore(2, TradeMatchPath.PNU_NAME);
 		}
 		if (!name.isBlank() && (name.contains(target) || target.contains(name))) {
-			return new NameScore(2, "PNU_NAME");
+			return new NameScore(2, TradeMatchPath.PNU_NAME);
 		}
 		for (String alias : candidate.normalizedAliases()) {
 			if (!alias.isBlank() && (alias.contains(target) || target.contains(alias))) {
-				return new NameScore(1, "PNU_ALIAS_NAME");
+				return new NameScore(1, TradeMatchPath.PNU_ALIAS_NAME);
 			}
 		}
-		return new NameScore(0, "PNU_NAME");
+		return new NameScore(0, TradeMatchPath.PNU_NAME);
 	}
 
 	private ComplexMatchResult matched(
 		ComplexMatchCandidate candidate,
-		String path,
+		TradeMatchPath path,
 		TradeMatchStatus status,
 		RtmsJibunPnu jibunPnu,
 		int candidateCount,
@@ -205,7 +206,7 @@ public class ComplexMatchCandidatePolicy {
 		return ComplexMatchResult.matched(
 			candidate.complexId(),
 			candidate.complexPk(),
-			path,
+			path.storedValue(),
 			status,
 			jibunPnu,
 			candidateCount,
@@ -276,13 +277,13 @@ public class ComplexMatchCandidatePolicy {
 
 	private record CandidateNameMatch(
 		ComplexMatchCandidate candidate,
-		String matchPath
+		TradeMatchPath matchPath
 	) {
 	}
 
 	private record NameScore(
 		int value,
-		String matchPath
+		TradeMatchPath matchPath
 	) {
 	}
 }

@@ -67,24 +67,7 @@ public record RtmsIngestRunRecord(
 		Instant startedAt,
 		Instant completedAt
 	) {
-		return new RtmsIngestRunRecord(
-			null,
-			lawdCd,
-			dealYmd,
-			"COMPLETED",
-			pageCount,
-			result.read(),
-			result.rawSaved(),
-			result.normalizedInserted(),
-			result.duplicateSkipped(),
-			result.canceledSkipped(),
-			result.matchFailed(),
-			result.parseFailed(),
-			null,
-			startedAt,
-			completedAt,
-			null
-		);
+		return of(lawdCd, dealYmd, pageCount, result, "COMPLETED", null, startedAt, completedAt);
 	}
 
 	public static RtmsIngestRunRecord failed(
@@ -96,24 +79,7 @@ public record RtmsIngestRunRecord(
 		Instant startedAt,
 		Instant completedAt
 	) {
-		return new RtmsIngestRunRecord(
-			null,
-			lawdCd,
-			dealYmd,
-			"FAILED",
-			pageCount,
-			result.read(),
-			result.rawSaved(),
-			result.normalizedInserted(),
-			result.duplicateSkipped(),
-			result.canceledSkipped(),
-			result.matchFailed(),
-			result.parseFailed(),
-			failureReason,
-			startedAt,
-			completedAt,
-			null
-		);
+		return of(lawdCd, dealYmd, pageCount, result, "FAILED", failureReason, startedAt, completedAt);
 	}
 
 	public static RtmsIngestRunRecord partiallyFailed(
@@ -125,11 +91,24 @@ public record RtmsIngestRunRecord(
 		Instant startedAt,
 		Instant completedAt
 	) {
+		return of(lawdCd, dealYmd, pageCount, result, "PARTIAL", failureReason, startedAt, completedAt);
+	}
+
+	public static RtmsIngestRunRecord of(
+		String lawdCd,
+		String dealYmd,
+		int pageCount,
+		IngestResult result,
+		String status,
+		String failureReason,
+		Instant startedAt,
+		Instant completedAt
+	) {
 		return new RtmsIngestRunRecord(
 			null,
 			lawdCd,
 			dealYmd,
-			"PARTIAL",
+			status,
 			pageCount,
 			result.read(),
 			result.rawSaved(),

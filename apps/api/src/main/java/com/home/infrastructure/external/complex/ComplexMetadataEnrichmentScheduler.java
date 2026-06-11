@@ -2,6 +2,7 @@ package com.home.infrastructure.external.complex;
 
 import com.home.application.ingest.metadata.ComplexMetadataEnrichmentResult;
 import com.home.application.ingest.metadata.ComplexMetadataEnrichmentService;
+import com.home.infrastructure.scheduling.ScheduledJobExecutionTemplate;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +14,8 @@ class ComplexMetadataEnrichmentScheduler {
 
 	private final ComplexMetadataEnrichmentService enrichmentService;
 	private final int batchSize;
+	private final ScheduledJobExecutionTemplate execution =
+		new ScheduledJobExecutionTemplate("complex metadata enrichment");
 
 	ComplexMetadataEnrichmentScheduler(ComplexMetadataEnrichmentService enrichmentService, int batchSize) {
 		this.enrichmentService = enrichmentService;
@@ -24,6 +27,10 @@ class ComplexMetadataEnrichmentScheduler {
 		fixedDelayString = "${complex.metadata.enrich.scheduler.fixed-delay-millis:3600000}"
 	)
 	void runDue() {
+		execution.execute(this::runScheduledExecution);
+	}
+
+	private void runScheduledExecution() {
 		ComplexMetadataEnrichmentResult result = enrichmentService.enrichPending(batchSize);
 		log.info(
 			"complex metadata enrichment scheduled run completed processed={} resolved={} partial={} ambiguous={} unavailable={} failed={}",

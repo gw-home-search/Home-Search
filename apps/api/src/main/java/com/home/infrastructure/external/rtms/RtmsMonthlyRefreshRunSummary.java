@@ -90,21 +90,7 @@ record RtmsMonthlyRefreshRunSummary(
 		IngestResult result,
 		Long runId
 	) {
-		return new RtmsMonthlyRefreshRunSummary(
-			lawdCd,
-			dealYmd,
-			result.read(),
-			result.rawSaved(),
-			result.normalizedInserted(),
-			result.duplicateSkipped(),
-			result.canceledSkipped(),
-			result.matchFailed(),
-			result.parseFailed(),
-			pageCount,
-			RtmsMonthlyRefreshRunStatus.COMPLETED,
-			null,
-			runId
-		);
+		return of(lawdCd, dealYmd, pageCount, result, RtmsMonthlyRefreshRunStatus.COMPLETED, null, runId);
 	}
 
 	static RtmsMonthlyRefreshRunSummary failed(
@@ -125,21 +111,7 @@ record RtmsMonthlyRefreshRunSummary(
 		String failureReason,
 		Long runId
 	) {
-		return new RtmsMonthlyRefreshRunSummary(
-			lawdCd,
-			dealYmd,
-			result.read(),
-			result.rawSaved(),
-			result.normalizedInserted(),
-			result.duplicateSkipped(),
-			result.canceledSkipped(),
-			result.matchFailed(),
-			result.parseFailed(),
-			pageCount,
-			RtmsMonthlyRefreshRunStatus.FAILED,
-			failureReason,
-			runId
-		);
+		return of(lawdCd, dealYmd, pageCount, result, RtmsMonthlyRefreshRunStatus.FAILED, failureReason, runId);
 	}
 
 	static RtmsMonthlyRefreshRunSummary partiallyFailed(
@@ -160,6 +132,18 @@ record RtmsMonthlyRefreshRunSummary(
 		String failureReason,
 		Long runId
 	) {
+		return of(lawdCd, dealYmd, pageCount, result, RtmsMonthlyRefreshRunStatus.PARTIAL, failureReason, runId);
+	}
+
+	static RtmsMonthlyRefreshRunSummary of(
+		String lawdCd,
+		String dealYmd,
+		int pageCount,
+		IngestResult result,
+		RtmsMonthlyRefreshRunStatus status,
+		String failureReason,
+		Long runId
+	) {
 		return new RtmsMonthlyRefreshRunSummary(
 			lawdCd,
 			dealYmd,
@@ -171,8 +155,8 @@ record RtmsMonthlyRefreshRunSummary(
 			result.matchFailed(),
 			result.parseFailed(),
 			pageCount,
-			RtmsMonthlyRefreshRunStatus.PARTIAL,
-			failureReason,
+			status,
+			status.failureReason(failureReason),
 			runId
 		);
 	}

@@ -10,12 +10,14 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(RtmsOneShotIngestConfigurationProperties.class)
 class RtmsExternalApiConfiguration {
 
 	@Bean
@@ -39,41 +41,9 @@ class RtmsExternalApiConfiguration {
 
 	@Bean
 	RtmsOneShotIngestProperties rtmsOneShotIngestProperties(
-		@Value("${home.ingest.rtms.enabled:false}") boolean enabled,
-		@Value("${home.ingest.rtms.lawd-cd:}") String lawdCd,
-		@Value("${home.ingest.rtms.deal-ymd:}") String dealYmd,
-		@Value("${home.ingest.rtms.page-no:1}") Integer pageNo,
-		@Value("${home.ingest.rtms.preflight-only:false}") boolean preflightOnly,
-		@Value("${home.ingest.rtms.mode:one-shot}") String mode,
-		@Value("${home.ingest.rtms.lookback-months:0}") Integer lookbackMonths,
-		@Value("${home.ingest.rtms.allow-coordinate-pending-only:false}") boolean allowCoordinatePendingOnly,
-		@Value("${home.ingest.rtms.nationwide.lawd-cds:}") String nationwideLawdCds,
-		@Value("${home.ingest.rtms.nationwide.deal-ymd-from:201201}") String nationwideDealYmdFrom,
-		@Value("${home.ingest.rtms.nationwide.deal-ymd-to:202606}") String nationwideDealYmdTo,
-		@Value("${home.ingest.rtms.nationwide.job-key:}") String nationwideJobKey,
-		@Value("${home.ingest.rtms.nationwide.worker-id:rtms-backfill-worker}") String nationwideWorkerId,
-		@Value("${home.ingest.rtms.nationwide.lease-minutes:30}") Integer nationwideLeaseMinutes,
-		@Value("${home.ingest.rtms.nationwide.max-attempt-count:3}") Integer nationwideMaxAttemptCount,
-		@Value("${home.ingest.rtms.nationwide.chunk-limit:2147483647}") Integer nationwideChunkLimit
+		RtmsOneShotIngestConfigurationProperties properties
 	) {
-		return new RtmsOneShotIngestProperties(
-			enabled,
-			lawdCd,
-			dealYmd,
-			pageNo,
-			preflightOnly,
-			mode,
-			lookbackMonths,
-			allowCoordinatePendingOnly,
-			nationwideLawdCds,
-			nationwideDealYmdFrom,
-			nationwideDealYmdTo,
-			nationwideJobKey,
-			nationwideWorkerId,
-			nationwideLeaseMinutes,
-			nationwideMaxAttemptCount,
-			nationwideChunkLimit
-		);
+		return properties.toProperties();
 	}
 
 	@Bean
@@ -113,9 +83,9 @@ class RtmsExternalApiConfiguration {
 	) {
 		return new RtmsOneShotTradeIngestRunner(
 			client,
-			RtmsTradeIngestServiceReference.lazy(() -> ingestServiceProvider.getIfAvailable(() -> {
+			() -> ingestServiceProvider.getIfAvailable(() -> {
 				throw new IllegalStateException("OpenApiTradeIngestService is required for RTMS one-shot ingest");
-			}))
+			})
 		);
 	}
 
@@ -129,12 +99,12 @@ class RtmsExternalApiConfiguration {
 	) {
 		return new RtmsMonthlyRefreshRunner(
 			client,
-			RtmsTradeIngestServiceReference.lazy(() -> ingestServiceProvider.getIfAvailable(() -> {
+			() -> ingestServiceProvider.getIfAvailable(() -> {
 				throw new IllegalStateException("OpenApiTradeIngestService is required for RTMS monthly refresh ingest");
-			})),
-			RtmsIngestRunRepositoryReference.lazy(() -> ingestRunRepositoryProvider.getIfAvailable(
+			}),
+			() -> ingestRunRepositoryProvider.getIfAvailable(
 				RtmsIngestRunRepository::noop
-			)),
+			),
 			java.time.Clock.systemUTC(),
 			new RtmsMonthlyRefreshRetryPolicy(refreshRetryAttempts, refreshRetryBackoffMillis)
 		);
@@ -160,7 +130,9 @@ class RtmsExternalApiConfiguration {
 					);
 				})
 			),
-			request -> summaryToBackfillResult(monthlyRefreshRunner.refresh(request.lawdCd(), request.dealYmd())),
+			request -> RtmsBackfillChunkExecutionResult.from(
+				monthlyRefreshRunner.refresh(request.lawdCd(), request.dealYmd())
+			),
 			java.time.Clock.systemUTC(),
 			properties.nationwideBackfillOptions()
 		);
@@ -215,28 +187,4 @@ class RtmsExternalApiConfiguration {
 		);
 	}
 
-	private RtmsBackfillChunkExecutionResult summaryToBackfillResult(RtmsMonthlyRefreshRunSummary summary) {
-		return switch (summary.status()) {
-			case COMPLETED -> RtmsBackfillChunkExecutionResult.completed(
-				summary.lawdCd(),
-				summary.dealYmd(),
-				summary.runId(),
-				summary.ingestResult()
-			);
-			case PARTIAL -> RtmsBackfillChunkExecutionResult.partial(
-				summary.lawdCd(),
-				summary.dealYmd(),
-				summary.runId(),
-				summary.failureReason(),
-				summary.ingestResult()
-			);
-			case FAILED -> RtmsBackfillChunkExecutionResult.failed(
-				summary.lawdCd(),
-				summary.dealYmd(),
-				summary.runId(),
-				summary.failureReason(),
-				summary.ingestResult()
-			);
-		};
-	}
 }

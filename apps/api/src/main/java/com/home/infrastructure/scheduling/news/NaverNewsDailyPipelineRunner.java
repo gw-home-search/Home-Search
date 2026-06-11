@@ -1,4 +1,4 @@
-package com.home.infrastructure.external.naver;
+package com.home.infrastructure.scheduling.news;
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -24,11 +24,14 @@ import com.home.application.news.signal.NewsSignalFeatureExtractionService;
 import com.home.domain.news.NewsCollectionArticleDisposition;
 import com.home.domain.news.NewsCollectionNotificationStatus;
 import com.home.domain.news.NewsCollectionRunStatus;
+import com.home.infrastructure.external.naver.NaverNewsOneShotIngestOutcome;
+import com.home.infrastructure.external.naver.NaverNewsOneShotIngestRunner;
+import com.home.infrastructure.external.naver.NaverNewsSearchRequest;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class NaverNewsDailyPipelineRunner {
+public class NaverNewsDailyPipelineRunner {
 
 	private static final Logger log = LoggerFactory.getLogger(NaverNewsDailyPipelineRunner.class);
 
@@ -266,28 +269,42 @@ class NaverNewsDailyPipelineRunner {
 		NewsArticleRelevanceGateResult relevance = postProcessing.relevanceResult();
 		NewsSignalFeatureExtractionResult extraction = postProcessing.extractionResult();
 		NewsSignalObsidianExportResult export = postProcessing.exportResult();
-		return new NewsCollectionRunCompletion(
-			runId,
-			status,
-			finishedAt,
-			keywordCount,
-			keywordExecutions.stream().mapToLong(it -> it.ingestResult().read()).sum(),
-			keywordExecutions.stream().mapToLong(it -> it.ingestResult().observed()).sum(),
-			keywordExecutions.stream().mapToLong(it -> it.ingestResult().duplicateSkipped()).sum(),
-			relevance.evaluated(),
-			relevance.kept(),
-			relevance.skippedIrrelevant(),
-			extraction.evaluated(),
-			extraction.extracted(),
-			extraction.duplicateFeatureSkipped(),
-			export == null ? 0 : export.featureCount(),
-			export == null ? null : export.date().toString(),
-			export == null || export.path() == null ? null : export.path().toString(),
-			export == null ? 0 : export.articleCount(),
-			export != null && export.truncated(),
-			notificationStatus,
-			notificationFailureReason,
-			failureReason(keywordExecutions, postProcessing)
+			return NewsCollectionRunCompletion.from(
+				runId,
+				status,
+				finishedAt,
+				new NewsCollectionRunCompletion.CollectionMetrics(
+					keywordCount,
+					keywordExecutions.stream().mapToLong(it -> it.ingestResult().read()).sum(),
+					keywordExecutions.stream().mapToLong(it -> it.ingestResult().observed()).sum(),
+					keywordExecutions.stream().mapToLong(it -> it.ingestResult().duplicateSkipped()).sum()
+				),
+				new NewsCollectionRunCompletion.RelevanceMetrics(
+					relevance.evaluated(),
+					relevance.kept(),
+					relevance.skippedIrrelevant()
+				),
+				new NewsCollectionRunCompletion.ExtractionMetrics(
+					extraction.evaluated(),
+					extraction.extracted(),
+					extraction.duplicateFeatureSkipped()
+				),
+				exportMetrics(export),
+				new NewsCollectionRunCompletion.NotificationResult(notificationStatus, notificationFailureReason),
+				failureReason(keywordExecutions, postProcessing)
+			);
+		}
+
+	private static NewsCollectionRunCompletion.ExportMetrics exportMetrics(NewsSignalObsidianExportResult export) {
+		if (export == null) {
+			return NewsCollectionRunCompletion.ExportMetrics.none();
+		}
+		return new NewsCollectionRunCompletion.ExportMetrics(
+			export.featureCount(),
+			export.date().toString(),
+			export.path() == null ? null : export.path().toString(),
+			export.articleCount(),
+			export.truncated()
 		);
 	}
 

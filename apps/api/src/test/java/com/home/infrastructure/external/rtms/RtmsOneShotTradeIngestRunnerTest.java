@@ -87,9 +87,9 @@ class RtmsOneShotTradeIngestRunnerTest {
 		RtmsApartmentTradeClient client = mock(RtmsApartmentTradeClient.class);
 		RtmsOneShotTradeIngestRunner runner = new RtmsOneShotTradeIngestRunner(
 			client,
-			RtmsTradeIngestServiceReference.lazy(() -> {
+			() -> {
 				throw new IllegalStateException("OpenApiTradeIngestService is required");
-			})
+			}
 		);
 
 		assertThatThrownBy(() -> runner.ingest(new RtmsApartmentTradeRequest("11680", "202512", 1)))

@@ -1,5 +1,6 @@
 package com.home.infrastructure.web.map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -14,11 +15,14 @@ import java.util.stream.Stream;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -33,6 +37,7 @@ import com.home.application.map.RegionMarkerQuery;
 
 @WebMvcTest(MapController.class)
 @ActiveProfiles("test")
+@ExtendWith(OutputCaptureExtension.class)
 class MapControllerContractTest {
 
 	private static final String OFFSET_TIMESTAMP_PATTERN =
@@ -342,9 +347,9 @@ class MapControllerContractTest {
 
 	@Test
 	@DisplayName("POST /api/v1/map/complexes는 unexpected server error를 ProblemDetail로 반환한다")
-	void unexpectedComplexMarkerErrorReturnsProblemDetail() throws Exception {
+	void unexpectedComplexMarkerErrorReturnsProblemDetail(CapturedOutput output) throws Exception {
 		given(mapUseCase.getComplexMarkers(any(ComplexMarkerQuery.class)))
-			.willThrow(new IllegalStateException("failed to load markers"));
+			.willThrow(new IllegalStateException("failed to load markers serviceKey=sensitive-marker"));
 
 		mockMvc.perform(post("/api/v1/map/complexes")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -372,6 +377,13 @@ class MapControllerContractTest {
 			.andExpect(jsonPath("$.detail").value("Internal server error."))
 			.andExpect(jsonPath("$.exception").value("IllegalStateException"))
 			.andExpect(jsonPath("$.timestamp").value(matchesPattern(OFFSET_TIMESTAMP_PATTERN)));
+		assertThat(output)
+			.contains("Unhandled API exception")
+			.contains("type=IllegalStateException")
+			.contains("MapControllerContractTest")
+			.doesNotContain("failed to load markers")
+			.doesNotContain("serviceKey")
+			.doesNotContain("sensitive-marker");
 	}
 
 	private static Stream<Arguments> invalidComplexFilterRanges() {

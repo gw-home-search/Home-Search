@@ -1,4 +1,4 @@
-package com.home.infrastructure.web.admin;
+package com.home.application.coordinate.override;
 
 public class AdminCoordinateAccessDeniedException extends RuntimeException {
 

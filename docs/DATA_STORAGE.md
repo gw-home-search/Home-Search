@@ -143,6 +143,48 @@ source field was identical:
 - `matchFailed`: raw row was preserved with queryable match evidence but could
   not safely attach to a `complex_id`.
 
+## Ingest Transaction Boundary And Recovery
+
+The RTMS item flow intentionally does not use one cross-repository transaction
+for raw evidence, matching evidence, normalized trade storage, and the final raw
+status update. The processing order is:
+
+1. Commit a `raw_trade_ingest` row with `RECEIVED`.
+2. Check source-key and payload duplicates, parse the item, bootstrap/match the
+   complex, and save match evidence.
+3. Insert or deduplicate the normalized trade.
+4. Update the raw row to its durable terminal status.
+
+This boundary preserves the source payload even when parsing, matching,
+normalization, or status updates fail later. A rollback of the whole item would
+violate the raw-first evidence invariant and make failed processing harder to
+explain or replay.
+
+The design is not transaction-free. `JdbcNormalizedTradeRepository` uses a
+transaction around source-key registry changes, fallback-identity locking,
+normalized `trade` insertion, and cancellation. Database uniqueness and
+`insertIfAbsent` behavior make repeated ingest idempotent for normalized trade
+creation. The cross-repository transaction boundary remains outside that
+adapter, so a process failure can leave durable intermediate evidence.
+
+Recovery behavior:
+
+- `RawIngestReconciliationRunner` finds `RECEIVED` raw rows already linked to
+  an active normalized trade and advances them to `NORMALIZED`.
+- Re-running the same source data is safe for normalized trade creation because
+  the source-key registry and fallback duplicate policy reject duplicate
+  inserts.
+- Match-failed evidence remains queryable and can be handled by the rematch
+  flow after master or coordinate coverage improves.
+
+The reconciliation runner does not repair every partial state. For example, it
+does not infer a missing match-evidence write, retry an arbitrary failed raw
+status update, or reinterpret a cancellation. Operators must inspect persistent
+`RECEIVED`, `MATCH_FAILED`, `PARSE_FAILED`, and related evidence when counts
+remain abnormal. Any future transaction expansion must preserve raw-first
+durability and prove that replay, dedupe, cancellation, and failure
+queryability remain intact.
+
 ### RTMS Deduplication Scenarios
 
 | Scenario | Storage result | Reason |

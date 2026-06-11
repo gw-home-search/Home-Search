@@ -14,6 +14,8 @@ class BackendPersistencePackageStructureTest {
 
 	private static final Path INGEST_PERSISTENCE_ROOT =
 		Path.of("src/main/java/com/home/infrastructure/persistence/ingest");
+	private static final Path PROPERTY_READ_REPOSITORY =
+		Path.of("src/main/java/com/home/infrastructure/persistence/read/JdbcPropertyReadRepository.java");
 	private static final int MAX_ROOT_CLASSES = 5;
 	private static final int MIN_CAPABILITY_PACKAGES = 4;
 
@@ -44,5 +46,17 @@ class BackendPersistencePackageStructureTest {
 		}
 
 		assertThat(violations).isEmpty();
+	}
+
+	@Test
+	@DisplayName("property read adapter는 search ranking과 trade list SQL을 단일 정의로 공유한다")
+	void propertyReadAdapterSharesSearchRankingAndTradeListSql() throws IOException {
+		String source = Files.readString(PROPERTY_READ_REPOSITORY);
+
+		assertThat(source)
+			.contains("private static final String COMPLEX_SEARCH_SQL")
+			.contains("private static final String TRADE_LIST_SQL");
+		assertThat(source.split("lower\\(a\\.alias_name\\) = :lowerQuery", -1)).hasSize(2);
+		assertThat(source.split("t\\.deleted_at IS NULL", -1)).hasSize(2);
 	}
 }

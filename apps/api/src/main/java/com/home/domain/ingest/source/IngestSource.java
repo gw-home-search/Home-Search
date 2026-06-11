@@ -5,6 +5,10 @@ package com.home.domain.ingest.source;
  */
 public record IngestSource(String value) {
 
+	public static IngestSource rtms() {
+		return new IngestSource("RTMS");
+	}
+
 	public static IngestSource of(String value) {
 		return new IngestSource(value);
 	}

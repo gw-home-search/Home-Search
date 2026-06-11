@@ -1,4 +1,4 @@
-package com.home.infrastructure.external.naver;
+package com.home.infrastructure.scheduling.news;
 
 import java.nio.file.Path;
 import java.time.LocalDate;

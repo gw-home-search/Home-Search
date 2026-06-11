@@ -9,6 +9,8 @@ import com.home.application.ingest.backfill.RtmsBackfillChunkStatusCounts;
 import com.home.application.ingest.backfill.RtmsBackfillJobRecord;
 import com.home.application.ingest.backfill.RtmsBackfillJobRepository;
 import com.home.domain.ingest.backfill.RtmsBackfillJobStatus;
+import com.home.domain.ingest.backfill.RtmsBackfillLawdCodeSource;
+import com.home.domain.ingest.source.IngestSource;
 
 class RtmsNationwideBackfillRunner {
 
@@ -35,10 +37,10 @@ class RtmsNationwideBackfillRunner {
 		RtmsBackfillChunkRepository chunkRepository = repositories.chunkRepository();
 		RtmsBackfillJobRecord job = jobRepository.createIfAbsent(
 			plan.jobKey(),
-			"RTMS",
+			IngestSource.rtms().value(),
 			plan.dealYmdFrom(),
 			plan.dealYmdTo(),
-			"region.si-gun-gu",
+			RtmsBackfillLawdCodeSource.REGION_SI_GUN_GU.storedValue(),
 			plan.chunks().size()
 		);
 		jobRepository.markRunning(job.id());

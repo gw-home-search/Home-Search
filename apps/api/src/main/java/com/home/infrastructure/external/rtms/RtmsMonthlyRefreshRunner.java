@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
@@ -17,34 +18,34 @@ class RtmsMonthlyRefreshRunner {
 	private static final int MAX_FAILURE_REASON_LENGTH = 500;
 
 	private final RtmsApartmentTradeClient client;
-	private final RtmsTradeIngestServiceReference ingestServiceReference;
-	private final RtmsIngestRunRepositoryReference ingestRunRepositoryReference;
+	private final Supplier<OpenApiTradeIngestService> ingestServiceSupplier;
+	private final Supplier<RtmsIngestRunRepository> ingestRunRepositorySupplier;
 	private final Clock clock;
 	private final RtmsMonthlyRefreshRetryPolicy retryPolicy;
 
 	RtmsMonthlyRefreshRunner(
 		RtmsApartmentTradeClient client,
-		RtmsTradeIngestServiceReference ingestServiceReference,
-		RtmsIngestRunRepositoryReference ingestRunRepositoryReference,
+		Supplier<OpenApiTradeIngestService> ingestServiceSupplier,
+		Supplier<RtmsIngestRunRepository> ingestRunRepositorySupplier,
 		Clock clock,
 		RtmsMonthlyRefreshRetryPolicy retryPolicy
 	) {
 		this.client = Objects.requireNonNull(client);
-		this.ingestServiceReference = Objects.requireNonNull(ingestServiceReference);
-		this.ingestRunRepositoryReference = Objects.requireNonNull(ingestRunRepositoryReference);
+		this.ingestServiceSupplier = Objects.requireNonNull(ingestServiceSupplier);
+		this.ingestRunRepositorySupplier = Objects.requireNonNull(ingestRunRepositorySupplier);
 		this.clock = Objects.requireNonNull(clock);
 		this.retryPolicy = Objects.requireNonNull(retryPolicy);
 	}
 
 	RtmsMonthlyRefreshRunSummary refresh(String lawdCd, String dealYmd) {
-		OpenApiTradeIngestService ingestService = ingestServiceReference.get();
+		OpenApiTradeIngestService ingestService = requiredIngestService();
 		RtmsApartmentTradeRequest currentRequest = new RtmsApartmentTradeRequest(lawdCd, dealYmd, 1);
 		return refreshMonth(ingestService, currentRequest);
 	}
 
 	RtmsMonthlyRefreshReport refresh(RtmsMonthlyRefreshPlan plan) {
 		Objects.requireNonNull(plan, "plan is required");
-		OpenApiTradeIngestService ingestService = ingestServiceReference.get();
+		OpenApiTradeIngestService ingestService = requiredIngestService();
 		List<RtmsMonthlyRefreshRunSummary> summaries = new ArrayList<>();
 		for (RtmsApartmentTradeRequest request : plan.monthlyRequests()) {
 			summaries.add(refreshMonth(ingestService, request));
@@ -57,7 +58,24 @@ class RtmsMonthlyRefreshRunner {
 		RtmsApartmentTradeRequest firstRequest
 	) {
 		Instant startedAt = clock.instant();
-		RtmsIngestRunRepository ingestRunRepository = ingestRunRepositoryReference.get();
+		RtmsIngestRunRepository ingestRunRepository = Objects.requireNonNull(
+			ingestRunRepositorySupplier.get(),
+			"RtmsIngestRunRepository is required"
+		);
+		MonthlyRefreshOutcome outcome = executeMonth(ingestService, firstRequest, startedAt);
+		RtmsIngestRunRecord saved = ingestRunRepository.save(outcome.toRecord());
+		return outcome.toSummary(saved.id());
+	}
+
+	private OpenApiTradeIngestService requiredIngestService() {
+		return Objects.requireNonNull(ingestServiceSupplier.get(), "OpenApiTradeIngestService is required");
+	}
+
+	private MonthlyRefreshOutcome executeMonth(
+		OpenApiTradeIngestService ingestService,
+		RtmsApartmentTradeRequest firstRequest,
+		Instant startedAt
+	) {
 		RtmsApartmentTradeRequest currentRequest = firstRequest;
 		IngestResult total = IngestResult.empty();
 		int pageCount = 0;
@@ -68,21 +86,12 @@ class RtmsMonthlyRefreshRunner {
 				total = total.plus(ingestService.ingest(batch));
 				pageCount++;
 				if (!page.hasNextPage()) {
-					Instant completedAt = clock.instant();
-					RtmsIngestRunRecord saved = ingestRunRepository.save(RtmsIngestRunRecord.completed(
-						currentRequest.lawdCd(),
-						currentRequest.dealYmd(),
+					return MonthlyRefreshOutcome.completed(
+						firstRequest,
 						pageCount,
 						total,
 						startedAt,
-						completedAt
-					));
-					return RtmsMonthlyRefreshRunSummary.completed(
-						currentRequest.lawdCd(),
-						currentRequest.dealYmd(),
-						pageCount,
-						total,
-						saved.id()
+						clock.instant()
 					);
 				}
 				currentRequest = page.nextRequest();
@@ -92,40 +101,22 @@ class RtmsMonthlyRefreshRunner {
 			Instant completedAt = clock.instant();
 			String failureReason = failureReason(exception);
 			if (pageCount > 0) {
-				RtmsIngestRunRecord saved = ingestRunRepository.save(RtmsIngestRunRecord.partiallyFailed(
-					firstRequest.lawdCd(),
-					firstRequest.dealYmd(),
+				return MonthlyRefreshOutcome.partiallyFailed(
+					firstRequest,
 					pageCount,
 					total,
 					failureReason,
 					startedAt,
 					completedAt
-				));
-				return RtmsMonthlyRefreshRunSummary.partiallyFailed(
-					firstRequest.lawdCd(),
-					firstRequest.dealYmd(),
-					pageCount,
-					total,
-					failureReason,
-					saved.id()
 				);
 			}
-			RtmsIngestRunRecord saved = ingestRunRepository.save(RtmsIngestRunRecord.failed(
-				firstRequest.lawdCd(),
-				firstRequest.dealYmd(),
+			return MonthlyRefreshOutcome.failed(
+				firstRequest,
 				pageCount,
 				total,
 				failureReason,
 				startedAt,
 				completedAt
-			));
-			return RtmsMonthlyRefreshRunSummary.failed(
-				firstRequest.lawdCd(),
-				firstRequest.dealYmd(),
-				pageCount,
-				total,
-				failureReason,
-				saved.id()
 			);
 		}
 	}
@@ -176,5 +167,112 @@ class RtmsMonthlyRefreshRunner {
 		return value
 			.replaceAll("(?i)(serviceKey=)[^&\\s]+", "$1[REDACTED]")
 			.replaceAll("(?i)(service_key=)[^&\\s]+", "$1[REDACTED]");
+	}
+
+	private record MonthlyRefreshOutcome(
+		String lawdCd,
+		String dealYmd,
+		int pageCount,
+		IngestResult result,
+		RtmsMonthlyRefreshRunStatus status,
+		String failureReason,
+		Instant startedAt,
+		Instant completedAt
+	) {
+
+		static MonthlyRefreshOutcome completed(
+			RtmsApartmentTradeRequest request,
+			int pageCount,
+			IngestResult result,
+			Instant startedAt,
+			Instant completedAt
+		) {
+			return new MonthlyRefreshOutcome(
+				request.lawdCd(),
+				request.dealYmd(),
+				pageCount,
+				result,
+				RtmsMonthlyRefreshRunStatus.COMPLETED,
+				null,
+				startedAt,
+				completedAt
+			);
+		}
+
+		static MonthlyRefreshOutcome partiallyFailed(
+			RtmsApartmentTradeRequest request,
+			int pageCount,
+			IngestResult result,
+			String failureReason,
+			Instant startedAt,
+			Instant completedAt
+		) {
+			return failedOutcome(
+				request,
+				pageCount,
+				result,
+				RtmsMonthlyRefreshRunStatus.PARTIAL,
+				failureReason,
+				startedAt,
+				completedAt
+			);
+		}
+
+		static MonthlyRefreshOutcome failed(
+			RtmsApartmentTradeRequest request,
+			int pageCount,
+			IngestResult result,
+			String failureReason,
+			Instant startedAt,
+			Instant completedAt
+		) {
+			return failedOutcome(
+				request,
+				pageCount,
+				result,
+				RtmsMonthlyRefreshRunStatus.FAILED,
+				failureReason,
+				startedAt,
+				completedAt
+			);
+		}
+
+		private static MonthlyRefreshOutcome failedOutcome(
+			RtmsApartmentTradeRequest request,
+			int pageCount,
+			IngestResult result,
+			RtmsMonthlyRefreshRunStatus status,
+			String failureReason,
+			Instant startedAt,
+			Instant completedAt
+		) {
+			return new MonthlyRefreshOutcome(
+				request.lawdCd(),
+				request.dealYmd(),
+				pageCount,
+				result,
+				status,
+				failureReason,
+				startedAt,
+				completedAt
+			);
+		}
+
+		RtmsIngestRunRecord toRecord() {
+			return RtmsIngestRunRecord.of(
+				lawdCd,
+				dealYmd,
+				pageCount,
+				result,
+				status.storedValue(),
+				status.failureReason(failureReason),
+				startedAt,
+				completedAt
+			);
+		}
+
+		RtmsMonthlyRefreshRunSummary toSummary(Long runId) {
+			return RtmsMonthlyRefreshRunSummary.of(lawdCd, dealYmd, pageCount, result, status, failureReason, runId);
+		}
 	}
 }

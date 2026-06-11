@@ -1,4 +1,4 @@
-package com.home.infrastructure.external.naver;
+package com.home.infrastructure.scheduling.news;
 
 import java.nio.file.Path;
 import java.time.Clock;
@@ -9,6 +9,7 @@ import com.home.application.news.collection.NewsCollectionRepository;
 import com.home.application.news.export.NewsSignalObsidianExportService;
 import com.home.application.news.relevance.NewsArticleRelevanceGateService;
 import com.home.application.news.signal.NewsSignalFeatureExtractionService;
+import com.home.infrastructure.external.naver.NaverNewsOneShotIngestRunner;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -19,7 +20,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
 @ConditionalOnProperty(name = "home.news.pipeline.daily.enabled", havingValue = "true")
-class NaverNewsDailyPipelineConfiguration {
+public class NaverNewsDailyPipelineConfiguration {
 
 	@Bean
 	NaverNewsDailyPipelineProperties naverNewsDailyPipelineProperties(

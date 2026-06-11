@@ -22,7 +22,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -149,29 +148,4 @@ class ComplexCoordinatePersistenceConfiguration {
 		});
 	}
 
-	@Configuration(proxyBeanMethods = false)
-	@EnableScheduling
-	@ConditionalOnProperty(name = "home.coordinate.readiness.enabled", havingValue = "true")
-	static class ComplexCoordinateReadinessSchedulingConfiguration {
-
-		@Bean
-		@ConditionalOnProperty(
-			name = "home.coordinate.readiness.scheduler.enabled",
-			havingValue = "true",
-			matchIfMissing = true
-		)
-		ComplexCoordinateReadinessScheduler complexCoordinateReadinessScheduler(
-			ComplexCoordinateReadinessService complexCoordinateReadinessService,
-			@Value("${home.coordinate.readiness.stage-limit:500}") int stageLimit,
-			@Value("${home.coordinate.readiness.resolve-limit:500}") int resolveLimit,
-			@Value("${home.coordinate.readiness.project-limit:1000}") int projectLimit
-		) {
-			return new ComplexCoordinateReadinessScheduler(
-				complexCoordinateReadinessService,
-				stageLimit,
-				resolveLimit,
-				projectLimit
-			);
-		}
-	}
 }

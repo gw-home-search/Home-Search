@@ -1,4 +1,4 @@
-package com.home.infrastructure.external.naver;
+package com.home.infrastructure.scheduling.news;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,6 +36,9 @@ import com.home.domain.news.NewsCollectionKeywordCadence;
 import com.home.domain.news.NewsCollectionKeywordType;
 import com.home.domain.news.NewsCollectionNotificationStatus;
 import com.home.domain.news.NewsCollectionRunStatus;
+import com.home.infrastructure.external.naver.NaverNewsOneShotIngestOutcome;
+import com.home.infrastructure.external.naver.NaverNewsOneShotIngestRunner;
+import com.home.infrastructure.external.naver.NaverNewsSearchRequest;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

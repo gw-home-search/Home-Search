@@ -31,6 +31,42 @@ public record NewsCollectionRunCompletion(
 	String failureReason
 ) {
 
+	public static NewsCollectionRunCompletion from(
+		long runId,
+		NewsCollectionRunStatus status,
+		OffsetDateTime finishedAt,
+		CollectionMetrics collection,
+		RelevanceMetrics relevance,
+		ExtractionMetrics extraction,
+		ExportMetrics export,
+		NotificationResult notification,
+		String failureReason
+	) {
+		return new NewsCollectionRunCompletion(
+			runId,
+			status,
+			finishedAt,
+			collection.keywordCount(),
+			collection.readCount(),
+			collection.observedCount(),
+			collection.duplicateSkippedCount(),
+			relevance.evaluatedCount(),
+			relevance.keptCount(),
+			relevance.skippedIrrelevantCount(),
+			extraction.evaluatedCount(),
+			extraction.extractedCount(),
+			extraction.duplicateFeatureSkippedCount(),
+			export.featureCount(),
+			export.date(),
+			export.path(),
+			export.articleCount(),
+			export.truncated(),
+			notification.status(),
+			notification.failureReason(),
+			failureReason
+		);
+	}
+
 	public NewsCollectionRunCompletion {
 		if (runId < 1) {
 			throw new IllegalArgumentException("runId must be positive");
@@ -51,5 +87,24 @@ public record NewsCollectionRunCompletion(
 			return null;
 		}
 		return LocalDate.parse(exportDate);
+	}
+
+	public record CollectionMetrics(int keywordCount, long readCount, long observedCount, long duplicateSkippedCount) {
+	}
+
+	public record RelevanceMetrics(long evaluatedCount, long keptCount, long skippedIrrelevantCount) {
+	}
+
+	public record ExtractionMetrics(long evaluatedCount, long extractedCount, long duplicateFeatureSkippedCount) {
+	}
+
+	public record ExportMetrics(int featureCount, String date, String path, int articleCount, boolean truncated) {
+
+		public static ExportMetrics none() {
+			return new ExportMetrics(0, null, null, 0, false);
+		}
+	}
+
+	public record NotificationResult(NewsCollectionNotificationStatus status, String failureReason) {
 	}
 }

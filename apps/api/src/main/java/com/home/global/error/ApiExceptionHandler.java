@@ -6,10 +6,12 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 
+import com.home.application.coordinate.override.AdminCoordinateAccessDeniedException;
 import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
 import com.home.application.read.InvalidReadRequestException;
-import com.home.infrastructure.web.admin.AdminCoordinateAccessDeniedException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -25,8 +27,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
+	private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 	private static final URI ERROR_TYPE = URI.create("/docs/index.html#error-code-list");
-	private static final String BAD_REQUEST_TITLE = "C401";
+	private static final String CLIENT_ERROR_TITLE = "C401";
 	private static final String BAD_REQUEST_DETAIL = "Invalid parameter format.";
 	private static final String UNAUTHORIZED_DETAIL = "Unauthorized admin access.";
 	private static final String NOT_FOUND_TITLE = "C404";
@@ -49,7 +52,7 @@ public class ApiExceptionHandler {
 	public ResponseEntity<ProblemDetail> handleBadRequest(Exception exception) {
 		ProblemDetail problemDetail = createProblemDetail(
 			HttpStatus.BAD_REQUEST,
-			BAD_REQUEST_TITLE,
+			CLIENT_ERROR_TITLE,
 			BAD_REQUEST_DETAIL,
 			MAP_API_EXCEPTION
 		);
@@ -64,7 +67,7 @@ public class ApiExceptionHandler {
 	public ResponseEntity<ProblemDetail> handleUnauthorized(AdminCoordinateAccessDeniedException exception) {
 		ProblemDetail problemDetail = createProblemDetail(
 			HttpStatus.UNAUTHORIZED,
-			BAD_REQUEST_TITLE,
+			CLIENT_ERROR_TITLE,
 			UNAUTHORIZED_DETAIL,
 			AdminCoordinateAccessDeniedException.class.getSimpleName()
 		);
@@ -92,6 +95,8 @@ public class ApiExceptionHandler {
 
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ProblemDetail> handleInternalServerError(Exception exception) {
+		log.error("Unhandled API exception type={}", exception.getClass().getSimpleName(), diagnosticException(exception));
+
 		ProblemDetail problemDetail = createProblemDetail(
 			HttpStatus.INTERNAL_SERVER_ERROR,
 			INTERNAL_SERVER_ERROR_TITLE,
@@ -103,6 +108,12 @@ public class ApiExceptionHandler {
 			.status(HttpStatus.INTERNAL_SERVER_ERROR)
 			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
 			.body(problemDetail);
+	}
+
+	private RuntimeException diagnosticException(Exception exception) {
+		RuntimeException diagnostic = new RuntimeException("Unhandled API exception");
+		diagnostic.setStackTrace(exception.getStackTrace());
+		return diagnostic;
 	}
 
 	private ProblemDetail createProblemDetail(

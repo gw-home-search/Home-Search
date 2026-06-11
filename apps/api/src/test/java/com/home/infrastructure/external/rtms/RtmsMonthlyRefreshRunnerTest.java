@@ -34,7 +34,7 @@ class RtmsMonthlyRefreshRunnerTest {
 		RecordingRtmsIngestRunRepository runRepository = new RecordingRtmsIngestRunRepository();
 		RtmsMonthlyRefreshRunner runner = runner(
 			client,
-			RtmsTradeIngestServiceReference.of(ingestService),
+			() -> ingestService,
 			runRepository
 		);
 		RtmsApartmentTradeRequest pageOne = new RtmsApartmentTradeRequest("11680", "202512", 1);
@@ -125,7 +125,7 @@ class RtmsMonthlyRefreshRunnerTest {
 		RecordingRtmsIngestRunRepository runRepository = new RecordingRtmsIngestRunRepository();
 		RtmsMonthlyRefreshRunner runner = runner(
 			client,
-			RtmsTradeIngestServiceReference.of(ingestService),
+			() -> ingestService,
 			runRepository
 		);
 		RtmsApartmentTradeRequest currentMonth = new RtmsApartmentTradeRequest("11680", "202501", 1);
@@ -173,7 +173,7 @@ class RtmsMonthlyRefreshRunnerTest {
 		RecordingRtmsIngestRunRepository runRepository = new RecordingRtmsIngestRunRepository();
 		RtmsMonthlyRefreshRunner runner = runner(
 			client,
-			RtmsTradeIngestServiceReference.of(ingestService),
+			() -> ingestService,
 			runRepository
 		);
 		RtmsApartmentTradeRequest request = new RtmsApartmentTradeRequest("11680", "202501", 1);
@@ -200,7 +200,7 @@ class RtmsMonthlyRefreshRunnerTest {
 		RecordingRtmsIngestRunRepository runRepository = new RecordingRtmsIngestRunRepository();
 		RtmsMonthlyRefreshRunner runner = runner(
 			client,
-			RtmsTradeIngestServiceReference.of(ingestService),
+			() -> ingestService,
 			runRepository
 		);
 		RtmsApartmentTradeRequest pageOne = new RtmsApartmentTradeRequest("11680", "202501", 1);
@@ -235,9 +235,9 @@ class RtmsMonthlyRefreshRunnerTest {
 		RtmsApartmentTradeClient client = mock(RtmsApartmentTradeClient.class);
 		RtmsMonthlyRefreshRunner runner = runner(
 			client,
-			RtmsTradeIngestServiceReference.lazy(() -> {
+			() -> {
 				throw new IllegalStateException("OpenApiTradeIngestService is required");
-			}),
+			},
 			RtmsIngestRunRepository.noop()
 		);
 
@@ -259,18 +259,18 @@ class RtmsMonthlyRefreshRunnerTest {
 		RtmsApartmentTradeClient client,
 		OpenApiTradeIngestService ingestService
 	) {
-		return runner(client, RtmsTradeIngestServiceReference.of(ingestService), RtmsIngestRunRepository.noop());
+		return runner(client, () -> ingestService, RtmsIngestRunRepository.noop());
 	}
 
 	private RtmsMonthlyRefreshRunner runner(
 		RtmsApartmentTradeClient client,
-		RtmsTradeIngestServiceReference ingestServiceReference,
+		java.util.function.Supplier<OpenApiTradeIngestService> ingestServiceSupplier,
 		RtmsIngestRunRepository ingestRunRepository
 	) {
 		return new RtmsMonthlyRefreshRunner(
 			client,
-			ingestServiceReference,
-			RtmsIngestRunRepositoryReference.of(ingestRunRepository),
+			ingestServiceSupplier,
+			() -> ingestRunRepository,
 			Clock.fixed(Instant.parse("2026-05-29T00:00:00Z"), ZoneOffset.UTC),
 			RtmsMonthlyRefreshRetryPolicy.noBackoffDefault()
 		);

@@ -20,8 +20,56 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class RtmsExternalApiConfigurationTest {
+
+	private final ApplicationContextRunner propertiesContextRunner = new ApplicationContextRunner()
+		.withUserConfiguration(PropertiesConfiguration.class);
+
+	@Test
+	@DisplayName("RTMS one-shot 설정은 기존 property key를 의미 단위 설정 객체로 바인딩한다")
+	void rtmsOneShotPropertiesBindExistingKeys() {
+		propertiesContextRunner
+			.withPropertyValues(
+				"home.ingest.rtms.enabled=true",
+				"home.ingest.rtms.lawd-cd=11680",
+				"home.ingest.rtms.deal-ymd=202606",
+				"home.ingest.rtms.page-no=2",
+				"home.ingest.rtms.preflight-only=true",
+				"home.ingest.rtms.mode=nationwide-backfill",
+				"home.ingest.rtms.lookback-months=3",
+				"home.ingest.rtms.allow-coordinate-pending-only=true",
+				"home.ingest.rtms.nationwide.lawd-cds=11110,11680",
+				"home.ingest.rtms.nationwide.deal-ymd-from=202501",
+				"home.ingest.rtms.nationwide.deal-ymd-to=202502",
+				"home.ingest.rtms.nationwide.job-key=rtms-test",
+				"home.ingest.rtms.nationwide.worker-id=worker-1",
+				"home.ingest.rtms.nationwide.lease-minutes=45",
+				"home.ingest.rtms.nationwide.max-attempt-count=4",
+				"home.ingest.rtms.nationwide.chunk-limit=6"
+			)
+			.run(context -> {
+				RtmsOneShotIngestConfigurationProperties bound =
+					context.getBean(RtmsOneShotIngestConfigurationProperties.class);
+				RtmsOneShotIngestProperties properties = bound.toProperties();
+
+				org.assertj.core.api.Assertions.assertThat(properties).satisfies(value -> {
+					org.assertj.core.api.Assertions.assertThat(value.request())
+						.isEqualTo(new RtmsApartmentTradeRequest("11680", "202606", 2));
+					org.assertj.core.api.Assertions.assertThat(value.preflightOnly()).isTrue();
+					org.assertj.core.api.Assertions.assertThat(value.lookbackMonths()).isEqualTo(3);
+					org.assertj.core.api.Assertions.assertThat(value.allowCoordinatePendingOnly()).isTrue();
+					org.assertj.core.api.Assertions.assertThat(value.nationwideBackfillPlan().jobKey()).isEqualTo("rtms-test");
+					org.assertj.core.api.Assertions.assertThat(value.nationwideBackfillOptions().workerId()).isEqualTo("worker-1");
+					org.assertj.core.api.Assertions.assertThat(value.nationwideBackfillOptions().leaseDuration())
+						.isEqualTo(java.time.Duration.ofMinutes(45));
+					org.assertj.core.api.Assertions.assertThat(value.nationwideBackfillOptions().maxAttemptCount()).isEqualTo(4);
+					org.assertj.core.api.Assertions.assertThat(value.nationwideBackfillOptions().chunkLimit()).isEqualTo(6);
+				});
+			});
+	}
 
 	@Test
 	@DisplayName("nationwide backfill runner bean은 monthly summary를 completed/partial/failed chunk 상태로 변환한다")
@@ -140,5 +188,9 @@ class RtmsExternalApiConfigurationTest {
 		StaticListableBeanFactory beanFactory = new StaticListableBeanFactory();
 		beanFactory.addBean(type.getName(), bean);
 		return beanFactory.getBeanProvider(type);
+	}
+
+	@EnableConfigurationProperties(RtmsOneShotIngestConfigurationProperties.class)
+	private static class PropertiesConfiguration {
 	}
 }

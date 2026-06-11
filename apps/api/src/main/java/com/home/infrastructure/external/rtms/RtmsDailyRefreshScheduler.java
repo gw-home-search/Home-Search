@@ -6,7 +6,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
+
+import com.home.infrastructure.scheduling.ScheduledJobExecutionTemplate;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +23,7 @@ class RtmsDailyRefreshScheduler {
 	private final RtmsDailyRefreshSlackMessageFormatter formatter;
 	private final RtmsDailyRefreshNotifier notifier;
 	private final Clock clock;
-	private final AtomicBoolean running = new AtomicBoolean(false);
+	private final ScheduledJobExecutionTemplate execution = new ScheduledJobExecutionTemplate("RTMS daily refresh");
 
 	RtmsDailyRefreshScheduler(
 		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
@@ -43,21 +44,16 @@ class RtmsDailyRefreshScheduler {
 		zone = "${home.ingest.rtms.daily.zone:Asia/Seoul}"
 	)
 	void runDue() {
-		if (!running.compareAndSet(false, true)) {
-			log.warn("RTMS daily refresh skipped because a previous run is still active");
+		execution.execute(this::runScheduledExecution);
+	}
+
+	private void runScheduledExecution() {
+		RtmsDailyRefreshExecution result = runOnce();
+		if (result.results().isEmpty()) {
+			log.warn("RTMS daily refresh skipped because configured lawdCds is empty");
 			return;
 		}
-		try {
-			RtmsDailyRefreshExecution execution = runOnce();
-			if (execution.results().isEmpty()) {
-				log.warn("RTMS daily refresh skipped because configured lawdCds is empty");
-				return;
-			}
-			notifySlack(execution);
-		}
-		finally {
-			running.set(false);
-		}
+		notifySlack(result);
 	}
 
 	RtmsDailyRefreshExecution runOnce() {

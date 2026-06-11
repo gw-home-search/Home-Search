@@ -1,23 +1,15 @@
 package com.home.infrastructure.external.rtms;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.application.ingest.backfill.RtmsBackfillChunkRepository;
-import com.home.application.ingest.backfill.RtmsBackfillJobRepository;
-import com.home.application.ingest.trade.OpenApiTradeIngestService;
-import com.home.application.ingest.run.RtmsIngestRunRepository;
 
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(RtmsOneShotIngestConfigurationProperties.class)
 class RtmsExternalApiConfiguration {
 
 	@Bean
@@ -37,13 +29,6 @@ class RtmsExternalApiConfiguration {
 			connectTimeoutMillis,
 			readTimeoutMillis
 		);
-	}
-
-	@Bean
-	RtmsOneShotIngestProperties rtmsOneShotIngestProperties(
-		RtmsOneShotIngestConfigurationProperties properties
-	) {
-		return properties.toProperties();
 	}
 
 	@Bean
@@ -77,70 +62,8 @@ class RtmsExternalApiConfiguration {
 	}
 
 	@Bean
-	RtmsOneShotTradeIngestRunner rtmsOneShotTradeIngestRunner(
-		RtmsApartmentTradeClient client,
-		ObjectProvider<OpenApiTradeIngestService> ingestServiceProvider
-	) {
-		return new RtmsOneShotTradeIngestRunner(
-			client,
-			() -> ingestServiceProvider.getIfAvailable(() -> {
-				throw new IllegalStateException("OpenApiTradeIngestService is required for RTMS one-shot ingest");
-			})
-		);
-	}
-
-	@Bean
-	RtmsMonthlyRefreshRunner rtmsMonthlyRefreshRunner(
-		RtmsApartmentTradeClient client,
-		ObjectProvider<OpenApiTradeIngestService> ingestServiceProvider,
-		ObjectProvider<RtmsIngestRunRepository> ingestRunRepositoryProvider,
-		@Value("${home.ingest.rtms.refresh-retry-attempts:3}") int refreshRetryAttempts,
-		@Value("${home.ingest.rtms.refresh-retry-backoff-millis:250}") long refreshRetryBackoffMillis
-	) {
-		return new RtmsMonthlyRefreshRunner(
-			client,
-			() -> ingestServiceProvider.getIfAvailable(() -> {
-				throw new IllegalStateException("OpenApiTradeIngestService is required for RTMS monthly refresh ingest");
-			}),
-			() -> ingestRunRepositoryProvider.getIfAvailable(
-				RtmsIngestRunRepository::noop
-			),
-			java.time.Clock.systemUTC(),
-			new RtmsMonthlyRefreshRetryPolicy(refreshRetryAttempts, refreshRetryBackoffMillis)
-		);
-	}
-
-	@Bean
-	RtmsNationwideBackfillRunner rtmsNationwideBackfillRunner(
-		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
-		ObjectProvider<RtmsBackfillJobRepository> backfillJobRepositoryProvider,
-		ObjectProvider<RtmsBackfillChunkRepository> backfillChunkRepositoryProvider,
-		RtmsOneShotIngestProperties properties
-	) {
-		return new RtmsNationwideBackfillRunner(
-			RtmsBackfillRepositories.lazy(
-				() -> backfillJobRepositoryProvider.getIfAvailable(() -> {
-					throw new IllegalStateException(
-						"RtmsBackfillJobRepository is required for RTMS nationwide backfill"
-					);
-				}),
-				() -> backfillChunkRepositoryProvider.getIfAvailable(() -> {
-					throw new IllegalStateException(
-						"RtmsBackfillChunkRepository is required for RTMS nationwide backfill"
-					);
-				})
-			),
-			request -> RtmsBackfillChunkExecutionResult.from(
-				monthlyRefreshRunner.refresh(request.lawdCd(), request.dealYmd())
-			),
-			java.time.Clock.systemUTC(),
-			properties.nationwideBackfillOptions()
-		);
-	}
-
-	@Bean
 	RtmsCoordinateSourcePreflight rtmsCoordinateSourcePreflight(
-		RtmsOneShotIngestProperties ingestProperties,
+		@Value("${home.ingest.rtms.allow-coordinate-pending-only:false}") boolean allowCoordinatePendingOnly,
 		@Value("${home.coordinate-source.db.jdbc-url:${COORDINATE_SOURCE_DB_JDBC_URL:}}") String jdbcUrl,
 		@Value("${home.coordinate-source.db.username:${COORDINATE_SOURCE_DB_USERNAME:${DB_USERNAME:}}}") String username,
 		@Value("${home.coordinate-source.db.password:${COORDINATE_SOURCE_DB_PASSWORD:${DB_PASSWORD:}}}") String password,
@@ -155,7 +78,7 @@ class RtmsExternalApiConfiguration {
 	) {
 		return new RequiredRtmsCoordinateSourcePreflight(
 			jdbcUrl,
-			ingestProperties.allowCoordinatePendingOnly(),
+			allowCoordinatePendingOnly,
 			new JdbcRtmsCoordinateSourceAvailabilityProbe(
 				jdbcUrl,
 				username,
@@ -167,24 +90,4 @@ class RtmsExternalApiConfiguration {
 			)
 		);
 	}
-
-	@Bean
-	ApplicationRunner rtmsOneShotIngestApplicationRunner(
-		RtmsOneShotTradeIngestRunner runner,
-		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
-		ObjectProvider<RtmsNationwideBackfillRunner> nationwideBackfillRunnerProvider,
-		RtmsOneShotIngestProperties properties,
-		RtmsApartmentTradeProperties tradeProperties,
-		RtmsCoordinateSourcePreflight coordinateSourcePreflight
-	) {
-		return new RtmsOneShotIngestApplicationRunner(
-			runner,
-			monthlyRefreshRunner,
-			nationwideBackfillRunnerProvider.getIfAvailable(),
-			properties,
-			tradeProperties,
-			coordinateSourcePreflight
-		);
-	}
-
 }

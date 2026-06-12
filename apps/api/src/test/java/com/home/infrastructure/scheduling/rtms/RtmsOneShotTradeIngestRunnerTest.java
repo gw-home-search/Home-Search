@@ -26,7 +26,6 @@ import com.home.infrastructure.external.rtms.RtmsApartmentTradeClient;
 import com.home.infrastructure.external.rtms.RtmsApartmentTradeRequest;
 import com.home.infrastructure.external.rtms.RtmsApartmentTradePage;
 import com.home.infrastructure.external.rtms.RtmsApartmentTradeProperties;
-import com.home.infrastructure.external.rtms.RtmsCoordinateSourcePreflight;
 
 @ExtendWith(OutputCaptureExtension.class)
 class RtmsOneShotTradeIngestRunnerTest {

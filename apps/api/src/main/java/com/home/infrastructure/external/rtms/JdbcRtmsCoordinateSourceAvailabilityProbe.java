@@ -7,6 +7,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 class JdbcRtmsCoordinateSourceAvailabilityProbe implements RtmsCoordinateSourceAvailabilityProbe {
 
+	private final String jdbcUrl;
 	private final JdbcClient jdbcClient;
 
 	JdbcRtmsCoordinateSourceAvailabilityProbe(
@@ -18,6 +19,7 @@ class JdbcRtmsCoordinateSourceAvailabilityProbe implements RtmsCoordinateSourceA
 		int lockTimeoutMillis,
 		int statementTimeoutMillis
 	) {
+		this.jdbcUrl = jdbcUrl;
 		DriverManagerDataSource dataSource = new DriverManagerDataSource();
 		dataSource.setDriverClassName("org.postgresql.Driver");
 		dataSource.setUrl(jdbcUrl);
@@ -30,6 +32,11 @@ class JdbcRtmsCoordinateSourceAvailabilityProbe implements RtmsCoordinateSourceA
 			statementTimeoutMillis
 		));
 		this.jdbcClient = JdbcClient.create(dataSource);
+	}
+
+	@Override
+	public boolean configured() {
+		return jdbcUrl != null && !jdbcUrl.isBlank();
 	}
 
 	@Override

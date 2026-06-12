@@ -52,18 +52,21 @@ class RtmsExternalApiConfiguration {
 		@Qualifier("rtmsApartmentTradeRestClient")
 		RestClient rtmsApartmentTradeRestClient,
 		RtmsApartmentTradeProperties properties,
-		RtmsApartmentTradeResponseParser parser
+		RtmsApartmentTradeResponseParser parser,
+		@Value("${apis.data.min-request-interval-millis:200}") long minRequestIntervalMillis
 	) {
-		return new RtmsPublicApartmentTradeClient(
-			rtmsApartmentTradeRestClient,
-			properties,
-			parser
+		return new RateLimitedRtmsApartmentTradeClient(
+			new RtmsPublicApartmentTradeClient(
+				rtmsApartmentTradeRestClient,
+				properties,
+				parser
+			),
+			minRequestIntervalMillis
 		);
 	}
 
 	@Bean
-	RtmsCoordinateSourcePreflight rtmsCoordinateSourcePreflight(
-		@Value("${home.ingest.rtms.allow-coordinate-pending-only:false}") boolean allowCoordinatePendingOnly,
+	RtmsCoordinateSourceAvailabilityProbe rtmsCoordinateSourceAvailabilityProbe(
 		@Value("${home.coordinate-source.db.jdbc-url:${COORDINATE_SOURCE_DB_JDBC_URL:}}") String jdbcUrl,
 		@Value("${home.coordinate-source.db.username:${COORDINATE_SOURCE_DB_USERNAME:${DB_USERNAME:}}}") String username,
 		@Value("${home.coordinate-source.db.password:${COORDINATE_SOURCE_DB_PASSWORD:${DB_PASSWORD:}}}") String password,
@@ -76,18 +79,14 @@ class RtmsExternalApiConfiguration {
 		@Value("${home.coordinate-source.db.statement-timeout-millis:${COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS:3000}}")
 		int statementTimeoutMillis
 	) {
-		return new RequiredRtmsCoordinateSourcePreflight(
+		return new JdbcRtmsCoordinateSourceAvailabilityProbe(
 			jdbcUrl,
-			allowCoordinatePendingOnly,
-			new JdbcRtmsCoordinateSourceAvailabilityProbe(
-				jdbcUrl,
-				username,
-				password,
-				connectTimeoutSeconds,
-				socketTimeoutSeconds,
-				lockTimeoutMillis,
-				statementTimeoutMillis
-			)
+			username,
+			password,
+			connectTimeoutSeconds,
+			socketTimeoutSeconds,
+			lockTimeoutMillis,
+			statementTimeoutMillis
 		);
 	}
 }

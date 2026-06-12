@@ -38,6 +38,7 @@ class RtmsDailyRefreshConfigurationTest {
 	void dailyRefreshSchedulerIsRegisteredWhenEnabled() {
 		contextRunner
 			.withBean(RtmsMonthlyRefreshRunner.class, () -> mock(RtmsMonthlyRefreshRunner.class))
+			.withBean(RtmsCoordinateSourcePreflight.class, RtmsCoordinateSourcePreflight::noop)
 			.withPropertyValues(
 				"home.ingest.rtms.daily.enabled=true",
 				"home.ingest.rtms.daily.lawd-cds=11680,11710",
@@ -52,10 +53,23 @@ class RtmsDailyRefreshConfigurationTest {
 	}
 
 	@Test
+	@DisplayName("daily refresh scheduler는 coordinate-source preflight 빈 없이는 기동하지 않는다")
+	void dailyRefreshSchedulerRequiresCoordinateSourcePreflight() {
+		contextRunner
+			.withBean(RtmsMonthlyRefreshRunner.class, () -> mock(RtmsMonthlyRefreshRunner.class))
+			.withPropertyValues(
+				"home.ingest.rtms.daily.enabled=true",
+				"home.ingest.rtms.daily.lawd-cds=11680"
+			)
+			.run(context -> assertThat(context).hasFailed());
+	}
+
+	@Test
 	@DisplayName("daily refresh Hermes notifier는 configured routing과 timeout으로 등록된다")
 	void dailyRefreshHermesNotifierUsesConfiguredRoutingAndTimeouts() {
 		contextRunner
 			.withBean(RtmsMonthlyRefreshRunner.class, () -> mock(RtmsMonthlyRefreshRunner.class))
+			.withBean(RtmsCoordinateSourcePreflight.class, RtmsCoordinateSourcePreflight::noop)
 			.withPropertyValues(
 				"home.ingest.rtms.daily.enabled=true",
 				"home.ingest.rtms.daily.lawd-cds=11680",

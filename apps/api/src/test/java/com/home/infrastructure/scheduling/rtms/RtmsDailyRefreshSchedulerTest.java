@@ -2,8 +2,10 @@ package com.home.infrastructure.scheduling.rtms;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -155,6 +157,53 @@ class RtmsDailyRefreshSchedulerTest {
 	}
 
 	@Test
+	@DisplayName("daily refresh scheduler는 어떤 live fetch보다 먼저 coordinate-source preflight를 검증한다")
+	void schedulerVerifiesCoordinateSourcePreflightBeforeAnyLiveFetch() {
+		List<String> callOrder = new ArrayList<>();
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner = mock(RtmsMonthlyRefreshRunner.class);
+		when(monthlyRefreshRunner.refresh(any(RtmsMonthlyRefreshPlan.class))).thenAnswer(invocation -> {
+			callOrder.add("refresh");
+			return new RtmsMonthlyRefreshReport(List.of());
+		});
+		RtmsDailyRefreshScheduler scheduler = scheduler(
+			monthlyRefreshRunner,
+			() -> callOrder.add("preflight"),
+			new CapturingDailyRefreshNotifier(),
+			List.of("11680", "11710")
+		);
+
+		scheduler.runDue();
+
+		assertThat(callOrder).containsExactly("preflight", "refresh", "refresh");
+	}
+
+	@Test
+	@DisplayName("daily refresh scheduler는 preflight 실패 시 어떤 법정동도 fetch하지 않고 FAILED summary를 보낸다")
+	void schedulerSendsFailedSummaryWithoutFetchingWhenPreflightFails() {
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner = mock(RtmsMonthlyRefreshRunner.class);
+		CapturingDailyRefreshNotifier notifier = new CapturingDailyRefreshNotifier();
+		RtmsCoordinateSourcePreflight failingPreflight = () -> {
+			throw new IllegalStateException("COORDINATE_SOURCE_DB_JDBC_URL is required for RTMS ingest");
+		};
+		RtmsDailyRefreshScheduler scheduler = scheduler(
+			monthlyRefreshRunner,
+			failingPreflight,
+			notifier,
+			List.of("11680", "11710")
+		);
+
+		assertThatCode(scheduler::runDue).doesNotThrowAnyException();
+
+		verifyNoInteractions(monthlyRefreshRunner);
+		assertThat(notifier.messages()).hasSize(1);
+		assertThat(notifier.messages().get(0))
+			.contains("status=FAILED")
+			.contains("lawdCd=11680")
+			.contains("lawdCd=11710")
+			.contains("COORDINATE_SOURCE_DB_JDBC_URL is required");
+	}
+
+	@Test
 	@DisplayName("daily refresh scheduler는 invalid 법정동을 실패 summary로 남기고 다음 법정동을 계속 실행한다")
 	void schedulerKeepsRunningNextLawdWhenOneLawdCodeIsInvalid() {
 		RtmsMonthlyRefreshRunner monthlyRefreshRunner = mock(RtmsMonthlyRefreshRunner.class);
@@ -191,6 +240,24 @@ class RtmsDailyRefreshSchedulerTest {
 	) {
 		return scheduler(
 			monthlyRefreshRunner,
+			RtmsCoordinateSourcePreflight.noop(),
+			notifier,
+			lawdCds,
+			new RegionUnitCntSynchronizationService(
+				() -> new RegionRelationSynchronizationResult(false, false, false)
+			)
+		);
+	}
+
+	private static RtmsDailyRefreshScheduler scheduler(
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
+		RtmsCoordinateSourcePreflight coordinateSourcePreflight,
+		RtmsDailyRefreshNotifier notifier,
+		List<String> lawdCds
+	) {
+		return scheduler(
+			monthlyRefreshRunner,
+			coordinateSourcePreflight,
 			notifier,
 			lawdCds,
 			new RegionUnitCntSynchronizationService(
@@ -205,8 +272,25 @@ class RtmsDailyRefreshSchedulerTest {
 		List<String> lawdCds,
 		RegionUnitCntSynchronizationService synchronizationService
 	) {
+		return scheduler(
+			monthlyRefreshRunner,
+			RtmsCoordinateSourcePreflight.noop(),
+			notifier,
+			lawdCds,
+			synchronizationService
+		);
+	}
+
+	private static RtmsDailyRefreshScheduler scheduler(
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
+		RtmsCoordinateSourcePreflight coordinateSourcePreflight,
+		RtmsDailyRefreshNotifier notifier,
+		List<String> lawdCds,
+		RegionUnitCntSynchronizationService synchronizationService
+	) {
 		return new RtmsDailyRefreshScheduler(
 			monthlyRefreshRunner,
+			coordinateSourcePreflight,
 			new RtmsDailyRefreshProperties(lawdCds, 1, ZoneId.of("Asia/Seoul")),
 			new RtmsDailyRefreshSlackMessageFormatter(),
 			notifier,

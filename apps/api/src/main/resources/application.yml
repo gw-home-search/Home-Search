@@ -32,6 +32,10 @@ management:
       enabled: false
 
 home:
+  region:
+    sync:
+      one-shot:
+        enabled: false
   map:
     marker-cache:
       enabled: false

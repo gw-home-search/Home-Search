@@ -1,7 +1,13 @@
 package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +28,8 @@ import com.home.application.ingest.matching.TradeMatchEvidenceRepository;
 import com.home.application.ingest.matching.TradeMatchRematchService;
 import com.home.infrastructure.ApplicationRunnerOrders;
 import com.home.infrastructure.persistence.ingest.matching.TradeMatchRematchRunner;
+import com.home.infrastructure.persistence.ingest.normalization.JdbcTradePartitionMaintenanceRepository;
+import com.home.infrastructure.persistence.ingest.normalization.TradePartitionMaintenanceRunner;
 import com.home.infrastructure.persistence.ingest.raw.RawIngestReconciliationRunner;
 
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +52,53 @@ class IngestRecoveryRunnerTest {
 
 		assertThat(reconciliationRepository.requestedLimits).containsExactly(25);
 		assertThat(runner.getOrder()).isEqualTo(ApplicationRunnerOrders.RAW_INGEST_RECONCILIATION);
+	}
+
+	@Test
+	@DisplayName("raw reconciliation runner는 DB가 없으면 reconciliation을 건너뛴다")
+	void rawReconciliationRunnerSkipsWhenDatabaseIsUnavailable() throws Exception {
+		FakeReconciliationRepository reconciliationRepository = new FakeReconciliationRepository();
+		RawIngestReconciliationService service = new RawIngestReconciliationService(
+			reconciliationRepository,
+			new EmptyRawRepository()
+		);
+		RawIngestReconciliationRunner runner = new RawIngestReconciliationRunner(() -> service, 25, () -> false);
+
+		runner.run(new DefaultApplicationArguments());
+
+		assertThat(reconciliationRepository.requestedLimits).isEmpty();
+	}
+
+	@Test
+	@DisplayName("trade partition maintenance runner는 DB가 없으면 partition 생성을 건너뛴다")
+	void tradePartitionMaintenanceRunnerSkipsWhenDatabaseIsUnavailable() throws Exception {
+		JdbcTradePartitionMaintenanceRepository repository = mock(JdbcTradePartitionMaintenanceRepository.class);
+		TradePartitionMaintenanceRunner runner = new TradePartitionMaintenanceRunner(
+			() -> repository,
+			Clock.fixed(Instant.parse("2026-06-12T00:00:00Z"), ZoneOffset.UTC),
+			5,
+			() -> false
+		);
+
+		runner.run(new DefaultApplicationArguments());
+
+		verifyNoInteractions(repository);
+	}
+
+	@Test
+	@DisplayName("trade partition maintenance runner는 DB가 있으면 설정된 연도 범위로 partition을 보장한다")
+	void tradePartitionMaintenanceRunnerEnsuresConfiguredYearRange() throws Exception {
+		JdbcTradePartitionMaintenanceRepository repository = mock(JdbcTradePartitionMaintenanceRepository.class);
+		TradePartitionMaintenanceRunner runner = new TradePartitionMaintenanceRunner(
+			() -> repository,
+			Clock.fixed(Instant.parse("2026-06-12T00:00:00Z"), ZoneOffset.UTC),
+			5,
+			() -> true
+		);
+
+		runner.run(new DefaultApplicationArguments());
+
+		verify(repository).ensureYearlyPartitions(2026, 2031);
 	}
 
 	@Test

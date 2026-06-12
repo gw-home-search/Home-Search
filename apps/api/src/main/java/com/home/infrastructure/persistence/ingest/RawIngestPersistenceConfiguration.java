@@ -13,7 +13,6 @@ import com.home.infrastructure.persistence.ingest.raw.RtmsRawTradeItemParser;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -49,13 +48,17 @@ class RawIngestPersistenceConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnBean(JdbcClient.class)
 	@ConditionalOnProperty(name = "home.ingest.raw-reconcile.enabled", havingValue = "true", matchIfMissing = true)
 	ApplicationRunner rawIngestReconciliationRunner(
-		RawIngestReconciliationService rawIngestReconciliationService,
+		ObjectProvider<RawIngestReconciliationService> reconciliationServiceProvider,
+		ObjectProvider<JdbcClient> jdbcClientProvider,
 		@Value("${home.ingest.raw-reconcile.batch-size:100}") int batchSize
 	) {
-		return new RawIngestReconciliationRunner(rawIngestReconciliationService, batchSize);
+		return new RawIngestReconciliationRunner(
+			reconciliationServiceProvider::getObject,
+			batchSize,
+			() -> jdbcClientProvider.getIfAvailable() != null
+		);
 	}
 
 	@Bean

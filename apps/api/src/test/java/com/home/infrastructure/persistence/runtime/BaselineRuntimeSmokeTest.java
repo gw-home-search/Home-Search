@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.home.HomeSearchApiApplication;
+import com.home.application.complex.ComplexRelationUseCase;
 import com.home.application.region.RegionRelationSynchronizationGateway;
 import com.home.application.region.RegionUnitCntSynchronizationService;
 
@@ -100,6 +101,25 @@ class BaselineRuntimeSmokeTest {
 		assertThat(regionRelationSynchronizationGateway).isNotNull();
 		assertThat(regionUnitCntSynchronizationService).isNotNull();
 		assertThat(applicationContext.containsBean("regionUnitCntSyncApplicationRunner")).isTrue();
+	}
+
+	@Test
+	@DisplayName("기본 ON 복구 runner와 complex relation Bean들은 실제 DB 부트에서 wiring된다")
+	void recoveryRunnersAndComplexRelationBeansAreWiredWithRealDatabase() {
+		assertThat(applicationContext.containsBean("rawIngestReconciliationRunner")).isTrue();
+		assertThat(applicationContext.containsBean("tradePartitionMaintenanceRunner")).isTrue();
+		assertThat(applicationContext.getBean(ComplexRelationUseCase.class)).isNotNull();
+		assertThat(missingRegionSeedCount()).isEqualTo(3L);
+	}
+
+	private Long missingRegionSeedCount() {
+		return jdbcClient.sql("""
+			SELECT count(*) FROM region
+			WHERE code IN ('43770256', '41461262', '11305108')
+			  AND region_type = 'eup-myeon-dong'
+			""")
+			.query(Long.class)
+			.single();
 	}
 
 	private Long syntheticSamplePublicDataCount() {

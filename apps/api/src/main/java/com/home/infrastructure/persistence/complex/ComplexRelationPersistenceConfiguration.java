@@ -6,11 +6,11 @@ import com.home.application.complex.ComplexRelationCaseService;
 import com.home.application.complex.ComplexRelationRepository;
 import com.home.application.complex.ComplexRelationUseCase;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -19,7 +19,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class ComplexRelationPersistenceConfiguration {
 
 	@Bean
-	@ConditionalOnBean(JdbcClient.class)
+	@Lazy
 	ComplexRelationUseCase complexRelationUseCase(ObjectProvider<JdbcClient> jdbcClientProvider) {
 		JdbcClient jdbcClient = jdbcClientProvider.getIfAvailable(() -> {
 			throw new IllegalStateException("JdbcClient is required for complex relation persistence");
@@ -29,7 +29,7 @@ class ComplexRelationPersistenceConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnBean(JdbcClient.class)
+	@Lazy
 	ComplexRelationCaseRepository complexRelationCaseRepository(
 		ObjectProvider<JdbcClient> jdbcClientProvider,
 		ObjectProvider<PlatformTransactionManager> transactionManagerProvider
@@ -41,7 +41,7 @@ class ComplexRelationPersistenceConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnBean(JdbcClient.class)
+	@Lazy
 	ComplexRelationCaseService complexRelationCaseService(
 		ObjectProvider<JdbcClient> jdbcClientProvider,
 		ComplexRelationCaseRepository complexRelationCaseRepository,

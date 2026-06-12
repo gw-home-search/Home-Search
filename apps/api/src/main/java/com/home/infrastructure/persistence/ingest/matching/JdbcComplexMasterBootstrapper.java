@@ -237,7 +237,7 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 	}
 
 	private String compactRegionCode(String sggCd, String umdCd) {
-		if (umdCd.length() == 5 && umdCd.endsWith("00")) {
+		if (umdCd.length() >= 3) {
 			return sggCd + umdCd.substring(0, 3);
 		}
 		return sggCd + umdCd;
@@ -252,6 +252,7 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 		return jdbcClient.sql("""
 			INSERT INTO complex (
 			    parcel_id,
+			    region_id,
 			    complex_pk,
 			    apt_seq,
 			    name,
@@ -267,6 +268,7 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			)
 			VALUES (
 			    :parcelId,
+			    (SELECT region_id FROM parcel WHERE id = :parcelId),
 			    :complexPk,
 			    :aptSeq,
 			    :name,
@@ -282,6 +284,10 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
 			)
 			ON CONFLICT (complex_pk) DO UPDATE
 			SET apt_seq = COALESCE(complex.apt_seq, EXCLUDED.apt_seq),
+			    region_id = COALESCE(
+			        complex.region_id,
+			        (SELECT region_id FROM parcel WHERE id = complex.parcel_id)
+			    ),
 			    name = complex.name,
 			    trade_name = COALESCE(complex.trade_name, EXCLUDED.trade_name),
 			    dong_cnt = COALESCE(complex.dong_cnt, EXCLUDED.dong_cnt),

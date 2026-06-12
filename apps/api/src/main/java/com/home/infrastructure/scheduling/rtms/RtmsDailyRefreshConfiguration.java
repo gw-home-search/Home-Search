@@ -2,6 +2,9 @@ package com.home.infrastructure.scheduling.rtms;
 
 import java.time.Clock;
 
+import com.home.application.region.RegionUnitCntSynchronizationService;
+
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -53,14 +56,16 @@ class RtmsDailyRefreshConfiguration {
 		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
 		RtmsDailyRefreshProperties properties,
 		RtmsDailyRefreshSlackMessageFormatter formatter,
-		RtmsDailyRefreshNotifier notifier
+		RtmsDailyRefreshNotifier notifier,
+		ObjectProvider<RegionUnitCntSynchronizationService> regionSynchronizationServiceProvider
 	) {
 		return new RtmsDailyRefreshScheduler(
 			monthlyRefreshRunner,
 			properties,
 			formatter,
 			notifier,
-			Clock.system(properties.zoneId())
+			Clock.system(properties.zoneId()),
+			regionSynchronizationServiceProvider.getIfAvailable()
 		);
 	}
 }

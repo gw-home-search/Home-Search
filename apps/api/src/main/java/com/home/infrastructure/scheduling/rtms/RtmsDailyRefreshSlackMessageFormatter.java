@@ -22,10 +22,19 @@ class RtmsDailyRefreshSlackMessageFormatter {
 				+ " matchFailed=" + total.matchFailed()
 				+ " parseFailed=" + total.parseFailed()
 		);
+		message.add(formatRegionSync(execution.regionSync()));
 		for (RtmsDailyRefreshResult result : execution.results()) {
 			message.add(formatResult(result));
 		}
 		return message.toString();
+	}
+
+	private String formatRegionSync(RtmsDailyRegionSyncResult result) {
+		String line = "regionSync=" + result.status();
+		if (result.failureReason() == null || result.failureReason().isBlank()) {
+			return line;
+		}
+		return line + " failureReason=" + sanitizeSensitiveValues(result.failureReason());
 	}
 
 	String sanitizeSensitiveValues(String value) {

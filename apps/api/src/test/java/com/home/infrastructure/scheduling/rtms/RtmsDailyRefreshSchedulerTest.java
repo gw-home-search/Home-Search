@@ -13,8 +13,11 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.home.application.ingest.trade.IngestResult;
+import com.home.application.region.RegionRelationSynchronizationResult;
+import com.home.application.region.RegionUnitCntSynchronizationService;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,7 +47,17 @@ class RtmsDailyRefreshSchedulerTest {
 	void schedulerRunsConfiguredLawdPlansAndSendsSlackSummary() {
 		RtmsMonthlyRefreshRunner monthlyRefreshRunner = mock(RtmsMonthlyRefreshRunner.class);
 		CapturingDailyRefreshNotifier notifier = new CapturingDailyRefreshNotifier();
-		RtmsDailyRefreshScheduler scheduler = scheduler(monthlyRefreshRunner, notifier);
+		AtomicInteger syncCalls = new AtomicInteger();
+		RegionUnitCntSynchronizationService synchronizationService = new RegionUnitCntSynchronizationService(() -> {
+			syncCalls.incrementAndGet();
+			return new RegionRelationSynchronizationResult(true, true, false);
+		});
+		RtmsDailyRefreshScheduler scheduler = scheduler(
+			monthlyRefreshRunner,
+			notifier,
+			List.of("11680", "11710"),
+			synchronizationService
+		);
 		RtmsMonthlyRefreshPlan gangnamPlan = new RtmsMonthlyRefreshPlan("11680", "202606", 1);
 		RtmsMonthlyRefreshPlan songpaPlan = new RtmsMonthlyRefreshPlan("11710", "202606", 1);
 		when(monthlyRefreshRunner.refresh(gangnamPlan)).thenReturn(new RtmsMonthlyRefreshReport(List.of(
@@ -60,6 +73,7 @@ class RtmsDailyRefreshSchedulerTest {
 
 		verify(monthlyRefreshRunner).refresh(gangnamPlan);
 		verify(monthlyRefreshRunner).refresh(songpaPlan);
+		assertThat(syncCalls).hasValue(1);
 		assertThat(notifier.messages()).hasSize(1);
 		assertThat(notifier.messages().get(0))
 			.contains("RTMS daily refresh")
@@ -68,7 +82,58 @@ class RtmsDailyRefreshSchedulerTest {
 			.contains("normalizedInserted=1")
 			.contains("runIds=[11, 12]")
 			.contains("lawdCd=11710")
+			.contains("regionSync=COMPLETED")
 			.contains("신규 실거래 저장");
+	}
+
+	@Test
+	@DisplayName("daily refresh scheduler는 region sync 실패를 FAILED Slack summary로 남긴다")
+	void schedulerReportsRegionSyncFailure() {
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner = mock(RtmsMonthlyRefreshRunner.class);
+		CapturingDailyRefreshNotifier notifier = new CapturingDailyRefreshNotifier();
+		RegionUnitCntSynchronizationService synchronizationService = new RegionUnitCntSynchronizationService(() -> {
+			throw new IllegalStateException("region sync failed");
+		});
+		RtmsDailyRefreshScheduler scheduler = scheduler(
+			monthlyRefreshRunner,
+			notifier,
+			List.of("11680"),
+			synchronizationService
+		);
+		RtmsMonthlyRefreshPlan plan = new RtmsMonthlyRefreshPlan("11680", "202606", 1);
+		when(monthlyRefreshRunner.refresh(plan)).thenReturn(new RtmsMonthlyRefreshReport(List.of(
+			RtmsMonthlyRefreshRunSummary.completed("11680", "202606", 1, new IngestResult(1, 1, 0, 1, 0, 0), 31L),
+			RtmsMonthlyRefreshRunSummary.completed("11680", "202605", 1, new IngestResult(1, 1, 0, 1, 0, 0), 32L)
+		)));
+
+		assertThatCode(scheduler::runDue).doesNotThrowAnyException();
+
+		assertThat(notifier.messages()).singleElement()
+			.asString()
+			.contains("regionSync=FAILED")
+			.contains("region sync failed");
+	}
+
+	@Test
+	@DisplayName("daily refresh scheduler는 configured 법정동이 없어도 실행한 region sync 결과를 Slack summary로 남긴다")
+	void schedulerReportsRegionSyncWhenLawdCodesAreEmpty() {
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner = mock(RtmsMonthlyRefreshRunner.class);
+		CapturingDailyRefreshNotifier notifier = new CapturingDailyRefreshNotifier();
+		RtmsDailyRefreshScheduler scheduler = scheduler(
+			monthlyRefreshRunner,
+			notifier,
+			List.of(),
+			new RegionUnitCntSynchronizationService(
+				() -> new RegionRelationSynchronizationResult(false, false, true)
+			)
+		);
+
+		scheduler.runDue();
+
+		assertThat(notifier.messages()).singleElement()
+			.asString()
+			.contains("status=PARTIAL")
+			.contains("regionSync=PARTIAL");
 	}
 
 	@Test
@@ -124,12 +189,29 @@ class RtmsDailyRefreshSchedulerTest {
 		RtmsDailyRefreshNotifier notifier,
 		List<String> lawdCds
 	) {
+		return scheduler(
+			monthlyRefreshRunner,
+			notifier,
+			lawdCds,
+			new RegionUnitCntSynchronizationService(
+				() -> new RegionRelationSynchronizationResult(false, false, false)
+			)
+		);
+	}
+
+	private static RtmsDailyRefreshScheduler scheduler(
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
+		RtmsDailyRefreshNotifier notifier,
+		List<String> lawdCds,
+		RegionUnitCntSynchronizationService synchronizationService
+	) {
 		return new RtmsDailyRefreshScheduler(
 			monthlyRefreshRunner,
 			new RtmsDailyRefreshProperties(lawdCds, 1, ZoneId.of("Asia/Seoul")),
 			new RtmsDailyRefreshSlackMessageFormatter(),
 			notifier,
-			JUNE_2026_KST_CLOCK
+			JUNE_2026_KST_CLOCK,
+			synchronizationService
 		);
 	}
 

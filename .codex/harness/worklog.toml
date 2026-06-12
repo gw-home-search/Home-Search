@@ -1,4 +1,76 @@
 [[items]]
+id = "complex-region-unit-count-sync"
+title_ko = "Complex Region 직접 관계와 Region 세대수 동기화"
+pr_type = "Feat"
+pr_title_ko = "단지 지역 관계와 지역 세대수 합계 동기화"
+description_ko = "complex.region_id 직접 관계와 region.unit_cnt_sum 반정규화 합계를 추가하고 daily RTMS 완료 후 전체 관계와 합계를 동기화한다."
+status = "done"
+priority = 280
+targets = "backend"
+preset = "backend-quality"
+acceptance_criteria = [
+  "complex.region_id는 parcel.region_id에서만 복사되고 복합 FK가 두 관계의 일치를 강제한다.",
+  "parcel.region_id는 유효한 19자리 PNU에 대해 10자리 우선, 8자리 fallback으로 region과 동기화된다.",
+  "region.unit_cnt_sum은 해당 지역과 모든 하위 지역의 complex.unit_cnt 합계를 저장하고 합계가 없으면 NULL을 보존한다.",
+  "전체 동기화는 TransactionTemplate 안에서 set-based SQL과 IS DISTINCT FROM 가드로 반복 실행 가능하다.",
+  "미매칭 parcel은 rollback하지 않고 PARTIAL로 가시화하며 관계 불일치는 전체 rollback한다.",
+  "daily RTMS 전체 수집 완료 후 관계와 합계 동기화를 정확히 한 번 실행한다.",
+  "신규 bootstrap complex는 parcel.region_id를 직접 복사하고 10자리 및 8자리 region 후보를 모두 시도한다.",
+  "POST /api/v1/map/regions URL, response field, field type, NULL 의미를 변경하지 않고 저장된 region.unit_cnt_sum을 반환한다.",
+  "raw-before-normalized, duplicate-safe ingest, failed-match queryability, complex_id 운영 관계를 변경하지 않는다.",
+]
+first_red_candidates = [
+  "JdbcRegionRelationSchemaTest에서 complex.region_id, region.unit_cnt_sum, 복합 FK와 ON UPDATE CASCADE가 없으면 실패하는 RED를 만든다.",
+  "JdbcRegionRelationSynchronizationRepositoryTest에서 어긋난 관계와 stale 합계가 전체 동기화 후 복구되지 않으면 실패하는 RED를 만든다.",
+  "RtmsDailyRefreshSchedulerTest에서 전체 수집 후 region sync가 한 번 실행되지 않거나 실패가 가시화되지 않으면 실패하는 RED를 만든다.",
+  "JdbcRegionMarkerRepositoryTest에서 저장된 region.unit_cnt_sum과 다른 실시간 합계를 반환하면 실패하는 RED를 만든다.",
+]
+verification_evidence = [
+  "- `./gradlew persistenceTest --tests '*JdbcRegionRelationSchemaTest'` = fail (최초 RED: complex.region_id와 region.unit_cnt_sum 부재)",
+  "- `./gradlew test --tests '*RegionUnitCntSynchronizationServiceTest'` = fail (최초 RED: sync service/gateway/result 부재 compile RED)",
+  "- `./gradlew persistenceTest --tests '*JdbcComplexMasterBootstrapperTest'` = fail (최초 RED: 신규 complex region_id NULL, 8자리 fallback 미적용)",
+  "- `./gradlew persistenceTest --tests '*JdbcRegionMarkerRepositoryTest'` = fail (최초 RED: 저장 합계 대신 실시간 합계 반환)",
+  "- `./gradlew persistenceTest --tests '*JdbcRegionRelationSynchronizationRepositoryTest'` = fail (리뷰 RED: 미매칭 parcel의 stale region_id가 남음)",
+  "- targeted unit/persistence tests = pass (최소 GREEN: schema, sync, bootstrapper, daily scheduler, one-shot, marker 및 stale 관계·cycle 회귀)",
+  "- `cd apps/api && ./gradlew test` = pass",
+  "- `cd apps/api && ./gradlew persistenceTest` = pass",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = pass (apiContractTest, persistenceTest, coverageCheck 포함)",
+  "- `cd apps/api && ./gradlew coverageCheck` = pass (line/branch minimum 0.90)",
+  "- `python3 scripts/check-test-display-names.py` = pass",
+  "- `python3 .codex/harness/project_terms_check.py` = pass",
+  "- `python3 .codex/harness/user_language_check.py --self-test` = pass",
+  "- `git diff --check` = pass",
+  "- `contract-reviewer` 관점 = pass (POST /api/v1/map/regions URL, field, type, NULL 의미 불변)",
+  "- `security-audit: 지적사항 = none` (정적 parameterized SQL, secret 추가 없음, Slack 실패 사유 sanitize 유지)",
+  "- `reviewer` 지적사항 = resolved (stale parcel.region_id 제거, region hierarchy cycle fail-fast, 빈 lawdCds sync 결과 가시화)",
+  "- `./gradlew test --tests '*RtmsDailyRefreshSlackMessageFormatterTest'` = fail (추가 최초 RED: region sync 실패 사유가 500자를 초과)",
+  "- `./gradlew test --tests '*RtmsDailyRefreshSlackMessageFormatterTest' --tests '*RtmsDailyRefreshSchedulerTest'` = pass (추가 최소 GREEN: region sync 실패 사유 500자 제한)",
+  "- `./gradlew persistenceTest --tests '*JdbcComplexMasterBootstrapperTest' --tests '*JdbcRegionRelationSchemaTest' --tests '*JdbcRegionRelationSynchronizationRepositoryTest'` = pass (V30/runtime 집계 정의 정렬과 bootstrap composite FK 방어 검증)",
+  "- RED waiver: V30 집계 join 정렬은 mismatch 불변식 아래 결과가 동치인 refactor이며, bootstrap의 다른 parcel 동일 complex_pk 경로는 policy가 upsert 전에 차단하므로 public seam RED를 만들 수 없음",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = pass (추가 리뷰 수정 후 전체 재검증)",
+  "- `reviewer` 추가 지적사항 = resolved (Slack 실패 사유 500자 제한, V30/runtime complex.region_id 집계 통일, bootstrap 기존 parcel region fallback)",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew test",
+  "cd apps/api && ./gradlew persistenceTest",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "cd apps/api && ./gradlew coverageCheck",
+  "python3 scripts/check-test-display-names.py",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+stop_conditions = [
+  "하나의 PNU prefix가 여러 region과 매칭되면 중단한다.",
+  "기존 complex.parcel_id 관계 손상으로 복합 FK 생성이 실패하면 중단한다.",
+  "region hierarchy 순환이 발견되면 중단한다.",
+  "public API URL, response field, field type, NULL 의미 변경이 필요하면 중단한다.",
+]
+risk_notes = [
+  "미매칭 parcel은 합계에서 제외되므로 daily sync가 PARTIAL 상태를 반드시 가시화해야 한다.",
+  "region 합계는 현행 region marker와 동일하게 연결된 모든 complex.unit_cnt를 합산한다.",
+]
+
+[[items]]
 id = "web-map-uiux-polish"
 title_ko = "Web map UI/UX polish"
 pr_type = "Feat"

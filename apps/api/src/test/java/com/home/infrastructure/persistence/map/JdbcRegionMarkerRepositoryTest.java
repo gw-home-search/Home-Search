@@ -29,7 +29,7 @@ class JdbcRegionMarkerRepositoryTest extends JdbcPostgresTestSupport {
 				RegionMarkerResult::trend,
 				RegionMarkerResult::unitCntSum
 			)
-			.containsExactly(tuple(11L, "Gangnam-gu", 37.5172, 127.0473, null, 1200L));
+			.containsExactly(tuple(11L, "Gangnam-gu", 37.5172, 127.0473, null, 1300L));
 	}
 
 	@Test
@@ -42,7 +42,7 @@ class JdbcRegionMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
 		assertThat(markers)
 			.extracting(RegionMarkerResult::id, RegionMarkerResult::name, RegionMarkerResult::unitCntSum)
-			.containsExactly(tuple(111L, "Cheongdam-dong", 1200L));
+			.containsExactly(tuple(111L, "Cheongdam-dong", 1250L));
 	}
 
 	@Test
@@ -70,13 +70,13 @@ class JdbcRegionMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
 	private void seedRegionMarkers() {
 		jdbcClient.sql("""
-			INSERT INTO region (id, parent_id, code, name, region_type, center_lat, center_lng)
+			INSERT INTO region (id, parent_id, code, name, region_type, center_lat, center_lng, unit_cnt_sum)
 			VALUES
-			    (1, NULL, '11', 'Seoul', 'si-do', 37.5663, 126.9780),
-			    (11, 1, '11680', 'Gangnam-gu', 'si-gun-gu', 37.5172, 127.0473),
-			    (12, 1, '11710', 'Songpa-gu', 'si-gun-gu', 37.7140, 127.1230),
-			    (111, 11, '11680104', 'Cheongdam-dong', 'eup-myeon-dong', 37.5194, 127.0496),
-			    (112, 11, '11680105', 'Samseong-dong', 'eup-myeon-dong', NULL, 127.0630)
+			    (1, NULL, '11', 'Seoul', 'si-do', 37.5663, 126.9780, 1400),
+			    (11, 1, '11680', 'Gangnam-gu', 'si-gun-gu', 37.5172, 127.0473, 1300),
+			    (12, 1, '11710', 'Songpa-gu', 'si-gun-gu', 37.7140, 127.1230, 100),
+			    (111, 11, '11680104', 'Cheongdam-dong', 'eup-myeon-dong', 37.5194, 127.0496, 1250),
+			    (112, 11, '11680105', 'Samseong-dong', 'eup-myeon-dong', NULL, 127.0630, 50)
 			""").update();
 		jdbcClient.sql("""
 			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)

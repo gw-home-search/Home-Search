@@ -14,6 +14,16 @@ class RtmsDailyRefreshSlackMessageFormatterTest {
 	private final RtmsDailyRefreshSlackMessageFormatter formatter = new RtmsDailyRefreshSlackMessageFormatter();
 
 	@Test
+	@DisplayName("daily refresh Slack summary는 region sync 실패 사유를 500자로 제한한다")
+	void slackSummaryLimitsRegionSyncFailureReasonLength() {
+		RtmsDailyRegionSyncResult result = RtmsDailyRegionSyncResult.failed(
+			new IllegalStateException("x".repeat(1_000))
+		);
+
+		assertThat(result.failureReason()).hasSize(500);
+	}
+
+	@Test
 	@DisplayName("daily refresh Slack summary는 신규 저장과 신규 없음 상태를 aggregate counter로 구분한다")
 	void slackSummarySeparatesNewDataFromNoNewData() {
 		String newDataMessage = formatter.format(new RtmsDailyRefreshExecution(List.of(

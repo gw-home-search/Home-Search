@@ -132,6 +132,26 @@ class BackendApplicationPackageStructureTest {
 	}
 
 	@Test
+	@DisplayName("RTMS ingest 정책 플래그 바인딩과 호출 간격 제어는 단일 지점에 둔다")
+	void rtmsIngestFlagBindingAndCallPacingHaveSingleOwners() throws IOException {
+		assertThat(Files.readString(RTMS_EXTERNAL_API_CONFIGURATION))
+			.doesNotContain("allow-coordinate-pending-only")
+			.contains("RateLimitedRtmsApartmentTradeClient")
+			.contains("min-request-interval-millis");
+		assertThat(Path.of(
+			"src/main/java/com/home/infrastructure/external/rtms/RtmsCoordinateSourcePreflight.java"
+		)).doesNotExist();
+		assertThat(Path.of(
+			"src/main/java/com/home/infrastructure/external/rtms/RequiredRtmsCoordinateSourcePreflight.java"
+		)).doesNotExist();
+		assertThat(Path.of(
+			"src/main/java/com/home/infrastructure/scheduling/rtms/RtmsCoordinateSourcePreflight.java"
+		)).exists();
+		assertThat(Files.readString(RTMS_BATCH_ORCHESTRATION_CONFIGURATION))
+			.contains("rtmsCoordinateSourcePreflight");
+	}
+
+	@Test
 	@DisplayName("application runner 순서는 선행 단계 의존성을 명시하고 전용 supplier wrapper를 만들지 않는다")
 	void applicationRunnerOrderingIsExplicitWithoutDedicatedReferenceWrappers() throws IOException {
 		assertThat(Path.of(

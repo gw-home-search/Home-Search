@@ -19,6 +19,7 @@ class RtmsDailyRefreshScheduler {
 	private static final DateTimeFormatter DEAL_YMD_FORMATTER = DateTimeFormatter.ofPattern("yyyyMM");
 
 	private final RtmsMonthlyRefreshRunner monthlyRefreshRunner;
+	private final RtmsCoordinateSourcePreflight coordinateSourcePreflight;
 	private final RtmsDailyRefreshProperties properties;
 	private final RtmsDailyRefreshSlackMessageFormatter formatter;
 	private final RtmsDailyRefreshNotifier notifier;
@@ -27,12 +28,14 @@ class RtmsDailyRefreshScheduler {
 
 	RtmsDailyRefreshScheduler(
 		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
+		RtmsCoordinateSourcePreflight coordinateSourcePreflight,
 		RtmsDailyRefreshProperties properties,
 		RtmsDailyRefreshSlackMessageFormatter formatter,
 		RtmsDailyRefreshNotifier notifier,
 		Clock clock
 	) {
 		this.monthlyRefreshRunner = Objects.requireNonNull(monthlyRefreshRunner);
+		this.coordinateSourcePreflight = Objects.requireNonNull(coordinateSourcePreflight);
 		this.properties = Objects.requireNonNull(properties);
 		this.formatter = Objects.requireNonNull(formatter);
 		this.notifier = Objects.requireNonNull(notifier);
@@ -58,6 +61,13 @@ class RtmsDailyRefreshScheduler {
 
 	RtmsDailyRefreshExecution runOnce() {
 		String baseDealYmd = YearMonth.now(clock.withZone(properties.zoneId())).format(DEAL_YMD_FORMATTER);
+		try {
+			coordinateSourcePreflight.verify();
+		}
+		catch (RuntimeException exception) {
+			log.error("RTMS daily refresh blocked because coordinate-source preflight failed", exception);
+			return preflightFailedExecution(baseDealYmd, exception);
+		}
 		List<RtmsDailyRefreshResult> results = new ArrayList<>();
 		for (String lawdCd : properties.lawdCds()) {
 			try {
@@ -73,6 +83,18 @@ class RtmsDailyRefreshScheduler {
 				));
 			}
 		}
+		return new RtmsDailyRefreshExecution(results);
+	}
+
+	private RtmsDailyRefreshExecution preflightFailedExecution(String baseDealYmd, RuntimeException exception) {
+		List<RtmsDailyRefreshResult> results = properties.lawdCds().stream()
+			.map(lawdCd -> RtmsDailyRefreshResult.failed(
+				lawdCd,
+				baseDealYmd,
+				properties.lookbackMonths(),
+				exception
+			))
+			.toList();
 		return new RtmsDailyRefreshExecution(results);
 	}
 

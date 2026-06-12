@@ -51,12 +51,14 @@ class RtmsDailyRefreshConfiguration {
 	@Bean
 	RtmsDailyRefreshScheduler rtmsDailyRefreshScheduler(
 		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
+		RtmsCoordinateSourcePreflight coordinateSourcePreflight,
 		RtmsDailyRefreshProperties properties,
 		RtmsDailyRefreshSlackMessageFormatter formatter,
 		RtmsDailyRefreshNotifier notifier
 	) {
 		return new RtmsDailyRefreshScheduler(
 			monthlyRefreshRunner,
+			coordinateSourcePreflight,
 			properties,
 			formatter,
 			notifier,

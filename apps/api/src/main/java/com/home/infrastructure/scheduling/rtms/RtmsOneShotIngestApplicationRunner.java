@@ -4,7 +4,6 @@ import com.home.application.ingest.trade.IngestResult;
 import com.home.infrastructure.ApplicationRunnerOrders;
 import com.home.infrastructure.external.rtms.RtmsApartmentTradeProperties;
 import com.home.infrastructure.external.rtms.RtmsApartmentTradeRequest;
-import com.home.infrastructure.external.rtms.RtmsCoordinateSourcePreflight;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

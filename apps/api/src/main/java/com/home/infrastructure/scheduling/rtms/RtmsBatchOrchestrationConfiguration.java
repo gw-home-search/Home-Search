@@ -6,7 +6,7 @@ import com.home.application.ingest.trade.OpenApiTradeIngestService;
 import com.home.application.ingest.run.RtmsIngestRunRepository;
 import com.home.infrastructure.external.rtms.RtmsApartmentTradeClient;
 import com.home.infrastructure.external.rtms.RtmsApartmentTradeProperties;
-import com.home.infrastructure.external.rtms.RtmsCoordinateSourcePreflight;
+import com.home.infrastructure.external.rtms.RtmsCoordinateSourceAvailabilityProbe;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -85,6 +85,17 @@ class RtmsBatchOrchestrationConfiguration {
 			),
 			java.time.Clock.systemUTC(),
 			properties.nationwideBackfillOptions()
+		);
+	}
+
+	@Bean
+	RtmsCoordinateSourcePreflight rtmsCoordinateSourcePreflight(
+		RtmsOneShotIngestProperties properties,
+		RtmsCoordinateSourceAvailabilityProbe availabilityProbe
+	) {
+		return new RequiredRtmsCoordinateSourcePreflight(
+			properties.allowCoordinatePendingOnly(),
+			availabilityProbe
 		);
 	}
 

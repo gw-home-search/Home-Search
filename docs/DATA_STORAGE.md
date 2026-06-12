@@ -329,6 +329,39 @@ other broad scans in the application path. Use exact 19 digit PNU lookup only.
 For diagnostics, prefer `pg_class.reltuples`, indexed sample lookup, or bounded
 queries with `LIMIT` and a short `statement_timeout`.
 
+### Complex-Region Relation And Region Unit Count
+
+`complex` keeps a direct, nullable `region_id` relation for region marker
+aggregation. This relation is derived only from the connected parcel and must
+not be guessed independently:
+
+- `complex.region_id` is copied only from `parcel.region_id`.
+- The composite foreign key on `(complex.parcel_id, complex.region_id)` keeps
+  the parcel and complex region relations consistent.
+- `region.unit_cnt_sum` stores the sum of `complex.unit_cnt` for the region
+  itself and every descendant region.
+- A region with no aggregatable complex keeps `unit_cnt_sum = NULL`, not zero.
+
+Recovery and synchronization use the same full-rebuild model:
+
+1. Flyway V30 repairs existing `parcel.region_id` values from valid 19 digit
+   PNU values, preferring the 10 digit region code and falling back to the
+   8 digit code.
+2. V30 copies the repaired parcel relation to `complex.region_id` and rebuilds
+   every `region.unit_cnt_sum`.
+3. The daily RTMS refresh runs the same relation and aggregate synchronization
+   once after collection completes.
+4. Operators may explicitly enable the one-shot region sync runner for manual
+   recovery.
+
+An unmatched parcel keeps `region_id = NULL`, is excluded from region sums,
+and makes the synchronization result `PARTIAL` without rolling back valid
+repairs. A complex/parcel region mismatch after synchronization or a cycle in
+the region hierarchy fails the synchronization and rolls back the transaction.
+This stored aggregate preserves the existing region marker household-count
+field, type, and `NULL` meaning; it is not a trade count, parcel count, or
+current-generation-only metric.
+
 ## Complex Metadata Enrichment
 
 `complex` rows keep identity data on the ingest path. Optional complex

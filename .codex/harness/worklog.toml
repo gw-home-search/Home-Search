@@ -1,4 +1,49 @@
 [[items]]
+id = "region-sync-canonical-docs"
+title_ko = "Region 관계와 세대수 동기화 canonical 문서화"
+pr_type = "Docs"
+pr_title_ko = "Region 관계와 세대수 동기화 저장 모델 문서화"
+description_ko = "complex.region_id 직접 관계, region.unit_cnt_sum 반정규화, V30·daily·one-shot 복구 모델을 canonical 문서와 기본 설정에 명시한다."
+status = "done"
+priority = 290
+targets = "backend"
+preset = "contract-hardening"
+acceptance_criteria = [
+  "docs/DATA_STORAGE.md가 complex.region_id 출처와 복합 FK 일치 불변식을 설명한다.",
+  "docs/DATA_STORAGE.md가 region.unit_cnt_sum 집계 범위와 NULL 의미를 설명한다.",
+  "docs/DATA_STORAGE.md가 V30, daily sync, one-shot 복구 경로와 PARTIAL/rollback 실패 의미를 설명한다.",
+  "application.yml이 home.region.sync.one-shot.enabled=false 기본값을 명시한다.",
+  "기본 애플리케이션 실행, daily RTMS sync, public API 계약과 데이터 의미는 변경되지 않는다.",
+]
+first_red_candidates = [
+  "문서와 동치인 명시적 false 기본값만 추가하므로 production behavior First RED는 적용하지 않는다.",
+]
+verification_evidence = [
+  "- RED waiver: canonical 문서와 @ConditionalOnProperty 기준 동치인 enabled=false 기본값만 추가하므로 production behavior First RED는 적용하지 않음",
+  "- `cd apps/api && ./gradlew test` = pass (기본 비활성 설정에서 backend unit test 통과)",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, persistence, coverage, Docs/OpenAPI 포함)",
+  "- `python3 .codex/harness/project_terms_check.py` = pass (프로젝트 용어 검사 통과)",
+  "- `git diff --check` = pass (공백 오류 없음)",
+  "- `contract-reviewer` 관점 = pass (public API URL, field, type, NULL 의미 불변)",
+  "- `security-audit: 지적사항 = none` (one-shot 기본 비활성 유지, secret 및 외부 입력 변경 없음)",
+  "- `reviewer` 지적사항 = none (문서와 V30/runtime sync 불변식 일치)",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew test",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+stop_conditions = [
+  "명시적 false 설정이 one-shot runner 활성 상태를 바꾸면 중단한다.",
+  "문서화 과정에서 기존 집계 범위나 NULL 의미 재해석이 필요하면 중단한다.",
+  "public API 또는 DB schema 변경이 필요하면 중단한다.",
+]
+risk_notes = [
+  "이번 slice는 기존 구현의 canonical 문서화와 동치인 기본 설정 명시이며 runtime 동작을 변경하지 않는다.",
+]
+
+[[items]]
 id = "complex-region-unit-count-sync"
 title_ko = "Complex Region 직접 관계와 Region 세대수 동기화"
 pr_type = "Feat"

@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import com.home.application.region.RegionUnitCntSynchronizationService;
 import com.home.infrastructure.scheduling.ScheduledJobExecutionTemplate;
 
 import org.slf4j.Logger;
@@ -24,6 +25,7 @@ class RtmsDailyRefreshScheduler {
 	private final RtmsDailyRefreshSlackMessageFormatter formatter;
 	private final RtmsDailyRefreshNotifier notifier;
 	private final Clock clock;
+	private final RegionUnitCntSynchronizationService regionSynchronizationService;
 	private final ScheduledJobExecutionTemplate execution = new ScheduledJobExecutionTemplate("RTMS daily refresh");
 
 	RtmsDailyRefreshScheduler(
@@ -34,12 +36,25 @@ class RtmsDailyRefreshScheduler {
 		RtmsDailyRefreshNotifier notifier,
 		Clock clock
 	) {
+		this(monthlyRefreshRunner, coordinateSourcePreflight, properties, formatter, notifier, clock, null);
+	}
+
+	RtmsDailyRefreshScheduler(
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
+		RtmsCoordinateSourcePreflight coordinateSourcePreflight,
+		RtmsDailyRefreshProperties properties,
+		RtmsDailyRefreshSlackMessageFormatter formatter,
+		RtmsDailyRefreshNotifier notifier,
+		Clock clock,
+		RegionUnitCntSynchronizationService regionSynchronizationService
+	) {
 		this.monthlyRefreshRunner = Objects.requireNonNull(monthlyRefreshRunner);
 		this.coordinateSourcePreflight = Objects.requireNonNull(coordinateSourcePreflight);
 		this.properties = Objects.requireNonNull(properties);
 		this.formatter = Objects.requireNonNull(formatter);
 		this.notifier = Objects.requireNonNull(notifier);
 		this.clock = Objects.requireNonNull(clock);
+		this.regionSynchronizationService = regionSynchronizationService;
 	}
 
 	@Scheduled(
@@ -52,7 +67,7 @@ class RtmsDailyRefreshScheduler {
 
 	private void runScheduledExecution() {
 		RtmsDailyRefreshExecution result = runOnce();
-		if (result.results().isEmpty()) {
+		if (result.results().isEmpty() && result.regionSync().isSkipped()) {
 			log.warn("RTMS daily refresh skipped because configured lawdCds is empty");
 			return;
 		}
@@ -83,7 +98,19 @@ class RtmsDailyRefreshScheduler {
 				));
 			}
 		}
-		return new RtmsDailyRefreshExecution(results);
+		return new RtmsDailyRefreshExecution(results, synchronizeRegionUnitCounts());
+	}
+
+	private RtmsDailyRegionSyncResult synchronizeRegionUnitCounts() {
+		if (regionSynchronizationService == null) {
+			return RtmsDailyRegionSyncResult.skipped();
+		}
+		try {
+			return RtmsDailyRegionSyncResult.completed(regionSynchronizationService.synchronize());
+		}
+		catch (RuntimeException exception) {
+			return RtmsDailyRegionSyncResult.failed(exception);
+		}
 	}
 
 	private RtmsDailyRefreshExecution preflightFailedExecution(String baseDealYmd, RuntimeException exception) {

@@ -40,7 +40,8 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 			.containsEntry("trade_name", "Live Sample Apartment")
 			.containsEntry("metadata_status", "PENDING")
 			.containsEntry("dong_cnt", null)
-			.containsEntry("unit_cnt", null);
+			.containsEntry("unit_cnt", null)
+			.containsEntry("region_id", 1L);
 		assertThat(complexAliasCount("APT-LIVE-501", "RTMS_APT_NAME", "livesampleapartment")).isEqualTo(1);
 	}
 
@@ -124,6 +125,25 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 		assertThat(parcelRow(expectedPnu()))
 			.containsEntry("region_id", 1L)
 			.containsEntry("address", "Sample-dong 777-1");
+	}
+
+	@Test
+	@DisplayName("RTMS bootstrap은 리 단위 10자리 코드도 8자리 법정동 region fallback으로 연결한다")
+	void bootstrapsRegionFallbackForNonZeroUmdSuffix() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (1, '11680103', 'Sample-dong', 'eup-myeon-dong')
+			""").update();
+		JdbcComplexMasterBootstrapper bootstrapper = new JdbcComplexMasterBootstrapper(
+			jdbcClient,
+			pnu -> Optional.empty()
+		);
+
+		var result = bootstrapper.bootstrap(rtmsItem("APT-LIVE-RI", "Live Ri Apartment", "777-1", "10301"));
+
+		assertThat(result.changed()).isTrue();
+		assertThat(complexBootstrapRow("APT-LIVE-RI"))
+			.containsEntry("region_id", 1L);
 	}
 
 	@Test
@@ -220,6 +240,10 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 	}
 
 	private OpenApiTradeItem rtmsItem(String aptSeq, String aptName, String jibun) {
+		return rtmsItem(aptSeq, aptName, jibun, "10300");
+	}
+
+	private OpenApiTradeItem rtmsItem(String aptSeq, String aptName, String jibun, String umdCd) {
 		return new OpenApiTradeItem(
 			"101",
 			aptName,
@@ -232,7 +256,7 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 			12,
 			jibun,
 			"11680",
-			"10300",
+			umdCd,
 			"{\"aptSeq\":\"%s\",\"aptNm\":\"%s\",\"jibun\":\"%s\"}"
 				.formatted(aptSeq, aptName, jibun)
 		);
@@ -267,7 +291,7 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 
 	private java.util.Map<String, Object> complexBootstrapRow(String aptSeq) {
 		return jdbcClient.sql("""
-			SELECT complex_pk, name, trade_name, metadata_status, dong_cnt, unit_cnt
+			SELECT complex_pk, name, trade_name, metadata_status, dong_cnt, unit_cnt, region_id
 			FROM complex
 			WHERE apt_seq = :aptSeq
 			""")
@@ -280,6 +304,7 @@ class JdbcComplexMasterBootstrapperTest extends JdbcPostgresTestSupport {
 				row.put("metadata_status", resultSet.getString("metadata_status"));
 				row.put("dong_cnt", resultSet.getObject("dong_cnt"));
 				row.put("unit_cnt", resultSet.getObject("unit_cnt"));
+				row.put("region_id", resultSet.getObject("region_id", Long.class));
 				return row;
 			})
 			.single();

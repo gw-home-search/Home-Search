@@ -5,16 +5,25 @@ import java.util.List;
 import com.home.application.ingest.trade.IngestResult;
 
 record RtmsDailyRefreshExecution(
-	List<RtmsDailyRefreshResult> results
+	List<RtmsDailyRefreshResult> results,
+	RtmsDailyRegionSyncResult regionSync
 ) {
 
 	RtmsDailyRefreshExecution {
 		results = results == null ? List.of() : List.copyOf(results);
+		regionSync = regionSync == null ? RtmsDailyRegionSyncResult.skipped() : regionSync;
+	}
+
+	RtmsDailyRefreshExecution(List<RtmsDailyRefreshResult> results) {
+		this(results, RtmsDailyRegionSyncResult.skipped());
 	}
 
 	RtmsMonthlyRefreshRunStatus status() {
+		if (regionSync.failed()) {
+			return RtmsMonthlyRefreshRunStatus.FAILED;
+		}
 		if (results.isEmpty()) {
-			return RtmsMonthlyRefreshRunStatus.COMPLETED;
+			return regionSync.partial() ? RtmsMonthlyRefreshRunStatus.PARTIAL : RtmsMonthlyRefreshRunStatus.COMPLETED;
 		}
 		boolean allFailed = results.stream()
 			.allMatch(result -> result.status() == RtmsMonthlyRefreshRunStatus.FAILED);
@@ -23,7 +32,9 @@ record RtmsDailyRefreshExecution(
 		}
 		boolean anyIncomplete = results.stream()
 			.anyMatch(result -> result.status() != RtmsMonthlyRefreshRunStatus.COMPLETED);
-		return anyIncomplete ? RtmsMonthlyRefreshRunStatus.PARTIAL : RtmsMonthlyRefreshRunStatus.COMPLETED;
+		return anyIncomplete || regionSync.partial()
+			? RtmsMonthlyRefreshRunStatus.PARTIAL
+			: RtmsMonthlyRefreshRunStatus.COMPLETED;
 	}
 
 	IngestResult totalResult() {

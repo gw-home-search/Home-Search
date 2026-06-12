@@ -46,4 +46,19 @@ class HomeSearchApiApplicationTests {
 			.isInstanceOf(IllegalStateException.class)
 			.hasMessage("PlatformTransactionManager is required for region unit count persistence");
 	}
+
+	@Test
+	@DisplayName("기본 ON 복구 runner들은 no-DB 부트에서도 등록되고 실행 시점에만 DB를 요구한다")
+	void defaultOnRecoveryRunnersAreRegisteredWithoutDatabase() {
+		assertThat(applicationContext.containsBean("rawIngestReconciliationRunner")).isTrue();
+		assertThat(applicationContext.containsBean("tradePartitionMaintenanceRunner")).isTrue();
+	}
+
+	@Test
+	@DisplayName("complex relation Bean들은 no-DB 부트에서도 정의되고 사용 시점에만 DB를 요구한다")
+	void complexRelationBeansAreDefinedWithoutDatabase() {
+		assertThat(applicationContext.containsBean("complexRelationUseCase")).isTrue();
+		assertThat(applicationContext.containsBean("complexRelationCaseRepository")).isTrue();
+		assertThat(applicationContext.containsBean("complexRelationCaseService")).isTrue();
+	}
 }

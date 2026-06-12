@@ -2,6 +2,7 @@ package com.home.infrastructure.scheduling.rtms;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -16,6 +17,7 @@ import com.home.application.ingest.backfill.RtmsBackfillJobRecord;
 import com.home.application.ingest.backfill.RtmsBackfillJobRepository;
 import com.home.domain.ingest.backfill.RtmsBackfillJobStatus;
 import com.home.infrastructure.external.rtms.RtmsApartmentTradeRequest;
+import com.home.infrastructure.external.rtms.RtmsCoordinateSourceAvailabilityProbe;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -183,6 +185,41 @@ class RtmsBatchOrchestrationConfigurationTest {
 		verify(chunkRepository).markPartial(102L, 12L, "IllegalStateException: page failed");
 		verify(chunkRepository).markFailed(103L, 13L, "IllegalStateException: fetch failed");
 		verify(jobRepository).markPartial(1L, "RTMS backfill finished with failed, partial, or blocked chunks");
+	}
+
+	@Test
+	@DisplayName("preflight bean은 allow-coordinate-pending-only를 ConfigurationProperties 단일 출처에서 읽는다")
+	void preflightBeanReadsPendingOnlyFlagFromSingleConfigurationSource() {
+		RtmsBatchOrchestrationConfiguration configuration = new RtmsBatchOrchestrationConfiguration();
+		RtmsCoordinateSourceAvailabilityProbe probe = mock(RtmsCoordinateSourceAvailabilityProbe.class);
+
+		configuration.rtmsCoordinateSourcePreflight(preflightProperties(true), probe).verify();
+		verifyNoInteractions(probe);
+
+		when(probe.configured()).thenReturn(true);
+		configuration.rtmsCoordinateSourcePreflight(preflightProperties(false), probe).verify();
+		verify(probe).verifyAvailable();
+	}
+
+	private static RtmsOneShotIngestProperties preflightProperties(boolean allowCoordinatePendingOnly) {
+		return new RtmsOneShotIngestProperties(
+			true,
+			"11680",
+			"202606",
+			1,
+			false,
+			"one-shot",
+			0,
+			allowCoordinatePendingOnly,
+			"",
+			"201201",
+			"202606",
+			"",
+			"rtms-backfill-worker",
+			30,
+			3,
+			1
+		);
 	}
 
 	private static <T> ObjectProvider<T> provider(Class<T> type, T bean) {

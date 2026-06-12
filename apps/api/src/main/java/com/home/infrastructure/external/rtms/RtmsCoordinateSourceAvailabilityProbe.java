@@ -1,7 +1,8 @@
 package com.home.infrastructure.external.rtms;
 
-@FunctionalInterface
-interface RtmsCoordinateSourceAvailabilityProbe {
+public interface RtmsCoordinateSourceAvailabilityProbe {
+
+	boolean configured();
 
 	void verifyAvailable();
 }

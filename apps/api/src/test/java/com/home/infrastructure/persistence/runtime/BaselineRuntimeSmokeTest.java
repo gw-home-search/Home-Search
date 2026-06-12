@@ -7,10 +7,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.home.HomeSearchApiApplication;
+import com.home.application.region.RegionRelationSynchronizationGateway;
+import com.home.application.region.RegionUnitCntSynchronizationService;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -41,6 +44,15 @@ class BaselineRuntimeSmokeTest {
 	@Autowired
 	private JdbcClient jdbcClient;
 
+	@Autowired
+	private ApplicationContext applicationContext;
+
+	@Autowired
+	private RegionRelationSynchronizationGateway regionRelationSynchronizationGateway;
+
+	@Autowired
+	private RegionUnitCntSynchronizationService regionUnitCntSynchronizationService;
+
 	@DynamicPropertySource
 	static void databaseProperties(DynamicPropertyRegistry registry) {
 		registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
@@ -50,6 +62,7 @@ class BaselineRuntimeSmokeTest {
 		registry.add("spring.flyway.enabled", () -> "true");
 		registry.add("spring.flyway.locations", () -> "classpath:db/migration/api");
 		registry.add("spring.flyway.clean-disabled", () -> "true");
+		registry.add("home.region.sync.one-shot.enabled", () -> "true");
 	}
 
 	@Test
@@ -84,6 +97,9 @@ class BaselineRuntimeSmokeTest {
 		assertThat(syntheticSamplePublicDataCount()).isZero();
 		assertThat(normalizedTradeCount()).isZero();
 		assertThat(rootRegionCount()).isGreaterThanOrEqualTo(17);
+		assertThat(regionRelationSynchronizationGateway).isNotNull();
+		assertThat(regionUnitCntSynchronizationService).isNotNull();
+		assertThat(applicationContext.containsBean("regionUnitCntSyncApplicationRunner")).isTrue();
 	}
 
 	private Long syntheticSamplePublicDataCount() {

@@ -1,4 +1,57 @@
 [[items]]
+id = "region-sync-real-boot-wiring"
+title_ko = "Region sync 실부트 Bean wiring 복구"
+pr_type = "Fix"
+pr_title_ko = "Region sync 실부트 Bean wiring 복구"
+description_ko = "JdbcClient auto-configuration 평가 순서 때문에 region sync Bean 체인이 운영에서 누락되는 문제를 lazy dependency resolution으로 복구한다."
+status = "done"
+priority = 300
+targets = "backend"
+preset = "backend-quality"
+acceptance_criteria = [
+  "실제 no-DB Spring Boot context에 RegionRelationSynchronizationGateway와 RegionUnitCntSynchronizationService Bean이 존재한다.",
+  "no-DB 기본 부트는 성공하고 DB 의존성은 synchronizeAll 호출 시점에만 요구된다.",
+  "one-shot 기본 false에서는 runner가 생성되지 않고 true에서는 property gate로 생성된다.",
+  "daily scheduler가 실제 RegionUnitCntSynchronizationService를 주입받아 영구 SKIPPED 상태가 되지 않는다.",
+  "public API와 region 집계 의미는 변경되지 않는다.",
+]
+first_red_candidates = [
+  "HomeSearchApiApplicationTests가 실부트 no-DB context에서 region sync gateway와 service Bean을 찾지 못해 실패한다.",
+  "no-DB context에서 gateway synchronizeAll 호출 시점 이전에는 부트가 성공해야 한다.",
+]
+verification_evidence = [
+  "- `cd apps/api && ./gradlew test --tests '*HomeSearchApiApplicationTests'` = fail (최초 RED: 실부트 no-DB context에 RegionRelationSynchronizationGateway Bean이 없어 NoSuchBeanDefinitionException)",
+  "- `cd apps/api && ./gradlew test --tests '*HomeSearchApiApplicationTests' --tests '*RegionUnitCntSynchronizationServiceTest' --tests '*RegionUnitCntSyncApplicationRunnerTest'` = pass (최소 GREEN: no-DB 실부트 Bean 체인 존재, 호출 시점 DB 검증)",
+  "- `cd apps/api && ./gradlew persistenceTest --tests '*BaselineRuntimeSmokeTest' --tests '*JdbcRegionRelationSynchronizationRepositoryTest'` = pass (실제 DB/Flyway context에서 gateway, service, one-shot runner 생성 및 sync 실행)",
+  "- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, persistence, coverage, Docs/OpenAPI 포함)",
+  "- `python3 scripts/check-test-display-names.py` = pass (테스트 표시명 정책 통과)",
+  "- `python3 .codex/harness/project_terms_check.py` = pass (프로젝트 용어 검사 통과)",
+  "- `python3 .codex/harness/user_language_check.py --self-test` = pass (사용자 언어 정책 자체 테스트 통과)",
+  "- `git diff --check` = pass (공백 오류 없음)",
+  "- `contract-reviewer` 관점 = pass (public API URL, field, type, NULL 의미 불변)",
+  "- `security-audit: 지적사항 = none` (DB 의존성 검증 시점만 변경, secret·권한·외부 입력 변경 없음)",
+  "- `reviewer` 지적사항 = none (region sync 체인만 수정하고 동일 ConditionalOnBean 잠복 버그 3건은 후속 분리)",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew test --tests '*HomeSearchApiApplicationTests'",
+  "cd apps/api && ./gradlew test --tests '*RegionUnitCnt*'",
+  "cd apps/api && ./gradlew persistenceTest",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 scripts/check-test-display-names.py",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+stop_conditions = [
+  "Bean 상시 등록을 위해 no-DB 기본 부트를 포기해야 하면 중단한다.",
+  "one-shot 기본 false에서 runner가 실행되면 중단한다.",
+  "region sync 외 잠복 Bean의 운영 활성 정책 변경이 필요하면 중단한다.",
+  "public API 또는 region 집계 의미 변경이 필요하면 중단한다.",
+]
+risk_notes = [
+  "raw reconciliation, complex relation case, trade partition maintenance의 동일 ConditionalOnBean 잠복 버그는 별도 후속 slice로 유지한다.",
+]
+
+[[items]]
 id = "region-sync-canonical-docs"
 title_ko = "Region 관계와 세대수 동기화 canonical 문서화"
 pr_type = "Docs"

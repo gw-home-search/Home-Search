@@ -6,7 +6,9 @@ package com.home.domain.complex.metadata;
 public enum ComplexMetadataLookupPath {
 
 	CANONICAL_PNU("현재 PNU", "운영 parcel PNU를 그대로 사용한 정확 조회"),
+	CANONICAL_PNU_NAME("현재 PNU + 단지명", "정확 PNU 후보가 여럿일 때 단지명 일치로 유일 단지를 선택한 조회"),
 	APPROVED_PREFIX_ALIAS("승인 PNU 별칭", "승인된 ODC 전용 구 PNU prefix를 사용한 정확 조회"),
+	APPROVED_PREFIX_ALIAS_NAME("승인 PNU 별칭 + 단지명", "승인된 구 PNU prefix 후보가 여럿일 때 단지명 일치로 유일 단지를 선택한 조회"),
 	COMPLEX_PK_DIAGNOSTIC("단지 식별자 진단", "COMPLEX_PK를 충돌 검증에 사용한 조회"),
 	BUILDING_PNU("건축물 PNU", "건축물대장 API에 운영 PNU를 사용한 조회"),
 	NONE("조회 없음", "외부 원천 조회를 수행하지 못한 상태");

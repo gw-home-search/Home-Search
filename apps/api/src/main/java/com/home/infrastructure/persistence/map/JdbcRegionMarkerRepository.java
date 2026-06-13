@@ -31,6 +31,7 @@ public class JdbcRegionMarkerRepository implements RegionMarkerRepository {
 			    r.unit_cnt_sum
 			FROM region r
 			WHERE r.region_type = :region
+			  AND r.unit_cnt_sum IS NOT NULL
 			  AND r.center_lat IS NOT NULL
 			  AND r.center_lng IS NOT NULL
 			  AND r.center_lat BETWEEN :swLat AND :neLat

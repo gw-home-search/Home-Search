@@ -75,7 +75,7 @@ class MapApiRestDocsTest {
 					fieldWithPath("[].lat").type(JsonFieldType.NUMBER).description("Marker latitude."),
 					fieldWithPath("[].lng").type(JsonFieldType.NUMBER).description("Marker longitude."),
 					fieldWithPath("[].trend").type(JsonFieldType.NULL).optional().description("Optional regional trend value."),
-					fieldWithPath("[].unitCntSum").type(JsonFieldType.NUMBER).optional().description("Total household count under the region marker.")
+					fieldWithPath("[].unitCntSum").type(JsonFieldType.NUMBER).description("Total household count under the region marker. Region markers without a household-count sum are excluded from the response.")
 				),
 				resource(builder()
 					.tag("Map")
@@ -94,7 +94,7 @@ class MapApiRestDocsTest {
 						fieldWithPath("[].lat").type(JsonFieldType.NUMBER).description("Marker latitude."),
 						fieldWithPath("[].lng").type(JsonFieldType.NUMBER).description("Marker longitude."),
 						fieldWithPath("[].trend").type(JsonFieldType.NULL).optional().description("Optional regional trend value."),
-						fieldWithPath("[].unitCntSum").type(JsonFieldType.NUMBER).optional().description("Total household count under the region marker.")
+						fieldWithPath("[].unitCntSum").type(JsonFieldType.NUMBER).description("Total household count under the region marker. Region markers without a household-count sum are excluded from the response.")
 					)
 					.build())
 			));
@@ -155,7 +155,7 @@ class MapApiRestDocsTest {
 					fieldWithPath("[].lat").type(JsonFieldType.NUMBER).description("Marker latitude."),
 					fieldWithPath("[].lng").type(JsonFieldType.NUMBER).description("Marker longitude."),
 					fieldWithPath("[].latestDealAmount").type(JsonFieldType.NUMBER).description("Latest trade amount in 10,000 KRW units."),
-					fieldWithPath("[].unitCntSum").type(JsonFieldType.VARIES).optional().description("Total household count under the parcel. May be null when metadata is unavailable.")
+					fieldWithPath("[].unitCntSum").type(JsonFieldType.NUMBER).description("Total household count under the parcel. Markers without household-count metadata are excluded from the response.")
 				),
 				resource(builder()
 					.tag("Map")
@@ -182,7 +182,7 @@ class MapApiRestDocsTest {
 						fieldWithPath("[].lat").type(JsonFieldType.NUMBER).description("Marker latitude."),
 						fieldWithPath("[].lng").type(JsonFieldType.NUMBER).description("Marker longitude."),
 						fieldWithPath("[].latestDealAmount").type(JsonFieldType.NUMBER).description("Latest trade amount."),
-						fieldWithPath("[].unitCntSum").type(JsonFieldType.VARIES).optional().description("Total household count. May be null when metadata is unavailable.")
+						fieldWithPath("[].unitCntSum").type(JsonFieldType.NUMBER).description("Total household count. Markers without household-count metadata are excluded from the response.")
 					)
 					.build())
 			));

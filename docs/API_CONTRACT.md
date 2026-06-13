@@ -188,7 +188,9 @@ Response fields:
 - `lat`: marker latitude.
 - `lng`: marker longitude.
 - `trend`: optional regional trend value. Home Search may return `null` or omit it.
-- `unitCntSum`: optional household count represented by this region marker.
+- `unitCntSum`: household count represented by this region marker. Region markers
+  whose subtree has no household-count metadata are excluded from the response, so
+  a returned region marker always carries a non-null `unitCntSum`.
 
 Status:
 
@@ -201,8 +203,9 @@ Migration notes:
 - Regional trend calculation is not required for map display.
 - Source repository aliases may not match the target field names exactly.
   Target Home Search should expose `name`, `lat`, and `lng`.
-- `unitCntSum` is not required for Home Search region markers. Frontend code must not
-  require it to render region markers, but should display it when present.
+- A region marker is returned only when its subtree has a household-count sum;
+  regions with no household-count metadata are omitted rather than returned with a
+  `null` `unitCntSum`. The backend must not turn missing metadata into `0`.
 
 ### POST `/api/v1/map/complexes`
 
@@ -280,8 +283,9 @@ Response fields:
 - `lat`: marker latitude.
 - `lng`: marker longitude.
 - `latestDealAmount`: optional latest trade amount in 10,000 KRW units.
-- `unitCntSum`: optional household count represented by this marker. May be
-  `null` when complex metadata has not been enriched yet.
+- `unitCntSum`: household count represented by this marker. Markers with no
+  household-count metadata are excluded from the response, so a returned marker
+  always carries a non-null `unitCntSum`.
 
 Status:
 
@@ -302,9 +306,11 @@ Migration notes:
   marker per complex. Redeveloped parcels return the current-generation complex
   marker. Unresolved or ambiguous cases fall back to one representative marker.
 - `unitCntSum` is the household count for a complex-level marker and the sum of
-  household counts for a representative fallback marker. It is `null` when the
-  marker has no household-count metadata; the backend must not turn missing
-  metadata into `0`.
+  household counts for a representative fallback marker. A marker with no
+  household-count metadata (for example a not-yet-enriched complex or a parcel
+  whose complexes all lack `unitCnt`) is omitted from the response rather than
+  returned with a `null` `unitCntSum`. The backend must not turn missing metadata
+  into `0`. Such complexes remain visible in the metadata admin surface.
 - `latestDealAmount` is the newest normalized `trade` amount for the marker's
   `complexId` when present, otherwise the newest trade under the parcel.
 - Price, area, unit, and age filters are applied to the marker row actually

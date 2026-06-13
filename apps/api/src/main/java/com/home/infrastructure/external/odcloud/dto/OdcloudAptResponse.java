@@ -26,6 +26,12 @@ public class OdcloudAptResponse {
 		private String address;
 		@JsonProperty("COMPLEX_PK")
 		private String complexPk;
+		@JsonProperty("COMPLEX_NM1")
+		private String complexNm1;
+		@JsonProperty("COMPLEX_NM2")
+		private String complexNm2;
+		@JsonProperty("COMPLEX_NM3")
+		private String complexNm3;
 		@JsonProperty("DONG_CNT")
 		private Integer dongCnt;
 		@JsonProperty("PNU")
@@ -49,6 +55,30 @@ public class OdcloudAptResponse {
 
 		public void setComplexPk(String complexPk) {
 			this.complexPk = complexPk;
+		}
+
+		public String getComplexNm1() {
+			return complexNm1;
+		}
+
+		public void setComplexNm1(String complexNm1) {
+			this.complexNm1 = complexNm1;
+		}
+
+		public String getComplexNm2() {
+			return complexNm2;
+		}
+
+		public void setComplexNm2(String complexNm2) {
+			this.complexNm2 = complexNm2;
+		}
+
+		public String getComplexNm3() {
+			return complexNm3;
+		}
+
+		public void setComplexNm3(String complexNm3) {
+			this.complexNm3 = complexNm3;
 		}
 
 		public Integer getDongCnt() {

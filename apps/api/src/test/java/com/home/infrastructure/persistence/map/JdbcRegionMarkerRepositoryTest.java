@@ -46,16 +46,14 @@ class JdbcRegionMarkerRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
-	@DisplayName("bounds query는 하위 complex 세대수 metadata가 없으면 region unitCntSum을 null로 반환한다")
-	void boundsQueryReturnsNullUnitCountWhenMetadataIsMissing() {
+	@DisplayName("bounds query는 하위 complex 세대수 metadata가 없어 region 세대수 합계가 없으면 marker를 반환하지 않는다")
+	void boundsQueryExcludesRegionMarkerWhenUnitCountSumIsMissing() {
 		seedRegionMarkersWithMissingUnitCounts();
 		JdbcRegionMarkerRepository repository = new JdbcRegionMarkerRepository(jdbcClient);
 
 		var markers = repository.findRegionMarkers(request("si-gun-gu"));
 
-		assertThat(markers)
-			.extracting(RegionMarkerResult::id, RegionMarkerResult::name, RegionMarkerResult::unitCntSum)
-			.containsExactly(tuple(11L, "Gangnam-gu", null));
+		assertThat(markers).isEmpty();
 	}
 
 	private RegionMarkerQuery request(String region) {

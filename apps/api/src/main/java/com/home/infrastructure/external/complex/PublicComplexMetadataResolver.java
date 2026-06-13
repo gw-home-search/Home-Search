@@ -171,6 +171,11 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 				.filter(item -> pnu.equals(trimToNull(item.getPnu())))
 				.toList();
 			if (matches.size() > 1) {
+				OdcloudAptResponse.Item nameMatched = chooseByName(lookup.aptName(), matches);
+				if (nameMatched != null) {
+					return metadataResolution(nameMatched).withLookupEvidence(
+						evidence(ComplexMetadataLookupPath.CANONICAL_PNU_NAME, pnu, pnu, null, matches.size()));
+				}
 				return ComplexMetadataResolution.ambiguous("ODC", "ODC PNU candidate ambiguous pnu=" + pnu)
 					.withLookupEvidence(evidence(ComplexMetadataLookupPath.CANONICAL_PNU, pnu, null, null, matches.size()));
 			}
@@ -203,10 +208,23 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 						.toList();
 				ComplexMetadataLookupEvidence evidence = evidence(
 					ComplexMetadataLookupPath.APPROVED_PREFIX_ALIAS, lookup.pnu(), sourcePnu, alias.id(), matches.size());
-				if (matches.size() != 1) {
-					return matches.isEmpty()
-						? ComplexMetadataResolution.unavailable("ODC", "ODC approved alias candidate unavailable").withLookupEvidence(evidence)
-						: ComplexMetadataResolution.ambiguous("ODC", "ODC approved alias candidate ambiguous").withLookupEvidence(evidence);
+				if (matches.isEmpty()) {
+					return ComplexMetadataResolution.unavailable("ODC", "ODC approved alias candidate unavailable")
+						.withLookupEvidence(evidence);
+				}
+				if (matches.size() > 1) {
+					OdcloudAptResponse.Item nameMatched = chooseByName(lookup.aptName(), matches);
+					if (nameMatched == null) {
+						return ComplexMetadataResolution.ambiguous("ODC", "ODC approved alias candidate ambiguous")
+							.withLookupEvidence(evidence);
+					}
+					ComplexMetadataLookupEvidence nameEvidence = evidence(
+						ComplexMetadataLookupPath.APPROVED_PREFIX_ALIAS_NAME, lookup.pnu(), sourcePnu, alias.id(), matches.size());
+					if (trimToNull(lookup.aptSeq()) != null && !lookup.aptSeq().equals(trimToNull(nameMatched.getComplexPk()))) {
+						return ComplexMetadataResolution.ambiguous("ODC", "ODC approved alias COMPLEX_PK conflict")
+							.withLookupEvidence(nameEvidence);
+					}
+					return metadataResolution(nameMatched).withLookupEvidence(nameEvidence);
 				}
 				OdcloudAptResponse.Item selected = matches.get(0);
 				if (trimToNull(lookup.aptSeq()) != null && !lookup.aptSeq().equals(trimToNull(selected.getComplexPk()))) {
@@ -237,6 +255,61 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 		ComplexMetadataLookupPath path, String requestedPnu, String resolvedSourcePnu, Long aliasId, Integer candidateCount
 	) {
 		return new ComplexMetadataLookupEvidence(path, requestedPnu, resolvedSourcePnu, aliasId, candidateCount);
+	}
+
+	/**
+	 * 같은 PNU에 여러 ODC 단지가 잡힐 때 단지명으로 유일 단지를 고른다. PNU 정확매칭은 이미 통과한 상태이므로
+	 * 같은 지번 후보끼리만 이름으로 구별하며, 점수 동점이거나 일치 후보가 없으면 null을 반환해 AMBIGUOUS로 남긴다.
+	 */
+	private OdcloudAptResponse.Item chooseByName(String aptName, List<OdcloudAptResponse.Item> candidates) {
+		String target = normalizeName(aptName);
+		if (target.isEmpty()) {
+			return null;
+		}
+		int bestScore = 0;
+		OdcloudAptResponse.Item best = null;
+		boolean tie = false;
+		for (OdcloudAptResponse.Item candidate : candidates) {
+			int score = scoreName(target, candidate);
+			if (score == 0) {
+				continue;
+			}
+			if (score > bestScore) {
+				bestScore = score;
+				best = candidate;
+				tie = false;
+			}
+			else if (score == bestScore) {
+				tie = true;
+			}
+		}
+		return (bestScore > 0 && !tie) ? best : null;
+	}
+
+	private int scoreName(String target, OdcloudAptResponse.Item candidate) {
+		int best = 0;
+		for (String name : new String[] {candidate.getComplexNm1(), candidate.getComplexNm2(), candidate.getComplexNm3()}) {
+			String normalized = normalizeName(name);
+			if (normalized.isEmpty()) {
+				continue;
+			}
+			if (target.equals(normalized)) {
+				return 3;
+			}
+			if (normalized.contains(target) || target.contains(normalized)) {
+				best = Math.max(best, 2);
+			}
+		}
+		return best;
+	}
+
+	private String normalizeName(String value) {
+		if (trimToNull(value) == null) {
+			return "";
+		}
+		return value.replaceAll("\\s+", "")
+			.replaceAll("[()\\[\\]{}.,·\\-_/]", "")
+			.toLowerCase(java.util.Locale.ROOT);
 	}
 
 	private ComplexMetadataResolution resolveBuildingMetadata(String pnu) {

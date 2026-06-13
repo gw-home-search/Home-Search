@@ -33,12 +33,15 @@ public class JdbcComplexMetadataEnrichmentRepository implements ComplexMetadataE
 			    c.metadata_attempts
 			FROM complex c
 			JOIN parcel p ON p.id = c.parcel_id
-			WHERE c.metadata_status = 'PENDING'
-			   OR (
-			       c.metadata_status IN ('FAILED', 'PARTIAL', 'UNAVAILABLE')
-			       AND c.metadata_next_attempt_at IS NOT NULL
-			       AND c.metadata_next_attempt_at <= now()
-			   )
+			WHERE (
+			    c.metadata_status = 'PENDING'
+			    OR (
+			        c.metadata_status IN ('FAILED', 'PARTIAL', 'UNAVAILABLE')
+			        AND c.metadata_next_attempt_at IS NOT NULL
+			        AND c.metadata_next_attempt_at <= now()
+			    )
+			)
+			  AND c.metadata_hold_at IS NULL
 			ORDER BY c.id
 			LIMIT :limit
 			""")
@@ -88,7 +91,12 @@ public class JdbcComplexMetadataEnrichmentRepository implements ComplexMetadataE
 			    source,
 			    failure_kind,
 			    failure_reason,
-			    next_attempt_at
+			    next_attempt_at,
+			    lookup_path,
+			    requested_pnu,
+			    resolved_source_pnu,
+			    alias_id,
+			    candidate_count
 			)
 			SELECT
 			    :complexId,
@@ -97,7 +105,12 @@ public class JdbcComplexMetadataEnrichmentRepository implements ComplexMetadataE
 			    :metadataSource,
 			    :metadataFailureKind,
 			    :metadataFailureReason,
-			    :metadataNextAttemptAt
+			    :metadataNextAttemptAt,
+			    :lookupPath,
+			    :requestedPnu,
+			    :resolvedSourcePnu,
+			    :aliasId,
+			    :candidateCount
 			FROM updated
 			""")
 			.param("complexId", complexId)
@@ -114,6 +127,11 @@ public class JdbcComplexMetadataEnrichmentRepository implements ComplexMetadataE
 			.param("metadataFailureReason", resolution.failureReason())
 			.param("metadataFailureKind", resolution.failureKind() == null ? null : resolution.failureKind().name())
 			.param("metadataNextAttemptAt", offsetDateTime(nextAttemptAt))
+			.param("lookupPath", resolution.lookupEvidence().lookupPath().name())
+			.param("requestedPnu", resolution.lookupEvidence().requestedPnu())
+			.param("resolvedSourcePnu", resolution.lookupEvidence().resolvedSourcePnu())
+			.param("aliasId", resolution.lookupEvidence().aliasId())
+			.param("candidateCount", resolution.lookupEvidence().candidateCount())
 			.update();
 	}
 

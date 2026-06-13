@@ -19,6 +19,7 @@ public class ComplexMetadataRetryPolicy {
 		Duration.ofDays(30),
 		Duration.ofDays(90)
 	};
+	private static final Duration SOURCE_MISSING_RECURRING_BACKOFF = Duration.ofDays(180);
 	private static final Duration[] TRANSIENT_FAILURE_BACKOFF = {
 		Duration.ofDays(1),
 		Duration.ofDays(3),
@@ -51,7 +52,8 @@ public class ComplexMetadataRetryPolicy {
 		Instant now
 	) {
 		if (failureKind != null && failureKind.isSourceMissing()) {
-			return next(now, SOURCE_MISSING_BACKOFF, attemptNo);
+			Optional<Instant> initial = next(now, SOURCE_MISSING_BACKOFF, attemptNo);
+			return initial.isPresent() ? initial : Optional.of(now.plus(SOURCE_MISSING_RECURRING_BACKOFF));
 		}
 		return Optional.empty();
 	}

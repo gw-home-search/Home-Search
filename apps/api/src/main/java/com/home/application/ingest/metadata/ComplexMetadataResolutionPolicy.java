@@ -28,9 +28,11 @@ public class ComplexMetadataResolutionPolicy {
 			if (hasMetadata(building)) {
 				if (conflicts(odcloud.metadata(), building.metadata())) {
 					return ComplexMetadataResolution.ambiguous("ODC+BLD",
-						"complex metadata source conflict pnu=" + pnu);
+						"complex metadata source conflict pnu=" + pnu)
+						.withLookupEvidence(odcloud.lookupEvidence());
 				}
-				return ComplexMetadataResolution.classify("ODC+BLD", merge(odcloud.metadata(), building.metadata()));
+				return ComplexMetadataResolution.classify("ODC+BLD", merge(odcloud.metadata(), building.metadata()))
+					.withLookupEvidence(odcloud.lookupEvidence());
 			}
 			if (building.status().isAmbiguous()) {
 				return odcloud;

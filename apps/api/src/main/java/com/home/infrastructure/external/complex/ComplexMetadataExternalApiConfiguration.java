@@ -2,8 +2,10 @@ package com.home.infrastructure.external.complex;
 
 import com.home.application.ingest.metadata.ComplexMetadataEnrichmentClient;
 import com.home.application.ingest.metadata.ComplexMetadataEnrichmentService;
+import com.home.application.ingest.metadata.OdcloudPnuPrefixAliasLookup;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
@@ -27,6 +29,8 @@ class ComplexMetadataExternalApiConfiguration {
 		@Value("${complex.metadata.building.enabled:false}") boolean buildingFallbackEnabled,
 		@Value("${complex.metadata.connect-timeout-millis:5000}") int connectTimeoutMillis,
 		@Value("${complex.metadata.read-timeout-millis:5000}") int readTimeoutMillis
+		,
+		ObjectProvider<OdcloudPnuPrefixAliasLookup> aliasLookupProvider
 	) {
 		return new PublicComplexMetadataResolver(
 			buildRestClient(odcloudBaseUrl, connectTimeoutMillis, readTimeoutMillis),
@@ -38,7 +42,9 @@ class ComplexMetadataExternalApiConfiguration {
 			bldServiceKey,
 			bldRecapPath,
 			recapPath,
-			buildingFallbackEnabled
+			buildingFallbackEnabled,
+			canonicalPnu -> aliasLookupProvider.getIfAvailable(OdcloudPnuPrefixAliasLookup::empty)
+				.findApprovedByCanonicalPnu(canonicalPnu)
 		);
 	}
 

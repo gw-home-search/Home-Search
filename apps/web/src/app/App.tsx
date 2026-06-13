@@ -26,6 +26,7 @@ import {
   CoordinateOverrideAdminPage,
   CoordinateReasonGuidePage,
 } from '../features/admin/CoordinateOverrideAdminPage';
+import { MetadataAdminPage } from '../features/admin/MetadataAdminPage';
 import {
   fetchMapMarkers,
   type ComplexMarkerFilters,
@@ -116,7 +117,7 @@ export function App({
   initialRegionLoad = true,
   kakaoMapAppKey,
 }: AppProps) {
-  if (isCoordinateAdminPath() && !isAdminSurfaceEnabled()) {
+  if ((isCoordinateAdminPath() || isMetadataAdminPath()) && !isAdminSurfaceEnabled()) {
     return <NotFoundPage />;
   }
 
@@ -126,6 +127,10 @@ export function App({
 
   if (isCoordinateAdminPath()) {
     return <CoordinateOverrideAdminPage />;
+  }
+
+  if (isMetadataAdminPath()) {
+    return <MetadataAdminPage />;
   }
 
   return (
@@ -1806,6 +1811,10 @@ function getConfiguredKakaoMapAppKey(): string {
 
 function isCoordinateAdminPath(): boolean {
   return window.location.pathname.startsWith('/admin/coordinates');
+}
+
+function isMetadataAdminPath(): boolean {
+  return window.location.pathname.startsWith('/admin/metadata');
 }
 
 function isCoordinateReasonGuidePath(): boolean {

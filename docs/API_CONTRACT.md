@@ -934,6 +934,55 @@ Migration notes:
 - Existing `/api/v1/map/complexes`, `/api/v1/detail/{parcelId}`, and
   `/api/v1/trade/{parcelId}` response shapes do not change.
 
+### Metadata Enrichment Admin APIs
+
+The metadata enrichment admin surface is disabled unless
+`home.admin.metadata-enrichment.enabled=true` and requires
+`X-Admin-Access-Code`.
+
+Read APIs:
+
+- `GET /api/v1/admin/metadata/pending?limit=50&offset=0`: unresolved or held
+  complex metadata snapshots.
+- `GET /api/v1/admin/metadata/pending/summary`: whole-query counts by metadata
+  status.
+- `GET /api/v1/admin/metadata/{complexId}`: complex snapshot, enrichment
+  attempt evidence, and admin decision history.
+- `GET /api/v1/admin/metadata/pnu-aliases`: ODC PNU prefix alias proposals and
+  approval state.
+
+Mutation APIs:
+
+- `POST /api/v1/admin/metadata/{complexId}/retry`
+- `POST /api/v1/admin/metadata/{complexId}/hold`
+- `POST /api/v1/admin/metadata/pnu-aliases`
+- `POST /api/v1/admin/metadata/pnu-aliases/{aliasId}/approve`
+- `POST /api/v1/admin/metadata/pnu-aliases/{aliasId}/disable`
+
+Retry, HOLD, approve, and disable requests require:
+
+```json
+{
+  "actor": "local-operator",
+  "reason": "operator verification evidence"
+}
+```
+
+Alias proposal additionally requires numeric eight-digit `canonicalPrefix`
+and `sourcePrefix`. Admin mutations append decision audit evidence. They do not
+directly edit operational PNU, region relationships, complex identity, or
+metadata values.
+
+Status:
+
+- `200`: successful read or mutation.
+- `400`: invalid page, prefix, actor, reason, complex, or alias target.
+- `401`: missing or invalid admin access code.
+- `500`: unexpected server error.
+
+These endpoints are additive admin operations. Public map, search, detail, and
+trade API URLs and response shapes do not change.
+
 ## later-scope APIs
 
 Keep these out of the current critical path:

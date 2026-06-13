@@ -44,6 +44,9 @@ home:
     coordinate-override:
       enabled: false
       access-code: "${ADMIN_COORDINATE_ACCESS_CODE:local-admin}"
+    metadata-enrichment:
+      enabled: false
+      access-code: "${ADMIN_METADATA_ACCESS_CODE:local-admin}"
   coordinate:
     vworld-fallback:
       enabled: false

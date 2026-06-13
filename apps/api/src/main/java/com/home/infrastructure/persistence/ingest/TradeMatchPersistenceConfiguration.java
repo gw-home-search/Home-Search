@@ -10,6 +10,9 @@ import com.home.application.ingest.matching.TradeMatchRematchService;
 import com.home.application.ingest.metadata.ComplexMetadataEnrichmentClient;
 import com.home.application.ingest.metadata.ComplexMetadataEnrichmentRepository;
 import com.home.application.ingest.metadata.ComplexMetadataEnrichmentService;
+import com.home.application.ingest.metadata.OdcloudPnuPrefixAliasLookup;
+import com.home.application.ingest.metadata.admin.MetadataAdminRepository;
+import com.home.application.ingest.metadata.admin.MetadataAdminService;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
 import com.home.application.ingest.raw.RawTradeItemParser;
@@ -19,6 +22,8 @@ import com.home.application.ingest.trade.TradeIngestMetrics;
 import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMasterBootstrapper;
 import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMatcher;
 import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMetadataEnrichmentRepository;
+import com.home.infrastructure.persistence.ingest.matching.JdbcOdcloudPnuPrefixAliasLookup;
+import com.home.infrastructure.persistence.ingest.matching.JdbcMetadataAdminRepository;
 import com.home.infrastructure.persistence.ingest.matching.JdbcTradeMatchEvidenceRepository;
 import com.home.infrastructure.persistence.ingest.matching.TradeMatchRematchRunner;
 
@@ -30,6 +35,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration(proxyBeanMethods = false)
 class TradeMatchPersistenceConfiguration {
@@ -64,6 +71,30 @@ class TradeMatchPersistenceConfiguration {
 			parcelCoordinateResolver,
 			identityResolverProvider.getIfAvailable(ComplexIdentityResolver::noop)
 		);
+	}
+
+	@Bean
+	@Lazy
+	MetadataAdminRepository metadataAdminRepository(
+		ObjectProvider<JdbcClient> jdbcClientProvider,
+		ObjectProvider<PlatformTransactionManager> transactionManagerProvider
+	) {
+		return new JdbcMetadataAdminRepository(
+			IngestPersistenceJdbcSupport.requiredJdbcClient(jdbcClientProvider),
+			new TransactionTemplate(transactionManagerProvider.getObject())
+		);
+	}
+
+	@Bean
+	@Lazy
+	MetadataAdminService metadataAdminService(MetadataAdminRepository repository) {
+		return new MetadataAdminService(repository);
+	}
+
+	@Bean
+	@Lazy
+	OdcloudPnuPrefixAliasLookup odcloudPnuPrefixAliasLookup(ObjectProvider<JdbcClient> jdbcClientProvider) {
+		return new JdbcOdcloudPnuPrefixAliasLookup(IngestPersistenceJdbcSupport.requiredJdbcClient(jdbcClientProvider));
 	}
 
 	@Bean

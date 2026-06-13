@@ -10,19 +10,35 @@ public record ComplexMetadataResolution(
 	ComplexMetadata metadata,
 	String source,
 	ComplexMetadataFailureKind failureKind,
-	String failureReason
+	String failureReason,
+	ComplexMetadataLookupEvidence lookupEvidence
 ) {
 
 	public ComplexMetadataResolution {
 		Objects.requireNonNull(status, "status is required");
 		source = trimToNull(source);
 		failureReason = trimToNull(failureReason);
+		lookupEvidence = lookupEvidence == null ? ComplexMetadataLookupEvidence.none() : lookupEvidence;
 		if (status.requiresMetadataPayload() && metadata == null) {
 			throw new IllegalArgumentException("resolved or partial metadata is required");
 		}
 		if (status.requiresCompleteCriticalFields() && !metadata.hasAllCriticalFields()) {
 			throw new IllegalArgumentException("resolved metadata must include critical fields");
 		}
+	}
+
+	public ComplexMetadataResolution(
+		ComplexMetadataStatus status,
+		ComplexMetadata metadata,
+		String source,
+		ComplexMetadataFailureKind failureKind,
+		String failureReason
+	) {
+		this(status, metadata, source, failureKind, failureReason, ComplexMetadataLookupEvidence.none());
+	}
+
+	public ComplexMetadataResolution withLookupEvidence(ComplexMetadataLookupEvidence evidence) {
+		return new ComplexMetadataResolution(status, metadata, source, failureKind, failureReason, evidence);
 	}
 
 	public static ComplexMetadataResolution resolved(String source, ComplexMetadata metadata) {

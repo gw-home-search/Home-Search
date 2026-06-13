@@ -9,6 +9,7 @@ import java.time.temporal.ChronoUnit;
 import com.home.application.coordinate.override.AdminCoordinateAccessDeniedException;
 import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
 import com.home.application.read.InvalidReadRequestException;
+import com.home.application.ingest.metadata.admin.InvalidMetadataAdminRequestException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +48,7 @@ public class ApiExceptionHandler {
 		MethodArgumentTypeMismatchException.class,
 		HandlerMethodValidationException.class,
 		InvalidCoordinateOverrideException.class,
+		InvalidMetadataAdminRequestException.class,
 		InvalidReadRequestException.class
 	})
 	public ResponseEntity<ProblemDetail> handleBadRequest(Exception exception) {

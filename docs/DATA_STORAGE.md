@@ -415,6 +415,30 @@ Every persisted enrichment result also appends a row to
 queryable even though the latest status snapshot remains on `complex` for cheap
 map and detail reads.
 
+ODC can retain an old legal-dong PNU prefix after an administrative-area
+rename. Home Search handles this only through approved rows in
+`odcloud_pnu_prefix_alias`:
+
+- `parcel.pnu`, `parcel.region_id`, and `complex.region_id` remain canonical
+  operational identities and are never rewritten from an ODC alias.
+- The resolver tries the canonical PNU first and uses an `APPROVED` alias only
+  after the canonical exact lookup has no candidate.
+- An alias candidate must be unique and its `COMPLEX_PK` must match `apt_seq`
+  when `apt_seq` is available. Conflicts remain `AMBIGUOUS`.
+- Each attempt stores `lookup_path`, requested canonical PNU, resolved source
+  PNU, alias id, and candidate count as durable lookup evidence.
+
+`SOURCE_MISSING` rows retry after 30 and 90 days and then every 180 days so
+newly registered buildings can recover without manual replay. Operators can
+place a complex on metadata HOLD or request an immediate retry through the
+admin surface. HOLD is a latest-state snapshot on `complex`; every retry,
+HOLD, alias proposal, approval, and disable action is appended to
+`complex_metadata_admin_decision`.
+
+Admin actions do not directly write `dong_cnt`, `unit_cnt`, `use_date`,
+`parcel.pnu`, region relationships, `complex_pk`, or `apt_seq`. Alias disable
+does not delete metadata that was already resolved.
+
 ## Partitioning
 
 Keep trade partitioning by `deal_date`.

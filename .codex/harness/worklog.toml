@@ -1,4 +1,61 @@
 [[items]]
+id = "metadata-alias-admin-hardening"
+title_ko = "ODC 구 PNU alias와 메타데이터 관리자 복구"
+pr_type = "Feat"
+pr_title_ko = "ODC 구 PNU alias와 메타데이터 관리자 복구"
+description_ko = "운영 PNU를 변경하지 않고 승인된 ODC 구 PNU alias로 metadata를 보강하며 조회 증거, 장기 재시도, HOLD, 관리자 감사와 admin web surface를 추가한다."
+status = "in_progress"
+priority = 310
+targets = "both"
+preset = "contract-hardening"
+acceptance_criteria = [
+  "parcel.pnu와 region 관계를 변경하지 않고 승인된 ODC alias만 canonical miss 이후 사용한다.",
+  "alias 후보는 정확히 1건이고 aptSeq가 있으면 COMPLEX_PK가 일치할 때만 metadata를 적용한다.",
+  "lookup path, requested PNU, resolved source PNU, alias id, candidate count가 attempt evidence로 저장된다.",
+  "SOURCE_MISSING은 30일, 90일 이후 180일 반복 재시도한다.",
+  "관리자 retry, HOLD, alias 제안·승인·비활성화가 append-only 감사 이력을 남긴다.",
+  "/admin/metadata는 운영 PNU와 metadata 값을 직접 편집하지 않는다.",
+  "public map, search, detail, trade API 계약은 변경되지 않는다.",
+]
+first_red_candidates = [
+  "ComplexMetadataRetryPolicyTest에서 SOURCE_MISSING 3회차 재시도가 비어 실패한다.",
+  "PublicComplexMetadataResolverTest에서 canonical miss 이후 승인 alias exact lookup이 해소되지 않는다.",
+  "MetadataAdminControllerContractTest와 metadataAdminApi.test.ts에서 신규 admin route가 부재해 실패한다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew test",
+  "cd apps/api && ./gradlew persistenceTest",
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "cd apps/web && npm test",
+  "cd apps/web && npm run build",
+  "cd apps/web && npm run build:admin",
+  "python3 scripts/check-test-display-names.py",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+verification_evidence = [
+  "- `cd apps/api && ./gradlew test --tests '*ComplexMetadataRetryPolicyTest'` = fail (최초 RED: SOURCE_MISSING 3회차 expected 180일, actual empty)",
+  "- targeted resolver/retry/admin unit tests = pass (최소 GREEN: exact PNU alias, conflict 차단, admin contract)",
+  "- targeted persistence tests = pass (Flyway V32/V33, evidence, HOLD/retry/audit)",
+  "- `cd apps/api && ./gradlew test` = pass (no-DB 부트 회귀 포함)",
+  "- `cd apps/web && npm test` = pass",
+  "- `cd apps/web && npm run build && npm run build:admin` = pass",
+  "- contract-reviewer: 게이트 결정 = Pass (additive admin API, public API 불변)",
+  "- security-audit: 지적사항 = none",
+  "- reviewer: 지적사항 = none",
+]
+stop_conditions = [
+  "운영 parcel.pnu 또는 region 관계 변경이 필요하면 중단한다.",
+  "alias exact lookup이 복수 후보를 반환하면 자동 적용하지 않는다.",
+  "COMPLEX_PK 충돌 후보만 존재하면 AMBIGUOUS로 유지한다.",
+  "public map, search, detail, trade API 변경이 필요하면 중단한다.",
+]
+risk_notes = [
+  "도봉동 PNU 충돌은 alias로 승인하지 않고 AMBIGUOUS/HOLD 대상으로 유지한다.",
+  "최신축 source missing 단지는 180일 반복 재시도로 원천 등재를 기다린다.",
+]
+
+[[items]]
 id = "region-sync-real-boot-wiring"
 title_ko = "Region sync 실부트 Bean wiring 복구"
 pr_type = "Fix"

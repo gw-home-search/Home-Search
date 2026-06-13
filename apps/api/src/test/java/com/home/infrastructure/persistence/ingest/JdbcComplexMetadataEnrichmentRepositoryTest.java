@@ -48,6 +48,9 @@ class JdbcComplexMetadataEnrichmentRepositoryTest extends JdbcPostgresTestSuppor
 			new BigDecimal("22.50"),
 			new BigDecimal("199.80"),
 			LocalDate.of(2015, 3, 20)
+		)).withLookupEvidence(new com.home.application.ingest.metadata.ComplexMetadataLookupEvidence(
+			com.home.domain.complex.metadata.ComplexMetadataLookupPath.APPROVED_PREFIX_ALIAS,
+			"1168010300101400001", "1168010400101400001", 1L, 1
 		)), null);
 
 		assertThat(complexMetadataState(501L))
@@ -66,6 +69,8 @@ class JdbcComplexMetadataEnrichmentRepositoryTest extends JdbcPostgresTestSuppor
 				.containsEntry("attempt_no", 1)
 				.containsEntry("status", "RESOLVED")
 				.containsEntry("source", "ODC")
+				.containsEntry("lookup_path", "APPROVED_PREFIX_ALIAS")
+				.containsEntry("resolved_source_pnu", "1168010400101400001")
 				.containsEntry("failure_kind", null)
 				.containsEntry("failure_reason", null));
 	}
@@ -222,6 +227,10 @@ class JdbcComplexMetadataEnrichmentRepositoryTest extends JdbcPostgresTestSuppor
 
 	private void seedPendingComplex() {
 		jdbcClient.sql("""
+			INSERT INTO odcloud_pnu_prefix_alias (id, canonical_prefix, source_prefix, status)
+			VALUES (1, '11680103', '11680104', 'APPROVED')
+			""").update();
+		jdbcClient.sql("""
 			INSERT INTO region (id, code, name, region_type)
 			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
 			""").update();
@@ -324,7 +333,7 @@ class JdbcComplexMetadataEnrichmentRepositoryTest extends JdbcPostgresTestSuppor
 
 	private List<Map<String, Object>> attemptRows(long complexId) {
 		return jdbcClient.sql("""
-			SELECT attempt_no, status, source, failure_kind, failure_reason, next_attempt_at
+			SELECT attempt_no, status, source, failure_kind, failure_reason, next_attempt_at, lookup_path, resolved_source_pnu
 			FROM complex_metadata_enrichment_attempt
 			WHERE complex_id = :complexId
 			ORDER BY observed_at DESC, id DESC
@@ -337,6 +346,8 @@ class JdbcComplexMetadataEnrichmentRepositoryTest extends JdbcPostgresTestSuppor
 				row.put("source", resultSet.getString("source"));
 				row.put("failure_kind", resultSet.getString("failure_kind"));
 				row.put("failure_reason", resultSet.getString("failure_reason"));
+				row.put("lookup_path", resultSet.getString("lookup_path"));
+				row.put("resolved_source_pnu", resultSet.getString("resolved_source_pnu"));
 				row.put("next_attempt_at", resultSet.getObject("next_attempt_at"));
 				return row;
 			})

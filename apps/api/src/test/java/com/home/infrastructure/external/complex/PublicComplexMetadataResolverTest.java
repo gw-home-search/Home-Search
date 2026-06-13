@@ -47,7 +47,7 @@ class PublicComplexMetadataResolverTest {
 
 		odcloudServer.expect(requestTo(startsWith("https://odcloud.example.test" + ODC_APT_PATH)))
 			.andExpect(request -> assertThat(request.getURI().getRawQuery())
-				.contains("cond%5BADRES::LIKE%5D=Sample%20address"))
+				.contains("cond%5BPNU::EQ%5D=1168010300107770001"))
 			.andExpect(queryParam("serviceKey", "ODC-KEY"))
 			.andRespond(withSuccess("""
 				{
@@ -99,8 +99,78 @@ class PublicComplexMetadataResolverTest {
 		assertThat(resolution.metadata().bcRat()).isEqualByComparingTo(new BigDecimal("22.5"));
 		assertThat(resolution.metadata().vlRat()).isEqualByComparingTo(new BigDecimal("199.8"));
 		assertThat(resolution.metadata().useDate()).isEqualTo(LocalDate.of(2015, 3, 20));
+		assertThat(resolution.lookupEvidence().lookupPath())
+			.isEqualTo(com.home.domain.complex.metadata.ComplexMetadataLookupPath.CANONICAL_PNU);
 		odcloudServer.verify();
 		bldServer.verify();
+	}
+
+	@Test
+	@DisplayName("ODC canonical PNU가 없으면 승인된 legacy prefix alias를 정확 조회한다")
+	void resolvesApprovedLegacyPnuAliasAfterCanonicalMiss() {
+		RestClient.Builder odcloudBuilder = RestClient.builder().baseUrl("https://odcloud.example.test");
+		MockRestServiceServer odcloudServer = MockRestServiceServer.bindTo(odcloudBuilder).build();
+		PublicComplexMetadataResolver resolver = new PublicComplexMetadataResolver(
+			odcloudBuilder.build(),
+			"https://odcloud.example.test",
+			"ODC-KEY",
+			ODC_APT_PATH,
+			RestClient.builder().baseUrl("https://apis.example.test").build(),
+			"https://apis.example.test",
+			" ",
+			"/recap",
+			"/title",
+			false,
+			pnu -> java.util.Optional.of(new com.home.application.ingest.metadata.OdcloudPnuPrefixAlias(
+				7L, "41461262", "41461360"))
+		);
+		odcloudServer.expect(requestTo(startsWith("https://odcloud.example.test" + ODC_APT_PATH)))
+			.andExpect(request -> assertThat(request.getURI().getRawQuery())
+				.contains("cond%5BPNU::EQ%5D=4146126200109010000"))
+			.andRespond(withSuccess("{\"data\": []}", MediaType.APPLICATION_JSON));
+		odcloudServer.expect(requestTo(startsWith("https://odcloud.example.test" + ODC_APT_PATH)))
+			.andExpect(request -> assertThat(request.getURI().getRawQuery())
+				.contains("cond%5BPNU::EQ%5D=4146136000109010000"))
+			.andRespond(withSuccess("""
+				{"data":[{"PNU":"4146136000109010000","COMPLEX_PK":"APT-501","DONG_CNT":8,"UNIT_CNT":740,"USEAPR_DT":"20150320"}]}
+				""", MediaType.APPLICATION_JSON));
+
+		var resolution = resolver.resolve(new ComplexMetadataLookup(
+			501L, "APT-501", "Legacy Apartment", "4146126200109010000", "양지읍"));
+
+		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.RESOLVED);
+		assertThat(resolution.lookupEvidence().lookupPath())
+			.isEqualTo(com.home.domain.complex.metadata.ComplexMetadataLookupPath.APPROVED_PREFIX_ALIAS);
+		assertThat(resolution.lookupEvidence().resolvedSourcePnu()).isEqualTo("4146136000109010000");
+		assertThat(resolution.lookupEvidence().aliasId()).isEqualTo(7L);
+		odcloudServer.verify();
+	}
+
+	@Test
+	@DisplayName("승인 alias 후보의 COMPLEX_PK가 다르면 metadata를 적용하지 않는다")
+	void rejectsApprovedAliasCandidateWithComplexPkConflict() {
+		RestClient.Builder odcloudBuilder = RestClient.builder().baseUrl("https://odcloud.example.test");
+		MockRestServiceServer odcloudServer = MockRestServiceServer.bindTo(odcloudBuilder).build();
+		PublicComplexMetadataResolver resolver = new PublicComplexMetadataResolver(
+			odcloudBuilder.build(), "https://odcloud.example.test", "ODC-KEY", ODC_APT_PATH,
+			RestClient.builder().build(), null, " ", "/recap", "/title", false,
+			pnu -> java.util.Optional.of(new com.home.application.ingest.metadata.OdcloudPnuPrefixAlias(
+				7L, "41461262", "41461360"))
+		);
+		odcloudServer.expect(requestTo(startsWith("https://odcloud.example.test" + ODC_APT_PATH)))
+			.andRespond(withSuccess("{\"data\": []}", MediaType.APPLICATION_JSON));
+		odcloudServer.expect(requestTo(startsWith("https://odcloud.example.test" + ODC_APT_PATH)))
+			.andRespond(withSuccess("""
+				{"data":[{"PNU":"4146136000109010000","COMPLEX_PK":"OTHER","DONG_CNT":8,"UNIT_CNT":740}]}
+				""", MediaType.APPLICATION_JSON));
+
+		var resolution = resolver.resolve(new ComplexMetadataLookup(
+			501L, "APT-501", "Legacy Apartment", "4146126200109010000", "양지읍"));
+
+		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.AMBIGUOUS);
+		assertThat(resolution.metadata()).isNull();
+		assertThat(resolution.failureReason()).contains("COMPLEX_PK conflict");
+		odcloudServer.verify();
 	}
 
 	@Test
@@ -423,12 +493,14 @@ class PublicComplexMetadataResolverTest {
 	}
 
 	@Test
-	@DisplayName("address가 없으면 ODC는 건너뛰고 building metadata PARTIAL을 반환한다")
-	void returnsPartialBuildingMetadataWhenAddressIsMissing() {
+	@DisplayName("address가 없어도 canonical PNU로 ODC metadata를 조회한다")
+	void resolvesOdcloudMetadataByCanonicalPnuWhenAddressIsMissing() {
+		RestClient.Builder odcloudBuilder = RestClient.builder().baseUrl("https://odcloud.example.test");
+		MockRestServiceServer odcloudServer = MockRestServiceServer.bindTo(odcloudBuilder).build();
 		RestClient.Builder bldBuilder = RestClient.builder().baseUrl("https://apis.example.test");
 		MockRestServiceServer bldServer = MockRestServiceServer.bindTo(bldBuilder).build();
 		PublicComplexMetadataResolver resolver = new PublicComplexMetadataResolver(
-			RestClient.builder().baseUrl("https://odcloud.example.test").build(),
+			odcloudBuilder.build(),
 			"https://odcloud.example.test",
 			"ODC-KEY",
 			ODC_APT_PATH,
@@ -440,6 +512,10 @@ class PublicComplexMetadataResolverTest {
 			true
 		);
 
+		odcloudServer.expect(requestTo(startsWith("https://odcloud.example.test" + ODC_APT_PATH)))
+			.andRespond(withSuccess("""
+				{"data":[{"PNU":"1168010300107770001","DONG_CNT":8,"UNIT_CNT":740,"USEAPR_DT":"20150320"}]}
+				""", MediaType.APPLICATION_JSON));
 		bldServer.expect(requestTo(startsWith("https://apis.example.test/1613000/BldRgstHubService/getBrRecapTitleInfo")))
 			.andExpect(queryParam("serviceKey", "BLD-KEY"))
 			.andRespond(withSuccess("""
@@ -481,11 +557,12 @@ class PublicComplexMetadataResolverTest {
 
 		ComplexMetadataResolution resolution = resolver.resolve("1168010300107770001", null);
 
-		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.PARTIAL);
+		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.RESOLVED);
 		assertThat(resolution.failureKind()).isNull();
-		assertThat(resolution.metadata().dongCnt()).isNull();
+		assertThat(resolution.metadata().dongCnt()).isEqualTo(8);
 		assertThat(resolution.metadata().unitCnt()).isEqualTo(740);
 		assertThat(resolution.metadata().platArea()).isEqualByComparingTo(new BigDecimal("12345.67"));
+		odcloudServer.verify();
 		bldServer.verify();
 	}
 

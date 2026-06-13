@@ -67,7 +67,13 @@ class ComplexMetadataRetryPolicyTest {
 			ComplexMetadataFailureKind.SOURCE_MISSING,
 			3,
 			NOW
-		)).isEmpty();
+		)).contains(NOW.plusSeconds(15_552_000));
+		assertThat(policy.nextAttemptAt(
+			ComplexMetadataStatus.UNAVAILABLE,
+			ComplexMetadataFailureKind.SOURCE_MISSING,
+			8,
+			NOW
+		)).contains(NOW.plusSeconds(15_552_000));
 	}
 
 	@Test

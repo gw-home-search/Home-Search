@@ -168,6 +168,35 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
+  it('admin metadata route는 ODC alias와 재시도 검토 화면을 분리해 표시한다', async () => {
+    vi.stubEnv('VITE_APP_SURFACE', 'admin');
+    window.history.pushState({}, '', '/admin/metadata');
+    window.sessionStorage.setItem('home-search-admin-metadata-access-code', 'test-admin');
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse([{
+        complexId: 501, aptName: 'Legacy Apartment', aptSeq: 'APT-501',
+        canonicalPnu: '4146126200109010000', address: '양지읍', status: 'UNAVAILABLE',
+        failureKind: 'SOURCE_MISSING', failureReason: 'candidate unavailable', attempts: 2,
+        nextAttemptAt: '2026-12-01T00:00:00Z', holdAt: null, holdReason: null,
+      }]))
+      .mockResolvedValueOnce(jsonResponse({ totalCount: 1, statusCounts: { UNAVAILABLE: 1 } }))
+      .mockResolvedValueOnce(jsonResponse([{
+        id: 7, canonicalPrefix: '41461262', sourcePrefix: '41461360', status: 'APPROVED',
+        reason: 'legacy source', approvedBy: 'reviewer', approvedAt: '2026-06-13T00:00:00Z',
+        disabledBy: null, disabledAt: null,
+      }]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp();
+    await flushAsyncState();
+
+    expect(rootElement.textContent).toContain('단지 메타데이터 관리');
+    expect(rootElement.textContent).toContain('Legacy Apartment');
+    expect(rootElement.textContent).toContain('41461262 → 41461360');
+    expect(rootElement.textContent).toContain('운영 PNU는 변경하지 않고');
+    unmount(root);
+  });
+
   it('admin coordinate route는 다음 page에서 offset을 증가시켜 조회한다', async () => {
     vi.stubEnv('VITE_APP_SURFACE', 'admin');
     window.history.pushState({}, '', '/admin/coordinates');

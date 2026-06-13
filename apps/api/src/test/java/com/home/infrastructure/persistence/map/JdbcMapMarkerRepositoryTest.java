@@ -58,14 +58,12 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
-	@DisplayName("bounds query는 complex 세대수 metadata가 없으면 marker unitCntSum을 null로 반환한다")
-	void boundsQueryReturnsNullUnitCountWhenComplexMetadataIsMissing() {
+	@DisplayName("bounds query는 complex 세대수 metadata가 없으면 marker를 반환하지 않는다")
+	void boundsQueryExcludesMarkerWhenComplexMetadataIsMissing() {
 		seedMissingUnitCountMapData();
 		JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
 
-		assertThat(repository.findComplexMarkers(request(null, null)))
-			.extracting(ComplexMarkerResult::parcelId, ComplexMarkerResult::complexId, ComplexMarkerResult::unitCntSum)
-			.containsExactly(tuple(9001L, 1901L, null));
+		assertThat(repository.findComplexMarkers(request(null, null))).isEmpty();
 	}
 
 	@Test

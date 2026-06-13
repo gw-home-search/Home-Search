@@ -216,6 +216,80 @@ class PublicComplexMetadataResolverTest {
 	}
 
 	@Test
+	@DisplayName("ODC exact PNU 후보가 여럿이어도 단지명이 유일하게 일치하면 그 단지를 RESOLVED한다")
+	void picksNameMatchedCandidateAmongMultipleOdcloudPnuCandidates() {
+		RestClient.Builder odcloudBuilder = RestClient.builder().baseUrl("https://odcloud.example.test");
+		MockRestServiceServer odcloudServer = MockRestServiceServer.bindTo(odcloudBuilder).build();
+		PublicComplexMetadataResolver resolver = new PublicComplexMetadataResolver(
+			odcloudBuilder.build(),
+			"https://odcloud.example.test",
+			"ODC-KEY",
+			ODC_APT_PATH,
+			RestClient.builder().baseUrl("https://apis.example.test").build(),
+			"https://apis.example.test",
+			" ",
+			"/1613000/BldRgstHubService/getBrRecapTitleInfo",
+			"/1613000/BldRgstHubService/getBrTitleInfo",
+			true
+		);
+		odcloudServer.expect(requestTo(startsWith("https://odcloud.example.test" + ODC_APT_PATH)))
+			.andRespond(withSuccess("""
+				{
+				  "data": [
+				    {"PNU": "4115010400107270001", "COMPLEX_NM1": "한국아파트", "DONG_CNT": 5, "UNIT_CNT": 796, "USEAPR_DT": "19960401"},
+				    {"PNU": "4115010400107270001", "COMPLEX_NM1": "풍림", "DONG_CNT": 4, "UNIT_CNT": 786, "USEAPR_DT": "19970801"}
+				  ]
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		var resolution = resolver.resolve(new ComplexMetadataLookup(
+			501L, "APT-501", "한국아파트", "4115010400107270001", "신곡동 727-1"));
+
+		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.RESOLVED);
+		assertThat(resolution.metadata().unitCnt()).isEqualTo(796);
+		assertThat(resolution.metadata().dongCnt()).isEqualTo(5);
+		assertThat(resolution.lookupEvidence().lookupPath())
+			.isEqualTo(com.home.domain.complex.metadata.ComplexMetadataLookupPath.CANONICAL_PNU_NAME);
+		odcloudServer.verify();
+	}
+
+	@Test
+	@DisplayName("ODC exact PNU 후보가 여럿이고 이름이 동점이면 AMBIGUOUS로 남긴다")
+	void keepsAmbiguousWhenNameScoresTieAmongCandidates() {
+		RestClient.Builder odcloudBuilder = RestClient.builder().baseUrl("https://odcloud.example.test");
+		MockRestServiceServer odcloudServer = MockRestServiceServer.bindTo(odcloudBuilder).build();
+		PublicComplexMetadataResolver resolver = new PublicComplexMetadataResolver(
+			odcloudBuilder.build(),
+			"https://odcloud.example.test",
+			"ODC-KEY",
+			ODC_APT_PATH,
+			RestClient.builder().baseUrl("https://apis.example.test").build(),
+			"https://apis.example.test",
+			" ",
+			"/1613000/BldRgstHubService/getBrRecapTitleInfo",
+			"/1613000/BldRgstHubService/getBrTitleInfo",
+			true
+		);
+		odcloudServer.expect(requestTo(startsWith("https://odcloud.example.test" + ODC_APT_PATH)))
+			.andRespond(withSuccess("""
+				{
+				  "data": [
+				    {"PNU": "1168010300107770001", "COMPLEX_NM1": "삼성래미안", "DONG_CNT": 5, "UNIT_CNT": 500},
+				    {"PNU": "1168010300107770001", "COMPLEX_NM1": "삼성래미안", "DONG_CNT": 6, "UNIT_CNT": 600}
+				  ]
+				}
+				""", MediaType.APPLICATION_JSON));
+
+		var resolution = resolver.resolve(new ComplexMetadataLookup(
+			501L, "APT-501", "삼성래미안", "1168010300107770001", "Sample address"));
+
+		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.AMBIGUOUS);
+		assertThat(resolution.metadata()).isNull();
+		assertThat(resolution.failureKind()).isEqualTo(ComplexMetadataFailureKind.AMBIGUOUS);
+		odcloudServer.verify();
+	}
+
+	@Test
 	@DisplayName("building fallback은 property가 꺼져 있으면 ODC unavailable을 대체하지 않는다")
 	void buildingFallbackDisabledDoesNotCallBuildingApi() {
 		RestClient.Builder odcloudBuilder = RestClient.builder().baseUrl("https://odcloud.example.test");

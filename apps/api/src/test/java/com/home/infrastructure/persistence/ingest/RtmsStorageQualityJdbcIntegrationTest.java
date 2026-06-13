@@ -65,6 +65,9 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
 				tuple("11680-578", "RTMS:11680-578", "RTMS", "RTMS:", true)
 			);
 
+		jdbcClient.sql("UPDATE complex SET unit_cnt = 500 WHERE parcel_id = :parcelId")
+			.param("parcelId", parcelId("1168010300101850000"))
+			.update();
 		List<ComplexMarkerResult> markers = new JdbcMapMarkerRepository(jdbcClient).findComplexMarkers(bounds());
 		assertThat(markers)
 			.singleElement()

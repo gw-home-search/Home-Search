@@ -163,13 +163,13 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 			    (1003, 1, '1168010300101400003', 'Ambiguous multi address', 37.5125, 127.0458)
 			""").update();
 		jdbcClient.sql("""
-			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name)
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt)
 			VALUES
-			    (501, 1001, 'COMPLEX-PK-501', 'APT-501', 'Single Apartment'),
-			    (601, 1002, 'COMPLEX-PK-601', 'APT-601', 'Tower A'),
-			    (602, 1002, 'COMPLEX-PK-602', 'APT-602', 'Tower B'),
-			    (701, 1003, 'COMPLEX-PK-701', 'APT-701', 'Ambiguous A'),
-			    (702, 1003, 'COMPLEX-PK-702', 'APT-702', 'Ambiguous B')
+			    (501, 1001, 'COMPLEX-PK-501', 'APT-501', 'Single Apartment', 100),
+			    (601, 1002, 'COMPLEX-PK-601', 'APT-601', 'Tower A', 200),
+			    (602, 1002, 'COMPLEX-PK-602', 'APT-602', 'Tower B', 300),
+			    (701, 1003, 'COMPLEX-PK-701', 'APT-701', 'Ambiguous A', 400),
+			    (702, 1003, 'COMPLEX-PK-702', 'APT-702', 'Ambiguous B', 500)
 			""").update();
 		Long rawId = insertRawIngest();
 		insertTrade(rawId, 601L, LocalDate.of(2024, 1, 1), "rtms-readiness-601-1", "101");

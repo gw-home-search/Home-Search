@@ -412,6 +412,7 @@ final class ComplexMarkerSql {
 			    FROM marker_candidates
 			    WHERE lat BETWEEN :swLat AND :neLat
 			      AND lng BETWEEN :swLng AND :neLng
+			      AND unit_cnt_sum IS NOT NULL
 			      AND (CAST(:unitMin AS BIGINT) IS NULL OR unit_cnt_sum >= :unitMin)
 			      AND (CAST(:unitMax AS BIGINT) IS NULL OR unit_cnt_sum <= :unitMax)
 			      AND (CAST(:ageMin AS INTEGER) IS NULL OR building_age >= :ageMin)
@@ -552,6 +553,7 @@ final class ComplexMarkerSql {
 			FROM markers
 			WHERE markers.lat BETWEEN :swLat AND :neLat
 			  AND markers.lng BETWEEN :swLng AND :neLng
+			  AND markers.unit_cnt_sum IS NOT NULL
 			  AND (CAST(:priceMin AS NUMERIC) IS NULL OR markers.latest_deal_amount >= :priceMin)
 			  AND (CAST(:priceMax AS NUMERIC) IS NULL OR markers.latest_deal_amount <= :priceMax)
 			  AND (CAST(:areaMin AS NUMERIC) IS NULL OR markers.excl_area >= :areaMin)

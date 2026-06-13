@@ -70,7 +70,10 @@ Complex markers need:
 Marker display:
 
 - Price label from `latestDealAmount`.
-- Unit label from `unitCntSum`.
+- Unit label from `unitCntSum`. Markers without a household-count sum are excluded
+  by the backend, so every returned marker has a non-null `unitCntSum`. Complexes
+  with no household-count metadata stay visible in the metadata admin surface
+  instead of the public map.
 - Click opens detail drawer for `parcelId` and optional `complexId`.
 
 ## Parcel And Complex Policy

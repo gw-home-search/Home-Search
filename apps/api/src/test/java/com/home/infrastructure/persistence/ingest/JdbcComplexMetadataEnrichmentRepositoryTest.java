@@ -76,6 +76,35 @@ class JdbcComplexMetadataEnrichmentRepositoryTest extends JdbcPostgresTestSuppor
 	}
 
 	@Test
+	@DisplayName("metadata enrichment repository는 이름 tiebreaker lookup path(CANONICAL_PNU_NAME)도 evidence로 저장한다")
+	void persistsNameTiebreakerLookupPathEvidence() {
+		seedPendingComplex();
+		JdbcComplexMetadataEnrichmentRepository repository = new JdbcComplexMetadataEnrichmentRepository(jdbcClient);
+
+		repository.saveResolution(501L, ComplexMetadataResolution.classify("ODC", new ComplexMetadata(
+			5,
+			796,
+			null,
+			null,
+			null,
+			null,
+			null,
+			LocalDate.of(1996, 4, 1)
+		)).withLookupEvidence(new com.home.application.ingest.metadata.ComplexMetadataLookupEvidence(
+			com.home.domain.complex.metadata.ComplexMetadataLookupPath.CANONICAL_PNU_NAME,
+			"1168010300101400001", "1168010300101400001", null, 2
+		)), null);
+
+		assertThat(complexMetadataState(501L))
+			.containsEntry("metadata_status", "RESOLVED")
+			.containsEntry("metadata_source", "ODC");
+		assertThat(attemptRows(501L)).singleElement()
+			.satisfies(row -> assertThat(row)
+				.containsEntry("status", "RESOLVED")
+				.containsEntry("lookup_path", "CANONICAL_PNU_NAME"));
+	}
+
+	@Test
 	@DisplayName("metadata enrichment repository는 ambiguous 상태와 사유를 metadata overwrite 없이 기록한다")
 	void recordsAmbiguousStatusWithoutMetadataOverwrite() {
 		seedPendingComplex();

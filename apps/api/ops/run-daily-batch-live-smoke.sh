@@ -45,7 +45,7 @@ validate_private_env() {
     source "${PRIVATE_ENV_FILE}"
     set +a
     local required name
-    required=(APT_SERVICE_KEY NAVER_NEWS_CLIENT_ID NAVER_NEWS_CLIENT_TOKEN HERMES_SLACK_URL HERMES_SLACK_CHANNEL)
+    required=(APT_SERVICE_KEY NAVER_NEWS_CLIENT_ID NAVER_NEWS_CLIENT_TOKEN HERMES_SLACK_URL HERMES_AUTH_TOKEN HERMES_SLACK_CHANNEL)
     for name in "${required[@]}"; do
       if [[ -z "${!name:-}" ]]; then
         echo "ERROR: private env is missing required value: ${name}" >&2
@@ -113,7 +113,7 @@ set -Eeuo pipefail
 set -a
 source "${PRIVATE_ENV_FILE}"
 set +a
-required=(APT_SERVICE_KEY NAVER_NEWS_CLIENT_ID NAVER_NEWS_CLIENT_TOKEN HERMES_SLACK_URL HERMES_SLACK_CHANNEL)
+required=(APT_SERVICE_KEY NAVER_NEWS_CLIENT_ID NAVER_NEWS_CLIENT_TOKEN HERMES_SLACK_URL HERMES_AUTH_TOKEN HERMES_SLACK_CHANNEL)
 for name in "\${required[@]}"; do
   if [[ -z "\${!name:-}" ]]; then
     echo "missing required private env: \${name}" > "${RUN_DIR}/worker-error"

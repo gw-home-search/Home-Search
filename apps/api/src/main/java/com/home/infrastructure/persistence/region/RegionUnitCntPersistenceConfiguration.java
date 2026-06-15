@@ -1,6 +1,7 @@
 package com.home.infrastructure.persistence.region;
 
 import com.home.application.region.RegionRelationSynchronizationGateway;
+import com.home.application.region.RegionSiGunGuCodeReader;
 import com.home.application.region.RegionUnitCntSynchronizationService;
 
 import org.springframework.beans.factory.ObjectProvider;
@@ -29,6 +30,11 @@ class RegionUnitCntPersistenceConfiguration {
 		RegionRelationSynchronizationGateway gateway
 	) {
 		return new RegionUnitCntSynchronizationService(gateway);
+	}
+
+	@Bean
+	RegionSiGunGuCodeReader regionSiGunGuCodeReader(ObjectProvider<JdbcClient> jdbcClientProvider) {
+		return new JdbcRegionSiGunGuCodeReader(() -> requiredJdbcClient(jdbcClientProvider));
 	}
 
 	private JdbcClient requiredJdbcClient(ObjectProvider<JdbcClient> jdbcClientProvider) {

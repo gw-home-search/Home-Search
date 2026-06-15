@@ -1,11 +1,20 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
   type FormEvent,
 } from 'react';
+import {
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 import {
   fetchComplexDetail,
@@ -22,6 +31,11 @@ import {
   type ParcelTrades,
   type TradeItem,
 } from '../features/complex-detail/api/fetchParcelTrades';
+import {
+  fetchComplexTradeTrend,
+  fetchParcelTradeTrend,
+  type TradeTrendPoint,
+} from '../features/complex-detail/api/fetchTradeTrend';
 import {
   CoordinateOverrideAdminPage,
   CoordinateReasonGuidePage,
@@ -111,6 +125,8 @@ const EMPTY_COMPLEX_MARKER_FILTERS: Required<ComplexMarkerFilters> = {
 
 const SEARCH_FOCUS_DELTA = 0.01;
 const SEARCH_DEBOUNCE_MILLIS = 300;
+const TRADE_PAGE_SIZE = 25;
+const TREND_LINE_FALLBACK = '#153847';
 
 export function App({
   initialMapLevel,
@@ -182,6 +198,9 @@ function MapApp({
   );
   const [complexDetail, setComplexDetail] = useState<ComplexDetail | null>(null);
   const [parcelTrades, setParcelTrades] = useState<ParcelTrades | null>(null);
+  const [tradeTrend, setTradeTrend] = useState<TradeTrendPoint[]>([]);
+  const [tradePage, setTradePage] = useState(0);
+  const [tradeRows, setTradeRows] = useState<TradeItem[]>([]);
   const [parcelComplexes, setParcelComplexes] = useState<ParcelComplexSummary[]>([]);
   const [detailState, setDetailState] = useState<DetailRequestState>('idle');
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -200,6 +219,7 @@ function MapApp({
   const [filterFormKey, setFilterFormKey] = useState(0);
   const markerRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
+  const tradePageRequestSeq = useRef(0);
   const parcelComplexRequestSeq = useRef(0);
   const searchRequestSeq = useRef(0);
   const suggestionRequestSeq = useRef(0);
@@ -263,6 +283,9 @@ function MapApp({
     if (selectedComplex == null) {
       setComplexDetail(null);
       setParcelTrades(null);
+      setTradeTrend([]);
+      setTradePage(0);
+      setTradeRows([]);
       setParcelComplexes([]);
       setDetailState('idle');
       setDetailError(null);
@@ -271,26 +294,35 @@ function MapApp({
 
     const requestSeq = detailRequestSeq.current + 1;
     detailRequestSeq.current = requestSeq;
+    tradePageRequestSeq.current += 1;
     let ignore = false;
 
     setDetailState('loading');
     setDetailError(null);
 
-    const detailRequest = selectedComplex.parcelId == null && selectedComplex.complexId != null
-      ? fetchComplexDetailByComplexId(selectedComplex.complexId)
+    const isComplexScoped = selectedComplex.parcelId == null && selectedComplex.complexId != null;
+    const detailRequest = isComplexScoped
+      ? fetchComplexDetailByComplexId(selectedComplex.complexId as number)
       : fetchComplexDetail(requiredParcelId(selectedComplex), selectedComplex.complexId);
-    const tradeRequest = selectedComplex.parcelId == null && selectedComplex.complexId != null
-      ? fetchComplexTrades(selectedComplex.complexId)
+    const tradeRequest = isComplexScoped
+      ? fetchComplexTrades(selectedComplex.complexId as number)
       : fetchParcelTrades(requiredParcelId(selectedComplex), selectedComplex.complexId);
+    const trendRequest = (isComplexScoped
+      ? fetchComplexTradeTrend(selectedComplex.complexId as number)
+      : fetchParcelTradeTrend(requiredParcelId(selectedComplex), selectedComplex.complexId)
+    ).catch((): TradeTrendPoint[] => []);
 
-    Promise.all([detailRequest, tradeRequest])
-      .then(([nextDetail, nextTrades]) => {
+    Promise.all([detailRequest, tradeRequest, trendRequest])
+      .then(([nextDetail, nextTrades, nextTrend]) => {
         if (ignore || requestSeq !== detailRequestSeq.current) {
           return;
         }
 
         setComplexDetail(nextDetail);
         setParcelTrades(nextTrades);
+        setTradeTrend(nextTrend);
+        setTradePage(nextTrades.page);
+        setTradeRows(nextTrades.trades);
         setDetailState('ready');
       })
       .catch((error: unknown) => {
@@ -300,6 +332,9 @@ function MapApp({
 
         setComplexDetail(null);
         setParcelTrades(null);
+        setTradeTrend([]);
+        setTradePage(0);
+        setTradeRows([]);
         setDetailState('error');
         setDetailError(error instanceof Error ? error.message : '알 수 없는 상세 정보 오류');
       });
@@ -392,6 +427,37 @@ function MapApp({
 
   function handleRetryDetail() {
     setDetailRetrySeq((current) => current + 1);
+  }
+
+  function handleLoadMoreTrades() {
+    if (selectedComplex == null) {
+      return;
+    }
+
+    const nextPage = tradePage + 1;
+    const requestSeq = tradePageRequestSeq.current + 1;
+    tradePageRequestSeq.current = requestSeq;
+
+    const request = selectedComplex.parcelId == null && selectedComplex.complexId != null
+      ? fetchComplexTrades(selectedComplex.complexId, { page: nextPage, size: TRADE_PAGE_SIZE })
+      : fetchParcelTrades(
+        requiredParcelId(selectedComplex),
+        selectedComplex.complexId,
+        { page: nextPage, size: TRADE_PAGE_SIZE },
+      );
+
+    request
+      .then((next) => {
+        if (requestSeq !== tradePageRequestSeq.current) {
+          return;
+        }
+
+        setTradePage(next.page);
+        setTradeRows((current) => [...current, ...next.trades]);
+      })
+      .catch(() => {
+        // Keep the loaded rows rendered when a page fetch fails.
+      });
   }
 
   function clearSearchDebounceTimer() {
@@ -943,8 +1009,11 @@ function MapApp({
               onBack={handleCloseDetailDrawer}
               onComplexSelect={handleComplexSummarySelect}
               onRetryDetail={handleRetryDetail}
+              onLoadMoreTrades={handleLoadMoreTrades}
               parcelComplexes={parcelComplexes}
               parcelTrades={parcelTrades}
+              tradeTrend={tradeTrend}
+              tradeRows={tradeRows}
               selection={selectedComplex}
             />
           )}
@@ -1128,8 +1197,11 @@ function DetailSidebar({
   onBack,
   onComplexSelect,
   onRetryDetail,
+  onLoadMoreTrades,
   parcelComplexes,
   parcelTrades,
+  tradeTrend,
+  tradeRows,
   selection,
 }: {
   complexDetail: ComplexDetail | null;
@@ -1138,8 +1210,11 @@ function DetailSidebar({
   onBack: () => void;
   onComplexSelect: (complex: ParcelComplexSummary | RegionComplexSummary) => void;
   onRetryDetail: () => void;
+  onLoadMoreTrades: () => void;
   parcelComplexes: ParcelComplexSummary[];
   parcelTrades: ParcelTrades | null;
+  tradeTrend: TradeTrendPoint[];
+  tradeRows: TradeItem[];
   selection: ComplexSelection;
 }) {
   return (
@@ -1164,7 +1239,7 @@ function DetailSidebar({
         flow="detail"
         items={[
           ['상세', detailRequestLabel(detailState)],
-          ['실거래', parcelTrades == null ? '대기' : `${parcelTrades.trades.length.toLocaleString()}건`],
+          ['실거래', parcelTrades == null ? '대기' : `${parcelTrades.totalElements.toLocaleString()}건`],
           ['같은 필지', detailState === 'ready' ? `${parcelComplexes.length.toLocaleString()}개` : '대기'],
         ]}
       />
@@ -1193,7 +1268,7 @@ function DetailSidebar({
             <p className="detail-address">{formatAddress(complexDetail.address)}</p>
             <dl className="detail-key-stats">
               {detailMetric('최근 거래', latestTradeAmountLabel(parcelTrades?.trades ?? []))}
-              {detailMetric('실거래', `${(parcelTrades?.trades.length ?? 0).toLocaleString()}건`)}
+              {detailMetric('실거래', `${(parcelTrades?.totalElements ?? 0).toLocaleString()}건`)}
               {detailMetric('세대수', formatNumber(complexDetail.unitCnt, '세대'))}
             </dl>
             {parcelComplexes.length > 0 ? (
@@ -1232,8 +1307,12 @@ function DetailSidebar({
               {detailMetric('용적률', formatNumber(complexDetail.vlRat, '%'))}
             </dl>
           </section>
-          <TradeAmountChart trades={parcelTrades?.trades ?? []} />
-          <TradeList trades={parcelTrades?.trades ?? []} />
+          <TradeTrendChart trend={tradeTrend} />
+          <TradeList
+            rows={tradeRows}
+            totalElements={parcelTrades?.totalElements ?? 0}
+            onLoadMore={onLoadMoreTrades}
+          />
         </>
       ) : null}
     </section>
@@ -1302,7 +1381,15 @@ function formatAmount(amount: number | null): string {
     return '최근 거래 없음';
   }
 
-  return `${amount.toLocaleString()}만원`;
+  if (amount < 10000) {
+    return `${amount.toLocaleString()}만원`;
+  }
+
+  const eok = Math.floor(amount / 10000);
+  const man = amount % 10000;
+  return man === 0
+    ? `${eok.toLocaleString()}억`
+    : `${eok.toLocaleString()}억 ${man.toLocaleString()}만원`;
 }
 
 function DataCountStrip({ items }: { items: Array<[string, number]> }) {
@@ -1406,7 +1493,7 @@ function detailHeaderStatusLabel(
     return `상세 ${detailRequestLabel(state)}`;
   }
 
-  return `거래 ${trades.trades.length.toLocaleString()}건`;
+  return `거래 ${trades.totalElements.toLocaleString()}건`;
 }
 
 function detailRequestLabel(state: DetailRequestState): string {
@@ -1625,135 +1712,180 @@ function formatNumber(value: number | null, suffix: string): string | null {
   return `${value.toLocaleString()}${suffix}`;
 }
 
-function TradeAmountChart({ trades }: { trades: TradeItem[] }) {
-  const points = tradeChartPoints(trades);
+type TradeTrendRange = 'all' | '3y';
+
+function TradeTrendChart({ trend }: { trend: TradeTrendPoint[] }) {
+  const [range, setRange] = useState<TradeTrendRange>('all');
+  const points = useMemo(() => filterTrendByRange(trend, range), [trend, range]);
 
   return (
-    <section className="trade-chart" aria-label="거래가 차트">
+    <section className="trade-chart" aria-label="거래가 차트" data-detail-section="trade-chart">
       <div className="trade-section-header">
         <h3>실거래가 흐름</h3>
-        {points.length > 0 ? <p>최근 {points.length}건</p> : null}
+        <div className="trade-range-toggle" role="group" aria-label="기간 선택">
+          <button
+            type="button"
+            className="trade-range-button"
+            aria-pressed={range === 'all'}
+            onClick={() => setRange('all')}
+          >
+            전체
+          </button>
+          <button
+            type="button"
+            className="trade-range-button"
+            aria-pressed={range === '3y'}
+            onClick={() => setRange('3y')}
+          >
+            최근 3년
+          </button>
+        </div>
       </div>
 
       {points.length === 0 ? (
         <p className="trade-chart-empty">표시할 거래가 없습니다</p>
       ) : (
+        <div className="trade-chart-canvas">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={points} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+              <XAxis
+                dataKey="month"
+                tickFormatter={formatTrendMonth}
+                tick={{ fontSize: 10 }}
+                tickMargin={6}
+                minTickGap={24}
+              />
+              <YAxis tickFormatter={formatTrendAxis} tick={{ fontSize: 10 }} width={44} />
+              <Tooltip content={<TrendTooltip />} />
+              <Line
+                type="monotone"
+                dataKey="avgAmount"
+                stroke={trendLineColor()}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 3 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TrendTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: TradeTrendPoint }>;
+}) {
+  if (!active || payload == null || payload.length === 0) {
+    return null;
+  }
+
+  const point = payload[0].payload;
+  return (
+    <div className="trade-chart-tooltip">
+      <span className="trade-chart-tooltip-month">{formatTrendMonth(point.month)}</span>
+      <strong>{formatAmount(point.avgAmount)}</strong>
+      <span className="trade-chart-tooltip-count">{point.count.toLocaleString()}건</span>
+    </div>
+  );
+}
+
+function filterTrendByRange(trend: TradeTrendPoint[], range: TradeTrendRange): TradeTrendPoint[] {
+  if (range === 'all') {
+    return trend;
+  }
+
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - 3);
+  const cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}`;
+  return trend.filter((point) => point.month >= cutoffKey);
+}
+
+function formatTrendMonth(month: string): string {
+  const [year, monthPart] = month.split('-');
+  return year && monthPart ? `${year.slice(2)}-${monthPart}` : month;
+}
+
+function formatTrendAxis(value: number): string {
+  return `${(value / 10000).toFixed(1)}억`;
+}
+
+function trendLineColor(): string {
+  if (typeof window === 'undefined') {
+    return TREND_LINE_FALLBACK;
+  }
+
+  const resolved = getComputedStyle(document.documentElement)
+    .getPropertyValue('--hs-color-primary')
+    .trim();
+  return resolved.length > 0 ? resolved : TREND_LINE_FALLBACK;
+}
+
+function TradeList({
+  rows,
+  totalElements,
+  onLoadMore,
+}: {
+  rows: TradeItem[];
+  totalElements: number;
+  onLoadMore: () => void;
+}) {
+  const hasMore = rows.length < totalElements;
+  return (
+    <section className="trade-list" aria-label="거래 목록" data-detail-section="trade-history">
+      <div className="trade-section-header">
+        <h3>거래 내역</h3>
+        {totalElements > 0 ? (
+          <p>{rows.length.toLocaleString()} / {totalElements.toLocaleString()}건</p>
+        ) : null}
+      </div>
+      {rows.length === 0 ? (
+        <p>거래 내역이 없습니다</p>
+      ) : (
         <>
-          <div
-            className="trade-chart-plot"
-            role="img"
-            aria-label={`${points[0]?.dealDate}부터 ${
-              points[points.length - 1]?.dealDate
-            }까지 최근 거래가`}
-          >
-            {points.map((point) => (
-              <div
-                key={`${point.tradeId}-${point.dealDate}`}
-                className="trade-chart-point"
-                data-chart-point=""
-                data-chart-date={point.dealDate}
-              >
-                <span
-                  className="trade-chart-bar"
-                  aria-label={`${point.dealDate} ${formatAmount(point.dealAmount)}`}
-                  style={{ height: `${point.heightPercent}%` }}
-                />
-                <span className="trade-chart-date">{point.shortDate}</span>
-              </div>
-            ))}
-          </div>
-          <ol className="trade-chart-summary">
-            {points.map((point) => (
-              <li key={`${point.tradeId}-${point.dealDate}-summary`}>
-                <span>{point.dealDate}</span>
-                <strong>{formatAmount(point.dealAmount)}</strong>
-              </li>
-            ))}
-          </ol>
+          <table>
+            <caption className="sr-only">선택한 단지 또는 필지의 실거래 목록</caption>
+            <thead>
+              <tr>
+                <th scope="col">일자</th>
+                <th scope="col">금액</th>
+                <th scope="col">면적</th>
+                <th scope="col">층</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((trade) => (
+                <tr key={trade.tradeId}>
+                  <td>{trade.dealDate}</td>
+                  <td data-trade-cell="amount">{formatAmount(trade.dealAmount)}</td>
+                  <td data-trade-cell="area">{trade.exclArea.toLocaleString()}㎡</td>
+                  <td data-trade-cell="floor">{formatTradeFloor(trade)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {hasMore ? (
+            <button
+              type="button"
+              className="trade-load-more"
+              aria-label="거래 더 보기"
+              onClick={onLoadMore}
+            >
+              더보기
+            </button>
+          ) : null}
         </>
       )}
     </section>
   );
 }
 
-function TradeList({ trades }: { trades: TradeItem[] }) {
-  return (
-    <section className="trade-list" aria-label="거래 목록" data-detail-section="trade-history">
-      <h3>거래 내역</h3>
-      {trades.length === 0 ? (
-        <p>거래 내역이 없습니다</p>
-      ) : (
-        <table>
-          <caption className="sr-only">선택한 단지 또는 필지의 실거래 목록</caption>
-          <thead>
-            <tr>
-              <th scope="col">일자</th>
-              <th scope="col">금액</th>
-              <th scope="col">면적</th>
-              <th scope="col">층</th>
-            </tr>
-          </thead>
-          <tbody>
-            {trades.map((trade) => (
-              <tr key={trade.tradeId}>
-                <td>{trade.dealDate}</td>
-                <td data-trade-cell="amount">{formatAmount(trade.dealAmount)}</td>
-                <td data-trade-cell="area">{trade.exclArea.toLocaleString()}㎡</td>
-                <td>{formatTradeFloor(trade)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </section>
-  );
-}
-
-type TradeChartPoint = {
-  tradeId: number;
-  dealDate: string;
-  dealAmount: number;
-  shortDate: string;
-  heightPercent: number;
-};
-
-function tradeChartPoints(trades: TradeItem[]): TradeChartPoint[] {
-  const recentTrades = trades
-    .filter((trade) => Number.isFinite(trade.dealAmount))
-    .slice()
-    .sort(compareTradesNewestFirst)
-    .slice(0, 6)
-    .sort(compareTradesOldestFirst);
-
-  if (recentTrades.length === 0) {
-    return [];
-  }
-
-  const amounts = recentTrades.map((trade) => trade.dealAmount);
-  const minAmount = Math.min(...amounts);
-  const maxAmount = Math.max(...amounts);
-  const range = maxAmount - minAmount;
-
-  return recentTrades.map((trade) => ({
-    tradeId: trade.tradeId,
-    dealDate: trade.dealDate,
-    dealAmount: trade.dealAmount,
-    shortDate: shortTradeDate(trade.dealDate),
-    heightPercent: range === 0 ? 54 : 32 + ((trade.dealAmount - minAmount) / range) * 58,
-  }));
-}
-
 function compareTradesNewestFirst(first: TradeItem, second: TradeItem): number {
   return second.dealDate.localeCompare(first.dealDate) || second.tradeId - first.tradeId;
-}
-
-function compareTradesOldestFirst(first: TradeItem, second: TradeItem): number {
-  return first.dealDate.localeCompare(second.dealDate) || first.tradeId - second.tradeId;
-}
-
-function shortTradeDate(dealDate: string): string {
-  const [, month, day] = dealDate.split('-');
-  return month && day ? `${month}/${day}` : dealDate;
 }
 
 function formatTradeFloor(trade: TradeItem): string {

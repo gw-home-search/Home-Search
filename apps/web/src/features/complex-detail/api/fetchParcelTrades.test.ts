@@ -8,12 +8,12 @@ describe('fetchParcelTrades API 어댑터', () => {
     vi.unstubAllGlobals();
   });
 
-  it('선택한 parcel의 documented trade data를 가져온다', async () => {
+  it('선택한 parcel의 documented trade page를 가져온다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         parcelId: '1001',
         complexId: '501',
-        trades: [
+        content: [
           {
             tradeId: '9001',
             dealDate: '2025-12-01',
@@ -23,6 +23,10 @@ describe('fetchParcelTrades API 어댑터', () => {
             floor: '12',
           },
         ],
+        page: '0',
+        size: '20',
+        totalElements: '1',
+        totalPages: '1',
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -40,6 +44,10 @@ describe('fetchParcelTrades API 어댑터', () => {
           floor: 12,
         },
       ],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -48,14 +56,18 @@ describe('fetchParcelTrades API 어댑터', () => {
     );
   });
 
-  it('valid empty trade list를 empty array로 유지한다', async () => {
+  it('valid empty trade page를 empty array로 유지한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
         jsonResponse({
           parcelId: 1001,
           complexId: null,
-          trades: [],
+          content: [],
+          page: 0,
+          size: 20,
+          totalElements: 0,
+          totalPages: 0,
         }),
       ),
     );
@@ -64,20 +76,20 @@ describe('fetchParcelTrades API 어댑터', () => {
       parcelId: 1001,
       complexId: null,
       trades: [],
+      page: 0,
+      size: 20,
+      totalElements: 0,
+      totalPages: 0,
     });
   });
 
   it('complexId가 있으면 trade URL에 query parameter로 전달한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        parcelId: 1001,
-        complexId: 502,
-        trades: [],
-      }),
+      jsonResponse(emptyTradePage(1001, 502)),
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(fetchParcelTrades(1001, 502)).resolves.toEqual({
+    await expect(fetchParcelTrades(1001, 502)).resolves.toMatchObject({
       parcelId: 1001,
       complexId: 502,
       trades: [],
@@ -89,24 +101,34 @@ describe('fetchParcelTrades API 어댑터', () => {
     );
   });
 
-  it('complexId 단독 trade URL을 호출한다', async () => {
+  it('page/size 옵션을 trade URL의 query parameter로 전달한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({
-        parcelId: 1001,
-        complexId: 502,
-        trades: [],
-      }),
+      jsonResponse(emptyTradePage(1001, 502)),
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(fetchComplexTrades(502)).resolves.toEqual({
+    await fetchParcelTrades(1001, 502, { page: 2, size: 5 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/trade/1001?complexId=502&page=2&size=5'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('complexId 단독 trade URL을 page 옵션과 함께 호출한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(emptyTradePage(1001, 502)),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchComplexTrades(502, { page: 1, size: 5 })).resolves.toMatchObject({
       parcelId: 1001,
       complexId: 502,
       trades: [],
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/complex/502/trades'),
+      resolveApiUrl('/api/v1/complex/502/trades?page=1&size=5'),
       expect.objectContaining({ method: 'GET' }),
     );
   });
@@ -117,7 +139,7 @@ describe('fetchParcelTrades API 어댑터', () => {
       vi.fn().mockResolvedValue(
         jsonResponse({
           parcelId: 1001,
-          trades: [null],
+          content: [null],
         }),
       ),
     );
@@ -142,6 +164,18 @@ describe('fetchParcelTrades API 어댑터', () => {
     );
   });
 });
+
+function emptyTradePage(parcelId: number, complexId: number | null) {
+  return {
+    parcelId,
+    complexId,
+    content: [],
+    page: 0,
+    size: 20,
+    totalElements: 0,
+    totalPages: 0,
+  };
+}
 
 function jsonResponse(body: unknown): Response {
   return {

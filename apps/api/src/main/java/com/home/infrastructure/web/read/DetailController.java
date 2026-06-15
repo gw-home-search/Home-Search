@@ -7,10 +7,13 @@ import com.home.application.read.ParcelDetailResult;
 import com.home.application.read.PropertyReadUseCase;
 import com.home.application.read.TradeListResult;
 import com.home.application.read.TradeResult;
+import com.home.application.read.TradeTrendPoint;
 import com.home.infrastructure.web.read.dto.ComplexSummaryResponse;
+import com.home.infrastructure.web.read.dto.PageResponse;
 import com.home.infrastructure.web.read.dto.ParcelDetailResponse;
 import com.home.infrastructure.web.read.dto.TradeListResponse;
 import com.home.infrastructure.web.read.dto.TradeResponse;
+import com.home.infrastructure.web.read.dto.TradeTrendResponse;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,9 +49,11 @@ public class DetailController {
 	@GetMapping("/api/v1/trade/{parcelId}")
 	public ResponseEntity<TradeListResponse> getTradeList(
 		@PathVariable Long parcelId,
-		@RequestParam(required = false) Long complexId
+		@RequestParam(required = false) Long complexId,
+		@RequestParam(required = false) Integer page,
+		@RequestParam(required = false) Integer size
 	) {
-		return ResponseEntity.ok(toResponse(readUseCase.getTradeList(parcelId, complexId)));
+		return ResponseEntity.ok(toResponse(readUseCase.getTradeList(parcelId, complexId, page, size)));
 	}
 
 	@GetMapping("/api/v1/complex/{complexId}")
@@ -57,8 +62,31 @@ public class DetailController {
 	}
 
 	@GetMapping("/api/v1/complex/{complexId}/trades")
-	public ResponseEntity<TradeListResponse> getComplexTradeList(@PathVariable Long complexId) {
-		return ResponseEntity.ok(toResponse(readUseCase.getComplexTradeList(complexId)));
+	public ResponseEntity<TradeListResponse> getComplexTradeList(
+		@PathVariable Long complexId,
+		@RequestParam(required = false) Integer page,
+		@RequestParam(required = false) Integer size
+	) {
+		return ResponseEntity.ok(toResponse(readUseCase.getComplexTradeList(complexId, page, size)));
+	}
+
+	@GetMapping("/api/v1/trade/{parcelId}/trend")
+	public ResponseEntity<List<TradeTrendResponse>> getTradeTrend(
+		@PathVariable Long parcelId,
+		@RequestParam(required = false) Long complexId
+	) {
+		return ResponseEntity.ok(readUseCase.getTradeTrend(parcelId, complexId)
+			.stream()
+			.map(DetailController::toResponse)
+			.toList());
+	}
+
+	@GetMapping("/api/v1/complex/{complexId}/trade-trend")
+	public ResponseEntity<List<TradeTrendResponse>> getComplexTradeTrend(@PathVariable Long complexId) {
+		return ResponseEntity.ok(readUseCase.getComplexTradeTrend(complexId)
+			.stream()
+			.map(DetailController::toResponse)
+			.toList());
 	}
 
 	private static ComplexSummaryResponse toResponse(ComplexSummaryResult result) {
@@ -96,12 +124,13 @@ public class DetailController {
 	}
 
 	private static TradeListResponse toResponse(TradeListResult result) {
+		List<TradeResponse> content = result.trades().stream()
+			.map(DetailController::toResponse)
+			.toList();
 		return new TradeListResponse(
 			result.parcelId(),
 			result.complexId(),
-			result.trades().stream()
-				.map(DetailController::toResponse)
-				.toList()
+			PageResponse.of(content, result.page(), result.size(), result.totalElements())
 		);
 	}
 
@@ -113,6 +142,16 @@ public class DetailController {
 			result.dealAmount(),
 			result.aptDong(),
 			result.floor()
+		);
+	}
+
+	private static TradeTrendResponse toResponse(TradeTrendPoint point) {
+		return new TradeTrendResponse(
+			point.month(),
+			point.avgAmount(),
+			point.count(),
+			point.minAmount(),
+			point.maxAmount()
 		);
 	}
 }

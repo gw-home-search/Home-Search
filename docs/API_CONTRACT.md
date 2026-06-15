@@ -90,6 +90,17 @@ Target Home Search should expose canonical fields. Legacy variants from the sour
 may be accepted temporarily by the frontend adapter, but backend responses
 should converge on the canonical fields below.
 
+### Approved breaking change — trade list pagination (2026-06)
+
+`GET /api/v1/trade/{parcelId}` and `GET /api/v1/complex/{complexId}/trades`
+moved from a bare `trades` array to a page envelope: the trade array is now
+`content`, and `page`, `size`, `totalElements`, and `totalPages` were added.
+Both endpoints accept optional `page` (default `0`) and `size` (default `25`,
+server-capped at `100`) query parameters. `dealAmount` stays in 10,000 KRW
+units and default ordering is preserved within each page. This reshape was
+explicitly approved because the only consumer (the Home Search web client) is
+updated in the same change.
+
 ## Error Policy
 
 Home Search uses Spring `ProblemDetail` style error bodies.
@@ -715,6 +726,9 @@ Request:
 
 - Optional query parameter `complexId`: selected complex id. When omitted, the
   backend returns trades for all complexes under the parcel.
+- Optional query parameter `page`: zero-based page index. Defaults to `0`.
+- Optional query parameter `size`: page size. Defaults to `25` and is
+  server-capped at `100`.
 
 Response:
 
@@ -722,7 +736,7 @@ Response:
 {
   "parcelId": 1001,
   "complexId": 501,
-  "trades": [
+  "content": [
     {
       "tradeId": 9001,
       "dealDate": "2025-12-01",
@@ -731,7 +745,11 @@ Response:
       "aptDong": "101",
       "floor": 12
     }
-  ]
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
 }
 ```
 
@@ -739,9 +757,13 @@ Response fields:
 
 - `parcelId`
 - `complexId`: selected complex id when scoped; otherwise nullable.
-- `trades`
+- `content`: trades on the requested page, newest first.
+- `page`: zero-based index of the returned page.
+- `size`: page size used for the response.
+- `totalElements`: total trade count across all pages for the request scope.
+- `totalPages`: total page count for the request scope.
 
-Trade item fields:
+Trade item fields (`content[]`):
 
 - `tradeId`: trade id.
 - `dealDate`: `YYYY-MM-DD`.
@@ -753,7 +775,8 @@ Trade item fields:
 Status:
 
 - `200`: successful lookup. If the parcel exists but has no trades, return an
-  empty `trades` list.
+  empty `content` list with `totalElements` `0`.
+- `400`: `page` is negative or `size` is less than `1`.
 - `404`: parcel or complex parent path does not exist.
 - `500`: unexpected server error.
 
@@ -766,8 +789,8 @@ Migration notes:
   requested `parcelId`, ordered newest first.
 - Preserve `complex_pk`, `apt_seq`, `source`, and `source_key` for audit,
   matching, and deduplication, but do not expose them in this public response.
-- Default ordering should be newest first: `dealDate` descending, then
-  `tradeId` descending when dates are equal.
+- Default ordering should be newest first within each page: `dealDate`
+  descending, then `tradeId` descending when dates are equal.
 
 ### GET `/api/v1/complex/{complexId}/trades`
 
@@ -777,15 +800,23 @@ Purpose:
   addressed directly by `complexId`.
 - Used by direct complex detail flows and chart/list refreshes.
 
+Request:
+
+- Optional query parameter `page`: zero-based page index. Defaults to `0`.
+- Optional query parameter `size`: page size. Defaults to `25` and is
+  server-capped at `100`.
+
 Response:
 
-- Same body shape as `GET /api/v1/trade/{parcelId}`. `complexId` is always the
-  requested complex id when the response is successful.
+- Same page-envelope body shape as `GET /api/v1/trade/{parcelId}`
+  (`content`, `page`, `size`, `totalElements`, `totalPages`). `complexId` is
+  always the requested complex id when the response is successful.
 
 Status:
 
 - `200`: successful lookup. If the complex exists but has no active trades,
-  return an empty `trades` list.
+  return an empty `content` list with `totalElements` `0`.
+- `400`: `page` is negative or `size` is less than `1`.
 - `404`: complex id does not exist.
 - `500`: unexpected server error.
 
@@ -794,6 +825,64 @@ Migration notes:
 - The query path must use normalized `trade.complex_id` and exclude
   soft-deleted rows where `deleted_at IS NOT NULL`.
 - This endpoint must not expose audit/source fields.
+
+### GET `/api/v1/trade/{parcelId}/trend`
+
+Purpose:
+
+- Return the **monthly average trade price series** for a parcel (or scoped
+  complex), used by the detail price-trend chart.
+
+Request:
+
+- Optional query parameter `complexId`: selected complex id. When omitted, the
+  trend covers all complexes under the parcel.
+
+Response:
+
+```json
+[
+  { "month": "2025-10", "avgAmount": 100000, "count": 1, "minAmount": 100000, "maxAmount": 100000 },
+  { "month": "2025-12", "avgAmount": 127500, "count": 2, "minAmount": 125000, "maxAmount": 130000 }
+]
+```
+
+Response item fields:
+
+- `month`: `YYYY-MM` trade month.
+- `avgAmount`: average deal amount in 10,000 KRW units.
+- `count`: number of trades in the month.
+- `minAmount` / `maxAmount`: min/max deal amount in 10,000 KRW units.
+
+Status:
+
+- `200`: ordered oldest month first. If the parcel exists but has no trades,
+  return an empty array.
+- `404`: parcel or complex parent path does not exist.
+- `500`: unexpected server error.
+
+Migration notes:
+
+- Aggregate over normalized `trade.complex_id`, excluding soft-deleted rows.
+  Group by calendar month; months without trades are omitted.
+
+### GET `/api/v1/complex/{complexId}/trade-trend`
+
+Purpose:
+
+- Return the same monthly-average trend shape as `/api/v1/trade/{parcelId}/trend`,
+  but addressed directly by `complexId`.
+
+Response:
+
+- Same array body shape as `GET /api/v1/trade/{parcelId}/trend`.
+
+Status:
+
+- `200`: ordered oldest month first; empty array when the complex has no active
+  trades.
+- `404`: complex id does not exist.
+- `500`: unexpected server error.
 
 ## Admin APIs
 

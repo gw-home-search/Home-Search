@@ -29,7 +29,19 @@ public interface PropertyReadRepository {
 		return findTradeList(parcelId, null);
 	}
 
-	Optional<TradeListResult> findTradeList(Long parcelId, Long complexId);
+	default Optional<TradeListResult> findTradeList(Long parcelId, Long complexId) {
+		return findTradeList(parcelId, complexId, 0, Integer.MAX_VALUE);
+	}
 
-	Optional<TradeListResult> findComplexTradeList(Long complexId);
+	Optional<TradeListResult> findTradeList(Long parcelId, Long complexId, int page, int size);
+
+	default Optional<TradeListResult> findComplexTradeList(Long complexId) {
+		return findComplexTradeList(complexId, 0, Integer.MAX_VALUE);
+	}
+
+	Optional<TradeListResult> findComplexTradeList(Long complexId, int page, int size);
+
+	Optional<List<TradeTrendPoint>> findTradeTrend(Long parcelId, Long complexId);
+
+	Optional<List<TradeTrendPoint>> findComplexTradeTrend(Long complexId);
 }

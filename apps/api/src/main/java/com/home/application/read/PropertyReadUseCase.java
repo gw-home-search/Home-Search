@@ -10,6 +10,8 @@ public class PropertyReadUseCase {
 	private static final int SUGGESTION_LIMIT = 8;
 	private static final int DEFAULT_REGION_COMPLEX_LIMIT = 50;
 	private static final int MAX_REGION_COMPLEX_LIMIT = 100;
+	private static final int DEFAULT_TRADE_PAGE_SIZE = 25;
+	private static final int MAX_TRADE_PAGE_SIZE = 100;
 
 	private final PropertyReadRepository repository;
 
@@ -73,12 +75,34 @@ public class PropertyReadUseCase {
 	}
 
 	public TradeListResult getTradeList(Long parcelId, Long complexId) {
-		return repository.findTradeList(parcelId, complexId)
+		return getTradeList(parcelId, complexId, null, null);
+	}
+
+	public TradeListResult getTradeList(Long parcelId, Long complexId, Integer requestedPage, Integer requestedSize) {
+		int page = normalizePage(requestedPage);
+		int size = normalizeSize(requestedSize);
+		return repository.findTradeList(parcelId, complexId, page, size)
 			.orElseThrow(() -> new ResourceNotFoundException("parcel trade parent not found: " + parcelId));
 	}
 
 	public TradeListResult getComplexTradeList(Long complexId) {
-		return repository.findComplexTradeList(complexId)
+		return getComplexTradeList(complexId, null, null);
+	}
+
+	public TradeListResult getComplexTradeList(Long complexId, Integer requestedPage, Integer requestedSize) {
+		int page = normalizePage(requestedPage);
+		int size = normalizeSize(requestedSize);
+		return repository.findComplexTradeList(complexId, page, size)
+			.orElseThrow(() -> new ResourceNotFoundException("complex trade parent not found: " + complexId));
+	}
+
+	public List<TradeTrendPoint> getTradeTrend(Long parcelId, Long complexId) {
+		return repository.findTradeTrend(parcelId, complexId)
+			.orElseThrow(() -> new ResourceNotFoundException("parcel trade parent not found: " + parcelId));
+	}
+
+	public List<TradeTrendPoint> getComplexTradeTrend(Long complexId) {
+		return repository.findComplexTradeTrend(complexId)
 			.orElseThrow(() -> new ResourceNotFoundException("complex trade parent not found: " + complexId));
 	}
 
@@ -100,5 +124,25 @@ public class PropertyReadUseCase {
 			throw new InvalidReadRequestException("offset must be greater than or equal to 0");
 		}
 		return requestedOffset;
+	}
+
+	private int normalizePage(Integer requestedPage) {
+		if (requestedPage == null) {
+			return 0;
+		}
+		if (requestedPage < 0) {
+			throw new InvalidReadRequestException("page must be greater than or equal to 0");
+		}
+		return requestedPage;
+	}
+
+	private int normalizeSize(Integer requestedSize) {
+		if (requestedSize == null) {
+			return DEFAULT_TRADE_PAGE_SIZE;
+		}
+		if (requestedSize < 1) {
+			throw new InvalidReadRequestException("size must be greater than 0");
+		}
+		return Math.min(requestedSize, MAX_TRADE_PAGE_SIZE);
 	}
 }

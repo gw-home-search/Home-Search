@@ -6,6 +6,7 @@ import static org.assertj.core.groups.Tuple.tuple;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import com.home.application.read.TradeTrendPoint;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 
 import org.junit.jupiter.api.DisplayName;
@@ -67,6 +68,81 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("trade read API는 page/size window와 totalElements를 적용한다")
+	void tradeListAppliesPageWindowAndTotalElements() {
+		seedPropertyExplorationData();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.findTradeList(1001L, null, 0, 1))
+			.hasValueSatisfying(tradeList -> {
+				assertThat(tradeList.page()).isEqualTo(0);
+				assertThat(tradeList.size()).isEqualTo(1);
+				assertThat(tradeList.totalElements()).isEqualTo(2L);
+				assertThat(tradeList.trades())
+					.extracting("tradeId")
+					.containsExactly(9002L);
+			});
+
+		assertThat(repository.findTradeList(1001L, null, 1, 1))
+			.hasValueSatisfying(tradeList -> {
+				assertThat(tradeList.page()).isEqualTo(1);
+				assertThat(tradeList.totalElements()).isEqualTo(2L);
+				assertThat(tradeList.trades())
+					.extracting("tradeId")
+					.containsExactly(9001L);
+			});
+	}
+
+	@Test
+	@DisplayName("trade trend read API는 월별 평균/건수/min/max를 오름차순으로 집계한다")
+	void tradeTrendAggregatesMonthlyAveragesAscending() {
+		seedPropertyExplorationData();
+		jdbcClient.sql("""
+			INSERT INTO raw_trade_ingest (
+			    id, source, source_key, lawd_cd, deal_ymd, page_no, payload, payload_hash, status, processed_at
+			) VALUES (90003, 'RTMS', 'sample-rtms-20251020', '11680', '202510', 1, '{}', 'hash-3', 'NORMALIZED', now())
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO trade (
+			    id, complex_id, deal_date, deal_amount, floor, excl_area, apt_dong, source, source_key, complex_pk, apt_seq, raw_ingest_id
+			) VALUES (9003, 501, DATE '2025-10-20', 100000, 8, 84.93, '101', 'RTMS', 'sample-rtms-20251020', 'COMPLEX-PK-501', 'APT-501', 90003)
+			""").update();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.findTradeTrend(1001L, null))
+			.hasValueSatisfying(trend -> {
+				assertThat(trend).extracting(TradeTrendPoint::month).containsExactly("2025-10", "2025-12");
+				assertThat(trend.get(0).avgAmount()).isEqualTo(100000L);
+				assertThat(trend.get(0).count()).isEqualTo(1);
+				assertThat(trend.get(1).avgAmount()).isEqualTo(127500L);
+				assertThat(trend.get(1).count()).isEqualTo(2);
+				assertThat(trend.get(1).minAmount()).isEqualTo(125000L);
+				assertThat(trend.get(1).maxAmount()).isEqualTo(130000L);
+			});
+		assertThat(repository.findComplexTradeTrend(501L))
+			.hasValueSatisfying(trend -> assertThat(trend).extracting(TradeTrendPoint::month)
+				.containsExactly("2025-10", "2025-12"));
+	}
+
+	@Test
+	@DisplayName("trade trend read API는 soft-delete를 제외하고 부모 경로 없으면 empty다")
+	void tradeTrendExcludesSoftDeletedAndEmptyWhenParentMissing() {
+		seedPropertyExplorationData();
+		jdbcClient.sql("UPDATE trade SET deleted_at = now() WHERE id = 9002").update();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.findTradeTrend(1001L, null))
+			.hasValueSatisfying(trend -> assertThat(trend)
+				.singleElement()
+				.satisfies(point -> {
+					assertThat(point.count()).isEqualTo(1);
+					assertThat(point.avgAmount()).isEqualTo(125000L);
+				}));
+		assertThat(repository.findTradeTrend(404L, null)).isEmpty();
+		assertThat(repository.findComplexTradeTrend(999L)).isEmpty();
+	}
+
+	@Test
 	@DisplayName("trade read API는 parcel에 complex가 있지만 trade가 없으면 empty trade list를 반환한다")
 	void tradeListReturnsEmptyWhenParcelAndComplexExistWithoutTrades() {
 		seedComplex();
@@ -91,9 +167,12 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
 
 		assertThat(repository.findTradeList(1001L))
-			.hasValueSatisfying(tradeList -> assertThat(tradeList.trades())
-				.extracting("tradeId")
-				.containsExactly(9001L));
+			.hasValueSatisfying(tradeList -> {
+				assertThat(tradeList.trades())
+					.extracting("tradeId")
+					.containsExactly(9001L);
+				assertThat(tradeList.totalElements()).isEqualTo(1L);
+			});
 	}
 
 	@Test

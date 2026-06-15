@@ -26,6 +26,7 @@ import com.home.application.read.RegionSummaryResult;
 import com.home.application.read.SearchComplexResult;
 import com.home.application.read.TradeListResult;
 import com.home.application.read.TradeResult;
+import com.home.application.read.TradeTrendPoint;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -260,7 +261,7 @@ class ReadApiRestDocsTest {
 				new BigDecimal("199.80"),
 				LocalDate.of(2015, 3, 20)
 			));
-		given(readUseCase.getTradeList(1001L, 501L))
+		given(readUseCase.getTradeList(1001L, 501L, null, null))
 			.willReturn(new TradeListResult(1001L, 501L, List.of(
 				new TradeResult(9002L, LocalDate.of(2025, 12, 15), new BigDecimal("84.93"), 130000L, "101", 15)
 			)));
@@ -323,37 +324,15 @@ class ReadApiRestDocsTest {
 				pathParameters(
 					parameterWithName("parcelId").description("Parcel id.")
 				),
-				queryParameters(
-					parameterWithName("complexId").optional().description("Optional selected complex id.")
-				),
-				responseFields(
-					fieldWithPath("parcelId").type(JsonFieldType.NUMBER).description("Parcel id."),
-					fieldWithPath("complexId").type(JsonFieldType.NUMBER).optional().description("Selected complex id when scoped."),
-					fieldWithPath("trades").type(JsonFieldType.ARRAY).description("Trades under the parcel complexes."),
-					fieldWithPath("trades[].tradeId").type(JsonFieldType.NUMBER).description("Trade id."),
-					fieldWithPath("trades[].dealDate").type(JsonFieldType.STRING).description("Deal date."),
-					fieldWithPath("trades[].exclArea").type(JsonFieldType.NUMBER).optional().description("Exclusive area."),
-					fieldWithPath("trades[].dealAmount").type(JsonFieldType.NUMBER).description("Deal amount in 10,000 KRW units."),
-					fieldWithPath("trades[].aptDong").type(JsonFieldType.STRING).optional().description("Apartment dong."),
-					fieldWithPath("trades[].floor").type(JsonFieldType.NUMBER).optional().description("Floor.")
-				),
+				queryParameters(parcelTradeQueryParameters()),
+				responseFields(tradeListFields()),
 				resource(builder()
 					.tag("Read")
 					.summary("Get parcel trades")
 					.description("Returns trades newest first for selected complex or complexes under a parcel.")
 					.pathParameters(parameterWithName("parcelId").description("Parcel id."))
-					.queryParameters(parameterWithName("complexId").optional().description("Optional selected complex id."))
-					.responseFields(
-						fieldWithPath("parcelId").type(JsonFieldType.NUMBER).description("Parcel id."),
-						fieldWithPath("complexId").type(JsonFieldType.NUMBER).optional().description("Selected complex id when scoped."),
-						fieldWithPath("trades").type(JsonFieldType.ARRAY).description("Trades under the parcel complexes."),
-						fieldWithPath("trades[].tradeId").type(JsonFieldType.NUMBER).description("Trade id."),
-						fieldWithPath("trades[].dealDate").type(JsonFieldType.STRING).description("Deal date."),
-						fieldWithPath("trades[].exclArea").type(JsonFieldType.NUMBER).optional().description("Exclusive area."),
-						fieldWithPath("trades[].dealAmount").type(JsonFieldType.NUMBER).description("Deal amount in 10,000 KRW units."),
-						fieldWithPath("trades[].aptDong").type(JsonFieldType.STRING).optional().description("Apartment dong."),
-						fieldWithPath("trades[].floor").type(JsonFieldType.NUMBER).optional().description("Floor.")
-					)
+					.queryParameters(parcelTradeQueryParameters())
+					.responseFields(tradeListFields())
 					.build())
 			));
 	}
@@ -412,7 +391,7 @@ class ReadApiRestDocsTest {
 				null,
 				LocalDate.of(2020, 1, 1)
 			));
-		given(readUseCase.getComplexTradeList(502L))
+		given(readUseCase.getComplexTradeList(502L, null, null))
 			.willReturn(new TradeListResult(1001L, 502L, List.of(
 				new TradeResult(9101L, LocalDate.of(2025, 12, 20), new BigDecimal("59.93"), 90000L, "201", 9)
 			)));
@@ -439,13 +418,60 @@ class ReadApiRestDocsTest {
 				pathParameters(
 					parameterWithName("complexId").description("Complex id.")
 				),
+				queryParameters(tradePageQueryParameters()),
 				responseFields(tradeListFields()),
 				resource(builder()
 					.tag("Read")
 					.summary("Get complex trades")
 					.description("Returns active trades newest first for one complex id.")
 					.pathParameters(parameterWithName("complexId").description("Complex id."))
+					.queryParameters(tradePageQueryParameters())
 					.responseFields(tradeListFields())
+					.build())
+			));
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/trade/{parcelId}/trend와 GET /api/v1/complex/{complexId}/trade-trend REST Docs를 생성한다")
+	void documentTradeTrend() throws Exception {
+		given(readUseCase.getTradeTrend(1001L, 501L))
+			.willReturn(List.of(new TradeTrendPoint("2025-12", 127500L, 2, 125000L, 130000L)));
+		given(readUseCase.getComplexTradeTrend(502L))
+			.willReturn(List.of(new TradeTrendPoint("2025-12", 90000L, 1, 90000L, 90000L)));
+
+		mockMvc.perform(get("/api/v1/trade/{parcelId}/trend", 1001L).param("complexId", "501"))
+			.andExpect(status().isOk())
+			.andDo(document("read-trade-trend-success",
+				pathParameters(
+					parameterWithName("parcelId").description("Parcel id.")
+				),
+				queryParameters(
+					parameterWithName("complexId").optional().description("Optional selected complex id.")
+				),
+				responseFields(tradeTrendFields()),
+				resource(builder()
+					.tag("Read")
+					.summary("Get parcel trade monthly trend")
+					.description("Returns monthly average trade price series (oldest first) for a parcel or scoped complex.")
+					.pathParameters(parameterWithName("parcelId").description("Parcel id."))
+					.queryParameters(parameterWithName("complexId").optional().description("Optional selected complex id."))
+					.responseFields(tradeTrendFields())
+					.build())
+			));
+
+		mockMvc.perform(get("/api/v1/complex/{complexId}/trade-trend", 502L))
+			.andExpect(status().isOk())
+			.andDo(document("read-complex-trade-trend-success",
+				pathParameters(
+					parameterWithName("complexId").description("Complex id.")
+				),
+				responseFields(tradeTrendFields()),
+				resource(builder()
+					.tag("Read")
+					.summary("Get complex trade monthly trend")
+					.description("Returns monthly average trade price series (oldest first) for one complex id.")
+					.pathParameters(parameterWithName("complexId").description("Complex id."))
+					.responseFields(tradeTrendFields())
 					.build())
 			));
 	}
@@ -488,13 +514,42 @@ class ReadApiRestDocsTest {
 		return new org.springframework.restdocs.payload.FieldDescriptor[] {
 			fieldWithPath("parcelId").type(JsonFieldType.NUMBER).description("Parcel id."),
 			fieldWithPath("complexId").type(JsonFieldType.NUMBER).optional().description("Selected complex id when scoped."),
-			fieldWithPath("trades").type(JsonFieldType.ARRAY).description("Trades under the parcel complexes."),
-			fieldWithPath("trades[].tradeId").type(JsonFieldType.NUMBER).description("Trade id."),
-			fieldWithPath("trades[].dealDate").type(JsonFieldType.STRING).description("Deal date."),
-			fieldWithPath("trades[].exclArea").type(JsonFieldType.NUMBER).optional().description("Exclusive area."),
-			fieldWithPath("trades[].dealAmount").type(JsonFieldType.NUMBER).description("Deal amount in 10,000 KRW units."),
-			fieldWithPath("trades[].aptDong").type(JsonFieldType.STRING).optional().description("Apartment dong."),
-			fieldWithPath("trades[].floor").type(JsonFieldType.NUMBER).optional().description("Floor.")
+			fieldWithPath("content").type(JsonFieldType.ARRAY).description("Trades on the current page, newest first."),
+			fieldWithPath("content[].tradeId").type(JsonFieldType.NUMBER).description("Trade id."),
+			fieldWithPath("content[].dealDate").type(JsonFieldType.STRING).description("Deal date."),
+			fieldWithPath("content[].exclArea").type(JsonFieldType.NUMBER).optional().description("Exclusive area."),
+			fieldWithPath("content[].dealAmount").type(JsonFieldType.NUMBER).description("Deal amount in 10,000 KRW units."),
+			fieldWithPath("content[].aptDong").type(JsonFieldType.STRING).optional().description("Apartment dong."),
+			fieldWithPath("content[].floor").type(JsonFieldType.NUMBER).optional().description("Floor."),
+			fieldWithPath("page").type(JsonFieldType.NUMBER).description("Zero-based page index."),
+			fieldWithPath("size").type(JsonFieldType.NUMBER).description("Page size."),
+			fieldWithPath("totalElements").type(JsonFieldType.NUMBER).description("Total trade count across all pages."),
+			fieldWithPath("totalPages").type(JsonFieldType.NUMBER).description("Total page count.")
+		};
+	}
+
+	private static org.springframework.restdocs.payload.FieldDescriptor[] tradeTrendFields() {
+		return new org.springframework.restdocs.payload.FieldDescriptor[] {
+			fieldWithPath("[].month").type(JsonFieldType.STRING).description("Trade month (YYYY-MM)."),
+			fieldWithPath("[].avgAmount").type(JsonFieldType.NUMBER).description("Average deal amount in 10,000 KRW units."),
+			fieldWithPath("[].count").type(JsonFieldType.NUMBER).description("Trade count in the month."),
+			fieldWithPath("[].minAmount").type(JsonFieldType.NUMBER).description("Min deal amount in 10,000 KRW units."),
+			fieldWithPath("[].maxAmount").type(JsonFieldType.NUMBER).description("Max deal amount in 10,000 KRW units.")
+		};
+	}
+
+	private static org.springframework.restdocs.request.ParameterDescriptor[] tradePageQueryParameters() {
+		return new org.springframework.restdocs.request.ParameterDescriptor[] {
+			parameterWithName("page").optional().description("Zero-based page index. Default 0."),
+			parameterWithName("size").optional().description("Page size. Default 25, max 100.")
+		};
+	}
+
+	private static org.springframework.restdocs.request.ParameterDescriptor[] parcelTradeQueryParameters() {
+		return new org.springframework.restdocs.request.ParameterDescriptor[] {
+			parameterWithName("complexId").optional().description("Optional selected complex id."),
+			parameterWithName("page").optional().description("Zero-based page index. Default 0."),
+			parameterWithName("size").optional().description("Page size. Default 25, max 100.")
 		};
 	}
 }

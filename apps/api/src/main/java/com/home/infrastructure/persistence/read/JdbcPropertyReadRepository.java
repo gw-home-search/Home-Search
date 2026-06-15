@@ -17,6 +17,7 @@ import com.home.application.read.RegionSummaryResult;
 import com.home.application.read.SearchComplexResult;
 import com.home.application.read.TradeListResult;
 import com.home.application.read.TradeResult;
+import com.home.application.read.TradeTrendPoint;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -92,6 +93,13 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 		    c.id
 		LIMIT :limit
 		""";
+	private static final String TRADE_SOURCE_SQL = """
+		FROM trade t
+		JOIN complex c ON c.id = t.complex_id
+		WHERE (CAST(:parcelId AS BIGINT) IS NULL OR c.parcel_id = :parcelId)
+		  AND (CAST(:complexId AS BIGINT) IS NULL OR c.id = :complexId)
+		  AND t.deleted_at IS NULL
+		""";
 	private static final String TRADE_LIST_SQL = """
 		SELECT
 		    t.id AS trade_id,
@@ -100,12 +108,25 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 		    t.deal_amount,
 		    t.apt_dong,
 		    t.floor
-		FROM trade t
-		JOIN complex c ON c.id = t.complex_id
-		WHERE (CAST(:parcelId AS BIGINT) IS NULL OR c.parcel_id = :parcelId)
-		  AND (CAST(:complexId AS BIGINT) IS NULL OR c.id = :complexId)
-		  AND t.deleted_at IS NULL
+		"""
+		+ TRADE_SOURCE_SQL
+		+ """
 		ORDER BY t.deal_date DESC, t.id DESC
+		LIMIT :size OFFSET :offset
+		""";
+	private static final String TRADE_COUNT_SQL = "SELECT count(*)\n" + TRADE_SOURCE_SQL;
+	private static final String TRADE_TREND_SQL = """
+		SELECT
+		    to_char(t.deal_date, 'YYYY-MM') AS month,
+		    round(avg(t.deal_amount))::bigint AS avg_amount,
+		    count(*) AS trade_count,
+		    min(t.deal_amount) AS min_amount,
+		    max(t.deal_amount) AS max_amount
+		"""
+		+ TRADE_SOURCE_SQL
+		+ """
+		GROUP BY to_char(t.deal_date, 'YYYY-MM')
+		ORDER BY month
 		""";
 
 	private final JdbcClient jdbcClient;
@@ -330,16 +351,17 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 	}
 
 	@Override
-	public Optional<TradeListResult> findTradeList(Long parcelId, Long complexId) {
+	public Optional<TradeListResult> findTradeList(Long parcelId, Long complexId, int page, int size) {
 		if (!hasComplexParent(parcelId, complexId)) {
 			return Optional.empty();
 		}
-		List<TradeResult> trades = findTrades(parcelId, complexId);
-		return Optional.of(new TradeListResult(parcelId, complexId, trades));
+		long totalElements = countTrades(parcelId, complexId);
+		List<TradeResult> trades = findTrades(parcelId, complexId, page, size);
+		return Optional.of(new TradeListResult(parcelId, complexId, trades, page, size, totalElements));
 	}
 
 	@Override
-	public Optional<TradeListResult> findComplexTradeList(Long complexId) {
+	public Optional<TradeListResult> findComplexTradeList(Long complexId, int page, int size) {
 		Optional<Long> parcelId = jdbcClient.sql("""
 			SELECT parcel_id
 			FROM complex
@@ -351,8 +373,34 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 		if (parcelId.isEmpty()) {
 			return Optional.empty();
 		}
-		List<TradeResult> trades = findTrades(null, complexId);
-		return Optional.of(new TradeListResult(parcelId.get(), complexId, trades));
+		long totalElements = countTrades(null, complexId);
+		List<TradeResult> trades = findTrades(null, complexId, page, size);
+		return Optional.of(new TradeListResult(parcelId.get(), complexId, trades, page, size, totalElements));
+	}
+
+	@Override
+	public Optional<List<TradeTrendPoint>> findTradeTrend(Long parcelId, Long complexId) {
+		if (!hasComplexParent(parcelId, complexId)) {
+			return Optional.empty();
+		}
+		return Optional.of(findTrend(parcelId, complexId));
+	}
+
+	@Override
+	public Optional<List<TradeTrendPoint>> findComplexTradeTrend(Long complexId) {
+		boolean complexExists = jdbcClient.sql("""
+			SELECT parcel_id
+			FROM complex
+			WHERE id = :complexId
+			""")
+			.param("complexId", complexId)
+			.query(Long.class)
+			.optional()
+			.isPresent();
+		if (!complexExists) {
+			return Optional.empty();
+		}
+		return Optional.of(findTrend(null, complexId));
 	}
 
 	private JdbcClient.StatementSpec searchStatement(PropertySearchTerms terms, int limit) {
@@ -366,12 +414,40 @@ public class JdbcPropertyReadRepository implements PropertyReadRepository {
 			.param("limit", limit);
 	}
 
-	private List<TradeResult> findTrades(Long parcelId, Long complexId) {
+	private List<TradeResult> findTrades(Long parcelId, Long complexId, int page, int size) {
 		return jdbcClient.sql(TRADE_LIST_SQL)
 			.param("parcelId", parcelId)
 			.param("complexId", complexId)
+			.param("size", size)
+			.param("offset", (long) page * size)
 			.query(this::mapTrade)
 			.list();
+	}
+
+	private long countTrades(Long parcelId, Long complexId) {
+		return jdbcClient.sql(TRADE_COUNT_SQL)
+			.param("parcelId", parcelId)
+			.param("complexId", complexId)
+			.query(Long.class)
+			.single();
+	}
+
+	private List<TradeTrendPoint> findTrend(Long parcelId, Long complexId) {
+		return jdbcClient.sql(TRADE_TREND_SQL)
+			.param("parcelId", parcelId)
+			.param("complexId", complexId)
+			.query(this::mapTradeTrend)
+			.list();
+	}
+
+	private TradeTrendPoint mapTradeTrend(ResultSet resultSet, int rowNumber) throws SQLException {
+		return new TradeTrendPoint(
+			resultSet.getString("month"),
+			resultSet.getLong("avg_amount"),
+			resultSet.getInt("trade_count"),
+			resultSet.getLong("min_amount"),
+			resultSet.getLong("max_amount")
+		);
 	}
 
 	private boolean hasRegion(Long regionId) {

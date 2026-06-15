@@ -24,6 +24,7 @@ import com.home.application.read.RegionSummaryResult;
 import com.home.application.read.SearchComplexResult;
 import com.home.application.read.TradeListResult;
 import com.home.application.read.TradeResult;
+import com.home.application.read.TradeTrendPoint;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -203,7 +204,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/trade/{parcelId}는 trade를 newest first로 반환한다")
 	void tradeListReturnsCanonicalFields() throws Exception {
-		given(readUseCase.getTradeList(eq(1001L), isNull()))
+		given(readUseCase.getTradeList(eq(1001L), isNull(), isNull(), isNull()))
 			.willReturn(new TradeListResult(1001L, null, List.of(
 				new TradeResult(9002L, LocalDate.of(2025, 12, 15), new BigDecimal("84.93"), 130000L, "101", 15),
 				new TradeResult(9001L, LocalDate.of(2025, 12, 1), new BigDecimal("84.93"), 125000L, "101", 12)
@@ -213,21 +214,25 @@ class ReadApiControllerContractTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.parcelId").value(1001))
 			.andExpect(jsonPath("$.complexId").isEmpty())
-			.andExpect(jsonPath("$.trades[0].tradeId").value(9002))
-			.andExpect(jsonPath("$.trades[0].dealDate").value("2025-12-15"))
-			.andExpect(jsonPath("$.trades[0].exclArea").value(84.93))
-			.andExpect(jsonPath("$.trades[0].dealAmount").value(130000))
-			.andExpect(jsonPath("$.trades[0].aptDong").value("101"))
-			.andExpect(jsonPath("$.trades[0].floor").value(15))
-			.andExpect(jsonPath("$.trades[0].complexPk").doesNotExist())
-			.andExpect(jsonPath("$.trades[0].aptSeq").doesNotExist())
-			.andExpect(jsonPath("$.trades[0].sourceKey").doesNotExist());
+			.andExpect(jsonPath("$.page").value(0))
+			.andExpect(jsonPath("$.size").value(2))
+			.andExpect(jsonPath("$.totalElements").value(2))
+			.andExpect(jsonPath("$.totalPages").value(1))
+			.andExpect(jsonPath("$.content[0].tradeId").value(9002))
+			.andExpect(jsonPath("$.content[0].dealDate").value("2025-12-15"))
+			.andExpect(jsonPath("$.content[0].exclArea").value(84.93))
+			.andExpect(jsonPath("$.content[0].dealAmount").value(130000))
+			.andExpect(jsonPath("$.content[0].aptDong").value("101"))
+			.andExpect(jsonPath("$.content[0].floor").value(15))
+			.andExpect(jsonPath("$.content[0].complexPk").doesNotExist())
+			.andExpect(jsonPath("$.content[0].aptSeq").doesNotExist())
+			.andExpect(jsonPath("$.content[0].sourceKey").doesNotExist());
 	}
 
 	@Test
 	@DisplayName("GET /api/v1/trade/{parcelId}?complexId= 는 선택한 complex trade만 반환한다")
 	void complexScopedTradeListReturnsSelectedComplexTrades() throws Exception {
-		given(readUseCase.getTradeList(1001L, 502L))
+		given(readUseCase.getTradeList(eq(1001L), eq(502L), isNull(), isNull()))
 			.willReturn(new TradeListResult(1001L, 502L, List.of(
 				new TradeResult(9101L, LocalDate.of(2025, 12, 20), new BigDecimal("59.93"), 90000L, "201", 9)
 			)));
@@ -236,8 +241,25 @@ class ReadApiControllerContractTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.parcelId").value(1001))
 			.andExpect(jsonPath("$.complexId").value(502))
-			.andExpect(jsonPath("$.trades[0].tradeId").value(9101))
-			.andExpect(jsonPath("$.trades[0].aptDong").value("201"));
+			.andExpect(jsonPath("$.content[0].tradeId").value(9101))
+			.andExpect(jsonPath("$.content[0].aptDong").value("201"));
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/trade/{parcelId}?page=&size= 는 use case에 page/size를 위임한다")
+	void tradeListDelegatesPageAndSize() throws Exception {
+		given(readUseCase.getTradeList(eq(1001L), isNull(), eq(2), eq(5)))
+			.willReturn(new TradeListResult(1001L, null, List.of(
+				new TradeResult(9001L, LocalDate.of(2025, 12, 1), new BigDecimal("84.93"), 125000L, "101", 12)
+			), 2, 5, 47));
+
+		mockMvc.perform(get("/api/v1/trade/1001").param("page", "2").param("size", "5"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.page").value(2))
+			.andExpect(jsonPath("$.size").value(5))
+			.andExpect(jsonPath("$.totalElements").value(47))
+			.andExpect(jsonPath("$.totalPages").value(10))
+			.andExpect(jsonPath("$.content[0].tradeId").value(9001));
 	}
 
 	@Test
@@ -307,7 +329,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/complex/{complexId}/trades는 complexId 단독 trade list를 반환한다")
 	void complexTradeListByComplexIdReturnsCanonicalTrades() throws Exception {
-		given(readUseCase.getComplexTradeList(502L))
+		given(readUseCase.getComplexTradeList(eq(502L), isNull(), isNull()))
 			.willReturn(new TradeListResult(1001L, 502L, List.of(
 				new TradeResult(9101L, LocalDate.of(2025, 12, 20), new BigDecimal("59.93"), 90000L, "201", 9)
 			)));
@@ -316,11 +338,43 @@ class ReadApiControllerContractTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.parcelId").value(1001))
 			.andExpect(jsonPath("$.complexId").value(502))
-			.andExpect(jsonPath("$.trades[0].tradeId").value(9101))
-			.andExpect(jsonPath("$.trades[0].dealAmount").value(90000))
-			.andExpect(jsonPath("$.trades[0].complexPk").doesNotExist())
-			.andExpect(jsonPath("$.trades[0].aptSeq").doesNotExist())
-			.andExpect(jsonPath("$.trades[0].sourceKey").doesNotExist());
+			.andExpect(jsonPath("$.content[0].tradeId").value(9101))
+			.andExpect(jsonPath("$.content[0].dealAmount").value(90000))
+			.andExpect(jsonPath("$.content[0].complexPk").doesNotExist())
+			.andExpect(jsonPath("$.content[0].aptSeq").doesNotExist())
+			.andExpect(jsonPath("$.content[0].sourceKey").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/trade/{parcelId}/trend는 월별 추세를 오름차순으로 반환한다")
+	void tradeTrendReturnsMonthlySeries() throws Exception {
+		given(readUseCase.getTradeTrend(eq(1001L), isNull()))
+			.willReturn(List.of(
+				new TradeTrendPoint("2025-10", 100000L, 1, 100000L, 100000L),
+				new TradeTrendPoint("2025-12", 127500L, 2, 125000L, 130000L)
+			));
+
+		mockMvc.perform(get("/api/v1/trade/1001/trend"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$[0].month").value("2025-10"))
+			.andExpect(jsonPath("$[1].month").value("2025-12"))
+			.andExpect(jsonPath("$[1].avgAmount").value(127500))
+			.andExpect(jsonPath("$[1].count").value(2))
+			.andExpect(jsonPath("$[1].minAmount").value(125000))
+			.andExpect(jsonPath("$[1].maxAmount").value(130000));
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/complex/{complexId}/trade-trend는 complexId 단독 월별 추세를 반환한다")
+	void complexTradeTrendReturnsMonthlySeries() throws Exception {
+		given(readUseCase.getComplexTradeTrend(502L))
+			.willReturn(List.of(new TradeTrendPoint("2025-12", 90000L, 1, 90000L, 90000L)));
+
+		mockMvc.perform(get("/api/v1/complex/502/trade-trend"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$[0].month").value("2025-12"))
+			.andExpect(jsonPath("$[0].avgAmount").value(90000))
+			.andExpect(jsonPath("$[0].count").value(1));
 	}
 
 	@Test

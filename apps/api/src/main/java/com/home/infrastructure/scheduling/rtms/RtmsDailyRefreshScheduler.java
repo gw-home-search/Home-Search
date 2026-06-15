@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import com.home.application.region.RegionSiGunGuCodeReader;
 import com.home.application.region.RegionUnitCntSynchronizationService;
 import com.home.infrastructure.scheduling.ScheduledJobExecutionTemplate;
 
@@ -26,6 +27,7 @@ class RtmsDailyRefreshScheduler {
 	private final RtmsDailyRefreshNotifier notifier;
 	private final Clock clock;
 	private final RegionUnitCntSynchronizationService regionSynchronizationService;
+	private final RegionSiGunGuCodeReader lawdCodeSource;
 	private final ScheduledJobExecutionTemplate execution = new ScheduledJobExecutionTemplate("RTMS daily refresh");
 
 	RtmsDailyRefreshScheduler(
@@ -48,6 +50,20 @@ class RtmsDailyRefreshScheduler {
 		Clock clock,
 		RegionUnitCntSynchronizationService regionSynchronizationService
 	) {
+		this(monthlyRefreshRunner, coordinateSourcePreflight, properties, formatter, notifier, clock,
+			regionSynchronizationService, RegionSiGunGuCodeReader.empty());
+	}
+
+	RtmsDailyRefreshScheduler(
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
+		RtmsCoordinateSourcePreflight coordinateSourcePreflight,
+		RtmsDailyRefreshProperties properties,
+		RtmsDailyRefreshSlackMessageFormatter formatter,
+		RtmsDailyRefreshNotifier notifier,
+		Clock clock,
+		RegionUnitCntSynchronizationService regionSynchronizationService,
+		RegionSiGunGuCodeReader lawdCodeSource
+	) {
 		this.monthlyRefreshRunner = Objects.requireNonNull(monthlyRefreshRunner);
 		this.coordinateSourcePreflight = Objects.requireNonNull(coordinateSourcePreflight);
 		this.properties = Objects.requireNonNull(properties);
@@ -55,6 +71,7 @@ class RtmsDailyRefreshScheduler {
 		this.notifier = Objects.requireNonNull(notifier);
 		this.clock = Objects.requireNonNull(clock);
 		this.regionSynchronizationService = regionSynchronizationService;
+		this.lawdCodeSource = Objects.requireNonNull(lawdCodeSource);
 	}
 
 	@Scheduled(
@@ -84,7 +101,7 @@ class RtmsDailyRefreshScheduler {
 			return preflightFailedExecution(baseDealYmd, exception);
 		}
 		List<RtmsDailyRefreshResult> results = new ArrayList<>();
-		for (String lawdCd : properties.lawdCds()) {
+		for (String lawdCd : effectiveLawdCds()) {
 			try {
 				RtmsMonthlyRefreshPlan plan = new RtmsMonthlyRefreshPlan(lawdCd, baseDealYmd, properties.lookbackMonths());
 				results.add(RtmsDailyRefreshResult.from(plan, monthlyRefreshRunner.refresh(plan)));
@@ -113,8 +130,13 @@ class RtmsDailyRefreshScheduler {
 		}
 	}
 
+	private List<String> effectiveLawdCds() {
+		List<String> configured = properties.lawdCds();
+		return configured.isEmpty() ? lawdCodeSource.siGunGuCodes() : configured;
+	}
+
 	private RtmsDailyRefreshExecution preflightFailedExecution(String baseDealYmd, RuntimeException exception) {
-		List<RtmsDailyRefreshResult> results = properties.lawdCds().stream()
+		List<RtmsDailyRefreshResult> results = effectiveLawdCds().stream()
 			.map(lawdCd -> RtmsDailyRefreshResult.failed(
 				lawdCd,
 				baseDealYmd,

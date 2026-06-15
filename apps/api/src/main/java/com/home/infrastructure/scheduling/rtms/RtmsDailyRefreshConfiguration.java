@@ -2,6 +2,7 @@ package com.home.infrastructure.scheduling.rtms;
 
 import java.time.Clock;
 
+import com.home.application.region.RegionSiGunGuCodeReader;
 import com.home.application.region.RegionUnitCntSynchronizationService;
 
 import org.springframework.beans.factory.ObjectProvider;
@@ -58,7 +59,8 @@ class RtmsDailyRefreshConfiguration {
 		RtmsDailyRefreshProperties properties,
 		RtmsDailyRefreshSlackMessageFormatter formatter,
 		RtmsDailyRefreshNotifier notifier,
-		ObjectProvider<RegionUnitCntSynchronizationService> regionSynchronizationServiceProvider
+		ObjectProvider<RegionUnitCntSynchronizationService> regionSynchronizationServiceProvider,
+		ObjectProvider<RegionSiGunGuCodeReader> lawdCodeSourceProvider
 	) {
 		return new RtmsDailyRefreshScheduler(
 			monthlyRefreshRunner,
@@ -67,7 +69,8 @@ class RtmsDailyRefreshConfiguration {
 			formatter,
 			notifier,
 			Clock.system(properties.zoneId()),
-			regionSynchronizationServiceProvider.getIfAvailable()
+			regionSynchronizationServiceProvider.getIfAvailable(),
+			lawdCodeSourceProvider.getIfAvailable(RegionSiGunGuCodeReader::empty)
 		);
 	}
 }

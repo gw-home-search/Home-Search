@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -224,6 +225,59 @@ class RtmsDailyRefreshSchedulerTest {
 			.contains("status=FAILED")
 			.contains("lawdCd=11680")
 			.contains("status=PARTIAL");
+	}
+
+	@Test
+	@DisplayName("daily refresh scheduler는 configured lawdCds가 비면 region 시군구 코드 전체를 대상으로 실행한다")
+	void schedulerDerivesNationwideLawdCdsFromRegionWhenConfigIsEmpty() {
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner = mock(RtmsMonthlyRefreshRunner.class);
+		when(monthlyRefreshRunner.refresh(any(RtmsMonthlyRefreshPlan.class)))
+			.thenReturn(new RtmsMonthlyRefreshReport(List.of()));
+		RtmsDailyRefreshScheduler scheduler = schedulerWithLawdSource(
+			monthlyRefreshRunner, new CapturingDailyRefreshNotifier(), List.of(),
+			() -> List.of("11110", "11140", "26110"));
+
+		scheduler.runDue();
+
+		verify(monthlyRefreshRunner).refresh(new RtmsMonthlyRefreshPlan("11110", "202606", 1));
+		verify(monthlyRefreshRunner).refresh(new RtmsMonthlyRefreshPlan("11140", "202606", 1));
+		verify(monthlyRefreshRunner).refresh(new RtmsMonthlyRefreshPlan("26110", "202606", 1));
+	}
+
+	@Test
+	@DisplayName("daily refresh scheduler는 configured lawdCds가 있으면 region 도출을 무시하고 그 목록만 실행한다")
+	void schedulerUsesConfiguredLawdCdsOverRegionSource() {
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner = mock(RtmsMonthlyRefreshRunner.class);
+		when(monthlyRefreshRunner.refresh(any(RtmsMonthlyRefreshPlan.class)))
+			.thenReturn(new RtmsMonthlyRefreshReport(List.of()));
+		RtmsDailyRefreshScheduler scheduler = schedulerWithLawdSource(
+			monthlyRefreshRunner, new CapturingDailyRefreshNotifier(), List.of("11680"),
+			() -> List.of("99999"));
+
+		scheduler.runDue();
+
+		verify(monthlyRefreshRunner).refresh(new RtmsMonthlyRefreshPlan("11680", "202606", 1));
+		verify(monthlyRefreshRunner, never()).refresh(new RtmsMonthlyRefreshPlan("99999", "202606", 1));
+	}
+
+	private static RtmsDailyRefreshScheduler schedulerWithLawdSource(
+		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
+		RtmsDailyRefreshNotifier notifier,
+		List<String> lawdCds,
+		com.home.application.region.RegionSiGunGuCodeReader lawdCodeSource
+	) {
+		return new RtmsDailyRefreshScheduler(
+			monthlyRefreshRunner,
+			RtmsCoordinateSourcePreflight.noop(),
+			new RtmsDailyRefreshProperties(lawdCds, 1, ZoneId.of("Asia/Seoul")),
+			new RtmsDailyRefreshSlackMessageFormatter(),
+			notifier,
+			JUNE_2026_KST_CLOCK,
+			new RegionUnitCntSynchronizationService(
+				() -> new RegionRelationSynchronizationResult(false, false, false)
+			),
+			lawdCodeSource
+		);
 	}
 
 	private static RtmsDailyRefreshScheduler scheduler(

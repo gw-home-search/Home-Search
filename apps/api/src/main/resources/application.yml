@@ -88,7 +88,7 @@ home:
         enabled: false
         cron: "0 0 4 * * *"
         zone: Asia/Seoul
-        max-keywords: 25
+        max-keywords: 60
         display: 100
         sort: date
         relevance-limit: 100

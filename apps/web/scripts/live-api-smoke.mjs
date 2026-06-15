@@ -124,7 +124,7 @@ async function main() {
     `selectedComplex=${selected.complexName} complexId=${complexId} parcelId=${parcelId}`,
     `mapComplexMarkers=${complexMarkers.length}`,
     `mapRegionMarkers=${regionMarkers.length}`,
-    `trades=${trades.trades.length}`,
+    `trades=${trades.content.length}/${trades.totalElements}`,
     `parcelComplexes=${parcelComplexes.length}`,
     `region=${regionProbe.detail.name} regionComplexes=${regionProbe.complexes.length}`,
     `hitCount=${hits.length}`,
@@ -278,9 +278,13 @@ function assertTradeEnvelope(envelope, expected) {
   if (expected.complexId != null && toRequiredNumber(envelope.complexId, 'trades.complexId') !== expected.complexId) {
     throw new Error(`trades.complexId mismatch: expected ${expected.complexId}, got ${envelope.complexId}`);
   }
-  assertArray(envelope.trades, 'trades.trades');
-  assertNonEmpty(envelope.trades, 'trades.trades');
-  for (const trade of envelope.trades.slice(0, 5)) {
+  toRequiredNumber(envelope.page, 'trades.page');
+  toRequiredNumber(envelope.size, 'trades.size');
+  toRequiredNumber(envelope.totalElements, 'trades.totalElements');
+  toRequiredNumber(envelope.totalPages, 'trades.totalPages');
+  assertArray(envelope.content, 'trades.content');
+  assertNonEmpty(envelope.content, 'trades.content');
+  for (const trade of envelope.content.slice(0, 5)) {
     assertRecord(trade, 'trade item');
     toRequiredNumber(trade.tradeId, 'trade.tradeId');
     toRequiredString(trade.dealDate, 'trade.dealDate');

@@ -498,7 +498,11 @@ describe('App map-first shell 화면', () => {
         return Promise.resolve(jsonResponse({
           parcelId: 1001,
           complexId: 501,
-          trades: [],
+          content: [],
+          page: 0,
+          size: 20,
+          totalElements: 0,
+          totalPages: 0,
         }));
       }
 
@@ -744,7 +748,7 @@ describe('App map-first shell 화면', () => {
         jsonResponse({
           parcelId: 1001,
           complexId: 501,
-          trades: [
+          content: [
             {
               tradeId: 9001,
               dealDate: '2025-12-01',
@@ -762,7 +766,17 @@ describe('App map-first shell 화면', () => {
               floor: 9,
             },
           ],
+          page: 0,
+          size: 20,
+          totalElements: 2,
+          totalPages: 1,
         }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          { month: '2025-10', avgAmount: 118000, count: 1, minAmount: 118000, maxAmount: 118000 },
+          { month: '2025-12', avgAmount: 125000, count: 1, minAmount: 125000, maxAmount: 125000 },
+        ]),
       )
       .mockResolvedValueOnce(
         jsonResponse([
@@ -811,25 +825,23 @@ describe('App map-first shell 화면', () => {
     expect(rootElement.textContent).toContain('Sample complex name');
     expect(rootElement.textContent).toContain('Sample address');
     expect(rootElement.textContent).toContain('2025-12-01');
-    expect(rootElement.textContent).toContain('125,000만원');
+    expect(rootElement.textContent).toContain('12억 5,000만원');
     const chartSection = rootElement.querySelector<HTMLElement>(
       '[aria-label="거래가 차트"]',
     );
-    const chartPoints = Array.from(
-      rootElement.querySelectorAll<HTMLElement>('[data-chart-point]'),
-    );
 
     expect(chartSection).not.toBeNull();
-    expect(chartSection?.textContent).toContain('125,000만원');
-    expect(chartPoints.map((point) => point.dataset.chartDate)).toEqual([
-      '2025-10-15',
-      '2025-12-01',
-    ]);
+    expect(chartSection?.textContent).toContain('실거래가 흐름');
+    expect(
+      Array.from(chartSection?.querySelectorAll('.trade-range-button') ?? []).map(
+        (button) => button.textContent,
+      ),
+    ).toEqual(['전체', '최근 3년']);
     expect(
       Array.from(rootElement.querySelectorAll('[data-trade-cell="amount"]')).map((cell) =>
         cell.textContent,
       ),
-    ).toEqual(['125,000만원', '118,000만원']);
+    ).toEqual(['12억 5,000만원', '11억 8,000만원']);
 
     unmount(root);
   });
@@ -866,7 +878,11 @@ describe('App map-first shell 화면', () => {
         jsonResponse({
           parcelId: 1001,
           complexId: 501,
-          trades: [],
+          content: [],
+          page: 0,
+          size: 20,
+          totalElements: 0,
+          totalPages: 0,
         }),
       )
       .mockResolvedValueOnce(
@@ -958,7 +974,11 @@ describe('App map-first shell 화면', () => {
         jsonResponse({
           parcelId: 1001,
           complexId: 501,
-          trades: [],
+          content: [],
+          page: 0,
+          size: 20,
+          totalElements: 0,
+          totalPages: 0,
         }),
       )
       .mockResolvedValueOnce(
@@ -1070,9 +1090,14 @@ describe('App map-first shell 화면', () => {
         jsonResponse({
           parcelId: 3001,
           complexId: 801,
-          trades: [],
+          content: [],
+          page: 0,
+          size: 20,
+          totalElements: 0,
+          totalPages: 0,
         }),
       )
+      .mockResolvedValueOnce(jsonResponse([]))
       .mockResolvedValueOnce(
         jsonResponse([
           {
@@ -1123,7 +1148,7 @@ describe('App map-first shell 화면', () => {
       resolveApiUrl('/api/v1/trade/3001?complexId=801'),
       expect.objectContaining({ method: 'GET' }),
     );
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
     expect(rootElement.querySelector('[aria-label="단지 상세 패널"]')).not.toBeNull();
     expect(rootElement.textContent).toContain('Coordinate Pending Complex');
     expect(rootElement.textContent).toContain('거래 내역이 없습니다');
@@ -1380,9 +1405,14 @@ describe('App map-first shell 화면', () => {
         jsonResponse({
           parcelId: 1001,
           complexId: 502,
-          trades: [],
+          content: [],
+          page: 0,
+          size: 20,
+          totalElements: 0,
+          totalPages: 0,
         }),
       )
+      .mockResolvedValueOnce(jsonResponse([]))
       .mockResolvedValueOnce(
         jsonResponse([
           {
@@ -1419,9 +1449,14 @@ describe('App map-first shell 화면', () => {
         jsonResponse({
           parcelId: 1001,
           complexId: 501,
-          trades: [],
+          content: [],
+          page: 0,
+          size: 20,
+          totalElements: 0,
+          totalPages: 0,
         }),
       )
+      .mockResolvedValueOnce(jsonResponse([]))
       .mockResolvedValueOnce(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -1488,7 +1523,7 @@ describe('App map-first shell 화면', () => {
         jsonResponse({
           parcelId: 4669,
           complexId: 4368,
-          trades: [
+          content: [
             {
               tradeId: 9901,
               dealDate: '2026-05-01',
@@ -1498,7 +1533,16 @@ describe('App map-first shell 화면', () => {
               floor: 12,
             },
           ],
+          page: 0,
+          size: 20,
+          totalElements: 1,
+          totalPages: 1,
         }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse([
+          { month: '2026-05', avgAmount: 154000, count: 1, minAmount: 154000, maxAmount: 154000 },
+        ]),
       )
       .mockResolvedValueOnce(
         jsonResponse([
@@ -1541,7 +1585,7 @@ describe('App map-first shell 화면', () => {
       '같은 필지 1개',
     );
     expect(rootElement.textContent).toContain('주소 정보 없음');
-    expect(rootElement.textContent).toContain('154,000만원');
+    expect(rootElement.textContent).toContain('15억 4,000만원');
     expect(rootElement.textContent).not.toContain('상세 정보를 불러오지 못했습니다');
 
     unmount(root);
@@ -1575,9 +1619,14 @@ describe('App map-first shell 화면', () => {
         jsonResponse({
           parcelId: 1001,
           complexId: 501,
-          trades: [],
+          content: [],
+          page: 0,
+          size: 20,
+          totalElements: 0,
+          totalPages: 0,
         }),
       )
+      .mockResolvedValueOnce(jsonResponse([]))
       .mockResolvedValueOnce(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 

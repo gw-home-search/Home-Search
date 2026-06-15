@@ -73,10 +73,43 @@ class PropertyReadUseCaseTest {
 		assertThat(useCase.getComplexTradeList(501L).complexId()).isEqualTo(501L);
 		assertThat(useCase.getParcelDetail(1001L, 501L).complexId()).isEqualTo(501L);
 		assertThat(useCase.getTradeList(1001L, 501L).complexId()).isEqualTo(501L);
+		assertThat(useCase.getTradeTrend(1001L, 501L))
+			.singleElement()
+			.extracting(TradeTrendPoint::month)
+			.isEqualTo("2024-11");
+		assertThat(useCase.getComplexTradeTrend(501L)).hasSize(1);
 		assertThat(repository.regionComplexLimit).isEqualTo(100);
 		assertThat(repository.regionComplexOffset).isEqualTo(2);
 		assertThat(repository.detailComplexId).isEqualTo(501L);
 		assertThat(repository.tradeComplexId).isEqualTo(501L);
+		assertThat(repository.tradePage).isEqualTo(0);
+		assertThat(repository.tradeSize).isEqualTo(25);
+		assertThat(repository.trendComplexId).isEqualTo(501L);
+	}
+
+	@Test
+	@DisplayName("read use case는 trade page/size를 검증하고 size 상한을 적용한다")
+	void validatesAndCapsTradePageRequest() {
+		CapturingRepository repository = new CapturingRepository();
+		PropertyReadUseCase useCase = new PropertyReadUseCase(repository);
+
+		assertThatThrownBy(() -> useCase.getTradeList(1001L, null, -1, 10))
+			.isInstanceOf(InvalidReadRequestException.class)
+			.hasMessageContaining("page must be greater than or equal to 0");
+		assertThatThrownBy(() -> useCase.getTradeList(1001L, null, 0, 0))
+			.isInstanceOf(InvalidReadRequestException.class)
+			.hasMessageContaining("size must be greater than 0");
+		assertThatThrownBy(() -> useCase.getComplexTradeList(501L, -1, 10))
+			.isInstanceOf(InvalidReadRequestException.class)
+			.hasMessageContaining("page must be greater than or equal to 0");
+
+		useCase.getTradeList(1001L, null, 3, 500);
+		assertThat(repository.tradePage).isEqualTo(3);
+		assertThat(repository.tradeSize).isEqualTo(100);
+
+		useCase.getComplexTradeList(501L, 2, 25);
+		assertThat(repository.tradePage).isEqualTo(2);
+		assertThat(repository.tradeSize).isEqualTo(25);
 	}
 
 	@Test
@@ -118,6 +151,12 @@ class PropertyReadUseCaseTest {
 		assertThatThrownBy(() -> useCase.getComplexTradeList(404L))
 			.isInstanceOf(ResourceNotFoundException.class)
 			.hasMessageContaining("complex trade parent not found");
+		assertThatThrownBy(() -> useCase.getTradeTrend(404L, null))
+			.isInstanceOf(ResourceNotFoundException.class)
+			.hasMessageContaining("parcel trade parent not found");
+		assertThatThrownBy(() -> useCase.getComplexTradeTrend(404L))
+			.isInstanceOf(ResourceNotFoundException.class)
+			.hasMessageContaining("complex trade parent not found");
 	}
 
 	@Test
@@ -135,6 +174,8 @@ class PropertyReadUseCaseTest {
 		assertThat(repository.findComplexDetail(501L)).isEmpty();
 		assertThat(repository.findTradeList(1001L)).isEmpty();
 		assertThat(repository.findComplexTradeList(501L)).isEmpty();
+		assertThat(repository.findTradeTrend(1001L, null)).isEmpty();
+		assertThat(repository.findComplexTradeTrend(501L)).isEmpty();
 	}
 
 	private static class CapturingRepository implements PropertyReadRepository {
@@ -146,6 +187,9 @@ class PropertyReadUseCaseTest {
 		private int regionComplexOffset;
 		private Long detailComplexId;
 		private Long tradeComplexId;
+		private int tradePage;
+		private int tradeSize;
+		private Long trendComplexId;
 
 		@Override
 		public List<SearchComplexResult> searchComplexes(String query) {
@@ -223,16 +267,33 @@ class PropertyReadUseCaseTest {
 		}
 
 		@Override
-		public Optional<TradeListResult> findTradeList(Long parcelId, Long complexId) {
+		public Optional<TradeListResult> findTradeList(Long parcelId, Long complexId, int page, int size) {
 			this.tradeComplexId = complexId;
+			this.tradePage = page;
+			this.tradeSize = size;
 			return Optional.of(new TradeListResult(1001L, complexId, List.of()));
 		}
 
 		@Override
-		public Optional<TradeListResult> findComplexTradeList(Long complexId) {
+		public Optional<TradeListResult> findComplexTradeList(Long complexId, int page, int size) {
+			this.tradePage = page;
+			this.tradeSize = size;
 			return Long.valueOf(404L).equals(complexId)
 				? Optional.empty()
 				: Optional.of(new TradeListResult(1001L, complexId, List.of()));
+		}
+
+		@Override
+		public Optional<List<TradeTrendPoint>> findTradeTrend(Long parcelId, Long complexId) {
+			this.trendComplexId = complexId;
+			return Optional.of(List.of(new TradeTrendPoint("2024-11", 89500L, 3, 80000L, 92000L)));
+		}
+
+		@Override
+		public Optional<List<TradeTrendPoint>> findComplexTradeTrend(Long complexId) {
+			return Long.valueOf(404L).equals(complexId)
+				? Optional.empty()
+				: Optional.of(List.of(new TradeTrendPoint("2024-11", 89500L, 3, 80000L, 92000L)));
 		}
 
 		private ComplexSummaryResult summary() {

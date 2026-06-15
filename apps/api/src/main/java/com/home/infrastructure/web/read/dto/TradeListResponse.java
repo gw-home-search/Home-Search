@@ -1,14 +1,10 @@
 package com.home.infrastructure.web.read.dto;
 
-import java.util.List;
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 
 public record TradeListResponse(
 	Long parcelId,
 	Long complexId,
-	List<TradeResponse> trades
+	@JsonUnwrapped PageResponse<TradeResponse> page
 ) {
-
-	public TradeListResponse(Long parcelId, List<TradeResponse> trades) {
-		this(parcelId, null, trades);
-	}
 }

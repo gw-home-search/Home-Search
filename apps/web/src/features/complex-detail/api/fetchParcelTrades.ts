@@ -14,12 +14,25 @@ export type ParcelTrades = {
   parcelId: number;
   complexId: number | null;
   trades: TradeItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
+
+export type TradePageOptions = {
+  page?: number;
+  size?: number;
 };
 
 type ParcelTradesResponse = {
   parcelId?: number | string;
   complexId?: number | string | null;
-  trades?: unknown;
+  content?: unknown;
+  page?: number | string;
+  size?: number | string;
+  totalElements?: number | string;
+  totalPages?: number | string;
 };
 
 type TradeItemResponse = {
@@ -37,10 +50,12 @@ const COMPLEX_PATH = '/api/v1/complex';
 export async function fetchParcelTrades(
   parcelId: number,
   complexId?: number | null,
+  options: TradePageOptions = {},
 ): Promise<ParcelTrades> {
-  const response = await fetch(resolveApiUrl(scopedPath(`${TRADE_PATH}/${parcelId}`, complexId)), {
-    method: 'GET',
-  });
+  const response = await fetch(
+    resolveApiUrl(`${TRADE_PATH}/${parcelId}${tradeQuery(complexId, options)}`),
+    { method: 'GET' },
+  );
 
   if (!response.ok) {
     const detail = await readProblemDetail(response);
@@ -57,10 +72,14 @@ export async function fetchParcelTrades(
   return normalizeParcelTrades(payload);
 }
 
-export async function fetchComplexTrades(complexId: number): Promise<ParcelTrades> {
-  const response = await fetch(resolveApiUrl(`${COMPLEX_PATH}/${complexId}/trades`), {
-    method: 'GET',
-  });
+export async function fetchComplexTrades(
+  complexId: number,
+  options: TradePageOptions = {},
+): Promise<ParcelTrades> {
+  const response = await fetch(
+    resolveApiUrl(`${COMPLEX_PATH}/${complexId}/trades${tradeQuery(null, options)}`),
+    { method: 'GET' },
+  );
 
   if (!response.ok) {
     const detail = await readProblemDetail(response);
@@ -78,25 +97,40 @@ export async function fetchComplexTrades(complexId: number): Promise<ParcelTrade
 }
 
 function normalizeParcelTrades(payload: ParcelTradesResponse): ParcelTrades {
-  if (!Array.isArray(payload.trades)) {
-    throw new Error('Invalid public API parcel trade response: trades must be an array');
+  if (!Array.isArray(payload.content)) {
+    throw new Error('Invalid public API parcel trade response: content must be an array');
   }
 
   return {
     parcelId: toRequiredNumber(payload.parcelId, 'parcelId'),
     complexId: toNullableNumber(payload.complexId, 'complexId'),
-    trades: payload.trades.map((trade) => {
+    trades: payload.content.map((trade) => {
       if (!isTradeItemResponse(trade)) {
         throw new Error('Invalid public API parcel trade response: trade item must be an object');
       }
 
       return normalizeTradeItem(trade);
     }),
+    page: toRequiredNumber(payload.page, 'page'),
+    size: toRequiredNumber(payload.size, 'size'),
+    totalElements: toRequiredNumber(payload.totalElements, 'totalElements'),
+    totalPages: toRequiredNumber(payload.totalPages, 'totalPages'),
   };
 }
 
-function scopedPath(path: string, complexId?: number | null): string {
-  return complexId == null ? path : `${path}?complexId=${encodeURIComponent(complexId)}`;
+function tradeQuery(complexId: number | null | undefined, options: TradePageOptions): string {
+  const params = new URLSearchParams();
+  if (complexId != null) {
+    params.set('complexId', String(complexId));
+  }
+  if (options.page != null) {
+    params.set('page', String(options.page));
+  }
+  if (options.size != null) {
+    params.set('size', String(options.size));
+  }
+  const query = params.toString();
+  return query.length > 0 ? `?${query}` : '';
 }
 
 function normalizeTradeItem(trade: TradeItemResponse): TradeItem {

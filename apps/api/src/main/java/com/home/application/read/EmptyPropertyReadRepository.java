@@ -46,12 +46,22 @@ public class EmptyPropertyReadRepository implements PropertyReadRepository {
 	}
 
 	@Override
-	public Optional<TradeListResult> findTradeList(Long parcelId, Long complexId) {
+	public Optional<TradeListResult> findTradeList(Long parcelId, Long complexId, int page, int size) {
 		return Optional.empty();
 	}
 
 	@Override
-	public Optional<TradeListResult> findComplexTradeList(Long complexId) {
+	public Optional<TradeListResult> findComplexTradeList(Long complexId, int page, int size) {
+		return Optional.empty();
+	}
+
+	@Override
+	public Optional<List<TradeTrendPoint>> findTradeTrend(Long parcelId, Long complexId) {
+		return Optional.empty();
+	}
+
+	@Override
+	public Optional<List<TradeTrendPoint>> findComplexTradeTrend(Long complexId) {
 		return Optional.empty();
 	}
 }

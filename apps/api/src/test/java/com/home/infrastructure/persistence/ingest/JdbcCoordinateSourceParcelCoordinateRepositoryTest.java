@@ -8,11 +8,26 @@ import java.math.BigDecimal;
 
 import com.home.infrastructure.persistence.ingest.coordinate.JdbcCoordinateSourceParcelCoordinateRepository;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.testcontainers.containers.PostgreSQLContainer;
 
-class JdbcCoordinateSourceParcelCoordinateRepositoryTest extends JdbcPostgresTestSupport {
+class JdbcCoordinateSourceParcelCoordinateRepositoryTest extends JdbcPostgresContainerSupport {
+
+	private static final PostgreSQLContainer<?> POSTGRES = newPostgisContainer();
+
+	static {
+		POSTGRES.start();
+	}
+
+	@BeforeEach
+	void resetCoordinateSourceDatabase() {
+		initializeJdbc(POSTGRES);
+		flyway(null, "classpath:db/migration/coordinate-source").clean();
+		flyway(null, "classpath:db/migration/coordinate-source").migrate();
+	}
 
 	@Test
 	@DisplayName("Coordinate Source DB에서 PNU coordinate와 geometry를 read-only lookup 한다")

@@ -35,10 +35,18 @@ public abstract class JdbcPostgresContainerSupport {
 	}
 
 	protected Flyway flyway(MigrationVersion target) {
+		return flyway(target, "classpath:db/migration/api");
+	}
+
+	protected Flyway flyway(MigrationVersion target, String location) {
+		return flyway(target, location, "public", "reference");
+	}
+
+	protected Flyway flyway(MigrationVersion target, String location, String... schemas) {
 		FluentConfiguration configuration = Flyway.configure()
 			.dataSource(dataSource)
-			.locations("classpath:db/migration/api")
-			.schemas("public", "reference")
+			.locations(location)
+			.schemas(schemas)
 			.defaultSchema("public")
 			.cleanDisabled(false);
 		if (target != null) {

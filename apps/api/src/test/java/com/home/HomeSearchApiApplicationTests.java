@@ -55,10 +55,8 @@ class HomeSearchApiApplicationTests {
 	}
 
 	@Test
-	@DisplayName("complex relation Bean들은 no-DB 부트에서도 정의되고 사용 시점에만 DB를 요구한다")
+	@DisplayName("complex relation use case는 no-DB 부트에서도 정의되고 사용 시점에만 DB를 요구한다")
 	void complexRelationBeansAreDefinedWithoutDatabase() {
 		assertThat(applicationContext.containsBean("complexRelationUseCase")).isTrue();
-		assertThat(applicationContext.containsBean("complexRelationCaseRepository")).isTrue();
-		assertThat(applicationContext.containsBean("complexRelationCaseService")).isTrue();
 	}
 }

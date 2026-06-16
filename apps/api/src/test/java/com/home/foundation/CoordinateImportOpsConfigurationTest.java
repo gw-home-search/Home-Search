@@ -15,7 +15,7 @@ class CoordinateImportOpsConfigurationTest {
 	private static final Path COORDINATE_IMPORT_SCRIPT = Path.of("ops/import-vworld-coordinate-snapshot.sh");
 	private static final Path COORDINATE_SMOKE_SCRIPT = Path.of("ops/verify-coordinate-snapshot-smoke.sh");
 	private static final Path COORDINATE_RESUMABLE_MIGRATION =
-			Path.of("src/main/resources/db/migration/api/V3__create_coordinate_snapshot_resumable_import_schema.sql");
+			Path.of("src/main/resources/db/migration/api/V1__create_clean_core_schema.sql");
 	private static final Path WORKLOG = Path.of("../../.codex/harness/worklog.toml");
 
 	@Test
@@ -141,14 +141,16 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("CREATE TABLE reference.parcel_coordinate_snapshot_publish");
 		assertThat(content).contains("CREATE TABLE reference.coordinate_snapshot_publish_checkpoint");
 		assertThat(content).contains("CREATE TABLE reference.coordinate_snapshot_publish_chunk_checkpoint");
-		assertThat(content).contains("status IN ('STARTED', 'PASSED', 'FAILED')");
-		assertThat(content).contains("source_manifest TEXT NOT NULL");
-		assertThat(content).contains("chunk_code VARCHAR(8) NOT NULL");
+		assertThat(content).contains("'STARTED'::character varying");
+		assertThat(content).contains("'PASSED'::character varying");
+		assertThat(content).contains("'FAILED'::character varying");
+		assertThat(content).contains("source_manifest text NOT NULL");
+		assertThat(content).contains("chunk_code character varying(8) NOT NULL");
 		assertThat(content).contains("PRIMARY KEY (run_id, region_code)");
 		assertThat(content).contains("PRIMARY KEY (run_id, region_code, chunk_code)");
 		assertThat(content).contains("PRIMARY KEY (run_id, pnu)");
-		assertThat(content).contains("USING GIST (geom)");
-		assertThat(content).contains("USING GIST (point)");
+		assertThat(content).contains("USING gist (geom)");
+		assertThat(content).contains("USING gist (point)");
 	}
 
 	@Test

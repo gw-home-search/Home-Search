@@ -16,7 +16,7 @@ import java.sql.Types;
 import org.flywaydb.core.api.migration.BaseJavaMigration;
 import org.flywaydb.core.api.migration.Context;
 
-public class V29__BackfillNationwideRegionAndComplexMetadata extends BaseJavaMigration {
+public class V2__SeedCleanCoreReferenceData extends BaseJavaMigration {
 
 	private static final String REGION_SEED_RESOURCE =
 		"db/migration/api/data/nationwide_region_seed_legacy.csv";
@@ -31,6 +31,7 @@ public class V29__BackfillNationwideRegionAndComplexMetadata extends BaseJavaMig
 		loadRegionSeed(connection);
 		loadComplexMetadataCandidates(connection);
 		backfillRegions(connection);
+		seedMissingRtmsRegions(connection);
 		backfillParcels(connection);
 		backfillComplexMetadata(connection);
 	}
@@ -165,6 +166,28 @@ public class V29__BackfillNationwideRegionAndComplexMetadata extends BaseJavaMig
 			WHERE child.code = seed.code
 			  AND seed.parent_code IS NULL
 			  AND child.parent_id IS NOT NULL
+			""");
+	}
+
+	private void seedMissingRtmsRegions(Connection connection) throws SQLException {
+		execute(connection, """
+			WITH missing_region_seed (code, parent_code, name) AS (
+			    VALUES
+			        ('11305108', '11305', '도봉동'),
+			        ('41461262', '41461', '양지읍'),
+			        ('43770256', '43770', '대소읍')
+			)
+			INSERT INTO region (parent_id, code, name, region_type, center_lat, center_lng)
+			SELECT
+			    parent.id,
+			    seed.code,
+			    seed.name,
+			    'eup-myeon-dong',
+			    NULL,
+			    NULL
+			FROM missing_region_seed seed
+			JOIN region parent ON parent.code = seed.parent_code
+			ON CONFLICT (code) DO NOTHING
 			""");
 	}
 

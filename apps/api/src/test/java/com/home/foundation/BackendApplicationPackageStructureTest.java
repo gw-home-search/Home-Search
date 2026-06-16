@@ -22,16 +22,13 @@ class BackendApplicationPackageStructureTest {
 		Path.of("src/main/java/com/home/infrastructure/external/rtms/RtmsExternalApiConfiguration.java");
 	private static final Path RTMS_BATCH_ORCHESTRATION_CONFIGURATION =
 		Path.of("src/main/java/com/home/infrastructure/scheduling/rtms/RtmsBatchOrchestrationConfiguration.java");
-	private static final Path NAVER_NEWS_DAILY_PIPELINE_RUNNER =
-		Path.of("src/main/java/com/home/infrastructure/scheduling/news/NaverNewsDailyPipelineRunner.java");
 	private static final Path DATA_STORAGE_DOC = Path.of("../../docs/DATA_STORAGE.md");
 	private static final List<Path> SCHEDULERS = List.of(
 		Path.of("src/main/java/com/home/infrastructure/external/complex/ComplexMetadataEnrichmentScheduler.java"),
-		Path.of("src/main/java/com/home/infrastructure/scheduling/news/NaverNewsDailyPipelineScheduler.java"),
 		Path.of("src/main/java/com/home/infrastructure/scheduling/rtms/RtmsDailyRefreshScheduler.java"),
 		Path.of("src/main/java/com/home/infrastructure/scheduling/coordinate/ComplexCoordinateReadinessScheduler.java")
 	);
-	private static final Set<String> SPLIT_REQUIRED_FEATURES = Set.of("coordinate", "ingest", "news");
+	private static final Set<String> SPLIT_REQUIRED_FEATURES = Set.of("coordinate", "ingest");
 	private static final Set<String> FORBIDDEN_ROLE_PACKAGES = Set.of("common", "dto", "model", "service", "util");
 	private static final int MAX_ROOT_CLASSES_FOR_SPLIT_FEATURE = 3;
 
@@ -90,11 +87,11 @@ class BackendApplicationPackageStructureTest {
 			"src/main/java/com/home/infrastructure/external/naver/NaverNewsDailyPipelineRunner.java"
 		)).doesNotExist();
 		assertThat(Path.of(
-			"src/main/java/com/home/infrastructure/persistence/coordinate/ComplexCoordinateReadinessScheduler.java"
+			"src/main/java/com/home/infrastructure/scheduling/news/NaverNewsDailyPipelineRunner.java"
 		)).doesNotExist();
 		assertThat(Path.of(
-			"src/main/java/com/home/infrastructure/scheduling/news/NaverNewsDailyPipelineRunner.java"
-		)).exists();
+			"src/main/java/com/home/infrastructure/persistence/coordinate/ComplexCoordinateReadinessScheduler.java"
+		)).doesNotExist();
 		assertThat(Path.of(
 			"src/main/java/com/home/infrastructure/scheduling/coordinate/ComplexCoordinateReadinessScheduler.java"
 		)).exists();
@@ -117,7 +114,7 @@ class BackendApplicationPackageStructureTest {
 		assertThat(RTMS_MONTHLY_REFRESH_RUNNER).exists();
 		assertThat(Path.of(
 			"src/main/java/com/home/infrastructure/scheduling/rtms/RtmsNationwideBackfillRunner.java"
-		)).exists();
+		)).doesNotExist();
 		assertThat(Path.of(
 			"src/main/java/com/home/infrastructure/scheduling/rtms/RtmsDailyRefreshScheduler.java"
 		)).exists();
@@ -167,10 +164,7 @@ class BackendApplicationPackageStructureTest {
 		assertThat(orders)
 			.contains("RAW_INGEST_RECONCILIATION = RTMS_ONE_SHOT_INGEST + INGEST_PHASE_STEP")
 			.contains("COORDINATE_READINESS = RAW_INGEST_RECONCILIATION + INGEST_PHASE_STEP")
-			.contains("NEWS_RELEVANCE_GATE = NEWS_ONE_SHOT_INGEST + NEWS_COLLECTION_STEP")
-			.contains("NEWS_SIGNAL_FEATURE_EXTRACTION = NEWS_RELEVANCE_GATE + NEWS_PROCESSING_STEP")
-			.contains("NEWS_OBSERVATION_CLEANUP = NEWS_SIGNAL_FEATURE_EXTRACTION + NEWS_PROCESSING_STEP")
-			.contains("NEWS_OBSIDIAN_EXPORT = NEWS_OBSERVATION_CLEANUP + NEWS_PROCESSING_STEP");
+			.doesNotContain("NEWS_");
 	}
 
 	@Test
@@ -200,41 +194,32 @@ class BackendApplicationPackageStructureTest {
 			.contains("RtmsMonthlyRefreshRunSummary.of(")
 			.doesNotContain("switch (status)");
 		assertThat(configuration)
-			.contains("RtmsBackfillChunkExecutionResult.from(")
+			.doesNotContain("RtmsBackfill")
 			.doesNotContain("summaryToBackfillResult");
 	}
 
 	@Test
-	@DisplayName("persisted matching path와 backfill source 값은 domain value로 정의한다")
-	void persistedMatchingAndBackfillEvidenceUsesDomainValues() throws IOException {
+	@DisplayName("persisted matching path 값은 domain value로 정의한다")
+	void persistedMatchingPathUsesDomainValues() throws IOException {
 		assertThat(Path.of(
 			"src/main/java/com/home/domain/ingest/matching/TradeMatchPath.java"
 		)).exists();
 		assertThat(Path.of(
 			"src/main/java/com/home/domain/ingest/backfill/RtmsBackfillLawdCodeSource.java"
-		)).exists();
+		)).doesNotExist();
 
 		String matchPolicy = Files.readString(Path.of(
 			"src/main/java/com/home/application/ingest/matching/ComplexMatchCandidatePolicy.java"
 		));
-		String backfillRunner = Files.readString(Path.of(
-			"src/main/java/com/home/infrastructure/scheduling/rtms/RtmsNationwideBackfillRunner.java"
-		));
 		assertThat(matchPolicy)
 			.doesNotContain("\"PNU_NAME\"", "\"PNU_ALIAS_NAME\"", "\"APTSEQ\"", "\"PNU_UNIQUE\"");
-		assertThat(backfillRunner)
-			.doesNotContain("\"RTMS\"", "\"region.si-gun-gu\"");
 	}
 
 	@Test
-	@DisplayName("news completion과 RTMS 설정은 의미 단위 객체로 조립한다")
+	@DisplayName("RTMS 설정은 의미 단위 객체로 조립한다")
 	void largePositionalAssemblyUsesSemanticGroups() throws IOException {
-		String newsRunner = Files.readString(NAVER_NEWS_DAILY_PIPELINE_RUNNER);
 		String rtmsConfiguration = Files.readString(RTMS_BATCH_ORCHESTRATION_CONFIGURATION);
 
-		assertThat(newsRunner)
-			.contains("NewsCollectionRunCompletion.from(")
-			.doesNotContain("new NewsCollectionRunCompletion(");
 		assertThat(rtmsConfiguration)
 			.contains("RtmsOneShotIngestConfigurationProperties")
 			.doesNotContain("@Value(\"${home.ingest.rtms.enabled:");

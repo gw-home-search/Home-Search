@@ -13,11 +13,11 @@ class JdbcTradePartitionMaintenanceRepositoryTest extends JdbcPostgresTestSuppor
 	@DisplayName("trade partition maintenance는 미래 연도 partition을 만들고 해당 연도 거래를 default가 아닌 연도 partition에 라우팅한다")
 	void createsFutureYearPartitionAndRoutesTradeIntoIt() {
 		JdbcTradePartitionMaintenanceRepository repository = new JdbcTradePartitionMaintenanceRepository(jdbcClient);
-		assertThat(partitionExists("trade_2031")).isFalse();
+		assertThat(partitionExists("trade_2032")).isFalse();
 
-		repository.ensureYearlyPartitions(2031, 2031);
+		repository.ensureYearlyPartitions(2032, 2032);
 
-		assertThat(partitionExists("trade_2031")).isTrue();
+		assertThat(partitionExists("trade_2032")).isTrue();
 		seedComplex();
 		jdbcClient.sql("""
 			INSERT INTO raw_trade_ingest (
@@ -34,12 +34,12 @@ class JdbcTradePartitionMaintenanceRepositoryTest extends JdbcPostgresTestSuppor
 			VALUES (
 			    92031,
 			    'RTMS',
-			    'rtms-20310115',
+			    'rtms-20320115',
 			    '11680',
-			    '203101',
+			    '203201',
 			    1,
 			    '{}',
-			    'hash-20310115',
+			    'hash-20320115',
 			    'NORMALIZED'
 			)
 			""").update();
@@ -59,20 +59,20 @@ class JdbcTradePartitionMaintenanceRepositoryTest extends JdbcPostgresTestSuppor
 			)
 			VALUES (
 			    501,
-			    DATE '2031-01-15',
+			    DATE '2032-01-15',
 			    125000,
 			    12,
 			    84.93,
 			    '101',
 			    'RTMS',
-			    'rtms-20310115',
+			    'rtms-20320115',
 			    'COMPLEX-PK-501',
 			    'APT-501',
 			    92031
 			)
 			""").update();
 
-		assertThat(rowPartition("rtms-20310115")).isEqualTo("trade_2031");
+		assertThat(rowPartition("rtms-20320115")).isEqualTo("trade_2032");
 	}
 
 	private boolean partitionExists(String partitionName) {

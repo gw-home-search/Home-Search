@@ -30,13 +30,8 @@ run_self_test() {
   RUN_DIR="${temp_dir}"
   cat > "${RUN_DIR}/result.snapshot" <<'EOF'
 RTMS_RUN|10|2026-06-14 00:00:00+00|3|COMPLETED
-NEWS_RUN|2|2026-06-14 00:00:00+00|1|COMPLETED
-NEWS_OBSERVATION|4|2026-06-14 00:00:00+00|2|OBSERVED
-NEWS_KEYWORD|8|2026-06-14 00:00:00+00|0|REGION,TOPIC
 EOF
   [[ "$(value_for RTMS_RUN 4)" == "3" ]]
-  [[ "$(value_for NEWS_RUN 4)" == "1" ]]
-  [[ "$(value_for NEWS_OBSERVATION 4)" == "2" ]]
   echo "self-test passed: daily batch live smoke checker"
 }
 
@@ -82,15 +77,9 @@ fi
 
 [[ -f "${RUN_DIR}/result.snapshot" ]] || snapshot "${RUN_DIR}"
 rtms_since="$(value_for RTMS_RUN 4)"
-news_run_since="$(value_for NEWS_RUN 4)"
-news_observation_since="$(value_for NEWS_OBSERVATION 4)"
-keyword_enabled="$(value_for NEWS_KEYWORD 2)"
 status="Pass"
 gaps=()
 [[ "${rtms_since:-0}" -gt 0 ]] || { status="Fail"; gaps+=("RTMS run 증가 없음"); }
-[[ "${news_run_since:-0}" -gt 0 ]] || { status="Fail"; gaps+=("News run 증가 없음"); }
-[[ "${news_observation_since:-0}" -gt 0 ]] || { [[ "${status}" == "Fail" ]] || status="Partial"; gaps+=("News article observation 증가 없음"); }
-[[ "${keyword_enabled:-0}" -ge 8 ]] || { status="Fail"; gaps+=("활성 News keyword 8개 미만"); }
 if grep -Eq "Hermes Slack notification failed|notification_status=FAILED" "${RUN_DIR}/application.log" 2>/dev/null; then
   status="Fail"
   gaps+=("Hermes notification 실패 로그 발견")
@@ -98,7 +87,7 @@ fi
 
 echo "상태: ${status}"
 echo "run_dir: ${RUN_DIR}"
-echo "검증 근거 확인: rtmsRuns=${rtms_since:-0}, newsRuns=${news_run_since:-0}, newsObservations=${news_observation_since:-0}, enabledKeywords=${keyword_enabled:-0}"
+echo "검증 근거 확인: rtmsRuns=${rtms_since:-0}"
 if [[ "${#gaps[@]}" -gt 0 ]]; then
   printf '검증 공백: %s\n' "$(IFS=', '; echo "${gaps[*]}")"
 else

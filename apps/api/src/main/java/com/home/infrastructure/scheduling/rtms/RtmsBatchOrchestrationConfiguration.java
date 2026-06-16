@@ -1,7 +1,5 @@
 package com.home.infrastructure.scheduling.rtms;
 
-import com.home.application.ingest.backfill.RtmsBackfillChunkRepository;
-import com.home.application.ingest.backfill.RtmsBackfillJobRepository;
 import com.home.application.ingest.trade.OpenApiTradeIngestService;
 import com.home.application.ingest.run.RtmsIngestRunRepository;
 import com.home.infrastructure.external.rtms.RtmsApartmentTradeClient;
@@ -61,34 +59,6 @@ class RtmsBatchOrchestrationConfiguration {
 	}
 
 	@Bean
-	RtmsNationwideBackfillRunner rtmsNationwideBackfillRunner(
-		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
-		ObjectProvider<RtmsBackfillJobRepository> backfillJobRepositoryProvider,
-		ObjectProvider<RtmsBackfillChunkRepository> backfillChunkRepositoryProvider,
-		RtmsOneShotIngestProperties properties
-	) {
-		return new RtmsNationwideBackfillRunner(
-			RtmsBackfillRepositories.lazy(
-				() -> backfillJobRepositoryProvider.getIfAvailable(() -> {
-					throw new IllegalStateException(
-						"RtmsBackfillJobRepository is required for RTMS nationwide backfill"
-					);
-				}),
-				() -> backfillChunkRepositoryProvider.getIfAvailable(() -> {
-					throw new IllegalStateException(
-						"RtmsBackfillChunkRepository is required for RTMS nationwide backfill"
-					);
-				})
-			),
-			request -> RtmsBackfillChunkExecutionResult.from(
-				monthlyRefreshRunner.refresh(request.lawdCd(), request.dealYmd())
-			),
-			java.time.Clock.systemUTC(),
-			properties.nationwideBackfillOptions()
-		);
-	}
-
-	@Bean
 	RtmsCoordinateSourcePreflight rtmsCoordinateSourcePreflight(
 		RtmsOneShotIngestProperties properties,
 		RtmsCoordinateSourceAvailabilityProbe availabilityProbe
@@ -103,7 +73,6 @@ class RtmsBatchOrchestrationConfiguration {
 	ApplicationRunner rtmsOneShotIngestApplicationRunner(
 		RtmsOneShotTradeIngestRunner runner,
 		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
-		ObjectProvider<RtmsNationwideBackfillRunner> nationwideBackfillRunnerProvider,
 		RtmsOneShotIngestProperties properties,
 		RtmsApartmentTradeProperties tradeProperties,
 		RtmsCoordinateSourcePreflight coordinateSourcePreflight
@@ -111,7 +80,6 @@ class RtmsBatchOrchestrationConfiguration {
 		return new RtmsOneShotIngestApplicationRunner(
 			runner,
 			monthlyRefreshRunner,
-			nationwideBackfillRunnerProvider.getIfAvailable(),
 			properties,
 			tradeProperties,
 			coordinateSourcePreflight

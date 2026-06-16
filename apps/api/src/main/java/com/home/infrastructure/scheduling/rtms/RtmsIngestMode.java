@@ -3,8 +3,7 @@ package com.home.infrastructure.scheduling.rtms;
 enum RtmsIngestMode {
 
 	ONE_SHOT,
-	MONTHLY_REFRESH,
-	NATIONWIDE_BACKFILL;
+	MONTHLY_REFRESH;
 
 	static RtmsIngestMode from(String value) {
 		if (value == null || value.isBlank()) {
@@ -16,7 +15,7 @@ enum RtmsIngestMode {
 		}
 		catch (IllegalArgumentException exception) {
 			throw new IllegalArgumentException(
-				"home.ingest.rtms.mode must be one-shot, monthly-refresh, or nationwide-backfill",
+				"home.ingest.rtms.mode must be one-shot or monthly-refresh",
 				exception
 			);
 		}

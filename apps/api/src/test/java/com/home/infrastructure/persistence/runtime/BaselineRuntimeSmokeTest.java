@@ -112,6 +112,21 @@ class BaselineRuntimeSmokeTest {
 		assertThat(missingRegionSeedCount()).isEqualTo(3L);
 	}
 
+	@Test
+	@DisplayName("clean Flyway baseline은 later-scope와 완료된 일회성 작업 테이블을 만들지 않는다")
+	void cleanFlywayBaselineDoesNotCreateLaterScopeOrCompletedOneShotTables() {
+		assertThat(existingRelationNames(
+			"public.news_article_observation",
+			"public.news_signal_feature",
+			"public.news_collection_run",
+			"public.rtms_backfill_job",
+			"public.rtms_backfill_chunk",
+			"public.rtms_backfill_chunk_run",
+			"public.complex_relation_case",
+			"public.complex_relation_case_complex"
+		)).isEmpty();
+	}
+
 	private Long missingRegionSeedCount() {
 		return jdbcClient.sql("""
 			SELECT count(*) FROM region
@@ -144,5 +159,17 @@ class BaselineRuntimeSmokeTest {
 		return jdbcClient.sql("SELECT count(*) FROM region WHERE parent_id IS NULL")
 			.query(Long.class)
 			.single();
+	}
+
+	private java.util.List<String> existingRelationNames(String... relationNames) {
+		return jdbcClient.sql("""
+			SELECT relation_name
+			FROM unnest(:relationNames::text[]) AS relation_name
+			WHERE to_regclass(relation_name) IS NOT NULL
+			ORDER BY relation_name
+			""")
+			.param("relationNames", relationNames)
+			.query(String.class)
+			.list();
 	}
 }

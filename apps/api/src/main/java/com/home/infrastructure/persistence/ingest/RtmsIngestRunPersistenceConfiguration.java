@@ -1,11 +1,7 @@
 package com.home.infrastructure.persistence.ingest;
 
-import com.home.application.ingest.backfill.RtmsBackfillChunkRepository;
-import com.home.application.ingest.backfill.RtmsBackfillJobRepository;
 import com.home.application.ingest.run.RtmsIngestRunReportRepository;
 import com.home.application.ingest.run.RtmsIngestRunRepository;
-import com.home.infrastructure.persistence.ingest.backfill.JdbcRtmsBackfillChunkRepository;
-import com.home.infrastructure.persistence.ingest.backfill.JdbcRtmsBackfillJobRepository;
 import com.home.infrastructure.persistence.ingest.run.JdbcRtmsIngestRunReportRepository;
 import com.home.infrastructure.persistence.ingest.run.JdbcRtmsIngestRunRepository;
 
@@ -29,24 +25,6 @@ class RtmsIngestRunPersistenceConfiguration {
 	RtmsIngestRunReportRepository rtmsIngestRunReportRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
 		return new JdbcRtmsIngestRunReportRepository(
 			IngestPersistenceJdbcSupport.requiredJdbcClient(jdbcClientProvider)
-		);
-	}
-
-	@Bean
-	@Lazy
-	RtmsBackfillJobRepository rtmsBackfillJobRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
-		return new JdbcRtmsBackfillJobRepository(
-			IngestPersistenceJdbcSupport.requiredJdbcClient(jdbcClientProvider),
-			java.time.Clock.systemUTC()
-		);
-	}
-
-	@Bean
-	@Lazy
-	RtmsBackfillChunkRepository rtmsBackfillChunkRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
-		return new JdbcRtmsBackfillChunkRepository(
-			IngestPersistenceJdbcSupport.requiredJdbcClient(jdbcClientProvider),
-			java.time.Clock.systemUTC()
 		);
 	}
 }

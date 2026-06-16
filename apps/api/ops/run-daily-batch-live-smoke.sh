@@ -45,7 +45,7 @@ validate_private_env() {
     source "${PRIVATE_ENV_FILE}"
     set +a
     local required name
-    required=(APT_SERVICE_KEY NAVER_NEWS_CLIENT_ID NAVER_NEWS_CLIENT_TOKEN HERMES_SLACK_URL HERMES_AUTH_TOKEN HERMES_SLACK_CHANNEL)
+    required=(APT_SERVICE_KEY HERMES_SLACK_URL HERMES_AUTH_TOKEN HERMES_SLACK_CHANNEL)
     for name in "${required[@]}"; do
       if [[ -z "${!name:-}" ]]; then
         echo "ERROR: private env is missing required value: ${name}" >&2
@@ -58,11 +58,8 @@ validate_private_env() {
 run_self_test() {
   require_positive_integer "HOME_BATCH_LIVE_SMOKE_DURATION_SECONDS" "${DURATION_SECONDS}"
   require_positive_integer "HOME_BATCH_LIVE_SMOKE_SERVER_PORT" "${SERVER_PORT}"
-  [[ -f "${OPS_DIR}/seed-news-keywords.sql" ]]
   [[ -f "${OPS_DIR}/batch-live-smoke-queries.sql" ]]
-  grep -q "ON CONFLICT (keyword_type, query_text, source_table, source_id)" "${OPS_DIR}/seed-news-keywords.sql"
   grep -q "HOME_INGEST_RTMS_DAILY_ENABLED=true" "$0"
-  grep -q "HOME_NEWS_PIPELINE_DAILY_ENABLED=true" "$0"
   echo "self-test passed: daily batch live smoke runner"
 }
 
@@ -97,13 +94,9 @@ STARTED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 RUN_ID="$(date -u +"%Y%m%dT%H%M%SZ")"
 RUN_DIR="${EVIDENCE_ROOT}/${RUN_ID}"
 mkdir -p "${RUN_DIR}"
-mkdir -p "${RUN_DIR}/obsidian"
 printf '%s\n' "${STARTED_AT}" > "${RUN_DIR}/started-at"
 printf '%s\n' "$(( $(date +%s) + DURATION_SECONDS + 30 ))" > "${RUN_DIR}/check-after-epoch"
 
-docker exec -i "${DB_CONTAINER}" psql -X -v ON_ERROR_STOP=1 \
-  -U "${DB_USER}" -d "${DB_NAME}" < "${OPS_DIR}/seed-news-keywords.sql" \
-  > "${RUN_DIR}/seed-news-keywords.log"
 snapshot "${STARTED_AT}" "${RUN_DIR}/baseline.snapshot"
 
 WORKER="${RUN_DIR}/worker.sh"
@@ -113,7 +106,7 @@ set -Eeuo pipefail
 set -a
 source "${PRIVATE_ENV_FILE}"
 set +a
-required=(APT_SERVICE_KEY NAVER_NEWS_CLIENT_ID NAVER_NEWS_CLIENT_TOKEN HERMES_SLACK_URL HERMES_AUTH_TOKEN HERMES_SLACK_CHANNEL)
+required=(APT_SERVICE_KEY HERMES_SLACK_URL HERMES_AUTH_TOKEN HERMES_SLACK_CHANNEL)
 for name in "\${required[@]}"; do
   if [[ -z "\${!name:-}" ]]; then
     echo "missing required private env: \${name}" > "${RUN_DIR}/worker-error"
@@ -135,11 +128,6 @@ HOME_INGEST_RTMS_DAILY_ENABLED=true \
 HOME_INGEST_RTMS_DAILY_LAWD_CDS=11680,11710,11650 \
 HOME_INGEST_RTMS_DAILY_CRON="0 * * * * *" \
 HOME_INGEST_RTMS_DAILY_HERMES_ENABLED=true \
-HOME_NEWS_PIPELINE_DAILY_ENABLED=true \
-HOME_NEWS_PIPELINE_DAILY_CRON="30 * * * * *" \
-HOME_NEWS_PIPELINE_DAILY_MAX_KEYWORDS=8 \
-HOME_NEWS_PIPELINE_DAILY_OBSIDIAN_OUTPUT_ROOT="${RUN_DIR}/obsidian" \
-HOME_NEWS_PIPELINE_DAILY_HERMES_ENABLED=true \
 ./gradlew bootRun --no-daemon > "${RUN_DIR}/application.log" 2>&1 &
 app_pid=\$!
 printf '%s\n' "\${app_pid}" > "${RUN_DIR}/application.pid"

@@ -68,12 +68,3 @@ blocks can be held by feature-local SQL provider classes under the same
 ## Backend Non-Scope
 
 The API app must not make map or trade endpoints depend on ranking, trend, favorite, alarm, mail, recommendation, auth, or heavy analytics state.
-
-## Runner Lifecycle
-
-`RUNNER_LIFECYCLE.md` is the local lifecycle inventory for `*Runner` and
-`*Scheduler` classes. Use it before removing ops code: not scheduled does not
-mean dead, and disabled-by-default does not mean unused. Preserve maintenance
-runners that protect raw-first recovery, duplicate-safe ingest, failed-match
-queryability, partition readiness, or coordinate readiness unless a separate
-evidence-backed cleanup PR explicitly closes them.

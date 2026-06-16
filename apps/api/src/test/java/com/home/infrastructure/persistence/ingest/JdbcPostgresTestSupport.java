@@ -9,6 +9,33 @@ public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSuppo
 
 	private static final PostgreSQLContainer<?> POSTGRES = newPostgisContainer();
 	private static final Object MIGRATION_LOCK = new Object();
+	private static final List<String> RESET_TABLES = List.of(
+		"reference.coordinate_snapshot_publish_checkpoint",
+		"reference.coordinate_snapshot_publish_chunk_checkpoint",
+		"reference.coordinate_snapshot_region_checkpoint",
+		"reference.coordinate_snapshot_stage_chunk_checkpoint",
+		"reference.parcel_coordinate_snapshot_publish",
+		"reference.parcel_coordinate_snapshot_stage",
+		"reference.parcel_coordinate_snapshot",
+		"reference.coordinate_snapshot_run",
+		"public.trade_source_key_registry",
+		"public.trade_match_evidence",
+		"public.trade",
+		"public.complex_display_coordinate",
+		"public.complex_building_link",
+		"public.complex_coordinate_case",
+		"public.complex_metadata_admin_decision",
+		"public.complex_metadata_enrichment_attempt",
+		"public.complex_name_alias",
+		"public.parcel_coordinate_override",
+		"public.complex",
+		"public.parcel",
+		"public.building_footprint_snapshot",
+		"public.odcloud_pnu_prefix_alias",
+		"public.rtms_ingest_run",
+		"public.raw_trade_ingest",
+		"public.region"
+	);
 	private static boolean migrated;
 
 	static {
@@ -37,21 +64,45 @@ public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSuppo
 	}
 
 	private void truncateTables() {
-		List<String> tables = jdbcClient.sql("""
+		transactionTemplate.executeWithoutResult(status -> {
+			for (String table : extraResetTables()) {
+				jdbcClient.sql("DELETE FROM " + table).update();
+			}
+			for (String table : RESET_TABLES) {
+				jdbcClient.sql("DELETE FROM " + table).update();
+			}
+			resetSequences();
+		});
+	}
+
+	private List<String> extraResetTables() {
+		return jdbcClient.sql("""
 			SELECT format('%I.%I', namespace.nspname, relation.relname)
 			FROM pg_class relation
 			JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
 			WHERE namespace.nspname IN ('public', 'reference')
-			  AND relation.relkind IN ('r', 'p')
+			  AND relation.relkind = 'r'
 			  AND relation.relispartition = false
 			  AND relation.relname <> 'flyway_schema_history'
 			ORDER BY namespace.nspname, relation.relname
+			""")
+			.query(String.class)
+			.list()
+			.stream()
+			.filter(table -> !RESET_TABLES.contains(table))
+			.toList();
+	}
+
+	private void resetSequences() {
+		List<String> sequences = jdbcClient.sql("""
+			SELECT format('%I.%I', sequence_schema, sequence_name)
+			FROM information_schema.sequences
+			WHERE sequence_schema IN ('public', 'reference')
+			ORDER BY sequence_schema, sequence_name
 			""").query(String.class).list();
-		if (tables.isEmpty()) {
-			return;
+		for (String sequence : sequences) {
+			jdbcClient.sql("ALTER SEQUENCE " + sequence + " RESTART WITH 1").update();
 		}
-		jdbcClient.sql("TRUNCATE TABLE " + String.join(", ", tables) + " RESTART IDENTITY CASCADE")
-			.update();
 	}
 
 	protected long tradeCount() {

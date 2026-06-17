@@ -32,6 +32,7 @@ Optional:
   HOME_COORDINATE_KEEP_STAGING           Defaults to false.
   HOME_COORDINATE_RESUME_RUN_ID          Explicit coordinate_snapshot_run id to resume.
   HOME_COORDINATE_CHUNK_PREFIX_LENGTH    PNU prefix length for resumable chunks. Defaults to 5.
+  HOME_COORDINATE_SCHEMA_SQL             Coordinate source schema SQL. Defaults to ops/sql/coordinate-source-schema.sql.
 EOF
 }
 
@@ -79,6 +80,7 @@ SYNC_PARCEL="${HOME_COORDINATE_SYNC_PARCEL:-false}"
 KEEP_STAGING="${HOME_COORDINATE_KEEP_STAGING:-false}"
 RESUME_RUN_ID="${HOME_COORDINATE_RESUME_RUN_ID:-}"
 CHUNK_PREFIX_LENGTH="${HOME_COORDINATE_CHUNK_PREFIX_LENGTH:-5}"
+SCHEMA_SQL="${HOME_COORDINATE_SCHEMA_SQL:-ops/sql/coordinate-source-schema.sql}"
 EXPECTED_REGIONS="${HOME_COORDINATE_EXPECTED_REGIONS:-11 26 27 28 29 30 31 36 41 43 44 46 47 48 50 51 52}"
 LOCK_KEY="home_search_coordinate_snapshot_import"
 LOCK_ACQUIRED="false"
@@ -819,8 +821,11 @@ SELECT to_regclass('reference.coordinate_snapshot_run') IS NOT NULL
 SQL
 )"
 if [[ "${schema_ready}" != "t" ]]; then
-  echo "ERROR: coordinate snapshot schema is missing. Run API Flyway migrations first." >&2
-  exit 2
+  if [[ ! -f "${SCHEMA_SQL}" ]]; then
+    echo "ERROR: coordinate snapshot schema is missing and schema SQL was not found: ${SCHEMA_SQL}" >&2
+    exit 2
+  fi
+  "${PSQL[@]}" -f "${SCHEMA_SQL}"
 fi
 
 acquire_lock

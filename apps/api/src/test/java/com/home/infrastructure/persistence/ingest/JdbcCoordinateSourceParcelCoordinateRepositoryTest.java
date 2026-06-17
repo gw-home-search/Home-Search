@@ -5,13 +5,16 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.math.BigDecimal;
+import java.nio.file.Path;
 
 import com.home.infrastructure.persistence.ingest.coordinate.JdbcCoordinateSourceParcelCoordinateRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 class JdbcCoordinateSourceParcelCoordinateRepositoryTest extends JdbcPostgresContainerSupport {
@@ -25,8 +28,10 @@ class JdbcCoordinateSourceParcelCoordinateRepositoryTest extends JdbcPostgresCon
 	@BeforeEach
 	void resetCoordinateSourceDatabase() {
 		initializeJdbc(POSTGRES);
-		flyway(null, "classpath:db/migration/coordinate-source").clean();
-		flyway(null, "classpath:db/migration/coordinate-source").migrate();
+		jdbcClient.sql("DROP SCHEMA IF EXISTS reference CASCADE").update();
+		jdbcClient.sql("DROP EXTENSION IF EXISTS postgis CASCADE").update();
+		new ResourceDatabasePopulator(new FileSystemResource(Path.of("ops/sql/coordinate-source-schema.sql")))
+			.execute(dataSource);
 	}
 
 	@Test

@@ -8,6 +8,7 @@ Usage:
   ./ops/coordinate-source-db-copy-cutover.sh --restore-copy
   ./ops/coordinate-source-db-copy-cutover.sh --copy-live-snapshot
   ./ops/coordinate-source-db-copy-cutover.sh --verify-live-snapshot
+  ./ops/coordinate-source-db-copy-cutover.sh --verify-drop-readiness
   ./ops/coordinate-source-db-copy-cutover.sh --archive-import-worktables
   ./ops/coordinate-source-db-copy-cutover.sh --print-cutover-env
   ./ops/coordinate-source-db-copy-cutover.sh --self-test
@@ -26,7 +27,7 @@ Optional environment:
   HOME_COORDINATE_SOURCE_DB_USER  Defaults to PGUSER.
   HOME_COORDINATE_SOURCE_DB_PASSWORD Defaults to PGPASSWORD.
   HOME_COORDINATE_TARGET_DB_HOST  Defaults to PGHOST.
-  HOME_COORDINATE_TARGET_DB_PORT  Defaults to 15433.
+  HOME_COORDINATE_TARGET_DB_PORT  Defaults to 15435.
   HOME_COORDINATE_TARGET_DB_USER  Defaults to PGUSER.
   HOME_COORDINATE_TARGET_DB_PASSWORD Defaults to PGPASSWORD.
   HOME_COORDINATE_SOURCE_DB_CONTAINER Optional source Postgres container for version-matched streaming.
@@ -34,6 +35,7 @@ Optional environment:
   HOME_COORDINATE_POSTGIS_TOOL_IMAGE  Defaults to postgis/postgis:16-3.4 for archive verification.
   HOME_COORDINATE_SOURCE_DUMP     Defaults to /tmp/<source>.dump.
   HOME_COORDINATE_WORKTABLE_DUMP  Defaults to /tmp/<source>-coordinate-worktables.dump.
+  HOME_COORDINATE_REQUIRE_WORKTABLE_ARCHIVE Defaults to true for drop readiness.
   HOME_COORDINATE_SAMPLE_PNU      Optional 19 digit PNU sample for copy verification.
 
 Safety:
@@ -47,7 +49,7 @@ EOF
 MODE=""
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
-    --dump-source|--restore-copy|--copy-live-snapshot|--verify-live-snapshot|--archive-import-worktables|--print-cutover-env|--self-test)
+    --dump-source|--restore-copy|--copy-live-snapshot|--verify-live-snapshot|--verify-drop-readiness|--archive-import-worktables|--print-cutover-env|--self-test)
       if [[ -n "${MODE}" ]]; then
         echo "ERROR: only one mode can be selected." >&2
         usage >&2
@@ -83,12 +85,13 @@ TARGET_DB="${HOME_COORDINATE_TARGET_DB:-}"
 DUMP_FILE="${HOME_COORDINATE_SOURCE_DUMP:-/tmp/${SOURCE_DB:-coordinate_source}.dump}"
 WORKTABLE_DUMP_FILE="${HOME_COORDINATE_WORKTABLE_DUMP:-/tmp/${SOURCE_DB:-coordinate_source}-coordinate-worktables.dump}"
 SAMPLE_PNU="${HOME_COORDINATE_SAMPLE_PNU:-}"
+REQUIRE_WORKTABLE_ARCHIVE="${HOME_COORDINATE_REQUIRE_WORKTABLE_ARCHIVE:-true}"
 SOURCE_HOST="${HOME_COORDINATE_SOURCE_DB_HOST:-${PGHOST}}"
 SOURCE_PORT="${HOME_COORDINATE_SOURCE_DB_PORT:-${PGPORT}}"
 SOURCE_USER="${HOME_COORDINATE_SOURCE_DB_USER:-${PGUSER}}"
 SOURCE_PASSWORD="${HOME_COORDINATE_SOURCE_DB_PASSWORD:-${PGPASSWORD}}"
 TARGET_HOST="${HOME_COORDINATE_TARGET_DB_HOST:-${PGHOST}}"
-TARGET_PORT="${HOME_COORDINATE_TARGET_DB_PORT:-15433}"
+TARGET_PORT="${HOME_COORDINATE_TARGET_DB_PORT:-15435}"
 TARGET_USER="${HOME_COORDINATE_TARGET_DB_USER:-${PGUSER}}"
 TARGET_PASSWORD="${HOME_COORDINATE_TARGET_DB_PASSWORD:-${PGPASSWORD}}"
 SOURCE_CONTAINER="${HOME_COORDINATE_SOURCE_DB_CONTAINER:-}"
@@ -242,6 +245,108 @@ target_snapshot_count() {
   psql_target_db "${TARGET_DB}" -At <<'SQL'
 SELECT count(*) FROM reference.parcel_coordinate_snapshot;
 SQL
+}
+
+source_database_size() {
+  psql_source_db postgres -At -v db="${SOURCE_DB}" <<'SQL'
+SELECT pg_size_pretty(pg_database_size(:'db'));
+SQL
+}
+
+target_database_size() {
+  psql_target_db postgres -At -v db="${TARGET_DB}" <<'SQL'
+SELECT pg_size_pretty(pg_database_size(:'db'));
+SQL
+}
+
+source_active_connection_count() {
+  psql_source_db postgres -At -v db="${SOURCE_DB}" <<'SQL'
+SELECT numbackends
+FROM pg_stat_database
+WHERE datname = :'db';
+SQL
+}
+
+coordinate_source_relation_inventory() {
+  psql_source_db "${SOURCE_DB}" -At -F '|' <<'SQL'
+WITH expected(relname) AS (
+  VALUES
+    ('coordinate_snapshot_run'),
+    ('parcel_coordinate_snapshot'),
+    ('coordinate_snapshot_region_checkpoint'),
+    ('coordinate_snapshot_stage_chunk_checkpoint'),
+    ('coordinate_snapshot_publish_checkpoint'),
+    ('coordinate_snapshot_publish_chunk_checkpoint'),
+    ('parcel_coordinate_snapshot_stage'),
+    ('parcel_coordinate_snapshot_publish')
+),
+resolved AS (
+  SELECT
+      expected.relname,
+      to_regclass(format('reference.%I', expected.relname)) AS relation_oid
+  FROM expected
+)
+SELECT
+    resolved.relname,
+    COALESCE(relation_oid::text, 'missing') AS relation_name,
+    COALESCE(pg_size_pretty(pg_total_relation_size(relation_oid)), '') AS total_size,
+    COALESCE(pg_class.reltuples::bigint::text, '') AS estimated_rows
+FROM resolved
+LEFT JOIN pg_class ON pg_class.oid = resolved.relation_oid
+ORDER BY relname;
+SQL
+}
+
+verify_chunked_worktable_archive() {
+  local archive_dir="$1"
+  local publish_manifest="${archive_dir}/publish-manifest.tsv"
+  local stage_manifest="${archive_dir}/stage-manifest.tsv"
+  local checksum_manifest="${archive_dir}/SHA256SUMS"
+  if [[ ! -f "${publish_manifest}" || ! -f "${stage_manifest}" || ! -f "${checksum_manifest}" ]]; then
+    echo "ERROR: chunked worktable archive is missing manifest files: ${archive_dir}" >&2
+    exit 1
+  fi
+
+  local expected_publish expected_stage actual_publish actual_stage
+  expected_publish="$(wc -l < "${publish_manifest}" | tr -d ' ')"
+  expected_stage="$(wc -l < "${stage_manifest}" | tr -d ' ')"
+  actual_publish="$(find "${archive_dir}/publish" -name '*.csv.gz' -type f | wc -l | tr -d ' ')"
+  actual_stage="$(find "${archive_dir}/stage" -name '*.csv.gz' -type f | wc -l | tr -d ' ')"
+  if [[ "${expected_publish}" != "${actual_publish}" ]]; then
+    echo "ERROR: chunked publish archive count=${actual_publish}, expected=${expected_publish}." >&2
+    exit 1
+  fi
+  if [[ "${expected_stage}" != "${actual_stage}" ]]; then
+    echo "ERROR: chunked stage archive count=${actual_stage}, expected=${expected_stage}." >&2
+    exit 1
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    (cd "${archive_dir}" && sha256sum -c SHA256SUMS >/dev/null)
+  elif command -v shasum >/dev/null 2>&1; then
+    (cd "${archive_dir}" && shasum -a 256 -c SHA256SUMS >/dev/null)
+  else
+    echo "ERROR: sha256sum or shasum is required to verify chunked worktable archive checksums." >&2
+    exit 1
+  fi
+  echo "drop_readiness_worktable_archive=${archive_dir}"
+  echo "drop_readiness_worktable_archive_publish_chunks=${actual_publish}"
+  echo "drop_readiness_worktable_archive_stage_chunks=${actual_stage}"
+  echo "drop_readiness_worktable_archive_checksum=passed"
+}
+
+verify_worktable_archive() {
+  if [[ -f "${WORKTABLE_DUMP_FILE}" ]]; then
+    pg_restore -l "${WORKTABLE_DUMP_FILE}" >/dev/null
+    echo "drop_readiness_worktable_archive=${WORKTABLE_DUMP_FILE}"
+    return 0
+  fi
+  if [[ -d "${WORKTABLE_DUMP_FILE}" ]]; then
+    verify_chunked_worktable_archive "${WORKTABLE_DUMP_FILE}"
+    return 0
+  fi
+  echo "ERROR: coordinate import worktable archive is missing: ${WORKTABLE_DUMP_FILE}" >&2
+  echo "Run --archive-import-worktables before old source DB removal, provide a chunked archive directory, or set HOME_COORDINATE_REQUIRE_WORKTABLE_ARCHIVE=false after an explicit data-retention decision." >&2
+  exit 1
 }
 
 sample_lookup_sql() {
@@ -439,6 +544,44 @@ verify_live_snapshot() {
   fi
 }
 
+verify_drop_readiness() {
+  require_database_names
+  require_tool psql
+  require_tool pg_restore
+  if [[ "${REQUIRE_WORKTABLE_ARCHIVE}" != "true" && "${REQUIRE_WORKTABLE_ARCHIVE}" != "false" ]]; then
+    echo "ERROR: HOME_COORDINATE_REQUIRE_WORKTABLE_ARCHIVE must be true or false." >&2
+    exit 2
+  fi
+
+  verify_live_snapshot
+
+  local source_size target_size source_connections
+  source_size="$(source_database_size)"
+  target_size="$(target_database_size)"
+  source_connections="$(source_active_connection_count)"
+  echo "drop_readiness_source_db=${SOURCE_DB}"
+  echo "drop_readiness_target_db=${TARGET_DB}"
+  echo "drop_readiness_source_db_size=${source_size}"
+  echo "drop_readiness_target_db_size=${target_size}"
+  echo "drop_readiness_source_active_connections=${source_connections}"
+  echo "drop_readiness_source_relation_inventory_begin"
+  coordinate_source_relation_inventory
+  echo "drop_readiness_source_relation_inventory_end"
+
+  if [[ "${source_connections}" != "0" ]]; then
+    echo "ERROR: source DB still has active connections: ${source_connections}" >&2
+    exit 1
+  fi
+
+  if [[ "${REQUIRE_WORKTABLE_ARCHIVE}" == "true" ]]; then
+    verify_worktable_archive
+  else
+    echo "drop_readiness_worktable_archive=not-required"
+  fi
+
+  echo "coordinate source drop readiness passed without deleting source DB: source=${SOURCE_DB}, target=${TARGET_DB}"
+}
+
 archive_import_worktables() {
   require_database_names
   if [[ "$(source_database_exists "${SOURCE_DB}")" != "t" ]]; then
@@ -498,6 +641,7 @@ case "${MODE}" in
   restore-copy) restore_copy ;;
   copy-live-snapshot) copy_live_snapshot ;;
   verify-live-snapshot) verify_live_snapshot ;;
+  verify-drop-readiness) verify_drop_readiness ;;
   archive-import-worktables) archive_import_worktables ;;
   print-cutover-env) print_cutover_env ;;
   *)

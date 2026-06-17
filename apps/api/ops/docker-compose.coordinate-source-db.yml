@@ -6,11 +6,11 @@ services:
     container_name: home-search-coordinate-source-postgis
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${COORDINATE_SOURCE_TARGET_DB_NAME:-home_search_coordinate_source_v2}
+      POSTGRES_DB: ${COORDINATE_SOURCE_TARGET_DB_NAME:-home_search_coordinate_source}
       POSTGRES_USER: ${COORDINATE_SOURCE_TARGET_DB_USERNAME:-home_search}
       POSTGRES_PASSWORD: ${COORDINATE_SOURCE_TARGET_DB_PASSWORD:-home_search_local_password}
     ports:
-      - "${COORDINATE_SOURCE_TARGET_DB_PORT:-15433}:5432"
+      - "${COORDINATE_SOURCE_TARGET_DB_PORT:-15435}:5432"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"" ]
       interval: 10s
@@ -24,7 +24,7 @@ services:
 
 volumes:
   source-postgis-data:
-    name: ${COORDINATE_SOURCE_TARGET_VOLUME_NAME:-home-search-coordinate-source-data-v2}
+    name: ${COORDINATE_SOURCE_TARGET_VOLUME_NAME:-home-search-coordinate-source-data}
 
 networks:
   home-search-local:

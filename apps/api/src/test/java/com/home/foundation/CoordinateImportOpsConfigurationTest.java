@@ -17,8 +17,7 @@ class CoordinateImportOpsConfigurationTest {
 	private static final Path COORDINATE_SMOKE_SCRIPT = Path.of("ops/verify-coordinate-snapshot-smoke.sh");
 	private static final Path COORDINATE_BOUNDARY_SCRIPT = Path.of("ops/verify-coordinate-source-boundary.sh");
 	private static final Path COORDINATE_COPY_CUTOVER_SCRIPT = Path.of("ops/coordinate-source-db-copy-cutover.sh");
-	private static final Path COORDINATE_RESUMABLE_MIGRATION =
-			Path.of("src/main/resources/db/migration/coordinate-source/V1__create_coordinate_source_schema.sql");
+	private static final Path COORDINATE_SOURCE_SCHEMA_SQL = Path.of("ops/sql/coordinate-source-schema.sql");
 	private static final Path OPERATIONAL_REFERENCE_REMOVAL_MIGRATION =
 			Path.of("src/main/resources/db/migration/api/V3__remove_operational_coordinate_source_reference.sql");
 	private static final Path GEO_ENRICHMENT_MIGRATION =
@@ -55,7 +54,7 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(verifier).contains("PGHOST: postgis");
 		assertThat(verifier).contains("PGPORT: \"5432\"");
 		assertThat(verifier)
-			.contains("PGDATABASE: ${COORDINATE_SOURCE_DB_NAME:-home_search_coordinate_full_durable_20260527182147}");
+			.contains("PGDATABASE: ${COORDINATE_SOURCE_DB_NAME:-home_search_coordinate_source}");
 		assertThat(verifier).contains("PGUSER: ${HOME_SEARCH_DB_USERNAME:-home_search}");
 		assertThat(verifier).contains("PGPASSWORD: ${HOME_SEARCH_DB_PASSWORD:-home_search_local_password}");
 		assertThat(verifier).contains("HOME_COORDINATE_EXPECTED_REGIONS: ${HOME_COORDINATE_EXPECTED_REGIONS:-}");
@@ -115,6 +114,7 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("reference.coordinate_snapshot_publish_chunk_checkpoint");
 		assertThat(content).contains("HOME_COORDINATE_RESUME_RUN_ID");
 		assertThat(content).contains("HOME_COORDINATE_CHUNK_PREFIX_LENGTH");
+		assertThat(content).contains("HOME_COORDINATE_SCHEMA_SQL");
 		assertThat(content).contains("coordinate snapshot region import skipped");
 		assertThat(content).contains("coordinate snapshot stage chunk skipped");
 		assertThat(content).contains("coordinate snapshot stage chunk passed");
@@ -139,11 +139,11 @@ class CoordinateImportOpsConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("coordinate snapshot resumable import schema는 durable stage와 checkpoint를 제공한다")
+	@DisplayName("coordinate source schema SQL은 API Flyway 밖에서 durable stage와 checkpoint를 제공한다")
 	void coordinateSnapshotResumableImportSchemaProvidesDurableStageAndCheckpoints() throws IOException {
-		assertThat(COORDINATE_RESUMABLE_MIGRATION).exists();
+		assertThat(COORDINATE_SOURCE_SCHEMA_SQL).exists();
 
-		String content = Files.readString(COORDINATE_RESUMABLE_MIGRATION);
+		String content = Files.readString(COORDINATE_SOURCE_SCHEMA_SQL);
 
 		assertThat(content).contains("CREATE TABLE reference.parcel_coordinate_snapshot_stage");
 		assertThat(content).contains("CREATE TABLE reference.coordinate_snapshot_region_checkpoint");
@@ -161,6 +161,14 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("PRIMARY KEY (run_id, pnu)");
 		assertThat(content).contains("USING gist (geom)");
 		assertThat(content).contains("USING gist (point)");
+	}
+
+	@Test
+	@DisplayName("API main Flyway resources는 coordinate source schema를 소유하지 않는다")
+	void apiMainFlywayResourcesDoNotOwnCoordinateSourceSchema() {
+		assertThat(Path.of("src/main/resources/db/migration/coordinate-source")).doesNotExist();
+		assertThat(Path.of("src/main/resources/db/migration/api")).exists();
+		assertThat(COORDINATE_SOURCE_SCHEMA_SQL).exists();
 	}
 
 	@Test
@@ -211,6 +219,7 @@ class CoordinateImportOpsConfigurationTest {
 
 		assertThat(content).contains("--copy-live-snapshot");
 		assertThat(content).contains("--verify-live-snapshot");
+		assertThat(content).contains("--verify-drop-readiness");
 		assertThat(content).contains("--archive-import-worktables");
 		assertThat(content).contains("--dump-source");
 		assertThat(content).contains("--restore-copy");
@@ -221,6 +230,7 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("HOME_COORDINATE_SOURCE_DB_CONTAINER");
 		assertThat(content).contains("HOME_COORDINATE_TARGET_DB_CONTAINER");
 		assertThat(content).contains("HOME_COORDINATE_POSTGIS_TOOL_IMAGE");
+		assertThat(content).contains("HOME_COORDINATE_REQUIRE_WORKTABLE_ARCHIVE");
 		assertThat(content).contains("docker exec -i");
 		assertThat(content).contains("docker run --rm");
 		assertThat(content).contains("--format=plain");
@@ -238,6 +248,14 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("live_schema_fingerprint");
 		assertThat(content).contains("target_snapshot_count");
 		assertThat(content).contains("sample_lookup");
+		assertThat(content).contains("source_active_connection_count");
+		assertThat(content).contains("coordinate_source_relation_inventory");
+		assertThat(content).contains("verify_chunked_worktable_archive");
+		assertThat(content).contains("drop_readiness_worktable_archive_publish_chunks");
+		assertThat(content).contains("drop_readiness_worktable_archive");
+		assertThat(content).contains("drop_readiness_worktable_archive_checksum");
+		assertThat(content).contains("sha256sum -c SHA256SUMS");
+		assertThat(content).contains("shasum -a 256 -c SHA256SUMS");
 		assertThat(content).contains("Live copy intentionally excludes import worktables");
 		assertThat(content).doesNotContain("dropdb ");
 		assertThat(content).doesNotContain("psql_db postgres -c \"DROP DATABASE");
@@ -256,12 +274,12 @@ class CoordinateImportOpsConfigurationTest {
 
 		assertThat(content).contains("home-search-coordinate-source");
 		assertThat(content).contains("container_name: home-search-coordinate-source-postgis");
-		assertThat(content).contains("POSTGRES_DB: ${COORDINATE_SOURCE_TARGET_DB_NAME:-home_search_coordinate_source_v2}");
+		assertThat(content).contains("POSTGRES_DB: ${COORDINATE_SOURCE_TARGET_DB_NAME:-home_search_coordinate_source}");
 		assertThat(content).contains("POSTGRES_USER: ${COORDINATE_SOURCE_TARGET_DB_USERNAME:-home_search}");
 		assertThat(content).contains("POSTGRES_PASSWORD: ${COORDINATE_SOURCE_TARGET_DB_PASSWORD:-home_search_local_password}");
-		assertThat(content).contains("${COORDINATE_SOURCE_TARGET_DB_PORT:-15433}:5432");
+		assertThat(content).contains("${COORDINATE_SOURCE_TARGET_DB_PORT:-15435}:5432");
 		assertThat(content).contains("source-postgis-data:/var/lib/postgresql/data");
-		assertThat(content).contains("name: ${COORDINATE_SOURCE_TARGET_VOLUME_NAME:-home-search-coordinate-source-data-v2}");
+		assertThat(content).contains("name: ${COORDINATE_SOURCE_TARGET_VOLUME_NAME:-home-search-coordinate-source-data}");
 		assertThat(content).contains("external: true");
 		assertThat(content).contains("name: home-search-local_home-search-local");
 		assertThat(content).doesNotContain("home-search-local_home-search-postgis-data");

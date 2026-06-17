@@ -37,7 +37,7 @@ class LocalRuntimeStackConfigurationTest {
 		String content = Files.readString(LOCAL_COMPOSE);
 		String operationalDbUrl = "DB_JDBC_URL: jdbc:postgresql://postgis:5432/${HOME_SEARCH_DB_NAME:-home_search}";
 		String coordinateSourceDbUrl =
-				"COORDINATE_SOURCE_DB_JDBC_URL: ${COORDINATE_SOURCE_DB_JDBC_URL:-jdbc:postgresql://home-search-coordinate-source-postgis-arm64-v4:5432/home_search_coordinate_source}";
+				"COORDINATE_SOURCE_DB_JDBC_URL: ${COORDINATE_SOURCE_DB_JDBC_URL:-jdbc:postgresql://${COORDINATE_SOURCE_DB_HOST:-home-search-coordinate-source-postgis-arm64-v4}:5432/${COORDINATE_SOURCE_DB_NAME:-home_search_coordinate_source}}";
 
 		assertThat(content).contains("postgis/postgis:16-3.4");
 		assertThat(content).contains(operationalDbUrl);
@@ -58,6 +58,27 @@ class LocalRuntimeStackConfigurationTest {
 		assertThat(content).doesNotContain("VITE_KAKAO_MAP_APP_KEY: ${VITE_KAKAO_MAP_APP_KEY:-}");
 		assertThat(content).doesNotContain("APT_SERVICE_KEY:");
 		assertThat(content).doesNotContain("VW_SERVICE_KEY:");
+	}
+
+	@Test
+	@DisplayName("local compose stack은 active coordinate source host를 별도 env knob으로 고정한다")
+	void localComposeStackSeparatesActiveCoordinateSourceHostFromJdbcUrl() throws IOException {
+		assertThat(LOCAL_COMPOSE).exists();
+
+		String content = Files.readString(LOCAL_COMPOSE);
+		String coordinateSourceJdbcUrlLine = content.lines()
+			.filter(line -> line.contains("COORDINATE_SOURCE_DB_JDBC_URL:"))
+			.findFirst()
+			.orElse("");
+
+		assertThat(content)
+			.contains("COORDINATE_SOURCE_DB_HOST: ${COORDINATE_SOURCE_DB_HOST:-home-search-coordinate-source-postgis-arm64-v4}");
+		assertThat(content)
+			.contains("COORDINATE_SOURCE_DB_NAME: ${COORDINATE_SOURCE_DB_NAME:-home_search_coordinate_source}");
+		assertThat(content)
+			.contains("jdbc:postgresql://${COORDINATE_SOURCE_DB_HOST:-home-search-coordinate-source-postgis-arm64-v4}:5432/${COORDINATE_SOURCE_DB_NAME:-home_search_coordinate_source}");
+		assertThat(coordinateSourceJdbcUrlLine).isNotBlank();
+		assertThat(coordinateSourceJdbcUrlLine).doesNotContain("jdbc:postgresql://postgis:5432/");
 	}
 
 	@Test

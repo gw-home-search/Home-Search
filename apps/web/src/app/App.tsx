@@ -3,7 +3,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type CSSProperties,
   type FormEvent,
 } from 'react';
 
@@ -27,7 +26,6 @@ import {
   fetchParcelTradeTrend,
   type TradeTrendPoint,
 } from '../features/complex-detail/api/fetchTradeTrend';
-import { DetailSidebar } from '../features/complex-detail/DetailSidebar';
 import {
   CoordinateOverrideAdminPage,
   CoordinateReasonGuidePage,
@@ -39,10 +37,13 @@ import {
   type MapBoundsRequest,
   type MapMarkersResult,
 } from '../features/map/api/fetchMapMarkers';
+import { FilterPanel } from '../features/filters/FilterPanel';
+import { ExplorationPanel } from '../features/exploration/ExplorationPanel';
 import {
   KakaoMapSurface,
   type KakaoMapRuntimeState,
 } from '../features/map/KakaoMapSurface';
+import { MapOverlayPanels } from '../features/map/MapOverlayPanels';
 import {
   fetchRegionComplexes,
   fetchRegionDetail,
@@ -730,7 +731,6 @@ function MapApp({
 
       <div className="map-workspace" data-layout-region="map-workspace">
         <section aria-label="지도 화면" className="map-surface">
-          <p className="map-status">{mapRuntimeStatusLabel(mapRuntimeState)}</p>
           <KakaoMapSurface
             appKey={kakaoMapAppKey}
             focusTarget={mapFocusTarget}
@@ -743,555 +743,66 @@ function MapApp({
             onRuntimeStateChange={setMapRuntimeState}
             onViewportChange={handleViewportChange}
           />
-          {mapRuntimeState === 'ready' || markers == null ? null : (
-            <FallbackMarkerLayer
-              bounds={viewport.bounds}
-              markers={markers}
-              onComplexMarkerSelect={handleComplexMarkerSelect}
-              onRegionMarkerSelect={handleRegionMarkerSelect}
-            />
-          )}
 
-          <form
-            key={filterFormKey}
-            aria-label="마커 필터"
-            className="filter-panel"
-            data-filter-state={activeFilterCount > 0 ? 'active' : 'idle'}
-            data-map-overlay="filters"
-            data-ui-layer="filter-controls"
+          <FilterPanel
+            activeFilterCount={activeFilterCount}
+            formKey={filterFormKey}
+            onReset={handleFilterReset}
             onSubmit={handleFilterSubmit}
-          >
-            <fieldset className="filter-group">
-              <legend>면적</legend>
-              <div className="filter-range">
-                <label>
-                  <span>최소</span>
-                  <input
-                    aria-label="최소 평형"
-                    name="pyeongMin"
-                    placeholder="평"
-                    type="number"
-                  />
-                </label>
-                <label>
-                  <span>최대</span>
-                  <input
-                    aria-label="최대 평형"
-                    name="pyeongMax"
-                    placeholder="평"
-                    type="number"
-                  />
-                </label>
-              </div>
-            </fieldset>
-            <fieldset className="filter-group">
-              <legend>가격</legend>
-              <div className="filter-range">
-                <label>
-                  <span>최소</span>
-                  <input
-                    aria-label="최소 가격 억"
-                    name="priceEokMin"
-                    placeholder="억"
-                    step="0.1"
-                    type="number"
-                  />
-                </label>
-                <label>
-                  <span>최대</span>
-                  <input
-                    aria-label="최대 가격 억"
-                    name="priceEokMax"
-                    placeholder="억"
-                    step="0.1"
-                    type="number"
-                  />
-                </label>
-              </div>
-            </fieldset>
-            <fieldset className="filter-group">
-              <legend>연식</legend>
-              <div className="filter-range">
-                <label>
-                  <span>최소</span>
-                  <input
-                    aria-label="최소 연식"
-                    name="ageMin"
-                    placeholder="년"
-                    type="number"
-                  />
-                </label>
-                <label>
-                  <span>최대</span>
-                  <input
-                    aria-label="최대 연식"
-                    name="ageMax"
-                    placeholder="년"
-                    type="number"
-                  />
-                </label>
-              </div>
-            </fieldset>
-            <fieldset className="filter-group">
-              <legend>세대수</legend>
-              <div className="filter-range">
-                <label>
-                  <span>최소</span>
-                  <input
-                    aria-label="최소 세대수"
-                    name="unitMin"
-                    placeholder="세대"
-                    type="number"
-                  />
-                </label>
-                <label>
-                  <span>최대</span>
-                  <input
-                    aria-label="최대 세대수"
-                    name="unitMax"
-                    placeholder="세대"
-                    type="number"
-                  />
-                </label>
-              </div>
-            </fieldset>
-            <div className="filter-actions">
-              <p className="filter-status" aria-live="polite">
-                {activeFilterCount > 0 ? `필터 ${activeFilterCount}개 적용` : '필터 없음'}
-              </p>
-              <button type="submit" aria-label="마커 필터 적용">
-                적용
-              </button>
-              <button type="button" aria-label="마커 필터 초기화" onClick={handleFilterReset}>
-                초기화
-              </button>
-            </div>
-          </form>
-
-          <div aria-label="지도 조작" className="map-controls">
-            <button type="button" aria-label="지도 확대" onClick={handleZoomIn}>
-              +
-            </button>
-            <button type="button" aria-label="지도 축소" onClick={handleZoomOut}>
-              -
-            </button>
-          </div>
-
-          {markerState === 'loading' ? (
-            <p className="map-feedback" role="status" aria-live="polite">
-              마커 불러오는 중
-            </p>
-          ) : null}
-
-          {markerState === 'empty' ? (
-            <p className="map-feedback" role="status" aria-live="polite">
-              이 영역에는 마커가 없습니다
-            </p>
-          ) : null}
-
-          {markerState === 'error' ? (
-            <p className="map-feedback map-feedback-error" role="alert">
-              마커 데이터를 불러오지 못했습니다. 지도는 계속 사용할 수 있습니다.
-              {markerError ? <span className="map-feedback-detail">{markerError}</span> : null}
-              {' '}
-              <button type="button" aria-label="마커 다시 불러오기" onClick={handleRetryMarkers}>
-                다시 시도
-              </button>
-            </p>
-          ) : null}
-
-          {mapRuntimeError && markerState !== 'error' ? (
-            <p className="map-feedback map-feedback-error" role="alert">
-              {mapRuntimeError}
-            </p>
-          ) : null}
-
-          {markers?.kind === 'complex' && markers.markers.length > 0 ? (
-            <ul aria-label="단지 마커" className="marker-preview-list">
-              {markers.markers.map((marker) => (
-                <li key={complexMarkerKey(marker)}>
-                  <button
-                    type="button"
-                    aria-label={complexMarkerAriaLabel(marker)}
-                    className="marker-list-button"
-                    data-marker-id={complexMarkerKey(marker)}
-                    onClick={() => {
-                      handleComplexMarkerSelect(marker);
-                    }}
-                  >
-                    <span className="marker-list-price">
-                      최근 실거래 {formatMarkerAmount(marker.latestDealAmount)}
-                    </span>
-                    {markerSubtitle(marker) ? (
-                      <span className="marker-list-subtitle">{markerSubtitle(marker)}</span>
-                    ) : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-
-          {markers?.kind === 'region' && markers.markers.length > 0 ? (
-            <ul aria-label="지역 마커" className="marker-preview-list">
-              {markers.markers.map((marker) => (
-                <li key={marker.id} data-marker-id={marker.id}>
-                  <button
-                    type="button"
-                    aria-label={`지역 이동 ${marker.name}`}
-                    className="marker-list-button marker-list-button-region"
-                    onClick={() => {
-                      handleRegionMarkerSelect(marker);
-                    }}
-                  >
-                    <span className="marker-list-price">{marker.name}</span>
-                    <span className="marker-list-subtitle">
-                      {regionMarkerUnitOrActionLabel(marker, viewport.level)}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
+          />
+          <MapOverlayPanels
+            bounds={viewport.bounds}
+            level={viewport.level}
+            mapRuntimeError={mapRuntimeError}
+            mapRuntimeState={mapRuntimeState}
+            markerError={markerError}
+            markerState={markerState}
+            markers={markers}
+            onComplexMarkerSelect={handleComplexMarkerSelect}
+            onRegionMarkerSelect={handleRegionMarkerSelect}
+            onRetryMarkers={handleRetryMarkers}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+          />
         </section>
 
-        <section
-          id="exploration-panel"
-          aria-label="탐색 패널"
-          aria-hidden={!isExplorationOpen}
-          className="exploration-panel"
-          data-collapsed={isExplorationOpen ? 'false' : 'true'}
-          data-sidebar-mode={sidebarMode}
-          data-ui-layer="exploration-panel"
-          hidden={!isExplorationOpen}
-        >
-          <div className="exploration-panel-header" hidden={sidebarMode === 'detail'}>
-            <p>탐색</p>
-            <span>{explorationSummaryLabel(searchResults.length, regionComplexes.length)}</span>
-          </div>
-
-          <form
-            aria-label="단지 검색"
-            className="search-panel exploration-search-panel"
-            hidden={sidebarMode === 'detail'}
-            onSubmit={handleSearchSubmit}
-          >
-            <label>
-              <span>단지</span>
-              <input
-                aria-label="단지 검색"
-                name="q"
-                onInput={(event) => {
-                  handleSearchInputChange(event.currentTarget.value);
-                }}
-                placeholder="아파트명을 검색해보세요."
-                type="search"
-              />
-            </label>
-            <button type="submit" aria-label="단지 검색 실행">
-              검색
-            </button>
-          </form>
-
-          {selectedComplex == null ? null : (
-            <DetailSidebar
-              complexDetail={complexDetail}
-              detailError={detailError}
-              detailState={detailState}
-              onBack={handleCloseDetailDrawer}
-              onComplexSelect={handleComplexSummarySelect}
-              onRetryDetail={handleRetryDetail}
-              onLoadMoreTrades={handleLoadMoreTrades}
-              parcelComplexes={parcelComplexes}
-              parcelTrades={parcelTrades}
-              tradeTrend={tradeTrend}
-              tradeRows={tradeRows}
-              selection={selectedComplex}
-            />
-          )}
-
-          <section
-            id="exploration-panel-search"
-            aria-label="검색 결과 패널"
-            className="panel-section"
-            data-api-flow="search"
-            hidden={sidebarMode !== 'search'}
-          >
-            <div className="panel-section-header">
-              <p>검색 결과</p>
-              <span>{panelRequestLabel(searchState)}</span>
-            </div>
-
-            <DataCountStrip
-              items={[
-                ['제안', complexSuggestions.length],
-                ['결과', searchResults.length],
-              ]}
-            />
-
-            {searchState === 'loading' ? (
-              <p className="panel-message" role="status" aria-live="polite">
-                단지 검색 중
-              </p>
-            ) : null}
-
-            {searchState === 'empty' ? (
-              <p className="panel-message" role="status" aria-live="polite">
-                검색 결과가 없습니다
-              </p>
-            ) : null}
-
-            {searchState === 'error' ? (
-              <p className="panel-message panel-message-error" role="alert">
-                검색을 사용할 수 없습니다.
-                {searchError ? ` ${searchError}` : null}
-              </p>
-            ) : null}
-
-            {searchResults.length > 0 ? (
-              <ul aria-label="검색 결과" className="panel-list panel-list-strong">
-                {searchResults.map((result) => (
-                  <li key={result.complexId}>
-                    <button
-                      type="button"
-                      aria-label={`검색 결과 선택 ${result.complexName}`}
-                      onClick={() => {
-                        handleSearchResultSelect(result);
-                      }}
-                    >
-                      <span>{result.complexName}</span>
-                      <span>{formatAddress(result.address)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-
-            {complexSuggestions.length > 0 ? (
-              <ul aria-label="검색 제안" className="panel-list">
-                {complexSuggestions.map((suggestion) => (
-                  <li key={suggestion.complexId}>
-                    <button
-                      type="button"
-                      aria-label={`검색 제안 선택 ${suggestion.complexName}`}
-                      onClick={() => {
-                        handleSuggestionSelect(suggestion);
-                      }}
-                    >
-                      <span>{suggestion.complexName}</span>
-                      <span>{formatAddress(suggestion.address)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </section>
-
-          <section
-            id="exploration-panel-region"
-            aria-label="지역 탐색 패널"
-            className="panel-section region-panel"
-            data-api-flow="region"
-            hidden={sidebarMode !== 'region'}
-          >
-            <div className="panel-section-header">
-              <p>지역</p>
-              {regionDetail ? <span>{regionDetail.name}</span> : <span>전체</span>}
-            </div>
-            <nav aria-label="지역 단계" className="region-breadcrumb">
-              <button type="button" aria-label="지역 처음으로" onClick={handleLoadRootRegions}>
-                시도 선택
-              </button>
-              {regionTrail.map((region) => (
-                <span key={region.id}>{region.name}</span>
-              ))}
-            </nav>
-            <div className="region-step-summary">
-              <p>{regionStepLabel(regionTrail.length)}</p>
-              <button type="button" aria-label="상위 지역 불러오기" onClick={handleLoadRootRegions}>
-                처음부터
-              </button>
-            </div>
-            <DataCountStrip
-              items={[
-                ['하위 지역', rootRegions.length],
-                ['단지', regionComplexes.length],
-              ]}
-            />
-
-            {regionState === 'loading' ? (
-              <p className="panel-message" role="status" aria-live="polite">
-                지역 불러오는 중
-              </p>
-            ) : null}
-
-            {regionState === 'empty' ? (
-              <p className="panel-message" role="status" aria-live="polite">
-                지역이 없습니다
-              </p>
-            ) : null}
-
-            {regionState === 'error' ? (
-              <p className="panel-message panel-message-error" role="alert">
-                지역 탐색을 사용할 수 없습니다.
-                {regionError ? ` ${regionError}` : null}
-              </p>
-            ) : null}
-
-            {rootRegions.length > 0 ? (
-              <ul aria-label="지역 탐색" className="panel-list region-grid-list">
-                {rootRegions.map((region) => (
-                  <li key={region.id}>
-                    <button
-                      type="button"
-                      aria-label={`지역 이동 ${region.name}`}
-                      onClick={() => {
-                        handleRegionSelect(region);
-                      }}
-                    >
-                      {region.name}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-
-            {regionComplexes.length > 0 ? (
-              <ul aria-label="지역 단지 목록" className="panel-list">
-                {regionComplexes.map((complex) => (
-                  <li key={complex.complexId}>
-                    <button
-                      type="button"
-                      aria-label={`지역 단지 선택 ${complex.complexName}`}
-                      onClick={() => {
-                        handleRegionComplexSelect(complex);
-                      }}
-                    >
-                      <span>{complex.complexName}</span>
-                      <span>{formatAddress(complex.address)}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </section>
-        </section>
+        <ExplorationPanel
+          complexDetail={complexDetail}
+          complexSuggestions={complexSuggestions}
+          detailError={detailError}
+          detailState={detailState}
+          isOpen={isExplorationOpen}
+          onCloseDetail={handleCloseDetailDrawer}
+          onComplexSelect={handleComplexSummarySelect}
+          onLoadMoreTrades={handleLoadMoreTrades}
+          onLoadRootRegions={handleLoadRootRegions}
+          onRegionComplexSelect={handleRegionComplexSelect}
+          onRegionSelect={handleRegionSelect}
+          onRetryDetail={handleRetryDetail}
+          onSearchInputChange={handleSearchInputChange}
+          onSearchResultSelect={handleSearchResultSelect}
+          onSearchSubmit={handleSearchSubmit}
+          onSuggestionSelect={handleSuggestionSelect}
+          parcelComplexes={parcelComplexes}
+          parcelTrades={parcelTrades}
+          regionComplexes={regionComplexes}
+          regionDetail={regionDetail}
+          regionError={regionError}
+          regionState={regionState}
+          regionTrail={regionTrail}
+          rootRegions={rootRegions}
+          searchError={searchError}
+          searchResults={searchResults}
+          searchState={searchState}
+          selectedComplex={selectedComplex}
+          sidebarMode={sidebarMode}
+          tradeRows={tradeRows}
+          tradeTrend={tradeTrend}
+        />
       </div>
 
     </main>
   );
-}
-
-function FallbackMarkerLayer({
-  bounds,
-  markers,
-  onComplexMarkerSelect,
-  onRegionMarkerSelect,
-}: {
-  bounds: MapBoundsRequest;
-  markers: MapMarkersResult;
-  onComplexMarkerSelect: (marker: ComplexMapMarker) => void;
-  onRegionMarkerSelect: (marker: RegionMapMarker) => void;
-}) {
-  if (markers.markers.length === 0) {
-    return null;
-  }
-
-  return (
-    <ul aria-label="대체 지도 마커" className="fallback-marker-layer">
-      {markers.kind === 'complex'
-        ? markers.markers.map((marker) => (
-            <li key={complexMarkerKey(marker)} style={mapMarkerPointStyle(marker.lat, marker.lng, bounds)}>
-              <button
-                type="button"
-                aria-label={complexMarkerAriaLabel(marker)}
-                className="fallback-map-marker fallback-map-marker-complex"
-                data-fallback-marker-id={`complex-${complexMarkerKey(marker)}`}
-                onClick={() => {
-                  onComplexMarkerSelect(marker);
-                }}
-              >
-                <span className="fallback-map-marker-kicker">
-                  {marker.latestDealAmount == null ? '거래 없음' : '최근 실거래'}
-                </span>
-                <strong>{formatMarkerAmount(marker.latestDealAmount)}</strong>
-                {markerSubtitle(marker) ? <span>{markerSubtitle(marker)}</span> : null}
-              </button>
-            </li>
-          ))
-        : markers.markers.map((marker) => (
-            <li key={marker.id} style={mapMarkerPointStyle(marker.lat, marker.lng, bounds)}>
-              <button
-                type="button"
-                aria-label={`지역 이동 ${marker.name}`}
-                className="fallback-map-marker fallback-map-marker-region"
-                data-fallback-marker-id={`region-${marker.id}`}
-                onClick={() => {
-                  onRegionMarkerSelect(marker);
-                }}
-              >
-                <strong>{marker.name}</strong>
-                <span>{regionMarkerUnitOrActionLabel(marker)}</span>
-              </button>
-            </li>
-          ))}
-    </ul>
-  );
-}
-
-function DataCountStrip({ items }: { items: Array<[string, number]> }) {
-  return (
-    <dl className="data-count-strip">
-      {items.map(([label, value]) => (
-        <div key={label}>
-          <dt>{label}</dt>
-          {' '}
-          <dd>{value.toLocaleString()}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
-function formatAddress(address: string | null): string {
-  return address ?? '주소 정보 없음';
-}
-
-function formatMarkerAmount(amount: number | null): string {
-  if (amount == null) {
-    return '최근 거래 없음';
-  }
-
-  if (amount >= 10000) {
-    const eok = amount / 10000;
-    const formatted = Number.isInteger(eok) ? eok.toLocaleString() : eok.toFixed(1);
-    return `${formatted}억`;
-  }
-
-  return `${amount.toLocaleString()}만`;
-}
-
-function markerSubtitle(marker: ComplexMapMarker): string | null {
-  if (marker.name) {
-    return marker.name;
-  }
-
-  if (marker.unitCntSum != null && marker.unitCntSum > 0) {
-    return `${marker.unitCntSum.toLocaleString()}세대`;
-  }
-
-  return null;
-}
-
-function complexMarkerKey(marker: ComplexMapMarker): string {
-  return marker.complexId == null
-    ? `${marker.parcelId}`
-    : `${marker.parcelId}-${marker.complexId}`;
-}
-
-function complexMarkerAriaLabel(marker: ComplexMapMarker): string {
-  return marker.complexId == null
-    ? `필지 ${marker.parcelId} 상세 열기`
-    : `필지 ${marker.parcelId} 단지 ${marker.complexId} 상세 열기`;
 }
 
 function detailHeaderStatusLabel(
@@ -1323,37 +834,6 @@ function detailRequestLabel(state: DetailRequestState): string {
   }
 }
 
-function panelRequestLabel(state: PanelRequestState): string {
-  switch (state) {
-    case 'idle':
-      return '대기';
-    case 'loading':
-      return '불러오는 중';
-    case 'ready':
-      return '완료';
-    case 'empty':
-      return '결과 없음';
-    case 'error':
-      return '오류';
-  }
-}
-
-function explorationSummaryLabel(searchCount: number, regionComplexCount: number): string {
-  if (searchCount > 0 && regionComplexCount > 0) {
-    return `검색 ${searchCount.toLocaleString()} / 지역 ${regionComplexCount.toLocaleString()}`;
-  }
-
-  if (searchCount > 0) {
-    return `검색 ${searchCount.toLocaleString()}`;
-  }
-
-  if (regionComplexCount > 0) {
-    return `지역 ${regionComplexCount.toLocaleString()}`;
-  }
-
-  return '지역 탐색';
-}
-
 function viewportAroundPoint(lat: number, lng: number, level: number, delta: number): MapViewport {
   return {
     bounds: {
@@ -1364,26 +844,6 @@ function viewportAroundPoint(lat: number, lng: number, level: number, delta: num
     },
     level,
   };
-}
-
-function mapMarkerPointStyle(lat: number, lng: number, bounds: MapBoundsRequest): CSSProperties {
-  const lngRange = bounds.neLng - bounds.swLng;
-  const latRange = bounds.neLat - bounds.swLat;
-  const x = lngRange === 0 ? 50 : ((lng - bounds.swLng) / lngRange) * 100;
-  const y = latRange === 0 ? 50 : 100 - ((lat - bounds.swLat) / latRange) * 100;
-
-  return {
-    left: `${clampPercent(x, 8, 92)}%`,
-    top: `${clampPercent(y, 14, 88)}%`,
-  };
-}
-
-function clampPercent(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) {
-    return 50;
-  }
-
-  return Math.min(max, Math.max(min, value));
 }
 
 function regionFocusLevel(depth: number): number {
@@ -1412,34 +872,6 @@ function mapFocusDeltaForLevel(level: number): number {
   }
 
   return SEARCH_FOCUS_DELTA;
-}
-
-function regionStepLabel(depth: number): string {
-  if (depth === 0) {
-    return '시도 선택';
-  }
-
-  if (depth === 1) {
-    return '시군구 선택';
-  }
-
-  if (depth === 2) {
-    return '읍면동 선택';
-  }
-
-  return '단지 선택';
-}
-
-function regionMarkerActionLabel(level: number): string {
-  return level <= 4 ? '단지 보기' : '지도 이동';
-}
-
-function regionMarkerUnitOrActionLabel(marker: RegionMapMarker, level?: number): string {
-  if (marker.unitCntSum != null && marker.unitCntSum > 0) {
-    return `${marker.unitCntSum.toLocaleString()}세대`;
-  }
-
-  return level == null ? '세대수 없음' : regionMarkerActionLabel(level);
 }
 
 type DisplayCoordinateCandidate = {
@@ -1488,17 +920,6 @@ function numberFormValue(formData: FormData, field: string): number | null {
 
 function countActiveFilters(filters: ComplexMarkerFilters): number {
   return Object.values(filters).filter((value) => value != null).length;
-}
-
-function mapRuntimeStatusLabel(state: KakaoMapRuntimeState): string {
-  switch (state) {
-    case 'loading':
-      return '지도 준비 중';
-    case 'ready':
-      return '지도 준비 완료';
-    case 'error':
-      return '지도 대체 화면';
-  }
 }
 
 function mapModeLabel(level: number): string {

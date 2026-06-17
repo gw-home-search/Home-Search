@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 class CleanDbCutoverOpsConfigurationTest {
 
 	private static final Path CLEAN_DB_CUTOVER_SCRIPT = Path.of("ops/verify-clean-db-cutover.sh");
+	private static final Path API_MIGRATION_DIRECTORY = Path.of("src/main/resources/db/migration/api");
 
 	@Test
 	@DisplayName("clean DB cutover verifier는 데이터 비교와 cleanup table 부재를 확인한다")
@@ -37,6 +38,20 @@ class CleanDbCutoverOpsConfigurationTest {
 		assertThat(content).contains("verification_mode=\"max-id\"");
 		assertThat(content).contains("verification_mode=\"exact-counts\"");
 		assertThat(content).contains("--self-test");
+	}
+
+	@Test
+	@DisplayName("clean DB cutover verifier는 현재 API Flyway migration 목록을 기준으로 history를 검증한다")
+	void cleanDbCutoverVerifierUsesCurrentApiFlywayMigrationVersions() throws IOException {
+		assertThat(CLEAN_DB_CUTOVER_SCRIPT).exists();
+		assertThat(API_MIGRATION_DIRECTORY).isDirectory();
+
+		String content = Files.readString(CLEAN_DB_CUTOVER_SCRIPT);
+
+		assertThat(content).contains("expected_flyway_versions");
+		assertThat(content).contains("src/main/resources/db/migration/api/V*.sql");
+		assertThat(content).contains("${flyway_versions}\" != \"${expected_versions}");
+		assertThat(content).doesNotContain("flyway_versions\" != \"1:true,2:true\"");
 	}
 
 	@Test

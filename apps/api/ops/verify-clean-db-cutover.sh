@@ -163,6 +163,29 @@ ORDER BY 1
 SQL
 }
 
+expected_flyway_versions() {
+  local migration_glob="src/main/resources/db/migration/api/V*.sql"
+  local migration_dir="src/main/resources/db/migration/api"
+  local versions
+  if [[ ! -d "${migration_dir}" ]]; then
+    echo "상태: Fail"
+    echo "차단 사유: API Flyway migration directory not found: ${migration_dir}"
+    exit 1
+  fi
+  versions="$(
+    find "${migration_dir}" -maxdepth 1 -type f -name 'V*.sql' -exec basename {} \; \
+      | sed -E 's/^V([0-9]+)__.*/\1/' \
+      | sort -n \
+      | awk 'BEGIN { sep = "" } /^[0-9]+$/ { printf "%s%s:true", sep, $1; sep = "," } END { print "" }'
+  )"
+  if [[ -z "${versions}" ]]; then
+    echo "상태: Fail"
+    echo "차단 사유: no API Flyway migrations found: ${migration_glob}"
+    exit 1
+  fi
+  printf "%s\n" "${versions}"
+}
+
 write_table_stats() {
   local database="$1"
   local output_file="$2"
@@ -179,15 +202,16 @@ verify_clean_db() {
   require_database_exists "${LEGACY_DB}"
   require_database_exists "${CLEAN_DB}"
 
-  local flyway_versions
+  local flyway_versions expected_versions
+  expected_versions="$(expected_flyway_versions)"
   flyway_versions="$(psql_scalar "${CLEAN_DB}" "
     SELECT string_agg(version || ':' || success::text, ',' ORDER BY installed_rank)
     FROM flyway_schema_history
     WHERE version IS NOT NULL
   ")"
-  if [[ "${flyway_versions}" != "1:true,2:true" ]]; then
+  if [[ "${flyway_versions}" != "${expected_versions}" ]]; then
     echo "상태: Fail"
-    echo "차단 사유: clean DB Flyway history mismatch: ${flyway_versions}"
+    echo "차단 사유: clean DB Flyway history mismatch: actual=${flyway_versions}, expected=${expected_versions}"
     exit 1
   fi
 
@@ -359,6 +383,8 @@ self_test() {
   table_stats_sql | grep -q "trade_source_key_registry"
   table_stats_sql | grep -q "trade_match_evidence"
   max_id_stats_sql | grep -q "raw_trade_ingest"
+  expected_flyway_versions | grep -q "1:true"
+  expected_flyway_versions | grep -q "3:true"
   echo "self-test passed: clean DB cutover verifier"
 }
 

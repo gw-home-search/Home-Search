@@ -21,6 +21,15 @@ class NewsBoundaryTest {
 	}
 
 	@Test
+	@DisplayName("news runtime은 later-scope라 기본값으로 실행되지 않는다")
+	void newsRuntimeIsDisabledByDefault() {
+		NewsRuntimeProperties properties = new NewsRuntimeProperties();
+
+		assertThat(properties.isEnabled()).isFalse();
+		assertThat(properties.boundary()).isEqualTo(NewsBoundary.SCOPE);
+	}
+
+	@Test
 	@DisplayName("news app은 legacy news table clean DB 검증을 API 앱 대신 소유한다")
 	void ownsLegacyNewsCleanDbVerifier() throws IOException {
 		assertThat(NEWS_CLEAN_DB_CUTOVER_SCRIPT).exists();

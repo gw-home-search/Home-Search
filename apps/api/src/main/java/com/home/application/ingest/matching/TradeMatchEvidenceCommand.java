@@ -8,7 +8,7 @@ import com.home.domain.ingest.matching.TradeMatchPath;
 import com.home.domain.ingest.source.IngestSource;
 import com.home.domain.trade.RtmsJibunPnu;
 import com.home.application.ingest.normalization.RtmsJibunPnuNormalizer;
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 
 /**
  * raw ingest row와 RTMS match attempt를 연결하는 evidence 저장 command입니다.

@@ -1,4 +1,4 @@
-package com.home.application.ingest.trade;
+package com.home.ingestcore.rtms;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -6,11 +6,10 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Locale;
-import com.home.domain.trade.TradeExclAreaNormalizer;
 
-final class SourceKeyGenerator {
+public final class SourceKeyGenerator {
 
-	String generate(String source, OpenApiTradeItem item) {
+	public String generate(String source, OpenApiTradeItem item) {
 		String canonicalSource = normalize(source).toUpperCase(Locale.ROOT);
 		String material = String.join("|",
 			canonicalSource,
@@ -29,7 +28,7 @@ final class SourceKeyGenerator {
 		return canonicalSource + ":" + sha256(material);
 	}
 
-	String hashPayload(String payload) {
+	public String hashPayload(String payload) {
 		return sha256(payload == null ? "" : payload);
 	}
 

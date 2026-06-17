@@ -2,6 +2,8 @@ package com.home.application.ingest.trade;
 
 import java.util.Objects;
 
+import com.home.ingestcore.rtms.OpenApiTradeItem;
+
 /**
  * Open API trade item을 raw evidence로 먼저 저장한 뒤 complex match와 normalized trade insert를 수행하는 ingest service입니다.
  */

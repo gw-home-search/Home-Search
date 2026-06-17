@@ -3,7 +3,7 @@ package com.home.application.ingest.run;
 import java.util.LinkedHashSet;
 import java.util.List;
 
-import com.home.domain.ingest.rtms.RtmsDealMonth;
+import com.home.ingestcore.rtms.RtmsDealMonth;
 import com.home.domain.ingest.run.RtmsIngestRunStatus;
 
 /**

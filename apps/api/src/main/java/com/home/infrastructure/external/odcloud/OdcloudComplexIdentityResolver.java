@@ -7,7 +7,7 @@ import java.util.Optional;
 import com.home.application.coordinate.identity.ComplexIdentityCandidate;
 import com.home.application.coordinate.identity.ComplexIdentityCandidatePolicy;
 import com.home.application.ingest.matching.ComplexIdentityResolver;
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 import com.home.infrastructure.external.ExternalApiUri;
 import com.home.infrastructure.external.odcloud.dto.OdcloudAptResponse;
 

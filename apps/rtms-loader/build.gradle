@@ -19,6 +19,8 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 dependencies {
+    implementation 'com.home:rtms-ingest-core:0.0.1-SNAPSHOT'
+
     implementation 'org.springframework.boot:spring-boot-starter'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }

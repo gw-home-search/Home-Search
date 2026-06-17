@@ -2,8 +2,8 @@ package com.home.application.ingest.raw;
 
 import java.time.Instant;
 
-import com.home.domain.ingest.rtms.RtmsDealMonth;
-import com.home.domain.ingest.rtms.RtmsLawdCode;
+import com.home.ingestcore.rtms.RtmsDealMonth;
+import com.home.ingestcore.rtms.RtmsLawdCode;
 import com.home.domain.ingest.source.IngestSource;
 import com.home.domain.ingest.source.IngestSourceKey;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;

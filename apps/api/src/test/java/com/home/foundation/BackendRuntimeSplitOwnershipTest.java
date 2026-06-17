@@ -19,6 +19,9 @@ class BackendRuntimeSplitOwnershipTest {
 	private static final Path SOURCE_DATA_ROOT = Path.of("../../apps/source-data");
 	private static final Path NEWS_ROOT = Path.of("../../apps/news");
 	private static final Path RTMS_INGEST_CORE_ROOT = Path.of("../../libs/rtms-ingest-core");
+	private static final Path API_APPLICATION_INGEST_TRADE =
+		Path.of("src/main/java/com/home/application/ingest/trade");
+	private static final Path API_BUILD_GRADLE = Path.of("build.gradle");
 
 	@Test
 	@DisplayName("API runtime은 RTMS daily refresh만 소유하고 one-shot 초기 적재 runner를 소유하지 않는다")
@@ -38,6 +41,24 @@ class BackendRuntimeSplitOwnershipTest {
 		assertThat(SOURCE_DATA_ROOT.resolve("src/main/java/com/home/sourcedata/SourceDataApplication.java")).exists();
 		assertThat(NEWS_ROOT.resolve("src/main/java/com/home/news/NewsApplication.java")).exists();
 		assertThat(RTMS_INGEST_CORE_ROOT.resolve("src/main/java/com/home/ingestcore/RtmsIngestCoreBoundary.java")).exists();
+	}
+
+	@Test
+	@DisplayName("RTMS 순수 ingest 값과 정규화 규칙은 API 앱이 아니라 ingest-core가 소유한다")
+	void rtmsPureIngestTypesBelongToSharedCore() throws IOException {
+		String apiBuild = Files.readString(API_BUILD_GRADLE);
+		Path coreRtmsPackage = RTMS_INGEST_CORE_ROOT.resolve("src/main/java/com/home/ingestcore/rtms");
+
+		assertThat(apiBuild).contains("com.home:rtms-ingest-core");
+		assertThat(coreRtmsPackage.resolve("OpenApiTradeItem.java")).exists();
+		assertThat(coreRtmsPackage.resolve("ParsedRtmsTrade.java")).exists();
+		assertThat(coreRtmsPackage.resolve("SourceKeyGenerator.java")).exists();
+		assertThat(coreRtmsPackage.resolve("RtmsDealMonth.java")).exists();
+		assertThat(coreRtmsPackage.resolve("RtmsLawdCode.java")).exists();
+		assertThat(coreRtmsPackage.resolve("TradeExclAreaNormalizer.java")).exists();
+		assertThat(API_APPLICATION_INGEST_TRADE.resolve("OpenApiTradeItem.java")).doesNotExist();
+		assertThat(API_APPLICATION_INGEST_TRADE.resolve("ParsedRtmsTrade.java")).doesNotExist();
+		assertThat(API_APPLICATION_INGEST_TRADE.resolve("SourceKeyGenerator.java")).doesNotExist();
 	}
 
 	@Test

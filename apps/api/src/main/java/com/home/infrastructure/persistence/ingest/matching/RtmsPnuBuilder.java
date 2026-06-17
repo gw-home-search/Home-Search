@@ -2,7 +2,7 @@ package com.home.infrastructure.persistence.ingest.matching;
 
 import java.util.Optional;
 
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 import com.home.application.ingest.normalization.RtmsJibunPnuNormalizer;
 
 final class RtmsPnuBuilder {

@@ -38,6 +38,8 @@ configurations {
 }
 
 dependencies {
+    implementation 'com.home:rtms-ingest-core:0.0.1-SNAPSHOT'
+
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'

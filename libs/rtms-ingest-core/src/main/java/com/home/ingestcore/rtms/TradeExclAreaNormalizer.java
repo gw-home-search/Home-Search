@@ -1,4 +1,4 @@
-package com.home.domain.trade;
+package com.home.ingestcore.rtms;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

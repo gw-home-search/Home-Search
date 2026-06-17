@@ -20,7 +20,7 @@ import com.home.application.ingest.raw.RawTradeIngestRepository;
 import com.home.domain.ingest.matching.TradeMatchStatus;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
 import com.home.application.ingest.raw.RawTradeItemParser;
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 
 class TradeMatchRematchServiceTest {
 

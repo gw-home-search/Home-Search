@@ -1,4 +1,4 @@
-package com.home.application.ingest.trade;
+package com.home.ingestcore.rtms;
 
 public record OpenApiTradeItem(
 	String aptDong,

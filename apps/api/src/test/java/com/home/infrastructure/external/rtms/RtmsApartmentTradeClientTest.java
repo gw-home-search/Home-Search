@@ -7,7 +7,7 @@ import java.util.List;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

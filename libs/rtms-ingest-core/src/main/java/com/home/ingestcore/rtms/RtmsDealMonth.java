@@ -1,4 +1,4 @@
-package com.home.domain.ingest.rtms;
+package com.home.ingestcore.rtms;
 
 import java.util.Optional;
 

@@ -9,6 +9,66 @@ permissions:
   pull-requests: read
 
 jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend_changed: ${{ steps.classify.outputs.backend_changed }}
+      frontend_changed: ${{ steps.classify.outputs.frontend_changed }}
+      ci_changed: ${{ steps.classify.outputs.ci_changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Classify changed files
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+            git diff --name-only FETCH_HEAD HEAD > changed-files.txt
+          else
+            {
+              echo ".github/workflows/ci.yml"
+              echo "apps/api/"
+              echo "apps/web/"
+            } > changed-files.txt
+          fi
+
+          backend_changed=false
+          frontend_changed=false
+          ci_changed=false
+
+          while IFS= read -r path; do
+            case "$path" in
+              .github/workflows/ci.yml)
+                ci_changed=true
+                ;;
+              apps/api/*|apps/source-data/*|infra/*|docs/API_CONTRACT.md|docs/DATA_STORAGE.md|docs/INFRA_AND_ENV.md|settings.gradle|build.gradle|gradle.properties|gradle/*)
+                backend_changed=true
+                ;;
+              apps/web/*)
+                frontend_changed=true
+                ;;
+            esac
+          done < changed-files.txt
+
+          if [[ "$ci_changed" == "true" ]]; then
+            backend_changed=true
+            frontend_changed=true
+          fi
+
+          {
+            echo "backend_changed=$backend_changed"
+            echo "frontend_changed=$frontend_changed"
+            echo "ci_changed=$ci_changed"
+          } >> "$GITHUB_OUTPUT"
+
   test-display-name-policy:
     name: test-display-name-policy
     runs-on: ubuntu-latest
@@ -22,15 +82,18 @@ jobs:
   backend-test:
     name: backend-test
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.backend_changed == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
       - name: Run backend tests
         working-directory: apps/api
-        run: ./gradlew backendQualityCheck
+        run: ./gradlew backendQualityCheck --no-daemon --stacktrace
       - name: Upload backend quality artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -46,6 +109,8 @@ jobs:
   frontend-test-build:
     name: frontend-test-build
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.frontend_changed == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

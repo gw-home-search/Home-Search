@@ -24,10 +24,10 @@ class CoordinateImportOpsConfigurationTest {
 	private static final Path COORDINATE_COPY_CUTOVER_SCRIPT =
 			SOURCE_DATA_ROOT.resolve("ops/coordinate-source-db-copy-cutover.sh");
 	private static final Path DAILY_BATCH_LIVE_SMOKE_SCRIPT = Path.of("ops/run-daily-batch-live-smoke.sh");
+	private static final Path API_BASELINE_MIGRATION =
+			Path.of("src/main/resources/db/migration/api/V1__create_clean_core_schema.sql");
 	private static final Path COORDINATE_SOURCE_SCHEMA_SQL =
 			SOURCE_DATA_ROOT.resolve("ops/sql/coordinate-source-schema.sql");
-	private static final Path OPERATIONAL_REFERENCE_REMOVAL_MIGRATION =
-			Path.of("src/main/resources/db/migration/api/V3__remove_operational_coordinate_source_reference.sql");
 	private static final Path GEO_ENRICHMENT_MIGRATION =
 			SOURCE_DATA_ROOT.resolve("src/main/resources/db/migration/geo-enrichment/V1__create_geo_enrichment_schema.sql");
 	private static final Path WORKLOG = Path.of("../../.codex/harness/worklog.toml");
@@ -181,18 +181,20 @@ class CoordinateImportOpsConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("operational migration은 빈 coordinate source reference 잔재만 제거한다")
-	void operationalMigrationRemovesOnlyEmptyCoordinateSourceReferenceTables() throws IOException {
-		assertThat(OPERATIONAL_REFERENCE_REMOVAL_MIGRATION).exists();
+	@DisplayName("API clean baseline은 coordinate source reference schema를 생성하지 않는다")
+	void apiCleanBaselineDoesNotCreateCoordinateSourceReferenceSchema() throws IOException {
+		assertThat(API_BASELINE_MIGRATION).exists();
+		assertThat(Path.of("src/main/resources/db/migration/api/V3__remove_operational_coordinate_source_reference.sql"))
+			.doesNotExist();
 
-		String content = Files.readString(OPERATIONAL_REFERENCE_REMOVAL_MIGRATION);
+		String content = Files.readString(API_BASELINE_MIGRATION);
 
-		assertThat(content).contains("Refusing to drop operational coordinate source tables with rows");
-		assertThat(content).contains("EXECUTE format('SELECT EXISTS (SELECT 1 FROM %s LIMIT 1)', source_table)");
-		assertThat(content).contains("DROP TABLE IF EXISTS reference.parcel_coordinate_snapshot");
-		assertThat(content).contains("DROP SCHEMA IF EXISTS reference");
-		assertThat(content).doesNotContain("CASCADE");
-		assertThat(content).doesNotContain("count(*) FROM reference.parcel_coordinate_snapshot");
+		assertThat(content).doesNotContain("CREATE SCHEMA IF NOT EXISTS reference");
+		assertThat(content).doesNotContain("CREATE TABLE reference.coordinate_snapshot_run");
+		assertThat(content).doesNotContain("CREATE TABLE reference.parcel_coordinate_snapshot");
+		assertThat(content).doesNotContain("reference.coordinate_snapshot_publish_checkpoint");
+		assertThat(content).doesNotContain("reference.parcel_coordinate_snapshot_stage");
+		assertThat(content).contains("CREATE TABLE public.building_footprint_snapshot");
 	}
 
 	@Test

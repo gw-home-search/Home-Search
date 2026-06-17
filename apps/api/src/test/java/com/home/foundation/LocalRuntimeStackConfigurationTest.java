@@ -35,13 +35,17 @@ class LocalRuntimeStackConfigurationTest {
 		assertThat(LOCAL_COMPOSE).exists();
 
 		String content = Files.readString(LOCAL_COMPOSE);
+		String operationalDbUrl = "DB_JDBC_URL: jdbc:postgresql://postgis:5432/${HOME_SEARCH_DB_NAME:-home_search}";
+		String coordinateSourceDbUrl =
+				"COORDINATE_SOURCE_DB_JDBC_URL: ${COORDINATE_SOURCE_DB_JDBC_URL:-jdbc:postgresql://home-search-coordinate-source-postgis-arm64-v4:5432/home_search_coordinate_source}";
 
 		assertThat(content).contains("postgis/postgis:16-3.4");
-		assertThat(content).contains("DB_JDBC_URL: jdbc:postgresql://postgis:5432/${HOME_SEARCH_DB_NAME:-home_search}");
+		assertThat(content).contains(operationalDbUrl);
 		assertThat(content).contains("env_file:");
 		assertThat(content).contains("- ../apps/api/ops/local-runtime.env.example");
 		assertThat(content).contains("- ${HOME_SEARCH_API_ENV_FILE:-../apps/api/ops/local-runtime.override.env.example}");
-		assertThat(content).contains("COORDINATE_SOURCE_DB_JDBC_URL: ${COORDINATE_SOURCE_DB_JDBC_URL:-jdbc:postgresql://home-search-coordinate-source-postgis-arm64-v4:5432/home_search_coordinate_source}");
+		assertThat(content).contains(coordinateSourceDbUrl);
+		assertThat(coordinateSourceDbUrl).doesNotContain("postgis:5432/${HOME_SEARCH_DB_NAME:-home_search}");
 		assertThat(content).contains("COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS: ${COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS:-3000}");
 		assertThat(content).contains("COORDINATE_SOURCE_DB_READ_ONLY: ${COORDINATE_SOURCE_DB_READ_ONLY:-true}");
 		assertThat(content).contains("HOME_INGEST_RTMS_ENABLED: ${HOME_INGEST_RTMS_ENABLED:-false}");

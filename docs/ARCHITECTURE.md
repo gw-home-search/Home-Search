@@ -70,7 +70,7 @@ Home Search uses two database roles:
 
 - `home_search`: operational database for API, RTMS ingest, map display, and
   evidence.
-- `home_search_coordinate_full_durable_*`: coordinate source database used only
+- `home_search_coordinate_source`: coordinate source database used only
   as a read-only PNU coordinate lookup source.
 
 The backend should connect to the coordinate source database through a dedicated

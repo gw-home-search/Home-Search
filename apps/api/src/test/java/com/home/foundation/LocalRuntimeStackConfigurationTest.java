@@ -48,8 +48,8 @@ class LocalRuntimeStackConfigurationTest {
 		assertThat(coordinateSourceDbUrl).doesNotContain("postgis:5432/${HOME_SEARCH_DB_NAME:-home_search}");
 		assertThat(content).contains("COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS: ${COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS:-3000}");
 		assertThat(content).contains("COORDINATE_SOURCE_DB_READ_ONLY: ${COORDINATE_SOURCE_DB_READ_ONLY:-true}");
-		assertThat(content).contains("HOME_INGEST_RTMS_ENABLED: ${HOME_INGEST_RTMS_ENABLED:-false}");
-		assertThat(content).contains("HOME_INGEST_RTMS_MODE: ${HOME_INGEST_RTMS_MODE:-one-shot}");
+		assertThat(content).doesNotContain("HOME_INGEST_RTMS_ENABLED");
+		assertThat(content).doesNotContain("HOME_INGEST_RTMS_MODE");
 		assertThat(content).contains("HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY: ${HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY:-false}");
 		assertThat(content).contains("SPRING_FLYWAY_LOCATIONS: classpath:db/migration/api");
 		assertThat(content).contains("SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS: ${SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS:-*:missing}");

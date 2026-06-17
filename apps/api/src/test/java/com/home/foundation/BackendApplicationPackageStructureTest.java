@@ -120,7 +120,10 @@ class BackendApplicationPackageStructureTest {
 		)).exists();
 		assertThat(Path.of(
 			"src/main/java/com/home/infrastructure/scheduling/rtms/RtmsOneShotIngestApplicationRunner.java"
-		)).exists();
+		)).doesNotExist();
+		assertThat(Path.of(
+			"src/main/java/com/home/infrastructure/scheduling/rtms/RtmsOneShotTradeIngestRunner.java"
+		)).doesNotExist();
 		assertThat(RTMS_BATCH_ORCHESTRATION_CONFIGURATION).exists();
 		assertThat(Files.readString(RTMS_EXTERNAL_API_CONFIGURATION))
 			.doesNotContain("RtmsMonthlyRefreshRunner")
@@ -162,8 +165,9 @@ class BackendApplicationPackageStructureTest {
 			"src/main/java/com/home/infrastructure/ApplicationRunnerOrders.java"
 		));
 		assertThat(orders)
-			.contains("RAW_INGEST_RECONCILIATION = RTMS_ONE_SHOT_INGEST + INGEST_PHASE_STEP")
+			.contains("RAW_INGEST_RECONCILIATION = 100")
 			.contains("COORDINATE_READINESS = RAW_INGEST_RECONCILIATION + INGEST_PHASE_STEP")
+			.doesNotContain("RTMS_ONE_SHOT_INGEST")
 			.doesNotContain("NEWS_");
 	}
 
@@ -221,7 +225,9 @@ class BackendApplicationPackageStructureTest {
 		String rtmsConfiguration = Files.readString(RTMS_BATCH_ORCHESTRATION_CONFIGURATION);
 
 		assertThat(rtmsConfiguration)
-			.contains("RtmsOneShotIngestConfigurationProperties")
+			.contains("RtmsMonthlyRefreshRunner")
+			.contains("home.ingest.rtms.allow-coordinate-pending-only")
+			.doesNotContain("RtmsOneShotIngestConfigurationProperties")
 			.doesNotContain("@Value(\"${home.ingest.rtms.enabled:");
 	}
 

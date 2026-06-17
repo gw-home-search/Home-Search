@@ -1,0 +1,26 @@
+plugins {
+    id 'java-library'
+}
+
+group = 'com.home'
+version = '0.0.1-SNAPSHOT'
+description = 'Home Search RTMS ingest invariant core boundary'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:6.1.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

@@ -52,6 +52,7 @@ class HomeSearchApiApplicationTests {
 	void defaultOnRecoveryRunnersAreRegisteredWithoutDatabase() {
 		assertThat(applicationContext.containsBean("rawIngestReconciliationRunner")).isTrue();
 		assertThat(applicationContext.containsBean("tradePartitionMaintenanceRunner")).isTrue();
+		assertThat(applicationContext.containsBean("rtmsOneShotIngestApplicationRunner")).isFalse();
 	}
 
 	@Test

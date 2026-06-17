@@ -30,7 +30,9 @@ class JdbcCoordinateSourceParcelCoordinateRepositoryTest extends JdbcPostgresCon
 		initializeJdbc(POSTGRES);
 		jdbcClient.sql("DROP SCHEMA IF EXISTS reference CASCADE").update();
 		jdbcClient.sql("DROP EXTENSION IF EXISTS postgis CASCADE").update();
-		new ResourceDatabasePopulator(new FileSystemResource(Path.of("ops/sql/coordinate-source-schema.sql")))
+		new ResourceDatabasePopulator(
+			new FileSystemResource(Path.of("../../apps/source-data/ops/sql/coordinate-source-schema.sql"))
+		)
 			.execute(dataSource);
 	}
 

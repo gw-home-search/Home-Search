@@ -44,8 +44,8 @@ class ComplexCoordinateReadinessRunnerTest {
 	}
 
 	@Test
-	@DisplayName("coordinate readiness runner는 RTMS one-shot ingest 이후 실행된다")
-	void runnerRunsAfterRtmsOneShotIngest() {
+	@DisplayName("coordinate readiness runner는 raw ingest reconciliation 이후 실행된다")
+	void runnerRunsAfterRawIngestReconciliation() {
 		ComplexCoordinateReadinessRunner runner = new ComplexCoordinateReadinessRunner(
 			new FakeReadinessService(),
 			3,
@@ -54,7 +54,7 @@ class ComplexCoordinateReadinessRunnerTest {
 		);
 
 		assertThat(runner.getOrder()).isEqualTo(ApplicationRunnerOrders.COORDINATE_READINESS);
-		assertThat(runner.getOrder()).isGreaterThan(ApplicationRunnerOrders.RTMS_ONE_SHOT_INGEST);
+		assertThat(runner.getOrder()).isGreaterThan(ApplicationRunnerOrders.RAW_INGEST_RECONCILIATION);
 	}
 
 	private static final class FakeReadinessService extends ComplexCoordinateReadinessService {

@@ -10,8 +10,8 @@ services:
     depends_on:
       postgis:
         condition: service_healthy
-    working_dir: /workspace/apps/api
-    entrypoint: ["bash", "/workspace/apps/api/ops/import-vworld-coordinate-snapshot.sh"]
+    working_dir: /workspace/apps/source-data
+    entrypoint: ["bash", "/workspace/apps/source-data/ops/import-vworld-coordinate-snapshot.sh"]
     environment:
       PGHOST: postgis
       PGPORT: "5432"
@@ -46,8 +46,8 @@ services:
     depends_on:
       postgis:
         condition: service_healthy
-    working_dir: /workspace/apps/api
-    entrypoint: ["bash", "/workspace/apps/api/ops/verify-coordinate-snapshot-smoke.sh"]
+    working_dir: /workspace/apps/source-data
+    entrypoint: ["bash", "/workspace/apps/source-data/ops/verify-coordinate-snapshot-smoke.sh"]
     environment:
       PGHOST: postgis
       PGPORT: "5432"

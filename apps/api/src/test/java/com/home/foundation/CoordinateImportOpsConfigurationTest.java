@@ -11,18 +11,25 @@ import org.junit.jupiter.api.Test;
 
 class CoordinateImportOpsConfigurationTest {
 
-	private static final Path COORDINATE_IMPORT_COMPOSE = Path.of("ops/docker-compose.coordinate-import.yml");
-	private static final Path COORDINATE_SOURCE_DB_COMPOSE = Path.of("ops/docker-compose.coordinate-source-db.yml");
-	private static final Path COORDINATE_IMPORT_SCRIPT = Path.of("ops/import-vworld-coordinate-snapshot.sh");
-	private static final Path COORDINATE_SMOKE_SCRIPT = Path.of("ops/verify-coordinate-snapshot-smoke.sh");
-	private static final Path COORDINATE_BOUNDARY_SCRIPT = Path.of("ops/verify-coordinate-source-boundary.sh");
-	private static final Path COORDINATE_COPY_CUTOVER_SCRIPT = Path.of("ops/coordinate-source-db-copy-cutover.sh");
+	private static final Path SOURCE_DATA_ROOT = Path.of("../../apps/source-data");
+	private static final Path COORDINATE_IMPORT_COMPOSE = SOURCE_DATA_ROOT.resolve("ops/docker-compose.coordinate-import.yml");
+	private static final Path COORDINATE_SOURCE_DB_COMPOSE =
+			SOURCE_DATA_ROOT.resolve("ops/docker-compose.coordinate-source-db.yml");
+	private static final Path COORDINATE_IMPORT_SCRIPT =
+			SOURCE_DATA_ROOT.resolve("ops/import-vworld-coordinate-snapshot.sh");
+	private static final Path COORDINATE_SMOKE_SCRIPT =
+			SOURCE_DATA_ROOT.resolve("ops/verify-coordinate-snapshot-smoke.sh");
+	private static final Path COORDINATE_BOUNDARY_SCRIPT =
+			SOURCE_DATA_ROOT.resolve("ops/verify-coordinate-source-boundary.sh");
+	private static final Path COORDINATE_COPY_CUTOVER_SCRIPT =
+			SOURCE_DATA_ROOT.resolve("ops/coordinate-source-db-copy-cutover.sh");
 	private static final Path DAILY_BATCH_LIVE_SMOKE_SCRIPT = Path.of("ops/run-daily-batch-live-smoke.sh");
-	private static final Path COORDINATE_SOURCE_SCHEMA_SQL = Path.of("ops/sql/coordinate-source-schema.sql");
+	private static final Path COORDINATE_SOURCE_SCHEMA_SQL =
+			SOURCE_DATA_ROOT.resolve("ops/sql/coordinate-source-schema.sql");
 	private static final Path OPERATIONAL_REFERENCE_REMOVAL_MIGRATION =
 			Path.of("src/main/resources/db/migration/api/V3__remove_operational_coordinate_source_reference.sql");
 	private static final Path GEO_ENRICHMENT_MIGRATION =
-			Path.of("src/main/resources/db/migration/geo-enrichment/V1__create_geo_enrichment_schema.sql");
+			SOURCE_DATA_ROOT.resolve("src/main/resources/db/migration/geo-enrichment/V1__create_geo_enrichment_schema.sql");
 	private static final Path WORKLOG = Path.of("../../.codex/harness/worklog.toml");
 
 	@Test
@@ -48,10 +55,11 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("HOME_COORDINATE_CHUNK_PREFIX_LENGTH: ${HOME_COORDINATE_CHUNK_PREFIX_LENGTH:-5}");
 		assertThat(content).contains("${HOME_SEARCH_REPO_DIR:-..}:/workspace:ro");
 		assertThat(content).contains("${HOME_COORDINATE_HOST_SHP_DIR:-../coordinate-input}:/coordinate-input:ro");
-		assertThat(content).contains("bash\", \"/workspace/apps/api/ops/import-vworld-coordinate-snapshot.sh");
+		assertThat(content).contains("bash\", \"/workspace/apps/source-data/ops/import-vworld-coordinate-snapshot.sh");
 		assertThat(verifier).contains("image: postgis/postgis:16-3.4-alpine");
 		assertThat(verifier).contains("platform: ${HOME_COORDINATE_IMPORT_PLATFORM:-linux/amd64}");
-		assertThat(verifier).contains("entrypoint: [\"bash\", \"/workspace/apps/api/ops/verify-coordinate-snapshot-smoke.sh\"]");
+		assertThat(verifier)
+			.contains("entrypoint: [\"bash\", \"/workspace/apps/source-data/ops/verify-coordinate-snapshot-smoke.sh\"]");
 		assertThat(verifier).contains("PGHOST: postgis");
 		assertThat(verifier).contains("PGPORT: \"5432\"");
 		assertThat(verifier)

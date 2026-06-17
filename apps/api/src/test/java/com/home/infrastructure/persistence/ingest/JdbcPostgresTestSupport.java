@@ -69,10 +69,19 @@ public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSuppo
 				jdbcClient.sql("DELETE FROM " + table).update();
 			}
 			for (String table : RESET_TABLES) {
-				jdbcClient.sql("DELETE FROM " + table).update();
+				if (tableExists(table)) {
+					jdbcClient.sql("DELETE FROM " + table).update();
+				}
 			}
 			resetSequences();
 		});
+	}
+
+	private boolean tableExists(String table) {
+		return Boolean.TRUE.equals(jdbcClient.sql("SELECT to_regclass(:tableName) IS NOT NULL")
+			.param("tableName", table)
+			.query(Boolean.class)
+			.single());
 	}
 
 	private List<String> extraResetTables() {

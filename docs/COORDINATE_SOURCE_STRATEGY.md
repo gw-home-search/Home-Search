@@ -9,7 +9,7 @@ ingest and map display.
 Home Search has two separate database roles:
 
 - `home_search`: operational database for public APIs and ingest results.
-- `home_search_coordinate_full_durable_*`: coordinate source database used as a
+- `home_search_coordinate_source`: coordinate source database used as a
   read-only PNU coordinate lookup source.
 
 The coordinate source database is not the operational database. Its internal
@@ -228,7 +228,7 @@ DB_PASSWORD=...
 Coordinate Source DB:
 
 ```text
-COORDINATE_SOURCE_DB_JDBC_URL=jdbc:postgresql://postgis:5432/home_search_coordinate_full_durable_20260527182147
+COORDINATE_SOURCE_DB_JDBC_URL=jdbc:postgresql://home-search-coordinate-source-postgis:5432/home_search_coordinate_source
 COORDINATE_SOURCE_DB_USERNAME=home_search
 COORDINATE_SOURCE_DB_PASSWORD=...
 HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY=false

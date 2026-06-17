@@ -13,7 +13,7 @@ mixing coordinate source storage with operational map and trade storage.
 
 ```text
 Coordinate Source DB
-  home_search_coordinate_full_durable_*
+  home_search_coordinate_source
   read-only lookup source for PNU coordinates
 
 Operational DB

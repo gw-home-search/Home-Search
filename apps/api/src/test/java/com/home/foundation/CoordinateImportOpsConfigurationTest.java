@@ -17,6 +17,7 @@ class CoordinateImportOpsConfigurationTest {
 	private static final Path COORDINATE_SMOKE_SCRIPT = Path.of("ops/verify-coordinate-snapshot-smoke.sh");
 	private static final Path COORDINATE_BOUNDARY_SCRIPT = Path.of("ops/verify-coordinate-source-boundary.sh");
 	private static final Path COORDINATE_COPY_CUTOVER_SCRIPT = Path.of("ops/coordinate-source-db-copy-cutover.sh");
+	private static final Path DAILY_BATCH_LIVE_SMOKE_SCRIPT = Path.of("ops/run-daily-batch-live-smoke.sh");
 	private static final Path COORDINATE_SOURCE_SCHEMA_SQL = Path.of("ops/sql/coordinate-source-schema.sql");
 	private static final Path OPERATIONAL_REFERENCE_REMOVAL_MIGRATION =
 			Path.of("src/main/resources/db/migration/api/V3__remove_operational_coordinate_source_reference.sql");
@@ -283,6 +284,20 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("external: true");
 		assertThat(content).contains("name: home-search-local_home-search-local");
 		assertThat(content).doesNotContain("home-search-local_home-search-postgis-data");
+	}
+
+	@Test
+	@DisplayName("daily batch live smoke runner는 운영 DB를 coordinate source fallback으로 재사용하지 않는다")
+	void dailyBatchLiveSmokeRunnerDoesNotReuseOperationalDbAsCoordinateSourceFallback() throws IOException {
+		assertThat(DAILY_BATCH_LIVE_SMOKE_SCRIPT).exists();
+
+		String content = Files.readString(DAILY_BATCH_LIVE_SMOKE_SCRIPT);
+
+		assertThat(content).contains("DB_JDBC_URL=\"\\${DB_JDBC_URL:-jdbc:postgresql://localhost:15432/${DB_NAME}}\"");
+		assertThat(content)
+			.contains("COORDINATE_SOURCE_DB_JDBC_URL=\"\\${COORDINATE_SOURCE_DB_JDBC_URL:-jdbc:postgresql://localhost:15435/home_search_coordinate_source}\"");
+		assertThat(content)
+			.doesNotContain("COORDINATE_SOURCE_DB_JDBC_URL=\"\\${COORDINATE_SOURCE_DB_JDBC_URL:-jdbc:postgresql://localhost:15432/${DB_NAME}}\"");
 	}
 
 	@Test

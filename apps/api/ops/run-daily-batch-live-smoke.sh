@@ -60,6 +60,7 @@ run_self_test() {
   require_positive_integer "HOME_BATCH_LIVE_SMOKE_SERVER_PORT" "${SERVER_PORT}"
   [[ -f "${OPS_DIR}/batch-live-smoke-queries.sql" ]]
   grep -q "HOME_INGEST_RTMS_DAILY_ENABLED=true" "$0"
+  grep -q "COORDINATE_SOURCE_DB_JDBC_URL=.*localhost:15435/home_search_coordinate_source" "$0"
   echo "self-test passed: daily batch live smoke runner"
 }
 
@@ -119,7 +120,7 @@ cd "${API_DIR}"
 DB_JDBC_URL="\${DB_JDBC_URL:-jdbc:postgresql://localhost:15432/${DB_NAME}}" \
 DB_USERNAME="\${DB_USERNAME:-${DB_USER}}" \
 DB_PASSWORD="\${DB_PASSWORD:-home_search_local_password}" \
-COORDINATE_SOURCE_DB_JDBC_URL="\${COORDINATE_SOURCE_DB_JDBC_URL:-jdbc:postgresql://localhost:15432/${DB_NAME}}" \
+COORDINATE_SOURCE_DB_JDBC_URL="\${COORDINATE_SOURCE_DB_JDBC_URL:-jdbc:postgresql://localhost:15435/home_search_coordinate_source}" \
 COORDINATE_SOURCE_DB_USERNAME="\${COORDINATE_SOURCE_DB_USERNAME:-${DB_USER}}" \
 COORDINATE_SOURCE_DB_PASSWORD="\${COORDINATE_SOURCE_DB_PASSWORD:-home_search_local_password}" \
 SERVER_PORT="${SERVER_PORT}" \

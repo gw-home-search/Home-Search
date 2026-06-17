@@ -116,9 +116,6 @@ class BaselineRuntimeSmokeTest {
 	@DisplayName("clean Flyway baseline은 later-scope와 완료된 일회성 작업 테이블을 만들지 않는다")
 	void cleanFlywayBaselineDoesNotCreateLaterScopeOrCompletedOneShotTables() {
 		assertThat(existingRelationNames(
-			"public.news_article_observation",
-			"public.news_signal_feature",
-			"public.news_collection_run",
 			"public.rtms_backfill_job",
 			"public.rtms_backfill_chunk",
 			"public.rtms_backfill_chunk_run",

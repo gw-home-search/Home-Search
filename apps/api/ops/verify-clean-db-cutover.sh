@@ -220,14 +220,19 @@ verify_clean_db() {
     SELECT count(*)
     FROM (
       VALUES
-        ('public.news_article_observation'),
-        ('public.news_signal_feature'),
-        ('public.news_collection_run'),
         ('public.rtms_backfill_job'),
         ('public.rtms_backfill_chunk'),
         ('public.rtms_backfill_chunk_run'),
         ('public.complex_relation_case'),
         ('public.complex_relation_case_complex'),
+        ('reference.parcel_coordinate_snapshot'),
+        ('reference.parcel_coordinate_snapshot_stage'),
+        ('reference.parcel_coordinate_snapshot_publish'),
+        ('reference.coordinate_snapshot_run'),
+        ('reference.coordinate_snapshot_region_checkpoint'),
+        ('reference.coordinate_snapshot_stage_chunk_checkpoint'),
+        ('reference.coordinate_snapshot_publish_checkpoint'),
+        ('reference.coordinate_snapshot_publish_chunk_checkpoint'),
         ('public.backup_ambiguous_complex_20260613'),
         ('public.backup_complex_metadata_20260612')
     ) AS target(name)

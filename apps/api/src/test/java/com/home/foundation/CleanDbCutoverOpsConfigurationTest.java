@@ -25,9 +25,9 @@ class CleanDbCutoverOpsConfigurationTest {
 		assertThat(content).contains("HOME_CLEAN_CUTOVER_CLEAN_DB");
 		assertThat(content).contains("home_search_clean_codex_20260616");
 		assertThat(content).contains("flyway_schema_history");
-		assertThat(content).contains("news_article_observation");
 		assertThat(content).contains("rtms_backfill_job");
 		assertThat(content).contains("complex_relation_case");
+		assertThat(content).contains("reference.parcel_coordinate_snapshot");
 		assertThat(content).contains("pg_constraint");
 		assertThat(content).contains("NOT convalidated");
 		assertThat(content).contains("raw_trade_ingest");
@@ -38,6 +38,9 @@ class CleanDbCutoverOpsConfigurationTest {
 		assertThat(content).contains("verification_mode=\"max-id\"");
 		assertThat(content).contains("verification_mode=\"exact-counts\"");
 		assertThat(content).contains("--self-test");
+		assertThat(content).doesNotContain("news_article_observation");
+		assertThat(content).doesNotContain("news_signal_feature");
+		assertThat(content).doesNotContain("news_collection_run");
 	}
 
 	@Test

@@ -32,7 +32,7 @@ services:
       HOME_COORDINATE_RESUME_RUN_ID: ${HOME_COORDINATE_RESUME_RUN_ID:-}
       HOME_COORDINATE_CHUNK_PREFIX_LENGTH: ${HOME_COORDINATE_CHUNK_PREFIX_LENGTH:-5}
     volumes:
-      - ${HOME_SEARCH_REPO_DIR:-../..}:/workspace:ro
+      - ${HOME_SEARCH_REPO_DIR:-..}:/workspace:ro
       - ${HOME_COORDINATE_HOST_SHP_DIR:-../coordinate-input}:/coordinate-input:ro
     networks:
       - home-search-local
@@ -59,6 +59,6 @@ services:
       HOME_COORDINATE_REQUIRE_SYNC_PARCEL: ${HOME_COORDINATE_REQUIRE_SYNC_PARCEL:-false}
       HOME_COORDINATE_VERIFY_ACTIVE_COUNT: ${HOME_COORDINATE_VERIFY_ACTIVE_COUNT:-false}
     volumes:
-      - ${HOME_SEARCH_REPO_DIR:-../..}:/workspace:ro
+      - ${HOME_SEARCH_REPO_DIR:-..}:/workspace:ro
     networks:
       - home-search-local

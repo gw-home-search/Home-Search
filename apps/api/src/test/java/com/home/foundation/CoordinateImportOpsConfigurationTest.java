@@ -53,7 +53,7 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("HOME_COORDINATE_SYNC_PARCEL: ${HOME_COORDINATE_SYNC_PARCEL:-false}");
 		assertThat(content).contains("HOME_COORDINATE_RESUME_RUN_ID: ${HOME_COORDINATE_RESUME_RUN_ID:-}");
 		assertThat(content).contains("HOME_COORDINATE_CHUNK_PREFIX_LENGTH: ${HOME_COORDINATE_CHUNK_PREFIX_LENGTH:-5}");
-		assertThat(content).contains("${HOME_SEARCH_REPO_DIR:-../..}:/workspace:ro");
+		assertThat(content).contains("${HOME_SEARCH_REPO_DIR:-..}:/workspace:ro");
 		assertThat(content).contains("${HOME_COORDINATE_HOST_SHP_DIR:-../coordinate-input}:/coordinate-input:ro");
 		assertThat(content).contains("bash\", \"/workspace/apps/source-data/ops/import-vworld-coordinate-snapshot.sh");
 		assertThat(verifier).contains("image: postgis/postgis:16-3.4-alpine");
@@ -70,7 +70,7 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(verifier).contains("HOME_COORDINATE_MIN_PNU_COUNT: ${HOME_COORDINATE_MIN_PNU_COUNT:-1}");
 		assertThat(verifier).contains("HOME_COORDINATE_REQUIRE_SYNC_PARCEL: ${HOME_COORDINATE_REQUIRE_SYNC_PARCEL:-false}");
 		assertThat(verifier).contains("HOME_COORDINATE_VERIFY_ACTIVE_COUNT: ${HOME_COORDINATE_VERIFY_ACTIVE_COUNT:-false}");
-		assertThat(verifier).contains("${HOME_SEARCH_REPO_DIR:-../..}:/workspace:ro");
+		assertThat(verifier).contains("${HOME_SEARCH_REPO_DIR:-..}:/workspace:ro");
 		assertThat(verifier).doesNotContain("/coordinate-input");
 		assertThat(content).doesNotContain("APT_SERVICE_KEY");
 		assertThat(content).doesNotContain("VW_SERVICE_KEY");

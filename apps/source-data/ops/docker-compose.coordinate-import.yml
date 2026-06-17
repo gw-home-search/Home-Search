@@ -10,8 +10,8 @@ services:
     depends_on:
       postgis:
         condition: service_healthy
-    working_dir: /workspace/apps/api
-    entrypoint: ["bash", "/workspace/apps/api/ops/import-vworld-coordinate-snapshot.sh"]
+    working_dir: /workspace/apps/source-data
+    entrypoint: ["bash", "/workspace/apps/source-data/ops/import-vworld-coordinate-snapshot.sh"]
     environment:
       PGHOST: postgis
       PGPORT: "5432"
@@ -32,7 +32,7 @@ services:
       HOME_COORDINATE_RESUME_RUN_ID: ${HOME_COORDINATE_RESUME_RUN_ID:-}
       HOME_COORDINATE_CHUNK_PREFIX_LENGTH: ${HOME_COORDINATE_CHUNK_PREFIX_LENGTH:-5}
     volumes:
-      - ${HOME_SEARCH_REPO_DIR:-..}:/workspace:ro
+      - ${HOME_SEARCH_REPO_DIR:-../..}:/workspace:ro
       - ${HOME_COORDINATE_HOST_SHP_DIR:-../coordinate-input}:/coordinate-input:ro
     networks:
       - home-search-local
@@ -46,8 +46,8 @@ services:
     depends_on:
       postgis:
         condition: service_healthy
-    working_dir: /workspace/apps/api
-    entrypoint: ["bash", "/workspace/apps/api/ops/verify-coordinate-snapshot-smoke.sh"]
+    working_dir: /workspace/apps/source-data
+    entrypoint: ["bash", "/workspace/apps/source-data/ops/verify-coordinate-snapshot-smoke.sh"]
     environment:
       PGHOST: postgis
       PGPORT: "5432"
@@ -59,6 +59,6 @@ services:
       HOME_COORDINATE_REQUIRE_SYNC_PARCEL: ${HOME_COORDINATE_REQUIRE_SYNC_PARCEL:-false}
       HOME_COORDINATE_VERIFY_ACTIVE_COUNT: ${HOME_COORDINATE_VERIFY_ACTIVE_COUNT:-false}
     volumes:
-      - ${HOME_SEARCH_REPO_DIR:-..}:/workspace:ro
+      - ${HOME_SEARCH_REPO_DIR:-../..}:/workspace:ro
     networks:
       - home-search-local

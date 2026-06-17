@@ -18,6 +18,8 @@ Optional:
 Safety:
   This verifier is read-only. It never drops, truncates, or rewrites data.
   Source DB checks avoid nationwide count(*) scans.
+  Source DB checks require only runtime live snapshot tables; import worktables
+  may be preserved as archive dumps instead of live DB tables.
 EOF
 }
 
@@ -120,16 +122,11 @@ verify_source() {
   local schema_ready
   schema_ready="$("${PSQL[@]}" -At <<'SQL'
 SELECT to_regclass('reference.coordinate_snapshot_run') IS NOT NULL
-   AND to_regclass('reference.parcel_coordinate_snapshot') IS NOT NULL
-   AND to_regclass('reference.parcel_coordinate_snapshot_stage') IS NOT NULL
-   AND to_regclass('reference.parcel_coordinate_snapshot_publish') IS NOT NULL
-   AND to_regclass('reference.coordinate_snapshot_publish_checkpoint') IS NOT NULL
-   AND to_regclass('reference.coordinate_snapshot_publish_chunk_checkpoint') IS NOT NULL
-   AND to_regclass('reference.coordinate_snapshot_stage_chunk_checkpoint') IS NOT NULL;
+   AND to_regclass('reference.parcel_coordinate_snapshot') IS NOT NULL;
 SQL
 )"
   if [[ "${schema_ready}" != "t" ]]; then
-    echo "ERROR: coordinate source DB schema is missing required reference tables." >&2
+    echo "ERROR: coordinate source DB schema is missing required live reference tables." >&2
     exit 1
   fi
 
@@ -145,13 +142,7 @@ WHERE c.relkind = 'r'
   AND n.nspname = 'reference'
   AND c.relname IN (
       'parcel_coordinate_snapshot',
-      'parcel_coordinate_snapshot_stage',
-      'parcel_coordinate_snapshot_publish',
-      'coordinate_snapshot_run',
-      'coordinate_snapshot_region_checkpoint',
-      'coordinate_snapshot_stage_chunk_checkpoint',
-      'coordinate_snapshot_publish_checkpoint',
-      'coordinate_snapshot_publish_chunk_checkpoint'
+      'coordinate_snapshot_run'
   )
 ORDER BY c.relname;
 SQL
@@ -208,7 +199,7 @@ SQL
     echo "coordinate source sample lookup: pnu=${SAMPLE_PNU}, found=${sample_found}"
   fi
 
-  echo "coordinate boundary passed: source DB owns reference coordinate snapshot tables"
+  echo "coordinate boundary passed: source DB owns live reference coordinate snapshot tables"
   echo "${relation_report}"
 }
 

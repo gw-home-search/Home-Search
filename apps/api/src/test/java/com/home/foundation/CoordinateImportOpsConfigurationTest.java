@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 class CoordinateImportOpsConfigurationTest {
 
 	private static final Path COORDINATE_IMPORT_COMPOSE = Path.of("ops/docker-compose.coordinate-import.yml");
+	private static final Path COORDINATE_SOURCE_DB_COMPOSE = Path.of("ops/docker-compose.coordinate-source-db.yml");
 	private static final Path COORDINATE_IMPORT_SCRIPT = Path.of("ops/import-vworld-coordinate-snapshot.sh");
 	private static final Path COORDINATE_SMOKE_SCRIPT = Path.of("ops/verify-coordinate-snapshot-smoke.sh");
 	private static final Path COORDINATE_BOUNDARY_SCRIPT = Path.of("ops/verify-coordinate-source-boundary.sh");
@@ -188,11 +189,14 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("--source");
 		assertThat(content).contains("--geo");
 		assertThat(content).contains("Source DB checks avoid nationwide count(*) scans");
+		assertThat(content).contains("runtime live snapshot tables");
 		assertThat(content).contains("operational DB still owns coordinate source tables");
-		assertThat(content).contains("source DB owns reference coordinate snapshot tables");
+		assertThat(content).contains("source DB owns live reference coordinate snapshot tables");
 		assertThat(content).contains("geo enrichment DB owns VWorld WFS raw/cache table");
 		assertThat(content).contains("pg_total_relation_size");
 		assertThat(content).contains("SET enable_seqscan = off");
+		assertThat(content).contains("to_regclass('reference.coordinate_snapshot_run') IS NOT NULL");
+		assertThat(content).contains("to_regclass('reference.parcel_coordinate_snapshot') IS NOT NULL");
 		assertThat(content).doesNotContain("count(*) FROM reference.parcel_coordinate_snapshot");
 		assertThat(content).doesNotContain("DROP TABLE");
 		assertThat(content).doesNotContain("TRUNCATE");
@@ -205,24 +209,62 @@ class CoordinateImportOpsConfigurationTest {
 
 		String content = Files.readString(COORDINATE_COPY_CUTOVER_SCRIPT);
 
+		assertThat(content).contains("--copy-live-snapshot");
+		assertThat(content).contains("--verify-live-snapshot");
+		assertThat(content).contains("--archive-import-worktables");
 		assertThat(content).contains("--dump-source");
 		assertThat(content).contains("--restore-copy");
-		assertThat(content).contains("--verify-copy");
 		assertThat(content).contains("--print-cutover-env");
+		assertThat(content).contains("HOME_COORDINATE_SOURCE_DB_HOST");
+		assertThat(content).contains("HOME_COORDINATE_TARGET_DB_HOST");
+		assertThat(content).contains("HOME_COORDINATE_TARGET_DB_PORT");
+		assertThat(content).contains("HOME_COORDINATE_SOURCE_DB_CONTAINER");
+		assertThat(content).contains("HOME_COORDINATE_TARGET_DB_CONTAINER");
+		assertThat(content).contains("HOME_COORDINATE_POSTGIS_TOOL_IMAGE");
+		assertThat(content).contains("docker exec -i");
+		assertThat(content).contains("docker run --rm");
+		assertThat(content).contains("--format=plain");
+		assertThat(content).contains("--table=reference.coordinate_snapshot_run");
+		assertThat(content).contains("--table=reference.parcel_coordinate_snapshot");
+		assertThat(content).contains("--table=reference.parcel_coordinate_snapshot_stage");
+		assertThat(content).contains("--table=reference.parcel_coordinate_snapshot_publish");
+		assertThat(content).contains("psql -v ON_ERROR_STOP=1 --single-transaction");
+		assertThat(content).contains("target DB already owns live coordinate source tables; refusing live restore");
 		assertThat(content).contains("pg_dump");
 		assertThat(content).contains("pg_restore");
 		assertThat(content).contains("createdb");
 		assertThat(content).contains("COORDINATE_SOURCE_DB_JDBC_URL");
 		assertThat(content).contains("rollback: set COORDINATE_SOURCE_DB_JDBC_URL back");
-		assertThat(content).contains("schema_fingerprint");
-		assertThat(content).contains("relation_estimates");
+		assertThat(content).contains("live_schema_fingerprint");
+		assertThat(content).contains("target_snapshot_count");
 		assertThat(content).contains("sample_lookup");
+		assertThat(content).contains("Live copy intentionally excludes import worktables");
 		assertThat(content).doesNotContain("dropdb ");
 		assertThat(content).doesNotContain("psql_db postgres -c \"DROP DATABASE");
 		assertThat(content).doesNotContain("psql_db postgres -c \"DROP TABLE");
 		assertThat(content).doesNotContain("psql_db postgres -c \"TRUNCATE");
 		assertThat(content).doesNotContain("docker volume rm ");
 		assertThat(content).doesNotContain("docker compose down -v ");
+	}
+
+	@Test
+	@DisplayName("coordinate source DB compose는 source 전용 PostGIS와 별도 volume을 제공한다")
+	void coordinateSourceDbComposeProvidesDedicatedPostgisAndVolume() throws IOException {
+		assertThat(COORDINATE_SOURCE_DB_COMPOSE).exists();
+
+		String content = Files.readString(COORDINATE_SOURCE_DB_COMPOSE);
+
+		assertThat(content).contains("home-search-coordinate-source");
+		assertThat(content).contains("container_name: home-search-coordinate-source-postgis");
+		assertThat(content).contains("POSTGRES_DB: ${COORDINATE_SOURCE_TARGET_DB_NAME:-home_search_coordinate_source_v2}");
+		assertThat(content).contains("POSTGRES_USER: ${COORDINATE_SOURCE_TARGET_DB_USERNAME:-home_search}");
+		assertThat(content).contains("POSTGRES_PASSWORD: ${COORDINATE_SOURCE_TARGET_DB_PASSWORD:-home_search_local_password}");
+		assertThat(content).contains("${COORDINATE_SOURCE_TARGET_DB_PORT:-15433}:5432");
+		assertThat(content).contains("source-postgis-data:/var/lib/postgresql/data");
+		assertThat(content).contains("name: ${COORDINATE_SOURCE_TARGET_VOLUME_NAME:-home-search-coordinate-source-data-v2}");
+		assertThat(content).contains("external: true");
+		assertThat(content).contains("name: home-search-local_home-search-local");
+		assertThat(content).doesNotContain("home-search-local_home-search-postgis-data");
 	}
 
 	@Test

@@ -9,7 +9,7 @@ import com.home.application.ingest.normalization.NormalizedTradeCommand;
 import com.home.application.ingest.normalization.NormalizedTradeDuplicateMatch;
 import com.home.application.ingest.normalization.NormalizedTradeDuplicatePolicy;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
-import com.home.domain.trade.TradeExclAreaNormalizer;
+import com.home.ingestcore.rtms.TradeExclAreaNormalizer;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;

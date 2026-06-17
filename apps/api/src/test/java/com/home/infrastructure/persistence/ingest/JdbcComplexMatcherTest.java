@@ -3,7 +3,7 @@ package com.home.infrastructure.persistence.ingest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.home.application.ingest.matching.ComplexMatchResult;
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 import com.home.domain.ingest.matching.TradeMatchStatus;
 import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMatcher;
 

@@ -3,7 +3,7 @@ package com.home.application.ingest.normalization;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 import com.home.domain.trade.RtmsJibunPnu;
 
 /**

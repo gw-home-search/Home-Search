@@ -7,7 +7,7 @@ import java.time.LocalDate;
 import java.util.Optional;
 
 import com.home.application.coordinate.lookup.ParcelCoordinate;
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMasterBootstrapper;
 
 import org.junit.jupiter.api.DisplayName;

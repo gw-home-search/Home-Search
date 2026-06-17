@@ -1,4 +1,4 @@
-package com.home.application.ingest.trade;
+package com.home.ingestcore.rtms;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

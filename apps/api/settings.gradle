@@ -13,3 +13,9 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = 'home-search-api'
+
+includeBuild('../../libs/rtms-ingest-core') {
+    dependencySubstitution {
+        substitute module('com.home:rtms-ingest-core') using project(':')
+    }
+}

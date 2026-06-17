@@ -6,7 +6,7 @@ import com.home.domain.trade.RtmsJibunPnu;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 
 class RtmsJibunPnuNormalizerTest {
 

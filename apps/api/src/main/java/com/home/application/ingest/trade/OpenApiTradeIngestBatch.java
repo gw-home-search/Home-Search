@@ -2,8 +2,9 @@ package com.home.application.ingest.trade;
 
 import java.util.List;
 
-import com.home.domain.ingest.rtms.RtmsDealMonth;
-import com.home.domain.ingest.rtms.RtmsLawdCode;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
+import com.home.ingestcore.rtms.RtmsDealMonth;
+import com.home.ingestcore.rtms.RtmsLawdCode;
 import com.home.domain.ingest.source.IngestSource;
 
 public record OpenApiTradeIngestBatch(

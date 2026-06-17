@@ -15,7 +15,7 @@ import java.util.Optional;
 import com.home.application.ingest.matching.ComplexMatchResult;
 import com.home.application.ingest.normalization.NormalizedTradeCommand;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 import com.home.application.ingest.reconciliation.RawIngestReconciliationCandidate;
 import com.home.application.ingest.reconciliation.RawIngestReconciliationRepository;
 import com.home.application.ingest.reconciliation.RawIngestReconciliationService;

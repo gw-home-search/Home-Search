@@ -1,8 +1,8 @@
 package com.home.application.ingest.raw;
 
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
-import com.home.domain.ingest.rtms.RtmsDealMonth;
-import com.home.domain.ingest.rtms.RtmsLawdCode;
+import com.home.ingestcore.rtms.RtmsDealMonth;
+import com.home.ingestcore.rtms.RtmsLawdCode;
 import com.home.domain.ingest.source.IngestSource;
 
 /**

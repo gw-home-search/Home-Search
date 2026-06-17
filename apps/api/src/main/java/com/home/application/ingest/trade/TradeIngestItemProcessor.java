@@ -14,7 +14,10 @@ import com.home.application.ingest.normalization.NormalizedTradeRepository;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
 import com.home.domain.ingest.raw.RawTradeIngestTransition;
-import com.home.domain.trade.TradeExclAreaNormalizer;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
+import com.home.ingestcore.rtms.ParsedRtmsTrade;
+import com.home.ingestcore.rtms.SourceKeyGenerator;
+import com.home.ingestcore.rtms.TradeExclAreaNormalizer;
 
 /**
  * Open API trade item 하나를 raw evidence, match evidence, normalized trade 결과로 처리합니다.

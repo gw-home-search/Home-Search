@@ -14,7 +14,7 @@ import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
 import com.home.application.ingest.trade.OpenApiTradeIngestService;
 import com.home.application.ingest.trade.OpenApiTradeIngestServiceFixture;
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
 import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMasterBootstrapper;
 import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMatcher;

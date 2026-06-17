@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Set;
 
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
-import com.home.domain.ingest.rtms.RtmsDealMonth;
+import com.home.ingestcore.rtms.RtmsDealMonth;
 
 /**
  * read-only raw ingest failure inspection 조건입니다.

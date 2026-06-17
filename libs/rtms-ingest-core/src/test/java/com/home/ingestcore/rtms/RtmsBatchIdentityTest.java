@@ -1,4 +1,4 @@
-package com.home.domain.ingest.rtms;
+package com.home.ingestcore.rtms;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

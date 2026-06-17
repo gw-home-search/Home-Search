@@ -7,7 +7,7 @@ import com.home.application.ingest.matching.ComplexMatchCandidate;
 import com.home.application.ingest.matching.ComplexMatchCandidatePolicy;
 import com.home.application.ingest.matching.ComplexMatchResult;
 import com.home.application.ingest.matching.ComplexMatcher;
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 import com.home.domain.trade.RtmsJibunPnu;
 import com.home.application.ingest.normalization.RtmsJibunPnuNormalizer;
 

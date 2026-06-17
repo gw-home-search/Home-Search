@@ -1,7 +1,7 @@
 package com.home.application.ingest.matching;
 
 import java.util.Optional;
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 
 @FunctionalInterface
 public interface ComplexIdentityResolver {

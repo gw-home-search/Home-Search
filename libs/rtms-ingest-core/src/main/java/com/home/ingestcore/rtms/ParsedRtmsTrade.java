@@ -1,4 +1,4 @@
-package com.home.application.ingest.trade;
+package com.home.ingestcore.rtms;
 
 import java.time.DateTimeException;
 import java.time.LocalDate;

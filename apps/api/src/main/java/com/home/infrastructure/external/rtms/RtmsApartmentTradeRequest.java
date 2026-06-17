@@ -1,7 +1,7 @@
 package com.home.infrastructure.external.rtms;
 
-import com.home.domain.ingest.rtms.RtmsDealMonth;
-import com.home.domain.ingest.rtms.RtmsLawdCode;
+import com.home.ingestcore.rtms.RtmsDealMonth;
+import com.home.ingestcore.rtms.RtmsLawdCode;
 
 public record RtmsApartmentTradeRequest(
 	String lawdCd,

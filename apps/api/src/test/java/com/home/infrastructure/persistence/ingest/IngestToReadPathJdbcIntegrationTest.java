@@ -11,7 +11,7 @@ import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
 import com.home.application.ingest.trade.OpenApiTradeIngestService;
 import com.home.application.ingest.trade.OpenApiTradeIngestServiceFixture;
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
 import com.home.domain.ingest.matching.TradeMatchStatus;
 import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;

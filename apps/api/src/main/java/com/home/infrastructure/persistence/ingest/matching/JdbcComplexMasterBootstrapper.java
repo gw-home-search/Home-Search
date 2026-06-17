@@ -11,7 +11,7 @@ import com.home.application.ingest.matching.ComplexMasterBootstrapPolicy;
 import com.home.application.ingest.matching.ComplexMasterBootstrapResult;
 import com.home.application.ingest.matching.ComplexMasterBootstrapper;
 import com.home.application.ingest.matching.ComplexIdentityResolver;
-import com.home.application.ingest.trade.OpenApiTradeItem;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
 

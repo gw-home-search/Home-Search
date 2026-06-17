@@ -6,11 +6,11 @@ import com.home.application.ingest.normalization.NormalizedTradeCommand;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
-import com.home.application.ingest.trade.OpenApiTradeItem;
-import com.home.application.ingest.trade.ParsedRtmsTrade;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
+import com.home.ingestcore.rtms.ParsedRtmsTrade;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
 import com.home.domain.ingest.raw.RawTradeIngestTransition;
-import com.home.domain.trade.TradeExclAreaNormalizer;
+import com.home.ingestcore.rtms.TradeExclAreaNormalizer;
 
 public class TradeMatchRematchService {
 

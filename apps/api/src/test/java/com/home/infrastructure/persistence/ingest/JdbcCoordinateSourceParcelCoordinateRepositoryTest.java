@@ -5,14 +5,34 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.math.BigDecimal;
+import java.nio.file.Path;
 
 import com.home.infrastructure.persistence.ingest.coordinate.JdbcCoordinateSourceParcelCoordinateRepository;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+import org.testcontainers.containers.PostgreSQLContainer;
 
-class JdbcCoordinateSourceParcelCoordinateRepositoryTest extends JdbcPostgresTestSupport {
+class JdbcCoordinateSourceParcelCoordinateRepositoryTest extends JdbcPostgresContainerSupport {
+
+	private static final PostgreSQLContainer<?> POSTGRES = newPostgisContainer();
+
+	static {
+		POSTGRES.start();
+	}
+
+	@BeforeEach
+	void resetCoordinateSourceDatabase() {
+		initializeJdbc(POSTGRES);
+		jdbcClient.sql("DROP SCHEMA IF EXISTS reference CASCADE").update();
+		jdbcClient.sql("DROP EXTENSION IF EXISTS postgis CASCADE").update();
+		new ResourceDatabasePopulator(new FileSystemResource(Path.of("ops/sql/coordinate-source-schema.sql")))
+			.execute(dataSource);
+	}
 
 	@Test
 	@DisplayName("Coordinate Source DB에서 PNU coordinate와 geometry를 read-only lookup 한다")

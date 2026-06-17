@@ -19,7 +19,7 @@ class JdbcCleanCoreReferenceDataMigrationTest extends JdbcMigrationTestSupport {
 
 		migrateToLatest();
 
-		assertThat(appliedMigrationVersions()).containsExactly("1", "2");
+		assertThat(appliedMigrationVersions()).containsExactly("1", "2", "3");
 		assertThat(count("SELECT count(*) FROM region WHERE region_type = 'si-do'")).isGreaterThanOrEqualTo(17);
 		assertThat(count("SELECT count(*) FROM region WHERE region_type = 'si-gun-gu'")).isGreaterThan(200);
 		assertThat(count("SELECT count(*) FROM region WHERE region_type = 'eup-myeon-dong'")).isGreaterThan(4_000);

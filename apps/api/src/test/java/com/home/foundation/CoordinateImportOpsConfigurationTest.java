@@ -12,10 +12,16 @@ import org.junit.jupiter.api.Test;
 class CoordinateImportOpsConfigurationTest {
 
 	private static final Path COORDINATE_IMPORT_COMPOSE = Path.of("ops/docker-compose.coordinate-import.yml");
+	private static final Path COORDINATE_SOURCE_DB_COMPOSE = Path.of("ops/docker-compose.coordinate-source-db.yml");
 	private static final Path COORDINATE_IMPORT_SCRIPT = Path.of("ops/import-vworld-coordinate-snapshot.sh");
 	private static final Path COORDINATE_SMOKE_SCRIPT = Path.of("ops/verify-coordinate-snapshot-smoke.sh");
-	private static final Path COORDINATE_RESUMABLE_MIGRATION =
-			Path.of("src/main/resources/db/migration/api/V1__create_clean_core_schema.sql");
+	private static final Path COORDINATE_BOUNDARY_SCRIPT = Path.of("ops/verify-coordinate-source-boundary.sh");
+	private static final Path COORDINATE_COPY_CUTOVER_SCRIPT = Path.of("ops/coordinate-source-db-copy-cutover.sh");
+	private static final Path COORDINATE_SOURCE_SCHEMA_SQL = Path.of("ops/sql/coordinate-source-schema.sql");
+	private static final Path OPERATIONAL_REFERENCE_REMOVAL_MIGRATION =
+			Path.of("src/main/resources/db/migration/api/V3__remove_operational_coordinate_source_reference.sql");
+	private static final Path GEO_ENRICHMENT_MIGRATION =
+			Path.of("src/main/resources/db/migration/geo-enrichment/V1__create_geo_enrichment_schema.sql");
 	private static final Path WORKLOG = Path.of("../../.codex/harness/worklog.toml");
 
 	@Test
@@ -36,6 +42,7 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("HOME_COORDINATE_EXPECTED_REGIONS: ${HOME_COORDINATE_EXPECTED_REGIONS:-}");
 		assertThat(content).contains("HOME_COORDINATE_STRICT_REGION_MATCH: ${HOME_COORDINATE_STRICT_REGION_MATCH:-true}");
 		assertThat(content).contains("HOME_COORDINATE_VALIDATE_PRJ: ${HOME_COORDINATE_VALIDATE_PRJ:-true}");
+		assertThat(content).contains("HOME_COORDINATE_SYNC_PARCEL: ${HOME_COORDINATE_SYNC_PARCEL:-false}");
 		assertThat(content).contains("HOME_COORDINATE_RESUME_RUN_ID: ${HOME_COORDINATE_RESUME_RUN_ID:-}");
 		assertThat(content).contains("HOME_COORDINATE_CHUNK_PREFIX_LENGTH: ${HOME_COORDINATE_CHUNK_PREFIX_LENGTH:-5}");
 		assertThat(content).contains("${HOME_SEARCH_REPO_DIR:-..}:/workspace:ro");
@@ -46,7 +53,8 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(verifier).contains("entrypoint: [\"bash\", \"/workspace/apps/api/ops/verify-coordinate-snapshot-smoke.sh\"]");
 		assertThat(verifier).contains("PGHOST: postgis");
 		assertThat(verifier).contains("PGPORT: \"5432\"");
-		assertThat(verifier).contains("PGDATABASE: ${HOME_SEARCH_DB_NAME:-home_search}");
+		assertThat(verifier)
+			.contains("PGDATABASE: ${COORDINATE_SOURCE_DB_NAME:-home_search_coordinate_source}");
 		assertThat(verifier).contains("PGUSER: ${HOME_SEARCH_DB_USERNAME:-home_search}");
 		assertThat(verifier).contains("PGPASSWORD: ${HOME_SEARCH_DB_PASSWORD:-home_search_local_password}");
 		assertThat(verifier).contains("HOME_COORDINATE_EXPECTED_REGIONS: ${HOME_COORDINATE_EXPECTED_REGIONS:-}");
@@ -93,6 +101,7 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("HOME_COORDINATE_INPUT_FORMAT");
 		assertThat(content).contains("HOME_COORDINATE_EXPECTED_REGIONS");
 		assertThat(content).contains("HOME_COORDINATE_STRICT_REGION_MATCH");
+		assertThat(content).contains("SYNC_PARCEL=\"${HOME_COORDINATE_SYNC_PARCEL:-false}\"");
 		assertThat(content).contains("ST_PointOnSurface");
 		assertThat(content).contains("ST_MakeValid");
 		assertThat(content).contains("duplicate_pnu_count");
@@ -105,6 +114,7 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("reference.coordinate_snapshot_publish_chunk_checkpoint");
 		assertThat(content).contains("HOME_COORDINATE_RESUME_RUN_ID");
 		assertThat(content).contains("HOME_COORDINATE_CHUNK_PREFIX_LENGTH");
+		assertThat(content).contains("HOME_COORDINATE_SCHEMA_SQL");
 		assertThat(content).contains("coordinate snapshot region import skipped");
 		assertThat(content).contains("coordinate snapshot stage chunk skipped");
 		assertThat(content).contains("coordinate snapshot stage chunk passed");
@@ -129,11 +139,11 @@ class CoordinateImportOpsConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("coordinate snapshot resumable import schema는 durable stage와 checkpoint를 제공한다")
+	@DisplayName("coordinate source schema SQL은 API Flyway 밖에서 durable stage와 checkpoint를 제공한다")
 	void coordinateSnapshotResumableImportSchemaProvidesDurableStageAndCheckpoints() throws IOException {
-		assertThat(COORDINATE_RESUMABLE_MIGRATION).exists();
+		assertThat(COORDINATE_SOURCE_SCHEMA_SQL).exists();
 
-		String content = Files.readString(COORDINATE_RESUMABLE_MIGRATION);
+		String content = Files.readString(COORDINATE_SOURCE_SCHEMA_SQL);
 
 		assertThat(content).contains("CREATE TABLE reference.parcel_coordinate_snapshot_stage");
 		assertThat(content).contains("CREATE TABLE reference.coordinate_snapshot_region_checkpoint");
@@ -141,9 +151,9 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("CREATE TABLE reference.parcel_coordinate_snapshot_publish");
 		assertThat(content).contains("CREATE TABLE reference.coordinate_snapshot_publish_checkpoint");
 		assertThat(content).contains("CREATE TABLE reference.coordinate_snapshot_publish_chunk_checkpoint");
-		assertThat(content).contains("'STARTED'::character varying");
-		assertThat(content).contains("'PASSED'::character varying");
-		assertThat(content).contains("'FAILED'::character varying");
+		assertThat(content).contains("'STARTED'");
+		assertThat(content).contains("'PASSED'");
+		assertThat(content).contains("'FAILED'");
 		assertThat(content).contains("source_manifest text NOT NULL");
 		assertThat(content).contains("chunk_code character varying(8) NOT NULL");
 		assertThat(content).contains("PRIMARY KEY (run_id, region_code)");
@@ -151,6 +161,144 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("PRIMARY KEY (run_id, pnu)");
 		assertThat(content).contains("USING gist (geom)");
 		assertThat(content).contains("USING gist (point)");
+	}
+
+	@Test
+	@DisplayName("API main Flyway resources는 coordinate source schema를 소유하지 않는다")
+	void apiMainFlywayResourcesDoNotOwnCoordinateSourceSchema() {
+		assertThat(Path.of("src/main/resources/db/migration/coordinate-source")).doesNotExist();
+		assertThat(Path.of("src/main/resources/db/migration/api")).exists();
+		assertThat(COORDINATE_SOURCE_SCHEMA_SQL).exists();
+	}
+
+	@Test
+	@DisplayName("operational migration은 빈 coordinate source reference 잔재만 제거한다")
+	void operationalMigrationRemovesOnlyEmptyCoordinateSourceReferenceTables() throws IOException {
+		assertThat(OPERATIONAL_REFERENCE_REMOVAL_MIGRATION).exists();
+
+		String content = Files.readString(OPERATIONAL_REFERENCE_REMOVAL_MIGRATION);
+
+		assertThat(content).contains("Refusing to drop operational coordinate source tables with rows");
+		assertThat(content).contains("EXECUTE format('SELECT EXISTS (SELECT 1 FROM %s LIMIT 1)', source_table)");
+		assertThat(content).contains("DROP TABLE IF EXISTS reference.parcel_coordinate_snapshot");
+		assertThat(content).contains("DROP SCHEMA IF EXISTS reference");
+		assertThat(content).doesNotContain("CASCADE");
+		assertThat(content).doesNotContain("count(*) FROM reference.parcel_coordinate_snapshot");
+	}
+
+	@Test
+	@DisplayName("coordinate source boundary verifier는 운영/source/geo DB 역할을 read-only로 확인한다")
+	void coordinateSourceBoundaryVerifierChecksSeparatedDatabaseRolesReadOnly() throws IOException {
+		assertThat(COORDINATE_BOUNDARY_SCRIPT).exists();
+
+		String content = Files.readString(COORDINATE_BOUNDARY_SCRIPT);
+
+		assertThat(content).contains("--operational");
+		assertThat(content).contains("--source");
+		assertThat(content).contains("--geo");
+		assertThat(content).contains("Source DB checks avoid nationwide count(*) scans");
+		assertThat(content).contains("runtime live snapshot tables");
+		assertThat(content).contains("operational DB still owns coordinate source tables");
+		assertThat(content).contains("source DB owns live reference coordinate snapshot tables");
+		assertThat(content).contains("geo enrichment DB owns VWorld WFS raw/cache table");
+		assertThat(content).contains("pg_total_relation_size");
+		assertThat(content).contains("SET enable_seqscan = off");
+		assertThat(content).contains("to_regclass('reference.coordinate_snapshot_run') IS NOT NULL");
+		assertThat(content).contains("to_regclass('reference.parcel_coordinate_snapshot') IS NOT NULL");
+		assertThat(content).doesNotContain("count(*) FROM reference.parcel_coordinate_snapshot");
+		assertThat(content).doesNotContain("DROP TABLE");
+		assertThat(content).doesNotContain("TRUNCATE");
+	}
+
+	@Test
+	@DisplayName("coordinate source copy/cutover helper는 삭제 없이 dump, restore, 검증, env 전환 evidence를 만든다")
+	void coordinateSourceCopyCutoverHelperKeepsSourceDatabaseRollbackable() throws IOException {
+		assertThat(COORDINATE_COPY_CUTOVER_SCRIPT).exists();
+
+		String content = Files.readString(COORDINATE_COPY_CUTOVER_SCRIPT);
+
+		assertThat(content).contains("--copy-live-snapshot");
+		assertThat(content).contains("--verify-live-snapshot");
+		assertThat(content).contains("--verify-drop-readiness");
+		assertThat(content).contains("--archive-import-worktables");
+		assertThat(content).contains("--dump-source");
+		assertThat(content).contains("--restore-copy");
+		assertThat(content).contains("--print-cutover-env");
+		assertThat(content).contains("HOME_COORDINATE_SOURCE_DB_HOST");
+		assertThat(content).contains("HOME_COORDINATE_TARGET_DB_HOST");
+		assertThat(content).contains("HOME_COORDINATE_TARGET_DB_PORT");
+		assertThat(content).contains("HOME_COORDINATE_SOURCE_DB_CONTAINER");
+		assertThat(content).contains("HOME_COORDINATE_TARGET_DB_CONTAINER");
+		assertThat(content).contains("HOME_COORDINATE_POSTGIS_TOOL_IMAGE");
+		assertThat(content).contains("HOME_COORDINATE_REQUIRE_WORKTABLE_ARCHIVE");
+		assertThat(content).contains("docker exec -i");
+		assertThat(content).contains("docker run --rm");
+		assertThat(content).contains("--format=plain");
+		assertThat(content).contains("--table=reference.coordinate_snapshot_run");
+		assertThat(content).contains("--table=reference.parcel_coordinate_snapshot");
+		assertThat(content).contains("--table=reference.parcel_coordinate_snapshot_stage");
+		assertThat(content).contains("--table=reference.parcel_coordinate_snapshot_publish");
+		assertThat(content).contains("psql -v ON_ERROR_STOP=1 --single-transaction");
+		assertThat(content).contains("target DB already owns live coordinate source tables; refusing live restore");
+		assertThat(content).contains("pg_dump");
+		assertThat(content).contains("pg_restore");
+		assertThat(content).contains("createdb");
+		assertThat(content).contains("COORDINATE_SOURCE_DB_JDBC_URL");
+		assertThat(content).contains("rollback: set COORDINATE_SOURCE_DB_JDBC_URL back");
+		assertThat(content).contains("live_schema_fingerprint");
+		assertThat(content).contains("target_snapshot_count");
+		assertThat(content).contains("sample_lookup");
+		assertThat(content).contains("source_active_connection_count");
+		assertThat(content).contains("coordinate_source_relation_inventory");
+		assertThat(content).contains("verify_chunked_worktable_archive");
+		assertThat(content).contains("drop_readiness_worktable_archive_publish_chunks");
+		assertThat(content).contains("drop_readiness_worktable_archive");
+		assertThat(content).contains("drop_readiness_worktable_archive_checksum");
+		assertThat(content).contains("sha256sum -c SHA256SUMS");
+		assertThat(content).contains("shasum -a 256 -c SHA256SUMS");
+		assertThat(content).contains("Live copy intentionally excludes import worktables");
+		assertThat(content).doesNotContain("dropdb ");
+		assertThat(content).doesNotContain("psql_db postgres -c \"DROP DATABASE");
+		assertThat(content).doesNotContain("psql_db postgres -c \"DROP TABLE");
+		assertThat(content).doesNotContain("psql_db postgres -c \"TRUNCATE");
+		assertThat(content).doesNotContain("docker volume rm ");
+		assertThat(content).doesNotContain("docker compose down -v ");
+	}
+
+	@Test
+	@DisplayName("coordinate source DB compose는 source 전용 PostGIS와 별도 volume을 제공한다")
+	void coordinateSourceDbComposeProvidesDedicatedPostgisAndVolume() throws IOException {
+		assertThat(COORDINATE_SOURCE_DB_COMPOSE).exists();
+
+		String content = Files.readString(COORDINATE_SOURCE_DB_COMPOSE);
+
+		assertThat(content).contains("home-search-coordinate-source");
+		assertThat(content).contains("container_name: home-search-coordinate-source-postgis");
+		assertThat(content).contains("POSTGRES_DB: ${COORDINATE_SOURCE_TARGET_DB_NAME:-home_search_coordinate_source}");
+		assertThat(content).contains("POSTGRES_USER: ${COORDINATE_SOURCE_TARGET_DB_USERNAME:-home_search}");
+		assertThat(content).contains("POSTGRES_PASSWORD: ${COORDINATE_SOURCE_TARGET_DB_PASSWORD:-home_search_local_password}");
+		assertThat(content).contains("${COORDINATE_SOURCE_TARGET_DB_PORT:-15435}:5432");
+		assertThat(content).contains("source-postgis-data:/var/lib/postgresql/data");
+		assertThat(content).contains("name: ${COORDINATE_SOURCE_TARGET_VOLUME_NAME:-home-search-coordinate-source-data}");
+		assertThat(content).contains("external: true");
+		assertThat(content).contains("name: home-search-local_home-search-local");
+		assertThat(content).doesNotContain("home-search-local_home-search-postgis-data");
+	}
+
+	@Test
+	@DisplayName("geo enrichment migration은 VWorld WFS raw/cache를 운영 DB 밖에서 소유한다")
+	void geoEnrichmentMigrationOwnsVworldWfsRawCacheOutsideOperationalDb() throws IOException {
+		assertThat(GEO_ENRICHMENT_MIGRATION).exists();
+
+		String content = Files.readString(GEO_ENRICHMENT_MIGRATION);
+
+		assertThat(content).contains("CREATE SCHEMA IF NOT EXISTS geo_enrichment");
+		assertThat(content).contains("CREATE TABLE geo_enrichment.vworld_wfs_footprint_cache");
+		assertThat(content).contains("provider character varying(32) NOT NULL DEFAULT 'VWORLD_WFS'");
+		assertThat(content).contains("raw_payload jsonb NOT NULL");
+		assertThat(content).contains("public.geometry(MultiPolygon,4326)");
+		assertThat(content).contains("uq_vworld_wfs_footprint_cache_source_key");
+		assertThat(content).contains("USING gist (geom)");
 	}
 
 	@Test

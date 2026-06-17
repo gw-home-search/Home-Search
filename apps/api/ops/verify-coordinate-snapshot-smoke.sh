@@ -121,7 +121,7 @@ SELECT to_regclass('reference.coordinate_snapshot_run') IS NOT NULL
 SQL
 )"
 if [[ "${SCHEMA_READY}" != "t" ]]; then
-  echo "ERROR: coordinate snapshot schema is missing. Run API Flyway migrations first." >&2
+  echo "ERROR: coordinate snapshot schema is missing. Apply ops/sql/coordinate-source-schema.sql first." >&2
   exit 2
 fi
 

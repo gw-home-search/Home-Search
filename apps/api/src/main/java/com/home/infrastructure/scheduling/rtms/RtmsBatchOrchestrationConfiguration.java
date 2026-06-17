@@ -3,39 +3,15 @@ package com.home.infrastructure.scheduling.rtms;
 import com.home.application.ingest.trade.OpenApiTradeIngestService;
 import com.home.application.ingest.run.RtmsIngestRunRepository;
 import com.home.infrastructure.external.rtms.RtmsApartmentTradeClient;
-import com.home.infrastructure.external.rtms.RtmsApartmentTradeProperties;
 import com.home.infrastructure.external.rtms.RtmsCoordinateSourceAvailabilityProbe;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(RtmsOneShotIngestConfigurationProperties.class)
 class RtmsBatchOrchestrationConfiguration {
-
-	@Bean
-	RtmsOneShotIngestProperties rtmsOneShotIngestProperties(
-		RtmsOneShotIngestConfigurationProperties properties
-	) {
-		return properties.toProperties();
-	}
-
-	@Bean
-	RtmsOneShotTradeIngestRunner rtmsOneShotTradeIngestRunner(
-		RtmsApartmentTradeClient client,
-		ObjectProvider<OpenApiTradeIngestService> ingestServiceProvider
-	) {
-		return new RtmsOneShotTradeIngestRunner(
-			client,
-			() -> ingestServiceProvider.getIfAvailable(() -> {
-				throw new IllegalStateException("OpenApiTradeIngestService is required for RTMS one-shot ingest");
-			})
-		);
-	}
 
 	@Bean
 	RtmsMonthlyRefreshRunner rtmsMonthlyRefreshRunner(
@@ -60,29 +36,12 @@ class RtmsBatchOrchestrationConfiguration {
 
 	@Bean
 	RtmsCoordinateSourcePreflight rtmsCoordinateSourcePreflight(
-		RtmsOneShotIngestProperties properties,
-		RtmsCoordinateSourceAvailabilityProbe availabilityProbe
+		RtmsCoordinateSourceAvailabilityProbe availabilityProbe,
+		@Value("${home.ingest.rtms.allow-coordinate-pending-only:false}") boolean allowCoordinatePendingOnly
 	) {
 		return new RequiredRtmsCoordinateSourcePreflight(
-			properties.allowCoordinatePendingOnly(),
+			allowCoordinatePendingOnly,
 			availabilityProbe
-		);
-	}
-
-	@Bean
-	ApplicationRunner rtmsOneShotIngestApplicationRunner(
-		RtmsOneShotTradeIngestRunner runner,
-		RtmsMonthlyRefreshRunner monthlyRefreshRunner,
-		RtmsOneShotIngestProperties properties,
-		RtmsApartmentTradeProperties tradeProperties,
-		RtmsCoordinateSourcePreflight coordinateSourcePreflight
-	) {
-		return new RtmsOneShotIngestApplicationRunner(
-			runner,
-			monthlyRefreshRunner,
-			properties,
-			tradeProperties,
-			coordinateSourcePreflight
 		);
 	}
 }

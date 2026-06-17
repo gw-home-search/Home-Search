@@ -1,7 +1,6 @@
 services:
   api:
     environment:
-      HOME_INGEST_RTMS_ENABLED: "false"
       HOME_INGEST_RTMS_DAILY_ENABLED: "true"
       HOME_INGEST_RTMS_DAILY_LAWD_CDS: "11680,11710,11650"
       HOME_INGEST_RTMS_DAILY_CRON: "0 * * * * *"

@@ -30,7 +30,6 @@ class CoordinateImportOpsConfigurationTest {
 			SOURCE_DATA_ROOT.resolve("ops/sql/coordinate-source-schema.sql");
 	private static final Path GEO_ENRICHMENT_MIGRATION =
 			SOURCE_DATA_ROOT.resolve("src/main/resources/db/migration/geo-enrichment/V1__create_geo_enrichment_schema.sql");
-	private static final Path WORKLOG = Path.of("../../.codex/harness/worklog.toml");
 
 	@Test
 	@DisplayName("coordinate import compose override는 service key 없이 read-only SHP input을 연결한다")
@@ -378,40 +377,6 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).doesNotContain("string_agg(DISTINCT region_code");
 		assertThat(content).contains("--self-test");
 		assertThat(content).contains("coordinate snapshot smoke passed");
-	}
-
-	@Test
-	@DisplayName("worklog는 coordinate full import smoke 작업을 등록한다")
-	void worklogRegistersCoordinateFullImportSmokeWork() throws IOException {
-		assertThat(WORKLOG).exists();
-
-		String content = Files.readString(WORKLOG);
-
-		assertThat(content).contains("id = \"baseline-coordinate-full-import-smoke\"");
-		assertThat(content).contains("status = \"done\"");
-		assertThat(content).contains("preset = \"coordinate-snapshot-import\"");
-		assertThat(content).contains("targets = \"backend\"");
-		assertThat(content).contains("verify-coordinate-snapshot-smoke.sh --self-test");
-		assertThat(content).contains("HOME_COORDINATE_EXPECTED_REGIONS");
-		assertThat(content).contains("coordinate_snapshot_run.status = PASSED");
-		assertThat(content).contains("full national import");
-	}
-
-	@Test
-	@DisplayName("worklog는 coordinate snapshot storage verification 작업을 등록한다")
-	void worklogRegistersCoordinateSnapshotStorageVerificationWork() throws IOException {
-		assertThat(WORKLOG).exists();
-
-		String content = Files.readString(WORKLOG);
-
-		assertThat(content).contains("id = \"coordinate-snapshot-storage-verification\"");
-		assertThat(content).contains("pr_type = \"Test\"");
-		assertThat(content).contains("preset = \"coordinate-snapshot-import\"");
-		assertThat(content).contains("targets = \"backend\"");
-		assertThat(content).contains("compose coordinate-importer는 bash, psql, shp2pgsql");
-		assertThat(content).contains("verify-coordinate-snapshot-smoke.sh --self-test");
-		assertThat(content).contains("coordinate_snapshot_run.status = PASSED");
-		assertThat(content).contains("active reference.parcel_coordinate_snapshot row count");
 	}
 
 	private static String serviceBlock(String content, String serviceName) {

@@ -6,12 +6,18 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class NewsRuntimeTest {
 
 	private static final Path NEWS_CLEAN_DB_CUTOVER_SCRIPT = Path.of("ops/verify-news-clean-db-cutover.sh");
+	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+		.withUserConfiguration(NewsRuntimeConfiguration.class)
+		.withBean(ObjectMapper.class, ObjectMapper::new);
 
 	@Test
 	@DisplayName("news runtime은 later-scope라 기본값으로 실행되지 않는다")
@@ -19,6 +25,21 @@ class NewsRuntimeTest {
 		NewsRuntimeProperties properties = new NewsRuntimeProperties();
 
 		assertThat(properties.isEnabled()).isFalse();
+	}
+
+	@Test
+	@DisplayName("news disabled이면 run-once enabled여도 runner bean을 만들지 않는다")
+	void runOnceRunnerRequiresNewsRuntimeEnabled() {
+		contextRunner
+			.withPropertyValues(
+				"home.news.enabled=false",
+				"home.news.run-once.enabled=true",
+				"home.news.run-once.query-text=강남 재건축"
+			)
+			.run(context -> {
+				assertThat(context).hasNotFailed();
+				assertThat(context).doesNotHaveBean(ApplicationRunner.class);
+			});
 	}
 
 	@Test

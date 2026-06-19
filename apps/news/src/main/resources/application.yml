@@ -1,0 +1,26 @@
+home:
+  news:
+    enabled: false
+    run-once:
+      enabled: false
+      query-text: ""
+      max-keywords: 1
+      max-articles: 10
+    naver:
+      client-id: ${NAVER_CLIENT_ID:}
+      client-secret: ${NAVER_CLIENT_SECRET:}
+      display: 10
+      sort: date
+    openai:
+      enabled: true
+      api-key: ${OPENAI_API_KEY:}
+      model: ${HOME_NEWS_OPENAI_MODEL:}
+      extraction-version: naver-title-snippet-v1
+      prompt-version: news-signal-v1
+      schema-version: news-signal-json-v1
+
+spring:
+  application:
+    name: home-search-news
+  flyway:
+    enabled: false

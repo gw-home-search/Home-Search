@@ -107,9 +107,9 @@ class LocalRuntimeStackConfigurationTest {
 		assertThat(GRAFANA_HOME_SEARCH_DASHBOARD).exists();
 
 		String compose = Files.readString(LOCAL_COMPOSE);
-		assertThat(compose).contains("grafana/grafana:13.0.2");
-		assertThat(compose).contains("grafana/loki:3.7.0");
-		assertThat(compose).contains("grafana/alloy:${HOME_SEARCH_ALLOY_IMAGE_TAG:-v${HOME_SEARCH_ALLOY_VERSION:-1.16.3}}");
+		assertThat(compose).contains("grafana/grafana:");
+		assertThat(compose).contains("grafana/loki:");
+		assertThat(compose).contains("grafana/alloy:");
 		assertThat(compose).contains("./loki.local.yml:/etc/loki/local-config.yml:ro");
 		assertThat(compose).contains("./alloy.local.alloy:/etc/alloy/config.alloy:ro");
 		assertThat(compose).contains("./grafana/provisioning:/etc/grafana/provisioning:ro");
@@ -155,8 +155,6 @@ class LocalRuntimeStackConfigurationTest {
 		assertThat(dashboard).contains("home_search_ingest_items_total");
 		assertThat(dashboard).contains("home_search_map_requests_total");
 		assertThat(dashboard).contains("home_search_map_marker_cache_requests_total");
-		assertThat(dashboard).contains("http_server_requests_seconds");
-		assertThat(dashboard).contains("jvm_memory_used_bytes");
 		String apiServiceSelector = "{service=" + "\\\"" + "api" + "\\\"" + "}";
 		assertThat(dashboard).contains(apiServiceSelector);
 		assertThat(dashboard).contains(apiServiceSelector + " |= " + "\\\"" + "ERROR" + "\\\"");

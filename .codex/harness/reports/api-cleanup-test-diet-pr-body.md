@@ -2,6 +2,7 @@
 
 상태: Pass
 `apps/api` foundation 테스트의 과도한 구조 고정을 줄이고, later-scope `apps/news`의 테스트 전용 boundary scaffold를 제거했습니다.
+추가로 의미 없이 통과하던 enum 문서 테스트와 실행 가능한 gate를 중복 고정하던 quality gate 문자열 테스트를 제거했습니다.
 
 - work item: api-cleanup-test-diet
 - targets: backend
@@ -11,6 +12,7 @@
 ## 작업 범위
 
 - backend: `apps/api` foundation test diet
+- backend 추가 정리: 대상 없는 enum documentation test, 중복 quality gate config-string test, monitoring exact-version assertions 제거
 - later-scope app: `apps/news` unused boundary scaffold 정리
 - 유지: `apps/rtms-loader`, `apps/source-data`, `libs/rtms-ingest-core`
 - 변경 없음: public API URL/response, DB migration, Docker volume/data, production ingest/map behavior

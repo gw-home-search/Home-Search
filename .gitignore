@@ -16,6 +16,7 @@ build/
 coverage/
 
 # Java/Gradle artifacts
+**/bin/
 .gradle/
 build/
 out/

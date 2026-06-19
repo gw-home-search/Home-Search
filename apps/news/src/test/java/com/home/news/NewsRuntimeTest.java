@@ -9,16 +9,9 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class NewsBoundaryTest {
+class NewsRuntimeTest {
 
 	private static final Path NEWS_CLEAN_DB_CUTOVER_SCRIPT = Path.of("ops/verify-news-clean-db-cutover.sh");
-
-	@Test
-	@DisplayName("news app은 later-scope runtime 경계를 가진다")
-	void ownsLaterScopeRuntimeBoundary() {
-		assertThat(NewsBoundary.APP_NAME).isEqualTo("home-search-news");
-		assertThat(NewsBoundary.SCOPE).isEqualTo("later-scope");
-	}
 
 	@Test
 	@DisplayName("news runtime은 later-scope라 기본값으로 실행되지 않는다")
@@ -26,7 +19,6 @@ class NewsBoundaryTest {
 		NewsRuntimeProperties properties = new NewsRuntimeProperties();
 
 		assertThat(properties.isEnabled()).isFalse();
-		assertThat(properties.boundary()).isEqualTo(NewsBoundary.SCOPE);
 	}
 
 	@Test

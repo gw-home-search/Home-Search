@@ -14,8 +14,4 @@ public class NewsRuntimeProperties {
 	public void setEnabled(boolean enabled) {
 		this.enabled = enabled;
 	}
-
-	public String boundary() {
-		return NewsBoundary.SCOPE;
-	}
 }

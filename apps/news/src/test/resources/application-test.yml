@@ -1,0 +1,5 @@
+home:
+  news:
+    enabled: false
+    run-once:
+      enabled: false

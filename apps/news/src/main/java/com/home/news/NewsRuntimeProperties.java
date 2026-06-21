@@ -212,9 +212,10 @@ public class NewsRuntimeProperties {
 		private String outputDir = "news-research-seed/obsidian";
 		private int maxRequestsPerRun = 5;
 		private String costCapUsd = "5.00";
-		private String model = "";
-		private String promptVersion = "ai-research-seed-prompt-v1";
-		private String schemaVersion = "ai-research-seed-schema-v1";
+		private String model = "gpt-5.4-2026-03-05";
+		private String promptVersion = "research-seed-v2-gpt54";
+		private String schemaVersion = "research-seed-schema-v2";
+		private String screeningVersion = "research-seed-screening-v1";
 		private String defaultReviewer = "local-operator";
 		private final List<String> pilotBuckets = new ArrayList<>(List.of(
 			"NATIONAL",
@@ -310,6 +311,14 @@ public class NewsRuntimeProperties {
 
 		public void setSchemaVersion(String schemaVersion) {
 			this.schemaVersion = schemaVersion;
+		}
+
+		public String getScreeningVersion() {
+			return screeningVersion;
+		}
+
+		public void setScreeningVersion(String screeningVersion) {
+			this.screeningVersion = screeningVersion;
 		}
 
 		public String getDefaultReviewer() {

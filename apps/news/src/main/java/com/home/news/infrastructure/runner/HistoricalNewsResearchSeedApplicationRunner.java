@@ -1,11 +1,14 @@
 package com.home.news.infrastructure.runner;
 
 import java.nio.file.Path;
+import java.time.YearMonth;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.home.domain.news.NewsRegionBucket;
 import com.home.domain.news.NewsResearchSeedMode;
 import com.home.news.NewsRuntimeProperties;
+import com.home.news.application.HistoricalNewsCandidate;
 import com.home.news.application.HistoricalNewsResearchClient;
 import com.home.news.application.HistoricalNewsResearchNoteGenerator;
 import com.home.news.application.HistoricalNewsResearchRequest;
@@ -44,7 +47,11 @@ public class HistoricalNewsResearchSeedApplicationRunner implements ApplicationR
 		}
 		Path outputRoot = Path.of(properties.getResearchSeed().getOutputDir());
 		if (mode == NewsResearchSeedMode.GENERATE_NOTES) {
-			noteGenerator.writeNotes(outputRoot, researchClient.research(request()).candidates());
+			List<HistoricalNewsCandidate> candidates = new ArrayList<>();
+			for (HistoricalNewsResearchRequest request : requests()) {
+				candidates.addAll(researchClient.research(request).candidates());
+			}
+			noteGenerator.writeNotes(outputRoot, candidates);
 			return;
 		}
 		if (mode == NewsResearchSeedMode.IMPORT_APPROVED) {
@@ -54,20 +61,27 @@ public class HistoricalNewsResearchSeedApplicationRunner implements ApplicationR
 		throw new NewsCollectionException("unsupported research seed mode: " + mode);
 	}
 
-	private HistoricalNewsResearchRequest request() {
+	private List<HistoricalNewsResearchRequest> requests() {
 		NewsRuntimeProperties.ResearchSeed seed = properties.getResearchSeed();
-		return new HistoricalNewsResearchRequest(
-			seed.getPeriodStart(),
-			seed.getPeriodEnd(),
-			buckets(seed),
-			seed.getTargetCandidatesPerBucket()
-		);
+		int limit = Math.max(1, seed.getMaxRequestsPerRun());
+		List<NewsRegionBucket> buckets = buckets(seed);
+		List<HistoricalNewsResearchRequest> requests = new ArrayList<>();
+		YearMonth current = YearMonth.from(seed.getPeriodStart());
+		YearMonth end = YearMonth.from(seed.getPeriodEnd());
+		while (!current.isAfter(end) && requests.size() < limit) {
+			for (NewsRegionBucket bucket : buckets) {
+				if (requests.size() >= limit) {
+					break;
+				}
+				requests.add(new HistoricalNewsResearchRequest(current, bucket, seed.getTargetCandidatesPerBucket()));
+			}
+			current = current.plusMonths(1);
+		}
+		return List.copyOf(requests);
 	}
 
 	private List<NewsRegionBucket> buckets(NewsRuntimeProperties.ResearchSeed seed) {
-		int limit = Math.max(1, seed.getMaxRequestsPerRun());
 		return seed.getPilotBuckets().stream()
-			.limit(limit)
 			.map(NewsRegionBucket::valueOf)
 			.toList();
 	}

@@ -41,9 +41,10 @@ class HistoricalNewsSeedImporterTest extends JdbcNewsPostgresTestSupport {
 	@Test
 	@DisplayName("MANUAL_APPROVED Obsidian note만 AI seed observation과 feature로 import한다")
 	void importsOnlyManualApprovedNotes(@TempDir Path tempDir) throws Exception {
-		writeNote(tempDir.resolve("news-research-seed/SEOUL_GANGNAM_GU/2020/2020-06-02-approved.md"), "MANUAL_APPROVED", "");
-		writeNote(tempDir.resolve("news-research-seed/SEOUL_GANGNAM_GU/2020/2020-06-03-needs-review.md"), "NEEDS_REVIEW", "operator");
-		writeNote(tempDir.resolve("news-research-seed/SEOUL_GANGNAM_GU/2020/2020-06-04-rejected.md"), "REJECTED", "operator");
+		writeNote(tempDir.resolve("news-research-seed/SEOUL_GANGNAM_GU/2020/2020-06/2020-06-02-approved.md"), "MANUAL_APPROVED", "");
+		writeNote(tempDir.resolve("news-research-seed/SEOUL_GANGNAM_GU/2020/2020-06/2020-06-03-needs-review.md"), "NEEDS_REVIEW", "operator");
+		writeNote(tempDir.resolve("news-research-seed/SEOUL_GANGNAM_GU/2020/2020-06/2020-06-04-rejected.md"), "REJECTED", "operator");
+		writeManifest(tempDir.resolve("news-research-seed/_manifest/test-run.md"));
 
 		HistoricalNewsSeedImporter importer = importer();
 
@@ -64,6 +65,9 @@ class HistoricalNewsSeedImporterTest extends JdbcNewsPostgresTestSupport {
 			    model_dataset_tier || '|' ||
 			    COALESCE(raw_provider_payload ->> 'reviewed_by', '') || '|' ||
 			    COALESCE(raw_provider_payload ->> 'published_date_precision', '') || '|' ||
+			    COALESCE(raw_provider_payload ->> 'query_month', '') || '|' ||
+			    COALESCE(raw_provider_payload ->> 'score_signal_strength', '') || '|' ||
+			    COALESCE(raw_provider_payload ->> 'candidate_hash', '') || '|' ||
 			    published_at::text
 			FROM news.article_observation
 			""").query(String.class).single();
@@ -72,6 +76,9 @@ class HistoricalNewsSeedImporterTest extends JdbcNewsPostgresTestSupport {
 			.contains("AI_ASSISTED_WEB_RESEARCH|OPENAI_WEB_SEARCH|AI_ASSISTED_RESEARCH_SEED|MANUAL_APPROVED|EXPERIMENTAL_SEED")
 			.contains("fallback-reviewer")
 			.contains("DATE")
+			.contains("2020-06")
+			.contains("STRONG")
+			.contains("candidate-hash")
 			.contains("2020-06-02 00:00:00+09");
 	}
 
@@ -128,14 +135,37 @@ class HistoricalNewsSeedImporterTest extends JdbcNewsPostgresTestSupport {
 			topic: policy_regulation
 			impact_target: sale_price
 			impact_direction_hint: up
-			model_utility: high
+			query_month: 2020-06
+			query_bucket: SEOUL_GANGNAM_GU
+			model: test-model
+			prompt_version: research-seed-v2-gpt54
+			schema_version: research-seed-schema-v2
+			screening_version: research-seed-screening-v1
+			score_signal_strength: STRONG
+			model_utility: HIGH
 			confidence: 0.870
+			reason_codes: [policy]
+			screening_reasons: []
+			candidate_hash: candidate-hash
+			reviewed_at:
+			review_decision_reason:
 			reviewed_by: %s
 			---
 			# 강남 재건축 규제 완화
 
-			- Source link: https://example.com/article
-			- Review status: %s
-			""".formatted(verificationStatus, reviewedBy, verificationStatus));
+			- [ ] URL 접속 가능
+			- [ ] 기사 날짜가 query_month 내부
+			""".formatted(verificationStatus, reviewedBy));
+	}
+
+	private void writeManifest(Path path) throws Exception {
+		Files.createDirectories(path.getParent());
+		Files.writeString(path, """
+			---
+			run_id: test-run
+			---
+			planned: 3
+			accepted: 1
+			""");
 	}
 }

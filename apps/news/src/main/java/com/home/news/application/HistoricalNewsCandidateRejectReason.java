@@ -1,0 +1,16 @@
+package com.home.news.application;
+
+public enum HistoricalNewsCandidateRejectReason {
+
+	MISSING_CITATION,
+	INVALID_URL,
+	OUT_OF_MONTH,
+	BUCKET_MISMATCH,
+	LOW_UTILITY,
+	WEAK_SIGNAL,
+	LOW_CONFIDENCE,
+	UNKNOWN_DIRECTION,
+	INVALID_ENUM,
+	DUPLICATE_URL,
+	BODY_LIKE_FIELD
+}

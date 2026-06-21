@@ -17,8 +17,10 @@ class HistoricalNewsResearchOutputParserTest {
 		var result = parser.parse(validJson());
 
 		assertThat(result.candidates()).hasSize(1);
+		assertThat(result.candidates().get(0).queryMonth().toString()).isEqualTo("2020-06");
 		assertThat(result.candidates().get(0).regionBucket().name()).isEqualTo("SEOUL_GANGNAM_GU");
 		assertThat(result.candidates().get(0).topic().name()).isEqualTo("policy_regulation");
+		assertThat(result.candidates().get(0).scoreSignalStrength().name()).isEqualTo("STRONG");
 	}
 
 	@Test
@@ -42,6 +44,13 @@ class HistoricalNewsResearchOutputParserTest {
 			.hasMessageContaining("confidence must be numeric");
 	}
 
+	@Test
+	@DisplayName("candidate enum field가 지원되지 않으면 거부한다")
+	void rejectsUnsupportedEnum() {
+		assertThatThrownBy(() -> parser.parse(validJson().replace("\"score_signal_strength\": \"STRONG\"", "\"score_signal_strength\": \"MAYBE\"")))
+			.hasMessageContaining("score_signal_strength");
+	}
+
 	private String validJson() {
 		return """
 			{
@@ -52,11 +61,13 @@ class HistoricalNewsResearchOutputParserTest {
 			      "published_date": "2020-06-02",
 			      "url": "https://example.com/article",
 			      "url_citation": "https://example.com/article",
+			      "query_month": "2020-06",
 			      "region_bucket": "SEOUL_GANGNAM_GU",
 			      "topic": "policy_regulation",
 			      "impact_target": "sale_price",
 			      "impact_direction_hint": "up",
-			      "model_utility": "high",
+			      "score_signal_strength": "STRONG",
+			      "model_utility": "HIGH",
 			      "confidence": 0.870,
 			      "reason_codes": ["policy"]
 			    }

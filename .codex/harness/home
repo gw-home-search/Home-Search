@@ -9,7 +9,16 @@ import sys
 import tomllib
 from pathlib import Path
 
-from home_flow import DEFAULT_MAIN, describe_presets, payload_path_for, resolve_preset, slugify
+from home_flow import (
+    DEFAULT_MAIN,
+    describe_presets,
+    path_matches_scope,
+    payload_path_for,
+    resolve_preset,
+    scope_patterns,
+    slugify,
+    target_config,
+)
 
 
 HARNESS_ROOT = Path(__file__).resolve().parent
@@ -262,11 +271,55 @@ def dirty_group(path: str, line: str) -> str:
     return "other"
 
 
-def grouped_dirty(lines: list[str]) -> dict[str, list[str]]:
+def target_list_for(args: argparse.Namespace) -> list[str]:
+    targets = getattr(args, "targets", None) or worklog_target_for(args.work_id) or "both"
+    if targets == "planning-only":
+        return []
+    if targets == "both":
+        return ["backend", "frontend"]
+    if targets in {"backend", "frontend"}:
+        return [targets]
+    return []
+
+
+def publish_allowed_patterns(args: argparse.Namespace) -> list[str]:
+    try:
+        _, preset = resolve_preset(args.work_id, args.preset or worklog_preset_for(args.work_id))
+    except Exception:
+        return []
+    namespace = argparse.Namespace(preset_config=preset)
+    patterns: list[str] = []
+    for target in target_list_for(args):
+        patterns.extend(scope_patterns(target_config(namespace, target)["allowed_scope"]))
+    return patterns
+
+
+def is_untracked_local_noise(path: str, line: str) -> bool:
+    if not line.startswith("??"):
+        return False
+    return path.startswith(".vscode/") or path.startswith(".idea/") or path == ".DS_Store"
+
+
+def publish_dirty_group(path: str, line: str, allowed_patterns: list[str]) -> str:
+    base_group = dirty_group(path, line)
+    if base_group == "forbidden":
+        return "forbidden dirty files"
+    if is_untracked_local_noise(path, line):
+        return "untracked local noise"
+    if allowed_patterns and not path_matches_scope(path, allowed_patterns):
+        return "out-of-scope changed files"
+    if line.startswith("??"):
+        return "pre-existing untracked files in allowed scope"
+    return "pre-existing dirty files in allowed scope"
+
+
+def grouped_dirty(lines: list[str], allowed_patterns: list[str] | None = None) -> dict[str, list[str]]:
     groups: dict[str, list[str]] = {}
+    patterns = allowed_patterns or []
     for line in lines:
         path = status_path(line)
-        groups.setdefault(dirty_group(path, line), []).append(f"{line[:2].strip() or '?'} {path}")
+        group = publish_dirty_group(path, line, patterns) if patterns else dirty_group(path, line)
+        groups.setdefault(group, []).append(f"{line[:2].strip() or '?'} {path}")
     return groups
 
 
@@ -293,6 +346,7 @@ def print_publish_readiness(
     dry_run: bool,
     dirty: list[str],
     issues: list[str],
+    allowed_patterns: list[str],
 ) -> None:
     status = "Pass"
     if dirty or issues:
@@ -300,7 +354,7 @@ def print_publish_readiness(
     print(f"publish-readiness: {status}", flush=True)
     if dirty:
         print("dirty worktree:", flush=True)
-        for group, items in grouped_dirty(dirty).items():
+        for group, items in grouped_dirty(dirty, allowed_patterns).items():
             print(f"- {group}: {', '.join(items[:8])}", flush=True)
     if issues:
         print("blocking checks:", flush=True)
@@ -308,15 +362,16 @@ def print_publish_readiness(
             print(f"- {issue}", flush=True)
     if dirty or issues:
         print("다음 행동:", flush=True)
-        print("- 의도한 변경이면 commit 후 같은 명령을 재실행하세요.", flush=True)
-        print("- 임시 변경이면 stash 후 같은 명령을 재실행하세요.", flush=True)
-        print("- 분리 실행이 필요하면 clean worktree에서 실행하세요.", flush=True)
+        print("- 구현 전에 dirty 상태를 정리하세요: commit, stash, branch 분리, 또는 repo 밖 backup 중 하나를 선택하세요.", flush=True)
+        print("- untracked local noise는 .gitignore 또는 repo 밖 backup으로 분리하세요.", flush=True)
+        print("- out-of-scope changed files는 현재 PR과 별도 branch/backup으로 분리한 뒤 clean worktree에서 재실행하세요.", flush=True)
 
 
 def run_publish_readiness(args: argparse.Namespace, intent: str, *, dry_run: bool) -> int:
     if intent not in {"push", "pr"}:
         return 0
     dirty = git_status_lines()
+    allowed_patterns = publish_allowed_patterns(args)
     issues: list[str] = []
     remote_ok, remote_reason = command_passes(["git", "remote", "get-url", "--push", "origin"])
     if not remote_ok:
@@ -325,7 +380,7 @@ def run_publish_readiness(args: argparse.Namespace, intent: str, *, dry_run: boo
         gh_ok, gh_reason = command_passes(["gh", "auth", "status"])
         if not gh_ok:
             issues.append(f"gh auth status 실패: {gh_reason}")
-    print_publish_readiness(intent, dry_run=dry_run, dirty=dirty, issues=issues)
+    print_publish_readiness(intent, dry_run=dry_run, dirty=dirty, issues=issues, allowed_patterns=allowed_patterns)
     if dry_run:
         return 0
     if dirty:
@@ -460,6 +515,9 @@ def run_self_test() -> int:
         planning_mode_for(argparse.Namespace(planning_mode=None), "pr") == "llm-replan",
         dirty_group(".codex/harness/home", " M .codex/harness/home") == "harness",
         dirty_group("apps/web/src/App.tsx", " M apps/web/src/App.tsx") == "apps",
+        publish_dirty_group(".vscode/settings.json", "?? .vscode/settings.json", ["apps/news/**"]) == "untracked local noise",
+        publish_dirty_group("docs/README.md", " M docs/README.md", ["apps/news/**"]) == "out-of-scope changed files",
+        publish_dirty_group("apps/news/src/App.java", " M apps/news/src/App.java", ["apps/news/**"]) == "pre-existing dirty files in allowed scope",
     ]
     if all(checks):
         print("self-test passed: home launcher")

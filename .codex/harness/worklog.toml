@@ -1,4 +1,56 @@
 [[items]]
+id = "news-realtime-observation-storage-smoke"
+title_ko = "뉴스 실시간 관측 저장 검증"
+pr_type = "Test"
+pr_title_ko = "뉴스 실시간 관측 저장 검증"
+description_ko = "Naver 실시간 metadata 수집 흐름이 OpenAI scoring 없이도 article observation을 안전하게 저장하고 run provenance를 보존하는지 fake provider와 Testcontainers PostgreSQL로 검증한다."
+status = "planned"
+priority = 330
+targets = "backend"
+preset = "news-runtime-storage"
+acceptance_criteria = [
+  "home.news.openai.enabled=false이면 scorer를 호출하지 않고 Naver article observation만 저장한다.",
+  "OpenAI disabled run은 signal_feature를 생성하지 않고 SUCCEEDED로 종료한다.",
+  "collection_run_article은 FEATURE_SKIPPED와 failure_reason=SCORING_DISABLED를 남긴다.",
+  "같은 source + source_key rerun은 article_observation을 중복 저장하지 않고 first_seen_at을 보존한다.",
+  "scoring 실패가 observation 저장 이후 발생해도 collection_run_article.article_observation_id가 null로 덮이지 않는다.",
+  "live Naver/OpenAI 호출, historical CSV importer, public API, apps/api, apps/web 변경은 포함하지 않는다.",
+]
+first_red_candidates = [
+  "OpenAI disabled 상태에서 collection이 FAILED/PARTIAL이거나 scorer를 호출하면 실패하는 service test를 추가한다.",
+  "OpenAI disabled duplicate run에서 observation 중복 또는 first_seen_at 변경이 있으면 실패하는 service test를 추가한다.",
+  "scoring 실패 후 run article의 article_observation_id가 null이면 실패하는 service test를 추가한다.",
+]
+verification_commands = [
+  "cd apps/news && gradle test",
+  "git diff --check",
+  "python3 .codex/harness/pr_lint.py --self-test",
+  "python3 .codex/harness/pr_context.py --self-test",
+  "python3 .codex/harness/pr_body_check.py --self-test",
+  "python3 .codex/harness/worklog_sync.py --self-test",
+  "python3 .codex/harness/home_pr.py --self-test",
+  "python3 .codex/harness/home_flow.py --self-test",
+  "python3 .codex/harness/home_integrate.py --self-test",
+  "python3 .codex/harness/home_plan.py --self-test",
+  "python3 .codex/harness/home_report.py --self-test",
+  ".codex/harness/home --self-test",
+  "python3 .codex/harness/skill_routing.py --self-test",
+  "python3 .codex/harness/user_language_check.py --self-test",
+  "python3 .codex/harness/project_terms_check.py",
+  "python3 .codex/harness/project_terms_check.py --self-test",
+]
+stop_conditions = [
+  "live provider 호출 또는 provider credential이 필요하면 PR gate에서 제외한다.",
+  "DB migration, public API 변경, apps/api/**, apps/web/** 변경이 필요하면 중단하고 별도 slice로 분리한다.",
+  "기사 full text, article-like summary, provider raw body 저장이 필요하면 중단한다.",
+  "Docker volume 삭제, DB reset, secrets 저장이 필요하면 중단한다.",
+]
+risk_notes = [
+  "이 item은 실시간 저장 invariant 검증이며 historical CSV importer는 별도 PR로 진행한다.",
+  "OpenAI scoring은 후처리로 취급하고 observation 저장을 우선한다.",
+]
+
+[[items]]
 id = "daily-batch-live-smoke"
 title_ko = "RTMS와 News daily batch 실동작 검증"
 pr_type = "Chore"

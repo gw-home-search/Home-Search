@@ -19,6 +19,7 @@ public class OneKeywordNewsCollectionService {
 	private static final int SLICE_MAX_KEYWORDS = 1;
 	private static final int SLICE_MAX_DISPLAY = 10;
 	private static final int SLICE_MAX_ARTICLES = 10;
+	private static final String SCORING_DISABLED_REASON = "SCORING_DISABLED";
 
 	private final JdbcNewsRepository repository;
 	private final NewsMetadataClient metadataClient;
@@ -94,8 +95,10 @@ public class OneKeywordNewsCollectionService {
 		String failureReason = null;
 		for (int index = 0; index < fetchedCount; index++) {
 			NewsArticleMetadata article = searchResult.articles().get(index);
+			Long articleObservationId = null;
 			try {
 				ArticleObservationResult observation = repository.insertObservationIfAbsent(toObservationCommand(article));
+				articleObservationId = observation.id();
 				if (observation.created()) {
 					observedNewCount++;
 					repository.recordRunArticle(
@@ -109,39 +112,9 @@ public class OneKeywordNewsCollectionService {
 						ArticleDiscoveryStatus.NEW_OBSERVATION,
 						null
 					);
-					SignalFeatureResult feature = repository.insertFeatureIfAbsent(toFeatureCommand(observation, signalScorer.score(observation)));
-					if (feature.created()) {
-						featureCreatedCount++;
-						repository.recordRunArticle(
-							runKeywordId,
-							observation.id(),
-							article.source(),
-							article.sourceKey(),
-							index + 1,
-							article.title(),
-							article.providerUrl(),
-							ArticleDiscoveryStatus.FEATURE_CREATED,
-							null
-						);
-					}
-					else {
-						featureSkippedCount++;
-						repository.recordRunArticle(
-							runKeywordId,
-							observation.id(),
-							article.source(),
-							article.sourceKey(),
-							index + 1,
-							article.title(),
-							article.providerUrl(),
-							ArticleDiscoveryStatus.FEATURE_SKIPPED,
-							null
-						);
-					}
 				}
 				else {
 					observedDuplicateCount++;
-					featureSkippedCount++;
 					repository.recordRunArticle(
 						runKeywordId,
 						observation.id(),
@@ -154,13 +127,65 @@ public class OneKeywordNewsCollectionService {
 						null
 					);
 				}
+				if (!properties.getOpenai().isEnabled()) {
+					featureSkippedCount++;
+					repository.recordRunArticle(
+						runKeywordId,
+						observation.id(),
+						article.source(),
+						article.sourceKey(),
+						index + 1,
+						article.title(),
+						article.providerUrl(),
+						ArticleDiscoveryStatus.FEATURE_SKIPPED,
+						SCORING_DISABLED_REASON
+					);
+					continue;
+				}
+				if (!observation.created() && repository.hasSignalFeature(
+					observation.source(),
+					observation.sourceKey(),
+					properties.getOpenai().getExtractionVersion()
+				)) {
+					featureSkippedCount++;
+					continue;
+				}
+				SignalFeatureResult feature = repository.insertFeatureIfAbsent(toFeatureCommand(observation, signalScorer.score(observation)));
+				if (feature.created()) {
+					featureCreatedCount++;
+					repository.recordRunArticle(
+						runKeywordId,
+						observation.id(),
+						article.source(),
+						article.sourceKey(),
+						index + 1,
+						article.title(),
+						article.providerUrl(),
+						ArticleDiscoveryStatus.FEATURE_CREATED,
+						null
+					);
+				}
+				else {
+					featureSkippedCount++;
+					repository.recordRunArticle(
+						runKeywordId,
+						observation.id(),
+						article.source(),
+						article.sourceKey(),
+						index + 1,
+						article.title(),
+						article.providerUrl(),
+						ArticleDiscoveryStatus.FEATURE_SKIPPED,
+						null
+					);
+				}
 			}
 			catch (RuntimeException ex) {
 				failedCount++;
 				failureReason = sanitizedFailureReason(ex);
 				repository.recordRunArticle(
 					runKeywordId,
-					null,
+					articleObservationId,
 					article.source(),
 					article.sourceKey(),
 					index + 1,

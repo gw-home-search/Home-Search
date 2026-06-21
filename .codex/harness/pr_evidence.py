@@ -7,6 +7,7 @@ from dataclasses import dataclass
 DIFF_CHECK = "git diff --check"
 DOCKER_COMPOSE_LOCAL_CONFIG = "docker compose -f infra/docker-compose.local.yml config"
 API_QUALITY = "cd apps/api && ./gradlew backendQualityCheck"
+NEWS_TEST = "cd apps/news && gradle test"
 WEB_TEST = "cd apps/web && npm run test"
 WEB_BUILD = "cd apps/web && npm run build"
 TEST_DISPLAY_NAME_POLICY = "python3 scripts/check-test-display-names.py"
@@ -31,6 +32,7 @@ COMMAND_ORDER = (
     DIFF_CHECK,
     DOCKER_COMPOSE_LOCAL_CONFIG,
     API_QUALITY,
+    NEWS_TEST,
     WEB_TEST,
     WEB_BUILD,
     TEST_DISPLAY_NAME_POLICY,
@@ -148,6 +150,8 @@ def requirements_for_changed_files(changed_files: list[str] | tuple[str, ...] | 
         companion_doc = is_removed_companion_doc(path)
         if path.startswith("apps/api/") and not companion_doc:
             commands.add(API_QUALITY)
+        if path.startswith("apps/news/") and not companion_doc:
+            commands.add(NEWS_TEST)
         if path.startswith("apps/web/") and not companion_doc:
             commands.add(WEB_TEST)
             commands.add(WEB_BUILD)

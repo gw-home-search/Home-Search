@@ -20,6 +20,7 @@ SKIP_DIRS = {
     ".next",
     ".vite",
     "__pycache__",
+    "bin",
     "build",
     "coverage",
     "dist",
@@ -61,7 +62,9 @@ ALLOW_PATTERNS = [
     re.compile(pattern)
     for pattern in (
         r"/api/v1(?:/|\b)",
+        r"https://(?:openapi\.naver\.com|api\.openai\.com)/v1(?:/|\b)",
         r"V[0-9]+__.*\.sql",
+        r"\b(?:naver-news-search-metadata|naver-title-snippet|news-signal|news-signal-json|test|prompt|schema)-v[0-9]+\b",
         r"v2/sdk\.js",
         r"kakao\.maps\.load",
         r"sha512-[A-Za-z0-9+/=]*V[0-9][A-Za-z0-9+/=]*",
@@ -82,6 +85,8 @@ def should_skip(path: Path) -> bool:
     if rel == ".codex/harness/project_terms_check.py":
         return True
     if rel.startswith(".codex/harness/reports/"):
+        return True
+    if path.name.startswith(".env"):
         return True
     return any(part in SKIP_DIRS for part in path.parts)
 
@@ -133,6 +138,8 @@ def run_self_test() -> int:
     sample = "\n".join(
         [
             "GET /api/v1/map/complexes stays valid",
+            "home.news.openai.base-url=https://api.openai.com/v1/responses",
+            "HOME_NEWS_OPENAI_EXTRACTION_VERSION=naver-title-snippet-v1",
             "apps/api/src/main/resources/db/migration/V1__initial_schema.sql",
             "Home Search V1 migration",
             "For V1, authentication is outside the path.",
@@ -148,6 +155,9 @@ def run_self_test() -> int:
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "GET /api/v1/search/complexes"),
         scan_text(REPO_ROOT / "SELF_TEST.txt", "V1 API stays at /api/v1/search/complexes") != [],
         scan_text(REPO_ROOT / "SELF_TEST.txt", "V2 ranking") != [],
+        not scan_text(REPO_ROOT / "SELF_TEST.txt", "prompt-version: news-signal-v1"),
+        should_skip(REPO_ROOT / "apps/news/ops/.env"),
+        should_skip(REPO_ROOT / "apps/news/bin/main/application.yml"),
     ]
     if all(checks):
         print("self-test passed: project_terms_check")

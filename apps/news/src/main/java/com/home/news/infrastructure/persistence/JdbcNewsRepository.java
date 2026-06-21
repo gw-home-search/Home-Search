@@ -226,7 +226,7 @@ public class JdbcNewsRepository {
 			ON CONFLICT (run_keyword_id, source, source_key)
 			WHERE source_key IS NOT NULL
 			DO UPDATE SET
-			    article_observation_id = EXCLUDED.article_observation_id,
+			    article_observation_id = COALESCE(EXCLUDED.article_observation_id, news.collection_run_article.article_observation_id),
 			    discovery_status = EXCLUDED.discovery_status,
 			    failure_reason = EXCLUDED.failure_reason
 			""")
@@ -359,6 +359,23 @@ public class JdbcNewsRepository {
 			.query(Long.class)
 			.single();
 		return new SignalFeatureResult(id, false);
+	}
+
+	public boolean hasSignalFeature(NewsSource source, String sourceKey, String extractionVersion) {
+		return Boolean.TRUE.equals(jdbcClient.sql("""
+			SELECT EXISTS (
+			    SELECT 1
+			    FROM news.signal_feature
+			    WHERE source = :source
+			      AND source_key = :sourceKey
+			      AND extraction_version = :extractionVersion
+			)
+			""")
+			.param("source", source.name())
+			.param("sourceKey", sourceKey)
+			.param("extractionVersion", extractionVersion)
+			.query(Boolean.class)
+			.single());
 	}
 
 	public void updateRunKeywordCounts(

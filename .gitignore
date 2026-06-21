@@ -1,5 +1,6 @@
 # IDE and OS files
 .idea/
+.vscode/
 .DS_Store
 
 # Local environment and secrets

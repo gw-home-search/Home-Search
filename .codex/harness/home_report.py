@@ -326,6 +326,7 @@ def render_pr_body(payload: dict[str, Any]) -> str:
 ## 작업 범위
 
 - backend: {changed_scope_summary(payload, "apps/api/")}
+- news: {changed_scope_summary(payload, "apps/news/")}
 - frontend: {changed_scope_summary(payload, "apps/web/")}
 - harness: {changed_scope_summary(payload, ".codex/harness/")}
 - docs/infra: PR template, GitHub workflow, Markdown policy 확인

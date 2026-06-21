@@ -27,9 +27,10 @@ home:
       output-dir: news-research-seed/obsidian
       max-requests-per-run: 5
       cost-cap-usd: "5.00"
-      model: ${HOME_NEWS_RESEARCH_SEED_MODEL:${HOME_NEWS_OPENAI_MODEL:}}
-      prompt-version: ai-research-seed-prompt-v1
-      schema-version: ai-research-seed-schema-v1
+      model: ${HOME_NEWS_RESEARCH_SEED_MODEL:gpt-5.4-2026-03-05}
+      prompt-version: research-seed-v2-gpt54
+      schema-version: research-seed-schema-v2
+      screening-version: research-seed-screening-v1
       default-reviewer: local-operator
       pilot-buckets:
         - NATIONAL

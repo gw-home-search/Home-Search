@@ -2,6 +2,7 @@ package com.home.news.infrastructure.external.openai;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -11,8 +12,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.domain.news.NewsRegionBucket;
 import com.home.domain.news.NewsSignalTopic;
+import com.home.domain.news.SignalModelUtility;
 import com.home.domain.news.SignalImpactDirection;
 import com.home.domain.news.SignalImpactTarget;
+import com.home.domain.news.SignalScoreSignalStrength;
 import com.home.news.application.HistoricalNewsCandidate;
 import com.home.news.application.HistoricalNewsResearchResult;
 import com.home.news.application.NewsCollectionException;
@@ -26,10 +29,12 @@ public class HistoricalNewsResearchOutputParser {
 		"published_date",
 		"url",
 		"url_citation",
+		"query_month",
 		"region_bucket",
 		"topic",
 		"impact_target",
 		"impact_direction_hint",
+		"score_signal_strength",
 		"model_utility",
 		"confidence",
 		"reason_codes"
@@ -92,11 +97,14 @@ public class HistoricalNewsResearchOutputParser {
 			LocalDate.parse(requiredText(candidateNode, "published_date")),
 			requiredText(candidateNode, "url"),
 			candidateNode.path("url_citation").asText(""),
+			YearMonth.parse(requiredText(candidateNode, "query_month")),
+			null,
 			enumValue(NewsRegionBucket.class, requiredText(candidateNode, "region_bucket"), "region_bucket"),
 			enumValue(NewsSignalTopic.class, requiredText(candidateNode, "topic"), "topic"),
 			enumValue(SignalImpactTarget.class, requiredText(candidateNode, "impact_target"), "impact_target"),
 			enumValue(SignalImpactDirection.class, requiredText(candidateNode, "impact_direction_hint"), "impact_direction_hint"),
-			requiredText(candidateNode, "model_utility"),
+			enumValue(SignalScoreSignalStrength.class, requiredText(candidateNode, "score_signal_strength"), "score_signal_strength"),
+			enumValue(SignalModelUtility.class, requiredText(candidateNode, "model_utility"), "model_utility"),
 			confidence,
 			reasonCodes(candidateNode.path("reason_codes"))
 		);

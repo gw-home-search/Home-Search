@@ -18,6 +18,7 @@ import com.home.news.infrastructure.external.openai.HistoricalNewsResearchOutput
 import com.home.news.infrastructure.external.openai.OpenAiHistoricalNewsResearchClient;
 import com.home.news.infrastructure.external.openai.OpenAiNewsSignalScorer;
 import com.home.news.infrastructure.external.openai.NewsSignalStructuredOutputParser;
+import com.home.news.infrastructure.external.openai.SpringAiHistoricalNewsPromptFactory;
 import com.home.news.infrastructure.persistence.JdbcNewsRepository;
 import com.home.news.infrastructure.runner.DailyNewsPipelineScheduler;
 import com.home.news.infrastructure.runner.HistoricalNewsResearchSeedApplicationRunner;
@@ -27,10 +28,10 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
@@ -118,6 +119,12 @@ class NewsRuntimeConfiguration {
 	}
 
 	@Bean
+	@ConditionalOnMissingBean
+	SpringAiHistoricalNewsPromptFactory springAiHistoricalNewsPromptFactory(ObjectMapper objectMapper) {
+		return new SpringAiHistoricalNewsPromptFactory(objectMapper);
+	}
+
+	@Bean
 	@ConditionalOnProperty(prefix = "home.news", name = "enabled", havingValue = "true")
 	@ConditionalOnMissingBean(NewsSignalScorer.class)
 	NewsSignalScorer openAiNewsSignalScorer(
@@ -136,15 +143,16 @@ class NewsRuntimeConfiguration {
 		HttpClient httpClient,
 		ObjectMapper objectMapper,
 		HistoricalNewsResearchOutputParser parser,
+		SpringAiHistoricalNewsPromptFactory promptFactory,
 		NewsRuntimeProperties properties
 	) {
-		return new OpenAiHistoricalNewsResearchClient(httpClient, objectMapper, parser, properties);
+		return new OpenAiHistoricalNewsResearchClient(httpClient, objectMapper, parser, promptFactory, properties);
 	}
 
 	@Bean
 	@ConditionalOnMissingBean
-	HistoricalNewsResearchNoteGenerator historicalNewsResearchNoteGenerator() {
-		return new HistoricalNewsResearchNoteGenerator();
+	HistoricalNewsResearchNoteGenerator historicalNewsResearchNoteGenerator(NewsRuntimeProperties properties, Clock clock) {
+		return new HistoricalNewsResearchNoteGenerator(properties, clock);
 	}
 
 	@Bean

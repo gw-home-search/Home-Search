@@ -108,6 +108,7 @@ public class HistoricalNewsSeedImporter {
 			return stream
 				.filter(Files::isRegularFile)
 				.filter(path -> path.getFileName().toString().endsWith(".md"))
+				.filter(path -> !isManifestPath(rootDir, path))
 				.sorted(Comparator.comparing(Path::toString))
 				.map(path -> parseNote(rootDir, path))
 				.toList();
@@ -115,6 +116,11 @@ public class HistoricalNewsSeedImporter {
 		catch (IOException ex) {
 			throw new NewsCollectionException("research seed note scan failed", ex);
 		}
+	}
+
+	private boolean isManifestPath(Path rootDir, Path notePath) {
+		String relativePath = relativePath(rootDir, notePath);
+		return relativePath.startsWith("_manifest/") || relativePath.contains("/_manifest/");
 	}
 
 	private ReviewedHistoricalNewsNote parseNote(Path rootDir, Path notePath) {
@@ -130,6 +136,7 @@ public class HistoricalNewsSeedImporter {
 			NewsSignalTopic topic = enumValue(NewsSignalTopic.class, required(frontMatter, "topic"));
 			SignalImpactTarget impactTarget = enumValue(SignalImpactTarget.class, required(frontMatter, "impact_target"));
 			SignalImpactDirection impactDirectionHint = enumValue(SignalImpactDirection.class, required(frontMatter, "impact_direction_hint"));
+			LocalDate publishedDate = LocalDate.parse(required(frontMatter, "published_date"));
 			if (source != NewsSource.AI_ASSISTED_WEB_RESEARCH
 				|| discoveryMethod != NewsDiscoveryMethod.OPENAI_WEB_SEARCH
 				|| !availabilityBasis.isAiAssistedSeed()
@@ -145,15 +152,27 @@ public class HistoricalNewsSeedImporter {
 				modelDatasetTier,
 				required(frontMatter, "title"),
 				required(frontMatter, "publisher"),
-				LocalDate.parse(required(frontMatter, "published_date")),
+				publishedDate,
 				required(frontMatter, "url"),
 				required(frontMatter, "url_citation"),
 				regionBucket,
 				topic,
 				impactTarget,
 				impactDirectionHint,
+				optional(frontMatter, "query_month", publishedDate.toString().substring(0, 7)),
+				optional(frontMatter, "query_bucket", regionBucket.name()),
+				optional(frontMatter, "model", requiredModel(properties.getResearchSeed())),
+				optional(frontMatter, "prompt_version", properties.getResearchSeed().getPromptVersion()),
+				optional(frontMatter, "schema_version", properties.getResearchSeed().getSchemaVersion()),
+				optional(frontMatter, "screening_version", properties.getResearchSeed().getScreeningVersion()),
+				optional(frontMatter, "score_signal_strength", ""),
 				required(frontMatter, "model_utility"),
 				required(frontMatter, "confidence"),
+				optional(frontMatter, "reason_codes", "[]"),
+				optional(frontMatter, "screening_reasons", "[]"),
+				optional(frontMatter, "candidate_hash", ""),
+				optional(frontMatter, "reviewed_at", ""),
+				optional(frontMatter, "review_decision_reason", ""),
 				frontMatter.getOrDefault("reviewed_by", "")
 			);
 		}
@@ -205,7 +224,19 @@ public class HistoricalNewsSeedImporter {
 		payload.put("topic", note.topic().name());
 		payload.put("impact_target", note.impactTarget().name());
 		payload.put("impact_direction_hint", note.impactDirectionHint().name());
+		payload.put("query_month", note.queryMonth());
+		payload.put("query_bucket", note.queryBucket());
+		payload.put("model", note.model());
+		payload.put("prompt_version", note.promptVersion());
+		payload.put("schema_version", note.schemaVersion());
+		payload.put("screening_version", note.screeningVersion());
+		payload.put("score_signal_strength", note.scoreSignalStrength());
 		payload.put("model_utility", note.modelUtility());
+		payload.put("reason_codes", note.reasonCodes());
+		payload.put("screening_reasons", note.screeningReasons());
+		payload.put("candidate_hash", note.candidateHash());
+		payload.put("reviewed_at", note.reviewedAt());
+		payload.put("review_decision_reason", note.reviewDecisionReason());
 		payload.put("reviewed_by", reviewer(note));
 		payload.put("review_note_path", note.reviewNotePath());
 		String payloadJson = JsonStrings.compact(objectMapper, payload);
@@ -262,6 +293,9 @@ public class HistoricalNewsSeedImporter {
 		structuredOutput.put("confidence", confidence);
 		structuredOutput.put("evidence_level", SignalEvidenceLevel.title.name());
 		structuredOutput.put("model_utility", note.modelUtility());
+		structuredOutput.put("score_signal_strength", note.scoreSignalStrength());
+		structuredOutput.put("reason_codes", note.reasonCodes());
+		structuredOutput.put("screening_version", note.screeningVersion());
 		String inputHash = TextDigests.sha256Hex(String.join("|",
 			observation.source().name(),
 			observation.sourceKey(),
@@ -375,6 +409,14 @@ public class HistoricalNewsSeedImporter {
 		return value.strip();
 	}
 
+	private String optional(Map<String, String> values, String key, String fallback) {
+		String value = values.get(key);
+		if (value == null || value.isBlank()) {
+			return fallback;
+		}
+		return value.strip();
+	}
+
 	private String unquote(String value) {
 		if (value.length() >= 2 && ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'")))) {
 			return value.substring(1, value.length() - 1);
@@ -414,8 +456,20 @@ public class HistoricalNewsSeedImporter {
 		NewsSignalTopic topic,
 		SignalImpactTarget impactTarget,
 		SignalImpactDirection impactDirectionHint,
+		String queryMonth,
+		String queryBucket,
+		String model,
+		String promptVersion,
+		String schemaVersion,
+		String screeningVersion,
+		String scoreSignalStrength,
 		String modelUtility,
 		String confidence,
+		String reasonCodes,
+		String screeningReasons,
+		String candidateHash,
+		String reviewedAt,
+		String reviewDecisionReason,
 		String reviewedBy
 	) {
 	}

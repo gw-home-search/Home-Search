@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Instant;
 import java.time.LocalDate;
 
+import com.home.domain.news.ArticleDiscoveryStatus;
 import com.home.domain.news.CollectionRunMode;
 import com.home.domain.news.CollectionRunStatus;
 import com.home.domain.news.NewsKeywordType;
@@ -96,6 +97,42 @@ class JdbcNewsRepositoryTest extends JdbcNewsPostgresTestSupport {
 		assertThat(count("news.collection_run_keyword")).isEqualTo(1);
 	}
 
+	@Test
+	@DisplayName("run article 실패 갱신은 기존 article_observation_id를 null로 덮지 않는다")
+	void recordRunArticleFailureUpdateDoesNotClearObservationId() {
+		long keywordId = repository.upsertManualKeyword("부동산 정책", NewsKeywordType.TOPIC);
+		long runId = repository.createRun(CollectionRunMode.RUN_ONCE, "부동산 정책", 1, 1, 1);
+		long runKeywordId = repository.createRunKeyword(runId, keywordId, "부동산 정책", NewsKeywordType.TOPIC, 1, "date");
+		ArticleObservationResult observation = repository.insertObservationIfAbsent(
+			observation("source-key-1", Instant.parse("2026-01-01T00:00:00Z"))
+		);
+
+		repository.recordRunArticle(
+			runKeywordId,
+			observation.id(),
+			observation.source(),
+			observation.sourceKey(),
+			1,
+			observation.title(),
+			observation.providerUrl(),
+			ArticleDiscoveryStatus.NEW_OBSERVATION,
+			null
+		);
+		repository.recordRunArticle(
+			runKeywordId,
+			null,
+			observation.source(),
+			observation.sourceKey(),
+			1,
+			observation.title(),
+			observation.providerUrl(),
+			ArticleDiscoveryStatus.FAILED,
+			"fake scoring failed"
+		);
+
+		assertThat(runArticleObservationId()).isEqualTo(observation.id());
+	}
+
 	private ArticleObservationCommand observation(String sourceKey, Instant firstSeenAt) {
 		String rawPayload = "{\"title\":\"title\",\"link\":\"https://news.naver.com/item\",\"description\":\"snippet\",\"pubDate\":\"Tue, 14 Nov 2023 15:30:00 +0900\"}";
 		return new ArticleObservationCommand(
@@ -128,6 +165,12 @@ class JdbcNewsRepositoryTest extends JdbcNewsPostgresTestSupport {
 			"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 			true
 		));
+	}
+
+	private Long runArticleObservationId() {
+		return jdbcClient.sql("SELECT article_observation_id FROM news.collection_run_article")
+			.query(Long.class)
+			.single();
 	}
 
 	private SignalFeatureCommand feature(ArticleObservationResult observation, String extractionVersion) {

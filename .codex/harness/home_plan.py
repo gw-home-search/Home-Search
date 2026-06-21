@@ -404,14 +404,14 @@ def action_profile(intent: str, commands: dict[str, str], targets: str) -> dict[
             "command": commands["push"],
             "publishes": True,
             "mutates": True,
-            "summary": "integration branch를 원격에 push하되 PR은 만들지 않는다.",
+            "summary": "integration branch를 원격에 push하되 PR은 만들지 않는다. dirty 상태에서 구현하지 말고 먼저 stash, branch 분리, 또는 repo 밖 backup으로 정리한다.",
         },
         "pr": {
             "sequence": ["plan pass 1", "plan pass 2", "plan pass 3", "dry-run --pr", "lint preflight", "run --pr"],
             "command": commands["pr"],
             "publishes": True,
             "mutates": True,
-            "summary": "integration branch push 후 draft PR을 생성한다.",
+            "summary": "integration branch push 후 draft PR을 생성한다. dirty 상태에서 구현하지 말고 먼저 stash, branch 분리, 또는 repo 밖 backup으로 정리한다.",
         },
         "report": {
             "sequence": ["load payload", "render report"],
@@ -792,6 +792,8 @@ def render_plan_text(payload: dict[str, Any]) -> str:
             f"- command: {profile['command']}",
         ]
     )
+    if profile["intent"] in {"push", "pr"}:
+        lines.append("- dirty guardrail: dirty 상태에서 구현하지 말고 먼저 stash, branch 분리, 또는 repo 밖 backup으로 정리한다.")
     if plan.get("critique"):
         critique = plan["critique"]
         lines.append("critique:")
@@ -1035,6 +1037,7 @@ def run_self_test() -> int:
             "재계획 pass: 1" in llm_commands[1][-1],
             len(plan["planning_iterations"]) == 3,
             plan["action_profile"]["command"].endswith("--push"),
+            "dirty 상태에서 구현하지 말고" in plan["action_profile"]["summary"],
             explicit_preset_plan["action_profile"]["command"].endswith("--preset map-ui-state --pr"),
             "--preset map-ui-state" in explicit_preset_plan["commands"]["dry"],
             any(option["intent"] == "pr" for option in plan["action_options"]),

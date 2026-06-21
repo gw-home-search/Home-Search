@@ -1,5 +1,9 @@
 package com.home.news;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -11,6 +15,8 @@ public class NewsRuntimeProperties {
 	private final RunOnce runOnce = new RunOnce();
 	private final Naver naver = new Naver();
 	private final OpenAi openai = new OpenAi();
+	private final ResearchSeed researchSeed = new ResearchSeed();
+	private final Pipeline pipeline = new Pipeline();
 
 	public boolean isEnabled() {
 		return enabled;
@@ -30,6 +36,14 @@ public class NewsRuntimeProperties {
 
 	public OpenAi getOpenai() {
 		return openai;
+	}
+
+	public ResearchSeed getResearchSeed() {
+		return researchSeed;
+	}
+
+	public Pipeline getPipeline() {
+		return pipeline;
 	}
 
 	public static class RunOnce {
@@ -185,6 +199,174 @@ public class NewsRuntimeProperties {
 
 		public void setSchemaVersion(String schemaVersion) {
 			this.schemaVersion = schemaVersion;
+		}
+	}
+
+	public static class ResearchSeed {
+
+		private boolean enabled;
+		private String mode = "GENERATE_NOTES";
+		private LocalDate periodStart = LocalDate.of(2017, 1, 1);
+		private LocalDate periodEnd = LocalDate.of(2026, 5, 31);
+		private int targetCandidatesPerBucket = 15;
+		private String outputDir = "news-research-seed/obsidian";
+		private int maxRequestsPerRun = 5;
+		private String costCapUsd = "5.00";
+		private String model = "";
+		private String promptVersion = "ai-research-seed-prompt-v1";
+		private String schemaVersion = "ai-research-seed-schema-v1";
+		private String defaultReviewer = "local-operator";
+		private final List<String> pilotBuckets = new ArrayList<>(List.of(
+			"NATIONAL",
+			"SEOUL_GANGNAM_GU",
+			"SEOUL_SONGPA_GU",
+			"GYEONGGI_SEONGNAM_SI",
+			"GYEONGGI_GWACHEON_SI"
+		));
+
+		public boolean isEnabled() {
+			return enabled;
+		}
+
+		public void setEnabled(boolean enabled) {
+			this.enabled = enabled;
+		}
+
+		public String getMode() {
+			return mode;
+		}
+
+		public void setMode(String mode) {
+			this.mode = mode;
+		}
+
+		public LocalDate getPeriodStart() {
+			return periodStart;
+		}
+
+		public void setPeriodStart(LocalDate periodStart) {
+			this.periodStart = periodStart;
+		}
+
+		public LocalDate getPeriodEnd() {
+			return periodEnd;
+		}
+
+		public void setPeriodEnd(LocalDate periodEnd) {
+			this.periodEnd = periodEnd;
+		}
+
+		public int getTargetCandidatesPerBucket() {
+			return targetCandidatesPerBucket;
+		}
+
+		public void setTargetCandidatesPerBucket(int targetCandidatesPerBucket) {
+			this.targetCandidatesPerBucket = targetCandidatesPerBucket;
+		}
+
+		public String getOutputDir() {
+			return outputDir;
+		}
+
+		public void setOutputDir(String outputDir) {
+			this.outputDir = outputDir;
+		}
+
+		public int getMaxRequestsPerRun() {
+			return maxRequestsPerRun;
+		}
+
+		public void setMaxRequestsPerRun(int maxRequestsPerRun) {
+			this.maxRequestsPerRun = maxRequestsPerRun;
+		}
+
+		public String getCostCapUsd() {
+			return costCapUsd;
+		}
+
+		public void setCostCapUsd(String costCapUsd) {
+			this.costCapUsd = costCapUsd;
+		}
+
+		public String getModel() {
+			return model;
+		}
+
+		public void setModel(String model) {
+			this.model = model;
+		}
+
+		public String getPromptVersion() {
+			return promptVersion;
+		}
+
+		public void setPromptVersion(String promptVersion) {
+			this.promptVersion = promptVersion;
+		}
+
+		public String getSchemaVersion() {
+			return schemaVersion;
+		}
+
+		public void setSchemaVersion(String schemaVersion) {
+			this.schemaVersion = schemaVersion;
+		}
+
+		public String getDefaultReviewer() {
+			return defaultReviewer;
+		}
+
+		public void setDefaultReviewer(String defaultReviewer) {
+			this.defaultReviewer = defaultReviewer;
+		}
+
+		public List<String> getPilotBuckets() {
+			return pilotBuckets;
+		}
+	}
+
+	public static class Pipeline {
+
+		private final Daily daily = new Daily();
+
+		public Daily getDaily() {
+			return daily;
+		}
+	}
+
+	public static class Daily {
+
+		private boolean enabled;
+		private String cron = "0 0 4 * * *";
+		private String zone = "Asia/Seoul";
+		private final List<String> pilotQueries = new ArrayList<>();
+
+		public boolean isEnabled() {
+			return enabled;
+		}
+
+		public void setEnabled(boolean enabled) {
+			this.enabled = enabled;
+		}
+
+		public String getCron() {
+			return cron;
+		}
+
+		public void setCron(String cron) {
+			this.cron = cron;
+		}
+
+		public String getZone() {
+			return zone;
+		}
+
+		public void setZone(String zone) {
+			this.zone = zone;
+		}
+
+		public List<String> getPilotQueries() {
+			return pilotQueries;
 		}
 	}
 }

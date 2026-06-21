@@ -13,7 +13,9 @@ import com.home.domain.news.CollectionRunStatus;
 import com.home.domain.news.KeywordCadence;
 import com.home.domain.news.NewsKeywordType;
 import com.home.domain.news.NewsObservationStatus;
+import com.home.domain.news.NewsResearchSeedRunStatus;
 import com.home.domain.news.NewsSource;
+import com.home.news.application.AiResearchSeedRunCommand;
 import com.home.news.application.ArticleObservationCommand;
 import com.home.news.application.ArticleObservationResult;
 import com.home.news.application.CollectionRunCounts;
@@ -79,6 +81,74 @@ public class JdbcNewsRepository {
 			.single();
 	}
 
+	public long createAiResearchSeedRun(AiResearchSeedRunCommand command) {
+		return jdbcClient.sql("""
+			INSERT INTO news.ai_research_seed_run (
+			    period_start,
+			    period_end,
+			    bucket_list,
+			    target_candidates_per_bucket,
+			    model,
+			    prompt_version,
+			    schema_version,
+			    output_manifest_hash,
+			    status,
+			    started_at
+			)
+			VALUES (
+			    :periodStart,
+			    :periodEnd,
+			    CAST(:bucketList AS jsonb),
+			    :targetCandidatesPerBucket,
+			    :model,
+			    :promptVersion,
+			    :schemaVersion,
+			    :outputManifestHash,
+			    :status,
+			    now()
+			)
+			RETURNING id
+			""")
+			.param("periodStart", command.periodStart())
+			.param("periodEnd", command.periodEnd())
+			.param("bucketList", command.bucketListJson())
+			.param("targetCandidatesPerBucket", command.targetCandidatesPerBucket())
+			.param("model", command.model())
+			.param("promptVersion", command.promptVersion())
+			.param("schemaVersion", command.schemaVersion())
+			.param("outputManifestHash", command.outputManifestHash())
+			.param("status", NewsResearchSeedRunStatus.RUNNING.name())
+			.query(Long.class)
+			.single();
+	}
+
+	public void finalizeAiResearchSeedRun(
+		long runId,
+		NewsResearchSeedRunStatus status,
+		int candidateCount,
+		int approvedCount,
+		int rejectedCount,
+		String failureReason
+	) {
+		jdbcClient.sql("""
+			UPDATE news.ai_research_seed_run
+			SET status = :status,
+			    candidate_count = :candidateCount,
+			    approved_count = :approvedCount,
+			    rejected_count = :rejectedCount,
+			    failure_reason = :failureReason,
+			    finished_at = now()
+			WHERE id = :id
+			""")
+			.param("status", status.name())
+			.param("candidateCount", candidateCount)
+			.param("approvedCount", approvedCount)
+			.param("rejectedCount", rejectedCount)
+			.param("failureReason", failureReason)
+			.param("id", runId)
+			.update();
+	}
+
 	public long createRunKeyword(long runId, long keywordId, String queryText, NewsKeywordType keywordType, int displayLimit, String sortOrder) {
 		return jdbcClient.sql("""
 			INSERT INTO news.collection_run_keyword (
@@ -120,6 +190,12 @@ public class JdbcNewsRepository {
 			INSERT INTO news.article_observation (
 			    source,
 			    source_key,
+			    discovery_method,
+			    availability_basis,
+			    verification_status,
+			    model_dataset_tier,
+			    review_note_path,
+			    ai_research_seed_run_id,
 			    publisher,
 			    title,
 			    url,
@@ -137,6 +213,12 @@ public class JdbcNewsRepository {
 			VALUES (
 			    :source,
 			    :sourceKey,
+			    :discoveryMethod,
+			    :availabilityBasis,
+			    :verificationStatus,
+			    :modelDatasetTier,
+			    :reviewNotePath,
+			    :aiResearchSeedRunId,
 			    :publisher,
 			    :title,
 			    :url,
@@ -156,6 +238,12 @@ public class JdbcNewsRepository {
 			""")
 			.param("source", command.source().name())
 			.param("sourceKey", command.sourceKey())
+			.param("discoveryMethod", command.discoveryMethod().name())
+			.param("availabilityBasis", command.availabilityBasis().name())
+			.param("verificationStatus", command.verificationStatus().name())
+			.param("modelDatasetTier", command.modelDatasetTier().name())
+			.param("reviewNotePath", command.reviewNotePath())
+			.param("aiResearchSeedRunId", command.aiResearchSeedRunId())
 			.param("publisher", command.publisher())
 			.param("title", command.title())
 			.param("url", command.url())

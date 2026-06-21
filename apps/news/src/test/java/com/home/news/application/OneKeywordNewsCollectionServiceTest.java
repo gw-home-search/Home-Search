@@ -63,6 +63,8 @@ class OneKeywordNewsCollectionServiceTest extends JdbcNewsPostgresTestSupport {
 		assertThat(count("news.article_observation")).isEqualTo(1);
 		assertThat(count("news.signal_feature")).isEqualTo(1);
 		assertThat(count("news.collection_run_article")).isEqualTo(1);
+		assertThat(observationDatasetMetadata())
+			.isEqualTo("PROVIDER_API|REALTIME_OBSERVED|SYSTEM_ACCEPTED|OBSERVED_SIGNAL");
 	}
 
 	@Test
@@ -248,6 +250,13 @@ class OneKeywordNewsCollectionServiceTest extends JdbcNewsPostgresTestSupport {
 		properties.getNaver().setSort("date");
 		properties.getOpenai().setModel("test-model");
 		return properties;
+	}
+
+	private String observationDatasetMetadata() {
+		return jdbcClient.sql("""
+			SELECT discovery_method || '|' || availability_basis || '|' || verification_status || '|' || model_dataset_tier
+			FROM news.article_observation
+			""").query(String.class).single();
 	}
 
 	private static class FakeMetadataClient implements NewsMetadataClient {

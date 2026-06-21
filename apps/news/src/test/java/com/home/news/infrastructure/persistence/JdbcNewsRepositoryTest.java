@@ -8,9 +8,13 @@ import java.time.LocalDate;
 import com.home.domain.news.ArticleDiscoveryStatus;
 import com.home.domain.news.CollectionRunMode;
 import com.home.domain.news.CollectionRunStatus;
+import com.home.domain.news.NewsAvailabilityBasis;
+import com.home.domain.news.NewsDiscoveryMethod;
 import com.home.domain.news.NewsKeywordType;
+import com.home.domain.news.NewsModelDatasetTier;
 import com.home.domain.news.NewsObservationStatus;
 import com.home.domain.news.NewsSource;
+import com.home.domain.news.NewsVerificationStatus;
 import com.home.news.application.ArticleObservationCommand;
 import com.home.news.application.ArticleObservationResult;
 import com.home.news.application.CollectionRunCounts;
@@ -138,6 +142,12 @@ class JdbcNewsRepositoryTest extends JdbcNewsPostgresTestSupport {
 		return new ArticleObservationCommand(
 			NewsSource.NAVER_NEWS_SEARCH,
 			sourceKey,
+			NewsDiscoveryMethod.PROVIDER_API,
+			NewsAvailabilityBasis.REALTIME_OBSERVED,
+			NewsVerificationStatus.SYSTEM_ACCEPTED,
+			NewsModelDatasetTier.OBSERVED_SIGNAL,
+			null,
+			null,
 			"example.com",
 			"title",
 			"https://example.com/article",

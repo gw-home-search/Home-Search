@@ -7,8 +7,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.domain.news.ArticleDiscoveryStatus;
 import com.home.domain.news.CollectionRunMode;
 import com.home.domain.news.CollectionRunStatus;
+import com.home.domain.news.NewsAvailabilityBasis;
+import com.home.domain.news.NewsDiscoveryMethod;
 import com.home.domain.news.NewsKeywordType;
+import com.home.domain.news.NewsModelDatasetTier;
 import com.home.domain.news.NewsObservationStatus;
+import com.home.domain.news.NewsVerificationStatus;
 import com.home.news.NewsRuntimeProperties;
 import com.home.news.infrastructure.persistence.JdbcNewsRepository;
 import com.home.news.support.JsonStrings;
@@ -230,6 +234,12 @@ public class OneKeywordNewsCollectionService {
 		return new ArticleObservationCommand(
 			article.source(),
 			article.sourceKey(),
+			NewsDiscoveryMethod.PROVIDER_API,
+			NewsAvailabilityBasis.REALTIME_OBSERVED,
+			NewsVerificationStatus.SYSTEM_ACCEPTED,
+			NewsModelDatasetTier.OBSERVED_SIGNAL,
+			null,
+			null,
 			article.publisher(),
 			article.title(),
 			article.url(),

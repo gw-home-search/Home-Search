@@ -55,7 +55,13 @@ public class OpenAiNewsSignalScorer implements NewsSignalScorer {
 				.build();
 			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
-				throw new NewsCollectionException("OpenAI scoring request failed with status " + response.statusCode());
+				throw new NewsCollectionException(OpenAiErrorDetails.failureMessage(
+					"OpenAI scoring request",
+					response.statusCode(),
+					response.body(),
+					response.headers(),
+					objectMapper
+				));
 			}
 			return parser.parse(extractOutputText(response.body()));
 		}

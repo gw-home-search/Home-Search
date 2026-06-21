@@ -54,7 +54,13 @@ public class OpenAiResponsesHistoricalNewsResearchClient implements HistoricalNe
 				.build();
 			HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
-				throw new NewsCollectionException("OpenAI historical research request failed with status " + response.statusCode());
+				throw new NewsCollectionException(OpenAiErrorDetails.failureMessage(
+					"OpenAI historical research request",
+					response.statusCode(),
+					response.body(),
+					response.headers(),
+					objectMapper
+				));
 			}
 			return withQueryBucket(request, parser.parse(extractOutputText(response.body())));
 		}

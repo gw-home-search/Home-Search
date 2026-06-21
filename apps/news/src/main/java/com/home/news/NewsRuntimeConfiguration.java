@@ -9,11 +9,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.news.application.NewsMetadataClient;
 import com.home.news.application.NewsSignalScorer;
 import com.home.news.application.OneKeywordNewsCollectionService;
+import com.home.news.application.HistoricalNewsResearchClient;
+import com.home.news.application.HistoricalNewsResearchNoteGenerator;
+import com.home.news.application.HistoricalNewsSeedImporter;
 import com.home.news.infrastructure.external.naver.NaverNewsSearchClient;
 import com.home.news.infrastructure.external.naver.NaverNewsSearchResponseParser;
+import com.home.news.infrastructure.external.openai.HistoricalNewsResearchOutputParser;
+import com.home.news.infrastructure.external.openai.OpenAiHistoricalNewsResearchClient;
 import com.home.news.infrastructure.external.openai.OpenAiNewsSignalScorer;
 import com.home.news.infrastructure.external.openai.NewsSignalStructuredOutputParser;
 import com.home.news.infrastructure.persistence.JdbcNewsRepository;
+import com.home.news.infrastructure.runner.DailyNewsPipelineScheduler;
+import com.home.news.infrastructure.runner.HistoricalNewsResearchSeedApplicationRunner;
 import com.home.news.infrastructure.runner.RunOnceNewsApplicationRunner;
 import org.flywaydb.core.Flyway;
 import org.springframework.beans.factory.InitializingBean;
@@ -25,9 +32,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({NewsRuntimeProperties.class, DataSourceProperties.class})
+@EnableScheduling
 class NewsRuntimeConfiguration {
 
 	@Bean
@@ -103,6 +112,12 @@ class NewsRuntimeConfiguration {
 	}
 
 	@Bean
+	@ConditionalOnMissingBean
+	HistoricalNewsResearchOutputParser historicalNewsResearchOutputParser(ObjectMapper objectMapper) {
+		return new HistoricalNewsResearchOutputParser(objectMapper);
+	}
+
+	@Bean
 	@ConditionalOnProperty(prefix = "home.news", name = "enabled", havingValue = "true")
 	@ConditionalOnMissingBean(NewsSignalScorer.class)
 	NewsSignalScorer openAiNewsSignalScorer(
@@ -112,6 +127,35 @@ class NewsRuntimeConfiguration {
 		NewsRuntimeProperties properties
 	) {
 		return new OpenAiNewsSignalScorer(httpClient, objectMapper, parser, properties);
+	}
+
+	@Bean
+	@ConditionalOnProperty(prefix = "home.news", name = "enabled", havingValue = "true")
+	@ConditionalOnMissingBean(HistoricalNewsResearchClient.class)
+	HistoricalNewsResearchClient openAiHistoricalNewsResearchClient(
+		HttpClient httpClient,
+		ObjectMapper objectMapper,
+		HistoricalNewsResearchOutputParser parser,
+		NewsRuntimeProperties properties
+	) {
+		return new OpenAiHistoricalNewsResearchClient(httpClient, objectMapper, parser, properties);
+	}
+
+	@Bean
+	@ConditionalOnMissingBean
+	HistoricalNewsResearchNoteGenerator historicalNewsResearchNoteGenerator() {
+		return new HistoricalNewsResearchNoteGenerator();
+	}
+
+	@Bean
+	@ConditionalOnProperty(prefix = "home.news", name = "enabled", havingValue = "true")
+	HistoricalNewsSeedImporter historicalNewsSeedImporter(
+		JdbcNewsRepository repository,
+		NewsRuntimeProperties properties,
+		Clock clock,
+		ObjectMapper objectMapper
+	) {
+		return new HistoricalNewsSeedImporter(repository, properties, clock, objectMapper);
 	}
 
 	@Bean
@@ -134,5 +178,25 @@ class NewsRuntimeConfiguration {
 		NewsRuntimeProperties properties
 	) {
 		return new RunOnceNewsApplicationRunner(service, properties);
+	}
+
+	@Bean
+	@ConditionalOnProperty(prefix = "home.news", name = {"enabled", "research-seed.enabled"}, havingValue = "true")
+	ApplicationRunner historicalNewsResearchSeedApplicationRunner(
+		HistoricalNewsResearchClient researchClient,
+		HistoricalNewsResearchNoteGenerator noteGenerator,
+		HistoricalNewsSeedImporter importer,
+		NewsRuntimeProperties properties
+	) {
+		return new HistoricalNewsResearchSeedApplicationRunner(researchClient, noteGenerator, importer, properties);
+	}
+
+	@Bean
+	@ConditionalOnProperty(prefix = "home.news", name = {"enabled", "pipeline.daily.enabled"}, havingValue = "true")
+	DailyNewsPipelineScheduler dailyNewsPipelineScheduler(
+		OneKeywordNewsCollectionService service,
+		NewsRuntimeProperties properties
+	) {
+		return new DailyNewsPipelineScheduler(service, properties);
 	}
 }

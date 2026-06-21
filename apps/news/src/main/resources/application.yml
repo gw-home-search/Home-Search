@@ -18,6 +18,31 @@ home:
       extraction-version: naver-title-snippet-v1
       prompt-version: news-signal-v1
       schema-version: news-signal-json-v1
+    research-seed:
+      enabled: false
+      mode: GENERATE_NOTES
+      period-start: 2017-01-01
+      period-end: 2026-05-31
+      target-candidates-per-bucket: 15
+      output-dir: news-research-seed/obsidian
+      max-requests-per-run: 5
+      cost-cap-usd: "5.00"
+      model: ${HOME_NEWS_RESEARCH_SEED_MODEL:${HOME_NEWS_OPENAI_MODEL:}}
+      prompt-version: ai-research-seed-prompt-v1
+      schema-version: ai-research-seed-schema-v1
+      default-reviewer: local-operator
+      pilot-buckets:
+        - NATIONAL
+        - SEOUL_GANGNAM_GU
+        - SEOUL_SONGPA_GU
+        - GYEONGGI_SEONGNAM_SI
+        - GYEONGGI_GWACHEON_SI
+    pipeline:
+      daily:
+        enabled: false
+        cron: "0 0 4 * * *"
+        zone: Asia/Seoul
+        pilot-queries: []
 
 spring:
   application:

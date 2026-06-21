@@ -6,6 +6,11 @@ This document is a planning baseline for later-scope real-estate news signals.
 It does not change the current Home Search public API contract, map display
 flow, or trade ingest storage contract.
 
+The first implemented news slice is for model-signal validation, not a public
+news product. It separates AI-assisted historical seed data from provider
+observed realtime data so experiments can compare both without weakening
+time-safety claims.
+
 ## Goal
 
 Collect public real-estate news metadata and convert it into time-safe,
@@ -41,6 +46,20 @@ Use source classes in this priority order:
 5. Publisher article pages, only after source-specific crawling and terms
    review.
 
+Current implemented source classes:
+
+- `NAVER_NEWS_SEARCH`: official Naver News Search API metadata source. This is
+  the production observed source for realtime collection from `2026-06-01`
+  onward.
+- `AI_ASSISTED_WEB_RESEARCH`: OpenAI web search assisted candidate discovery
+  for historical model seed data. It is not treated as production observed
+  history and only enters the database after manual approval.
+
+Naver News Search is not used for long historical backfill before
+`2026-06-01`. If the June 2026 transition gap needs to be filled before the
+daily realtime collector is active, store it only as
+`AI_ASSISTED_TRANSITION_SEED`, not as `REALTIME_OBSERVED`.
+
 For unlicensed publisher pages:
 
 - Fetch only when a prior metadata filter says the article is prediction
@@ -49,6 +68,49 @@ For unlicensed publisher pages:
 - Do not persist full text.
 - Do not persist article-like summaries.
 - Persist only structured features and source metadata.
+
+### AI-Assisted Historical Seed
+
+`2017-01-01` through `2026-05-31` historical candidates are generated as
+`AI_ASSISTED_RESEARCH_SEED` review notes. OpenAI web search is used to find
+candidates and citations, with `store=false`, strict structured output, and a
+schema that excludes article body and article-like summary fields.
+
+Generated notes are written under:
+
+```text
+news-research-seed/
+  <region_bucket>/
+    <year>/
+      <published_date>-<candidate_hash>.md
+```
+
+The note frontmatter starts as:
+
+```yaml
+verification_status: NEEDS_REVIEW
+source: AI_ASSISTED_WEB_RESEARCH
+discovery_method: OPENAI_WEB_SEARCH
+availability_basis: AI_ASSISTED_RESEARCH_SEED
+model_dataset_tier: EXPERIMENTAL_SEED
+title:
+publisher:
+published_date:
+url:
+url_citation:
+region_bucket:
+topic:
+impact_target:
+impact_direction_hint:
+model_utility:
+confidence:
+reviewed_by:
+```
+
+Humans must verify URL, date, publisher, region bucket, and topic, then change
+`verification_status` to `MANUAL_APPROVED` or `REJECTED`. The importer ignores
+`NEEDS_REVIEW` and `REJECTED`; only `MANUAL_APPROVED` notes create database
+rows.
 
 ## Storage Boundary
 
@@ -69,6 +131,12 @@ Minimum fields:
 - `id`
 - `source`
 - `source_key`
+- `discovery_method`
+- `availability_basis`
+- `verification_status`
+- `model_dataset_tier`
+- `review_note_path`
+- `ai_research_seed_run_id`
 - `publisher`
 - `title`
 - `url`
@@ -91,6 +159,29 @@ replacement summary.
 `raw_provider_payload` must be redacted to metadata and snippet fields only.
 Article body fields such as `content`, `body`, `full_text`, or rendered HTML
 must be dropped before storage, even when a licensed provider returns them.
+Forbidden body-like keys include `content`, `body`, `full_text`, `html`,
+`article_html`, `summary`, `article_summary`, `본문`, `내용`, `원문`, and
+`기사본문`.
+
+For imported AI historical seed rows:
+
+```text
+source = AI_ASSISTED_WEB_RESEARCH
+discovery_method = OPENAI_WEB_SEARCH
+availability_basis = AI_ASSISTED_RESEARCH_SEED
+verification_status = MANUAL_APPROVED
+model_dataset_tier = EXPERIMENTAL_SEED
+```
+
+For Naver realtime rows:
+
+```text
+source = NAVER_NEWS_SEARCH
+discovery_method = PROVIDER_API
+availability_basis = REALTIME_OBSERVED
+verification_status = SYSTEM_ACCEPTED
+model_dataset_tier = OBSERVED_SIGNAL
+```
 
 ### News Signal Feature
 
@@ -188,6 +279,15 @@ home.news.pipeline.daily.enabled: false
 home.news.pipeline.daily.cron: "0 0 4 * * *"
 home.news.pipeline.daily.zone: Asia/Seoul
 ```
+
+The implemented scheduler is disabled by default. In the first pilot it should
+run only a bounded query list for the v1 buckets:
+
+- `NATIONAL`
+- `SEOUL_GANGNAM_GU`
+- `SEOUL_SONGPA_GU`
+- `GYEONGGI_SEONGNAM_SI`
+- `GYEONGGI_GWACHEON_SI`
 
 Execution order:
 
@@ -308,9 +408,11 @@ first_seen_at <= prediction_cutoff
 Model and RAG consumers should read prediction-safe rows from a stable dataset
 contract, not from ad hoc joins over operational tables.
 
-`news_signal_dataset_view` exposes:
+`news.signal_dataset_view` exposes:
 
 - Article identity: `source`, `source_key`, `publisher`, `title`, `url`.
+- Dataset provenance: `discovery_method`, `availability_basis`,
+  `verification_status`, `model_dataset_tier`, `review_note_path`.
 - Time safety: `published_at`, `provider_pub_at`, `first_seen_at`,
   `feature_date_kst`, `news_date_kst`.
 - Model features: `region_tags`, `complex_candidates`, `topic_tags`,
@@ -331,6 +433,46 @@ first_seen_at <= prediction_cutoff
 
 This rule is stricter than `published_at <= prediction_cutoff` and prevents a
 future-discovered historical article from leaking into a past backtest.
+
+Two narrower views separate experiment and production reads:
+
+- `news.model_experiment_signal_view`: includes both `EXPERIMENTAL_SEED` and
+  `OBSERVED_SIGNAL`.
+- `news.production_observed_signal_view`: includes only `OBSERVED_SIGNAL`.
+
+`EXPERIMENTAL_SEED` rows may help evaluate whether news features improve model
+performance. They must not be represented as production-grade observed history.
+
+### Region Bucket V1
+
+Model aggregation uses stable v1 buckets:
+
+- Parent buckets: `NATIONAL`, `SEOUL`, `GYEONGGI`, `OTHER`.
+- Seoul detail buckets: `SEOUL_GANGNAM_GU`, `SEOUL_SEOCHO_GU`,
+  `SEOUL_SONGPA_GU`, `SEOUL_YONGSAN_GU`, `SEOUL_MAPO_GU`,
+  `SEOUL_SEONGDONG_GU`, `SEOUL_YEONGDEUNGPO_GU`, `SEOUL_YANGCHEON_GU`,
+  `SEOUL_NOWON_GU`, `SEOUL_GANGDONG_GU`.
+- Gyeonggi detail buckets: `GYEONGGI_SEONGNAM_SI`,
+  `GYEONGGI_GWACHEON_SI`, `GYEONGGI_HANAM_SI`,
+  `GYEONGGI_GWANGMYEONG_SI`, `GYEONGGI_GOYANG_SI`,
+  `GYEONGGI_YONGIN_SI`, `GYEONGGI_SUWON_SI`,
+  `GYEONGGI_HWASEONG_SI`, `GYEONGGI_NAMYANGJU_SI`,
+  `GYEONGGI_GIMPO_SI`, `GYEONGGI_ANYANG_SI`,
+  `GYEONGGI_UIWANG_SI`.
+
+Major Seoul/Gyeonggi areas not listed fall back to the parent bucket. Other
+regions fall back to `OTHER`.
+
+### Topic V1
+
+Topic tags are model-feature labels, not public taxonomy:
+
+```text
+policy_regulation, tax, loan_rate, subscription,
+reconstruction_redevelopment, supply, transport_infra, school_district,
+jeonse_rent, transaction_volume, auction_distress, unsold_inventory,
+development_project, macro_rate
+```
 
 ## Retention And Cleanup
 

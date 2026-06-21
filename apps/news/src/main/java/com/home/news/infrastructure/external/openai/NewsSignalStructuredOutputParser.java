@@ -31,7 +31,12 @@ public class NewsSignalStructuredOutputParser {
 		"content",
 		"body",
 		"full_text",
-		"html"
+		"html",
+		"article_html",
+		"본문",
+		"내용",
+		"원문",
+		"기사본문"
 	);
 
 	private final ObjectMapper objectMapper;

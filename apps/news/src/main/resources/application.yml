@@ -1,56 +1,17 @@
 home:
   news:
     enabled: false
-    run-once:
+    region-month-signals:
       enabled: false
-      query-text: ""
-      max-keywords: 1
-      max-articles: 10
-    naver:
-      client-id: ${NAVER_CLIENT_ID:}
-      client-secret: ${NAVER_CLIENT_SECRET:}
-      display: 10
-      sort: date
-    openai:
-      enabled: true
-      api-key: ${OPENAI_API_KEY:}
-      model: ${HOME_NEWS_OPENAI_MODEL:}
-      extraction-version: naver-title-snippet-v1
-      prompt-version: news-signal-v1
-      schema-version: news-signal-json-v1
-    research-seed:
-      enabled: false
-      mode: ${HOME_NEWS_RESEARCH_SEED_MODE:GENERATE_NOTES}
-      period-start: ${HOME_NEWS_RESEARCH_SEED_PERIOD_START:2017-01-01}
-      period-end: ${HOME_NEWS_RESEARCH_SEED_PERIOD_END:2026-05-31}
-      target-candidates-per-bucket: ${HOME_NEWS_RESEARCH_SEED_TARGET_CANDIDATES_PER_BUCKET:15}
-      min-review-notes-per-run: ${HOME_NEWS_RESEARCH_SEED_MIN_REVIEW_NOTES_PER_RUN:3}
-      output-dir: news-research-seed/obsidian
-      max-requests-per-run: 5
-      cost-cap-usd: "5.00"
-      model: ${HOME_NEWS_RESEARCH_SEED_MODEL:gpt-5.4-2026-03-05}
-      prompt-version: research-seed-v2-gpt54
-      schema-version: research-seed-schema-v2
-      screening-version: research-seed-screening-v1
-      reasoning-effort: ${HOME_NEWS_RESEARCH_SEED_REASONING_EFFORT:medium}
-      max-output-tokens: ${HOME_NEWS_RESEARCH_SEED_MAX_OUTPUT_TOKENS:0}
-      max-tool-calls: ${HOME_NEWS_RESEARCH_SEED_MAX_TOOL_CALLS:0}
-      csv-input-dir: ${HOME_NEWS_RESEARCH_SEED_CSV_INPUT_DIR:apps/news/local-input/historical-news-csv}
-      csv-max-notes-per-run: ${HOME_NEWS_RESEARCH_SEED_CSV_MAX_NOTES_PER_RUN:100}
-      csv-shortlist-limit: ${HOME_NEWS_RESEARCH_SEED_CSV_SHORTLIST_LIMIT:20}
-      default-reviewer: local-operator
-      pilot-buckets:
-        - NATIONAL
-        - SEOUL_GANGNAM_GU
-        - SEOUL_SONGPA_GU
-        - GYEONGGI_SEONGNAM_SI
-        - GYEONGGI_GWACHEON_SI
-    pipeline:
-      daily:
-        enabled: false
-        cron: "0 0 4 * * *"
-        zone: Asia/Seoul
-        pilot-queries: []
+      mode: ${HOME_NEWS_REGION_MONTH_SIGNAL_MODE:GENERATE_CSV_REGION_MONTH_SIGNALS}
+      period-start: ${HOME_NEWS_REGION_MONTH_SIGNAL_PERIOD_START:2017-01-01}
+      period-end: ${HOME_NEWS_REGION_MONTH_SIGNAL_PERIOD_END:2026-05-31}
+      method-version: ${HOME_NEWS_REGION_MONTH_SIGNAL_METHOD_VERSION:region-month-signal-v1}
+      csv-input-dir: ${HOME_NEWS_REGION_MONTH_SIGNAL_CSV_INPUT_DIR:apps/news/local-input/historical-news-csv}
+      web-worklist-path: ${HOME_NEWS_REGION_MONTH_SIGNAL_WEB_WORKLIST_PATH:apps/news/local-input/region-month-signal-web-worklist.jsonl}
+      web-research-path: ${HOME_NEWS_REGION_MONTH_SIGNAL_WEB_RESEARCH_PATH:apps/news/local-input/region-month-signal-web-research.jsonl}
+      generated-csv-signals-path: ${HOME_NEWS_REGION_MONTH_SIGNAL_CSV_OUTPUT_PATH:apps/news/local-input/region-month-signal-bigkinds.csv.jsonl}
+      obsidian-output-dir: ${HOME_NEWS_REGION_MONTH_SIGNAL_OBSIDIAN_OUTPUT_DIR:news-research-seed/obsidian}
 
 spring:
   application:

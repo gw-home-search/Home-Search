@@ -1,59 +1,42 @@
 package com.home.news;
 
-import java.net.http.HttpClient;
-import java.time.Clock;
-
 import javax.sql.DataSource;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.news.application.NewsMetadataClient;
-import com.home.news.application.NewsSignalScorer;
-import com.home.news.application.OneKeywordNewsCollectionService;
-import com.home.news.application.BigKindsCsvResearchNoteGenerator;
-import com.home.news.application.HistoricalNewsResearchClient;
-import com.home.news.application.HistoricalNewsResearchNoteGenerator;
-import com.home.news.application.HistoricalNewsSeedImporter;
-import com.home.news.infrastructure.external.naver.NaverNewsSearchClient;
-import com.home.news.infrastructure.external.naver.NaverNewsSearchResponseParser;
-import com.home.news.infrastructure.external.openai.HistoricalNewsResearchOutputParser;
-import com.home.news.infrastructure.external.openai.OpenAiHistoricalNewsResearchClient;
-import com.home.news.infrastructure.external.openai.OpenAiNewsSignalScorer;
-import com.home.news.infrastructure.external.openai.NewsSignalStructuredOutputParser;
-import com.home.news.infrastructure.external.openai.SpringAiHistoricalNewsPromptFactory;
-import com.home.news.infrastructure.persistence.JdbcNewsRepository;
-import com.home.news.infrastructure.runner.DailyNewsPipelineScheduler;
-import com.home.news.infrastructure.runner.HistoricalNewsResearchSeedApplicationRunner;
-import com.home.news.infrastructure.runner.RunOnceNewsApplicationRunner;
+import com.home.news.application.BigKindsCsvRegionMonthSignalGenerator;
+import com.home.news.application.RegionAliasMatcher;
+import com.home.news.application.RegionMonthSignalImporter;
+import com.home.news.application.RegionMonthSignalJsonl;
+import com.home.news.application.RegionMonthSignalObsidianExporter;
+import com.home.news.application.RegionMonthSignalValidator;
+import com.home.news.application.RegionMonthSignalWebWorklistGenerator;
+import com.home.news.infrastructure.persistence.JdbcRegionMonthSignalRepository;
+import com.home.news.infrastructure.runner.RegionMonthSignalApplicationRunner;
 import org.flywaydb.core.Flyway;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({NewsRuntimeProperties.class, DataSourceProperties.class})
-@EnableScheduling
 class NewsRuntimeConfiguration {
 
 	@Bean
-	Clock newsClock() {
-		return Clock.systemDefaultZone();
-	}
-
-	@Bean
-	@ConditionalOnProperty(prefix = "home.news", name = "enabled", havingValue = "true")
+	@ConditionalOnExpression("'${home.news.enabled:false}' == 'true' && ('${home.news.region-month-signals.mode:}' == 'IMPORT_REGION_MONTH_SIGNALS' || '${home.news.region-month-signals.mode:}' == 'EXPORT_REGION_MONTH_SIGNALS')")
 	DataSource newsDataSource(DataSourceProperties properties) {
 		return properties.initializeDataSourceBuilder().build();
 	}
 
 	@Bean
-	@ConditionalOnProperty(prefix = "home.news", name = "enabled", havingValue = "true")
+	@ConditionalOnExpression("'${home.news.enabled:false}' == 'true' && ('${home.news.region-month-signals.mode:}' == 'IMPORT_REGION_MONTH_SIGNALS' || '${home.news.region-month-signals.mode:}' == 'EXPORT_REGION_MONTH_SIGNALS')")
 	Flyway newsFlyway(DataSource dataSource) {
 		return Flyway.configure()
 			.dataSource(dataSource)
@@ -66,153 +49,75 @@ class NewsRuntimeConfiguration {
 	}
 
 	@Bean
-	@ConditionalOnProperty(prefix = "home.news", name = "enabled", havingValue = "true")
+	@ConditionalOnExpression("'${home.news.enabled:false}' == 'true' && ('${home.news.region-month-signals.mode:}' == 'IMPORT_REGION_MONTH_SIGNALS' || '${home.news.region-month-signals.mode:}' == 'EXPORT_REGION_MONTH_SIGNALS')")
 	InitializingBean newsFlywayMigration(Flyway newsFlyway) {
 		return newsFlyway::migrate;
 	}
 
 	@Bean
-	@ConditionalOnProperty(prefix = "home.news", name = "enabled", havingValue = "true")
+	@ConditionalOnExpression("'${home.news.enabled:false}' == 'true' && ('${home.news.region-month-signals.mode:}' == 'IMPORT_REGION_MONTH_SIGNALS' || '${home.news.region-month-signals.mode:}' == 'EXPORT_REGION_MONTH_SIGNALS')")
 	JdbcClient newsJdbcClient(DataSource dataSource) {
 		return JdbcClient.create(dataSource);
 	}
 
 	@Bean
-	@ConditionalOnProperty(prefix = "home.news", name = "enabled", havingValue = "true")
-	JdbcNewsRepository jdbcNewsRepository(JdbcClient jdbcClient) {
-		return new JdbcNewsRepository(jdbcClient);
+	@ConditionalOnMissingBean
+	RegionAliasMatcher regionAliasMatcher() {
+		return new RegionAliasMatcher();
 	}
 
 	@Bean
 	@ConditionalOnMissingBean
-	HttpClient newsHttpClient() {
-		return HttpClient.newHttpClient();
+	RegionMonthSignalValidator regionMonthSignalValidator() {
+		return new RegionMonthSignalValidator();
 	}
 
 	@Bean
 	@ConditionalOnMissingBean
-	NaverNewsSearchResponseParser naverNewsSearchResponseParser(ObjectMapper objectMapper) {
-		return new NaverNewsSearchResponseParser(objectMapper);
+	RegionMonthSignalJsonl regionMonthSignalJsonl(ObjectMapper objectMapper, RegionMonthSignalValidator validator) {
+		return new RegionMonthSignalJsonl(objectMapper, validator);
 	}
 
 	@Bean
-	@ConditionalOnProperty(prefix = "home.news", name = "enabled", havingValue = "true")
-	@ConditionalOnMissingBean(NewsMetadataClient.class)
-	NewsMetadataClient naverNewsSearchClient(
-		HttpClient httpClient,
-		ObjectMapper objectMapper,
-		NaverNewsSearchResponseParser parser,
+	@ConditionalOnMissingBean
+	BigKindsCsvRegionMonthSignalGenerator bigKindsCsvRegionMonthSignalGenerator(RegionAliasMatcher matcher) {
+		return new BigKindsCsvRegionMonthSignalGenerator(matcher);
+	}
+
+	@Bean
+	@ConditionalOnMissingBean
+	RegionMonthSignalWebWorklistGenerator regionMonthSignalWebWorklistGenerator(ObjectMapper objectMapper) {
+		return new RegionMonthSignalWebWorklistGenerator(objectMapper);
+	}
+
+	@Bean
+	@ConditionalOnExpression("'${home.news.enabled:false}' == 'true' && ('${home.news.region-month-signals.mode:}' == 'IMPORT_REGION_MONTH_SIGNALS' || '${home.news.region-month-signals.mode:}' == 'EXPORT_REGION_MONTH_SIGNALS')")
+	JdbcRegionMonthSignalRepository jdbcRegionMonthSignalRepository(JdbcClient jdbcClient, ObjectMapper objectMapper) {
+		return new JdbcRegionMonthSignalRepository(jdbcClient, objectMapper);
+	}
+
+	@Bean
+	@ConditionalOnExpression("'${home.news.enabled:false}' == 'true' && '${home.news.region-month-signals.mode:}' == 'IMPORT_REGION_MONTH_SIGNALS'")
+	RegionMonthSignalImporter regionMonthSignalImporter(RegionMonthSignalJsonl jsonl, JdbcRegionMonthSignalRepository repository) {
+		return new RegionMonthSignalImporter(jsonl, repository);
+	}
+
+	@Bean
+	@ConditionalOnExpression("'${home.news.enabled:false}' == 'true' && '${home.news.region-month-signals.mode:}' == 'EXPORT_REGION_MONTH_SIGNALS'")
+	RegionMonthSignalObsidianExporter regionMonthSignalObsidianExporter(JdbcRegionMonthSignalRepository repository) {
+		return new RegionMonthSignalObsidianExporter(repository);
+	}
+
+	@Bean
+	@ConditionalOnProperty(prefix = "home.news", name = {"enabled", "region-month-signals.enabled"}, havingValue = "true")
+	ApplicationRunner regionMonthSignalApplicationRunner(
+		BigKindsCsvRegionMonthSignalGenerator csvGenerator,
+		RegionMonthSignalJsonl jsonl,
+		RegionMonthSignalWebWorklistGenerator worklistGenerator,
+		ObjectProvider<RegionMonthSignalImporter> importer,
+		ObjectProvider<RegionMonthSignalObsidianExporter> exporter,
 		NewsRuntimeProperties properties
 	) {
-		return new NaverNewsSearchClient(httpClient, objectMapper, parser, properties);
-	}
-
-	@Bean
-	@ConditionalOnMissingBean
-	NewsSignalStructuredOutputParser newsSignalStructuredOutputParser(ObjectMapper objectMapper) {
-		return new NewsSignalStructuredOutputParser(objectMapper);
-	}
-
-	@Bean
-	@ConditionalOnMissingBean
-	HistoricalNewsResearchOutputParser historicalNewsResearchOutputParser(ObjectMapper objectMapper) {
-		return new HistoricalNewsResearchOutputParser(objectMapper);
-	}
-
-	@Bean
-	@ConditionalOnMissingBean
-	SpringAiHistoricalNewsPromptFactory springAiHistoricalNewsPromptFactory(ObjectMapper objectMapper) {
-		return new SpringAiHistoricalNewsPromptFactory(objectMapper);
-	}
-
-	@Bean
-	@ConditionalOnProperty(prefix = "home.news", name = "enabled", havingValue = "true")
-	@ConditionalOnMissingBean(NewsSignalScorer.class)
-	NewsSignalScorer openAiNewsSignalScorer(
-		HttpClient httpClient,
-		ObjectMapper objectMapper,
-		NewsSignalStructuredOutputParser parser,
-		NewsRuntimeProperties properties
-	) {
-		return new OpenAiNewsSignalScorer(httpClient, objectMapper, parser, properties);
-	}
-
-	@Bean
-	@ConditionalOnProperty(prefix = "home.news", name = "enabled", havingValue = "true")
-	@ConditionalOnMissingBean(HistoricalNewsResearchClient.class)
-	HistoricalNewsResearchClient openAiHistoricalNewsResearchClient(
-		HttpClient httpClient,
-		ObjectMapper objectMapper,
-		HistoricalNewsResearchOutputParser parser,
-		SpringAiHistoricalNewsPromptFactory promptFactory,
-		NewsRuntimeProperties properties
-	) {
-		return new OpenAiHistoricalNewsResearchClient(httpClient, objectMapper, parser, promptFactory, properties);
-	}
-
-	@Bean
-	@ConditionalOnMissingBean
-	HistoricalNewsResearchNoteGenerator historicalNewsResearchNoteGenerator(NewsRuntimeProperties properties, Clock clock) {
-		return new HistoricalNewsResearchNoteGenerator(properties, clock);
-	}
-
-	@Bean
-	@ConditionalOnMissingBean
-	BigKindsCsvResearchNoteGenerator bigKindsCsvResearchNoteGenerator(NewsRuntimeProperties properties, Clock clock) {
-		return new BigKindsCsvResearchNoteGenerator(properties, clock);
-	}
-
-	@Bean
-	@ConditionalOnProperty(prefix = "home.news", name = "enabled", havingValue = "true")
-	HistoricalNewsSeedImporter historicalNewsSeedImporter(
-		JdbcNewsRepository repository,
-		NewsRuntimeProperties properties,
-		Clock clock,
-		ObjectMapper objectMapper
-	) {
-		return new HistoricalNewsSeedImporter(repository, properties, clock, objectMapper);
-	}
-
-	@Bean
-	@ConditionalOnProperty(prefix = "home.news", name = "enabled", havingValue = "true")
-	OneKeywordNewsCollectionService oneKeywordNewsCollectionService(
-		JdbcNewsRepository repository,
-		NewsMetadataClient metadataClient,
-		NewsSignalScorer signalScorer,
-		NewsRuntimeProperties properties,
-		Clock clock,
-		ObjectMapper objectMapper
-	) {
-		return new OneKeywordNewsCollectionService(repository, metadataClient, signalScorer, properties, clock, objectMapper);
-	}
-
-	@Bean
-	@ConditionalOnProperty(prefix = "home.news", name = {"enabled", "run-once.enabled"}, havingValue = "true")
-	ApplicationRunner runOnceNewsApplicationRunner(
-		OneKeywordNewsCollectionService service,
-		NewsRuntimeProperties properties
-	) {
-		return new RunOnceNewsApplicationRunner(service, properties);
-	}
-
-	@Bean
-	@ConditionalOnProperty(prefix = "home.news", name = {"enabled", "research-seed.enabled"}, havingValue = "true")
-	ApplicationRunner historicalNewsResearchSeedApplicationRunner(
-		HistoricalNewsResearchClient researchClient,
-		HistoricalNewsResearchNoteGenerator noteGenerator,
-		BigKindsCsvResearchNoteGenerator csvNoteGenerator,
-		HistoricalNewsSeedImporter importer,
-		NewsRuntimeProperties properties
-	) {
-		return new HistoricalNewsResearchSeedApplicationRunner(researchClient, noteGenerator, csvNoteGenerator, importer, properties);
-	}
-
-	@Bean
-	@ConditionalOnProperty(prefix = "home.news", name = {"enabled", "pipeline.daily.enabled"}, havingValue = "true")
-	DailyNewsPipelineScheduler dailyNewsPipelineScheduler(
-		OneKeywordNewsCollectionService service,
-		NewsRuntimeProperties properties
-	) {
-		return new DailyNewsPipelineScheduler(service, properties);
+		return new RegionMonthSignalApplicationRunner(csvGenerator, jsonl, worklistGenerator, importer, exporter, properties);
 	}
 }

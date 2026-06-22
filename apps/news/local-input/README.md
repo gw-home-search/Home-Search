@@ -1,6 +1,7 @@
 # News Local Input
 
-This directory is for local-only source files used during news seed experiments.
+This directory is for local-only source files used during region-month signal
+seed experiments.
 
 Put historical news CSV files under:
 
@@ -9,12 +10,22 @@ apps/news/local-input/historical-news-csv/
 ```
 
 Files in that directory are intentionally ignored by git. Keep original CSV data
-local, inspect its columns first, then build a dedicated importer in a separate
-slice.
+local. The aggregate generator reads metadata columns only and writes no article
+body or article note files.
 
-Monthly CSV shortlist selection is also local-only. After an operator chooses
-shortlist numbers, selected `source_key` values can be staged in:
+Generated local-only aggregate inputs:
 
 ```text
-apps/news/local-input/historical-news-csv-selected.txt
+apps/news/local-input/region-month-signal-bigkinds.csv.jsonl
+apps/news/local-input/region-month-signal-web-worklist.jsonl
+apps/news/local-input/region-month-signal-web-research.jsonl
 ```
+
+`region-month-signal-web-research.jsonl` must contain scored aggregate rows, not
+article body text or article-like summaries.
+
+Evidence target by source:
+
+- `BIGKINDS_CSV`: up to 10 metadata evidence links per region-month aggregate.
+- `AGENT_WEB_RESEARCH`: target 5 metadata evidence links per region-month
+  aggregate; inherited evidence is allowed when direct local evidence is sparse.

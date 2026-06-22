@@ -1,5 +1,6 @@
 package com.home.news.infrastructure.persistence;
 
+import java.util.List;
 import java.util.Properties;
 
 import javax.sql.DataSource;
@@ -39,10 +40,13 @@ public abstract class JdbcNewsPostgresTestSupport {
 			.load();
 	}
 
-	protected long count(String qualifiedTableName) {
-		return jdbcClient.sql("SELECT count(*) FROM " + qualifiedTableName)
-			.query(Long.class)
-			.single();
+	protected List<String> newsRelations() {
+		return jdbcClient.sql("""
+			SELECT table_name
+			FROM information_schema.tables
+			WHERE table_schema = 'news'
+			ORDER BY table_name
+			""").query(String.class).list();
 	}
 
 	private DataSource dataSource(PostgreSQLContainer<?> postgres) {

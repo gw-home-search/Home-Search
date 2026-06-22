@@ -1,5 +1,5 @@
 home:
   news:
     enabled: false
-    run-once:
+    region-month-signals:
       enabled: false

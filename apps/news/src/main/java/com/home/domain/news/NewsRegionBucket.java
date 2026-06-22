@@ -37,19 +37,15 @@ public enum NewsRegionBucket {
 		this.descriptionKo = descriptionKo;
 	}
 
-	public boolean isPilotBucket() {
-		return this == NATIONAL
-			|| this == SEOUL_GANGNAM_GU
-			|| this == SEOUL_SONGPA_GU
-			|| this == GYEONGGI_SEONGNAM_SI
-			|| this == GYEONGGI_GWACHEON_SI;
-	}
-
 	public String titleKo() {
 		return titleKo;
 	}
 
 	public String descriptionKo() {
 		return descriptionKo;
+	}
+
+	public boolean isDetailBucket() {
+		return this != NATIONAL && this != SEOUL && this != GYEONGGI && this != OTHER;
 	}
 }

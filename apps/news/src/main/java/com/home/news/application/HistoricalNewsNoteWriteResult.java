@@ -5,6 +5,7 @@ import java.util.Map;
 
 public record HistoricalNewsNoteWriteResult(
 	int candidateCount,
+	int acceptedCount,
 	int noteCount,
 	int rejectedCount,
 	Map<HistoricalNewsCandidateRejectReason, Integer> rejectedByReason,

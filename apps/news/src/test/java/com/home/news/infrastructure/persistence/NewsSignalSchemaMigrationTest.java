@@ -146,6 +146,74 @@ class NewsSignalSchemaMigrationTest extends JdbcNewsPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("BIGKINDS_CSV observation은 licensed historical provider export metadata CHECK를 통과한다")
+	void acceptsBigKindsCsvResearchSeedObservationMetadata() {
+		long seedRunId = insertAiResearchSeedRun();
+
+		long observationId = jdbcClient.sql("""
+			INSERT INTO news.article_observation (
+			    source,
+			    source_key,
+			    discovery_method,
+			    availability_basis,
+			    verification_status,
+			    model_dataset_tier,
+			    review_note_path,
+			    ai_research_seed_run_id,
+			    publisher,
+			    title,
+			    url,
+			    provider_url,
+			    first_seen_at,
+			    collected_at,
+			    news_date_kst,
+			    raw_provider_payload,
+			    payload_hash,
+			    ingest_status
+			)
+			VALUES (
+			    'BIGKINDS_CSV',
+			    'BIGKINDS_CSV:01200201.20200602123456001',
+			    'PROVIDER_EXPORT',
+			    'LICENSED_HISTORICAL_EXPORT',
+			    'MANUAL_APPROVED',
+			    'EXPERIMENTAL_SEED',
+			    'news-research-seed/NATIONAL/2020/2020-06-02-source-key-1.md',
+			    :seedRunId,
+			    'example.com',
+			    'title',
+			    'https://example.com/article',
+			    'http://www.bigkinds.or.kr/news/newsDetailView.do?newsId=01200201.20200602123456001',
+			    now(),
+			    now(),
+			    DATE '2020-06-02',
+			    '{"source_file":"sample.csv","source_row_number":2,"keywords":"재건축"}'::jsonb,
+			    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+			    'OBSERVED'
+			)
+			RETURNING id
+			""").param("seedRunId", seedRunId).query(Long.class).single();
+
+		assertThat(observationId).isPositive();
+	}
+
+	@Test
+	@DisplayName("BIGKINDS_CSV source policy는 full text/snippet 저장을 허용하지 않는다")
+	void bigKindsCsvSourcePolicyDisallowsTextStorage() {
+		String policy = jdbcClient.sql("""
+			SELECT metadata_collection_allowed || '|' ||
+			       publisher_page_fetch_allowed || '|' ||
+			       full_text_storage_allowed || '|' ||
+			       snippet_storage_allowed || '|' ||
+			       raw_payload_retention_days
+			FROM news.source_policy
+			WHERE source = 'BIGKINDS_CSV'
+			""").query(String.class).single();
+
+		assertThat(policy).isEqualTo("true|false|false|false|3650");
+	}
+
+	@Test
 	@DisplayName("기존 Naver observation은 realtime observed dataset default를 받는다")
 	void naverObservationGetsRealtimeDatasetDefaults() {
 		long observationId = insertObservation();
@@ -166,11 +234,13 @@ class NewsSignalSchemaMigrationTest extends JdbcNewsPostgresTestSupport {
 		long seedRunId = insertAiResearchSeedRun();
 		long observedId = insertObservation("NAVER_NEWS_SEARCH", "naver-source-key", null);
 		long seedId = insertObservation("AI_ASSISTED_WEB_RESEARCH", "AI_ASSISTED_WEB_RESEARCH:seed-source-key", seedRunId);
+		long csvId = insertObservation("BIGKINDS_CSV", "BIGKINDS_CSV:seed-source-key", seedRunId);
 		insertFeature(observedId, "NAVER_NEWS_SEARCH", "naver-source-key");
 		insertFeature(seedId, "AI_ASSISTED_WEB_RESEARCH", "AI_ASSISTED_WEB_RESEARCH:seed-source-key");
+		insertFeature(csvId, "BIGKINDS_CSV", "BIGKINDS_CSV:seed-source-key");
 
 		assertThat(datasetSourceKeys("news.model_experiment_signal_view"))
-			.containsExactlyInAnyOrder("naver-source-key", "AI_ASSISTED_WEB_RESEARCH:seed-source-key");
+			.containsExactlyInAnyOrder("naver-source-key", "AI_ASSISTED_WEB_RESEARCH:seed-source-key", "BIGKINDS_CSV:seed-source-key");
 		assertThat(datasetSourceKeys("news.production_observed_signal_view"))
 			.containsExactly("naver-source-key");
 	}
@@ -265,11 +335,19 @@ class NewsSignalSchemaMigrationTest extends JdbcNewsPostgresTestSupport {
 			VALUES (
 			    :source,
 			    :sourceKey,
-			    CASE WHEN :source = 'AI_ASSISTED_WEB_RESEARCH' THEN 'OPENAI_WEB_SEARCH' ELSE 'PROVIDER_API' END,
-			    CASE WHEN :source = 'AI_ASSISTED_WEB_RESEARCH' THEN 'AI_ASSISTED_RESEARCH_SEED' ELSE 'REALTIME_OBSERVED' END,
-			    CASE WHEN :source = 'AI_ASSISTED_WEB_RESEARCH' THEN 'MANUAL_APPROVED' ELSE 'SYSTEM_ACCEPTED' END,
-			    CASE WHEN :source = 'AI_ASSISTED_WEB_RESEARCH' THEN 'EXPERIMENTAL_SEED' ELSE 'OBSERVED_SIGNAL' END,
-			    CASE WHEN :source = 'AI_ASSISTED_WEB_RESEARCH' THEN 'news-research-seed/NATIONAL/2020/2020-06-02-source-key-1.md' ELSE NULL END,
+			    CASE
+			        WHEN :source = 'AI_ASSISTED_WEB_RESEARCH' THEN 'OPENAI_WEB_SEARCH'
+			        WHEN :source = 'BIGKINDS_CSV' THEN 'PROVIDER_EXPORT'
+			        ELSE 'PROVIDER_API'
+			    END,
+			    CASE
+			        WHEN :source = 'AI_ASSISTED_WEB_RESEARCH' THEN 'AI_ASSISTED_RESEARCH_SEED'
+			        WHEN :source = 'BIGKINDS_CSV' THEN 'LICENSED_HISTORICAL_EXPORT'
+			        ELSE 'REALTIME_OBSERVED'
+			    END,
+			    CASE WHEN :source IN ('AI_ASSISTED_WEB_RESEARCH', 'BIGKINDS_CSV') THEN 'MANUAL_APPROVED' ELSE 'SYSTEM_ACCEPTED' END,
+			    CASE WHEN :source IN ('AI_ASSISTED_WEB_RESEARCH', 'BIGKINDS_CSV') THEN 'EXPERIMENTAL_SEED' ELSE 'OBSERVED_SIGNAL' END,
+			    CASE WHEN :source IN ('AI_ASSISTED_WEB_RESEARCH', 'BIGKINDS_CSV') THEN 'news-research-seed/NATIONAL/2020/2020-06-02-source-key-1.md' ELSE NULL END,
 			    :seedRunId,
 			    'example.com',
 			    'title',

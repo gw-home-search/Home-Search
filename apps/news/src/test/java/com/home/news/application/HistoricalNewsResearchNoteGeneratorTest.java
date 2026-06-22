@@ -31,26 +31,46 @@ class HistoricalNewsResearchNoteGeneratorTest {
 	);
 
 	@Test
-	@DisplayName("citation 없는 historical candidate는 Obsidian note로 생성하지 않는다")
-	void skipsCandidateWithoutCitation(@TempDir Path tempDir) throws Exception {
+	@DisplayName("gate 실패 candidate도 최소 검수 note 수를 채우기 위해 screening_reasons와 함께 생성한다")
+	void writesRejectedCandidatesForMinimumReviewNotes(@TempDir Path tempDir) throws Exception {
 		HistoricalNewsCandidate withCitation = candidate("https://example.com/article");
-		HistoricalNewsCandidate withoutCitation = candidate("");
+		HistoricalNewsCandidate withoutCitation = candidate("").withTitle("citation 없는 후보");
 
 		HistoricalNewsNoteWriteResult result = generator.writeNotes(tempDir, List.of(withCitation, withoutCitation));
 
 		assertThat(result.candidateCount()).isEqualTo(2);
-		assertThat(result.noteCount()).isEqualTo(1);
+		assertThat(result.acceptedCount()).isEqualTo(1);
+		assertThat(result.noteCount()).isEqualTo(2);
+		assertThat(result.rejectedCount()).isEqualTo(1);
 		try (var walk = Files.walk(tempDir)) {
 			assertThat(walk
 				.filter(path -> path.getFileName().toString().endsWith(".md"))
 				.filter(path -> !path.toString().contains("_manifest"))
-				.count()).isEqualTo(1);
+				.count()).isEqualTo(2);
+		}
+		try (var walk = Files.walk(tempDir)) {
+			Path rejectedNote = walk
+				.filter(path -> path.getFileName().toString().endsWith(".md"))
+				.filter(path -> !path.toString().contains("_manifest"))
+				.filter(path -> {
+					try {
+						return Files.readString(path).contains("screening_reasons: [MISSING_CITATION, INVALID_URL]");
+					}
+					catch (Exception ex) {
+						throw new RuntimeException(ex);
+					}
+				})
+				.findFirst()
+				.orElseThrow();
+			assertThat(Files.readString(rejectedNote))
+				.contains("verification_status: NEEDS_REVIEW")
+				.contains("screening_reasons: [MISSING_CITATION, INVALID_URL]");
 		}
 	}
 
 	@Test
-	@DisplayName("gate 통과 candidate만 yyyy-MM 경로의 Obsidian note로 생성하고 manifest에 reject reason count를 남긴다")
-	void writesOnlyCandidatesAcceptedByGate(@TempDir Path tempDir) throws Exception {
+	@DisplayName("gate 통과 candidate와 최소 검수 후보를 yyyy-MM 경로의 Obsidian note로 생성하고 manifest에 count를 남긴다")
+	void writesAcceptedAndMinimumReviewCandidates(@TempDir Path tempDir) throws Exception {
 		HistoricalNewsCandidate accepted = candidate("https://example.com/article");
 		HistoricalNewsCandidate lowConfidence = accepted.withConfidence(new BigDecimal("0.790"));
 		HistoricalNewsCandidate weakSignal = accepted.withUrl("https://example.com/weak")
@@ -65,7 +85,8 @@ class HistoricalNewsResearchNoteGeneratorTest {
 		));
 
 		assertThat(result.candidateCount()).isEqualTo(4);
-		assertThat(result.noteCount()).isEqualTo(1);
+		assertThat(result.acceptedCount()).isEqualTo(1);
+		assertThat(result.noteCount()).isEqualTo(3);
 		assertThat(result.rejectedCount()).isEqualTo(3);
 		assertThat(result.rejectedByReason())
 			.containsEntry(HistoricalNewsCandidateRejectReason.LOW_CONFIDENCE, 1)
@@ -84,17 +105,19 @@ class HistoricalNewsResearchNoteGeneratorTest {
 
 		String note = Files.readString(notePath);
 		assertThat(note)
-			.contains("query_month: 2020-06")
-			.contains("query_bucket: SEOUL_GANGNAM_GU")
-			.contains("model: gpt-5.4-2026-03-05")
-			.contains("prompt_version: research-seed-v2-gpt54")
-			.contains("schema_version: research-seed-schema-v2")
-			.contains("screening_version: research-seed-screening-v1")
-			.contains("score_signal_strength: STRONG")
-			.contains("reason_codes: [policy]")
+			.contains("signal_month: 2020-06")
+			.doesNotContain("query_month:")
+			.doesNotContain("query_bucket:")
+			.doesNotContain("model: gpt-5.4-2026-03-05")
+			.doesNotContain("prompt_version:")
+			.doesNotContain("schema_version:")
+			.doesNotContain("screening_version:")
+			.doesNotContain("score_signal_strength:")
+			.doesNotContain("model_utility:")
+			.doesNotContain("reason_codes:")
 			.contains("candidate_hash:")
 			.contains("- [ ] URL 접속 가능")
-			.contains("- [ ] 기사 날짜가 query_month 내부")
+			.contains("- [ ] 기사 날짜가 signal_month 판단에 적합")
 			.contains("- [ ] 가격/전세/거래량/공급/risk 방향성이 설명 가능")
 			.doesNotContain("Source link:");
 
@@ -108,6 +131,7 @@ class HistoricalNewsResearchNoteGeneratorTest {
 		}
 		assertThat(Files.readString(manifestJson))
 			.contains("\"accepted\": 1")
+			.contains("\"notes\": 3")
 			.contains("\"LOW_CONFIDENCE\":1")
 			.contains("\"WEAK_SIGNAL\":1")
 			.contains("\"DUPLICATE_URL\":1")
@@ -177,6 +201,7 @@ class HistoricalNewsResearchNoteGeneratorTest {
 		properties.getResearchSeed().setPromptVersion("research-seed-v2-gpt54");
 		properties.getResearchSeed().setSchemaVersion("research-seed-schema-v2");
 		properties.getResearchSeed().setScreeningVersion("research-seed-screening-v1");
+		properties.getResearchSeed().setMinReviewNotesPerRun(3);
 		return properties;
 	}
 }

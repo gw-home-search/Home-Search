@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -127,6 +128,7 @@ public class HistoricalNewsSeedImporter {
 		try {
 			String content = Files.readString(notePath);
 			Map<String, String> frontMatter = frontMatter(content);
+			Map<String, String> bodyMetadata = bodyMetadata(content);
 			NewsVerificationStatus verificationStatus = enumValue(NewsVerificationStatus.class, required(frontMatter, "verification_status"));
 			NewsSource source = enumValue(NewsSource.class, required(frontMatter, "source"));
 			NewsDiscoveryMethod discoveryMethod = enumValue(NewsDiscoveryMethod.class, required(frontMatter, "discovery_method"));
@@ -137,12 +139,7 @@ public class HistoricalNewsSeedImporter {
 			SignalImpactTarget impactTarget = enumValue(SignalImpactTarget.class, required(frontMatter, "impact_target"));
 			SignalImpactDirection impactDirectionHint = enumValue(SignalImpactDirection.class, required(frontMatter, "impact_direction_hint"));
 			LocalDate publishedDate = LocalDate.parse(required(frontMatter, "published_date"));
-			if (source != NewsSource.AI_ASSISTED_WEB_RESEARCH
-				|| discoveryMethod != NewsDiscoveryMethod.OPENAI_WEB_SEARCH
-				|| !availabilityBasis.isAiAssistedSeed()
-				|| modelDatasetTier != NewsModelDatasetTier.EXPERIMENTAL_SEED) {
-				throw new NewsCollectionException("research seed note metadata does not match AI seed policy: " + notePath);
-			}
+			validateSourcePolicy(source, discoveryMethod, availabilityBasis, modelDatasetTier, notePath);
 			return new ReviewedHistoricalNewsNote(
 				relativePath(rootDir, notePath),
 				verificationStatus,
@@ -159,21 +156,29 @@ public class HistoricalNewsSeedImporter {
 				topic,
 				impactTarget,
 				impactDirectionHint,
-				optional(frontMatter, "query_month", publishedDate.toString().substring(0, 7)),
+				optional(frontMatter, "signal_month", optional(frontMatter, "query_month", publishedDate.toString().substring(0, 7))),
 				optional(frontMatter, "query_bucket", regionBucket.name()),
 				optional(frontMatter, "model", requiredModel(properties.getResearchSeed())),
 				optional(frontMatter, "prompt_version", properties.getResearchSeed().getPromptVersion()),
 				optional(frontMatter, "schema_version", properties.getResearchSeed().getSchemaVersion()),
 				optional(frontMatter, "screening_version", properties.getResearchSeed().getScreeningVersion()),
 				optional(frontMatter, "score_signal_strength", ""),
-				required(frontMatter, "model_utility"),
+				optional(frontMatter, "model_utility", ""),
 				required(frontMatter, "confidence"),
 				optional(frontMatter, "reason_codes", "[]"),
 				optional(frontMatter, "screening_reasons", "[]"),
 				optional(frontMatter, "candidate_hash", ""),
 				optional(frontMatter, "reviewed_at", ""),
 				optional(frontMatter, "review_decision_reason", ""),
-				frontMatter.getOrDefault("reviewed_by", "")
+				frontMatter.getOrDefault("reviewed_by", ""),
+				optional(frontMatter, "source_file", ""),
+				optional(frontMatter, "source_row_number", ""),
+				optional(frontMatter, "provider_record_id", ""),
+				optional(frontMatter, "original_url", ""),
+				optional(frontMatter, "keywords", bodyMetadata.getOrDefault("키워드", "")),
+				optional(frontMatter, "extracted_terms", bodyMetadata.getOrDefault("특성추출", "")),
+				optional(frontMatter, "region_entities", bodyMetadata.getOrDefault("지역 개체", "")),
+				optional(frontMatter, "organization_entities", bodyMetadata.getOrDefault("기관 개체", ""))
 			);
 		}
 		catch (NewsCollectionException ex) {
@@ -208,9 +213,51 @@ public class HistoricalNewsSeedImporter {
 		return values;
 	}
 
+	private void validateSourcePolicy(
+		NewsSource source,
+		NewsDiscoveryMethod discoveryMethod,
+		NewsAvailabilityBasis availabilityBasis,
+		NewsModelDatasetTier modelDatasetTier,
+		Path notePath
+	) {
+		boolean validAiSeed = source == NewsSource.AI_ASSISTED_WEB_RESEARCH
+			&& discoveryMethod == NewsDiscoveryMethod.OPENAI_WEB_SEARCH
+			&& availabilityBasis.isAiAssistedSeed()
+			&& modelDatasetTier == NewsModelDatasetTier.EXPERIMENTAL_SEED;
+		boolean validBigKindsSeed = source == NewsSource.BIGKINDS_CSV
+			&& discoveryMethod == NewsDiscoveryMethod.PROVIDER_EXPORT
+			&& availabilityBasis == NewsAvailabilityBasis.LICENSED_HISTORICAL_EXPORT
+			&& modelDatasetTier == NewsModelDatasetTier.EXPERIMENTAL_SEED;
+		if (!validAiSeed && !validBigKindsSeed) {
+			throw new NewsCollectionException("research seed note metadata does not match seed policy: " + notePath);
+		}
+	}
+
+	private Map<String, String> bodyMetadata(String content) {
+		int end = content.indexOf("\n---", 3);
+		if (end < 0) {
+			return Map.of();
+		}
+		String body = content.substring(end + 4);
+		Map<String, String> values = new LinkedHashMap<>();
+		for (String line : body.split("\\R")) {
+			String stripped = line.strip();
+			if (!stripped.startsWith("- ")) {
+				continue;
+			}
+			String item = stripped.substring(2).strip();
+			int separator = item.indexOf(':');
+			if (separator < 1) {
+				continue;
+			}
+			values.put(item.substring(0, separator).strip(), item.substring(separator + 1).strip());
+		}
+		return values;
+	}
+
 	private ArticleObservationCommand observationCommand(ReviewedHistoricalNewsNote note, long runId) {
 		String canonicalUrl = canonicalUrl(note.url());
-		String sourceKey = sourceKey(canonicalUrl, note.publishedDate(), note.publisher(), note.title());
+		String sourceKey = sourceKey(note, canonicalUrl);
 		Instant publishedAt = note.publishedDate().atStartOfDay(KST).toInstant();
 		Instant now = Instant.now(clock);
 		ObjectNode payload = objectMapper.createObjectNode();
@@ -224,21 +271,31 @@ public class HistoricalNewsSeedImporter {
 		payload.put("topic", note.topic().name());
 		payload.put("impact_target", note.impactTarget().name());
 		payload.put("impact_direction_hint", note.impactDirectionHint().name());
-		payload.put("query_month", note.queryMonth());
+		payload.put("signal_month", note.signalMonth());
 		payload.put("query_bucket", note.queryBucket());
-		payload.put("model", note.model());
-		payload.put("prompt_version", note.promptVersion());
-		payload.put("schema_version", note.schemaVersion());
-		payload.put("screening_version", note.screeningVersion());
-		payload.put("score_signal_strength", note.scoreSignalStrength());
-		payload.put("model_utility", note.modelUtility());
-		payload.put("reason_codes", note.reasonCodes());
+		if (note.source() == NewsSource.AI_ASSISTED_WEB_RESEARCH) {
+			payload.put("model", note.model());
+			payload.put("prompt_version", note.promptVersion());
+			payload.put("schema_version", note.schemaVersion());
+			payload.put("screening_version", note.screeningVersion());
+			putIfNotBlank(payload, "score_signal_strength", note.scoreSignalStrength());
+			putIfNotBlank(payload, "model_utility", note.modelUtility());
+			payload.put("reason_codes", note.reasonCodes());
+		}
 		payload.put("screening_reasons", note.screeningReasons());
 		payload.put("candidate_hash", note.candidateHash());
 		payload.put("reviewed_at", note.reviewedAt());
 		payload.put("review_decision_reason", note.reviewDecisionReason());
 		payload.put("reviewed_by", reviewer(note));
 		payload.put("review_note_path", note.reviewNotePath());
+		putIfNotBlank(payload, "source_file", note.sourceFile());
+		putIfNotBlank(payload, "source_row_number", note.sourceRowNumber());
+		putIfNotBlank(payload, "provider_record_id", note.providerRecordId());
+		putIfNotBlank(payload, "original_url", note.originalUrl());
+		putIfNotBlank(payload, "keywords", note.keywords());
+		putIfNotBlank(payload, "extracted_terms", note.extractedTerms());
+		putIfNotBlank(payload, "region_entities", note.regionEntities());
+		putIfNotBlank(payload, "organization_entities", note.organizationEntities());
 		String payloadJson = JsonStrings.compact(objectMapper, payload);
 		return new ArticleObservationCommand(
 			note.source(),
@@ -292,8 +349,8 @@ public class HistoricalNewsSeedImporter {
 		BigDecimal confidence = confidence(note.confidence());
 		structuredOutput.put("confidence", confidence);
 		structuredOutput.put("evidence_level", SignalEvidenceLevel.title.name());
-		structuredOutput.put("model_utility", note.modelUtility());
-		structuredOutput.put("score_signal_strength", note.scoreSignalStrength());
+		putIfNotBlank(structuredOutput, "model_utility", note.modelUtility());
+		putIfNotBlank(structuredOutput, "score_signal_strength", note.scoreSignalStrength());
 		structuredOutput.put("reason_codes", note.reasonCodes());
 		structuredOutput.put("screening_version", note.screeningVersion());
 		String inputHash = TextDigests.sha256Hex(String.join("|",
@@ -307,7 +364,7 @@ public class HistoricalNewsSeedImporter {
 			observation.id(),
 			observation.source(),
 			observation.sourceKey(),
-			observation.newsDateKst(),
+			YearMonth.parse(note.signalMonth()).atDay(1),
 			observation.firstSeenAt(),
 			JsonStrings.compact(objectMapper, regionTags),
 			JsonStrings.compact(objectMapper, complexCandidates),
@@ -352,9 +409,21 @@ public class HistoricalNewsSeedImporter {
 		);
 	}
 
-	private String sourceKey(String canonicalUrl, LocalDate publishedDate, String publisher, String title) {
+	private String sourceKey(ReviewedHistoricalNewsNote note, String canonicalUrl) {
+		if (note.source() == NewsSource.BIGKINDS_CSV) {
+			if (!note.providerRecordId().isBlank()) {
+				return NewsSource.BIGKINDS_CSV.name() + ":" + note.providerRecordId().strip();
+			}
+			return NewsSource.BIGKINDS_CSV.name() + ":" + TextDigests.sha256Hex(String.join("|",
+				note.sourceFile(),
+				note.sourceRowNumber(),
+				note.publisher(),
+				note.title(),
+				note.publishedDate().toString()
+			));
+		}
 		return NewsSource.AI_ASSISTED_WEB_RESEARCH.name() + ":"
-			+ TextDigests.sha256Hex(String.join("|", canonicalUrl, publishedDate.toString(), publisher, title));
+			+ TextDigests.sha256Hex(String.join("|", canonicalUrl, note.publishedDate().toString(), note.publisher(), note.title()));
 	}
 
 	private String canonicalUrl(String url) {
@@ -417,6 +486,12 @@ public class HistoricalNewsSeedImporter {
 		return value.strip();
 	}
 
+	private void putIfNotBlank(ObjectNode payload, String key, String value) {
+		if (value != null && !value.isBlank()) {
+			payload.put(key, value.strip());
+		}
+	}
+
 	private String unquote(String value) {
 		if (value.length() >= 2 && ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'")))) {
 			return value.substring(1, value.length() - 1);
@@ -456,7 +531,7 @@ public class HistoricalNewsSeedImporter {
 		NewsSignalTopic topic,
 		SignalImpactTarget impactTarget,
 		SignalImpactDirection impactDirectionHint,
-		String queryMonth,
+		String signalMonth,
 		String queryBucket,
 		String model,
 		String promptVersion,
@@ -470,7 +545,15 @@ public class HistoricalNewsSeedImporter {
 		String candidateHash,
 		String reviewedAt,
 		String reviewDecisionReason,
-		String reviewedBy
+		String reviewedBy,
+		String sourceFile,
+		String sourceRowNumber,
+		String providerRecordId,
+		String originalUrl,
+		String keywords,
+		String extractedTerms,
+		String regionEntities,
+		String organizationEntities
 	) {
 	}
 }

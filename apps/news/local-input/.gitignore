@@ -1,0 +1,6 @@
+*
+!.gitignore
+!README.md
+!historical-news-csv/
+historical-news-csv/*
+!historical-news-csv/.gitignore

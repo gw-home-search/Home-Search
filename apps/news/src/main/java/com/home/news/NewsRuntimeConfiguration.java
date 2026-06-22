@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.news.application.NewsMetadataClient;
 import com.home.news.application.NewsSignalScorer;
 import com.home.news.application.OneKeywordNewsCollectionService;
+import com.home.news.application.BigKindsCsvResearchNoteGenerator;
 import com.home.news.application.HistoricalNewsResearchClient;
 import com.home.news.application.HistoricalNewsResearchNoteGenerator;
 import com.home.news.application.HistoricalNewsSeedImporter;
@@ -156,6 +157,12 @@ class NewsRuntimeConfiguration {
 	}
 
 	@Bean
+	@ConditionalOnMissingBean
+	BigKindsCsvResearchNoteGenerator bigKindsCsvResearchNoteGenerator(NewsRuntimeProperties properties, Clock clock) {
+		return new BigKindsCsvResearchNoteGenerator(properties, clock);
+	}
+
+	@Bean
 	@ConditionalOnProperty(prefix = "home.news", name = "enabled", havingValue = "true")
 	HistoricalNewsSeedImporter historicalNewsSeedImporter(
 		JdbcNewsRepository repository,
@@ -193,10 +200,11 @@ class NewsRuntimeConfiguration {
 	ApplicationRunner historicalNewsResearchSeedApplicationRunner(
 		HistoricalNewsResearchClient researchClient,
 		HistoricalNewsResearchNoteGenerator noteGenerator,
+		BigKindsCsvResearchNoteGenerator csvNoteGenerator,
 		HistoricalNewsSeedImporter importer,
 		NewsRuntimeProperties properties
 	) {
-		return new HistoricalNewsResearchSeedApplicationRunner(researchClient, noteGenerator, importer, properties);
+		return new HistoricalNewsResearchSeedApplicationRunner(researchClient, noteGenerator, csvNoteGenerator, importer, properties);
 	}
 
 	@Bean

@@ -85,7 +85,15 @@ public class OpenAiResponsesHistoricalNewsResearchClient implements HistoricalNe
 		tools.add(webSearch);
 		root.put("tool_choice", "required");
 		ObjectNode reasoning = root.putObject("reasoning");
-		reasoning.put("effort", "medium");
+		reasoning.put("effort", reasoningEffort());
+		int maxOutputTokens = properties.getResearchSeed().getMaxOutputTokens();
+		if (maxOutputTokens > 0) {
+			root.put("max_output_tokens", maxOutputTokens);
+		}
+		int maxToolCalls = properties.getResearchSeed().getMaxToolCalls();
+		if (maxToolCalls > 0) {
+			root.put("max_tool_calls", maxToolCalls);
+		}
 		ArrayNode input = root.putArray("input");
 		input.add(message("system", prompt.systemPrompt()));
 		input.add(message("user", prompt.userPrompt()));
@@ -159,5 +167,10 @@ public class OpenAiResponsesHistoricalNewsResearchClient implements HistoricalNe
 			return properties.getResearchSeed().getModel();
 		}
 		return properties.getOpenai().getModel() == null ? "" : properties.getOpenai().getModel();
+	}
+
+	private String reasoningEffort() {
+		String effort = properties.getResearchSeed().getReasoningEffort();
+		return effort == null || effort.isBlank() ? "medium" : effort.strip();
 	}
 }

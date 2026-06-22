@@ -43,20 +43,34 @@ public class HistoricalNewsResearchNoteGenerator {
 	public HistoricalNewsNoteWriteResult writeNotes(Path outputRoot, List<HistoricalNewsCandidate> candidates) {
 		List<HistoricalNewsCandidateScreening> screenings = gate.screen(candidates);
 		int noteCount = 0;
+		int acceptedCount = 0;
 		for (HistoricalNewsCandidateScreening screening : screenings) {
 			if (!screening.accepted()) {
 				continue;
 			}
-			writeNote(outputRoot, screening.candidate());
+			writeNote(outputRoot, screening);
+			noteCount++;
+			acceptedCount++;
+		}
+		int minReviewNotes = Math.max(0, properties.getResearchSeed().getMinReviewNotesPerRun());
+		for (HistoricalNewsCandidateScreening screening : screenings) {
+			if (noteCount >= minReviewNotes) {
+				break;
+			}
+			if (screening.accepted()) {
+				continue;
+			}
+			writeNote(outputRoot, screening);
 			noteCount++;
 		}
 		Map<HistoricalNewsCandidateRejectReason, Integer> rejectedByReason = rejectedByReason(screenings);
 		int rejectedCount = (int) screenings.stream().filter(screening -> !screening.accepted()).count();
-		writeManifest(outputRoot, runId(candidates), candidates.size(), noteCount, rejectedCount, rejectedByReason);
-		return new HistoricalNewsNoteWriteResult(candidates.size(), noteCount, rejectedCount, rejectedByReason, outputRoot);
+		writeManifest(outputRoot, runId(candidates), candidates.size(), acceptedCount, noteCount, rejectedCount, rejectedByReason);
+		return new HistoricalNewsNoteWriteResult(candidates.size(), acceptedCount, noteCount, rejectedCount, rejectedByReason, outputRoot);
 	}
 
-	private void writeNote(Path outputRoot, HistoricalNewsCandidate candidate) {
+	private void writeNote(Path outputRoot, HistoricalNewsCandidateScreening screening) {
+		HistoricalNewsCandidate candidate = screening.candidate();
 		Path notePath = outputRoot
 			.resolve("news-research-seed")
 			.resolve(candidate.regionBucket().name())
@@ -65,14 +79,15 @@ public class HistoricalNewsResearchNoteGenerator {
 			.resolve(candidate.publishedDate() + "-" + candidateHash(candidate) + ".md");
 		try {
 			Files.createDirectories(notePath.getParent());
-			Files.writeString(notePath, note(candidate));
+			Files.writeString(notePath, note(screening));
 		}
 		catch (IOException ex) {
 			throw new NewsCollectionException("research seed note write failed: " + notePath, ex);
 		}
 	}
 
-	private String note(HistoricalNewsCandidate candidate) {
+	private String note(HistoricalNewsCandidateScreening screening) {
+		HistoricalNewsCandidate candidate = screening.candidate();
 		String hash = candidateHash(candidate);
 		return """
 			---
@@ -90,24 +105,16 @@ public class HistoricalNewsResearchNoteGenerator {
 			topic: %s
 			impact_target: %s
 			impact_direction_hint: %s
-			query_month: %s
-			query_bucket: %s
-			model: %s
-			prompt_version: %s
-			schema_version: %s
-			screening_version: %s
-			score_signal_strength: %s
-			model_utility: %s
+			signal_month: %s
 			confidence: %s
-			reason_codes: %s
-			screening_reasons: []
+			screening_reasons: %s
 			candidate_hash: %s
 			reviewed_at:
-			review_decision_reason:
 			reviewed_by:
+			review_decision_reason:
 			---
 			- [ ] URL 접속 가능
-			- [ ] 기사 날짜가 query_month 내부
+			- [ ] 기사 날짜가 signal_month 판단에 적합
 			- [ ] 언론사/제목 일치
 			- [ ] 지역 영향 직접적
 			- [ ] topic/impact target 수정 필요 없음
@@ -128,15 +135,8 @@ public class HistoricalNewsResearchNoteGenerator {
 			candidate.impactTarget().name(),
 			candidate.impactDirectionHint().name(),
 			candidate.queryMonth(),
-			candidate.queryBucket().name(),
-			frontMatterScalar(researchModel()),
-			frontMatterScalar(properties.getResearchSeed().getPromptVersion()),
-			frontMatterScalar(properties.getResearchSeed().getSchemaVersion()),
-			frontMatterScalar(properties.getResearchSeed().getScreeningVersion()),
-			candidate.scoreSignalStrength().name(),
-			candidate.modelUtility().name(),
 			candidate.confidence().toPlainString(),
-			array(candidate.reasonCodes()),
+			rejectReasonArray(screening.reasons()),
 			hash
 		);
 	}
@@ -146,14 +146,15 @@ public class HistoricalNewsResearchNoteGenerator {
 		String runId,
 		int planned,
 		int accepted,
+		int notes,
 		int rejected,
 		Map<HistoricalNewsCandidateRejectReason, Integer> rejectedByReason
 	) {
 		Path manifestRoot = outputRoot.resolve("news-research-seed").resolve("_manifest");
 		try {
 			Files.createDirectories(manifestRoot);
-			Files.writeString(manifestRoot.resolve(runId + ".json"), manifestJson(runId, planned, accepted, rejected, rejectedByReason));
-			Files.writeString(manifestRoot.resolve(runId + ".md"), manifestMarkdown(runId, planned, accepted, rejectedByReason));
+			Files.writeString(manifestRoot.resolve(runId + ".json"), manifestJson(runId, planned, accepted, notes, rejected, rejectedByReason));
+			Files.writeString(manifestRoot.resolve(runId + ".md"), manifestMarkdown(runId, planned, accepted, notes, rejectedByReason));
 		}
 		catch (IOException ex) {
 			throw new NewsCollectionException("research seed manifest write failed: " + manifestRoot, ex);
@@ -164,6 +165,7 @@ public class HistoricalNewsResearchNoteGenerator {
 		String runId,
 		int planned,
 		int accepted,
+		int notes,
 		int rejected,
 		Map<HistoricalNewsCandidateRejectReason, Integer> rejectedByReason
 	) {
@@ -174,6 +176,7 @@ public class HistoricalNewsResearchNoteGenerator {
 			  "planned": %d,
 			  "executed": %d,
 			  "accepted": %d,
+			  "notes": %d,
 			  "rejected": %d,
 			  "rejected_by_reason": %s,
 			  "duplicates": %d,
@@ -187,6 +190,7 @@ public class HistoricalNewsResearchNoteGenerator {
 			planned,
 			planned,
 			accepted,
+			notes,
 			rejected,
 			rejectedReasonJson(rejectedByReason),
 			duplicates,
@@ -200,6 +204,7 @@ public class HistoricalNewsResearchNoteGenerator {
 		String runId,
 		int planned,
 		int accepted,
+		int notes,
 		Map<HistoricalNewsCandidateRejectReason, Integer> rejectedByReason
 	) {
 		return """
@@ -213,6 +218,7 @@ public class HistoricalNewsResearchNoteGenerator {
 			planned: %d
 			executed: %d
 			accepted: %d
+			notes: %d
 			rejected_by_reason: %s
 			duplicates: %d
 			estimated_cost:
@@ -225,6 +231,7 @@ public class HistoricalNewsResearchNoteGenerator {
 			planned,
 			planned,
 			accepted,
+			notes,
 			rejectedReasonText(rejectedByReason),
 			rejectedByReason.getOrDefault(HistoricalNewsCandidateRejectReason.DUPLICATE_URL, 0)
 		);
@@ -278,6 +285,12 @@ public class HistoricalNewsResearchNoteGenerator {
 	private String array(List<String> values) {
 		return values.stream()
 			.map(value -> markdownText(value.toLowerCase(Locale.ROOT)))
+			.collect(Collectors.joining(", ", "[", "]"));
+	}
+
+	private String rejectReasonArray(List<HistoricalNewsCandidateRejectReason> values) {
+		return values.stream()
+			.map(HistoricalNewsCandidateRejectReason::name)
 			.collect(Collectors.joining(", ", "[", "]"));
 	}
 

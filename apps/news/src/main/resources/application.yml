@@ -20,10 +20,11 @@ home:
       schema-version: news-signal-json-v1
     research-seed:
       enabled: false
-      mode: GENERATE_NOTES
-      period-start: 2017-01-01
-      period-end: 2026-05-31
-      target-candidates-per-bucket: 15
+      mode: ${HOME_NEWS_RESEARCH_SEED_MODE:GENERATE_NOTES}
+      period-start: ${HOME_NEWS_RESEARCH_SEED_PERIOD_START:2017-01-01}
+      period-end: ${HOME_NEWS_RESEARCH_SEED_PERIOD_END:2026-05-31}
+      target-candidates-per-bucket: ${HOME_NEWS_RESEARCH_SEED_TARGET_CANDIDATES_PER_BUCKET:15}
+      min-review-notes-per-run: ${HOME_NEWS_RESEARCH_SEED_MIN_REVIEW_NOTES_PER_RUN:3}
       output-dir: news-research-seed/obsidian
       max-requests-per-run: 5
       cost-cap-usd: "5.00"
@@ -31,6 +32,12 @@ home:
       prompt-version: research-seed-v2-gpt54
       schema-version: research-seed-schema-v2
       screening-version: research-seed-screening-v1
+      reasoning-effort: ${HOME_NEWS_RESEARCH_SEED_REASONING_EFFORT:medium}
+      max-output-tokens: ${HOME_NEWS_RESEARCH_SEED_MAX_OUTPUT_TOKENS:0}
+      max-tool-calls: ${HOME_NEWS_RESEARCH_SEED_MAX_TOOL_CALLS:0}
+      csv-input-dir: ${HOME_NEWS_RESEARCH_SEED_CSV_INPUT_DIR:apps/news/local-input/historical-news-csv}
+      csv-max-notes-per-run: ${HOME_NEWS_RESEARCH_SEED_CSV_MAX_NOTES_PER_RUN:100}
+      csv-shortlist-limit: ${HOME_NEWS_RESEARCH_SEED_CSV_SHORTLIST_LIMIT:20}
       default-reviewer: local-operator
       pilot-buckets:
         - NATIONAL

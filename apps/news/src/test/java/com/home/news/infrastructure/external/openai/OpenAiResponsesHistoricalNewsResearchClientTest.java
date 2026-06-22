@@ -58,6 +58,35 @@ class OpenAiResponsesHistoricalNewsResearchClientTest {
 	}
 
 	@Test
+	@DisplayName("historical research Responses request는 token 절약 cap을 설정할 수 있다")
+	void buildsResponsesRequestWithTokenSavingCaps() {
+		NewsRuntimeProperties properties = new NewsRuntimeProperties();
+		properties.getResearchSeed().setModel("gpt-5.4-mini");
+		properties.getResearchSeed().setReasoningEffort("none");
+		properties.getResearchSeed().setMaxOutputTokens(4096);
+		properties.getResearchSeed().setMaxToolCalls(1);
+		properties.getResearchSeed().setTargetCandidatesPerBucket(10);
+		OpenAiResponsesHistoricalNewsResearchClient client = new OpenAiResponsesHistoricalNewsResearchClient(
+			HttpClient.newHttpClient(),
+			objectMapper,
+			new HistoricalNewsResearchOutputParser(objectMapper),
+			new SpringAiHistoricalNewsPromptFactory(objectMapper),
+			properties
+		);
+
+		ObjectNode body = client.requestJson(new HistoricalNewsResearchRequest(
+			YearMonth.of(2020, 6),
+			NewsRegionBucket.NATIONAL,
+			5
+		));
+
+		assertThat(body.path("model").asText()).isEqualTo("gpt-5.4-mini");
+		assertThat(body.path("reasoning").path("effort").asText()).isEqualTo("none");
+		assertThat(body.path("max_output_tokens").asInt()).isEqualTo(4096);
+		assertThat(body.path("max_tool_calls").asInt()).isEqualTo(1);
+	}
+
+	@Test
 	@DisplayName("historical research OpenAI 429 응답은 type code message request id를 노출한다")
 	void includesSanitizedOpenAiErrorDetailsOnNonSuccessResponse() throws IOException {
 		HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

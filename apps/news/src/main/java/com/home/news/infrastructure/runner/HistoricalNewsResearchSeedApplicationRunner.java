@@ -8,30 +8,41 @@ import java.util.List;
 import com.home.domain.news.NewsRegionBucket;
 import com.home.domain.news.NewsResearchSeedMode;
 import com.home.news.NewsRuntimeProperties;
+import com.home.news.application.BigKindsCsvResearchNoteGenerator;
 import com.home.news.application.HistoricalNewsCandidate;
+import com.home.news.application.HistoricalNewsCsvNoteWriteResult;
+import com.home.news.application.HistoricalNewsCsvShortlistWriteResult;
+import com.home.news.application.HistoricalNewsNoteWriteResult;
 import com.home.news.application.HistoricalNewsResearchClient;
 import com.home.news.application.HistoricalNewsResearchNoteGenerator;
 import com.home.news.application.HistoricalNewsResearchRequest;
 import com.home.news.application.HistoricalNewsSeedImporter;
 import com.home.news.application.NewsCollectionException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 
 public class HistoricalNewsResearchSeedApplicationRunner implements ApplicationRunner {
 
+	private static final Logger log = LoggerFactory.getLogger(HistoricalNewsResearchSeedApplicationRunner.class);
+
 	private final HistoricalNewsResearchClient researchClient;
 	private final HistoricalNewsResearchNoteGenerator noteGenerator;
+	private final BigKindsCsvResearchNoteGenerator csvNoteGenerator;
 	private final HistoricalNewsSeedImporter importer;
 	private final NewsRuntimeProperties properties;
 
 	public HistoricalNewsResearchSeedApplicationRunner(
 		HistoricalNewsResearchClient researchClient,
 		HistoricalNewsResearchNoteGenerator noteGenerator,
+		BigKindsCsvResearchNoteGenerator csvNoteGenerator,
 		HistoricalNewsSeedImporter importer,
 		NewsRuntimeProperties properties
 	) {
 		this.researchClient = researchClient;
 		this.noteGenerator = noteGenerator;
+		this.csvNoteGenerator = csvNoteGenerator;
 		this.importer = importer;
 		this.properties = properties;
 	}
@@ -51,7 +62,43 @@ public class HistoricalNewsResearchSeedApplicationRunner implements ApplicationR
 			for (HistoricalNewsResearchRequest request : requests()) {
 				candidates.addAll(researchClient.research(request).candidates());
 			}
-			noteGenerator.writeNotes(outputRoot, candidates);
+			HistoricalNewsNoteWriteResult result = noteGenerator.writeNotes(outputRoot, candidates);
+			log.info(
+				"Historical research seed notes generated: candidates={} accepted={} notes={} rejected={} rejected_by_reason={} output_root={}",
+				result.candidateCount(),
+				result.acceptedCount(),
+				result.noteCount(),
+				result.rejectedCount(),
+				result.rejectedByReason(),
+				result.outputRoot()
+			);
+			return;
+		}
+		if (mode == NewsResearchSeedMode.GENERATE_CSV_NOTES) {
+			Path csvInputRoot = Path.of(properties.getResearchSeed().getCsvInputDir());
+			HistoricalNewsCsvNoteWriteResult result = csvNoteGenerator.writeNotes(csvInputRoot, outputRoot);
+			log.info(
+				"BigKinds CSV research seed notes generated: files={} notes={} skipped_files={} skipped_by_reason={} output_root={}",
+				result.fileCount(),
+				result.generatedCount(),
+				result.skippedFileCount(),
+				result.skippedByReason(),
+				result.outputRoot()
+			);
+			return;
+		}
+		if (mode == NewsResearchSeedMode.GENERATE_CSV_SHORTLIST) {
+			Path csvInputRoot = Path.of(properties.getResearchSeed().getCsvInputDir());
+			HistoricalNewsCsvShortlistWriteResult result = csvNoteGenerator.writeShortlists(csvInputRoot, outputRoot);
+			log.info(
+				"BigKinds CSV research seed shortlist generated: files={} months={} candidates={} skipped_files={} skipped_by_reason={} output_root={}",
+				result.fileCount(),
+				result.monthCount(),
+				result.candidateCount(),
+				result.skippedFileCount(),
+				result.skippedByReason(),
+				result.outputRoot()
+			);
 			return;
 		}
 		if (mode == NewsResearchSeedMode.IMPORT_APPROVED) {

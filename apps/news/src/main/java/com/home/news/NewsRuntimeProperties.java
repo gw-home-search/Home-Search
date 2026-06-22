@@ -209,6 +209,7 @@ public class NewsRuntimeProperties {
 		private LocalDate periodStart = LocalDate.of(2017, 1, 1);
 		private LocalDate periodEnd = LocalDate.of(2026, 5, 31);
 		private int targetCandidatesPerBucket = 15;
+		private int minReviewNotesPerRun = 3;
 		private String outputDir = "news-research-seed/obsidian";
 		private int maxRequestsPerRun = 5;
 		private String costCapUsd = "5.00";
@@ -216,6 +217,12 @@ public class NewsRuntimeProperties {
 		private String promptVersion = "research-seed-v2-gpt54";
 		private String schemaVersion = "research-seed-schema-v2";
 		private String screeningVersion = "research-seed-screening-v1";
+		private String reasoningEffort = "medium";
+		private int maxOutputTokens;
+		private int maxToolCalls;
+		private String csvInputDir = "apps/news/local-input/historical-news-csv";
+		private int csvMaxNotesPerRun = 100;
+		private int csvShortlistLimit = 20;
 		private String defaultReviewer = "local-operator";
 		private final List<String> pilotBuckets = new ArrayList<>(List.of(
 			"NATIONAL",
@@ -263,6 +270,14 @@ public class NewsRuntimeProperties {
 
 		public void setTargetCandidatesPerBucket(int targetCandidatesPerBucket) {
 			this.targetCandidatesPerBucket = targetCandidatesPerBucket;
+		}
+
+		public int getMinReviewNotesPerRun() {
+			return minReviewNotesPerRun;
+		}
+
+		public void setMinReviewNotesPerRun(int minReviewNotesPerRun) {
+			this.minReviewNotesPerRun = minReviewNotesPerRun;
 		}
 
 		public String getOutputDir() {
@@ -319,6 +334,54 @@ public class NewsRuntimeProperties {
 
 		public void setScreeningVersion(String screeningVersion) {
 			this.screeningVersion = screeningVersion;
+		}
+
+		public String getReasoningEffort() {
+			return reasoningEffort;
+		}
+
+		public void setReasoningEffort(String reasoningEffort) {
+			this.reasoningEffort = reasoningEffort;
+		}
+
+		public int getMaxOutputTokens() {
+			return maxOutputTokens;
+		}
+
+		public void setMaxOutputTokens(int maxOutputTokens) {
+			this.maxOutputTokens = maxOutputTokens;
+		}
+
+		public int getMaxToolCalls() {
+			return maxToolCalls;
+		}
+
+		public void setMaxToolCalls(int maxToolCalls) {
+			this.maxToolCalls = maxToolCalls;
+		}
+
+		public String getCsvInputDir() {
+			return csvInputDir;
+		}
+
+		public void setCsvInputDir(String csvInputDir) {
+			this.csvInputDir = csvInputDir;
+		}
+
+		public int getCsvMaxNotesPerRun() {
+			return csvMaxNotesPerRun;
+		}
+
+		public void setCsvMaxNotesPerRun(int csvMaxNotesPerRun) {
+			this.csvMaxNotesPerRun = csvMaxNotesPerRun;
+		}
+
+		public int getCsvShortlistLimit() {
+			return csvShortlistLimit;
+		}
+
+		public void setCsvShortlistLimit(int csvShortlistLimit) {
+			this.csvShortlistLimit = csvShortlistLimit;
 		}
 
 		public String getDefaultReviewer() {

@@ -65,7 +65,7 @@ class HistoricalNewsSeedImporterTest extends JdbcNewsPostgresTestSupport {
 			    model_dataset_tier || '|' ||
 			    COALESCE(raw_provider_payload ->> 'reviewed_by', '') || '|' ||
 			    COALESCE(raw_provider_payload ->> 'published_date_precision', '') || '|' ||
-			    COALESCE(raw_provider_payload ->> 'query_month', '') || '|' ||
+			    COALESCE(raw_provider_payload ->> 'signal_month', '') || '|' ||
 			    COALESCE(raw_provider_payload ->> 'score_signal_strength', '') || '|' ||
 			    COALESCE(raw_provider_payload ->> 'candidate_hash', '') || '|' ||
 			    published_at::text
@@ -97,6 +97,49 @@ class HistoricalNewsSeedImporterTest extends JdbcNewsPostgresTestSupport {
 		assertThat(result.duplicateCount()).isEqualTo(1);
 		assertThat(count("news.article_observation")).isEqualTo(1);
 		assertThat(count("news.signal_feature")).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("MANUAL_APPROVED BigKinds CSV v2 note는 provider metadata만 raw payload에 보존하고 signal_month 첫날 feature로 import한다")
+	void importsManualApprovedBigKindsCsvNotes(@TempDir Path tempDir) throws Exception {
+		writeBigKindsNote(tempDir.resolve("news-research-seed/SEOUL_GANGNAM_GU/2020/2020-06/2020-06-02-bigkinds.md"), "MANUAL_APPROVED");
+		writeBigKindsNote(tempDir.resolve("news-research-seed/SEOUL_GANGNAM_GU/2020/2020-06/2020-06-03-needs-review.md"), "NEEDS_REVIEW");
+
+		HistoricalNewsSeedImportResult result = importer().importApprovedNotes(tempDir);
+
+		assertThat(result.scannedCount()).isEqualTo(2);
+		assertThat(result.importedCount()).isEqualTo(1);
+		assertThat(result.skippedCount()).isEqualTo(1);
+		String imported = jdbcClient.sql("""
+			SELECT
+			    observation.source || '|' ||
+			    observation.source_key || '|' ||
+			    observation.discovery_method || '|' ||
+			    observation.availability_basis || '|' ||
+			    observation.verification_status || '|' ||
+			    observation.provider_url || '|' ||
+			    observation.news_date_kst::text || '|' ||
+			    feature.feature_date_kst::text || '|' ||
+			    COALESCE(observation.raw_provider_payload ->> 'source_file', '') || '|' ||
+			    COALESCE(observation.raw_provider_payload ->> 'source_row_number', '') || '|' ||
+			    COALESCE(observation.raw_provider_payload ->> 'keywords', '') || '|' ||
+			    COALESCE(observation.raw_provider_payload ->> 'extracted_terms', '') || '|' ||
+			    jsonb_exists(observation.raw_provider_payload, 'body')::text || '|' ||
+			    jsonb_exists(observation.raw_provider_payload, '본문')::text || '|' ||
+			    jsonb_exists(observation.raw_provider_payload, 'model')::text || '|' ||
+			    jsonb_exists(observation.raw_provider_payload, 'prompt_version')::text
+			FROM news.article_observation observation
+			JOIN news.signal_feature feature ON feature.article_observation_id = observation.id
+			""").query(String.class).single();
+
+		assertThat(imported)
+			.contains("BIGKINDS_CSV|BIGKINDS_CSV:01200201.20200602123456001|PROVIDER_EXPORT|LICENSED_HISTORICAL_EXPORT|MANUAL_APPROVED")
+			.contains("http://www.bigkinds.or.kr/news/newsDetailView.do?newsId=01200201.20200602123456001")
+			.contains("2020-06-02|2020-06-01")
+			.contains("부동산 (2020.04.01-2020.06.30).csv|2")
+			.contains("재건축,강남,아파트")
+			.contains("재건축,규제완화,강남")
+			.endsWith("false|false|false|false");
 	}
 
 	private HistoricalNewsSeedImporter importer() {
@@ -156,6 +199,46 @@ class HistoricalNewsSeedImporterTest extends JdbcNewsPostgresTestSupport {
 			- [ ] URL 접속 가능
 			- [ ] 기사 날짜가 query_month 내부
 			""".formatted(verificationStatus, reviewedBy));
+	}
+
+	private void writeBigKindsNote(Path path, String verificationStatus) throws Exception {
+		Files.createDirectories(path.getParent());
+		Files.writeString(path, """
+			---
+			verification_status: %s
+			source: BIGKINDS_CSV
+			discovery_method: PROVIDER_EXPORT
+			availability_basis: LICENSED_HISTORICAL_EXPORT
+			model_dataset_tier: EXPERIMENTAL_SEED
+			title: 강남 재건축 규제 완화
+			publisher: 경인일보
+			published_date: 2020-06-02
+			url: https://example.com/article
+			url_citation: http://www.bigkinds.or.kr/news/newsDetailView.do?newsId=01200201.20200602123456001
+			region_bucket: SEOUL_GANGNAM_GU
+			topic: reconstruction_redevelopment
+			impact_target: sale_price
+			impact_direction_hint: unknown
+			signal_month: 2020-06
+			confidence: 0.800
+			screening_reasons: []
+			candidate_hash: csv-candidate-hash
+			reviewed_at:
+			reviewed_by: csv-reviewer
+			review_decision_reason:
+			source_file: 부동산 (2020.04.01-2020.06.30).csv
+			source_row_number: 2
+			provider_record_id: 01200201.20200602123456001
+			original_url: https://example.com/article
+			keywords: 재건축,강남,아파트
+			extracted_terms: 재건축,규제완화,강남
+			region_entities: 서울,강남구
+			organization_entities: 국토교통부
+			---
+			## 검수 참고
+			- 키워드: 재건축,강남,아파트
+			- 특성추출: 재건축,규제완화,강남
+			""".formatted(verificationStatus));
 	}
 
 	private void writeManifest(Path path) throws Exception {

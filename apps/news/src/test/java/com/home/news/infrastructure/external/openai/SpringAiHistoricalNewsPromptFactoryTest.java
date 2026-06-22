@@ -30,6 +30,8 @@ class SpringAiHistoricalNewsPromptFactoryTest {
 			.contains("region_bucket: SEOUL_GANGNAM_GU")
 			.contains("강남구")
 			.contains("대치")
+			.contains("url and url_citation must be direct http(s) URLs")
+			.contains("Do not use citation labels")
 			.contains("loan_rate")
 			.contains("대출 규제")
 			.contains("Pass 1")

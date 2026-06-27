@@ -40,6 +40,23 @@ home:
     marker-cache:
       enabled: false
       ttl: 5m
+  prediction:
+    enabled: true
+    model-version: deployment__F37_monthly_anchor_prev3_rolling_huber_010
+    zone: Asia/Seoul
+    cache:
+      ttl: 24h
+      pending-ttl: 60s
+      failed-ttl: 10m
+      unavailable-ttl: 1h
+      lock-ttl: 60s
+    client:
+      base-url: http://localhost:8001
+      connect-timeout-millis: 1000
+      read-timeout-millis: 3000
+    interval:
+      pct: 0.188077
+      basis: recent_holdout_p95
   admin:
     coordinate-override:
       enabled: false

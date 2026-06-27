@@ -268,55 +268,23 @@ class ReadApiRestDocsTest {
 
 		mockMvc.perform(get("/api/v1/detail/{parcelId}", 1001L).param("complexId", "501"))
 			.andExpect(status().isOk())
-			.andDo(document("read-detail-success",
-				pathParameters(
-					parameterWithName("parcelId").description("Parcel id.")
-				),
-				queryParameters(
-					parameterWithName("complexId").optional().description("Optional selected complex id.")
-				),
-				responseFields(
-					fieldWithPath("parcelId").type(JsonFieldType.NUMBER).description("Parcel id."),
-					fieldWithPath("complexId").type(JsonFieldType.NUMBER).optional().description("Selected or representative complex id."),
-					fieldWithPath("latitude").type(JsonFieldType.NUMBER).description("Detail display latitude."),
-					fieldWithPath("longitude").type(JsonFieldType.NUMBER).description("Detail display longitude."),
-					fieldWithPath("address").type(JsonFieldType.STRING).optional().description("Parcel address."),
-					fieldWithPath("tradeName").type(JsonFieldType.STRING).optional().description("Representative trade name."),
-					fieldWithPath("name").type(JsonFieldType.STRING).description("Representative complex name."),
-					fieldWithPath("dongCnt").type(JsonFieldType.NUMBER).optional().description("Building count."),
-					fieldWithPath("unitCnt").type(JsonFieldType.NUMBER).optional().description("Household count."),
-					fieldWithPath("platArea").type(JsonFieldType.NUMBER).optional().description("Plat area."),
-					fieldWithPath("archArea").type(JsonFieldType.NUMBER).optional().description("Architecture area."),
-					fieldWithPath("totArea").type(JsonFieldType.NUMBER).optional().description("Total area."),
-					fieldWithPath("bcRat").type(JsonFieldType.NUMBER).optional().description("Building coverage ratio."),
-					fieldWithPath("vlRat").type(JsonFieldType.NUMBER).optional().description("Floor area ratio."),
-					fieldWithPath("useDate").type(JsonFieldType.STRING).optional().description("Use approval date.")
-				),
-				resource(builder()
-					.tag("Read")
-					.summary("Get parcel detail")
-					.description("Returns parcel and selected or representative complex details.")
-					.pathParameters(parameterWithName("parcelId").description("Parcel id."))
-					.queryParameters(parameterWithName("complexId").optional().description("Optional selected complex id."))
-					.responseFields(
-						fieldWithPath("parcelId").type(JsonFieldType.NUMBER).description("Parcel id."),
-						fieldWithPath("complexId").type(JsonFieldType.NUMBER).optional().description("Selected or representative complex id."),
-						fieldWithPath("latitude").type(JsonFieldType.NUMBER).description("Detail display latitude."),
-						fieldWithPath("longitude").type(JsonFieldType.NUMBER).description("Detail display longitude."),
-						fieldWithPath("address").type(JsonFieldType.STRING).optional().description("Parcel address."),
-						fieldWithPath("tradeName").type(JsonFieldType.STRING).optional().description("Representative trade name."),
-						fieldWithPath("name").type(JsonFieldType.STRING).description("Representative complex name."),
-						fieldWithPath("dongCnt").type(JsonFieldType.NUMBER).optional().description("Building count."),
-						fieldWithPath("unitCnt").type(JsonFieldType.NUMBER).optional().description("Household count."),
-						fieldWithPath("platArea").type(JsonFieldType.NUMBER).optional().description("Plat area."),
-						fieldWithPath("archArea").type(JsonFieldType.NUMBER).optional().description("Architecture area."),
-						fieldWithPath("totArea").type(JsonFieldType.NUMBER).optional().description("Total area."),
-						fieldWithPath("bcRat").type(JsonFieldType.NUMBER).optional().description("Building coverage ratio."),
-						fieldWithPath("vlRat").type(JsonFieldType.NUMBER).optional().description("Floor area ratio."),
-						fieldWithPath("useDate").type(JsonFieldType.STRING).optional().description("Use approval date.")
-					)
-					.build())
-			));
+				.andDo(document("read-detail-success",
+					pathParameters(
+						parameterWithName("parcelId").description("Parcel id.")
+					),
+					queryParameters(
+						parameterWithName("complexId").optional().description("Optional selected complex id.")
+					),
+					responseFields(detailFields()),
+					resource(builder()
+						.tag("Read")
+						.summary("Get parcel detail")
+						.description("Returns parcel and selected or representative complex details.")
+						.pathParameters(parameterWithName("parcelId").description("Parcel id."))
+						.queryParameters(parameterWithName("complexId").optional().description("Optional selected complex id."))
+						.responseFields(detailFields())
+						.build())
+				));
 
 		mockMvc.perform(get("/api/v1/trade/{parcelId}", 1001L).param("complexId", "501"))
 			.andExpect(status().isOk())
@@ -503,12 +471,27 @@ class ReadApiRestDocsTest {
 			fieldWithPath("unitCnt").type(JsonFieldType.NUMBER).optional().description("Household count."),
 			fieldWithPath("platArea").type(JsonFieldType.NUMBER).optional().description("Plat area."),
 			fieldWithPath("archArea").type(JsonFieldType.NUMBER).optional().description("Architecture area."),
-			fieldWithPath("totArea").type(JsonFieldType.NUMBER).optional().description("Total area."),
-			fieldWithPath("bcRat").type(JsonFieldType.NUMBER).optional().description("Building coverage ratio."),
-			fieldWithPath("vlRat").type(JsonFieldType.NUMBER).optional().description("Floor area ratio."),
-			fieldWithPath("useDate").type(JsonFieldType.STRING).optional().description("Use approval date.")
-		};
-	}
+				fieldWithPath("totArea").type(JsonFieldType.NUMBER).optional().description("Total area."),
+				fieldWithPath("bcRat").type(JsonFieldType.NUMBER).optional().description("Building coverage ratio."),
+				fieldWithPath("vlRat").type(JsonFieldType.NUMBER).optional().description("Floor area ratio."),
+				fieldWithPath("useDate").type(JsonFieldType.STRING).optional().description("Use approval date."),
+				fieldWithPath("prediction").type(JsonFieldType.VARIES).optional().description("Optional F37 prediction result."),
+				fieldWithPath("prediction.status").type(JsonFieldType.STRING).optional().description("Prediction status: READY, PENDING, FAILED, or UNAVAILABLE."),
+				fieldWithPath("prediction.modelVersion").type(JsonFieldType.STRING).optional().description("Prediction model version."),
+				fieldWithPath("prediction.predictedDealAmount").type(JsonFieldType.NUMBER).optional().description("Predicted total deal amount in 10,000 KRW units."),
+				fieldWithPath("prediction.predictedPricePerM2").type(JsonFieldType.NUMBER).optional().description("Predicted price per square meter in 10,000 KRW units."),
+				fieldWithPath("prediction.predictedPricePerPyeong").type(JsonFieldType.NUMBER).optional().description("Predicted price per pyeong in 10,000 KRW units."),
+				fieldWithPath("prediction.intervalLow").type(JsonFieldType.NUMBER).optional().description("Lower predicted deal amount bound in 10,000 KRW units."),
+				fieldWithPath("prediction.intervalHigh").type(JsonFieldType.NUMBER).optional().description("Upper predicted deal amount bound in 10,000 KRW units."),
+				fieldWithPath("prediction.intervalBasis").type(JsonFieldType.STRING).optional().description("Prediction interval basis."),
+				fieldWithPath("prediction.targetAreaM2").type(JsonFieldType.NUMBER).optional().description("Prediction target exclusive area."),
+				fieldWithPath("prediction.targetFloor").type(JsonFieldType.NUMBER).optional().description("Prediction target floor."),
+				fieldWithPath("prediction.basisTradeId").type(JsonFieldType.NUMBER).optional().description("Basis trade id used for prediction features."),
+				fieldWithPath("prediction.basisDealDate").type(JsonFieldType.STRING).optional().description("Basis trade deal date."),
+				fieldWithPath("prediction.generatedAt").type(JsonFieldType.STRING).optional().description("Prediction status/result generation timestamp."),
+				fieldWithPath("prediction.message").type(JsonFieldType.STRING).optional().description("Non-sensitive prediction status message.")
+			};
+		}
 
 	private static org.springframework.restdocs.payload.FieldDescriptor[] tradeListFields() {
 		return new org.springframework.restdocs.payload.FieldDescriptor[] {

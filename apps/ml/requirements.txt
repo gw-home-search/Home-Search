@@ -1,0 +1,7 @@
+fastapi==0.103.2
+pydantic<2
+typing_extensions>=4.4,<4.6
+uvicorn[standard]>=0.22,<0.30
+numpy>=1.24,<2
+tensorflow>=2.15,<2.16
+h5py>=3.8,<4

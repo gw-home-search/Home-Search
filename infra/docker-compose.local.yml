@@ -37,12 +37,33 @@ services:
     networks:
       - home-search-local
 
+  ml:
+    image: python:3.10-slim
+    container_name: home-search-ml
+    restart: unless-stopped
+    working_dir: /workspace/apps/ml
+    command:
+      - "sh"
+      - "-c"
+      - "test -f \"$${F37_ARTIFACT_DIR}/keras_model.keras\" || { echo 'Set host F37_ARTIFACT_DIR to local F37 artifact directory.' >&2; exit 1; }; pip install --no-cache-dir -r requirements.txt && uvicorn ml_service.main:app --host 0.0.0.0 --port 8001"
+    environment:
+      F37_ARTIFACT_DIR: /model
+    ports:
+      - "127.0.0.1:${HOME_SEARCH_ML_PORT:-8001}:8001"
+    volumes:
+      - ..:/workspace
+      - ${F37_ARTIFACT_DIR:-/tmp/home-search-missing-f37-artifact}:/model:ro
+    networks:
+      - home-search-local
+
   api:
     image: eclipse-temurin:17-jdk
     container_name: home-search-api
     restart: unless-stopped
     depends_on:
       postgis:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     working_dir: /workspace/apps/api
     command: [ "./gradlew", "bootRun", "--no-daemon" ]
@@ -71,6 +92,9 @@ services:
       HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY: ${HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY:-false}
       HOME_MAP_MARKER_CACHE_ENABLED: ${HOME_MAP_MARKER_CACHE_ENABLED:-false}
       HOME_MAP_MARKER_CACHE_TTL: ${HOME_MAP_MARKER_CACHE_TTL:-5m}
+      HOME_PREDICTION_ENABLED: ${HOME_PREDICTION_ENABLED:-true}
+      HOME_PREDICTION_CLIENT_BASE_URL: ${HOME_PREDICTION_CLIENT_BASE_URL:-http://ml:8001}
+      HOME_PREDICTION_CACHE_TTL: ${HOME_PREDICTION_CACHE_TTL:-24h}
       SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST:-redis}
       SPRING_DATA_REDIS_PORT: ${SPRING_DATA_REDIS_PORT:-6379}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}

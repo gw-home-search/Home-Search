@@ -12,7 +12,6 @@ type RegionMapMarker = Extract<MapMarkersResult, { kind: 'region' }>['markers'][
 
 type MapOverlayPanelsProps = {
   bounds: MapBoundsRequest;
-  level: number;
   mapRuntimeError: string | null;
   mapRuntimeState: KakaoMapRuntimeState;
   markerError: string | null;
@@ -27,7 +26,6 @@ type MapOverlayPanelsProps = {
 
 export function MapOverlayPanels({
   bounds,
-  level,
   mapRuntimeError,
   mapRuntimeState,
   markerError,
@@ -87,53 +85,6 @@ export function MapOverlayPanels({
         <p className="map-feedback map-feedback-error" role="alert">
           {mapRuntimeError}
         </p>
-      ) : null}
-
-      {markers?.kind === 'complex' && markers.markers.length > 0 ? (
-        <ul aria-label="단지 마커" className="marker-preview-list">
-          {markers.markers.map((marker) => (
-            <li key={complexMarkerKey(marker)}>
-              <button
-                type="button"
-                aria-label={complexMarkerAriaLabel(marker)}
-                className="marker-list-button"
-                data-marker-id={complexMarkerKey(marker)}
-                onClick={() => {
-                  onComplexMarkerSelect(marker);
-                }}
-              >
-                <span className="marker-list-price">
-                  최근 실거래 {formatMarkerAmount(marker.latestDealAmount)}
-                </span>
-                {markerSubtitle(marker) ? (
-                  <span className="marker-list-subtitle">{markerSubtitle(marker)}</span>
-                ) : null}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      {markers?.kind === 'region' && markers.markers.length > 0 ? (
-        <ul aria-label="지역 마커" className="marker-preview-list">
-          {markers.markers.map((marker) => (
-            <li key={marker.id} data-marker-id={marker.id}>
-              <button
-                type="button"
-                aria-label={`지역 이동 ${marker.name}`}
-                className="marker-list-button marker-list-button-region"
-                onClick={() => {
-                  onRegionMarkerSelect(marker);
-                }}
-              >
-                <span className="marker-list-price">{marker.name}</span>
-                <span className="marker-list-subtitle">
-                  {regionMarkerUnitOrActionLabel(marker, level)}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
       ) : null}
     </>
   );
@@ -254,16 +205,12 @@ function clampPercent(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function regionMarkerActionLabel(level: number): string {
-  return level <= 4 ? '단지 보기' : '지도 이동';
-}
-
-function regionMarkerUnitOrActionLabel(marker: RegionMapMarker, level?: number): string {
+function regionMarkerUnitOrActionLabel(marker: RegionMapMarker): string {
   if (marker.unitCntSum != null && marker.unitCntSum > 0) {
     return `${marker.unitCntSum.toLocaleString()}세대`;
   }
 
-  return level == null ? '세대수 없음' : regionMarkerActionLabel(level);
+  return '세대수 없음';
 }
 
 function mapRuntimeStatusLabel(state: KakaoMapRuntimeState): string {

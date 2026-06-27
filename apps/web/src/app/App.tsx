@@ -119,6 +119,8 @@ const EMPTY_COMPLEX_MARKER_FILTERS: Required<ComplexMarkerFilters> = {
 const SEARCH_FOCUS_DELTA = 0.01;
 const SEARCH_DEBOUNCE_MILLIS = 300;
 const TRADE_PAGE_SIZE = 25;
+const PREDICTION_POLL_INTERVAL_MILLIS = 2000;
+const PREDICTION_POLL_MAX_ATTEMPTS = 5;
 
 export function App({
   initialMapLevel,
@@ -218,6 +220,7 @@ function MapApp({
   const searchDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const regionRequestSeq = useRef(0);
   const initialRegionLoadStarted = useRef(false);
+  const predictionPoll = useRef({ key: '', attempts: 0 });
   const activeFilterCount = countActiveFilters(markerFilters);
   const isSearchPanelActive =
     searchState !== 'idle' || searchResults.length > 0 || complexSuggestions.length > 0;
@@ -364,6 +367,56 @@ function MapApp({
       ignore = true;
     };
   }, [complexDetail, detailState]);
+
+  useEffect(() => {
+    if (
+      selectedComplex == null
+      || detailState !== 'ready'
+      || complexDetail?.prediction?.status !== 'PENDING'
+    ) {
+      predictionPoll.current = {
+        key: selectedComplexKey(selectedComplex),
+        attempts: 0,
+      };
+      return undefined;
+    }
+
+    const key = selectedComplexKey(selectedComplex);
+    if (predictionPoll.current.key !== key) {
+      predictionPoll.current = { key, attempts: 0 };
+    }
+    if (predictionPoll.current.attempts >= PREDICTION_POLL_MAX_ATTEMPTS) {
+      return undefined;
+    }
+
+    let ignore = false;
+    const timer = setTimeout(() => {
+      if (ignore) {
+        return;
+      }
+
+      predictionPoll.current = {
+        key,
+        attempts: predictionPoll.current.key === key ? predictionPoll.current.attempts + 1 : 1,
+      };
+
+      fetchSelectedComplexDetail(selectedComplex)
+        .then((nextDetail) => {
+          if (ignore || selectedComplexKey(selectedComplex) !== key) {
+            return;
+          }
+          setComplexDetail(nextDetail);
+        })
+        .catch(() => {
+          // Prediction polling should not disturb the already rendered detail drawer.
+        });
+    }, PREDICTION_POLL_INTERVAL_MILLIS);
+
+    return () => {
+      ignore = true;
+      clearTimeout(timer);
+    };
+  }, [complexDetail?.prediction, detailState, selectedComplex]);
 
   useEffect(() => {
     if (!initialRegionLoad || initialRegionLoadStarted.current) {
@@ -752,7 +805,6 @@ function MapApp({
           />
           <MapOverlayPanels
             bounds={viewport.bounds}
-            level={viewport.level}
             mapRuntimeError={mapRuntimeError}
             mapRuntimeState={mapRuntimeState}
             markerError={markerError}
@@ -890,6 +942,19 @@ function requiredParcelId(selection: ComplexSelection): number {
     throw new Error('parcelId is required for parcel-scoped detail request');
   }
   return selection.parcelId;
+}
+
+function fetchSelectedComplexDetail(selection: ComplexSelection): Promise<ComplexDetail> {
+  return selection.parcelId == null && selection.complexId != null
+    ? fetchComplexDetailByComplexId(selection.complexId)
+    : fetchComplexDetail(requiredParcelId(selection), selection.complexId);
+}
+
+function selectedComplexKey(selection: ComplexSelection | null): string {
+  if (selection == null) {
+    return 'none';
+  }
+  return `${selection.parcelId ?? '_'}:${selection.complexId ?? '_'}`;
 }
 
 function initialComplexSelectionFromUrl(): ComplexSelection | null {

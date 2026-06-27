@@ -846,6 +846,135 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
+  it('prediction PENDING이면 detail API만 polling해서 READY 예상가를 표시한다', async () => {
+    let detailCalls = 0;
+    let tradeCalls = 0;
+    const detailUrl = resolveApiUrl('/api/v1/detail/1001?complexId=501');
+    const tradeUrl = resolveApiUrl('/api/v1/trade/1001?complexId=501');
+    const fetchMock = vi.fn((url: RequestInfo | URL) => {
+      const requestUrl = String(url);
+
+      if (requestUrl === resolveApiUrl('/api/v1/map/complexes')) {
+        return Promise.resolve(jsonResponse([
+          {
+            parcelId: 1001,
+            complexId: 501,
+            lat: 37.5123,
+            lng: 127.0456,
+            latestDealAmount: 125000,
+            unitCntSum: 740,
+          },
+        ]));
+      }
+
+      if (requestUrl === detailUrl) {
+        detailCalls += 1;
+        return Promise.resolve(jsonResponse({
+          parcelId: 1001,
+          complexId: 501,
+          latitude: 37.5123,
+          longitude: 127.0456,
+          address: 'Sample address',
+          name: 'Sample complex name',
+          unitCnt: 740,
+          prediction: detailCalls <= 2
+            ? {
+                status: 'PENDING',
+                modelVersion: 'deployment__F37_monthly_anchor_prev3_rolling_huber_010',
+                predictedDealAmount: null,
+                predictedPricePerM2: null,
+                predictedPricePerPyeong: null,
+                intervalLow: null,
+                intervalHigh: null,
+                intervalBasis: 'recent_holdout_p95',
+                targetAreaM2: 84.69,
+                targetFloor: 6,
+                basisTradeId: 9001,
+                basisDealDate: '2026-01-01',
+                generatedAt: '2026-06-25T07:05:38Z',
+                message: null,
+              }
+            : {
+                status: 'READY',
+                modelVersion: 'deployment__F37_monthly_anchor_prev3_rolling_huber_010',
+                predictedDealAmount: 179163,
+                predictedPricePerM2: 2115.5,
+                predictedPricePerPyeong: 6993.4,
+                intervalLow: 139425,
+                intervalHigh: 218900,
+                intervalBasis: 'recent_holdout_p95',
+                targetAreaM2: 84.69,
+                targetFloor: 6,
+                basisTradeId: 9001,
+                basisDealDate: '2026-01-01',
+                generatedAt: '2026-06-25T07:05:38Z',
+                message: null,
+              },
+        }));
+      }
+
+      if (requestUrl === tradeUrl) {
+        tradeCalls += 1;
+        return Promise.resolve(jsonResponse({
+          parcelId: 1001,
+          complexId: 501,
+          content: [],
+          page: 0,
+          size: 20,
+          totalElements: 0,
+          totalPages: 0,
+        }));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/trade/1001/trend?complexId=501')) {
+        return Promise.resolve(jsonResponse([]));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/detail/1001/complexes')) {
+        return Promise.resolve(jsonResponse([]));
+      }
+
+      return Promise.resolve(errorResponse(404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+    await flushAsyncState();
+
+    const markerButton = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="필지 1001 단지 501 상세 열기"]',
+    );
+    await act(async () => {
+      markerButton?.click();
+    });
+    await flushAsyncState();
+
+    expect(rootElement.textContent).toContain('AI 예상가 계산 중');
+    expect(detailCalls).toBe(1);
+    expect(tradeCalls).toBe(1);
+
+    await waitForMillis(2100);
+    await flushAsyncState();
+
+    expect(rootElement.textContent).toContain('AI 예상가 계산 중');
+    expect(detailCalls).toBe(2);
+    expect(tradeCalls).toBe(1);
+
+    await waitForMillis(2100);
+    await flushAsyncState();
+
+    expect(rootElement.textContent).toContain('AI 예상 거래가');
+    expect(rootElement.textContent).toContain('17억 9,163만원');
+    expect(rootElement.textContent).toContain('예상 범위 13억 9,425만원 ~ 21억 8,900만원');
+    expect(rootElement.querySelector('[aria-label="AI 예상가 계산 방식 안내"]')).not.toBeNull();
+    expect(rootElement.textContent).toContain('최근 실거래를 기준으로 면적, 층, 지역 정보를 반영해 계산한 예상가입니다.');
+    expect(rootElement.textContent).toContain('예상 범위는 최근 검증 데이터의 오차를 기준으로 산정했습니다.');
+    expect(detailCalls).toBe(3);
+    expect(tradeCalls).toBe(1);
+
+    unmount(root);
+  });
+
   it('Kakao CustomOverlay complex marker에서 detail sidebar를 연다', async () => {
     const fetchMock = vi
       .fn()
@@ -1775,7 +1904,9 @@ describe('App map-first shell 화면', () => {
       }),
     );
     expect(rootElement.querySelector('[role="alert"]')).toBeNull();
-    expect(rootElement.querySelector('[data-marker-id="1001"]')).not.toBeNull();
+    expect(sdk.overlays[0]?.content.getAttribute('aria-label')).toBe('필지 1001 상세 열기');
+    expect(rootElement.querySelector('[aria-label="단지 마커"]')).toBeNull();
+    expect(rootElement.querySelector('[data-marker-id="1001"]')).toBeNull();
 
     unmount(root);
   });
@@ -2030,9 +2161,8 @@ describe('App map-first shell 화면', () => {
     expect(sdk.overlays[0]?.content.textContent).toContain('최근 실거래');
     expect(sdk.overlays[0]?.content.textContent).toContain('12.5억');
     expect(sdk.overlays[0]?.content.textContent).toContain('Sample Apartment');
-    expect(rootElement.querySelector('[data-marker-id="1001"]')?.textContent).toContain(
-      'Sample Apartment',
-    );
+    expect(rootElement.querySelector('[aria-label="단지 마커"]')).toBeNull();
+    expect(rootElement.querySelector('[data-marker-id="1001"]')).toBeNull();
     expect(rootElement.textContent).not.toContain('세대 정보 없음');
     expect(rootElement.textContent).not.toContain('0 units');
 
@@ -2075,6 +2205,7 @@ describe('App map-first shell 화면', () => {
     expect(regionOverlayButton).not.toBeNull();
     expect(regionOverlayButton?.getAttribute('aria-label')).toBe('지역 이동 Seoul');
     expect(regionOverlayButton?.textContent).toContain('1,200세대');
+    expect(rootElement.querySelector('[aria-label="지역 마커"]')).toBeNull();
 
     await act(async () => {
       regionOverlayButton?.click();

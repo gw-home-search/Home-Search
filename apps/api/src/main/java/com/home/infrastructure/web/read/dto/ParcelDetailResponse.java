@@ -18,8 +18,46 @@ public record ParcelDetailResponse(
 	BigDecimal totArea,
 	BigDecimal bcRat,
 	BigDecimal vlRat,
-	LocalDate useDate
+	LocalDate useDate,
+	PricePredictionResponse prediction
 ) {
+
+	public ParcelDetailResponse(
+		Long parcelId,
+		Long complexId,
+		Double latitude,
+		Double longitude,
+		String address,
+		String tradeName,
+		String name,
+		Integer dongCnt,
+		Integer unitCnt,
+		BigDecimal platArea,
+		BigDecimal archArea,
+		BigDecimal totArea,
+		BigDecimal bcRat,
+		BigDecimal vlRat,
+		LocalDate useDate
+	) {
+		this(
+			parcelId,
+			complexId,
+			latitude,
+			longitude,
+			address,
+			tradeName,
+			name,
+			dongCnt,
+			unitCnt,
+			platArea,
+			archArea,
+			totArea,
+			bcRat,
+			vlRat,
+			useDate,
+			null
+		);
+	}
 
 	public ParcelDetailResponse(
 		Long parcelId,
@@ -52,7 +90,8 @@ public record ParcelDetailResponse(
 			totArea,
 			bcRat,
 			vlRat,
-			useDate
+			useDate,
+			null
 		);
 	}
 }

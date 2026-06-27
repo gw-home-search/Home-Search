@@ -8,13 +8,18 @@ import com.home.application.read.PropertyReadUseCase;
 import com.home.application.read.TradeListResult;
 import com.home.application.read.TradeResult;
 import com.home.application.read.TradeTrendPoint;
+import com.home.application.prediction.PricePredictionUseCase;
 import com.home.infrastructure.web.read.dto.ComplexSummaryResponse;
 import com.home.infrastructure.web.read.dto.PageResponse;
 import com.home.infrastructure.web.read.dto.ParcelDetailResponse;
+import com.home.infrastructure.web.read.dto.PricePredictionResponse;
 import com.home.infrastructure.web.read.dto.TradeListResponse;
 import com.home.infrastructure.web.read.dto.TradeResponse;
 import com.home.infrastructure.web.read.dto.TradeTrendResponse;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,10 +29,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class DetailController {
 
-	private final PropertyReadUseCase readUseCase;
+	private static final Logger log = LoggerFactory.getLogger(DetailController.class);
 
-	public DetailController(PropertyReadUseCase readUseCase) {
+	private final PropertyReadUseCase readUseCase;
+	private final ObjectProvider<PricePredictionUseCase> predictionUseCaseProvider;
+
+	public DetailController(
+		PropertyReadUseCase readUseCase,
+		ObjectProvider<PricePredictionUseCase> predictionUseCaseProvider
+	) {
 		this.readUseCase = readUseCase;
+		this.predictionUseCaseProvider = predictionUseCaseProvider;
 	}
 
 	@GetMapping("/api/v1/detail/{parcelId}")
@@ -35,7 +47,8 @@ public class DetailController {
 		@PathVariable Long parcelId,
 		@RequestParam(required = false) Long complexId
 	) {
-		return ResponseEntity.ok(toResponse(readUseCase.getParcelDetail(parcelId, complexId)));
+		ParcelDetailResult result = readUseCase.getParcelDetail(parcelId, complexId);
+		return ResponseEntity.ok(toResponse(result, predictionResponse(result.complexId())));
 	}
 
 	@GetMapping("/api/v1/detail/{parcelId}/complexes")
@@ -58,7 +71,8 @@ public class DetailController {
 
 	@GetMapping("/api/v1/complex/{complexId}")
 	public ResponseEntity<ParcelDetailResponse> getComplexDetail(@PathVariable Long complexId) {
-		return ResponseEntity.ok(toResponse(readUseCase.getComplexDetail(complexId)));
+		ParcelDetailResult result = readUseCase.getComplexDetail(complexId);
+		return ResponseEntity.ok(toResponse(result, predictionResponse(result.complexId())));
 	}
 
 	@GetMapping("/api/v1/complex/{complexId}/trades")
@@ -103,7 +117,20 @@ public class DetailController {
 		);
 	}
 
-	private static ParcelDetailResponse toResponse(ParcelDetailResult result) {
+	private PricePredictionResponse predictionResponse(Long complexId) {
+		PricePredictionUseCase predictionUseCase = predictionUseCaseProvider.getIfAvailable();
+		if (predictionUseCase == null || complexId == null) {
+			return null;
+		}
+		try {
+			return PricePredictionResponse.from(predictionUseCase.getOrSchedulePrediction(complexId));
+		} catch (RuntimeException ex) {
+			log.debug("Failed to build prediction response complexId={}", complexId, ex);
+			return PricePredictionResponse.failed("AI prediction unavailable");
+		}
+	}
+
+	private static ParcelDetailResponse toResponse(ParcelDetailResult result, PricePredictionResponse prediction) {
 		return new ParcelDetailResponse(
 			result.parcelId(),
 			result.complexId(),
@@ -119,7 +146,8 @@ public class DetailController {
 			result.totArea(),
 			result.bcRat(),
 			result.vlRat(),
-			result.useDate()
+			result.useDate(),
+			prediction
 		);
 	}
 
@@ -154,4 +182,5 @@ public class DetailController {
 			point.maxAmount()
 		);
 	}
+
 }

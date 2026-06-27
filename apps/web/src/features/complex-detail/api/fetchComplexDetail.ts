@@ -17,6 +17,26 @@ export type ComplexDetail = {
   bcRat: number | null;
   vlRat: number | null;
   useDate: string | null;
+  prediction: PricePrediction | null;
+};
+
+export type PricePredictionStatus = 'PENDING' | 'READY' | 'FAILED' | 'UNAVAILABLE';
+
+export type PricePrediction = {
+  status: PricePredictionStatus;
+  modelVersion: string | null;
+  predictedDealAmount: number | null;
+  predictedPricePerM2: number | null;
+  predictedPricePerPyeong: number | null;
+  intervalLow: number | null;
+  intervalHigh: number | null;
+  intervalBasis: string | null;
+  targetAreaM2: number | null;
+  targetFloor: number | null;
+  basisTradeId: number | null;
+  basisDealDate: string | null;
+  generatedAt: string | null;
+  message: string | null;
 };
 
 type ComplexDetailResponse = {
@@ -35,6 +55,24 @@ type ComplexDetailResponse = {
   bcRat?: number | string | null;
   vlRat?: number | string | null;
   useDate?: string | null;
+  prediction?: PricePredictionResponse | null;
+};
+
+type PricePredictionResponse = {
+  status?: string | null;
+  modelVersion?: string | null;
+  predictedDealAmount?: number | string | null;
+  predictedPricePerM2?: number | string | null;
+  predictedPricePerPyeong?: number | string | null;
+  intervalLow?: number | string | null;
+  intervalHigh?: number | string | null;
+  intervalBasis?: string | null;
+  targetAreaM2?: number | string | null;
+  targetFloor?: number | string | null;
+  basisTradeId?: number | string | null;
+  basisDealDate?: string | null;
+  generatedAt?: string | null;
+  message?: string | null;
 };
 
 const DETAIL_PATH = '/api/v1/detail';
@@ -100,6 +138,37 @@ function normalizeComplexDetail(detail: ComplexDetailResponse): ComplexDetail {
     bcRat: toNullableNumber(detail.bcRat, 'bcRat'),
     vlRat: toNullableNumber(detail.vlRat, 'vlRat'),
     useDate: toNullableString(detail.useDate),
+    prediction: normalizePrediction(detail.prediction),
+  };
+}
+
+function normalizePrediction(prediction: unknown): PricePrediction | null {
+  if (prediction == null) {
+    return null;
+  }
+
+  if (!isObjectRecord(prediction)) {
+    throw new Error('Invalid public API complex detail response: prediction must be an object');
+  }
+
+  return {
+    status: toPredictionStatus(prediction.status),
+    modelVersion: toNullableString(prediction.modelVersion),
+    predictedDealAmount: toNullableNumber(prediction.predictedDealAmount, 'prediction.predictedDealAmount'),
+    predictedPricePerM2: toNullableNumber(prediction.predictedPricePerM2, 'prediction.predictedPricePerM2'),
+    predictedPricePerPyeong: toNullableNumber(
+      prediction.predictedPricePerPyeong,
+      'prediction.predictedPricePerPyeong',
+    ),
+    intervalLow: toNullableNumber(prediction.intervalLow, 'prediction.intervalLow'),
+    intervalHigh: toNullableNumber(prediction.intervalHigh, 'prediction.intervalHigh'),
+    intervalBasis: toNullableString(prediction.intervalBasis),
+    targetAreaM2: toNullableNumber(prediction.targetAreaM2, 'prediction.targetAreaM2'),
+    targetFloor: toNullableNumber(prediction.targetFloor, 'prediction.targetFloor'),
+    basisTradeId: toNullableNumber(prediction.basisTradeId, 'prediction.basisTradeId'),
+    basisDealDate: toNullableString(prediction.basisDealDate),
+    generatedAt: toNullableString(prediction.generatedAt),
+    message: toNullableString(prediction.message),
   };
 }
 
@@ -108,7 +177,19 @@ function scopedPath(path: string, complexId?: number | null): string {
 }
 
 function isRecord(value: unknown): value is ComplexDetailResponse {
+  return isObjectRecord(value);
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function toPredictionStatus(value: unknown): PricePredictionStatus {
+  if (value === 'PENDING' || value === 'READY' || value === 'FAILED' || value === 'UNAVAILABLE') {
+    return value;
+  }
+
+  throw new Error('Invalid public API complex detail response: prediction.status is invalid');
 }
 
 function toRequiredNumber(value: unknown, field: string): number {

@@ -65,6 +65,7 @@ ALLOW_PATTERNS = [
         r"https://(?:openapi\.naver\.com|api\.openai\.com)/v1(?:/|\b)",
         r"V[0-9]+__.*\.sql",
         r"\b(?:naver-news-search-metadata|naver-title-snippet|news-signal|news-signal-json|test|prompt|schema)-v[0-9]+\b",
+        r"\bhome-search:prediction:v[0-9]+\b",
         r"v2/sdk\.js",
         r"kakao\.maps\.load",
         r"sha512-[A-Za-z0-9+/=]*V[0-9][A-Za-z0-9+/=]*",
@@ -85,6 +86,10 @@ def should_skip(path: Path) -> bool:
     if rel == ".codex/harness/project_terms_check.py":
         return True
     if rel.startswith(".codex/harness/reports/"):
+        return True
+    if rel == "docs/NEWS_SIGNAL_PIPELINE.md":
+        return True
+    if rel.startswith("apps/news/"):
         return True
     if path.name.startswith(".env"):
         return True
@@ -153,9 +158,13 @@ def run_self_test() -> int:
     checks = [
         len(findings) == 6,
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "GET /api/v1/search/complexes"),
+        not scan_text(REPO_ROOT / "SELF_TEST.txt", "home-search:prediction:v1:F37:complex:501"),
         scan_text(REPO_ROOT / "SELF_TEST.txt", "V1 API stays at /api/v1/search/complexes") != [],
         scan_text(REPO_ROOT / "SELF_TEST.txt", "V2 ranking") != [],
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "prompt-version: news-signal-v1"),
+        should_skip(REPO_ROOT / "docs/NEWS_SIGNAL_PIPELINE.md"),
+        should_skip(REPO_ROOT / "apps/news/src/main/resources/application.yml"),
+        should_skip(REPO_ROOT / "apps/news/local-input/region-month-signal-bigkinds.csv.jsonl"),
         should_skip(REPO_ROOT / "apps/news/ops/.env"),
         should_skip(REPO_ROOT / "apps/news/bin/main/application.yml"),
     ]

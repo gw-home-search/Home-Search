@@ -2939,3 +2939,43 @@ risk_notes = [
   "frontend가 search/marker selection에서 complexId를 잃으면 backend scoped read와 화면 표시가 어긋나므로 propagation test를 핵심 gate로 둔다.",
   "runtime visual smoke는 environment에 따라 Partial일 수 있지만 backend/frontend deterministic tests와 contract gates는 반드시 통과해야 한다.",
 ]
+
+[[items]]
+id = "news-scope-cleanup-removal"
+title_ko = "News later-scope 코드 제거"
+pr_type = "Chore"
+pr_title_ko = "news later-scope 코드 제거"
+description_ko = "current map/trade scope 밖에 있는 apps/news standalone runtime, news planning doc 링크, backend guide의 news package 예시를 제거한다."
+status = "candidate"
+priority = 248
+targets = "backend"
+preset = "news-scope-cleanup"
+acceptance_criteria = [
+  "apps/news tracked 코드와 news standalone Gradle/runtime 파일을 제거한다.",
+  "docs/NEWS_SIGNAL_PIPELINE.md를 제거하고 docs/README.md의 later-scope news 링크를 제거한다.",
+  "apps/api/AGENTS.md의 application/news package 예시를 제거한다.",
+  "public map/search/detail/trade API URL, request, response, unit, ProblemDetail shape를 변경하지 않는다.",
+  "apps/api Flyway migration, operational trade relation complex_id, raw ingest/dedupe 정책을 변경하지 않는다.",
+  "map endpoints는 ranking, trend, favorite, alarm, mail, recommendation, news state에 의존하지 않는다.",
+  "ignored/local apps/news 산출물은 PR 생성 뒤 로컬에서 제거하고 `test ! -e apps/news`로 확인한다.",
+]
+first_red_candidates = [
+  "삭제 cleanup이므로 production behavior First RED는 not applicable이며, changed-file PR lint가 삭제된 apps/news 경로에 news Gradle test를 요구하지 않는지 확인한다.",
+  "apps/api/AGENTS.md나 docs/README.md 정리 누락은 project_terms_check와 review gate에서 잡는다.",
+]
+verification_commands = [
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "DB migration 삭제, 기존 operational data cleanup, Docker volume 삭제가 필요하면 중단하고 별도 승인을 받는다.",
+  "apps/api runtime code, apps/web UI, infra compose behavior 변경이 필요하면 별도 slice로 분리한다.",
+  "news 기능을 current scope로 되살려야 하는 요구가 나오면 planning으로 되돌린다.",
+]
+risk_notes = [
+  "apps/news는 later-scope standalone runtime이므로 current map/trade critical path에서 제거한다.",
+  "apps/api의 legacy news table 부재 가드나 prediction read path는 이번 삭제 대상이 아니다.",
+  "로컬 CSV, Obsidian seed, Gradle build/cache 산출물은 tracked PR diff가 아니라 PR 생성 뒤 로컬 정리 대상으로 처리한다.",
+]

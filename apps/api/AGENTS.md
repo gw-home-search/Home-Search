@@ -60,8 +60,7 @@ com.home
 │   ├── read/
 │   ├── ingest/
 │   ├── complex/
-│   ├── coordinate/
-│   └── news/
+│   └── coordinate/
 ├── domain/
 │   ├── region/
 │   ├── parcel/
@@ -134,7 +133,7 @@ Application capability package rules:
 
 - Keep `application/**` feature-first. The first child under `application` must
   stay a project feature such as `map`, `read`, `ingest`, `complex`,
-  `coordinate`, or `news`.
+  or `coordinate`.
 - Split inside `application/<feature>` when that feature has roughly 20 or more
   classes, or when it clearly contains three or more independent capabilities.
 - Use business capability package names, not generic role package names. Avoid

@@ -1,5 +1,0 @@
-home:
-  news:
-    enabled: false
-    region-month-signals:
-      enabled: false

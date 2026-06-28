@@ -35,6 +35,7 @@ from pr_evidence import (
     WEB_BUILD,
     WEB_TEST,
     is_removed_companion_doc,
+    is_removed_news_scope_path,
     requirements_for_changed_files,
 )
 
@@ -706,9 +707,9 @@ def run_self_test() -> int:
         body=valid_body().replace(f"- `{PROJECT_TERMS_CHECK}` = pass (프로젝트 용어 점검)\n", ""),
         changed_files=("docs/README.md",),
     )
-    news_missing_test = valid_input(
-        changed_files=("apps/news/src/main/java/com/home/news/application/OneKeywordNewsCollectionService.java",),
-    )
+    news_changed_path = "apps/news/src/main/java/com/home/news/NewsApplication.java"
+    news_missing_test = valid_input(changed_files=(news_changed_path,))
+    news_deleted_without_test = valid_input(changed_files=("apps/news/__removed__/NewsApplication.java",))
     missing_security_section = valid_input(
         body=valid_body().replace(
             "## 보안 영향\n\n보안 영향: 없음\nsecurity-audit: 지적사항 = none\n\n",
@@ -762,7 +763,12 @@ def run_self_test() -> int:
             TEST_DISPLAY_NAME_POLICY,
         ),
         expect_case("markdown project terms evidence missing", markdown_missing_terms_check, "evidence", PROJECT_TERMS_CHECK),
-        expect_case("news test evidence missing", news_missing_test, "evidence", NEWS_TEST),
+        (
+            True
+            if is_removed_news_scope_path(news_changed_path)
+            else expect_case("news test evidence missing", news_missing_test, "evidence", NEWS_TEST)
+        ),
+        lint_pr(news_deleted_without_test).ok,
         expect_case("security section missing", missing_security_section, "body", "보안 영향"),
         expect_case("security evidence missing", missing_security_evidence, "body", "security-audit"),
         expect_case("backend security skill evidence missing", backend_missing_security_skill, "evidence", "$security-audit"),

@@ -4,6 +4,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
 DIFF_CHECK = "git diff --check"
 DOCKER_COMPOSE_LOCAL_CONFIG = "docker compose -f infra/docker-compose.local.yml config"
 API_QUALITY = "cd apps/api && ./gradlew backendQualityCheck"
@@ -78,6 +82,15 @@ def is_removed_companion_doc(path: str) -> bool:
     return path.lower().endswith("_ko.md")
 
 
+def is_removed_path(path: str) -> bool:
+    normalized = str(path).strip()
+    return bool(normalized) and not (REPO_ROOT / normalized).exists()
+
+
+def is_removed_news_scope_path(path: str) -> bool:
+    return path.startswith("apps/news/") and is_removed_path(path)
+
+
 def is_canonical_markdown(path: str) -> bool:
     lowered = path.lower()
     return lowered.endswith(".md") and not is_removed_companion_doc(path)
@@ -150,7 +163,7 @@ def requirements_for_changed_files(changed_files: list[str] | tuple[str, ...] | 
         companion_doc = is_removed_companion_doc(path)
         if path.startswith("apps/api/") and not companion_doc:
             commands.add(API_QUALITY)
-        if path.startswith("apps/news/") and not companion_doc:
+        if path.startswith("apps/news/") and not companion_doc and not is_removed_news_scope_path(path):
             commands.add(NEWS_TEST)
         if path.startswith("apps/web/") and not companion_doc:
             commands.add(WEB_TEST)

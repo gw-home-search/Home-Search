@@ -1,0 +1,20 @@
+id = "news-scope-cleanup"
+description = "Remove later-scope news runtime and planning artifacts without changing public map/trade APIs."
+aliases = ["news-scope-cleanup", "news-removal", "news-later-scope-cleanup"]
+slice_patterns = ["news-scope-cleanup", "news-removal", "news-later-scope"]
+
+[targets.backend]
+prompt = "backend_execute.md"
+allowed_scope = "apps/news/**, docs/NEWS_SIGNAL_PIPELINE.md, docs/README.md, apps/api/AGENTS.md"
+forbidden_scope = "apps/web/**, infra/**, apps/api/src/**"
+verification_commands = [
+  "cd apps/api && ./gradlew backendQualityCheck",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+
+[safety]
+allow_main_merge = false
+allow_push = false
+allow_open_api_call = false
+allow_db_migration_run = false

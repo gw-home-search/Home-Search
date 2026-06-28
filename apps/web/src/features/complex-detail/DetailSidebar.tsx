@@ -8,7 +8,7 @@ import {
   YAxis,
 } from 'recharts';
 
-import type { ComplexDetail } from './api/fetchComplexDetail';
+import type { ComplexDetail, PricePrediction } from './api/fetchComplexDetail';
 import type { ParcelComplexSummary } from './api/fetchParcelComplexes';
 import type { ParcelTrades, TradeItem } from './api/fetchParcelTrades';
 import type { TradeTrendPoint } from './api/fetchTradeTrend';
@@ -106,6 +106,7 @@ export function DetailSidebar({
               {detailMetric('실거래', `${(parcelTrades?.totalElements ?? 0).toLocaleString()}건`)}
               {detailMetric('세대수', formatNumber(complexDetail.unitCnt, '세대'))}
             </dl>
+            <PricePredictionPanel prediction={complexDetail.prediction} />
             {parcelComplexes.length > 0 ? (
               <section aria-label="같은 필지 단지 선택" className="detail-complex-switcher">
                 <div className="detail-section-heading">
@@ -214,6 +215,107 @@ function detailMetric(label: string, value: string | null) {
       <dd>{value}</dd>
     </div>
   );
+}
+
+function PricePredictionPanel({ prediction }: { prediction: PricePrediction | null }) {
+  if (prediction == null) {
+    return null;
+  }
+
+  if (prediction.status === 'READY') {
+    return (
+      <section
+        aria-label="AI 예상가"
+        className="prediction-panel"
+        data-prediction-status={prediction.status}
+      >
+        <div className="prediction-heading">
+          <p className="prediction-kicker">AI 예상 거래가</p>
+          <div className="prediction-help">
+            <button
+              type="button"
+              aria-describedby="prediction-help-copy"
+              aria-label="AI 예상가 계산 방식 안내"
+              className="prediction-help-button"
+            >
+              <span aria-hidden="true" className="prediction-help-mark">?</span>
+            </button>
+            <div className="prediction-help-popover" id="prediction-help-copy" role="tooltip">
+              <strong>AI 예상가 안내</strong>
+              <p>최근 실거래를 기준으로 면적, 층, 지역 정보를 반영해 계산한 예상가입니다.</p>
+              <p>직전 거래 흐름과 월별 시장 흐름도 함께 참고합니다.</p>
+              <p>예상 범위는 최근 검증 데이터의 오차를 기준으로 산정했습니다.</p>
+            </div>
+          </div>
+        </div>
+        <strong className="prediction-amount">{formatPredictionAmount(prediction.predictedDealAmount)}</strong>
+        {prediction.intervalLow != null && prediction.intervalHigh != null ? (
+          <p className="prediction-range">
+            예상 범위 {formatAmount(prediction.intervalLow)} ~ {formatAmount(prediction.intervalHigh)}
+          </p>
+        ) : null}
+        <p className="prediction-basis">{predictionBasisLabel(prediction)}</p>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      aria-label="AI 예상가"
+      className="prediction-panel"
+      data-prediction-status={prediction.status}
+    >
+      <p className="prediction-kicker">{predictionStatusTitle(prediction)}</p>
+      <p className="prediction-message">{predictionStatusMessage(prediction)}</p>
+    </section>
+  );
+}
+
+function predictionStatusTitle(prediction: PricePrediction): string {
+  switch (prediction.status) {
+    case 'PENDING':
+      return 'AI 예상가 계산 중';
+    case 'FAILED':
+      return 'AI 예상가를 불러오지 못했습니다';
+    case 'UNAVAILABLE':
+      return prediction.message ?? '예측에 필요한 최근 거래가 부족합니다';
+    case 'READY':
+      return 'AI 예상 거래가';
+  }
+}
+
+function predictionStatusMessage(prediction: PricePrediction): string {
+  switch (prediction.status) {
+    case 'PENDING':
+      return '잠시 후 자동으로 갱신됩니다';
+    case 'FAILED':
+      return prediction.message ?? '실거래 정보는 계속 확인할 수 있습니다';
+    case 'UNAVAILABLE':
+      return prediction.message ?? '예측에 필요한 최근 거래가 부족합니다';
+    case 'READY':
+      return '';
+  }
+}
+
+function predictionBasisLabel(prediction: PricePrediction): string {
+  const values = [
+    prediction.targetAreaM2 == null ? null : `기준 ${formatArea(prediction.targetAreaM2)}`,
+    prediction.targetFloor == null ? null : `${prediction.targetFloor}층`,
+    prediction.basisDealDate == null ? null : `최근 거래 ${prediction.basisDealDate}`,
+  ].filter((value): value is string => value != null);
+
+  return values.length === 0 ? '기준 거래 정보 없음' : values.join(' · ');
+}
+
+function formatArea(value: number): string {
+  return `${value.toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+  })}㎡`;
+}
+
+function formatPredictionAmount(amount: number | null): string {
+  return amount == null ? '예상가 없음' : formatAmount(amount);
 }
 
 function latestTradeAmountLabel(trades: TradeItem[]): string {

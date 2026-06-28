@@ -46,6 +46,7 @@ describe('fetchComplexDetail API 어댑터', () => {
       bcRat: 22.5,
       vlRat: 199.8,
       useDate: '2015-03-20',
+      prediction: null,
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -77,6 +78,55 @@ describe('fetchComplexDetail API 어댑터', () => {
       resolveApiUrl('/api/v1/detail/1001?complexId=502'),
       expect.objectContaining({ method: 'GET' }),
     );
+  });
+
+  it('optional prediction READY 응답을 detail model로 normalize한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        parcelId: 1001,
+        complexId: 501,
+        latitude: 37.5123,
+        longitude: 127.0456,
+        address: 'Sample address',
+        name: 'Sample complex name',
+        prediction: {
+          status: 'READY',
+          modelVersion: 'deployment__F37_monthly_anchor_prev3_rolling_huber_010',
+          predictedDealAmount: '179163',
+          predictedPricePerM2: '2115.5',
+          predictedPricePerPyeong: '6993.4',
+          intervalLow: '139425',
+          intervalHigh: '218900',
+          intervalBasis: 'recent_holdout_p95',
+          targetAreaM2: '84.69',
+          targetFloor: '6',
+          basisTradeId: '9001',
+          basisDealDate: '2026-01-01',
+          generatedAt: '2026-06-25T07:05:38Z',
+          message: null,
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchComplexDetail(1001, 501)).resolves.toMatchObject({
+      prediction: {
+        status: 'READY',
+        modelVersion: 'deployment__F37_monthly_anchor_prev3_rolling_huber_010',
+        predictedDealAmount: 179163,
+        predictedPricePerM2: 2115.5,
+        predictedPricePerPyeong: 6993.4,
+        intervalLow: 139425,
+        intervalHigh: 218900,
+        intervalBasis: 'recent_holdout_p95',
+        targetAreaM2: 84.69,
+        targetFloor: 6,
+        basisTradeId: 9001,
+        basisDealDate: '2026-01-01',
+        generatedAt: '2026-06-25T07:05:38Z',
+        message: null,
+      },
+    });
   });
 
   it('complexId 단독 detail URL을 호출한다', async () => {

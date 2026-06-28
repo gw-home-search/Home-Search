@@ -13,8 +13,11 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-import com.home.application.read.PropertyReadUseCase;
 import com.home.global.error.ResourceNotFoundException;
+import com.home.application.prediction.PredictionStatus;
+import com.home.application.prediction.PricePredictionResult;
+import com.home.application.prediction.PricePredictionUseCase;
+import com.home.application.read.PropertyReadUseCase;
 import com.home.application.read.ComplexSummaryResult;
 import com.home.application.read.ComplexSuggestionResult;
 import com.home.application.read.InvalidReadRequestException;
@@ -51,6 +54,9 @@ class ReadApiControllerContractTest {
 
 	@MockitoBean
 	private PropertyReadUseCase readUseCase;
+
+	@MockitoBean
+	private PricePredictionUseCase predictionUseCase;
 
 	@Test
 	@DisplayName("GET /api/v1/search/complexes는 canonical search field를 반환한다")
@@ -164,9 +170,71 @@ class ReadApiControllerContractTest {
 			.andExpect(jsonPath("$.bcRat").value(22.50))
 			.andExpect(jsonPath("$.vlRat").value(199.80))
 			.andExpect(jsonPath("$.useDate").value("2015-03-20"))
-			.andExpect(jsonPath("$.complexPk").doesNotExist())
-			.andExpect(jsonPath("$.aptSeq").doesNotExist())
-			.andExpect(jsonPath("$.sourceKey").doesNotExist());
+				.andExpect(jsonPath("$.complexPk").doesNotExist())
+				.andExpect(jsonPath("$.aptSeq").doesNotExist())
+				.andExpect(jsonPath("$.sourceKey").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/detail/{parcelId}는 compatible optional prediction READY field를 반환한다")
+	void parcelDetailReturnsOptionalPredictionReadyField() throws Exception {
+		given(readUseCase.getParcelDetail(eq(1001L), eq(501L)))
+			.willReturn(new ParcelDetailResult(
+				1001L,
+				501L,
+				37.5123,
+				127.0456,
+				"Sample address",
+				"Sample trade name",
+				"Sample Apartment",
+				8,
+				740,
+				new BigDecimal("12345.67"),
+				new BigDecimal("2345.67"),
+				new BigDecimal("98765.43"),
+				new BigDecimal("22.50"),
+				new BigDecimal("199.80"),
+				LocalDate.of(2015, 3, 20)
+			));
+		given(predictionUseCase.getOrSchedulePrediction(501L))
+			.willReturn(new PricePredictionResult(
+				PredictionStatus.READY,
+				"deployment__F37_monthly_anchor_prev3_rolling_huber_010",
+				179163L,
+				new BigDecimal("2115.5"),
+				new BigDecimal("6993.4"),
+				139425L,
+				218900L,
+				"recent_holdout_p95",
+				new BigDecimal("84.69"),
+				6,
+				9001L,
+				LocalDate.of(2026, 1, 1),
+				java.time.Instant.parse("2026-06-25T07:05:38Z"),
+				null
+			));
+
+		mockMvc.perform(get("/api/v1/detail/1001").param("complexId", "501"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.parcelId").value(1001))
+			.andExpect(jsonPath("$.complexId").value(501))
+			.andExpect(jsonPath("$.prediction.status").value("READY"))
+			.andExpect(jsonPath("$.prediction.modelVersion")
+				.value("deployment__F37_monthly_anchor_prev3_rolling_huber_010"))
+			.andExpect(jsonPath("$.prediction.predictedDealAmount").value(179163))
+			.andExpect(jsonPath("$.prediction.predictedPricePerM2").value(2115.5))
+			.andExpect(jsonPath("$.prediction.predictedPricePerPyeong").value(6993.4))
+			.andExpect(jsonPath("$.prediction.intervalLow").value(139425))
+			.andExpect(jsonPath("$.prediction.intervalHigh").value(218900))
+			.andExpect(jsonPath("$.prediction.intervalBasis").value("recent_holdout_p95"))
+			.andExpect(jsonPath("$.prediction.targetAreaM2").value(84.69))
+			.andExpect(jsonPath("$.prediction.targetFloor").value(6))
+			.andExpect(jsonPath("$.prediction.basisTradeId").value(9001))
+			.andExpect(jsonPath("$.prediction.basisDealDate").value("2026-01-01"))
+			.andExpect(jsonPath("$.prediction.generatedAt").value("2026-06-25T07:05:38Z"))
+			.andExpect(jsonPath("$.prediction.message").isEmpty())
+			.andExpect(jsonPath("$.prediction.complexPk").doesNotExist())
+			.andExpect(jsonPath("$.prediction.sourceKey").doesNotExist());
 	}
 
 	@Test

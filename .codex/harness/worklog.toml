@@ -1,4 +1,61 @@
 [[items]]
+id = "stop-hook-intent-scope-fix"
+title_ko = "Stop hook intent와 scope 오판 수정"
+pr_type = "Chore"
+pr_title_ko = "Stop hook evidence gate 오판 수정"
+description_ko = "Stop hook이 계획 응답, 과거 transcript, branch diff를 섞어 apps/api evidence를 오판하지 않도록 현재 assistant 응답 intent와 검증 대상 diff scope를 분리한다."
+status = "planned"
+priority = 250
+targets = "backend"
+preset = "harness-policy"
+acceptance_criteria = [
+  "last_assistant_message가 없을 때 transcript 전체를 마지막 응답으로 쓰지 않는다.",
+  "intent 판단은 last_assistant_message 또는 transcript의 마지막 assistant turn만 사용한다.",
+  "<proposed_plan>...</proposed_plan> 블록은 intent 판단 전에 제거한다.",
+  "plan/질문/분석 응답은 dirty diff가 있어도 Stop hook evidence gate를 적용하지 않는다.",
+  "complete intent는 current worktree diff만 검사한다.",
+  "publish intent는 origin/main...HEAD branch diff만 검사한다.",
+  "harness-policy preset은 hook/harness self-test와 git diff whitespace 검증만 실행하고 backendQualityCheck를 요구하지 않는다.",
+]
+first_red_candidates = [
+  "plan 응답이 dirty diff 때문에 backend evidence를 요구하면 실패하는 Stop hook self-test를 추가한다.",
+  "transcript 과거 PR 문구가 마지막 plan 응답보다 우선되어 branch diff를 선택하면 실패하는 self-test를 추가한다.",
+  "publish intent가 아니면 branch diff의 apps/api 변경이 backendQualityCheck evidence를 요구하지 않는 self-test를 추가한다.",
+  "publish intent이면 branch diff의 apps/api 변경이 backendQualityCheck evidence를 요구하는 self-test를 추가한다.",
+  "complete intent이면 current worktree diff만 검사하는 self-test를 추가한다.",
+]
+verification_commands = [
+  "python3 .codex/hooks/stop_verification_gate.py --self-test",
+  "python3 .codex/hooks/pre_tool_use_policy.py --self-test",
+  "python3 .codex/hooks/post_tool_use_review.py --self-test",
+  "python3 .codex/harness/pr_lint.py --self-test",
+  "python3 .codex/harness/pr_context.py --self-test",
+  "python3 .codex/harness/pr_body_check.py --self-test",
+  "python3 .codex/harness/worklog_sync.py --self-test",
+  "python3 .codex/harness/home_pr.py --self-test",
+  "python3 .codex/harness/home_flow.py --self-test",
+  "python3 .codex/harness/home_integrate.py --self-test",
+  "python3 .codex/harness/home_plan.py --self-test",
+  "python3 .codex/harness/home_report.py --self-test",
+  ".codex/harness/home --self-test",
+  "python3 .codex/harness/skill_routing.py --self-test",
+  "python3 .codex/harness/user_language_check.py --self-test",
+  "python3 .codex/harness/project_terms_check.py",
+  "python3 .codex/harness/project_terms_check.py --self-test",
+  "git diff --check",
+]
+stop_conditions = [
+  "apps/api, apps/web, public API, DB, ingest/runtime 코드 변경이 필요하면 중단하고 별도 slice로 분리한다.",
+  "Stop hook evidence 정책 자체를 완화해야 하면 중단하고 별도 정책 결정으로 분리한다.",
+  "기존 dirty apps/web/src/app/App.css를 PR에 포함해야 하면 중단한다.",
+  "branch publish 전 main worktree dirty 상태가 남아 있으면 중단한다.",
+]
+risk_notes = [
+  "현재 branch diff에 기존 apps/api/AGENTS.md가 있을 수 있으므로 publish intent에서만 branch diff evidence를 검사해야 한다.",
+  "이 item은 hook/harness 정책 수정이며 backendQualityCheck/Coverage/OpenAPI 요구 정책은 유지한다.",
+]
+
+[[items]]
 id = "news-realtime-observation-storage-smoke"
 title_ko = "뉴스 실시간 관측 저장 검증"
 pr_type = "Test"

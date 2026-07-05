@@ -1,0 +1,35 @@
+id = "harness-policy"
+description = "Hook and harness policy changes without product backend/frontend runtime checks."
+aliases = ["harness-policy", "hook-policy", "harness-hook-policy"]
+slice_patterns = ["stop-hook", "hook-policy", "harness-policy"]
+
+[targets.backend]
+prompt = "backend_execute.md"
+allowed_scope = ".codex/hooks/**, .codex/harness/**"
+forbidden_scope = "apps/api/**, apps/web/**, infra/**, docs/**"
+verification_commands = [
+  "python3 .codex/hooks/stop_verification_gate.py --self-test",
+  "python3 .codex/hooks/pre_tool_use_policy.py --self-test",
+  "python3 .codex/hooks/post_tool_use_review.py --self-test",
+  "python3 .codex/harness/pr_lint.py --self-test",
+  "python3 .codex/harness/pr_context.py --self-test",
+  "python3 .codex/harness/pr_body_check.py --self-test",
+  "python3 .codex/harness/worklog_sync.py --self-test",
+  "python3 .codex/harness/home_pr.py --self-test",
+  "python3 .codex/harness/home_flow.py --self-test",
+  "python3 .codex/harness/home_integrate.py --self-test",
+  "python3 .codex/harness/home_plan.py --self-test",
+  "python3 .codex/harness/home_report.py --self-test",
+  ".codex/harness/home --self-test",
+  "python3 .codex/harness/skill_routing.py --self-test",
+  "python3 .codex/harness/user_language_check.py --self-test",
+  "python3 .codex/harness/project_terms_check.py",
+  "python3 .codex/harness/project_terms_check.py --self-test",
+  "git diff --check",
+]
+
+[safety]
+allow_main_merge = false
+allow_push = false
+allow_open_api_call = false
+allow_db_migration_run = false

@@ -14,6 +14,7 @@ from pr_context import PrContext, changed_files_from_sources, context_from_event
 from pr_evidence import (
     API_QUALITY,
     NEWS_TEST,
+    PRE_TOOL_USE_POLICY_SELF_TEST,
     WORKLOG_SYNC_SELF_TEST,
     DIFF_CHECK,
     POST_TOOL_USE_REVIEW_SELF_TEST,
@@ -562,6 +563,7 @@ def valid_body(
 - `{PROJECT_TERMS_SELF_TEST}` = pass (용어 점검 자체 테스트)
 - `{PROJECT_TERMS_CHECK}` = pass (프로젝트 용어 점검)
 - `{STOP_HOOK_SELF_TEST}` = pass (stop hook fixture)
+- `{PRE_TOOL_USE_POLICY_SELF_TEST}` = pass (pre-tool hook fixture)
 - `{POST_TOOL_USE_REVIEW_SELF_TEST}` = pass (post-tool hook fixture)
 
 Coverage: >=90%

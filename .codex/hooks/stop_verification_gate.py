@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -69,6 +70,7 @@ PUBLISH_HANDOFF_RE = re.compile(
     r")",
     re.IGNORECASE | re.DOTALL,
 )
+PROPOSED_PLAN_RE = re.compile(r"<proposed_plan\b[^>]*>.*?</proposed_plan>", re.IGNORECASE | re.DOTALL)
 
 
 def load_payload() -> dict[str, Any]:
@@ -158,25 +160,136 @@ def ignored_path(path: str) -> bool:
     return bool(parts & IGNORED_PARTS)
 
 
+def transcript_path_from_payload(payload: dict[str, Any]) -> Path | None:
+    transcript = payload.get("transcript_path") or payload.get("transcriptPath")
+    if isinstance(transcript, str):
+        return Path(transcript)
+    return None
+
+
+def read_transcript(payload: dict[str, Any]) -> str:
+    transcript_path = transcript_path_from_payload(payload)
+    if transcript_path is None:
+        return ""
+    try:
+        if transcript_path.exists() and transcript_path.is_file():
+            return transcript_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    return ""
+
+
 def transcript_text(payload: dict[str, Any]) -> str:
     parts: list[str] = []
     last = last_assistant_text(payload)
     if last:
         parts.append(last)
-    transcript = payload.get("transcript_path") or payload.get("transcriptPath")
-    if isinstance(transcript, str):
-        transcript_path = Path(transcript)
-        try:
-            if transcript_path.exists() and transcript_path.is_file():
-                parts.append(transcript_path.read_text(encoding="utf-8", errors="replace"))
-        except OSError:
-            pass
+    transcript = read_transcript(payload)
+    if transcript:
+        parts.append(transcript)
     return "\n".join(parts)
 
 
 def last_assistant_text(payload: dict[str, Any]) -> str:
     last = payload.get("last_assistant_message") or payload.get("lastAssistantMessage")
     return last if isinstance(last, str) else ""
+
+
+def text_from_content(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts = [text_from_content(item) for item in value]
+        return "\n".join(part for part in parts if part)
+    if isinstance(value, dict):
+        for key in ("text", "content", "value", "output_text"):
+            text = text_from_content(value.get(key))
+            if text:
+                return text
+    return ""
+
+
+def assistant_text_from_record(record: Any) -> str:
+    if not isinstance(record, dict):
+        return ""
+    candidates = [record]
+    for key in ("message", "item", "entry", "event"):
+        nested = record.get(key)
+        if isinstance(nested, dict):
+            candidates.append(nested)
+            for nested_key in ("message", "item"):
+                nested_again = nested.get(nested_key)
+                if isinstance(nested_again, dict):
+                    candidates.append(nested_again)
+
+    for candidate in candidates:
+        role = str(candidate.get("role") or candidate.get("author") or "").lower()
+        event_type = str(candidate.get("type") or "").lower()
+        if role != "assistant" and event_type not in {"assistant", "assistant_message"}:
+            continue
+        for key in ("content", "text", "message"):
+            text = text_from_content(candidate.get(key))
+            if text:
+                return text
+    return ""
+
+
+def iter_transcript_records(raw: str) -> list[Any]:
+    records: list[Any] = []
+    stripped = raw.strip()
+    if not stripped:
+        return records
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        parsed = None
+    if isinstance(parsed, list):
+        records.extend(parsed)
+        return records
+    if isinstance(parsed, dict):
+        records.append(parsed)
+        return records
+
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return records
+
+
+def last_assistant_text_from_transcript(payload: dict[str, Any]) -> str:
+    raw = read_transcript(payload)
+    if not raw:
+        return ""
+    last = ""
+    for record in iter_transcript_records(raw):
+        text = assistant_text_from_record(record)
+        if text:
+            last = text
+    return last
+
+
+def intent_message_text(payload: dict[str, Any]) -> str:
+    return last_assistant_text(payload) or last_assistant_text_from_transcript(payload)
+
+
+def strip_proposed_plan(text: str) -> str:
+    return PROPOSED_PLAN_RE.sub("", text)
+
+
+def classify_stop_intent(last_message: str) -> str:
+    text = strip_proposed_plan(last_message).strip()
+    if not text:
+        return "none"
+    if PUBLISH_HANDOFF_RE.search(text):
+        return "publish"
+    if COMPLETION_INTENT_RE.search(text):
+        return "complete"
+    return "none"
 
 
 def has_successful_command(text: str, command_re: re.Pattern[str]) -> bool:
@@ -359,13 +472,16 @@ def missing_evidence(files: list[str], text: str) -> list[str]:
 def should_enforce_stop_gate(files: list[str], last_message: str) -> bool:
     if not files:
         return False
-    return bool(COMPLETION_INTENT_RE.search(last_message))
+    return classify_stop_intent(last_message) != "none"
 
 
 def scope_files_for_stop_gate(files: list[str], last_message: str, branch_files: list[str]) -> list[str]:
-    if branch_files and PUBLISH_HANDOFF_RE.search(last_message):
+    intent = classify_stop_intent(last_message)
+    if intent == "publish":
         return branch_files
-    return files
+    if intent == "complete":
+        return files
+    return []
 
 
 def gated_missing_evidence(files: list[str], last_message: str, evidence_text: str) -> list[str]:
@@ -384,6 +500,18 @@ def block(lines: list[str]) -> None:
 
 
 def run_self_test() -> int:
+    hook_evidence = "\n".join(
+        [
+            "상태: Pass",
+            "최초 RED: blocked/no test environment",
+            "예상 RED 실패: 해당 없음",
+            "최소 GREEN: 확인",
+            "검증: python3 .codex/hooks/stop_verification_gate.py --self-test = pass",
+            "reviewer: 지적사항 = 없음",
+            "주요 위험: 없음",
+            "다음 행동: 없음",
+        ]
+    )
     missing_red = missing_evidence(
         ["apps/api/src/main/java/com/home/App.java"],
         "\n".join(
@@ -543,6 +671,46 @@ def run_self_test() -> int:
             ]
         ),
     )
+    plan_answer = "다음 계획입니다.\n<proposed_plan>\n수정했습니다. PR을 열었습니다.\n</proposed_plan>\n1. hook을 고칩니다."
+    plan_scope_files = scope_files_for_stop_gate(["apps/web/src/app/App.css"], plan_answer, ["apps/api/AGENTS.md"])
+    dirty_plan_answer = gated_missing_evidence(plan_scope_files, plan_answer, "")
+    transcript_plan_payload: dict[str, Any] = {}
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=True) as handle:
+        handle.write(
+            "\n".join(
+                [
+                    json.dumps({"role": "assistant", "content": "PR을 열었습니다."}, ensure_ascii=False),
+                    json.dumps({"role": "assistant", "content": "계획만 정리합니다."}, ensure_ascii=False),
+                ]
+            )
+        )
+        handle.flush()
+        transcript_plan_payload["transcript_path"] = handle.name
+        transcript_last = intent_message_text(transcript_plan_payload)
+    transcript_plan_scope = scope_files_for_stop_gate(
+        ["apps/web/src/app/App.css"],
+        transcript_last,
+        ["apps/api/AGENTS.md"],
+    )
+    current_scope_files = scope_files_for_stop_gate(
+        ["apps/web/src/app/App.css"],
+        "수정했습니다.",
+        ["apps/api/AGENTS.md"],
+    )
+    current_scope_missing = gated_missing_evidence(current_scope_files, "수정했습니다.", "")
+    publish_scope_backend = scope_files_for_stop_gate(
+        [".codex/hooks/stop_verification_gate.py"],
+        "PR을 열었습니다.",
+        ["apps/api/AGENTS.md"],
+    )
+    publish_scope_backend_missing = gated_missing_evidence(publish_scope_backend, "PR을 열었습니다.", hook_evidence)
+    complete_scope_hook = scope_files_for_stop_gate(
+        [".codex/hooks/stop_verification_gate.py"],
+        "수정했습니다.",
+        ["apps/api/AGENTS.md"],
+    )
+    complete_scope_hook_missing = gated_missing_evidence(complete_scope_hook, "수정했습니다.", hook_evidence)
+    complete_ignores_branch_backend = not any("backendQualityCheck" in item for item in complete_scope_hook_missing)
     tests = [
         ("missing First RED is detected", any("최초 RED" in item or "First RED" in item for item in missing_red)),
         ("missing Korean review is detected", any("짧은 한글 리뷰" in item for item in missing_review)),
@@ -557,6 +725,17 @@ def run_self_test() -> int:
         ("completion answer with evidence passes", not completion_with_evidence),
         ("publish handoff uses branch diff scope", publish_scope_files == [".codex/hooks/stop_verification_gate.py"]),
         ("publish handoff scoped evidence passes", not publish_scope_missing),
+        ("proposed_plan block is ignored for intent", classify_stop_intent(plan_answer) == "none"),
+        ("plan answer is not gated even with dirty diff", not dirty_plan_answer and plan_scope_files == []),
+        ("transcript last assistant plan ignores stale publish text", transcript_last == "계획만 정리합니다."),
+        ("transcript stale publish does not select branch diff", transcript_plan_scope == []),
+        ("non-publish completion uses current diff scope", current_scope_files == ["apps/web/src/app/App.css"]),
+        ("current diff web completion does not require backend evidence", not any("backendQualityCheck" in item for item in current_scope_missing)),
+        ("publish intent uses branch backend diff", publish_scope_backend == ["apps/api/AGENTS.md"]),
+        ("publish backend branch diff requires backend evidence", any("backendQualityCheck" in item for item in publish_scope_backend_missing)),
+        ("complete intent ignores backend branch diff", complete_scope_hook == [".codex/hooks/stop_verification_gate.py"]),
+        ("complete hook current diff passes with hook evidence", not complete_scope_hook_missing),
+        ("complete current diff does not require branch backend evidence", complete_ignores_branch_backend),
     ]
     failed = [name for name, passed in tests if not passed]
     if failed:
@@ -576,7 +755,7 @@ def main() -> None:
         return
 
     evidence_text = transcript_text(payload)
-    last_message = last_assistant_text(payload) or evidence_text
+    last_message = intent_message_text(payload)
     scoped_files = scope_files_for_stop_gate(files, last_message, branch_diff_files(repo_root))
     missing = gated_missing_evidence(scoped_files, last_message, evidence_text)
     if missing:

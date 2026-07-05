@@ -30,6 +30,7 @@ USER_LANGUAGE_CHECK = "python3 .codex/harness/user_language_check.py --self-test
 PROJECT_TERMS_CHECK = "python3 .codex/harness/project_terms_check.py"
 PROJECT_TERMS_SELF_TEST = "python3 .codex/harness/project_terms_check.py --self-test"
 STOP_HOOK_SELF_TEST = "python3 .codex/hooks/stop_verification_gate.py --self-test"
+PRE_TOOL_USE_POLICY_SELF_TEST = "python3 .codex/hooks/pre_tool_use_policy.py --self-test"
 POST_TOOL_USE_REVIEW_SELF_TEST = "python3 .codex/hooks/post_tool_use_review.py --self-test"
 
 COMMAND_ORDER = (
@@ -55,6 +56,7 @@ COMMAND_ORDER = (
     PROJECT_TERMS_CHECK,
     PROJECT_TERMS_SELF_TEST,
     STOP_HOOK_SELF_TEST,
+    PRE_TOOL_USE_POLICY_SELF_TEST,
     POST_TOOL_USE_REVIEW_SELF_TEST,
 )
 
@@ -207,6 +209,7 @@ def requirements_for_changed_files(changed_files: list[str] | tuple[str, ...] | 
             commands.add(USER_LANGUAGE_CHECK)
         if path.startswith(".codex/hooks/"):
             commands.add(STOP_HOOK_SELF_TEST)
+            commands.add(PRE_TOOL_USE_POLICY_SELF_TEST)
             commands.add(POST_TOOL_USE_REVIEW_SELF_TEST)
 
     canonical_markdown = tuple(path for path in changed if is_canonical_markdown(path))

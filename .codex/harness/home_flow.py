@@ -39,6 +39,7 @@ from pr_evidence import (
     HARNESS_PLAN_SELF_TEST,
     HARNESS_PR_SELF_TEST,
     HARNESS_REPORT_SELF_TEST,
+    PRE_TOOL_USE_POLICY_SELF_TEST,
     WEB_BUILD,
     WEB_TEST,
     ordered_commands,
@@ -102,6 +103,7 @@ KNOWN_VERIFICATION_COMMANDS = {
         PROJECT_TERMS_CHECK: (".", ["python3", ".codex/harness/project_terms_check.py"]),
         TEST_DISPLAY_NAME_POLICY: (".", ["python3", "scripts/" + "check-test-display-names.py"]),
         STOP_HOOK_SELF_TEST: (".", ["python3", ".codex/hooks/stop_verification_gate.py", "--self-test"]),
+        PRE_TOOL_USE_POLICY_SELF_TEST: (".", ["python3", ".codex/hooks/pre_tool_use_policy.py", "--self-test"]),
         POST_TOOL_USE_REVIEW_SELF_TEST: (".", ["python3", ".codex/hooks/post_tool_use_review.py", "--self-test"]),
     },
     "frontend": {
@@ -125,6 +127,7 @@ KNOWN_VERIFICATION_COMMANDS = {
         PROJECT_TERMS_CHECK: (".", ["python3", ".codex/harness/project_terms_check.py"]),
         TEST_DISPLAY_NAME_POLICY: (".", ["python3", "scripts/" + "check-test-display-names.py"]),
         STOP_HOOK_SELF_TEST: (".", ["python3", ".codex/hooks/stop_verification_gate.py", "--self-test"]),
+        PRE_TOOL_USE_POLICY_SELF_TEST: (".", ["python3", ".codex/hooks/pre_tool_use_policy.py", "--self-test"]),
         POST_TOOL_USE_REVIEW_SELF_TEST: (".", ["python3", ".codex/hooks/post_tool_use_review.py", "--self-test"]),
     },
 }

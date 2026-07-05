@@ -18,6 +18,7 @@ from pr_evidence import (
     API_QUALITY,
     WORKLOG_SYNC_SELF_TEST,
     DIFF_CHECK,
+    PRE_TOOL_USE_POLICY_SELF_TEST,
     PR_BODY_CHECK_SELF_TEST,
     PR_CONTEXT_SELF_TEST,
     POST_TOOL_USE_REVIEW_SELF_TEST,
@@ -590,6 +591,7 @@ def run_self_test() -> int:
             PROJECT_TERMS_SELF_TEST: {"status": "pass", "exit_code": 0},
             PROJECT_TERMS_CHECK: {"status": "pass", "exit_code": 0},
             STOP_HOOK_SELF_TEST: {"status": "pass", "exit_code": 0},
+            PRE_TOOL_USE_POLICY_SELF_TEST: {"status": "pass", "exit_code": 0},
             POST_TOOL_USE_REVIEW_SELF_TEST: {"status": "pass", "exit_code": 0},
         },
     }

@@ -6,11 +6,13 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import os
 import re
 import subprocess
 import sys
 import tomllib
 import tempfile
+from collections.abc import Iterable
 from contextlib import suppress
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -59,6 +61,8 @@ DEFAULT_WORKTREE_PARENT = Path("/Users/gwongwangjae")
 PRESET_DIR = Path(__file__).with_name("presets")
 WORKLOG_PATH = Path(__file__).with_name("worklog.toml")
 REPORT_ROOT = DEFAULT_MAIN / ".codex" / "harness" / "reports"
+REPORT_KEEP_FILES = {".gitignore", ".gitkeep"}
+REPORT_MAX_AGE_DAYS = 30
 PR_SCRIPT = Path(__file__).with_name("home_pr.py")
 PR_TITLE_TYPES = {"Feat", "Fix", "Chore", "Docs", "Test", "Refactor"}
 DEFAULT_TARGETS = {
@@ -453,7 +457,7 @@ def run_codex(
 ) -> dict[str, Any]:
     if args.no_codex:
         return {"status": "skipped", "exit_code": None, "summary": "--no-codex"}
-    output = DEFAULT_MAIN / ".codex" / "harness" / "reports" / f"{names['work_id']}-{target}-last.md"
+    output = REPORT_ROOT / f"{target}-last.md"
     config = target_config(args, target)
     prompt_name = str(config["prompt"])
     prompt = render_prompt(
@@ -494,7 +498,7 @@ def run_gate_review(
     *,
     dry_run: bool,
 ) -> dict[str, Any]:
-    output = DEFAULT_MAIN / ".codex" / "harness" / "reports" / f"{names['work_id']}-{target}-gate.md"
+    output = REPORT_ROOT / f"{target}-gate.md"
     prompt = render_prompt(
         "gate_review.md",
         {
@@ -787,7 +791,74 @@ def call_worklog_sync(args: argparse.Namespace, names: dict[str, Any], *, dry_ru
         raise RuntimeError(f"worklog sync commit failed: {commit_result['summary']}")
     payload["commit"] = git_output(DEFAULT_MAIN, "rev-parse", "--short", "HEAD") or None
     payload["summary"] = f"{result.summary}; commit={payload['commit']}"
+    pruned = prune_reports()
+    if pruned:
+        payload["summary"] = f"{payload['summary']}; pruned_reports={len(pruned)}"
     return payload
+
+
+def worklog_item_statuses(worklog_path: Path = WORKLOG_PATH) -> dict[str, str]:
+    if not worklog_path.exists():
+        return {}
+    try:
+        with worklog_path.open("rb") as handle:
+            data = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError):
+        return {}
+    statuses: dict[str, str] = {}
+    for item in data.get("items", []):
+        if isinstance(item, dict) and item.get("id"):
+            statuses[slugify(str(item["id"]))] = str(item.get("status", "")).strip().lower()
+    return statuses
+
+
+def report_work_id(file_name: str, work_ids: Iterable[str]) -> str | None:
+    best: str | None = None
+    for work_id in work_ids:
+        if file_name == work_id or file_name.startswith(f"{work_id}-") or file_name.startswith(f"{work_id}."):
+            if best is None or len(work_id) > len(best):
+                best = work_id
+    return best
+
+
+def prune_reports(
+    *,
+    root: Path = REPORT_ROOT,
+    statuses: dict[str, str] | None = None,
+    max_age_days: int = REPORT_MAX_AGE_DAYS,
+    now: datetime | None = None,
+    dry_run: bool = False,
+) -> list[str]:
+    """Reports are a workbench for in-flight work; merged evidence lives in the GitHub PR.
+
+    Deletes report files whose work item is done, plus orphan files older than
+    max_age_days. Files for planned/in-progress work items are always kept.
+    """
+    if not root.exists():
+        return []
+    if statuses is None:
+        statuses = worklog_item_statuses()
+    current = now or datetime.now(timezone.utc)
+    removed: list[str] = []
+    for path in sorted(root.iterdir()):
+        if not path.is_file() or path.name in REPORT_KEEP_FILES:
+            continue
+        work_id = report_work_id(path.name, statuses)
+        if work_id is not None:
+            if statuses[work_id] != "done":
+                continue
+        else:
+            try:
+                mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+            except OSError:
+                continue
+            if (current - mtime).days < max_age_days:
+                continue
+        removed.append(path.name)
+        if not dry_run:
+            with suppress(OSError):
+                path.unlink()
+    return removed
 
 
 def payload_path_for(work_id: str) -> Path:
@@ -1309,6 +1380,13 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--no-commit", action="store_true")
     run.add_argument("--no-integrate", action="store_true")
     run.add_argument("--codex-bin", default="codex")
+
+    prune = subparsers.add_parser(
+        "prune-reports",
+        help="Delete report files for done work items and stale orphans.",
+    )
+    prune.add_argument("--max-age-days", type=int, default=REPORT_MAX_AGE_DAYS)
+    prune.add_argument("--dry-run", action="store_true")
     return parser
 
 
@@ -1380,7 +1458,24 @@ def run_self_test() -> int:
         validate_integration_branch("feat/not-integration-branch")
     except RuntimeError:
         invalid_branch_blocked = True
+    with tempfile.TemporaryDirectory() as tmp_reports:
+        tmp_root = Path(tmp_reports)
+        for name in ("done-item.json", "done-item-pr-body.md", "active-item.json", "orphan.md", "orphan-old.md"):
+            (tmp_root / name).write_text("x", encoding="utf-8")
+        stale = datetime.now(timezone.utc).timestamp() - 90 * 24 * 3600
+        os.utime(tmp_root / "orphan-old.md", (stale, stale))
+        prune_statuses = {"done-item": "done", "active-item": "planned"}
+        prune_dry_removed = prune_reports(root=tmp_root, statuses=prune_statuses, dry_run=True)
+        prune_dry_kept = sorted(path.name for path in tmp_root.iterdir())
+        prune_removed = prune_reports(root=tmp_root, statuses=prune_statuses)
+        prune_remaining = sorted(path.name for path in tmp_root.iterdir())
     checks = [
+        sorted(prune_dry_removed) == ["done-item-pr-body.md", "done-item.json", "orphan-old.md"],
+        len(prune_dry_kept) == 5,
+        sorted(prune_removed) == ["done-item-pr-body.md", "done-item.json", "orphan-old.md"],
+        prune_remaining == ["active-item.json", "orphan.md"],
+        report_work_id("done-item-backend-gate.md", prune_statuses) == "done-item",
+        report_work_id("unrelated.md", prune_statuses) is None,
         slugify("Map Contract Hardening") == "map-contract-hardening",
         resolved == "contract-hardening",
         is_main_worktree(DEFAULT_MAIN),
@@ -1433,6 +1528,13 @@ def main(argv: list[str] | None = None) -> int:
         return run_self_test()
     if args.command == "run":
         return run_flow(args)
+    if args.command == "prune-reports":
+        removed = prune_reports(max_age_days=args.max_age_days, dry_run=args.dry_run)
+        label = "[DRY-RUN] " if args.dry_run else ""
+        for name in removed:
+            print(f"{label}prune report: {name}")
+        print(f"{label}pruned reports: {len(removed)}")
+        return 0
     parser.print_help()
     return 0
 

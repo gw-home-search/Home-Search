@@ -27,7 +27,6 @@ from pr_evidence import (
     TEST_DISPLAY_NAME_POLICY,
     USER_LANGUAGE_CHECK,
     HARNESS_FLOW_SELF_TEST,
-    HARNESS_INTEGRATE_SELF_TEST,
     HARNESS_LAUNCHER_SELF_TEST,
     HARNESS_PLAN_SELF_TEST,
     HARNESS_PR_SELF_TEST,
@@ -550,7 +549,6 @@ def valid_body(
 - `{WORKLOG_SYNC_SELF_TEST}` = pass (worklog sync 자체 테스트)
 - `{HARNESS_PR_SELF_TEST}` = pass (draft PR 생성 helper 자체 테스트)
 - `{HARNESS_FLOW_SELF_TEST}` = pass (harness flow 자체 테스트)
-- `{HARNESS_INTEGRATE_SELF_TEST}` = pass (harness integration 자체 테스트)
 - `{HARNESS_PLAN_SELF_TEST}` = pass (harness plan 자체 테스트)
 - `{HARNESS_REPORT_SELF_TEST}` = pass (harness report 자체 테스트)
 - `{HARNESS_LAUNCHER_SELF_TEST}` = pass (harness launcher 자체 테스트)

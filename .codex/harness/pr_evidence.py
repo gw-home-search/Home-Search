@@ -20,7 +20,6 @@ PR_BODY_CHECK_SELF_TEST = "python3 .codex/harness/pr_body_check.py --self-test"
 WORKLOG_SYNC_SELF_TEST = "python3 .codex/harness/worklog_sync.py --self-test"
 HARNESS_PR_SELF_TEST = "python3 .codex/harness/home_pr.py --self-test"
 HARNESS_FLOW_SELF_TEST = "python3 .codex/harness/home_flow.py --self-test"
-HARNESS_INTEGRATE_SELF_TEST = "python3 .codex/harness/home_integrate.py --self-test"
 HARNESS_PLAN_SELF_TEST = "python3 .codex/harness/home_plan.py --self-test"
 HARNESS_REPORT_SELF_TEST = "python3 .codex/harness/home_report.py --self-test"
 HARNESS_LAUNCHER_SELF_TEST = ".codex/harness/home --self-test"
@@ -45,7 +44,6 @@ COMMAND_ORDER = (
     WORKLOG_SYNC_SELF_TEST,
     HARNESS_PR_SELF_TEST,
     HARNESS_FLOW_SELF_TEST,
-    HARNESS_INTEGRATE_SELF_TEST,
     HARNESS_PLAN_SELF_TEST,
     HARNESS_REPORT_SELF_TEST,
     HARNESS_LAUNCHER_SELF_TEST,
@@ -188,7 +186,6 @@ def requirements_for_changed_files(changed_files: list[str] | tuple[str, ...] | 
             commands.add(WORKLOG_SYNC_SELF_TEST)
             commands.add(HARNESS_PR_SELF_TEST)
             commands.add(HARNESS_FLOW_SELF_TEST)
-            commands.add(HARNESS_INTEGRATE_SELF_TEST)
             commands.add(HARNESS_PLAN_SELF_TEST)
             commands.add(HARNESS_REPORT_SELF_TEST)
             commands.add(HARNESS_LAUNCHER_SELF_TEST)

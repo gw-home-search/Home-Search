@@ -6,11 +6,13 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import json
+import os
 import re
 import subprocess
 import sys
 import tomllib
 import tempfile
+from collections.abc import Iterable
 from contextlib import suppress
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -19,13 +21,10 @@ from typing import Any
 
 from pr_evidence import (
     API_QUALITY,
-    NEWS_TEST,
     WORKLOG_SYNC_SELF_TEST,
     DIFF_CHECK,
     DOCKER_COMPOSE_LOCAL_CONFIG,
-    HARNESS_INTEGRATE_SELF_TEST,
     POST_TOOL_USE_REVIEW_SELF_TEST,
-    PR_BODY_CHECK_SELF_TEST,
     PR_CONTEXT_SELF_TEST,
     PROJECT_TERMS_CHECK,
     PROJECT_TERMS_SELF_TEST,
@@ -33,7 +32,6 @@ from pr_evidence import (
     SKILL_ROUTING_SELF_TEST,
     STOP_HOOK_SELF_TEST,
     TEST_DISPLAY_NAME_POLICY,
-    USER_LANGUAGE_CHECK,
     HARNESS_FLOW_SELF_TEST,
     HARNESS_LAUNCHER_SELF_TEST,
     HARNESS_PLAN_SELF_TEST,
@@ -43,9 +41,10 @@ from pr_evidence import (
     WEB_BUILD,
     WEB_TEST,
     ordered_commands,
+    parse_git_status,
     requirements_for_changed_files,
 )
-from worklog_sync import mark_work_item_done
+from worklog_sync import load_worklog as load_worklog_states, mark_work_item_done
 from pr_lint import PrInput, format_grouped_errors, lint_pr
 from skill_routing import routing_payload, routing_text
 from home_report import render_pr_body
@@ -59,6 +58,8 @@ DEFAULT_WORKTREE_PARENT = Path("/Users/gwongwangjae")
 PRESET_DIR = Path(__file__).with_name("presets")
 WORKLOG_PATH = Path(__file__).with_name("worklog.toml")
 REPORT_ROOT = DEFAULT_MAIN / ".codex" / "harness" / "reports"
+REPORT_KEEP_FILES = {".gitignore", ".gitkeep"}
+REPORT_MAX_AGE_DAYS = 30
 PR_SCRIPT = Path(__file__).with_name("home_pr.py")
 PR_TITLE_TYPES = {"Feat", "Fix", "Chore", "Docs", "Test", "Refactor"}
 DEFAULT_TARGETS = {
@@ -83,22 +84,18 @@ PLANNING_MODES = {"standard", "critique", "llm-replan"}
 KNOWN_VERIFICATION_COMMANDS = {
     "backend": {
         API_QUALITY: ("apps/api", ["./gradlew", "backendQualityCheck"]),
-        NEWS_TEST: ("apps/news", ["gradle", "test"]),
         DOCKER_COMPOSE_LOCAL_CONFIG: (".", ["docker", "compose", "-f", "infra/docker-compose.local.yml", "config"]),
         "cd apps/api && ./gradlew test": ("apps/api", ["./gradlew", "test"]),
         DIFF_CHECK: (".", ["git", "diff", "--check"]),
         PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
         PR_CONTEXT_SELF_TEST: (".", ["python3", ".codex/harness/pr_context.py", "--self-test"]),
-        PR_BODY_CHECK_SELF_TEST: (".", ["python3", ".codex/harness/pr_body_check.py", "--self-test"]),
         WORKLOG_SYNC_SELF_TEST: (".", ["python3", ".codex/harness/worklog_sync.py", "--self-test"]),
         HARNESS_PR_SELF_TEST: (".", ["python3", ".codex/harness/home_pr.py", "--self-test"]),
         HARNESS_FLOW_SELF_TEST: (".", ["python3", ".codex/harness/home_flow.py", "--self-test"]),
-        HARNESS_INTEGRATE_SELF_TEST: (".", ["python3", ".codex/harness/home_integrate.py", "--self-test"]),
         HARNESS_PLAN_SELF_TEST: (".", ["python3", ".codex/harness/home_plan.py", "--self-test"]),
         HARNESS_REPORT_SELF_TEST: (".", ["python3", ".codex/harness/home_report.py", "--self-test"]),
         HARNESS_LAUNCHER_SELF_TEST: (".", [".codex/harness/home", "--self-test"]),
         SKILL_ROUTING_SELF_TEST: (".", ["python3", ".codex/harness/skill_routing.py", "--self-test"]),
-        USER_LANGUAGE_CHECK: (".", ["python3", ".codex/harness/user_language_check.py", "--self-test"]),
         PROJECT_TERMS_SELF_TEST: (".", ["python3", ".codex/harness/project_terms_check.py", "--self-test"]),
         PROJECT_TERMS_CHECK: (".", ["python3", ".codex/harness/project_terms_check.py"]),
         TEST_DISPLAY_NAME_POLICY: (".", ["python3", "scripts/" + "check-test-display-names.py"]),
@@ -113,16 +110,13 @@ KNOWN_VERIFICATION_COMMANDS = {
         DIFF_CHECK: (".", ["git", "diff", "--check"]),
         PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
         PR_CONTEXT_SELF_TEST: (".", ["python3", ".codex/harness/pr_context.py", "--self-test"]),
-        PR_BODY_CHECK_SELF_TEST: (".", ["python3", ".codex/harness/pr_body_check.py", "--self-test"]),
         WORKLOG_SYNC_SELF_TEST: (".", ["python3", ".codex/harness/worklog_sync.py", "--self-test"]),
         HARNESS_PR_SELF_TEST: (".", ["python3", ".codex/harness/home_pr.py", "--self-test"]),
         HARNESS_FLOW_SELF_TEST: (".", ["python3", ".codex/harness/home_flow.py", "--self-test"]),
-        HARNESS_INTEGRATE_SELF_TEST: (".", ["python3", ".codex/harness/home_integrate.py", "--self-test"]),
         HARNESS_PLAN_SELF_TEST: (".", ["python3", ".codex/harness/home_plan.py", "--self-test"]),
         HARNESS_REPORT_SELF_TEST: (".", ["python3", ".codex/harness/home_report.py", "--self-test"]),
         HARNESS_LAUNCHER_SELF_TEST: (".", [".codex/harness/home", "--self-test"]),
         SKILL_ROUTING_SELF_TEST: (".", ["python3", ".codex/harness/skill_routing.py", "--self-test"]),
-        USER_LANGUAGE_CHECK: (".", ["python3", ".codex/harness/user_language_check.py", "--self-test"]),
         PROJECT_TERMS_SELF_TEST: (".", ["python3", ".codex/harness/project_terms_check.py", "--self-test"]),
         PROJECT_TERMS_CHECK: (".", ["python3", ".codex/harness/project_terms_check.py"]),
         TEST_DISPLAY_NAME_POLICY: (".", ["python3", "scripts/" + "check-test-display-names.py"]),
@@ -453,7 +447,8 @@ def run_codex(
 ) -> dict[str, Any]:
     if args.no_codex:
         return {"status": "skipped", "exit_code": None, "summary": "--no-codex"}
-    output = DEFAULT_MAIN / ".codex" / "harness" / "reports" / f"{names['work_id']}-{target}-last.md"
+    # Fixed name, overwritten per run: assumes one flow at a time (last run wins).
+    output = REPORT_ROOT / f"{target}-last.md"
     config = target_config(args, target)
     prompt_name = str(config["prompt"])
     prompt = render_prompt(
@@ -494,7 +489,8 @@ def run_gate_review(
     *,
     dry_run: bool,
 ) -> dict[str, Any]:
-    output = DEFAULT_MAIN / ".codex" / "harness" / "reports" / f"{names['work_id']}-{target}-gate.md"
+    # Fixed name, overwritten per run: assumes one flow at a time (last run wins).
+    output = REPORT_ROOT / f"{target}-gate.md"
     prompt = render_prompt(
         "gate_review.md",
         {
@@ -566,13 +562,7 @@ def required_evidence_payload(files: list[str]) -> dict[str, Any]:
 
 
 def parse_changed_files(raw: str) -> list[str]:
-    files: list[str] = []
-    for line in raw.splitlines():
-        path = line[3:].strip()
-        if " -> " in path:
-            path = path.split(" -> ", 1)[1]
-        files.append(path)
-    return files
+    return parse_git_status(raw)
 
 
 def changed_files(worktree: Path) -> list[str]:
@@ -599,11 +589,7 @@ def changed_files_between(base: str, branch: str) -> list[str]:
 def expected_changed_files_for_targets(targets: list[str], args: argparse.Namespace | None = None) -> list[str]:
     expected: list[str] = []
     if "backend" in targets:
-        backend_patterns = scope_patterns(target_config(args, "backend")["allowed_scope"]) if args is not None else []
-        if any(pattern.startswith("apps/news/") for pattern in backend_patterns):
-            expected.append("apps/news/__expected__")
-        else:
-            expected.append("apps/api/__expected__")
+        expected.append("apps/api/__expected__")
     if "frontend" in targets:
         expected.append("apps/web/__expected__")
     if targets:
@@ -787,7 +773,69 @@ def call_worklog_sync(args: argparse.Namespace, names: dict[str, Any], *, dry_ru
         raise RuntimeError(f"worklog sync commit failed: {commit_result['summary']}")
     payload["commit"] = git_output(DEFAULT_MAIN, "rev-parse", "--short", "HEAD") or None
     payload["summary"] = f"{result.summary}; commit={payload['commit']}"
+    pruned = prune_reports()
+    if pruned:
+        payload["summary"] = f"{payload['summary']}; pruned_reports={len(pruned)}"
     return payload
+
+
+def worklog_item_statuses(worklog_path: Path = WORKLOG_PATH) -> dict[str, str]:
+    if not worklog_path.exists():
+        return {}
+    try:
+        states = load_worklog_states(worklog_path)
+    except (OSError, ValueError):
+        return {}
+    return {state.id: state.status.strip().lower() for state in states}
+
+
+def report_work_id(file_name: str, work_ids: Iterable[str]) -> str | None:
+    best: str | None = None
+    for work_id in work_ids:
+        if file_name == work_id or file_name.startswith(f"{work_id}-") or file_name.startswith(f"{work_id}."):
+            if best is None or len(work_id) > len(best):
+                best = work_id
+    return best
+
+
+def prune_reports(
+    *,
+    root: Path = REPORT_ROOT,
+    statuses: dict[str, str] | None = None,
+    max_age_days: int = REPORT_MAX_AGE_DAYS,
+    now: datetime | None = None,
+    dry_run: bool = False,
+) -> list[str]:
+    """Reports are a workbench for in-flight work; merged evidence lives in the GitHub PR.
+
+    Deletes report files whose work item is done, plus orphan files older than
+    max_age_days. Files for planned/in-progress work items are always kept.
+    """
+    if not root.exists():
+        return []
+    if statuses is None:
+        statuses = worklog_item_statuses()
+    current = now or datetime.now(timezone.utc)
+    removed: list[str] = []
+    for path in sorted(root.iterdir()):
+        if not path.is_file() or path.name in REPORT_KEEP_FILES:
+            continue
+        work_id = report_work_id(path.name, statuses)
+        if work_id is not None:
+            if statuses[work_id] != "done":
+                continue
+        else:
+            try:
+                mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+            except OSError:
+                continue
+            if (current - mtime).days < max_age_days:
+                continue
+        removed.append(path.name)
+        if not dry_run:
+            with suppress(OSError):
+                path.unlink()
+    return removed
 
 
 def payload_path_for(work_id: str) -> Path:
@@ -1309,31 +1357,25 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--no-commit", action="store_true")
     run.add_argument("--no-integrate", action="store_true")
     run.add_argument("--codex-bin", default="codex")
+
+    prune = subparsers.add_parser(
+        "prune-reports",
+        help="Delete report files for done work items and stale orphans.",
+    )
+    prune.add_argument("--max-age-days", type=int, default=REPORT_MAX_AGE_DAYS)
+    prune.add_argument("--dry-run", action="store_true")
     return parser
 
 
 def run_self_test() -> int:
     try:
         resolved, _ = resolve_preset("map-contract-hardening")
-        _, news_preset = resolve_preset("news-realtime-observation-storage-smoke", "news-runtime-storage")
     except PresetError:
         resolved = ""
-        news_preset = {}
     parser = build_parser()
     pr_args = parser.parse_args(["run", "--work-id", "map-contract-hardening", "--pr", "--dry-run"])
-    worklog_pr_args = parser.parse_args(["run", "--work-id", "open-api-ingest-prep", "--pr", "--dry-run"])
-    backend_args = parser.parse_args(["run", "--work-id", "open-api-ingest-prep", "--targets", "backend", "--dry-run"])
-    news_args = parser.parse_args([
-        "run",
-        "--work-id",
-        "news-realtime-observation-storage-smoke",
-        "--targets",
-        "backend",
-        "--preset",
-        "news-runtime-storage",
-        "--dry-run",
-    ])
-    news_args.preset_config = news_preset
+    worklog_pr_args = parser.parse_args(["run", "--work-id", "self-test-fixture", "--pr", "--dry-run"])
+    backend_args = parser.parse_args(["run", "--work-id", "self-test-fixture", "--targets", "backend", "--dry-run"])
     planning_args = parser.parse_args(["run", "--work-id", "data-architecture-checkpoint", "--targets", "planning-only"])
     pr_names = default_names(pr_args)
     pr_payload = build_payload(
@@ -1380,7 +1422,45 @@ def run_self_test() -> int:
         validate_integration_branch("feat/not-integration-branch")
     except RuntimeError:
         invalid_branch_blocked = True
+    global WORKLOG_PATH
+    original_worklog_path = WORKLOG_PATH
+    with tempfile.TemporaryDirectory() as tmp_worklog_dir:
+        fixture_worklog = Path(tmp_worklog_dir) / "worklog.toml"
+        fixture_worklog.write_text(
+            "[[items]]\n"
+            'id = "self-test-fixture"\n'
+            'title_ko = "셀프테스트 픽스처"\n'
+            'pr_type = "Test"\n'
+            'pr_title_ko = "셀프테스트 픽스처 제목"\n'
+            'status = "planned"\n'
+            'targets = "backend"\n',
+            encoding="utf-8",
+        )
+        WORKLOG_PATH = fixture_worklog
+        try:
+            fixture_worklog_title = pr_title(worklog_pr_args, default_names(worklog_pr_args))
+        finally:
+            WORKLOG_PATH = original_worklog_path
+    with tempfile.TemporaryDirectory() as tmp_reports:
+        tmp_root = Path(tmp_reports)
+        for name in ("done-item.json", "done-item-pr-body.md", "active-item.json", "orphan.md", "orphan-old.md"):
+            (tmp_root / name).write_text("x", encoding="utf-8")
+        stale = datetime.now(timezone.utc).timestamp() - 90 * 24 * 3600
+        os.utime(tmp_root / "orphan-old.md", (stale, stale))
+        prune_statuses = {"done-item": "done", "active-item": "planned"}
+        prune_dry_removed = prune_reports(root=tmp_root, statuses=prune_statuses, dry_run=True)
+        prune_dry_kept = sorted(path.name for path in tmp_root.iterdir())
+        prune_removed = prune_reports(root=tmp_root, statuses=prune_statuses)
+        prune_remaining = sorted(path.name for path in tmp_root.iterdir())
     checks = [
+        sorted(prune_dry_removed) == ["done-item-pr-body.md", "done-item.json", "orphan-old.md"],
+        len(prune_dry_kept) == 5,
+        sorted(prune_removed) == ["done-item-pr-body.md", "done-item.json", "orphan-old.md"],
+        prune_remaining == ["active-item.json", "orphan.md"],
+        report_work_id("done-item-backend-gate.md", prune_statuses) == "done-item",
+        report_work_id("unrelated.md", prune_statuses) is None,
+        report_work_id(payload_path_for("Self Test").name, {"self-test": "done"}) == "self-test",
+        report_work_id(pr_body_path_for("Self Test").name, {"self-test": "done"}) == "self-test",
         slugify("Map Contract Hardening") == "map-contract-hardening",
         resolved == "contract-hardening",
         is_main_worktree(DEFAULT_MAIN),
@@ -1392,7 +1472,7 @@ def run_self_test() -> int:
         pr_payload["commands"]["push_command_suggestion"] == "handled by --pr after integration succeeds",
         pr_payload["next_action"].startswith("dry-run 결과와 PR lint preflight"),
         "llm-replan" in PLANNING_MODES,
-        pr_title(worklog_pr_args, default_names(worklog_pr_args)) == "[Feat] RTMS 수집 준비",
+        fixture_worklog_title == "[Test] 셀프테스트 픽스처 제목",
         pr_title(pr_args, pr_names) == "[Chore] map contract hardening 정리",
         execution_targets(backend_args) == ["backend"],
         execution_targets(planning_args) == [],
@@ -1409,8 +1489,8 @@ def run_self_test() -> int:
         )["api_branch"],
         parse_changed_files(" M apps/api/Foo.java\n?? apps/web/Bar.tsx\nR  old.txt -> apps/api/New.java")
         == ["apps/api/Foo.java", "apps/web/Bar.tsx", "apps/api/New.java"],
-        expected_changed_files_for_targets(["backend"], news_args)
-        == ["apps/news/__expected__", ".codex/harness/worklog.toml"],
+        expected_changed_files_for_targets(["backend"])
+        == ["apps/api/__expected__", ".codex/harness/worklog.toml"],
         "Skill contract:" in prompt,
         "home-search-harness [orchestrator]" in prompt,
         "$tdd [primary]" in prompt,
@@ -1433,6 +1513,13 @@ def main(argv: list[str] | None = None) -> int:
         return run_self_test()
     if args.command == "run":
         return run_flow(args)
+    if args.command == "prune-reports":
+        removed = prune_reports(max_age_days=args.max_age_days, dry_run=args.dry_run)
+        label = "[DRY-RUN] " if args.dry_run else ""
+        for name in removed:
+            print(f"{label}정리 대상 리포트: {name}")
+        print(f"{label}정리한 리포트: {len(removed)}건")
+        return 0
     parser.print_help()
     return 0
 

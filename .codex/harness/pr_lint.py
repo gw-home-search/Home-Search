@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from dataclasses import dataclass
@@ -13,12 +14,10 @@ from typing import Iterable
 from pr_context import PrContext, changed_files_from_sources, context_from_event, context_from_local
 from pr_evidence import (
     API_QUALITY,
-    NEWS_TEST,
     PRE_TOOL_USE_POLICY_SELF_TEST,
     WORKLOG_SYNC_SELF_TEST,
     DIFF_CHECK,
     POST_TOOL_USE_REVIEW_SELF_TEST,
-    PR_BODY_CHECK_SELF_TEST,
     PR_CONTEXT_SELF_TEST,
     PROJECT_TERMS_CHECK,
     PROJECT_TERMS_SELF_TEST,
@@ -26,9 +25,7 @@ from pr_evidence import (
     SKILL_ROUTING_SELF_TEST,
     STOP_HOOK_SELF_TEST,
     TEST_DISPLAY_NAME_POLICY,
-    USER_LANGUAGE_CHECK,
     HARNESS_FLOW_SELF_TEST,
-    HARNESS_INTEGRATE_SELF_TEST,
     HARNESS_LAUNCHER_SELF_TEST,
     HARNESS_PLAN_SELF_TEST,
     HARNESS_PR_SELF_TEST,
@@ -36,7 +33,6 @@ from pr_evidence import (
     WEB_BUILD,
     WEB_TEST,
     is_removed_companion_doc,
-    is_removed_news_scope_path,
     requirements_for_changed_files,
 )
 
@@ -391,8 +387,6 @@ def required_skill_triggers_for_files(changed_files: Iterable[str]) -> set[str]:
     required = {"home-search-harness"}
     if any(path.startswith("apps/api/") and not is_removed_companion_doc(path) for path in changed):
         required.update({"$backend-api", "$tdd", "$api-contract", "$code-review", "$security-audit"})
-    if any(path.startswith("apps/news/") and not is_removed_companion_doc(path) for path in changed):
-        required.update({"$tdd", "$code-review", "$security-audit"})
     if any(path.startswith("apps/web/") and not is_removed_companion_doc(path) for path in changed):
         required.update({"$frontend-web", "$tdd", "$api-contract", "$code-review", "$security-audit"})
     if any(path.startswith(".codex/harness/") for path in changed):
@@ -550,16 +544,13 @@ def valid_body(
 - `{TEST_DISPLAY_NAME_POLICY}` = not run (테스트 표시 이름 변경 없음)
 - `{PR_LINT_SELF_TEST}` = pass (자체 테스트)
 - `{PR_CONTEXT_SELF_TEST}` = pass (PR context 공용 helper 자체 테스트)
-- `{PR_BODY_CHECK_SELF_TEST}` = pass (PR body 검사 자체 테스트)
 - `{WORKLOG_SYNC_SELF_TEST}` = pass (worklog sync 자체 테스트)
 - `{HARNESS_PR_SELF_TEST}` = pass (draft PR 생성 helper 자체 테스트)
 - `{HARNESS_FLOW_SELF_TEST}` = pass (harness flow 자체 테스트)
-- `{HARNESS_INTEGRATE_SELF_TEST}` = pass (harness integration 자체 테스트)
 - `{HARNESS_PLAN_SELF_TEST}` = pass (harness plan 자체 테스트)
 - `{HARNESS_REPORT_SELF_TEST}` = pass (harness report 자체 테스트)
 - `{HARNESS_LAUNCHER_SELF_TEST}` = pass (harness launcher 자체 테스트)
 - `{SKILL_ROUTING_SELF_TEST}` = pass (skill routing 자체 테스트)
-- `{USER_LANGUAGE_CHECK}` = pass (사용자 노출 언어 점검)
 - `{PROJECT_TERMS_SELF_TEST}` = pass (용어 점검 자체 테스트)
 - `{PROJECT_TERMS_CHECK}` = pass (프로젝트 용어 점검)
 - `{STOP_HOOK_SELF_TEST}` = pass (stop hook fixture)
@@ -709,9 +700,6 @@ def run_self_test() -> int:
         body=valid_body().replace(f"- `{PROJECT_TERMS_CHECK}` = pass (프로젝트 용어 점검)\n", ""),
         changed_files=("docs/README.md",),
     )
-    news_changed_path = "apps/news/src/main/java/com/home/news/NewsApplication.java"
-    news_missing_test = valid_input(changed_files=(news_changed_path,))
-    news_deleted_without_test = valid_input(changed_files=("apps/news/__removed__/NewsApplication.java",))
     missing_security_section = valid_input(
         body=valid_body().replace(
             "## 보안 영향\n\n보안 영향: 없음\nsecurity-audit: 지적사항 = none\n\n",
@@ -765,12 +753,6 @@ def run_self_test() -> int:
             TEST_DISPLAY_NAME_POLICY,
         ),
         expect_case("markdown project terms evidence missing", markdown_missing_terms_check, "evidence", PROJECT_TERMS_CHECK),
-        (
-            True
-            if is_removed_news_scope_path(news_changed_path)
-            else expect_case("news test evidence missing", news_missing_test, "evidence", NEWS_TEST)
-        ),
-        lint_pr(news_deleted_without_test).ok,
         expect_case("security section missing", missing_security_section, "body", "보안 영향"),
         expect_case("security evidence missing", missing_security_evidence, "body", "security-audit"),
         expect_case("backend security skill evidence missing", backend_missing_security_skill, "evidence", "$security-audit"),
@@ -811,6 +793,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--head", "--branch", dest="head")
     parser.add_argument("--body-file")
     parser.add_argument("--body-env")
+    parser.add_argument("--body-only", action="store_true", help="Check only the PR body evidence sections.")
     parser.add_argument("--evidence-policy", choices=sorted(EVIDENCE_POLICIES), default="strict")
     draft = parser.add_mutually_exclusive_group()
     draft.add_argument("--draft", dest="draft", action="store_true")
@@ -827,7 +810,17 @@ def main(argv: list[str] | None = None) -> int:
         return run_self_test()
 
     try:
-        if args.template_file:
+        if args.body_only:
+            if bool(args.body_file) == bool(args.body_env):
+                raise ValueError("--body-only requires exactly one of --body-file or --body-env")
+            if args.body_file:
+                body = Path(args.body_file).read_text(encoding="utf-8")
+            else:
+                body = os.environ.get(args.body_env or "")
+                if body is None:
+                    raise ValueError(f"환경 변수를 찾을 수 없습니다: {args.body_env}")
+            result = check_body(body)
+        elif args.template_file:
             result = lint_template(args.template_file)
         else:
             changed_files = changed_files_from_sources(args.changed_files_nul, args.changed_files_file)

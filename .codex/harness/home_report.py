@@ -16,24 +16,10 @@ from typing import Any
 
 from pr_evidence import (
     API_QUALITY,
-    WORKLOG_SYNC_SELF_TEST,
     DIFF_CHECK,
-    PRE_TOOL_USE_POLICY_SELF_TEST,
-    PR_BODY_CHECK_SELF_TEST,
-    PR_CONTEXT_SELF_TEST,
-    POST_TOOL_USE_REVIEW_SELF_TEST,
-    PROJECT_TERMS_CHECK,
-    PROJECT_TERMS_SELF_TEST,
     ordered_commands,
     PR_LINT_SELF_TEST,
     SKILL_ROUTING_SELF_TEST,
-    STOP_HOOK_SELF_TEST,
-    USER_LANGUAGE_CHECK,
-    HARNESS_FLOW_SELF_TEST,
-    HARNESS_INTEGRATE_SELF_TEST,
-    HARNESS_LAUNCHER_SELF_TEST,
-    HARNESS_PLAN_SELF_TEST,
-    HARNESS_PR_SELF_TEST,
     HARNESS_REPORT_SELF_TEST,
     requirements_for_changed_files,
 )
@@ -327,7 +313,6 @@ def render_pr_body(payload: dict[str, Any]) -> str:
 ## 작업 범위
 
 - backend: {changed_scope_summary(payload, "apps/api/")}
-- news: {changed_scope_summary(payload, "apps/news/")}
 - frontend: {changed_scope_summary(payload, "apps/web/")}
 - harness: {changed_scope_summary(payload, ".codex/harness/")}
 - docs/infra: PR template, GitHub workflow, Markdown policy 확인
@@ -576,23 +561,8 @@ def run_self_test() -> int:
         },
         "verification": {
             DIFF_CHECK: {"status": "pass", "exit_code": 0},
-            PR_LINT_SELF_TEST: {"status": "pass", "exit_code": 0},
-            PR_CONTEXT_SELF_TEST: {"status": "pass", "exit_code": 0},
-            PR_BODY_CHECK_SELF_TEST: {"status": "pass", "exit_code": 0},
-            WORKLOG_SYNC_SELF_TEST: {"status": "pass", "exit_code": 0},
-            HARNESS_PR_SELF_TEST: {"status": "pass", "exit_code": 0},
-            HARNESS_FLOW_SELF_TEST: {"status": "pass", "exit_code": 0},
-            HARNESS_INTEGRATE_SELF_TEST: {"status": "pass", "exit_code": 0},
-            HARNESS_PLAN_SELF_TEST: {"status": "pass", "exit_code": 0},
             HARNESS_REPORT_SELF_TEST: {"status": "pass", "exit_code": 0},
-            HARNESS_LAUNCHER_SELF_TEST: {"status": "pass", "exit_code": 0},
             SKILL_ROUTING_SELF_TEST: {"status": "pass", "exit_code": 0},
-            USER_LANGUAGE_CHECK: {"status": "pass", "exit_code": 0},
-            PROJECT_TERMS_SELF_TEST: {"status": "pass", "exit_code": 0},
-            PROJECT_TERMS_CHECK: {"status": "pass", "exit_code": 0},
-            STOP_HOOK_SELF_TEST: {"status": "pass", "exit_code": 0},
-            PRE_TOOL_USE_POLICY_SELF_TEST: {"status": "pass", "exit_code": 0},
-            POST_TOOL_USE_REVIEW_SELF_TEST: {"status": "pass", "exit_code": 0},
         },
     }
     rendered = render_report(payload)
@@ -612,15 +582,9 @@ def run_self_test() -> int:
         "# Home Search 작업 보고서: self-test" in rendered,
         "검증 매트릭스" in rendered,
         f"`{DIFF_CHECK}`" in rendered,
-        f"`{PR_LINT_SELF_TEST}`" in pr_body,
-        f"`{PR_CONTEXT_SELF_TEST}`" in pr_body,
-        f"`{PR_BODY_CHECK_SELF_TEST}`" in pr_body,
-        f"`{WORKLOG_SYNC_SELF_TEST}`" in pr_body,
-        f"`{HARNESS_PR_SELF_TEST}`" in pr_body,
-        f"`{HARNESS_FLOW_SELF_TEST}`" in pr_body,
-        f"`{HARNESS_INTEGRATE_SELF_TEST}`" in pr_body,
+        f"`{HARNESS_REPORT_SELF_TEST}`" in pr_body,
         f"`{SKILL_ROUTING_SELF_TEST}`" in pr_body,
-        f"`{USER_LANGUAGE_CHECK}`" in pr_body,
+        f"`{PR_LINT_SELF_TEST}`" not in pr_body,
         "## 사용 skill" in pr_body,
         "| execute | home-search-harness | orchestrator | .codex/harness/home | 상태; 검증; 다음 행동 |" in rendered,
         "| execute | $tdd | primary | .agents/skills/tdd/SKILL.md | 최초 RED; 예상 RED 실패; 최소 GREEN |" in pr_body,

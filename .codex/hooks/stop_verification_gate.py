@@ -13,52 +13,22 @@ Evidence still belongs in the PR body: 검증 근거 확인 명령 결과와 TDD
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 from pathlib import Path
+
+from hook_common import load_payload, repo_root_from_payload
 
 HARNESS_DIR = Path(__file__).resolve().parents[1] / "harness"
 if str(HARNESS_DIR) not in sys.path:
     sys.path.insert(0, str(HARNESS_DIR))
 
 try:
-    from pr_evidence import ordered_commands, requirements_for_changed_files
+    from pr_evidence import ordered_commands, parse_git_status, requirements_for_changed_files
 except ImportError:  # pragma: no cover - harness layout changed
     ordered_commands = None
+    parse_git_status = None
     requirements_for_changed_files = None
-
-
-def load_payload() -> dict:
-    try:
-        raw = sys.stdin.read()
-    except OSError:
-        return {}
-    if not raw.strip():
-        return {}
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError:
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
-def repo_root(payload: dict) -> Path | None:
-    cwd = Path(str(payload.get("cwd") or Path.cwd()))
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            cwd=cwd,
-            check=False,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            timeout=5,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    top = result.stdout.strip()
-    return Path(top) if result.returncode == 0 and top else None
 
 
 def changed_files(root: Path) -> list[str]:
@@ -74,16 +44,9 @@ def changed_files(root: Path) -> list[str]:
         )
     except (OSError, subprocess.TimeoutExpired):
         return []
-    files: list[str] = []
-    for line in result.stdout.splitlines():
-        if len(line) <= 3:
-            continue
-        path = line[3:].strip()
-        if " -> " in path:
-            path = path.split(" -> ", 1)[1]
-        if path:
-            files.append(path)
-    return files
+    if parse_git_status is None:
+        return []
+    return parse_git_status(result.stdout)
 
 
 def reminder_lines(files: list[str]) -> list[str]:
@@ -121,9 +84,7 @@ def run_self_test() -> int:
 
 def main() -> None:
     payload = load_payload()
-    root = repo_root(payload)
-    if root is None:
-        return
+    root = repo_root_from_payload(payload)
     lines = reminder_lines(changed_files(root))
     if lines:
         print("\n".join(lines))

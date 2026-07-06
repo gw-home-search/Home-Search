@@ -26,7 +26,7 @@
 - `cd apps/web && npm run test` = not run (사유)
 - `cd apps/web && npm run build` = not run (사유)
 - `python3 .codex/harness/pr_lint.py --self-test` = not run (사유)
-- `python3 .codex/harness/user_language_check.py --self-test` = not run (사유)
+- `python3 .codex/harness/project_terms_check.py --self-test` = not run (사유)
 - `python3 .codex/hooks/stop_verification_gate.py --self-test` = not run (사유)
 - `python3 .codex/hooks/post_tool_use_review.py --self-test` = not run (사유)
 

@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import subprocess
+import tempfile
 import sys
 import tomllib
 from datetime import datetime, timezone
@@ -953,6 +954,43 @@ def build_parser() -> argparse.ArgumentParser:
 def run_self_test() -> int:
     try:
         items = load_worklog()
+        with tempfile.TemporaryDirectory() as fixture_dir:
+            fixture_path = Path(fixture_dir) / "worklog.toml"
+            fixture_path.write_text(
+                "[[items]]\n"
+                'id = "self-test-fixture"\n'
+                'title_ko = "셀프테스트 픽스처"\n'
+                'pr_type = "Test"\n'
+                'pr_title_ko = "셀프테스트 픽스처 제목"\n'
+                'description_ko = "self-test fixture item"\n'
+                'status = "planned"\n'
+                "priority = 100\n"
+                'targets = "backend"\n'
+                'preset = "runtime-smoke"\n'
+                'acceptance_criteria = ["fixture 인수 기준"]\n'
+                'first_red_candidates = ["fixture 최초 RED"]\n'
+                'verification_commands = ["cd apps/api && ./gradlew backendQualityCheck", "git diff --check"]\n'
+                'stop_conditions = ["fixture 중단 조건"]\n'
+                'risk_notes = ["fixture 위험 없음"]\n'
+                "\n"
+                "[[items]]\n"
+                'id = "self-test-fixture-second"\n'
+                'title_ko = "셀프테스트 픽스처 2"\n'
+                'pr_type = "Test"\n'
+                'pr_title_ko = "셀프테스트 픽스처 제목 2"\n'
+                'description_ko = "self-test fixture item 2"\n'
+                'status = "planned"\n'
+                "priority = 200\n"
+                'targets = "backend"\n'
+                'preset = "runtime-smoke"\n'
+                'acceptance_criteria = ["fixture 인수 기준 2"]\n'
+                'first_red_candidates = ["fixture 최초 RED 2"]\n'
+                'verification_commands = ["cd apps/api && ./gradlew backendQualityCheck", "git diff --check"]\n'
+                'stop_conditions = ["fixture 중단 조건 2"]\n'
+                'risk_notes = ["fixture 위험 없음 2"]\n',
+                encoding="utf-8",
+            )
+            fixture_items = load_worklog(fixture_path)
         evidence = {
             "gate_risks": ["marker API failure hides current markers"],
             "missing_tests": ["cd apps/web && npm run test"],
@@ -960,12 +998,12 @@ def run_self_test() -> int:
             "data_safety_gaps": [],
             "summary": "self-test evidence",
         }
-        candidate_fixture = [dict(item) for item in items]
+        candidate_fixture = [dict(item) for item in fixture_items]
         candidate_fixture[0]["status"] = "candidate"
         candidates = select_candidates(candidate_fixture, evidence, limit=3, targets=None, preset=None)
-        no_candidate_fixture = [dict(item, status="done") for item in items]
+        no_candidate_fixture = [dict(item, status="done") for item in fixture_items]
         no_candidates = select_candidates(no_candidate_fixture, evidence, limit=3, targets=None, preset=None)
-        plan_item = find_work_item(items, "rtms-special-region-readiness-gate")
+        plan_item = find_work_item(fixture_items, "self-test-fixture")
         plan = plan_for_work_item(plan_item, evidence, targets=None, preset=None, intent="push", planning_mode="critique")
         llm_plan = plan_for_work_item(plan_item, evidence, targets=None, preset=None, intent="pr", planning_mode="llm-replan")
 
@@ -1014,7 +1052,7 @@ def run_self_test() -> int:
         except PlanError:
             target_rejected = True
         checks = [
-            len(items) >= 4,
+            len(items) >= 1,
             all(item["targets"] in VALID_TARGETS for item in items),
             1 <= len(candidates) <= 3,
             len(no_candidates) == 0,

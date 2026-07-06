@@ -102,6 +102,18 @@ class EvidenceRequirements:
         return self.backend_changed
 
 
+def parse_git_status(raw: str) -> list[str]:
+    """Parse `git status --short/--porcelain` output into changed file paths."""
+    files: list[str] = []
+    for line in raw.splitlines():
+        path = line[3:].strip() if len(line) > 3 else ""
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        if path:
+            files.append(path)
+    return files
+
+
 def ordered_commands(commands: set[str] | frozenset[str]) -> list[str]:
     ordered = [command for command in COMMAND_ORDER if command in commands]
     ordered.extend(sorted(command for command in commands if command not in COMMAND_ORDER))

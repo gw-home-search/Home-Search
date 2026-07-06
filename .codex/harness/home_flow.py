@@ -41,9 +41,10 @@ from pr_evidence import (
     WEB_BUILD,
     WEB_TEST,
     ordered_commands,
+    parse_git_status,
     requirements_for_changed_files,
 )
-from worklog_sync import mark_work_item_done
+from worklog_sync import load_worklog as load_worklog_states, mark_work_item_done
 from pr_lint import PrInput, format_grouped_errors, lint_pr
 from skill_routing import routing_payload, routing_text
 from home_report import render_pr_body
@@ -446,6 +447,7 @@ def run_codex(
 ) -> dict[str, Any]:
     if args.no_codex:
         return {"status": "skipped", "exit_code": None, "summary": "--no-codex"}
+    # Fixed name, overwritten per run: assumes one flow at a time (last run wins).
     output = REPORT_ROOT / f"{target}-last.md"
     config = target_config(args, target)
     prompt_name = str(config["prompt"])
@@ -487,6 +489,7 @@ def run_gate_review(
     *,
     dry_run: bool,
 ) -> dict[str, Any]:
+    # Fixed name, overwritten per run: assumes one flow at a time (last run wins).
     output = REPORT_ROOT / f"{target}-gate.md"
     prompt = render_prompt(
         "gate_review.md",
@@ -559,13 +562,7 @@ def required_evidence_payload(files: list[str]) -> dict[str, Any]:
 
 
 def parse_changed_files(raw: str) -> list[str]:
-    files: list[str] = []
-    for line in raw.splitlines():
-        path = line[3:].strip()
-        if " -> " in path:
-            path = path.split(" -> ", 1)[1]
-        files.append(path)
-    return files
+    return parse_git_status(raw)
 
 
 def changed_files(worktree: Path) -> list[str]:
@@ -786,15 +783,10 @@ def worklog_item_statuses(worklog_path: Path = WORKLOG_PATH) -> dict[str, str]:
     if not worklog_path.exists():
         return {}
     try:
-        with worklog_path.open("rb") as handle:
-            data = tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError):
+        states = load_worklog_states(worklog_path)
+    except (OSError, ValueError):
         return {}
-    statuses: dict[str, str] = {}
-    for item in data.get("items", []):
-        if isinstance(item, dict) and item.get("id"):
-            statuses[slugify(str(item["id"]))] = str(item.get("status", "")).strip().lower()
-    return statuses
+    return {state.id: state.status.strip().lower() for state in states}
 
 
 def report_work_id(file_name: str, work_ids: Iterable[str]) -> str | None:
@@ -1382,8 +1374,8 @@ def run_self_test() -> int:
         resolved = ""
     parser = build_parser()
     pr_args = parser.parse_args(["run", "--work-id", "map-contract-hardening", "--pr", "--dry-run"])
-    worklog_pr_args = parser.parse_args(["run", "--work-id", "rtms-special-region-readiness-gate", "--pr", "--dry-run"])
-    backend_args = parser.parse_args(["run", "--work-id", "rtms-special-region-readiness-gate", "--targets", "backend", "--dry-run"])
+    worklog_pr_args = parser.parse_args(["run", "--work-id", "self-test-fixture", "--pr", "--dry-run"])
+    backend_args = parser.parse_args(["run", "--work-id", "self-test-fixture", "--targets", "backend", "--dry-run"])
     planning_args = parser.parse_args(["run", "--work-id", "data-architecture-checkpoint", "--targets", "planning-only"])
     pr_names = default_names(pr_args)
     pr_payload = build_payload(
@@ -1430,6 +1422,25 @@ def run_self_test() -> int:
         validate_integration_branch("feat/not-integration-branch")
     except RuntimeError:
         invalid_branch_blocked = True
+    global WORKLOG_PATH
+    original_worklog_path = WORKLOG_PATH
+    with tempfile.TemporaryDirectory() as tmp_worklog_dir:
+        fixture_worklog = Path(tmp_worklog_dir) / "worklog.toml"
+        fixture_worklog.write_text(
+            "[[items]]\n"
+            'id = "self-test-fixture"\n'
+            'title_ko = "셀프테스트 픽스처"\n'
+            'pr_type = "Test"\n'
+            'pr_title_ko = "셀프테스트 픽스처 제목"\n'
+            'status = "planned"\n'
+            'targets = "backend"\n',
+            encoding="utf-8",
+        )
+        WORKLOG_PATH = fixture_worklog
+        try:
+            fixture_worklog_title = pr_title(worklog_pr_args, default_names(worklog_pr_args))
+        finally:
+            WORKLOG_PATH = original_worklog_path
     with tempfile.TemporaryDirectory() as tmp_reports:
         tmp_root = Path(tmp_reports)
         for name in ("done-item.json", "done-item-pr-body.md", "active-item.json", "orphan.md", "orphan-old.md"):
@@ -1448,6 +1459,8 @@ def run_self_test() -> int:
         prune_remaining == ["active-item.json", "orphan.md"],
         report_work_id("done-item-backend-gate.md", prune_statuses) == "done-item",
         report_work_id("unrelated.md", prune_statuses) is None,
+        report_work_id(payload_path_for("Self Test").name, {"self-test": "done"}) == "self-test",
+        report_work_id(pr_body_path_for("Self Test").name, {"self-test": "done"}) == "self-test",
         slugify("Map Contract Hardening") == "map-contract-hardening",
         resolved == "contract-hardening",
         is_main_worktree(DEFAULT_MAIN),
@@ -1459,7 +1472,7 @@ def run_self_test() -> int:
         pr_payload["commands"]["push_command_suggestion"] == "handled by --pr after integration succeeds",
         pr_payload["next_action"].startswith("dry-run 결과와 PR lint preflight"),
         "llm-replan" in PLANNING_MODES,
-        pr_title(worklog_pr_args, default_names(worklog_pr_args)) == "[Test] RTMS 특수지역 저장 직전 readiness gate",
+        fixture_worklog_title == "[Test] 셀프테스트 픽스처 제목",
         pr_title(pr_args, pr_names) == "[Chore] map contract hardening 정리",
         execution_targets(backend_args) == ["backend"],
         execution_targets(planning_args) == [],
@@ -1504,8 +1517,8 @@ def main(argv: list[str] | None = None) -> int:
         removed = prune_reports(max_age_days=args.max_age_days, dry_run=args.dry_run)
         label = "[DRY-RUN] " if args.dry_run else ""
         for name in removed:
-            print(f"{label}prune report: {name}")
-        print(f"{label}pruned reports: {len(removed)}")
+            print(f"{label}정리 대상 리포트: {name}")
+        print(f"{label}정리한 리포트: {len(removed)}건")
         return 0
     parser.print_help()
     return 0

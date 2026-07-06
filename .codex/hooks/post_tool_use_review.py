@@ -12,6 +12,8 @@ import re
 import sys
 from typing import Any
 
+from hook_common import load_payload
+
 
 WATCHED_COMMANDS = (
     re.compile(r"(^|\s)(?:\./)?gradlew\s+test(\s|$)"),
@@ -27,15 +29,6 @@ WATCHED_COMMANDS = (
 )
 
 
-def load_payload() -> dict[str, Any]:
-    raw = sys.stdin.read()
-    if not raw.strip():
-        return {}
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError:
-        return {}
-    return payload if isinstance(payload, dict) else {}
 
 
 def as_text(value: Any) -> str:

@@ -965,7 +965,7 @@ def run_self_test() -> int:
         candidates = select_candidates(candidate_fixture, evidence, limit=3, targets=None, preset=None)
         no_candidate_fixture = [dict(item, status="done") for item in items]
         no_candidates = select_candidates(no_candidate_fixture, evidence, limit=3, targets=None, preset=None)
-        plan_item = find_work_item(items, "kakao-map-marker-refresh-flow")
+        plan_item = find_work_item(items, "rtms-special-region-readiness-gate")
         plan = plan_for_work_item(plan_item, evidence, targets=None, preset=None, intent="push", planning_mode="critique")
         llm_plan = plan_for_work_item(plan_item, evidence, targets=None, preset=None, intent="pr", planning_mode="llm-replan")
 
@@ -1009,7 +1009,7 @@ def run_self_test() -> int:
         )
         rendered = json.dumps(payload, ensure_ascii=False)
         try:
-            plan_for_work_item(plan_item, evidence, targets="backend", preset=None)
+            plan_for_work_item(plan_item, evidence, targets="frontend", preset=None)
             target_rejected = False
         except PlanError:
             target_rejected = True
@@ -1022,7 +1022,7 @@ def run_self_test() -> int:
             "다음 행동: worklog 후보를 추가하세요" in no_candidate_rendered,
             payload["recommended"]["id"] == candidates[0]["id"],
             '"recommended"' in rendered,
-            plan["targets"] == "frontend",
+            plan["targets"] == "backend",
             plan["intent"] == "push",
             plan["planning_mode"] == "critique",
             plan["critique"]["status"] == "pass",

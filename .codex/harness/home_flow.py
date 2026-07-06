@@ -21,7 +21,6 @@ from typing import Any
 
 from pr_evidence import (
     API_QUALITY,
-    NEWS_TEST,
     WORKLOG_SYNC_SELF_TEST,
     DIFF_CHECK,
     DOCKER_COMPOSE_LOCAL_CONFIG,
@@ -87,7 +86,6 @@ PLANNING_MODES = {"standard", "critique", "llm-replan"}
 KNOWN_VERIFICATION_COMMANDS = {
     "backend": {
         API_QUALITY: ("apps/api", ["./gradlew", "backendQualityCheck"]),
-        NEWS_TEST: ("apps/news", ["gradle", "test"]),
         DOCKER_COMPOSE_LOCAL_CONFIG: (".", ["docker", "compose", "-f", "infra/docker-compose.local.yml", "config"]),
         "cd apps/api && ./gradlew test": ("apps/api", ["./gradlew", "test"]),
         DIFF_CHECK: (".", ["git", "diff", "--check"]),
@@ -603,11 +601,7 @@ def changed_files_between(base: str, branch: str) -> list[str]:
 def expected_changed_files_for_targets(targets: list[str], args: argparse.Namespace | None = None) -> list[str]:
     expected: list[str] = []
     if "backend" in targets:
-        backend_patterns = scope_patterns(target_config(args, "backend")["allowed_scope"]) if args is not None else []
-        if any(pattern.startswith("apps/news/") for pattern in backend_patterns):
-            expected.append("apps/news/__expected__")
-        else:
-            expected.append("apps/api/__expected__")
+        expected.append("apps/api/__expected__")
     if "frontend" in targets:
         expected.append("apps/web/__expected__")
     if targets:
@@ -1393,25 +1387,12 @@ def build_parser() -> argparse.ArgumentParser:
 def run_self_test() -> int:
     try:
         resolved, _ = resolve_preset("map-contract-hardening")
-        _, news_preset = resolve_preset("news-realtime-observation-storage-smoke", "news-runtime-storage")
     except PresetError:
         resolved = ""
-        news_preset = {}
     parser = build_parser()
     pr_args = parser.parse_args(["run", "--work-id", "map-contract-hardening", "--pr", "--dry-run"])
-    worklog_pr_args = parser.parse_args(["run", "--work-id", "open-api-ingest-prep", "--pr", "--dry-run"])
-    backend_args = parser.parse_args(["run", "--work-id", "open-api-ingest-prep", "--targets", "backend", "--dry-run"])
-    news_args = parser.parse_args([
-        "run",
-        "--work-id",
-        "news-realtime-observation-storage-smoke",
-        "--targets",
-        "backend",
-        "--preset",
-        "news-runtime-storage",
-        "--dry-run",
-    ])
-    news_args.preset_config = news_preset
+    worklog_pr_args = parser.parse_args(["run", "--work-id", "rtms-special-region-readiness-gate", "--pr", "--dry-run"])
+    backend_args = parser.parse_args(["run", "--work-id", "rtms-special-region-readiness-gate", "--targets", "backend", "--dry-run"])
     planning_args = parser.parse_args(["run", "--work-id", "data-architecture-checkpoint", "--targets", "planning-only"])
     pr_names = default_names(pr_args)
     pr_payload = build_payload(
@@ -1487,7 +1468,7 @@ def run_self_test() -> int:
         pr_payload["commands"]["push_command_suggestion"] == "handled by --pr after integration succeeds",
         pr_payload["next_action"].startswith("dry-run 결과와 PR lint preflight"),
         "llm-replan" in PLANNING_MODES,
-        pr_title(worklog_pr_args, default_names(worklog_pr_args)) == "[Feat] RTMS 수집 준비",
+        pr_title(worklog_pr_args, default_names(worklog_pr_args)) == "[Test] RTMS 특수지역 저장 직전 readiness gate",
         pr_title(pr_args, pr_names) == "[Chore] map contract hardening 정리",
         execution_targets(backend_args) == ["backend"],
         execution_targets(planning_args) == [],
@@ -1504,8 +1485,8 @@ def run_self_test() -> int:
         )["api_branch"],
         parse_changed_files(" M apps/api/Foo.java\n?? apps/web/Bar.tsx\nR  old.txt -> apps/api/New.java")
         == ["apps/api/Foo.java", "apps/web/Bar.tsx", "apps/api/New.java"],
-        expected_changed_files_for_targets(["backend"], news_args)
-        == ["apps/news/__expected__", ".codex/harness/worklog.toml"],
+        expected_changed_files_for_targets(["backend"])
+        == ["apps/api/__expected__", ".codex/harness/worklog.toml"],
         "Skill contract:" in prompt,
         "home-search-harness [orchestrator]" in prompt,
         "$tdd [primary]" in prompt,

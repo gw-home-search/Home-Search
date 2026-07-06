@@ -515,9 +515,9 @@ def run_self_test() -> int:
         planning_mode_for(argparse.Namespace(planning_mode=None), "pr") == "llm-replan",
         dirty_group(".codex/harness/home", " M .codex/harness/home") == "harness",
         dirty_group("apps/web/src/App.tsx", " M apps/web/src/App.tsx") == "apps",
-        publish_dirty_group(".vscode/settings.json", "?? .vscode/settings.json", ["apps/news/**"]) == "untracked local noise",
-        publish_dirty_group("docs/README.md", " M docs/README.md", ["apps/news/**"]) == "out-of-scope changed files",
-        publish_dirty_group("apps/news/src/App.java", " M apps/news/src/App.java", ["apps/news/**"]) == "pre-existing dirty files in allowed scope",
+        publish_dirty_group(".vscode/settings.json", "?? .vscode/settings.json", ["apps/api/**"]) == "untracked local noise",
+        publish_dirty_group("docs/README.md", " M docs/README.md", ["apps/api/**"]) == "out-of-scope changed files",
+        publish_dirty_group("apps/api/src/App.java", " M apps/api/src/App.java", ["apps/api/**"]) == "pre-existing dirty files in allowed scope",
     ]
     if all(checks):
         print("self-test passed: home launcher")

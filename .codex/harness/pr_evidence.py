@@ -52,6 +52,42 @@ COMMAND_ORDER = (
     POST_TOOL_USE_REVIEW_SELF_TEST,
 )
 
+SELF_TESTS_BY_FILE: dict[str, tuple[str, ...]] = {
+    ".codex/harness/pr_lint.py": (PR_LINT_SELF_TEST,),
+    ".codex/harness/pr_context.py": (PR_CONTEXT_SELF_TEST, PR_LINT_SELF_TEST),
+    ".codex/harness/pr_evidence.py": (PR_LINT_SELF_TEST, HARNESS_FLOW_SELF_TEST, HARNESS_REPORT_SELF_TEST),
+    ".codex/harness/worklog_sync.py": (WORKLOG_SYNC_SELF_TEST,),
+    ".codex/harness/home_pr.py": (HARNESS_PR_SELF_TEST,),
+    ".codex/harness/home_flow.py": (HARNESS_FLOW_SELF_TEST, HARNESS_LAUNCHER_SELF_TEST),
+    ".codex/harness/home_plan.py": (HARNESS_PLAN_SELF_TEST,),
+    ".codex/harness/home_report.py": (HARNESS_REPORT_SELF_TEST,),
+    ".codex/harness/home": (HARNESS_LAUNCHER_SELF_TEST,),
+    ".codex/harness/skill_routing.py": (SKILL_ROUTING_SELF_TEST,),
+    ".codex/harness/project_terms_check.py": (PROJECT_TERMS_SELF_TEST,),
+    ".codex/hooks/stop_verification_gate.py": (STOP_HOOK_SELF_TEST,),
+    ".codex/hooks/pre_tool_use_policy.py": (PRE_TOOL_USE_POLICY_SELF_TEST,),
+    ".codex/hooks/post_tool_use_review.py": (POST_TOOL_USE_REVIEW_SELF_TEST,),
+}
+
+SELF_TESTS_BY_DIR: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (".codex/harness/presets/", (HARNESS_FLOW_SELF_TEST,)),
+    (".codex/harness/prompts/", (HARNESS_FLOW_SELF_TEST,)),
+    (".codex/harness/reporters/", (HARNESS_REPORT_SELF_TEST,)),
+)
+
+
+def self_tests_for_path(path: str) -> tuple[str, ...]:
+    """Self-tests for the changed file only — not the whole harness suite."""
+    direct = SELF_TESTS_BY_FILE.get(path)
+    if direct:
+        return direct
+    for prefix, commands in SELF_TESTS_BY_DIR:
+        if path.startswith(prefix):
+            return commands
+    if path.startswith(".codex/harness/") or path.startswith(".codex/hooks/"):
+        return (HARNESS_FLOW_SELF_TEST,)
+    return ()
+
 
 @dataclass(frozen=True)
 class EvidenceRequirements:
@@ -175,24 +211,9 @@ def requirements_for_changed_files(changed_files: list[str] | tuple[str, ...] | 
                 commands.add(WORKLOG_SYNC_SELF_TEST)
                 commands.add(HARNESS_PLAN_SELF_TEST)
             continue
-        if path.startswith(".codex/harness/"):
-            commands.add(PR_LINT_SELF_TEST)
-            commands.add(PR_CONTEXT_SELF_TEST)
-            commands.add(WORKLOG_SYNC_SELF_TEST)
-            commands.add(HARNESS_PR_SELF_TEST)
-            commands.add(HARNESS_FLOW_SELF_TEST)
-            commands.add(HARNESS_PLAN_SELF_TEST)
-            commands.add(HARNESS_REPORT_SELF_TEST)
-            commands.add(HARNESS_LAUNCHER_SELF_TEST)
-            commands.add(SKILL_ROUTING_SELF_TEST)
-            commands.add(PROJECT_TERMS_SELF_TEST)
-            commands.add(PROJECT_TERMS_CHECK)
+        commands.update(self_tests_for_path(path))
         if path.startswith(".github/"):
             commands.add(PR_LINT_SELF_TEST)
-        if path.startswith(".codex/hooks/"):
-            commands.add(STOP_HOOK_SELF_TEST)
-            commands.add(PRE_TOOL_USE_POLICY_SELF_TEST)
-            commands.add(POST_TOOL_USE_REVIEW_SELF_TEST)
 
     canonical_markdown = tuple(path for path in changed if is_canonical_markdown(path))
 

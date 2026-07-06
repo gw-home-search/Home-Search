@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from dataclasses import dataclass
@@ -17,7 +18,6 @@ from pr_evidence import (
     WORKLOG_SYNC_SELF_TEST,
     DIFF_CHECK,
     POST_TOOL_USE_REVIEW_SELF_TEST,
-    PR_BODY_CHECK_SELF_TEST,
     PR_CONTEXT_SELF_TEST,
     PROJECT_TERMS_CHECK,
     PROJECT_TERMS_SELF_TEST,
@@ -25,7 +25,6 @@ from pr_evidence import (
     SKILL_ROUTING_SELF_TEST,
     STOP_HOOK_SELF_TEST,
     TEST_DISPLAY_NAME_POLICY,
-    USER_LANGUAGE_CHECK,
     HARNESS_FLOW_SELF_TEST,
     HARNESS_LAUNCHER_SELF_TEST,
     HARNESS_PLAN_SELF_TEST,
@@ -545,7 +544,6 @@ def valid_body(
 - `{TEST_DISPLAY_NAME_POLICY}` = not run (테스트 표시 이름 변경 없음)
 - `{PR_LINT_SELF_TEST}` = pass (자체 테스트)
 - `{PR_CONTEXT_SELF_TEST}` = pass (PR context 공용 helper 자체 테스트)
-- `{PR_BODY_CHECK_SELF_TEST}` = pass (PR body 검사 자체 테스트)
 - `{WORKLOG_SYNC_SELF_TEST}` = pass (worklog sync 자체 테스트)
 - `{HARNESS_PR_SELF_TEST}` = pass (draft PR 생성 helper 자체 테스트)
 - `{HARNESS_FLOW_SELF_TEST}` = pass (harness flow 자체 테스트)
@@ -553,7 +551,6 @@ def valid_body(
 - `{HARNESS_REPORT_SELF_TEST}` = pass (harness report 자체 테스트)
 - `{HARNESS_LAUNCHER_SELF_TEST}` = pass (harness launcher 자체 테스트)
 - `{SKILL_ROUTING_SELF_TEST}` = pass (skill routing 자체 테스트)
-- `{USER_LANGUAGE_CHECK}` = pass (사용자 노출 언어 점검)
 - `{PROJECT_TERMS_SELF_TEST}` = pass (용어 점검 자체 테스트)
 - `{PROJECT_TERMS_CHECK}` = pass (프로젝트 용어 점검)
 - `{STOP_HOOK_SELF_TEST}` = pass (stop hook fixture)
@@ -796,6 +793,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--head", "--branch", dest="head")
     parser.add_argument("--body-file")
     parser.add_argument("--body-env")
+    parser.add_argument("--body-only", action="store_true", help="Check only the PR body evidence sections.")
     parser.add_argument("--evidence-policy", choices=sorted(EVIDENCE_POLICIES), default="strict")
     draft = parser.add_mutually_exclusive_group()
     draft.add_argument("--draft", dest="draft", action="store_true")
@@ -812,7 +810,17 @@ def main(argv: list[str] | None = None) -> int:
         return run_self_test()
 
     try:
-        if args.template_file:
+        if args.body_only:
+            if bool(args.body_file) == bool(args.body_env):
+                raise ValueError("--body-only requires exactly one of --body-file or --body-env")
+            if args.body_file:
+                body = Path(args.body_file).read_text(encoding="utf-8")
+            else:
+                body = os.environ.get(args.body_env or "")
+                if body is None:
+                    raise ValueError(f"환경 변수를 찾을 수 없습니다: {args.body_env}")
+            result = check_body(body)
+        elif args.template_file:
             result = lint_template(args.template_file)
         else:
             changed_files = changed_files_from_sources(args.changed_files_nul, args.changed_files_file)

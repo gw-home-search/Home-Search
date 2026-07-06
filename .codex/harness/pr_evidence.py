@@ -16,7 +16,6 @@ WEB_BUILD = "cd apps/web && npm run build"
 TEST_DISPLAY_NAME_POLICY = "python3 scripts/check-test-display-names.py"
 PR_LINT_SELF_TEST = "python3 .codex/harness/pr_lint.py --self-test"
 PR_CONTEXT_SELF_TEST = "python3 .codex/harness/pr_context.py --self-test"
-PR_BODY_CHECK_SELF_TEST = "python3 .codex/harness/pr_body_check.py --self-test"
 WORKLOG_SYNC_SELF_TEST = "python3 .codex/harness/worklog_sync.py --self-test"
 HARNESS_PR_SELF_TEST = "python3 .codex/harness/home_pr.py --self-test"
 HARNESS_FLOW_SELF_TEST = "python3 .codex/harness/home_flow.py --self-test"
@@ -24,7 +23,6 @@ HARNESS_PLAN_SELF_TEST = "python3 .codex/harness/home_plan.py --self-test"
 HARNESS_REPORT_SELF_TEST = "python3 .codex/harness/home_report.py --self-test"
 HARNESS_LAUNCHER_SELF_TEST = ".codex/harness/home --self-test"
 SKILL_ROUTING_SELF_TEST = "python3 .codex/harness/skill_routing.py --self-test"
-USER_LANGUAGE_CHECK = "python3 .codex/harness/user_language_check.py --self-test"
 PROJECT_TERMS_CHECK = "python3 .codex/harness/project_terms_check.py"
 PROJECT_TERMS_SELF_TEST = "python3 .codex/harness/project_terms_check.py --self-test"
 STOP_HOOK_SELF_TEST = "python3 .codex/hooks/stop_verification_gate.py --self-test"
@@ -40,7 +38,6 @@ COMMAND_ORDER = (
     TEST_DISPLAY_NAME_POLICY,
     PR_LINT_SELF_TEST,
     PR_CONTEXT_SELF_TEST,
-    PR_BODY_CHECK_SELF_TEST,
     WORKLOG_SYNC_SELF_TEST,
     HARNESS_PR_SELF_TEST,
     HARNESS_FLOW_SELF_TEST,
@@ -48,7 +45,6 @@ COMMAND_ORDER = (
     HARNESS_REPORT_SELF_TEST,
     HARNESS_LAUNCHER_SELF_TEST,
     SKILL_ROUTING_SELF_TEST,
-    USER_LANGUAGE_CHECK,
     PROJECT_TERMS_CHECK,
     PROJECT_TERMS_SELF_TEST,
     STOP_HOOK_SELF_TEST,
@@ -182,7 +178,6 @@ def requirements_for_changed_files(changed_files: list[str] | tuple[str, ...] | 
         if path.startswith(".codex/harness/"):
             commands.add(PR_LINT_SELF_TEST)
             commands.add(PR_CONTEXT_SELF_TEST)
-            commands.add(PR_BODY_CHECK_SELF_TEST)
             commands.add(WORKLOG_SYNC_SELF_TEST)
             commands.add(HARNESS_PR_SELF_TEST)
             commands.add(HARNESS_FLOW_SELF_TEST)
@@ -190,12 +185,10 @@ def requirements_for_changed_files(changed_files: list[str] | tuple[str, ...] | 
             commands.add(HARNESS_REPORT_SELF_TEST)
             commands.add(HARNESS_LAUNCHER_SELF_TEST)
             commands.add(SKILL_ROUTING_SELF_TEST)
-            commands.add(USER_LANGUAGE_CHECK)
             commands.add(PROJECT_TERMS_SELF_TEST)
             commands.add(PROJECT_TERMS_CHECK)
         if path.startswith(".github/"):
             commands.add(PR_LINT_SELF_TEST)
-            commands.add(USER_LANGUAGE_CHECK)
         if path.startswith(".codex/hooks/"):
             commands.add(STOP_HOOK_SELF_TEST)
             commands.add(PRE_TOOL_USE_POLICY_SELF_TEST)

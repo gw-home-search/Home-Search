@@ -1,80 +1,39 @@
 #!/usr/bin/env python3
-"""Stop hook verification gate for Home Search.
+"""Stop-time verification reminder for Home Search.
 
-The hook checks for evidence on completion-like responses. It does not run
-tests, perform review, or call AI services.
+Downgraded from a blocking gate to a non-blocking reminder (harness diet R2).
+The old gate parsed the conversation transcript with regexes and blocked the
+stop unless evidence phrases were present; that coupled the hook to model
+wording and produced false blocks. This version only reports which
+verification commands the current diff suggests, and never blocks.
+
+Evidence still belongs in the PR body: 검증 근거 확인 명령 결과와 TDD 근거
+(최초 RED / 예상 RED 실패 / 최소 GREEN)는 pr_lint가 PR 본문에서 검사한다.
 """
 
 from __future__ import annotations
 
 import json
-import os
-import re
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
-from typing import Any
+
+HARNESS_DIR = Path(__file__).resolve().parents[1] / "harness"
+if str(HARNESS_DIR) not in sys.path:
+    sys.path.insert(0, str(HARNESS_DIR))
+
+try:
+    from pr_evidence import ordered_commands, requirements_for_changed_files
+except ImportError:  # pragma: no cover - harness layout changed
+    ordered_commands = None
+    requirements_for_changed_files = None
 
 
-FALLBACK_REPO_ROOT = Path("/Users/gwongwangjae/home-search")
-
-IGNORED_PARTS = {
-    ".gradle",
-    ".idea",
-    ".next",
-    ".vite",
-    "build",
-    "coverage",
-    "dist",
-    "node_modules",
-    "out",
-    "target",
-}
-
-SUCCESS_RE = re.compile(
-    r"(Process exited with code 0|exit(?:_| )code[\"']?\s*[:=]\s*0|\bBUILD SUCCESSFUL\b|"
-    r"\btests? passed\b|=\s*pass\b)",
-    re.IGNORECASE,
-)
-
-BACKEND_TEST_RE = re.compile(r"(\./gradlew|gradle)\s+(test|verify)\b")
-BACKEND_QUALITY_RE = re.compile(r"(\./gradlew|gradle)\s+backendQualityCheck\b")
-FRONTEND_TEST_RE = re.compile(r"npm\s+run\s+(test|build)\b")
-COVERAGE_EVIDENCE_RE = re.compile(
-    r"(Coverage\s*:\s*>=?\s*90%|coverageCheck\b.*=\s*pass|jacocoTestCoverageVerification\b.*=\s*pass)",
-    re.IGNORECASE,
-)
-OPENAPI_EVIDENCE_RE = re.compile(
-    r"(Docs/OpenAPI\s*:\s*(generated|생성).*(verified|검증)|apiDocsCheck\b.*=\s*pass|openapi3\.ya?ml)",
-    re.IGNORECASE,
-)
-COMPLETION_INTENT_RE = re.compile(
-    r"("
-    r"작업\s*완료|완료(?:했습니다|했어요|됐습니다|되었습니다|됨)|"
-    r"(?:수정|변경|반영|구현|추가|삭제|정리)(?:했습니다|했어요|되었습니다|됨)|"
-    r"(?:고쳤|마쳤)(?:습니다|어요)|"
-    r"(?:커밋|commit)(?:했습니다|했어요|됨|:)|"
-    r"\bpush(?:ed)?\b|"
-    r"(?:\bPR\b|PR[은는을를이가]?|\bpull request\b).{0,80}(?:열었습니다|생성했습니다|created|opened)|"
-    r"reviewer\s*:\s*(?:지적사항|Findings)|"
-    r"상태:\s*(?:Pass|Partial|Fail).{0,400}(?:검증:|최초 RED:)"
-    r")",
-    re.IGNORECASE | re.DOTALL,
-)
-PUBLISH_HANDOFF_RE = re.compile(
-    r"("
-    r"(?:커밋|commit)(?:했습니다|했어요|됨|:)|"
-    r"\bpush(?:ed)?\b|"
-    r"(?:\bPR\b|PR[은는을를이가]?|\bpull request\b).{0,80}(?:열었습니다|생성했습니다|created|opened)"
-    r")",
-    re.IGNORECASE | re.DOTALL,
-)
-PROPOSED_PLAN_RE = re.compile(r"<proposed_plan\b[^>]*>.*?</proposed_plan>", re.IGNORECASE | re.DOTALL)
-
-
-def load_payload() -> dict[str, Any]:
-    raw = sys.stdin.read()
+def load_payload() -> dict:
+    try:
+        raw = sys.stdin.read()
+    except OSError:
+        return {}
     if not raw.strip():
         return {}
     try:
@@ -84,682 +43,90 @@ def load_payload() -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def git_root(cwd: Path) -> Path | None:
+def repo_root(payload: dict) -> Path | None:
+    cwd = Path(str(payload.get("cwd") or Path.cwd()))
     try:
         result = subprocess.run(
-            ["git", "-C", str(cwd), "rev-parse", "--show-toplevel"],
-            cwd=str(cwd) if cwd.exists() else None,
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=cwd,
             check=False,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            timeout=5,
         )
-    except OSError:
+    except (OSError, subprocess.TimeoutExpired):
         return None
-    if result.returncode != 0:
-        return None
-    root = result.stdout.strip()
-    return Path(root).resolve(strict=False) if root else None
+    top = result.stdout.strip()
+    return Path(top) if result.returncode == 0 and top else None
 
 
-def payload_cwd(payload: dict[str, Any]) -> Path:
-    raw = payload.get("cwd")
-    if isinstance(raw, str) and raw:
-        return Path(raw)
-    return Path(os.getcwd())
-
-
-def repo_root_from_payload(payload: dict[str, Any]) -> Path:
-    cwd = payload_cwd(payload)
-    for candidate in (cwd, Path(os.getcwd())):
-        root = git_root(candidate)
-        if root is not None:
-            return root
-    return FALLBACK_REPO_ROOT
-
-
-def run_git(args: list[str], repo_root: Path) -> list[str]:
+def changed_files(root: Path) -> list[str]:
     try:
         result = subprocess.run(
-            ["git", *args],
-            cwd=repo_root,
+            ["git", "status", "--short", "--untracked-files=all"],
+            cwd=root,
             check=False,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            timeout=5,
         )
-    except OSError:
+    except (OSError, subprocess.TimeoutExpired):
         return []
-    if result.returncode != 0:
+    files: list[str] = []
+    for line in result.stdout.splitlines():
+        if len(line) <= 3:
+            continue
+        path = line[3:].strip()
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        if path:
+            files.append(path)
+    return files
+
+
+def reminder_lines(files: list[str]) -> list[str]:
+    if not files or requirements_for_changed_files is None or ordered_commands is None:
         return []
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
-
-
-def changed_files(repo_root: Path) -> list[str]:
-    paths: set[str] = set()
-    for args in (
-        ["diff", "--name-only"],
-        ["diff", "--cached", "--name-only"],
-        ["ls-files", "--others", "--exclude-standard"],
-    ):
-        paths.update(run_git(args, repo_root))
-    return sorted(path for path in paths if not ignored_path(path))
-
-
-def branch_diff_files(repo_root: Path) -> list[str]:
-    for base in ("origin/main", "main", "origin/master", "master"):
-        paths = run_git(["diff", "--name-only", f"{base}...HEAD"], repo_root)
-        scoped = sorted(path for path in paths if not ignored_path(path))
-        if scoped:
-            return scoped
-    return []
-
-
-def ignored_path(path: str) -> bool:
-    parts = set(Path(path).parts)
-    return bool(parts & IGNORED_PARTS)
-
-
-def transcript_path_from_payload(payload: dict[str, Any]) -> Path | None:
-    transcript = payload.get("transcript_path") or payload.get("transcriptPath")
-    if isinstance(transcript, str):
-        return Path(transcript)
-    return None
-
-
-def read_transcript(payload: dict[str, Any]) -> str:
-    transcript_path = transcript_path_from_payload(payload)
-    if transcript_path is None:
-        return ""
-    try:
-        if transcript_path.exists() and transcript_path.is_file():
-            return transcript_path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return ""
-    return ""
-
-
-def transcript_text(payload: dict[str, Any]) -> str:
-    parts: list[str] = []
-    last = last_assistant_text(payload)
-    if last:
-        parts.append(last)
-    transcript = read_transcript(payload)
-    if transcript:
-        parts.append(transcript)
-    return "\n".join(parts)
-
-
-def last_assistant_text(payload: dict[str, Any]) -> str:
-    last = payload.get("last_assistant_message") or payload.get("lastAssistantMessage")
-    return last if isinstance(last, str) else ""
-
-
-def text_from_content(value: Any) -> str:
-    if isinstance(value, str):
-        return value
-    if isinstance(value, list):
-        parts = [text_from_content(item) for item in value]
-        return "\n".join(part for part in parts if part)
-    if isinstance(value, dict):
-        for key in ("text", "content", "value", "output_text"):
-            text = text_from_content(value.get(key))
-            if text:
-                return text
-    return ""
-
-
-def assistant_text_from_record(record: Any) -> str:
-    if not isinstance(record, dict):
-        return ""
-    candidates = [record]
-    for key in ("message", "item", "entry", "event"):
-        nested = record.get(key)
-        if isinstance(nested, dict):
-            candidates.append(nested)
-            for nested_key in ("message", "item"):
-                nested_again = nested.get(nested_key)
-                if isinstance(nested_again, dict):
-                    candidates.append(nested_again)
-
-    for candidate in candidates:
-        role = str(candidate.get("role") or candidate.get("author") or "").lower()
-        event_type = str(candidate.get("type") or "").lower()
-        if role != "assistant" and event_type not in {"assistant", "assistant_message"}:
-            continue
-        for key in ("content", "text", "message"):
-            text = text_from_content(candidate.get(key))
-            if text:
-                return text
-    return ""
-
-
-def iter_transcript_records(raw: str) -> list[Any]:
-    records: list[Any] = []
-    stripped = raw.strip()
-    if not stripped:
-        return records
-    try:
-        parsed = json.loads(stripped)
-    except json.JSONDecodeError:
-        parsed = None
-    if isinstance(parsed, list):
-        records.extend(parsed)
-        return records
-    if isinstance(parsed, dict):
-        records.append(parsed)
-        return records
-
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            records.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    return records
-
-
-def last_assistant_text_from_transcript(payload: dict[str, Any]) -> str:
-    raw = read_transcript(payload)
-    if not raw:
-        return ""
-    last = ""
-    for record in iter_transcript_records(raw):
-        text = assistant_text_from_record(record)
-        if text:
-            last = text
-    return last
-
-
-def intent_message_text(payload: dict[str, Any]) -> str:
-    return last_assistant_text(payload) or last_assistant_text_from_transcript(payload)
-
-
-def strip_proposed_plan(text: str) -> str:
-    return PROPOSED_PLAN_RE.sub("", text)
-
-
-def classify_stop_intent(last_message: str) -> str:
-    text = strip_proposed_plan(last_message).strip()
-    if not text:
-        return "none"
-    if PUBLISH_HANDOFF_RE.search(text):
-        return "publish"
-    if COMPLETION_INTENT_RE.search(text):
-        return "complete"
-    return "none"
-
-
-def has_successful_command(text: str, command_re: re.Pattern[str]) -> bool:
-    return bool(command_re.search(text) and SUCCESS_RE.search(text))
-
-
-def has_backend_quality_evidence(text: str) -> bool:
-    return has_successful_command(text, BACKEND_QUALITY_RE)
-
-
-def has_coverage_evidence(text: str) -> bool:
-    return bool(COVERAGE_EVIDENCE_RE.search(text))
-
-
-def has_openapi_evidence(text: str) -> bool:
-    return bool(OPENAPI_EVIDENCE_RE.search(text))
-
-
-def has_first_red_evidence(text: str) -> bool:
-    if re.search(r"blocked/no test environment", text, re.IGNORECASE):
-        return True
-    first_red_label = r"(?:최초 RED|First RED)"
-    if re.search(rf"{first_red_label}\s*:\s*(없음|no|none)", text, re.IGNORECASE):
-        return False
-    return bool(
-        re.search(
-            rf"({first_red_label}\s*:\s*(있음|yes)|valid RED|RED validity\s*=\s*Pass|"
-            r"예상 RED 실패|expected RED failure|RED failure|failing test)",
-            text,
-            re.IGNORECASE,
-        )
-    )
-
-
-def has_expected_red_failure_evidence(text: str) -> bool:
-    if re.search(r"blocked/no test environment", text, re.IGNORECASE):
-        return True
-    return bool(
-        re.search(
-            r"(?:예상 RED 실패|Expected RED failure)\s*:\s*(확인|yes|confirmed|해당 없음|n/a)",
-            text,
-            re.IGNORECASE,
-        )
-    )
-
-
-def has_minimum_green_evidence(text: str) -> bool:
-    if re.search(r"blocked/no test environment", text, re.IGNORECASE):
-        return True
-    return bool(
-        re.search(
-            r"(?:최소 GREEN|Minimum GREEN)\s*:\s*(확인|yes|confirmed|해당 없음|n/a)",
-            text,
-            re.IGNORECASE,
-        )
-    )
-
-
-def has_tdd_work_evidence(text: str) -> bool:
-    return (
-        has_first_red_evidence(text)
-        and has_expected_red_failure_evidence(text)
-        and has_minimum_green_evidence(text)
-    )
-
-
-def has_contract_reviewer_evidence(text: str) -> bool:
-    return bool(
-        re.search(
-            r"contract-reviewer\s*:\s*(?:게이트 결정|Gate decision)\s*=\s*(Pass|Partial|Fail)",
-            text,
-            re.IGNORECASE,
-        )
-    )
-
-
-def has_implementation_review_evidence(text: str) -> bool:
-    return bool(
-        re.search(r"reviewer\s*:\s*(?:지적사항|Findings)\s*=\s*(none|listed|없음|있음)", text, re.IGNORECASE)
-        or re.search(r"tdd-guide\s*:\s*RED validity\s*=\s*(Pass|Partial|Fail)", text, re.IGNORECASE)
-    )
-
-
-def has_security_audit_evidence(text: str) -> bool:
-    return bool(
-        re.search(
-            r"security-audit\s*:\s*(?:지적사항|Findings)\s*=\s*(none|listed|없음|있음)",
-            text,
-            re.IGNORECASE,
-        )
-    )
-
-
-def has_short_korean_review(text: str) -> bool:
-    required_groups = (
-        ("상태:",),
-        ("최초 RED:", "First RED:"),
-        ("검증:",),
-        ("주요 위험:",),
-        ("다음 행동:",),
-    )
-    if not all(any(label in text for label in labels) for labels in required_groups):
-        return False
-    return bool(re.search(r"상태:\s*(Pass|Partial|Fail)", text))
-
-
-def is_markdown(path: str) -> bool:
-    return path.lower().endswith(".md")
-
-
-def is_contract_related(path: str) -> bool:
-    if path == "docs/API_CONTRACT.md":
-        return True
-    if path.startswith("apps/api/") and re.search(
-        r"/(web|dto|controller|error|validation)/|Controller|Request|Response|ProblemDetail",
-        path,
-    ):
-        return True
-    if path.startswith("apps/web/") and re.search(
-        r"/(api|fixtures|mocks?)/|adapter|marker|fetch",
-        path,
-        re.IGNORECASE,
-    ):
-        return True
-    return False
-
-
-def is_behavior_change(path: str) -> bool:
-    if path.startswith("apps/api/src/main/"):
-        return True
-    if path.startswith("apps/web/src/") and not re.search(r"\.test\.[tj]sx?$", path):
-        return True
-    return False
-
-
-def is_implementation_change(path: str) -> bool:
-    if is_behavior_change(path):
-        return True
-    if path.startswith(".codex/hooks"):
-        return True
-    if path == ".codex/hooks.json":
-        return True
-    return False
-
-
-def missing_evidence(files: list[str], text: str) -> list[str]:
-    missing: list[str] = []
-
-    if any(path.startswith("apps/api/") for path in files):
-        if not has_backend_quality_evidence(text):
-            missing.append("apps/api 변경: backendQualityCheck evidence 필요")
-        if not has_coverage_evidence(text):
-            missing.append("apps/api 변경: Coverage >=90% evidence 필요")
-        if not has_openapi_evidence(text):
-            missing.append("apps/api 변경: Docs/OpenAPI generated + verified evidence 필요")
-
-    if any(path.startswith("apps/web/") for path in files):
-        if not has_successful_command(text, FRONTEND_TEST_RE):
-            missing.append("apps/web 변경: npm run test/build evidence 필요")
-
-    if any(is_behavior_change(path) for path in files):
-        if not has_tdd_work_evidence(text):
-            missing.append("behavior 변경: 최초 RED, 예상 RED 실패, 최소 GREEN evidence 필요")
-        if not has_security_audit_evidence(text):
-            missing.append("apps 코드 변경: security-audit 지적사항 evidence 필요")
-
-    if any(is_contract_related(path) for path in files):
-        if not has_contract_reviewer_evidence(text):
-            missing.append("contract 관련 변경: contract-reviewer evidence 필요")
-
-    if any(is_implementation_change(path) for path in files):
-        if not has_implementation_review_evidence(text):
-            missing.append("구현 변경: reviewer 또는 tdd-guide evidence 필요")
-        if not has_short_korean_review(text):
-            missing.append("짧은 한글 리뷰 형식 필요")
-
-    return missing
-
-
-def should_enforce_stop_gate(files: list[str], last_message: str) -> bool:
-    if not files:
-        return False
-    return classify_stop_intent(last_message) != "none"
-
-
-def scope_files_for_stop_gate(files: list[str], last_message: str, branch_files: list[str]) -> list[str]:
-    intent = classify_stop_intent(last_message)
-    if intent == "publish":
-        return branch_files
-    if intent == "complete":
-        return files
-    return []
-
-
-def gated_missing_evidence(files: list[str], last_message: str, evidence_text: str) -> list[str]:
-    if not should_enforce_stop_gate(files, last_message):
-        return []
-    return missing_evidence(files, evidence_text)
-
-
-def block(lines: list[str]) -> None:
-    prompt_lines = ["완료 전 evidence가 부족합니다."]
-    prompt_lines.extend(f"- {line}" for line in lines[:7])
-    prompt_lines.append("다음 행동: 누락된 검증/리뷰 evidence를 남기고 짧은 한글 리뷰를 작성하세요.")
-    prompt = "\n".join(prompt_lines[:10])
-    print(json.dumps({"decision": "block", "reason": prompt}, ensure_ascii=False))
-    raise SystemExit(0)
+    requirements = requirements_for_changed_files(files)
+    lines = ["검증 리마인더 (비차단): 현재 변경 기준 권장 검증 명령"]
+    for command in ordered_commands(requirements.commands):
+        lines.append(f"- {command}")
+    for path, reason in requirements.forbidden_paths:
+        lines.append(f"- 경고: {path}: {reason}")
+    lines.append("검증 결과와 TDD 근거는 PR 본문에 남기세요 (pr_lint가 검사).")
+    return lines
 
 
 def run_self_test() -> int:
-    hook_evidence = "\n".join(
-        [
-            "상태: Pass",
-            "최초 RED: blocked/no test environment",
-            "예상 RED 실패: 해당 없음",
-            "최소 GREEN: 확인",
-            "검증: python3 .codex/hooks/stop_verification_gate.py --self-test = pass",
-            "reviewer: 지적사항 = 없음",
-            "주요 위험: 없음",
-            "다음 행동: 없음",
-        ]
-    )
-    missing_red = missing_evidence(
-        ["apps/api/src/main/java/com/home/App.java"],
-        "\n".join(
-            [
-                "상태: Partial",
-                "검증: ./gradlew backendQualityCheck = pass",
-                "Coverage: >=90%",
-                "Docs/OpenAPI: generated + verified",
-                "reviewer: 지적사항 = 없음",
-                "security-audit: 지적사항 = 없음",
-                "주요 위험: 없음",
-                "다음 행동: 최초 RED 보강",
-            ]
-        ),
-    )
-    missing_review = missing_evidence(
-        [".codex/hooks/pre_tool_use_policy.py"],
-        "\n".join(
-            [
-                "최초 RED: blocked/no test environment",
-                "예상 RED 실패: 해당 없음",
-                "최소 GREEN: 확인",
-                "검증: python3 .codex/hooks/pre_tool_use_policy.py --self-test = pass",
-                "reviewer: 지적사항 = 없음",
-            ]
-        ),
-    )
-    complete_hook_review = missing_evidence(
-        [".codex/hooks/pre_tool_use_policy.py"],
-        "\n".join(
-            [
-                "상태: Pass",
-                "최초 RED: blocked/no test environment",
-                "예상 RED 실패: 해당 없음",
-                "최소 GREEN: 확인",
-                "검증: python3 .codex/hooks/pre_tool_use_policy.py --self-test = pass",
-                "reviewer: 지적사항 = 없음",
-                "주요 위험: 없음",
-                "다음 행동: 없음",
-            ]
-        ),
-    )
-    markdown_complete = missing_evidence([".codex/harness/home"], "검증: git diff --check = pass")
-    missing_backend_quality = missing_evidence(
-        ["apps/api/src/main/java/com/home/App.java"],
-        "\n".join(
-            [
-                "상태: Pass",
-                "최초 RED: 있음",
-                "예상 RED 실패: 확인",
-                "최소 GREEN: 확인",
-                "검증: ./gradlew test = pass",
-                "Coverage: >=90%",
-                "Docs/OpenAPI: generated + verified",
-                "reviewer: 지적사항 = 없음",
-                "security-audit: 지적사항 = 없음",
-                "주요 위험: 없음",
-                "다음 행동: 없음",
-            ]
-        ),
-    )
-    missing_coverage = missing_evidence(
-        ["apps/api/src/main/java/com/home/App.java"],
-        "\n".join(
-            [
-                "상태: Pass",
-                "최초 RED: 있음",
-                "예상 RED 실패: 확인",
-                "최소 GREEN: 확인",
-                "검증: ./gradlew backendQualityCheck = pass",
-                "Docs/OpenAPI: generated + verified",
-                "reviewer: 지적사항 = 없음",
-                "security-audit: 지적사항 = 없음",
-                "주요 위험: 없음",
-                "다음 행동: 없음",
-            ]
-        ),
-    )
-    missing_security = missing_evidence(
-        ["apps/api/src/main/java/com/home/App.java"],
-        "\n".join(
-            [
-                "상태: Pass",
-                "최초 RED: 있음",
-                "예상 RED 실패: 확인",
-                "최소 GREEN: 확인",
-                "검증: ./gradlew backendQualityCheck = pass",
-                "Coverage: >=90%",
-                "Docs/OpenAPI: generated + verified",
-                "reviewer: 지적사항 = 없음",
-                "주요 위험: 없음",
-                "다음 행동: 없음",
-            ]
-        ),
-    )
-    informational_answer = gated_missing_evidence(
-        ["apps/api/src/main/java/com/home/App.java"],
-        "원인: Stop hook이 dirty worktree 전체를 보고 있습니다. 고치려면 완료 응답에만 gate를 적용해야 합니다.",
-        "",
-    )
-    completion_without_evidence = gated_missing_evidence(
-        ["apps/api/src/main/java/com/home/App.java"],
-        "수정했습니다.",
-        "수정했습니다.",
-    )
-    completion_with_evidence = gated_missing_evidence(
-        ["apps/api/src/main/java/com/home/App.java"],
-        "\n".join(
-            [
-                "상태: Pass",
-                "최초 RED: 있음",
-                "예상 RED 실패: 확인",
-                "최소 GREEN: 확인",
-                "검증: ./gradlew backendQualityCheck = pass",
-                "Coverage: >=90%",
-                "Docs/OpenAPI: generated + verified",
-                "reviewer: 지적사항 = 없음",
-                "security-audit: 지적사항 = 없음",
-                "주요 위험: 없음",
-                "다음 행동: 없음",
-            ]
-        ),
-        "\n".join(
-            [
-                "상태: Pass",
-                "최초 RED: 있음",
-                "예상 RED 실패: 확인",
-                "최소 GREEN: 확인",
-                "검증: ./gradlew backendQualityCheck = pass",
-                "Coverage: >=90%",
-                "Docs/OpenAPI: generated + verified",
-                "reviewer: 지적사항 = 없음",
-                "security-audit: 지적사항 = 없음",
-                "주요 위험: 없음",
-                "다음 행동: 없음",
-            ]
-        ),
-    )
-    publish_scope_files = scope_files_for_stop_gate(
-        [".codex/hooks/stop_verification_gate.py", "apps/api/src/main/java/com/home/App.java"],
-        "PR을 열었습니다.",
-        [".codex/hooks/stop_verification_gate.py"],
-    )
-    publish_scope_missing = gated_missing_evidence(
-        publish_scope_files,
-        "PR을 열었습니다.",
-        "\n".join(
-            [
-                "상태: Pass",
-                "최초 RED: 있음",
-                "예상 RED 실패: 확인",
-                "최소 GREEN: 확인",
-                "검증: python3 .codex/hooks/stop_verification_gate.py --self-test = pass",
-                "reviewer: 지적사항 = 없음",
-                "주요 위험: 없음",
-                "다음 행동: 없음",
-            ]
-        ),
-    )
-    plan_answer = "다음 계획입니다.\n<proposed_plan>\n수정했습니다. PR을 열었습니다.\n</proposed_plan>\n1. hook을 고칩니다."
-    plan_scope_files = scope_files_for_stop_gate(["apps/web/src/app/App.css"], plan_answer, ["apps/api/AGENTS.md"])
-    dirty_plan_answer = gated_missing_evidence(plan_scope_files, plan_answer, "")
-    transcript_plan_payload: dict[str, Any] = {}
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=True) as handle:
-        handle.write(
-            "\n".join(
-                [
-                    json.dumps({"role": "assistant", "content": "PR을 열었습니다."}, ensure_ascii=False),
-                    json.dumps({"role": "assistant", "content": "계획만 정리합니다."}, ensure_ascii=False),
-                ]
-            )
-        )
-        handle.flush()
-        transcript_plan_payload["transcript_path"] = handle.name
-        transcript_last = intent_message_text(transcript_plan_payload)
-    transcript_plan_scope = scope_files_for_stop_gate(
-        ["apps/web/src/app/App.css"],
-        transcript_last,
-        ["apps/api/AGENTS.md"],
-    )
-    current_scope_files = scope_files_for_stop_gate(
-        ["apps/web/src/app/App.css"],
-        "수정했습니다.",
-        ["apps/api/AGENTS.md"],
-    )
-    current_scope_missing = gated_missing_evidence(current_scope_files, "수정했습니다.", "")
-    publish_scope_backend = scope_files_for_stop_gate(
-        [".codex/hooks/stop_verification_gate.py"],
-        "PR을 열었습니다.",
-        ["apps/api/AGENTS.md"],
-    )
-    publish_scope_backend_missing = gated_missing_evidence(publish_scope_backend, "PR을 열었습니다.", hook_evidence)
-    complete_scope_hook = scope_files_for_stop_gate(
-        [".codex/hooks/stop_verification_gate.py"],
-        "수정했습니다.",
-        ["apps/api/AGENTS.md"],
-    )
-    complete_scope_hook_missing = gated_missing_evidence(complete_scope_hook, "수정했습니다.", hook_evidence)
-    complete_ignores_branch_backend = not any("backendQualityCheck" in item for item in complete_scope_hook_missing)
-    tests = [
-        ("missing First RED is detected", any("최초 RED" in item or "First RED" in item for item in missing_red)),
-        ("missing Korean review is detected", any("짧은 한글 리뷰" in item for item in missing_review)),
-        ("complete hook review passes", not complete_hook_review),
-        ("markdown changes do not require companion evidence", not markdown_complete),
-        ("backendQualityCheck evidence is required", any("backendQualityCheck" in item for item in missing_backend_quality)),
-        ("coverage evidence is required", any("Coverage" in item for item in missing_coverage)),
-        ("security-audit evidence is required", any("security-audit" in item for item in missing_security)),
-        ("complete backend evidence has no security gap", not any("security-audit" in item for item in missing_backend_quality)),
-        ("informational stop answer is not gated", not informational_answer),
-        ("completion answer still requires evidence", bool(completion_without_evidence)),
-        ("completion answer with evidence passes", not completion_with_evidence),
-        ("publish handoff uses branch diff scope", publish_scope_files == [".codex/hooks/stop_verification_gate.py"]),
-        ("publish handoff scoped evidence passes", not publish_scope_missing),
-        ("proposed_plan block is ignored for intent", classify_stop_intent(plan_answer) == "none"),
-        ("plan answer is not gated even with dirty diff", not dirty_plan_answer and plan_scope_files == []),
-        ("transcript last assistant plan ignores stale publish text", transcript_last == "계획만 정리합니다."),
-        ("transcript stale publish does not select branch diff", transcript_plan_scope == []),
-        ("non-publish completion uses current diff scope", current_scope_files == ["apps/web/src/app/App.css"]),
-        ("current diff web completion does not require backend evidence", not any("backendQualityCheck" in item for item in current_scope_missing)),
-        ("publish intent uses branch backend diff", publish_scope_backend == ["apps/api/AGENTS.md"]),
-        ("publish backend branch diff requires backend evidence", any("backendQualityCheck" in item for item in publish_scope_backend_missing)),
-        ("complete intent ignores backend branch diff", complete_scope_hook == [".codex/hooks/stop_verification_gate.py"]),
-        ("complete hook current diff passes with hook evidence", not complete_scope_hook_missing),
-        ("complete current diff does not require branch backend evidence", complete_ignores_branch_backend),
+    with_changes = reminder_lines(["apps/api/src/main/java/Foo.java"])
+    harness_change = reminder_lines([".codex/harness/home_flow.py"])
+    empty = reminder_lines([])
+    checks = [
+        bool(with_changes),
+        any("backendQualityCheck" in line for line in with_changes),
+        any("git diff --check" in line for line in with_changes),
+        any("home_flow.py --self-test" in line for line in harness_change),
+        all("decision" not in line for line in with_changes),
+        empty == [],
+        "비차단" in (with_changes[0] if with_changes else ""),
     ]
-    failed = [name for name, passed in tests if not passed]
-    if failed:
-        print("self-test failed:")
-        for name in failed:
-            print(f"- {name}")
-        return 1
-    print("self-test passed: stop_verification_gate")
-    return 0
+    if all(checks):
+        print("self-test passed: stop_verification_gate")
+        return 0
+    print("self-test failed: stop_verification_gate", file=sys.stderr)
+    return 1
 
 
 def main() -> None:
     payload = load_payload()
-    repo_root = repo_root_from_payload(payload)
-    files = changed_files(repo_root)
-    if not files:
+    root = repo_root(payload)
+    if root is None:
         return
-
-    evidence_text = transcript_text(payload)
-    last_message = intent_message_text(payload)
-    scoped_files = scope_files_for_stop_gate(files, last_message, branch_diff_files(repo_root))
-    missing = gated_missing_evidence(scoped_files, last_message, evidence_text)
-    if missing:
-        block(missing)
+    lines = reminder_lines(changed_files(root))
+    if lines:
+        print("\n".join(lines))
 
 
 if __name__ == "__main__":

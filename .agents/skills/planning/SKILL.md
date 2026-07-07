@@ -1,6 +1,6 @@
 ---
 name: planning
-description: Convert Home Search /goal, ambiguous requests, cleanup/refactor goals, next-slice choices, acceptance criteria, module-separation ideas, code-smell reduction, test/DB pruning, and public API/data guardrail questions into evidence-backed, decision-complete plans. Use for "plan", "planning", "roadmap", "next slice comparison", "acceptance criteria", "API contract impact", "cleanup", "refactor", "code smell", "test diet", "DB cleanup", "module split", "목표", "플랜", "계획", "로드맵", "다음 slice 비교", "인수 기준", "정리", "리팩터링", "테스트 다이어트", "DB 정리", "분리". Do not use for failed command debugging or final diff review; route failures to systematic-debugging and review to code-review/reviewer.
+description: Convert Home Search /goal, ambiguous requests, cleanup/refactor goals, next-slice choices, acceptance criteria, module-separation ideas, code-smell reduction, test/DB pruning, and public API/data guardrail questions into evidence-backed, decision-complete plans. Use for "plan", "planning", "roadmap", "next slice comparison", "acceptance criteria", "API contract impact", "cleanup", "refactor", "code smell", "test diet", "DB cleanup", "module split", "spec", "requirements", "PRD", "목표", "플랜", "계획", "로드맵", "다음 slice 비교", "인수 기준", "요구사항", "정리", "리팩터링", "테스트 다이어트", "DB 정리", "분리". Do not use for failed command debugging or final diff review; route failures to systematic-debugging and review to code-review/reviewer.
 ---
 
 
@@ -35,8 +35,8 @@ Use this skill when a request is goal-level or has ambiguous scope. The goal is 
 
 1. Restate the decision to make in one sentence.
 2. Read the canonical docs that own the affected surface before recommending a
-   direction. For backend work, include `apps/api/AGENTS.md` and
-   `apps/api/CONTEXT.md`. For frontend work, include `apps/web/AGENTS.md` and
+   direction. For backend work, include `apps/home-data/AGENTS.md` and
+   `apps/home-data/CONTEXT.md`. For frontend work, include `apps/web/AGENTS.md` and
    `apps/web/CONTEXT.md`.
 3. Check the current repository state with local evidence, not memory. Use `rg`,
    `find`, `wc`, package scripts, migration files, and config wiring as needed.
@@ -88,27 +88,31 @@ Use this skill when a request is goal-level or has ambiguous scope. The goal is 
 
 ## Required Plan Fields
 
+Always required:
+
 - Goal.
 - Scope.
 - Non-scope.
 - Touched subsystem: backend, frontend, data, infra, docs.
-- App `AGENTS.md` and `CONTEXT.md` checked.
 - Evidence gathered.
-- Current classification: live, live-capable, maintenance, one-shot,
-  later-scope, dead.
 - Options considered and recommendation.
 - Slice order and rollback path.
-- Code-mapper preflight need.
-- Contract-reviewer checkpoint.
-- Public contract impact.
-- Data invariant impact.
 - Acceptance criteria.
-- TDD gate decision: required, not applicable, or blocked/no test environment.
-- TDD slice plan.
-- Agent handoffs.
-- Web/API collision risk.
 - Verification commands.
 - Stop conditions.
+
+Required when the plan touches that surface; otherwise state `not applicable`
+once instead of filling the field:
+
+- App `AGENTS.md` and `CONTEXT.md` checked (backend/frontend code work).
+- Current classification: live, live-capable, maintenance, one-shot,
+  later-scope, dead (cleanup/removal work).
+- Public contract impact and contract-reviewer checkpoint (contract-adjacent
+  work).
+- Data invariant impact (DB/ingest work).
+- TDD gate decision and TDD slice plan (behavior changes).
+- Code-mapper preflight need and agent handoffs (multi-agent execution).
+- Web/API collision risk (cross-app work).
 
 ## Cleanup And Refactor Checklist
 
@@ -162,6 +166,10 @@ For very small plans, collapse these fields into short paragraphs but preserve
 the same decisions.
 
 ## Output Rule
+
+Do not modify `docs/API_CONTRACT.md` as part of planning. If a decision
+deserves durable recording, mark it as an ADR candidate in the plan instead of
+writing `docs/adr` directly.
 
 Keep the plan short and executable. Prefer TDD slice plans over generic test
 plans for backend or frontend behavior changes. For backend/frontend behavior

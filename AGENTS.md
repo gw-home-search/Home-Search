@@ -190,12 +190,12 @@ stored state, operational identifiers, and policy distinctions explicit.
 - Never revert user changes unless explicitly asked.
 - Avoid unrelated refactors, renames, formatting churn, and dependency changes.
 - Do not commit secrets, API keys, or local environment values.
-- Keep `apps/api`, `apps/web`, `infra`, and `docs` responsibilities separate.
+- Keep `apps/home-data`, `apps/web`, `infra`, and `docs` responsibilities separate.
 - `.gitkeep` files preserve empty directories; remove them only when a real tracked file replaces their purpose.
 
 ## Verification
 
-- Backend commands should be added here once `apps/api` exists.
+- Backend commands should be added here once `apps/home-data` exists.
 - Frontend commands should be added here once `apps/web` exists.
 - Infra commands should be added here once Docker/PostGIS/Flyway files exist.
 

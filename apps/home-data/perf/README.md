@@ -21,7 +21,7 @@ curl -f http://localhost:8080/actuator/health
 계약과 기본 응답 shape를 빠르게 확인한다.
 
 ```bash
-k6 run -e SCENARIO=smoke -e BASE_URL=http://localhost:8080 apps/api/perf/k6/map-marker-baseline.js
+k6 run -e SCENARIO=smoke -e BASE_URL=http://localhost:8080 apps/home-data/perf/k6/map-marker-baseline.js
 ```
 
 ## Baseline
@@ -33,8 +33,8 @@ k6 run \
   -e SCENARIO=baseline \
   -e BASE_URL=http://localhost:8080 \
   -e TARGET_RPS=1 \
-  -e SUMMARY_EXPORT=apps/api/perf/results/map-marker-baseline.json \
-  apps/api/perf/k6/map-marker-baseline.js
+  -e SUMMARY_EXPORT=apps/home-data/perf/results/map-marker-baseline.json \
+  apps/home-data/perf/k6/map-marker-baseline.js
 ```
 
 ## Stress
@@ -46,7 +46,7 @@ k6 run \
   -e SCENARIO=stress \
   -e BASE_URL=http://localhost:8080 \
   -e TARGET_RPS=5 \
-  apps/api/perf/k6/map-marker-baseline.js
+  apps/home-data/perf/k6/map-marker-baseline.js
 ```
 
 ## 옵션
@@ -69,8 +69,8 @@ k6 run \
 endpoint를 따로 보고 싶으면 한쪽 weight를 `0`으로 둔다.
 
 ```bash
-k6 run -e SCENARIO=smoke -e COMPLEX_WEIGHT=1 -e REGION_WEIGHT=0 apps/api/perf/k6/map-marker-baseline.js
-k6 run -e SCENARIO=smoke -e COMPLEX_WEIGHT=0 -e REGION_WEIGHT=1 apps/api/perf/k6/map-marker-baseline.js
+k6 run -e SCENARIO=smoke -e COMPLEX_WEIGHT=1 -e REGION_WEIGHT=0 apps/home-data/perf/k6/map-marker-baseline.js
+k6 run -e SCENARIO=smoke -e COMPLEX_WEIGHT=0 -e REGION_WEIGHT=1 apps/home-data/perf/k6/map-marker-baseline.js
 ```
 
 Redis cache hit 효과를 분리해서 보고 싶으면 같은 complex 요청을 고정한다.
@@ -83,7 +83,7 @@ k6 run \
   -e COMPLEX_WEIGHT=1 \
   -e REGION_WEIGHT=0 \
   -e COMPLEX_CASE=seed-wide \
-  apps/api/perf/k6/map-marker-baseline.js
+  apps/home-data/perf/k6/map-marker-baseline.js
 ```
 
 Redis cache 운영 후보를 비교할 때는 같은 요청으로 off/cold/warm을 분리한다.
@@ -100,7 +100,7 @@ k6 run \
   -e RAMP_UP=1s \
   -e STEADY=10s \
   -e RAMP_DOWN=1s \
-  apps/api/perf/k6/map-marker-baseline.js
+  apps/home-data/perf/k6/map-marker-baseline.js
 
 # Redis cold miss: Redis FLUSHALL 후 1회
 k6 run \
@@ -110,7 +110,7 @@ k6 run \
   -e COMPLEX_WEIGHT=1 \
   -e REGION_WEIGHT=0 \
   -e COMPLEX_CASE=seed-wide \
-  apps/api/perf/k6/map-marker-baseline.js
+  apps/home-data/perf/k6/map-marker-baseline.js
 
 # Redis warm hit: cold miss로 cache가 채워진 뒤 반복 실행
 k6 run \
@@ -123,7 +123,7 @@ k6 run \
   -e RAMP_UP=1s \
   -e STEADY=10s \
   -e RAMP_DOWN=1s \
-  apps/api/perf/k6/map-marker-baseline.js
+  apps/home-data/perf/k6/map-marker-baseline.js
 ```
 
 Redis cache 관측 지표:

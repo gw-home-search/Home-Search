@@ -42,8 +42,8 @@ class LocalRuntimeStackConfigurationTest {
 		assertThat(content).contains("postgis/postgis:16-3.4");
 		assertThat(content).contains(operationalDbUrl);
 		assertThat(content).contains("env_file:");
-		assertThat(content).contains("- ../apps/api/ops/local-runtime.env.example");
-		assertThat(content).contains("- ${HOME_SEARCH_API_ENV_FILE:-../apps/api/ops/local-runtime.override.env.example}");
+		assertThat(content).contains("- ../apps/home-data/ops/local-runtime.env.example");
+		assertThat(content).contains("- ${HOME_SEARCH_API_ENV_FILE:-../apps/home-data/ops/local-runtime.override.env.example}");
 		assertThat(content).contains(coordinateSourceDbUrl);
 		assertThat(coordinateSourceDbUrl).doesNotContain("postgis:5432/${HOME_SEARCH_DB_NAME:-home_search}");
 		assertThat(content).contains("COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS: ${COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS:-3000}");

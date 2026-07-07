@@ -9,7 +9,7 @@ plugins {
 
 group = 'com.home'
 version = '0.0.1-SNAPSHOT'
-description = 'Home Search public API'
+description = 'Home Search home-data service'
 
 java {
     toolchain {

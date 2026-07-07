@@ -276,7 +276,7 @@ def run_self_test() -> int:
     sample = "\n".join(
         [
             "GET /api/v1/map/complexes stays valid",
-            "apps/api/src/main/resources/db/migration/V1__initial_schema.sql",
+            "apps/home-data/src/main/resources/db/migration/V1__initial_schema.sql",
             "Home Search V1 migration",
             "For V1, authentication is outside the path.",
             "$v1-slice-harness mode=run",

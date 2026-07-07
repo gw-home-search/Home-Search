@@ -1,4 +1,4 @@
-# apps/api Agent Rules
+# apps/home-data Agent Rules
 
 
 ## Scope
@@ -15,15 +15,15 @@ Read root `AGENTS.md`, then:
 4. `docs/API_CONTRACT.md`
 5. `docs/INFRA_AND_ENV.md`
 6. `CONTEXT.md`
-7. `apps/api/CONTEXT.md`
+7. `apps/home-data/CONTEXT.md`
 
 ## Writable Scope
 
 Allowed:
 
-- `apps/api/**`
+- `apps/home-data/**`
 
-Do not edit outside `apps/api/**` unless the user explicitly approves it.
+Do not edit outside `apps/home-data/**` unless the user explicitly approves it.
 
 ## Do Not Modify
 
@@ -197,7 +197,7 @@ Before changing backend behavior, complete this flow:
 
 1. Confirm the goal/spec and affected project surface.
 2. Read root `AGENTS.md`, canonical docs listed above, `CONTEXT.md`, and
-   `apps/api/CONTEXT.md`.
+   `apps/home-data/CONTEXT.md`.
 3. Map the current call flow with `code-mapper` when existing backend code or
    source-reference flow affects the change.
 4. Run a contract checkpoint with `contract-reviewer` before changing
@@ -206,7 +206,7 @@ Before changing backend behavior, complete this flow:
 5. Use `tdd-guide` to validate the first RED when the change touches
    Controller/DTO, Application service, Repository/Flyway, ingest, or External
    API adapter behavior.
-6. Implement only the minimum GREEN slice inside `apps/api/**`.
+6. Implement only the minimum GREEN slice inside `apps/home-data/**`.
 7. Run the narrowest verification command first, then broader available Gradle
    checks.
 8. Use `reviewer` or `.agents/skills/code-review` for findings-first
@@ -232,7 +232,7 @@ For a behavior slice, run the gates in this order:
    slice.
 3. `tdd-guide` to confirm the first RED, public seam, expected RED failure,
    and minimum GREEN.
-4. Implement only the minimum GREEN inside `apps/api/**`.
+4. Implement only the minimum GREEN inside `apps/home-data/**`.
 5. Use `.agents/skills/systematic-debugging` when a check fails or behavior
    does not match the contract.
 6. Use `reviewer` or `.agents/skills/code-review` before claiming completion.
@@ -300,7 +300,7 @@ error policy, stop before implementation and run an API contract review.
 
 ## Verification Rule
 
-After `apps/api` exists, inspect available Gradle tasks first. Run the narrowest relevant test, then run `./gradlew test` or `./gradlew verify` when present.
+After `apps/home-data` exists, inspect available Gradle tasks first. Run the narrowest relevant test, then run `./gradlew test` or `./gradlew verify` when present.
 
 ## Frontend/Backend Conflict Prevention
 

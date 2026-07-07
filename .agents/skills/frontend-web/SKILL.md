@@ -1,6 +1,6 @@
 ---
 name: frontend-web
-description: Guide Home Search apps/web Vite React, Kakao map, API adapter, and map-first UI work.
+description: Guide Home Search apps/web Vite React, Kakao map, API adapter normalization, marker rendering, detail/trade drawer, and map-first UI implementation. Use for "frontend", "React", "Vite", "Kakao map", "marker", "adapter", "drawer", "map UI", "프론트", "지도", "마커", "어댑터", "상세 패널". Do not use for design direction (use home-search-design), contract impact decisions (use api-contract), or failing-command debugging (use systematic-debugging).
 ---
 
 
@@ -26,7 +26,8 @@ Only `apps/web/**`, unless the user explicitly approves a broader scope.
 
 - Preserve public API calls for map, search, region, detail, and trade flows.
 - Keep API normalization inside adapters.
-- Use canonical marker fields: `parcelId`, `lat`, `lng`, `latestDealAmount`, `unitCntSum`.
+- Use the canonical marker field names owned by `docs/API_CONTRACT.md`; read
+  them from that document instead of restating the list here.
 - During migration, accept `id`, `latitude`, and `longitude` variants only in adapter code.
 - Keep map usable on marker API failure.
 - Show non-blocking error state for map fetch failures.
@@ -44,7 +45,17 @@ Prefer public seams:
 
 ## Verification
 
-When `apps/web/package.json` exists, inspect scripts and run existing commands only. Typical checks are `npm run lint` and `npm run build`. Use browser smoke verification for meaningful map UI changes.
+Inspect `apps/web/package.json` scripts and run existing commands only.
+
+- Canonical checks: `cd apps/web && npm run test` (vitest) and
+  `cd apps/web && npm run build`. There is no `lint` script.
+- PR evidence for any `apps/web/**` change requires both commands above
+  (see `.codex/harness/pr_evidence.py`).
+- Run the narrowest vitest target first when iterating, then the full
+  `npm run test` before completion claims.
+- `npm run test:live-api` is an optional live-backend smoke script; it needs a
+  running api and is not part of the PR gate.
+- Use browser smoke verification for meaningful map UI changes.
 
 ## Stop Conditions
 

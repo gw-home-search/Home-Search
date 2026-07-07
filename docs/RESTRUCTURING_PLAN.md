@@ -2,12 +2,15 @@
 
 백엔드 재구조화의 실행 계획과 그 상위 맥락을 한 문서에서 관리한다:
 
-- **지금 실행할 것**: Gradle 멀티모듈 분리(`core`/`api-app`/`batch-app`, §4·§6)와
-  RTMS daily refresh의 Spring Batch run-and-exit 전환 (§5)
+- **이번 선행 PR에서 실행할 것**: 기존 단일 Spring Boot backend 경로를
+  `apps/api`에서 `apps/home-data`로 rename하고, 문서와 자동화 경로가
+  home-data-service 경계를 가리키게 정렬한다.
+- **후속 PR에서 검토할 것**: Gradle 멀티모듈 분리(`core`/`api-app`/`batch-app`,
+  §4·§6)와 RTMS daily refresh의 Spring Batch run-and-exit 전환 (§5)
 - **상위 맥락**: 라이브러리 경계 규칙(§3), MSA 서비스 지도와 진화 로드맵(§8),
   AWS 배포 아키텍처(§9), MSA/Kafka/DB 설계 선행 게이트(§10)
 
-- 상태: 확정 1차 — 개발 착수 기준 문서 (설계 대화 + 리뷰 3회 반영)
+- 상태: rename 선행 PR 반영 — 멀티모듈/배치 전환은 후속 검토 대상
 - 작성일: 2026-07-06
 - 전제: 재작성(rewrite)이 아니라 검증된 코어를 보존하는 구조 이동 + 껍데기 교체(strangler)
 
@@ -19,7 +22,7 @@ home-search는 `home-server`/`home-client`의 마이그레이션 타깃이며, �
 "아파트 실거래 데이터를 수집하고, 안전하게 저장하고, 지도에 표시한다 —
 공개 API URL을 보존하면서"다 (`docs/README.md` 체계). 현재 백엔드 자산:
 
-- `apps/api`: 단일 Spring Boot. ingest 파이프라인(매칭·정규화·dedupe)은
+- `apps/home-data`: home-data-service 경계의 현재 단일 Spring Boot. ingest 파이프라인(매칭·정규화·dedupe)은
   test 350+ / persistenceTest 199 GREEN으로 검증된 상태
 - `libs/rtms-ingest-core`: 순수 파싱 라이브러리 (includeBuild)
 - `apps/ml`: 가격 예측 무상태 추론 (D18)
@@ -44,7 +47,7 @@ home-search는 `home-server`/`home-client`의 마이그레이션 타깃이며, �
 
 ### 1.3 목표
 
-1. Gradle 멀티모듈 `core` / `api-app` / `batch-app` — 모듈 경계가 서비스
+1. 후속 Gradle 멀티모듈 `core` / `api-app` / `batch-app` — 모듈 경계가 서비스
    경계(D15)를 비추고, batch-app은 run-and-exit 배포 모드가 된다.
 2. daily refresh를 Spring Batch job으로 교체 (§5) — JobInstance 기준 재실행과
    `rtmsBackfillJob` 표적 재수집을 얻는다. 파티션 단위 실패 격리는 D11 조건
@@ -58,6 +61,8 @@ home-search는 `home-server`/`home-client`의 마이그레이션 타깃이며, �
 
 - `application/ingest/**` 파이프라인 재작성 금지. 한 줄도 바꾸지 않는 것이 기본값.
 - 신규 레포/신규 프로젝트 시작 금지. 기존 테스트 자산을 안전망으로 사용.
+- 이번 선행 PR에서는 내부 모듈 분리, Java package 변경, DB/Flyway 변경,
+  runtime behavior 변경을 하지 않는다.
 - trade/map 서비스 분리 아님 (D15) — batch와 api는 같은 bounded context의
   두 실행 모드다.
 - user/ai 도메인 구현 아님 — 탄생 수칙(D16)과 청사진(D19)으로 자리만 예약.
@@ -213,7 +218,7 @@ home-search/
 ├─ libs/
 │   └─ rtms-ingest-core/                  # 유지. 프리미티브 추가 승격도 여기로
 ├─ apps/
-│   ├─ api/                               # Gradle 멀티모듈 루트
+│   ├─ home-data/                         # home-data-service 경계
 │   │   ├─ core/                          # home-data-service의 몸체 (boot jar 아님)
 │   │   │     com.home.domain.**
 │   │   │     com.home.application.**     # feature 패키지 = 내부 경계 (D14)
@@ -426,9 +431,18 @@ Partitioned Step을 도입할 경우에만 같은 `runDate` 재실행을 실패 
 1. 설계 md 확정          이 문서 + docs/AI_SERVICE_PLAN.md를 docs/README.md
                          캐노니컬 목록에 등록
 
-1.5 [베이스라인]         이동 전 ./gradlew test persistenceTest 실행·기록.
+1.3 [선행 rename]        apps/api → apps/home-data 경로 rename.
+                         Java package, Flyway, DB schema, runtime behavior,
+                         Gradle 멀티모듈 구조는 변경하지 않는다.
+                         자동화/문서의 현재 경로만 apps/home-data 기준으로 갱신.
+
+1.5 [베이스라인]         모듈 분리 전 ./gradlew test persistenceTest 실행·기록.
                          (persistenceTest는 로컬 PostGIS 필요 — compose 기동 후 실행)
                          이사 전 GREEN이 있어야 이사 후 GREEN이 증거가 된다
+                         재수집 불가 데이터 백업 1회 확보: coordinate_source·
+                         enrichment 손작업 산물·매칭 증거를 pg_dump로 백업하고
+                         위치를 기록한다. 구조 이동의 안전망은 테스트 GREEN과
+                         데이터 백업 두 겹이다 — §6-6 이관 시점까지 미루지 않는다
 
 2. [분할 1차]            core + api-app 모듈 2개로 분리. batch-app은 만들지 않음
                          순수 파일 이동, 동작 변화 0
@@ -438,8 +452,11 @@ Partitioned Step을 도입할 경우에만 같은 `runDate` 재실행을 실패 
                          (resolver/config는 core행)과 달리 api-app에 둔다 (D7).
                          D3에 따라 패키지명은 유지, 소스루트만 분리
                          착수 첫 작업: 참조 지점 전수 그렙 체크리스트 생성 —
-                         레포 전체에서 apps/api 경로·gradle 태스크명 검색
-                         (.codex hooks/harness, backend-quality-gate.toml,
+                         레포 전체에서 apps/home-data 경로·gradle 태스크명 검색
+                         (.codex hooks/harness — 특히 pr_evidence.py의 경로
+                          프리픽스와 backendQualityCheck 태스크명,
+                          .agents/skills — backend-api·security-audit의
+                          경로/클래스명 전제, backend-quality-gate.toml,
                           infra compose·Dockerfile, ops/, perf/, local-runtime)
                          핵심 작업: build.gradle(278줄) 해부 — test/persistenceTest/
                          jacoco/REST Docs/quality gate 태스크의 모듈 분배.

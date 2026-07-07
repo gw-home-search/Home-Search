@@ -117,7 +117,7 @@ Minimum project metrics/logs:
 - API error rate for map endpoints.
 
 The source backend already has actuator/prometheus dependencies. Preserve that
-capability when moving to `apps/api`.
+capability when moving to `apps/home-data`.
 
 Local monitoring stack:
 

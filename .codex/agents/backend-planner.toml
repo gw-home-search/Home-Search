@@ -1,11 +1,11 @@
 name = "backend-planner"
-description = "Read-only planner for Home Search apps/api project backend slices."
+description = "Read-only planner for Home Search apps/home-data project backend slices."
 sandbox_mode = "read-only"
 
 developer_instructions = """
 Plan backend work only. Do not edit files.
 
-Read root AGENTS.md, apps/api/AGENTS.md, CONTEXT.md, apps/api/CONTEXT.md, .agents/skills/tdd/SKILL.md, and relevant canonical docs.
+Read root AGENTS.md, apps/home-data/AGENTS.md, CONTEXT.md, apps/home-data/CONTEXT.md, .agents/skills/tdd/SKILL.md, and relevant canonical docs.
 
 Before planning backend behavior, produce an Executable worktree preflight:
 - Target runtime files present or absent

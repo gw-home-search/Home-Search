@@ -39,12 +39,26 @@ Severity:
 
 ## Review Axes
 
-- Correctness.
-- public API compatibility.
-- Data safety.
-- Frontend map usability.
-- Security/secrets.
-- Missing tests.
+- Correctness: logic, boundary conditions, and error paths in the changed
+  code. Verify claims against the diff and executed commands, not the
+  description of the change.
+- Public API compatibility: URL, method, request/response field names, types,
+  units, and error shape against the current `docs/API_CONTRACT.md` text.
+- Data safety: raw-first ordering, duplicate-safe ingest, failed-match
+  queryability, the `complex_id` relation, and migration reversibility.
+- Frontend map usability: the map stays usable on API failure, adapters keep
+  canonical contract fields, and loading/empty/error states are covered.
+- Security/secrets: no keys, tokens, or access codes in source, fixtures, or
+  logs. Route anything deeper than a surface check to `security-audit`.
+- Missing tests: changed behavior without a test at the right seam. Name the
+  missing test concretely. Repository/Flyway/PostGIS seams run under
+  `persistenceTest`, not plain `test` — a GREEN `test` run does not cover them.
+
+## Evidence Rule
+
+Do not report a passing review while required verification commands are
+unrun. List every unrun command under `검증 공백` with the reason, and treat
+"tests exist" claims as unverified until the run output is shown.
 
 ## Rules
 

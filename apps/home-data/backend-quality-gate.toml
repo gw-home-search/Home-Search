@@ -32,6 +32,6 @@ forbidden_public_fields = [
 ]
 
 [commands]
-quality = "cd apps/api && ./gradlew backendQualityCheck"
-docs = "cd apps/api && ./gradlew apiDocsCheck"
-coverage = "cd apps/api && ./gradlew coverageCheck"
+quality = "cd apps/home-data && ./gradlew backendQualityCheck"
+docs = "cd apps/home-data && ./gradlew apiDocsCheck"
+coverage = "cd apps/home-data && ./gradlew coverageCheck"

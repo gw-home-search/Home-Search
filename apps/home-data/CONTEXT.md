@@ -1,11 +1,21 @@
-# apps/api Context
+# apps/home-data Context
 
 
 This file defines backend-specific Home Search terms. Canonical decisions remain in root `docs/*.md`.
 
 ## Backend Shape
 
-**API app** is the Spring Boot backend under `apps/api`.
+**Home-data service** is the Spring Boot backend under `apps/home-data`. It owns
+RTMS ingest, map/trade HTTP APIs, domain logic, persistence, and the operational
+`home_search` database.
+
+**API app** is the current HTTP execution mode of the home-data service. A
+future `api-app` directory may isolate this mode without creating a separate
+MSA service or database.
+
+**Batch app** is the future RTMS batch execution mode of the same home-data
+service. It may become a `batch-app` directory later, but it keeps the same
+`home_search` ownership boundary.
 
 **Layered backend** means `application`, `domain`, `infrastructure`, and `global` responsibilities remain separate.
 
@@ -67,4 +77,5 @@ blocks can be held by feature-local SQL provider classes under the same
 
 ## Backend Non-Scope
 
-The API app must not make map or trade endpoints depend on ranking, trend, favorite, alarm, mail, recommendation, auth, or heavy analytics state.
+The home-data service must not make map or trade endpoints depend on ranking,
+trend, favorite, alarm, mail, recommendation, auth, or heavy analytics state.

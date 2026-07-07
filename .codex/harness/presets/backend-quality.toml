@@ -5,11 +5,11 @@ slice_patterns = ["backend-quality", "quality-docs", "docs-foundation"]
 
 [targets.backend]
 prompt = "backend_execute.md"
-allowed_scope = "apps/api/**, infra/**, docs/**, .codex/harness/**, .codex/hooks/**, .github/**"
+allowed_scope = "apps/home-data/**, infra/**, docs/**, .codex/harness/**, .codex/hooks/**, .github/**"
 forbidden_scope = "apps/web/**"
 verification_commands = [
   "docker compose -f infra/docker-compose.local.yml config",
-  "cd apps/api && ./gradlew backendQualityCheck",
+  "cd apps/home-data && ./gradlew backendQualityCheck",
   "python3 scripts/check-test-display-names.py",
   "python3 .codex/harness/project_terms_check.py",
   "git diff --check",

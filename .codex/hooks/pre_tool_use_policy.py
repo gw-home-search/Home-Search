@@ -29,7 +29,7 @@ from hook_common import (
 
 
 PROTECTED_MUTATION_PREFIXES = (
-    "apps/api/AGENTS.md",
+    "apps/home-data/AGENTS.md",
     "apps/web/AGENTS.md",
     "build/",
     "dist/",
@@ -584,8 +584,8 @@ def check_payload(
     scope = infer_worktree_scope(root, cwd, branch)
     if scope == "backend" and any(path.startswith("apps/web/") for path in paths):
         deny("backend worktree에서 apps/web/** 변경 차단.")
-    if scope == "frontend" and any(path.startswith("apps/api/") for path in paths):
-        deny("frontend worktree에서 apps/api/** 변경 차단.")
+    if scope == "frontend" and any(path.startswith("apps/home-data/") for path in paths):
+        deny("frontend worktree에서 apps/home-data/** 변경 차단.")
 
 
 def denied_output(
@@ -619,7 +619,7 @@ def run_self_test() -> int:
         (
             "dangerous rm -rf is denied",
             lambda: "rm -rf 차단" in denied_output(
-                {"cwd": str(FALLBACK_REPO_ROOT), "tool_input": {"cmd": "rm -rf apps/api/build"}},
+                {"cwd": str(FALLBACK_REPO_ROOT), "tool_input": {"cmd": "rm -rf apps/home-data/build"}},
                 repo_root=FALLBACK_REPO_ROOT,
                 branch_name="feat/root",
             ),
@@ -644,9 +644,9 @@ def run_self_test() -> int:
             ),
         ),
         (
-            "frontend worktree denies apps/api mutation",
-            lambda: "apps/api/**" in denied_output(
-                patch_payload(frontend_root, "apps/api/src/main/java/App.java"),
+            "frontend worktree denies apps/home-data mutation",
+            lambda: "apps/home-data/**" in denied_output(
+                patch_payload(frontend_root, "apps/home-data/src/main/java/App.java"),
                 repo_root=frontend_root,
                 branch_name="feat/web-region-marker-slice",
             ),
@@ -654,7 +654,7 @@ def run_self_test() -> int:
         (
             "integration scope allows cross-app mutation",
             lambda: not denied_output(
-                patch_payload(Path("/tmp/home-search-integration-work"), "apps/api/src/main/java/App.java"),
+                patch_payload(Path("/tmp/home-search-integration-work"), "apps/home-data/src/main/java/App.java"),
                 repo_root=Path("/tmp/home-search-integration-work"),
                 branch_name="feat/region-marker-integration",
             ),
@@ -730,11 +730,11 @@ def run_self_test() -> int:
             "build output mutation is denied before protected approval",
             lambda: "build output 변경 차단" in denied_output(
                 {
-                    **patch_payload(FALLBACK_REPO_ROOT, "apps/api/build/generated.txt"),
+                    **patch_payload(FALLBACK_REPO_ROOT, "apps/home-data/build/generated.txt"),
                     "last_assistant_message": "\n".join(
                         [
                             "보호 경로 변경 요청:",
-                            "보호 경로 대상: apps/api/build/generated.txt",
+                            "보호 경로 대상: apps/home-data/build/generated.txt",
                             "보호 경로 변경 기준: current task approval only",
                             "사용자 승인: 확인",
                         ]

@@ -35,7 +35,7 @@ jobs:
           else
             {
               echo ".github/workflows/ci.yml"
-              echo "apps/api/"
+              echo "apps/home-data/"
               echo "apps/web/"
             } > changed-files.txt
           fi
@@ -49,7 +49,7 @@ jobs:
               .github/workflows/ci.yml)
                 ci_changed=true
                 ;;
-              apps/api/*|apps/source-data/*|infra/*|docs/API_CONTRACT.md|docs/DATA_STORAGE.md|docs/INFRA_AND_ENV.md|settings.gradle|build.gradle|gradle.properties|gradle/*)
+              apps/home-data/*|apps/source-data/*|infra/*|docs/API_CONTRACT.md|docs/DATA_STORAGE.md|docs/INFRA_AND_ENV.md|settings.gradle|build.gradle|gradle.properties|gradle/*)
                 backend_changed=true
                 ;;
               apps/web/*)
@@ -92,7 +92,7 @@ jobs:
           java-version: "17"
           cache: gradle
       - name: Run backend tests
-        working-directory: apps/api
+        working-directory: apps/home-data
         run: ./gradlew backendQualityCheck --no-daemon --stacktrace
       - name: Upload backend quality artifacts
         if: always()
@@ -100,10 +100,10 @@ jobs:
         with:
           name: backend-quality-artifacts
           path: |
-            apps/api/build/reports/tests/
-            apps/api/build/reports/jacoco/
-            apps/api/build/docs/asciidoc/
-            apps/api/build/api-spec/openapi3.yaml
+            apps/home-data/build/reports/tests/
+            apps/home-data/build/reports/jacoco/
+            apps/home-data/build/docs/asciidoc/
+            apps/home-data/build/api-spec/openapi3.yaml
           if-no-files-found: ignore
 
   frontend-test-build:

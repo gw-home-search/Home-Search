@@ -8,7 +8,7 @@ use before claiming a backend slice is complete.
 Run the single backend gate:
 
 ```sh
-cd apps/api && ./gradlew backendQualityCheck
+cd apps/home-data && ./gradlew backendQualityCheck
 ```
 
 The gate runs profile boundary tests, public API contract tests, PostGIS/Flyway
@@ -33,7 +33,7 @@ REST Docs tests generate snippets from MockMvc web tests. The OpenAPI YAML is
 generated from those snippets at:
 
 ```text
-apps/api/build/api-spec/openapi3.yaml
+apps/home-data/build/api-spec/openapi3.yaml
 ```
 
 The YAML must include the current map paths and canonical public fields. It
@@ -54,5 +54,5 @@ Backend PRs should include these evidence lines:
 ```text
 Coverage: >=90%
 Docs/OpenAPI: generated + verified
-- `cd apps/api && ./gradlew backendQualityCheck` = pass (<reason>)
+- `cd apps/home-data && ./gradlew backendQualityCheck` = pass (<reason>)
 ```

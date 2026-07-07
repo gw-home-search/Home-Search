@@ -1,0 +1,136 @@
+plugins {
+    id 'org.springframework.boot'
+    id 'org.asciidoctor.jvm.convert'
+    id 'com.epages.restdocs-api-spec'
+}
+
+description = 'Home Search property-data API app'
+
+configurations {
+    asciidoctorExt
+}
+
+dependencies {
+    implementation project(':core')
+
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+    runtimeOnly 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
+    testImplementation 'com.epages:restdocs-api-spec-mockmvc:0.19.4'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+
+    asciidoctorExt 'org.springframework.restdocs:spring-restdocs-asciidoctor'
+}
+
+ext {
+    snippetsDir = file('build/generated-snippets')
+}
+
+tasks.named('test') {
+    exclude '**/infrastructure/web/**/*ContractTest.class'
+    exclude '**/*RestDocsTest.class'
+}
+
+tasks.register('apiContractTest', Test) {
+    description = 'Run public API controller and DTO contract tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    include '**/infrastructure/web/**/*ContractTest.class'
+}
+
+tasks.register('restDocsTest', Test) {
+    description = 'Generate Spring REST Docs snippets and API spec resource snippets.'
+    group = 'documentation'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    outputs.dir snippetsDir
+    useJUnitPlatform {
+        includeTags 'restDocs'
+    }
+}
+
+tasks.named('asciidoctor') {
+    dependsOn tasks.named('restDocsTest')
+    inputs.dir snippetsDir
+    configurations 'asciidoctorExt'
+}
+
+openapi3 {
+    server = 'http://localhost:8080'
+    title = 'Home Search public API'
+    description = 'Home Search map and trade-data API generated from REST Docs tests.'
+    version = project.version.toString()
+    format = 'yaml'
+}
+
+tasks.matching { it.name == 'openapi3' }.configureEach {
+    dependsOn tasks.named('restDocsTest')
+}
+
+tasks.register('verifyOpenApiSpec') {
+    description = 'Verify generated OpenAPI YAML exposes only the public map API contract.'
+    group = 'verification'
+    dependsOn tasks.named('openapi3')
+
+    doLast {
+        def specFile = layout.buildDirectory.file('api-spec/openapi3.yaml').get().asFile
+        if (!specFile.exists()) {
+            throw new GradleException("OpenAPI spec was not generated: ${specFile}")
+        }
+
+        def content = specFile.getText('UTF-8')
+        def requiredTokens = [
+            '/api/v1/map/regions',
+            '/api/v1/map/complexes',
+            '/api/v1/search/complexes',
+            '/api/v1/search/complexes/suggestions',
+            '/api/v1/region',
+            '/api/v1/region/{regionId}/complexes',
+            '/api/v1/detail/{parcelId}',
+            '/api/v1/detail/{parcelId}/complexes',
+            '/api/v1/complex/{complexId}',
+            '/api/v1/complex/{complexId}/trades',
+            '/api/v1/trade/{parcelId}',
+            'complexId',
+            'complexName',
+            'parcelId',
+            'lat',
+            'lng',
+            'latestDealAmount',
+            'unitCntSum',
+            'dealAmount',
+            'exception',
+            'timestamp'
+        ]
+        requiredTokens.each { token ->
+            if (!content.contains(token)) {
+                throw new GradleException("OpenAPI spec is missing required token: ${token}")
+            }
+        }
+
+        def forbiddenPublicFields = ['complex_pk', 'complexPk', 'apt_seq', 'aptSeq', 'source_key', 'sourceKey']
+        forbiddenPublicFields.each { field ->
+            if ((content =~ /(?m)^\s+${field}\s*:/).find()) {
+                throw new GradleException("OpenAPI spec exposes internal audit field: ${field}")
+            }
+        }
+    }
+}
+
+tasks.register('apiDocsCheck') {
+    description = 'Generate and verify REST Docs HTML and OpenAPI YAML artifacts.'
+    group = 'verification'
+    dependsOn tasks.named('restDocsTest')
+    dependsOn tasks.named('asciidoctor')
+    dependsOn tasks.named('verifyOpenApiSpec')
+}

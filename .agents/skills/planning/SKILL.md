@@ -35,8 +35,8 @@ Use this skill when a request is goal-level or has ambiguous scope. The goal is 
 
 1. Restate the decision to make in one sentence.
 2. Read the canonical docs that own the affected surface before recommending a
-   direction. For backend work, include `apps/home-data/AGENTS.md` and
-   `apps/home-data/CONTEXT.md`. For frontend work, include `apps/web/AGENTS.md` and
+   direction. For backend work, include `apps/property-data/AGENTS.md` and
+   `apps/property-data/CONTEXT.md`. For frontend work, include `apps/web/AGENTS.md` and
    `apps/web/CONTEXT.md`.
 3. Check the current repository state with local evidence, not memory. Use `rg`,
    `find`, `wc`, package scripts, migration files, and config wiring as needed.

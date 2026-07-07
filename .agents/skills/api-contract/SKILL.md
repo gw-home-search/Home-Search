@@ -10,7 +10,7 @@ Use this skill when work touches API clients, controllers, DTOs, marker adapters
 
 ## Purpose
 
-Keep `apps/home-data` and `apps/web` compatible with `docs/API_CONTRACT.md` before parallel work begins or lands.
+Keep `apps/property-data` and `apps/web` compatible with `docs/API_CONTRACT.md` before parallel work begins or lands.
 
 This skill is the local compatibility checklist. When a gate flow routes to the
 read-only `contract-reviewer` agent, that agent owns the gate decision; this
@@ -61,7 +61,7 @@ Confirm the work preserves:
 ## Verification
 
 - Backend contract surface: run the affected controller/DTO tests first
-  (`cd apps/home-data && ./gradlew test --tests '<ControllerTest>'`), then the
+  (`cd apps/property-data && ./gradlew test --tests '<ControllerTest>'`), then the
   canonical gate `./gradlew backendQualityCheck` before completion claims.
 - Frontend contract surface: `cd apps/web && npm run test` covers adapter
   normalization and marker transforms.

@@ -1,0 +1,36 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    api 'com.home:rtms-ingest-core:0.0.1-SNAPSHOT'
+
+    implementation 'io.micrometer:micrometer-core'
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework:spring-web'
+
+    runtimeOnly 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+}
+
+tasks.named('test') {
+    exclude '**/infrastructure/persistence/**/*Test.class'
+    exclude '**/*JdbcIntegrationTest.class'
+}
+
+tasks.register('persistenceTest', Test) {
+    description = 'Run Flyway/JDBC/PostGIS persistence tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    include '**/infrastructure/persistence/**/*Test.class'
+    include '**/*JdbcIntegrationTest.class'
+}

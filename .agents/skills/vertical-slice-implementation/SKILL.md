@@ -23,7 +23,7 @@ Each slice must include:
 
 - User-visible or API-visible behavior. A slice that only moves files or adds
   unused code is not a vertical slice.
-- Exact app ownership: `apps/home-data`, `apps/web`, or both.
+- Exact app ownership: `apps/property-data`, `apps/web`, or both.
 - API contract checkpoint via `api-contract` when the slice touches a public
   URL, field, unit, or error shape.
 - Data invariant checkpoint if backend is involved: raw-first ordering,
@@ -59,7 +59,7 @@ Each slice must include:
 
 Name only commands that exist:
 
-- Backend slice: `cd apps/home-data && ./gradlew backendQualityCheck`
+- Backend slice: `cd apps/property-data && ./gradlew backendQualityCheck`
   (includes `persistenceTest`; plain `test` skips PostGIS integration tests).
 - Frontend slice: `cd apps/web && npm run test` and `cd apps/web && npm run build`.
 - Infra slice: `docker compose -f infra/docker-compose.local.yml config`.

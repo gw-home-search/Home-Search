@@ -15,7 +15,7 @@ This file gives agents the shortest shared vocabulary for Home Search. Canonical
 
 **Source frontend** means `/Users/gwongwangjae/frontend/home-client`. It is read-only reference material.
 
-**Target home-data** means `apps/home-data`, the backend service boundary that
+**Target property-data** means `apps/property-data`, the backend service boundary that
 owns RTMS ingest, map/trade API runtime, domain logic, persistence, and the
 operational `home_search` database.
 

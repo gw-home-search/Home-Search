@@ -1,0 +1,8 @@
+.env
+.gradle/
+.idea/
+bin/
+build/
+core/build/
+api/build/
+.live-smoke/

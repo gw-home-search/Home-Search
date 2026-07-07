@@ -43,29 +43,33 @@ Important project packages:
 
 ## Backend Project Target
 
-In `/Users/gwongwangjae/home-search/apps/home-data`, keep the backend layered but
+In `/Users/gwongwangjae/home-search/apps/property-data`, keep the backend layered but
 make the project boundary clearer:
 
 ```text
-apps/home-data
-├── src/main/java/com/home
-│   ├── application/
-│   ├── domain/
-│   ├── infrastructure/
-│   │   ├── external/
-│   │   ├── persistence/
-│   │   ├── batch/
-│   │   └── web/
-│   └── global/
-└── src/main/resources/db/migration/
+apps/property-data
+├── core/
+│   └── src/main/java/com/home
+│       ├── application/
+│       ├── domain/
+│       └── infrastructure/
+│           ├── external/
+│           ├── persistence/
+│           └── cache/
+└── api/
+    └── src/main/java/com/home
+        ├── HomeSearchApiApplication.java
+        ├── infrastructure/web/
+        ├── infrastructure/scheduling/
+        └── global/
 ```
 
 The implementation can keep existing package names during the first move. The
 important decision is not package renaming; it is keeping project focused on
 collection, storage, and map display.
 
-`apps/home-data` is the home-data-service boundary. Future `core`, `api-app`,
-and `batch-app` directories are internal module or execution-mode boundaries
+`apps/property-data` is the property-data-service boundary. `core` and `api`
+are internal module or execution-mode boundaries
 inside that service and keep one `home_search` database ownership model.
 
 ## Coordinate Source Boundary

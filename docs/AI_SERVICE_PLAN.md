@@ -43,17 +43,17 @@ app/chatbot/       챗봇 오케스트레이션
 | | 내용 |
 |---|---|
 | ai-service가 소유 | `ai` 스키마: 대화 세션/메모리, 법령 코퍼스, 문서 청크, 임베딩(pgvector), vector index. Alembic으로 자체 마이그레이션 |
-| ai-service가 소비 | 사실(facts) = `ai_read` 읽기 전용 뷰. 계산된 값(가격 예측 등) = api-app API |
+| ai-service가 소비 | 사실(facts) = `ai_read` 읽기 전용 뷰. 계산된 값(가격 예측 등) = api API |
 | ai-service 금지 | `public` 스키마 테이블 직접 접근(권한으로 차단), ml-inference 직접 호출(§8.4), home_search 쓰기 |
 | DB 권한 | `ai_service` 역할: `ai_read` SELECT + `ai` 스키마 ALL. `public` 권한 없음 |
 | `ai_read` 뷰 소유 | core(Spring Flyway). 해제 거래 제외·match-failed 제외 등 도메인 필터를 뷰 정의에 인코딩 |
-| 진입 경로 | web → api-app(BFF: 인증·rate limit·audit) → ai-service SSE. api-app 중계는 async 필수 |
+| 진입 경로 | web → api(BFF: 인증·rate limit·audit) → ai-service SSE. api 중계는 async 필수 |
 
 ## 3. 이식 매핑 (kosa → home-search)
 
 | kosa 모듈 | home-search 대응 | 처리 |
 |---|---|---|
-| `app/real_estate/**` + `models.py` + `db/init` seed | Spring api-app + `home_search` DB가 이미 담당 | **이식하지 않음** (대체됨) |
+| `app/real_estate/**` + `models.py` + `db/init` seed | Spring api + `home_search` DB가 이미 담당 | **이식하지 않음** (대체됨) |
 | `app/chatbot/service/**` (splitter/planner/orchestrator/supervisor/tools/answer/streaming/memory) | `apps/ai` 코어 파이프라인 | 구조 계승 |
 | `app/chatbot/features/*/dao.py` (complexes/trades/regions 직접 SQL) | `ai_read` 뷰 조회로 치환 | **이식의 핵심 작업** |
 | `app/chatbot/features/legal_contract/rag/**` | ai-service 완전 소유 (`ai` 스키마) | 거의 그대로 이식 (home 데이터 의존 없음) |
@@ -68,9 +68,9 @@ feature별 데이터 소스 매핑:
 | simple_lookup (시세/단지 조회) | `ai_read.complex_fact_v`, `ai_read.trade_fact_v` |
 | price_trend | `ai_read.trade_fact_v` 집계 또는 전용 트렌드 뷰 |
 | comparison | 위 뷰들의 조합 |
-| recommendation | `ai_read` 뷰 + ai-service 내부 선정 로직. 가드레일의 later-scope "recommendations"는 챗봇 기능으로서만 존재하며 home-data API 표면에 추가하지 않는다 |
+| recommendation | `ai_read` 뷰 + ai-service 내부 선정 로직. 가드레일의 later-scope "recommendations"는 챗봇 기능으로서만 존재하며 property-data API 표면에 추가하지 않는다 |
 | legal_contract | 자체 RAG (법령 API → `ai` 스키마 코퍼스). home 데이터 불필요 |
-| (미래) 가격 예측 질문 | api-app 예측 API 경유 (D18 — ml-inference 직접 호출 금지) |
+| (미래) 가격 예측 질문 | api 예측 API 경유 (D18 — ml-inference 직접 호출 금지) |
 
 ## 4. 목표 구조 (apps/ai)
 
@@ -106,7 +106,7 @@ apps/ai/
 
 ```
 A0  선행 (core 쪽): ai_read 스키마 + 뷰 2~3개 + ai_service 역할 Flyway 추가
-    api-app BFF 중계 경로 (async SSE) 골격
+    api BFF 중계 경로 (async SSE) 골격
 A1  파이프라인 골격 + simple_lookup + price_trend
     (뷰 소비 검증이 목적. planner는 rule 경로만으로 시작 가능)
 A2  comparison + supervisor(LLM fallback) + streaming 완성
@@ -120,7 +120,7 @@ A4  recommendation (POI 제외 버전) + 대화 메모리 DB 승격 검토
 
 ## 6. 운영·보안 메모
 
-- 시크릿: LLM API key, 법령 API key는 ai-service 전용. home-data의 공공 API
+- 시크릿: LLM API key, 법령 API key는 ai-service 전용. property-data의 공공 API
   키와 저장·주입 경로를 분리한다.
 - 비용 가드: supervisor(LLM) 경로 호출률과 토큰 사용량을 메트릭으로 노출.
   rule planner가 처리한 비율이 떨어지면 프롬프트/신호 사전을 먼저 점검.

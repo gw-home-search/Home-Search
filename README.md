@@ -47,7 +47,9 @@ Home Search는 RTMS 실거래 원본을 보존하면서 단지와 거래를 연�
 ```text
 home-search/
 ├── apps/
-│   ├── api/       # Spring Boot API, ingest, domain, persistence
+│   ├── property-data/
+│   │   ├── core/  # domain, application, persistence, external clients
+│   │   └── api/   # Spring Boot HTTP API runtime
 │   └── web/       # React 지도 중심 UI
 ├── docs/          # 아키텍처, 데이터 저장, API 계약 문서
 └── infra/         # 로컬 Docker, PostGIS, Redis, 모니터링
@@ -57,7 +59,7 @@ home-search/
 
 ```bash
 # Backend: 테스트, persistence, API 계약, OpenAPI, coverage, Javadoc
-cd apps/home-data
+cd apps/property-data
 ./gradlew backendQualityCheck
 
 # Frontend

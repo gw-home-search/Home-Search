@@ -1,0 +1,156 @@
+plugins {
+    id 'org.springframework.boot' version '3.5.7' apply false
+    id 'io.spring.dependency-management' version '1.1.7' apply false
+    id 'jacoco'
+    id 'org.asciidoctor.jvm.convert' version '4.0.5' apply false
+    id 'com.epages.restdocs-api-spec' version '0.20.1' apply false
+}
+
+group = 'com.home'
+version = '0.0.1-SNAPSHOT'
+description = 'Home Search property-data service'
+
+allprojects {
+    group = rootProject.group
+    version = rootProject.version
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'jacoco'
+
+    dependencyManagement {
+        imports {
+            mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES
+        }
+    }
+
+    dependencies {
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    }
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(17)
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+    }
+
+    tasks.withType(Javadoc).configureEach {
+        options.addStringOption('Xdoclint:all,-missing', '-quiet')
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+        reports.html.required = false
+        doFirst {
+            layout.buildDirectory.dir('jacoco').get().asFile.mkdirs()
+        }
+    }
+
+    jacoco {
+        toolVersion = '0.8.13'
+    }
+}
+
+def coverageExcludes = [
+    '**/HomeSearchApiApplication*',
+    '**/*Request*',
+    '**/*Response*',
+    '**/*Record*',
+    '**/*Command*',
+    '**/*Result*',
+    '**/*Status*',
+    '**/*Matcher*',
+    '**/dto/**',
+    '**/package-info*'
+]
+def jacocoExec = { Project project, String taskName ->
+    project.layout.buildDirectory.file("jacoco/${taskName}.exec")
+}
+def coverageExecutionData = files(
+    jacocoExec(project(':core'), 'test'),
+    jacocoExec(project(':core'), 'persistenceTest'),
+    jacocoExec(project(':api'), 'test'),
+    jacocoExec(project(':api'), 'apiContractTest')
+)
+def coverageSourceDirectories = files(subprojects.collect { it.sourceSets.main.allSource.srcDirs })
+def coverageClassDirectories = files(subprojects.collect { project ->
+    project.sourceSets.main.output.classesDirs.collect {
+        fileTree(dir: it, exclude: coverageExcludes)
+    }
+})
+
+tasks.register('jacocoRootReport', JacocoReport) {
+    dependsOn ':core:test'
+    dependsOn ':core:persistenceTest'
+    dependsOn ':api:test'
+    dependsOn ':api:apiContractTest'
+
+    executionData.setFrom(coverageExecutionData)
+    sourceDirectories.setFrom(coverageSourceDirectories)
+    classDirectories.setFrom(coverageClassDirectories)
+    reports {
+        xml.required = true
+        csv.required = false
+        html.required = true
+    }
+}
+
+tasks.register('jacocoRootCoverageVerification', JacocoCoverageVerification) {
+    dependsOn tasks.named('jacocoRootReport')
+    executionData.setFrom(coverageExecutionData)
+    sourceDirectories.setFrom(coverageSourceDirectories)
+    classDirectories.setFrom(coverageClassDirectories)
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.90
+            }
+            limit {
+                counter = 'INSTRUCTION'
+                value = 'COVEREDRATIO'
+                minimum = 0.90
+            }
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.65
+            }
+        }
+    }
+}
+
+tasks.register('coverageCheck') {
+    description = 'Generate JaCoCo reports and enforce backend coverage gates.'
+    group = 'verification'
+    dependsOn tasks.named('jacocoRootReport')
+    dependsOn tasks.named('jacocoRootCoverageVerification')
+}
+
+tasks.register('apiDocsCheck') {
+    description = 'Generate and verify API app REST Docs and OpenAPI artifacts.'
+    group = 'verification'
+    dependsOn ':api:apiDocsCheck'
+}
+
+tasks.register('backendQualityCheck') {
+    description = 'Run backend profile, contract, persistence, docs, coverage, and javadoc gates.'
+    group = 'verification'
+    dependsOn ':core:test'
+    dependsOn ':core:persistenceTest'
+    dependsOn ':api:test'
+    dependsOn ':api:apiContractTest'
+    dependsOn ':api:restDocsTest'
+    dependsOn ':api:apiDocsCheck'
+    dependsOn ':core:javadoc'
+    dependsOn ':api:javadoc'
+    dependsOn tasks.named('coverageCheck')
+}

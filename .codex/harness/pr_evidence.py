@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 DIFF_CHECK = "git diff --check"
 DOCKER_COMPOSE_LOCAL_CONFIG = "docker compose -f infra/docker-compose.local.yml config"
-API_QUALITY = "cd apps/home-data && ./gradlew backendQualityCheck"
+API_QUALITY = "cd apps/property-data && ./gradlew backendQualityCheck"
 WEB_TEST = "cd apps/web && npm run test"
 WEB_BUILD = "cd apps/web && npm run build"
 TEST_DISPLAY_NAME_POLICY = "python3 scripts/check-test-display-names.py"
@@ -141,7 +141,7 @@ def requires_project_terms_check(path: str) -> bool:
     if lowered.endswith(".md") and (
         path in {"AGENTS.md", "README.md", "CONTEXT.md", "CLAUDE.md"}
         or path.startswith("docs/")
-        or path.startswith("apps/home-data/")
+        or path.startswith("apps/property-data/")
         or path.startswith("apps/web/")
         or path.startswith(".agents/skills/")
         or path.startswith(".codex/harness/prompts/")
@@ -199,13 +199,14 @@ def requirements_for_changed_files(changed_files: list[str] | tuple[str, ...] | 
         if reason:
             forbidden.append((path, reason))
         companion_doc = is_removed_companion_doc(path)
-        if path.startswith("apps/home-data/") and not companion_doc:
+        if path.startswith("apps/property-data/") and not companion_doc:
             commands.add(API_QUALITY)
         if path.startswith("apps/web/") and not companion_doc:
             commands.add(WEB_TEST)
             commands.add(WEB_BUILD)
         if (
-            path.startswith("apps/home-data/src/test/java/")
+            path.startswith("apps/property-data/core/src/test/java/")
+            or path.startswith("apps/property-data/api/src/test/java/")
             or (
                 path.startswith("apps/web/src/")
                 and (path.endswith(".test.ts") or path.endswith(".test.tsx"))
@@ -232,7 +233,7 @@ def requirements_for_changed_files(changed_files: list[str] | tuple[str, ...] | 
     return EvidenceRequirements(
         commands=frozenset(commands),
         forbidden_paths=tuple(forbidden),
-        backend_changed=any(path.startswith("apps/home-data/") and not is_removed_companion_doc(path) for path in changed),
+        backend_changed=any(path.startswith("apps/property-data/") and not is_removed_companion_doc(path) for path in changed),
         web_changed=any(path.startswith("apps/web/") and not is_removed_companion_doc(path) for path in changed),
         canonical_markdown=canonical_markdown,
     )

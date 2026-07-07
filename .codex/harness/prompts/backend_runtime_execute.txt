@@ -20,12 +20,12 @@ Forbidden edit scope:
 
 Instructions:
 - Edit only paths inside the allowed edit scope. If the work item needs a path outside that scope, stop and report the required split.
-- Read root AGENTS.md, apps/home-data/AGENTS.md, CONTEXT.md, apps/home-data/CONTEXT.md, and relevant canonical docs before editing.
+- Read root AGENTS.md, apps/property-data/AGENTS.md, CONTEXT.md, apps/property-data/CONTEXT.md, and relevant canonical docs before editing.
 - Preserve the public API contract and data invariants.
 - Do not introduce later-scope ranking, favorite, alarm, mail, recommendation, auth, or heavy analytics work.
 - Do not store secrets, service keys, .env* files, production data, or build output.
 - Treat local Docker/PostGIS work as repository-managed developer runtime only; do not run destructive DB operations.
-- Treat `cd apps/home-data && ./gradlew backendQualityCheck` as the backend canonical PR/CI gate when apps/home-data changes are present.
+- Treat `cd apps/property-data && ./gradlew backendQualityCheck` as the backend canonical PR/CI gate when apps/property-data changes are present.
 - Use the minimum GREEN work item and leave a short Korean-first gate summary.
 
 Skill routing:

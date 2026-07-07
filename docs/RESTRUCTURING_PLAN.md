@@ -1,9 +1,13 @@
-# Backend Restructuring Plan (초안)
+# Backend Restructuring Plan
 
-백엔드(apps/api)를 Gradle 멀티모듈(`core` / `api-app` / `batch-app`)로 재구조화하고,
-RTMS daily refresh 스케줄링을 Spring Batch 기반 run-and-exit 배치로 전환하기 위한 설계 문서.
+백엔드 재구조화의 실행 계획과 그 상위 맥락을 한 문서에서 관리한다:
 
-- 상태: 확정 1차 — 개발 착수 기준 문서 (설계 대화 + 리뷰 2회 반영)
+- **지금 실행할 것**: Gradle 멀티모듈 분리(`core`/`api-app`/`batch-app`, §4·§6)와
+  RTMS daily refresh의 Spring Batch run-and-exit 전환 (§5)
+- **상위 맥락**: 라이브러리 경계 규칙(§3), MSA 서비스 지도와 진화 로드맵(§8),
+  AWS 배포 아키텍처(§9), MSA/Kafka/DB 설계 선행 게이트(§10)
+
+- 상태: 확정 1차 — 개발 착수 기준 문서 (설계 대화 + 리뷰 3회 반영)
 - 작성일: 2026-07-06
 - 전제: 재작성(rewrite)이 아니라 검증된 코어를 보존하는 구조 이동 + 껍데기 교체(strangler)
 
@@ -75,7 +79,7 @@ home-search는 `home-server`/`home-client`의 마이그레이션 타깃이며, �
 
 | # | 결정 | 내용 |
 |---|---|---|
-| D1 | 모듈 구성 (재개정) | `core` + boot jar 2개(`api-app`, `batch-app`). 원칙: **모듈 경계는 서비스 경계(D15)를 비춘다** — core는 home-data-service의 몸체이므로 한 덩어리가 정확한 반영이다. core-trade/core-map 분할안은 검토 후 폐기: 쓰기 파이프라인이 region 동기화·coordinate preflight·complex metadata를 가로질러(daily 스케줄러의 region import, 매칭의 metadata 4타입) 상호 의존 금지가 성립하지 않고, 강행 시 core-shared가 부활한다. `core-shared`·`core-schema`도 두지 않는다(Flyway는 core에) |
+| D1 | 모듈 구성 (재개정) | `core` + boot jar 2개(`api-app`, `batch-app`). 원칙: 모듈 경계는 서비스 경계(D15)를 비춘다. core-trade/core-map·core-shared·core-schema 분할안은 검토 후 폐기 — 사유는 §4 "경계 수단의 역할 분담" |
 | D2 | 모듈 이름 | `core` / `api-app` / `batch-app`. user 스코프 진입 시 `core-user` 추가 (D16) |
 | D3 | 패키지명 불변 | 자바 패키지(`com.home.*`)는 그대로 두고 소스루트만 이동. import 변경 0이 원칙 |
 | D4 | 신규 libs 생성 보류 | 지금은 `libs/rtms-ingest-core`만 유지. 신규 라이브러리는 §3.3 승격 조건 충족 시에만 |
@@ -83,24 +87,24 @@ home-search는 `home-server`/`home-client`의 마이그레이션 타깃이며, �
 | D6 | 전환 방식 | strangler: 신규 Spring Batch job과 기존 `@Scheduled` 경로 병행 검증 후 구 경로 삭제 |
 | D7 | enrichment 스케줄러 | `ComplexMetadataEnrichmentScheduler`는 당분간 api-app 잔류. batch-app 후속 job 후보로만 표시 |
 | D8 | `rtms_ingest_run` 유지 | 도메인 운영 증거 테이블. `BATCH_*` 메타데이터로 대체하지 않음 |
-| D9 | JobParameters 규약 | daily identifying 파라미터는 `runDate`(yyyy-MM-dd) 하나를 기본값으로 둔다. 같은 날 재실행은 동일한 resolved workset을 대상으로 한다는 검증이 전제이며, 파티션 restart를 도입하기 전에는 workset snapshot 또는 plan drift 검증 방식을 확정한다. `baseDealYmd`는 runDate에서 파생 |
+| D9 | JobParameters 규약 | daily identifying 파라미터는 `runDate`(yyyy-MM-dd) 하나가 기본값, `baseDealYmd`는 파생. 재실행 workset 검증 전제와 drift 처리 — 함정 상세는 §5.2 |
 | D10 | job 카탈로그 | batch-app은 multi-job 그릇. 시작은 `rtmsDailyRefreshJob` + `rtmsBackfillJob` 2개. job 1개 = 책임 1개, 이질적 스텝 체이닝 금지 |
-| D11 | 파티션/병렬화 보류 | 첫 batch 전환은 기존 월 단위 refresh 의미론을 감싸는 순차 실행으로 시작할 수 있다. Partitioned Step은 restart 단위와 plan drift 처리 방식을 확정한 뒤 도입하며, 병렬화 승격 기준(§5.5)은 실측 이후로 의도적 보류 |
+| D11 | 파티션/병렬화 보류 | 첫 전환은 순차 실행. Partitioned Step은 restart/drift 정책 확정 후 도입(§5.3), 병렬화 승격 기준은 §5.5 — 실측 이후로 의도적 보류 |
 | D12 | 스케줄 트리거 | AWS EventBridge Scheduler → 컨테이너 실행(ECS RunTask). 전제: 운영 런타임이 AWS(DB 접근 가능). 스케줄 정의는 IaC로 레포에서 버전 관리 |
-| D13 | 정책 공유 금지 | MSA 전제에서도 도메인 정책/판단은 라이브러리로 서비스 간 공유하지 않는다. 공유 허용은 wire client·프리미티브·기술 섀시뿐 (§3.5) |
-| D14 | feature 경계 규율 | `application/**` feature 패키지 간 직접 import 금지. 단일 core 내부의 조망성 경계이며 boundary test로 강제 (기지 baseline 1건: coordinate→complex) |
-| D15 | 서비스/DB 경계 | 서비스 경계는 데이터 소유권으로 긋는다: `home-data`(trade+map 한 몸, DB 하나) / `user`(미래) / `ai`(미래, later-scope). trade↔map 간 DB 분리는 기본 로드맵에서 제외 — 프로젝션 동기화 비용을 정당화할 근거가 확인되기 전에는 하지 않는다 |
+| D13 | 정책 공유 금지 | 도메인 정책/판단은 서비스 간 라이브러리 공유 금지. 허용 범위(wire client·프리미티브·기술 섀시)와 사유는 §3.5 |
+| D14 | feature 경계 규율 | `application/**` feature 패키지 간 직접 import 금지, boundary test로 강제. baseline 예외 1건 포함 상세는 §4 원칙 |
+| D15 | 서비스/DB 경계 | 서비스 경계는 데이터 소유권: `home-data`(trade+map 한 몸, DB 하나) / `user`(미래) / `ai`(later-scope). trade↔map DB 분리는 로드맵 제외 — 근거는 §8.1 |
 | D16 | user 도메인 탄생 수칙 | user/JWT/OAuth가 스코프에 들어오는 날: `core-user` 모듈 신설 + 전용 `users` 스키마 + 전용 Flyway location + 토큰 발급(user 소유)/검증(기술 섀시, api-app·BFF) 분리 + 맵 공개 표면은 무인증 유지 |
-| D17 | 내부 경계 수단 | 단일 core 내부의 조망성은 feature 패키지 + D14 boundary test가 담당한다. 워크로드 격리(쓰기/읽기)는 모듈 분할이 아니라 배포 모드 분리(batch-app)가 담당한다. 기지 예외: `coordinate→complex` 1건은 boundary test의 명시적 baseline으로 기록 후 점진 해소 |
-| D18 | AI 구성요소 분리 | ml-inference(apps/ml, 가격 예측)와 ai-service(챗봇, 미래)는 통합하지 않는다. ml-inference는 상태 없는 추론 함수(DB 무접속, 피처·캐시는 home-data 소유)이고 ai-service는 상태를 소유하는 서비스(`ai` 스키마 + vector). 운영 표면(예측)을 실험 속도가 빠른 표면(챗봇)의 배포에 묶지 않는다. 호출 방향은 §8.4 매트릭스를 따른다 |
-| D19 | 챗봇 이식 청사진 | ai-service의 참조 구현은 `/Users/gwongwangjae/kosa-team5/server`(읽기 전용). 이식 설계는 `docs/AI_SERVICE_PLAN.md` — real_estate 부분은 이식하지 않고(Spring이 대체), 챗봇 파이프라인은 계승하되 feature dao의 직접 SQL을 `ai_read` 뷰 조회로 치환하는 것이 핵심 작업. 지위는 여전히 later-scope |
-| D20 | 배포 아키텍처 | ECS on EC2 + RDS (§9). 운영 런타임 AWS 확정(D12 전제 충족). 서비스별 태스크 정의 = MSA 서비스 지도의 배포 표현. 로컬은 compose 유지(의도적 비대칭, 태스크 정의는 레포 내 IaC로 버전 관리). ml-inference/ai-service 분리(D18)에 재검토 조건 부여: ai-service 운영 6개월 후 Python 2서비스 운영 부담이 실증되고 챗봇 의존성이 안정화되면 합류 재론 |
-| D21 | Messaging 표준 | 서비스 간 비동기 도메인 이벤트 표준은 Kafka **의미론**(topic/partition, consumer group, at-least-once, DLQ)으로 한다. 로컬은 compose Kafka(KRaft). 운영 런타임은 확정하지 않고 §10.2 산출물로 — Amazon MSK 최소 구성(~$70+/mo)이 현 인프라 고정비(~$40)를 초과하므로 MSK vs EC2 self-host vs 호환 대안을 비용 실측 후 결정. Kafka는 사용자 요청/응답 경로를 대체하지 않는다. **도입 트리거**: 첫 실제 이벤트 소비자(ai 재임베딩, user 알림 등)가 스코프에 들어올 때 — 그 전에 브로커를 세우지 않는다 |
-| D22 | 동기/비동기 분리 | 동기(HTTP/SSE): web→api-app, api-app→ml-inference, api-app(BFF 중계)→ai-service. 비동기(Kafka event): 도메인 후속 반응(수집 완료→재임베딩, 상태 변화→알림·ops). 동기는 timeout·retry 상한·degrade 정책, 비동기는 retry·DLQ·idempotency 정책을 §10.3에서 확정. 호출 매트릭스는 §8.4 하나로 통합 관리 — api-app의 "home-data 서빙" 모자와 "BFF 라우팅" 모자를 구분한다 |
-| D23 | Transactional Outbox | DB 변경과 event publish 정합성은 transactional outbox로 보장한다. `event_outbox` 스키마·publisher 정책은 첫 producer 구현 전에, `processed_event`(consumer idempotency) 저장소는 첫 consumer 구현 전에 확정. delivery는 at-least-once 전제. event_outbox/processed_event **스키마 설계는 브로커 도입과 무관하게 D24 산출물로 선행** 가능 |
-| D24 | DB 설계 선행 | 새 스키마·새 서비스·이벤트가 걸린 구현(ai, user, Kafka) 전에 DB ownership 설계를 `docs/DATA_STORAGE.md`에서 확정한다. 최소 산출물은 §10.1. **§6의 분할 1차·2차는 현행 DB 그대로이므로 이 게이트에 막히지 않는다** |
-| D25 | DB 권한/마이그레이션 | migration owner: `home_search`=api-app(SQL은 core 소유, 실행은 api-app / batch-app은 validate), `coordinate_source`=source-data, `ai`=ai-service(Alembic), `users`=future user-service. `ai_read`는 SELECT only 소비. ml-inference와 web은 DB 권한 없음. 권한표·owner는 DATA_STORAGE.md와 INFRA_AND_ENV.md에서 해당 구현 전 확정 |
-| D26 | 배포 전 게이트 | 필수: Docker build, compose smoke, Flyway baseline, API contract check. 데이터 안전: raw-first/dedupe/failed-match queryability. 서비스 분리: ml 장애 시 map/trade degrade, ai 장애 시 map/trade 무영향. Kafka 게이트(outbox publish, consumer idempotency, DLQ routing)는 **첫 producer 도입 시부터 활성**. rollback은 git SHA 이미지 태그 + migration rollback/forward-fix 기준 |
+| D17 | 내부 경계 수단 | core 내부 조망성 = feature 패키지 + D14 테스트, 워크로드 격리 = 배포 모드 분리(batch-app). 역할 분담 상세는 §4 |
+| D18 | AI 구성요소 분리 | ml-inference(무상태 추론 함수)와 ai-service(상태 소유 챗봇)는 통합하지 않는다. 역할 정의는 §8.3, 호출 방향은 §8.4 |
+| D19 | 챗봇 이식 청사진 | 참조 구현은 kosa-team5/server(읽기 전용), 이식 설계는 `docs/AI_SERVICE_PLAN.md`. 핵심 작업 = feature dao 직접 SQL → `ai_read` 뷰 치환. 지위는 later-scope |
+| D20 | 배포 아키텍처 | ECS on EC2 + RDS — 근거·구성·원칙은 §9. 로컬 compose는 의도적 비대칭. D18 재검토 조건: ai-service 운영 6개월 후 Python 2서비스 부담이 실증되고 의존성이 안정화되면 합류 재론 |
+| D21 | Messaging 표준 | 비동기 이벤트 표준은 Kafka 의미론(topic, consumer group, at-least-once, DLQ). 운영 런타임은 §10.2에서 비용 실측 후 결정. 요청/응답 경로 대체 금지. **도입 트리거**: 첫 실제 이벤트 소비자 등장 시 — 그 전에 브로커를 세우지 않는다 |
+| D22 | 동기/비동기 분리 | 동기(HTTP/SSE)·비동기(Kafka event)의 경계와 금지 방향은 §8.4 단일 매트릭스로 관리. timeout·retry·DLQ·idempotency 정책은 §10.3에서 확정 |
+| D23 | Transactional Outbox | DB 변경↔event publish 정합성은 outbox로 보장, at-least-once 전제. `event_outbox`/`processed_event` 스키마는 첫 producer/consumer 구현 전 확정 — 브로커와 무관하게 §10.1에서 선행 가능 |
+| D24 | DB 설계 선행 | 새 스키마·서비스·이벤트가 걸린 구현(ai, user, Kafka) 전에 `docs/DATA_STORAGE.md`에서 DB ownership 확정 (산출물 §10.1). 분할 1차·2차는 게이트 비대상 |
+| D25 | DB 권한/마이그레이션 | migration owner: `home_search`=api-app(SQL은 core 소유), `coordinate_source`=source-data, `ai`=ai-service(Alembic), `users`=future user-service. batch-app은 validate, `ai_read`는 SELECT only, ml-inference·web은 DB 권한 없음. 권한표는 DATA_STORAGE.md·INFRA_AND_ENV.md에서 확정 |
+| D26 | 배포 전 게이트 | 게이트 목록(필수/데이터 안전/서비스 분리/Kafka)은 §10.4. Kafka 게이트는 첫 producer 도입 시부터 활성. rollback = git SHA 이미지 태그 + migration rollback/forward-fix |
 
 ## 3. 외부 라이브러리(`libs/*`) 경계 규칙
 

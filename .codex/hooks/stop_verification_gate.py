@@ -74,10 +74,10 @@ def stop_stdout(files: list[str]) -> str:
 
 
 def run_self_test() -> int:
-    with_changes = reminder_lines(["apps/home-data/src/main/java/Foo.java"])
+    with_changes = reminder_lines(["apps/property-data/core/src/main/java/Foo.java"])
     harness_change = reminder_lines([".codex/harness/home_flow.py"])
     empty = reminder_lines([])
-    quiet_stop = stop_stdout(["apps/home-data/src/main/java/Foo.java"])
+    quiet_stop = stop_stdout(["apps/property-data/core/src/main/java/Foo.java"])
     checks = [
         bool(with_changes),
         any("backendQualityCheck" in line for line in with_changes),

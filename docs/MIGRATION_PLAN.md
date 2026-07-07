@@ -31,7 +31,7 @@ Done when:
 
 Target:
 
-- `/Users/gwongwangjae/home-search/apps/home-data`
+- `/Users/gwongwangjae/home-search/apps/property-data`
 - `/Users/gwongwangjae/home-search/apps/web`
 - `/Users/gwongwangjae/home-search/infra`
 
@@ -40,7 +40,7 @@ Prepare the repository as a monorepo-style migration target.
 Rules:
 
 - Do not mix backend and frontend files at the repository root.
-- Keep backend Gradle files inside `apps/home-data`.
+- Keep backend Gradle files inside `apps/property-data`.
 - Keep frontend Vite files inside `apps/web`.
 - Keep Docker, Postgres, monitoring, and deployment files inside `infra` unless
   a tool requires a root-level file.
@@ -80,7 +80,7 @@ Done when:
 
 Source backend: `/Users/gwongwangjae/IdeaProjects/home-server`
 
-Target backend: `/Users/gwongwangjae/home-search/apps/home-data`
+Target backend: `/Users/gwongwangjae/home-search/apps/property-data`
 
 Migrate in this order:
 
@@ -96,9 +96,9 @@ Migrate in this order:
 Do not migrate later-scope features into the critical path. Keep rankings, favorites,
 OAuth-dependent user flows, and mail alarms separate.
 
-`apps/home-data` is the home-data-service boundary that owns the operational
-`home_search` database. Future `core`, `api-app`, and `batch-app` directories
-inside this boundary are execution/module splits of the same service, not
+`apps/property-data` is the property-data-service boundary that owns the operational
+`home_search` database. `core` and `api` are current internal module splits;
+a future `batch-app` directory would be another execution split of the same service, not
 trade/map database or MSA service splits.
 
 The RTMS ingest service must apply the jibun/PNU match policy before normalized

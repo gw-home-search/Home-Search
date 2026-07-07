@@ -44,13 +44,13 @@ Excluded from the current project scope:
 /Users/gwongwangjae/home-search
 ├── docs/
 ├── apps/
-│   ├── home-data/
+│   ├── property-data/
 │   └── web/
 └── infra/
 ```
 
 - `docs/`: migration decisions and implementation guide.
-- `apps/home-data/`: home-data-service boundary for API runtime, RTMS ingest,
+- `apps/property-data/`: property-data-service boundary for API runtime, RTMS ingest,
   domain, and persistence.
 - `apps/web/`: future frontend location.
 - `infra/`: Postgres/PostGIS, Docker Compose, monitoring, and env docs.

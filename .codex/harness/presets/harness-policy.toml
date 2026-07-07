@@ -6,7 +6,7 @@ slice_patterns = ["stop-hook", "hook-policy", "harness-policy"]
 [targets.backend]
 prompt = "backend_execute.md"
 allowed_scope = ".codex/hooks/**, .codex/harness/**"
-forbidden_scope = "apps/home-data/**, apps/web/**, infra/**, docs/**"
+forbidden_scope = "apps/property-data/**, apps/web/**, infra/**, docs/**"
 verification_commands = [
   "python3 .codex/hooks/stop_verification_gate.py --self-test",
   "python3 .codex/hooks/pre_tool_use_policy.py --self-test",

@@ -175,7 +175,7 @@ def routes_for(mode: str, targets: str | Iterable[str] | None = None) -> tuple[S
         routes.append(harness_route("execute", "prepare target worktrees, inject skill contracts, collect verification, gate, commit, integration, and optional PR evidence."))
         routes.append(route("tdd", "execute", "primary", "drive behavior changes through First RED, Expected RED failure, Minimum GREEN, and regression evidence.", TDD_EVIDENCE))
         if has_backend(target_set):
-            routes.append(route("backend-api", "execute", "support", "apply apps/home-data Spring Boot, persistence, ingest, Flyway, and backendQualityCheck rules.", BACKEND_EVIDENCE))
+            routes.append(route("backend-api", "execute", "support", "apply apps/property-data Spring Boot, persistence, ingest, Flyway, and backendQualityCheck rules.", BACKEND_EVIDENCE))
             routes.append(route("api-contract", "execute", "checkpoint", "preserve public API request, response, unit, and error contracts.", CONTRACT_EVIDENCE))
         if has_frontend(target_set):
             routes.append(route("frontend-web", "execute", "support", "apply apps/web Vite React, Kakao map, adapter, and map-first UI rules.", FRONTEND_EVIDENCE))

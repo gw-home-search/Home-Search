@@ -1,0 +1,23 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'home-search-property-data'
+
+include 'core', 'api'
+
+includeBuild('../../libs/rtms-ingest-core') {
+    dependencySubstitution {
+        substitute module('com.home:rtms-ingest-core') using project(':')
+    }
+}

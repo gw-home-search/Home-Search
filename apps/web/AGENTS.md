@@ -25,7 +25,7 @@ Do not edit outside `apps/web/**` unless the user explicitly approves it.
 
 ## Do Not Modify
 
-- `apps/api/**`
+- `apps/property-data/**`
 - `docs/API_CONTRACT.md`
 - Root `AGENTS.md`
 - Root `README.md`
@@ -50,7 +50,7 @@ Before changing frontend behavior, complete this flow:
    source-reference flow affects the change.
 4. Run a contract checkpoint with `contract-reviewer` before changing API
    clients, adapters, fixture/mock response shapes, request params, route
-   usage, or any frontend behavior coordinated with `apps/api`.
+   usage, or any frontend behavior coordinated with `apps/property-data/api`.
 5. Use `tdd-guide` to validate the first RED when the change touches API
    adapter normalization, marker transform, map fallback,
    loading/empty/error state, fixture/mock contract, or detail/trade drawer

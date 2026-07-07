@@ -9,10 +9,10 @@ slice_patterns = ["coordinate", "coordinate-shp", "snapshot-import"]
 
 [targets.backend]
 prompt = "backend_execute.md"
-allowed_scope = "apps/home-data/**"
+allowed_scope = "apps/property-data/**"
 forbidden_scope = "apps/web/**"
 verification_commands = [
-  "cd apps/home-data && ./gradlew backendQualityCheck",
+  "cd apps/property-data && ./gradlew backendQualityCheck",
   "git diff --check",
 ]
 

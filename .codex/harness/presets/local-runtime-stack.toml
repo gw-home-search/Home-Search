@@ -10,18 +10,18 @@ slice_patterns = ["local-dev-stack", "local-postgis", "postgis-api-web", "runtim
 
 [targets.backend]
 prompt = "backend_runtime_execute.txt"
-allowed_scope = "infra/**, apps/home-data/**"
+allowed_scope = "infra/**, apps/property-data/**"
 forbidden_scope = "apps/web/**"
 verification_commands = [
   "docker compose -f infra/docker-compose.local.yml config",
-  "cd apps/home-data && ./gradlew backendQualityCheck",
+  "cd apps/property-data && ./gradlew backendQualityCheck",
   "git diff --check",
 ]
 
 [targets.frontend]
 prompt = "frontend_execute.md"
 allowed_scope = "apps/web/**"
-forbidden_scope = "apps/home-data/**"
+forbidden_scope = "apps/property-data/**"
 verification_commands = [
   "cd apps/web && npm run test",
   "cd apps/web && npm run build",

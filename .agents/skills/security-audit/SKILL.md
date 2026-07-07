@@ -1,6 +1,6 @@
 ---
 name: security-audit
-description: Home Search security specialist skill for secure-by-default guidance, diff security review, full audit, and threat modeling across apps/home-data, apps/web, and infra. Use for "security audit", "security review", "vulnerability", "threat model", "보안", "보안 점검", "보안 리뷰", "취약점", "위협 모델". Not for general code review (use code-review), failing-command debugging (use systematic-debugging), or API contract decisions (use api-contract).
+description: Home Search security specialist skill for secure-by-default guidance, diff security review, full audit, and threat modeling across apps/property-data, apps/web, and infra. Use for "security audit", "security review", "vulnerability", "threat model", "보안", "보안 점검", "보안 리뷰", "취약점", "위협 모델". Not for general code review (use code-review), failing-command debugging (use systematic-debugging), or API contract decisions (use api-contract).
 ---
 
 
@@ -62,7 +62,7 @@ stay stable across runs.
 ## When To Use
 
 - Security review of a diff, branch, or PR.
-- Full security audit of `apps/home-data`, `apps/web`, or infra config.
+- Full security audit of `apps/property-data`, `apps/web`, or infra config.
 - Threat modeling a feature, endpoint, pipeline, or admin surface.
 - Implementation guidance when touching admin access, secrets, SQL, external
   API calls, parsers, file or network IO, logging, or error responses.
@@ -84,7 +84,7 @@ stay stable across runs.
 ## Required Inputs
 
 - Root `AGENTS.md` (data/API invariants, Docker/data safety rules).
-- `apps/home-data/AGENTS.md` and `apps/home-data/CONTEXT.md` when backend is in scope.
+- `apps/property-data/AGENTS.md` and `apps/property-data/CONTEXT.md` when backend is in scope.
 - `docs/API_CONTRACT.md`, `docs/INFRA_AND_ENV.md`, `docs/DATA_STORAGE.md`.
 
 ## Operating Modes
@@ -139,7 +139,7 @@ still exists at review time (`rg` the name) before relying on it; if an
 anchor moved or was renamed, update this skill in the same PR as the finding
 that discovered it.
 
-## Backend Checklist (apps/home-data)
+## Backend Checklist (apps/property-data)
 
 - SQL: `JdbcClient` named parameters only. User-controlled data must never
   enter SQL string composition; composed fragments (the `ComplexMarkerSql`

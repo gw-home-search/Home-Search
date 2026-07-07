@@ -57,7 +57,7 @@ home-search/
 
 ```bash
 # Backend: 테스트, persistence, API 계약, OpenAPI, coverage, Javadoc
-cd apps/api
+cd apps/home-data
 ./gradlew backendQualityCheck
 
 # Frontend

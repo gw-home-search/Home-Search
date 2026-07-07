@@ -385,7 +385,7 @@ def required_skill_triggers_for_files(changed_files: Iterable[str]) -> set[str]:
     if not changed:
         return set()
     required = {"home-search-harness"}
-    if any(path.startswith("apps/api/") and not is_removed_companion_doc(path) for path in changed):
+    if any(path.startswith("apps/home-data/") and not is_removed_companion_doc(path) for path in changed):
         required.update({"$backend-api", "$tdd", "$api-contract", "$code-review", "$security-audit"})
     if any(path.startswith("apps/web/") and not is_removed_companion_doc(path) for path in changed):
         required.update({"$frontend-web", "$tdd", "$api-contract", "$code-review", "$security-audit"})
@@ -438,9 +438,9 @@ def check_evidence(
 
     if backend_changed and require_pass:
         if not COVERAGE_LINE_RE.search(body):
-            add(errors, "evidence", "apps/api 변경에는 `Coverage: >=90%` evidence가 필요합니다")
+            add(errors, "evidence", "apps/home-data 변경에는 `Coverage: >=90%` evidence가 필요합니다")
         if not DOCS_OPENAPI_LINE_RE.search(body):
-            add(errors, "evidence", "apps/api 변경에는 `Docs/OpenAPI: generated + verified` evidence가 필요합니다")
+            add(errors, "evidence", "apps/home-data 변경에는 `Docs/OpenAPI: generated + verified` evidence가 필요합니다")
 
     if status == "Pass":
         for line in verification.values():
@@ -641,18 +641,18 @@ def run_self_test() -> int:
     )
     backend_missing_quality = valid_input(
         body=valid_body().replace(f"- `{API_TEST}` = not run (api 변경 없음)", f"- `{API_TEST}` = not run (확인 안 함)"),
-        changed_files=("apps/api/src/main/java/com/home/App.java",),
+        changed_files=("apps/home-data/src/main/java/com/home/App.java",),
     )
     backend_test_only = valid_input(
         body=valid_body().replace(
             f"- `{API_TEST}` = not run (api 변경 없음)",
-            "- `cd apps/api && ./gradlew test` = pass (단위 테스트만 확인)",
+            "- `cd apps/home-data && ./gradlew test` = pass (단위 테스트만 확인)",
         ),
-        changed_files=("apps/api/src/main/java/com/home/App.java",),
+        changed_files=("apps/home-data/src/main/java/com/home/App.java",),
     )
     backend_missing_coverage = valid_input(
         body=valid_body().replace("Coverage: >=90%\n", ""),
-        changed_files=("apps/api/src/main/java/com/home/App.java",),
+        changed_files=("apps/home-data/src/main/java/com/home/App.java",),
     )
     web_without_lint = valid_input(
         body=valid_body()
@@ -714,7 +714,7 @@ def run_self_test() -> int:
             "| gate | $security-audit | checkpoint | .agents/skills/security-audit/SKILL.md | security-audit: 지적사항; 보안 잔여 위험 |\n",
             "",
         ),
-        changed_files=("apps/api/src/main/java/com/home/App.java",),
+        changed_files=("apps/home-data/src/main/java/com/home/App.java",),
     )
     pass_with_open_risk = valid_input(body=valid_body(risk="미확인 gate 위험이 남아 있습니다."))
     non_draft = valid_input(draft=False)

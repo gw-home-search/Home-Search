@@ -65,14 +65,14 @@ PR_TITLE_TYPES = {"Feat", "Fix", "Chore", "Docs", "Test", "Refactor"}
 DEFAULT_TARGETS = {
     "backend": {
         "prompt": "backend_execute.md",
-        "allowed_scope": "apps/api/**",
+        "allowed_scope": "apps/home-data/**",
         "forbidden_scope": "apps/web/**",
         "verification_commands": [API_QUALITY],
     },
     "frontend": {
         "prompt": "frontend_execute.md",
         "allowed_scope": "apps/web/**",
-        "forbidden_scope": "apps/api/**",
+        "forbidden_scope": "apps/home-data/**",
         "verification_commands": [
             WEB_TEST,
             WEB_BUILD,
@@ -83,9 +83,9 @@ TARGET_MODES = {"backend", "frontend", "both", "planning-only"}
 PLANNING_MODES = {"standard", "critique", "llm-replan"}
 KNOWN_VERIFICATION_COMMANDS = {
     "backend": {
-        API_QUALITY: ("apps/api", ["./gradlew", "backendQualityCheck"]),
+        API_QUALITY: ("apps/home-data", ["./gradlew", "backendQualityCheck"]),
         DOCKER_COMPOSE_LOCAL_CONFIG: (".", ["docker", "compose", "-f", "infra/docker-compose.local.yml", "config"]),
-        "cd apps/api && ./gradlew test": ("apps/api", ["./gradlew", "test"]),
+        "cd apps/home-data && ./gradlew test": ("apps/home-data", ["./gradlew", "test"]),
         DIFF_CHECK: (".", ["git", "diff", "--check"]),
         PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
         PR_CONTEXT_SELF_TEST: (".", ["python3", ".codex/harness/pr_context.py", "--self-test"]),
@@ -589,7 +589,7 @@ def changed_files_between(base: str, branch: str) -> list[str]:
 def expected_changed_files_for_targets(targets: list[str], args: argparse.Namespace | None = None) -> list[str]:
     expected: list[str] = []
     if "backend" in targets:
-        expected.append("apps/api/__expected__")
+        expected.append("apps/home-data/__expected__")
     if "frontend" in targets:
         expected.append("apps/web/__expected__")
     if targets:
@@ -1401,7 +1401,7 @@ def run_self_test() -> int:
             "PRESET": "contract-hardening",
             "TARGET": "backend",
             "BRANCH_NAME": "feat/api-self-test",
-            "ALLOWED_SCOPE": "apps/api/**",
+            "ALLOWED_SCOPE": "apps/home-data/**",
             "FORBIDDEN_SCOPE": "apps/web/**",
             "VERIFICATION_COMMANDS": API_QUALITY,
             "SKILL_ROUTING": routing_text("execute", "backend"),
@@ -1487,10 +1487,10 @@ def run_self_test() -> int:
                 web_worktree=None,
             )
         )["api_branch"],
-        parse_changed_files(" M apps/api/Foo.java\n?? apps/web/Bar.tsx\nR  old.txt -> apps/api/New.java")
-        == ["apps/api/Foo.java", "apps/web/Bar.tsx", "apps/api/New.java"],
+        parse_changed_files(" M apps/home-data/Foo.java\n?? apps/web/Bar.tsx\nR  old.txt -> apps/home-data/New.java")
+        == ["apps/home-data/Foo.java", "apps/web/Bar.tsx", "apps/home-data/New.java"],
         expected_changed_files_for_targets(["backend"])
-        == ["apps/api/__expected__", ".codex/harness/worklog.toml"],
+        == ["apps/home-data/__expected__", ".codex/harness/worklog.toml"],
         "Skill contract:" in prompt,
         "home-search-harness [orchestrator]" in prompt,
         "$tdd [primary]" in prompt,

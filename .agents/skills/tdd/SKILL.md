@@ -71,6 +71,21 @@ Use this skill for backend or frontend behavior changes. The goal is to anchor i
 - Verification commands.
 - RED waiver reason, only when no valid RED can be created.
 
+## Verification Commands
+
+Choose the command that actually executes the RED test — a RED the chosen
+task never runs is not a valid RED:
+
+- Backend controller/service/adapter seams run under
+  `cd apps/home-data && ./gradlew test`.
+- Repository, Flyway, partitioning, and PostGIS seams run under
+  `./gradlew persistenceTest` (requires local compose PostGIS). Confirm the
+  RED failure in that task, not in plain `test`.
+- Frontend seams run under `cd apps/web && npm run test` (vitest).
+- Before completion claims, run the canonical gate:
+  `./gradlew backendQualityCheck` for backend, `npm run test` plus
+  `npm run build` for frontend.
+
 ## Routes
 
 - Use `tdd-guide` when RED validity, public seam choice, expected RED failure,

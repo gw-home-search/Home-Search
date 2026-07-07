@@ -40,6 +40,13 @@ Use this skill for failing checks, runtime bugs, API mismatches, ingest issues, 
 ## Common Cases
 
 - Gradle failure: pin task, stack trace, profile, and failing test class.
+  `./gradlew test` skips PostGIS integration tests — repository, Flyway,
+  partitioning, and PostGIS symptoms reproduce only under `persistenceTest`
+  (requires local compose PostGIS). "GREEN locally, broken in CI" often means
+  the wrong task ran.
+- Real-boot failure with GREEN tests: slice tests can pass while bean wiring
+  dies at startup (`@ConditionalOnBean` real-boot pitfall). Reproduce with a
+  compose boot plus health and one endpoint smoke, not with more unit tests.
 - npm failure: confirm the existing package script before adding a new command
   to presets, hooks, CI, or PR evidence.
 - Hook block: separate missing evidence from a real failing verification

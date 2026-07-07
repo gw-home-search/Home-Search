@@ -22,7 +22,7 @@
 
 검증:
 - `git diff --check` = not run (사유)
-- `cd apps/api && ./gradlew backendQualityCheck` = not run (사유)
+- `cd apps/home-data && ./gradlew backendQualityCheck` = not run (사유)
 - `cd apps/web && npm run test` = not run (사유)
 - `cd apps/web && npm run build` = not run (사유)
 - `python3 .codex/harness/pr_lint.py --self-test` = not run (사유)

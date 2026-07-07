@@ -13,6 +13,10 @@ This skill defines design direction only. It does not replace `frontend-web`
 for React implementation, `api-contract` for project compatibility, `tdd` for
 behavior tests, or `code-review` for final findings.
 
+This skill is user-invoked by design: it is intentionally absent from harness
+skill routing, and design passes start only on explicit user request. Do not
+add it to automated flows.
+
 ## Required Inputs
 
 - Root `AGENTS.md`.

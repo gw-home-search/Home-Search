@@ -36,7 +36,7 @@
 
 ## 확인된 병목
 
-[JdbcMapMarkerRepository.java](/Users/gwongwangjae/home-search/apps/api/src/main/java/com/home/infrastructure/persistence/map/JdbcMapMarkerRepository.java:53)의 `complex_base`는 bounds 안의 모든 complex에 대해 두 번의 `LATERAL` trade lookup을 수행한다.
+[JdbcMapMarkerRepository.java](/Users/gwongwangjae/home-search/apps/home-data/src/main/java/com/home/infrastructure/persistence/map/JdbcMapMarkerRepository.java:53)의 `complex_base`는 bounds 안의 모든 complex에 대해 두 번의 `LATERAL` trade lookup을 수행한다.
 
 - 최신 거래: `ORDER BY trade.deal_date DESC, trade.id DESC LIMIT 1`
 - 최초 거래: `ORDER BY trade.deal_date ASC, trade.id ASC LIMIT 1`
@@ -193,7 +193,7 @@ Gate acceptance:
 Required local evidence:
 
 - local compose config 렌더링
-- `cd apps/api && ./gradlew backendQualityCheck`
+- `cd apps/home-data && ./gradlew backendQualityCheck`
 - Redis off/cold/warm k6 fixed-case runs
 - Prometheus marker cache metric scrape
 
@@ -201,10 +201,10 @@ Recorded gate evidence:
 
 - `production behavior RED` = not run (이번 slice는 새 runtime behavior 없이 Redis performance gate 기준과 local evidence를 고정)
 - `local compose config render` = pass (tracked local-runtime override fallback으로 API env_file 렌더링 통과)
-- `cd apps/api && ./gradlew foundationTest --tests com.home.foundation.LocalRuntimeStackConfigurationTest` = pass (local compose env_file fallback 기대값 통과)
-- `cd apps/api && ./gradlew foundationTest --tests com.home.foundation.ObservabilityEndpointSmokeTest` = pass (Prometheus scrape surface와 marker cache metric exposure smoke 통과)
-- `cd apps/api && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.RedisCachingComplexMarkerRepositoryTest` = pass (Redis hit/miss/fallback metric과 read/write 장애 fallback 회귀 통과)
-- `cd apps/api && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, persistence, coverage, foundation, javadoc gate 통과)
+- `cd apps/home-data && ./gradlew foundationTest --tests com.home.foundation.LocalRuntimeStackConfigurationTest` = pass (local compose env_file fallback 기대값 통과)
+- `cd apps/home-data && ./gradlew foundationTest --tests com.home.foundation.ObservabilityEndpointSmokeTest` = pass (Prometheus scrape surface와 marker cache metric exposure smoke 통과)
+- `cd apps/home-data && ./gradlew persistenceTest --tests com.home.infrastructure.persistence.map.RedisCachingComplexMarkerRepositoryTest` = pass (Redis hit/miss/fallback metric과 read/write 장애 fallback 회귀 통과)
+- `cd apps/home-data && ./gradlew backendQualityCheck` = pass (API contract, REST Docs/OpenAPI, persistence, coverage, foundation, javadoc gate 통과)
 - `Coverage: >=90%` = pass (`backendQualityCheck`의 jacoco coverage verification과 coverageCheck 통과)
 - `Docs/OpenAPI: generated + verified` = pass (`backendQualityCheck`의 REST Docs, openapi3, verifyOpenApiSpec, apiDocsCheck 통과)
 - `test display name policy` = pass (test display name policy 통과)
@@ -229,7 +229,7 @@ k6 run \
   -e RAMP_UP=1s \
   -e STEADY=10s \
   -e RAMP_DOWN=1s \
-  apps/api/perf/k6/map-marker-baseline.js
+  apps/home-data/perf/k6/map-marker-baseline.js
 ```
 
 Redis cold miss:
@@ -242,7 +242,7 @@ k6 run \
   -e COMPLEX_WEIGHT=1 \
   -e REGION_WEIGHT=0 \
   -e COMPLEX_CASE=seed-wide \
-  apps/api/perf/k6/map-marker-baseline.js
+  apps/home-data/perf/k6/map-marker-baseline.js
 ```
 
 Redis warm hit:
@@ -258,7 +258,7 @@ k6 run \
   -e RAMP_UP=1s \
   -e STEADY=10s \
   -e RAMP_DOWN=1s \
-  apps/api/perf/k6/map-marker-baseline.js
+  apps/home-data/perf/k6/map-marker-baseline.js
 ```
 
 Metric check:

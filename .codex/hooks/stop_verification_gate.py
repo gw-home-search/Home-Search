@@ -62,10 +62,22 @@ def reminder_lines(files: list[str]) -> list[str]:
     return lines
 
 
+def stop_stdout(files: list[str]) -> str:
+    """Return Stop hook stdout.
+
+    Codex parses Stop hook stdout as JSON. This hook is intentionally
+    non-blocking, so it must stay quiet instead of printing a plain-text
+    reminder that would be treated as invalid JSON by the hook runner.
+    """
+    _ = files
+    return ""
+
+
 def run_self_test() -> int:
-    with_changes = reminder_lines(["apps/api/src/main/java/Foo.java"])
+    with_changes = reminder_lines(["apps/home-data/src/main/java/Foo.java"])
     harness_change = reminder_lines([".codex/harness/home_flow.py"])
     empty = reminder_lines([])
+    quiet_stop = stop_stdout(["apps/home-data/src/main/java/Foo.java"])
     checks = [
         bool(with_changes),
         any("backendQualityCheck" in line for line in with_changes),
@@ -74,6 +86,7 @@ def run_self_test() -> int:
         all("decision" not in line for line in with_changes),
         empty == [],
         "비차단" in (with_changes[0] if with_changes else ""),
+        quiet_stop == "",
     ]
     if all(checks):
         print("self-test passed: stop_verification_gate")
@@ -85,9 +98,9 @@ def run_self_test() -> int:
 def main() -> None:
     payload = load_payload()
     root = repo_root_from_payload(payload)
-    lines = reminder_lines(changed_files(root))
-    if lines:
-        print("\n".join(lines))
+    output = stop_stdout(changed_files(root))
+    if output:
+        print(output)
 
 
 if __name__ == "__main__":

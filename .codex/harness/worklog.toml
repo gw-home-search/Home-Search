@@ -1,4 +1,57 @@
 [[items]]
+id = "home-data-service-path-rename"
+title_ko = "home-data service 경로명 정리"
+pr_type = "Chore"
+pr_title_ko = "home-data service 경로명 정리"
+description_ko = "기존 apps/api 단일 Spring Boot backend 경로를 apps/home-data home-data-service 경계로 rename하고, 문서/CI/infra/harness/hook/skill 경로와 Gradle 표시 이름을 새 서비스명에 맞춘다."
+status = "planned"
+priority = 260
+targets = "backend"
+preset = "backend-quality"
+acceptance_criteria = [
+  "apps/api tracked directory는 apps/home-data로 이동하고 Java package, Flyway location, DB schema, runtime behavior는 변경하지 않는다.",
+  "docs/README.md, docs/MIGRATION_PLAN.md, docs/ARCHITECTURE.md, docs/RESTRUCTURING_PLAN.md는 apps/home-data가 home-data-service 경계이며 core/api-app/batch-app은 후속 실행 모드 분리 후보임을 설명한다.",
+  "CI working-directory, artifact path, infra compose working_dir/env_file, backend quality 문서, harness/hook/skill 경로는 apps/home-data 기준으로 갱신한다.",
+  "Gradle rootProject.name은 home-search-home-data, description은 Home Search home-data service로 갱신한다.",
+  "public API URL, request/response shape, ProblemDetail, amount unit, DB schema, Java package는 변경하지 않는다.",
+  "ignored local .env, .gradle, build, .idea, bin, perf result 파일은 commit 대상에 포함하지 않는다.",
+]
+first_red_candidates = [
+  "동작 변경이 없는 rename-only slice이므로 First RED는 not applicable이다.",
+  "회귀 검증은 apps/home-data 기준 backendQualityCheck, compose config, harness/hook self-test, project terms, 경로 잔여 grep으로 수행한다.",
+]
+verification_commands = [
+  "docker compose -f infra/docker-compose.local.yml config",
+  "cd apps/home-data && ./gradlew test --no-daemon",
+  "cd apps/home-data && ./gradlew persistenceTest --no-daemon",
+  "cd apps/home-data && ./gradlew backendQualityCheck --no-daemon",
+  "python3 scripts/check-test-display-names.py --self-test && python3 scripts/check-test-display-names.py",
+  "python3 .codex/harness/project_terms_check.py",
+  "python3 .codex/hooks/stop_verification_gate.py --self-test",
+  "python3 .codex/hooks/pre_tool_use_policy.py --self-test",
+  "python3 .codex/hooks/post_tool_use_review.py --self-test",
+  "python3 .codex/harness/pr_lint.py --self-test",
+  "python3 .codex/harness/home_flow.py --self-test",
+  "python3 .codex/harness/home_plan.py --self-test",
+  "python3 .codex/harness/home_report.py --self-test",
+  ".codex/harness/home --self-test",
+  "rg -n \"apps/api|cd apps/api\" README.md docs .github .codex .agents apps/home-data infra scripts CONTEXT.md AGENTS.md --glob '!**/__pycache__/**'",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
+  "DB schema, Flyway migration, Java package, runtime behavior 변경이 필요하면 중단한다.",
+  "core/api-app/batch-app 내부 모듈 분리나 Spring Batch 전환이 필요하면 후속 slice로 분리한다.",
+  "local secret 또는 build output이 commit 대상에 포함되면 중단한다.",
+  "Docker volume 삭제나 데이터 reset이 필요하면 중단하고 별도 승인으로 분리한다.",
+]
+risk_notes = [
+  "root README.md 저장소 구조 표는 protected hook 정책으로 직접 수정이 차단될 수 있어 PR 설명에 잔여 위험으로 남긴다.",
+  "apps/api 잔여 문자열은 docs/RESTRUCTURING_PLAN.md의 rename history 설명에만 허용한다.",
+  "이 item은 remote publish 요청이 있을 때만 --pr로 진행한다.",
+]
+
+[[items]]
 id = "rtms-special-region-readiness-gate"
 title_ko = "RTMS 특수지역 저장 직전 readiness gate"
 pr_type = "Test"
@@ -29,7 +82,7 @@ first_red_candidates = [
 ]
 verification_commands = [
   "docker compose -f infra/docker-compose.local.yml config",
-  "cd apps/api && ./gradlew backendQualityCheck",
+  "cd apps/home-data && ./gradlew backendQualityCheck",
   "git diff --check",
 ]
 stop_conditions = [
@@ -62,7 +115,7 @@ acceptance_criteria = [
   "대상 API는 GET /api/v1/detail/{parcelId}, GET /api/v1/trade/{parcelId}, GET /api/v1/search/complexes?q=, GET /api/v1/region, GET /api/v1/region/{regionId}로 제한한다.",
   "legacy backend controller/DTO, legacy frontend consumer, target docs/API_CONTRACT.md, target backend controller/usecase/repository, target frontend adapter/UI 표시 흐름을 API별로 대조한다.",
   "각 API를 OK, backend gap, frontend gap, visual gap, later-scope 중 하나 이상으로 분류하고 근거 파일/테스트 후보를 남긴다.",
-  "App AGENTS.md와 CONTEXT.md 확인 범위는 root, apps/api, apps/web로 명시한다.",
+  "App AGENTS.md와 CONTEXT.md 확인 범위는 root, apps/home-data, apps/web로 명시한다.",
   "code-mapper preflight 필요 여부를 API별로 기록하고, 구현 slice에서는 controller -> usecase -> repository -> frontend adapter 흐름을 먼저 확인하도록 한다.",
   "contract-reviewer checkpoint는 모든 구현 slice 시작 전에 public URL, request/query, response field/type/unit, ProblemDetail shape 변경 없음으로 통과해야 한다.",
   "public contract impact는 None이어야 하며 새 URL이나 response field가 필요하면 구현으로 넘어가지 않고 중단한다.",
@@ -121,8 +174,8 @@ first_red_candidates = [
   "App.test.tsx 또는 detail feature test에서 trades: [] 응답이 drawer empty state로 표시되지 않으면 실패하는 RED를 만든다.",
 ]
 verification_commands = [
-  "cd apps/api && ./gradlew apiContractTest --tests '*ReadApiControllerContractTest'",
-  "cd apps/api && ./gradlew persistenceTest --tests '*JdbcPropertyReadRepositoryTest'",
+  "cd apps/home-data && ./gradlew apiContractTest --tests '*ReadApiControllerContractTest'",
+  "cd apps/home-data && ./gradlew persistenceTest --tests '*JdbcPropertyReadRepositoryTest'",
   "cd apps/web && npm run test",
   "cd apps/web && npm run build",
   "git diff --check",
@@ -168,8 +221,8 @@ first_red_candidates = [
   "App.test.tsx에서 search result 선택 후 detail/trade URL에 complexId가 빠지면 실패하는 RED를 만든다.",
 ]
 verification_commands = [
-  "cd apps/api && ./gradlew persistenceTest --tests '*JdbcPropertyReadRepositoryTest'",
-  "cd apps/api && ./gradlew apiContractTest --tests '*ReadApiControllerContractTest'",
+  "cd apps/home-data && ./gradlew persistenceTest --tests '*JdbcPropertyReadRepositoryTest'",
+  "cd apps/home-data && ./gradlew apiContractTest --tests '*ReadApiControllerContractTest'",
   "cd apps/web && npm run test",
   "cd apps/web && npm run build",
   "git diff --check",
@@ -178,7 +231,7 @@ stop_conditions = [
   "검색 ranking, similarity score, pagination, sorting public field 추가가 필요하면 후속 search ranking slice로 분리한다.",
   "public API URL, request field, response field, amount unit, ProblemDetail shape 변경이 필요하면 중단한다.",
   "favorites, auth user state, recommendation, ranking, trend aggregate가 검색 결과에 필요하면 중단한다.",
-  "apps/api와 apps/web 변경이 검색 흐름 밖 detail/trade/region behavior까지 커지면 별도 /goal로 분리한다.",
+  "apps/home-data와 apps/web 변경이 검색 흐름 밖 detail/trade/region behavior까지 커지면 별도 /goal로 분리한다.",
 ]
 risk_notes = [
   "검색 결과가 complex 단위라는 정책은 same-PNU parcel에서 detail/trade scope를 지키기 위한 핵심 전제다.",
@@ -212,8 +265,8 @@ first_red_candidates = [
   "App.test.tsx에서 region 선택 후 map context가 갱신되지 않거나 marker API refresh로 이어지지 않으면 실패하는 RED를 만든다.",
 ]
 verification_commands = [
-  "cd apps/api && ./gradlew apiContractTest --tests '*ReadApiControllerContractTest'",
-  "cd apps/api && ./gradlew persistenceTest --tests '*JdbcPropertyReadRepositoryTest'",
+  "cd apps/home-data && ./gradlew apiContractTest --tests '*ReadApiControllerContractTest'",
+  "cd apps/home-data && ./gradlew persistenceTest --tests '*JdbcPropertyReadRepositoryTest'",
   "cd apps/web && npm run test",
   "cd apps/web && npm run build",
   "git diff --check",
@@ -255,7 +308,7 @@ first_red_candidates = [
   "local runtime smoke가 seed data 부재로 detail/trade 화면을 열 수 없으면 seed/runtime evidence gap을 RED 또는 blocked/no test environment 근거로 기록한다.",
 ]
 verification_commands = [
-  "cd apps/api && ./gradlew backendQualityCheck",
+  "cd apps/home-data && ./gradlew backendQualityCheck",
   "cd apps/web && npm run test",
   "cd apps/web && npm run build",
   "docker compose -f infra/docker-compose.local.yml config",

@@ -547,7 +547,7 @@ def critique_plan(view: dict[str, Any], profile: dict[str, Any], commands: dict[
         missing = sorted(expected - verification)
         if missing:
             findings.append("frontend 검증 명령이 누락되었습니다: " + ", ".join(missing))
-    if target == "backend" and "cd apps/api && ./gradlew backendQualityCheck" not in verification:
+    if target == "backend" and "cd apps/home-data && ./gradlew backendQualityCheck" not in verification:
         findings.append("backendQualityCheck 검증 명령이 누락되었습니다.")
     if profile["intent"] in {"push", "pr"}:
         sequence = " ".join(profile["sequence"])
@@ -969,7 +969,7 @@ def run_self_test() -> int:
                 'preset = "runtime-smoke"\n'
                 'acceptance_criteria = ["fixture 인수 기준"]\n'
                 'first_red_candidates = ["fixture 최초 RED"]\n'
-                'verification_commands = ["cd apps/api && ./gradlew backendQualityCheck", "git diff --check"]\n'
+                'verification_commands = ["cd apps/home-data && ./gradlew backendQualityCheck", "git diff --check"]\n'
                 'stop_conditions = ["fixture 중단 조건"]\n'
                 'risk_notes = ["fixture 위험 없음"]\n'
                 "\n"
@@ -985,7 +985,7 @@ def run_self_test() -> int:
                 'preset = "runtime-smoke"\n'
                 'acceptance_criteria = ["fixture 인수 기준 2"]\n'
                 'first_red_candidates = ["fixture 최초 RED 2"]\n'
-                'verification_commands = ["cd apps/api && ./gradlew backendQualityCheck", "git diff --check"]\n'
+                'verification_commands = ["cd apps/home-data && ./gradlew backendQualityCheck", "git diff --check"]\n'
                 'stop_conditions = ["fixture 중단 조건 2"]\n'
                 'risk_notes = ["fixture 위험 없음 2"]\n',
                 encoding="utf-8",

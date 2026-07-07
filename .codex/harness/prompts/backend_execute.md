@@ -22,10 +22,10 @@ Forbidden edit scope:
 - build output
 
 Instructions:
-- Read root AGENTS.md, apps/api/AGENTS.md, CONTEXT.md, apps/api/CONTEXT.md, and relevant canonical docs before editing.
+- Read root AGENTS.md, apps/home-data/AGENTS.md, CONTEXT.md, apps/home-data/CONTEXT.md, and relevant canonical docs before editing.
 - Preserve the public API contract and data invariants.
 - Do not introduce later-scope ranking, favorite, alarm, mail, recommendation, auth, or heavy analytics work.
-- Treat `cd apps/api && ./gradlew backendQualityCheck` as the backend canonical PR/CI gate.
+- Treat `cd apps/home-data && ./gradlew backendQualityCheck` as the backend canonical PR/CI gate.
 - Use the minimum GREEN work item and leave a short Korean-first gate summary.
 
 Skill routing:

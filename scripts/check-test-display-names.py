@@ -54,7 +54,7 @@ def placeholder_only(value: str) -> bool:
 
 
 def java_test_files() -> list[Path]:
-    root = REPO_ROOT / "apps/api/src/test/java"
+    root = REPO_ROOT / "apps/home-data/src/test/java"
     if not root.exists():
         return []
     return sorted(path for path in root.rglob("*.java") if path.is_file())
@@ -184,7 +184,7 @@ def format_violations(violations: Iterable[Violation]) -> str:
 
 
 def run_self_test() -> int:
-    java_path = REPO_ROOT / "apps/api/src/test/java/SampleTest.java"
+    java_path = REPO_ROOT / "apps/home-data/src/test/java/SampleTest.java"
     web_path = REPO_ROOT / "apps/web/src/Sample.test.ts"
     good_java = """
 class SampleTest {

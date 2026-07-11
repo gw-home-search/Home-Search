@@ -1,4 +1,142 @@
 [[items]]
+id = "HS-SEP-00-BASELINE"
+title_ko = "Property-data 역할 분리 기준선"
+pr_type = "Chore"
+pr_title_ko = "Property-data 역할 분리 기준선 고정"
+description_ko = "실행 호스트, dirty worktree, canonical docs, Gradle wrapper, 변경 대상과 backend 기준선을 고정한다."
+status = "done"
+priority = 100
+targets = "backend"
+preset = "property-data-separation"
+acceptance_criteria = [
+  "현재 commit과 dirty file을 기록하고 사용자 변경을 되돌리지 않는다.",
+  "canonical docs와 실제 wrapper/변경 대상/기준선 검증 결과를 00-baseline.md에 남긴다.",
+]
+first_red_candidates = ["기준선 단계는 behavior RED가 없으며 기존 backend gate 실패 목록을 baseline으로 기록한다."]
+verification_commands = ["cd apps/property-data && ./gradlew backendQualityCheck --no-daemon", "git diff --check"]
+stop_conditions = ["실행 호스트 또는 wrapper가 동작하지 않으면 파일 변경 없이 Blocked로 종료한다.", "canonical docs와 구현 목표가 공개 API 또는 DB 의미에서 충돌하면 중단한다."]
+risk_notes = ["기존 dirty diff는 현재 작업 입력이며 임의로 되돌리지 않는다."]
+
+[[items]]
+id = "HS-SEP-01-API-CLASSPATH"
+title_ko = "API compile classpath 분리"
+pr_type = "Refactor"
+pr_title_ko = "API JDBC Redis compile 경계 차단"
+description_ko = "API compileClasspath에서 JDBC·Redis persistence artifact를 제거하고 runtime에만 제공한다."
+status = "done"
+priority = 101
+targets = "backend"
+preset = "property-data-separation"
+depends_on = ["HS-SEP-00-BASELINE"]
+acceptance_criteria = ["dependency resolution 기반 검증 task가 compile classpath 유입을 차단한다.", "API runtime classpath와 context는 필요한 JDBC·Redis dependency를 유지한다."]
+first_red_candidates = ["implementation 상태에서 verifyApiCompileClasspathBoundary가 네 artifact와 유입 경로를 출력하며 실패한다."]
+verification_commands = ["cd apps/property-data && ./gradlew :api:compileJava :api:check --no-daemon", "cd apps/property-data && ./gradlew :api:test --tests 'com.home.HomeSearchApiApplicationTests' --no-daemon"]
+stop_conditions = ["compile 오류를 숨기기 위해 JDBC·Redis를 compileOnly로 다시 넣지 않는다.", "public controller URL이나 DTO 변경이 필요하면 중단한다."]
+risk_notes = ["API test source의 JDBC fixture는 testImplementation 범위로 제한한다."]
+
+[[items]]
+id = "HS-SEP-02-BATCH-EXIT-CODE"
+title_ko = "Batch packaged process exit code"
+pr_type = "Refactor"
+pr_title_ko = "Batch 직접 jar 운영 진입점 전환"
+description_ko = "Batch 운영 경로를 bootJar의 직접 java -jar 실행으로 바꾸고 OS exit code 0/1/2 전달을 검증한다."
+status = "done"
+priority = 102
+targets = "backend"
+preset = "property-data-separation"
+depends_on = ["HS-SEP-01-API-CLASSPATH"]
+acceptance_criteria = ["운영 wrapper는 명시된 단일 jar만 exec java -jar로 실행한다.", "packaged process에서 argument 2와 application failure 1을 관측하고 live 단계에서 success 0을 확인한다."]
+first_red_candidates = ["Gradle bootRun이 Batch Java validation exit 2를 shell exit 1로 변형한다."]
+verification_commands = ["cd apps/property-data && ./gradlew :batch:bootJar :batch:packagedProcessSmoke :batch:test --no-daemon", "cd apps/property-data && ./ops/run-daily-batch-live-smoke.sh --self-test"]
+stop_conditions = ["wrapper가 jar 후보를 임의 선택하거나 child exit code를 변형하면 중단한다."]
+risk_notes = ["정상 exit 0의 실제 증거는 HS-SEP-03 live smoke가 소유한다."]
+
+[[items]]
+id = "HS-SEP-03-LIVE-SMOKE"
+title_ko = "Daily live smoke 2회"
+pr_type = "Test"
+pr_title_ko = "Daily Batch live smoke 증거"
+description_ko = "동일 최종 bootJar와 실제 RTMS·기존 로컬 통합 DB로 daily를 연속 2회 실행하고 Batch metadata와 rtms_ingest_run을 대조한다."
+status = "done"
+priority = 103
+targets = "backend"
+preset = "property-data-separation"
+depends_on = ["HS-SEP-02-BATCH-EXIT-CODE"]
+acceptance_criteria = ["두 process와 모든 필수 step이 0/COMPLETED다.", "각 execution과 rtms_ingest_run을 대조하고 두 번째 실행이 normalized source/source_key 중복을 늘리지 않는다."]
+first_red_candidates = ["live 전 baseline snapshot과 첫 실행 전후 DB count 차이를 증거로 고정한다."]
+verification_commands = ["cd apps/property-data && ./ops/run-daily-batch-live-smoke.sh", "cd apps/property-data && ./ops/check-daily-batch-live-smoke.sh"]
+stop_conditions = ["Docker health, private RTMS credential 또는 coordinate source 설정이 없으면 Blocked로 종료한다.", "explicit correlation 없이 시간 추정만 가능하면 Partial로 종료한다."]
+risk_notes = ["Docker volume 삭제·reset과 secret 출력은 금지한다."]
+
+[[items]]
+id = "HS-SEP-04-LEGACY-SCHEDULER"
+title_ko = "Legacy RTMS scheduler 제거"
+pr_type = "Refactor"
+pr_title_ko = "Legacy RTMS scheduler 제거"
+description_ko = "live smoke Pass 뒤에만 RTMS legacy @Scheduled 진입점과 전용 설정을 제거한다."
+status = "done"
+priority = 104
+targets = "backend"
+preset = "property-data-separation"
+depends_on = ["HS-SEP-03-LIVE-SMOKE"]
+acceptance_criteria = ["legacy property를 활성화해도 scheduler bean이 없고 Batch job/tasklet은 유지된다.", "제거 후 최종 jar live smoke가 다시 0/COMPLETED다."]
+first_red_candidates = ["legacy scheduler 활성화 context에서 scheduler bean 부재 assertion이 제거 전 실패한다."]
+verification_commands = ["cd apps/property-data && ./gradlew :api:test :batch:test --no-daemon", "cd apps/property-data && ./gradlew backendQualityCheck --no-daemon"]
+stop_conditions = ["HS-SEP-03 status가 Pass가 아니면 시작하지 않는다."]
+risk_notes = ["RTMS use case, raw-first, dedupe, matching 정책은 삭제 대상이 아니다."]
+
+[[items]]
+id = "HS-SEP-05-PACKAGE-POLICY"
+title_ko = "Property-data package 정책 교정"
+pr_type = "Test"
+pr_title_ko = "Property-data JPA 정책 범위 교정"
+description_ko = "domain/application 역참조와 현재 JDBC persistence의 JPA 금지만 검사하도록 package 정책 범위를 제한한다."
+status = "done"
+priority = 105
+targets = "backend"
+preset = "property-data-separation"
+depends_on = ["HS-SEP-04-LEGACY-SCHEDULER"]
+acceptance_criteria = ["domain/application forbidden dependency fixture는 실패하고 정상 production class는 통과한다.", "미래 backend 서비스 전체에 JPA 금지 정책을 확장하지 않는다."]
+first_red_candidates = ["현재 전 backend source/JPA 문자열 검사 정책이 역할별 fixture seam 요구를 충족하지 못함을 확인한다."]
+verification_commands = ["cd apps/property-data && ./gradlew :core:test --tests 'com.home.foundation.BackendPackageBoundaryTest' --no-daemon"]
+stop_conditions = ["API compile boundary를 source 문자열 검사로 중복 구현하지 않는다."]
+risk_notes = ["현재 property-data JDBC adapter의 JDBC 사용은 허용한다."]
+
+[[items]]
+id = "HS-SEP-06-BATCH-CONTEXT"
+title_ko = "Batch explicit context 조립"
+pr_type = "Refactor"
+pr_title_ko = "Batch component scan 경계 강화"
+description_ko = "Batch의 com.home 전체 scan을 제거하고 필요한 core configuration만 명시적으로 import한다."
+status = "done"
+priority = 106
+targets = "backend"
+preset = "property-data-separation"
+depends_on = ["HS-SEP-05-PACKAGE-POLICY"]
+acceptance_criteria = ["daily job/use case/persistence/transaction/Batch repository bean은 존재한다.", "API web, legacy scheduler, ranking/favorite/mail/recommendation/cache warmer bean은 부재한다."]
+first_red_candidates = ["비-Batch feature property를 활성화한 context에서 해당 bean 부재 assertion이 전체 scan 때문에 실패한다."]
+verification_commands = ["cd apps/property-data && ./gradlew :batch:test :api:test --no-daemon", "cd apps/property-data && ./gradlew backendQualityCheck --no-daemon"]
+stop_conditions = ["core 물리 Gradle module 분리는 후속 ADR로 남기고 이번 item에서 수행하지 않는다."]
+risk_notes = ["enabled=false 기본값을 Batch 격리 수단으로 사용하지 않는다."]
+
+[[items]]
+id = "HS-SEP-07-FINAL-GATE"
+title_ko = "Property-data 역할 분리 최종 게이트"
+pr_type = "Test"
+pr_title_ko = "Property-data 역할 분리 최종 검증"
+description_ko = "전체 backend, API contract, packaged process, live evidence, code review와 security audit를 findings-first로 마감한다."
+status = "done"
+priority = 107
+targets = "backend"
+preset = "property-data-separation"
+depends_on = ["HS-SEP-06-BATCH-CONTEXT"]
+acceptance_criteria = ["전체 check와 public API regression이 통과하고 Medium 이상 unresolved finding이 없다.", "07-final-report.md 보안 영향에 machine-checked security-audit evidence line을 남긴다."]
+first_red_candidates = ["최종 gate는 각 선행 item의 RED/GREEN artifact와 마지막 live DB 대조를 재검증한다."]
+verification_commands = ["cd apps/property-data && ./gradlew backendQualityCheck --no-daemon", "python3 .codex/harness/home_plan.py --self-test", "git diff --check"]
+stop_conditions = ["공개 API 또는 DB schema/enum/complex_id 의미 변경이 발견되면 Fail로 종료한다."]
+risk_notes = ["commit, push, PR 생성은 이 harness 범위 밖이다."]
+
+[[items]]
 id = "property-data-service-path-rename"
 title_ko = "property-data service 경로명 정리"
 pr_type = "Chore"

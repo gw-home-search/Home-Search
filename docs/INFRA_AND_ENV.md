@@ -212,7 +212,8 @@ local API도 Flyway를 자동 실행하지 않으며 missing/validation 우회 �
 사용한다. `enabled=false`는 자동 실행만 막고 이미 적용된 migration checksum
 규칙을 없애지 않는다.
 
-현재 V3 source missing history는 일반 ignore로 숨기지 않는다. V1/V4 checksum,
+현재 V3 source missing history는 일반 ignore로 숨기지 않는다.
+`V1__create_clean_core_schema.sql`과 `V4__create_spring_batch_metadata_schema.sql` checksum,
 failed migration 0건, V3 unresolved 단 한 건, backup을 확인한 뒤
 `repair-missing-v3 --confirm=3`으로만 `Deleted` 처리한다. 예상하지 않은 aligned,
 removed, deleted action이 있으면 V5/V6 적용을 중단한다.

@@ -37,6 +37,12 @@ class BackendRuntimeSplitOwnershipTest {
 	}
 
 	@Test
+	@DisplayName("clean checkout에서 삭제된 runtime 디렉터리는 빈 파일 목록으로 취급한다")
+	void missingRuntimeDirectoryIsTreatedAsEmpty() throws IOException {
+		assertThat(filesUnder(Path.of("build", "missing-runtime-directory"))).isEmpty();
+	}
+
+	@Test
 	@DisplayName("API 설정과 local compose는 legacy RTMS 실행 env를 노출하지 않는다")
 	void apiConfigurationDoesNotExposeLegacyRtmsExecutionEnv() throws IOException {
 		String application = Files.readString(API_APPLICATION_YML);
@@ -64,6 +70,9 @@ class BackendRuntimeSplitOwnershipTest {
 	}
 
 	private static List<Path> filesUnder(Path root) throws IOException {
+		if (Files.notExists(root)) {
+			return List.of();
+		}
 		try (var paths = Files.walk(root)) {
 			return paths
 				.filter(Files::isRegularFile)

@@ -26,6 +26,7 @@ add it to automated flows.
 - `.agents/skills/frontend-web/SKILL.md`.
 - `apps/web/AGENTS.md`.
 - `apps/web/CONTEXT.md`.
+- `apps/web/DESIGN_DECISIONS.md`.
 
 ## Writable Scope
 
@@ -55,15 +56,18 @@ decorator.
 3. Identify the affected UI unit: app bar, map surface, marker layer, filter
    controls, exploration panel, detail drawer, trade list, or mobile sheet.
 4. Map every visible data need to a documented Home Search endpoint and field.
-5. Apply the visual doctrine in `references/map-ux-principles.md`.
-6. For a polish pass, use `references/interface-polish-principles.md`.
-7. For a broader style consistency review, use
+5. Treat `apps/web/DESIGN_DECISIONS.md` as the source for current product-specific
+   dimensions, colors, and component anatomy. Do not duplicate those values in
+   this skill.
+6. Apply the visual doctrine in `references/map-ux-principles.md`.
+7. For a polish pass, use `references/interface-polish-principles.md`.
+8. For a broader style consistency review, use
    `references/design-system-audit.md`.
-8. For keyboard, screen-reader, focus, or animation decisions, use
+9. For keyboard, screen-reader, focus, or animation decisions, use
    `references/accessibility-motion-rules.md`.
-9. If Figma is involved, follow `references/figma-workflow.md`.
-10. Before claiming completion, use `references/visual-qa-checklist.md`.
-11. Route implementation, contract, TDD, and review work to the existing Home
+10. If Figma is involved, follow `references/figma-workflow.md`.
+11. Before claiming completion, use `references/visual-qa-checklist.md`.
+12. Route implementation, contract, TDD, and review work to the existing Home
    Search skills named above.
 
 ## Style Guardrails
@@ -111,7 +115,9 @@ Stop and use the proper Home Search skill before proceeding if:
 - The map becomes secondary to a panel, drawer, hero, or card layout.
 - A polish direction requires adding decorative dependencies or visual assets
   that do not support the map workflow.
-- Screenshot evidence is unavailable for a meaningful visual change.
+- Browser or screenshot evidence is unavailable: continue deterministic
+  verification, report visual QA as `Partial`, and do not claim visual
+  completion.
 
 ## User-Facing Review Output
 

@@ -10,7 +10,9 @@ export type KakaoBounds = {
 
 export type KakaoMap = {
   getBounds: () => KakaoBounds;
+  getCenter?: () => KakaoLatLng;
   getLevel: () => number;
+  relayout?: () => void;
   setCenter?: (center: KakaoLatLng) => void;
   setLevel?: (level: number) => void;
 };

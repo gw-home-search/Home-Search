@@ -59,12 +59,15 @@ subprojects {
 
 def coverageExcludes = [
     '**/HomeSearchApiApplication*',
+    '**/PropertyDataBatchApplication*',
     '**/*Request*',
     '**/*Response*',
     '**/*Record*',
     '**/*Command*',
     '**/*Result*',
     '**/*Status*',
+    '**/*Configuration*',
+    '**/HermesOpsNotifier*',
     '**/*Matcher*',
     '**/dto/**',
     '**/package-info*'
@@ -76,7 +79,9 @@ def coverageExecutionData = files(
     jacocoExec(project(':core'), 'test'),
     jacocoExec(project(':core'), 'persistenceTest'),
     jacocoExec(project(':api'), 'test'),
-    jacocoExec(project(':api'), 'apiContractTest')
+    jacocoExec(project(':api'), 'apiContractTest'),
+    jacocoExec(project(':batch'), 'test'),
+    jacocoExec(project(':migration'), 'test')
 )
 def coverageSourceDirectories = files(subprojects.collect { it.sourceSets.main.allSource.srcDirs })
 def coverageClassDirectories = files(subprojects.collect { project ->
@@ -90,6 +95,8 @@ tasks.register('jacocoRootReport', JacocoReport) {
     dependsOn ':core:persistenceTest'
     dependsOn ':api:test'
     dependsOn ':api:apiContractTest'
+    dependsOn ':batch:test'
+    dependsOn ':migration:test'
 
     executionData.setFrom(coverageExecutionData)
     sourceDirectories.setFrom(coverageSourceDirectories)
@@ -146,11 +153,17 @@ tasks.register('backendQualityCheck') {
     group = 'verification'
     dependsOn ':core:test'
     dependsOn ':core:persistenceTest'
+    dependsOn ':core:verifyApiMigrationCatalog'
     dependsOn ':api:test'
     dependsOn ':api:apiContractTest'
     dependsOn ':api:restDocsTest'
     dependsOn ':api:apiDocsCheck'
+    dependsOn ':api:check'
     dependsOn ':core:javadoc'
     dependsOn ':api:javadoc'
+    dependsOn ':batch:javadoc'
+    dependsOn ':batch:check'
+    dependsOn ':migration:javadoc'
+    dependsOn ':migration:check'
     dependsOn tasks.named('coverageCheck')
 }

@@ -6,6 +6,7 @@ import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.home.application.ingest.rtms.RtmsApartmentTradePage;
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
 import com.home.ingestcore.rtms.OpenApiTradeItem;
 

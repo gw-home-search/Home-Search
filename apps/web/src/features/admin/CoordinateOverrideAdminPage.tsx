@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 
+import './admin.css';
+
 import {
   approveCoordinateOverride,
   fetchCoordinatePendingComplexes,

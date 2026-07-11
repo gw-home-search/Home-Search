@@ -147,8 +147,8 @@ class PublicComplexMetadataResolverTest {
 	}
 
 	@Test
-	@DisplayName("승인 alias 후보의 COMPLEX_PK가 다르면 metadata를 적용하지 않는다")
-	void rejectsApprovedAliasCandidateWithComplexPkConflict() {
+	@DisplayName("승인 alias 후보의 ODC COMPLEX_PK는 apt_seq와 비교하거나 덮어쓰지 않는다")
+	void doesNotCompareApprovedAliasOdcComplexPkWithAptSeq() {
 		RestClient.Builder odcloudBuilder = RestClient.builder().baseUrl("https://odcloud.example.test");
 		MockRestServiceServer odcloudServer = MockRestServiceServer.bindTo(odcloudBuilder).build();
 		PublicComplexMetadataResolver resolver = new PublicComplexMetadataResolver(
@@ -167,9 +167,8 @@ class PublicComplexMetadataResolverTest {
 		var resolution = resolver.resolve(new ComplexMetadataLookup(
 			501L, "APT-501", "Legacy Apartment", "4146126200109010000", "양지읍"));
 
-		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.AMBIGUOUS);
-		assertThat(resolution.metadata()).isNull();
-		assertThat(resolution.failureReason()).contains("COMPLEX_PK conflict");
+		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.PARTIAL);
+		assertThat(resolution.metadata().dongCnt()).isEqualTo(8);
 		odcloudServer.verify();
 	}
 
@@ -251,6 +250,27 @@ class PublicComplexMetadataResolverTest {
 		assertThat(resolution.lookupEvidence().lookupPath())
 			.isEqualTo(com.home.domain.complex.metadata.ComplexMetadataLookupPath.CANONICAL_PNU_NAME);
 		odcloudServer.verify();
+	}
+
+	@Test
+	@DisplayName("ODC exact PNU 복수 후보의 부분 이름 일치는 자동 확정하지 않는다")
+	void doesNotAutoResolvePartialNameMatch() {
+		RestClient.Builder builder = RestClient.builder().baseUrl("https://odcloud.example.test");
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		PublicComplexMetadataResolver resolver = new PublicComplexMetadataResolver(builder.build(),
+			"https://odcloud.example.test","ODC-KEY",ODC_APT_PATH,RestClient.builder().build(),null," ",
+			"/recap","/title",false);
+		server.expect(requestTo(startsWith("https://odcloud.example.test"+ODC_APT_PATH))).andRespond(withSuccess("""
+			{"data":[
+			 {"PNU":"4115010400107270001","COMPLEX_NM1":"한국아파트","DONG_CNT":5,"UNIT_CNT":796},
+			 {"PNU":"4115010400107270001","COMPLEX_NM1":"풍림","DONG_CNT":4,"UNIT_CNT":786}
+			]}
+			""",MediaType.APPLICATION_JSON));
+
+		var resolution = resolver.resolve(new ComplexMetadataLookup(501L,"APT-501","한국","4115010400107270001","신곡동"));
+
+		assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.AMBIGUOUS);
+		assertThat(resolution.metadata()).isNull();
 	}
 
 	@Test

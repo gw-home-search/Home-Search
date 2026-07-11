@@ -76,6 +76,22 @@ Done when:
 - Duplicate ingest is prevented.
 - Failed matches are inspectable.
 
+Flyway 운영 규칙:
+
+- API와 Batch startup은 migration 또는 validation을 자동 실행하지 않는다.
+- schema 변경은 `property-data-migration.jar`의 명시적 operation만 수행한다.
+- 신규 `V*` source는 durable DB 적용 전까지 수정할 수 있지만, 한 번 적용한
+  migration은 수정하지 않고 다음 version으로 forward-fix한다.
+- trade registry 연관 변경은 V5 expand → bounded backfill → V6 validate 순서로
+  적용한다. V6에는 backfill DML을 넣지 않는다.
+- V7 building metadata evidence는 durable DB의 V3 repair와 V5 bounded
+  backfill/V6 validation이 완료된 뒤 명시적으로 적용한다. V7은 기존 값을
+  삭제하거나 재해석하지 않고 snapshot, evaluation, external identity, state,
+  decision만 추가한다.
+- 현재는 `home_search` DB와 `public.flyway_schema_history` 하나를 유지한다.
+  schema별 history나 Batch metadata DB 분리는 후속 운영 요구가 생길 때 ADR로
+  검토한다.
+
 ## Phase 3 - Backend Migration
 
 Source backend: `/Users/gwongwangjae/IdeaProjects/home-server`
@@ -97,9 +113,13 @@ Do not migrate later-scope features into the critical path. Keep rankings, favor
 OAuth-dependent user flows, and mail alarms separate.
 
 `apps/property-data` is the property-data-service boundary that owns the operational
-`home_search` database. `core` and `api` are current internal module splits;
-a future `batch-app` directory would be another execution split of the same service, not
-trade/map database or MSA service splits.
+`home_search` database. `core`, `api`, and `batch` are internal module and execution
+splits of the same service, not trade/map database or MSA service splits.
+
+The daily RTMS operational entrypoint is the packaged `batch` application. The legacy
+API `@Scheduled` entrypoint was removed after `HS-SEP-03-LIVE-SMOKE` proved two
+successful executions of the same jar against RTMS and the local integration database.
+The evidence is stored under `.codex/harness/reports/hs-sep/03-live-*.md`.
 
 The RTMS ingest service must apply the jibun/PNU match policy before normalized
 trade insert. Uncertain rows remain raw/evidence records until a later admin

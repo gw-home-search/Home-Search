@@ -13,9 +13,12 @@ RTMS ingest, map/trade HTTP APIs, domain logic, persistence, and the operational
 current `api` module isolates this mode without creating a separate MSA service
 or database.
 
-**Batch app** is the future RTMS batch execution mode of the same property-data
-service. It may become a `batch-app` directory later, but it keeps the same
+**Batch** is the current RTMS batch execution mode of the same property-data
+service. It uses the `batch` directory and keeps the same
 `home_search` ownership boundary.
+
+**Migration app** is the explicit run-and-exit Flyway/backfill execution mode
+under `migration`. API and Batch keep Flyway auto-execution disabled.
 
 **Layered backend** means `application`, `domain`, `infrastructure`, and `global` responsibilities remain separate.
 

@@ -12,7 +12,7 @@ class AdminMetadataAccessConfiguration implements WebMvcConfigurer {
 	private final String accessCode;
 
 	AdminMetadataAccessConfiguration(
-		@Value("${home.admin.metadata-enrichment.access-code:local-admin}") String accessCode
+		@Value("${home.admin.metadata-enrichment.access-code:}") String accessCode
 	) {
 		this.accessCode = accessCode;
 	}

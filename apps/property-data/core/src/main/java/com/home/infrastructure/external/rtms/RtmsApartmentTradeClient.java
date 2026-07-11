@@ -1,12 +1,6 @@
 package com.home.infrastructure.external.rtms;
 
-import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
+import com.home.application.ingest.rtms.RtmsApartmentTradePageGateway;
 
-public interface RtmsApartmentTradeClient {
-
-	OpenApiTradeIngestBatch fetch(RtmsApartmentTradeRequest request);
-
-	default RtmsApartmentTradePage fetchPage(RtmsApartmentTradeRequest request) {
-		return RtmsApartmentTradePage.single(fetch(request));
-	}
+public interface RtmsApartmentTradeClient extends RtmsApartmentTradePageGateway {
 }

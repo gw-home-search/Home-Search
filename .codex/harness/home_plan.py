@@ -69,6 +69,13 @@ def load_worklog(path: Path = WORKLOG_PATH) -> list[dict[str, Any]]:
     duplicates = sorted({item for item in ids if ids.count(item) > 1})
     if duplicates:
         raise PlanError(f"duplicate work ids: {', '.join(duplicates)}")
+    known_ids = set(ids)
+    for item in items:
+        unknown = sorted(set(item["depends_on"]) - known_ids)
+        if unknown:
+            raise PlanError(f"{item['id']} has unknown dependencies: {', '.join(unknown)}")
+        if item["id"] in item["depends_on"]:
+            raise PlanError(f"{item['id']} cannot depend on itself")
     return items
 
 
@@ -96,6 +103,7 @@ def normalize_work_item(raw: Any) -> dict[str, Any]:
     item["id"] = slugify(str(item["id"]))
     item["status"] = str(item["status"])
     item["targets"] = str(item["targets"])
+    item["depends_on"] = [slugify(dependency) for dependency in as_list(item.get("depends_on"))]
     if item["status"] not in VALID_STATUSES:
         raise PlanError(f"{item['id']} has invalid status: {item['status']}")
     if item["targets"] not in VALID_TARGETS:
@@ -283,6 +291,21 @@ def candidate_view(item: dict[str, Any], evidence: dict[str, Any]) -> dict[str, 
     return view
 
 
+def dependency_blockers(items: list[dict[str, Any]], item: dict[str, Any]) -> list[str]:
+    statuses = {candidate["id"]: candidate["status"] for candidate in items}
+    return [
+        f"{dependency}({statuses[dependency]})"
+        for dependency in item["depends_on"]
+        if statuses[dependency] != "done"
+    ]
+
+
+def ensure_dependencies_ready(items: list[dict[str, Any]], item: dict[str, Any]) -> None:
+    blockers = dependency_blockers(items, item)
+    if blockers:
+        raise PlanError(f"{item['id']} 선행 작업 미완료: {', '.join(blockers)}")
+
+
 def select_candidates(
     items: list[dict[str, Any]],
     evidence: dict[str, Any],
@@ -300,6 +323,8 @@ def select_candidates(
         if preset and slugify(str(item["preset"])) != slugify(preset):
             continue
         if item["status"] in {"done", "blocked"}:
+            continue
+        if dependency_blockers(items, item):
             continue
         filtered.append(candidate_view(item, evidence))
     filtered.sort(key=lambda item: (-item["score"], item["priority"], item["id"]))
@@ -869,8 +894,10 @@ def run_plan(args: argparse.Namespace) -> int:
     try:
         items = load_worklog()
         evidence = read_report_evidence(report_path_from_args(args))
+        work_item = find_work_item(items, args.work_id)
+        ensure_dependencies_ready(items, work_item)
         plan = plan_for_work_item(
-            find_work_item(items, args.work_id),
+            work_item,
             evidence,
             targets=args.targets,
             preset=args.preset,
@@ -983,6 +1010,7 @@ def run_self_test() -> int:
                 "priority = 200\n"
                 'targets = "backend"\n'
                 'preset = "runtime-smoke"\n'
+                'depends_on = ["self-test-fixture"]\n'
                 'acceptance_criteria = ["fixture 인수 기준 2"]\n'
                 'first_red_candidates = ["fixture 최초 RED 2"]\n'
                 'verification_commands = ["cd apps/property-data && ./gradlew backendQualityCheck", "git diff --check"]\n'
@@ -1001,6 +1029,14 @@ def run_self_test() -> int:
         candidate_fixture = [dict(item) for item in fixture_items]
         candidate_fixture[0]["status"] = "candidate"
         candidates = select_candidates(candidate_fixture, evidence, limit=3, targets=None, preset=None)
+        dependency_blocked = False
+        try:
+            ensure_dependencies_ready(candidate_fixture, candidate_fixture[1])
+        except PlanError:
+            dependency_blocked = True
+        ready_fixture = [dict(item) for item in fixture_items]
+        ready_fixture[0]["status"] = "done"
+        ready_candidates = select_candidates(ready_fixture, evidence, limit=3, targets=None, preset=None)
         no_candidate_fixture = [dict(item, status="done") for item in fixture_items]
         no_candidates = select_candidates(no_candidate_fixture, evidence, limit=3, targets=None, preset=None)
         plan_item = find_work_item(fixture_items, "self-test-fixture")
@@ -1055,6 +1091,9 @@ def run_self_test() -> int:
             len(items) >= 1,
             all(item["targets"] in VALID_TARGETS for item in items),
             1 <= len(candidates) <= 3,
+            all(item["id"] != "self-test-fixture-second" for item in candidates),
+            dependency_blocked,
+            any(item["id"] == "self-test-fixture-second" for item in ready_candidates),
             len(no_candidates) == 0,
             "worklog 후보 없음" in no_candidate_rendered,
             "다음 행동: worklog 후보를 추가하세요" in no_candidate_rendered,

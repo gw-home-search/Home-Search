@@ -1,0 +1,114 @@
+package com.home.batch.launch;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.Map;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+class BatchJobArgumentsTest {
+
+	private final Clock clock = Clock.fixed(Instant.parse("2026-07-06T16:00:00Z"), ZoneId.of("UTC"));
+
+	@Test
+	@DisplayName("daily job은 requestId가 있으면 runDate 기본값과 canonical UUID를 identifying parameter로 채운다")
+	void dailyJobDefaultsRunDateToKstToday() {
+		BatchJobArguments arguments = BatchJobArguments.from("rtmsDailyRefreshJob", Map.of(
+			"requestId", "123e4567-e89b-12d3-a456-426614174000"
+		), clock);
+
+		assertThat(arguments.jobName()).isEqualTo("rtmsDailyRefreshJob");
+		assertThat(arguments.jobParameters().getString("runDate")).isEqualTo("2026-07-07");
+		assertThat(arguments.jobParameters().getParameter("runDate").isIdentifying()).isTrue();
+		assertThat(arguments.jobParameters().getString("requestId"))
+			.isEqualTo("123e4567-e89b-12d3-a456-426614174000");
+	}
+
+	@Test
+	@DisplayName("daily job은 canonical UUID requestId를 identifying parameter로 보존한다")
+	void dailyJobKeepsRequiredCanonicalRequestId() {
+		BatchJobArguments arguments = BatchJobArguments.from("rtmsDailyRefreshJob", Map.of(
+			"runDate", "2026-07-10",
+			"requestId", "123e4567-e89b-12d3-a456-426614174001"
+		), clock);
+
+		assertThat(arguments.jobParameters().getString("runDate")).isEqualTo("2026-07-10");
+		assertThat(arguments.jobParameters().getString("requestId"))
+			.isEqualTo("123e4567-e89b-12d3-a456-426614174001");
+		assertThat(arguments.jobParameters().getParameter("requestId").isIdentifying()).isTrue();
+	}
+
+	@Test
+	@DisplayName("backfill job은 기간, 지역, requestId를 모두 요구한다")
+	void backfillJobRequiresExplicitParameters() {
+		BatchJobArguments arguments = BatchJobArguments.from("rtmsBackfillJob", Map.of(
+			"fromYmd", "202606",
+			"toYmd", "202607",
+			"lawdCds", "11680,11710",
+			"requestId", "123e4567-e89b-12d3-a456-426614174002"
+		), clock);
+
+		assertThat(arguments.jobParameters().getString("fromYmd")).isEqualTo("202606");
+		assertThat(arguments.jobParameters().getString("toYmd")).isEqualTo("202607");
+		assertThat(arguments.jobParameters().getString("lawdCds")).isEqualTo("11680,11710");
+		assertThat(arguments.jobParameters().getString("requestId"))
+			.isEqualTo("123e4567-e89b-12d3-a456-426614174002");
+	}
+
+	@Test
+	@DisplayName("daily job은 requestId 누락과 arbitrary text를 exit code 2로 거부한다")
+	void dailyJobRejectsMissingOrNonCanonicalRequestId() {
+		assertThatThrownBy(() -> BatchJobArguments.from("rtmsDailyRefreshJob", Map.of(), clock))
+			.isInstanceOf(BatchExitCodeException.class)
+			.extracting("exitCode")
+			.isEqualTo(2);
+		assertThatThrownBy(() -> BatchJobArguments.from("rtmsDailyRefreshJob", Map.of(
+			"requestId", "hs-sep-live-1"
+		), clock))
+			.isInstanceOf(BatchExitCodeException.class)
+			.extracting("exitCode")
+			.isEqualTo(2);
+	}
+
+	@Test
+	@DisplayName("지원하지 않는 job 이름은 exit code 2 예외로 거부한다")
+	void rejectsUnsupportedJobName() {
+		assertThatThrownBy(() -> BatchJobArguments.from("unknownJob", Map.of(), clock))
+			.isInstanceOf(BatchExitCodeException.class)
+			.extracting("exitCode")
+			.isEqualTo(2);
+	}
+
+	@Test
+	@DisplayName("backfill 기간 역전은 거부한다")
+	void rejectsBackfillReversedRange() {
+		assertThatThrownBy(() -> BatchJobArguments.from("rtmsBackfillJob", Map.of(
+			"fromYmd", "202607",
+			"toYmd", "202606",
+			"lawdCds", "11680",
+			"requestId", "123e4567-e89b-12d3-a456-426614174003"
+		), clock))
+			.isInstanceOf(BatchExitCodeException.class)
+			.hasMessageContaining("fromYmd");
+	}
+
+	@Test
+	@DisplayName("building metadata job은 mode, quota cap 입력, 범위, canonical requestId를 보존한다")
+	void parsesBuildingMetadataJobArguments() {
+		BatchJobArguments arguments = BatchJobArguments.from("complexBuildingMetadataJob", Map.of(
+			"mode", "missing", "runDate", "2026-07-10", "maxRequests", "900",
+			"fromComplexId", "100", "toComplexId", "200",
+			"requestId", "123e4567-e89b-12d3-a456-426614174004"
+		), clock);
+
+		assertThat(arguments.jobParameters().getString("mode")).isEqualTo("missing");
+		assertThat(arguments.jobParameters().getString("maxRequests")).isEqualTo("900");
+		assertThat(arguments.jobParameters().getString("fromComplexId")).isEqualTo("100");
+	}
+
+}

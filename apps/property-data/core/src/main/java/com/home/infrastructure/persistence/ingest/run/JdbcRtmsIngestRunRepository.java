@@ -38,7 +38,8 @@ public class JdbcRtmsIngestRunRepository implements RtmsIngestRunRepository {
 			    parse_failed_count,
 			    failure_reason,
 			    started_at,
-			    completed_at
+			    completed_at,
+			    execution_correlation_id
 			)
 			VALUES (
 			    :lawdCd,
@@ -54,7 +55,8 @@ public class JdbcRtmsIngestRunRepository implements RtmsIngestRunRepository {
 			    :parseFailedCount,
 			    :failureReason,
 			    :startedAt,
-			    :completedAt
+			    :completedAt,
+			    :executionCorrelationId
 			)
 			RETURNING *
 			""")
@@ -72,6 +74,9 @@ public class JdbcRtmsIngestRunRepository implements RtmsIngestRunRepository {
 			.param("failureReason", record.failureReason())
 			.param("startedAt", offset(record.startedAt()))
 			.param("completedAt", offset(record.completedAt()))
+			.param("executionCorrelationId", record.executionCorrelationId() == null
+				? null
+				: record.executionCorrelationId().value())
 			.query(this::mapRecord)
 			.single();
 	}
@@ -93,8 +98,15 @@ public class JdbcRtmsIngestRunRepository implements RtmsIngestRunRepository {
 			resultSet.getString("failure_reason"),
 			instant(resultSet, "started_at"),
 			instant(resultSet, "completed_at"),
-			instant(resultSet, "created_at")
+			instant(resultSet, "created_at"),
+			executionCorrelationId(resultSet)
 		);
+	}
+
+	private com.home.domain.ingest.run.ExecutionCorrelationId executionCorrelationId(ResultSet resultSet)
+		throws SQLException {
+		java.util.UUID value = resultSet.getObject("execution_correlation_id", java.util.UUID.class);
+		return value == null ? null : new com.home.domain.ingest.run.ExecutionCorrelationId(value);
 	}
 
 	private Instant instant(ResultSet resultSet, String column) throws SQLException {

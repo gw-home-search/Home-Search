@@ -1,5 +1,8 @@
 package com.home.infrastructure.external.complex;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceClient;
+import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceParser;
 import com.home.application.ingest.metadata.ComplexMetadataEnrichmentClient;
 import com.home.application.ingest.metadata.OdcloudPnuPrefixAliasLookup;
 
@@ -11,7 +14,33 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration(proxyBeanMethods = false)
-class ComplexMetadataClientConfiguration {
+public class ComplexMetadataClientConfiguration {
+
+	@Bean
+	BuildingMetadataSourceParser buildingMetadataSourceParser(ObjectMapper objectMapper) {
+		return new BuildingMetadataJsonParser(objectMapper);
+	}
+
+	@Bean
+	BuildingMetadataSourceClient buildingMetadataSourceClient(
+		@Value("${odcloud.data.base-url:https://api.odcloud.kr}") String odcloudBaseUrl,
+		@Value("${odcloud.data.od-service-key:${ODC_SERVICE_KEY:}}") String odcloudServiceKey,
+		@Value("${odcloud.data.apt-title-path:}") String odcloudAptPath,
+		@Value("${apis.data.base-url:https://apis.data.go.kr}") String buildingBaseUrl,
+		@Value("${apis.data.bld-service-key:${BLD_SERVICE_KEY:}}") String buildingServiceKey,
+		@Value("${apis.data.bld-title-path:/1613000/BldRgstHubService/getBrRecapTitleInfo}") String recapPath,
+		@Value("${apis.data.recap-title-path:/1613000/BldRgstHubService/getBrTitleInfo}") String titlePath,
+		@Value("${complex.metadata.min-request-interval-millis:250}") long minRequestIntervalMillis,
+		@Value("${complex.metadata.connect-timeout-millis:5000}") int connectTimeoutMillis,
+		@Value("${complex.metadata.read-timeout-millis:5000}") int readTimeoutMillis
+	) {
+		return new PublicBuildingMetadataSourceClient(
+			buildRestClient(odcloudBaseUrl, connectTimeoutMillis, readTimeoutMillis), odcloudBaseUrl, odcloudServiceKey,
+			defaultOdcloudAptPath(odcloudAptPath),
+			buildRestClient(buildingBaseUrl, connectTimeoutMillis, readTimeoutMillis), buildingBaseUrl, buildingServiceKey,
+			recapPath, titlePath, minRequestIntervalMillis
+		);
+	}
 
 	@Bean
 	ComplexMetadataEnrichmentClient complexMetadataEnrichmentClient(

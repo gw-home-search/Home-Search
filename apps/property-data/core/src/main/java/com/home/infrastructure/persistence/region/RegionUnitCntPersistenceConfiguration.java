@@ -12,7 +12,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration(proxyBeanMethods = false)
-class RegionUnitCntPersistenceConfiguration {
+public class RegionUnitCntPersistenceConfiguration {
 
 	@Bean
 	RegionRelationSynchronizationGateway regionRelationSynchronizationGateway(

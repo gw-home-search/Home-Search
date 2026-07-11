@@ -1,4 +1,4 @@
-import type { FormEventHandler } from 'react';
+import type { FormEventHandler, Ref } from 'react';
 
 import {
   DetailSidebar,
@@ -27,6 +27,8 @@ import type {
 import type {
   ComplexSearchResult,
 } from '../search/api/fetchComplexSearchResults';
+import { RequestStateNotice } from '../../shared/RequestStateNotice';
+import { CheckIcon, ChevronDownIcon, CloseIcon, SearchIcon } from '../../shared/icons';
 
 type DetailRequestState = 'idle' | 'loading' | 'ready' | 'error';
 type PanelRequestState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
@@ -64,16 +66,22 @@ type ExplorationPanelProps = {
   tradeRows: TradeItem[];
   tradeTrend: TradeTrendPoint[];
   onCloseDetail: () => void;
+  onDismissDetail: () => void;
+  onCloseExploration: () => void;
   onComplexSelect: (complex: ParcelComplexSummary | RegionComplexSummary) => void;
   onLoadMoreTrades: () => void;
   onLoadRootRegions: () => void;
   onRegionComplexSelect: (complex: RegionComplexSummary) => void;
   onRegionSelect: (region: RegionTrailItem) => void;
+  onRegionTrailSelect: (region: RegionTrailItem, index: number) => void;
   onRetryDetail: () => void;
+  onRetryRegion: () => void;
+  onRetrySearch: () => void;
   onSearchInputChange: (value: string) => void;
   onSearchResultSelect: (result: ComplexSearchResult) => void;
   onSearchSubmit: FormEventHandler<HTMLFormElement>;
   onSuggestionSelect: (suggestion: ComplexSuggestion) => void;
+  searchInputRef?: Ref<HTMLInputElement>;
 };
 
 export function ExplorationPanel({
@@ -98,17 +106,25 @@ export function ExplorationPanel({
   tradeRows,
   tradeTrend,
   onCloseDetail,
+  onDismissDetail,
+  onCloseExploration,
   onComplexSelect,
   onLoadMoreTrades,
   onLoadRootRegions,
   onRegionComplexSelect,
   onRegionSelect,
+  onRegionTrailSelect,
   onRetryDetail,
+  onRetryRegion,
+  onRetrySearch,
   onSearchInputChange,
   onSearchResultSelect,
   onSearchSubmit,
   onSuggestionSelect,
+  searchInputRef,
 }: ExplorationPanelProps) {
+  const showRegionComplexes = regionDetail?.children.length === 0 && regionComplexes.length > 0;
+
   return (
     <section
       id="exploration-panel"
@@ -122,7 +138,9 @@ export function ExplorationPanel({
     >
       <div className="exploration-panel-header" hidden={sidebarMode === 'detail'}>
         <p>탐색</p>
-        <span>{explorationSummaryLabel(searchResults.length, regionComplexes.length)}</span>
+        <button type="button" aria-label="검색 패널 닫기" className="exploration-mobile-close" onClick={onCloseExploration}>
+          <CloseIcon aria-hidden="true" />
+        </button>
       </div>
 
       <form
@@ -131,9 +149,11 @@ export function ExplorationPanel({
         hidden={sidebarMode === 'detail'}
         onSubmit={onSearchSubmit}
       >
-        <label>
+        <label className="exploration-search-field">
           <span>단지</span>
+          <SearchIcon aria-hidden="true" />
           <input
+            ref={searchInputRef}
             aria-label="단지 검색"
             name="q"
             onInput={(event) => {
@@ -143,7 +163,7 @@ export function ExplorationPanel({
             type="search"
           />
         </label>
-        <button type="submit" aria-label="단지 검색 실행">
+        <button type="submit" aria-label="단지 검색 실행" className="exploration-search-submit">
           검색
         </button>
       </form>
@@ -154,6 +174,7 @@ export function ExplorationPanel({
           detailError={detailError}
           detailState={detailState}
           onBack={onCloseDetail}
+          onClose={onDismissDetail}
           onComplexSelect={onComplexSelect}
           onRetryDetail={onRetryDetail}
           onLoadMoreTrades={onLoadMoreTrades}
@@ -174,34 +195,16 @@ export function ExplorationPanel({
       >
         <div className="panel-section-header">
           <p>검색 결과</p>
-          <span>{panelRequestLabel(searchState)}</span>
+          {searchResults.length > 0 ? <span>{searchResults.length.toLocaleString()}개</span> : null}
         </div>
-
-        <DataCountStrip
-          items={[
-            ['제안', complexSuggestions.length],
-            ['결과', searchResults.length],
-          ]}
+        <RequestStateNotice
+          state={searchState}
+          loadingMessage="단지를 검색하는 중"
+          emptyMessage="검색 결과가 없습니다"
+          errorMessage="검색 결과를 불러오지 못했어요"
+          technicalError={searchError}
+          onRetry={onRetrySearch}
         />
-
-        {searchState === 'loading' ? (
-          <p className="panel-message" role="status" aria-live="polite">
-            단지 검색 중
-          </p>
-        ) : null}
-
-        {searchState === 'empty' ? (
-          <p className="panel-message" role="status" aria-live="polite">
-            검색 결과가 없습니다
-          </p>
-        ) : null}
-
-        {searchState === 'error' ? (
-          <p className="panel-message panel-message-error" role="alert">
-            검색을 사용할 수 없습니다.
-            {searchError ? ` ${searchError}` : null}
-          </p>
-        ) : null}
 
         {searchResults.length > 0 ? (
           <ul aria-label="검색 결과" className="panel-list panel-list-strong">
@@ -214,8 +217,8 @@ export function ExplorationPanel({
                     onSearchResultSelect(result);
                   }}
                 >
-                  <span>{result.complexName}</span>
-                  <span>{formatAddress(result.address)}</span>
+                  <span className="panel-list-title">{result.complexName}</span>
+                  <span className="panel-list-meta">{formatAddress(result.address)}</span>
                 </button>
               </li>
             ))}
@@ -223,6 +226,8 @@ export function ExplorationPanel({
         ) : null}
 
         {complexSuggestions.length > 0 ? (
+          <>
+          <div className="panel-section-header panel-subsection-header"><p>제안</p><span>{complexSuggestions.length.toLocaleString()}개</span></div>
           <ul aria-label="검색 제안" className="panel-list">
             {complexSuggestions.map((suggestion) => (
               <li key={suggestion.complexId}>
@@ -233,12 +238,12 @@ export function ExplorationPanel({
                     onSuggestionSelect(suggestion);
                   }}
                 >
-                  <span>{suggestion.complexName}</span>
-                  <span>{formatAddress(suggestion.address)}</span>
+                  <span className="panel-list-title">{suggestion.complexName}</span>
+                  <span className="panel-list-meta">{formatAddress(suggestion.address)}</span>
                 </button>
               </li>
             ))}
-          </ul>
+          </ul></>
         ) : null}
       </section>
 
@@ -251,47 +256,41 @@ export function ExplorationPanel({
       >
         <div className="panel-section-header">
           <p>지역</p>
-          {regionDetail ? <span>{regionDetail.name}</span> : <span>전체</span>}
+          {regionDetail ? <span>{regionDetail.name}</span> : null}
         </div>
         <nav aria-label="지역 단계" className="region-breadcrumb">
-          <button type="button" aria-label="지역 처음으로" onClick={onLoadRootRegions}>
+          <button
+            type="button"
+            aria-current={regionTrail.length === 0 ? 'page' : undefined}
+            aria-label="지역 처음으로"
+            className="region-breadcrumb-link region-breadcrumb-root"
+            onClick={onLoadRootRegions}
+          >
             시도 선택
           </button>
-          {regionTrail.map((region) => (
-            <span key={region.id}>{region.name}</span>
+          {regionTrail.map((region, index) => (
+            <span className="region-breadcrumb-step" key={region.id}>
+              <ChevronDownIcon aria-hidden="true" />
+              <button
+                type="button"
+                aria-current={index === regionTrail.length - 1 ? 'page' : undefined}
+                aria-label={`지역 단계 이동 ${region.name}`}
+                className="region-breadcrumb-link"
+                onClick={() => onRegionTrailSelect(region, index)}
+              >
+                {region.name}
+              </button>
+            </span>
           ))}
         </nav>
-        <div className="region-step-summary">
-          <p>{regionStepLabel(regionTrail.length)}</p>
-          <button type="button" aria-label="상위 지역 불러오기" onClick={onLoadRootRegions}>
-            처음부터
-          </button>
-        </div>
-        <DataCountStrip
-          items={[
-            ['하위 지역', rootRegions.length],
-            ['단지', regionComplexes.length],
-          ]}
+        <RequestStateNotice
+          state={regionState}
+          loadingMessage="지역을 불러오는 중"
+          emptyMessage="표시할 지역이 없습니다"
+          errorMessage="지역 정보를 불러오지 못했어요"
+          technicalError={regionError}
+          onRetry={onRetryRegion}
         />
-
-        {regionState === 'loading' ? (
-          <p className="panel-message" role="status" aria-live="polite">
-            지역 불러오는 중
-          </p>
-        ) : null}
-
-        {regionState === 'empty' ? (
-          <p className="panel-message" role="status" aria-live="polite">
-            지역이 없습니다
-          </p>
-        ) : null}
-
-        {regionState === 'error' ? (
-          <p className="panel-message panel-message-error" role="alert">
-            지역 탐색을 사용할 수 없습니다.
-            {regionError ? ` ${regionError}` : null}
-          </p>
-        ) : null}
 
         {rootRegions.length > 0 ? (
           <ul aria-label="지역 탐색" className="panel-list region-grid-list">
@@ -300,51 +299,54 @@ export function ExplorationPanel({
                 <button
                   type="button"
                   aria-label={`지역 이동 ${region.name}`}
+                  aria-pressed={regionTrail.some((item) => item.id === region.id)}
                   onClick={() => {
                     onRegionSelect(region);
                   }}
                 >
-                  {region.name}
+                  <span className="region-tile-label">{region.name}</span>
+                  {regionTrail.some((item) => item.id === region.id) ? <CheckIcon aria-hidden="true" /> : null}
                 </button>
               </li>
             ))}
           </ul>
         ) : null}
 
-        {regionComplexes.length > 0 ? (
-          <ul aria-label="지역 단지 목록" className="panel-list">
-            {regionComplexes.map((complex) => (
-              <li key={complex.complexId}>
-                <button
-                  type="button"
-                  aria-label={`지역 단지 선택 ${complex.complexName}`}
-                  onClick={() => {
-                    onRegionComplexSelect(complex);
-                  }}
-                >
-                  <span>{complex.complexName}</span>
-                  <span>{formatAddress(complex.address)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+        {showRegionComplexes ? (
+          <section aria-label="선택한 읍면동 단지" className="region-complex-section">
+            <div className="panel-section-header region-complex-heading">
+              <p>단지</p>
+              <span>{regionComplexes.length.toLocaleString()}개</span>
+            </div>
+            <ul aria-label="지역 단지 목록" className="panel-list region-complex-list">
+              {regionComplexes.map((complex) => {
+                const meta = regionComplexMeta(complex);
+                return (
+                  <li key={complex.complexId}>
+                    <button
+                      type="button"
+                      className="region-complex-card"
+                      aria-label={`지역 단지 선택 ${complex.complexName}`}
+                      onClick={() => {
+                        onRegionComplexSelect(complex);
+                      }}
+                    >
+                      <span className="region-complex-copy">
+                        <span className="region-complex-name">{complex.complexName}</span>
+                        <span className="region-complex-address">{formatAddress(complex.address)}</span>
+                        {meta.length > 0 ? (
+                          <span className="region-complex-meta" aria-label="단지 요약">{meta.join(' · ')}</span>
+                        ) : null}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
         ) : null}
       </section>
     </section>
-  );
-}
-
-function DataCountStrip({ items }: { items: Array<[string, number]> }) {
-  return (
-    <dl className="data-count-strip">
-      {items.map(([label, value]) => (
-        <div key={label}>
-          <dt>{label}</dt>
-          {' '}
-          <dd>{value.toLocaleString()}</dd>
-        </div>
-      ))}
-    </dl>
   );
 }
 
@@ -352,49 +354,11 @@ function formatAddress(address: string | null): string {
   return address ?? '주소 정보 없음';
 }
 
-function panelRequestLabel(state: PanelRequestState): string {
-  switch (state) {
-    case 'idle':
-      return '대기';
-    case 'loading':
-      return '불러오는 중';
-    case 'ready':
-      return '완료';
-    case 'empty':
-      return '결과 없음';
-    case 'error':
-      return '오류';
-  }
-}
-
-function explorationSummaryLabel(searchCount: number, regionComplexCount: number): string {
-  if (searchCount > 0 && regionComplexCount > 0) {
-    return `검색 ${searchCount.toLocaleString()} / 지역 ${regionComplexCount.toLocaleString()}`;
-  }
-
-  if (searchCount > 0) {
-    return `검색 ${searchCount.toLocaleString()}`;
-  }
-
-  if (regionComplexCount > 0) {
-    return `지역 ${regionComplexCount.toLocaleString()}`;
-  }
-
-  return '지역 탐색';
-}
-
-function regionStepLabel(depth: number): string {
-  if (depth === 0) {
-    return '시도 선택';
-  }
-
-  if (depth === 1) {
-    return '시군구 선택';
-  }
-
-  if (depth === 2) {
-    return '읍면동 선택';
-  }
-
-  return '단지 선택';
+function regionComplexMeta(complex: RegionComplexSummary): string[] {
+  const meta: string[] = [];
+  if (complex.unitCnt != null) meta.push(`${complex.unitCnt.toLocaleString()}세대`);
+  if (complex.dongCnt != null) meta.push(`${complex.dongCnt.toLocaleString()}동`);
+  const approvalYear = complex.useDate?.match(/^\d{4}/)?.[0];
+  if (approvalYear != null) meta.push(`${approvalYear}년 승인`);
+  return meta;
 }

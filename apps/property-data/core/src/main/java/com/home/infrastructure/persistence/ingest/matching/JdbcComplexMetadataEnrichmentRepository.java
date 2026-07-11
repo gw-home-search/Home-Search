@@ -36,6 +36,16 @@ public class JdbcComplexMetadataEnrichmentRepository implements ComplexMetadataE
 			WHERE (
 			    c.metadata_status = 'PENDING'
 			    OR (
+			        c.metadata_status = 'RESOLVED'
+			        AND (
+			            c.plat_area IS NULL
+			            OR c.arch_area IS NULL
+			            OR c.tot_area IS NULL
+			            OR c.bc_rat IS NULL
+			            OR c.vl_rat IS NULL
+			        )
+			    )
+			    OR (
 			        c.metadata_status IN ('FAILED', 'PARTIAL', 'UNAVAILABLE')
 			        AND c.metadata_next_attempt_at IS NOT NULL
 			        AND c.metadata_next_attempt_at <= now()

@@ -132,6 +132,24 @@ The fallback exists because historical RTMS data may not always provide a
 perfect stable source key. It should be treated as a safety net, not the main
 identity.
 
+### Registry To Partitioned Trade Reference
+
+`trade`는 `deal_date` partition key를 가지므로 database가 보장하는 trade
+identity는 `(id, deal_date)`다. `trade_source_key_registry`도 같은 pair를
+원자적으로 저장한다.
+
+- normalized/fallback-linked registry: `trade_id`와 `trade_deal_date` 모두 존재.
+- cancellation-only 또는 ambiguous registry: 두 값 모두 `NULL`.
+- cancellation, reconciliation, audit join은 두 column을 모두 사용.
+- V5는 nullable column/check/index를 expand하고, bounded backfill이 기존 linked
+  row의 새 date column만 채운 뒤, V6가 check와 composite FK를 validate한다.
+- V5/V6는 기존 trade/raw/source identity/`complex_id` 값을 삭제하거나
+  재해석하지 않는다.
+
+V5 적용 후 V6 전에는 API/Batch writer 배포와 backfill 검증을 완료해야 한다.
+V6 이후 구 Batch writer는 pair check를 만족하지 않으므로 rollback하지 않고
+Batch를 중지한 채 forward-fix한다.
+
 RTMS ingest counters should be read as row outcomes, not as proof that every
 source field was identical:
 
@@ -166,6 +184,21 @@ normalized `trade` insertion, and cancellation. Database uniqueness and
 `insertIfAbsent` behavior make repeated ingest idempotent for normalized trade
 creation. The cross-repository transaction boundary remains outside that
 adapter, so a process failure can leave durable intermediate evidence.
+
+### Batch Execution Correlation
+
+신규 production Batch execution은 canonical UUID `requestId`를 identifying
+JobParameter로 요구한다. 이 값은 한 execution의 모든 월×지역
+`rtms_ingest_run.execution_correlation_id`에 동일하게 저장되며 FAILED/PARTIAL
+run도 예외가 아니다. historical run은 `NULL`을 유지한다.
+
+같은 UUID는 동일 JobInstance restart의 exact identifying parameter set에서만
+재사용할 수 있다. 운영 대조의 기준은 시간 추정이 아니라 다음 equality다.
+
+```sql
+rtms_ingest_run.execution_correlation_id::text
+= batch.BATCH_JOB_EXECUTION_PARAMS.PARAMETER_VALUE
+```
 
 Recovery behavior:
 
@@ -375,7 +408,8 @@ Core metadata is considered complete only when all of these fields are present:
 - `use_date IS NOT NULL`
 
 Area and ratio fields are useful detail metadata, but missing area values do
-not block a core `RESOLVED` status:
+not block the legacy core `RESOLVED` status. They do remain collection targets
+for the building-metadata state machine:
 
 - `plat_area`
 - `arch_area`
@@ -423,8 +457,8 @@ rename. Home Search handles this only through approved rows in
   operational identities and are never rewritten from an ODC alias.
 - The resolver tries the canonical PNU first and uses an `APPROVED` alias only
   after the canonical exact lookup has no candidate.
-- An alias candidate must be unique and its `COMPLEX_PK` must match `apt_seq`
-  when `apt_seq` is available. Conflicts remain `AMBIGUOUS`.
+- ODC `COMPLEX_PK` is an external numeric source identity. It is never compared
+  with or copied into RTMS `apt_seq`/`complex_pk`.
 - Each attempt stores `lookup_path`, requested canonical PNU, resolved source
   PNU, alias id, and candidate count as durable lookup evidence.
 
@@ -438,6 +472,37 @@ HOLD, alias proposal, approval, and disable action is appended to
 Admin actions do not directly write `dong_cnt`, `unit_cnt`, `use_date`,
 `parcel.pnu`, region relationships, `complex_pk`, or `apt_seq`. Alias disable
 does not delete metadata that was already resolved.
+
+### Building register evidence and replay (V7)
+
+V7 adds a raw-first building metadata path without changing the public detail
+projection:
+
+- `complex_metadata_source_snapshot` stores ODC, recap-title, and title raw
+  responses before parsing. `(source_kind, requested_pnu, response_hash)` is
+  deduplicated by observation count. Bodies over 2 MiB keep only hash and byte
+  size and cannot update a projection.
+- `complex_metadata_snapshot_evaluation` appends one immutable evaluation per
+  `(snapshot_id, policy_version)`.
+- `complex_external_identity` stores `ODC_COMPLEX_PK` and
+  `BLD_MGM_BLD_RGST_PK` independently of `apt_seq` and `complex_pk`.
+- `complex_building_metadata_state` owns the latest operational state,
+  optimistic `state_version`, current evaluation, and pending evaluation.
+- `complex_building_metadata_decision` audits identity, alias, retry, HOLD,
+  replay, and value-change decisions.
+
+Candidate matching is restricted to one exact 19-digit PNU. Automatic name
+matching uses Unicode NFKC plus whitespace/case/separator normalization and
+requires an exact, mutually unique result. Contains/trigram scores are admin
+recommendations only. Building results are limited to `mainPurpsCd=02000`,
+`pageNo=1`, and `numOfRows=100`; a larger `totalCount` is held as
+`AMBIGUOUS_OVERSIZED_RESULT`.
+
+Projection application is all-or-review: invalid non-positive values become
+`NULL`; matching existing values may fill only missing fields; any difference
+against an existing non-null value makes the whole evaluation
+`CHANGE_PENDING`. Only the explicit admin approval transaction can overwrite
+those values. Parser fixes use snapshot replay and do not call an external API.
 
 ## Partitioning
 

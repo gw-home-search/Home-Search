@@ -4,6 +4,7 @@ spring:
   profiles:
     default: local
   flyway:
+    enabled: false
     locations: classpath:db/migration/api
 
 apis:
@@ -63,7 +64,7 @@ home:
       access-code: "${ADMIN_COORDINATE_ACCESS_CODE:local-admin}"
     metadata-enrichment:
       enabled: false
-      access-code: "${ADMIN_METADATA_ACCESS_CODE:local-admin}"
+      access-code: "${ADMIN_METADATA_ACCESS_CODE:}"
   coordinate:
     vworld-fallback:
       enabled: false
@@ -72,16 +73,3 @@ home:
       allow-coordinate-pending-only: false
       refresh-retry-attempts: 3
       refresh-retry-backoff-millis: 250
-      daily:
-        enabled: false
-        lawd-cds: ""
-        lookback-months: 1
-        cron: "0 0 3 * * *"
-        zone: Asia/Seoul
-        hermes:
-          enabled: false
-          url: "${HERMES_SLACK_URL:}"
-          auth-token: "${HERMES_AUTH_TOKEN:}"
-          channel: "${HERMES_SLACK_CHANNEL:}"
-          connect-timeout-millis: 3000
-          read-timeout-millis: 3000

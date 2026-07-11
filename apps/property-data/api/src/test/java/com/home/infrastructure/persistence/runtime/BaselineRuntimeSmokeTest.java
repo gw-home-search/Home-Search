@@ -11,6 +11,8 @@ import com.home.application.complex.ComplexRelationUseCase;
 import com.home.application.region.RegionRelationSynchronizationGateway;
 import com.home.application.region.RegionUnitCntSynchronizationService;
 
+import org.flywaydb.core.Flyway;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,13 +58,18 @@ class BaselineRuntimeSmokeTest {
 
 	@DynamicPropertySource
 	static void databaseProperties(DynamicPropertyRegistry registry) {
+		Flyway.configure()
+			.dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+			.locations("classpath:db/migration/api")
+			.schemas("public", "reference", "batch")
+			.defaultSchema("public")
+			.load()
+			.migrate();
 		registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
 		registry.add("spring.datasource.username", POSTGRES::getUsername);
 		registry.add("spring.datasource.password", POSTGRES::getPassword);
 		registry.add("spring.datasource.driver-class-name", POSTGRES::getDriverClassName);
-		registry.add("spring.flyway.enabled", () -> "true");
-		registry.add("spring.flyway.locations", () -> "classpath:db/migration/api");
-		registry.add("spring.flyway.clean-disabled", () -> "true");
+		registry.add("spring.flyway.enabled", () -> "false");
 		registry.add("home.region.sync.one-shot.enabled", () -> "true");
 	}
 
@@ -101,6 +108,7 @@ class BaselineRuntimeSmokeTest {
 		assertThat(regionRelationSynchronizationGateway).isNotNull();
 		assertThat(regionUnitCntSynchronizationService).isNotNull();
 		assertThat(applicationContext.containsBean("regionUnitCntSyncApplicationRunner")).isTrue();
+		assertThat(applicationContext.getBeansOfType(Flyway.class)).isEmpty();
 	}
 
 	@Test

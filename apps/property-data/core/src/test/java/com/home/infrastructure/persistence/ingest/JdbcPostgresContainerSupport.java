@@ -39,7 +39,7 @@ public abstract class JdbcPostgresContainerSupport {
 	}
 
 	protected Flyway flyway(MigrationVersion target, String location) {
-		return flyway(target, location, "public", "reference");
+		return flyway(target, location, "public", "reference", "batch");
 	}
 
 	protected Flyway flyway(MigrationVersion target, String location, String... schemas) {

@@ -1,0 +1,47 @@
+plugins {
+    id 'org.springframework.boot'
+}
+
+description = 'Home Search property-data batch app'
+
+dependencies {
+    implementation project(':core')
+
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-batch'
+    implementation 'org.springframework:spring-jdbc'
+
+    runtimeOnly 'org.postgresql:postgresql'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.batch:spring-batch-test'
+    testRuntimeOnly 'com.h2database:h2'
+    testImplementation 'org.testcontainers:postgresql'
+}
+
+tasks.named('bootJar') {
+    archiveFileName = 'property-data-batch.jar'
+}
+
+tasks.register('printBatchBootJarPath') {
+    description = 'Build the batch boot jar and print its absolute archive path.'
+    group = 'build'
+    dependsOn tasks.named('bootJar')
+
+    doLast {
+        println "BATCH_BOOT_JAR=${tasks.named('bootJar').get().archiveFile.get().asFile.absolutePath}"
+    }
+}
+
+tasks.register('packagedProcessSmoke', Exec) {
+    description = 'Verify packaged batch process exit codes without calling RTMS.'
+    group = 'verification'
+    dependsOn tasks.named('bootJar')
+    workingDir rootProject.projectDir
+    commandLine 'bash', 'ops/verify-batch-packaged-process.sh'
+    environment 'PROPERTY_DATA_BATCH_JAR', tasks.named('bootJar').flatMap { it.archiveFile }.get().asFile.absolutePath
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('packagedProcessSmoke')
+}

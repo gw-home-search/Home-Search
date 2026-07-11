@@ -75,7 +75,7 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 		lockFallbackIdentity(command);
 		NormalizedTradeDuplicateMatch existingTrade = findFallbackMatch(command);
 		if (existingTrade.tradeId().isPresent()) {
-			attachTrade(registryId.get(), existingTrade.tradeId().get());
+			attachTrade(registryId.get(), existingTrade.tradeId().get(), command.dealDate());
 			return false;
 		}
 		if (existingTrade.ambiguous()) {
@@ -86,7 +86,7 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 		if (tradeId.isEmpty()) {
 			NormalizedTradeDuplicateMatch conflictedTrade = findFallbackMatch(command);
 			if (conflictedTrade.tradeId().isPresent()) {
-				attachTrade(registryId.get(), conflictedTrade.tradeId().get());
+				attachTrade(registryId.get(), conflictedTrade.tradeId().get(), command.dealDate());
 			}
 			else if (!conflictedTrade.ambiguous()) {
 				throw new IllegalStateException("fallback duplicate trade id was not found");
@@ -94,7 +94,7 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 			return false;
 		}
 
-		attachTrade(registryId.get(), tradeId.get());
+		attachTrade(registryId.get(), tradeId.get(), command.dealDate());
 		return true;
 	}
 
@@ -132,6 +132,7 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 			    updated_at = now()
 			FROM trade_source_key_registry r
 			WHERE r.trade_id = t.id
+			  AND r.trade_deal_date = t.deal_date
 			  AND r.source = :source
 			  AND r.source_key = :sourceKey
 			  AND t.deleted_at IS NULL
@@ -278,13 +279,15 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 		return material.hashCode();
 	}
 
-	private void attachTrade(Long registryId, Long tradeId) {
+	private void attachTrade(Long registryId, Long tradeId, java.time.LocalDate tradeDealDate) {
 		jdbcClient.sql("""
 			UPDATE trade_source_key_registry
-			SET trade_id = :tradeId
+			SET trade_id = :tradeId,
+			    trade_deal_date = :tradeDealDate
 			WHERE id = :registryId
 			""")
 			.param("tradeId", tradeId)
+			.param("tradeDealDate", tradeDealDate)
 			.param("registryId", registryId)
 			.update();
 	}

@@ -1,0 +1,20 @@
+id = "property-data-separation"
+description = "Sequential property-data API, batch runtime, scheduler, package policy, and context separation gate."
+aliases = ["property-data-separation", "hs-sep"]
+slice_patterns = ["hs-sep", "property-data-separation"]
+
+[targets.backend]
+prompt = "backend_runtime_execute.txt"
+allowed_scope = "apps/property-data/**, docs/**, .codex/harness/**"
+forbidden_scope = "apps/web/**"
+verification_commands = [
+  "docker compose -f infra/docker-compose.local.yml config",
+  "cd apps/property-data && ./gradlew backendQualityCheck",
+  "git diff --check",
+]
+
+[safety]
+allow_main_merge = false
+allow_push = false
+allow_open_api_call = false
+allow_db_migration_run = false

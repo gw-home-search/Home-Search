@@ -19,7 +19,8 @@ class JdbcCleanCoreReferenceDataMigrationTest extends JdbcMigrationTestSupport {
 
 		migrateToLatest();
 
-		assertThat(appliedMigrationVersions()).containsExactly("1", "2");
+		assertThat(appliedMigrationVersions()).containsExactly("1", "2", "4", "5", "6", "7");
+		assertThat(regclass("batch.BATCH_JOB_INSTANCE")).isEqualTo("batch.batch_job_instance");
 		assertThat(count("SELECT count(*) FROM region WHERE region_type = 'si-do'")).isGreaterThanOrEqualTo(17);
 		assertThat(count("SELECT count(*) FROM region WHERE region_type = 'si-gun-gu'")).isGreaterThan(200);
 		assertThat(count("SELECT count(*) FROM region WHERE region_type = 'eup-myeon-dong'")).isGreaterThan(4_000);
@@ -104,6 +105,13 @@ class JdbcCleanCoreReferenceDataMigrationTest extends JdbcMigrationTestSupport {
 	private long count(String sql) {
 		return jdbcClient.sql(sql)
 			.query(Long.class)
+			.single();
+	}
+
+	private String regclass(String relationName) {
+		return jdbcClient.sql("SELECT to_regclass(:relationName)::text")
+			.param("relationName", relationName)
+			.query(String.class)
 			.single();
 	}
 

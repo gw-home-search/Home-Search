@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
+import type { ComplexSelection } from '../../app/mapAppTypes';
 import type { MapBoundsRequest, MapMarkersResult } from './api/fetchMapMarkers';
 import {
   loadKakaoMapSdk,
@@ -7,6 +8,13 @@ import {
   type KakaoMap,
   type KakaoMapsApi,
 } from './kakao/loadKakaoMapSdk';
+import {
+  createComplexMarkerViewModel,
+  createRegionMarkerViewModel,
+  isComplexMarkerSelected,
+  type ComplexMapMarker,
+  type RegionMapMarker,
+} from './markerViewModel';
 
 type MapViewport = {
   bounds: MapBoundsRequest;
@@ -22,15 +30,13 @@ type MapFocusTarget = {
 
 export type KakaoMapRuntimeState = 'loading' | 'ready' | 'error';
 
-type ComplexMapMarker = Extract<MapMarkersResult, { kind: 'complex' }>['markers'][number];
-type RegionMapMarker = Extract<MapMarkersResult, { kind: 'region' }>['markers'][number];
-
 type KakaoMapSurfaceProps = {
   appKey: string;
   focusTarget: MapFocusTarget | null;
   initialLevel: number;
   level: number;
   markers: MapMarkersResult | null;
+  selectedComplex: ComplexSelection | null;
   onComplexMarkerSelect: (marker: ComplexMapMarker) => void;
   onRegionMarkerSelect: (marker: RegionMapMarker) => void;
   onRuntimeErrorChange: (message: string | null) => void;
@@ -49,6 +55,7 @@ export function KakaoMapSurface({
   initialLevel,
   level,
   markers,
+  selectedComplex,
   onComplexMarkerSelect,
   onRegionMarkerSelect,
   onRuntimeErrorChange,
@@ -148,6 +155,26 @@ export function KakaoMapSurface({
   }, [level, runtimeState]);
 
   useEffect(() => {
+    const host = hostRef.current;
+    const map = mapRef.current;
+
+    if (runtimeState !== 'ready' || !host || !map || typeof ResizeObserver === 'undefined') {
+      return undefined;
+    }
+
+    const observer = new ResizeObserver(() => {
+      const center = map.getCenter?.();
+      map.relayout?.();
+      if (center) {
+        map.setCenter?.(center);
+      }
+    });
+    observer.observe(host);
+
+    return () => observer.disconnect();
+  }, [runtimeState]);
+
+  useEffect(() => {
     const map = mapRef.current;
     const maps = mapsApiRef.current;
 
@@ -166,7 +193,12 @@ export function KakaoMapSurface({
               maps,
               marker.lat,
               marker.lng,
-              overlayContentForComplexMarker(marker, onComplexMarkerSelect),
+              1,
+              overlayContentForComplexMarker(
+                marker,
+                isComplexMarkerSelected(marker, selectedComplex),
+                onComplexMarkerSelect,
+              ),
             ),
           )
         : markers.markers.map((marker) =>
@@ -175,6 +207,7 @@ export function KakaoMapSurface({
               maps,
               marker.lat,
               marker.lng,
+              1,
               overlayContentForRegionMarker(marker, onRegionMarkerSelect),
             ),
           );
@@ -185,7 +218,7 @@ export function KakaoMapSurface({
       clearOverlays(overlaysRef.current);
       overlaysRef.current = [];
     };
-  }, [markers, onComplexMarkerSelect, onRegionMarkerSelect, runtimeState]);
+  }, [markers, onComplexMarkerSelect, onRegionMarkerSelect, runtimeState, selectedComplex]);
 
   return (
     <div
@@ -202,13 +235,14 @@ function overlayForMarker(
   maps: KakaoMapsApi,
   lat: number,
   lng: number,
+  yAnchor: number,
   content: HTMLElement,
 ): KakaoCustomOverlay {
   const position = new maps.LatLng(lat, lng);
   const overlay = new maps.CustomOverlay({
     position,
     content,
-    yAnchor: 1,
+    yAnchor,
   });
   overlay.setMap(map);
   return overlay;
@@ -238,97 +272,60 @@ function clearOverlays(overlays: KakaoCustomOverlay[]) {
 
 function overlayContentForComplexMarker(
   marker: ComplexMapMarker,
+  isSelected: boolean,
   onComplexMarkerSelect: (marker: ComplexMapMarker) => void,
 ): HTMLElement {
+  const viewModel = createComplexMarkerViewModel(marker, isSelected);
   const element = document.createElement('button');
   const kicker = document.createElement('span');
   const price = document.createElement('strong');
-  const subtitle = markerSubtitle(marker);
+  const subtitle = document.createElement('span');
 
   element.type = 'button';
-  element.className = 'kakao-map-overlay kakao-map-overlay-complex';
-  element.setAttribute('aria-label', complexMarkerAriaLabel(marker));
+  element.className = 'kakao-map-overlay map-marker map-marker-complex';
+  element.setAttribute('aria-label', viewModel.ariaLabel);
+  element.setAttribute('aria-pressed', String(viewModel.selected));
+  element.dataset.state = viewModel.state;
+  element.dataset.markerShape = viewModel.shape;
 
-  kicker.className = 'kakao-map-overlay-kicker';
-  kicker.textContent = marker.latestDealAmount == null ? '거래 없음' : '최근 실거래';
+  kicker.className = 'kakao-map-overlay-kicker map-marker-kicker';
+  kicker.textContent = viewModel.kicker;
   price.className = 'kakao-map-overlay-price';
-  price.textContent = formatMarkerAmount(marker.latestDealAmount);
+  price.textContent = viewModel.price;
+  subtitle.className = 'kakao-map-overlay-subtitle map-marker-subtitle';
+  subtitle.textContent = viewModel.meta;
 
-  element.append(kicker, price);
-  if (subtitle) {
-    const subtitleElement = document.createElement('span');
-    subtitleElement.className = 'kakao-map-overlay-subtitle';
-    subtitleElement.textContent = subtitle;
-    element.append(subtitleElement);
-  }
+  element.append(kicker, price, subtitle);
   element.addEventListener('click', () => {
     onComplexMarkerSelect(marker);
   });
   return element;
 }
 
-function complexMarkerAriaLabel(marker: ComplexMapMarker): string {
-  return marker.complexId == null
-    ? `필지 ${marker.parcelId} 상세 열기`
-    : `필지 ${marker.parcelId} 단지 ${marker.complexId} 상세 열기`;
-}
-
 function overlayContentForRegionMarker(
   marker: RegionMapMarker,
   onRegionMarkerSelect: (marker: RegionMapMarker) => void,
 ): HTMLElement {
+  const viewModel = createRegionMarkerViewModel(marker);
   const element = document.createElement('button');
   const name = document.createElement('strong');
   const action = document.createElement('span');
 
   element.type = 'button';
-  element.className = 'kakao-map-overlay kakao-map-overlay-region';
-  element.setAttribute('aria-label', `지역 이동 ${marker.name}`);
+  element.className = 'kakao-map-overlay map-marker map-marker-region';
+  element.setAttribute('aria-label', viewModel.ariaLabel);
+  element.dataset.markerShape = viewModel.shape;
 
-  name.className = 'kakao-map-overlay-region-name';
-  name.textContent = marker.name;
-  action.className = 'kakao-map-overlay-region-action';
-  action.textContent = regionMarkerUnitLabel(marker);
+  name.className = 'kakao-map-overlay-region-name map-marker-region-name';
+  name.textContent = viewModel.name;
+  action.className = 'kakao-map-overlay-region-action map-marker-region-unit';
+  action.textContent = viewModel.meta;
 
   element.append(name, action);
   element.addEventListener('click', () => {
     onRegionMarkerSelect(marker);
   });
   return element;
-}
-
-function regionMarkerUnitLabel(marker: RegionMapMarker): string {
-  if (marker.unitCntSum == null || marker.unitCntSum <= 0) {
-    return '세대수 없음';
-  }
-
-  return `${marker.unitCntSum.toLocaleString()}세대`;
-}
-
-function formatMarkerAmount(amount: number | null): string {
-  if (amount == null) {
-    return '최근 거래 없음';
-  }
-
-  if (amount >= 10000) {
-    const eok = amount / 10000;
-    const formatted = Number.isInteger(eok) ? eok.toLocaleString() : eok.toFixed(1);
-    return `${formatted}억`;
-  }
-
-  return `${amount.toLocaleString()}만`;
-}
-
-function markerSubtitle(marker: ComplexMapMarker): string | null {
-  if (marker.name) {
-    return marker.name;
-  }
-
-  if (marker.unitCntSum != null && marker.unitCntSum > 0) {
-    return `${marker.unitCntSum.toLocaleString()}세대`;
-  }
-
-  return null;
 }
 
 function runtimeErrorMessage(error: unknown): string {

@@ -1,53 +1,46 @@
 :root {
-  --hs-color-ink: #17202a;
-  --hs-color-ink-soft: #27313d;
-  --hs-color-muted: #66727c;
-  --hs-color-muted-strong: #46525e;
-  --hs-color-paper: #f4f6f2;
-  --hs-color-map-paper: #dfe7e4;
+  color: #0f172a;
+  font-family: Inter, Pretendard, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+
+  --hs-color-ink: #0f172a;
+  --hs-color-ink-soft: #334155;
+  --hs-color-muted: #64748b;
   --hs-color-surface: #ffffff;
-  --hs-color-surface-muted: #f7f9f8;
-  --hs-color-line: #d8e0dd;
-  --hs-color-line-strong: #bdc9c6;
-  --hs-color-primary: #153847;
-  --hs-color-primary-soft: #e8eff1;
-  --hs-color-complex: #0e6b5e;
-  --hs-color-complex-soft: #e7f3ef;
+  --hs-color-surface-muted: #f8fafc;
+  --hs-color-map: #dfe7e4;
+  --hs-color-line: #e2e8f0;
+  --hs-color-line-strong: #cbd5e1;
+  --hs-color-primary: #0e6b5e;
+  --hs-color-primary-soft: #ecf7f4;
   --hs-color-region: #315f83;
-  --hs-color-region-soft: #e8f1f7;
-  --hs-color-trade: #1f7a68;
-  --hs-color-warning: #a86619;
-  --hs-color-error: #af4b45;
-  --hs-color-error-soft: #f8edeb;
-  --hs-color-grid-line: rgba(255, 255, 255, 0.7);
-  --hs-color-layer: #ffffff;
-  --hs-color-layer-strong: #ffffff;
+  --hs-color-region-soft: #edf4f8;
+  --hs-color-error: #be123c;
+  --hs-color-error-soft: #fff1f2;
+  --hs-color-warning: #a16207;
 
   --hs-text-primary: var(--hs-color-ink);
   --hs-text-secondary: var(--hs-color-muted);
   --hs-text-strong: var(--hs-color-ink-soft);
-  --hs-surface-page: var(--hs-color-paper);
-  --hs-surface-map: var(--hs-color-map-paper);
-  --hs-surface-panel: var(--hs-color-layer);
+  --hs-surface-page: var(--hs-color-surface-muted);
+  --hs-surface-map: var(--hs-color-map);
+  --hs-surface-panel: var(--hs-color-surface);
   --hs-surface-control: var(--hs-color-surface);
   --hs-surface-control-muted: var(--hs-color-surface-muted);
   --hs-border-default: var(--hs-color-line);
   --hs-border-strong: var(--hs-color-line-strong);
   --hs-action-primary: var(--hs-color-primary);
-  --hs-action-secondary: var(--hs-color-complex);
-  --hs-marker-complex: var(--hs-color-complex);
-  --hs-marker-region: var(--hs-color-region);
-  --hs-chart-trade: var(--hs-color-trade);
+  --hs-action-secondary: var(--hs-color-primary);
   --hs-state-error: var(--hs-color-error);
   --hs-state-error-surface: var(--hs-color-error-soft);
 
-  --hs-appbar-height: 56px;
+  --hs-appbar-height: 54px;
   --hs-appbar-height-compact: 52px;
-  --hs-control-height: 36px;
-  --hs-control-height-compact: 32px;
+  --hs-rail-width: 352px;
+  --hs-control-height: 40px;
   --hs-control-radius: 6px;
   --hs-panel-radius: 8px;
-  --hs-marker-radius: 6px;
   --hs-space-1: 4px;
   --hs-space-2: 8px;
   --hs-space-3: 12px;
@@ -57,119 +50,105 @@
   --hs-z-map-controls: 3;
   --hs-z-panel: 4;
   --hs-z-appbar: 10;
-  --hs-z-drawer: 12;
-  --hs-shadow-appbar: 0 2px 10px rgba(23, 32, 42, 0.08);
-  --hs-shadow-panel: 0 8px 20px rgba(23, 32, 42, 0.12);
-  --hs-shadow-drawer: 0 14px 32px rgba(23, 32, 42, 0.2);
-  --hs-shadow-marker: 0 3px 8px rgba(23, 32, 42, 0.18);
-  --hs-focus-ring: 0 0 0 3px rgba(14, 107, 94, 0.22);
-  --hs-focus-ring-strong: 0 0 0 3px rgba(21, 56, 71, 0.28);
-  --hs-map-grid-background:
-    linear-gradient(90deg, var(--hs-color-grid-line) 1px, transparent 1px),
-    linear-gradient(180deg, var(--hs-color-grid-line) 1px, transparent 1px),
-    var(--hs-surface-map);
+  --hs-focus-ring: 0 0 0 3px rgb(14 107 94 / 22%);
+  --hs-shadow-layer: 0 6px 18px rgb(15 23 42 / 12%);
+
+  /* Public map foundation and semantic tokens. Existing shared/admin tokens above stay stable. */
+  --hs-map-color-primary: #0ea5b7;
+  --hs-map-color-ink: #172033;
+  --hs-map-color-ink-soft: #344054;
+  --hs-map-color-muted: #667085;
+  --hs-map-color-surface: #ffffff;
+  --hs-map-color-surface-muted: #f6f8f9;
+  --hs-map-color-map: #edf2f3;
+  --hs-map-color-line: #dce4e8;
+  --hs-map-color-line-strong: #c7d2d9;
+  --hs-map-color-brand: #0e7490;
+  --hs-map-color-brand-soft: #ecf7f8;
+  --hs-map-color-action: #0e7490;
+  --hs-map-color-action-hover: #155e75;
+  --hs-map-color-price: #172033;
+  --hs-map-color-price-hover: #0e7490;
+  --hs-map-color-trend: #0e7490;
+  --hs-map-color-region: #0e7490;
+  --hs-map-color-region-hover: #155e75;
+  --hs-map-color-marker-soft: #dceff0;
+  --hs-map-color-marker-accent: #62aab2;
+  --hs-map-color-geography-soft: #f2f8f8;
+  --hs-map-color-error: #e11d48;
+  --hs-map-color-error-soft: #fff1f2;
+  --hs-map-color-white-muted: rgb(255 255 255 / 82%);
+  --hs-map-color-error-line: rgb(225 29 72 / 22%);
+
+  --hs-map-shell-bar-height: 56px;
+  --hs-map-mobile-brand-height: 58px;
+  --hs-map-filter-height: 62px;
+  --hs-map-rail-width-wide: 380px;
+  --hs-map-rail-width-standard: 380px;
+  --hs-map-rail-width-compact: 352px;
+  --hs-map-tablet-rail-width: 352px;
+  --hs-map-rail-width: var(--hs-map-rail-width-wide);
+  --hs-map-mobile-min-height: 180px;
+  --hs-map-space-1: 4px;
+  --hs-map-space-2: 8px;
+  --hs-map-space-3: 12px;
+  --hs-map-space-4: 16px;
+  --hs-map-space-6: 24px;
+  --hs-map-type-panel-title-size: 15px;
+  --hs-map-type-panel-title-line: 20px;
+  --hs-map-type-control-size: 13px;
+  --hs-map-type-control-line: 18px;
+  --hs-map-type-row-title-size: 13px;
+  --hs-map-type-row-title-line: 18px;
+  --hs-map-type-row-meta-size: 11px;
+  --hs-map-type-row-meta-line: 16px;
+  --hs-map-type-caption-size: 11px;
+  --hs-map-type-caption-line: 16px;
+  --hs-map-radius-marker: 6px;
+  --hs-map-radius-map: 10px;
+  --hs-map-radius-control: 12px;
+  --hs-map-radius-panel: 16px;
+  --hs-map-radius-pill: 999px;
+  --hs-map-control-size: 40px;
+  --hs-map-control-size-mobile: 44px;
+  --hs-map-z-host: 0;
+  --hs-map-z-marker: 10;
+  --hs-map-z-notice: 20;
+  --hs-map-z-control: 30;
+  --hs-map-z-rail: 40;
+  --hs-map-z-appbar: 50;
+  --hs-map-z-filter-popover: 60;
+  --hs-map-shadow-card: 0 2px 10px rgb(14 116 144 / 7%);
+  --hs-map-shadow-marker: 0 2px 7px rgb(23 32 51 / 14%);
+  --hs-map-shadow-popover: 0 14px 34px rgb(15 23 42 / 16%);
+  --hs-map-shadow-rail: 0 0 12px rgb(15 23 42 / 6%);
+  --hs-map-focus-ring: 0 0 0 3px rgb(14 165 183 / 24%);
+  --hs-map-marker-selected-ring: 0 0 0 3px var(--hs-map-color-brand-soft), var(--hs-map-shadow-marker);
 }
 
-.hs-button {
-  min-height: var(--hs-control-height);
-  border: 1px solid var(--hs-border-default);
-  border-radius: var(--hs-control-radius);
-  background: var(--hs-surface-control);
-  color: var(--hs-text-primary);
-  cursor: pointer;
+button,
+input,
+textarea,
+select {
   font: inherit;
 }
 
-.hs-button:hover {
-  border-color: var(--hs-border-strong);
-  background: var(--hs-surface-control-muted);
+button:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--hs-color-primary);
+  outline-offset: 2px;
 }
 
-.hs-button:focus-visible,
-.hs-field:focus-visible {
-  outline: 0;
-  box-shadow: var(--hs-focus-ring);
-}
-
-.hs-button-primary {
-  border-color: var(--hs-action-primary);
-  background: var(--hs-action-primary);
-  color: var(--hs-color-surface);
-}
-
-.hs-button-primary:hover {
-  border-color: var(--hs-action-primary);
-  background: var(--hs-action-primary);
-}
-
-.hs-button-ghost {
-  border-color: transparent;
-  background: transparent;
-  color: var(--hs-action-secondary);
-}
-
-.hs-button-ghost:hover {
-  background: var(--hs-color-complex-soft);
-}
-
-.hs-panel,
-.hs-floating-panel {
-  border: 1px solid var(--hs-border-default);
-  border-radius: var(--hs-panel-radius);
-  background: var(--hs-surface-panel);
-}
-
-.hs-floating-panel {
-  box-shadow: var(--hs-shadow-panel);
-}
-
-.hs-field {
-  min-height: var(--hs-control-height-compact);
-  border: 1px solid var(--hs-border-default);
-  border-radius: var(--hs-control-radius);
-  background: var(--hs-surface-control);
-  color: var(--hs-text-primary);
-  font: inherit;
-}
-
-.hs-status {
-  color: var(--hs-text-strong);
-  font-size: 13px;
-}
-
-.hs-status-error {
-  border-color: var(--hs-state-error);
-  background: var(--hs-state-error-surface);
-}
-
-.hs-marker {
-  border: 1px solid var(--hs-color-ink);
-  border-radius: var(--hs-marker-radius);
-  background: var(--hs-surface-control);
-  color: var(--hs-text-primary);
-  box-shadow: var(--hs-shadow-marker);
-}
-
-.hs-marker-complex {
-  border-color: var(--hs-marker-complex);
-}
-
-.hs-marker-region {
-  border-color: var(--hs-marker-region);
-}
-
-.hs-marker:focus-visible {
-  outline: 0;
-  box-shadow:
-    var(--hs-shadow-marker),
-    var(--hs-focus-ring);
-}
-
-.hs-chart-bar {
-  background: var(--hs-chart-trade);
-}
-
-.hs-data-table {
-  width: 100%;
-  border-collapse: collapse;
+.sr-only,
+.sr-only:not(:focus):not(:active) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

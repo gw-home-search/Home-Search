@@ -1,18 +1,12 @@
-import { useMemo, useState } from 'react';
-import {
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { lazy, Suspense, useEffect, useState } from 'react';
 
 import type { ComplexDetail, PricePrediction } from './api/fetchComplexDetail';
 import type { ParcelComplexSummary } from './api/fetchParcelComplexes';
 import type { ParcelTrades, TradeItem } from './api/fetchParcelTrades';
 import type { TradeTrendPoint } from './api/fetchTradeTrend';
 import type { RegionComplexSummary } from '../region/api/fetchRegions';
+import { RequestStateNotice } from '../../shared/RequestStateNotice';
+import { BackIcon, CloseIcon, HelpIcon } from '../../shared/icons';
 
 type DetailRequestState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -26,6 +20,7 @@ type DetailSidebarProps = {
   detailError: string | null;
   detailState: DetailRequestState;
   onBack: () => void;
+  onClose?: () => void;
   onComplexSelect: (complex: ParcelComplexSummary | RegionComplexSummary) => void;
   onRetryDetail: () => void;
   onLoadMoreTrades: () => void;
@@ -36,13 +31,17 @@ type DetailSidebarProps = {
   selection: ComplexSelection;
 };
 
-const TREND_LINE_FALLBACK = '#153847';
+const TradeTrendChart = lazy(() =>
+  import('./TradeTrendChart').then((module) => ({ default: module.TradeTrendChart })));
+
+type DetailMobileTab = 'info' | 'trend' | 'trades';
 
 export function DetailSidebar({
   complexDetail,
   detailError,
   detailState,
   onBack,
+  onClose = onBack,
   onComplexSelect,
   onRetryDetail,
   onLoadMoreTrades,
@@ -52,128 +51,199 @@ export function DetailSidebar({
   tradeRows,
   selection,
 }: DetailSidebarProps) {
+  const [mobileTab, setMobileTab] = useState<DetailMobileTab>('info');
+  const isMobileLayout = useMediaQuery('(max-width: 720px)');
+  const shouldRenderTradeChart = !isMobileLayout || mobileTab === 'trend';
+
   return (
     <section aria-label="단지 상세 패널" className="detail-sidebar" data-ui-layer="detail-sidebar">
-      <div className="detail-drawer-header">
+      <span className="detail-sheet-handle" aria-hidden="true" />
+      <div className="detail-drawer-header" data-detail-order="identity" data-detail-section="identity">
         <button
           type="button"
           aria-label="상세에서 뒤로가기"
           className="detail-back-button"
           onClick={onBack}
         >
-          ←
+          <BackIcon aria-hidden="true" />
         </button>
-        <div>
-          <p className="detail-drawer-kicker">{detailDrawerKicker(selection)}</p>
-          <p className="detail-drawer-state">{detailRequestLabel(detailState)}</p>
+        <div className="detail-drawer-identity">
+          <p className="detail-drawer-address">{complexDetail ? formatAddress(complexDetail.address) : detailDrawerKicker(selection)}</p>
+          <h2>{complexDetail?.name ?? '단지 상세'}</h2>
         </div>
+        <button
+          type="button"
+          aria-label="상세 닫기"
+          className="detail-close-button"
+          onClick={onClose}
+        >
+          <CloseIcon aria-hidden="true" />
+        </button>
       </div>
 
-      <DataStatusList
-        ariaLabel="상세 API 데이터 요약"
-        flow="detail"
-        items={[
-          ['상세', detailRequestLabel(detailState)],
-          ['실거래', parcelTrades == null ? '대기' : `${parcelTrades.totalElements.toLocaleString()}건`],
-          ['같은 필지', detailState === 'ready' ? `${parcelComplexes.length.toLocaleString()}개` : '대기'],
-        ]}
-      />
-
-      {detailState === 'loading' ? (
-        <p className="detail-message" role="status" aria-live="polite">
-          상세 정보 불러오는 중
-        </p>
-      ) : null}
-
-      {detailState === 'error' ? (
-        <p className="detail-message detail-message-error" role="alert">
-          상세 정보를 불러오지 못했습니다.
-          {detailError ? ` ${detailError}` : null}
-          {' '}
-          <button type="button" aria-label="상세 정보 다시 불러오기" onClick={onRetryDetail}>
-            다시 시도
+      <div className="detail-mobile-tabs" role="tablist" aria-label="상세 섹션">
+        {([
+          ['info', '정보'],
+          ['trend', '시세'],
+          ['trades', parcelTrades == null ? '거래' : `거래 ${parcelTrades.totalElements.toLocaleString()}`],
+        ] as Array<[DetailMobileTab, string]>).map(([tab, label]) => (
+          <button
+            type="button"
+            role="tab"
+            key={tab}
+            aria-label={`${tab === 'trades' ? '거래' : label} 보기`}
+            aria-selected={mobileTab === tab}
+            onClick={() => setMobileTab(tab)}
+          >
+            {label}
           </button>
-        </p>
-      ) : null}
+        ))}
+      </div>
+
+      {detailState === 'ready' ? null : <ul
+        aria-label="상세 API 데이터 요약"
+        className="data-status-list"
+        data-api-flow="detail"
+        data-detail-order="status"
+      >
+        <li><span>상세</span><strong>{detailStateLabel(detailState)}</strong></li>
+        <li><span>실거래</span><strong>{parcelTrades == null ? '대기' : `${parcelTrades.totalElements.toLocaleString()}건`}</strong></li>
+        <li><span>같은 필지</span><strong>대기</strong></li>
+      </ul>}
+
+      <RequestStateNotice
+        state={detailState}
+        loadingMessage="단지 상세를 불러오는 중"
+        emptyMessage="표시할 단지 상세가 없습니다"
+        errorMessage="단지 상세를 불러오지 못했어요"
+        technicalError={detailError}
+        onRetry={onRetryDetail}
+      />
 
       {detailState === 'ready' && complexDetail ? (
         <>
-          <section className="detail-identity" data-detail-section="identity">
-            <h2>{complexDetail.name}</h2>
-            <p className="detail-address">{formatAddress(complexDetail.address)}</p>
+          <section
+            className="detail-price-overview detail-tab-panel"
+            data-detail-order="summary"
+            data-mobile-tab-panel="trend"
+            data-mobile-tab-active={mobileTab === 'trend' ? 'true' : 'false'}
+          >
             <dl className="detail-key-stats">
-              {detailMetric('최근 거래', latestTradeAmountLabel(parcelTrades?.trades ?? []))}
-              {detailMetric('실거래', `${(parcelTrades?.totalElements ?? 0).toLocaleString()}건`)}
-              {detailMetric('세대수', formatNumber(complexDetail.unitCnt, '세대'))}
+              <div className="detail-metric"><dt>최근 거래</dt><dd>{latestTradeAmountLabel(parcelTrades?.trades ?? [])}</dd></div>
+              <div className="detail-metric"><dt>단지 규모</dt><dd>{complexScaleLabel(complexDetail)}</dd></div>
             </dl>
             <PricePredictionPanel prediction={complexDetail.prediction} />
-            {parcelComplexes.length > 0 ? (
-              <section aria-label="같은 필지 단지 선택" className="detail-complex-switcher">
-                <div className="detail-section-heading">
-                  <h3>같은 필지 단지</h3>
-                  <span>{parcelComplexes.length.toLocaleString()}개</span>
-                </div>
-                <ul>
-                  {parcelComplexes.map((complex) => (
-                    <li key={complex.complexId}>
-                      <button
-                        type="button"
-                        aria-label={`같은 필지 단지 선택 ${complex.complexName}`}
-                        aria-current={complex.complexId === complexDetail.complexId ? 'true' : undefined}
-                        onClick={() => {
-                          onComplexSelect(complex);
-                        }}
-                      >
-                        <span>{complex.complexName}</span>
-                        <span>{complexSummaryMeta(complex)}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-            <dl className="detail-metrics">
-              {detailMetric('거래명', complexDetail.tradeName)}
-              {detailMetric('동수', formatNumber(complexDetail.dongCnt, '개동'))}
-              {detailMetric('사용승인일', complexDetail.useDate)}
-              {detailMetric('대지면적', formatNumber(complexDetail.platArea, '㎡'))}
-              {detailMetric('건축면적', formatNumber(complexDetail.archArea, '㎡'))}
-              {detailMetric('연면적', formatNumber(complexDetail.totArea, '㎡'))}
-              {detailMetric('건폐율', formatNumber(complexDetail.bcRat, '%'))}
-              {detailMetric('용적률', formatNumber(complexDetail.vlRat, '%'))}
-            </dl>
           </section>
-          <TradeTrendChart trend={tradeTrend} />
-          <TradeList
-            rows={tradeRows}
-            totalElements={parcelTrades?.totalElements ?? 0}
-            onLoadMore={onLoadMoreTrades}
-          />
+
+          <section
+            aria-label="같은 필지 단지 선택"
+            className="detail-complex-switcher detail-tab-panel"
+            data-detail-order="switcher"
+            data-mobile-tab-panel="info"
+            data-mobile-tab-active={mobileTab === 'info' ? 'true' : 'false'}
+            hidden={parcelComplexes.length <= 1}
+          >
+            <div className="detail-section-heading"><h3>같은 필지 단지</h3><span>{parcelComplexes.length.toLocaleString()}개</span></div>
+            <ul>
+              {parcelComplexes.map((complex) => (
+                <li key={complex.complexId}>
+                  <button type="button" aria-label={`같은 필지 단지 선택 ${complex.complexName}`} aria-current={complex.complexId === complexDetail.complexId ? 'true' : undefined} onClick={() => onComplexSelect(complex)}>
+                    <span>{complex.complexName}</span><span>{complexSummaryMeta(complex)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section
+            className="detail-basic-information detail-tab-panel"
+            data-detail-order="information"
+            data-mobile-tab-panel="info"
+            data-mobile-tab-active={mobileTab === 'info' ? 'true' : 'false'}
+          >
+            <h3>단지 기본정보</h3>
+            <dl>
+              {detailInformationRow('주소', formatAddress(complexDetail.address), 'address')}
+              {detailInformationRow('사용승인일', complexDetail.useDate)}
+              {detailInformationRow('세대수', formatNumber(complexDetail.unitCnt, '세대'), 'unitCnt')}
+              {detailInformationRow('동수', formatNumber(complexDetail.dongCnt, '개동'))}
+            </dl>
+            <details className="detail-additional-information">
+              <summary>추가 정보</summary>
+              <dl>
+                {detailInformationRow('거래명', complexDetail.tradeName)}
+                {detailInformationRow('단지명', complexDetail.name)}
+                {detailInformationRow('면적', areaSummary(complexDetail))}
+                {detailInformationRow('건폐율', formatNumber(complexDetail.bcRat, '%'))}
+                {detailInformationRow('용적률', formatNumber(complexDetail.vlRat, '%'))}
+              </dl>
+            </details>
+          </section>
+
+          <div className="detail-tab-panel" data-detail-order="trend" data-mobile-tab-panel="trend" data-mobile-tab-active={mobileTab === 'trend' ? 'true' : 'false'}>
+            {shouldRenderTradeChart ? (
+              <Suspense fallback={<TradeChartFallback />}>
+                <TradeTrendChart trend={tradeTrend} />
+              </Suspense>
+            ) : null}
+          </div>
+          <div
+            className="detail-tab-panel"
+            data-detail-order="trades"
+            data-mobile-tab-panel="trades"
+            data-mobile-tab-active={mobileTab === 'trades' ? 'true' : 'false'}
+          >
+            <TradeList
+              rows={tradeRows}
+              totalElements={parcelTrades?.totalElements ?? 0}
+              onLoadMore={onLoadMoreTrades}
+            />
+          </div>
         </>
       ) : null}
     </section>
   );
 }
 
-function DataStatusList({
-  ariaLabel,
-  flow,
-  items,
-}: {
-  ariaLabel: string;
-  flow: string;
-  items: Array<[string, string]>;
-}) {
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => mediaQueryMatches(query));
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia(query);
+    const handleChange = (event: MediaQueryListEvent) => setMatches(event.matches);
+    setMatches(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [query]);
+
+  return matches;
+}
+
+function mediaQueryMatches(query: string): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia(query).matches;
+}
+
+function detailStateLabel(state: DetailRequestState): string {
+  switch (state) {
+    case 'idle': return '대기';
+    case 'loading': return '조회 중';
+    case 'ready': return '조회됨';
+    case 'error': return '오류';
+  }
+}
+
+function TradeChartFallback() {
   return (
-    <ul aria-label={ariaLabel} className="data-status-list" data-api-flow={flow}>
-      {items.map(([label, value]) => (
-        <li key={label}>
-          <span>{label}</span>
-          {' '}
-          <strong>{value}</strong>
-        </li>
-      ))}
-    </ul>
+    <section className="trade-chart trade-chart-fallback" aria-label="거래가 차트 불러오는 중">
+      <div className="trade-section-header"><h3>실거래가 흐름</h3></div>
+      <div className="trade-chart-canvas" role="status" aria-live="polite">차트 불러오는 중</div>
+    </section>
   );
 }
 
@@ -187,34 +257,26 @@ function detailDrawerKicker(selection: ComplexSelection): string {
     : `단지 ${selection.complexId} / 필지 ${selection.parcelId}`;
 }
 
-function detailRequestLabel(state: DetailRequestState): string {
-  switch (state) {
-    case 'idle':
-      return '대기';
-    case 'loading':
-      return '불러오는 중';
-    case 'ready':
-      return '완료';
-    case 'error':
-      return '오류';
-  }
-}
-
 function formatAddress(address: string | null): string {
   return address ?? '주소 정보 없음';
 }
 
-function detailMetric(label: string, value: string | null) {
-  if (value == null) {
-    return null;
-  }
-
+function detailInformationRow(label: string, value: string | null, field?: string) {
   return (
-    <div className="detail-metric" key={label}>
+    <div className="detail-information-row" key={label} data-detail-field={field}>
       <dt>{label}</dt>
-      <dd>{value}</dd>
+      <dd>{value ?? '-'}</dd>
     </div>
   );
+}
+
+function areaSummary(detail: ComplexDetail): string | null {
+  const values = [
+    detail.platArea == null ? null : `대지 ${formatNumber(detail.platArea, '㎡')}`,
+    detail.archArea == null ? null : `건축 ${formatNumber(detail.archArea, '㎡')}`,
+    detail.totArea == null ? null : `연면적 ${formatNumber(detail.totArea, '㎡')}`,
+  ].filter((value): value is string => value != null);
+  return values.length === 0 ? null : values.join(' · ');
 }
 
 function PricePredictionPanel({ prediction }: { prediction: PricePrediction | null }) {
@@ -238,7 +300,7 @@ function PricePredictionPanel({ prediction }: { prediction: PricePrediction | nu
               aria-label="AI 예상가 계산 방식 안내"
               className="prediction-help-button"
             >
-              <span aria-hidden="true" className="prediction-help-mark">?</span>
+              <HelpIcon aria-hidden="true" />
             </button>
             <div className="prediction-help-popover" id="prediction-help-copy" role="tooltip">
               <strong>AI 예상가 안내</strong>
@@ -341,117 +403,13 @@ function formatNumber(value: number | null, suffix: string): string | null {
   return `${value.toLocaleString()}${suffix}`;
 }
 
-type TradeTrendRange = 'all' | '3y';
-
-function TradeTrendChart({ trend }: { trend: TradeTrendPoint[] }) {
-  const [range, setRange] = useState<TradeTrendRange>('all');
-  const points = useMemo(() => filterTrendByRange(trend, range), [trend, range]);
-
-  return (
-    <section className="trade-chart" aria-label="거래가 차트" data-detail-section="trade-chart">
-      <div className="trade-section-header">
-        <h3>실거래가 흐름</h3>
-        <div className="trade-range-toggle" role="group" aria-label="기간 선택">
-          <button
-            type="button"
-            className="trade-range-button"
-            aria-pressed={range === 'all'}
-            onClick={() => setRange('all')}
-          >
-            전체
-          </button>
-          <button
-            type="button"
-            className="trade-range-button"
-            aria-pressed={range === '3y'}
-            onClick={() => setRange('3y')}
-          >
-            최근 3년
-          </button>
-        </div>
-      </div>
-
-      {points.length === 0 ? (
-        <p className="trade-chart-empty">표시할 거래가 없습니다</p>
-      ) : (
-        <div className="trade-chart-canvas">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={points} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-              <XAxis
-                dataKey="month"
-                tickFormatter={formatTrendMonth}
-                tick={{ fontSize: 10 }}
-                tickMargin={6}
-                minTickGap={24}
-              />
-              <YAxis tickFormatter={formatTrendAxis} tick={{ fontSize: 10 }} width={44} />
-              <Tooltip content={<TrendTooltip />} />
-              <Line
-                type="monotone"
-                dataKey="avgAmount"
-                stroke={trendLineColor()}
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 3 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function TrendTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: Array<{ payload: TradeTrendPoint }>;
-}) {
-  if (!active || payload == null || payload.length === 0) {
-    return null;
-  }
-
-  const point = payload[0].payload;
-  return (
-    <div className="trade-chart-tooltip">
-      <span className="trade-chart-tooltip-month">{formatTrendMonth(point.month)}</span>
-      <strong>{formatAmount(point.avgAmount)}</strong>
-      <span className="trade-chart-tooltip-count">{point.count.toLocaleString()}건</span>
-    </div>
-  );
-}
-
-function filterTrendByRange(trend: TradeTrendPoint[], range: TradeTrendRange): TradeTrendPoint[] {
-  if (range === 'all') {
-    return trend;
-  }
-
-  const cutoff = new Date();
-  cutoff.setFullYear(cutoff.getFullYear() - 3);
-  const cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}`;
-  return trend.filter((point) => point.month >= cutoffKey);
-}
-
-function formatTrendMonth(month: string): string {
-  const [year, monthPart] = month.split('-');
-  return year && monthPart ? `${year.slice(2)}-${monthPart}` : month;
-}
-
-function formatTrendAxis(value: number): string {
-  return `${(value / 10000).toFixed(1)}억`;
-}
-
-function trendLineColor(): string {
-  if (typeof window === 'undefined') {
-    return TREND_LINE_FALLBACK;
-  }
-
-  const resolved = getComputedStyle(document.documentElement)
-    .getPropertyValue('--hs-color-primary')
-    .trim();
-  return resolved.length > 0 ? resolved : TREND_LINE_FALLBACK;
+function complexScaleLabel(detail: ComplexDetail): string {
+  const values = [
+    formatNumber(detail.unitCnt, '세대'),
+    formatNumber(detail.dongCnt, '개동'),
+    detail.useDate == null ? null : `${detail.useDate.slice(0, 4)}년`,
+  ].filter((value): value is string => value != null);
+  return values.length === 0 ? '-' : values.join(' · ');
 }
 
 function TradeList({

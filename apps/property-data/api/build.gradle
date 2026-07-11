@@ -10,19 +10,61 @@ configurations {
     asciidoctorExt
 }
 
+def forbiddenApiCompileModules = [
+    'org.springframework:spring-jdbc',
+    'org.springframework.data:spring-data-redis',
+    'org.springframework.boot:spring-boot-starter-jdbc',
+    'org.springframework.boot:spring-boot-starter-data-redis'
+] as Set
+
+tasks.register('verifyApiCompileClasspathBoundary') {
+    description = 'Fail when JDBC or Redis persistence artifacts enter the API compile classpath.'
+    group = 'verification'
+
+    doLast {
+        def resolved = configurations.compileClasspath.resolvedConfiguration
+        def violations = resolved.resolvedArtifacts.findAll { artifact ->
+            def id = artifact.moduleVersion.id
+            forbiddenApiCompileModules.contains("${id.group}:${id.name}".toString())
+        }.sort { left, right -> left.moduleVersion.id.toString() <=> right.moduleVersion.id.toString() }
+
+        if (!violations.isEmpty()) {
+            logger.error('API compileClasspath contains forbidden persistence artifacts:')
+            violations.each { artifact ->
+                def violationId = artifact.moduleVersion.id
+                logger.error("- ${violationId}")
+                def visit
+                visit = { dependency, List<String> path ->
+                    def current = "${dependency.moduleGroup}:${dependency.moduleName}:${dependency.moduleVersion}"
+                    def nextPath = path + current
+                    if (dependency.moduleGroup == violationId.group && dependency.moduleName == violationId.name) {
+                        logger.error("  path: ${nextPath.join(' -> ')}")
+                    }
+                    dependency.children.each { child -> visit(child, nextPath) }
+                }
+                resolved.firstLevelModuleDependencies.each { dependency -> visit(dependency, []) }
+            }
+            throw new GradleException('API compile classpath boundary violated')
+        }
+    }
+}
+
 dependencies {
     implementation project(':core')
 
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-web'
 
+    runtimeOnly 'org.springframework.boot:spring-boot-starter-data-redis'
+    runtimeOnly 'org.springframework.boot:spring-boot-starter-jdbc'
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
     runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework:spring-jdbc'
+    testImplementation 'org.flywaydb:flyway-core'
     testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
     testImplementation 'com.epages:restdocs-api-spec-mockmvc:0.19.4'
     testImplementation 'org.testcontainers:junit-jupiter'
@@ -38,6 +80,10 @@ ext {
 tasks.named('test') {
     exclude '**/infrastructure/web/**/*ContractTest.class'
     exclude '**/*RestDocsTest.class'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyApiCompileClasspathBoundary')
 }
 
 tasks.register('apiContractTest', Test) {

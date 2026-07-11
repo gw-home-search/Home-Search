@@ -8,11 +8,41 @@ import java.util.Arrays;
 import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.run.RtmsIngestRunRecord;
 import com.home.infrastructure.persistence.ingest.run.JdbcRtmsIngestRunRepository;
+import com.home.domain.ingest.run.ExecutionCorrelationId;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class JdbcRtmsIngestRunRepositoryTest extends JdbcPostgresTestSupport {
+
+	@Test
+	@DisplayName("RTMS 수집 실행은 Batch execution correlation UUID를 JDBC round-trip으로 보존한다")
+	void savesExecutionCorrelationId() {
+		ExecutionCorrelationId correlationId = ExecutionCorrelationId.from(
+			"123e4567-e89b-12d3-a456-426614174030"
+		);
+		RtmsIngestRunRecord record = RtmsIngestRunRecord.of(
+			"11680",
+			"202512",
+			1,
+			new IngestResult(1, 1, 1, 0, 0, 0),
+			"COMPLETED",
+			null,
+			Instant.parse("2026-05-29T00:00:00Z"),
+			Instant.parse("2026-05-29T00:00:05Z"),
+			correlationId
+		);
+
+		RtmsIngestRunRecord saved = new JdbcRtmsIngestRunRepository(jdbcClient).save(record);
+
+		assertThat(saved.executionCorrelationId()).isEqualTo(correlationId);
+		assertThat(jdbcClient.sql("""
+			SELECT execution_correlation_id::text FROM rtms_ingest_run WHERE id = :id
+			""")
+			.param("id", saved.id())
+			.query(String.class)
+			.single()).isEqualTo(correlationId.toString());
+	}
 
 	@Test
 	@DisplayName("RTMS 수집 실행 summary는 raw payload나 source key 없이 count evidence로 저장된다")

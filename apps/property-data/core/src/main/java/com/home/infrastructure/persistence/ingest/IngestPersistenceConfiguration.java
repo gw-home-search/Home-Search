@@ -11,5 +11,5 @@ import org.springframework.context.annotation.Import;
 	TradeMatchPersistenceConfiguration.class,
 	TradeNormalizationPersistenceConfiguration.class
 })
-class IngestPersistenceConfiguration {
+public class IngestPersistenceConfiguration {
 }

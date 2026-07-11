@@ -1,0 +1,75 @@
+spring:
+  application:
+    name: home-search-batch
+  profiles:
+    default: local
+  main:
+    web-application-type: none
+    lazy-initialization: true
+  datasource:
+    url: "${DB_JDBC_URL}"
+    username: "${DB_USERNAME}"
+    password: "${DB_PASSWORD}"
+    driver-class-name: org.postgresql.Driver
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: never
+      table-prefix: batch.BATCH_
+  flyway:
+    enabled: false
+
+apis:
+  data:
+    base-url: https://apis.data.go.kr
+    apt-service-key: "${APT_SERVICE_KEY:}"
+    apt-title-path: /1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev
+    apt-num-of-rows: 1000
+    connect-timeout-millis: 5000
+    read-timeout-millis: 5000
+    min-request-interval-millis: 200
+
+home:
+  ops:
+    hermes:
+      enabled: false
+      url: "${HERMES_SLACK_URL:}"
+      auth-token: "${HERMES_AUTH_TOKEN:}"
+      channel: "${HERMES_SLACK_CHANNEL:}"
+      connect-timeout-millis: 3000
+      read-timeout-millis: 3000
+  coordinate-source:
+    db:
+      jdbc-url: "${COORDINATE_SOURCE_DB_JDBC_URL:}"
+      username: "${COORDINATE_SOURCE_DB_USERNAME:${DB_USERNAME}}"
+      password: "${COORDINATE_SOURCE_DB_PASSWORD:${DB_PASSWORD}}"
+  ingest:
+    raw-reconcile:
+      enabled: false
+    match-rematch:
+      enabled: false
+    rtms:
+      allow-coordinate-pending-only: false
+      refresh-retry-attempts: 3
+      refresh-retry-backoff-millis: 250
+      daily:
+        enabled: false
+        lawd-cds: ""
+        lookback-months: 1
+        zone: Asia/Seoul
+  trade:
+    partition:
+      maintenance:
+        enabled: false
+  coordinate:
+    readiness:
+      enabled: false
+complex:
+  metadata:
+    daily-request-quota: 1000
+    min-request-interval-millis: 250
+    enrich:
+      enabled: false
+      scheduler:
+        enabled: false

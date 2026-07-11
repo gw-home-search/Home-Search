@@ -2,6 +2,9 @@ package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.sql.Types;
+import java.time.LocalDate;
+
 import com.home.application.ingest.reconciliation.RawIngestReconciliationService;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
 import com.home.infrastructure.persistence.ingest.raw.JdbcRawIngestReconciliationRepository;
@@ -106,12 +109,17 @@ class JdbcRawIngestReconciliationRepositoryTest extends JdbcPostgresTestSupport 
 
 	private void seedRegistry(String sourceKey, long rawIngestId, Long tradeId) {
 		jdbcClient.sql("""
-			INSERT INTO trade_source_key_registry (source, source_key, raw_ingest_id, trade_id)
-			VALUES ('RTMS', :sourceKey, :rawIngestId, :tradeId)
+			INSERT INTO trade_source_key_registry (
+			    source, source_key, raw_ingest_id, trade_id, trade_deal_date
+			)
+			VALUES (
+			    'RTMS', :sourceKey, :rawIngestId, :tradeId, :tradeDealDate
+			)
 			""")
 			.param("sourceKey", sourceKey)
 			.param("rawIngestId", rawIngestId)
 			.param("tradeId", tradeId)
+			.param("tradeDealDate", tradeId == null ? null : LocalDate.of(2025, 12, 15), Types.DATE)
 			.update();
 	}
 }

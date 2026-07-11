@@ -10,7 +10,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration(proxyBeanMethods = false)
-class RtmsExternalApiConfiguration {
+public class RtmsExternalApiConfiguration {
 
 	@Bean
 	RtmsApartmentTradeProperties rtmsApartmentTradeProperties(

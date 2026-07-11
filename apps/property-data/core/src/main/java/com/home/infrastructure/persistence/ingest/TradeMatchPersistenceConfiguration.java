@@ -1,6 +1,10 @@
 package com.home.infrastructure.persistence.ingest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.home.application.ingest.buildingmetadata.BuildingMetadataEvidenceRepository;
+import com.home.application.ingest.buildingmetadata.BuildingMetadataBatchService;
+import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceClient;
+import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceParser;
 import com.home.application.coordinate.lookup.ParcelCoordinateResolver;
 import com.home.application.ingest.matching.ComplexIdentityResolver;
 import com.home.application.ingest.matching.ComplexMasterBootstrapper;
@@ -20,6 +24,7 @@ import com.home.application.ingest.trade.OpenApiTradeIngestService;
 import com.home.application.ingest.trade.TradeIngestItemProcessor;
 import com.home.application.ingest.trade.TradeIngestMetrics;
 import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMasterBootstrapper;
+import com.home.infrastructure.persistence.ingest.matching.JdbcBuildingMetadataEvidenceRepository;
 import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMatcher;
 import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMetadataEnrichmentRepository;
 import com.home.infrastructure.persistence.ingest.matching.JdbcOdcloudPnuPrefixAliasLookup;
@@ -40,6 +45,27 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration(proxyBeanMethods = false)
 class TradeMatchPersistenceConfiguration {
+
+	@Bean
+	@Lazy
+	BuildingMetadataEvidenceRepository buildingMetadataEvidenceRepository(
+		ObjectProvider<JdbcClient> jdbcClientProvider,
+		ObjectProvider<PlatformTransactionManager> transactionManagerProvider,
+		ObjectMapper objectMapper
+	) {
+		return new JdbcBuildingMetadataEvidenceRepository(
+			IngestPersistenceJdbcSupport.requiredJdbcClient(jdbcClientProvider),
+			new TransactionTemplate(transactionManagerProvider.getObject())
+		);
+	}
+
+	@Bean
+	@Lazy
+	BuildingMetadataBatchService buildingMetadataBatchService(BuildingMetadataEvidenceRepository repository,
+		ObjectProvider<BuildingMetadataSourceClient> clientProvider, BuildingMetadataSourceParser parser) {
+		return new BuildingMetadataBatchService(repository,
+			clientProvider.getIfAvailable(BuildingMetadataSourceClient::noop), parser);
+	}
 
 	@Bean
 	@Lazy

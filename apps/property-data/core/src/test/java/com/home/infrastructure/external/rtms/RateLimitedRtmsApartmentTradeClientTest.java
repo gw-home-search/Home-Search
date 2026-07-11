@@ -1,5 +1,8 @@
 package com.home.infrastructure.external.rtms;
 
+import com.home.application.ingest.rtms.RtmsApartmentTradePage;
+import com.home.application.ingest.rtms.RtmsApartmentTradeRequest;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;

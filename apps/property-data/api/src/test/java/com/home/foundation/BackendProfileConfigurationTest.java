@@ -21,6 +21,7 @@ class BackendProfileConfigurationTest {
 		Properties properties = load("application.yml");
 
 		assertThat(properties.getProperty("spring.autoconfigure.exclude")).isNull();
+		assertThat(properties.getProperty("spring.flyway.enabled")).isEqualTo("false");
 		assertThat(properties.getProperty("spring.flyway.locations")).isEqualTo("classpath:db/migration/api");
 		assertThat(properties.getProperty("spring.profiles.default")).isEqualTo("local");
 		assertThat(properties.getProperty("management.endpoints.web.exposure.include")).isNull();
@@ -40,21 +41,15 @@ class BackendProfileConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("local profile은 PostgreSQL과 Flyway project migration을 environment placeholder로 연결한다")
-	void localProfileWiresPostgresAndFlywayMigrationLocation() throws IOException {
+	@DisplayName("local profile은 PostgreSQL만 연결하고 Flyway 자동 실행 우회 설정을 제공하지 않는다")
+	void localProfileWiresPostgresWithoutFlywayAutoMigrationOverrides() throws IOException {
 		Properties properties = load("application-local.yml");
 
 		assertThat(properties.getProperty("spring.datasource.url")).isEqualTo("${DB_JDBC_URL}");
 		assertThat(properties.getProperty("spring.datasource.username")).isEqualTo("${DB_USERNAME}");
 		assertThat(properties.getProperty("spring.datasource.password")).isEqualTo("${DB_PASSWORD}");
-		assertThat(properties.getProperty("spring.flyway.enabled")).isEqualTo("true");
-		assertThat(properties.getProperty("spring.flyway.locations"))
-			.isEqualTo("${SPRING_FLYWAY_LOCATIONS:classpath:db/migration/api}");
-		assertThat(properties.getProperty("spring.flyway.clean-disabled")).isEqualTo("true");
-		assertThat(properties.getProperty("spring.flyway.ignore-migration-patterns"))
-			.isEqualTo("${SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS:*:missing}");
-		assertThat(properties.getProperty("spring.flyway.validate-on-migrate"))
-			.isEqualTo("${SPRING_FLYWAY_VALIDATE_ON_MIGRATE:false}");
+		assertThat(properties.stringPropertyNames())
+			.noneMatch(name -> name.startsWith("spring.flyway."));
 		assertThat(properties.getProperty("home.coordinate-source.db.jdbc-url"))
 			.isEqualTo("${COORDINATE_SOURCE_DB_JDBC_URL:}");
 		assertThat(properties.getProperty("home.coordinate-source.db.username"))

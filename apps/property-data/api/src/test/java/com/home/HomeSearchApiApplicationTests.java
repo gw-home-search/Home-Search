@@ -15,7 +15,7 @@ import com.home.application.map.MapUseCase;
 import com.home.application.region.RegionRelationSynchronizationGateway;
 import com.home.application.region.RegionUnitCntSynchronizationService;
 
-@SpringBootTest
+@SpringBootTest(properties = "home.ingest.rtms.daily.enabled=true")
 @ActiveProfiles("test")
 class HomeSearchApiApplicationTests {
 
@@ -37,6 +37,12 @@ class HomeSearchApiApplicationTests {
 		assertThat(regionRelationSynchronizationGateway).isNotNull();
 		assertThat(regionUnitCntSynchronizationService).isNotNull();
 		assertThat(applicationContext.containsBean("regionUnitCntSyncApplicationRunner")).isFalse();
+	}
+
+	@Test
+	@DisplayName("legacy RTMS daily property를 활성화해도 API scheduler bean은 없다")
+	void legacyRtmsDailySchedulerIsAbsent() {
+		assertThat(applicationContext.containsBean("rtmsDailyRefreshScheduler")).isFalse();
 	}
 
 	@Test

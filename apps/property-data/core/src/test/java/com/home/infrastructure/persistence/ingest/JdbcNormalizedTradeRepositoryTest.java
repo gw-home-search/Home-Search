@@ -56,6 +56,8 @@ class JdbcNormalizedTradeRepositoryTest extends JdbcPostgresTestSupport {
 		assertThat(tradeCount()).isEqualTo(1);
 		Long existingTradeId = onlyTradeId();
 		assertThat(registryTradeIds()).containsExactly(existingTradeId, existingTradeId);
+		assertThat(registryTradeDealDates())
+			.containsExactly(LocalDate.of(2025, 12, 1), LocalDate.of(2025, 12, 1));
 	}
 
 	@Test
@@ -273,6 +275,16 @@ class JdbcNormalizedTradeRepositoryTest extends JdbcPostgresTestSupport {
 			ORDER BY source_key
 			""")
 			.query(Long.class)
+			.list();
+	}
+
+	private List<LocalDate> registryTradeDealDates() {
+		return jdbcClient.sql("""
+			SELECT trade_deal_date
+			FROM trade_source_key_registry
+			ORDER BY source_key
+			""")
+			.query(LocalDate.class)
 			.list();
 	}
 

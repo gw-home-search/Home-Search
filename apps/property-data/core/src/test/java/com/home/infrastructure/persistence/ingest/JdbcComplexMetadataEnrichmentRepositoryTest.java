@@ -194,8 +194,8 @@ class JdbcComplexMetadataEnrichmentRepositoryTest extends JdbcPostgresTestSuppor
 	}
 
 	@Test
-	@DisplayName("metadata enrichment repository는 next_attempt_at이 지난 재시도 대상만 다시 조회한다")
-	void findsDueRetryableComplexesButSkipsTerminalAndFutureRows() {
+	@DisplayName("metadata enrichment repository는 재시도 대상과 건축 면적이 누락된 RESOLVED 단지를 조회한다")
+	void findsDueRetryableComplexesAndResolvedComplexesMissingBuildingAreas() {
 		seedPendingComplex();
 		seedComplex(
 			502,
@@ -241,7 +241,7 @@ class JdbcComplexMetadataEnrichmentRepositoryTest extends JdbcPostgresTestSuppor
 
 		assertThat(repository.findPending(10))
 			.extracting(ComplexMetadataLookup::complexId)
-			.containsExactly(501L, 502L);
+			.containsExactly(501L, 502L, 505L);
 	}
 
 	@Test

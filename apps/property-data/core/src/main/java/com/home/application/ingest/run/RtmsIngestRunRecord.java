@@ -2,6 +2,7 @@ package com.home.application.ingest.run;
 
 import java.time.Instant;
 import com.home.application.ingest.trade.IngestResult;
+import com.home.domain.ingest.run.ExecutionCorrelationId;
 
 public record RtmsIngestRunRecord(
 	Long id,
@@ -19,8 +20,31 @@ public record RtmsIngestRunRecord(
 	String failureReason,
 	Instant startedAt,
 	Instant completedAt,
-	Instant createdAt
+	Instant createdAt,
+	ExecutionCorrelationId executionCorrelationId
 ) {
+
+	public RtmsIngestRunRecord(
+		Long id,
+		String lawdCd,
+		String dealYmd,
+		String status,
+		int pageCount,
+		long read,
+		long rawSaved,
+		long normalizedInserted,
+		long duplicateSkipped,
+		long canceledSkipped,
+		long matchFailed,
+		long parseFailed,
+		String failureReason,
+		Instant startedAt,
+		Instant completedAt,
+		Instant createdAt
+	) {
+		this(id, lawdCd, dealYmd, status, pageCount, read, rawSaved, normalizedInserted, duplicateSkipped,
+			canceledSkipped, matchFailed, parseFailed, failureReason, startedAt, completedAt, createdAt, null);
+	}
 
 	public RtmsIngestRunRecord(
 		Long id,
@@ -55,7 +79,8 @@ public record RtmsIngestRunRecord(
 			failureReason,
 			startedAt,
 			completedAt,
-			createdAt
+			createdAt,
+			null
 		);
 	}
 
@@ -104,6 +129,20 @@ public record RtmsIngestRunRecord(
 		Instant startedAt,
 		Instant completedAt
 	) {
+		return of(lawdCd, dealYmd, pageCount, result, status, failureReason, startedAt, completedAt, null);
+	}
+
+	public static RtmsIngestRunRecord of(
+		String lawdCd,
+		String dealYmd,
+		int pageCount,
+		IngestResult result,
+		String status,
+		String failureReason,
+		Instant startedAt,
+		Instant completedAt,
+		ExecutionCorrelationId executionCorrelationId
+	) {
 		return new RtmsIngestRunRecord(
 			null,
 			lawdCd,
@@ -120,7 +159,8 @@ public record RtmsIngestRunRecord(
 			failureReason,
 			startedAt,
 			completedAt,
-			null
+			null,
+			executionCorrelationId
 		);
 	}
 }

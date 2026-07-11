@@ -1,6 +1,8 @@
 package com.home.infrastructure.external.rtms;
 
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
+import com.home.application.ingest.rtms.RtmsApartmentTradePage;
+import com.home.application.ingest.rtms.RtmsApartmentTradeRequest;
 import com.home.infrastructure.external.ExternalApiUri;
 
 import org.springframework.web.client.RestClient;

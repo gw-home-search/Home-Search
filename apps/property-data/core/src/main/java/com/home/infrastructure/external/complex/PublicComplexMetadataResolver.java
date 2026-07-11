@@ -220,17 +220,9 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 					}
 					ComplexMetadataLookupEvidence nameEvidence = evidence(
 						ComplexMetadataLookupPath.APPROVED_PREFIX_ALIAS_NAME, lookup.pnu(), sourcePnu, alias.id(), matches.size());
-					if (trimToNull(lookup.aptSeq()) != null && !lookup.aptSeq().equals(trimToNull(nameMatched.getComplexPk()))) {
-						return ComplexMetadataResolution.ambiguous("ODC", "ODC approved alias COMPLEX_PK conflict")
-							.withLookupEvidence(nameEvidence);
-					}
 					return metadataResolution(nameMatched).withLookupEvidence(nameEvidence);
 				}
 				OdcloudAptResponse.Item selected = matches.get(0);
-				if (trimToNull(lookup.aptSeq()) != null && !lookup.aptSeq().equals(trimToNull(selected.getComplexPk()))) {
-					return ComplexMetadataResolution.ambiguous("ODC", "ODC approved alias COMPLEX_PK conflict")
-						.withLookupEvidence(evidence);
-				}
 				return metadataResolution(selected).withLookupEvidence(evidence);
 			})
 			.orElseGet(() -> ComplexMetadataResolution.unavailable(
@@ -287,7 +279,6 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 	}
 
 	private int scoreName(String target, OdcloudAptResponse.Item candidate) {
-		int best = 0;
 		for (String name : new String[] {candidate.getComplexNm1(), candidate.getComplexNm2(), candidate.getComplexNm3()}) {
 			String normalized = normalizeName(name);
 			if (normalized.isEmpty()) {
@@ -296,11 +287,8 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 			if (target.equals(normalized)) {
 				return 3;
 			}
-			if (normalized.contains(target) || target.contains(normalized)) {
-				best = Math.max(best, 2);
-			}
 		}
-		return best;
+		return 0;
 	}
 
 	private String normalizeName(String value) {

@@ -180,5 +180,6 @@ JOIN trade_source_key_registry registry
  AND registry.source_key = r.source_key
 JOIN trade t
   ON t.id = registry.trade_id
+ AND t.deal_date = registry.trade_deal_date
  AND t.deleted_at IS NULL
 WHERE r.status = 'RECEIVED';

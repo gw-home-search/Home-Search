@@ -14,7 +14,7 @@ dependencyResolutionManagement {
 
 rootProject.name = 'home-search-property-data'
 
-include 'core', 'api'
+include 'core', 'api', 'batch', 'migration'
 
 includeBuild('../../libs/rtms-ingest-core') {
     dependencySubstitution {

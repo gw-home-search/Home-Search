@@ -89,32 +89,25 @@ class MigrationCommandRunner implements ApplicationRunner {
 	private void repairMissingV3() {
 		requireRepairBackups();
 		Flyway flyway = flyway(null);
-		long failed = Arrays.stream(flyway.info().all()).filter(info -> info.getState().isFailed()).count();
+		MigrationInfo[] migrations = flyway.info().all();
+		long failed = Arrays.stream(migrations).filter(info -> info.getState().isFailed()).count();
 		if (failed != 0) {
 			throw new MigrationOperationException("Repair preflight failed: failed migration count=" + failed);
 		}
-		ValidateResult validation = flyway.validateWithResult();
-		boolean onlyMissingV3 = !validation.validationSuccessful
-			&& validation.invalidMigrations.size() == 1
-			&& "3".equals(validation.invalidMigrations.get(0).version);
-		if (!onlyMissingV3) {
-			throw new MigrationOperationException("Repair preflight failed: validation is not missing V3 only");
-		}
-		for (MigrationInfo info : flyway.info().all()) {
-			if (("1".equals(version(info)) || "4".equals(version(info))) && !info.isChecksumMatching()) {
-				throw new MigrationOperationException("Repair preflight failed: checksum mismatch for V" + version(info));
-			}
-		}
+		FlywayRepairPreflight.Decision decision = FlywayRepairPreflight.verify(migrations);
 		RepairResult result = flyway.repair();
 		boolean expected = result.migrationsDeleted.size() == 1
 			&& "3".equals(result.migrationsDeleted.get(0).version)
-			&& result.migrationsAligned.isEmpty()
+			&& (decision.alignV1()
+				? result.migrationsAligned.size() == 1 && "1".equals(result.migrationsAligned.get(0).version)
+				: result.migrationsAligned.isEmpty())
 			&& result.migrationsRemoved.isEmpty();
 		if (!expected) {
 			throw new MigrationOperationException("Unexpected Flyway repair actions; stop before V5/V6");
 		}
-		validate(flyway);
-		System.out.println("migrationsDeleted=[3] migrationsAligned=[] migrationsRemoved=[]");
+		validate(flyway(null, true));
+		System.out.printf("migrationsDeleted=[3] migrationsAligned=%s migrationsRemoved=[]%n",
+			decision.alignV1() ? "[1]" : "[]");
 	}
 
 	private void requireRepairBackups() {
@@ -152,12 +145,17 @@ class MigrationCommandRunner implements ApplicationRunner {
 	}
 
 	private Flyway flyway(MigrationVersion target) {
+		return flyway(target, false);
+	}
+
+	private Flyway flyway(MigrationVersion target, boolean ignorePending) {
 		var configuration = Flyway.configure()
 			.dataSource(dataSource)
 			.locations(LOCATION)
 			.schemas("public", "reference", "batch")
 			.defaultSchema("public")
 			.cleanDisabled(true);
+		if (ignorePending) configuration.ignoreMigrationPatterns("*:pending");
 		if (target != null) {
 			configuration.target(target);
 		}

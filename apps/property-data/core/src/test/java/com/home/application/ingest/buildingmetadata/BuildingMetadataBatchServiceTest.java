@@ -15,12 +15,14 @@ import com.home.domain.complex.buildingmetadata.BuildingMetadataValues;
 import com.home.domain.complex.metadata.ComplexMetadataStatus;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.DisplayName;
 
 class BuildingMetadataBatchServiceTest {
 	private static final String PNU = "1168010300101400001";
 	private static final UUID REQUEST_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
 
 	@Test
+	@DisplayName("동일 PNU 복수 단지는 외부 원천 호출 없이 모호 상태를 기록한다")
 	void recordsSharedPnuWithoutCallingExternalSource() {
 		BuildingMetadataEvidenceRepository repository = mock(BuildingMetadataEvidenceRepository.class);
 		BuildingMetadataSourceClient client = mock(BuildingMetadataSourceClient.class);
@@ -38,6 +40,7 @@ class BuildingMetadataBatchServiceTest {
 	}
 
 	@Test
+	@DisplayName("단일동은 표제부를 우선하고 후보가 없을 때만 총괄표제부로 대체한다")
 	void usesTitleForSingleBuildingAndFallsBackOnlyForZeroCandidates() {
 		BuildingMetadataEvidenceRepository repository = mock(BuildingMetadataEvidenceRepository.class);
 		BuildingMetadataSourceClient client = mock(BuildingMetadataSourceClient.class);
@@ -65,6 +68,7 @@ class BuildingMetadataBatchServiceTest {
 	}
 
 	@Test
+	@DisplayName("건축물대장 배치는 refresh mode를 거부한다")
 	void rejectsRefreshMode() {
 		BuildingMetadataSourceClient client = mock(BuildingMetadataSourceClient.class);
 		assertThatThrownBy(() -> new BuildingMetadataBatchService(mock(BuildingMetadataEvidenceRepository.class),client,r -> null)
@@ -72,6 +76,7 @@ class BuildingMetadataBatchServiceTest {
 	}
 
 	@Test
+	@DisplayName("단일 후보는 fallback 없이 projection에 전달한다")
 	void appliesSingleCandidateWithoutFallback() {
 		BuildingMetadataEvidenceRepository repository = mock(BuildingMetadataEvidenceRepository.class);
 		BuildingMetadataSourceClient client = mock(BuildingMetadataSourceClient.class);
@@ -94,6 +99,7 @@ class BuildingMetadataBatchServiceTest {
 	}
 
 	@Test
+	@DisplayName("과다 후보와 원천 실패를 즉시 재시도 없이 attempt로 변환한다")
 	void mapsOversizedHttpAndParserFailuresToAttemptsWithoutImmediateRetry() {
 		BuildingMetadataEvidenceRepository repository = mock(BuildingMetadataEvidenceRepository.class);
 		BuildingMetadataSourceClient client = mock(BuildingMetadataSourceClient.class);
@@ -122,6 +128,7 @@ class BuildingMetadataBatchServiceTest {
 	}
 
 	@Test
+	@DisplayName("원천 미설정과 양수가 아닌 요청 한도를 거부한다")
 	void rejectsUnconfiguredClientAndNonPositiveLimit() {
 		BuildingMetadataSourceClient client = mock(BuildingMetadataSourceClient.class);
 		given(client.isConfigured()).willReturn(false);

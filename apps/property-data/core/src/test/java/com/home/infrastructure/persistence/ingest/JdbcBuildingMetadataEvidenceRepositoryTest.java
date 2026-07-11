@@ -19,6 +19,7 @@ import com.home.infrastructure.persistence.ingest.matching.JdbcBuildingMetadataE
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.DisplayName;
 
 class JdbcBuildingMetadataEvidenceRepositoryTest extends JdbcMigrationTestSupport {
 	private static final UUID REQUEST_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
@@ -31,6 +32,7 @@ class JdbcBuildingMetadataEvidenceRepositoryTest extends JdbcMigrationTestSuppor
 	}
 
 	@Test
+	@DisplayName("면적 결측 단지만 선택하고 PNU 전체 단지 수를 계산한다")
 	void selectsOnlyMissingAreaTargetsAndCountsAllComplexesOnPnu() {
 		seed(501,1001,"1168010300101400001",false);
 		seed(502,1002,"1168010300101400001",true);
@@ -43,6 +45,7 @@ class JdbcBuildingMetadataEvidenceRepositoryTest extends JdbcMigrationTestSuppor
 	}
 
 	@Test
+	@DisplayName("기존 core 값을 덮어쓰지 않고 결측값과 identity 및 alias를 저장한다")
 	void fillsNullsStoresIdentityAndAliasWithoutOverwritingExistingCoreValues() {
 		seed(501,1001,"1168010300101400001",true);
 		jdbcClient.sql("UPDATE complex SET dong_cnt=1,unit_cnt=100,use_date='2015-01-01' WHERE id=501").update();
@@ -64,6 +67,7 @@ class JdbcBuildingMetadataEvidenceRepositoryTest extends JdbcMigrationTestSuppor
 	}
 
 	@Test
+	@DisplayName("값 충돌은 projection 없이 기록하고 동일 PNU 모호 대상은 반복 선택하지 않는다")
 	void recordsConflictWithoutProjectionAndSharedPnuIsIdempotentlyExcludedFromMissingMode() {
 		seed(501,1001,"1168010300101400001",true);
 		seed(502,1002,"1168010300101400001",true);
@@ -83,6 +87,7 @@ class JdbcBuildingMetadataEvidenceRepositoryTest extends JdbcMigrationTestSuppor
 	}
 
 	@Test
+	@DisplayName("안전하지 않은 후보 형태와 명시적 실패를 조회 가능한 attempt로 기록한다")
 	void recordsAllUnsafeCandidateShapesAndExplicitFailures() {
 		seed(501,1001,"1168010300101400001",true);
 		BuildingMetadataTarget target = repository.findTargets("missing",1,null,null).get(0);

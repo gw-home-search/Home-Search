@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DetailSidebar } from './DetailSidebar';
 
-describe('DetailSidebar mobile tabs', () => {
+describe('DetailSidebar 모바일 탭', () => {
   let root: Root | null = null;
 
   afterEach(() => {

@@ -13,7 +13,7 @@ const mapApp = readFileSync(`${appDirectory}/MapApp.tsx`, 'utf8');
 const tradeTrendChart = readFileSync(`${process.cwd()}/src/features/complex-detail/TradeTrendChart.tsx`, 'utf8');
 const detailSidebar = readFileSync(`${process.cwd()}/src/features/complex-detail/DetailSidebar.tsx`, 'utf8');
 
-describe('public map design system contract', () => {
+describe('공개 지도 디자인 시스템 계약', () => {
   it('public map palette와 layout semantic token을 고정한다', () => {
     expect(designSystem).toContain('--hs-map-color-primary: #0ea5b7;');
     expect(designSystem).toContain('--hs-map-color-brand: #0e7490;');

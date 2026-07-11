@@ -16,7 +16,7 @@ const EMPTY_FILTERS: Required<ComplexMarkerFilters> = {
   unitMax: null,
 };
 
-describe('FilterPanel', () => {
+describe('FilterPanel 필터 동작', () => {
   let root: Root | null = null;
   let host: HTMLDivElement | null = null;
 

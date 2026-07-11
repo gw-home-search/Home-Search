@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { RequestStateNotice } from './RequestStateNotice';
 
-describe('RequestStateNotice', () => {
+describe('RequestStateNotice 요청 상태 안내', () => {
   let root: Root | null = null;
   let host: HTMLDivElement | null = null;
 

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MapOverlayPanels } from './MapOverlayPanels';
 
-describe('MapOverlayPanels', () => {
+describe('MapOverlayPanels 지도 오버레이', () => {
   let root: Root | null = null;
 
   afterEach(() => {

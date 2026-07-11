@@ -6,7 +6,7 @@ import {
   declutterComplexMarkers,
 } from './markerViewModel';
 
-describe('markerViewModel', () => {
+describe('markerViewModel 지도 마커 모델', () => {
   it('complex marker anatomy와 selected 상태를 색 외의 신호로 고정한다', () => {
     const viewModel = createComplexMarkerViewModel({
       parcelId: 1001,

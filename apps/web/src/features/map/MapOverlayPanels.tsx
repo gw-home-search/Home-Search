@@ -1,49 +1,64 @@
 import type { CSSProperties } from 'react';
 
+import type { ComplexSelection } from '../../app/mapAppTypes';
+import { RequestStateNotice } from '../../shared/RequestStateNotice';
 import type {
   MapBoundsRequest,
   MapMarkersResult,
 } from './api/fetchMapMarkers';
 import type { KakaoMapRuntimeState } from './KakaoMapSurface';
+import { MinusIcon, PlusIcon } from '../../shared/icons';
+import {
+  createComplexMarkerViewModel,
+  createRegionMarkerViewModel,
+  isComplexMarkerSelected,
+  type ComplexMapMarker,
+  type RegionMapMarker,
+} from './markerViewModel';
 
 type MarkerRequestState = 'loading' | 'ready' | 'empty' | 'error';
-type ComplexMapMarker = Extract<MapMarkersResult, { kind: 'complex' }>['markers'][number];
-type RegionMapMarker = Extract<MapMarkersResult, { kind: 'region' }>['markers'][number];
-
 type MapOverlayPanelsProps = {
+  activeFilterCount: number;
   bounds: MapBoundsRequest;
   mapRuntimeError: string | null;
   mapRuntimeState: KakaoMapRuntimeState;
   markerError: string | null;
   markerState: MarkerRequestState;
   markers: MapMarkersResult | null;
+  hiddenMarkerCount?: number;
+  selectedComplex: ComplexSelection | null;
   onComplexMarkerSelect: (marker: ComplexMapMarker) => void;
   onRegionMarkerSelect: (marker: RegionMapMarker) => void;
   onRetryMarkers: () => void;
+  onResetFilters: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
 };
 
 export function MapOverlayPanels({
+  activeFilterCount,
   bounds,
   mapRuntimeError,
   mapRuntimeState,
   markerError,
   markerState,
   markers,
+  hiddenMarkerCount = 0,
+  selectedComplex,
   onComplexMarkerSelect,
   onRegionMarkerSelect,
   onRetryMarkers,
+  onResetFilters,
   onZoomIn,
   onZoomOut,
 }: MapOverlayPanelsProps) {
   return (
     <>
-      <p className="map-status">{mapRuntimeStatusLabel(mapRuntimeState)}</p>
       {mapRuntimeState === 'ready' || markers == null ? null : (
         <FallbackMarkerLayer
           bounds={bounds}
           markers={markers}
+          selectedComplex={selectedComplex}
           onComplexMarkerSelect={onComplexMarkerSelect}
           onRegionMarkerSelect={onRegionMarkerSelect}
         />
@@ -51,41 +66,44 @@ export function MapOverlayPanels({
 
       <div aria-label="지도 조작" className="map-controls">
         <button type="button" aria-label="지도 확대" onClick={onZoomIn}>
-          +
+          <PlusIcon aria-hidden="true" />
         </button>
         <button type="button" aria-label="지도 축소" onClick={onZoomOut}>
-          -
+          <MinusIcon aria-hidden="true" />
         </button>
       </div>
 
-      {markerState === 'loading' ? (
-        <p className="map-feedback" role="status" aria-live="polite">
-          마커 불러오는 중
-        </p>
-      ) : null}
+      <div className="map-notices">
+        {hiddenMarkerCount > 0 ? <p className="map-density-note" role="status">가까운 단지 {hiddenMarkerCount.toLocaleString()}개는 확대하면 표시됩니다</p> : null}
+        <RequestStateNotice
+          className="map-feedback"
+          state={markerState}
+          loadingMessage="이 지역의 단지를 불러오는 중"
+          emptyMessage={activeFilterCount > 0
+            ? '조건에 맞는 단지가 없습니다'
+            : '이 지도 영역에는 표시할 단지가 없습니다'}
+          errorMessage="단지 정보를 불러오지 못했어요"
+          secondaryMessage="지도 이동과 확대·축소는 계속 사용할 수 있습니다"
+          technicalError={markerError}
+          retryAriaLabel="마커 다시 불러오기"
+          onRetry={onRetryMarkers}
+          secondaryAction={activeFilterCount > 0 ? (
+            <button type="button" onClick={onResetFilters}>필터 전체 초기화</button>
+          ) : null}
+        />
 
-      {markerState === 'empty' ? (
-        <p className="map-feedback" role="status" aria-live="polite">
-          이 영역에는 마커가 없습니다
-        </p>
-      ) : null}
-
-      {markerState === 'error' ? (
-        <p className="map-feedback map-feedback-error" role="alert">
-          마커 데이터를 불러오지 못했습니다. 지도는 계속 사용할 수 있습니다.
-          {markerError ? <span className="map-feedback-detail">{markerError}</span> : null}
-          {' '}
-          <button type="button" aria-label="마커 다시 불러오기" onClick={onRetryMarkers}>
-            다시 시도
-          </button>
-        </p>
-      ) : null}
-
-      {mapRuntimeError && markerState !== 'error' ? (
-        <p className="map-feedback map-feedback-error" role="alert">
-          {mapRuntimeError}
-        </p>
-      ) : null}
+        {mapRuntimeError && markerState !== 'error' ? (
+          <RequestStateNotice
+            className="map-feedback"
+            state="error"
+            loadingMessage="지도를 불러오는 중"
+            emptyMessage=""
+            errorMessage="지도를 불러오지 못했어요"
+            secondaryMessage="기본 지도 화면에서 탐색을 계속할 수 있습니다"
+            technicalError={mapRuntimeError}
+          />
+        ) : null}
+      </div>
     </>
   );
 }
@@ -93,11 +111,13 @@ export function MapOverlayPanels({
 function FallbackMarkerLayer({
   bounds,
   markers,
+  selectedComplex,
   onComplexMarkerSelect,
   onRegionMarkerSelect,
 }: {
   bounds: MapBoundsRequest;
   markers: MapMarkersResult;
+  selectedComplex: ComplexSelection | null;
   onComplexMarkerSelect: (marker: ComplexMapMarker) => void;
   onRegionMarkerSelect: (marker: RegionMapMarker) => void;
 }) {
@@ -108,81 +128,53 @@ function FallbackMarkerLayer({
   return (
     <ul aria-label="대체 지도 마커" className="fallback-marker-layer">
       {markers.kind === 'complex'
-        ? markers.markers.map((marker) => (
-            <li key={complexMarkerKey(marker)} style={mapMarkerPointStyle(marker.lat, marker.lng, bounds)}>
+        ? markers.markers.map((marker) => {
+            const viewModel = createComplexMarkerViewModel(
+              marker,
+              isComplexMarkerSelected(marker, selectedComplex),
+            );
+            return (
+            <li className="fallback-marker-position-complex" key={viewModel.key} style={mapMarkerPointStyle(marker.lat, marker.lng, bounds)}>
               <button
                 type="button"
-                aria-label={complexMarkerAriaLabel(marker)}
-                className="fallback-map-marker fallback-map-marker-complex"
-                data-fallback-marker-id={`complex-${complexMarkerKey(marker)}`}
+                aria-label={viewModel.ariaLabel}
+                aria-pressed={viewModel.selected}
+                className="fallback-map-marker map-marker map-marker-complex"
+                data-fallback-marker-id={`complex-${viewModel.key}`}
+                data-marker-shape={viewModel.shape}
+                data-state={viewModel.state}
                 onClick={() => {
                   onComplexMarkerSelect(marker);
                 }}
               >
-                <span className="fallback-map-marker-kicker">
-                  {marker.latestDealAmount == null ? '거래 없음' : '최근 실거래'}
-                </span>
-                <strong>{formatMarkerAmount(marker.latestDealAmount)}</strong>
-                {markerSubtitle(marker) ? <span>{markerSubtitle(marker)}</span> : null}
+                <span className="map-marker-kicker">{viewModel.kicker}</span>
+                <strong className="map-marker-price">{viewModel.price}</strong>
+                <span className="map-marker-subtitle">{viewModel.meta}</span>
               </button>
             </li>
-          ))
-        : markers.markers.map((marker) => (
-            <li key={marker.id} style={mapMarkerPointStyle(marker.lat, marker.lng, bounds)}>
+            );
+          })
+        : markers.markers.map((marker) => {
+            const viewModel = createRegionMarkerViewModel(marker);
+            return (
+            <li className="fallback-marker-position-region" key={viewModel.key} style={mapMarkerPointStyle(marker.lat, marker.lng, bounds)}>
               <button
                 type="button"
-                aria-label={`지역 이동 ${marker.name}`}
-                className="fallback-map-marker fallback-map-marker-region"
-                data-fallback-marker-id={`region-${marker.id}`}
+                aria-label={viewModel.ariaLabel}
+                className="fallback-map-marker map-marker map-marker-region"
+                data-fallback-marker-id={`region-${viewModel.key}`}
+                data-marker-shape={viewModel.shape}
                 onClick={() => {
                   onRegionMarkerSelect(marker);
                 }}
               >
-                <strong>{marker.name}</strong>
-                <span>{regionMarkerUnitOrActionLabel(marker)}</span>
+                <strong className="map-marker-region-name">{viewModel.name}</strong>
+                <span className="map-marker-region-unit">{viewModel.meta}</span>
               </button>
             </li>
-          ))}
+          );})}
     </ul>
   );
-}
-
-function formatMarkerAmount(amount: number | null): string {
-  if (amount == null) {
-    return '최근 거래 없음';
-  }
-
-  if (amount >= 10000) {
-    const eok = amount / 10000;
-    const formatted = Number.isInteger(eok) ? eok.toLocaleString() : eok.toFixed(1);
-    return `${formatted}억`;
-  }
-
-  return `${amount.toLocaleString()}만`;
-}
-
-function markerSubtitle(marker: ComplexMapMarker): string | null {
-  if (marker.name) {
-    return marker.name;
-  }
-
-  if (marker.unitCntSum != null && marker.unitCntSum > 0) {
-    return `${marker.unitCntSum.toLocaleString()}세대`;
-  }
-
-  return null;
-}
-
-function complexMarkerKey(marker: ComplexMapMarker): string {
-  return marker.complexId == null
-    ? `${marker.parcelId}`
-    : `${marker.parcelId}-${marker.complexId}`;
-}
-
-function complexMarkerAriaLabel(marker: ComplexMapMarker): string {
-  return marker.complexId == null
-    ? `필지 ${marker.parcelId} 상세 열기`
-    : `필지 ${marker.parcelId} 단지 ${marker.complexId} 상세 열기`;
 }
 
 function mapMarkerPointStyle(lat: number, lng: number, bounds: MapBoundsRequest): CSSProperties {
@@ -203,23 +195,4 @@ function clampPercent(value: number, min: number, max: number): number {
   }
 
   return Math.min(max, Math.max(min, value));
-}
-
-function regionMarkerUnitOrActionLabel(marker: RegionMapMarker): string {
-  if (marker.unitCntSum != null && marker.unitCntSum > 0) {
-    return `${marker.unitCntSum.toLocaleString()}세대`;
-  }
-
-  return '세대수 없음';
-}
-
-function mapRuntimeStatusLabel(state: KakaoMapRuntimeState): string {
-  switch (state) {
-    case 'loading':
-      return '지도 준비 중';
-    case 'ready':
-      return '지도 준비 완료';
-    case 'error':
-      return '지도 대체 화면';
-  }
 }

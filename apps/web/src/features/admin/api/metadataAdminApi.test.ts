@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchMetadataPending, retryMetadata } from './metadataAdminApi';
+import { decideBuildingMetadataChange, fetchBuildingMetadataPending, fetchMetadataPending, retryMetadata } from './metadataAdminApi';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
 
 describe('metadata admin API client 계약', () => {
@@ -19,6 +19,31 @@ describe('metadata admin API client 계약', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Admin-Access-Code': 'test-admin' },
         body: JSON.stringify({ actor: 'operator', reason: 'source updated' }),
+      }));
+    vi.unstubAllGlobals();
+  });
+
+  it('building metadata 조회와 변경 승인은 versioned additive admin route를 사용한다', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response('{"updated":true,"stateVersion":4,"status":"RESOLVED"}', {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchBuildingMetadataPending('test-admin');
+    await decideBuildingMetadataChange(501, 7, 'approve', {
+      actor: 'operator', reason: 'verified', expectedStateVersion: 3,
+    }, 'test-admin');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1,
+      resolveApiUrl('/api/v1/admin/metadata/building/pending?limit=50&offset=0'),
+      expect.objectContaining({ headers: { 'X-Admin-Access-Code': 'test-admin' } }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2,
+      resolveApiUrl('/api/v1/admin/metadata/building/501/changes/7/approve'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ actor: 'operator', reason: 'verified', expectedStateVersion: 3 }),
       }));
     vi.unstubAllGlobals();
   });

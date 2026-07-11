@@ -11,6 +11,7 @@ describe('App map-first shell 화면', () => {
     vi.unstubAllEnvs();
     window.sessionStorage.clear();
     window.history.pushState({}, '', '/');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
   });
 
   it('public surface admin coordinate route는 관리자 화면을 노출하지 않는다', async () => {
@@ -184,16 +185,26 @@ describe('App map-first shell 화면', () => {
         id: 7, canonicalPrefix: '41461262', sourcePrefix: '41461360', status: 'APPROVED',
         reason: 'legacy source', approvedBy: 'reviewer', approvedAt: '2026-06-13T00:00:00Z',
         disabledBy: null, disabledAt: null,
+      }]))
+      .mockResolvedValueOnce(jsonResponse([{
+        complexId: 501, aptSeq: 'APT-501', canonicalName: 'Building Review Apartment', tradeName: 'Legacy Apartment',
+        pnu: '4146126200109010000', status: 'NAME_CONFLICT', failureKind: null,
+        failureReason: 'building register name conflict', attempts: 1, currentEvaluationId: null,
+        pendingEvaluationId: 7, stateVersion: 3, nextAttemptAt: null,
       }]));
     vi.stubGlobal('fetch', fetchMock);
 
     const { root, rootElement } = await renderApp();
-    await flushAsyncState();
+    await flushLazyRoute();
 
     expect(rootElement.textContent).toContain('단지 메타데이터 관리');
-    expect(rootElement.textContent).toContain('Legacy Apartment');
+    expect(rootElement.textContent).toContain('Building Review Apartment');
+    expect(rootElement.textContent).toContain('건축 metadata');
+    const legacyTab = Array.from(rootElement.querySelectorAll<HTMLButtonElement>('button'))
+      .find(button => button.textContent === 'ODC PNU alias');
+    await act(async () => { legacyTab?.click(); });
     expect(rootElement.textContent).toContain('41461262 → 41461360');
-    expect(rootElement.textContent).toContain('운영 PNU는 변경하지 않고');
+    expect(rootElement.textContent).toContain('ODC identity와 건축물대장 관리번호');
     unmount(root);
   });
 
@@ -281,7 +292,7 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
-  it('collapsible exploration control과 in-map marker error가 있는 map-first shell을 rendering한다', async () => {
+  it('desktop exploration rail은 항상 표시하고 운영 상태·toggle 문구를 제거한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(errorResponse(500)));
 
     const { root, rootElement } = await renderApp();
@@ -292,31 +303,63 @@ describe('App map-first shell 화면', () => {
     const mapSurface = rootElement.querySelector<HTMLElement>('[aria-label="지도 화면"]');
     const explorationPanel = rootElement.querySelector<HTMLElement>('#exploration-panel');
     const filterPanel = rootElement.querySelector<HTMLElement>('form[aria-label="마커 필터"]');
-    const explorationToggle = rootElement.querySelector<HTMLButtonElement>(
-      'button[aria-label="탐색 패널 접기"]',
-    );
     const markerAlert = Array.from(rootElement.querySelectorAll('[role="alert"]')).find((alert) =>
-      alert.textContent?.includes('마커 데이터를 불러오지 못했습니다'),
+      alert.textContent?.includes('단지 정보를 불러오지 못했어요'),
     );
 
     expect(mapWorkspace).not.toBeNull();
     expect(mapSurface).not.toBeNull();
-    expect(mapWorkspace?.firstElementChild).toBe(mapSurface);
     expect(explorationPanel).not.toBeNull();
+    expect(
+      (explorationPanel?.compareDocumentPosition(mapSurface as Node) ?? 0)
+        & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(filterPanel?.getAttribute('data-map-overlay')).toBe('filters');
+    expect(filterPanel?.closest('header')).toBeNull();
+    expect(filterPanel?.closest('[data-layout-region="map-column"]')).not.toBeNull();
     expect(markerAlert?.closest('[aria-label="지도 화면"]')).toBe(mapSurface);
-    expect(explorationToggle?.getAttribute('aria-controls')).toBe('exploration-panel');
-    expect(explorationToggle?.getAttribute('aria-expanded')).toBe('true');
-
-    await act(async () => {
-      explorationToggle?.click();
-    });
-
-    expect(explorationToggle?.getAttribute('aria-expanded')).toBe('false');
-    expect(explorationPanel?.getAttribute('data-collapsed')).toBe('true');
+    expect(rootElement.querySelector('button[aria-label="탐색 패널 접기"]')).toBeNull();
+    expect(explorationPanel?.hasAttribute('hidden')).toBe(false);
+    expect(rootElement.textContent).not.toContain('지역 보기');
+    expect(rootElement.textContent).not.toContain('단지 보기');
+    expect(rootElement.textContent).not.toContain('상세 미선택');
+    expect(rootElement.textContent).not.toContain('마커 오류');
+    expect(rootElement.textContent).not.toContain('지도 준비 완료');
     expect(rootElement.querySelector('[aria-label="지도 화면"]')).not.toBeNull();
 
     unmount(root);
+  });
+
+  it('mobile 검색 action은 exploration sheet를 열고 닫은 뒤 focus를 복귀한다', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+
+    const { root, rootElement } = await renderApp();
+    document.body.append(rootElement);
+    const searchButton = rootElement.querySelector<HTMLButtonElement>('button[aria-label="검색 패널 열기"]');
+    const explorationPanel = rootElement.querySelector<HTMLElement>('#exploration-panel');
+    expect(explorationPanel?.hasAttribute('hidden')).toBe(true);
+
+    await act(async () => searchButton?.click());
+    expect(explorationPanel?.hasAttribute('hidden')).toBe(false);
+    expect(rootElement.querySelector('[data-layout-region="map-workspace"]')?.getAttribute('data-exploration-open')).toBe('true');
+    expect(rootElement.querySelector('[data-layout-region="map-workspace"]')?.getAttribute('data-sidebar-mode')).toBe('region');
+    expect(document.activeElement).toBe(rootElement.querySelector('input[aria-label="단지 검색"]'));
+
+    await act(async () => {
+      rootElement.querySelector<HTMLButtonElement>('button[aria-label="검색 패널 닫기"]')?.click();
+    });
+    await act(async () => Promise.resolve());
+
+    expect(explorationPanel?.hasAttribute('hidden')).toBe(true);
+    expect(rootElement.querySelector('[data-layout-region="map-workspace"]')?.getAttribute('data-exploration-open')).toBe('false');
+    expect(document.activeElement).toBe(searchButton);
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+    await act(async () => window.dispatchEvent(new Event('resize')));
+    expect(explorationPanel?.hasAttribute('hidden')).toBe(false);
+    unmount(root);
+    rootElement.remove();
   });
 
   it('public map UI는 map-first design landmarks와 active filter state를 고정한다', async () => {
@@ -329,25 +372,20 @@ describe('App map-first shell 화면', () => {
     expect(rootElement.querySelector('[data-ui-surface="map-first"]')).not.toBeNull();
     expect(rootElement.querySelector('[data-ui-layer="filter-controls"]')).not.toBeNull();
     expect(rootElement.querySelector('[data-ui-layer="exploration-panel"]')).not.toBeNull();
-    expect(rootElement.textContent).toContain('필터 없음');
+    expect(rootElement.querySelector('.filter-status')).toBeNull();
 
-    setInputValue(rootElement, 'input[aria-label="최소 평형"]', '20');
-    setInputValue(rootElement, 'input[aria-label="최대 가격 억"]', '15');
-    setInputValue(rootElement, 'input[aria-label="최소 세대수"]', '300');
-
-    const filterForm = rootElement.querySelector<HTMLFormElement>(
-      'form[aria-label="마커 필터"]',
-    );
-    await act(async () => {
-      submitForm(filterForm);
-    });
-    await flushAsyncState();
+    await applyFilterRange(rootElement, '평형', '20', '');
+    await applyFilterRange(rootElement, '가격', '', '15');
+    await applyFilterRange(rootElement, '세대수', '300', '');
 
     const filterPanel = rootElement.querySelector<HTMLElement>(
       '[data-ui-layer="filter-controls"]',
     );
     expect(filterPanel?.dataset.filterState).toBe('active');
-    expect(filterPanel?.textContent).toContain('필터 3개 적용');
+    expect(filterPanel?.textContent).not.toContain('필터 3개 적용');
+    expect(filterPanel?.textContent).toContain('20평 이상');
+    expect(filterPanel?.textContent).toContain('15억 이하');
+    expect(filterPanel?.textContent).toContain('300세대 이상');
 
     const resetButton = rootElement.querySelector<HTMLButtonElement>(
       'button[aria-label="마커 필터 초기화"]',
@@ -362,7 +400,7 @@ describe('App map-first shell 화면', () => {
       '[data-ui-layer="filter-controls"]',
     );
     expect(resetFilterPanel?.dataset.filterState).toBe('idle');
-    expect(resetFilterPanel?.textContent).toContain('필터 없음');
+    expect(resetFilterPanel?.querySelector('.filter-status')).toBeNull();
     expect(fetchMock).toHaveBeenLastCalledWith(
       resolveApiUrl('/api/v1/map/complexes'),
       expect.objectContaining({
@@ -387,7 +425,7 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
-  it('초기 탐색 패널은 레거시처럼 검색 입력과 지역 내비게이션을 기본으로 연다', async () => {
+  it('초기 탐색 패널은 검색 입력과 지역 내비게이션을 기본으로 연다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
 
     const { root, rootElement } = await renderApp();
@@ -400,7 +438,7 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
-  it('단지 검색 입력은 레거시처럼 debounce 후 검색 목록 모드로 전환한다', async () => {
+  it('단지 검색 입력은 debounce 후 검색 목록 모드로 전환한다', async () => {
     const fetchMock = vi.fn((url: RequestInfo | URL) => {
       const requestUrl = String(url);
 
@@ -464,7 +502,8 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
-  it('단지 선택은 레거시처럼 왼쪽 sidebar를 상세 모드로 바꾸고 뒤로가기로 지역 탐색에 복귀한다', async () => {
+  it('단지 선택은 왼쪽 sidebar를 상세 모드로 바꾸고 뒤로가기로 지역 탐색에 복귀한다', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
     const fetchMock = vi.fn((url: RequestInfo | URL) => {
       const requestUrl = String(url);
 
@@ -515,6 +554,7 @@ describe('App map-first shell 화면', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+    document.body.append(rootElement);
     await flushAsyncState();
 
     const markerButton = rootElement.querySelector<HTMLButtonElement>(
@@ -527,6 +567,7 @@ describe('App map-first shell 화면', () => {
 
     const explorationPanel = rootElement.querySelector<HTMLElement>('#exploration-panel');
     expect(explorationPanel?.dataset.sidebarMode).toBe('detail');
+    expect(rootElement.querySelector('[data-layout-region="map-workspace"]')?.getAttribute('data-sidebar-mode')).toBe('detail');
     expect(rootElement.querySelector('[data-ui-layer="detail-sidebar"]')).not.toBeNull();
     expect(rootElement.querySelector('.detail-drawer')).toBeNull();
     expect(rootElement.textContent).toContain('Sample complex name');
@@ -543,7 +584,23 @@ describe('App map-first shell 화면', () => {
       false,
     );
 
+    await act(async () => {
+      markerButton?.click();
+    });
+    await flushAsyncState();
+    await act(async () => {
+      rootElement.querySelector<HTMLButtonElement>('button[aria-label="상세 닫기"]')?.click();
+    });
+    await act(async () => Promise.resolve());
+
+    expect(explorationPanel?.hasAttribute('hidden')).toBe(true);
+    expect(rootElement.querySelector('[data-layout-region="map-workspace"]')?.getAttribute('data-exploration-open')).toBe('false');
+    expect(document.activeElement).toBe(
+      rootElement.querySelector<HTMLButtonElement>('button[aria-label="검색 패널 열기"]'),
+    );
+
     unmount(root);
+    rootElement.remove();
   });
 
   it('map surface를 block하지 않고 marker loading state를 표시한다', async () => {
@@ -552,7 +609,8 @@ describe('App map-first shell 화면', () => {
     const { root, rootElement } = await renderApp();
 
     expect(rootElement.querySelector('[aria-label="지도 화면"]')).not.toBeNull();
-    expect(rootElement.textContent).toContain('마커 불러오는 중');
+    await waitForMillis(151);
+    expect(rootElement.textContent).toContain('이 지역의 단지를 불러오는 중');
 
     unmount(root);
   });
@@ -573,7 +631,7 @@ describe('App map-first shell 화면', () => {
       }),
     );
     expect(rootElement.querySelector('[aria-label="지도 화면"]')).not.toBeNull();
-    expect(rootElement.textContent).toContain('이 영역에는 마커가 없습니다');
+    expect(rootElement.textContent).toContain('이 지도 영역에는 표시할 단지가 없습니다');
 
     unmount(root);
   });
@@ -707,9 +765,9 @@ describe('App map-first shell 화면', () => {
 
     expect(rootElement.querySelector('[aria-label="지도 화면"]')).not.toBeNull();
     expect(rootElement.querySelector('[role="alert"]')?.textContent).toContain(
-      '마커 데이터를 불러오지 못했습니다',
+      '단지 정보를 불러오지 못했어요',
     );
-    expect(rootElement.textContent).toContain('지도는 계속 사용할 수 있습니다');
+    expect(rootElement.textContent).toContain('지도 이동과 확대·축소는 계속 사용할 수 있습니다');
     expect(rootElement.querySelectorAll('[data-marker-id]')).toHaveLength(0);
 
     unmount(root);
@@ -1045,6 +1103,7 @@ describe('App map-first shell 화면', () => {
     expect(sdk.overlays[0]?.content.getAttribute('aria-label')).toBe(
       '필지 1001 단지 501 상세 열기',
     );
+    expect(sdk.overlays[0]?.yAnchor).toBe(1);
 
     await act(async () => {
       sdk.overlays[0]?.content.click();
@@ -1157,6 +1216,8 @@ describe('App map-first shell 화면', () => {
       'button[aria-label="검색 결과 선택 Sample Apartment"]',
     );
     expect(searchResult).not.toBeNull();
+    expect(searchResult?.querySelector('.panel-list-title')?.textContent).toBe('Sample Apartment');
+    expect(searchResult?.querySelector('.panel-list-meta')?.textContent).toBe('Sample address');
 
     await act(async () => {
       searchResult?.click();
@@ -1285,7 +1346,7 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
-  it('region navigation을 load하고 선택한 region detail로 map context를 refresh한다', async () => {
+  it('children이 있는 시도·시군구 단계에서는 단지 목록을 요청하거나 표시하지 않는다', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse([]))
@@ -1311,19 +1372,6 @@ describe('App map-first shell 화면', () => {
           ],
         }),
       )
-      .mockResolvedValueOnce(
-        jsonResponse([
-          {
-            complexId: 701,
-            complexName: 'Region Complex',
-            parcelId: 2001,
-            latitude: 37.5123,
-            longitude: 127.0456,
-            address: 'Region address',
-            unitCnt: 740,
-          },
-        ]),
-      )
       .mockResolvedValueOnce(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -1331,7 +1379,7 @@ describe('App map-first shell 화면', () => {
     await flushAsyncState();
 
     const loadRegionsButton = rootElement.querySelector<HTMLButtonElement>(
-      'button[aria-label="상위 지역 불러오기"]',
+      'button[aria-label="지역 처음으로"]',
     );
     expect(loadRegionsButton).not.toBeNull();
 
@@ -1359,9 +1407,9 @@ describe('App map-first shell 화면', () => {
       resolveApiUrl('/api/v1/region/1'),
       expect.objectContaining({ method: 'GET' }),
     );
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(fetchMock).not.toHaveBeenCalledWith(
       resolveApiUrl('/api/v1/region/1/complexes?limit=20&offset=0'),
-      expect.objectContaining({ method: 'GET' }),
+      expect.anything(),
     );
     expect(fetchMock).toHaveBeenLastCalledWith(
       resolveApiUrl('/api/v1/map/regions'),
@@ -1371,12 +1419,12 @@ describe('App map-first shell 화면', () => {
       }),
     );
     expect(rootElement.textContent).toContain('Gangnam-gu');
-    expect(rootElement.textContent).toContain('Region Complex');
+    expect(rootElement.textContent).not.toContain('Region Complex');
 
     unmount(root);
   });
 
-  it('탐색 패널은 레거시처럼 지역 목록을 바로 불러오고 단계적으로 drill-down한다', async () => {
+  it('탐색 패널은 지역 목록을 바로 불러오고 단계적으로 drill-down한다', async () => {
     const fetchMock = vi.fn((url: RequestInfo | URL) => {
       const requestUrl = String(url);
 
@@ -1458,6 +1506,8 @@ describe('App map-first shell 화면', () => {
       expect.objectContaining({ method: 'GET' }),
     );
     expect(rootElement.textContent).toContain('시도 선택');
+    expect(rootElement.querySelector('button[aria-label="지역 처음으로"]')?.getAttribute('aria-current')).toBe('page');
+    expect(rootElement.querySelector('.region-step-summary')).toBeNull();
 
     const sidoButton = rootElement.querySelector<HTMLButtonElement>(
       'button[aria-label="지역 이동 Seoul"]',
@@ -1468,7 +1518,13 @@ describe('App map-first shell 화면', () => {
     await flushAsyncState();
 
     expect(rootElement.textContent).toContain('Seoul');
-    expect(rootElement.textContent).toContain('시군구 선택');
+    expect(rootElement.querySelector('button[aria-label="지역 처음으로"]')?.hasAttribute('aria-current')).toBe(false);
+    expect(rootElement.textContent).not.toContain('시군구 선택');
+    expect(rootElement.querySelector('button[aria-label="지역 단계 이동 Seoul"]')).not.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/region/1/complexes?limit=20&offset=0'),
+      expect.anything(),
+    );
     expect(fetchMock).toHaveBeenLastCalledWith(
       resolveApiUrl('/api/v1/map/regions'),
       expect.objectContaining({
@@ -1486,7 +1542,11 @@ describe('App map-first shell 화면', () => {
     await flushAsyncState();
 
     expect(rootElement.textContent).toContain('Gangnam-gu');
-    expect(rootElement.textContent).toContain('읍면동 선택');
+    expect(rootElement.textContent).not.toContain('읍면동 선택');
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/region/11/complexes?limit=20&offset=0'),
+      expect.anything(),
+    );
     expect(fetchMock).toHaveBeenLastCalledWith(
       resolveApiUrl('/api/v1/map/regions'),
       expect.objectContaining({
@@ -1504,10 +1564,31 @@ describe('App map-first shell 화면', () => {
     await flushAsyncState();
 
     expect(rootElement.textContent).toContain('Apgujeong Region Complex');
+    const regionComplexCard = rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="지역 단지 선택 Apgujeong Region Complex"]',
+    );
+    expect(regionComplexCard?.classList.contains('region-complex-card')).toBe(true);
+    expect(regionComplexCard?.querySelector('.region-complex-name')?.textContent).toBe('Apgujeong Region Complex');
+    expect(regionComplexCard?.querySelector('.region-complex-address')?.textContent).toBe('Apgujeong address');
+    expect(regionComplexCard?.querySelector('.region-complex-meta')?.textContent).toContain('810세대');
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/region/111/complexes?limit=20&offset=0'),
+      expect.objectContaining({ method: 'GET' }),
+    );
     expect(fetchMock).toHaveBeenLastCalledWith(
       resolveApiUrl('/api/v1/map/complexes'),
       expect.objectContaining({ method: 'POST' }),
     );
+
+    await act(async () => {
+      rootElement.querySelector<HTMLButtonElement>('button[aria-label="지역 단계 이동 Seoul"]')?.click();
+    });
+    await flushAsyncState();
+
+    expect(rootElement.querySelector('button[aria-label="지역 단계 이동 Seoul"]')).not.toBeNull();
+    expect(rootElement.querySelector('button[aria-label="지역 단계 이동 Gangnam-gu"]')).toBeNull();
+    expect(rootElement.textContent).not.toContain('Apgujeong Region Complex');
+    expect(rootElement.querySelector('button[aria-label="지역 이동 Gangnam-gu"]')).not.toBeNull();
 
     expect(rootElement.querySelector('input[aria-label="단지 검색"]')).not.toBeNull();
 
@@ -1704,15 +1785,7 @@ describe('App map-first shell 화면', () => {
       resolveApiUrl('/api/v1/detail/4669/complexes'),
       expect.objectContaining({ method: 'GET' }),
     );
-    expect(rootElement.querySelector('[data-api-flow="detail"]')?.textContent).toContain(
-      '상세 완료',
-    );
-    expect(rootElement.querySelector('[data-api-flow="detail"]')?.textContent).toContain(
-      '실거래 1건',
-    );
-    expect(rootElement.querySelector('[data-api-flow="detail"]')?.textContent).toContain(
-      '같은 필지 1개',
-    );
+    expect(rootElement.textContent).not.toContain('상세 완료');
     expect(rootElement.textContent).toContain('주소 정보 없음');
     expect(rootElement.textContent).toContain('15억 4,000만원');
     expect(rootElement.textContent).not.toContain('상세 정보를 불러오지 못했습니다');
@@ -1803,28 +1876,10 @@ describe('App map-first shell 화면', () => {
     const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
     await flushAsyncState();
 
-    setInputValue(rootElement, 'input[aria-label="최소 평형"]', '20');
-    setInputValue(rootElement, 'input[aria-label="최대 평형"]', '34');
-    setInputValue(rootElement, 'input[aria-label="최소 가격 억"]', '8.5');
-    setInputValue(rootElement, 'input[aria-label="최대 가격 억"]', '15');
-    setInputValue(rootElement, 'input[aria-label="최소 연식"]', '5');
-    setInputValue(rootElement, 'input[aria-label="최대 연식"]', '25');
-    setInputValue(rootElement, 'input[aria-label="최소 세대수"]', '300');
-    setInputValue(rootElement, 'input[aria-label="최대 세대수"]', '1200');
-
-    const applyButton = rootElement.querySelector<HTMLButtonElement>(
-      'button[aria-label="마커 필터 적용"]',
-    );
-    const filterForm = rootElement.querySelector<HTMLFormElement>(
-      'form[aria-label="마커 필터"]',
-    );
-    expect(applyButton).not.toBeNull();
-    expect(filterForm).not.toBeNull();
-
-    await act(async () => {
-      submitForm(filterForm);
-    });
-    await flushAsyncState();
+    await applyFilterRange(rootElement, '평형', '20', '34');
+    await applyFilterRange(rootElement, '가격', '8.5', '15');
+    await applyFilterRange(rootElement, '입주년차', '5', '25');
+    await applyFilterRange(rootElement, '세대수', '300', '1200');
 
     expect(fetchMock).toHaveBeenLastCalledWith(
       resolveApiUrl('/api/v1/map/complexes'),
@@ -1883,7 +1938,7 @@ describe('App map-first shell 화면', () => {
     await flushAsyncState();
 
     expect(rootElement.querySelector('[role="alert"]')?.textContent).toContain(
-      '마커 데이터를 불러오지 못했습니다',
+      '단지 정보를 불러오지 못했어요',
     );
 
     const retryButton = rootElement.querySelector<HTMLButtonElement>(
@@ -1892,6 +1947,7 @@ describe('App map-first shell 화면', () => {
     expect(retryButton).not.toBeNull();
 
     await act(async () => {
+      retryButton?.click();
       retryButton?.click();
     });
     await flushAsyncState();
@@ -2005,7 +2061,7 @@ describe('App map-first shell 화면', () => {
 
     expect(rootElement.querySelector('[aria-label="지도 화면"]')).not.toBeNull();
     expect(rootElement.querySelector('[role="alert"]')?.textContent).toContain(
-      '카카오 지도를 불러오지 못했습니다',
+      '지도를 불러오지 못했어요',
     );
 
     unmount(root);
@@ -2023,6 +2079,9 @@ describe('App map-first shell 화면', () => {
             unitCntSum: 1200,
           },
         ]));
+      }
+      if (String(url) === resolveApiUrl('/api/v1/region/1')) {
+        return Promise.resolve(jsonResponse({ id: 1, name: 'Seoul', latitude: 37.5663, longitude: 126.978, children: [{ id: 11, name: 'Gangnam-gu' }] }));
       }
 
       return Promise.resolve(jsonResponse([]));
@@ -2045,14 +2104,10 @@ describe('App map-first shell 화면', () => {
       fallbackMarker?.click();
     });
     await flushAsyncState();
+    await flushAsyncState();
 
-    expect(fetchMock).toHaveBeenLastCalledWith(
-      resolveApiUrl('/api/v1/map/regions'),
-      expect.objectContaining({
-        method: 'POST',
-        body: expect.stringContaining('"region":"si-gun-gu"'),
-      }),
-    );
+    expect(fetchMock).toHaveBeenCalledWith(resolveApiUrl('/api/v1/region/1'), { method: 'GET' });
+    expect(rootElement.querySelector('[aria-label="지역 단계"]')?.textContent).toContain('Seoul');
 
     unmount(root);
   });
@@ -2127,7 +2182,43 @@ describe('App map-first shell 화면', () => {
     expect(sdk.overlays[0]?.setMap).toHaveBeenLastCalledWith(null);
   });
 
-  it('Kakao CustomOverlay marker는 latest deal amount와 pending unit metadata를 읽기 쉽게 표시한다', async () => {
+  it('Kakao host resize는 center를 보존하며 relayout을 한 번 호출한다', async () => {
+    let resizeCallback: ResizeObserverCallback | null = null;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    class FakeResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallback = callback;
+      }
+      observe = observe;
+      disconnect = disconnect;
+      unobserve = vi.fn();
+    }
+    const sdk = createFakeKakaoSdk({
+      bounds: { swLat: 37.45, swLng: 126.85, neLat: 37.7, neLng: 127.2 },
+      level: 4,
+    });
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+    await flushAsyncState();
+
+    const host = rootElement.querySelector<HTMLElement>('[aria-label="카카오 지도 화면"]');
+    expect(observe).toHaveBeenCalledWith(host);
+    await act(async () => {
+      resizeCallback?.([], {} as ResizeObserver);
+    });
+
+    expect(sdk.map.relayout).toHaveBeenCalledTimes(1);
+    expect(sdk.map.setCenter).toHaveBeenLastCalledWith(sdk.center);
+
+    unmount(root);
+    expect(disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('Kakao CustomOverlay marker는 KOSA price-card에 latest deal amount와 단지명을 표시한다', async () => {
     const sdk = createFakeKakaoSdk({
       bounds: {
         swLat: 37.45,
@@ -2158,9 +2249,10 @@ describe('App map-first shell 화면', () => {
     await flushAsyncState();
     await flushAsyncState();
 
-    expect(sdk.overlays[0]?.content.textContent).toContain('최근 실거래');
     expect(sdk.overlays[0]?.content.textContent).toContain('12.5억');
     expect(sdk.overlays[0]?.content.textContent).toContain('Sample Apartment');
+    expect(sdk.overlays[0]?.content.classList.contains('map-marker-complex')).toBe(true);
+    expect(sdk.overlays[0]?.content.dataset.markerShape).toBe('price-card');
     expect(rootElement.querySelector('[aria-label="단지 마커"]')).toBeNull();
     expect(rootElement.querySelector('[data-marker-id="1001"]')).toBeNull();
     expect(rootElement.textContent).not.toContain('세대 정보 없음');
@@ -2169,11 +2261,10 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
-  it('Kakao CustomOverlay region marker 클릭은 레거시처럼 바로 다음 지도 단계로 이동한다', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse([
+  it('Kakao CustomOverlay region marker 클릭은 바로 다음 지도 단계로 이동한다', async () => {
+    const fetchMock = vi.fn((url: RequestInfo | URL) => {
+      const requestUrl = String(url);
+      if (requestUrl === resolveApiUrl('/api/v1/map/regions')) return Promise.resolve(jsonResponse([
           {
             id: 1,
             name: 'Seoul',
@@ -2181,10 +2272,10 @@ describe('App map-first shell 화면', () => {
             lng: 126.978,
             unitCntSum: 1200,
           },
-        ]),
-      )
-      .mockResolvedValueOnce(jsonResponse([]))
-      .mockResolvedValueOnce(jsonResponse([]));
+        ]));
+      if (requestUrl === resolveApiUrl('/api/v1/region/1')) return Promise.resolve(jsonResponse({ id: 1, name: 'Seoul', latitude: 37.5663, longitude: 126.978, children: [{ id: 11, name: 'Gangnam-gu' }] }));
+      return Promise.resolve(jsonResponse([]));
+    });
     const sdk = createFakeKakaoSdk({
       bounds: {
         swLat: 37.45,
@@ -2211,13 +2302,12 @@ describe('App map-first shell 화면', () => {
       regionOverlayButton?.click();
     });
     await flushAsyncState();
+    await flushAsyncState();
 
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/region/1'),
-      expect.anything(),
-    );
+    expect(fetchMock).toHaveBeenCalledWith(resolveApiUrl('/api/v1/region/1'), { method: 'GET' });
+    expect(rootElement.querySelector('[aria-label="지역 단계"]')?.textContent).toContain('Seoul');
     expect(sdk.map.setCenter).toHaveBeenCalled();
-    expect(sdk.map.setLevel).toHaveBeenLastCalledWith(8);
+    expect(sdk.map.setLevel).toHaveBeenLastCalledWith(9);
     expect(fetchMock).toHaveBeenLastCalledWith(
       resolveApiUrl('/api/v1/map/regions'),
       expect.objectContaining({
@@ -2229,7 +2319,7 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
-  it('Kakao SDK script가 resolve될 때까지 loading map runtime status를 표시한다', async () => {
+  it('Kakao SDK runtime ready 상태는 운영 문구 없이 map host state로만 노출한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
 
     const { root, rootElement } = await renderApp({ kakaoMapAppKey: 'test-app-key' });
@@ -2238,8 +2328,9 @@ describe('App map-first shell 화면', () => {
     );
 
     expect(script).not.toBeNull();
-    expect(rootElement.textContent).toContain('지도 준비 중');
+    expect(rootElement.textContent).not.toContain('지도 준비 중');
     expect(rootElement.textContent).not.toContain('지도 준비 완료');
+    expect(rootElement.querySelector('[aria-label="카카오 지도 화면"]')?.getAttribute('data-kakao-map-state')).toBe('loading');
 
     const sdk = createFakeKakaoSdk({
       bounds: {
@@ -2257,7 +2348,7 @@ describe('App map-first shell 화면', () => {
     });
     await flushAsyncState();
 
-    expect(rootElement.textContent).toContain('지도 준비 완료');
+    expect(rootElement.textContent).not.toContain('지도 준비 완료');
     expect(
       rootElement
         .querySelector('[aria-label="카카오 지도 화면"]')
@@ -2291,7 +2382,9 @@ async function flushAsyncState(): Promise<void> {
 }
 
 async function flushLazyRoute(): Promise<void> {
-  await flushAsyncState();
+  await act(async () => {
+    await vi.dynamicImportSettled();
+  });
   await flushAsyncState();
 }
 
@@ -2301,6 +2394,29 @@ async function waitForMillis(ms: number): Promise<void> {
       setTimeout(resolve, ms);
     });
   });
+}
+
+async function applyFilterRange(
+  rootElement: HTMLElement,
+  label: '세대수' | '평형' | '가격' | '입주년차',
+  min: string,
+  max: string,
+): Promise<void> {
+  const inputLabels = label === '입주년차'
+    ? ['최소 연식', '최대 연식']
+    : label === '가격'
+      ? ['최소 가격 억', '최대 가격 억']
+      : [`최소 ${label}`, `최대 ${label}`];
+
+  await act(async () => {
+    rootElement.querySelector<HTMLButtonElement>(`button[aria-label="${label} 필터 열기"]`)?.click();
+  });
+  setInputValue(rootElement, `input[aria-label="${inputLabels[0]}"]`, min);
+  setInputValue(rootElement, `input[aria-label="${inputLabels[1]}"]`, max);
+  await act(async () => {
+    submitForm(rootElement.querySelector<HTMLFormElement>('form[aria-label="마커 필터"]'));
+  });
+  await flushAsyncState();
 }
 
 function unmount(root: Root): void {
@@ -2315,6 +2431,7 @@ function setInputValue(rootElement: HTMLElement, selector: string, value: string
 
   if (input) {
     input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 }
 
@@ -2396,6 +2513,7 @@ type FakeBounds = {
 
 type FakeOverlay = {
   content: HTMLElement;
+  yAnchor: number;
   setMap: ReturnType<typeof vi.fn>;
 };
 
@@ -2404,12 +2522,15 @@ function createFakeKakaoSdk(options: { bounds: FakeBounds; level: number }) {
   let bounds = options.bounds;
   let level = options.level;
   const idleHandlers: Array<() => void> = [];
+  const center = latLng(37.5663, 126.978);
   const map = {
     getBounds: () => ({
       getSouthWest: () => latLng(bounds.swLat, bounds.swLng),
       getNorthEast: () => latLng(bounds.neLat, bounds.neLng),
     }),
     getLevel: () => level,
+    getCenter: vi.fn(() => center),
+    relayout: vi.fn(),
     setCenter: vi.fn(),
     setLevel: vi.fn((nextLevel: number) => {
       level = nextLevel;
@@ -2425,9 +2546,9 @@ function createFakeKakaoSdk(options: { bounds: FakeBounds; level: number }) {
         void this;
         return map;
       }),
-      CustomOverlay: vi.fn(function (this: unknown, options: { content: HTMLElement }) {
+      CustomOverlay: vi.fn(function (this: unknown, options: { content: HTMLElement; yAnchor: number }) {
         void this;
-        const overlay = { content: options.content, setMap: vi.fn() };
+        const overlay = { content: options.content, yAnchor: options.yAnchor, setMap: vi.fn() };
         overlays.push(overlay);
         return overlay;
       }),
@@ -2445,6 +2566,7 @@ function createFakeKakaoSdk(options: { bounds: FakeBounds; level: number }) {
   return {
     kakao,
     map,
+    center,
     overlays,
     setViewport(nextViewport: { bounds: FakeBounds; level: number }) {
       bounds = nextViewport.bounds;

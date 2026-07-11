@@ -56,21 +56,50 @@ apps/property-data
 │           ├── external/
 │           ├── persistence/
 │           └── cache/
-└── api/
-    └── src/main/java/com/home
-        ├── HomeSearchApiApplication.java
-        ├── infrastructure/web/
-        ├── infrastructure/scheduling/
-        └── global/
+├── api/
+│   └── src/main/java/com/home
+│       ├── HomeSearchApiApplication.java
+│       ├── infrastructure/web/
+│       ├── infrastructure/scheduling/
+│       └── global/
+├── batch/
+│   └── src/main/java/com/home/batch
+│       ├── PropertyDataBatchApplication.java
+│       ├── launch/
+│       └── rtms/
+└── migration/
+    └── src/main/java/com/home/migration
+        ├── PropertyDataMigrationApplication.java
+        └── explicit Flyway/backfill operations
 ```
 
 The implementation can keep existing package names during the first move. The
 important decision is not package renaming; it is keeping project focused on
 collection, storage, and map display.
 
-`apps/property-data` is the property-data-service boundary. `core` and `api`
+`apps/property-data` is the property-data-service boundary. `core`, `api`, and `batch`
 are internal module or execution-mode boundaries
 inside that service and keep one `home_search` database ownership model.
+
+The API and Batch applications are separate composition roots. API composes HTTP and
+map-serving adapters, while Batch composes the daily RTMS job, tasklets, ingest use
+cases, persistence adapters, and operational notification. Daily RTMS ingest is owned
+only by the packaged Batch process; API does not register an RTMS scheduler even when
+the removed legacy property is supplied.
+
+`core` remains a physical Gradle module shared by those two composition roots. Further
+domain/application/infrastructure module extraction requires a follow-up ADR and is not
+part of the current runtime separation.
+
+`migration`은 같은 property-data ownership boundary 안의 run-and-exit 운영
+artifact다. API와 Batch는 모든 profile에서 Flyway 자동 실행을 끄며,
+`home_search` schema 변경은 `property-data-migration.jar`의 명시적 operation만
+수행한다. SQL/Java migration source는 계속 `core`가 소유하고 migration jar가
+`classpath:db/migration/api` 한 location을 사용한다.
+
+현재 `home_search`는 `public` domain table, `batch` Spring Batch metadata,
+`public.flyway_schema_history` 하나를 유지한다. schema별 history 또는 Batch
+metadata 물리 DB 분리는 실제 운영 격리 요구가 생길 때 후속 ADR로 검토한다.
 
 ## Coordinate Source Boundary
 

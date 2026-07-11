@@ -1054,6 +1054,27 @@ Mutation APIs:
 - `POST /api/v1/admin/metadata/pnu-aliases/{aliasId}/approve`
 - `POST /api/v1/admin/metadata/pnu-aliases/{aliasId}/disable`
 
+Building metadata read APIs:
+
+- `GET /api/v1/admin/metadata/building/pending?limit=50&offset=0`
+- `GET /api/v1/admin/metadata/building/{complexId}`: same-PNU internal
+  candidates, source identities, versioned evaluations, field comparisons,
+  top-five review recommendations, decisions, and bounded raw JSON.
+
+Building metadata mutation APIs:
+
+- `POST /api/v1/admin/metadata/building/{complexId}/identities`
+- `POST /api/v1/admin/metadata/building/{complexId}/aliases`
+- `POST /api/v1/admin/metadata/building/{complexId}/retry`
+- `POST /api/v1/admin/metadata/building/{complexId}/hold`
+- `POST /api/v1/admin/metadata/building/{complexId}/changes/{evaluationId}/approve`
+- `POST /api/v1/admin/metadata/building/{complexId}/changes/{evaluationId}/reject`
+
+Building mutations require `actor`, `reason`, and non-negative
+`expectedStateVersion`. Identity requests additionally require `source` and
+`sourceKey`; alias requests require `aliasType` and `aliasName`. Identity or
+alias approval sets `REPLAY_PENDING`; it does not implicitly replay a snapshot.
+
 Retry, HOLD, approve, and disable requests require:
 
 ```json
@@ -1073,6 +1094,8 @@ Status:
 - `200`: successful read or mutation.
 - `400`: invalid page, prefix, actor, reason, complex, or alias target.
 - `401`: missing or invalid admin access code.
+- `409`: stale `expectedStateVersion`, stale evaluation, or duplicate external
+  source identity.
 - `500`: unexpected server error.
 
 These endpoints are additive admin operations. Public map, search, detail, and

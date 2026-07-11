@@ -5,12 +5,12 @@
 - **이번 PR에서 실행할 것**: `apps/property-data` 내부 Gradle 멀티모듈을
   `core`와 `api`으로 분리하고, `api -> core -> libs/rtms-ingest-core`
   의존 방향을 고정한다.
-- **후속 PR에서 검토할 것**: `batch-app` 생성과 RTMS daily refresh의
+- **후속 PR에서 검토할 것**: `batch` 생성과 RTMS daily refresh의
   Spring Batch run-and-exit 전환 (§5)
 - **상위 맥락**: 라이브러리 경계 규칙(§3), MSA 서비스 지도와 진화 로드맵(§8),
   AWS 배포 아키텍처(§9), MSA/Kafka/DB 설계 선행 게이트(§10)
 
-- 상태: `core`/`api` 멀티모듈 분리 반영 — `batch-app`/배치 전환은 후속 검토 대상
+- 상태: `core`/`api` 멀티모듈 분리 반영 — `batch`/배치 전환은 후속 검토 대상
 - 작성일: 2026-07-06
 - 전제: 재작성(rewrite)이 아니라 검증된 코어를 보존하는 구조 이동 + 껍데기 교체(strangler)
 
@@ -47,8 +47,8 @@ home-search는 `home-server`/`home-client`의 마이그레이션 타깃이며, �
 
 ### 1.3 목표
 
-1. 후속 Gradle 멀티모듈 `core` / `api` / `batch-app` — 모듈 경계가 서비스
-   경계(D15)를 비추고, batch-app은 run-and-exit 배포 모드가 된다.
+1. 후속 Gradle 멀티모듈 `core` / `api` / `batch` — 모듈 경계가 서비스
+   경계(D15)를 비추고, batch는 run-and-exit 배포 모드가 된다.
 2. daily refresh를 Spring Batch job으로 교체 (§5) — JobInstance 기준 재실행과
    `rtmsBackfillJob` 표적 재수집을 얻는다. 파티션 단위 실패 격리는 D11 조건
    충족 후의 후속 실익이다.
@@ -74,7 +74,7 @@ home-search는 `home-server`/`home-client`의 마이그레이션 타깃이며, �
 - 같은 `runDate` 재실행이 안전하고(멱등), 표적 재수집은 `rtmsBackfillJob`
   파라미터 실행으로 가능하다.
 - api 재배포와 배치 실행이 서로 독립이다.
-- map/trade 엔드포인트는 batch-app·ml-inference 부재 상태에서도 동작한다
+- map/trade 엔드포인트는 batch·ml-inference 부재 상태에서도 동작한다
   (예측은 degrade).
 - `test` + `persistenceTest` GREEN에 더해 실부팅 스모크(§6)가 통과한다.
 - 위 상태가 캐노니컬 문서(ARCHITECTURE / INFRA_AND_ENV / DATA_STORAGE)에
@@ -83,16 +83,16 @@ home-search는 `home-server`/`home-client`의 마이그레이션 타깃이며, �
 ### 1.6 완료 작업: runtime split 1차
 
 rename 선행 PR 이후의 첫 runtime split은 `core`와 `api` 멀티모듈을
-생성하되, `batch-app`과 신규 `libs/*`는 만들지 않는 범위로 마감한다.
+생성하되, `batch`과 신규 `libs/*`는 만들지 않는 범위로 마감한다.
 현재 코드는 다음처럼 분류한다.
 
 | 대상 | 판정 | 이번 프리플라이트에서 할 일 |
 |---|---|---|
 | map/search/detail/trade HTTP API | `api` 실행 모드 | public API URL/응답 shape 유지 대상임을 확인 |
 | `application/**`, `domain/**`, persistence/external/cache/observability adapter | `core` | `core-trade`/`core-map`/`core-shared`로 쪼개지 않음 |
-| RTMS daily/monthly refresh orchestration | `api` 잔류, `batch-app` 후보 | 이번에는 `api`에 두고 후속 Spring Batch 전환 대상으로 표시 |
+| RTMS daily/monthly refresh orchestration | `api` 잔류, `batch` 후보 | 이번에는 `api`에 두고 후속 Spring Batch 전환 대상으로 표시 |
 | `RawIngestReconciliationRunner`, `TradePartitionMaintenanceRunner`, coordinate readiness | maintenance | API 기능은 아니지만 데이터 복구/운영 안전장치로 보존 |
-| region unit count sync, metadata enrichment, match rematch | one-shot 또는 ops | 자동 실행 조건과 후속 batch-app 후보 여부만 분류 |
+| region unit count sync, metadata enrichment, match rematch | one-shot 또는 ops | 자동 실행 조건과 후속 batch 후보 여부만 분류 |
 | `libs/rtms-ingest-core` | `libs` | 유지 |
 | VWorld/ODcloud/APIS wire DTO + 순수 파싱 | `libs` 후보 | `libs/geo-core`를 만들지 않음. §3.3 조건 충족 전까지 core 잔류 |
 | `*Resolver`/`*Client` 포트 구현체, `*Configuration` | `core` | adapter이므로 libs로 이동하지 않음 |
@@ -107,23 +107,23 @@ public API 변경은 후속 PR에서만 수행한다.
 
 | # | 결정 | 내용 |
 |---|---|---|
-| D1 | 모듈 구성 (재개정) | `core` + boot jar 2개(`api`, `batch-app`). 원칙: 모듈 경계는 서비스 경계(D15)를 비춘다. core-trade/core-map·core-shared·core-schema 분할안은 검토 후 폐기 — 사유는 §4 "경계 수단의 역할 분담" |
-| D2 | 모듈 이름 | `core` / `api` / `batch-app`. user 스코프 진입 시 `core-user` 추가 (D16) |
+| D1 | 모듈 구성 (재개정) | `core` + boot jar 2개(`api`, `batch`). 원칙: 모듈 경계는 서비스 경계(D15)를 비춘다. core-trade/core-map·core-shared·core-schema 분할안은 검토 후 폐기 — 사유는 §4 "경계 수단의 역할 분담" |
+| D2 | 모듈 이름 | `core` / `api` / `batch`. user 스코프 진입 시 `core-user` 추가 (D16) |
 | D3 | 패키지명 불변 | 자바 패키지(`com.home.*`)는 그대로 두고 소스루트만 이동. import 변경 0이 원칙 |
 | D4 | 신규 libs 생성 보류 | 지금은 `libs/rtms-ingest-core`만 유지. 신규 라이브러리는 §3.3 승격 조건 충족 시에만 |
 | D5 | 코어 보존 | ingest 코어는 자산. 교체 대상은 orchestration 껍데기(`infrastructure/scheduling/rtms` 약 1,400줄)뿐 |
 | D6 | 전환 방식 | strangler: 신규 Spring Batch job과 기존 `@Scheduled` 경로 병행 검증 후 구 경로 삭제 |
-| D7 | enrichment 스케줄러 | `ComplexMetadataEnrichmentScheduler`는 당분간 api 잔류. batch-app 후속 job 후보로만 표시 |
+| D7 | enrichment 스케줄러 | `ComplexMetadataEnrichmentScheduler`는 당분간 api 잔류. batch 후속 job 후보로만 표시 |
 | D8 | `rtms_ingest_run` 유지 | 도메인 운영 증거 테이블. `BATCH_*` 메타데이터로 대체하지 않음 |
 | D9 | JobParameters 규약 | daily identifying 파라미터는 `runDate`(yyyy-MM-dd) 하나가 기본값, `baseDealYmd`는 파생. 재실행 workset 검증 전제와 drift 처리 — 함정 상세는 §5.2 |
-| D10 | job 카탈로그 | batch-app은 multi-job 그릇. 시작은 `rtmsDailyRefreshJob` + `rtmsBackfillJob` 2개. job 1개 = 책임 1개, 이질적 스텝 체이닝 금지 |
+| D10 | job 카탈로그 | batch는 multi-job 그릇. 시작은 `rtmsDailyRefreshJob` + `rtmsBackfillJob` 2개. job 1개 = 책임 1개, 이질적 스텝 체이닝 금지 |
 | D11 | 파티션/병렬화 보류 | 첫 전환은 순차 실행. Partitioned Step은 restart/drift 정책 확정 후 도입(§5.3), 병렬화 승격 기준은 §5.5 — 실측 이후로 의도적 보류 |
 | D12 | 스케줄 트리거 | AWS EventBridge Scheduler → 컨테이너 실행(ECS RunTask). 전제: 운영 런타임이 AWS(DB 접근 가능). 스케줄 정의는 IaC로 레포에서 버전 관리 |
 | D13 | 정책 공유 금지 | 도메인 정책/판단은 서비스 간 라이브러리 공유 금지. 허용 범위(wire client·프리미티브·기술 섀시)와 사유는 §3.5 |
 | D14 | feature 경계 규율 | `application/**` feature 패키지 간 직접 import 금지, boundary test로 강제. baseline 예외 1건 포함 상세는 §4 원칙 |
 | D15 | 서비스/DB 경계 | 서비스 경계는 데이터 소유권: `property-data`(trade+map 한 몸, DB 하나) / `user`(미래) / `ai`(later-scope). trade↔map DB 분리는 로드맵 제외 — 근거는 §8.1 |
 | D16 | user 도메인 탄생 수칙 | user/JWT/OAuth가 스코프에 들어오는 날: `core-user` 모듈 신설 + 전용 `users` 스키마 + 전용 Flyway location + 토큰 발급(user 소유)/검증(기술 섀시, api·BFF) 분리 + 맵 공개 표면은 무인증 유지 |
-| D17 | 내부 경계 수단 | core 내부 조망성 = feature 패키지 + D14 테스트, 워크로드 격리 = 배포 모드 분리(batch-app). 역할 분담 상세는 §4 |
+| D17 | 내부 경계 수단 | core 내부 조망성 = feature 패키지 + D14 테스트, 워크로드 격리 = 배포 모드 분리(batch). 역할 분담 상세는 §4 |
 | D18 | AI 구성요소 분리 | ml-inference(무상태 추론 함수)와 ai-service(상태 소유 챗봇)는 통합하지 않는다. 역할 정의는 §8.3, 호출 방향은 §8.4 |
 | D19 | 챗봇 이식 청사진 | 참조 구현은 kosa-team5/server(읽기 전용), 이식 설계는 `docs/AI_SERVICE_PLAN.md`. 핵심 작업 = feature dao 직접 SQL → `ai_read` 뷰 치환. 지위는 later-scope |
 | D20 | 배포 아키텍처 | ECS on EC2 + RDS — 근거·구성·원칙은 §9. 로컬 compose는 의도적 비대칭. D18 재검토 조건: ai-service 운영 6개월 후 Python 2서비스 부담이 실증되고 의존성이 안정화되면 합류 재론 |
@@ -131,7 +131,7 @@ public API 변경은 후속 PR에서만 수행한다.
 | D22 | 동기/비동기 분리 | 동기(HTTP/SSE)·비동기(Kafka event)의 경계와 금지 방향은 §8.4 단일 매트릭스로 관리. timeout·retry·DLQ·idempotency 정책은 §10.3에서 확정 |
 | D23 | Transactional Outbox | DB 변경↔event publish 정합성은 outbox로 보장, at-least-once 전제. `event_outbox`/`processed_event` 스키마는 첫 producer/consumer 구현 전 확정 — 브로커와 무관하게 §10.1에서 선행 가능 |
 | D24 | DB 설계 선행 | 새 스키마·서비스·이벤트가 걸린 구현(ai, user, Kafka) 전에 `docs/DATA_STORAGE.md`에서 DB ownership 확정 (산출물 §10.1). 분할 1차·2차는 게이트 비대상 |
-| D25 | DB 권한/마이그레이션 | migration owner: `home_search`=api(SQL은 core 소유), `coordinate_source`=source-data, `ai`=ai-service(Alembic), `users`=future user-service. batch-app은 validate, `ai_read`는 SELECT only, ml-inference·web은 DB 권한 없음. 권한표는 DATA_STORAGE.md·INFRA_AND_ENV.md에서 확정 |
+| D25 | DB 권한/마이그레이션 | migration owner: `home_search`=property-data migration artifact(SQL은 core 소유), `coordinate_source`=source-data, `ai`=ai-service(Alembic), `users`=future user-service. api/batch는 Flyway 자동 실행 금지, `ai_read`는 SELECT only, ml-inference·web은 DB 권한 없음. 권한표는 DATA_STORAGE.md·INFRA_AND_ENV.md에서 확정 |
 | D26 | 배포 전 게이트 | 게이트 목록(필수/데이터 안전/서비스 분리/Kafka)은 §10.4. Kafka 게이트는 첫 producer 도입 시부터 활성. rollback = git SHA 이미지 태그 + migration rollback/forward-fix |
 
 ## 3. 외부 라이브러리(`libs/*`) 경계 규칙
@@ -196,7 +196,7 @@ MSA 전환(§8)을 전제하면 라이브러리 카테고리는 4개로 늘어�
 서비스 락스텝 배포가 필요해지는 분산 모놀리스가 된다. 정책은 소유 서비스
 안에만 살고, 다른 서비스는 API(또는 뷰 계약)로 결과만 소비한다.
 
-현실 제약: batch-app은 같은 빌드라 core가 섀시 역할을 하고(퍼블리시 불필요),
+현실 제약: batch는 같은 빌드라 core가 섀시 역할을 하고(퍼블리시 불필요),
 FastAPI ai-service는 Python이라 Java 라이브러리를 소비하지 못한다. 따라서
 ③④의 실제 트리거는 두 번째 독립 Spring 서비스의 등장 — 현실적으로
 user-service(D16) — 이다. trade/map 분리는 로드맵에 없으므로(D15) 그 경로로는
@@ -222,16 +222,14 @@ user-service(D16) — 이다. trade/map 분리는 로드맵에 없으므로(D15)
 
 #### Slack(Hermes) notifier
 
-- 현황: 범용 notifier가 아니라 `RtmsDailyRefreshHermesNotifier`가
-  `infrastructure/scheduling/rtms`에 package-private로 존재. RTMS daily 전용
-  네이밍/이벤트 타입(`rtms-daily-refresh`)이 하드코딩돼 있다.
-- 목표 형태 (2단계): 분할 2차(§6-3)에서 batch-app 공용 `BatchSummaryListener`가
-  소비해야 하므로 core의 범용 ops notifier로 승격 — 전송(HTTP)과 이벤트
-  구성(source/eventType/channel)을 분리하고 RTMS 전용 네이밍 제거.
-  이는 보류가 아니라 분할 2차의 실제 작업 항목이다.
+- 현재: API의 RTMS daily 전용 notifier는 legacy scheduler와 함께 제거됐다.
+  Batch listener는 core의 범용 `OpsNotifier`를 사용하며 전송과
+  `eventType`/title/message 구성을 분리한다.
+- 분할 2차 완료 근거: `RtmsBatchSummaryListener`가 job 결과 알림을 소유하고
+  API에는 RTMS scheduler 또는 전용 알림 bean이 남지 않는다.
 - 목표 형태 (최종): ③service chassis의 일부로 두 번째 Java 서비스 등장 시
   `libs/ops-notifier`(가칭) 승격.
-- 사용처: batch-app job 결과 알림(전 job 공통), api 운영 알림(향후),
+- 사용처: batch job 결과 알림(전 job 공통), api 운영 알림(향후),
   분리된 각 서비스의 공통 알림 경로.
 
 ## 4. 목표 모듈/패키지 구조
@@ -251,7 +249,7 @@ home-search/
 │   │   │     infrastructure/web.**  global/error.**
 │   │   │     HomeSearchApiApplication
 │   │   │     (전환 완료 전까지 infrastructure/scheduling.** 잔류)
-│   │   └─ batch-app/                     # boot jar ② run-and-exit = 배치 모드
+│   │   └─ batch/                     # boot jar ② run-and-exit = 배치 모드
 │   │         com.home.batch.rtms.**      # Spring Batch job/Partitioner/listener
 │   │   (미래) core-user/                 # user-service의 몸체. 스코프 진입 시 (D16)
 │   ├─ web / ml / rtms-loader / source-data
@@ -260,7 +258,7 @@ home-search/
 의존 규칙:
 
 ```
-api  → core        batch-app → core        core → libs/rtms-ingest-core
+api  → core        batch → core        core → libs/rtms-ingest-core
 (미래) core-user는 core와 상호 의존 금지 — 서비스 경계이므로 컴파일러로 강제
 ```
 
@@ -270,7 +268,7 @@ api  → core        batch-app → core        core → libs/rtms-ingest-core
   한 서비스라는 사실의 정확한 반영이다. core-trade/core-map 분할은 폐기 —
   쓰기 파이프라인(daily 배치)이 region 동기화·coordinate preflight·complex
   metadata를 가로지르므로 워크로드 축과 도메인 축이 평행하지 않다.
-- 워크로드 격리(쓰기/읽기)는 배포 모드(api vs batch-app)가 담당한다.
+- 워크로드 격리(쓰기/읽기)는 배포 모드(api vs batch)가 담당한다.
 - core 내부 조망성은 feature 패키지 + D14 boundary test가 담당한다.
 
 원칙:
@@ -303,7 +301,7 @@ api  → core        batch-app → core        core → libs/rtms-ingest-core
 
 ### 5.2 Job 카탈로그와 구조
 
-batch-app은 job 여러 개를 담는 그릇이며, 실행 시 `spring.batch.job.name`
+batch는 job 여러 개를 담는 그릇이며, 실행 시 `spring.batch.job.name`
 (env `SPRING_BATCH_JOB_NAME` 또는 커맨드라인)으로 job을 선택하고
 JobParameters를 커맨드라인 인자로 전달한다.
 
@@ -338,7 +336,7 @@ JobParameters 함정 (D9의 근거): 매 실행에 타임스탬프를 identifyin
 방식을 선택해야 한다. workset이 바뀐 수집은 daily restart가 아니라
 `rtmsBackfillJob`으로 수행한다.
 
-batch-app 패키지 구조:
+batch 패키지 구조:
 
 ```
 com.home.batch
@@ -376,27 +374,27 @@ com.home.batch
 
 ### 5.4 실행/배포 모드
 
-기본 경로는 2단계 직행이다 — §6-3에서 batch-app을 신설하고 기존 `@Scheduled`
+기본 경로는 2단계 직행이다 — §6-3에서 batch를 신설하고 기존 `@Scheduled`
 경로를 병행 검증한다. 1단계(api 내장)는 채택하지 않은 선택적 중간 형태이며
 비교를 위해서만 남긴다.
 
-| 구분 | 1단계 (api 내장, 미채택) | 2단계 (batch-app run-and-exit, 기본 경로) |
+| 구분 | 1단계 (api 내장, 미채택) | 2단계 (batch run-and-exit, 기본 경로) |
 |---|---|---|
-| 트리거 | 얇은 `@Scheduled` → `JobLauncher.run` | EventBridge Scheduler → ECS RunTask (D12). 로컬은 `docker compose run --rm batch-app` 수동 실행 |
+| 트리거 | 얇은 `@Scheduled` → `JobLauncher.run` | EventBridge Scheduler → ECS RunTask (D12). 로컬은 `docker compose run --rm batch` 수동 실행 |
 | `spring.batch.job.enabled` | `false` (부팅 시 자동 실행 방지) | `true` (부팅 = 실행이 의도) |
 | `web-application-type` | `servlet` | `none` |
 | job 선택 | 코드에서 지정 | `SPRING_BATCH_JOB_NAME` env / 커맨드라인 |
-| Flyway | api이 migrate | batch-app은 validate만. migrate는 api(또는 추후 독립 마이그레이션 잡) |
+| Flyway | API/Batch 모두 자동 실행 안 함 | migrate/validate/repair/backfill은 전용 migration artifact만 수행 |
 
 실행 예시 (2단계):
 
 ```
 # daily (스케줄러가 실행; 로컬 검증 시 수동)
-docker compose run --rm batch-app
+docker compose run --rm batch
 
 # 표적 backfill: 2026-05 강남구만 재수집
 docker compose run --rm -e SPRING_BATCH_JOB_NAME=rtmsBackfillJob \
-  batch-app fromYmd=202605 toYmd=202605 lawdCds=11680
+  batch fromYmd=202605 toYmd=202605 lawdCds=11680
 ```
 
 restart 운영: 표적 재수집은 `rtmsBackfillJob`이 담당한다. daily job은 lookback 창 +
@@ -431,7 +429,7 @@ Partitioned Step을 도입할 경우에만 같은 `runDate` 재실행을 실패 
 
 차별 (레거시의 교훈):
 
-- 프로파일 스위치(`@Profile("batch")`) 대신 물리적 모듈 분리 (batch-app jar)
+- 프로파일 스위치(`@Profile("batch")`) 대신 물리적 모듈 분리 (batch jar)
 - 한 job에 이질적 스텝 체이닝 금지 — 레거시 `tradeDailyJob`은 수집→트렌드→랭킹→
   메일 6스텝 직렬로, 메일 실패가 수집을 FAILED로 만들고 later-scope가 수집의
   critical path에 들어갔다. job 1개 = 책임 1개 (D10)
@@ -467,7 +465,7 @@ Partitioned Step을 도입할 경우에만 같은 `runDate` 재실행을 실패 
                          위치를 기록한다. 구조 이동의 안전망은 테스트 GREEN과
                          데이터 백업 두 겹이다 — §6-6 이관 시점까지 미루지 않는다
 
-2. [분할 1차]            core + api 모듈 2개로 분리. batch-app은 만들지 않음
+2. [분할 1차]            core + api 모듈 2개로 분리. batch는 만들지 않음
                          순수 파일 이동, 동작 변화 0
                          scheduling 패키지는 api에 그대로 잔류.
                          @Scheduled 빈은 전부 api 소속 — external/complex의
@@ -495,7 +493,7 @@ Partitioned Step을 도입할 경우에만 같은 `runDate` 재실행을 실패 
                          coordinate→complex 1건은 명시적 baseline)
                          분할 1차와 같은 PR 또는 직후 소형 PR
 
-3. [분할 2차]            batch-app 신설 (core 의존) + rtmsDailyRefreshJob
+3. [분할 2차]            batch 신설 (core 의존) + rtmsDailyRefreshJob
                          신규 작성 (§5). 초기 구현은 순차 실행 가능,
                          Partitioned Step은 restart/drift 정책 확정 후 도입
                          batch 스키마(BATCH_*) Flyway 마이그레이션 포함 —
@@ -506,7 +504,7 @@ Partitioned Step을 도입할 경우에만 같은 `runDate` 재실행을 실패 
                          이중 알림 혼선을 막는다
                          검증: 신규 job 수동 실행 → rtms_ingest_run 결과를
                          기존 경로 실행분과 비교 (dedupe 불변식으로 이중 실행 안전)
-                         완료 조건: 로컬 batch-app 컨테이너 실행 → job COMPLETED
+                         완료 조건: 로컬 batch 컨테이너 실행 → job COMPLETED
                          + rtms_ingest_run 비교 일치 + test/persistenceTest GREEN
                          완료 시: INFRA_AND_ENV.md에 batch 실행/검증 명령 갱신
 
@@ -548,7 +546,7 @@ Partitioned Step을 도입할 경우에만 같은 `runDate` 재실행을 실패 
 ## 7. 관련 확정 원칙 (이 계획의 상위 제약)
 
 - single-writer의 "writer"는 프로세스가 아니라 소유권 경계(코드베이스 + Flyway)다.
-  api과 batch-app은 같은 경계의 두 프로세스이므로 원칙 위반이 아니다.
+  api과 batch는 같은 경계의 두 프로세스이므로 원칙 위반이 아니다.
 - 스키마 주인은 하나: `home_search`의 Flyway 히스토리는 core 한 곳에서만 관리한다.
 - FastAPI AI 서비스(챗봇/RAG)는 later-scope이며 구현은 이 문서 범위 밖.
   설계 청사진은 `docs/AI_SERVICE_PLAN.md`에 작성됨 (D19) — 참조 구현 이식 매핑,
@@ -570,7 +568,7 @@ feature 패키지로 산다 (D17).
 
 | 서비스 | 구성 | 소유 데이터 | 상태 |
 |---|---|---|---|
-| property-data-service | core (몸체) + api(서빙 모드) + batch-app(배치 모드) | `home_search` DB: raw ingest, normalized trade, 매칭 증거, region/complex/좌표, `rtms_ingest_run` | 현재 구축 중 |
+| property-data-service | core (몸체) + api(서빙 모드) + batch(배치 모드) | `home_search` DB: raw ingest, normalized trade, 매칭 증거, region/complex/좌표, `rtms_ingest_run` | 현재 구축 중 |
 | user-service | `core-user` (미래) | `users` 스키마 → 전용 DB (D16) | 미래, 스코프 진입 시 |
 | ai-service | FastAPI (미래) | `ai` 스키마 + vector index. 사실은 `ai_read` 뷰로 구독 | later-scope, 청사진: `docs/AI_SERVICE_PLAN.md` (D19) |
 | ml-inference | apps/ml FastAPI (D18) | **없음** — 무상태 추론 함수. 모델 아티팩트 파일만. 피처·예측 캐시는 property-data 소유 | 현존 운영 |
@@ -587,7 +585,7 @@ feature 패키지로 산다 (D17).
 api의 web 레이어는 서비스가 늘어나는 시점에 api-gateway/BFF 역할
 (라우팅 + 토큰 검증)을 겸하는 후보다.
 
-run-and-exit batch-app은 "쓰기/읽기 워크로드 격리"를 DB 분리 없이 배포 모드
+run-and-exit batch는 "쓰기/읽기 워크로드 격리"를 DB 분리 없이 배포 모드
 분리로 달성한다. 읽기 스케일이 필요해지면 리드 레플리카가 다음 수단이며,
 이 역시 소유권 분리가 아니다.
 
@@ -595,7 +593,7 @@ run-and-exit batch-app은 "쓰기/읽기 워크로드 격리"를 DB 분리 없�
 
 ```
 Stage 0  현재: 단일 boot 프로젝트 + libs/rtms-ingest-core + apps/ml(ml-inference, D18)
-Stage 1  멀티모듈 (§6-2): core / api / batch-app + D14 boundary test
+Stage 1  멀티모듈 (§6-2): core / api / batch + D14 boundary test
 Stage 2  batch run-and-exit 배포 분리 (§6-3,4) + AWS 운영 실행 (§6-5~7, D12, §9)
 Stage 3  [스코프 진입 이벤트, 순서 무관·독립]
          - user-service: core-user + users 스키마 + JWT/OAuth (D16)
@@ -689,7 +687,7 @@ EC2 t4g.small (arm64, ECS 에이전트)      RDS db.t4g.micro (PostGIS)
 ├─ ECS service: ml-inference              └─ coordinate_source
 ├─ ECS service: redis
 ├─ (미래) ECS service: ai-service         S3 + CloudFront: apps/web 정적 배포
-└─ ECS task:    batch-app                 ECR: 이미지 저장 (git SHA + latest 태그)
+└─ ECS task:    batch                 ECR: 이미지 저장 (git SHA + latest 태그)
                 ← EventBridge Scheduler   SSM Parameter Store: 시크릿 주입
 ```
 
@@ -710,8 +708,9 @@ EC2 t4g.small (arm64, ECS 에이전트)      RDS db.t4g.micro (PostGIS)
   통과를 이미지 푸시의 전제로 (레거시의 `-x test` 금지), `:latest` 단독 대신
   git SHA 태그 병기로 롤백 가능하게. 배포는 변경된 서비스만
   `update-service --force-new-deployment`.
-- `home_search` Flyway migrate 실행 주체는 api (§5.4). batch-app은
-  validate만 한다. ai-service는 `home_search` Flyway를 실행하지 않고, 자기
+- `home_search` Flyway 실행 주체는 전용 property-data migration artifact다.
+  api와 batch는 migrate/validate를 startup에서 자동 실행하지 않는다.
+  ai-service는 `home_search` Flyway를 실행하지 않고, 자기
   `ai` 스키마는 Alembic으로 소유한다 (D25).
 
 ## 10. MSA/Kafka/DB 설계 선행 게이트

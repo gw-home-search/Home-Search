@@ -76,8 +76,9 @@ The sheet never overlays Kakao attribution. Grid rows/columns are not animated.
 
 Use a flat white header with a 1px neutral bottom border, no shadow,
 20/18/12px horizontal padding, and no right-side account/status actions. The
-38px (34px mobile) Brand Soft tile draws the house/search mark in CSS. Wordmark
-is `홈서치`; subtitle is `HomeSearch · 실거래가 인사이트`.
+38px (34px mobile) Brand Soft tile uses the selected H1 house/search image and
+the same image supplies browser and Apple touch icons. Wordmark is `홈서치`;
+subtitle is `HomeSearch · 실거래가 인사이트`.
 
 Public map icons live under `src/shared/icons`, use `currentColor`, 1.75px round
 strokes, and no icon dependency or raster asset. Icon-only buttons require an
@@ -103,16 +104,19 @@ and each transition uses a plain 14px neutral chevron separator. Region choices 
 optically centered and use an emergency two-line wrap for long, unspaced names
 such as `세종특별자치시`; the selected Check icon is absolutely positioned
 so it does not shift the label. Selected tiles expose `aria-pressed=true`, a
-Check icon, and a Sky border and fill. The complex-list step uses the KOSA
-82px card anatomy: 16px complex name, address, and optional household/building/
-approval-year metadata pills.
+Check icon, and a Sky border and fill. The complex-list step uses compact 76px
+comparison rows: a 15px complex name and address/approval context on the left,
+with household/building counts aligned on the right.
 
 The breadcrumb is the only region-stage navigation label. Do not render a
 separate `시군구 선택` or `읍면동 선택` summary row. `시도 선택` and every
 selected ancestor are 32px breadcrumb buttons; selecting an ancestor reloads
 that region, truncates deeper trail items, and returns to its child grid.
 
-Region complex rows are leaf-only. A selected region with non-empty `children`
+Region complex rows are leaf-only. Their list uses 76px comparison rows without
+an outer rounded card: complex name plus address/approval year stay on the left,
+while unit and building counts use a fixed right-aligned numeric column. The
+section count is quiet text rather than an outlined pill. A selected region with non-empty `children`
 shows only the next region grid and must not request or render
 `/api/v1/region/{regionId}/complexes`. The complex request starts only when the
 selected region has no children; changing stages clears stale complex rows
@@ -163,7 +167,10 @@ and `-` for missing values.
 
 Price and prediction use separate semantic roles: Ink for values and Red plus
 a label/icon for failure. The trend uses Sky. Trades use a divider table
-with right-aligned amount/area/floor and a full-width 40px more button.
+with 56px rows and right-aligned amount/area/floor columns. Non-round amounts
+split intentionally into `억` and `만원` lines; numeric apartment buildings and
+floors split into explicit `동` and `층` lines. Square meters and pyeong stay as
+primary/secondary area lines. The more button remains full-width and 40px tall.
 
 Mobile keeps a handle, sticky 48px navigation, sticky 44px tabs, and common
 identity. Information shows switcher/basic data; price shows overview/chart;

@@ -12,6 +12,7 @@ const icons = readFileSync(`${process.cwd()}/src/shared/icons/index.tsx`, 'utf8'
 const mapApp = readFileSync(`${appDirectory}/MapApp.tsx`, 'utf8');
 const tradeTrendChart = readFileSync(`${process.cwd()}/src/features/complex-detail/TradeTrendChart.tsx`, 'utf8');
 const detailSidebar = readFileSync(`${process.cwd()}/src/features/complex-detail/DetailSidebar.tsx`, 'utf8');
+const indexHtml = readFileSync(`${process.cwd()}/index.html`, 'utf8');
 
 describe('공개 지도 디자인 시스템 계약', () => {
   it('public map palette와 layout semantic token을 고정한다', () => {
@@ -75,7 +76,7 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(shell).toContain('.app-bar {');
     expect(shell).toContain('box-shadow: none;');
     expect(shell).toContain('.app-brand-mark {');
-    expect(shell).toContain('background: var(--hs-map-color-brand-soft);');
+    expect(shell).toContain('object-fit: cover;');
     expect(map).toContain('.filter-panel {');
     expect(map).toContain('border-bottom: 1px solid var(--hs-map-color-line);');
     expect(map).toContain('background: var(--hs-map-color-surface);');
@@ -109,13 +110,14 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(icons).toContain("stroke: 'currentColor'");
   });
 
-  it('KOSA team5의 CSS house/search brand mark anatomy를 보존한다', () => {
+  it('선택한 Home Search 이미지 로고를 header와 browser icon에 공통 적용한다', () => {
     expect(mapApp).toContain('className="app-brand-mark"');
-    expect(mapApp).toContain('className="app-brand-mark-roof"');
-    expect(mapApp).toContain('className="app-brand-mark-lens"');
+    expect(mapApp).toContain('src="/home-search-logo.png"');
     expect(mapApp).toContain('HomeSearch · 실거래가 인사이트');
-    expect(shell).toContain('.app-brand-mark-roof');
-    expect(shell).toContain('.app-brand-mark-lens');
+    expect(shell).toContain('object-fit: cover;');
+    expect(indexHtml).toContain('href="/favicon-32.png?v=2"');
+    expect(indexHtml).toContain('rel="shortcut icon"');
+    expect(indexHtml).toContain('href="/apple-touch-icon.png"');
   });
 
   it('desktop/tablet rail과 mobile docked sheet 좌표를 같은 grid contract로 유지한다', () => {
@@ -198,12 +200,15 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(exploration).not.toContain('border-radius: var(--hs-map-radius-pill); background: var(--hs-map-color-surface); color: var(--hs-map-color-action); stroke-width: 2.25;');
   });
 
-  it('KOSA 지역 단지 card의 이름·주소·metadata 계층을 유지한다', () => {
-    expect(exploration).toContain('.region-complex-section { display: grid; gap: 10px;');
+  it('지역 단지 목록을 외곽 card 없이 비교 가능한 2열 행으로 유지한다', () => {
+    expect(exploration).toContain('.region-complex-section { display: grid; gap: 8px;');
+    expect(exploration).toContain('border-top: 1px solid var(--hs-map-color-line); border-bottom: 1px solid var(--hs-map-color-line);');
     expect(exploration).toContain('.region-complex-list .region-complex-card {');
-    expect(exploration).toContain('min-height: 68px;');
+    expect(exploration).toContain('min-height: 76px;');
+    expect(exploration).toContain('grid-template-columns: minmax(0, 1fr) auto;');
     expect(exploration).toContain('.region-complex-name {');
-    expect(exploration).toContain('font-size: 14px; font-weight: 750;');
-    expect(exploration).toContain('.region-complex-meta { display: block;');
+    expect(exploration).toContain('font-size: 15px; font-weight: 750;');
+    expect(exploration).toContain('.region-complex-stats { display: grid;');
+    expect(exploration).toContain('.region-complex-unit { color: var(--hs-map-color-ink); font-size: 13px;');
   });
 });

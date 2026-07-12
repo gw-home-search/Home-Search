@@ -272,9 +272,9 @@ function detailInformationRow(label: string, value: string | null, field?: strin
 
 function areaSummary(detail: ComplexDetail): string | null {
   const values = [
-    detail.platArea == null ? null : `대지 ${formatNumber(detail.platArea, '㎡')}`,
-    detail.archArea == null ? null : `건축 ${formatNumber(detail.archArea, '㎡')}`,
-    detail.totArea == null ? null : `연면적 ${formatNumber(detail.totArea, '㎡')}`,
+    detail.platArea == null ? null : `대지 ${formatArea(detail.platArea)}`,
+    detail.archArea == null ? null : `건축 ${formatArea(detail.archArea)}`,
+    detail.totArea == null ? null : `연면적 ${formatArea(detail.totArea)}`,
   ].filter((value): value is string => value != null);
   return values.length === 0 ? null : values.join(' · ');
 }
@@ -370,10 +370,18 @@ function predictionBasisLabel(prediction: PricePrediction): string {
 }
 
 function formatArea(value: number): string {
-  return `${value.toLocaleString(undefined, {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
-  })}㎡`;
+  const labels = areaLabels(value);
+  return `${labels.squareMeters} (${labels.pyeong})`;
+}
+
+function areaLabels(value: number): { squareMeters: string; pyeong: string } {
+  return {
+    squareMeters: `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}㎡`,
+    pyeong: `${(value / 3.305785).toLocaleString(undefined, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    })}평`,
+  };
 }
 
 function formatPredictionAmount(amount: number | null): string {
@@ -445,14 +453,30 @@ function TradeList({
               </tr>
             </thead>
             <tbody>
-              {rows.map((trade) => (
-                <tr key={trade.tradeId}>
-                  <td>{trade.dealDate}</td>
-                  <td data-trade-cell="amount">{formatAmount(trade.dealAmount)}</td>
-                  <td data-trade-cell="area">{trade.exclArea.toLocaleString()}㎡</td>
-                  <td data-trade-cell="floor">{formatTradeFloor(trade)}</td>
-                </tr>
-              ))}
+              {rows.map((trade) => {
+                const area = areaLabels(trade.exclArea);
+                const amount = tradeAmountLabels(trade.dealAmount);
+                const location = tradeLocationLabels(trade);
+                return (
+                  <tr key={trade.tradeId}>
+                    <td>{trade.dealDate}</td>
+                    <td className="trade-amount-value" data-trade-cell="amount">
+                      {amount.eok == null ? null : <span className="trade-amount-eok">{amount.eok}</span>}
+                      {amount.eok == null || amount.man == null ? null : ' '}
+                      {amount.man == null ? null : <span className="trade-amount-man">{amount.man}</span>}
+                    </td>
+                    <td className="trade-area-value" data-trade-cell="area">
+                      <span>{area.squareMeters}</span>
+                      <span className="trade-area-pyeong">{area.pyeong}</span>
+                    </td>
+                    <td className="trade-location-value" data-trade-cell="floor">
+                      {location.building == null ? null : <span className="trade-building">{location.building}</span>}
+                      {location.building == null ? null : ' '}
+                      <span className="trade-floor">{location.floor}</span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {hasMore ? (
@@ -491,7 +515,23 @@ function compareTradesNewestFirst(first: TradeItem, second: TradeItem): number {
   return second.dealDate.localeCompare(first.dealDate) || second.tradeId - first.tradeId;
 }
 
-function formatTradeFloor(trade: TradeItem): string {
-  const floor = trade.floor == null ? '층 정보 없음' : `${trade.floor}층`;
-  return trade.aptDong == null ? floor : `${trade.aptDong} / ${floor}`;
+function tradeAmountLabels(amount: number): { eok: string | null; man: string | null } {
+  if (amount < 10000) {
+    return { eok: null, man: `${amount.toLocaleString()}만원` };
+  }
+
+  const eok = Math.floor(amount / 10000);
+  const man = amount % 10000;
+  return {
+    eok: `${eok.toLocaleString()}억`,
+    man: man === 0 ? null : `${man.toLocaleString()}만원`,
+  };
+}
+
+function tradeLocationLabels(trade: TradeItem): { building: string | null; floor: string } {
+  const aptDong = trade.aptDong?.trim() || null;
+  return {
+    building: aptDong == null ? null : /^\d+$/.test(aptDong) ? `${aptDong}동` : aptDong,
+    floor: trade.floor == null ? '층 정보 없음' : `${trade.floor}층`,
+  };
 }

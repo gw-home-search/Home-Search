@@ -53,7 +53,7 @@
   --hs-focus-ring: 0 0 0 3px rgb(14 107 94 / 22%);
   --hs-shadow-layer: 0 6px 18px rgb(15 23 42 / 12%);
 
-  /* Public map foundation and semantic tokens. Existing shared/admin tokens above stay stable. */
+  /* Public map foundation and semantic tokens. */
   --hs-map-color-primary: #0ea5b7;
   --hs-map-color-ink: #172033;
   --hs-map-color-ink-soft: #344054;

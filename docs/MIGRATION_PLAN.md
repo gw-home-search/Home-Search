@@ -33,6 +33,8 @@ Target:
 
 - `/Users/gwongwangjae/home-search/apps/property-data`
 - `/Users/gwongwangjae/home-search/apps/web`
+- `/Users/gwongwangjae/home-search/apps/admin/service`
+- `/Users/gwongwangjae/home-search/apps/admin/web`
 - `/Users/gwongwangjae/home-search/infra`
 
 Prepare the repository as a monorepo-style migration target.
@@ -42,6 +44,8 @@ Rules:
 - Do not mix backend and frontend files at the repository root.
 - Keep backend Gradle files inside `apps/property-data`.
 - Keep frontend Vite files inside `apps/web`.
+- Keep the independently built admin service and web apps inside
+  `apps/admin/service` and `apps/admin/web`.
 - Keep Docker, Postgres, monitoring, and deployment files inside `infra` unless
   a tool requires a root-level file.
 
@@ -86,8 +90,9 @@ Flyway 운영 규칙:
   적용한다. V6에는 backfill DML을 넣지 않는다.
 - V7 building metadata evidence는 durable DB의 V3 repair와 V5 bounded
   backfill/V6 validation이 완료된 뒤 명시적으로 적용한다. V7은 기존 값을
-  삭제하거나 재해석하지 않고 snapshot, evaluation, external identity, state,
-  decision만 추가한다.
+  삭제하거나 재해석하지 않고 `complex.bld_mgm_bld_rgst_pk`와 attempt의
+  `request_id`, `projection_applied`만 추가한다. raw snapshot/evaluation/replay
+  테이블은 만들지 않는다.
 - 현재는 `home_search` DB와 `public.flyway_schema_history` 하나를 유지한다.
   schema별 history나 Batch metadata DB 분리는 후속 운영 요구가 생길 때 ADR로
   검토한다.

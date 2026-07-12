@@ -43,7 +43,7 @@ Optional but recommended:
 - Batch execution logs.
 - Redis for short-lived map marker response caching.
 
-## Required Backend Environment
+## Required Property-data Environment
 
 Home Search backend collection and map display need:
 
@@ -56,34 +56,55 @@ Home Search backend collection and map display need:
   validation; set it to `true` only for storage-only experiments.
 - `APT_SERVICE_KEY`
 - `SPRING_BATCH_JOB_NAME` for run-and-exit batch execution
-  (`rtmsDailyRefreshJob`, `rtmsBackfillJob`, `complexBuildingMetadataJob`, or
-  `complexMetadataReplayJob`).
+  (`rtmsDailyRefreshJob`, `rtmsBackfillJob`, `complexOdcMetadataGapFillJob`, or
+  `complexBuildingMetadataJob`).
 - `BLD_SERVICE_KEY` if building data enrichment is included in the current scope.
 - `ODC_SERVICE_KEY` if complex reference enrichment is included in the current scope.
 - `VW_SERVICE_KEY` if GIS/building data calls are included in the current scope.
-- `JWT_SECRET` only if authenticated endpoints are enabled.
 - `FRONTEND_URL`
-- `ADMIN_COORDINATE_ACCESS_CODE` when coordinate override admin is enabled.
-- `ADMIN_METADATA_ACCESS_CODE` when metadata enrichment admin is enabled.
 - `HOME_MAP_MARKER_CACHE_ENABLED=true` when Redis-backed map marker caching is
   enabled.
 - `HOME_MAP_MARKER_CACHE_TTL`, for example `5m`, to bound stale marker data.
 - `SPRING_DATA_REDIS_HOST` and `SPRING_DATA_REDIS_PORT` when marker caching is
   enabled outside the local Docker network.
 
-Authentication can remain outside the core map-display path unless a later
-work item explicitly brings authenticated endpoints into scope.
+Property-data receives neither admin database credentials nor an internal
+signing private key. It receives only the active/overlap internal JWT public
+keys; the browser-facing legacy admin authentication path is removed.
+
+## Required Admin-service Environment
+
+- `ADMIN_DB_JDBC_URL`
+- `ADMIN_DB_USERNAME=home_search_admin_runtime`
+- `ADMIN_DB_PASSWORD`
+- server Session cookie/security settings
+- the internal admin-token private signing key and active `kid`
+- property-data internal base URL
+
+Admin-service receives neither `home_search` nor coordinate-source database
+credentials. Its migration and ops credentials are injected only into their
+run-and-exit jobs, never into the API runtime.
+
+## Required Source-data Environment
+
+- `SOURCE_DATA_DB_JDBC_URL`
+- `SOURCE_DATA_DB_USERNAME=home_search_coordinate_migrator` for migration jobs
+- `SOURCE_IMPORTER_DB_USERNAME=home_search_coordinate_importer` for imports
+- `COORDINATE_READER_DB_USERNAME=home_search_coordinate_reader` for read smoke
+
+Each role has a separate password. Property-data receives only the reader
+credential.
 
 ## Required Frontend Environment
 
-The source frontend uses:
-
-- `VITE_API_SERVER_IP`
-- `VITE_APP_SURFACE=public|admin`; omit or set `public` for the public map
-  frontend. Set `admin` only for the admin coordinate or metadata frontend runtime.
-
-Home Search target frontend should keep an equivalent API base URL variable. The name can
-stay the same during migration to reduce risk.
+- `apps/web` is the public map app on development port `5173` and receives only
+  the property-data API base configuration.
+- `apps/admin/web` is an independent app on development port `5174`. It calls
+  same-origin `/api/**`; `ADMIN_SERVICE_PROXY_TARGET` is development-proxy-only.
+- Neither app uses a surface-switch environment flag, shares a build artifact,
+  or receives the other service's base URL.
+- Admin browser authentication is an HttpOnly server Session. Tokens, session
+  identifiers, passwords, and access codes are not stored in Web Storage.
 
 ## Flyway Strategy
 
@@ -126,14 +147,19 @@ DB_PASSWORD=... \
 ```text
 --operation=info
 --operation=validate
---operation=migrate --target=5 --confirm=5
---operation=migrate --target=latest --confirm=6
---operation=repair-missing-v3 --confirm=3
---operation=backfill-registry-trade-date --batch-size=20000 --sleep-millis=100
+--operation=migrate --target=6 --confirm=6 --confirm-database=home_search
+--operation=migrate --target=7 --confirm=7 --confirm-database=home_search
+--operation=repair-missing-v3 --confirm=3 --confirm-database=home_search
+--operation=backfill-registry-trade-date --confirm-database=home_search --batch-size=20000 --sleep-millis=100
 ```
 
 exit code는 성공 `0`, DB/Flyway/backfill/validation 실패 `1`, 잘못된 argument
 또는 confirmation `2`다. wrapper의 마지막 명령은 `exec java -jar ... "$@"`다.
+모든 operation은 연결 직후 `current_database()=home_search`를 확인한다.
+mutating operation은 `--confirm-database=home_search`와
+`MIGRATION_EVIDENCE_FILE`을 요구한다. wrapper는 실행 직전에 credential을
+포함하지 않는 UTC timestamp, operation, Git SHA, migration JAR SHA-256을 해당
+evidence 파일에 append한다. evidence 파일의 상위 directory는 미리 만들어 둔다.
 V3 controlled repair는 history CSV/SQL과 schema-only dump를 먼저 만들고,
 `MIGRATION_HISTORY_CSV_BACKUP_FILE`, `MIGRATION_HISTORY_SQL_BACKUP_FILE`,
 `MIGRATION_SCHEMA_BACKUP_FILE`로 non-empty backup 파일을 지정해야 실행된다.
@@ -283,28 +309,22 @@ docker compose -f ../../infra/docker-compose.local.yml \
   -f ops/docker-compose.daily-batch-smoke.yml run --rm batch
 ```
 
-Building metadata collection and raw replay use the same packaged jar:
+ODC gap fill과 building metadata collection은 같은 packaged jar를 사용한다:
 
 ```bash
+SPRING_BATCH_JOB_NAME=complexOdcMetadataGapFillJob ./ops/run-batch-jar.sh \
+  runDate=2026-07-10 maxTargets=450 toComplexId=43978 \
+  requestId=123e4567-e89b-12d3-a456-426614174009
+
 SPRING_BATCH_JOB_NAME=complexBuildingMetadataJob ./ops/run-batch-jar.sh \
   mode=missing runDate=2026-07-10 maxRequests=900 \
   requestId=123e4567-e89b-12d3-a456-426614174010
-
-# preview: no external API and no projection mutation
-SPRING_BATCH_JOB_NAME=complexMetadataReplayJob ./ops/run-batch-jar.sh \
-  policyVersion=building-metadata-v2 snapshotId=7 apply=false \
-  requestId=123e4567-e89b-12d3-a456-426614174011
-
-# apply requires exact policy confirmation
-SPRING_BATCH_JOB_NAME=complexMetadataReplayJob ./ops/run-batch-jar.sh \
-  policyVersion=building-metadata-v2 snapshotId=7 apply=true \
-  confirmPolicyVersion=building-metadata-v2 \
-  requestId=123e4567-e89b-12d3-a456-426614174012
 ```
 
 `complex.metadata.daily-request-quota` must match the approved provider quota;
-the collection task rejects `maxRequests` above 90%. Collection and replay
-share a PostgreSQL advisory lock, so they cannot run concurrently.
+ODC는 canonical/alias 최악 조건을 반영해 `maxTargets * 2`가 quota 90% 이하여야
+하고 building collection은 `maxRequests`가 quota 90% 이하여야 한다. 두 job은
+같은 PostgreSQL advisory lock을 사용하므로 동시에 실행할 수 없다.
 
 ## Local Monitoring
 

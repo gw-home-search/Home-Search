@@ -886,15 +886,22 @@ Status:
 
 ## Admin APIs
 
+Admin browser APIs are owned by `admin-service`, not property-data. They require
+an authenticated server Session and route permission. Mutations additionally
+require the `XSRF-TOKEN` cookie value in the `X-XSRF-TOKEN` header.
+Admin-service forwards authorized work to property-data over
+`/internal/v1/admin/**` with a 60-second RS256 token. The browser never calls
+the internal endpoints directly, and actor identity is derived from the
+Session/JWT rather than a request body.
+
 ### GET `/api/v1/admin/coordinates/pending`
 
 Purpose:
 
 - Return coordinate-pending complexes that have stored identity/trade data but
   no marker-safe parcel coordinates.
-- This endpoint is an operational correction surface and is disabled unless
-  coordinate override admin is explicitly enabled.
-- Requires the `X-Admin-Access-Code` request header when enabled.
+- This endpoint is an operational correction surface exposed by admin-service.
+- Requires `COORDINATE_READ`.
 
 Query parameters:
 
@@ -905,8 +912,8 @@ Query parameters:
 
 Errors:
 
-- Missing or invalid `X-Admin-Access-Code` returns `401` with the standard
-  `ProblemDetail` body.
+- Missing or expired Session returns `401`; insufficient permission returns
+  `403`, both with a `ProblemDetail` body.
 
 Response:
 
@@ -939,9 +946,8 @@ Response:
 Purpose:
 
 - Return whole-query coordinate-pending counts for the admin correction surface.
-- This endpoint is an operational summary for the paged pending list. It is
-  disabled unless coordinate override admin is explicitly enabled.
-- Requires the `X-Admin-Access-Code` request header when enabled.
+- This endpoint is an operational summary for the paged pending list.
+- Requires `COORDINATE_READ`.
 
 Request:
 
@@ -950,8 +956,8 @@ Request:
 
 Errors:
 
-- Missing or invalid `X-Admin-Access-Code` returns `401` with the standard
-  `ProblemDetail` body.
+- Missing or expired Session returns `401`; insufficient permission returns
+  `403`.
 
 Response:
 
@@ -978,7 +984,8 @@ Status:
 
 - `200`: successful summary lookup. If no coordinate-pending complexes exist,
   return `totalCount: 0` and `0` for every documented reason key.
-- `401`: missing or invalid admin access code.
+- `401`: missing or expired admin Session.
+- `403`: insufficient permission.
 - `500`: unexpected server error.
 
 ### PUT `/api/v1/admin/coordinates/{pnu}/override`
@@ -988,12 +995,12 @@ Purpose:
 - Approve a manual coordinate override for an identity-safe PNU.
 - The override updates the existing `parcel` coordinates and does not create a
   new parcel, complex, or trade row.
-- Requires the `X-Admin-Access-Code` request header when enabled.
+- Requires `COORDINATE_WRITE` and a valid CSRF token.
 
 Errors:
 
-- Missing or invalid `X-Admin-Access-Code` returns `401` with the standard
-  `ProblemDetail` body.
+- Missing or expired Session returns `401`; insufficient permission or invalid
+  CSRF token returns `403`.
 
 Request:
 
@@ -1001,8 +1008,7 @@ Request:
 {
   "latitude": 37.5123,
   "longitude": 127.0456,
-  "reason": "operator verified missing coordinate",
-  "approvedBy": "local-operator"
+  "reason": "operator verified missing coordinate"
 }
 ```
 
@@ -1031,9 +1037,9 @@ Migration notes:
 
 ### Metadata Enrichment Admin APIs
 
-The metadata enrichment admin surface is disabled unless
-`home.admin.metadata-enrichment.enabled=true` and requires
-`X-Admin-Access-Code`.
+The metadata enrichment admin surface is exposed by admin-service. Reads require
+`METADATA_READ`; retry, HOLD, and alias operations require their corresponding
+permissions and valid CSRF token.
 
 Read APIs:
 
@@ -1054,32 +1060,10 @@ Mutation APIs:
 - `POST /api/v1/admin/metadata/pnu-aliases/{aliasId}/approve`
 - `POST /api/v1/admin/metadata/pnu-aliases/{aliasId}/disable`
 
-Building metadata read APIs:
-
-- `GET /api/v1/admin/metadata/building/pending?limit=50&offset=0`
-- `GET /api/v1/admin/metadata/building/{complexId}`: same-PNU internal
-  candidates, source identities, versioned evaluations, field comparisons,
-  top-five review recommendations, decisions, and bounded raw JSON.
-
-Building metadata mutation APIs:
-
-- `POST /api/v1/admin/metadata/building/{complexId}/identities`
-- `POST /api/v1/admin/metadata/building/{complexId}/aliases`
-- `POST /api/v1/admin/metadata/building/{complexId}/retry`
-- `POST /api/v1/admin/metadata/building/{complexId}/hold`
-- `POST /api/v1/admin/metadata/building/{complexId}/changes/{evaluationId}/approve`
-- `POST /api/v1/admin/metadata/building/{complexId}/changes/{evaluationId}/reject`
-
-Building mutations require `actor`, `reason`, and non-negative
-`expectedStateVersion`. Identity requests additionally require `source` and
-`sourceKey`; alias requests require `aliasType` and `aliasName`. Identity or
-alias approval sets `REPLAY_PENDING`; it does not implicitly replay a snapshot.
-
 Retry, HOLD, approve, and disable requests require:
 
 ```json
 {
-  "actor": "local-operator",
   "reason": "operator verification evidence"
 }
 ```
@@ -1092,10 +1076,10 @@ metadata values.
 Status:
 
 - `200`: successful read or mutation.
-- `400`: invalid page, prefix, actor, reason, complex, or alias target.
-- `401`: missing or invalid admin access code.
-- `409`: stale `expectedStateVersion`, stale evaluation, or duplicate external
-  source identity.
+- `400`: invalid page, prefix, reason, complex, or alias target.
+- `401`: missing or expired admin Session.
+- `403`: insufficient permission or invalid CSRF token.
+- `409`: downstream domain state conflict or duplicate alias proposal.
 - `500`: unexpected server error.
 
 These endpoints are additive admin operations. Public map, search, detail, and

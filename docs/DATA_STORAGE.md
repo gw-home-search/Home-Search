@@ -473,36 +473,48 @@ Admin actions do not directly write `dong_cnt`, `unit_cnt`, `use_date`,
 `parcel.pnu`, region relationships, `complex_pk`, or `apt_seq`. Alias disable
 does not delete metadata that was already resolved.
 
-### Building register evidence and replay (V7)
+### Building metadata attempt evidence (V7)
 
-V7 adds a raw-first building metadata path without changing the public detail
-projection:
+V7 is intentionally minimal and does not add raw response, snapshot,
+evaluation, replay, or external-identity tables. It adds only:
 
-- `complex_metadata_source_snapshot` stores ODC, recap-title, and title raw
-  responses before parsing. `(source_kind, requested_pnu, response_hash)` is
-  deduplicated by observation count. Bodies over 2 MiB keep only hash and byte
-  size and cannot update a projection.
-- `complex_metadata_snapshot_evaluation` appends one immutable evaluation per
-  `(snapshot_id, policy_version)`.
-- `complex_external_identity` stores `ODC_COMPLEX_PK` and
-  `BLD_MGM_BLD_RGST_PK` independently of `apt_seq` and `complex_pk`.
-- `complex_building_metadata_state` owns the latest operational state,
-  optimistic `state_version`, current evaluation, and pending evaluation.
-- `complex_building_metadata_decision` audits identity, alias, retry, HOLD,
-  replay, and value-change decisions.
+- `complex.bld_mgm_bld_rgst_pk` with a nonblank check and partial unique index.
+- `complex_metadata_enrichment_attempt.request_id` for execution correlation.
+- `complex_metadata_enrichment_attempt.projection_applied` for explicit
+  projection evidence.
 
-Candidate matching is restricted to one exact 19-digit PNU. Automatic name
-matching uses Unicode NFKC plus whitespace/case/separator normalization and
-requires an exact, mutually unique result. Contains/trigram scores are admin
-recommendations only. Building results are limited to `mainPurpsCd=02000`,
-`pageNo=1`, and `numOfRows=100`; a larger `totalCount` is held as
-`AMBIGUOUS_OVERSIZED_RESULT`.
+ODC gap fill uses the existing `PublicComplexMetadataResolver`, canonical PNU
+lookup, approved prefix alias fallback, candidate-name policy, and
+`complex_metadata_enrichment_attempt`. It selects only rows where `dong_cnt`,
+`unit_cnt`, or `use_date` is missing and no earlier ODC attempt exists. This
+one-shot selection lets successive request IDs advance through the cutoff
+without consuming quota on rows whose retry date is still in the future. Due
+retries remain owned by the existing enrichment retry path. A PNU shared by
+multiple complexes is recorded as `AMBIGUOUS` without an external request. ODC
+`COMPLEX_PK` is not stored in `apt_seq`, `complex_pk`, or a new identity table.
 
-Projection application is all-or-review: invalid non-positive values become
-`NULL`; matching existing values may fill only missing fields; any difference
-against an existing non-null value makes the whole evaluation
-`CHANGE_PENDING`. Only the explicit admin approval transaction can overwrite
-those values. Parser fixes use snapshot replay and do not call an external API.
+ODC and building projections are all-or-nothing for conflicts. A candidate may
+fill only `NULL` fields, and every existing non-null candidate field must match.
+If any value differs, no field from that candidate is projected and the attempt
+keeps `projection_applied=false`. `metadata_source` means the source of the last
+applied projection, not the last attempted lookup.
+
+Building title collection chooses `BLD_TITLE` only when `dong_cnt == 1`; all
+other cases, including `dong_cnt IS NULL`, start with `BLD_RECAP_TITLE`.
+The PNU land-category digit is converted to the building-register parameter
+instead of copied directly: PNU `1` (ordinary land) becomes `platGbCd=0`, and
+PNU `2` (mountain land) becomes `platGbCd=1`. Other PNU land-category digits
+are rejected before an external request.
+Fallback is allowed only after a successful provider response has zero usable
+`mainPurpsCd=02000` candidates. HTTP/provider/parser/oversized/multiple-candidate
+failures do not trigger fallback. Responses over 2 MiB are not retained and are
+recorded as `PERMANENT` without projection.
+
+Both jobs exclude an already-attempted complex when restarted with the same
+`request_id` and share one PostgreSQL advisory lock. ODC capacity uses the
+worst-case bound `maxTargets * 2 <= floor(daily quota * 0.9)` because canonical
+and approved-alias lookups can each make one request. Building collection checks
+the remaining `maxRequests` before every primary or fallback call.
 
 ## Partitioning
 

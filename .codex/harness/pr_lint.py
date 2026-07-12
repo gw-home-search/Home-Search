@@ -728,6 +728,9 @@ def run_self_test() -> int:
     bracket_title = valid_input(title="[Feat] 한글 제목 규칙 정리")
     bracket_without_korean = valid_input(title="[Feat] English summary")
     forbidden_env = valid_input(changed_files=(".env.local",))
+    password_source_abstraction = valid_input(
+        changed_files=("tools/AdminPasswordSource.java",)
+    )
     placeholder_summary = valid_input(title="feat(api): summary")
 
     checks = [
@@ -765,6 +768,7 @@ def run_self_test() -> int:
         lint_pr(bracket_title).ok,
         expect_case("bracket title requires Korean", bracket_without_korean, "title", "한글"),
         expect_case("forbidden env path", forbidden_env, "changed-files", ".env"),
+        lint_pr(password_source_abstraction).ok,
         expect_case("placeholder conventional title", placeholder_summary, "title", "placeholder"),
     ]
     if all(checks):

@@ -256,7 +256,6 @@ export function ExplorationPanel({
       >
         <div className="panel-section-header">
           <p>지역</p>
-          {regionDetail ? <span>{regionDetail.name}</span> : null}
         </div>
         <nav aria-label="지역 단계" className="region-breadcrumb">
           <button
@@ -316,11 +315,13 @@ export function ExplorationPanel({
           <section aria-label="선택한 읍면동 단지" className="region-complex-section">
             <div className="panel-section-header region-complex-heading">
               <p>단지</p>
-              <span>{regionComplexes.length.toLocaleString()}개</span>
+              <span aria-label={`${regionComplexes.length.toLocaleString()}개 단지`}>
+                {regionComplexes.length.toLocaleString()}
+              </span>
             </div>
             <ul aria-label="지역 단지 목록" className="panel-list region-complex-list">
               {regionComplexes.map((complex) => {
-                const meta = regionComplexMeta(complex);
+                const approvalYear = complex.useDate?.match(/^\d{4}/)?.[0];
                 return (
                   <li key={complex.complexId}>
                     <button
@@ -331,13 +332,25 @@ export function ExplorationPanel({
                         onRegionComplexSelect(complex);
                       }}
                     >
-                      <span className="region-complex-copy">
+                      <span className="region-complex-main">
                         <span className="region-complex-name">{complex.complexName}</span>
-                        <span className="region-complex-address">{formatAddress(complex.address)}</span>
-                        {meta.length > 0 ? (
-                          <span className="region-complex-meta" aria-label="단지 요약">{meta.join(' · ')}</span>
-                        ) : null}
+                        <span className="region-complex-context">
+                          <span className="region-complex-address">{formatAddress(complex.address)}</span>
+                          {approvalYear == null ? null : (
+                            <span className="region-complex-approval">· {approvalYear}년 승인</span>
+                          )}
+                        </span>
                       </span>
+                      {complex.unitCnt == null && complex.dongCnt == null ? null : (
+                        <span className="region-complex-stats" aria-label="단지 규모">
+                          {complex.unitCnt == null ? null : (
+                            <strong className="region-complex-unit">{complex.unitCnt.toLocaleString()}세대</strong>
+                          )}
+                          {complex.dongCnt == null ? null : (
+                            <span className="region-complex-dong">{complex.dongCnt.toLocaleString()}동</span>
+                          )}
+                        </span>
+                      )}
                     </button>
                   </li>
                 );
@@ -352,13 +365,4 @@ export function ExplorationPanel({
 
 function formatAddress(address: string | null): string {
   return address ?? '주소 정보 없음';
-}
-
-function regionComplexMeta(complex: RegionComplexSummary): string[] {
-  const meta: string[] = [];
-  if (complex.unitCnt != null) meta.push(`${complex.unitCnt.toLocaleString()}세대`);
-  if (complex.dongCnt != null) meta.push(`${complex.dongCnt.toLocaleString()}동`);
-  const approvalYear = complex.useDate?.match(/^\d{4}/)?.[0];
-  if (approvalYear != null) meta.push(`${approvalYear}년 승인`);
-  return meta;
 }

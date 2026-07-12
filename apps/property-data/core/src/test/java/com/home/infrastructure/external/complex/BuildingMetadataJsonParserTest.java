@@ -1,9 +1,11 @@
 package com.home.infrastructure.external.complex;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceResponse;
+import com.home.application.ingest.buildingmetadata.BuildingMetadataProviderException;
 import com.home.domain.complex.buildingmetadata.BuildingMetadataSourceKind;
 
 import org.junit.jupiter.api.DisplayName;
@@ -30,6 +32,16 @@ class BuildingMetadataJsonParserTest {
 			assertThat(candidate.values().platArea()).isEqualByComparingTo("12345.67");
 			assertThat(candidate.values().dongCnt()).isEqualTo(8);
 		});
+	}
+
+	@Test
+	@DisplayName("HTTP 200 provider 오류는 정상 빈 결과가 아니라 provider failure다")
+	void rejectsProviderErrorEnvelope() {
+		assertThatThrownBy(() -> parser.parse(snapshot(BuildingMetadataSourceKind.BLD_TITLE, """
+			{"response":{"header":{"resultCode":"99","resultMsg":"SERVICE ERROR"},"body":{"totalCount":0}}}
+			""")))
+			.isInstanceOf(BuildingMetadataProviderException.class)
+			.hasMessageContaining("resultCode=99");
 	}
 
 	private BuildingMetadataSourceResponse snapshot(BuildingMetadataSourceKind kind, String body) {

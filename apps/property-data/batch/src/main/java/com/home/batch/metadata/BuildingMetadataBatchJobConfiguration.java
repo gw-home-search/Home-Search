@@ -1,6 +1,7 @@
 package com.home.batch.metadata;
 
 import com.home.application.ingest.buildingmetadata.BuildingMetadataBatchService;
+import com.home.application.ingest.metadata.OdcMetadataGapFillService;
 
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -24,6 +25,18 @@ class BuildingMetadataBatchJobConfiguration {
 
 	@Bean @Lazy Job complexBuildingMetadataJob(JobRepository repository, Step complexBuildingMetadataStep) {
 		return new JobBuilder("complexBuildingMetadataJob", repository).start(complexBuildingMetadataStep).build();
+	}
+
+	@Bean @Lazy Job complexOdcMetadataGapFillJob(JobRepository repository, Step complexOdcMetadataGapFillStep) {
+		return new JobBuilder("complexOdcMetadataGapFillJob", repository).start(complexOdcMetadataGapFillStep).build();
+	}
+
+	@Bean @Lazy Step complexOdcMetadataGapFillStep(JobRepository repository,
+		PlatformTransactionManager transactionManager, OdcMetadataGapFillService service,
+		BuildingMetadataExecutionLock executionLock,
+		@Value("${complex.metadata.daily-request-quota:1000}") int dailyQuota) {
+		return step("complexOdcMetadataGapFillStep", repository, transactionManager,
+			new OdcMetadataGapFillTasklet(service, executionLock, dailyQuota));
 	}
 
 	@Bean @Lazy Step complexBuildingMetadataStep(JobRepository repository, PlatformTransactionManager transactionManager,

@@ -7,7 +7,7 @@ public final class SourceDataBoundary {
 
 	public static final String APP_NAME = "home-search-source-data";
 	public static final String COORDINATE_SOURCE_MIGRATION = "db/migration/coordinate-source";
-	public static final String GEO_ENRICHMENT_MIGRATION = "db/migration/geo-enrichment";
+	public static final String GEO_ENRICHMENT_MIGRATION = COORDINATE_SOURCE_MIGRATION;
 
 	private SourceDataBoundary() {
 	}

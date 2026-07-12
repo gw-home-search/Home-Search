@@ -112,10 +112,10 @@ class BaselineRuntimeSmokeTest {
 	}
 
 	@Test
-	@DisplayName("기본 ON 복구 runner와 complex relation Bean들은 실제 DB 부트에서 wiring된다")
+	@DisplayName("runtime DML 복구 runner와 complex relation Bean만 실제 DB 부트에서 wiring된다")
 	void recoveryRunnersAndComplexRelationBeansAreWiredWithRealDatabase() {
 		assertThat(applicationContext.containsBean("rawIngestReconciliationRunner")).isTrue();
-		assertThat(applicationContext.containsBean("tradePartitionMaintenanceRunner")).isTrue();
+		assertThat(applicationContext.containsBean("tradePartitionMaintenanceRunner")).isFalse();
 		assertThat(applicationContext.getBean(ComplexRelationUseCase.class)).isNotNull();
 		assertThat(missingRegionSeedCount()).isEqualTo(3L);
 	}

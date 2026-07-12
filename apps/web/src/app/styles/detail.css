@@ -159,13 +159,24 @@
 .trade-chart-tooltip strong { color: var(--hs-map-color-price); }
 
 .trade-list table { width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 10px; font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; }
-.trade-list th, .trade-list td { height: 36px; padding: 5px 4px; border-bottom: 1px solid var(--hs-map-color-line); text-align: left; vertical-align: middle; }
+.trade-list th, .trade-list td { height: 56px; padding: 6px 4px; border-bottom: 1px solid var(--hs-map-color-line); text-align: left; vertical-align: middle; }
+.trade-list th { height: 34px; }
 .trade-list th { color: var(--hs-map-color-muted); font-size: 11px; line-height: 16px; font-weight: 700; }
-.trade-list th:nth-child(1), .trade-list td:nth-child(1) { width: 27%; }
-.trade-list th:nth-child(2), .trade-list td:nth-child(2) { width: 28%; text-align: right; }
-.trade-list th:nth-child(3), .trade-list td:nth-child(3) { width: 20%; text-align: right; }
-.trade-list th:nth-child(4), .trade-list td:nth-child(4) { width: 25%; text-align: right; }
+.trade-list th:nth-child(1), .trade-list td:nth-child(1) { width: 25%; white-space: nowrap; }
+.trade-list th:nth-child(2), .trade-list td:nth-child(2) { width: 31%; text-align: right; }
+.trade-list th:nth-child(3), .trade-list td:nth-child(3) { width: 23%; text-align: right; }
+.trade-list th:nth-child(4), .trade-list td:nth-child(4) { width: 21%; text-align: right; }
 .trade-list td[data-trade-cell="amount"] { color: var(--hs-map-color-price); font-weight: 800; }
+.trade-amount-value span,
+.trade-list td.trade-area-value { line-height: 15px; }
+.trade-amount-value span,
+.trade-location-value span,
+.trade-area-value span { display: block; white-space: nowrap; }
+.trade-amount-man { font-size: 11px; }
+.trade-area-pyeong { color: var(--hs-map-color-muted); font-size: 10px; font-weight: 650; }
+.trade-location-value { line-height: 15px; }
+.trade-building { color: var(--hs-map-color-muted); font-size: 11px; font-weight: 650; }
+.trade-floor { color: var(--hs-map-color-ink); font-size: 12px; }
 .trade-load-more { width: 100%; min-height: 40px; margin-top: 10px; border: 1px solid var(--hs-map-color-line); border-radius: var(--hs-map-radius-control); background: var(--hs-map-color-surface); color: var(--hs-map-color-ink-soft); cursor: pointer; font-size: 12px; font-weight: 700; }
 .trade-load-more:hover { background: var(--hs-map-color-surface-muted); }
 

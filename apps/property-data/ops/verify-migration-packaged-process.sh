@@ -20,7 +20,7 @@ expect_exit_code() {
 }
 
 run_self_test() {
-  local temp_dir fake_jar expected
+  local temp_dir fake_jar evidence_file expected
   temp_dir="$(mktemp -d)"
   trap 'rm -rf "${temp_dir}"' RETURN
   fake_jar="${temp_dir}/fake.jar"
@@ -30,15 +30,28 @@ run_self_test() {
 set -eu
 [[ "$1" == "-jar" ]]
 [[ -f "$2" ]]
-exit "$3"
+exit "${!#}"
 EOF
   chmod 700 "${temp_dir}/java"
+  evidence_file="${temp_dir}/migration-evidence.txt"
   for expected in 0 1 2; do
     expect_exit_code "${expected}" env \
       PATH="${temp_dir}:${PATH}" \
       PROPERTY_DATA_MIGRATION_JAR="${fake_jar}" \
       "${WRAPPER}" "${expected}"
   done
+  expect_exit_code 2 env \
+    PATH="${temp_dir}:${PATH}" \
+    PROPERTY_DATA_MIGRATION_JAR="${fake_jar}" \
+    "${WRAPPER}" --operation=migrate --target=7 --confirm=7 --confirm-database=home_search
+  expect_exit_code 0 env \
+    PATH="${temp_dir}:${PATH}" \
+    PROPERTY_DATA_MIGRATION_JAR="${fake_jar}" \
+    MIGRATION_EVIDENCE_FILE="${evidence_file}" \
+    "${WRAPPER}" --operation=migrate --target=7 --confirm=7 --confirm-database=home_search 0
+  grep -Eq '^git_sha=[0-9a-f]{40}$' "${evidence_file}"
+  grep -Eq '^migration_jar_sha256=[0-9a-f]{64}$' "${evidence_file}"
+  grep -Fxq 'operation=migrate' "${evidence_file}"
   echo "self-test passed: migration jar wrapper preserves child exit codes 0/1/2"
 }
 

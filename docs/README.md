@@ -44,6 +44,9 @@ Excluded from the current project scope:
 /Users/gwongwangjae/home-search
 ├── docs/
 ├── apps/
+│   ├── admin/
+│   │   ├── service/
+│   │   └── web/
 │   ├── property-data/
 │   └── web/
 └── infra/
@@ -52,6 +55,8 @@ Excluded from the current project scope:
 - `docs/`: migration decisions and implementation guide.
 - `apps/property-data/`: property-data-service boundary for API runtime, RTMS ingest,
   domain, and persistence.
+- `apps/admin/`: admin product boundary. `service/` and `web/` remain independently
+  built and deployed applications.
 - `apps/web/`: future frontend location.
 - `infra/`: Postgres/PostGIS, Docker Compose, monitoring, and env docs.
 

@@ -121,7 +121,21 @@ SELECT to_regclass('reference.coordinate_snapshot_run') IS NOT NULL
 SQL
 )"
 if [[ "${SCHEMA_READY}" != "t" ]]; then
-  echo "ERROR: coordinate snapshot schema is missing. Apply ops/sql/coordinate-source-schema.sql first." >&2
+  echo "ERROR: coordinate snapshot schema is missing. Run source-data-migration.jar first." >&2
+  exit 2
+fi
+
+if [[ "$("${PSQL[@]}" -At -c "SELECT to_regclass('reference.flyway_schema_history') IS NOT NULL")" != "t" ]]; then
+  echo "ERROR: coordinate source Flyway history is missing." >&2
+  exit 2
+fi
+SCHEMA_VERSION="$("${PSQL[@]}" -At <<'SQL'
+SELECT COALESCE(max(version::integer) FILTER (WHERE success AND version ~ '^[0-9]+$'), 0)
+FROM reference.flyway_schema_history;
+SQL
+)"
+if (( SCHEMA_VERSION < 2 )); then
+  echo "ERROR: coordinate source Flyway version 2 or newer is required: actual=${SCHEMA_VERSION}" >&2
   exit 2
 fi
 

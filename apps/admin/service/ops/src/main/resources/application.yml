@@ -1,0 +1,9 @@
+spring:
+  main:
+    web-application-type: none
+  flyway:
+    enabled: false
+  datasource:
+    url: ${ADMIN_OPS_DB_JDBC_URL}
+    username: ${ADMIN_OPS_DB_USERNAME}
+    password: ${ADMIN_OPS_DB_PASSWORD}

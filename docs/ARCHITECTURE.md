@@ -103,12 +103,16 @@ metadata 물리 DB 분리는 실제 운영 격리 요구가 생길 때 후속 AD
 
 ## Coordinate Source Boundary
 
-Home Search uses two database roles:
+Home Search separates three databases even when one PostgreSQL cluster hosts
+them:
 
-- `home_search`: operational database for API, RTMS ingest, map display, and
-  evidence.
-- `home_search_coordinate_source`: coordinate source database used only
-  as a read-only PNU coordinate lookup source.
+- `home_search`: property-data API, Batch, and domain evidence.
+- `home_search_admin`: admin accounts, RBAC, Session, and security audit.
+- `home_search_coordinate_source`: coordinate snapshot/import state.
+
+Every database has separate migrator and runtime/import/reader roles. API and
+Batch processes keep `spring.flyway.enabled=false`; only explicit run-and-exit
+migration artifacts own Flyway history.
 
 The backend should connect to the coordinate source database through a dedicated
 coordinate lookup component. It should not copy nationwide coordinate snapshots
@@ -124,6 +128,35 @@ RTMS row -> PNU -> Coordinate Source DB lookup -> parcel -> complex -> trade
 
 VWorld VM/WFS is reserved for same-PNU multi-complex marker disambiguation and
 stores any confident complex-level result in `complex_display_coordinate`.
+
+## Admin Control-plane Boundary
+
+The admin product boundary is grouped by filesystem path while preserving two
+independent applications:
+
+```text
+apps/admin
+├── service
+└── web
+```
+
+`service` and `web` keep separate build artifacts, containers, deployment
+boundaries, and security responsibilities.
+
+```text
+Admin Web -> admin-service Session/RBAC -> short-lived signed internal token
+          -> property-data /internal/v1/admin/**
+```
+
+Admin-service never reads `home_search` directly, and property-data never reads
+`home_search_admin`. The browser does not call property-data directly. Domain
+coordinate/metadata changes and their evidence remain one transaction owned by
+property-data; the actor is derived from the authenticated principal rather
+than accepted from a browser request body.
+
+The legacy browser-facing property-data admin controllers are removed.
+Public ingress returns `404` for `/internal/**`; only admin-service reaches the
+internal property-data port on the service network.
 
 ## Frontend Current Shape
 

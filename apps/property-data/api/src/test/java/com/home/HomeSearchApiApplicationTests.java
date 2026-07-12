@@ -54,10 +54,10 @@ class HomeSearchApiApplicationTests {
 	}
 
 	@Test
-	@DisplayName("기본 ON 복구 runner들은 no-DB 부트에서도 등록되고 실행 시점에만 DB를 요구한다")
+	@DisplayName("runtime DML 복구 runner만 기본 등록되고 partition DDL runner는 opt-in이다")
 	void defaultOnRecoveryRunnersAreRegisteredWithoutDatabase() {
 		assertThat(applicationContext.containsBean("rawIngestReconciliationRunner")).isTrue();
-		assertThat(applicationContext.containsBean("tradePartitionMaintenanceRunner")).isTrue();
+		assertThat(applicationContext.containsBean("tradePartitionMaintenanceRunner")).isFalse();
 		assertThat(applicationContext.containsBean("rtmsOneShotIngestApplicationRunner")).isFalse();
 	}
 

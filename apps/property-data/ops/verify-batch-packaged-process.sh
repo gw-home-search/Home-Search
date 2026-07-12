@@ -91,4 +91,18 @@ expect_exit_code 1 env \
   requestId=123e4567-e89b-12d3-a456-426614174098 \
   > "${temp_dir}/building-metadata-application-error.log" 2>&1
 
-echo "packaged-process smoke passed: argument=2 rtms=1 building-metadata=1"
+expect_exit_code 1 env \
+  PROPERTY_DATA_BATCH_JAR="${BATCH_JAR}" \
+  SPRING_BATCH_JOB_NAME=complexOdcMetadataGapFillJob \
+  DB_JDBC_URL=jdbc:postgresql://127.0.0.1:1/home_search_unreachable \
+  DB_USERNAME=packaged_smoke \
+  DB_PASSWORD=packaged_smoke \
+  ODC_SERVICE_KEY=packaged-smoke \
+  "${WRAPPER}" \
+  runDate=2026-07-10 \
+  maxTargets=1 \
+  toComplexId=1 \
+  requestId=123e4567-e89b-12d3-a456-426614174097 \
+  > "${temp_dir}/odc-metadata-application-error.log" 2>&1
+
+echo "packaged-process smoke passed: argument=2 rtms=1 building-metadata=1 odc-metadata=1"

@@ -111,4 +111,24 @@ class BatchJobArgumentsTest {
 		assertThat(arguments.jobParameters().getString("fromComplexId")).isEqualTo("100");
 	}
 
+	@Test
+	@DisplayName("ODC gap-fill job은 maxTargets, cutoff, canonical requestId를 요구한다")
+	void parsesOdcMetadataGapFillArguments() {
+		BatchJobArguments arguments = BatchJobArguments.from("complexOdcMetadataGapFillJob", Map.of(
+			"runDate", "2026-07-10", "maxTargets", "450", "fromComplexId", "100", "toComplexId", "200",
+			"requestId", "123e4567-e89b-12d3-a456-426614174005"
+		), clock);
+
+		assertThat(arguments.jobParameters().getString("maxTargets")).isEqualTo("450");
+		assertThat(arguments.jobParameters().getString("toComplexId")).isEqualTo("200");
+	}
+
+	@Test
+	@DisplayName("ODC gap-fill job은 cutoff 누락을 거부한다")
+	void odcMetadataGapFillRequiresCutoff() {
+		assertThatThrownBy(() -> BatchJobArguments.from("complexOdcMetadataGapFillJob", Map.of(
+			"maxTargets", "20", "requestId", "123e4567-e89b-12d3-a456-426614174005"
+		), clock)).isInstanceOf(BatchExitCodeException.class).hasMessageContaining("toComplexId");
+	}
+
 }

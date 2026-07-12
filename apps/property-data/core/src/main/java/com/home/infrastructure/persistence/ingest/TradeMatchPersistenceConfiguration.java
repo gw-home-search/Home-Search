@@ -14,7 +14,12 @@ import com.home.application.ingest.matching.TradeMatchRematchService;
 import com.home.application.ingest.metadata.ComplexMetadataEnrichmentClient;
 import com.home.application.ingest.metadata.ComplexMetadataEnrichmentRepository;
 import com.home.application.ingest.metadata.ComplexMetadataEnrichmentService;
+import com.home.application.ingest.metadata.ComplexMetadataLookup;
+import com.home.application.ingest.metadata.ComplexMetadataResolution;
 import com.home.application.ingest.metadata.OdcloudPnuPrefixAliasLookup;
+import com.home.application.ingest.metadata.OdcComplexMetadataResolver;
+import com.home.application.ingest.metadata.OdcMetadataGapFillRepository;
+import com.home.application.ingest.metadata.OdcMetadataGapFillService;
 import com.home.application.ingest.metadata.admin.MetadataAdminRepository;
 import com.home.application.ingest.metadata.admin.MetadataAdminService;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
@@ -28,6 +33,7 @@ import com.home.infrastructure.persistence.ingest.matching.JdbcBuildingMetadataE
 import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMatcher;
 import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMetadataEnrichmentRepository;
 import com.home.infrastructure.persistence.ingest.matching.JdbcOdcloudPnuPrefixAliasLookup;
+import com.home.infrastructure.persistence.ingest.matching.JdbcOdcMetadataGapFillRepository;
 import com.home.infrastructure.persistence.ingest.matching.JdbcMetadataAdminRepository;
 import com.home.infrastructure.persistence.ingest.matching.JdbcTradeMatchEvidenceRepository;
 import com.home.infrastructure.persistence.ingest.matching.TradeMatchRematchRunner;
@@ -65,6 +71,30 @@ class TradeMatchPersistenceConfiguration {
 		ObjectProvider<BuildingMetadataSourceClient> clientProvider, BuildingMetadataSourceParser parser) {
 		return new BuildingMetadataBatchService(repository,
 			clientProvider.getIfAvailable(BuildingMetadataSourceClient::noop), parser);
+	}
+
+	@Bean
+	@Lazy
+	OdcMetadataGapFillRepository odcMetadataGapFillRepository(
+		ObjectProvider<JdbcClient> jdbcClientProvider,
+		ObjectProvider<PlatformTransactionManager> transactionManagerProvider
+	) {
+		return new JdbcOdcMetadataGapFillRepository(
+			IngestPersistenceJdbcSupport.requiredJdbcClient(jdbcClientProvider),
+			new TransactionTemplate(transactionManagerProvider.getObject())
+		);
+	}
+
+	@Bean
+	@Lazy
+	OdcMetadataGapFillService odcMetadataGapFillService(OdcMetadataGapFillRepository repository,
+		ObjectProvider<OdcComplexMetadataResolver> resolverProvider) {
+		return new OdcMetadataGapFillService(repository, resolverProvider.getIfAvailable(() -> new OdcComplexMetadataResolver() {
+			@Override public ComplexMetadataResolution resolveOdc(ComplexMetadataLookup lookup) {
+				throw new IllegalStateException("ODC metadata resolver is not configured");
+			}
+			@Override public boolean isOdcConfigured() { return false; }
+		}));
 	}
 
 	@Bean

@@ -53,9 +53,9 @@ class BackendProfileConfigurationTest {
 		assertThat(properties.getProperty("home.coordinate-source.db.jdbc-url"))
 			.isEqualTo("${COORDINATE_SOURCE_DB_JDBC_URL:}");
 		assertThat(properties.getProperty("home.coordinate-source.db.username"))
-			.isEqualTo("${COORDINATE_SOURCE_DB_USERNAME:${DB_USERNAME}}");
+			.isEqualTo("${COORDINATE_SOURCE_DB_USERNAME}");
 		assertThat(properties.getProperty("home.coordinate-source.db.password"))
-			.isEqualTo("${COORDINATE_SOURCE_DB_PASSWORD:${DB_PASSWORD}}");
+			.isEqualTo("${COORDINATE_SOURCE_DB_PASSWORD}");
 		assertThat(properties.getProperty("home.coordinate-source.db.connect-timeout-seconds"))
 			.isEqualTo("${COORDINATE_SOURCE_DB_CONNECT_TIMEOUT_SECONDS:5}");
 		assertThat(properties.getProperty("home.coordinate-source.db.socket-timeout-seconds"))

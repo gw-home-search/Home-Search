@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+: "${PROPERTY_RUNTIME_DB_PASSWORD:?PROPERTY_RUNTIME_DB_PASSWORD is required}"
+: "${PROPERTY_MIGRATOR_DB_PASSWORD:?PROPERTY_MIGRATOR_DB_PASSWORD is required}"
+: "${ADMIN_RUNTIME_DB_PASSWORD:?ADMIN_RUNTIME_DB_PASSWORD is required}"
+: "${ADMIN_MIGRATOR_DB_PASSWORD:?ADMIN_MIGRATOR_DB_PASSWORD is required}"
+
+psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname postgres <<'SQL'
+\getenv property_runtime_password PROPERTY_RUNTIME_DB_PASSWORD
+\getenv property_migrator_password PROPERTY_MIGRATOR_DB_PASSWORD
+\getenv admin_runtime_password ADMIN_RUNTIME_DB_PASSWORD
+\getenv admin_migrator_password ADMIN_MIGRATOR_DB_PASSWORD
+SELECT format('CREATE ROLE home_search_property_runtime LOGIN PASSWORD %L', :'property_runtime_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='home_search_property_runtime') \gexec
+SELECT format('CREATE ROLE home_search_property_migrator LOGIN PASSWORD %L', :'property_migrator_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='home_search_property_migrator') \gexec
+SELECT format('CREATE ROLE home_search_admin_runtime LOGIN PASSWORD %L', :'admin_runtime_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='home_search_admin_runtime') \gexec
+SELECT format('CREATE ROLE home_search_admin_migrator LOGIN PASSWORD %L', :'admin_migrator_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='home_search_admin_migrator') \gexec
+GRANT home_search TO home_search_property_migrator;
+SQL
+
+if ! psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname postgres -tAc \
+    "SELECT 1 FROM pg_database WHERE datname='home_search_admin'" | grep -q 1; then
+  createdb --username "${POSTGRES_USER}" --owner home_search_admin_migrator home_search_admin
+fi
+
+psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname postgres <<'SQL'
+ALTER DATABASE home_search OWNER TO home_search_property_migrator;
+GRANT CONNECT ON DATABASE home_search TO home_search_property_runtime, home_search_property_migrator;
+GRANT CONNECT ON DATABASE home_search_admin TO home_search_admin_runtime, home_search_admin_migrator;
+SQL

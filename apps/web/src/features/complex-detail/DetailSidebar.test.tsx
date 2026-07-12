@@ -106,5 +106,10 @@ describe('DetailSidebar 모바일 탭', () => {
     expect(host.querySelector('[data-detail-field="unitCnt"]')?.textContent).toContain('740');
     expect(host.querySelector('details.detail-additional-information')?.hasAttribute('open')).toBe(false);
     expect(host.querySelector('details.detail-additional-information')?.textContent).toContain('면적');
+    expect(host.querySelector('[data-trade-cell="area"]')?.textContent).toBe('84.9㎡25.7평');
+    expect(host.querySelector('[data-trade-cell="amount"] .trade-amount-eok')?.textContent).toBe('12억');
+    expect(host.querySelector('[data-trade-cell="amount"] .trade-amount-man')?.textContent).toBe('5,000만원');
+    expect(host.querySelector('[data-trade-cell="floor"] .trade-building')?.textContent).toBe('101동');
+    expect(host.querySelector('[data-trade-cell="floor"] .trade-floor')?.textContent).toBe('12층');
   });
 });

@@ -201,24 +201,29 @@
 .region-grid-list button > .region-tile-label { display: -webkit-box; width: 100%; min-width: 0; overflow: hidden; overflow-wrap: anywhere; font-size: 14px; font-weight: 700; line-height: 20px; text-align: center; white-space: normal; word-break: keep-all; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .region-grid-list button svg { position: absolute; top: 8px; right: 8px; width: 14px; height: 14px; color: var(--hs-map-color-action); }
 
-.region-complex-section { display: grid; gap: 10px; margin-top: var(--hs-map-space-3); }
-.region-complex-heading span { display: inline-flex; min-height: 24px; align-items: center; padding: 0 9px; border: 1px solid var(--hs-map-color-primary); border-radius: var(--hs-map-radius-pill); background: var(--hs-map-color-brand-soft); color: var(--hs-map-color-action); }
-.region-complex-list { gap: 0; overflow: hidden; border: 1px solid var(--hs-map-color-line); border-radius: 12px; background: var(--hs-map-color-surface); }
+.region-complex-section { display: grid; gap: 8px; margin-top: var(--hs-map-space-3); }
+.region-complex-heading span { color: var(--hs-map-color-muted); font-size: 12px; font-weight: 750; }
+.region-complex-list { gap: 0; border-top: 1px solid var(--hs-map-color-line); border-bottom: 1px solid var(--hs-map-color-line); background: var(--hs-map-color-surface); }
 .region-complex-list li + li { border-top: 1px solid var(--hs-map-color-line); }
 .region-complex-list .region-complex-card {
-  min-height: 68px;
+  min-height: 76px;
+  grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: none;
   align-items: center;
-  gap: 5px;
-  padding: 10px 13px;
+  gap: 12px;
+  padding: 11px 2px;
   border: 0;
   border-radius: 0;
   background: var(--hs-map-color-surface);
   box-shadow: none;
 }
-.region-complex-list .region-complex-card:hover { background: var(--hs-map-color-surface-muted); }
+.region-complex-list .region-complex-card:hover { background: var(--hs-map-color-brand-soft); }
 .region-complex-list .region-complex-card:focus-visible { box-shadow: inset 3px 0 0 var(--hs-map-color-action); }
-.region-complex-copy { display: grid; width: 100%; min-width: 0; gap: 2px; }
-.region-complex-name { min-width: 0; overflow: hidden; color: var(--hs-map-color-ink); font-size: 14px; font-weight: 750; line-height: 19px; text-overflow: ellipsis; white-space: nowrap; }
-.region-complex-address { min-width: 0; overflow: hidden; color: var(--hs-map-color-muted); font-size: 11px; font-weight: 550; line-height: 15px; text-overflow: ellipsis; white-space: nowrap; }
-.region-complex-meta { display: block; min-width: 0; overflow: hidden; color: var(--hs-map-color-muted); font-size: 11px; font-weight: 600; line-height: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.region-complex-main { display: grid; width: 100%; min-width: 0; gap: 5px; }
+.region-complex-name { min-width: 0; overflow: hidden; color: var(--hs-map-color-ink); font-size: 15px; font-weight: 750; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
+.region-complex-context { display: flex; min-width: 0; gap: 4px; color: var(--hs-map-color-muted); font-size: 11px; font-weight: 550; line-height: 16px; }
+.region-complex-address { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.region-complex-approval { flex: 0 0 auto; white-space: nowrap; }
+.region-complex-stats { display: grid; min-width: 68px; align-content: center; justify-items: end; gap: 3px; font-variant-numeric: tabular-nums; }
+.region-complex-unit { color: var(--hs-map-color-ink); font-size: 13px; font-weight: 800; line-height: 18px; white-space: nowrap; }
+.region-complex-dong { color: var(--hs-map-color-muted); font-size: 11px; font-weight: 650; line-height: 15px; white-space: nowrap; }

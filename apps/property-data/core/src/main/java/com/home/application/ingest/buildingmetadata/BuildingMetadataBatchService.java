@@ -27,24 +27,30 @@ public class BuildingMetadataBatchService {
 		if (maxRequests <= 0) throw new IllegalArgumentException("maxRequests must be positive");
 		if (!client.isConfigured()) throw new IllegalStateException("BLD_SERVICE_KEY is required");
 		int requests = 0, targets = 0, resolved = 0, review = 0, failed = 0;
-		for (BuildingMetadataTarget target : repository.findTargets(mode, maxRequests, fromComplexId, toComplexId)) {
-			if (targets >= maxRequests) break;
-			targets++;
+		int consecutiveTransientFailures = 0;
+		for (BuildingMetadataTarget target : repository.findTargets(mode, maxRequests, fromComplexId, toComplexId, requestId)) {
 			BuildingMetadataAttemptResult result;
 			if (target.pnuComplexCount() != 1) {
+				targets++;
 				result = repository.recordAmbiguousPnu(target, requestId);
 			}
 			else {
+				if (requests >= maxRequests) break;
+				targets++;
 				BuildingMetadataSourceKind primary = target.currentValues().dongCnt() != null
 					&& target.currentValues().dongCnt() == 1 ? BuildingMetadataSourceKind.BLD_TITLE
 					: BuildingMetadataSourceKind.BLD_RECAP_TITLE;
 				FetchResult fetched = fetch(target, primary, requestId);
 				requests++;
+				consecutiveTransientFailures = nextTransientCount(consecutiveTransientFailures, fetched);
+				stopOnProviderOutage(consecutiveTransientFailures);
 				if (fetched.empty() && requests < maxRequests) {
 					BuildingMetadataSourceKind fallback = primary == BuildingMetadataSourceKind.BLD_TITLE
 						? BuildingMetadataSourceKind.BLD_RECAP_TITLE : BuildingMetadataSourceKind.BLD_TITLE;
 					fetched = fetch(target, fallback, requestId);
 					requests++;
+					consecutiveTransientFailures = nextTransientCount(consecutiveTransientFailures, fetched);
+					stopOnProviderOutage(consecutiveTransientFailures);
 				}
 				result = fetched.result() != null ? fetched.result() : repository.recordFailure(target, fetched.source(),
 					ComplexMetadataStatus.UNAVAILABLE, ComplexMetadataFailureKind.SOURCE_MISSING,
@@ -60,8 +66,20 @@ public class BuildingMetadataBatchService {
 	private FetchResult fetch(BuildingMetadataTarget target, BuildingMetadataSourceKind source, UUID requestId) {
 		try {
 			BuildingMetadataSourceResponse response = client.fetch(source, target.pnu());
+			if (response.payloadOversized()) {
+				return permanentFailure(target, source, requestId, "building source payload exceeds 2 MiB");
+			}
 			if (response.httpStatus() == null || response.httpStatus() < 200 || response.httpStatus() >= 300) {
-				return failure(target, source, requestId, "building source HTTP failure");
+				int status = response.httpStatus() == null ? 0 : response.httpStatus();
+				if (status == 401 || status == 403 || status == 429) {
+					repository.recordFailure(target, source, ComplexMetadataStatus.FAILED,
+						ComplexMetadataFailureKind.PERMANENT, "building source authentication or quota failure",
+						requestId, null);
+					throw new FatalBuildingMetadataException("building source authentication or quota failure");
+				}
+				return status >= 400 && status < 500
+					? permanentFailure(target, source, requestId, "building source HTTP failure")
+					: transientFailure(target, source, requestId, "building source HTTP failure");
 			}
 			ParsedBuildingMetadataSource parsed = parser.parse(response);
 			if (parsed.totalCount() > 100) {
@@ -73,16 +91,50 @@ public class BuildingMetadataBatchService {
 			}
 			return new FetchResult(repository.apply(target, source, parsed, requestId), false, source);
 		}
+		catch (FatalBuildingMetadataException exception) {
+			throw exception;
+		}
+		catch (BuildingMetadataProviderException exception) {
+			BuildingMetadataAttemptResult result = repository.recordFailure(target, source, ComplexMetadataStatus.FAILED,
+				exception.failureKind(), exception.getMessage(), requestId, null);
+			if (exception.fatal()) throw new FatalBuildingMetadataException(exception.getMessage());
+			return new FetchResult(result, false, source, false);
+		}
 		catch (RuntimeException exception) {
-			return failure(target, source, requestId, "building source request or parsing failed");
+			return transientFailure(target, source, requestId, "building source request or parsing failed");
 		}
 	}
 
-	private FetchResult failure(BuildingMetadataTarget target, BuildingMetadataSourceKind source, UUID requestId,
+	private FetchResult transientFailure(BuildingMetadataTarget target, BuildingMetadataSourceKind source, UUID requestId,
 		String reason) {
 		return new FetchResult(repository.recordFailure(target, source, ComplexMetadataStatus.FAILED,
-			ComplexMetadataFailureKind.TRANSIENT, reason, requestId, Instant.now().plusSeconds(86_400)), false, source);
+			ComplexMetadataFailureKind.TRANSIENT, reason, requestId, Instant.now().plusSeconds(86_400)), false, source, true);
 	}
 
-	private record FetchResult(BuildingMetadataAttemptResult result, boolean empty, BuildingMetadataSourceKind source) {}
+	private FetchResult permanentFailure(BuildingMetadataTarget target, BuildingMetadataSourceKind source,
+		UUID requestId, String reason) {
+		return new FetchResult(repository.recordFailure(target, source, ComplexMetadataStatus.FAILED,
+			ComplexMetadataFailureKind.PERMANENT, reason, requestId, null), false, source, false);
+	}
+
+	private int nextTransientCount(int current, FetchResult fetched) {
+		return fetched.transientFailure() ? current + 1 : 0;
+	}
+
+	private void stopOnProviderOutage(int consecutiveTransientFailures) {
+		if (consecutiveTransientFailures >= 3) {
+			throw new IllegalStateException("building metadata provider failed transiently 3 consecutive times");
+		}
+	}
+
+	private record FetchResult(BuildingMetadataAttemptResult result, boolean empty,
+		BuildingMetadataSourceKind source, boolean transientFailure) {
+		private FetchResult(BuildingMetadataAttemptResult result, boolean empty, BuildingMetadataSourceKind source) {
+			this(result, empty, source, false);
+		}
+	}
+
+	private static class FatalBuildingMetadataException extends IllegalStateException {
+		FatalBuildingMetadataException(String message) { super(message); }
+	}
 }

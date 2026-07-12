@@ -42,7 +42,7 @@ public class JdbcBuildingMetadataEvidenceRepository implements BuildingMetadataE
 	}
 
 	@Override
-	public List<BuildingMetadataTarget> findTargets(String mode, int limit, Long fromId, Long toId) {
+	public List<BuildingMetadataTarget> findTargets(String mode, int limit, Long fromId, Long toId, UUID requestId) {
 		String modePredicate = switch (mode) {
 			case "missing" -> """
 				NOT EXISTS (SELECT 1 FROM complex_metadata_enrichment_attempt a
@@ -62,16 +62,24 @@ public class JdbcBuildingMetadataEvidenceRepository implements BuildingMetadataE
 			       c.tot_area,c.bc_rat,c.vl_rat,c.use_date,
 			       (SELECT count(*) FROM complex pc JOIN parcel pp ON pp.id=pc.parcel_id WHERE pp.pnu=p.pnu) AS pnu_complex_count
 			FROM complex c JOIN parcel p ON p.id=c.parcel_id
-			WHERE (c.plat_area IS NULL OR c.arch_area IS NULL OR c.tot_area IS NULL OR c.bc_rat IS NULL OR c.vl_rat IS NULL)
+			WHERE (c.bld_mgm_bld_rgst_pk IS NULL OR c.plat_area IS NULL OR c.arch_area IS NULL
+			       OR c.tot_area IS NULL OR c.bc_rat IS NULL OR c.vl_rat IS NULL)
 			  AND c.metadata_hold_at IS NULL
 			  AND c.id>=COALESCE(:from_id,c.id) AND c.id<=COALESCE(:to_id,c.id)
+			  AND NOT EXISTS (SELECT 1 FROM complex_metadata_enrichment_attempt request_attempt
+			                  WHERE request_attempt.complex_id=c.id AND request_attempt.request_id=:request_id
+			                    AND request_attempt.source IN ('BLD_TITLE','BLD_RECAP_TITLE'))
 			  AND (""" + modePredicate + ") ORDER BY c.id LIMIT :limit")
-			.param("from_id", fromId).param("to_id", toId).param("limit", limit).query(this::target).list();
+			.param("from_id", fromId).param("to_id", toId).param("request_id", requestId)
+			.param("limit", limit).query(this::target).list();
 	}
 
 	@Override
 	public BuildingMetadataAttemptResult recordAmbiguousPnu(BuildingMetadataTarget target, UUID requestId) {
-		return transaction.execute(status -> record(target, null, ComplexMetadataStatus.AMBIGUOUS,
+		BuildingMetadataSourceKind source = target.currentValues().dongCnt() != null
+			&& target.currentValues().dongCnt() == 1 ? BuildingMetadataSourceKind.BLD_TITLE
+			: BuildingMetadataSourceKind.BLD_RECAP_TITLE;
+		return transaction.execute(status -> record(target, source, ComplexMetadataStatus.AMBIGUOUS,
 			ComplexMetadataFailureKind.AMBIGUOUS, "multiple complexes share the requested PNU", null,
 			target.pnuComplexCount(), false, requestId, null));
 	}
@@ -127,7 +135,8 @@ public class JdbcBuildingMetadataEvidenceRepository implements BuildingMetadataE
 			 plat_area=COALESCE(plat_area,:plat),arch_area=COALESCE(arch_area,:arch),tot_area=COALESCE(tot_area,:tot),
 			 bc_rat=COALESCE(bc_rat,:bc),vl_rat=COALESCE(vl_rat,:vl),use_date=COALESCE(use_date,:use_date),
 			 bld_mgm_bld_rgst_pk=COALESCE(bld_mgm_bld_rgst_pk,:key),metadata_status=:metadata_status,
-			 metadata_source=:source,metadata_checked_at=now(),metadata_failure_kind=NULL,metadata_failure_reason=NULL,
+			 metadata_source=CASE WHEN :changed THEN :source ELSE metadata_source END,
+			 metadata_checked_at=now(),metadata_failure_kind=NULL,metadata_failure_reason=NULL,
 			 metadata_next_attempt_at=NULL,updated_at=CASE WHEN :changed THEN now() ELSE updated_at END
 			WHERE id=:id AND (bld_mgm_bld_rgst_pk IS NULL OR bld_mgm_bld_rgst_pk=:key)
 			""").param("dong", merged.dongCnt()).param("unit", merged.unitCnt()).param("plat", merged.platArea())
@@ -138,7 +147,8 @@ public class JdbcBuildingMetadataEvidenceRepository implements BuildingMetadataE
 		if (updated != 1) return conflict(target, source, "building register identity changed concurrently", requestId);
 		String alias = candidate.names().stream().filter(name -> name != null && !name.isBlank()).findFirst().orElse(null);
 		if (alias != null) upsertAlias(target.complexId(), alias);
-		ComplexMetadataStatus attemptStatus = merged.hasAllAreaValues() ? ComplexMetadataStatus.RESOLVED : ComplexMetadataStatus.PARTIAL;
+		ComplexMetadataStatus attemptStatus = coreComplete(merged) && merged.hasAllAreaValues()
+			? ComplexMetadataStatus.RESOLVED : ComplexMetadataStatus.PARTIAL;
 		Instant retry = attemptStatus.isPartial() ? Instant.now().plusSeconds(14L * 86_400) : null;
 		return record(target, source, attemptStatus, null, null, locked.pnu(), 1, changed, requestId, retry);
 	}

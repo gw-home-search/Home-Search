@@ -1,11 +1,16 @@
 package com.home.batch;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.Mockito.mock;
 
 import com.home.application.coordinate.lookup.ParcelCoordinateResolver;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
 import com.home.application.ingest.rtms.RtmsMonthlyRefreshUseCase;
+import com.home.application.ingest.metadata.OdcComplexMetadataResolver;
+import com.home.application.ingest.metadata.OdcMetadataGapFillRepository;
+import com.home.application.ingest.metadata.OdcMetadataGapFillService;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,12 +46,14 @@ class PropertyDataBatchContextBoundaryTest {
 			assertThat(context)
 				.hasBean("rtmsDailyRefreshJob")
 				.hasBean("complexBuildingMetadataJob")
+				.hasBean("complexOdcMetadataGapFillJob")
 				.doesNotHaveBean("complexMetadataReplayJob")
 				.hasBean("coordinatePreflightStep")
 				.hasBean("rtmsDailyMonthlyIngestStep")
 				.hasBean("regionUnitSyncStep")
 				.hasSingleBean(ParcelCoordinateResolver.class)
 				.hasSingleBean(RtmsMonthlyRefreshUseCase.class)
+				.hasSingleBean(OdcComplexMetadataResolver.class)
 				.hasSingleBean(RawTradeIngestRepository.class)
 				.hasSingleBean(NormalizedTradeRepository.class)
 				.hasSingleBean(PlatformTransactionManager.class)
@@ -62,5 +69,26 @@ class PropertyDataBatchContextBoundaryTest {
 				.doesNotHaveBean("mapController")
 				.doesNotHaveBean("apiExceptionHandler");
 		});
+	}
+
+	@Test
+	@DisplayName("Batch ODC service는 설정된 실제 resolver를 사용하고 미구성 fallback을 캡처하지 않는다")
+	void odcGapFillServiceUsesConfiguredResolver() {
+		OdcMetadataGapFillRepository repository = mock(OdcMetadataGapFillRepository.class);
+		contextRunner
+			.withPropertyValues("ODC_SERVICE_KEY=packaged-test")
+			.withInitializer(context -> context.addBeanFactoryPostProcessor(beanFactory -> {
+				for (String beanName : beanFactory.getBeanDefinitionNames()) {
+					beanFactory.getBeanDefinition(beanName).setLazyInit(true);
+				}
+			}))
+			.withBean("testOdcMetadataGapFillRepository", OdcMetadataGapFillRepository.class, () -> repository,
+				definition -> definition.setPrimary(true))
+			.run(context -> {
+				OdcMetadataGapFillService service = context.getBean(OdcMetadataGapFillService.class);
+				assertThatCode(() -> service.fill(1, null, 1L,
+					java.util.UUID.fromString("123e4567-e89b-12d3-a456-426614174099")))
+					.doesNotThrowAnyException();
+			});
 	}
 }

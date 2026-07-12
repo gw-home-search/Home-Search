@@ -11,10 +11,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceParser;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceResponse;
+import com.home.application.ingest.buildingmetadata.BuildingMetadataProviderException;
 import com.home.application.ingest.buildingmetadata.ParsedBuildingMetadataSource;
 import com.home.domain.complex.buildingmetadata.BuildingMetadataMatchPolicy.SourceCandidate;
 import com.home.domain.complex.buildingmetadata.BuildingMetadataSourceKind;
 import com.home.domain.complex.buildingmetadata.BuildingMetadataValues;
+import com.home.domain.complex.metadata.ComplexMetadataFailureKind;
 
 public class BuildingMetadataJsonParser implements BuildingMetadataSourceParser {
 	private final ObjectMapper objectMapper;
@@ -27,11 +29,25 @@ public class BuildingMetadataJsonParser implements BuildingMetadataSourceParser 
 	public ParsedBuildingMetadataSource parse(BuildingMetadataSourceResponse snapshot) {
 		try {
 			JsonNode root = objectMapper.readTree(snapshot.body());
+			validateProviderResult(root);
 			return parseBuilding(root, snapshot.requestedPnu());
+		}
+		catch (BuildingMetadataProviderException exception) {
+			throw exception;
 		}
 		catch (Exception exception) {
 			throw new IllegalArgumentException("building metadata JSON parsing failed", exception);
 		}
+	}
+
+	private void validateProviderResult(JsonNode root) {
+		JsonNode header = path(root, "response", "header");
+		if (header == null) return;
+		String resultCode = text(header, "resultCode", "RESULT_CODE");
+		if (resultCode == null || "00".equals(resultCode) || "000".equals(resultCode)) return;
+		boolean fatal = java.util.Set.of("20", "22", "30", "31", "32").contains(resultCode);
+		throw new BuildingMetadataProviderException("building provider failure resultCode=" + resultCode,
+			ComplexMetadataFailureKind.PERMANENT, fatal);
 	}
 
 	private ParsedBuildingMetadataSource parseBuilding(JsonNode root, String requestedPnu) {

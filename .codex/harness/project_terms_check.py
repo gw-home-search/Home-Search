@@ -28,6 +28,7 @@ SKIP_DIRS = {
     "coverage",
     "dist",
     "node_modules",
+    "runtime-keys",
     "target",
 }
 
@@ -65,6 +66,7 @@ ALLOW_PATTERNS = [
     re.compile(pattern)
     for pattern in (
         r"/api/v1(?:/|\b)",
+        r"/internal/v1(?:/|\b)",
         r"https://(?:openapi\.naver\.com|api\.openai\.com)/v1(?:/|\b)",
         r"V[0-9]+__.*\.sql",
         r"\b(?:naver-news-search-metadata|naver-title-snippet|news-signal|news-signal-json|test|prompt|schema)-v[0-9]+\b",
@@ -74,6 +76,14 @@ ALLOW_PATTERNS = [
         r"sha512-[A-Za-z0-9+/=]*V[0-9][A-Za-z0-9+/=]*",
     )
 ]
+
+MIGRATION_VERSION_PATHS = (
+    "apps/property-data/migration/",
+    "apps/source-data/README.md",
+    "apps/source-data/src/main/java/com/home/sourcedata/migration/",
+    "apps/source-data/src/test/java/com/home/sourcedata/migration/",
+    "apps/property-data/api/src/test/java/com/home/foundation/CoordinateImportOpsConfigurationTest.java",
+)
 
 USER_VISIBLE_FILES = [
     ".github/pull_request_template.md",
@@ -176,10 +186,12 @@ def candidate_files() -> Iterable[Path]:
         yield path
 
 
-def mask_allowed_fragments(line: str) -> str:
+def mask_allowed_fragments(path: Path, line: str) -> str:
     masked = line
     for pattern in ALLOW_PATTERNS:
         masked = pattern.sub("", masked)
+    if rel(path).startswith(MIGRATION_VERSION_PATHS):
+        masked = re.sub(r"\b[Vv][0-9]+\b", "", masked)
     return masked
 
 
@@ -187,7 +199,7 @@ def scan_text(path: Path, text: str) -> list[Finding]:
     relative = rel(path)
     findings: list[Finding] = []
     for index, line in enumerate(text.splitlines(), 1):
-        scanned_line = mask_allowed_fragments(line)
+        scanned_line = mask_allowed_fragments(path, line)
         for pattern in BANNED_PATTERNS:
             if pattern.search(scanned_line):
                 findings.append(Finding(relative, index, line.strip(), pattern.pattern))
@@ -292,11 +304,15 @@ def run_self_test() -> int:
     checks = [
         len(findings) == 6,
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "GET /api/v1/search/complexes"),
+        not scan_text(REPO_ROOT / "SELF_TEST.txt", "GET /internal/v1/admin/coordinates"),
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "home-search:prediction:v1:F37:complex:501"),
         scan_text(REPO_ROOT / "SELF_TEST.txt", "V1 API stays at /api/v1/search/complexes") != [],
         scan_text(REPO_ROOT / "SELF_TEST.txt", "V2 ranking") != [],
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "prompt-version: news-signal-v1"),
+        not scan_text(REPO_ROOT / "apps/source-data/README.md", "V1 is the fresh database schema"),
+        scan_text(REPO_ROOT / "docs/README.md", "V1 is the product milestone") != [],
         should_skip(REPO_ROOT / ".codex/harness/reports/sample.md"),
+        should_skip(REPO_ROOT / "runtime-keys/admin-e2e/private.pem"),
         bool(bad_language),
         not good_language,
         not legacy_language,

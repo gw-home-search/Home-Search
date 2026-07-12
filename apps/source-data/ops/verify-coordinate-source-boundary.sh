@@ -48,9 +48,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 if [[ -z "${MODE}" ]]; then
-  echo "ERROR: mode is required." >&2
-  usage >&2
-  exit 2
+  MODE="self-test"
 fi
 
 PSQL=(psql -X -v ON_ERROR_STOP=1)
@@ -127,6 +125,21 @@ SQL
 )"
   if [[ "${schema_ready}" != "t" ]]; then
     echo "ERROR: coordinate source DB schema is missing required live reference tables." >&2
+    exit 1
+  fi
+
+  if [[ "$("${PSQL[@]}" -At -c "SELECT to_regclass('reference.flyway_schema_history') IS NOT NULL")" != "t" ]]; then
+    echo "ERROR: coordinate source Flyway history is missing." >&2
+    exit 1
+  fi
+  local source_version
+  source_version="$("${PSQL[@]}" -At <<'SQL'
+SELECT COALESCE(max(version::integer) FILTER (WHERE success AND version ~ '^[0-9]+$'), 0)
+FROM reference.flyway_schema_history;
+SQL
+)"
+  if (( source_version < 2 )); then
+    echo "ERROR: coordinate source Flyway version 2 or newer is required: actual=${source_version}" >&2
     exit 1
   fi
 
@@ -211,6 +224,16 @@ SQL
 )"
   if [[ "${geo_ready}" != "t" ]]; then
     echo "ERROR: geo enrichment DB schema is missing vworld_wfs_footprint_cache." >&2
+    exit 1
+  fi
+  local geo_version
+  geo_version="$("${PSQL[@]}" -At <<'SQL'
+SELECT COALESCE(max(version::integer) FILTER (WHERE success AND version ~ '^[0-9]+$'), 0)
+FROM reference.flyway_schema_history;
+SQL
+)"
+  if (( geo_version < 3 )); then
+    echo "ERROR: geo enrichment Flyway version 3 or newer is required: actual=${geo_version}" >&2
     exit 1
   fi
   echo "coordinate boundary passed: geo enrichment DB owns VWorld WFS raw/cache table"

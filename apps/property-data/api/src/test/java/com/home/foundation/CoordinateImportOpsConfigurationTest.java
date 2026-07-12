@@ -28,10 +28,10 @@ class CoordinateImportOpsConfigurationTest {
 	private static final Path API_BASELINE_MIGRATION =
 			Path.of("..", "core", "src", "main", "resources", "db", "migration", "api",
 				"V1__create_clean_core_schema.sql");
-	private static final Path COORDINATE_SOURCE_SCHEMA_SQL =
-			SOURCE_DATA_ROOT.resolve("ops/sql/coordinate-source-schema.sql");
+	private static final Path COORDINATE_SOURCE_RECONCILIATION_MIGRATION =
+			SOURCE_DATA_ROOT.resolve("src/main/resources/db/migration/coordinate-source/V2__reconcile_legacy_coordinate_source.sql");
 	private static final Path GEO_ENRICHMENT_MIGRATION =
-			SOURCE_DATA_ROOT.resolve("src/main/resources/db/migration/geo-enrichment/V1__create_geo_enrichment_schema.sql");
+			SOURCE_DATA_ROOT.resolve("src/main/resources/db/migration/coordinate-source/V3__create_geo_enrichment_schema.sql");
 
 	@Test
 	@DisplayName("coordinate import compose override는 service key 없이 read-only SHP input을 연결한다")
@@ -65,8 +65,10 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(verifier).contains("PGPORT: \"5432\"");
 		assertThat(verifier)
 			.contains("PGDATABASE: ${COORDINATE_SOURCE_DB_NAME:-home_search_coordinate_source}");
-		assertThat(verifier).contains("PGUSER: ${HOME_SEARCH_DB_USERNAME:-home_search}");
-		assertThat(verifier).contains("PGPASSWORD: ${HOME_SEARCH_DB_PASSWORD:-home_search_local_password}");
+		assertThat(importer).contains("PGUSER: ${SOURCE_IMPORTER_DB_USERNAME:-home_search_coordinate_importer}");
+		assertThat(importer).contains("PGPASSWORD: ${SOURCE_IMPORTER_DB_PASSWORD:-coordinate_importer_local_password}");
+		assertThat(verifier).contains("PGUSER: ${COORDINATE_READER_DB_USERNAME:-home_search_coordinate_reader}");
+		assertThat(verifier).contains("PGPASSWORD: ${COORDINATE_READER_DB_PASSWORD:-coordinate_reader_local_password}");
 		assertThat(verifier).contains("HOME_COORDINATE_EXPECTED_REGIONS: ${HOME_COORDINATE_EXPECTED_REGIONS:-}");
 		assertThat(verifier).contains("HOME_COORDINATE_MIN_PNU_COUNT: ${HOME_COORDINATE_MIN_PNU_COUNT:-1}");
 		assertThat(verifier).contains("HOME_COORDINATE_REQUIRE_SYNC_PARCEL: ${HOME_COORDINATE_REQUIRE_SYNC_PARCEL:-false}");
@@ -124,7 +126,10 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(content).contains("reference.coordinate_snapshot_publish_chunk_checkpoint");
 		assertThat(content).contains("HOME_COORDINATE_RESUME_RUN_ID");
 		assertThat(content).contains("HOME_COORDINATE_CHUNK_PREFIX_LENGTH");
-		assertThat(content).contains("HOME_COORDINATE_SCHEMA_SQL");
+		assertThat(content).contains("HOME_COORDINATE_EXPECTED_DATABASE");
+		assertThat(content).contains("HOME_COORDINATE_REQUIRED_SCHEMA_VERSION");
+		assertThat(content).contains("reference.flyway_schema_history");
+		assertThat(content).doesNotContain("HOME_COORDINATE_SCHEMA_SQL");
 		assertThat(content).contains("coordinate snapshot region import skipped");
 		assertThat(content).contains("coordinate snapshot stage chunk skipped");
 		assertThat(content).contains("coordinate snapshot stage chunk passed");
@@ -149,18 +154,18 @@ class CoordinateImportOpsConfigurationTest {
 	}
 
 	@Test
-	@DisplayName("coordinate source schema SQL은 API Flyway 밖에서 durable stage와 checkpoint를 제공한다")
+	@DisplayName("source-data V2 Flyway migration은 durable stage와 checkpoint를 제공한다")
 	void coordinateSnapshotResumableImportSchemaProvidesDurableStageAndCheckpoints() throws IOException {
-		assertThat(COORDINATE_SOURCE_SCHEMA_SQL).exists();
+		assertThat(COORDINATE_SOURCE_RECONCILIATION_MIGRATION).exists();
 
-		String content = Files.readString(COORDINATE_SOURCE_SCHEMA_SQL);
+		String content = Files.readString(COORDINATE_SOURCE_RECONCILIATION_MIGRATION);
 
-		assertThat(content).contains("CREATE TABLE reference.parcel_coordinate_snapshot_stage");
-		assertThat(content).contains("CREATE TABLE reference.coordinate_snapshot_region_checkpoint");
-		assertThat(content).contains("CREATE TABLE reference.coordinate_snapshot_stage_chunk_checkpoint");
-		assertThat(content).contains("CREATE TABLE reference.parcel_coordinate_snapshot_publish");
-		assertThat(content).contains("CREATE TABLE reference.coordinate_snapshot_publish_checkpoint");
-		assertThat(content).contains("CREATE TABLE reference.coordinate_snapshot_publish_chunk_checkpoint");
+		assertThat(content).contains("CREATE TABLE IF NOT EXISTS reference.parcel_coordinate_snapshot_stage");
+		assertThat(content).contains("CREATE TABLE IF NOT EXISTS reference.coordinate_snapshot_region_checkpoint");
+		assertThat(content).contains("CREATE TABLE IF NOT EXISTS reference.coordinate_snapshot_stage_chunk_checkpoint");
+		assertThat(content).contains("CREATE TABLE IF NOT EXISTS reference.parcel_coordinate_snapshot_publish");
+		assertThat(content).contains("CREATE TABLE IF NOT EXISTS reference.coordinate_snapshot_publish_checkpoint");
+		assertThat(content).contains("CREATE TABLE IF NOT EXISTS reference.coordinate_snapshot_publish_chunk_checkpoint");
 		assertThat(content).contains("'STARTED'");
 		assertThat(content).contains("'PASSED'");
 		assertThat(content).contains("'FAILED'");
@@ -179,7 +184,8 @@ class CoordinateImportOpsConfigurationTest {
 		assertThat(Path.of("..", "core", "src", "main", "resources", "db", "migration", "coordinate-source"))
 			.doesNotExist();
 		assertThat(Path.of("..", "core", "src", "main", "resources", "db", "migration", "api")).exists();
-		assertThat(COORDINATE_SOURCE_SCHEMA_SQL).exists();
+		assertThat(COORDINATE_SOURCE_RECONCILIATION_MIGRATION).exists();
+		assertThat(SOURCE_DATA_ROOT.resolve("ops/sql/coordinate-source-schema.sql")).doesNotExist();
 	}
 
 	@Test

@@ -32,7 +32,8 @@ Optional:
   HOME_COORDINATE_KEEP_STAGING           Defaults to false.
   HOME_COORDINATE_RESUME_RUN_ID          Explicit coordinate_snapshot_run id to resume.
   HOME_COORDINATE_CHUNK_PREFIX_LENGTH    PNU prefix length for resumable chunks. Defaults to 5.
-  HOME_COORDINATE_SCHEMA_SQL             Coordinate source schema SQL. Defaults to ops/sql/coordinate-source-schema.sql.
+  HOME_COORDINATE_EXPECTED_DATABASE      Required target database. Defaults to home_search_coordinate_source.
+  HOME_COORDINATE_REQUIRED_SCHEMA_VERSION Minimum successful Flyway version. Defaults to 2.
 EOF
 }
 
@@ -80,7 +81,8 @@ SYNC_PARCEL="${HOME_COORDINATE_SYNC_PARCEL:-false}"
 KEEP_STAGING="${HOME_COORDINATE_KEEP_STAGING:-false}"
 RESUME_RUN_ID="${HOME_COORDINATE_RESUME_RUN_ID:-}"
 CHUNK_PREFIX_LENGTH="${HOME_COORDINATE_CHUNK_PREFIX_LENGTH:-5}"
-SCHEMA_SQL="${HOME_COORDINATE_SCHEMA_SQL:-ops/sql/coordinate-source-schema.sql}"
+EXPECTED_DATABASE="${HOME_COORDINATE_EXPECTED_DATABASE:-home_search_coordinate_source}"
+REQUIRED_SCHEMA_VERSION="${HOME_COORDINATE_REQUIRED_SCHEMA_VERSION:-2}"
 EXPECTED_REGIONS="${HOME_COORDINATE_EXPECTED_REGIONS:-11 26 27 28 29 30 31 36 41 43 44 46 47 48 50 51 52}"
 LOCK_KEY="home_search_coordinate_snapshot_import"
 LOCK_ACQUIRED="false"
@@ -319,6 +321,15 @@ case "${INPUT_FORMAT}" in
     exit 2
     ;;
 esac
+
+if [[ -z "${EXPECTED_DATABASE}" ]]; then
+  echo "ERROR: HOME_COORDINATE_EXPECTED_DATABASE must not be blank" >&2
+  exit 2
+fi
+if [[ ! "${REQUIRED_SCHEMA_VERSION}" =~ ^[0-9]+$ || "${REQUIRED_SCHEMA_VERSION}" -lt 2 ]]; then
+  echo "ERROR: HOME_COORDINATE_REQUIRED_SCHEMA_VERSION must be an integer greater than or equal to 2" >&2
+  exit 2
+fi
 
 if [[ -z "${SHP_DIR}" ]]; then
   usage >&2
@@ -809,6 +820,12 @@ if [[ "${PRE_FLIGHT_ONLY}" == "true" ]]; then
   exit 0
 fi
 
+connected_database="$("${PSQL[@]}" -At -c 'SELECT current_database()')"
+if [[ "${connected_database}" != "${EXPECTED_DATABASE}" ]]; then
+  echo "ERROR: coordinate importer target database mismatch: expected=${EXPECTED_DATABASE}, actual=${connected_database}" >&2
+  exit 2
+fi
+
 schema_ready="$("${PSQL[@]}" -At <<'SQL'
 SELECT to_regclass('reference.coordinate_snapshot_run') IS NOT NULL
    AND to_regclass('reference.parcel_coordinate_snapshot') IS NOT NULL
@@ -821,11 +838,24 @@ SELECT to_regclass('reference.coordinate_snapshot_run') IS NOT NULL
 SQL
 )"
 if [[ "${schema_ready}" != "t" ]]; then
-  if [[ ! -f "${SCHEMA_SQL}" ]]; then
-    echo "ERROR: coordinate snapshot schema is missing and schema SQL was not found: ${SCHEMA_SQL}" >&2
-    exit 2
-  fi
-  "${PSQL[@]}" -f "${SCHEMA_SQL}"
+  echo "ERROR: coordinate snapshot schema is missing. Run source-data-migration.jar before the importer." >&2
+  exit 2
+fi
+
+if [[ "$("${PSQL[@]}" -At -c "SELECT to_regclass('reference.flyway_schema_history') IS NOT NULL")" != "t" ]]; then
+  echo "ERROR: coordinate source Flyway history is missing. Run the controlled baseline and migration first." >&2
+  exit 2
+fi
+
+schema_version="$("${PSQL[@]}" -v required_version="${REQUIRED_SCHEMA_VERSION}" -At <<'SQL'
+SELECT COALESCE(max(version::integer) FILTER (WHERE success), 0)
+FROM reference.flyway_schema_history
+WHERE version ~ '^[0-9]+$';
+SQL
+)"
+if (( schema_version < REQUIRED_SCHEMA_VERSION )); then
+  echo "ERROR: coordinate source Flyway version is too old: required=${REQUIRED_SCHEMA_VERSION}, actual=${schema_version}" >&2
+  exit 2
 fi
 
 acquire_lock

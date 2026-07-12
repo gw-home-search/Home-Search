@@ -21,3 +21,9 @@ includeBuild('../../libs/rtms-ingest-core') {
         substitute module('com.home:rtms-ingest-core') using project(':')
     }
 }
+
+includeBuild('../../libs/security-jwt-core') {
+    dependencySubstitution {
+        substitute module('com.home:security-jwt-core') using project(':')
+    }
+}

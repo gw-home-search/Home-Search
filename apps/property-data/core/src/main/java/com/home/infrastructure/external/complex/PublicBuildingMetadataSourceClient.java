@@ -116,10 +116,18 @@ public class PublicBuildingMetadataSourceClient implements BuildingMetadataSourc
 			+ "&pageNo=" + ExternalApiUri.queryValue(1) + "&numOfRows=" + ExternalApiUri.queryValue(100)
 			+ "&sigunguCd=" + ExternalApiUri.queryValue(pnu.substring(0, 5))
 			+ "&bjdongCd=" + ExternalApiUri.queryValue(pnu.substring(5, 10))
-			+ "&platGbCd=" + ExternalApiUri.queryValue(pnu.substring(10, 11))
+			+ "&platGbCd=" + ExternalApiUri.queryValue(buildingPlatGbCd(pnu))
 			+ "&bun=" + ExternalApiUri.queryValue(pnu.substring(11, 15))
 			+ "&ji=" + ExternalApiUri.queryValue(pnu.substring(15, 19))
 			+ "&serviceKey=" + ExternalApiUri.serviceKeyQueryValue(buildingServiceKey);
+	}
+
+	private String buildingPlatGbCd(String pnu) {
+		return switch (pnu.charAt(10)) {
+			case '1' -> "0";
+			case '2' -> "1";
+			default -> throw new IllegalArgumentException("PNU land category must be 1 or 2");
+		};
 	}
 
 	private synchronized void throttle() {

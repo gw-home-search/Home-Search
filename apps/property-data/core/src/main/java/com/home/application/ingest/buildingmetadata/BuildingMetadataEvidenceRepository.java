@@ -8,7 +8,7 @@ import com.home.domain.complex.metadata.ComplexMetadataFailureKind;
 import com.home.domain.complex.metadata.ComplexMetadataStatus;
 
 public interface BuildingMetadataEvidenceRepository {
-	List<BuildingMetadataTarget> findTargets(String mode, int limit, Long fromComplexId, Long toComplexId);
+	List<BuildingMetadataTarget> findTargets(String mode, int limit, Long fromComplexId, Long toComplexId, UUID requestId);
 
 	BuildingMetadataAttemptResult recordAmbiguousPnu(BuildingMetadataTarget target, UUID requestId);
 

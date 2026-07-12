@@ -24,6 +24,7 @@ public record BatchJobArguments(
 	private static final String DAILY_JOB = "rtmsDailyRefreshJob";
 	private static final String BACKFILL_JOB = "rtmsBackfillJob";
 	private static final String BUILDING_METADATA_JOB = "complexBuildingMetadataJob";
+	private static final String ODC_METADATA_GAP_FILL_JOB = "complexOdcMetadataGapFillJob";
 	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
 	public static BatchJobArguments from(
@@ -45,8 +46,27 @@ public record BatchJobArguments(
 			case DAILY_JOB -> daily(normalizedJobName, params, clock);
 			case BACKFILL_JOB -> backfill(normalizedJobName, params);
 			case BUILDING_METADATA_JOB -> buildingMetadata(normalizedJobName, params, clock);
+			case ODC_METADATA_GAP_FILL_JOB -> odcMetadataGapFill(normalizedJobName, params, clock);
 			default -> throw invalid("Unsupported SPRING_BATCH_JOB_NAME: " + normalizedJobName);
 		};
+	}
+
+	private static BatchJobArguments odcMetadataGapFill(String jobName, Map<String, String> arguments, Clock clock) {
+		String runDate = text(arguments.get("runDate"));
+		if (runDate == null) runDate = LocalDate.now((clock == null ? Clock.system(KST) : clock).withZone(KST)).toString();
+		try { LocalDate.parse(runDate); } catch (RuntimeException exception) { throw invalid("runDate must use yyyy-MM-dd"); }
+		int maxTargets = positiveInt(arguments.get("maxTargets"), "maxTargets");
+		Long fromId = optionalPositiveLong(arguments.get("fromComplexId"), "fromComplexId");
+		Long toId = optionalPositiveLong(arguments.get("toComplexId"), "toComplexId");
+		if (toId == null) throw invalid("toComplexId is required");
+		if (fromId != null && fromId > toId) throw invalid("fromComplexId must be <= toComplexId");
+		Map<String, String> values = new LinkedHashMap<>();
+		values.put("runDate", runDate);
+		values.put("maxTargets", Integer.toString(maxTargets));
+		values.put("toComplexId", toId.toString());
+		values.put("requestId", canonicalRequestId(arguments.get("requestId")));
+		if (fromId != null) values.put("fromComplexId", fromId.toString());
+		return new BatchJobArguments(jobName, parameters(values));
 	}
 
 	private static BatchJobArguments buildingMetadata(String jobName, Map<String, String> arguments, Clock clock) {

@@ -25,6 +25,8 @@ apis:
     base-url: https://apis.data.go.kr
     apt-service-key: "${APT_SERVICE_KEY:}"
     apt-title-path: /1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev
+    building-title-path: /1613000/BldRgstHubService/getBrTitleInfo
+    building-recap-title-path: /1613000/BldRgstHubService/getBrRecapTitleInfo
     apt-num-of-rows: 1000
     connect-timeout-millis: 5000
     read-timeout-millis: 5000
@@ -42,8 +44,8 @@ home:
   coordinate-source:
     db:
       jdbc-url: "${COORDINATE_SOURCE_DB_JDBC_URL:}"
-      username: "${COORDINATE_SOURCE_DB_USERNAME:${DB_USERNAME}}"
-      password: "${COORDINATE_SOURCE_DB_PASSWORD:${DB_PASSWORD}}"
+      username: "${COORDINATE_SOURCE_DB_USERNAME}"
+      password: "${COORDINATE_SOURCE_DB_PASSWORD}"
   ingest:
     raw-reconcile:
       enabled: false

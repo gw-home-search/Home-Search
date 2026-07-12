@@ -35,8 +35,21 @@ import com.home.infrastructure.persistence.ingest.raw.RawIngestReconciliationRun
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 class IngestRecoveryRunnerTest {
+
+	@Test
+	@DisplayName("trade partition DDL은 runtime 기본 시작에서 실행되지 않는다")
+	void tradePartitionMaintenanceIsExplicitOptIn() throws Exception {
+		var method = TradeNormalizationPersistenceConfiguration.class.getDeclaredMethod(
+			"tradePartitionMaintenanceRunner", org.springframework.beans.factory.ObjectProvider.class,
+			org.springframework.beans.factory.ObjectProvider.class, int.class);
+		ConditionalOnProperty condition = method.getAnnotation(ConditionalOnProperty.class);
+
+		assertThat(condition).isNotNull();
+		assertThat(condition.matchIfMissing()).isFalse();
+	}
 
 	@Test
 	@DisplayName("raw reconciliation runner는 설정된 batch size로 reconciliation service를 실행한다")

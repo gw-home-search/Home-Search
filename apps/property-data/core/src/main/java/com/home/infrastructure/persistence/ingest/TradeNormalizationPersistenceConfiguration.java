@@ -45,7 +45,7 @@ class TradeNormalizationPersistenceConfiguration {
 	@ConditionalOnProperty(
 		name = "home.trade.partition.maintenance.enabled",
 		havingValue = "true",
-		matchIfMissing = true
+		matchIfMissing = false
 	)
 	ApplicationRunner tradePartitionMaintenanceRunner(
 		ObjectProvider<JdbcTradePartitionMaintenanceRepository> maintenanceRepositoryProvider,

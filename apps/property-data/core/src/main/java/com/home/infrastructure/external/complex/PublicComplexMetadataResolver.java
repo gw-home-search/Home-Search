@@ -16,6 +16,7 @@ import com.home.application.ingest.metadata.ComplexMetadataResolutionPolicy;
 import com.home.application.ingest.metadata.ComplexMetadataResolver;
 import com.home.application.ingest.metadata.ComplexMetadataLookupEvidence;
 import com.home.application.ingest.metadata.OdcloudPnuPrefixAliasLookup;
+import com.home.application.ingest.metadata.OdcComplexMetadataResolver;
 import com.home.domain.complex.metadata.ComplexMetadataLookupPath;
 import com.home.infrastructure.external.ExternalApiUri;
 import com.home.infrastructure.external.apis.dto.ApisBldRecapResponse;
@@ -26,7 +27,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-public class PublicComplexMetadataResolver implements ComplexMetadataResolver, ComplexMetadataEnrichmentClient {
+public class PublicComplexMetadataResolver implements ComplexMetadataResolver, ComplexMetadataEnrichmentClient,
+	OdcComplexMetadataResolver {
 
 	private static final Logger log = LoggerFactory.getLogger(PublicComplexMetadataResolver.class);
 
@@ -147,9 +149,18 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 			() -> resolveBuildingMetadata(lookup.pnu()));
 	}
 
+	@Override
+	public ComplexMetadataResolution resolveOdc(ComplexMetadataLookup lookup) {
+		return resolveOdcloud(lookup);
+	}
+
+	@Override
+	public boolean isOdcConfigured() {
+		return odcloudServiceKey != null;
+	}
+
 	private ComplexMetadataResolution resolveOdcloud(ComplexMetadataLookup lookup) {
 		String pnu = lookup.pnu();
-		String parcelAddress = lookup.parcelAddress();
 		if (odcloudServiceKey == null || trimToNull(pnu) == null) {
 			return ComplexMetadataResolution.unavailable(
 				"ODC",
@@ -186,7 +197,8 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 				evidence(ComplexMetadataLookupPath.CANONICAL_PNU, pnu, pnu, null, 1));
 		}
 		catch (RestClientException exception) {
-			log.warn("ODC complex metadata lookup failed pnu={} address={}", pnu, parcelAddress, exception);
+			log.warn("ODC complex metadata lookup failed pnu={} errorType={}", pnu,
+				exception.getClass().getSimpleName());
 			return ComplexMetadataResolution.failed(
 				"ODC",
 				ComplexMetadataFailureKind.TRANSIENT,
@@ -318,7 +330,8 @@ public class PublicComplexMetadataResolver implements ComplexMetadataResolver, C
 				evidence(ComplexMetadataLookupPath.BUILDING_PNU, pnu, pnu, null, null));
 		}
 		catch (RestClientException exception) {
-			log.warn("Building complex metadata lookup failed pnu={}", pnu, exception);
+			log.warn("Building complex metadata lookup failed pnu={} errorType={}", pnu,
+				exception.getClass().getSimpleName());
 			return ComplexMetadataResolution.failed(
 				"BLD",
 				ComplexMetadataFailureKind.TRANSIENT,

@@ -5,16 +5,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.math.BigDecimal;
-import java.nio.file.Path;
 
 import com.home.infrastructure.persistence.ingest.coordinate.JdbcCoordinateSourceParcelCoordinateRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 class JdbcCoordinateSourceParcelCoordinateRepositoryTest extends JdbcPostgresContainerSupport {
@@ -30,10 +29,15 @@ class JdbcCoordinateSourceParcelCoordinateRepositoryTest extends JdbcPostgresCon
 		initializeJdbc(POSTGRES);
 		jdbcClient.sql("DROP SCHEMA IF EXISTS reference CASCADE").update();
 		jdbcClient.sql("DROP EXTENSION IF EXISTS postgis CASCADE").update();
-		new ResourceDatabasePopulator(
-			new FileSystemResource(Path.of("../../../apps/source-data/ops/sql/coordinate-source-schema.sql"))
-		)
-			.execute(dataSource);
+		Flyway.configure()
+			.dataSource(dataSource)
+			.locations("filesystem:../../../apps/source-data/src/main/resources/db/migration/coordinate-source")
+			.schemas("public", "reference", "geo_enrichment")
+			.defaultSchema("reference")
+			.table("flyway_schema_history")
+			.target(MigrationVersion.fromVersion("1"))
+			.load()
+			.migrate();
 	}
 
 	@Test

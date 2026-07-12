@@ -32,15 +32,15 @@ class JdbcBuildingMetadataEvidenceRepositoryTest extends JdbcMigrationTestSuppor
 	}
 
 	@Test
-	@DisplayName("면적 결측 단지만 선택하고 PNU 전체 단지 수를 계산한다")
-	void selectsOnlyMissingAreaTargetsAndCountsAllComplexesOnPnu() {
+	@DisplayName("면적 또는 관리번호 결측 단지를 선택하고 PNU 전체 단지 수를 계산한다")
+	void selectsMissingAreaOrIdentityTargetsAndCountsAllComplexesOnPnu() {
 		seed(501,1001,"1168010300101400001",false);
 		seed(502,1002,"1168010300101400001",true);
 		seed(503,1003,"1168010300101400002",true);
 
-		List<BuildingMetadataTarget> targets = repository.findTargets("missing",10,null,null);
+		List<BuildingMetadataTarget> targets = repository.findTargets("missing",10,null,null,REQUEST_ID);
 
-		assertThat(targets).extracting(BuildingMetadataTarget::complexId).containsExactly(502L,503L);
+		assertThat(targets).extracting(BuildingMetadataTarget::complexId).containsExactly(501L,502L,503L);
 		assertThat(targets.get(0).pnuComplexCount()).isEqualTo(2);
 	}
 
@@ -49,7 +49,7 @@ class JdbcBuildingMetadataEvidenceRepositoryTest extends JdbcMigrationTestSuppor
 	void fillsNullsStoresIdentityAndAliasWithoutOverwritingExistingCoreValues() {
 		seed(501,1001,"1168010300101400001",true);
 		jdbcClient.sql("UPDATE complex SET dong_cnt=1,unit_cnt=100,use_date='2015-01-01' WHERE id=501").update();
-		BuildingMetadataTarget target = repository.findTargets("missing",1,null,null).get(0);
+		BuildingMetadataTarget target = repository.findTargets("missing",1,null,null,REQUEST_ID).get(0);
 		BuildingMetadataValues values = new BuildingMetadataValues(1,100,new BigDecimal("1000"),new BigDecimal("200"),
 			new BigDecimal("3000"),new BigDecimal("20"),new BigDecimal("300"),LocalDate.of(2015,1,1));
 
@@ -71,13 +71,16 @@ class JdbcBuildingMetadataEvidenceRepositoryTest extends JdbcMigrationTestSuppor
 	void recordsConflictWithoutProjectionAndSharedPnuIsIdempotentlyExcludedFromMissingMode() {
 		seed(501,1001,"1168010300101400001",true);
 		seed(502,1002,"1168010300101400001",true);
-		BuildingMetadataTarget shared = repository.findTargets("missing",10,null,null).get(0);
+		jdbcClient.sql("UPDATE complex SET dong_cnt=1 WHERE id=501").update();
+		BuildingMetadataTarget shared = repository.findTargets("missing",10,null,null,REQUEST_ID).get(0);
 		repository.recordAmbiguousPnu(shared,REQUEST_ID);
-		assertThat(repository.findTargets("missing",10,501L,501L)).isEmpty();
+		assertThat(repository.findTargets("missing",10,501L,501L,REQUEST_ID)).isEmpty();
+		assertThat(jdbcClient.sql("SELECT source FROM complex_metadata_enrichment_attempt WHERE complex_id=501")
+			.query(String.class).single()).isEqualTo("BLD_TITLE");
 
 		seed(503,1003,"1168010300101400002",true);
 		jdbcClient.sql("UPDATE complex SET unit_cnt=100 WHERE id=503").update();
-		BuildingMetadataTarget target = repository.findTargets("missing",10,503L,503L).get(0);
+		BuildingMetadataTarget target = repository.findTargets("missing",10,503L,503L,REQUEST_ID).get(0);
 		BuildingMetadataValues conflict = new BuildingMetadataValues(null,101,new BigDecimal("1000"),null,null,null,null,null);
 		var result = repository.apply(target,BuildingMetadataSourceKind.BLD_RECAP_TITLE,
 			new ParsedBuildingMetadataSource(1,List.of(new SourceCandidate("BLD-503",target.pnu(),
@@ -90,43 +93,62 @@ class JdbcBuildingMetadataEvidenceRepositoryTest extends JdbcMigrationTestSuppor
 	@DisplayName("안전하지 않은 후보 형태와 명시적 실패를 조회 가능한 attempt로 기록한다")
 	void recordsAllUnsafeCandidateShapesAndExplicitFailures() {
 		seed(501,1001,"1168010300101400001",true);
-		BuildingMetadataTarget target = repository.findTargets("missing",1,null,null).get(0);
+		BuildingMetadataTarget target = repository.findTargets("missing",1,null,null,REQUEST_ID).get(0);
 		SourceCandidate valid = candidate("BLD-501","Sample Apartment",BuildingMetadataValues.empty(),target.pnu());
 		assertThat(repository.apply(target,BuildingMetadataSourceKind.BLD_RECAP_TITLE,
 			new ParsedBuildingMetadataSource(2,List.of(valid,valid)),REQUEST_ID).status()).isEqualTo(ComplexMetadataStatus.AMBIGUOUS);
 
 		seed(502,1002,"1168010300101400002",true);
-		BuildingMetadataTarget missingKey = repository.findTargets("missing",1,502L,502L).get(0);
+		BuildingMetadataTarget missingKey = repository.findTargets("missing",1,502L,502L,REQUEST_ID).get(0);
 		assertThat(repository.apply(missingKey,BuildingMetadataSourceKind.BLD_TITLE,
 			new ParsedBuildingMetadataSource(1,List.of(candidate(null,"Sample Apartment",BuildingMetadataValues.empty(),missingKey.pnu()))),REQUEST_ID)
 			.status()).isEqualTo(ComplexMetadataStatus.FAILED);
 
 		seed(503,1003,"1168010300101400003",true);
 		jdbcClient.sql("UPDATE complex SET bld_mgm_bld_rgst_pk='OLD-503' WHERE id=503").update();
-		BuildingMetadataTarget identityConflict = repository.findTargets("missing",1,503L,503L).get(0);
+		BuildingMetadataTarget identityConflict = repository.findTargets("missing",1,503L,503L,REQUEST_ID).get(0);
 		assertThat(repository.apply(identityConflict,BuildingMetadataSourceKind.BLD_TITLE,
 			new ParsedBuildingMetadataSource(1,List.of(candidate("NEW-503","Sample Apartment",BuildingMetadataValues.empty(),identityConflict.pnu()))),REQUEST_ID)
 			.projectionApplied()).isFalse();
 
 		seed(504,1004,"1168010300101400004",true); seed(505,1005,"1168010300101400005",true);
 		jdbcClient.sql("UPDATE complex SET bld_mgm_bld_rgst_pk='SHARED-KEY' WHERE id=504").update();
-		BuildingMetadataTarget ownerConflict = repository.findTargets("missing",1,505L,505L).get(0);
+		BuildingMetadataTarget ownerConflict = repository.findTargets("missing",1,505L,505L,REQUEST_ID).get(0);
 		assertThat(repository.apply(ownerConflict,BuildingMetadataSourceKind.BLD_TITLE,
 			new ParsedBuildingMetadataSource(1,List.of(candidate("SHARED-KEY","Sample Apartment",BuildingMetadataValues.empty(),ownerConflict.pnu()))),REQUEST_ID)
 			.status()).isEqualTo(ComplexMetadataStatus.AMBIGUOUS);
 
 		seed(506,1006,"1168010300101400006",true);
-		BuildingMetadataTarget nameConflict = repository.findTargets("missing",1,506L,506L).get(0);
+		BuildingMetadataTarget nameConflict = repository.findTargets("missing",1,506L,506L,REQUEST_ID).get(0);
 		assertThat(repository.apply(nameConflict,BuildingMetadataSourceKind.BLD_TITLE,
 			new ParsedBuildingMetadataSource(1,List.of(candidate("BLD-506","Different Apartment",BuildingMetadataValues.empty(),nameConflict.pnu()))),REQUEST_ID)
 			.projectionApplied()).isFalse();
 
 		seed(507,1007,"1168010300101400007",true);
-		BuildingMetadataTarget failure = repository.findTargets("missing",1,507L,507L).get(0);
+		BuildingMetadataTarget failure = repository.findTargets("missing",1,507L,507L,REQUEST_ID).get(0);
 		repository.recordFailure(failure,BuildingMetadataSourceKind.BLD_TITLE,ComplexMetadataStatus.FAILED,
 			ComplexMetadataFailureKind.TRANSIENT,"temporary",REQUEST_ID,java.time.Instant.now());
-		assertThat(repository.findTargets("retry",10,507L,507L)).isNotEmpty();
-		assertThatThrownBy(() -> repository.findTargets("refresh",1,null,null)).isInstanceOf(IllegalArgumentException.class);
+		assertThat(repository.findTargets("retry",10,507L,507L,
+			UUID.fromString("123e4567-e89b-12d3-a456-426614174001"))).isNotEmpty();
+		assertThatThrownBy(() -> repository.findTargets("refresh",1,null,null,REQUEST_ID)).isInstanceOf(IllegalArgumentException.class);
+	}
+
+	@Test
+	@DisplayName("면적이 모두 수집돼도 core metadata가 비어 있으면 complex와 attempt를 PARTIAL로 일치시킨다")
+	void keepsAttemptPartialWhenCoreMetadataIsIncomplete() {
+		seed(501,1001,"1168010300101400001",true);
+		BuildingMetadataTarget target = repository.findTargets("missing",1,null,null,REQUEST_ID).get(0);
+		BuildingMetadataValues areasOnly = new BuildingMetadataValues(null,null,new BigDecimal("1000"),
+			new BigDecimal("200"),new BigDecimal("3000"),new BigDecimal("20"),new BigDecimal("300"),null);
+
+		var result = repository.apply(target,BuildingMetadataSourceKind.BLD_RECAP_TITLE,
+			new ParsedBuildingMetadataSource(1,List.of(candidate("BLD-501","Sample Apartment",areasOnly,target.pnu()))),REQUEST_ID);
+
+		assertThat(result.status()).isEqualTo(ComplexMetadataStatus.PARTIAL);
+		assertThat(jdbcClient.sql("SELECT metadata_status FROM complex WHERE id=501").query(String.class).single())
+			.isEqualTo("PARTIAL");
+		assertThat(jdbcClient.sql("SELECT status FROM complex_metadata_enrichment_attempt WHERE complex_id=501")
+			.query(String.class).single()).isEqualTo("PARTIAL");
 	}
 
 	private SourceCandidate candidate(String key,String name,BuildingMetadataValues values,String pnu) {

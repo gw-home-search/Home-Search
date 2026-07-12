@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Import;
 public class PropertyDataBatchApplication {
 
 	private static final Set<String> SUPPORTED_JOB_NAMES = Set.of(
-		"rtmsDailyRefreshJob", "rtmsBackfillJob", "complexBuildingMetadataJob"
+		"rtmsDailyRefreshJob", "rtmsBackfillJob", "complexBuildingMetadataJob", "complexOdcMetadataGapFillJob"
 	);
 
 	public static void main(String[] args) {

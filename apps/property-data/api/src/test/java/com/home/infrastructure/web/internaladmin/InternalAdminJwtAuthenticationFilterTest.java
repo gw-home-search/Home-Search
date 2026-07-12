@@ -18,6 +18,7 @@ import com.home.security.jwt.JwtVerificationPolicy;
 import com.home.security.jwt.Rs256JwtCodec;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -38,6 +39,7 @@ class InternalAdminJwtAuthenticationFilterTest {
     }
 
     @Test
+    @DisplayName("유효한 internal token은 요청 principal을 생성한다")
     void validInternalTokenCreatesPrincipalForTheRequest() throws Exception {
         var filter = filter("property-data-admin");
         var request = internalRequest(token(Map.of(
@@ -61,6 +63,7 @@ class InternalAdminJwtAuthenticationFilterTest {
     }
 
     @Test
+    @DisplayName("audience 오류와 requestId claim 누락은 chain 호출 없이 거부한다")
     void wrongAudienceAndMissingRequestIdAreRejectedWithoutCallingTheChain() throws Exception {
         var wrongAudience = filter("wrong-audience");
         var response = new MockHttpServletResponse();
@@ -80,6 +83,7 @@ class InternalAdminJwtAuthenticationFilterTest {
     }
 
     @Test
+    @DisplayName("Bearer header 누락과 잘못된 authorization claim을 거부한다")
     void missingBearerHeaderAndMalformedAuthorizationClaimsAreRejected() throws Exception {
         var missingHeader = new MockHttpServletRequest("GET", "/internal/v1/admin/metadata/pending");
         var missingHeaderResponse = new MockHttpServletResponse();
@@ -95,6 +99,7 @@ class InternalAdminJwtAuthenticationFilterTest {
     }
 
     @Test
+    @DisplayName("requestId header 누락과 token 불일치를 거부한다")
     void missingOrMismatchedRequestIdHeaderIsRejected() throws Exception {
         var missing = internalRequest(token(validClaims()));
         missing.removeHeader("X-Request-Id");
@@ -111,6 +116,7 @@ class InternalAdminJwtAuthenticationFilterTest {
     }
 
     @Test
+    @DisplayName("public API는 internal authentication을 요구하지 않는다")
     void publicApiDoesNotRequireInternalAuthentication() throws Exception {
         var request = new MockHttpServletRequest("GET", "/api/v1/map/complexes");
         var response = new MockHttpServletResponse();
@@ -123,6 +129,7 @@ class InternalAdminJwtAuthenticationFilterTest {
     }
 
     @Test
+    @DisplayName("인증 이후 downstream 예외는 authentication failure로 재분류하지 않는다")
     void authenticatedDownstreamExceptionsAreNotReclassifiedAsAuthenticationFailures() {
         var request = internalRequest(token(validClaims()));
         var response = new MockHttpServletResponse();

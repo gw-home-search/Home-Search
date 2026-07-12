@@ -22,6 +22,7 @@ import com.home.application.ingest.metadata.admin.MetadataAdminService;
 import com.home.global.error.ApiExceptionHandler;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.DisplayName;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -41,6 +42,7 @@ class InternalAdminControllersContractTest {
     @MockitoBean MetadataAdminService metadataService;
 
     @Test
+    @DisplayName("좌표 override actor는 principal에서 파생하고 권한 누락을 거부한다")
     void coordinateOverrideDerivesActorFromPrincipalAndRejectsMissingPermission() throws Exception {
         given(coordinateService.approve(eq("1168010300101400001"), any()))
             .willReturn(new CoordinateOverrideApprovalResult("1168010300101400001",
@@ -67,6 +69,7 @@ class InternalAdminControllersContractTest {
     }
 
     @Test
+    @DisplayName("metadata retry actor는 principal에서 파생한다")
     void metadataRetryDerivesActorFromPrincipal() throws Exception {
         given(metadataService.retry(eq(501L), eq(ACCOUNT_ID.toString()), eq("source updated")))
             .willReturn(new ActionResult(true));
@@ -81,6 +84,7 @@ class InternalAdminControllersContractTest {
     }
 
     @Test
+    @DisplayName("모든 read hold alias operation은 대응 권한으로 노출한다")
     void exposesEveryPermissionBoundReadHoldAndAliasOperation() throws Exception {
         InternalAdminPrincipal principal = new InternalAdminPrincipal(ACCOUNT_ID, "operator", Set.of("OPERATOR"), Set.of(
             "COORDINATE_READ", "METADATA_READ", "METADATA_HOLD", "METADATA_ALIAS_MANAGE"), "request-all");

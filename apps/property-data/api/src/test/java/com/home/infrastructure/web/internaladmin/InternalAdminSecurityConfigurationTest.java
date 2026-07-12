@@ -9,12 +9,14 @@ import java.security.KeyPairGenerator;
 import java.util.Base64;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.io.TempDir;
 
 class InternalAdminSecurityConfigurationTest {
     @TempDir Path directory;
 
     @Test
+    @DisplayName("여러 public key를 kid로 로드하고 중복 kid를 거부한다")
     void loadsMultiplePublicKeysByKeyIdAndRejectsDuplicateIds() throws Exception {
         var generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);

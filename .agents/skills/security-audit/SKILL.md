@@ -40,11 +40,12 @@ checklists below.
 ## Severity Rubric
 
 Severity = exposure × exploitability × impact, calibrated to this project
-(public read-only API, single admin access code, batch ingest):
+(public read-only API, Session/RBAC admin control plane, internal RS256 JWT,
+batch ingest):
 
 - 치명(Critical): secret committed to source or git history; remote
   unauthenticated code execution, SQL injection, or data tampering; an admin
-  route reachable without the access code.
+  mutation reachable without Session/RBAC/CSRF or a valid internal JWT.
 - 높음(High): admin-guarded RCE or injection; sensitive data (secrets, PII,
   keyed request URLs) written to logs or evidence tables; an admin mutation
   exposed without interceptor coverage.
@@ -52,8 +53,7 @@ Severity = exposure × exploitability × impact, calibrated to this project
   escaping into a Slack or markdown sink; XXE-capable parser on a reachable
   ingest path; error response leaking internals.
 - 낮음(Low): defense-in-depth gaps with no concrete path today (for example a
-  non-constant-time compare on a local-only code, or a missing security header
-  on a JSON API), and hardening recommendations.
+  missing security header on a JSON API), and hardening recommendations.
 
 A leaked secret is always 치명 regardless of perceived reach, and requires
 rotation, not just deletion. Map findings to a CWE id when one applies so IDs
@@ -108,15 +108,21 @@ stay stable across runs.
 
 - The public map/trade API is read-only and unauthenticated by design. Do not
   raise "no login" as a finding for public endpoints. This stance excuses the
-  absence of authentication only. It does NOT excuse: an admin route missing
-  interceptor coverage, a public endpoint returning data the contract does not
+  absence of authentication only. It does NOT excuse: an admin-service route
+  missing Session/RBAC/CSRF coverage, an internal property-data route missing
+  JWT verification, a public endpoint returning data the contract does not
   intend, or access to non-public rows (IDOR-style). Treat those as real
   findings.
-- The only privileged surface is the admin coordinate path guarded by
-  `AdminCoordinateAccessInterceptor` (`X-Admin-Access-Code`). Every new admin
-  route must be covered by the interceptor. Access codes must never be logged,
-  persisted in evidence tables, or echoed in errors. Prefer constant-time
-  comparison for access-code checks.
+- The privileged browser surface is `admin-service`, guarded by an HttpOnly
+  server Session, RBAC permissions, and CSRF checks on mutations. Every new
+  admin-service route must declare the required permission; browser-provided
+  actor ids must not cross the boundary.
+- Property-data exposes only `/internal/v1/admin/**` for admin-service. Those
+  routes require a short-lived RS256 internal JWT with issuer, audience,
+  lifetime, `kid`, and permission checks. Property-data receives public keys
+  only; the signing private key belongs only to admin-service. Public ingress
+  must not route `/internal/**`, and the browser must never receive or send the
+  internal token.
 - Secrets: provider credentials (`APT_SERVICE_KEY`, `VW_SERVICE_KEY`,
   `HERMES_AUTH_TOKEN`) live only as env placeholders in `application.yml`.
   Never hardcode them in source, tests, fixtures, or docs. Check git history,
@@ -132,7 +138,8 @@ stay stable across runs.
 
 ## Anchor Freshness
 
-Concrete class and path anchors in this skill (interceptor names, SQL
+Concrete class and path anchors in this skill (Session/security configuration,
+internal JWT verification, SQL
 composition patterns, config locations) reflect the current module layout.
 After a `docs/RESTRUCTURING_PLAN.md` stage moves code, verify each anchor
 still exists at review time (`rg` the name) before relying on it; if an
@@ -167,7 +174,9 @@ that discovered it.
 
 - No secrets, admin access codes, or provider keys in client source, bundles,
   or committed env files.
-- Admin features must not hardcode `X-Admin-Access-Code`; inject at runtime.
+- Admin Web must use same-origin Session APIs. Do not store passwords, Session
+  identifiers, CSRF tokens beyond their cookie/header flow, or internal JWTs in
+  Web Storage or application source.
 - Render external strings (complex names, news titles) as text, not HTML.
 - The Kakao/map client key is necessarily public; do not flag its presence in
   the bundle. Verify it is domain-restricted instead of treating it as leaked.

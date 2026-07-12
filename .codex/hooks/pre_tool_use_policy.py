@@ -113,6 +113,7 @@ SECRET_PATH_RE = re.compile(
     r"(^|/)(\.env(?:\..*)?|[^/\s]*(?:secret|credential|token)[^/\s]*|[^/\s]*\.(?:pem|key))$",
     re.IGNORECASE,
 )
+SOURCE_CODE_SUFFIXES = {".java", ".kt", ".py", ".js", ".jsx", ".ts", ".tsx", ".gradle"}
 DIRECT_PR_CREATE_RE = re.compile(r"(^|\s)gh\s+pr\s+create(\s|$)", re.IGNORECASE)
 
 
@@ -299,15 +300,19 @@ def infer_worktree_scope(repo_root: Path, cwd: Path, branch_name: str) -> str:
 
 
 def looks_like_path(token: str) -> bool:
+    if token.startswith("."):
+        return token.startswith(("./", "../")) or bool(
+            re.fullmatch(r"\.[a-zA-Z0-9][a-zA-Z0-9._-]*", token)
+        )
     return (
         "/" in token
-        or token.startswith(".")
         or token.endswith((".md", ".toml", ".json", ".py", ".java", ".ts", ".tsx", ".js", ".jsx"))
     )
 
 
 def normalize_path(raw_path: str, cwd: Path, repo_root: Path) -> str | None:
     cleaned = raw_path.strip("'\"")
+    cleaned = cleaned.lstrip("([{ ").rstrip(",;)]} ")
     if not cleaned or cleaned.startswith("-"):
         return None
     if "://" in cleaned:
@@ -326,6 +331,8 @@ def normalize_path(raw_path: str, cwd: Path, repo_root: Path) -> str | None:
 
 
 def paths_from_command(command: str, cwd: Path, repo_root: Path) -> set[str]:
+    if command.lstrip().startswith("*** Begin Patch"):
+        return paths_from_patch_text(command, cwd, repo_root)
     paths: set[str] = set()
     for cmd in unwrap_shell(command):
         for token in shell_words(cmd):
@@ -369,6 +376,8 @@ def paths_from_payload(payload: dict[str, Any], cwd: Path, repo_root: Path) -> s
 
 
 def is_secret_path(path: str) -> bool:
+    if Path(path).suffix.lower() in SOURCE_CODE_SUFFIXES:
+        return False
     return bool(SECRET_PATH_RE.search(path))
 
 
@@ -616,6 +625,38 @@ def run_self_test() -> int:
     frontend_root = Path("/tmp/home-search-web-work")
 
     tests = [
+        (
+            "Java fluent token methods are not treated as secret paths",
+            lambda: not paths_from_command(
+                "builder.id(request.tokenId()).parseSignedClaims(token);",
+                FALLBACK_REPO_ROOT,
+                FALLBACK_REPO_ROOT,
+            ),
+        ),
+        (
+            "apply patch content is not treated as a path list",
+            lambda: paths_from_command(
+                "*** Begin Patch\n*** Update File: infra/docker-compose.local.yml\n@@\n+ volume:/root/.gradle\n*** End Patch",
+                FALLBACK_REPO_ROOT,
+                FALLBACK_REPO_ROOT,
+            ) == {"infra/docker-compose.local.yml"},
+        ),
+        (
+            "real env paths remain denied",
+            lambda: "secrets/env 접근 차단" in denied_output(
+                {"cwd": str(FALLBACK_REPO_ROOT), "tool_input": {"cmd": "cat .env.local"}},
+                repo_root=FALLBACK_REPO_ROOT,
+                branch_name="feat/root",
+            ),
+        ),
+        (
+            "token-named Java source remains writable",
+            lambda: not denied_output(
+                patch_payload(FALLBACK_REPO_ROOT, "apps/admin/service/TokenIssuer.java"),
+                repo_root=FALLBACK_REPO_ROOT,
+                branch_name="feat/root",
+            ),
+        ),
         (
             "dangerous rm -rf is denied",
             lambda: "rm -rf 차단" in denied_output(

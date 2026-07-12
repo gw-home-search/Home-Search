@@ -6,3 +6,4 @@ build/
 core/build/
 api/build/
 .live-smoke/
+.live-metadata/

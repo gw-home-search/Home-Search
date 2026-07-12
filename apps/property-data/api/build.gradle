@@ -6,6 +6,10 @@ plugins {
 
 description = 'Home Search property-data API app'
 
+tasks.named('bootJar') {
+    archiveFileName = 'property-data-api.jar'
+}
+
 configurations {
     asciidoctorExt
 }
@@ -51,6 +55,7 @@ tasks.register('verifyApiCompileClasspathBoundary') {
 
 dependencies {
     implementation project(':core')
+    implementation 'com.home:security-jwt-core'
 
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-validation'

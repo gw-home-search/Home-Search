@@ -20,9 +20,48 @@ tasks.withType(JavaCompile).configureEach {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.flywaydb:flyway-core'
+    runtimeOnly 'org.flywaydb:flyway-database-postgresql'
+    runtimeOnly 'org.postgresql:postgresql'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
 }
+
+tasks.named('bootJar') {
+    archiveFileName = 'source-data-migration.jar'
+}
+
+tasks.register('printMigrationBootJarPath') {
+    dependsOn tasks.named('bootJar')
+    doLast {
+        println "MIGRATION_BOOT_JAR=${tasks.named('bootJar').get().archiveFile.get().asFile.absolutePath}"
+    }
+}
+
+tasks.register('packagedProcessSmoke', Exec) {
+    dependsOn tasks.named('bootJar')
+    workingDir projectDir
+    commandLine 'bash', 'ops/verify-migration-packaged-process.sh'
+    environment 'SOURCE_DATA_MIGRATION_JAR', tasks.named('bootJar').flatMap { it.archiveFile }.get().asFile.absolutePath
+}
+
+tasks.named('check') { dependsOn tasks.named('packagedProcessSmoke') }
 
 tasks.named('test') {
     useJUnitPlatform()
+    exclude '**/*IntegrationTest.class'
 }
+
+tasks.register('persistenceTest', Test) {
+    description = 'Runs source-data Flyway/PostgreSQL integration tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    include '**/*IntegrationTest.class'
+    shouldRunAfter tasks.named('test')
+}
+
+tasks.named('check') { dependsOn tasks.named('persistenceTest') }

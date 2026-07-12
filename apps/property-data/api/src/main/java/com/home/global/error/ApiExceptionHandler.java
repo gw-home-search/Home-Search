@@ -6,11 +6,12 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 
-import com.home.application.coordinate.override.AdminCoordinateAccessDeniedException;
 import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
 import com.home.application.read.InvalidReadRequestException;
 import com.home.application.read.ResourceNotFoundException;
 import com.home.application.ingest.metadata.admin.InvalidMetadataAdminRequestException;
+import com.home.infrastructure.web.internaladmin.InternalAdminAuthenticationException;
+import com.home.infrastructure.web.internaladmin.InternalAdminAuthorizationException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,19 +67,28 @@ public class ApiExceptionHandler {
 			.body(problemDetail);
 	}
 
-	@ExceptionHandler(AdminCoordinateAccessDeniedException.class)
-	public ResponseEntity<ProblemDetail> handleUnauthorized(AdminCoordinateAccessDeniedException exception) {
+	@ExceptionHandler(InternalAdminAuthenticationException.class)
+	public ResponseEntity<ProblemDetail> handleInternalAdminUnauthorized(InternalAdminAuthenticationException exception) {
 		ProblemDetail problemDetail = createProblemDetail(
 			HttpStatus.UNAUTHORIZED,
 			CLIENT_ERROR_TITLE,
 			UNAUTHORIZED_DETAIL,
-			AdminCoordinateAccessDeniedException.class.getSimpleName()
+			InternalAdminAuthenticationException.class.getSimpleName()
 		);
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+			.contentType(MediaType.APPLICATION_PROBLEM_JSON).body(problemDetail);
+	}
 
-		return ResponseEntity
-			.status(HttpStatus.UNAUTHORIZED)
-			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
-			.body(problemDetail);
+	@ExceptionHandler(InternalAdminAuthorizationException.class)
+	public ResponseEntity<ProblemDetail> handleInternalAdminForbidden(InternalAdminAuthorizationException exception) {
+		ProblemDetail problemDetail = createProblemDetail(
+			HttpStatus.FORBIDDEN,
+			CLIENT_ERROR_TITLE,
+			"Forbidden internal admin action.",
+			InternalAdminAuthorizationException.class.getSimpleName()
+		);
+		return ResponseEntity.status(HttpStatus.FORBIDDEN)
+			.contentType(MediaType.APPLICATION_PROBLEM_JSON).body(problemDetail);
 	}
 
 	@ExceptionHandler(ResourceNotFoundException.class)

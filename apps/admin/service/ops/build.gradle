@@ -1,0 +1,18 @@
+plugins { id 'org.springframework.boot' }
+dependencies {
+    implementation project(':core')
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.security:spring-security-crypto'
+    runtimeOnly 'org.postgresql:postgresql'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation project(':migration')
+    testImplementation 'org.flywaydb:flyway-core'
+    testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+}
+tasks.named('bootJar') { archiveFileName = 'admin-service-ops.jar' }
+tasks.register('printOpsBootJarPath') {
+    dependsOn tasks.named('bootJar')
+    doLast { println "OPS_BOOT_JAR=${tasks.named('bootJar').get().archiveFile.get().asFile.absolutePath}" }
+}

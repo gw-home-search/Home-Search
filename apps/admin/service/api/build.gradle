@@ -1,0 +1,27 @@
+plugins { id 'org.springframework.boot' }
+dependencies {
+    implementation project(':core')
+    implementation 'com.home:security-jwt-core'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.session:spring-session-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    runtimeOnly 'org.springframework.boot:spring-boot-starter-jdbc'
+    runtimeOnly 'org.postgresql:postgresql'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+}
+tasks.named('bootJar') { archiveFileName = 'admin-service-api.jar' }
+tasks.register('verifyRuntimeMigrationBoundary') {
+    dependsOn tasks.named('bootJar')
+    doLast {
+        def jar = zipTree(tasks.named('bootJar').get().archiveFile.get().asFile)
+        if (!jar.matching { include 'BOOT-INF/classes/db/migration/**' }.files.isEmpty()) {
+            throw new GradleException('Admin API jar must not package migration resources')
+        }
+        if (!configurations.runtimeClasspath.resolvedConfiguration.resolvedArtifacts.findAll { it.moduleVersion.id.group == 'org.flywaydb' }.isEmpty()) {
+            throw new GradleException('Admin API runtime must not include Flyway')
+        }
+    }
+}
+tasks.named('check') { dependsOn tasks.named('verifyRuntimeMigrationBoundary') }

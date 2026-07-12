@@ -19,15 +19,11 @@ management:
         enabled: true
 
 home:
-  admin:
-    coordinate-override:
-      enabled: true
-      access-code: "${ADMIN_COORDINATE_ACCESS_CODE:local-admin}"
   coordinate-source:
     db:
       jdbc-url: "${COORDINATE_SOURCE_DB_JDBC_URL:}"
-      username: "${COORDINATE_SOURCE_DB_USERNAME:${DB_USERNAME}}"
-      password: "${COORDINATE_SOURCE_DB_PASSWORD:${DB_PASSWORD}}"
+      username: "${COORDINATE_SOURCE_DB_USERNAME}"
+      password: "${COORDINATE_SOURCE_DB_PASSWORD}"
       connect-timeout-seconds: "${COORDINATE_SOURCE_DB_CONNECT_TIMEOUT_SECONDS:5}"
       socket-timeout-seconds: "${COORDINATE_SOURCE_DB_SOCKET_TIMEOUT_SECONDS:10}"
       lock-timeout-millis: "${COORDINATE_SOURCE_DB_LOCK_TIMEOUT_MILLIS:1000}"

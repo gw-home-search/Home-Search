@@ -33,6 +33,7 @@ class MigrationCommandRunner implements ApplicationRunner {
 	public void run(ApplicationArguments arguments) {
 		MigrationOperationRequest request = MigrationOperationRequest.parse(arguments.getSourceArgs());
 		try {
+			verifyDatabase();
 			switch (request.operation()) {
 				case INFO -> info(flyway(null));
 				case VALIDATE -> validate(flyway(null));
@@ -51,9 +52,22 @@ class MigrationCommandRunner implements ApplicationRunner {
 
 	private void info(Flyway flyway) {
 		for (MigrationInfo migration : flyway.info().all()) {
-			System.out.printf("version=%s state=%s description=%s%n",
-				version(migration), migration.getState().getDisplayName(), migration.getDescription());
+			System.out.printf("version=%s state=%s description=%s checksum=%s%n",
+				version(migration), migration.getState().getDisplayName(), migration.getDescription(), migration.getChecksum());
 		}
+	}
+
+	private void verifyDatabase() {
+		String database = JdbcClient.create(dataSource)
+			.sql("SELECT current_database()")
+			.query(String.class)
+			.single();
+		if (!"home_search".equals(database)) {
+			throw new MigrationOperationException(
+				"Database preflight failed: expected=home_search actual=" + database
+			);
+		}
+		System.out.println("databaseVerified=home_search");
 	}
 
 	private void validate(Flyway flyway) {

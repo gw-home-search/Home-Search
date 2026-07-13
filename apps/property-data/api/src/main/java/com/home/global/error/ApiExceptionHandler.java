@@ -7,12 +7,16 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 
 import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
+import com.home.application.place.InvalidNearbyPlaceRequestException;
+import com.home.application.place.NearbyPlaceCenterUnavailableException;
+import com.home.application.place.NearbyPlaceProviderUnavailableException;
 import com.home.application.read.InvalidReadRequestException;
 import com.home.application.read.ResourceNotFoundException;
 import com.home.application.ingest.metadata.admin.InvalidMetadataAdminRequestException;
 import com.home.infrastructure.web.internaladmin.InternalAdminAuthenticationException;
 import com.home.infrastructure.web.internaladmin.InternalAdminAuthorizationException;
 
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -49,9 +53,11 @@ public class ApiExceptionHandler {
 		MissingServletRequestParameterException.class,
 		MethodArgumentTypeMismatchException.class,
 		HandlerMethodValidationException.class,
+		ConstraintViolationException.class,
 		InvalidCoordinateOverrideException.class,
 		InvalidMetadataAdminRequestException.class,
-		InvalidReadRequestException.class
+		InvalidReadRequestException.class,
+		InvalidNearbyPlaceRequestException.class
 	})
 	public ResponseEntity<ProblemDetail> handleBadRequest(Exception exception) {
 		ProblemDetail problemDetail = createProblemDetail(
@@ -102,6 +108,36 @@ public class ApiExceptionHandler {
 
 		return ResponseEntity
 			.status(HttpStatus.NOT_FOUND)
+			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
+			.body(problemDetail);
+	}
+
+	@ExceptionHandler(NearbyPlaceCenterUnavailableException.class)
+	public ResponseEntity<ProblemDetail> handleNearbyPlaceCenterUnavailable(
+		NearbyPlaceCenterUnavailableException exception
+	) {
+		ProblemDetail problemDetail = createProblemDetail(
+			HttpStatus.UNPROCESSABLE_ENTITY,
+			"C422",
+			"Complex display coordinate unavailable.",
+			NearbyPlaceCenterUnavailableException.class.getSimpleName()
+		);
+		return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
+			.body(problemDetail);
+	}
+
+	@ExceptionHandler(NearbyPlaceProviderUnavailableException.class)
+	public ResponseEntity<ProblemDetail> handleNearbyPlaceProviderUnavailable(
+		NearbyPlaceProviderUnavailableException exception
+	) {
+		ProblemDetail problemDetail = createProblemDetail(
+			HttpStatus.SERVICE_UNAVAILABLE,
+			"S503",
+			"Nearby place provider unavailable.",
+			NearbyPlaceProviderUnavailableException.class.getSimpleName()
+		);
+		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
 			.contentType(MediaType.APPLICATION_PROBLEM_JSON)
 			.body(problemDetail);
 	}

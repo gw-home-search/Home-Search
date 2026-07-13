@@ -40,6 +40,20 @@ home:
     marker-cache:
       enabled: false
       ttl: 5m
+  place:
+    kakao:
+      enabled: ${HOME_PLACE_KAKAO_ENABLED:false}
+      rest-api-key: ${KAKAO_REST_API_KEY:}
+      base-url: https://dapi.kakao.com
+      daily-request-budget: ${HOME_PLACE_KAKAO_DAILY_REQUEST_BUDGET:10000}
+      connect-timeout: ${HOME_PLACE_KAKAO_CONNECT_TIMEOUT:1s}
+      read-timeout: ${HOME_PLACE_KAKAO_READ_TIMEOUT:2s}
+      total-timeout: 5s
+      executor:
+        threads: 3
+      cache:
+        enabled: ${HOME_PLACE_KAKAO_CACHE_ENABLED:true}
+        ttl: ${HOME_PLACE_KAKAO_CACHE_TTL:24h}
   prediction:
     enabled: true
     model-version: deployment__F37_monthly_anchor_prev3_rolling_huber_010

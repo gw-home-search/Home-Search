@@ -84,9 +84,9 @@
   --hs-map-mobile-brand-height: 58px;
   --hs-map-filter-height: 62px;
   --hs-map-rail-width-wide: 380px;
-  --hs-map-rail-width-standard: 380px;
-  --hs-map-rail-width-compact: 352px;
-  --hs-map-tablet-rail-width: 352px;
+  --hs-map-rail-width-standard: 360px;
+  --hs-map-rail-width-compact: 336px;
+  --hs-map-tablet-rail-width: 336px;
   --hs-map-rail-width: var(--hs-map-rail-width-wide);
   --hs-map-mobile-min-height: 180px;
   --hs-map-space-1: 4px;

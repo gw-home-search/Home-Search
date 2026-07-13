@@ -44,6 +44,8 @@ React/CSS components; no Tailwind, `lucide-react`, Redux, or
 - `data-exploration-open` and `data-sidebar-mode`: responsive workspace state.
 - `data-detail-order`: desktop detail sequence.
 - `data-marker-shape`: shared renderer shape (`price-card` or `split-card`).
+- `data-marker-density`: zoom-level marker scale (`dense`, `compact`, `standard`, or `overview`).
+- `data-map-level`: current clamped Kakao map level used for visual QA.
 
 ## Fixed Shell
 
@@ -53,8 +55,9 @@ filter row above the actual Kakao map.
 
 | Viewport | Header | Sidebar | Filter |
 | --- | ---: | ---: | ---: |
-| `>=1101px` | 56px | 380px | 62px |
-| `721–1100px` | 56px | 352px | 62px |
+| `>=1440px` | 56px | 380px | 62px |
+| `1101–1439px` | 56px | 360px | 62px |
+| `721–1100px` | 56px | 336px | 62px |
 | `<=720px` | 58px | docked/closed | 62px |
 
 Exploration and detail always use the same desktop width. At `<=720px`, a
@@ -86,10 +89,12 @@ accessible name and 40px desktop or 44px mobile target where the layout allows.
 
 ## Exploration
 
-Search uses a 68px block and a 42px, 16px-radius field with a leading search
-icon and visible Sky search action. Debounce and Enter submit remain. Search
-results and suggestions use one-column 58px cards with 14px radius,
-border, restrained hover, and a leading selected signal.
+Search starts the exploration rail without a redundant visible section title.
+It uses the same 62px baseline as the filter bar and a 42px, 16px-radius field
+with a leading search icon. The input is neutral until focus and the visible
+Sky submit button owns the primary action emphasis. Debounce and Enter submit
+remain. Search results and suggestions use one-column 58px cards with 14px
+radius, border, restrained hover, and a leading selected signal.
 
 Exploration typography is token-controlled rather than DOM-order-controlled.
 Panel headings use 15/20px, result names use 13/18px with one-line ellipsis and
@@ -97,14 +102,17 @@ Panel headings use 15/20px, result names use 13/18px with one-line ellipsis and
 explicit `panel-list-title` and `panel-list-meta` classes. The breadcrumb root
 owns a centered 32px control and each trail label owns its own ellipsis box.
 
-Region navigation uses a quiet single-line breadcrumb on the white panel. Its
-stage actions are unframed text, the current stage is distinguished by weight,
-and each transition uses a plain 14px neutral chevron separator. Region choices are a three-column grid of
-56px white tiles with 12px radius and Sky hover/selection states. Tile labels stay
+Region navigation uses a quiet single-line breadcrumb as the only visible
+region heading on the white panel. Its stage actions are unframed text, the
+current stage is distinguished by weight, and each transition uses a dedicated
+14px right chevron separator. Breadcrumb items never compress their labels;
+the row scrolls horizontally and brings the current stage into view. Region
+choices are a three-column grid of 52px
+white tiles with 10px radius and Sky hover/selection states. Tile labels stay
 optically centered and use an emergency two-line wrap for long, unspaced names
-such as `세종특별자치시`; the selected Check icon is absolutely positioned
-so it does not shift the label. Selected tiles expose `aria-pressed=true`, a
-Check icon, and a Sky border and fill. The complex-list step uses compact 76px
+such as `세종특별자치시`; the selected Check icon is absolutely positioned so
+it does not shift the label. Selected tiles expose `aria-pressed=true`, a Check
+icon, and a Sky border and fill. The complex-list step uses compact 76px
 comparison rows: a 15px complex name and address/approval context on the left,
 with household/building counts aligned on the right.
 
@@ -125,11 +133,12 @@ before the next response.
 ## Filters
 
 Each chip is two-line label/summary: 92×46px desktop, 88×46px tablet, and
-88×46px mobile. Inactive chips show only the group label; applied chips add the
-range summary. Active and open states use border, background, and expanded
-semantics as well as color. Group labels use 14/18px. Reset follows the four
-filter chips inside the same horizontal scroller; it is a desktop pill and
-mobile icon target. Do not render a separate applied-filter count label.
+88×46px mobile. Inactive chips use a neutral white surface and show only the
+group label; applied chips add the range summary on Brand Soft. Active and open
+states use border, background, and expanded semantics as well as color. Group
+labels use 14/18px. Reset follows the four filter chips inside the same
+horizontal scroller; it is a desktop pill and mobile icon target. Do not render
+a separate applied-filter count label.
 Filter controls do not add decorative hover color shifts.
 
 The filter bar uses Surface Muted with a 1px neutral bottom border. It has no
@@ -161,12 +170,16 @@ subtle gray thumb ring and number-field border.
 
 Desktop order is fixed: identity header, API status, key-stat/prediction
 summary, same-parcel switcher, basic information, trend, trade table. The 72px
-Sky Soft header shows address and complex name. Hide same-parcel switching for
+Sky Soft header shows address and complex name. Its centered identity sits
+between symmetric 40px control columns; the back action is an unframed arrow
+inside a full hit target. Hide same-parcel switching for
 zero or one complex. Basic information is a label/value list with 94px labels
 and `-` for missing values.
 
 Price and prediction use separate semantic roles: Ink for values and Red plus
-a label/icon for failure. The trend uses Sky. Trades use a divider table
+a label/icon for failure. The prediction heading uses a fixed 32px alignment
+row; its transparent help target centers the question icon without adding a
+second visible container. The trend uses Sky. Trades use a divider table
 with 56px rows and right-aligned amount/area/floor columns. Non-round amounts
 split intentionally into `억` and `만원` lines; numeric apartment buildings and
 floors split into explicit `동` and `층` lines. Square meters and pyeong stay as
@@ -186,12 +199,14 @@ deep-teal outline/ring and `aria-pressed=true`. Dense idle markers hide the
 `recent trade` kicker and show only price plus complex name; the selected
 marker restores the full three-line anatomy.
 
-Region markers are 130px Soft Split Cards: a 34px white name row and a 30px
-soft-teal unit row with deep-teal text. Hover strengthens only the neutral
-border, rather than filling the marker with a darker color. Shape, not only
-color, distinguishes marker
-types. Kakao `CustomOverlay` and fallback renderers share the same view-model,
-key, accessible label, shape, values, and selected state.
+Region markers preserve the same Soft Split Card anatomy at every zoom: a white
+name row above a soft-teal household-count row with deep-teal text. Level 10 uses
+the 130×64px standard card, levels 8–9 use 112×54px compact cards, levels 5–7
+use 98×48px dense cards, and levels 11–12 use 92×46px overview cards. The map
+caps zoom-out at level 12. Hover strengthens only the neutral border, rather
+than filling the marker with a darker color. Shape, not only color,
+distinguishes marker types. Kakao `CustomOverlay` and fallback renderers share
+the same view-model, key, accessible label, shape, values, and selected state.
 
 ## Color, Layer, Scroll, And State
 

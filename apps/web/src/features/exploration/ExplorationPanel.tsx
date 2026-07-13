@@ -1,4 +1,4 @@
-import type { FormEventHandler, Ref } from 'react';
+import { useEffect, useRef, type FormEventHandler, type Ref } from 'react';
 
 import {
   DetailSidebar,
@@ -28,7 +28,7 @@ import type {
   ComplexSearchResult,
 } from '../search/api/fetchComplexSearchResults';
 import { RequestStateNotice } from '../../shared/RequestStateNotice';
-import { CheckIcon, ChevronDownIcon, CloseIcon, SearchIcon } from '../../shared/icons';
+import { CheckIcon, ChevronRightIcon, CloseIcon, SearchIcon } from '../../shared/icons';
 
 type DetailRequestState = 'idle' | 'loading' | 'ready' | 'error';
 type PanelRequestState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
@@ -124,6 +124,11 @@ export function ExplorationPanel({
   searchInputRef,
 }: ExplorationPanelProps) {
   const showRegionComplexes = regionDetail?.children.length === 0 && regionComplexes.length > 0;
+  const currentRegionStepRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    currentRegionStepRef.current?.scrollIntoView?.({ block: 'nearest', inline: 'end' });
+  }, [regionTrail]);
 
   return (
     <section
@@ -136,13 +141,6 @@ export function ExplorationPanel({
       data-ui-layer="exploration-panel"
       hidden={!isOpen}
     >
-      <div className="exploration-panel-header" hidden={sidebarMode === 'detail'}>
-        <p>탐색</p>
-        <button type="button" aria-label="검색 패널 닫기" className="exploration-mobile-close" onClick={onCloseExploration}>
-          <CloseIcon aria-hidden="true" />
-        </button>
-      </div>
-
       <form
         aria-label="단지 검색"
         className="search-panel exploration-search-panel"
@@ -165,6 +163,9 @@ export function ExplorationPanel({
         </label>
         <button type="submit" aria-label="단지 검색 실행" className="exploration-search-submit">
           검색
+        </button>
+        <button type="button" aria-label="검색 패널 닫기" className="exploration-mobile-close" onClick={onCloseExploration}>
+          <CloseIcon aria-hidden="true" />
         </button>
       </form>
 
@@ -254,9 +255,6 @@ export function ExplorationPanel({
         data-api-flow="region"
         hidden={sidebarMode !== 'region'}
       >
-        <div className="panel-section-header">
-          <p>지역</p>
-        </div>
         <nav aria-label="지역 단계" className="region-breadcrumb">
           <button
             type="button"
@@ -269,9 +267,10 @@ export function ExplorationPanel({
           </button>
           {regionTrail.map((region, index) => (
             <span className="region-breadcrumb-step" key={region.id}>
-              <ChevronDownIcon aria-hidden="true" />
+              <ChevronRightIcon aria-hidden="true" />
               <button
                 type="button"
+                ref={index === regionTrail.length - 1 ? currentRegionStepRef : undefined}
                 aria-current={index === regionTrail.length - 1 ? 'page' : undefined}
                 aria-label={`지역 단계 이동 ${region.name}`}
                 className="region-breadcrumb-link"

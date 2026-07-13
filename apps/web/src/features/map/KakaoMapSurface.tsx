@@ -11,7 +11,11 @@ import {
 import {
   createComplexMarkerViewModel,
   createRegionMarkerViewModel,
+  clampMapLevel,
   isComplexMarkerSelected,
+  MAX_MAP_LEVEL,
+  MIN_MAP_LEVEL,
+  regionMarkerDensityForLevel,
   type ComplexMapMarker,
   type RegionMapMarker,
 } from './markerViewModel';
@@ -90,8 +94,10 @@ export function KakaoMapSurface({
 
         const map = new maps.Map(host, {
           center: new maps.LatLng(INITIAL_CENTER.lat, INITIAL_CENTER.lng),
-          level: initialLevel,
+          level: clampMapLevel(initialLevel),
         });
+        map.setMinLevel?.(MIN_MAP_LEVEL);
+        map.setMaxLevel?.(MAX_MAP_LEVEL);
         const notifyViewport = () => {
           onViewportChange(viewportFromMap(map));
         };
@@ -141,7 +147,7 @@ export function KakaoMapSurface({
     }
 
     map.setCenter?.(new maps.LatLng(focusTarget.lat, focusTarget.lng));
-    map.setLevel?.(focusTarget.level);
+    map.setLevel?.(clampMapLevel(focusTarget.level));
   }, [focusTarget, runtimeState]);
 
   useEffect(() => {
@@ -208,7 +214,7 @@ export function KakaoMapSurface({
               marker.lat,
               marker.lng,
               1,
-              overlayContentForRegionMarker(marker, onRegionMarkerSelect),
+              overlayContentForRegionMarker(marker, level, onRegionMarkerSelect),
             ),
           );
 
@@ -218,7 +224,7 @@ export function KakaoMapSurface({
       clearOverlays(overlaysRef.current);
       overlaysRef.current = [];
     };
-  }, [markers, onComplexMarkerSelect, onRegionMarkerSelect, runtimeState, selectedComplex]);
+  }, [level, markers, onComplexMarkerSelect, onRegionMarkerSelect, runtimeState, selectedComplex]);
 
   return (
     <div
@@ -304,6 +310,7 @@ function overlayContentForComplexMarker(
 
 function overlayContentForRegionMarker(
   marker: RegionMapMarker,
+  level: number,
   onRegionMarkerSelect: (marker: RegionMapMarker) => void,
 ): HTMLElement {
   const viewModel = createRegionMarkerViewModel(marker);
@@ -315,6 +322,7 @@ function overlayContentForRegionMarker(
   element.className = 'kakao-map-overlay map-marker map-marker-region';
   element.setAttribute('aria-label', viewModel.ariaLabel);
   element.dataset.markerShape = viewModel.shape;
+  element.dataset.markerDensity = regionMarkerDensityForLevel(level);
 
   name.className = 'kakao-map-overlay-region-name map-marker-region-name';
   name.textContent = viewModel.name;

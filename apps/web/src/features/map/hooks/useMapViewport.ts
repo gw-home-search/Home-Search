@@ -2,6 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { MapBoundsRequest } from '../api/fetchMapMarkers';
 import type { MapFocusTarget, MapViewport } from '../../../app/mapAppTypes';
+import {
+  clampMapLevel,
+  MAX_MAP_LEVEL,
+  MIN_MAP_LEVEL,
+} from '../markerViewModel';
 
 const INITIAL_MARKER_BOUNDS: MapBoundsRequest = {
   swLat: 37.45,
@@ -13,34 +18,37 @@ const INITIAL_MARKER_BOUNDS: MapBoundsRequest = {
 export function useMapViewport(initialMapLevel: number) {
   const [viewport, setViewport] = useState<MapViewport>(() => ({
     bounds: INITIAL_MARKER_BOUNDS,
-    level: initialMapLevel,
+    level: clampMapLevel(initialMapLevel),
   }));
   const [mapFocusTarget, setMapFocusTarget] = useState<MapFocusTarget | null>(null);
 
   useEffect(() => {
-    setViewport((current) => current.level === initialMapLevel
+    const nextLevel = clampMapLevel(initialMapLevel);
+    setViewport((current) => current.level === nextLevel
       ? current
-      : { ...current, level: initialMapLevel });
+      : { ...current, level: nextLevel });
   }, [initialMapLevel]);
 
   const handleViewportChange = useCallback((nextViewport: MapViewport) => {
-    setViewport((current) => sameViewport(current, nextViewport) ? current : nextViewport);
+    const clampedViewport = { ...nextViewport, level: clampMapLevel(nextViewport.level) };
+    setViewport((current) => sameViewport(current, clampedViewport) ? current : clampedViewport);
   }, []);
 
   const handleZoomIn = useCallback(() => {
-    setViewport((current) => ({ ...current, level: Math.max(1, current.level - 1) }));
+    setViewport((current) => ({ ...current, level: Math.max(MIN_MAP_LEVEL, current.level - 1) }));
   }, []);
 
   const handleZoomOut = useCallback(() => {
-    setViewport((current) => ({ ...current, level: current.level + 1 }));
+    setViewport((current) => ({ ...current, level: Math.min(MAX_MAP_LEVEL, current.level + 1) }));
   }, []);
 
   const focusMap = useCallback((lat: number, lng: number, level: number, delta: number) => {
-    setViewport(viewportAroundPoint(lat, lng, level, delta));
+    const nextLevel = clampMapLevel(level);
+    setViewport(viewportAroundPoint(lat, lng, nextLevel, delta));
     setMapFocusTarget((current) => ({
       lat,
       lng,
-      level,
+      level: nextLevel,
       seq: (current?.seq ?? 0) + 1,
     }));
   }, []);

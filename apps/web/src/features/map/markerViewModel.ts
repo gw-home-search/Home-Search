@@ -4,6 +4,11 @@ import type { MapMarkersResult } from './api/fetchMapMarkers';
 export type ComplexMapMarker = Extract<MapMarkersResult, { kind: 'complex' }>['markers'][number];
 export type RegionMapMarker = Extract<MapMarkersResult, { kind: 'region' }>['markers'][number];
 
+export const MIN_MAP_LEVEL = 1;
+export const MAX_MAP_LEVEL = 12;
+
+export type RegionMarkerDensity = 'dense' | 'compact' | 'standard' | 'overview';
+
 export type ComplexMarkerViewModel = {
   kind: 'complex';
   shape: 'price-card';
@@ -59,6 +64,17 @@ export function createRegionMarkerViewModel(marker: RegionMapMarker): RegionMark
     name: marker.name,
     meta: positiveUnitLabel(marker.unitCntSum) ?? '세대수 없음',
   };
+}
+
+export function clampMapLevel(level: number): number {
+  return Math.min(MAX_MAP_LEVEL, Math.max(MIN_MAP_LEVEL, Math.round(level)));
+}
+
+export function regionMarkerDensityForLevel(level: number): RegionMarkerDensity {
+  if (level >= 11) return 'overview';
+  if (level >= 10) return 'standard';
+  if (level >= 8) return 'compact';
+  return 'dense';
 }
 
 export function isComplexMarkerSelected(

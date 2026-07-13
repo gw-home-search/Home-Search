@@ -3,6 +3,7 @@ package com.home.infrastructure.persistence.read;
 import java.util.Locale;
 
 record PropertySearchTerms(
+	String query,
 	String lowerQuery,
 	String pattern,
 	String prefixPattern,
@@ -14,21 +15,27 @@ record PropertySearchTerms(
 	static PropertySearchTerms from(String query) {
 		String lowerQuery = query.toLowerCase(Locale.ROOT);
 		String normalized = normalizeName(query);
-		String normalizedQuery = normalized.isBlank() ? null : normalized;
+		String normalizedQuery = normalized.isBlank() ? "" : normalized;
 		return new PropertySearchTerms(
+			query,
 			lowerQuery,
-			"%" + lowerQuery + "%",
-			lowerQuery + "%",
+			"%" + escapeLikePattern(lowerQuery) + "%",
+			escapeLikePattern(lowerQuery) + "%",
 			normalizedQuery,
-			normalizedQuery == null ? null : "%" + normalizedQuery + "%",
-			normalizedQuery == null ? null : normalizedQuery + "%"
+			"%" + escapeLikePattern(normalizedQuery) + "%",
+			escapeLikePattern(normalizedQuery) + "%"
 		);
+	}
+
+	private static String escapeLikePattern(String value) {
+		return value.replace("\\", "\\\\")
+			.replace("%", "\\%")
+			.replace("_", "\\_");
 	}
 
 	private static String normalizeName(String value) {
 		String text = value == null ? "" : value.trim();
-		return text.replaceAll("\\s+", "")
-			.replaceAll("[()\\[\\]{}.,·\\-_/]", "")
+		return text.replaceAll("[\\s\\p{P}]+", "")
 			.toLowerCase(Locale.ROOT);
 	}
 }

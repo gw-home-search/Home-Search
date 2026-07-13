@@ -85,7 +85,7 @@ PLANNED_STACKED_BRANCHES = {
 }
 PLANNED_STACKED_BASES = {
     "codex/user-service-1-6": "main",
-    "codex/property-flyway-boundary": "codex/user-service-1-6",
+    "codex/property-flyway-boundary": "main",
     "codex/nearby-map-ux": "codex/property-flyway-boundary",
 }
 
@@ -735,7 +735,7 @@ def run_self_test() -> int:
     planned_stacked_head = valid_input(head="codex/user-service-1-6")
     stacked_draft = valid_input(base="feat/coordinate-input-package-layout-integration")
     planned_stacked_draft = valid_input(
-        base="codex/user-service-1-6",
+        base="main",
         head="codex/property-flyway-boundary",
     )
     planned_nearby_draft = valid_input(

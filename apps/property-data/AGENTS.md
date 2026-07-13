@@ -164,7 +164,8 @@ bash -n ops/*.sh
 ./ops/run-daily-batch-live-smoke.sh --self-test
 ./ops/check-daily-batch-live-smoke.sh --self-test
 ./ops/verify-clean-db-cutover.sh --self-test
-./ops/test-property-v2-history-cutover.sh
+./ops/test-property-deployment-preflight.sh
+./ops/test-property-flyway-wrapper.sh
 git diff --check
 ```
 

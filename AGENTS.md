@@ -151,6 +151,10 @@ stored state, operational identifiers, and policy distinctions explicit.
 - Keep use-case commands, queries, orchestration results, ports, and execution
   summaries in `application/**` when they do not define durable business
   meaning by themselves.
+- Application services may use Spring `@Service` and `@Transactional` to own
+  registration and transaction boundaries. Other Spring imports, Spring Data,
+  JDBC, web, JPA, and `infrastructure/**` dependencies remain forbidden in
+  `application/**`.
 - Keep provider modes, scheduler options, cache lookup states, HTTP DTOs, JDBC
   row mapping, SQL, locks, and external response shapes in
   `infrastructure/**`.

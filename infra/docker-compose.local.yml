@@ -13,6 +13,8 @@ services:
       PROPERTY_MIGRATOR_DB_PASSWORD: ${PROPERTY_MIGRATOR_DB_PASSWORD:-property_migrator_local_password}
       ADMIN_RUNTIME_DB_PASSWORD: ${ADMIN_RUNTIME_DB_PASSWORD:-admin_runtime_local_password}
       ADMIN_MIGRATOR_DB_PASSWORD: ${ADMIN_MIGRATOR_DB_PASSWORD:-admin_migrator_local_password}
+      USER_RUNTIME_DB_PASSWORD: ${USER_RUNTIME_DB_PASSWORD:-user_runtime_local_password}
+      USER_MIGRATOR_DB_PASSWORD: ${USER_MIGRATOR_DB_PASSWORD:-user_migrator_local_password}
     ports:
       - "${HOME_SEARCH_DB_PORT:-15432}:5432"
     healthcheck:
@@ -39,6 +41,24 @@ services:
       timeout: 5s
       retries: 10
       start_period: 5s
+    networks:
+      - home-search-local
+
+  user-flyway:
+    image: redgate/flyway:12.4.0
+    platform: linux/amd64
+    profiles: [ "migration" ]
+    depends_on:
+      postgis:
+        condition: service_healthy
+    environment:
+      FLYWAY_URL: ${USER_FLYWAY_URL:-jdbc:postgresql://postgis:5432/home_search_user}
+      FLYWAY_USER: ${USER_FLYWAY_USER:-home_search_user_migrator}
+      FLYWAY_PASSWORD: ${USER_FLYWAY_PASSWORD:-user_migrator_local_password}
+      REDGATE_DISABLE_TELEMETRY: "true"
+    volumes:
+      - ../apps/user/service/db/migration/user:/flyway/sql:ro
+      - ../apps/user/service/db:/flyway/conf:ro
     networks:
       - home-search-local
 
@@ -263,6 +283,34 @@ services:
     volumes:
       - ..:/workspace
       - home-search-admin-web-node-modules:/workspace/apps/admin/web/node_modules
+    networks:
+      - home-search-local
+
+  user-service:
+    image: eclipse-temurin:21-jdk
+    container_name: home-search-user-service
+    restart: unless-stopped
+    profiles: [ "user" ]
+    env_file:
+      - ../apps/user/service/.env
+    depends_on:
+      postgis:
+        condition: service_healthy
+    working_dir: /workspace/apps/user/service
+    command: [ "java", "-jar", "app/build/libs/user-service-app.jar" ]
+    environment:
+      USER_DB_JDBC_URL: jdbc:postgresql://postgis:5432/home_search_user
+      USER_DB_USERNAME: home_search_user_runtime
+      SPRING_PROFILES_ACTIVE: local
+      USER_JWT_PRIVATE_KEY_PATH: /run/keys/user-signing-private
+      USER_JWT_ACTIVE_PUBLIC_KEY_PATH: /run/keys/user-signing-public
+      SERVER_PORT: "8082"
+    ports:
+      - "${HOME_SEARCH_USER_API_PORT:-8082}:8082"
+    volumes:
+      - ..:/workspace
+      - ${USER_JWT_PRIVATE_KEY_HOST_PATH:-../runtime-keys/user/private}:/run/keys/user-signing-private:ro
+      - ${USER_JWT_PUBLIC_KEY_HOST_PATH:-../runtime-keys/user/public}:/run/keys/user-signing-public:ro
     networks:
       - home-search-local
 

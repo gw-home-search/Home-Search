@@ -11,6 +11,8 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
 
+import io.jsonwebtoken.Jwts;
+
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -69,6 +71,25 @@ class Rs256JwtCodecTest {
             Duration.ofSeconds(61), Map.of()
         ), keyPair.getPrivate());
         assertThatThrownBy(() -> codec.verify(longLived, valid)).isInstanceOf(JwtVerificationException.class);
+    }
+
+    @Test
+    void rejectsTokensWithAdditionalAudience() {
+        String token = Jwts.builder()
+            .header().keyId("active-key").and()
+            .issuer("admin-service")
+            .audience().add("other-service").add("property-data-admin").and()
+            .subject("account-id")
+            .id("request-id")
+            .issuedAt(java.util.Date.from(NOW))
+            .expiration(java.util.Date.from(NOW.plusSeconds(60)))
+            .signWith(keyPair.getPrivate(), Jwts.SIG.RS256)
+            .compact();
+
+        assertThatThrownBy(() -> new Rs256JwtCodec(Clock.fixed(NOW, ZoneOffset.UTC)).verify(token,
+            new JwtVerificationPolicy("admin-service", "property-data-admin", Duration.ofSeconds(60),
+                keyId -> keyPair.getPublic())))
+            .isInstanceOf(JwtVerificationException.class);
     }
 
     @Test

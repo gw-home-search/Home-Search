@@ -1,0 +1,47 @@
+plugins { id 'org.springframework.boot' }
+
+dependencies {
+    implementation project(':core')
+    implementation 'com.home:security-jwt-core'
+    implementation 'com.home:user-auth-contract'
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-session-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-client'
+    implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    runtimeOnly 'org.postgresql:postgresql'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-flyway'
+    testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
+    testImplementation platform('org.testcontainers:testcontainers-bom:1.21.3')
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+}
+
+tasks.named('bootJar') { archiveFileName = 'user-service-app.jar' }
+tasks.withType(Test).configureEach {
+    systemProperty 'userServiceMigrationLocation',
+        "filesystem:${rootProject.layout.projectDirectory.dir('db/migration/user').asFile.absolutePath}"
+}
+tasks.register('verifyRuntimeMigrationBoundary') {
+    dependsOn tasks.named('bootJar')
+    dependsOn project(':core').tasks.named('jar')
+    doLast {
+        if (!configurations.runtimeClasspath.resolvedConfiguration.resolvedArtifacts
+                .findAll { it.moduleVersion.id.group == 'org.flywaydb' }.isEmpty()) {
+            throw new GradleException('User app runtime must not include Flyway')
+        }
+        def appJar = tasks.named('bootJar').get().archiveFile.get().asFile
+        if (!zipTree(appJar).matching { include 'BOOT-INF/classes/db/migration/**' }.files.isEmpty()) {
+            throw new GradleException('User app artifact must not contain migration resources')
+        }
+        def coreJar = project(':core').tasks.named('jar').get().archiveFile.get().asFile
+        if (!zipTree(coreJar).matching { include 'db/migration/**' }.files.isEmpty()) {
+            throw new GradleException('User core runtime artifact must not contain migration resources')
+        }
+    }
+}

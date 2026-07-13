@@ -51,6 +51,7 @@ home:
       total-timeout: 5s
       executor:
         threads: 3
+        queue-capacity: 24
       cache:
         enabled: ${HOME_PLACE_KAKAO_CACHE_ENABLED:true}
         ttl: ${HOME_PLACE_KAKAO_CACHE_TTL:24h}

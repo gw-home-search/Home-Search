@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -64,12 +65,19 @@ public class NearbyPlaceQueryService implements NearbyPlaceUseCase {
 			.orElseThrow(() -> new ResourceNotFoundException("complex not found: " + complexId));
 		NearbyPlacePoint point = requiredPoint(center);
 
-		List<CompletableFuture<NearbyPlaceProviderResult>> futures = categories.stream()
-			.map(category -> CompletableFuture.supplyAsync(
-				() -> provider.search(point, radiusMeters, category),
-				executor
-			))
-			.toList();
+		List<CompletableFuture<NearbyPlaceProviderResult>> futures = new ArrayList<>(categories.size());
+		try {
+			for (NearbyPlaceCategory category : categories) {
+				futures.add(CompletableFuture.supplyAsync(
+					() -> provider.search(point, radiusMeters, category),
+					executor
+				));
+			}
+		}
+		catch (RejectedExecutionException exception) {
+			cancel(futures);
+			throw new NearbyPlaceProviderUnavailableException("nearby place capacity unavailable", exception);
+		}
 
 		waitForAll(futures);
 		List<NearbyPlaceCategoryResult> results = new ArrayList<>(futures.size());

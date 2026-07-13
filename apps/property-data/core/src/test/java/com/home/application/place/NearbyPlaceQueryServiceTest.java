@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.home.application.read.ResourceNotFoundException;
@@ -219,6 +220,25 @@ class NearbyPlaceQueryServiceTest {
 		finally {
 			Thread.interrupted();
 		}
+	}
+
+	@Test
+	@DisplayName("provider executor가 포화되면 작업을 queueing하지 않고 503용 실패로 변환한다")
+	void rejectsSaturatedExecutor() {
+		NearbyPlaceQueryService service = service(
+			complexId -> Optional.of(new NearbyPlaceCenter(complexId, 37.321, 127.109)),
+			(point, radiusMeters, category) -> new NearbyPlaceProviderResult(category, 0, NOW, List.of()),
+			command -> { throw new RejectedExecutionException("executor saturated"); },
+			5_000
+		);
+
+		assertThatThrownBy(() -> service.getNearbyPlaces(
+			501L,
+			800,
+			List.of(NearbyPlaceCategory.CAFE),
+			5
+		)).isInstanceOf(NearbyPlaceProviderUnavailableException.class)
+			.hasMessageNotContaining("executor saturated");
 	}
 
 	private NearbyPlaceQueryService service(NearbyPlaceCenterReader centerReader, NearbyPlaceProvider provider) {

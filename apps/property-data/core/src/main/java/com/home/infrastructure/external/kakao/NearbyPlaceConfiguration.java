@@ -4,9 +4,11 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.util.Optional;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,13 +47,30 @@ public class NearbyPlaceConfiguration {
 	private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
 	@Bean(destroyMethod = "shutdown")
-	ExecutorService nearbyPlaceExecutor(@Value("${home.place.kakao.executor.threads:3}") int threads) {
+	ExecutorService nearbyPlaceExecutor(
+		@Value("${home.place.kakao.executor.threads:3}") int threads,
+		@Value("${home.place.kakao.executor.queue-capacity:24}") int queueCapacity
+	) {
+		if (threads < 1 || threads > 3) {
+			throw new IllegalArgumentException("nearby place executor threads must be between 1 and 3");
+		}
+		if (queueCapacity < 1 || queueCapacity > 120) {
+			throw new IllegalArgumentException("nearby place executor queue capacity must be between 1 and 120");
+		}
 		AtomicInteger sequence = new AtomicInteger();
-		return Executors.newFixedThreadPool(Math.max(1, Math.min(3, threads)), runnable -> {
-			Thread thread = new Thread(runnable, "home-nearby-place-" + sequence.incrementAndGet());
-			thread.setDaemon(true);
-			return thread;
-		});
+		return new ThreadPoolExecutor(
+			threads,
+			threads,
+			0,
+			TimeUnit.MILLISECONDS,
+			new ArrayBlockingQueue<>(queueCapacity),
+			runnable -> {
+				Thread thread = new Thread(runnable, "home-nearby-place-" + sequence.incrementAndGet());
+				thread.setDaemon(true);
+				return thread;
+			},
+			new ThreadPoolExecutor.AbortPolicy()
+		);
 	}
 
 	@Bean

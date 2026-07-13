@@ -6,22 +6,25 @@ user-service는 property-data 다음 구현 milestone이다. `apps/user/service`
 독립 Gradle build, container, `home_search_user` database를 소유하며
 property-data의 `core` 모듈이나 `home_search` database를 공유하지 않는다.
 
-이번 milestone은 로그인과 현재 사용자 조회까지만 포함한다. 이메일 가입,
-즐겨찾기, 알림, 메일, 사용자 선호 추천은 포함하지 않는다. 기존 public
+이번 milestone은 로그인, 현재 사용자 조회, 관심 단지 저장까지 포함한다.
+이메일 가입, 알림, 메일, 사용자 선호 추천은 포함하지 않는다. 기존 public
 map/search/detail/trade API는 계속 무인증이다.
 
 ## 목표 구조
 
 ```text
 apps/user/service/
-├── core/       # identity, refresh-token 정책과 application ports
-├── api/        # OAuth2 login, JWT/cookie, HTTP composition root
-└── migration/  # 명시적 Flyway run-and-exit artifact
+├── core/
+│   └── src/main/          # domain/application ports + JPA persistence adapter
+├── app/                    # Spring Boot, OAuth2, JWT/cookie, HTTP composition root
+├── db/                     # external Flyway config and V1~V5 SQL catalog
+└── ops/                    # restricted Docker Flyway wrapper
 ```
 
-세 모듈은 하나의 user-service 배포 경계다. `api -> core`,
-`migration -> core resources`만 허용하고 property-data와 compile-time 의존을
-두지 않는다.
+두 모듈은 하나의 user-service 배포 경계다. `app -> core`만 허용하고
+property-data와 compile-time 의존을 두지 않는다. JPA entity, Spring Data
+repository, application port adapter, PostgreSQL identity lock은 `core`가 소유하며
+`app`은 `@EntityScan`/`@EnableJpaRepositories`로 이를 조립한다.
 
 ## 데이터 소유권
 
@@ -34,6 +37,8 @@ apps/user/service/
 - refresh token은 원문을 저장하지 않고 강한 one-way hash만 저장한다.
 - 사용자당 active refresh token은 최대 하나다. 새 로그인과 refresh 성공은
   기존 token을 폐기하고 새 token으로 회전한다.
+- 관심 단지는 `(user_id, complex_id)`로 식별하고 사용자당 최대 200개다.
+  단지명, 주소, 가격 snapshot과 property-data cross-database FK/join은 두지 않는다.
 
 runtime role은 `users` schema의 필요한 DML만 받고 DDL, role 관리,
 `home_search` 및 `home_search_admin` 접근 권한을 받지 않는다. API와 migration
@@ -57,6 +62,8 @@ Access token:
 - 기본 TTL 15분
 - private key는 user-service만 보유하고 BFF/ai-service 등 검증자는 public
   key만 받는다.
+- logout 또는 계정 정지 뒤 이미 발급된 access token은 별도 revocation 조회를
+  하지 않으므로 최대 15분까지 유효할 수 있다.
 
 Refresh token:
 
@@ -76,6 +83,8 @@ token으로 사용자 API에 접근할 수 없다.
 - `POST /auth/logout` → `204`
 - `GET /api/v1/users/me` → 로그인한 사용자의 안정적인 id, provider, profile
   표시 필드
+- `GET /api/v1/favorites` 및 `GET /api/v1/favorites/{complexId}`
+- `PUT /api/v1/favorites/{complexId}` 및 `DELETE /api/v1/favorites/{complexId}`
 
 이 경로들은 user-service 계약이며 현재 property-data public 계약인
 `API_CONTRACT.md`를 변경하지 않는다. BFF가 추가될 때 user JWT 검증 결과만
@@ -83,12 +92,13 @@ downstream principal로 전달하고 browser가 임의의 user id를 보내지 �
 
 ## 구현 slice와 검증
 
-1. 독립 Gradle build와 `core/api/migration`, test task, `user-service-test` CI.
+1. 독립 Gradle build와 `core/app`, external Flyway CLI, `user-service-test` CI.
 2. `users` schema/roles와 identity 저장소. provider별 신규/재로그인 검증.
 3. refresh token hash 저장, 단일 active 제약, rotation/reuse/revoke/expiry 검증.
 4. RS256 access JWT의 issuer/audience/kid/TTL/role 검증.
 5. OAuth provider adapter와 callback, cookie 속성 검증.
-6. `/api/v1/users/me` 및 public map 무인증 회귀 검증.
+6. 관심 단지 V5 schema, 최대 200개 정책, user row lock, CRUD API 검증.
+7. `/api/v1/users/me` 및 public map 무인증 회귀 검증.
 
 외부 OAuth는 test에서 stub으로 실행한다. 실제 client secret, private key,
 refresh token을 source, fixture, log에 저장하지 않는다.
@@ -98,3 +108,31 @@ refresh token을 source, fixture, log에 저장하지 않는다.
 public map/trade URL 또는 응답 변경, cross-database join, email 기반 identity
 병합, applied migration 수정, 데이터 삭제, admin/user key 공유가 필요하면
 구현을 중단하고 별도 승인을 받는다.
+
+## 구현된 runtime 계약
+
+- user-service app은 Spring Boot 4.1.0, Java 21을 사용하고 database migration은
+  application JVM을 기동하지 않는 official Docker CLI가 수행한다.
+- app runtime은 Flyway를 포함하지 않으며 `ddl-auto=validate`로 `users` JPA mapping만 검증한다.
+- `redgate/flyway:12.4.0` Docker CLI만 `db/migration/user` V1~V5를 실행하며
+  `home_search_user` database guard와 read-only SQL mount를 사용한다.
+- `ops/user-flyway.sh`는 `info`, `validate`, 숫자 target이 필수인 `migrate`만
+  제공한다. legacy identity importer, `repair`, `clean`, `baseline`, `latest`는
+  최종 운영 interface에 없다.
+- 신규 deployment는 `ops/user-deployment-preflight.sh before 5`가 history와
+  service relation이 모두 없는 fresh DB만 허용한 뒤 migrate하고,
+  `after 5`가 V1~V5의 exact SQL/Success history와 Flyway validate 결과를
+  확인해야 한다. JDBC, Baseline, Deleted, Out of Order, Missing, Ignored,
+  duplicate, failed history는 자동 중단한다.
+- runtime OAuth/JWT/DB 값은 `USER_*`, `GOOGLE_OAUTH_*`, `KAKAO_OAUTH_*`, `NAVER_OAUTH_*`
+  environment에서만 주입하며 provider token이나 raw refresh token을 durable storage/log에 남기지 않는다.
+
+검증 gate:
+
+```bash
+cd apps/user/service
+./gradlew userServiceQualityCheck --no-daemon --stacktrace
+```
+
+현재 persistence integration은 fresh PostgreSQL fixture와 pinned external CLI에서
+V1~V5, runtime role 권한, 동시 identity 생성과 refresh rotation을 검증한다.

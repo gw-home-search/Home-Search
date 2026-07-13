@@ -104,9 +104,39 @@ credential.
   and refresh TTL.
 - public-key overlap set for verifying tokens during key rotation.
 
+Consumer services that validate user tokens receive only the allowlisted
+public-key mapping and canonical verification policy:
+
+```dotenv
+USER_JWT_ISSUER=user-service
+USER_JWT_AUDIENCE=home-search-user-api
+USER_JWT_MAXIMUM_LIFETIME=15m
+USER_JWT_PUBLIC_KEYS=active-kid=/run/keys/user-active-public,old-kid=/run/keys/user-old-public
+```
+
+They fail at startup for empty/duplicate mappings, missing or oversized key
+files, RSA keys below 2048 bits, or active/overlap `kid` collisions. New public
+keys are deployed before signing switches; old keys remain for at least the
+15-minute access-token lifetime. Runtime JWKS fetch is not used.
+
 Migration jobs use `home_search_user_migrator` credentials separately. No
 user-service process receives `home_search`, admin DB, or admin internal signing
 credentials.
+
+Local Compose loads user-service runtime values from
+`apps/user/service/.env` through the service-level `env_file`; do not commit
+that populated file. The container receives `USER_DB_JDBC_URL`,
+`USER_DB_USERNAME`, key mount paths, and `SERVER_PORT` from Compose, while
+`USER_DB_PASSWORD`, OAuth credentials, Origin/redirect values, cookie security,
+and JWT key metadata come from the service-local file.
+
+`USER_RUNTIME_DB_PASSWORD` and `USER_MIGRATOR_DB_PASSWORD` are Postgres role
+bootstrap variables, not user-service application variables. The user-service
+file must therefore contain `USER_DB_PASSWORD`; for the built-in local role use
+`USER_DB_PASSWORD=user_runtime_local_password`. If the runtime role password is
+customized, the Postgres bootstrap value and `USER_DB_PASSWORD` must be kept
+identical. Service-level `env_file` values are intentionally not shared with the
+Postgres container because that would also expose OAuth credentials to it.
 
 ## Required AI-service Environment
 
@@ -186,6 +216,38 @@ evidence 파일에 append한다. evidence 파일의 상위 directory는 미리 �
 V3 controlled repair는 history CSV/SQL과 schema-only dump를 먼저 만들고,
 `MIGRATION_HISTORY_CSV_BACKUP_FILE`, `MIGRATION_HISTORY_SQL_BACKUP_FILE`,
 `MIGRATION_SCHEMA_BACKUP_FILE`로 non-empty backup 파일을 지정해야 실행된다.
+
+User-service는 application runtime과 분리된 official Docker Flyway CLI만
+사용한다. `core`/`app` artifact에는 Flyway dependency와 migration SQL이 없다.
+
+```bash
+cd apps/user/service
+USER_MIGRATOR_JDBC_URL=jdbc:postgresql://localhost:15432/home_search_user \
+USER_MIGRATOR_DB_USERNAME=home_search_user_migrator \
+USER_MIGRATOR_DB_PASSWORD=... \
+./ops/user-flyway.sh validate
+```
+
+`user-flyway.sh`는 `info`, `validate`, 숫자 target이 필수인 `migrate`만
+제공하고 `latest`, `clean`, `repair`, `baseline`, 임의 option을 거부한다.
+`redgate/flyway:12.4.0`과 read-only SQL/conf mount를 사용하며 migrator
+credential은 user-service runtime container에 전달하지 않는다.
+
+User-service deployment는 fresh-only다.
+
+```bash
+./ops/user-deployment-preflight.sh before 5
+./ops/user-flyway.sh migrate 5
+./ops/user-deployment-preflight.sh after 5
+./ops/user-flyway.sh validate
+```
+
+preflight는 pinned PostgreSQL client의 read-only catalog probe로
+`current_database()`와 service relation/history를 확인한다. `before`는 empty
+database만, `after`는 V1~V5가 각각 정확히 한 건의 `SQL`/`Success`이고
+`validate -outputType=json`이 성공한 경우만 허용한다. snapshot, JDBC,
+Baseline, Deleted, Out of Order, Missing, Ignored, duplicate, failed history는
+exit `2`로 중단하며 credential은 stdout/stderr/evidence에 기록하지 않는다.
 
 개발 중 다음 version은 `./gradlew :core:printNextApiMigrationVersion`으로 확인한다.
 신규 migration은 durable DB에 명시적으로 적용하기 전까지 수정할 수 있다.

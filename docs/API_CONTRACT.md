@@ -51,9 +51,10 @@ The source backend and source frontend are read-only references. If source code
 and this target contract disagree, the Home Search implementation should follow
 this document and keep the source mismatch as a migration note.
 
-Do not widen Home Search to include rankings, favorites, alarms, mail batches,
-recommendations, auth flows, or heavy analytics unless the migration scope is
-explicitly changed.
+Do not widen property-data to include rankings, favorites, alarms, mail batches,
+recommendations, auth flows, or heavy analytics. The additive authenticated
+favorite APIs documented below are owned by user-service and do not change the
+unauthenticated property-data map/search/detail/trade contract.
 
 ## Common Conventions
 
@@ -884,6 +885,98 @@ Status:
 - `404`: complex id does not exist.
 - `500`: unexpected server error.
 
+## Authenticated User APIs
+
+These APIs are owned by user-service. Existing property-data map, search,
+detail, trend, and trade APIs remain unauthenticated. Access tokens use RS256,
+remain memory-only in the browser, and must contain `iss=user-service`, exactly
+one `aud=home-search-user-api`, a positive numeric `sub`, and `role=USER`. The
+verified `sub` is the only accepted user id.
+
+Authentication failures return `401` with code `AUTHENTICATION_REQUIRED` and
+the common `ProblemDetail` fields. Auth refresh/logout mutations accept only the
+single configured frontend `Origin`.
+
+### OAuth login endpoints
+
+- `GET /oauth2/authorization/{provider}` starts login for the allowlisted
+  `google`, `kakao`, or `naver` provider.
+- `GET /login/oauth2/code/{provider}` is the provider callback.
+
+Unsupported providers are not forwarded to an arbitrary authorization URL.
+
+### POST `/auth/access`
+
+Rotates the HttpOnly `refresh_token` cookie and returns a new memory-only access
+token. A missing, expired, revoked, or reused refresh token returns `401`.
+
+```json
+{ "accessToken": "signed-rs256-token" }
+```
+
+### POST `/auth/logout`
+
+Revokes the presented refresh token when present, expires the refresh cookie,
+and returns `204`. It is idempotent when the cookie is absent.
+
+### GET `/api/v1/users/me`
+
+Returns the verified user's stable profile without exposing email or OAuth
+provider tokens.
+
+```json
+{
+  "userId": 42,
+  "provider": "GOOGLE",
+  "displayName": "홍길동",
+  "profileImage": null
+}
+```
+
+### GET `/api/v1/favorites?page=0&size=20`
+
+- `page` defaults to `0` and must be non-negative.
+- `size` defaults to `20`, must be at least `1`, and is capped at `100`.
+- Items are ordered by `savedAt DESC`, then `complexId DESC`.
+
+```json
+{
+  "content": [{ "complexId": 501, "savedAt": "2026-07-13T06:00:00Z" }],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+Invalid pagination returns `400` with code `INVALID_PAGINATION`.
+
+### GET `/api/v1/favorites/{complexId}`
+
+Returns `200` for both saved and unsaved complexes. An unsaved item returns
+`favorite: false` and `savedAt: null`.
+
+```json
+{ "complexId": 501, "favorite": true, "savedAt": "2026-07-13T06:00:00Z" }
+```
+
+### PUT `/api/v1/favorites/{complexId}`
+
+Saves the complex and returns `204` with no body. Duplicate PUT is successful
+and preserves the original `savedAt`. A user may save at most 200 complexes;
+attempting to save a new item over the limit returns `409` with code
+`FAVORITE_LIMIT_REACHED`.
+
+### DELETE `/api/v1/favorites/{complexId}`
+
+Removes the saved complex and returns `204` with no body. Deleting an absent
+item is also successful.
+
+For every favorite item endpoint, `complexId` must be a positive integer.
+Invalid values return `400` with code `INVALID_COMPLEX_ID`. Favorite rows store
+only `userId`, opaque `complexId`, and `savedAt`; user-service does not join or
+foreign-key the property-data database.
+
 ## Admin APIs
 
 Admin browser APIs are owned by `admin-service`, not property-data. They require
@@ -1091,9 +1184,6 @@ Keep these out of the current critical path:
 
 - `/api/v1/rankings/top-price-30d`
 - `/api/v1/rankings/top-volume-30d`
-- `/api/v1/favorites`
-- `/api/v1/users/me`
-- `/auth/access`
 - `/admin/batch/trade-alarm/run`
 
 They should not be deleted from source knowledge, but they must not block

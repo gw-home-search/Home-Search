@@ -17,10 +17,20 @@ require_migrator_environment() {
     : "${USER_MIGRATOR_DB_USERNAME:?USER_MIGRATOR_DB_USERNAME is required}"
     : "${USER_MIGRATOR_DB_PASSWORD:?USER_MIGRATOR_DB_PASSWORD is required}"
 
-    local jdbc_without_query="${USER_MIGRATOR_JDBC_URL%%\?*}"
-    local database_name="${jdbc_without_query##*/}"
-    if [[ "${database_name}" != "${EXPECTED_DATABASE}" ]]; then
-        printf '거부됨: JDBC database는 %s여야 합니다.\n' "${EXPECTED_DATABASE}" >&2
+    local jdbc_url="${USER_MIGRATOR_JDBC_URL}"
+    local jdbc_without_query="${jdbc_url%%\?*}"
+    local authority="${jdbc_without_query#jdbc:postgresql://}"
+    authority="${authority%%/*}"
+    local database_name="${jdbc_without_query#jdbc:postgresql://${authority}/}"
+    local query lower_query
+    query=$([[ "${jdbc_url}" == *\?* ]] && printf '%s' "${jdbc_url#*\?}" || true)
+    lower_query="${query,,}"
+    if [[ "${jdbc_without_query}" != jdbc:postgresql://* || -z "${authority}" || "${authority}" == *@* || "${database_name}" != "${EXPECTED_DATABASE}" ]]; then
+        printf '거부됨: JDBC database는 userinfo가 없는 %s PostgreSQL이어야 합니다.\n' "${EXPECTED_DATABASE}" >&2
+        exit 2
+    fi
+    if [[ "&${lower_query}" == *'&password='* ]]; then
+        printf '거부됨: JDBC URL password parameter는 허용되지 않습니다.\n' >&2
         exit 2
     fi
 }

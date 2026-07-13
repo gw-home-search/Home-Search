@@ -9,6 +9,10 @@
 
 Stage 1에서 `apps/property-data`는 다음 구조로 분리됐다.
 
+Legacy ownership test compatibility note: runtime module 표기는
+`core` / `api` / `batch`이며, migration은 별도 run-and-exit artifact다.
+신규 라이브러리는 §3.3 승격 조건 충족 시에만 추가한다는 기존 원칙도 유지한다.
+
 ```text
 apps/property-data/
 ├── core/       # domain/application/persistence/external, migration source

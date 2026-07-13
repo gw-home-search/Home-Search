@@ -55,21 +55,16 @@ class BackendRuntimeSplitOwnershipTest {
 	}
 
 	@Test
-	@DisplayName("Stage 1 runtime split은 core/api/batch/migration 경계를 유지한다")
+	@DisplayName("runtime split은 core/api/batch를 생성하고 신규 libs는 만들지 않는다")
 	void runtimeSplitCreatesCoreApiAndBatchAppOnly() throws IOException {
 		String plan = Files.readString(RESTRUCTURING_PLAN);
 
 		assertThat(plan)
-			.contains("상태: Stage 1 완료")
-			.contains("├── core/")
-			.contains("├── api/")
-			.contains("├── batch/")
-			.contains("└── migration/")
-			.contains("user-service는 property-data 내부 module이");
+			.contains("`core` / `api` / `batch`")
+			.contains("신규 라이브러리는 §3.3 승격 조건 충족 시에만");
 		assertThat(HOME_DATA_ROOT.resolve("core")).isDirectory();
 		assertThat(HOME_DATA_ROOT.resolve("api")).isDirectory();
 		assertThat(HOME_DATA_ROOT.resolve("batch")).isDirectory();
-		assertThat(HOME_DATA_ROOT.resolve("migration")).isDirectory();
 		assertThat(LIBS_ROOT.resolve("rtms-ingest-core")).exists();
 		assertThat(LIBS_ROOT.resolve("geo-core")).doesNotExist();
 	}

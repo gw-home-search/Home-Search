@@ -10,6 +10,7 @@ import com.home.application.read.RegionSummaryResult;
 import com.home.application.read.ResourceNotFoundException;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class RegionNavigationService {
@@ -27,11 +28,19 @@ public class RegionNavigationService {
 		return reader.findRootRegions();
 	}
 
+	@Transactional(
+		readOnly = true,
+		isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ
+	)
 	public RegionDetailResult getRegionDetail(Long regionId) {
 		return reader.findRegionDetail(regionId)
 			.orElseThrow(() -> new ResourceNotFoundException("region not found: " + regionId));
 	}
 
+	@Transactional(
+		readOnly = true,
+		isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ
+	)
 	public List<ComplexSummaryResult> getRegionComplexes(Long regionId, Integer requestedLimit, Integer requestedOffset) {
 		int limit = normalizeLimit(requestedLimit);
 		int offset = normalizeOffset(requestedOffset);

@@ -23,6 +23,12 @@ import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;
+import com.home.application.coordinate.caseflow.CoordinateResolutionCommitter;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.TransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
 
 class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupport {
 
@@ -34,14 +40,7 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 			jdbcClient
 		);
 		ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
-				new com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService(
-					coordinateRepository,
-					new JdbcComplexRelationRepository(jdbcClient),
-					new ComplexRelationClassifier(),
-					ComplexCoordinateIdentityVerifier.trusting(),
-					BuildingFootprintSource.unavailable(),
-					CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
-				),
+			coordinateExceptionService(coordinateRepository),
 			coordinateRepository,
 			new ComplexDisplayCoordinateProjectionService(new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient))
 		);
@@ -99,14 +98,7 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 			jdbcClient
 		);
 		ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
-				new com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService(
-					coordinateRepository,
-					new JdbcComplexRelationRepository(jdbcClient),
-					new ComplexRelationClassifier(),
-					ComplexCoordinateIdentityVerifier.trusting(),
-					BuildingFootprintSource.unavailable(),
-					CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
-				),
+			coordinateExceptionService(coordinateRepository),
 			coordinateRepository,
 			new ComplexDisplayCoordinateProjectionService(new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient)),
 			10,
@@ -132,14 +124,7 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 			jdbcClient
 		);
 		ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
-				new com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService(
-					coordinateRepository,
-					new JdbcComplexRelationRepository(jdbcClient),
-					new ComplexRelationClassifier(),
-					ComplexCoordinateIdentityVerifier.trusting(),
-					BuildingFootprintSource.unavailable(),
-					CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
-				),
+			coordinateExceptionService(coordinateRepository),
 			coordinateRepository,
 			new ComplexDisplayCoordinateProjectionService(new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient)),
 			10,
@@ -151,6 +136,34 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 		assertThat(result.retried()).isEqualTo(1);
 		assertThat(result.resolved()).isEqualTo(1);
 		assertThat(caseStatuses()).contains(tuple(1002L, "RESOLVED"));
+	}
+
+	private ComplexCoordinateExceptionService coordinateExceptionService(
+		JdbcComplexCoordinateExceptionRepository repository
+	) {
+		return new ComplexCoordinateExceptionService(
+			repository,
+			new JdbcComplexRelationRepository(jdbcClient),
+			new ComplexRelationClassifier(),
+			ComplexCoordinateIdentityVerifier.trusting(),
+			BuildingFootprintSource.unavailable(),
+			CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed(),
+			transactionalCommitter(repository)
+		);
+	}
+
+	private CoordinateResolutionCommitter transactionalCommitter(
+		JdbcComplexCoordinateExceptionRepository repository
+	) {
+		DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(dataSource);
+		TransactionInterceptor interceptor = new TransactionInterceptor(
+			(TransactionManager) transactionManager,
+			new AnnotationTransactionAttributeSource()
+		);
+		ProxyFactory proxyFactory = new ProxyFactory(new CoordinateResolutionCommitter(repository));
+		proxyFactory.setProxyTargetClass(true);
+		proxyFactory.addAdvice(interceptor);
+		return (CoordinateResolutionCommitter) proxyFactory.getProxy();
 	}
 
 	private void seedCoordinateReadinessData() {

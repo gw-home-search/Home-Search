@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 
 import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;
+import com.home.application.coordinate.caseflow.CoordinateResolutionCommitter;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessRepository;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessResult;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessService;
@@ -65,16 +66,22 @@ class ComplexCoordinateReadinessRunnerTest {
 
 		private FakeReadinessService() {
 			super(
-					new ComplexCoordinateExceptionService(
-						new NoopCoordinateExceptionRepository(),
-						parcelId -> List.of(),
-						new com.home.domain.complex.relation.ComplexRelationClassifier(),
-						ComplexCoordinateIdentityVerifier.trusting(),
-						BuildingFootprintSource.unavailable(),
-						CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
-					),
+				coordinateExceptionService(),
 				new NoopReadinessRepository(),
 				new ComplexDisplayCoordinateProjectionService(new NoopProjectionRepository())
+			);
+		}
+
+		private static ComplexCoordinateExceptionService coordinateExceptionService() {
+			NoopCoordinateExceptionRepository repository = new NoopCoordinateExceptionRepository();
+			return new ComplexCoordinateExceptionService(
+				repository,
+				parcelId -> List.of(),
+				new com.home.domain.complex.relation.ComplexRelationClassifier(),
+				ComplexCoordinateIdentityVerifier.trusting(),
+				BuildingFootprintSource.unavailable(),
+				CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed(),
+				new CoordinateResolutionCommitter(repository)
 			);
 		}
 

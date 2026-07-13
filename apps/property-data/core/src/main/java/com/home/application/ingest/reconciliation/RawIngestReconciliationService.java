@@ -1,20 +1,30 @@
 package com.home.application.ingest.reconciliation;
 
 import java.util.Objects;
+import java.util.Optional;
+
+import com.home.application.ingest.raw.RawTradeIngestRecord;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
-import com.home.domain.ingest.raw.RawTradeIngestTransition;
+import com.home.application.ingest.raw.RawTradeItemParser;
+import com.home.application.ingest.trade.TradeIngestFinalizer;
+import com.home.application.ingest.trade.TradeIngestItemOutcome;
+import com.home.domain.ingest.raw.RawTradeIngestStatus;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
 
 public class RawIngestReconciliationService {
 
-	private final RawIngestReconciliationRepository reconciliationRepository;
 	private final RawTradeIngestRepository rawTradeIngestRepository;
+	private final RawTradeItemParser rawTradeItemParser;
+	private final TradeIngestFinalizer finalizer;
 
 	public RawIngestReconciliationService(
-		RawIngestReconciliationRepository reconciliationRepository,
-		RawTradeIngestRepository rawTradeIngestRepository
+		RawTradeIngestRepository rawTradeIngestRepository,
+		RawTradeItemParser rawTradeItemParser,
+		TradeIngestFinalizer finalizer
 	) {
-		this.reconciliationRepository = Objects.requireNonNull(reconciliationRepository);
 		this.rawTradeIngestRepository = Objects.requireNonNull(rawTradeIngestRepository);
+		this.rawTradeItemParser = Objects.requireNonNull(rawTradeItemParser);
+		this.finalizer = Objects.requireNonNull(finalizer);
 	}
 
 	public RawIngestReconciliationResult reconcileReceived(int limit) {
@@ -22,10 +32,14 @@ public class RawIngestReconciliationService {
 			return RawIngestReconciliationResult.empty();
 		}
 		RawIngestReconciliationResult result = RawIngestReconciliationResult.empty();
-		for (RawIngestReconciliationCandidate candidate
-			: reconciliationRepository.findReceivedRowsLinkedToActiveTrade(limit)) {
-			rawTradeIngestRepository.updateStatus(candidate.rawIngestId(), RawTradeIngestTransition.normalized());
-			result = result.plusNormalized();
+		for (RawTradeIngestRecord raw
+			: rawTradeIngestRepository.findByStatus(RawTradeIngestStatus.RECEIVED, limit)) {
+			Optional<OpenApiTradeItem> item = rawTradeItemParser.parse(raw);
+			if (item.isEmpty()) {
+				continue;
+			}
+			TradeIngestItemOutcome outcome = finalizer.finalizeReceived(raw, item.get());
+			result = result.plus(outcome);
 		}
 		return result;
 	}

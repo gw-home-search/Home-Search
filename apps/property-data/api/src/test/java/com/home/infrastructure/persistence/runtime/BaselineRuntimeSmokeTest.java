@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Duration;
+
 import com.home.HomeSearchApiApplication;
 import com.home.application.complex.ComplexRelationUseCase;
 import com.home.application.region.RegionRelationSynchronizationGateway;
@@ -39,7 +41,7 @@ class BaselineRuntimeSmokeTest {
 	@Container
 	private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
 		DockerImageName.parse("postgis/postgis:16-3.4").asCompatibleSubstituteFor("postgres")
-	);
+	).withStartupTimeout(Duration.ofMinutes(3));
 
 	@Autowired
 	private MockMvc mockMvc;

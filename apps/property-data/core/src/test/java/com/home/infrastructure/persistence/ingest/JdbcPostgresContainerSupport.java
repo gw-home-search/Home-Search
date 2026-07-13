@@ -35,7 +35,7 @@ public abstract class JdbcPostgresContainerSupport {
 	}
 
 	protected Flyway flyway(MigrationVersion target) {
-		return flyway(target, "classpath:db/migration/api");
+		return flyway(target, System.getProperty("propertyDataMigrationLocation"));
 	}
 
 	protected Flyway flyway(MigrationVersion target, String location) {

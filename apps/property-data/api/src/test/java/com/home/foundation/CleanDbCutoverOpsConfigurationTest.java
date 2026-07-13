@@ -13,7 +13,7 @@ class CleanDbCutoverOpsConfigurationTest {
 
 	private static final Path CLEAN_DB_CUTOVER_SCRIPT = Path.of("..", "ops", "verify-clean-db-cutover.sh");
 	private static final Path API_MIGRATION_DIRECTORY =
-		Path.of("..", "core", "src", "main", "resources", "db", "migration", "api");
+		Path.of("..", "db", "migration", "api");
 
 	@Test
 	@DisplayName("clean DB cutover verifier는 데이터 비교와 cleanup table 부재를 확인한다")
@@ -53,7 +53,7 @@ class CleanDbCutoverOpsConfigurationTest {
 		String content = Files.readString(CLEAN_DB_CUTOVER_SCRIPT);
 
 		assertThat(content).contains("expected_flyway_versions");
-		assertThat(content).contains("core/src/main/resources/db/migration/api/V*.sql");
+		assertThat(content).contains("db/migration/api/V*.sql");
 		assertThat(content).contains("${flyway_versions}\" != \"${expected_versions}");
 		assertThat(content).doesNotContain("flyway_versions\" != \"1:true,2:true\"");
 	}

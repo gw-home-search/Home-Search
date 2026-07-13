@@ -22,7 +22,7 @@ class BackendProfileConfigurationTest {
 
 		assertThat(properties.getProperty("spring.autoconfigure.exclude")).isNull();
 		assertThat(properties.getProperty("spring.flyway.enabled")).isEqualTo("false");
-		assertThat(properties.getProperty("spring.flyway.locations")).isEqualTo("classpath:db/migration/api");
+		assertThat(properties.getProperty("spring.flyway.locations")).isNull();
 		assertThat(properties.getProperty("spring.profiles.default")).isEqualTo("local");
 		assertThat(properties.getProperty("management.endpoints.web.exposure.include")).isNull();
 		assertThat(properties.getProperty("management.prometheus.metrics.export.enabled")).isNull();

@@ -60,7 +60,7 @@ class BaselineRuntimeSmokeTest {
 	static void databaseProperties(DynamicPropertyRegistry registry) {
 		Flyway.configure()
 			.dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-			.locations("classpath:db/migration/api")
+			.locations(System.getProperty("propertyDataMigrationLocation"))
 			.schemas("public", "reference", "batch")
 			.defaultSchema("public")
 			.load()

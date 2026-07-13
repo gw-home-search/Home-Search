@@ -57,6 +57,8 @@ subprojects {
     }
 }
 
+evaluationDependsOn(':core')
+
 def coverageExcludes = [
     '**/HomeSearchApiApplication*',
     '**/PropertyDataBatchApplication*',
@@ -80,10 +82,11 @@ def coverageExecutionData = files(
     jacocoExec(project(':core'), 'persistenceTest'),
     jacocoExec(project(':api'), 'test'),
     jacocoExec(project(':api'), 'apiContractTest'),
-    jacocoExec(project(':batch'), 'test'),
-    jacocoExec(project(':migration'), 'test')
+    jacocoExec(project(':batch'), 'test')
 )
-def coverageSourceDirectories = files(subprojects.collect { it.sourceSets.main.allSource.srcDirs })
+def coverageSourceDirectories = files(
+    subprojects.collect { it.sourceSets.main.allSource.srcDirs }
+)
 def coverageClassDirectories = files(subprojects.collect { project ->
     project.sourceSets.main.output.classesDirs.collect {
         fileTree(dir: it, exclude: coverageExcludes)
@@ -96,7 +99,6 @@ tasks.register('jacocoRootReport', JacocoReport) {
     dependsOn ':api:test'
     dependsOn ':api:apiContractTest'
     dependsOn ':batch:test'
-    dependsOn ':migration:test'
 
     executionData.setFrom(coverageExecutionData)
     sourceDirectories.setFrom(coverageSourceDirectories)
@@ -148,12 +150,104 @@ tasks.register('apiDocsCheck') {
     dependsOn ':api:apiDocsCheck'
 }
 
+def apiMigrationSqlDir = layout.projectDirectory.dir('db/migration/api')
+def migrationVersionOf = { File file ->
+    def matcher = file.name =~ /^V([0-9]+)__.*/
+    matcher.matches() ? matcher.group(1).toInteger() : null
+}
+def apiMigrationFiles = {
+    fileTree(apiMigrationSqlDir) { include 'V*__*.sql' }.files.sort { left, right -> left.name <=> right.name }
+}
+def sha256 = { File file ->
+    def digest = java.security.MessageDigest.getInstance('SHA-256')
+    file.withInputStream { input ->
+        byte[] buffer = new byte[8192]
+        for (int read = input.read(buffer); read >= 0; read = input.read(buffer)) {
+            if (read > 0) digest.update(buffer, 0, read)
+        }
+    }
+    digest.digest().collect { String.format('%02x', it) }.join()
+}
+
+tasks.register('printNextApiMigrationVersion') {
+    description = 'Print the next available property-data API migration version.'
+    group = 'database'
+    doLast {
+        def versions = apiMigrationFiles().collect(migrationVersionOf).findAll { it != null }
+        println "NEXT_API_MIGRATION_VERSION=${versions.isEmpty() ? 1 : versions.max() + 1}"
+    }
+}
+
+tasks.register('verifyApiMigrationCatalog') {
+    description = 'Verify the external property-data SQL migration catalog and runtime boundary.'
+    group = 'verification'
+    doLast {
+        def files = apiMigrationFiles()
+        if (files.isEmpty()) throw new GradleException('API migration catalog is empty')
+        files.each { file ->
+            if (!(file.name ==~ /^V[1-9][0-9]*__[A-Za-z0-9]+(?:_[A-Za-z0-9]+)*\.sql$/)) {
+                throw new GradleException("Invalid API SQL migration filename: ${file.name}")
+            }
+        }
+        def byVersion = files.groupBy(migrationVersionOf)
+        def duplicates = byVersion.findAll { version, versionFiles -> version != null && versionFiles.size() > 1 }
+        if (!duplicates.isEmpty()) {
+            throw new GradleException("Duplicate API migration versions: ${duplicates.keySet().sort()}")
+        }
+        def versions = byVersion.keySet().findAll { it != null }.sort()
+        def expectedVersions = [1, 2, 4, 5, 6, 7, 8]
+        if (versions != expectedVersions) {
+            throw new GradleException("API migration versions must be exact: ${expectedVersions}; actual=${versions}")
+        }
+        [
+            'V1__create_clean_core_schema.sql': 'b5755bd88dce6b80ccb284782fc13d8b42b90cf42b579a1f56fa6dd9bf6d4c1a',
+            'V2__SeedCleanCoreReferenceData.sql': '5a8c24062cbf30915f1068531795af5c09adf0bf3724a6fc460002a42513a7f0',
+            'V4__create_spring_batch_metadata_schema.sql': 'c9aac255ac166afa06833d3feeddd702e70ef95367d060cfae435c18b86bc802',
+            'V5__expand_trade_registry_and_rtms_run_correlation.sql': '7f6644126e3ea1b42aa2a7c8e17984bad8f9580d3f4d7c478678e38d03a7e5e5',
+            'V6__enforce_trade_registry_reference.sql': '3c5f7cac9a886311362fa5a3b4bee1ddd734201ad9fef49a6719c582085a84b2',
+            'V7__add_building_register_metadata_fields.sql': '4a0d7cf77640937f4c5aeb5e4462959ff0469eb670631bb3b31df82fcbdadf50',
+            'V8__add_complex_display_search_projection.sql': '23aa88583332e2c8d24b62432d67da3581874f738016cd363f6474d1db3b6d4b'
+        ].each { fileName, expected ->
+            def file = files.find { it.name == fileName }
+            if (file == null || sha256(file) != expected) {
+                throw new GradleException("Locked API migration is missing or changed: ${fileName}")
+            }
+        }
+        ['core/src/database', 'core/src/databaseTest', 'migration'].each { forbidden ->
+            if (layout.projectDirectory.dir(forbidden).asFile.exists()) {
+                throw new GradleException("Removed database execution boundary must stay absent: ${forbidden}")
+            }
+        }
+    }
+}
+
+tasks.register('verifyFlywayCliContract', Exec) {
+    description = 'Verify external Flyway wrapper syntax and rejected operations.'
+    group = 'verification'
+    commandLine 'bash', 'ops/test-property-flyway-wrapper.sh'
+}
+
+tasks.register('verifyPropertyDeploymentPreflightContract', Exec) {
+    description = 'Verify property-data fresh-only deployment preflight policy.'
+    group = 'verification'
+    commandLine 'bash', 'ops/test-property-deployment-preflight.sh'
+}
+
+tasks.register('verifyPropertyFlywayFresh', Exec) {
+    description = 'Migrate and validate a fresh PostGIS database with the pinned external Flyway CLI.'
+    group = 'verification'
+    commandLine 'bash', 'ops/verify-property-flyway-fresh.sh'
+}
+
 tasks.register('backendQualityCheck') {
     description = 'Run backend profile, contract, persistence, docs, coverage, and javadoc gates.'
     group = 'verification'
     dependsOn ':core:test'
     dependsOn ':core:persistenceTest'
-    dependsOn ':core:verifyApiMigrationCatalog'
+    dependsOn tasks.named('verifyApiMigrationCatalog')
+    dependsOn tasks.named('verifyFlywayCliContract')
+    dependsOn tasks.named('verifyPropertyDeploymentPreflightContract')
+    dependsOn tasks.named('verifyPropertyFlywayFresh')
     dependsOn ':api:test'
     dependsOn ':api:apiContractTest'
     dependsOn ':api:restDocsTest'
@@ -163,7 +257,5 @@ tasks.register('backendQualityCheck') {
     dependsOn ':api:javadoc'
     dependsOn ':batch:javadoc'
     dependsOn ':batch:check'
-    dependsOn ':migration:javadoc'
-    dependsOn ':migration:check'
     dependsOn tasks.named('coverageCheck')
 }

@@ -13,10 +13,15 @@ safe ingest behavior ahead of feature expansion.
 ```text
 apps/property-data
 ├── core
-│   └── domain, application, persistence, external clients, cache, Flyway
-└── api
-    └── Spring Boot app, web controllers, DTOs, scheduling, global errors,
-        runtime resources, REST Docs/OpenAPI
+│   └── domain, application, persistence, external clients, cache
+├── api
+│   └── Spring Boot HTTP composition, DTOs, errors, REST Docs/OpenAPI
+├── batch
+│   └── Spring Batch composition
+├── db
+│   └── external Flyway config and SQL catalog
+└── ops
+    └── restricted Docker Flyway wrapper
 ```
 
 Dependency direction:
@@ -102,8 +107,11 @@ Use the layer and module that owns the reason to change:
   ODCloud, prediction, and other provider clients/parsers.
 - `core/src/main/java/com/home/infrastructure/cache/**`: cache adapters and
   cache-specific lookup state.
-- `core/src/main/resources/db/migration/**`: Flyway migrations for the
-  property-data database.
+- `db/migration/api/**`: external Flyway SQL catalog for the property-data database.
+- `ops/property-flyway.sh`: explicit `info|validate|migrate <numeric-target>`
+  interface. Do not add `repair`, `clean`, `baseline`, `latest`, or arbitrary options.
+- Completed local Java-to-SQL history cutover evidence remains documentation-only;
+  do not restore executable repair or history mutation commands.
 - `api/src/main/java/com/home/infrastructure/web/**`: controllers, public
   request/response DTOs, validation, interceptors, and HTTP behavior.
 - `api/src/main/java/com/home/infrastructure/scheduling/**`: scheduled runtime
@@ -156,6 +164,7 @@ bash -n ops/*.sh
 ./ops/run-daily-batch-live-smoke.sh --self-test
 ./ops/check-daily-batch-live-smoke.sh --self-test
 ./ops/verify-clean-db-cutover.sh --self-test
+./ops/test-property-v2-history-cutover.sh
 git diff --check
 ```
 

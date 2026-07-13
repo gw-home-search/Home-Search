@@ -17,7 +17,7 @@ apps/user/service/
 ├── core/
 │   └── src/main/          # domain/application ports + JPA persistence adapter
 ├── app/                    # Spring Boot, OAuth2, JWT/cookie, HTTP composition root
-├── db/                     # external Flyway config and V1~V5 SQL catalog
+├── db/                     # external Flyway config and versioned SQL catalog
 └── ops/                    # restricted Docker Flyway wrapper
 ```
 
@@ -114,14 +114,14 @@ public map/trade URL 또는 응답 변경, cross-database join, email 기반 ide
 - user-service app은 Spring Boot 4.1.0, Java 21을 사용하고 database migration은
   application JVM을 기동하지 않는 official Docker CLI가 수행한다.
 - app runtime은 Flyway를 포함하지 않으며 `ddl-auto=validate`로 `users` JPA mapping만 검증한다.
-- `redgate/flyway:12.4.0` Docker CLI만 `db/migration/user` V1~V5를 실행하며
+- `redgate/flyway:12.4.0` Docker CLI만 `db/migration/user`의 migration versions 1 through 5를 실행하며
   `home_search_user` database guard와 read-only SQL mount를 사용한다.
 - `ops/user-flyway.sh`는 `info`, `validate`, 숫자 target이 필수인 `migrate`만
   제공한다. legacy identity importer, `repair`, `clean`, `baseline`, `latest`는
   최종 운영 interface에 없다.
 - 신규 deployment는 `ops/user-deployment-preflight.sh before 5`가 history와
   service relation이 모두 없는 fresh DB만 허용한 뒤 migrate하고,
-  `after 5`가 V1~V5의 exact SQL/Success history와 Flyway validate 결과를
+`after 5`가 migration versions 1 through 5의 exact SQL/Success history와 Flyway validate 결과를
   확인해야 한다. JDBC, Baseline, Deleted, Out of Order, Missing, Ignored,
   duplicate, failed history는 자동 중단한다.
 - runtime OAuth/JWT/DB 값은 `USER_*`, `GOOGLE_OAUTH_*`, `KAKAO_OAUTH_*`, `NAVER_OAUTH_*`
@@ -135,4 +135,4 @@ cd apps/user/service
 ```
 
 현재 persistence integration은 fresh PostgreSQL fixture와 pinned external CLI에서
-V1~V5, runtime role 권한, 동시 identity 생성과 refresh rotation을 검증한다.
+Migration versions 1 through 5, runtime role 권한, 동시 identity 생성과 refresh rotation을 검증한다.

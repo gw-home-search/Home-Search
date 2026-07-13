@@ -70,6 +70,8 @@ Complex markers need:
 Marker display:
 
 - Price label from `latestDealAmount`.
+- Name label from the marker response `name`, which is the source complex name
+  without the locality-combined display projection.
 - Unit label from `unitCntSum`. Markers without a household-count sum are excluded
   by the backend, so every returned marker has a non-null `unitCntSum`. Complexes
   with no household-count metadata stay visible in the metadata admin surface
@@ -132,6 +134,28 @@ On marker API failure:
 - Do not navigate away from the map.
 - Show a small non-blocking error state in the redesigned UI.
 
+## Nearby Commerce Tool Flow
+
+`상권` is an exclusive map work mode alongside Roadview and distance measurement;
+the cadastral overlay remains independent.
+
+```text
+detail-complexId ?? selected-marker-complexId
+  -> GET /api/v1/complex/{complexId}/nearby-places once for six categories
+  -> default CAFE category
+  -> keep selected complex marker, hide non-selected property markers
+  -> render at most five selected-category POI overlays
+  -> marker click selects and scrolls the matching list row
+  -> row click selects the marker and centers the map
+  -> category switch reuses the same response without another API request
+  -> complex switch, mode exit, or unmount aborts/cleans overlays and listeners
+```
+
+Parcel fallback markers with `complexId == null` do not enable the tool until
+the detail response provides a canonical complex id. Loading, empty, provider
+failure and retry stay inside the nearby-place panel; the base map remains
+usable. Counts are always labeled as Kakao place-search counts.
+
 ## Acceptance Criteria
 
 - Moving or zooming the map triggers marker refresh.
@@ -139,3 +163,5 @@ On marker API failure:
 - Detailed zoom shows complex markers.
 - Complex marker click opens detail and trade data.
 - Map display works with only project data tables.
+- Nearby commerce mode uses the canonical complex coordinate and does not add a
+  POI table or change the ordinary marker endpoint.

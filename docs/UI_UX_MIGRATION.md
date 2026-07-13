@@ -46,6 +46,8 @@ Use a map-first layout:
 - Floating filter controls on top of the map.
 - Detail drawer opened from a complex marker.
 - Trade chart and list inside the detail drawer.
+- Optional authenticated favorite toggle in the detail identity header. Its
+  failure state is non-blocking and never hides public detail or trade data.
 
 ## Behavior Rules
 
@@ -58,6 +60,9 @@ Use a map-first layout:
   `/api/v1/trade/{parcelId}`. When a marker or search result includes
   `complexId`, the drawer passes `?complexId={complexId}` to keep detail and
   trade data scoped to the selected complex.
+- Favorite state uses user-service `/api/v1/favorites/{complexId}` with the
+  memory-only access token. Anonymous users can still use every public map and
+  detail flow and are prompted to log in only when activating the heart.
 
 ## Component Direction
 

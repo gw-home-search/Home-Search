@@ -136,3 +136,20 @@ cd apps/user/service
 
 현재 persistence integration은 fresh PostgreSQL fixture와 pinned external CLI에서
 Migration versions 1 through 5, runtime role 권한, 동시 identity 생성과 refresh rotation을 검증한다.
+
+## Frontend 인증 흐름
+
+`apps/web`은 property-data의 `VITE_API_SERVER_IP`와 별도로
+`VITE_USER_API_SERVER_IP`를 사용한다. production build에는 user-service origin을
+명시하며 local/test만 `http://localhost:8082` fallback을 허용한다. OAuth 개발
+origin은 user-service의 exact Origin 검사와 맞는 `http://localhost:5173`이고
+`127.0.0.1:5173`은 사용하지 않는다.
+
+브라우저는 mount 또는 `/auth/success`에서 `POST /auth/access`
+(`credentials: include`) 후 memory-only access JWT로
+`GET /api/v1/users/me`를 호출한다. `/auth/access`와 `/auth/logout` 외 요청에는
+cookie credential을 추가하지 않으며 public map API에는 cookie나 Bearer token을
+전달하지 않는다. startup refresh 실패는 anonymous로 degrade해 public map을
+계속 사용하게 하고, logout은 서버 응답 실패에도 local memory auth/favorite
+상태를 지운다. `/auth/failure`은 provider 원인을 노출하지 않는 안내를 열고,
+두 callback URL은 처리 뒤 `/`로 교체한다.

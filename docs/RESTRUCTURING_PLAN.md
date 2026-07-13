@@ -15,10 +15,11 @@ Legacy ownership test compatibility note: runtime module 표기는
 
 ```text
 apps/property-data/
-├── core/       # domain/application/persistence/external, migration source
+├── core/       # domain/application/persistence/external
 ├── api/        # public/internal HTTP composition root
 ├── batch/      # Spring Batch run-and-exit composition root
-└── migration/  # explicit Flyway/backfill run-and-exit artifact
+├── db/         # external SQL-only Flyway catalog and config
+└── ops/        # restricted external Flyway wrapper
 ```
 
 daily RTMS 수집은 packaged `batch`의 `rtmsDailyRefreshJob`이 소유한다.
@@ -27,8 +28,9 @@ API/Batch startup은 Flyway를 자동 실행하지 않는다.
 
 ## 완료된 결정
 
-- `core`, `api`, `batch`, `migration`은 하나의 property-data service 내부
-  module/execution 경계다.
+- `core`, `api`, `batch`는 하나의 property-data service 내부 module/execution
+  경계다. schema migration은 application module이 아니라 `db/` SQL catalog와
+  `ops/property-flyway.sh`의 external run-and-exit 경계다.
 - operational trade relation은 `complex_id`이며 `complex_pk`, `apt_seq`,
   `source`, `source_key`는 audit/dedupe evidence로 보존한다.
 - raw-first, duplicate-safe ingest, failed-match queryability를 유지한다.
@@ -53,9 +55,9 @@ dead application이다. 같은 운영 목적은 property-data의
 
 ```text
 apps/
-├── property-data/{core,api,batch,migration}
+├── property-data/{core,api,batch,db,ops}
 ├── admin/{service,web}
-├── user/service/{core,api,migration}
+├── user/service/{core,app,db,ops}
 ├── ai/
 ├── source-data/
 ├── ml/

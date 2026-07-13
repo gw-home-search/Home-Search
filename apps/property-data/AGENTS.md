@@ -39,6 +39,9 @@ Rules:
 - `api` must not own domain meaning, persistence SQL, Flyway migrations, or
   external provider parsing that belongs to reusable backend logic.
 - Keep Java package names stable unless a package rename is explicitly scoped.
+  The Java/Spring Boot modernization milestone explicitly permits splitting the
+  legacy `application/read`, `persistence/read`, and `web/read` packages into
+  search, region-navigation, property-detail, and trade-history capabilities.
 
 ## Must Read
 
@@ -100,7 +103,9 @@ Use the layer and module that owns the reason to change:
   dedupe identities, and state-transition rules. Domain code must not import
   Spring, JDBC, HTTP clients, Flyway, `application/**`, or `infrastructure/**`.
 - `core/src/main/java/com/home/application/**`: use cases, commands, queries,
-  orchestration results, ports, and application services.
+  orchestration results, ports, and application services. Application services
+  may import only Spring `@Service` and `@Transactional`; Spring Data, JDBC,
+  web, JPA, and infrastructure imports remain forbidden.
 - `core/src/main/java/com/home/infrastructure/persistence/**`: JDBC, SQL,
   PostGIS, repository implementations, constraints, locks, and row mapping.
 - `core/src/main/java/com/home/infrastructure/external/**`: RTMS, VWorld,

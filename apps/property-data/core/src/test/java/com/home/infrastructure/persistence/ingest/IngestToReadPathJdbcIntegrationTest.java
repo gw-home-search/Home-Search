@@ -20,7 +20,9 @@ import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMatcher;
 import com.home.infrastructure.persistence.ingest.matching.JdbcTradeMatchEvidenceRepository;
 import com.home.infrastructure.persistence.ingest.normalization.JdbcNormalizedTradeRepository;
 import com.home.infrastructure.persistence.ingest.raw.JdbcRawTradeIngestRepository;
-import com.home.infrastructure.persistence.read.JdbcPropertyReadRepository;
+import com.home.infrastructure.persistence.propertydetail.JdbcPropertyDetailReader;
+import com.home.infrastructure.persistence.search.JdbcComplexSearchReader;
+import com.home.infrastructure.persistence.tradehistory.JdbcTradeHistoryReader;
 import com.home.application.map.ComplexMarkerResult;
 import com.home.application.map.ComplexMarkerQuery;
 
@@ -74,21 +76,23 @@ class IngestToReadPathJdbcIntegrationTest extends JdbcPostgresTestSupport {
 			)
 			.containsExactly(tuple(1001L, 130000L, 740L));
 
-		JdbcPropertyReadRepository readRepository = new JdbcPropertyReadRepository(jdbcClient);
-		assertThat(readRepository.findParcelDetail(1001L))
+		JdbcPropertyDetailReader detailReader = new JdbcPropertyDetailReader(jdbcClient);
+		JdbcTradeHistoryReader tradeReader = new JdbcTradeHistoryReader(jdbcClient);
+		JdbcComplexSearchReader searchReader = new JdbcComplexSearchReader(jdbcClient);
+		assertThat(detailReader.findParcelDetail(1001L, null))
 			.hasValueSatisfying(detail -> {
 				assertThat(detail.parcelId()).isEqualTo(1001L);
 				assertThat(detail.name()).isEqualTo("Sample Apartment");
 				assertThat(detail.tradeName()).isEqualTo("Sample trade name");
 			});
-		assertThat(readRepository.findTradeList(1001L))
+		assertThat(tradeReader.findTradeList(1001L, null, 0, 25))
 			.hasValueSatisfying(tradeList -> assertThat(tradeList.trades())
 				.extracting("dealDate", "dealAmount", "aptDong", "floor")
 				.containsExactly(
 					tuple(LocalDate.of(2025, 12, 15), 130000L, "101", 15),
 					tuple(LocalDate.of(2025, 12, 1), 125000L, "101", 12)
 				));
-		assertThat(readRepository.searchComplexes("sample"))
+		assertThat(searchReader.searchComplexes("sample"))
 			.singleElement()
 			.satisfies(resultRow -> {
 				assertThat(resultRow.complexId()).isEqualTo(501L);
@@ -133,8 +137,8 @@ class IngestToReadPathJdbcIntegrationTest extends JdbcPostgresTestSupport {
 			.extracting(ComplexMarkerResult::latestDealAmount)
 			.isEqualTo(125000L);
 
-		JdbcPropertyReadRepository readRepository = new JdbcPropertyReadRepository(jdbcClient);
-		assertThat(readRepository.findTradeList(1001L))
+		JdbcTradeHistoryReader tradeReader = new JdbcTradeHistoryReader(jdbcClient);
+		assertThat(tradeReader.findTradeList(1001L, null, 0, 25))
 			.hasValueSatisfying(tradeList -> assertThat(tradeList.trades())
 				.extracting("dealAmount")
 				.containsExactly(125000L));

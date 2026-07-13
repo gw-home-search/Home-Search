@@ -19,7 +19,10 @@ import java.util.List;
 
 import com.home.application.read.ComplexSummaryResult;
 import com.home.application.read.ComplexSuggestionResult;
-import com.home.application.read.PropertyReadUseCase;
+import com.home.application.propertydetail.PropertyDetailService;
+import com.home.application.regionnavigation.RegionNavigationService;
+import com.home.application.search.ComplexSearchService;
+import com.home.application.tradehistory.TradeHistoryService;
 import com.home.application.read.ParcelDetailResult;
 import com.home.application.read.RegionDetailResult;
 import com.home.application.read.RegionSummaryResult;
@@ -27,6 +30,11 @@ import com.home.application.read.SearchComplexResult;
 import com.home.application.read.TradeListResult;
 import com.home.application.read.TradeResult;
 import com.home.application.read.TradeTrendPoint;
+
+import com.home.infrastructure.web.propertydetail.PropertyDetailController;
+import com.home.infrastructure.web.regionnavigation.RegionNavigationController;
+import com.home.infrastructure.web.search.SearchController;
+import com.home.infrastructure.web.tradehistory.TradeHistoryController;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -42,8 +50,9 @@ import org.springframework.test.web.servlet.MockMvc;
 @Tag("restDocs")
 @WebMvcTest({
 	SearchController.class,
-	RegionController.class,
-	DetailController.class
+	RegionNavigationController.class,
+	PropertyDetailController.class,
+	TradeHistoryController.class
 })
 @AutoConfigureRestDocs
 @ActiveProfiles("test")
@@ -53,12 +62,21 @@ class ReadApiRestDocsTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private PropertyReadUseCase readUseCase;
+	private ComplexSearchService complexSearchService;
+
+	@MockitoBean
+	private RegionNavigationService regionNavigationService;
+
+	@MockitoBean
+	private PropertyDetailService propertyDetailService;
+
+	@MockitoBean
+	private TradeHistoryService tradeHistoryService;
 
 	@Test
 	@DisplayName("GET /api/v1/search/complexes REST Docs를 생성한다")
 	void documentSearchComplexes() throws Exception {
-		given(readUseCase.searchComplexes(eq("Sample")))
+		given(complexSearchService.searchComplexes(eq("Sample")))
 			.willReturn(List.of(new SearchComplexResult(
 				501L,
 				"Sample Apartment",
@@ -102,7 +120,7 @@ class ReadApiRestDocsTest {
 	@Test
 	@DisplayName("GET /api/v1/search/complexes/suggestions REST Docs를 생성한다")
 	void documentComplexSuggestions() throws Exception {
-		given(readUseCase.suggestComplexes(eq("Sample")))
+		given(complexSearchService.suggestComplexes(eq("Sample")))
 			.willReturn(List.of(new ComplexSuggestionResult(501L, "Sample Apartment", 1001L, "Sample address")));
 
 		mockMvc.perform(get("/api/v1/search/complexes/suggestions").param("q", "Sample"))
@@ -135,9 +153,9 @@ class ReadApiRestDocsTest {
 	@Test
 	@DisplayName("GET /api/v1/region과 GET /api/v1/region/{regionId} REST Docs를 생성한다")
 	void documentRegionNavigation() throws Exception {
-		given(readUseCase.getRootRegions())
+		given(regionNavigationService.getRootRegions())
 			.willReturn(List.of(new RegionSummaryResult(1L, "Seoul")));
-		given(readUseCase.getRegionDetail(1L))
+		given(regionNavigationService.getRegionDetail(1L))
 			.willReturn(new RegionDetailResult(
 				1L,
 				"Seoul",
@@ -200,7 +218,7 @@ class ReadApiRestDocsTest {
 	@Test
 	@DisplayName("GET /api/v1/region/{regionId}/complexes REST Docs를 생성한다")
 	void documentRegionComplexes() throws Exception {
-		given(readUseCase.getRegionComplexes(11L, 25, 50))
+		given(regionNavigationService.getRegionComplexes(11L, 25, 50))
 			.willReturn(List.of(new ComplexSummaryResult(
 				701L,
 				"Region Complex",
@@ -243,7 +261,7 @@ class ReadApiRestDocsTest {
 	@Test
 	@DisplayName("GET /api/v1/detail/{parcelId}와 GET /api/v1/trade/{parcelId} REST Docs를 생성한다")
 	void documentDetailAndTrade() throws Exception {
-		given(readUseCase.getParcelDetail(1001L, 501L))
+		given(propertyDetailService.getParcelDetail(1001L, 501L))
 			.willReturn(new ParcelDetailResult(
 				1001L,
 				501L,
@@ -261,7 +279,7 @@ class ReadApiRestDocsTest {
 				new BigDecimal("199.80"),
 				LocalDate.of(2015, 3, 20)
 			));
-		given(readUseCase.getTradeList(1001L, 501L, null, null))
+		given(tradeHistoryService.getTradeList(1001L, 501L, null, null))
 			.willReturn(new TradeListResult(1001L, 501L, List.of(
 				new TradeResult(9002L, LocalDate.of(2025, 12, 15), new BigDecimal("84.93"), 130000L, "101", 15)
 			)));
@@ -308,7 +326,7 @@ class ReadApiRestDocsTest {
 	@Test
 	@DisplayName("GET /api/v1/detail/{parcelId}/complexes REST Docs를 생성한다")
 	void documentParcelComplexes() throws Exception {
-		given(readUseCase.getParcelComplexes(1001L))
+		given(propertyDetailService.getParcelComplexes(1001L))
 			.willReturn(List.of(new ComplexSummaryResult(
 				501L,
 				"Tower A",
@@ -341,7 +359,7 @@ class ReadApiRestDocsTest {
 	@Test
 	@DisplayName("GET /api/v1/complex/{complexId}와 GET /api/v1/complex/{complexId}/trades REST Docs를 생성한다")
 	void documentComplexDetailAndTrades() throws Exception {
-		given(readUseCase.getComplexDetail(502L))
+		given(propertyDetailService.getComplexDetail(502L))
 			.willReturn(new ParcelDetailResult(
 				1001L,
 				502L,
@@ -359,7 +377,7 @@ class ReadApiRestDocsTest {
 				null,
 				LocalDate.of(2020, 1, 1)
 			));
-		given(readUseCase.getComplexTradeList(502L, null, null))
+		given(tradeHistoryService.getComplexTradeList(502L, null, null))
 			.willReturn(new TradeListResult(1001L, 502L, List.of(
 				new TradeResult(9101L, LocalDate.of(2025, 12, 20), new BigDecimal("59.93"), 90000L, "201", 9)
 			)));
@@ -402,9 +420,9 @@ class ReadApiRestDocsTest {
 	@Test
 	@DisplayName("GET /api/v1/trade/{parcelId}/trend와 GET /api/v1/complex/{complexId}/trade-trend REST Docs를 생성한다")
 	void documentTradeTrend() throws Exception {
-		given(readUseCase.getTradeTrend(1001L, 501L))
+		given(tradeHistoryService.getTradeTrend(1001L, 501L))
 			.willReturn(List.of(new TradeTrendPoint("2025-12", 127500L, 2, 125000L, 130000L)));
-		given(readUseCase.getComplexTradeTrend(502L))
+		given(tradeHistoryService.getComplexTradeTrend(502L))
 			.willReturn(List.of(new TradeTrendPoint("2025-12", 90000L, 1, 90000L, 90000L)));
 
 		mockMvc.perform(get("/api/v1/trade/{parcelId}/trend", 1001L).param("complexId", "501"))

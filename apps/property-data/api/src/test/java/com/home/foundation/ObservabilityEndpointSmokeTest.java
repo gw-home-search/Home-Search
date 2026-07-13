@@ -12,6 +12,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.trade.TradeIngestMetrics;
 import com.home.application.map.MapUseCase;
+import com.home.infrastructure.persistence.propertydetail.JdbcPropertyDetailReader;
+import com.home.infrastructure.persistence.regionnavigation.JdbcRegionNavigationReader;
+import com.home.infrastructure.persistence.search.JdbcComplexSearchReader;
+import com.home.infrastructure.persistence.tradehistory.JdbcTradeHistoryReader;
 
 import io.micrometer.core.instrument.MeterRegistry;
 
@@ -41,6 +45,18 @@ class ObservabilityEndpointSmokeTest {
 
 	@MockitoBean
 	private MapUseCase mapUseCase;
+
+	@MockitoBean
+	private JdbcComplexSearchReader complexSearchReader;
+
+	@MockitoBean
+	private JdbcRegionNavigationReader regionNavigationReader;
+
+	@MockitoBean
+	private JdbcPropertyDetailReader propertyDetailReader;
+
+	@MockitoBean
+	private JdbcTradeHistoryReader tradeHistoryReader;
 
 	@Test
 	@DisplayName("GET /actuator/health는 database auto-configuration 없이 readiness status를 반환한다")

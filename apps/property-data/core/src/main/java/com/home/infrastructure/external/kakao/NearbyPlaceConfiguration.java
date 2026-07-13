@@ -18,8 +18,7 @@ import com.home.application.place.NearbyPlaceProvider;
 import com.home.application.place.NearbyPlaceProviderUnavailableException;
 import com.home.application.place.NearbyPlaceQueryService;
 import com.home.application.place.NearbyPlaceUseCase;
-import com.home.application.read.PropertyReadUseCase;
-import com.home.application.read.ResourceNotFoundException;
+import com.home.application.propertydetail.ComplexCenterReader;
 import com.home.infrastructure.cache.place.CachingNearbyPlaceProvider;
 import com.home.infrastructure.cache.place.NearbyPlaceCache;
 import com.home.infrastructure.cache.place.NearbyPlaceQuotaGuard;
@@ -76,7 +75,7 @@ public class NearbyPlaceConfiguration {
 	@Bean
 	@ConditionalOnMissingBean(NearbyPlaceUseCase.class)
 	NearbyPlaceUseCase nearbyPlaceUseCase(
-		PropertyReadUseCase propertyReadUseCase,
+		ComplexCenterReader complexCenterReader,
 		ObjectMapper objectMapper,
 		ObjectProvider<StringRedisTemplate> redisTemplateProvider,
 		MeterRegistry meterRegistry,
@@ -92,7 +91,7 @@ public class NearbyPlaceConfiguration {
 		@Value("${home.place.kakao.total-timeout:5s}") String totalTimeout
 	) {
 		Clock clock = Clock.system(SEOUL);
-		NearbyPlaceCenterReader centerReader = complexId -> readCenter(propertyReadUseCase, complexId);
+		NearbyPlaceCenterReader centerReader = complexId -> readCenter(complexCenterReader, complexId);
 		NearbyPlaceProvider provider = provider(
 			enabled,
 			restApiKey,
@@ -221,14 +220,10 @@ public class NearbyPlaceConfiguration {
 			.build();
 	}
 
-	private Optional<NearbyPlaceCenter> readCenter(PropertyReadUseCase propertyReadUseCase, Long complexId) {
-		try {
-			var detail = propertyReadUseCase.getComplexDetail(complexId);
-			return Optional.of(new NearbyPlaceCenter(complexId, detail.latitude(), detail.longitude()));
-		}
-		catch (ResourceNotFoundException exception) {
-			return Optional.empty();
-		}
+	private Optional<NearbyPlaceCenter> readCenter(ComplexCenterReader complexCenterReader, Long complexId) {
+		return complexCenterReader.findComplexCenter(complexId)
+			.filter(center -> center.latitude() != null && center.longitude() != null)
+			.map(center -> new NearbyPlaceCenter(complexId, center.latitude(), center.longitude()));
 	}
 
 	private Duration duration(String value) {

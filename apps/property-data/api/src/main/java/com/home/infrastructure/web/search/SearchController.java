@@ -1,10 +1,10 @@
-package com.home.infrastructure.web.read;
+package com.home.infrastructure.web.search;
 
 import java.util.List;
 
 import com.home.application.read.ComplexSuggestionResult;
-import com.home.application.read.PropertyReadUseCase;
 import com.home.application.read.SearchComplexResult;
+import com.home.application.search.ComplexSearchService;
 import com.home.infrastructure.web.read.dto.ComplexSuggestionResponse;
 import com.home.infrastructure.web.read.dto.SearchComplexResponse;
 
@@ -16,15 +16,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class SearchController {
 
-	private final PropertyReadUseCase readUseCase;
+	private final ComplexSearchService searchService;
 
-	public SearchController(PropertyReadUseCase readUseCase) {
-		this.readUseCase = readUseCase;
+	public SearchController(ComplexSearchService searchService) {
+		this.searchService = searchService;
 	}
 
 	@GetMapping("/api/v1/search/complexes")
 	public ResponseEntity<List<SearchComplexResponse>> searchComplexes(@RequestParam("q") String query) {
-		return ResponseEntity.ok(readUseCase.searchComplexes(query.trim())
+		return ResponseEntity.ok(searchService.searchComplexes(query.trim())
 			.stream()
 			.map(SearchController::toResponse)
 			.toList());
@@ -32,7 +32,7 @@ public class SearchController {
 
 	@GetMapping("/api/v1/search/complexes/suggestions")
 	public ResponseEntity<List<ComplexSuggestionResponse>> suggestComplexes(@RequestParam("q") String query) {
-		return ResponseEntity.ok(readUseCase.suggestComplexes(query.trim())
+		return ResponseEntity.ok(searchService.suggestComplexes(query.trim())
 			.stream()
 			.map(SearchController::toResponse)
 			.toList());

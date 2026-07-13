@@ -3,7 +3,7 @@
 ## 실행 기준
 
 - baseline commit: `d601237`
-- 현재 진행 PR: `PR 1 — 구조 원칙과 계약 baseline 고정 (merge 대기)`
+- 현재 진행 PR: `PR 2 — property read capability 분할`
 - 전체 상태: `In Progress`
 - 시작일: 2026-07-14
 - 실행 원칙: 한 번에 하나의 PR만 진행하고, 선행 PR이 `Complete`인 경우에만 다음 PR을 시작한다.
@@ -73,7 +73,7 @@ property-data configuration file distribution:
 | PR | Slice | 상태 | 다음 진입 조건 |
 | ---: | --- | --- | --- |
 | 1 | governance와 contract baseline | Complete | fresh baseline, docs, characterization tests GREEN |
-| 2 | property read capability split | Pending | PR 1 `Complete` |
+| 2 | property read capability split | In Progress | PR 1 `Complete` |
 | 3 | read snapshot과 DTO 경로 | Pending | PR 2 `Complete` |
 | 4 | coordinate/ingest atomic workflows | Pending | PR 3 `Complete` |
 | 5 | Java 21 / Boot 3.5 bridge | Pending | PR 4 `Complete` |
@@ -131,4 +131,53 @@ property-data configuration file distribution:
 
 ### Merge
 
-- merge commit: 미정
+- merge commit: `31f0b58b5597d0de9684d869588ce5325a0872be`
+
+## PR 2 Evidence
+
+### TDD 근거
+
+- 최초 RED: waiver
+- 예상 RED 실패: 해당 없음
+- waiver 이유: SQL과 public behavior를 변경하지 않는 package/capability 구조 분할이며 기존 characterization tests가 회귀 seam이다.
+- 최소 GREEN: search, region-navigation, property-detail, trade-history service/reader/adapter/controller로 분리하고 기존 contract/persistence tests를 유지한다.
+
+### 계약 영향
+
+- `none`: URL, method, field, unit, error, empty/404, clamp 계약을 변경하지 않는다.
+
+### 검증 근거 확인
+
+- 변경 전 `:core:test --tests com.home.application.read.PropertyReadUseCaseTest --rerun-tasks` — `Pass` (11s)
+- 변경 전 `:api:apiContractTest --tests com.home.infrastructure.web.read.ReadApiControllerContractTest --rerun-tasks` — `Pass` (13s)
+- 변경 전 `:core:persistenceTest --tests com.home.infrastructure.persistence.read.JdbcPropertyReadRepositoryTest --rerun-tasks` — `Pass` (1m 16s)
+- `:core:test --tests com.home.application.read.ReadCapabilityServicesTest :api:apiContractTest --tests com.home.infrastructure.web.read.ReadApiControllerContractTest --rerun-tasks` — `Pass` (16s)
+- `:core:persistenceTest --tests com.home.infrastructure.persistence.read.JdbcReadCapabilityReadersTest --tests com.home.infrastructure.persistence.ingest.IngestToReadPathJdbcIntegrationTest --tests com.home.infrastructure.persistence.ingest.RtmsStorageQualityJdbcIntegrationTest --rerun-tasks` — `Pass` (1m 41s)
+- `:core:test :api:test :batch:test --rerun-tasks` — 첫 실행은 no-DB full context가 mandatory JDBC adapter를 생성하려 해 `Fail`; production fallback을 복원하지 않고 두 no-DB test context에 새 JDBC adapter mock을 추가한 뒤 `Pass` (1m 1s)
+- `backendQualityCheck --no-daemon --stacktrace` — `Pass` (12m 4s, persistence/coverage/fresh Flyway/REST Docs/OpenAPI/packaged Batch 포함)
+- 제거 대상 참조 검사 — `PropertyReadUseCase`, `PropertyReadRepository`, `JdbcPropertyReadRepository`, production `Integer.MAX_VALUE` paging 모두 0건
+- repository root `git diff --check` — `Pass`
+- migration diff — 변경 0건
+- credential/secret added-line pattern 검사 — 지적사항 없음
+- `python3 .codex/harness/pr_lint.py --self-test` — `Pass`
+- `python3 .codex/harness/pr_lint.py --body-only --body-env PR_BODY` — `Pass`
+
+### 검증 공백
+
+- 없음
+
+### 잔여 위험
+
+- parent 존재 확인, count, content가 아직 여러 statement를 사용하므로 concurrent snapshot 일관성은 PR 3에서 다룬다. 이번 PR은 기존 isolation과 SQL 의미를 변경하지 않았다.
+
+### 보안 영향
+
+- 검증 범위: 새 JDBC adapter의 named parameter binding, 동적 SQL 입력 부재, public error/DTO 불변, migration/credential diff를 확인했다.
+- security-audit: 지적사항 = none
+
+### Findings-first review
+
+- 지적사항: 없음
+- 검증 근거 확인: capability별 service/reader/controller 의존, persistence characterization, API contract/OpenAPI, no-DB composition을 확인했다.
+- 검증 공백: 없음
+- 잔여 위험: snapshot consistency는 승인된 다음 slice인 PR 3 범위다.

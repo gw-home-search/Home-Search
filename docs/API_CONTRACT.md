@@ -515,7 +515,7 @@ Purpose:
 
 Source controller:
 
-- `src/main/java/com/home/infrastructure/web/region/RegionController.java`
+- `src/main/java/com/home/infrastructure/web/regionnavigation/RegionNavigationController.java`
 
 Frontend source consumer:
 
@@ -551,7 +551,7 @@ Purpose:
 
 Source controller:
 
-- `src/main/java/com/home/infrastructure/web/region/RegionController.java`
+- `src/main/java/com/home/infrastructure/web/regionnavigation/RegionNavigationController.java`
 
 Frontend source consumer:
 
@@ -660,7 +660,7 @@ Purpose:
 
 Source controller:
 
-- `src/main/java/com/home/infrastructure/web/detail/DetailController.java`
+- `src/main/java/com/home/infrastructure/web/propertydetail/PropertyDetailController.java`
 
 Frontend source consumer:
 
@@ -793,7 +793,7 @@ Purpose:
 
 Source controller:
 
-- `src/main/java/com/home/infrastructure/web/detail/DetailController.java`
+- `src/main/java/com/home/infrastructure/web/tradehistory/TradeHistoryController.java`
 
 Frontend source consumer:
 

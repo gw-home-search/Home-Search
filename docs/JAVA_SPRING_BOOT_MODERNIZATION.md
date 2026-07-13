@@ -3,7 +3,7 @@
 ## 실행 기준
 
 - baseline commit: `d601237`
-- 현재 진행 PR: `PR 2 — property read capability 분할`
+- 현재 진행 PR: `PR 3 — read snapshot과 DTO 경로 정리`
 - 전체 상태: `In Progress`
 - 시작일: 2026-07-14
 - 실행 원칙: 한 번에 하나의 PR만 진행하고, 선행 PR이 `Complete`인 경우에만 다음 PR을 시작한다.
@@ -73,8 +73,8 @@ property-data configuration file distribution:
 | PR | Slice | 상태 | 다음 진입 조건 |
 | ---: | --- | --- | --- |
 | 1 | governance와 contract baseline | Complete | fresh baseline, docs, characterization tests GREEN |
-| 2 | property read capability split | In Progress | PR 1 `Complete` |
-| 3 | read snapshot과 DTO 경로 | Pending | PR 2 `Complete` |
+| 2 | property read capability split | Complete | PR 1 `Complete` |
+| 3 | read snapshot과 DTO 경로 | In Progress | PR 2 `Complete` |
 | 4 | coordinate/ingest atomic workflows | Pending | PR 3 `Complete` |
 | 5 | Java 21 / Boot 3.5 bridge | Pending | PR 4 `Complete` |
 | 6 | format baseline | Pending | PR 5 `Complete` |
@@ -181,3 +181,58 @@ property-data configuration file distribution:
 - 검증 근거 확인: capability별 service/reader/controller 의존, persistence characterization, API contract/OpenAPI, no-DB composition을 확인했다.
 - 검증 공백: 없음
 - 잔여 위험: snapshot consistency는 승인된 다음 slice인 PR 3 범위다.
+
+### Merge
+
+- implementation commit: `8ddc7c0512c09baed746ad2973d75c3aa673596f`
+- merge commit: `393d0df43ac4e605e91dbd3ee621d13de240628d`
+
+## PR 3 Evidence
+
+### TDD 근거
+
+- 최초 RED: `TradeHistorySnapshotConsistencyTest`에서 실제 PostgreSQL connection을 교차 실행했다. 첫 fixture 실행은 duplicate natural key로 assertion 전에 실패해 RED에서 제외했고, fixture 수정 후 유효한 RED를 확인했다.
+- 예상 RED 실패: parent 확인 뒤 첫 trade commit, count 뒤 두 번째 trade commit을 강제하자 `totalElements=3`, content size `4`로 서로 다른 snapshot이 관찰됐다.
+- 최소 GREEN: region/trade composite public service method에 read-only `REPEATABLE_READ` transaction을 적용했다. 같은 테스트에서 initial `totalElements=2`, content size `2`, active transaction, `repeatable read` isolation을 확인했다.
+
+### 계약 영향
+
+- `none`: Optional parent 의미, public URL/JSON, `complexName`/`displayName`, page/size/limit clamp를 유지한다.
+
+### 검증 근거 확인
+
+- 변경 전 `:core:test --tests com.home.application.read.ReadCapabilityServicesTest :api:apiContractTest --tests com.home.infrastructure.web.read.ReadApiControllerContractTest --rerun-tasks` — `Pass` (17s)
+- 최초 유효 RED `:core:persistenceTest --tests com.home.infrastructure.persistence.read.TradeHistorySnapshotConsistencyTest --rerun-tasks` — `Fail` (예상대로 `3L` vs `4L`)
+- 최소 GREEN 동일 snapshot test — `Pass` (44s)
+- read persistence/API/REST Docs combined narrow gate — `Pass` (1m 28s)
+- `:core:test :api:test :batch:test --rerun-tasks` — `Pass` (1m 1s)
+- `:api:compileJava :batch:compileJava --rerun-tasks --warning-mode all` — `Pass`; `Isolation` annotation metadata 경고 제거를 위해 core의 `spring-tx`를 `api` dependency로 노출했다. 잔여 경고는 기존 Asciidoctor plugin의 Gradle 10 deprecation이다.
+- `backendQualityCheck --no-daemon --stacktrace` — `Pass` (12m 4s, persistence/coverage/fresh Flyway/REST Docs/OpenAPI/packaged Batch 포함)
+- review 수정 후 transaction/API narrow gate — `Pass` (53s)
+- controller의 read response 직접 constructor 호출 — 0건
+- application production Spring import — `@Service`, `@Transactional`만 존재
+- repository root `git diff --check` — `Pass`
+- migration diff — 변경 0건
+- credential/secret added-line pattern 검사 — 지적사항 없음
+- `python3 .codex/harness/pr_lint.py --self-test` — `Pass`
+- `python3 .codex/harness/pr_lint.py --body-only --body-env PR_BODY` — `Pass`
+
+### 검증 공백
+
+- 없음
+
+### 잔여 위험
+
+- `REPEATABLE_READ`가 긴 read transaction에서 만드는 MVCC 비용은 운영 지표로 관찰한다. 단일 CTE/`COUNT(*) OVER()` 최적화는 측정 근거가 생길 때 별도 PR로 검토한다.
+
+### 보안 영향
+
+- 검증 범위: transaction 범위가 read-only인지, production SQL/parameter binding과 public error가 변경되지 않았는지, migration/credential diff가 없는지 확인했다.
+- security-audit: 지적사항 = none
+
+### Findings-first review
+
+- 지적사항: application의 허용 Spring import 경계를 벗어난 `Isolation` import 1건을 발견해 fully-qualified annotation value로 수정했다. 미해결 지적사항은 없다.
+- 검증 근거 확인: concurrent snapshot RED/GREEN, annotation reflection, API contract/REST Docs/OpenAPI, full backend gate가 GREEN이다.
+- 검증 공백: 없음
+- 잔여 위험: 운영 MVCC 비용은 후속 관찰 대상이다.

@@ -9,6 +9,7 @@ import com.home.application.read.TradeListResult;
 import com.home.application.read.TradeTrendPoint;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TradeHistoryService {
@@ -22,6 +23,10 @@ public class TradeHistoryService {
 		this.reader = Objects.requireNonNull(reader);
 	}
 
+	@Transactional(
+		readOnly = true,
+		isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ
+	)
 	public TradeListResult getTradeList(Long parcelId, Long complexId, Integer requestedPage, Integer requestedSize) {
 		int page = normalizePage(requestedPage);
 		int size = normalizeSize(requestedSize);
@@ -29,6 +34,10 @@ public class TradeHistoryService {
 			.orElseThrow(() -> new ResourceNotFoundException("parcel trade parent not found: " + parcelId));
 	}
 
+	@Transactional(
+		readOnly = true,
+		isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ
+	)
 	public TradeListResult getComplexTradeList(Long complexId, Integer requestedPage, Integer requestedSize) {
 		int page = normalizePage(requestedPage);
 		int size = normalizeSize(requestedSize);
@@ -36,11 +45,19 @@ public class TradeHistoryService {
 			.orElseThrow(() -> new ResourceNotFoundException("complex trade parent not found: " + complexId));
 	}
 
+	@Transactional(
+		readOnly = true,
+		isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ
+	)
 	public List<TradeTrendPoint> getTradeTrend(Long parcelId, Long complexId) {
 		return reader.findTradeTrend(parcelId, complexId)
 			.orElseThrow(() -> new ResourceNotFoundException("parcel trade parent not found: " + parcelId));
 	}
 
+	@Transactional(
+		readOnly = true,
+		isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ
+	)
 	public List<TradeTrendPoint> getComplexTradeTrend(Long complexId) {
 		return reader.findComplexTradeTrend(complexId)
 			.orElseThrow(() -> new ResourceNotFoundException("complex trade parent not found: " + complexId));

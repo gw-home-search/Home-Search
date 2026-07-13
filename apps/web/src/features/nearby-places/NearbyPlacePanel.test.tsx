@@ -27,7 +27,7 @@ const DATA: NearbyPlaces = {
   ],
 };
 
-describe('NearbyPlacePanel', () => {
+describe('NearbyPlacePanel 주변 장소 패널', () => {
   let root: Root | null = null;
   afterEach(() => {
     if (root) act(() => root?.unmount());

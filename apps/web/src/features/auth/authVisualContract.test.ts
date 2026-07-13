@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 const authCss = readFileSync(`${process.cwd()}/src/features/auth/auth.css`, 'utf8');
 const designSystem = readFileSync(`${process.cwd()}/src/app/design-system.css`, 'utf8');
 
-describe('auth responsive design contract', () => {
+describe('auth 반응형 디자인 계약', () => {
   it('provider raw color는 design token에만 선언한다', () => {
     expect(designSystem).toContain('--hs-auth-provider-kakao: #fee500;');
     expect(designSystem).toContain('--hs-auth-provider-naver: #03a94d;');

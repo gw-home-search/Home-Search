@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { resolveUserApiUrl } from './resolveUserApiUrl';
 
-describe('resolveUserApiUrl', () => {
+describe('resolveUserApiUrl 사용자 API 주소', () => {
   it('property-data 설정과 분리된 user-service base를 정규화한다', () => {
     expect(resolveUserApiUrl('https://user.example.com/', 'production')).toBe('https://user.example.com');
   });

@@ -27,7 +27,7 @@ public record NearbyPlaceCacheKey(
 	}
 
 	public String redisKey() {
-		return "home-search:nearby-place:kakao:v1:"
+		return "home-search:nearby-place:kakao:format-1:"
 			+ lat + ":" + lng + ":" + radiusMeters + ":" + category.name();
 	}
 

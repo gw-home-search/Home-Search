@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ComplexList } from './ComplexList';
 
-describe('ComplexList', () => {
+describe('ComplexList 단지 목록', () => {
   let root: Root | null = null;
 
   afterEach(() => {

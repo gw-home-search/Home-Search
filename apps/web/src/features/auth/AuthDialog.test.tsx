@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthDialog } from './AuthDialog';
 import type { OAuthProvider } from './authTypes';
 
-describe('AuthDialog', () => {
+describe('AuthDialog 로그인 대화상자', () => {
   let root: Root | undefined;
   let host: HTMLDivElement | undefined;
 

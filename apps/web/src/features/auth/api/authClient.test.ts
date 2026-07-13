@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createAuthClient } from './authClient';
 
-describe('authClient', () => {
+describe('authClient 인증 요청', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('refresh cookie는 access에만 포함하고 JWT는 /me에만 전달한다', async () => {

@@ -6,7 +6,7 @@ import { AuthProvider } from '../../auth/AuthProvider';
 import type { AuthClient } from '../../auth/api/authClient';
 import { useFavoriteComplex } from './useFavoriteComplex';
 
-describe('useFavoriteComplex', () => {
+describe('useFavoriteComplex 즐겨찾기 상태', () => {
   let root: Root | null = null;
   let host: HTMLDivElement | null = null;
   afterEach(() => { if (root) act(() => root?.unmount()); host?.remove(); root = null; host = null; });

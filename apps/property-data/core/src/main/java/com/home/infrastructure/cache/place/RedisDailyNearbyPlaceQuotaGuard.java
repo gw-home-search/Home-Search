@@ -16,7 +16,7 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 
 public final class RedisDailyNearbyPlaceQuotaGuard implements NearbyPlaceQuotaGuard {
 
-	private static final String KEY_PREFIX = "home-search:nearby-place:kakao:quota:v1:";
+	private static final String KEY_PREFIX = "home-search:nearby-place:kakao:quota:format-1:";
 	private static final DefaultRedisScript<Long> INCREMENT_SCRIPT = new DefaultRedisScript<>("""
 		local budget = tonumber(ARGV[1])
 		local existing = tonumber(redis.call('GET', KEYS[1]) or '0')

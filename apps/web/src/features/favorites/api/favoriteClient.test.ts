@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createFavoriteClient, FavoriteClientError } from './favoriteClient';
 
-describe('favoriteClient', () => {
+describe('favoriteClient 즐겨찾기 요청', () => {
   it('단건/list 응답을 검증하고 PUT/DELETE는 body 없이 호출한다', async () => {
     const request = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ complexId: 501, favorite: true, savedAt: '2026-07-13T06:00:00Z' }))

@@ -8,7 +8,7 @@ import { FavoriteToggle } from './FavoriteToggle';
 const favoriteCss = readFileSync(`${process.cwd()}/src/features/favorites/favorite.css`, 'utf8');
 const designSystemCss = readFileSync(`${process.cwd()}/src/app/design-system.css`, 'utf8');
 
-describe('FavoriteToggle', () => {
+describe('FavoriteToggle 즐겨찾기 토글', () => {
   let root: Root | null = null;
   afterEach(() => { if (root) act(() => root?.unmount()); root = null; });
 

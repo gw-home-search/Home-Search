@@ -6,7 +6,7 @@ import type { AuthClient } from './api/authClient';
 import { AccountControl } from './AccountControl';
 import { AuthProvider } from './AuthProvider';
 
-describe('AccountControl', () => {
+describe('AccountControl 사용자 메뉴', () => {
   let root: Root | undefined;
   let host: HTMLDivElement | undefined;
 

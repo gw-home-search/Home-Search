@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchNearbyPlaces } from './fetchNearbyPlaces';
 
-describe('fetchNearbyPlaces', () => {
+describe('fetchNearbyPlaces 주변 장소 요청', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('단지 기준 6개 category 요청을 만들고 공용 응답을 정규화한다', async () => {

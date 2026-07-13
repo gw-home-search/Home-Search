@@ -1,5 +1,6 @@
 package com.home.infrastructure.persistence.ingest;
 
+import java.time.Duration;
 import java.util.Properties;
 
 import javax.sql.DataSource;
@@ -25,7 +26,8 @@ public abstract class JdbcPostgresContainerSupport {
 	protected TransactionTemplate transactionTemplate;
 
 	protected static PostgreSQLContainer<?> newPostgisContainer() {
-		return new PostgreSQLContainer<>(POSTGIS_IMAGE);
+		return new PostgreSQLContainer<>(POSTGIS_IMAGE)
+			.withStartupTimeout(Duration.ofMinutes(3));
 	}
 
 	protected void initializeJdbc(PostgreSQLContainer<?> postgres) {

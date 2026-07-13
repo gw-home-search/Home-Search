@@ -1,6 +1,7 @@
 package com.home.infrastructure.persistence.coordinate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
 import java.math.BigDecimal;
@@ -13,6 +14,7 @@ import com.home.application.coordinate.footprint.BuildingFootprintImportCandidat
 import com.home.application.coordinate.footprint.BuildingFootprintSource;
 import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;
+import com.home.application.coordinate.caseflow.CoordinateResolutionCommitter;
 import com.home.application.coordinate.display.ResolvedDisplayCoordinate;
 import com.home.infrastructure.persistence.complex.JdbcComplexRelationRepository;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
@@ -21,6 +23,11 @@ import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.TransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
 
 class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSupport {
 
@@ -124,7 +131,8 @@ class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSuppo
 			new ComplexRelationClassifier(),
 			ComplexCoordinateIdentityVerifier.trusting(),
 			BuildingFootprintSource.unavailable(),
-			CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
+			CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed(),
+			transactionalCommitter(repository)
 		);
 
 		service.stageExceptionCases(10);
@@ -141,6 +149,65 @@ class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSuppo
 				tuple(601L, bd("37.5010000"), bd("127.0010000")),
 				tuple(602L, bd("37.5020000"), bd("127.0020000"))
 			);
+		assertThat(caseStatus(1002L)).isEqualTo("RESOLVED");
+	}
+
+	@Test
+	@DisplayName("표시 좌표 저장 실패 시 building link와 terminal case update를 함께 rollback한다")
+	void rollsBackBuildingLinkWhenDisplayCoordinateWriteFails() {
+		seedConcurrentComplexParcel();
+		Long rawId = insertRawIngest("coordinate-atomic-failure");
+		insertTrade(rawId, 601L, LocalDate.of(2025, 1, 1), "coordinate-atomic-601", "101");
+		insertTrade(rawId, 602L, LocalDate.of(2025, 1, 2), "coordinate-atomic-602", "201");
+		insertBuildingFootprint(new BuildingFootprintCandidate(
+			9001L,
+			"1168010300101400002",
+			"Tower A",
+			"101동",
+			bd("37.5010000"),
+			bd("127.0010000")
+		));
+		insertBuildingFootprint(new BuildingFootprintCandidate(
+			9002L,
+			"1168010300101400002",
+			"Tower B",
+			"201동",
+			bd("37.5020000"),
+			bd("127.0020000")
+		));
+		jdbcClient.sql("""
+			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, reason)
+			VALUES (1002, '1168010300101400002', 'PENDING', 'awaiting resolution')
+			""").update();
+		installDisplayCoordinateFailureTrigger();
+		JdbcComplexCoordinateExceptionRepository repository = new JdbcComplexCoordinateExceptionRepository(jdbcClient);
+		ComplexCoordinateExceptionService service = new ComplexCoordinateExceptionService(
+			repository,
+			new JdbcComplexRelationRepository(jdbcClient),
+			new ComplexRelationClassifier(),
+			ComplexCoordinateIdentityVerifier.trusting(),
+			BuildingFootprintSource.unavailable(),
+			CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed(),
+			transactionalCommitter(repository)
+		);
+
+		try {
+			assertThatThrownBy(() -> service.resolveExceptionCase(1002L))
+				.hasMessageContaining("injected display coordinate failure");
+
+			assertThat(buildingLinkCount()).isZero();
+			assertThat(findResolvedDisplayCoordinates()).isEmpty();
+			assertThat(caseStatus(1002L)).isEqualTo("PENDING");
+		}
+		finally {
+			removeDisplayCoordinateFailureTrigger();
+		}
+
+		var retried = service.resolveExceptionCase(1002L);
+
+		assertThat(retried.status()).isEqualTo(ComplexCoordinateCaseStatus.RESOLVED);
+		assertThat(buildingLinkCount()).isEqualTo(2);
+		assertThat(findResolvedDisplayCoordinates()).hasSize(2);
 		assertThat(caseStatus(1002L)).isEqualTo("RESOLVED");
 	}
 
@@ -166,7 +233,8 @@ class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSuppo
 			new ComplexRelationClassifier(),
 			com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier.trusting(),
 			source,
-			CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
+			CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed(),
+			transactionalCommitter(repository)
 		);
 
 		service.stageExceptionCases(10);
@@ -367,6 +435,49 @@ class JdbcComplexCoordinateExceptionRepositoryTest extends JdbcPostgresTestSuppo
 			.param("pnu", pnu)
 			.query(Long.class)
 			.single();
+	}
+
+	private Long buildingLinkCount() {
+		return jdbcClient.sql("SELECT count(*) FROM complex_building_link")
+			.query(Long.class)
+			.single();
+	}
+
+	private CoordinateResolutionCommitter transactionalCommitter(
+		JdbcComplexCoordinateExceptionRepository repository
+	) {
+		DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(dataSource);
+		TransactionInterceptor interceptor = new TransactionInterceptor(
+			(TransactionManager) transactionManager,
+			new AnnotationTransactionAttributeSource()
+		);
+		ProxyFactory proxyFactory = new ProxyFactory(new CoordinateResolutionCommitter(repository));
+		proxyFactory.setProxyTargetClass(true);
+		proxyFactory.addAdvice(interceptor);
+		return (CoordinateResolutionCommitter) proxyFactory.getProxy();
+	}
+
+	private void installDisplayCoordinateFailureTrigger() {
+		jdbcClient.sql("""
+			CREATE OR REPLACE FUNCTION fail_display_coordinate_write()
+			RETURNS trigger
+			LANGUAGE plpgsql
+			AS $function$
+			BEGIN
+			    RAISE EXCEPTION 'injected display coordinate failure';
+			END;
+			$function$
+			""").update();
+		jdbcClient.sql("""
+			CREATE TRIGGER fail_display_coordinate_write
+			BEFORE INSERT OR UPDATE ON complex_display_coordinate
+			FOR EACH ROW EXECUTE FUNCTION fail_display_coordinate_write()
+			""").update();
+	}
+
+	private void removeDisplayCoordinateFailureTrigger() {
+		jdbcClient.sql("DROP TRIGGER IF EXISTS fail_display_coordinate_write ON complex_display_coordinate").update();
+		jdbcClient.sql("DROP FUNCTION IF EXISTS fail_display_coordinate_write()").update();
 	}
 
 	private java.util.List<ResolvedDisplayCoordinate> findResolvedDisplayCoordinates() {

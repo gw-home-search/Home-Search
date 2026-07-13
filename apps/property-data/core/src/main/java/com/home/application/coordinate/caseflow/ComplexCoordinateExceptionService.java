@@ -38,6 +38,7 @@ public class ComplexCoordinateExceptionService {
 	private final ComplexCoordinateIdentityVerifier identityVerifier;
 	private final BuildingFootprintSource buildingFootprintSource;
 	private final CoordinateIdentityBlockingPolicy identityBlockingPolicy;
+	private final CoordinateResolutionCommitter resolutionCommitter;
 
 	public ComplexCoordinateExceptionService(
 		ComplexCoordinateExceptionRepository repository,
@@ -45,7 +46,8 @@ public class ComplexCoordinateExceptionService {
 		ComplexRelationClassifier relationClassifier,
 		ComplexCoordinateIdentityVerifier identityVerifier,
 		BuildingFootprintSource buildingFootprintSource,
-		CoordinateIdentityBlockingPolicy identityBlockingPolicy
+		CoordinateIdentityBlockingPolicy identityBlockingPolicy,
+		CoordinateResolutionCommitter resolutionCommitter
 	) {
 		this.repository = Objects.requireNonNull(repository);
 		this.relationRepository = Objects.requireNonNull(relationRepository);
@@ -53,6 +55,7 @@ public class ComplexCoordinateExceptionService {
 		this.identityVerifier = Objects.requireNonNull(identityVerifier);
 		this.buildingFootprintSource = Objects.requireNonNull(buildingFootprintSource);
 		this.identityBlockingPolicy = Objects.requireNonNull(identityBlockingPolicy);
+		this.resolutionCommitter = Objects.requireNonNull(resolutionCommitter);
 	}
 
 	public ComplexCoordinateExceptionResult stageExceptionCases(int limit) {
@@ -106,11 +109,11 @@ public class ComplexCoordinateExceptionService {
 				String reason = coordinate.isEmpty()
 					? "building dong candidates are ambiguous or unavailable"
 					: "building dong candidates overlap across complexes";
-				repository.saveCaseUpdate(new ComplexCoordinateCaseUpdate(
+				commitResolution(new ComplexCoordinateCaseUpdate(
 					targets.parcelId(),
 					ComplexCoordinateCaseStatus.AMBIGUOUS,
 					reason
-				));
+				), List.of());
 				return new ComplexCoordinateResolutionResult(
 					targets.parcelId(),
 					ComplexCoordinateCaseStatus.AMBIGUOUS,
@@ -121,13 +124,12 @@ public class ComplexCoordinateExceptionService {
 			assignedFootprintIds.addAll(coordinate.get().footprintIds());
 			coordinates.add(coordinate.get().coordinate());
 		}
-		coordinates.forEach(repository::saveResolvedDisplayCoordinate);
 		String reason = "building footprint matched by apt_dong";
-		repository.saveCaseUpdate(new ComplexCoordinateCaseUpdate(
+		commitResolution(new ComplexCoordinateCaseUpdate(
 			targets.parcelId(),
 			ComplexCoordinateCaseStatus.RESOLVED,
 			reason
-		));
+		), coordinates);
 		return new ComplexCoordinateResolutionResult(
 			targets.parcelId(),
 			ComplexCoordinateCaseStatus.RESOLVED,
@@ -161,7 +163,7 @@ public class ComplexCoordinateExceptionService {
 		String reason = "identity verification " + verification.status().name().toLowerCase()
 			+ " complexId=" + target.complexId()
 			+ (verification.reason() == null ? "" : " reason=" + verification.reason());
-		repository.saveCaseUpdate(new ComplexCoordinateCaseUpdate(targets.parcelId(), status, reason));
+		commitResolution(new ComplexCoordinateCaseUpdate(targets.parcelId(), status, reason), List.of());
 		return Optional.of(new ComplexCoordinateResolutionResult(targets.parcelId(), status, 0, reason));
 	}
 
@@ -254,17 +256,24 @@ public class ComplexCoordinateExceptionService {
 	}
 
 	private ComplexCoordinateResolutionResult unavailable(Long parcelId, String reason) {
-		repository.saveCaseUpdate(new ComplexCoordinateCaseUpdate(
+		commitResolution(new ComplexCoordinateCaseUpdate(
 			parcelId,
 			ComplexCoordinateCaseStatus.UNAVAILABLE,
 			reason
-		));
+		), List.of());
 		return new ComplexCoordinateResolutionResult(
 			parcelId,
 			ComplexCoordinateCaseStatus.UNAVAILABLE,
 			0,
 			reason
 		);
+	}
+
+	private void commitResolution(
+		ComplexCoordinateCaseUpdate caseUpdate,
+		List<ResolvedDisplayCoordinate> coordinates
+	) {
+		resolutionCommitter.commit(new CoordinateResolutionCommitCommand(coordinates, caseUpdate));
 	}
 
 	private Set<String> normalizeDongTokens(Set<String> values) {

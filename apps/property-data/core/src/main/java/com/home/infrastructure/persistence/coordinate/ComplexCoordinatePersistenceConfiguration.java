@@ -4,6 +4,7 @@ import com.home.domain.complex.relation.ComplexRelationClassifier;
 import com.home.application.coordinate.footprint.BuildingFootprintSource;
 import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionRepository;
 import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;
+import com.home.application.coordinate.caseflow.CoordinateResolutionCommitter;
 import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessRepository;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessService;
@@ -30,15 +31,7 @@ class ComplexCoordinatePersistenceConfiguration {
 
 	@Bean
 	@Lazy
-	ComplexCoordinateExceptionRepository complexCoordinateExceptionRepository(
-		ObjectProvider<JdbcClient> jdbcClientProvider
-	) {
-		return new JdbcComplexCoordinateExceptionRepository(requiredJdbcClient(jdbcClientProvider));
-	}
-
-	@Bean
-	@Lazy
-	ComplexCoordinateReadinessRepository complexCoordinateReadinessRepository(
+	JdbcComplexCoordinateExceptionRepository complexCoordinateExceptionRepository(
 		ObjectProvider<JdbcClient> jdbcClientProvider
 	) {
 		return new JdbcComplexCoordinateExceptionRepository(requiredJdbcClient(jdbcClientProvider));
@@ -48,6 +41,8 @@ class ComplexCoordinatePersistenceConfiguration {
 	@Lazy
 	ComplexCoordinateExceptionService complexCoordinateExceptionService(
 		ObjectProvider<JdbcClient> jdbcClientProvider,
+		JdbcComplexCoordinateExceptionRepository repository,
+		CoordinateResolutionCommitter coordinateResolutionCommitter,
 		ObjectProvider<ComplexCoordinateIdentityVerifier> identityVerifierProvider,
 		ObjectProvider<BuildingFootprintSource> buildingFootprintSourceProvider,
 		@Value("${complex.coordinate.identity.block-on-unavailable:true}") boolean blockOnUnavailableIdentity,
@@ -55,13 +50,22 @@ class ComplexCoordinatePersistenceConfiguration {
 	) {
 		JdbcClient jdbcClient = requiredJdbcClient(jdbcClientProvider);
 		return new ComplexCoordinateExceptionService(
-			new JdbcComplexCoordinateExceptionRepository(jdbcClient),
+			repository,
 			new JdbcComplexRelationRepository(jdbcClient),
 			new ComplexRelationClassifier(),
 			identityVerifierProvider.getIfAvailable(ComplexCoordinateIdentityVerifier::trusting),
 			buildingFootprintSourceProvider.getIfAvailable(BuildingFootprintSource::unavailable),
-			new CoordinateIdentityBlockingPolicy(blockOnUnavailableIdentity, blockOnFailedIdentity)
+			new CoordinateIdentityBlockingPolicy(blockOnUnavailableIdentity, blockOnFailedIdentity),
+			coordinateResolutionCommitter
 		);
+	}
+
+	@Bean
+	@Lazy
+	CoordinateResolutionCommitter coordinateResolutionCommitter(
+		ComplexCoordinateExceptionRepository repository
+	) {
+		return new CoordinateResolutionCommitter(repository);
 	}
 
 	@Bean

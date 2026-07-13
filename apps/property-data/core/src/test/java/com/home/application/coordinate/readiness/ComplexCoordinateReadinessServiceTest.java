@@ -177,17 +177,20 @@ class ComplexCoordinateReadinessServiceTest {
 
 	private static final class FakeCoordinateExceptionService extends ComplexCoordinateExceptionService {
 
+		private static final NoopCoordinateExceptionRepository REPOSITORY = new NoopCoordinateExceptionRepository();
+
 			private int stageLimit;
 			private final List<Long> resolvedParcelIds = new ArrayList<>();
 
 			private FakeCoordinateExceptionService() {
 				super(
-					new NoopCoordinateExceptionRepository(),
+					REPOSITORY,
 					parcelId -> List.of(),
 					new com.home.domain.complex.relation.ComplexRelationClassifier(),
 					ComplexCoordinateIdentityVerifier.trusting(),
 					BuildingFootprintSource.unavailable(),
-					CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed()
+					CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed(),
+					new com.home.application.coordinate.caseflow.CoordinateResolutionCommitter(REPOSITORY)
 				);
 			}
 

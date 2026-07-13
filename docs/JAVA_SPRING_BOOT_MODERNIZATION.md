@@ -3,7 +3,7 @@
 ## 실행 기준
 
 - baseline commit: `d601237`
-- 현재 진행 PR: `PR 3 — read snapshot과 DTO 경로 정리`
+- 현재 진행 PR: `PR 4 — coordinate/ingest atomic workflows`
 - 전체 상태: `In Progress`
 - 시작일: 2026-07-14
 - 실행 원칙: 한 번에 하나의 PR만 진행하고, 선행 PR이 `Complete`인 경우에만 다음 PR을 시작한다.
@@ -74,8 +74,8 @@ property-data configuration file distribution:
 | ---: | --- | --- | --- |
 | 1 | governance와 contract baseline | Complete | fresh baseline, docs, characterization tests GREEN |
 | 2 | property read capability split | Complete | PR 1 `Complete` |
-| 3 | read snapshot과 DTO 경로 | In Progress | PR 2 `Complete` |
-| 4 | coordinate/ingest atomic workflows | Pending | PR 3 `Complete` |
+| 3 | read snapshot과 DTO 경로 | Complete | PR 2 `Complete` |
+| 4 | coordinate/ingest atomic workflows | In Progress | PR 3 `Complete` |
 | 5 | Java 21 / Boot 3.5 bridge | Pending | PR 4 `Complete` |
 | 6 | format baseline | Pending | PR 5 `Complete` |
 | 7 | Boot 4.1 / Jackson 3 | Pending | PR 6 `Complete` |
@@ -236,3 +236,64 @@ property-data configuration file distribution:
 - 검증 근거 확인: concurrent snapshot RED/GREEN, annotation reflection, API contract/REST Docs/OpenAPI, full backend gate가 GREEN이다.
 - 검증 공백: 없음
 - 잔여 위험: 운영 MVCC 비용은 후속 관찰 대상이다.
+
+### Merge
+
+- implementation commit: `914a9585261b67bd66c79550d7b6e683f8100d14`
+- merge commit: `3510ea7d72c7966dc0b432bc8fcdfcc004762aa8`
+
+## PR 4 Evidence
+
+### TDD 근거
+
+- 최초 RED: PostgreSQL trigger로 display coordinate insert와 raw terminal status update에 예외를 주입했다.
+- 예상 RED 실패: coordinate RED에서는 display coordinate 실패 뒤 `complex_building_link` 1건이 남았다. ingest RED에서는 raw가 `RECEIVED`인 상태에서 match evidence와 normalized trade가 이미 commit돼 rollback assertion이 실패했다.
+- 최소 GREEN: 외부 좌표 계산 뒤 immutable command를 `CoordinateResolutionCommitter`가 한 transaction으로 확정한다. ingest는 `RawReceiptService.REQUIRES_NEW` 뒤 `TradeIngestFinalizer`가 dedupe/cancel/parse/match/evidence/normalized write/raw terminal transition을 한 transaction으로 확정한다.
+
+### 계약 영향
+
+- `none`: public URL/JSON/error/clamp, `complex_id`/`complex_pk`, source identity, raw-first와 failed-match queryability를 유지한다.
+- migration SQL과 checksum은 변경하지 않았다.
+
+### 검증 근거 확인
+
+- 변경 전 coordinate/ingest unit/persistence narrow gate — `Pass` (1m 2s)
+- coordinate 최초 RED — `Fail` (예상대로 link 1건이 partial commit됨, 48s)
+- coordinate 최소 GREEN과 retry — `Pass` (47s)
+- ingest 최초 RED — `Fail` (예상대로 normalized/evidence partial state가 남음, 46s)
+- ingest 최소 GREEN — `Pass` (45s)
+- coordinate/ingest/reconciliation combined narrow gate — `Pass` (1m 8s)
+- constructor/wiring 정리 후 atomic workflow narrow gate — `Pass` (1m 19s)
+- `:core:test :api:test :batch:test --rerun-tasks --no-daemon --stacktrace` — `Pass` (1m 2s)
+- `BaselineRuntimeSmokeTest --rerun-tasks` — `Pass` (1m 1s)
+- `ComplexCoordinatePersistenceConfigurationTest` — `Pass`; dual-port JDBC adapter를 single concrete bean으로 등록해 후보 모호성을 제거했다.
+- ARM64에서 AMD64 PostGIS cold start가 기존 60초 timeout을 반복 초과한 환경 실패를 재현했고, test support timeout을 3분으로 확장한 뒤 기존 `JdbcBuildingMetadataEvidenceRepositoryTest`가 `Pass` (8m 22s)했다.
+- `backendQualityCheck --no-daemon --stacktrace` — `Pass` (12m 20s, full persistence/coverage/fresh Flyway/REST Docs/OpenAPI/packaged Batch 포함)
+- quality gate 후 transaction propagation/proxy 가능 조건 reflection test — `Pass` (11s)
+- `python3 .codex/harness/pr_lint.py --body-only --body-env PR_BODY` — `Pass`
+- repository root `git diff --check` — `Pass`
+- migration diff — 변경 0건
+- production application Spring import — `@Service`, `@Transactional`만 존재
+- removed active-trade-only reconciliation type/reference — 0건
+- credential/secret added-line pattern 검사 — 지적사항 없음
+
+### 검증 공백
+
+- 없음
+
+### 잔여 위험
+
+- reconciliation은 한 row의 예상하지 못한 runtime exception에서 현재 batch를 중단하고 raw `RECEIVED`를 유지한다. 재시도 가능성은 보존되며, row별 실패 metric/log와 continue 정책은 PR 10 observability 범위에서 결정한다.
+- ARM64에서는 AMD64 PostGIS migration fixture가 느리다. startup timeout만 늘렸으며 image/schema/test assertion은 변경하지 않았다.
+
+### 보안 영향
+
+- 검증 범위: raw payload가 log/응답에 노출되지 않는지, replay limit이 유지되는지, 새 SQL 문자열 결합이나 credential/migration 변경이 없는지, 실패 시 partial public trade/coordinate가 rollback되는지 확인했다.
+- security-audit: 지적사항 = none
+
+### Findings-first review
+
+- 지적사항: coordinate dual-port adapter bean 후보 모호성 1건, test convenience constructor가 unproxied committer/finalizer를 만들 수 있는 위험 2건, ARM64 Testcontainers startup timeout 2곳을 발견해 수정했다.
+- 검증 근거 확인: coordinate link/display/case rollback과 retry, raw-first/finalizer rollback, match evidence/cancellation/duplicate rollback, unrestricted recoverable `RECEIVED` replay를 실제 PostgreSQL에서 확인했다.
+- 검증 공백: 없음
+- 잔여 위험: reconciliation row별 continue/observability 정책은 PR 10에서 다룬다.

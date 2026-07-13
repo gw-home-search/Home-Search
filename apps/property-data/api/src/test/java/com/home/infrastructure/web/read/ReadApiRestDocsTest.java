@@ -86,7 +86,7 @@ class ReadApiRestDocsTest {
 					.tag("Read")
 					.summary("Search complexes")
 					.description("Searches apartment complexes by user-entered text.")
-					.queryParameters(parameterWithName("q").description("Search query."))
+					.queryParameters(parameterWithName("q").description("Trimmed complex search query; maximum 100 characters and 8 unique whitespace-separated tokens."))
 					.responseFields(
 						fieldWithPath("[].complexId").type(JsonFieldType.NUMBER).description("Complex id."),
 						fieldWithPath("[].complexName").type(JsonFieldType.STRING).description("Complex display name."),
@@ -121,7 +121,7 @@ class ReadApiRestDocsTest {
 					.tag("Read")
 					.summary("Suggest complexes")
 					.description("Returns lightweight complex suggestions for autocomplete.")
-					.queryParameters(parameterWithName("q").description("Suggestion query."))
+					.queryParameters(parameterWithName("q").description("Trimmed complex suggestion query; maximum 100 characters and 8 unique whitespace-separated tokens."))
 					.responseFields(
 						fieldWithPath("[].complexId").type(JsonFieldType.NUMBER).description("Complex id."),
 						fieldWithPath("[].complexName").type(JsonFieldType.STRING).description("Complex display name."),

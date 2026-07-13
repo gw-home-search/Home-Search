@@ -1,6 +1,7 @@
 plugins {
-    id 'org.springframework.boot' version '3.5.7' apply false
+    id 'org.springframework.boot' version '4.1.0' apply false
     id 'io.spring.dependency-management' version '1.1.7' apply false
+    id 'jacoco'
 }
 
 group = 'com.home'
@@ -13,14 +14,157 @@ allprojects {
 
 subprojects {
     apply plugin: 'java'
+    apply plugin: 'jacoco'
     apply plugin: 'io.spring.dependency-management'
     dependencyManagement { imports { mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES } }
-    java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+    java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
     tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
     tasks.withType(Test).configureEach { useJUnitPlatform() }
+    jacoco { toolVersion = '0.8.13' }
     dependencies { testRuntimeOnly 'org.junit.platform:junit-platform-launcher' }
 }
 
+evaluationDependsOn(':core')
+evaluationDependsOn(':app')
+
 tasks.register('userServiceTest') {
-    dependsOn ':core:test', ':api:test', ':migration:test'
+    dependsOn ':core:test', ':app:test'
+}
+tasks.register('userServicePersistenceTest') { dependsOn ':core:test', ':app:test' }
+tasks.register('userServiceApiContractTest') { dependsOn ':app:test' }
+tasks.register('userServiceDependencyBoundaryCheck') { dependsOn ':app:verifyRuntimeMigrationBoundary' }
+
+tasks.register('userServiceCoverageCheck', JacocoCoverageVerification) {
+    dependsOn ':core:test', ':app:test'
+    executionData.from(
+        project(':core').layout.buildDirectory.file('jacoco/test.exec'),
+        project(':app').layout.buildDirectory.file('jacoco/test.exec')
+    )
+    sourceDirectories.from(project(':core').sourceSets.main.allSource.srcDirs)
+    classDirectories.from(project(':core').sourceSets.main.output.classesDirs)
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit { counter = 'INSTRUCTION'; value = 'COVEREDRATIO'; minimum = 0.90 }
+        }
+    }
+}
+
+tasks.register('userServiceCoverageReport', JacocoReport) {
+    dependsOn ':core:test', ':app:test'
+    executionData.from(
+        project(':core').layout.buildDirectory.file('jacoco/test.exec'),
+        project(':app').layout.buildDirectory.file('jacoco/test.exec')
+    )
+    sourceDirectories.from(project(':core').sourceSets.main.allSource.srcDirs)
+    classDirectories.from(project(':core').sourceSets.main.output.classesDirs)
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+def userMigrationDir = layout.projectDirectory.dir('db/migration/user')
+def userMigrationFiles = {
+    fileTree(userMigrationDir) { include 'V*__*.sql' }.files.sort { left, right -> left.name <=> right.name }
+}
+
+tasks.register('verifyUserMigrationCatalog') {
+    description = 'Verify the external user-service SQL migration catalog and module boundary.'
+    group = 'verification'
+    doLast {
+        def files = userMigrationFiles()
+        if (files.isEmpty()) throw new GradleException('User migration catalog is empty')
+        def expectedCatalog = [
+            'V1__create_users_schema.sql': '55f52d1f0fe07fc3e8d287b662d42f71ecf15fe8cf599fec70f99e94b37e5a63',
+            'V2__create_user_identity.sql': '01c1cef8379f9993cee3269348a8beb411314427e4fc7561294c5aeb4e249196',
+            'V3__create_refresh_state.sql': '6c88b4289eb8a6111c00296474df086aada21f0105789fcdaf5e9ade470d3355',
+            'V4__create_oauth_session.sql': '98e936a2ec340306bf908a58a21319d43d63e891183f58a222c208f0d326c4d2',
+            'V5__create_favorite_complex.sql': '7b1bee6dc26efa0a57aba8873a5d3f391dca426f61684cd9f740bbbf1b94bcb6'
+        ]
+        if (files*.name != expectedCatalog.keySet().toList()) {
+            throw new GradleException("User migration catalog must be exact: ${expectedCatalog.keySet()}")
+        }
+        def versions = []
+        files.each { file ->
+            def matcher = file.name =~ /^V([1-9][0-9]*)__[A-Za-z0-9]+(?:_[A-Za-z0-9]+)*\.sql$/
+            if (!matcher.matches()) throw new GradleException("Invalid user migration filename: ${file.name}")
+            versions << matcher.group(1).toInteger()
+            def digest = java.security.MessageDigest.getInstance('SHA-256')
+                .digest(file.bytes).encodeHex().toString()
+            if (digest != expectedCatalog[file.name]) {
+                throw new GradleException("User migration checksum changed: ${file.name}")
+            }
+        }
+        if (versions != (1..versions.max()).toList()) {
+            throw new GradleException("User migration versions must be contiguous: ${versions}")
+        }
+        ['core/src/database', 'core/src/databaseTest', 'migration', 'api'].each { forbidden ->
+            if (layout.projectDirectory.dir(forbidden).asFile.exists()) {
+                throw new GradleException("Removed user-service boundary must stay absent: ${forbidden}")
+            }
+        }
+        def appPersistence = fileTree(layout.projectDirectory.dir('app/src/main/java')) {
+            include '**/infrastructure/persistence/**'
+        }.files
+        if (!appPersistence.isEmpty()) {
+            throw new GradleException("User app must not own persistence implementations: ${appPersistence}")
+        }
+        if (!layout.projectDirectory.dir('core/src/main/java/com/home/infrastructure/persistence/user').asFile.isDirectory()) {
+            throw new GradleException('User core must own the JPA persistence adapter package')
+        }
+        def domainFiles = fileTree(layout.projectDirectory.dir('core/src/main/java/com/home/domain')) {
+            include '**/*.java'
+        }.files
+        def forbiddenDomainImports = domainFiles.findAll { file ->
+            file.text =~ /(?m)^import (com\.home\.(application|infrastructure)|org\.springframework|jakarta\.persistence|javax\.persistence)/
+        }
+        if (!forbiddenDomainImports.isEmpty()) {
+            throw new GradleException("User domain imports an outer layer or framework: ${forbiddenDomainImports}")
+        }
+        def applicationFiles = fileTree(layout.projectDirectory.dir('core/src/main/java/com/home/application')) {
+            include '**/*.java'
+        }.files
+        def forbiddenApplicationImports = applicationFiles.findAll { file ->
+            file.text =~ /(?m)^import (com\.home\.infrastructure|com\.home\.user|org\.springframework)/
+        }
+        if (!forbiddenApplicationImports.isEmpty()) {
+            throw new GradleException("User application imports app or infrastructure: ${forbiddenApplicationImports}")
+        }
+        def misplacedPersistence = fileTree(layout.projectDirectory.dir('core/src/main/java')) {
+            include '**/*.java'
+            exclude 'com/home/infrastructure/persistence/user/**'
+        }.files.findAll { file ->
+            file.text =~ /(@Entity\b|extends JpaRepository\b|class PostgresIdentityLock\b)/
+        }
+        if (!misplacedPersistence.isEmpty()) {
+            throw new GradleException("User persistence implementation escaped the core persistence package: ${misplacedPersistence}")
+        }
+    }
+}
+
+tasks.register('verifyUserFlywayCliContract', Exec) {
+    description = 'Verify external user-service Flyway wrapper syntax and rejected operations.'
+    group = 'verification'
+    commandLine 'bash', 'ops/test-user-flyway-wrapper.sh'
+}
+
+tasks.register('verifyUserDeploymentPreflightContract', Exec) {
+    description = 'Verify fresh-only user-service deployment preflight policy with fake Docker.'
+    group = 'verification'
+    commandLine 'bash', 'ops/test-user-deployment-preflight.sh'
+}
+
+
+tasks.register('verifyUserFlywayFresh', Exec) {
+    description = 'Migrate and validate a fresh PostgreSQL database with the pinned external Flyway CLI.'
+    group = 'verification'
+    commandLine 'bash', 'ops/verify-user-flyway-fresh.sh'
+}
+
+tasks.register('userServiceQualityCheck') {
+    dependsOn 'userServiceTest', 'userServicePersistenceTest', 'userServiceApiContractTest',
+        'userServiceDependencyBoundaryCheck', 'verifyUserMigrationCatalog',
+        'verifyUserFlywayCliContract', 'verifyUserDeploymentPreflightContract',
+        'verifyUserFlywayFresh', 'userServiceCoverageCheck', ':app:bootJar'
 }

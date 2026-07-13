@@ -195,6 +195,7 @@ class ReadApiControllerContractTest {
 			.andExpect(jsonPath("$.latitude").value(37.5123))
 			.andExpect(jsonPath("$.longitude").value(127.0456))
 			.andExpect(jsonPath("$.address").value("Sample address"))
+			.andExpect(jsonPath("$.displayName").value("Sample Apartment"))
 			.andExpect(jsonPath("$.tradeName").value("Sample trade name"))
 			.andExpect(jsonPath("$.name").value("Sample Apartment"))
 			.andExpect(jsonPath("$.dongCnt").value(8))

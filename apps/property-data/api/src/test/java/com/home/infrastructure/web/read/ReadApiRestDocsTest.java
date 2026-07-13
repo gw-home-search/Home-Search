@@ -465,6 +465,7 @@ class ReadApiRestDocsTest {
 			fieldWithPath("latitude").type(JsonFieldType.NUMBER).description("Detail display latitude."),
 			fieldWithPath("longitude").type(JsonFieldType.NUMBER).description("Detail display longitude."),
 			fieldWithPath("address").type(JsonFieldType.STRING).optional().description("Parcel address."),
+			fieldWithPath("displayName").type(JsonFieldType.STRING).optional().description("User-facing locality-combined complex name."),
 			fieldWithPath("tradeName").type(JsonFieldType.STRING).optional().description("Representative trade name."),
 			fieldWithPath("name").type(JsonFieldType.STRING).description("Representative complex name."),
 			fieldWithPath("dongCnt").type(JsonFieldType.NUMBER).optional().description("Building count."),

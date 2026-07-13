@@ -26,7 +26,7 @@ class CoordinateImportOpsConfigurationTest {
 	private static final Path DAILY_BATCH_LIVE_SMOKE_SCRIPT =
 			Path.of("..", "ops", "run-daily-batch-live-smoke.sh");
 	private static final Path API_BASELINE_MIGRATION =
-			Path.of("..", "core", "src", "main", "resources", "db", "migration", "api",
+			Path.of("..", "db", "migration", "api",
 				"V1__create_clean_core_schema.sql");
 	private static final Path COORDINATE_SOURCE_RECONCILIATION_MIGRATION =
 			SOURCE_DATA_ROOT.resolve("src/main/resources/db/migration/coordinate-source/V2__reconcile_legacy_coordinate_source.sql");
@@ -183,7 +183,7 @@ class CoordinateImportOpsConfigurationTest {
 	void apiMainFlywayResourcesDoNotOwnCoordinateSourceSchema() {
 		assertThat(Path.of("..", "core", "src", "main", "resources", "db", "migration", "coordinate-source"))
 			.doesNotExist();
-		assertThat(Path.of("..", "core", "src", "main", "resources", "db", "migration", "api")).exists();
+		assertThat(Path.of("..", "db", "migration", "api")).isDirectory();
 		assertThat(COORDINATE_SOURCE_RECONCILIATION_MIGRATION).exists();
 		assertThat(SOURCE_DATA_ROOT.resolve("ops/sql/coordinate-source-schema.sql")).doesNotExist();
 	}
@@ -192,7 +192,7 @@ class CoordinateImportOpsConfigurationTest {
 	@DisplayName("API clean baseline은 coordinate source reference schema를 생성하지 않는다")
 	void apiCleanBaselineDoesNotCreateCoordinateSourceReferenceSchema() throws IOException {
 		assertThat(API_BASELINE_MIGRATION).exists();
-		assertThat(Path.of("..", "core", "src", "main", "resources", "db", "migration", "api",
+		assertThat(Path.of("..", "db", "migration", "api",
 			"V3__remove_operational_coordinate_source_reference.sql"))
 			.doesNotExist();
 

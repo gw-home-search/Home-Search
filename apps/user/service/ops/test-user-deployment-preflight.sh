@@ -85,6 +85,15 @@ expect_exit 2 env \
     USER_MIGRATOR_DB_USERNAME=migrator \
     USER_MIGRATOR_DB_PASSWORD=sentinel-value \
     "${PREFLIGHT}" before 5
+: > "${TEST_ROOT}/docker.log"
+expect_exit 2 invoke env USER_MIGRATOR_JDBC_URL='jdbc:postgresql://migrator:authority-sentinel@postgis:5432/home_search_user' \
+    "${PREFLIGHT}" before 5
+[[ ! -s "${TEST_ROOT}/docker.log" ]]
+expect_exit 2 invoke env USER_MIGRATOR_JDBC_URL='jdbc:postgresql://postgis:5432/home_search_user?Password=query-sentinel' \
+    "${PREFLIGHT}" before 5
+[[ ! -s "${TEST_ROOT}/docker.log" ]]
+! grep -Fq authority-sentinel "${TEST_ROOT}/stdout" "${TEST_ROOT}/stderr" "${TEST_ROOT}/docker.log"
+! grep -Fq query-sentinel "${TEST_ROOT}/stdout" "${TEST_ROOT}/stderr" "${TEST_ROOT}/docker.log"
 
 expect_exit 2 invoke env FAKE_CURRENT_DATABASE=wrong_database FAKE_INFO_JSON="${PENDING_INFO}" \
     "${PREFLIGHT}" before 5

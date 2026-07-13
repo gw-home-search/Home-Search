@@ -6,7 +6,8 @@ dependencies {
     api 'com.home:rtms-ingest-core:0.0.1-SNAPSHOT'
 
     implementation 'io.micrometer:micrometer-core'
-    implementation 'org.flywaydb:flyway-core'
+    implementation 'com.fasterxml.jackson.core:jackson-annotations'
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'org.springframework.boot:spring-boot'
     implementation 'org.springframework.boot:spring-boot-autoconfigure'
     implementation 'org.springframework.data:spring-data-redis'
@@ -15,18 +16,24 @@ dependencies {
     implementation 'org.springframework:spring-tx'
     implementation 'org.springframework:spring-web'
 
-    runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.flywaydb:flyway-core'
     testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.1'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:postgresql'
+    testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
 }
 
 tasks.named('test') {
     exclude '**/infrastructure/persistence/**/*Test.class'
     exclude '**/*JdbcIntegrationTest.class'
+}
+
+tasks.withType(Test).configureEach {
+    systemProperty 'propertyDataMigrationLocation',
+        "filesystem:${rootProject.layout.projectDirectory.dir('db/migration/api').asFile.absolutePath}"
 }
 
 tasks.register('persistenceTest', Test) {
@@ -36,125 +43,4 @@ tasks.register('persistenceTest', Test) {
     classpath = sourceSets.test.runtimeClasspath
     include '**/infrastructure/persistence/**/*Test.class'
     include '**/*JdbcIntegrationTest.class'
-}
-
-def apiMigrationSqlDir = layout.projectDirectory.dir('src/main/resources/db/migration/api')
-def apiMigrationJavaDir = layout.projectDirectory.dir('src/main/java/db/migration/api')
-def migrationVersionOf = { File file ->
-    def matcher = file.name =~ /^V([0-9]+)__.*/
-    matcher.matches() ? matcher.group(1).toInteger() : null
-}
-def apiMigrationFiles = {
-    def files = []
-    if (apiMigrationSqlDir.asFile.exists()) {
-        files.addAll(fileTree(apiMigrationSqlDir) { include 'V*__*.sql' }.files)
-    }
-    if (apiMigrationJavaDir.asFile.exists()) {
-        files.addAll(fileTree(apiMigrationJavaDir) { include 'V*__*.java' }.files)
-    }
-    files.sort { left, right -> left.name <=> right.name }
-}
-def sha256 = { File file ->
-    def digest = java.security.MessageDigest.getInstance('SHA-256')
-    file.withInputStream { input ->
-        byte[] buffer = new byte[8192]
-        for (int read = input.read(buffer); read >= 0; read = input.read(buffer)) {
-            if (read > 0) {
-                digest.update(buffer, 0, read)
-            }
-        }
-    }
-    digest.digest().collect { String.format('%02x', it) }.join()
-}
-
-tasks.register('printNextApiMigrationVersion') {
-    description = 'Print the next available property-data API migration version.'
-    group = 'database'
-    doLast {
-        def versions = apiMigrationFiles().collect(migrationVersionOf).findAll { it != null }
-        println "NEXT_API_MIGRATION_VERSION=${versions.isEmpty() ? 1 : versions.max() + 1}"
-    }
-}
-
-tasks.register('verifyApiMigrationCatalog') {
-    description = 'Verify API migration naming, immutable history, locations, and runtime ownership.'
-    group = 'verification'
-    doLast {
-        def files = apiMigrationFiles()
-        if (files.isEmpty()) {
-            throw new GradleException('API migration catalog is empty')
-        }
-
-        files.findAll { it.name.endsWith('.sql') }.each { file ->
-            if (!(file.name ==~ /^V[1-9][0-9]*__[a-z0-9]+(?:_[a-z0-9]+)*\.sql$/)) {
-                throw new GradleException("Invalid API SQL migration filename: ${file.name}")
-            }
-        }
-
-        def byVersion = files.groupBy(migrationVersionOf)
-        def duplicates = byVersion.findAll { version, versionFiles -> version != null && versionFiles.size() > 1 }
-        if (!duplicates.isEmpty()) {
-            throw new GradleException("Duplicate API migration versions: ${duplicates.keySet().sort()}")
-        }
-        def versions = byVersion.keySet().findAll { it != null }.sort()
-        def unexpectedMissing = (versions.min()..versions.max()).findAll { !versions.contains(it) && it != 3 }
-        if (!unexpectedMissing.isEmpty()) {
-            throw new GradleException("Missing API migration sources other than V3: ${unexpectedMissing}")
-        }
-        if (versions.contains(3)) {
-            throw new GradleException('V3 source must remain absent; applied history is repaired as Deleted')
-        }
-
-        def locked = [
-            'V1__create_clean_core_schema.sql': 'b5755bd88dce6b80ccb284782fc13d8b42b90cf42b579a1f56fa6dd9bf6d4c1a',
-            'V2__SeedCleanCoreReferenceData.java': 'c2c9d87b96202d3529049932188765f48530a9258c8dfdb39020bd1cc1379d3b',
-            'V4__create_spring_batch_metadata_schema.sql': 'c9aac255ac166afa06833d3feeddd702e70ef95367d060cfae435c18b86bc802'
-        ]
-        locked.each { fileName, expected ->
-            def file = files.find { it.name == fileName }
-            if (file == null) {
-                throw new GradleException("Locked API migration was deleted: ${fileName}")
-            }
-            def actual = sha256(file)
-            if (actual != expected) {
-                throw new GradleException("Locked API migration changed: ${fileName} expected=${expected} actual=${actual}")
-            }
-        }
-
-        def serviceRoot = rootProject.projectDir
-        def apiConfig = serviceRoot.toPath().resolve('api/src/main/resources/application.yml').toFile().text
-        def batchConfig = serviceRoot.toPath().resolve('batch/src/main/resources/application.yml').toFile().text
-        if (!(apiConfig =~ /(?ms)flyway:\s*\n\s+enabled:\s*false/).find()) {
-            throw new GradleException('API Flyway auto-configuration must be disabled')
-        }
-        if (!(batchConfig =~ /(?ms)flyway:\s*\n\s+enabled:\s*false/).find()) {
-            throw new GradleException('Batch Flyway auto-configuration must be disabled')
-        }
-        [
-            serviceRoot.toPath().resolve('api/src/main/java').toFile(),
-            serviceRoot.toPath().resolve('batch/src/main/java').toFile()
-        ].each { sourceRoot ->
-            fileTree(sourceRoot) { include '**/*.java' }.files.each { source ->
-                def text = source.text
-                if ((text =~ /\bFlyway\b/).find() || (text =~ /\.repair\s*\(/).find()) {
-                    throw new GradleException("API/Batch production code must not invoke Flyway: ${source}")
-                }
-            }
-        }
-
-        def locationUsages = []
-        fileTree(serviceRoot) {
-            include 'api/src/main/resources/**/*.yml'
-            include 'batch/src/main/resources/**/*.yml'
-        }.files.each { resource ->
-            resource.eachLine { line ->
-                if (line.contains('db/migration')) {
-                    locationUsages << line.trim()
-                }
-            }
-        }
-        if (locationUsages.any { !it.contains('classpath:db/migration/api') }) {
-            throw new GradleException("Non-canonical API migration location: ${locationUsages}")
-        }
-    }
 }

@@ -2,6 +2,7 @@ package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Map;
 
@@ -19,7 +20,7 @@ class JdbcCleanCoreReferenceDataMigrationTest extends JdbcMigrationTestSupport {
 
 		migrateToLatest();
 
-		assertThat(appliedMigrationVersions()).containsExactly("1", "2", "4", "5", "6", "7");
+		assertThat(appliedMigrationVersions()).containsExactly("1", "2", "4", "5", "6", "7", "8");
 		assertThat(regclass("batch.BATCH_JOB_INSTANCE")).isEqualTo("batch.batch_job_instance");
 		assertThat(count("SELECT count(*) FROM region WHERE region_type = 'si-do'")).isGreaterThanOrEqualTo(17);
 		assertThat(count("SELECT count(*) FROM region WHERE region_type = 'si-gun-gu'")).isGreaterThan(200);
@@ -36,6 +37,14 @@ class JdbcCleanCoreReferenceDataMigrationTest extends JdbcMigrationTestSupport {
 			.containsEntry("name", "도봉동")
 			.containsEntry("parent_code", "11305")
 			.containsEntry("region_type", "eup-myeon-dong");
+		assertThat(regionCenter("28"))
+			.containsExactly(new BigDecimal("37.4562259"), new BigDecimal("126.7059693"));
+		assertThat(regionCenter("41"))
+			.containsExactly(new BigDecimal("37.2117556"), new BigDecimal("127.3760723"));
+		assertThat(regionCenter("47"))
+			.containsExactly(new BigDecimal("36.5250729"), new BigDecimal("128.8543550"));
+		assertThat(regionCenter("50110"))
+			.containsExactly(new BigDecimal("33.5000829"), new BigDecimal("126.5314575"));
 
 		assertThat(parcelRegionAndAddress(1001L))
 			.containsEntry("region_code", "11680104")
@@ -59,6 +68,18 @@ class JdbcCleanCoreReferenceDataMigrationTest extends JdbcMigrationTestSupport {
 			.containsEntry("use_date", LocalDate.of(2012, 6, 5))
 			.containsEntry("metadata_status", "RESOLVED")
 			.containsEntry("metadata_source", "LEGACY_CSV");
+	}
+
+	@Test
+	@DisplayName("migration version 2 fresh baseline은 Java parity로 확정한 schema와 seed fingerprint를 유지한다")
+	void sqlV2FreshBaselineMatchesGoldenFingerprint() {
+		flyway(null).clean();
+		flyway(null).migrate();
+		jdbcClient = org.springframework.jdbc.core.simple.JdbcClient.create(dataSource);
+
+		assertThat(schemaFingerprint()).isEqualTo("16d2a6e4b96383e92c124b80fce9ae37");
+		assertThat(seedFingerprint()).isEqualTo("4cc3b683cff740f5eb20dc09271f117d");
+		assertThat(sequenceFingerprint()).isEqualTo("588869ab552608ed168a0b29266f5e91");
 	}
 
 	private void migrateToVersion1() {
@@ -108,6 +129,60 @@ class JdbcCleanCoreReferenceDataMigrationTest extends JdbcMigrationTestSupport {
 			.single();
 	}
 
+	private String schemaFingerprint() {
+		return jdbcClient.sql("""
+			WITH objects AS (
+			    SELECT 'column|' || table_schema || '|' || table_name || '|' || ordinal_position || '|'
+			        || column_name || '|' || data_type || '|' || is_nullable || '|' || coalesce(column_default, '') AS value
+			    FROM information_schema.columns
+			    WHERE table_schema IN ('public', 'reference', 'batch')
+			    UNION ALL
+			    SELECT 'constraint|' || n.nspname || '|' || c.relname || '|' || con.conname || '|'
+			        || pg_get_constraintdef(con.oid, true)
+			    FROM pg_constraint con
+			    JOIN pg_class c ON c.oid = con.conrelid
+			    JOIN pg_namespace n ON n.oid = c.relnamespace
+			    WHERE n.nspname IN ('public', 'reference', 'batch')
+			    UNION ALL
+			    SELECT 'index|' || schemaname || '|' || tablename || '|' || indexname || '|' || indexdef
+			    FROM pg_indexes
+			    WHERE schemaname IN ('public', 'reference', 'batch')
+			    UNION ALL
+			    SELECT 'trigger|' || event_object_schema || '|' || event_object_table || '|' || trigger_name || '|'
+			        || action_timing || '|' || event_manipulation || '|' || action_statement
+			    FROM information_schema.triggers
+			    WHERE event_object_schema IN ('public', 'reference', 'batch')
+			    UNION ALL
+			    SELECT 'grant|' || table_schema || '|' || table_name || '|' || grantee || '|' || privilege_type
+			    FROM information_schema.role_table_grants
+			    WHERE table_schema IN ('public', 'reference', 'batch')
+			)
+			SELECT md5(string_agg(value, E'\\n' ORDER BY value)) FROM objects
+			""").query(String.class).single();
+	}
+
+	private String seedFingerprint() {
+		return jdbcClient.sql("""
+			SELECT md5(concat_ws('|',
+			    (SELECT count(*)::text FROM region),
+			    (SELECT md5(string_agg(concat_ws('|', id, code, name, parent_id), E'\\n' ORDER BY id)) FROM region),
+			    (SELECT count(*)::text FROM parcel),
+			    (SELECT md5(string_agg(concat_ws('|', id, pnu, address), E'\\n' ORDER BY id)) FROM parcel),
+			    (SELECT count(*)::text FROM complex),
+			    (SELECT md5(string_agg(concat_ws('|', id, complex_pk, apt_seq, name, trade_name, display_name), E'\\n' ORDER BY id)) FROM complex)
+			))
+			""").query(String.class).single();
+	}
+
+	private String sequenceFingerprint() {
+		return jdbcClient.sql("""
+			SELECT md5(string_agg(concat_ws('|', sequence_schema, sequence_name, start_value, minimum_value,
+			    maximum_value, increment), E'\\n' ORDER BY sequence_schema, sequence_name))
+			FROM information_schema.sequences
+			WHERE sequence_schema IN ('public', 'reference', 'batch')
+			""").query(String.class).single();
+	}
+
 	private String regclass(String relationName) {
 		return jdbcClient.sql("SELECT to_regclass(:relationName)::text")
 			.param("relationName", relationName)
@@ -127,6 +202,16 @@ class JdbcCleanCoreReferenceDataMigrationTest extends JdbcMigrationTestSupport {
 				"name", resultSet.getString("name"),
 				"parent_code", resultSet.getString("parent_code"),
 				"region_type", resultSet.getString("region_type")
+			))
+			.single();
+	}
+
+	private java.util.List<BigDecimal> regionCenter(String code) {
+		return jdbcClient.sql("SELECT center_lat, center_lng FROM region WHERE code = :code")
+			.param("code", code)
+			.query((resultSet, rowNumber) -> java.util.List.of(
+				resultSet.getBigDecimal("center_lat"),
+				resultSet.getBigDecimal("center_lng")
 			))
 			.single();
 	}

@@ -53,6 +53,34 @@ tasks.register('verifyApiCompileClasspathBoundary') {
     }
 }
 
+tasks.register('verifyApiRuntimeDatabaseBoundary') {
+    description = 'Fail when Flyway or migration resources enter the API runtime artifact.'
+    group = 'verification'
+    dependsOn tasks.named('bootJar')
+    dependsOn project(':core').tasks.named('jar')
+
+    doLast {
+        def flywayArtifacts = configurations.runtimeClasspath.resolvedConfiguration.resolvedArtifacts.findAll {
+            it.moduleVersion.id.group == 'org.flywaydb'
+        }
+        if (!flywayArtifacts.isEmpty()) {
+            throw new GradleException("API runtime must not include Flyway: ${flywayArtifacts*.moduleVersion*.id}")
+        }
+
+        def apiJar = tasks.named('bootJar').get().archiveFile.get().asFile
+        def apiMigrationResources = zipTree(apiJar).matching { include 'BOOT-INF/classes/db/migration/**' }.files
+        if (!apiMigrationResources.isEmpty()) {
+            throw new GradleException("API artifact contains migration resources: ${apiMigrationResources}")
+        }
+
+        def coreJar = project(':core').tasks.named('jar').get().archiveFile.get().asFile
+        def coreMigrationResources = zipTree(coreJar).matching { include 'db/migration/**' }.files
+        if (!coreMigrationResources.isEmpty()) {
+            throw new GradleException("Core runtime artifact contains migration resources: ${coreMigrationResources}")
+        }
+    }
+}
+
 dependencies {
     implementation project(':core')
     implementation 'com.home:security-jwt-core'
@@ -64,12 +92,12 @@ dependencies {
     runtimeOnly 'org.springframework.boot:spring-boot-starter-data-redis'
     runtimeOnly 'org.springframework.boot:spring-boot-starter-jdbc'
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
-    runtimeOnly 'org.flywaydb:flyway-database-postgresql'
     runtimeOnly 'org.postgresql:postgresql'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework:spring-jdbc'
     testImplementation 'org.flywaydb:flyway-core'
+    testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
     testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
     testImplementation 'com.epages:restdocs-api-spec-mockmvc:0.19.4'
     testImplementation 'org.testcontainers:junit-jupiter'
@@ -87,8 +115,14 @@ tasks.named('test') {
     exclude '**/*RestDocsTest.class'
 }
 
+tasks.withType(Test).configureEach {
+    systemProperty 'propertyDataMigrationLocation',
+        "filesystem:${rootProject.layout.projectDirectory.dir('db/migration/api').asFile.absolutePath}"
+}
+
 tasks.named('check') {
     dependsOn tasks.named('verifyApiCompileClasspathBoundary')
+    dependsOn tasks.named('verifyApiRuntimeDatabaseBoundary')
 }
 
 tasks.register('apiContractTest', Test) {

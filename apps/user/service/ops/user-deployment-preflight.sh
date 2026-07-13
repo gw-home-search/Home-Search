@@ -27,11 +27,16 @@ require_inputs() {
     [[ -n "${USER_MIGRATOR_DB_PASSWORD:-}" ]] || policy_error 'USER_MIGRATOR_DB_PASSWORD가 필요합니다.'
     command -v docker >/dev/null 2>&1 || runtime_error 'Docker를 찾을 수 없습니다.'
 
-    local jdbc_without_query="${USER_MIGRATOR_JDBC_URL%%\?*}"
-    local database_name="${jdbc_without_query##*/}"
-    [[ "${database_name}" == "${EXPECTED_DATABASE}" ]] || policy_error "JDBC database는 ${EXPECTED_DATABASE}여야 합니다."
-    [[ "${USER_MIGRATOR_JDBC_URL}" == jdbc:postgresql://* ]] || policy_error 'PostgreSQL JDBC URL만 허용합니다.'
-    [[ "${USER_MIGRATOR_JDBC_URL}" != *password=* ]] || policy_error 'JDBC URL에 password를 포함할 수 없습니다.'
+    local jdbc_url="${USER_MIGRATOR_JDBC_URL}" jdbc_without_query authority database_name query lower_query
+    jdbc_without_query="${jdbc_url%%\?*}"
+    authority="${jdbc_without_query#jdbc:postgresql://}"
+    authority="${authority%%/*}"
+    database_name="${jdbc_without_query#jdbc:postgresql://${authority}/}"
+    query=$([[ "${jdbc_url}" == *\?* ]] && printf '%s' "${jdbc_url#*\?}" || true)
+    lower_query="${query,,}"
+    [[ "${jdbc_without_query}" == jdbc:postgresql://* && -n "${authority}" && "${authority}" != *@* && "${database_name}" == "${EXPECTED_DATABASE}" ]] \
+        || policy_error "JDBC database는 userinfo가 없는 ${EXPECTED_DATABASE} PostgreSQL이어야 합니다."
+    [[ "&${lower_query}" != *'&password='* ]] || policy_error 'JDBC URL password parameter는 허용되지 않습니다.'
 }
 
 catalog_versions() {

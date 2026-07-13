@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly SERVICE_NAME="user-service"
-readonly EXPECTED_DATABASE="home_search_user"
-readonly FLYWAY_IMAGE="redgate/flyway:12.4.0"
+readonly SERVICE_NAME="property-data"
+readonly EXPECTED_DATABASE="home_search"
+readonly FLYWAY_IMAGE="redgate/flyway:11.7.2"
 readonly SERVICE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-readonly REPOSITORY_ROOT="$(cd "${SERVICE_ROOT}/../../.." && pwd)"
+readonly REPOSITORY_ROOT="$(cd "${SERVICE_ROOT}/../.." && pwd)"
 
 usage() {
     printf '사용법: %s info|validate|migrate <target>\n' "$0" >&2
@@ -13,11 +13,11 @@ usage() {
 }
 
 require_migrator_environment() {
-    : "${USER_MIGRATOR_JDBC_URL:?USER_MIGRATOR_JDBC_URL is required}"
-    : "${USER_MIGRATOR_DB_USERNAME:?USER_MIGRATOR_DB_USERNAME is required}"
-    : "${USER_MIGRATOR_DB_PASSWORD:?USER_MIGRATOR_DB_PASSWORD is required}"
+    : "${PROPERTY_MIGRATOR_JDBC_URL:?PROPERTY_MIGRATOR_JDBC_URL is required}"
+    : "${PROPERTY_MIGRATOR_DB_USERNAME:?PROPERTY_MIGRATOR_DB_USERNAME is required}"
+    : "${PROPERTY_MIGRATOR_DB_PASSWORD:?PROPERTY_MIGRATOR_DB_PASSWORD is required}"
 
-    local jdbc_url="${USER_MIGRATOR_JDBC_URL}"
+    local jdbc_url="${PROPERTY_MIGRATOR_JDBC_URL}"
     local jdbc_without_query="${jdbc_url%%\?*}"
     local authority="${jdbc_without_query#jdbc:postgresql://}"
     authority="${authority%%/*}"
@@ -40,11 +40,11 @@ run_flyway() {
     if [[ -n "${MIGRATION_DOCKER_NETWORK:-}" ]]; then
         network_args=(--network "${MIGRATION_DOCKER_NETWORK}")
     fi
-    FLYWAY_URL="${USER_MIGRATOR_JDBC_URL}" \
-    FLYWAY_USER="${USER_MIGRATOR_DB_USERNAME}" \
-    FLYWAY_PASSWORD="${USER_MIGRATOR_DB_PASSWORD}" \
+    FLYWAY_URL="${PROPERTY_MIGRATOR_JDBC_URL}" \
+    FLYWAY_USER="${PROPERTY_MIGRATOR_DB_USERNAME}" \
+    FLYWAY_PASSWORD="${PROPERTY_MIGRATOR_DB_PASSWORD}" \
     docker run --rm --platform linux/amd64 "${network_args[@]}" \
-        -v "${SERVICE_ROOT}/db/migration/user:/flyway/sql:ro" \
+        -v "${SERVICE_ROOT}/db/migration/api:/flyway/sql:ro" \
         -v "${SERVICE_ROOT}/db:/flyway/conf:ro" \
         -e FLYWAY_URL -e FLYWAY_USER -e FLYWAY_PASSWORD \
         -e REDGATE_DISABLE_TELEMETRY=true \

@@ -85,7 +85,7 @@ Done when:
 Flyway 운영 규칙:
 
 - API와 Batch startup은 migration 또는 validation을 자동 실행하지 않는다.
-- schema 변경은 `property-data-migration.jar`의 명시적 operation만 수행한다.
+- schema 변경은 pinned official Flyway container의 명시적 operation만 수행한다.
 - 신규 `V*` source는 durable DB 적용 전까지 수정할 수 있지만, 한 번 적용한
   migration은 수정하지 않고 다음 version으로 forward-fix한다.
 - trade registry 연관 변경은 V5 expand → bounded backfill → V6 validate 순서로

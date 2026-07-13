@@ -186,39 +186,34 @@ later-scope:
 
 API와 Batch는 모든 profile에서 `spring.flyway.enabled=false`다. `bootRun`, API
 startup, Batch startup은 migration이나 strict validation을 실행하지 않는다.
-실제 schema 작업은 다음 artifact만 수행한다.
+실제 schema 작업은 pinned official Flyway container만 수행한다.
 
 ```bash
 cd apps/property-data
-./gradlew -q :migration:printMigrationBootJarPath --no-daemon
-PROPERTY_DATA_MIGRATION_JAR=/absolute/property-data-migration.jar \
-DB_JDBC_URL=jdbc:postgresql://localhost:15432/home_search \
-DB_USERNAME=home_search \
-DB_PASSWORD=... \
-./ops/run-migration-jar.sh --operation=info
+PROPERTY_MIGRATOR_JDBC_URL=jdbc:postgresql://localhost:15432/home_search \
+PROPERTY_MIGRATOR_DB_USERNAME=home_search_property_migrator \
+PROPERTY_MIGRATOR_DB_PASSWORD=... \
+./ops/property-flyway.sh info
 ```
 
-지원 operation:
+지원 interface:
 
 ```text
---operation=info
---operation=validate
---operation=migrate --target=6 --confirm=6 --confirm-database=home_search
---operation=migrate --target=7 --confirm=7 --confirm-database=home_search
---operation=repair-missing-v3 --confirm=3 --confirm-database=home_search
---operation=backfill-registry-trade-date --confirm-database=home_search --batch-size=20000 --sleep-millis=100
+property-flyway.sh info|validate|migrate <numeric-target>
 ```
 
-exit code는 성공 `0`, DB/Flyway/backfill/validation 실패 `1`, 잘못된 argument
-또는 confirmation `2`다. wrapper의 마지막 명령은 `exec java -jar ... "$@"`다.
-모든 operation은 연결 직후 `current_database()=home_search`를 확인한다.
-mutating operation은 `--confirm-database=home_search`와
-`MIGRATION_EVIDENCE_FILE`을 요구한다. wrapper는 실행 직전에 credential을
-포함하지 않는 UTC timestamp, operation, Git SHA, migration JAR SHA-256을 해당
-evidence 파일에 append한다. evidence 파일의 상위 directory는 미리 만들어 둔다.
-V3 controlled repair는 history CSV/SQL과 schema-only dump를 먼저 만들고,
-`MIGRATION_HISTORY_CSV_BACKUP_FILE`, `MIGRATION_HISTORY_SQL_BACKUP_FILE`,
-`MIGRATION_SCHEMA_BACKUP_FILE`로 non-empty backup 파일을 지정해야 실행된다.
+wrapper는 expected database와 최고 pending version을 확인하고 `latest`, `clean`,
+`repair`, `baseline`, 임의 option을 거부한다. mutation evidence에는 credential을
+제외한 timestamp, service, target, pinned image, Git SHA만 기록한다.
+
+Property-data deployment도 fresh-only다.
+
+```bash
+./ops/property-deployment-preflight.sh before 8
+./ops/property-flyway.sh migrate 8
+./ops/property-deployment-preflight.sh after 8
+./ops/property-flyway.sh validate
+```
 
 User-service는 application runtime과 분리된 official Docker Flyway CLI만
 사용한다. `core`/`app` artifact에는 Flyway dependency와 migration SQL이 없다.
@@ -252,11 +247,11 @@ database만, `after`는 migration versions 1 through 5가 각각 정확히 한 �
 Baseline, Deleted, Out of Order, Missing, Ignored, duplicate, failed history는
 exit `2`로 중단하며 credential은 stdout/stderr/evidence에 기록하지 않는다.
 
-개발 중 다음 version은 `./gradlew :core:printNextApiMigrationVersion`으로 확인한다.
+개발 중 다음 version은 `./gradlew printNextApiMigrationVersion`으로 확인한다.
 신규 migration은 durable DB에 명시적으로 적용하기 전까지 수정할 수 있다.
 적용 직전 checksum과 Git diff를 증거로 고정하고, 적용 뒤에는 파일을 수정하지
 않으며 다음 version으로 변경한다. fresh PostgreSQL 검증은 `persistenceTest`와
-`:migration:test`가 담당한다.
+pinned Docker CLI smoke가 담당한다.
 
 ## Monitoring
 
@@ -322,15 +317,17 @@ metric labels or Loki labels.
 ## Local Flyway History
 
 local API도 Flyway를 자동 실행하지 않으며 missing/validation 우회 환경 변수를
-제공하지 않는다. durable local DB의 history 변경도 migration jar를 명시적으로
-사용한다. `enabled=false`는 자동 실행만 막고 이미 적용된 migration checksum
-규칙을 없애지 않는다.
+제공하지 않는다. `enabled=false`는 자동 실행만 막고 이미 적용된 migration
+checksum 규칙을 없애지 않는다.
 
-현재 V3 source missing history는 일반 ignore로 숨기지 않는다.
-`V1__create_clean_core_schema.sql`과 `V4__create_spring_batch_metadata_schema.sql` checksum,
-failed migration 0건, V3 unresolved 단 한 건, backup을 확인한 뒤
-`repair-missing-v3 --confirm=3`으로만 `Deleted` 처리한다. 예상하지 않은 aligned,
-removed, deleted action이 있으면 V5/V6 적용을 중단한다.
+local migration version 2 Java→SQL cutover는 완료됐고 executable repair script는
+제거됐다. sanitized evidence는 timestamp `2026-07-13T10:51:35Z`, image
+`redgate/flyway:11.7.2`, Git SHA `a65fe6dd...`, SQL checksum `599267940`,
+business fingerprint `b49e9afa...03fb4`, schema fingerprint
+`f4354488...d1b0`, validate `success`다. ignored
+`.migration-backup/20260713T104859Z-v2-history-cutover` backup은 local에 보존한다.
+현재 local DB의 JDBC/Deleted audit history는 fresh-only deployment preflight에서
+거부되는 것이 정상이며 일반 `info`/`validate`만 허용한다.
 
 ## Local Redis
 

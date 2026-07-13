@@ -17,6 +17,10 @@ if grep -Eq 'USER_(RUNTIME|MIGRATOR)_DB_PASSWORD:-' "${compose_file}"; then
   echo "ERROR: user database role passwords must not have repository-known defaults" >&2
   exit 1
 fi
+if grep -Eq 'PROPERTY_MIGRATOR_DB_PASSWORD:-' "${compose_file}"; then
+  echo "ERROR: property migrator password must not have a repository-known default" >&2
+  exit 1
+fi
 if grep -Eq 'POSTGRES_PASSWORD:.*HOME_SEARCH_DB_PASSWORD:-' "${compose_file}"; then
   echo "ERROR: PostgreSQL superuser password must not have a repository-known default" >&2
   exit 1
@@ -35,6 +39,18 @@ for password_binding in \
   'user_migrator_password USER_MIGRATOR_DB_PASSWORD'; do
   if ! grep -Fq "\\getenv ${password_binding}" "${role_init_script}"; then
     echo "ERROR: database role password must be read from the environment inside psql: ${password_binding}" >&2
+    exit 1
+  fi
+done
+if grep -Fq 'GRANT home_search TO home_search_property_migrator' "${role_init_script}"; then
+  echo "ERROR: property migrator must not inherit or SET ROLE to the bootstrap superuser" >&2
+  exit 1
+fi
+for required_property_migrator_guard in \
+  'ALTER ROLE home_search_property_migrator NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' \
+  "pg_has_role('home_search_property_migrator', 'home_search', 'SET')"; do
+  if ! grep -Fq "${required_property_migrator_guard}" "${role_init_script}"; then
+    echo "ERROR: property migrator least-privilege guard is missing: ${required_property_migrator_guard}" >&2
     exit 1
   fi
 done
@@ -109,7 +125,8 @@ if ! grep -Eq 'enabled:[[:space:]]*false' "${root}/apps/user/service/app/src/mai
   exit 1
 fi
 for removed_migration_module in \
-  "${root}/apps/user/service/migration"; do
+  "${root}/apps/user/service/migration" \
+  "${root}/apps/property-data/migration"; do
   if [[ -e "${removed_migration_module}" ]]; then
     echo "ERROR: removed migration module still exists: ${removed_migration_module}" >&2
     exit 1
@@ -117,7 +134,9 @@ for removed_migration_module in \
 done
 for removed_database_source_set in \
   "${root}/apps/user/service/core/src/database" \
-  "${root}/apps/user/service/core/src/databaseTest"; do
+  "${root}/apps/user/service/core/src/databaseTest" \
+  "${root}/apps/property-data/core/src/database" \
+  "${root}/apps/property-data/core/src/databaseTest"; do
   if [[ -e "${removed_database_source_set}" ]]; then
     echo "ERROR: removed database source set still exists: ${removed_database_source_set}" >&2
     exit 1
@@ -125,6 +144,10 @@ for removed_database_source_set in \
 done
 if ! grep -Fq '../apps/user/service/db/migration/user:/flyway/sql:ro' "${compose_file}"; then
   echo "ERROR: user Flyway SQL catalog must be mounted read-only" >&2
+  exit 1
+fi
+if ! grep -Fq '../apps/property-data/db/migration/api:/flyway/sql:ro' "${compose_file}"; then
+  echo "ERROR: property Flyway SQL catalog must be mounted read-only" >&2
   exit 1
 fi
 if grep -A4 '^  user-flyway:' "${compose_file}" | grep -Eq 'profiles:.*user'; then

@@ -17,8 +17,11 @@ or database.
 service. It uses the `batch` directory and keeps the same
 `home_search` ownership boundary.
 
-**Migration app** is the explicit run-and-exit Flyway/backfill execution mode
-under `migration`. API and Batch keep Flyway auto-execution disabled.
+**External database CLI** is the explicit run-and-exit Flyway mode backed by
+`db/migration/api`, `db/flyway.conf`, and `ops/property-flyway.sh`. API and Batch
+keep Flyway auto-execution disabled and do not package Flyway or migration SQL.
+The completed local Java-to-SQL history cutover remains sanitized documentation
+evidence only; its executable one-time repair command has been removed.
 
 **Layered backend** means `application`, `domain`, `infrastructure`, and `global` responsibilities remain separate.
 
@@ -28,7 +31,8 @@ under `migration`. API and Batch keep Flyway auto-execution disabled.
 
 **Domain layer** owns region, parcel, complex, trade, and ingest concepts.
 
-**Persistence layer** owns repository queries, Flyway migrations, PostGIS access, uniqueness, and partitioning behavior.
+**Persistence layer** owns repository queries, PostGIS access, uniqueness, and
+partitioning behavior. External SQL catalog ownership stays under `db/`.
 
 ## Data Terms
 

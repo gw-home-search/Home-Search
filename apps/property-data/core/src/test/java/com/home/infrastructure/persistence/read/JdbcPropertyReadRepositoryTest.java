@@ -326,6 +326,69 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	}
 
 	@Test
+	@DisplayName("search API는 표시명·alias·주소의 복합 token을 순서와 무관하게 AND 검색한다")
+	void searchComplexesMatchesAllTokensAcrossDisplayAliasAndAddressRegardlessOfOrder() {
+		jdbcClient.sql("""
+			INSERT INTO region (id, code, name, region_type)
+			VALUES (28, '1120010800', '응봉동', 'eup-myeon-dong')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+			VALUES (97, 28, '1120010800100970000', '서울 성동구 응봉동 97', 37.5500, 127.0300)
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, region_id, complex_pk, apt_seq, name, trade_name)
+			VALUES (4677, 97, 28, 'RTMS:11200-28', '11200-28', '대림(2차)', '대림(2차)')
+			""").update();
+		jdbcClient.sql("""
+			INSERT INTO complex_name_alias (complex_id, alias_type, alias_name, normalized_name, source)
+			VALUES (4677, 'RTMS_APT_NAME', '대림2차', '대림2차', 'RTMS')
+			""").update();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.searchComplexes("응봉동 대림"))
+			.extracting("complexId", "complexName")
+			.containsExactly(tuple(4677L, "대림(2차)"));
+		assertThat(repository.searchComplexes("대림 응봉동"))
+			.extracting("complexId")
+			.containsExactly(4677L);
+		assertThat(repository.searchComplexes("응봉동 97 대림2차"))
+			.extracting("complexId")
+			.containsExactly(4677L);
+		assertThat(repository.findRegionComplexes(28L, 20, 0))
+			.hasValueSatisfying(complexes -> assertThat(complexes)
+				.extracting("complexName")
+				.containsExactly("대림(2차)"));
+		assertThat(repository.findParcelComplexes(97L))
+			.hasValueSatisfying(complexes -> assertThat(complexes)
+				.extracting("complexName")
+				.containsExactly("대림(2차)"));
+		assertThat(repository.findParcelDetail(97L, 4677L))
+			.hasValueSatisfying(detail -> {
+				assertThat(detail.name()).isEqualTo("대림(2차)");
+				assertThat(detail.tradeName()).isEqualTo("대림(2차)");
+			});
+	}
+
+	@Test
+	@DisplayName("search API는 %, _, \\ 문자를 SQL wildcard로 해석하지 않는다")
+	void searchComplexesTreatsLikeWildcardsAsLiteralCharacters() {
+		seedComplex();
+		jdbcClient.sql("""
+			UPDATE complex
+			SET name = 'Rate 100%_Home', trade_name = 'Rate 100%_Home'
+			WHERE id = 501
+			""").update();
+		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+
+		assertThat(repository.searchComplexes("%_"))
+			.extracting("complexId")
+			.containsExactly(501L);
+		assertThat(repository.searchComplexes("\\"))
+			.isEmpty();
+	}
+
+	@Test
 	@DisplayName("search API는 exact, prefix, alias, address match 순서로 관련도를 우선한다")
 	void searchComplexesRanksExactPrefixAliasBeforeAddressMatches() {
 		seedSearchRankingData();

@@ -97,6 +97,41 @@ class ReadApiControllerContractTest {
 	}
 
 	@Test
+	@DisplayName("GET /api/v1/search/complexes는 100자·8 token 경계를 허용한다")
+	void searchComplexesAllowsLengthAndTokenBoundaries() throws Exception {
+		String maxLengthQuery = "가".repeat(100);
+		String maxTokenQuery = "가 나 다 라 마 바 사 아";
+		given(readUseCase.searchComplexes(eq(maxLengthQuery))).willReturn(List.of());
+		given(readUseCase.searchComplexes(eq(maxTokenQuery))).willReturn(List.of());
+
+		mockMvc.perform(get("/api/v1/search/complexes").param("q", maxLengthQuery))
+			.andExpect(status().isOk())
+			.andExpect(content().json("[]"));
+		mockMvc.perform(get("/api/v1/search/complexes").param("q", maxTokenQuery))
+			.andExpect(status().isOk())
+			.andExpect(content().json("[]"));
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/search/complexes는 100자 또는 8 token 초과를 ProblemDetail 400으로 반환한다")
+	void searchComplexesRejectsLengthAndTokenOverages() throws Exception {
+		String overLengthQuery = "가".repeat(101);
+		String overTokenQuery = "가 나 다 라 마 바 사 아 자";
+		given(readUseCase.searchComplexes(eq(overLengthQuery)))
+			.willThrow(new InvalidReadRequestException("search query exceeds 100 characters"));
+		given(readUseCase.searchComplexes(eq(overTokenQuery)))
+			.willThrow(new InvalidReadRequestException("search query exceeds 8 tokens"));
+
+		for (String query : List.of(overLengthQuery, overTokenQuery)) {
+			mockMvc.perform(get("/api/v1/search/complexes").param("q", query))
+				.andExpect(status().isBadRequest())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+				.andExpect(jsonPath("$.status").value(400))
+				.andExpect(jsonPath("$.detail").value("Invalid parameter format."));
+		}
+	}
+
+	@Test
 	@DisplayName("GET /api/v1/region은 root region을 반환한다")
 	void rootRegionsReturnCanonicalFields() throws Exception {
 		given(readUseCase.getRootRegions())

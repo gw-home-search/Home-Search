@@ -164,8 +164,8 @@ SQL
 }
 
 expected_flyway_versions() {
-  local migration_glob="core/src/main/resources/db/migration/api/V*.sql"
-  local migration_dir="core/src/main/resources/db/migration/api"
+  local migration_glob="db/migration/api/V*.sql"
+  local migration_dir="db/migration/api"
   local versions
   if [[ ! -d "${migration_dir}" ]]; then
     echo "상태: Fail"

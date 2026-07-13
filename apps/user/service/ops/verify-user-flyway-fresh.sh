@@ -21,13 +21,20 @@ docker run -d --name "${DATABASE_CONTAINER}" --network "${NETWORK}" \
     -e POSTGRES_DB=home_search_user -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD="${PASSWORD}" \
     postgres:16.3-alpine >/dev/null
 
-for _ in $(seq 1 40); do
-    if docker exec "${DATABASE_CONTAINER}" pg_isready -U postgres -d home_search_user >/dev/null 2>&1; then
+database_ready=false
+for _ in $(seq 1 60); do
+    if docker exec "${DATABASE_CONTAINER}" psql -U postgres -d home_search_user \
+        -X -v ON_ERROR_STOP=1 -Atc 'SELECT 1' >/dev/null 2>&1; then
+        database_ready=true
         break
     fi
     sleep 1
 done
-docker exec "${DATABASE_CONTAINER}" pg_isready -U postgres -d home_search_user >/dev/null
+if [[ "${database_ready}" != true ]]; then
+    printf 'user-service fresh database가 제한 시간 안에 준비되지 않았습니다.\n' >&2
+    docker logs "${DATABASE_CONTAINER}" >&2 || true
+    exit 1
+fi
 docker exec "${DATABASE_CONTAINER}" psql -U postgres -d home_search_user -v ON_ERROR_STOP=1 \
     -c "CREATE ROLE home_search_user_migrator LOGIN PASSWORD '${PASSWORD}'" \
     -c "CREATE ROLE home_search_user_runtime LOGIN PASSWORD 'runtime-smoke-only'" \

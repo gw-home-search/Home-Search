@@ -5,20 +5,33 @@ import static org.assertj.core.groups.Tuple.tuple;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
 
+import com.home.application.read.ComplexSuggestionResult;
+import com.home.application.read.ComplexSummaryResult;
+import com.home.application.read.ParcelDetailResult;
+import com.home.application.read.RegionDetailResult;
+import com.home.application.read.RegionSummaryResult;
+import com.home.application.read.SearchComplexResult;
+import com.home.application.read.TradeListResult;
 import com.home.application.read.TradeTrendPoint;
+import com.home.infrastructure.persistence.propertydetail.JdbcPropertyDetailReader;
+import com.home.infrastructure.persistence.regionnavigation.JdbcRegionNavigationReader;
+import com.home.infrastructure.persistence.search.JdbcComplexSearchReader;
+import com.home.infrastructure.persistence.tradehistory.JdbcTradeHistoryReader;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
+class JdbcReadCapabilityReadersTest extends JdbcPostgresTestSupport {
 
 	@Test
 	@DisplayName("search/region/detail/trade read API는 baseline core table로 backing된다")
 	void readsPropertyMapExplorationDataFromBaselineTables() {
 		seedPropertyExplorationData();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
 		assertThat(repository.searchComplexes("sample"))
 			.singleElement()
@@ -47,7 +60,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 					.containsExactly("Gangnam-gu");
 			});
 
-		assertThat(repository.findParcelDetail(1001L))
+		assertThat(repository.findParcelDetail(1001L, null))
 			.hasValueSatisfying(detail -> {
 				assertThat(detail.parcelId()).isEqualTo(1001L);
 				assertThat(detail.name()).isEqualTo("Sample Apartment");
@@ -57,7 +70,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 				assertThat(detail.useDate()).isEqualTo(LocalDate.of(2015, 3, 20));
 			});
 
-		assertThat(repository.findTradeList(1001L))
+		assertThat(repository.findTradeList(1001L, null, 0, 25))
 			.hasValueSatisfying(tradeList -> {
 				assertThat(tradeList.parcelId()).isEqualTo(1001L);
 				assertThat(tradeList.trades())
@@ -71,7 +84,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	@DisplayName("trade read API는 page/size window와 totalElements를 적용한다")
 	void tradeListAppliesPageWindowAndTotalElements() {
 		seedPropertyExplorationData();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
 		assertThat(repository.findTradeList(1001L, null, 0, 1))
 			.hasValueSatisfying(tradeList -> {
@@ -107,7 +120,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			    id, complex_id, deal_date, deal_amount, floor, excl_area, apt_dong, source, source_key, complex_pk, apt_seq, raw_ingest_id
 			) VALUES (9003, 501, DATE '2025-10-20', 100000, 8, 84.93, '101', 'RTMS', 'sample-rtms-20251020', 'COMPLEX-PK-501', 'APT-501', 90003)
 			""").update();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
 		assertThat(repository.findTradeTrend(1001L, null))
 			.hasValueSatisfying(trend -> {
@@ -129,7 +142,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	void tradeTrendExcludesSoftDeletedAndEmptyWhenParentMissing() {
 		seedPropertyExplorationData();
 		jdbcClient.sql("UPDATE trade SET deleted_at = now() WHERE id = 9002").update();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
 		assertThat(repository.findTradeTrend(1001L, null))
 			.hasValueSatisfying(trend -> assertThat(trend)
@@ -146,9 +159,9 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	@DisplayName("trade read API는 parcel에 complex가 있지만 trade가 없으면 empty trade list를 반환한다")
 	void tradeListReturnsEmptyWhenParcelAndComplexExistWithoutTrades() {
 		seedComplex();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
-		assertThat(repository.findTradeList(1001L))
+		assertThat(repository.findTradeList(1001L, null, 0, 25))
 			.hasValueSatisfying(tradeList -> {
 				assertThat(tradeList.parcelId()).isEqualTo(1001L);
 				assertThat(tradeList.trades()).isEmpty();
@@ -164,9 +177,9 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			SET deleted_at = now()
 			WHERE id = 9002
 			""").update();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
-		assertThat(repository.findTradeList(1001L))
+		assertThat(repository.findTradeList(1001L, null, 0, 25))
 			.hasValueSatisfying(tradeList -> {
 				assertThat(tradeList.trades())
 					.extracting("tradeId")
@@ -179,7 +192,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	@DisplayName("detail/trade read API는 complexId가 있으면 같은 parcel의 선택 complex로 범위를 좁힌다")
 	void detailAndTradeCanBeScopedToSelectedComplex() {
 		seedTwoComplexParcel();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
 		assertThat(repository.findParcelDetail(2001L, 702L))
 			.hasValueSatisfying(detail -> {
@@ -188,7 +201,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 				assertThat(detail.name()).isEqualTo("Complex B");
 				assertThat(detail.unitCnt()).isEqualTo(320);
 			});
-		assertThat(repository.findTradeList(2001L, 702L))
+		assertThat(repository.findTradeList(2001L, 702L, 0, 25))
 			.hasValueSatisfying(tradeList -> {
 				assertThat(tradeList.parcelId()).isEqualTo(2001L);
 				assertThat(tradeList.complexId()).isEqualTo(702L);
@@ -197,7 +210,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 					.containsExactly(9702L);
 			});
 		assertThat(repository.findParcelDetail(2001L, 999L)).isEmpty();
-		assertThat(repository.findTradeList(2001L, 999L)).isEmpty();
+		assertThat(repository.findTradeList(2001L, 999L, 0, 25)).isEmpty();
 	}
 
 	@Test
@@ -240,9 +253,9 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			    (9001, 501, DATE '2025-12-01', 125000, 12, 84.93, '101', 'RTMS', 'same-condition-101', 'COMPLEX-PK-501', 'APT-501', 90001),
 			    (9002, 501, DATE '2025-12-01', 125000, 12, 84.93, '102', 'RTMS', 'same-condition-102', 'COMPLEX-PK-501', 'APT-501', 90002)
 			""").update();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
-		assertThat(repository.findTradeList(1001L))
+		assertThat(repository.findTradeList(1001L, null, 0, 25))
 			.hasValueSatisfying(tradeList -> assertThat(tradeList.trades())
 				.extracting("tradeId", "aptDong")
 				.containsExactly(
@@ -261,7 +274,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			    trade_name = 'Legacy Trade Display Name'
 			WHERE id = 501
 			""").update();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
 		assertThat(repository.searchComplexes("legacy"))
 			.singleElement()
@@ -278,7 +291,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			    trade_name = '   '
 			WHERE id = 501
 			""").update();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
 		assertThat(repository.searchComplexes("building"))
 			.singleElement()
@@ -311,7 +324,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			    'RTMS'
 			)
 			""").update();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
 		assertThat(repository.searchComplexes("wobbly"))
 			.singleElement()
@@ -344,7 +357,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			INSERT INTO complex_name_alias (complex_id, alias_type, alias_name, normalized_name, source)
 			VALUES (4677, 'RTMS_APT_NAME', '대림2차', '대림2차', 'RTMS')
 			""").update();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
 		assertThat(repository.searchComplexes("응봉동 대림"))
 			.extracting("complexId", "complexName")
@@ -380,7 +393,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			SET name = 'Rate 100%_Home', trade_name = 'Rate 100%_Home'
 			WHERE id = 501
 			""").update();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
 		assertThat(repository.searchComplexes("%_"))
 			.extracting("complexId")
@@ -393,7 +406,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	@DisplayName("search API는 exact, prefix, alias, address match 순서로 관련도를 우선한다")
 	void searchComplexesRanksExactPrefixAliasBeforeAddressMatches() {
 		seedSearchRankingData();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
 		assertThat(repository.searchComplexes("river"))
 			.extracting("complexId", "complexName")
@@ -409,7 +422,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	@DisplayName("suggestion API는 search ranking과 같은 관련도 순서를 사용하고 limit을 지킨다")
 	void suggestComplexesUsesSearchRankingAndLimit() {
 		seedSearchRankingData();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
 		assertThat(repository.suggestComplexes("river", 3))
 			.extracting("complexId", "complexName")
@@ -461,7 +474,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt)
 			VALUES (502, 1001, 'COMPLEX-PK-502', 'APT-502', 'Sample River Tower', 'Sample River Trade', 120)
 			""").update();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
 		assertThat(repository.searchComplexes("sample"))
 			.extracting("complexId", "parcelId")
@@ -486,7 +499,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			)
 			VALUES (501, 37.6010, 127.1010, 'PARCEL_FALLBACK', 70, 'test display coordinate')
 			""").update();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
 		assertThat(repository.searchComplexes("sample"))
 			.singleElement()
@@ -494,7 +507,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 				assertThat(result.latitude()).isEqualTo(37.6010);
 				assertThat(result.longitude()).isEqualTo(127.1010);
 			});
-		assertThat(repository.findParcelDetail(1001L))
+		assertThat(repository.findParcelDetail(1001L, null))
 			.hasValueSatisfying(detail -> {
 				assertThat(detail.latitude()).isEqualTo(37.6010);
 				assertThat(detail.longitude()).isEqualTo(127.1010);
@@ -516,7 +529,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, trade_name, unit_cnt)
 			VALUES (801, 3001, 'COMPLEX-PK-801', 'APT-801', 'Coordinate Pending Complex', 'Coordinate Pending Trade', 180)
 			""").update();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
 		assertThat(repository.searchComplexes("pending"))
 			.singleElement()
@@ -585,14 +598,14 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			    90003
 			)
 			""").update();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
-		assertThat(repository.findParcelDetail(1001L))
+		assertThat(repository.findParcelDetail(1001L, null))
 			.hasValueSatisfying(detail -> {
 				assertThat(detail.name()).isEqualTo("Sample Apartment");
 				assertThat(detail.tradeName()).isEqualTo("Sample trade name");
 			});
-		assertThat(repository.findTradeList(1001L))
+		assertThat(repository.findTradeList(1001L, null, 0, 25))
 			.hasValueSatisfying(tradeList -> assertThat(tradeList.trades())
 				.extracting("tradeId")
 				.containsExactly(9003L, 9002L, 9001L));
@@ -636,9 +649,9 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			    (9103, 502, DATE '2023-01-01', 180000, 15, 84.93, '101', 'RTMS', 'redev-d-502-1', 'COMPLEX-PK-502', 'APT-502', 90100),
 			    (9104, 502, DATE '2025-01-01', 190000, 16, 84.93, '101', 'RTMS', 'redev-d-502-2', 'COMPLEX-PK-502', 'APT-502', 90100)
 			""").update();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
-		assertThat(repository.findParcelDetail(1001L))
+		assertThat(repository.findParcelDetail(1001L, null))
 			.hasValueSatisfying(detail -> {
 				assertThat(detail.name()).isEqualTo("New Tower");
 				assertThat(detail.tradeName()).isEqualTo("New Tower Trade");
@@ -668,9 +681,9 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, relation_type, relation_confidence)
 			VALUES (1001, '1168010300101400010', 'SKIPPED', 'REDEVELOPED', 'LOW')
 			""").update();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
-		assertThat(repository.findParcelDetail(1001L))
+		assertThat(repository.findParcelDetail(1001L, null))
 			.hasValueSatisfying(detail -> {
 				assertThat(detail.complexId()).isEqualTo(501L);
 				assertThat(detail.name()).isEqualTo("Old Mansion");
@@ -682,10 +695,10 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 	@DisplayName("detail/trade read API는 parcel 또는 complex parent path가 없으면 empty가 된다")
 	void missingParentPathReturnsEmpty() {
 		seedPropertyExplorationData();
-		JdbcPropertyReadRepository repository = new JdbcPropertyReadRepository(jdbcClient);
+		ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
 
-		assertThat(repository.findParcelDetail(404L)).isEmpty();
-		assertThat(repository.findTradeList(404L)).isEmpty();
+		assertThat(repository.findParcelDetail(404L, null)).isEmpty();
+		assertThat(repository.findTradeList(404L, null, 0, 25)).isEmpty();
 	}
 
 	private boolean extensionExists(String extensionName) {
@@ -805,4 +818,65 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 			    (9702, 702, DATE '2025-12-15', 130000, 15, 59.93, '201', 'RTMS', 'scoped-702', 'COMPLEX-PK-702', 'APT-702', 9702)
 			""").update();
 	}
+
+	private static class ReadCapabilityReaders {
+
+		private final JdbcComplexSearchReader searchReader;
+		private final JdbcRegionNavigationReader regionReader;
+		private final JdbcPropertyDetailReader detailReader;
+		private final JdbcTradeHistoryReader tradeReader;
+
+		private ReadCapabilityReaders(org.springframework.jdbc.core.simple.JdbcClient jdbcClient) {
+			searchReader = new JdbcComplexSearchReader(jdbcClient);
+			regionReader = new JdbcRegionNavigationReader(jdbcClient);
+			detailReader = new JdbcPropertyDetailReader(jdbcClient);
+			tradeReader = new JdbcTradeHistoryReader(jdbcClient);
+		}
+
+		private List<SearchComplexResult> searchComplexes(String query) {
+			return searchReader.searchComplexes(query);
+		}
+
+		private List<ComplexSuggestionResult> suggestComplexes(String query, int limit) {
+			return searchReader.suggestComplexes(query, limit);
+		}
+
+		private List<RegionSummaryResult> findRootRegions() {
+			return regionReader.findRootRegions();
+		}
+
+		private Optional<RegionDetailResult> findRegionDetail(Long regionId) {
+			return regionReader.findRegionDetail(regionId);
+		}
+
+		private Optional<List<ComplexSummaryResult>> findRegionComplexes(Long regionId, int limit, int offset) {
+			return regionReader.findRegionComplexes(regionId, limit, offset);
+		}
+
+		private Optional<ParcelDetailResult> findParcelDetail(Long parcelId, Long complexId) {
+			return detailReader.findParcelDetail(parcelId, complexId);
+		}
+
+		private Optional<List<ComplexSummaryResult>> findParcelComplexes(Long parcelId) {
+			return detailReader.findParcelComplexes(parcelId);
+		}
+
+		private Optional<TradeListResult> findTradeList(
+			Long parcelId,
+			Long complexId,
+			int page,
+			int size
+		) {
+			return tradeReader.findTradeList(parcelId, complexId, page, size);
+		}
+
+		private Optional<List<TradeTrendPoint>> findTradeTrend(Long parcelId, Long complexId) {
+			return tradeReader.findTradeTrend(parcelId, complexId);
+		}
+
+		private Optional<List<TradeTrendPoint>> findComplexTradeTrend(Long complexId) {
+			return tradeReader.findComplexTradeTrend(complexId);
+		}
+	}
+
 }

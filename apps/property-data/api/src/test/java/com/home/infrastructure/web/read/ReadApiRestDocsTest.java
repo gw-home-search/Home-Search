@@ -72,7 +72,7 @@ class ReadApiRestDocsTest {
 			.andExpect(status().isOk())
 			.andDo(document("read-search-complexes-success",
 				queryParameters(
-					parameterWithName("q").description("Trimmed complex search query.")
+					parameterWithName("q").description("Trimmed complex search query; maximum 100 characters and 8 unique whitespace-separated tokens.")
 				),
 				responseFields(
 					fieldWithPath("[].complexId").type(JsonFieldType.NUMBER).description("Complex id."),
@@ -109,7 +109,7 @@ class ReadApiRestDocsTest {
 			.andExpect(status().isOk())
 			.andDo(document("read-complex-suggestions-success",
 				queryParameters(
-					parameterWithName("q").description("Trimmed complex suggestion query.")
+					parameterWithName("q").description("Trimmed complex suggestion query; maximum 100 characters and 8 unique whitespace-separated tokens.")
 				),
 				responseFields(
 					fieldWithPath("[].complexId").type(JsonFieldType.NUMBER).description("Complex id."),

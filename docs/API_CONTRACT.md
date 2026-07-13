@@ -348,7 +348,9 @@ Frontend source consumers:
 
 Request:
 
-- Query parameter `q`: required string, trim before search.
+- Query parameter `q`: required string, trim before search; maximum 100 Unicode
+  characters and 8 unique whitespace-separated tokens. Repeated tokens are
+  compared case-insensitively and only the first form is searched.
 
 Response:
 
@@ -377,7 +379,8 @@ Response fields:
 Status:
 
 - `200`: successful lookup. Empty or no-match searches return `[]`.
-- `400`: invalid query parameter type.
+- `400`: invalid query parameter type, more than 100 characters, or more than
+  8 unique tokens.
 - `500`: unexpected server error.
 
 Migration notes:
@@ -402,7 +405,8 @@ Purpose:
 Request:
 
 - Query parameter `q`: required string, trim before search. Blank queries return
-  `[]`.
+  `[]`. The same 100-character and 8-unique-token limits as complex search
+  apply, and repeated tokens are searched once.
 
 Response:
 
@@ -427,7 +431,8 @@ Response fields:
 Status:
 
 - `200`: successful lookup. Empty or no-match searches return `[]`.
-- `400`: invalid query parameter type.
+- `400`: invalid query parameter type, more than 100 characters, or more than
+  8 unique tokens.
 - `500`: unexpected server error.
 
 Migration notes:

@@ -51,6 +51,37 @@ class PropertyReadUseCaseTest {
 	}
 
 	@Test
+	@DisplayName("read use case는 100자·8 token 경계를 허용하고 초과 query는 repository 전에 거부한다")
+	void rejectsOversizedSearchQueriesBeforeRepositoryAccess() {
+		CapturingRepository repository = new CapturingRepository();
+		PropertyReadUseCase useCase = new PropertyReadUseCase(repository);
+
+		assertThat(useCase.searchComplexes("가".repeat(100))).hasSize(1);
+		assertThat(repository.searchQuery).isEqualTo("가".repeat(100));
+		assertThat(useCase.searchComplexes("가 나 다 라 마 바 사 아")).hasSize(1);
+		assertThat(repository.searchQuery).isEqualTo("가 나 다 라 마 바 사 아");
+
+		CapturingRepository rejectedRepository = new CapturingRepository();
+		PropertyReadUseCase rejectedUseCase = new PropertyReadUseCase(rejectedRepository);
+		assertThatThrownBy(() -> rejectedUseCase.searchComplexes("가".repeat(101)))
+			.isInstanceOf(InvalidReadRequestException.class);
+		assertThatThrownBy(() -> rejectedUseCase.searchComplexes("가 나 다 라 마 바 사 아 자"))
+			.isInstanceOf(InvalidReadRequestException.class);
+		assertThat(rejectedRepository.searchQuery).isNull();
+	}
+
+	@Test
+	@DisplayName("read use case는 대소문자 반복 token을 제거해 repository에 한 번만 전달한다")
+	void deduplicatesRepeatedSearchTokensBeforeRepositoryAccess() {
+		CapturingRepository repository = new CapturingRepository();
+		PropertyReadUseCase useCase = new PropertyReadUseCase(repository);
+
+		assertThat(useCase.searchComplexes("  대림   대림 DAELIM daelim  ")).hasSize(1);
+
+		assertThat(repository.searchQuery).isEqualTo("대림 DAELIM");
+	}
+
+	@Test
 	@DisplayName("read use case는 region/detail/trade와 확장 read API를 위임한다")
 	void delegatesReadApis() {
 		CapturingRepository repository = new CapturingRepository();

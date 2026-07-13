@@ -1,11 +1,15 @@
 package com.home.application.read;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 public class PropertyReadUseCase {
 
 	private static final int SUGGESTION_LIMIT = 8;
+	private static final int MAX_SEARCH_QUERY_CODE_POINTS = 100;
+	private static final int MAX_SEARCH_QUERY_TOKENS = 8;
 	private static final int DEFAULT_REGION_COMPLEX_LIMIT = 50;
 	private static final int MAX_REGION_COMPLEX_LIMIT = 100;
 	private static final int DEFAULT_TRADE_PAGE_SIZE = 25;
@@ -18,19 +22,37 @@ public class PropertyReadUseCase {
 	}
 
 	public List<SearchComplexResult> searchComplexes(String query) {
-		String trimmed = query == null ? "" : query.trim();
-		if (trimmed.isEmpty()) {
+		String normalized = normalizeSearchQuery(query);
+		if (normalized.isEmpty()) {
 			return List.of();
 		}
-		return repository.searchComplexes(trimmed);
+		return repository.searchComplexes(normalized);
 	}
 
 	public List<ComplexSuggestionResult> suggestComplexes(String query) {
-		String trimmed = query == null ? "" : query.trim();
-		if (trimmed.isEmpty()) {
+		String normalized = normalizeSearchQuery(query);
+		if (normalized.isEmpty()) {
 			return List.of();
 		}
-		return repository.suggestComplexes(trimmed, SUGGESTION_LIMIT);
+		return repository.suggestComplexes(normalized, SUGGESTION_LIMIT);
+	}
+
+	private String normalizeSearchQuery(String query) {
+		String trimmed = query == null ? "" : query.strip();
+		if (trimmed.codePointCount(0, trimmed.length()) > MAX_SEARCH_QUERY_CODE_POINTS) {
+			throw new InvalidReadRequestException("search query must not exceed 100 characters");
+		}
+		if (trimmed.isEmpty()) {
+			return "";
+		}
+		LinkedHashMap<String, String> uniqueTokens = new LinkedHashMap<>();
+		for (String token : trimmed.split("(?U)\\s+")) {
+			uniqueTokens.putIfAbsent(token.toLowerCase(Locale.ROOT), token);
+		}
+		if (uniqueTokens.size() > MAX_SEARCH_QUERY_TOKENS) {
+			throw new InvalidReadRequestException("search query must not exceed 8 unique tokens");
+		}
+		return String.join(" ", uniqueTokens.values());
 	}
 
 	public List<RegionSummaryResult> getRootRegions() {

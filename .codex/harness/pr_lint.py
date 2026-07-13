@@ -83,6 +83,11 @@ PLANNED_STACKED_BRANCHES = {
     "codex/property-flyway-boundary",
     "codex/nearby-map-ux",
 }
+PLANNED_STACKED_BASES = {
+    "codex/user-service-1-6": "main",
+    "codex/property-flyway-boundary": "codex/user-service-1-6",
+    "codex/nearby-map-ux": "codex/property-flyway-boundary",
+}
 
 API_TEST = API_QUALITY
 COVERAGE_LINE_RE = re.compile(r"^\s*Coverage:\s*>=\s*90%\s*$", re.MULTILINE)
@@ -325,6 +330,9 @@ def check_branch(base: str, head: str, draft: bool, errors: list[LintMessage]) -
         add(errors, "branch", "head branch는 main/master일 수 없습니다")
     if head not in PLANNED_STACKED_BRANCHES and not INTEGRATION_BRANCH_RE.fullmatch(head or ""):
         add(errors, "branch", "head branch는 feat/*-integration 또는 승인된 stacked branch여야 합니다")
+    expected_base = PLANNED_STACKED_BASES.get(head)
+    if expected_base is not None and base != expected_base:
+        add(errors, "branch", f"승인된 stacked branch {head}의 base는 {expected_base}여야 합니다")
     if not draft:
         add(errors, "branch", "PR은 draft여야 합니다")
 
@@ -730,6 +738,14 @@ def run_self_test() -> int:
         base="codex/user-service-1-6",
         head="codex/property-flyway-boundary",
     )
+    planned_nearby_draft = valid_input(
+        base="codex/property-flyway-boundary",
+        head="codex/nearby-map-ux",
+    )
+    planned_wrong_base = valid_input(
+        base="main",
+        head="codex/nearby-map-ux",
+    )
     unsupported_base = valid_input(base="release/coordinate-import")
     same_base_and_head = valid_input(
         base="feat/pr-lint-hardening-integration",
@@ -775,6 +791,8 @@ def run_self_test() -> int:
         lint_pr(planned_stacked_head).ok,
         lint_pr(stacked_draft).ok,
         lint_pr(planned_stacked_draft).ok,
+        lint_pr(planned_nearby_draft).ok,
+        expect_case("planned stacked wrong base", planned_wrong_base, "branch", "base는"),
         expect_case("unsupported base", unsupported_base, "branch", "base branch"),
         expect_case("same base and head", same_base_and_head, "branch", "같을 수 없습니다"),
         lint_pr(bracket_title).ok,

@@ -546,6 +546,25 @@ Do not block project on:
 - 30-day top volume.
 - Ranking materialization.
 
+## User And AI Data Ownership
+
+`home_search_user` is a separate database owned by user-service. Its `users`
+schema stores OAuth identities keyed by `(provider, provider_subject)` and
+hashed, rotating refresh-token state. Email is not an identity key. The
+`home_search_user_runtime` role receives only the DML needed by user-service;
+`home_search_user_migrator` alone owns DDL and Flyway history.
+
+ai-service owns its `ai` schema and migration history: conversations, POI and
+other reference datasets, legal corpus, chunks, embeddings, and indexing
+evidence. It receives `SELECT` only on domain-filtered `ai_read` views and no
+permission on property-data `public` tables. Cross-database joins are forbidden;
+references such as `user_id` and `complex_id` remain opaque ids across service
+boundaries.
+
+Imported POI or legal files must record checksum, source, refreshed date, and
+license before a one-shot seed/backfill runs. Unattributed datasets are not
+imported.
+
 ## Acceptance Criteria
 
 - Raw rows are created before normalized insert.

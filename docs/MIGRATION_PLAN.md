@@ -35,6 +35,8 @@ Target:
 - `/Users/gwongwangjae/home-search/apps/web`
 - `/Users/gwongwangjae/home-search/apps/admin/service`
 - `/Users/gwongwangjae/home-search/apps/admin/web`
+- `/Users/gwongwangjae/home-search/apps/user/service`
+- `/Users/gwongwangjae/home-search/apps/ai`
 - `/Users/gwongwangjae/home-search/infra`
 
 Prepare the repository as a monorepo-style migration target.
@@ -114,8 +116,8 @@ Migrate in this order:
 7. Error handling and validation.
 8. Project tests.
 
-Do not migrate later-scope features into the critical path. Keep rankings, favorites,
-OAuth-dependent user flows, and mail alarms separate.
+Do not migrate expansion features into the property-data critical path. Keep rankings,
+favorites, OAuth-dependent user flows, and mail alarms separate from property-data.
 
 `apps/property-data` is the property-data-service boundary that owns the operational
 `home_search` database. `core`, `api`, and `batch` are internal module and execution
@@ -172,11 +174,28 @@ Done when:
 
 ## Later-Scope Worklog
 
-Keep these out of project implementation unless explicitly re-scoped:
+Keep these out of property-data implementation unless explicitly re-scoped:
 
 - Rankings and top lists.
 - Trade trend calculations.
 - Favorite and alarm flows.
-- OAuth login UX.
+- OAuth login UX beyond the user-service backend milestone.
 - Mail batch.
 - Analytics dashboards.
+
+## Expansion Milestones
+
+The map/trade baseline is complete enough to begin isolated product services.
+The order is fixed:
+
+1. Remove the dead `apps/rtms-loader`; packaged property-data Batch remains the
+   only RTMS operational path.
+2. Implement user-service according to `USER_SERVICE_PLAN.md`.
+3. Migrate full legacy chatbot behavior according to `AI_SERVICE_PLAN.md`.
+4. Add immutable git-SHA image builds and GitHub OIDC ECR publishing only after
+   both service test workflows are GREEN.
+5. Prepare ECS tasks, RDS databases, EventBridge, secret injection, and DNS.
+
+These milestones do not re-scope rankings, favorites, alarms, or mail, and do
+not change `docs/API_CONTRACT.md` unless a separately approved contract change
+is required.

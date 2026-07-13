@@ -95,6 +95,29 @@ run-and-exit jobs, never into the API runtime.
 Each role has a separate password. Property-data receives only the reader
 credential.
 
+## Required User-service Environment
+
+- `USER_DB_JDBC_URL`, `USER_DB_USERNAME=home_search_user_runtime`, and a
+  runtime-only password.
+- Google, Kakao, and Naver OAuth client id/secret values injected at runtime.
+- user-service RS256 private key, active `kid`, issuer, audience, access TTL,
+  and refresh TTL.
+- public-key overlap set for verifying tokens during key rotation.
+
+Migration jobs use `home_search_user_migrator` credentials separately. No
+user-service process receives `home_search`, admin DB, or admin internal signing
+credentials.
+
+## Required AI-service Environment
+
+- ai-service database credentials limited to `ai` ownership and `ai_read`
+  `SELECT`.
+- user JWT public keys plus exact user issuer/audience values.
+- LLM and legal-source credentials injected only when those adapters are
+  enabled.
+
+Tests run with stub OAuth/LLM/legal providers and require no live secret.
+
 ## Required Frontend Environment
 
 - `apps/web` is the public map app on development port `5173` and receives only

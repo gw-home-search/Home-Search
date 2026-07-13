@@ -109,10 +109,34 @@ them:
 - `home_search`: property-data API, Batch, and domain evidence.
 - `home_search_admin`: admin accounts, RBAC, Session, and security audit.
 - `home_search_coordinate_source`: coordinate snapshot/import state.
+- `home_search_user`: OAuth identity and refresh-token state owned by
+  user-service.
 
 Every database has separate migrator and runtime/import/reader roles. API and
 Batch processes keep `spring.flyway.enabled=false`; only explicit run-and-exit
 migration artifacts own Flyway history.
+
+## User And AI Service Boundaries
+
+`apps/user/service/{core,api,migration}` is an independent Gradle build and
+deployment unit. It owns `home_search_user.users`; property-data and
+admin-service never read that database. Its RS256 user keys, issuer, and
+audience are distinct from the admin internal JWT boundary.
+
+`apps/ai` is an independent FastAPI deployment. Home Search facts enter only
+through the `ai_read` read-only contract; POI/reference datasets, conversation
+state, legal corpus, chunks, and embeddings are ai-service-owned. Feature code
+does not query property-data tables directly.
+
+```text
+Browser -> user-service OAuth/JWT
+Browser -> property-data public map/trade (unauthenticated)
+Browser -> authenticated chatbot BFF -> ai-service JSON/SSE
+ai-service -> ai_read views (SELECT only)
+```
+
+The implementation order is user-service first, full chatbot parity second,
+then image/ECR CI and AWS deployment preparation.
 
 The backend should connect to the coordinate source database through a dedicated
 coordinate lookup component. It should not copy nationwide coordinate snapshots

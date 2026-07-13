@@ -8,19 +8,43 @@ export type KakaoBounds = {
   getNorthEast: () => KakaoLatLng;
 };
 
+export type KakaoMapTypeId = string | number;
+
 export type KakaoMap = {
+  addOverlayMapTypeId: (mapTypeId: KakaoMapTypeId) => void;
   getBounds: () => KakaoBounds;
   getCenter?: () => KakaoLatLng;
   getLevel: () => number;
   relayout?: () => void;
+  removeOverlayMapTypeId: (mapTypeId: KakaoMapTypeId) => void;
   setCenter?: (center: KakaoLatLng) => void;
   setLevel?: (level: number) => void;
+  setMapTypeId: (mapTypeId: KakaoMapTypeId) => void;
   setMaxLevel?: (level: number) => void;
   setMinLevel?: (level: number) => void;
 };
 
 export type KakaoCustomOverlay = {
   setMap: (map: KakaoMap | null) => void;
+};
+
+export type KakaoMarker = {
+  setMap: (map: KakaoMap | null) => void;
+  setPosition: (position: KakaoLatLng) => void;
+};
+
+export type KakaoPolyline = {
+  getLength: () => number;
+  setMap: (map: KakaoMap | null) => void;
+  setPath: (path: KakaoLatLng[]) => void;
+};
+
+export type KakaoRoadview = {
+  setPanoId: (panoId: number, position: KakaoLatLng) => void;
+};
+
+export type KakaoMapMouseEvent = {
+  latLng: KakaoLatLng;
 };
 
 export type KakaoMapsApi = {
@@ -37,9 +61,35 @@ export type KakaoMapsApi = {
     content: HTMLElement | string;
     yAnchor?: number;
   }) => KakaoCustomOverlay;
+  Marker: new (options: {
+    map?: KakaoMap;
+    position: KakaoLatLng;
+  }) => KakaoMarker;
+  Polyline: new (options: {
+    map?: KakaoMap;
+    path: KakaoLatLng[];
+    strokeColor?: string;
+    strokeOpacity?: number;
+    strokeWeight?: number;
+  }) => KakaoPolyline;
+  Roadview: new (container: HTMLElement) => KakaoRoadview;
+  RoadviewClient: new () => {
+    getNearestPanoId: (
+      position: KakaoLatLng,
+      radius: number,
+      callback: (panoId: number | null) => void,
+    ) => void;
+  };
+  MapTypeId: {
+    HYBRID: KakaoMapTypeId;
+    ROADMAP: KakaoMapTypeId;
+    ROADVIEW: KakaoMapTypeId;
+    TERRAIN: KakaoMapTypeId;
+    USE_DISTRICT: KakaoMapTypeId;
+  };
   event: {
-    addListener: (target: KakaoMap, eventName: string, handler: () => void) => unknown;
-    removeListener?: (target: KakaoMap, eventName: string, handler: () => void) => void;
+    addListener: (target: KakaoMap | KakaoRoadview, eventName: string, handler: (...args: never[]) => void) => unknown;
+    removeListener?: (target: KakaoMap | KakaoRoadview, eventName: string, handler: (...args: never[]) => void) => void;
   };
   load?: (callback: () => void) => void;
 };
@@ -121,6 +171,16 @@ function isLoadedKakaoMapsApi(maps: KakaoMapsApi | undefined): maps is KakaoMaps
     typeof maps.LatLng === 'function' &&
     typeof maps.Map === 'function' &&
     typeof maps.CustomOverlay === 'function' &&
+    typeof maps.Marker === 'function' &&
+    typeof maps.Polyline === 'function' &&
+    typeof maps.Roadview === 'function' &&
+    typeof maps.RoadviewClient === 'function' &&
+    maps.MapTypeId !== undefined &&
+    maps.MapTypeId.ROADMAP !== undefined &&
+    maps.MapTypeId.HYBRID !== undefined &&
+    maps.MapTypeId.TERRAIN !== undefined &&
+    maps.MapTypeId.ROADVIEW !== undefined &&
+    maps.MapTypeId.USE_DISTRICT !== undefined &&
     maps.event !== undefined &&
     typeof maps.event.addListener === 'function'
   );

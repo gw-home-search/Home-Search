@@ -7,8 +7,9 @@ still lives in root `docs/API_CONTRACT.md`.
 
 Home Search is a calm, map-first real-estate trade exploration tool. Keep the
 map, search, region, filters, detail, and trades in one dense operational flow.
-Do not add gradients, glass, glow, marketing composition, ranking, favorites,
-alarms, auth, or other later-scope features. Header and filter layers use flat
+Do not add gradients, glass, glow, marketing composition, ranking, alarms, or
+other later-scope features. Optional OAuth login and the detail-drawer favorite
+toggle are the current account surfaces. Header and filter layers use flat
 semantic surfaces separated by subtle borders.
 
 UI changes preserve the existing map, search, region, detail, trend, and trade
@@ -23,7 +24,7 @@ baseline.
 
 | KOSA team5 source | Adopted in Home Search | Intentional adaptation |
 | --- | --- | --- |
-| `src/app/App.tsx`, `styles/app-shell.css` | 38px CSS house/search mark and wordmark/subtitle anatomy | use a 56px flat white header and 380px rail so the map keeps priority; omit KOSA operational badges and all account/auth actions; compact to 58px on mobile |
+| `src/app/App.tsx`, `styles/app-shell.css` | 38px CSS house/search mark and wordmark/subtitle anatomy | use a 56px flat white header and 380px rail so the map keeps priority; omit KOSA operational badges and reserve the right side for the optional login/account control; compact to 58px on mobile |
 | `components/SearchPanel.tsx`, `styles/exploration.css` | 42px outlined search, visible Sky search action, 58px result cards, 3-column region grid | compact region tiles to 56px while retaining debounce, Enter submit, target loading/error states, accessible buttons, and docked mobile sheet |
 | `components/MarkerFilterPanel.tsx`, `styles/map.css` | 62px map-top filter band, 92×46 two-line chips, reset pill, 320px dropdown, dual range slider | retain nullable drafts, explicit Apply/Enter, validation, dynamic ceiling, and target request fields |
 | `features/complex-detail/DetailSidebar.tsx`, `styles/detail-sidebar.css` | 72px cyan identity band, 3-column API status and key-stat rows, 54px same-parcel cards, 94px labels | retain prediction, pagination, target mobile tabs, and current detail/trade API ownership |
@@ -46,6 +47,14 @@ React/CSS components; no Tailwind, `lucide-react`, Redux, or
 - `data-marker-shape`: shared renderer shape (`price-card` or `split-card`).
 - `data-marker-density`: zoom-level marker scale (`dense`, `compact`, `standard`, or `overview`).
 - `data-map-level`: current clamped Kakao map level used for visual QA.
+- `data-map-display-mode`: active Kakao base/terrain view (`roadmap`, `terrain`, or `hybrid`).
+- `data-ui-layer="map-control-rail"`: shared zoom, map-display, and map-tool rail.
+- `data-map-tool`: active interactive map tool (`none`, `roadview`, or `distance`).
+- `data-cadastral-visible`: independent cadastral overlay state.
+- `data-roadview-state` and `data-distance-phase`: public UI seams for tool progress and completion.
+- `data-auth-status`: header auth state without exposing token or email data.
+- `data-ui-component="auth-dialog"` and `data-auth-provider`: login dialog and
+  allowlisted provider actions.
 
 ## Fixed Shell
 
@@ -72,13 +81,15 @@ chips stay 84px, icon targets stay 44px, popovers keep 8px insets, and only the
 detail trade table may scroll horizontally. Short portrait screens keep the
 180px map minimum and reduce the chart to 150px.
 
-The sheet never overlays Kakao attribution. Grid rows/columns are not animated.
+The docked sheet and its nested rail controls use a consistent restrained 1px
+corner. The sheet never overlays Kakao attribution. Grid rows/columns are not animated.
 `ResizeObserver` preserves center around `map.relayout()`.
 
 ## Header And Icons
 
-Use a flat white header with a 1px neutral bottom border, no shadow,
-20/18/12px horizontal padding, and no right-side account/status actions. The
+Use a flat white header with a 1px neutral bottom border, no shadow, and
+20/18/12px horizontal padding. The right side contains only the optional OAuth
+login/account control; notification mocks and email/user ids are not shown. The
 38px (34px mobile) Brand Soft tile uses the selected H1 house/search image and
 the same image supplies browser and Apple touch icons. Wordmark is `홈서치`;
 subtitle is `HomeSearch · 실거래가 인사이트`.
@@ -87,19 +98,40 @@ Public map icons live under `src/shared/icons`, use `currentColor`, 1.75px round
 strokes, and no icon dependency or raster asset. Icon-only buttons require an
 accessible name and 40px desktop or 44px mobile target where the layout allows.
 
+The auth dialog is a 440px native `dialog` on desktop and an `<=720px`
+bottom sheet. Its header login action pairs a restrained account icon with the
+label without changing the app-bar height. Provider buttons have equal geometry
+and preserve each official identity: Kakao yellow with the black talk symbol,
+Naver `#03A94D` with the white N, and Google white with a neutral border and the
+standard color G. Kakao provider corners remain 12px per its login design guide;
+the same geometry keeps all three providers equally prominent. The dialog
+centers each provider icon and label in an 8px-gap flex row so stale plain-text
+markup during hot reload still remains centered and cannot wrap vertically. It
+explains automatic signup and keeps access JWTs out of UI state and Web Storage.
+Header height and map viewport remain fixed across auth states.
+The authenticated account trigger is an unframed 44px header action: avatar,
+single-line display name, and a down chevron only. Provider identity stays in
+the opened account menu. Hover uses Surface Muted; expanded state uses Brand
+Soft plus chevron rotation, avoiding a permanent card-like box in the app bar.
+The trigger is content-sized and right-aligned so the name and chevron remain
+a compact group instead of being separated by a flexible middle column.
+
 ## Exploration
 
 Search starts the exploration rail without a redundant visible section title.
-It uses the same 62px baseline as the filter bar and a 42px, 16px-radius field
+It uses the same 62px baseline as the filter bar and a 42px field with an
+explicit 4px radius on both input and submit button
 with a leading search icon. The input is neutral until focus and the visible
 Sky submit button owns the primary action emphasis. Debounce and Enter submit
-remain. Search results and suggestions use one-column 58px cards with 14px
-radius, border, restrained hover, and a leading selected signal.
+remain. Search results, suggestions, and region complexes share the reusable
+`ComplexList` divider-row anatomy. Rows avoid individual cards, repeated
+shadows, and a left accent bar; optional approval year and scale values occupy
+the same secondary positions used by region complex rows.
 
 Exploration typography is token-controlled rather than DOM-order-controlled.
-Panel headings use 15/20px, result names use 13/18px with one-line ellipsis and
-`word-break: keep-all`, and addresses/metadata use 11/16px. Result markup uses
-explicit `panel-list-title` and `panel-list-meta` classes. The breadcrumb root
+Panel headings and result names use 15/20px with one-line ellipsis, and
+addresses/metadata use 11/16px. Result markup uses explicit
+`complex-list-name` and `complex-list-address` classes. The breadcrumb root
 owns a centered 32px control and each trail label owns its own ellipsis box.
 
 Region navigation uses a quiet single-line breadcrumb as the only visible
@@ -108,7 +140,7 @@ current stage is distinguished by weight, and each transition uses a dedicated
 14px right chevron separator. Breadcrumb items never compress their labels;
 the row scrolls horizontally and brings the current stage into view. Region
 choices are a three-column grid of 52px
-white tiles with 10px radius and Sky hover/selection states. Tile labels stay
+white tiles with restrained, visibly rounded 4px corners and Sky hover/selection states. Tile labels stay
 optically centered and use an emergency two-line wrap for long, unspaced names
 such as `세종특별자치시`; the selected Check icon is absolutely positioned so
 it does not shift the label. Selected tiles expose `aria-pressed=true`, a Check
@@ -136,8 +168,10 @@ Each chip is two-line label/summary: 92×46px desktop, 88×46px tablet, and
 88×46px mobile. Inactive chips use a neutral white surface and show only the
 group label; applied chips add the range summary on Brand Soft. Active and open
 states use border, background, and expanded semantics as well as color. Group
-labels use 14/18px. Reset follows the four filter chips inside the same
-horizontal scroller; it is a desktop pill and mobile icon target. Do not render
+labels use 14/18px while idle and active. Each complete filter button uses a
+visibly rounded 4px radius; opened popovers, number fields, and action buttons
+keep the compact rail corner system. Reset follows the four filter chips inside the same
+horizontal scroller; it is a quiet desktop action and mobile icon target. Do not render
 a separate applied-filter count label.
 Filter controls do not add decorative hover color shifts.
 
@@ -168,8 +202,8 @@ subtle gray thumb ring and number-field border.
 
 ## Detail
 
-Desktop order is fixed: identity header, API status, key-stat/prediction
-summary, same-parcel switcher, basic information, trend, trade table. The 72px
+Desktop order is fixed: identity header, optional favorite error row, API status, key-stat/prediction
+summary, same-parcel switcher, basic information, trend, trade table. The 76px
 Sky Soft header shows address and complex name. Its centered identity sits
 between symmetric 40px control columns; the back action is an unframed arrow
 inside a full hit target. Hide same-parcel switching for
@@ -179,11 +213,20 @@ and `-` for missing values.
 Price and prediction use separate semantic roles: Ink for values and Red plus
 a label/icon for failure. The prediction heading uses a fixed 32px alignment
 row; its transparent help target centers the question icon without adding a
-second visible container. The trend uses Sky. Trades use a divider table
-with 56px rows and right-aligned amount/area/floor columns. Non-round amounts
-split intentionally into `억` and `만원` lines; numeric apartment buildings and
-floors split into explicit `동` and `층` lines. Square meters and pyeong stay as
+second visible container. The prediction card keeps an explicit 4px corner
+radius independent of shared rail controls. The trend uses Sky. Trades use a divider table
+with 56px rows and right-aligned amount/area/floor columns. Amounts keep `억` and
+`만원` together on one non-wrapping line; numeric apartment buildings and floors
+split into explicit `동` and `층` lines. Square meters and pyeong stay as
 primary/secondary area lines. The more button remains full-width and 40px tall.
+
+The identity header reserves symmetric action geometry. Desktop uses
+`40px minmax(0, 1fr) 40px` for back, identity, and favorite. Mobile uses
+`44px minmax(0, 1fr) 88px` for back, identity, and separate 44px favorite/close
+targets. The heart uses outline/filled shape plus `aria-pressed`, not color
+alone. Both states use the Favorite Red semantic color and a transparent hit
+area without a white circular surface. Favorite failures render a compact non-blocking row below the
+identity header.
 
 Mobile keeps a handle, sticky 48px navigation, sticky 44px tabs, and common
 identity. Information shows switcher/basic data; price shows overview/chart;
@@ -210,18 +253,53 @@ the same view-model, key, accessible label, shape, values, and selected state.
 
 ## Color, Layer, Scroll, And State
 
-Raw public colors live only in `design-system.css` `--hs-map-*` declarations.
+Raw public colors live only in `design-system.css` `--hs-map-*` and
+`--hs-auth-*` declarations.
 Deep teal Sky is brand/action, exploration region controls, and map-marker
 emphasis; the brighter teal is reserved for focus and lightweight borders.
 Blue-gray neutrals separate surfaces without competing with the Kakao map.
-Ink is price text, and Red is failure only. Use
+Ink is price text, and Red is reserved for failures and the explicit favorite
+heart state. Use
 6/10/12/14/16/999px semantic radii and KOSA's restrained
 appbar/card/marker/dropdown shadows.
 
 Layers are host 0, markers 10, notices 20, controls 30, rail/sheet 40, header 50,
-popover 60. Notice and zoom stay at map top corners; the map bottom remains
-clear. Body/workspace are hidden. Search/region and detail each own one vertical
+popover 60. Notice and zoom stay at map top corners; the map-type toggle shares
+the right-side tool rail below zoom without covering Kakao attribution. Body/workspace are hidden. Search/region and detail each own one vertical
 scroll; chips own horizontal scroll; only constrained popovers scroll.
+
+The right-side map-type toggle sits below the zoom stack and shows only the current
+mode while closed. Activating it expands a compact segmented menu to the left:
+`지도` maps to Kakao `ROADMAP`, `지형` to `ROADMAP` plus the `TERRAIN` overlay,
+and `위성` to labeled `HYBRID`. Selection closes the menu, which uses
+`aria-expanded` and `aria-pressed`, and does not persist across a full page refresh.
+The zoom actions remain a separate top-right vertical stack of individual rounded
+buttons. A second tool toggle follows the same left-opening menu pattern for
+`거리뷰`, `지적`, and `거리`; only one menu can be open. `상권` is a separate,
+always-visible rail button because it is a primary place-exploration mode rather
+than a map utility. Roadview, distance, and commerce are exclusive working modes,
+while cadastral is an independent reference overlay. Commerce stays visible but
+disabled until a canonical `complexId` is known.
+
+Roadview replaces the map stage at every viewport instead of opening a fixed split.
+Its 44px header provides back, title/status, and close actions while the Roadview fills
+the remaining map area, keeping Kakao Roadview controls unobstructed. Distance
+measurement uses a compact bottom-center action bar with explicit undo, reset, complete,
+and exit actions. Cadastral mode adds a map-local reference disclaimer. All tool states
+reset on full-page refresh and must not change Home Search public API requests.
+
+Commerce uses one compact `주변 상권·생활시설` panel rather than stacked cards.
+Desktop placement is bottom-center, at most 560×280px with a 4px radius; mobile
+docks it to the bottom at at most 45dvh with a 1px top radius. Six horizontally
+scrollable segmented tabs are visible from loading onward in the fixed product
+order `카페`, `음식점`, `편의점`, `병원`, `약국`, `학교`; provider-search
+counts appear when available. Category changes reuse the initial six-category
+response and do not trigger another request. Place rows use dividers,
+name/address on the left and distance/optional phone on the right; only the list
+body scrolls. A permanent footnote states that counts are Kakao search results,
+not registered-business totals. POI markers use category-specific glyph/shape
+plus label, never color alone. Selection synchronizes marker and row without
+covering the Kakao attribution or right control rail.
 
 Loading is delayed to avoid flash, empty/error copy is task-local, and marker
 errors keep the map usable. Focus, selected, open, disabled, and error states do

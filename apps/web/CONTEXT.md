@@ -35,6 +35,26 @@ This file defines frontend-specific Home Search terms. Canonical decisions remai
 
 **Non-blocking map error** means marker API failure does not navigate away from the map or make the map unusable.
 
+## Authentication Terms
+
+**Auth UI** is the header login/account control and social-login dialog. It is
+independent from the public map/search/detail/trade request path.
+
+**User API adapter** calls the separate user-service base configured by
+`VITE_USER_API_SERVER_IP`. Access JWTs stay in adapter memory; refresh tokens
+remain in the user-service HttpOnly cookie.
+
+**OAuth callback** means `/auth/success` or `/auth/failure`. The frontend
+restores or reports the session and then replaces the browser URL with `/`.
+
+## Authenticated Favorite
+
+**Favorite toggle** is an optional authenticated action in the detail drawer.
+It calls user-service with the memory-only access token and never changes or
+blocks public property-data detail/trade requests.
+
 ## Frontend Non-Scope
 
-The web app must not introduce later-scope ranking, favorite, alarm, mail, recommendation, or auth flows into the map/trade display path.
+The web app must not introduce later-scope ranking, alarm, mail, or
+recommendation flows. Login and favorite remain optional and must not enter or
+block the public map/trade display path.

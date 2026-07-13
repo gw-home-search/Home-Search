@@ -10,6 +10,8 @@ import { useRegionExplorer } from '../features/region/hooks/useRegionExplorer';
 import { useComplexSearch } from '../features/search/hooks/useComplexSearch';
 import type { RegionMapMarker, SidebarMode } from './mapAppTypes';
 import { declutterComplexMarkers } from '../features/map/markerViewModel';
+import { AppHeader } from './AppHeader';
+import { useFavoriteComplex } from '../features/favorites/hooks/useFavoriteComplex';
 
 export type MapAppProps = {
   initialMapLevel?: number;
@@ -18,7 +20,7 @@ export type MapAppProps = {
 };
 
 export function MapApp({
-  initialMapLevel = 10,
+  initialMapLevel = 12,
   initialRegionLoad = true,
   kakaoMapAppKey = getConfiguredKakaoMapAppKey(),
 }: MapAppProps) {
@@ -36,6 +38,7 @@ export function MapApp({
   const viewport = useMapViewport(initialMapLevel);
   const markerData = useMapMarkers(viewport.viewport);
   const detail = useComplexDetail();
+  const favorite = useFavoriteComplex(detail.complexDetail?.complexId);
   useEffect(() => {
     if (detail.selectedComplex != null) setIsExplorationOpen(true);
   }, [detail.selectedComplex]);
@@ -84,22 +87,7 @@ export function MapApp({
       data-detail-open={detail.selectedComplex == null ? 'false' : 'true'}
       data-ui-surface="map-first"
     >
-      <header aria-label="상단 앱 바" className="app-bar">
-        <div className="app-brand">
-          <img
-            alt=""
-            aria-hidden="true"
-            className="app-brand-mark"
-            height="38"
-            src="/home-search-logo.png"
-            width="38"
-          />
-          <span className="app-brand-copy">
-            <h1>홈서치</h1>
-            <span>HomeSearch · 실거래가 인사이트</span>
-          </span>
-        </div>
-      </header>
+      <AppHeader />
 
       <div
         className="map-workspace"
@@ -112,6 +100,9 @@ export function MapApp({
           complexSuggestions={search.complexSuggestions}
           detailError={detail.detailError}
           detailState={detail.detailState}
+          favoriteError={favorite.favoriteError}
+          favoriteState={favorite.favoriteState}
+          favoriteLiveMessage={favorite.liveMessage}
           isOpen={isExplorationOpen}
           onCloseExploration={closeMobileExploration}
           onCloseDetail={detail.closeDetail}
@@ -123,6 +114,8 @@ export function MapApp({
           onRegionSelect={region.handleRegionSelect}
           onRegionTrailSelect={region.handleRegionTrailSelect}
           onRetryDetail={detail.retryDetail}
+          onFavoriteToggle={favorite.onFavoriteToggle}
+          onRetryFavorite={favorite.onRetryFavorite}
           onRetryRegion={region.retryRegion}
           onRetrySearch={search.retrySearch}
           onSearchInputChange={search.handleSearchInputChange}
@@ -158,6 +151,11 @@ export function MapApp({
           />
           <MapWorkspace
             appKey={kakaoMapAppKey}
+            nearbyPlaceComplexId={
+              detail.complexDetail?.complexId
+              ?? detail.selectedComplex?.complexId
+              ?? null
+            }
             focusTarget={viewport.mapFocusTarget}
             initialLevel={initialMapLevel}
             markerError={markerData.markerError}

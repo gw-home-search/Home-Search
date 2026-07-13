@@ -7,6 +7,8 @@ import type { TradeTrendPoint } from './api/fetchTradeTrend';
 import type { RegionComplexSummary } from '../region/api/fetchRegions';
 import { RequestStateNotice } from '../../shared/RequestStateNotice';
 import { BackIcon, CloseIcon, HelpIcon } from '../../shared/icons';
+import { FavoriteToggle } from '../favorites/FavoriteToggle';
+import type { FavoriteState } from '../favorites/favoriteTypes';
 
 type DetailRequestState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -19,11 +21,16 @@ type DetailSidebarProps = {
   complexDetail: ComplexDetail | null;
   detailError: string | null;
   detailState: DetailRequestState;
+  favoriteError?: string | null;
+  favoriteLiveMessage?: string;
+  favoriteState?: FavoriteState;
   onBack: () => void;
   onClose?: () => void;
   onComplexSelect: (complex: ParcelComplexSummary | RegionComplexSummary) => void;
   onRetryDetail: () => void;
   onLoadMoreTrades: () => void;
+  onFavoriteToggle?: (trigger?: HTMLElement) => void;
+  onRetryFavorite?: () => void;
   parcelComplexes: ParcelComplexSummary[];
   parcelTrades: ParcelTrades | null;
   tradeTrend: TradeTrendPoint[];
@@ -40,11 +47,16 @@ export function DetailSidebar({
   complexDetail,
   detailError,
   detailState,
+  favoriteError = null,
+  favoriteLiveMessage = '',
+  favoriteState = { phase: 'auth-checking', favorite: null },
   onBack,
   onClose = onBack,
   onComplexSelect,
   onRetryDetail,
   onLoadMoreTrades,
+  onFavoriteToggle = () => undefined,
+  onRetryFavorite = () => undefined,
   parcelComplexes,
   parcelTrades,
   tradeTrend,
@@ -69,17 +81,27 @@ export function DetailSidebar({
         </button>
         <div className="detail-drawer-identity">
           <p className="detail-drawer-address">{complexDetail ? formatAddress(complexDetail.address) : detailDrawerKicker(selection)}</p>
-          <h2>{complexDetail?.name ?? '단지 상세'}</h2>
+          <h2>{complexDetail?.displayName ?? complexDetail?.name ?? '단지 상세'}</h2>
         </div>
-        <button
-          type="button"
-          aria-label="상세 닫기"
-          className="detail-close-button"
-          onClick={onClose}
-        >
-          <CloseIcon aria-hidden="true" />
-        </button>
+        <div className="detail-header-actions">
+          <FavoriteToggle state={favoriteState} liveMessage={favoriteLiveMessage} onToggle={onFavoriteToggle} />
+          <button
+            type="button"
+            aria-label="상세 닫기"
+            className="detail-close-button"
+            onClick={onClose}
+          >
+            <CloseIcon aria-hidden="true" />
+          </button>
+        </div>
       </div>
+
+      {favoriteError == null ? null : (
+        <div className="favorite-error-row" role="status">
+          <span>{favoriteError}</span>
+          {favoriteError.includes('최대 200개') ? null : <button type="button" onClick={onRetryFavorite}>다시 시도</button>}
+        </div>
+      )}
 
       <div className="detail-mobile-tabs" role="tablist" aria-label="상세 섹션">
         {([
@@ -455,15 +477,12 @@ function TradeList({
             <tbody>
               {rows.map((trade) => {
                 const area = areaLabels(trade.exclArea);
-                const amount = tradeAmountLabels(trade.dealAmount);
                 const location = tradeLocationLabels(trade);
                 return (
                   <tr key={trade.tradeId}>
                     <td>{trade.dealDate}</td>
                     <td className="trade-amount-value" data-trade-cell="amount">
-                      {amount.eok == null ? null : <span className="trade-amount-eok">{amount.eok}</span>}
-                      {amount.eok == null || amount.man == null ? null : ' '}
-                      {amount.man == null ? null : <span className="trade-amount-man">{amount.man}</span>}
+                      <span className="trade-amount-label">{formatAmount(trade.dealAmount)}</span>
                     </td>
                     <td className="trade-area-value" data-trade-cell="area">
                       <span>{area.squareMeters}</span>
@@ -513,19 +532,6 @@ function formatAmount(amount: number | null): string {
 
 function compareTradesNewestFirst(first: TradeItem, second: TradeItem): number {
   return second.dealDate.localeCompare(first.dealDate) || second.tradeId - first.tradeId;
-}
-
-function tradeAmountLabels(amount: number): { eok: string | null; man: string | null } {
-  if (amount < 10000) {
-    return { eok: null, man: `${amount.toLocaleString()}만원` };
-  }
-
-  const eok = Math.floor(amount / 10000);
-  const man = amount % 10000;
-  return {
-    eok: `${eok.toLocaleString()}억`,
-    man: man === 0 ? null : `${man.toLocaleString()}만원`,
-  };
 }
 
 function tradeLocationLabels(trade: TradeItem): { building: string | null; floor: string } {

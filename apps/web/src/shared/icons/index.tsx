@@ -53,10 +53,18 @@ export function MinusIcon(props: IconProps) {
   return <svg {...sharedProps} {...props}><path d="M5 12h14" /></svg>;
 }
 
+export function MapToolsIcon(props: IconProps) {
+  return <svg {...sharedProps} {...props}><circle cx="12" cy="12" r="7" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="1.5" /></svg>;
+}
+
 export function HelpIcon(props: IconProps) {
   return <svg {...sharedProps} {...props}><circle cx="12" cy="12" r="9" /><path d="M9.8 9a2.4 2.4 0 1 1 3.5 2.1c-.9.5-1.3 1-1.3 2" /><path d="M12 17h.01" /></svg>;
 }
 
 export function CheckIcon(props: IconProps) {
   return <svg {...sharedProps} {...props}><path d="m5 12 4.2 4.2L19 6.5" /></svg>;
+}
+
+export function HeartIcon({ filled = false, ...props }: IconProps & { filled?: boolean }) {
+  return <svg {...sharedProps} {...props}><path fill={filled ? 'currentColor' : 'none'} d="M20.8 4.8a5.4 5.4 0 0 0-7.6 0L12 6l-1.2-1.2a5.4 5.4 0 0 0-7.6 7.6L12 21l8.8-8.6a5.4 5.4 0 0 0 0-7.6Z" /></svg>;
 }

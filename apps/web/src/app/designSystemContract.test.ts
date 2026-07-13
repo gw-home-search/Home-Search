@@ -10,6 +10,7 @@ const map = readFileSync(`${appDirectory}/styles/map.css`, 'utf8');
 const responsive = readFileSync(`${appDirectory}/styles/responsive.css`, 'utf8');
 const icons = readFileSync(`${process.cwd()}/src/shared/icons/index.tsx`, 'utf8');
 const mapApp = readFileSync(`${appDirectory}/MapApp.tsx`, 'utf8');
+const appHeader = readFileSync(`${appDirectory}/AppHeader.tsx`, 'utf8');
 const tradeTrendChart = readFileSync(`${process.cwd()}/src/features/complex-detail/TradeTrendChart.tsx`, 'utf8');
 const detailSidebar = readFileSync(`${process.cwd()}/src/features/complex-detail/DetailSidebar.tsx`, 'utf8');
 const indexHtml = readFileSync(`${process.cwd()}/index.html`, 'utf8');
@@ -30,6 +31,10 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(designSystem).toContain('--hs-map-mobile-brand-height: 58px;');
     expect(designSystem).toContain('--hs-map-filter-height: 62px;');
     expect(designSystem).toContain('--hs-map-radius-marker: 6px;');
+    expect(designSystem).toContain('--hs-map-radius-rail-panel: 1px;');
+    expect(designSystem).toContain('--hs-map-radius-rail-control: 1px;');
+    expect(designSystem).toContain('--hs-map-radius-rail-compact: 1px;');
+    expect(responsive).toContain('border-radius: var(--hs-map-radius-rail-panel) var(--hs-map-radius-rail-panel) 0 0;');
     expect(designSystem).toContain('--hs-map-mobile-min-height: 180px;');
     expect(designSystem).toContain('--hs-map-z-filter-popover: 60;');
     expect(designSystem).toContain('--hs-map-type-panel-title-size: 15px;');
@@ -97,6 +102,9 @@ describe('공개 지도 디자인 시스템 계약', () => {
 
   it('검색 입력은 중립 상태에서 시작하고 실행 버튼만 primary action으로 강조한다', () => {
     expect(exploration).toContain('border: 1px solid var(--hs-map-color-line);');
+    expect(exploration).toContain('.exploration-search-panel input {');
+    expect(exploration).toContain('.exploration-search-submit {');
+    expect((exploration.match(/border-radius: 4px;/g) ?? []).length).toBeGreaterThanOrEqual(2);
     expect(exploration).toContain('.exploration-search-panel input:focus-visible { border-color: var(--hs-map-color-action); box-shadow: var(--hs-map-focus-ring); }');
     expect(exploration).toContain('background: var(--hs-map-color-action) !important;');
     expect(exploration).toContain('color: var(--hs-map-color-surface) !important;');
@@ -104,6 +112,10 @@ describe('공개 지도 디자인 시스템 계약', () => {
 
   it('상세 identity와 snapshot은 380px rail에서 충분한 세로 공간과 타이포 계층을 갖는다', () => {
     expect(detail).toContain('min-height: 76px;');
+    expect(detail).toContain('grid-template-columns: 40px minmax(0, 1fr) 40px;');
+    expect(responsive).toContain('grid-template-columns: 44px minmax(0, 1fr) 88px;');
+    expect(responsive).toContain('.detail-header-actions { grid-template-columns: 44px 44px; }');
+    expect(responsive).toContain('top: 48px;');
     expect(detail).toContain('.detail-drawer-identity h2');
     expect(detail).toContain('font-size: 16px;');
     expect(detail).toContain('.detail-key-stats {');
@@ -112,6 +124,7 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(detail).toContain('.detail-key-stats .detail-metric:last-child dd {');
     expect(detail).toContain('white-space: normal;');
     expect(detail).toContain('.prediction-panel {');
+    expect(detail).toContain('.prediction-panel { border-radius: 4px; }');
     expect(detail).toContain('background: var(--hs-map-color-brand-soft);');
     expect(detail).toContain('border-left: 3px solid var(--hs-map-color-marker-accent);');
     expect(detail).toContain('.trade-section-header h3 { margin: 0; font-size: 14px;');
@@ -135,9 +148,10 @@ describe('공개 지도 디자인 시스템 계약', () => {
   });
 
   it('선택한 Home Search 이미지 로고를 header와 browser icon에 공통 적용한다', () => {
-    expect(mapApp).toContain('className="app-brand-mark"');
-    expect(mapApp).toContain('src="/home-search-logo.png"');
-    expect(mapApp).toContain('HomeSearch · 실거래가 인사이트');
+    expect(mapApp).toContain('<AppHeader />');
+    expect(appHeader).toContain('className="app-brand-mark"');
+    expect(appHeader).toContain('src="/home-search-logo.png"');
+    expect(appHeader).toContain('HomeSearch · 실거래가 인사이트');
     expect(shell).toContain('object-fit: cover;');
     expect(indexHtml).toContain('href="/favicon-32.png?v=2"');
     expect(indexHtml).toContain('rel="shortcut icon"');
@@ -161,8 +175,8 @@ describe('공개 지도 디자인 시스템 계약', () => {
   });
 
   it('panel text와 filter range가 좁은 폭에서도 깨지지 않는 sizing contract를 유지한다', () => {
-    expect(exploration).toContain('.panel-list-title');
-    expect(exploration).toContain('.panel-list-meta');
+    expect(exploration).toContain('.complex-list-name');
+    expect(exploration).toContain('.complex-list-address');
     expect(exploration).toContain('.region-breadcrumb-link');
     expect(exploration).toContain('word-break: keep-all;');
     expect(map).toContain('grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);');
@@ -179,12 +193,15 @@ describe('공개 지도 디자인 시스템 계약', () => {
   it('필터 대표 라벨과 popover 제목을 크게 정렬하고 장식성 hover를 사용하지 않는다', () => {
     expect(map).toContain('.filter-panel {');
     expect(map).toContain('grid-template-columns: minmax(0, 1fr);');
+    expect(map).toContain('.filter-chip { display: grid; width: 94px; place-items: center; padding: 0 9px; border-color: var(--hs-map-color-line); border-radius: 4px;');
     expect(map).toContain('.filter-chip-copy > span:first-child { display: block; font-size: 14px; font-weight: 800; line-height: 18px;');
-    expect(map).toContain('border-color: var(--hs-map-color-line); background: var(--hs-map-color-surface);');
+    expect(map).toContain('.filter-chip-copy > span + span {');
+    expect(map).not.toContain('.filter-chip-copy > span:last-child');
+    expect(map).toContain('border-color: var(--hs-map-color-line); border-radius: 4px; background: var(--hs-map-color-surface);');
     expect(map).toContain('.filter-chip[data-active="true"] { border-color: var(--hs-map-color-primary); background: var(--hs-map-color-brand-soft);');
     expect(map).toContain('.filter-chip[data-open="true"] { border-width: 2px; border-color: var(--hs-map-color-action);');
     expect(map).toContain('.filter-reset { display: inline-flex;');
-    expect(map).toContain('border-color: transparent; border-radius: var(--hs-map-radius-pill); background: transparent;');
+    expect(map).toContain('border-color: transparent; border-radius: var(--hs-map-radius-rail-control); background: transparent;');
     expect(map).toContain('.filter-popover legend { float: left; width: 100%; margin: 0 0 8px;');
     expect(map).toContain('font-size: 15px; font-weight: 800; line-height: 20px;');
     expect(map).toContain('font-size: 13px; font-weight: 750; line-height: 18px;');
@@ -201,14 +218,36 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(map).toContain('.filter-number-field:focus-within { border-color: var(--hs-map-color-line-strong);');
   });
 
+  it('필터를 열었을 때 바깥 panel과 내부 control radius를 rail 체계로 유지한다', () => {
+    expect(map).toContain('border-radius: var(--hs-map-radius-rail-control);');
+    expect(map).toContain('.filter-popover {');
+    expect(map).toContain('border-radius: var(--hs-map-radius-rail-panel);');
+    expect(map).toContain('.filter-number-field {');
+    expect(map).toContain('.filter-popover-actions button {');
+    expect(map).not.toContain('border-radius: var(--hs-map-radius-panel);');
+    expect(map).not.toContain('border-radius: var(--hs-map-radius-map);');
+  });
+
+  it('rail 내부 action icon을 기존보다 조금 크게 유지한다', () => {
+    expect(exploration).toContain('.exploration-mobile-close svg { width: 20px; height: 20px;');
+    expect(exploration).toContain('.exploration-search-field > svg { position: absolute; left: 13px; width: 20px; height: 20px;');
+    expect(exploration).toContain('.region-grid-list button svg { position: absolute; top: 6px; right: 6px; width: 16px; height: 16px;');
+    expect(map).toContain('.mobile-search-action svg { width: 18px; height: 18px;');
+    expect(map).toContain('.filter-reset svg { width: 18px; height: 18px; }');
+    expect(detail).toContain('.detail-back-button svg,\n.detail-close-button svg { width: 22px; height: 22px; }');
+    expect(detail).toContain('.prediction-help-button svg { display: block; width: 20px; height: 20px; }');
+  });
+
   it('지역 타일을 Sky surface로 정렬하고 라벨을 정중앙에 고정한다', () => {
+    expect(exploration).toContain('.region-breadcrumb button { border: 0; background: transparent;');
     expect(exploration).toContain('.region-grid-list button {');
     expect(exploration).toContain('position: relative;');
     expect(exploration).toContain('display: flex;');
     expect(exploration).not.toContain('grid-template-columns: minmax(0, 1fr) 14px;');
     expect(exploration).toContain('padding: 6px 8px;');
     expect(exploration).toContain('min-height: 52px;');
-    expect(exploration).toContain('border-radius: var(--hs-map-radius-map);');
+    expect(exploration).toContain('border: 1px solid var(--hs-map-color-line);');
+    expect(exploration).toContain('border-radius: 4px;');
     expect(exploration).toContain('overflow-wrap: anywhere;');
     expect(exploration).toContain('-webkit-line-clamp: 2;');
     expect(exploration).toContain('.region-grid-list button svg { position: absolute; top: 6px; right: 6px;');
@@ -233,15 +272,16 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(exploration).not.toContain('border-radius: var(--hs-map-radius-pill); background: var(--hs-map-color-surface); color: var(--hs-map-color-action); stroke-width: 2.25;');
   });
 
-  it('지역 단지 목록을 외곽 card 없이 비교 가능한 2열 행으로 유지한다', () => {
+  it('검색 결과와 지역 단지 목록을 공용 외곽 card 없는 비교형 행으로 유지한다', () => {
     expect(exploration).toContain('.region-complex-section { display: grid; gap: 8px;');
     expect(exploration).toContain('border-top: 1px solid var(--hs-map-color-line); border-bottom: 1px solid var(--hs-map-color-line);');
-    expect(exploration).toContain('.region-complex-list .region-complex-card {');
+    expect(exploration).toContain('.complex-list .complex-list-row {');
     expect(exploration).toContain('min-height: 76px;');
     expect(exploration).toContain('grid-template-columns: minmax(0, 1fr) auto;');
-    expect(exploration).toContain('.region-complex-name {');
+    expect(exploration).toContain('.complex-list-name {');
     expect(exploration).toContain('font-size: 15px; font-weight: 750;');
-    expect(exploration).toContain('.region-complex-stats { display: grid;');
-    expect(exploration).toContain('.region-complex-unit { color: var(--hs-map-color-ink); font-size: 13px;');
+    expect(exploration).toContain('.complex-list-stats { display: grid;');
+    expect(exploration).toContain('.complex-list-unit { color: var(--hs-map-color-ink); font-size: 13px;');
+    expect(exploration).not.toContain('.panel-list-strong button::before');
   });
 });

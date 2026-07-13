@@ -80,6 +80,29 @@ function fakeKakaoMapsApi(): KakaoMapsApi {
       void this;
       return { setMap: vi.fn() };
     } as unknown as KakaoMapsApi['CustomOverlay'],
+    Marker: function FakeMarker(this: unknown) {
+      void this;
+      return { setMap: vi.fn(), setPosition: vi.fn() };
+    } as unknown as KakaoMapsApi['Marker'],
+    Polyline: function FakePolyline(this: unknown) {
+      void this;
+      return { getLength: vi.fn(() => 0), setMap: vi.fn(), setPath: vi.fn() };
+    } as unknown as KakaoMapsApi['Polyline'],
+    Roadview: function FakeRoadview(this: unknown) {
+      void this;
+      return { setPanoId: vi.fn() };
+    } as unknown as KakaoMapsApi['Roadview'],
+    RoadviewClient: function FakeRoadviewClient(this: unknown) {
+      void this;
+      return { getNearestPanoId: vi.fn() };
+    } as unknown as KakaoMapsApi['RoadviewClient'],
+    MapTypeId: {
+      HYBRID: 'HYBRID',
+      ROADMAP: 'ROADMAP',
+      ROADVIEW: 'ROADVIEW',
+      TERRAIN: 'TERRAIN',
+      USE_DISTRICT: 'USE_DISTRICT',
+    },
     event: {
       addListener: vi.fn(),
       removeListener: vi.fn(),

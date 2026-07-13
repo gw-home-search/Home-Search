@@ -549,10 +549,15 @@ Do not block project on:
 ## User And AI Data Ownership
 
 `home_search_user` is a separate database owned by user-service. Its `users`
-schema stores OAuth identities keyed by `(provider, provider_subject)` and
-hashed, rotating refresh-token state. Email is not an identity key. The
+schema stores OAuth identities keyed by `(provider, provider_subject)`, hashed
+rotating refresh-token state, and `favorite_complex(user_id, complex_id,
+saved_at)`. Email is not an identity key. Favorite `complex_id` is an opaque
+property-data identifier: there is no cross-database FK or join, and no name,
+address, or price snapshot is stored. The
 `home_search_user_runtime` role receives only the DML needed by user-service;
-`home_search_user_migrator` alone owns DDL and Flyway history.
+`home_search_user_migrator` alone owns DDL and Flyway history. Only the pinned
+external Flyway container receives that credential; user `core` and `app`
+artifacts contain neither Flyway nor `db/migration/**` resources.
 
 ai-service owns its `ai` schema and migration history: conversations, POI and
 other reference datasets, legal corpus, chunks, embeddings, and indexing

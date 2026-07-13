@@ -1,4 +1,0 @@
-plugins { id 'java-library' }
-
-// Intentionally non-runnable until the first users-schema migration and
-// migration-only credential wiring land together.

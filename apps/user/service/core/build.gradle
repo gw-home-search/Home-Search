@@ -1,6 +1,22 @@
 plugins { id 'java-library' }
 
 dependencies {
+    implementation 'org.springframework.data:spring-data-jpa'
+    implementation 'org.springframework:spring-jdbc'
+    implementation 'org.springframework:spring-tx'
+    compileOnly 'org.hibernate.orm:hibernate-core'
+
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.assertj:assertj-core'
+    testImplementation 'org.flywaydb:flyway-core'
+    testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
+    testRuntimeOnly 'org.postgresql:postgresql'
+    testImplementation platform('org.testcontainers:testcontainers-bom:1.21.3')
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+}
+
+tasks.withType(Test).configureEach {
+    systemProperty 'userServiceMigrationLocation',
+        "filesystem:${rootProject.layout.projectDirectory.dir('db/migration/user').asFile.absolutePath}"
 }

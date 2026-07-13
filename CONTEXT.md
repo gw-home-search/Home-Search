@@ -7,7 +7,9 @@ This file gives agents the shortest shared vocabulary for Home Search. Canonical
 
 **Home Search** is the migration target for collecting real-estate apartment trade data, storing it safely, and displaying it on a map.
 
-**later-scope work** includes rankings, favorites, alarms, mail batches, recommendations, insights, auth-dependent UX, and heavy analytics. later-scope work must not enter the current critical path unless explicitly re-scoped.
+**later-scope work** includes rankings, alarms, mail batches, recommendations,
+insights, and heavy analytics. Authenticated favorite storage is explicitly
+re-scoped to user-service; it must not enter property-data map queries.
 
 ## Repositories
 

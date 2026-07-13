@@ -118,10 +118,19 @@ migration artifacts own Flyway history.
 
 ## User And AI Service Boundaries
 
-`apps/user/service/{core,api,migration}` is an independent Gradle build and
-deployment unit. It owns `home_search_user.users`; property-data and
+`apps/user/service/{core,app}` is an independent Gradle build and
+deployment unit. It owns identity, refresh tokens, and favorite complexes in
+`home_search_user.users`; property-data and
 admin-service never read that database. Its RS256 user keys, issuer, and
-audience are distinct from the admin internal JWT boundary.
+audience are distinct from the admin internal JWT boundary. JPA entities,
+Spring Data repositories, adapters, and the PostgreSQL identity lock live in
+`core`; `app` owns Spring Boot, HTTP, OAuth, Security, cookies, and composition.
+User Flyway runs only from the external Docker CLI against `db/migration/user`.
+
+Reusable user-token claim verification lives in the pure Java
+`libs/user-auth-contract` library on top of `security-jwt-core`. Consumer APIs
+load allowlisted public keys locally and derive `userId` only from a fully
+verified `sub`; they do not call user-service during token verification.
 
 `apps/ai` is an independent FastAPI deployment. Home Search facts enter only
 through the `ai_read` read-only contract; POI/reference datasets, conversation
@@ -130,6 +139,7 @@ does not query property-data tables directly.
 
 ```text
 Browser -> user-service OAuth/JWT
+Browser -> user-service authenticated favorites
 Browser -> property-data public map/trade (unauthenticated)
 Browser -> authenticated chatbot BFF -> ai-service JSON/SSE
 ai-service -> ai_read views (SELECT only)

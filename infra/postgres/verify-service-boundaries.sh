@@ -5,6 +5,23 @@ compose_file="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/docker-compose.lo
 root="$(cd "$(dirname "${compose_file}")/.." && pwd)"
 role_init_script="${root}/infra/postgres/init/10-create-service-databases-and-roles.sh"
 
+if grep -Fq -- '- ..:/workspace' "${compose_file}"; then
+  echo "ERROR: runtime services must not mount the repository root" >&2
+  exit 1
+fi
+if ! grep -Fq '127.0.0.1:${HOME_SEARCH_DB_PORT:-15432}:5432' "${compose_file}"; then
+  echo "ERROR: local PostgreSQL must bind to loopback only" >&2
+  exit 1
+fi
+if grep -Eq 'USER_(RUNTIME|MIGRATOR)_DB_PASSWORD:-' "${compose_file}"; then
+  echo "ERROR: user database role passwords must not have repository-known defaults" >&2
+  exit 1
+fi
+if grep -Eq 'POSTGRES_PASSWORD:.*HOME_SEARCH_DB_PASSWORD:-' "${compose_file}"; then
+  echo "ERROR: PostgreSQL superuser password must not have a repository-known default" >&2
+  exit 1
+fi
+
 if grep -Eq -- '--set=[^ ]*password' "${role_init_script}"; then
   echo "ERROR: database role password is exposed through a psql process argument" >&2
   exit 1
@@ -13,9 +30,17 @@ for password_binding in \
   'property_runtime_password PROPERTY_RUNTIME_DB_PASSWORD' \
   'property_migrator_password PROPERTY_MIGRATOR_DB_PASSWORD' \
   'admin_runtime_password ADMIN_RUNTIME_DB_PASSWORD' \
-  'admin_migrator_password ADMIN_MIGRATOR_DB_PASSWORD'; do
+  'admin_migrator_password ADMIN_MIGRATOR_DB_PASSWORD' \
+  'user_runtime_password USER_RUNTIME_DB_PASSWORD' \
+  'user_migrator_password USER_MIGRATOR_DB_PASSWORD'; do
   if ! grep -Fq "\\getenv ${password_binding}" "${role_init_script}"; then
     echo "ERROR: database role password must be read from the environment inside psql: ${password_binding}" >&2
+    exit 1
+  fi
+done
+for database in home_search home_search_admin home_search_user; do
+  if ! grep -Fq "REVOKE CONNECT ON DATABASE ${database} FROM PUBLIC" "${role_init_script}"; then
+    echo "ERROR: PUBLIC database connect must be revoked: ${database}" >&2
     exit 1
   fi
 done
@@ -39,6 +64,37 @@ if grep -A45 '^  api:' "${compose_file}" | grep -Eq 'ADMIN_DB_|ADMIN_RUNTIME|ADM
   echo "ERROR: property-data API receives an admin credential" >&2
   exit 1
 fi
+if grep -A30 '^  user-service:' "${compose_file}" | grep -Eq 'HOME_SEARCH_DB_|ADMIN_DB_|MIGRATION_DB_'; then
+  echo "ERROR: user-service receives a foreign or migrator credential" >&2
+  exit 1
+fi
+user_runtime_config="${root}/apps/user/service/app/src/main/resources/application.yml"
+if ! grep -A55 '^  user-service:' "${compose_file}" | grep -Fq 'env_file:'; then
+  echo "ERROR: user-service runtime environment source is missing" >&2
+  exit 1
+fi
+for required_user_setting in \
+  GOOGLE_OAUTH_CLIENT_ID KAKAO_OAUTH_CLIENT_ID NAVER_OAUTH_CLIENT_ID \
+  USER_ALLOWED_ORIGIN USER_OAUTH_SUCCESS_REDIRECT USER_OAUTH_FAILURE_REDIRECT \
+  USER_JWT_ACTIVE_KID USER_JWT_PRIVATE_KEY_PATH USER_JWT_ACTIVE_PUBLIC_KEY_PATH; do
+  if ! grep -Fq "\${${required_user_setting}}" "${user_runtime_config}" \
+      && ! grep -A55 '^  user-service:' "${compose_file}" | grep -Fq "${required_user_setting}:"; then
+    echo "ERROR: user-service runtime setting is missing: ${required_user_setting}" >&2
+    exit 1
+  fi
+done
+if ! grep -A55 '^  user-service:' "${compose_file}" | grep -Fq '/run/keys/user-signing-private:ro'; then
+  echo "ERROR: user signing private key must be mounted read-only" >&2
+  exit 1
+fi
+if ! grep -A55 '^  user-service:' "${compose_file}" | grep -Fq '../apps/user/service/app/build/libs/user-service-app.jar:/app/user-service-app.jar:ro'; then
+  echo "ERROR: user-service must mount only its runtime artifact" >&2
+  exit 1
+fi
+if grep -A55 '^  user-service:' "${compose_file}" | grep -Eq '/workspace|db/migration|\.env:'; then
+  echo "ERROR: user-service runtime mount exposes source, migrations, or dotenv files" >&2
+  exit 1
+fi
 for runtime_config in \
   "${root}/apps/property-data/api/src/main/resources/application.yml" \
   "${root}/apps/property-data/batch/src/main/resources/application.yml" \
@@ -48,6 +104,38 @@ for runtime_config in \
     exit 1
   fi
 done
+if ! grep -Eq 'enabled:[[:space:]]*false' "${root}/apps/user/service/app/src/main/resources/application.yml"; then
+  echo "ERROR: user runtime Flyway auto-run guard is missing" >&2
+  exit 1
+fi
+for removed_migration_module in \
+  "${root}/apps/user/service/migration"; do
+  if [[ -e "${removed_migration_module}" ]]; then
+    echo "ERROR: removed migration module still exists: ${removed_migration_module}" >&2
+    exit 1
+  fi
+done
+for removed_database_source_set in \
+  "${root}/apps/user/service/core/src/database" \
+  "${root}/apps/user/service/core/src/databaseTest"; do
+  if [[ -e "${removed_database_source_set}" ]]; then
+    echo "ERROR: removed database source set still exists: ${removed_database_source_set}" >&2
+    exit 1
+  fi
+done
+if ! grep -Fq '../apps/user/service/db/migration/user:/flyway/sql:ro' "${compose_file}"; then
+  echo "ERROR: user Flyway SQL catalog must be mounted read-only" >&2
+  exit 1
+fi
+if grep -A4 '^  user-flyway:' "${compose_file}" | grep -Eq 'profiles:.*user'; then
+  echo "ERROR: user runtime profile must not auto-select the Flyway one-shot service" >&2
+  exit 1
+fi
+if grep -Eq "include .*['\"]migration['\"]" \
+    "${root}/apps/user/service/settings.gradle"; then
+  echo "ERROR: settings.gradle still includes a migration module" >&2
+  exit 1
+fi
 if grep -R -E 'VITE_API_SERVER_IP|localhost:8080|property-data' "${root}/apps/admin/web/src"; then
   echo "ERROR: admin-web contains a direct property-data dependency" >&2
   exit 1
@@ -57,4 +145,4 @@ if grep -R -E 'ADMIN_DB_|ADMIN_SERVICE|localhost:8081' "${root}/apps/web/src"; t
   exit 1
 fi
 
-echo "service boundary passed: credentials are separated and admin API Flyway auto-run is disabled"
+echo "service boundary passed: credentials are separated and runtime Flyway auto-run is disabled"

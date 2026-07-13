@@ -63,7 +63,11 @@ public final class Rs256JwtCodec {
                 || Duration.between(issuedAt, expiresAt).compareTo(policy.maximumLifetime()) > 0) {
                 throw new JwtVerificationException();
             }
-            String audience = claims.getAudience().stream().findFirst().orElseThrow(JwtVerificationException::new);
+            Set<String> audiences = claims.getAudience();
+            if (audiences.size() != 1 || !audiences.contains(policy.audience())) {
+                throw new JwtVerificationException();
+            }
+            String audience = policy.audience();
             Map<String, Object> customClaims = new LinkedHashMap<>(claims);
             REGISTERED.forEach(customClaims::remove);
             return new VerifiedJwt(parsed.getHeader().getKeyId(), claims.getIssuer(), audience,

@@ -1,0 +1,14 @@
+plugins { id 'java-library' }
+group = 'com.home'; version = '0.0.1-SNAPSHOT'
+java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+dependencies {
+    api 'com.home:security-jwt-core'
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.assertj:assertj-core:3.27.3'
+    testImplementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    testRuntimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+    testRuntimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+tasks.withType(Test).configureEach { useJUnitPlatform() }

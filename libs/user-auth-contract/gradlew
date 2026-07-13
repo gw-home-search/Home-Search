@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+exec "${script_dir}/../../apps/property-data/gradlew" -p "${script_dir}" "$@"

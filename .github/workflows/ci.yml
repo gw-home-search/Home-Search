@@ -64,13 +64,22 @@ jobs:
               apps/web/*)
                 frontend_changed=true
                 ;;
-              apps/admin/service/*|libs/security-jwt-core/*)
+              apps/admin/service/*)
                 admin_service_changed=true
                 ;;
               apps/admin/web/*)
                 admin_web_changed=true
                 ;;
-              apps/user/service/*)
+              libs/security-jwt-core/*)
+                admin_service_changed=true
+                user_service_changed=true
+                ;;
+              apps/user/service/*|libs/user-auth-contract/*|docs/USER_SERVICE_PLAN.md)
+                user_service_changed=true
+                ;;
+            esac
+            case "$path" in
+              infra/postgres/*|docs/INFRA_AND_ENV.md)
                 user_service_changed=true
                 ;;
             esac
@@ -201,11 +210,11 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
           cache: gradle
       - name: Run user service tests
         working-directory: apps/user/service
-        run: ./gradlew userServiceTest --no-daemon --stacktrace
+        run: ./gradlew userServiceQualityCheck --no-daemon --stacktrace
 
   diff-check:
     name: diff-check

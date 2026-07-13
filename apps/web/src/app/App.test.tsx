@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveApiUrl } from '../features/map/api/resolveApiUrl';
+import type { AuthClient } from '../features/auth/api/authClient';
 import { App } from './App';
 
 describe('App map-first shell 화면', () => {
@@ -48,6 +49,29 @@ describe('App map-first shell 화면', () => {
     expect(rootElement.textContent).not.toContain('마커 오류');
     expect(rootElement.textContent).not.toContain('지도 준비 완료');
     expect(rootElement.querySelector('[aria-label="지도 화면"]')).not.toBeNull();
+
+    unmount(root);
+  });
+
+  it('auth service 장애가 public map marker 요청과 지도 사용을 막지 않는다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+    const unavailableClient: AuthClient = {
+      authenticatedRequest: async () => { throw new Error('Authentication required'); },
+      authorizationUrl: () => { throw new Error('unavailable'); },
+      logout: async () => { throw new Error('unavailable'); },
+      restoreSession: async () => ({ kind: 'unavailable' }),
+    };
+
+    const { root, rootElement } = await renderApp({ authClient: unavailableClient });
+    await flushAsyncState();
+
+    expect(rootElement.querySelector('[aria-label="지도 화면"]')).not.toBeNull();
+    expect(rootElement.querySelector('.account-login-button')?.textContent).toBe('로그인');
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/map/regions'),
+      expect.objectContaining({ method: 'POST' }),
+    );
 
     unmount(root);
   });
@@ -491,6 +515,260 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
+  it('지도 형식 control은 일반·지형·위성을 Kakao runtime에 적용한다', async () => {
+    const sdk = createFakeKakaoSdk({
+      bounds: {
+        swLat: 37.45,
+        swLng: 126.85,
+        neLat: 37.7,
+        neLng: 127.2,
+      },
+      level: 4,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+    await flushAsyncState();
+
+    const mapTypeToggle = rootElement.querySelector<HTMLButtonElement>('button[aria-label="지도 형식 선택"]');
+    expect(mapTypeToggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(mapTypeToggle?.textContent).toBe('지도');
+    expect(rootElement.querySelector('[aria-label="지도 형식 메뉴"]')).toBeNull();
+    expect(sdk.map.setMapTypeId).toHaveBeenLastCalledWith(sdk.kakao.maps.MapTypeId.ROADMAP);
+
+    await act(async () => mapTypeToggle?.click());
+    expect(mapTypeToggle?.getAttribute('aria-expanded')).toBe('true');
+
+    await act(async () => mapTypeToggle?.click());
+    expect(mapTypeToggle?.getAttribute('aria-expanded')).toBe('false');
+
+    await act(async () => mapTypeToggle?.click());
+
+    const terrainButton = rootElement.querySelector<HTMLButtonElement>('button[aria-label="지형 지도"]');
+    await act(async () => terrainButton?.click());
+    expect(sdk.map.removeOverlayMapTypeId).toHaveBeenLastCalledWith(sdk.kakao.maps.MapTypeId.TERRAIN);
+    expect(sdk.map.setMapTypeId).toHaveBeenLastCalledWith(sdk.kakao.maps.MapTypeId.ROADMAP);
+    expect(sdk.map.addOverlayMapTypeId).toHaveBeenLastCalledWith(sdk.kakao.maps.MapTypeId.TERRAIN);
+    expect(mapTypeToggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(mapTypeToggle?.textContent).toBe('지형');
+
+    await act(async () => mapTypeToggle?.click());
+    const hybridButton = rootElement.querySelector<HTMLButtonElement>('button[aria-label="위성 지도"]');
+    await act(async () => hybridButton?.click());
+    expect(sdk.map.removeOverlayMapTypeId).toHaveBeenLastCalledWith(sdk.kakao.maps.MapTypeId.TERRAIN);
+    expect(sdk.map.setMapTypeId).toHaveBeenLastCalledWith(sdk.kakao.maps.MapTypeId.HYBRID);
+    expect(mapTypeToggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(mapTypeToggle?.textContent).toBe('위성');
+
+    unmount(root);
+  });
+
+  it('지도 도구에서 거리뷰를 열면 기존 지도 영역을 전체 거리뷰로 교체하고 복귀한다', async () => {
+    const sdk = createFakeKakaoSdk({
+      bounds: { swLat: 37.45, swLng: 126.85, neLat: 37.7, neLng: 127.2 },
+      level: 4,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+    await flushAsyncState();
+
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="지도 도구 선택"]')?.click());
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="거리뷰 사용"]')?.click());
+    await flushAsyncState();
+
+    expect(rootElement.querySelector('[aria-label="지도 화면"]')?.getAttribute('data-map-tool')).toBe('roadview');
+    expect(rootElement.querySelector('[aria-label="거리뷰 패널"]')).not.toBeNull();
+    expect(rootElement.querySelector('[aria-label="카카오 지도 화면"]')?.hasAttribute('hidden')).toBe(true);
+    expect(rootElement.querySelector('[data-ui-layer="map-control-rail"]')).toBeNull();
+    expect(rootElement.querySelector('button[aria-label="거리뷰 뒤로가기"]')).not.toBeNull();
+    expect(sdk.map.addOverlayMapTypeId).toHaveBeenCalledWith(sdk.kakao.maps.MapTypeId.ROADVIEW);
+    expect(sdk.roadviewClient.getNearestPanoId).toHaveBeenCalledWith(expect.anything(), 100, expect.any(Function));
+
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="거리뷰 닫기"]')?.click());
+    expect(rootElement.querySelector('[aria-label="거리뷰 패널"]')).toBeNull();
+    expect(rootElement.querySelector('[aria-label="카카오 지도 화면"]')?.hasAttribute('hidden')).toBe(false);
+    expect(rootElement.querySelector('[data-ui-layer="map-control-rail"]')).not.toBeNull();
+    expect(sdk.map.removeOverlayMapTypeId).toHaveBeenCalledWith(sdk.kakao.maps.MapTypeId.ROADVIEW);
+
+    unmount(root);
+  });
+
+  it('가까운 panoId가 없으면 지도는 유지하고 거리뷰 부재 상태를 안내한다', async () => {
+    const sdk = createFakeKakaoSdk({
+      bounds: { swLat: 37.45, swLng: 126.85, neLat: 37.7, neLng: 127.2 },
+      level: 4,
+    });
+    sdk.setRoadviewPanoId(null);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+    await flushAsyncState();
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="지도 도구 선택"]')?.click());
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="거리뷰 사용"]')?.click());
+    await flushAsyncState();
+
+    expect(rootElement.querySelector('[aria-label="카카오 지도 화면"]')).not.toBeNull();
+    expect(rootElement.querySelector('[aria-label="거리뷰 패널"]')?.textContent).toContain('이 위치 주변에는 거리뷰가 없습니다');
+    expect(rootElement.querySelector('[aria-label="거리뷰 패널"]')?.getAttribute('data-roadview-state')).toBe('unavailable');
+
+    unmount(root);
+  });
+
+  it('거리뷰 위치를 연속 선택하면 가장 최근 panoId 응답만 적용한다', async () => {
+    const sdk = createFakeKakaoSdk({
+      bounds: { swLat: 37.45, swLng: 126.85, neLat: 37.7, neLng: 127.2 },
+      level: 4,
+    });
+    sdk.setRoadviewAutoResolve(false);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+    await flushAsyncState();
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="지도 도구 선택"]')?.click());
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="거리뷰 사용"]')?.click());
+    await flushAsyncState();
+    await act(async () => sdk.triggerMapClick(37.51, 127.01));
+
+    await act(async () => sdk.resolveRoadviewRequest(1, 202));
+    await act(async () => sdk.resolveRoadviewRequest(0, 101));
+
+    expect(sdk.roadview.setPanoId).toHaveBeenCalledTimes(1);
+    expect(sdk.roadview.setPanoId).toHaveBeenLastCalledWith(202, expect.anything());
+
+    unmount(root);
+  });
+
+  it('지적편집도는 지도 형식과 독립적으로 toggle되고 참고 안내를 표시한다', async () => {
+    const sdk = createFakeKakaoSdk({
+      bounds: { swLat: 37.45, swLng: 126.85, neLat: 37.7, neLng: 127.2 },
+      level: 4,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+    await flushAsyncState();
+
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="지도 도구 선택"]')?.click());
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="지적편집도 표시"]')?.click());
+
+    expect(rootElement.querySelector('[aria-label="지도 화면"]')?.getAttribute('data-cadastral-visible')).toBe('true');
+    expect(rootElement.textContent).toContain('지적편집도는 참고용이며 실제 지적 정보와 다를 수 있습니다.');
+    expect(sdk.map.addOverlayMapTypeId).toHaveBeenCalledWith(sdk.kakao.maps.MapTypeId.USE_DISTRICT);
+
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="지도 형식 선택"]')?.click());
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="위성 지도"]')?.click());
+    expect(rootElement.querySelector('[aria-label="지도 화면"]')?.getAttribute('data-cadastral-visible')).toBe('true');
+
+    unmount(root);
+  });
+
+  it('거리 측정은 지도 click을 다중 지점 경로와 누적 거리로 표시하고 종료 시 정리한다', async () => {
+    const sdk = createFakeKakaoSdk({
+      bounds: { swLat: 37.45, swLng: 126.85, neLat: 37.7, neLng: 127.2 },
+      level: 4,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+    await flushAsyncState();
+
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="지도 도구 선택"]')?.click());
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="거리 측정 사용"]')?.click());
+    await act(async () => {
+      sdk.triggerMapClick(37.5, 127);
+      sdk.triggerMapClick(37.51, 127.01);
+    });
+    await flushAsyncState();
+
+    expect(rootElement.querySelector('[aria-label="거리 측정 도구"]')?.textContent).toContain('1.25km');
+    expect(sdk.polyline.setPath).toHaveBeenLastCalledWith(expect.arrayContaining([expect.anything(), expect.anything()]));
+
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('[aria-label="거리 측정 도구"] button:nth-of-type(3)')?.click());
+    expect(rootElement.querySelector('[aria-label="거리 측정 도구"]')?.getAttribute('data-distance-phase')).toBe('complete');
+    const pathUpdateCount = sdk.polyline.setPath.mock.calls.length;
+    await act(async () => sdk.triggerMapClick(37.52, 127.02));
+    expect(sdk.polyline.setPath).toHaveBeenCalledTimes(pathUpdateCount);
+
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('[aria-label="거리 측정 도구"] button:last-child')?.click());
+    expect(rootElement.querySelector('[aria-label="거리 측정 도구"]')).toBeNull();
+    expect(sdk.polyline.setMap).toHaveBeenCalledWith(null);
+
+    unmount(root);
+  });
+
+  it('상권 도구는 확정 complexId로 한 번 조회하고 선택 category POI와 목록을 동기화한다', async () => {
+    const sdk = createFakeKakaoSdk({
+      bounds: { swLat: 37.45, swLng: 126.85, neLat: 37.7, neLng: 127.2 },
+      level: 4,
+    });
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/v1/map/complexes')) return Promise.resolve(jsonResponse([{
+        parcelId: 1001, complexId: 501, name: 'Sample Apartment', lat: 37.5123, lng: 127.0456,
+        latestDealAmount: 125000, unitCntSum: 740,
+      }]));
+      if (url.includes('/api/v1/detail/1001/complexes')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/api/v1/detail/1001')) return Promise.resolve(jsonResponse({
+        parcelId: 1001, complexId: 501, latitude: 37.5123, longitude: 127.0456,
+        address: 'Sample address', tradeName: 'Sample', name: 'Sample Apartment',
+      }));
+      if (url.includes('/api/v1/trade/1001/trend')) return Promise.resolve(jsonResponse([]));
+      if (url.includes('/api/v1/trade/1001')) return Promise.resolve(jsonResponse({
+        parcelId: 1001, complexId: 501, content: [], page: 0, size: 25,
+        totalElements: 0, totalPages: 0,
+      }));
+      if (url.includes('/api/v1/complex/501/nearby-places')) return Promise.resolve(jsonResponse({
+        complexId: 501,
+        center: { lat: 37.5123, lng: 127.0456 },
+        radiusMeters: 800,
+        source: { provider: 'KAKAO_LOCAL', countBasis: 'PROVIDER_SEARCH' },
+        generatedAt: '2026-07-13T03:00:01Z',
+        categories: [{
+          category: 'CAFE', label: '카페', matchedCount: 1, returnedCount: 1, hasMore: false,
+          retrievedAt: '2026-07-13T03:00:00Z',
+          places: [{
+            placeId: 'kakao:1', name: '가까운 카페', categoryDetail: '음식점 > 카페',
+            lat: 37.513, lng: 127.046, distanceMeters: 72, address: 'Sample address',
+            roadAddress: null, phone: null, placeUrl: 'https://place.map.kakao.com/1',
+          }],
+        }],
+      }));
+      return Promise.resolve(jsonResponse([]));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+    await flushAsyncState();
+    await flushAsyncState();
+    await act(async () => sdk.overlays[0]?.content.click());
+    await flushAsyncState();
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="주변 상권 보기"]')?.click());
+    await flushAsyncState();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/complex/501/nearby-places?'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(rootElement.querySelector('[aria-label="주변 상권·생활시설"]')?.textContent).toContain('가까운 카페');
+    const poi = sdk.overlays.find((overlay) => overlay.content.classList.contains('nearby-place-marker'));
+    expect(poi?.content.getAttribute('aria-label')).toBe('가까운 카페, 72m');
+
+    await act(async () => poi?.content.click());
+    await flushAsyncState();
+    expect(rootElement.querySelector('[data-place-id="kakao:1"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(sdk.map.setCenter).toHaveBeenLastCalledWith(expect.objectContaining({ getLat: expect.any(Function) }));
+
+    unmount(root);
+  });
+
   it('전국 overview level에서 zoom-out을 막고 Kakao runtime 최고 level을 제한한다', async () => {
     const sdk = createFakeKakaoSdk({
       bounds: {
@@ -510,6 +788,31 @@ describe('App map-first shell 화면', () => {
     expect(sdk.map.setMaxLevel).toHaveBeenCalledWith(12);
     expect(rootElement.querySelector<HTMLElement>('[aria-label="지도 화면"]')?.dataset.mapLevel).toBe('12');
     expect(rootElement.querySelector<HTMLButtonElement>('button[aria-label="지도 축소"]')?.disabled).toBe(true);
+
+    unmount(root);
+  });
+
+  it('새로고침 기본 지도는 전국 중심과 overview level로 시작한다', async () => {
+    const sdk = createFakeKakaoSdk({
+      bounds: {
+        swLat: 33,
+        swLng: 124,
+        neLat: 39,
+        neLng: 132,
+      },
+      level: 12,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root } = await renderApp();
+    await flushAsyncState();
+
+    expect(sdk.kakao.maps.LatLng).toHaveBeenCalledWith(36.35, 127.8);
+    expect(sdk.kakao.maps.Map).toHaveBeenCalledWith(
+      expect.any(HTMLDivElement),
+      expect.objectContaining({ level: 12 }),
+    );
 
     unmount(root);
   });
@@ -974,8 +1277,10 @@ describe('App map-first shell 화면', () => {
       'button[aria-label="검색 결과 선택 Sample Apartment"]',
     );
     expect(searchResult).not.toBeNull();
-    expect(searchResult?.querySelector('.panel-list-title')?.textContent).toBe('Sample Apartment');
-    expect(searchResult?.querySelector('.panel-list-meta')?.textContent).toBe('Sample address');
+    expect(searchResult?.classList.contains('complex-list-row')).toBe(true);
+    expect(searchResult?.closest('[data-ui-component="complex-list"]')).not.toBeNull();
+    expect(searchResult?.querySelector('.complex-list-name')?.textContent).toBe('Sample Apartment');
+    expect(searchResult?.querySelector('.complex-list-address')?.textContent).toBe('Sample address');
 
     await act(async () => {
       searchResult?.click();
@@ -1327,12 +1632,13 @@ describe('App map-first shell 화면', () => {
     const regionComplexCard = rootElement.querySelector<HTMLButtonElement>(
       'button[aria-label="지역 단지 선택 Apgujeong Region Complex"]',
     );
-    expect(regionComplexCard?.classList.contains('region-complex-card')).toBe(true);
-    expect(regionComplexCard?.querySelector('.region-complex-name')?.textContent).toBe('Apgujeong Region Complex');
-    expect(regionComplexCard?.querySelector('.region-complex-address')?.textContent).toBe('Apgujeong address');
-    expect(regionComplexCard?.querySelector('.region-complex-context')?.textContent).toContain('2018년 승인');
-    expect(regionComplexCard?.querySelector('.region-complex-unit')?.textContent).toBe('810세대');
-    expect(regionComplexCard?.querySelector('.region-complex-dong')?.textContent).toBe('12동');
+    expect(regionComplexCard?.classList.contains('complex-list-row')).toBe(true);
+    expect(regionComplexCard?.closest('[data-ui-component="complex-list"]')).not.toBeNull();
+    expect(regionComplexCard?.querySelector('.complex-list-name')?.textContent).toBe('Apgujeong Region Complex');
+    expect(regionComplexCard?.querySelector('.complex-list-address')?.textContent).toBe('Apgujeong address');
+    expect(regionComplexCard?.querySelector('.complex-list-context')?.textContent).toContain('2018년 승인');
+    expect(regionComplexCard?.querySelector('.complex-list-unit')?.textContent).toBe('810세대');
+    expect(regionComplexCard?.querySelector('.complex-list-building')?.textContent).toBe('12동');
     expect(fetchMock).toHaveBeenCalledWith(
       resolveApiUrl('/api/v1/region/111/complexes?limit=20&offset=0'),
       expect.objectContaining({ method: 'GET' }),
@@ -2007,7 +2313,7 @@ describe('App map-first shell 화면', () => {
     );
     vi.stubGlobal('kakao', sdk.kakao);
 
-    const { root, rootElement } = await renderApp();
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
     await flushAsyncState();
     await flushAsyncState();
 
@@ -2130,11 +2436,18 @@ async function renderApp(props?: TestAppProps): Promise<{ root: Root; rootElemen
   const root = createRoot(rootElement);
 
   await act(async () => {
-    root.render(<App initialRegionLoad={false} {...props} />);
+    root.render(<App authClient={testAnonymousAuthClient} initialRegionLoad={false} {...props} />);
   });
 
   return { root, rootElement };
 }
+
+const testAnonymousAuthClient: AuthClient = {
+  authenticatedRequest: async () => { throw new Error('Authentication required'); },
+  authorizationUrl: (provider) => `http://localhost:8082/oauth2/authorization/${provider}`,
+  logout: async () => undefined,
+  restoreSession: async () => ({ kind: 'anonymous' }),
+};
 
 async function flushAsyncState(): Promise<void> {
   await act(async () => {
@@ -2285,8 +2598,28 @@ function createFakeKakaoSdk(options: { bounds: FakeBounds; level: number }) {
   let bounds = options.bounds;
   let level = options.level;
   const idleHandlers: Array<() => void> = [];
+  const clickHandlers: Array<(event: { latLng: ReturnType<typeof latLng> }) => void> = [];
   const center = latLng(37.5663, 126.978);
+  let polylinePath: ReturnType<typeof latLng>[] = [];
+  const polyline = {
+    getLength: vi.fn(() => polylinePath.length >= 2 ? 1250 : 0),
+    setMap: vi.fn(),
+    setPath: vi.fn((path: ReturnType<typeof latLng>[]) => {
+      polylinePath = path;
+    }),
+  };
+  const roadview = { setPanoId: vi.fn() };
+  let nearestPanoId: number | null = 101;
+  let roadviewAutoResolve = true;
+  const roadviewRequests: Array<(panoId: number | null) => void> = [];
+  const roadviewClient = {
+    getNearestPanoId: vi.fn((_position: unknown, _radius: number, callback: (panoId: number | null) => void) => {
+      roadviewRequests.push(callback);
+      if (roadviewAutoResolve) callback(nearestPanoId);
+    }),
+  };
   const map = {
+    addOverlayMapTypeId: vi.fn(),
     getBounds: () => ({
       getSouthWest: () => latLng(bounds.swLat, bounds.swLng),
       getNorthEast: () => latLng(bounds.neLat, bounds.neLng),
@@ -2294,15 +2627,24 @@ function createFakeKakaoSdk(options: { bounds: FakeBounds; level: number }) {
     getLevel: () => level,
     getCenter: vi.fn(() => center),
     relayout: vi.fn(),
+    removeOverlayMapTypeId: vi.fn(),
     setCenter: vi.fn(),
     setMaxLevel: vi.fn(),
     setMinLevel: vi.fn(),
+    setMapTypeId: vi.fn(),
     setLevel: vi.fn((nextLevel: number) => {
       level = nextLevel;
     }),
   };
   const kakao = {
     maps: {
+      MapTypeId: {
+        HYBRID: 'HYBRID',
+        ROADMAP: 'ROADMAP',
+        ROADVIEW: 'ROADVIEW',
+        TERRAIN: 'TERRAIN',
+        USE_DISTRICT: 'USE_DISTRICT',
+      },
       LatLng: vi.fn(function (this: unknown, lat: number, lng: number) {
         void this;
         return latLng(lat, lng);
@@ -2317,13 +2659,37 @@ function createFakeKakaoSdk(options: { bounds: FakeBounds; level: number }) {
         overlays.push(overlay);
         return overlay;
       }),
+      Marker: vi.fn(function (this: unknown) {
+        void this;
+        return { setMap: vi.fn(), setPosition: vi.fn() };
+      }),
+      Polyline: vi.fn(function (this: unknown) {
+        void this;
+        return polyline;
+      }),
+      Roadview: vi.fn(function (this: unknown) {
+        void this;
+        return roadview;
+      }),
+      RoadviewClient: vi.fn(function (this: unknown) {
+        void this;
+        return roadviewClient;
+      }),
       event: {
-        addListener: vi.fn((_target: unknown, eventName: string, handler: () => void) => {
+        addListener: vi.fn((_target: unknown, eventName: string, handler: (...args: never[]) => void) => {
           if (eventName === 'idle') {
-            idleHandlers.push(handler);
+            idleHandlers.push(handler as () => void);
+          }
+          if (eventName === 'click') {
+            clickHandlers.push(handler as unknown as (event: { latLng: ReturnType<typeof latLng> }) => void);
           }
         }),
-        removeListener: vi.fn(),
+        removeListener: vi.fn((_target: unknown, eventName: string, handler: (...args: never[]) => void) => {
+          if (eventName === 'click') {
+            const index = clickHandlers.indexOf(handler as unknown as (event: { latLng: ReturnType<typeof latLng> }) => void);
+            if (index >= 0) clickHandlers.splice(index, 1);
+          }
+        }),
       },
     },
   };
@@ -2333,12 +2699,27 @@ function createFakeKakaoSdk(options: { bounds: FakeBounds; level: number }) {
     map,
     center,
     overlays,
+    polyline,
+    roadview,
+    roadviewClient,
     setViewport(nextViewport: { bounds: FakeBounds; level: number }) {
       bounds = nextViewport.bounds;
       level = nextViewport.level;
     },
+    setRoadviewPanoId(panoId: number | null) {
+      nearestPanoId = panoId;
+    },
+    setRoadviewAutoResolve(autoResolve: boolean) {
+      roadviewAutoResolve = autoResolve;
+    },
+    resolveRoadviewRequest(index: number, panoId: number | null) {
+      roadviewRequests[index]?.(panoId);
+    },
     triggerIdle() {
       idleHandlers.forEach((handler) => handler());
+    },
+    triggerMapClick(lat: number, lng: number) {
+      clickHandlers.forEach((handler) => handler({ latLng: latLng(lat, lng) }));
     },
   };
 }

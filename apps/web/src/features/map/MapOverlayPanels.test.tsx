@@ -23,6 +23,7 @@ describe('MapOverlayPanels 지도 오버레이', () => {
         <MapOverlayPanels
           activeFilterCount={0}
           bounds={{ swLat: 37.4, swLng: 126.9, neLat: 37.6, neLng: 127.1 }}
+          cadastralEnabled={false}
           mapRuntimeError="fallback"
           mapRuntimeState="error"
           markerError={null}
@@ -45,8 +46,6 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           onRegionMarkerSelect={vi.fn()}
           onRetryMarkers={vi.fn()}
           onResetFilters={vi.fn()}
-          onZoomIn={vi.fn()}
-          onZoomOut={vi.fn()}
         />,
       );
     });
@@ -70,6 +69,7 @@ describe('MapOverlayPanels 지도 오버레이', () => {
         <MapOverlayPanels
           activeFilterCount={0}
           bounds={{ swLat: 37.4, swLng: 126.9, neLat: 37.6, neLng: 127.1 }}
+          cadastralEnabled={false}
           mapRuntimeError="fallback"
           mapRuntimeState="error"
           markerError={null}
@@ -81,8 +81,6 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           onRegionMarkerSelect={vi.fn()}
           onRetryMarkers={vi.fn()}
           onResetFilters={vi.fn()}
-          onZoomIn={vi.fn()}
-          onZoomOut={vi.fn()}
         />,
       );
     });
@@ -103,6 +101,7 @@ describe('MapOverlayPanels 지도 오버레이', () => {
         <MapOverlayPanels
           activeFilterCount={0}
           bounds={{ swLat: 33, swLng: 124, neLat: 39, neLng: 132 }}
+          cadastralEnabled={false}
           level={12}
           mapRuntimeError="fallback"
           mapRuntimeState="error"
@@ -114,8 +113,6 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           onRegionMarkerSelect={vi.fn()}
           onRetryMarkers={vi.fn()}
           onResetFilters={vi.fn()}
-          onZoomIn={vi.fn()}
-          onZoomOut={vi.fn()}
         />,
       );
     });
@@ -135,6 +132,7 @@ describe('MapOverlayPanels 지도 오버레이', () => {
         <MapOverlayPanels
           activeFilterCount={0}
           bounds={{ swLat: 37.4, swLng: 126.9, neLat: 37.6, neLng: 127.1 }}
+          cadastralEnabled={false}
           mapRuntimeError="fallback"
           mapRuntimeState="error"
           markerError={null}
@@ -146,8 +144,6 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           onRegionMarkerSelect={vi.fn()}
           onRetryMarkers={vi.fn()}
           onResetFilters={vi.fn()}
-          onZoomIn={vi.fn()}
-          onZoomOut={vi.fn()}
         />,
       );
     });

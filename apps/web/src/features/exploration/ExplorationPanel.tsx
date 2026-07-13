@@ -29,6 +29,8 @@ import type {
 } from '../search/api/fetchComplexSearchResults';
 import { RequestStateNotice } from '../../shared/RequestStateNotice';
 import { CheckIcon, ChevronRightIcon, CloseIcon, SearchIcon } from '../../shared/icons';
+import { ComplexList } from './ComplexList';
+import type { FavoriteState } from '../favorites/favoriteTypes';
 
 type DetailRequestState = 'idle' | 'loading' | 'ready' | 'error';
 type PanelRequestState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
@@ -49,6 +51,9 @@ type ExplorationPanelProps = {
   complexSuggestions: ComplexSuggestion[];
   detailError: string | null;
   detailState: DetailRequestState;
+  favoriteError: string | null;
+  favoriteLiveMessage: string;
+  favoriteState: FavoriteState;
   isOpen: boolean;
   parcelComplexes: ParcelComplexSummary[];
   parcelTrades: ParcelTrades | null;
@@ -75,6 +80,8 @@ type ExplorationPanelProps = {
   onRegionSelect: (region: RegionTrailItem) => void;
   onRegionTrailSelect: (region: RegionTrailItem, index: number) => void;
   onRetryDetail: () => void;
+  onFavoriteToggle: (trigger?: HTMLElement) => void;
+  onRetryFavorite: () => void;
   onRetryRegion: () => void;
   onRetrySearch: () => void;
   onSearchInputChange: (value: string) => void;
@@ -89,6 +96,9 @@ export function ExplorationPanel({
   complexSuggestions,
   detailError,
   detailState,
+  favoriteError,
+  favoriteLiveMessage,
+  favoriteState,
   isOpen,
   parcelComplexes,
   parcelTrades,
@@ -115,6 +125,8 @@ export function ExplorationPanel({
   onRegionSelect,
   onRegionTrailSelect,
   onRetryDetail,
+  onFavoriteToggle,
+  onRetryFavorite,
   onRetryRegion,
   onRetrySearch,
   onSearchInputChange,
@@ -174,10 +186,15 @@ export function ExplorationPanel({
           complexDetail={complexDetail}
           detailError={detailError}
           detailState={detailState}
+          favoriteError={favoriteError}
+          favoriteLiveMessage={favoriteLiveMessage}
+          favoriteState={favoriteState}
           onBack={onCloseDetail}
           onClose={onDismissDetail}
           onComplexSelect={onComplexSelect}
           onRetryDetail={onRetryDetail}
+          onFavoriteToggle={onFavoriteToggle}
+          onRetryFavorite={onRetryFavorite}
           onLoadMoreTrades={onLoadMoreTrades}
           parcelComplexes={parcelComplexes}
           parcelTrades={parcelTrades}
@@ -208,43 +225,35 @@ export function ExplorationPanel({
         />
 
         {searchResults.length > 0 ? (
-          <ul aria-label="검색 결과" className="panel-list panel-list-strong">
-            {searchResults.map((result) => (
-              <li key={result.complexId}>
-                <button
-                  type="button"
-                  aria-label={`검색 결과 선택 ${result.complexName}`}
-                  onClick={() => {
-                    onSearchResultSelect(result);
-                  }}
-                >
-                  <span className="panel-list-title">{result.complexName}</span>
-                  <span className="panel-list-meta">{formatAddress(result.address)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <ComplexList
+            ariaLabel="검색 결과"
+            items={searchResults.map((result) => ({
+              id: result.complexId,
+              ariaLabel: `검색 결과 선택 ${result.complexName}`,
+              name: result.complexName,
+              address: formatAddress(result.address),
+              onSelect: () => {
+                onSearchResultSelect(result);
+              },
+            }))}
+          />
         ) : null}
 
         {complexSuggestions.length > 0 ? (
           <>
           <div className="panel-section-header panel-subsection-header"><p>제안</p><span>{complexSuggestions.length.toLocaleString()}개</span></div>
-          <ul aria-label="검색 제안" className="panel-list">
-            {complexSuggestions.map((suggestion) => (
-              <li key={suggestion.complexId}>
-                <button
-                  type="button"
-                  aria-label={`검색 제안 선택 ${suggestion.complexName}`}
-                  onClick={() => {
-                    onSuggestionSelect(suggestion);
-                  }}
-                >
-                  <span className="panel-list-title">{suggestion.complexName}</span>
-                  <span className="panel-list-meta">{formatAddress(suggestion.address)}</span>
-                </button>
-              </li>
-            ))}
-          </ul></>
+          <ComplexList
+            ariaLabel="검색 제안"
+            items={complexSuggestions.map((suggestion) => ({
+              id: suggestion.complexId,
+              ariaLabel: `검색 제안 선택 ${suggestion.complexName}`,
+              name: suggestion.complexName,
+              address: formatAddress(suggestion.address),
+              onSelect: () => {
+                onSuggestionSelect(suggestion);
+              },
+            }))}
+          /></>
         ) : null}
       </section>
 
@@ -318,43 +327,21 @@ export function ExplorationPanel({
                 {regionComplexes.length.toLocaleString()}
               </span>
             </div>
-            <ul aria-label="지역 단지 목록" className="panel-list region-complex-list">
-              {regionComplexes.map((complex) => {
-                const approvalYear = complex.useDate?.match(/^\d{4}/)?.[0];
-                return (
-                  <li key={complex.complexId}>
-                    <button
-                      type="button"
-                      className="region-complex-card"
-                      aria-label={`지역 단지 선택 ${complex.complexName}`}
-                      onClick={() => {
-                        onRegionComplexSelect(complex);
-                      }}
-                    >
-                      <span className="region-complex-main">
-                        <span className="region-complex-name">{complex.complexName}</span>
-                        <span className="region-complex-context">
-                          <span className="region-complex-address">{formatAddress(complex.address)}</span>
-                          {approvalYear == null ? null : (
-                            <span className="region-complex-approval">· {approvalYear}년 승인</span>
-                          )}
-                        </span>
-                      </span>
-                      {complex.unitCnt == null && complex.dongCnt == null ? null : (
-                        <span className="region-complex-stats" aria-label="단지 규모">
-                          {complex.unitCnt == null ? null : (
-                            <strong className="region-complex-unit">{complex.unitCnt.toLocaleString()}세대</strong>
-                          )}
-                          {complex.dongCnt == null ? null : (
-                            <span className="region-complex-dong">{complex.dongCnt.toLocaleString()}동</span>
-                          )}
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+            <ComplexList
+              ariaLabel="지역 단지 목록"
+              items={regionComplexes.map((complex) => ({
+                id: complex.complexId,
+                ariaLabel: `지역 단지 선택 ${complex.complexName}`,
+                name: complex.complexName,
+                address: formatAddress(complex.address),
+                approvalYear: complex.useDate?.match(/^\d{4}/)?.[0],
+                unitCount: complex.unitCnt,
+                buildingCount: complex.dongCnt,
+                onSelect: () => {
+                  onRegionComplexSelect(complex);
+                },
+              }))}
+            />
           </section>
         ) : null}
       </section>

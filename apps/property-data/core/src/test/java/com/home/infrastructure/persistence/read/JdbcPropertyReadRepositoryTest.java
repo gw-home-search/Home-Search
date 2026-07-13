@@ -365,6 +365,7 @@ class JdbcPropertyReadRepositoryTest extends JdbcPostgresTestSupport {
 				.containsExactly("대림(2차)"));
 		assertThat(repository.findParcelDetail(97L, 4677L))
 			.hasValueSatisfying(detail -> {
+				assertThat(detail.displayName()).isEqualTo("응봉동 대림(2차)");
 				assertThat(detail.name()).isEqualTo("대림(2차)");
 				assertThat(detail.tradeName()).isEqualTo("대림(2차)");
 			});

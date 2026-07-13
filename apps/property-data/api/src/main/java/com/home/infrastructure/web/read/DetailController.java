@@ -137,6 +137,7 @@ public class DetailController {
 			result.latitude(),
 			result.longitude(),
 			result.address(),
+			result.displayName(),
 			result.tradeName(),
 			result.name(),
 			result.dongCnt(),

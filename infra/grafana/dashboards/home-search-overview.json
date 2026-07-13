@@ -426,6 +426,136 @@
       ],
       "title": "API Error Logs",
       "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "home-search-prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 0,
+        "y": 32
+      },
+      "id": 11,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "home-search-prometheus"
+          },
+          "expr": "sum(rate(home_search_nearby_place_cache_requests_total{result=\"hit\"}[5m])) / clamp_min(sum(rate(home_search_nearby_place_cache_requests_total{result=~\"hit|miss\"}[5m])), 1)",
+          "legendFormat": "cache hit ratio",
+          "refId": "A"
+        }
+      ],
+      "title": "Nearby-place Cache Hit Ratio",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "home-search-prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 6,
+        "y": 32
+      },
+      "id": 12,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "home-search-prometheus"
+          },
+          "expr": "sum by (category, result) (rate(home_search_kakao_local_calls_total[5m]))",
+          "legendFormat": "{{category}} {{result}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Kakao Local Call Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "home-search-prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 12,
+        "y": 32
+      },
+      "id": 13,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "home-search-prometheus"
+          },
+          "expr": "sum(rate(home_search_kakao_local_calls_total{result=\"error\"}[5m])) / clamp_min(sum(rate(home_search_kakao_local_calls_total[5m])), 1)",
+          "legendFormat": "error ratio",
+          "refId": "A"
+        }
+      ],
+      "title": "Kakao Local Error Ratio",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "home-search-prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 6,
+        "x": 18,
+        "y": 32
+      },
+      "id": 14,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "home-search-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, category) (rate(home_search_kakao_local_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95 {{category}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Kakao Local p95 Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "home-search-prometheus"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 39
+      },
+      "id": 15,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "home-search-prometheus"
+          },
+          "expr": "home_search_kakao_local_quota_used / clamp_min(home_search_kakao_local_quota_budget, 1)",
+          "legendFormat": "daily budget ratio",
+          "refId": "A"
+        }
+      ],
+      "title": "Kakao Daily Budget Usage",
+      "type": "stat"
     }
   ],
   "refresh": "30s",

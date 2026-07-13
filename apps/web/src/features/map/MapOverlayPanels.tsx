@@ -7,13 +7,11 @@ import type {
   MapMarkersResult,
 } from './api/fetchMapMarkers';
 import type { KakaoMapRuntimeState } from './KakaoMapSurface';
-import { MinusIcon, PlusIcon } from '../../shared/icons';
+import { MapToolNotice } from './tools/MapToolNotice';
 import {
   createComplexMarkerViewModel,
   createRegionMarkerViewModel,
   isComplexMarkerSelected,
-  MAX_MAP_LEVEL,
-  MIN_MAP_LEVEL,
   regionMarkerDensityForLevel,
   type ComplexMapMarker,
   type RegionMapMarker,
@@ -23,6 +21,7 @@ type MarkerRequestState = 'loading' | 'ready' | 'empty' | 'error';
 type MapOverlayPanelsProps = {
   activeFilterCount: number;
   bounds: MapBoundsRequest;
+  cadastralEnabled: boolean;
   mapRuntimeError: string | null;
   mapRuntimeState: KakaoMapRuntimeState;
   markerError: string | null;
@@ -35,13 +34,12 @@ type MapOverlayPanelsProps = {
   onRegionMarkerSelect: (marker: RegionMapMarker) => void;
   onRetryMarkers: () => void;
   onResetFilters: () => void;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
 };
 
 export function MapOverlayPanels({
   activeFilterCount,
   bounds,
+  cadastralEnabled,
   mapRuntimeError,
   mapRuntimeState,
   markerError,
@@ -54,8 +52,6 @@ export function MapOverlayPanels({
   onRegionMarkerSelect,
   onRetryMarkers,
   onResetFilters,
-  onZoomIn,
-  onZoomOut,
 }: MapOverlayPanelsProps) {
   return (
     <>
@@ -70,16 +66,8 @@ export function MapOverlayPanels({
         />
       )}
 
-      <div aria-label="지도 조작" className="map-controls">
-        <button type="button" aria-label="지도 확대" disabled={level <= MIN_MAP_LEVEL} onClick={onZoomIn}>
-          <PlusIcon aria-hidden="true" />
-        </button>
-        <button type="button" aria-label="지도 축소" disabled={level >= MAX_MAP_LEVEL} onClick={onZoomOut}>
-          <MinusIcon aria-hidden="true" />
-        </button>
-      </div>
-
       <div className="map-notices">
+        <MapToolNotice cadastralEnabled={cadastralEnabled} />
         {hiddenMarkerCount > 0 ? <p className="map-density-note" role="status">가까운 단지 {hiddenMarkerCount.toLocaleString()}개는 확대하면 표시됩니다</p> : null}
         <RequestStateNotice
           className="map-feedback"

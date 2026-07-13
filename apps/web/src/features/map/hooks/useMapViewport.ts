@@ -8,7 +8,14 @@ import {
   MIN_MAP_LEVEL,
 } from '../markerViewModel';
 
-const INITIAL_MARKER_BOUNDS: MapBoundsRequest = {
+const INITIAL_NATIONWIDE_BOUNDS: MapBoundsRequest = {
+  swLat: 33,
+  swLng: 124,
+  neLat: 39,
+  neLng: 132,
+};
+
+const INITIAL_DETAIL_BOUNDS: MapBoundsRequest = {
   swLat: 37.45,
   swLng: 126.85,
   neLat: 37.7,
@@ -16,10 +23,13 @@ const INITIAL_MARKER_BOUNDS: MapBoundsRequest = {
 };
 
 export function useMapViewport(initialMapLevel: number) {
-  const [viewport, setViewport] = useState<MapViewport>(() => ({
-    bounds: INITIAL_MARKER_BOUNDS,
-    level: clampMapLevel(initialMapLevel),
-  }));
+  const [viewport, setViewport] = useState<MapViewport>(() => {
+    const level = clampMapLevel(initialMapLevel);
+    return {
+      bounds: level >= 10 ? INITIAL_NATIONWIDE_BOUNDS : INITIAL_DETAIL_BOUNDS,
+      level,
+    };
+  });
   const [mapFocusTarget, setMapFocusTarget] = useState<MapFocusTarget | null>(null);
 
   useEffect(() => {

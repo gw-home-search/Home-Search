@@ -103,7 +103,9 @@ Migration version 8의 `complex.display_name`/generated `search_name`은 내부 
 projection이다. 검색 matching과 ranking에는 사용할 수 있지만 기존 public
 response의 `complexName`은 계속
 `COALESCE(NULLIF(BTRIM(trade_name), ''), name)` 의미를 유지한다. Optional
-`displayName` 공개는 후속 additive API 변경에서만 수행한다.
+Detail response는 기존 `name`/`tradeName`을 유지하면서 optional
+`displayName`만 additive로 공개한다. Web title은 `displayName ?? name`을
+사용하고 map marker source name과 기존 `complexName` 의미는 변경하지 않는다.
 
 현재 `home_search`는 `public` domain table, `batch` Spring Batch metadata,
 `public.flyway_schema_history` 하나를 유지한다. schema별 history 또는 Batch
@@ -139,6 +141,13 @@ Reusable user-token claim verification lives in the pure Java
 `libs/user-auth-contract` library on top of `security-jwt-core`. Consumer APIs
 load allowlisted public keys locally and derive `userId` only from a fully
 verified `sub`; they do not call user-service during token verification.
+
+The nearby-place gateway is provider-neutral outside
+`infrastructure/external/kakao`. Property-data owns the server-only Kakao key,
+Redis quota/cache policy, and
+`GET /api/v1/complex/{complexId}/nearby-places`; it does not persist place
+results in PostgreSQL. Category cache entries expire within 24 hours and a
+Seoul-day request budget fails closed when the Redis quota guard is unavailable.
 
 `apps/ai` is an independent FastAPI deployment. Home Search facts enter only
 through the `ai_read` read-only contract; POI/reference datasets, conversation

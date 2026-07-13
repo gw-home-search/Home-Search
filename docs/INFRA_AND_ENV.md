@@ -153,14 +153,20 @@ Tests run with stub OAuth/LLM/legal providers and require no live secret.
 
 ## Required Frontend Environment
 
-- `apps/web` is the public map app on development port `5173` and receives only
-  the property-data API base configuration.
+- `apps/web` is the public map app on development port `5173`. It receives
+  `VITE_API_SERVER_IP` for property-data and the separate
+  `VITE_USER_API_SERVER_IP` for optional OAuth/current-user calls.
+- Production must set `VITE_USER_API_SERVER_IP` explicitly. Local/test may use
+  `http://localhost:8082`; OAuth development uses the exact frontend origin
+  `http://localhost:5173`, not `127.0.0.1:5173`.
 - `apps/admin/web` is an independent app on development port `5174`. It calls
   same-origin `/api/**`; `ADMIN_SERVICE_PROXY_TARGET` is development-proxy-only.
 - Neither app uses a surface-switch environment flag, shares a build artifact,
-  or receives the other service's base URL.
-- Admin browser authentication is an HttpOnly server Session. Tokens, session
-  identifiers, passwords, and access codes are not stored in Web Storage.
+  or receives the other app's service credentials.
+- Public web OAuth keeps its access JWT memory-only and its refresh token in the
+  user-service HttpOnly cookie. Admin browser authentication is an HttpOnly
+  server Session. Tokens, session identifiers, passwords, and access codes are
+  not stored in Web Storage.
 
 ## Flyway Strategy
 
@@ -361,6 +367,42 @@ To verify Redis itself:
 docker compose -f infra/docker-compose.local.yml up -d redis
 docker exec home-search-redis redis-cli ping
 ```
+
+## Kakao Nearby-place Gateway
+
+Kakao REST credentials are server-only. Never add `KAKAO_REST_API_KEY` to a
+`VITE_*` variable, fixture, log, image layer, or committed override file.
+
+```text
+KAKAO_REST_API_KEY=
+HOME_PLACE_KAKAO_ENABLED=false
+HOME_PLACE_KAKAO_CACHE_ENABLED=true
+HOME_PLACE_KAKAO_CACHE_TTL=24h
+HOME_PLACE_KAKAO_DAILY_REQUEST_BUDGET=10000
+HOME_PLACE_KAKAO_CONNECT_TIMEOUT=1s
+HOME_PLACE_KAKAO_READ_TIMEOUT=2s
+```
+
+The feature is disabled by default. Enabling it requires a Kakao app with Local
+API use enabled, Redis connectivity, and a deployment-time daily budget below
+the provider quota. Public ingress must apply the equivalent of the checked-in
+per-IP `5r/s`, burst `10` nearby-place route limit; the local gateway returns
+`429` above it. Redis cache read/write failures may degrade to a provider call,
+but an unavailable quota guard fails closed.
+
+Category cache keys contain six-decimal canonical coordinates, radius, and
+category only. TTL is 24 hours, empty results are cached, provider failures are
+not cached, and no place result is written to PostgreSQL.
+
+Prometheus exposes bounded tags only:
+
+- `home_search_nearby_place_cache_requests_total`
+- `home_search_kakao_local_calls_total`
+- `home_search_kakao_local_duration_seconds`
+- `home_search_kakao_local_quota_used`
+
+Never use complex id, coordinate, place name, raw provider body, query URL, or
+authorization material as a metric tag or log field.
 
 ## Batch Packaged Runtime
 

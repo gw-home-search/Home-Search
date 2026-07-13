@@ -119,7 +119,9 @@ Status rules:
 
 - Invalid request body, invalid query parameter, or invalid enum: `400`.
 - Missing region, parcel, complex, detail, or trade parent resource: `404`.
-- Unexpected server error or external integration failure: `500`.
+- 단지에 표시 좌표가 없어 주변 장소를 조회할 수 없는 경우: `422`.
+- Kakao Local 비활성화, timeout, quota 소진 또는 quota guard 장애: `503`.
+- Unexpected server error: `500`.
 
 Example:
 
@@ -135,6 +137,71 @@ Example:
 ```
 
 ## Public APIs
+
+### GET `/api/v1/complex/{complexId}/nearby-places`
+
+선택 단지의 canonical 표시 좌표를 기준으로 지도 UI가 사용하는 주변 장소 사실을
+반환한다. 범용 `lat/lng` 검색은 제공하지 않는다.
+
+Query parameters:
+
+- `radiusMeters`: 기본 `800`, 허용 `100..2000`.
+- `categories`: 생략 시 `CAFE,RESTAURANT,CONVENIENCE_STORE,HOSPITAL,PHARMACY,SCHOOL`.
+- `limitPerCategory`: 기본 `5`, 허용 `1..15`.
+
+중복 category는 제거하고 위 제품 순서로 반환한다. category별 장소는 거리
+오름차순이며 정상 empty는 `200`, `matchedCount: 0`, `places: []`다. 한 category라도
+provider 조회에 실패하면 partial response 대신 전체 요청을 실패시킨다.
+
+```json
+{
+  "complexId": 501,
+  "center": { "lat": 37.321, "lng": 127.109 },
+  "radiusMeters": 800,
+  "source": {
+    "provider": "KAKAO_LOCAL",
+    "countBasis": "PROVIDER_SEARCH"
+  },
+  "generatedAt": "2026-07-13T03:00:01Z",
+  "categories": [{
+    "category": "CAFE",
+    "label": "카페",
+    "matchedCount": 18,
+    "returnedCount": 5,
+    "hasMore": true,
+    "retrievedAt": "2026-07-13T03:00:00Z",
+    "places": [{
+      "placeId": "kakao:123456",
+      "name": "카페 이름",
+      "categoryDetail": "음식점 > 카페",
+      "lat": 37.322,
+      "lng": 127.108,
+      "distanceMeters": 72,
+      "address": "경기도 ...",
+      "roadAddress": "경기도 ...",
+      "phone": "031-...",
+      "placeUrl": "https://place.map.kakao.com/123456"
+    }]
+  }]
+}
+```
+
+`matchedCount`는 사업자 등록 전체 수가 아니라 Kakao category 검색의
+`total_count`다. `retrievedAt`은 category cache 시점, `generatedAt`은 Home
+Search 응답 조립 시점이다. `placeId`는 provider namespace를 포함하며
+`placeUrl`은 검증된 Kakao Place HTTPS URL만 반환한다.
+
+Status:
+
+- `200`: 성공 또는 정상 empty.
+- `400`: 범위, category 또는 형식 오류.
+- `404`: 단지가 존재하지 않음.
+- `422`: 단지 표시 좌표가 없음.
+- `503`: 기능 비활성화, Kakao/Redis quota guard 장애, timeout 또는 예산 소진.
+- `429`: public ingress의 주변 장소 per-IP rate limit 초과.
+
+이 endpoint는 additive public contract이며 기존 map/search/detail/trade URL,
+필드, 단위와 DB 상태를 변경하지 않는다.
 
 ### POST `/api/v1/map/regions`
 
@@ -613,6 +680,7 @@ Response:
   "latitude": 37.5123,
   "longitude": 127.0456,
   "address": "Sample address",
+  "displayName": "Sample-dong Sample complex name",
   "tradeName": "Sample trade name",
   "name": "Sample complex name",
   "dongCnt": 8,
@@ -633,6 +701,7 @@ Response fields:
 - `latitude`
 - `longitude`
 - `address`
+- `displayName`: optional user-facing locality-combined complex name.
 - `tradeName`
 - `name`
 - `dongCnt`
@@ -654,6 +723,8 @@ Migration notes:
 
 - Source DTO omits `null` values. Target Home Search may omit nullable fields rather
   than returning explicit `null`.
+- `name` and `tradeName` preserve source complex names. `displayName` is the
+  title intended for user-facing screens.
 - If `complexId` is provided, this endpoint returns that complex only when it
   belongs to the requested `parcelId`; otherwise it returns `404`. If omitted,
   this endpoint returns one representative complex detail for the selected

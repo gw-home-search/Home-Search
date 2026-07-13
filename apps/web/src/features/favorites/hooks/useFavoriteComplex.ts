@@ -1,0 +1,138 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { useAuth } from '../../auth/AuthProvider';
+import { createFavoriteClient, FavoriteClientError } from '../api/favoriteClient';
+import type { FavoriteState } from '../favoriteTypes';
+
+const favoriteCache = new Map<number, boolean>();
+let favoriteCacheOwner: number | null = null;
+
+export function useFavoriteComplex(complexId: number | null | undefined) {
+  const { authenticatedRequest, currentUser, openDialog, status } = useAuth();
+  const client = useMemo(() => createFavoriteClient(authenticatedRequest), [authenticatedRequest]);
+  const [favoriteState, setFavoriteState] = useState<FavoriteState>({ phase: 'auth-checking', favorite: null });
+  const [favoriteError, setFavoriteError] = useState<string | null>(null);
+  const [liveMessage, setLiveMessage] = useState('');
+  const [retrySequence, setRetrySequence] = useState(0);
+  const requestSequence = useRef(0);
+  const activeController = useRef<AbortController | null>(null);
+  const selectionRef = useRef<number | null>(null);
+  const failedMutation = useRef<'save' | 'remove' | null>(null);
+  selectionRef.current = isComplexId(complexId) ? complexId : null;
+
+  useEffect(() => {
+    if (status !== 'authenticated' || currentUser == null) {
+      favoriteCache.clear();
+      favoriteCacheOwner = null;
+      return;
+    }
+    if (favoriteCacheOwner !== currentUser.userId) {
+      favoriteCache.clear();
+      favoriteCacheOwner = currentUser.userId;
+    }
+  }, [currentUser, status]);
+
+  useEffect(() => {
+    const nextSequence = requestSequence.current + 1;
+    requestSequence.current = nextSequence;
+    activeController.current?.abort();
+    activeController.current = null;
+    failedMutation.current = null;
+    setFavoriteError(null);
+    setLiveMessage('');
+
+    if (status === 'checking') {
+      setFavoriteState({ phase: 'auth-checking', favorite: null });
+      return;
+    }
+    if (status === 'anonymous') {
+      setFavoriteState({ phase: 'anonymous', favorite: false });
+      return;
+    }
+    if (status === 'unavailable') {
+      setFavoriteState({ phase: 'unavailable', favorite: false });
+      return;
+    }
+    if (!isComplexId(complexId)) {
+      setFavoriteState({ phase: 'auth-checking', favorite: null });
+      return;
+    }
+    const cached = favoriteCache.get(complexId);
+    if (cached != null) {
+      setFavoriteState({ phase: 'ready', favorite: cached });
+      return;
+    }
+
+    const controller = new AbortController();
+    activeController.current = controller;
+    setFavoriteState({ phase: 'checking', favorite: null });
+    client.get(complexId, controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted || requestSequence.current !== nextSequence || selectionRef.current !== complexId) return;
+        favoriteCache.set(complexId, result.favorite);
+        setFavoriteState({ phase: 'ready', favorite: result.favorite });
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted || requestSequence.current !== nextSequence || selectionRef.current !== complexId) return;
+        if (error instanceof FavoriteClientError && error.kind === 'session-expired') return;
+        setFavoriteState({ phase: 'error', favorite: null });
+        setFavoriteError('관심 상태를 불러오지 못했습니다.');
+      });
+    return () => controller.abort();
+  }, [client, complexId, retrySequence, status]);
+
+  const toggleFavorite = useCallback(async (trigger?: HTMLElement) => {
+    if (status !== 'authenticated') {
+      openDialog(trigger);
+      return;
+    }
+    const selectedId = selectionRef.current;
+    const currentFavorite = favoriteState.favorite;
+    if (selectedId == null || currentFavorite == null || favoriteState.phase === 'saving' || favoriteState.phase === 'removing') return;
+    const action = currentFavorite ? 'remove' : 'save';
+    const sequence = requestSequence.current;
+    const controller = new AbortController();
+    activeController.current?.abort();
+    activeController.current = controller;
+    failedMutation.current = null;
+    setFavoriteError(null);
+    setLiveMessage('');
+    setFavoriteState({ phase: action === 'save' ? 'saving' : 'removing', favorite: !currentFavorite });
+    try {
+      if (action === 'save') await client.save(selectedId, controller.signal);
+      else await client.remove(selectedId, controller.signal);
+      if (controller.signal.aborted || requestSequence.current !== sequence || selectionRef.current !== selectedId) return;
+      const nextFavorite = action === 'save';
+      favoriteCache.set(selectedId, nextFavorite);
+      setFavoriteState({ phase: 'ready', favorite: nextFavorite });
+      setLiveMessage(nextFavorite ? '관심 단지에 저장했습니다.' : '관심 단지에서 해제했습니다.');
+    } catch (error) {
+      if (controller.signal.aborted || requestSequence.current !== sequence || selectionRef.current !== selectedId) return;
+      if (error instanceof FavoriteClientError && error.kind === 'session-expired') return;
+      failedMutation.current = action;
+      setFavoriteState({ phase: 'error', favorite: currentFavorite });
+      setFavoriteError(error instanceof FavoriteClientError && error.kind === 'limit'
+        ? '관심 단지는 최대 200개까지 저장할 수 있습니다.'
+        : action === 'save'
+          ? '관심 단지를 저장하지 못했습니다. 다시 시도해주세요.'
+          : '관심 단지를 해제하지 못했습니다. 다시 시도해주세요.');
+    }
+  }, [client, favoriteState, openDialog, status]);
+
+  const retryFavorite = useCallback(() => {
+    if (failedMutation.current != null) void toggleFavorite();
+    else setRetrySequence((current) => current + 1);
+  }, [toggleFavorite]);
+
+  return {
+    favoriteError,
+    favoriteState,
+    liveMessage,
+    onFavoriteToggle: toggleFavorite,
+    onRetryFavorite: retryFavorite,
+  };
+}
+
+function isComplexId(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}

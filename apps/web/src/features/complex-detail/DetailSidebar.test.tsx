@@ -27,6 +27,7 @@ describe('DetailSidebar 모바일 탭', () => {
             latitude: 37.5,
             longitude: 127,
             address: '서울시 테스트로',
+            displayName: '응봉동 테스트아파트',
             tradeName: '테스트아파트',
             name: '테스트아파트',
             dongCnt: 5,
@@ -102,13 +103,16 @@ describe('DetailSidebar 모바일 탭', () => {
     expect(host.querySelector('.data-status-list')).toBeNull();
     expect(host.querySelectorAll('.detail-key-stats .detail-metric')).toHaveLength(2);
     expect(host.querySelector('.detail-key-stats')?.textContent).toContain('740세대 · 5개동 · 2018년');
+    expect(host.querySelector('.detail-drawer-identity h2')?.textContent).toBe('응봉동 테스트아파트');
     expect(host.querySelector('[data-detail-field="address"]')?.textContent).toContain('서울시 테스트로');
     expect(host.querySelector('[data-detail-field="unitCnt"]')?.textContent).toContain('740');
     expect(host.querySelector('details.detail-additional-information')?.hasAttribute('open')).toBe(false);
     expect(host.querySelector('details.detail-additional-information')?.textContent).toContain('면적');
+    expect(host.querySelector('details.detail-additional-information')?.textContent).toContain('단지명테스트아파트');
     expect(host.querySelector('[data-trade-cell="area"]')?.textContent).toBe('84.9㎡25.7평');
-    expect(host.querySelector('[data-trade-cell="amount"] .trade-amount-eok')?.textContent).toBe('12억');
-    expect(host.querySelector('[data-trade-cell="amount"] .trade-amount-man')?.textContent).toBe('5,000만원');
+    expect(host.querySelector('[data-trade-cell="amount"] .trade-amount-label')?.textContent)
+      .toBe('12억 5,000만원');
+    expect(host.querySelector('[data-trade-cell="amount"]')?.children).toHaveLength(1);
     expect(host.querySelector('[data-trade-cell="floor"] .trade-building')?.textContent).toBe('101동');
     expect(host.querySelector('[data-trade-cell="floor"] .trade-floor')?.textContent).toBe('12층');
   });

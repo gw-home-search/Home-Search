@@ -29,6 +29,13 @@ reject(){ expected="$1"; shift; set +e; "$@" >"${TEMP}/out" 2>"${TEMP}/err"; cod
 bash -n "${SCRIPT}"
 reject 2 env -u PROPERTY_MIGRATOR_DB_PASSWORD "${SCRIPT}" before 8
 reject 2 invoke "${SCRIPT}" before x
+: > "${TEMP}/docker.log"
+reject 2 invoke env PROPERTY_MIGRATOR_JDBC_URL='jdbc:postgresql://migrator:authority-sentinel@db:5432/home_search' "${SCRIPT}" before 8
+[[ ! -s "${TEMP}/docker.log" ]]
+reject 2 invoke env PROPERTY_MIGRATOR_JDBC_URL='jdbc:postgresql://db:5432/home_search?Password=query-sentinel' "${SCRIPT}" before 8
+[[ ! -s "${TEMP}/docker.log" ]]
+! grep -Fq authority-sentinel "${TEMP}/out" "${TEMP}/err" "${TEMP}/docker.log"
+! grep -Fq query-sentinel "${TEMP}/out" "${TEMP}/err" "${TEMP}/docker.log"
 reject 2 invoke env FAKE_DATABASE=wrong FAKE_INFO="${pending}" "${SCRIPT}" before 8
 reject 2 invoke env FAKE_RELATIONS=1 FAKE_INFO="${pending}" "${SCRIPT}" before 8
 [[ "$(invoke env FAKE_INFO="${pending}" "${SCRIPT}" before 8)" == 'service=property-data phase=before target=8 state=EMPTY' ]]

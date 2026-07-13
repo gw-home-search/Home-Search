@@ -14,8 +14,14 @@ require_inputs(){
   [[ -n "${PROPERTY_MIGRATOR_JDBC_URL:-}" ]] || policy_error 'PROPERTY_MIGRATOR_JDBC_URL is required'
   [[ -n "${PROPERTY_MIGRATOR_DB_USERNAME:-}" ]] || policy_error 'PROPERTY_MIGRATOR_DB_USERNAME is required'
   [[ -n "${PROPERTY_MIGRATOR_DB_PASSWORD:-}" ]] || policy_error 'PROPERTY_MIGRATOR_DB_PASSWORD is required'
-  local url="${PROPERTY_MIGRATOR_JDBC_URL%%\?*}"
-  [[ "${url}" == jdbc:postgresql://* && "${url##*/}" == home_search && "${PROPERTY_MIGRATOR_JDBC_URL}" != *password=* ]] || policy_error 'JDBC database는 password query가 없는 home_search PostgreSQL이어야 합니다.'
+  local url="${PROPERTY_MIGRATOR_JDBC_URL}" url_without_query authority database query lower_query
+  url_without_query="${url%%\?*}"
+  authority="${url_without_query#jdbc:postgresql://}"; authority="${authority%%/*}"
+  database="${url_without_query#jdbc:postgresql://${authority}/}"
+  query=$([[ "${url}" == *\?* ]] && printf '%s' "${url#*\?}" || true)
+  lower_query="${query,,}"
+  [[ "${url_without_query}" == jdbc:postgresql://* && -n "${authority}" && "${authority}" != *@* && "${database}" == home_search ]] || policy_error 'JDBC database는 userinfo가 없는 home_search PostgreSQL이어야 합니다.'
+  [[ "&${lower_query}" != *'&password='* ]] || policy_error 'JDBC URL password parameter는 허용되지 않습니다.'
   command -v docker >/dev/null 2>&1 || runtime_error 'Docker를 찾을 수 없습니다.'
 }
 

@@ -322,7 +322,9 @@ checksum 규칙을 없애지 않는다.
 
 local migration version 2 Java→SQL cutover는 완료됐고 executable repair script는
 제거됐다. sanitized evidence는 timestamp `2026-07-13T10:51:35Z`, image
-`redgate/flyway:11.7.2`, SQL checksum `599267940`, validate `success`다. ignored
+`redgate/flyway:11.7.2`, Git SHA `a65fe6dd...`, SQL checksum `599267940`,
+business fingerprint `b49e9afa...03fb4`, schema fingerprint
+`f4354488...d1b0`, validate `success`다. ignored
 `.migration-backup/20260713T104859Z-v2-history-cutover` backup은 local에 보존한다.
 현재 local DB의 JDBC/Deleted audit history는 fresh-only deployment preflight에서
 거부되는 것이 정상이며 일반 `info`/`validate`만 허용한다.

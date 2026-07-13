@@ -14,6 +14,14 @@ expect_rejected() {
     fi
 }
 
+expect_policy_rejected() {
+    set +e
+    "$@" >"${TEST_ROOT}/out" 2>"${TEST_ROOT}/err"
+    local code=$?
+    set -e
+    [[ "${code}" -eq 2 ]]
+}
+
 bash -n "${WRAPPER}"
 expect_rejected "${WRAPPER}"
 expect_rejected "${WRAPPER}" latest
@@ -25,6 +33,16 @@ expect_rejected "${WRAPPER}" migrate latest
 expect_rejected "${WRAPPER}" migrate 8 -cleanDisabled=false
 expect_rejected env \
     PROPERTY_MIGRATOR_JDBC_URL=jdbc:postgresql://localhost:5432/wrong_database \
+    PROPERTY_MIGRATOR_DB_USERNAME=migrator \
+    PROPERTY_MIGRATOR_DB_PASSWORD=redacted \
+    "${WRAPPER}" info
+expect_rejected env \
+    PROPERTY_MIGRATOR_JDBC_URL=jdbc:postgresql://migrator:authority-sentinel@localhost:5432/home_search \
+    PROPERTY_MIGRATOR_DB_USERNAME=migrator \
+    PROPERTY_MIGRATOR_DB_PASSWORD=redacted \
+    "${WRAPPER}" info
+expect_rejected env \
+    'PROPERTY_MIGRATOR_JDBC_URL=jdbc:postgresql://localhost:5432/home_search?Password=query-sentinel' \
     PROPERTY_MIGRATOR_DB_USERNAME=migrator \
     PROPERTY_MIGRATOR_DB_PASSWORD=redacted \
     "${WRAPPER}" info
@@ -55,6 +73,26 @@ wrapper_environment=(
     PROPERTY_MIGRATOR_DB_PASSWORD=not-recorded
     MIGRATION_EVIDENCE_FILE="${TEST_ROOT}/evidence.log"
 )
+
+: > "${TEST_ROOT}/docker.log"
+expect_policy_rejected env \
+    PATH="${TEST_ROOT}/bin:${PATH}" \
+    FAKE_DOCKER_LOG="${TEST_ROOT}/docker.log" \
+    PROPERTY_MIGRATOR_JDBC_URL=jdbc:postgresql://migrator:authority-sentinel@localhost:5432/home_search \
+    PROPERTY_MIGRATOR_DB_USERNAME=migrator \
+    PROPERTY_MIGRATOR_DB_PASSWORD=redacted \
+    "${WRAPPER}" info
+[[ ! -s "${TEST_ROOT}/docker.log" ]]
+expect_policy_rejected env \
+    PATH="${TEST_ROOT}/bin:${PATH}" \
+    FAKE_DOCKER_LOG="${TEST_ROOT}/docker.log" \
+    'PROPERTY_MIGRATOR_JDBC_URL=jdbc:postgresql://localhost:5432/home_search?Password=query-sentinel' \
+    PROPERTY_MIGRATOR_DB_USERNAME=migrator \
+    PROPERTY_MIGRATOR_DB_PASSWORD=redacted \
+    "${WRAPPER}" info
+[[ ! -s "${TEST_ROOT}/docker.log" ]]
+! grep -Fq authority-sentinel "${TEST_ROOT}/out" "${TEST_ROOT}/err" "${TEST_ROOT}/docker.log"
+! grep -Fq query-sentinel "${TEST_ROOT}/out" "${TEST_ROOT}/err" "${TEST_ROOT}/docker.log"
 
 expect_rejected "${wrapper_environment[@]}" "${WRAPPER}" migrate 8
 "${wrapper_environment[@]}" "${WRAPPER}" migrate 9 >/dev/null

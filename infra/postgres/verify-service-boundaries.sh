@@ -42,6 +42,18 @@ for password_binding in \
     exit 1
   fi
 done
+if grep -Fq 'GRANT home_search TO home_search_property_migrator' "${role_init_script}"; then
+  echo "ERROR: property migrator must not inherit or SET ROLE to the bootstrap superuser" >&2
+  exit 1
+fi
+for required_property_migrator_guard in \
+  'ALTER ROLE home_search_property_migrator NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' \
+  "pg_has_role('home_search_property_migrator', 'home_search', 'SET')"; do
+  if ! grep -Fq "${required_property_migrator_guard}" "${role_init_script}"; then
+    echo "ERROR: property migrator least-privilege guard is missing: ${required_property_migrator_guard}" >&2
+    exit 1
+  fi
+done
 for database in home_search home_search_admin home_search_user; do
   if ! grep -Fq "REVOKE CONNECT ON DATABASE ${database} FROM PUBLIC" "${role_init_script}"; then
     echo "ERROR: PUBLIC database connect must be revoked: ${database}" >&2

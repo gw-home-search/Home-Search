@@ -91,11 +91,16 @@ the removed legacy property is supplied.
 domain/application/infrastructure module extraction requires a follow-up ADR and is not
 part of the current runtime separation.
 
-`migration`은 같은 property-data ownership boundary 안의 run-and-exit 운영
-artifact다. API와 Batch는 모든 profile에서 Flyway 자동 실행을 끄며,
-`home_search` schema 변경은 `property-data-migration.jar`의 명시적 operation만
-수행한다. SQL/Java migration source는 계속 `core`가 소유하고 migration jar가
-`classpath:db/migration/api` 한 location을 사용한다.
+API와 Batch는 모든 profile에서 Flyway 자동 실행을 끈다. `home_search` schema
+변경은 pinned official Flyway container가 외부 `db/migration/api` SQL catalog를
+read-only mount해 수행한다. Flyway dependency와 migration SQL은 API/core/Batch
+runtime artifact에 포함되지 않는다.
+
+Migration version 8의 `complex.display_name`/generated `search_name`은 내부 검색
+projection이다. 검색 matching과 ranking에는 사용할 수 있지만 기존 public
+response의 `complexName`은 계속
+`COALESCE(NULLIF(BTRIM(trade_name), ''), name)` 의미를 유지한다. Optional
+`displayName` 공개는 후속 additive API 변경에서만 수행한다.
 
 현재 `home_search`는 `public` domain table, `batch` Spring Batch metadata,
 `public.flyway_schema_history` 하나를 유지한다. schema별 history 또는 Batch

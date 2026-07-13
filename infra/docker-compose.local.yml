@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: ${HOME_SEARCH_DB_USERNAME:-home_search}
       POSTGRES_PASSWORD: ${HOME_SEARCH_DB_PASSWORD:?Set HOME_SEARCH_DB_PASSWORD}
       PROPERTY_RUNTIME_DB_PASSWORD: ${PROPERTY_RUNTIME_DB_PASSWORD:-property_runtime_local_password}
-      PROPERTY_MIGRATOR_DB_PASSWORD: ${PROPERTY_MIGRATOR_DB_PASSWORD:-property_migrator_local_password}
+      PROPERTY_MIGRATOR_DB_PASSWORD: ${PROPERTY_MIGRATOR_DB_PASSWORD:?Set PROPERTY_MIGRATOR_DB_PASSWORD}
       ADMIN_RUNTIME_DB_PASSWORD: ${ADMIN_RUNTIME_DB_PASSWORD:-admin_runtime_local_password}
       ADMIN_MIGRATOR_DB_PASSWORD: ${ADMIN_MIGRATOR_DB_PASSWORD:-admin_migrator_local_password}
       USER_RUNTIME_DB_PASSWORD: ${USER_RUNTIME_DB_PASSWORD:?Set USER_RUNTIME_DB_PASSWORD}
@@ -41,6 +41,24 @@ services:
       timeout: 5s
       retries: 10
       start_period: 5s
+    networks:
+      - home-search-local
+
+  property-flyway:
+    image: redgate/flyway:11.7.2
+    platform: linux/amd64
+    profiles: [ "migration" ]
+    depends_on:
+      postgis:
+        condition: service_healthy
+    environment:
+      FLYWAY_URL: ${PROPERTY_FLYWAY_URL:-jdbc:postgresql://postgis:5432/home_search}
+      FLYWAY_USER: ${PROPERTY_FLYWAY_USER:-home_search_property_migrator}
+      FLYWAY_PASSWORD: ${PROPERTY_MIGRATOR_DB_PASSWORD:?Set PROPERTY_MIGRATOR_DB_PASSWORD}
+      REDGATE_DISABLE_TELEMETRY: "true"
+    volumes:
+      - ../apps/property-data/db/migration/api:/flyway/sql:ro
+      - ../apps/property-data/db:/flyway/conf:ro
     networks:
       - home-search-local
 

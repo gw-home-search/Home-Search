@@ -17,6 +17,10 @@ if grep -Eq 'USER_(RUNTIME|MIGRATOR)_DB_PASSWORD:-' "${compose_file}"; then
   echo "ERROR: user database role passwords must not have repository-known defaults" >&2
   exit 1
 fi
+if grep -Eq 'PROPERTY_MIGRATOR_DB_PASSWORD:-' "${compose_file}"; then
+  echo "ERROR: property migrator password must not have a repository-known default" >&2
+  exit 1
+fi
 if grep -Eq 'POSTGRES_PASSWORD:.*HOME_SEARCH_DB_PASSWORD:-' "${compose_file}"; then
   echo "ERROR: PostgreSQL superuser password must not have a repository-known default" >&2
   exit 1
@@ -109,7 +113,8 @@ if ! grep -Eq 'enabled:[[:space:]]*false' "${root}/apps/user/service/app/src/mai
   exit 1
 fi
 for removed_migration_module in \
-  "${root}/apps/user/service/migration"; do
+  "${root}/apps/user/service/migration" \
+  "${root}/apps/property-data/migration"; do
   if [[ -e "${removed_migration_module}" ]]; then
     echo "ERROR: removed migration module still exists: ${removed_migration_module}" >&2
     exit 1
@@ -117,7 +122,9 @@ for removed_migration_module in \
 done
 for removed_database_source_set in \
   "${root}/apps/user/service/core/src/database" \
-  "${root}/apps/user/service/core/src/databaseTest"; do
+  "${root}/apps/user/service/core/src/databaseTest" \
+  "${root}/apps/property-data/core/src/database" \
+  "${root}/apps/property-data/core/src/databaseTest"; do
   if [[ -e "${removed_database_source_set}" ]]; then
     echo "ERROR: removed database source set still exists: ${removed_database_source_set}" >&2
     exit 1
@@ -125,6 +132,10 @@ for removed_database_source_set in \
 done
 if ! grep -Fq '../apps/user/service/db/migration/user:/flyway/sql:ro' "${compose_file}"; then
   echo "ERROR: user Flyway SQL catalog must be mounted read-only" >&2
+  exit 1
+fi
+if ! grep -Fq '../apps/property-data/db/migration/api:/flyway/sql:ro' "${compose_file}"; then
+  echo "ERROR: property Flyway SQL catalog must be mounted read-only" >&2
   exit 1
 fi
 if grep -A4 '^  user-flyway:' "${compose_file}" | grep -Eq 'profiles:.*user'; then

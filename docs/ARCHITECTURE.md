@@ -67,10 +67,13 @@ apps/property-data
 │       ├── PropertyDataBatchApplication.java
 │       ├── launch/
 │       └── rtms/
-└── migration/
-    └── src/main/java/com/home/migration
-        ├── PropertyDataMigrationApplication.java
-        └── explicit Flyway/backfill operations
+├── db/
+│   ├── flyway.conf
+│   └── migration/api/
+│       └── external SQL-only Flyway catalog
+└── ops/
+    ├── property-flyway.sh
+    └── property-deployment-preflight.sh
 ```
 
 The implementation can keep existing package names during the first move. The

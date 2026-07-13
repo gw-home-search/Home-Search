@@ -117,9 +117,9 @@ verify_catalog_state() {
 verify_history_rows() {
     local actual="$1" catalog expected
     catalog="$(catalog_versions)"
-    expected="$(printf '%s\n' "${catalog}" | sed 's/$/|SQL|t/')"
+    expected="$(printf '<null>|SCHEMA|t\n'; printf '%s\n' "${catalog}" | sed 's/$/|SQL|t/')"
     actual="$(printf '%s' "${actual}" | sed '/^[[:space:]]*$/d' | sort -t'|' -k1,1n)"
-    [[ "${actual}" == "${expected}" ]] || policy_error 'Flyway history가 version별 SQL/Success 정확히 한 건이 아닙니다.'
+    [[ "${actual}" == "${expected}" ]] || policy_error "Flyway history가 version별 SQL/Success 정확히 한 건이 아닙니다: ${actual}"
 }
 
 main() {
@@ -153,7 +153,7 @@ main() {
     fi
 
     [[ "${history_present}" == "t" || "${history_present}" == "true" ]] || policy_error 'Flyway history가 없습니다.'
-    if ! history_rows="$(run_psql "SELECT /* preflight_history_rows */ version || '|' || type || '|' || CASE WHEN success THEN 't' ELSE 'f' END FROM users.flyway_schema_history ORDER BY installed_rank;")"; then
+    if ! history_rows="$(run_psql "SELECT /* preflight_history_rows */ COALESCE(version, '<null>') || '|' || type || '|' || CASE WHEN success THEN 't' ELSE 'f' END FROM users.flyway_schema_history ORDER BY installed_rank;")"; then
         runtime_error 'Flyway history 조회가 실패했습니다.'
     fi
     verify_history_rows "${history_rows}"

@@ -44,7 +44,7 @@ chmod +x "${TEST_ROOT}/bin/docker"
 readonly PENDING_INFO='{"migrations":[{"version":"1","type":"SQL","state":"Pending"},{"version":"2","type":"SQL","state":"Pending"},{"version":"3","type":"SQL","state":"Pending"},{"version":"4","type":"SQL","state":"Pending"},{"version":"5","type":"SQL","state":"Pending"}]}'
 readonly SUCCESS_INFO='{"migrations":[{"version":"1","type":"SQL","state":"Success"},{"version":"2","type":"SQL","state":"Success"},{"version":"3","type":"SQL","state":"Success"},{"version":"4","type":"SQL","state":"Success"},{"version":"5","type":"SQL","state":"Success"}]}'
 readonly REPEATABLE_INFO='{"migrations":[{"version":"1","type":"SQL","state":"Pending"},{"version":"2","type":"SQL","state":"Pending"},{"version":"3","type":"SQL","state":"Pending"},{"version":"4","type":"SQL","state":"Pending"},{"version":"5","type":"SQL","state":"Pending"},{"category":"Repeatable","version":null,"type":"SQL","state":"Pending"}]}'
-readonly SUCCESS_HISTORY=$'1|SQL|t\n2|SQL|t\n3|SQL|t\n4|SQL|t\n5|SQL|t\n'
+readonly SUCCESS_HISTORY=$'<null>|SCHEMA|t\n1|SQL|t\n2|SQL|t\n3|SQL|t\n4|SQL|t\n5|SQL|t\n'
 
 invoke() {
     env \
@@ -122,6 +122,8 @@ expect_exit 2 invoke env FAKE_HISTORY_PRESENT=true FAKE_INFO_JSON='{"migrations"
     FAKE_HISTORY_ROWS="${SUCCESS_HISTORY}" "${PREFLIGHT}" after 5
 expect_exit 2 invoke env FAKE_HISTORY_PRESENT=true FAKE_INFO_JSON='{"migrations":[{"version":"1","type":"BASELINE","state":"Success"}]}' \
     FAKE_HISTORY_ROWS=$'1|BASELINE|t\n' "${PREFLIGHT}" after 5
+expect_exit 2 invoke env FAKE_HISTORY_PRESENT=true FAKE_INFO_JSON="${SUCCESS_INFO}" \
+    FAKE_HISTORY_ROWS="${SUCCESS_HISTORY}"$'<null>|JDBC|t\n' "${PREFLIGHT}" after 5
 expect_exit 2 invoke env FAKE_HISTORY_PRESENT=true FAKE_INFO_JSON='{"migrations":[{"version":"2","type":"SQL","state":"Success"},{"version":"2","type":"SQL","state":"Success"}]}' \
     FAKE_HISTORY_ROWS=$'2|SQL|t\n2|SQL|t\n' "${PREFLIGHT}" after 5
 expect_exit 2 invoke env FAKE_HISTORY_PRESENT=true FAKE_INFO_JSON='{"migrations":[{"version":"2","type":"SQL","state":"Missing"}]}' \

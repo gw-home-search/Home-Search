@@ -6,5 +6,5 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class OAuthProviderFallbackController{
- @GetMapping("/oauth2/authorization/{provider}") ProblemDetail unsupported(@PathVariable String provider){var detail=ProblemDetail.forStatus(HttpStatus.NOT_FOUND);detail.setTitle("지원하지 않는 OAuth provider입니다");detail.setProperty("code","OAUTH_PROVIDER_NOT_SUPPORTED");return detail;}
+ @GetMapping("/oauth2/authorization/{provider}") ProblemDetail unsupported(@PathVariable String provider){return UserProblemDetails.create(HttpStatus.NOT_FOUND,"지원하지 않는 OAuth provider입니다","The requested OAuth provider is not supported.","OAUTH_PROVIDER_NOT_SUPPORTED","OAuthProviderNotSupportedException");}
 }

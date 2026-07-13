@@ -30,6 +30,10 @@ evaluationDependsOn(':app')
 tasks.register('userServiceTest') {
     dependsOn ':core:test', ':app:test'
 }
+tasks.register('userServiceLibraryTest') {
+    dependsOn gradle.includedBuild('security-jwt-core').task(':test')
+    dependsOn gradle.includedBuild('user-auth-contract').task(':test')
+}
 tasks.register('userServicePersistenceTest') { dependsOn ':core:test', ':app:test' }
 tasks.register('userServiceApiContractTest') { dependsOn ':app:test' }
 tasks.register('userServiceDependencyBoundaryCheck') { dependsOn ':app:verifyRuntimeMigrationBoundary' }
@@ -163,7 +167,7 @@ tasks.register('verifyUserFlywayFresh', Exec) {
 }
 
 tasks.register('userServiceQualityCheck') {
-    dependsOn 'userServiceTest', 'userServicePersistenceTest', 'userServiceApiContractTest',
+    dependsOn 'userServiceTest', 'userServiceLibraryTest', 'userServicePersistenceTest', 'userServiceApiContractTest',
         'userServiceDependencyBoundaryCheck', 'verifyUserMigrationCatalog',
         'verifyUserFlywayCliContract', 'verifyUserDeploymentPreflightContract',
         'verifyUserFlywayFresh', 'userServiceCoverageCheck', ':app:bootJar'

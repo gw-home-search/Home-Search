@@ -13,10 +13,10 @@ services:
       PROPERTY_MIGRATOR_DB_PASSWORD: ${PROPERTY_MIGRATOR_DB_PASSWORD:-property_migrator_local_password}
       ADMIN_RUNTIME_DB_PASSWORD: ${ADMIN_RUNTIME_DB_PASSWORD:-admin_runtime_local_password}
       ADMIN_MIGRATOR_DB_PASSWORD: ${ADMIN_MIGRATOR_DB_PASSWORD:-admin_migrator_local_password}
-      USER_RUNTIME_DB_PASSWORD: ${USER_RUNTIME_DB_PASSWORD:-user_runtime_local_password}
-      USER_MIGRATOR_DB_PASSWORD: ${USER_MIGRATOR_DB_PASSWORD:-user_migrator_local_password}
+      USER_RUNTIME_DB_PASSWORD: ${USER_RUNTIME_DB_PASSWORD:?Set USER_RUNTIME_DB_PASSWORD}
+      USER_MIGRATOR_DB_PASSWORD: ${USER_MIGRATOR_DB_PASSWORD:?Set USER_MIGRATOR_DB_PASSWORD}
     ports:
-      - "${HOME_SEARCH_DB_PORT:-15432}:5432"
+      - "127.0.0.1:${HOME_SEARCH_DB_PORT:-15432}:5432"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"" ]
       interval: 10s
@@ -54,7 +54,7 @@ services:
     environment:
       FLYWAY_URL: ${USER_FLYWAY_URL:-jdbc:postgresql://postgis:5432/home_search_user}
       FLYWAY_USER: ${USER_FLYWAY_USER:-home_search_user_migrator}
-      FLYWAY_PASSWORD: ${USER_FLYWAY_PASSWORD:-user_migrator_local_password}
+      FLYWAY_PASSWORD: ${USER_MIGRATOR_DB_PASSWORD:?Set USER_MIGRATOR_DB_PASSWORD}
       REDGATE_DISABLE_TELEMETRY: "true"
     volumes:
       - ../apps/user/service/db/migration/user:/flyway/sql:ro
@@ -76,7 +76,7 @@ services:
     ports:
       - "127.0.0.1:${HOME_SEARCH_ML_PORT:-8001}:8001"
     volumes:
-      - ..:/workspace
+      - ../apps/ml:/workspace/apps/ml
       - ${F37_ARTIFACT_DIR:-/tmp/home-search-missing-f37-artifact}:/model:ro
     networks:
       - home-search-local
@@ -90,8 +90,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    working_dir: /workspace/apps/property-data
-    command: [ "java", "-jar", "api/build/libs/property-data-api.jar" ]
+    working_dir: /app
+    command: [ "java", "-jar", "property-data-api.jar" ]
     env_file:
       - ../apps/property-data/ops/local-runtime.env.example
       - ${HOME_SEARCH_API_ENV_FILE:-../apps/property-data/ops/local-runtime.override.env.example}
@@ -129,7 +129,7 @@ services:
     expose:
       - "8080"
     volumes:
-      - ..:/workspace
+      - ../apps/property-data/api/build/libs/property-data-api.jar:/app/property-data-api.jar:ro
       - ../runtime-keys/admin-internal/public:/run/keys/admin-internal-public:ro
     networks:
       - home-search-local
@@ -232,7 +232,7 @@ services:
     ports:
       - "${HOME_SEARCH_WEB_PORT:-5173}:5173"
     volumes:
-      - ..:/workspace
+      - ../apps/web:/workspace/apps/web
       - home-search-web-node-modules:/workspace/apps/web/node_modules
     networks:
       - home-search-local
@@ -245,8 +245,8 @@ services:
     depends_on:
       postgis:
         condition: service_healthy
-    working_dir: /workspace/apps/admin/service
-    command: [ "java", "-jar", "api/build/libs/admin-service-api.jar" ]
+    working_dir: /app
+    command: [ "java", "-jar", "admin-service-api.jar" ]
     environment:
       ADMIN_DB_JDBC_URL: jdbc:postgresql://postgis:5432/home_search_admin
       ADMIN_DB_USERNAME: ${ADMIN_RUNTIME_DB_USERNAME:-home_search_admin_runtime}
@@ -262,7 +262,7 @@ services:
     ports:
       - "${HOME_SEARCH_ADMIN_API_PORT:-8081}:8081"
     volumes:
-      - ..:/workspace
+      - ../apps/admin/service/api/build/libs/admin-service-api.jar:/app/admin-service-api.jar:ro
       - ../runtime-keys/admin-internal/private:/run/keys/admin-internal-signing:ro
     networks:
       - home-search-local
@@ -281,7 +281,7 @@ services:
     ports:
       - "${HOME_SEARCH_ADMIN_WEB_PORT:-5174}:5174"
     volumes:
-      - ..:/workspace
+      - ../apps/admin/web:/workspace/apps/admin/web
       - home-search-admin-web-node-modules:/workspace/apps/admin/web/node_modules
     networks:
       - home-search-local
@@ -296,8 +296,8 @@ services:
     depends_on:
       postgis:
         condition: service_healthy
-    working_dir: /workspace/apps/user/service
-    command: [ "java", "-jar", "app/build/libs/user-service-app.jar" ]
+    working_dir: /app
+    command: [ "java", "-jar", "user-service-app.jar" ]
     environment:
       USER_DB_JDBC_URL: jdbc:postgresql://postgis:5432/home_search_user
       USER_DB_USERNAME: home_search_user_runtime
@@ -308,7 +308,7 @@ services:
     ports:
       - "${HOME_SEARCH_USER_API_PORT:-8082}:8082"
     volumes:
-      - ..:/workspace
+      - ../apps/user/service/app/build/libs/user-service-app.jar:/app/user-service-app.jar:ro
       - ${USER_JWT_PRIVATE_KEY_HOST_PATH:-../runtime-keys/user/private}:/run/keys/user-signing-private:ro
       - ${USER_JWT_PUBLIC_KEY_HOST_PATH:-../runtime-keys/user/public}:/run/keys/user-signing-public:ro
     networks:

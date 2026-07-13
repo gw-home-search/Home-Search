@@ -5,6 +5,19 @@ compose_file="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/docker-compose.lo
 root="$(cd "$(dirname "${compose_file}")/.." && pwd)"
 role_init_script="${root}/infra/postgres/init/10-create-service-databases-and-roles.sh"
 
+if grep -Fq -- '- ..:/workspace' "${compose_file}"; then
+  echo "ERROR: runtime services must not mount the repository root" >&2
+  exit 1
+fi
+if ! grep -Fq '127.0.0.1:${HOME_SEARCH_DB_PORT:-15432}:5432' "${compose_file}"; then
+  echo "ERROR: local PostgreSQL must bind to loopback only" >&2
+  exit 1
+fi
+if grep -Eq 'USER_(RUNTIME|MIGRATOR)_DB_PASSWORD:-' "${compose_file}"; then
+  echo "ERROR: user database role passwords must not have repository-known defaults" >&2
+  exit 1
+fi
+
 if grep -Eq -- '--set=[^ ]*password' "${role_init_script}"; then
   echo "ERROR: database role password is exposed through a psql process argument" >&2
   exit 1
@@ -68,6 +81,14 @@ for required_user_setting in \
 done
 if ! grep -A55 '^  user-service:' "${compose_file}" | grep -Fq '/run/keys/user-signing-private:ro'; then
   echo "ERROR: user signing private key must be mounted read-only" >&2
+  exit 1
+fi
+if ! grep -A55 '^  user-service:' "${compose_file}" | grep -Fq '../apps/user/service/app/build/libs/user-service-app.jar:/app/user-service-app.jar:ro'; then
+  echo "ERROR: user-service must mount only its runtime artifact" >&2
+  exit 1
+fi
+if grep -A55 '^  user-service:' "${compose_file}" | grep -Eq '/workspace|db/migration|\.env:'; then
+  echo "ERROR: user-service runtime mount exposes source, migrations, or dotenv files" >&2
   exit 1
 fi
 for runtime_config in \

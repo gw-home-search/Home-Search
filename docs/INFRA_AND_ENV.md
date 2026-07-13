@@ -132,11 +132,13 @@ and JWT key metadata come from the service-local file.
 
 `USER_RUNTIME_DB_PASSWORD` and `USER_MIGRATOR_DB_PASSWORD` are Postgres role
 bootstrap variables, not user-service application variables. The user-service
-file must therefore contain `USER_DB_PASSWORD`; for the built-in local role use
-`USER_DB_PASSWORD=user_runtime_local_password`. If the runtime role password is
-customized, the Postgres bootstrap value and `USER_DB_PASSWORD` must be kept
-identical. Service-level `env_file` values are intentionally not shared with the
-Postgres container because that would also expose OAuth credentials to it.
+file must therefore contain the same value as `USER_DB_PASSWORD`. Compose has no
+repository-known default for either database role password: export two distinct
+values before `docker compose` and keep the runtime value synchronized with
+`USER_DB_PASSWORD`. Service-level `env_file` values are intentionally not shared
+with the Postgres container because that would also expose OAuth credentials to
+it. PostgreSQL binds to host loopback only, and runtime services mount only their
+own artifact or application directory rather than the repository root.
 
 ## Required AI-service Environment
 

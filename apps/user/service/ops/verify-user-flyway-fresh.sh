@@ -29,12 +29,13 @@ for _ in $(seq 1 40); do
 done
 docker exec "${DATABASE_CONTAINER}" pg_isready -U postgres -d home_search_user >/dev/null
 docker exec "${DATABASE_CONTAINER}" psql -U postgres -d home_search_user -v ON_ERROR_STOP=1 \
-    -c 'CREATE ROLE home_search_user_migrator' \
-    -c 'CREATE ROLE home_search_user_runtime' >/dev/null
+    -c "CREATE ROLE home_search_user_migrator LOGIN PASSWORD '${PASSWORD}'" \
+    -c "CREATE ROLE home_search_user_runtime LOGIN PASSWORD 'runtime-smoke-only'" \
+    -c 'ALTER DATABASE home_search_user OWNER TO home_search_user_migrator' >/dev/null
 
 : > "${EVIDENCE_FILE}"
 export USER_MIGRATOR_JDBC_URL="jdbc:postgresql://${DATABASE_CONTAINER}:5432/home_search_user"
-export USER_MIGRATOR_DB_USERNAME=postgres
+export USER_MIGRATOR_DB_USERNAME=home_search_user_migrator
 export USER_MIGRATOR_DB_PASSWORD="${PASSWORD}"
 export MIGRATION_DOCKER_NETWORK="${NETWORK}"
 export MIGRATION_EVIDENCE_FILE="${EVIDENCE_FILE}"
@@ -46,9 +47,9 @@ export MIGRATION_EVIDENCE_FILE="${EVIDENCE_FILE}"
 
 history_rows="$(docker exec "${DATABASE_CONTAINER}" psql -U postgres -d home_search_user \
     -v ON_ERROR_STOP=1 -Atc \
-    "SELECT version || '|' || type || '|' || CASE WHEN success THEN 't' ELSE 'f' END FROM users.flyway_schema_history ORDER BY installed_rank" \
+    "SELECT COALESCE(version, '<null>') || '|' || type || '|' || CASE WHEN success THEN 't' ELSE 'f' END FROM users.flyway_schema_history ORDER BY installed_rank" \
     | sed '/^[[:space:]]*$/d')"
-expected_history=$'1|SQL|t\n2|SQL|t\n3|SQL|t\n4|SQL|t\n5|SQL|t'
+expected_history=$'<null>|SCHEMA|t\n1|SQL|t\n2|SQL|t\n3|SQL|t\n4|SQL|t\n5|SQL|t'
 if [[ "${history_rows}" != "${expected_history}" ]]; then
     printf '예상하지 않은 user-service migration history: %s\n' "${history_rows}" >&2
     exit 1

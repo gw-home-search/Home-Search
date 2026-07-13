@@ -22,6 +22,11 @@ if hasattr(sys.stdout, "reconfigure"):
 
 DEFAULT_MAIN = Path("/Users/gwongwangjae/home-search")
 FORBIDDEN_BRANCHES = {"main", "master"}
+PLANNED_STACKED_BRANCHES = {
+    "codex/user-service-1-6",
+    "codex/property-flyway-boundary",
+    "codex/nearby-map-ux",
+}
 
 
 def now_iso() -> str:
@@ -63,8 +68,10 @@ def fail(message: str, code: int = 1) -> int:
 def validate_branch(branch: str) -> None:
     if branch in FORBIDDEN_BRANCHES:
         raise ValueError("main/master branch는 push 또는 PR head로 사용할 수 없습니다")
-    if not branch.startswith("feat/") or not branch.endswith("-integration"):
-        raise ValueError("integration branch는 feat/*-integration 형식이어야 합니다")
+    if branch not in PLANNED_STACKED_BRANCHES and (
+        not branch.startswith("feat/") or not branch.endswith("-integration")
+    ):
+        raise ValueError("integration branch는 feat/*-integration 또는 승인된 stacked branch여야 합니다")
 
 
 def branch_exists(branch: str, cwd: Path) -> bool:
@@ -280,6 +287,11 @@ def run_self_test() -> int:
         checks.append(False)
     except ValueError:
         checks.append(True)
+    try:
+        validate_branch("codex/user-service-1-6")
+        checks.append(True)
+    except ValueError:
+        checks.append(False)
     checks.append("--draft" in manual_commands(args))
     checks.append(args.draft is True)
     checks.append(

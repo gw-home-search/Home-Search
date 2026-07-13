@@ -17,6 +17,10 @@ if grep -Eq 'USER_(RUNTIME|MIGRATOR)_DB_PASSWORD:-' "${compose_file}"; then
   echo "ERROR: user database role passwords must not have repository-known defaults" >&2
   exit 1
 fi
+if grep -Eq 'POSTGRES_PASSWORD:.*HOME_SEARCH_DB_PASSWORD:-' "${compose_file}"; then
+  echo "ERROR: PostgreSQL superuser password must not have a repository-known default" >&2
+  exit 1
+fi
 
 if grep -Eq -- '--set=[^ ]*password' "${role_init_script}"; then
   echo "ERROR: database role password is exposed through a psql process argument" >&2

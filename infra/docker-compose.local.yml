@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: ${HOME_SEARCH_DB_NAME:-home_search}
       POSTGRES_USER: ${HOME_SEARCH_DB_USERNAME:-home_search}
-      POSTGRES_PASSWORD: ${HOME_SEARCH_DB_PASSWORD:-home_search_local_password}
+      POSTGRES_PASSWORD: ${HOME_SEARCH_DB_PASSWORD:?Set HOME_SEARCH_DB_PASSWORD}
       PROPERTY_RUNTIME_DB_PASSWORD: ${PROPERTY_RUNTIME_DB_PASSWORD:-property_runtime_local_password}
       PROPERTY_MIGRATOR_DB_PASSWORD: ${PROPERTY_MIGRATOR_DB_PASSWORD:-property_migrator_local_password}
       ADMIN_RUNTIME_DB_PASSWORD: ${ADMIN_RUNTIME_DB_PASSWORD:-admin_runtime_local_password}

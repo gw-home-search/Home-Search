@@ -130,11 +130,12 @@ that populated file. The container receives `USER_DB_JDBC_URL`,
 `USER_DB_PASSWORD`, OAuth credentials, Origin/redirect values, cookie security,
 and JWT key metadata come from the service-local file.
 
-`USER_RUNTIME_DB_PASSWORD` and `USER_MIGRATOR_DB_PASSWORD` are Postgres role
-bootstrap variables, not user-service application variables. The user-service
+`HOME_SEARCH_DB_PASSWORD`, `USER_RUNTIME_DB_PASSWORD`, and
+`USER_MIGRATOR_DB_PASSWORD` are Postgres bootstrap variables, not user-service
+application variables. The user-service
 file must therefore contain the same value as `USER_DB_PASSWORD`. Compose has no
-repository-known default for either database role password: export two distinct
-values before `docker compose` and keep the runtime value synchronized with
+repository-known default for the cluster superuser or either user database role:
+export three distinct values before `docker compose` and keep the runtime value synchronized with
 `USER_DB_PASSWORD`. Service-level `env_file` values are intentionally not shared
 with the Postgres container because that would also expose OAuth credentials to
 it. PostgreSQL binds to host loopback only, and runtime services mount only their

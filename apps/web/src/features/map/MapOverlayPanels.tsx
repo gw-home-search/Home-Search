@@ -12,6 +12,9 @@ import {
   createComplexMarkerViewModel,
   createRegionMarkerViewModel,
   isComplexMarkerSelected,
+  MAX_MAP_LEVEL,
+  MIN_MAP_LEVEL,
+  regionMarkerDensityForLevel,
   type ComplexMapMarker,
   type RegionMapMarker,
 } from './markerViewModel';
@@ -24,6 +27,7 @@ type MapOverlayPanelsProps = {
   mapRuntimeState: KakaoMapRuntimeState;
   markerError: string | null;
   markerState: MarkerRequestState;
+  level: number;
   markers: MapMarkersResult | null;
   hiddenMarkerCount?: number;
   selectedComplex: ComplexSelection | null;
@@ -42,6 +46,7 @@ export function MapOverlayPanels({
   mapRuntimeState,
   markerError,
   markerState,
+  level,
   markers,
   hiddenMarkerCount = 0,
   selectedComplex,
@@ -57,6 +62,7 @@ export function MapOverlayPanels({
       {mapRuntimeState === 'ready' || markers == null ? null : (
         <FallbackMarkerLayer
           bounds={bounds}
+          level={level}
           markers={markers}
           selectedComplex={selectedComplex}
           onComplexMarkerSelect={onComplexMarkerSelect}
@@ -65,10 +71,10 @@ export function MapOverlayPanels({
       )}
 
       <div aria-label="지도 조작" className="map-controls">
-        <button type="button" aria-label="지도 확대" onClick={onZoomIn}>
+        <button type="button" aria-label="지도 확대" disabled={level <= MIN_MAP_LEVEL} onClick={onZoomIn}>
           <PlusIcon aria-hidden="true" />
         </button>
-        <button type="button" aria-label="지도 축소" onClick={onZoomOut}>
+        <button type="button" aria-label="지도 축소" disabled={level >= MAX_MAP_LEVEL} onClick={onZoomOut}>
           <MinusIcon aria-hidden="true" />
         </button>
       </div>
@@ -110,12 +116,14 @@ export function MapOverlayPanels({
 
 function FallbackMarkerLayer({
   bounds,
+  level,
   markers,
   selectedComplex,
   onComplexMarkerSelect,
   onRegionMarkerSelect,
 }: {
   bounds: MapBoundsRequest;
+  level: number;
   markers: MapMarkersResult;
   selectedComplex: ComplexSelection | null;
   onComplexMarkerSelect: (marker: ComplexMapMarker) => void;
@@ -163,6 +171,7 @@ function FallbackMarkerLayer({
                 aria-label={viewModel.ariaLabel}
                 className="fallback-map-marker map-marker map-marker-region"
                 data-fallback-marker-id={`region-${viewModel.key}`}
+                data-marker-density={regionMarkerDensityForLevel(level)}
                 data-marker-shape={viewModel.shape}
                 onClick={() => {
                   onRegionMarkerSelect(marker);

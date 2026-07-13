@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: home-search-user-service
+  flyway:
+    enabled: false
+
+server:
+  port: 8082

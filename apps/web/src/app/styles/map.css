@@ -107,18 +107,19 @@
   white-space: nowrap;
 }
 
-.filter-chip { display: grid; width: 94px; place-items: center; padding: 0 9px; border-color: var(--hs-map-color-marker-soft); background: var(--hs-map-color-brand-soft); text-align: center; }
+.filter-chip { display: grid; width: 94px; place-items: center; padding: 0 9px; border-color: var(--hs-map-color-line); background: var(--hs-map-color-surface); text-align: center; }
 .filter-chip-copy { display: grid; height: 100%; place-content: center; min-width: 0; gap: 2px; }
 .filter-chip-copy > span:first-child { display: block; font-size: 14px; font-weight: 800; line-height: 18px; }
 .filter-chip-copy > span:last-child { overflow: hidden; color: var(--hs-map-color-muted); font-size: 10px; font-weight: 700; line-height: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .mobile-search-action { display: none; align-items: center; gap: 7px; padding: 0 11px; }
-.filter-chip[data-active="true"] { border-color: var(--hs-map-color-action); background: var(--hs-map-color-brand-soft); color: var(--hs-map-color-action); }
+.filter-chip:hover { border-color: var(--hs-map-color-line-strong); }
+.filter-chip[data-active="true"] { border-color: var(--hs-map-color-primary); background: var(--hs-map-color-brand-soft); color: var(--hs-map-color-action); }
 .filter-chip[data-open="true"] { border-width: 2px; border-color: var(--hs-map-color-action); color: var(--hs-map-color-action); }
 .mobile-search-action svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 
 .filter-reset { display: inline-flex; width: auto; height: 38px; flex: 0 0 auto; align-items: center; justify-content: center; gap: 6px; padding: 0 9px; border-color: transparent; border-radius: var(--hs-map-radius-pill); background: transparent; font-size: 13px; font-weight: 750; line-height: 18px; }
 .filter-reset svg { width: 16px; height: 16px; }
-.filter-reset:disabled { cursor: not-allowed; opacity: .45; }
+.filter-reset:disabled { cursor: not-allowed; opacity: .62; }
 
 .filter-popover {
   position: absolute;
@@ -246,7 +247,15 @@
 }
 
 .map-marker-region:hover { border-color: var(--hs-map-color-marker-accent); transform: translateY(-1px); }
-.fallback-map-marker-region strong,
-.kakao-map-overlay-region-name { display: grid; place-items: center; padding: 0 8px; overflow: hidden; color: var(--hs-map-color-ink); font-size: 13px; font-weight: 600; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
-.fallback-map-marker-region span,
-.kakao-map-overlay-region-action { display: grid; place-items: center; margin: 0 -1px -1px; border-radius: 0 0 var(--hs-map-radius-marker) var(--hs-map-radius-marker); background: var(--hs-map-color-marker-soft); color: var(--hs-map-color-action); font-size: 14px; font-weight: 800; line-height: 18px; }
+.map-marker-region-name { display: grid; place-items: center; padding: 0 8px; overflow: hidden; color: var(--hs-map-color-ink); font-size: 13px; font-weight: 600; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.map-marker-region-unit { display: grid; place-items: center; margin: 0 -1px -1px; border-radius: 0 0 var(--hs-map-radius-marker) var(--hs-map-radius-marker); background: var(--hs-map-color-marker-soft); color: var(--hs-map-color-action); font-size: 14px; font-weight: 800; line-height: 18px; }
+
+.map-marker-region[data-marker-density="dense"] { width: 98px; min-height: 48px; grid-template-rows: 26px 22px; }
+.map-marker-region[data-marker-density="dense"] .map-marker-region-name { padding: 0 6px; font-size: 11px; font-weight: 700; line-height: 15px; }
+.map-marker-region[data-marker-density="dense"] .map-marker-region-unit { font-size: 11px; line-height: 15px; }
+.map-marker-region[data-marker-density="compact"] { width: 112px; min-height: 54px; grid-template-rows: 29px 25px; }
+.map-marker-region[data-marker-density="compact"] .map-marker-region-name { padding: 0 7px; font-size: 12px; line-height: 16px; }
+.map-marker-region[data-marker-density="compact"] .map-marker-region-unit { font-size: 12px; line-height: 16px; }
+.map-marker-region[data-marker-density="overview"] { width: 92px; min-height: 46px; grid-template-rows: 25px 21px; }
+.map-marker-region[data-marker-density="overview"] .map-marker-region-name { padding: 0 5px; font-size: 11px; font-weight: 700; line-height: 14px; }
+.map-marker-region[data-marker-density="overview"] .map-marker-region-unit { font-size: 10px; line-height: 14px; }

@@ -153,7 +153,20 @@ describe('App map-first shell 화면', () => {
     const { root, rootElement } = await renderApp();
     await flushAsyncState();
 
+    const explorationPanel = rootElement.querySelector<HTMLElement>('#exploration-panel');
+    const regionPanel = rootElement.querySelector<HTMLElement>('#exploration-panel-region');
+
     expect(rootElement.querySelector('[role="tablist"]')).toBeNull();
+    expect(explorationPanel?.getAttribute('aria-label')).toBe('탐색 패널');
+    expect(
+      Array.from(explorationPanel?.querySelectorAll('p') ?? [])
+        .some((element) => element.textContent?.trim() === '탐색'),
+    ).toBe(false);
+    expect(regionPanel?.getAttribute('aria-label')).toBe('지역 탐색 패널');
+    expect(
+      Array.from(regionPanel?.querySelectorAll('p') ?? [])
+        .some((element) => element.textContent?.trim() === '지역'),
+    ).toBe(false);
     expect(rootElement.querySelector('input[aria-label="단지 검색"]')).not.toBeNull();
     expect(rootElement.querySelector('#exploration-panel-region')?.hasAttribute('hidden')).toBe(false);
 
@@ -474,6 +487,29 @@ describe('App map-first shell 화면', () => {
     });
 
     expect(sdk.map.setLevel).toHaveBeenLastCalledWith(5);
+
+    unmount(root);
+  });
+
+  it('전국 overview level에서 zoom-out을 막고 Kakao runtime 최고 level을 제한한다', async () => {
+    const sdk = createFakeKakaoSdk({
+      bounds: {
+        swLat: 33,
+        swLng: 124,
+        neLat: 39,
+        neLng: 132,
+      },
+      level: 12,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+    vi.stubGlobal('kakao', sdk.kakao);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 12 });
+    await flushAsyncState();
+
+    expect(sdk.map.setMaxLevel).toHaveBeenCalledWith(12);
+    expect(rootElement.querySelector<HTMLElement>('[aria-label="지도 화면"]')?.dataset.mapLevel).toBe('12');
+    expect(rootElement.querySelector<HTMLButtonElement>('button[aria-label="지도 축소"]')?.disabled).toBe(true);
 
     unmount(root);
   });
@@ -2021,6 +2057,7 @@ describe('App map-first shell 화면', () => {
     const regionOverlayButton = sdk.overlays[0]?.content as HTMLButtonElement | undefined;
     expect(regionOverlayButton).not.toBeNull();
     expect(regionOverlayButton?.getAttribute('aria-label')).toBe('지역 이동 Seoul');
+    expect(regionOverlayButton?.dataset.markerDensity).toBe('standard');
     expect(regionOverlayButton?.textContent).toContain('1,200세대');
     expect(rootElement.querySelector('[aria-label="지역 마커"]')).toBeNull();
 
@@ -2258,6 +2295,8 @@ function createFakeKakaoSdk(options: { bounds: FakeBounds; level: number }) {
     getCenter: vi.fn(() => center),
     relayout: vi.fn(),
     setCenter: vi.fn(),
+    setMaxLevel: vi.fn(),
+    setMinLevel: vi.fn(),
     setLevel: vi.fn((nextLevel: number) => {
       level = nextLevel;
     }),

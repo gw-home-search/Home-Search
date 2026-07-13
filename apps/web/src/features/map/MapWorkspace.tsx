@@ -51,7 +51,7 @@ export function MapWorkspace({
   const [mapRuntimeError, setMapRuntimeError] = useState<string | null>(null);
 
   return (
-    <section aria-label="지도 화면" className="map-surface">
+    <section aria-label="지도 화면" className="map-surface" data-map-level={viewport.level}>
       <KakaoMapSurface
         appKey={appKey}
         focusTarget={focusTarget}
@@ -73,6 +73,7 @@ export function MapWorkspace({
         mapRuntimeState={mapRuntimeState}
         markerError={markerError}
         markerState={markerState}
+        level={viewport.level}
         markers={markers}
         hiddenMarkerCount={hiddenMarkerCount}
         selectedComplex={selectedComplex}

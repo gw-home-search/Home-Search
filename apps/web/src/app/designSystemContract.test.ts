@@ -25,7 +25,7 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(designSystem).toContain('--hs-map-color-surface-muted: #f6f8f9;');
     expect(designSystem).toContain('--hs-map-color-trend: #0e7490;');
     expect(designSystem).toContain('--hs-map-rail-width-wide: 380px;');
-    expect(designSystem).toContain('--hs-map-rail-width-compact: 352px;');
+    expect(designSystem).toContain('--hs-map-rail-width-compact: 336px;');
     expect(designSystem).toContain('--hs-map-shell-bar-height: 56px;');
     expect(designSystem).toContain('--hs-map-mobile-brand-height: 58px;');
     expect(designSystem).toContain('--hs-map-filter-height: 62px;');
@@ -61,6 +61,13 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(map).not.toContain('background: var(--hs-map-color-region); color: var(--hs-map-color-surface);');
   });
 
+  it('region marker는 두 band 형태를 유지하며 지도 level density에 따라 비례 축소한다', () => {
+    expect(map).toContain('.map-marker-region[data-marker-density="dense"] { width: 98px; min-height: 48px; grid-template-rows: 26px 22px;');
+    expect(map).toContain('.map-marker-region[data-marker-density="compact"] { width: 112px; min-height: 54px; grid-template-rows: 29px 25px;');
+    expect(map).toContain('.map-marker-region[data-marker-density="overview"] { width: 92px; min-height: 46px; grid-template-rows: 25px 21px;');
+    expect(map).not.toContain('.map-marker-region-unit { display: none; }');
+  });
+
   it('기존 shared token을 유지하고 public stylesheet에는 raw HEX나 gradient를 두지 않는다', () => {
     const publicStyles = [shell, map, exploration, detail, responsive].join('\n');
 
@@ -83,8 +90,16 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(map).not.toContain('.filter-panel::after');
   });
 
-  it('상세 mode에서 바깥 탐색 header를 완전히 숨긴다', () => {
-    expect(exploration).toContain('.exploration-panel-header[hidden] { display: none; }');
+  it('상세 mode에서 바깥 검색 controls를 완전히 숨긴다', () => {
+    expect(exploration).toContain('.exploration-search-panel[hidden] { display: none; }');
+    expect(exploration).toContain('min-height: var(--hs-map-filter-height);');
+  });
+
+  it('검색 입력은 중립 상태에서 시작하고 실행 버튼만 primary action으로 강조한다', () => {
+    expect(exploration).toContain('border: 1px solid var(--hs-map-color-line);');
+    expect(exploration).toContain('.exploration-search-panel input:focus-visible { border-color: var(--hs-map-color-action); box-shadow: var(--hs-map-focus-ring); }');
+    expect(exploration).toContain('background: var(--hs-map-color-action) !important;');
+    expect(exploration).toContain('color: var(--hs-map-color-surface) !important;');
   });
 
   it('상세 identity와 snapshot은 380px rail에서 충분한 세로 공간과 타이포 계층을 갖는다', () => {
@@ -103,8 +118,17 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(detail).toContain('.trade-range-button { min-height: 34px;');
   });
 
+  it('상세 header의 back control과 AI 도움말 icon을 각 hit area 중앙에 정렬한다', () => {
+    expect(detail).toContain('.detail-back-button { display: grid; place-items: center; grid-column: 1; justify-self: center; }');
+    expect(detail).toContain('width: 40px;');
+    expect(detail).toContain('border: 1px solid transparent;');
+    expect(detail).toContain('background: transparent;');
+    expect(detail).toContain('.prediction-help-button { display: grid; width: 32px; height: 32px; place-items: center;');
+    expect(detail).toContain('.prediction-heading { min-height: 32px;');
+  });
+
   it('공개 지도 local SVG icon export를 dependency 없이 유지한다', () => {
-    for (const icon of ['HomeSearchLogoIcon', 'SearchIcon', 'RefreshIcon', 'ChevronDownIcon', 'BackIcon', 'CloseIcon', 'PlusIcon', 'MinusIcon', 'HelpIcon', 'CheckIcon']) {
+    for (const icon of ['HomeSearchLogoIcon', 'SearchIcon', 'RefreshIcon', 'ChevronDownIcon', 'ChevronRightIcon', 'BackIcon', 'CloseIcon', 'PlusIcon', 'MinusIcon', 'HelpIcon', 'CheckIcon']) {
       expect(icons).toContain(`export function ${icon}`);
     }
     expect(icons).toContain("stroke: 'currentColor'");
@@ -123,19 +147,20 @@ describe('공개 지도 디자인 시스템 계약', () => {
   it('desktop/tablet rail과 mobile docked sheet 좌표를 같은 grid contract로 유지한다', () => {
     expect(designSystem).toContain('--hs-map-shell-bar-height: 56px;');
     expect(designSystem).toContain('--hs-map-rail-width-wide: 380px;');
-    expect(designSystem).toContain('--hs-map-rail-width-standard: 380px;');
-    expect(designSystem).toContain('--hs-map-rail-width-compact: 352px;');
+    expect(designSystem).toContain('--hs-map-rail-width-standard: 360px;');
+    expect(designSystem).toContain('--hs-map-rail-width-compact: 336px;');
     expect(shell).toContain('grid-template-columns: var(--hs-map-rail-width) minmax(0, 1fr);');
     expect(shell).toContain('grid-template-rows: var(--hs-map-filter-height) minmax(0, 1fr);');
     expect(responsive).toContain('grid-template-columns: var(--hs-map-rail-width-compact) minmax(0, 1fr);');
     expect(responsive).toContain('minmax(242px, 1fr) min(46dvh, calc(100dvh - 300px))');
     expect(responsive).toContain('minmax(242px, 1fr) min(68dvh, calc(100dvh - 300px))');
+    expect(responsive).toContain('grid-template-columns: minmax(0, 1fr) auto auto;');
     expect(exploration).not.toContain('404px');
     expect(responsive).toContain('(orientation: landscape)');
     expect(responsive).toContain('320px minmax(0, 1fr)');
   });
 
-  it('탐색 text와 filter range가 좁은 폭에서도 깨지지 않는 sizing contract를 유지한다', () => {
+  it('panel text와 filter range가 좁은 폭에서도 깨지지 않는 sizing contract를 유지한다', () => {
     expect(exploration).toContain('.panel-list-title');
     expect(exploration).toContain('.panel-list-meta');
     expect(exploration).toContain('.region-breadcrumb-link');
@@ -155,7 +180,9 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(map).toContain('.filter-panel {');
     expect(map).toContain('grid-template-columns: minmax(0, 1fr);');
     expect(map).toContain('.filter-chip-copy > span:first-child { display: block; font-size: 14px; font-weight: 800; line-height: 18px;');
-    expect(map).toContain('border-color: var(--hs-map-color-marker-soft); background: var(--hs-map-color-brand-soft);');
+    expect(map).toContain('border-color: var(--hs-map-color-line); background: var(--hs-map-color-surface);');
+    expect(map).toContain('.filter-chip[data-active="true"] { border-color: var(--hs-map-color-primary); background: var(--hs-map-color-brand-soft);');
+    expect(map).toContain('.filter-chip[data-open="true"] { border-width: 2px; border-color: var(--hs-map-color-action);');
     expect(map).toContain('.filter-reset { display: inline-flex;');
     expect(map).toContain('border-color: transparent; border-radius: var(--hs-map-radius-pill); background: transparent;');
     expect(map).toContain('.filter-popover legend { float: left; width: 100%; margin: 0 0 8px;');
@@ -179,11 +206,13 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(exploration).toContain('position: relative;');
     expect(exploration).toContain('display: flex;');
     expect(exploration).not.toContain('grid-template-columns: minmax(0, 1fr) 14px;');
-    expect(exploration).toContain('padding: 8px 12px;');
-    expect(exploration).toContain('min-height: 56px;');
+    expect(exploration).toContain('padding: 6px 8px;');
+    expect(exploration).toContain('min-height: 52px;');
+    expect(exploration).toContain('border-radius: var(--hs-map-radius-map);');
     expect(exploration).toContain('overflow-wrap: anywhere;');
     expect(exploration).toContain('-webkit-line-clamp: 2;');
-    expect(exploration).toContain('.region-grid-list button svg { position: absolute; top: 8px; right: 8px;');
+    expect(exploration).toContain('.region-grid-list button svg { position: absolute; top: 6px; right: 6px;');
+    expect(exploration).toContain('font-size: 13px; font-weight: 700;');
     expect(exploration).toContain('background: var(--hs-map-color-surface);');
     expect(exploration).toContain('color: var(--hs-map-color-ink);');
     expect(exploration).toContain('.region-grid-list button:hover { border-color: var(--hs-map-color-primary); background: var(--hs-map-color-brand-soft); color: var(--hs-map-color-action); }');
@@ -195,6 +224,10 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(exploration).toContain('border-bottom: 1px solid var(--hs-map-color-line);');
     expect(exploration).toContain('.region-breadcrumb-link[aria-current="page"] { color: var(--hs-map-color-ink) !important; font-weight: 800; }');
     expect(exploration).toContain('.region-breadcrumb-step > svg { width: 14px; height: 14px;');
+    expect(exploration).toContain('overflow-x: auto;');
+    expect(exploration).toContain('.region-breadcrumb-step { display: inline-flex; min-width: max-content; flex: 0 0 auto;');
+    expect(exploration).not.toContain('transform: rotate(-90deg);');
+    expect(icons).toContain('export function ChevronRightIcon');
     expect(exploration).toContain('color: var(--hs-map-color-line-strong); stroke-width: 2;');
     expect(exploration).not.toContain('box-shadow: inset 0 0 0 1px var(--hs-map-color-primary);');
     expect(exploration).not.toContain('border-radius: var(--hs-map-radius-pill); background: var(--hs-map-color-surface); color: var(--hs-map-color-action); stroke-width: 2.25;');

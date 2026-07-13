@@ -4,6 +4,7 @@ import {
   createComplexMarkerViewModel,
   createRegionMarkerViewModel,
   declutterComplexMarkers,
+  regionMarkerDensityForLevel,
 } from './markerViewModel';
 
 describe('markerViewModel 지도 마커 모델', () => {
@@ -47,6 +48,14 @@ describe('markerViewModel 지도 마커 모델', () => {
       meta: '1,200세대',
       ariaLabel: '지역 이동 서울',
     });
+  });
+
+  it('지도 level에 따라 region marker density를 단계적으로 축소한다', () => {
+    expect(regionMarkerDensityForLevel(6)).toBe('dense');
+    expect(regionMarkerDensityForLevel(8)).toBe('compact');
+    expect(regionMarkerDensityForLevel(10)).toBe('standard');
+    expect(regionMarkerDensityForLevel(11)).toBe('overview');
+    expect(regionMarkerDensityForLevel(12)).toBe('overview');
   });
 
   it('근접 complex marker는 선택 단지를 우선 노출하고 숨겨진 개수를 반환한다', () => {

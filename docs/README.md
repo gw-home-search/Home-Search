@@ -28,14 +28,16 @@ Included:
 - Search, region navigation, complex detail, and trade list APIs.
 - Frontend map UX using the existing API contract.
 
-Excluded from the current project scope:
+Excluded from the property-data map/trade scope:
 
 - Ranking APIs and screens.
 - Trade trend tables and calculations.
 - Top price or top volume 30-day aggregate tables.
 - Favorite and trade alarm workflows.
 - Mail target generation and mail sending batch.
-- Recommendation or insight features.
+- Recommendation or insight features in property-data public APIs. Authenticated
+  chatbot features are owned by the later expansion milestone in
+  `AI_SERVICE_PLAN.md`.
 - Query-heavy analytical optimizations unrelated to map display.
 
 ## Target Repository Shape
@@ -47,6 +49,9 @@ Excluded from the current project scope:
 │   ├── admin/
 │   │   ├── service/
 │   │   └── web/
+│   ├── user/
+│   │   └── service/
+│   ├── ai/
 │   ├── property-data/
 │   └── web/
 └── infra/
@@ -57,7 +62,12 @@ Excluded from the current project scope:
   domain, and persistence.
 - `apps/admin/`: admin product boundary. `service/` and `web/` remain independently
   built and deployed applications.
-- `apps/web/`: future frontend location.
+- `apps/user/service/`: OAuth identity, user JWT, and refresh-token ownership
+  boundary with its own build, container, and database.
+- `apps/ai/`: authenticated chatbot, POI/reference data, legal RAG, and
+  conversation pipeline boundary. It consumes property facts through read-only
+  contracts.
+- `apps/web/`: public map frontend.
 - `infra/`: Postgres/PostGIS, Docker Compose, monitoring, and env docs.
 
 ## Reading Order
@@ -71,6 +81,9 @@ Excluded from the current project scope:
 7. [MAP_DISPLAY_FLOW.md](MAP_DISPLAY_FLOW.md)
 8. [UI_UX_MIGRATION.md](UI_UX_MIGRATION.md)
 9. [INFRA_AND_ENV.md](INFRA_AND_ENV.md)
+10. [RESTRUCTURING_PLAN.md](RESTRUCTURING_PLAN.md)
+11. [USER_SERVICE_PLAN.md](USER_SERVICE_PLAN.md)
+12. [AI_SERVICE_PLAN.md](AI_SERVICE_PLAN.md)
 
 ## Non-Negotiable Decisions
 
@@ -85,3 +98,6 @@ Excluded from the current project scope:
   snapshots are not copied into the operational database.
 - UI/UX may change, but frontend calls must remain compatible with the public API
   contract.
+- Expansion order is user-service, chatbot parity, image/ECR CI, then AWS
+  deployment preparation. These services do not change the property-data
+  database or its public map/trade surface.

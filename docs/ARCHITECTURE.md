@@ -15,6 +15,13 @@ Migration target:
 
 - `/Users/gwongwangjae/home-search`
 
+Current Java platform baseline:
+
+- All Java builds and local Java application containers use Java 21.
+- property-data, admin-service, and source-data use Spring Boot 3.5.16 as the
+  compatibility bridge before Boot 4.
+- user-service already uses Spring Boot 4.1.0.
+
 ## Backend Current Shape
 
 The source backend follows a layered Spring Boot structure:

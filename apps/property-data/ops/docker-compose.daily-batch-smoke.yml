@@ -1,6 +1,6 @@
 services:
   batch:
-    image: eclipse-temurin:17-jdk
+    image: eclipse-temurin:21-jdk
     depends_on:
       postgis:
         condition: service_healthy

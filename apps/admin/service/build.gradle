@@ -11,6 +11,10 @@ spotless {
         palantirJavaFormat('2.96.0')
     }
 }
+
+tasks.named('spotlessCheck') {
+    dependsOn gradle.includedBuild('security-jwt-core').task(':spotlessCheck')
+}
 allprojects { group = rootProject.group; version = rootProject.version }
 subprojects {
     apply plugin: 'java'

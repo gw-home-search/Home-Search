@@ -18,6 +18,11 @@ spotless {
     }
 }
 
+tasks.named('spotlessCheck') {
+    dependsOn gradle.includedBuild('rtms-ingest-core').task(':spotlessCheck')
+    dependsOn gradle.includedBuild('security-jwt-core').task(':spotlessCheck')
+}
+
 allprojects {
     group = rootProject.group
     version = rootProject.version
@@ -250,6 +255,7 @@ tasks.register('verifyPropertyFlywayFresh', Exec) {
 tasks.register('backendQualityCheck') {
     description = 'Run backend profile, contract, persistence, docs, coverage, and javadoc gates.'
     group = 'verification'
+    dependsOn tasks.named('spotlessCheck')
     dependsOn ':core:test'
     dependsOn ':core:persistenceTest'
     dependsOn tasks.named('verifyApiMigrationCatalog')

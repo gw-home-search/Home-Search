@@ -15,6 +15,11 @@ spotless {
     }
 }
 
+tasks.named('spotlessCheck') {
+    dependsOn gradle.includedBuild('security-jwt-core').task(':spotlessCheck')
+    dependsOn gradle.includedBuild('user-auth-contract').task(':spotlessCheck')
+}
+
 allprojects {
     group = rootProject.group
     version = rootProject.version
@@ -175,6 +180,7 @@ tasks.register('verifyUserFlywayFresh', Exec) {
 }
 
 tasks.register('userServiceQualityCheck') {
+    dependsOn tasks.named('spotlessCheck')
     dependsOn 'userServiceTest', 'userServiceLibraryTest', 'userServicePersistenceTest', 'userServiceApiContractTest',
         'userServiceDependencyBoundaryCheck', 'verifyUserMigrationCatalog',
         'verifyUserFlywayCliContract', 'verifyUserDeploymentPreflightContract',

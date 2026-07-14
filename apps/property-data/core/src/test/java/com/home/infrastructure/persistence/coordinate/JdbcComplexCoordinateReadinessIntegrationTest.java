@@ -3,27 +3,25 @@ package com.home.infrastructure.persistence.coordinate;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.groups.Tuple.tuple;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.List;
-
-import com.home.domain.complex.relation.ComplexRelationClassifier;
+import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;
+import com.home.application.coordinate.caseflow.CoordinateResolutionCommitter;
+import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionService;
+import com.home.application.coordinate.footprint.BuildingFootprintSource;
+import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessResult;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessService;
-import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionService;
+import com.home.application.map.ComplexMarkerQuery;
+import com.home.application.map.ComplexMarkerResult;
+import com.home.domain.complex.relation.ComplexRelationClassifier;
+import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
 import com.home.infrastructure.persistence.complex.JdbcComplexRelationRepository;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
-import com.home.application.map.ComplexMarkerResult;
-import com.home.application.map.ComplexMarkerQuery;
-import com.home.application.coordinate.footprint.BuildingFootprintSource;
-import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
-import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
-
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;
-import com.home.application.coordinate.caseflow.CoordinateResolutionCommitter;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.TransactionManager;
@@ -32,150 +30,132 @@ import org.springframework.transaction.interceptor.TransactionInterceptor;
 
 class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupport {
 
-	@Test
-	@DisplayName("coordinate readiness는 단일 fallback과 다중 단지 building 좌표를 full coverage로 준비한다")
-	void preparesFullDisplayCoordinateCoverage() {
-		seedCoordinateReadinessData();
-		JdbcComplexCoordinateExceptionRepository coordinateRepository = new JdbcComplexCoordinateExceptionRepository(
-			jdbcClient
-		);
-		ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
-			coordinateExceptionService(coordinateRepository),
-			coordinateRepository,
-			new ComplexDisplayCoordinateProjectionService(new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient))
-		);
+    @Test
+    @DisplayName("coordinate readiness는 단일 fallback과 다중 단지 building 좌표를 full coverage로 준비한다")
+    void preparesFullDisplayCoordinateCoverage() {
+        seedCoordinateReadinessData();
+        JdbcComplexCoordinateExceptionRepository coordinateRepository =
+                new JdbcComplexCoordinateExceptionRepository(jdbcClient);
+        ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
+                coordinateExceptionService(coordinateRepository),
+                coordinateRepository,
+                new ComplexDisplayCoordinateProjectionService(
+                        new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient)));
 
-		ComplexCoordinateReadinessResult result = service.prepare(10, 10, 10);
+        ComplexCoordinateReadinessResult result = service.prepare(10, 10, 10);
 
-		assertThat(result.staged()).isEqualTo(2);
-		assertThat(result.pending()).isEqualTo(2);
-		assertThat(result.resolved()).isEqualTo(1);
-		assertThat(result.ambiguous()).isEqualTo(1);
-		assertThat(result.projectedBuildingFootprint()).isZero();
-		assertThat(result.projectedParcelFallback()).isEqualTo(3);
-		assertThat(caseStatuses())
-			.containsExactly(
-				tuple(1002L, "RESOLVED"),
-				tuple(1003L, "AMBIGUOUS")
-			);
-		assertThat(displayRows())
-			.extracting(
-				DisplayRow::complexId,
-				DisplayRow::coordinateSource,
-				DisplayRow::confidence,
-				DisplayRow::latitude,
-				DisplayRow::longitude
-			)
-			.containsExactly(
-				tuple(501L, "PARCEL_FALLBACK", 70, bd("37.5123000"), bd("127.0456000")),
-				tuple(601L, "BUILDING_FOOTPRINT", 90, bd("37.5010000"), bd("127.0010000")),
-				tuple(602L, "BUILDING_FOOTPRINT", 90, bd("37.5020000"), bd("127.0020000")),
-				tuple(701L, "PARCEL_FALLBACK", 40, bd("37.5125000"), bd("127.0458000")),
-				tuple(702L, "PARCEL_FALLBACK", 40, bd("37.5125000"), bd("127.0458000"))
-			);
-		assertThat(new JdbcMapMarkerRepository(jdbcClient).findComplexMarkers(bounds()))
-			.extracting(ComplexMarkerResult::parcelId, ComplexMarkerResult::lat, ComplexMarkerResult::lng)
-			.contains(
-				tuple(1002L, 37.5020, 127.0020),
-				tuple(1003L, 37.5125, 127.0458)
-			);
+        assertThat(result.staged()).isEqualTo(2);
+        assertThat(result.pending()).isEqualTo(2);
+        assertThat(result.resolved()).isEqualTo(1);
+        assertThat(result.ambiguous()).isEqualTo(1);
+        assertThat(result.projectedBuildingFootprint()).isZero();
+        assertThat(result.projectedParcelFallback()).isEqualTo(3);
+        assertThat(caseStatuses()).containsExactly(tuple(1002L, "RESOLVED"), tuple(1003L, "AMBIGUOUS"));
+        assertThat(displayRows())
+                .extracting(
+                        DisplayRow::complexId,
+                        DisplayRow::coordinateSource,
+                        DisplayRow::confidence,
+                        DisplayRow::latitude,
+                        DisplayRow::longitude)
+                .containsExactly(
+                        tuple(501L, "PARCEL_FALLBACK", 70, bd("37.5123000"), bd("127.0456000")),
+                        tuple(601L, "BUILDING_FOOTPRINT", 90, bd("37.5010000"), bd("127.0010000")),
+                        tuple(602L, "BUILDING_FOOTPRINT", 90, bd("37.5020000"), bd("127.0020000")),
+                        tuple(701L, "PARCEL_FALLBACK", 40, bd("37.5125000"), bd("127.0458000")),
+                        tuple(702L, "PARCEL_FALLBACK", 40, bd("37.5125000"), bd("127.0458000")));
+        assertThat(new JdbcMapMarkerRepository(jdbcClient).findComplexMarkers(bounds()))
+                .extracting(ComplexMarkerResult::parcelId, ComplexMarkerResult::lat, ComplexMarkerResult::lng)
+                .contains(tuple(1002L, 37.5020, 127.0020), tuple(1003L, 37.5125, 127.0458));
 
-		ComplexCoordinateReadinessResult secondRun = service.prepare(10, 10, 10);
+        ComplexCoordinateReadinessResult secondRun = service.prepare(10, 10, 10);
 
-		assertThat(secondRun).isEqualTo(ComplexCoordinateReadinessResult.empty());
-		assertThat(displayRowCount()).isEqualTo(5);
-	}
+        assertThat(secondRun).isEqualTo(ComplexCoordinateReadinessResult.empty());
+        assertThat(displayRowCount()).isEqualTo(5);
+    }
 
-	@Test
-	@DisplayName("coordinate readiness는 retry가 활성화되면 backoff 지난 FAILED 케이스를 재해석해 RESOLVED로 만든다")
-	void retriesStaleFailedCaseToResolved() {
-		seedCoordinateReadinessData();
-		jdbcClient.sql("""
+    @Test
+    @DisplayName("coordinate readiness는 retry가 활성화되면 backoff 지난 FAILED 케이스를 재해석해 RESOLVED로 만든다")
+    void retriesStaleFailedCaseToResolved() {
+        seedCoordinateReadinessData();
+        jdbcClient.sql("""
 			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, relation_type, relation_confidence, reason, checked_at)
 			VALUES (1002, '1168010300101400002', 'FAILED', 'CONCURRENT', 'HIGH', 'transient failure', now() - INTERVAL '2 days')
 			""").update();
-		JdbcComplexCoordinateExceptionRepository coordinateRepository = new JdbcComplexCoordinateExceptionRepository(
-			jdbcClient
-		);
-		ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
-			coordinateExceptionService(coordinateRepository),
-			coordinateRepository,
-			new ComplexDisplayCoordinateProjectionService(new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient)),
-			10,
-			java.time.Duration.ofDays(1)
-		);
+        JdbcComplexCoordinateExceptionRepository coordinateRepository =
+                new JdbcComplexCoordinateExceptionRepository(jdbcClient);
+        ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
+                coordinateExceptionService(coordinateRepository),
+                coordinateRepository,
+                new ComplexDisplayCoordinateProjectionService(
+                        new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient)),
+                10,
+                java.time.Duration.ofDays(1));
 
-		ComplexCoordinateReadinessResult result = service.prepare(0, 0, 10);
+        ComplexCoordinateReadinessResult result = service.prepare(0, 0, 10);
 
-		assertThat(result.retried()).isEqualTo(1);
-		assertThat(result.resolved()).isEqualTo(1);
-		assertThat(caseStatuses()).contains(tuple(1002L, "RESOLVED"));
-	}
+        assertThat(result.retried()).isEqualTo(1);
+        assertThat(result.resolved()).isEqualTo(1);
+        assertThat(caseStatuses()).contains(tuple(1002L, "RESOLVED"));
+    }
 
-	@Test
-	@DisplayName("coordinate readiness는 retry가 활성화되면 backoff 지난 UNAVAILABLE 케이스를 재해석한다")
-	void retriesStaleUnavailableCase() {
-		seedCoordinateReadinessData();
-		jdbcClient.sql("""
+    @Test
+    @DisplayName("coordinate readiness는 retry가 활성화되면 backoff 지난 UNAVAILABLE 케이스를 재해석한다")
+    void retriesStaleUnavailableCase() {
+        seedCoordinateReadinessData();
+        jdbcClient.sql("""
 			INSERT INTO complex_coordinate_case (parcel_id, pnu, status, relation_type, relation_confidence, reason, checked_at)
 			VALUES (1002, '1168010300101400002', 'UNAVAILABLE', 'CONCURRENT', 'HIGH', 'ODC unavailable', now() - INTERVAL '2 days')
 			""").update();
-		JdbcComplexCoordinateExceptionRepository coordinateRepository = new JdbcComplexCoordinateExceptionRepository(
-			jdbcClient
-		);
-		ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
-			coordinateExceptionService(coordinateRepository),
-			coordinateRepository,
-			new ComplexDisplayCoordinateProjectionService(new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient)),
-			10,
-			java.time.Duration.ofDays(1)
-		);
+        JdbcComplexCoordinateExceptionRepository coordinateRepository =
+                new JdbcComplexCoordinateExceptionRepository(jdbcClient);
+        ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
+                coordinateExceptionService(coordinateRepository),
+                coordinateRepository,
+                new ComplexDisplayCoordinateProjectionService(
+                        new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient)),
+                10,
+                java.time.Duration.ofDays(1));
 
-		ComplexCoordinateReadinessResult result = service.prepare(0, 0, 10);
+        ComplexCoordinateReadinessResult result = service.prepare(0, 0, 10);
 
-		assertThat(result.retried()).isEqualTo(1);
-		assertThat(result.resolved()).isEqualTo(1);
-		assertThat(caseStatuses()).contains(tuple(1002L, "RESOLVED"));
-	}
+        assertThat(result.retried()).isEqualTo(1);
+        assertThat(result.resolved()).isEqualTo(1);
+        assertThat(caseStatuses()).contains(tuple(1002L, "RESOLVED"));
+    }
 
-	private ComplexCoordinateExceptionService coordinateExceptionService(
-		JdbcComplexCoordinateExceptionRepository repository
-	) {
-		return new ComplexCoordinateExceptionService(
-			repository,
-			new JdbcComplexRelationRepository(jdbcClient),
-			new ComplexRelationClassifier(),
-			ComplexCoordinateIdentityVerifier.trusting(),
-			BuildingFootprintSource.unavailable(),
-			CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed(),
-			transactionalCommitter(repository)
-		);
-	}
+    private ComplexCoordinateExceptionService coordinateExceptionService(
+            JdbcComplexCoordinateExceptionRepository repository) {
+        return new ComplexCoordinateExceptionService(
+                repository,
+                new JdbcComplexRelationRepository(jdbcClient),
+                new ComplexRelationClassifier(),
+                ComplexCoordinateIdentityVerifier.trusting(),
+                BuildingFootprintSource.unavailable(),
+                CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed(),
+                transactionalCommitter(repository));
+    }
 
-	private CoordinateResolutionCommitter transactionalCommitter(
-		JdbcComplexCoordinateExceptionRepository repository
-	) {
-		DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(dataSource);
-		TransactionInterceptor interceptor = new TransactionInterceptor(
-			(TransactionManager) transactionManager,
-			new AnnotationTransactionAttributeSource()
-		);
-		ProxyFactory proxyFactory = new ProxyFactory(new CoordinateResolutionCommitter(repository));
-		proxyFactory.setProxyTargetClass(true);
-		proxyFactory.addAdvice(interceptor);
-		return (CoordinateResolutionCommitter) proxyFactory.getProxy();
-	}
+    private CoordinateResolutionCommitter transactionalCommitter(JdbcComplexCoordinateExceptionRepository repository) {
+        DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(dataSource);
+        TransactionInterceptor interceptor = new TransactionInterceptor(
+                (TransactionManager) transactionManager, new AnnotationTransactionAttributeSource());
+        ProxyFactory proxyFactory = new ProxyFactory(new CoordinateResolutionCommitter(repository));
+        proxyFactory.setProxyTargetClass(true);
+        proxyFactory.addAdvice(interceptor);
+        return (CoordinateResolutionCommitter) proxyFactory.getProxy();
+    }
 
-	private void seedCoordinateReadinessData() {
-		seedRegion();
-		jdbcClient.sql("""
+    private void seedCoordinateReadinessData() {
+        seedRegion();
+        jdbcClient.sql("""
 			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
 			VALUES
 			    (1001, 1, '1168010300101400001', 'Single address', 37.5123, 127.0456),
 			    (1002, 1, '1168010300101400002', 'Resolved multi address', 37.5124, 127.0457),
 			    (1003, 1, '1168010300101400003', 'Ambiguous multi address', 37.5125, 127.0458)
 			""").update();
-		jdbcClient.sql("""
+        jdbcClient.sql("""
 			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt)
 			VALUES
 			    (501, 1001, 'COMPLEX-PK-501', 'APT-501', 'Single Apartment', 100),
@@ -184,31 +164,31 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 			    (701, 1003, 'COMPLEX-PK-701', 'APT-701', 'Ambiguous A', 400),
 			    (702, 1003, 'COMPLEX-PK-702', 'APT-702', 'Ambiguous B', 500)
 			""").update();
-		Long rawId = insertRawIngest();
-		insertTrade(rawId, 601L, LocalDate.of(2024, 1, 1), "rtms-readiness-601-1", "101");
-		insertTrade(rawId, 601L, LocalDate.of(2025, 1, 1), "rtms-readiness-601-2", "101");
-		insertTrade(rawId, 602L, LocalDate.of(2024, 6, 1), "rtms-readiness-602-1", "201");
-		insertTrade(rawId, 602L, LocalDate.of(2025, 6, 1), "rtms-readiness-602-2", "201");
-		insertTrade(rawId, 701L, LocalDate.of(2024, 1, 1), "rtms-readiness-701-1", "301");
-		insertTrade(rawId, 701L, LocalDate.of(2025, 1, 1), "rtms-readiness-701-2", "301");
-		insertTrade(rawId, 702L, LocalDate.of(2024, 6, 1), "rtms-readiness-702-1", "401");
-		insertTrade(rawId, 702L, LocalDate.of(2025, 6, 1), "rtms-readiness-702-2", "401");
-		insertBuildingFootprint(9001L, "1168010300101400002", "Tower A", "101동", "37.5010000", "127.0010000");
-		insertBuildingFootprint(9002L, "1168010300101400002", "Tower B", "201동", "37.5020000", "127.0020000");
-		insertBuildingFootprint(9101L, "1168010300101400003", "Ambiguous A", "301동", "37.5030000", "127.0030000");
-		insertBuildingFootprint(9102L, "1168010300101400003", "Ambiguous A Annex", "301", "37.5040000", "127.0040000");
-		insertBuildingFootprint(9103L, "1168010300101400003", "Ambiguous B", "401동", "37.5050000", "127.0050000");
-	}
+        Long rawId = insertRawIngest();
+        insertTrade(rawId, 601L, LocalDate.of(2024, 1, 1), "rtms-readiness-601-1", "101");
+        insertTrade(rawId, 601L, LocalDate.of(2025, 1, 1), "rtms-readiness-601-2", "101");
+        insertTrade(rawId, 602L, LocalDate.of(2024, 6, 1), "rtms-readiness-602-1", "201");
+        insertTrade(rawId, 602L, LocalDate.of(2025, 6, 1), "rtms-readiness-602-2", "201");
+        insertTrade(rawId, 701L, LocalDate.of(2024, 1, 1), "rtms-readiness-701-1", "301");
+        insertTrade(rawId, 701L, LocalDate.of(2025, 1, 1), "rtms-readiness-701-2", "301");
+        insertTrade(rawId, 702L, LocalDate.of(2024, 6, 1), "rtms-readiness-702-1", "401");
+        insertTrade(rawId, 702L, LocalDate.of(2025, 6, 1), "rtms-readiness-702-2", "401");
+        insertBuildingFootprint(9001L, "1168010300101400002", "Tower A", "101동", "37.5010000", "127.0010000");
+        insertBuildingFootprint(9002L, "1168010300101400002", "Tower B", "201동", "37.5020000", "127.0020000");
+        insertBuildingFootprint(9101L, "1168010300101400003", "Ambiguous A", "301동", "37.5030000", "127.0030000");
+        insertBuildingFootprint(9102L, "1168010300101400003", "Ambiguous A Annex", "301", "37.5040000", "127.0040000");
+        insertBuildingFootprint(9103L, "1168010300101400003", "Ambiguous B", "401동", "37.5050000", "127.0050000");
+    }
 
-	private void seedRegion() {
-		jdbcClient.sql("""
+    private void seedRegion() {
+        jdbcClient.sql("""
 			INSERT INTO region (id, code, name, region_type)
 			VALUES (1, '1168010300', 'Sample-dong', 'eup-myeon-dong')
 			""").update();
-	}
+    }
 
-	private Long insertRawIngest() {
-		return jdbcClient.sql("""
+    private Long insertRawIngest() {
+        return jdbcClient.sql("""
 			INSERT INTO raw_trade_ingest (
 			    source,
 			    source_key,
@@ -221,13 +201,12 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 			)
 			VALUES ('RTMS', 'coordinate-readiness', '11680', '202501', 1, '{}', 'payload-hash-readiness', 'NORMALIZED')
 			RETURNING id
-			""")
-			.query(Long.class)
-			.single();
-	}
+			""").query(Long.class).single();
+    }
 
-	private void insertTrade(Long rawId, Long complexId, LocalDate dealDate, String sourceKey, String aptDong) {
-		jdbcClient.sql("""
+    private void insertTrade(Long rawId, Long complexId, LocalDate dealDate, String sourceKey, String aptDong) {
+        jdbcClient
+                .sql("""
 			INSERT INTO trade (
 			    raw_ingest_id,
 			    complex_id,
@@ -255,25 +234,20 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 			    :aptSeq
 			)
 			""")
-			.param("rawId", rawId)
-			.param("complexId", complexId)
-			.param("dealDate", dealDate)
-			.param("aptDong", aptDong)
-			.param("sourceKey", sourceKey)
-			.param("complexPk", "COMPLEX-PK-" + complexId)
-			.param("aptSeq", "APT-" + complexId)
-			.update();
-	}
+                .param("rawId", rawId)
+                .param("complexId", complexId)
+                .param("dealDate", dealDate)
+                .param("aptDong", aptDong)
+                .param("sourceKey", sourceKey)
+                .param("complexPk", "COMPLEX-PK-" + complexId)
+                .param("aptSeq", "APT-" + complexId)
+                .update();
+    }
 
-	private void insertBuildingFootprint(
-		Long id,
-		String pnu,
-		String buildingName,
-		String dongName,
-		String latitude,
-		String longitude
-	) {
-		jdbcClient.sql("""
+    private void insertBuildingFootprint(
+            Long id, String pnu, String buildingName, String dongName, String latitude, String longitude) {
+        jdbcClient
+                .sql("""
 			INSERT INTO building_footprint_snapshot (
 			    id,
 			    pnu,
@@ -297,78 +271,58 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
 			    '2026-06'
 			)
 			""")
-			.param("id", id)
-			.param("pnu", pnu)
-			.param("buildingName", buildingName)
-			.param("dongName", dongName)
-			.param("sourceBuildingKey", "TEST-BLD-" + id)
-			.param("latitude", new BigDecimal(latitude))
-			.param("longitude", new BigDecimal(longitude))
-			.update();
-	}
+                .param("id", id)
+                .param("pnu", pnu)
+                .param("buildingName", buildingName)
+                .param("dongName", dongName)
+                .param("sourceBuildingKey", "TEST-BLD-" + id)
+                .param("latitude", new BigDecimal(latitude))
+                .param("longitude", new BigDecimal(longitude))
+                .update();
+    }
 
-	private List<org.assertj.core.groups.Tuple> caseStatuses() {
-		return jdbcClient.sql("""
+    private List<org.assertj.core.groups.Tuple> caseStatuses() {
+        return jdbcClient
+                .sql("""
 			SELECT parcel_id, status
 			FROM complex_coordinate_case
 			ORDER BY parcel_id
 			""")
-			.query((resultSet, rowNumber) -> tuple(
-				resultSet.getLong("parcel_id"),
-				resultSet.getString("status")
-			))
-			.list();
-	}
+                .query((resultSet, rowNumber) -> tuple(resultSet.getLong("parcel_id"), resultSet.getString("status")))
+                .list();
+    }
 
-	private List<DisplayRow> displayRows() {
-		return jdbcClient.sql("""
+    private List<DisplayRow> displayRows() {
+        return jdbcClient
+                .sql("""
 			SELECT complex_id, latitude, longitude, coordinate_source, confidence
 			FROM complex_display_coordinate
 			ORDER BY complex_id
 			""")
-			.query((resultSet, rowNumber) -> new DisplayRow(
-				resultSet.getLong("complex_id"),
-				resultSet.getBigDecimal("latitude"),
-				resultSet.getBigDecimal("longitude"),
-				resultSet.getString("coordinate_source"),
-				resultSet.getInt("confidence")
-			))
-			.list();
-	}
+                .query((resultSet, rowNumber) -> new DisplayRow(
+                        resultSet.getLong("complex_id"),
+                        resultSet.getBigDecimal("latitude"),
+                        resultSet.getBigDecimal("longitude"),
+                        resultSet.getString("coordinate_source"),
+                        resultSet.getInt("confidence")))
+                .list();
+    }
 
-	private long displayRowCount() {
-		return jdbcClient.sql("SELECT count(*) FROM complex_display_coordinate")
-			.query(Long.class)
-			.single();
-	}
+    private long displayRowCount() {
+        return jdbcClient
+                .sql("SELECT count(*) FROM complex_display_coordinate")
+                .query(Long.class)
+                .single();
+    }
 
-	private ComplexMarkerQuery bounds() {
-		return new ComplexMarkerQuery(
-			37.45,
-			126.85,
-			37.70,
-			127.20,
-			null,
-			null,
-			null,
-			null,
-			null,
-			null,
-			null,
-			null
-		);
-	}
+    private ComplexMarkerQuery bounds() {
+        return new ComplexMarkerQuery(37.45, 126.85, 37.70, 127.20, null, null, null, null, null, null, null, null);
+    }
 
-	private static BigDecimal bd(String value) {
-		return new BigDecimal(value);
-	}
+    private static BigDecimal bd(String value) {
+        return new BigDecimal(value);
+    }
 
-	private record DisplayRow(
-		Long complexId,
-		BigDecimal latitude,
-		BigDecimal longitude,
-		String coordinateSource,
-		int confidence
-	) {
-	}
+    private record DisplayRow(
+            Long complexId, BigDecimal latitude, BigDecimal longitude, String coordinateSource, int confidence) {}
 }

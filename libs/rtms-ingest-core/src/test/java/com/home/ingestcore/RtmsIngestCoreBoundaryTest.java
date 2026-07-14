@@ -7,11 +7,11 @@ import org.junit.jupiter.api.Test;
 
 class RtmsIngestCoreBoundaryTest {
 
-	@Test
-	@DisplayName("RTMS ingest core는 API와 loader가 공유할 저장 invariant를 명시한다")
-	void exposesSharedIngestInvariants() {
-		assertEquals("raw-first", RtmsIngestCoreBoundary.RAW_FIRST);
-		assertEquals("duplicate-safe", RtmsIngestCoreBoundary.DUPLICATE_SAFE);
-		assertEquals("failed-match-queryable", RtmsIngestCoreBoundary.FAILED_MATCH_QUERYABLE);
-	}
+    @Test
+    @DisplayName("RTMS ingest core는 API와 loader가 공유할 저장 invariant를 명시한다")
+    void exposesSharedIngestInvariants() {
+        assertEquals("raw-first", RtmsIngestCoreBoundary.RAW_FIRST);
+        assertEquals("duplicate-safe", RtmsIngestCoreBoundary.DUPLICATE_SAFE);
+        assertEquals("failed-match-queryable", RtmsIngestCoreBoundary.FAILED_MATCH_QUERYABLE);
+    }
 }

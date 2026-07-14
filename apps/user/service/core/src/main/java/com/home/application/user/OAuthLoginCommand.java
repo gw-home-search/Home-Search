@@ -6,6 +6,7 @@ import java.time.Instant;
 
 public record OAuthLoginCommand(OAuthProvider provider, String providerSubject, UserProfile profile, Instant loginAt) {
     public OAuthLoginCommand {
-        if (provider == null || profile == null || loginAt == null) throw new IllegalArgumentException("login fields are required");
+        if (provider == null || profile == null || loginAt == null)
+            throw new IllegalArgumentException("login fields are required");
     }
 }

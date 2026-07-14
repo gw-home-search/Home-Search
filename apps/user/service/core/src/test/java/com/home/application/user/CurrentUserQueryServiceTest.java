@@ -22,9 +22,24 @@ class CurrentUserQueryServiceTest {
     }
 
     private record QueryOnlyRepository(OAuthLoginResult user) implements UserRepository {
-        @Override public Optional<OAuthLoginResult> findByUserId(long userId) { return user.userId() == userId ? Optional.of(user) : Optional.empty(); }
-        @Override public Optional<OAuthLoginResult> findByIdentity(OAuthIdentityKey identity) { throw new UnsupportedOperationException(); }
-        @Override public OAuthLoginResult create(OAuthIdentityKey identity, UserProfile profile, Instant loginAt) { throw new UnsupportedOperationException(); }
-        @Override public OAuthLoginResult updateProfile(OAuthIdentityKey identity, UserProfile profile, Instant loginAt) { throw new UnsupportedOperationException(); }
+        @Override
+        public Optional<OAuthLoginResult> findByUserId(long userId) {
+            return user.userId() == userId ? Optional.of(user) : Optional.empty();
+        }
+
+        @Override
+        public Optional<OAuthLoginResult> findByIdentity(OAuthIdentityKey identity) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public OAuthLoginResult create(OAuthIdentityKey identity, UserProfile profile, Instant loginAt) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public OAuthLoginResult updateProfile(OAuthIdentityKey identity, UserProfile profile, Instant loginAt) {
+            throw new UnsupportedOperationException();
+        }
     }
 }

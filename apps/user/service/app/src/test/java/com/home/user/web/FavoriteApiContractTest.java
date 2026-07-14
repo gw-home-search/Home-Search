@@ -1,9 +1,9 @@
 package com.home.user.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.assertj.core.api.Assertions.assertThat;
 
 import com.home.application.favorite.GetFavoriteComplex;
 import com.home.application.favorite.ListFavoriteComplexes;
@@ -32,17 +32,21 @@ class FavoriteApiContractTest {
         var controller = new FavoriteController(save, remove, getFavorite, list);
         var principal = new AuthenticatedUserPrincipal(42);
 
-        assertThat(controller.get(principal, 501)).isEqualTo(new FavoriteController.FavoriteStatusResponse(501, true, SAVED_AT));
-        assertThat(controller.get(principal, 502)).isEqualTo(new FavoriteController.FavoriteStatusResponse(502, false, null));
-        assertThat(controller.list(principal, 0, 20)).isEqualTo(new FavoriteController.FavoriteListResponse(
-            List.of(new FavoriteController.FavoriteItemResponse(501, SAVED_AT)), 0, 20, 1, 1));
+        assertThat(controller.get(principal, 501))
+                .isEqualTo(new FavoriteController.FavoriteStatusResponse(501, true, SAVED_AT));
+        assertThat(controller.get(principal, 502))
+                .isEqualTo(new FavoriteController.FavoriteStatusResponse(502, false, null));
+        assertThat(controller.list(principal, 0, 20))
+                .isEqualTo(new FavoriteController.FavoriteListResponse(
+                        List.of(new FavoriteController.FavoriteItemResponse(501, SAVED_AT)), 0, 20, 1, 1));
     }
 
     @Test
     void savesAndRemovesIdempotentlyWithNoRequestBody() throws Exception {
         var save = mock(SaveFavoriteComplex.class);
         var remove = mock(RemoveFavoriteComplex.class);
-        var controller = new FavoriteController(save, remove, mock(GetFavoriteComplex.class), mock(ListFavoriteComplexes.class));
+        var controller =
+                new FavoriteController(save, remove, mock(GetFavoriteComplex.class), mock(ListFavoriteComplexes.class));
         controller.save(new AuthenticatedUserPrincipal(42), 501);
         controller.remove(new AuthenticatedUserPrincipal(42), 501);
         verify(save).execute(42, 501);

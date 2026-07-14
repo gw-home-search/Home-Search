@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.home.application.auth.port.OpaqueTokenGenerator;
 import com.home.application.auth.port.RefreshTokenRepository;
-import com.home.application.auth.port.TokenClock;
 import com.home.domain.user.token.ActiveRefreshToken;
 import com.home.domain.user.token.InvalidRefreshTokenException;
 import com.home.domain.user.token.RefreshTokenHash;
@@ -19,8 +18,8 @@ class RefreshTokenServiceTest {
     @Test
     void rotatesAtomicallyAndReturnsTheOwningUser() {
         var repository = new MemoryRepository();
-        var service = new RefreshTokenService(repository, new SequenceGenerator(),
-                () -> Instant.parse("2026-07-13T00:00:00Z"), Duration.ofDays(30));
+        var service = new RefreshTokenService(
+                repository, new SequenceGenerator(), () -> Instant.parse("2026-07-13T00:00:00Z"), Duration.ofDays(30));
 
         IssuedRefreshToken issued = service.issue(42L);
         RotatedRefreshToken rotated = service.rotate(issued.rawToken());
@@ -28,15 +27,14 @@ class RefreshTokenServiceTest {
         assertThat(rotated.userId()).isEqualTo(42L);
         assertThat(rotated.rawToken()).isNotEqualTo(issued.rawToken());
         assertThat(repository.active.tokenHash()).isEqualTo(RefreshTokenHash.sha256(rotated.rawToken()));
-        assertThatThrownBy(() -> service.rotate(issued.rawToken()))
-                .isInstanceOf(InvalidRefreshTokenException.class);
+        assertThatThrownBy(() -> service.rotate(issued.rawToken())).isInstanceOf(InvalidRefreshTokenException.class);
     }
 
     @Test
     void issuesRevokesAndRejectsInvalidInputs() {
         var repository = new MemoryRepository();
-        var service = new RefreshTokenService(repository, new SequenceGenerator(),
-                () -> Instant.parse("2026-07-13T00:00:00Z"), Duration.ofDays(30));
+        var service = new RefreshTokenService(
+                repository, new SequenceGenerator(), () -> Instant.parse("2026-07-13T00:00:00Z"), Duration.ofDays(30));
 
         IssuedRefreshToken issued = service.issue(7L);
         assertThat(issued.userId()).isEqualTo(7L);
@@ -45,8 +43,9 @@ class RefreshTokenServiceTest {
         service.revoke(null);
 
         assertThatThrownBy(() -> service.issue(0)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new RefreshTokenService(repository, new SequenceGenerator(),
-                () -> Instant.EPOCH, Duration.ZERO)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new RefreshTokenService(
+                        repository, new SequenceGenerator(), () -> Instant.EPOCH, Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -67,7 +66,9 @@ class RefreshTokenServiceTest {
         private boolean failRotation;
 
         @Override
-        public void replaceActive(ActiveRefreshToken token) { active = token; }
+        public void replaceActive(ActiveRefreshToken token) {
+            active = token;
+        }
 
         @Override
         public Optional<ActiveRefreshToken> findActiveByHash(String hash) {
@@ -90,6 +91,10 @@ class RefreshTokenServiceTest {
 
     private static final class SequenceGenerator implements OpaqueTokenGenerator {
         private int value;
-        @Override public String generate() { return "long-enough-opaque-token-" + ++value; }
+
+        @Override
+        public String generate() {
+            return "long-enough-opaque-token-" + ++value;
+        }
     }
 }

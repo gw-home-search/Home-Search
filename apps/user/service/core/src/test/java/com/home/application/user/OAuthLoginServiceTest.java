@@ -22,18 +22,24 @@ class OAuthLoginServiceTest {
         Instant firstLogin = Instant.parse("2026-07-13T00:00:00Z");
 
         OAuthLoginResult created = service.login(new OAuthLoginCommand(
-                OAuthProvider.GOOGLE, " google-subject ",
-                new UserProfile("첫 이름", "first@example.com", "https://example.com/first.png"), firstLogin));
+                OAuthProvider.GOOGLE,
+                " google-subject ",
+                new UserProfile("첫 이름", "first@example.com", "https://example.com/first.png"),
+                firstLogin));
         OAuthLoginResult loggedInAgain = service.login(new OAuthLoginCommand(
-                OAuthProvider.GOOGLE, "google-subject",
-                new UserProfile("새 이름", null, null), firstLogin.plusSeconds(60)));
+                OAuthProvider.GOOGLE,
+                "google-subject",
+                new UserProfile("새 이름", null, null),
+                firstLogin.plusSeconds(60)));
         OAuthLoginResult otherProvider = service.login(new OAuthLoginCommand(
-                OAuthProvider.NAVER, "google-subject",
-                new UserProfile("다른 사용자", "first@example.com", null), firstLogin.plusSeconds(120)));
+                OAuthProvider.NAVER,
+                "google-subject",
+                new UserProfile("다른 사용자", "first@example.com", null),
+                firstLogin.plusSeconds(120)));
 
         assertThat(loggedInAgain.userId()).isEqualTo(created.userId());
-        assertThat(loggedInAgain.profile()).isEqualTo(
-                new UserProfile("새 이름", "first@example.com", "https://example.com/first.png"));
+        assertThat(loggedInAgain.profile())
+                .isEqualTo(new UserProfile("새 이름", "first@example.com", "https://example.com/first.png"));
         assertThat(otherProvider.userId()).isNotEqualTo(created.userId());
     }
 
@@ -63,7 +69,9 @@ class OAuthLoginServiceTest {
 
         @Override
         public Optional<OAuthLoginResult> findByUserId(long userId) {
-            return users.values().stream().filter(user -> user.userId() == userId).findFirst();
+            return users.values().stream()
+                    .filter(user -> user.userId() == userId)
+                    .findFirst();
         }
     }
 }

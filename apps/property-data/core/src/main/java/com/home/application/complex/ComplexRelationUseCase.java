@@ -1,22 +1,21 @@
 package com.home.application.complex;
 
-import java.util.Objects;
-
 import com.home.domain.complex.relation.ComplexRelationClassification;
 import com.home.domain.complex.relation.ComplexRelationClassifier;
+import java.util.Objects;
 
 public class ComplexRelationUseCase {
 
-	private final ComplexRelationRepository repository;
-	private final ComplexRelationClassifier classifier;
+    private final ComplexRelationRepository repository;
+    private final ComplexRelationClassifier classifier;
 
-	public ComplexRelationUseCase(ComplexRelationRepository repository, ComplexRelationClassifier classifier) {
-		this.repository = Objects.requireNonNull(repository);
-		this.classifier = Objects.requireNonNull(classifier);
-	}
+    public ComplexRelationUseCase(ComplexRelationRepository repository, ComplexRelationClassifier classifier) {
+        this.repository = Objects.requireNonNull(repository);
+        this.classifier = Objects.requireNonNull(classifier);
+    }
 
-	public ComplexRelationClassification classifyParcel(Long parcelId) {
-		Objects.requireNonNull(parcelId, "parcelId is required");
-		return classifier.classify(repository.findTradeSpansByParcelId(parcelId));
-	}
+    public ComplexRelationClassification classifyParcel(Long parcelId) {
+        Objects.requireNonNull(parcelId, "parcelId is required");
+        return classifier.classify(repository.findTradeSpansByParcelId(parcelId));
+    }
 }

@@ -17,8 +17,10 @@ public final class OAuthLoginService {
     public OAuthLoginResult login(OAuthLoginCommand command) {
         var identity = new OAuthIdentityKey(command.provider(), command.providerSubject());
         identityLock.lock(identity);
-        return repository.findByIdentity(identity)
-                .map(current -> repository.updateProfile(identity, current.profile().merge(command.profile()), command.loginAt()))
+        return repository
+                .findByIdentity(identity)
+                .map(current -> repository.updateProfile(
+                        identity, current.profile().merge(command.profile()), command.loginAt()))
                 .orElseGet(() -> repository.create(identity, command.profile().forNewUser(), command.loginAt()));
     }
 }

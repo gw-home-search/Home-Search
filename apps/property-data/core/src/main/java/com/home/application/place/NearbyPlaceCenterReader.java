@@ -5,5 +5,5 @@ import java.util.Optional;
 @FunctionalInterface
 public interface NearbyPlaceCenterReader {
 
-	Optional<NearbyPlaceCenter> findComplexCenter(Long complexId);
+    Optional<NearbyPlaceCenter> findComplexCenter(Long complexId);
 }

@@ -1,17 +1,11 @@
 package com.home.infrastructure.web.internaladmin;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.Set;
 import java.util.UUID;
 
-import jakarta.servlet.http.HttpServletRequest;
-
 public record InternalAdminPrincipal(
-    UUID accountId,
-    String loginId,
-    Set<String> roles,
-    Set<String> permissions,
-    String requestId
-) {
+        UUID accountId, String loginId, Set<String> roles, Set<String> permissions, String requestId) {
     public static final String REQUEST_ATTRIBUTE = InternalAdminPrincipal.class.getName();
 
     public InternalAdminPrincipal {

@@ -4,5 +4,5 @@ import jakarta.persistence.TestJpaMarker;
 
 public class ForbiddenJpaPersistenceFixture {
 
-	private TestJpaMarker marker;
+    private TestJpaMarker marker;
 }

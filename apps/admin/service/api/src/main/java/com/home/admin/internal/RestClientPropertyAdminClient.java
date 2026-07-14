@@ -1,7 +1,6 @@
 package com.home.admin.internal;
 
 import java.io.IOException;
-
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
@@ -18,15 +17,19 @@ public final class RestClientPropertyAdminClient implements PropertyAdminClient 
 
     @Override
     public DownstreamResponse exchange(Request request) {
-        RestClient.RequestBodySpec spec = restClient.method(request.method())
-            .uri(builder -> {
-                builder.path(request.path());
-                request.query().entrySet().stream().sorted(java.util.Map.Entry.comparingByKey())
-                    .forEach(entry -> builder.queryParam(entry.getKey(), entry.getValue()));
-                return builder.build();
-            })
-            .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenIssuer.issue(request.principal(), request.requestId()))
-            .header("X-Request-Id", request.requestId());
+        RestClient.RequestBodySpec spec = restClient
+                .method(request.method())
+                .uri(builder -> {
+                    builder.path(request.path());
+                    request.query().entrySet().stream()
+                            .sorted(java.util.Map.Entry.comparingByKey())
+                            .forEach(entry -> builder.queryParam(entry.getKey(), entry.getValue()));
+                    return builder.build();
+                })
+                .header(
+                        HttpHeaders.AUTHORIZATION,
+                        "Bearer " + tokenIssuer.issue(request.principal(), request.requestId()))
+                .header("X-Request-Id", request.requestId());
         if (request.body() != null) spec.contentType(MediaType.APPLICATION_JSON).body(request.body());
         return spec.exchange((httpRequest, response) -> {
             byte[] body = readBounded(response.getBody());

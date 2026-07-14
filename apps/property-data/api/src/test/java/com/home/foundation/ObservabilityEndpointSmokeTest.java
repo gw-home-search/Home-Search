@@ -16,9 +16,7 @@ import com.home.infrastructure.persistence.propertydetail.JdbcPropertyDetailRead
 import com.home.infrastructure.persistence.regionnavigation.JdbcRegionNavigationReader;
 import com.home.infrastructure.persistence.search.JdbcComplexSearchReader;
 import com.home.infrastructure.persistence.tradehistory.JdbcTradeHistoryReader;
-
 import io.micrometer.core.instrument.MeterRegistry;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,92 +32,95 @@ import org.springframework.test.web.servlet.MockMvc;
 @ActiveProfiles("test")
 class ObservabilityEndpointSmokeTest {
 
-	@Autowired
-	private MockMvc mockMvc;
+    @Autowired
+    private MockMvc mockMvc;
 
-	@Autowired
-	private TradeIngestMetrics tradeIngestMetrics;
+    @Autowired
+    private TradeIngestMetrics tradeIngestMetrics;
 
-	@Autowired
-	private MeterRegistry meterRegistry;
+    @Autowired
+    private MeterRegistry meterRegistry;
 
-	@MockitoBean
-	private MapUseCase mapUseCase;
+    @MockitoBean
+    private MapUseCase mapUseCase;
 
-	@MockitoBean
-	private JdbcComplexSearchReader complexSearchReader;
+    @MockitoBean
+    private JdbcComplexSearchReader complexSearchReader;
 
-	@MockitoBean
-	private JdbcRegionNavigationReader regionNavigationReader;
+    @MockitoBean
+    private JdbcRegionNavigationReader regionNavigationReader;
 
-	@MockitoBean
-	private JdbcPropertyDetailReader propertyDetailReader;
+    @MockitoBean
+    private JdbcPropertyDetailReader propertyDetailReader;
 
-	@MockitoBean
-	private JdbcTradeHistoryReader tradeHistoryReader;
+    @MockitoBean
+    private JdbcTradeHistoryReader tradeHistoryReader;
 
-	@Test
-	@DisplayName("GET /actuator/health는 database auto-configuration 없이 readiness status를 반환한다")
-	void actuatorHealthIsAvailableWithoutDatabaseAutoConfiguration() throws Exception {
-		mockMvc.perform(get("/actuator/health"))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.status").value("UP"));
-	}
+    @Test
+    @DisplayName("GET /actuator/health는 database auto-configuration 없이 readiness status를 반환한다")
+    void actuatorHealthIsAvailableWithoutDatabaseAutoConfiguration() throws Exception {
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
+    }
 
-	@Test
-	@DisplayName("GET /actuator/prometheus는 local scrape surface를 노출한다")
-	void prometheusScrapeEndpointIsAvailable() throws Exception {
-		mockMvc.perform(get("/actuator/prometheus"))
-			.andExpect(status().isOk())
-			.andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN))
-			.andExpect(content().string(containsString("# HELP")));
-	}
+    @Test
+    @DisplayName("GET /actuator/prometheus는 local scrape surface를 노출한다")
+    void prometheusScrapeEndpointIsAvailable() throws Exception {
+        mockMvc.perform(get("/actuator/prometheus"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN))
+                .andExpect(content().string(containsString("# HELP")));
+    }
 
-	@Test
-	@DisplayName("GET /actuator/prometheus는 RTMS ingest counter를 노출한다")
-	void prometheusExposesIngestCounters() throws Exception {
-		tradeIngestMetrics.record("RTMS", new IngestResult(4, 4, 1, 1, 1, 1, 0));
+    @Test
+    @DisplayName("GET /actuator/prometheus는 RTMS ingest counter를 노출한다")
+    void prometheusExposesIngestCounters() throws Exception {
+        tradeIngestMetrics.record("RTMS", new IngestResult(4, 4, 1, 1, 1, 1, 0));
 
-		mockMvc.perform(get("/actuator/prometheus"))
-			.andExpect(status().isOk())
-			.andExpect(content().string(containsString("home_search_ingest_items_total")))
-			.andExpect(content().string(containsString("source=\"RTMS\"")))
-			.andExpect(content().string(containsString("result=\"read\"")))
-			.andExpect(content().string(containsString("result=\"raw_saved\"")))
-			.andExpect(content().string(containsString("result=\"normalized_inserted\"")))
-			.andExpect(content().string(containsString("result=\"duplicate_skipped\"")))
-			.andExpect(content().string(containsString("result=\"canceled_skipped\"")))
-			.andExpect(content().string(containsString("result=\"match_failed\"")))
-			.andExpect(content().string(containsString("result=\"parse_failed\"")));
-	}
+        mockMvc.perform(get("/actuator/prometheus"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("home_search_ingest_items_total")))
+                .andExpect(content().string(containsString("source=\"RTMS\"")))
+                .andExpect(content().string(containsString("result=\"read\"")))
+                .andExpect(content().string(containsString("result=\"raw_saved\"")))
+                .andExpect(content().string(containsString("result=\"normalized_inserted\"")))
+                .andExpect(content().string(containsString("result=\"duplicate_skipped\"")))
+                .andExpect(content().string(containsString("result=\"canceled_skipped\"")))
+                .andExpect(content().string(containsString("result=\"match_failed\"")))
+                .andExpect(content().string(containsString("result=\"parse_failed\"")));
+    }
 
-	@Test
-	@DisplayName("GET /actuator/prometheus는 map marker cache hit miss fallback counter를 노출한다")
-	void prometheusExposesMapMarkerCacheCounters() throws Exception {
-		meterRegistry.counter("home.search.map.marker.cache.requests", "endpoint", "complexes", "result", "hit")
-			.increment();
-		meterRegistry.counter("home.search.map.marker.cache.requests", "endpoint", "complexes", "result", "miss")
-			.increment();
-		meterRegistry.counter("home.search.map.marker.cache.requests", "endpoint", "complexes", "result", "fallback")
-			.increment();
+    @Test
+    @DisplayName("GET /actuator/prometheus는 map marker cache hit miss fallback counter를 노출한다")
+    void prometheusExposesMapMarkerCacheCounters() throws Exception {
+        meterRegistry
+                .counter("home.search.map.marker.cache.requests", "endpoint", "complexes", "result", "hit")
+                .increment();
+        meterRegistry
+                .counter("home.search.map.marker.cache.requests", "endpoint", "complexes", "result", "miss")
+                .increment();
+        meterRegistry
+                .counter("home.search.map.marker.cache.requests", "endpoint", "complexes", "result", "fallback")
+                .increment();
 
-		mockMvc.perform(get("/actuator/prometheus"))
-			.andExpect(status().isOk())
-			.andExpect(content().string(containsString("home_search_map_marker_cache_requests_total")))
-			.andExpect(content().string(containsString("endpoint=\"complexes\"")))
-			.andExpect(content().string(containsString("result=\"hit\"")))
-			.andExpect(content().string(containsString("result=\"miss\"")))
-			.andExpect(content().string(containsString("result=\"fallback\"")));
-	}
+        mockMvc.perform(get("/actuator/prometheus"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("home_search_map_marker_cache_requests_total")))
+                .andExpect(content().string(containsString("endpoint=\"complexes\"")))
+                .andExpect(content().string(containsString("result=\"hit\"")))
+                .andExpect(content().string(containsString("result=\"miss\"")))
+                .andExpect(content().string(containsString("result=\"fallback\"")));
+    }
 
-	@Test
-	@DisplayName("GET /actuator/prometheus는 map endpoint success/error counter를 노출한다")
-	void prometheusExposesMapEndpointCounters() throws Exception {
-		given(mapUseCase.getComplexMarkers(any())).willReturn(java.util.List.of());
+    @Test
+    @DisplayName("GET /actuator/prometheus는 map endpoint success/error counter를 노출한다")
+    void prometheusExposesMapEndpointCounters() throws Exception {
+        given(mapUseCase.getComplexMarkers(any())).willReturn(java.util.List.of());
 
-		mockMvc.perform(post("/api/v1/map/complexes")
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("""
+        mockMvc.perform(post("/api/v1/map/complexes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
 					{
 					  "swLat": 37.45,
 					  "swLng": 126.85,
@@ -135,10 +136,10 @@ class ObservabilityEndpointSmokeTest {
 					  "unitMax": null
 					}
 					"""))
-			.andExpect(status().isOk());
-		mockMvc.perform(post("/api/v1/map/regions")
-				.contentType(MediaType.APPLICATION_JSON)
-				.content("""
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/map/regions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
 					{
 					  "swLat": 37.45,
 					  "swLng": 126.85,
@@ -147,14 +148,14 @@ class ObservabilityEndpointSmokeTest {
 					  "region": "invalid-level"
 					}
 					"""))
-			.andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest());
 
-		mockMvc.perform(get("/actuator/prometheus"))
-			.andExpect(status().isOk())
-			.andExpect(content().string(containsString("home_search_map_requests_total")))
-			.andExpect(content().string(containsString("endpoint=\"complexes\"")))
-			.andExpect(content().string(containsString("endpoint=\"regions\"")))
-			.andExpect(content().string(containsString("outcome=\"success\"")))
-			.andExpect(content().string(containsString("outcome=\"error\"")));
-	}
+        mockMvc.perform(get("/actuator/prometheus"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("home_search_map_requests_total")))
+                .andExpect(content().string(containsString("endpoint=\"complexes\"")))
+                .andExpect(content().string(containsString("endpoint=\"regions\"")))
+                .andExpect(content().string(containsString("outcome=\"success\"")))
+                .andExpect(content().string(containsString("outcome=\"error\"")));
+    }
 }

@@ -1,2 +1,5 @@
 package com.home.user.oauth;
-public interface OAuthAuthenticatedUser { long homeSearchUserId(); }
+
+public interface OAuthAuthenticatedUser {
+    long homeSearchUserId();
+}

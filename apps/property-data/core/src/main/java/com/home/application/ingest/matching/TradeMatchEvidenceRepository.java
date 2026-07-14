@@ -4,21 +4,21 @@ import java.util.Optional;
 
 public interface TradeMatchEvidenceRepository {
 
-	TradeMatchEvidenceRecord save(TradeMatchEvidenceCommand command);
+    TradeMatchEvidenceRecord save(TradeMatchEvidenceCommand command);
 
-	Optional<TradeMatchEvidenceRecord> findByRawIngestId(Long rawIngestId);
+    Optional<TradeMatchEvidenceRecord> findByRawIngestId(Long rawIngestId);
 
-	static TradeMatchEvidenceRepository noop() {
-		return new TradeMatchEvidenceRepository() {
-			@Override
-			public TradeMatchEvidenceRecord save(TradeMatchEvidenceCommand command) {
-				return null;
-			}
+    static TradeMatchEvidenceRepository noop() {
+        return new TradeMatchEvidenceRepository() {
+            @Override
+            public TradeMatchEvidenceRecord save(TradeMatchEvidenceCommand command) {
+                return null;
+            }
 
-			@Override
-			public Optional<TradeMatchEvidenceRecord> findByRawIngestId(Long rawIngestId) {
-				return Optional.empty();
-			}
-		};
-	}
+            @Override
+            public Optional<TradeMatchEvidenceRecord> findByRawIngestId(Long rawIngestId) {
+                return Optional.empty();
+            }
+        };
+    }
 }

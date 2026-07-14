@@ -9,7 +9,6 @@ import com.home.application.ingest.trade.TradeIngestFinalizer;
 import com.home.infrastructure.persistence.ingest.raw.JdbcRawTradeIngestRepository;
 import com.home.infrastructure.persistence.ingest.raw.RawIngestReconciliationRunner;
 import com.home.infrastructure.persistence.ingest.raw.RtmsRawTradeItemParser;
-
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
@@ -22,45 +21,40 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 @Configuration(proxyBeanMethods = false)
 class RawIngestPersistenceConfiguration {
 
-	@Bean
-	@Lazy
-	RawTradeIngestRepository rawTradeIngestRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
-		return new JdbcRawTradeIngestRepository(IngestPersistenceJdbcSupport.requiredJdbcClient(jdbcClientProvider));
-	}
+    @Bean
+    @Lazy
+    RawTradeIngestRepository rawTradeIngestRepository(ObjectProvider<JdbcClient> jdbcClientProvider) {
+        return new JdbcRawTradeIngestRepository(IngestPersistenceJdbcSupport.requiredJdbcClient(jdbcClientProvider));
+    }
 
-	@Bean
-	@Lazy
-	RawReceiptService rawReceiptService(RawTradeIngestRepository rawTradeIngestRepository) {
-		return new RawReceiptService(rawTradeIngestRepository);
-	}
+    @Bean
+    @Lazy
+    RawReceiptService rawReceiptService(RawTradeIngestRepository rawTradeIngestRepository) {
+        return new RawReceiptService(rawTradeIngestRepository);
+    }
 
-	@Bean
-	@Lazy
-	RawIngestReconciliationService rawIngestReconciliationService(
-		RawTradeIngestRepository rawTradeIngestRepository,
-		RawTradeItemParser rawTradeItemParser,
-		TradeIngestFinalizer finalizer
-	) {
-		return new RawIngestReconciliationService(rawTradeIngestRepository, rawTradeItemParser, finalizer);
-	}
+    @Bean
+    @Lazy
+    RawIngestReconciliationService rawIngestReconciliationService(
+            RawTradeIngestRepository rawTradeIngestRepository,
+            RawTradeItemParser rawTradeItemParser,
+            TradeIngestFinalizer finalizer) {
+        return new RawIngestReconciliationService(rawTradeIngestRepository, rawTradeItemParser, finalizer);
+    }
 
-	@Bean
-	@ConditionalOnProperty(name = "home.ingest.raw-reconcile.enabled", havingValue = "true", matchIfMissing = true)
-	ApplicationRunner rawIngestReconciliationRunner(
-		ObjectProvider<RawIngestReconciliationService> reconciliationServiceProvider,
-		ObjectProvider<JdbcClient> jdbcClientProvider,
-		@Value("${home.ingest.raw-reconcile.batch-size:100}") int batchSize
-	) {
-		return new RawIngestReconciliationRunner(
-			reconciliationServiceProvider::getObject,
-			batchSize,
-			() -> jdbcClientProvider.getIfAvailable() != null
-		);
-	}
+    @Bean
+    @ConditionalOnProperty(name = "home.ingest.raw-reconcile.enabled", havingValue = "true", matchIfMissing = true)
+    ApplicationRunner rawIngestReconciliationRunner(
+            ObjectProvider<RawIngestReconciliationService> reconciliationServiceProvider,
+            ObjectProvider<JdbcClient> jdbcClientProvider,
+            @Value("${home.ingest.raw-reconcile.batch-size:100}") int batchSize) {
+        return new RawIngestReconciliationRunner(
+                reconciliationServiceProvider::getObject, batchSize, () -> jdbcClientProvider.getIfAvailable() != null);
+    }
 
-	@Bean
-	@Lazy
-	RawTradeItemParser rawTradeItemParser(ObjectMapper objectMapper) {
-		return new RtmsRawTradeItemParser(objectMapper);
-	}
+    @Bean
+    @Lazy
+    RawTradeItemParser rawTradeItemParser(ObjectMapper objectMapper) {
+        return new RtmsRawTradeItemParser(objectMapper);
+    }
 }

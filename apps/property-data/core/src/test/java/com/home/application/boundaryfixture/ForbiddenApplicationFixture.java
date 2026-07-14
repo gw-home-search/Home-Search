@@ -4,5 +4,5 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 public class ForbiddenApplicationFixture {
 
-	private JdbcTemplate jdbcTemplate;
+    private JdbcTemplate jdbcTemplate;
 }

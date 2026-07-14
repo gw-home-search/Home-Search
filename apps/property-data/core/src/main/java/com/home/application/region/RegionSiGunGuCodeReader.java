@@ -5,9 +5,9 @@ import java.util.List;
 @FunctionalInterface
 public interface RegionSiGunGuCodeReader {
 
-	List<String> siGunGuCodes();
+    List<String> siGunGuCodes();
 
-	static RegionSiGunGuCodeReader empty() {
-		return List::of;
-	}
+    static RegionSiGunGuCodeReader empty() {
+        return List::of;
+    }
 }

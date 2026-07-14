@@ -1,2 +1,3 @@
 package com.home.user.web;
-public record AccessTokenResponse(String accessToken) { }
+
+public record AccessTokenResponse(String accessToken) {}

@@ -4,9 +4,9 @@ import java.util.Optional;
 
 public interface ParcelCoordinateSourceRepository {
 
-	Optional<ParcelCoordinate> findByPnu(String pnu);
+    Optional<ParcelCoordinate> findByPnu(String pnu);
 
-	static ParcelCoordinateSourceRepository empty() {
-		return pnu -> Optional.empty();
-	}
+    static ParcelCoordinateSourceRepository empty() {
+        return pnu -> Optional.empty();
+    }
 }

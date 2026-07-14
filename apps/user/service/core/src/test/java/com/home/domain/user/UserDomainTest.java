@@ -23,9 +23,12 @@ class UserDomainTest {
     @Test
     void rejectsInvalidIdentityProfileAndRefreshState() {
         assertThatThrownBy(() -> new OAuthIdentityKey(null, "subject")).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new OAuthIdentityKey(OAuthProvider.GOOGLE, "null")).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new UserProfile("x".repeat(101), null, null)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new UserProfile("name", "x".repeat(321), null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new OAuthIdentityKey(OAuthProvider.GOOGLE, "null"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new UserProfile("x".repeat(101), null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new UserProfile("name", "x".repeat(321), null))
+                .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> RefreshTokenHash.sha256(" ")).isInstanceOf(InvalidRefreshTokenException.class);
         assertThatThrownBy(() -> new ActiveRefreshToken(0, "0".repeat(64), Instant.EPOCH, Instant.EPOCH.plusSeconds(1)))
                 .isInstanceOf(IllegalArgumentException.class);

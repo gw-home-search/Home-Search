@@ -24,8 +24,10 @@ public final class UserAccessTokenVerifier {
             if (token.isBlank() || !token.equals(token.trim()) || token.indexOf(' ') >= 0) {
                 throw new UserJwtVerificationException();
             }
-            var verified = codec.verify(token, new JwtVerificationPolicy(
-                policy.issuer(), policy.audience(), policy.maximumLifetime(), policy.publicKeys()::get));
+            var verified = codec.verify(
+                    token,
+                    new JwtVerificationPolicy(
+                            policy.issuer(), policy.audience(), policy.maximumLifetime(), policy.publicKeys()::get));
             if (!"USER".equals(verified.claims().get("role"))) {
                 throw new UserJwtVerificationException();
             }

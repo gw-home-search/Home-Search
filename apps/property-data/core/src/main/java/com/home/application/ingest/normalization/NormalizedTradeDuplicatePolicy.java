@@ -9,30 +9,29 @@ import java.util.Optional;
  */
 public class NormalizedTradeDuplicatePolicy {
 
-	public NormalizedTradeDuplicateMatch resolve(
-		String aptDong,
-		Optional<Long> exactAptDongTradeId,
-		Optional<Long> missingAptDongTradeId,
-		List<Long> fallbackCandidateIds
-	) {
-		Optional<Long> exactCandidate = Objects.requireNonNullElse(exactAptDongTradeId, Optional.empty());
-		Optional<Long> missingCandidate = Objects.requireNonNullElse(missingAptDongTradeId, Optional.empty());
-		List<Long> fallbackCandidates = List.copyOf(Objects.requireNonNullElse(fallbackCandidateIds, List.of()));
+    public NormalizedTradeDuplicateMatch resolve(
+            String aptDong,
+            Optional<Long> exactAptDongTradeId,
+            Optional<Long> missingAptDongTradeId,
+            List<Long> fallbackCandidateIds) {
+        Optional<Long> exactCandidate = Objects.requireNonNullElse(exactAptDongTradeId, Optional.empty());
+        Optional<Long> missingCandidate = Objects.requireNonNullElse(missingAptDongTradeId, Optional.empty());
+        List<Long> fallbackCandidates = List.copyOf(Objects.requireNonNullElse(fallbackCandidateIds, List.of()));
 
-		if (aptDong == null) {
-			if (fallbackCandidates.size() == 1) {
-				return NormalizedTradeDuplicateMatch.matched(fallbackCandidates.get(0));
-			}
-			return fallbackCandidates.isEmpty()
-				? NormalizedTradeDuplicateMatch.none()
-				: NormalizedTradeDuplicateMatch.ambiguousMatch();
-		}
+        if (aptDong == null) {
+            if (fallbackCandidates.size() == 1) {
+                return NormalizedTradeDuplicateMatch.matched(fallbackCandidates.get(0));
+            }
+            return fallbackCandidates.isEmpty()
+                    ? NormalizedTradeDuplicateMatch.none()
+                    : NormalizedTradeDuplicateMatch.ambiguousMatch();
+        }
 
-		if (exactCandidate.isPresent()) {
-			return NormalizedTradeDuplicateMatch.matched(exactCandidate.get());
-		}
-		return missingCandidate
-			.map(NormalizedTradeDuplicateMatch::matched)
-			.orElseGet(NormalizedTradeDuplicateMatch::none);
-	}
+        if (exactCandidate.isPresent()) {
+            return NormalizedTradeDuplicateMatch.matched(exactCandidate.get());
+        }
+        return missingCandidate
+                .map(NormalizedTradeDuplicateMatch::matched)
+                .orElseGet(NormalizedTradeDuplicateMatch::none);
+    }
 }

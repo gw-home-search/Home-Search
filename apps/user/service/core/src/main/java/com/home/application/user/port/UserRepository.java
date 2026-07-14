@@ -8,7 +8,10 @@ import java.util.Optional;
 
 public interface UserRepository {
     Optional<OAuthLoginResult> findByIdentity(OAuthIdentityKey identity);
+
     OAuthLoginResult create(OAuthIdentityKey identity, UserProfile profile, Instant loginAt);
+
     OAuthLoginResult updateProfile(OAuthIdentityKey identity, UserProfile profile, Instant loginAt);
+
     Optional<OAuthLoginResult> findByUserId(long userId);
 }

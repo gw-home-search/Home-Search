@@ -1,26 +1,24 @@
 package com.home.infrastructure.persistence.map;
 
+import com.home.application.map.ComplexMarkerResult;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
-import com.home.application.map.ComplexMarkerResult;
-
 final class ComplexMarkerRowMapper {
 
-	ComplexMarkerResult map(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new ComplexMarkerResult(
-			resultSet.getLong("parcel_id"),
-			longOrNull(resultSet, "complex_id"),
-			resultSet.getString("complex_name"),
-			resultSet.getDouble("lat"),
-			resultSet.getDouble("lng"),
-			longOrNull(resultSet, "latest_deal_amount"),
-			longOrNull(resultSet, "unit_cnt_sum")
-		);
-	}
+    ComplexMarkerResult map(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new ComplexMarkerResult(
+                resultSet.getLong("parcel_id"),
+                longOrNull(resultSet, "complex_id"),
+                resultSet.getString("complex_name"),
+                resultSet.getDouble("lat"),
+                resultSet.getDouble("lng"),
+                longOrNull(resultSet, "latest_deal_amount"),
+                longOrNull(resultSet, "unit_cnt_sum"));
+    }
 
-	private Long longOrNull(ResultSet resultSet, String columnName) throws SQLException {
-		long value = resultSet.getLong(columnName);
-		return resultSet.wasNull() ? null : value;
-	}
+    private Long longOrNull(ResultSet resultSet, String columnName) throws SQLException {
+        long value = resultSet.getLong(columnName);
+        return resultSet.wasNull() ? null : value;
+    }
 }

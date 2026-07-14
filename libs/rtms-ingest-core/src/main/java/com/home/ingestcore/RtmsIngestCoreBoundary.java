@@ -5,10 +5,9 @@ package com.home.ingestcore;
  */
 public final class RtmsIngestCoreBoundary {
 
-	public static final String RAW_FIRST = "raw-first";
-	public static final String DUPLICATE_SAFE = "duplicate-safe";
-	public static final String FAILED_MATCH_QUERYABLE = "failed-match-queryable";
+    public static final String RAW_FIRST = "raw-first";
+    public static final String DUPLICATE_SAFE = "duplicate-safe";
+    public static final String FAILED_MATCH_QUERYABLE = "failed-match-queryable";
 
-	private RtmsIngestCoreBoundary() {
-	}
+    private RtmsIngestCoreBoundary() {}
 }

@@ -4,19 +4,18 @@ import java.util.Objects;
 
 public class RegionUnitCntSynchronizationService {
 
-	private final RegionRelationSynchronizationGateway gateway;
+    private final RegionRelationSynchronizationGateway gateway;
 
-	public RegionUnitCntSynchronizationService(RegionRelationSynchronizationGateway gateway) {
-		this.gateway = Objects.requireNonNull(gateway);
-	}
+    public RegionUnitCntSynchronizationService(RegionRelationSynchronizationGateway gateway) {
+        this.gateway = Objects.requireNonNull(gateway);
+    }
 
-	public RegionUnitCntSyncResult synchronize() {
-		RegionRelationSynchronizationResult result = gateway.synchronizeAll();
-		return new RegionUnitCntSyncResult(
-			result.unmatchedParcelExists(),
-			result.relationChanged(),
-			result.unitCntChanged(),
-			result.unmatchedParcelExists()
-		);
-	}
+    public RegionUnitCntSyncResult synchronize() {
+        RegionRelationSynchronizationResult result = gateway.synchronizeAll();
+        return new RegionUnitCntSyncResult(
+                result.unmatchedParcelExists(),
+                result.relationChanged(),
+                result.unitCntChanged(),
+                result.unmatchedParcelExists());
+    }
 }

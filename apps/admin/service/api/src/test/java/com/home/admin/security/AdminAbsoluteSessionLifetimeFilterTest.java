@@ -6,7 +6,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -17,7 +16,8 @@ class AdminAbsoluteSessionLifetimeFilterTest {
     @Test
     void rejectsSessionOlderThanEightHours() throws Exception {
         MockHttpSession session = new MockHttpSession();
-        Clock clock = Clock.fixed(Instant.ofEpochMilli(session.getCreationTime()).plus(Duration.ofHours(8)), ZoneOffset.UTC);
+        Clock clock =
+                Clock.fixed(Instant.ofEpochMilli(session.getCreationTime()).plus(Duration.ofHours(8)), ZoneOffset.UTC);
         var filter = new AdminAbsoluteSessionLifetimeFilter(Duration.ofHours(8), clock);
         var request = new MockHttpServletRequest();
         request.setSession(session);
@@ -33,7 +33,8 @@ class AdminAbsoluteSessionLifetimeFilterTest {
     @Test
     void allowsSessionWithinAbsoluteLifetime() throws Exception {
         MockHttpSession session = new MockHttpSession();
-        Clock clock = Clock.fixed(Instant.ofEpochMilli(session.getCreationTime()).plus(Duration.ofMinutes(30)), ZoneOffset.UTC);
+        Clock clock = Clock.fixed(
+                Instant.ofEpochMilli(session.getCreationTime()).plus(Duration.ofMinutes(30)), ZoneOffset.UTC);
         var filter = new AdminAbsoluteSessionLifetimeFilter(Duration.ofHours(8), clock);
         var request = new MockHttpServletRequest();
         request.setSession(session);
@@ -50,7 +51,8 @@ class AdminAbsoluteSessionLifetimeFilterTest {
     @Test
     void allowsLoginToReplaceExpiredSession() throws Exception {
         MockHttpSession session = new MockHttpSession();
-        Clock clock = Clock.fixed(Instant.ofEpochMilli(session.getCreationTime()).plus(Duration.ofHours(9)), ZoneOffset.UTC);
+        Clock clock =
+                Clock.fixed(Instant.ofEpochMilli(session.getCreationTime()).plus(Duration.ofHours(9)), ZoneOffset.UTC);
         var filter = new AdminAbsoluteSessionLifetimeFilter(Duration.ofHours(8), clock);
         var request = new MockHttpServletRequest("POST", "/api/v1/admin/auth/login");
         request.setSession(session);

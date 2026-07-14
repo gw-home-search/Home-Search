@@ -4,5 +4,5 @@ import org.springframework.context.ApplicationContext;
 
 public class ForbiddenDomainFixture {
 
-	private ApplicationContext applicationContext;
+    private ApplicationContext applicationContext;
 }

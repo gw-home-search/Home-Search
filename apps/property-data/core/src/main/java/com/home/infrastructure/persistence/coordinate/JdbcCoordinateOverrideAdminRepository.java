@@ -1,42 +1,40 @@
 package com.home.infrastructure.persistence.coordinate;
 
-import java.math.BigDecimal;
+import com.home.application.coordinate.override.CoordinateOverrideAdminRepository;
+import com.home.application.coordinate.override.CoordinateOverrideApprovalCommand;
+import com.home.application.coordinate.override.CoordinateOverrideApprovalResult;
+import com.home.application.coordinate.override.CoordinatePendingComplex;
+import com.home.application.coordinate.override.CoordinatePendingSummary;
+import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
+import com.home.domain.coordinate.CoordinateDisplayPolicy;
+import com.home.domain.coordinate.CoordinatePendingReason;
+import com.home.domain.coordinate.CoordinateSource;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
-
-import com.home.application.coordinate.override.CoordinateOverrideAdminRepository;
-import com.home.application.coordinate.override.CoordinateOverrideApprovalCommand;
-import com.home.application.coordinate.override.CoordinateOverrideApprovalResult;
-import com.home.application.coordinate.override.CoordinatePendingComplex;
-import com.home.domain.coordinate.CoordinatePendingReason;
-import com.home.application.coordinate.override.CoordinatePendingSummary;
-import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
-import com.home.domain.coordinate.CoordinateDisplayPolicy;
-import com.home.domain.coordinate.CoordinateSource;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
 class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRepository {
 
-	private final JdbcClient jdbcClient;
-	private final TransactionTemplate transactionTemplate;
+    private final JdbcClient jdbcClient;
+    private final TransactionTemplate transactionTemplate;
 
-	JdbcCoordinateOverrideAdminRepository(JdbcClient jdbcClient) {
-		this(jdbcClient, null);
-	}
+    JdbcCoordinateOverrideAdminRepository(JdbcClient jdbcClient) {
+        this(jdbcClient, null);
+    }
 
-	JdbcCoordinateOverrideAdminRepository(JdbcClient jdbcClient, TransactionTemplate transactionTemplate) {
-		this.jdbcClient = Objects.requireNonNull(jdbcClient);
-		this.transactionTemplate = transactionTemplate;
-	}
+    JdbcCoordinateOverrideAdminRepository(JdbcClient jdbcClient, TransactionTemplate transactionTemplate) {
+        this.jdbcClient = Objects.requireNonNull(jdbcClient);
+        this.transactionTemplate = transactionTemplate;
+    }
 
-	@Override
-	public List<CoordinatePendingComplex> findPendingComplexes(int limit, int offset) {
-		return jdbcClient.sql("""
+    @Override
+    public List<CoordinatePendingComplex> findPendingComplexes(int limit, int offset) {
+        return jdbcClient
+                .sql("""
 			WITH multi_parcel AS (
 			    SELECT parcel_id
 			    FROM complex
@@ -156,18 +154,20 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			) active_trade ON true
 			ORDER BY pending_base.created_at DESC, pending_base.parcel_id, pending_base.complex_id
 			""")
-			.param("limit", limit)
-			.param("offset", offset)
-			.param("trustedBuildingCoordinateConfidence",
-				CoordinateDisplayPolicy.TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE)
-			.param("buildingFootprintSource", CoordinateSource.BUILDING_FOOTPRINT.storedValue())
-			.query(this::mapPendingComplex)
-			.list();
-	}
+                .param("limit", limit)
+                .param("offset", offset)
+                .param(
+                        "trustedBuildingCoordinateConfidence",
+                        CoordinateDisplayPolicy.TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE)
+                .param("buildingFootprintSource", CoordinateSource.BUILDING_FOOTPRINT.storedValue())
+                .query(this::mapPendingComplex)
+                .list();
+    }
 
-	@Override
-	public CoordinatePendingSummary findPendingSummary() {
-		return jdbcClient.sql("""
+    @Override
+    public CoordinatePendingSummary findPendingSummary() {
+        return jdbcClient
+                .sql("""
 			WITH multi_parcel AS (
 			    SELECT parcel_id
 			    FROM complex
@@ -247,56 +247,54 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			    count(*) FILTER (WHERE reason = 'COMPLEX_DISPLAY_COORDINATE_MISSING') AS complex_display_coordinate_missing_count
 			FROM pending_candidate
 			""")
-			.param("trustedBuildingCoordinateConfidence",
-				CoordinateDisplayPolicy.TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE)
-			.param("buildingFootprintSource", CoordinateSource.BUILDING_FOOTPRINT.storedValue())
-			.query(this::mapPendingSummary)
-			.single();
-	}
+                .param(
+                        "trustedBuildingCoordinateConfidence",
+                        CoordinateDisplayPolicy.TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE)
+                .param("buildingFootprintSource", CoordinateSource.BUILDING_FOOTPRINT.storedValue())
+                .query(this::mapPendingSummary)
+                .single();
+    }
 
-	@Override
-	public CoordinateOverrideApprovalResult approve(CoordinateOverrideApprovalCommand command) {
-		if (transactionTemplate == null) {
-			return approveInTransaction(command);
-		}
-		CoordinateOverrideApprovalResult result = transactionTemplate.execute(status -> approveInTransaction(command));
-		if (result == null) {
-			throw new IllegalStateException("coordinate override approval transaction returned no result");
-		}
-		return result;
-	}
+    @Override
+    public CoordinateOverrideApprovalResult approve(CoordinateOverrideApprovalCommand command) {
+        if (transactionTemplate == null) {
+            return approveInTransaction(command);
+        }
+        CoordinateOverrideApprovalResult result = transactionTemplate.execute(status -> approveInTransaction(command));
+        if (result == null) {
+            throw new IllegalStateException("coordinate override approval transaction returned no result");
+        }
+        return result;
+    }
 
-	private CoordinateOverrideApprovalResult approveInTransaction(CoordinateOverrideApprovalCommand command) {
-		if (!canApproveParcelCoordinate(command.pnu())) {
-			throw new InvalidCoordinateOverrideException(
-				"coordinate override requires a PNU coordinate missing parcel with active trades"
-			);
-		}
-		int updatedOverride = updateApprovedOverride(command);
-		if (updatedOverride == 0) {
-			insertApprovedOverride(command);
-		}
-		int updatedParcel = jdbcClient.sql("""
+    private CoordinateOverrideApprovalResult approveInTransaction(CoordinateOverrideApprovalCommand command) {
+        if (!canApproveParcelCoordinate(command.pnu())) {
+            throw new InvalidCoordinateOverrideException(
+                    "coordinate override requires a PNU coordinate missing parcel with active trades");
+        }
+        int updatedOverride = updateApprovedOverride(command);
+        if (updatedOverride == 0) {
+            insertApprovedOverride(command);
+        }
+        int updatedParcel = jdbcClient
+                .sql("""
 			UPDATE parcel
 			SET latitude = :latitude,
 			    longitude = :longitude,
 			    updated_at = now()
 			WHERE pnu = :pnu
 			""")
-			.param("latitude", command.latitude())
-			.param("longitude", command.longitude())
-			.param("pnu", command.pnu())
-			.update();
-		return new CoordinateOverrideApprovalResult(
-			command.pnu(),
-			command.latitude(),
-			command.longitude(),
-			updatedParcel > 0
-		);
-	}
+                .param("latitude", command.latitude())
+                .param("longitude", command.longitude())
+                .param("pnu", command.pnu())
+                .update();
+        return new CoordinateOverrideApprovalResult(
+                command.pnu(), command.latitude(), command.longitude(), updatedParcel > 0);
+    }
 
-	private boolean canApproveParcelCoordinate(String pnu) {
-		return Boolean.TRUE.equals(jdbcClient.sql("""
+    private boolean canApproveParcelCoordinate(String pnu) {
+        return Boolean.TRUE.equals(
+                jdbcClient.sql("""
 			SELECT EXISTS (
 			    SELECT 1
 			    FROM parcel p
@@ -310,14 +308,12 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			            AND t.deleted_at IS NULL
 			      )
 			)
-			""")
-			.param("pnu", pnu)
-			.query(Boolean.class)
-			.single());
-	}
+			""").param("pnu", pnu).query(Boolean.class).single());
+    }
 
-	private int updateApprovedOverride(CoordinateOverrideApprovalCommand command) {
-		return jdbcClient.sql("""
+    private int updateApprovedOverride(CoordinateOverrideApprovalCommand command) {
+        return jdbcClient
+                .sql("""
 			UPDATE parcel_coordinate_override
 			SET latitude = :latitude,
 			    longitude = :longitude,
@@ -331,16 +327,17 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			WHERE pnu = :pnu
 			  AND status = 'APPROVED'
 			""")
-			.param("latitude", command.latitude())
-			.param("longitude", command.longitude())
-			.param("reason", command.reason())
-			.param("approvedBy", command.approvedBy())
-			.param("pnu", command.pnu())
-			.update();
-	}
+                .param("latitude", command.latitude())
+                .param("longitude", command.longitude())
+                .param("reason", command.reason())
+                .param("approvedBy", command.approvedBy())
+                .param("pnu", command.pnu())
+                .update();
+    }
 
-	private void insertApprovedOverride(CoordinateOverrideApprovalCommand command) {
-		jdbcClient.sql("""
+    private void insertApprovedOverride(CoordinateOverrideApprovalCommand command) {
+        jdbcClient
+                .sql("""
 			INSERT INTO parcel_coordinate_override (
 			    pnu,
 			    latitude,
@@ -366,34 +363,32 @@ class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRe
 			    now()
 			)
 			""")
-			.param("pnu", command.pnu())
-			.param("latitude", command.latitude())
-			.param("longitude", command.longitude())
-			.param("reason", command.reason())
-			.param("approvedBy", command.approvedBy())
-			.update();
-	}
+                .param("pnu", command.pnu())
+                .param("latitude", command.latitude())
+                .param("longitude", command.longitude())
+                .param("reason", command.reason())
+                .param("approvedBy", command.approvedBy())
+                .update();
+    }
 
-	private CoordinatePendingComplex mapPendingComplex(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new CoordinatePendingComplex(
-			resultSet.getLong("parcel_id"),
-			resultSet.getLong("complex_id"),
-			resultSet.getString("pnu"),
-			resultSet.getString("apt_seq"),
-			resultSet.getString("apt_name"),
-			resultSet.getString("address"),
-			CoordinatePendingReason.valueOf(resultSet.getString("reason")),
-			resultSet.getLong("trade_count"),
-			resultSet.getObject("created_at", OffsetDateTime.class)
-		);
-	}
+    private CoordinatePendingComplex mapPendingComplex(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new CoordinatePendingComplex(
+                resultSet.getLong("parcel_id"),
+                resultSet.getLong("complex_id"),
+                resultSet.getString("pnu"),
+                resultSet.getString("apt_seq"),
+                resultSet.getString("apt_name"),
+                resultSet.getString("address"),
+                CoordinatePendingReason.valueOf(resultSet.getString("reason")),
+                resultSet.getLong("trade_count"),
+                resultSet.getObject("created_at", OffsetDateTime.class));
+    }
 
-	private CoordinatePendingSummary mapPendingSummary(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new CoordinatePendingSummary(
-			resultSet.getLong("total_count"),
-			resultSet.getLong("pnu_coordinate_missing_count"),
-			resultSet.getLong("same_pnu_multi_complex_count"),
-			resultSet.getLong("complex_display_coordinate_missing_count")
-		);
-	}
+    private CoordinatePendingSummary mapPendingSummary(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new CoordinatePendingSummary(
+                resultSet.getLong("total_count"),
+                resultSet.getLong("pnu_coordinate_missing_count"),
+                resultSet.getLong("same_pnu_multi_complex_count"),
+                resultSet.getLong("complex_display_coordinate_missing_count"));
+    }
 }

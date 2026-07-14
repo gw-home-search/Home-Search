@@ -1,459 +1,473 @@
 package com.home.infrastructure.external.complex;
 
+import com.home.application.ingest.metadata.ComplexMetadata;
+import com.home.application.ingest.metadata.ComplexMetadataEnrichmentClient;
+import com.home.application.ingest.metadata.ComplexMetadataLookup;
+import com.home.application.ingest.metadata.ComplexMetadataLookupEvidence;
+import com.home.application.ingest.metadata.ComplexMetadataResolution;
+import com.home.application.ingest.metadata.ComplexMetadataResolutionPolicy;
+import com.home.application.ingest.metadata.ComplexMetadataResolver;
+import com.home.application.ingest.metadata.OdcComplexMetadataResolver;
+import com.home.application.ingest.metadata.OdcloudPnuPrefixAliasLookup;
+import com.home.domain.complex.metadata.ComplexMetadataFailureKind;
+import com.home.domain.complex.metadata.ComplexMetadataLookupPath;
+import com.home.infrastructure.external.ExternalApiUri;
+import com.home.infrastructure.external.apis.dto.ApisBldRecapResponse;
+import com.home.infrastructure.external.odcloud.dto.OdcloudAptResponse;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Objects;
-
-import com.home.application.ingest.metadata.ComplexMetadata;
-import com.home.application.ingest.metadata.ComplexMetadataEnrichmentClient;
-import com.home.domain.complex.metadata.ComplexMetadataFailureKind;
-import com.home.application.ingest.metadata.ComplexMetadataLookup;
-import com.home.application.ingest.metadata.ComplexMetadataResolution;
-import com.home.application.ingest.metadata.ComplexMetadataResolutionPolicy;
-import com.home.application.ingest.metadata.ComplexMetadataResolver;
-import com.home.application.ingest.metadata.ComplexMetadataLookupEvidence;
-import com.home.application.ingest.metadata.OdcloudPnuPrefixAliasLookup;
-import com.home.application.ingest.metadata.OdcComplexMetadataResolver;
-import com.home.domain.complex.metadata.ComplexMetadataLookupPath;
-import com.home.infrastructure.external.ExternalApiUri;
-import com.home.infrastructure.external.apis.dto.ApisBldRecapResponse;
-import com.home.infrastructure.external.odcloud.dto.OdcloudAptResponse;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-public class PublicComplexMetadataResolver implements ComplexMetadataResolver, ComplexMetadataEnrichmentClient,
-	OdcComplexMetadataResolver {
+public class PublicComplexMetadataResolver
+        implements ComplexMetadataResolver, ComplexMetadataEnrichmentClient, OdcComplexMetadataResolver {
 
-	private static final Logger log = LoggerFactory.getLogger(PublicComplexMetadataResolver.class);
+    private static final Logger log = LoggerFactory.getLogger(PublicComplexMetadataResolver.class);
 
-	private final RestClient odcloudRestClient;
-	private final String odcloudBaseUrl;
-	private final String odcloudServiceKey;
-	private final String odcloudAptPath;
-	private final RestClient bldRestClient;
-	private final String bldBaseUrl;
-	private final String bldServiceKey;
-	private final String bldRecapPath;
-	private final String recapPath;
-	private final boolean buildingFallbackEnabled;
-	private final ComplexMetadataResolutionPolicy resolutionPolicy;
-	private final OdcloudPnuPrefixAliasLookup aliasLookup;
+    private final RestClient odcloudRestClient;
+    private final String odcloudBaseUrl;
+    private final String odcloudServiceKey;
+    private final String odcloudAptPath;
+    private final RestClient bldRestClient;
+    private final String bldBaseUrl;
+    private final String bldServiceKey;
+    private final String bldRecapPath;
+    private final String recapPath;
+    private final boolean buildingFallbackEnabled;
+    private final ComplexMetadataResolutionPolicy resolutionPolicy;
+    private final OdcloudPnuPrefixAliasLookup aliasLookup;
 
-	public PublicComplexMetadataResolver(
-		RestClient odcloudRestClient,
-		String odcloudServiceKey,
-		String odcloudAptPath,
-		RestClient bldRestClient,
-		String bldServiceKey,
-		String bldRecapPath,
-		String recapPath
-	) {
-		this(odcloudRestClient, null, odcloudServiceKey, odcloudAptPath, bldRestClient, null, bldServiceKey,
-			bldRecapPath, recapPath, true, new ComplexMetadataResolutionPolicy(), OdcloudPnuPrefixAliasLookup.empty());
-	}
+    public PublicComplexMetadataResolver(
+            RestClient odcloudRestClient,
+            String odcloudServiceKey,
+            String odcloudAptPath,
+            RestClient bldRestClient,
+            String bldServiceKey,
+            String bldRecapPath,
+            String recapPath) {
+        this(
+                odcloudRestClient,
+                null,
+                odcloudServiceKey,
+                odcloudAptPath,
+                bldRestClient,
+                null,
+                bldServiceKey,
+                bldRecapPath,
+                recapPath,
+                true,
+                new ComplexMetadataResolutionPolicy(),
+                OdcloudPnuPrefixAliasLookup.empty());
+    }
 
-	public PublicComplexMetadataResolver(
-		RestClient odcloudRestClient,
-		String odcloudBaseUrl,
-		String odcloudServiceKey,
-		String odcloudAptPath,
-		RestClient bldRestClient,
-		String bldBaseUrl,
-		String bldServiceKey,
-		String bldRecapPath,
-		String recapPath,
-		boolean buildingFallbackEnabled
-	) {
-		this(
-			odcloudRestClient,
-			odcloudBaseUrl,
-			odcloudServiceKey,
-			odcloudAptPath,
-			bldRestClient,
-			bldBaseUrl,
-			bldServiceKey,
-			bldRecapPath,
-			recapPath,
-			buildingFallbackEnabled,
-			new ComplexMetadataResolutionPolicy(),
-			OdcloudPnuPrefixAliasLookup.empty()
-		);
-	}
+    public PublicComplexMetadataResolver(
+            RestClient odcloudRestClient,
+            String odcloudBaseUrl,
+            String odcloudServiceKey,
+            String odcloudAptPath,
+            RestClient bldRestClient,
+            String bldBaseUrl,
+            String bldServiceKey,
+            String bldRecapPath,
+            String recapPath,
+            boolean buildingFallbackEnabled) {
+        this(
+                odcloudRestClient,
+                odcloudBaseUrl,
+                odcloudServiceKey,
+                odcloudAptPath,
+                bldRestClient,
+                bldBaseUrl,
+                bldServiceKey,
+                bldRecapPath,
+                recapPath,
+                buildingFallbackEnabled,
+                new ComplexMetadataResolutionPolicy(),
+                OdcloudPnuPrefixAliasLookup.empty());
+    }
 
-	public PublicComplexMetadataResolver(
-		RestClient odcloudRestClient,
-		String odcloudBaseUrl,
-		String odcloudServiceKey,
-		String odcloudAptPath,
-		RestClient bldRestClient,
-		String bldBaseUrl,
-		String bldServiceKey,
-		String bldRecapPath,
-		String recapPath,
-		boolean buildingFallbackEnabled,
-		OdcloudPnuPrefixAliasLookup aliasLookup
-	) {
-		this(odcloudRestClient, odcloudBaseUrl, odcloudServiceKey, odcloudAptPath, bldRestClient, bldBaseUrl,
-			bldServiceKey, bldRecapPath, recapPath, buildingFallbackEnabled, new ComplexMetadataResolutionPolicy(),
-			aliasLookup);
-	}
+    public PublicComplexMetadataResolver(
+            RestClient odcloudRestClient,
+            String odcloudBaseUrl,
+            String odcloudServiceKey,
+            String odcloudAptPath,
+            RestClient bldRestClient,
+            String bldBaseUrl,
+            String bldServiceKey,
+            String bldRecapPath,
+            String recapPath,
+            boolean buildingFallbackEnabled,
+            OdcloudPnuPrefixAliasLookup aliasLookup) {
+        this(
+                odcloudRestClient,
+                odcloudBaseUrl,
+                odcloudServiceKey,
+                odcloudAptPath,
+                bldRestClient,
+                bldBaseUrl,
+                bldServiceKey,
+                bldRecapPath,
+                recapPath,
+                buildingFallbackEnabled,
+                new ComplexMetadataResolutionPolicy(),
+                aliasLookup);
+    }
 
-	PublicComplexMetadataResolver(
-		RestClient odcloudRestClient,
-		String odcloudBaseUrl,
-		String odcloudServiceKey,
-		String odcloudAptPath,
-		RestClient bldRestClient,
-		String bldBaseUrl,
-		String bldServiceKey,
-		String bldRecapPath,
-		String recapPath,
-		boolean buildingFallbackEnabled,
-		ComplexMetadataResolutionPolicy resolutionPolicy,
-		OdcloudPnuPrefixAliasLookup aliasLookup
-	) {
-		this.odcloudRestClient = Objects.requireNonNull(odcloudRestClient);
-		this.odcloudBaseUrl = trimToNull(odcloudBaseUrl);
-		this.odcloudServiceKey = trimToNull(odcloudServiceKey);
-		this.odcloudAptPath = Objects.requireNonNull(odcloudAptPath);
-		this.bldRestClient = Objects.requireNonNull(bldRestClient);
-		this.bldBaseUrl = trimToNull(bldBaseUrl);
-		this.bldServiceKey = trimToNull(bldServiceKey);
-		this.bldRecapPath = Objects.requireNonNull(bldRecapPath);
-		this.recapPath = Objects.requireNonNull(recapPath);
-		this.buildingFallbackEnabled = buildingFallbackEnabled;
-		this.resolutionPolicy = Objects.requireNonNull(resolutionPolicy);
-		this.aliasLookup = Objects.requireNonNull(aliasLookup);
-	}
+    PublicComplexMetadataResolver(
+            RestClient odcloudRestClient,
+            String odcloudBaseUrl,
+            String odcloudServiceKey,
+            String odcloudAptPath,
+            RestClient bldRestClient,
+            String bldBaseUrl,
+            String bldServiceKey,
+            String bldRecapPath,
+            String recapPath,
+            boolean buildingFallbackEnabled,
+            ComplexMetadataResolutionPolicy resolutionPolicy,
+            OdcloudPnuPrefixAliasLookup aliasLookup) {
+        this.odcloudRestClient = Objects.requireNonNull(odcloudRestClient);
+        this.odcloudBaseUrl = trimToNull(odcloudBaseUrl);
+        this.odcloudServiceKey = trimToNull(odcloudServiceKey);
+        this.odcloudAptPath = Objects.requireNonNull(odcloudAptPath);
+        this.bldRestClient = Objects.requireNonNull(bldRestClient);
+        this.bldBaseUrl = trimToNull(bldBaseUrl);
+        this.bldServiceKey = trimToNull(bldServiceKey);
+        this.bldRecapPath = Objects.requireNonNull(bldRecapPath);
+        this.recapPath = Objects.requireNonNull(recapPath);
+        this.buildingFallbackEnabled = buildingFallbackEnabled;
+        this.resolutionPolicy = Objects.requireNonNull(resolutionPolicy);
+        this.aliasLookup = Objects.requireNonNull(aliasLookup);
+    }
 
-	@Override
-	public boolean isConfigured() {
-		return odcloudServiceKey != null || (buildingFallbackEnabled && bldServiceKey != null);
-	}
+    @Override
+    public boolean isConfigured() {
+        return odcloudServiceKey != null || (buildingFallbackEnabled && bldServiceKey != null);
+    }
 
-	@Override
-	public ComplexMetadataResolution resolve(String pnu, String parcelAddress) {
-		return resolve(new ComplexMetadataLookup(null, null, null, pnu, parcelAddress));
-	}
+    @Override
+    public ComplexMetadataResolution resolve(String pnu, String parcelAddress) {
+        return resolve(new ComplexMetadataLookup(null, null, null, pnu, parcelAddress));
+    }
 
-	@Override
-	public ComplexMetadataResolution resolve(ComplexMetadataLookup lookup) {
-		ComplexMetadataResolution odcloud = resolveOdcloud(lookup);
-		return resolutionPolicy.resolve(lookup.pnu(), buildingFallbackEnabled, odcloud,
-			() -> resolveBuildingMetadata(lookup.pnu()));
-	}
+    @Override
+    public ComplexMetadataResolution resolve(ComplexMetadataLookup lookup) {
+        ComplexMetadataResolution odcloud = resolveOdcloud(lookup);
+        return resolutionPolicy.resolve(
+                lookup.pnu(), buildingFallbackEnabled, odcloud, () -> resolveBuildingMetadata(lookup.pnu()));
+    }
 
-	@Override
-	public ComplexMetadataResolution resolveOdc(ComplexMetadataLookup lookup) {
-		return resolveOdcloud(lookup);
-	}
+    @Override
+    public ComplexMetadataResolution resolveOdc(ComplexMetadataLookup lookup) {
+        return resolveOdcloud(lookup);
+    }
 
-	@Override
-	public boolean isOdcConfigured() {
-		return odcloudServiceKey != null;
-	}
+    @Override
+    public boolean isOdcConfigured() {
+        return odcloudServiceKey != null;
+    }
 
-	private ComplexMetadataResolution resolveOdcloud(ComplexMetadataLookup lookup) {
-		String pnu = lookup.pnu();
-		if (odcloudServiceKey == null || trimToNull(pnu) == null) {
-			return ComplexMetadataResolution.unavailable(
-				"ODC",
-				ComplexMetadataFailureKind.INPUT_INSUFFICIENT,
-				"ODC lookup skipped"
-			);
-		}
-		try {
-			OdcloudAptResponse response = getBody(
-				odcloudRestClient,
-				odcloudBaseUrl,
-				odcloudAptPath,
-				odcloudPnuQuery(pnu),
-				OdcloudAptResponse.class
-			);
-			List<OdcloudAptResponse.Item> matches = response == null || response.getData() == null ? List.of()
-				: response.getData().stream()
-				.filter(Objects::nonNull)
-				.filter(item -> pnu.equals(trimToNull(item.getPnu())))
-				.toList();
-			if (matches.size() > 1) {
-				OdcloudAptResponse.Item nameMatched = chooseByName(lookup.aptName(), matches);
-				if (nameMatched != null) {
-					return metadataResolution(nameMatched).withLookupEvidence(
-						evidence(ComplexMetadataLookupPath.CANONICAL_PNU_NAME, pnu, pnu, null, matches.size()));
-				}
-				return ComplexMetadataResolution.ambiguous("ODC", "ODC PNU candidate ambiguous pnu=" + pnu)
-					.withLookupEvidence(evidence(ComplexMetadataLookupPath.CANONICAL_PNU, pnu, null, null, matches.size()));
-			}
-			if (matches.isEmpty()) {
-				return resolveApprovedAlias(lookup);
-			}
-			return metadataResolution(matches.get(0)).withLookupEvidence(
-				evidence(ComplexMetadataLookupPath.CANONICAL_PNU, pnu, pnu, null, 1));
-		}
-		catch (RestClientException exception) {
-			log.warn("ODC complex metadata lookup failed pnu={} errorType={}", pnu,
-				exception.getClass().getSimpleName());
-			return ComplexMetadataResolution.failed(
-				"ODC",
-				ComplexMetadataFailureKind.TRANSIENT,
-				redactSensitive(exception.getMessage())
-			).withLookupEvidence(evidence(ComplexMetadataLookupPath.CANONICAL_PNU, pnu, null, null, null));
-		}
-	}
+    private ComplexMetadataResolution resolveOdcloud(ComplexMetadataLookup lookup) {
+        String pnu = lookup.pnu();
+        if (odcloudServiceKey == null || trimToNull(pnu) == null) {
+            return ComplexMetadataResolution.unavailable(
+                    "ODC", ComplexMetadataFailureKind.INPUT_INSUFFICIENT, "ODC lookup skipped");
+        }
+        try {
+            OdcloudAptResponse response = getBody(
+                    odcloudRestClient, odcloudBaseUrl, odcloudAptPath, odcloudPnuQuery(pnu), OdcloudAptResponse.class);
+            List<OdcloudAptResponse.Item> matches = response == null || response.getData() == null
+                    ? List.of()
+                    : response.getData().stream()
+                            .filter(Objects::nonNull)
+                            .filter(item -> pnu.equals(trimToNull(item.getPnu())))
+                            .toList();
+            if (matches.size() > 1) {
+                OdcloudAptResponse.Item nameMatched = chooseByName(lookup.aptName(), matches);
+                if (nameMatched != null) {
+                    return metadataResolution(nameMatched)
+                            .withLookupEvidence(evidence(
+                                    ComplexMetadataLookupPath.CANONICAL_PNU_NAME, pnu, pnu, null, matches.size()));
+                }
+                return ComplexMetadataResolution.ambiguous("ODC", "ODC PNU candidate ambiguous pnu=" + pnu)
+                        .withLookupEvidence(
+                                evidence(ComplexMetadataLookupPath.CANONICAL_PNU, pnu, null, null, matches.size()));
+            }
+            if (matches.isEmpty()) {
+                return resolveApprovedAlias(lookup);
+            }
+            return metadataResolution(matches.get(0))
+                    .withLookupEvidence(evidence(ComplexMetadataLookupPath.CANONICAL_PNU, pnu, pnu, null, 1));
+        } catch (RestClientException exception) {
+            log.warn(
+                    "ODC complex metadata lookup failed pnu={} errorType={}",
+                    pnu,
+                    exception.getClass().getSimpleName());
+            return ComplexMetadataResolution.failed(
+                            "ODC", ComplexMetadataFailureKind.TRANSIENT, redactSensitive(exception.getMessage()))
+                    .withLookupEvidence(evidence(ComplexMetadataLookupPath.CANONICAL_PNU, pnu, null, null, null));
+        }
+    }
 
-	private ComplexMetadataResolution resolveApprovedAlias(ComplexMetadataLookup lookup) {
-		return aliasLookup.findApprovedByCanonicalPnu(lookup.pnu())
-			.map(alias -> {
-				String sourcePnu = alias.translate(lookup.pnu());
-				OdcloudAptResponse response = getBody(
-					odcloudRestClient, odcloudBaseUrl, odcloudAptPath, odcloudPnuQuery(sourcePnu), OdcloudAptResponse.class);
-				List<OdcloudAptResponse.Item> matches = response == null || response.getData() == null ? List.of()
-					: response.getData().stream()
-						.filter(Objects::nonNull)
-						.filter(item -> sourcePnu.equals(trimToNull(item.getPnu())))
-						.toList();
-				ComplexMetadataLookupEvidence evidence = evidence(
-					ComplexMetadataLookupPath.APPROVED_PREFIX_ALIAS, lookup.pnu(), sourcePnu, alias.id(), matches.size());
-				if (matches.isEmpty()) {
-					return ComplexMetadataResolution.unavailable("ODC", "ODC approved alias candidate unavailable")
-						.withLookupEvidence(evidence);
-				}
-				if (matches.size() > 1) {
-					OdcloudAptResponse.Item nameMatched = chooseByName(lookup.aptName(), matches);
-					if (nameMatched == null) {
-						return ComplexMetadataResolution.ambiguous("ODC", "ODC approved alias candidate ambiguous")
-							.withLookupEvidence(evidence);
-					}
-					ComplexMetadataLookupEvidence nameEvidence = evidence(
-						ComplexMetadataLookupPath.APPROVED_PREFIX_ALIAS_NAME, lookup.pnu(), sourcePnu, alias.id(), matches.size());
-					return metadataResolution(nameMatched).withLookupEvidence(nameEvidence);
-				}
-				OdcloudAptResponse.Item selected = matches.get(0);
-				return metadataResolution(selected).withLookupEvidence(evidence);
-			})
-			.orElseGet(() -> ComplexMetadataResolution.unavailable(
-				"ODC", "ODC exact PNU candidate unavailable pnu=" + lookup.pnu())
-				.withLookupEvidence(evidence(ComplexMetadataLookupPath.CANONICAL_PNU, lookup.pnu(), null, null, 0)));
-	}
+    private ComplexMetadataResolution resolveApprovedAlias(ComplexMetadataLookup lookup) {
+        return aliasLookup
+                .findApprovedByCanonicalPnu(lookup.pnu())
+                .map(alias -> {
+                    String sourcePnu = alias.translate(lookup.pnu());
+                    OdcloudAptResponse response = getBody(
+                            odcloudRestClient,
+                            odcloudBaseUrl,
+                            odcloudAptPath,
+                            odcloudPnuQuery(sourcePnu),
+                            OdcloudAptResponse.class);
+                    List<OdcloudAptResponse.Item> matches = response == null || response.getData() == null
+                            ? List.of()
+                            : response.getData().stream()
+                                    .filter(Objects::nonNull)
+                                    .filter(item -> sourcePnu.equals(trimToNull(item.getPnu())))
+                                    .toList();
+                    ComplexMetadataLookupEvidence evidence = evidence(
+                            ComplexMetadataLookupPath.APPROVED_PREFIX_ALIAS,
+                            lookup.pnu(),
+                            sourcePnu,
+                            alias.id(),
+                            matches.size());
+                    if (matches.isEmpty()) {
+                        return ComplexMetadataResolution.unavailable("ODC", "ODC approved alias candidate unavailable")
+                                .withLookupEvidence(evidence);
+                    }
+                    if (matches.size() > 1) {
+                        OdcloudAptResponse.Item nameMatched = chooseByName(lookup.aptName(), matches);
+                        if (nameMatched == null) {
+                            return ComplexMetadataResolution.ambiguous("ODC", "ODC approved alias candidate ambiguous")
+                                    .withLookupEvidence(evidence);
+                        }
+                        ComplexMetadataLookupEvidence nameEvidence = evidence(
+                                ComplexMetadataLookupPath.APPROVED_PREFIX_ALIAS_NAME,
+                                lookup.pnu(),
+                                sourcePnu,
+                                alias.id(),
+                                matches.size());
+                        return metadataResolution(nameMatched).withLookupEvidence(nameEvidence);
+                    }
+                    OdcloudAptResponse.Item selected = matches.get(0);
+                    return metadataResolution(selected).withLookupEvidence(evidence);
+                })
+                .orElseGet(() -> ComplexMetadataResolution.unavailable(
+                                "ODC", "ODC exact PNU candidate unavailable pnu=" + lookup.pnu())
+                        .withLookupEvidence(
+                                evidence(ComplexMetadataLookupPath.CANONICAL_PNU, lookup.pnu(), null, null, 0)));
+    }
 
-	private ComplexMetadataResolution metadataResolution(OdcloudAptResponse.Item selected) {
-		return ComplexMetadataResolution.classify("ODC", new ComplexMetadata(
-				selected.getDongCnt(),
-				selected.getUnitCnt(),
-				null,
-				null,
-				null,
-				null,
-				null,
-				parseUseDate(selected.getUseaprDt())
-			));
-	}
+    private ComplexMetadataResolution metadataResolution(OdcloudAptResponse.Item selected) {
+        return ComplexMetadataResolution.classify(
+                "ODC",
+                new ComplexMetadata(
+                        selected.getDongCnt(),
+                        selected.getUnitCnt(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        parseUseDate(selected.getUseaprDt())));
+    }
 
-	private ComplexMetadataLookupEvidence evidence(
-		ComplexMetadataLookupPath path, String requestedPnu, String resolvedSourcePnu, Long aliasId, Integer candidateCount
-	) {
-		return new ComplexMetadataLookupEvidence(path, requestedPnu, resolvedSourcePnu, aliasId, candidateCount);
-	}
+    private ComplexMetadataLookupEvidence evidence(
+            ComplexMetadataLookupPath path,
+            String requestedPnu,
+            String resolvedSourcePnu,
+            Long aliasId,
+            Integer candidateCount) {
+        return new ComplexMetadataLookupEvidence(path, requestedPnu, resolvedSourcePnu, aliasId, candidateCount);
+    }
 
-	/**
-	 * 같은 PNU에 여러 ODC 단지가 잡힐 때 단지명으로 유일 단지를 고른다. PNU 정확매칭은 이미 통과한 상태이므로
-	 * 같은 지번 후보끼리만 이름으로 구별하며, 점수 동점이거나 일치 후보가 없으면 null을 반환해 AMBIGUOUS로 남긴다.
-	 */
-	private OdcloudAptResponse.Item chooseByName(String aptName, List<OdcloudAptResponse.Item> candidates) {
-		String target = normalizeName(aptName);
-		if (target.isEmpty()) {
-			return null;
-		}
-		int bestScore = 0;
-		OdcloudAptResponse.Item best = null;
-		boolean tie = false;
-		for (OdcloudAptResponse.Item candidate : candidates) {
-			int score = scoreName(target, candidate);
-			if (score == 0) {
-				continue;
-			}
-			if (score > bestScore) {
-				bestScore = score;
-				best = candidate;
-				tie = false;
-			}
-			else if (score == bestScore) {
-				tie = true;
-			}
-		}
-		return (bestScore > 0 && !tie) ? best : null;
-	}
+    /**
+     * 같은 PNU에 여러 ODC 단지가 잡힐 때 단지명으로 유일 단지를 고른다. PNU 정확매칭은 이미 통과한 상태이므로
+     * 같은 지번 후보끼리만 이름으로 구별하며, 점수 동점이거나 일치 후보가 없으면 null을 반환해 AMBIGUOUS로 남긴다.
+     */
+    private OdcloudAptResponse.Item chooseByName(String aptName, List<OdcloudAptResponse.Item> candidates) {
+        String target = normalizeName(aptName);
+        if (target.isEmpty()) {
+            return null;
+        }
+        int bestScore = 0;
+        OdcloudAptResponse.Item best = null;
+        boolean tie = false;
+        for (OdcloudAptResponse.Item candidate : candidates) {
+            int score = scoreName(target, candidate);
+            if (score == 0) {
+                continue;
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                best = candidate;
+                tie = false;
+            } else if (score == bestScore) {
+                tie = true;
+            }
+        }
+        return (bestScore > 0 && !tie) ? best : null;
+    }
 
-	private int scoreName(String target, OdcloudAptResponse.Item candidate) {
-		for (String name : new String[] {candidate.getComplexNm1(), candidate.getComplexNm2(), candidate.getComplexNm3()}) {
-			String normalized = normalizeName(name);
-			if (normalized.isEmpty()) {
-				continue;
-			}
-			if (target.equals(normalized)) {
-				return 3;
-			}
-		}
-		return 0;
-	}
+    private int scoreName(String target, OdcloudAptResponse.Item candidate) {
+        for (String name :
+                new String[] {candidate.getComplexNm1(), candidate.getComplexNm2(), candidate.getComplexNm3()}) {
+            String normalized = normalizeName(name);
+            if (normalized.isEmpty()) {
+                continue;
+            }
+            if (target.equals(normalized)) {
+                return 3;
+            }
+        }
+        return 0;
+    }
 
-	private String normalizeName(String value) {
-		if (trimToNull(value) == null) {
-			return "";
-		}
-		return value.replaceAll("\\s+", "")
-			.replaceAll("[()\\[\\]{}.,·\\-_/]", "")
-			.toLowerCase(java.util.Locale.ROOT);
-	}
+    private String normalizeName(String value) {
+        if (trimToNull(value) == null) {
+            return "";
+        }
+        return value.replaceAll("\\s+", "")
+                .replaceAll("[()\\[\\]{}.,·\\-_/]", "")
+                .toLowerCase(java.util.Locale.ROOT);
+    }
 
-	private ComplexMetadataResolution resolveBuildingMetadata(String pnu) {
-		if (bldServiceKey == null || pnu == null || pnu.length() < 19) {
-			return ComplexMetadataResolution.unavailable(
-				"BLD",
-				ComplexMetadataFailureKind.INPUT_INSUFFICIENT,
-				"building metadata lookup skipped"
-			);
-		}
-		try {
-			ComplexMetadataResolution recap = fetchBuildingMetadata(bldRecapPath, pnu);
-			if (!recap.status().isUnavailable()) {
-				return recap.withLookupEvidence(
-					evidence(ComplexMetadataLookupPath.BUILDING_PNU, pnu, pnu, null, null));
-			}
-			return fetchBuildingMetadata(recapPath, pnu).withLookupEvidence(
-				evidence(ComplexMetadataLookupPath.BUILDING_PNU, pnu, pnu, null, null));
-		}
-		catch (RestClientException exception) {
-			log.warn("Building complex metadata lookup failed pnu={} errorType={}", pnu,
-				exception.getClass().getSimpleName());
-			return ComplexMetadataResolution.failed(
-				"BLD",
-				ComplexMetadataFailureKind.TRANSIENT,
-				redactSensitive(exception.getMessage())
-			).withLookupEvidence(evidence(ComplexMetadataLookupPath.BUILDING_PNU, pnu, null, null, null));
-		}
-	}
+    private ComplexMetadataResolution resolveBuildingMetadata(String pnu) {
+        if (bldServiceKey == null || pnu == null || pnu.length() < 19) {
+            return ComplexMetadataResolution.unavailable(
+                    "BLD", ComplexMetadataFailureKind.INPUT_INSUFFICIENT, "building metadata lookup skipped");
+        }
+        try {
+            ComplexMetadataResolution recap = fetchBuildingMetadata(bldRecapPath, pnu);
+            if (!recap.status().isUnavailable()) {
+                return recap.withLookupEvidence(evidence(ComplexMetadataLookupPath.BUILDING_PNU, pnu, pnu, null, null));
+            }
+            return fetchBuildingMetadata(recapPath, pnu)
+                    .withLookupEvidence(evidence(ComplexMetadataLookupPath.BUILDING_PNU, pnu, pnu, null, null));
+        } catch (RestClientException exception) {
+            log.warn(
+                    "Building complex metadata lookup failed pnu={} errorType={}",
+                    pnu,
+                    exception.getClass().getSimpleName());
+            return ComplexMetadataResolution.failed(
+                            "BLD", ComplexMetadataFailureKind.TRANSIENT, redactSensitive(exception.getMessage()))
+                    .withLookupEvidence(evidence(ComplexMetadataLookupPath.BUILDING_PNU, pnu, null, null, null));
+        }
+    }
 
-	private ComplexMetadataResolution fetchBuildingMetadata(String path, String pnu) {
-		ApisBldRecapResponse response = getBody(
-			bldRestClient,
-			bldBaseUrl,
-			path,
-			buildingQuery(pnu),
-			ApisBldRecapResponse.class
-		);
-		if (response == null || response.getResponse() == null || response.getResponse().getBody() == null
-			|| response.getResponse().getBody().getItems() == null
-			|| response.getResponse().getBody().getItems().getItem() == null
-			|| response.getResponse().getBody().getItems().getItem().isEmpty()) {
-			return ComplexMetadataResolution.unavailable("BLD", "building metadata candidate unavailable");
-		}
-		List<ApisBldRecapResponse.Item> apartmentItems = response.getResponse().getBody().getItems().getItem()
-			.stream()
-			.filter(Objects::nonNull)
-			.filter(item -> "02000".equals(item.getMainPurpsCd()))
-			.toList();
-		if (apartmentItems.size() > 1) {
-			return ComplexMetadataResolution.ambiguous("BLD", "building apartment candidate ambiguous pnu=" + pnu);
-		}
-		if (apartmentItems.isEmpty()) {
-			return ComplexMetadataResolution.unavailable("BLD", "building apartment candidate unavailable");
-		}
-		ApisBldRecapResponse.Item item = apartmentItems.get(0);
-		return ComplexMetadataResolution.classify("BLD", new ComplexMetadata(
-			null,
-			item.getHhldCnt(),
-			bd(item.getPlatArea()),
-			bd(item.getArchArea()),
-			bd(item.getTotArea()),
-			bd(item.getBcRat()),
-			bd(item.getVlRat()),
-			null
-		));
-	}
+    private ComplexMetadataResolution fetchBuildingMetadata(String path, String pnu) {
+        ApisBldRecapResponse response =
+                getBody(bldRestClient, bldBaseUrl, path, buildingQuery(pnu), ApisBldRecapResponse.class);
+        if (response == null
+                || response.getResponse() == null
+                || response.getResponse().getBody() == null
+                || response.getResponse().getBody().getItems() == null
+                || response.getResponse().getBody().getItems().getItem() == null
+                || response.getResponse().getBody().getItems().getItem().isEmpty()) {
+            return ComplexMetadataResolution.unavailable("BLD", "building metadata candidate unavailable");
+        }
+        List<ApisBldRecapResponse.Item> apartmentItems = response.getResponse().getBody().getItems().getItem().stream()
+                .filter(Objects::nonNull)
+                .filter(item -> "02000".equals(item.getMainPurpsCd()))
+                .toList();
+        if (apartmentItems.size() > 1) {
+            return ComplexMetadataResolution.ambiguous("BLD", "building apartment candidate ambiguous pnu=" + pnu);
+        }
+        if (apartmentItems.isEmpty()) {
+            return ComplexMetadataResolution.unavailable("BLD", "building apartment candidate unavailable");
+        }
+        ApisBldRecapResponse.Item item = apartmentItems.get(0);
+        return ComplexMetadataResolution.classify(
+                "BLD",
+                new ComplexMetadata(
+                        null,
+                        item.getHhldCnt(),
+                        bd(item.getPlatArea()),
+                        bd(item.getArchArea()),
+                        bd(item.getTotArea()),
+                        bd(item.getBcRat()),
+                        bd(item.getVlRat()),
+                        null));
+    }
 
-	private <T> T getBody(RestClient restClient, String baseUrl, String path, String query, Class<T> bodyType) {
-		if (baseUrl != null) {
-			return restClient.get()
-				.uri(ExternalApiUri.create(baseUrl, path, query))
-				.retrieve()
-				.body(bodyType);
-		}
-		String normalizedPath = path.startsWith("/") ? path : "/" + path;
-		return restClient.get()
-			.uri(normalizedPath + "?" + query)
-			.retrieve()
-			.body(bodyType);
-	}
+    private <T> T getBody(RestClient restClient, String baseUrl, String path, String query, Class<T> bodyType) {
+        if (baseUrl != null) {
+            return restClient
+                    .get()
+                    .uri(ExternalApiUri.create(baseUrl, path, query))
+                    .retrieve()
+                    .body(bodyType);
+        }
+        String normalizedPath = path.startsWith("/") ? path : "/" + path;
+        return restClient.get().uri(normalizedPath + "?" + query).retrieve().body(bodyType);
+    }
 
-	private String odcloudPnuQuery(String pnu) {
-		return "page=" + ExternalApiUri.queryValue(1)
-			+ "&perPage=" + ExternalApiUri.queryValue(20)
-			+ "&cond%5BPNU::EQ%5D=" + ExternalApiUri.queryValue(pnu)
-			+ "&serviceKey=" + ExternalApiUri.serviceKeyQueryValue(odcloudServiceKey);
-	}
+    private String odcloudPnuQuery(String pnu) {
+        return "page=" + ExternalApiUri.queryValue(1)
+                + "&perPage=" + ExternalApiUri.queryValue(20)
+                + "&cond%5BPNU::EQ%5D=" + ExternalApiUri.queryValue(pnu)
+                + "&serviceKey=" + ExternalApiUri.serviceKeyQueryValue(odcloudServiceKey);
+    }
 
-	private String buildingQuery(String pnu) {
-		String sigunguCd = pnu.substring(0, 5);
-		String bjdongCd = pnu.substring(5, 10);
-		String bun = pnu.substring(11, 15);
-		String ji = pnu.substring(15, 19);
-		return "_type=" + ExternalApiUri.queryValue("json")
-			+ "&serviceKey=" + ExternalApiUri.serviceKeyQueryValue(bldServiceKey)
-			+ "&sigunguCd=" + ExternalApiUri.queryValue(sigunguCd)
-			+ "&bjdongCd=" + ExternalApiUri.queryValue(bjdongCd)
-			+ "&bun=" + ExternalApiUri.queryValue(bun)
-			+ "&ji=" + ExternalApiUri.queryValue(ji);
-	}
+    private String buildingQuery(String pnu) {
+        String sigunguCd = pnu.substring(0, 5);
+        String bjdongCd = pnu.substring(5, 10);
+        String bun = pnu.substring(11, 15);
+        String ji = pnu.substring(15, 19);
+        return "_type=" + ExternalApiUri.queryValue("json")
+                + "&serviceKey=" + ExternalApiUri.serviceKeyQueryValue(bldServiceKey)
+                + "&sigunguCd=" + ExternalApiUri.queryValue(sigunguCd)
+                + "&bjdongCd=" + ExternalApiUri.queryValue(bjdongCd)
+                + "&bun=" + ExternalApiUri.queryValue(bun)
+                + "&ji=" + ExternalApiUri.queryValue(ji);
+    }
 
-	private BigDecimal bd(Double value) {
-		if (value == null) {
-			return null;
-		}
-		String text = trimToNull(value.toString());
-		if (text == null) {
-			return null;
-		}
-		try {
-			return new BigDecimal(text);
-		}
-		catch (NumberFormatException exception) {
-			return null;
-		}
-	}
+    private BigDecimal bd(Double value) {
+        if (value == null) {
+            return null;
+        }
+        String text = trimToNull(value.toString());
+        if (text == null) {
+            return null;
+        }
+        try {
+            return new BigDecimal(text);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
 
-	private LocalDate parseUseDate(String value) {
-		String text = trimToNull(value);
-		if (text == null) {
-			return null;
-		}
-		String normalized = text.replace("-", "").replace("/", "").replace(".", "");
-		try {
-			if (normalized.length() == 8) {
-				return LocalDate.parse(normalized, DateTimeFormatter.BASIC_ISO_DATE);
-			}
-			return LocalDate.parse(text);
-		}
-		catch (DateTimeParseException exception) {
-			return null;
-		}
-	}
+    private LocalDate parseUseDate(String value) {
+        String text = trimToNull(value);
+        if (text == null) {
+            return null;
+        }
+        String normalized = text.replace("-", "").replace("/", "").replace(".", "");
+        try {
+            if (normalized.length() == 8) {
+                return LocalDate.parse(normalized, DateTimeFormatter.BASIC_ISO_DATE);
+            }
+            return LocalDate.parse(text);
+        } catch (DateTimeParseException exception) {
+            return null;
+        }
+    }
 
-	private String trimToNull(String value) {
-		return value != null && !value.isBlank() ? value.trim() : null;
-	}
+    private String trimToNull(String value) {
+        return value != null && !value.isBlank() ? value.trim() : null;
+    }
 
-	private String redactSensitive(String message) {
-		if (message == null) {
-			return null;
-		}
-		return message.replaceAll("(?i)(serviceKey=)[^&\\s]+", "$1[REDACTED]");
-	}
-
+    private String redactSensitive(String message) {
+        if (message == null) {
+            return null;
+        }
+        return message.replaceAll("(?i)(serviceKey=)[^&\\s]+", "$1[REDACTED]");
+    }
 }

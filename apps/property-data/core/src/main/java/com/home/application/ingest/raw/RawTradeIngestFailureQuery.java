@@ -1,77 +1,63 @@
 package com.home.application.ingest.raw;
 
+import com.home.domain.ingest.raw.RawTradeIngestStatus;
+import com.home.ingestcore.rtms.RtmsDealMonth;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-
-import com.home.domain.ingest.raw.RawTradeIngestStatus;
-import com.home.ingestcore.rtms.RtmsDealMonth;
 
 /**
  * read-only raw ingest failure inspection 조건입니다.
  */
 public record RawTradeIngestFailureQuery(
-	String source,
-	String lawdCd,
-	String dealYmdFrom,
-	String dealYmdTo,
-	List<RawTradeIngestStatus> statuses
-) {
+        String source, String lawdCd, String dealYmdFrom, String dealYmdTo, List<RawTradeIngestStatus> statuses) {
 
-	private static final List<RawTradeIngestStatus> DEFAULT_FAILURE_STATUSES = List.of(
-		RawTradeIngestStatus.MATCH_FAILED,
-		RawTradeIngestStatus.PARSE_FAILED,
-		RawTradeIngestStatus.DUPLICATE,
-		RawTradeIngestStatus.CANCELED
-	);
-	private static final Set<RawTradeIngestStatus> ALLOWED_STATUSES = Set.copyOf(DEFAULT_FAILURE_STATUSES);
+    private static final List<RawTradeIngestStatus> DEFAULT_FAILURE_STATUSES = List.of(
+            RawTradeIngestStatus.MATCH_FAILED,
+            RawTradeIngestStatus.PARSE_FAILED,
+            RawTradeIngestStatus.DUPLICATE,
+            RawTradeIngestStatus.CANCELED);
+    private static final Set<RawTradeIngestStatus> ALLOWED_STATUSES = Set.copyOf(DEFAULT_FAILURE_STATUSES);
 
-	public RawTradeIngestFailureQuery {
-		source = trimToNull(source);
-		lawdCd = trimToNull(lawdCd);
-		dealYmdFrom = validateDealYmd(trimToNull(dealYmdFrom), "dealYmdFrom");
-		dealYmdTo = validateDealYmd(trimToNull(dealYmdTo), "dealYmdTo");
-		if (dealYmdFrom != null && dealYmdTo != null && dealYmdFrom.compareTo(dealYmdTo) > 0) {
-			throw new IllegalArgumentException("dealYmdFrom must be before or equal to dealYmdTo");
-		}
-		statuses = normalizeStatuses(statuses);
-	}
+    public RawTradeIngestFailureQuery {
+        source = trimToNull(source);
+        lawdCd = trimToNull(lawdCd);
+        dealYmdFrom = validateDealYmd(trimToNull(dealYmdFrom), "dealYmdFrom");
+        dealYmdTo = validateDealYmd(trimToNull(dealYmdTo), "dealYmdTo");
+        if (dealYmdFrom != null && dealYmdTo != null && dealYmdFrom.compareTo(dealYmdTo) > 0) {
+            throw new IllegalArgumentException("dealYmdFrom must be before or equal to dealYmdTo");
+        }
+        statuses = normalizeStatuses(statuses);
+    }
 
-	public static RawTradeIngestFailureQuery between(
-		String source,
-		String lawdCd,
-		String dealYmdFrom,
-		String dealYmdTo
-	) {
-		return new RawTradeIngestFailureQuery(source, lawdCd, dealYmdFrom, dealYmdTo, DEFAULT_FAILURE_STATUSES);
-	}
+    public static RawTradeIngestFailureQuery between(
+            String source, String lawdCd, String dealYmdFrom, String dealYmdTo) {
+        return new RawTradeIngestFailureQuery(source, lawdCd, dealYmdFrom, dealYmdTo, DEFAULT_FAILURE_STATUSES);
+    }
 
-	public List<String> statusNames() {
-		return statuses.stream()
-			.map(Enum::name)
-			.toList();
-	}
+    public List<String> statusNames() {
+        return statuses.stream().map(Enum::name).toList();
+    }
 
-	private static List<RawTradeIngestStatus> normalizeStatuses(List<RawTradeIngestStatus> statuses) {
-		if (statuses == null || statuses.isEmpty()) {
-			return DEFAULT_FAILURE_STATUSES;
-		}
-		LinkedHashSet<RawTradeIngestStatus> unique = new LinkedHashSet<>(statuses);
-		if (!ALLOWED_STATUSES.containsAll(unique)) {
-			throw new IllegalArgumentException(
-				"statuses must be one of MATCH_FAILED, PARSE_FAILED, DUPLICATE, CANCELED"
-			);
-		}
-		return List.copyOf(unique);
-	}
+    private static List<RawTradeIngestStatus> normalizeStatuses(List<RawTradeIngestStatus> statuses) {
+        if (statuses == null || statuses.isEmpty()) {
+            return DEFAULT_FAILURE_STATUSES;
+        }
+        LinkedHashSet<RawTradeIngestStatus> unique = new LinkedHashSet<>(statuses);
+        if (!ALLOWED_STATUSES.containsAll(unique)) {
+            throw new IllegalArgumentException(
+                    "statuses must be one of MATCH_FAILED, PARSE_FAILED, DUPLICATE, CANCELED");
+        }
+        return List.copyOf(unique);
+    }
 
-	private static String validateDealYmd(String value, String fieldName) {
-		return RtmsDealMonth.optional(value, fieldName + " must use yyyyMM format")
-			.map(RtmsDealMonth::value)
-			.orElse(null);
-	}
+    private static String validateDealYmd(String value, String fieldName) {
+        return RtmsDealMonth.optional(value, fieldName + " must use yyyyMM format")
+                .map(RtmsDealMonth::value)
+                .orElse(null);
+    }
 
-	private static String trimToNull(String value) {
-		return value == null || value.isBlank() ? null : value.trim();
-	}
+    private static String trimToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
 }

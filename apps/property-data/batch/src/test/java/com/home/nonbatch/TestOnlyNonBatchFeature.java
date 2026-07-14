@@ -5,5 +5,4 @@ import org.springframework.stereotype.Component;
 
 @Component("testOnlyNonBatchFeature")
 @ConditionalOnProperty(name = "home.test.non-batch.enabled", havingValue = "true")
-public class TestOnlyNonBatchFeature {
-}
+public class TestOnlyNonBatchFeature {}

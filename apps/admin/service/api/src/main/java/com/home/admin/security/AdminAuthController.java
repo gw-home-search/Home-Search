@@ -9,11 +9,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -21,22 +21,23 @@ import org.springframework.web.bind.annotation.*;
 public class AdminAuthController {
     private final AdminAuthenticationService authentication;
     private final SecurityContextRepository securityContextRepository;
-    public AdminAuthController(AdminAuthenticationService authentication,
-                               SecurityContextRepository securityContextRepository) {
+
+    public AdminAuthController(
+            AdminAuthenticationService authentication, SecurityContextRepository securityContextRepository) {
         this.authentication = authentication;
         this.securityContextRepository = securityContextRepository;
     }
 
     @PostMapping("/login")
-    public AdminPrincipal login(@Valid @RequestBody LoginRequest body, HttpServletRequest request,
-                                HttpServletResponse response) {
+    public AdminPrincipal login(
+            @Valid @RequestBody LoginRequest body, HttpServletRequest request, HttpServletResponse response) {
         AdminPrincipal principal = authentication.authenticate(body.loginId(), body.password());
         request.getSession(true);
         request.changeSessionId();
         var authorities = java.util.stream.Stream.concat(
-                principal.roles().stream().map(role -> new SimpleGrantedAuthority("ROLE_" + role)),
-                principal.permissions().stream().map(SimpleGrantedAuthority::new))
-            .toList();
+                        principal.roles().stream().map(role -> new SimpleGrantedAuthority("ROLE_" + role)),
+                        principal.permissions().stream().map(SimpleGrantedAuthority::new))
+                .toList();
         var springAuthentication = UsernamePasswordAuthenticationToken.authenticated(principal, null, authorities);
         var context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(springAuthentication);
@@ -44,13 +45,16 @@ public class AdminAuthController {
         securityContextRepository.saveContext(context, request, response);
         return principal;
     }
+
     @GetMapping("/me")
     public AdminPrincipal me(@AuthenticationPrincipal AdminPrincipal principal) {
         return principal;
     }
+
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
-        new SecurityContextLogoutHandler().logout(request, response, SecurityContextHolder.getContext().getAuthentication());
+        new SecurityContextLogoutHandler()
+                .logout(request, response, SecurityContextHolder.getContext().getAuthentication());
         return ResponseEntity.noContent().build();
     }
 
@@ -59,5 +63,8 @@ public class AdminAuthController {
         ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "로그인 정보를 확인하세요.");
         return ResponseEntity.status(401).body(detail);
     }
-    public record LoginRequest(@NotBlank @Size(max=100) String loginId, @NotBlank @Size(max=200) String password) {}
+
+    public record LoginRequest(
+            @NotBlank @Size(max = 100) String loginId,
+            @NotBlank @Size(max = 200) String password) {}
 }

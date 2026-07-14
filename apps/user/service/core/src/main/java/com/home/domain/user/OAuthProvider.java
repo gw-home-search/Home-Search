@@ -13,6 +13,11 @@ public enum OAuthProvider {
         this.descriptionKo = descriptionKo;
     }
 
-    public String titleKo() { return titleKo; }
-    public String descriptionKo() { return descriptionKo; }
+    public String titleKo() {
+        return titleKo;
+    }
+
+    public String descriptionKo() {
+        return descriptionKo;
+    }
 }

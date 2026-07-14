@@ -12,8 +12,7 @@ public final class RsaPemKeys {
 
     public static PrivateKey privateKey(String pem) {
         try {
-            return KeyFactory.getInstance("RSA").generatePrivate(
-                new PKCS8EncodedKeySpec(decode(pem, "PRIVATE KEY")));
+            return KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(decode(pem, "PRIVATE KEY")));
         } catch (Exception exception) {
             throw new IllegalArgumentException("invalid PKCS#8 RSA private key", exception);
         }
@@ -21,8 +20,7 @@ public final class RsaPemKeys {
 
     public static PublicKey publicKey(String pem) {
         try {
-            return KeyFactory.getInstance("RSA").generatePublic(
-                new X509EncodedKeySpec(decode(pem, "PUBLIC KEY")));
+            return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(decode(pem, "PUBLIC KEY")));
         } catch (Exception exception) {
             throw new IllegalArgumentException("invalid X.509 RSA public key", exception);
         }

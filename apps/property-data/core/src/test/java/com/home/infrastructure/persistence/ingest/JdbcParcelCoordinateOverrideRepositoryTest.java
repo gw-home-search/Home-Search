@@ -2,19 +2,17 @@ package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.math.BigDecimal;
-
 import com.home.infrastructure.persistence.ingest.coordinate.JdbcParcelCoordinateOverrideRepository;
-
+import java.math.BigDecimal;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class JdbcParcelCoordinateOverrideRepositoryTest extends JdbcPostgresTestSupport {
 
-	@Test
-	@DisplayName("승인된 좌표 override만 parcel coordinate fallback으로 사용된다")
-	void findsOnlyApprovedCoordinateOverrideByPnu() {
-		jdbcClient.sql("""
+    @Test
+    @DisplayName("승인된 좌표 override만 parcel coordinate fallback으로 사용된다")
+    void findsOnlyApprovedCoordinateOverrideByPnu() {
+        jdbcClient.sql("""
 			INSERT INTO parcel_coordinate_override (
 			    pnu,
 			    apt_seq,
@@ -59,15 +57,14 @@ class JdbcParcelCoordinateOverrideRepositoryTest extends JdbcPostgresTestSupport
 			        NULL
 			    )
 			""").update();
-		JdbcParcelCoordinateOverrideRepository repository = new JdbcParcelCoordinateOverrideRepository(jdbcClient);
+        JdbcParcelCoordinateOverrideRepository repository = new JdbcParcelCoordinateOverrideRepository(jdbcClient);
 
-		assertThat(repository.findApprovedByPnu(" 1168010300107770001 "))
-			.hasValueSatisfying(coordinate -> {
-				assertThat(coordinate.latitude()).isEqualByComparingTo(new BigDecimal("37.6012345"));
-				assertThat(coordinate.longitude()).isEqualByComparingTo(new BigDecimal("127.1543210"));
-				assertThat(coordinate.geometryWkt()).isNull();
-			});
-		assertThat(repository.findApprovedByPnu("1168010300108880001")).isEmpty();
-		assertThat(repository.findApprovedByPnu(" ")).isEmpty();
-	}
+        assertThat(repository.findApprovedByPnu(" 1168010300107770001 ")).hasValueSatisfying(coordinate -> {
+            assertThat(coordinate.latitude()).isEqualByComparingTo(new BigDecimal("37.6012345"));
+            assertThat(coordinate.longitude()).isEqualByComparingTo(new BigDecimal("127.1543210"));
+            assertThat(coordinate.geometryWkt()).isNull();
+        });
+        assertThat(repository.findApprovedByPnu("1168010300108880001")).isEmpty();
+        assertThat(repository.findApprovedByPnu(" ")).isEmpty();
+    }
 }

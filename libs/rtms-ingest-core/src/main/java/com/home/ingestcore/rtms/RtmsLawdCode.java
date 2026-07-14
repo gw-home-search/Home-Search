@@ -7,24 +7,24 @@ import java.util.Optional;
  */
 public record RtmsLawdCode(String value) {
 
-	private static final String REQUIRED_MESSAGE = "lawdCd is required";
-	private static final String INVALID_MESSAGE = "lawdCd must be a 5 digit RTMS code";
+    private static final String REQUIRED_MESSAGE = "lawdCd is required";
+    private static final String INVALID_MESSAGE = "lawdCd must be a 5 digit RTMS code";
 
-	public static RtmsLawdCode of(String value) {
-		return new RtmsLawdCode(value);
-	}
+    public static RtmsLawdCode of(String value) {
+        return new RtmsLawdCode(value);
+    }
 
-	public static Optional<RtmsLawdCode> optional(String value) {
-		return value == null || value.isBlank() ? Optional.empty() : Optional.of(of(value));
-	}
+    public static Optional<RtmsLawdCode> optional(String value) {
+        return value == null || value.isBlank() ? Optional.empty() : Optional.of(of(value));
+    }
 
-	public RtmsLawdCode {
-		if (value == null || value.isBlank()) {
-			throw new IllegalArgumentException(REQUIRED_MESSAGE);
-		}
-		value = value.trim();
-		if (!value.matches("\\d{5}")) {
-			throw new IllegalArgumentException(INVALID_MESSAGE);
-		}
-	}
+    public RtmsLawdCode {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(REQUIRED_MESSAGE);
+        }
+        value = value.trim();
+        if (!value.matches("\\d{5}")) {
+            throw new IllegalArgumentException(INVALID_MESSAGE);
+        }
+    }
 }

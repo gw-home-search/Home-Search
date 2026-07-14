@@ -5,9 +5,7 @@ import java.sql.ResultSet;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.stream.Collectors;
-
 import javax.sql.DataSource;
-
 import org.flywaydb.core.Flyway;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -35,12 +33,12 @@ public final class SourceDataMigrationRunner implements ApplicationRunner, ExitC
                 throw new UsageException("target database must be " + EXPECTED_DATABASE);
             }
             Flyway flyway = Flyway.configure()
-                .dataSource(dataSource)
-                .locations("classpath:db/migration/coordinate-source")
-                .schemas("reference", "public", "geo_enrichment")
-                .defaultSchema("reference")
-                .table("flyway_schema_history")
-                .load();
+                    .dataSource(dataSource)
+                    .locations("classpath:db/migration/coordinate-source")
+                    .schemas("reference", "public", "geo_enrichment")
+                    .defaultSchema("reference")
+                    .table("flyway_schema_history")
+                    .load();
             switch (operation) {
                 case "info" -> flyway.info();
                 case "validate" -> flyway.validate();
@@ -63,12 +61,15 @@ public final class SourceDataMigrationRunner implements ApplicationRunner, ExitC
         if (!target.equals(required(options, "confirm"))) {
             throw new UsageException("--confirm must equal --target");
         }
-        Flyway configured = Flyway.configure().configuration(flyway.getConfiguration())
-            .target(target).load();
-        Flyway.configure().configuration(configured.getConfiguration())
-            .ignoreMigrationPatterns("*:pending")
-            .load()
-            .validate();
+        Flyway configured = Flyway.configure()
+                .configuration(flyway.getConfiguration())
+                .target(target)
+                .load();
+        Flyway.configure()
+                .configuration(configured.getConfiguration())
+                .ignoreMigrationPatterns("*:pending")
+                .load()
+                .validate();
         configured.migrate();
         configured.validate();
     }
@@ -78,12 +79,14 @@ public final class SourceDataMigrationRunner implements ApplicationRunner, ExitC
             throw new UsageException("--confirm-database must equal the connected database");
         }
         LegacyCoordinateSourceFingerprint.LegacyFingerprintEvidence evidence = preflightBaseline();
-        Flyway.configure().configuration(flyway.getConfiguration())
-            .baselineVersion("1")
-            .baselineDescription("controlled legacy coordinate source adoption")
-            .load()
-            .baseline();
-        System.out.println("legacy coordinate source baseline completed: version=1, estimatedRows=" + evidence.estimatedRows());
+        Flyway.configure()
+                .configuration(flyway.getConfiguration())
+                .baselineVersion("1")
+                .baselineDescription("controlled legacy coordinate source adoption")
+                .load()
+                .baseline();
+        System.out.println(
+                "legacy coordinate source baseline completed: version=1, estimatedRows=" + evidence.estimatedRows());
     }
 
     private LegacyCoordinateSourceFingerprint.LegacyFingerprintEvidence preflightBaseline() {
@@ -99,18 +102,21 @@ public final class SourceDataMigrationRunner implements ApplicationRunner, ExitC
 
     private String databaseName() throws Exception {
         try (Connection connection = dataSource.getConnection();
-             var statement = connection.prepareStatement("select current_database()");
-             ResultSet result = statement.executeQuery()) {
+                var statement = connection.prepareStatement("select current_database()");
+                ResultSet result = statement.executeQuery()) {
             result.next();
             return result.getString(1);
         }
     }
 
     static Map<String, String> parse(String[] args) {
-        return Arrays.stream(args).map(value -> value.split("=", 2))
-            .filter(parts -> parts.length == 2 && parts[0].startsWith("--"))
-            .collect(Collectors.toUnmodifiableMap(parts -> parts[0].substring(2), parts -> parts[1],
-                (left, right) -> { throw new UsageException("duplicate option"); }));
+        return Arrays.stream(args)
+                .map(value -> value.split("=", 2))
+                .filter(parts -> parts.length == 2 && parts[0].startsWith("--"))
+                .collect(Collectors.toUnmodifiableMap(
+                        parts -> parts[0].substring(2), parts -> parts[1], (left, right) -> {
+                            throw new UsageException("duplicate option");
+                        }));
     }
 
     private static String required(Map<String, String> options, String key) {
@@ -119,9 +125,14 @@ public final class SourceDataMigrationRunner implements ApplicationRunner, ExitC
         return value;
     }
 
-    @Override public int getExitCode() { return exitCode; }
+    @Override
+    public int getExitCode() {
+        return exitCode;
+    }
 
     private static final class UsageException extends RuntimeException {
-        UsageException(String message) { super(message); }
+        UsageException(String message) {
+            super(message);
+        }
     }
 }

@@ -1,4 +1,3 @@
 package jakarta.persistence;
 
-public final class TestJpaMarker {
-}
+public final class TestJpaMarker {}

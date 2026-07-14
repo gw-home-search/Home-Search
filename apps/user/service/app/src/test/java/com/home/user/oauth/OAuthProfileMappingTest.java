@@ -9,9 +9,11 @@ class OAuthProfileMappingTest {
     @Test
     void convertsInvalidProviderProfileIntoOAuthFailure() {
         assertThatThrownBy(() -> OAuthProfileMapping.map(() -> {
-            throw new IllegalArgumentException("provider subject is required");
-        })).isInstanceOf(OAuth2AuthenticationException.class)
-                .extracting(error -> ((OAuth2AuthenticationException) error).getError().getErrorCode())
+                    throw new IllegalArgumentException("provider subject is required");
+                }))
+                .isInstanceOf(OAuth2AuthenticationException.class)
+                .extracting(error ->
+                        ((OAuth2AuthenticationException) error).getError().getErrorCode())
                 .isEqualTo("invalid_user_info");
     }
 }

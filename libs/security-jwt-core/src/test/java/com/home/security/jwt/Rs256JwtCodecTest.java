@@ -3,6 +3,7 @@ package com.home.security.jwt;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.jsonwebtoken.Jwts;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.time.Clock;
@@ -10,9 +11,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
-
-import io.jsonwebtoken.Jwts;
-
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -30,15 +28,24 @@ class Rs256JwtCodecTest {
     @Test
     void roundTripsStandardAndCustomClaimsThroughTheSelectedKeyId() {
         Rs256JwtCodec codec = new Rs256JwtCodec(Clock.fixed(NOW, ZoneOffset.UTC));
-        String token = codec.issue(new JwtIssueRequest(
-            "admin-service", "property-data-admin", "account-id", "request-id", "active-key",
-            Duration.ofSeconds(60), Map.of("loginId", "operator", "permissions", java.util.List.of("COORDINATE_WRITE"))
-        ), keyPair.getPrivate());
+        String token = codec.issue(
+                new JwtIssueRequest(
+                        "admin-service",
+                        "property-data-admin",
+                        "account-id",
+                        "request-id",
+                        "active-key",
+                        Duration.ofSeconds(60),
+                        Map.of("loginId", "operator", "permissions", java.util.List.of("COORDINATE_WRITE"))),
+                keyPair.getPrivate());
 
-        VerifiedJwt verified = codec.verify(token, new JwtVerificationPolicy(
-            "admin-service", "property-data-admin", Duration.ofSeconds(60),
-            keyId -> "active-key".equals(keyId) ? keyPair.getPublic() : null
-        ));
+        VerifiedJwt verified = codec.verify(
+                token,
+                new JwtVerificationPolicy(
+                        "admin-service",
+                        "property-data-admin",
+                        Duration.ofSeconds(60),
+                        keyId -> "active-key".equals(keyId) ? keyPair.getPublic() : null));
 
         assertThat(verified.keyId()).isEqualTo("active-key");
         assertThat(verified.subject()).isEqualTo("account-id");
@@ -50,65 +57,109 @@ class Rs256JwtCodecTest {
     @Test
     void rejectsWrongAudienceTamperingUnknownKeysAndExcessiveLifetime() {
         Rs256JwtCodec codec = new Rs256JwtCodec(Clock.fixed(NOW, ZoneOffset.UTC));
-        String token = codec.issue(new JwtIssueRequest(
-            "admin-service", "property-data-admin", "account-id", "request-id", "active-key",
-            Duration.ofSeconds(60), Map.of()
-        ), keyPair.getPrivate());
+        String token = codec.issue(
+                new JwtIssueRequest(
+                        "admin-service",
+                        "property-data-admin",
+                        "account-id",
+                        "request-id",
+                        "active-key",
+                        Duration.ofSeconds(60),
+                        Map.of()),
+                keyPair.getPrivate());
         JwtVerificationPolicy valid = new JwtVerificationPolicy(
-            "admin-service", "property-data-admin", Duration.ofSeconds(60), keyId -> keyPair.getPublic());
+                "admin-service", "property-data-admin", Duration.ofSeconds(60), keyId -> keyPair.getPublic());
 
-        assertThatThrownBy(() -> codec.verify(token, new JwtVerificationPolicy(
-            "admin-service", "wrong-audience", Duration.ofSeconds(60), keyId -> keyPair.getPublic())))
-            .isInstanceOf(JwtVerificationException.class);
+        assertThatThrownBy(() -> codec.verify(
+                        token,
+                        new JwtVerificationPolicy(
+                                "admin-service",
+                                "wrong-audience",
+                                Duration.ofSeconds(60),
+                                keyId -> keyPair.getPublic())))
+                .isInstanceOf(JwtVerificationException.class);
         assertThatThrownBy(() -> codec.verify(token.substring(0, token.length() - 2) + "xx", valid))
-            .isInstanceOf(JwtVerificationException.class);
-        assertThatThrownBy(() -> codec.verify(token, new JwtVerificationPolicy(
-            "admin-service", "property-data-admin", Duration.ofSeconds(60), keyId -> null)))
-            .isInstanceOf(JwtVerificationException.class);
+                .isInstanceOf(JwtVerificationException.class);
+        assertThatThrownBy(() -> codec.verify(
+                        token,
+                        new JwtVerificationPolicy(
+                                "admin-service", "property-data-admin", Duration.ofSeconds(60), keyId -> null)))
+                .isInstanceOf(JwtVerificationException.class);
 
-        String longLived = codec.issue(new JwtIssueRequest(
-            "admin-service", "property-data-admin", "account-id", "request-id", "active-key",
-            Duration.ofSeconds(61), Map.of()
-        ), keyPair.getPrivate());
+        String longLived = codec.issue(
+                new JwtIssueRequest(
+                        "admin-service",
+                        "property-data-admin",
+                        "account-id",
+                        "request-id",
+                        "active-key",
+                        Duration.ofSeconds(61),
+                        Map.of()),
+                keyPair.getPrivate());
         assertThatThrownBy(() -> codec.verify(longLived, valid)).isInstanceOf(JwtVerificationException.class);
     }
 
     @Test
     void rejectsTokensWithAdditionalAudience() {
         String token = Jwts.builder()
-            .header().keyId("active-key").and()
-            .issuer("admin-service")
-            .audience().add("other-service").add("property-data-admin").and()
-            .subject("account-id")
-            .id("request-id")
-            .issuedAt(java.util.Date.from(NOW))
-            .expiration(java.util.Date.from(NOW.plusSeconds(60)))
-            .signWith(keyPair.getPrivate(), Jwts.SIG.RS256)
-            .compact();
+                .header()
+                .keyId("active-key")
+                .and()
+                .issuer("admin-service")
+                .audience()
+                .add("other-service")
+                .add("property-data-admin")
+                .and()
+                .subject("account-id")
+                .id("request-id")
+                .issuedAt(java.util.Date.from(NOW))
+                .expiration(java.util.Date.from(NOW.plusSeconds(60)))
+                .signWith(keyPair.getPrivate(), Jwts.SIG.RS256)
+                .compact();
 
-        assertThatThrownBy(() -> new Rs256JwtCodec(Clock.fixed(NOW, ZoneOffset.UTC)).verify(token,
-            new JwtVerificationPolicy("admin-service", "property-data-admin", Duration.ofSeconds(60),
-                keyId -> keyPair.getPublic())))
-            .isInstanceOf(JwtVerificationException.class);
+        assertThatThrownBy(() -> new Rs256JwtCodec(Clock.fixed(NOW, ZoneOffset.UTC))
+                        .verify(
+                                token,
+                                new JwtVerificationPolicy(
+                                        "admin-service",
+                                        "property-data-admin",
+                                        Duration.ofSeconds(60),
+                                        keyId -> keyPair.getPublic())))
+                .isInstanceOf(JwtVerificationException.class);
     }
 
     @Test
     void rejectsExpiredTokensAndReservedCustomClaims() {
         Rs256JwtCodec issuer = new Rs256JwtCodec(Clock.fixed(NOW, ZoneOffset.UTC));
-        String token = issuer.issue(new JwtIssueRequest(
-            "admin-service", "property-data-admin", "account-id", "request-id", "old-key",
-            Duration.ofSeconds(60), Map.of()
-        ), keyPair.getPrivate());
+        String token = issuer.issue(
+                new JwtIssueRequest(
+                        "admin-service",
+                        "property-data-admin",
+                        "account-id",
+                        "request-id",
+                        "old-key",
+                        Duration.ofSeconds(60),
+                        Map.of()),
+                keyPair.getPrivate());
         Rs256JwtCodec verifier = new Rs256JwtCodec(Clock.fixed(NOW.plusSeconds(61), ZoneOffset.UTC));
 
-        assertThatThrownBy(() -> verifier.verify(token, new JwtVerificationPolicy(
-            "admin-service", "property-data-admin", Duration.ofSeconds(60),
-            keyId -> "old-key".equals(keyId) ? keyPair.getPublic() : null
-        ))).isInstanceOf(JwtVerificationException.class);
+        assertThatThrownBy(() -> verifier.verify(
+                        token,
+                        new JwtVerificationPolicy(
+                                "admin-service",
+                                "property-data-admin",
+                                Duration.ofSeconds(60),
+                                keyId -> "old-key".equals(keyId) ? keyPair.getPublic() : null)))
+                .isInstanceOf(JwtVerificationException.class);
         assertThatThrownBy(() -> new JwtIssueRequest(
-            "admin-service", "property-data-admin", "account-id", "request-id", "active-key",
-            Duration.ofSeconds(60), Map.of("sub", "forged-subject")
-        )).isInstanceOf(IllegalArgumentException.class);
+                        "admin-service",
+                        "property-data-admin",
+                        "account-id",
+                        "request-id",
+                        "active-key",
+                        Duration.ofSeconds(60),
+                        Map.of("sub", "forged-subject")))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -117,18 +168,39 @@ class Rs256JwtCodecTest {
         generator.initialize(2048);
         KeyPair oldKey = generator.generateKeyPair();
         Rs256JwtCodec codec = new Rs256JwtCodec(Clock.fixed(NOW, ZoneOffset.UTC));
-        String token = codec.issue(new JwtIssueRequest(
-            "admin-service", "property-data-admin", "account-id", "request-id", "old-key",
-            Duration.ofSeconds(60), Map.of()
-        ), oldKey.getPrivate());
+        String token = codec.issue(
+                new JwtIssueRequest(
+                        "admin-service",
+                        "property-data-admin",
+                        "account-id",
+                        "request-id",
+                        "old-key",
+                        Duration.ofSeconds(60),
+                        Map.of()),
+                oldKey.getPrivate());
 
-        assertThat(codec.verify(token, new JwtVerificationPolicy(
-            "admin-service", "property-data-admin", Duration.ofSeconds(60),
-            keyId -> Map.of("old-key", oldKey.getPublic(), "active-key", keyPair.getPublic()).get(keyId)
-        )).keyId()).isEqualTo("old-key");
-        assertThatThrownBy(() -> codec.verify(token, new JwtVerificationPolicy(
-            "admin-service", "property-data-admin", Duration.ofSeconds(60),
-            keyId -> Map.of("active-key", keyPair.getPublic()).get(keyId)
-        ))).isInstanceOf(JwtVerificationException.class);
+        assertThat(codec.verify(
+                                token,
+                                new JwtVerificationPolicy(
+                                        "admin-service",
+                                        "property-data-admin",
+                                        Duration.ofSeconds(60),
+                                        keyId -> Map.of(
+                                                        "old-key",
+                                                        oldKey.getPublic(),
+                                                        "active-key",
+                                                        keyPair.getPublic())
+                                                .get(keyId)))
+                        .keyId())
+                .isEqualTo("old-key");
+        assertThatThrownBy(() -> codec.verify(
+                        token,
+                        new JwtVerificationPolicy(
+                                "admin-service",
+                                "property-data-admin",
+                                Duration.ofSeconds(60),
+                                keyId -> Map.of("active-key", keyPair.getPublic())
+                                        .get(keyId))))
+                .isInstanceOf(JwtVerificationException.class);
     }
 }

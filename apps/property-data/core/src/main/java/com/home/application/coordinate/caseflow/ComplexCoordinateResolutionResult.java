@@ -1,21 +1,16 @@
 package com.home.application.coordinate.caseflow;
 
+import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 import java.util.Objects;
 
-import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
-
 public record ComplexCoordinateResolutionResult(
-	Long parcelId,
-	ComplexCoordinateCaseStatus status,
-	int resolvedCoordinates,
-	String reason
-) {
+        Long parcelId, ComplexCoordinateCaseStatus status, int resolvedCoordinates, String reason) {
 
-	public ComplexCoordinateResolutionResult {
-		Objects.requireNonNull(parcelId, "parcelId is required");
-		Objects.requireNonNull(status, "status is required");
-		if (resolvedCoordinates < 0) {
-			throw new IllegalArgumentException("resolvedCoordinates must be non-negative");
-		}
-	}
+    public ComplexCoordinateResolutionResult {
+        Objects.requireNonNull(parcelId, "parcelId is required");
+        Objects.requireNonNull(status, "status is required");
+        if (resolvedCoordinates < 0) {
+            throw new IllegalArgumentException("resolvedCoordinates must be non-negative");
+        }
+    }
 }

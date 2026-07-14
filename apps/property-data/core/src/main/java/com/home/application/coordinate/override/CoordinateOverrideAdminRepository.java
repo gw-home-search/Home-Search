@@ -4,9 +4,9 @@ import java.util.List;
 
 public interface CoordinateOverrideAdminRepository {
 
-	List<CoordinatePendingComplex> findPendingComplexes(int limit, int offset);
+    List<CoordinatePendingComplex> findPendingComplexes(int limit, int offset);
 
-	CoordinatePendingSummary findPendingSummary();
+    CoordinatePendingSummary findPendingSummary();
 
-	CoordinateOverrideApprovalResult approve(CoordinateOverrideApprovalCommand command);
+    CoordinateOverrideApprovalResult approve(CoordinateOverrideApprovalCommand command);
 }

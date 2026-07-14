@@ -2,55 +2,52 @@ package com.home.infrastructure.persistence.map;
 
 final class ComplexMarkerSql {
 
-	private ComplexMarkerSql() {
-	}
+    private ComplexMarkerSql() {}
 
-	static String markerShapeFilter() {
-		return withCtes(
-			requestedBounds(),
-			boundedParcel(),
-			complexBase("", "", ""),
-			parcelFlags(),
-			redevelopmentGenerationBase(),
-			currentGeneration("redevelopment_generation_base", "latest_generation_deal_date"),
-			splitComplexMarker(""),
-			representativeCoordinate("base.use_date DESC NULLS LAST"),
-			parcelMarkerBase(),
-			parcelMarker(true),
-			markerShapeFilterTail()
-		);
-	}
+    static String markerShapeFilter() {
+        return withCtes(
+                requestedBounds(),
+                boundedParcel(),
+                complexBase("", "", ""),
+                parcelFlags(),
+                redevelopmentGenerationBase(),
+                currentGeneration("redevelopment_generation_base", "latest_generation_deal_date"),
+                splitComplexMarker(""),
+                representativeCoordinate("base.use_date DESC NULLS LAST"),
+                parcelMarkerBase(),
+                parcelMarker(true),
+                markerShapeFilterTail());
+    }
 
-	static String tradeFirst() {
-		return withCtes(
-			requestedBounds(),
-			boundedParcel(),
-			complexBase(tradeFirstColumns(), tradeFirstJoins(), tradeFirstGroupByColumns()),
-			parcelFlags(),
-			currentGeneration("complex_base", "latest_complex_deal_date"),
-			splitComplexMarker("""
+    static String tradeFirst() {
+        return withCtes(
+                requestedBounds(),
+                boundedParcel(),
+                complexBase(tradeFirstColumns(), tradeFirstJoins(), tradeFirstGroupByColumns()),
+                parcelFlags(),
+                currentGeneration("complex_base", "latest_complex_deal_date"),
+                splitComplexMarker("""
 				        base.latest_complex_deal_amount AS latest_deal_amount,
 				        base.latest_complex_excl_area AS excl_area,
 				"""),
-			representativeCoordinate("base.latest_complex_deal_date DESC NULLS LAST"),
-			parcelMarkerBase(),
-			parcelMarker(false),
-			tradeFirstTail()
-		);
-	}
+                representativeCoordinate("base.latest_complex_deal_date DESC NULLS LAST"),
+                parcelMarkerBase(),
+                parcelMarker(false),
+                tradeFirstTail());
+    }
 
-	private static String withCtes(String first, String... ctesAndSelect) {
-		StringBuilder sql = new StringBuilder("WITH ");
-		sql.append(first);
-		for (String cte : ctesAndSelect) {
-			sql.append(",\n");
-			sql.append(cte);
-		}
-		return sql.toString();
-	}
+    private static String withCtes(String first, String... ctesAndSelect) {
+        StringBuilder sql = new StringBuilder("WITH ");
+        sql.append(first);
+        for (String cte : ctesAndSelect) {
+            sql.append(",\n");
+            sql.append(cte);
+        }
+        return sql.toString();
+    }
 
-	private static String requestedBounds() {
-		return """
+    private static String requestedBounds() {
+        return """
 			requested_bounds AS (
 			    SELECT ST_MakeEnvelope(
 			        CAST(:swLng AS DOUBLE PRECISION),
@@ -60,10 +57,10 @@ final class ComplexMarkerSql {
 			        4326
 			    ) AS geom
 			)""";
-	}
+    }
 
-	private static String boundedParcel() {
-		return """
+    private static String boundedParcel() {
+        return """
 			bounded_parcel AS (
 			    SELECT p.*
 			    FROM parcel p
@@ -78,14 +75,11 @@ final class ComplexMarkerSql {
 			           AND p.longitude BETWEEN :swLng AND :neLng
 			       )
 			)""";
-	}
+    }
 
-	private static String complexBase(
-		String additionalSelectColumns,
-		String additionalJoins,
-		String additionalGroupByColumns
-	) {
-		return """
+    private static String complexBase(
+            String additionalSelectColumns, String additionalJoins, String additionalGroupByColumns) {
+        return """
 			complex_base AS (
 			    SELECT
 			        p.id AS parcel_id,
@@ -130,24 +124,20 @@ final class ComplexMarkerSql {
 			        display_coordinate.coordinate_source,
 			        display_coordinate.confidence%s
 			)""".formatted(
-			additionalSelectColumns,
-			buildingFootprintSql(),
-			additionalJoins,
-			additionalGroupByColumns
-		);
-	}
+                        additionalSelectColumns, buildingFootprintSql(), additionalJoins, additionalGroupByColumns);
+    }
 
-	private static String tradeFirstColumns() {
-		return """
+    private static String tradeFirstColumns() {
+        return """
 				,
 				        latest_complex_trade.deal_date AS latest_complex_deal_date,
 				        latest_complex_trade.deal_amount AS latest_complex_deal_amount,
 				        latest_complex_trade.excl_area AS latest_complex_excl_area,
 				        first_complex_trade.deal_date AS first_deal""";
-	}
+    }
 
-	private static String tradeFirstJoins() {
-		return """
+    private static String tradeFirstJoins() {
+        return """
 			    LEFT JOIN LATERAL (
 			        SELECT
 			            trade.deal_date,
@@ -175,19 +165,19 @@ final class ComplexMarkerSql {
 			        LIMIT 1
 			    ) first_complex_trade ON true
 			""";
-	}
+    }
 
-	private static String tradeFirstGroupByColumns() {
-		return """
+    private static String tradeFirstGroupByColumns() {
+        return """
 				,
 				        latest_complex_trade.deal_date,
 				        latest_complex_trade.deal_amount,
 				        latest_complex_trade.excl_area,
 				        first_complex_trade.deal_date""";
-	}
+    }
 
-	private static String parcelFlags() {
-		return """
+    private static String parcelFlags() {
+        return """
 			parcel_flags AS (
 			    SELECT
 			        parcel_id,
@@ -210,10 +200,10 @@ final class ComplexMarkerSql {
 			    FROM complex_base
 			    GROUP BY parcel_id
 			)""".formatted(buildingFootprintSql());
-	}
+    }
 
-	private static String redevelopmentGenerationBase() {
-		return """
+    private static String redevelopmentGenerationBase() {
+        return """
 			redevelopment_generation_base AS (
 			    SELECT
 			        base.parcel_id,
@@ -242,10 +232,10 @@ final class ComplexMarkerSql {
 			        LIMIT 1
 			    ) first_generation_trade ON true
 			)""";
-	}
+    }
 
-	private static String currentGeneration(String sourceCte, String latestDealColumn) {
-		return """
+    private static String currentGeneration(String sourceCte, String latestDealColumn) {
+        return """
 			current_generation AS (
 			    SELECT DISTINCT ON (parcel_id)
 			        parcel_id,
@@ -258,10 +248,10 @@ final class ComplexMarkerSql {
 			        first_deal DESC NULLS LAST,
 			        complex_id DESC
 			)""".formatted(sourceCte, latestDealColumn);
-	}
+    }
 
-	private static String splitComplexMarker(String tradeColumns) {
-		return """
+    private static String splitComplexMarker(String tradeColumns) {
+        return """
 			split_complex_marker AS (
 			    SELECT
 			        base.parcel_id,
@@ -297,10 +287,10 @@ final class ComplexMarkerSql {
 			           AND base.complex_id = current_generation.complex_id
 			       )
 			)""".formatted(tradeColumns, buildingFootprintSql());
-	}
+    }
 
-	private static String representativeCoordinate(String lastTieBreaker) {
-		return """
+    private static String representativeCoordinate(String lastTieBreaker) {
+        return """
 			representative_coordinate AS (
 			    SELECT DISTINCT ON (base.parcel_id)
 			        base.parcel_id,
@@ -318,10 +308,10 @@ final class ComplexMarkerSql {
 			        %s,
 			        base.complex_id DESC
 			)""".formatted(buildingFootprintSql(), lastTieBreaker);
-	}
+    }
 
-	private static String parcelMarkerBase() {
-		return """
+    private static String parcelMarkerBase() {
+        return """
 			parcel_marker_base AS (
 			    SELECT base.*
 			    FROM complex_base base
@@ -341,12 +331,12 @@ final class ComplexMarkerSql {
 			          OR base.coordinate_source IS DISTINCT FROM %s
 			      )
 			)""".formatted(buildingFootprintSql());
-	}
+    }
 
-	private static String parcelMarker(boolean includeParcelGeometry) {
-		String parcelGeomSelect = includeParcelGeometry ? ",\n			        base.parcel_geom" : "";
-		String parcelGeomGroupBy = includeParcelGeometry ? ",\n			        base.parcel_geom" : "";
-		return """
+    private static String parcelMarker(boolean includeParcelGeometry) {
+        String parcelGeomSelect = includeParcelGeometry ? ",\n			        base.parcel_geom" : "";
+        String parcelGeomGroupBy = includeParcelGeometry ? ",\n			        base.parcel_geom" : "";
+        return """
 			parcel_marker AS (
 			    SELECT
 			        base.parcel_id,
@@ -380,10 +370,10 @@ final class ComplexMarkerSql {
 			        representative_coordinate.lat,
 			        representative_coordinate.lng%s
 			)""".formatted(parcelGeomSelect, parcelGeomGroupBy);
-	}
+    }
 
-	private static String markerShapeFilterTail() {
-		return """
+    private static String markerShapeFilterTail() {
+        return """
 			marker_candidates AS (
 			    SELECT
 			        split_complex_marker.parcel_id,
@@ -485,10 +475,10 @@ final class ComplexMarkerSql {
 			  AND (CAST(:areaMax AS NUMERIC) IS NULL OR markers_with_trade.excl_area <= :areaMax)
 			ORDER BY markers_with_trade.parcel_id, markers_with_trade.complex_id
 			""";
-	}
+    }
 
-	private static String tradeFirstTail() {
-		return """
+    private static String tradeFirstTail() {
+        return """
 			latest_parcel_trade AS (
 			    SELECT DISTINCT ON (base.parcel_id)
 			        base.parcel_id,
@@ -560,9 +550,9 @@ final class ComplexMarkerSql {
 			  AND (CAST(:areaMax AS NUMERIC) IS NULL OR markers.excl_area <= :areaMax)
 			ORDER BY markers.parcel_id, markers.complex_id
 			""";
-	}
+    }
 
-	private static String buildingFootprintSql() {
-		return ":buildingFootprintSource";
-	}
+    private static String buildingFootprintSql() {
+        return ":buildingFootprintSource";
+    }
 }

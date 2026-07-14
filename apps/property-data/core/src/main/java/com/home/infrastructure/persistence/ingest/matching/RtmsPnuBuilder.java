@@ -1,16 +1,14 @@
 package com.home.infrastructure.persistence.ingest.matching;
 
-import java.util.Optional;
-
-import com.home.ingestcore.rtms.OpenApiTradeItem;
 import com.home.application.ingest.normalization.RtmsJibunPnuNormalizer;
+import com.home.ingestcore.rtms.OpenApiTradeItem;
+import java.util.Optional;
 
 final class RtmsPnuBuilder {
 
-	private RtmsPnuBuilder() {
-	}
+    private RtmsPnuBuilder() {}
 
-	static Optional<String> build(OpenApiTradeItem item) {
-		return Optional.ofNullable(RtmsJibunPnuNormalizer.normalize(item).derivedPnu());
-	}
+    static Optional<String> build(OpenApiTradeItem item) {
+        return Optional.ofNullable(RtmsJibunPnuNormalizer.normalize(item).derivedPnu());
+    }
 }

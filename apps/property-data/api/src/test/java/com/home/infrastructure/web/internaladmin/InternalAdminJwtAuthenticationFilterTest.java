@@ -3,6 +3,10 @@ package com.home.infrastructure.web.internaladmin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.home.security.jwt.JwtIssueRequest;
+import com.home.security.jwt.JwtVerificationPolicy;
+import com.home.security.jwt.Rs256JwtCodec;
 import java.security.KeyPairGenerator;
 import java.time.Clock;
 import java.time.Duration;
@@ -11,12 +15,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.security.jwt.JwtIssueRequest;
-import com.home.security.jwt.JwtVerificationPolicy;
-import com.home.security.jwt.Rs256JwtCodec;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,18 +41,21 @@ class InternalAdminJwtAuthenticationFilterTest {
     void validInternalTokenCreatesPrincipalForTheRequest() throws Exception {
         var filter = filter("property-data-admin");
         var request = internalRequest(token(Map.of(
-            "loginId", "operator",
-            "requestId", "request-1",
-            "roles", List.of("OPERATOR"),
-            "permissions", List.of("COORDINATE_READ", "COORDINATE_WRITE")
-        )));
+                "loginId",
+                "operator",
+                "requestId",
+                "request-1",
+                "roles",
+                List.of("OPERATOR"),
+                "permissions",
+                List.of("COORDINATE_READ", "COORDINATE_WRITE"))));
         var response = new MockHttpServletResponse();
         var chain = new MockFilterChain();
 
         filter.doFilter(request, response, chain);
 
-        InternalAdminPrincipal principal = (InternalAdminPrincipal) chain.getRequest()
-            .getAttribute(InternalAdminPrincipal.REQUEST_ATTRIBUTE);
+        InternalAdminPrincipal principal =
+                (InternalAdminPrincipal) chain.getRequest().getAttribute(InternalAdminPrincipal.REQUEST_ATTRIBUTE);
         assertThat(principal.accountId()).isEqualTo(accountId);
         assertThat(principal.loginId()).isEqualTo("operator");
         assertThat(principal.requestId()).isEqualTo("request-1");
@@ -74,10 +75,17 @@ class InternalAdminJwtAuthenticationFilterTest {
 
         var missingClaimResponse = new MockHttpServletResponse();
         var missingClaimChain = new MockFilterChain();
-        filter("property-data-admin").doFilter(internalRequest(token(Map.of(
-            "loginId", "operator", "roles", List.of("OPERATOR"),
-            "permissions", List.of("COORDINATE_READ")
-        ))), missingClaimResponse, missingClaimChain);
+        filter("property-data-admin")
+                .doFilter(
+                        internalRequest(token(Map.of(
+                                "loginId",
+                                "operator",
+                                "roles",
+                                List.of("OPERATOR"),
+                                "permissions",
+                                List.of("COORDINATE_READ")))),
+                        missingClaimResponse,
+                        missingClaimChain);
         assertThat(missingClaimResponse.getStatus()).isEqualTo(401);
         assertThat(missingClaimChain.getRequest()).isNull();
     }
@@ -94,7 +102,8 @@ class InternalAdminJwtAuthenticationFilterTest {
         var malformedClaims = new java.util.LinkedHashMap<String, Object>(validClaims());
         malformedClaims.put("roles", "OPERATOR");
         var malformedResponse = new MockHttpServletResponse();
-        filter("property-data-admin").doFilter(internalRequest(token(malformedClaims)), malformedResponse, new MockFilterChain());
+        filter("property-data-admin")
+                .doFilter(internalRequest(token(malformedClaims)), malformedResponse, new MockFilterChain());
         assertThat(malformedResponse.getStatus()).isEqualTo(401);
     }
 
@@ -134,17 +143,23 @@ class InternalAdminJwtAuthenticationFilterTest {
         var request = internalRequest(token(validClaims()));
         var response = new MockHttpServletResponse();
 
-        assertThatThrownBy(() -> filter("property-data-admin").doFilter(request, response,
-            (servletRequest, servletResponse) -> { throw new IllegalArgumentException("domain validation"); }))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("domain validation");
+        assertThatThrownBy(() -> filter("property-data-admin")
+                        .doFilter(request, response, (servletRequest, servletResponse) -> {
+                            throw new IllegalArgumentException("domain validation");
+                        }))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("domain validation");
     }
 
     private InternalAdminJwtAuthenticationFilter filter(String expectedAudience) {
-        return new InternalAdminJwtAuthenticationFilter(codec, new JwtVerificationPolicy(
-            "admin-service", expectedAudience, Duration.ofSeconds(60),
-            keyId -> "test-key".equals(keyId) ? keys.getPublic() : null
-        ), new ObjectMapper());
+        return new InternalAdminJwtAuthenticationFilter(
+                codec,
+                new JwtVerificationPolicy(
+                        "admin-service",
+                        expectedAudience,
+                        Duration.ofSeconds(60),
+                        keyId -> "test-key".equals(keyId) ? keys.getPublic() : null),
+                new ObjectMapper());
     }
 
     private MockHttpServletRequest internalRequest(String token) {
@@ -155,14 +170,27 @@ class InternalAdminJwtAuthenticationFilterTest {
     }
 
     private String token(Map<String, Object> claims) {
-        return codec.issue(new JwtIssueRequest(
-            "admin-service", "property-data-admin", accountId.toString(), "token-id", "test-key",
-            Duration.ofSeconds(60), claims
-        ), keys.getPrivate());
+        return codec.issue(
+                new JwtIssueRequest(
+                        "admin-service",
+                        "property-data-admin",
+                        accountId.toString(),
+                        "token-id",
+                        "test-key",
+                        Duration.ofSeconds(60),
+                        claims),
+                keys.getPrivate());
     }
 
     private Map<String, Object> validClaims() {
-        return Map.of("loginId", "operator", "requestId", "request-1", "roles", List.of("OPERATOR"),
-            "permissions", List.of("COORDINATE_READ"));
+        return Map.of(
+                "loginId",
+                "operator",
+                "requestId",
+                "request-1",
+                "roles",
+                List.of("OPERATOR"),
+                "permissions",
+                List.of("COORDINATE_READ"));
     }
 }

@@ -1,22 +1,20 @@
 package com.home.infrastructure.persistence.search;
 
+import com.home.application.read.ComplexSuggestionResult;
+import com.home.application.read.SearchComplexResult;
+import com.home.application.search.ComplexSearchReader;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Objects;
-
-import com.home.application.read.ComplexSuggestionResult;
-import com.home.application.read.SearchComplexResult;
-import com.home.application.search.ComplexSearchReader;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class JdbcComplexSearchReader implements ComplexSearchReader {
 
-	private static final String COMPLEX_SEARCH_SQL = """
+    private static final String COMPLEX_SEARCH_SQL = """
 		WITH query_tokens AS (
 		    SELECT
 		        token_no,
@@ -152,60 +150,59 @@ public class JdbcComplexSearchReader implements ComplexSearchReader {
 		LIMIT :limit
 		""";
 
-	private final JdbcClient jdbcClient;
+    private final JdbcClient jdbcClient;
 
-	public JdbcComplexSearchReader(JdbcClient jdbcClient) {
-		this.jdbcClient = Objects.requireNonNull(jdbcClient);
-	}
+    public JdbcComplexSearchReader(JdbcClient jdbcClient) {
+        this.jdbcClient = Objects.requireNonNull(jdbcClient);
+    }
 
-	@Override
-	public List<SearchComplexResult> searchComplexes(String query) {
-		return searchStatement(PropertySearchTerms.from(query), 20)
-			.query(this::mapSearchComplex)
-			.list();
-	}
+    @Override
+    public List<SearchComplexResult> searchComplexes(String query) {
+        return searchStatement(PropertySearchTerms.from(query), 20)
+                .query(this::mapSearchComplex)
+                .list();
+    }
 
-	@Override
-	public List<ComplexSuggestionResult> suggestComplexes(String query, int limit) {
-		return searchStatement(PropertySearchTerms.from(query), limit)
-			.query(this::mapComplexSuggestion)
-			.list();
-	}
+    @Override
+    public List<ComplexSuggestionResult> suggestComplexes(String query, int limit) {
+        return searchStatement(PropertySearchTerms.from(query), limit)
+                .query(this::mapComplexSuggestion)
+                .list();
+    }
 
-	private JdbcClient.StatementSpec searchStatement(PropertySearchTerms terms, int limit) {
-		return jdbcClient.sql(COMPLEX_SEARCH_SQL)
-			.param("query", terms.query())
-			.param("lowerQuery", terms.lowerQuery())
-			.param("pattern", terms.pattern())
-			.param("prefixPattern", terms.prefixPattern())
-			.param("normalizedQuery", terms.normalizedQuery())
-			.param("normalizedPattern", terms.normalizedPattern())
-			.param("normalizedPrefixPattern", terms.normalizedPrefixPattern())
-			.param("limit", limit);
-	}
+    private JdbcClient.StatementSpec searchStatement(PropertySearchTerms terms, int limit) {
+        return jdbcClient
+                .sql(COMPLEX_SEARCH_SQL)
+                .param("query", terms.query())
+                .param("lowerQuery", terms.lowerQuery())
+                .param("pattern", terms.pattern())
+                .param("prefixPattern", terms.prefixPattern())
+                .param("normalizedQuery", terms.normalizedQuery())
+                .param("normalizedPattern", terms.normalizedPattern())
+                .param("normalizedPrefixPattern", terms.normalizedPrefixPattern())
+                .param("limit", limit);
+    }
 
-	private SearchComplexResult mapSearchComplex(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new SearchComplexResult(
-			resultSet.getLong("complex_id"),
-			resultSet.getString("complex_name"),
-			resultSet.getLong("parcel_id"),
-			doubleOrNull(resultSet, "latitude"),
-			doubleOrNull(resultSet, "longitude"),
-			resultSet.getString("address")
-		);
-	}
+    private SearchComplexResult mapSearchComplex(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new SearchComplexResult(
+                resultSet.getLong("complex_id"),
+                resultSet.getString("complex_name"),
+                resultSet.getLong("parcel_id"),
+                doubleOrNull(resultSet, "latitude"),
+                doubleOrNull(resultSet, "longitude"),
+                resultSet.getString("address"));
+    }
 
-	private ComplexSuggestionResult mapComplexSuggestion(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new ComplexSuggestionResult(
-			resultSet.getLong("complex_id"),
-			resultSet.getString("complex_name"),
-			resultSet.getLong("parcel_id"),
-			resultSet.getString("address")
-		);
-	}
+    private ComplexSuggestionResult mapComplexSuggestion(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new ComplexSuggestionResult(
+                resultSet.getLong("complex_id"),
+                resultSet.getString("complex_name"),
+                resultSet.getLong("parcel_id"),
+                resultSet.getString("address"));
+    }
 
-	private Double doubleOrNull(ResultSet resultSet, String column) throws SQLException {
-		BigDecimal value = resultSet.getBigDecimal(column);
-		return value == null ? null : value.doubleValue();
-	}
+    private Double doubleOrNull(ResultSet resultSet, String column) throws SQLException {
+        BigDecimal value = resultSet.getBigDecimal(column);
+        return value == null ? null : value.doubleValue();
+    }
 }

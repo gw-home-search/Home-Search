@@ -4,5 +4,5 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class JdbcPersistenceFixture {
 
-	private JdbcClient jdbcClient;
+    private JdbcClient jdbcClient;
 }

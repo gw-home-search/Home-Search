@@ -7,11 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public record UserAccessTokenPolicy(
-    String issuer,
-    String audience,
-    Duration maximumLifetime,
-    Map<String, PublicKey> publicKeys
-) {
+        String issuer, String audience, Duration maximumLifetime, Map<String, PublicKey> publicKeys) {
     public UserAccessTokenPolicy {
         issuer = required(issuer, "issuer");
         audience = required(audience, "audience");

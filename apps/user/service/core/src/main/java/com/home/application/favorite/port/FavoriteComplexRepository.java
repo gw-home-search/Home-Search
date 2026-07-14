@@ -8,8 +8,11 @@ import java.util.Optional;
 
 public interface FavoriteComplexRepository {
     FavoriteComplex save(long userId, long complexId, Instant savedAt, FavoriteLimitPolicy policy);
+
     void remove(long userId, long complexId);
+
     Optional<FavoriteComplex> get(long userId, long complexId);
+
     FavoritePage list(long userId, int page, int size);
 
     record FavoritePage(List<FavoriteComplex> content, long totalElements) {

@@ -14,7 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public class JpaFavoriteComplexRepository implements FavoriteComplexRepository {
     private final SpringDataFavoriteComplexRepository favorites;
-    public JpaFavoriteComplexRepository(SpringDataFavoriteComplexRepository favorites) { this.favorites = favorites; }
+
+    public JpaFavoriteComplexRepository(SpringDataFavoriteComplexRepository favorites) {
+        this.favorites = favorites;
+    }
 
     @Override
     @Transactional
@@ -24,7 +27,7 @@ public class JpaFavoriteComplexRepository implements FavoriteComplexRepository {
         Optional<FavoriteComplexJpaEntity> existing = favorites.findById(id);
         policy.ensureCanSave(existing.isPresent(), favorites.countByIdUserId(userId));
         return existing.map(JpaFavoriteComplexRepository::toDomain)
-            .orElseGet(() -> toDomain(favorites.save(new FavoriteComplexJpaEntity(userId, complexId, savedAt))));
+                .orElseGet(() -> toDomain(favorites.save(new FavoriteComplexJpaEntity(userId, complexId, savedAt))));
     }
 
     @Override
@@ -42,10 +45,13 @@ public class JpaFavoriteComplexRepository implements FavoriteComplexRepository {
     @Override
     @Transactional(readOnly = true)
     public FavoritePage list(long userId, int page, int size) {
-        var pageable = PageRequest.of(page, size, Sort.by(
-            Sort.Order.desc("savedAt"), Sort.Order.desc("id.complexId")));
+        var pageable = PageRequest.of(page, size, Sort.by(Sort.Order.desc("savedAt"), Sort.Order.desc("id.complexId")));
         var result = favorites.findByIdUserId(userId, pageable);
-        return new FavoritePage(result.getContent().stream().map(JpaFavoriteComplexRepository::toDomain).toList(), result.getTotalElements());
+        return new FavoritePage(
+                result.getContent().stream()
+                        .map(JpaFavoriteComplexRepository::toDomain)
+                        .toList(),
+                result.getTotalElements());
     }
 
     private static FavoriteComplex toDomain(FavoriteComplexJpaEntity entity) {

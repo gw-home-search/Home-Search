@@ -4,46 +4,44 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import java.math.BigDecimal;
-
 import com.home.infrastructure.persistence.ingest.coordinate.JdbcCoordinateSourceParcelCoordinateRepository;
-
+import java.math.BigDecimal;
+import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.flywaydb.core.Flyway;
-import org.flywaydb.core.api.MigrationVersion;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 class JdbcCoordinateSourceParcelCoordinateRepositoryTest extends JdbcPostgresContainerSupport {
 
-	private static final PostgreSQLContainer<?> POSTGRES = newPostgisContainer();
+    private static final PostgreSQLContainer<?> POSTGRES = newPostgisContainer();
 
-	static {
-		POSTGRES.start();
-	}
+    static {
+        POSTGRES.start();
+    }
 
-	@BeforeEach
-	void resetCoordinateSourceDatabase() {
-		initializeJdbc(POSTGRES);
-		jdbcClient.sql("DROP SCHEMA IF EXISTS reference CASCADE").update();
-		jdbcClient.sql("DROP EXTENSION IF EXISTS postgis CASCADE").update();
-		Flyway.configure()
-			.dataSource(dataSource)
-			.locations("filesystem:../../../apps/source-data/src/main/resources/db/migration/coordinate-source")
-			.schemas("public", "reference", "geo_enrichment")
-			.defaultSchema("reference")
-			.table("flyway_schema_history")
-			.target(MigrationVersion.fromVersion("1"))
-			.load()
-			.migrate();
-	}
+    @BeforeEach
+    void resetCoordinateSourceDatabase() {
+        initializeJdbc(POSTGRES);
+        jdbcClient.sql("DROP SCHEMA IF EXISTS reference CASCADE").update();
+        jdbcClient.sql("DROP EXTENSION IF EXISTS postgis CASCADE").update();
+        Flyway.configure()
+                .dataSource(dataSource)
+                .locations("filesystem:../../../apps/source-data/src/main/resources/db/migration/coordinate-source")
+                .schemas("public", "reference", "geo_enrichment")
+                .defaultSchema("reference")
+                .table("flyway_schema_history")
+                .target(MigrationVersion.fromVersion("1"))
+                .load()
+                .migrate();
+    }
 
-	@Test
-	@DisplayName("Coordinate Source DB에서 PNU coordinate와 geometry를 read-only lookup 한다")
-	void findsCoordinateFromCoordinateSourceByPnu() {
-		Long runId = jdbcClient.sql("""
+    @Test
+    @DisplayName("Coordinate Source DB에서 PNU coordinate와 geometry를 read-only lookup 한다")
+    void findsCoordinateFromCoordinateSourceByPnu() {
+        Long runId = jdbcClient.sql("""
 			INSERT INTO reference.coordinate_snapshot_run (
 			    snapshot_version,
 			    source_dir,
@@ -53,10 +51,8 @@ class JdbcCoordinateSourceParcelCoordinateRepositoryTest extends JdbcPostgresCon
 			)
 			VALUES ('20260508', '/coordinate-input', 5186, 4326, 'PASSED')
 			RETURNING id
-			""")
-			.query(Long.class)
-			.single();
-		jdbcClient.sql("""
+			""").query(Long.class).single();
+        jdbcClient.sql("""
 			INSERT INTO reference.parcel_coordinate_snapshot (
 			    pnu,
 			    region_code,
@@ -82,39 +78,36 @@ class JdbcCoordinateSourceParcelCoordinateRepositoryTest extends JdbcPostgresCon
 			    'LSMD_CONT_LDREG_11_202605.shp',
 			    :runId
 			)
-			""")
-			.param("runId", runId)
-			.update();
-		JdbcCoordinateSourceParcelCoordinateRepository repository =
-			new JdbcCoordinateSourceParcelCoordinateRepository(jdbcClient);
+			""").param("runId", runId).update();
+        JdbcCoordinateSourceParcelCoordinateRepository repository =
+                new JdbcCoordinateSourceParcelCoordinateRepository(jdbcClient);
 
-		assertThat(repository.findByPnu(" 1168010300107770001 "))
-			.hasValueSatisfying(coordinate -> {
-				assertThat(coordinate.latitude()).isEqualByComparingTo(new BigDecimal("37.5012345"));
-				assertThat(coordinate.longitude()).isEqualByComparingTo(new BigDecimal("127.0543210"));
-				assertThat(coordinate.geometryWkt()).startsWith("MULTIPOLYGON");
-			});
-	}
+        assertThat(repository.findByPnu(" 1168010300107770001 ")).hasValueSatisfying(coordinate -> {
+            assertThat(coordinate.latitude()).isEqualByComparingTo(new BigDecimal("37.5012345"));
+            assertThat(coordinate.longitude()).isEqualByComparingTo(new BigDecimal("127.0543210"));
+            assertThat(coordinate.geometryWkt()).startsWith("MULTIPOLYGON");
+        });
+    }
 
-	@Test
-	@DisplayName("blank PNU는 Coordinate Source DB lookup을 수행하지 않는다")
-	void blankPnuReturnsEmpty() {
-		JdbcCoordinateSourceParcelCoordinateRepository repository =
-			new JdbcCoordinateSourceParcelCoordinateRepository(jdbcClient);
+    @Test
+    @DisplayName("blank PNU는 Coordinate Source DB lookup을 수행하지 않는다")
+    void blankPnuReturnsEmpty() {
+        JdbcCoordinateSourceParcelCoordinateRepository repository =
+                new JdbcCoordinateSourceParcelCoordinateRepository(jdbcClient);
 
-		assertThat(repository.findByPnu(" ")).isEmpty();
-	}
+        assertThat(repository.findByPnu(" ")).isEmpty();
+    }
 
-	@Test
-	@DisplayName("19자리 숫자가 아닌 PNU는 source DB query를 수행하지 않는다")
-	void invalidPnuReturnsEmptyWithoutQuery() {
-		JdbcClient jdbcClient = mock(JdbcClient.class);
-		JdbcCoordinateSourceParcelCoordinateRepository repository =
-			new JdbcCoordinateSourceParcelCoordinateRepository(jdbcClient);
+    @Test
+    @DisplayName("19자리 숫자가 아닌 PNU는 source DB query를 수행하지 않는다")
+    void invalidPnuReturnsEmptyWithoutQuery() {
+        JdbcClient jdbcClient = mock(JdbcClient.class);
+        JdbcCoordinateSourceParcelCoordinateRepository repository =
+                new JdbcCoordinateSourceParcelCoordinateRepository(jdbcClient);
 
-		assertThat(repository.findByPnu("11680%")).isEmpty();
-		assertThat(repository.findByPnu("116801030010777000")).isEmpty();
-		assertThat(repository.findByPnu("11680103001077700010")).isEmpty();
-		verifyNoInteractions(jdbcClient);
-	}
+        assertThat(repository.findByPnu("11680%")).isEmpty();
+        assertThat(repository.findByPnu("116801030010777000")).isEmpty();
+        assertThat(repository.findByPnu("11680103001077700010")).isEmpty();
+        verifyNoInteractions(jdbcClient);
+    }
 }

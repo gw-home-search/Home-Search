@@ -16,7 +16,8 @@ public final class RefreshTokenService {
     private final TokenClock clock;
     private final Duration ttl;
 
-    public RefreshTokenService(RefreshTokenRepository repository, OpaqueTokenGenerator generator, TokenClock clock, Duration ttl) {
+    public RefreshTokenService(
+            RefreshTokenRepository repository, OpaqueTokenGenerator generator, TokenClock clock, Duration ttl) {
         this.repository = Objects.requireNonNull(repository);
         this.generator = Objects.requireNonNull(generator);
         this.clock = Objects.requireNonNull(clock);
@@ -36,17 +37,22 @@ public final class RefreshTokenService {
     public RotatedRefreshToken rotate(String rawToken) {
         Instant now = clock.now();
         String expectedHash = RefreshTokenHash.sha256(rawToken);
-        ActiveRefreshToken active = repository.findActiveByHash(expectedHash)
-                .filter(token -> !token.isExpiredAt(now)).orElseThrow(InvalidRefreshTokenException::new);
+        ActiveRefreshToken active = repository
+                .findActiveByHash(expectedHash)
+                .filter(token -> !token.isExpiredAt(now))
+                .orElseThrow(InvalidRefreshTokenException::new);
         String replacementRaw = generator.generate();
         Instant expiresAt = now.plus(ttl);
-        var replacement = new ActiveRefreshToken(active.userId(), RefreshTokenHash.sha256(replacementRaw), now, expiresAt);
+        var replacement =
+                new ActiveRefreshToken(active.userId(), RefreshTokenHash.sha256(replacementRaw), now, expiresAt);
         if (!repository.rotateActive(expectedHash, replacement, now)) throw new InvalidRefreshTokenException();
         return new RotatedRefreshToken(active.userId(), replacementRaw, expiresAt);
     }
 
     public void revoke(String rawToken) {
-        try { repository.revokeByHash(RefreshTokenHash.sha256(rawToken), clock.now()); }
-        catch (InvalidRefreshTokenException ignored) { }
+        try {
+            repository.revokeByHash(RefreshTokenHash.sha256(rawToken), clock.now());
+        } catch (InvalidRefreshTokenException ignored) {
+        }
     }
 }

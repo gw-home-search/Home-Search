@@ -22,13 +22,13 @@ class FavoriteApplicationTest {
     @Test
     void savesIdempotentlyListsAndRemoves() {
         FakeRepository repository = new FakeRepository();
-        SaveFavoriteComplex save = new SaveFavoriteComplex(repository, new FavoriteLimitPolicy(), Clock.fixed(NOW, ZoneOffset.UTC));
+        SaveFavoriteComplex save =
+                new SaveFavoriteComplex(repository, new FavoriteLimitPolicy(), Clock.fixed(NOW, ZoneOffset.UTC));
         save.execute(7, 501);
         save.execute(7, 501);
         save.execute(7, 502);
 
-        assertThat(new GetFavoriteComplex(repository).execute(7, 501)).contains(
-            new FavoriteComplex(7, 501, NOW));
+        assertThat(new GetFavoriteComplex(repository).execute(7, 501)).contains(new FavoriteComplex(7, 501, NOW));
         var page = new ListFavoriteComplexes(repository).execute(7, 0, 20);
         assertThat(page.content()).extracting(FavoriteComplex::complexId).containsExactly(502L, 501L);
         assertThat(page.totalElements()).isEqualTo(2);
@@ -50,19 +50,39 @@ class FavoriteApplicationTest {
 
     private static final class FakeRepository implements FavoriteComplexRepository {
         private final List<FavoriteComplex> values = new ArrayList<>();
-        @Override public FavoriteComplex save(long userId, long complexId, Instant savedAt, FavoriteLimitPolicy policy) {
+
+        @Override
+        public FavoriteComplex save(long userId, long complexId, Instant savedAt, FavoriteLimitPolicy policy) {
             Optional<FavoriteComplex> existing = get(userId, complexId);
-            policy.ensureCanSave(existing.isPresent(), values.stream().filter(value -> value.userId() == userId).count());
+            policy.ensureCanSave(
+                    existing.isPresent(),
+                    values.stream().filter(value -> value.userId() == userId).count());
             if (existing.isPresent()) return existing.get();
             FavoriteComplex favorite = new FavoriteComplex(userId, complexId, savedAt);
             values.add(favorite);
             return favorite;
         }
-        @Override public void remove(long userId, long complexId) { values.removeIf(value -> value.userId() == userId && value.complexId() == complexId); }
-        @Override public Optional<FavoriteComplex> get(long userId, long complexId) { return values.stream().filter(value -> value.userId() == userId && value.complexId() == complexId).findFirst(); }
-        @Override public FavoritePage list(long userId, int page, int size) {
-            List<FavoriteComplex> all = values.stream().filter(value -> value.userId() == userId)
-                .sorted(Comparator.comparing(FavoriteComplex::savedAt).reversed().thenComparing(FavoriteComplex::complexId, Comparator.reverseOrder())).toList();
+
+        @Override
+        public void remove(long userId, long complexId) {
+            values.removeIf(value -> value.userId() == userId && value.complexId() == complexId);
+        }
+
+        @Override
+        public Optional<FavoriteComplex> get(long userId, long complexId) {
+            return values.stream()
+                    .filter(value -> value.userId() == userId && value.complexId() == complexId)
+                    .findFirst();
+        }
+
+        @Override
+        public FavoritePage list(long userId, int page, int size) {
+            List<FavoriteComplex> all = values.stream()
+                    .filter(value -> value.userId() == userId)
+                    .sorted(Comparator.comparing(FavoriteComplex::savedAt)
+                            .reversed()
+                            .thenComparing(FavoriteComplex::complexId, Comparator.reverseOrder()))
+                    .toList();
             int from = Math.min(page * size, all.size());
             int to = Math.min(from + size, all.size());
             return new FavoritePage(all.subList(from, to), all.size());

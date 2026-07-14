@@ -2,7 +2,7 @@ package com.home.infrastructure.external.rtms;
 
 public interface RtmsCoordinateSourceAvailabilityProbe {
 
-	boolean configured();
+    boolean configured();
 
-	void verifyAvailable();
+    void verifyAvailable();
 }

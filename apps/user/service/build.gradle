@@ -49,7 +49,33 @@ tasks.register('userServiceLibraryTest') {
 }
 tasks.register('userServicePersistenceTest') { dependsOn ':core:test', ':app:test' }
 tasks.register('userServiceApiContractTest') { dependsOn ':app:test' }
-tasks.register('userServiceDependencyBoundaryCheck') { dependsOn ':app:verifyRuntimeMigrationBoundary' }
+tasks.register('userServiceDependencyBoundaryCheck') {
+    dependsOn ':app:verifyRuntimeMigrationBoundary'
+    doLast {
+        def applicationFiles = fileTree(layout.projectDirectory.dir('core/src/main/java/com/home/application')) {
+            include '**/*.java'
+        }.files
+        def invalidTransactionalTypes = applicationFiles.findAll { file ->
+            def source = file.text
+            source.contains('@Transactional') && (
+                source =~ /(?m)^\s*(?:public\s+)?final\s+class\s+/ ||
+                    source =~ /(?s)@Transactional(?:\([^)]*\))?\s+(?:public|protected)\s+final\s+/
+            )
+        }
+        if (!invalidTransactionalTypes.isEmpty()) {
+            throw new GradleException("Transactional user application service or method must not be final: ${invalidTransactionalTypes}")
+        }
+        def webFiles = fileTree(layout.projectDirectory.dir('app/src/main/java')) {
+            include '**/web/**/*.java', '**/controller/**/*.java'
+        }.files
+        def webPersistenceImports = webFiles.findAll { file ->
+            file.text =~ /(?m)^import com\.home\.infrastructure\.persistence\./
+        }
+        if (!webPersistenceImports.isEmpty()) {
+            throw new GradleException("User web depends directly on persistence adapters: ${webPersistenceImports}")
+        }
+    }
+}
 
 tasks.register('userServiceCoverageCheck', JacocoCoverageVerification) {
     dependsOn ':core:test', ':app:test'
@@ -68,7 +94,9 @@ tasks.register('userServiceCoverageCheck', JacocoCoverageVerification) {
     violationRules {
         rule {
             element = 'BUNDLE'
+            limit { counter = 'LINE'; value = 'COVEREDRATIO'; minimum = 0.90 }
             limit { counter = 'INSTRUCTION'; value = 'COVEREDRATIO'; minimum = 0.90 }
+            limit { counter = 'BRANCH'; value = 'COVEREDRATIO'; minimum = 0.65 }
         }
     }
 }

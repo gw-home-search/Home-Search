@@ -3,6 +3,7 @@ package com.home.admin.account;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.home.admin.audit.AdminAuditService;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
@@ -61,6 +62,44 @@ class AdminAccountServicePersistenceTest {
                             .query(Integer.class)
                             .single())
                     .isEqualTo(1);
+
+            var created = service.create(
+                    first,
+                    new AdminAccountService.CreateAccount(
+                            "operator", "운영자", "long-enough-test-password", Set.of("OPERATOR")));
+            assertThat(service.accounts())
+                    .extracting(AdminAccountService.AccountSummary::loginId)
+                    .contains("operator");
+            insertSession(jdbc, "operator");
+            service.setEnabled(first, created.accountId(), false);
+            assertThat(jdbc.sql("SELECT enabled FROM admin.admin_account WHERE id=:id")
+                            .param("id", created.accountId())
+                            .query(Boolean.class)
+                            .single())
+                    .isFalse();
+
+            insertSession(jdbc, "second-admin");
+            UUID second = jdbc.sql("SELECT id FROM admin.admin_account WHERE login_id='second-admin'")
+                    .query(UUID.class)
+                    .single();
+            service.revokeSessions(first, second);
+
+            assertThatThrownBy(() -> service.create(
+                            first, new AdminAccountService.CreateAccount("bad", "bad", "password", Set.of("UNKNOWN"))))
+                    .isInstanceOf(AdminAccountService.InvalidRoleException.class);
+            assertThatThrownBy(() -> service.revokeSessions(first, UUID.randomUUID()))
+                    .isInstanceOf(AdminAccountService.AccountNotFoundException.class);
+
+            var audit = new AdminAuditService(jdbc);
+            audit.recordBffRequest(first, "request-1", "COORDINATE_READ", true);
+            assertThat(audit.events(200, 0)).anySatisfy(event -> {
+                assertThat(event.actorAccountId()).isEqualTo(first);
+                assertThat(event.requestId()).isEqualTo("request-1");
+                assertThat(event.success()).isTrue();
+            });
+            assertThatThrownBy(() -> audit.events(0, 0)).isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> audit.recordBffRequest(null, "", "", false))
+                    .isInstanceOf(IllegalArgumentException.class);
         }
     }
 
@@ -82,8 +121,10 @@ class AdminAccountServicePersistenceTest {
         long now = Instant.now().toEpochMilli();
         jdbc.sql("""
             INSERT INTO admin.spring_session(primary_id,session_id,creation_time,last_access_time,max_inactive_interval,expiry_time,principal_name)
-            VALUES ('primary-role-test','browser-role-test',:now,:now,1800,:expiry,:loginId)
+            VALUES (:primaryId,:sessionId,:now,:now,1800,:expiry,:loginId)
             """)
+                .param("primaryId", "primary-" + loginId)
+                .param("sessionId", "browser-" + loginId)
                 .param("now", now)
                 .param("expiry", now + 1_800_000)
                 .param("loginId", loginId)

@@ -2,6 +2,7 @@ plugins {
     id 'org.springframework.boot' version '4.1.0' apply false
     id 'io.spring.dependency-management' version '1.1.7' apply false
     id 'com.diffplug.spotless' version '8.8.0'
+    id 'jacoco'
 }
 group = 'com.home'; version = '0.0.1-SNAPSHOT'
 
@@ -18,13 +19,70 @@ tasks.named('spotlessCheck') {
 allprojects { group = rootProject.group; version = rootProject.version }
 subprojects {
     apply plugin: 'java'
+    apply plugin: 'jacoco'
     apply plugin: 'io.spring.dependency-management'
     dependencyManagement { imports { mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES } }
     java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
     tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
     tasks.withType(Test).configureEach { useJUnitPlatform() }
+    jacoco { toolVersion = '0.8.13' }
     dependencies { testRuntimeOnly 'org.junit.platform:junit-platform-launcher' }
 }
 tasks.register('persistenceTest') { dependsOn ':migration:test', ':ops:test' }
 tasks.register('apiContractTest') { dependsOn ':api:test' }
 tasks.register('securityTest') { dependsOn ':api:test', ':core:test', ':ops:test' }
+
+def adminProjects = [project(':core'), project(':api'), project(':migration'), project(':ops')]
+def adminCoverageExecutionData = files(adminProjects.collect {
+    it.layout.buildDirectory.file('jacoco/test.exec')
+})
+def adminCoverageSources = files(adminProjects.collect { it.sourceSets.main.allSource.srcDirs })
+def adminCoverageClasses = files(adminProjects.collect { project ->
+    project.sourceSets.main.output.classesDirs.collect { directory ->
+        fileTree(dir: directory, exclude: [
+            '**/AdminServiceApplication*',
+            '**/AdminMigrationApplication*',
+            '**/AdminOpsApplication*'
+        ])
+    }
+})
+
+tasks.register('adminServiceCoverageReport', JacocoReport) {
+    dependsOn adminProjects.collect { it.tasks.named('test') }
+    executionData.from(adminCoverageExecutionData)
+    sourceDirectories.from(adminCoverageSources)
+    classDirectories.from(adminCoverageClasses)
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+tasks.register('adminServiceCoverageCheck', JacocoCoverageVerification) {
+    dependsOn tasks.named('adminServiceCoverageReport')
+    executionData.from(adminCoverageExecutionData)
+    sourceDirectories.from(adminCoverageSources)
+    classDirectories.from(adminCoverageClasses)
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit { counter = 'LINE'; value = 'COVEREDRATIO'; minimum = 0.90 }
+            limit { counter = 'INSTRUCTION'; value = 'COVEREDRATIO'; minimum = 0.90 }
+            limit { counter = 'BRANCH'; value = 'COVEREDRATIO'; minimum = 0.65 }
+        }
+    }
+}
+
+tasks.register('adminPackagedProcessSmoke', Exec) {
+    dependsOn ':migration:bootJar', ':ops:bootJar'
+    commandLine 'bash', 'ops/verify-packaged-processes.sh'
+    environment 'ADMIN_MIGRATION_JAR', project(':migration').tasks.named('bootJar').flatMap { it.archiveFile }.get().asFile.absolutePath
+    environment 'ADMIN_OPS_JAR', project(':ops').tasks.named('bootJar').flatMap { it.archiveFile }.get().asFile.absolutePath
+}
+
+tasks.register('adminServiceQualityCheck') {
+    dependsOn tasks.named('spotlessCheck')
+    dependsOn tasks.named('persistenceTest'), tasks.named('apiContractTest'), tasks.named('securityTest')
+    dependsOn ':api:check', ':migration:check', ':ops:check'
+    dependsOn tasks.named('adminPackagedProcessSmoke'), tasks.named('adminServiceCoverageCheck')
+}

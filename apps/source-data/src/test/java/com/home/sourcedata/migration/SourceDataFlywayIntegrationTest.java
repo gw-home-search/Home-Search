@@ -29,6 +29,17 @@ class SourceDataFlywayIntegrationTest {
                                     dataSource,
                                     "SELECT count(*) FROM reference.flyway_schema_history WHERE success AND version IN ('1','2')"))
                     .isEqualTo(2);
+
+            SourceDataMigrationRunner infoRunner = new SourceDataMigrationRunner(dataSource);
+            infoRunner.run(new DefaultApplicationArguments("--operation=info"));
+            assertThat(infoRunner.getExitCode()).isZero();
+
+            SourceDataMigrationRunner latestRunner = new SourceDataMigrationRunner(dataSource);
+            latestRunner.run(new DefaultApplicationArguments("--operation=migrate", "--target=4", "--confirm=4"));
+            assertThat(latestRunner.getExitCode()).isZero();
+            SourceDataMigrationRunner validateRunner = new SourceDataMigrationRunner(dataSource);
+            validateRunner.run(new DefaultApplicationArguments("--operation=validate"));
+            assertThat(validateRunner.getExitCode()).isZero();
         }
     }
 
@@ -39,12 +50,20 @@ class SourceDataFlywayIntegrationTest {
             DriverManagerDataSource dataSource = dataSource(database);
             createLegacySchema(dataSource);
 
+            SourceDataMigrationRunner runner = new SourceDataMigrationRunner(dataSource);
+            runner.run(new DefaultApplicationArguments("--operation=preflight-baseline"));
+            assertThat(runner.getExitCode()).isZero();
+
             LegacyCoordinateSourceFingerprint.LegacyFingerprintEvidence evidence =
                     new LegacyCoordinateSourceFingerprint().verify(dataSource);
             assertThat(evidence.estimatedRows()).containsKeys("coordinate_snapshot_run", "parcel_coordinate_snapshot");
 
+            runner.run(new DefaultApplicationArguments(
+                    "--operation=baseline-existing",
+                    "--confirm-database=" + SourceDataMigrationRunner.EXPECTED_DATABASE));
+            assertThat(runner.getExitCode()).isZero();
+
             Flyway flyway = flyway(dataSource, "2");
-            flyway.baseline();
             flyway.migrate();
             flyway.validate();
 

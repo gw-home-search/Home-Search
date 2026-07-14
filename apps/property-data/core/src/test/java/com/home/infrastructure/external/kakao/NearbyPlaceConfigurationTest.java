@@ -1,10 +1,15 @@
 package com.home.infrastructure.external.kakao;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
+import com.home.application.place.NearbyPlaceCenterReader;
+import com.home.application.place.NearbyPlaceProvider;
+import com.home.application.propertydetail.ComplexCenter;
 import com.home.application.propertydetail.ComplexCenterReader;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -64,6 +69,26 @@ class NearbyPlaceConfigurationTest {
                     assertThat(executor.getMaxPoolSize()).isEqualTo(2);
                     assertThat(executor.getThreadPoolExecutor().getQueue().remainingCapacity())
                             .isEqualTo(7);
+                });
+    }
+
+    @Test
+    @DisplayName("Kakao nearby 기능이 활성화되면 provider와 좌표 reader를 조립한다")
+    void enabledNearbyPlaceBuildsProviderAndCenterReader() {
+        contextRunner
+                .withPropertyValues("home.place.kakao.enabled=true", "home.place.kakao.rest-api-key=test-key")
+                .withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(NearbyPlaceProvider.class);
+                    ComplexCenterReader centerReader = context.getBean(ComplexCenterReader.class);
+                    given(centerReader.findComplexCenter(42L)).willReturn(Optional.of(new ComplexCenter(37.5, 127.0)));
+                    assertThat(context.getBean(NearbyPlaceCenterReader.class).findComplexCenter(42L))
+                            .hasValueSatisfying(center -> {
+                                assertThat(center.complexId()).isEqualTo(42L);
+                                assertThat(center.lat()).isEqualTo(37.5);
+                                assertThat(center.lng()).isEqualTo(127.0);
+                            });
                 });
     }
 }

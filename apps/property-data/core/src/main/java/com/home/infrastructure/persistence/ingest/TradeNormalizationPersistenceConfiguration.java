@@ -1,41 +1,16 @@
 package com.home.infrastructure.persistence.ingest;
 
-import com.home.application.ingest.normalization.NormalizedTradeRepository;
-import com.home.infrastructure.persistence.ingest.normalization.JdbcNormalizedTradeRepository;
 import com.home.infrastructure.persistence.ingest.normalization.JdbcTradePartitionMaintenanceRepository;
 import com.home.infrastructure.persistence.ingest.normalization.TradePartitionMaintenanceRunner;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Lazy;
-import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(TradePartitionProperties.class)
 class TradeNormalizationPersistenceConfiguration {
-
-    @Bean
-    @Lazy
-    NormalizedTradeRepository normalizedTradeRepository(
-            ObjectProvider<JdbcClient> jdbcClientProvider,
-            ObjectProvider<PlatformTransactionManager> transactionManagerProvider) {
-        return new JdbcNormalizedTradeRepository(
-                IngestPersistenceJdbcSupport.requiredJdbcClient(jdbcClientProvider),
-                new TransactionTemplate(
-                        IngestPersistenceJdbcSupport.requiredTransactionManager(transactionManagerProvider)));
-    }
-
-    @Bean
-    @Lazy
-    JdbcTradePartitionMaintenanceRepository tradePartitionMaintenanceRepository(
-            ObjectProvider<JdbcClient> jdbcClientProvider) {
-        return new JdbcTradePartitionMaintenanceRepository(
-                IngestPersistenceJdbcSupport.requiredJdbcClient(jdbcClientProvider));
-    }
 
     @Bean
     @ConditionalOnProperty(
@@ -43,13 +18,8 @@ class TradeNormalizationPersistenceConfiguration {
             havingValue = "true",
             matchIfMissing = false)
     ApplicationRunner tradePartitionMaintenanceRunner(
-            ObjectProvider<JdbcTradePartitionMaintenanceRepository> maintenanceRepositoryProvider,
-            ObjectProvider<JdbcClient> jdbcClientProvider,
-            @Value("${home.trade.partition.maintenance.years-ahead:5}") int yearsAhead) {
+            JdbcTradePartitionMaintenanceRepository maintenanceRepository, TradePartitionProperties properties) {
         return new TradePartitionMaintenanceRunner(
-                maintenanceRepositoryProvider::getObject,
-                java.time.Clock.systemUTC(),
-                yearsAhead,
-                () -> jdbcClientProvider.getIfAvailable() != null);
+                () -> maintenanceRepository, java.time.Clock.systemUTC(), properties.yearsAhead(), () -> true);
     }
 }

@@ -7,7 +7,9 @@ import com.home.application.ingest.metadata.admin.MetadataAdminModels.Pending;
 import com.home.application.ingest.metadata.admin.MetadataAdminModels.Summary;
 import java.util.List;
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
+@Service
 public class MetadataAdminService {
     private final MetadataAdminRepository repository;
 

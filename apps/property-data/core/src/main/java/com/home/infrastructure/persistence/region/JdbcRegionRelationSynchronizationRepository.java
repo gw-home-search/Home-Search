@@ -4,9 +4,13 @@ import com.home.application.region.RegionRelationSynchronizationGateway;
 import com.home.application.region.RegionRelationSynchronizationResult;
 import java.util.Objects;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+@Repository
 class JdbcRegionRelationSynchronizationRepository implements RegionRelationSynchronizationGateway {
 
     private final Supplier<JdbcClient> jdbcClientSupplier;
@@ -14,6 +18,11 @@ class JdbcRegionRelationSynchronizationRepository implements RegionRelationSynch
 
     JdbcRegionRelationSynchronizationRepository(JdbcClient jdbcClient, TransactionTemplate transactionTemplate) {
         this(() -> jdbcClient, () -> transactionTemplate);
+    }
+
+    @Autowired
+    JdbcRegionRelationSynchronizationRepository(JdbcClient jdbcClient, PlatformTransactionManager transactionManager) {
+        this(jdbcClient, new TransactionTemplate(transactionManager));
     }
 
     JdbcRegionRelationSynchronizationRepository(

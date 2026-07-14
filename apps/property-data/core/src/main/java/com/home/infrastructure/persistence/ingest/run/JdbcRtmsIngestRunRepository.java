@@ -9,7 +9,9 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Objects;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public class JdbcRtmsIngestRunRepository implements RtmsIngestRunRepository {
 
     private final JdbcClient jdbcClient;

@@ -7,7 +7,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.stereotype.Service;
 
+@Service
 public class BuildingMetadataBatchService {
     private final BuildingMetadataEvidenceRepository repository;
     private final BuildingMetadataSourceClient client;

@@ -10,7 +10,9 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public class JdbcComplexMetadataEnrichmentRepository implements ComplexMetadataEnrichmentRepository {
 
     private final JdbcClient jdbcClient;

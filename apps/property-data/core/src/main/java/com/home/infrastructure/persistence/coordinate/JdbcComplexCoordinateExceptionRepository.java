@@ -18,7 +18,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public class JdbcComplexCoordinateExceptionRepository
         implements ComplexCoordinateExceptionRepository, ComplexCoordinateReadinessRepository {
 

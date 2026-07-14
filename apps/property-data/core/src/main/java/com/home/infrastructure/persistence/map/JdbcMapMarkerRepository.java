@@ -6,7 +6,9 @@ import com.home.application.map.ComplexMarkerResult;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 
     private final JdbcClient jdbcClient;

@@ -1,7 +1,9 @@
 package com.home.application.region;
 
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
+@Service
 public class RegionUnitCntSynchronizationService {
 
     private final RegionRelationSynchronizationGateway gateway;

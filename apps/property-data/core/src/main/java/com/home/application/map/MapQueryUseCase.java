@@ -2,7 +2,9 @@ package com.home.application.map;
 
 import java.util.List;
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
+@Service
 public class MapQueryUseCase implements MapUseCase {
 
     private final ComplexMarkerRepository complexMarkerRepository;

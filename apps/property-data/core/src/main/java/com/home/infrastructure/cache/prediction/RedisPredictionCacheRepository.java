@@ -13,9 +13,11 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Repository;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+@Repository
 public class RedisPredictionCacheRepository implements PredictionCacheRepository {
 
     private static final Logger log = LoggerFactory.getLogger(RedisPredictionCacheRepository.class);

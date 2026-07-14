@@ -4,7 +4,9 @@ import com.home.domain.complex.metadata.ComplexMetadataFailureKind;
 import com.home.domain.complex.metadata.ComplexMetadataStatus;
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.stereotype.Service;
 
+@Service
 public class OdcMetadataGapFillService {
     private final OdcMetadataGapFillRepository repository;
     private final OdcComplexMetadataResolver resolver;

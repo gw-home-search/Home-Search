@@ -5,7 +5,9 @@ import java.time.Instant;
 import java.time.YearMonth;
 import java.util.Objects;
 import java.util.concurrent.Executor;
+import org.springframework.stereotype.Service;
 
+@Service
 public class PricePredictionUseCase {
 
     private final PredictionFeatureRepository featureRepository;
@@ -19,14 +21,14 @@ public class PricePredictionUseCase {
             PredictionFeatureRepository featureRepository,
             PredictionCacheRepository cacheRepository,
             PredictionClient client,
-            Executor executor,
-            Clock clock,
+            PredictionExecutionContext executionContext,
             PredictionProperties properties) {
         this.featureRepository = Objects.requireNonNull(featureRepository);
         this.cacheRepository = Objects.requireNonNull(cacheRepository);
         this.client = Objects.requireNonNull(client);
-        this.executor = Objects.requireNonNull(executor);
-        this.clock = Objects.requireNonNull(clock);
+        PredictionExecutionContext context = Objects.requireNonNull(executionContext);
+        this.executor = context.executor();
+        this.clock = context.clock();
         this.properties = Objects.requireNonNull(properties);
     }
 

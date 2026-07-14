@@ -7,11 +7,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.PublicKey;
 import java.time.Clock;
-import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,18 +19,16 @@ import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 @ConditionalOnProperty(name = "home.admin.internal.enabled", havingValue = "true")
+@EnableConfigurationProperties(InternalAdminJwtProperties.class)
 public class InternalAdminSecurityConfiguration {
     @Bean
     FilterRegistrationBean<InternalAdminJwtAuthenticationFilter> internalAdminJwtFilter(
-            ObjectMapper objectMapper,
-            @Value("${home.admin.internal.issuer:admin-service}") String issuer,
-            @Value("${home.admin.internal.audience:property-data-admin}") String audience,
-            @Value("${home.admin.internal.maximum-lifetime:60s}") Duration maximumLifetime,
-            @Value("${home.admin.internal.public-keys}") String publicKeyLocations) {
-        Map<String, PublicKey> keys = loadPublicKeys(publicKeyLocations);
+            ObjectMapper objectMapper, InternalAdminJwtProperties properties) {
+        Map<String, PublicKey> keys = loadPublicKeys(properties.publicKeys());
         var filter = new InternalAdminJwtAuthenticationFilter(
                 new Rs256JwtCodec(Clock.systemUTC()),
-                new JwtVerificationPolicy(issuer, audience, maximumLifetime, keys::get),
+                new JwtVerificationPolicy(
+                        properties.issuer(), properties.audience(), properties.maximumLifetime(), keys::get),
                 objectMapper);
         FilterRegistrationBean<InternalAdminJwtAuthenticationFilter> registration =
                 new FilterRegistrationBean<>(filter);

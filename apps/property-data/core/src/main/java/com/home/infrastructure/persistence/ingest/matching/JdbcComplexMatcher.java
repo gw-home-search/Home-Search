@@ -9,16 +9,20 @@ import com.home.domain.trade.RtmsJibunPnu;
 import com.home.ingestcore.rtms.OpenApiTradeItem;
 import java.util.List;
 import java.util.Objects;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
 /**
  * RTMS trade item을 local PostGIS-backed canonical complex rows에 연결하는 matcher입니다.
  */
+@Repository
 public class JdbcComplexMatcher implements ComplexMatcher {
 
     private final JdbcClient jdbcClient;
     private final ComplexMatchCandidatePolicy policy;
 
+    @Autowired
     public JdbcComplexMatcher(JdbcClient jdbcClient) {
         this(jdbcClient, new ComplexMatchCandidatePolicy());
     }

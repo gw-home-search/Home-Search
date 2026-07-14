@@ -35,8 +35,11 @@ class ComplexCoordinateReadinessServiceTest {
         FakeReadinessRepository repository = new FakeReadinessRepository(List.of(1001L, 1002L, 1003L));
         FakeCoordinateExceptionService exceptionService = new FakeCoordinateExceptionService();
         FakeProjectionService projectionService = new FakeProjectionService();
-        ComplexCoordinateReadinessService service =
-                new ComplexCoordinateReadinessService(exceptionService, repository, projectionService);
+        ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
+                exceptionService,
+                repository,
+                projectionService,
+                new CoordinateReadinessPolicy(0, java.time.Duration.ZERO));
 
         ComplexCoordinateReadinessResult result = service.prepare(5, 10, 20);
 
@@ -64,8 +67,11 @@ class ComplexCoordinateReadinessServiceTest {
         FakeReadinessRepository repository = new FakeReadinessRepository(List.of(1001L));
         FakeCoordinateExceptionService exceptionService = new FakeCoordinateExceptionService();
         FakeProjectionService projectionService = new FakeProjectionService();
-        ComplexCoordinateReadinessService service =
-                new ComplexCoordinateReadinessService(exceptionService, repository, projectionService);
+        ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
+                exceptionService,
+                repository,
+                projectionService,
+                new CoordinateReadinessPolicy(0, java.time.Duration.ZERO));
 
         ComplexCoordinateReadinessResult result = service.prepare(0, 0, 0);
 
@@ -84,7 +90,10 @@ class ComplexCoordinateReadinessServiceTest {
         FakeCoordinateExceptionService exceptionService = new FakeCoordinateExceptionService();
         FakeProjectionService projectionService = new FakeProjectionService();
         ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
-                exceptionService, repository, projectionService, 10, java.time.Duration.ofHours(6));
+                exceptionService,
+                repository,
+                projectionService,
+                new CoordinateReadinessPolicy(10, java.time.Duration.ofHours(6)));
 
         ComplexCoordinateReadinessResult result = service.prepare(0, 0, 0);
 
@@ -100,7 +109,10 @@ class ComplexCoordinateReadinessServiceTest {
         FakeReadinessRepository repository = new FakeReadinessRepository(List.of());
         repository.retryableParcelIds = List.of(1001L);
         ComplexCoordinateReadinessService service = new ComplexCoordinateReadinessService(
-                new FakeCoordinateExceptionService(), repository, new FakeProjectionService());
+                new FakeCoordinateExceptionService(),
+                repository,
+                new FakeProjectionService(),
+                new CoordinateReadinessPolicy(0, java.time.Duration.ZERO));
 
         ComplexCoordinateReadinessResult result = service.prepare(0, 0, 0);
 
@@ -115,8 +127,7 @@ class ComplexCoordinateReadinessServiceTest {
                         new FakeCoordinateExceptionService(),
                         new FakeReadinessRepository(List.of()),
                         new FakeProjectionService(),
-                        -1,
-                        java.time.Duration.ZERO))
+                        new CoordinateReadinessPolicy(-1, java.time.Duration.ZERO)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("retryLimit");
 
@@ -124,8 +135,7 @@ class ComplexCoordinateReadinessServiceTest {
                         new FakeCoordinateExceptionService(),
                         new FakeReadinessRepository(List.of()),
                         new FakeProjectionService(),
-                        1,
-                        java.time.Duration.ofMillis(-1)))
+                        new CoordinateReadinessPolicy(1, java.time.Duration.ofMillis(-1))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("retryAfter");
     }

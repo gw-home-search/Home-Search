@@ -9,7 +9,6 @@ import com.home.infrastructure.web.read.dto.PricePredictionResponse;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,13 +21,12 @@ public class PropertyDetailController {
     private static final Logger log = LoggerFactory.getLogger(PropertyDetailController.class);
 
     private final PropertyDetailService propertyDetailService;
-    private final ObjectProvider<PricePredictionUseCase> predictionUseCaseProvider;
+    private final PricePredictionUseCase predictionUseCase;
 
     public PropertyDetailController(
-            PropertyDetailService propertyDetailService,
-            ObjectProvider<PricePredictionUseCase> predictionUseCaseProvider) {
+            PropertyDetailService propertyDetailService, PricePredictionUseCase predictionUseCase) {
         this.propertyDetailService = propertyDetailService;
-        this.predictionUseCaseProvider = predictionUseCaseProvider;
+        this.predictionUseCase = predictionUseCase;
     }
 
     @GetMapping("/api/v1/detail/{parcelId}")
@@ -52,8 +50,7 @@ public class PropertyDetailController {
     }
 
     private PricePredictionResponse predictionResponse(Long complexId) {
-        PricePredictionUseCase predictionUseCase = predictionUseCaseProvider.getIfAvailable();
-        if (predictionUseCase == null || complexId == null) {
+        if (complexId == null) {
             return null;
         }
         try {

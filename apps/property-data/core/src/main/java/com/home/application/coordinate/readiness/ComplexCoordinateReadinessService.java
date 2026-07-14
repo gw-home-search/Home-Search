@@ -9,7 +9,9 @@ import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
+@Service
 public class ComplexCoordinateReadinessService {
 
     private final ComplexCoordinateExceptionService coordinateExceptionService;
@@ -21,27 +23,14 @@ public class ComplexCoordinateReadinessService {
     public ComplexCoordinateReadinessService(
             ComplexCoordinateExceptionService coordinateExceptionService,
             ComplexCoordinateReadinessRepository readinessRepository,
-            ComplexDisplayCoordinateProjectionService projectionService) {
-        this(coordinateExceptionService, readinessRepository, projectionService, 0, Duration.ZERO);
-    }
-
-    public ComplexCoordinateReadinessService(
-            ComplexCoordinateExceptionService coordinateExceptionService,
-            ComplexCoordinateReadinessRepository readinessRepository,
             ComplexDisplayCoordinateProjectionService projectionService,
-            int retryLimit,
-            Duration retryAfter) {
+            CoordinateReadinessPolicy policy) {
         this.coordinateExceptionService = Objects.requireNonNull(coordinateExceptionService);
         this.readinessRepository = Objects.requireNonNull(readinessRepository);
         this.projectionService = Objects.requireNonNull(projectionService);
-        if (retryLimit < 0) {
-            throw new IllegalArgumentException("retryLimit must be non-negative");
-        }
-        if (retryAfter == null || retryAfter.isNegative()) {
-            throw new IllegalArgumentException("retryAfter must be non-negative");
-        }
-        this.retryLimit = retryLimit;
-        this.retryAfter = retryAfter;
+        CoordinateReadinessPolicy requiredPolicy = Objects.requireNonNull(policy);
+        this.retryLimit = requiredPolicy.retryLimit();
+        this.retryAfter = requiredPolicy.retryAfter();
     }
 
     public ComplexCoordinateReadinessResult prepare(int stageLimit, int resolveLimit, int projectLimit) {

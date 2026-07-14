@@ -98,6 +98,7 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 			UPDATE parcel
 			SET geom = ST_Multi(ST_Buffer(ST_SetSRID(ST_MakePoint(longitude, latitude), 4326), 0.0001))
 			""").update();
+        seedPlannerScaleOutsideBounds();
 
         List<String> plan = transactionTemplate.execute(status -> {
             jdbcClient.sql("SET LOCAL enable_seqscan = off").update();
@@ -110,6 +111,34 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
         assertThat(String.join("\n", plan))
                 .contains("ix_parcel_geom")
                 .contains("complex_id_deal_date_id_deal_amount_excl_area_idx");
+    }
+
+    private void seedPlannerScaleOutsideBounds() {
+        jdbcClient.sql("""
+			INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude, geom)
+			SELECT
+			    10000 + fixture_id,
+			    1,
+			    (2000000000000000000 + fixture_id)::text,
+			    'Planner scale fixture',
+			    35.0,
+			    125.0,
+			    ST_Multi(ST_Buffer(ST_SetSRID(ST_MakePoint(125.0, 35.0), 4326), 0.0001))
+			FROM generate_series(1, 2000) AS fixture_id
+			""").update();
+        jdbcClient.sql("""
+			INSERT INTO complex (id, parcel_id, complex_pk, apt_seq, name, unit_cnt)
+			SELECT
+			    20000 + fixture_id,
+			    10000 + fixture_id,
+			    'PLANNER-COMPLEX-' || fixture_id,
+			    'PLANNER-APT-' || fixture_id,
+			    'Planner scale fixture',
+			    1
+			FROM generate_series(1, 2000) AS fixture_id
+			""").update();
+        jdbcClient.sql("ANALYZE parcel").update();
+        jdbcClient.sql("ANALYZE complex").update();
     }
 
     @Test

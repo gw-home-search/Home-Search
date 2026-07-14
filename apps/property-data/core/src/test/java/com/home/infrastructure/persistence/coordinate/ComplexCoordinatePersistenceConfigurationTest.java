@@ -3,7 +3,6 @@ package com.home.infrastructure.persistence.coordinate;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionService;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessService;
 import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
 import javax.sql.DataSource;
@@ -13,7 +12,6 @@ import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.jdbc.autoconfigure.JdbcClientAutoConfiguration;
 import org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.test.util.ReflectionTestUtils;
 
 class ComplexCoordinatePersistenceConfigurationTest {
 
@@ -22,7 +20,8 @@ class ComplexCoordinatePersistenceConfigurationTest {
                     AutoConfigurations.of(JdbcTemplateAutoConfiguration.class, JdbcClientAutoConfiguration.class))
             .withUserConfiguration(ComplexCoordinatePersistenceConfiguration.class)
             .withPropertyValues("home.coordinate.readiness.enabled=true")
-            .withBean(DataSource.class, () -> mock(DataSource.class));
+            .withBean(DataSource.class, () -> mock(DataSource.class))
+            .withBean(ComplexCoordinateReadinessService.class, () -> mock(ComplexCoordinateReadinessService.class));
 
     @Test
     @DisplayName("coordinate readiness runner는 JdbcClient auto-config 환경에서 시작된다")
@@ -38,9 +37,7 @@ class ComplexCoordinatePersistenceConfigurationTest {
     @DisplayName("ODC identity strict block은 기본 설정에서 unavailable과 failed를 모두 차단한다")
     void odcloudIdentityStrictBlockIsDefaultOn() {
         contextRunner.run(context -> {
-            ComplexCoordinateExceptionService service = context.getBean(ComplexCoordinateExceptionService.class);
-
-            assertThat(ReflectionTestUtils.getField(service, "identityBlockingPolicy"))
+            assertThat(context.getBean(CoordinateIdentityBlockingPolicy.class))
                     .isEqualTo(CoordinateIdentityBlockingPolicy.strict());
         });
     }
@@ -53,10 +50,7 @@ class ComplexCoordinatePersistenceConfigurationTest {
                         "complex.coordinate.identity.block-on-unavailable=false",
                         "complex.coordinate.identity.block-on-failed=false")
                 .run(context -> {
-                    ComplexCoordinateExceptionService service =
-                            context.getBean(ComplexCoordinateExceptionService.class);
-
-                    assertThat(ReflectionTestUtils.getField(service, "identityBlockingPolicy"))
+                    assertThat(context.getBean(CoordinateIdentityBlockingPolicy.class))
                             .isEqualTo(CoordinateIdentityBlockingPolicy.degradeUnavailableAndFailed());
                 });
     }

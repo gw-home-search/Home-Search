@@ -8,7 +8,9 @@ import com.home.domain.coordinate.CoordinateSource;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public class JdbcComplexDisplayCoordinateProjectionRepository implements ComplexDisplayCoordinateProjectionRepository {
 
     private final JdbcClient jdbcClient;

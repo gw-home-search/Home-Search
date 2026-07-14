@@ -124,7 +124,12 @@ class PricePredictionUseCaseTest {
             FakePredictionCacheRepository cacheRepository,
             PredictionClient client,
             Executor executor) {
-        return new PricePredictionUseCase(featureRepository, cacheRepository, client, executor, CLOCK, PROPERTIES);
+        return new PricePredictionUseCase(
+                featureRepository,
+                cacheRepository,
+                client,
+                new PredictionExecutionContext(executor, CLOCK),
+                PROPERTIES);
     }
 
     private static PredictionFeature feature() {

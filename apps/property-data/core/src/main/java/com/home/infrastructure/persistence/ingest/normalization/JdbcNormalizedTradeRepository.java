@@ -9,12 +9,15 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * source_key registry와 fallback identity를 함께 사용해 normalized trade 중복 생성을 막는 JDBC adapter입니다.
  */
+@Repository
 public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository {
 
     private static final int FALLBACK_IDENTITY_LOCK_NAMESPACE = 0x48534D45;
@@ -23,6 +26,7 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
     private final TransactionTemplate transactionTemplate;
     private final NormalizedTradeDuplicatePolicy duplicatePolicy;
 
+    @Autowired
     public JdbcNormalizedTradeRepository(JdbcClient jdbcClient, TransactionTemplate transactionTemplate) {
         this(jdbcClient, transactionTemplate, new NormalizedTradeDuplicatePolicy());
     }

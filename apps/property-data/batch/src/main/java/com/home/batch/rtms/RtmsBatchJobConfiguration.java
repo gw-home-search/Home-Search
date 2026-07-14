@@ -4,14 +4,14 @@ import com.home.application.ingest.rtms.RtmsCoordinateSourcePreflight;
 import com.home.application.ingest.rtms.RtmsMonthlyRefreshUseCase;
 import com.home.application.region.RegionSiGunGuCodeReader;
 import com.home.application.region.RegionUnitCntSynchronizationService;
+import com.home.infrastructure.external.rtms.RtmsIngestProperties;
 import com.home.infrastructure.ops.notification.OpsNotifier;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.step.builder.StepBuilder;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
@@ -20,11 +20,12 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.interceptor.DefaultTransactionAttribute;
 
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(RtmsIngestProperties.class)
 class RtmsBatchJobConfiguration {
 
     @Bean
-    RtmsRefreshWorksetPlanner rtmsRefreshWorksetPlanner(ObjectProvider<RegionSiGunGuCodeReader> lawdCodeReader) {
-        return new RtmsRefreshWorksetPlanner(lawdCodeReader.getIfAvailable(RegionSiGunGuCodeReader::empty));
+    RtmsRefreshWorksetPlanner rtmsRefreshWorksetPlanner(RegionSiGunGuCodeReader lawdCodeReader) {
+        return new RtmsRefreshWorksetPlanner(lawdCodeReader);
     }
 
     @Bean
@@ -78,13 +79,17 @@ class RtmsBatchJobConfiguration {
             PlatformTransactionManager transactionManager,
             RtmsMonthlyRefreshUseCase useCase,
             RtmsRefreshWorksetPlanner planner,
-            @Value("${home.ingest.rtms.daily.lawd-cds:}") String lawdCds,
-            @Value("${home.ingest.rtms.daily.lookback-months:1}") int lookbackMonths) {
+            RtmsIngestProperties properties) {
         return taskletStep(
                 "monthlyIngestStep",
                 jobRepository,
                 transactionManager,
-                new RtmsMonthlyRefreshTasklet(useCase, planner, lawdCds, lookbackMonths, true));
+                new RtmsMonthlyRefreshTasklet(
+                        useCase,
+                        planner,
+                        properties.daily().lawdCds(),
+                        properties.daily().lookbackMonths(),
+                        true));
     }
 
     @Bean
@@ -106,12 +111,12 @@ class RtmsBatchJobConfiguration {
     Step regionUnitSyncStep(
             JobRepository jobRepository,
             PlatformTransactionManager transactionManager,
-            ObjectProvider<RegionUnitCntSynchronizationService> synchronizationService) {
+            RegionUnitCntSynchronizationService synchronizationService) {
         return taskletStep(
                 "regionUnitSyncStep",
                 jobRepository,
                 transactionManager,
-                new RtmsRegionUnitSyncTasklet(synchronizationService.getIfAvailable()));
+                new RtmsRegionUnitSyncTasklet(synchronizationService));
     }
 
     private static Step taskletStep(

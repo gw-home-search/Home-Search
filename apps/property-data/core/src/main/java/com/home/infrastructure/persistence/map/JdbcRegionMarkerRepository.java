@@ -8,7 +8,9 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public class JdbcRegionMarkerRepository implements RegionMarkerRepository {
 
     private final JdbcClient jdbcClient;

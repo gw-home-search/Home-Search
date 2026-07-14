@@ -1,5 +1,6 @@
 package com.home.infrastructure.external.rtms;
 
+import com.home.infrastructure.persistence.ingest.coordinate.CoordinateSourceDbProperties;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -52,29 +53,14 @@ public class RtmsExternalApiConfiguration {
 
     @Bean
     RtmsCoordinateSourceAvailabilityProbe rtmsCoordinateSourceAvailabilityProbe(
-            @Value("${home.coordinate-source.db.jdbc-url:${COORDINATE_SOURCE_DB_JDBC_URL:}}") String jdbcUrl,
-            @Value("${home.coordinate-source.db.username:${COORDINATE_SOURCE_DB_USERNAME:${DB_USERNAME:}}}")
-                    String username,
-            @Value("${home.coordinate-source.db.password:${COORDINATE_SOURCE_DB_PASSWORD:${DB_PASSWORD:}}}")
-                    String password,
-            @Value(
-                            "${home.coordinate-source.db.connect-timeout-seconds:${COORDINATE_SOURCE_DB_CONNECT_TIMEOUT_SECONDS:5}}")
-                    int connectTimeoutSeconds,
-            @Value(
-                            "${home.coordinate-source.db.socket-timeout-seconds:${COORDINATE_SOURCE_DB_SOCKET_TIMEOUT_SECONDS:10}}")
-                    int socketTimeoutSeconds,
-            @Value("${home.coordinate-source.db.lock-timeout-millis:${COORDINATE_SOURCE_DB_LOCK_TIMEOUT_MILLIS:1000}}")
-                    int lockTimeoutMillis,
-            @Value(
-                            "${home.coordinate-source.db.statement-timeout-millis:${COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS:3000}}")
-                    int statementTimeoutMillis) {
+            CoordinateSourceDbProperties properties) {
         return new JdbcRtmsCoordinateSourceAvailabilityProbe(
-                jdbcUrl,
-                username,
-                password,
-                connectTimeoutSeconds,
-                socketTimeoutSeconds,
-                lockTimeoutMillis,
-                statementTimeoutMillis);
+                properties.jdbcUrl(),
+                properties.username(),
+                properties.password(),
+                properties.connectTimeoutSeconds(),
+                properties.socketTimeoutSeconds(),
+                properties.lockTimeoutMillis(),
+                properties.statementTimeoutMillis());
     }
 }

@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.home.application.map.MapUseCase;
 import com.home.application.region.RegionRelationSynchronizationGateway;
 import com.home.application.region.RegionUnitCntSynchronizationService;
+import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
+import com.home.infrastructure.persistence.map.JdbcRegionMarkerRepository;
 import com.home.infrastructure.persistence.propertydetail.JdbcPropertyDetailReader;
 import com.home.infrastructure.persistence.regionnavigation.JdbcRegionNavigationReader;
 import com.home.infrastructure.persistence.search.JdbcComplexSearchReader;
@@ -24,6 +26,12 @@ class HomeSearchApiApplicationTests {
 
     @MockitoBean
     private MapUseCase mapUseCase;
+
+    @MockitoBean
+    private JdbcMapMarkerRepository mapMarkerRepository;
+
+    @MockitoBean
+    private JdbcRegionMarkerRepository regionMarkerRepository;
 
     @MockitoBean
     private JdbcComplexSearchReader complexSearchReader;

@@ -12,6 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.trade.TradeIngestMetrics;
 import com.home.application.map.MapUseCase;
+import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
+import com.home.infrastructure.persistence.map.JdbcRegionMarkerRepository;
 import com.home.infrastructure.persistence.propertydetail.JdbcPropertyDetailReader;
 import com.home.infrastructure.persistence.regionnavigation.JdbcRegionNavigationReader;
 import com.home.infrastructure.persistence.search.JdbcComplexSearchReader;
@@ -43,6 +45,12 @@ class ObservabilityEndpointSmokeTest {
 
     @MockitoBean
     private MapUseCase mapUseCase;
+
+    @MockitoBean
+    private JdbcMapMarkerRepository mapMarkerRepository;
+
+    @MockitoBean
+    private JdbcRegionMarkerRepository regionMarkerRepository;
 
     @MockitoBean
     private JdbcComplexSearchReader complexSearchReader;

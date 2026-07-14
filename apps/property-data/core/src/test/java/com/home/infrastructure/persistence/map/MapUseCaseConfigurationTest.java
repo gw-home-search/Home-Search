@@ -12,13 +12,20 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.test.context.support.TestPropertySourceUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
 class MapUseCaseConfigurationTest {
 
-    private final ApplicationContextRunner contextRunner =
-            new ApplicationContextRunner().withUserConfiguration(MapUseCaseConfiguration.class);
+    private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+            .withUserConfiguration(
+                    MapMarkerCacheConfiguration.class,
+                    MapQueryUseCase.class,
+                    JdbcMapMarkerRepository.class,
+                    JdbcRegionMarkerRepository.class)
+            .withInitializer(context ->
+                    TestPropertySourceUtils.addInlinedPropertiesToEnvironment(context, "spring.main.banner-mode=off"));
 
     @Test
     @DisplayName("map read persistence는 JdbcClient가 없으면 empty marker fallback 대신 startup 실패로 드러난다")
@@ -26,8 +33,8 @@ class MapUseCaseConfigurationTest {
         contextRunner.run(context -> {
             assertThat(context).hasFailed();
             assertThat(context.getStartupFailure())
-                    .hasRootCauseInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("JdbcClient is required for map read persistence");
+                    .hasRootCauseInstanceOf(org.springframework.beans.factory.NoSuchBeanDefinitionException.class)
+                    .hasMessageContaining("JdbcClient");
         });
     }
 
@@ -71,6 +78,23 @@ class MapUseCaseConfigurationTest {
                     Object repository = complexMarkerRepository(context.getBean(MapUseCase.class));
 
                     assertThat(ReflectionTestUtils.getField(repository, "ttl")).isEqualTo(Duration.ofMinutes(5));
+                });
+    }
+
+    @Test
+    @DisplayName("marker cache가 켜졌는데 Redis가 없으면 JDBC fallback으로 숨기지 않고 startup 실패한다")
+    void markerCacheFailsFastWithoutRedis() {
+        contextRunner
+                .withPropertyValues("home.map.marker-cache.enabled=true")
+                .withBean(JdbcClient.class, () -> mock(JdbcClient.class))
+                .withBean(ObjectMapper.class, ObjectMapper::new)
+                .withBean(SimpleMeterRegistry.class, SimpleMeterRegistry::new)
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasRootCauseInstanceOf(
+                                    org.springframework.beans.factory.NoSuchBeanDefinitionException.class)
+                            .hasMessageContaining("StringRedisTemplate");
                 });
     }
 

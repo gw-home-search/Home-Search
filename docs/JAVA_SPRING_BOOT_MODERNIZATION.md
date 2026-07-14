@@ -3,7 +3,7 @@
 ## 실행 기준
 
 - baseline commit: `d601237`
-- 현재 진행 PR: `PR 8 — map SQL readability`
+- 현재 진행 PR: `PR 9 — property-data typed wiring`
 - 전체 상태: `In Progress`
 - 시작일: 2026-07-14
 - 실행 원칙: 한 번에 하나의 PR만 진행하고, 선행 PR이 `Complete`인 경우에만 다음 PR을 시작한다.
@@ -80,7 +80,7 @@ property-data configuration file distribution:
 | 6 | format baseline | Complete | PR 5 `Complete` |
 | 7 | Boot 4.1 / Jackson 3 | Complete | PR 6 `Complete` |
 | 8 | map SQL readability | Complete | PR 7 `Complete` |
-| 9 | property-data typed wiring | Pending | PR 8 `Complete` |
+| 9 | property-data typed wiring | In Progress | PR 8 `Complete` |
 | 10 | error/validation/executor/observability | Pending | PR 9 `Complete` |
 | 11 | user-service Spring/JPA cleanup | Pending | PR 10 `Complete` |
 | 12 | admin/source-data modernization | Pending | PR 11 `Complete` |
@@ -541,3 +541,8 @@ property-data configuration file distribution:
 - 검증 근거 확인: 두 완성형 SQL resource, one-time load, variant selection/binding/mapping 책임, filter parity, index plan, public API gate를 확인했다.
 - 검증 공백: 원격 CI와 production cardinality 성능 미측정.
 - 잔여 위험: 열린 correctness/security finding은 없고 production query latency 관측만 남는다.
+
+### Merge
+
+- implementation commit: `1ed9cc6`
+- merge commit: `25e4e2a`

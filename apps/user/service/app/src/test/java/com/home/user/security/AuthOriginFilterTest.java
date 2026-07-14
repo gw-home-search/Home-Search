@@ -2,6 +2,9 @@ package com.home.user.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.home.user.config.properties.AuthProperties;
+import java.net.URI;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -13,7 +16,8 @@ class AuthOriginFilterTest {
         var request = new MockHttpServletRequest("POST", "/auth/access");
         var response = new MockHttpServletResponse();
 
-        new AuthOriginFilter("https://home.example").doFilter(request, response, new MockFilterChain());
+        new AuthOriginFilter(new AuthProperties(URI.create("https://home.example"), Duration.ofDays(30)))
+                .doFilter(request, response, new MockFilterChain());
 
         var body = response.getContentAsString();
         assertThat(response.getStatus()).isEqualTo(403);

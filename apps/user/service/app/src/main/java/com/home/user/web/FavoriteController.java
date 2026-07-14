@@ -1,9 +1,6 @@
 package com.home.user.web;
 
-import com.home.application.favorite.GetFavoriteComplex;
-import com.home.application.favorite.ListFavoriteComplexes;
-import com.home.application.favorite.RemoveFavoriteComplex;
-import com.home.application.favorite.SaveFavoriteComplex;
+import com.home.application.favorite.FavoriteService;
 import com.home.user.security.AuthenticatedUserPrincipal;
 import java.time.Instant;
 import java.util.List;
@@ -19,20 +16,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class FavoriteController {
-    private final SaveFavoriteComplex save;
-    private final RemoveFavoriteComplex remove;
-    private final GetFavoriteComplex get;
-    private final ListFavoriteComplexes list;
+    private final FavoriteService favorites;
 
-    public FavoriteController(
-            SaveFavoriteComplex save,
-            RemoveFavoriteComplex remove,
-            GetFavoriteComplex get,
-            ListFavoriteComplexes list) {
-        this.save = save;
-        this.remove = remove;
-        this.get = get;
-        this.list = list;
+    public FavoriteController(FavoriteService favorites) {
+        this.favorites = favorites;
     }
 
     @GetMapping("/api/v1/favorites")
@@ -40,7 +27,7 @@ public class FavoriteController {
             @AuthenticationPrincipal AuthenticatedUserPrincipal principal,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        var result = list.execute(principal.userId(), page, size);
+        var result = favorites.list(principal.userId(), page, size);
         List<FavoriteItemResponse> content = result.content().stream()
                 .map(value -> new FavoriteItemResponse(value.complexId(), value.savedAt()))
                 .toList();
@@ -51,7 +38,8 @@ public class FavoriteController {
     @GetMapping("/api/v1/favorites/{complexId}")
     FavoriteStatusResponse get(
             @AuthenticationPrincipal AuthenticatedUserPrincipal principal, @PathVariable long complexId) {
-        return get.execute(principal.userId(), complexId)
+        return favorites
+                .get(principal.userId(), complexId)
                 .map(value -> new FavoriteStatusResponse(complexId, true, value.savedAt()))
                 .orElseGet(() -> new FavoriteStatusResponse(complexId, false, null));
     }
@@ -59,13 +47,13 @@ public class FavoriteController {
     @PutMapping("/api/v1/favorites/{complexId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void save(@AuthenticationPrincipal AuthenticatedUserPrincipal principal, @PathVariable long complexId) {
-        save.execute(principal.userId(), complexId);
+        favorites.save(principal.userId(), complexId);
     }
 
     @DeleteMapping("/api/v1/favorites/{complexId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void remove(@AuthenticationPrincipal AuthenticatedUserPrincipal principal, @PathVariable long complexId) {
-        remove.execute(principal.userId(), complexId);
+        favorites.remove(principal.userId(), complexId);
     }
 
     record FavoriteItemResponse(long complexId, Instant savedAt) {}

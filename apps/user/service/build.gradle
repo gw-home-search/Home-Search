@@ -57,8 +57,14 @@ tasks.register('userServiceCoverageCheck', JacocoCoverageVerification) {
         project(':core').layout.buildDirectory.file('jacoco/test.exec'),
         project(':app').layout.buildDirectory.file('jacoco/test.exec')
     )
-    sourceDirectories.from(project(':core').sourceSets.main.allSource.srcDirs)
-    classDirectories.from(project(':core').sourceSets.main.output.classesDirs)
+    sourceDirectories.from(
+        project(':core').sourceSets.main.allSource.srcDirs,
+        project(':app').sourceSets.main.allSource.srcDirs
+    )
+    classDirectories.from(
+        project(':core').sourceSets.main.output.classesDirs,
+        project(':app').sourceSets.main.output.classesDirs
+    )
     violationRules {
         rule {
             element = 'BUNDLE'
@@ -73,8 +79,14 @@ tasks.register('userServiceCoverageReport', JacocoReport) {
         project(':core').layout.buildDirectory.file('jacoco/test.exec'),
         project(':app').layout.buildDirectory.file('jacoco/test.exec')
     )
-    sourceDirectories.from(project(':core').sourceSets.main.allSource.srcDirs)
-    classDirectories.from(project(':core').sourceSets.main.output.classesDirs)
+    sourceDirectories.from(
+        project(':core').sourceSets.main.allSource.srcDirs,
+        project(':app').sourceSets.main.allSource.srcDirs
+    )
+    classDirectories.from(
+        project(':core').sourceSets.main.output.classesDirs,
+        project(':app').sourceSets.main.output.classesDirs
+    )
     reports {
         xml.required = true
         html.required = true
@@ -142,8 +154,17 @@ tasks.register('verifyUserMigrationCatalog') {
         def applicationFiles = fileTree(layout.projectDirectory.dir('core/src/main/java/com/home/application')) {
             include '**/*.java'
         }.files
+        def allowedApplicationSpringImports = [
+            'import org.springframework.stereotype.Service;',
+            'import org.springframework.transaction.annotation.Transactional;'
+        ] as Set
         def forbiddenApplicationImports = applicationFiles.findAll { file ->
-            file.text =~ /(?m)^import (com\.home\.infrastructure|com\.home\.user|org\.springframework)/
+            def imports = file.readLines().findAll { it.startsWith('import ') }
+            imports.any { line ->
+                line.startsWith('import com.home.infrastructure') ||
+                    line.startsWith('import com.home.user') ||
+                    (line.startsWith('import org.springframework') && !allowedApplicationSpringImports.contains(line))
+            }
         }
         if (!forbiddenApplicationImports.isEmpty()) {
             throw new GradleException("User application imports app or infrastructure: ${forbiddenApplicationImports}")

@@ -15,16 +15,19 @@ map/search/detail/trade API는 계속 무인증이다.
 ```text
 apps/user/service/
 ├── core/
-│   └── src/main/          # domain/application ports + JPA persistence adapter
+│   └── src/main/          # domain/application ports + JPA/JDBC persistence adapters
 ├── app/                    # Spring Boot, OAuth2, JWT/cookie, HTTP composition root
 ├── db/                     # external Flyway config and versioned SQL catalog
 └── ops/                    # restricted Docker Flyway wrapper
 ```
 
 두 모듈은 하나의 user-service 배포 경계다. `app -> core`만 허용하고
-property-data와 compile-time 의존을 두지 않는다. JPA entity, Spring Data
-repository, application port adapter, PostgreSQL identity lock은 `core`가 소유하며
-`app`은 `@EntityScan`/`@EnableJpaRepositories`로 이를 조립한다.
+property-data와 compile-time 의존을 두지 않는다. OAuth identity, user account,
+favorite aggregate의 JPA entity/Spring Data repository와 refresh token JDBC adapter,
+PostgreSQL identity lock은 `core`가 소유한다. `app`은 JPA aggregate만
+`@EntityScan`/`@EnableJpaRepositories`로 조립한다. application service는 `@Service`로
+자동 등록되고 transaction boundary를 소유하며 persistence adapter는 transaction을
+시작하지 않는다.
 
 ## 데이터 소유권
 
@@ -113,6 +116,17 @@ public map/trade URL 또는 응답 변경, cross-database join, email 기반 ide
 
 - user-service app은 Spring Boot 4.1.0, Java 21을 사용하고 database migration은
   application JVM을 기동하지 않는 official Docker CLI가 수행한다.
+- `OAuthLoginService`, `CurrentUserQueryService`, `RefreshTokenService`, `FavoriteService`가
+  application transaction boundary를 소유한다. favorite 저장은 user row lock 뒤 기존
+  favorite와 현재 개수를 확인하고 domain `FavoriteLimitPolicy`를 적용하므로 200번째와
+  201번째 동시 요청에서도 최대 200개 제약과 duplicate PUT idempotency를 유지한다.
+- refresh token은 JPA entity/native query 경로 없이 `JdbcRefreshTokenRepository`의
+  명시적 upsert, active lookup, row-count CAS rotate, revoke SQL을 사용한다. OAuth identity,
+  user account, favorite aggregate는 JPA를 유지한다.
+- `AuthProperties`, `CookieProperties`, `OAuthProperties`, `JwtProperties`가 기존
+  `home.auth`, `home.cookie`, `home.oauth`, `home.jwt` key를 type-safe하게 bind하고 startup
+  validation을 수행한다. provider별 client registration은 Spring Boot가 제공하는 typed
+  `spring.security.oauth2.client` configuration binding을 그대로 사용한다.
 - app runtime은 Flyway를 포함하지 않으며 `ddl-auto=validate`로 `users` JPA mapping만 검증한다.
 - `redgate/flyway:12.4.0` Docker CLI만 `db/migration/user`의 migration versions 1 through 5를 실행하며
   `home_search_user` database guard와 read-only SQL mount를 사용한다.
@@ -135,7 +149,9 @@ cd apps/user/service
 ```
 
 현재 persistence integration은 fresh PostgreSQL fixture와 pinned external CLI에서
-Migration versions 1 through 5, runtime role 권한, 동시 identity 생성과 refresh rotation을 검증한다.
+Migration versions 1 through 5, runtime role 권한, 동시 identity 생성, refresh CAS rotation,
+favorite 200/201 동시 저장을 검증한다. coverage gate는 `core`와 `app` production class를
+모두 denominator에 포함하므로 controller, OAuth handler, security filter, cookie code도 측정한다.
 
 ## Frontend 인증 흐름
 

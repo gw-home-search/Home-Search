@@ -1,5 +1,6 @@
 package com.home.user.security;
 
+import com.home.user.config.properties.AuthProperties;
 import com.home.user.oauth.NoopOAuth2AuthorizedClientRepository;
 import com.home.user.oauth.OAuthLoginFailureHandler;
 import com.home.user.oauth.OAuthLoginSuccessHandler;
@@ -7,7 +8,6 @@ import com.home.user.oauth.SupportedOAuth2AuthorizationRequestResolver;
 import com.home.user.oauth.UserOAuth2UserService;
 import com.home.user.oauth.UserOidcUserService;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -68,9 +68,9 @@ public class UserSecurityConfig {
     }
 
     @Bean
-    CorsConfigurationSource corsConfigurationSource(@Value("${home.auth.allowed-origin}") String origin) {
+    CorsConfigurationSource corsConfigurationSource(AuthProperties properties) {
         var c = new CorsConfiguration();
-        c.setAllowedOrigins(List.of(origin));
+        c.setAllowedOrigins(List.of(properties.allowedOrigin().toString()));
         c.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         c.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         c.setAllowCredentials(true);

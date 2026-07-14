@@ -5,10 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.home.application.favorite.GetFavoriteComplex;
-import com.home.application.favorite.ListFavoriteComplexes;
-import com.home.application.favorite.RemoveFavoriteComplex;
-import com.home.application.favorite.SaveFavoriteComplex;
+import com.home.application.favorite.FavoriteService;
 import com.home.application.favorite.port.FavoriteComplexRepository.FavoritePage;
 import com.home.domain.user.favorite.FavoriteComplex;
 import com.home.user.security.AuthenticatedUserPrincipal;
@@ -22,14 +19,12 @@ class FavoriteApiContractTest {
 
     @Test
     void exposesListAndSingleStatusWithoutAcceptingUserId() throws Exception {
-        var save = mock(SaveFavoriteComplex.class);
-        var remove = mock(RemoveFavoriteComplex.class);
-        var getFavorite = mock(GetFavoriteComplex.class);
-        var list = mock(ListFavoriteComplexes.class);
-        when(getFavorite.execute(42, 501)).thenReturn(Optional.of(new FavoriteComplex(42, 501, SAVED_AT)));
-        when(getFavorite.execute(42, 502)).thenReturn(Optional.empty());
-        when(list.execute(42, 0, 20)).thenReturn(new FavoritePage(List.of(new FavoriteComplex(42, 501, SAVED_AT)), 1));
-        var controller = new FavoriteController(save, remove, getFavorite, list);
+        var favorites = mock(FavoriteService.class);
+        when(favorites.get(42, 501)).thenReturn(Optional.of(new FavoriteComplex(42, 501, SAVED_AT)));
+        when(favorites.get(42, 502)).thenReturn(Optional.empty());
+        when(favorites.list(42, 0, 20))
+                .thenReturn(new FavoritePage(List.of(new FavoriteComplex(42, 501, SAVED_AT)), 1));
+        var controller = new FavoriteController(favorites);
         var principal = new AuthenticatedUserPrincipal(42);
 
         assertThat(controller.get(principal, 501))
@@ -43,13 +38,11 @@ class FavoriteApiContractTest {
 
     @Test
     void savesAndRemovesIdempotentlyWithNoRequestBody() throws Exception {
-        var save = mock(SaveFavoriteComplex.class);
-        var remove = mock(RemoveFavoriteComplex.class);
-        var controller =
-                new FavoriteController(save, remove, mock(GetFavoriteComplex.class), mock(ListFavoriteComplexes.class));
+        var favorites = mock(FavoriteService.class);
+        var controller = new FavoriteController(favorites);
         controller.save(new AuthenticatedUserPrincipal(42), 501);
         controller.remove(new AuthenticatedUserPrincipal(42), 501);
-        verify(save).execute(42, 501);
-        verify(remove).execute(42, 501);
+        verify(favorites).save(42, 501);
+        verify(favorites).remove(42, 501);
     }
 }

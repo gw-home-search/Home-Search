@@ -6,10 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.home.application.favorite.GetFavoriteComplex;
-import com.home.application.favorite.ListFavoriteComplexes;
-import com.home.application.favorite.RemoveFavoriteComplex;
-import com.home.application.favorite.SaveFavoriteComplex;
+import com.home.application.favorite.FavoriteService;
 import com.home.user.security.AuthenticatedUserPrincipal;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.MethodParameter;
@@ -62,11 +59,7 @@ class UserApiErrorHttpContractTest {
     }
 
     private MockMvc favoriteMockMvc() {
-        var controller = new FavoriteController(
-                mock(SaveFavoriteComplex.class),
-                mock(RemoveFavoriteComplex.class),
-                mock(GetFavoriteComplex.class),
-                mock(ListFavoriteComplexes.class));
+        var controller = new FavoriteController(mock(FavoriteService.class));
         return MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new UserApiExceptionHandler())
                 .setCustomArgumentResolvers(new AuthenticatedPrincipalResolver())

@@ -19,7 +19,10 @@ class RefreshTokenServiceTest {
     void rotatesAtomicallyAndReturnsTheOwningUser() {
         var repository = new MemoryRepository();
         var service = new RefreshTokenService(
-                repository, new SequenceGenerator(), () -> Instant.parse("2026-07-13T00:00:00Z"), Duration.ofDays(30));
+                repository,
+                new SequenceGenerator(),
+                () -> Instant.parse("2026-07-13T00:00:00Z"),
+                new RefreshTokenSettings(Duration.ofDays(30)));
 
         IssuedRefreshToken issued = service.issue(42L);
         RotatedRefreshToken rotated = service.rotate(issued.rawToken());
@@ -34,7 +37,10 @@ class RefreshTokenServiceTest {
     void issuesRevokesAndRejectsInvalidInputs() {
         var repository = new MemoryRepository();
         var service = new RefreshTokenService(
-                repository, new SequenceGenerator(), () -> Instant.parse("2026-07-13T00:00:00Z"), Duration.ofDays(30));
+                repository,
+                new SequenceGenerator(),
+                () -> Instant.parse("2026-07-13T00:00:00Z"),
+                new RefreshTokenSettings(Duration.ofDays(30)));
 
         IssuedRefreshToken issued = service.issue(7L);
         assertThat(issued.userId()).isEqualTo(7L);
@@ -43,16 +49,15 @@ class RefreshTokenServiceTest {
         service.revoke(null);
 
         assertThatThrownBy(() -> service.issue(0)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new RefreshTokenService(
-                        repository, new SequenceGenerator(), () -> Instant.EPOCH, Duration.ZERO))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new RefreshTokenSettings(Duration.ZERO)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void rejectsExpiredAndLostRotationRace() {
         var repository = new MemoryRepository();
         Instant now = Instant.parse("2026-07-13T00:00:00Z");
-        var service = new RefreshTokenService(repository, new SequenceGenerator(), () -> now, Duration.ofDays(30));
+        var service = new RefreshTokenService(
+                repository, new SequenceGenerator(), () -> now, new RefreshTokenSettings(Duration.ofDays(30)));
         repository.active = new ActiveRefreshToken(7L, RefreshTokenHash.sha256("expired"), now.minusSeconds(10), now);
         assertThatThrownBy(() -> service.rotate("expired")).isInstanceOf(InvalidRefreshTokenException.class);
 

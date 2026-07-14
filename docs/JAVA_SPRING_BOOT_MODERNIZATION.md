@@ -3,7 +3,7 @@
 ## 실행 기준
 
 - baseline commit: `d601237`
-- 현재 진행 PR: `PR 10 — property-data runtime surface`
+- 현재 진행 PR: `PR 10 — property-data runtime surface (Complete)`
 - 전체 상태: `In Progress`
 - 시작일: 2026-07-14
 - 실행 원칙: 한 번에 하나의 PR만 진행하고, 선행 PR이 `Complete`인 경우에만 다음 PR을 시작한다.
@@ -81,7 +81,7 @@ property-data configuration file distribution:
 | 7 | Boot 4.1 / Jackson 3 | Complete | PR 6 `Complete` |
 | 8 | map SQL readability | Complete | PR 7 `Complete` |
 | 9 | property-data typed wiring | Complete | PR 8 `Complete` |
-| 10 | error/validation/executor/observability | In Progress | PR 9 `Complete` |
+| 10 | error/validation/executor/observability | Complete | PR 9 `Complete` |
 | 11 | user-service Spring/JPA cleanup | Pending | PR 10 `Complete` |
 | 12 | admin/source-data modernization | Pending | PR 11 `Complete` |
 | 13 | quality gates와 final docs | Pending | PR 12 `Complete` |
@@ -699,3 +699,4 @@ property-data configuration file distribution:
 ### Merge
 
 - implementation commit: `98374cb`
+- merge commit: `78aea144b2cc0fd3be018f52815143789b40fd60`

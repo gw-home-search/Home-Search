@@ -1,15 +1,15 @@
 package com.home.admin.internal;
 
+import com.home.admin.config.InternalAdminClientProperties;
+import com.home.admin.config.InternalAdminJwtProperties;
 import com.home.security.jwt.Rs256JwtCodec;
 import com.home.security.jwt.RsaPemKeys;
 import java.io.IOException;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.time.Duration;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -17,6 +17,7 @@ import org.springframework.web.client.RestClient;
 
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "home.admin.internal.enabled", havingValue = "true")
+@EnableConfigurationProperties({InternalAdminClientProperties.class, InternalAdminJwtProperties.class})
 public class InternalAdminClientConfiguration {
     private static final long MAXIMUM_PRIVATE_KEY_BYTES = 16 * 1024;
 
@@ -26,50 +27,29 @@ public class InternalAdminClientConfiguration {
     }
 
     @Bean
-    InternalAdminTokenIssuer internalAdminTokenIssuer(
-            Rs256JwtCodec codec,
-            @Value("${home.admin.internal.private-key-path}") Path privateKeyPath,
-            @Value("${home.admin.internal.key-id}") String keyId,
-            @Value("${home.admin.internal.issuer}") String issuer,
-            @Value("${home.admin.internal.audience}") String audience,
-            @Value("${home.admin.internal.token-lifetime}") Duration lifetime) {
-        return new InternalAdminTokenIssuer(codec, loadPrivateKey(privateKeyPath), keyId, issuer, audience, lifetime);
+    InternalAdminTokenIssuer internalAdminTokenIssuer(Rs256JwtCodec codec, InternalAdminJwtProperties properties) {
+        return new InternalAdminTokenIssuer(
+                codec,
+                loadPrivateKey(Path.of(properties.privateKeyPath())),
+                properties.keyId(),
+                properties.issuer(),
+                properties.audience(),
+                properties.tokenLifetime());
     }
 
     @Bean
     PropertyAdminClient propertyAdminClient(
             RestClient.Builder builder,
             InternalAdminTokenIssuer tokenIssuer,
-            @Value("${home.admin.internal.property-data-base-url}") String baseUrl,
-            @Value("${home.admin.internal.connect-timeout}") Duration connectTimeout,
-            @Value("${home.admin.internal.read-timeout}") Duration readTimeout) {
+            InternalAdminClientProperties properties) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(positive(connectTimeout, "connect timeout"));
-        requestFactory.setReadTimeout(positive(readTimeout, "read timeout"));
+        requestFactory.setConnectTimeout(properties.connectTimeout());
+        requestFactory.setReadTimeout(properties.readTimeout());
         RestClient restClient = builder.clone()
-                .baseUrl(validatedBaseUri(baseUrl).toString())
+                .baseUrl(properties.propertyDataBaseUrl().toString())
                 .requestFactory(requestFactory)
                 .build();
         return new RestClientPropertyAdminClient(restClient, tokenIssuer);
-    }
-
-    URI validatedBaseUri(String value) {
-        try {
-            URI uri = URI.create(value);
-            String path = uri.getPath();
-            if (!("http".equals(uri.getScheme()) || "https".equals(uri.getScheme()))
-                    || uri.getHost() == null
-                    || uri.getHost().isBlank()
-                    || uri.getUserInfo() != null
-                    || uri.getQuery() != null
-                    || uri.getFragment() != null
-                    || (path != null && !path.isEmpty() && !"/".equals(path))) {
-                throw new IllegalArgumentException("invalid property-data base URL");
-            }
-            return uri;
-        } catch (RuntimeException exception) {
-            throw new IllegalArgumentException("invalid property-data base URL", exception);
-        }
     }
 
     private java.security.PrivateKey loadPrivateKey(Path path) {
@@ -81,11 +61,5 @@ public class InternalAdminClientConfiguration {
         } catch (IOException exception) {
             throw new IllegalArgumentException("could not read internal JWT private key", exception);
         }
-    }
-
-    private Duration positive(Duration value, String label) {
-        if (value == null || value.isZero() || value.isNegative())
-            throw new IllegalArgumentException(label + " must be positive");
-        return value;
     }
 }

@@ -27,7 +27,7 @@ public final class SourceDataMigrationRunner implements ApplicationRunner, ExitC
     public void run(ApplicationArguments arguments) {
         try {
             Map<String, String> options = parse(arguments.getSourceArgs());
-            String operation = required(options, "operation");
+            Operation operation = Operation.parse(required(options, "operation"));
             String database = databaseName();
             if (!EXPECTED_DATABASE.equals(database)) {
                 throw new UsageException("target database must be " + EXPECTED_DATABASE);
@@ -40,12 +40,11 @@ public final class SourceDataMigrationRunner implements ApplicationRunner, ExitC
                     .table("flyway_schema_history")
                     .load();
             switch (operation) {
-                case "info" -> flyway.info();
-                case "validate" -> flyway.validate();
-                case "migrate" -> migrate(flyway, options);
-                case "preflight-baseline" -> preflightBaseline();
-                case "baseline-existing" -> baseline(flyway, options, database);
-                default -> throw new UsageException("unsupported operation: " + operation);
+                case INFO -> flyway.info();
+                case VALIDATE -> flyway.validate();
+                case MIGRATE -> migrate(flyway, options);
+                case PREFLIGHT_BASELINE -> preflightBaseline();
+                case BASELINE_EXISTING -> baseline(flyway, options, database);
             }
         } catch (UsageException | LegacyCoordinateSourceFingerprint.LegacyFingerprintMismatchException exception) {
             System.err.println(exception.getMessage());
@@ -133,6 +132,25 @@ public final class SourceDataMigrationRunner implements ApplicationRunner, ExitC
     private static final class UsageException extends RuntimeException {
         UsageException(String message) {
             super(message);
+        }
+    }
+
+    private enum Operation {
+        INFO,
+        VALIDATE,
+        MIGRATE,
+        PREFLIGHT_BASELINE,
+        BASELINE_EXISTING;
+
+        private static Operation parse(String value) {
+            return switch (value) {
+                case "info" -> INFO;
+                case "validate" -> VALIDATE;
+                case "migrate" -> MIGRATE;
+                case "preflight-baseline" -> PREFLIGHT_BASELINE;
+                case "baseline-existing" -> BASELINE_EXISTING;
+                default -> throw new UsageException("unsupported operation: " + value);
+            };
         }
     }
 }

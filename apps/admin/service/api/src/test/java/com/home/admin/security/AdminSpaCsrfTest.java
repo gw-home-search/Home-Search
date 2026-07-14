@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.home.admin.AdminProblemFactory;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({
     AdminSecurityConfiguration.class,
     AdminSecurityProblemHandler.class,
+    AdminProblemFactory.class,
     AdminSessionAuthenticationTest.ProbeConfiguration.class
 })
 class AdminSpaCsrfTest {

@@ -3,7 +3,7 @@
 ## 실행 기준
 
 - baseline commit: `d601237`
-- 현재 진행 PR: 없음 (`PR 9 — property-data typed wiring` 완료, 다음 `PR 10` 대기)
+- 현재 진행 PR: `PR 10 — property-data runtime surface`
 - 전체 상태: `In Progress`
 - 시작일: 2026-07-14
 - 실행 원칙: 한 번에 하나의 PR만 진행하고, 선행 PR이 `Complete`인 경우에만 다음 PR을 시작한다.
@@ -81,7 +81,7 @@ property-data configuration file distribution:
 | 7 | Boot 4.1 / Jackson 3 | Complete | PR 6 `Complete` |
 | 8 | map SQL readability | Complete | PR 7 `Complete` |
 | 9 | property-data typed wiring | Complete | PR 8 `Complete` |
-| 10 | error/validation/executor/observability | Pending | PR 9 `Complete` |
+| 10 | error/validation/executor/observability | In Progress | PR 9 `Complete` |
 | 11 | user-service Spring/JPA cleanup | Pending | PR 10 `Complete` |
 | 12 | admin/source-data modernization | Pending | PR 11 `Complete` |
 | 13 | quality gates와 final docs | Pending | PR 12 `Complete` |
@@ -622,3 +622,80 @@ property-data configuration file distribution:
 
 - implementation commits: `94f2800`, `47c93d4`
 - merge commit: `027f23e4ce9e3c3b49f82d0eb0969b37ada90fe3`
+
+## PR 10 Evidence
+
+### TDD 근거
+
+- 변경 전 Nearby/Prediction executor와 use case narrow baseline — `Pass` (12s).
+- 최초 RED 1: Nearby executor가 `ThreadPoolTaskExecutor`가 아니어서 type assertion이 실패했고, Prediction executor 포화 시 `RejectedExecutionException`이 전파되어 `PENDING` cache만 남았다.
+- 예상 RED 실패 1: managed executor assertion failure와 `RejectedExecutionException: executor saturated`를 확인했다.
+- 최소 GREEN 1: 기존 `threads` key를 유지한 bounded `ThreadPoolTaskExecutor`, typed queue/shutdown timeout, Spring lifecycle shutdown을 적용하고 Prediction rejection을 non-sensitive `FAILED` 결과로 확정했다.
+- 최초 RED 2: internal JWT 401 body에 documented minimum field인 `exception`, `timestamp`가 없어 JSON assertion이 실패했다.
+- 예상 RED 실패 2: `problem.get("exception")`이 `null`인 NPE를 확인했다.
+- 최소 GREEN 2: `ApiProblemFactory`가 handler와 filter의 `ProblemDetail`을 생성하도록 통합하고 기존 internal `type`, `title`, `status`, `detail` 값을 유지했다.
+- 최초 RED 3: `/api/v1/detail/0`이 controller validation을 통과해 service mock의 `null` 결과로 `500`을 반환했다.
+- 예상 RED 실패 3: expected `400` but was `500`을 확인했다.
+- 최소 GREEN 3: resource id와 page/limit 하한을 web validation으로 명시하고, `size > 100`/`limit > 100`의 application clamp는 그대로 유지했다.
+- 최초 RED 4: 500 diagnostic log가 원본 exception의 cause/suppressed type을 잃어 contract assertion이 실패했다.
+- 예상 RED 실패 4: `IllegalArgumentException`, `UnsupportedOperationException` diagnostic evidence가 log에 없었다.
+- 최소 GREEN 4: cause/suppressed topology와 stack은 유지하되 exception message는 제거하는 sanitized diagnostic을 적용했다.
+
+### 계약 영향
+
+- public URL, method, JSON success field, status, error detail, empty/404, search/region/trade clamp 변경 없음.
+- internal JWT 401은 기존 field 값을 유지하면서 canonical error minimum인 `exception`, UTC offset `timestamp`만 추가했다.
+- Prediction provider/rejection failure message는 raw exception 대신 기존 REST Docs 정의인 non-sensitive status message를 반환한다.
+
+### 데이터 영향
+
+- migration, schema, persisted enum/state, SQL, `complex_id`/`complex_pk` 변경 없음.
+- Prediction Redis cache의 `FAILED` message만 non-sensitive canonical 문구로 저장한다.
+
+### 검증 근거 확인
+
+- managed executor/rejection/cache/quota narrow core tests — `Pass` (12s).
+- Prediction/Map configuration persistence narrow tests — `Pass` (12s).
+- internal JWT filter tests — `Pass` (10s).
+- read/map API contract tests — `Pass` (13s); non-positive id `400`, `Invalid parameter format.`, 500 sanitized cause/suppressed, 기존 response field를 확인했다.
+- 최초 aggregate gate는 API/Core/Batch/persistence tests를 통과한 뒤 새 test assertion의 Spotless 미적용만 `Fail` (10m 30s); `spotlessApply` 후 동일 gate를 재실행했다.
+- `backendQualityCheck --no-daemon --stacktrace` — `Pass` (12m 3s; API contract, API/Core/Batch, persistence 220 tests, coverage, Spotless, fresh Flyway, REST Docs/OpenAPI, packaged Batch 포함).
+- production raw `Executors.newFixedThreadPool`, `new ThreadPoolExecutor(...)` — 0건.
+- application Spring import — `@Service`, `@Transactional`만 존재; domain Spring import 0건.
+- metric label — bounded `category` enum, `operation`, `result`만 사용하며 complex id, 좌표, 장소명, URL, credential 0건.
+- repository root `git diff --check` — `Pass`; migration diff — 변경 0건.
+- added-line credential/secret pattern 검사 — 지적사항 없음 (`gitleaks`는 local에 설치되지 않음).
+- `python3 .codex/harness/pr_lint.py --self-test` 및 PR body lint — `Pass`.
+
+### 검증 공백
+
+- 원격 CI와 실제 Kakao/Prediction/Redis 장애 호출은 실행하지 않았다. provider/cache/rejection behavior는 fixture, mock, context test로 검증했다.
+
+### 잔여 위험
+
+- Nearby/Prediction executor의 thread/queue/shutdown timeout은 bounded default를 적용했으며 production 부하와 rejection metric에 따라 조정이 필요할 수 있다.
+- 500 diagnostic은 secret/query exception message를 보존하지 않고 cause/suppressed type과 stack topology만 보존한다. 원본 message는 의도적으로 log/response에서 제외한다.
+
+### 보안 영향
+
+- internal JWT token/claim 검증 실패는 generic body만 반환하며 token, claim, request id를 log/response에 추가하지 않았다.
+- cache/provider/quota log는 exception type만 기록하고 cache key, 좌표, URL, query, credential을 기록하지 않는다.
+- executor queue는 bounded이고 rejection은 기존 503/FAILED degrade 계약으로 변환한다.
+- credential, SQL binding, migration, runtime Flyway boundary 변경 없음.
+- security-audit: 지적사항 = none
+
+### Findings-first review
+
+- 지적사항: 열린 correctness/security finding 없음.
+- 해소한 finding 1: Prediction fixed pool의 unbounded queue와 두 executor의 Spring lifecycle 밖 shutdown을 bounded `ThreadPoolTaskExecutor`로 교체했다.
+- 해소한 finding 2: Prediction rejection이 `PENDING`만 남기던 상태를 `FAILED` cache/response로 확정했다.
+- 해소한 finding 3: internal JWT filter의 독립 error map과 handler의 중복 factory를 통합했다.
+- 해소한 finding 4: metadata/cache/provider log의 raw exception/key 노출을 bounded error type log와 metric으로 교체했다.
+- 해소한 finding 5: aggregate gate의 유일한 Spotless 실패를 수정하고 전체 gate를 재실행했다.
+- 검증 근거 확인: narrow RED/GREEN, public/internal error contract, full backend gate, migration/secret/static boundary가 GREEN이다.
+- 검증 공백: 원격 CI 및 실제 provider 호출 미실행.
+- 잔여 위험: 위 executor 운영 tuning 외 열린 finding은 없다.
+
+### Merge
+
+- implementation commit: `98374cb`

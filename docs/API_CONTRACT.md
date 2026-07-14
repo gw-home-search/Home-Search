@@ -140,6 +140,10 @@ Example:
 
 ### GET `/api/v1/complex/{complexId}/nearby-places`
 
+Source controller:
+
+- `apps/property-data/api/src/main/java/com/home/infrastructure/web/place/NearbyPlaceController.java`
+
 선택 단지의 canonical 표시 좌표를 기준으로 지도 UI가 사용하는 주변 장소 사실을
 반환한다. 범용 `lat/lng` 검색은 제공하지 않는다.
 
@@ -212,7 +216,7 @@ Purpose:
 
 Source controller:
 
-- `src/main/java/com/home/infrastructure/web/map/MapController.java`
+- `apps/property-data/api/src/main/java/com/home/infrastructure/web/map/MapController.java`
 
 Frontend source consumer:
 
@@ -295,7 +299,7 @@ Purpose:
 
 Source controller:
 
-- `src/main/java/com/home/infrastructure/web/map/MapController.java`
+- `apps/property-data/api/src/main/java/com/home/infrastructure/web/map/MapController.java`
 
 Frontend source consumer:
 
@@ -406,7 +410,7 @@ Purpose:
 
 Source controller:
 
-- `src/main/java/com/home/infrastructure/web/search/SearchController.java`
+- `apps/property-data/api/src/main/java/com/home/infrastructure/web/search/SearchController.java`
 
 Frontend source consumers:
 
@@ -515,7 +519,7 @@ Purpose:
 
 Source controller:
 
-- `src/main/java/com/home/infrastructure/web/regionnavigation/RegionNavigationController.java`
+- `apps/property-data/api/src/main/java/com/home/infrastructure/web/regionnavigation/RegionNavigationController.java`
 
 Frontend source consumer:
 
@@ -551,7 +555,7 @@ Purpose:
 
 Source controller:
 
-- `src/main/java/com/home/infrastructure/web/regionnavigation/RegionNavigationController.java`
+- `apps/property-data/api/src/main/java/com/home/infrastructure/web/regionnavigation/RegionNavigationController.java`
 
 Frontend source consumer:
 
@@ -660,7 +664,7 @@ Purpose:
 
 Source controller:
 
-- `src/main/java/com/home/infrastructure/web/propertydetail/PropertyDetailController.java`
+- `apps/property-data/api/src/main/java/com/home/infrastructure/web/propertydetail/PropertyDetailController.java`
 
 Frontend source consumer:
 
@@ -793,7 +797,7 @@ Purpose:
 
 Source controller:
 
-- `src/main/java/com/home/infrastructure/web/tradehistory/TradeHistoryController.java`
+- `apps/property-data/api/src/main/java/com/home/infrastructure/web/tradehistory/TradeHistoryController.java`
 
 Frontend source consumer:
 

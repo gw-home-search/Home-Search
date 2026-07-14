@@ -839,3 +839,121 @@ property-data configuration file distribution:
 
 - implementation commit: `26660a7`
 - merge commit: `3b0d6dfe94ef8198078a1075c5f60079064f71b0`
+
+## PR 13 Evidence
+
+### TDD 근거
+
+- 최초 RED 1: admin aggregate coverage가 `LINE 0.69`, `INSTRUCTION 0.65`,
+  `BRANCH 0.47`로 새 `0.90/0.90/0.65` 기준에 미달했다.
+- 예상 RED 실패 1: account/authentication/BFF/CLI의 미검증 분기 때문에 세
+  counter가 모두 coverage gate에서 거부된다.
+- 최소 GREEN 1: controller forwarding, account mutation, authentication
+  success/unknown/lock, migration/ops operation과 stdin 동작 테스트를 추가했다.
+- 최초 RED 2: source-data aggregate coverage가 `LINE 0.72`,
+  `INSTRUCTION 0.82`, `BRANCH 0.44`로 기준에 미달했다.
+- 예상 RED 실패 2: operation parse와 `info`/`validate`/baseline interleaving이
+  실행되지 않아 runner 분기 coverage가 부족하다.
+- 최소 GREEN 2: wrong/missing/duplicate/unconfirmed operation과 fresh/legacy
+  Flyway operation 순서를 실제 runner로 검증했다.
+- 최초 RED 3: property-data의 broad `*Matcher*`/`*Configuration*` 제외를
+  제거하자 `INSTRUCTION 27,874/31,038`(`89.81%`)로 실패했다.
+- 예상 RED 실패 3: conditional nearby/internal-admin configuration 조립이
+  coverage denominator에는 포함되지만 enabled success path가 실행되지 않는다.
+- 최소 GREEN 3: enabled nearby provider/center reader와 internal JWT filter
+  registration 테스트를 추가하고, 최종적으로 HTTP DTO와 실제 entrypoint만
+  명시적으로 제외했다.
+
+### 계약 영향
+
+- public URL, method, request/response JSON, status, error detail, pagination과
+  clamp 변경 없음.
+- `docs/API_CONTRACT.md`는 이동 완료된 controller의 실제
+  `apps/property-data/api/src/main/java` source path만 갱신했다.
+- generated OpenAPI와 REST Docs token/semantic 검증은 기존 계약으로 통과했다.
+
+### 데이터 영향
+
+- SQL, schema, applied migration/checksum/history, persisted enum/state,
+  `complex_id`/`complex_pk`, raw-first와 failed-match evidence 변경 없음.
+- baseline `d601237` 대비 migration diff는 0건이다.
+
+### 검증 근거 확인
+
+- property-data broad coverage exclusion 제거 첫 실행 — 예상 `Fail`
+  (`INSTRUCTION 89.81%`).
+- property-data strict final coverage — `Pass`: `LINE 6,648/7,363`
+  (`90.29%`), `INSTRUCTION 31,592/35,091`(`90.03%`),
+  `BRANCH 1,917/2,823`(`67.91%`).
+- user-service final coverage — `Pass`: `LINE 94.3%`, `INSTRUCTION 91.66%`,
+  `BRANCH 68.9%`; `core`와 `app` production class를 모두 포함한다.
+- admin-service fresh coverage — `Pass` (34s): `LINE 638/679`(`93.96%`),
+  `INSTRUCTION 2,715/2,952`(`91.97%`), `BRANCH 170/259`(`65.64%`).
+- source-data fresh coverage — `Pass`: `LINE 138/149`(`92.62%`),
+  `INSTRUCTION 761/805`(`94.53%`), `BRANCH 28/38`(`73.68%`).
+- property-data `backendQualityCheck --no-daemon --stacktrace` — `Pass`
+  (12m 46s; persistence, fresh Flyway, API/OpenAPI, packaged Batch, coverage,
+  architecture 포함).
+- user-service `userServiceQualityCheck --no-daemon --stacktrace` — `Pass`
+  (1m 50s; fresh Flyway, runtime boundary, coverage, architecture 포함).
+- admin-service `adminServiceQualityCheck --no-daemon --stacktrace` — `Pass`;
+  source-data `sourceDataQualityCheck --no-daemon --stacktrace` — `Pass`.
+- web `npm run test` — `Pass` (32 files, 189 tests); `npm run build` — `Pass`.
+- property/user architecture gate — `Pass`: domain purity, application Spring
+  import allowlist, web→persistence 금지, transactional final 금지를 확인했다.
+- runtime JAR inspection — property API/core/Batch, user app/core, admin API/ops는
+  Flyway/migration resource 0건; admin migration은 admin SQL 1건,
+  source-data migration은 소유 SQL 4건만 포함한다.
+- `git diff --check`, project terms check, 네 harness self-test, valid PR body
+  `pr-lint` — `Pass`.
+- added-line secret pattern 검사 — test placeholder password/API key만 확인됐고
+  실제 credential/private key는 없다. `gitleaks`/`trufflehog`는 local에 설치되지 않았다.
+
+### 검증 공백
+
+- 원격 CI, 실제 OAuth/Kakao/RTMS provider, 운영 private-key/Redis/network smoke는
+  실행하지 않았다. 이번 PR은 provider 호출이나 production runtime behavior를
+  변경하지 않는다.
+- `pr_lint.py --body-only`의 invalid-body 오류 출력 경로는 기존
+  `BodyCheckResult.errors` type mismatch로 traceback을 출력한다. valid body와
+  self-test는 통과했으며 application/PR 13 변경 범위 밖의 후속 harness 정리다.
+
+### 잔여 위험
+
+- property-data instruction coverage는 `90.03%`로 기준에 가깝다. 이름 기반
+  domain/configuration 제외는 제거했으므로 이후 production 분기 추가 시 해당
+  동작 테스트를 함께 추가해야 한다.
+- Gradle/Asciidoctor의 기존 deprecation warning은 남아 있으며 Gradle 10 전환
+  전에 별도 dependency/tooling PR에서 해소해야 한다.
+
+### 보안 영향
+
+- production security/filter/configuration code와 authorization contract는
+  변경하지 않았다.
+- test credential은 고정 placeholder이며 source/runtime secret으로 사용되지
+  않는다. private key, OAuth secret, raw refresh token, provider query를 추가하지 않았다.
+- coverage/architecture gate는 security filter와 application boundary를 실제
+  denominator/검사 범위에 포함한다.
+- security-audit: 지적사항 = none
+
+### Findings-first review
+
+- 지적사항: PR 13 application/build/docs diff의 열린 correctness, contract,
+  data-safety, security finding 없음.
+- 해소한 finding 1: admin/source-data에 없던 aggregate quality/coverage task를
+  추가하고 네 Java application에 같은 `90/90/65%` counter 기준을 적용했다.
+- 해소한 finding 2: property-data의 `Matcher`, `Configuration`, domain
+  `Status`/`Record` 등 이름 기반 broad exclusion을 제거하고 HTTP DTO와 실제
+  entrypoint만 명시적으로 제외했다.
+- 해소한 finding 3: property/user에 domain/application/web/transactional-final
+  architecture gate를 추가했다.
+- 검증 근거 확인: 네 service aggregate gate, frontend test/build, contract/OpenAPI,
+  migration/JAR/secret boundary가 GREEN이다.
+- 검증 공백: 원격 CI와 실제 운영 provider/network smoke 미실행.
+- 잔여 위험: 기존 Gradle deprecation과 invalid-body lint error rendering은
+  후속 tooling 범위다.
+
+### Merge
+
+- implementation commit: `c33abe5`
+- merge commit: pending

@@ -29,10 +29,20 @@ evidence only; its executable one-time repair command has been removed.
 
 **Application layer** owns use cases such as map marker lookup, region navigation, search, detail, trade list, and ingest orchestration.
 
+Public reads are feature-owned: `search`, `regionnavigation`, `propertydetail`,
+and `tradehistory` each have one application service, reader port, JDBC adapter,
+and web controller. Do not recreate a combined `PropertyReadUseCase` or
+`PropertyReadRepository`.
+
 **Domain layer** owns region, parcel, complex, trade, and ingest concepts.
 
 **Persistence layer** owns repository queries, PostGIS access, uniqueness, and
 partitioning behavior. External SQL catalog ownership stays under `db/`.
+
+Application services are Spring `@Service` beans and own transaction boundaries.
+Domain remains framework-free. Mandatory adapters use constructor injection;
+typed `@ConfigurationProperties` and explicit API/Batch composition roots own
+conditional cache, executor, SecurityFilterChain, and external-client wiring.
 
 ## Data Terms
 

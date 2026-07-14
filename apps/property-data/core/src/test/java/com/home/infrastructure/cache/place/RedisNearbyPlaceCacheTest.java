@@ -98,11 +98,19 @@ class RedisNearbyPlaceCacheTest {
 
         fixture.cache().store(KEY, EMPTY_RESULT);
         verify(fixture.values()).set(eq(KEY.redisKey()), any(String.class), eq(TTL));
+        assertThat(fixture.registry()
+                        .counter("home.search.nearby.place.cache.operations", "operation", "write", "result", "success")
+                        .count())
+                .isEqualTo(1);
 
         doThrow(new IllegalStateException("redis unavailable"))
                 .when(fixture.values())
                 .set(eq(KEY.redisKey()), any(String.class), eq(TTL));
         assertThatCode(() -> fixture.cache().store(KEY, EMPTY_RESULT)).doesNotThrowAnyException();
+        assertThat(fixture.registry()
+                        .counter("home.search.nearby.place.cache.operations", "operation", "write", "result", "error")
+                        .count())
+                .isEqualTo(1);
     }
 
     @SuppressWarnings("unchecked")

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import tools.jackson.databind.ObjectMapper;
 
 class NearbyPlaceConfigurationTest {
@@ -47,6 +48,22 @@ class NearbyPlaceConfigurationTest {
                             .hasRootCauseInstanceOf(
                                     org.springframework.beans.factory.NoSuchBeanDefinitionException.class)
                             .hasMessageContaining("StringRedisTemplate");
+                });
+    }
+
+    @Test
+    @DisplayName("nearby executor는 bounded queue를 가진 Spring-managed executor다")
+    void nearbyExecutorIsSpringManagedAndBounded() {
+        contextRunner
+                .withPropertyValues("home.place.kakao.executor.threads=2", "home.place.kakao.executor.queue-capacity=7")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    ThreadPoolTaskExecutor executor =
+                            context.getBean("nearbyPlaceExecutor", ThreadPoolTaskExecutor.class);
+                    assertThat(executor.getCorePoolSize()).isEqualTo(2);
+                    assertThat(executor.getMaxPoolSize()).isEqualTo(2);
+                    assertThat(executor.getThreadPoolExecutor().getQueue().remainingCapacity())
+                            .isEqualTo(7);
                 });
     }
 }

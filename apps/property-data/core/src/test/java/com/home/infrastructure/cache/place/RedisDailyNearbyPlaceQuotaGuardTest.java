@@ -37,6 +37,9 @@ class RedisDailyNearbyPlaceQuotaGuardTest {
         assertThatCode(guard::acquire).doesNotThrowAnyException();
         assertThat(registry.get("home.search.kakao.local.quota.used").gauge().value())
                 .isEqualTo(12);
+        assertThat(registry.counter("home.search.kakao.local.quota.requests", "result", "allowed")
+                        .count())
+                .isEqualTo(2);
     }
 
     @Test
@@ -45,11 +48,15 @@ class RedisDailyNearbyPlaceQuotaGuardTest {
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
         when(redisTemplate.execute(anyRedisScript(), anyList(), anyString(), anyString()))
                 .thenReturn(null);
-        var guard = new RedisDailyNearbyPlaceQuotaGuard(redisTemplate, 10_000, SEOUL_CLOCK, new SimpleMeterRegistry());
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        var guard = new RedisDailyNearbyPlaceQuotaGuard(redisTemplate, 10_000, SEOUL_CLOCK, registry);
 
         assertThatThrownBy(guard::acquire)
                 .isInstanceOf(NearbyPlaceProviderUnavailableException.class)
                 .hasMessageContaining("예산");
+        assertThat(registry.counter("home.search.kakao.local.quota.requests", "result", "error")
+                        .count())
+                .isEqualTo(1);
     }
 
     @Test
@@ -58,11 +65,15 @@ class RedisDailyNearbyPlaceQuotaGuardTest {
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
         when(redisTemplate.execute(anyRedisScript(), anyList(), anyString(), anyString()))
                 .thenReturn(-1L);
-        var guard = new RedisDailyNearbyPlaceQuotaGuard(redisTemplate, 10_000, SEOUL_CLOCK, new SimpleMeterRegistry());
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        var guard = new RedisDailyNearbyPlaceQuotaGuard(redisTemplate, 10_000, SEOUL_CLOCK, registry);
 
         assertThatThrownBy(guard::acquire)
                 .isInstanceOf(NearbyPlaceProviderUnavailableException.class)
                 .hasMessageContaining("예산");
+        assertThat(registry.counter("home.search.kakao.local.quota.requests", "result", "exhausted")
+                        .count())
+                .isEqualTo(1);
     }
 
     @Test
@@ -71,11 +82,15 @@ class RedisDailyNearbyPlaceQuotaGuardTest {
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
         when(redisTemplate.execute(anyRedisScript(), anyList(), anyString(), anyString()))
                 .thenThrow(new IllegalStateException("redis unavailable"));
-        var guard = new RedisDailyNearbyPlaceQuotaGuard(redisTemplate, 10_000, SEOUL_CLOCK, new SimpleMeterRegistry());
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        var guard = new RedisDailyNearbyPlaceQuotaGuard(redisTemplate, 10_000, SEOUL_CLOCK, registry);
 
         assertThatThrownBy(guard::acquire)
                 .isInstanceOf(NearbyPlaceProviderUnavailableException.class)
                 .hasMessageNotContaining("redis unavailable");
+        assertThat(registry.counter("home.search.kakao.local.quota.requests", "result", "error")
+                        .count())
+                .isEqualTo(1);
     }
 
     private RedisScript<Long> anyRedisScript() {

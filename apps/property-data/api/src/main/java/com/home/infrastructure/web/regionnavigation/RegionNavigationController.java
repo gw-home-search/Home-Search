@@ -4,14 +4,18 @@ import com.home.application.regionnavigation.RegionNavigationService;
 import com.home.infrastructure.web.read.dto.ComplexSummaryResponse;
 import com.home.infrastructure.web.read.dto.RegionDetailResponse;
 import com.home.infrastructure.web.read.dto.RegionSummaryResponse;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
+@Validated
 public class RegionNavigationController {
 
     private final RegionNavigationService regionNavigationService;
@@ -28,15 +32,15 @@ public class RegionNavigationController {
     }
 
     @GetMapping("/api/v1/region/{regionId}")
-    public ResponseEntity<RegionDetailResponse> getRegionDetail(@PathVariable Long regionId) {
+    public ResponseEntity<RegionDetailResponse> getRegionDetail(@PathVariable @Positive Long regionId) {
         return ResponseEntity.ok(RegionDetailResponse.from(regionNavigationService.getRegionDetail(regionId)));
     }
 
     @GetMapping("/api/v1/region/{regionId}/complexes")
     public ResponseEntity<List<ComplexSummaryResponse>> getRegionComplexes(
-            @PathVariable Long regionId,
-            @RequestParam(value = "limit", required = false) Integer limit,
-            @RequestParam(value = "offset", required = false) Integer offset) {
+            @PathVariable @Positive Long regionId,
+            @RequestParam(value = "limit", required = false) @Positive Integer limit,
+            @RequestParam(value = "offset", required = false) @PositiveOrZero Integer offset) {
         return ResponseEntity.ok(regionNavigationService.getRegionComplexes(regionId, limit, offset).stream()
                 .map(ComplexSummaryResponse::from)
                 .toList());

@@ -31,6 +31,23 @@ class AdminMigrationIntegrationTest {
                                 "SELECT count(*) FROM admin.flyway_schema_history WHERE version='1' AND success"))
                         .isEqualTo(1);
             }
+
+            var info = new AdminMigrationRunner(
+                    new DriverManagerDataSource(database.getJdbcUrl(), database.getUsername(), database.getPassword()));
+            info.run(new DefaultApplicationArguments("--operation=info"));
+            assertThat(info.getExitCode()).isZero();
+            var validate = new AdminMigrationRunner(
+                    new DriverManagerDataSource(database.getJdbcUrl(), database.getUsername(), database.getPassword()));
+            validate.run(new DefaultApplicationArguments("--operation=validate"));
+            assertThat(validate.getExitCode()).isZero();
+            var unconfirmed = new AdminMigrationRunner(
+                    new DriverManagerDataSource(database.getJdbcUrl(), database.getUsername(), database.getPassword()));
+            unconfirmed.run(new DefaultApplicationArguments("--operation=migrate", "--target=1", "--confirm=2"));
+            assertThat(unconfirmed.getExitCode()).isEqualTo(2);
+            var unsupported = new AdminMigrationRunner(
+                    new DriverManagerDataSource(database.getJdbcUrl(), database.getUsername(), database.getPassword()));
+            unsupported.run(new DefaultApplicationArguments("--operation=repair"));
+            assertThat(unsupported.getExitCode()).isEqualTo(2);
         }
     }
 

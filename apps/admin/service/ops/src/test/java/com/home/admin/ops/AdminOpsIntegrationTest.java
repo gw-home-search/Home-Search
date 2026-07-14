@@ -64,7 +64,7 @@ class AdminOpsIntegrationTest {
             assertThat(value(jdbc, "SELECT count(*) FROM admin.admin_account", Integer.class))
                     .isEqualTo(1);
 
-            insertSession(jdbc);
+            insertSession(jdbc, "operator", "operator");
             var passwordChange = new AdminOpsRunner(
                     dataSource, jdbc, new DataSourceTransactionManager(dataSource), () -> "changed-password");
             passwordChange.run(args("--operation=set-password", "--login-id=operator"));
@@ -84,6 +84,52 @@ class AdminOpsIntegrationTest {
                     .isTrue();
             assertThat(value(jdbc, "SELECT count(*) FROM admin.admin_security_audit_event", Integer.class))
                     .isEqualTo(2);
+
+            var createViewer = new AdminOpsRunner(
+                    dataSource, jdbc, new DataSourceTransactionManager(dataSource), () -> "viewer-password");
+            createViewer.run(
+                    args("--operation=create-account", "--login-id=viewer", "--display-name=조회자", "--role=VIEWER"));
+            assertThat(createViewer.getExitCode()).isZero();
+
+            var grantRole = new AdminOpsRunner(
+                    dataSource, jdbc, new DataSourceTransactionManager(dataSource), () -> "unused-password");
+            grantRole.run(args("--operation=grant-role", "--login-id=viewer", "--role=OPERATOR"));
+            assertThat(grantRole.getExitCode()).isZero();
+            assertThat(value(
+                            jdbc,
+                            "SELECT count(*) FROM admin.admin_account_role ar JOIN admin.admin_account a ON a.id=ar.account_id WHERE a.login_id='viewer'",
+                            Integer.class))
+                    .isEqualTo(2);
+
+            insertSession(jdbc, "viewer", "viewer");
+            var revoke = new AdminOpsRunner(
+                    dataSource, jdbc, new DataSourceTransactionManager(dataSource), () -> "unused-password");
+            revoke.run(args("--operation=revoke-sessions", "--login-id=viewer"));
+            assertThat(revoke.getExitCode()).isZero();
+            assertThat(value(
+                            jdbc,
+                            "SELECT count(*) FROM admin.spring_session WHERE principal_name='viewer'",
+                            Integer.class))
+                    .isZero();
+
+            var disable = new AdminOpsRunner(
+                    dataSource, jdbc, new DataSourceTransactionManager(dataSource), () -> "unused-password");
+            disable.run(args("--operation=disable-account", "--login-id=viewer"));
+            assertThat(disable.getExitCode()).isZero();
+            assertThat(value(jdbc, "SELECT enabled FROM admin.admin_account WHERE login_id='viewer'", Boolean.class))
+                    .isFalse();
+
+            for (String[] invalid : new String[][] {
+                {"--operation=create-account", "--login-id=third", "--display-name=세번째", "--role=UNKNOWN"},
+                {"--operation=set-password", "--login-id=missing"},
+                {"--operation=unknown"},
+                {}
+            }) {
+                var invalidRunner = new AdminOpsRunner(
+                        dataSource, jdbc, new DataSourceTransactionManager(dataSource), () -> "unused-password");
+                invalidRunner.run(args(invalid));
+                assertThat(invalidRunner.getExitCode()).isEqualTo(2);
+            }
         }
     }
 
@@ -95,11 +141,17 @@ class AdminOpsIntegrationTest {
         return jdbc.sql(sql).query(type).single();
     }
 
-    private void insertSession(JdbcClient jdbc) {
+    private void insertSession(JdbcClient jdbc, String loginId, String key) {
         long now = Instant.now().toEpochMilli();
         jdbc.sql("""
             INSERT INTO admin.spring_session(primary_id,session_id,creation_time,last_access_time,max_inactive_interval,expiry_time,principal_name)
-            VALUES ('primary-session-id','browser-session-id',:now,:now,1800,:expiry,'operator')
-            """).param("now", now).param("expiry", now + 1_800_000).update();
+            VALUES (:primaryId,:sessionId,:now,:now,1800,:expiry,:loginId)
+            """)
+                .param("primaryId", "primary-session-id-" + key)
+                .param("sessionId", "browser-session-id-" + key)
+                .param("now", now)
+                .param("expiry", now + 1_800_000)
+                .param("loginId", loginId)
+                .update();
     }
 }

@@ -2,7 +2,9 @@ package com.home.application.coordinate.override;
 
 import java.util.List;
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
+@Service
 public class CoordinateOverrideAdminService {
 
     private static final int DEFAULT_LIMIT = 50;

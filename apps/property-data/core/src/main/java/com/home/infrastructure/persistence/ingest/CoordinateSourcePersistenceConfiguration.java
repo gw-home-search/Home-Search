@@ -1,10 +1,8 @@
 package com.home.infrastructure.persistence.ingest;
 
-import com.home.application.coordinate.lookup.ParcelCoordinateOverrideRepository;
 import com.home.application.coordinate.lookup.ParcelCoordinateSourceRepository;
-import com.home.infrastructure.persistence.ingest.coordinate.CoordinateSourceDbProperties;
+import com.home.infrastructure.configuration.CoordinateSourceDbProperties;
 import com.home.infrastructure.persistence.ingest.coordinate.JdbcCoordinateSourceParcelCoordinateRepository;
-import com.home.infrastructure.persistence.ingest.coordinate.JdbcParcelCoordinateOverrideRepository;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,11 +27,5 @@ class CoordinateSourcePersistenceConfiguration {
         dataSource.setPassword(properties.password());
         dataSource.setConnectionProperties(properties.connectionProperties());
         return new JdbcCoordinateSourceParcelCoordinateRepository(JdbcClient.create(dataSource));
-    }
-
-    @Bean
-    @Lazy
-    ParcelCoordinateOverrideRepository parcelCoordinateOverrideRepository(JdbcClient jdbcClient) {
-        return new JdbcParcelCoordinateOverrideRepository(jdbcClient);
     }
 }

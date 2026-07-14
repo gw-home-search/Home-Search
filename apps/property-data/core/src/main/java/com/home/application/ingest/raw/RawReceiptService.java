@@ -1,8 +1,10 @@
 package com.home.application.ingest.raw;
 
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Service
 public class RawReceiptService {
 
     private final RawTradeIngestRepository repository;

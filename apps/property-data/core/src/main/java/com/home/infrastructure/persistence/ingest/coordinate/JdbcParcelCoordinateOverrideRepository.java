@@ -6,7 +6,9 @@ import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public class JdbcParcelCoordinateOverrideRepository implements ParcelCoordinateOverrideRepository {
 
     private final JdbcClient jdbcClient;

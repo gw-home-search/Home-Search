@@ -1,8 +1,9 @@
 package com.home.infrastructure.external.rtms;
 
-import com.home.infrastructure.persistence.ingest.coordinate.CoordinateSourceDbProperties;
+import com.home.infrastructure.configuration.CoordinateSourceDbProperties;
+import com.home.infrastructure.configuration.ExternalApiCredentialProperties;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -10,19 +11,8 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
 
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties({RtmsApartmentTradeProperties.class, ExternalApiCredentialProperties.class})
 public class RtmsExternalApiConfiguration {
-
-    @Bean
-    RtmsApartmentTradeProperties rtmsApartmentTradeProperties(
-            @Value("${apis.data.base-url:https://apis.data.go.kr}") String baseUrl,
-            @Value("${apis.data.apt-title-path:/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev}") String path,
-            @Value("${apis.data.apt-service-key:${APT_SERVICE_KEY:}}") String serviceKey,
-            @Value("${apis.data.apt-num-of-rows:1000}") int numOfRows,
-            @Value("${apis.data.connect-timeout-millis:5000}") int connectTimeoutMillis,
-            @Value("${apis.data.read-timeout-millis:5000}") int readTimeoutMillis) {
-        return new RtmsApartmentTradeProperties(
-                baseUrl, path, serviceKey, numOfRows, connectTimeoutMillis, readTimeoutMillis);
-    }
 
     @Bean
     RtmsApartmentTradeResponseParser rtmsApartmentTradeResponseParser(ObjectMapper objectMapper) {
@@ -44,11 +34,19 @@ public class RtmsExternalApiConfiguration {
     RtmsApartmentTradeClient rtmsApartmentTradeClient(
             @Qualifier("rtmsApartmentTradeRestClient") RestClient rtmsApartmentTradeRestClient,
             RtmsApartmentTradeProperties properties,
-            RtmsApartmentTradeResponseParser parser,
-            @Value("${apis.data.min-request-interval-millis:200}") long minRequestIntervalMillis) {
+            ExternalApiCredentialProperties credentials,
+            RtmsApartmentTradeResponseParser parser) {
+        RtmsApartmentTradeProperties effectiveProperties = new RtmsApartmentTradeProperties(
+                properties.baseUrl(),
+                properties.path(),
+                credentials.aptServiceKey(properties.aptServiceKey()),
+                properties.numOfRows(),
+                properties.connectTimeoutMillis(),
+                properties.readTimeoutMillis(),
+                properties.minRequestIntervalMillis());
         return new RateLimitedRtmsApartmentTradeClient(
-                new RtmsPublicApartmentTradeClient(rtmsApartmentTradeRestClient, properties, parser),
-                minRequestIntervalMillis);
+                new RtmsPublicApartmentTradeClient(rtmsApartmentTradeRestClient, effectiveProperties, parser),
+                properties.minRequestIntervalMillis());
     }
 
     @Bean

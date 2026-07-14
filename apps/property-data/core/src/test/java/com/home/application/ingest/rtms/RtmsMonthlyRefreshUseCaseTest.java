@@ -31,7 +31,7 @@ class RtmsMonthlyRefreshUseCaseTest {
         RtmsApartmentTradeClient client = mock(RtmsApartmentTradeClient.class);
         OpenApiTradeIngestService ingestService = mock(OpenApiTradeIngestService.class);
         RecordingRtmsIngestRunRepository runRepository = new RecordingRtmsIngestRunRepository();
-        RtmsMonthlyRefreshUseCase runner = runner(client, () -> ingestService, runRepository);
+        RtmsMonthlyRefreshUseCase runner = runner(client, ingestService, runRepository);
         RtmsApartmentTradeRequest pageOne = new RtmsApartmentTradeRequest("11680", "202512", 1);
         RtmsApartmentTradeRequest pageTwo = new RtmsApartmentTradeRequest("11680", "202512", 2);
 
@@ -98,7 +98,7 @@ class RtmsMonthlyRefreshUseCaseTest {
         RtmsApartmentTradeClient client = mock(RtmsApartmentTradeClient.class);
         OpenApiTradeIngestService ingestService = mock(OpenApiTradeIngestService.class);
         RecordingRtmsIngestRunRepository runRepository = new RecordingRtmsIngestRunRepository();
-        RtmsMonthlyRefreshUseCase runner = runner(client, () -> ingestService, runRepository);
+        RtmsMonthlyRefreshUseCase runner = runner(client, ingestService, runRepository);
         RtmsApartmentTradeRequest currentMonth = new RtmsApartmentTradeRequest("11680", "202501", 1);
         RtmsApartmentTradeRequest previousMonth = new RtmsApartmentTradeRequest("11680", "202412", 1);
         when(client.fetchPage(currentMonth))
@@ -141,7 +141,7 @@ class RtmsMonthlyRefreshUseCaseTest {
         RtmsApartmentTradeClient client = mock(RtmsApartmentTradeClient.class);
         OpenApiTradeIngestService ingestService = mock(OpenApiTradeIngestService.class);
         RecordingRtmsIngestRunRepository runRepository = new RecordingRtmsIngestRunRepository();
-        RtmsMonthlyRefreshUseCase runner = runner(client, () -> ingestService, runRepository);
+        RtmsMonthlyRefreshUseCase runner = runner(client, ingestService, runRepository);
         RtmsApartmentTradeRequest request = new RtmsApartmentTradeRequest("11680", "202501", 1);
         when(client.fetchPage(request))
                 .thenThrow(new IllegalStateException("temporary 503"))
@@ -164,7 +164,7 @@ class RtmsMonthlyRefreshUseCaseTest {
         RtmsApartmentTradeClient client = mock(RtmsApartmentTradeClient.class);
         OpenApiTradeIngestService ingestService = mock(OpenApiTradeIngestService.class);
         RecordingRtmsIngestRunRepository runRepository = new RecordingRtmsIngestRunRepository();
-        RtmsMonthlyRefreshUseCase runner = runner(client, () -> ingestService, runRepository);
+        RtmsMonthlyRefreshUseCase runner = runner(client, ingestService, runRepository);
         RtmsApartmentTradeRequest pageOne = new RtmsApartmentTradeRequest("11680", "202501", 1);
         RtmsApartmentTradeRequest pageTwo = new RtmsApartmentTradeRequest("11680", "202501", 2);
         when(client.fetchPage(pageOne)).thenReturn(new RtmsApartmentTradePage(batch("202501", 1), 1, 1, 2));
@@ -188,19 +188,11 @@ class RtmsMonthlyRefreshUseCaseTest {
     }
 
     @Test
-    @DisplayName("monthly refresh는 ingest service가 없으면 live fetch 전에 실패한다")
+    @DisplayName("monthly refresh는 mandatory ingest service가 없으면 생성에 실패한다")
     void monthlyRefreshFailsBeforeLiveFetchWhenIngestServiceIsUnavailable() {
         RtmsApartmentTradeClient client = mock(RtmsApartmentTradeClient.class);
-        RtmsMonthlyRefreshUseCase runner = runner(
-                client,
-                () -> {
-                    throw new IllegalStateException("OpenApiTradeIngestService is required");
-                },
-                RtmsIngestRunRepository.noop());
-
-        assertThatThrownBy(() -> runner.refresh("11680", "202512"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("OpenApiTradeIngestService");
+        assertThatThrownBy(() -> runner(client, null, RtmsIngestRunRepository.noop()))
+                .isInstanceOf(NullPointerException.class);
         verifyNoInteractions(client);
     }
 
@@ -213,19 +205,20 @@ class RtmsMonthlyRefreshUseCaseTest {
     }
 
     private RtmsMonthlyRefreshUseCase runner(RtmsApartmentTradeClient client, OpenApiTradeIngestService ingestService) {
-        return runner(client, () -> ingestService, RtmsIngestRunRepository.noop());
+        return runner(client, ingestService, RtmsIngestRunRepository.noop());
     }
 
     private RtmsMonthlyRefreshUseCase runner(
             RtmsApartmentTradeClient client,
-            java.util.function.Supplier<OpenApiTradeIngestService> ingestServiceSupplier,
+            OpenApiTradeIngestService ingestService,
             RtmsIngestRunRepository ingestRunRepository) {
         return new RtmsMonthlyRefreshUseCase(
                 client,
-                ingestServiceSupplier,
-                () -> ingestRunRepository,
-                Clock.fixed(Instant.parse("2026-05-29T00:00:00Z"), ZoneOffset.UTC),
-                RtmsMonthlyRefreshRetryPolicy.noBackoffDefault());
+                ingestService,
+                ingestRunRepository,
+                new RtmsMonthlyRefreshExecution(
+                        Clock.fixed(Instant.parse("2026-05-29T00:00:00Z"), ZoneOffset.UTC),
+                        RtmsMonthlyRefreshRetryPolicy.noBackoffDefault()));
     }
 
     private static final class RecordingRtmsIngestRunRepository

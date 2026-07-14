@@ -2,7 +2,9 @@ package com.home.application.coordinate.display;
 
 import com.home.domain.coordinate.CoordinateSource;
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
+@Service
 public class ComplexDisplayCoordinateProjectionService {
 
     private static final int DEFAULT_BUILDING_CONFIDENCE = 90;

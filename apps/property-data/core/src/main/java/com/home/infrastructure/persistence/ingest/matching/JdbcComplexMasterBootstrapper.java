@@ -11,8 +11,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper {
 
     private final JdbcClient jdbcClient;
@@ -29,6 +32,14 @@ public class JdbcComplexMasterBootstrapper implements ComplexMasterBootstrapper 
             ParcelCoordinateResolver coordinateResolver,
             ComplexIdentityResolver identityResolver) {
         this(jdbcClient, coordinateResolver, identityResolver, new ComplexMasterBootstrapPolicy());
+    }
+
+    @Autowired
+    public JdbcComplexMasterBootstrapper(
+            JdbcClient jdbcClient,
+            ParcelCoordinateResolver coordinateResolver,
+            Optional<ComplexIdentityResolver> identityResolver) {
+        this(jdbcClient, coordinateResolver, identityResolver.orElseGet(ComplexIdentityResolver::noop));
     }
 
     JdbcComplexMasterBootstrapper(

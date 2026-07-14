@@ -14,21 +14,30 @@ import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+@Repository
 class JdbcCoordinateOverrideAdminRepository implements CoordinateOverrideAdminRepository {
 
     private final JdbcClient jdbcClient;
     private final TransactionTemplate transactionTemplate;
 
     JdbcCoordinateOverrideAdminRepository(JdbcClient jdbcClient) {
-        this(jdbcClient, null);
+        this(jdbcClient, (TransactionTemplate) null);
     }
 
     JdbcCoordinateOverrideAdminRepository(JdbcClient jdbcClient, TransactionTemplate transactionTemplate) {
         this.jdbcClient = Objects.requireNonNull(jdbcClient);
         this.transactionTemplate = transactionTemplate;
+    }
+
+    @Autowired
+    JdbcCoordinateOverrideAdminRepository(JdbcClient jdbcClient, PlatformTransactionManager transactionManager) {
+        this(jdbcClient, new TransactionTemplate(transactionManager));
     }
 
     @Override

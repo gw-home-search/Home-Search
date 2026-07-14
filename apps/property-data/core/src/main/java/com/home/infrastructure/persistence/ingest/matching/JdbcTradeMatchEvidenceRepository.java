@@ -11,11 +11,14 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
+@Repository
 public class JdbcTradeMatchEvidenceRepository implements TradeMatchEvidenceRepository {
 
     private static final TypeReference<List<Long>> LONG_LIST = new TypeReference<>() {};
@@ -27,6 +30,7 @@ public class JdbcTradeMatchEvidenceRepository implements TradeMatchEvidenceRepos
         this(jdbcClient, new ObjectMapper());
     }
 
+    @Autowired
     public JdbcTradeMatchEvidenceRepository(JdbcClient jdbcClient, ObjectMapper objectMapper) {
         this.jdbcClient = Objects.requireNonNull(jdbcClient);
         this.objectMapper = Objects.requireNonNull(objectMapper);

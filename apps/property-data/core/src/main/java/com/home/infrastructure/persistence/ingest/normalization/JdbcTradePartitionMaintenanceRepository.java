@@ -3,7 +3,9 @@ package com.home.infrastructure.persistence.ingest.normalization;
 import java.time.LocalDate;
 import java.util.Objects;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public class JdbcTradePartitionMaintenanceRepository {
 
     private static final int MIN_SUPPORTED_YEAR = 1900;

@@ -5,7 +5,9 @@ import com.home.application.ingest.metadata.OdcloudPnuPrefixAliasLookup;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public class JdbcOdcloudPnuPrefixAliasLookup implements OdcloudPnuPrefixAliasLookup {
 
     private final JdbcClient jdbcClient;

@@ -546,3 +546,79 @@ property-data configuration file distribution:
 
 - implementation commit: `1ed9cc6`
 - merge commit: `25e4e2a`
+
+## PR 9 Evidence
+
+### TDD 근거
+
+- 최초 RED: `NearbyPlaceConfigurationTest`에서 Kakao 기능 활성 상태의 API key 누락과 Redis bean 누락이 기존 fallback 때문에 startup failure가 되지 않음을 확인했다.
+- 예상 RED 실패: enabled feature의 필수 secret/infrastructure가 없어도 context가 시작되는 실패다.
+- 최소 GREEN: `NearbyPlaceProperties` validation과 mandatory `StringRedisTemplate` injection을 적용하고 동일 테스트를 GREEN으로 만들었다.
+- 최초 RED: `PredictionUseCaseConfigurationTest`에서 prediction JDBC/Redis 필수 adapter가 없어도 fallback use case가 등록되는 실패를 확인했다.
+- 예상 RED 실패: enabled prediction이 required persistence/cache 없이 시작되는 실패다.
+- 최소 GREEN: `PricePredictionUseCase`를 component service로 등록하고 JDBC/Redis adapter를 mandatory dependency로 전환했다.
+- 구조 이동 waiver: 나머지 service/repository annotation 전환과 configuration bean 제거는 production behavior를 바꾸지 않으며 기존 unit, persistence, API contract, Batch composition test를 회귀 seam으로 사용했다.
+
+### 계약 영향
+
+- `none`: public URL, method, JSON field, status, error detail, empty/404, clamp, `complexName`/`displayName` 의미를 변경하지 않았다.
+- 기존 `APT_SERVICE_KEY`, `ODC_SERVICE_KEY`, `BLD_SERVICE_KEY`, `VW_SERVICE_KEY` 환경변수 이름과 canonical property key 우선순위를 유지한다.
+- migration SQL, checksum, runtime Flyway boundary를 변경하지 않았다.
+
+### 데이터 영향
+
+- `none`: SQL, migration, persisted enum/state, `complex_id`/`complex_pk`, raw-first ingest 및 failed-match evidence를 변경하지 않았다.
+
+### 검증 근거 확인
+
+- Nearby/Prediction mandatory dependency 최초 RED와 최소 GREEN narrow tests — `Pass`.
+- `ExternalApiCredentialPropertiesTest` — `Pass`; 기존 4개 external credential 환경변수 binding과 canonical property 우선순위를 확인했다.
+- `HomeSearchApiApplicationTests` — `Pass`; no-DB context가 mandatory JDBC/transaction/Redis test dependency를 명시한다.
+- `ObservabilityEndpointSmokeTest` 5건 — `Pass`; no-DB context에서 raw reconciliation runner를 명시적으로 비활성화했다.
+- `PropertyDataBatchContextBoundaryTest` — `Pass`; Batch가 필요한 service/ingest-region adapter만 스캔하고 API feature를 유입하지 않음을 확인했다.
+- `:core:test --rerun-tasks` — `Pass` (14s).
+- `:batch:test --rerun-tasks` — `Pass` (16s).
+- `:api:test --rerun-tasks` — `Pass` (2m 28s, 57 tests).
+- `:api:apiContractTest` — `Pass`; `:api:restDocsTest :api:verifyOpenApiSpec --rerun-tasks` — `Pass` (49s).
+- configuration component 전환에 맞춘 persistence context tests와 `IngestRecoveryRunnerTest` — `Pass`.
+- `JdbcMapMarkerRepositoryTest` exact PostGIS/covering-index EXPLAIN assertion — 단독 및 전체 class `Pass`; planner 통계 순서 의존성을 범위 밖 bulk fixture와 `ANALYZE`로 제거했다.
+- `backendQualityCheck --no-daemon --stacktrace` — `Pass` (12m 6s; persistence 220 tests, coverage, Spotless, fresh Flyway, REST Docs/OpenAPI, packaged Batch 포함).
+- production `@Value`, `ObjectProvider`, `DurationStyle.detectAndParse`, configuration의 application `Service`/`UseCase` 수동 생성 — 모두 0건.
+- production structure — exact `@Configuration` 27개, `@Bean` 56개, `@ConfigurationProperties` 20개, `@Service` 25개, `@Repository` 28개.
+- application Spring import — `org.springframework.stereotype.Service`, `org.springframework.transaction.annotation.Transactional`만 존재; domain Spring import 0건.
+- legacy read type, production `Integer.MAX_VALUE` paging — 0건.
+- `python3 .codex/harness/pr_lint.py --self-test` 및 PR body lint — `Pass`.
+- repository root `git diff --check` — `Pass`; migration diff — 변경 0건.
+
+### 검증 공백
+
+- 원격 CI와 실제 external provider/Redis 호출은 실행하지 않았다. provider parsing과 startup binding은 local fixtures/context tests로 검증했다.
+- `gitleaks`가 local에 설치되지 않아 repository added-line credential/secret pattern 검사를 사용했다.
+
+### 잔여 위험
+
+- Asciidoctor/Grolifant의 기존 Gradle 10 deprecation warning은 남아 있으며 project production API 경고는 아니다.
+- 외부 provider credential 자체의 유효성·quota는 실제 운영 호출 전까지 검증되지 않는다.
+
+### 보안 영향
+
+- enabled Kakao/notification configuration의 secret 누락은 startup에서 차단하고, disabled feature는 blank secret을 허용한다.
+- credential은 typed binding과 기존 env fallback으로만 전달하며 log, exception response, metric label에 값을 추가하지 않았다.
+- JDBC는 기존 named parameter와 transaction 경계를 유지하고 SQL 문자열/외부 입력 보간을 추가하지 않았다.
+- security-audit: 지적사항 = none
+
+### Findings-first review
+
+- 지적사항: 열린 correctness/security finding 없음.
+- 해소한 finding 1: Batch의 broad component scan이 API 전용 service까지 유입하던 문제를 exact application service와 ingest/region adapter scan으로 제한했다.
+- 해소한 finding 2: typed binding 전환 중 누락될 수 있던 unprefixed external credential env 계약을 별도 typed properties와 회귀 테스트로 보존했다.
+- 해소한 finding 3: no-DB API/REST Docs tests가 production fallback에 의존하지 않고 필수 mock/disabled runner를 명시하도록 수정했다.
+- 해소한 finding 4: map EXPLAIN의 suite-order planner 통계 의존성을 production SQL/assertion 완화 없이 deterministic fixture로 제거했다.
+- 검증 근거 확인: full API/Batch/core/persistence, public contract, OpenAPI, coverage, fresh migration, packaged process가 GREEN이다.
+- 검증 공백: 원격 CI 및 실제 provider 호출 미실행.
+- 잔여 위험: 위 third-party Gradle warning과 external credential 유효성 확인 외 열린 finding은 없다.
+
+### Merge
+
+- implementation commit: pending
+- merge commit: pending

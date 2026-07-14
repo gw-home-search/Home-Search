@@ -10,6 +10,7 @@ import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifie
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessRepository;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessResult;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessService;
+import com.home.application.coordinate.readiness.CoordinateReadinessPolicy;
 import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
 import com.home.infrastructure.ApplicationRunnerOrders;
 import java.util.List;
@@ -52,7 +53,8 @@ class ComplexCoordinateReadinessRunnerTest {
             super(
                     coordinateExceptionService(),
                     new NoopReadinessRepository(),
-                    new ComplexDisplayCoordinateProjectionService(new NoopProjectionRepository()));
+                    new ComplexDisplayCoordinateProjectionService(new NoopProjectionRepository()),
+                    new CoordinateReadinessPolicy(0, java.time.Duration.ZERO));
         }
 
         private static ComplexCoordinateExceptionService coordinateExceptionService() {

@@ -11,29 +11,30 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.function.Supplier;
+import org.springframework.stereotype.Service;
 
+@Service
 public class RtmsMonthlyRefreshUseCase {
 
     private static final int MAX_FAILURE_REASON_LENGTH = 500;
 
     private final RtmsApartmentTradePageGateway client;
-    private final Supplier<OpenApiTradeIngestService> ingestServiceSupplier;
-    private final Supplier<RtmsIngestRunRepository> ingestRunRepositorySupplier;
+    private final OpenApiTradeIngestService ingestService;
+    private final RtmsIngestRunRepository ingestRunRepository;
     private final Clock clock;
     private final RtmsMonthlyRefreshRetryPolicy retryPolicy;
 
     public RtmsMonthlyRefreshUseCase(
             RtmsApartmentTradePageGateway client,
-            Supplier<OpenApiTradeIngestService> ingestServiceSupplier,
-            Supplier<RtmsIngestRunRepository> ingestRunRepositorySupplier,
-            Clock clock,
-            RtmsMonthlyRefreshRetryPolicy retryPolicy) {
+            OpenApiTradeIngestService ingestService,
+            RtmsIngestRunRepository ingestRunRepository,
+            RtmsMonthlyRefreshExecution execution) {
         this.client = Objects.requireNonNull(client);
-        this.ingestServiceSupplier = Objects.requireNonNull(ingestServiceSupplier);
-        this.ingestRunRepositorySupplier = Objects.requireNonNull(ingestRunRepositorySupplier);
-        this.clock = Objects.requireNonNull(clock);
-        this.retryPolicy = Objects.requireNonNull(retryPolicy);
+        this.ingestService = Objects.requireNonNull(ingestService);
+        this.ingestRunRepository = Objects.requireNonNull(ingestRunRepository);
+        RtmsMonthlyRefreshExecution requiredExecution = Objects.requireNonNull(execution);
+        this.clock = requiredExecution.clock();
+        this.retryPolicy = requiredExecution.retryPolicy();
     }
 
     public RtmsMonthlyRefreshRunSummary refresh(String lawdCd, String dealYmd) {
@@ -42,14 +43,12 @@ public class RtmsMonthlyRefreshUseCase {
 
     public RtmsMonthlyRefreshRunSummary refresh(
             String lawdCd, String dealYmd, ExecutionCorrelationId executionCorrelationId) {
-        OpenApiTradeIngestService ingestService = requiredIngestService();
         RtmsApartmentTradeRequest currentRequest = new RtmsApartmentTradeRequest(lawdCd, dealYmd, 1);
         return refreshMonth(ingestService, currentRequest, executionCorrelationId);
     }
 
     public RtmsMonthlyRefreshReport refresh(RtmsMonthlyRefreshPlan plan) {
         Objects.requireNonNull(plan, "plan is required");
-        OpenApiTradeIngestService ingestService = requiredIngestService();
         List<RtmsMonthlyRefreshRunSummary> summaries = new ArrayList<>();
         for (RtmsApartmentTradeRequest request : plan.monthlyRequests()) {
             summaries.add(refreshMonth(ingestService, request, null));
@@ -62,15 +61,9 @@ public class RtmsMonthlyRefreshUseCase {
             RtmsApartmentTradeRequest firstRequest,
             ExecutionCorrelationId executionCorrelationId) {
         Instant startedAt = clock.instant();
-        RtmsIngestRunRepository ingestRunRepository =
-                Objects.requireNonNull(ingestRunRepositorySupplier.get(), "RtmsIngestRunRepository is required");
         MonthlyRefreshOutcome outcome = executeMonth(ingestService, firstRequest, startedAt);
         RtmsIngestRunRecord saved = ingestRunRepository.save(outcome.toRecord(executionCorrelationId));
         return outcome.toSummary(saved.id());
-    }
-
-    private OpenApiTradeIngestService requiredIngestService() {
-        return Objects.requireNonNull(ingestServiceSupplier.get(), "OpenApiTradeIngestService is required");
     }
 
     private MonthlyRefreshOutcome executeMonth(

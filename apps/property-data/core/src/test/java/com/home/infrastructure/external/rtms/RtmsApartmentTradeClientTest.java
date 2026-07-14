@@ -161,7 +161,7 @@ class RtmsApartmentTradeClientTest {
     @DisplayName("blank RTMS service key는 HTTP request 생성 전에 실패한다")
     void blankServiceKeyFailsBeforeHttpRequest() {
         RtmsApartmentTradeProperties properties =
-                new RtmsApartmentTradeProperties("https://example.invalid", "/rtms", " ", 100, 1_000, 1_000);
+                new RtmsApartmentTradeProperties("https://example.invalid", "/rtms", " ", 100, 1_000, 1_000, 200);
         RestClient restClient = RestClient.builder()
                 .baseUrl(properties.baseUrl())
                 .requestFactory((uri, httpMethod) -> {
@@ -179,7 +179,7 @@ class RtmsApartmentTradeClientTest {
     @DisplayName("public RTMS client는 configured endpoint를 호출하고 response를 parse한다")
     void publicClientFetchesConfiguredEndpointAndParsesResponse() {
         RtmsApartmentTradeProperties properties =
-                new RtmsApartmentTradeProperties("https://api.example.test", "/rtms", "DUMMY", 100, 1_000, 1_000);
+                new RtmsApartmentTradeProperties("https://api.example.test", "/rtms", "DUMMY", 100, 1_000, 1_000, 200);
         RestClient.Builder builder = RestClient.builder().baseUrl(properties.baseUrl());
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         RestClient restClient = builder.build();
@@ -203,7 +203,7 @@ class RtmsApartmentTradeClientTest {
     @DisplayName("public RTMS client는 포털 Encoding service key를 이중 인코딩하지 않는다")
     void publicClientDoesNotDoubleEncodePortalEncodedServiceKey() {
         RtmsApartmentTradeProperties properties = new RtmsApartmentTradeProperties(
-                "https://api.example.test", "/rtms", "abc%2Fdef%2Bghi%3D", 100, 1_000, 1_000);
+                "https://api.example.test", "/rtms", "abc%2Fdef%2Bghi%3D", 100, 1_000, 1_000, 200);
         RestClient.Builder builder = RestClient.builder().baseUrl(properties.baseUrl());
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         RestClient restClient = builder.build();

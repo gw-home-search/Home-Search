@@ -1,7 +1,6 @@
 package com.home;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.home.application.map.MapUseCase;
 import com.home.application.region.RegionRelationSynchronizationGateway;
@@ -17,10 +16,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
-@SpringBootTest(properties = "home.ingest.rtms.daily.enabled=true")
+@SpringBootTest(properties = {"home.ingest.rtms.daily.enabled=true", "home.ingest.raw-reconcile.enabled=false"})
 @ActiveProfiles("test")
 class HomeSearchApiApplicationTests {
 
@@ -44,6 +47,18 @@ class HomeSearchApiApplicationTests {
 
     @MockitoBean
     private JdbcTradeHistoryReader tradeHistoryReader;
+
+    @MockitoBean
+    private JdbcClient jdbcClient;
+
+    @MockitoBean
+    private PlatformTransactionManager transactionManager;
+
+    @MockitoBean
+    private TransactionTemplate transactionTemplate;
+
+    @MockitoBean
+    private StringRedisTemplate redisTemplate;
 
     @Autowired
     private ApplicationContext applicationContext;
@@ -70,18 +85,17 @@ class HomeSearchApiApplicationTests {
     }
 
     @Test
-    @DisplayName("region sync DB 의존성은 no-DB 부트가 아니라 실행 시점에 검증한다")
-    void regionSyncRequiresDatabaseOnlyWhenInvoked() {
-        assertThatThrownBy(regionRelationSynchronizationGateway::synchronizeAll)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("PlatformTransactionManager is required for region unit count persistence");
+    @DisplayName("no-DB 부트 테스트는 mandatory region persistence 의존성을 mock으로 명시한다")
+    void regionSyncUsesExplicitTestDependencies() {
+        assertThat(regionRelationSynchronizationGateway).isNotNull();
+        assertThat(transactionManager).isNotNull();
     }
 
     @Test
-    @DisplayName("runtime DML 복구 runner만 기본 등록되고 partition DDL runner는 opt-in이다")
-    void defaultOnRecoveryRunnersAreRegisteredWithoutDatabase() {
+    @DisplayName("no-DB 부트 테스트는 DB를 사용하는 복구 runner를 명시적으로 비활성화한다")
+    void databaseRunnersAreExplicitlyDisabledWithoutDatabase() {
         assertThat(applicationContext.containsBean("rawIngestReconciliationRunner"))
-                .isTrue();
+                .isFalse();
         assertThat(applicationContext.containsBean("tradePartitionMaintenanceRunner"))
                 .isFalse();
         assertThat(applicationContext.containsBean("rtmsOneShotIngestApplicationRunner"))
@@ -89,7 +103,7 @@ class HomeSearchApiApplicationTests {
     }
 
     @Test
-    @DisplayName("complex relation use case는 no-DB 부트에서도 정의되고 사용 시점에만 DB를 요구한다")
+    @DisplayName("complex relation use case는 명시적 JdbcClient test mock으로 구성된다")
     void complexRelationBeansAreDefinedWithoutDatabase() {
         assertThat(applicationContext.containsBean("complexRelationUseCase")).isTrue();
     }

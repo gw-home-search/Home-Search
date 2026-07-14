@@ -5,10 +5,12 @@ import com.home.application.ingest.raw.RawTradeItemParser;
 import com.home.ingestcore.rtms.OpenApiTradeItem;
 import java.util.Objects;
 import java.util.Optional;
+import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+@Component
 public class RtmsRawTradeItemParser implements RawTradeItemParser {
 
     private final ObjectMapper objectMapper;

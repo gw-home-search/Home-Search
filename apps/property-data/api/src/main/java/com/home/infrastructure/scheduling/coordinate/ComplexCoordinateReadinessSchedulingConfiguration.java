@@ -1,6 +1,7 @@
 package com.home.infrastructure.scheduling.coordinate;
 
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessService;
+import com.home.infrastructure.persistence.coordinate.CoordinateReadinessProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;

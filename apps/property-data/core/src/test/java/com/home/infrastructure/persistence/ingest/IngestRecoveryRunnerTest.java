@@ -43,9 +43,8 @@ class IngestRecoveryRunnerTest {
     void tradePartitionMaintenanceIsExplicitOptIn() throws Exception {
         var method = TradeNormalizationPersistenceConfiguration.class.getDeclaredMethod(
                 "tradePartitionMaintenanceRunner",
-                org.springframework.beans.factory.ObjectProvider.class,
-                org.springframework.beans.factory.ObjectProvider.class,
-                int.class);
+                JdbcTradePartitionMaintenanceRepository.class,
+                TradePartitionProperties.class);
         ConditionalOnProperty condition = method.getAnnotation(ConditionalOnProperty.class);
 
         assertThat(condition).isNotNull();
@@ -112,6 +111,7 @@ class IngestRecoveryRunnerTest {
                 rawRepository,
                 new NoopNormalizedRepository(),
                 item -> ComplexMatchResult.matched(501L, "COMPLEX-501", "APT_SEQ"),
+                com.home.application.ingest.matching.ComplexMasterBootstrapper.noop(),
                 TradeMatchEvidenceRepository.noop(),
                 raw -> Optional.of(new OpenApiTradeItem(
                         "101",

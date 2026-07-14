@@ -10,6 +10,7 @@ import com.home.application.coordinate.footprint.BuildingFootprintSource;
 import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessResult;
 import com.home.application.coordinate.readiness.ComplexCoordinateReadinessService;
+import com.home.application.coordinate.readiness.CoordinateReadinessPolicy;
 import com.home.application.map.ComplexMarkerQuery;
 import com.home.application.map.ComplexMarkerResult;
 import com.home.domain.complex.relation.ComplexRelationClassifier;
@@ -40,7 +41,8 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
                 coordinateExceptionService(coordinateRepository),
                 coordinateRepository,
                 new ComplexDisplayCoordinateProjectionService(
-                        new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient)));
+                        new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient)),
+                new CoordinateReadinessPolicy(0, java.time.Duration.ZERO));
 
         ComplexCoordinateReadinessResult result = service.prepare(10, 10, 10);
 
@@ -89,8 +91,7 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
                 coordinateRepository,
                 new ComplexDisplayCoordinateProjectionService(
                         new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient)),
-                10,
-                java.time.Duration.ofDays(1));
+                new CoordinateReadinessPolicy(10, java.time.Duration.ofDays(1)));
 
         ComplexCoordinateReadinessResult result = service.prepare(0, 0, 10);
 
@@ -114,8 +115,7 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
                 coordinateRepository,
                 new ComplexDisplayCoordinateProjectionService(
                         new JdbcComplexDisplayCoordinateProjectionRepository(jdbcClient)),
-                10,
-                java.time.Duration.ofDays(1));
+                new CoordinateReadinessPolicy(10, java.time.Duration.ofDays(1)));
 
         ComplexCoordinateReadinessResult result = service.prepare(0, 0, 10);
 

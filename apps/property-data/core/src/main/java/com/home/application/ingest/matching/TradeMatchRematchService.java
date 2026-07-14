@@ -11,7 +11,9 @@ import com.home.ingestcore.rtms.OpenApiTradeItem;
 import com.home.ingestcore.rtms.ParsedRtmsTrade;
 import com.home.ingestcore.rtms.TradeExclAreaNormalizer;
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
+@Service
 public class TradeMatchRematchService {
 
     private final RawTradeIngestRepository rawTradeIngestRepository;
@@ -20,21 +22,6 @@ public class TradeMatchRematchService {
     private final ComplexMasterBootstrapper complexMasterBootstrapper;
     private final TradeMatchEvidenceRepository tradeMatchEvidenceRepository;
     private final RawTradeItemParser rawTradeItemParser;
-
-    public TradeMatchRematchService(
-            RawTradeIngestRepository rawTradeIngestRepository,
-            NormalizedTradeRepository normalizedTradeRepository,
-            ComplexMatcher complexMatcher,
-            TradeMatchEvidenceRepository tradeMatchEvidenceRepository,
-            RawTradeItemParser rawTradeItemParser) {
-        this(
-                rawTradeIngestRepository,
-                normalizedTradeRepository,
-                complexMatcher,
-                ComplexMasterBootstrapper.noop(),
-                tradeMatchEvidenceRepository,
-                rawTradeItemParser);
-    }
 
     public TradeMatchRematchService(
             RawTradeIngestRepository rawTradeIngestRepository,

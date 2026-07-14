@@ -26,8 +26,10 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionTemplate;
 
+@Repository
 public class JdbcBuildingMetadataEvidenceRepository implements BuildingMetadataEvidenceRepository {
     private final JdbcClient jdbc;
     private final TransactionTemplate transaction;

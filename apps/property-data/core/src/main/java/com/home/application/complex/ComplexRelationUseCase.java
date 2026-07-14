@@ -3,7 +3,9 @@ package com.home.application.complex;
 import com.home.domain.complex.relation.ComplexRelationClassification;
 import com.home.domain.complex.relation.ComplexRelationClassifier;
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
+@Service
 public class ComplexRelationUseCase {
 
     private final ComplexRelationRepository repository;

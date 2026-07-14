@@ -14,7 +14,9 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.springframework.stereotype.Service;
 
+@Service
 public class NearbyPlaceQueryService implements NearbyPlaceUseCase {
 
     private static final int DEFAULT_RADIUS_METERS = 800;
@@ -33,17 +35,13 @@ public class NearbyPlaceQueryService implements NearbyPlaceUseCase {
     public NearbyPlaceQueryService(
             NearbyPlaceCenterReader centerReader,
             NearbyPlaceProvider provider,
-            Executor executor,
-            Clock clock,
-            long timeoutMillis) {
+            NearbyPlaceExecutionOptions executionOptions) {
         this.centerReader = Objects.requireNonNull(centerReader);
         this.provider = Objects.requireNonNull(provider);
-        this.executor = Objects.requireNonNull(executor);
-        this.clock = Objects.requireNonNull(clock);
-        if (timeoutMillis < 1) {
-            throw new IllegalArgumentException("nearby place timeout must be positive");
-        }
-        this.timeoutMillis = timeoutMillis;
+        NearbyPlaceExecutionOptions options = Objects.requireNonNull(executionOptions);
+        this.executor = options.executor();
+        this.clock = options.clock();
+        this.timeoutMillis = options.totalTimeout().toMillis();
     }
 
     @Override

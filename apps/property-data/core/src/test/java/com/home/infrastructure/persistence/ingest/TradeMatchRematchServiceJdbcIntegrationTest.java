@@ -3,6 +3,7 @@ package com.home.infrastructure.persistence.ingest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.home.application.coordinate.lookup.ParcelCoordinate;
+import com.home.application.ingest.matching.ComplexMasterBootstrapper;
 import com.home.application.ingest.matching.TradeMatchRematchService;
 import com.home.domain.ingest.matching.TradeMatchStatus;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
@@ -58,6 +59,7 @@ class TradeMatchRematchServiceJdbcIntegrationTest extends JdbcPostgresTestSuppor
                 rawRepository,
                 new JdbcNormalizedTradeRepository(jdbcClient, transactionTemplate),
                 new JdbcComplexMatcher(jdbcClient),
+                ComplexMasterBootstrapper.noop(),
                 evidenceRepository,
                 new RtmsRawTradeItemParser(new ObjectMapper()));
 

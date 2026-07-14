@@ -1,4 +1,4 @@
-package com.home.infrastructure.persistence.ingest.coordinate;
+package com.home.infrastructure.configuration;
 
 import jakarta.validation.constraints.Positive;
 import java.util.Properties;

@@ -35,6 +35,9 @@ Home Search needs:
 - Flyway migration execution.
 - RTMS public data API access.
 
+All Java application artifacts target Java 21. Local property-data API/Batch,
+admin-service, and user-service containers therefore use Eclipse Temurin 21.
+
 Optional but recommended:
 
 - Prometheus endpoint.

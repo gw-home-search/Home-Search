@@ -1,12 +1,12 @@
 package com.home.admin.security;
 
+import com.home.admin.AdminProblemFactory;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ProblemDetail;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
@@ -19,9 +19,11 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 final class AdminSecurityProblemHandler implements AuthenticationEntryPoint, AccessDeniedHandler {
     private final ObjectMapper objectMapper;
+    private final AdminProblemFactory problems;
 
-    AdminSecurityProblemHandler(ObjectMapper objectMapper) {
+    AdminSecurityProblemHandler(ObjectMapper objectMapper, AdminProblemFactory problems) {
         this.objectMapper = objectMapper;
+        this.problems = problems;
     }
 
     @Override
@@ -43,6 +45,6 @@ final class AdminSecurityProblemHandler implements AuthenticationEntryPoint, Acc
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
-        objectMapper.writeValue(response.getOutputStream(), ProblemDetail.forStatusAndDetail(status, detail));
+        objectMapper.writeValue(response.getOutputStream(), problems.create(status, detail));
     }
 }

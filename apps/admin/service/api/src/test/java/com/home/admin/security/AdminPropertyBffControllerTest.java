@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.home.admin.AdminApiExceptionHandler;
+import com.home.admin.AdminProblemFactory;
 import com.home.admin.audit.AdminAuditService;
 import com.home.admin.internal.AdminPropertyBffController;
 import com.home.admin.internal.PropertyAdminClient;
@@ -36,7 +37,12 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(AdminPropertyBffController.class)
 @TestPropertySource(properties = "home.admin.internal.enabled=true")
-@Import({AdminSecurityConfiguration.class, AdminSecurityProblemHandler.class, AdminApiExceptionHandler.class})
+@Import({
+    AdminSecurityConfiguration.class,
+    AdminSecurityProblemHandler.class,
+    AdminApiExceptionHandler.class,
+    AdminProblemFactory.class
+})
 class AdminPropertyBffControllerTest {
     @Autowired
     MockMvc mvc;

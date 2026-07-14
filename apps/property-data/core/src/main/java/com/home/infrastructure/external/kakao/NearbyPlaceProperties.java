@@ -51,5 +51,11 @@ public record NearbyPlaceProperties(
 
     public record Executor(
             @Min(1) @Max(3) @DefaultValue("3") int threads,
-            @Min(1) @Max(120) @DefaultValue("24") int queueCapacity) {}
+            @Min(1) @Max(120) @DefaultValue("24") int queueCapacity,
+            @NotNull @DefaultValue("10s") Duration shutdownAwait) {
+
+        public Executor {
+            requirePositive(shutdownAwait, "home.place.kakao.executor.shutdown-await");
+        }
+    }
 }

@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.YearMonth;
 import java.util.Objects;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -59,7 +60,14 @@ public class PricePredictionUseCase {
         }
 
         cacheRepository.save(key, pending, properties.pendingTtl());
-        executor.execute(() -> runPrediction(feature, key));
+        try {
+            executor.execute(() -> runPrediction(feature, key));
+        } catch (RejectedExecutionException exception) {
+            PricePredictionResult failed =
+                    PricePredictionResult.failed(feature, properties, now(), "AI prediction capacity unavailable.");
+            cacheRepository.save(key, failed, properties.failedTtl());
+            return failed;
+        }
         return pending;
     }
 
@@ -78,7 +86,7 @@ public class PricePredictionUseCase {
         } catch (RuntimeException ex) {
             cacheRepository.save(
                     key,
-                    PricePredictionResult.failed(feature, properties, now(), failureMessage(ex)),
+                    PricePredictionResult.failed(feature, properties, now(), failureMessage()),
                     properties.failedTtl());
         }
     }
@@ -87,8 +95,7 @@ public class PricePredictionUseCase {
         return Instant.now(clock);
     }
 
-    private static String failureMessage(RuntimeException ex) {
-        String message = ex.getMessage();
-        return message == null || message.isBlank() ? ex.getClass().getSimpleName() : message;
+    private static String failureMessage() {
+        return "AI prediction provider unavailable.";
     }
 }

@@ -10,9 +10,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/internal/v1/admin/metadata")
 @ConditionalOnProperty(name = "home.admin.internal.enabled", havingValue = "true")
+@Validated
 public class InternalAdminMetadataController {
     private final MetadataAdminService service;
 
@@ -33,8 +37,8 @@ public class InternalAdminMetadataController {
 
     @GetMapping("/pending")
     public List<Pending> pending(
-            @RequestParam(defaultValue = "50") int limit,
-            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "50") @Positive int limit,
+            @RequestParam(defaultValue = "0") @PositiveOrZero int offset,
             HttpServletRequest request) {
         require(request, "METADATA_READ");
         return service.findPending(limit, offset);
@@ -47,21 +51,25 @@ public class InternalAdminMetadataController {
     }
 
     @GetMapping("/{complexId}")
-    public Detail detail(@PathVariable long complexId, HttpServletRequest request) {
+    public Detail detail(@PathVariable @Positive long complexId, HttpServletRequest request) {
         require(request, "METADATA_READ");
         return service.detail(complexId);
     }
 
     @PostMapping("/{complexId}/retry")
     public ActionResult retry(
-            @PathVariable long complexId, @Valid @RequestBody DecisionRequest body, HttpServletRequest request) {
+            @PathVariable @Positive long complexId,
+            @Valid @RequestBody DecisionRequest body,
+            HttpServletRequest request) {
         InternalAdminPrincipal principal = require(request, "METADATA_RETRY");
         return service.retry(complexId, principal.actor(), body.reason());
     }
 
     @PostMapping("/{complexId}/hold")
     public ActionResult hold(
-            @PathVariable long complexId, @Valid @RequestBody DecisionRequest body, HttpServletRequest request) {
+            @PathVariable @Positive long complexId,
+            @Valid @RequestBody DecisionRequest body,
+            HttpServletRequest request) {
         InternalAdminPrincipal principal = require(request, "METADATA_HOLD");
         return service.hold(complexId, principal.actor(), body.reason());
     }
@@ -80,14 +88,18 @@ public class InternalAdminMetadataController {
 
     @PostMapping("/pnu-aliases/{aliasId}/approve")
     public ActionResult approveAlias(
-            @PathVariable long aliasId, @Valid @RequestBody DecisionRequest body, HttpServletRequest request) {
+            @PathVariable @Positive long aliasId,
+            @Valid @RequestBody DecisionRequest body,
+            HttpServletRequest request) {
         InternalAdminPrincipal principal = require(request, "METADATA_ALIAS_MANAGE");
         return service.approveAlias(aliasId, principal.actor(), body.reason());
     }
 
     @PostMapping("/pnu-aliases/{aliasId}/disable")
     public ActionResult disableAlias(
-            @PathVariable long aliasId, @Valid @RequestBody DecisionRequest body, HttpServletRequest request) {
+            @PathVariable @Positive long aliasId,
+            @Valid @RequestBody DecisionRequest body,
+            HttpServletRequest request) {
         InternalAdminPrincipal principal = require(request, "METADATA_ALIAS_MANAGE");
         return service.disableAlias(aliasId, principal.actor(), body.reason());
     }

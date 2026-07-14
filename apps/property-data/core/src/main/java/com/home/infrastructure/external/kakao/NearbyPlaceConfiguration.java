@@ -17,11 +17,10 @@ import io.micrometer.core.instrument.Timer;
 import java.time.Clock;
 import java.time.ZoneId;
 import java.util.Optional;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -30,6 +29,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
 
@@ -37,24 +37,22 @@ import tools.jackson.databind.ObjectMapper;
 @EnableConfigurationProperties(NearbyPlaceProperties.class)
 public class NearbyPlaceConfiguration {
 
+    private static final Logger log = LoggerFactory.getLogger(NearbyPlaceConfiguration.class);
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
-    @Bean(destroyMethod = "shutdown")
-    ExecutorService nearbyPlaceExecutor(NearbyPlaceProperties properties) {
+    @Bean
+    ThreadPoolTaskExecutor nearbyPlaceExecutor(NearbyPlaceProperties properties) {
         NearbyPlaceProperties.Executor executor = properties.executor();
-        AtomicInteger sequence = new AtomicInteger();
-        return new ThreadPoolExecutor(
-                executor.threads(),
-                executor.threads(),
-                0,
-                TimeUnit.MILLISECONDS,
-                new ArrayBlockingQueue<>(executor.queueCapacity()),
-                runnable -> {
-                    Thread thread = new Thread(runnable, "home-nearby-place-" + sequence.incrementAndGet());
-                    thread.setDaemon(true);
-                    return thread;
-                },
-                new ThreadPoolExecutor.AbortPolicy());
+        ThreadPoolTaskExecutor taskExecutor = new ThreadPoolTaskExecutor();
+        taskExecutor.setCorePoolSize(executor.threads());
+        taskExecutor.setMaxPoolSize(executor.threads());
+        taskExecutor.setQueueCapacity(executor.queueCapacity());
+        taskExecutor.setThreadNamePrefix("home-nearby-place-");
+        taskExecutor.setDaemon(true);
+        taskExecutor.setWaitForTasksToCompleteOnShutdown(true);
+        taskExecutor.setAwaitTerminationMillis(executor.shutdownAwait().toMillis());
+        taskExecutor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        return taskExecutor;
     }
 
     @Bean
@@ -64,7 +62,7 @@ public class NearbyPlaceConfiguration {
 
     @Bean
     NearbyPlaceExecutionOptions nearbyPlaceExecutionOptions(
-            @Qualifier("nearbyPlaceExecutor") ExecutorService nearbyPlaceExecutor, NearbyPlaceProperties properties) {
+            @Qualifier("nearbyPlaceExecutor") Executor nearbyPlaceExecutor, NearbyPlaceProperties properties) {
         return new NearbyPlaceExecutionOptions(nearbyPlaceExecutor, Clock.system(SEOUL), properties.totalTimeout());
     }
 
@@ -104,6 +102,10 @@ public class NearbyPlaceConfiguration {
                 return delegate.search(center, radiusMeters, category);
             } catch (RuntimeException exception) {
                 result = "error";
+                log.warn(
+                        "Kakao nearby-place provider call failed category={} type={}",
+                        category.name(),
+                        exception.getClass().getSimpleName());
                 throw exception;
             } finally {
                 meterRegistry

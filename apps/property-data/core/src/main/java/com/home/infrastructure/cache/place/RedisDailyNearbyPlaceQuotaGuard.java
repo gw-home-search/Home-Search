@@ -9,11 +9,14 @@ import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 
 public final class RedisDailyNearbyPlaceQuotaGuard implements NearbyPlaceQuotaGuard {
 
+    private static final Logger log = LoggerFactory.getLogger(RedisDailyNearbyPlaceQuotaGuard.class);
     private static final String KEY_PREFIX = "home-search:nearby-place:kakao:quota:format-1:";
     private static final DefaultRedisScript<Long> INCREMENT_SCRIPT = new DefaultRedisScript<>("""
 		local budget = tonumber(ARGV[1])
@@ -27,6 +30,7 @@ public final class RedisDailyNearbyPlaceQuotaGuard implements NearbyPlaceQuotaGu
     private final StringRedisTemplate redisTemplate;
     private final int dailyBudget;
     private final Clock clock;
+    private final MeterRegistry meterRegistry;
     private final AtomicLong used = new AtomicLong();
 
     public RedisDailyNearbyPlaceQuotaGuard(
@@ -37,7 +41,8 @@ public final class RedisDailyNearbyPlaceQuotaGuard implements NearbyPlaceQuotaGu
         }
         this.dailyBudget = dailyBudget;
         this.clock = Objects.requireNonNull(clock);
-        Objects.requireNonNull(meterRegistry).gauge("home.search.kakao.local.quota.used", used);
+        this.meterRegistry = Objects.requireNonNull(meterRegistry);
+        meterRegistry.gauge("home.search.kakao.local.quota.used", used);
         meterRegistry.gauge("home.search.kakao.local.quota.budget", new AtomicLong(dailyBudget));
     }
 
@@ -54,17 +59,30 @@ public final class RedisDailyNearbyPlaceQuotaGuard implements NearbyPlaceQuotaGu
             Long current = redisTemplate.execute(
                     INCREMENT_SCRIPT, List.of(key), Integer.toString(dailyBudget), Long.toString(ttlSeconds));
             if (current == null) {
+                record("error");
                 throw new NearbyPlaceProviderUnavailableException("Kakao 호출 예산을 확인할 수 없습니다.");
             }
             if (current < 0) {
                 used.set(dailyBudget);
+                record("exhausted");
                 throw new NearbyPlaceProviderUnavailableException("Kakao 일일 호출 예산을 모두 사용했습니다.");
             }
             used.set(current);
+            record("allowed");
         } catch (NearbyPlaceProviderUnavailableException exception) {
             throw exception;
         } catch (RuntimeException exception) {
+            record("error");
+            log.warn(
+                    "Kakao quota guard failed closed type={}",
+                    exception.getClass().getSimpleName());
             throw new NearbyPlaceProviderUnavailableException("Kakao 호출 예산을 확인할 수 없습니다.", exception);
         }
+    }
+
+    private void record(String result) {
+        meterRegistry
+                .counter("home.search.kakao.local.quota.requests", "result", result)
+                .increment();
     }
 }

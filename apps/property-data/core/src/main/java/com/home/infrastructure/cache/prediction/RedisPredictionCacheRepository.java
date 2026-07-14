@@ -4,6 +4,7 @@ import com.home.application.prediction.PredictionCacheKey;
 import com.home.application.prediction.PredictionCacheRepository;
 import com.home.application.prediction.PredictionStatus;
 import com.home.application.prediction.PricePredictionResult;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
@@ -25,10 +26,13 @@ public class RedisPredictionCacheRepository implements PredictionCacheRepository
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
 
-    public RedisPredictionCacheRepository(StringRedisTemplate redisTemplate, ObjectMapper objectMapper) {
+    public RedisPredictionCacheRepository(
+            StringRedisTemplate redisTemplate, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
         this.redisTemplate = Objects.requireNonNull(redisTemplate);
         this.objectMapper = Objects.requireNonNull(objectMapper);
+        this.meterRegistry = Objects.requireNonNull(meterRegistry);
     }
 
     @Override
@@ -36,12 +40,15 @@ public class RedisPredictionCacheRepository implements PredictionCacheRepository
         try {
             String cachedValue = redisTemplate.opsForValue().get(key.cacheKey());
             if (cachedValue == null || cachedValue.isBlank()) {
+                record("read", "miss");
                 return Optional.empty();
             }
+            record("read", "hit");
             return Optional.of(
                     objectMapper.readValue(cachedValue, CacheValue.class).toResult());
         } catch (RuntimeException ex) {
-            log.debug("Failed to read prediction cache key={}", key.cacheKey(), ex);
+            record("read", "error");
+            log.debug("Prediction cache read failed type={}", ex.getClass().getSimpleName());
             return Optional.of(cacheFailure("prediction cache read failure"));
         }
     }
@@ -49,9 +56,12 @@ public class RedisPredictionCacheRepository implements PredictionCacheRepository
     @Override
     public boolean acquireLock(PredictionCacheKey key, Duration ttl) {
         try {
-            return Boolean.TRUE.equals(redisTemplate.opsForValue().setIfAbsent(key.lockKey(), "1", ttl));
+            boolean acquired = Boolean.TRUE.equals(redisTemplate.opsForValue().setIfAbsent(key.lockKey(), "1", ttl));
+            record("lock", acquired ? "acquired" : "contended");
+            return acquired;
         } catch (RuntimeException ex) {
-            log.debug("Failed to acquire prediction lock key={}", key.lockKey(), ex);
+            record("lock", "error");
+            log.debug("Prediction cache lock failed type={}", ex.getClass().getSimpleName());
             return false;
         }
     }
@@ -62,9 +72,17 @@ public class RedisPredictionCacheRepository implements PredictionCacheRepository
             redisTemplate
                     .opsForValue()
                     .set(key.cacheKey(), CacheValue.from(result).serialize(objectMapper), ttl);
+            record("write", "success");
         } catch (RuntimeException ex) {
-            log.debug("Failed to write prediction cache key={}", key.cacheKey(), ex);
+            record("write", "error");
+            log.debug("Prediction cache write failed type={}", ex.getClass().getSimpleName());
         }
+    }
+
+    private void record(String operation, String result) {
+        meterRegistry
+                .counter("home.search.prediction.cache.operations", "operation", operation, "result", result)
+                .increment();
     }
 
     private static PricePredictionResult cacheFailure(String message) {

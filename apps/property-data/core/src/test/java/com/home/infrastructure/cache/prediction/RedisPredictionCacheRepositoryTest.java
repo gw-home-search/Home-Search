@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.home.application.prediction.PredictionCacheKey;
 import com.home.application.prediction.PredictionStatus;
 import com.home.application.prediction.PricePredictionResult;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
@@ -32,7 +33,8 @@ class RedisPredictionCacheRepositoryTest {
     @DisplayName("READY 예측 결과를 계획된 Redis key와 TTL로 저장한다")
     void storesReadyPredictionWithCacheKeyAndTtl() {
         RedisFixture redis = redis();
-        RedisPredictionCacheRepository repository = new RedisPredictionCacheRepository(redis.template(), objectMapper);
+        RedisPredictionCacheRepository repository =
+                new RedisPredictionCacheRepository(redis.template(), objectMapper, new SimpleMeterRegistry());
         PredictionCacheKey key = new PredictionCacheKey(501L, 9001L, YearMonth.of(2026, 6));
 
         repository.save(key, readyResult(), Duration.ofHours(24));
@@ -56,7 +58,8 @@ class RedisPredictionCacheRepositoryTest {
         RedisFixture redis = redis();
         when(redis.operations().setIfAbsent(anyString(), anyString(), any(Duration.class)))
                 .thenReturn(true);
-        RedisPredictionCacheRepository repository = new RedisPredictionCacheRepository(redis.template(), objectMapper);
+        RedisPredictionCacheRepository repository =
+                new RedisPredictionCacheRepository(redis.template(), objectMapper, new SimpleMeterRegistry());
 
         boolean acquired = repository.acquireLock(
                 new PredictionCacheKey(501L, 9001L, YearMonth.of(2026, 6)), Duration.ofSeconds(60));
@@ -74,13 +77,18 @@ class RedisPredictionCacheRepositoryTest {
     void brokenJsonReturnsFailedFallbackStatus() {
         RedisFixture redis = redis();
         when(redis.operations().get(anyString())).thenReturn("{broken-json");
-        RedisPredictionCacheRepository repository = new RedisPredictionCacheRepository(redis.template(), objectMapper);
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        RedisPredictionCacheRepository repository =
+                new RedisPredictionCacheRepository(redis.template(), objectMapper, registry);
 
         assertThat(repository.find(new PredictionCacheKey(501L, 9001L, YearMonth.of(2026, 6))))
                 .hasValueSatisfying(result -> {
                     assertThat(result.status()).isEqualTo(PredictionStatus.FAILED);
                     assertThat(result.message()).contains("cache");
                 });
+        assertThat(registry.counter("home.search.prediction.cache.operations", "operation", "read", "result", "error")
+                        .count())
+                .isEqualTo(1);
     }
 
     @SuppressWarnings("unchecked")

@@ -1,8 +1,16 @@
 plugins {
     id 'org.springframework.boot' version '3.5.16' apply false
     id 'io.spring.dependency-management' version '1.1.7' apply false
+    id 'com.diffplug.spotless' version '8.8.0'
 }
 group = 'com.home'; version = '0.0.1-SNAPSHOT'
+
+spotless {
+    java {
+        target 'core/src/**/*.java', 'api/src/**/*.java', 'migration/src/**/*.java', 'ops/src/**/*.java'
+        palantirJavaFormat('2.96.0')
+    }
+}
 allprojects { group = rootProject.group; version = rootProject.version }
 subprojects {
     apply plugin: 'java'

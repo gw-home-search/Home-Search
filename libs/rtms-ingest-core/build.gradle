@@ -1,10 +1,18 @@
 plugins {
     id 'java-library'
+    id 'com.diffplug.spotless' version '8.8.0'
 }
 
 group = 'com.home'
 version = '0.0.1-SNAPSHOT'
 description = 'Home Search RTMS ingest invariant core boundary'
+
+spotless {
+    java {
+        target 'src/**/*.java'
+        palantirJavaFormat('2.96.0')
+    }
+}
 
 java {
     toolchain {

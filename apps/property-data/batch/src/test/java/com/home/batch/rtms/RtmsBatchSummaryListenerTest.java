@@ -9,8 +9,9 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.batch.core.ExitStatus;
-import org.springframework.batch.core.JobExecution;
-import org.springframework.batch.core.JobInstance;
+import org.springframework.batch.core.job.JobExecution;
+import org.springframework.batch.core.job.JobInstance;
+import org.springframework.batch.core.job.parameters.JobParameters;
 
 class RtmsBatchSummaryListenerTest {
 
@@ -19,7 +20,7 @@ class RtmsBatchSummaryListenerTest {
     void listenerMapsWarningsAndSendsNotification() {
         List<OpsNotification> notifications = new ArrayList<>();
         RtmsBatchSummaryListener listener = new RtmsBatchSummaryListener(notifications::add);
-        JobExecution execution = new JobExecution(new JobInstance(1L, "rtmsDailyRefreshJob"), 2L, null);
+        JobExecution execution = new JobExecution(2L, new JobInstance(1L, "rtmsDailyRefreshJob"), new JobParameters());
         execution.setExitStatus(ExitStatus.COMPLETED);
         execution.getExecutionContext().put(RtmsBatchExecutionSummary.WARNINGS_CONTEXT_KEY, true);
 
@@ -38,7 +39,7 @@ class RtmsBatchSummaryListenerTest {
             throw new IllegalStateException("notify failed");
         };
         RtmsBatchSummaryListener listener = new RtmsBatchSummaryListener(failingNotifier);
-        JobExecution execution = new JobExecution(new JobInstance(1L, "rtmsDailyRefreshJob"), 2L, null);
+        JobExecution execution = new JobExecution(2L, new JobInstance(1L, "rtmsDailyRefreshJob"), new JobParameters());
         execution.setExitStatus(ExitStatus.COMPLETED);
 
         listener.afterJob(execution);

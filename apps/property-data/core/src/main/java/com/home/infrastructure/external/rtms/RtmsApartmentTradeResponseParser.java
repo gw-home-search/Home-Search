@@ -1,13 +1,13 @@
 package com.home.infrastructure.external.rtms;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.rtms.RtmsApartmentTradePage;
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
 import com.home.ingestcore.rtms.OpenApiTradeItem;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 public class RtmsApartmentTradeResponseParser {
 

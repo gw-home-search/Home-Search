@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.rtms.RtmsApartmentTradePage;
 import com.home.application.ingest.rtms.RtmsApartmentTradeRequest;
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
@@ -16,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
 
 class RtmsApartmentTradeClientTest {
 

@@ -3,7 +3,6 @@ package com.home.infrastructure.web.internaladmin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.security.jwt.JwtIssueRequest;
 import com.home.security.jwt.JwtVerificationPolicy;
 import com.home.security.jwt.Rs256JwtCodec;
@@ -21,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import tools.jackson.databind.ObjectMapper;
 
 class InternalAdminJwtAuthenticationFilterTest {
     private static final Instant NOW = Instant.parse("2026-07-12T00:00:00Z");

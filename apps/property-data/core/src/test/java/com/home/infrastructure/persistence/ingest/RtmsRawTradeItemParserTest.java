@@ -2,13 +2,13 @@ package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
 import com.home.infrastructure.persistence.ingest.raw.RtmsRawTradeItemParser;
 import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 class RtmsRawTradeItemParserTest {
 

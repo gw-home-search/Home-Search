@@ -1,7 +1,5 @@
 package com.home.infrastructure.external.kakao;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.place.NearbyPlaceItem;
 import com.home.application.place.NearbyPlacePoint;
 import com.home.application.place.NearbyPlaceProvider;
@@ -19,6 +17,8 @@ import java.util.Objects;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 public final class KakaoNearbyPlaceProvider implements NearbyPlaceProvider {
 

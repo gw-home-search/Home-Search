@@ -1,8 +1,5 @@
 package com.home.infrastructure.persistence.map;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.map.ComplexMarkerQuery;
 import com.home.application.map.ComplexMarkerRepository;
 import com.home.application.map.ComplexMarkerResult;
@@ -15,6 +12,8 @@ import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 final class RedisCachingComplexMarkerRepository implements ComplexMarkerRepository {
 
@@ -71,7 +70,7 @@ final class RedisCachingComplexMarkerRepository implements ComplexMarkerReposito
                 return CacheLookup.miss();
             }
             return CacheLookup.hit(objectMapper.readValue(cachedValue, MARKER_LIST_TYPE));
-        } catch (JsonProcessingException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             log.debug("Failed to read Redis complex marker cache key={}", cacheKey, ex);
             return CacheLookup.error();
         }
@@ -82,7 +81,7 @@ final class RedisCachingComplexMarkerRepository implements ComplexMarkerReposito
             String serializedMarkers = objectMapper.writeValueAsString(markers);
             redisTemplate.opsForValue().set(cacheKey, serializedMarkers, ttl);
             return true;
-        } catch (JsonProcessingException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             log.debug("Failed to write Redis complex marker cache key={}", cacheKey, ex);
             return false;
         }

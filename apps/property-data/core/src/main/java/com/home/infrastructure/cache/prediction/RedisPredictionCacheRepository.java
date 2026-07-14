@@ -1,7 +1,5 @@
 package com.home.infrastructure.cache.prediction;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.prediction.PredictionCacheKey;
 import com.home.application.prediction.PredictionCacheRepository;
 import com.home.application.prediction.PredictionStatus;
@@ -15,6 +13,8 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 public class RedisPredictionCacheRepository implements PredictionCacheRepository {
 
@@ -38,7 +38,7 @@ public class RedisPredictionCacheRepository implements PredictionCacheRepository
             }
             return Optional.of(
                     objectMapper.readValue(cachedValue, CacheValue.class).toResult());
-        } catch (JsonProcessingException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             log.debug("Failed to read prediction cache key={}", key.cacheKey(), ex);
             return Optional.of(cacheFailure("prediction cache read failure"));
         }
@@ -60,7 +60,7 @@ public class RedisPredictionCacheRepository implements PredictionCacheRepository
             redisTemplate
                     .opsForValue()
                     .set(key.cacheKey(), CacheValue.from(result).serialize(objectMapper), ttl);
-        } catch (JsonProcessingException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             log.debug("Failed to write prediction cache key={}", key.cacheKey(), ex);
         }
     }
@@ -137,7 +137,7 @@ public class RedisPredictionCacheRepository implements PredictionCacheRepository
                     message);
         }
 
-        private String serialize(ObjectMapper objectMapper) throws JsonProcessingException {
+        private String serialize(ObjectMapper objectMapper) throws JacksonException {
             return objectMapper.writeValueAsString(this);
         }
     }

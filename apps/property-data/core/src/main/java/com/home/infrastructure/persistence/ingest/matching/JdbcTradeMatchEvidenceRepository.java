@@ -1,8 +1,5 @@
 package com.home.infrastructure.persistence.ingest.matching;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.matching.TradeMatchEvidenceCommand;
 import com.home.application.ingest.matching.TradeMatchEvidenceRecord;
 import com.home.application.ingest.matching.TradeMatchEvidenceRepository;
@@ -15,6 +12,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 public class JdbcTradeMatchEvidenceRepository implements TradeMatchEvidenceRepository {
 
@@ -169,7 +169,7 @@ public class JdbcTradeMatchEvidenceRepository implements TradeMatchEvidenceRepos
     private String candidateJson(List<Long> candidateComplexIds) {
         try {
             return objectMapper.writeValueAsString(candidateComplexIds);
-        } catch (JsonProcessingException exception) {
+        } catch (JacksonException exception) {
             throw new IllegalStateException("Failed to serialize trade match candidate ids", exception);
         }
     }
@@ -180,7 +180,7 @@ public class JdbcTradeMatchEvidenceRepository implements TradeMatchEvidenceRepos
         }
         try {
             return objectMapper.readValue(json, LONG_LIST);
-        } catch (JsonProcessingException exception) {
+        } catch (JacksonException exception) {
             throw new IllegalStateException("Failed to parse trade match candidate ids", exception);
         }
     }

@@ -3,7 +3,6 @@ package com.home.infrastructure.persistence.map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.map.MapQueryUseCase;
 import com.home.application.map.MapUseCase;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -14,6 +13,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.util.ReflectionTestUtils;
+import tools.jackson.databind.ObjectMapper;
 
 class MapUseCaseConfigurationTest {
 

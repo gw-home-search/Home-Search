@@ -8,8 +8,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
-import org.springframework.batch.core.JobParameter;
-import org.springframework.batch.core.JobParameters;
+import org.springframework.batch.core.job.parameters.JobParameter;
+import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -83,10 +83,9 @@ public class BatchExecutionCorrelationGuard {
 
     private Map<String, String> identifyingParameters(JobParameters parameters) {
         Map<String, String> values = new LinkedHashMap<>();
-        parameters.getParameters().entrySet().stream()
-                .filter(entry -> entry.getValue().isIdentifying())
-                .sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> values.put(entry.getKey(), stringValue(entry.getValue())));
+        parameters.getIdentifyingParameters().stream()
+                .sorted((left, right) -> left.name().compareTo(right.name()))
+                .forEach(parameter -> values.put(parameter.name(), stringValue(parameter)));
         return values;
     }
 
@@ -118,7 +117,7 @@ public class BatchExecutionCorrelationGuard {
     }
 
     private String stringValue(JobParameter<?> parameter) {
-        return parameter.getValue() == null ? null : parameter.getValue().toString();
+        return parameter.value() == null ? null : parameter.value().toString();
     }
 
     private void unlockAndClose(Connection connection, String requestId) {

@@ -2,7 +2,6 @@ package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.reconciliation.RawIngestReconciliationResult;
 import com.home.application.ingest.reconciliation.RawIngestReconciliationService;
 import com.home.application.ingest.trade.TradeIngestFinalizer;
@@ -21,6 +20,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.TransactionManager;
 import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
 import org.springframework.transaction.interceptor.TransactionInterceptor;
+import tools.jackson.databind.ObjectMapper;
 
 class RawIngestReconciliationJdbcIntegrationTest extends JdbcPostgresTestSupport {
 

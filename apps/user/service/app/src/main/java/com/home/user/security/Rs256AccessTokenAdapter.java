@@ -6,6 +6,7 @@ import com.home.security.jwt.Rs256JwtCodec;
 import com.home.security.jwt.RsaPemKeys;
 import com.home.security.user.UserAccessTokenPolicy;
 import com.home.security.user.UserAccessTokenVerifier;
+import com.home.user.config.properties.JwtProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.PrivateKey;
@@ -16,7 +17,6 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -34,16 +34,16 @@ public class Rs256AccessTokenAdapter implements AccessTokenIssuer, JwtDecoder {
     private final Duration lifetime;
     private final UserAccessTokenVerifier verifier;
 
-    public Rs256AccessTokenAdapter(
-            @Value("${home.jwt.active-kid}") String activeKid,
-            @Value("${home.jwt.private-key-path}") Path privatePath,
-            @Value("${home.jwt.active-public-key-path}") Path publicPath,
-            @Value("${home.jwt.overlap-kid:}") String overlapKid,
-            @Value("${home.jwt.overlap-public-key-path:}") String overlapPath,
-            @Value("${home.jwt.lifetime:15m}") Duration lifetime,
-            @Value("${home.jwt.issuer:user-service}") String issuer,
-            @Value("${home.jwt.audience:home-search-user-api}") String audience) {
+    public Rs256AccessTokenAdapter(JwtProperties properties) {
         try {
+            String activeKid = properties.activeKid();
+            Path privatePath = properties.privateKeyPath();
+            Path publicPath = properties.activePublicKeyPath();
+            String overlapKid = properties.overlapKid();
+            String overlapPath = properties.overlapPublicKeyPath();
+            Duration lifetime = properties.lifetime();
+            String issuer = properties.issuer();
+            String audience = properties.audience();
             if (!ISSUER.equals(issuer) || !AUDIENCE.equals(audience) || lifetime.compareTo(Duration.ofMinutes(15)) != 0)
                 throw new IllegalStateException("canonical JWT policy mismatch");
             this.activeKid = required(activeKid);

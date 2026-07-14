@@ -1,6 +1,7 @@
 package com.home.user.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
@@ -14,7 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.home.application.auth.RefreshTokenService;
 import com.home.application.auth.port.AccessTokenIssuer;
-import com.home.application.favorite.SaveFavoriteComplex;
+import com.home.application.favorite.FavoriteService;
 import com.home.domain.user.OAuthProvider;
 import com.home.domain.user.UserProfile;
 import com.home.domain.user.favorite.FavoriteLimitReachedException;
@@ -146,7 +147,7 @@ class UserPersistenceConcurrencyTest {
     MockMvc mockMvc;
 
     @Autowired
-    SaveFavoriteComplex saveFavorite;
+    FavoriteService favorites;
 
     @Test
     void serializesFirstLoginAndAllowsExactlyOneRefreshRotation() throws Exception {
@@ -179,6 +180,18 @@ class UserPersistenceConcurrencyTest {
             var secondRotate = executor.submit(rotateTask);
             assertThat(java.util.List.of(firstRotate.get(), secondRotate.get())).containsExactlyInAnyOrder(true, false);
         }
+    }
+
+    @Test
+    void replacesAndRevokesTheSingleActiveRefreshToken() {
+        var user = login.login(
+                OAuthProvider.GOOGLE, new OAuthProfile("refresh-replace-user", new UserProfile("교체 사용자", null, null)));
+        String replaced = refresh.issue(user.userId()).rawToken();
+        String active = refresh.issue(user.userId()).rawToken();
+
+        assertThatThrownBy(() -> refresh.rotate(replaced)).isInstanceOf(InvalidRefreshTokenException.class);
+        refresh.revoke(active);
+        assertThatThrownBy(() -> refresh.rotate(active)).isInstanceOf(InvalidRefreshTokenException.class);
     }
 
     @Test
@@ -386,7 +399,7 @@ class UserPersistenceConcurrencyTest {
 
     private boolean saveFavoriteResult(long userId, long complexId) {
         try {
-            saveFavorite.execute(userId, complexId);
+            favorites.save(userId, complexId);
             return true;
         } catch (FavoriteLimitReachedException ignored) {
             return false;

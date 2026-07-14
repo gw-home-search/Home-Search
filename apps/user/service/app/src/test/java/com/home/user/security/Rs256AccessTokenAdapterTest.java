@@ -3,6 +3,7 @@ package com.home.user.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.home.user.config.properties.JwtProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyPairGenerator;
@@ -20,15 +21,15 @@ class Rs256AccessTokenAdapterTest {
         Path privateKey = directory.resolve("private.pem"), publicKey = directory.resolve("public.pem");
         Files.writeString(privateKey, pem("PRIVATE KEY", pair.getPrivate().getEncoded()));
         Files.writeString(publicKey, pem("PUBLIC KEY", pair.getPublic().getEncoded()));
-        var adapter = new Rs256AccessTokenAdapter(
+        var adapter = new Rs256AccessTokenAdapter(new JwtProperties(
                 "user-key",
                 privateKey,
                 publicKey,
                 "",
                 "",
-                Duration.ofMinutes(15),
                 "user-service",
-                "home-search-user-api");
+                "home-search-user-api",
+                Duration.ofMinutes(15)));
 
         var jwt = adapter.decode(adapter.issue(42L));
 
@@ -55,15 +56,15 @@ class Rs256AccessTokenAdapterTest {
         Files.writeString(publicKey, pem("PUBLIC KEY", active.getPublic().getEncoded()));
         Files.writeString(overlapKey, pem("PUBLIC KEY", overlap.getPublic().getEncoded()));
 
-        assertThatThrownBy(() -> new Rs256AccessTokenAdapter(
+        assertThatThrownBy(() -> new Rs256AccessTokenAdapter(new JwtProperties(
                         "active",
                         privateKey,
                         publicKey,
                         "overlap",
                         overlapKey.toString(),
-                        Duration.ofMinutes(15),
                         "user-service",
-                        "home-search-user-api"))
+                        "home-search-user-api",
+                        Duration.ofMinutes(15))))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("invalid user JWT key configuration");
     }

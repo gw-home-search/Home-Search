@@ -769,3 +769,73 @@ property-data configuration file distribution:
 
 - implementation commit: `430ef4f`
 - merge commit: `6ab8bdb9c23213e6e80933605b24e2358243c4e3`
+
+## PR 12 Evidence
+
+### TDD 근거
+
+- 변경 전 admin `./gradlew test --rerun-tasks --no-daemon --stacktrace` — `Pass` (28s).
+- 변경 전 source-data `./gradlew test --rerun-tasks --no-daemon --stacktrace` — `Pass` (5s).
+- 최초 RED 1: `AdminSpringModernizationTest`가 typed session/internal-client/internal-JWT properties와 공통 `AdminProblemFactory`를 요구하도록 추가했다.
+- 예상 RED 실패 1: 네 production type이 없어 admin 구조 test가 `Fail` (6s).
+- 최소 GREEN 1: `@Value`를 validated `@ConfigurationProperties`로 교체하고 MVC advice, login controller, Security handler가 동일 factory로 기존 `ProblemDetail`을 생성하도록 했다.
+- 최초 RED 2: source-data runner가 지원 operation을 내부 enum으로 소유하는지 검사했다.
+- 예상 RED 실패 2: `SourceDataMigrationRunner$Operation`이 없어 source-data 구조 test가 `Fail` (5s).
+- 최소 GREEN 2: CLI 문자열/option/exit code는 그대로 유지하고 runner의 문자열 switch만 private enum parse/switch로 변경했다.
+
+### 계약 영향
+
+- admin Session/RBAC/CSRF URL, request/response, status/detail, internal JWT issuer/audience/kid/lifetime, downstream request id 계약 변경 없음.
+- browser request body/path에서 actor id를 받지 않고 `@AuthenticationPrincipal AdminPrincipal`의 account id만 사용한다.
+- source-data `info`, `validate`, `migrate`, `preflight-baseline`, `baseline-existing` operation과 option/confirmation/exit code 계약 변경 없음.
+
+### 데이터 영향
+
+- admin/source-data migration SQL, checksum, schema, Flyway history 변경 없음.
+- `AdminAccountService`/`AdminAuthenticationService`의 직접 `JdbcClient`, transaction, advisory lock, last-admin 보호, session revoke/audit 원자성을 변경하지 않았다.
+- source-data wrong-database guard와 legacy fingerprint/baseline confirmation을 그대로 유지한다.
+
+### 검증 근거 확인
+
+- admin typed config/problem/security narrow tests — `Pass` (9s).
+- source-data operation/parse narrow test — `Pass` (5s).
+- admin `spotlessApply test --rerun-tasks --no-daemon --stacktrace` — `Pass` (30s; API/core/migration/ops 포함).
+- admin API 전체 regression 재실행 — `Pass` (10s); session/RBAC/CSRF/login/BFF error detail을 포함한다.
+- admin `spotlessCheck :api:check :migration:check :ops:check` — `Pass` (6s); API runtime Flyway-free JAR boundary 포함.
+- admin migration/ops packaged wrapper smoke — `Pass`; unknown operation과 forbidden inline password가 exit code `2`를 유지한다.
+- source-data `spotlessApply check --rerun-tasks --no-daemon --stacktrace` — `Pass` (56s; unit, PostgreSQL/Flyway integration, packaged process 포함).
+- production admin `@Value` — 0건; `ProblemDetail.forStatusAndDetail` production 생성 지점은 공통 factory 1건만 존재한다.
+- repository root `git diff --check` — `Pass`; baseline 대비 admin/source migration diff — 변경 0건.
+- added-line credential/secret pattern 검사 — 지적사항 없음 (`gitleaks`는 local에 설치되지 않음).
+- `python3 .codex/harness/pr_lint.py --self-test` 및 PR body lint — `Pass`.
+
+### 검증 공백
+
+- 원격 CI와 실제 property-data internal endpoint 호출은 실행하지 않았다. RestClient URI/timeout과 JWT는 configuration/unit/BFF mock test로 검증했다.
+
+### 잔여 위험
+
+- 실제 배포 private key file mount와 property-data network route는 운영 smoke에서 확인해야 한다. enabled startup은 blank secret, unsafe URI, non-positive timeout/lifetime을 거부한다.
+
+### 보안 영향
+
+- internal feature disabled 시 secret 공백을 허용하고 enabled 시 issuer/audience/kid/private-key path와 최대 60초 TTL을 startup validation한다.
+- RestClient base URI는 HTTP(S) host만 허용하고 user-info/query/fragment/non-root path를 거부하며 connect/read timeout은 positive duration으로 검증한다.
+- private key regular-file/최대 16 KiB 검사, internal JWT actor principal, Session/RBAC/CSRF와 last-admin protection을 유지한다.
+- CLI option/exit code와 data-sensitive `baseline-existing` confirmation을 변경하지 않았다.
+- security-audit: 지적사항 = none
+
+### Findings-first review
+
+- 지적사항: 열린 correctness/security finding 없음.
+- 해소한 finding 1: admin session/internal JWT/RestClient의 9개 `@Value`를 feature별 typed properties로 이동했다.
+- 해소한 finding 2: MVC advice, login controller, Security handler의 독립 `ProblemDetail` 생성을 공통 factory로 통합했다.
+- 해소한 finding 3: source-data 지원 operation을 private enum으로 명시하면서 외부 문자열/exit 계약은 유지했다.
+- 검증 근거 확인: admin security/persistence/API와 source-data CLI/Flyway/packaged process, migration/runtime/secret boundary가 GREEN이다.
+- 검증 공백: 원격 CI 및 실제 internal network 호출 미실행.
+- 잔여 위험: 운영 key mount/network smoke 외 열린 finding은 없다.
+
+### Merge
+
+- implementation commit: `26660a7`
+- merge commit: pending

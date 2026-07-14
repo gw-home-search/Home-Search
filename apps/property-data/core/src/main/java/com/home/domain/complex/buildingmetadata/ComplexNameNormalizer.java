@@ -1,18 +1,17 @@
 package com.home.domain.complex.buildingmetadata;
 
-import java.text.Normalizer;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 public final class ComplexNameNormalizer {
+    private static final Pattern SEARCH_SEPARATOR = Pattern.compile("[\\p{P}\\s]+");
+
     private ComplexNameNormalizer() {}
 
     public static String normalize(String value) {
         if (value == null || value.isBlank()) {
             return "";
         }
-        return Normalizer.normalize(value, Normalizer.Form.NFKC)
-                .replaceAll("\\s+", "")
-                .replaceAll("[()\\[\\]{}.,·\\-_/]", "")
-                .toLowerCase(Locale.ROOT);
+        return SEARCH_SEPARATOR.matcher(value.toLowerCase(Locale.ROOT)).replaceAll("");
     }
 }

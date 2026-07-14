@@ -7,6 +7,7 @@ import com.home.application.map.ComplexMarkerQuery;
 import com.home.application.map.ComplexMarkerResult;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -53,6 +54,62 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
                         ComplexMarkerResult::parcelId, ComplexMarkerResult::complexId, ComplexMarkerResult::unitCntSum)
                 .containsExactly(tuple(1001L, null, 860L));
         assertThat(repository.findComplexMarkers(unitRequest(861L, null))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("neutral unit·age filter variant는 trade-first variant와 같은 marker를 반환한다")
+    void neutralMarkerShapeFiltersMatchTradeFirstVariant() {
+        seedMapData();
+        jdbcClient
+                .sql("UPDATE complex SET use_date = DATE '2010-01-01' WHERE parcel_id = 1001")
+                .update();
+        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+
+        var tradeFirstMarkers = repository.findComplexMarkers(request(null, null));
+        var markerShapeFilterMarkers = repository.findComplexMarkers(shapeFilterRequest());
+
+        assertThat(markerShapeFilterMarkers).containsExactlyElementsOf(tradeFirstMarkers);
+    }
+
+    @Test
+    @DisplayName("가격·면적·연식·세대수 조합은 marker identity와 source name을 유지한다")
+    void combinedFiltersKeepMarkerIdentityAndSourceName() {
+        seedMapData();
+        jdbcClient
+                .sql("UPDATE complex SET use_date = DATE '2010-01-01' WHERE parcel_id = 1001")
+                .update();
+        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+
+        assertThat(repository.findComplexMarkers(combinedFilterRequest()))
+                .extracting(
+                        ComplexMarkerResult::parcelId,
+                        ComplexMarkerResult::complexId,
+                        ComplexMarkerResult::name,
+                        ComplexMarkerResult::latestDealAmount,
+                        ComplexMarkerResult::unitCntSum)
+                .containsExactly(tuple(1001L, null, "Sample Apartment B", 125000L, 860L));
+    }
+
+    @Test
+    @DisplayName("map query EXPLAIN은 PostGIS와 latest-trade index 경로를 유지한다")
+    void explainUsesSpatialAndLatestTradeIndexes() {
+        seedMapData();
+        jdbcClient.sql("""
+			UPDATE parcel
+			SET geom = ST_Multi(ST_Buffer(ST_SetSRID(ST_MakePoint(longitude, latitude), 4326), 0.0001))
+			""").update();
+
+        List<String> plan = transactionTemplate.execute(status -> {
+            jdbcClient.sql("SET LOCAL enable_seqscan = off").update();
+            return ComplexMarkerJdbcParameters.from(request(null, null))
+                    .bindTradeFirst(jdbcClient.sql("EXPLAIN (COSTS OFF) " + ComplexMarkerSql.tradeFirst()))
+                    .query(String.class)
+                    .list();
+        });
+
+        assertThat(String.join("\n", plan))
+                .contains("ix_parcel_geom")
+                .contains("complex_id_deal_date_id_deal_amount_excl_area_idx");
     }
 
     @Test
@@ -234,6 +291,14 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
     private ComplexMarkerQuery unitRequest(Long unitMin, Long unitMax) {
         return new ComplexMarkerQuery(
                 37.45, 126.85, 37.70, 127.20, null, null, null, null, null, null, unitMin, unitMax);
+    }
+
+    private ComplexMarkerQuery shapeFilterRequest() {
+        return new ComplexMarkerQuery(37.45, 126.85, 37.70, 127.20, null, null, null, null, 0, null, 0L, null);
+    }
+
+    private ComplexMarkerQuery combinedFilterRequest() {
+        return new ComplexMarkerQuery(37.45, 126.85, 37.70, 127.20, 25, 26, 12.0, 13.0, 10, 30, 800L, 900L);
     }
 
     private void seedRedevelopmentParcel() {

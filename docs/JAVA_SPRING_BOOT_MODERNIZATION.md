@@ -3,7 +3,7 @@
 ## 실행 기준
 
 - baseline commit: `d601237`
-- 현재 진행 PR: `PR 12 — admin/source-data modernization`
+- 현재 진행 PR: `PR 13 — quality gates and final docs`
 - 전체 상태: `In Progress`
 - 시작일: 2026-07-14
 - 실행 원칙: 한 번에 하나의 PR만 진행하고, 선행 PR이 `Complete`인 경우에만 다음 PR을 시작한다.
@@ -83,8 +83,8 @@ property-data configuration file distribution:
 | 9 | property-data typed wiring | Complete | PR 8 `Complete` |
 | 10 | error/validation/executor/observability | Complete | PR 9 `Complete` |
 | 11 | user-service Spring/JPA cleanup | Complete | PR 10 `Complete` |
-| 12 | admin/source-data modernization | In Progress | PR 11 `Complete` |
-| 13 | quality gates와 final docs | Pending | PR 12 `Complete` |
+| 12 | admin/source-data modernization | Complete | PR 11 `Complete` |
+| 13 | quality gates와 final docs | In Progress | PR 12 `Complete` |
 
 ## PR 1 Evidence
 
@@ -838,4 +838,4 @@ property-data configuration file distribution:
 ### Merge
 
 - implementation commit: `26660a7`
-- merge commit: pending
+- merge commit: `3b0d6dfe94ef8198078a1075c5f60079064f71b0`

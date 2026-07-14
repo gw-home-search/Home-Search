@@ -2,7 +2,6 @@ package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.coordinate.lookup.ParcelCoordinate;
 import com.home.application.ingest.matching.TradeMatchRematchService;
 import com.home.domain.ingest.matching.TradeMatchStatus;
@@ -17,6 +16,7 @@ import java.math.BigDecimal;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 class TradeMatchRematchServiceJdbcIntegrationTest extends JdbcPostgresTestSupport {
 

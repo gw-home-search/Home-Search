@@ -37,6 +37,8 @@ Home Search needs:
 
 All Java application artifacts target Java 21. Local property-data API/Batch,
 admin-service, and user-service containers therefore use Eclipse Temurin 21.
+All Java applications build on Spring Boot 4.1.0; application runtime images do
+not perform implicit Flyway migration.
 
 Optional but recommended:
 

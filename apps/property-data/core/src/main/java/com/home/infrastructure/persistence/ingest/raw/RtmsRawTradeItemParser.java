@@ -1,13 +1,13 @@
 package com.home.infrastructure.persistence.ingest.raw;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
 import com.home.application.ingest.raw.RawTradeItemParser;
 import com.home.ingestcore.rtms.OpenApiTradeItem;
-import java.io.IOException;
 import java.util.Objects;
 import java.util.Optional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 public class RtmsRawTradeItemParser implements RawTradeItemParser {
 
@@ -41,7 +41,7 @@ public class RtmsRawTradeItemParser implements RawTradeItemParser {
                     text(node, "cdealType"),
                     text(node, "cdealDay"),
                     text(node, "rgstDate")));
-        } catch (IOException | IllegalArgumentException exception) {
+        } catch (JacksonException | IllegalArgumentException exception) {
             return Optional.empty();
         }
     }

@@ -18,9 +18,12 @@ Migration target:
 Current Java platform baseline:
 
 - All Java builds and local Java application containers use Java 21.
-- property-data, admin-service, and source-data use Spring Boot 3.5.16 as the
-  compatibility bridge before Boot 4.
-- user-service already uses Spring Boot 4.1.0.
+- property-data, user-service, admin-service, and source-data use Spring Boot
+  4.1.0.
+- Jackson data binding uses Jackson 3 (`tools.jackson`); Jackson annotations
+  retain the supported `com.fasterxml.jackson.annotation` package.
+- Property/user runtime artifacts remain Flyway-free. Admin/source migration
+  operations own explicit Flyway execution.
 
 ## Backend Current Shape
 

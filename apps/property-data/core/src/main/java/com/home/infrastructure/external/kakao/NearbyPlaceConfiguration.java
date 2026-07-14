@@ -1,6 +1,5 @@
 package com.home.infrastructure.external.kakao;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.place.NearbyPlaceCenter;
 import com.home.application.place.NearbyPlaceCenterReader;
 import com.home.application.place.NearbyPlaceProvider;
@@ -37,6 +36,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration(proxyBeanMethods = false)
 public class NearbyPlaceConfiguration {

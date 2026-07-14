@@ -3,10 +3,10 @@ package com.home.batch.metadata;
 import com.home.application.ingest.metadata.OdcMetadataGapFillService;
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.batch.core.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
+import org.springframework.batch.core.step.StepContribution;
 import org.springframework.batch.core.step.tasklet.Tasklet;
-import org.springframework.batch.repeat.RepeatStatus;
+import org.springframework.batch.infrastructure.repeat.RepeatStatus;
 
 class OdcMetadataGapFillTasklet implements Tasklet {
     private final OdcMetadataGapFillService service;

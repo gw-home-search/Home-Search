@@ -4,10 +4,10 @@ dependencies {
     api 'org.springframework.security:spring-security-crypto'
     implementation 'org.springframework:spring-tx'
     implementation 'org.springframework:spring-context'
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-jdbc-test'
     testImplementation project(':migration')
     testImplementation 'org.flywaydb:flyway-core'
     testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
 }

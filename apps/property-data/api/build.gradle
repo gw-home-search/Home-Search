@@ -6,6 +6,10 @@ plugins {
 
 description = 'Home Search property-data API app'
 
+asciidoctorj {
+    version = '3.0.0'
+}
+
 tasks.named('bootJar') {
     archiveFileName = 'property-data-api.jar'
 }
@@ -87,21 +91,24 @@ dependencies {
 
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 
     runtimeOnly 'org.springframework.boot:spring-boot-starter-data-redis'
     runtimeOnly 'org.springframework.boot:spring-boot-starter-jdbc'
     runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
     runtimeOnly 'org.postgresql:postgresql'
 
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-restdocs'
+    testImplementation 'org.springframework.boot:spring-boot-starter-jdbc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis-test'
     testImplementation 'org.springframework:spring-jdbc'
     testImplementation 'org.flywaydb:flyway-core'
     testRuntimeOnly 'org.flywaydb:flyway-database-postgresql'
     testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
-    testImplementation 'com.epages:restdocs-api-spec-mockmvc:0.19.4'
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'com.epages:restdocs-api-spec-mockmvc:0.20.1'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
 
     asciidoctorExt 'org.springframework.restdocs:spring-restdocs-asciidoctor'
 }

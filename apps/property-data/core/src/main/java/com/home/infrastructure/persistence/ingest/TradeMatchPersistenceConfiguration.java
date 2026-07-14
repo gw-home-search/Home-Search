@@ -1,6 +1,5 @@
 package com.home.infrastructure.persistence.ingest;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.coordinate.lookup.ParcelCoordinateResolver;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataBatchService;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataEvidenceRepository;
@@ -49,6 +48,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration(proxyBeanMethods = false)
 class TradeMatchPersistenceConfiguration {

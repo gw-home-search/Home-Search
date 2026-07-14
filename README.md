@@ -36,7 +36,7 @@ Home Search는 RTMS 실거래 원본을 보존하면서 단지와 거래를 연�
 
 | 영역 | 기술 |
 | --- | --- |
-| Backend | Java 21, Spring Boot 3.5/4.1, Gradle, JDBC, Flyway |
+| Backend | Java 21, Spring Boot 4.1, Gradle, JDBC, Flyway |
 | Frontend | React 19, TypeScript, Vite, Vitest |
 | Data | PostgreSQL, PostGIS, Redis |
 | Infra | Docker Compose, Prometheus, Loki, Grafana |

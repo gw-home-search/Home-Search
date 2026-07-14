@@ -9,9 +9,9 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.springframework.batch.core.ExitStatus;
-import org.springframework.batch.core.Job;
-import org.springframework.batch.core.JobExecution;
-import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.job.Job;
+import org.springframework.batch.core.job.JobExecution;
+import org.springframework.batch.core.launch.JobOperator;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class BatchJobLauncherApplicationRunner implements ApplicationRunner {
 
-    private final Supplier<JobLauncher> jobLauncher;
+    private final Supplier<JobOperator> jobOperator;
     private final Function<String, Job> jobLookup;
     private final Predicate<String> jobExists;
     private final BatchMetadataSchemaPreflight schemaPreflight;
@@ -34,13 +34,13 @@ public class BatchJobLauncherApplicationRunner implements ApplicationRunner {
 
     @Autowired
     public BatchJobLauncherApplicationRunner(
-            ObjectProvider<JobLauncher> jobLauncher,
+            ObjectProvider<JobOperator> jobOperator,
             ConfigurableListableBeanFactory beanFactory,
             BatchMetadataSchemaPreflight schemaPreflight,
             BatchExecutionCorrelationGuard correlationGuard,
             Environment environment) {
         this(
-                jobLauncher::getObject,
+                jobOperator::getObject,
                 name -> beanFactory.getBean(name, Job.class),
                 beanFactory::containsBeanDefinition,
                 schemaPreflight,
@@ -51,7 +51,7 @@ public class BatchJobLauncherApplicationRunner implements ApplicationRunner {
     }
 
     BatchJobLauncherApplicationRunner(
-            JobLauncher jobLauncher,
+            JobOperator jobOperator,
             List<Job> jobs,
             BatchMetadataSchemaPreflight schemaPreflight,
             BatchExecutionCorrelationGuard correlationGuard,
@@ -59,7 +59,7 @@ public class BatchJobLauncherApplicationRunner implements ApplicationRunner {
             Clock clock,
             BatchExitCodeExceptionMapper exitCodes) {
         this(
-                () -> jobLauncher,
+                () -> jobOperator,
                 jobsByName(jobs)::get,
                 jobsByName(jobs)::containsKey,
                 schemaPreflight,
@@ -70,7 +70,7 @@ public class BatchJobLauncherApplicationRunner implements ApplicationRunner {
     }
 
     private BatchJobLauncherApplicationRunner(
-            Supplier<JobLauncher> jobLauncher,
+            Supplier<JobOperator> jobOperator,
             Function<String, Job> jobLookup,
             Predicate<String> jobExists,
             BatchMetadataSchemaPreflight schemaPreflight,
@@ -78,7 +78,7 @@ public class BatchJobLauncherApplicationRunner implements ApplicationRunner {
             Environment environment,
             Clock clock,
             BatchExitCodeExceptionMapper exitCodes) {
-        this.jobLauncher = Objects.requireNonNull(jobLauncher);
+        this.jobOperator = Objects.requireNonNull(jobOperator);
         this.jobLookup = Objects.requireNonNull(jobLookup);
         this.jobExists = Objects.requireNonNull(jobExists);
         this.schemaPreflight = Objects.requireNonNull(schemaPreflight);
@@ -104,7 +104,7 @@ public class BatchJobLauncherApplicationRunner implements ApplicationRunner {
                 correlationGuard.lock(parsed.jobParameters().getString("requestId"))) {
             correlationGuard.verify(parsed.jobName(), parsed.jobParameters());
             Job job = jobLookup.apply(parsed.jobName());
-            JobExecution execution = jobLauncher.get().run(job, parsed.jobParameters());
+            JobExecution execution = jobOperator.get().start(job, parsed.jobParameters());
             ExitStatus exitStatus = execution.getExitStatus();
             if (!exitCodes.successful(exitStatus)) {
                 throw exitCodes.failedJob("Batch job ended with exit status: " + exitStatus.getExitCode());

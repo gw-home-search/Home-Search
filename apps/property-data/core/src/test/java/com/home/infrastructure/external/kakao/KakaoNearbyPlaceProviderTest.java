@@ -10,7 +10,6 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.place.NearbyPlacePoint;
 import com.home.application.place.NearbyPlaceProviderUnavailableException;
 import com.home.domain.place.NearbyPlaceCategory;
@@ -24,6 +23,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
 
 class KakaoNearbyPlaceProviderTest {
 

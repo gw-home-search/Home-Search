@@ -1,6 +1,5 @@
 package com.home.infrastructure.external.complex;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceClient;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceParser;
 import com.home.application.ingest.metadata.OdcloudPnuPrefixAliasLookup;
@@ -10,6 +9,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration(proxyBeanMethods = false)
 public class ComplexMetadataClientConfiguration {

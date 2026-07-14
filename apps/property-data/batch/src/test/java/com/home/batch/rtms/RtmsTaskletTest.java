@@ -7,12 +7,13 @@ import com.home.application.region.RegionUnitCntSynchronizationService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.batch.core.JobExecution;
-import org.springframework.batch.core.JobParameters;
-import org.springframework.batch.core.StepContribution;
-import org.springframework.batch.core.StepExecution;
+import org.springframework.batch.core.job.JobExecution;
+import org.springframework.batch.core.job.JobInstance;
+import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.scope.context.StepContext;
+import org.springframework.batch.core.step.StepContribution;
+import org.springframework.batch.core.step.StepExecution;
 
 class RtmsTaskletTest {
 
@@ -66,7 +67,8 @@ class RtmsTaskletTest {
     }
 
     private static StepExecution stepExecution(String stepName) {
-        JobExecution jobExecution = new JobExecution(1L, new JobParameters());
-        return new StepExecution(stepName, jobExecution);
+        JobExecution jobExecution =
+                new JobExecution(1L, new JobInstance(1L, "rtmsDailyRefreshJob"), new JobParameters());
+        return new StepExecution(1L, stepName, jobExecution);
     }
 }

@@ -620,5 +620,5 @@ property-data configuration file distribution:
 
 ### Merge
 
-- implementation commit: pending
+- implementation commits: `94f2800`, `47c93d4`
 - merge commit: pending

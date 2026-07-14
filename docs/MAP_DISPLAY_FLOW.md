@@ -118,6 +118,17 @@ markers when the backend has enough coordinate confidence:
 - Compute or select latest trade amount.
 - Apply simple filters for unit count, price, area, and age.
 
+The property-data map adapter owns two complete, feature-local SQL resources:
+
+- `complex-marker-trade-first.sql` is used when unit-count and building-age shape filters are absent.
+- `complex-marker-shape-filter.sql` applies unit-count and building-age filters before resolving the latest marker trade.
+
+`ComplexMarkerSql` loads both resources once when the JDBC repository is created. The repository only selects the variant,
+binds named parameters, and maps rows. Bounds and filter values are never interpolated into SQL text. Both variants keep the
+same marker identity, source `name`, latest-price, current-generation, and household-count policies; persistence fixtures
+verify their neutral-filter parity. V8's `hs_normalize_complex_search_name` remains the canonical complex search-name
+normalizer, with Java-to-database golden parity tests. Applied V8 migration SQL is not modified.
+
 Do not require:
 
 - Ranking tables.

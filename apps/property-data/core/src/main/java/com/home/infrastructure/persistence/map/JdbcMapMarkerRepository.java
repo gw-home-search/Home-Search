@@ -11,9 +11,13 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
 
     private final JdbcClient jdbcClient;
     private final ComplexMarkerRowMapper rowMapper = new ComplexMarkerRowMapper();
+    private final String markerShapeFilterSql;
+    private final String tradeFirstSql;
 
     public JdbcMapMarkerRepository(JdbcClient jdbcClient) {
         this.jdbcClient = Objects.requireNonNull(jdbcClient);
+        this.markerShapeFilterSql = ComplexMarkerSql.markerShapeFilter();
+        this.tradeFirstSql = ComplexMarkerSql.tradeFirst();
     }
 
     @Override
@@ -27,7 +31,7 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
     private List<ComplexMarkerResult> findComplexMarkersWithMarkerShapeFilter(ComplexMarkerQuery query) {
         ComplexMarkerJdbcParameters parameters = ComplexMarkerJdbcParameters.from(query);
         return parameters
-                .bindMarkerShapeFilter(jdbcClient.sql(ComplexMarkerSql.markerShapeFilter()))
+                .bindMarkerShapeFilter(jdbcClient.sql(markerShapeFilterSql))
                 .query(rowMapper::map)
                 .list();
     }
@@ -35,7 +39,7 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
     private List<ComplexMarkerResult> findComplexMarkersWithTradeFirst(ComplexMarkerQuery query) {
         ComplexMarkerJdbcParameters parameters = ComplexMarkerJdbcParameters.from(query);
         return parameters
-                .bindTradeFirst(jdbcClient.sql(ComplexMarkerSql.tradeFirst()))
+                .bindTradeFirst(jdbcClient.sql(tradeFirstSql))
                 .query(rowMapper::map)
                 .list();
     }

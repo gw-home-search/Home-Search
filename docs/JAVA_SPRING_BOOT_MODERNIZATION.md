@@ -3,7 +3,7 @@
 ## 실행 기준
 
 - baseline commit: `d601237`
-- 현재 진행 PR: `PR 9 — property-data typed wiring`
+- 현재 진행 PR: 없음 (`PR 9 — property-data typed wiring` 완료, 다음 `PR 10` 대기)
 - 전체 상태: `In Progress`
 - 시작일: 2026-07-14
 - 실행 원칙: 한 번에 하나의 PR만 진행하고, 선행 PR이 `Complete`인 경우에만 다음 PR을 시작한다.
@@ -80,7 +80,7 @@ property-data configuration file distribution:
 | 6 | format baseline | Complete | PR 5 `Complete` |
 | 7 | Boot 4.1 / Jackson 3 | Complete | PR 6 `Complete` |
 | 8 | map SQL readability | Complete | PR 7 `Complete` |
-| 9 | property-data typed wiring | In Progress | PR 8 `Complete` |
+| 9 | property-data typed wiring | Complete | PR 8 `Complete` |
 | 10 | error/validation/executor/observability | Pending | PR 9 `Complete` |
 | 11 | user-service Spring/JPA cleanup | Pending | PR 10 `Complete` |
 | 12 | admin/source-data modernization | Pending | PR 11 `Complete` |
@@ -621,4 +621,4 @@ property-data configuration file distribution:
 ### Merge
 
 - implementation commits: `94f2800`, `47c93d4`
-- merge commit: pending
+- merge commit: `027f23e4ce9e3c3b49f82d0eb0969b37ada90fe3`

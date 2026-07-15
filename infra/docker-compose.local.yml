@@ -81,21 +81,24 @@ services:
       - home-search-local
 
   ml:
-    image: python:3.10-slim
+    build:
+      context: ../apps/ml
+      dockerfile: Dockerfile
+    image: home-search-ml:local
     container_name: home-search-ml
     restart: unless-stopped
-    working_dir: /workspace/apps/ml
-    command:
-      - "sh"
-      - "-c"
-      - "test -f \"$${F37_ARTIFACT_DIR}/keras_model.keras\" || { echo 'Set host F37_ARTIFACT_DIR to local F37 artifact directory.' >&2; exit 1; }; pip install --no-cache-dir -r requirements.txt && uvicorn ml_service.main:app --host 0.0.0.0 --port 8001"
     environment:
       F37_ARTIFACT_DIR: /model
     ports:
       - "127.0.0.1:${HOME_SEARCH_ML_PORT:-8001}:8001"
     volumes:
-      - ../apps/ml:/workspace/apps/ml
       - ${F37_ARTIFACT_DIR:-/tmp/home-search-missing-f37-artifact}:/model:ro
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=10)" ]
+      interval: 15s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
     networks:
       - home-search-local
 

@@ -48,6 +48,41 @@ Optional but recommended:
 - Batch execution logs.
 - Redis for short-lived map marker response caching.
 
+## ML Prediction Runtime
+
+`apps/ml/Dockerfile` builds the F37 FastAPI runtime once from the exact
+`requirements.lock` graph. Container startup does not run `pip install` and does
+not mount application source. The model remains a deployment artifact outside
+Git and outside the image:
+
+```text
+host F37_ARTIFACT_DIR
+  -> /model:ro
+  -> non-root UID/GID 10001:10001
+```
+
+The entrypoint fails before Uvicorn starts when `keras_model.keras` is missing
+or unreadable. The Compose healthcheck calls `/health`, which also loads the
+remaining metadata/schema/model files. The property API intentionally has no
+Compose `depends_on` edge to ML, so a model deployment failure does not block
+the map/API process from starting.
+
+Build and verify locally:
+
+```bash
+docker build --tag home-search-ml:local apps/ml
+docker run --rm --entrypoint python home-search-ml:local -m pip check
+
+F37_ARTIFACT_DIR=/path/to/best_price_deployment_attempt \
+  docker compose -f infra/docker-compose.local.yml up -d --build ml
+```
+
+CI runs the image gate when `apps/ml/**`, the local Compose definition, or the
+CI workflow changes. It checks the exact dependency graph, runtime imports,
+non-root identity, model exclusion, and missing-model fail-fast behavior. The
+Python base tag is intentionally kept on the existing `3.10-slim` line in this
+slice; registry digest pinning remains a separate supply-chain decision.
+
 ## Required Property-data Environment
 
 Home Search backend collection and map display need:

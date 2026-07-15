@@ -19,6 +19,7 @@ jobs:
       admin_web_changed: ${{ steps.classify.outputs.admin_web_changed }}
       user_service_changed: ${{ steps.classify.outputs.user_service_changed }}
       infra_changed: ${{ steps.classify.outputs.infra_changed }}
+      ml_changed: ${{ steps.classify.outputs.ml_changed }}
       ci_changed: ${{ steps.classify.outputs.ci_changed }}
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +42,7 @@ jobs:
               echo ".github/workflows/ci.yml"
               echo "apps/property-data/"
               echo "apps/web/"
+              echo "apps/ml/"
               echo "apps/admin/service/"
               echo "apps/admin/web/"
               echo "apps/user/service/"
@@ -53,6 +55,7 @@ jobs:
           admin_web_changed=false
           user_service_changed=false
           infra_changed=false
+          ml_changed=false
           ci_changed=false
 
           while IFS= read -r path; do
@@ -63,9 +66,17 @@ jobs:
               apps/property-data/*|apps/source-data/*|docs/API_CONTRACT.md|docs/DATA_STORAGE.md|docs/INFRA_AND_ENV.md|settings.gradle|build.gradle|gradle.properties|gradle/*)
                 backend_changed=true
                 ;;
+              infra/docker-compose.local.yml)
+                backend_changed=true
+                infra_changed=true
+                ml_changed=true
+                ;;
               infra/*)
                 backend_changed=true
                 infra_changed=true
+                ;;
+              apps/ml/*)
+                ml_changed=true
                 ;;
               apps/web/*)
                 frontend_changed=true
@@ -99,6 +110,7 @@ jobs:
             admin_web_changed=true
             user_service_changed=true
             infra_changed=true
+            ml_changed=true
           fi
 
           {
@@ -108,6 +120,7 @@ jobs:
             echo "admin_web_changed=$admin_web_changed"
             echo "user_service_changed=$user_service_changed"
             echo "infra_changed=$infra_changed"
+            echo "ml_changed=$ml_changed"
             echo "ci_changed=$ci_changed"
           } >> "$GITHUB_OUTPUT"
 
@@ -180,6 +193,40 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify public gateway rate-limit contract
         run: infra/nginx/test-property-public.sh
+
+  ml-image-test:
+    name: ml-image-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: changes
+    if: needs.changes.outputs.ml_changed == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build exact-lock ML image
+        run: docker build --tag home-search-ml:ci apps/ml
+      - name: Verify installed dependency graph
+        run: docker run --rm --entrypoint python home-search-ml:ci -m pip check
+      - name: Verify runtime imports without loading a model
+        run: >-
+          docker run --rm --entrypoint python home-search-ml:ci -c
+          "import fastapi, h5py, keras, numpy, pydantic, tensorflow, uvicorn;
+          import ml_service.main"
+      - name: Verify non-root runtime and model exclusion
+        shell: bash
+        run: |
+          set -euo pipefail
+          user="$(docker inspect --format '{{.Config.User}}' home-search-ml:ci)"
+          [[ "$user" == "10001:10001" ]]
+          docker run --rm --entrypoint python home-search-ml:ci -c \
+            "from pathlib import Path; assert not Path('/model/keras_model.keras').exists(); assert not any(Path('/app').rglob('*.keras')); assert not any(Path('/app').rglob('*.h5'))"
+      - name: Verify missing model fails before server startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker run --rm home-search-ml:ci; then
+            echo "상태: Fail - model 없는 container가 성공 종료했습니다." >&2
+            exit 1
+          fi
 
   admin-service-test:
     name: admin-service-test

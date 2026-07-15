@@ -71,6 +71,7 @@ jobs:
                 admin_web_changed=true
                 ;;
               libs/security-jwt-core/*)
+                backend_changed=true
                 admin_service_changed=true
                 user_service_changed=true
                 ;;

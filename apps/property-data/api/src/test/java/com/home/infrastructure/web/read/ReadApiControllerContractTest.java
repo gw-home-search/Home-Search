@@ -367,6 +367,33 @@ class ReadApiControllerContractTest {
 	}
 
 	@Test
+	@DisplayName("GET /api/v1/trade/{parcelId}는 valid parent의 empty page를 200으로 반환한다")
+	void tradeListReturnsEmptyPageForExistingParent() throws Exception {
+		given(readUseCase.getTradeList(eq(1001L), isNull(), isNull(), isNull()))
+			.willReturn(new TradeListResult(1001L, null, List.of(), 0, 25, 0));
+
+		mockMvc.perform(get("/api/v1/trade/1001"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.content").isEmpty())
+			.andExpect(jsonPath("$.page").value(0))
+			.andExpect(jsonPath("$.size").value(25))
+			.andExpect(jsonPath("$.totalElements").value(0))
+			.andExpect(jsonPath("$.totalPages").value(0));
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/trade/{parcelId}는 malformed pagination을 canonical ProblemDetail 400으로 반환한다")
+	void malformedTradePaginationReturnsProblemDetail400() throws Exception {
+		mockMvc.perform(get("/api/v1/trade/1001").param("page", "not-a-number"))
+			.andExpect(status().isBadRequest())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+			.andExpect(jsonPath("$.status").value(400))
+			.andExpect(jsonPath("$.detail").value("Invalid parameter format."))
+			.andExpect(jsonPath("$.exception").value("MapApiException"))
+			.andExpect(jsonPath("$.timestamp").value(matchesPattern(OFFSET_TIMESTAMP_PATTERN)));
+	}
+
+	@Test
 	@DisplayName("GET /api/v1/detail/{parcelId}/complexes는 같은 parcel의 complex 목록을 반환한다")
 	void parcelComplexesReturnSelectableComplexSummaries() throws Exception {
 		given(readUseCase.getParcelComplexes(1001L))
@@ -536,6 +563,16 @@ class ReadApiControllerContractTest {
 			.andExpect(jsonPath("$[0].longitude").value(127.0456))
 			.andExpect(jsonPath("$[0].address").value("Region address"))
 			.andExpect(jsonPath("$[0].unitCnt").value(740));
+	}
+
+	@Test
+	@DisplayName("GET /api/v1/region/{regionId}/complexes는 valid parent의 empty result를 200으로 반환한다")
+	void regionComplexesReturnEmptyArrayForExistingParent() throws Exception {
+		given(readUseCase.getRegionComplexes(11L, null, null)).willReturn(List.of());
+
+		mockMvc.perform(get("/api/v1/region/11/complexes"))
+			.andExpect(status().isOk())
+			.andExpect(content().json("[]"));
 	}
 
 	@Test

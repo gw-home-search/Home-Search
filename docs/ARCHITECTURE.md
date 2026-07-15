@@ -94,6 +94,16 @@ the removed legacy property is supplied.
 domain/application/infrastructure module extraction requires a follow-up ADR and is not
 part of the current runtime separation.
 
+Spring Boot runtime ownership and framework annotation boundaries are separate
+concerns. Domain code remains pure Java. Application services may use Spring
+`@Service` and `@Transactional` so registration and transaction ownership are
+visible at the use-case boundary, but application code must not depend on Spring
+Data, JDBC, web APIs, JPA, or infrastructure implementations. Ordinary adapters
+use component/repository registration. API and Batch remain explicit composition
+roots for execution-mode imports, SecurityFilterChain, conditional cache,
+executors, and external clients; configuration classes do not manually construct
+every use case.
+
 API와 Batch는 모든 profile에서 Flyway 자동 실행을 끈다. `home_search` schema
 변경은 pinned official Flyway container가 외부 `db/migration/api` SQL catalog를
 read-only mount해 수행한다. Flyway dependency와 migration SQL은 API/core/Batch

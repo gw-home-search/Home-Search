@@ -49,7 +49,11 @@ home-search/
 ├── apps/
 │   ├── property-data/
 │   │   ├── core/  # domain, application, persistence, external clients
-│   │   └── api/   # Spring Boot HTTP API runtime
+│   │   ├── api/   # Spring Boot HTTP API runtime
+│   │   └── batch/ # Spring Batch run-and-exit runtime
+│   ├── user/service/  # OAuth, JWT, favorite service
+│   ├── admin/service/ # Session/RBAC control plane
+│   ├── source-data/   # coordinate-source migration operations
 │   └── web/       # React 지도 중심 UI
 ├── docs/          # 아키텍처, 데이터 저장, API 계약 문서
 └── infra/         # 로컬 Docker, PostGIS, Redis, 모니터링

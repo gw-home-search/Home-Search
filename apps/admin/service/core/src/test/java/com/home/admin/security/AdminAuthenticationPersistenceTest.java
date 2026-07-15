@@ -1,6 +1,7 @@
 package com.home.admin.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
@@ -47,6 +48,17 @@ class AdminAuthenticationPersistenceTest {
                     new DataSourceTransactionManager(dataSource), new AnnotationTransactionAttributeSource()));
             AdminAuthenticationService transactionalService = (AdminAuthenticationService) proxyFactory.getProxy();
 
+            jdbc.sql("INSERT INTO admin.admin_account_role(account_id,role_code) VALUES (:id,'ADMIN')")
+                    .param("id", accountId)
+                    .update();
+            AdminPrincipal principal = transactionalService.authenticate("operator", "correct-password");
+            assertThat(principal.accountId()).isEqualTo(accountId);
+            assertThat(principal.roles()).containsExactly("ADMIN");
+            assertThat(principal.permissions()).isNotEmpty();
+
+            assertThatThrownBy(() -> transactionalService.authenticate("unknown", "incorrect-password"))
+                    .isInstanceOf(AdminAuthenticationService.InvalidCredentialsException.class);
+
             for (int attempt = 0; attempt < 5; attempt++) {
                 try {
                     transactionalService.authenticate("operator", "incorrect-password");
@@ -66,7 +78,8 @@ class AdminAuthenticationPersistenceTest {
                             .single())
                     .isTrue();
             assertThat(jdbc.sql(
-                                    "SELECT count(*) FROM admin.admin_security_audit_event WHERE event_type='LOGIN_FAILURE' AND NOT success")
+                                    "SELECT count(*) FROM admin.admin_security_audit_event WHERE target_account_id=:id AND event_type='LOGIN_FAILURE' AND NOT success")
+                            .param("id", accountId)
                             .query(Integer.class)
                             .single())
                     .isEqualTo(5);

@@ -75,16 +75,9 @@ evaluationDependsOn(':core')
 def coverageExcludes = [
     '**/HomeSearchApiApplication*',
     '**/PropertyDataBatchApplication*',
-    '**/*Request*',
-    '**/*Response*',
-    '**/*Record*',
-    '**/*Command*',
-    '**/*Result*',
-    '**/*Status*',
-    '**/*Configuration*',
-    '**/HermesOpsNotifier*',
-    '**/*Matcher*',
-    '**/dto/**',
+    '**/infrastructure/web/**/*Request*',
+    '**/infrastructure/web/**/*Response*',
+    '**/infrastructure/web/**/dto/**',
     '**/package-info*'
 ]
 def jacocoExec = { Project project, String taskName ->
@@ -155,6 +148,63 @@ tasks.register('coverageCheck') {
     group = 'verification'
     dependsOn tasks.named('jacocoRootReport')
     dependsOn tasks.named('jacocoRootCoverageVerification')
+}
+
+tasks.register('verifyArchitectureBoundaries') {
+    description = 'Verify domain, application, web, and transactional service boundaries.'
+    group = 'verification'
+    doLast {
+        def domainFiles = fileTree(layout.projectDirectory.dir('core/src/main/java/com/home/domain')) {
+            include '**/*.java'
+        }.files
+        def forbiddenDomainImports = domainFiles.findAll { file ->
+            file.text =~ /(?m)^import (com\.home\.(application|infrastructure)|org\.springframework|org\.flywaydb|java\.sql|jakarta\.persistence|javax\.persistence)/
+        }
+        if (!forbiddenDomainImports.isEmpty()) {
+            throw new GradleException("Property domain imports an outer layer or framework: ${forbiddenDomainImports}")
+        }
+
+        def applicationFiles = fileTree(layout.projectDirectory.dir('core/src/main/java/com/home/application')) {
+            include '**/*.java'
+        }.files
+        def allowedApplicationSpringImports = [
+            'import org.springframework.stereotype.Service;',
+            'import org.springframework.transaction.annotation.Transactional;'
+        ] as Set
+        def forbiddenApplicationImports = applicationFiles.findAll { file ->
+            def imports = file.readLines().findAll { it.startsWith('import ') }
+            imports.any { line ->
+                line.startsWith('import com.home.infrastructure') ||
+                    line.startsWith('import com.home.api') ||
+                    (line.startsWith('import org.springframework') && !allowedApplicationSpringImports.contains(line))
+            }
+        }
+        if (!forbiddenApplicationImports.isEmpty()) {
+            throw new GradleException("Property application imports infrastructure, API, or unsupported Spring types: ${forbiddenApplicationImports}")
+        }
+
+        def webFiles = files(
+            fileTree(layout.projectDirectory.dir('core/src/main/java/com/home/infrastructure/web')) { include '**/*.java' },
+            fileTree(layout.projectDirectory.dir('api/src/main/java/com/home/infrastructure/web')) { include '**/*.java' }
+        ).files
+        def webPersistenceImports = webFiles.findAll { file ->
+            file.text =~ /(?m)^import com\.home\.infrastructure\.persistence\./
+        }
+        if (!webPersistenceImports.isEmpty()) {
+            throw new GradleException("Property web depends directly on persistence adapters: ${webPersistenceImports}")
+        }
+
+        def invalidTransactionalTypes = applicationFiles.findAll { file ->
+            def source = file.text
+            source.contains('@Transactional') && (
+                source =~ /(?m)^\s*(?:public\s+)?final\s+class\s+/ ||
+                    source =~ /(?s)@Transactional(?:\([^)]*\))?\s+(?:public|protected)\s+final\s+/
+            )
+        }
+        if (!invalidTransactionalTypes.isEmpty()) {
+            throw new GradleException("Transactional application service or method must not be final: ${invalidTransactionalTypes}")
+        }
+    }
 }
 
 tasks.register('apiDocsCheck') {
@@ -272,4 +322,5 @@ tasks.register('backendQualityCheck') {
     dependsOn ':batch:javadoc'
     dependsOn ':batch:check'
     dependsOn tasks.named('coverageCheck')
+    dependsOn tasks.named('verifyArchitectureBoundaries')
 }

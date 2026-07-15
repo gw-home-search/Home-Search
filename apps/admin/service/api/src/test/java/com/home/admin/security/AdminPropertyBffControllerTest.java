@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -114,6 +115,75 @@ class AdminPropertyBffControllerTest {
                 .andExpect(header().exists("X-Request-Id"));
 
         verify(audit, times(1)).recordBffRequest(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void forwardsEveryMetadataOperationWithoutChangingItsPublicPath() throws Exception {
+        given(client.exchange(any()))
+                .willReturn(new PropertyAdminClient.DownstreamResponse(
+                        200, MediaType.APPLICATION_JSON, "{}".getBytes(StandardCharsets.UTF_8)));
+        var reader = authentication(auth(
+                "OPERATOR",
+                "COORDINATE_READ",
+                "METADATA_READ",
+                "METADATA_RETRY",
+                "METADATA_HOLD",
+                "METADATA_ALIAS_MANAGE"));
+
+        mvc.perform(get("/api/v1/admin/coordinates/pending/summary").with(reader))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/admin/metadata/pending?limit=17&offset=3").with(reader))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/admin/metadata/pending/summary").with(reader)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/admin/metadata/42").with(reader)).andExpect(status().isOk());
+        mvc.perform(post("/api/v1/admin/metadata/42/retry")
+                        .with(reader)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"retry\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/admin/metadata/42/hold")
+                        .with(reader)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"hold\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/admin/metadata/pnu-aliases").with(reader)).andExpect(status().isOk());
+        mvc.perform(post("/api/v1/admin/metadata/pnu-aliases")
+                        .with(reader)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"canonicalPrefix\":\"11680103\",\"sourcePrefix\":\"11680104\",\"reason\":\"fix\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/admin/metadata/pnu-aliases/7/approve")
+                        .with(reader)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"approve\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/admin/metadata/pnu-aliases/7/disable")
+                        .with(reader)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"disable\"}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<PropertyAdminClient.Request> request =
+                ArgumentCaptor.forClass(PropertyAdminClient.Request.class);
+        verify(client, times(10)).exchange(request.capture());
+        assertThat(request.getAllValues())
+                .extracting(PropertyAdminClient.Request::path)
+                .containsExactly(
+                        "/internal/v1/admin/coordinates/pending/summary",
+                        "/internal/v1/admin/metadata/pending",
+                        "/internal/v1/admin/metadata/pending/summary",
+                        "/internal/v1/admin/metadata/42",
+                        "/internal/v1/admin/metadata/42/retry",
+                        "/internal/v1/admin/metadata/42/hold",
+                        "/internal/v1/admin/metadata/pnu-aliases",
+                        "/internal/v1/admin/metadata/pnu-aliases",
+                        "/internal/v1/admin/metadata/pnu-aliases/7/approve",
+                        "/internal/v1/admin/metadata/pnu-aliases/7/disable");
     }
 
     private UsernamePasswordAuthenticationToken auth(String role, String... permissions) {

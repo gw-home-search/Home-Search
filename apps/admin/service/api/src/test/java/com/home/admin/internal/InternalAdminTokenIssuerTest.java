@@ -66,5 +66,31 @@ class InternalAdminTokenIssuerTest {
                         "property-data-admin",
                         Duration.ofSeconds(61)))
                 .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new InternalAdminTokenIssuer(
+                        null,
+                        keys.getPrivate(),
+                        "active-key",
+                        "admin-service",
+                        "property-data-admin",
+                        Duration.ofSeconds(60)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new InternalAdminTokenIssuer(
+                        codec, null, "active-key", "admin-service", "property-data-admin", Duration.ofSeconds(60)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new InternalAdminTokenIssuer(
+                        codec, keys.getPrivate(), " ", "admin-service", "property-data-admin", Duration.ofSeconds(60)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new InternalAdminTokenIssuer(
+                        codec, keys.getPrivate(), "active-key", "admin-service", "property-data-admin", Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        for (AdminPrincipal invalid : java.util.List.of(
+                new AdminPrincipal(null, "operator", "운영자", Set.of("OPERATOR"), Set.of("COORDINATE_READ")),
+                new AdminPrincipal(UUID.randomUUID(), " ", "운영자", Set.of("OPERATOR"), Set.of("COORDINATE_READ")),
+                new AdminPrincipal(UUID.randomUUID(), "operator", "운영자", Set.of(), Set.of("COORDINATE_READ")),
+                new AdminPrincipal(UUID.randomUUID(), "operator", "운영자", Set.of("OPERATOR"), Set.of()))) {
+            assertThatThrownBy(() -> issuer.issue(invalid, "request-1")).isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThatThrownBy(() -> issuer.issue(null, "request-1")).isInstanceOf(IllegalArgumentException.class);
     }
 }

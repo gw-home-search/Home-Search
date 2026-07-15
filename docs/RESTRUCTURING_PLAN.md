@@ -2,8 +2,8 @@
 
 ## 현재 상태
 
-- 상태: Stage 1 완료, 확장 milestone 진입
-- 갱신일: 2026-07-13
+- 상태: Stage 1 및 Java/Spring modernization 완료, 후속 확장 milestone 진행
+- 갱신일: 2026-07-14
 - 불변: property-data 공개 map/trade API, operational DB data, 실행 중인
   packaged Batch는 변경하지 않는다.
 
@@ -25,6 +25,12 @@ apps/property-data/
 daily RTMS 수집은 packaged `batch`의 `rtmsDailyRefreshJob`이 소유한다.
 표적 재수집은 `rtmsBackfillJob`이 소유하며 legacy API scheduler는 제거됐다.
 API/Batch startup은 Flyway를 자동 실행하지 않는다.
+
+Java/Spring modernization PR 1–13으로 Java 21, Spring Boot 4.1.0,
+Jackson 3, feature별 read capability, application-owned transaction,
+typed configuration, managed executor와 네 Java application의 aggregate
+quality/coverage gate를 확정했다. 완료 근거와 merge commit은
+`JAVA_SPRING_BOOT_MODERNIZATION.md`가 소유한다.
 
 ## 완료된 결정
 
@@ -89,9 +95,9 @@ reference일 뿐이며 한 service가 다른 service database credential을 받�
 ## 실행 순서
 
 ```text
-계획 문서 정합화
--> dead rtms-loader 제거
--> user-service 기반/OAuth/JWT 완성
+계획 문서 정합화 (완료)
+-> dead rtms-loader 제거 (완료)
+-> user-service 기반/OAuth/JWT 완성 (완료)
 -> chatbot legacy 전체 parity
 -> image/ECR CI
 -> AWS 배포 준비

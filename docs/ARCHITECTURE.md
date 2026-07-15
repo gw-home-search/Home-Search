@@ -51,7 +51,7 @@ Important project packages:
 - `infrastructure/batch/trade`: trade collection and bulk insert flow.
 - `infrastructure/web`: HTTP API controllers.
 
-## Backend Project Target
+## Implemented Property-data Shape
 
 In `/Users/gwongwangjae/home-search/apps/property-data`, keep the backend layered but
 make the project boundary clearer:
@@ -86,9 +86,11 @@ apps/property-data
     └── property-deployment-preflight.sh
 ```
 
-The implementation can keep existing package names during the first move. The
-important decision is not package renaming; it is keeping project focused on
-collection, storage, and map display.
+Public read behavior is split by change reason. Application packages are
+`search`, `regionnavigation`, `propertydetail`, and `tradehistory`; matching
+JDBC adapters and web controllers use the same feature names. Nearby-place
+lookup depends on the narrow `ComplexCenterReader` port instead of a combined
+property-read facade. Public URL and JSON contracts remain unchanged.
 
 `apps/property-data` is the property-data-service boundary. `core`, `api`, and `batch`
 are internal module or execution-mode boundaries
@@ -118,6 +120,12 @@ API와 Batch는 모든 profile에서 Flyway 자동 실행을 끈다. `home_searc
 변경은 pinned official Flyway container가 외부 `db/migration/api` SQL catalog를
 read-only mount해 수행한다. Flyway dependency와 migration SQL은 API/core/Batch
 runtime artifact에 포함되지 않는다.
+
+The build enforces the final architecture boundary: domain source cannot import
+application, infrastructure, Spring, JDBC, JPA, or Flyway; application source
+may import only Spring `@Service` and `@Transactional`; web source cannot import
+persistence adapters directly; transactional application services and methods
+cannot be `final`.
 
 Migration version 8의 `complex.display_name`/generated `search_name`은 내부 검색
 projection이다. 검색 matching과 ranking에는 사용할 수 있지만 기존 public

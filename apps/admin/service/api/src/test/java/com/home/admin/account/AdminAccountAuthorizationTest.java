@@ -2,8 +2,13 @@ package com.home.admin.security;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.home.admin.AdminApiExceptionHandler;
@@ -75,9 +80,48 @@ class AdminAccountAuthorizationTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void accountManagerCanCreateAndMaintainAccounts() throws Exception {
+        UUID actorId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
+        var authentication = authenticationFor(actorId, "ADMIN", "ADMIN_ACCOUNT_MANAGE");
+        when(accountService.create(org.mockito.ArgumentMatchers.eq(actorId), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new AdminAccountService.AccountSummary(
+                        accountId, "viewer", "조회자", true, null, Set.of("VIEWER")));
+
+        mvc.perform(
+                        post("/api/v1/admin/accounts")
+                                .with(authentication(authentication))
+                                .with(csrf())
+                                .contentType("application/json")
+                                .content(
+                                        "{\"loginId\":\"viewer\",\"displayName\":\"조회자\",\"password\":\"long-test-password\",\"roles\":[\"VIEWER\"]}"))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", "/api/v1/admin/accounts/" + accountId));
+        mvc.perform(put("/api/v1/admin/accounts/" + accountId + "/roles")
+                        .with(authentication(authentication))
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{\"roles\":[\"OPERATOR\"]}"))
+                .andExpect(status().isNoContent());
+        mvc.perform(patch("/api/v1/admin/accounts/" + accountId + "/status")
+                        .with(authentication(authentication))
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{\"enabled\":false}"))
+                .andExpect(status().isNoContent());
+        mvc.perform(delete("/api/v1/admin/accounts/" + accountId + "/sessions")
+                        .with(authentication(authentication))
+                        .with(csrf()))
+                .andExpect(status().isNoContent());
+    }
+
     private UsernamePasswordAuthenticationToken authenticationFor(String role, String permission) {
-        AdminPrincipal principal =
-                new AdminPrincipal(UUID.randomUUID(), "actor", "관리자", Set.of(role), Set.of(permission));
+        return authenticationFor(UUID.randomUUID(), role, permission);
+    }
+
+    private UsernamePasswordAuthenticationToken authenticationFor(UUID accountId, String role, String permission) {
+        AdminPrincipal principal = new AdminPrincipal(accountId, "actor", "관리자", Set.of(role), Set.of(permission));
         return UsernamePasswordAuthenticationToken.authenticated(
                 principal,
                 null,

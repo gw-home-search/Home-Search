@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyPairGenerator;
+import java.time.Duration;
 import java.util.Base64;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,17 @@ class InternalAdminSecurityConfigurationTest {
         assertThatThrownBy(() -> InternalAdminSecurityConfiguration.loadPublicKeys(
                         "active-key=" + activeKey + ",active-key=" + oldKey))
                 .isInstanceOf(IllegalArgumentException.class);
+
+        var registration = new InternalAdminSecurityConfiguration()
+                .internalAdminJwtFilter(
+                        new tools.jackson.databind.ObjectMapper(),
+                        new InternalAdminJwtProperties(
+                                "admin-service",
+                                "property-data-admin",
+                                Duration.ofSeconds(60),
+                                "active-key=" + activeKey));
+        assertThat(registration.getUrlPatterns()).containsExactly("/internal/*");
+        assertThat(registration.getOrder()).isEqualTo(org.springframework.core.Ordered.HIGHEST_PRECEDENCE);
     }
 
     private Path write(String fileName, byte[] encoded) throws Exception {

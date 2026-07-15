@@ -5,7 +5,7 @@ import { fetchNearbyPlaces } from './fetchNearbyPlaces';
 describe('fetchNearbyPlaces 주변 장소 요청', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('단지 기준 6개 category 요청을 만들고 공용 응답을 정규화한다', async () => {
+  it('단지 기준 제품 기본 8개 category 요청을 만들고 공용 응답을 정규화한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       complexId: 501,
       center: { lat: 37.321, lng: 127.109 },
@@ -41,7 +41,7 @@ describe('fetchNearbyPlaces 주변 장소 요청', () => {
     expect(url.pathname).toBe('/api/v1/complex/501/nearby-places');
     expect(url.searchParams.get('radiusMeters')).toBe('800');
     expect(url.searchParams.get('categories')).toBe(
-      'CAFE,RESTAURANT,CONVENIENCE_STORE,HOSPITAL,PHARMACY,SCHOOL',
+      'SUPERMARKET,CONVENIENCE_STORE,RESTAURANT,DAYCARE_KINDERGARTEN,SCHOOL,ACADEMY,SUBWAY_STATION,HOSPITAL',
     );
     expect(url.searchParams.get('limitPerCategory')).toBe('5');
     expect(result.categories[0].places[0]).toMatchObject({ placeId: 'kakao:123456', distanceMeters: 72 });

@@ -8,9 +8,26 @@ export const NEARBY_PLACE_CATEGORIES = [
   'HOSPITAL',
   'PHARMACY',
   'SCHOOL',
+  'SUPERMARKET',
+  'DAYCARE_KINDERGARTEN',
+  'ACADEMY',
+  'SUBWAY_STATION',
 ] as const;
 
 export type NearbyPlaceCategory = typeof NEARBY_PLACE_CATEGORIES[number];
+
+export const DEFAULT_NEARBY_PLACE_CATEGORIES = [
+  'SUPERMARKET',
+  'CONVENIENCE_STORE',
+  'RESTAURANT',
+  'DAYCARE_KINDERGARTEN',
+  'SCHOOL',
+  'ACADEMY',
+  'SUBWAY_STATION',
+  'HOSPITAL',
+] as const satisfies readonly NearbyPlaceCategory[];
+
+export const MAP_NEARBY_PLACE_CATEGORIES = DEFAULT_NEARBY_PLACE_CATEGORIES;
 
 export const NEARBY_PLACE_CATEGORY_LABELS: Readonly<Record<NearbyPlaceCategory, string>> = {
   CAFE: '카페',
@@ -19,6 +36,10 @@ export const NEARBY_PLACE_CATEGORY_LABELS: Readonly<Record<NearbyPlaceCategory, 
   HOSPITAL: '병원',
   PHARMACY: '약국',
   SCHOOL: '학교',
+  SUPERMARKET: '대형마트',
+  DAYCARE_KINDERGARTEN: '어린이집·유치원',
+  ACADEMY: '학원',
+  SUBWAY_STATION: '지하철역',
 };
 
 export type NearbyPlace = {
@@ -65,7 +86,7 @@ export async function fetchNearbyPlaces(
   options: FetchNearbyPlacesOptions = {},
 ): Promise<NearbyPlaces> {
   const radiusMeters = options.radiusMeters ?? 800;
-  const categories = options.categories ?? NEARBY_PLACE_CATEGORIES;
+  const categories = options.categories ?? DEFAULT_NEARBY_PLACE_CATEGORIES;
   const limitPerCategory = options.limitPerCategory ?? 5;
   const query = new URLSearchParams({
     radiusMeters: String(radiusMeters),

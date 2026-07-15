@@ -26,7 +26,8 @@ class NearbyPlaceQueryServiceTest {
     @DisplayName("주변 장소 조회는 provider 결과를 거리순으로 제한하고 count와 조회 시점을 보존한다")
     void aggregatesProviderResultsByCategory() {
         List<NearbyPlaceCategory> calledCategories = new ArrayList<>();
-        NearbyPlaceProvider provider = (point, radiusMeters, category) -> {
+        NearbyPlaceProvider provider = query -> {
+            NearbyPlaceCategory category = query.category();
             calledCategories.add(category);
             return new NearbyPlaceProviderResult(
                     category, 18, NOW, List.of(place("kakao:2", "먼 카페", 230), place("kakao:1", "가까운 카페", 72)));
@@ -52,28 +53,36 @@ class NearbyPlaceQueryServiceTest {
     }
 
     @Test
-    @DisplayName("category를 생략하면 제품 순서로 6개 category를 조회한다")
+    @DisplayName("category를 생략하면 제품 순서로 8개 기본 category를 조회한다")
     void defaultsToAllSupportedCategories() {
         List<NearbyPlaceCategory> calledCategories = new ArrayList<>();
-        NearbyPlaceQueryService service = service(
-                complexId -> Optional.of(new NearbyPlaceCenter(complexId, 37.321, 127.109)),
-                (point, radiusMeters, category) -> {
+        NearbyPlaceQueryService service =
+                service(complexId -> Optional.of(new NearbyPlaceCenter(complexId, 37.321, 127.109)), query -> {
+                    NearbyPlaceCategory category = query.category();
                     calledCategories.add(category);
                     return new NearbyPlaceProviderResult(category, 0, NOW, List.of());
                 });
 
         NearbyPlacesResult result = service.getNearbyPlaces(501L, null, null, null);
 
-        assertThat(calledCategories).containsExactly(NearbyPlaceCategory.values());
+        assertThat(calledCategories)
+                .containsExactly(
+                        NearbyPlaceCategory.SUPERMARKET,
+                        NearbyPlaceCategory.CONVENIENCE_STORE,
+                        NearbyPlaceCategory.RESTAURANT,
+                        NearbyPlaceCategory.DAYCARE_KINDERGARTEN,
+                        NearbyPlaceCategory.SCHOOL,
+                        NearbyPlaceCategory.ACADEMY,
+                        NearbyPlaceCategory.SUBWAY_STATION,
+                        NearbyPlaceCategory.HOSPITAL);
         assertThat(result.radiusMeters()).isEqualTo(800);
-        assertThat(result.categories()).hasSize(6);
+        assertThat(result.categories()).hasSize(8);
     }
 
     @Test
     @DisplayName("존재하지 않는 단지와 좌표 없는 단지를 구분한다")
     void distinguishesMissingComplexAndMissingCoordinate() {
-        NearbyPlaceProvider provider =
-                (point, radiusMeters, category) -> new NearbyPlaceProviderResult(category, 0, NOW, List.of());
+        NearbyPlaceProvider provider = query -> new NearbyPlaceProviderResult(query.category(), 0, NOW, List.of());
 
         assertThatThrownBy(
                         () -> service(complexId -> Optional.empty(), provider).getNearbyPlaces(999L, 800, null, 5))
@@ -90,7 +99,7 @@ class NearbyPlaceQueryServiceTest {
     void validatesBoundedInputs() {
         NearbyPlaceQueryService service = service(
                 complexId -> Optional.of(new NearbyPlaceCenter(complexId, 37.321, 127.109)),
-                (point, radiusMeters, category) -> new NearbyPlaceProviderResult(category, 0, NOW, List.of()));
+                query -> new NearbyPlaceProviderResult(query.category(), 0, NOW, List.of()));
 
         assertThatThrownBy(() -> service.getNearbyPlaces(501L, 99, null, 5))
                 .isInstanceOf(InvalidNearbyPlaceRequestException.class);
@@ -102,9 +111,9 @@ class NearbyPlaceQueryServiceTest {
     @DisplayName("중복 category는 제거하고 제품 고정 순서로 한 번씩 조회한다")
     void deduplicatesCategoriesInProductOrder() {
         List<NearbyPlaceCategory> calledCategories = new ArrayList<>();
-        NearbyPlaceQueryService service = service(
-                complexId -> Optional.of(new NearbyPlaceCenter(complexId, 37.321, 127.109)),
-                (point, radiusMeters, category) -> {
+        NearbyPlaceQueryService service =
+                service(complexId -> Optional.of(new NearbyPlaceCenter(complexId, 37.321, 127.109)), query -> {
+                    NearbyPlaceCategory category = query.category();
                     calledCategories.add(category);
                     return new NearbyPlaceProviderResult(category, 0, NOW, List.of());
                 });
@@ -119,19 +128,37 @@ class NearbyPlaceQueryServiceTest {
     }
 
     @Test
+    @DisplayName("기본 목록에서 제외된 카페와 약국도 명시 요청하면 기존 순서로 조회한다")
+    void keepsLegacyCategoriesAvailableForExplicitQueries() {
+        List<NearbyPlaceCategory> calledCategories = new ArrayList<>();
+        NearbyPlaceQueryService service =
+                service(complexId -> Optional.of(new NearbyPlaceCenter(complexId, 37.321, 127.109)), query -> {
+                    calledCategories.add(query.category());
+                    return new NearbyPlaceProviderResult(query.category(), 0, NOW, List.of());
+                });
+
+        service.getNearbyPlaces(
+                501L,
+                800,
+                List.of(NearbyPlaceCategory.PHARMACY, NearbyPlaceCategory.CAFE, NearbyPlaceCategory.PHARMACY),
+                5);
+
+        assertThat(calledCategories).containsExactly(NearbyPlaceCategory.CAFE, NearbyPlaceCategory.PHARMACY);
+    }
+
+    @Test
     @DisplayName("provider category mismatch와 한 category 실패는 partial response 없이 전체 실패한다")
     void rejectsCategoryMismatchAndPartialProviderFailure() {
         NearbyPlaceCenterReader centerReader =
                 complexId -> Optional.of(new NearbyPlaceCenter(complexId, 37.321, 127.109));
         NearbyPlaceQueryService mismatchService = service(
-                centerReader,
-                (point, radiusMeters, category) ->
-                        new NearbyPlaceProviderResult(NearbyPlaceCategory.SCHOOL, 0, NOW, List.of()));
+                centerReader, query -> new NearbyPlaceProviderResult(NearbyPlaceCategory.SCHOOL, 0, NOW, List.of()));
         assertThatThrownBy(() -> mismatchService.getNearbyPlaces(501L, 800, List.of(NearbyPlaceCategory.CAFE), 5))
                 .isInstanceOf(NearbyPlaceProviderUnavailableException.class);
 
         AtomicInteger calls = new AtomicInteger();
-        NearbyPlaceQueryService failureService = service(centerReader, (point, radiusMeters, category) -> {
+        NearbyPlaceQueryService failureService = service(centerReader, query -> {
+            NearbyPlaceCategory category = query.category();
             calls.incrementAndGet();
             if (category == NearbyPlaceCategory.RESTAURANT) {
                 throw new NearbyPlaceProviderUnavailableException("provider failed");
@@ -149,7 +176,7 @@ class NearbyPlaceQueryServiceTest {
     void timesOutIncompleteProviderWork() {
         NearbyPlaceQueryService service = service(
                 complexId -> Optional.of(new NearbyPlaceCenter(complexId, 37.321, 127.109)),
-                (point, radiusMeters, category) -> new NearbyPlaceProviderResult(category, 0, NOW, List.of()),
+                query -> new NearbyPlaceProviderResult(query.category(), 0, NOW, List.of()),
                 command -> {},
                 1);
 
@@ -163,7 +190,7 @@ class NearbyPlaceQueryServiceTest {
     void preservesInterruptedStatus() {
         NearbyPlaceQueryService service = service(
                 complexId -> Optional.of(new NearbyPlaceCenter(complexId, 37.321, 127.109)),
-                (point, radiusMeters, category) -> new NearbyPlaceProviderResult(category, 0, NOW, List.of()),
+                query -> new NearbyPlaceProviderResult(query.category(), 0, NOW, List.of()),
                 command -> {},
                 5_000);
 
@@ -183,7 +210,7 @@ class NearbyPlaceQueryServiceTest {
     void rejectsSaturatedExecutor() {
         NearbyPlaceQueryService service = service(
                 complexId -> Optional.of(new NearbyPlaceCenter(complexId, 37.321, 127.109)),
-                (point, radiusMeters, category) -> new NearbyPlaceProviderResult(category, 0, NOW, List.of()),
+                query -> new NearbyPlaceProviderResult(query.category(), 0, NOW, List.of()),
                 command -> {
                     throw new RejectedExecutionException("executor saturated");
                 },

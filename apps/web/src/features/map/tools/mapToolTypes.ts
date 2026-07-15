@@ -1,5 +1,5 @@
-export type MapToolMode = 'none' | 'roadview' | 'distance' | 'commerce';
-export type OpenMapControl = null | 'display' | 'tools';
+export type MapToolMode = 'none' | 'roadview' | 'distance';
+export type OpenMapControl = null | 'display' | 'tools' | 'facilities';
 export type DistanceMeasurePhase = 'idle' | 'drawing' | 'complete';
 export type RoadviewRuntimeState = 'idle' | 'loading' | 'ready' | 'unavailable' | 'error';
 

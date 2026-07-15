@@ -150,16 +150,18 @@ Source controller:
 
 - `apps/property-data/api/src/main/java/com/home/infrastructure/web/place/NearbyPlaceController.java`
 
-선택 단지의 canonical 표시 좌표를 기준으로 지도 UI가 사용하는 주변 장소 사실을
-반환한다. 범용 `lat/lng` 검색은 제공하지 않는다.
+선택 단지의 canonical 표시 좌표를 기준으로 챗봇과 단지 생활 편의 요약이 사용하는
+주변 장소 사실을 반환한다. 범용 `lat/lng` 검색은 제공하지 않는다.
 
 Query parameters:
 
 - `radiusMeters`: 기본 `800`, 허용 `100..2000`.
-- `categories`: 생략 시 `CAFE,RESTAURANT,CONVENIENCE_STORE,HOSPITAL,PHARMACY,SCHOOL`.
+- `categories`: 생략 시 `SUPERMARKET,CONVENIENCE_STORE,RESTAURANT,DAYCARE_KINDERGARTEN,SCHOOL,ACADEMY,SUBWAY_STATION,HOSPITAL`.
 - `limitPerCategory`: 기본 `5`, 허용 `1..15`.
 
-중복 category는 제거하고 위 제품 순서로 반환한다. category별 장소는 거리
+중복 category는 제거하고 category를 생략했을 때만 위 제품 8종 순서로 반환한다.
+명시 요청은 지원 10종의 안정적 enum 순서를 유지하며 기존 `CAFE`, `PHARMACY`도
+계속 지원한다. category별 장소는 거리
 오름차순이며 정상 empty는 `200`, `matchedCount: 0`, `places: []`다. 한 category라도
 provider 조회에 실패하면 partial response 대신 전체 요청을 실패시킨다.
 
@@ -174,16 +176,16 @@ provider 조회에 실패하면 partial response 대신 전체 요청을 실패�
   },
   "generatedAt": "2026-07-13T03:00:01Z",
   "categories": [{
-    "category": "CAFE",
-    "label": "카페",
+    "category": "SUPERMARKET",
+    "label": "대형마트",
     "matchedCount": 18,
     "returnedCount": 5,
     "hasMore": true,
     "retrievedAt": "2026-07-13T03:00:00Z",
     "places": [{
       "placeId": "kakao:123456",
-      "name": "카페 이름",
-      "categoryDetail": "음식점 > 카페",
+      "name": "대형마트 이름",
+      "categoryDetail": "소매 > 대형마트",
       "lat": 37.322,
       "lng": 127.108,
       "distanceMeters": 72,
@@ -212,6 +214,60 @@ Status:
 
 이 endpoint는 additive public contract이며 기존 map/search/detail/trade URL,
 필드, 단위와 DB 상태를 변경하지 않는다.
+
+### POST `/api/v1/map/nearby-places`
+
+현재 Kakao 지도 화면 안에서 사용자가 선택한 category 한 개의 장소를 반환한다.
+단지 선택과 사용자 위치는 필요하지 않으며 다중 category와 전국 bounds는 허용하지
+않는다.
+
+```json
+{
+  "swLat": 37.45,
+  "swLng": 126.85,
+  "neLat": 37.50,
+  "neLng": 126.93,
+  "level": 4,
+  "category": "SUPERMARKET"
+}
+```
+
+- `category`: `CAFE|RESTAURANT|CONVENIENCE_STORE|HOSPITAL|PHARMACY|SCHOOL|SUPERMARKET|DAYCARE_KINDERGARTEN|ACADEMY|SUBWAY_STATION` 중 하나.
+- `level`: `1..4`.
+- 좌표: WGS84 유한 숫자, `swLat < neLat`, `swLng < neLng`.
+- 화면 대각선: 최대 `10km`.
+
+```json
+{
+  "bounds": { "swLat": 37.45, "swLng": 126.85, "neLat": 37.50, "neLng": 126.93 },
+  "level": 4,
+  "source": { "provider": "KAKAO_LOCAL", "countBasis": "PROVIDER_SEARCH" },
+  "generatedAt": "2026-07-15T04:00:00Z",
+  "category": {
+    "category": "SUPERMARKET",
+    "label": "대형마트",
+    "retrievedAt": "2026-07-15T03:59:50Z",
+    "places": [{
+      "placeId": "kakao:123456",
+      "name": "대형마트 이름",
+      "categoryDetail": "소매 > 대형마트",
+      "lat": 37.49,
+      "lng": 126.91,
+      "distanceMeters": 170,
+      "address": "서울특별시 ...",
+      "roadAddress": "서울특별시 ...",
+      "phone": "02-...",
+      "placeUrl": "https://place.map.kakao.com/123456"
+    }]
+  }
+}
+```
+
+장소는 실제 요청 bounds 안에서 지도 중심 거리 오름차순으로 최대 10개다.
+`distanceMeters`는 사용자 위치가 아닌 지도 중심 기준이다. 정상 empty는 `200`과
+`places: []`, 입력 오류는 `400`, provider·cache quota guard·timeout은 `503`,
+ingress per-IP 제한은 `429`다. 기존 단지 endpoint와 DB 상태를 변경하지 않는
+additive contract다.
 
 ### POST `/api/v1/map/regions`
 

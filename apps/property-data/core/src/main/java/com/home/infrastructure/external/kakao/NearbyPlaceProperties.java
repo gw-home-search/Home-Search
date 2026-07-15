@@ -42,15 +42,17 @@ public record NearbyPlaceProperties(
 
     public record Cache(
             @DefaultValue("true") boolean enabled,
-            @NotNull @DefaultValue("24h") Duration ttl) {
+            @NotNull @DefaultValue("24h") Duration ttl,
+            @NotNull @DefaultValue("1h") Duration viewportTtl) {
 
         public Cache {
             requirePositive(ttl, "home.place.kakao.cache.ttl");
+            requirePositive(viewportTtl, "home.place.kakao.cache.viewport-ttl");
         }
     }
 
     public record Executor(
-            @Min(1) @Max(3) @DefaultValue("3") int threads,
+            @Min(1) @Max(4) @DefaultValue("4") int threads,
             @Min(1) @Max(120) @DefaultValue("24") int queueCapacity,
             @NotNull @DefaultValue("10s") Duration shutdownAwait) {
 

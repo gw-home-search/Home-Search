@@ -275,11 +275,12 @@ and `위성` to labeled `HYBRID`. Selection closes the menu, which uses
 `aria-expanded` and `aria-pressed`, and does not persist across a full page refresh.
 The zoom actions remain a separate top-right vertical stack of individual rounded
 buttons. A second tool toggle follows the same left-opening menu pattern for
-`거리뷰`, `지적`, and `거리`; only one menu can be open. `상권` is a separate,
-always-visible rail button because it is a primary place-exploration mode rather
-than a map utility. Roadview, distance, and commerce are exclusive working modes,
-while cadastral is an independent reference overlay. Commerce stays visible but
-disabled until a canonical `complexId` is known.
+`거리뷰`, `지적`, and `거리`; only one menu can be open. `시설` is a separate,
+always-visible category-settings button. It is not a working mode and selected
+facilities remain visible while distance, cadastral, or display-mode controls are
+used. Roadview temporarily clears facility requests and overlays while preserving
+the category selection for restoration. The control is enabled as soon as the
+Kakao runtime is ready and does not require a selected complex.
 
 Roadview replaces the map stage at every viewport instead of opening a fixed split.
 Its 44px header provides back, title/status, and close actions while the Roadview fills
@@ -288,18 +289,26 @@ measurement uses a compact bottom-center action bar with explicit undo, reset, c
 and exit actions. Cadastral mode adds a map-local reference disclaimer. All tool states
 reset on full-page refresh and must not change Home Search public API requests.
 
-Commerce uses one compact `주변 상권·생활시설` panel rather than stacked cards.
-Desktop placement is bottom-center, at most 560×280px with a 4px radius; mobile
-docks it to the bottom at at most 45dvh with a 1px top radius. Six horizontally
-scrollable segmented tabs are visible from loading onward in the fixed product
-order `카페`, `음식점`, `편의점`, `병원`, `약국`, `학교`; provider-search
-counts appear when available. Category changes reuse the initial six-category
-response and do not trigger another request. Place rows use dividers,
-name/address on the left and distance/optional phone on the right; only the list
-body scrolls. A permanent footnote states that counts are Kakao search results,
-not registered-business totals. POI markers use category-specific glyph/shape
-plus label, never color alone. Selection synchronizes marker and row without
-covering the Kakao attribution or right control rail.
+Facilities opens an eight-item picker to the left of its rail button in the fixed
+order `대형마트`, `편의점`, `음식점`, `어린이집·유치원`, `학교`, `학원`, `지하철역`, `병원`.
+Zero to three categories may be selected; a visible Check plus `aria-pressed`
+identifies selection, and an accessible status message explains the maximum.
+Closing the picker does not clear POIs. Desktop uses a 336px 4-by-2 grid; narrow
+screens use a 2-by-4 grid with 44px targets. Level 5 or wider never calls the
+viewport API and displays a zoom prompt. Each
+category contributes at most five symbols and the combined layer is capped at
+fifteen, with duplicate Kakao place ids rendered once.
+
+POIs use a 40px hit area containing a 30px white symbol tile with 4px radius and
+teal outline. Icons share one `currentColor`, 1.75px rounded-stroke descriptor
+between React controls and imperative Kakao overlays. There are no pin tails,
+emoji, or letter markers. Selection expands to an icon plus a place-name label
+and changes background, border, and size together. A compact bottom-center info
+bar shows only the selected place name, category, address, optional phone, and a
+validated Kakao link. Routine loading, empty, and zoom states stay visually quiet;
+only partial/error recovery uses the same compact footprint with retry.
+Ordinary apartment markers remain visible and interactive while the selected
+complex keeps its normal emphasis.
 
 Loading is delayed to avoid flash, empty/error copy is task-local, and marker
 errors keep the map usable. Focus, selected, open, disabled, and error states do

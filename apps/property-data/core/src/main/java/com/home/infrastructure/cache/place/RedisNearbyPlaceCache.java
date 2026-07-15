@@ -18,14 +18,25 @@ public final class RedisNearbyPlaceCache implements NearbyPlaceCache {
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
-    private final Duration ttl;
+    private final Duration complexTtl;
+    private final Duration viewportTtl;
     private final MeterRegistry meterRegistry;
 
     public RedisNearbyPlaceCache(
             StringRedisTemplate redisTemplate, ObjectMapper objectMapper, Duration ttl, MeterRegistry meterRegistry) {
+        this(redisTemplate, objectMapper, ttl, ttl, meterRegistry);
+    }
+
+    public RedisNearbyPlaceCache(
+            StringRedisTemplate redisTemplate,
+            ObjectMapper objectMapper,
+            Duration complexTtl,
+            Duration viewportTtl,
+            MeterRegistry meterRegistry) {
         this.redisTemplate = Objects.requireNonNull(redisTemplate);
         this.objectMapper = Objects.requireNonNull(objectMapper);
-        this.ttl = Objects.requireNonNull(ttl);
+        this.complexTtl = Objects.requireNonNull(complexTtl);
+        this.viewportTtl = Objects.requireNonNull(viewportTtl);
         this.meterRegistry = Objects.requireNonNull(meterRegistry);
     }
 
@@ -34,26 +45,26 @@ public final class RedisNearbyPlaceCache implements NearbyPlaceCache {
         try {
             String value = redisTemplate.opsForValue().get(key.redisKey());
             if (value == null || value.isBlank()) {
-                record("miss");
+                record(key, "miss");
                 return Optional.empty();
             }
             NearbyPlaceProviderResult result = objectMapper.readValue(value, NearbyPlaceProviderResult.class);
             if (!valid(result, key)) {
-                record("corrupt");
+                record(key, "corrupt");
                 redisTemplate.delete(key.redisKey());
                 return Optional.empty();
             }
-            record("hit");
+            record(key, "hit");
             return Optional.of(result);
         } catch (JacksonException exception) {
-            record("corrupt");
+            record(key, "corrupt");
             log.debug(
                     "Discarding corrupt nearby-place cache entry type={}",
                     exception.getClass().getSimpleName());
             tryDelete(key);
             return Optional.empty();
         } catch (RuntimeException exception) {
-            record("error");
+            record(key, "error");
             log.debug(
                     "Nearby-place cache read failed type={}",
                     exception.getClass().getSimpleName());
@@ -64,10 +75,10 @@ public final class RedisNearbyPlaceCache implements NearbyPlaceCache {
     @Override
     public void store(NearbyPlaceCacheKey key, NearbyPlaceProviderResult result) {
         try {
-            redisTemplate.opsForValue().set(key.redisKey(), objectMapper.writeValueAsString(result), ttl);
-            recordOperation("write", "success");
+            redisTemplate.opsForValue().set(key.redisKey(), objectMapper.writeValueAsString(result), ttlFor(key));
+            recordOperation(key, "write", "success");
         } catch (RuntimeException exception) {
-            recordOperation("write", "error");
+            recordOperation(key, "write", "error");
             log.debug(
                     "Nearby-place cache write failed type={}",
                     exception.getClass().getSimpleName());
@@ -78,7 +89,7 @@ public final class RedisNearbyPlaceCache implements NearbyPlaceCache {
         try {
             redisTemplate.delete(key.redisKey());
         } catch (RuntimeException exception) {
-            recordOperation("delete", "error");
+            recordOperation(key, "delete", "error");
             log.debug(
                     "Nearby-place corrupt cache cleanup failed type={}",
                     exception.getClass().getSimpleName());
@@ -115,22 +126,43 @@ public final class RedisNearbyPlaceCache implements NearbyPlaceCache {
             try {
                 URI uri = URI.create(place.placeUrl());
                 return "https".equalsIgnoreCase(uri.getScheme())
-                        && "place.map.kakao.com".equalsIgnoreCase(uri.getHost());
+                        && "place.map.kakao.com".equalsIgnoreCase(uri.getHost())
+                        && uri.getPort() == -1
+                        && uri.getUserInfo() == null
+                        && uri.getFragment() == null
+                        && uri.getRawPath() != null
+                        && !uri.getRawPath().isBlank();
             } catch (IllegalArgumentException exception) {
                 return false;
             }
         });
     }
 
-    private void record(String result) {
+    private Duration ttlFor(NearbyPlaceCacheKey key) {
+        return key.scope() == NearbyPlaceCacheKey.Scope.VIEWPORT ? viewportTtl : complexTtl;
+    }
+
+    private void record(NearbyPlaceCacheKey key, String result) {
         meterRegistry
-                .counter("home.search.nearby.place.cache.requests", "result", result)
+                .counter(
+                        "home.search.nearby.place.cache.requests",
+                        "scope",
+                        key.scope().metricValue(),
+                        "result",
+                        result)
                 .increment();
     }
 
-    private void recordOperation(String operation, String result) {
+    private void recordOperation(NearbyPlaceCacheKey key, String operation, String result) {
         meterRegistry
-                .counter("home.search.nearby.place.cache.operations", "operation", operation, "result", result)
+                .counter(
+                        "home.search.nearby.place.cache.operations",
+                        "scope",
+                        key.scope().metricValue(),
+                        "operation",
+                        operation,
+                        "result",
+                        result)
                 .increment();
     }
 }

@@ -50,11 +50,12 @@ home:
       read-timeout: ${HOME_PLACE_KAKAO_READ_TIMEOUT:2s}
       total-timeout: 5s
       executor:
-        threads: 3
+        threads: ${HOME_PLACE_KAKAO_EXECUTOR_THREADS:4}
         queue-capacity: 24
       cache:
         enabled: ${HOME_PLACE_KAKAO_CACHE_ENABLED:true}
         ttl: ${HOME_PLACE_KAKAO_CACHE_TTL:24h}
+        viewport-ttl: ${HOME_PLACE_KAKAO_VIEWPORT_CACHE_TTL:1h}
   prediction:
     enabled: true
     model-version: deployment__F37_monthly_anchor_prev3_rolling_huber_010

@@ -27,7 +27,6 @@ describe('MapControlRail 지도 컨트롤', () => {
           disabled={false}
           displayMode="roadmap"
           level={4}
-          commerceAvailable={false}
           onCadastralChange={vi.fn()}
           onDisplayModeChange={vi.fn()}
           onToolModeChange={vi.fn()}
@@ -71,7 +70,6 @@ describe('MapControlRail 지도 컨트롤', () => {
           disabled={false}
           displayMode="roadmap"
           level={4}
-          commerceAvailable
           onCadastralChange={onCadastralChange}
           onDisplayModeChange={vi.fn()}
           onToolModeChange={onToolModeChange}
@@ -95,7 +93,7 @@ describe('MapControlRail 지도 컨트롤', () => {
 
   });
 
-  it('상권을 도구 메뉴 밖의 독립 버튼으로 보여주고 바로 연다', async () => {
+  it('주변시설 버튼은 작업 모드를 바꾸지 않고 독립 선택창만 연다', async () => {
     const host = document.createElement('div');
     root = createRoot(host);
     const onToolModeChange = vi.fn();
@@ -104,7 +102,6 @@ describe('MapControlRail 지도 컨트롤', () => {
       <MapControlRail
         activeTool="none"
         cadastralEnabled={false}
-        commerceAvailable
         disabled={false}
         displayMode="roadmap"
         level={4}
@@ -116,18 +113,23 @@ describe('MapControlRail 지도 컨트롤', () => {
       />,
     ));
 
-    const commerceToggle = host.querySelector<HTMLButtonElement>('button[aria-label="주변 상권 보기"]');
-    expect(commerceToggle).not.toBeNull();
-    expect(commerceToggle?.closest('#map-tools-menu')).toBeNull();
+    const facilityToggle = host.querySelector<HTMLButtonElement>('button[aria-label="주변시설 선택"]');
+    expect(facilityToggle).not.toBeNull();
+    expect(facilityToggle?.closest('#map-tools-menu')).toBeNull();
+    expect(facilityToggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(facilityToggle?.hasAttribute('aria-pressed')).toBe(false);
 
     await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="지도 도구 선택"]')?.click());
-    expect(host.querySelector('#map-tools-menu button[aria-label="주변 상권 보기"]')).toBeNull();
+    expect(host.querySelector('#map-tools-menu button[aria-label="주변시설 선택"]')).toBeNull();
 
-    await act(async () => commerceToggle?.click());
-    expect(onToolModeChange).toHaveBeenLastCalledWith('commerce');
+    await act(async () => facilityToggle?.click());
+    expect(onToolModeChange).not.toHaveBeenCalled();
+    expect(facilityToggle?.getAttribute('aria-expanded')).toBe('true');
+    expect(host.querySelector('[aria-label="주변시설 종류 선택"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="지도 도구 메뉴"]')).toBeNull();
   });
 
-  it('상권 모드에서 Escape를 누르면 종료하고 독립 상권 버튼으로 focus를 복원한다', async () => {
+  it('주변시설 선택창에서 Escape를 누르면 선택은 유지하고 버튼으로 focus를 복원한다', async () => {
     const host = document.createElement('div');
     document.body.append(host);
     root = createRoot(host);
@@ -135,9 +137,9 @@ describe('MapControlRail 지도 컨트롤', () => {
 
     await act(async () => root?.render(
       <MapControlRail
-        activeTool="commerce"
+        activeTool="none"
         cadastralEnabled={false}
-        commerceAvailable
+        facilityCategories={['SUPERMARKET']}
         disabled={false}
         displayMode="roadmap"
         level={4}
@@ -149,23 +151,25 @@ describe('MapControlRail 지도 컨트롤', () => {
       />,
     ));
 
-    const commerceToggle = host.querySelector<HTMLButtonElement>('button[aria-label="주변 상권 보기"]');
-    expect(commerceToggle?.getAttribute('aria-pressed')).toBe('true');
+    const facilityToggle = host.querySelector<HTMLButtonElement>('button[aria-label="주변시설 선택"]');
+    await act(async () => facilityToggle?.click());
+    expect(facilityToggle?.getAttribute('aria-expanded')).toBe('true');
 
     await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
-    expect(onToolModeChange).toHaveBeenCalledWith('none');
-    expect(document.activeElement).toBe(commerceToggle);
+    expect(onToolModeChange).not.toHaveBeenCalled();
+    expect(facilityToggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(facilityToggle?.dataset.active).toBe('true');
+    expect(document.activeElement).toBe(facilityToggle);
     host.remove();
   });
 
-  it('확정된 complexId가 없으면 상권 도구만 비활성화한다', async () => {
+  it('지도 runtime이 준비되면 단지 선택 없이 주변시설 설정을 활성화한다', async () => {
     const host = document.createElement('div');
     root = createRoot(host);
     await act(async () => root?.render(
       <MapControlRail
         activeTool="none"
         cadastralEnabled={false}
-        commerceAvailable={false}
         disabled={false}
         displayMode="roadmap"
         level={4}
@@ -176,6 +180,46 @@ describe('MapControlRail 지도 컨트롤', () => {
         onZoomOut={vi.fn()}
       />,
     ));
-    expect(host.querySelector<HTMLButtonElement>('button[aria-label="주변 상권 보기"]')?.disabled).toBe(true);
+    expect(host.querySelector<HTMLButtonElement>('button[aria-label="주변시설 선택"]')?.disabled).toBe(false);
+  });
+
+  it('주변시설 category를 0개까지 해제하고 최대 3개까지만 선택한다', async () => {
+    const host = document.createElement('div');
+    root = createRoot(host);
+    const onFacilityCategoriesChange = vi.fn();
+    const render = (facilityCategories: Array<'SUPERMARKET' | 'HOSPITAL' | 'SCHOOL'>) => root?.render(
+      <MapControlRail
+        activeTool="none"
+        cadastralEnabled={false}
+        facilityCategories={facilityCategories}
+        disabled={false}
+        displayMode="roadmap"
+        level={4}
+        onCadastralChange={vi.fn()}
+        onFacilityCategoriesChange={onFacilityCategoriesChange}
+        onDisplayModeChange={vi.fn()}
+        onToolModeChange={vi.fn()}
+        onZoomIn={vi.fn()}
+        onZoomOut={vi.fn()}
+      />
+    );
+
+    await act(async () => render(['SUPERMARKET', 'HOSPITAL', 'SCHOOL']));
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="주변시설 선택"]')?.click());
+    expect(host.querySelectorAll('.map-facility-options button[aria-pressed="true"]')).toHaveLength(3);
+    expect(host.querySelectorAll('.map-facility-category-check')).toHaveLength(3);
+    expect(host.querySelector('.map-facility-live')).toBeNull();
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="음식점 선택"]')?.click());
+    expect(onFacilityCategoriesChange).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('주변시설은 최대 3개까지 선택할 수 있습니다.');
+    expect(host.querySelector('.map-facility-live')).not.toBeNull();
+
+    await act(async () => render(['SUPERMARKET']));
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="대형마트 선택 해제"]')?.click());
+    expect(onFacilityCategoriesChange).toHaveBeenLastCalledWith([]);
+
+    await act(async () => render(['SUPERMARKET', 'HOSPITAL', 'SCHOOL']));
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="주변시설 전체 해제"]')?.click());
+    expect(onFacilityCategoriesChange).toHaveBeenLastCalledWith([]);
   });
 });

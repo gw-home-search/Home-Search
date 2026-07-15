@@ -442,27 +442,34 @@ KAKAO_REST_API_KEY=
 HOME_PLACE_KAKAO_ENABLED=false
 HOME_PLACE_KAKAO_CACHE_ENABLED=true
 HOME_PLACE_KAKAO_CACHE_TTL=24h
+HOME_PLACE_KAKAO_VIEWPORT_CACHE_TTL=1h
 HOME_PLACE_KAKAO_DAILY_REQUEST_BUDGET=10000
 HOME_PLACE_KAKAO_CONNECT_TIMEOUT=1s
 HOME_PLACE_KAKAO_READ_TIMEOUT=2s
+HOME_PLACE_KAKAO_EXECUTOR_THREADS=4
 ```
 
 The feature is disabled by default. Enabling it requires a Kakao app with Local
 API use enabled, Redis connectivity, and a deployment-time daily budget below
-the provider quota. Public ingress must apply the equivalent of the checked-in
-per-IP `5r/s`, burst `10` nearby-place route limit; the local gateway returns the
-same public `429` ProblemDetail above it. Redis cache read/write failures may
-degrade to a provider call, but an unavailable quota guard fails closed.
+the provider quota. The shared executor uses four workers by default (bounded
+to `1..4`) and a queue capacity of 24, so the eight default complex categories
+run in two bounded waves while viewport selection stays capped at three.
+Public ingress must apply the equivalent of the checked-in
+per-IP `5r/s`, burst `10` nearby-place route limit; the local gateway returns
+the same public `429` ProblemDetail above it. Redis cache read/write failures may degrade to a provider call,
+but an unavailable quota guard fails closed.
 
-Category cache keys contain six-decimal canonical coordinates, radius, and
-category only. TTL is 24 hours, empty results are cached, provider failures are
-not cached, and no place result is written to PostgreSQL.
+Complex category cache keys contain six-decimal canonical coordinates, radius,
+and category with a 24-hour TTL. Viewport keys use a separate namespace with map
+level, outward-normalized 0.001° bounds, and category with a 1-hour TTL. Empty
+results are cached, provider failures are not cached, both scopes share the same
+daily request budget, and no place result is written to PostgreSQL.
 
 Prometheus exposes bounded tags only:
 
-- `home_search_nearby_place_cache_requests_total`
-- `home_search_kakao_local_calls_total`
-- `home_search_kakao_local_duration_seconds`
+- `home_search_nearby_place_cache_requests_total` (`scope=complex|viewport`)
+- `home_search_kakao_local_calls_total` (`scope=complex|viewport`)
+- `home_search_kakao_local_duration_seconds` (`scope=complex|viewport`)
 - `home_search_kakao_local_quota_used`
 
 Never use complex id, coordinate, place name, raw provider body, query URL, or

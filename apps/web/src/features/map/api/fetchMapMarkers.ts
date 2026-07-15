@@ -33,11 +33,13 @@ export type MapMarkersResult =
       markers: RegionMarker[];
     };
 
+export const MAX_COMPLEX_MARKER_LEVEL = 4;
+
 export async function fetchMapMarkers(
   request: MapMarkersRequest,
   signal?: AbortSignal,
 ): Promise<MapMarkersResult> {
-  if (request.level <= 4) {
+  if (request.level <= MAX_COMPLEX_MARKER_LEVEL) {
     const markers = await fetchComplexMarkers(
       {
         ...request.bounds,

@@ -9,7 +9,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.place.NearbyPlacePoint;
 import com.home.application.place.NearbyPlaceProviderResult;
 import com.home.domain.place.NearbyPlaceCategory;
@@ -21,6 +20,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 class RedisNearbyPlaceCacheTest {
 
@@ -109,7 +110,7 @@ class RedisNearbyPlaceCacheTest {
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
         ValueOperations<String, String> values = mock(ValueOperations.class);
         when(redisTemplate.opsForValue()).thenReturn(values);
-        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+        ObjectMapper objectMapper = JsonMapper.builder().findAndAddModules().build();
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         return new Fixture(
                 new RedisNearbyPlaceCache(redisTemplate, objectMapper, TTL, registry),

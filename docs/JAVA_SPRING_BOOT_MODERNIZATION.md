@@ -3,7 +3,7 @@
 ## 실행 기준
 
 - baseline commit: `d601237`
-- 현재 진행 PR: `PR 6 — format baseline`
+- 현재 진행 PR: `PR 7 — Boot 4.1 / Jackson 3`
 - 전체 상태: `In Progress`
 - 시작일: 2026-07-14
 - 실행 원칙: 한 번에 하나의 PR만 진행하고, 선행 PR이 `Complete`인 경우에만 다음 PR을 시작한다.
@@ -77,8 +77,8 @@ property-data configuration file distribution:
 | 3 | read snapshot과 DTO 경로 | Complete | PR 2 `Complete` |
 | 4 | coordinate/ingest atomic workflows | Complete | PR 3 `Complete` |
 | 5 | Java 21 / Boot 3.5 bridge | Complete | PR 4 `Complete` |
-| 6 | format baseline | In Progress | PR 5 `Complete` |
-| 7 | Boot 4.1 / Jackson 3 | Pending | PR 6 `Complete` |
+| 6 | format baseline | Complete | PR 5 `Complete` |
+| 7 | Boot 4.1 / Jackson 3 | Complete | PR 6 `Complete` |
 | 8 | map SQL readability | Pending | PR 7 `Complete` |
 | 9 | property-data typed wiring | Pending | PR 8 `Complete` |
 | 10 | error/validation/executor/observability | Pending | PR 9 `Complete` |
@@ -423,3 +423,65 @@ property-data configuration file distribution:
 - 검증 근거 확인: mechanical commit이 Java file만 포함하는지, ignore-rev가 정확한 SHA인지, Spotless가 root/CI gate에 연결됐는지, 포맷 전후 compile/test/API spec이 동일하게 GREEN인지 확인했다.
 - 검증 공백: 원격 CI 미실행.
 - 잔여 위험: local automation은 공용 included build를 쓰는 service gate를 같은 worktree에서 병렬 `--rerun-tasks`하지 않아야 한다.
+
+### Merge
+
+- implementation ledger commit: `228ebce`
+- merge commit: `bdeaae23cb2b845b5543a540038efe6159cc472b`
+
+## PR 7 Evidence
+
+### TDD 근거
+
+- 최초 RED: property-data `:core:compileJava --rerun-tasks`가 Jackson 2 data-binding/core import 100건 이상을 찾지 못해 compile 실패했다.
+- 예상 RED 실패: Jackson 3 package, Spring Batch 6 package/record API, Boot 4 auto-configuration/test slice package incompatibility다.
+- 최소 GREEN: data binding을 `tools.jackson`으로 옮기고, Batch 6 API와 Boot 4 기능별 starter/test starter만 적용했다. 공개 DTO와 SQL은 변경하지 않았다.
+
+### 계약 영향
+
+- `none`: public URL, JSON field, status, error detail, clamp, OAuth/cookie/JWT claim, CLI operation/exit code를 변경하지 않았다.
+- Jackson annotation은 공식 호환 package인 `com.fasterxml.jackson.annotation`을 유지한다.
+
+### 검증 근거 확인
+
+- property-data main/test compile — `Pass`; Spring Batch 6 `JobOperator`, named `JobParameter` record API, Boot 4 test slice를 확인했다.
+- property-data `:core:test :api:test :api:apiContractTest :api:restDocsTest :api:verifyOpenApiSpec :batch:test` — `Pass`.
+- `backendQualityCheck --no-daemon --stacktrace` — `Pass` (3m 27s; coverage, persistence, fresh Flyway, REST Docs, OpenAPI, packaged Batch 포함).
+- user-service `:core:test :app:test --rerun-tasks` — `Pass` (24s).
+- `userServiceQualityCheck --no-daemon --stacktrace` — `Pass` (1m 50s; shared JWT library와 migration/runtime boundary 포함).
+- admin-service `test --rerun-tasks` — `Pass` (32s); 최종 aggregate와 runtime migration boundary — `Pass` (11s).
+- admin migration/ops packaged process — `Pass`.
+- source-data `test --rerun-tasks` — `Pass`; `check --no-daemon --stacktrace` — `Pass` (57s; packaged migration process 포함).
+- property REST Docs snippet, Asciidoctor HTML, OpenAPI YAML 생성 및 required/forbidden token 검사 — `Pass`.
+- Boot JAR manifest — property API/Batch, user app, admin API/migration/ops, source migration 모두 `Spring-Boot-Version: 4.1.0`, `Build-Jdk-Spec: 21`.
+- runtime JAR — Jackson 3 core/databind만 존재하고 Jackson 2 data-binding compatibility module은 0건; 지원 annotation artifact만 유지한다.
+- runtime Flyway/migration resource boundary — property API/Batch, user app, admin API/ops 0건; admin/source migration artifact만 소유 migration을 포함한다.
+- `python3 .codex/harness/pr_lint.py --self-test` — `Pass`; PR body lint — `Pass`.
+- staged secret/credential pattern 검사 — 지적사항 없음 (`gitleaks`는 local에 설치되지 않아 repository regex 검사를 사용).
+- repository root `git diff --check` — `Pass`.
+- migration diff — 변경 0건.
+
+### 검증 공백
+
+- 원격 CI와 실제 외부 provider 호출은 실행하지 않았다. provider parsing은 기존 fixture와 service gate로 검증했다.
+- 생성 OpenAPI의 이전 파일 snapshot은 저장소에 없어서 byte/semantic file diff는 불가능했다. 기존 required URL/field 및 forbidden audit field 검사를 통과했다.
+
+### 잔여 위험
+
+- ePages `0.20.1`은 승인 계획대로 pre-release다. snippet/OpenAPI 생성과 재실행을 통과했으며 consumer defect는 발견되지 않았다.
+- REST Docs 4 extension은 AsciidoctorJ 3.0.0을 요구하므로 API docs task에 version을 명시했다. 기존 Gradle/Grolifant deprecation warning은 남아 있으며 PR 13 품질 gate에서 계속 추적한다.
+
+### 보안 영향
+
+- JJWT JSON provider를 `jjwt-jackson`에서 같은 버전의 `jjwt-gson`으로 바꿔 Jackson 2 runtime을 제거했다. RS256 검증, issuer/audience/kid, internal admin authentication, user auth test를 다시 실행했다.
+- dependency/runtime 변경에 새 credential·secret·외부 endpoint가 없는지 확인했다.
+- security-audit: 지적사항 = none
+
+### Findings-first review
+
+- 지적사항: 없음.
+- 해소한 finding 1: Boot 4 REST Docs 4와 Asciidoctor Gradle plugin 기본 AsciidoctorJ 2.5.7의 ABI 충돌을 AsciidoctorJ 3.0.0 명시로 해결했다.
+- 해소한 finding 2: `jjwt-jackson`이 Jackson 2 databind/core를 runtime에 재도입하는 것을 발견해 `jjwt-gson`으로 교체하고 JWT 계약을 회귀 검증했다.
+- 검증 근거 확인: public API/OpenAPI, JSON/cache/evidence/provider fixture, Batch packaged process, runtime Flyway/Jackson JAR boundary를 확인했다.
+- 검증 공백: 원격 CI와 실제 외부 provider 호출 미실행.
+- 잔여 위험: 위 third-party Gradle deprecation warning 외 열린 correctness/security finding은 없다.

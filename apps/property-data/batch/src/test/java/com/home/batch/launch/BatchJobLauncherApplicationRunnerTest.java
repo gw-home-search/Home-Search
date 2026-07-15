@@ -11,10 +11,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.ExitStatus;
-import org.springframework.batch.core.Job;
-import org.springframework.batch.core.JobExecution;
-import org.springframework.batch.core.JobParameters;
-import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.job.Job;
+import org.springframework.batch.core.job.JobExecution;
+import org.springframework.batch.core.job.JobInstance;
+import org.springframework.batch.core.job.parameters.JobParameters;
+import org.springframework.batch.core.launch.JobOperator;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.core.env.Environment;
 
@@ -23,21 +24,21 @@ class BatchJobLauncherApplicationRunnerTest {
     @Test
     @DisplayName("launcher는 선택된 job을 실행하고 COMPLETED exit status를 성공으로 처리한다")
     void launcherRunsSelectedJob() throws Exception {
-        JobLauncher jobLauncher = mock(JobLauncher.class);
+        JobOperator jobOperator = mock(JobOperator.class);
         Job job = mock(Job.class);
         BatchMetadataSchemaPreflight preflight = mock(BatchMetadataSchemaPreflight.class);
         BatchExecutionCorrelationGuard correlationGuard = mock(BatchExecutionCorrelationGuard.class);
         Environment environment = mock(Environment.class);
         when(job.getName()).thenReturn("rtmsDailyRefreshJob");
         when(environment.getProperty("SPRING_BATCH_JOB_NAME")).thenReturn("rtmsDailyRefreshJob");
-        JobExecution execution = new JobExecution(1L, new JobParameters());
+        JobExecution execution = new JobExecution(1L, new JobInstance(1L, "rtmsDailyRefreshJob"), new JobParameters());
         execution.setStatus(BatchStatus.COMPLETED);
         execution.setExitStatus(ExitStatus.COMPLETED);
-        when(jobLauncher.run(
+        when(jobOperator.start(
                         org.mockito.ArgumentMatchers.eq(job), org.mockito.ArgumentMatchers.any(JobParameters.class)))
                 .thenReturn(execution);
         BatchJobLauncherApplicationRunner runner = new BatchJobLauncherApplicationRunner(
-                jobLauncher,
+                jobOperator,
                 List.of(job),
                 preflight,
                 correlationGuard,
@@ -54,27 +55,27 @@ class BatchJobLauncherApplicationRunnerTest {
                 .verify(
                         org.mockito.ArgumentMatchers.eq("rtmsDailyRefreshJob"),
                         org.mockito.ArgumentMatchers.any(JobParameters.class));
-        verify(jobLauncher)
-                .run(org.mockito.ArgumentMatchers.eq(job), org.mockito.ArgumentMatchers.any(JobParameters.class));
+        verify(jobOperator)
+                .start(org.mockito.ArgumentMatchers.eq(job), org.mockito.ArgumentMatchers.any(JobParameters.class));
     }
 
     @Test
     @DisplayName("launcher는 warning exit status를 exit code 1 예외로 매핑한다")
     void launcherMapsWarningExitStatusToNonZero() throws Exception {
-        JobLauncher jobLauncher = mock(JobLauncher.class);
+        JobOperator jobOperator = mock(JobOperator.class);
         Job job = mock(Job.class);
         BatchMetadataSchemaPreflight preflight = mock(BatchMetadataSchemaPreflight.class);
         BatchExecutionCorrelationGuard correlationGuard = mock(BatchExecutionCorrelationGuard.class);
         Environment environment = mock(Environment.class);
         when(job.getName()).thenReturn("rtmsDailyRefreshJob");
         when(environment.getProperty("SPRING_BATCH_JOB_NAME")).thenReturn("rtmsDailyRefreshJob");
-        JobExecution execution = new JobExecution(1L, new JobParameters());
+        JobExecution execution = new JobExecution(1L, new JobInstance(1L, "rtmsDailyRefreshJob"), new JobParameters());
         execution.setExitStatus(new ExitStatus("COMPLETED_WITH_WARNINGS"));
-        when(jobLauncher.run(
+        when(jobOperator.start(
                         org.mockito.ArgumentMatchers.eq(job), org.mockito.ArgumentMatchers.any(JobParameters.class)))
                 .thenReturn(execution);
         BatchJobLauncherApplicationRunner runner = new BatchJobLauncherApplicationRunner(
-                jobLauncher,
+                jobOperator,
                 List.of(job),
                 preflight,
                 correlationGuard,

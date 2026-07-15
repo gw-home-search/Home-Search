@@ -1,6 +1,5 @@
 package com.home.infrastructure.web.internaladmin;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.security.jwt.JwtVerificationException;
 import com.home.security.jwt.JwtVerificationPolicy;
 import com.home.security.jwt.Rs256JwtCodec;
@@ -17,6 +16,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
+import tools.jackson.databind.ObjectMapper;
 
 public final class InternalAdminJwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String INTERNAL_PREFIX = "/internal/v1/admin/";

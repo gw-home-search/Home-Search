@@ -1,7 +1,5 @@
 package com.home.infrastructure.cache.place;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.place.NearbyPlaceProviderResult;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
@@ -11,6 +9,8 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 public final class RedisNearbyPlaceCache implements NearbyPlaceCache {
 
@@ -45,7 +45,7 @@ public final class RedisNearbyPlaceCache implements NearbyPlaceCache {
             }
             record("hit");
             return Optional.of(result);
-        } catch (JsonProcessingException exception) {
+        } catch (JacksonException exception) {
             record("corrupt");
             log.debug("Discarding corrupt nearby-place cache entry", exception);
             tryDelete(key);
@@ -61,7 +61,7 @@ public final class RedisNearbyPlaceCache implements NearbyPlaceCache {
     public void store(NearbyPlaceCacheKey key, NearbyPlaceProviderResult result) {
         try {
             redisTemplate.opsForValue().set(key.redisKey(), objectMapper.writeValueAsString(result), ttl);
-        } catch (JsonProcessingException | RuntimeException exception) {
+        } catch (RuntimeException exception) {
             log.debug("Nearby-place cache write failed", exception);
         }
     }

@@ -3,12 +3,12 @@ package com.home.batch.launch;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.batch.core.JobParameter;
-import org.springframework.batch.core.JobParameters;
+import org.springframework.batch.core.job.parameters.JobParameter;
+import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
@@ -64,20 +64,20 @@ class BatchExecutionCorrelationGuardTest {
                 .isEqualTo(2);
         assertThatThrownBy(() -> guard.verify(
                         "rtmsBackfillJob",
-                        new JobParameters(Map.of(
-                                "fromYmd", new JobParameter<>("202607", String.class, true),
-                                "toYmd", new JobParameter<>("202607", String.class, true),
-                                "lawdCds", new JobParameter<>("11680", String.class, true),
-                                "requestId", new JobParameter<>(REQUEST_ID, String.class, true)))))
+                        new JobParameters(Set.of(
+                                new JobParameter<>("fromYmd", "202607", String.class, true),
+                                new JobParameter<>("toYmd", "202607", String.class, true),
+                                new JobParameter<>("lawdCds", "11680", String.class, true),
+                                new JobParameter<>("requestId", REQUEST_ID, String.class, true)))))
                 .isInstanceOf(BatchExitCodeException.class)
                 .extracting("exitCode")
                 .isEqualTo(2);
     }
 
     private JobParameters parameters(String runDate, String requestId) {
-        return new JobParameters(Map.of(
-                "runDate", new JobParameter<>(runDate, String.class, true),
-                "requestId", new JobParameter<>(requestId, String.class, true)));
+        return new JobParameters(Set.of(
+                new JobParameter<>("runDate", runDate, String.class, true),
+                new JobParameter<>("requestId", requestId, String.class, true)));
     }
 
     private void seedExecution(long instanceId, long executionId, String jobName, String runDate, String requestId) {

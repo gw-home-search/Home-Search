@@ -7,7 +7,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.prediction.PredictionCacheKey;
 import com.home.application.prediction.PredictionStatus;
 import com.home.application.prediction.PricePredictionResult;
@@ -21,10 +20,13 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 class RedisPredictionCacheRepositoryTest {
 
-    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    private final ObjectMapper objectMapper =
+            JsonMapper.builder().findAndAddModules().build();
 
     @Test
     @DisplayName("READY 예측 결과를 계획된 Redis key와 TTL로 저장한다")

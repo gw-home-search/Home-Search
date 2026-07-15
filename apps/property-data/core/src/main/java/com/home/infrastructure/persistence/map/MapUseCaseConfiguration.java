@@ -1,6 +1,5 @@
 package com.home.infrastructure.persistence.map;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.map.ComplexMarkerRepository;
 import com.home.application.map.MapQueryUseCase;
 import com.home.application.map.MapUseCase;
@@ -14,6 +13,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration(proxyBeanMethods = false)
 class MapUseCaseConfiguration {

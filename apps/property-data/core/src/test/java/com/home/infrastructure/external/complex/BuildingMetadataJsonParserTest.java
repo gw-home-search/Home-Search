@@ -3,12 +3,12 @@ package com.home.infrastructure.external.complex;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataProviderException;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceResponse;
 import com.home.domain.complex.buildingmetadata.BuildingMetadataSourceKind;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 class BuildingMetadataJsonParserTest {
     private static final String PNU = "1168010300101400001";

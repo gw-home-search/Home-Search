@@ -1,7 +1,5 @@
 package com.home.infrastructure.external.complex;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataProviderException;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceParser;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceResponse;
@@ -15,6 +13,8 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 public class BuildingMetadataJsonParser implements BuildingMetadataSourceParser {
     private final ObjectMapper objectMapper;

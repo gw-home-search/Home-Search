@@ -22,7 +22,7 @@ class BatchJobArgumentsTest {
 
         assertThat(arguments.jobName()).isEqualTo("rtmsDailyRefreshJob");
         assertThat(arguments.jobParameters().getString("runDate")).isEqualTo("2026-07-07");
-        assertThat(arguments.jobParameters().getParameter("runDate").isIdentifying())
+        assertThat(arguments.jobParameters().getParameter("runDate").identifying())
                 .isTrue();
         assertThat(arguments.jobParameters().getString("requestId")).isEqualTo("123e4567-e89b-12d3-a456-426614174000");
     }
@@ -39,7 +39,7 @@ class BatchJobArgumentsTest {
 
         assertThat(arguments.jobParameters().getString("runDate")).isEqualTo("2026-07-10");
         assertThat(arguments.jobParameters().getString("requestId")).isEqualTo("123e4567-e89b-12d3-a456-426614174001");
-        assertThat(arguments.jobParameters().getParameter("requestId").isIdentifying())
+        assertThat(arguments.jobParameters().getParameter("requestId").identifying())
                 .isTrue();
     }
 

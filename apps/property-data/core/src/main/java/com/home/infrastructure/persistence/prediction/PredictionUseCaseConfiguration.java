@@ -1,6 +1,5 @@
 package com.home.infrastructure.persistence.prediction;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.prediction.PredictionCacheKey;
 import com.home.application.prediction.PredictionCacheRepository;
 import com.home.application.prediction.PredictionClient;
@@ -27,6 +26,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration(proxyBeanMethods = false)
 class PredictionUseCaseConfiguration {

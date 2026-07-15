@@ -7,11 +7,13 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import org.springframework.batch.core.JobParameter;
-import org.springframework.batch.core.JobParameters;
+import java.util.Set;
+import org.springframework.batch.core.job.parameters.JobParameter;
+import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.boot.ApplicationArguments;
 
 public record BatchJobArguments(String jobName, JobParameters jobParameters) {
@@ -129,8 +131,8 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
     }
 
     private static JobParameters parameters(Map<String, String> values) {
-        Map<String, JobParameter<?>> parameters = new LinkedHashMap<>();
-        values.forEach((name, value) -> parameters.put(name, new JobParameter<>(value, String.class, true)));
+        Set<JobParameter<?>> parameters = new LinkedHashSet<>();
+        values.forEach((name, value) -> parameters.add(new JobParameter<>(name, value, String.class, true)));
         return new JobParameters(parameters);
     }
 

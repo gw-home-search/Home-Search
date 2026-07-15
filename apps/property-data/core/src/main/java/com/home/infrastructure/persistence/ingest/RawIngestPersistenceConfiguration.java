@@ -1,6 +1,5 @@
 package com.home.infrastructure.persistence.ingest;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.ingest.raw.RawReceiptService;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
 import com.home.application.ingest.raw.RawTradeItemParser;
@@ -17,6 +16,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration(proxyBeanMethods = false)
 class RawIngestPersistenceConfiguration {

@@ -10,15 +10,17 @@ import com.home.application.ingest.rtms.RtmsMonthlyRefreshUseCase;
 import com.home.application.ingest.trade.IngestResult;
 import com.home.application.region.RegionSiGunGuCodeReader;
 import com.home.domain.ingest.run.ExecutionCorrelationId;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.batch.core.JobExecution;
-import org.springframework.batch.core.JobParameter;
-import org.springframework.batch.core.JobParameters;
-import org.springframework.batch.core.StepContribution;
-import org.springframework.batch.core.StepExecution;
+import org.springframework.batch.core.job.JobExecution;
+import org.springframework.batch.core.job.JobInstance;
+import org.springframework.batch.core.job.parameters.JobParameter;
+import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.scope.context.StepContext;
+import org.springframework.batch.core.step.StepContribution;
+import org.springframework.batch.core.step.StepExecution;
 
 class RtmsMonthlyRefreshTaskletTest {
 
@@ -35,9 +37,9 @@ class RtmsMonthlyRefreshTaskletTest {
                         "11680", "202606", 1, new IngestResult(1, 1, 0, 1, 0, 0), 2L));
         RtmsMonthlyRefreshTasklet tasklet = new RtmsMonthlyRefreshTasklet(
                 useCase, new RtmsRefreshWorksetPlanner(RegionSiGunGuCodeReader.empty()), "11680", 1, true);
-        StepExecution stepExecution = stepExecution(new JobParameters(java.util.Map.of(
-                "runDate", new JobParameter<>("2026-07-07", String.class, true),
-                "requestId", new JobParameter<>(correlationId.toString(), String.class, true))));
+        StepExecution stepExecution = stepExecution(new JobParameters(Set.of(
+                new JobParameter<>("runDate", "2026-07-07", String.class, true),
+                new JobParameter<>("requestId", correlationId.toString(), String.class, true))));
 
         tasklet.execute(new StepContribution(stepExecution), new ChunkContext(new StepContext(stepExecution)));
 
@@ -53,7 +55,7 @@ class RtmsMonthlyRefreshTaskletTest {
     }
 
     private static StepExecution stepExecution(JobParameters parameters) {
-        JobExecution jobExecution = new JobExecution(1L, parameters);
-        return new StepExecution("monthlyIngestStep", jobExecution);
+        JobExecution jobExecution = new JobExecution(1L, new JobInstance(1L, "rtmsDailyRefreshJob"), parameters);
+        return new StepExecution(1L, "monthlyIngestStep", jobExecution);
     }
 }

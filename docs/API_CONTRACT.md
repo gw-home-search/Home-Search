@@ -121,6 +121,7 @@ Status rules:
 - Missing region, parcel, complex, detail, or trade parent resource: `404`.
 - 단지에 표시 좌표가 없어 주변 장소를 조회할 수 없는 경우: `422`.
 - Kakao Local 비활성화, timeout, quota 소진 또는 quota guard 장애: `503`.
+- Public ingress per-IP rate limit 초과: `429`.
 - Unexpected server error: `500`.
 
 Example:
@@ -135,6 +136,11 @@ Example:
   "timestamp": "2026-05-18T10:30:00Z"
 }
 ```
+
+Public ingress가 `429`를 반환할 때도 같은 shape를 사용하며 `title`은
+`Too Many Requests`, `detail`은 `Too many requests.`, `exception`은
+`IngressRateLimitException`이다. 응답은 `Retry-After: 1`과
+`Cache-Control: no-store`를 포함한다.
 
 ## Public APIs
 
@@ -243,6 +249,12 @@ Request fields:
 - `neLng`: required number.
 - `region`: required string.
 
+Bounds policy:
+
+- latitude span (`neLat - swLat`)은 최대 `10.0`도.
+- longitude span (`neLng - swLng`)은 최대 `15.0`도.
+- 초과 요청은 marker query를 실행하지 않고 표준 `400` ProblemDetail로 거부한다.
+
 Allowed `region` values:
 
 - `si-do`
@@ -279,6 +291,7 @@ Status:
 
 - `200`: successful lookup. May be `[]`.
 - `400`: invalid bounds or unsupported `region`.
+- `429`: public ingress의 per-IP `10r/s`, burst `30` 초과.
 - `500`: unexpected server error.
 
 Migration notes:
@@ -340,6 +353,12 @@ Request fields:
 - `unitMin`: optional integer household count lower bound.
 - `unitMax`: optional integer household count upper bound.
 
+Bounds policy:
+
+- latitude span (`neLat - swLat`)은 최대 `1.0`도.
+- longitude span (`neLng - swLng`)은 최대 `1.5`도.
+- 초과 요청은 marker query를 실행하지 않고 표준 `400` ProblemDetail로 거부한다.
+
 Response:
 
 ```json
@@ -374,6 +393,7 @@ Status:
 
 - `200`: successful lookup. May be `[]`.
 - `400`: invalid bounds or invalid filter type/range.
+- `429`: public ingress의 per-IP `10r/s`, burst `30` 초과.
 - `500`: unexpected server error.
 
 Migration notes:

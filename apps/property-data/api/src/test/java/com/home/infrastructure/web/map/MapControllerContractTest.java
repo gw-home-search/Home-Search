@@ -270,6 +270,16 @@ class MapControllerContractTest {
     }
 
     @ParameterizedTest(name = "{0}")
+    @MethodSource("oversizedMapBounds")
+    @DisplayName("map marker endpoints는 최대 bbox span을 초과하면 거부한다")
+    void oversizedMapBoundsReturnBadRequest(String ignoredName, String endpoint, String requestBody) throws Exception {
+        expectProblemDetail(mockMvc.perform(
+                post(endpoint).contentType(MediaType.APPLICATION_JSON).content(requestBody)));
+
+        verifyNoInteractions(mapUseCase);
+    }
+
+    @ParameterizedTest(name = "{0}")
     @MethodSource("invalidComplexFilterRanges")
     @DisplayName("POST /api/v1/map/complexes는 invalid numeric filter range를 거부한다")
     void invalidComplexFilterRangesReturnBadRequest(String ignoredName, String filters) throws Exception {
@@ -374,6 +384,44 @@ class MapControllerContractTest {
 				"""),
                 Arguments.of("unit count가 음수다", """
 				"unitMin": -1
+				"""));
+    }
+
+    private static Stream<Arguments> oversizedMapBounds() {
+        return Stream.of(
+                Arguments.of("complex latitude span 초과", "/api/v1/map/complexes", """
+				{
+				  "swLat": 36.0,
+				  "swLng": 126.0,
+				  "neLat": 37.01,
+				  "neLng": 127.0
+				}
+				"""),
+                Arguments.of("complex longitude span 초과", "/api/v1/map/complexes", """
+				{
+				  "swLat": 37.0,
+				  "swLng": 126.0,
+				  "neLat": 37.5,
+				  "neLng": 127.51
+				}
+				"""),
+                Arguments.of("region latitude span 초과", "/api/v1/map/regions", """
+				{
+				  "swLat": 30.0,
+				  "swLng": 120.0,
+				  "neLat": 40.01,
+				  "neLng": 130.0,
+				  "region": "si-do"
+				}
+				"""),
+                Arguments.of("region longitude span 초과", "/api/v1/map/regions", """
+				{
+				  "swLat": 33.0,
+				  "swLng": 120.0,
+				  "neLat": 39.0,
+				  "neLng": 135.01,
+				  "region": "si-do"
+				}
 				"""));
     }
 

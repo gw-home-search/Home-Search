@@ -20,6 +20,9 @@ public record ComplexMarkersRequest(
         @PositiveOrZero Long unitMin,
         @PositiveOrZero Long unitMax) {
 
+    private static final double MAX_LATITUDE_SPAN_DEGREES = 1.0;
+    private static final double MAX_LONGITUDE_SPAN_DEGREES = 1.5;
+
     @AssertTrue
     public boolean isLatitudeBoundsOrdered() {
         return swLat == null || neLat == null || swLat <= neLat;
@@ -28,6 +31,16 @@ public record ComplexMarkersRequest(
     @AssertTrue
     public boolean isLongitudeBoundsOrdered() {
         return swLng == null || neLng == null || swLng <= neLng;
+    }
+
+    @AssertTrue
+    public boolean isLatitudeSpanWithinLimit() {
+        return swLat == null || neLat == null || neLat - swLat <= MAX_LATITUDE_SPAN_DEGREES;
+    }
+
+    @AssertTrue
+    public boolean isLongitudeSpanWithinLimit() {
+        return swLng == null || neLng == null || neLng - swLng <= MAX_LONGITUDE_SPAN_DEGREES;
     }
 
     @AssertTrue

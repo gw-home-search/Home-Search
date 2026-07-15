@@ -3,7 +3,7 @@
 ## 실행 기준
 
 - baseline commit: `d601237`
-- 현재 진행 PR: `PR 10 — property-data runtime surface`
+- 현재 진행 PR: `PR 11 — user-service Spring/JPA cleanup`
 - 전체 상태: `In Progress`
 - 시작일: 2026-07-14
 - 실행 원칙: 한 번에 하나의 PR만 진행하고, 선행 PR이 `Complete`인 경우에만 다음 PR을 시작한다.
@@ -81,8 +81,8 @@ property-data configuration file distribution:
 | 7 | Boot 4.1 / Jackson 3 | Complete | PR 6 `Complete` |
 | 8 | map SQL readability | Complete | PR 7 `Complete` |
 | 9 | property-data typed wiring | Complete | PR 8 `Complete` |
-| 10 | error/validation/executor/observability | In Progress | PR 9 `Complete` |
-| 11 | user-service Spring/JPA cleanup | Pending | PR 10 `Complete` |
+| 10 | error/validation/executor/observability | Complete | PR 9 `Complete` |
+| 11 | user-service Spring/JPA cleanup | In Progress | PR 10 `Complete` |
 | 12 | admin/source-data modernization | Pending | PR 11 `Complete` |
 | 13 | quality gates와 final docs | Pending | PR 12 `Complete` |
 
@@ -699,3 +699,73 @@ property-data configuration file distribution:
 ### Merge
 
 - implementation commit: `98374cb`
+- merge commit: `78aea144b2cc0fd3be018f52815143789b40fd60`
+
+## PR 11 Evidence
+
+### TDD 근거
+
+- 변경 전 `:core:test :app:test --rerun-tasks --no-daemon --stacktrace` — `Pass` (24s).
+- 최초 RED: `UserSpringJpaModernizationTest`가 application-owned favorite policy/service와 JDBC-only refresh persistence 구조를 요구하도록 추가했다.
+- 예상 RED 실패: `FavoriteService`와 `JdbcRefreshTokenRepository`가 없어 2개 test가 모두 `Fail`했고, 기존 favorite port가 `FavoriteLimitPolicy`를 parameter로 받으며 JPA refresh 3개 type이 남아 있음을 확인했다.
+- 최소 GREEN: 네 favorite use case를 transactional `FavoriteService`로 통합하고 user lock → existing → count/policy → idempotent save 순서를 application에 배치했다. refresh persistence는 명시적 JDBC upsert/lookup/row-count CAS rotate/revoke로 교체했다.
+- 중간 GREEN: favorite 단위/구조 test는 먼저 `Pass`하고 refresh 구조 test만 예상대로 `Fail`; JDBC 교체 후 favorite/auth/구조 test가 모두 `Pass`했다.
+
+### 계약 영향
+
+- user OAuth URL, callback, access/logout, current-user, favorite URL/method/status/JSON/pagination 계약 변경 없음.
+- refresh cookie name/`HttpOnly`/`Secure`/`SameSite=Lax`/`Path=/auth`, JWT issuer/audience/kid/15분 정책을 유지한다.
+- favorite duplicate PUT idempotency와 최대 200개 정책을 유지한다. property-data public API와 `docs/API_CONTRACT.md` 변경 없음.
+
+### 데이터 영향
+
+- migration/schema/checksum/history 변경 없음. `users.refresh_token`, `users.favorite_complex`, `users.user_account`의 저장 의미를 변경하지 않는다.
+- refresh token 원문은 계속 저장하지 않고 SHA-256 hash만 저장한다. 기존 user당 active token 1개와 version 증가 semantics를 동일 SQL로 유지한다.
+- OAuth identity/user/favorite는 JPA를 유지하고 refresh token만 JPA entity/native query에서 명시적 `JdbcClient` adapter로 이동했다.
+
+### 검증 근거 확인
+
+- 구조 최초 RED — `:core:test --tests com.home.application.UserSpringJpaModernizationTest --rerun-tasks`가 예상대로 2 tests `Fail` (6s).
+- favorite/auth/구조 narrow test — `Pass` (6s).
+- typed configuration, cookie, security/JWT, OAuth handler, favorite/web narrow test — `Pass` (10s).
+- 실제 PostgreSQL의 refresh replace/revoke/CAS와 favorite 200/201 concurrency 포함 app narrow test — `Pass` (18s).
+- `:core:test :app:test --rerun-tasks --no-daemon --stacktrace` — `Pass` (23s).
+- `verifyUserMigrationCatalog userServiceDependencyBoundaryCheck spotlessCheck` — `Pass` (6s).
+- `userServiceQualityCheck --rerun-tasks --no-daemon --stacktrace` — `Pass` (2m 3s; core/app/library/API/persistence tests, coverage, fresh Flyway `EMPTY → READY`, runtime Flyway-free JAR, bootJar 포함).
+- coverage denominator에 core/app production class를 모두 포함했으며 instruction은 covered `2878`, missed `262`, ratio 약 `91.66%`로 90% gate를 통과했다.
+- production `@Value`, persistence adapter `@Transactional`, configuration의 use-case `new`, 제거 대상 favorite/JPA refresh production reference — 모두 0건.
+- application Spring import는 `@Service`, `@Transactional`만 존재한다.
+- repository root `git diff --check` — `Pass`; baseline 대비 migration diff — 변경 0건; `docs/API_CONTRACT.md` diff — 변경 0건.
+- added-line credential/secret pattern 검사 — 지적사항 없음 (`gitleaks`는 local에 설치되지 않음).
+
+### 검증 공백
+
+- 원격 CI와 실제 Google/Kakao/Naver provider login은 실행하지 않았다. provider response parsing과 OAuth callback은 기존 stub/security-chain test로 검증했다.
+
+### 잔여 위험
+
+- provider별 client registration은 중복 custom wrapper를 만들지 않고 Spring Boot의 typed `spring.security.oauth2.client` binding을 유지한다. 실제 provider credential/redirect 조합은 배포 preflight와 운영 smoke에서 별도 확인해야 한다.
+
+### 보안 영향
+
+- refresh rotate는 old hash, non-revoked, non-expired 조건의 단일 `UPDATE` row count로 재사용 경쟁을 차단하며 실제 PostgreSQL 동시 test에서 정확히 하나만 성공했다.
+- 모든 새 refresh/favorite SQL은 static statement와 named parameter를 사용하고 raw token, hash, credential을 log에 추가하지 않았다.
+- typed JWT/cookie/auth/OAuth 설정은 기존 env/property key를 유지하고 필수값·positive duration을 startup validation한다. insecure production refresh cookie 거부도 회귀 test로 고정했다.
+- runtime Flyway-free boundary, user/admin JWT issuer/audience 분리, cookie flags, key file 검증은 유지된다.
+- security-audit: 지적사항 = none
+
+### Findings-first review
+
+- 지적사항: 열린 correctness/security finding 없음.
+- 해소한 finding 1: favorite adapter가 user lock, count, domain policy와 transaction을 소유하던 경계를 application `FavoriteService`로 이동했다.
+- 해소한 finding 2: refresh CAS SQL의 JPA entity/Spring Data native-query 3단 경로를 단일 명시적 JDBC adapter로 축소했다.
+- 해소한 finding 3: application use-case 수동 `@Bean` 조립과 production `@Value`를 제거하고 service/component scan 및 typed properties로 전환했다.
+- 해소한 finding 4: core-only coverage denominator를 core/app 전체 production class로 수정해 controller, OAuth handler, security filter, cookie code를 포함했다.
+- 검증 근거 확인: structural RED/GREEN, 실제 PostgreSQL concurrency, user API/security chain, full quality gate, migration/runtime/secret boundary가 GREEN이다.
+- 검증 공백: 원격 CI 및 실제 OAuth provider 호출 미실행.
+- 잔여 위험: 실제 provider credential/redirect 운영 smoke 외 열린 finding은 없다.
+
+### Merge
+
+- implementation commit: `430ef4f`
+- merge commit: pending

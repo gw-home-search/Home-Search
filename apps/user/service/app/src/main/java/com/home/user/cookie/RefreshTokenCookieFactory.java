@@ -1,7 +1,10 @@
 package com.home.user.cookie;
 
+import com.home.user.config.properties.AuthProperties;
+import com.home.user.config.properties.CookieProperties;
 import java.time.Duration;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
 
@@ -11,13 +14,11 @@ public class RefreshTokenCookieFactory {
     private final Duration ttl;
 
     public RefreshTokenCookieFactory(
-            @Value("${home.cookie.secure:true}") boolean secure,
-            @Value("${home.auth.refresh-ttl:30d}") Duration ttl,
-            @Value("${spring.profiles.active:}") String profiles) {
-        if (!secure && profiles.contains("prod"))
+            CookieProperties cookieProperties, AuthProperties authProperties, Environment environment) {
+        if (!cookieProperties.secure() && environment.acceptsProfiles(Profiles.of("prod")))
             throw new IllegalStateException("production refresh cookie must be Secure");
-        this.secure = secure;
-        this.ttl = ttl;
+        this.secure = cookieProperties.secure();
+        this.ttl = authProperties.refreshTtl();
     }
 
     public ResponseCookie active(String value) {

@@ -1,39 +1,19 @@
 package com.home.user.config;
 
-import com.home.application.auth.RefreshTokenService;
+import com.home.application.auth.RefreshTokenSettings;
 import com.home.application.auth.port.OpaqueTokenGenerator;
-import com.home.application.auth.port.RefreshTokenRepository;
-import com.home.application.favorite.GetFavoriteComplex;
-import com.home.application.favorite.ListFavoriteComplexes;
-import com.home.application.favorite.RemoveFavoriteComplex;
-import com.home.application.favorite.SaveFavoriteComplex;
-import com.home.application.favorite.port.FavoriteComplexRepository;
-import com.home.application.user.CurrentUserQueryService;
-import com.home.application.user.OAuthLoginService;
-import com.home.application.user.port.IdentityLock;
-import com.home.application.user.port.UserRepository;
-import com.home.domain.user.favorite.FavoriteLimitPolicy;
+import com.home.application.auth.port.TokenClock;
+import com.home.user.config.properties.AuthProperties;
+import com.home.user.config.properties.CookieProperties;
 import java.security.SecureRandom;
-import java.time.Duration;
-import java.time.Instant;
+import java.time.Clock;
 import java.util.Base64;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.session.web.http.DefaultCookieSerializer;
 
 @Configuration
 public class UserServiceBeans {
-    @Bean
-    OAuthLoginService oauthLoginService(UserRepository r, IdentityLock l) {
-        return new OAuthLoginService(r, l);
-    }
-
-    @Bean
-    CurrentUserQueryService currentUserQueryService(UserRepository r) {
-        return new CurrentUserQueryService(r);
-    }
-
     @Bean
     OpaqueTokenGenerator opaqueTokenGenerator() {
         SecureRandom random = new SecureRandom();
@@ -45,42 +25,26 @@ public class UserServiceBeans {
     }
 
     @Bean
-    RefreshTokenService refreshTokenService(
-            RefreshTokenRepository r, OpaqueTokenGenerator g, @Value("${home.auth.refresh-ttl:30d}") Duration ttl) {
-        return new RefreshTokenService(r, g, Instant::now, ttl);
+    TokenClock tokenClock(Clock clock) {
+        return clock::instant;
     }
 
     @Bean
-    FavoriteLimitPolicy favoriteLimitPolicy() {
-        return new FavoriteLimitPolicy();
+    RefreshTokenSettings refreshTokenSettings(AuthProperties properties) {
+        return new RefreshTokenSettings(properties.refreshTtl());
     }
 
     @Bean
-    SaveFavoriteComplex saveFavoriteComplex(FavoriteComplexRepository r, FavoriteLimitPolicy p) {
-        return new SaveFavoriteComplex(r, p, java.time.Clock.systemUTC());
+    Clock userClock() {
+        return Clock.systemUTC();
     }
 
     @Bean
-    RemoveFavoriteComplex removeFavoriteComplex(FavoriteComplexRepository r) {
-        return new RemoveFavoriteComplex(r);
-    }
-
-    @Bean
-    GetFavoriteComplex getFavoriteComplex(FavoriteComplexRepository r) {
-        return new GetFavoriteComplex(r);
-    }
-
-    @Bean
-    ListFavoriteComplexes listFavoriteComplexes(FavoriteComplexRepository r) {
-        return new ListFavoriteComplexes(r);
-    }
-
-    @Bean
-    DefaultCookieSerializer oauthSessionCookieSerializer(@Value("${home.cookie.secure:true}") boolean secure) {
+    DefaultCookieSerializer oauthSessionCookieSerializer(CookieProperties properties) {
         var serializer = new DefaultCookieSerializer();
         serializer.setCookieName("OAUTH_SESSION");
         serializer.setUseHttpOnlyCookie(true);
-        serializer.setUseSecureCookie(secure);
+        serializer.setUseSecureCookie(properties.secure());
         serializer.setSameSite("Lax");
         serializer.setCookiePath("/");
         return serializer;

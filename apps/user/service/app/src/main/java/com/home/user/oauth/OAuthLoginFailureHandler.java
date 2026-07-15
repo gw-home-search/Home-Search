@@ -1,9 +1,9 @@
 package com.home.user.oauth;
 
+import com.home.user.config.properties.OAuthProperties;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.stereotype.Component;
@@ -13,10 +13,9 @@ public class OAuthLoginFailureHandler implements AuthenticationFailureHandler {
     private final OAuthSessionInvalidator sessions;
     private final String redirect;
 
-    public OAuthLoginFailureHandler(
-            OAuthSessionInvalidator sessions, @Value("${home.oauth.failure-redirect}") String redirect) {
+    public OAuthLoginFailureHandler(OAuthSessionInvalidator sessions, OAuthProperties properties) {
         this.sessions = sessions;
-        this.redirect = redirect;
+        this.redirect = properties.failureRedirect().toString();
     }
 
     @Override

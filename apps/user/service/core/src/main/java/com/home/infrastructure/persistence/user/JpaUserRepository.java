@@ -8,7 +8,6 @@ import com.home.domain.user.UserProfile;
 import java.time.Instant;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class JpaUserRepository implements UserRepository {
@@ -28,7 +27,6 @@ public class JpaUserRepository implements UserRepository {
     }
 
     @Override
-    @Transactional
     public OAuthLoginResult create(OAuthIdentityKey key, UserProfile profile, Instant now) {
         var account = accounts.save(
                 new UserAccountJpaEntity(profile.displayName(), profile.email(), profile.profileImage(), now));
@@ -37,7 +35,6 @@ public class JpaUserRepository implements UserRepository {
     }
 
     @Override
-    @Transactional
     public OAuthLoginResult updateProfile(OAuthIdentityKey key, UserProfile profile, Instant now) {
         var identity = identities
                 .findByProviderAndProviderSubject(key.provider().name(), key.providerSubject())

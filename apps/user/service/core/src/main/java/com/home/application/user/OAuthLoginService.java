@@ -4,8 +4,11 @@ import com.home.application.user.port.IdentityLock;
 import com.home.application.user.port.UserRepository;
 import com.home.domain.user.OAuthIdentityKey;
 import java.util.Objects;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-public final class OAuthLoginService {
+@Service
+public class OAuthLoginService {
     private final UserRepository repository;
     private final IdentityLock identityLock;
 
@@ -14,6 +17,7 @@ public final class OAuthLoginService {
         this.identityLock = Objects.requireNonNull(identityLock);
     }
 
+    @Transactional
     public OAuthLoginResult login(OAuthLoginCommand command) {
         var identity = new OAuthIdentityKey(command.provider(), command.providerSubject());
         identityLock.lock(identity);

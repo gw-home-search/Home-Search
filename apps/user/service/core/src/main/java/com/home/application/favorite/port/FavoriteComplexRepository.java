@@ -1,17 +1,19 @@
 package com.home.application.favorite.port;
 
 import com.home.domain.user.favorite.FavoriteComplex;
-import com.home.domain.user.favorite.FavoriteLimitPolicy;
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 public interface FavoriteComplexRepository {
-    FavoriteComplex save(long userId, long complexId, Instant savedAt, FavoriteLimitPolicy policy);
+    boolean lockUser(long userId);
+
+    Optional<FavoriteComplex> find(long userId, long complexId);
+
+    long count(long userId);
+
+    FavoriteComplex save(FavoriteComplex favorite);
 
     void remove(long userId, long complexId);
-
-    Optional<FavoriteComplex> get(long userId, long complexId);
 
     FavoritePage list(long userId, int page, int size);
 

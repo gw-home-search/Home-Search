@@ -1,12 +1,12 @@
 package com.home.user.security;
 
+import com.home.user.config.properties.AuthProperties;
 import com.home.user.web.UserProblemDetails;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -14,8 +14,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class AuthOriginFilter extends OncePerRequestFilter {
     private final String allowed;
 
-    public AuthOriginFilter(@Value("${home.auth.allowed-origin}") String allowed) {
-        this.allowed = allowed;
+    public AuthOriginFilter(AuthProperties properties) {
+        this.allowed = properties.allowedOrigin().toString();
     }
 
     @Override

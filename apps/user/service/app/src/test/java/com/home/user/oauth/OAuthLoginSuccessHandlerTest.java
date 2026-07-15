@@ -6,9 +6,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.home.application.auth.RefreshTokenService;
+import com.home.user.config.properties.AuthProperties;
+import com.home.user.config.properties.CookieProperties;
+import com.home.user.config.properties.OAuthProperties;
 import com.home.user.cookie.RefreshTokenCookieFactory;
+import java.net.URI;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.Authentication;
@@ -25,9 +30,14 @@ class OAuthLoginSuccessHandlerTest {
         when(refresh.issue(42L)).thenThrow(new IllegalStateException("database unavailable"));
         var handler = new OAuthLoginSuccessHandler(
                 refresh,
-                new RefreshTokenCookieFactory(true, Duration.ofDays(30), "prod"),
+                new RefreshTokenCookieFactory(
+                        new CookieProperties(true),
+                        new AuthProperties(URI.create("https://home.example"), Duration.ofDays(30)),
+                        new MockEnvironment().withProperty("spring.profiles.active", "prod")),
                 sessions,
-                "https://home.example/auth/success");
+                new OAuthProperties(
+                        URI.create("https://home.example/auth/success"),
+                        URI.create("https://home.example/auth/failure")));
 
         assertThatThrownBy(() -> handler.onAuthenticationSuccess(request, response, authentication))
                 .isInstanceOf(IllegalStateException.class);

@@ -33,22 +33,31 @@ export type MapMarkersResult =
       markers: RegionMarker[];
     };
 
-export async function fetchMapMarkers(request: MapMarkersRequest): Promise<MapMarkersResult> {
+export async function fetchMapMarkers(
+  request: MapMarkersRequest,
+  signal?: AbortSignal,
+): Promise<MapMarkersResult> {
   if (request.level <= 4) {
-    const markers = await fetchComplexMarkers({
-      ...request.bounds,
-      ...EMPTY_COMPLEX_MARKER_FILTERS,
-      ...request.filters,
-    });
+    const markers = await fetchComplexMarkers(
+      {
+        ...request.bounds,
+        ...EMPTY_COMPLEX_MARKER_FILTERS,
+        ...request.filters,
+      },
+      signal,
+    );
 
     return { kind: 'complex', markers };
   }
 
   const region = regionLevelForMapLevel(request.level);
-  const markers = await fetchRegionMarkers({
-    ...request.bounds,
-    region,
-  } satisfies RegionMarkersRequest);
+  const markers = await fetchRegionMarkers(
+    {
+      ...request.bounds,
+      region,
+    } satisfies RegionMarkersRequest,
+    signal,
+  );
 
   return { kind: 'region', level: region, markers };
 }

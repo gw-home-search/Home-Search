@@ -2275,11 +2275,12 @@ describe('App map-first shell 화면', () => {
 
     const host = rootElement.querySelector<HTMLElement>('[aria-label="카카오 지도 화면"]');
     expect(observe).toHaveBeenCalledWith(host);
-    await act(async () => {
+    const relayoutCallsBeforeResize = sdk.map.relayout.mock.calls.length;
+    act(() => {
       resizeCallback?.([], {} as ResizeObserver);
     });
 
-    expect(sdk.map.relayout).toHaveBeenCalledTimes(1);
+    expect(sdk.map.relayout).toHaveBeenCalledTimes(relayoutCallsBeforeResize + 1);
     expect(sdk.map.setCenter).toHaveBeenLastCalledWith(sdk.center);
 
     unmount(root);

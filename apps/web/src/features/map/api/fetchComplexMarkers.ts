@@ -35,9 +35,13 @@ type ComplexMarkerResponse = Partial<ComplexMarker> & {
 
 const COMPLEX_MARKERS_PATH = '/api/v1/map/complexes';
 
-export async function fetchComplexMarkers(request: ComplexMarkersRequest): Promise<ComplexMarker[]> {
+export async function fetchComplexMarkers(
+  request: ComplexMarkersRequest,
+  signal?: AbortSignal,
+): Promise<ComplexMarker[]> {
   const response = await fetch(resolveApiUrl(COMPLEX_MARKERS_PATH), {
     method: 'POST',
+    signal,
     headers: {
       'Content-Type': 'application/json',
     },

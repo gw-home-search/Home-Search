@@ -89,7 +89,8 @@ class PublicComplexMetadataResolverTest {
 				}
 				""", MediaType.APPLICATION_JSON));
 
-        ComplexMetadataResolution resolution = resolver.resolve("1168010300107770001", "Sample address");
+        ComplexMetadataResolution resolution =
+                resolver.resolve(new ComplexMetadataLookup(null, null, null, "1168010300107770001", "Sample address"));
 
         assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.RESOLVED);
         assertThat(resolution.metadata().dongCnt()).isEqualTo(8);
@@ -548,7 +549,8 @@ class PublicComplexMetadataResolverTest {
                 "/1613000/BldRgstHubService/getBrRecapTitleInfo",
                 "/1613000/BldRgstHubService/getBrTitleInfo");
 
-        ComplexMetadataResolution resolution = resolver.resolve("1168010300107770001", "Sample address");
+        ComplexMetadataResolution resolution =
+                resolver.resolve(new ComplexMetadataLookup(null, null, null, "1168010300107770001", "Sample address"));
 
         assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.UNAVAILABLE);
         assertThat(resolution.failureKind()).isEqualTo(ComplexMetadataFailureKind.INPUT_INSUFFICIENT);
@@ -664,7 +666,8 @@ class PublicComplexMetadataResolverTest {
 				}
 				""", MediaType.APPLICATION_JSON));
 
-        ComplexMetadataResolution resolution = resolver.resolve("1168010300107770001", null);
+        ComplexMetadataResolution resolution =
+                resolver.resolve(new ComplexMetadataLookup(null, null, null, "1168010300107770001", null));
 
         assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.RESOLVED);
         assertThat(resolution.failureKind()).isNull();
@@ -702,7 +705,8 @@ class PublicComplexMetadataResolverTest {
                 "/1613000/BldRgstHubService/getBrTitleInfo",
                 true);
 
-        ComplexMetadataResolution resolution = resolver.resolve("1168010300107770001", "Sample address");
+        ComplexMetadataResolution resolution =
+                resolver.resolve(new ComplexMetadataLookup(null, null, null, "1168010300107770001", "Sample address"));
 
         assertThat(resolution.status()).isEqualTo(ComplexMetadataStatus.FAILED);
         assertThat(resolution.failureKind()).isEqualTo(ComplexMetadataFailureKind.TRANSIENT);

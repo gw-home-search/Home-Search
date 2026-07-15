@@ -6,7 +6,6 @@ import com.home.application.ingest.metadata.ComplexMetadataLookup;
 import com.home.application.ingest.metadata.ComplexMetadataLookupEvidence;
 import com.home.application.ingest.metadata.ComplexMetadataResolution;
 import com.home.application.ingest.metadata.ComplexMetadataResolutionPolicy;
-import com.home.application.ingest.metadata.ComplexMetadataResolver;
 import com.home.application.ingest.metadata.OdcComplexMetadataResolver;
 import com.home.application.ingest.metadata.OdcloudPnuPrefixAliasLookup;
 import com.home.domain.complex.metadata.ComplexMetadataFailureKind;
@@ -25,8 +24,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
-public class PublicComplexMetadataResolver
-        implements ComplexMetadataResolver, ComplexMetadataEnrichmentClient, OdcComplexMetadataResolver {
+public class PublicComplexMetadataResolver implements ComplexMetadataEnrichmentClient, OdcComplexMetadataResolver {
 
     private static final Logger log = LoggerFactory.getLogger(PublicComplexMetadataResolver.class);
 
@@ -149,11 +147,6 @@ public class PublicComplexMetadataResolver
     @Override
     public boolean isConfigured() {
         return odcloudServiceKey != null || (buildingFallbackEnabled && bldServiceKey != null);
-    }
-
-    @Override
-    public ComplexMetadataResolution resolve(String pnu, String parcelAddress) {
-        return resolve(new ComplexMetadataLookup(null, null, null, pnu, parcelAddress));
     }
 
     @Override

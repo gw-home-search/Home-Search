@@ -1,4 +1,4 @@
-package com.home.infrastructure.persistence.read;
+package com.home.infrastructure.persistence.search;
 
 import java.util.Locale;
 

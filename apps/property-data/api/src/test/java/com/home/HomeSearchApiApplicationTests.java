@@ -14,6 +14,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.home.application.map.MapUseCase;
 import com.home.application.region.RegionRelationSynchronizationGateway;
 import com.home.application.region.RegionUnitCntSynchronizationService;
+import com.home.infrastructure.persistence.propertydetail.JdbcPropertyDetailReader;
+import com.home.infrastructure.persistence.regionnavigation.JdbcRegionNavigationReader;
+import com.home.infrastructure.persistence.search.JdbcComplexSearchReader;
+import com.home.infrastructure.persistence.tradehistory.JdbcTradeHistoryReader;
 
 @SpringBootTest(properties = "home.ingest.rtms.daily.enabled=true")
 @ActiveProfiles("test")
@@ -21,6 +25,18 @@ class HomeSearchApiApplicationTests {
 
 	@MockitoBean
 	private MapUseCase mapUseCase;
+
+	@MockitoBean
+	private JdbcComplexSearchReader complexSearchReader;
+
+	@MockitoBean
+	private JdbcRegionNavigationReader regionNavigationReader;
+
+	@MockitoBean
+	private JdbcPropertyDetailReader propertyDetailReader;
+
+	@MockitoBean
+	private JdbcTradeHistoryReader tradeHistoryReader;
 
 	@Autowired
 	private ApplicationContext applicationContext;

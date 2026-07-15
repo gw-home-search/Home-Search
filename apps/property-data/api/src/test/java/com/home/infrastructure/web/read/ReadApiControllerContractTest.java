@@ -17,7 +17,10 @@ import com.home.application.prediction.PredictionStatus;
 import com.home.application.prediction.PricePredictionResult;
 import com.home.application.prediction.PricePredictionUseCase;
 import com.home.application.read.ResourceNotFoundException;
-import com.home.application.read.PropertyReadUseCase;
+import com.home.application.propertydetail.PropertyDetailService;
+import com.home.application.regionnavigation.RegionNavigationService;
+import com.home.application.search.ComplexSearchService;
+import com.home.application.tradehistory.TradeHistoryService;
 import com.home.application.read.ComplexSummaryResult;
 import com.home.application.read.ComplexSuggestionResult;
 import com.home.application.read.InvalidReadRequestException;
@@ -28,6 +31,11 @@ import com.home.application.read.SearchComplexResult;
 import com.home.application.read.TradeListResult;
 import com.home.application.read.TradeResult;
 import com.home.application.read.TradeTrendPoint;
+
+import com.home.infrastructure.web.propertydetail.PropertyDetailController;
+import com.home.infrastructure.web.regionnavigation.RegionNavigationController;
+import com.home.infrastructure.web.search.SearchController;
+import com.home.infrastructure.web.tradehistory.TradeHistoryController;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,8 +48,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest({
 	SearchController.class,
-	RegionController.class,
-	DetailController.class
+	RegionNavigationController.class,
+	PropertyDetailController.class,
+	TradeHistoryController.class
 })
 @ActiveProfiles("test")
 class ReadApiControllerContractTest {
@@ -53,7 +62,16 @@ class ReadApiControllerContractTest {
 	private MockMvc mockMvc;
 
 	@MockitoBean
-	private PropertyReadUseCase readUseCase;
+	private ComplexSearchService complexSearchService;
+
+	@MockitoBean
+	private RegionNavigationService regionNavigationService;
+
+	@MockitoBean
+	private PropertyDetailService propertyDetailService;
+
+	@MockitoBean
+	private TradeHistoryService tradeHistoryService;
 
 	@MockitoBean
 	private PricePredictionUseCase predictionUseCase;
@@ -61,7 +79,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/search/complexes는 canonical search field를 반환한다")
 	void searchComplexesReturnsCanonicalFields() throws Exception {
-		given(readUseCase.searchComplexes(eq("Sample")))
+		given(complexSearchService.searchComplexes(eq("Sample")))
 			.willReturn(List.of(new SearchComplexResult(
 				501L,
 				"Sample Apartment",
@@ -88,7 +106,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/search/complexes는 blank search에서 empty array를 반환한다")
 	void blankSearchReturnsEmptyArray() throws Exception {
-		given(readUseCase.searchComplexes(eq("")))
+		given(complexSearchService.searchComplexes(eq("")))
 			.willReturn(List.of());
 
 		mockMvc.perform(get("/api/v1/search/complexes").param("q", " "))
@@ -101,8 +119,8 @@ class ReadApiControllerContractTest {
 	void searchComplexesAllowsLengthAndTokenBoundaries() throws Exception {
 		String maxLengthQuery = "가".repeat(100);
 		String maxTokenQuery = "가 나 다 라 마 바 사 아";
-		given(readUseCase.searchComplexes(eq(maxLengthQuery))).willReturn(List.of());
-		given(readUseCase.searchComplexes(eq(maxTokenQuery))).willReturn(List.of());
+		given(complexSearchService.searchComplexes(eq(maxLengthQuery))).willReturn(List.of());
+		given(complexSearchService.searchComplexes(eq(maxTokenQuery))).willReturn(List.of());
 
 		mockMvc.perform(get("/api/v1/search/complexes").param("q", maxLengthQuery))
 			.andExpect(status().isOk())
@@ -117,9 +135,9 @@ class ReadApiControllerContractTest {
 	void searchComplexesRejectsLengthAndTokenOverages() throws Exception {
 		String overLengthQuery = "가".repeat(101);
 		String overTokenQuery = "가 나 다 라 마 바 사 아 자";
-		given(readUseCase.searchComplexes(eq(overLengthQuery)))
+		given(complexSearchService.searchComplexes(eq(overLengthQuery)))
 			.willThrow(new InvalidReadRequestException("search query exceeds 100 characters"));
-		given(readUseCase.searchComplexes(eq(overTokenQuery)))
+		given(complexSearchService.searchComplexes(eq(overTokenQuery)))
 			.willThrow(new InvalidReadRequestException("search query exceeds 8 tokens"));
 
 		for (String query : List.of(overLengthQuery, overTokenQuery)) {
@@ -134,7 +152,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/region은 root region을 반환한다")
 	void rootRegionsReturnCanonicalFields() throws Exception {
-		given(readUseCase.getRootRegions())
+		given(regionNavigationService.getRootRegions())
 			.willReturn(List.of(new RegionSummaryResult(1L, "Seoul")));
 
 		mockMvc.perform(get("/api/v1/region"))
@@ -147,7 +165,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/region/{regionId}는 region detail과 child region을 반환한다")
 	void regionDetailReturnsChildrenAndCenter() throws Exception {
-		given(readUseCase.getRegionDetail(1L))
+		given(regionNavigationService.getRegionDetail(1L))
 			.willReturn(new RegionDetailResult(
 				1L,
 				"Seoul",
@@ -169,7 +187,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/detail/{parcelId}는 parcel과 representative complex detail을 반환한다")
 	void parcelDetailReturnsCanonicalFields() throws Exception {
-		given(readUseCase.getParcelDetail(eq(1001L), isNull()))
+		given(propertyDetailService.getParcelDetail(eq(1001L), isNull()))
 			.willReturn(new ParcelDetailResult(
 				1001L,
 				501L,
@@ -214,7 +232,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/detail/{parcelId}는 compatible optional prediction READY field를 반환한다")
 	void parcelDetailReturnsOptionalPredictionReadyField() throws Exception {
-		given(readUseCase.getParcelDetail(eq(1001L), eq(501L)))
+		given(propertyDetailService.getParcelDetail(eq(1001L), eq(501L)))
 			.willReturn(new ParcelDetailResult(
 				1001L,
 				501L,
@@ -276,7 +294,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/detail/{parcelId}?complexId= 는 선택한 complex detail을 반환한다")
 	void complexScopedParcelDetailReturnsSelectedComplex() throws Exception {
-		given(readUseCase.getParcelDetail(1001L, 502L))
+		given(propertyDetailService.getParcelDetail(1001L, 502L))
 			.willReturn(new ParcelDetailResult(
 				1001L,
 				502L,
@@ -308,7 +326,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/trade/{parcelId}는 trade를 newest first로 반환한다")
 	void tradeListReturnsCanonicalFields() throws Exception {
-		given(readUseCase.getTradeList(eq(1001L), isNull(), isNull(), isNull()))
+		given(tradeHistoryService.getTradeList(eq(1001L), isNull(), isNull(), isNull()))
 			.willReturn(new TradeListResult(1001L, null, List.of(
 				new TradeResult(9002L, LocalDate.of(2025, 12, 15), new BigDecimal("84.93"), 130000L, "101", 15),
 				new TradeResult(9001L, LocalDate.of(2025, 12, 1), new BigDecimal("84.93"), 125000L, "101", 12)
@@ -336,7 +354,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/trade/{parcelId}?complexId= 는 선택한 complex trade만 반환한다")
 	void complexScopedTradeListReturnsSelectedComplexTrades() throws Exception {
-		given(readUseCase.getTradeList(eq(1001L), eq(502L), isNull(), isNull()))
+		given(tradeHistoryService.getTradeList(eq(1001L), eq(502L), isNull(), isNull()))
 			.willReturn(new TradeListResult(1001L, 502L, List.of(
 				new TradeResult(9101L, LocalDate.of(2025, 12, 20), new BigDecimal("59.93"), 90000L, "201", 9)
 			)));
@@ -352,7 +370,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/trade/{parcelId}?page=&size= 는 use case에 page/size를 위임한다")
 	void tradeListDelegatesPageAndSize() throws Exception {
-		given(readUseCase.getTradeList(eq(1001L), isNull(), eq(2), eq(5)))
+		given(tradeHistoryService.getTradeList(eq(1001L), isNull(), eq(2), eq(5)))
 			.willReturn(new TradeListResult(1001L, null, List.of(
 				new TradeResult(9001L, LocalDate.of(2025, 12, 1), new BigDecimal("84.93"), 125000L, "101", 12)
 			), 2, 5, 47));
@@ -369,7 +387,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/trade/{parcelId}는 valid parent의 empty page를 200으로 반환한다")
 	void tradeListReturnsEmptyPageForExistingParent() throws Exception {
-		given(readUseCase.getTradeList(eq(1001L), isNull(), isNull(), isNull()))
+		given(tradeHistoryService.getTradeList(eq(1001L), isNull(), isNull(), isNull()))
 			.willReturn(new TradeListResult(1001L, null, List.of(), 0, 25, 0));
 
 		mockMvc.perform(get("/api/v1/trade/1001"))
@@ -396,7 +414,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/detail/{parcelId}/complexes는 같은 parcel의 complex 목록을 반환한다")
 	void parcelComplexesReturnSelectableComplexSummaries() throws Exception {
-		given(readUseCase.getParcelComplexes(1001L))
+		given(propertyDetailService.getParcelComplexes(1001L))
 			.willReturn(List.of(
 				new ComplexSummaryResult(501L, "Tower A", 1001L, 37.5123, 127.0456, "Sample address", 5, 320,
 					LocalDate.of(2015, 3, 20)),
@@ -423,7 +441,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/complex/{complexId}는 complexId 단독 detail을 반환한다")
 	void complexDetailByComplexIdReturnsCanonicalDetail() throws Exception {
-		given(readUseCase.getComplexDetail(502L))
+		given(propertyDetailService.getComplexDetail(502L))
 			.willReturn(new ParcelDetailResult(
 				1001L,
 				502L,
@@ -460,7 +478,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/complex/{complexId}/trades는 complexId 단독 trade list를 반환한다")
 	void complexTradeListByComplexIdReturnsCanonicalTrades() throws Exception {
-		given(readUseCase.getComplexTradeList(eq(502L), isNull(), isNull()))
+		given(tradeHistoryService.getComplexTradeList(eq(502L), isNull(), isNull()))
 			.willReturn(new TradeListResult(1001L, 502L, List.of(
 				new TradeResult(9101L, LocalDate.of(2025, 12, 20), new BigDecimal("59.93"), 90000L, "201", 9)
 			)));
@@ -479,7 +497,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/trade/{parcelId}/trend는 월별 추세를 오름차순으로 반환한다")
 	void tradeTrendReturnsMonthlySeries() throws Exception {
-		given(readUseCase.getTradeTrend(eq(1001L), isNull()))
+		given(tradeHistoryService.getTradeTrend(eq(1001L), isNull()))
 			.willReturn(List.of(
 				new TradeTrendPoint("2025-10", 100000L, 1, 100000L, 100000L),
 				new TradeTrendPoint("2025-12", 127500L, 2, 125000L, 130000L)
@@ -498,7 +516,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/complex/{complexId}/trade-trend는 complexId 단독 월별 추세를 반환한다")
 	void complexTradeTrendReturnsMonthlySeries() throws Exception {
-		given(readUseCase.getComplexTradeTrend(502L))
+		given(tradeHistoryService.getComplexTradeTrend(502L))
 			.willReturn(List.of(new TradeTrendPoint("2025-12", 90000L, 1, 90000L, 90000L)));
 
 		mockMvc.perform(get("/api/v1/complex/502/trade-trend"))
@@ -511,7 +529,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/search/complexes/suggestions는 autocomplete field를 반환한다")
 	void complexSuggestionsReturnAutocompleteFields() throws Exception {
-		given(readUseCase.suggestComplexes("Sample"))
+		given(complexSearchService.suggestComplexes("Sample"))
 			.willReturn(List.of(new ComplexSuggestionResult(501L, "Sample Apartment", 1001L, "Sample address")));
 
 		mockMvc.perform(get("/api/v1/search/complexes/suggestions").param("q", "  Sample  "))
@@ -528,7 +546,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/search/complexes/suggestions는 blank query에서 empty array를 반환한다")
 	void blankComplexSuggestionsReturnEmptyArray() throws Exception {
-		given(readUseCase.suggestComplexes(""))
+		given(complexSearchService.suggestComplexes(""))
 			.willReturn(List.of());
 
 		mockMvc.perform(get("/api/v1/search/complexes/suggestions").param("q", " "))
@@ -539,7 +557,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/region/{regionId}/complexes는 region complex page를 반환한다")
 	void regionComplexesReturnPagedComplexSummaries() throws Exception {
-		given(readUseCase.getRegionComplexes(11L, 25, 50))
+		given(regionNavigationService.getRegionComplexes(11L, 25, 50))
 			.willReturn(List.of(new ComplexSummaryResult(
 				701L,
 				"Region Complex",
@@ -568,7 +586,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/region/{regionId}/complexes는 valid parent의 empty result를 200으로 반환한다")
 	void regionComplexesReturnEmptyArrayForExistingParent() throws Exception {
-		given(readUseCase.getRegionComplexes(11L, null, null)).willReturn(List.of());
+		given(regionNavigationService.getRegionComplexes(11L, null, null)).willReturn(List.of());
 
 		mockMvc.perform(get("/api/v1/region/11/complexes"))
 			.andExpect(status().isOk())
@@ -578,7 +596,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET /api/v1/region/{regionId}/complexes는 invalid page request를 ProblemDetail 400으로 반환한다")
 	void invalidRegionComplexPageReturnsProblemDetail400() throws Exception {
-		given(readUseCase.getRegionComplexes(11L, 0, 0))
+		given(regionNavigationService.getRegionComplexes(11L, 0, 0))
 			.willThrow(new InvalidReadRequestException("limit must be greater than 0"));
 
 		mockMvc.perform(get("/api/v1/region/11/complexes")
@@ -594,7 +612,7 @@ class ReadApiControllerContractTest {
 	@Test
 	@DisplayName("GET read endpoint는 missing parent에서 ProblemDetail 404를 반환한다")
 	void missingReadResourceReturnsProblemDetail404() throws Exception {
-		given(readUseCase.getRegionDetail(404L))
+		given(regionNavigationService.getRegionDetail(404L))
 			.willThrow(new ResourceNotFoundException("region not found"));
 
 		mockMvc.perform(get("/api/v1/region/404"))

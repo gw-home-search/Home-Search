@@ -1,11 +1,11 @@
-package com.home.infrastructure.web.read;
+package com.home.infrastructure.web.regionnavigation;
 
 import java.util.List;
 
 import com.home.application.read.ComplexSummaryResult;
-import com.home.application.read.PropertyReadUseCase;
 import com.home.application.read.RegionDetailResult;
 import com.home.application.read.RegionSummaryResult;
+import com.home.application.regionnavigation.RegionNavigationService;
 import com.home.infrastructure.web.read.dto.ComplexSummaryResponse;
 import com.home.infrastructure.web.read.dto.RegionDetailResponse;
 import com.home.infrastructure.web.read.dto.RegionSummaryResponse;
@@ -17,25 +17,25 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-public class RegionController {
+public class RegionNavigationController {
 
-	private final PropertyReadUseCase readUseCase;
+	private final RegionNavigationService regionNavigationService;
 
-	public RegionController(PropertyReadUseCase readUseCase) {
-		this.readUseCase = readUseCase;
+	public RegionNavigationController(RegionNavigationService regionNavigationService) {
+		this.regionNavigationService = regionNavigationService;
 	}
 
 	@GetMapping("/api/v1/region")
 	public ResponseEntity<List<RegionSummaryResponse>> getRootRegions() {
-		return ResponseEntity.ok(readUseCase.getRootRegions()
+		return ResponseEntity.ok(regionNavigationService.getRootRegions()
 			.stream()
-			.map(RegionController::toResponse)
+			.map(RegionNavigationController::toResponse)
 			.toList());
 	}
 
 	@GetMapping("/api/v1/region/{regionId}")
 	public ResponseEntity<RegionDetailResponse> getRegionDetail(@PathVariable Long regionId) {
-		return ResponseEntity.ok(toResponse(readUseCase.getRegionDetail(regionId)));
+		return ResponseEntity.ok(toResponse(regionNavigationService.getRegionDetail(regionId)));
 	}
 
 	@GetMapping("/api/v1/region/{regionId}/complexes")
@@ -44,9 +44,9 @@ public class RegionController {
 		@RequestParam(value = "limit", required = false) Integer limit,
 		@RequestParam(value = "offset", required = false) Integer offset
 	) {
-		return ResponseEntity.ok(readUseCase.getRegionComplexes(regionId, limit, offset)
+		return ResponseEntity.ok(regionNavigationService.getRegionComplexes(regionId, limit, offset)
 			.stream()
-			.map(RegionController::toResponse)
+			.map(RegionNavigationController::toResponse)
 			.toList());
 	}
 
@@ -71,15 +71,12 @@ public class RegionController {
 			result.latitude(),
 			result.longitude(),
 			result.children().stream()
-				.map(RegionController::toResponse)
+				.map(RegionNavigationController::toResponse)
 				.toList()
 		);
 	}
 
 	private static RegionSummaryResponse toResponse(RegionSummaryResult result) {
-		return new RegionSummaryResponse(
-			result.id(),
-			result.name()
-		);
+		return new RegionSummaryResponse(result.id(), result.name());
 	}
 }

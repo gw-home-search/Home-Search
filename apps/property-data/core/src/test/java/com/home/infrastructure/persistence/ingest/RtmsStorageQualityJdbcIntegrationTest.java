@@ -21,7 +21,7 @@ import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMatcher;
 import com.home.infrastructure.persistence.ingest.matching.JdbcTradeMatchEvidenceRepository;
 import com.home.infrastructure.persistence.ingest.normalization.JdbcNormalizedTradeRepository;
 import com.home.infrastructure.persistence.ingest.raw.JdbcRawTradeIngestRepository;
-import com.home.infrastructure.persistence.read.JdbcPropertyReadRepository;
+import com.home.infrastructure.persistence.tradehistory.JdbcTradeHistoryReader;
 import com.home.application.map.ComplexMarkerResult;
 import com.home.application.map.ComplexMarkerQuery;
 import com.home.application.read.TradeResult;
@@ -75,7 +75,8 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
 				assertThat(marker.parcelId()).isEqualTo(parcelId("1168010300101850000"));
 				assertThat(marker.latestDealAmount()).isEqualTo(318000L);
 			});
-		assertThat(new JdbcPropertyReadRepository(jdbcClient).findTradeList(parcelId("1168010300101850000")))
+		assertThat(new JdbcTradeHistoryReader(jdbcClient)
+			.findTradeList(parcelId("1168010300101850000"), null, 0, 25))
 			.hasValueSatisfying(response -> assertThat(response.trades())
 				.extracting(TradeResult::dealAmount, TradeResult::aptDong)
 				.containsExactly(tuple(318000L, "605"), tuple(342000L, "707")));
@@ -118,7 +119,7 @@ class RtmsStorageQualityJdbcIntegrationTest extends JdbcPostgresTestSupport {
 		assertThat(deletedTradeCount()).isEqualTo(1);
 		assertThat(normalizedRawWithoutMatchedEvidence()).isZero();
 		assertThat(activeTradeWithoutComplexParcel()).isZero();
-		assertThat(new JdbcPropertyReadRepository(jdbcClient).findTradeList(1001L))
+		assertThat(new JdbcTradeHistoryReader(jdbcClient).findTradeList(1001L, null, 0, 25))
 			.hasValueSatisfying(response -> assertThat(response.trades()).isEmpty());
 		assertThat(new JdbcMapMarkerRepository(jdbcClient).findComplexMarkers(bounds()))
 			.singleElement()

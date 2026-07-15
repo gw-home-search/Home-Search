@@ -55,11 +55,15 @@
   .distance-measure-bar { right: 8px; bottom: 40px; left: 8px; width: auto; max-width: none; align-items: stretch; transform: none; }
   .distance-measure-copy { min-width: 0; flex: 1; }
   .distance-measure-actions { overflow-x: auto; }
-  .map-surface[data-map-tool="commerce"] .kakao-map-stage { bottom: min(45dvh, 45%); }
-  .nearby-place-panel { right: 0; bottom: 0; left: 0; width: auto; height: min(45dvh, 45%); max-height: none; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 1px 1px 0 0; transform: none; }
-  .nearby-place-header { min-height: 48px; padding-left: 12px; }
-  .nearby-place-tabs button { min-height: 40px; padding: 0 9px; }
-  .nearby-place-row { min-height: 56px; padding: 8px 12px; }
+  .map-facility-picker { width: min(322px, calc(100vw - 68px)); }
+  .map-facility-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .map-facility-options button { min-height: 44px; border-right: 1px solid var(--hs-map-color-line); border-bottom: 1px solid var(--hs-map-color-line); padding: 0 8px; }
+  .map-facility-options button:nth-child(2n) { border-right: 0; }
+  .map-facility-options button:nth-last-child(-n + 4) { border-bottom: 1px solid var(--hs-map-color-line); }
+  .map-facility-options button:nth-last-child(-n + 2) { border-bottom: 0; }
+  .nearby-place-info-bar { right: 60px; bottom: 104px; left: 8px; width: auto; transform: none; }
+  .map-surface[data-map-tool="distance"] .nearby-place-info-bar { bottom: 112px; }
+  .nearby-place-marker { min-width: 44px; height: 44px; padding: 7px; }
   .map-notices { top: var(--hs-map-space-2); right: 60px; left: var(--hs-map-space-2); max-width: none; }
   .map-feedback { max-width: none; }
 
@@ -129,8 +133,11 @@
   .map-workspace[data-exploration-open="true"] .exploration-panel { grid-column: 1; grid-row: 1; width: 320px; border-top: 0; border-right: 1px solid var(--hs-map-color-line); border-radius: 0; }
   .map-workspace[data-exploration-open="true"] .map-column { grid-column: 2; grid-row: 1; }
   .map-workspace[data-exploration-open="false"] .map-column { grid-column: 1; }
-  .map-surface[data-map-tool="commerce"] .kakao-map-stage { bottom: min(45dvh, 45%); }
-  .nearby-place-panel { right: 0; bottom: 0; left: 0; width: auto; height: min(45dvh, 45%); max-height: none; border-right: 0; border-bottom: 0; border-left: 0; border-radius: 1px 1px 0 0; transform: none; }
+  .map-control-rail { gap: 12px; }
+  .map-control-mode-group { gap: 6px; }
+  .nearby-place-info-bar { top: 8px; right: 60px; bottom: auto; }
+  .map-facility-picker { top: auto; bottom: 0; }
+  .map-surface[data-map-tool="distance"] .nearby-place-info-bar { top: 8px; bottom: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {

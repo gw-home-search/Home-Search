@@ -60,6 +60,7 @@ export type KakaoMapsApi = {
     position: KakaoLatLng;
     content: HTMLElement | string;
     yAnchor?: number;
+    zIndex?: number;
   }) => KakaoCustomOverlay;
   Marker: new (options: {
     map?: KakaoMap;

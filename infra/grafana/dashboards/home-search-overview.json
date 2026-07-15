@@ -445,8 +445,8 @@
             "type": "prometheus",
             "uid": "home-search-prometheus"
           },
-          "expr": "sum(rate(home_search_nearby_place_cache_requests_total{result=\"hit\"}[5m])) / clamp_min(sum(rate(home_search_nearby_place_cache_requests_total{result=~\"hit|miss\"}[5m])), 1)",
-          "legendFormat": "cache hit ratio",
+          "expr": "sum by (scope) (rate(home_search_nearby_place_cache_requests_total{result=\"hit\"}[5m])) / clamp_min(sum by (scope) (rate(home_search_nearby_place_cache_requests_total{result=~\"hit|miss\"}[5m])), 1)",
+          "legendFormat": "{{scope}} cache hit ratio",
           "refId": "A"
         }
       ],
@@ -471,8 +471,8 @@
             "type": "prometheus",
             "uid": "home-search-prometheus"
           },
-          "expr": "sum by (category, result) (rate(home_search_kakao_local_calls_total[5m]))",
-          "legendFormat": "{{category}} {{result}}",
+          "expr": "sum by (scope, category, result) (rate(home_search_kakao_local_calls_total[5m]))",
+          "legendFormat": "{{scope}} {{category}} {{result}}",
           "refId": "A"
         }
       ],
@@ -497,8 +497,8 @@
             "type": "prometheus",
             "uid": "home-search-prometheus"
           },
-          "expr": "sum(rate(home_search_kakao_local_calls_total{result=\"error\"}[5m])) / clamp_min(sum(rate(home_search_kakao_local_calls_total[5m])), 1)",
-          "legendFormat": "error ratio",
+          "expr": "sum by (scope) (rate(home_search_kakao_local_calls_total{result=\"error\"}[5m])) / clamp_min(sum by (scope) (rate(home_search_kakao_local_calls_total[5m])), 1)",
+          "legendFormat": "{{scope}} error ratio",
           "refId": "A"
         }
       ],
@@ -523,8 +523,8 @@
             "type": "prometheus",
             "uid": "home-search-prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, category) (rate(home_search_kakao_local_duration_seconds_bucket[5m])))",
-          "legendFormat": "p95 {{category}}",
+          "expr": "histogram_quantile(0.95, sum by (le, scope, category) (rate(home_search_kakao_local_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95 {{scope}} {{category}}",
           "refId": "A"
         }
       ],

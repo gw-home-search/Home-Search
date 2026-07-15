@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
 import type { MapDisplayMode } from '../../../app/mapAppTypes';
-import { MapToolsIcon, MinusIcon, PlusIcon } from '../../../shared/icons';
+import { CheckIcon, MapToolsIcon, MinusIcon, PlusIcon } from '../../../shared/icons';
+import {
+  MAP_NEARBY_PLACE_CATEGORIES,
+  NEARBY_PLACE_CATEGORY_LABELS,
+  type NearbyPlaceCategory,
+} from '../../nearby-places/api/fetchNearbyPlaces';
+import { NearbyPlaceCategoryIcon } from '../../nearby-places/NearbyPlaceCategoryIcon';
 import { MAX_MAP_LEVEL, MIN_MAP_LEVEL } from '../markerViewModel';
 import type { MapToolMode, OpenMapControl } from '../tools/mapToolTypes';
 
@@ -11,16 +17,24 @@ const DISPLAY_OPTIONS: ReadonlyArray<{ ariaLabel: string; label: string; value: 
   { ariaLabel: '위성 지도', label: '위성', value: 'hybrid' },
 ];
 
+const FACILITY_PICKER_LABELS: Readonly<Record<NearbyPlaceCategory, string>> = {
+  ...NEARBY_PLACE_CATEGORY_LABELS,
+  DAYCARE_KINDERGARTEN: '어린이집',
+  SUBWAY_STATION: '지하철',
+};
+
 type MapControlRailProps = {
   activeTool: MapToolMode;
   cadastralEnabled: boolean;
-  commerceAvailable: boolean;
+  facilityCategories?: readonly NearbyPlaceCategory[];
+  facilityLoading?: boolean;
   disabled: boolean;
   displayMode: MapDisplayMode;
   level: number;
-  commerceToggleRef?: RefObject<HTMLButtonElement | null>;
+  facilityToggleRef?: RefObject<HTMLButtonElement | null>;
   toolToggleRef?: RefObject<HTMLButtonElement | null>;
   onCadastralChange: (enabled: boolean) => void;
+  onFacilityCategoriesChange?: (categories: NearbyPlaceCategory[]) => void;
   onDisplayModeChange: (mode: MapDisplayMode) => void;
   onToolModeChange: (mode: MapToolMode) => void;
   onZoomIn: () => void;
@@ -30,25 +44,28 @@ type MapControlRailProps = {
 export function MapControlRail({
   activeTool,
   cadastralEnabled,
-  commerceAvailable,
+  facilityCategories = [],
+  facilityLoading = false,
   disabled,
   displayMode,
   level,
-  commerceToggleRef,
+  facilityToggleRef,
   toolToggleRef,
   onCadastralChange,
+  onFacilityCategoriesChange = () => undefined,
   onDisplayModeChange,
   onToolModeChange,
   onZoomIn,
   onZoomOut,
 }: MapControlRailProps) {
   const [openControl, setOpenControl] = useState<OpenMapControl>(null);
+  const [facilitySelectionMessage, setFacilitySelectionMessage] = useState('');
   const railRef = useRef<HTMLDivElement>(null);
   const displayToggleRef = useRef<HTMLButtonElement>(null);
   const internalToolToggleRef = useRef<HTMLButtonElement>(null);
-  const internalCommerceToggleRef = useRef<HTMLButtonElement>(null);
+  const internalFacilityToggleRef = useRef<HTMLButtonElement>(null);
   const resolvedToolToggleRef = toolToggleRef ?? internalToolToggleRef;
-  const resolvedCommerceToggleRef = commerceToggleRef ?? internalCommerceToggleRef;
+  const resolvedFacilityToggleRef = facilityToggleRef ?? internalFacilityToggleRef;
   const activeDisplay = DISPLAY_OPTIONS.find((option) => option.value === displayMode) ?? DISPLAY_OPTIONS[0];
 
   useEffect(() => {
@@ -58,7 +75,13 @@ export function MapControlRail({
 
     function closeFromOutside(event: PointerEvent) {
       if (event.target instanceof Node && !railRef.current?.contains(event.target)) {
+        const target = openControl === 'display'
+          ? displayToggleRef.current
+          : openControl === 'facilities'
+            ? resolvedFacilityToggleRef.current
+            : resolvedToolToggleRef.current;
         setOpenControl(null);
+        queueMicrotask(() => target?.focus());
       }
     }
 
@@ -70,8 +93,8 @@ export function MapControlRail({
         ? displayToggleRef.current
         : openControl === 'tools'
           ? resolvedToolToggleRef.current
-          : activeTool === 'commerce'
-            ? resolvedCommerceToggleRef.current
+          : openControl === 'facilities'
+            ? resolvedFacilityToggleRef.current
             : resolvedToolToggleRef.current;
       if (openControl) setOpenControl(null);
       else onToolModeChange('none');
@@ -84,7 +107,7 @@ export function MapControlRail({
       document.removeEventListener('pointerdown', closeFromOutside);
       document.removeEventListener('keydown', closeFromEscape);
     };
-  }, [activeTool, onToolModeChange, openControl, resolvedCommerceToggleRef, resolvedToolToggleRef]);
+  }, [activeTool, onToolModeChange, openControl, resolvedFacilityToggleRef, resolvedToolToggleRef]);
 
   function selectDisplay(mode: MapDisplayMode) {
     onDisplayModeChange(mode);
@@ -104,9 +127,17 @@ export function MapControlRail({
     queueMicrotask(() => resolvedToolToggleRef.current?.focus());
   }
 
-  function toggleCommerce() {
-    onToolModeChange(activeTool === 'commerce' ? 'none' : 'commerce');
-    setOpenControl(null);
+  function toggleFacilityCategory(category: NearbyPlaceCategory) {
+    const selected = facilityCategories.includes(category);
+    if (!selected && facilityCategories.length >= 3) {
+      setFacilitySelectionMessage('주변시설은 최대 3개까지 선택할 수 있습니다.');
+      return;
+    }
+    const nextSelection = new Set(facilityCategories);
+    if (selected) nextSelection.delete(category);
+    else nextSelection.add(category);
+    setFacilitySelectionMessage('');
+    onFacilityCategoriesChange(MAP_NEARBY_PLACE_CATEGORIES.filter((item) => nextSelection.has(item)));
   }
 
   return (
@@ -176,19 +207,66 @@ export function MapControlRail({
           ) : null}
         </div>
 
-        <button
-          type="button"
-          aria-label="주변 상권 보기"
-          aria-pressed={activeTool === 'commerce'}
-          className="map-control-toggle map-commerce-toggle"
-          data-active={activeTool === 'commerce'}
-          disabled={disabled || !commerceAvailable}
-          ref={resolvedCommerceToggleRef}
-          title={commerceAvailable ? '주변 상권·생활시설 보기' : '단지를 선택하면 주변 상권을 볼 수 있습니다.'}
-          onClick={toggleCommerce}
-        >
-          상권
-        </button>
+        <div className="map-control-anchor map-facility-anchor">
+          {openControl === 'facilities' ? (
+            <div aria-label="주변시설 종류 선택" className="map-facility-picker" id="map-facility-picker" role="group">
+              <div className="map-facility-picker-header">
+                <div>
+                  <strong>주변시설</strong>
+                  <span>최대 3개</span>
+                </div>
+                <button
+                  type="button"
+                  aria-label="주변시설 전체 해제"
+                  disabled={facilityCategories.length === 0}
+                  onClick={() => {
+                    setFacilitySelectionMessage('');
+                    onFacilityCategoriesChange([]);
+                  }}
+                >
+                  전체 해제
+                </button>
+              </div>
+              <div className="map-facility-options">
+                {MAP_NEARBY_PLACE_CATEGORIES.map((category) => (
+                  <button
+                    type="button"
+                    aria-label={`${NEARBY_PLACE_CATEGORY_LABELS[category]} ${facilityCategories.includes(category) ? '선택 해제' : '선택'}`}
+                    aria-pressed={facilityCategories.includes(category)}
+                    key={category}
+                    onClick={() => toggleFacilityCategory(category)}
+                  >
+                    <NearbyPlaceCategoryIcon category={category} />
+                    <span className="map-facility-category-label">{FACILITY_PICKER_LABELS[category]}</span>
+                    {facilityCategories.includes(category) ? (
+                      <CheckIcon aria-hidden="true" className="map-facility-category-check" />
+                    ) : <span aria-hidden="true" className="map-facility-category-placeholder" />}
+                  </button>
+                ))}
+              </div>
+              {facilitySelectionMessage ? (
+                <span className="map-facility-live" aria-live="polite">{facilitySelectionMessage}</span>
+              ) : null}
+            </div>
+          ) : null}
+          <button
+            type="button"
+            aria-controls="map-facility-picker"
+            aria-expanded={openControl === 'facilities'}
+            aria-haspopup="true"
+            aria-label="주변시설 선택"
+            className="map-control-toggle map-facility-toggle"
+            data-active={facilityCategories.length > 0}
+            data-loading={facilityLoading}
+            disabled={disabled}
+            ref={resolvedFacilityToggleRef}
+            title={`주변시설 선택 · ${facilityCategories.length}개 선택`}
+            onClick={() => setOpenControl(openControl === 'facilities' ? null : 'facilities')}
+          >
+            시설
+            {facilityCategories.length > 0 ? <span className="map-facility-count">{facilityCategories.length}</span> : null}
+          </button>
+        </div>
       </div>
     </div>
   );

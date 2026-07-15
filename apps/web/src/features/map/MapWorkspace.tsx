@@ -8,9 +8,10 @@ import { MapControlRail } from './controls/MapControlRail';
 import { DistanceMeasureBar } from './tools/DistanceMeasureBar';
 import type { MapPoint } from './tools/mapToolTypes';
 import { useMapToolState } from './tools/useMapToolState';
-import { NearbyPlacePanel } from '../nearby-places/NearbyPlacePanel';
+import { NearbyPlaceInfoBar } from '../nearby-places/NearbyPlaceInfoBar';
 import type { NearbyPlaceCategory } from '../nearby-places/api/fetchNearbyPlaces';
-import { useNearbyPlaces } from '../nearby-places/useNearbyPlaces';
+import { createMapNearbyPlaces } from '../nearby-places/mapNearbyPlaces';
+import { useViewportNearbyPlaces } from '../nearby-places/useViewportNearbyPlaces';
 
 type ComplexMapMarker = Extract<MapMarkersResult, { kind: 'complex' }>['markers'][number];
 type RegionMapMarker = Extract<MapMarkersResult, { kind: 'region' }>['markers'][number];
@@ -23,7 +24,6 @@ type MapWorkspaceProps = {
   markerError: string | null;
   markerState: 'loading' | 'ready' | 'empty' | 'error';
   markers: MapMarkersResult | null;
-  nearbyPlaceComplexId: number | null;
   hiddenMarkerCount: number;
   selectedComplex: ComplexSelection | null;
   viewport: MapViewport;
@@ -44,7 +44,6 @@ export function MapWorkspace({
   markerError,
   markerState,
   markers,
-  nearbyPlaceComplexId,
   hiddenMarkerCount,
   selectedComplex,
   viewport,
@@ -60,26 +59,27 @@ export function MapWorkspace({
   const [mapRuntimeError, setMapRuntimeError] = useState<string | null>(null);
   const [mapDisplayMode, setMapDisplayMode] = useState<MapDisplayMode>('roadmap');
   const toolToggleRef = useRef<HTMLButtonElement>(null);
-  const commerceToggleRef = useRef<HTMLButtonElement>(null);
   const mapTools = useMapToolState();
-  const [nearbyPlaceCategory, setNearbyPlaceCategory] = useState<NearbyPlaceCategory>('CAFE');
+  const [facilityCategories, setFacilityCategories] = useState<NearbyPlaceCategory[]>([]);
   const [selectedNearbyPlaceId, setSelectedNearbyPlaceId] = useState<string | null>(null);
-  const nearbyPlaces = useNearbyPlaces(nearbyPlaceComplexId, mapTools.activeTool === 'commerce');
-  const visibleNearbyPlaces = nearbyPlaces.data?.categories
-    .find((category) => category.category === nearbyPlaceCategory)
-    ?.places.slice(0, 5) ?? [];
+  const facilitiesEnabled = mapRuntimeState === 'ready'
+    && facilityCategories.length > 0
+    && mapTools.activeTool !== 'roadview';
+  const nearbyPlaces = useViewportNearbyPlaces(viewport, facilityCategories, facilitiesEnabled);
+  const visibleNearbyPlaces = useMemo(
+    () => createMapNearbyPlaces(nearbyPlaces.data, facilityCategories),
+    [facilityCategories, nearbyPlaces.data],
+  );
+  const selectedNearbyPlace = visibleNearbyPlaces
+    .find((item) => item.place.placeId === selectedNearbyPlaceId)?.place ?? null;
   const roadviewInitialPoint = useMemo(
     () => resolveRoadviewInitialPoint(markers, selectedComplex, focusTarget),
     [focusTarget, markers, selectedComplex],
   );
 
   useEffect(() => {
-    setNearbyPlaceCategory('CAFE');
-    setSelectedNearbyPlaceId(null);
-    if (mapTools.activeTool === 'commerce' && nearbyPlaceComplexId == null) {
-      mapTools.exitActiveTool();
-    }
-  }, [mapTools.activeTool, mapTools.exitActiveTool, nearbyPlaceComplexId]);
+    if (mapTools.activeTool === 'roadview') setSelectedNearbyPlaceId(null);
+  }, [mapTools.activeTool]);
 
   return (
     <section
@@ -89,6 +89,7 @@ export function MapWorkspace({
       data-map-display-mode={mapDisplayMode}
       data-map-level={viewport.level}
       data-map-tool={mapTools.activeTool}
+      data-facilities-active={facilityCategories.length > 0}
     >
       <KakaoMapSurface
         appKey={appKey}
@@ -100,8 +101,8 @@ export function MapWorkspace({
         distanceState={mapTools.distance}
         mapDisplayMode={mapDisplayMode}
         markers={markers}
+        facilitiesEnabled={facilitiesEnabled}
         nearbyPlaces={visibleNearbyPlaces}
-        nearbyPlaceCategory={nearbyPlaceCategory}
         roadviewInitialPoint={roadviewInitialPoint}
         roadviewState={mapTools.roadviewState}
         selectedComplex={selectedComplex}
@@ -122,13 +123,17 @@ export function MapWorkspace({
         <MapControlRail
           activeTool={mapTools.activeTool}
           cadastralEnabled={mapTools.cadastralEnabled}
-          commerceAvailable={nearbyPlaceComplexId != null}
+          facilityCategories={facilityCategories}
+          facilityLoading={nearbyPlaces.state === 'loading'}
           disabled={mapRuntimeState !== 'ready'}
           displayMode={mapDisplayMode}
           level={viewport.level}
-          commerceToggleRef={commerceToggleRef}
           toolToggleRef={toolToggleRef}
           onCadastralChange={mapTools.setCadastralEnabled}
+          onFacilityCategoriesChange={(categories) => {
+            setFacilityCategories(categories);
+            setSelectedNearbyPlaceId(null);
+          }}
           onDisplayModeChange={setMapDisplayMode}
           onToolModeChange={mapTools.changeTool}
           onZoomIn={onZoomIn}
@@ -146,22 +151,11 @@ export function MapWorkspace({
         />
       ) : null}
 
-      {mapTools.activeTool === 'commerce' ? (
-        <NearbyPlacePanel
-          data={nearbyPlaces.data}
+      {facilityCategories.length > 0 && mapTools.activeTool !== 'roadview' ? (
+        <NearbyPlaceInfoBar
           error={nearbyPlaces.error}
-          selectedCategory={nearbyPlaceCategory}
-          selectedPlaceId={selectedNearbyPlaceId}
+          place={selectedNearbyPlace}
           state={nearbyPlaces.state}
-          onCategoryChange={(category) => {
-            setNearbyPlaceCategory(category);
-            setSelectedNearbyPlaceId(null);
-          }}
-          onClose={() => {
-            mapTools.exitActiveTool();
-            queueMicrotask(() => commerceToggleRef.current?.focus());
-          }}
-          onPlaceSelect={setSelectedNearbyPlaceId}
           onRetry={nearbyPlaces.retry}
         />
       ) : null}

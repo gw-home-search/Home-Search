@@ -703,12 +703,12 @@ describe('App map-first shell 화면', () => {
     unmount(root);
   });
 
-  it('상권 도구는 확정 complexId로 한 번 조회하고 선택 category POI와 목록을 동기화한다', async () => {
+  it('주변시설은 단지 선택 없이 0~3종을 선택하고 현재 viewport에서 자동 조회한다', async () => {
     const sdk = createFakeKakaoSdk({
-      bounds: { swLat: 37.45, swLng: 126.85, neLat: 37.7, neLng: 127.2 },
+      bounds: { swLat: 37.45, swLng: 126.85, neLat: 37.50, neLng: 126.93 },
       level: 4,
     });
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input);
       if (url.includes('/api/v1/map/complexes')) return Promise.resolve(jsonResponse([{
         parcelId: 1001, complexId: 501, name: 'Sample Apartment', lat: 37.5123, lng: 127.0456,
@@ -724,22 +724,32 @@ describe('App map-first shell 화면', () => {
         parcelId: 1001, complexId: 501, content: [], page: 0, size: 25,
         totalElements: 0, totalPages: 0,
       }));
-      if (url.includes('/api/v1/complex/501/nearby-places')) return Promise.resolve(jsonResponse({
-        complexId: 501,
-        center: { lat: 37.5123, lng: 127.0456 },
-        radiusMeters: 800,
-        source: { provider: 'KAKAO_LOCAL', countBasis: 'PROVIDER_SEARCH' },
-        generatedAt: '2026-07-13T03:00:01Z',
-        categories: [{
-          category: 'CAFE', label: '카페', matchedCount: 1, returnedCount: 1, hasMore: false,
-          retrievedAt: '2026-07-13T03:00:00Z',
-          places: [{
-            placeId: 'kakao:1', name: '가까운 카페', categoryDetail: '음식점 > 카페',
-            lat: 37.513, lng: 127.046, distanceMeters: 72, address: 'Sample address',
-            roadAddress: null, phone: null, placeUrl: 'https://place.map.kakao.com/1',
-          }],
-        }],
-      }));
+      if (url.includes('/api/v1/map/nearby-places')) {
+        const category = JSON.parse(String(_init?.body)).category as 'SUPERMARKET' | 'HOSPITAL' | 'SCHOOL';
+        const label = { SUPERMARKET: '대형마트', HOSPITAL: '병원', SCHOOL: '학교' }[category];
+        return Promise.resolve(jsonResponse({
+          bounds: { swLat: 37.45, swLng: 126.85, neLat: 37.50, neLng: 126.93 },
+          level: 4,
+          source: { provider: 'KAKAO_LOCAL', countBasis: 'PROVIDER_SEARCH' },
+          generatedAt: '2026-07-13T03:00:01Z',
+          category: {
+            category, label,
+            retrievedAt: '2026-07-13T03:00:00Z',
+            places: Array.from({ length: 6 }, (_, index) => ({
+              placeId: `kakao:${category}:${index}`,
+              name: category === 'SUPERMARKET' && index === 0 ? '가까운 대형마트' : `${label} ${index + 1}`,
+              categoryDetail: label,
+              lat: 37.48 + index * 0.001,
+              lng: 126.89 + index * 0.001,
+              distanceMeters: 72 + index,
+              address: 'Sample address',
+              roadAddress: null,
+              phone: null,
+              placeUrl: `https://place.map.kakao.com/${category}-${index}`,
+            })),
+          },
+        }));
+      }
       return Promise.resolve(jsonResponse([]));
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -748,23 +758,67 @@ describe('App map-first shell 화면', () => {
     const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
     await flushAsyncState();
     await flushAsyncState();
-    await act(async () => sdk.overlays[0]?.content.click());
-    await flushAsyncState();
-    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="주변 상권 보기"]')?.click());
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/api/v1/map/nearby-places'))).toHaveLength(0);
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="주변시설 선택"]')?.click());
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="대형마트 선택"]')?.click());
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 450)));
     await flushAsyncState();
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/complex/501/nearby-places?'),
-      expect.objectContaining({ method: 'GET' }),
-    );
-    expect(rootElement.querySelector('[aria-label="주변 상권·생활시설"]')?.textContent).toContain('가까운 카페');
+    const nearbyCalls = fetchMock.mock.calls.filter(([input]) => String(input).includes('/api/v1/map/nearby-places'));
+    expect(nearbyCalls).toHaveLength(1);
+    expect(nearbyCalls[0]?.[1]).toEqual(expect.objectContaining({
+      method: 'POST',
+      body: expect.stringContaining('"category":"SUPERMARKET"'),
+    }));
+    expect(rootElement.querySelector('[aria-label="주변시설 종류 선택"]')).not.toBeNull();
     const poi = sdk.overlays.find((overlay) => overlay.content.classList.contains('nearby-place-marker'));
-    expect(poi?.content.getAttribute('aria-label')).toBe('가까운 카페, 72m');
+    expect(poi?.content.getAttribute('aria-label')).toBe('가까운 대형마트');
+    expect(poi?.content.querySelector('svg')).not.toBeNull();
+    expect(poi).toMatchObject({ yAnchor: 1, zIndex: 2 });
 
     await act(async () => poi?.content.click());
     await flushAsyncState();
-    expect(rootElement.querySelector('[data-place-id="kakao:1"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(rootElement.querySelector('[aria-label="선택 장소 정보"]')?.textContent).toContain('가까운 대형마트');
     expect(sdk.map.setCenter).toHaveBeenLastCalledWith(expect.objectContaining({ getLat: expect.any(Function) }));
+    const selectedPoi = [...sdk.overlays].reverse().find((overlay) =>
+      overlay.content.classList.contains('nearby-place-marker')
+      && overlay.content.dataset.selected === 'true');
+    expect(selectedPoi).toMatchObject({ yAnchor: 1, zIndex: 3 });
+
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="병원 선택"]')?.click());
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="학교 선택"]')?.click());
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 450)));
+    await flushAsyncState();
+
+    const multiCategoryCalls = fetchMock.mock.calls
+      .filter(([input]) => String(input).includes('/api/v1/map/nearby-places'));
+    expect(multiCategoryCalls).toHaveLength(3);
+    expect(multiCategoryCalls.map((call) => JSON.parse(String(call[1]?.body)).category))
+      .toEqual(['SUPERMARKET', 'SCHOOL', 'HOSPITAL']);
+    const activePoiOverlays = sdk.overlays.filter((overlay) => (
+      overlay.content.classList.contains('nearby-place-marker')
+      && overlay.setMap.mock.calls.at(-1)?.[0] === sdk.map
+    ));
+    expect(activePoiOverlays).toHaveLength(15);
+    expect(activePoiOverlays.filter((overlay) => overlay.content.dataset.category === 'SUPERMARKET')).toHaveLength(5);
+    expect(activePoiOverlays.filter((overlay) => overlay.content.dataset.category === 'HOSPITAL')).toHaveLength(5);
+    expect(activePoiOverlays.filter((overlay) => overlay.content.dataset.category === 'SCHOOL')).toHaveLength(5);
+
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="주변시설 선택"]')?.click());
+    expect(rootElement.querySelector('[aria-label="주변시설 종류 선택"]')).toBeNull();
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="지도 도구 선택"]')?.click());
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="거리 측정 사용"]')?.click());
+    expect(rootElement.querySelector('.map-surface')?.getAttribute('data-map-tool')).toBe('distance');
+    expect(rootElement.querySelector('.map-surface')?.getAttribute('data-facilities-active')).toBe('true');
+
+    sdk.setViewport({
+      bounds: { swLat: 37.46, swLng: 126.86, neLat: 37.51, neLng: 126.94 },
+      level: 4,
+    });
+    await act(async () => sdk.triggerIdle());
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 450)));
+    await flushAsyncState();
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/api/v1/map/nearby-places'))).toHaveLength(6);
 
     unmount(root);
   });
@@ -2591,6 +2645,7 @@ type FakeBounds = {
 type FakeOverlay = {
   content: HTMLElement;
   yAnchor: number;
+  zIndex?: number;
   setMap: ReturnType<typeof vi.fn>;
 };
 
@@ -2654,9 +2709,14 @@ function createFakeKakaoSdk(options: { bounds: FakeBounds; level: number }) {
         void this;
         return map;
       }),
-      CustomOverlay: vi.fn(function (this: unknown, options: { content: HTMLElement; yAnchor: number }) {
+      CustomOverlay: vi.fn(function (this: unknown, options: { content: HTMLElement; yAnchor: number; zIndex?: number }) {
         void this;
-        const overlay = { content: options.content, yAnchor: options.yAnchor, setMap: vi.fn() };
+        const overlay = {
+          content: options.content,
+          yAnchor: options.yAnchor,
+          zIndex: options.zIndex,
+          setMap: vi.fn(),
+        };
         overlays.push(overlay);
         return overlay;
       }),

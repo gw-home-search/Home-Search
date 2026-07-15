@@ -32,7 +32,7 @@ final class ObservedNearbyPlaceUseCase implements NearbyPlaceUseCase {
             throw exception;
         } finally {
             meterRegistry
-                    .counter("home.search.nearby.place.requests", "result", result)
+                    .counter("home.search.nearby.place.requests", "scope", "complex", "result", result)
                     .increment();
         }
     }

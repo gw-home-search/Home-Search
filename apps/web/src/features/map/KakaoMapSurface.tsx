@@ -18,6 +18,8 @@ import {
 import { useKakaoDistanceMeasure } from './kakao/useKakaoDistanceMeasure';
 import { useKakaoRoadview } from './kakao/useKakaoRoadview';
 import type { NearbyPlace, NearbyPlaceCategory } from '../nearby-places/api/fetchNearbyPlaces';
+import type { MapNearbyPlace } from '../nearby-places/mapNearbyPlaces';
+import { createNearbyPlaceCategoryIcon } from '../nearby-places/NearbyPlaceCategoryIcon';
 import {
   createComplexMarkerViewModel,
   createRegionMarkerViewModel,
@@ -49,13 +51,13 @@ type KakaoMapSurfaceProps = {
   activeTool: MapToolMode;
   cadastralEnabled: boolean;
   distanceState: DistanceMeasureState;
+  facilitiesEnabled: boolean;
   focusTarget: MapFocusTarget | null;
   initialLevel: number;
   level: number;
   mapDisplayMode: MapDisplayMode;
   markers: MapMarkersResult | null;
-  nearbyPlaces: NearbyPlace[];
-  nearbyPlaceCategory: NearbyPlaceCategory;
+  nearbyPlaces: MapNearbyPlace[];
   roadviewInitialPoint: MapPoint | null;
   roadviewState: RoadviewRuntimeState;
   selectedComplex: ComplexSelection | null;
@@ -64,7 +66,7 @@ type KakaoMapSurfaceProps = {
   onDistanceLengthChange: (lengthMeters: number) => void;
   onDistancePointAdd: (point: MapPoint) => void;
   onExitRoadview: () => void;
-  onNearbyPlaceSelect: (placeId: string) => void;
+  onNearbyPlaceSelect: (placeId: string | null) => void;
   onRegionMarkerSelect: (marker: RegionMapMarker) => void;
   onRuntimeErrorChange: (message: string | null) => void;
   onRuntimeStateChange: (state: KakaoMapRuntimeState) => void;
@@ -82,13 +84,13 @@ export function KakaoMapSurface({
   activeTool,
   cadastralEnabled,
   distanceState,
+  facilitiesEnabled,
   focusTarget,
   initialLevel,
   level,
   mapDisplayMode,
   markers,
   nearbyPlaces,
-  nearbyPlaceCategory,
   roadviewInitialPoint,
   roadviewState,
   selectedComplex,
@@ -263,9 +265,7 @@ export function KakaoMapSurface({
 
     const nextOverlays =
       markers.kind === 'complex'
-        ? markers.markers
-          .filter((marker) => activeTool !== 'commerce' || isComplexMarkerSelected(marker, selectedComplex))
-          .map((marker) =>
+        ? markers.markers.map((marker) =>
             overlayForMarker(
               map,
               maps,
@@ -280,7 +280,7 @@ export function KakaoMapSurface({
               ),
             ),
           )
-        : activeTool === 'commerce' ? [] : markers.markers.map((marker) =>
+        : markers.markers.map((marker) =>
             overlayForMarker(
               map,
               maps,
@@ -304,18 +304,18 @@ export function KakaoMapSurface({
     const maps = mapsApiRef.current;
     clearOverlays(nearbyPlaceOverlaysRef.current);
     nearbyPlaceOverlaysRef.current = [];
-    if (runtimeState !== 'ready' || activeTool !== 'commerce' || !map || !maps) return undefined;
+    if (runtimeState !== 'ready' || !facilitiesEnabled || !map || !maps) return undefined;
 
-    nearbyPlaceOverlaysRef.current = nearbyPlaces.map((place) => overlayForMarker(
+    nearbyPlaceOverlaysRef.current = nearbyPlaces.map((item) => overlayForMarker(
       map,
       maps,
-      place.lat,
-      place.lng,
-      1,
+      item.place.lat,
+      item.place.lng,
+      selectedNearbyPlaceId === item.place.placeId ? 3 : 2,
       overlayContentForNearbyPlace(
-        place,
-        nearbyPlaceCategory,
-        selectedNearbyPlaceId === place.placeId,
+        item.place,
+        item.category,
+        selectedNearbyPlaceId === item.place.placeId,
         onNearbyPlaceSelect,
       ),
     ));
@@ -324,15 +324,24 @@ export function KakaoMapSurface({
       clearOverlays(nearbyPlaceOverlaysRef.current);
       nearbyPlaceOverlaysRef.current = [];
     };
-  }, [activeTool, nearbyPlaceCategory, nearbyPlaces, onNearbyPlaceSelect, runtimeState, selectedNearbyPlaceId]);
+  }, [facilitiesEnabled, nearbyPlaces, onNearbyPlaceSelect, runtimeState, selectedNearbyPlaceId]);
 
   useEffect(() => {
-    if (runtimeState !== 'ready' || activeTool !== 'commerce' || !selectedNearbyPlaceId) return;
-    const place = nearbyPlaces.find((candidate) => candidate.placeId === selectedNearbyPlaceId);
+    if (runtimeState !== 'ready' || !facilitiesEnabled || !selectedNearbyPlaceId) return;
+    const place = nearbyPlaces.find((candidate) => candidate.place.placeId === selectedNearbyPlaceId)?.place;
     const map = mapRef.current;
     const maps = mapsApiRef.current;
     if (place && map && maps) map.setCenter?.(new maps.LatLng(place.lat, place.lng));
-  }, [activeTool, nearbyPlaces, runtimeState, selectedNearbyPlaceId]);
+  }, [facilitiesEnabled, nearbyPlaces, runtimeState, selectedNearbyPlaceId]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const maps = mapsApiRef.current;
+    if (runtimeState !== 'ready' || !facilitiesEnabled || !map || !maps) return undefined;
+    const clearSelection = () => onNearbyPlaceSelect(null);
+    maps.event.addListener(map, 'click', clearSelection);
+    return () => maps.event.removeListener?.(map, 'click', clearSelection);
+  }, [facilitiesEnabled, onNearbyPlaceSelect, runtimeState]);
 
   useKakaoRoadview({
     active: activeTool === 'roadview',
@@ -383,14 +392,15 @@ function overlayForMarker(
   maps: KakaoMapsApi,
   lat: number,
   lng: number,
-  yAnchor: number,
+  zIndex: number,
   content: HTMLElement,
 ): KakaoCustomOverlay {
   const position = new maps.LatLng(lat, lng);
   const overlay = new maps.CustomOverlay({
     position,
     content,
-    yAnchor,
+    yAnchor: 1,
+    zIndex,
   });
   overlay.setMap(map);
   return overlay;
@@ -486,32 +496,31 @@ function overlayContentForNearbyPlace(
   place: NearbyPlace,
   category: NearbyPlaceCategory,
   selected: boolean,
-  onSelect: (placeId: string) => void,
+  onSelect: (placeId: string | null) => void,
 ): HTMLElement {
   const element = document.createElement('button');
   const icon = document.createElement('span');
+  const label = document.createElement('span');
   element.type = 'button';
   element.className = 'kakao-map-overlay nearby-place-marker';
   element.dataset.category = category;
   element.dataset.selected = String(selected);
-  element.setAttribute('aria-label', `${place.name}, ${Math.round(place.distanceMeters)}m`);
+  element.setAttribute('aria-label', place.name);
   element.setAttribute('aria-pressed', String(selected));
+  icon.className = 'nearby-place-marker-icon';
   icon.setAttribute('aria-hidden', 'true');
-  icon.textContent = nearbyPlaceIcon(category);
+  icon.append(createNearbyPlaceCategoryIcon(category));
   element.append(icon);
-  element.addEventListener('click', () => onSelect(place.placeId));
+  if (selected) {
+    label.className = 'nearby-place-marker-label';
+    label.textContent = place.name;
+    element.append(label);
+  }
+  element.addEventListener('click', (event) => {
+    event.stopPropagation();
+    onSelect(place.placeId);
+  });
   return element;
-}
-
-function nearbyPlaceIcon(category: NearbyPlaceCategory): string {
-  return {
-    CAFE: '☕',
-    RESTAURANT: '●',
-    CONVENIENCE_STORE: 'C',
-    HOSPITAL: '+',
-    PHARMACY: 'P',
-    SCHOOL: 'S',
-  }[category];
 }
 
 function runtimeErrorMessage(error: unknown): string {

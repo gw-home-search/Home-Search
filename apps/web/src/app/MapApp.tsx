@@ -151,11 +151,6 @@ export function MapApp({
           />
           <MapWorkspace
             appKey={kakaoMapAppKey}
-            nearbyPlaceComplexId={
-              detail.complexDetail?.complexId
-              ?? detail.selectedComplex?.complexId
-              ?? null
-            }
             focusTarget={viewport.mapFocusTarget}
             initialLevel={initialMapLevel}
             markerError={markerData.markerError}

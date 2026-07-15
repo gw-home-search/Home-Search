@@ -153,27 +153,35 @@ On marker API failure:
 - Do not navigate away from the map.
 - Show a small non-blocking error state in the redesigned UI.
 
-## Nearby Commerce Tool Flow
+## Nearby Facility Overlay Flow
 
-`상권` is an exclusive map work mode alongside Roadview and distance measurement;
-the cadastral overlay remains independent.
+`주변시설`은 단지 선택과 무관한 viewport overlay다. 거리 측정·지적편집도·
+지도 종류와 동시에 사용할 수 있고, 거리뷰가 열린 동안만 request와 overlay를
+정리한다. `시설` 버튼은 overlay toggle이 아니라 category picker 설정 버튼이다.
 
 ```text
-detail-complexId ?? selected-marker-complexId
-  -> GET /api/v1/complex/{complexId}/nearby-places once for six categories
-  -> default CAFE category
-  -> keep selected complex marker, hide non-selected property markers
-  -> render at most five selected-category POI overlays
-  -> marker click selects and scrolls the matching list row
-  -> row click selects the marker and centers the map
-  -> category switch reuses the same response without another API request
-  -> complex switch, mode exit, or unmount aborts/cleans overlays and listeners
+Kakao runtime ready -> category default []
+  -> 0개: API 0회, POI·상태 안내 없음
+  -> 1..3개 선택: picker 열림 여부와 무관하게 자동 조회
+  -> level > MAX_COMPLEX_MARKER_LEVEL(4): API 호출 없이 확대 안내와 POI overlay 정리
+  -> level <= MAX_COMPLEX_MARKER_LEVEL(4): map idle 이후 400ms debounce
+  -> 선택 category만 public API를 category별로 1회씩 병렬 조회
+  -> browser 5분 LRU cache hit category는 network 0회
+  -> backend 1시간 Redis hit category는 Kakao 0회
+  -> miss category마다 Kakao category search 최대 1회
+  -> actual bounds 안에서 category당 최대 5개, 전체 최대 15개 symbol tile overlay
+  -> category 추가는 새 category만 조회하고 해제는 해당 overlay만 정리
+  -> marker 선택은 compact 장소 정보 bar를 표시
+  -> 빈 지도 클릭은 장소 선택만 해제하고 category는 유지
+  -> 거리뷰 진입·unmount는 request·overlay·listener 정리, 거리뷰 종료 후 자동 복원
 ```
 
-Parcel fallback markers with `complexId == null` do not enable the tool until
-the detail response provides a canonical complex id. Loading, empty, provider
-failure and retry stay inside the nearby-place panel; the base map remains
-usable. Counts are always labeled as Kakao place-search counts.
+이동 중 이전 request는 abort하고 sequence가 늦은 응답을 무시한다. 선택은 0개까지
+해제할 수 있고 4번째 category 선택은 안내 후 차단한다. 지도 기본 8종은
+`대형마트`, `편의점`, `음식점`, `어린이집·유치원`, `학교`, `학원`, `지하철역`, `병원`
+순서다. loading, empty, partial/provider failure와 retry는 compact 정보 bar에서
+처리하며 기본 지도는 계속 사용할 수 있다. property marker는 숨기지 않고 기존
+선택·클릭 동작을 유지한다.
 
 ## Acceptance Criteria
 
@@ -182,5 +190,5 @@ usable. Counts are always labeled as Kakao place-search counts.
 - Detailed zoom shows complex markers.
 - Complex marker click opens detail and trade data.
 - Map display works with only project data tables.
-- Nearby commerce mode uses the canonical complex coordinate and does not add a
-  POI table or change the ordinary marker endpoint.
+- Nearby facility overlay uses the viewport endpoint, stores no POI table, and does
+  not change the ordinary marker or complex nearby-place endpoint.

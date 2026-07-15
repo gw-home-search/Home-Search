@@ -73,6 +73,17 @@ class NearbyPlaceConfigurationTest {
     }
 
     @Test
+    @DisplayName("nearby executor 기본 동시성은 8종 cold-cache 조회를 위해 4다")
+    void nearbyExecutorDefaultsToFourThreads() {
+        contextRunner.run(context -> {
+            assertThat(context).hasNotFailed();
+            ThreadPoolTaskExecutor executor = context.getBean("nearbyPlaceExecutor", ThreadPoolTaskExecutor.class);
+            assertThat(executor.getCorePoolSize()).isEqualTo(4);
+            assertThat(executor.getMaxPoolSize()).isEqualTo(4);
+        });
+    }
+
+    @Test
     @DisplayName("Kakao nearby 기능이 활성화되면 provider와 좌표 reader를 조립한다")
     void enabledNearbyPlaceBuildsProviderAndCenterReader() {
         contextRunner

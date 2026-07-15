@@ -9,7 +9,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.home.application.place.NearbyPlaceBounds;
+import com.home.application.place.NearbyPlaceBoundsArea;
+import com.home.application.place.NearbyPlaceItem;
 import com.home.application.place.NearbyPlacePoint;
+import com.home.application.place.NearbyPlaceProviderQuery;
 import com.home.application.place.NearbyPlaceProviderResult;
 import com.home.domain.place.NearbyPlaceCategory;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -42,11 +46,11 @@ class RedisNearbyPlaceCacheTest {
         assertThat(fixture.cache().find(KEY)).isEmpty();
         assertThat(fixture.cache().find(KEY)).contains(EMPTY_RESULT);
         assertThat(fixture.registry()
-                        .counter("home.search.nearby.place.cache.requests", "result", "miss")
+                        .counter("home.search.nearby.place.cache.requests", "scope", "complex", "result", "miss")
                         .count())
                 .isEqualTo(1);
         assertThat(fixture.registry()
-                        .counter("home.search.nearby.place.cache.requests", "result", "hit")
+                        .counter("home.search.nearby.place.cache.requests", "scope", "complex", "result", "hit")
                         .count())
                 .isEqualTo(1);
     }
@@ -60,7 +64,7 @@ class RedisNearbyPlaceCacheTest {
         assertThat(fixture.cache().find(KEY)).isEmpty();
         verify(fixture.redisTemplate()).delete(KEY.redisKey());
         assertThat(fixture.registry()
-                        .counter("home.search.nearby.place.cache.requests", "result", "corrupt")
+                        .counter("home.search.nearby.place.cache.requests", "scope", "complex", "result", "corrupt")
                         .count())
                 .isEqualTo(1);
     }
@@ -79,6 +83,32 @@ class RedisNearbyPlaceCacheTest {
     }
 
     @Test
+    @DisplayName("port나 userinfo가 포함된 Kakao Place URL cache payload은 폐기한다")
+    void discardsUnsafePlaceUrl() throws Exception {
+        Fixture fixture = fixture();
+        NearbyPlaceProviderResult unsafe = new NearbyPlaceProviderResult(
+                NearbyPlaceCategory.CAFE,
+                1,
+                EMPTY_RESULT.retrievedAt(),
+                List.of(new NearbyPlaceItem(
+                        "kakao:1",
+                        "카페",
+                        "음식점 > 카페",
+                        37.3,
+                        127.1,
+                        1,
+                        "서울특별시",
+                        null,
+                        null,
+                        "https://place.map.kakao.com:444/1")));
+        when(fixture.values().get(KEY.redisKey()))
+                .thenReturn(fixture.objectMapper().writeValueAsString(unsafe));
+
+        assertThat(fixture.cache().find(KEY)).isEmpty();
+        verify(fixture.redisTemplate()).delete(KEY.redisKey());
+    }
+
+    @Test
     @DisplayName("Redis read 장애는 provider 호출이 가능한 cache miss로 degrade한다")
     void degradesReadFailureToMiss() {
         Fixture fixture = fixture();
@@ -86,7 +116,7 @@ class RedisNearbyPlaceCacheTest {
 
         assertThat(fixture.cache().find(KEY)).isEmpty();
         assertThat(fixture.registry()
-                        .counter("home.search.nearby.place.cache.requests", "result", "error")
+                        .counter("home.search.nearby.place.cache.requests", "scope", "complex", "result", "error")
                         .count())
                 .isEqualTo(1);
     }
@@ -99,7 +129,14 @@ class RedisNearbyPlaceCacheTest {
         fixture.cache().store(KEY, EMPTY_RESULT);
         verify(fixture.values()).set(eq(KEY.redisKey()), any(String.class), eq(TTL));
         assertThat(fixture.registry()
-                        .counter("home.search.nearby.place.cache.operations", "operation", "write", "result", "success")
+                        .counter(
+                                "home.search.nearby.place.cache.operations",
+                                "scope",
+                                "complex",
+                                "operation",
+                                "write",
+                                "result",
+                                "success")
                         .count())
                 .isEqualTo(1);
 
@@ -108,9 +145,38 @@ class RedisNearbyPlaceCacheTest {
                 .set(eq(KEY.redisKey()), any(String.class), eq(TTL));
         assertThatCode(() -> fixture.cache().store(KEY, EMPTY_RESULT)).doesNotThrowAnyException();
         assertThat(fixture.registry()
-                        .counter("home.search.nearby.place.cache.operations", "operation", "write", "result", "error")
+                        .counter(
+                                "home.search.nearby.place.cache.operations",
+                                "scope",
+                                "complex",
+                                "operation",
+                                "write",
+                                "result",
+                                "error")
                         .count())
                 .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("viewport 결과는 radius 24시간과 분리된 1시간 TTL로 저장한다")
+    void storesViewportWithSeparateTtl() {
+        StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+        @SuppressWarnings("unchecked")
+        ValueOperations<String, String> values = mock(ValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(values);
+        NearbyPlaceBounds bounds = new NearbyPlaceBounds(37.450, 126.850, 37.511, 126.931);
+        NearbyPlaceCacheKey key = NearbyPlaceCacheKey.from(new NearbyPlaceProviderQuery(
+                new NearbyPlaceBoundsArea(bounds.center(), bounds, 4), NearbyPlaceCategory.CAFE));
+        RedisNearbyPlaceCache cache = new RedisNearbyPlaceCache(
+                redisTemplate,
+                JsonMapper.builder().findAndAddModules().build(),
+                Duration.ofHours(24),
+                Duration.ofHours(1),
+                new SimpleMeterRegistry());
+
+        cache.store(key, EMPTY_RESULT);
+
+        verify(values).set(eq(key.redisKey()), any(String.class), eq(Duration.ofHours(1)));
     }
 
     @SuppressWarnings("unchecked")

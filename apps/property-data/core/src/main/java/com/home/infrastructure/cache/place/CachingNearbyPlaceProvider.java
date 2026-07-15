@@ -1,9 +1,8 @@
 package com.home.infrastructure.cache.place;
 
-import com.home.application.place.NearbyPlacePoint;
 import com.home.application.place.NearbyPlaceProvider;
+import com.home.application.place.NearbyPlaceProviderQuery;
 import com.home.application.place.NearbyPlaceProviderResult;
-import com.home.domain.place.NearbyPlaceCategory;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -25,8 +24,8 @@ public final class CachingNearbyPlaceProvider implements NearbyPlaceProvider {
     }
 
     @Override
-    public NearbyPlaceProviderResult search(NearbyPlacePoint center, int radiusMeters, NearbyPlaceCategory category) {
-        NearbyPlaceCacheKey key = NearbyPlaceCacheKey.from(center, radiusMeters, category);
+    public NearbyPlaceProviderResult search(NearbyPlaceProviderQuery query) {
+        NearbyPlaceCacheKey key = NearbyPlaceCacheKey.from(query);
         var cached = cache.find(key);
         if (cached.isPresent()) {
             return cached.get();
@@ -40,7 +39,7 @@ public final class CachingNearbyPlaceProvider implements NearbyPlaceProvider {
 
         try {
             quotaGuard.acquire();
-            NearbyPlaceProviderResult result = delegate.search(center, radiusMeters, category);
+            NearbyPlaceProviderResult result = delegate.search(query);
             cache.store(key, result);
             owner.complete(result);
             return result;

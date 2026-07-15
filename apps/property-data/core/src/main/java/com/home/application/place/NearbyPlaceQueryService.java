@@ -24,7 +24,16 @@ public class NearbyPlaceQueryService implements NearbyPlaceUseCase {
     private static final int MAX_RADIUS_METERS = 2_000;
     private static final int DEFAULT_LIMIT_PER_CATEGORY = 5;
     private static final int MAX_LIMIT_PER_CATEGORY = 15;
-    private static final List<NearbyPlaceCategory> DEFAULT_CATEGORIES = List.of(NearbyPlaceCategory.values());
+    private static final List<NearbyPlaceCategory> SUPPORTED_CATEGORIES = List.of(NearbyPlaceCategory.values());
+    private static final List<NearbyPlaceCategory> DEFAULT_CATEGORIES = List.of(
+            NearbyPlaceCategory.SUPERMARKET,
+            NearbyPlaceCategory.CONVENIENCE_STORE,
+            NearbyPlaceCategory.RESTAURANT,
+            NearbyPlaceCategory.DAYCARE_KINDERGARTEN,
+            NearbyPlaceCategory.SCHOOL,
+            NearbyPlaceCategory.ACADEMY,
+            NearbyPlaceCategory.SUBWAY_STATION,
+            NearbyPlaceCategory.HOSPITAL);
 
     private final NearbyPlaceCenterReader centerReader;
     private final NearbyPlaceProvider provider;
@@ -64,8 +73,9 @@ public class NearbyPlaceQueryService implements NearbyPlaceUseCase {
         List<CompletableFuture<NearbyPlaceProviderResult>> futures = new ArrayList<>(categories.size());
         try {
             for (NearbyPlaceCategory category : categories) {
-                futures.add(
-                        CompletableFuture.supplyAsync(() -> provider.search(point, radiusMeters, category), executor));
+                NearbyPlaceProviderQuery query =
+                        new NearbyPlaceProviderQuery(new NearbyPlaceRadiusArea(point, radiusMeters), category);
+                futures.add(CompletableFuture.supplyAsync(() -> provider.search(query), executor));
             }
         } catch (RejectedExecutionException exception) {
             cancel(futures);
@@ -120,7 +130,7 @@ public class NearbyPlaceQueryService implements NearbyPlaceUseCase {
             return DEFAULT_CATEGORIES;
         }
         LinkedHashSet<NearbyPlaceCategory> requested = new LinkedHashSet<>(requestedCategories);
-        return DEFAULT_CATEGORIES.stream().filter(requested::contains).toList();
+        return SUPPORTED_CATEGORIES.stream().filter(requested::contains).toList();
     }
 
     private NearbyPlacePoint requiredPoint(NearbyPlaceCenter center) {

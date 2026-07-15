@@ -2,35 +2,40 @@ package com.home.infrastructure.external.odcloud;
 
 import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
 import com.home.application.ingest.matching.ComplexIdentityResolver;
-import org.springframework.beans.factory.annotation.Value;
+import com.home.infrastructure.configuration.CoordinateIdentityProperties;
+import com.home.infrastructure.configuration.ExternalApiCredentialProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties({
+    OdcloudProperties.class,
+    ComplexIdentityProperties.class,
+    CoordinateIdentityProperties.class,
+    ExternalApiCredentialProperties.class
+})
 class OdcloudIdentityExternalApiConfiguration {
 
     @Bean
     @ConditionalOnProperty(name = "complex.identity.odcloud.enabled", havingValue = "true")
     ComplexIdentityResolver odcloudComplexIdentityResolver(
-            @Value("${odcloud.data.base-url:https://api.odcloud.kr}") String odcloudBaseUrl,
-            @Value("${odcloud.data.od-service-key:${ODC_SERVICE_KEY:}}") String odcloudServiceKey,
-            @Value("${odcloud.data.apt-title-path:}") String odcloudAptPath,
-            @Value("${complex.identity.connect-timeout-millis:5000}") int connectTimeoutMillis,
-            @Value("${complex.identity.read-timeout-millis:5000}") int readTimeoutMillis) {
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(connectTimeoutMillis);
-        requestFactory.setReadTimeout(readTimeoutMillis);
+            OdcloudProperties odcloud,
+            ComplexIdentityProperties identity,
+            ExternalApiCredentialProperties credentials) {
+        SimpleClientHttpRequestFactory requestFactory =
+                requestFactory(identity.connectTimeoutMillis(), identity.readTimeoutMillis());
         return new OdcloudComplexIdentityResolver(
                 RestClient.builder()
                         .requestFactory(requestFactory)
-                        .baseUrl(odcloudBaseUrl)
+                        .baseUrl(odcloud.baseUrl().toString())
                         .build(),
-                odcloudBaseUrl,
-                odcloudServiceKey,
-                defaultOdcloudAptPath(odcloudAptPath));
+                odcloud.baseUrl().toString(),
+                credentials.odcServiceKey(odcloud.odServiceKey()),
+                odcloud.effectiveAptTitlePath());
     }
 
     @Bean
@@ -39,30 +44,29 @@ class OdcloudIdentityExternalApiConfiguration {
             havingValue = "true",
             matchIfMissing = true)
     ComplexCoordinateIdentityVerifier odcloudComplexCoordinateIdentityVerifier(
-            @Value("${odcloud.data.base-url:https://api.odcloud.kr}") String odcloudBaseUrl,
-            @Value("${odcloud.data.od-service-key:${ODC_SERVICE_KEY:}}") String odcloudServiceKey,
-            @Value("${odcloud.data.apt-title-path:}") String odcloudAptPath,
-            @Value("${complex.coordinate.identity.connect-timeout-millis:5000}") int connectTimeoutMillis,
-            @Value("${complex.coordinate.identity.read-timeout-millis:5000}") int readTimeoutMillis) {
-        if (odcloudServiceKey == null || odcloudServiceKey.isBlank()) {
+            OdcloudProperties odcloud,
+            CoordinateIdentityProperties identity,
+            ExternalApiCredentialProperties credentials) {
+        String serviceKey = credentials.odcServiceKey(odcloud.odServiceKey());
+        if (serviceKey.isBlank()) {
             return ComplexCoordinateIdentityVerifier.trusting();
         }
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(connectTimeoutMillis);
-        requestFactory.setReadTimeout(readTimeoutMillis);
+        SimpleClientHttpRequestFactory requestFactory =
+                requestFactory(identity.connectTimeoutMillis(), identity.readTimeoutMillis());
         return new OdcloudComplexCoordinateIdentityVerifier(
                 RestClient.builder()
                         .requestFactory(requestFactory)
-                        .baseUrl(odcloudBaseUrl)
+                        .baseUrl(odcloud.baseUrl().toString())
                         .build(),
-                odcloudBaseUrl,
-                odcloudServiceKey.trim(),
-                defaultOdcloudAptPath(odcloudAptPath));
+                odcloud.baseUrl().toString(),
+                serviceKey,
+                odcloud.effectiveAptTitlePath());
     }
 
-    private String defaultOdcloudAptPath(String configuredPath) {
-        return configuredPath != null && !configuredPath.isBlank()
-                ? configuredPath
-                : "/api/AptIdInfoSvc/" + "v" + "1/getAptInfo";
+    private SimpleClientHttpRequestFactory requestFactory(int connectTimeoutMillis, int readTimeoutMillis) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(connectTimeoutMillis);
+        requestFactory.setReadTimeout(readTimeoutMillis);
+        return requestFactory;
     }
 }

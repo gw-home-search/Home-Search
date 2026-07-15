@@ -9,7 +9,9 @@ import com.home.domain.ingest.raw.RawTradeIngestStatus;
 import com.home.ingestcore.rtms.OpenApiTradeItem;
 import java.util.Objects;
 import java.util.Optional;
+import org.springframework.stereotype.Service;
 
+@Service
 public class RawIngestReconciliationService {
 
     private final RawTradeIngestRepository rawTradeIngestRepository;

@@ -7,7 +7,6 @@ import org.springframework.context.annotation.Import;
 @Import({
     CoordinateSourcePersistenceConfiguration.class,
     RawIngestPersistenceConfiguration.class,
-    RtmsIngestRunPersistenceConfiguration.class,
     TradeMatchPersistenceConfiguration.class,
     TradeNormalizationPersistenceConfiguration.class
 })

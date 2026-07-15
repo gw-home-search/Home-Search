@@ -13,6 +13,7 @@ import static org.springframework.restdocs.request.RequestDocumentation.queryPar
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.home.application.prediction.PricePredictionUseCase;
 import com.home.application.propertydetail.PropertyDetailService;
 import com.home.application.read.ComplexSuggestionResult;
 import com.home.application.read.ComplexSummaryResult;
@@ -66,6 +67,9 @@ class ReadApiRestDocsTest {
 
     @MockitoBean
     private PropertyDetailService propertyDetailService;
+
+    @MockitoBean
+    private PricePredictionUseCase predictionUseCase;
 
     @MockitoBean
     private TradeHistoryService tradeHistoryService;

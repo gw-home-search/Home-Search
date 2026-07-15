@@ -16,8 +16,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionTemplate;
 
+@Repository
 public class JdbcMetadataAdminRepository implements MetadataAdminRepository {
     private final JdbcClient jdbcClient;
     private final TransactionTemplate transactionTemplate;

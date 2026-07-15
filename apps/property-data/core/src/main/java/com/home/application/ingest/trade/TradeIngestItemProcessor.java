@@ -5,10 +5,12 @@ import com.home.application.ingest.raw.RawTradeIngestRecord;
 import com.home.ingestcore.rtms.OpenApiTradeItem;
 import com.home.ingestcore.rtms.SourceKeyGenerator;
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
 /**
  * Open API trade item 하나의 raw receipt와 transactional finalization 경계를 연결합니다.
  */
+@Service
 public class TradeIngestItemProcessor {
 
     private final RawReceiptService rawReceiptService;
@@ -16,16 +18,9 @@ public class TradeIngestItemProcessor {
     private final SourceKeyGenerator sourceKeyGenerator;
 
     public TradeIngestItemProcessor(RawReceiptService rawReceiptService, TradeIngestFinalizer finalizer) {
-        this(rawReceiptService, finalizer, new SourceKeyGenerator());
-    }
-
-    TradeIngestItemProcessor(
-            RawReceiptService rawReceiptService,
-            TradeIngestFinalizer finalizer,
-            SourceKeyGenerator sourceKeyGenerator) {
         this.rawReceiptService = Objects.requireNonNull(rawReceiptService);
         this.finalizer = Objects.requireNonNull(finalizer);
-        this.sourceKeyGenerator = Objects.requireNonNull(sourceKeyGenerator);
+        this.sourceKeyGenerator = new SourceKeyGenerator();
     }
 
     public TradeIngestItemOutcome process(OpenApiTradeIngestBatch batch, OpenApiTradeItem item) {

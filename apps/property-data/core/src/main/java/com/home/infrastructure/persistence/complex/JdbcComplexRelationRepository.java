@@ -7,7 +7,9 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public class JdbcComplexRelationRepository implements ComplexRelationRepository {
 
     private final JdbcClient jdbcClient;

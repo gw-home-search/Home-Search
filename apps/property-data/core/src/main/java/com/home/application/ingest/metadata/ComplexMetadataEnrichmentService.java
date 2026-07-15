@@ -4,7 +4,9 @@ import java.time.Instant;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
 
+@Service
 public class ComplexMetadataEnrichmentService {
 
     private static final Logger log = LoggerFactory.getLogger(ComplexMetadataEnrichmentService.class);
@@ -15,16 +17,9 @@ public class ComplexMetadataEnrichmentService {
 
     public ComplexMetadataEnrichmentService(
             ComplexMetadataEnrichmentRepository repository, ComplexMetadataEnrichmentClient client) {
-        this(repository, client, new ComplexMetadataRetryPolicy());
-    }
-
-    ComplexMetadataEnrichmentService(
-            ComplexMetadataEnrichmentRepository repository,
-            ComplexMetadataEnrichmentClient client,
-            ComplexMetadataRetryPolicy retryPolicy) {
         this.repository = Objects.requireNonNull(repository);
         this.client = Objects.requireNonNull(client);
-        this.retryPolicy = Objects.requireNonNull(retryPolicy);
+        this.retryPolicy = new ComplexMetadataRetryPolicy();
     }
 
     public ComplexMetadataEnrichmentResult enrichPending(int limit) {

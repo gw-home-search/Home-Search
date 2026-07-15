@@ -67,6 +67,7 @@ ALLOW_PATTERNS = [
     for pattern in (
         r"/api/v1(?:/|\b)",
         r"/internal/v1(?:/|\b)",
+        r"/api/AptIdInfoSvc/v1/getAptInfo\b",
         r"https://(?:openapi\.naver\.com|api\.openai\.com)/v1(?:/|\b)",
         r"V[0-9]+__.*\.sql",
         r"\b(?:naver-news-search-metadata|naver-title-snippet|news-signal|news-signal-json|test|prompt|schema)-v[0-9]+\b",
@@ -305,6 +306,7 @@ def run_self_test() -> int:
         len(findings) == 6,
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "GET /api/v1/search/complexes"),
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "GET /internal/v1/admin/coordinates"),
+        not scan_text(REPO_ROOT / "SELF_TEST.txt", "/api/AptIdInfoSvc/v1/getAptInfo"),
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "home-search:prediction:v1:F37:complex:501"),
         scan_text(REPO_ROOT / "SELF_TEST.txt", "V1 API stays at /api/v1/search/complexes") != [],
         scan_text(REPO_ROOT / "SELF_TEST.txt", "V2 ranking") != [],

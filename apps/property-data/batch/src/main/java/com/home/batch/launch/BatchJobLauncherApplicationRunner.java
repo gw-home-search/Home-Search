@@ -12,7 +12,6 @@ import org.springframework.batch.core.ExitStatus;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.JobExecution;
 import org.springframework.batch.core.launch.JobOperator;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -34,13 +33,13 @@ public class BatchJobLauncherApplicationRunner implements ApplicationRunner {
 
     @Autowired
     public BatchJobLauncherApplicationRunner(
-            ObjectProvider<JobOperator> jobOperator,
+            JobOperator jobOperator,
             ConfigurableListableBeanFactory beanFactory,
             BatchMetadataSchemaPreflight schemaPreflight,
             BatchExecutionCorrelationGuard correlationGuard,
             Environment environment) {
         this(
-                jobOperator::getObject,
+                () -> jobOperator,
                 name -> beanFactory.getBean(name, Job.class),
                 beanFactory::containsBeanDefinition,
                 schemaPreflight,

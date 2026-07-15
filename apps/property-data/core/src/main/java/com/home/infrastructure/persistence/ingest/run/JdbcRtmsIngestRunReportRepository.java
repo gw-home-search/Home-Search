@@ -16,10 +16,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
 /**
  * JDBC adapter that summarizes rtms_ingest_run outcomes without raw payload or source_key.
  */
+@Repository
 public class JdbcRtmsIngestRunReportRepository implements RtmsIngestRunReportRepository {
 
     private final JdbcClient jdbcClient;

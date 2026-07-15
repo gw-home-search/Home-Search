@@ -183,7 +183,15 @@ def is_forbidden_path(path: str) -> str | None:
         ".keystore",
     ]
     source_abstraction_suffixes = ("passwordsource.java",)
-    if any(token in basename for token in secret_tokens) and not basename.endswith(source_abstraction_suffixes):
+    source_abstraction_basenames = {
+        "externalapicredentialproperties.java",
+        "externalapicredentialpropertiestest.java",
+    }
+    if (
+        any(token in basename for token in secret_tokens)
+        and not basename.endswith(source_abstraction_suffixes)
+        and basename not in source_abstraction_basenames
+    ):
         return "secret으로 보이는 파일명은 금지됩니다"
     return None
 

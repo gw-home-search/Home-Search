@@ -13,10 +13,12 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
 /**
  * raw_trade_ingest table에 원천 수집 evidence를 저장하고 status별 조회를 제공하는 JDBC adapter입니다.
  */
+@Repository
 public class JdbcRawTradeIngestRepository implements RawTradeIngestRepository {
 
     private final JdbcClient jdbcClient;

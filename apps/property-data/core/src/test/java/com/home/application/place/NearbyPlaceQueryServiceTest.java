@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.home.application.read.ResourceNotFoundException;
 import com.home.domain.place.NearbyPlaceCategory;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -200,7 +201,10 @@ class NearbyPlaceQueryServiceTest {
     private NearbyPlaceQueryService service(
             NearbyPlaceCenterReader centerReader, NearbyPlaceProvider provider, Executor executor, long timeoutMillis) {
         return new NearbyPlaceQueryService(
-                centerReader, provider, executor, Clock.fixed(NOW, ZoneOffset.UTC), timeoutMillis);
+                centerReader,
+                provider,
+                new NearbyPlaceExecutionOptions(
+                        executor, Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofMillis(timeoutMillis)));
     }
 
     private NearbyPlaceItem place(String id, String name, int distanceMeters) {

@@ -4,14 +4,22 @@ import com.home.application.region.RegionSiGunGuCodeReader;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
+@Repository
 class JdbcRegionSiGunGuCodeReader implements RegionSiGunGuCodeReader {
 
     private final Supplier<JdbcClient> jdbcClientSupplier;
 
     JdbcRegionSiGunGuCodeReader(Supplier<JdbcClient> jdbcClientSupplier) {
         this.jdbcClientSupplier = Objects.requireNonNull(jdbcClientSupplier);
+    }
+
+    @Autowired
+    JdbcRegionSiGunGuCodeReader(JdbcClient jdbcClient) {
+        this(() -> jdbcClient);
     }
 
     @Override

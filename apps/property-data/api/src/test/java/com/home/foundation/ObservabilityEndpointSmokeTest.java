@@ -12,6 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.trade.TradeIngestMetrics;
 import com.home.application.map.MapUseCase;
+import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
+import com.home.infrastructure.persistence.map.JdbcRegionMarkerRepository;
 import com.home.infrastructure.persistence.propertydetail.JdbcPropertyDetailReader;
 import com.home.infrastructure.persistence.regionnavigation.JdbcRegionNavigationReader;
 import com.home.infrastructure.persistence.search.JdbcComplexSearchReader;
@@ -22,12 +24,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
-@SpringBootTest
+@SpringBootTest(properties = "home.ingest.raw-reconcile.enabled=false")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class ObservabilityEndpointSmokeTest {
@@ -45,6 +51,12 @@ class ObservabilityEndpointSmokeTest {
     private MapUseCase mapUseCase;
 
     @MockitoBean
+    private JdbcMapMarkerRepository mapMarkerRepository;
+
+    @MockitoBean
+    private JdbcRegionMarkerRepository regionMarkerRepository;
+
+    @MockitoBean
     private JdbcComplexSearchReader complexSearchReader;
 
     @MockitoBean
@@ -55,6 +67,18 @@ class ObservabilityEndpointSmokeTest {
 
     @MockitoBean
     private JdbcTradeHistoryReader tradeHistoryReader;
+
+    @MockitoBean
+    private JdbcClient jdbcClient;
+
+    @MockitoBean
+    private PlatformTransactionManager transactionManager;
+
+    @MockitoBean
+    private TransactionTemplate transactionTemplate;
+
+    @MockitoBean
+    private StringRedisTemplate redisTemplate;
 
     @Test
     @DisplayName("GET /actuator/health는 database auto-configuration 없이 readiness status를 반환한다")

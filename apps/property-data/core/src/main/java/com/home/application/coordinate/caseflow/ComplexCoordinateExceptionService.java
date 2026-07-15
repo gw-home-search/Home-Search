@@ -26,7 +26,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import org.springframework.stereotype.Service;
 
+@Service
 public class ComplexCoordinateExceptionService {
 
     private static final int BUILDING_DONG_MATCH_CONFIDENCE = 90;

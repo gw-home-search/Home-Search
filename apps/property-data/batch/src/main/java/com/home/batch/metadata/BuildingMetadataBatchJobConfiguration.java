@@ -2,13 +2,14 @@ package com.home.batch.metadata;
 
 import com.home.application.ingest.buildingmetadata.BuildingMetadataBatchService;
 import com.home.application.ingest.metadata.OdcMetadataGapFillService;
+import com.home.infrastructure.external.complex.ComplexMetadataProperties;
 import javax.sql.DataSource;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.step.builder.StepBuilder;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
@@ -17,6 +18,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.interceptor.DefaultTransactionAttribute;
 
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(ComplexMetadataProperties.class)
 class BuildingMetadataBatchJobConfiguration {
     @Bean
     BuildingMetadataExecutionLock buildingMetadataExecutionLock(DataSource dataSource) {
@@ -46,12 +48,12 @@ class BuildingMetadataBatchJobConfiguration {
             PlatformTransactionManager transactionManager,
             OdcMetadataGapFillService service,
             BuildingMetadataExecutionLock executionLock,
-            @Value("${complex.metadata.daily-request-quota:1000}") int dailyQuota) {
+            ComplexMetadataProperties properties) {
         return step(
                 "complexOdcMetadataGapFillStep",
                 repository,
                 transactionManager,
-                new OdcMetadataGapFillTasklet(service, executionLock, dailyQuota));
+                new OdcMetadataGapFillTasklet(service, executionLock, properties.dailyRequestQuota()));
     }
 
     @Bean
@@ -61,12 +63,12 @@ class BuildingMetadataBatchJobConfiguration {
             PlatformTransactionManager transactionManager,
             BuildingMetadataBatchService service,
             BuildingMetadataExecutionLock executionLock,
-            @Value("${complex.metadata.daily-request-quota:1000}") int dailyQuota) {
+            ComplexMetadataProperties properties) {
         return step(
                 "complexBuildingMetadataStep",
                 repository,
                 transactionManager,
-                new BuildingMetadataCollectTasklet(service, executionLock, dailyQuota));
+                new BuildingMetadataCollectTasklet(service, executionLock, properties.dailyRequestQuota()));
     }
 
     private Step step(

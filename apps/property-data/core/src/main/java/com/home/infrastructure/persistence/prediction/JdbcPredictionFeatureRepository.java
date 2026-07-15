@@ -14,7 +14,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
+@Repository
 public class JdbcPredictionFeatureRepository implements PredictionFeatureRepository {
 
     private static final double AVERAGE_DAYS_PER_MONTH = 30.4375;

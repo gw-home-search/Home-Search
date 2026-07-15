@@ -757,6 +757,10 @@ def run_self_test() -> int:
     password_source_abstraction = valid_input(
         changed_files=("tools/AdminPasswordSource.java",)
     )
+    credential_properties_abstraction = valid_input(
+        changed_files=("tools/ExternalApiCredentialProperties.java",)
+    )
+    forbidden_credential_file = valid_input(changed_files=("tools/provider-credentials.json",))
     placeholder_summary = valid_input(title="feat(api): summary")
 
     checks = [
@@ -799,6 +803,8 @@ def run_self_test() -> int:
         expect_case("bracket title requires Korean", bracket_without_korean, "title", "한글"),
         expect_case("forbidden env path", forbidden_env, "changed-files", ".env"),
         lint_pr(password_source_abstraction).ok,
+        lint_pr(credential_properties_abstraction).ok,
+        expect_case("forbidden credential path", forbidden_credential_file, "changed-files", "credential"),
         expect_case("placeholder conventional title", placeholder_summary, "title", "placeholder"),
     ]
     if all(checks):

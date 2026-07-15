@@ -4,8 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.home.application.coordinate.lookup.ParcelCoordinateSourceRepository;
+import com.home.application.ingest.reconciliation.RawIngestReconciliationService;
 import com.home.application.ingest.run.RtmsIngestRunRepository;
-import com.home.infrastructure.persistence.ingest.coordinate.CoordinateSourceDbProperties;
+import com.home.infrastructure.configuration.CoordinateSourceDbProperties;
 import com.home.infrastructure.persistence.ingest.coordinate.JdbcCoordinateSourceParcelCoordinateRepository;
 import com.home.infrastructure.persistence.ingest.raw.RawIngestReconciliationRunner;
 import com.home.infrastructure.persistence.ingest.run.JdbcRtmsIngestRunRepository;
@@ -16,7 +17,6 @@ import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.jdbc.autoconfigure.JdbcClientAutoConfiguration;
 import org.springframework.boot.jdbc.autoconfigure.JdbcTemplateAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.jdbc.core.simple.JdbcClient;
 
 class IngestPersistenceConfigurationTest {
 
@@ -24,13 +24,14 @@ class IngestPersistenceConfigurationTest {
             .withConfiguration(
                     AutoConfigurations.of(JdbcTemplateAutoConfiguration.class, JdbcClientAutoConfiguration.class))
             .withUserConfiguration(IngestPersistenceConfiguration.class)
-            .withPropertyValues("home.trade.partition.maintenance.enabled=false")
+            .withPropertyValues(
+                    "home.trade.partition.maintenance.enabled=false", "home.ingest.raw-reconcile.enabled=false")
             .withBean(DataSource.class, () -> mock(DataSource.class));
 
     @Test
     @DisplayName("RTMS monthly refresh run repository는 JdbcClient auto-config 환경에서 등록된다")
     void rtmsIngestRunRepositoryIsRegisteredWithJdbcClientAutoConfiguration() {
-        contextRunner.run(context -> {
+        contextRunner.withUserConfiguration(JdbcRtmsIngestRunRepository.class).run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).hasSingleBean(RtmsIngestRunRepository.class);
             assertThat(context.getBean(RtmsIngestRunRepository.class)).isInstanceOf(JdbcRtmsIngestRunRepository.class);
@@ -89,13 +90,15 @@ class IngestPersistenceConfigurationTest {
     @Test
     @DisplayName("raw reconciliation runner는 JDBC 환경에서 기본 등록되고 명시적으로 끌 수 있다")
     void rawReconciliationRunnerIsEnabledByDefaultInJdbcContext() {
-        contextRunner.withBean(JdbcClient.class, () -> mock(JdbcClient.class)).run(context -> {
-            assertThat(context).hasNotFailed();
-            assertThat(context).hasSingleBean(RawIngestReconciliationRunner.class);
-        });
+        contextRunner
+                .withPropertyValues("home.ingest.raw-reconcile.enabled=true")
+                .withBean(RawIngestReconciliationService.class, () -> mock(RawIngestReconciliationService.class))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(RawIngestReconciliationRunner.class);
+                });
 
         contextRunner
-                .withBean(JdbcClient.class, () -> mock(JdbcClient.class))
                 .withPropertyValues("home.ingest.raw-reconcile.enabled=false")
                 .run(context -> {
                     assertThat(context).hasNotFailed();

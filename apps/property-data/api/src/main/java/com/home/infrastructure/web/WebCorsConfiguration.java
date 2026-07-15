@@ -2,21 +2,23 @@ package com.home.infrastructure.web;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(WebCorsProperties.class)
 public class WebCorsConfiguration {
 
     private static final String LOCALHOST = "localhost";
     private static final String LOOPBACK = "127.0.0.1";
 
     @Bean
-    WebMvcConfigurer apiCorsWebMvcConfigurer(@Value("${FRONTEND_URL:http://localhost:5173}") String frontendUrl) {
-        String[] allowedOrigins = localLoopbackOrigins(frontendUrl).toArray(String[]::new);
+    WebMvcConfigurer apiCorsWebMvcConfigurer(WebCorsProperties properties) {
+        String[] allowedOrigins =
+                localLoopbackOrigins(properties.url().toString()).toArray(String[]::new);
         return new WebMvcConfigurer() {
             @Override
             public void addCorsMappings(CorsRegistry registry) {

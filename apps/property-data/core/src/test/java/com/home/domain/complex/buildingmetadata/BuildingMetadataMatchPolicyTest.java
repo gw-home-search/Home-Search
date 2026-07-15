@@ -17,7 +17,7 @@ class BuildingMetadataMatchPolicyTest {
     private final BuildingMetadataMatchPolicy policy = new BuildingMetadataMatchPolicy();
 
     @Test
-    @DisplayName("이름 정규화는 NFKC·공백·구분기호만 제거하고 의미 단어와 숫자를 보존한다")
+    @DisplayName("이름 정규화는 V8 projection처럼 공백·문장부호를 제거하고 의미 단어와 숫자를 보존한다")
     void normalizesConservatively() {
         assertThat(ComplexNameNormalizer.normalize(" 래미안（1차）-아파트 ")).isEqualTo("래미안1차아파트");
         assertThat(ComplexNameNormalizer.normalize("래미안1차")).isNotEqualTo(ComplexNameNormalizer.normalize("래미안2차"));

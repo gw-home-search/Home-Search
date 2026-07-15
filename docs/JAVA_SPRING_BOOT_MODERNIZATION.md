@@ -3,7 +3,7 @@
 ## 실행 기준
 
 - baseline commit: `d601237`
-- 현재 진행 PR: `PR 7 — Boot 4.1 / Jackson 3`
+- 현재 진행 PR: `PR 8 — map SQL readability`
 - 전체 상태: `In Progress`
 - 시작일: 2026-07-14
 - 실행 원칙: 한 번에 하나의 PR만 진행하고, 선행 PR이 `Complete`인 경우에만 다음 PR을 시작한다.
@@ -79,7 +79,7 @@ property-data configuration file distribution:
 | 5 | Java 21 / Boot 3.5 bridge | Complete | PR 4 `Complete` |
 | 6 | format baseline | Complete | PR 5 `Complete` |
 | 7 | Boot 4.1 / Jackson 3 | Complete | PR 6 `Complete` |
-| 8 | map SQL readability | Pending | PR 7 `Complete` |
+| 8 | map SQL readability | Complete | PR 7 `Complete` |
 | 9 | property-data typed wiring | Pending | PR 8 `Complete` |
 | 10 | error/validation/executor/observability | Pending | PR 9 `Complete` |
 | 11 | user-service Spring/JPA cleanup | Pending | PR 10 `Complete` |
@@ -485,3 +485,59 @@ property-data configuration file distribution:
 - 검증 근거 확인: public API/OpenAPI, JSON/cache/evidence/provider fixture, Batch packaged process, runtime Flyway/Jackson JAR boundary를 확인했다.
 - 검증 공백: 원격 CI와 실제 외부 provider 호출 미실행.
 - 잔여 위험: 위 third-party Gradle deprecation warning 외 열린 correctness/security finding은 없다.
+
+### Merge
+
+- implementation commit: `2f5403a`
+- merge commit: `2e83090`
+
+## PR 8 Evidence
+
+### TDD 근거
+
+- 최초 RED: `ComplexNameNormalizerParityTest`가 `" 래미안! 1차:아파트 "`에서 실패했다.
+- 예상 RED 실패: V8 `hs_normalize_complex_search_name`은 모든 공백·문장부호를 제거하지만 Java 구현은 일부 구분기호만 제거했다.
+- 최소 GREEN: V8을 canonical로 유지하고 Java normalizer를 동일한 lowercase/공백·문장부호 제거 규칙으로 맞췄다. SQL resource 이동은 production 의미를 바꾸지 않는 구조 변경이므로 기존 JDBC characterization test를 회귀 seam으로 사용했다.
+
+### 계약 영향
+
+- `none`: map URL, query parameter, marker field, source `name`, `complexId`, price/unit, current-generation 정책을 변경하지 않았다.
+- 검색 projection schema와 applied V8 migration은 변경하지 않았다.
+
+### 검증 근거 확인
+
+- 변경 전 `:core:persistenceTest --tests com.home.infrastructure.persistence.map.JdbcMapMarkerRepositoryTest --rerun-tasks` — `Pass` (1m 5s).
+- 최초 RED `:core:persistenceTest --tests com.home.infrastructure.persistence.search.ComplexNameNormalizerParityTest --rerun-tasks` — 예상한 punctuation parity 1건만 `Fail` (45s).
+- SQL catalog, map repository, V8 parity narrow suite — `Pass` (1m 13s).
+- neutral unit/age variant parity, 가격·면적·연식·세대수 조합, marker identity/source name/current-generation fixture — `Pass`.
+- `EXPLAIN (COSTS OFF)` smoke — `ix_parcel_geom`과 partition `complex_id_deal_date_id_deal_amount_excl_area_idx` 경로 확인, `Pass` (49s).
+- `backendQualityCheck --no-daemon --stacktrace` — `Pass` (12m 56s; persistence, coverage, fresh Flyway, API contract, REST Docs/OpenAPI, packaged Batch 포함).
+- repository root `git diff --check` — `Pass`.
+- migration diff — 변경 0건.
+- staged secret/credential pattern 검사 — 지적사항 없음 (`gitleaks`는 local에 설치되지 않아 repository regex 검사를 사용).
+- `python3 .codex/harness/pr_lint.py --self-test` 및 PR body lint — `Pass`.
+
+### 검증 공백
+
+- 원격 CI와 production 규모 데이터의 실제 query latency는 실행하지 않았다.
+
+### 잔여 위험
+
+- `EXPLAIN`은 index 경로 존재를 고정하지만 production cardinality별 planner 선택과 latency는 별도 관측이 필요하다.
+- Java normalizer는 DB canonical 규칙과 같아졌으므로 기존 일부 punctuation을 보존하던 metadata 후보가 더 넓게 일치할 수 있다. ambiguous/tie 정책과 golden parity test는 그대로 유지한다.
+
+### 보안 영향
+
+- bounds와 모든 filter는 기존 `JdbcClient` named parameter binding을 유지하며 SQL 문자열 보간은 없다.
+- SQL resource 이름은 compile-time constant이고 외부 입력으로 resource를 선택하지 않는다.
+- migration, credential, endpoint, secret 계약 변경은 없다.
+- security-audit: 지적사항 = none
+
+### Findings-first review
+
+- 지적사항: 없음.
+- 해소한 finding 1: Java complex-name normalization이 V8 search projection보다 좁아 동일 이름을 다르게 판단하던 불일치를 golden parity test와 최소 구현으로 해소했다.
+- 해소한 finding 2: 최초 `EXPLAIN` fixture가 `Point`를 `MultiPolygon` column에 넣어 실패한 것을 실제 schema 타입의 작은 polygon fixture로 수정했다.
+- 검증 근거 확인: 두 완성형 SQL resource, one-time load, variant selection/binding/mapping 책임, filter parity, index plan, public API gate를 확인했다.
+- 검증 공백: 원격 CI와 production cardinality 성능 미측정.
+- 잔여 위험: 열린 correctness/security finding은 없고 production query latency 관측만 남는다.

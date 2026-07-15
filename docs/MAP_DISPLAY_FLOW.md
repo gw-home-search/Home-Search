@@ -35,6 +35,7 @@ Current behavior:
 ```text
 Kakao map idle
   -> read bounds and level
+  -> abort the previous in-flight marker request
   -> if detailed level, call /api/v1/map/complexes
   -> else call /api/v1/map/regions
   -> render markers
@@ -117,6 +118,13 @@ markers when the backend has enough coordinate confidence:
 - Join complexes under each parcel.
 - Compute or select latest trade amount.
 - Apply simple filters for unit count, price, area, and age.
+
+The frontend aborts obsolete requests on viewport change or unmount while still
+keeping its request-sequence guard against stale responses. The API rejects
+complex bbox spans above `1.0` latitude degrees or `1.5` longitude degrees and
+region bbox spans above `10.0`/`15.0` degrees. Public ingress separately applies
+a per-IP `10r/s`, burst `30` limit to only the two map bbox endpoints; this
+protects the query path without adding a rate-limit library to application code.
 
 The property-data map adapter owns two complete, feature-local SQL resources:
 

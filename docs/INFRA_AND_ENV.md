@@ -373,6 +373,30 @@ docker compose -f infra/docker-compose.local.yml up -d redis
 docker exec home-search-redis redis-cli ping
 ```
 
+## Public Map Gateway Guard
+
+The checked-in nginx gateway rate-limits only the two expensive bbox routes,
+`POST /api/v1/map/regions` and `POST /api/v1/map/complexes`, per client IP at
+`10r/s` with burst `30`. `OPTIONS` is excluded so CORS preflight does not consume
+the quota. The application independently rejects oversized bounds before a map
+query runs: region bounds are capped at latitude/longitude spans `10.0/15.0`
+degrees and complex bounds at `1.0/1.5` degrees.
+
+The nginx config is rendered from the mounted template at container startup so
+only `FRONTEND_URL` is injected into gateway-generated CORS headers. nginx
+runtime variables remain intact. Rate-limit responses use the public
+ProblemDetail shape, `429`, `Retry-After: 1`, and `Cache-Control: no-store`.
+Verify the config and behavior without the database or API JAR:
+
+```bash
+infra/nginx/test-property-public.sh
+```
+
+The smoke test starts isolated temporary nginx containers, checks that a normal
+request succeeds, a burst yields both `200` and `429`, the `429` body and headers
+match the contract, `OPTIONS` remains exempt, and requests recover after the
+bucket drains. CI runs the same check for `infra/**` changes.
+
 ## Kakao Nearby-place Gateway
 
 Kakao REST credentials are server-only. Never add `KAKAO_REST_API_KEY` to a
@@ -391,9 +415,9 @@ HOME_PLACE_KAKAO_READ_TIMEOUT=2s
 The feature is disabled by default. Enabling it requires a Kakao app with Local
 API use enabled, Redis connectivity, and a deployment-time daily budget below
 the provider quota. Public ingress must apply the equivalent of the checked-in
-per-IP `5r/s`, burst `10` nearby-place route limit; the local gateway returns
-`429` above it. Redis cache read/write failures may degrade to a provider call,
-but an unavailable quota guard fails closed.
+per-IP `5r/s`, burst `10` nearby-place route limit; the local gateway returns the
+same public `429` ProblemDetail above it. Redis cache read/write failures may
+degrade to a provider call, but an unavailable quota guard fails closed.
 
 Category cache keys contain six-decimal canonical coordinates, radius, and
 category only. TTL is 24 hours, empty results are cached, provider failures are

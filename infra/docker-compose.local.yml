@@ -165,10 +165,12 @@ services:
     restart: unless-stopped
     depends_on:
       - api
+    environment:
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
     ports:
       - "${HOME_SEARCH_API_PORT:-8080}:8080"
     volumes:
-      - ./nginx/property-public.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/property-public.conf:/etc/nginx/templates/default.conf.template:ro
     networks:
       - home-search-local
 

@@ -18,6 +18,7 @@ jobs:
       admin_service_changed: ${{ steps.classify.outputs.admin_service_changed }}
       admin_web_changed: ${{ steps.classify.outputs.admin_web_changed }}
       user_service_changed: ${{ steps.classify.outputs.user_service_changed }}
+      infra_changed: ${{ steps.classify.outputs.infra_changed }}
       ci_changed: ${{ steps.classify.outputs.ci_changed }}
     steps:
       - uses: actions/checkout@v4
@@ -51,6 +52,7 @@ jobs:
           admin_service_changed=false
           admin_web_changed=false
           user_service_changed=false
+          infra_changed=false
           ci_changed=false
 
           while IFS= read -r path; do
@@ -58,8 +60,12 @@ jobs:
               .github/workflows/ci.yml)
                 ci_changed=true
                 ;;
-              apps/property-data/*|apps/source-data/*|infra/*|docs/API_CONTRACT.md|docs/DATA_STORAGE.md|docs/INFRA_AND_ENV.md|settings.gradle|build.gradle|gradle.properties|gradle/*)
+              apps/property-data/*|apps/source-data/*|docs/API_CONTRACT.md|docs/DATA_STORAGE.md|docs/INFRA_AND_ENV.md|settings.gradle|build.gradle|gradle.properties|gradle/*)
                 backend_changed=true
+                ;;
+              infra/*)
+                backend_changed=true
+                infra_changed=true
                 ;;
               apps/web/*)
                 frontend_changed=true
@@ -92,6 +98,7 @@ jobs:
             admin_service_changed=true
             admin_web_changed=true
             user_service_changed=true
+            infra_changed=true
           fi
 
           {
@@ -100,6 +107,7 @@ jobs:
             echo "admin_service_changed=$admin_service_changed"
             echo "admin_web_changed=$admin_web_changed"
             echo "user_service_changed=$user_service_changed"
+            echo "infra_changed=$infra_changed"
             echo "ci_changed=$ci_changed"
           } >> "$GITHUB_OUTPUT"
 
@@ -162,6 +170,16 @@ jobs:
       - name: Build frontend
         working-directory: apps/web
         run: npm run build
+
+  nginx-contract-test:
+    name: nginx-contract-test
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.infra_changed == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify public gateway rate-limit contract
+        run: infra/nginx/test-property-public.sh
 
   admin-service-test:
     name: admin-service-test

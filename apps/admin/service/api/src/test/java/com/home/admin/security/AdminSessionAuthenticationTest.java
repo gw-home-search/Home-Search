@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.home.admin.AdminProblemFactory;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Import({
     AdminSecurityConfiguration.class,
     AdminSecurityProblemHandler.class,
+    AdminProblemFactory.class,
     AdminSessionAuthenticationTest.ProbeConfiguration.class
 })
 class AdminSessionAuthenticationTest {

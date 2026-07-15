@@ -1,5 +1,6 @@
 package com.home.admin.security;
 
+import com.home.admin.AdminProblemFactory;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -21,11 +22,15 @@ import org.springframework.web.bind.annotation.*;
 public class AdminAuthController {
     private final AdminAuthenticationService authentication;
     private final SecurityContextRepository securityContextRepository;
+    private final AdminProblemFactory problems;
 
     public AdminAuthController(
-            AdminAuthenticationService authentication, SecurityContextRepository securityContextRepository) {
+            AdminAuthenticationService authentication,
+            SecurityContextRepository securityContextRepository,
+            AdminProblemFactory problems) {
         this.authentication = authentication;
         this.securityContextRepository = securityContextRepository;
+        this.problems = problems;
     }
 
     @PostMapping("/login")
@@ -60,7 +65,7 @@ public class AdminAuthController {
 
     @ExceptionHandler(AdminAuthenticationService.InvalidCredentialsException.class)
     ResponseEntity<ProblemDetail> invalid() {
-        ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "로그인 정보를 확인하세요.");
+        ProblemDetail detail = problems.create(HttpStatus.UNAUTHORIZED, "로그인 정보를 확인하세요.");
         return ResponseEntity.status(401).body(detail);
     }
 

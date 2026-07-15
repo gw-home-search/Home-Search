@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.home.admin.AdminApiExceptionHandler;
+import com.home.admin.AdminProblemFactory;
 import com.home.admin.account.AdminAccountController;
 import com.home.admin.account.AdminAccountService;
 import com.home.admin.audit.AdminAuditController;
@@ -24,7 +25,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(controllers = {AdminAccountController.class, AdminAuditController.class})
-@Import({AdminSecurityConfiguration.class, AdminSecurityProblemHandler.class, AdminApiExceptionHandler.class})
+@Import({
+    AdminSecurityConfiguration.class,
+    AdminSecurityProblemHandler.class,
+    AdminApiExceptionHandler.class,
+    AdminProblemFactory.class
+})
 class AdminAccountAuthorizationTest {
     @Autowired
     MockMvc mvc;

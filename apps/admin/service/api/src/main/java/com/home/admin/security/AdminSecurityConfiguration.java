@@ -1,8 +1,8 @@
 package com.home.admin.security;
 
+import com.home.admin.config.AdminSessionProperties;
 import java.time.Clock;
-import java.time.Duration;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -17,6 +17,7 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
 @Configuration
 @EnableMethodSecurity
+@EnableConfigurationProperties(AdminSessionProperties.class)
 public class AdminSecurityConfiguration {
     @Bean
     PasswordEncoder passwordEncoder() {
@@ -29,9 +30,8 @@ public class AdminSecurityConfiguration {
     }
 
     @Bean
-    AdminAbsoluteSessionLifetimeFilter adminAbsoluteSessionLifetimeFilter(
-            @Value("${home.admin.session.absolute-lifetime:8h}") Duration absoluteLifetime) {
-        return new AdminAbsoluteSessionLifetimeFilter(absoluteLifetime, Clock.systemUTC());
+    AdminAbsoluteSessionLifetimeFilter adminAbsoluteSessionLifetimeFilter(AdminSessionProperties properties) {
+        return new AdminAbsoluteSessionLifetimeFilter(properties.absoluteLifetime(), Clock.systemUTC());
     }
 
     @Bean

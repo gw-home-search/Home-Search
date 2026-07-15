@@ -1,29 +1,28 @@
 package com.home.infrastructure.persistence.ingest.matching;
 
+import com.home.application.ingest.metadata.ComplexMetadata;
+import com.home.application.ingest.metadata.ComplexMetadataEnrichmentRepository;
+import com.home.application.ingest.metadata.ComplexMetadataLookup;
+import com.home.application.ingest.metadata.ComplexMetadataResolution;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
-
-import com.home.application.ingest.metadata.ComplexMetadata;
-import com.home.application.ingest.metadata.ComplexMetadataEnrichmentRepository;
-import com.home.application.ingest.metadata.ComplexMetadataLookup;
-import com.home.application.ingest.metadata.ComplexMetadataResolution;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class JdbcComplexMetadataEnrichmentRepository implements ComplexMetadataEnrichmentRepository {
 
-	private final JdbcClient jdbcClient;
+    private final JdbcClient jdbcClient;
 
-	public JdbcComplexMetadataEnrichmentRepository(JdbcClient jdbcClient) {
-		this.jdbcClient = Objects.requireNonNull(jdbcClient);
-	}
+    public JdbcComplexMetadataEnrichmentRepository(JdbcClient jdbcClient) {
+        this.jdbcClient = Objects.requireNonNull(jdbcClient);
+    }
 
-	@Override
-	public List<ComplexMetadataLookup> findPending(int limit) {
-		return jdbcClient.sql("""
+    @Override
+    public List<ComplexMetadataLookup> findPending(int limit) {
+        return jdbcClient
+                .sql("""
 			SELECT
 			    c.id,
 			    c.apt_seq,
@@ -55,24 +54,24 @@ public class JdbcComplexMetadataEnrichmentRepository implements ComplexMetadataE
 			ORDER BY c.id
 			LIMIT :limit
 			""")
-			.param("limit", limit)
-			.query((resultSet, rowNumber) -> new ComplexMetadataLookup(
-				resultSet.getLong("id"),
-				resultSet.getString("apt_seq"),
-				resultSet.getString("name"),
-				resultSet.getString("pnu"),
-				resultSet.getString("address"),
-				resultSet.getInt("metadata_attempts")
-			))
-			.list();
-	}
+                .param("limit", limit)
+                .query((resultSet, rowNumber) -> new ComplexMetadataLookup(
+                        resultSet.getLong("id"),
+                        resultSet.getString("apt_seq"),
+                        resultSet.getString("name"),
+                        resultSet.getString("pnu"),
+                        resultSet.getString("address"),
+                        resultSet.getInt("metadata_attempts")))
+                .list();
+    }
 
-	@Override
-	public void saveResolution(Long complexId, ComplexMetadataResolution resolution, Instant nextAttemptAt) {
-		Objects.requireNonNull(complexId, "complexId is required");
-		Objects.requireNonNull(resolution, "resolution is required");
-		ComplexMetadata metadata = resolution.metadata();
-		jdbcClient.sql("""
+    @Override
+    public void saveResolution(Long complexId, ComplexMetadataResolution resolution, Instant nextAttemptAt) {
+        Objects.requireNonNull(complexId, "complexId is required");
+        Objects.requireNonNull(resolution, "resolution is required");
+        ComplexMetadata metadata = resolution.metadata();
+        jdbcClient
+                .sql("""
 			WITH updated AS (
 			    UPDATE complex
 			    SET dong_cnt = COALESCE(dong_cnt, :dongCnt),
@@ -123,29 +122,33 @@ public class JdbcComplexMetadataEnrichmentRepository implements ComplexMetadataE
 			    :candidateCount
 			FROM updated
 			""")
-			.param("complexId", complexId)
-			.param("dongCnt", metadata == null ? null : metadata.dongCnt())
-			.param("unitCnt", metadata == null ? null : metadata.unitCnt())
-			.param("platArea", metadata == null ? null : metadata.platArea())
-			.param("archArea", metadata == null ? null : metadata.archArea())
-			.param("totArea", metadata == null ? null : metadata.totArea())
-			.param("bcRat", metadata == null ? null : metadata.bcRat())
-			.param("vlRat", metadata == null ? null : metadata.vlRat())
-			.param("useDate", metadata == null ? null : metadata.useDate())
-			.param("metadataStatus", resolution.status().name())
-			.param("metadataSource", resolution.source())
-			.param("metadataFailureReason", resolution.failureReason())
-			.param("metadataFailureKind", resolution.failureKind() == null ? null : resolution.failureKind().name())
-			.param("metadataNextAttemptAt", offsetDateTime(nextAttemptAt))
-			.param("lookupPath", resolution.lookupEvidence().lookupPath().name())
-			.param("requestedPnu", resolution.lookupEvidence().requestedPnu())
-			.param("resolvedSourcePnu", resolution.lookupEvidence().resolvedSourcePnu())
-			.param("aliasId", resolution.lookupEvidence().aliasId())
-			.param("candidateCount", resolution.lookupEvidence().candidateCount())
-			.update();
-	}
+                .param("complexId", complexId)
+                .param("dongCnt", metadata == null ? null : metadata.dongCnt())
+                .param("unitCnt", metadata == null ? null : metadata.unitCnt())
+                .param("platArea", metadata == null ? null : metadata.platArea())
+                .param("archArea", metadata == null ? null : metadata.archArea())
+                .param("totArea", metadata == null ? null : metadata.totArea())
+                .param("bcRat", metadata == null ? null : metadata.bcRat())
+                .param("vlRat", metadata == null ? null : metadata.vlRat())
+                .param("useDate", metadata == null ? null : metadata.useDate())
+                .param("metadataStatus", resolution.status().name())
+                .param("metadataSource", resolution.source())
+                .param("metadataFailureReason", resolution.failureReason())
+                .param(
+                        "metadataFailureKind",
+                        resolution.failureKind() == null
+                                ? null
+                                : resolution.failureKind().name())
+                .param("metadataNextAttemptAt", offsetDateTime(nextAttemptAt))
+                .param("lookupPath", resolution.lookupEvidence().lookupPath().name())
+                .param("requestedPnu", resolution.lookupEvidence().requestedPnu())
+                .param("resolvedSourcePnu", resolution.lookupEvidence().resolvedSourcePnu())
+                .param("aliasId", resolution.lookupEvidence().aliasId())
+                .param("candidateCount", resolution.lookupEvidence().candidateCount())
+                .update();
+    }
 
-	private OffsetDateTime offsetDateTime(Instant instant) {
-		return instant == null ? null : instant.atOffset(ZoneOffset.UTC);
-	}
+    private OffsetDateTime offsetDateTime(Instant instant) {
+        return instant == null ? null : instant.atOffset(ZoneOffset.UTC);
+    }
 }

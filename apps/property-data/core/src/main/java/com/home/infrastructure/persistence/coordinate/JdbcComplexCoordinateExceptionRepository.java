@@ -1,5 +1,15 @@
 package com.home.infrastructure.persistence.coordinate;
 
+import com.home.application.coordinate.caseflow.ComplexCoordinateCaseCandidate;
+import com.home.application.coordinate.caseflow.ComplexCoordinateCaseUpdate;
+import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionRepository;
+import com.home.application.coordinate.display.ResolvedDisplayCoordinate;
+import com.home.application.coordinate.footprint.BuildingFootprintCandidate;
+import com.home.application.coordinate.footprint.BuildingFootprintImportCandidate;
+import com.home.application.coordinate.identity.ComplexCoordinateParcelTargets;
+import com.home.application.coordinate.identity.ComplexCoordinateTarget;
+import com.home.application.coordinate.readiness.ComplexCoordinateReadinessRepository;
+import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -7,40 +17,29 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-
-import com.home.application.coordinate.footprint.BuildingFootprintCandidate;
-import com.home.application.coordinate.footprint.BuildingFootprintImportCandidate;
-import com.home.application.coordinate.caseflow.ComplexCoordinateCaseCandidate;
-import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
-import com.home.application.coordinate.caseflow.ComplexCoordinateCaseUpdate;
-import com.home.application.coordinate.caseflow.ComplexCoordinateExceptionRepository;
-import com.home.application.coordinate.identity.ComplexCoordinateParcelTargets;
-import com.home.application.coordinate.readiness.ComplexCoordinateReadinessRepository;
-import com.home.application.coordinate.identity.ComplexCoordinateTarget;
-import com.home.application.coordinate.display.ResolvedDisplayCoordinate;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class JdbcComplexCoordinateExceptionRepository
-	implements ComplexCoordinateExceptionRepository, ComplexCoordinateReadinessRepository {
+        implements ComplexCoordinateExceptionRepository, ComplexCoordinateReadinessRepository {
 
-	private static final BigDecimal MIN_LATITUDE = new BigDecimal("33");
-	private static final BigDecimal MAX_LATITUDE = new BigDecimal("39");
-	private static final BigDecimal MIN_LONGITUDE = new BigDecimal("124");
-	private static final BigDecimal MAX_LONGITUDE = new BigDecimal("132");
+    private static final BigDecimal MIN_LATITUDE = new BigDecimal("33");
+    private static final BigDecimal MAX_LATITUDE = new BigDecimal("39");
+    private static final BigDecimal MIN_LONGITUDE = new BigDecimal("124");
+    private static final BigDecimal MAX_LONGITUDE = new BigDecimal("132");
 
-	private final JdbcClient jdbcClient;
+    private final JdbcClient jdbcClient;
 
-	public JdbcComplexCoordinateExceptionRepository(JdbcClient jdbcClient) {
-		this.jdbcClient = Objects.requireNonNull(jdbcClient);
-	}
+    public JdbcComplexCoordinateExceptionRepository(JdbcClient jdbcClient) {
+        this.jdbcClient = Objects.requireNonNull(jdbcClient);
+    }
 
-	@Override
-	public List<ComplexCoordinateCaseCandidate> findExceptionCaseCandidates(int limit) {
-		if (limit < 1) {
-			return List.of();
-		}
-		return jdbcClient.sql("""
+    @Override
+    public List<ComplexCoordinateCaseCandidate> findExceptionCaseCandidates(int limit) {
+        if (limit < 1) {
+            return List.of();
+        }
+        return jdbcClient
+                .sql("""
 			SELECT p.id AS parcel_id
 			FROM parcel p
 			JOIN complex c ON c.parcel_id = p.id
@@ -54,34 +53,32 @@ public class JdbcComplexCoordinateExceptionRepository
 			ORDER BY p.id
 			LIMIT :limit
 			""")
-			.param("limit", limit)
-			.query((resultSet, rowNumber) -> new ComplexCoordinateCaseCandidate(resultSet.getLong("parcel_id")))
-			.list();
-	}
+                .param("limit", limit)
+                .query((resultSet, rowNumber) -> new ComplexCoordinateCaseCandidate(resultSet.getLong("parcel_id")))
+                .list();
+    }
 
-	@Override
-	public List<Long> findPendingCaseParcelIds(int limit) {
-		if (limit < 1) {
-			return List.of();
-		}
-		return jdbcClient.sql("""
+    @Override
+    public List<Long> findPendingCaseParcelIds(int limit) {
+        if (limit < 1) {
+            return List.of();
+        }
+        return jdbcClient.sql("""
 			SELECT parcel_id
 			FROM complex_coordinate_case
 			WHERE status = 'PENDING'
 			ORDER BY id
 			LIMIT :limit
-			""")
-			.param("limit", limit)
-			.query(Long.class)
-			.list();
-	}
+			""").param("limit", limit).query(Long.class).list();
+    }
 
-	@Override
-	public List<Long> findRetryableCaseParcelIds(int limit, java.time.Instant retryBefore) {
-		if (limit < 1) {
-			return List.of();
-		}
-		return jdbcClient.sql("""
+    @Override
+    public List<Long> findRetryableCaseParcelIds(int limit, java.time.Instant retryBefore) {
+        if (limit < 1) {
+            return List.of();
+        }
+        return jdbcClient
+                .sql("""
 			SELECT parcel_id
 			FROM complex_coordinate_case
 			WHERE status IN ('FAILED', 'UNAVAILABLE')
@@ -89,25 +86,22 @@ public class JdbcComplexCoordinateExceptionRepository
 			ORDER BY checked_at, id
 			LIMIT :limit
 			""")
-			.param("retryBefore", java.sql.Timestamp.from(retryBefore))
-			.param("limit", limit)
-			.query(Long.class)
-			.list();
-	}
+                .param("retryBefore", java.sql.Timestamp.from(retryBefore))
+                .param("limit", limit)
+                .query(Long.class)
+                .list();
+    }
 
-	@Override
-	public void markCaseFailed(Long parcelId, String reason) {
-		saveCaseUpdate(new ComplexCoordinateCaseUpdate(
-			parcelId,
-			ComplexCoordinateCaseStatus.FAILED,
-			reason
-		));
-	}
+    @Override
+    public void markCaseFailed(Long parcelId, String reason) {
+        saveCaseUpdate(new ComplexCoordinateCaseUpdate(parcelId, ComplexCoordinateCaseStatus.FAILED, reason));
+    }
 
-	@Override
-	public void saveCaseUpdate(ComplexCoordinateCaseUpdate update) {
-		Objects.requireNonNull(update, "update is required");
-		jdbcClient.sql("""
+    @Override
+    public void saveCaseUpdate(ComplexCoordinateCaseUpdate update) {
+        Objects.requireNonNull(update, "update is required");
+        jdbcClient
+                .sql("""
 			INSERT INTO complex_coordinate_case (
 			    parcel_id,
 			    pnu,
@@ -137,21 +131,27 @@ public class JdbcComplexCoordinateExceptionRepository
 			    checked_at = now(),
 			    updated_at = now()
 			""")
-			.param("parcelId", update.parcelId())
-			.param("status", update.status().name())
-			.param("relationType", update.relationType() == null ? null : update.relationType().name())
-			.param(
-				"relationConfidence",
-				update.relationConfidence() == null ? null : update.relationConfidence().name()
-			)
-			.param("reason", update.reason())
-			.update();
-	}
+                .param("parcelId", update.parcelId())
+                .param("status", update.status().name())
+                .param(
+                        "relationType",
+                        update.relationType() == null
+                                ? null
+                                : update.relationType().name())
+                .param(
+                        "relationConfidence",
+                        update.relationConfidence() == null
+                                ? null
+                                : update.relationConfidence().name())
+                .param("reason", update.reason())
+                .update();
+    }
 
-	@Override
-	public Optional<ComplexCoordinateParcelTargets> findParcelTargets(Long parcelId) {
-		Objects.requireNonNull(parcelId, "parcelId is required");
-		List<TargetRow> rows = jdbcClient.sql("""
+    @Override
+    public Optional<ComplexCoordinateParcelTargets> findParcelTargets(Long parcelId) {
+        Objects.requireNonNull(parcelId, "parcelId is required");
+        List<TargetRow> rows = jdbcClient
+                .sql("""
 			SELECT
 			    p.id AS parcel_id,
 			    p.pnu,
@@ -174,36 +174,32 @@ public class JdbcComplexCoordinateExceptionRepository
 			GROUP BY p.id, p.pnu, c.id, c.apt_seq, c.name
 			ORDER BY c.id
 			""")
-			.param("parcelId", parcelId)
-			.query((resultSet, rowNumber) -> new TargetRow(
-				resultSet.getLong("parcel_id"),
-				resultSet.getString("pnu"),
-				resultSet.getLong("complex_id"),
-				resultSet.getString("apt_seq"),
-				resultSet.getString("name"),
-				resultSet.getString("apt_dongs")
-			))
-			.list();
-		if (rows.isEmpty()) {
-			return Optional.empty();
-		}
-		ArrayList<ComplexCoordinateTarget> targets = new ArrayList<>();
-		for (TargetRow row : rows) {
-			targets.add(new ComplexCoordinateTarget(
-				row.complexId(),
-				row.aptSeq(),
-				row.name(),
-				parseAptDongs(row.aptDongs())
-			));
-		}
-		TargetRow first = rows.get(0);
-		return Optional.of(new ComplexCoordinateParcelTargets(first.parcelId(), first.pnu(), targets));
-	}
+                .param("parcelId", parcelId)
+                .query((resultSet, rowNumber) -> new TargetRow(
+                        resultSet.getLong("parcel_id"),
+                        resultSet.getString("pnu"),
+                        resultSet.getLong("complex_id"),
+                        resultSet.getString("apt_seq"),
+                        resultSet.getString("name"),
+                        resultSet.getString("apt_dongs")))
+                .list();
+        if (rows.isEmpty()) {
+            return Optional.empty();
+        }
+        ArrayList<ComplexCoordinateTarget> targets = new ArrayList<>();
+        for (TargetRow row : rows) {
+            targets.add(new ComplexCoordinateTarget(
+                    row.complexId(), row.aptSeq(), row.name(), parseAptDongs(row.aptDongs())));
+        }
+        TargetRow first = rows.get(0);
+        return Optional.of(new ComplexCoordinateParcelTargets(first.parcelId(), first.pnu(), targets));
+    }
 
-	@Override
-	public List<BuildingFootprintCandidate> findBuildingFootprintsByPnu(String pnu) {
-		Objects.requireNonNull(pnu, "pnu is required");
-		return jdbcClient.sql("""
+    @Override
+    public List<BuildingFootprintCandidate> findBuildingFootprintsByPnu(String pnu) {
+        Objects.requireNonNull(pnu, "pnu is required");
+        return jdbcClient
+                .sql("""
 			SELECT
 			    id,
 			    pnu,
@@ -215,26 +211,26 @@ public class JdbcComplexCoordinateExceptionRepository
 			WHERE pnu = :pnu
 			ORDER BY id
 			""")
-			.param("pnu", pnu)
-			.query((resultSet, rowNumber) -> new BuildingFootprintCandidate(
-				resultSet.getLong("id"),
-				resultSet.getString("pnu"),
-				resultSet.getString("building_name"),
-				resultSet.getString("dong_name"),
-				resultSet.getBigDecimal("centroid_lat"),
-				resultSet.getBigDecimal("centroid_lng")
-			))
-			.list();
-	}
+                .param("pnu", pnu)
+                .query((resultSet, rowNumber) -> new BuildingFootprintCandidate(
+                        resultSet.getLong("id"),
+                        resultSet.getString("pnu"),
+                        resultSet.getString("building_name"),
+                        resultSet.getString("dong_name"),
+                        resultSet.getBigDecimal("centroid_lat"),
+                        resultSet.getBigDecimal("centroid_lng")))
+                .list();
+    }
 
-	@Override
-	public void saveBuildingFootprints(List<BuildingFootprintImportCandidate> footprints) {
-		Objects.requireNonNull(footprints, "footprints is required");
-		for (BuildingFootprintImportCandidate footprint : footprints) {
-			if (!validCoordinate(footprint)) {
-				continue;
-			}
-			jdbcClient.sql("""
+    @Override
+    public void saveBuildingFootprints(List<BuildingFootprintImportCandidate> footprints) {
+        Objects.requireNonNull(footprints, "footprints is required");
+        for (BuildingFootprintImportCandidate footprint : footprints) {
+            if (!validCoordinate(footprint)) {
+                continue;
+            }
+            jdbcClient
+                    .sql("""
 				INSERT INTO building_footprint_snapshot (
 				    pnu,
 				    building_name,
@@ -265,32 +261,33 @@ public class JdbcComplexCoordinateExceptionRepository
 				    centroid_lng = EXCLUDED.centroid_lng,
 				    updated_at = now()
 				""")
-				.param("pnu", footprint.pnu())
-				.param("buildingName", footprint.buildingName())
-				.param("dongName", footprint.dongName())
-				.param("sourceBuildingKey", footprint.sourceBuildingKey())
-				.param("latitude", footprint.latitude())
-				.param("longitude", footprint.longitude())
-				.param("source", footprint.source())
-				.param("snapshotVersion", footprint.snapshotVersion())
-				.update();
-		}
-	}
+                    .param("pnu", footprint.pnu())
+                    .param("buildingName", footprint.buildingName())
+                    .param("dongName", footprint.dongName())
+                    .param("sourceBuildingKey", footprint.sourceBuildingKey())
+                    .param("latitude", footprint.latitude())
+                    .param("longitude", footprint.longitude())
+                    .param("source", footprint.source())
+                    .param("snapshotVersion", footprint.snapshotVersion())
+                    .update();
+        }
+    }
 
-	private boolean validCoordinate(BuildingFootprintImportCandidate footprint) {
-		return inRange(footprint.latitude(), MIN_LATITUDE, MAX_LATITUDE)
-			&& inRange(footprint.longitude(), MIN_LONGITUDE, MAX_LONGITUDE);
-	}
+    private boolean validCoordinate(BuildingFootprintImportCandidate footprint) {
+        return inRange(footprint.latitude(), MIN_LATITUDE, MAX_LATITUDE)
+                && inRange(footprint.longitude(), MIN_LONGITUDE, MAX_LONGITUDE);
+    }
 
-	private boolean inRange(BigDecimal value, BigDecimal min, BigDecimal max) {
-		return value != null && value.compareTo(min) >= 0 && value.compareTo(max) <= 0;
-	}
+    private boolean inRange(BigDecimal value, BigDecimal min, BigDecimal max) {
+        return value != null && value.compareTo(min) >= 0 && value.compareTo(max) <= 0;
+    }
 
-	@Override
-	public void saveResolvedDisplayCoordinate(ResolvedDisplayCoordinate coordinate) {
-		Objects.requireNonNull(coordinate, "coordinate is required");
-		saveBuildingLink(coordinate);
-		jdbcClient.sql("""
+    @Override
+    public void saveResolvedDisplayCoordinate(ResolvedDisplayCoordinate coordinate) {
+        Objects.requireNonNull(coordinate, "coordinate is required");
+        saveBuildingLink(coordinate);
+        jdbcClient
+                .sql("""
 			INSERT INTO complex_display_coordinate (
 			    complex_id,
 			    building_footprint_id,
@@ -323,18 +320,19 @@ public class JdbcComplexCoordinateExceptionRepository
 			    checked_at = now(),
 			    updated_at = now()
 			""")
-			.param("complexId", coordinate.complexId())
-			.param("buildingFootprintId", coordinate.buildingFootprintId())
-			.param("latitude", coordinate.latitude())
-			.param("longitude", coordinate.longitude())
-			.param("coordinateSource", coordinate.coordinateSource())
-			.param("confidence", coordinate.confidence())
-			.param("reason", coordinate.reason())
-			.update();
-	}
+                .param("complexId", coordinate.complexId())
+                .param("buildingFootprintId", coordinate.buildingFootprintId())
+                .param("latitude", coordinate.latitude())
+                .param("longitude", coordinate.longitude())
+                .param("coordinateSource", coordinate.coordinateSource())
+                .param("confidence", coordinate.confidence())
+                .param("reason", coordinate.reason())
+                .update();
+    }
 
-	private void saveBuildingLink(ResolvedDisplayCoordinate coordinate) {
-		jdbcClient.sql("""
+    private void saveBuildingLink(ResolvedDisplayCoordinate coordinate) {
+        jdbcClient
+                .sql("""
 			INSERT INTO complex_building_link (
 			    complex_id,
 			    building_footprint_id,
@@ -355,34 +353,26 @@ public class JdbcComplexCoordinateExceptionRepository
 			)
 			ON CONFLICT DO NOTHING
 			""")
-			.param("complexId", coordinate.complexId())
-			.param("buildingFootprintId", coordinate.buildingFootprintId())
-			.param("confidence", coordinate.confidence())
-			.param("reason", coordinate.reason())
-			.param("source", coordinate.coordinateSource())
-			.update();
-	}
+                .param("complexId", coordinate.complexId())
+                .param("buildingFootprintId", coordinate.buildingFootprintId())
+                .param("confidence", coordinate.confidence())
+                .param("reason", coordinate.reason())
+                .param("source", coordinate.coordinateSource())
+                .update();
+    }
 
-	private Set<String> parseAptDongs(String raw) {
-		if (raw == null || raw.isBlank()) {
-			return Set.of();
-		}
-		LinkedHashSet<String> values = new LinkedHashSet<>();
-		for (String value : raw.split("\\|")) {
-			if (!value.isBlank()) {
-				values.add(value);
-			}
-		}
-		return values;
-	}
+    private Set<String> parseAptDongs(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return Set.of();
+        }
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        for (String value : raw.split("\\|")) {
+            if (!value.isBlank()) {
+                values.add(value);
+            }
+        }
+        return values;
+    }
 
-	private record TargetRow(
-		Long parcelId,
-		String pnu,
-		Long complexId,
-		String aptSeq,
-		String name,
-		String aptDongs
-	) {
-	}
+    private record TargetRow(Long parcelId, String pnu, Long complexId, String aptSeq, String name, String aptDongs) {}
 }

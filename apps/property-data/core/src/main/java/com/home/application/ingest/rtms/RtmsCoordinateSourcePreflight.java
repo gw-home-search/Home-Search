@@ -3,10 +3,9 @@ package com.home.application.ingest.rtms;
 @FunctionalInterface
 public interface RtmsCoordinateSourcePreflight {
 
-	void verify();
+    void verify();
 
-	public static RtmsCoordinateSourcePreflight noop() {
-		return () -> {
-		};
-	}
+    public static RtmsCoordinateSourcePreflight noop() {
+        return () -> {};
+    }
 }

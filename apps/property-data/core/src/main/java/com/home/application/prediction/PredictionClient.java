@@ -2,5 +2,5 @@ package com.home.application.prediction;
 
 public interface PredictionClient {
 
-	PredictionClientResult predict(PredictionRequest request);
+    PredictionClientResult predict(PredictionRequest request);
 }

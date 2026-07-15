@@ -5,14 +5,14 @@ import org.testcontainers.containers.PostgreSQLContainer;
 
 public abstract class JdbcMigrationTestSupport extends JdbcPostgresContainerSupport {
 
-	private static final PostgreSQLContainer<?> POSTGRES = newPostgisContainer();
+    private static final PostgreSQLContainer<?> POSTGRES = newPostgisContainer();
 
-	static {
-		POSTGRES.start();
-	}
+    static {
+        POSTGRES.start();
+    }
 
-	@BeforeEach
-	protected void initializeMigrationDatabase() {
-		initializeJdbc(POSTGRES);
-	}
+    @BeforeEach
+    protected void initializeMigrationDatabase() {
+        initializeJdbc(POSTGRES);
+    }
 }

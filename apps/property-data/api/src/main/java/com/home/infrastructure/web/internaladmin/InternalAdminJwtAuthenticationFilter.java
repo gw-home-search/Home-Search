@@ -1,23 +1,20 @@
 package com.home.infrastructure.web.internaladmin;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.home.security.jwt.JwtVerificationException;
+import com.home.security.jwt.JwtVerificationPolicy;
+import com.home.security.jwt.Rs256JwtCodec;
+import com.home.security.jwt.VerifiedJwt;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.home.security.jwt.JwtVerificationException;
-import com.home.security.jwt.JwtVerificationPolicy;
-import com.home.security.jwt.Rs256JwtCodec;
-import com.home.security.jwt.VerifiedJwt;
-
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-
 import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -28,10 +25,7 @@ public final class InternalAdminJwtAuthenticationFilter extends OncePerRequestFi
     private final ObjectMapper objectMapper;
 
     public InternalAdminJwtAuthenticationFilter(
-        Rs256JwtCodec codec,
-        JwtVerificationPolicy policy,
-        ObjectMapper objectMapper
-    ) {
+            Rs256JwtCodec codec, JwtVerificationPolicy policy, ObjectMapper objectMapper) {
         this.codec = codec;
         this.policy = policy;
         this.objectMapper = objectMapper;
@@ -44,7 +38,7 @@ public final class InternalAdminJwtAuthenticationFilter extends OncePerRequestFi
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
-        throws ServletException, IOException {
+            throws ServletException, IOException {
         InternalAdminPrincipal principal;
         try {
             String authorization = request.getHeader("Authorization");
@@ -66,12 +60,11 @@ public final class InternalAdminJwtAuthenticationFilter extends OncePerRequestFi
 
     private InternalAdminPrincipal principal(VerifiedJwt verified) {
         return new InternalAdminPrincipal(
-            UUID.fromString(verified.subject()),
-            stringClaim(verified.claims(), "loginId", 100),
-            stringSet(verified.claims(), "roles"),
-            stringSet(verified.claims(), "permissions"),
-            stringClaim(verified.claims(), "requestId", 100)
-        );
+                UUID.fromString(verified.subject()),
+                stringClaim(verified.claims(), "loginId", 100),
+                stringSet(verified.claims(), "roles"),
+                stringSet(verified.claims(), "permissions"),
+                stringClaim(verified.claims(), "requestId", 100));
     }
 
     private String stringClaim(Map<String, Object> claims, String name, int maximumLength) {
@@ -100,11 +93,12 @@ public final class InternalAdminJwtAuthenticationFilter extends OncePerRequestFi
     private void unauthorized(HttpServletResponse response) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-        objectMapper.writeValue(response.getOutputStream(), Map.of(
-            "type", "about:blank",
-            "title", "Unauthorized",
-            "status", HttpServletResponse.SC_UNAUTHORIZED,
-            "detail", "Internal admin authentication failed."
-        ));
+        objectMapper.writeValue(
+                response.getOutputStream(),
+                Map.of(
+                        "type", "about:blank",
+                        "title", "Unauthorized",
+                        "status", HttpServletResponse.SC_UNAUTHORIZED,
+                        "detail", "Internal admin authentication failed."));
     }
 }

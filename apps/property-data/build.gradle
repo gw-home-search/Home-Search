@@ -1,6 +1,7 @@
 plugins {
     id 'org.springframework.boot' version '3.5.16' apply false
     id 'io.spring.dependency-management' version '1.1.7' apply false
+    id 'com.diffplug.spotless' version '8.8.0'
     id 'jacoco'
     id 'org.asciidoctor.jvm.convert' version '4.0.5' apply false
     id 'com.epages.restdocs-api-spec' version '0.20.1' apply false
@@ -9,6 +10,18 @@ plugins {
 group = 'com.home'
 version = '0.0.1-SNAPSHOT'
 description = 'Home Search property-data service'
+
+spotless {
+    java {
+        target 'core/src/**/*.java', 'api/src/**/*.java', 'batch/src/**/*.java'
+        palantirJavaFormat('2.96.0')
+    }
+}
+
+tasks.named('spotlessCheck') {
+    dependsOn gradle.includedBuild('rtms-ingest-core').task(':spotlessCheck')
+    dependsOn gradle.includedBuild('security-jwt-core').task(':spotlessCheck')
+}
 
 allprojects {
     group = rootProject.group
@@ -242,6 +255,7 @@ tasks.register('verifyPropertyFlywayFresh', Exec) {
 tasks.register('backendQualityCheck') {
     description = 'Run backend profile, contract, persistence, docs, coverage, and javadoc gates.'
     group = 'verification'
+    dependsOn tasks.named('spotlessCheck')
     dependsOn ':core:test'
     dependsOn ':core:persistenceTest'
     dependsOn tasks.named('verifyApiMigrationCatalog')

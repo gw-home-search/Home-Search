@@ -1,2 +1,6 @@
 package com.home.application.auth.port;
-@FunctionalInterface public interface OpaqueTokenGenerator { String generate(); }
+
+@FunctionalInterface
+public interface OpaqueTokenGenerator {
+    String generate();
+}

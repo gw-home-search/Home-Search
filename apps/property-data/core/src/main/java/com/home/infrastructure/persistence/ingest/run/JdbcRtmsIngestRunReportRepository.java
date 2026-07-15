@@ -1,5 +1,12 @@
 package com.home.infrastructure.persistence.ingest.run;
 
+import com.home.application.ingest.run.RtmsIngestRunRecord;
+import com.home.application.ingest.run.RtmsIngestRunReport;
+import com.home.application.ingest.run.RtmsIngestRunReportQuery;
+import com.home.application.ingest.run.RtmsIngestRunReportRepository;
+import com.home.application.ingest.run.RtmsIngestRunReportTotals;
+import com.home.application.ingest.run.RtmsIngestRunStatusSummary;
+import com.home.domain.ingest.run.RtmsIngestRunStatus;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -8,15 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
-
-import com.home.application.ingest.run.RtmsIngestRunRecord;
-import com.home.application.ingest.run.RtmsIngestRunReport;
-import com.home.application.ingest.run.RtmsIngestRunReportQuery;
-import com.home.application.ingest.run.RtmsIngestRunReportRepository;
-import com.home.application.ingest.run.RtmsIngestRunReportTotals;
-import com.home.domain.ingest.run.RtmsIngestRunStatus;
-import com.home.application.ingest.run.RtmsIngestRunStatusSummary;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
@@ -24,24 +22,20 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  */
 public class JdbcRtmsIngestRunReportRepository implements RtmsIngestRunReportRepository {
 
-	private final JdbcClient jdbcClient;
+    private final JdbcClient jdbcClient;
 
-	public JdbcRtmsIngestRunReportRepository(JdbcClient jdbcClient) {
-		this.jdbcClient = Objects.requireNonNull(jdbcClient);
-	}
+    public JdbcRtmsIngestRunReportRepository(JdbcClient jdbcClient) {
+        this.jdbcClient = Objects.requireNonNull(jdbcClient);
+    }
 
-	@Override
-	public RtmsIngestRunReport summarize(RtmsIngestRunReportQuery query) {
-		Objects.requireNonNull(query, "query is required");
-		return new RtmsIngestRunReport(
-			findTotals(query),
-			findStatusSummaries(query),
-			findRecentRuns(query)
-		);
-	}
+    @Override
+    public RtmsIngestRunReport summarize(RtmsIngestRunReportQuery query) {
+        Objects.requireNonNull(query, "query is required");
+        return new RtmsIngestRunReport(findTotals(query), findStatusSummaries(query), findRecentRuns(query));
+    }
 
-	private RtmsIngestRunReportTotals findTotals(RtmsIngestRunReportQuery query) {
-		return baseQuery("""
+    private RtmsIngestRunReportTotals findTotals(RtmsIngestRunReportQuery query) {
+        return baseQuery("""
 			SELECT
 			    count(*)::bigint AS run_count,
 			    COALESCE(sum(page_count), 0)::bigint AS page_count,
@@ -57,13 +51,11 @@ public class JdbcRtmsIngestRunReportRepository implements RtmsIngestRunReportRep
 			  AND (:lawdCd IS NULL OR lawd_cd = :lawdCd)
 			  AND (:dealYmdFrom IS NULL OR deal_ymd >= :dealYmdFrom)
 			  AND (:dealYmdTo IS NULL OR deal_ymd <= :dealYmdTo)
-			""", query)
-			.query(this::mapTotals)
-			.single();
-	}
+			""", query).query(this::mapTotals).single();
+    }
 
-	private List<RtmsIngestRunStatusSummary> findStatusSummaries(RtmsIngestRunReportQuery query) {
-		Map<RtmsIngestRunStatus, Long> counts = baseQuery("""
+    private List<RtmsIngestRunStatusSummary> findStatusSummaries(RtmsIngestRunReportQuery query) {
+        Map<RtmsIngestRunStatus, Long> counts = baseQuery("""
 			SELECT status, count(*)::bigint AS run_count
 			FROM rtms_ingest_run
 			WHERE status IN (:statuses)
@@ -77,19 +69,15 @@ public class JdbcRtmsIngestRunReportRepository implements RtmsIngestRunReportRep
 			    WHEN 'FAILED' THEN 3
 			    ELSE 4
 			END
-			""", query)
-			.query(this::mapStatusSummary)
-			.list()
-			.stream()
-			.collect(Collectors.toMap(RtmsIngestRunStatusSummary::status, RtmsIngestRunStatusSummary::runCount));
-		return query.statuses()
-			.stream()
-			.map(status -> new RtmsIngestRunStatusSummary(status, counts.getOrDefault(status, 0L)))
-			.toList();
-	}
+			""", query).query(this::mapStatusSummary).list().stream()
+                .collect(Collectors.toMap(RtmsIngestRunStatusSummary::status, RtmsIngestRunStatusSummary::runCount));
+        return query.statuses().stream()
+                .map(status -> new RtmsIngestRunStatusSummary(status, counts.getOrDefault(status, 0L)))
+                .toList();
+    }
 
-	private List<RtmsIngestRunRecord> findRecentRuns(RtmsIngestRunReportQuery query) {
-		return baseQuery("""
+    private List<RtmsIngestRunRecord> findRecentRuns(RtmsIngestRunReportQuery query) {
+        return baseQuery("""
 			SELECT *
 			FROM rtms_ingest_run
 			WHERE status IN (:statuses)
@@ -99,70 +87,67 @@ public class JdbcRtmsIngestRunReportRepository implements RtmsIngestRunReportRep
 			ORDER BY completed_at DESC, id DESC
 			LIMIT :recentRunLimit
 			""", query)
-			.param("recentRunLimit", query.recentRunLimit())
-			.query(this::mapRecord)
-			.list();
-	}
+                .param("recentRunLimit", query.recentRunLimit())
+                .query(this::mapRecord)
+                .list();
+    }
 
-	private JdbcClient.StatementSpec baseQuery(String sql, RtmsIngestRunReportQuery query) {
-		return jdbcClient.sql(sql)
-			.param("statuses", query.statusNames())
-			.param("lawdCd", query.lawdCd())
-			.param("dealYmdFrom", query.dealYmdFrom())
-			.param("dealYmdTo", query.dealYmdTo());
-	}
+    private JdbcClient.StatementSpec baseQuery(String sql, RtmsIngestRunReportQuery query) {
+        return jdbcClient
+                .sql(sql)
+                .param("statuses", query.statusNames())
+                .param("lawdCd", query.lawdCd())
+                .param("dealYmdFrom", query.dealYmdFrom())
+                .param("dealYmdTo", query.dealYmdTo());
+    }
 
-	private RtmsIngestRunReportTotals mapTotals(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new RtmsIngestRunReportTotals(
-			resultSet.getLong("run_count"),
-			resultSet.getLong("page_count"),
-			resultSet.getLong("read_count"),
-			resultSet.getLong("raw_saved_count"),
-			resultSet.getLong("normalized_inserted_count"),
-			resultSet.getLong("duplicate_skipped_count"),
-			resultSet.getLong("canceled_skipped_count"),
-			resultSet.getLong("match_failed_count"),
-			resultSet.getLong("parse_failed_count")
-		);
-	}
+    private RtmsIngestRunReportTotals mapTotals(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new RtmsIngestRunReportTotals(
+                resultSet.getLong("run_count"),
+                resultSet.getLong("page_count"),
+                resultSet.getLong("read_count"),
+                resultSet.getLong("raw_saved_count"),
+                resultSet.getLong("normalized_inserted_count"),
+                resultSet.getLong("duplicate_skipped_count"),
+                resultSet.getLong("canceled_skipped_count"),
+                resultSet.getLong("match_failed_count"),
+                resultSet.getLong("parse_failed_count"));
+    }
 
-	private RtmsIngestRunStatusSummary mapStatusSummary(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new RtmsIngestRunStatusSummary(
-			RtmsIngestRunStatus.valueOf(resultSet.getString("status")),
-			resultSet.getLong("run_count")
-		);
-	}
+    private RtmsIngestRunStatusSummary mapStatusSummary(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new RtmsIngestRunStatusSummary(
+                RtmsIngestRunStatus.valueOf(resultSet.getString("status")), resultSet.getLong("run_count"));
+    }
 
-	private RtmsIngestRunRecord mapRecord(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new RtmsIngestRunRecord(
-			resultSet.getLong("id"),
-			resultSet.getString("lawd_cd"),
-			resultSet.getString("deal_ymd"),
-			resultSet.getString("status"),
-			resultSet.getInt("page_count"),
-			resultSet.getLong("read_count"),
-			resultSet.getLong("raw_saved_count"),
-			resultSet.getLong("normalized_inserted_count"),
-			resultSet.getLong("duplicate_skipped_count"),
-			resultSet.getLong("canceled_skipped_count"),
-			resultSet.getLong("match_failed_count"),
-			resultSet.getLong("parse_failed_count"),
-			resultSet.getString("failure_reason"),
-			instant(resultSet, "started_at"),
-			instant(resultSet, "completed_at"),
-			instant(resultSet, "created_at"),
-			executionCorrelationId(resultSet)
-		);
-	}
+    private RtmsIngestRunRecord mapRecord(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new RtmsIngestRunRecord(
+                resultSet.getLong("id"),
+                resultSet.getString("lawd_cd"),
+                resultSet.getString("deal_ymd"),
+                resultSet.getString("status"),
+                resultSet.getInt("page_count"),
+                resultSet.getLong("read_count"),
+                resultSet.getLong("raw_saved_count"),
+                resultSet.getLong("normalized_inserted_count"),
+                resultSet.getLong("duplicate_skipped_count"),
+                resultSet.getLong("canceled_skipped_count"),
+                resultSet.getLong("match_failed_count"),
+                resultSet.getLong("parse_failed_count"),
+                resultSet.getString("failure_reason"),
+                instant(resultSet, "started_at"),
+                instant(resultSet, "completed_at"),
+                instant(resultSet, "created_at"),
+                executionCorrelationId(resultSet));
+    }
 
-	private com.home.domain.ingest.run.ExecutionCorrelationId executionCorrelationId(ResultSet resultSet)
-		throws SQLException {
-		java.util.UUID value = resultSet.getObject("execution_correlation_id", java.util.UUID.class);
-		return value == null ? null : new com.home.domain.ingest.run.ExecutionCorrelationId(value);
-	}
+    private com.home.domain.ingest.run.ExecutionCorrelationId executionCorrelationId(ResultSet resultSet)
+            throws SQLException {
+        java.util.UUID value = resultSet.getObject("execution_correlation_id", java.util.UUID.class);
+        return value == null ? null : new com.home.domain.ingest.run.ExecutionCorrelationId(value);
+    }
 
-	private Instant instant(ResultSet resultSet, String column) throws SQLException {
-		OffsetDateTime value = resultSet.getObject(column, OffsetDateTime.class);
-		return value == null ? null : value.toInstant();
-	}
+    private Instant instant(ResultSet resultSet, String column) throws SQLException {
+        OffsetDateTime value = resultSet.getObject(column, OffsetDateTime.class);
+        return value == null ? null : value.toInstant();
+    }
 }

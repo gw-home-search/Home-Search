@@ -1,16 +1,14 @@
 package com.home.infrastructure.persistence.ingest.normalization;
 
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-
 import com.home.application.ingest.normalization.NormalizedTradeCommand;
 import com.home.application.ingest.normalization.NormalizedTradeDuplicateMatch;
 import com.home.application.ingest.normalization.NormalizedTradeDuplicatePolicy;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
 import com.home.ingestcore.rtms.TradeExclAreaNormalizer;
-
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -19,29 +17,29 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository {
 
-	private static final int FALLBACK_IDENTITY_LOCK_NAMESPACE = 0x48534D45;
+    private static final int FALLBACK_IDENTITY_LOCK_NAMESPACE = 0x48534D45;
 
-	private final JdbcClient jdbcClient;
-	private final TransactionTemplate transactionTemplate;
-	private final NormalizedTradeDuplicatePolicy duplicatePolicy;
+    private final JdbcClient jdbcClient;
+    private final TransactionTemplate transactionTemplate;
+    private final NormalizedTradeDuplicatePolicy duplicatePolicy;
 
-	public JdbcNormalizedTradeRepository(JdbcClient jdbcClient, TransactionTemplate transactionTemplate) {
-		this(jdbcClient, transactionTemplate, new NormalizedTradeDuplicatePolicy());
-	}
+    public JdbcNormalizedTradeRepository(JdbcClient jdbcClient, TransactionTemplate transactionTemplate) {
+        this(jdbcClient, transactionTemplate, new NormalizedTradeDuplicatePolicy());
+    }
 
-	JdbcNormalizedTradeRepository(
-		JdbcClient jdbcClient,
-		TransactionTemplate transactionTemplate,
-		NormalizedTradeDuplicatePolicy duplicatePolicy
-	) {
-		this.jdbcClient = Objects.requireNonNull(jdbcClient);
-		this.transactionTemplate = Objects.requireNonNull(transactionTemplate);
-		this.duplicatePolicy = Objects.requireNonNull(duplicatePolicy);
-	}
+    JdbcNormalizedTradeRepository(
+            JdbcClient jdbcClient,
+            TransactionTemplate transactionTemplate,
+            NormalizedTradeDuplicatePolicy duplicatePolicy) {
+        this.jdbcClient = Objects.requireNonNull(jdbcClient);
+        this.transactionTemplate = Objects.requireNonNull(transactionTemplate);
+        this.duplicatePolicy = Objects.requireNonNull(duplicatePolicy);
+    }
 
-	@Override
-	public boolean existsBySourceAndSourceKey(String source, String sourceKey) {
-		return Boolean.TRUE.equals(jdbcClient.sql("""
+    @Override
+    public boolean existsBySourceAndSourceKey(String source, String sourceKey) {
+        return Boolean.TRUE.equals(jdbcClient
+                .sql("""
 			SELECT EXISTS (
 			    SELECT 1
 			    FROM trade_source_key_registry
@@ -49,84 +47,86 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 			      AND source_key = :sourceKey
 			)
 			""")
-			.param("source", source)
-			.param("sourceKey", sourceKey)
-			.query(Boolean.class)
-			.single());
-	}
+                .param("source", source)
+                .param("sourceKey", sourceKey)
+                .query(Boolean.class)
+                .single());
+    }
 
-	@Override
-	public boolean insertIfAbsent(NormalizedTradeCommand command) {
-		return Boolean.TRUE.equals(transactionTemplate.execute(status -> insertInTransaction(command)));
-	}
+    @Override
+    public boolean insertIfAbsent(NormalizedTradeCommand command) {
+        return Boolean.TRUE.equals(transactionTemplate.execute(status -> insertInTransaction(command)));
+    }
 
-	@Override
-	public boolean cancelBySourceAndSourceKey(String source, String sourceKey, Long rawIngestId) {
-		return Boolean.TRUE.equals(transactionTemplate.execute(status -> cancelInTransaction(source, sourceKey,
-			rawIngestId)));
-	}
+    @Override
+    public boolean cancelBySourceAndSourceKey(String source, String sourceKey, Long rawIngestId) {
+        return Boolean.TRUE.equals(
+                transactionTemplate.execute(status -> cancelInTransaction(source, sourceKey, rawIngestId)));
+    }
 
-	private boolean insertInTransaction(NormalizedTradeCommand command) {
-		Optional<Long> registryId = insertRegistry(command);
-		if (registryId.isEmpty()) {
-			return false;
-		}
+    private boolean insertInTransaction(NormalizedTradeCommand command) {
+        Optional<Long> registryId = insertRegistry(command);
+        if (registryId.isEmpty()) {
+            return false;
+        }
 
-		lockFallbackIdentity(command);
-		NormalizedTradeDuplicateMatch existingTrade = findFallbackMatch(command);
-		if (existingTrade.tradeId().isPresent()) {
-			attachTrade(registryId.get(), existingTrade.tradeId().get(), command.dealDate());
-			return false;
-		}
-		if (existingTrade.ambiguous()) {
-			return false;
-		}
+        lockFallbackIdentity(command);
+        NormalizedTradeDuplicateMatch existingTrade = findFallbackMatch(command);
+        if (existingTrade.tradeId().isPresent()) {
+            attachTrade(registryId.get(), existingTrade.tradeId().get(), command.dealDate());
+            return false;
+        }
+        if (existingTrade.ambiguous()) {
+            return false;
+        }
 
-		Optional<Long> tradeId = insertTrade(command);
-		if (tradeId.isEmpty()) {
-			NormalizedTradeDuplicateMatch conflictedTrade = findFallbackMatch(command);
-			if (conflictedTrade.tradeId().isPresent()) {
-				attachTrade(registryId.get(), conflictedTrade.tradeId().get(), command.dealDate());
-			}
-			else if (!conflictedTrade.ambiguous()) {
-				throw new IllegalStateException("fallback duplicate trade id was not found");
-			}
-			return false;
-		}
+        Optional<Long> tradeId = insertTrade(command);
+        if (tradeId.isEmpty()) {
+            NormalizedTradeDuplicateMatch conflictedTrade = findFallbackMatch(command);
+            if (conflictedTrade.tradeId().isPresent()) {
+                attachTrade(registryId.get(), conflictedTrade.tradeId().get(), command.dealDate());
+            } else if (!conflictedTrade.ambiguous()) {
+                throw new IllegalStateException("fallback duplicate trade id was not found");
+            }
+            return false;
+        }
 
-		attachTrade(registryId.get(), tradeId.get(), command.dealDate());
-		return true;
-	}
+        attachTrade(registryId.get(), tradeId.get(), command.dealDate());
+        return true;
+    }
 
-	private void lockFallbackIdentity(NormalizedTradeCommand command) {
-		jdbcClient.sql("SELECT pg_advisory_xact_lock(:namespace, :lockKey)")
-			.param("namespace", FALLBACK_IDENTITY_LOCK_NAMESPACE)
-			.param("lockKey", fallbackIdentityLockKey(command))
-			.query((resultSet, rowNumber) -> 0)
-			.single();
-	}
+    private void lockFallbackIdentity(NormalizedTradeCommand command) {
+        jdbcClient
+                .sql("SELECT pg_advisory_xact_lock(:namespace, :lockKey)")
+                .param("namespace", FALLBACK_IDENTITY_LOCK_NAMESPACE)
+                .param("lockKey", fallbackIdentityLockKey(command))
+                .query((resultSet, rowNumber) -> 0)
+                .single();
+    }
 
-	private Optional<Long> insertRegistry(NormalizedTradeCommand command) {
-		return insertRegistry(command.source(), command.sourceKey(), command.rawIngestId());
-	}
+    private Optional<Long> insertRegistry(NormalizedTradeCommand command) {
+        return insertRegistry(command.source(), command.sourceKey(), command.rawIngestId());
+    }
 
-	private Optional<Long> insertRegistry(String source, String sourceKey, Long rawIngestId) {
-		return jdbcClient.sql("""
+    private Optional<Long> insertRegistry(String source, String sourceKey, Long rawIngestId) {
+        return jdbcClient
+                .sql("""
 			INSERT INTO trade_source_key_registry (source, source_key, raw_ingest_id)
 			VALUES (:source, :sourceKey, :rawIngestId)
 			ON CONFLICT (source, source_key) DO NOTHING
 			RETURNING id
 			""")
-			.param("source", source)
-			.param("sourceKey", sourceKey)
-			.param("rawIngestId", rawIngestId)
-			.query(Long.class)
-			.optional();
-	}
+                .param("source", source)
+                .param("sourceKey", sourceKey)
+                .param("rawIngestId", rawIngestId)
+                .query(Long.class)
+                .optional();
+    }
 
-	private boolean cancelInTransaction(String source, String sourceKey, Long rawIngestId) {
-		insertRegistry(source, sourceKey, rawIngestId);
-		int updated = jdbcClient.sql("""
+    private boolean cancelInTransaction(String source, String sourceKey, Long rawIngestId) {
+        insertRegistry(source, sourceKey, rawIngestId);
+        int updated = jdbcClient
+                .sql("""
 			UPDATE trade t
 			SET deleted_at = now(),
 			    updated_at = now()
@@ -137,14 +137,15 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 			  AND r.source_key = :sourceKey
 			  AND t.deleted_at IS NULL
 			""")
-			.param("source", source)
-			.param("sourceKey", sourceKey)
-			.update();
-		return updated > 0;
-	}
+                .param("source", source)
+                .param("sourceKey", sourceKey)
+                .update();
+        return updated > 0;
+    }
 
-	private Optional<Long> insertTrade(NormalizedTradeCommand command) {
-		return jdbcClient.sql("""
+    private Optional<Long> insertTrade(NormalizedTradeCommand command) {
+        return jdbcClient
+                .sql("""
 			INSERT INTO trade (
 			    raw_ingest_id,
 			    complex_id,
@@ -174,35 +175,35 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 			ON CONFLICT DO NOTHING
 			RETURNING id
 			""")
-			.param("rawIngestId", command.rawIngestId())
-			.param("complexId", command.complexId())
-			.param("dealDate", command.dealDate())
-			.param("dealAmount", command.dealAmount())
-			.param("floor", command.floor())
-			.param("exclArea", decimalOrNull(command.exclArea()))
-			.param("aptDong", command.aptDong())
-			.param("source", command.source())
-			.param("sourceKey", command.sourceKey())
-			.param("complexPk", command.complexPk())
-			.param("aptSeq", command.aptSeq())
-			.query(Long.class)
-			.optional();
-	}
+                .param("rawIngestId", command.rawIngestId())
+                .param("complexId", command.complexId())
+                .param("dealDate", command.dealDate())
+                .param("dealAmount", command.dealAmount())
+                .param("floor", command.floor())
+                .param("exclArea", decimalOrNull(command.exclArea()))
+                .param("aptDong", command.aptDong())
+                .param("source", command.source())
+                .param("sourceKey", command.sourceKey())
+                .param("complexPk", command.complexPk())
+                .param("aptSeq", command.aptSeq())
+                .query(Long.class)
+                .optional();
+    }
 
-	private NormalizedTradeDuplicateMatch findFallbackMatch(NormalizedTradeCommand command) {
-		if (command.aptDong() == null) {
-			return duplicatePolicy.resolve(null, Optional.empty(), Optional.empty(), findFallbackCandidateIds(command));
-		}
+    private NormalizedTradeDuplicateMatch findFallbackMatch(NormalizedTradeCommand command) {
+        if (command.aptDong() == null) {
+            return duplicatePolicy.resolve(null, Optional.empty(), Optional.empty(), findFallbackCandidateIds(command));
+        }
 
-		Optional<Long> exactAptDong = findExistingTradeIdByAptDong(command);
-		Optional<Long> missingAptDong = exactAptDong.isPresent()
-			? Optional.empty()
-			: findExistingTradeIdWithMissingAptDong(command);
-		return duplicatePolicy.resolve(command.aptDong(), exactAptDong, missingAptDong, List.of());
-	}
+        Optional<Long> exactAptDong = findExistingTradeIdByAptDong(command);
+        Optional<Long> missingAptDong =
+                exactAptDong.isPresent() ? Optional.empty() : findExistingTradeIdWithMissingAptDong(command);
+        return duplicatePolicy.resolve(command.aptDong(), exactAptDong, missingAptDong, List.of());
+    }
 
-	private Optional<Long> findExistingTradeIdByAptDong(NormalizedTradeCommand command) {
-		return jdbcClient.sql("""
+    private Optional<Long> findExistingTradeIdByAptDong(NormalizedTradeCommand command) {
+        return jdbcClient
+                .sql("""
 			SELECT id
 			FROM trade
 			WHERE complex_id = :complexId
@@ -214,18 +215,19 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 			ORDER BY id
 			LIMIT 1
 			""")
-			.param("complexId", command.complexId())
-			.param("dealDate", command.dealDate())
-			.param("floor", command.floor())
-			.param("exclArea", decimalOrNull(command.exclArea()))
-			.param("dealAmount", command.dealAmount())
-			.param("aptDong", command.aptDong())
-			.query(Long.class)
-			.optional();
-	}
+                .param("complexId", command.complexId())
+                .param("dealDate", command.dealDate())
+                .param("floor", command.floor())
+                .param("exclArea", decimalOrNull(command.exclArea()))
+                .param("dealAmount", command.dealAmount())
+                .param("aptDong", command.aptDong())
+                .query(Long.class)
+                .optional();
+    }
 
-	private Optional<Long> findExistingTradeIdWithMissingAptDong(NormalizedTradeCommand command) {
-		return jdbcClient.sql("""
+    private Optional<Long> findExistingTradeIdWithMissingAptDong(NormalizedTradeCommand command) {
+        return jdbcClient
+                .sql("""
 			SELECT id
 			FROM trade
 			WHERE complex_id = :complexId
@@ -237,17 +239,18 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 			ORDER BY id
 			LIMIT 1
 			""")
-			.param("complexId", command.complexId())
-			.param("dealDate", command.dealDate())
-			.param("floor", command.floor())
-			.param("exclArea", decimalOrNull(command.exclArea()))
-			.param("dealAmount", command.dealAmount())
-			.query(Long.class)
-			.optional();
-	}
+                .param("complexId", command.complexId())
+                .param("dealDate", command.dealDate())
+                .param("floor", command.floor())
+                .param("exclArea", decimalOrNull(command.exclArea()))
+                .param("dealAmount", command.dealAmount())
+                .query(Long.class)
+                .optional();
+    }
 
-	private List<Long> findFallbackCandidateIds(NormalizedTradeCommand command) {
-		return jdbcClient.sql("""
+    private List<Long> findFallbackCandidateIds(NormalizedTradeCommand command) {
+        return jdbcClient
+                .sql("""
 			SELECT id
 			FROM trade
 			WHERE complex_id = :complexId
@@ -258,42 +261,42 @@ public class JdbcNormalizedTradeRepository implements NormalizedTradeRepository 
 			ORDER BY id
 			LIMIT 2
 			""")
-			.param("complexId", command.complexId())
-			.param("dealDate", command.dealDate())
-			.param("floor", command.floor())
-			.param("exclArea", decimalOrNull(command.exclArea()))
-			.param("dealAmount", command.dealAmount())
-			.query(Long.class)
-			.list();
-	}
+                .param("complexId", command.complexId())
+                .param("dealDate", command.dealDate())
+                .param("floor", command.floor())
+                .param("exclArea", decimalOrNull(command.exclArea()))
+                .param("dealAmount", command.dealAmount())
+                .query(Long.class)
+                .list();
+    }
 
-	private int fallbackIdentityLockKey(NormalizedTradeCommand command) {
-		BigDecimal exclArea = decimalOrNull(command.exclArea());
-		String material = "%s|%s|%s|%s|%s".formatted(
-			command.complexId(),
-			command.dealDate(),
-			command.floor(),
-			exclArea == null ? "" : exclArea.stripTrailingZeros().toPlainString(),
-			command.dealAmount()
-		);
-		return material.hashCode();
-	}
+    private int fallbackIdentityLockKey(NormalizedTradeCommand command) {
+        BigDecimal exclArea = decimalOrNull(command.exclArea());
+        String material = "%s|%s|%s|%s|%s"
+                .formatted(
+                        command.complexId(),
+                        command.dealDate(),
+                        command.floor(),
+                        exclArea == null ? "" : exclArea.stripTrailingZeros().toPlainString(),
+                        command.dealAmount());
+        return material.hashCode();
+    }
 
-	private void attachTrade(Long registryId, Long tradeId, java.time.LocalDate tradeDealDate) {
-		jdbcClient.sql("""
+    private void attachTrade(Long registryId, Long tradeId, java.time.LocalDate tradeDealDate) {
+        jdbcClient
+                .sql("""
 			UPDATE trade_source_key_registry
 			SET trade_id = :tradeId,
 			    trade_deal_date = :tradeDealDate
 			WHERE id = :registryId
 			""")
-			.param("tradeId", tradeId)
-			.param("tradeDealDate", tradeDealDate)
-			.param("registryId", registryId)
-			.update();
-	}
+                .param("tradeId", tradeId)
+                .param("tradeDealDate", tradeDealDate)
+                .param("registryId", registryId)
+                .update();
+    }
 
-	private BigDecimal decimalOrNull(Double value) {
-		return TradeExclAreaNormalizer.normalize(value);
-	}
-
+    private BigDecimal decimalOrNull(Double value) {
+        return TradeExclAreaNormalizer.normalize(value);
+    }
 }

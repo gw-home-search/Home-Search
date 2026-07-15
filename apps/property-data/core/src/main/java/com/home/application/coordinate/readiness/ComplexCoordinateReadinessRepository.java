@@ -5,11 +5,11 @@ import java.util.List;
 
 public interface ComplexCoordinateReadinessRepository {
 
-	List<Long> findPendingCaseParcelIds(int limit);
+    List<Long> findPendingCaseParcelIds(int limit);
 
-	void markCaseFailed(Long parcelId, String reason);
+    void markCaseFailed(Long parcelId, String reason);
 
-	default List<Long> findRetryableCaseParcelIds(int limit, Instant retryBefore) {
-		return List.of();
-	}
+    default List<Long> findRetryableCaseParcelIds(int limit, Instant retryBefore) {
+        return List.of();
+    }
 }

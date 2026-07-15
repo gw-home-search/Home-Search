@@ -23,8 +23,10 @@ class OAuthLoginSuccessHandlerTest {
         var response = new MockHttpServletResponse();
         when(authentication.getPrincipal()).thenReturn((OAuthAuthenticatedUser) () -> 42L);
         when(refresh.issue(42L)).thenThrow(new IllegalStateException("database unavailable"));
-        var handler = new OAuthLoginSuccessHandler(refresh,
-                new RefreshTokenCookieFactory(true, Duration.ofDays(30), "prod"), sessions,
+        var handler = new OAuthLoginSuccessHandler(
+                refresh,
+                new RefreshTokenCookieFactory(true, Duration.ofDays(30), "prod"),
+                sessions,
                 "https://home.example/auth/success");
 
         assertThatThrownBy(() -> handler.onAuthenticationSuccess(request, response, authentication))

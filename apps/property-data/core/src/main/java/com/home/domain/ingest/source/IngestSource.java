@@ -5,26 +5,26 @@ package com.home.domain.ingest.source;
  */
 public record IngestSource(String value) {
 
-	public static IngestSource rtms() {
-		return new IngestSource("RTMS");
-	}
+    public static IngestSource rtms() {
+        return new IngestSource("RTMS");
+    }
 
-	public static IngestSource of(String value) {
-		return new IngestSource(value);
-	}
+    public static IngestSource of(String value) {
+        return new IngestSource(value);
+    }
 
-	public static IngestSource ofOrDefault(String value, String defaultValue) {
-		return new IngestSource(hasText(value) ? value : defaultValue);
-	}
+    public static IngestSource ofOrDefault(String value, String defaultValue) {
+        return new IngestSource(hasText(value) ? value : defaultValue);
+    }
 
-	public IngestSource {
-		if (!hasText(value)) {
-			throw new IllegalArgumentException("source is required");
-		}
-		value = value.trim();
-	}
+    public IngestSource {
+        if (!hasText(value)) {
+            throw new IllegalArgumentException("source is required");
+        }
+        value = value.trim();
+    }
 
-	private static boolean hasText(String value) {
-		return value != null && !value.isBlank();
-	}
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
 }

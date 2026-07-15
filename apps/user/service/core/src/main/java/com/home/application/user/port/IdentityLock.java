@@ -5,5 +5,8 @@ import com.home.domain.user.OAuthIdentityKey;
 @FunctionalInterface
 public interface IdentityLock {
     void lock(OAuthIdentityKey identity);
-    static IdentityLock noop() { return ignored -> { }; }
+
+    static IdentityLock noop() {
+        return ignored -> {};
+    }
 }

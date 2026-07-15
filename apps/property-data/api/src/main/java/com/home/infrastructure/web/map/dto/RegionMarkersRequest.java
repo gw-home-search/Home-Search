@@ -8,30 +8,21 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
 public record RegionMarkersRequest(
-	@DecimalMin("-90.0")
-	@DecimalMax("90.0")
-	@NotNull Double swLat,
-	@DecimalMin("-180.0")
-	@DecimalMax("180.0")
-	@NotNull Double swLng,
-	@DecimalMin("-90.0")
-	@DecimalMax("90.0")
-	@NotNull Double neLat,
-	@DecimalMin("-180.0")
-	@DecimalMax("180.0")
-	@NotNull Double neLng,
-	@NotBlank
-	@Pattern(regexp = "si-do|si-gun-gu|eup-myeon-dong")
-	String region
-) {
+        @DecimalMin("-90.0") @DecimalMax("90.0") @NotNull Double swLat,
+        @DecimalMin("-180.0") @DecimalMax("180.0") @NotNull Double swLng,
+        @DecimalMin("-90.0") @DecimalMax("90.0") @NotNull Double neLat,
+        @DecimalMin("-180.0") @DecimalMax("180.0") @NotNull Double neLng,
 
-	@AssertTrue
-	public boolean isLatitudeBoundsOrdered() {
-		return swLat == null || neLat == null || swLat <= neLat;
-	}
+        @NotBlank @Pattern(regexp = "si-do|si-gun-gu|eup-myeon-dong")
+        String region) {
 
-	@AssertTrue
-	public boolean isLongitudeBoundsOrdered() {
-		return swLng == null || neLng == null || swLng <= neLng;
-	}
+    @AssertTrue
+    public boolean isLatitudeBoundsOrdered() {
+        return swLat == null || neLat == null || swLat <= neLat;
+    }
+
+    @AssertTrue
+    public boolean isLongitudeBoundsOrdered() {
+        return swLng == null || neLng == null || swLng <= neLng;
+    }
 }

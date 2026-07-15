@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.Connection;
-
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
@@ -22,13 +21,14 @@ class SourceDataFlywayIntegrationTest {
             DriverManagerDataSource dataSource = dataSource(database);
             SourceDataMigrationRunner runner = new SourceDataMigrationRunner(dataSource);
 
-            runner.run(new DefaultApplicationArguments(
-                "--operation=migrate", "--target=2", "--confirm=2"));
+            runner.run(new DefaultApplicationArguments("--operation=migrate", "--target=2", "--confirm=2"));
 
             assertThat(runner.getExitCode()).isZero();
-            assertThat(scalar(dataSource,
-                "SELECT count(*) FROM reference.flyway_schema_history WHERE success AND version IN ('1','2')"))
-                .isEqualTo(2);
+            assertThat(
+                            scalar(
+                                    dataSource,
+                                    "SELECT count(*) FROM reference.flyway_schema_history WHERE success AND version IN ('1','2')"))
+                    .isEqualTo(2);
         }
     }
 
@@ -40,7 +40,7 @@ class SourceDataFlywayIntegrationTest {
             createLegacySchema(dataSource);
 
             LegacyCoordinateSourceFingerprint.LegacyFingerprintEvidence evidence =
-                new LegacyCoordinateSourceFingerprint().verify(dataSource);
+                    new LegacyCoordinateSourceFingerprint().verify(dataSource);
             assertThat(evidence.estimatedRows()).containsKeys("coordinate_snapshot_run", "parcel_coordinate_snapshot");
 
             Flyway flyway = flyway(dataSource, "2");
@@ -48,17 +48,29 @@ class SourceDataFlywayIntegrationTest {
             flyway.migrate();
             flyway.validate();
 
-            assertThat(scalar(dataSource, "SELECT count(*) FROM reference.parcel_coordinate_snapshot")).isEqualTo(1);
-            assertThat(scalar(dataSource, "SELECT count(*) FROM reference.flyway_schema_history WHERE version='1' AND type='BASELINE' AND success")).isEqualTo(1);
-            assertThat(scalar(dataSource, "SELECT count(*) FROM reference.flyway_schema_history WHERE version='2' AND success")).isEqualTo(1);
-            assertThat(regclass(dataSource, "reference.coordinate_snapshot_publish_checkpoint")).isNotNull();
-            assertThat(regclass(dataSource, "geo_enrichment.vworld_wfs_footprint_cache")).isNull();
+            assertThat(scalar(dataSource, "SELECT count(*) FROM reference.parcel_coordinate_snapshot"))
+                    .isEqualTo(1);
+            assertThat(
+                            scalar(
+                                    dataSource,
+                                    "SELECT count(*) FROM reference.flyway_schema_history WHERE version='1' AND type='BASELINE' AND success"))
+                    .isEqualTo(1);
+            assertThat(scalar(
+                            dataSource,
+                            "SELECT count(*) FROM reference.flyway_schema_history WHERE version='2' AND success"))
+                    .isEqualTo(1);
+            assertThat(regclass(dataSource, "reference.coordinate_snapshot_publish_checkpoint"))
+                    .isNotNull();
+            assertThat(regclass(dataSource, "geo_enrichment.vworld_wfs_footprint_cache"))
+                    .isNull();
 
             Flyway latest = flyway(dataSource, "4");
             latest.migrate();
             latest.validate();
-            assertThat(regclass(dataSource, "geo_enrichment.vworld_wfs_footprint_cache")).isNotNull();
-            assertThat(scalar(dataSource, "SELECT count(*) FROM reference.parcel_coordinate_snapshot")).isEqualTo(1);
+            assertThat(regclass(dataSource, "geo_enrichment.vworld_wfs_footprint_cache"))
+                    .isNotNull();
+            assertThat(scalar(dataSource, "SELECT count(*) FROM reference.parcel_coordinate_snapshot"))
+                    .isEqualTo(1);
         }
     }
 
@@ -73,29 +85,40 @@ class SourceDataFlywayIntegrationTest {
             flyway.migrate();
             flyway.validate();
 
-            assertThat(scalar(dataSource, "SELECT count(*) FROM reference.flyway_schema_history WHERE success AND version IS NOT NULL")).isEqualTo(4);
-            assertThat(regclass(dataSource, "reference.parcel_coordinate_snapshot")).isNotNull();
-            assertThat(regclass(dataSource, "reference.parcel_coordinate_snapshot_stage")).isNotNull();
-            assertThat(regclass(dataSource, "geo_enrichment.vworld_wfs_footprint_cache")).isNotNull();
-            DriverManagerDataSource reader = new DriverManagerDataSource(database.getJdbcUrl(), "home_search_coordinate_reader", "reader-test-password");
-            assertThat(scalar(reader, "SELECT count(*) FROM reference.parcel_coordinate_snapshot")).isZero();
-            assertThatThrownBy(() -> execute(reader, "INSERT INTO reference.parcel_coordinate_snapshot(pnu) VALUES ('1168010300101400001')"))
-                .isInstanceOf(Exception.class);
-            DriverManagerDataSource importer = new DriverManagerDataSource(database.getJdbcUrl(), "home_search_coordinate_importer", "importer-test-password");
+            assertThat(
+                            scalar(
+                                    dataSource,
+                                    "SELECT count(*) FROM reference.flyway_schema_history WHERE success AND version IS NOT NULL"))
+                    .isEqualTo(4);
+            assertThat(regclass(dataSource, "reference.parcel_coordinate_snapshot"))
+                    .isNotNull();
+            assertThat(regclass(dataSource, "reference.parcel_coordinate_snapshot_stage"))
+                    .isNotNull();
+            assertThat(regclass(dataSource, "geo_enrichment.vworld_wfs_footprint_cache"))
+                    .isNotNull();
+            DriverManagerDataSource reader = new DriverManagerDataSource(
+                    database.getJdbcUrl(), "home_search_coordinate_reader", "reader-test-password");
+            assertThat(scalar(reader, "SELECT count(*) FROM reference.parcel_coordinate_snapshot"))
+                    .isZero();
+            assertThatThrownBy(() -> execute(
+                            reader,
+                            "INSERT INTO reference.parcel_coordinate_snapshot(pnu) VALUES ('1168010300101400001')"))
+                    .isInstanceOf(Exception.class);
+            DriverManagerDataSource importer = new DriverManagerDataSource(
+                    database.getJdbcUrl(), "home_search_coordinate_importer", "importer-test-password");
             execute(importer, "CREATE TABLE reference.importer_work_table(id integer)");
-            assertThatThrownBy(() -> execute(importer,
-                "UPDATE reference.flyway_schema_history SET description=description WHERE false"))
-                .isInstanceOf(Exception.class);
+            assertThatThrownBy(() -> execute(
+                            importer, "UPDATE reference.flyway_schema_history SET description=description WHERE false"))
+                    .isInstanceOf(Exception.class);
         }
     }
 
     private PostgreSQLContainer<?> database() {
-        DockerImageName image = DockerImageName.parse("postgis/postgis:16-3.4")
-            .asCompatibleSubstituteFor("postgres");
+        DockerImageName image = DockerImageName.parse("postgis/postgis:16-3.4").asCompatibleSubstituteFor("postgres");
         return new PostgreSQLContainer<>(image)
-            .withDatabaseName("home_search_coordinate_source")
-            .withUsername("source_test")
-            .withPassword("source_test");
+                .withDatabaseName("home_search_coordinate_source")
+                .withUsername("source_test")
+                .withPassword("source_test");
     }
 
     private DriverManagerDataSource dataSource(PostgreSQLContainer<?> database) {
@@ -104,21 +127,22 @@ class SourceDataFlywayIntegrationTest {
 
     private Flyway flyway(DriverManagerDataSource dataSource, String target) {
         return Flyway.configure()
-            .dataSource(dataSource)
-            .locations("classpath:db/migration/coordinate-source")
-            .schemas("reference", "public", "geo_enrichment")
-            .defaultSchema("reference")
-            .table("flyway_schema_history")
-            .baselineVersion("1")
-            .baselineDescription("controlled legacy coordinate source adoption")
-            .target(target)
-            .load();
+                .dataSource(dataSource)
+                .locations("classpath:db/migration/coordinate-source")
+                .schemas("reference", "public", "geo_enrichment")
+                .defaultSchema("reference")
+                .table("flyway_schema_history")
+                .baselineVersion("1")
+                .baselineDescription("controlled legacy coordinate source adoption")
+                .target(target)
+                .load();
     }
 
     private void createLegacySchema(DriverManagerDataSource dataSource) throws Exception {
         try (Connection connection = dataSource.getConnection()) {
-            ScriptUtils.executeSqlScript(connection,
-                new ClassPathResource("db/migration/coordinate-source/V1__create_coordinate_source_schema.sql"));
+            ScriptUtils.executeSqlScript(
+                    connection,
+                    new ClassPathResource("db/migration/coordinate-source/V1__create_coordinate_source_schema.sql"));
             execute(connection, """
                 DROP TABLE reference.parcel_coordinate_snapshot_publish;
                 DROP TABLE reference.parcel_coordinate_snapshot_stage;
@@ -156,28 +180,47 @@ class SourceDataFlywayIntegrationTest {
 
     private void createSourceRoles(DriverManagerDataSource dataSource) {
         try (Connection connection = dataSource.getConnection()) {
-            execute(connection, "CREATE ROLE home_search_coordinate_reader LOGIN PASSWORD 'reader-test-password'; CREATE ROLE home_search_coordinate_importer LOGIN PASSWORD 'importer-test-password'");
-        } catch (Exception exception) { throw new IllegalStateException(exception); }
+            execute(
+                    connection,
+                    "CREATE ROLE home_search_coordinate_reader LOGIN PASSWORD 'reader-test-password'; CREATE ROLE home_search_coordinate_importer LOGIN PASSWORD 'importer-test-password'");
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private void execute(Connection connection, String sql) throws Exception {
-        try (var statement = connection.createStatement()) { statement.execute(sql); }
+        try (var statement = connection.createStatement()) {
+            statement.execute(sql);
+        }
     }
 
     private void execute(DriverManagerDataSource dataSource, String sql) throws Exception {
-        try (Connection connection = dataSource.getConnection()) { execute(connection, sql); }
+        try (Connection connection = dataSource.getConnection()) {
+            execute(connection, sql);
+        }
     }
 
     private long scalar(DriverManagerDataSource dataSource, String sql) {
-        try (Connection connection = dataSource.getConnection(); var statement = connection.prepareStatement(sql); var result = statement.executeQuery()) {
-            result.next(); return result.getLong(1);
-        } catch (Exception exception) { throw new IllegalStateException(exception); }
+        try (Connection connection = dataSource.getConnection();
+                var statement = connection.prepareStatement(sql);
+                var result = statement.executeQuery()) {
+            result.next();
+            return result.getLong(1);
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private String regclass(DriverManagerDataSource dataSource, String relation) {
-        try (Connection connection = dataSource.getConnection(); var statement = connection.prepareStatement("SELECT to_regclass(?)::text")) {
+        try (Connection connection = dataSource.getConnection();
+                var statement = connection.prepareStatement("SELECT to_regclass(?)::text")) {
             statement.setString(1, relation);
-            try (var result = statement.executeQuery()) { result.next(); return result.getString(1); }
-        } catch (Exception exception) { throw new IllegalStateException(exception); }
+            try (var result = statement.executeQuery()) {
+                result.next();
+                return result.getString(1);
+            }
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 }

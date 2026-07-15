@@ -1,30 +1,29 @@
 package com.home.infrastructure.persistence.coordinate;
 
-import java.util.List;
-import java.util.Objects;
-
-import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 import com.home.application.coordinate.display.ComplexDisplayCoordinateCommand;
 import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionRepository;
 import com.home.application.coordinate.display.ComplexDisplayCoordinateProjectionTarget;
+import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
 import com.home.domain.coordinate.CoordinateSource;
-
+import java.util.List;
+import java.util.Objects;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class JdbcComplexDisplayCoordinateProjectionRepository implements ComplexDisplayCoordinateProjectionRepository {
 
-	private final JdbcClient jdbcClient;
+    private final JdbcClient jdbcClient;
 
-	public JdbcComplexDisplayCoordinateProjectionRepository(JdbcClient jdbcClient) {
-		this.jdbcClient = Objects.requireNonNull(jdbcClient);
-	}
+    public JdbcComplexDisplayCoordinateProjectionRepository(JdbcClient jdbcClient) {
+        this.jdbcClient = Objects.requireNonNull(jdbcClient);
+    }
 
-	@Override
-	public List<ComplexDisplayCoordinateProjectionTarget> findProjectionTargets(int limit) {
-		if (limit < 1) {
-			return List.of();
-		}
-		return jdbcClient.sql("""
+    @Override
+    public List<ComplexDisplayCoordinateProjectionTarget> findProjectionTargets(int limit) {
+        if (limit < 1) {
+            return List.of();
+        }
+        return jdbcClient
+                .sql("""
 			WITH parcel_complex_counts AS (
 			    SELECT parcel_id, count(*)::integer AS parcel_complex_count
 			    FROM complex
@@ -71,29 +70,29 @@ public class JdbcComplexDisplayCoordinateProjectionRepository implements Complex
 			ORDER BY c.id
 			LIMIT :limit
 			""")
-			.param("limit", limit)
-			.param("buildingFootprintSource", CoordinateSource.BUILDING_FOOTPRINT.storedValue())
-			.query((resultSet, rowNumber) -> new ComplexDisplayCoordinateProjectionTarget(
-				resultSet.getLong("complex_id"),
-				resultSet.getLong("parcel_id"),
-				resultSet.getBigDecimal("parcel_latitude"),
-				resultSet.getBigDecimal("parcel_longitude"),
-				resultSet.getInt("parcel_complex_count"),
-				mapCoordinateCaseStatus(resultSet.getString("coordinate_case_status")),
-				resultSet.getString("existing_coordinate_source"),
-				nullableLong(resultSet, "resolved_building_footprint_id"),
-				resultSet.getBigDecimal("resolved_latitude"),
-				resultSet.getBigDecimal("resolved_longitude"),
-				nullableInteger(resultSet, "resolved_confidence"),
-				resultSet.getString("resolved_reason")
-			))
-			.list();
-	}
+                .param("limit", limit)
+                .param("buildingFootprintSource", CoordinateSource.BUILDING_FOOTPRINT.storedValue())
+                .query((resultSet, rowNumber) -> new ComplexDisplayCoordinateProjectionTarget(
+                        resultSet.getLong("complex_id"),
+                        resultSet.getLong("parcel_id"),
+                        resultSet.getBigDecimal("parcel_latitude"),
+                        resultSet.getBigDecimal("parcel_longitude"),
+                        resultSet.getInt("parcel_complex_count"),
+                        mapCoordinateCaseStatus(resultSet.getString("coordinate_case_status")),
+                        resultSet.getString("existing_coordinate_source"),
+                        nullableLong(resultSet, "resolved_building_footprint_id"),
+                        resultSet.getBigDecimal("resolved_latitude"),
+                        resultSet.getBigDecimal("resolved_longitude"),
+                        nullableInteger(resultSet, "resolved_confidence"),
+                        resultSet.getString("resolved_reason")))
+                .list();
+    }
 
-	@Override
-	public void saveDisplayCoordinate(ComplexDisplayCoordinateCommand command) {
-		Objects.requireNonNull(command, "command is required");
-		jdbcClient.sql("""
+    @Override
+    public void saveDisplayCoordinate(ComplexDisplayCoordinateCommand command) {
+        Objects.requireNonNull(command, "command is required");
+        jdbcClient
+                .sql("""
 			INSERT INTO complex_display_coordinate (
 			    complex_id,
 			    building_footprint_id,
@@ -128,37 +127,37 @@ public class JdbcComplexDisplayCoordinateProjectionRepository implements Complex
 			WHERE complex_display_coordinate.coordinate_source <> :buildingFootprintSource
 			   OR EXCLUDED.coordinate_source = :buildingFootprintSource
 			""")
-			.param("complexId", command.complexId())
-			.param("buildingFootprintId", command.buildingFootprintId())
-			.param("latitude", command.latitude())
-			.param("longitude", command.longitude())
-			.param("coordinateSource", command.coordinateSource())
-			.param("buildingFootprintSource", CoordinateSource.BUILDING_FOOTPRINT.storedValue())
-			.param("confidence", command.confidence())
-			.param("reason", command.reason())
-			.update();
-	}
+                .param("complexId", command.complexId())
+                .param("buildingFootprintId", command.buildingFootprintId())
+                .param("latitude", command.latitude())
+                .param("longitude", command.longitude())
+                .param("coordinateSource", command.coordinateSource())
+                .param("buildingFootprintSource", CoordinateSource.BUILDING_FOOTPRINT.storedValue())
+                .param("confidence", command.confidence())
+                .param("reason", command.reason())
+                .update();
+    }
 
-	private ComplexCoordinateCaseStatus mapCoordinateCaseStatus(String value) {
-		if (value == null) {
-			return null;
-		}
-		return ComplexCoordinateCaseStatus.valueOf(value);
-	}
+    private ComplexCoordinateCaseStatus mapCoordinateCaseStatus(String value) {
+        if (value == null) {
+            return null;
+        }
+        return ComplexCoordinateCaseStatus.valueOf(value);
+    }
 
-	private Long nullableLong(java.sql.ResultSet resultSet, String columnName) throws java.sql.SQLException {
-		long value = resultSet.getLong(columnName);
-		if (resultSet.wasNull()) {
-			return null;
-		}
-		return value;
-	}
+    private Long nullableLong(java.sql.ResultSet resultSet, String columnName) throws java.sql.SQLException {
+        long value = resultSet.getLong(columnName);
+        if (resultSet.wasNull()) {
+            return null;
+        }
+        return value;
+    }
 
-	private Integer nullableInteger(java.sql.ResultSet resultSet, String columnName) throws java.sql.SQLException {
-		int value = resultSet.getInt(columnName);
-		if (resultSet.wasNull()) {
-			return null;
-		}
-		return value;
-	}
+    private Integer nullableInteger(java.sql.ResultSet resultSet, String columnName) throws java.sql.SQLException {
+        int value = resultSet.getInt(columnName);
+        if (resultSet.wasNull()) {
+            return null;
+        }
+        return value;
+    }
 }

@@ -3,23 +3,22 @@ package com.home.infrastructure.persistence.ingest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.home.infrastructure.persistence.ingest.normalization.JdbcTradePartitionMaintenanceRepository;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class JdbcTradePartitionMaintenanceRepositoryTest extends JdbcPostgresTestSupport {
 
-	@Test
-	@DisplayName("trade partition maintenance는 미래 연도 partition을 만들고 해당 연도 거래를 default가 아닌 연도 partition에 라우팅한다")
-	void createsFutureYearPartitionAndRoutesTradeIntoIt() {
-		JdbcTradePartitionMaintenanceRepository repository = new JdbcTradePartitionMaintenanceRepository(jdbcClient);
-		assertThat(partitionExists("trade_2032")).isFalse();
+    @Test
+    @DisplayName("trade partition maintenance는 미래 연도 partition을 만들고 해당 연도 거래를 default가 아닌 연도 partition에 라우팅한다")
+    void createsFutureYearPartitionAndRoutesTradeIntoIt() {
+        JdbcTradePartitionMaintenanceRepository repository = new JdbcTradePartitionMaintenanceRepository(jdbcClient);
+        assertThat(partitionExists("trade_2032")).isFalse();
 
-		repository.ensureYearlyPartitions(2032, 2032);
+        repository.ensureYearlyPartitions(2032, 2032);
 
-		assertThat(partitionExists("trade_2032")).isTrue();
-		seedComplex();
-		jdbcClient.sql("""
+        assertThat(partitionExists("trade_2032")).isTrue();
+        seedComplex();
+        jdbcClient.sql("""
 			INSERT INTO raw_trade_ingest (
 			    id,
 			    source,
@@ -43,7 +42,7 @@ class JdbcTradePartitionMaintenanceRepositoryTest extends JdbcPostgresTestSuppor
 			    'NORMALIZED'
 			)
 			""").update();
-		jdbcClient.sql("""
+        jdbcClient.sql("""
 			INSERT INTO trade (
 			    complex_id,
 			    deal_date,
@@ -72,11 +71,12 @@ class JdbcTradePartitionMaintenanceRepositoryTest extends JdbcPostgresTestSuppor
 			)
 			""").update();
 
-		assertThat(rowPartition("rtms-20320115")).isEqualTo("trade_2032");
-	}
+        assertThat(rowPartition("rtms-20320115")).isEqualTo("trade_2032");
+    }
 
-	private boolean partitionExists(String partitionName) {
-		return jdbcClient.sql("""
+    private boolean partitionExists(String partitionName) {
+        return jdbcClient
+                .sql("""
 			SELECT EXISTS (
 			    SELECT 1
 			    FROM pg_class child
@@ -86,19 +86,20 @@ class JdbcTradePartitionMaintenanceRepositoryTest extends JdbcPostgresTestSuppor
 			      AND child.relname = :partitionName
 			)
 			""")
-			.param("partitionName", partitionName)
-			.query(Boolean.class)
-			.single();
-	}
+                .param("partitionName", partitionName)
+                .query(Boolean.class)
+                .single();
+    }
 
-	private String rowPartition(String sourceKey) {
-		return jdbcClient.sql("""
+    private String rowPartition(String sourceKey) {
+        return jdbcClient
+                .sql("""
 			SELECT tableoid::regclass::text
 			FROM trade
 			WHERE source_key = :sourceKey
 			""")
-			.param("sourceKey", sourceKey)
-			.query(String.class)
-			.single();
-	}
+                .param("sourceKey", sourceKey)
+                .query(String.class)
+                .single();
+    }
 }

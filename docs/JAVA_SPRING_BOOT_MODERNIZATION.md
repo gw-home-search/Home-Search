@@ -3,7 +3,7 @@
 ## 실행 기준
 
 - baseline commit: `d601237`
-- 현재 진행 PR: `PR 5 — Java 21 / Boot 3.5 bridge`
+- 현재 진행 PR: `PR 6 — format baseline`
 - 전체 상태: `In Progress`
 - 시작일: 2026-07-14
 - 실행 원칙: 한 번에 하나의 PR만 진행하고, 선행 PR이 `Complete`인 경우에만 다음 PR을 시작한다.
@@ -76,8 +76,8 @@ property-data configuration file distribution:
 | 2 | property read capability split | Complete | PR 1 `Complete` |
 | 3 | read snapshot과 DTO 경로 | Complete | PR 2 `Complete` |
 | 4 | coordinate/ingest atomic workflows | Complete | PR 3 `Complete` |
-| 5 | Java 21 / Boot 3.5 bridge | In Progress | PR 4 `Complete` |
-| 6 | format baseline | Pending | PR 5 `Complete` |
+| 5 | Java 21 / Boot 3.5 bridge | Complete | PR 4 `Complete` |
+| 6 | format baseline | In Progress | PR 5 `Complete` |
 | 7 | Boot 4.1 / Jackson 3 | Pending | PR 6 `Complete` |
 | 8 | map SQL readability | Pending | PR 7 `Complete` |
 | 9 | property-data typed wiring | Pending | PR 8 `Complete` |
@@ -360,3 +360,66 @@ property-data configuration file distribution:
 - 검증 근거 확인: Java 21 toolchain/CI/container 설정, Boot manifest, 네 service gate, packaged exit code, API/runtime migration boundary, migration diff를 확인했다.
 - 검증 공백: 실제 container recreate 및 원격 CI는 실행하지 않았다.
 - 잔여 위험: third-party Gradle deprecation과 source-data CI aggregate 공백은 위 후속 PR에서 추적한다.
+
+### Merge
+
+- implementation commit: `8d34383e3bfcaf06af234cb4e9f5e1bf41e9d74d`
+- merge commit: `ad39968a51bf461dd803b2d39b39557441a06df8`
+
+## PR 6 Evidence
+
+### TDD 근거
+
+- 최초 RED: formatter 설정만 추가한 뒤 네 service root에서 `spotlessCheck`를 실행했다.
+- 예상 RED 실패: property-data 530개, user-service 84개를 포함해 기존 Java source의 format violation으로 실패했다. formatter configuration/runtime 오류는 없었다.
+- 최소 GREEN: Spotless 8.8.0과 Palantir Java Format 2.96.0으로 Java source만 기계적으로 포맷하고, 모든 build의 `spotlessCheck`를 GREEN으로 만들었다.
+
+### 계약 영향
+
+- `none`: production behavior, public API, SQL, migration, dependency version, env/secret contract를 변경하지 않았다.
+
+### Commit 분리
+
+- formatter 설정: `b49f0af3556750160621cdfd9b8adbf8b67fc9a2`
+- Java mechanical formatting: `6097e374e0dbcecb76f45db45610cdcb7780b615`
+- `.git-blame-ignore-revs`: `914c5aaa9e8abd1a6e8434226e281677a25f3dc0`
+- CI/gate 연결: `a673dd2c4762066275f736b10f2fb39f7928fe31`
+
+### 검증 근거 확인
+
+- formatter 대상 — Java 682개; mechanical commit의 non-Java 변경 0건
+- property-data + included libraries `spotlessCheck --rerun-tasks` — `Pass` (17s)
+- user-service + included libraries `spotlessCheck --rerun-tasks` — `Pass` (14s)
+- admin-service + included library `spotlessCheck --rerun-tasks` — `Pass` (13s)
+- source-data `check --dry-run` — `spotlessCheck` 연결 확인
+- 포맷 후 property-data fresh compile/test + Spotless — `Pass` (1m 36s)
+- 포맷 후 user-service fresh compile/test + Spotless — `Pass` (1m)
+- 포맷 후 admin-service fresh test + Spotless — `Pass` (1m 6s)
+- 포맷 후 source-data fresh test + Spotless — `Pass` (25s)
+- `backendQualityCheck --no-daemon --stacktrace` — `Pass` (12m 24s; Spotless/coverage/persistence/Flyway/REST Docs/OpenAPI/packaged Batch 포함)
+- user-service 단독 `userServiceQualityCheck --rerun-tasks` — `Pass` (2m 6s)
+- admin `spotlessCheck test persistenceTest apiContractTest securityTest --rerun-tasks` — `Pass` (39s)
+- source-data `check --rerun-tasks` — `Pass` (1m 10s)
+- `python3 .codex/harness/pr_lint.py --body-only --body-env PR_BODY` — `Pass`
+- repository root `git diff --check` — `Pass`
+- migration diff — 변경 0건
+
+### 검증 공백
+
+- 원격 CI는 실행하지 않았다. local task graph에서 property/user/admin/source와 세 included library의 Spotless 연결을 확인했다.
+
+### 잔여 위험
+
+- 여러 독립 Gradle build를 같은 worktree에서 동시에 `--rerun-tasks`로 실행하면 공유 included build output에 경합이 생길 수 있다. 실제 user/admin 병렬 실행에서 재현했고, user 단독 재실행은 GREEN이었다. GitHub job은 별도 checkout을 사용한다.
+
+### 보안 영향
+
+- 검증 범위: formatter/CI 외 dependency나 runtime 설정이 바뀌지 않았는지, secret/credential 파일이 포맷 대상에 포함되지 않았는지, API/security test가 동일하게 통과하는지 확인했다.
+- security-audit: 지적사항 = none
+
+### Findings-first review
+
+- 지적사항: 공용 included build를 공유하는 독립 Gradle process 병렬 실행 경합 1건을 확인했다. repository code 결함이 아니며 aggregate 검증은 단독/순차 실행으로 확정했다.
+- 검증 근거 확인: mechanical commit이 Java file만 포함하는지, ignore-rev가 정확한 SHA인지, Spotless가 root/CI gate에 연결됐는지, 포맷 전후 compile/test/API spec이 동일하게 GREEN인지 확인했다.
+- 검증 공백: 원격 CI 미실행.
+- 잔여 위험: local automation은 공용 included build를 쓰는 service gate를 같은 worktree에서 병렬 `--rerun-tasks`하지 않아야 한다.

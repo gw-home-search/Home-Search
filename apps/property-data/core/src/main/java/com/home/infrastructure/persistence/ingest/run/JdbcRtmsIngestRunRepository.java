@@ -1,29 +1,28 @@
 package com.home.infrastructure.persistence.ingest.run;
 
+import com.home.application.ingest.run.RtmsIngestRunRecord;
+import com.home.application.ingest.run.RtmsIngestRunRepository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Objects;
-
-import com.home.application.ingest.run.RtmsIngestRunRecord;
-import com.home.application.ingest.run.RtmsIngestRunRepository;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class JdbcRtmsIngestRunRepository implements RtmsIngestRunRepository {
 
-	private final JdbcClient jdbcClient;
+    private final JdbcClient jdbcClient;
 
-	public JdbcRtmsIngestRunRepository(JdbcClient jdbcClient) {
-		this.jdbcClient = Objects.requireNonNull(jdbcClient);
-	}
+    public JdbcRtmsIngestRunRepository(JdbcClient jdbcClient) {
+        this.jdbcClient = Objects.requireNonNull(jdbcClient);
+    }
 
-	@Override
-	public RtmsIngestRunRecord save(RtmsIngestRunRecord record) {
-		Objects.requireNonNull(record, "record is required");
-		return jdbcClient.sql("""
+    @Override
+    public RtmsIngestRunRecord save(RtmsIngestRunRecord record) {
+        Objects.requireNonNull(record, "record is required");
+        return jdbcClient
+                .sql("""
 			INSERT INTO rtms_ingest_run (
 			    lawd_cd,
 			    deal_ymd,
@@ -60,61 +59,62 @@ public class JdbcRtmsIngestRunRepository implements RtmsIngestRunRepository {
 			)
 			RETURNING *
 			""")
-			.param("lawdCd", record.lawdCd())
-			.param("dealYmd", record.dealYmd())
-			.param("status", record.status())
-			.param("pageCount", record.pageCount())
-			.param("readCount", record.read())
-			.param("rawSavedCount", record.rawSaved())
-			.param("normalizedInsertedCount", record.normalizedInserted())
-			.param("duplicateSkippedCount", record.duplicateSkipped())
-			.param("canceledSkippedCount", record.canceledSkipped())
-			.param("matchFailedCount", record.matchFailed())
-			.param("parseFailedCount", record.parseFailed())
-			.param("failureReason", record.failureReason())
-			.param("startedAt", offset(record.startedAt()))
-			.param("completedAt", offset(record.completedAt()))
-			.param("executionCorrelationId", record.executionCorrelationId() == null
-				? null
-				: record.executionCorrelationId().value())
-			.query(this::mapRecord)
-			.single();
-	}
+                .param("lawdCd", record.lawdCd())
+                .param("dealYmd", record.dealYmd())
+                .param("status", record.status())
+                .param("pageCount", record.pageCount())
+                .param("readCount", record.read())
+                .param("rawSavedCount", record.rawSaved())
+                .param("normalizedInsertedCount", record.normalizedInserted())
+                .param("duplicateSkippedCount", record.duplicateSkipped())
+                .param("canceledSkippedCount", record.canceledSkipped())
+                .param("matchFailedCount", record.matchFailed())
+                .param("parseFailedCount", record.parseFailed())
+                .param("failureReason", record.failureReason())
+                .param("startedAt", offset(record.startedAt()))
+                .param("completedAt", offset(record.completedAt()))
+                .param(
+                        "executionCorrelationId",
+                        record.executionCorrelationId() == null
+                                ? null
+                                : record.executionCorrelationId().value())
+                .query(this::mapRecord)
+                .single();
+    }
 
-	private RtmsIngestRunRecord mapRecord(ResultSet resultSet, int rowNumber) throws SQLException {
-		return new RtmsIngestRunRecord(
-			resultSet.getLong("id"),
-			resultSet.getString("lawd_cd"),
-			resultSet.getString("deal_ymd"),
-			resultSet.getString("status"),
-			resultSet.getInt("page_count"),
-			resultSet.getLong("read_count"),
-			resultSet.getLong("raw_saved_count"),
-			resultSet.getLong("normalized_inserted_count"),
-			resultSet.getLong("duplicate_skipped_count"),
-			resultSet.getLong("canceled_skipped_count"),
-			resultSet.getLong("match_failed_count"),
-			resultSet.getLong("parse_failed_count"),
-			resultSet.getString("failure_reason"),
-			instant(resultSet, "started_at"),
-			instant(resultSet, "completed_at"),
-			instant(resultSet, "created_at"),
-			executionCorrelationId(resultSet)
-		);
-	}
+    private RtmsIngestRunRecord mapRecord(ResultSet resultSet, int rowNumber) throws SQLException {
+        return new RtmsIngestRunRecord(
+                resultSet.getLong("id"),
+                resultSet.getString("lawd_cd"),
+                resultSet.getString("deal_ymd"),
+                resultSet.getString("status"),
+                resultSet.getInt("page_count"),
+                resultSet.getLong("read_count"),
+                resultSet.getLong("raw_saved_count"),
+                resultSet.getLong("normalized_inserted_count"),
+                resultSet.getLong("duplicate_skipped_count"),
+                resultSet.getLong("canceled_skipped_count"),
+                resultSet.getLong("match_failed_count"),
+                resultSet.getLong("parse_failed_count"),
+                resultSet.getString("failure_reason"),
+                instant(resultSet, "started_at"),
+                instant(resultSet, "completed_at"),
+                instant(resultSet, "created_at"),
+                executionCorrelationId(resultSet));
+    }
 
-	private com.home.domain.ingest.run.ExecutionCorrelationId executionCorrelationId(ResultSet resultSet)
-		throws SQLException {
-		java.util.UUID value = resultSet.getObject("execution_correlation_id", java.util.UUID.class);
-		return value == null ? null : new com.home.domain.ingest.run.ExecutionCorrelationId(value);
-	}
+    private com.home.domain.ingest.run.ExecutionCorrelationId executionCorrelationId(ResultSet resultSet)
+            throws SQLException {
+        java.util.UUID value = resultSet.getObject("execution_correlation_id", java.util.UUID.class);
+        return value == null ? null : new com.home.domain.ingest.run.ExecutionCorrelationId(value);
+    }
 
-	private Instant instant(ResultSet resultSet, String column) throws SQLException {
-		OffsetDateTime value = resultSet.getObject(column, OffsetDateTime.class);
-		return value == null ? null : value.toInstant();
-	}
+    private Instant instant(ResultSet resultSet, String column) throws SQLException {
+        OffsetDateTime value = resultSet.getObject(column, OffsetDateTime.class);
+        return value == null ? null : value.toInstant();
+    }
 
-	private OffsetDateTime offset(Instant instant) {
-		return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
-	}
+    private OffsetDateTime offset(Instant instant) {
+        return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
+    }
 }

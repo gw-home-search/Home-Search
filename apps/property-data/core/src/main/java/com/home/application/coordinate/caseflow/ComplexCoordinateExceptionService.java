@@ -1,5 +1,21 @@
 package com.home.application.coordinate.caseflow;
 
+import com.home.application.complex.ComplexRelationRepository;
+import com.home.application.coordinate.display.ResolvedDisplayCoordinate;
+import com.home.application.coordinate.footprint.BuildingFootprintCandidate;
+import com.home.application.coordinate.footprint.BuildingFootprintImportCandidate;
+import com.home.application.coordinate.footprint.BuildingFootprintSource;
+import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerification;
+import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
+import com.home.application.coordinate.identity.ComplexCoordinateParcelTargets;
+import com.home.application.coordinate.identity.ComplexCoordinateTarget;
+import com.home.domain.complex.relation.ComplexRelationClassification;
+import com.home.domain.complex.relation.ComplexRelationClassifier;
+import com.home.domain.complex.relation.ComplexRelationType;
+import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
+import com.home.domain.coordinate.ComplexCoordinateIdentityVerificationStatus;
+import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
+import com.home.domain.coordinate.CoordinateSource;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -11,297 +27,248 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-import com.home.domain.complex.relation.ComplexRelationClassification;
-import com.home.domain.complex.relation.ComplexRelationClassifier;
-import com.home.application.complex.ComplexRelationRepository;
-import com.home.domain.complex.relation.ComplexRelationType;
-import com.home.application.coordinate.display.ResolvedDisplayCoordinate;
-import com.home.application.coordinate.footprint.BuildingFootprintCandidate;
-import com.home.application.coordinate.footprint.BuildingFootprintImportCandidate;
-import com.home.application.coordinate.footprint.BuildingFootprintSource;
-import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerification;
-import com.home.domain.coordinate.ComplexCoordinateCaseStatus;
-import com.home.domain.coordinate.ComplexCoordinateIdentityVerificationStatus;
-import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
-import com.home.application.coordinate.identity.ComplexCoordinateIdentityVerifier;
-import com.home.application.coordinate.identity.ComplexCoordinateParcelTargets;
-import com.home.application.coordinate.identity.ComplexCoordinateTarget;
-import com.home.domain.coordinate.CoordinateSource;
-
 public class ComplexCoordinateExceptionService {
 
-	private static final int BUILDING_DONG_MATCH_CONFIDENCE = 90;
+    private static final int BUILDING_DONG_MATCH_CONFIDENCE = 90;
 
-	private final ComplexCoordinateExceptionRepository repository;
-	private final ComplexRelationRepository relationRepository;
-	private final ComplexRelationClassifier relationClassifier;
-	private final ComplexCoordinateIdentityVerifier identityVerifier;
-	private final BuildingFootprintSource buildingFootprintSource;
-	private final CoordinateIdentityBlockingPolicy identityBlockingPolicy;
-	private final CoordinateResolutionCommitter resolutionCommitter;
+    private final ComplexCoordinateExceptionRepository repository;
+    private final ComplexRelationRepository relationRepository;
+    private final ComplexRelationClassifier relationClassifier;
+    private final ComplexCoordinateIdentityVerifier identityVerifier;
+    private final BuildingFootprintSource buildingFootprintSource;
+    private final CoordinateIdentityBlockingPolicy identityBlockingPolicy;
+    private final CoordinateResolutionCommitter resolutionCommitter;
 
-	public ComplexCoordinateExceptionService(
-		ComplexCoordinateExceptionRepository repository,
-		ComplexRelationRepository relationRepository,
-		ComplexRelationClassifier relationClassifier,
-		ComplexCoordinateIdentityVerifier identityVerifier,
-		BuildingFootprintSource buildingFootprintSource,
-		CoordinateIdentityBlockingPolicy identityBlockingPolicy,
-		CoordinateResolutionCommitter resolutionCommitter
-	) {
-		this.repository = Objects.requireNonNull(repository);
-		this.relationRepository = Objects.requireNonNull(relationRepository);
-		this.relationClassifier = Objects.requireNonNull(relationClassifier);
-		this.identityVerifier = Objects.requireNonNull(identityVerifier);
-		this.buildingFootprintSource = Objects.requireNonNull(buildingFootprintSource);
-		this.identityBlockingPolicy = Objects.requireNonNull(identityBlockingPolicy);
-		this.resolutionCommitter = Objects.requireNonNull(resolutionCommitter);
-	}
+    public ComplexCoordinateExceptionService(
+            ComplexCoordinateExceptionRepository repository,
+            ComplexRelationRepository relationRepository,
+            ComplexRelationClassifier relationClassifier,
+            ComplexCoordinateIdentityVerifier identityVerifier,
+            BuildingFootprintSource buildingFootprintSource,
+            CoordinateIdentityBlockingPolicy identityBlockingPolicy,
+            CoordinateResolutionCommitter resolutionCommitter) {
+        this.repository = Objects.requireNonNull(repository);
+        this.relationRepository = Objects.requireNonNull(relationRepository);
+        this.relationClassifier = Objects.requireNonNull(relationClassifier);
+        this.identityVerifier = Objects.requireNonNull(identityVerifier);
+        this.buildingFootprintSource = Objects.requireNonNull(buildingFootprintSource);
+        this.identityBlockingPolicy = Objects.requireNonNull(identityBlockingPolicy);
+        this.resolutionCommitter = Objects.requireNonNull(resolutionCommitter);
+    }
 
-	public ComplexCoordinateExceptionResult stageExceptionCases(int limit) {
-		if (limit < 1) {
-			return ComplexCoordinateExceptionResult.empty();
-		}
-		ComplexCoordinateExceptionResult result = ComplexCoordinateExceptionResult.empty();
-		for (ComplexCoordinateCaseCandidate candidate : repository.findExceptionCaseCandidates(limit)) {
-			ComplexRelationClassification classification = relationClassifier.classify(
-				relationRepository.findTradeSpansByParcelId(candidate.parcelId())
-			);
-			ComplexCoordinateCaseStatus status = stageStatusFor(classification.type());
-			repository.saveCaseUpdate(new ComplexCoordinateCaseUpdate(
-				candidate.parcelId(),
-				status,
-				classification.type(),
-				classification.confidence(),
-				classification.reason()
-			));
-			result = result.plus(status);
-		}
-		return result;
-	}
+    public ComplexCoordinateExceptionResult stageExceptionCases(int limit) {
+        if (limit < 1) {
+            return ComplexCoordinateExceptionResult.empty();
+        }
+        ComplexCoordinateExceptionResult result = ComplexCoordinateExceptionResult.empty();
+        for (ComplexCoordinateCaseCandidate candidate : repository.findExceptionCaseCandidates(limit)) {
+            ComplexRelationClassification classification =
+                    relationClassifier.classify(relationRepository.findTradeSpansByParcelId(candidate.parcelId()));
+            ComplexCoordinateCaseStatus status = stageStatusFor(classification.type());
+            repository.saveCaseUpdate(new ComplexCoordinateCaseUpdate(
+                    candidate.parcelId(),
+                    status,
+                    classification.type(),
+                    classification.confidence(),
+                    classification.reason()));
+            result = result.plus(status);
+        }
+        return result;
+    }
 
-	public ComplexCoordinateResolutionResult resolveExceptionCase(Long parcelId) {
-		Objects.requireNonNull(parcelId, "parcelId is required");
-		Optional<ComplexCoordinateParcelTargets> targets = repository.findParcelTargets(parcelId);
-		if (targets.isEmpty()) {
-			return unavailable(parcelId, "parcel targets unavailable");
-		}
-		return resolveTargets(targets.get());
-	}
+    public ComplexCoordinateResolutionResult resolveExceptionCase(Long parcelId) {
+        Objects.requireNonNull(parcelId, "parcelId is required");
+        Optional<ComplexCoordinateParcelTargets> targets = repository.findParcelTargets(parcelId);
+        if (targets.isEmpty()) {
+            return unavailable(parcelId, "parcel targets unavailable");
+        }
+        return resolveTargets(targets.get());
+    }
 
-	private ComplexCoordinateResolutionResult resolveTargets(ComplexCoordinateParcelTargets targets) {
-		if (targets.complexes().isEmpty()) {
-			return unavailable(targets.parcelId(), "complex targets unavailable");
-		}
-		List<BuildingFootprintCandidate> footprints = findOrFetchBuildingFootprints(targets.pnu());
-		if (footprints.isEmpty()) {
-			return unavailable(targets.parcelId(), "building footprint unavailable");
-		}
-		ArrayList<ResolvedDisplayCoordinate> coordinates = new ArrayList<>();
-		Set<Long> assignedFootprintIds = new HashSet<>();
-		for (ComplexCoordinateTarget target : targets.complexes()) {
-			Optional<ComplexCoordinateResolutionResult> blockedByIdentity = blockIfIdentityUnverified(targets, target);
-			if (blockedByIdentity.isPresent()) {
-				return blockedByIdentity.get();
-			}
-			Optional<ResolvedCoordinateMatch> coordinate = resolveCoordinate(target, footprints);
-			if (coordinate.isEmpty() || overlaps(assignedFootprintIds, coordinate.get().footprintIds())) {
-				String reason = coordinate.isEmpty()
-					? "building dong candidates are ambiguous or unavailable"
-					: "building dong candidates overlap across complexes";
-				commitResolution(new ComplexCoordinateCaseUpdate(
-					targets.parcelId(),
-					ComplexCoordinateCaseStatus.AMBIGUOUS,
-					reason
-				), List.of());
-				return new ComplexCoordinateResolutionResult(
-					targets.parcelId(),
-					ComplexCoordinateCaseStatus.AMBIGUOUS,
-					0,
-					reason
-				);
-			}
-			assignedFootprintIds.addAll(coordinate.get().footprintIds());
-			coordinates.add(coordinate.get().coordinate());
-		}
-		String reason = "building footprint matched by apt_dong";
-		commitResolution(new ComplexCoordinateCaseUpdate(
-			targets.parcelId(),
-			ComplexCoordinateCaseStatus.RESOLVED,
-			reason
-		), coordinates);
-		return new ComplexCoordinateResolutionResult(
-			targets.parcelId(),
-			ComplexCoordinateCaseStatus.RESOLVED,
-			coordinates.size(),
-			reason
-		);
-	}
+    private ComplexCoordinateResolutionResult resolveTargets(ComplexCoordinateParcelTargets targets) {
+        if (targets.complexes().isEmpty()) {
+            return unavailable(targets.parcelId(), "complex targets unavailable");
+        }
+        List<BuildingFootprintCandidate> footprints = findOrFetchBuildingFootprints(targets.pnu());
+        if (footprints.isEmpty()) {
+            return unavailable(targets.parcelId(), "building footprint unavailable");
+        }
+        ArrayList<ResolvedDisplayCoordinate> coordinates = new ArrayList<>();
+        Set<Long> assignedFootprintIds = new HashSet<>();
+        for (ComplexCoordinateTarget target : targets.complexes()) {
+            Optional<ComplexCoordinateResolutionResult> blockedByIdentity = blockIfIdentityUnverified(targets, target);
+            if (blockedByIdentity.isPresent()) {
+                return blockedByIdentity.get();
+            }
+            Optional<ResolvedCoordinateMatch> coordinate = resolveCoordinate(target, footprints);
+            if (coordinate.isEmpty()
+                    || overlaps(assignedFootprintIds, coordinate.get().footprintIds())) {
+                String reason = coordinate.isEmpty()
+                        ? "building dong candidates are ambiguous or unavailable"
+                        : "building dong candidates overlap across complexes";
+                commitResolution(
+                        new ComplexCoordinateCaseUpdate(
+                                targets.parcelId(), ComplexCoordinateCaseStatus.AMBIGUOUS, reason),
+                        List.of());
+                return new ComplexCoordinateResolutionResult(
+                        targets.parcelId(), ComplexCoordinateCaseStatus.AMBIGUOUS, 0, reason);
+            }
+            assignedFootprintIds.addAll(coordinate.get().footprintIds());
+            coordinates.add(coordinate.get().coordinate());
+        }
+        String reason = "building footprint matched by apt_dong";
+        commitResolution(
+                new ComplexCoordinateCaseUpdate(targets.parcelId(), ComplexCoordinateCaseStatus.RESOLVED, reason),
+                coordinates);
+        return new ComplexCoordinateResolutionResult(
+                targets.parcelId(), ComplexCoordinateCaseStatus.RESOLVED, coordinates.size(), reason);
+    }
 
-	private List<BuildingFootprintCandidate> findOrFetchBuildingFootprints(String pnu) {
-		List<BuildingFootprintCandidate> footprints = repository.findBuildingFootprintsByPnu(pnu);
-		if (!footprints.isEmpty()) {
-			return footprints;
-		}
-		List<BuildingFootprintImportCandidate> imported = buildingFootprintSource.fetchByPnu(pnu);
-		if (imported.isEmpty()) {
-			return footprints;
-		}
-		repository.saveBuildingFootprints(imported);
-		return repository.findBuildingFootprintsByPnu(pnu);
-	}
+    private List<BuildingFootprintCandidate> findOrFetchBuildingFootprints(String pnu) {
+        List<BuildingFootprintCandidate> footprints = repository.findBuildingFootprintsByPnu(pnu);
+        if (!footprints.isEmpty()) {
+            return footprints;
+        }
+        List<BuildingFootprintImportCandidate> imported = buildingFootprintSource.fetchByPnu(pnu);
+        if (imported.isEmpty()) {
+            return footprints;
+        }
+        repository.saveBuildingFootprints(imported);
+        return repository.findBuildingFootprintsByPnu(pnu);
+    }
 
-	private Optional<ComplexCoordinateResolutionResult> blockIfIdentityUnverified(
-		ComplexCoordinateParcelTargets targets,
-		ComplexCoordinateTarget target
-	) {
-		ComplexCoordinateIdentityVerification verification = identityVerifier.verify(targets, target);
-		if (!shouldBlock(verification.status())) {
-			return Optional.empty();
-		}
-		ComplexCoordinateCaseStatus status = verification.status().toBlockedCaseStatus();
-		String reason = "identity verification " + verification.status().name().toLowerCase()
-			+ " complexId=" + target.complexId()
-			+ (verification.reason() == null ? "" : " reason=" + verification.reason());
-		commitResolution(new ComplexCoordinateCaseUpdate(targets.parcelId(), status, reason), List.of());
-		return Optional.of(new ComplexCoordinateResolutionResult(targets.parcelId(), status, 0, reason));
-	}
+    private Optional<ComplexCoordinateResolutionResult> blockIfIdentityUnverified(
+            ComplexCoordinateParcelTargets targets, ComplexCoordinateTarget target) {
+        ComplexCoordinateIdentityVerification verification = identityVerifier.verify(targets, target);
+        if (!shouldBlock(verification.status())) {
+            return Optional.empty();
+        }
+        ComplexCoordinateCaseStatus status = verification.status().toBlockedCaseStatus();
+        String reason = "identity verification " + verification.status().name().toLowerCase()
+                + " complexId=" + target.complexId()
+                + (verification.reason() == null ? "" : " reason=" + verification.reason());
+        commitResolution(new ComplexCoordinateCaseUpdate(targets.parcelId(), status, reason), List.of());
+        return Optional.of(new ComplexCoordinateResolutionResult(targets.parcelId(), status, 0, reason));
+    }
 
-	private boolean shouldBlock(ComplexCoordinateIdentityVerificationStatus status) {
-		return identityBlockingPolicy.shouldBlock(status);
-	}
+    private boolean shouldBlock(ComplexCoordinateIdentityVerificationStatus status) {
+        return identityBlockingPolicy.shouldBlock(status);
+    }
 
-	private Optional<ResolvedCoordinateMatch> resolveCoordinate(
-		ComplexCoordinateTarget target,
-		List<BuildingFootprintCandidate> footprints
-	) {
-		Set<String> targetDongs = normalizeDongTokens(target.aptDongs());
-		if (targetDongs.isEmpty()) {
-			return Optional.empty();
-		}
-		List<BuildingFootprintCandidate> matches = footprints.stream()
-			.filter(footprint -> targetDongs.contains(normalizeDongToken(footprint.dongName())))
-			.toList();
-		if (matches.isEmpty() || hasDuplicateDongToken(matches)) {
-			return Optional.empty();
-		}
-		return Optional.of(new ResolvedCoordinateMatch(
-			new ResolvedDisplayCoordinate(
-				target.complexId(),
-				representativeBuildingFootprintId(matches),
-				averageLatitude(matches),
-				averageLongitude(matches),
-				CoordinateSource.BUILDING_FOOTPRINT.storedValue(),
-				BUILDING_DONG_MATCH_CONFIDENCE,
-				matches.size() == 1
-					? "apt_dong matched building dong_name"
-					: "apt_dong matched building dong_name aggregate footprint_count=" + matches.size()
-			),
-			matches.stream().map(BuildingFootprintCandidate::id).collect(java.util.stream.Collectors.toSet())
-		));
-	}
+    private Optional<ResolvedCoordinateMatch> resolveCoordinate(
+            ComplexCoordinateTarget target, List<BuildingFootprintCandidate> footprints) {
+        Set<String> targetDongs = normalizeDongTokens(target.aptDongs());
+        if (targetDongs.isEmpty()) {
+            return Optional.empty();
+        }
+        List<BuildingFootprintCandidate> matches = footprints.stream()
+                .filter(footprint -> targetDongs.contains(normalizeDongToken(footprint.dongName())))
+                .toList();
+        if (matches.isEmpty() || hasDuplicateDongToken(matches)) {
+            return Optional.empty();
+        }
+        return Optional.of(new ResolvedCoordinateMatch(
+                new ResolvedDisplayCoordinate(
+                        target.complexId(),
+                        representativeBuildingFootprintId(matches),
+                        averageLatitude(matches),
+                        averageLongitude(matches),
+                        CoordinateSource.BUILDING_FOOTPRINT.storedValue(),
+                        BUILDING_DONG_MATCH_CONFIDENCE,
+                        matches.size() == 1
+                                ? "apt_dong matched building dong_name"
+                                : "apt_dong matched building dong_name aggregate footprint_count=" + matches.size()),
+                matches.stream().map(BuildingFootprintCandidate::id).collect(java.util.stream.Collectors.toSet())));
+    }
 
-	private boolean overlaps(Set<Long> assignedFootprintIds, Set<Long> candidateFootprintIds) {
-		for (Long footprintId : candidateFootprintIds) {
-			if (assignedFootprintIds.contains(footprintId)) {
-				return true;
-			}
-		}
-		return false;
-	}
+    private boolean overlaps(Set<Long> assignedFootprintIds, Set<Long> candidateFootprintIds) {
+        for (Long footprintId : candidateFootprintIds) {
+            if (assignedFootprintIds.contains(footprintId)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
-	private boolean hasDuplicateDongToken(List<BuildingFootprintCandidate> matches) {
-		Map<String, Integer> counts = new HashMap<>();
-		for (BuildingFootprintCandidate match : matches) {
-			String token = normalizeDongToken(match.dongName());
-			if (token.isBlank()) {
-				return true;
-			}
-			counts.put(token, counts.getOrDefault(token, 0) + 1);
-			if (counts.get(token) > 1) {
-				return true;
-			}
-		}
-		return false;
-	}
+    private boolean hasDuplicateDongToken(List<BuildingFootprintCandidate> matches) {
+        Map<String, Integer> counts = new HashMap<>();
+        for (BuildingFootprintCandidate match : matches) {
+            String token = normalizeDongToken(match.dongName());
+            if (token.isBlank()) {
+                return true;
+            }
+            counts.put(token, counts.getOrDefault(token, 0) + 1);
+            if (counts.get(token) > 1) {
+                return true;
+            }
+        }
+        return false;
+    }
 
-	private Long representativeBuildingFootprintId(List<BuildingFootprintCandidate> matches) {
-		return matches.stream()
-			.map(BuildingFootprintCandidate::id)
-			.min(Long::compareTo)
-			.orElseThrow();
-	}
+    private Long representativeBuildingFootprintId(List<BuildingFootprintCandidate> matches) {
+        return matches.stream()
+                .map(BuildingFootprintCandidate::id)
+                .min(Long::compareTo)
+                .orElseThrow();
+    }
 
-	private BigDecimal averageLatitude(List<BuildingFootprintCandidate> matches) {
-		return average(matches.stream().map(BuildingFootprintCandidate::latitude).toList());
-	}
+    private BigDecimal averageLatitude(List<BuildingFootprintCandidate> matches) {
+        return average(
+                matches.stream().map(BuildingFootprintCandidate::latitude).toList());
+    }
 
-	private BigDecimal averageLongitude(List<BuildingFootprintCandidate> matches) {
-		return average(matches.stream().map(BuildingFootprintCandidate::longitude).toList());
-	}
+    private BigDecimal averageLongitude(List<BuildingFootprintCandidate> matches) {
+        return average(
+                matches.stream().map(BuildingFootprintCandidate::longitude).toList());
+    }
 
-	private BigDecimal average(List<BigDecimal> values) {
-		BigDecimal sum = BigDecimal.ZERO;
-		for (BigDecimal value : values) {
-			sum = sum.add(value);
-		}
-		return sum.divide(BigDecimal.valueOf(values.size()), 7, RoundingMode.HALF_UP);
-	}
+    private BigDecimal average(List<BigDecimal> values) {
+        BigDecimal sum = BigDecimal.ZERO;
+        for (BigDecimal value : values) {
+            sum = sum.add(value);
+        }
+        return sum.divide(BigDecimal.valueOf(values.size()), 7, RoundingMode.HALF_UP);
+    }
 
-	private ComplexCoordinateCaseStatus stageStatusFor(ComplexRelationType type) {
-		if (type.requiresCoordinateExceptionResolution()) {
-			return ComplexCoordinateCaseStatus.PENDING;
-		}
-		return ComplexCoordinateCaseStatus.SKIPPED;
-	}
+    private ComplexCoordinateCaseStatus stageStatusFor(ComplexRelationType type) {
+        if (type.requiresCoordinateExceptionResolution()) {
+            return ComplexCoordinateCaseStatus.PENDING;
+        }
+        return ComplexCoordinateCaseStatus.SKIPPED;
+    }
 
-	private ComplexCoordinateResolutionResult unavailable(Long parcelId, String reason) {
-		commitResolution(new ComplexCoordinateCaseUpdate(
-			parcelId,
-			ComplexCoordinateCaseStatus.UNAVAILABLE,
-			reason
-		), List.of());
-		return new ComplexCoordinateResolutionResult(
-			parcelId,
-			ComplexCoordinateCaseStatus.UNAVAILABLE,
-			0,
-			reason
-		);
-	}
+    private ComplexCoordinateResolutionResult unavailable(Long parcelId, String reason) {
+        commitResolution(
+                new ComplexCoordinateCaseUpdate(parcelId, ComplexCoordinateCaseStatus.UNAVAILABLE, reason), List.of());
+        return new ComplexCoordinateResolutionResult(parcelId, ComplexCoordinateCaseStatus.UNAVAILABLE, 0, reason);
+    }
 
-	private void commitResolution(
-		ComplexCoordinateCaseUpdate caseUpdate,
-		List<ResolvedDisplayCoordinate> coordinates
-	) {
-		resolutionCommitter.commit(new CoordinateResolutionCommitCommand(coordinates, caseUpdate));
-	}
+    private void commitResolution(ComplexCoordinateCaseUpdate caseUpdate, List<ResolvedDisplayCoordinate> coordinates) {
+        resolutionCommitter.commit(new CoordinateResolutionCommitCommand(coordinates, caseUpdate));
+    }
 
-	private Set<String> normalizeDongTokens(Set<String> values) {
-		Set<String> normalized = new HashSet<>();
-		for (String value : values) {
-			String token = normalizeDongToken(value);
-			if (!token.isBlank()) {
-				normalized.add(token);
-			}
-		}
-		return normalized;
-	}
+    private Set<String> normalizeDongTokens(Set<String> values) {
+        Set<String> normalized = new HashSet<>();
+        for (String value : values) {
+            String token = normalizeDongToken(value);
+            if (!token.isBlank()) {
+                normalized.add(token);
+            }
+        }
+        return normalized;
+    }
 
-	private static String normalizeDongToken(String value) {
-		if (value == null) {
-			return "";
-		}
-		String normalized = value.trim().toUpperCase().replaceAll("\\s+", "");
-		String digits = normalized.replaceAll("\\D+", "");
-		if (!digits.isBlank()) {
-			return digits;
-		}
-		return normalized.replaceAll("동$", "");
-	}
+    private static String normalizeDongToken(String value) {
+        if (value == null) {
+            return "";
+        }
+        String normalized = value.trim().toUpperCase().replaceAll("\\s+", "");
+        String digits = normalized.replaceAll("\\D+", "");
+        if (!digits.isBlank()) {
+            return digits;
+        }
+        return normalized.replaceAll("동$", "");
+    }
 
-	private record ResolvedCoordinateMatch(
-		ResolvedDisplayCoordinate coordinate,
-		Set<Long> footprintIds
-	) {
-	}
+    private record ResolvedCoordinateMatch(ResolvedDisplayCoordinate coordinate, Set<Long> footprintIds) {}
 }

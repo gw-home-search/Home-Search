@@ -1,28 +1,25 @@
 package com.home.application.coordinate.override;
 
+import com.home.domain.coordinate.CoordinatePendingReason;
 import java.util.Map;
 
-import com.home.domain.coordinate.CoordinatePendingReason;
+public record CoordinatePendingSummary(long totalCount, Map<CoordinatePendingReason, Long> reasonCounts) {
 
-public record CoordinatePendingSummary(
-	long totalCount,
-	Map<CoordinatePendingReason, Long> reasonCounts
-) {
+    public CoordinatePendingSummary(
+            long totalCount,
+            long pnuCoordinateMissingCount,
+            long samePnuMultiComplexCount,
+            long complexDisplayCoordinateMissingCount) {
+        this(
+                totalCount,
+                Map.of(
+                        CoordinatePendingReason.PNU_COORDINATE_MISSING, pnuCoordinateMissingCount,
+                        CoordinatePendingReason.SAME_PNU_MULTI_COMPLEX, samePnuMultiComplexCount,
+                        CoordinatePendingReason.COMPLEX_DISPLAY_COORDINATE_MISSING,
+                                complexDisplayCoordinateMissingCount));
+    }
 
-	public CoordinatePendingSummary(
-		long totalCount,
-		long pnuCoordinateMissingCount,
-		long samePnuMultiComplexCount,
-		long complexDisplayCoordinateMissingCount
-	) {
-		this(totalCount, Map.of(
-			CoordinatePendingReason.PNU_COORDINATE_MISSING, pnuCoordinateMissingCount,
-			CoordinatePendingReason.SAME_PNU_MULTI_COMPLEX, samePnuMultiComplexCount,
-			CoordinatePendingReason.COMPLEX_DISPLAY_COORDINATE_MISSING, complexDisplayCoordinateMissingCount
-		));
-	}
-
-	public long count(CoordinatePendingReason reason) {
-		return reasonCounts.getOrDefault(reason, 0L);
-	}
+    public long count(CoordinatePendingReason reason) {
+        return reasonCounts.getOrDefault(reason, 0L);
+    }
 }

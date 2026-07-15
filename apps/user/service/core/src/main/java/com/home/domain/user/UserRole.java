@@ -5,10 +5,17 @@ public enum UserRole {
 
     private final String titleKo;
     private final String descriptionKo;
+
     UserRole(String titleKo, String descriptionKo) {
         this.titleKo = titleKo;
         this.descriptionKo = descriptionKo;
     }
-    public String titleKo() { return titleKo; }
-    public String descriptionKo() { return descriptionKo; }
+
+    public String titleKo() {
+        return titleKo;
+    }
+
+    public String descriptionKo() {
+        return descriptionKo;
+    }
 }

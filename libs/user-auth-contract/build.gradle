@@ -1,5 +1,14 @@
-plugins { id 'java-library' }
+plugins {
+    id 'java-library'
+    id 'com.diffplug.spotless' version '8.8.0'
+}
 group = 'com.home'; version = '0.0.1-SNAPSHOT'
+spotless {
+    java {
+        target 'src/**/*.java'
+        palantirJavaFormat('2.96.0')
+    }
+}
 java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
 dependencies {
     api 'com.home:security-jwt-core'

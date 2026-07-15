@@ -1,5 +1,8 @@
 package com.home.batch.launch;
 
+import com.home.domain.ingest.run.ExecutionCorrelationId;
+import com.home.ingestcore.rtms.RtmsDealMonth;
+import com.home.ingestcore.rtms.RtmsLawdCode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -7,187 +10,198 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
-import com.home.ingestcore.rtms.RtmsDealMonth;
-import com.home.ingestcore.rtms.RtmsLawdCode;
-import com.home.domain.ingest.run.ExecutionCorrelationId;
-
 import org.springframework.batch.core.JobParameter;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.boot.ApplicationArguments;
 
-public record BatchJobArguments(
-	String jobName,
-	JobParameters jobParameters
-) {
+public record BatchJobArguments(String jobName, JobParameters jobParameters) {
 
-	private static final String DAILY_JOB = "rtmsDailyRefreshJob";
-	private static final String BACKFILL_JOB = "rtmsBackfillJob";
-	private static final String BUILDING_METADATA_JOB = "complexBuildingMetadataJob";
-	private static final String ODC_METADATA_GAP_FILL_JOB = "complexOdcMetadataGapFillJob";
-	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final String DAILY_JOB = "rtmsDailyRefreshJob";
+    private static final String BACKFILL_JOB = "rtmsBackfillJob";
+    private static final String BUILDING_METADATA_JOB = "complexBuildingMetadataJob";
+    private static final String ODC_METADATA_GAP_FILL_JOB = "complexOdcMetadataGapFillJob";
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
-	public static BatchJobArguments from(
-		String jobName,
-		ApplicationArguments arguments,
-		Clock clock
-	) {
-		return from(jobName, argumentMap(arguments), clock);
-	}
+    public static BatchJobArguments from(String jobName, ApplicationArguments arguments, Clock clock) {
+        return from(jobName, argumentMap(arguments), clock);
+    }
 
-	static BatchJobArguments from(
-		String jobName,
-		Map<String, String> arguments,
-		Clock clock
-	) {
-		String normalizedJobName = requireText(jobName, "SPRING_BATCH_JOB_NAME is required");
-		Map<String, String> params = arguments == null ? Map.of() : Map.copyOf(arguments);
-		return switch (normalizedJobName) {
-			case DAILY_JOB -> daily(normalizedJobName, params, clock);
-			case BACKFILL_JOB -> backfill(normalizedJobName, params);
-			case BUILDING_METADATA_JOB -> buildingMetadata(normalizedJobName, params, clock);
-			case ODC_METADATA_GAP_FILL_JOB -> odcMetadataGapFill(normalizedJobName, params, clock);
-			default -> throw invalid("Unsupported SPRING_BATCH_JOB_NAME: " + normalizedJobName);
-		};
-	}
+    static BatchJobArguments from(String jobName, Map<String, String> arguments, Clock clock) {
+        String normalizedJobName = requireText(jobName, "SPRING_BATCH_JOB_NAME is required");
+        Map<String, String> params = arguments == null ? Map.of() : Map.copyOf(arguments);
+        return switch (normalizedJobName) {
+            case DAILY_JOB -> daily(normalizedJobName, params, clock);
+            case BACKFILL_JOB -> backfill(normalizedJobName, params);
+            case BUILDING_METADATA_JOB -> buildingMetadata(normalizedJobName, params, clock);
+            case ODC_METADATA_GAP_FILL_JOB -> odcMetadataGapFill(normalizedJobName, params, clock);
+            default -> throw invalid("Unsupported SPRING_BATCH_JOB_NAME: " + normalizedJobName);
+        };
+    }
 
-	private static BatchJobArguments odcMetadataGapFill(String jobName, Map<String, String> arguments, Clock clock) {
-		String runDate = text(arguments.get("runDate"));
-		if (runDate == null) runDate = LocalDate.now((clock == null ? Clock.system(KST) : clock).withZone(KST)).toString();
-		try { LocalDate.parse(runDate); } catch (RuntimeException exception) { throw invalid("runDate must use yyyy-MM-dd"); }
-		int maxTargets = positiveInt(arguments.get("maxTargets"), "maxTargets");
-		Long fromId = optionalPositiveLong(arguments.get("fromComplexId"), "fromComplexId");
-		Long toId = optionalPositiveLong(arguments.get("toComplexId"), "toComplexId");
-		if (toId == null) throw invalid("toComplexId is required");
-		if (fromId != null && fromId > toId) throw invalid("fromComplexId must be <= toComplexId");
-		Map<String, String> values = new LinkedHashMap<>();
-		values.put("runDate", runDate);
-		values.put("maxTargets", Integer.toString(maxTargets));
-		values.put("toComplexId", toId.toString());
-		values.put("requestId", canonicalRequestId(arguments.get("requestId")));
-		if (fromId != null) values.put("fromComplexId", fromId.toString());
-		return new BatchJobArguments(jobName, parameters(values));
-	}
+    private static BatchJobArguments odcMetadataGapFill(String jobName, Map<String, String> arguments, Clock clock) {
+        String runDate = text(arguments.get("runDate"));
+        if (runDate == null)
+            runDate = LocalDate.now((clock == null ? Clock.system(KST) : clock).withZone(KST))
+                    .toString();
+        try {
+            LocalDate.parse(runDate);
+        } catch (RuntimeException exception) {
+            throw invalid("runDate must use yyyy-MM-dd");
+        }
+        int maxTargets = positiveInt(arguments.get("maxTargets"), "maxTargets");
+        Long fromId = optionalPositiveLong(arguments.get("fromComplexId"), "fromComplexId");
+        Long toId = optionalPositiveLong(arguments.get("toComplexId"), "toComplexId");
+        if (toId == null) throw invalid("toComplexId is required");
+        if (fromId != null && fromId > toId) throw invalid("fromComplexId must be <= toComplexId");
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("runDate", runDate);
+        values.put("maxTargets", Integer.toString(maxTargets));
+        values.put("toComplexId", toId.toString());
+        values.put("requestId", canonicalRequestId(arguments.get("requestId")));
+        if (fromId != null) values.put("fromComplexId", fromId.toString());
+        return new BatchJobArguments(jobName, parameters(values));
+    }
 
-	private static BatchJobArguments buildingMetadata(String jobName, Map<String, String> arguments, Clock clock) {
-		String mode = requireText(arguments.get("mode"), "mode is required");
-		if (!List.of("missing", "retry").contains(mode)) throw invalid("mode must be missing or retry");
-		String runDate = text(arguments.get("runDate"));
-		if (runDate == null) runDate = LocalDate.now((clock == null ? Clock.system(KST) : clock).withZone(KST)).toString();
-		try { LocalDate.parse(runDate); } catch (RuntimeException exception) { throw invalid("runDate must use yyyy-MM-dd"); }
-		int maxRequests = positiveInt(arguments.get("maxRequests"), "maxRequests");
-		Long fromId = optionalPositiveLong(arguments.get("fromComplexId"), "fromComplexId");
-		Long toId = optionalPositiveLong(arguments.get("toComplexId"), "toComplexId");
-		if (fromId != null && toId != null && fromId > toId) throw invalid("fromComplexId must be <= toComplexId");
-		Map<String, String> values = new LinkedHashMap<>();
-		values.put("mode", mode); values.put("runDate", runDate); values.put("maxRequests", Integer.toString(maxRequests));
-		values.put("requestId", canonicalRequestId(arguments.get("requestId")));
-		if (fromId != null) values.put("fromComplexId", fromId.toString());
-		if (toId != null) values.put("toComplexId", toId.toString());
-		return new BatchJobArguments(jobName, parameters(values));
-	}
+    private static BatchJobArguments buildingMetadata(String jobName, Map<String, String> arguments, Clock clock) {
+        String mode = requireText(arguments.get("mode"), "mode is required");
+        if (!List.of("missing", "retry").contains(mode)) throw invalid("mode must be missing or retry");
+        String runDate = text(arguments.get("runDate"));
+        if (runDate == null)
+            runDate = LocalDate.now((clock == null ? Clock.system(KST) : clock).withZone(KST))
+                    .toString();
+        try {
+            LocalDate.parse(runDate);
+        } catch (RuntimeException exception) {
+            throw invalid("runDate must use yyyy-MM-dd");
+        }
+        int maxRequests = positiveInt(arguments.get("maxRequests"), "maxRequests");
+        Long fromId = optionalPositiveLong(arguments.get("fromComplexId"), "fromComplexId");
+        Long toId = optionalPositiveLong(arguments.get("toComplexId"), "toComplexId");
+        if (fromId != null && toId != null && fromId > toId) throw invalid("fromComplexId must be <= toComplexId");
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("mode", mode);
+        values.put("runDate", runDate);
+        values.put("maxRequests", Integer.toString(maxRequests));
+        values.put("requestId", canonicalRequestId(arguments.get("requestId")));
+        if (fromId != null) values.put("fromComplexId", fromId.toString());
+        if (toId != null) values.put("toComplexId", toId.toString());
+        return new BatchJobArguments(jobName, parameters(values));
+    }
 
-	private static BatchJobArguments daily(String jobName, Map<String, String> arguments, Clock clock) {
-		Clock safeClock = clock == null ? Clock.system(KST) : clock;
-		String runDate = text(arguments.get("runDate"));
-		if (runDate == null) {
-			runDate = LocalDate.now(safeClock.withZone(KST)).toString();
-		}
-		try {
-			LocalDate.parse(runDate);
-		}
-		catch (RuntimeException exception) {
-			throw invalid("runDate must use yyyy-MM-dd");
-		}
-		Map<String, String> identifyingParameters = new LinkedHashMap<>();
-		identifyingParameters.put("runDate", runDate);
-		String requestId = canonicalRequestId(arguments.get("requestId"));
-		identifyingParameters.put("requestId", requestId);
-		return new BatchJobArguments(jobName, parameters(identifyingParameters));
-	}
+    private static BatchJobArguments daily(String jobName, Map<String, String> arguments, Clock clock) {
+        Clock safeClock = clock == null ? Clock.system(KST) : clock;
+        String runDate = text(arguments.get("runDate"));
+        if (runDate == null) {
+            runDate = LocalDate.now(safeClock.withZone(KST)).toString();
+        }
+        try {
+            LocalDate.parse(runDate);
+        } catch (RuntimeException exception) {
+            throw invalid("runDate must use yyyy-MM-dd");
+        }
+        Map<String, String> identifyingParameters = new LinkedHashMap<>();
+        identifyingParameters.put("runDate", runDate);
+        String requestId = canonicalRequestId(arguments.get("requestId"));
+        identifyingParameters.put("requestId", requestId);
+        return new BatchJobArguments(jobName, parameters(identifyingParameters));
+    }
 
-	private static BatchJobArguments backfill(String jobName, Map<String, String> arguments) {
-		String fromYmd = RtmsDealMonth.of(requireText(arguments.get("fromYmd"), "fromYmd is required")).value();
-		String toYmd = RtmsDealMonth.of(requireText(arguments.get("toYmd"), "toYmd is required")).value();
-		if (fromYmd.compareTo(toYmd) > 0) {
-			throw invalid("fromYmd must be less than or equal to toYmd");
-		}
-		String lawdCds = requireText(arguments.get("lawdCds"), "lawdCds is required");
-		for (String lawdCd : lawdCds.split(",")) {
-			RtmsLawdCode.of(lawdCd);
-		}
-		String requestId = canonicalRequestId(arguments.get("requestId"));
-		return new BatchJobArguments(jobName, parameters(Map.of(
-			"fromYmd", fromYmd,
-			"toYmd", toYmd,
-			"lawdCds", lawdCds,
-			"requestId", requestId
-		)));
-	}
+    private static BatchJobArguments backfill(String jobName, Map<String, String> arguments) {
+        String fromYmd = RtmsDealMonth.of(requireText(arguments.get("fromYmd"), "fromYmd is required"))
+                .value();
+        String toYmd = RtmsDealMonth.of(requireText(arguments.get("toYmd"), "toYmd is required"))
+                .value();
+        if (fromYmd.compareTo(toYmd) > 0) {
+            throw invalid("fromYmd must be less than or equal to toYmd");
+        }
+        String lawdCds = requireText(arguments.get("lawdCds"), "lawdCds is required");
+        for (String lawdCd : lawdCds.split(",")) {
+            RtmsLawdCode.of(lawdCd);
+        }
+        String requestId = canonicalRequestId(arguments.get("requestId"));
+        return new BatchJobArguments(
+                jobName,
+                parameters(Map.of(
+                        "fromYmd", fromYmd,
+                        "toYmd", toYmd,
+                        "lawdCds", lawdCds,
+                        "requestId", requestId)));
+    }
 
-	private static JobParameters parameters(Map<String, String> values) {
-		Map<String, JobParameter<?>> parameters = new LinkedHashMap<>();
-		values.forEach((name, value) -> parameters.put(name, new JobParameter<>(value, String.class, true)));
-		return new JobParameters(parameters);
-	}
+    private static JobParameters parameters(Map<String, String> values) {
+        Map<String, JobParameter<?>> parameters = new LinkedHashMap<>();
+        values.forEach((name, value) -> parameters.put(name, new JobParameter<>(value, String.class, true)));
+        return new JobParameters(parameters);
+    }
 
-	private static Map<String, String> argumentMap(ApplicationArguments arguments) {
-		Map<String, String> result = new LinkedHashMap<>();
-		if (arguments == null) {
-			return result;
-		}
-		for (String value : arguments.getNonOptionArgs()) {
-			int separator = value.indexOf('=');
-			if (separator > 0) {
-				result.put(value.substring(0, separator), value.substring(separator + 1));
-			}
-		}
-		for (String name : arguments.getOptionNames()) {
-			List<String> values = arguments.getOptionValues(name);
-			if (values != null && !values.isEmpty()) {
-				result.put(name, values.get(values.size() - 1));
-			}
-		}
-		return result;
-	}
+    private static Map<String, String> argumentMap(ApplicationArguments arguments) {
+        Map<String, String> result = new LinkedHashMap<>();
+        if (arguments == null) {
+            return result;
+        }
+        for (String value : arguments.getNonOptionArgs()) {
+            int separator = value.indexOf('=');
+            if (separator > 0) {
+                result.put(value.substring(0, separator), value.substring(separator + 1));
+            }
+        }
+        for (String name : arguments.getOptionNames()) {
+            List<String> values = arguments.getOptionValues(name);
+            if (values != null && !values.isEmpty()) {
+                result.put(name, values.get(values.size() - 1));
+            }
+        }
+        return result;
+    }
 
-	private static String requireText(String value, String message) {
-		String text = text(value);
-		if (text == null) {
-			throw invalid(message);
-		}
-		return text;
-	}
+    private static String requireText(String value, String message) {
+        String text = text(value);
+        if (text == null) {
+            throw invalid(message);
+        }
+        return text;
+    }
 
-	private static String canonicalRequestId(String value) {
-		String requestId = requireText(value, "requestId is required");
-		try {
-			return ExecutionCorrelationId.from(requestId).toString();
-		}
-		catch (IllegalArgumentException exception) {
-			throw invalid("requestId must be a canonical UUID");
-		}
-	}
+    private static String canonicalRequestId(String value) {
+        String requestId = requireText(value, "requestId is required");
+        try {
+            return ExecutionCorrelationId.from(requestId).toString();
+        } catch (IllegalArgumentException exception) {
+            throw invalid("requestId must be a canonical UUID");
+        }
+    }
 
-	private static int positiveInt(String value, String name) {
-		try { int parsed = Integer.parseInt(requireText(value, name + " is required")); if (parsed <= 0) throw new NumberFormatException(); return parsed; }
-		catch (NumberFormatException exception) { throw invalid(name + " must be a positive integer"); }
-	}
+    private static int positiveInt(String value, String name) {
+        try {
+            int parsed = Integer.parseInt(requireText(value, name + " is required"));
+            if (parsed <= 0) throw new NumberFormatException();
+            return parsed;
+        } catch (NumberFormatException exception) {
+            throw invalid(name + " must be a positive integer");
+        }
+    }
 
-	private static Long optionalPositiveLong(String value, String name) {
-		String text = text(value); if (text == null) return null;
-		try { long parsed = Long.parseLong(text); if (parsed <= 0) throw new NumberFormatException(); return parsed; }
-		catch (NumberFormatException exception) { throw invalid(name + " must be a positive integer"); }
-	}
+    private static Long optionalPositiveLong(String value, String name) {
+        String text = text(value);
+        if (text == null) return null;
+        try {
+            long parsed = Long.parseLong(text);
+            if (parsed <= 0) throw new NumberFormatException();
+            return parsed;
+        } catch (NumberFormatException exception) {
+            throw invalid(name + " must be a positive integer");
+        }
+    }
 
-	private static String text(String value) {
-		if (value == null || value.isBlank()) {
-			return null;
-		}
-		return value.trim();
-	}
+    private static String text(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
 
-	private static BatchExitCodeException invalid(String message) {
-		return new BatchExitCodeException(Objects.requireNonNull(message), BatchExitCodeExceptionMapper.INVALID_ARGUMENT_EXIT_CODE);
-	}
+    private static BatchExitCodeException invalid(String message) {
+        return new BatchExitCodeException(
+                Objects.requireNonNull(message), BatchExitCodeExceptionMapper.INVALID_ARGUMENT_EXIT_CODE);
+    }
 }

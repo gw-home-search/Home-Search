@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.LinkedHashSet;
-
 import org.junit.jupiter.api.Test;
 
 class LegacyCoordinateSourceFingerprintTest {
@@ -13,7 +12,7 @@ class LegacyCoordinateSourceFingerprintTest {
     @Test
     void acceptsOnlyKnownLegacyFingerprint() {
         assertThatCode(() -> fingerprint.assertMatches(LegacyCoordinateSourceFingerprint.expectedSnapshot()))
-            .doesNotThrowAnyException();
+                .doesNotThrowAnyException();
     }
 
     @Test
@@ -23,9 +22,9 @@ class LegacyCoordinateSourceFingerprintTest {
         tables.remove("parcel_coordinate_snapshot");
 
         assertThatThrownBy(() -> fingerprint.assertMatches(new LegacyCoordinateSourceFingerprint.LegacySchemaSnapshot(
-            tables, expected.columns(), expected.constraints(), expected.indexes())))
-            .isInstanceOf(LegacyCoordinateSourceFingerprint.LegacyFingerprintMismatchException.class)
-            .hasMessageContaining("missing");
+                        tables, expected.columns(), expected.constraints(), expected.indexes())))
+                .isInstanceOf(LegacyCoordinateSourceFingerprint.LegacyFingerprintMismatchException.class)
+                .hasMessageContaining("missing");
     }
 
     @Test
@@ -35,8 +34,8 @@ class LegacyCoordinateSourceFingerprintTest {
         columns.add("parcel_coordinate_snapshot|unknown|text|text|YES|NO|||");
 
         assertThatThrownBy(() -> fingerprint.assertMatches(new LegacyCoordinateSourceFingerprint.LegacySchemaSnapshot(
-            expected.tables(), columns, expected.constraints(), expected.indexes())))
-            .isInstanceOf(LegacyCoordinateSourceFingerprint.LegacyFingerprintMismatchException.class)
-            .hasMessageContaining("unexpected");
+                        expected.tables(), columns, expected.constraints(), expected.indexes())))
+                .isInstanceOf(LegacyCoordinateSourceFingerprint.LegacyFingerprintMismatchException.class)
+                .hasMessageContaining("unexpected");
     }
 }

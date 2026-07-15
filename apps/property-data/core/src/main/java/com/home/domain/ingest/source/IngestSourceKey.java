@@ -5,14 +5,14 @@ package com.home.domain.ingest.source;
  */
 public record IngestSourceKey(String value) {
 
-	public static IngestSourceKey of(String value) {
-		return new IngestSourceKey(value);
-	}
+    public static IngestSourceKey of(String value) {
+        return new IngestSourceKey(value);
+    }
 
-	public IngestSourceKey {
-		if (value == null || value.isBlank()) {
-			throw new IllegalArgumentException("sourceKey is required");
-		}
-		value = value.trim();
-	}
+    public IngestSourceKey {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("sourceKey is required");
+        }
+        value = value.trim();
+    }
 }

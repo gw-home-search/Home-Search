@@ -5,12 +5,11 @@ package com.home.domain.coordinate;
  */
 public final class CoordinateDisplayPolicy {
 
-	public static final int TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE = 80;
+    public static final int TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE = 80;
 
-	private CoordinateDisplayPolicy() {
-	}
+    private CoordinateDisplayPolicy() {}
 
-	public static boolean isTrustedBuildingFootprintConfidence(int confidence) {
-		return confidence >= TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE;
-	}
+    public static boolean isTrustedBuildingFootprintConfidence(int confidence) {
+        return confidence >= TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE;
+    }
 }

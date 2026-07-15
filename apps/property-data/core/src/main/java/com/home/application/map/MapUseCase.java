@@ -4,7 +4,7 @@ import java.util.List;
 
 public interface MapUseCase {
 
-	List<ComplexMarkerResult> getComplexMarkers(ComplexMarkerQuery query);
+    List<ComplexMarkerResult> getComplexMarkers(ComplexMarkerQuery query);
 
-	List<RegionMarkerResult> getRegionMarkers(RegionMarkerQuery query);
+    List<RegionMarkerResult> getRegionMarkers(RegionMarkerQuery query);
 }

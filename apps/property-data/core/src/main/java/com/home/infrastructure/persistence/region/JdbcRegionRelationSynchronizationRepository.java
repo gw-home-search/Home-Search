@@ -1,55 +1,48 @@
 package com.home.infrastructure.persistence.region;
 
-import java.util.Objects;
-import java.util.function.Supplier;
-
 import com.home.application.region.RegionRelationSynchronizationGateway;
 import com.home.application.region.RegionRelationSynchronizationResult;
-
+import java.util.Objects;
+import java.util.function.Supplier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.support.TransactionTemplate;
 
 class JdbcRegionRelationSynchronizationRepository implements RegionRelationSynchronizationGateway {
 
-	private final Supplier<JdbcClient> jdbcClientSupplier;
-	private final Supplier<TransactionTemplate> transactionTemplateSupplier;
+    private final Supplier<JdbcClient> jdbcClientSupplier;
+    private final Supplier<TransactionTemplate> transactionTemplateSupplier;
 
-	JdbcRegionRelationSynchronizationRepository(JdbcClient jdbcClient, TransactionTemplate transactionTemplate) {
-		this(() -> jdbcClient, () -> transactionTemplate);
-	}
+    JdbcRegionRelationSynchronizationRepository(JdbcClient jdbcClient, TransactionTemplate transactionTemplate) {
+        this(() -> jdbcClient, () -> transactionTemplate);
+    }
 
-	JdbcRegionRelationSynchronizationRepository(
-		Supplier<JdbcClient> jdbcClientSupplier,
-		Supplier<TransactionTemplate> transactionTemplateSupplier
-	) {
-		this.jdbcClientSupplier = Objects.requireNonNull(jdbcClientSupplier);
-		this.transactionTemplateSupplier = Objects.requireNonNull(transactionTemplateSupplier);
-	}
+    JdbcRegionRelationSynchronizationRepository(
+            Supplier<JdbcClient> jdbcClientSupplier, Supplier<TransactionTemplate> transactionTemplateSupplier) {
+        this.jdbcClientSupplier = Objects.requireNonNull(jdbcClientSupplier);
+        this.transactionTemplateSupplier = Objects.requireNonNull(transactionTemplateSupplier);
+    }
 
-	@Override
-	public RegionRelationSynchronizationResult synchronizeAll() {
-		return transactionTemplate().execute(status -> synchronizeInTransaction());
-	}
+    @Override
+    public RegionRelationSynchronizationResult synchronizeAll() {
+        return transactionTemplate().execute(status -> synchronizeInTransaction());
+    }
 
-	private RegionRelationSynchronizationResult synchronizeInTransaction() {
-		if (regionHierarchyCycleExists()) {
-			throw new IllegalStateException("region hierarchy cycle detected");
-		}
-		boolean parcelRelationChanged = repairParcelRegionRelations() > 0;
-		boolean complexRelationChanged = synchronizeComplexRegionRelations() > 0;
-		if (complexParcelRegionMismatchExists()) {
-			throw new IllegalStateException("complex and parcel region relation mismatch after synchronization");
-		}
-		boolean unitCntChanged = rebuildRegionUnitCountSums() > 0;
-		return new RegionRelationSynchronizationResult(
-			parcelRelationChanged || complexRelationChanged,
-			unitCntChanged,
-			unmatchedParcelExists()
-		);
-	}
+    private RegionRelationSynchronizationResult synchronizeInTransaction() {
+        if (regionHierarchyCycleExists()) {
+            throw new IllegalStateException("region hierarchy cycle detected");
+        }
+        boolean parcelRelationChanged = repairParcelRegionRelations() > 0;
+        boolean complexRelationChanged = synchronizeComplexRegionRelations() > 0;
+        if (complexParcelRegionMismatchExists()) {
+            throw new IllegalStateException("complex and parcel region relation mismatch after synchronization");
+        }
+        boolean unitCntChanged = rebuildRegionUnitCountSums() > 0;
+        return new RegionRelationSynchronizationResult(
+                parcelRelationChanged || complexRelationChanged, unitCntChanged, unmatchedParcelExists());
+    }
 
-	private int repairParcelRegionRelations() {
-		return jdbcClient().sql("""
+    private int repairParcelRegionRelations() {
+        return jdbcClient().sql("""
 			WITH parcel_region_candidate AS (
 			    SELECT
 			        p.id AS parcel_id,
@@ -78,10 +71,10 @@ class JdbcRegionRelationSynchronizationRepository implements RegionRelationSynch
 			WHERE p.id = candidate.parcel_id
 			  AND p.region_id IS DISTINCT FROM candidate.region_id
 			""").update();
-	}
+    }
 
-	private int synchronizeComplexRegionRelations() {
-		return jdbcClient().sql("""
+    private int synchronizeComplexRegionRelations() {
+        return jdbcClient().sql("""
 			UPDATE complex c
 			SET region_id = p.region_id,
 			    updated_at = now()
@@ -89,10 +82,10 @@ class JdbcRegionRelationSynchronizationRepository implements RegionRelationSynch
 			WHERE p.id = c.parcel_id
 			  AND c.region_id IS DISTINCT FROM p.region_id
 			""").update();
-	}
+    }
 
-	private int rebuildRegionUnitCountSums() {
-		return jdbcClient().sql("""
+    private int rebuildRegionUnitCountSums() {
+        return jdbcClient().sql("""
 			WITH RECURSIVE region_ancestor AS (
 			    SELECT
 			        r.id AS descendant_id,
@@ -128,10 +121,10 @@ class JdbcRegionRelationSynchronizationRepository implements RegionRelationSynch
 			WHERE r.id = value.region_id
 			  AND r.unit_cnt_sum IS DISTINCT FROM value.unit_cnt_sum
 			""").update();
-	}
+    }
 
-	private boolean complexParcelRegionMismatchExists() {
-		return jdbcClient().sql("""
+    private boolean complexParcelRegionMismatchExists() {
+        return jdbcClient().sql("""
 			SELECT EXISTS (
 			    SELECT 1
 			    FROM complex c
@@ -139,10 +132,10 @@ class JdbcRegionRelationSynchronizationRepository implements RegionRelationSynch
 			    WHERE c.region_id IS DISTINCT FROM p.region_id
 			)
 			""").query(Boolean.class).single();
-	}
+    }
 
-	private boolean regionHierarchyCycleExists() {
-		return jdbcClient().sql("""
+    private boolean regionHierarchyCycleExists() {
+        return jdbcClient().sql("""
 			WITH RECURSIVE region_path AS (
 			    SELECT
 			        r.id AS current_id,
@@ -161,19 +154,20 @@ class JdbcRegionRelationSynchronizationRepository implements RegionRelationSynch
 			)
 			SELECT EXISTS (SELECT 1 FROM region_path WHERE cycle_found)
 			""").query(Boolean.class).single();
-	}
+    }
 
-	private boolean unmatchedParcelExists() {
-		return jdbcClient().sql("SELECT EXISTS (SELECT 1 FROM parcel WHERE region_id IS NULL)")
-			.query(Boolean.class)
-			.single();
-	}
+    private boolean unmatchedParcelExists() {
+        return jdbcClient()
+                .sql("SELECT EXISTS (SELECT 1 FROM parcel WHERE region_id IS NULL)")
+                .query(Boolean.class)
+                .single();
+    }
 
-	private JdbcClient jdbcClient() {
-		return Objects.requireNonNull(jdbcClientSupplier.get(), "JdbcClient supplier returned null");
-	}
+    private JdbcClient jdbcClient() {
+        return Objects.requireNonNull(jdbcClientSupplier.get(), "JdbcClient supplier returned null");
+    }
 
-	private TransactionTemplate transactionTemplate() {
-		return Objects.requireNonNull(transactionTemplateSupplier.get(), "TransactionTemplate supplier returned null");
-	}
+    private TransactionTemplate transactionTemplate() {
+        return Objects.requireNonNull(transactionTemplateSupplier.get(), "TransactionTemplate supplier returned null");
+    }
 }

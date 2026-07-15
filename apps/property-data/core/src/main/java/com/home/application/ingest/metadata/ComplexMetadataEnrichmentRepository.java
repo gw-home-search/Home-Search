@@ -5,7 +5,7 @@ import java.util.List;
 
 public interface ComplexMetadataEnrichmentRepository {
 
-	List<ComplexMetadataLookup> findPending(int limit);
+    List<ComplexMetadataLookup> findPending(int limit);
 
-	void saveResolution(Long complexId, ComplexMetadataResolution resolution, Instant nextAttemptAt);
+    void saveResolution(Long complexId, ComplexMetadataResolution resolution, Instant nextAttemptAt);
 }

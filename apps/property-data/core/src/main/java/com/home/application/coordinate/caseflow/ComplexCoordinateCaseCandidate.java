@@ -4,7 +4,7 @@ import java.util.Objects;
 
 public record ComplexCoordinateCaseCandidate(Long parcelId) {
 
-	public ComplexCoordinateCaseCandidate {
-		Objects.requireNonNull(parcelId, "parcelId is required");
-	}
+    public ComplexCoordinateCaseCandidate {
+        Objects.requireNonNull(parcelId, "parcelId is required");
+    }
 }

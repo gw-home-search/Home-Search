@@ -5,5 +5,5 @@ import com.home.ingestcore.rtms.OpenApiTradeItem;
 @FunctionalInterface
 public interface ComplexMatcher {
 
-	ComplexMatchResult match(OpenApiTradeItem item);
+    ComplexMatchResult match(OpenApiTradeItem item);
 }

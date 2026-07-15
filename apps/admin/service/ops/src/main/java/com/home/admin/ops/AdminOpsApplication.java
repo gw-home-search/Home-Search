@@ -9,7 +9,8 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 public class AdminOpsApplication {
     public static void main(String[] args) {
         var context = new SpringApplicationBuilder(AdminOpsApplication.class)
-            .web(WebApplicationType.NONE).run(args);
+                .web(WebApplicationType.NONE)
+                .run(args);
         System.exit(SpringApplication.exit(context));
     }
 }

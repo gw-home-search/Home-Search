@@ -5,11 +5,10 @@ import org.springframework.context.annotation.Import;
 
 @Configuration(proxyBeanMethods = false)
 @Import({
-	CoordinateSourcePersistenceConfiguration.class,
-	RawIngestPersistenceConfiguration.class,
-	RtmsIngestRunPersistenceConfiguration.class,
-	TradeMatchPersistenceConfiguration.class,
-	TradeNormalizationPersistenceConfiguration.class
+    CoordinateSourcePersistenceConfiguration.class,
+    RawIngestPersistenceConfiguration.class,
+    RtmsIngestRunPersistenceConfiguration.class,
+    TradeMatchPersistenceConfiguration.class,
+    TradeNormalizationPersistenceConfiguration.class
 })
-public class IngestPersistenceConfiguration {
-}
+public class IngestPersistenceConfiguration {}

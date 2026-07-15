@@ -7,10 +7,8 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import java.util.List;
-
 import com.home.application.coordinate.footprint.BuildingFootprintImportCandidate;
-
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -19,19 +17,19 @@ import org.springframework.web.client.RestClient;
 
 class VworldBuildingFootprintSourceTest {
 
-	@Test
-	@DisplayName("VWorld WFS feature는 PNU 단건 building footprint 후보로 변환한다")
-	void fetchesBuildingFootprintsByPnu() {
-		VworldParcelCoordinateProperties properties = properties("DUMMY");
-		RestClient.Builder builder = RestClient.builder().baseUrl(properties.baseUrl());
-		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-		VworldBuildingFootprintSource source = new VworldBuildingFootprintSource(builder.build(), properties);
-		server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
-			.andExpect(queryParam("key", "DUMMY"))
-			.andExpect(queryParam("output", "application/json"))
-			.andExpect(queryParam("pnu", "4128510200115660000"))
-			.andExpect(queryParam("srsName", "EPSG:4326"))
-			.andRespond(withSuccess("""
+    @Test
+    @DisplayName("VWorld WFS feature는 PNU 단건 building footprint 후보로 변환한다")
+    void fetchesBuildingFootprintsByPnu() {
+        VworldParcelCoordinateProperties properties = properties("DUMMY");
+        RestClient.Builder builder = RestClient.builder().baseUrl(properties.baseUrl());
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        VworldBuildingFootprintSource source = new VworldBuildingFootprintSource(builder.build(), properties);
+        server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
+                .andExpect(queryParam("key", "DUMMY"))
+                .andExpect(queryParam("output", "application/json"))
+                .andExpect(queryParam("pnu", "4128510200115660000"))
+                .andExpect(queryParam("srsName", "EPSG:4326"))
+                .andRespond(withSuccess("""
 				{
 				  "features": [
 				    {
@@ -63,66 +61,52 @@ class VworldBuildingFootprintSourceTest {
 				}
 				""", MediaType.APPLICATION_JSON));
 
-		List<BuildingFootprintImportCandidate> footprints = source.fetchByPnu("4128510200115660000");
+        List<BuildingFootprintImportCandidate> footprints = source.fetchByPnu("4128510200115660000");
 
-		assertThat(footprints)
-			.extracting(
-				BuildingFootprintImportCandidate::pnu,
-				BuildingFootprintImportCandidate::buildingName,
-				BuildingFootprintImportCandidate::dongName,
-				BuildingFootprintImportCandidate::sourceBuildingKey,
-				BuildingFootprintImportCandidate::source,
-				BuildingFootprintImportCandidate::snapshotVersion
-			)
-			.containsExactly(
-				org.assertj.core.groups.Tuple.tuple(
-					"4128510200115660000",
-					"중산마을",
-					"1001동",
-					"dt_d010.1",
-					"VWORLD_WFS",
-					"LIVE"
-				),
-				org.assertj.core.groups.Tuple.tuple(
-					"4128510200115660000",
-					"중산마을",
-					"1006동",
-					"dt_d010.2",
-					"VWORLD_WFS",
-					"LIVE"
-				)
-			);
-		assertThat(footprints.get(0).latitude()).isEqualByComparingTo("37.6876");
-		assertThat(footprints.get(0).longitude()).isEqualByComparingTo("126.7781");
-		server.verify();
-	}
+        assertThat(footprints)
+                .extracting(
+                        BuildingFootprintImportCandidate::pnu,
+                        BuildingFootprintImportCandidate::buildingName,
+                        BuildingFootprintImportCandidate::dongName,
+                        BuildingFootprintImportCandidate::sourceBuildingKey,
+                        BuildingFootprintImportCandidate::source,
+                        BuildingFootprintImportCandidate::snapshotVersion)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                "4128510200115660000", "중산마을", "1001동", "dt_d010.1", "VWORLD_WFS", "LIVE"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                "4128510200115660000", "중산마을", "1006동", "dt_d010.2", "VWORLD_WFS", "LIVE"));
+        assertThat(footprints.get(0).latitude()).isEqualByComparingTo("37.6876");
+        assertThat(footprints.get(0).longitude()).isEqualByComparingTo("126.7781");
+        server.verify();
+    }
 
-	@Test
-	@DisplayName("VWorld service key가 없으면 HTTP 호출 없이 빈 footprint를 반환한다")
-	void blankServiceKeySkipsHttpLookup() {
-		VworldParcelCoordinateProperties properties = properties(" ");
-		RestClient restClient = RestClient.builder()
-			.baseUrl(properties.baseUrl())
-			.requestFactory((uri, httpMethod) -> {
-				throw new AssertionError("HTTP request must not be created without VW_SERVICE_KEY");
-			})
-			.build();
-		VworldBuildingFootprintSource source = new VworldBuildingFootprintSource(restClient, properties);
+    @Test
+    @DisplayName("VWorld service key가 없으면 HTTP 호출 없이 빈 footprint를 반환한다")
+    void blankServiceKeySkipsHttpLookup() {
+        VworldParcelCoordinateProperties properties = properties(" ");
+        RestClient restClient = RestClient.builder()
+                .baseUrl(properties.baseUrl())
+                .requestFactory((uri, httpMethod) -> {
+                    throw new AssertionError("HTTP request must not be created without VW_SERVICE_KEY");
+                })
+                .build();
+        VworldBuildingFootprintSource source = new VworldBuildingFootprintSource(restClient, properties);
 
-		assertThat(source.fetchByPnu("4128510200115660000")).isEmpty();
-	}
+        assertThat(source.fetchByPnu("4128510200115660000")).isEmpty();
+    }
 
-	@Test
-	@DisplayName("VWorld WFS transient 실패는 호출 단위 retry 후 성공 결과를 반환한다")
-	void retriesTransientVworldFailure() {
-		VworldParcelCoordinateProperties properties = properties("DUMMY");
-		RestClient.Builder builder = RestClient.builder().baseUrl(properties.baseUrl());
-		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-		VworldBuildingFootprintSource source = new VworldBuildingFootprintSource(builder.build(), properties, 2, 0);
-		server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
-			.andRespond(withServerError());
-		server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
-			.andRespond(withSuccess("""
+    @Test
+    @DisplayName("VWorld WFS transient 실패는 호출 단위 retry 후 성공 결과를 반환한다")
+    void retriesTransientVworldFailure() {
+        VworldParcelCoordinateProperties properties = properties("DUMMY");
+        RestClient.Builder builder = RestClient.builder().baseUrl(properties.baseUrl());
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        VworldBuildingFootprintSource source = new VworldBuildingFootprintSource(builder.build(), properties, 2, 0);
+        server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
+                .andRespond(withServerError());
+        server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
+                .andRespond(withSuccess("""
 				{
 				  "features": [
 				    {
@@ -138,24 +122,24 @@ class VworldBuildingFootprintSourceTest {
 				}
 				""", MediaType.APPLICATION_JSON));
 
-		List<BuildingFootprintImportCandidate> footprints = source.fetchByPnu("4128510200115660000");
+        List<BuildingFootprintImportCandidate> footprints = source.fetchByPnu("4128510200115660000");
 
-		assertThat(footprints).hasSize(1);
-		assertThat(footprints.get(0).sourceBuildingKey()).isEqualTo("dt_d010.retry");
-		server.verify();
-	}
+        assertThat(footprints).hasSize(1);
+        assertThat(footprints.get(0).sourceBuildingKey()).isEqualTo("dt_d010.retry");
+        server.verify();
+    }
 
-	@Test
-	@DisplayName("VWorld WFS totalCount가 numOfRows보다 크면 다음 page를 이어서 조회한다")
-	void fetchesAdditionalVworldPagesWhenTotalCountExceedsPageSize() {
-		VworldParcelCoordinateProperties properties = properties("DUMMY", 1);
-		RestClient.Builder builder = RestClient.builder().baseUrl(properties.baseUrl());
-		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-		VworldBuildingFootprintSource source = new VworldBuildingFootprintSource(builder.build(), properties, 1, 0);
-		server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
-			.andExpect(queryParam("pageNo", "1"))
-			.andExpect(queryParam("numOfRows", "1"))
-			.andRespond(withSuccess("""
+    @Test
+    @DisplayName("VWorld WFS totalCount가 numOfRows보다 크면 다음 page를 이어서 조회한다")
+    void fetchesAdditionalVworldPagesWhenTotalCountExceedsPageSize() {
+        VworldParcelCoordinateProperties properties = properties("DUMMY", 1);
+        RestClient.Builder builder = RestClient.builder().baseUrl(properties.baseUrl());
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        VworldBuildingFootprintSource source = new VworldBuildingFootprintSource(builder.build(), properties, 1, 0);
+        server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
+                .andExpect(queryParam("pageNo", "1"))
+                .andExpect(queryParam("numOfRows", "1"))
+                .andRespond(withSuccess("""
 				{
 				  "totalCount": 2,
 				  "features": [
@@ -170,10 +154,10 @@ class VworldBuildingFootprintSourceTest {
 				  ]
 				}
 				""", MediaType.APPLICATION_JSON));
-		server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
-			.andExpect(queryParam("pageNo", "2"))
-			.andExpect(queryParam("numOfRows", "1"))
-			.andRespond(withSuccess("""
+        server.expect(requestTo(startsWith("https://api.example.test/vworld/wfs")))
+                .andExpect(queryParam("pageNo", "2"))
+                .andExpect(queryParam("numOfRows", "1"))
+                .andRespond(withSuccess("""
 				{
 				  "totalCount": 2,
 				  "features": [
@@ -189,27 +173,26 @@ class VworldBuildingFootprintSourceTest {
 				}
 				""", MediaType.APPLICATION_JSON));
 
-		List<BuildingFootprintImportCandidate> footprints = source.fetchByPnu("4128510200115660000");
+        List<BuildingFootprintImportCandidate> footprints = source.fetchByPnu("4128510200115660000");
 
-		assertThat(footprints)
-			.extracting(BuildingFootprintImportCandidate::sourceBuildingKey)
-			.containsExactly("dt_d010.page1", "dt_d010.page2");
-		server.verify();
-	}
+        assertThat(footprints)
+                .extracting(BuildingFootprintImportCandidate::sourceBuildingKey)
+                .containsExactly("dt_d010.page1", "dt_d010.page2");
+        server.verify();
+    }
 
-	private VworldParcelCoordinateProperties properties(String serviceKey) {
-		return properties(serviceKey, 100);
-	}
+    private VworldParcelCoordinateProperties properties(String serviceKey) {
+        return properties(serviceKey, 100);
+    }
 
-	private VworldParcelCoordinateProperties properties(String serviceKey, int numOfRows) {
-		return new VworldParcelCoordinateProperties(
-			"https://api.example.test",
-			"/vworld/wfs",
-			serviceKey,
-			"http://localhost:8080/test",
-			numOfRows,
-			1_000,
-			1_000
-		);
-	}
+    private VworldParcelCoordinateProperties properties(String serviceKey, int numOfRows) {
+        return new VworldParcelCoordinateProperties(
+                "https://api.example.test",
+                "/vworld/wfs",
+                serviceKey,
+                "http://localhost:8080/test",
+                numOfRows,
+                1_000,
+                1_000);
+    }
 }

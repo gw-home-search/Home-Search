@@ -5,14 +5,13 @@ import java.util.Map;
 import java.util.Set;
 
 public record JwtIssueRequest(
-    String issuer,
-    String audience,
-    String subject,
-    String tokenId,
-    String keyId,
-    Duration lifetime,
-    Map<String, Object> claims
-) {
+        String issuer,
+        String audience,
+        String subject,
+        String tokenId,
+        String keyId,
+        Duration lifetime,
+        Map<String, Object> claims) {
     private static final Set<String> RESERVED = Set.of("iss", "aud", "sub", "jti", "iat", "exp", "nbf");
 
     public JwtIssueRequest {

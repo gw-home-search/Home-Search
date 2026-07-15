@@ -1,11 +1,24 @@
 plugins {
     id 'org.springframework.boot' version '4.1.0' apply false
     id 'io.spring.dependency-management' version '1.1.7' apply false
+    id 'com.diffplug.spotless' version '8.8.0'
     id 'jacoco'
 }
 
 group = 'com.home'
 version = '0.0.1-SNAPSHOT'
+
+spotless {
+    java {
+        target 'core/src/**/*.java', 'app/src/**/*.java'
+        palantirJavaFormat('2.96.0')
+    }
+}
+
+tasks.named('spotlessCheck') {
+    dependsOn gradle.includedBuild('security-jwt-core').task(':spotlessCheck')
+    dependsOn gradle.includedBuild('user-auth-contract').task(':spotlessCheck')
+}
 
 allprojects {
     group = rootProject.group
@@ -167,6 +180,7 @@ tasks.register('verifyUserFlywayFresh', Exec) {
 }
 
 tasks.register('userServiceQualityCheck') {
+    dependsOn tasks.named('spotlessCheck')
     dependsOn 'userServiceTest', 'userServiceLibraryTest', 'userServicePersistenceTest', 'userServiceApiContractTest',
         'userServiceDependencyBoundaryCheck', 'verifyUserMigrationCatalog',
         'verifyUserFlywayCliContract', 'verifyUserDeploymentPreflightContract',

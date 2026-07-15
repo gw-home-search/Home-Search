@@ -3,9 +3,9 @@ package com.home.application.ingest.run;
 @FunctionalInterface
 public interface RtmsIngestRunRepository {
 
-	RtmsIngestRunRecord save(RtmsIngestRunRecord record);
+    RtmsIngestRunRecord save(RtmsIngestRunRecord record);
 
-	static RtmsIngestRunRepository noop() {
-		return record -> record;
-	}
+    static RtmsIngestRunRepository noop() {
+        return record -> record;
+    }
 }

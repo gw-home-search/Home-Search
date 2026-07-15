@@ -2,9 +2,6 @@ package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.math.BigDecimal;
-import java.util.Optional;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.home.application.coordinate.lookup.ParcelCoordinate;
 import com.home.application.ingest.matching.TradeMatchRematchService;
@@ -16,17 +13,18 @@ import com.home.infrastructure.persistence.ingest.matching.JdbcTradeMatchEvidenc
 import com.home.infrastructure.persistence.ingest.normalization.JdbcNormalizedTradeRepository;
 import com.home.infrastructure.persistence.ingest.raw.JdbcRawTradeIngestRepository;
 import com.home.infrastructure.persistence.ingest.raw.RtmsRawTradeItemParser;
-
+import java.math.BigDecimal;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class TradeMatchRematchServiceJdbcIntegrationTest extends JdbcPostgresTestSupport {
 
-	@Test
-	@DisplayName("MATCH_FAILED raw는 complex coverage 보강 후 외부 RTMS 재호출 없이 rematch되어 normalized trade가 된다")
-	void rematchesHeldRawAfterComplexCoverageImprovesWithoutExternalFetch() {
-		seedComplex();
-		jdbcClient.sql("""
+    @Test
+    @DisplayName("MATCH_FAILED raw는 complex coverage 보강 후 외부 RTMS 재호출 없이 rematch되어 normalized trade가 된다")
+    void rematchesHeldRawAfterComplexCoverageImprovesWithoutExternalFetch() {
+        seedComplex();
+        jdbcClient.sql("""
 			INSERT INTO raw_trade_ingest (
 			    id,
 			    source,
@@ -54,35 +52,33 @@ class TradeMatchRematchServiceJdbcIntegrationTest extends JdbcPostgresTestSuppor
 			    now()
 			)
 			""").update();
-		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
-		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
-		TradeMatchRematchService service = new TradeMatchRematchService(
-			rawRepository,
-			new JdbcNormalizedTradeRepository(jdbcClient, transactionTemplate),
-			new JdbcComplexMatcher(jdbcClient),
-			evidenceRepository,
-			new RtmsRawTradeItemParser(new ObjectMapper())
-		);
+        JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+        JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
+        TradeMatchRematchService service = new TradeMatchRematchService(
+                rawRepository,
+                new JdbcNormalizedTradeRepository(jdbcClient, transactionTemplate),
+                new JdbcComplexMatcher(jdbcClient),
+                evidenceRepository,
+                new RtmsRawTradeItemParser(new ObjectMapper()));
 
-		var result = service.rematchHeld(10);
+        var result = service.rematchHeld(10);
 
-		assertThat(result.processed()).isEqualTo(1);
-		assertThat(result.normalized()).isEqualTo(1);
-		assertThat(tradeCount()).isEqualTo(1);
-		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.NORMALIZED))
-			.singleElement()
-			.satisfies(raw -> assertThat(raw.id()).isEqualTo(93001L));
-		assertThat(evidenceRepository.findByRawIngestId(93001L))
-			.hasValueSatisfying(evidence -> {
-				assertThat(evidence.matchStatus()).isEqualTo(TradeMatchStatus.MATCHED);
-				assertThat(evidence.matchedComplexId()).isEqualTo(501L);
-			});
-	}
+        assertThat(result.processed()).isEqualTo(1);
+        assertThat(result.normalized()).isEqualTo(1);
+        assertThat(tradeCount()).isEqualTo(1);
+        assertThat(rawRepository.findByStatus(RawTradeIngestStatus.NORMALIZED))
+                .singleElement()
+                .satisfies(raw -> assertThat(raw.id()).isEqualTo(93001L));
+        assertThat(evidenceRepository.findByRawIngestId(93001L)).hasValueSatisfying(evidence -> {
+            assertThat(evidence.matchStatus()).isEqualTo(TradeMatchStatus.MATCHED);
+            assertThat(evidence.matchedComplexId()).isEqualTo(501L);
+        });
+    }
 
-	@Test
-	@DisplayName("MATCH_FAILED raw는 coordinate coverage 보강 후 rematch 중 complex를 bootstrap하고 normalized trade가 된다")
-	void bootstrapsComplexDuringRematchAfterCoordinateCoverageImproves() {
-		jdbcClient.sql("""
+    @Test
+    @DisplayName("MATCH_FAILED raw는 coordinate coverage 보강 후 rematch 중 complex를 bootstrap하고 normalized trade가 된다")
+    void bootstrapsComplexDuringRematchAfterCoordinateCoverageImproves() {
+        jdbcClient.sql("""
 			INSERT INTO raw_trade_ingest (
 			    id,
 			    source,
@@ -110,41 +106,37 @@ class TradeMatchRematchServiceJdbcIntegrationTest extends JdbcPostgresTestSuppor
 			    now()
 			)
 			""").update();
-		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
-		JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
-		TradeMatchRematchService service = new TradeMatchRematchService(
-			rawRepository,
-			new JdbcNormalizedTradeRepository(jdbcClient, transactionTemplate),
-			new JdbcComplexMatcher(jdbcClient),
-			new JdbcComplexMasterBootstrapper(
-				jdbcClient,
-				pnu -> "1168010300101400001".equals(pnu)
-					? Optional.of(new ParcelCoordinate(new BigDecimal("37.5123000"), new BigDecimal("127.0456000")))
-					: Optional.empty()
-			),
-			evidenceRepository,
-			new RtmsRawTradeItemParser(new ObjectMapper())
-		);
+        JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+        JdbcTradeMatchEvidenceRepository evidenceRepository = new JdbcTradeMatchEvidenceRepository(jdbcClient);
+        TradeMatchRematchService service = new TradeMatchRematchService(
+                rawRepository,
+                new JdbcNormalizedTradeRepository(jdbcClient, transactionTemplate),
+                new JdbcComplexMatcher(jdbcClient),
+                new JdbcComplexMasterBootstrapper(
+                        jdbcClient,
+                        pnu -> "1168010300101400001".equals(pnu)
+                                ? Optional.of(new ParcelCoordinate(
+                                        new BigDecimal("37.5123000"), new BigDecimal("127.0456000")))
+                                : Optional.empty()),
+                evidenceRepository,
+                new RtmsRawTradeItemParser(new ObjectMapper()));
 
-		var result = service.rematchHeld(10);
+        var result = service.rematchHeld(10);
 
-		assertThat(result.processed()).isEqualTo(1);
-		assertThat(result.normalized()).isEqualTo(1);
-		assertThat(tradeCount()).isEqualTo(1);
-		assertThat(complexCount()).isEqualTo(1);
-		assertThat(rawRepository.findByStatus(RawTradeIngestStatus.NORMALIZED))
-			.singleElement()
-			.satisfies(raw -> assertThat(raw.id()).isEqualTo(93002L));
-		assertThat(evidenceRepository.findByRawIngestId(93002L))
-			.hasValueSatisfying(evidence -> {
-				assertThat(evidence.matchStatus()).isEqualTo(TradeMatchStatus.MATCHED);
-				assertThat(evidence.matchedComplexPk()).isEqualTo("RTMS:APT-501");
-			});
-	}
+        assertThat(result.processed()).isEqualTo(1);
+        assertThat(result.normalized()).isEqualTo(1);
+        assertThat(tradeCount()).isEqualTo(1);
+        assertThat(complexCount()).isEqualTo(1);
+        assertThat(rawRepository.findByStatus(RawTradeIngestStatus.NORMALIZED))
+                .singleElement()
+                .satisfies(raw -> assertThat(raw.id()).isEqualTo(93002L));
+        assertThat(evidenceRepository.findByRawIngestId(93002L)).hasValueSatisfying(evidence -> {
+            assertThat(evidence.matchStatus()).isEqualTo(TradeMatchStatus.MATCHED);
+            assertThat(evidence.matchedComplexPk()).isEqualTo("RTMS:APT-501");
+        });
+    }
 
-	private long complexCount() {
-		return jdbcClient.sql("SELECT count(*) FROM complex")
-			.query(Long.class)
-			.single();
-	}
+    private long complexCount() {
+        return jdbcClient.sql("SELECT count(*) FROM complex").query(Long.class).single();
+    }
 }

@@ -6,5 +6,7 @@ import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServic
 
 @SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
 public class AdminServiceApplication {
-    public static void main(String[] args) { SpringApplication.run(AdminServiceApplication.class, args); }
+    public static void main(String[] args) {
+        SpringApplication.run(AdminServiceApplication.class, args);
+    }
 }

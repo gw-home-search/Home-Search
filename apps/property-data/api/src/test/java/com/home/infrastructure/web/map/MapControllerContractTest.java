@@ -300,8 +300,11 @@ class MapControllerContractTest {
     @Test
     @DisplayName("POST /api/v1/map/complexes는 unexpected server error를 ProblemDetail로 반환한다")
     void unexpectedComplexMarkerErrorReturnsProblemDetail(CapturedOutput output) throws Exception {
-        given(mapUseCase.getComplexMarkers(any(ComplexMarkerQuery.class)))
-                .willThrow(new IllegalStateException("failed to load markers serviceKey=sensitive-marker"));
+        IllegalStateException failure = new IllegalStateException(
+                "failed to load markers serviceKey=sensitive-marker",
+                new IllegalArgumentException("sensitive root cause detail"));
+        failure.addSuppressed(new UnsupportedOperationException("sensitive suppressed detail"));
+        given(mapUseCase.getComplexMarkers(any(ComplexMarkerQuery.class))).willThrow(failure);
 
         mockMvc.perform(post("/api/v1/map/complexes")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -333,7 +336,11 @@ class MapControllerContractTest {
                 .contains("Unhandled API exception")
                 .contains("type=IllegalStateException")
                 .contains("MapControllerContractTest")
+                .contains("IllegalArgumentException")
+                .contains("UnsupportedOperationException")
                 .doesNotContain("failed to load markers")
+                .doesNotContain("sensitive root cause detail")
+                .doesNotContain("sensitive suppressed detail")
                 .doesNotContain("serviceKey")
                 .doesNotContain("sensitive-marker");
     }

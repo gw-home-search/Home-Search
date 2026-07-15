@@ -47,12 +47,16 @@ public final class RedisNearbyPlaceCache implements NearbyPlaceCache {
             return Optional.of(result);
         } catch (JacksonException exception) {
             record("corrupt");
-            log.debug("Discarding corrupt nearby-place cache entry", exception);
+            log.debug(
+                    "Discarding corrupt nearby-place cache entry type={}",
+                    exception.getClass().getSimpleName());
             tryDelete(key);
             return Optional.empty();
         } catch (RuntimeException exception) {
             record("error");
-            log.debug("Nearby-place cache read failed", exception);
+            log.debug(
+                    "Nearby-place cache read failed type={}",
+                    exception.getClass().getSimpleName());
             return Optional.empty();
         }
     }
@@ -61,8 +65,12 @@ public final class RedisNearbyPlaceCache implements NearbyPlaceCache {
     public void store(NearbyPlaceCacheKey key, NearbyPlaceProviderResult result) {
         try {
             redisTemplate.opsForValue().set(key.redisKey(), objectMapper.writeValueAsString(result), ttl);
+            recordOperation("write", "success");
         } catch (RuntimeException exception) {
-            log.debug("Nearby-place cache write failed", exception);
+            recordOperation("write", "error");
+            log.debug(
+                    "Nearby-place cache write failed type={}",
+                    exception.getClass().getSimpleName());
         }
     }
 
@@ -70,7 +78,10 @@ public final class RedisNearbyPlaceCache implements NearbyPlaceCache {
         try {
             redisTemplate.delete(key.redisKey());
         } catch (RuntimeException exception) {
-            log.debug("Nearby-place corrupt cache cleanup failed", exception);
+            recordOperation("delete", "error");
+            log.debug(
+                    "Nearby-place corrupt cache cleanup failed type={}",
+                    exception.getClass().getSimpleName());
         }
     }
 
@@ -114,6 +125,12 @@ public final class RedisNearbyPlaceCache implements NearbyPlaceCache {
     private void record(String result) {
         meterRegistry
                 .counter("home.search.nearby.place.cache.requests", "result", result)
+                .increment();
+    }
+
+    private void recordOperation(String operation, String result) {
+        meterRegistry
+                .counter("home.search.nearby.place.cache.operations", "operation", operation, "result", result)
                 .increment();
     }
 }

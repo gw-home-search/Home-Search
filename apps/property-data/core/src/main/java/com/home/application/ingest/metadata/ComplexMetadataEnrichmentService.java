@@ -60,11 +60,14 @@ public class ComplexMetadataEnrichmentService {
             repository.saveResolution(lookup.complexId(), failed, nextAttemptAt(lookup, failed));
         } catch (RuntimeException saveException) {
             log.warn(
-                    "complex metadata enrichment failure status save failed complexId={}",
+                    "complex metadata enrichment failure status save failed complexId={} errorType={}",
                     lookup.complexId(),
-                    saveException);
+                    saveException.getClass().getSimpleName());
         }
-        log.warn("complex metadata enrichment failed complexId={}", lookup.complexId(), exception);
+        log.warn(
+                "complex metadata enrichment failed complexId={} errorType={}",
+                lookup.complexId(),
+                exception.getClass().getSimpleName());
     }
 
     private Instant nextAttemptAt(ComplexMetadataLookup lookup, ComplexMetadataResolution resolution) {

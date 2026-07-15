@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -116,7 +117,29 @@ class PricePredictionUseCaseTest {
                 .extracting(PricePredictionResult::status)
                 .containsExactly(PredictionStatus.PENDING, PredictionStatus.FAILED);
         assertThat(cacheRepository.savedTtls).containsExactly(Duration.ofSeconds(60), Duration.ofMinutes(10));
-        assertThat(cacheRepository.savedResults.get(1).message()).contains("ml timeout");
+        assertThat(cacheRepository.savedResults.get(1).message())
+                .isEqualTo("AI prediction provider unavailable.")
+                .doesNotContain("ml timeout");
+    }
+
+    @Test
+    @DisplayName("prediction executor가 포화되면 PENDING을 남기지 않고 FAILED로 확정한다")
+    void saturatedExecutorStoresAndReturnsFailedPrediction() {
+        FakePredictionCacheRepository cacheRepository = new FakePredictionCacheRepository();
+        Executor saturatedExecutor = command -> {
+            throw new RejectedExecutionException("executor saturated");
+        };
+        PricePredictionUseCase useCase = useCase(
+                new FakeFeatureRepository(feature()), cacheRepository, new FakePredictionClient(), saturatedExecutor);
+
+        PricePredictionResult result = useCase.getOrSchedulePrediction(501L);
+
+        assertThat(result.status()).isEqualTo(PredictionStatus.FAILED);
+        assertThat(result.message()).doesNotContain("executor saturated");
+        assertThat(cacheRepository.savedResults)
+                .extracting(PricePredictionResult::status)
+                .containsExactly(PredictionStatus.PENDING, PredictionStatus.FAILED);
+        assertThat(cacheRepository.savedTtls).containsExactly(Duration.ofSeconds(60), Duration.ofMinutes(10));
     }
 
     private PricePredictionUseCase useCase(

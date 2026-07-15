@@ -71,7 +71,9 @@ final class RedisCachingComplexMarkerRepository implements ComplexMarkerReposito
             }
             return CacheLookup.hit(objectMapper.readValue(cachedValue, MARKER_LIST_TYPE));
         } catch (RuntimeException ex) {
-            log.debug("Failed to read Redis complex marker cache key={}", cacheKey, ex);
+            log.debug(
+                    "Redis complex marker cache read failed type={}",
+                    ex.getClass().getSimpleName());
             return CacheLookup.error();
         }
     }
@@ -82,7 +84,9 @@ final class RedisCachingComplexMarkerRepository implements ComplexMarkerReposito
             redisTemplate.opsForValue().set(cacheKey, serializedMarkers, ttl);
             return true;
         } catch (RuntimeException ex) {
-            log.debug("Failed to write Redis complex marker cache key={}", cacheKey, ex);
+            log.debug(
+                    "Redis complex marker cache write failed type={}",
+                    ex.getClass().getSimpleName());
             return false;
         }
     }

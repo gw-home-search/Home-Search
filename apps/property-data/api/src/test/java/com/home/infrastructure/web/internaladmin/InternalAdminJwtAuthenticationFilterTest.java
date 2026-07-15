@@ -14,6 +14,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,8 @@ import tools.jackson.databind.ObjectMapper;
 
 class InternalAdminJwtAuthenticationFilterTest {
     private static final Instant NOW = Instant.parse("2026-07-12T00:00:00Z");
+    private static final Pattern OFFSET_TIMESTAMP =
+            Pattern.compile("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:Z|[+-]\\d{2}:\\d{2})$");
     private final UUID accountId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private Rs256JwtCodec codec;
     private java.security.KeyPair keys;
@@ -98,6 +101,12 @@ class InternalAdminJwtAuthenticationFilterTest {
         filter("property-data-admin").doFilter(missingHeader, missingHeaderResponse, new MockFilterChain());
         assertThat(missingHeaderResponse.getStatus()).isEqualTo(401);
         assertThat(missingHeaderResponse.getContentType()).isEqualTo("application/problem+json");
+        var problem = new ObjectMapper().readTree(missingHeaderResponse.getContentAsByteArray());
+        assertThat(problem.get("type").asText()).isEqualTo("about:blank");
+        assertThat(problem.get("title").asText()).isEqualTo("Unauthorized");
+        assertThat(problem.get("detail").asText()).isEqualTo("Internal admin authentication failed.");
+        assertThat(problem.get("exception").asText()).isEqualTo("InternalAdminAuthenticationException");
+        assertThat(problem.get("timestamp").asText()).matches(OFFSET_TIMESTAMP);
 
         var malformedClaims = new java.util.LinkedHashMap<String, Object>(validClaims());
         malformedClaims.put("roles", "OPERATOR");

@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.matchesPattern;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -612,6 +613,19 @@ class ReadApiControllerContractTest {
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.detail").value("Invalid parameter format."))
                 .andExpect(jsonPath("$.exception").value("MapApiException"));
+    }
+
+    @Test
+    @DisplayName("GET read endpoint는 non-positive resource id를 service 호출 전에 거부한다")
+    void nonPositiveReadResourceIdReturnsProblemDetail400BeforeServiceCall() throws Exception {
+        mockMvc.perform(get("/api/v1/detail/0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.detail").value("Invalid parameter format."))
+                .andExpect(jsonPath("$.exception").value("MapApiException"));
+
+        verifyNoInteractions(propertyDetailService, predictionUseCase);
     }
 
     @Test

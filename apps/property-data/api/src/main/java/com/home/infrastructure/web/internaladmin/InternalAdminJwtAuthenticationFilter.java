@@ -1,5 +1,6 @@
 package com.home.infrastructure.web.internaladmin;
 
+import com.home.global.error.ApiProblemFactory;
 import com.home.security.jwt.JwtVerificationException;
 import com.home.security.jwt.JwtVerificationPolicy;
 import com.home.security.jwt.Rs256JwtCodec;
@@ -95,10 +96,6 @@ public final class InternalAdminJwtAuthenticationFilter extends OncePerRequestFi
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         objectMapper.writeValue(
                 response.getOutputStream(),
-                Map.of(
-                        "type", "about:blank",
-                        "title", "Unauthorized",
-                        "status", HttpServletResponse.SC_UNAUTHORIZED,
-                        "detail", "Internal admin authentication failed."));
+                ApiProblemFactory.body(ApiProblemFactory.internalAdminAuthenticationFailure()));
     }
 }

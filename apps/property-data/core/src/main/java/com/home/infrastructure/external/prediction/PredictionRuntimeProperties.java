@@ -57,7 +57,14 @@ public record PredictionRuntimeProperties(
     }
 
     public record Executor(
-            @Min(1) @Max(16) @DefaultValue("2") int threads) {}
+            @Min(1) @Max(16) @DefaultValue("2") int threads,
+            @Min(1) @Max(1_000) @DefaultValue("32") int queueCapacity,
+            @NotNull @DefaultValue("10s") Duration shutdownAwait) {
+
+        public Executor {
+            requirePositive(shutdownAwait, "home.prediction.executor.shutdown-await");
+        }
+    }
 
     public record Client(
             @NotNull @DefaultValue("http://localhost:8001") URI baseUrl,

@@ -33,13 +33,17 @@ export function useMapMarkers(viewport: MapViewport) {
   useEffect(() => {
     const requestSeq = markerRequestSeq.current + 1;
     markerRequestSeq.current = requestSeq;
+    const controller = new AbortController();
     let ignore = false;
 
     setMarkerState('loading');
     markerRequestPending.current = true;
     setMarkerError(null);
 
-    fetchMapMarkers({ bounds: viewport.bounds, filters: markerFilters, level: viewport.level })
+    fetchMapMarkers(
+      { bounds: viewport.bounds, filters: markerFilters, level: viewport.level },
+      controller.signal,
+    )
       .then((nextMarkers) => {
         if (ignore || requestSeq !== markerRequestSeq.current) {
           return;
@@ -49,7 +53,7 @@ export function useMapMarkers(viewport: MapViewport) {
         markerRequestPending.current = false;
       })
       .catch((error: unknown) => {
-        if (ignore || requestSeq !== markerRequestSeq.current) {
+        if (controller.signal.aborted || ignore || requestSeq !== markerRequestSeq.current) {
           return;
         }
         setMarkers(null);
@@ -60,6 +64,7 @@ export function useMapMarkers(viewport: MapViewport) {
 
     return () => {
       ignore = true;
+      controller.abort();
     };
   }, [markerFilters, markerRetrySeq, viewport]);
 

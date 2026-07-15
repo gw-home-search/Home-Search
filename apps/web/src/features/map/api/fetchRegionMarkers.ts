@@ -33,9 +33,13 @@ type RegionMarkerResponse = {
 
 const REGION_MARKERS_PATH = '/api/v1/map/regions';
 
-export async function fetchRegionMarkers(request: RegionMarkersRequest): Promise<RegionMarker[]> {
+export async function fetchRegionMarkers(
+  request: RegionMarkersRequest,
+  signal?: AbortSignal,
+): Promise<RegionMarker[]> {
   const response = await fetch(resolveApiUrl(REGION_MARKERS_PATH), {
     method: 'POST',
+    signal,
     headers: {
       'Content-Type': 'application/json',
     },

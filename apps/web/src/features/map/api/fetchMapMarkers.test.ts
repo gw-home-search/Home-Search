@@ -11,12 +11,13 @@ describe('fetchMapMarkers API 어댑터', () => {
   it('detailed map level에서 complex marker endpoint를 사용한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
+    const controller = new AbortController();
 
     await expect(
       fetchMapMarkers({
         bounds: boundsRequest(),
         level: 4,
-      }),
+      }, controller.signal),
     ).resolves.toEqual({ kind: 'complex', markers: [] });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -24,6 +25,7 @@ describe('fetchMapMarkers API 어댑터', () => {
       expect.objectContaining({
         method: 'POST',
         body: expect.stringContaining('"unitMax":null'),
+        signal: controller.signal,
       }),
     );
   });
@@ -31,12 +33,13 @@ describe('fetchMapMarkers API 어댑터', () => {
   it('wide map level에서 si-do region marker를 사용한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
+    const controller = new AbortController();
 
     await expect(
       fetchMapMarkers({
         bounds: boundsRequest(),
         level: 10,
-      }),
+      }, controller.signal),
     ).resolves.toEqual({ kind: 'region', level: 'si-do', markers: [] });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -44,6 +47,7 @@ describe('fetchMapMarkers API 어댑터', () => {
       expect.objectContaining({
         method: 'POST',
         body: expect.stringContaining('"region":"si-do"'),
+        signal: controller.signal,
       }),
     );
   });

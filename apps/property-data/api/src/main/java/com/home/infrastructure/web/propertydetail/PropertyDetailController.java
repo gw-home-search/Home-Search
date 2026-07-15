@@ -4,7 +4,6 @@ import java.util.List;
 
 import com.home.application.prediction.PricePredictionUseCase;
 import com.home.application.propertydetail.PropertyDetailService;
-import com.home.application.read.ComplexSummaryResult;
 import com.home.application.read.ParcelDetailResult;
 import com.home.infrastructure.web.read.dto.ComplexSummaryResponse;
 import com.home.infrastructure.web.read.dto.ParcelDetailResponse;
@@ -41,35 +40,21 @@ public class PropertyDetailController {
 		@RequestParam(required = false) Long complexId
 	) {
 		ParcelDetailResult result = propertyDetailService.getParcelDetail(parcelId, complexId);
-		return ResponseEntity.ok(toResponse(result, predictionResponse(result.complexId())));
+		return ResponseEntity.ok(ParcelDetailResponse.from(result, predictionResponse(result.complexId())));
 	}
 
 	@GetMapping("/api/v1/detail/{parcelId}/complexes")
 	public ResponseEntity<List<ComplexSummaryResponse>> getParcelComplexes(@PathVariable Long parcelId) {
 		return ResponseEntity.ok(propertyDetailService.getParcelComplexes(parcelId)
 			.stream()
-			.map(PropertyDetailController::toResponse)
+			.map(ComplexSummaryResponse::from)
 			.toList());
 	}
 
 	@GetMapping("/api/v1/complex/{complexId}")
 	public ResponseEntity<ParcelDetailResponse> getComplexDetail(@PathVariable Long complexId) {
 		ParcelDetailResult result = propertyDetailService.getComplexDetail(complexId);
-		return ResponseEntity.ok(toResponse(result, predictionResponse(result.complexId())));
-	}
-
-	private static ComplexSummaryResponse toResponse(ComplexSummaryResult result) {
-		return new ComplexSummaryResponse(
-			result.complexId(),
-			result.complexName(),
-			result.parcelId(),
-			result.latitude(),
-			result.longitude(),
-			result.address(),
-			result.dongCnt(),
-			result.unitCnt(),
-			result.useDate()
-		);
+		return ResponseEntity.ok(ParcelDetailResponse.from(result, predictionResponse(result.complexId())));
 	}
 
 	private PricePredictionResponse predictionResponse(Long complexId) {
@@ -84,27 +69,5 @@ public class PropertyDetailController {
 			log.debug("Failed to build prediction response complexId={}", complexId, ex);
 			return PricePredictionResponse.failed("AI prediction unavailable");
 		}
-	}
-
-	private static ParcelDetailResponse toResponse(ParcelDetailResult result, PricePredictionResponse prediction) {
-		return new ParcelDetailResponse(
-			result.parcelId(),
-			result.complexId(),
-			result.latitude(),
-			result.longitude(),
-			result.address(),
-			result.displayName(),
-			result.tradeName(),
-			result.name(),
-			result.dongCnt(),
-			result.unitCnt(),
-			result.platArea(),
-			result.archArea(),
-			result.totArea(),
-			result.bcRat(),
-			result.vlRat(),
-			result.useDate(),
-			prediction
-		);
 	}
 }

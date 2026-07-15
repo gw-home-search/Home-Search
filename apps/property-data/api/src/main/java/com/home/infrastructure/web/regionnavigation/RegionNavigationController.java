@@ -2,9 +2,6 @@ package com.home.infrastructure.web.regionnavigation;
 
 import java.util.List;
 
-import com.home.application.read.ComplexSummaryResult;
-import com.home.application.read.RegionDetailResult;
-import com.home.application.read.RegionSummaryResult;
 import com.home.application.regionnavigation.RegionNavigationService;
 import com.home.infrastructure.web.read.dto.ComplexSummaryResponse;
 import com.home.infrastructure.web.read.dto.RegionDetailResponse;
@@ -29,13 +26,13 @@ public class RegionNavigationController {
 	public ResponseEntity<List<RegionSummaryResponse>> getRootRegions() {
 		return ResponseEntity.ok(regionNavigationService.getRootRegions()
 			.stream()
-			.map(RegionNavigationController::toResponse)
+			.map(RegionSummaryResponse::from)
 			.toList());
 	}
 
 	@GetMapping("/api/v1/region/{regionId}")
 	public ResponseEntity<RegionDetailResponse> getRegionDetail(@PathVariable Long regionId) {
-		return ResponseEntity.ok(toResponse(regionNavigationService.getRegionDetail(regionId)));
+		return ResponseEntity.ok(RegionDetailResponse.from(regionNavigationService.getRegionDetail(regionId)));
 	}
 
 	@GetMapping("/api/v1/region/{regionId}/complexes")
@@ -46,37 +43,7 @@ public class RegionNavigationController {
 	) {
 		return ResponseEntity.ok(regionNavigationService.getRegionComplexes(regionId, limit, offset)
 			.stream()
-			.map(RegionNavigationController::toResponse)
+			.map(ComplexSummaryResponse::from)
 			.toList());
-	}
-
-	private static ComplexSummaryResponse toResponse(ComplexSummaryResult result) {
-		return new ComplexSummaryResponse(
-			result.complexId(),
-			result.complexName(),
-			result.parcelId(),
-			result.latitude(),
-			result.longitude(),
-			result.address(),
-			result.dongCnt(),
-			result.unitCnt(),
-			result.useDate()
-		);
-	}
-
-	private static RegionDetailResponse toResponse(RegionDetailResult result) {
-		return new RegionDetailResponse(
-			result.id(),
-			result.name(),
-			result.latitude(),
-			result.longitude(),
-			result.children().stream()
-				.map(RegionNavigationController::toResponse)
-				.toList()
-		);
-	}
-
-	private static RegionSummaryResponse toResponse(RegionSummaryResult result) {
-		return new RegionSummaryResponse(result.id(), result.name());
 	}
 }

@@ -17,8 +17,42 @@ import com.home.application.tradehistory.TradeHistoryService;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 class ReadCapabilityServicesTest {
+
+	@Test
+	@DisplayName("region/trade composite read method는 read-only repeatable-read transaction 경계를 선언한다")
+	void compositeReadsDeclareRepeatableReadTransactions() throws Exception {
+		assertRepeatableRead(RegionNavigationService.class, "getRegionDetail", Long.class);
+		assertRepeatableRead(
+			RegionNavigationService.class,
+			"getRegionComplexes",
+			Long.class,
+			Integer.class,
+			Integer.class
+		);
+		assertRepeatableRead(
+			TradeHistoryService.class,
+			"getTradeList",
+			Long.class,
+			Long.class,
+			Integer.class,
+			Integer.class
+		);
+		assertRepeatableRead(
+			TradeHistoryService.class,
+			"getComplexTradeList",
+			Long.class,
+			Integer.class,
+			Integer.class
+		);
+		assertRepeatableRead(TradeHistoryService.class, "getTradeTrend", Long.class, Long.class);
+		assertRepeatableRead(TradeHistoryService.class, "getComplexTradeTrend", Long.class);
+		assertThat(RegionNavigationService.class.getMethod("getRootRegions").getAnnotation(Transactional.class))
+			.isNull();
+	}
 
 	@Test
 	@DisplayName("search service는 query를 정규화하고 suggestion limit을 소유한다")
@@ -259,5 +293,12 @@ class ReadCapabilityServicesTest {
 		private TradeTrendPoint trend() {
 			return new TradeTrendPoint("2024-11", 89500L, 3, 80000L, 92000L);
 		}
+	}
+
+	private void assertRepeatableRead(Class<?> type, String methodName, Class<?>... parameterTypes) throws Exception {
+		Transactional transaction = type.getMethod(methodName, parameterTypes).getAnnotation(Transactional.class);
+		assertThat(transaction).isNotNull();
+		assertThat(transaction.readOnly()).isTrue();
+		assertThat(transaction.isolation()).isEqualTo(Isolation.REPEATABLE_READ);
 	}
 }

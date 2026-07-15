@@ -3,7 +3,7 @@
 ## 실행 기준
 
 - baseline commit: `d601237`
-- 현재 진행 PR: `PR 4 — coordinate/ingest atomic workflows`
+- 현재 진행 PR: `PR 5 — Java 21 / Boot 3.5 bridge`
 - 전체 상태: `In Progress`
 - 시작일: 2026-07-14
 - 실행 원칙: 한 번에 하나의 PR만 진행하고, 선행 PR이 `Complete`인 경우에만 다음 PR을 시작한다.
@@ -75,8 +75,8 @@ property-data configuration file distribution:
 | 1 | governance와 contract baseline | Complete | fresh baseline, docs, characterization tests GREEN |
 | 2 | property read capability split | Complete | PR 1 `Complete` |
 | 3 | read snapshot과 DTO 경로 | Complete | PR 2 `Complete` |
-| 4 | coordinate/ingest atomic workflows | In Progress | PR 3 `Complete` |
-| 5 | Java 21 / Boot 3.5 bridge | Pending | PR 4 `Complete` |
+| 4 | coordinate/ingest atomic workflows | Complete | PR 3 `Complete` |
+| 5 | Java 21 / Boot 3.5 bridge | In Progress | PR 4 `Complete` |
 | 6 | format baseline | Pending | PR 5 `Complete` |
 | 7 | Boot 4.1 / Jackson 3 | Pending | PR 6 `Complete` |
 | 8 | map SQL readability | Pending | PR 7 `Complete` |
@@ -297,3 +297,66 @@ property-data configuration file distribution:
 - 검증 근거 확인: coordinate link/display/case rollback과 retry, raw-first/finalizer rollback, match evidence/cancellation/duplicate rollback, unrestricted recoverable `RECEIVED` replay를 실제 PostgreSQL에서 확인했다.
 - 검증 공백: 없음
 - 잔여 위험: reconciliation row별 continue/observability 정책은 PR 10에서 다룬다.
+
+### Merge
+
+- implementation commit: `1d374b6b455707dbcfa8c16ea0b7f3859e106022`
+- merge commit: `f8dff667fe74ff46c02097821c6991a6cc33bcb9`
+
+## PR 5 Evidence
+
+### TDD 근거
+
+- 최초 RED: waiver. 이 PR은 승인된 build/runtime platform bridge이며 production behavior를 변경하지 않는다.
+- 예상 RED 실패: 해당 없음. 변경 전 네 Java service의 fresh test baseline을 먼저 고정한다.
+- 최소 GREEN: Java toolchain/runtime을 21로 통일하고 property-data/admin/source-data만 Spring Boot 3.5.16으로 이동한다.
+
+### 계약 영향
+
+- `none`: public API, JSON, error, transaction, SQL, migration, env/secret 이름을 변경하지 않는다.
+
+### 검증 근거 확인
+
+- 변경 전 property-data `:core:test :api:test :batch:test --rerun-tasks` — `Pass` (1m 19s)
+- 변경 전 user-service `:core:test :app:test --rerun-tasks` — `Pass` (41s)
+- 변경 전 admin-service `test --rerun-tasks` — `Pass` (50s)
+- 변경 전 source-data `test --rerun-tasks` — `Pass` (15s)
+- 변경 후 property-data `:core:test :api:test :batch:test --rerun-tasks --warning-mode all` — `Pass` (1m 40s)
+- 변경 후 user-service `:core:test :app:test --rerun-tasks --warning-mode all` — `Pass` (52s)
+- 변경 후 admin-service `test --rerun-tasks --warning-mode all` — `Pass` (1m 6s)
+- 변경 후 source-data `test --rerun-tasks --warning-mode all` — `Pass` (42s)
+- property-data API/Batch packaged smoke와 runtime migration boundary — `Pass` (19s)
+- admin API runtime migration boundary와 migration/ops packaged smoke — `Pass` (10s)
+- source-data migration packaged smoke — `Pass` (10s)
+- `backendQualityCheck --no-daemon --stacktrace` — `Pass` (12m 43s)
+- `userServiceQualityCheck --no-daemon --stacktrace` — `Pass` (2m 6s)
+- admin `test persistenceTest apiContractTest securityTest --rerun-tasks` — `Pass` (42s)
+- source-data `check --rerun-tasks` — `Pass` (1m 15s)
+- Boot JAR manifest — property API/Batch, admin API/migration/ops, source migration `3.5.16`; user app `4.1.0`
+- compiled production classfile — `major version 65` (Java 21)
+- base + Batch override Compose `config --quiet` — `Pass`
+- `python3 .codex/harness/pr_lint.py --body-only --body-env PR_BODY` — `Pass`
+- Java 17 toolchain/CI/container reference — production config 0건
+- migration diff — 변경 0건
+- repository root `git diff --check` — `Pass`
+
+### 검증 공백
+
+- 실제 local service container recreate는 하지 않았다. Compose의 image contract와 packaged JAR를 검증했다.
+
+### 잔여 위험
+
+- Asciidoctor/Grolifant plugin이 Gradle 10에서 제거될 `StartParameter.isConfigurationCacheRequested`를 사용한다. project build script 경고는 아니며 PR 7/도구 전환 시 재검토한다.
+- admin test 두 곳의 기존 deprecated API compiler note는 production API 제거 경고가 아니며 PR 12에서 test source와 함께 정리한다.
+
+### 보안 영향
+
+- 검증 범위: 인증/JWT/cookie/env/secret 계약과 runtime Flyway boundary가 바뀌지 않았는지, dependency·container 변경에 credential 추가가 없는지 확인했다.
+- security-audit: 지적사항 = none
+
+### Findings-first review
+
+- 지적사항: source-data가 독립 CI job 없이 backend change로 분류되는 기존 검증 공백을 확인했다. 이번 변경은 local `check`와 packaged smoke로 검증했고, source/admin aggregate quality task 및 CI 연결은 계획된 PR 13에서 해소한다.
+- 검증 근거 확인: Java 21 toolchain/CI/container 설정, Boot manifest, 네 service gate, packaged exit code, API/runtime migration boundary, migration diff를 확인했다.
+- 검증 공백: 실제 container recreate 및 원격 CI는 실행하지 않았다.
+- 잔여 위험: third-party Gradle deprecation과 source-data CI aggregate 공백은 위 후속 PR에서 추적한다.

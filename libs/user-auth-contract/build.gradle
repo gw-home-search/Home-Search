@@ -1,6 +1,6 @@
 plugins { id 'java-library' }
 group = 'com.home'; version = '0.0.1-SNAPSHOT'
-java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
 dependencies {
     api 'com.home:security-jwt-core'
     testImplementation platform('org.junit:junit-bom:5.11.4')

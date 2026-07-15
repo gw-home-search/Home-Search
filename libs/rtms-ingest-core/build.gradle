@@ -8,7 +8,7 @@ description = 'Home Search RTMS ingest invariant core boundary'
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 

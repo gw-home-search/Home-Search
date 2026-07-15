@@ -100,7 +100,7 @@ services:
       - home-search-local
 
   api:
-    image: eclipse-temurin:17-jdk
+    image: eclipse-temurin:21-jdk
     container_name: home-search-api
     restart: unless-stopped
     depends_on:
@@ -264,7 +264,7 @@ services:
       - home-search-local
 
   admin-service:
-    image: eclipse-temurin:17-jdk
+    image: eclipse-temurin:21-jdk
     container_name: home-search-admin-service
     restart: unless-stopped
     profiles: [ "admin" ]

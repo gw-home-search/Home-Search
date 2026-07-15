@@ -1,6 +1,7 @@
 package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -16,8 +17,12 @@ import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
 import com.home.application.ingest.trade.OpenApiTradeIngestService;
 import com.home.application.ingest.trade.OpenApiTradeIngestServiceFixture;
+import com.home.application.ingest.trade.TradeIngestFinalizer;
+import com.home.application.ingest.trade.TradeIngestItemProcessor;
+import com.home.application.ingest.trade.TradeIngestMetrics;
 import com.home.ingestcore.rtms.OpenApiTradeItem;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
+import com.home.application.ingest.raw.RawReceiptService;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
 import com.home.application.ingest.matching.TradeMatchEvidenceRecord;
 import com.home.domain.ingest.matching.TradeMatchStatus;
@@ -30,8 +35,123 @@ import com.home.infrastructure.persistence.ingest.raw.JdbcRawTradeIngestReposito
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.TransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
 
 class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSupport {
+
+	@Test
+	@DisplayName("raw terminal status 갱신 실패 시 evidence와 normalized trade를 rollback하고 RECEIVED만 남긴다")
+	void rollsBackFinalizationWhenRawTerminalStatusWriteFails() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		OpenApiTradeIngestService service = transactionalIngestService(rawRepository);
+		installRawTerminalStatusFailureTrigger();
+
+		try {
+			assertThatThrownBy(() -> service.ingest(new OpenApiTradeIngestBatch(
+				"RTMS",
+				"11680",
+				"202512",
+				1,
+				List.of(rtmsItem("125,000"))
+			))).hasMessageContaining("injected raw terminal status failure");
+
+			assertThat(rawCount()).isEqualTo(1);
+			assertThat(rawRepository.findByStatus(RawTradeIngestStatus.RECEIVED)).hasSize(1);
+			assertThat(tradeCount()).isZero();
+			assertThat(tradeMatchEvidenceCount()).isZero();
+		}
+		finally {
+			removeRawTerminalStatusFailureTrigger();
+		}
+	}
+
+	@Test
+	@DisplayName("match-failed terminal 갱신 실패 시 match evidence를 rollback하고 RECEIVED만 남긴다")
+	void rollsBackMatchEvidenceWhenMatchFailedStatusWriteFails() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		OpenApiTradeIngestService service = transactionalIngestService(rawRepository);
+		installRawTerminalStatusFailureTrigger();
+
+		try {
+			assertThatThrownBy(() -> service.ingest(new OpenApiTradeIngestBatch(
+				"RTMS",
+				"11680",
+				"202512",
+				1,
+				List.of(liveRtmsItem("APT-501", "Conflicting Apartment", "999-1"))
+			))).hasMessageContaining("injected raw terminal status failure");
+
+			assertThat(rawRepository.findByStatus(RawTradeIngestStatus.RECEIVED)).hasSize(1);
+			assertThat(tradeMatchEvidenceCount()).isZero();
+			assertThat(tradeCount()).isZero();
+		}
+		finally {
+			removeRawTerminalStatusFailureTrigger();
+		}
+	}
+
+	@Test
+	@DisplayName("cancellation terminal 갱신 실패 시 trade soft-delete를 rollback한다")
+	void rollsBackCancellationWhenCanceledStatusWriteFails() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		OpenApiTradeIngestService service = transactionalIngestService(rawRepository);
+		OpenApiTradeItem active = rtmsItem("125,000");
+		service.ingest(new OpenApiTradeIngestBatch("RTMS", "11680", "202512", 1, List.of(active)));
+		installRawTerminalStatusFailureTrigger();
+
+		try {
+			assertThatThrownBy(() -> service.ingest(new OpenApiTradeIngestBatch(
+				"RTMS",
+				"11680",
+				"202512",
+				1,
+				List.of(canceledRtmsItem("125,000"))
+			))).hasMessageContaining("injected raw terminal status failure");
+
+			assertThat(rawRepository.findByStatus(RawTradeIngestStatus.RECEIVED)).hasSize(1);
+			assertThat(activeTradeCount()).isEqualTo(1);
+			assertThat(deletedTradeCount()).isZero();
+		}
+		finally {
+			removeRawTerminalStatusFailureTrigger();
+		}
+	}
+
+	@Test
+	@DisplayName("duplicate terminal 갱신 실패 시 새 raw는 RECEIVED로 남고 기존 normalized 결과는 유지된다")
+	void leavesDuplicateReceiptRecoverableWhenDuplicateStatusWriteFails() {
+		seedComplex();
+		JdbcRawTradeIngestRepository rawRepository = new JdbcRawTradeIngestRepository(jdbcClient);
+		OpenApiTradeIngestService service = transactionalIngestService(rawRepository);
+		OpenApiTradeItem item = rtmsItem("125,000");
+		service.ingest(new OpenApiTradeIngestBatch("RTMS", "11680", "202512", 1, List.of(item)));
+		installRawTerminalStatusFailureTrigger();
+
+		try {
+			assertThatThrownBy(() -> service.ingest(new OpenApiTradeIngestBatch(
+				"RTMS",
+				"11680",
+				"202512",
+				1,
+				List.of(item)
+			))).hasMessageContaining("injected raw terminal status failure");
+
+			assertThat(rawRepository.findByStatus(RawTradeIngestStatus.RECEIVED)).hasSize(1);
+			assertThat(rawRepository.findByStatus(RawTradeIngestStatus.NORMALIZED)).hasSize(1);
+			assertThat(tradeCount()).isEqualTo(1);
+			assertThat(tradeMatchEvidenceCount()).isEqualTo(1);
+		}
+		finally {
+			removeRawTerminalStatusFailureTrigger();
+		}
+	}
 
 	@Test
 	@DisplayName("raw row는 normalized insert 전에 저장되고 duplicate raw row는 queryable하게 남는다")
@@ -891,6 +1011,63 @@ class OpenApiTradeIngestServiceJdbcIntegrationTest extends JdbcPostgresTestSuppo
 			"10300",
 			"{\"aptSeq\":\"APT-501\",\"dealAmount\":\"%s\"}".formatted(dealAmount)
 		);
+	}
+
+	private void installRawTerminalStatusFailureTrigger() {
+		jdbcClient.sql("""
+			CREATE OR REPLACE FUNCTION fail_raw_terminal_status_write()
+			RETURNS trigger
+			LANGUAGE plpgsql
+			AS $function$
+			BEGIN
+			    IF NEW.status <> 'RECEIVED' THEN
+			        RAISE EXCEPTION 'injected raw terminal status failure';
+			    END IF;
+			    RETURN NEW;
+			END;
+			$function$
+			""").update();
+		jdbcClient.sql("""
+			CREATE TRIGGER fail_raw_terminal_status_write
+			BEFORE UPDATE ON raw_trade_ingest
+			FOR EACH ROW EXECUTE FUNCTION fail_raw_terminal_status_write()
+			""").update();
+	}
+
+	private void removeRawTerminalStatusFailureTrigger() {
+		jdbcClient.sql("DROP TRIGGER IF EXISTS fail_raw_terminal_status_write ON raw_trade_ingest").update();
+		jdbcClient.sql("DROP FUNCTION IF EXISTS fail_raw_terminal_status_write()").update();
+	}
+
+	private OpenApiTradeIngestService transactionalIngestService(
+		JdbcRawTradeIngestRepository rawRepository
+	) {
+		return new OpenApiTradeIngestService(
+			new TradeIngestItemProcessor(
+				transactionalProxy(new RawReceiptService(rawRepository)),
+				transactionalProxy(new TradeIngestFinalizer(
+					rawRepository,
+					new JdbcNormalizedTradeRepository(jdbcClient, transactionTemplate),
+					new JdbcComplexMatcher(jdbcClient),
+					new JdbcComplexMasterBootstrapper(jdbcClient, pnu -> Optional.empty()),
+					new JdbcTradeMatchEvidenceRepository(jdbcClient)
+				))
+			),
+			TradeIngestMetrics.noop()
+		);
+	}
+
+	@SuppressWarnings("unchecked")
+	private <T> T transactionalProxy(T target) {
+		DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(dataSource);
+		TransactionInterceptor interceptor = new TransactionInterceptor(
+			(TransactionManager) transactionManager,
+			new AnnotationTransactionAttributeSource()
+		);
+		ProxyFactory proxyFactory = new ProxyFactory(target);
+		proxyFactory.setProxyTargetClass(true);
+		proxyFactory.addAdvice(interceptor);
+		return (T) proxyFactory.getProxy();
 	}
 
 	private OpenApiTradeItem canceledRtmsItem(String dealAmount) {

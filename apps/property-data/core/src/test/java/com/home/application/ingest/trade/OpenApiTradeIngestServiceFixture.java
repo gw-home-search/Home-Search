@@ -5,6 +5,7 @@ import com.home.application.ingest.matching.ComplexMatcher;
 import com.home.application.ingest.matching.TradeMatchEvidenceRepository;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
+import com.home.application.ingest.raw.RawReceiptService;
 
 public final class OpenApiTradeIngestServiceFixture {
 
@@ -82,11 +83,14 @@ public final class OpenApiTradeIngestServiceFixture {
 		TradeMatchEvidenceRepository tradeMatchEvidenceRepository
 	) {
 		TradeIngestItemProcessor itemProcessor = new TradeIngestItemProcessor(
-			rawTradeIngestRepository,
-			normalizedTradeRepository,
-			complexMatcher,
-			complexMasterBootstrapper,
-			tradeMatchEvidenceRepository
+			new RawReceiptService(rawTradeIngestRepository),
+			new TradeIngestFinalizer(
+				rawTradeIngestRepository,
+				normalizedTradeRepository,
+				complexMatcher,
+				complexMasterBootstrapper,
+				tradeMatchEvidenceRepository
+			)
 		);
 		return new OpenApiTradeIngestService(itemProcessor, tradeIngestMetrics);
 	}

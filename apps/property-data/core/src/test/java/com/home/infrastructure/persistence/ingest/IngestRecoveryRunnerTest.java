@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -16,9 +17,8 @@ import com.home.application.ingest.matching.ComplexMatchResult;
 import com.home.application.ingest.normalization.NormalizedTradeCommand;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
 import com.home.ingestcore.rtms.OpenApiTradeItem;
-import com.home.application.ingest.reconciliation.RawIngestReconciliationCandidate;
-import com.home.application.ingest.reconciliation.RawIngestReconciliationRepository;
 import com.home.application.ingest.reconciliation.RawIngestReconciliationService;
+import com.home.application.ingest.raw.RawTradeItemParser;
 import com.home.application.ingest.raw.RawTradeIngestFailureQuery;
 import com.home.application.ingest.raw.RawTradeIngestFailureSummary;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
@@ -26,6 +26,7 @@ import com.home.application.ingest.raw.RawTradeIngestRepository;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
 import com.home.application.ingest.matching.TradeMatchEvidenceRepository;
 import com.home.application.ingest.matching.TradeMatchRematchService;
+import com.home.application.ingest.trade.TradeIngestFinalizer;
 import com.home.infrastructure.ApplicationRunnerOrders;
 import com.home.infrastructure.persistence.ingest.matching.TradeMatchRematchRunner;
 import com.home.infrastructure.persistence.ingest.normalization.JdbcTradePartitionMaintenanceRepository;
@@ -54,32 +55,35 @@ class IngestRecoveryRunnerTest {
 	@Test
 	@DisplayName("raw reconciliation runner는 설정된 batch size로 reconciliation service를 실행한다")
 	void rawReconciliationRunnerUsesConfiguredBatchSize() throws Exception {
-		FakeReconciliationRepository reconciliationRepository = new FakeReconciliationRepository();
+		RawTradeIngestRepository rawRepository = mock(RawTradeIngestRepository.class);
+		when(rawRepository.findByStatus(RawTradeIngestStatus.RECEIVED, 25)).thenReturn(List.of());
 		RawIngestReconciliationService service = new RawIngestReconciliationService(
-			reconciliationRepository,
-			new EmptyRawRepository()
+			rawRepository,
+			mock(RawTradeItemParser.class),
+			mock(TradeIngestFinalizer.class)
 		);
 		RawIngestReconciliationRunner runner = new RawIngestReconciliationRunner(service, 25);
 
 		runner.run(new DefaultApplicationArguments());
 
-		assertThat(reconciliationRepository.requestedLimits).containsExactly(25);
+		verify(rawRepository).findByStatus(RawTradeIngestStatus.RECEIVED, 25);
 		assertThat(runner.getOrder()).isEqualTo(ApplicationRunnerOrders.RAW_INGEST_RECONCILIATION);
 	}
 
 	@Test
 	@DisplayName("raw reconciliation runner는 DB가 없으면 reconciliation을 건너뛴다")
 	void rawReconciliationRunnerSkipsWhenDatabaseIsUnavailable() throws Exception {
-		FakeReconciliationRepository reconciliationRepository = new FakeReconciliationRepository();
+		RawTradeIngestRepository rawRepository = mock(RawTradeIngestRepository.class);
 		RawIngestReconciliationService service = new RawIngestReconciliationService(
-			reconciliationRepository,
-			new EmptyRawRepository()
+			rawRepository,
+			mock(RawTradeItemParser.class),
+			mock(TradeIngestFinalizer.class)
 		);
 		RawIngestReconciliationRunner runner = new RawIngestReconciliationRunner(() -> service, 25, () -> false);
 
 		runner.run(new DefaultApplicationArguments());
 
-		assertThat(reconciliationRepository.requestedLimits).isEmpty();
+		verifyNoInteractions(rawRepository);
 	}
 
 	@Test
@@ -144,16 +148,6 @@ class IngestRecoveryRunnerTest {
 		runner.run(new DefaultApplicationArguments());
 
 		assertThat(rawRepository.findByStatusCalls).containsExactly(RawTradeIngestStatus.MATCH_FAILED);
-	}
-
-	private static final class FakeReconciliationRepository implements RawIngestReconciliationRepository {
-		private final List<Integer> requestedLimits = new ArrayList<>();
-
-		@Override
-		public List<RawIngestReconciliationCandidate> findReceivedRowsLinkedToActiveTrade(int limit) {
-			requestedLimits.add(limit);
-			return List.of();
-		}
 	}
 
 	private static class EmptyRawRepository implements RawTradeIngestRepository {

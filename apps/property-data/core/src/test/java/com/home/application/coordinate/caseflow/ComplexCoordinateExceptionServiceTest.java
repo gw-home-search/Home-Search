@@ -488,7 +488,8 @@ class ComplexCoordinateExceptionServiceTest {
 			new ComplexRelationClassifier(),
 			identityVerifier,
 			buildingFootprintSource,
-			identityBlockingPolicy
+			identityBlockingPolicy,
+			new CoordinateResolutionCommitter(repository)
 		);
 	}
 

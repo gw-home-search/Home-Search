@@ -80,6 +80,7 @@ Recommended statuses:
 - `RECEIVED`
 - `NORMALIZED`
 - `DUPLICATE`
+- `CANCELED`
 - `MATCH_FAILED`
 - `PARSE_FAILED`
 - `SKIPPED_INVALID`
@@ -163,27 +164,26 @@ source field was identical:
 
 ## Ingest Transaction Boundary And Recovery
 
-The RTMS item flow intentionally does not use one cross-repository transaction
-for raw evidence, matching evidence, normalized trade storage, and the final raw
-status update. The processing order is:
+RTMS item은 raw receipt와 finalization을 분리한다. 처리 순서는 다음과 같다.
 
-1. Commit a `raw_trade_ingest` row with `RECEIVED`.
-2. Check source-key and payload duplicates, parse the item, bootstrap/match the
-   complex, and save match evidence.
-3. Insert or deduplicate the normalized trade.
-4. Update the raw row to its durable terminal status.
+1. `RawReceiptService`가 `REQUIRES_NEW` transaction에서
+   `raw_trade_ingest(RECEIVED)`를 먼저 commit한다.
+2. `TradeIngestFinalizer`가 별도 transaction에서 source-key/payload dedupe,
+   cancellation, parse, complex bootstrap/match, match evidence,
+   normalized trade write를 수행한다.
+3. 같은 finalizer transaction에서 raw row를 `NORMALIZED`, `DUPLICATE`,
+   `CANCELED`, `MATCH_FAILED`, `PARSE_FAILED` 중 하나로 전환한다.
 
-This boundary preserves the source payload even when parsing, matching,
-normalization, or status updates fail later. A rollback of the whole item would
-violate the raw-first evidence invariant and make failed processing harder to
-explain or replay.
+이 경계는 raw-first invariant를 유지하면서 terminal 결과의 partial state를
+막는다. Finalizer의 어느 write에서 예외가 발생해도 evidence, registry,
+normalized trade, cancellation, terminal status는 모두 rollback되고 먼저
+commit된 raw `RECEIVED`만 남는다. 따라서 같은 finalizer로 안전하게 재시도할
+수 있다.
 
-The design is not transaction-free. `JdbcNormalizedTradeRepository` uses a
-transaction around source-key registry changes, fallback-identity locking,
-normalized `trade` insertion, and cancellation. Database uniqueness and
-`insertIfAbsent` behavior make repeated ingest idempotent for normalized trade
-creation. The cross-repository transaction boundary remains outside that
-adapter, so a process failure can leave durable intermediate evidence.
+`JdbcNormalizedTradeRepository`의 source-key registry, fallback-identity lock,
+normalized `trade`, cancellation transaction은 finalizer transaction에 참여한다.
+Database uniqueness와 `insertIfAbsent`는 replay 시 normalized trade 중복을
+계속 방지한다.
 
 ### Batch Execution Correlation
 
@@ -202,21 +202,30 @@ rtms_ingest_run.execution_correlation_id::text
 
 Recovery behavior:
 
-- `RawIngestReconciliationRunner` finds `RECEIVED` raw rows already linked to
-  an active normalized trade and advances them to `NORMALIZED`.
-- Re-running the same source data is safe for normalized trade creation because
-  the source-key registry and fallback duplicate policy reject duplicate
-  inserts.
-- Match-failed evidence remains queryable and can be handled by the rematch
-  flow after master or coordinate coverage improves.
+- `RawIngestReconciliationRunner`는 active trade 연결 여부로 후보를 제한하지
+  않고, limit 안의 모든 `RECEIVED` raw row를 조회한다.
+- 저장 payload를 `RawTradeItemParser`로 복원할 수 있는 row는 최초 ingest와
+  동일한 `TradeIngestFinalizer`로 재처리한다.
+- 복원할 수 없는 payload는 임의로 재해석하지 않고 `RECEIVED`로 유지해
+  운영자가 원본 evidence를 확인할 수 있게 한다.
+- Source-key registry와 fallback duplicate policy가 replay 중 normalized
+  trade 중복을 방지한다.
+- `MATCH_FAILED` evidence는 계속 queryable하며 master/coordinate coverage가
+  개선된 뒤 별도 rematch flow에서 처리할 수 있다.
 
-The reconciliation runner does not repair every partial state. For example, it
-does not infer a missing match-evidence write, retry an arbitrary failed raw
-status update, or reinterpret a cancellation. Operators must inspect persistent
-`RECEIVED`, `MATCH_FAILED`, `PARSE_FAILED`, and related evidence when counts
-remain abnormal. Any future transaction expansion must preserve raw-first
-durability and prove that replay, dedupe, cancellation, and failure
-queryability remain intact.
+### Coordinate Resolution Commit Boundary
+
+외부 building-footprint provider 호출, identity verification, dong matching,
+geometry 계산은 transaction 밖에서 수행한다. 계산 완료 후 immutable
+`CoordinateResolutionCommitCommand`를 `CoordinateResolutionCommitter`에
+전달한다.
+
+Committer transaction은 `complex_building_link`,
+`complex_display_coordinate`, terminal `complex_coordinate_case`를 함께
+저장한다. Coordinate write 예외가 발생하면 link와 case update까지 모두
+rollback된다. `AMBIGUOUS`, `UNAVAILABLE` 같은 업무상 미해결 결과는 coordinate
+write 없이 terminal case evidence만 저장한다. 실패 후 동일 case를 재시도해도
+처음부터 계산된 commit command가 원자적으로 적용된다.
 
 ### RTMS Deduplication Scenarios
 

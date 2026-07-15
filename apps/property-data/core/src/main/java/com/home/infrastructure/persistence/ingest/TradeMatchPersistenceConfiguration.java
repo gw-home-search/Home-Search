@@ -23,9 +23,11 @@ import com.home.application.ingest.metadata.OdcMetadataGapFillService;
 import com.home.application.ingest.metadata.admin.MetadataAdminRepository;
 import com.home.application.ingest.metadata.admin.MetadataAdminService;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
+import com.home.application.ingest.raw.RawReceiptService;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
 import com.home.application.ingest.raw.RawTradeItemParser;
 import com.home.application.ingest.trade.OpenApiTradeIngestService;
+import com.home.application.ingest.trade.TradeIngestFinalizer;
 import com.home.application.ingest.trade.TradeIngestItemProcessor;
 import com.home.application.ingest.trade.TradeIngestMetrics;
 import com.home.infrastructure.persistence.ingest.matching.JdbcComplexMasterBootstrapper;
@@ -207,13 +209,22 @@ class TradeMatchPersistenceConfiguration {
 	@Bean
 	@Lazy
 	TradeIngestItemProcessor tradeIngestItemProcessor(
+		RawReceiptService rawReceiptService,
+		TradeIngestFinalizer tradeIngestFinalizer
+	) {
+		return new TradeIngestItemProcessor(rawReceiptService, tradeIngestFinalizer);
+	}
+
+	@Bean
+	@Lazy
+	TradeIngestFinalizer tradeIngestFinalizer(
 		RawTradeIngestRepository rawTradeIngestRepository,
 		NormalizedTradeRepository normalizedTradeRepository,
 		ComplexMatcher complexMatcher,
 		ComplexMasterBootstrapper complexMasterBootstrapper,
 		TradeMatchEvidenceRepository tradeMatchEvidenceRepository
 	) {
-		return new TradeIngestItemProcessor(
+		return new TradeIngestFinalizer(
 			rawTradeIngestRepository,
 			normalizedTradeRepository,
 			complexMatcher,

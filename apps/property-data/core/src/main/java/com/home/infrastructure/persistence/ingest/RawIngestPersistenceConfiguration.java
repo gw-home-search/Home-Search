@@ -1,11 +1,11 @@
 package com.home.infrastructure.persistence.ingest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.home.application.ingest.raw.RawReceiptService;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
 import com.home.application.ingest.raw.RawTradeItemParser;
-import com.home.application.ingest.reconciliation.RawIngestReconciliationRepository;
 import com.home.application.ingest.reconciliation.RawIngestReconciliationService;
-import com.home.infrastructure.persistence.ingest.raw.JdbcRawIngestReconciliationRepository;
+import com.home.application.ingest.trade.TradeIngestFinalizer;
 import com.home.infrastructure.persistence.ingest.raw.JdbcRawTradeIngestRepository;
 import com.home.infrastructure.persistence.ingest.raw.RawIngestReconciliationRunner;
 import com.home.infrastructure.persistence.ingest.raw.RtmsRawTradeItemParser;
@@ -30,21 +30,18 @@ class RawIngestPersistenceConfiguration {
 
 	@Bean
 	@Lazy
-	RawIngestReconciliationRepository rawIngestReconciliationRepository(
-		ObjectProvider<JdbcClient> jdbcClientProvider
-	) {
-		return new JdbcRawIngestReconciliationRepository(
-			IngestPersistenceJdbcSupport.requiredJdbcClient(jdbcClientProvider)
-		);
+	RawReceiptService rawReceiptService(RawTradeIngestRepository rawTradeIngestRepository) {
+		return new RawReceiptService(rawTradeIngestRepository);
 	}
 
 	@Bean
 	@Lazy
 	RawIngestReconciliationService rawIngestReconciliationService(
-		RawIngestReconciliationRepository rawIngestReconciliationRepository,
-		RawTradeIngestRepository rawTradeIngestRepository
+		RawTradeIngestRepository rawTradeIngestRepository,
+		RawTradeItemParser rawTradeItemParser,
+		TradeIngestFinalizer finalizer
 	) {
-		return new RawIngestReconciliationService(rawIngestReconciliationRepository, rawTradeIngestRepository);
+		return new RawIngestReconciliationService(rawTradeIngestRepository, rawTradeItemParser, finalizer);
 	}
 
 	@Bean

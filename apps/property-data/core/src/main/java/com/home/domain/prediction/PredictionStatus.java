@@ -1,4 +1,4 @@
-package com.home.application.prediction;
+package com.home.domain.prediction;
 
 public enum PredictionStatus {
     READY("예측 완료", "Redis cache에 사용 가능한 예측 결과가 저장된 상태입니다."),

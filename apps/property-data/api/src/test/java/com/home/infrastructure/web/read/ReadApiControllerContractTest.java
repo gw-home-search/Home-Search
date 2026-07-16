@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.home.application.prediction.PredictionStatus;
 import com.home.application.prediction.PricePredictionResult;
 import com.home.application.prediction.PricePredictionUseCase;
 import com.home.application.propertydetail.PropertyDetailService;
@@ -28,6 +27,7 @@ import com.home.application.read.TradeTrendPoint;
 import com.home.application.regionnavigation.RegionNavigationService;
 import com.home.application.search.ComplexSearchService;
 import com.home.application.tradehistory.TradeHistoryService;
+import com.home.domain.prediction.PredictionStatus;
 import com.home.infrastructure.web.propertydetail.PropertyDetailController;
 import com.home.infrastructure.web.regionnavigation.RegionNavigationController;
 import com.home.infrastructure.web.search.SearchController;

@@ -2,8 +2,8 @@ package com.home.infrastructure.cache.prediction;
 
 import com.home.application.prediction.PredictionCacheKey;
 import com.home.application.prediction.PredictionCacheRepository;
-import com.home.application.prediction.PredictionStatus;
 import com.home.application.prediction.PricePredictionResult;
+import com.home.domain.prediction.PredictionStatus;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Duration;

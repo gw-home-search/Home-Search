@@ -3,6 +3,7 @@ package com.home.application.ingest.metadata;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.home.domain.complex.metadata.ComplexMetadataFailureKind;
+import com.home.domain.complex.metadata.ComplexMetadataRetryPolicy;
 import com.home.domain.complex.metadata.ComplexMetadataStatus;
 import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;

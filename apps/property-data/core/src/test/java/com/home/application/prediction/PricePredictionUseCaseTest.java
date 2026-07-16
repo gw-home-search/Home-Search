@@ -2,6 +2,7 @@ package com.home.application.prediction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.home.domain.prediction.PredictionStatus;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;

@@ -1,5 +1,6 @@
 package com.home.application.prediction;
 
+import com.home.domain.prediction.PredictionStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;

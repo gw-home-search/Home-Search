@@ -57,7 +57,7 @@ describe('MapOverlayPanels 지도 오버레이', () => {
     expect(marker?.dataset.markerShape).toBe('price-card');
     expect(marker?.querySelector('.map-marker-kicker')?.textContent).toBe('최근 실거래');
     expect(marker?.querySelector('.map-marker-price')?.textContent).toBe('12.5억');
-    expect(marker?.querySelector('.map-marker-subtitle')?.textContent).toBe('선택 단지');
+    expect(marker?.querySelector('.map-marker-subtitle')?.textContent).toBe('선택 단지 · 740세대');
   });
 
   it('region marker는 name/unit 두 band와 split-card shape를 노출한다', async () => {

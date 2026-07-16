@@ -47,7 +47,7 @@ export function createComplexMarkerViewModel(
       : `필지 ${marker.parcelId} 단지 ${marker.complexId} 상세 열기`,
     kicker: marker.latestDealAmount == null ? '거래 없음' : '최근 실거래',
     price: formatMarkerAmount(marker.latestDealAmount),
-    meta: marker.name ?? positiveUnitLabel(marker.unitCntSum) ?? '단지 정보 없음',
+    meta: complexMarkerMeta(marker.name, marker.unitCntSum),
     symbol: 'price-card',
     selected,
     state: selected ? 'selected' : 'idle',
@@ -108,6 +108,12 @@ function positiveUnitLabel(unitCntSum: number | null): string | null {
   return unitCntSum != null && unitCntSum > 0
     ? `${unitCntSum.toLocaleString()}세대`
     : null;
+}
+
+function complexMarkerMeta(name: string | null, unitCntSum: number | null): string | null {
+  const normalizedName = name?.trim() || null;
+  const unitLabel = positiveUnitLabel(unitCntSum);
+  return [normalizedName, unitLabel].filter((value): value is string => value != null).join(' · ') || null;
 }
 
 function formatMarkerAmount(amount: number | null): string {

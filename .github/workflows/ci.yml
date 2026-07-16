@@ -209,6 +209,17 @@ jobs:
       - name: Verify admin user and source-data image boundaries
         run: infra/images/test-platform-images.sh
 
+  edge-image-test:
+    name: edge-image-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: changes
+    if: needs.changes.outputs.frontend_changed == 'true' || needs.changes.outputs.admin_web_changed == 'true' || needs.changes.outputs.infra_changed == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify public and admin gateway image boundaries
+        run: infra/images/test-edge-images.sh
+
   admin-service-test:
     name: admin-service-test
     runs-on: ubuntu-latest

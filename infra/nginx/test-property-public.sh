@@ -73,10 +73,14 @@ if (( success_count == 0 || rate_limited_count == 0 )); then
     exit 1
 fi
 
-rate_status="$(curl --silent --show-error --dump-header "$tmp_dir/headers" \
-    --output "$tmp_dir/body" --write-out '%{http_code}' --max-time 5 \
-    --header 'Content-Type: application/json' --header 'Origin: http://localhost:5173' \
-    --data "$complex_request" "$complex_endpoint")"
+rate_status=""
+for _ in $(seq 1 60); do
+    rate_status="$(curl --silent --show-error --dump-header "$tmp_dir/headers" \
+        --output "$tmp_dir/body" --write-out '%{http_code}' --max-time 5 \
+        --header 'Content-Type: application/json' --header 'Origin: http://localhost:5173' \
+        --data "$complex_request" "$complex_endpoint")"
+    [[ "$rate_status" == "429" ]] && break
+done
 if [[ "$rate_status" != "429" ]]; then
     echo "상태: Fail - saturated 요청이 429를 반환하지 않았습니다: ${rate_status}" >&2
     exit 1

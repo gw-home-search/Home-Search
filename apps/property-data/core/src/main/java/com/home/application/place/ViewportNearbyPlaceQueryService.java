@@ -7,12 +7,6 @@ import java.time.Clock;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -26,15 +20,13 @@ public class ViewportNearbyPlaceQueryService implements ViewportNearbyPlaceUseCa
 
     private final NearbyPlaceProvider provider;
     private final Clock clock;
-    private final Executor executor;
-    private final long timeoutMillis;
+    private final NearbyPlaceQueryExecutor queryExecutor;
 
     public ViewportNearbyPlaceQueryService(NearbyPlaceProvider provider, NearbyPlaceExecutionOptions options) {
         this.provider = Objects.requireNonNull(provider);
         NearbyPlaceExecutionOptions executionOptions = Objects.requireNonNull(options);
         this.clock = executionOptions.clock();
-        this.executor = executionOptions.executor();
-        this.timeoutMillis = executionOptions.totalTimeout().toMillis();
+        this.queryExecutor = new NearbyPlaceQueryExecutor(executionOptions);
     }
 
     @Override
@@ -44,7 +36,7 @@ public class ViewportNearbyPlaceQueryService implements ViewportNearbyPlaceUseCa
         NearbyPlaceBounds normalizedBounds = normalizeOutward(bounds);
         NearbyPlaceProviderQuery query = new NearbyPlaceProviderQuery(
                 new NearbyPlaceBoundsArea(normalizedBounds.center(), normalizedBounds, level), category);
-        NearbyPlaceProviderResult providerResult = execute(query);
+        NearbyPlaceProviderResult providerResult = queryExecutor.execute(() -> provider.search(query));
         if (providerResult == null || providerResult.category() != category || providerResult.retrievedAt() == null) {
             throw new NearbyPlaceProviderUnavailableException("nearby place provider category mismatch");
         }
@@ -54,7 +46,8 @@ public class ViewportNearbyPlaceQueryService implements ViewportNearbyPlaceUseCa
                 ? List.of()
                 : providerResult.places().stream()
                         .filter(place -> bounds.contains(place.lat(), place.lng()))
-                        .map(place -> withDistance(place, actualCenter))
+                        .map(place -> place.withDistanceMeters((int) Math.round(
+                                distanceMeters(actualCenter.lat(), actualCenter.lng(), place.lat(), place.lng()))))
                         .sorted(Comparator.comparingInt(NearbyPlaceItem::distanceMeters))
                         .limit(MAX_RETURNED_PLACES)
                         .toList();
@@ -63,29 +56,6 @@ public class ViewportNearbyPlaceQueryService implements ViewportNearbyPlaceUseCa
                 level,
                 clock.instant(),
                 new ViewportNearbyPlaceCategoryResult(category, providerResult.retrievedAt(), places));
-    }
-
-    private NearbyPlaceProviderResult execute(NearbyPlaceProviderQuery query) {
-        CompletableFuture<NearbyPlaceProviderResult> future;
-        try {
-            future = CompletableFuture.supplyAsync(() -> provider.search(query), executor);
-        } catch (RejectedExecutionException exception) {
-            throw new NearbyPlaceProviderUnavailableException("nearby place capacity unavailable", exception);
-        }
-        try {
-            return future.get(timeoutMillis, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            future.cancel(true);
-            throw new NearbyPlaceProviderUnavailableException("nearby place query interrupted", exception);
-        } catch (TimeoutException exception) {
-            future.cancel(true);
-            throw new NearbyPlaceProviderUnavailableException("nearby place query timed out", exception);
-        } catch (ExecutionException exception) {
-            Throwable cause = exception.getCause();
-            if (cause instanceof NearbyPlaceProviderUnavailableException unavailable) throw unavailable;
-            throw new NearbyPlaceProviderUnavailableException("nearby place provider unavailable", cause);
-        }
     }
 
     private void validate(NearbyPlaceBounds bounds, Integer level, NearbyPlaceCategory category) {
@@ -122,20 +92,6 @@ public class ViewportNearbyPlaceQueryService implements ViewportNearbyPlaceUseCa
 
     private double grid(double value, RoundingMode roundingMode) {
         return BigDecimal.valueOf(value).setScale(3, roundingMode).doubleValue();
-    }
-
-    private NearbyPlaceItem withDistance(NearbyPlaceItem place, NearbyPlacePoint center) {
-        return new NearbyPlaceItem(
-                place.placeId(),
-                place.name(),
-                place.categoryDetail(),
-                place.lat(),
-                place.lng(),
-                (int) Math.round(distanceMeters(center.lat(), center.lng(), place.lat(), place.lng())),
-                place.address(),
-                place.roadAddress(),
-                place.phone(),
-                place.placeUrl());
     }
 
     private double distanceMeters(double fromLat, double fromLng, double toLat, double toLng) {

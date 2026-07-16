@@ -47,12 +47,20 @@ contract-reviewer:
 
 <!-- 또는: 보안 영향: 있음: <요약> -->
 
-security-audit:
+security-audit: 지적사항 = none|listed
 
 ## 주요 위험
 
 주요 위험: 없음
 reviewer:
+
+## 검증 공백
+
+검증 공백: 없음|<미실행 항목과 사유>
+
+## 잔여 위험
+
+잔여 위험: 없음|<운영에서 추적할 위험>
 
 ## 다음 행동
 

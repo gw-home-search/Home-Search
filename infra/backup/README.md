@@ -27,6 +27,14 @@ infra/backup/home-search-db-backup.sh \
   --verify-restore /tmp/home-search-backups/property-YYYYmmddTHHMMSSZ.manifest.tsv
 ```
 
+Verify the newest property/admin/user artifacts from S3 in one non-destructive
+rehearsal:
+
+```bash
+infra/backup/home-search-db-backup.sh \
+  --verify-latest-s3 s3://bucket/staging
+```
+
 Verification checks the dump and migration checksums, initializes a PostgreSQL
 cluster under task-local temporary storage, restores into that cluster, and
 compares Flyway/core row-count invariants. It never connects to, drops, or

@@ -41,7 +41,7 @@ docker build --tag "${backup_image}" --file infra/backup/Dockerfile .
 [[ "$(docker inspect --format '{{json .Config.Entrypoint}}' "${backup_image}")" == '["/usr/local/bin/home-search-db-backup"]' ]]
 [[ "$(docker inspect --format '{{json .Config.Cmd}}' "${backup_image}")" == '["--backup-all","/backup"]' ]]
 docker run --rm --entrypoint bash "${backup_image}" -c \
-  'command -v pg_dump >/dev/null && command -v pg_restore >/dev/null && command -v initdb >/dev/null && command -v aws >/dev/null && test ! -e /model'
+  'command -v pg_dump >/dev/null && command -v pg_restore >/dev/null && command -v initdb >/dev/null && command -v aws >/dev/null && test -d "${HOME_BACKUP_REPO_ROOT}/apps/property-data/db/migration/api" && test ! -e /model'
 
 docker build --tag "${bootstrap_image}" --file infra/bootstrap/Dockerfile .
 [[ "$(docker inspect --format '{{.Config.User}}' "${bootstrap_image}")" == '10001:10001' ]]

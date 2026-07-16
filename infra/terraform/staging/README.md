@@ -37,6 +37,6 @@ wait for the following one-shot task families in order:
 4. `home-search-staging-runtime-grants`
 
 Only after every task exits with code 0 should a reviewed plan set
-`enable_services=true`. The optional ML service additionally requires
+`enable_services=true` and `enable_backup_schedules=true`. The optional ML service additionally requires
 `enable_ml=true` and a model artifact in the encrypted EFS `/model` mount; its
 entrypoint fails instead of serving without that artifact.

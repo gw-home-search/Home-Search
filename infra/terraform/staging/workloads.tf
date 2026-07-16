@@ -456,14 +456,22 @@ locals {
     }
     backup = {
       image   = "backup"
-      role    = aws_iam_role.runtime_task.arn
+      role    = aws_iam_role.backup_task.arn
       command = ["--backup-all", "/backup"]
       environment = [
         { name = "HOME_BACKUP_PGHOST", value = aws_db_instance.primary.address },
         { name = "HOME_BACKUP_PGPORT", value = "5432" },
         { name = "HOME_BACKUP_PGUSER", value = "home_search_backup" },
+        { name = "HOME_BACKUP_S3_URI", value = "s3://${aws_s3_bucket.database_backup.id}/staging" },
       ]
       secrets = [{ name = "HOME_BACKUP_PGPASSWORD", valueFrom = "${aws_secretsmanager_secret.container["database-bootstrap"].arn}:backup::" }]
+    }
+    restore-verification = {
+      image       = "backup"
+      role        = aws_iam_role.backup_task.arn
+      command     = ["--verify-latest-s3", "s3://${aws_s3_bucket.database_backup.id}/staging"]
+      environment = []
+      secrets     = []
     }
   }
 }
@@ -481,7 +489,7 @@ resource "aws_ecs_task_definition" "one_shot" {
     cpu_architecture        = "X86_64"
     operating_system_family = "LINUX"
   }
-  ephemeral_storage { size_in_gib = each.key == "backup" ? 40 : 21 }
+  ephemeral_storage { size_in_gib = contains(["backup", "restore-verification"], each.key) ? 40 : 21 }
   container_definitions = jsonencode([merge({
     name                   = each.key
     image                  = local.image_references[each.value.image]

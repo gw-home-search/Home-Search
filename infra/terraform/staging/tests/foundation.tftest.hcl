@@ -85,7 +85,9 @@ run "private_encrypted_staging_foundation" {
     error_message = "Secret containers and the rotating staging KMS key must be present."
   }
   assert {
-    condition     = length(aws_ecs_service.service) == 0 && length(aws_ecs_task_definition.one_shot) == 10
+    condition = length(aws_ecs_service.service) == 0 && length(aws_ecs_task_definition.one_shot) == 11 && alltrue([
+      for schedule in aws_scheduler_schedule.database_backup : schedule.state == "DISABLED"
+    ])
     error_message = "Initial apply must define bootstrap tasks without starting services against empty secrets."
   }
 }

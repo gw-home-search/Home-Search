@@ -13,6 +13,7 @@ usage() {
 Usage:
   home-search-db-backup.sh --backup-all OUTPUT_DIR
   home-search-db-backup.sh --verify-restore MANIFEST_FILE
+  home-search-db-backup.sh --verify-latest-s3 S3_URI
 
 Environment:
   HOME_BACKUP_PGHOST       Source PostgreSQL host (required for backup).
@@ -32,7 +33,7 @@ EOF
 
 mode="${1:-}"
 argument="${2:-}"
-if [[ "$#" -ne 2 || ( "${mode}" != "--backup-all" && "${mode}" != "--verify-restore" ) ]]; then
+if [[ "$#" -ne 2 || ( "${mode}" != "--backup-all" && "${mode}" != "--verify-restore" && "${mode}" != "--verify-latest-s3" ) ]]; then
   usage >&2
   exit 2
 fi
@@ -215,6 +216,7 @@ backup_all() {
       row_count "${row_count}"
     publish_artifacts "${dump_file}" "${manifest_file}"
     echo "backup_status=success logical_name=${logical} manifest=${manifest_file}"
+    printf '{"metric":"backup_success","value":1,"logical_name":"%s"}\n' "${logical}"
   done
 
   cleanup_backup_pgpass
@@ -291,11 +293,59 @@ verify_restore() {
   [[ "${row_count}" == "${expected_row_count}" ]] || { echo "ERROR: restored core table row count mismatch." >&2; exit 1; }
   duration="$(( $(date +%s) - start_seconds ))"
   echo "restore_verification_status=success logical_name=${logical} row_count=${row_count} duration_seconds=${duration}"
+  printf '{"metric":"restore_success","value":1,"logical_name":"%s"}\n' "${logical}"
+  printf '{"metric":"restore_duration_seconds","value":%s,"logical_name":"%s"}\n' "${duration}" "${logical}"
   restore_cleanup "${cluster_dir}" "${task_dir}"
   trap - EXIT
+}
+
+verify_latest_s3() {
+  local uri="$1"
+  [[ "${uri}" =~ ^s3://[a-z0-9][a-z0-9.-]{1,61}[a-z0-9](/.*)?$ ]] \
+    || { echo 'ERROR: HOME_BACKUP_S3_URI must be a valid s3 URI.' >&2; exit 2; }
+  local without_scheme bucket prefix logical key key_dir dump_key task_dir manifest dump_name timestamp set_timestamp='' created_epoch now_epoch age
+  without_scheme="${uri#s3://}"
+  bucket="${without_scheme%%/*}"
+  if [[ "${without_scheme}" == */* ]]; then
+    prefix="${without_scheme#*/}"
+    prefix="${prefix%/}/"
+  else
+    prefix=''
+  fi
+  [[ "${prefix}" =~ ^[A-Za-z0-9._/-]*$ && "${prefix}" != *'..'* ]] \
+    || { echo 'ERROR: S3 prefix contains unsupported characters.' >&2; exit 2; }
+
+  for logical in property admin user; do
+    key="$(aws s3api list-objects-v2 --bucket "${bucket}" --prefix "${prefix}${logical}-" \
+      --query "sort_by(Contents[?ends_with(Key, '.manifest.tsv')], &LastModified)[-1].Key" --output text)"
+    [[ "${key}" != "None" && "${key}" =~ ^${prefix}${logical}-[0-9]{8}T[0-9]{6}Z[.]manifest[.]tsv$ ]] \
+      || { echo "ERROR: latest ${logical} backup manifest was not found." >&2; exit 1; }
+    task_dir="$(mktemp -d "${HOME_RESTORE_TMP_ROOT:-/tmp}/home-search-s3.XXXXXX")"
+    manifest="${task_dir}/$(basename "${key}")"
+    aws s3 cp "s3://${bucket}/${key}" "${manifest}" --only-show-errors
+    dump_name="$(manifest_value "${manifest}" dump_file)"
+    validate_manifest_token dump_file "${dump_name}" '[A-Za-z0-9._-]+'
+    if [[ "${key}" == */* ]]; then key_dir="${key%/*}/"; else key_dir=''; fi
+    dump_key="${key_dir}${dump_name}"
+    aws s3 cp "s3://${bucket}/${dump_key}" "${task_dir}/${dump_name}" --only-show-errors
+    timestamp="$(manifest_value "${manifest}" created_at)"
+    validate_manifest_token created_at "${timestamp}" '[0-9]{8}T[0-9]{6}Z'
+    if [[ -z "${set_timestamp}" ]]; then set_timestamp="${timestamp}"; fi
+    [[ "${timestamp}" == "${set_timestamp}" ]] \
+      || { echo 'ERROR: latest logical backups do not share one backup timestamp.' >&2; exit 1; }
+    created_epoch="$(date -u -d "${timestamp:0:8} ${timestamp:9:2}:${timestamp:11:2}:${timestamp:13:2} UTC" +%s)"
+    now_epoch="$(date -u +%s)"
+    age="$((now_epoch - created_epoch))"
+    (( age >= 0 )) || { echo 'ERROR: backup timestamp is in the future.' >&2; exit 1; }
+    echo "backup_age_seconds=${age} logical_name=${logical}"
+    printf '{"metric":"backup_age_seconds","value":%s,"logical_name":"%s"}\n' "${age}" "${logical}"
+    verify_restore "${manifest}"
+    find "${task_dir}" -depth -delete
+  done
 }
 
 case "${mode}" in
   --backup-all) backup_all "${argument}" ;;
   --verify-restore) verify_restore "${argument}" ;;
+  --verify-latest-s3) verify_latest_s3 "${argument}" ;;
 esac

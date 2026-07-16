@@ -109,3 +109,9 @@ variable "enable_services" {
   type        = bool
   default     = false
 }
+
+variable "enable_backup_schedules" {
+  description = "Enables backup schedules only after secret bootstrap, database migrations, and runtime grants succeed."
+  type        = bool
+  default     = false
+}

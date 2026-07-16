@@ -51,3 +51,14 @@ output "workload_release" {
   }
   description = "Non-secret deployment identities consumed by the release manifest."
 }
+
+output "backup_automation" {
+  value = {
+    bucket_name        = aws_s3_bucket.database_backup.id
+    schedule_group     = aws_scheduler_schedule_group.database_backup.name
+    schedule_names     = { for name, schedule in aws_scheduler_schedule.database_backup : name => schedule.name }
+    retention_days     = 30
+    included_databases = ["home_search", "home_search_admin", "home_search_user"]
+    excluded_databases = ["home_search_coordinate_source"]
+  }
+}

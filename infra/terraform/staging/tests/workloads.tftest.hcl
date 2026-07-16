@@ -52,8 +52,8 @@ run "digest_pinned_private_rollback_capable_workloads" {
   assert {
     condition = length(setsubtract(toset(keys(aws_ecs_task_definition.one_shot)), toset([
       "secret-bootstrap", "database-bootstrap", "property-flyway", "admin-migration",
-      "user-flyway", "source-data-migration", "runtime-grants", "property-batch", "admin-ops", "backup",
-    ]))) == 0 && length(keys(aws_ecs_task_definition.one_shot)) == 10
+      "user-flyway", "source-data-migration", "runtime-grants", "property-batch", "admin-ops", "backup", "restore-verification",
+    ]))) == 0 && length(keys(aws_ecs_task_definition.one_shot)) == 11
     error_message = "Bootstrap, migrations, batch, ops, and backup must remain one-shot task definitions."
   }
 

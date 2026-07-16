@@ -44,6 +44,13 @@ export async function flushAsyncState(): Promise<void> {
   });
 }
 
+export async function flushLazyRoute(): Promise<void> {
+  await act(async () => {
+    await vi.dynamicImportSettled();
+  });
+  await flushAsyncState();
+}
+
 export async function waitForMillis(ms: number): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => {

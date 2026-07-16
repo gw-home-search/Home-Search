@@ -5,6 +5,7 @@ import {
   deferred,
   errorResponse,
   flushAsyncState,
+  flushLazyRoute,
   jsonResponse,
   renderApp,
   resetAppTestState,
@@ -266,6 +267,7 @@ describe('App 단지 상세', () => {
       markerButton?.click();
     });
     await flushAsyncState();
+    await flushLazyRoute();
 
     expect(fetchMock).toHaveBeenCalledWith(
       resolveApiUrl('/api/v1/detail/1001?complexId=501'),

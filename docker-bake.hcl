@@ -40,6 +40,7 @@ group "default" {
     "public-gateway",
     "admin-gateway",
     "backup",
+    "ops-bootstrap",
     "ml",
   ]
 }
@@ -158,6 +159,14 @@ target "backup" {
   dockerfile = "infra/backup/Dockerfile"
   labels = { "org.opencontainers.image.title" = "home-search-backup" }
   tags = ["${REGISTRY}/${IMAGE_PREFIX}-backup:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-backup:${VERSION}"]
+}
+
+target "ops-bootstrap" {
+  inherits = ["_common"]
+  context = "."
+  dockerfile = "infra/bootstrap/Dockerfile"
+  labels = { "org.opencontainers.image.title" = "home-search-ops-bootstrap" }
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}-ops-bootstrap:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-ops-bootstrap:${VERSION}"]
 }
 
 target "ml" {

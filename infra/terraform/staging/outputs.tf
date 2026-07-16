@@ -40,3 +40,14 @@ output "ecr_repository_urls" {
 output "secret_container_arns" {
   value = { for name, secret in aws_secretsmanager_secret.container : name => secret.arn }
 }
+
+output "workload_release" {
+  value = {
+    cluster_arn        = aws_ecs_cluster.this.arn
+    service_names      = sort(keys(aws_ecs_service.service))
+    one_shot_task_arns = { for name, task in aws_ecs_task_definition.one_shot : name => task.arn }
+    service_task_arns  = { for name, task in aws_ecs_task_definition.service : name => task.arn }
+    image_digests      = var.image_digests
+  }
+  description = "Non-secret deployment identities consumed by the release manifest."
+}

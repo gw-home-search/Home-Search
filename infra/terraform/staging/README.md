@@ -16,9 +16,27 @@ bootstrap outputs, then initialize. A real plan requires explicit admin CIDRs:
 ```bash
 terraform -chdir=infra/terraform/staging init
 terraform -chdir=infra/terraform/staging plan \
-  -var='admin_allowed_cidrs=["203.0.113.10/32"]'
+  -var='admin_allowed_cidrs=["203.0.113.10/32"]' \
+  -var-file=release.auto.tfvars.json
 ```
 
 Never put secret values in `.tfvars`, `TF_VAR_*`, plan files, or Terraform
 outputs. Secret values are populated by the bootstrap ECS task added with the
 workload layer.
+
+The release variable file contains only certificate ARNs, HTTPS origins, and
+the 14 image digests from the immutable release manifest. Keep
+`enable_services=false` on the first apply. That creates the ECS cluster and
+task definitions without starting applications against empty secrets. Run and
+wait for the following one-shot task families in order:
+
+1. `home-search-staging-secret-bootstrap`
+2. `home-search-staging-database-bootstrap`
+3. `home-search-staging-property-flyway`, `admin-migration`, `user-flyway`, and
+   `source-data-migration`
+4. `home-search-staging-runtime-grants`
+
+Only after every task exits with code 0 should a reviewed plan set
+`enable_services=true`. The optional ML service additionally requires
+`enable_ml=true` and a model artifact in the encrypted EFS `/model` mount; its
+entrypoint fails instead of serving without that artifact.

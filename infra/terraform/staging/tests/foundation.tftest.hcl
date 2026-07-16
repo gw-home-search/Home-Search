@@ -13,7 +13,17 @@ mock_provider "aws" {
 
 run "private_encrypted_staging_foundation" {
   command = plan
-  variables { admin_allowed_cidrs = ["203.0.113.10/32"] }
+  variables {
+    admin_allowed_cidrs    = ["203.0.113.10/32"]
+    public_origin          = "https://staging.example.test"
+    admin_origin           = "https://admin.staging.example.test"
+    public_certificate_arn = "arn:aws:acm:ap-northeast-2:123456789012:certificate/11111111-1111-1111-1111-111111111111"
+    admin_certificate_arn  = "arn:aws:acm:ap-northeast-2:123456789012:certificate/22222222-2222-2222-2222-222222222222"
+    image_digests = { for name in [
+      "property-api", "property-batch", "property-flyway", "admin-api", "admin-migration", "admin-ops",
+      "user-api", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
+    ] : name => "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  }
 
   assert {
     condition     = length(aws_subnet.public) == 2 && length(aws_subnet.application) == 2 && length(aws_subnet.data) == 2
@@ -74,10 +84,24 @@ run "private_encrypted_staging_foundation" {
     condition     = length(aws_secretsmanager_secret.container) == 6 && aws_kms_key.data.enable_key_rotation
     error_message = "Secret containers and the rotating staging KMS key must be present."
   }
+  assert {
+    condition     = length(aws_ecs_service.service) == 0 && length(aws_ecs_task_definition.one_shot) == 10
+    error_message = "Initial apply must define bootstrap tasks without starting services against empty secrets."
+  }
 }
 
 run "reject_world_open_admin_ingress" {
   command = plan
-  variables { admin_allowed_cidrs = ["0.0.0.0/0"] }
+  variables {
+    admin_allowed_cidrs    = ["0.0.0.0/0"]
+    public_origin          = "https://staging.example.test"
+    admin_origin           = "https://admin.staging.example.test"
+    public_certificate_arn = "arn:aws:acm:ap-northeast-2:123456789012:certificate/11111111-1111-1111-1111-111111111111"
+    admin_certificate_arn  = "arn:aws:acm:ap-northeast-2:123456789012:certificate/22222222-2222-2222-2222-222222222222"
+    image_digests = { for name in [
+      "property-api", "property-batch", "property-flyway", "admin-api", "admin-migration", "admin-ops",
+      "user-api", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
+    ] : name => "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  }
   expect_failures = [var.admin_allowed_cidrs]
 }

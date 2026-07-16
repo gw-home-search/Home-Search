@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
 import type { ComplexDetail, PricePrediction } from './api/fetchComplexDetail';
 import type { ParcelComplexSummary } from './api/fetchParcelComplexes';
@@ -76,6 +76,7 @@ export function DetailSidebar({
   selection,
 }: DetailSidebarProps) {
   const [mobileTab, setMobileTab] = useState<DetailMobileTab>('info');
+  const tabRefs = useRef<Partial<Record<DetailMobileTab, HTMLButtonElement | null>>>({});
   const isMobileLayout = useMediaQuery('(max-width: 720px)');
   const shouldRenderTradeChart = !isMobileLayout || mobileTab === 'trend';
 
@@ -122,12 +123,17 @@ export function DetailSidebar({
           ['trades', parcelTrades == null ? '거래' : `거래 ${parcelTrades.totalElements.toLocaleString()}`],
         ] as Array<[DetailMobileTab, string]>).map(([tab, label]) => (
           <button
+            ref={(element) => { tabRefs.current[tab] = element; }}
             type="button"
             role="tab"
             key={tab}
+            id={`detail-tab-${tab}`}
+            aria-controls={`detail-tabpanel-${tab}`}
             aria-label={`${tab === 'trades' ? '거래' : label} 보기`}
             aria-selected={mobileTab === tab}
+            tabIndex={mobileTab === tab ? 0 : -1}
             onClick={() => setMobileTab(tab)}
+            onKeyDown={(event) => moveDetailTabFocus(event, tab, setMobileTab, tabRefs.current)}
           >
             {label}
           </button>
@@ -190,6 +196,9 @@ export function DetailSidebar({
           </section>
 
           <section
+            id="detail-tabpanel-info"
+            role="tabpanel"
+            aria-labelledby="detail-tab-info"
             className="detail-basic-information detail-tab-panel"
             data-detail-order="information"
             data-mobile-tab-panel="info"
@@ -214,7 +223,7 @@ export function DetailSidebar({
             </details>
           </section>
 
-          <div className="detail-tab-panel" data-detail-order="trend" data-mobile-tab-panel="trend" data-mobile-tab-active={mobileTab === 'trend' ? 'true' : 'false'}>
+          <div id="detail-tabpanel-trend" role="tabpanel" aria-labelledby="detail-tab-trend" className="detail-tab-panel" data-detail-order="trend" data-mobile-tab-panel="trend" data-mobile-tab-active={mobileTab === 'trend' ? 'true' : 'false'}>
             <RequestStateNotice
               state={trendState}
               loadingMessage="시세를 불러오는 중"
@@ -236,6 +245,9 @@ export function DetailSidebar({
             ) : null}
           </div>
           <div
+            id="detail-tabpanel-trades"
+            role="tabpanel"
+            aria-labelledby="detail-tab-trades"
             className="detail-tab-panel"
             data-detail-order="trades"
             data-mobile-tab-panel="trades"
@@ -259,6 +271,27 @@ export function DetailSidebar({
       ) : null}
     </section>
   );
+}
+
+const DETAIL_TABS: DetailMobileTab[] = ['info', 'trend', 'trades'];
+
+function moveDetailTabFocus(
+  event: KeyboardEvent<HTMLButtonElement>,
+  current: DetailMobileTab,
+  select: (tab: DetailMobileTab) => void,
+  refs: Partial<Record<DetailMobileTab, HTMLButtonElement | null>>,
+) {
+  const currentIndex = DETAIL_TABS.indexOf(current);
+  let nextIndex: number | null = null;
+  if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % DETAIL_TABS.length;
+  if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + DETAIL_TABS.length) % DETAIL_TABS.length;
+  if (event.key === 'Home') nextIndex = 0;
+  if (event.key === 'End') nextIndex = DETAIL_TABS.length - 1;
+  if (nextIndex == null) return;
+  event.preventDefault();
+  const next = DETAIL_TABS[nextIndex];
+  select(next);
+  refs[next]?.focus();
 }
 
 function useMediaQuery(query: string): boolean {

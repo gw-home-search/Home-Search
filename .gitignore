@@ -30,3 +30,4 @@ tmp/
 temp/
 runtime-keys/
 *.tsbuildinfo
+/coordinate-input/

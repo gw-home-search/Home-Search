@@ -317,6 +317,7 @@ capability when moving to `apps/property-data`.
 Local monitoring stack:
 
 - Prometheus scrapes `api:8080/actuator/prometheus`.
+- Public gateway는 `/actuator`와 `/actuator/**`를 `404`로 차단한다.
 - Loki stores local Docker container logs with filesystem storage.
 - Grafana Alloy reads Docker logs from the local Docker socket and forwards
   only `home-search-*` containers to Loki.
@@ -382,7 +383,7 @@ map marker response caching.
 
 - Container name: `home-search-redis`.
 - Docker network address: `redis:6379`.
-- Host address: `localhost:${HOME_SEARCH_REDIS_PORT:-16379}`.
+- Host address: `127.0.0.1:${HOME_SEARCH_REDIS_PORT:-16379}` (loopback only).
 - Healthcheck command: `redis-cli ping`.
 
 The local `api` service receives Redis connection variables by default:
@@ -535,8 +536,10 @@ docker compose -f infra/docker-compose.local.yml up -d postgis redis api prometh
 Verify the main endpoints:
 
 ```bash
-curl -fsS http://localhost:8080/actuator/prometheus
 curl -fsS http://localhost:${HOME_SEARCH_PROMETHEUS_PORT:-9090}/-/ready
+curl -fsSG http://localhost:${HOME_SEARCH_PROMETHEUS_PORT:-9090}/api/v1/query \
+  --data-urlencode 'query=up{job="home-search-api"}'
+test "$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:8080/actuator/prometheus)" = 404
 curl -fsS http://localhost:${HOME_SEARCH_LOKI_PORT:-3100}/ready
 curl -fsS http://localhost:${HOME_SEARCH_GRAFANA_PORT:-3000}/api/health
 ```

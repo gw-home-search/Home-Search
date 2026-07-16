@@ -142,6 +142,12 @@ Public ingress가 `429`를 반환할 때도 같은 shape를 사용하며 `title`
 `IngressRateLimitException`이다. 응답은 `Retry-After: 1`과
 `Cache-Control: no-store`를 포함한다.
 
+`C401`은 보안과 기존 consumer 호환성을 위한 generic public validation
+error다. 공개 `title`, `detail`, `exception` 문구와 shape를 구체적인 내부
+validator 오류로 바꾸지 않는다. 거부된 field value, query 원문, request body
+원문, provider 원문은 `400` response나 application log에 기록하지 않는다.
+내부 진단은 request ID와 값이 제거된 validation category를 사용한다.
+
 ## Public APIs
 
 ### GET `/api/v1/complex/{complexId}/nearby-places`

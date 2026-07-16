@@ -51,9 +51,14 @@ Excluded from the property-data map/trade scope:
 │   │   └── web/
 │   ├── user/
 │   │   └── service/
-│   ├── ai/
+│   ├── ml/
 │   ├── property-data/
+│   ├── source-data/
 │   └── web/
+├── libs/
+│   ├── rtms-ingest-core/
+│   ├── security-jwt-core/
+│   └── user-auth-contract/
 └── infra/
 ```
 
@@ -64,11 +69,18 @@ Excluded from the property-data map/trade scope:
   built and deployed applications.
 - `apps/user/service/`: OAuth identity, user JWT, and refresh-token ownership
   boundary with its own build, container, and database.
-- `apps/ai/`: authenticated chatbot, POI/reference data, legal RAG, and
-  conversation pipeline boundary. It consumes property facts through read-only
-  contracts.
+- `apps/ml/`: optional prediction runtime. Model artifacts are supplied at
+  runtime and are not stored in the image or repository.
+- `apps/source-data/`: coordinate-source migration and verification boundary,
+  separate from the operational property database.
 - `apps/web/`: public map frontend.
+- `libs/`: shared ingest and security contracts used by independently built
+  services.
 - `infra/`: Postgres/PostGIS, Docker Compose, monitoring, and env docs.
+
+`apps/ai/` is a later-scope authenticated chatbot boundary described by
+`AI_SERVICE_PLAN.md`; it is not part of the current repository shape or the
+property-data map/trade critical path.
 
 ## Reading Order
 

@@ -199,9 +199,30 @@ stored state, operational identifiers, and policy distinctions explicit.
 
 ## Verification
 
-- Backend commands should be added here once `apps/property-data` exists.
-- Frontend commands should be added here once `apps/web` exists.
-- Infra commands should be added here once Docker/PostGIS/Flyway files exist.
+Backend and service gates:
+
+```bash
+cd apps/property-data && ./gradlew backendQualityCheck --no-daemon --stacktrace
+cd apps/user/service && ./gradlew userServiceQualityCheck --no-daemon --stacktrace
+cd apps/admin/service && ./gradlew adminServiceQualityCheck --no-daemon --stacktrace
+cd apps/source-data && ./gradlew sourceDataQualityCheck --no-daemon --stacktrace
+```
+
+Frontend gates:
+
+```bash
+cd apps/web && npm run lint && npm run test && npm run build
+cd apps/admin/web && npm run lint && npm run test && npm run build
+```
+
+Infra and repository gates:
+
+```bash
+.github/scripts/test-classify-changes.sh
+infra/nginx/test-property-public.sh
+infra/postgres/verify-service-boundaries.sh
+HOME_SEARCH_DB_PASSWORD=compose-validation PROPERTY_MIGRATOR_DB_PASSWORD=compose-validation USER_RUNTIME_DB_PASSWORD=compose-validation USER_MIGRATOR_DB_PASSWORD=compose-validation docker compose -f infra/docker-compose.local.yml config --quiet
+```
 
 ## When To Ask
 

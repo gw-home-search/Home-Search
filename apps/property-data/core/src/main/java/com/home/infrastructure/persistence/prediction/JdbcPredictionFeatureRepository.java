@@ -1,7 +1,9 @@
 package com.home.infrastructure.persistence.prediction;
 
-import com.home.application.prediction.PredictionFeature;
-import com.home.application.prediction.PredictionFeatureRepository;
+import com.home.application.prediction.PredictionBasis;
+import com.home.application.prediction.PredictionBasisReader;
+import com.home.application.prediction.PredictionFeatureSnapshot;
+import com.home.application.prediction.PredictionFeatureSnapshotReader;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -17,7 +19,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public class JdbcPredictionFeatureRepository implements PredictionFeatureRepository {
+public class JdbcPredictionFeatureRepository implements PredictionBasisReader, PredictionFeatureSnapshotReader {
 
     private static final double AVERAGE_DAYS_PER_MONTH = 30.4375;
     private static final BigDecimal EXACT_AREA_TOLERANCE = new BigDecimal("0.5");
@@ -29,28 +31,36 @@ public class JdbcPredictionFeatureRepository implements PredictionFeatureReposit
     }
 
     @Override
-    public Optional<PredictionFeature> findFeature(Long complexId, YearMonth anchorMonth) {
-        if (complexId == null || anchorMonth == null) {
+    public Optional<PredictionBasis> findBasis(Long complexId) {
+        if (complexId == null) {
+            return Optional.empty();
+        }
+        return findBasisTrade(complexId).filter(basis -> validPnu(basis.pnu())).map(this::toBasis);
+    }
+
+    @Override
+    public Optional<PredictionFeatureSnapshot> readSnapshot(PredictionBasis predictionBasis, YearMonth anchorMonth) {
+        if (predictionBasis == null || anchorMonth == null || !validPnu(predictionBasis.pnu())) {
             return Optional.empty();
         }
 
-        Optional<BasisTradeRow> basis = findBasisTrade(complexId);
-        if (basis.isEmpty() || !validPnu(basis.get().pnu())) {
-            return Optional.empty();
-        }
-
-        BasisTradeRow basisTrade = basis.get();
+        BasisTradeRow basisTrade = toRow(predictionBasis);
         LocalDate anchorDate = anchorMonth.atDay(1);
         String legalDongCode = basisTrade.pnu().substring(0, 10);
         String sggCode = basisTrade.pnu().substring(0, 5);
 
-        List<TradeFeatureRow> complexPrev = findComplexPrev(complexId);
-        List<TradeFeatureRow> exactPrev = findExactPrev(complexId, basisTrade.exclArea());
+        List<TradeFeatureRow> previousTrades = findPreviousTrades(basisTrade.complexId(), basisTrade.exclArea());
+        List<TradeFeatureRow> complexPrev = previousTrades.stream().limit(3).toList();
+        List<TradeFeatureRow> exactPrev = previousTrades.stream()
+                .filter(row -> row.exclArea() != null
+                        && row.exclArea().subtract(basisTrade.exclArea()).abs().compareTo(EXACT_AREA_TOLERANCE) <= 0)
+                .limit(3)
+                .toList();
         Map<String, Object> numeric = new HashMap<>();
         putCoreFeatures(numeric, basisTrade, anchorMonth);
         putComplexPrevFeatures(numeric, complexPrev, anchorDate);
         putExactPrevFeatures(numeric, exactPrev, basisTrade.exclArea(), anchorDate);
-        putMonthlyAnchorFeatures(numeric, complexId, basisTrade.exclArea(), sggCode, anchorMonth);
+        putMonthlyAnchorFeatures(numeric, basisTrade.complexId(), basisTrade.exclArea(), sggCode, anchorMonth);
         putCrossGaps(numeric);
 
         Map<String, String> embedding = Map.of(
@@ -63,15 +73,7 @@ public class JdbcPredictionFeatureRepository implements PredictionFeatureReposit
             return Optional.empty();
         }
 
-        return Optional.of(new PredictionFeature(
-                basisTrade.complexId(),
-                basisTrade.id(),
-                basisTrade.dealDate(),
-                basisTrade.exclArea(),
-                basisTrade.floor(),
-                numeric,
-                embedding,
-                ((Number) baseLog).doubleValue()));
+        return Optional.of(new PredictionFeatureSnapshot(numeric, embedding, ((Number) baseLog).doubleValue()));
     }
 
     private Optional<BasisTradeRow> findBasisTrade(Long complexId) {
@@ -102,37 +104,31 @@ public class JdbcPredictionFeatureRepository implements PredictionFeatureReposit
                 .optional();
     }
 
-    private List<TradeFeatureRow> findComplexPrev(Long complexId) {
+    private List<TradeFeatureRow> findPreviousTrades(Long complexId, BigDecimal targetAreaM2) {
         return jdbcClient
                 .sql("""
+			WITH ranked AS (
+			    SELECT
+			        id,
+			        deal_date,
+			        deal_amount,
+			        floor,
+			        excl_area,
+			        row_number() OVER (ORDER BY deal_date DESC, id DESC) AS complex_rank,
+			        sum(CASE WHEN abs(excl_area - :targetAreaM2) <= :tolerance THEN 1 ELSE 0 END)
+			            OVER (ORDER BY deal_date DESC, id DESC) AS exact_rank
+			    FROM trade
+			    WHERE complex_id = :complexId
+			      AND deleted_at IS NULL
+			      AND excl_area IS NOT NULL
+			      AND excl_area > 0
+			      AND deal_amount > 0
+			)
 			SELECT id, deal_date, deal_amount, floor, excl_area
-			FROM trade
-			WHERE complex_id = :complexId
-			  AND deleted_at IS NULL
-			  AND excl_area IS NOT NULL
-			  AND excl_area > 0
-			  AND deal_amount > 0
+			FROM ranked
+			WHERE complex_rank <= 3
+			   OR (abs(excl_area - :targetAreaM2) <= :tolerance AND exact_rank <= 3)
 			ORDER BY deal_date DESC, id DESC
-			LIMIT 3
-			""")
-                .param("complexId", complexId)
-                .query(this::mapTradeFeature)
-                .list();
-    }
-
-    private List<TradeFeatureRow> findExactPrev(Long complexId, BigDecimal targetAreaM2) {
-        return jdbcClient
-                .sql("""
-			SELECT id, deal_date, deal_amount, floor, excl_area
-			FROM trade
-			WHERE complex_id = :complexId
-			  AND deleted_at IS NULL
-			  AND excl_area IS NOT NULL
-			  AND excl_area > 0
-			  AND deal_amount > 0
-			  AND abs(excl_area - :targetAreaM2) <= :tolerance
-			ORDER BY deal_date DESC, id DESC
-			LIMIT 3
 			""")
                 .param("complexId", complexId)
                 .param("targetAreaM2", targetAreaM2)
@@ -211,67 +207,74 @@ public class JdbcPredictionFeatureRepository implements PredictionFeatureReposit
             String sggCode,
             YearMonth anchorMonth) {
         LocalDate anchorStart = anchorMonth.atDay(1);
-        MonthlyAggregate complexLag1 = findMonthlyAggregate(
-                "complex", complexId, targetAreaM2, sggCode, anchorStart.minusMonths(1), anchorStart);
-        MonthlyAggregate complexLag3 = findMonthlyAggregate(
-                "complex", complexId, targetAreaM2, sggCode, anchorStart.minusMonths(3), anchorStart);
-        MonthlyAggregate exactLag1 = findMonthlyAggregate(
-                "exact", complexId, targetAreaM2, sggCode, anchorStart.minusMonths(1), anchorStart);
-        MonthlyAggregate exactLag3 = findMonthlyAggregate(
-                "exact", complexId, targetAreaM2, sggCode, anchorStart.minusMonths(3), anchorStart);
-        MonthlyAggregate sggLag1 =
-                findMonthlyAggregate("sgg", complexId, targetAreaM2, sggCode, anchorStart.minusMonths(1), anchorStart);
-        MonthlyAggregate sggLag3 =
-                findMonthlyAggregate("sgg", complexId, targetAreaM2, sggCode, anchorStart.minusMonths(3), anchorStart);
-
-        putLag1(numeric, "complex", complexLag1);
-        putLag3(numeric, "complex", complexLag3);
-        putLag1(numeric, "exact_area", exactLag1);
-        putLag3(numeric, "exact_area", exactLag3);
-        putLag1(numeric, "sgg", sggLag1);
-        putLag3(numeric, "sgg", sggLag3);
+        MonthlyAggregateSet aggregates = findMonthlyAggregates(
+                complexId, targetAreaM2, sggCode, anchorStart.minusMonths(3), anchorStart.minusMonths(1), anchorStart);
+        putLag1(numeric, "complex", aggregates.complexLag1());
+        putLag3(numeric, "complex", aggregates.complexLag3());
+        putLag1(numeric, "exact_area", aggregates.exactLag1());
+        putLag3(numeric, "exact_area", aggregates.exactLag3());
+        putLag1(numeric, "sgg", aggregates.sggLag1());
+        putLag3(numeric, "sgg", aggregates.sggLag3());
     }
 
-    private MonthlyAggregate findMonthlyAggregate(
-            String scope,
+    private MonthlyAggregateSet findMonthlyAggregates(
             Long complexId,
             BigDecimal targetAreaM2,
             String sggCode,
-            LocalDate startInclusive,
-            LocalDate endExclusive) {
-        String scopePredicate =
-                switch (scope) {
-                    case "complex" -> "t.complex_id = :complexId";
-                    case "exact" -> "t.complex_id = :complexId AND abs(t.excl_area - :targetAreaM2) <= :tolerance";
-                    case "sgg" -> "substring(p.pnu from 1 for 5) = :sggCode";
-                    default -> throw new IllegalArgumentException("Unsupported prediction aggregate scope: " + scope);
-                };
+            LocalDate lag3Start,
+            LocalDate lag1Start,
+            LocalDate anchorStart) {
         return jdbcClient
                 .sql("""
+			WITH base AS (
+			    SELECT
+			        t.complex_id,
+			        t.deal_date,
+			        t.excl_area,
+			        substring(p.pnu from 1 for 5) AS sgg_code,
+			        ln((t.deal_amount::numeric / t.excl_area)::double precision) AS log_ppm
+			    FROM trade t
+			    JOIN complex c ON c.id = t.complex_id
+			    JOIN parcel p ON p.id = c.parcel_id
+			    WHERE t.deleted_at IS NULL
+			      AND t.excl_area IS NOT NULL
+			      AND t.excl_area > 0
+			      AND t.deal_amount > 0
+			      AND t.deal_date >= :lag3Start
+			      AND t.deal_date < :anchorStart
+			)
 			SELECT
-			    percentile_cont(0.5) WITHIN GROUP (
-			        ORDER BY ln((t.deal_amount::numeric / t.excl_area)::double precision)
-			    ) AS median_log_ppm,
-			    avg(ln((t.deal_amount::numeric / t.excl_area)::double precision)) AS mean_log_ppm,
-			    count(*) AS trade_count
-			FROM trade t
-			JOIN complex c ON c.id = t.complex_id
-			JOIN parcel p ON p.id = c.parcel_id
-			WHERE t.deleted_at IS NULL
-			  AND t.excl_area IS NOT NULL
-			  AND t.excl_area > 0
-			  AND t.deal_amount > 0
-			  AND t.deal_date >= :startInclusive
-			  AND t.deal_date < :endExclusive
-			  AND %s
-			""".formatted(scopePredicate))
+			    percentile_cont(0.5) WITHIN GROUP (ORDER BY log_ppm)
+			        FILTER (WHERE complex_id = :complexId AND deal_date >= :lag1Start) AS complex_lag1_median,
+			    count(*) FILTER (WHERE complex_id = :complexId AND deal_date >= :lag1Start) AS complex_lag1_count,
+			    percentile_cont(0.5) WITHIN GROUP (ORDER BY log_ppm)
+			        FILTER (WHERE complex_id = :complexId) AS complex_lag3_median,
+			    avg(log_ppm) FILTER (WHERE complex_id = :complexId) AS complex_lag3_mean,
+			    count(*) FILTER (WHERE complex_id = :complexId) AS complex_lag3_count,
+			    percentile_cont(0.5) WITHIN GROUP (ORDER BY log_ppm)
+			        FILTER (WHERE complex_id = :complexId AND abs(excl_area - :targetAreaM2) <= :tolerance AND deal_date >= :lag1Start) AS exact_lag1_median,
+			    count(*) FILTER (WHERE complex_id = :complexId AND abs(excl_area - :targetAreaM2) <= :tolerance AND deal_date >= :lag1Start) AS exact_lag1_count,
+			    percentile_cont(0.5) WITHIN GROUP (ORDER BY log_ppm)
+			        FILTER (WHERE complex_id = :complexId AND abs(excl_area - :targetAreaM2) <= :tolerance) AS exact_lag3_median,
+			    avg(log_ppm) FILTER (WHERE complex_id = :complexId AND abs(excl_area - :targetAreaM2) <= :tolerance) AS exact_lag3_mean,
+			    count(*) FILTER (WHERE complex_id = :complexId AND abs(excl_area - :targetAreaM2) <= :tolerance) AS exact_lag3_count,
+			    percentile_cont(0.5) WITHIN GROUP (ORDER BY log_ppm)
+			        FILTER (WHERE sgg_code = :sggCode AND deal_date >= :lag1Start) AS sgg_lag1_median,
+			    count(*) FILTER (WHERE sgg_code = :sggCode AND deal_date >= :lag1Start) AS sgg_lag1_count,
+			    percentile_cont(0.5) WITHIN GROUP (ORDER BY log_ppm)
+			        FILTER (WHERE sgg_code = :sggCode) AS sgg_lag3_median,
+			    avg(log_ppm) FILTER (WHERE sgg_code = :sggCode) AS sgg_lag3_mean,
+			    count(*) FILTER (WHERE sgg_code = :sggCode) AS sgg_lag3_count
+			FROM base
+			""")
                 .param("complexId", complexId)
                 .param("targetAreaM2", targetAreaM2)
                 .param("tolerance", EXACT_AREA_TOLERANCE)
                 .param("sggCode", sggCode)
-                .param("startInclusive", startInclusive)
-                .param("endExclusive", endExclusive)
-                .query(this::mapMonthlyAggregate)
+                .param("lag3Start", lag3Start)
+                .param("lag1Start", lag1Start)
+                .param("anchorStart", anchorStart)
+                .query(this::mapMonthlyAggregateSet)
                 .single();
     }
 
@@ -331,6 +334,30 @@ public class JdbcPredictionFeatureRepository implements PredictionFeatureReposit
                 resultSet.getObject("use_date", LocalDate.class));
     }
 
+    private PredictionBasis toBasis(BasisTradeRow row) {
+        return new PredictionBasis(
+                row.complexId(),
+                row.id(),
+                row.dealDate(),
+                row.dealAmount(),
+                row.floor(),
+                row.exclArea(),
+                row.pnu(),
+                row.useDate());
+    }
+
+    private BasisTradeRow toRow(PredictionBasis basis) {
+        return new BasisTradeRow(
+                basis.tradeId(),
+                basis.complexId(),
+                basis.dealDate(),
+                basis.dealAmount(),
+                basis.floor(),
+                basis.areaM2(),
+                basis.pnu(),
+                basis.useDate());
+    }
+
     private TradeFeatureRow mapTradeFeature(ResultSet resultSet, int rowNum) throws SQLException {
         return new TradeFeatureRow(
                 resultSet.getLong("id"),
@@ -340,11 +367,26 @@ public class JdbcPredictionFeatureRepository implements PredictionFeatureReposit
                 resultSet.getBigDecimal("excl_area"));
     }
 
-    private MonthlyAggregate mapMonthlyAggregate(ResultSet resultSet, int rowNum) throws SQLException {
+    private MonthlyAggregateSet mapMonthlyAggregateSet(ResultSet resultSet, int rowNum) throws SQLException {
+        return new MonthlyAggregateSet(
+                lag1(resultSet, "complex"),
+                lag3(resultSet, "complex"),
+                lag1(resultSet, "exact"),
+                lag3(resultSet, "exact"),
+                lag1(resultSet, "sgg"),
+                lag3(resultSet, "sgg"));
+    }
+
+    private MonthlyAggregate lag1(ResultSet resultSet, String scope) throws SQLException {
         return new MonthlyAggregate(
-                nullableDouble(resultSet, "median_log_ppm"),
-                nullableDouble(resultSet, "mean_log_ppm"),
-                resultSet.getLong("trade_count"));
+                nullableDouble(resultSet, scope + "_lag1_median"), null, resultSet.getLong(scope + "_lag1_count"));
+    }
+
+    private MonthlyAggregate lag3(ResultSet resultSet, String scope) throws SQLException {
+        return new MonthlyAggregate(
+                nullableDouble(resultSet, scope + "_lag3_median"),
+                nullableDouble(resultSet, scope + "_lag3_mean"),
+                resultSet.getLong(scope + "_lag3_count"));
     }
 
     private Integer nullableInt(ResultSet resultSet, String column) throws SQLException {
@@ -476,4 +518,12 @@ public class JdbcPredictionFeatureRepository implements PredictionFeatureReposit
             Long id, LocalDate dealDate, BigDecimal dealAmount, Integer floor, BigDecimal exclArea) {}
 
     private record MonthlyAggregate(Double medianLogPpm, Double meanLogPpm, long count) {}
+
+    private record MonthlyAggregateSet(
+            MonthlyAggregate complexLag1,
+            MonthlyAggregate complexLag3,
+            MonthlyAggregate exactLag1,
+            MonthlyAggregate exactLag3,
+            MonthlyAggregate sggLag1,
+            MonthlyAggregate sggLag3) {}
 }

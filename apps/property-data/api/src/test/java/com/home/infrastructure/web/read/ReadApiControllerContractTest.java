@@ -274,6 +274,39 @@ class ReadApiControllerContractTest {
     }
 
     @Test
+    @DisplayName("GET /api/v1/detail/{parcelId}는 prediction RuntimeException을 generic FAILED field로 격리한다")
+    void parcelDetailDegradesPredictionRuntimeFailure() throws Exception {
+        given(propertyDetailService.getParcelDetail(eq(1001L), isNull()))
+                .willReturn(new ParcelDetailResult(
+                        1001L,
+                        501L,
+                        37.5123,
+                        127.0456,
+                        "Sample address",
+                        "Sample trade name",
+                        "Sample Apartment",
+                        8,
+                        740,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        LocalDate.of(2015, 3, 20)));
+        given(predictionUseCase.getOrSchedulePrediction(501L))
+                .willThrow(new IllegalStateException("sensitive provider failure"));
+
+        mockMvc.perform(get("/api/v1/detail/1001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.parcelId").value(1001))
+                .andExpect(jsonPath("$.prediction.status").value("FAILED"))
+                .andExpect(jsonPath("$.prediction.message").value("AI prediction unavailable"))
+                .andExpect(content()
+                        .string(org.hamcrest.Matchers.not(
+                                org.hamcrest.Matchers.containsString("sensitive provider failure"))));
+    }
+
+    @Test
     @DisplayName("GET /api/v1/detail/{parcelId}?complexId= 는 선택한 complex detail을 반환한다")
     void complexScopedParcelDetailReturnsSelectedComplex() throws Exception {
         given(propertyDetailService.getParcelDetail(1001L, 502L))

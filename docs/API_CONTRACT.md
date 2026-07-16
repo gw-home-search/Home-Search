@@ -770,7 +770,23 @@ Response:
   "totArea": 98765.43,
   "bcRat": 22.5,
   "vlRat": 199.8,
-  "useDate": "2015-03-20"
+  "useDate": "2015-03-20",
+  "prediction": {
+    "status": "READY",
+    "modelVersion": "deployment__F37_monthly_anchor_prev3_rolling_huber_010",
+    "predictedDealAmount": 179163,
+    "predictedPricePerM2": 2115.5,
+    "predictedPricePerPyeong": 6993.4,
+    "intervalLow": 139425,
+    "intervalHigh": 218900,
+    "intervalBasis": "recent_holdout_p95",
+    "targetAreaM2": 84.69,
+    "targetFloor": 6,
+    "basisTradeId": 9001,
+    "basisDealDate": "2026-01-01",
+    "generatedAt": "2026-06-25T07:05:38Z",
+    "message": null
+  }
 }
 ```
 
@@ -792,6 +808,20 @@ Response fields:
 - `bcRat`
 - `vlRat`
 - `useDate`
+- `prediction`: optional prediction result. Prediction 장애가 detail 기본 정보 응답을 실패시키지 않는다.
+  - `status`: `READY|PENDING|FAILED|UNAVAILABLE`.
+  - `modelVersion`
+  - `predictedDealAmount`: 10,000 KRW units.
+  - `predictedPricePerM2`: 10,000 KRW per square meter.
+  - `predictedPricePerPyeong`: 10,000 KRW per pyeong.
+  - `intervalLow`, `intervalHigh`: 10,000 KRW units.
+  - `intervalBasis`
+  - `targetAreaM2`
+  - `targetFloor`
+  - `basisTradeId`
+  - `basisDealDate`
+  - `generatedAt`
+  - `message`: non-sensitive optional status message.
 
 Status:
 

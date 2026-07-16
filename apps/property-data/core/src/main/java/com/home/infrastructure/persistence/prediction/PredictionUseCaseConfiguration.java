@@ -1,6 +1,7 @@
 package com.home.infrastructure.persistence.prediction;
 
 import com.home.application.prediction.PredictionExecutionContext;
+import com.home.application.prediction.PredictionFeatureAssembler;
 import com.home.application.prediction.PredictionProperties;
 import com.home.infrastructure.external.prediction.PredictionRuntimeProperties;
 import java.time.Clock;
@@ -15,6 +16,11 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(PredictionRuntimeProperties.class)
 class PredictionUseCaseConfiguration {
+
+    @Bean
+    PredictionFeatureAssembler predictionFeatureAssembler() {
+        return new PredictionFeatureAssembler();
+    }
 
     @Bean
     PredictionProperties predictionProperties(PredictionRuntimeProperties properties) {

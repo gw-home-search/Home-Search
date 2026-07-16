@@ -118,6 +118,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: apps/web
         run: npm ci
+      - name: Lint frontend
+        working-directory: apps/web
+        run: npm run lint
       - name: Run frontend tests
         working-directory: apps/web
         run: npm run test
@@ -200,6 +203,9 @@ jobs:
       - name: Install admin web dependencies
         working-directory: apps/admin/web
         run: npm ci
+      - name: Lint admin web
+        working-directory: apps/admin/web
+        run: npm run lint
       - name: Run admin web tests
         working-directory: apps/admin/web
         run: npm run test

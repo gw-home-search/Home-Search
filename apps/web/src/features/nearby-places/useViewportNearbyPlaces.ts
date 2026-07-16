@@ -207,8 +207,7 @@ function loadCategory(
   if (pending) return pending.promise;
 
   const controller = new AbortController();
-  let promise: Promise<ViewportNearbyPlaces>;
-  promise = fetchViewportNearbyPlaces({ ...viewport, category }, controller.signal)
+  const promise = fetchViewportNearbyPlaces({ ...viewport, category }, controller.signal)
     .then((result) => {
       remember(cache, key, result);
       return result;

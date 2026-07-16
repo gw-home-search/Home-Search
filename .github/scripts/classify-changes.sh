@@ -55,6 +55,10 @@ classify() {
     apps/admin/web/*)
       changed[admin_web_changed]=true
       ;;
+    tools/eslint/*)
+      changed[frontend_changed]=true
+      changed[admin_web_changed]=true
+      ;;
     apps/user/service/*|libs/user-auth-contract/*|docs/USER_SERVICE_PLAN.md)
       changed[user_service_changed]=true
       ;;

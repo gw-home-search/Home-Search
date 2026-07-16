@@ -125,7 +125,7 @@ function technicalErrorDetails(error: string | null | undefined): {
   const statusMatch = normalized.match(/\b([45]\d{2})\b/u);
   const status = statusMatch?.[1] ?? null;
   const detail = statusMatch
-    ? normalized.slice((statusMatch.index ?? 0) + statusMatch[0].length).replace(/^\s*[:\-]?\s*/u, '').trim()
+    ? normalized.slice((statusMatch.index ?? 0) + statusMatch[0].length).replace(/^\s*[:-]?\s*/u, '').trim()
     : null;
 
   if (!status && !detail) {

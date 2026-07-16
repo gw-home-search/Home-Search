@@ -2509,13 +2509,6 @@ async function flushAsyncState(): Promise<void> {
   });
 }
 
-async function flushLazyRoute(): Promise<void> {
-  await act(async () => {
-    await vi.dynamicImportSettled();
-  });
-  await flushAsyncState();
-}
-
 async function waitForMillis(ms: number): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => {
@@ -2580,41 +2573,6 @@ function errorResponse(status: number): Response {
     ok: false,
     status,
   } as Response;
-}
-
-function coordinatePendingFixture(
-  id: number,
-  pnu: string,
-  aptName: string,
-  reason: string,
-): Record<string, unknown> {
-  return {
-    parcelId: id,
-    complexId: id + 500,
-    pnu,
-    aptSeq: `APT-${id}`,
-    aptName,
-    address: `${aptName} address`,
-    reason,
-    tradeCount: 3,
-    createdAt: '2026-06-03T00:00:00Z',
-  };
-}
-
-function coordinatePendingSummaryFixture(overrides: {
-  totalCount?: number;
-  pnuCoordinateMissing?: number;
-  samePnuMultiComplex?: number;
-  complexDisplayCoordinateMissing?: number;
-} = {}): Record<string, unknown> {
-  return {
-    totalCount: overrides.totalCount ?? 1429,
-    reasonCounts: {
-      PNU_COORDINATE_MISSING: overrides.pnuCoordinateMissing ?? 321,
-      SAME_PNU_MULTI_COMPLEX: overrides.samePnuMultiComplex ?? 1001,
-      COMPLEX_DISPLAY_COORDINATE_MISSING: overrides.complexDisplayCoordinateMissing ?? 107,
-    },
-  };
 }
 
 function deferred<T>(): {

@@ -27,6 +27,8 @@ assert_case "shared ingest library" "$(printf '%s' "$none" | sed 's/backend_chan
   libs/rtms-ingest-core/src/main/java/com/home/Example.java
 assert_case "frontend" "${none/frontend_changed=false/frontend_changed=true}" \
   apps/web/src/App.tsx
+assert_case "shared frontend lint policy" "$(printf '%s' "$none" | sed 's/admin_web_changed=false/admin_web_changed=true/;s/frontend_changed=false/frontend_changed=true/')" \
+  tools/eslint/react-flat-config.mjs
 assert_case "docs only" "$none" docs/README.md
 assert_case "manual dispatch" "$all" --manual
 

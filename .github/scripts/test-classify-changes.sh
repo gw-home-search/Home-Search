@@ -30,6 +30,7 @@ assert_case "frontend" "${none/frontend_changed=false/frontend_changed=true}" \
 assert_case "shared frontend lint policy" "$(printf '%s' "$none" | sed 's/admin_web_changed=false/admin_web_changed=true/;s/frontend_changed=false/frontend_changed=true/')" \
   tools/eslint/react-flat-config.mjs
 assert_case "docs only" "$none" docs/README.md
+assert_case "shared Docker build context" "$all" .dockerignore
 assert_case "manual dispatch" "$all" --manual
 
 printf '상태: Pass - change classifier self-test\n'

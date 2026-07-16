@@ -1,0 +1,14 @@
+.git
+.gitignore
+**/.DS_Store
+**/.env
+**/.env.*
+!**/.env.example
+**/.gradle
+**/build
+**/node_modules
+**/dist
+coordinate-input
+outputs
+runtime-keys
+tmp

@@ -33,7 +33,7 @@ enable_all() {
 classify() {
   local path="$1"
   case "$path" in
-    .github/workflows/ci.yml|.github/scripts/classify-changes.sh|.github/scripts/test-classify-changes.sh)
+    .dockerignore|.github/workflows/ci.yml|.github/scripts/classify-changes.sh|.github/scripts/test-classify-changes.sh)
       enable_all
       ;;
     apps/property-data/*)

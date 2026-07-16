@@ -176,6 +176,21 @@ jobs:
             exit 1
           fi
 
+  property-image-test:
+    name: property-image-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.backend_changed == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Verify property workload image boundaries
+        run: infra/images/test-property-images.sh
+
   admin-service-test:
     name: admin-service-test
     runs-on: ubuntu-latest

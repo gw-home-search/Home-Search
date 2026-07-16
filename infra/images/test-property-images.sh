@@ -25,6 +25,10 @@ assert_user "${api_image}"
 assert_user "${batch_image}"
 assert_user "${flyway_image}"
 
+[[ "$(docker inspect --format '{{json .Config.Healthcheck.Test}}' "${api_image}")" != 'null' ]]
+docker run --rm --entrypoint sh "${api_image}" -c \
+  'command -v timeout >/dev/null && command -v bash >/dev/null'
+
 [[ "$(docker inspect --format '{{json .Config.Entrypoint}}' "${api_image}")" == '["java","-jar","/app/application.jar"]' ]]
 [[ "$(docker inspect --format '{{json .Config.Entrypoint}}' "${batch_image}")" == '["java","-jar","/app/application.jar"]' ]]
 [[ "$(docker inspect --format '{{json .Config.Entrypoint}}' "${flyway_image}")" == '["/flyway/flyway"]' ]]

@@ -23,6 +23,11 @@ docker build --tag "${source_migration}" --file apps/source-data/Dockerfile .
 for image in "${admin_api}" "${admin_migration}" "${admin_ops}" "${user_api}" "${user_flyway}" "${source_migration}"; do
   [[ "$(docker inspect --format '{{.Config.User}}' "${image}")" == '10001:10001' ]]
 done
+for image in "${admin_api}" "${user_api}"; do
+  [[ "$(docker inspect --format '{{json .Config.Healthcheck.Test}}' "${image}")" != 'null' ]]
+  docker run --rm --entrypoint sh "${image}" -c \
+    'command -v timeout >/dev/null && command -v bash >/dev/null'
+done
 for image in "${admin_api}" "${admin_migration}" "${admin_ops}" "${user_api}" "${source_migration}"; do
   [[ "$(docker inspect --format '{{json .Config.Entrypoint}}' "${image}")" == '["java","-jar","/app/application.jar"]' ]]
 done

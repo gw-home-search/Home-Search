@@ -19,6 +19,8 @@ WORKDIR /app
 COPY --from=build --chown=10001:10001 /workspace/apps/user/service/app/build/libs/user-service-app.jar /app/application.jar
 USER 10001:10001
 EXPOSE 8082
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+    CMD timeout 3 bash -c '</dev/tcp/127.0.0.1/8082' || exit 1
 ENTRYPOINT ["java", "-jar", "/app/application.jar"]
 
 FROM --platform=linux/amd64 redgate/flyway:12.4.0 AS flyway

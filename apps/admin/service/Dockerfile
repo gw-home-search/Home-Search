@@ -21,6 +21,8 @@ ENTRYPOINT ["java", "-jar", "/app/application.jar"]
 FROM runtime AS api
 COPY --from=build --chown=10001:10001 /workspace/apps/admin/service/api/build/libs/admin-service-api.jar /app/application.jar
 EXPOSE 8081
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+    CMD timeout 3 bash -c '</dev/tcp/127.0.0.1/8081' || exit 1
 
 FROM runtime AS migration
 COPY --from=build --chown=10001:10001 /workspace/apps/admin/service/migration/build/libs/admin-service-migration.jar /app/application.jar

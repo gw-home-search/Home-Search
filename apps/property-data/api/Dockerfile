@@ -19,4 +19,6 @@ COPY --from=build --chown=10001:10001 /workspace/apps/property-data/api/build/li
 
 USER 10001:10001
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+    CMD timeout 3 bash -c '</dev/tcp/127.0.0.1/8080' || exit 1
 ENTRYPOINT ["java", "-jar", "/app/application.jar"]

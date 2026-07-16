@@ -51,10 +51,11 @@ export async function fetchParcelTrades(
   parcelId: number,
   complexId?: number | null,
   options: TradePageOptions = {},
+  signal?: AbortSignal,
 ): Promise<ParcelTrades> {
   const response = await fetch(
     resolveApiUrl(`${TRADE_PATH}/${parcelId}${tradeQuery(complexId, options)}`),
-    { method: 'GET' },
+    { method: 'GET', signal },
   );
 
   if (!response.ok) {
@@ -75,10 +76,11 @@ export async function fetchParcelTrades(
 export async function fetchComplexTrades(
   complexId: number,
   options: TradePageOptions = {},
+  signal?: AbortSignal,
 ): Promise<ParcelTrades> {
   const response = await fetch(
     resolveApiUrl(`${COMPLEX_PATH}/${complexId}/trades${tradeQuery(null, options)}`),
-    { method: 'GET' },
+    { method: 'GET', signal },
   );
 
   if (!response.ok) {

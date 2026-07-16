@@ -23,17 +23,21 @@ const COMPLEX_PATH = '/api/v1/complex';
 export async function fetchParcelTradeTrend(
   parcelId: number,
   complexId?: number | null,
+  signal?: AbortSignal,
 ): Promise<TradeTrendPoint[]> {
   const query = complexId == null ? '' : `?complexId=${encodeURIComponent(complexId)}`;
-  return fetchTrend(`${TRADE_PATH}/${parcelId}/trend${query}`);
+  return fetchTrend(`${TRADE_PATH}/${parcelId}/trend${query}`, signal);
 }
 
-export async function fetchComplexTradeTrend(complexId: number): Promise<TradeTrendPoint[]> {
-  return fetchTrend(`${COMPLEX_PATH}/${complexId}/trade-trend`);
+export async function fetchComplexTradeTrend(
+  complexId: number,
+  signal?: AbortSignal,
+): Promise<TradeTrendPoint[]> {
+  return fetchTrend(`${COMPLEX_PATH}/${complexId}/trade-trend`, signal);
 }
 
-async function fetchTrend(path: string): Promise<TradeTrendPoint[]> {
-  const response = await fetch(resolveApiUrl(path), { method: 'GET' });
+async function fetchTrend(path: string, signal?: AbortSignal): Promise<TradeTrendPoint[]> {
+  const response = await fetch(resolveApiUrl(path), { method: 'GET', signal });
 
   if (!response.ok) {
     const detail = await readProblemDetail(response);

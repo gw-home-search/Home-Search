@@ -27,9 +27,13 @@ type ParcelComplexSummaryResponse = {
 
 const DETAIL_PATH = '/api/v1/detail';
 
-export async function fetchParcelComplexes(parcelId: number): Promise<ParcelComplexSummary[]> {
+export async function fetchParcelComplexes(
+  parcelId: number,
+  signal?: AbortSignal,
+): Promise<ParcelComplexSummary[]> {
   const response = await fetch(resolveApiUrl(`${DETAIL_PATH}/${parcelId}/complexes`), {
     method: 'GET',
+    signal,
   });
 
   if (!response.ok) {

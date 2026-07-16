@@ -114,6 +114,8 @@ export function MapApp({
           onRegionSelect={region.handleRegionSelect}
           onRegionTrailSelect={region.handleRegionTrailSelect}
           onRetryDetail={detail.retryDetail}
+          onRetryTrades={detail.retryTrades}
+          onRetryTrend={detail.retryTrend}
           onFavoriteToggle={favorite.onFavoriteToggle}
           onRetryFavorite={favorite.onRetryFavorite}
           onRetryRegion={region.retryRegion}
@@ -137,7 +139,11 @@ export function MapApp({
           selectedComplex={detail.selectedComplex}
           sidebarMode={sidebarMode}
           tradeRows={detail.tradeRows}
+          tradeError={detail.tradeError}
+          tradeState={detail.tradeState}
           tradeTrend={detail.tradeTrend}
+          trendError={detail.trendError}
+          trendState={detail.trendState}
         />
 
         <div className="map-column" data-layout-region="map-column">

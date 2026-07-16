@@ -1235,12 +1235,9 @@ describe('App map-first shell 화면', () => {
     );
     expect(rootElement.querySelector('[aria-label="단지 상세 패널"]')).not.toBeNull();
     expect(rootElement.textContent).toContain('Sample complex name');
-    const emptyChartSection = rootElement.querySelector<HTMLElement>(
-      '[aria-label="거래가 차트"]',
-    );
-
-    expect(emptyChartSection).not.toBeNull();
-    expect(emptyChartSection?.textContent).toContain('표시할 거래가 없습니다');
+    expect(rootElement.textContent).toContain('Sample complex name');
+    expect(rootElement.textContent).toContain('시세를 불러오지 못했어요');
+    expect(rootElement.querySelector('[data-detail-section="trade-history"]')).not.toBeNull();
 
     unmount(root);
   });

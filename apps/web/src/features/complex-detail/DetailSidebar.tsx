@@ -28,6 +28,8 @@ type DetailSidebarProps = {
   onClose?: () => void;
   onComplexSelect: (complex: ParcelComplexSummary | RegionComplexSummary) => void;
   onRetryDetail: () => void;
+  onRetryTrades?: () => void;
+  onRetryTrend?: () => void;
   onLoadMoreTrades: () => void;
   onFavoriteToggle?: (trigger?: HTMLElement) => void;
   onRetryFavorite?: () => void;
@@ -35,6 +37,10 @@ type DetailSidebarProps = {
   parcelTrades: ParcelTrades | null;
   tradeTrend: TradeTrendPoint[];
   tradeRows: TradeItem[];
+  tradeError?: string | null;
+  tradeState?: DetailRequestState;
+  trendError?: string | null;
+  trendState?: DetailRequestState;
   selection: ComplexSelection;
 };
 
@@ -54,6 +60,8 @@ export function DetailSidebar({
   onClose = onBack,
   onComplexSelect,
   onRetryDetail,
+  onRetryTrades = onRetryDetail,
+  onRetryTrend = onRetryDetail,
   onLoadMoreTrades,
   onFavoriteToggle = () => undefined,
   onRetryFavorite = () => undefined,
@@ -61,6 +69,10 @@ export function DetailSidebar({
   parcelTrades,
   tradeTrend,
   tradeRows,
+  tradeError = null,
+  tradeState = 'ready',
+  trendError = null,
+  trendState = 'ready',
   selection,
 }: DetailSidebarProps) {
   const [mobileTab, setMobileTab] = useState<DetailMobileTab>('info');
@@ -203,7 +215,21 @@ export function DetailSidebar({
           </section>
 
           <div className="detail-tab-panel" data-detail-order="trend" data-mobile-tab-panel="trend" data-mobile-tab-active={mobileTab === 'trend' ? 'true' : 'false'}>
-            {shouldRenderTradeChart ? (
+            <RequestStateNotice
+              state={trendState}
+              loadingMessage="시세를 불러오는 중"
+              emptyMessage="표시할 시세가 없습니다"
+              errorMessage="시세를 불러오지 못했어요"
+              technicalError={trendError}
+              onRetry={onRetryTrend}
+            />
+            {shouldRenderTradeChart && trendState === 'ready' && tradeTrend.length === 0 ? (
+              <section className="trade-chart" aria-label="거래가 차트" data-detail-section="trade-chart">
+                <div className="trade-section-header"><h3>실거래가 흐름</h3></div>
+                <p className="trade-chart-empty">표시할 거래가 없습니다</p>
+              </section>
+            ) : null}
+            {shouldRenderTradeChart && trendState === 'ready' && tradeTrend.length > 0 ? (
               <Suspense fallback={<TradeChartFallback />}>
                 <TradeTrendChart trend={tradeTrend} />
               </Suspense>
@@ -215,6 +241,14 @@ export function DetailSidebar({
             data-mobile-tab-panel="trades"
             data-mobile-tab-active={mobileTab === 'trades' ? 'true' : 'false'}
           >
+            <RequestStateNotice
+              state={tradeState}
+              loadingMessage="거래를 불러오는 중"
+              emptyMessage="표시할 거래가 없습니다"
+              errorMessage="거래를 불러오지 못했어요"
+              technicalError={tradeError}
+              onRetry={onRetryTrades}
+            />
             <TradeList
               rows={tradeRows}
               totalElements={parcelTrades?.totalElements ?? 0}

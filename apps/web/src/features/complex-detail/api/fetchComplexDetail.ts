@@ -83,9 +83,11 @@ const COMPLEX_PATH = '/api/v1/complex';
 export async function fetchComplexDetail(
   parcelId: number,
   complexId?: number | null,
+  signal?: AbortSignal,
 ): Promise<ComplexDetail> {
   const response = await fetch(resolveApiUrl(scopedPath(`${DETAIL_PATH}/${parcelId}`, complexId)), {
     method: 'GET',
+    signal,
   });
 
   if (!response.ok) {
@@ -103,9 +105,12 @@ export async function fetchComplexDetail(
   return normalizeComplexDetail(payload);
 }
 
-export async function fetchComplexDetailByComplexId(complexId: number): Promise<ComplexDetail> {
+export async function fetchComplexDetailByComplexId(
+  complexId: number,
+  signal?: AbortSignal,
+): Promise<ComplexDetail> {
   const response = await fetch(resolveApiUrl(`${COMPLEX_PATH}/${complexId}`), {
-    method: 'GET',
+    method: 'GET', signal,
   });
 
   if (!response.ok) {

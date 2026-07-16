@@ -53,6 +53,15 @@ if [[ "$ready" != "true" ]]; then
     exit 1
 fi
 
+for actuator_path in /actuator /actuator/health /actuator/prometheus; do
+    actuator_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+        --max-time 5 "http://127.0.0.1:${host_port}${actuator_path}")"
+    if [[ "$actuator_status" != "404" ]]; then
+        echo "상태: Fail - public gateway ${actuator_path}는 404여야 합니다: ${actuator_status}" >&2
+        exit 1
+    fi
+done
+
 burst_codes="$(seq 1 60 | xargs -I{} -P20 curl --silent --show-error \
     --output /dev/null --write-out '%{http_code}\n' --max-time 5 \
     --header 'Content-Type: application/json' --data "$region_request" "$region_endpoint")"
@@ -101,4 +110,4 @@ if [[ "$recovered_status" != "200" ]]; then
     exit 1
 fi
 
-echo "상태: Pass - map bbox rate limit, ProblemDetail, OPTIONS 예외, cooldown 복구를 확인했습니다."
+echo "상태: Pass - actuator 차단, 정상 API, rate limit, ProblemDetail, OPTIONS 예외, cooldown 복구를 확인했습니다."

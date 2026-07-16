@@ -87,6 +87,15 @@ class LocalRuntimeStackConfigurationTest {
     }
 
     @Test
+    @DisplayName("local Redis host port는 loopback interface에만 binding한다")
+    void localRedisPortIsBoundToLoopbackOnly() throws IOException {
+        String compose = Files.readString(LOCAL_COMPOSE);
+
+        assertThat(compose).contains("127.0.0.1:${HOME_SEARCH_REDIS_PORT:-16379}:6379");
+        assertThat(compose).doesNotContain("- \"${HOME_SEARCH_REDIS_PORT:-16379}:6379\"");
+    }
+
+    @Test
     @DisplayName("local compose stack은 Prometheus가 API actuator endpoint를 scrape하도록 연결한다")
     void localComposeStackWiresPrometheusScrapeConfig() throws IOException {
         assertThat(LOCAL_PROMETHEUS).exists();

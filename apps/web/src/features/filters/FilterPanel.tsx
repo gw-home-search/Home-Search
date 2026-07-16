@@ -107,7 +107,7 @@ export function FilterPanel({
   function applyDraft(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     if (!definition) return;
-    const parsed = parseAndValidateRange(draftMinRef.current, draftMaxRef.current);
+    const parsed = parseAndValidateRange(draftMinRef.current, draftMaxRef.current, definition.step);
     if ('error' in parsed) {
       setValidationError(parsed.error);
       return;
@@ -260,11 +260,14 @@ export function countActiveFilterGroups(filters: CompleteFilters): number {
   return FILTERS.filter((filter) => hasRange(filters, filter)).length;
 }
 
-function parseAndValidateRange(minValue: string, maxValue: string): { min: number | null; max: number | null } | { error: string } {
+function parseAndValidateRange(minValue: string, maxValue: string, step: number): { min: number | null; max: number | null } | { error: string } {
   const min = numericDraft(minValue);
   const max = numericDraft(maxValue);
   if (min === 'invalid' || max === 'invalid') return { error: '올바른 숫자를 입력해주세요' };
   if ((min != null && min < 0) || (max != null && max < 0)) return { error: '0 이상을 입력해주세요' };
+  if (step === 1 && ((min != null && !Number.isInteger(min)) || (max != null && !Number.isInteger(max)))) {
+    return { error: '정수로 입력해주세요' };
+  }
   if (min != null && max != null && min > max) return { error: '최소값은 최대값보다 클 수 없습니다' };
   return { min, max };
 }

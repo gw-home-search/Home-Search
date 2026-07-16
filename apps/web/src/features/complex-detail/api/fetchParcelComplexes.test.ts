@@ -12,14 +12,14 @@ describe('fetchParcelComplexes API 어댑터', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse([
         {
-          complexId: '501',
+          complexId: 501,
           complexName: 'Tower A',
-          parcelId: '1001',
-          latitude: '37.5123',
-          longitude: '127.0456',
+          parcelId: 1001,
+          latitude: 37.5123,
+          longitude: 127.0456,
           address: 'Sample address',
-          dongCnt: '5',
-          unitCnt: '320',
+          dongCnt: 5,
+          unitCnt: 320,
           useDate: '2015-03-20',
         },
       ]),

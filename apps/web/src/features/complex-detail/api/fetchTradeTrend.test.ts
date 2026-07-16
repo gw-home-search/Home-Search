@@ -11,7 +11,7 @@ describe('fetchTradeTrend API 어댑터', () => {
   it('parcel 월별 추세 배열을 파싱한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse([
-        { month: '2025-10', avgAmount: '100000', count: '1', minAmount: '100000', maxAmount: '100000' },
+        { month: '2025-10', avgAmount: 100000, count: 1, minAmount: 100000, maxAmount: 100000 },
         { month: '2025-12', avgAmount: 127500, count: 2, minAmount: 125000, maxAmount: 130000 },
       ]),
     );

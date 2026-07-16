@@ -75,16 +75,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function toRequiredNumber(value: unknown, field: string): number {
-  if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new Error(`Invalid public API trade trend response: ${field} must be a number`);
   }
 
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid public API trade trend response: ${field} must be a number`);
-  }
-
-  return parsed;
+  return value;
 }
 
 function toRequiredString(value: unknown, field: string): string {

@@ -12,7 +12,7 @@ describe('fetchRegions API 어댑터', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse([
         {
-          id: '1',
+          id: 1,
           name: 'Seoul',
         },
       ]),
@@ -35,13 +35,13 @@ describe('fetchRegions API 어댑터', () => {
   it('documented region detail과 child region을 가져온다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
-        id: '1',
+        id: 1,
         name: 'Seoul',
-        latitude: '37.5663',
-        longitude: '126.978',
+        latitude: 37.5663,
+        longitude: 126.978,
         children: [
           {
-            id: '11',
+            id: 11,
             name: 'Gangnam-gu',
           },
         ],
@@ -106,14 +106,14 @@ describe('fetchRegions API 어댑터', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse([
         {
-          complexId: '701',
+          complexId: 701,
           complexName: 'Region Complex',
-          parcelId: '2001',
-          latitude: '37.5123',
-          longitude: '127.0456',
+          parcelId: 2001,
+          latitude: 37.5123,
+          longitude: 127.0456,
           address: 'Region address',
-          dongCnt: '8',
-          unitCnt: '740',
+          dongCnt: 8,
+          unitCnt: 740,
           useDate: '2018-05-01',
         },
       ]),

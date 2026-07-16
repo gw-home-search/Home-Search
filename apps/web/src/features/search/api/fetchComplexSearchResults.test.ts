@@ -12,11 +12,11 @@ describe('fetchComplexSearchResults API 어댑터', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse([
         {
-          complexId: '501',
+          complexId: 501,
           complexName: 'Sample Apartment',
-          parcelId: '1001',
-          latitude: '37.5123',
-          longitude: '127.0456',
+          parcelId: 1001,
+          latitude: 37.5123,
+          longitude: 127.0456,
           address: 'Sample address',
         },
       ]),
@@ -124,6 +124,16 @@ describe('fetchComplexSearchResults API 어댑터', () => {
 
     await expect(fetchComplexSearchResults('Sample')).rejects.toThrow(
       'Invalid public API complex search response: expected an array',
+    );
+  });
+
+  it('계약에 없는 numeric response string을 reject한다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([
+      { complexId: '501', complexName: 'Sample', parcelId: 1001 },
+    ])));
+
+    await expect(fetchComplexSearchResults('Sample')).rejects.toThrow(
+      'complexId must be a number',
     );
   });
 

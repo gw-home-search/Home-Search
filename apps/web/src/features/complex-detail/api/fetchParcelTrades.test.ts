@@ -11,22 +11,22 @@ describe('fetchParcelTrades API 어댑터', () => {
   it('선택한 parcel의 documented trade page를 가져온다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
-        parcelId: '1001',
-        complexId: '501',
+        parcelId: 1001,
+        complexId: 501,
         content: [
           {
-            tradeId: '9001',
+            tradeId: 9001,
             dealDate: '2025-12-01',
-            exclArea: '84.93',
-            dealAmount: '125000',
+            exclArea: 84.93,
+            dealAmount: 125000,
             aptDong: '101',
-            floor: '12',
+            floor: 12,
           },
         ],
-        page: '0',
-        size: '20',
-        totalElements: '1',
-        totalPages: '1',
+        page: 0,
+        size: 20,
+        totalElements: 1,
+        totalPages: 1,
       }),
     );
     vi.stubGlobal('fetch', fetchMock);

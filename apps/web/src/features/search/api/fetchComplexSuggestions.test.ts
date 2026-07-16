@@ -12,9 +12,9 @@ describe('fetchComplexSuggestions API 어댑터', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse([
         {
-          complexId: '501',
+          complexId: 501,
           complexName: 'Sample Apartment',
-          parcelId: '1001',
+          parcelId: 1001,
           address: 'Sample address',
         },
       ]),

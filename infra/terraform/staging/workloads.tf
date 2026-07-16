@@ -253,6 +253,7 @@ resource "aws_ecs_task_definition" "service" {
   requires_compatibilities = ["FARGATE"]
   execution_role_arn       = aws_iam_role.task_execution.arn
   task_role_arn            = aws_iam_role.runtime_task.arn
+  skip_destroy             = true
   runtime_platform {
     cpu_architecture        = "X86_64"
     operating_system_family = "LINUX"
@@ -485,6 +486,7 @@ resource "aws_ecs_task_definition" "one_shot" {
   requires_compatibilities = ["FARGATE"]
   execution_role_arn       = aws_iam_role.task_execution.arn
   task_role_arn            = each.value.role
+  skip_destroy             = true
   runtime_platform {
     cpu_architecture        = "X86_64"
     operating_system_family = "LINUX"

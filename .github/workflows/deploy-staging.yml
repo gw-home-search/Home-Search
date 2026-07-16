@@ -1,0 +1,196 @@
+name: Deploy staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Published vMAJOR.MINOR.PATCH release tag"
+        required: true
+        type: string
+      enable_ml:
+        description: "Start the optional ML service after model upload"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: staging-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: migrate-deploy-verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: staging
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.release_tag }}
+
+      - name: Resolve successful release evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -Eeuo pipefail
+          [[ "${RELEASE_TAG}" =~ ^v(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)$ ]]
+          release_sha="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          run_id="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow release-images.yml \
+            --commit "${release_sha}" --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          [[ -n "${run_id}" ]]
+          mkdir -p deployment-evidence release-source
+          gh run download "${run_id}" --repo "${GITHUB_REPOSITORY}" \
+            --name "release-evidence-${RELEASE_TAG}" --dir release-source
+          manifest="$(find release-source -type f -name release-manifest.json -print -quit)"
+          [[ -n "${manifest}" ]]
+          cp "${manifest}" deployment-evidence/release-manifest.json
+          jq -e --arg tag "${RELEASE_TAG}" --arg sha "${release_sha}" \
+            '.tag == $tag and .commit_sha == $sha and (.images | length == 14)' \
+            deployment-evidence/release-manifest.json >/dev/null
+          echo "RELEASE_SHA=${release_sha}" >>"${GITHUB_ENV}"
+
+      - name: Configure short-lived AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.2
+        with:
+          role-to-assume: ${{ vars.AWS_STAGING_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
+          mask-aws-account-id: true
+          unset-current-credentials: true
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Initialize reviewed release variables and remote state
+        env:
+          ADMIN_ALLOWED_CIDRS: ${{ vars.STAGING_ADMIN_ALLOWED_CIDRS_JSON }}
+          PUBLIC_CERTIFICATE_ARN: ${{ vars.STAGING_PUBLIC_CERTIFICATE_ARN }}
+          ADMIN_CERTIFICATE_ARN: ${{ vars.STAGING_ADMIN_CERTIFICATE_ARN }}
+          PUBLIC_ORIGIN: ${{ vars.STAGING_PUBLIC_ORIGIN }}
+          ADMIN_ORIGIN: ${{ vars.STAGING_ADMIN_ORIGIN }}
+          ENABLE_ML: ${{ inputs.enable_ml }}
+          STATE_BUCKET: ${{ vars.TERRAFORM_STATE_BUCKET }}
+          STATE_KEY: ${{ vars.TERRAFORM_STAGING_STATE_KEY }}
+          STATE_KMS_KEY_ARN: ${{ vars.TERRAFORM_STATE_KMS_KEY_ARN }}
+        run: |
+          set -Eeuo pipefail
+          jq -e 'type == "array" and length > 0' <<<"${ADMIN_ALLOWED_CIDRS}" >/dev/null
+          image_digests="$(jq '.images | map_values(.digest)' deployment-evidence/release-manifest.json)"
+          jq -n \
+            --argjson image_digests "${image_digests}" \
+            --argjson admin_allowed_cidrs "${ADMIN_ALLOWED_CIDRS}" \
+            --arg public_certificate_arn "${PUBLIC_CERTIFICATE_ARN}" \
+            --arg admin_certificate_arn "${ADMIN_CERTIFICATE_ARN}" \
+            --arg public_origin "${PUBLIC_ORIGIN}" --arg admin_origin "${ADMIN_ORIGIN}" \
+            --argjson enable_ml "${ENABLE_ML}" \
+            '{image_digests:$image_digests,admin_allowed_cidrs:$admin_allowed_cidrs,
+              public_certificate_arn:$public_certificate_arn,admin_certificate_arn:$admin_certificate_arn,
+              public_origin:$public_origin,admin_origin:$admin_origin,enable_ml:$enable_ml,
+              enable_services:true,enable_backup_schedules:true}' \
+            >infra/terraform/staging/deployment.auto.tfvars.json
+          terraform -chdir=infra/terraform/staging init -input=false \
+            -backend-config="bucket=${STATE_BUCKET}" -backend-config="key=${STATE_KEY}" \
+            -backend-config="region=${AWS_REGION}" -backend-config="encrypt=true" \
+            -backend-config="kms_key_id=${STATE_KMS_KEY_ARN}" -backend-config="use_lockfile=true"
+
+      - name: Back up current databases before migration
+        id: backup
+        run: |
+          set -Eeuo pipefail
+          network="$(terraform -chdir=infra/terraform/staging output -json network)"
+          release="$(terraform -chdir=infra/terraform/staging output -json workload_release)"
+          cluster="$(jq -r '.cluster_arn' <<<"${release}")"
+          subnets="$(jq -c '.application_subnet_ids' <<<"${network}")"
+          security_groups="$(jq -c '[.task_security_group_ids.ops]' <<<"${network}")"
+          task_definition="$(jq -r '.one_shot_task_arns.backup' <<<"${release}")"
+          task_arn="$(infra/deploy/run-ecs-task.sh "${cluster}" "${task_definition}" "${subnets}" "${security_groups}")"
+          jq -n --arg task_arn "${task_arn}" --arg verified_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{status:"pass",task_arn:$task_arn,checksum_verified_by_task:true,verified_at:$verified_at}' \
+            >deployment-evidence/pre-migration-backup.json
+
+      - name: Register release one-shot tasks without updating services
+        run: |
+          terraform -chdir=infra/terraform/staging plan -input=false \
+            -target='aws_ecs_task_definition.one_shot' \
+            -var-file=deployment.auto.tfvars.json -out=one-shot.tfplan
+          terraform -chdir=infra/terraform/staging show -json one-shot.tfplan \
+            >deployment-evidence/one-shot-terraform-plan.json
+          infra/deploy/verify-terraform-plan.sh deployment-evidence/one-shot-terraform-plan.json one-shot
+          terraform -chdir=infra/terraform/staging apply -input=false one-shot.tfplan
+
+      - name: Run migrations and post-migration grants
+        id: migrations
+        run: |
+          set -Eeuo pipefail
+          network="$(terraform -chdir=infra/terraform/staging output -json network)"
+          release="$(terraform -chdir=infra/terraform/staging output -json workload_release)"
+          cluster="$(jq -r '.cluster_arn' <<<"${release}")"
+          subnets="$(jq -c '.application_subnet_ids' <<<"${network}")"
+          security_groups="$(jq -c '[.task_security_group_ids.ops]' <<<"${network}")"
+          evidence='{}'
+          for task in property-flyway admin-migration user-flyway source-data-migration runtime-grants; do
+            task_definition="$(jq -r --arg task "${task}" '.one_shot_task_arns[$task]' <<<"${release}")"
+            task_arn="$(infra/deploy/run-ecs-task.sh "${cluster}" "${task_definition}" "${subnets}" "${security_groups}")"
+            evidence="$(jq --arg task "${task}" --arg task_arn "${task_arn}" '. + {($task):$task_arn}' <<<"${evidence}")"
+          done
+          jq . <<<"${evidence}" >deployment-evidence/migration-tasks.json
+          infra/deploy/migration-checksums.sh >deployment-evidence/migration-checksums.json
+
+      - name: Plan and gate service deployment changes
+        run: |
+          set -Eeuo pipefail
+          terraform -chdir=infra/terraform/staging plan -input=false \
+            -var-file=deployment.auto.tfvars.json -out=release.tfplan
+          terraform -chdir=infra/terraform/staging show -json release.tfplan \
+            >deployment-evidence/terraform-plan.json
+          infra/deploy/verify-terraform-plan.sh deployment-evidence/terraform-plan.json
+          cluster="$(terraform -chdir=infra/terraform/staging output -json workload_release | jq -r '.cluster_arn')"
+          infra/deploy/capture-service-state.sh "${cluster}" deployment-evidence/previous-release.json
+
+      - name: Apply, stabilize, and smoke test services
+        id: service_deploy
+        env:
+          PUBLIC_ORIGIN: ${{ vars.STAGING_PUBLIC_ORIGIN }}
+          ADMIN_ORIGIN: ${{ vars.STAGING_ADMIN_ORIGIN }}
+        run: |
+          set -Eeuo pipefail
+          terraform -chdir=infra/terraform/staging apply -input=false release.tfplan
+          release="$(terraform -chdir=infra/terraform/staging output -json workload_release)"
+          cluster="$(jq -r '.cluster_arn' <<<"${release}")"
+          mapfile -t services < <(jq -r '.service_names[]' <<<"${release}")
+          (( ${#services[@]} > 0 ))
+          aws ecs wait services-stable --cluster "${cluster}" --services "${services[@]}"
+          infra/deploy/staging-smoke.sh "${PUBLIC_ORIGIN}" "${ADMIN_ORIGIN}" deployment-evidence/smoke.json
+          jq -n --argjson release "$(cat deployment-evidence/release-manifest.json)" \
+            --argjson tasks "$(jq '.service_task_arns + .one_shot_task_arns' <<<"${release}")" \
+            --argjson migrations "$(cat deployment-evidence/migration-checksums.json)" \
+            --argjson migration_tasks "$(cat deployment-evidence/migration-tasks.json)" \
+            --argjson backup "$(cat deployment-evidence/pre-migration-backup.json)" \
+            --argjson previous "$(cat deployment-evidence/previous-release.json)" \
+            --argjson smoke "$(cat deployment-evidence/smoke.json)" \
+            --arg deployed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '$release + {deployment:{environment:"staging",deployed_at:$deployed_at,
+              task_definition_arns:$tasks,migration_checksums:$migrations,migration_tasks:$migration_tasks,
+              pre_migration_backup:$backup,previous_release:$previous,smoke:$smoke,automatic_db_down_migration:false}}' \
+            >deployment-evidence/staging-release-manifest.json
+
+      - name: Roll back services to previous task definitions
+        if: ${{ failure() && steps.migrations.outcome == 'success' && steps.service_deploy.outcome == 'failure' }}
+        run: infra/deploy/rollback-services.sh deployment-evidence/previous-release.json
+
+      - name: Upload deployment and rollback evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-deployment-${{ inputs.release_tag }}-${{ github.run_attempt }}
+          path: deployment-evidence/
+          if-no-files-found: error
+          retention-days: 90

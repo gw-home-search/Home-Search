@@ -74,4 +74,12 @@ run "digest_pinned_private_rollback_capable_workloads" {
     ])
     error_message = "Secret and database bootstraps must use distinct roles and explicit idempotent modes."
   }
+
+  assert {
+    condition = alltrue(concat(
+      [for task in aws_ecs_task_definition.service : task.skip_destroy],
+      [for task in aws_ecs_task_definition.one_shot : task.skip_destroy],
+    ))
+    error_message = "Previous task revisions must remain registered for deployment rollback."
+  }
 }

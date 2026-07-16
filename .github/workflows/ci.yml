@@ -145,6 +145,7 @@ jobs:
         run: |
           .github/scripts/test-verify-release-eligibility.sh
           infra/release/test-create-release-manifest.sh
+          infra/deploy/test-deploy-scripts.sh
 
   ml-image-test:
     name: ml-image-test

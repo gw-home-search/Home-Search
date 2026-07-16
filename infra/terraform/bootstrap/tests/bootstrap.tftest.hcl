@@ -64,4 +64,13 @@ run "secure_remote_state_and_exact_oidc_trust" {
     ])
     error_message = "Release publishing requires a distinct tag-only role bound to the exact release workflow."
   }
+  assert {
+    condition = one([
+      for statement in jsondecode(aws_iam_role_policy.github_staging_deployment.policy).Statement : statement.Resource
+      if statement.Sid == "DeployStagingServices"
+      ]) == [
+      "arn:aws:ecs:ap-northeast-2:123456789012:service/home-search-staging/*",
+    ]
+    error_message = "The staging deployment role must not update ECS services outside the Home Search staging cluster."
+  }
 }

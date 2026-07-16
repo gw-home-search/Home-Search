@@ -159,6 +159,101 @@ resource "aws_iam_role_policy" "terraform_state_access" {
   policy = data.aws_iam_policy_document.terraform_state_access.json
 }
 
+resource "aws_iam_role_policy" "github_staging_deployment" {
+  name = "staging-ecs-release-deployment"
+  role = aws_iam_role.github_staging.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadStagingPlanState"
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:Describe*", "cloudwatch:Get*", "cloudwatch:List*",
+          "ec2:Describe*", "ecr:Describe*", "ecr:GetLifecyclePolicy",
+          "ecs:Describe*", "ecs:List*", "elasticache:Describe*",
+          "elasticfilesystem:Describe*", "elasticloadbalancing:Describe*",
+          "kms:DescribeKey", "kms:ListAliases", "logs:Describe*", "rds:Describe*",
+          "scheduler:GetSchedule", "scheduler:GetScheduleGroup", "scheduler:List*",
+          "secretsmanager:DescribeSecret", "servicediscovery:Get*", "servicediscovery:List*",
+          "tag:GetResources",
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = { "aws:RequestedRegion" = var.aws_region }
+        }
+      },
+      {
+        Sid      = "RegisterStagingTaskDefinitions"
+        Effect   = "Allow"
+        Action   = ["ecs:RegisterTaskDefinition"]
+        Resource = "*"
+        Condition = {
+          StringEquals = { "aws:RequestedRegion" = var.aws_region }
+        }
+      },
+      {
+        Sid    = "RunStagingTaskDefinitions"
+        Effect = "Allow"
+        Action = ["ecs:RunTask", "ecs:TagResource", "ecs:UntagResource"]
+        Resource = [
+          "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:task-definition/home-search-staging-*:*",
+        ]
+      },
+      {
+        Sid    = "DeployStagingServices"
+        Effect = "Allow"
+        Action = ["ecs:CreateService", "ecs:TagResource", "ecs:UntagResource", "ecs:UpdateService"]
+        Resource = [
+          "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:service/home-search-staging/*",
+        ]
+      },
+      {
+        Sid      = "EnableReviewedBackupSchedules"
+        Effect   = "Allow"
+        Action   = ["scheduler:UpdateSchedule"]
+        Resource = "arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule/home-search-staging-database-backup/*"
+      },
+      {
+        Sid    = "PassStagingEcsTaskRolesOnly"
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        Resource = [
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-task-execution",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-runtime-task",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-secret-bootstrap",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-database-bootstrap",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-backup-task",
+        ]
+        Condition = {
+          StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
+        }
+      },
+      {
+        Sid      = "PassStagingSchedulerRoleOnly"
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-backup-scheduler"
+        Condition = {
+          StringEquals = { "iam:PassedToService" = "scheduler.amazonaws.com" }
+        }
+      },
+      {
+        Sid      = "ReadStagingTaskRoles"
+        Effect   = "Allow"
+        Action   = ["iam:GetRole", "iam:GetRolePolicy", "iam:ListAttachedRolePolicies", "iam:ListRolePolicies"]
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-*"
+      },
+      {
+        Sid      = "ReadStagingBackupBucketConfiguration"
+        Effect   = "Allow"
+        Action   = ["s3:Get*", "s3:ListBucket"]
+        Resource = "arn:aws:s3:::home-search-staging-database-backup-${data.aws_caller_identity.current.account_id}"
+      },
+    ]
+  })
+}
+
 locals {
   github_release_oidc_string_equals = {
     "token.actions.githubusercontent.com:aud"         = ["sts.amazonaws.com"]
@@ -221,8 +316,8 @@ resource "aws_iam_role_policy" "github_release" {
         Effect = "Allow"
         Action = [
           "ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:CompleteLayerUpload",
-          "ecr:DescribeImages", "ecr:DescribeImageScanFindings", "ecr:GetDownloadUrlForLayer",
-          "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:StartImageScan", "ecr:UploadLayerPart",
+          "ecr:DescribeImages", "ecr:GetDownloadUrlForLayer", "ecr:InitiateLayerUpload",
+          "ecr:PutImage", "ecr:UploadLayerPart",
         ]
         Resource = "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/home-search/*"
       },

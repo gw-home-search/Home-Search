@@ -12,9 +12,9 @@ describe('fetchComplexSuggestions API 어댑터', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse([
         {
-          complexId: '501',
+          complexId: 501,
           complexName: 'Sample Apartment',
-          parcelId: '1001',
+          parcelId: 1001,
           address: 'Sample address',
         },
       ]),
@@ -42,6 +42,19 @@ describe('fetchComplexSuggestions API 어댑터', () => {
 
     await expect(fetchComplexSuggestions(' ')).resolves.toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('호출자가 전달한 AbortSignal을 fetch에 전달한다', async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchComplexSuggestions('Sample', controller.signal);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ signal: controller.signal }),
+    );
   });
 
   it('주소가 없는 suggestion의 null address를 보존한다', async () => {

@@ -21,7 +21,10 @@ type ComplexSearchResultResponse = {
 
 const SEARCH_COMPLEXES_PATH = '/api/v1/search/complexes';
 
-export async function fetchComplexSearchResults(query: string): Promise<ComplexSearchResult[]> {
+export async function fetchComplexSearchResults(
+  query: string,
+  signal?: AbortSignal,
+): Promise<ComplexSearchResult[]> {
   const trimmedQuery = query.trim();
   if (trimmedQuery.length === 0) {
     return [];
@@ -31,6 +34,7 @@ export async function fetchComplexSearchResults(query: string): Promise<ComplexS
     resolveApiUrl(`${SEARCH_COMPLEXES_PATH}?${new URLSearchParams({ q: trimmedQuery })}`),
     {
       method: 'GET',
+      signal,
     },
   );
 
@@ -61,16 +65,11 @@ function normalizeComplexSearchResult(result: ComplexSearchResultResponse): Comp
 }
 
 function toRequiredNumber(value: unknown, field: string): number {
-  if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new Error(`Invalid public API complex search response: ${field} must be a number`);
   }
 
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid public API complex search response: ${field} must be a number`);
-  }
-
-  return parsed;
+  return value;
 }
 
 function toNullableNumber(value: unknown, field: string): number | null {

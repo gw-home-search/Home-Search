@@ -50,7 +50,7 @@ describe('공개 지도 디자인 시스템 계약', () => {
 
   it('모바일의 숨은 시세 tab에서는 폭 0 차트를 미리 그리지 않는다', () => {
     expect(detailSidebar).toContain("useMediaQuery('(max-width: 720px)')");
-    expect(detailSidebar).toContain('{shouldRenderTradeChart ? (');
+    expect(detailSidebar).toContain("shouldRenderTradeChart && trendState === 'ready'");
     expect(tradeTrendChart).toContain('<ResponsiveContainer width="100%" height="100%" minWidth={0}>');
   });
 

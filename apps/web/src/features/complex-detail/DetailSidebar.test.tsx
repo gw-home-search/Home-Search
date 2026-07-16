@@ -16,6 +16,7 @@ describe('DetailSidebar 모바일 탭', () => {
 
   it('정보·시세·거래 tab은 aria-selected와 활성 section을 하나씩 전환한다', async () => {
     const host = document.createElement('div');
+    document.body.append(host);
     root = createRoot(host);
 
     await act(async () => {
@@ -87,7 +88,21 @@ describe('DetailSidebar 모바일 탭', () => {
     const tradeTab = host.querySelector<HTMLButtonElement>('button[role="tab"][aria-label="거래 보기"]');
     expect(tradeTab?.textContent).toBe('거래 1');
     expect(infoTab?.getAttribute('aria-selected')).toBe('true');
+    expect(infoTab?.id).toBe('detail-tab-info');
+    expect(infoTab?.getAttribute('aria-controls')).toBe('detail-tabpanel-info');
+    expect(infoTab?.tabIndex).toBe(0);
+    expect(host.querySelector('#detail-tabpanel-info')?.getAttribute('role')).toBe('tabpanel');
+    expect(host.querySelector('#detail-tabpanel-info')?.getAttribute('aria-labelledby')).toBe('detail-tab-info');
     expect(host.querySelectorAll('[data-mobile-tab-panel="info"][data-mobile-tab-active="true"]')).toHaveLength(2);
+
+    act(() => infoTab?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
+    const trendTab = host.querySelector<HTMLButtonElement>('#detail-tab-trend');
+    expect(trendTab?.getAttribute('aria-selected')).toBe('true');
+    expect(trendTab?.tabIndex).toBe(0);
+    expect(document.activeElement).toBe(trendTab);
+
+    act(() => trendTab?.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })));
+    expect(document.activeElement).toBe(tradeTab);
 
     act(() => tradeTab?.click());
 
@@ -115,5 +130,6 @@ describe('DetailSidebar 모바일 탭', () => {
     expect(host.querySelector('[data-trade-cell="amount"]')?.children).toHaveLength(1);
     expect(host.querySelector('[data-trade-cell="floor"] .trade-building')?.textContent).toBe('101동');
     expect(host.querySelector('[data-trade-cell="floor"] .trade-floor')?.textContent).toBe('12층');
+    host.remove();
   });
 });

@@ -27,10 +27,15 @@ export function useComplexSearch({
   const searchRequestSeq = useRef(0);
   const suggestionRequestSeq = useRef(0);
   const searchDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchAbortController = useRef<AbortController | null>(null);
+  const suggestionAbortController = useRef<AbortController | null>(null);
   const lastSearchQuery = useRef('');
-  const searchPending = useRef(false);
 
-  useEffect(() => () => clearSearchDebounceTimer(), []);
+  useEffect(() => () => {
+    clearSearchDebounceTimer();
+    searchAbortController.current?.abort();
+    suggestionAbortController.current?.abort();
+  }, []);
 
   function clearSearchDebounceTimer() {
     if (searchDebounceTimer.current != null) {
@@ -40,7 +45,7 @@ export function useComplexSearch({
   }
 
   function runComplexSearch(query: string) {
-    if (searchPending.current) return;
+    searchAbortController.current?.abort();
     const requestSeq = searchRequestSeq.current + 1;
     searchRequestSeq.current = requestSeq;
     setSearchError(null);
@@ -51,17 +56,17 @@ export function useComplexSearch({
       return;
     }
 
+    const controller = new AbortController();
+    searchAbortController.current = controller;
     lastSearchQuery.current = query;
-    searchPending.current = true;
     setSearchState('loading');
-    fetchComplexSearchResults(query)
+    fetchComplexSearchResults(query, controller.signal)
       .then((nextResults) => {
         if (requestSeq !== searchRequestSeq.current) {
           return;
         }
         setSearchResults(nextResults);
         setSearchState(nextResults.length === 0 ? 'empty' : 'ready');
-        searchPending.current = false;
       })
       .catch((error: unknown) => {
         if (requestSeq !== searchRequestSeq.current) {
@@ -70,7 +75,6 @@ export function useComplexSearch({
         setSearchResults([]);
         setSearchState('error');
         setSearchError(error instanceof Error ? error.message : '알 수 없는 검색 오류');
-        searchPending.current = false;
       });
   }
 
@@ -86,6 +90,7 @@ export function useComplexSearch({
     clearSearchDebounceTimer();
     const requestSeq = suggestionRequestSeq.current + 1;
     suggestionRequestSeq.current = requestSeq;
+    suggestionAbortController.current?.abort();
     const query = value.trim();
 
     if (query.length === 0) {
@@ -94,13 +99,15 @@ export function useComplexSearch({
       setSearchState('idle');
       setSearchError(null);
       searchRequestSeq.current += 1;
-      searchPending.current = false;
+      searchAbortController.current?.abort();
       return;
     }
 
+    const suggestionController = new AbortController();
+    suggestionAbortController.current = suggestionController;
     setSearchState('loading');
     setSearchError(null);
-    fetchComplexSuggestions(query)
+    fetchComplexSuggestions(query, suggestionController.signal)
       .then((nextSuggestions) => {
         if (requestSeq === suggestionRequestSeq.current) {
           setComplexSuggestions(nextSuggestions);

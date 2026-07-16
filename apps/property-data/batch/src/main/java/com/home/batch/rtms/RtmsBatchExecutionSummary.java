@@ -1,7 +1,7 @@
 package com.home.batch.rtms;
 
-import com.home.application.ingest.rtms.RtmsMonthlyRefreshRunStatus;
 import com.home.application.ingest.rtms.RtmsMonthlyRefreshRunSummary;
+import com.home.domain.ingest.run.RtmsMonthlyRefreshRunStatus;
 import java.util.List;
 
 public record RtmsBatchExecutionSummary(List<RtmsMonthlyRefreshRunSummary> runs, boolean regionSyncFailed) {

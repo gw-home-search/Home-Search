@@ -1,0 +1,84 @@
+name: Staging performance evidence
+
+on:
+  workflow_run:
+    workflows: ["Deploy staging"]
+    types: [completed]
+  schedule:
+    - cron: "0 18 * * 1"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: staging-performance
+  cancel-in-progress: false
+
+jobs:
+  k6-evidence:
+    name: k6-evidence-nonblocking
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Link latest successful staging release manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -Eeuo pipefail
+          if [[ -n "${SOURCE_RUN_ID}" ]]; then
+            run_id="${SOURCE_RUN_ID}"
+          else
+            run_id="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow deploy-staging.yml \
+              --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          fi
+          [[ -n "${run_id}" ]]
+          mkdir -p performance-evidence/deployment
+          gh run download "${run_id}" --repo "${GITHUB_REPOSITORY}" \
+            --pattern 'staging-deployment-*' --dir performance-evidence/deployment
+          manifest="$(find performance-evidence/deployment -type f -name staging-release-manifest.json -print -quit)"
+          [[ -n "${manifest}" ]]
+          cp "${manifest}" performance-evidence/staging-release-manifest.json
+
+      - name: Run map and prediction regression probes
+        id: k6
+        continue-on-error: true
+        env:
+          BASE_URL: ${{ vars.STAGING_PUBLIC_ORIGIN }}
+          MAP_BOUNDS_JSON: ${{ vars.STAGING_PERF_MAP_BOUNDS_JSON }}
+          READY_COMPLEX_ID: ${{ vars.STAGING_PERF_READY_COMPLEX_ID }}
+          MISS_COMPLEX_ID: ${{ vars.STAGING_PERF_MISS_COMPLEX_ID }}
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --volume "${GITHUB_WORKSPACE}:/work" --workdir /work \
+            --env BASE_URL --env MAP_BOUNDS_JSON --env READY_COMPLEX_ID --env MISS_COMPLEX_ID \
+            grafana/k6@sha256:a33a0cfdc4d2483d6b7a3a22e726a499ff2831a671a49239104cd34a9937523c \
+            run --out json=performance-evidence/k6-points.json performance/staging/map-prediction.js
+
+      - name: Record evidence-only baseline metadata
+        if: always()
+        env:
+          K6_OUTCOME: ${{ steps.k6.outcome }}
+        run: |
+          release_tag="$(jq -r '.tag' performance-evidence/staging-release-manifest.json)"
+          release_sha="$(jq -r '.commit_sha' performance-evidence/staging-release-manifest.json)"
+          jq -n --arg release_tag "${release_tag}" --arg release_sha "${release_sha}" \
+            --arg outcome "${K6_OUTCOME}" --arg measured_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{mode:"evidence-only",merge_gate:false,promotion_review_after_stable_runs:3,
+              release_tag:$release_tag,release_sha:$release_sha,k6_outcome:$outcome,measured_at:$measured_at,
+              cold_definition:"first request per VU; cache state is not forcibly cleared"}' \
+            >performance-evidence/metadata.json
+
+      - name: Upload performance evidence linked to release
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-performance-${{ github.run_id }}
+          path: performance-evidence/
+          if-no-files-found: error
+          retention-days: 90

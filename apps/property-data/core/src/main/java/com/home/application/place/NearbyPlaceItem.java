@@ -10,4 +10,10 @@ public record NearbyPlaceItem(
         String address,
         String roadAddress,
         String phone,
-        String placeUrl) {}
+        String placeUrl) {
+
+    public NearbyPlaceItem withDistanceMeters(int newDistanceMeters) {
+        return new NearbyPlaceItem(
+                placeId, name, categoryDetail, lat, lng, newDistanceMeters, address, roadAddress, phone, placeUrl);
+    }
+}

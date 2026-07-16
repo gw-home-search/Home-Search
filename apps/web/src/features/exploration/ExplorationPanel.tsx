@@ -69,7 +69,11 @@ type ExplorationPanelProps = {
   selectedComplex: ComplexSelection | null;
   sidebarMode: SidebarMode;
   tradeRows: TradeItem[];
+  tradeError: string | null;
+  tradeState: DetailRequestState;
   tradeTrend: TradeTrendPoint[];
+  trendError: string | null;
+  trendState: DetailRequestState;
   onCloseDetail: () => void;
   onDismissDetail: () => void;
   onCloseExploration: () => void;
@@ -80,6 +84,8 @@ type ExplorationPanelProps = {
   onRegionSelect: (region: RegionTrailItem) => void;
   onRegionTrailSelect: (region: RegionTrailItem, index: number) => void;
   onRetryDetail: () => void;
+  onRetryTrades: () => void;
+  onRetryTrend: () => void;
   onFavoriteToggle: (trigger?: HTMLElement) => void;
   onRetryFavorite: () => void;
   onRetryRegion: () => void;
@@ -114,7 +120,11 @@ export function ExplorationPanel({
   selectedComplex,
   sidebarMode,
   tradeRows,
+  tradeError,
+  tradeState,
   tradeTrend,
+  trendError,
+  trendState,
   onCloseDetail,
   onDismissDetail,
   onCloseExploration,
@@ -125,6 +135,8 @@ export function ExplorationPanel({
   onRegionSelect,
   onRegionTrailSelect,
   onRetryDetail,
+  onRetryTrades,
+  onRetryTrend,
   onFavoriteToggle,
   onRetryFavorite,
   onRetryRegion,
@@ -193,6 +205,8 @@ export function ExplorationPanel({
           onClose={onDismissDetail}
           onComplexSelect={onComplexSelect}
           onRetryDetail={onRetryDetail}
+          onRetryTrades={onRetryTrades}
+          onRetryTrend={onRetryTrend}
           onFavoriteToggle={onFavoriteToggle}
           onRetryFavorite={onRetryFavorite}
           onLoadMoreTrades={onLoadMoreTrades}
@@ -200,6 +214,10 @@ export function ExplorationPanel({
           parcelTrades={parcelTrades}
           tradeTrend={tradeTrend}
           tradeRows={tradeRows}
+          tradeError={tradeError}
+          tradeState={tradeState}
+          trendError={trendError}
+          trendState={trendState}
           selection={selectedComplex}
         />
       )}

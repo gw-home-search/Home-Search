@@ -83,9 +83,11 @@ const COMPLEX_PATH = '/api/v1/complex';
 export async function fetchComplexDetail(
   parcelId: number,
   complexId?: number | null,
+  signal?: AbortSignal,
 ): Promise<ComplexDetail> {
   const response = await fetch(resolveApiUrl(scopedPath(`${DETAIL_PATH}/${parcelId}`, complexId)), {
     method: 'GET',
+    signal,
   });
 
   if (!response.ok) {
@@ -103,9 +105,12 @@ export async function fetchComplexDetail(
   return normalizeComplexDetail(payload);
 }
 
-export async function fetchComplexDetailByComplexId(complexId: number): Promise<ComplexDetail> {
+export async function fetchComplexDetailByComplexId(
+  complexId: number,
+  signal?: AbortSignal,
+): Promise<ComplexDetail> {
   const response = await fetch(resolveApiUrl(`${COMPLEX_PATH}/${complexId}`), {
-    method: 'GET',
+    method: 'GET', signal,
   });
 
   if (!response.ok) {
@@ -196,16 +201,11 @@ function toPredictionStatus(value: unknown): PricePredictionStatus {
 }
 
 function toRequiredNumber(value: unknown, field: string): number {
-  if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new Error(`Invalid public API complex detail response: ${field} must be a number`);
   }
 
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid public API complex detail response: ${field} must be a number`);
-  }
-
-  return parsed;
+  return value;
 }
 
 function toNullableNumber(value: unknown, field: string): number | null {
@@ -213,16 +213,11 @@ function toNullableNumber(value: unknown, field: string): number | null {
     return null;
   }
 
-  if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new Error(`Invalid public API complex detail response: ${field} must be a number`);
   }
 
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid public API complex detail response: ${field} must be a number`);
-  }
-
-  return parsed;
+  return value;
 }
 
 function toRequiredString(value: unknown, field: string): string {

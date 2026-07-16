@@ -34,7 +34,7 @@ services:
     container_name: home-search-redis
     restart: unless-stopped
     ports:
-      - "${HOME_SEARCH_REDIS_PORT:-16379}:6379"
+      - "127.0.0.1:${HOME_SEARCH_REDIS_PORT:-16379}:6379"
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s

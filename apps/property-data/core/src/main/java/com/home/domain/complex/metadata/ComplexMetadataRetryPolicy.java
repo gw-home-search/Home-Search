@@ -1,7 +1,5 @@
-package com.home.application.ingest.metadata;
+package com.home.domain.complex.metadata;
 
-import com.home.domain.complex.metadata.ComplexMetadataFailureKind;
-import com.home.domain.complex.metadata.ComplexMetadataStatus;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
 import type { ComplexDetail, PricePrediction } from './api/fetchComplexDetail';
 import type { ParcelComplexSummary } from './api/fetchParcelComplexes';
@@ -28,6 +28,8 @@ type DetailSidebarProps = {
   onClose?: () => void;
   onComplexSelect: (complex: ParcelComplexSummary | RegionComplexSummary) => void;
   onRetryDetail: () => void;
+  onRetryTrades?: () => void;
+  onRetryTrend?: () => void;
   onLoadMoreTrades: () => void;
   onFavoriteToggle?: (trigger?: HTMLElement) => void;
   onRetryFavorite?: () => void;
@@ -35,6 +37,10 @@ type DetailSidebarProps = {
   parcelTrades: ParcelTrades | null;
   tradeTrend: TradeTrendPoint[];
   tradeRows: TradeItem[];
+  tradeError?: string | null;
+  tradeState?: DetailRequestState;
+  trendError?: string | null;
+  trendState?: DetailRequestState;
   selection: ComplexSelection;
 };
 
@@ -54,6 +60,8 @@ export function DetailSidebar({
   onClose = onBack,
   onComplexSelect,
   onRetryDetail,
+  onRetryTrades = onRetryDetail,
+  onRetryTrend = onRetryDetail,
   onLoadMoreTrades,
   onFavoriteToggle = () => undefined,
   onRetryFavorite = () => undefined,
@@ -61,9 +69,14 @@ export function DetailSidebar({
   parcelTrades,
   tradeTrend,
   tradeRows,
+  tradeError = null,
+  tradeState = 'ready',
+  trendError = null,
+  trendState = 'ready',
   selection,
 }: DetailSidebarProps) {
   const [mobileTab, setMobileTab] = useState<DetailMobileTab>('info');
+  const tabRefs = useRef<Partial<Record<DetailMobileTab, HTMLButtonElement | null>>>({});
   const isMobileLayout = useMediaQuery('(max-width: 720px)');
   const shouldRenderTradeChart = !isMobileLayout || mobileTab === 'trend';
 
@@ -110,12 +123,17 @@ export function DetailSidebar({
           ['trades', parcelTrades == null ? '거래' : `거래 ${parcelTrades.totalElements.toLocaleString()}`],
         ] as Array<[DetailMobileTab, string]>).map(([tab, label]) => (
           <button
+            ref={(element) => { tabRefs.current[tab] = element; }}
             type="button"
             role="tab"
             key={tab}
+            id={`detail-tab-${tab}`}
+            aria-controls={`detail-tabpanel-${tab}`}
             aria-label={`${tab === 'trades' ? '거래' : label} 보기`}
             aria-selected={mobileTab === tab}
+            tabIndex={mobileTab === tab ? 0 : -1}
             onClick={() => setMobileTab(tab)}
+            onKeyDown={(event) => moveDetailTabFocus(event, tab, setMobileTab, tabRefs.current)}
           >
             {label}
           </button>
@@ -178,6 +196,9 @@ export function DetailSidebar({
           </section>
 
           <section
+            id="detail-tabpanel-info"
+            role="tabpanel"
+            aria-labelledby="detail-tab-info"
             className="detail-basic-information detail-tab-panel"
             data-detail-order="information"
             data-mobile-tab-panel="info"
@@ -202,19 +223,44 @@ export function DetailSidebar({
             </details>
           </section>
 
-          <div className="detail-tab-panel" data-detail-order="trend" data-mobile-tab-panel="trend" data-mobile-tab-active={mobileTab === 'trend' ? 'true' : 'false'}>
-            {shouldRenderTradeChart ? (
+          <div id="detail-tabpanel-trend" role="tabpanel" aria-labelledby="detail-tab-trend" className="detail-tab-panel" data-detail-order="trend" data-mobile-tab-panel="trend" data-mobile-tab-active={mobileTab === 'trend' ? 'true' : 'false'}>
+            <RequestStateNotice
+              state={trendState}
+              loadingMessage="시세를 불러오는 중"
+              emptyMessage="표시할 시세가 없습니다"
+              errorMessage="시세를 불러오지 못했어요"
+              technicalError={trendError}
+              onRetry={onRetryTrend}
+            />
+            {shouldRenderTradeChart && trendState === 'ready' && tradeTrend.length === 0 ? (
+              <section className="trade-chart" aria-label="거래가 차트" data-detail-section="trade-chart">
+                <div className="trade-section-header"><h3>실거래가 흐름</h3></div>
+                <p className="trade-chart-empty">표시할 거래가 없습니다</p>
+              </section>
+            ) : null}
+            {shouldRenderTradeChart && trendState === 'ready' && tradeTrend.length > 0 ? (
               <Suspense fallback={<TradeChartFallback />}>
                 <TradeTrendChart trend={tradeTrend} />
               </Suspense>
             ) : null}
           </div>
           <div
+            id="detail-tabpanel-trades"
+            role="tabpanel"
+            aria-labelledby="detail-tab-trades"
             className="detail-tab-panel"
             data-detail-order="trades"
             data-mobile-tab-panel="trades"
             data-mobile-tab-active={mobileTab === 'trades' ? 'true' : 'false'}
           >
+            <RequestStateNotice
+              state={tradeState}
+              loadingMessage="거래를 불러오는 중"
+              emptyMessage="표시할 거래가 없습니다"
+              errorMessage="거래를 불러오지 못했어요"
+              technicalError={tradeError}
+              onRetry={onRetryTrades}
+            />
             <TradeList
               rows={tradeRows}
               totalElements={parcelTrades?.totalElements ?? 0}
@@ -225,6 +271,27 @@ export function DetailSidebar({
       ) : null}
     </section>
   );
+}
+
+const DETAIL_TABS: DetailMobileTab[] = ['info', 'trend', 'trades'];
+
+function moveDetailTabFocus(
+  event: KeyboardEvent<HTMLButtonElement>,
+  current: DetailMobileTab,
+  select: (tab: DetailMobileTab) => void,
+  refs: Partial<Record<DetailMobileTab, HTMLButtonElement | null>>,
+) {
+  const currentIndex = DETAIL_TABS.indexOf(current);
+  let nextIndex: number | null = null;
+  if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % DETAIL_TABS.length;
+  if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + DETAIL_TABS.length) % DETAIL_TABS.length;
+  if (event.key === 'Home') nextIndex = 0;
+  if (event.key === 'End') nextIndex = DETAIL_TABS.length - 1;
+  if (nextIndex == null) return;
+  event.preventDefault();
+  const next = DETAIL_TABS[nextIndex];
+  select(next);
+  refs[next]?.focus();
 }
 
 function useMediaQuery(query: string): boolean {

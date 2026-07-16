@@ -17,7 +17,10 @@ type ComplexSuggestionResponse = {
 
 const SEARCH_SUGGESTIONS_PATH = '/api/v1/search/complexes/suggestions';
 
-export async function fetchComplexSuggestions(query: string): Promise<ComplexSuggestion[]> {
+export async function fetchComplexSuggestions(
+  query: string,
+  signal?: AbortSignal,
+): Promise<ComplexSuggestion[]> {
   const trimmedQuery = query.trim();
   if (trimmedQuery.length === 0) {
     return [];
@@ -27,6 +30,7 @@ export async function fetchComplexSuggestions(query: string): Promise<ComplexSug
     resolveApiUrl(`${SEARCH_SUGGESTIONS_PATH}?${new URLSearchParams({ q: trimmedQuery })}`),
     {
       method: 'GET',
+      signal,
     },
   );
 
@@ -55,16 +59,11 @@ function normalizeComplexSuggestion(item: ComplexSuggestionResponse): ComplexSug
 }
 
 function toRequiredNumber(value: unknown, field: string): number {
-  if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new Error(`Invalid public API complex suggestion response: ${field} must be a number`);
   }
 
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid public API complex suggestion response: ${field} must be a number`);
-  }
-
-  return parsed;
+  return value;
 }
 
 function toRequiredString(value: unknown, field: string): string {

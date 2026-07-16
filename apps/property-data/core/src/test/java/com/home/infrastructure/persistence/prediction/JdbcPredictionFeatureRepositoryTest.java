@@ -2,6 +2,7 @@ package com.home.infrastructure.persistence.prediction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.home.application.prediction.PredictionFeatureAssembler;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 import java.time.YearMonth;
 import org.junit.jupiter.api.DisplayName;
@@ -16,23 +17,26 @@ class JdbcPredictionFeatureRepositoryTest extends JdbcPostgresTestSupport {
         seedExtraTradesForExactAreaFilter();
         JdbcPredictionFeatureRepository repository = new JdbcPredictionFeatureRepository(jdbcClient);
 
-        assertThat(repository.findFeature(501L, YearMonth.of(2026, 6))).hasValueSatisfying(feature -> {
-            assertThat(feature.complexId()).isEqualTo(501L);
-            assertThat(feature.basisTradeId()).isEqualTo(9002L);
-            assertThat(feature.targetAreaM2()).isEqualByComparingTo("84.93");
-            assertThat(feature.targetFloor()).isEqualTo(15);
-            assertThat(feature.embeddingFeatures())
-                    .containsEntry("legal_dong_code", "1168010300")
-                    .containsEntry("sgg_code", "11680");
-            assertThat(number(feature.numericFeatures().get("area_m2"))).isEqualTo(84.93);
-            assertThat(number(feature.numericFeatures().get("floor"))).isEqualTo(15.0);
-            assertThat(number(feature.numericFeatures().get("complex_prev_missing")))
-                    .isZero();
-            assertThat(number(feature.numericFeatures().get("exact_prev1_missing")))
-                    .isZero();
-            assertThat(number(feature.numericFeatures().get("exact_prev3_area_abs_diff")))
-                    .isCloseTo(0.37, org.assertj.core.data.Offset.offset(0.001));
-        });
+        var basis = repository.findBasis(501L).orElseThrow();
+        assertThat(repository.readSnapshot(basis, YearMonth.of(2026, 6)))
+                .map(snapshot -> new PredictionFeatureAssembler().assemble(basis, snapshot))
+                .hasValueSatisfying(feature -> {
+                    assertThat(feature.complexId()).isEqualTo(501L);
+                    assertThat(feature.basisTradeId()).isEqualTo(9002L);
+                    assertThat(feature.targetAreaM2()).isEqualByComparingTo("84.93");
+                    assertThat(feature.targetFloor()).isEqualTo(15);
+                    assertThat(feature.embeddingFeatures())
+                            .containsEntry("legal_dong_code", "1168010300")
+                            .containsEntry("sgg_code", "11680");
+                    assertThat(number(feature.numericFeatures().get("area_m2"))).isEqualTo(84.93);
+                    assertThat(number(feature.numericFeatures().get("floor"))).isEqualTo(15.0);
+                    assertThat(number(feature.numericFeatures().get("complex_prev_missing")))
+                            .isZero();
+                    assertThat(number(feature.numericFeatures().get("exact_prev1_missing")))
+                            .isZero();
+                    assertThat(number(feature.numericFeatures().get("exact_prev3_area_abs_diff")))
+                            .isCloseTo(0.37, org.assertj.core.data.Offset.offset(0.001));
+                });
     }
 
     @Test
@@ -41,7 +45,7 @@ class JdbcPredictionFeatureRepositoryTest extends JdbcPostgresTestSupport {
         seedPropertyExplorationData();
         JdbcPredictionFeatureRepository repository = new JdbcPredictionFeatureRepository(jdbcClient);
 
-        assertThat(repository.findFeature(999L, YearMonth.of(2026, 6))).isEmpty();
+        assertThat(repository.findBasis(999L)).isEmpty();
     }
 
     private void seedExtraTradesForExactAreaFilter() {

@@ -12,11 +12,11 @@ describe('fetchComplexSearchResults API 어댑터', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse([
         {
-          complexId: '501',
+          complexId: 501,
           complexName: 'Sample Apartment',
-          parcelId: '1001',
-          latitude: '37.5123',
-          longitude: '127.0456',
+          parcelId: 1001,
+          latitude: 37.5123,
+          longitude: 127.0456,
           address: 'Sample address',
         },
       ]),
@@ -46,6 +46,19 @@ describe('fetchComplexSearchResults API 어댑터', () => {
 
     await expect(fetchComplexSearchResults('  ')).resolves.toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('호출자가 전달한 AbortSignal을 fetch에 전달한다', async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchComplexSearchResults('Sample', controller.signal);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ signal: controller.signal }),
+    );
   });
 
   it('coordinate-pending search result의 null 좌표를 보존한다', async () => {
@@ -111,6 +124,16 @@ describe('fetchComplexSearchResults API 어댑터', () => {
 
     await expect(fetchComplexSearchResults('Sample')).rejects.toThrow(
       'Invalid public API complex search response: expected an array',
+    );
+  });
+
+  it('계약에 없는 numeric response string을 reject한다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([
+      { complexId: '501', complexName: 'Sample', parcelId: 1001 },
+    ])));
+
+    await expect(fetchComplexSearchResults('Sample')).rejects.toThrow(
+      'complexId must be a number',
     );
   });
 

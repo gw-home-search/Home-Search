@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.home.application.prediction.PredictionStatus;
 import com.home.application.prediction.PricePredictionResult;
 import com.home.application.prediction.PricePredictionUseCase;
 import com.home.application.propertydetail.PropertyDetailService;
@@ -28,6 +27,7 @@ import com.home.application.read.TradeTrendPoint;
 import com.home.application.regionnavigation.RegionNavigationService;
 import com.home.application.search.ComplexSearchService;
 import com.home.application.tradehistory.TradeHistoryService;
+import com.home.domain.prediction.PredictionStatus;
 import com.home.infrastructure.web.propertydetail.PropertyDetailController;
 import com.home.infrastructure.web.regionnavigation.RegionNavigationController;
 import com.home.infrastructure.web.search.SearchController;
@@ -271,6 +271,39 @@ class ReadApiControllerContractTest {
                 .andExpect(jsonPath("$.prediction.message").isEmpty())
                 .andExpect(jsonPath("$.prediction.complexPk").doesNotExist())
                 .andExpect(jsonPath("$.prediction.sourceKey").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/detail/{parcelId}는 prediction RuntimeException을 generic FAILED field로 격리한다")
+    void parcelDetailDegradesPredictionRuntimeFailure() throws Exception {
+        given(propertyDetailService.getParcelDetail(eq(1001L), isNull()))
+                .willReturn(new ParcelDetailResult(
+                        1001L,
+                        501L,
+                        37.5123,
+                        127.0456,
+                        "Sample address",
+                        "Sample trade name",
+                        "Sample Apartment",
+                        8,
+                        740,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        LocalDate.of(2015, 3, 20)));
+        given(predictionUseCase.getOrSchedulePrediction(501L))
+                .willThrow(new IllegalStateException("sensitive provider failure"));
+
+        mockMvc.perform(get("/api/v1/detail/1001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.parcelId").value(1001))
+                .andExpect(jsonPath("$.prediction.status").value("FAILED"))
+                .andExpect(jsonPath("$.prediction.message").value("AI prediction unavailable"))
+                .andExpect(content()
+                        .string(org.hamcrest.Matchers.not(
+                                org.hamcrest.Matchers.containsString("sensitive provider failure"))));
     }
 
     @Test

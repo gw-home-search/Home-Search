@@ -11,7 +11,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class PricePredictionUseCase {
 
-    private final PredictionFeatureRepository featureRepository;
+    private final PredictionBasisReader basisReader;
+    private final PredictionFeatureSnapshotReader snapshotReader;
+    private final PredictionFeatureAssembler featureAssembler;
     private final PredictionCacheRepository cacheRepository;
     private final PredictionClient client;
     private final Executor executor;
@@ -19,12 +21,16 @@ public class PricePredictionUseCase {
     private final PredictionProperties properties;
 
     public PricePredictionUseCase(
-            PredictionFeatureRepository featureRepository,
+            PredictionBasisReader basisReader,
+            PredictionFeatureSnapshotReader snapshotReader,
+            PredictionFeatureAssembler featureAssembler,
             PredictionCacheRepository cacheRepository,
             PredictionClient client,
             PredictionExecutionContext executionContext,
             PredictionProperties properties) {
-        this.featureRepository = Objects.requireNonNull(featureRepository);
+        this.basisReader = Objects.requireNonNull(basisReader);
+        this.snapshotReader = Objects.requireNonNull(snapshotReader);
+        this.featureAssembler = Objects.requireNonNull(featureAssembler);
         this.cacheRepository = Objects.requireNonNull(cacheRepository);
         this.client = Objects.requireNonNull(client);
         PredictionExecutionContext context = Objects.requireNonNull(executionContext);
@@ -42,15 +48,20 @@ public class PricePredictionUseCase {
         }
 
         YearMonth anchorMonth = YearMonth.now(clock.withZone(properties.zoneId()));
-        return featureRepository
-                .findFeature(complexId, anchorMonth)
-                .map(feature -> getOrSchedulePrediction(feature, anchorMonth))
+        return basisReader
+                .findBasis(complexId)
+                .map(basis -> getOrSchedulePrediction(basis, anchorMonth))
                 .orElseGet(() -> PricePredictionResult.unavailable(now(), "예측에 필요한 최근 거래가 부족합니다."));
     }
 
-    private PricePredictionResult getOrSchedulePrediction(PredictionFeature feature, YearMonth anchorMonth) {
-        PredictionCacheKey key = new PredictionCacheKey(feature.complexId(), feature.basisTradeId(), anchorMonth);
-        return cacheRepository.find(key).orElseGet(() -> schedulePrediction(feature, key));
+    private PricePredictionResult getOrSchedulePrediction(PredictionBasis basis, YearMonth anchorMonth) {
+        PredictionCacheKey key = new PredictionCacheKey(basis.complexId(), basis.tradeId(), anchorMonth);
+        return cacheRepository
+                .find(key)
+                .orElseGet(() -> snapshotReader
+                        .readSnapshot(basis, anchorMonth)
+                        .map(snapshot -> schedulePrediction(featureAssembler.assemble(basis, snapshot), key))
+                        .orElseGet(() -> PricePredictionResult.unavailable(now(), "예측에 필요한 최근 거래가 부족합니다.")));
     }
 
     private PricePredictionResult schedulePrediction(PredictionFeature feature, PredictionCacheKey key) {

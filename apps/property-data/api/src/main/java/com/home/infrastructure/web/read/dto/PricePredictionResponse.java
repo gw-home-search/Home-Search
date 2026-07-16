@@ -1,13 +1,12 @@
 package com.home.infrastructure.web.read.dto;
 
-import com.home.application.prediction.PredictionStatus;
 import com.home.application.prediction.PricePredictionResult;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
 public record PricePredictionResponse(
-        PredictionStatus status,
+        String status,
         String modelVersion,
         Long predictedDealAmount,
         BigDecimal predictedPricePerM2,
@@ -27,7 +26,7 @@ public record PricePredictionResponse(
             return null;
         }
         return new PricePredictionResponse(
-                result.status(),
+                result.status().name(),
                 result.modelVersion(),
                 result.predictedDealAmount(),
                 result.predictedPricePerM2(),
@@ -45,19 +44,6 @@ public record PricePredictionResponse(
 
     public static PricePredictionResponse failed(String message) {
         return new PricePredictionResponse(
-                PredictionStatus.FAILED,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                Instant.now(),
-                message);
+                "FAILED", null, null, null, null, null, null, null, null, null, null, null, Instant.now(), message);
     }
 }

@@ -8,12 +8,7 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -37,9 +32,8 @@ public class NearbyPlaceQueryService implements NearbyPlaceUseCase {
 
     private final NearbyPlaceCenterReader centerReader;
     private final NearbyPlaceProvider provider;
-    private final Executor executor;
+    private final NearbyPlaceQueryExecutor queryExecutor;
     private final Clock clock;
-    private final long timeoutMillis;
 
     public NearbyPlaceQueryService(
             NearbyPlaceCenterReader centerReader,
@@ -48,9 +42,8 @@ public class NearbyPlaceQueryService implements NearbyPlaceUseCase {
         this.centerReader = Objects.requireNonNull(centerReader);
         this.provider = Objects.requireNonNull(provider);
         NearbyPlaceExecutionOptions options = Objects.requireNonNull(executionOptions);
-        this.executor = options.executor();
+        this.queryExecutor = new NearbyPlaceQueryExecutor(options);
         this.clock = options.clock();
-        this.timeoutMillis = options.totalTimeout().toMillis();
     }
 
     @Override
@@ -70,22 +63,14 @@ public class NearbyPlaceQueryService implements NearbyPlaceUseCase {
                 .orElseThrow(() -> new ResourceNotFoundException("complex not found: " + complexId));
         NearbyPlacePoint point = requiredPoint(center);
 
-        List<CompletableFuture<NearbyPlaceProviderResult>> futures = new ArrayList<>(categories.size());
-        try {
-            for (NearbyPlaceCategory category : categories) {
-                NearbyPlaceProviderQuery query =
-                        new NearbyPlaceProviderQuery(new NearbyPlaceRadiusArea(point, radiusMeters), category);
-                futures.add(CompletableFuture.supplyAsync(() -> provider.search(query), executor));
-            }
-        } catch (RejectedExecutionException exception) {
-            cancel(futures);
-            throw new NearbyPlaceProviderUnavailableException("nearby place capacity unavailable", exception);
-        }
-
-        waitForAll(futures);
-        List<NearbyPlaceCategoryResult> results = new ArrayList<>(futures.size());
-        for (int index = 0; index < futures.size(); index++) {
-            NearbyPlaceProviderResult providerResult = join(futures.get(index));
+        List<Supplier<NearbyPlaceProviderResult>> tasks = categories.stream()
+                .<Supplier<NearbyPlaceProviderResult>>map(category -> () -> provider.search(
+                        new NearbyPlaceProviderQuery(new NearbyPlaceRadiusArea(point, radiusMeters), category)))
+                .toList();
+        List<NearbyPlaceProviderResult> providerResults = queryExecutor.executeAll(tasks);
+        List<NearbyPlaceCategoryResult> results = new ArrayList<>(providerResults.size());
+        for (int index = 0; index < providerResults.size(); index++) {
+            NearbyPlaceProviderResult providerResult = providerResults.get(index);
             NearbyPlaceCategory expectedCategory = categories.get(index);
             if (providerResult == null || providerResult.category() != expectedCategory) {
                 throw new NearbyPlaceProviderUnavailableException("nearby place provider category mismatch");
@@ -145,41 +130,5 @@ public class NearbyPlaceQueryService implements NearbyPlaceUseCase {
             throw new NearbyPlaceCenterUnavailableException("complex display coordinate unavailable");
         }
         return new NearbyPlacePoint(center.lat(), center.lng());
-    }
-
-    private void waitForAll(List<CompletableFuture<NearbyPlaceProviderResult>> futures) {
-        try {
-            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
-                    .get(timeoutMillis, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            cancel(futures);
-            throw new NearbyPlaceProviderUnavailableException("nearby place query interrupted", exception);
-        } catch (TimeoutException exception) {
-            cancel(futures);
-            throw new NearbyPlaceProviderUnavailableException("nearby place query timed out", exception);
-        } catch (ExecutionException exception) {
-            cancel(futures);
-            throw providerFailure(exception.getCause());
-        }
-    }
-
-    private NearbyPlaceProviderResult join(CompletableFuture<NearbyPlaceProviderResult> future) {
-        try {
-            return future.join();
-        } catch (RuntimeException exception) {
-            throw providerFailure(exception.getCause() == null ? exception : exception.getCause());
-        }
-    }
-
-    private NearbyPlaceProviderUnavailableException providerFailure(Throwable cause) {
-        if (cause instanceof NearbyPlaceProviderUnavailableException unavailable) {
-            return unavailable;
-        }
-        return new NearbyPlaceProviderUnavailableException("nearby place provider unavailable", cause);
-    }
-
-    private void cancel(List<CompletableFuture<NearbyPlaceProviderResult>> futures) {
-        futures.forEach(future -> future.cancel(true));
     }
 }

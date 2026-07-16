@@ -14,6 +14,7 @@ import com.home.application.ingest.run.RtmsIngestRunRepository;
 import com.home.application.ingest.trade.IngestResult;
 import com.home.application.ingest.trade.OpenApiTradeIngestBatch;
 import com.home.application.ingest.trade.OpenApiTradeIngestService;
+import com.home.domain.ingest.run.RtmsMonthlyRefreshRunStatus;
 import com.home.infrastructure.external.rtms.RtmsApartmentTradeClient;
 import java.time.Clock;
 import java.time.Instant;

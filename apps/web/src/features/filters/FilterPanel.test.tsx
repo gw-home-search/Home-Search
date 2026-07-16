@@ -199,6 +199,14 @@ describe('FilterPanel 필터 동작', () => {
     expect(testHost.textContent).toContain('최소값은 최대값보다 클 수 없습니다');
     expect(onChange).not.toHaveBeenCalled();
 
+    act(() => {
+      setInputValue(testHost.querySelector('input[aria-label="최소 평형"]'), '37.5');
+      setInputValue(testHost.querySelector('input[aria-label="최대 평형"]'), '40');
+      testHost.querySelector<HTMLButtonElement>('button[aria-label="평형 필터 적용"]')?.click();
+    });
+    expect(testHost.textContent).toContain('정수로 입력해주세요');
+    expect(onChange).not.toHaveBeenCalled();
+
     act(() => setInputValue(testHost.querySelector('input[aria-label="최소 평형"]'), '-1'));
     act(() => testHost.querySelector<HTMLButtonElement>('button[aria-label="평형 필터 적용"]')?.click());
     expect(testHost.textContent).toContain('0 이상을 입력해주세요');

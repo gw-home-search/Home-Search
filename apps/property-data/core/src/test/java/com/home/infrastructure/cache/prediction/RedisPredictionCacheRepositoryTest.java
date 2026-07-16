@@ -8,8 +8,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.home.application.prediction.PredictionCacheKey;
-import com.home.application.prediction.PredictionStatus;
 import com.home.application.prediction.PricePredictionResult;
+import com.home.domain.prediction.PredictionStatus;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.time.Duration;

@@ -51,10 +51,11 @@ export async function fetchParcelTrades(
   parcelId: number,
   complexId?: number | null,
   options: TradePageOptions = {},
+  signal?: AbortSignal,
 ): Promise<ParcelTrades> {
   const response = await fetch(
     resolveApiUrl(`${TRADE_PATH}/${parcelId}${tradeQuery(complexId, options)}`),
-    { method: 'GET' },
+    { method: 'GET', signal },
   );
 
   if (!response.ok) {
@@ -75,10 +76,11 @@ export async function fetchParcelTrades(
 export async function fetchComplexTrades(
   complexId: number,
   options: TradePageOptions = {},
+  signal?: AbortSignal,
 ): Promise<ParcelTrades> {
   const response = await fetch(
     resolveApiUrl(`${COMPLEX_PATH}/${complexId}/trades${tradeQuery(null, options)}`),
-    { method: 'GET' },
+    { method: 'GET', signal },
   );
 
   if (!response.ok) {
@@ -153,16 +155,11 @@ function isTradeItemResponse(value: unknown): value is TradeItemResponse {
 }
 
 function toRequiredNumber(value: unknown, field: string): number {
-  if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new Error(`Invalid public API parcel trade response: ${field} must be a number`);
   }
 
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid public API parcel trade response: ${field} must be a number`);
-  }
-
-  return parsed;
+  return value;
 }
 
 function toNullableNumber(value: unknown, field: string): number | null {
@@ -170,16 +167,11 @@ function toNullableNumber(value: unknown, field: string): number | null {
     return null;
   }
 
-  if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new Error(`Invalid public API parcel trade response: ${field} must be a number`);
   }
 
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid public API parcel trade response: ${field} must be a number`);
-  }
-
-  return parsed;
+  return value;
 }
 
 function toRequiredString(value: unknown, field: string): string {

@@ -2,6 +2,7 @@ package com.home.application.prediction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.home.domain.prediction.PredictionStatus;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
@@ -49,6 +50,7 @@ class PricePredictionUseCaseTest {
         assertThat(result.predictedDealAmount()).isEqualTo(179163L);
         assertThat(client.callCount).isZero();
         assertThat(cacheRepository.lockAttempts).isZero();
+        assertThat(featureRepository.readCount).isZero();
     }
 
     @Test
@@ -143,12 +145,14 @@ class PricePredictionUseCaseTest {
     }
 
     private PricePredictionUseCase useCase(
-            PredictionFeatureRepository featureRepository,
+            FakeFeatureRepository featureRepository,
             FakePredictionCacheRepository cacheRepository,
             PredictionClient client,
             Executor executor) {
         return new PricePredictionUseCase(
                 featureRepository,
+                featureRepository,
+                new PredictionFeatureAssembler(),
                 cacheRepository,
                 client,
                 new PredictionExecutionContext(executor, CLOCK),
@@ -192,17 +196,37 @@ class PricePredictionUseCaseTest {
                 null);
     }
 
-    private static class FakeFeatureRepository implements PredictionFeatureRepository {
+    private static class FakeFeatureRepository implements PredictionBasisReader, PredictionFeatureSnapshotReader {
 
         private final PredictionFeature feature;
+        private int readCount;
 
         FakeFeatureRepository(PredictionFeature feature) {
             this.feature = feature;
         }
 
         @Override
-        public Optional<PredictionFeature> findFeature(Long complexId, YearMonth anchorMonth) {
-            return Optional.ofNullable(feature);
+        public Optional<PredictionBasis> findBasis(Long complexId) {
+            if (feature == null) {
+                return Optional.empty();
+            }
+            return Optional.of(new PredictionBasis(
+                    feature.complexId(),
+                    feature.basisTradeId(),
+                    feature.basisDealDate(),
+                    new BigDecimal("100000"),
+                    feature.targetFloor(),
+                    feature.targetAreaM2(),
+                    "1168010300100010001",
+                    LocalDate.of(2015, 1, 1)));
+        }
+
+        @Override
+        public Optional<PredictionFeatureSnapshot> readSnapshot(PredictionBasis basis, YearMonth anchorMonth) {
+            readCount++;
+            return Optional.ofNullable(feature)
+                    .map(value -> new PredictionFeatureSnapshot(
+                            value.numericFeatures(), value.embeddingFeatures(), value.baseLogValue()));
         }
     }
 

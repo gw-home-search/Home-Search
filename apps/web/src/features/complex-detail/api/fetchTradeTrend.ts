@@ -23,17 +23,21 @@ const COMPLEX_PATH = '/api/v1/complex';
 export async function fetchParcelTradeTrend(
   parcelId: number,
   complexId?: number | null,
+  signal?: AbortSignal,
 ): Promise<TradeTrendPoint[]> {
   const query = complexId == null ? '' : `?complexId=${encodeURIComponent(complexId)}`;
-  return fetchTrend(`${TRADE_PATH}/${parcelId}/trend${query}`);
+  return fetchTrend(`${TRADE_PATH}/${parcelId}/trend${query}`, signal);
 }
 
-export async function fetchComplexTradeTrend(complexId: number): Promise<TradeTrendPoint[]> {
-  return fetchTrend(`${COMPLEX_PATH}/${complexId}/trade-trend`);
+export async function fetchComplexTradeTrend(
+  complexId: number,
+  signal?: AbortSignal,
+): Promise<TradeTrendPoint[]> {
+  return fetchTrend(`${COMPLEX_PATH}/${complexId}/trade-trend`, signal);
 }
 
-async function fetchTrend(path: string): Promise<TradeTrendPoint[]> {
-  const response = await fetch(resolveApiUrl(path), { method: 'GET' });
+async function fetchTrend(path: string, signal?: AbortSignal): Promise<TradeTrendPoint[]> {
+  const response = await fetch(resolveApiUrl(path), { method: 'GET', signal });
 
   if (!response.ok) {
     const detail = await readProblemDetail(response);
@@ -71,16 +75,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function toRequiredNumber(value: unknown, field: string): number {
-  if (typeof value !== 'number' && (typeof value !== 'string' || value.trim().length === 0)) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new Error(`Invalid public API trade trend response: ${field} must be a number`);
   }
 
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`Invalid public API trade trend response: ${field} must be a number`);
-  }
-
-  return parsed;
+  return value;
 }
 
 function toRequiredString(value: unknown, field: string): string {

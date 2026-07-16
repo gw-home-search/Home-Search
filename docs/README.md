@@ -51,9 +51,14 @@ Excluded from the property-data map/trade scope:
 │   │   └── web/
 │   ├── user/
 │   │   └── service/
-│   ├── ai/
+│   ├── ml/
 │   ├── property-data/
+│   ├── source-data/
 │   └── web/
+├── libs/
+│   ├── rtms-ingest-core/
+│   ├── security-jwt-core/
+│   └── user-auth-contract/
 └── infra/
 ```
 
@@ -64,11 +69,18 @@ Excluded from the property-data map/trade scope:
   built and deployed applications.
 - `apps/user/service/`: OAuth identity, user JWT, and refresh-token ownership
   boundary with its own build, container, and database.
-- `apps/ai/`: authenticated chatbot, POI/reference data, legal RAG, and
-  conversation pipeline boundary. It consumes property facts through read-only
-  contracts.
+- `apps/ml/`: optional prediction runtime. Model artifacts are supplied at
+  runtime and are not stored in the image or repository.
+- `apps/source-data/`: coordinate-source migration and verification boundary,
+  separate from the operational property database.
 - `apps/web/`: public map frontend.
+- `libs/`: shared ingest and security contracts used by independently built
+  services.
 - `infra/`: Postgres/PostGIS, Docker Compose, monitoring, and env docs.
+
+`apps/ai/` is a later-scope authenticated chatbot boundary described by
+`AI_SERVICE_PLAN.md`; it is not part of the current repository shape or the
+property-data map/trade critical path.
 
 ## Reading Order
 
@@ -81,10 +93,12 @@ Excluded from the property-data map/trade scope:
 7. [MAP_DISPLAY_FLOW.md](MAP_DISPLAY_FLOW.md)
 8. [UI_UX_MIGRATION.md](UI_UX_MIGRATION.md)
 9. [INFRA_AND_ENV.md](INFRA_AND_ENV.md)
-10. [JAVA_SPRING_BOOT_MODERNIZATION.md](JAVA_SPRING_BOOT_MODERNIZATION.md)
-11. [RESTRUCTURING_PLAN.md](RESTRUCTURING_PLAN.md)
-12. [USER_SERVICE_PLAN.md](USER_SERVICE_PLAN.md)
-13. [AI_SERVICE_PLAN.md](AI_SERVICE_PLAN.md)
+10. [STAGING_RUNBOOK.md](STAGING_RUNBOOK.md)
+11. [VERIFICATION_EVIDENCE.md](VERIFICATION_EVIDENCE.md)
+12. [JAVA_SPRING_BOOT_MODERNIZATION.md](JAVA_SPRING_BOOT_MODERNIZATION.md)
+13. [RESTRUCTURING_PLAN.md](RESTRUCTURING_PLAN.md)
+14. [USER_SERVICE_PLAN.md](USER_SERVICE_PLAN.md)
+15. [AI_SERVICE_PLAN.md](AI_SERVICE_PLAN.md)
 
 ## Non-Negotiable Decisions
 

@@ -1,6 +1,7 @@
 package com.home.application.ingest.rtms;
 
 import com.home.application.ingest.trade.IngestResult;
+import com.home.domain.ingest.run.RtmsMonthlyRefreshRunStatus;
 
 public record RtmsMonthlyRefreshRunSummary(
         String lawdCd,

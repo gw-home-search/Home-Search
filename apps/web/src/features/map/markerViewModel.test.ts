@@ -25,12 +25,22 @@ describe('markerViewModel 지도 마커 모델', () => {
       key: '1001-501',
       kicker: '최근 실거래',
       price: '12.5억',
-      meta: '선택 단지',
+      meta: '선택 단지 · 740세대',
       symbol: 'price-card',
       selected: true,
       state: 'selected',
     });
     expect(viewModel.ariaLabel).toBe('필지 1001 단지 501 상세 열기');
+  });
+
+  it('complex marker 보조 문구는 이름과 세대수의 독립 fallback을 유지한다', () => {
+    const base = { parcelId: 1, complexId: 2, lat: 37.5, lng: 127, latestDealAmount: null };
+    expect(createComplexMarkerViewModel({ ...base, name: '이름만', unitCntSum: null }, false).meta)
+      .toBe('이름만');
+    expect(createComplexMarkerViewModel({ ...base, name: null, unitCntSum: 320 }, false).meta)
+      .toBe('320세대');
+    expect(createComplexMarkerViewModel({ ...base, name: null, unitCntSum: null }, false).meta)
+      .toBeNull();
   });
 
   it('region marker는 별도 capsule anatomy와 세대수 label을 제공한다', () => {

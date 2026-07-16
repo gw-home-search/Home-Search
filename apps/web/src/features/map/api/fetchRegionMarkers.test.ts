@@ -89,10 +89,10 @@ describe('fetchRegionMarkers API 어댑터', () => {
       vi.fn().mockResolvedValue(
         jsonResponse([
           {
-            id: '11',
+            id: 11,
             regionName: 'Mapo-gu',
-            latitude: '37.5662',
-            longitude: '126.9016',
+            latitude: 37.5662,
+            longitude: 126.9016,
             trend: 1.1,
           },
         ]),

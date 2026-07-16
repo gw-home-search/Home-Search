@@ -31,3 +31,12 @@ temp/
 runtime-keys/
 *.tsbuildinfo
 /coordinate-input/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+infra/terraform/**/backend.tf

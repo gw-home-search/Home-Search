@@ -244,12 +244,15 @@ jobs:
         with:
           terraform_version: 1.15.8
           terraform_wrapper: false
-      - name: Verify bootstrap Terraform
+      - name: Verify Terraform roots
         run: |
           terraform fmt -check -recursive infra/terraform
           terraform -chdir=infra/terraform/bootstrap init -backend=false -input=false
           terraform -chdir=infra/terraform/bootstrap validate
           terraform -chdir=infra/terraform/bootstrap test
+          terraform -chdir=infra/terraform/staging init -backend=false -input=false
+          terraform -chdir=infra/terraform/staging validate
+          terraform -chdir=infra/terraform/staging test
 
   admin-service-test:
     name: admin-service-test

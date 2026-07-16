@@ -191,6 +191,24 @@ jobs:
       - name: Verify property workload image boundaries
         run: infra/images/test-property-images.sh
 
+  platform-image-test:
+    name: platform-image-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: changes
+    if: >-
+      needs.changes.outputs.admin_service_changed == 'true' ||
+      needs.changes.outputs.user_service_changed == 'true' ||
+      needs.changes.outputs.source_data_changed == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Verify admin user and source-data image boundaries
+        run: infra/images/test-platform-images.sh
+
   admin-service-test:
     name: admin-service-test
     runs-on: ubuntu-latest

@@ -1,4 +1,4 @@
-FROM redgate/flyway:11.7.2
+FROM --platform=linux/amd64 redgate/flyway:11.7.2
 
 USER root
 RUN mkdir -p /flyway/sql /flyway/conf \

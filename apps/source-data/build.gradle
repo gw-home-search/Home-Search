@@ -60,7 +60,14 @@ tasks.register('packagedProcessSmoke', Exec) {
     environment 'SOURCE_DATA_MIGRATION_JAR', tasks.named('bootJar').flatMap { it.archiveFile }.get().asFile.absolutePath
 }
 
-tasks.named('check') { dependsOn tasks.named('packagedProcessSmoke') }
+tasks.register('coordinateCopyCutoverSelfTest', Exec) {
+    workingDir projectDir
+    commandLine 'bash', 'ops/coordinate-source-db-copy-cutover.sh', '--self-test'
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('packagedProcessSmoke'), tasks.named('coordinateCopyCutoverSelfTest')
+}
 
 tasks.named('test') {
     useJUnitPlatform()

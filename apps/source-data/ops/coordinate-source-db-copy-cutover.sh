@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+if [[ $- == *x* ]]; then
+  set +x
+fi
 set -Eeuo pipefail
 
 usage() {
@@ -97,6 +100,42 @@ TARGET_PASSWORD="${HOME_COORDINATE_TARGET_DB_PASSWORD:-${PGPASSWORD}}"
 SOURCE_CONTAINER="${HOME_COORDINATE_SOURCE_DB_CONTAINER:-}"
 TARGET_CONTAINER="${HOME_COORDINATE_TARGET_DB_CONTAINER:-}"
 POSTGIS_TOOL_IMAGE="${HOME_COORDINATE_POSTGIS_TOOL_IMAGE:-postgis/postgis:16-3.4}"
+declare -a CONTAINER_PGPASS_FILES=()
+
+escape_pgpass_field() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//:/\\:}"
+  printf '%s' "${value}"
+}
+
+create_container_pgpass_file() {
+  local container="$1"
+  local path="$2"
+  local user="$3"
+  local password="$4"
+  if [[ "${password}" == *$'\n'* || "${password}" == *$'\r'* ]]; then
+    echo "ERROR: PostgreSQL password cannot contain a newline for PGPASSFILE use." >&2
+    return 1
+  fi
+
+  CONTAINER_PGPASS_FILES+=("${container}|${path}")
+  printf '*:*:*:%s:%s\n' "$(escape_pgpass_field "${user}")" "$(escape_pgpass_field "${password}")" \
+    | docker exec -i "${container}" sh -c 'umask 077; cat > "$1"; chmod 600 "$1"' sh "${path}"
+}
+
+cleanup_container_pgpass_files() {
+  local entry container path
+  for entry in "${CONTAINER_PGPASS_FILES[@]:-}"; do
+    [[ -n "${entry}" ]] || continue
+    container="${entry%%|*}"
+    path="${entry#*|}"
+    docker exec "${container}" rm -f "${path}" >/dev/null 2>&1 || true
+  done
+  CONTAINER_PGPASS_FILES=()
+}
+
+trap cleanup_container_pgpass_files EXIT
 
 require_database_names() {
   if [[ -z "${SOURCE_DB}" || -z "${TARGET_DB}" ]]; then
@@ -394,6 +433,52 @@ run_self_test() {
     echo "self-test failed: live snapshot modes are missing." >&2
     exit 1
   fi
+  local docker_password_pattern='docker exec[^|]*(--env|-e)[[:space:]]+PGPASS''WORD'
+  if grep -Eq "${docker_password_pattern}" "$0"; then
+    echo "self-test failed: docker argv still contains PGPASSWORD." >&2
+    exit 1
+  fi
+
+  local test_dir argv_log stdin_log output_log sentinel test_pgpass
+  test_dir="$(mktemp -d)"
+  argv_log="${test_dir}/argv"
+  stdin_log="${test_dir}/stdin"
+  output_log="${test_dir}/output"
+  sentinel='sentinel:password\must-not-leak'
+  test_pgpass='/tmp/home-search-self-test.pgpass'
+  docker() {
+    printf '%q ' "$@" >> "${argv_log}"
+    printf '\n' >> "${argv_log}"
+    if [[ "$*" == *'cat > "$1"'* ]]; then
+      cat > "${stdin_log}"
+    fi
+  }
+
+  create_container_pgpass_file test-postgres "${test_pgpass}" test_user "${sentinel}" \
+    > "${output_log}" 2>&1
+  docker exec -e PGPASSFILE="${test_pgpass}" test-postgres pg_dump -U test_user -d test_db \
+    >> "${output_log}" 2>&1
+  cleanup_container_pgpass_files >> "${output_log}" 2>&1
+
+  if grep -Fq "${sentinel}" "${argv_log}" || grep -Fq "${sentinel}" "${output_log}"; then
+    echo "self-test failed: sentinel password leaked through docker argv or output." >&2
+    exit 1
+  fi
+  if ! grep -Fq 'PGPASSFILE' "${argv_log}" \
+      || ! grep -Fq 'chmod' "${argv_log}" \
+      || ! grep -Fq '600' "${argv_log}"; then
+    echo "self-test failed: PGPASSFILE path or permission command is missing." >&2
+    exit 1
+  fi
+  if ! grep -Fq 'sentinel\:password\\must-not-leak' "${stdin_log}"; then
+    echo "self-test failed: pgpass escaping or stdin delivery is incorrect." >&2
+    exit 1
+  fi
+  unset -f docker
+  unlink "${argv_log}"
+  unlink "${stdin_log}"
+  unlink "${output_log}"
+  rmdir "${test_dir}"
   echo "self-test passed: coordinate source DB copy/cutover helper"
 }
 
@@ -456,7 +541,11 @@ copy_live_snapshot() {
   ensure_target_reference_schema
   if [[ -n "${SOURCE_CONTAINER}" || -n "${TARGET_CONTAINER}" ]]; then
     require_docker_stream_containers
-    docker exec -e PGPASSWORD="${SOURCE_PASSWORD}" "${SOURCE_CONTAINER}" \
+    local source_pgpass_file="/tmp/home-search-source-pgpass-$$-${RANDOM}"
+    local target_pgpass_file="/tmp/home-search-target-pgpass-$$-${RANDOM}"
+    create_container_pgpass_file "${SOURCE_CONTAINER}" "${source_pgpass_file}" "${SOURCE_USER}" "${SOURCE_PASSWORD}"
+    create_container_pgpass_file "${TARGET_CONTAINER}" "${target_pgpass_file}" "${TARGET_USER}" "${TARGET_PASSWORD}"
+    docker exec -e PGPASSFILE="${source_pgpass_file}" "${SOURCE_CONTAINER}" \
       pg_dump -U "${SOURCE_USER}" -d "${SOURCE_DB}" \
         --format=plain \
         --no-owner \
@@ -464,7 +553,7 @@ copy_live_snapshot() {
         --table=reference.coordinate_snapshot_run \
         --table=reference.parcel_coordinate_snapshot \
         --file=- \
-    | docker exec -i -e PGPASSWORD="${TARGET_PASSWORD}" "${TARGET_CONTAINER}" \
+    | docker exec -i -e PGPASSFILE="${target_pgpass_file}" "${TARGET_CONTAINER}" \
       psql -v ON_ERROR_STOP=1 --single-transaction -U "${TARGET_USER}" -d "${TARGET_DB}"
   else
     require_tool pg_dump
@@ -590,7 +679,9 @@ archive_import_worktables() {
   fi
   if [[ -n "${SOURCE_CONTAINER}" ]]; then
     require_tool docker
-    docker exec -e PGPASSWORD="${SOURCE_PASSWORD}" "${SOURCE_CONTAINER}" \
+    local source_pgpass_file="/tmp/home-search-source-pgpass-$$-${RANDOM}"
+    create_container_pgpass_file "${SOURCE_CONTAINER}" "${source_pgpass_file}" "${SOURCE_USER}" "${SOURCE_PASSWORD}"
+    docker exec -e PGPASSFILE="${source_pgpass_file}" "${SOURCE_CONTAINER}" \
       pg_dump -U "${SOURCE_USER}" -d "${SOURCE_DB}" \
         --format=custom \
         --no-owner \

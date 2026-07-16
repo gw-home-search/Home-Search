@@ -141,6 +141,10 @@ jobs:
         run: infra/backup/test-home-search-db-backup.sh
       - name: Verify PostgreSQL backup and ephemeral restore
         run: infra/backup/test-home-search-db-backup-integration.sh
+      - name: Verify release eligibility and manifest scripts
+        run: |
+          .github/scripts/test-verify-release-eligibility.sh
+          infra/release/test-create-release-manifest.sh
 
   ml-image-test:
     name: ml-image-test

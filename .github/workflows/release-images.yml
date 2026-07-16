@@ -1,0 +1,122 @@
+name: Publish release images
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+  checks: read
+  id-token: write
+
+concurrency:
+  group: release-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish-immutable-images
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: release
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify main tag and successful quality gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags origin main
+          gh api -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100" > check-runs.json
+          .github/scripts/verify-release-eligibility.sh "${GITHUB_REF_NAME}" "${GITHUB_SHA}" check-runs.json
+
+      - name: Configure short-lived AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.2
+        with:
+          role-to-assume: ${{ vars.AWS_RELEASE_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
+          mask-aws-account-id: true
+          unset-current-credentials: true
+
+      - name: Log in to immutable ECR registry
+        id: registry
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+          registry="${account_id}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          aws ecr get-login-password | docker login --username AWS --password-stdin "${registry}" >/dev/null
+          echo "registry=${registry}" >>"${GITHUB_OUTPUT}"
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4.1.0
+
+      - name: Build and publish SHA and SemVer images
+        env:
+          REGISTRY: ${{ steps.registry.outputs.registry }}
+          IMAGE_PREFIX: home-search
+          GIT_SHA: ${{ github.sha }}
+          VERSION: ${{ github.ref_name }}
+          SOURCE_URL: https://github.com/${{ github.repository }}
+          PUBLIC_ORIGIN: ${{ vars.STAGING_PUBLIC_ORIGIN }}
+          KAKAO_MAP_APP_KEY: ${{ vars.KAKAO_MAP_APP_KEY }}
+        run: |
+          set -Eeuo pipefail
+          VERSION="${VERSION#v}"
+          export VERSION
+          [[ -n "${PUBLIC_ORIGIN}" && -n "${KAKAO_MAP_APP_KEY}" ]]
+          docker buildx bake --push \
+            --set '*.attest=type=sbom' \
+            --set '*.attest=type=provenance,mode=max'
+
+      - name: Record immutable release manifest
+        env:
+          REGISTRY: ${{ steps.registry.outputs.registry }}
+        run: |
+          mkdir -p release-evidence/sbom release-evidence/vulnerability
+          infra/release/create-release-manifest.sh \
+            "${GITHUB_REF_NAME}" "${GITHUB_SHA}" "${REGISTRY}" release-evidence/release-manifest.json
+
+      - name: Install checksum-pinned SBOM and scanner tools
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "${RUNNER_TEMP}/home-search-tools"
+          syft_version='1.44.0'
+          curl --fail --location --silent --show-error --retry 3 \
+            --output syft.tar.gz "https://github.com/anchore/syft/releases/download/v${syft_version}/syft_${syft_version}_linux_amd64.tar.gz"
+          echo '0e91737aee2b5baf1d255b959630194a302335d848ff97bb07921eb6205b5f5a  syft.tar.gz' | sha256sum --check
+          tar -xzf syft.tar.gz -C "${RUNNER_TEMP}/home-search-tools" syft
+          curl --fail --location --silent --show-error --retry 3 \
+            --output grype.tar.gz https://github.com/anchore/grype/releases/download/v0.115.0/grype_0.115.0_linux_amd64.tar.gz
+          echo '3fad92940650e514c0aa2dad83526942a055e210cec09a8a59d9c024adc2b90e  grype.tar.gz' | sha256sum --check
+          tar -xzf grype.tar.gz -C "${RUNNER_TEMP}/home-search-tools" grype
+          echo "${RUNNER_TEMP}/home-search-tools" >>"${GITHUB_PATH}"
+
+      - name: Generate SBOMs and vulnerability evidence
+        run: |
+          set -Eeuo pipefail
+          scan_failed=0
+          while IFS=$'\t' read -r name uri; do
+            syft "${uri}" --output "spdx-json=release-evidence/sbom/${name}.spdx.json"
+            if ! grype "${uri}" --output json --fail-on critical \
+              >"release-evidence/vulnerability/${name}.json"; then
+              scan_failed=1
+            fi
+          done < <(jq -r '.images | to_entries[] | [.key,.value.uri] | @tsv' release-evidence/release-manifest.json)
+          jq -n --argjson passed "$((1 - scan_failed))" \
+            '{scanner:"grype",critical_gate_passed:($passed == 1)}' >release-evidence/vulnerability/summary.json
+          exit "${scan_failed}"
+
+      - name: Upload release manifest, SBOM, and vulnerability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-${{ github.ref_name }}
+          path: release-evidence/
+          if-no-files-found: error
+          retention-days: 90

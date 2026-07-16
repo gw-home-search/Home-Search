@@ -13,6 +13,11 @@ output "github_staging_role_arn" {
   value       = aws_iam_role.github_staging.arn
 }
 
+output "github_release_role_arn" {
+  description = "Tag-only OIDC role that can publish and inspect Home Search ECR images."
+  value       = aws_iam_role.github_release.arn
+}
+
 output "backend_config" {
   description = "Non-secret backend values used during the explicit state migration."
   value = {

@@ -59,7 +59,7 @@ target "property-api" {
   context = "."
   dockerfile = "apps/property-data/api/Dockerfile"
   labels = { "org.opencontainers.image.title" = "home-search-property-api" }
-  tags = ["${REGISTRY}/${IMAGE_PREFIX}-property-api:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-property-api:${VERSION}"]
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/property-api:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/property-api:${VERSION}"]
 }
 
 target "property-batch" {
@@ -67,7 +67,7 @@ target "property-batch" {
   context = "."
   dockerfile = "apps/property-data/batch/Dockerfile"
   labels = { "org.opencontainers.image.title" = "home-search-property-batch" }
-  tags = ["${REGISTRY}/${IMAGE_PREFIX}-property-batch:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-property-batch:${VERSION}"]
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/property-batch:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/property-batch:${VERSION}"]
 }
 
 target "property-flyway" {
@@ -76,7 +76,7 @@ target "property-flyway" {
   dockerfile = "apps/property-data/db/Dockerfile"
   platforms = ["linux/amd64"]
   labels = { "org.opencontainers.image.title" = "home-search-property-flyway" }
-  tags = ["${REGISTRY}/${IMAGE_PREFIX}-property-flyway:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-property-flyway:${VERSION}"]
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/property-flyway:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/property-flyway:${VERSION}"]
 }
 
 target "admin-api" {
@@ -85,7 +85,7 @@ target "admin-api" {
   dockerfile = "apps/admin/service/Dockerfile"
   target = "api"
   labels = { "org.opencontainers.image.title" = "home-search-admin-api" }
-  tags = ["${REGISTRY}/${IMAGE_PREFIX}-admin-api:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-admin-api:${VERSION}"]
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/admin-api:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/admin-api:${VERSION}"]
 }
 
 target "admin-migration" {
@@ -94,7 +94,7 @@ target "admin-migration" {
   dockerfile = "apps/admin/service/Dockerfile"
   target = "migration"
   labels = { "org.opencontainers.image.title" = "home-search-admin-migration" }
-  tags = ["${REGISTRY}/${IMAGE_PREFIX}-admin-migration:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-admin-migration:${VERSION}"]
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/admin-migration:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/admin-migration:${VERSION}"]
 }
 
 target "admin-ops" {
@@ -103,7 +103,7 @@ target "admin-ops" {
   dockerfile = "apps/admin/service/Dockerfile"
   target = "ops"
   labels = { "org.opencontainers.image.title" = "home-search-admin-ops" }
-  tags = ["${REGISTRY}/${IMAGE_PREFIX}-admin-ops:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-admin-ops:${VERSION}"]
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/admin-ops:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/admin-ops:${VERSION}"]
 }
 
 target "user-api" {
@@ -112,7 +112,7 @@ target "user-api" {
   dockerfile = "apps/user/service/Dockerfile"
   target = "app"
   labels = { "org.opencontainers.image.title" = "home-search-user-api" }
-  tags = ["${REGISTRY}/${IMAGE_PREFIX}-user-api:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-user-api:${VERSION}"]
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/user-api:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/user-api:${VERSION}"]
 }
 
 target "user-flyway" {
@@ -122,7 +122,7 @@ target "user-flyway" {
   target = "flyway"
   platforms = ["linux/amd64"]
   labels = { "org.opencontainers.image.title" = "home-search-user-flyway" }
-  tags = ["${REGISTRY}/${IMAGE_PREFIX}-user-flyway:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-user-flyway:${VERSION}"]
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/user-flyway:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/user-flyway:${VERSION}"]
 }
 
 target "source-data-migration" {
@@ -130,7 +130,7 @@ target "source-data-migration" {
   context = "."
   dockerfile = "apps/source-data/Dockerfile"
   labels = { "org.opencontainers.image.title" = "home-search-source-data-migration" }
-  tags = ["${REGISTRY}/${IMAGE_PREFIX}-source-data-migration:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-source-data-migration:${VERSION}"]
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/source-data-migration:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/source-data-migration:${VERSION}"]
 }
 
 target "public-gateway" {
@@ -142,7 +142,7 @@ target "public-gateway" {
     VITE_KAKAO_MAP_APP_KEY = "${KAKAO_MAP_APP_KEY}"
   }
   labels = { "org.opencontainers.image.title" = "home-search-public-gateway" }
-  tags = ["${REGISTRY}/${IMAGE_PREFIX}-public-gateway:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-public-gateway:${VERSION}"]
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/public-gateway:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/public-gateway:${VERSION}"]
 }
 
 target "admin-gateway" {
@@ -150,7 +150,7 @@ target "admin-gateway" {
   context = "."
   dockerfile = "apps/admin/web/Dockerfile"
   labels = { "org.opencontainers.image.title" = "home-search-admin-gateway" }
-  tags = ["${REGISTRY}/${IMAGE_PREFIX}-admin-gateway:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-admin-gateway:${VERSION}"]
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/admin-gateway:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/admin-gateway:${VERSION}"]
 }
 
 target "backup" {
@@ -158,7 +158,7 @@ target "backup" {
   context = "."
   dockerfile = "infra/backup/Dockerfile"
   labels = { "org.opencontainers.image.title" = "home-search-backup" }
-  tags = ["${REGISTRY}/${IMAGE_PREFIX}-backup:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-backup:${VERSION}"]
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/backup:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/backup:${VERSION}"]
 }
 
 target "ops-bootstrap" {
@@ -166,7 +166,7 @@ target "ops-bootstrap" {
   context = "."
   dockerfile = "infra/bootstrap/Dockerfile"
   labels = { "org.opencontainers.image.title" = "home-search-ops-bootstrap" }
-  tags = ["${REGISTRY}/${IMAGE_PREFIX}-ops-bootstrap:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-ops-bootstrap:${VERSION}"]
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/ops-bootstrap:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/ops-bootstrap:${VERSION}"]
 }
 
 target "ml" {
@@ -174,5 +174,5 @@ target "ml" {
   context = "apps/ml"
   dockerfile = "Dockerfile"
   labels = { "org.opencontainers.image.title" = "home-search-ml" }
-  tags = ["${REGISTRY}/${IMAGE_PREFIX}-ml:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}-ml:${VERSION}"]
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/ml:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/ml:${VERSION}"]
 }

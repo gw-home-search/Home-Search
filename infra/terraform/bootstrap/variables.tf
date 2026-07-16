@@ -65,3 +65,14 @@ variable "allowed_refs" {
     error_message = "allowed_refs must contain only branch or tag refs."
   }
 }
+
+variable "github_release_environment" {
+  description = "Protected GitHub Environment allowed to publish immutable images."
+  type        = string
+  default     = "release"
+}
+
+variable "github_release_workflow_name" {
+  type    = string
+  default = "Publish release images"
+}

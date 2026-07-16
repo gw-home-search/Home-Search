@@ -54,4 +54,14 @@ run "secure_remote_state_and_exact_oidc_trust" {
     )
     error_message = "OIDC ref scope must be exact without requiring reusable-workflow-only claims."
   }
+  assert {
+    condition = alltrue([
+      local.github_release_oidc_string_equals["token.actions.githubusercontent.com:sub"] == ["repo:home-search-org/home-search:environment:release"],
+      local.github_release_oidc_string_equals["token.actions.githubusercontent.com:workflow"] == ["Publish release images"],
+      length(keys(local.github_release_oidc_string_like)) == 1,
+      local.github_release_oidc_string_like["token.actions.githubusercontent.com:ref"] == ["refs/tags/v*"],
+      aws_iam_role.github_release.name != aws_iam_role.github_staging.name,
+    ])
+    error_message = "Release publishing requires a distinct tag-only role bound to the exact release workflow."
+  }
 }

@@ -30,6 +30,7 @@ jq -e '
   ([.target[] | .labels["org.opencontainers.image.version"]] | all(. == "1.2.3")) and
   ([.target[] | .labels["org.opencontainers.image.title"]] | all(startswith("home-search-"))) and
   ([.target[] | .tags | length] | all(. == 2)) and
+  ([.target | to_entries[] | .value.tags[]] | all(test("/home-search/[^:]+:(0123456789abcdef|1[.]2[.]3)$"))) and
   (.target["property-flyway"].platforms == ["linux/amd64"]) and
   (.target["user-flyway"].platforms == ["linux/amd64"]) and
   (.target.ml.context == "apps/ml") and

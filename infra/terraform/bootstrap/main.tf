@@ -158,3 +158,74 @@ resource "aws_iam_role_policy" "terraform_state_access" {
   role   = aws_iam_role.github_staging.id
   policy = data.aws_iam_policy_document.terraform_state_access.json
 }
+
+locals {
+  github_release_oidc_string_equals = {
+    "token.actions.githubusercontent.com:aud"         = ["sts.amazonaws.com"]
+    "token.actions.githubusercontent.com:sub"         = ["repo:${var.github_repository}:environment:${var.github_release_environment}"]
+    "token.actions.githubusercontent.com:repository"  = [var.github_repository]
+    "token.actions.githubusercontent.com:workflow"    = [var.github_release_workflow_name]
+    "token.actions.githubusercontent.com:environment" = [var.github_release_environment]
+  }
+  github_release_oidc_string_like = {
+    "token.actions.githubusercontent.com:ref" = ["refs/tags/v*"]
+  }
+}
+
+data "aws_iam_policy_document" "github_release_oidc_trust" {
+  statement {
+    sid     = "GitHubReleaseImagePublishing"
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+    dynamic "condition" {
+      for_each = local.github_release_oidc_string_equals
+      content {
+        test     = "StringEquals"
+        variable = condition.key
+        values   = condition.value
+      }
+    }
+    dynamic "condition" {
+      for_each = local.github_release_oidc_string_like
+      content {
+        test     = "StringLike"
+        variable = condition.key
+        values   = condition.value
+      }
+    }
+  }
+}
+
+resource "aws_iam_role" "github_release" {
+  name                 = "home-search-github-release"
+  assume_role_policy   = data.aws_iam_policy_document.github_release_oidc_trust.json
+  max_session_duration = 3600
+}
+
+resource "aws_iam_role_policy" "github_release" {
+  name = "publish-home-search-images"
+  role = aws_iam_role.github_release.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:CompleteLayerUpload",
+          "ecr:DescribeImages", "ecr:DescribeImageScanFindings", "ecr:GetDownloadUrlForLayer",
+          "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:StartImageScan", "ecr:UploadLayerPart",
+        ]
+        Resource = "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/home-search/*"
+      },
+    ]
+  })
+}

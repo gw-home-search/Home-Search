@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+test_dir="$(mktemp -d)"
+fake_bin="${test_dir}/bin"
+output_one="${test_dir}/output-one"
+output_two="${test_dir}/output-two"
+argv_log="${test_dir}/argv.log"
+aws_log="${test_dir}/aws.log"
+sentinel='backup-password-sentinel'
+
+cleanup() {
+  find "${test_dir}" -depth -delete 2>/dev/null || true
+}
+trap cleanup EXIT
+mkdir -p "${fake_bin}" "${output_one}" "${output_two}"
+
+cat > "${fake_bin}/psql" <<'EOF'
+#!/usr/bin/env bash
+printf 'psql' >> "${FAKE_ARGV_LOG}"
+printf ' %q' "$@" >> "${FAKE_ARGV_LOG}"
+printf '\n' >> "${FAKE_ARGV_LOG}"
+case "$*" in
+  *'SHOW server_version'*) printf '16.3\n' ;;
+  *'WHERE NOT success'*) printf '0\n' ;;
+  *'flyway_schema_history WHERE success'*) printf '3\n' ;;
+  *'public.raw_trade_ingest'*) printf '11\n' ;;
+  *'admin.admin_account'*) printf '7\n' ;;
+  *'users.user_account'*) printf '5\n' ;;
+  *) printf '0\n' ;;
+esac
+EOF
+
+cat > "${fake_bin}/pg_dump" <<'EOF'
+#!/usr/bin/env bash
+printf 'pg_dump' >> "${FAKE_ARGV_LOG}"
+printf ' %q' "$@" >> "${FAKE_ARGV_LOG}"
+printf '\n' >> "${FAKE_ARGV_LOG}"
+database='unknown'
+output=''
+previous=''
+for argument in "$@"; do
+  if [[ "${previous}" == '-d' ]]; then database="${argument}"; fi
+  case "${argument}" in --file=*) output="${argument#--file=}" ;; esac
+  previous="${argument}"
+done
+printf 'deterministic custom dump fixture for %s\n' "${database}" > "${output}"
+EOF
+
+cat > "${fake_bin}/pg_restore" <<'EOF'
+#!/usr/bin/env bash
+printf 'pg_restore' >> "${FAKE_ARGV_LOG}"
+printf ' %q' "$@" >> "${FAKE_ARGV_LOG}"
+printf '\n' >> "${FAKE_ARGV_LOG}"
+EOF
+
+cat > "${fake_bin}/aws" <<'EOF'
+#!/usr/bin/env bash
+printf 'aws' >> "${FAKE_AWS_LOG}"
+printf ' %q' "$@" >> "${FAKE_AWS_LOG}"
+printf '\n' >> "${FAKE_AWS_LOG}"
+EOF
+chmod +x "${fake_bin}/psql" "${fake_bin}/pg_dump" "${fake_bin}/pg_restore" "${fake_bin}/aws"
+
+run_backup() {
+  local output_dir="$1"
+  local s3_uri="$2"
+  PATH="${fake_bin}:${PATH}" \
+  FAKE_ARGV_LOG="${argv_log}" \
+  FAKE_AWS_LOG="${aws_log}" \
+  HOME_BACKUP_PGHOST=fake-postgres \
+  HOME_BACKUP_PGPORT=5432 \
+  HOME_BACKUP_PGUSER=backup_user \
+  HOME_BACKUP_PGPASSWORD="${sentinel}" \
+  HOME_BACKUP_TIMESTAMP=20260716T010203Z \
+  HOME_BACKUP_S3_URI="${s3_uri}" \
+    "${script_dir}/home-search-db-backup.sh" --backup-all "${output_dir}"
+}
+
+run_backup "${output_one}" 's3://fixture-bucket/staging' > "${test_dir}/stdout.log"
+run_backup "${output_two}" '' >> "${test_dir}/stdout.log"
+if run_backup "${output_one}" '' >> "${test_dir}/stdout.log" 2>&1; then
+  echo '상태: Fail - 동일 timestamp의 immutable artifact를 덮어썼습니다.' >&2
+  exit 1
+fi
+
+for logical in property admin user; do
+  manifest_one="${output_one}/${logical}-20260716T010203Z.manifest.tsv"
+  manifest_two="${output_two}/${logical}-20260716T010203Z.manifest.tsv"
+  dump_one="${output_one}/${logical}-20260716T010203Z.dump"
+  [[ -s "${dump_one}" && -s "${manifest_one}" ]]
+  cmp "${manifest_one}" "${manifest_two}"
+  grep -Eq '^dump_sha256[[:space:]][0-9a-f]{64}$' "${manifest_one}"
+  grep -Eq '^migration_sha256[[:space:]][0-9a-f]{64}$' "${manifest_one}"
+  grep -Eq '^postgres_version[[:space:]]16[.]3$' "${manifest_one}"
+done
+
+if find "${output_one}" "${output_two}" -type f -iname '*coordinate*' | grep -q .; then
+  echo '상태: Fail - coordinate-source artifact가 생성되었습니다.' >&2
+  exit 1
+fi
+if grep -Fq "${sentinel}" "${argv_log}" || grep -Fq "${sentinel}" "${test_dir}/stdout.log"; then
+  echo '상태: Fail - backup password가 argv 또는 stdout에 노출되었습니다.' >&2
+  exit 1
+fi
+[[ "$(wc -l < "${aws_log}" | tr -d ' ')" == '6' ]]
+grep -Fq 's3://fixture-bucket/staging/property-20260716T010203Z.dump' "${aws_log}"
+grep -Fq 's3://fixture-bucket/staging/user-20260716T010203Z.manifest.tsv' "${aws_log}"
+
+echo '상태: Pass - deterministic local backup manifest, fake S3 upload, secret 비노출을 확인했습니다.'

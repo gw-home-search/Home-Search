@@ -21,7 +21,10 @@ type ComplexSearchResultResponse = {
 
 const SEARCH_COMPLEXES_PATH = '/api/v1/search/complexes';
 
-export async function fetchComplexSearchResults(query: string): Promise<ComplexSearchResult[]> {
+export async function fetchComplexSearchResults(
+  query: string,
+  signal?: AbortSignal,
+): Promise<ComplexSearchResult[]> {
   const trimmedQuery = query.trim();
   if (trimmedQuery.length === 0) {
     return [];
@@ -31,6 +34,7 @@ export async function fetchComplexSearchResults(query: string): Promise<ComplexS
     resolveApiUrl(`${SEARCH_COMPLEXES_PATH}?${new URLSearchParams({ q: trimmedQuery })}`),
     {
       method: 'GET',
+      signal,
     },
   );
 

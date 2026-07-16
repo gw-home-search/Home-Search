@@ -48,6 +48,19 @@ describe('fetchComplexSearchResults API 어댑터', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('호출자가 전달한 AbortSignal을 fetch에 전달한다', async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchComplexSearchResults('Sample', controller.signal);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ signal: controller.signal }),
+    );
+  });
+
   it('coordinate-pending search result의 null 좌표를 보존한다', async () => {
     vi.stubGlobal(
       'fetch',

@@ -4,8 +4,8 @@
 판정: `Partial` — production read-only repository와 grounded answer kernel을
 통과하는 offline 골든 검증기를 구현하고 격리 PostgreSQL fixture에서 검증했다.
 운영 DB에서도 `home_search_ai_reader` 역할로 대상 단지·거래·추이를 직접
-감사했지만, reader DSN을 사용한 CLI 전체 실행과 실제 OpenAI live 1건은 실행하지
-않았으므로 부동산 Capability를 아직 `지원`으로 활성화하지 않는다.
+감사하고 reader DSN을 사용한 offline CLI 전체 4건을 통과했다. 실제 OpenAI live
+1건은 실행하지 않았으므로 부동산 Capability를 아직 `지원`으로 활성화하지 않는다.
 
 ## 검증 범위
 
@@ -57,7 +57,7 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
 | 잘못된 reader password CLI | Pass — pool detail 없이 stable reason code만 출력 |
 | production OpenAI network request | not run |
 | 운영 `ai_read` 역할·데이터 직접 감사 | Pass — reader `SELECT` 2개 view, 단지 단일 식별, 최근 거래 3건, 월별 추이 6개월 |
-| 운영 reader DSN 기반 offline CLI 전체 실행 | not run — 현재 process에 DSN 없음 |
+| 운영 reader DSN 기반 offline CLI 전체 실행 | Pass — 4 cases, supported 3, unavailable 1 |
 | 기존 property public API URL·response 변경 | 없음 |
 
 ## 활성화 가능한 질문 유형
@@ -72,10 +72,7 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
 
 - 운영 DB에서 잠실엘스는 `complex_id=11471`로 단일 식별되며 marker-safe이고,
   최신 거래일은 `2026-07-16`이다. 대상 면적의 최근 거래 3건과 2026년 1~6월
-  월별 추이도 확인했지만 이 결과는 전체 CLI의 fact/citation 검증을 대신하지 않는다.
-- 현재 입력한 `PGPASSWORD`는 DB에 저장된 `home_search_ai_reader` credential과
-  일치하지 않는다. credential 값은 출력·변경하지 않았으며, 보호된 설정과 DB 역할을
-  동기화하기 전까지 운영 offline CLI는 `Fail` 상태다.
+  월별 추이를 전체 CLI의 fact/citation 검증까지 포함해 확인했다.
 - live model이 세 Capability의 plan과 모든 observed fact를 안정적으로 반환하는지
   확인하지 않았다. 첫 live 검증은 비용 경계를 확인하기 위해 1건만 실행해야 한다.
 - catalog는 운영 데이터 변경에 따라 readiness가 달라질 수 있다. 이 경우 기대값을
@@ -98,7 +95,6 @@ code-review: 지적사항 = none
 
 ## 다음 승인 조건
 
-1. 보호된 운영 reader DSN으로 offline catalog 전체를 실행해 `Pass` 결과를 보존한다.
-2. 사용자가 비용 발생을 별도로 승인한 뒤 대표 live case 1건을 실행한다.
-3. 계약 회귀, `code-review`, `security-audit` 결과와 함께 Capability 활성화를
+1. 사용자가 비용 발생을 별도로 승인한 뒤 대표 live case 1건을 실행한다.
+2. 계약 회귀, `code-review`, `security-audit` 결과와 함께 Capability 활성화를
    별도 승인한다.

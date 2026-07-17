@@ -1,0 +1,71 @@
+services:
+  ai:
+    build:
+      context: ../apps/ai
+      dockerfile: Dockerfile
+    image: home-search-ai:local
+    container_name: home-search-ai
+    restart: unless-stopped
+    depends_on:
+      postgis:
+        condition: service_healthy
+    environment:
+      HOME_AI_PROPERTY_DSN: ${HOME_AI_PROPERTY_DSN:?Set HOME_AI_PROPERTY_DSN}
+      HOME_AI_JWT_PUBLIC_KEY_PATHS: ${HOME_AI_JWT_PUBLIC_KEY_PATHS:?Set HOME_AI_JWT_PUBLIC_KEY_PATHS}
+    expose:
+      - "8000"
+    volumes:
+      - ${USER_JWT_PUBLIC_KEY_HOST_PATH:-../runtime-keys/user/public}:/run/keys/user-signing-public:ro
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - home-search-local
+
+  chat-bff:
+    image: eclipse-temurin:21-jdk
+    container_name: home-search-chat-bff
+    user: "10001:10001"
+    restart: unless-stopped
+    depends_on:
+      ai:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    working_dir: /app
+    command: [ "java", "-jar", "chat-bff.jar" ]
+    environment:
+      HOME_CHAT_BFF_AI_BASE_URL: http://ai:8000
+      HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS: ${HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS:?Set HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+    expose:
+      - "8083"
+    volumes:
+      - ${CHATBOT_BFF_JAR_PATH:-../apps/chat-bff/build/libs/chat-bff.jar}:/app/chat-bff.jar:ro
+      - ${USER_JWT_PUBLIC_KEY_HOST_PATH:-../runtime-keys/user/public}:/run/keys/user-signing-public:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8083
+          && printf 'GET /actuator/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3
+          && grep -q '"status":"UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - home-search-local
+
+  public-api-gateway:
+    depends_on:
+      api:
+        condition: service_started
+      chat-bff:
+        condition: service_healthy
+    volumes:
+      - ./nginx/property-chatbot-public.conf:/etc/nginx/templates/default.conf.template:ro

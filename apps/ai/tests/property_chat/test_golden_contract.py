@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from copy import deepcopy
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -450,3 +451,29 @@ def test_cli_sanitizes_execution_failures(monkeypatch, capsys, exception, reason
     assert exit_code == 1
     assert f"reasonCode: {reason}" in output
     assert "secret detail" not in output
+
+
+def test_cli_suppresses_connection_pool_details(monkeypatch, capsys, caplog) -> None:
+    pool_logger = logging.getLogger("psycopg.pool")
+    original_disabled = pool_logger.disabled
+
+    def fail_with_pool_log(dsn: str):
+        del dsn
+        pool_logger.warning(
+            "error connecting: host=127.0.0.1 user=home_search_ai_reader"
+        )
+        raise RuntimeError("connection failed")
+
+    monkeypatch.setenv("HOME_AI_PROPERTY_DSN", "test-dsn")
+    monkeypatch.setattr(golden, "PostgresPropertyFactRepository", fail_with_pool_log)
+    monkeypatch.setattr(golden, "load_catalog", lambda path: (golden_case(),))
+    caplog.set_level(logging.WARNING, logger="psycopg.pool")
+
+    exit_code = golden.main([])
+
+    output = capsys.readouterr()
+    assert exit_code == 1
+    assert "reasonCode: GOLDEN_EXECUTION_FAILED" in output.out
+    assert output.err == ""
+    assert not [record for record in caplog.records if record.name == "psycopg.pool"]
+    assert pool_logger.disabled is original_disabled

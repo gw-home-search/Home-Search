@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import logging
 import os
 import re
 from collections.abc import Iterable, Sequence
@@ -488,6 +489,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mode", choices=("offline", "live"), default="offline")
     parser.add_argument("--case-id", action="append", default=[])
     args = parser.parse_args(argv)
+    pool_logger = logging.getLogger("psycopg.pool")
+    pool_logger_was_disabled = pool_logger.disabled
+    pool_logger.disabled = True
     repository: PostgresPropertyFactRepository | None = None
     current_case = "none"
     try:
@@ -527,6 +531,7 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         if repository is not None:
             repository.close()
+        pool_logger.disabled = pool_logger_was_disabled
 
 
 if __name__ == "__main__":

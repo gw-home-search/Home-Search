@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: home-search-chat-bff
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+
+home:
+  chat-bff:
+    ai:
+      base-url: ${HOME_CHAT_BFF_AI_BASE_URL:http://127.0.0.1:8000}
+      timeout: ${HOME_CHAT_BFF_AI_TIMEOUT:5s}
+    rate-limit:
+      requests: ${HOME_CHAT_BFF_RATE_LIMIT_REQUESTS:20}
+      window: ${HOME_CHAT_BFF_RATE_LIMIT_WINDOW:1m}
+      key-prefix: home-search:chatbot:rate-limit
+    jwt:
+      issuer: user-service
+      audience: home-search-user-api
+      maximum-lifetime: 15m
+      public-key-paths: ${HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS:}
+
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:127.0.0.1}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+
+server:
+  port: 8083
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

@@ -1,0 +1,3 @@
+# Copy to apps/chat-bff/.env and use the same kid as apps/user/service/.env.
+# This file contains only public-key routing metadata, never a signing key.
+HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS=replace-with-user-active-kid=/run/keys/user-signing-public

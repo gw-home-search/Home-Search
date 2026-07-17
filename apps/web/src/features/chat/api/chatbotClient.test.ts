@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { queryChatbot, type AuthenticatedChatbotRequest } from './chatbotClient';
 
-describe('queryChatbot', () => {
-  it('uses the fixed JSON route, bounded context, and validated evidence response', async () => {
+describe('챗봇 질문 client', () => {
+  it('고정 JSON 경로와 제한된 문맥을 사용하고 근거 응답을 검증한다', async () => {
     const authenticatedRequest = vi.fn<AuthenticatedChatbotRequest>().mockResolvedValue(new Response(JSON.stringify({
       success: true,
       status: 'success',
@@ -47,7 +47,7 @@ describe('queryChatbot', () => {
     expect(response.citations[0]?.factIds).toEqual(['property-trade-1']);
   });
 
-  it('rejects invalid success bodies and maps non-success responses without leaking response text', async () => {
+  it('잘못된 성공 body를 거부하고 응답 원문 노출 없이 실패를 변환한다', async () => {
     const invalid = vi.fn<AuthenticatedChatbotRequest>().mockResolvedValue(new Response(JSON.stringify({
       success: true,
       answer: 'unsupported',

@@ -8,8 +8,8 @@ import {
   type ChatConversation,
 } from './chatConversationStore';
 
-describe('IndexedDbChatConversationStore', () => {
-  it('persists multiple conversations and lists the most recently updated first', async () => {
+describe('IndexedDB 챗봇 대화 저장소', () => {
+  it('여러 대화를 저장하고 최근 수정 순서로 조회한다', async () => {
     const indexedDB = new IDBFactory();
     const firstStore = new IndexedDbChatConversationStore(indexedDB, 'chat-test-persist');
     const first = conversation('first', '2026-07-17T00:00:00.000Z');
@@ -23,7 +23,7 @@ describe('IndexedDbChatConversationStore', () => {
     await expect(reloadedStore.get(first.id)).resolves.toEqual(first);
   });
 
-  it('deletes one selected conversation or all conversations', async () => {
+  it('선택한 대화 하나 또는 전체 대화를 삭제한다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-test-delete');
     await store.save(conversation('first', '2026-07-17T00:00:00.000Z'));
     await store.save(conversation('second', '2026-07-17T01:00:00.000Z'));
@@ -35,7 +35,7 @@ describe('IndexedDbChatConversationStore', () => {
     await expect(store.list()).resolves.toEqual([]);
   });
 
-  it('exports and imports a versioned archive without partial writes', async () => {
+  it('부분 저장 없이 versioned archive를 내보내고 가져온다', async () => {
     const source = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-test-export');
     const target = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-test-import');
     const first = conversation('first', '2026-07-17T00:00:00.000Z');
@@ -51,7 +51,7 @@ describe('IndexedDbChatConversationStore', () => {
     await expect(target.list()).resolves.toEqual(beforeInvalidImport);
   });
 
-  it('replace import removes conversations that are absent from the archive', async () => {
+  it('replace 가져오기는 archive에 없는 기존 대화를 제거한다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-test-replace');
     await store.save(conversation('old', '2026-07-17T00:00:00.000Z'));
     const replacement = conversation('replacement', '2026-07-17T03:00:00.000Z');
@@ -65,7 +65,7 @@ describe('IndexedDbChatConversationStore', () => {
     await expect(store.list()).resolves.toEqual([replacement]);
   });
 
-  it('rejects an archive larger than the browser import limit', async () => {
+  it('브라우저 가져오기 한도를 초과한 archive를 거부한다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-test-size-limit');
     const oversized = JSON.stringify({
       version: 1,
@@ -78,7 +78,7 @@ describe('IndexedDbChatConversationStore', () => {
     await expect(store.list()).resolves.toEqual([]);
   });
 
-  it('rejects an imported citation with a non-HTTPS source URL', async () => {
+  it('HTTPS가 아닌 출처 URL을 포함한 citation 가져오기를 거부한다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-test-source-url');
     const imported = conversation('malicious-link', '2026-07-17T04:00:00.000Z');
     imported.messages[0] = {
@@ -96,8 +96,8 @@ describe('IndexedDbChatConversationStore', () => {
   });
 });
 
-describe('chat conversation helpers', () => {
-  it('creates a local-only empty conversation', () => {
+describe('챗봇 대화 helper', () => {
+  it('브라우저 전용 빈 대화를 생성한다', () => {
     const created = createChatConversation({
       id: 'new-id',
       now: '2026-07-17T05:00:00.000Z',
@@ -113,7 +113,7 @@ describe('chat conversation helpers', () => {
     });
   });
 
-  it('sends only the newest bounded messages as conversationContext', () => {
+  it('최신 message만 제한해 conversationContext로 보낸다', () => {
     const messages = Array.from({ length: 15 }, (_, index) => ({
       id: `message-${index}`,
       role: index % 2 === 0 ? 'user' as const : 'assistant' as const,

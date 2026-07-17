@@ -8,7 +8,7 @@ import type { AuthClient } from '../auth/api/authClient';
 import { ChatbotPanel } from './ChatbotPanel';
 import { IndexedDbChatConversationStore } from './storage/chatConversationStore';
 
-describe('ChatbotPanel', () => {
+describe('챗봇 패널', () => {
   let root: Root | undefined;
   let host: HTMLDivElement | undefined;
 
@@ -18,7 +18,7 @@ describe('ChatbotPanel', () => {
     vi.restoreAllMocks();
   });
 
-  it('sends a bounded authenticated query and persists answer evidence across remount', async () => {
+  it('제한된 인증 질문을 보내고 재마운트 후에도 답변 근거를 유지한다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-persist');
     const client = authenticatedClient();
     ({ root, host } = await renderPanel(client, store));
@@ -56,7 +56,7 @@ describe('ChatbotPanel', () => {
     expect(host.textContent).toContain('기준일 2026-07-16');
   });
 
-  it('supports new conversation and selected/all deletion without server storage', async () => {
+  it('서버 저장 없이 새 대화와 선택·전체 삭제를 지원한다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-lifecycle');
     ({ root, host } = await renderPanel(authenticatedClient(), store));
     await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);

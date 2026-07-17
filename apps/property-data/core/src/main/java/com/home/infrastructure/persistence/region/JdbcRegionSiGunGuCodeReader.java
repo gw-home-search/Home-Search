@@ -24,10 +24,22 @@ class JdbcRegionSiGunGuCodeReader implements RegionSiGunGuCodeReader {
 
     @Override
     public List<String> siGunGuCodes() {
-        return jdbcClient()
-                .sql("SELECT code FROM region WHERE region_type = 'si-gun-gu' ORDER BY code")
-                .query(String.class)
-                .list();
+        return jdbcClient().sql("""
+                        SELECT lawd_cd
+                        FROM (
+                            SELECT code AS lawd_cd
+                            FROM region
+                            WHERE region_type = 'si-gun-gu'
+                            UNION
+                            SELECT substring(child.code FROM 1 FOR 5) AS lawd_cd
+                            FROM region child
+                            JOIN region parent ON parent.id = child.parent_id
+                            WHERE child.region_type = 'eup-myeon-dong'
+                              AND parent.region_type = 'si-do'
+                              AND child.code ~ '^[0-9]{8}$'
+                        ) nationwide_lawd_code
+                        ORDER BY lawd_cd
+                        """).query(String.class).list();
     }
 
     private JdbcClient jdbcClient() {

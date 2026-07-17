@@ -15,6 +15,9 @@ import org.testcontainers.utility.DockerImageName;
 
 public abstract class JdbcPostgresContainerSupport {
 
+    protected static final String AI_READER_ROLE = "home_search_ai_reader";
+    protected static final String AI_READER_PASSWORD = "ai-reader-test-only";
+
     private static final DockerImageName POSTGIS_IMAGE =
             DockerImageName.parse("postgis/postgis:16-3.4").asCompatibleSubstituteFor("postgres");
     private static final String JDBC_OPTIONS = "-c lock_timeout=10000 -c statement_timeout=120000";
@@ -38,7 +41,7 @@ public abstract class JdbcPostgresContainerSupport {
     }
 
     protected Flyway flyway(MigrationVersion target, String location) {
-        return flyway(target, location, "public", "reference", "batch");
+        return flyway(target, location, "public", "reference", "batch", "ai_read");
     }
 
     protected Flyway flyway(MigrationVersion target, String location, String... schemas) {
@@ -52,6 +55,24 @@ public abstract class JdbcPostgresContainerSupport {
             configuration.target(target);
         }
         return configuration.load();
+    }
+
+    protected void ensureAiReaderRole() {
+        Boolean exists = jdbcClient
+                .sql("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :role)")
+                .param("role", AI_READER_ROLE)
+                .query(Boolean.class)
+                .single();
+        if (!exists) {
+            jdbcClient
+                    .sql("CREATE ROLE " + AI_READER_ROLE + " LOGIN PASSWORD '" + AI_READER_PASSWORD + "'")
+                    .update();
+        }
+        jdbcClient
+                .sql("ALTER ROLE " + AI_READER_ROLE
+                        + " NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '"
+                        + AI_READER_PASSWORD + "'")
+                .update();
     }
 
     private DataSource dataSource(PostgreSQLContainer<?> postgres) {

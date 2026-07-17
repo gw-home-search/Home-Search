@@ -1,0 +1,12 @@
+pluginManagement { repositories { gradlePluginPortal(); mavenCentral() } }
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories { mavenCentral() }
+}
+rootProject.name = 'home-search-chat-bff'
+includeBuild('../../libs/security-jwt-core') {
+    dependencySubstitution { substitute module('com.home:security-jwt-core') using project(':') }
+}
+includeBuild('../../libs/user-auth-contract') {
+    dependencySubstitution { substitute module('com.home:user-auth-contract') using project(':') }
+}

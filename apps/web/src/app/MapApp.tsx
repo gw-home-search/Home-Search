@@ -12,17 +12,21 @@ import type { RegionMapMarker, SidebarMode } from './mapAppTypes';
 import { declutterComplexMarkers } from '../features/map/markerViewModel';
 import { AppHeader } from './AppHeader';
 import { useFavoriteComplex } from '../features/favorites/hooks/useFavoriteComplex';
+import { ChatbotPanel } from '../features/chat/ChatbotPanel';
+import type { IndexedDbChatConversationStore } from '../features/chat/storage/chatConversationStore';
 
 export type MapAppProps = {
   initialMapLevel?: number;
   initialRegionLoad?: boolean;
   kakaoMapAppKey?: string;
+  chatConversationStore?: IndexedDbChatConversationStore;
 };
 
 export function MapApp({
   initialMapLevel = 12,
   initialRegionLoad = true,
   kakaoMapAppKey = getConfiguredKakaoMapAppKey(),
+  chatConversationStore,
 }: MapAppProps) {
   const [isExplorationOpen, setIsExplorationOpen] = useState(() => window.innerWidth > 720);
   const explorationButtonRef = useRef<HTMLButtonElement>(null);
@@ -176,6 +180,7 @@ export function MapApp({
           />
         </div>
       </div>
+      <ChatbotPanel store={chatConversationStore} />
     </main>
   );
 }

@@ -258,7 +258,7 @@ tasks.register('verifyApiMigrationCatalog') {
             throw new GradleException("Duplicate API migration versions: ${duplicates.keySet().sort()}")
         }
         def versions = byVersion.keySet().findAll { it != null }.sort()
-        def expectedVersions = [1, 2, 4, 5, 6, 7, 8]
+        def expectedVersions = [1, 2, 4, 5, 6, 7, 8, 9]
         if (versions != expectedVersions) {
             throw new GradleException("API migration versions must be exact: ${expectedVersions}; actual=${versions}")
         }
@@ -269,7 +269,8 @@ tasks.register('verifyApiMigrationCatalog') {
             'V5__expand_trade_registry_and_rtms_run_correlation.sql': '7f6644126e3ea1b42aa2a7c8e17984bad8f9580d3f4d7c478678e38d03a7e5e5',
             'V6__enforce_trade_registry_reference.sql': '3c5f7cac9a886311362fa5a3b4bee1ddd734201ad9fef49a6719c582085a84b2',
             'V7__add_building_register_metadata_fields.sql': '4a0d7cf77640937f4c5aeb5e4462959ff0469eb670631bb3b31df82fcbdadf50',
-            'V8__add_complex_display_search_projection.sql': '23aa88583332e2c8d24b62432d67da3581874f738016cd363f6474d1db3b6d4b'
+            'V8__add_complex_display_search_projection.sql': '23aa88583332e2c8d24b62432d67da3581874f738016cd363f6474d1db3b6d4b',
+            'V9__publish_ai_read_property_facts.sql': '7d1fde99ad9050a4cf3da591b887ba4870e6337c07d5dcbe27434a1f3d2aff12'
         ].each { fileName, expected ->
             def file = files.find { it.name == fileName }
             if (file == null || sha256(file) != expected) {

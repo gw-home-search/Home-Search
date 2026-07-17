@@ -37,6 +37,7 @@ Target:
 - `/Users/gwongwangjae/home-search/apps/admin/web`
 - `/Users/gwongwangjae/home-search/apps/user/service`
 - `/Users/gwongwangjae/home-search/apps/ai`
+- `/Users/gwongwangjae/home-search/apps/chat-bff`
 - `/Users/gwongwangjae/home-search/infra`
 
 Prepare the repository as a monorepo-style migration target.
@@ -191,7 +192,8 @@ The order is fixed:
 1. Remove the dead `apps/rtms-loader`; packaged property-data Batch remains the
    only RTMS operational path.
 2. Implement user-service according to `USER_SERVICE_PLAN.md`.
-3. Migrate full legacy chatbot behavior according to `AI_SERVICE_PLAN.md`.
+3. Rebuild the evidence-grounded chatbot one approved capability slice at a time
+   according to `AI_SERVICE_PLAN.md`; do not persist conversations on the server.
 4. Add immutable git-SHA image builds and GitHub OIDC ECR publishing only after
    both service test workflows are GREEN.
 5. Prepare ECS tasks, RDS databases, EventBridge, secret injection, and DNS.

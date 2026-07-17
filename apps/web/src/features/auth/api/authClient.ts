@@ -11,7 +11,11 @@ export type AuthRestoreResult =
   | { kind: 'unavailable' };
 
 export type AuthClient = {
-  authenticatedRequest(path: string, init?: RequestInit): Promise<Response>;
+  authenticatedRequest(
+    path: string,
+    init?: RequestInit,
+    target?: 'user' | 'public',
+  ): Promise<Response>;
   authorizationUrl(provider: OAuthProvider): string;
   logout(): Promise<void>;
   restoreSession(options?: { force?: boolean }): Promise<AuthRestoreResult>;
@@ -19,25 +23,27 @@ export type AuthClient = {
 
 type AuthClientOptions = {
   baseUrl?: string;
+  publicApiBaseUrl?: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
 };
 
 export function createAuthClient(options: AuthClientOptions = {}): AuthClient {
   const baseUrl = options.baseUrl ?? resolveUserApiUrl();
+  const publicApiBaseUrl = options.publicApiBaseUrl ?? resolvePublicApiBaseUrl();
   const fetchImplementation = options.fetch ?? globalThis.fetch;
   const timeoutMs = options.timeoutMs ?? AUTH_REQUEST_TIMEOUT_MS;
   let restorePromise: Promise<AuthRestoreResult> | null = null;
   let accessToken: string | null = null;
 
-  async function request(path: string, init: RequestInit): Promise<Response> {
+  async function request(requestBaseUrl: string, path: string, init: RequestInit): Promise<Response> {
     const controller = new AbortController();
     const abortFromCaller = () => controller.abort();
     if (init.signal?.aborted) controller.abort();
     else init.signal?.addEventListener('abort', abortFromCaller, { once: true });
     const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
     try {
-      return await fetchImplementation(`${baseUrl}${path}`, { ...init, signal: controller.signal });
+      return await fetchImplementation(`${requestBaseUrl}${path}`, { ...init, signal: controller.signal });
     } finally {
       globalThis.clearTimeout(timeout);
       init.signal?.removeEventListener('abort', abortFromCaller);
@@ -47,7 +53,7 @@ export function createAuthClient(options: AuthClientOptions = {}): AuthClient {
   async function performRestore(): Promise<AuthRestoreResult> {
     accessToken = null;
     try {
-      const accessResponse = await request('/auth/access', {
+      const accessResponse = await request(baseUrl, '/auth/access', {
         method: 'POST',
         credentials: 'include',
         headers: { Accept: 'application/json' },
@@ -59,7 +65,7 @@ export function createAuthClient(options: AuthClientOptions = {}): AuthClient {
       if (!isAccessTokenResponse(accessBody)) return { kind: 'unavailable' };
       accessToken = accessBody.accessToken;
 
-      const meResponse = await request('/api/v1/users/me', {
+      const meResponse = await request(baseUrl, '/api/v1/users/me', {
         method: 'GET',
         headers: {
           Accept: 'application/json',
@@ -88,14 +94,20 @@ export function createAuthClient(options: AuthClientOptions = {}): AuthClient {
   }
 
   return {
-    async authenticatedRequest(path, init = {}) {
-      if (!path.startsWith('/api/v1/') || path.startsWith('//')) {
-        throw new Error('authenticatedRequest requires a relative user API path');
+    async authenticatedRequest(path, init = {}, target = 'user') {
+      const chatbotPath = /^\/api\/v1\/chatbot\/query(?:\/stream)?$/;
+      const userPath = /^\/api\/v1\/(?:users(?:\/|$)|favorites(?:\/|$))/;
+      if (path.startsWith('//') || (target === 'public' ? !chatbotPath.test(path) : !userPath.test(path))) {
+        throw new Error(`authenticatedRequest requires a relative ${target === 'public' ? 'chatbot' : 'user'} API path`);
       }
       if (accessToken == null) throw new Error('Authentication required');
       const headers = new Headers(init.headers);
       headers.set('Authorization', `Bearer ${accessToken}`);
-      const response = await request(path, { ...init, credentials: 'omit', headers });
+      const response = await request(target === 'public' ? publicApiBaseUrl : baseUrl, path, {
+        ...init,
+        credentials: 'omit',
+        headers,
+      });
       if (response.status === 401) {
         accessToken = null;
         restorePromise = null;
@@ -108,7 +120,7 @@ export function createAuthClient(options: AuthClientOptions = {}): AuthClient {
     },
     async logout() {
       try {
-        const response = await request('/auth/logout', {
+        const response = await request(baseUrl, '/auth/logout', {
           method: 'POST',
           credentials: 'include',
           headers: { Accept: 'application/json' },
@@ -125,6 +137,25 @@ export function createAuthClient(options: AuthClientOptions = {}): AuthClient {
       return restorePromise;
     },
   };
+}
+
+function resolvePublicApiBaseUrl(): string {
+  const configured = (import.meta.env.VITE_API_SERVER_IP as string | undefined)?.trim();
+  if (!configured) {
+    if (import.meta.env.DEV || import.meta.env.MODE === 'test') return 'http://localhost:8080';
+    return window.location.origin;
+  }
+  const candidate = /^[a-z][a-z\d+\-.]*:\/\//i.test(configured) ? configured : `http://${configured}`;
+  const url = new URL(candidate);
+  if ((url.protocol !== 'http:' && url.protocol !== 'https:')
+    || url.username
+    || url.password
+    || url.search
+    || url.hash
+    || (url.pathname !== '/' && url.pathname !== '')) {
+    throw new Error('VITE_API_SERVER_IP must be an HTTP origin');
+  }
+  return url.origin;
 }
 
 function isAccessTokenResponse(value: unknown): value is { accessToken: string } {

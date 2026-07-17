@@ -57,33 +57,36 @@ info_rows(){
 
 verify_info(){
   local phase="$1" target="$2" json="$3" expected rows versions
-  [[ "$(catalog | paste -sd, -)" == '1,2,4,5,6,7,8' && "$(catalog | tail -1)" == "${target}" ]] || policy_error 'resolved SQL catalog 또는 target이 예상과 다릅니다.'
+  [[ "$(catalog | paste -sd, -)" == '1,2,4,5,6,7,8,9' && "$(catalog | tail -1)" == "${target}" ]] || policy_error 'resolved SQL catalog 또는 target이 예상과 다릅니다.'
   expected=$([[ "${phase}" == before ]] && printf Pending || printf Success)
   [[ "$(printf '%s' "${json}" | tr -d '[:space:]')" != *'"category":"Repeatable"'* ]] || policy_error 'repeatable migration은 허용되지 않습니다.'
   rows="$(info_rows "${json}")"; versions="$(printf '%s\n' "${rows}" | cut -d'|' -f1 | paste -sd, -)"
-  [[ "${versions}" == '1,2,4,5,6,7,8' ]] || policy_error 'resolved version set이 예상과 다릅니다.'
+  [[ "${versions}" == '1,2,4,5,6,7,8,9' ]] || policy_error 'resolved version set이 예상과 다릅니다.'
   while IFS='|' read -r version type state; do [[ "${type}" == SQL && "${state}" == "${expected}" ]] || policy_error "version ${version} state/type이 허용되지 않습니다."; done <<< "${rows}"
 }
 
+verify_validate(){
+  run_flyway -outputType=json validate >/dev/null || runtime_error 'Flyway validate 실패'
+}
+
 main(){
-  require_inputs "$@"; local phase="$1" target="$2" current history relations info rows validate expected
+  require_inputs "$@"; local phase="$1" target="$2" current history relations info rows expected
   current="$(run_psql 'SELECT current_database();')" || runtime_error 'current_database probe 실패'
   [[ "${current}" == home_search ]] || policy_error 'current_database()가 home_search와 다릅니다.'
   history="$(run_psql "SELECT to_regclass('public.flyway_schema_history') IS NOT NULL;")" || runtime_error 'history probe 실패'
-  relations="$(run_psql "SELECT /* service_owned_relations */ count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','reference','batch') AND c.relkind IN ('r','p','v','m','S','f') AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid=c.oid AND d.deptype='e');")" || runtime_error 'relation probe 실패'
-  info="$(run_flyway -outputType=json info)" || runtime_error 'Flyway info 실패'; verify_info "${phase}" "${target}" "${info}"
+  relations="$(run_psql "SELECT /* service_owned_relations */ count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','reference','batch','ai_read') AND c.relkind IN ('r','p','v','m','S','f') AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid=c.oid AND d.deptype='e');")" || runtime_error 'relation probe 실패'
+  info="$(run_flyway -outputType=json info)" || runtime_error 'Flyway info 실패'
+  verify_info "${phase}" "${target}" "${info}"
   if [[ "${phase}" == before ]]; then
     [[ "${history}" =~ ^(f|false)$ && "${relations}" == 0 ]] || policy_error 'fresh DB에 history 또는 service relation이 존재합니다.'
     printf 'service=property-data phase=before target=%s state=EMPTY\n' "${target}"; return
   fi
   [[ "${history}" =~ ^(t|true)$ ]] || policy_error 'Flyway history가 없습니다.'
   rows="$(run_psql "SELECT /* preflight_history_rows */ COALESCE(version,'<null>')||'|'||type||'|'||CASE WHEN success THEN 't' ELSE 'f' END FROM public.flyway_schema_history ORDER BY installed_rank;")" || runtime_error 'history query 실패'
-  expected=$'<null>|SCHEMA|t\n1|SQL|t\n2|SQL|t\n4|SQL|t\n5|SQL|t\n6|SQL|t\n7|SQL|t\n8|SQL|t'
+  expected=$'<null>|SCHEMA|t\n1|SQL|t\n2|SQL|t\n4|SQL|t\n5|SQL|t\n6|SQL|t\n7|SQL|t\n8|SQL|t\n9|SQL|t'
   rows="$(printf '%s' "${rows}" | sed '/^[[:space:]]*$/d')"
   [[ "${rows}" == "${expected}" ]] || policy_error "exact SQL/Success history가 아닙니다: ${rows}"
-  validate="$(run_flyway -outputType=json validate)" || runtime_error 'Flyway validate 실패'
-  validate="$(printf '%s' "${validate}" | tr -d '[:space:]')"
-  [[ "${validate}" == *'"validationSuccessful":true'* && "${validate}" == *'"invalidMigrations":[]'* ]] || policy_error 'Flyway validate 결과가 유효하지 않습니다.'
+  verify_validate
   printf 'service=property-data phase=after target=%s state=READY\n' "${target}"
 }
 main "$@"

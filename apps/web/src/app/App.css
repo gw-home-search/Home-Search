@@ -4,4 +4,5 @@
 @import "./styles/exploration.css";
 @import "./styles/detail.css";
 @import "../features/auth/auth.css";
+@import "../features/chat/chat.css";
 @import "./styles/responsive.css";

@@ -21,6 +21,10 @@ if grep -Eq 'PROPERTY_MIGRATOR_DB_PASSWORD:-' "${compose_file}"; then
   echo "ERROR: property migrator password must not have a repository-known default" >&2
   exit 1
 fi
+if grep -Eq 'AI_PROPERTY_READER_DB_PASSWORD:-' "${compose_file}"; then
+  echo "ERROR: AI property reader password must not have a repository-known default" >&2
+  exit 1
+fi
 if grep -Eq 'POSTGRES_PASSWORD:.*HOME_SEARCH_DB_PASSWORD:-' "${compose_file}"; then
   echo "ERROR: PostgreSQL superuser password must not have a repository-known default" >&2
   exit 1
@@ -33,12 +37,23 @@ fi
 for password_binding in \
   'property_runtime_password PROPERTY_RUNTIME_DB_PASSWORD' \
   'property_migrator_password PROPERTY_MIGRATOR_DB_PASSWORD' \
+  'ai_property_reader_password AI_PROPERTY_READER_DB_PASSWORD' \
   'admin_runtime_password ADMIN_RUNTIME_DB_PASSWORD' \
   'admin_migrator_password ADMIN_MIGRATOR_DB_PASSWORD' \
   'user_runtime_password USER_RUNTIME_DB_PASSWORD' \
   'user_migrator_password USER_MIGRATOR_DB_PASSWORD'; do
   if ! grep -Fq "\\getenv ${password_binding}" "${role_init_script}"; then
     echo "ERROR: database role password must be read from the environment inside psql: ${password_binding}" >&2
+    exit 1
+  fi
+done
+for required_ai_reader_guard in \
+  'CREATE ROLE home_search_ai_reader LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' \
+  'ALTER ROLE home_search_ai_reader NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' \
+  "membership.member = 'home_search_ai_reader'::regrole" \
+  'GRANT CONNECT ON DATABASE home_search TO home_search_property_runtime, home_search_property_migrator, home_search_ai_reader'; do
+  if ! grep -Fq "${required_ai_reader_guard}" "${role_init_script}"; then
+    echo "ERROR: AI property reader least-privilege guard is missing: ${required_ai_reader_guard}" >&2
     exit 1
   fi
 done
@@ -59,7 +74,15 @@ for database in home_search home_search_admin home_search_user; do
     echo "ERROR: PUBLIC database connect must be revoked: ${database}" >&2
     exit 1
   fi
+  if ! grep -Fq "REVOKE TEMPORARY ON DATABASE ${database} FROM PUBLIC" "${role_init_script}"; then
+    echo "ERROR: PUBLIC temporary object creation must be revoked: ${database}" >&2
+    exit 1
+  fi
 done
+if ! grep -Fq 'REVOKE CONNECT, TEMPORARY ON DATABASE postgres FROM PUBLIC' "${role_init_script}"; then
+  echo 'ERROR: PUBLIC access to the postgres maintenance database must be revoked' >&2
+  exit 1
+fi
 
 if grep -Eq 'COORDINATE_SOURCE_DB_(USERNAME|PASSWORD):.*HOME_SEARCH_DB_' "${compose_file}"; then
   echo "ERROR: coordinate reader credential falls back to operational DB credential" >&2

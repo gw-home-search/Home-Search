@@ -13,7 +13,9 @@ gates=(
   frontend_changed
   admin_service_changed
   admin_web_changed
+  ai_changed
   user_service_changed
+  chat_bff_changed
   infra_changed
   ml_changed
 )
@@ -61,11 +63,30 @@ classify() {
       ;;
     apps/user/service/*|libs/user-auth-contract/*|docs/USER_SERVICE_PLAN.md)
       changed[user_service_changed]=true
+      changed[chat_bff_changed]=true
       ;;
     libs/security-jwt-core/*)
       changed[backend_changed]=true
       changed[admin_service_changed]=true
       changed[user_service_changed]=true
+      changed[chat_bff_changed]=true
+      ;;
+    apps/ai/*)
+      changed[ai_changed]=true
+      ;;
+    apps/chat-bff/*)
+      changed[chat_bff_changed]=true
+      ;;
+    docs/CHATBOT_API_CONTRACT.md)
+      changed[ai_changed]=true
+      changed[chat_bff_changed]=true
+      ;;
+    docs/AI_SERVICE_PLAN.md|docs/adr/0001-evidence-grounded-chatbot-and-browser-memory.md)
+      changed[ai_changed]=true
+      changed[chat_bff_changed]=true
+      ;;
+    docs/CHATBOT_CAPABILITY_REGISTRY.md|docs/CHATBOT_DATA_SOURCES.md)
+      changed[ai_changed]=true
       ;;
     apps/ml/*)
       changed[ml_changed]=true
@@ -74,6 +95,8 @@ classify() {
       changed[backend_changed]=true
       changed[source_data_changed]=true
       changed[user_service_changed]=true
+      changed[chat_bff_changed]=true
+      changed[ai_changed]=true
       changed[infra_changed]=true
       changed[ml_changed]=true
       ;;
@@ -93,6 +116,8 @@ classify() {
       changed[backend_changed]=true
       changed[source_data_changed]=true
       changed[user_service_changed]=true
+      changed[chat_bff_changed]=true
+      changed[ai_changed]=true
       changed[infra_changed]=true
       ;;
     settings.gradle|build.gradle|gradle.properties|gradle/*)

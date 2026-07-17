@@ -178,20 +178,24 @@ results in PostgreSQL. Category cache entries expire within 24 hours and a
 Seoul-day request budget fails closed when the Redis quota guard is unavailable.
 
 `apps/ai` is an independent FastAPI deployment. Home Search facts enter only
-through the `ai_read` read-only contract; POI/reference datasets, conversation
-state, legal corpus, chunks, and embeddings are ai-service-owned. Feature code
-does not query property-data tables directly.
+through the `ai_read` read-only contract; dataset metadata, quality evidence,
+POI/reference snapshots, legal corpus, chunks, and embeddings are ai-service-owned.
+Feature code does not query property-data tables directly. Conversation state is
+browser-owned IndexedDB data; the BFF and ai-service receive only a bounded recent
+context per request and do not persist question or answer text.
 
 ```text
 Browser -> user-service OAuth/JWT
 Browser -> user-service authenticated favorites
 Browser -> property-data public map/trade (unauthenticated)
+Browser IndexedDB -> bounded conversationContext -> authenticated chatbot BFF
 Browser -> authenticated chatbot BFF -> ai-service JSON/SSE
 ai-service -> ai_read views (SELECT only)
+ai-service -> home_search_ai reference/quality/RAG data
 ```
 
-The implementation order is user-service first, full chatbot parity second,
-then image/ECR CI and AWS deployment preparation.
+The implementation order is user-service first, evidence-grounded chatbot
+capabilities second, then image/ECR CI and AWS deployment preparation.
 
 The backend should connect to the coordinate source database through a dedicated
 coordinate lookup component. It should not copy nationwide coordinate snapshots

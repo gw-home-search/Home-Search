@@ -39,8 +39,8 @@ put_if_empty() {
 secret_bootstrap() {
   for name in DATABASE_RUNTIME_SECRET_ARN DATABASE_BOOTSTRAP_SECRET_ARN USER_JWT_SECRET_ARN ADMIN_JWT_SECRET_ARN; do required "${name}"; done
 
-  printf '{"property_runtime":"%s","admin_runtime":"%s","user_runtime":"%s","coordinate_reader":"%s"}\n' \
-    "$(random_hex)" "$(random_hex)" "$(random_hex)" "$(random_hex)" >"${tmp_dir}/runtime.json"
+  printf '{"property_runtime":"%s","property_ai_reader":"%s","admin_runtime":"%s","user_runtime":"%s","coordinate_reader":"%s"}\n' \
+    "$(random_hex)" "$(random_hex)" "$(random_hex)" "$(random_hex)" "$(random_hex)" >"${tmp_dir}/runtime.json"
   printf '{"property_migrator":"%s","admin_migrator":"%s","user_migrator":"%s","coordinate_migrator":"%s","coordinate_importer":"%s","backup":"%s"}\n' \
     "$(random_hex)" "$(random_hex)" "$(random_hex)" "$(random_hex)" "$(random_hex)" "$(random_hex)" >"${tmp_dir}/bootstrap.json"
 
@@ -110,6 +110,28 @@ db_bootstrap() {
 
   : >"${tmp_dir}/primary-roles.sql"
   write_role_sql "${tmp_dir}/primary-roles.sql" home_search_property_runtime "$(jq -r '.property_runtime' "${tmp_dir}/runtime.json")"
+  property_ai_reader_password="$(jq -er '.property_ai_reader | select(type == "string" and length > 0)' "${tmp_dir}/runtime.json")" || {
+    echo '상태: Fail - runtime secret에 property_ai_reader 설정이 필요합니다.' >&2
+    exit 1
+  }
+  write_role_sql "${tmp_dir}/primary-roles.sql" home_search_ai_reader "${property_ai_reader_password}"
+  cat >>"${tmp_dir}/primary-roles.sql" <<'SQL'
+ALTER ROLE home_search_ai_reader NOINHERIT;
+DO $$
+DECLARE
+  parent_role name;
+BEGIN
+  FOR parent_role IN
+    SELECT parent.rolname
+    FROM pg_auth_members membership
+    JOIN pg_roles parent ON parent.oid = membership.roleid
+    WHERE membership.member = 'home_search_ai_reader'::regrole
+  LOOP
+    EXECUTE format('REVOKE %I FROM home_search_ai_reader', parent_role);
+  END LOOP;
+END
+$$;
+SQL
   write_role_sql "${tmp_dir}/primary-roles.sql" home_search_property_migrator "$(jq -r '.property_migrator' "${tmp_dir}/bootstrap.json")"
   write_role_sql "${tmp_dir}/primary-roles.sql" home_search_admin_runtime "$(jq -r '.admin_runtime' "${tmp_dir}/runtime.json")"
   write_role_sql "${tmp_dir}/primary-roles.sql" home_search_admin_migrator "$(jq -r '.admin_migrator' "${tmp_dir}/bootstrap.json")"
@@ -125,10 +147,14 @@ db_bootstrap() {
   ensure_database "${tmp_dir}/primary-master.json" "${tmp_dir}/primary.pgpass" home_search_admin home_search_admin_migrator
   ensure_database "${tmp_dir}/primary-master.json" "${tmp_dir}/primary.pgpass" home_search_user home_search_user_migrator
   PGPASSFILE="${tmp_dir}/primary.pgpass" psql -X -q -h "${primary_host}" -p "${primary_port}" -U "${primary_user}" -d postgres <<'SQL'
+REVOKE CONNECT, TEMPORARY ON DATABASE postgres FROM PUBLIC;
 REVOKE CONNECT ON DATABASE home_search FROM PUBLIC;
 REVOKE CONNECT ON DATABASE home_search_admin FROM PUBLIC;
 REVOKE CONNECT ON DATABASE home_search_user FROM PUBLIC;
-GRANT CONNECT ON DATABASE home_search TO home_search_property_runtime, home_search_property_migrator, home_search_backup;
+REVOKE TEMPORARY ON DATABASE home_search FROM PUBLIC;
+REVOKE TEMPORARY ON DATABASE home_search_admin FROM PUBLIC;
+REVOKE TEMPORARY ON DATABASE home_search_user FROM PUBLIC;
+GRANT CONNECT ON DATABASE home_search TO home_search_property_runtime, home_search_property_migrator, home_search_ai_reader, home_search_backup;
 GRANT CONNECT ON DATABASE home_search_admin TO home_search_admin_runtime, home_search_admin_migrator, home_search_backup;
 GRANT CONNECT ON DATABASE home_search_user TO home_search_user_runtime, home_search_user_migrator, home_search_backup;
 SQL
@@ -174,6 +200,13 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public, reference, batch TO home_search_bac
 ALTER DEFAULT PRIVILEGES IN SCHEMA public, reference, batch GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO home_search_property_runtime;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public, reference, batch GRANT USAGE, SELECT ON SEQUENCES TO home_search_property_runtime;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public, reference, batch GRANT SELECT ON TABLES TO home_search_backup;
+REVOKE ALL ON ALL TABLES IN SCHEMA public, reference, batch FROM home_search_ai_reader;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public, reference, batch FROM home_search_ai_reader;
+REVOKE ALL ON SCHEMA public, reference, batch FROM home_search_ai_reader;
+REVOKE ALL ON ALL TABLES IN SCHEMA ai_read FROM PUBLIC, home_search_ai_reader;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA ai_read FROM PUBLIC, home_search_ai_reader;
+GRANT USAGE ON SCHEMA ai_read TO home_search_ai_reader;
+GRANT SELECT ON ai_read.complex_fact, ai_read.trade_fact TO home_search_ai_reader;
 SQL
         ;;
       admin) cat >"${sql}" <<'SQL'

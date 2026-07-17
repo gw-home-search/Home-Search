@@ -35,9 +35,9 @@ value, citation, and data readiness checks before a response is returned.
 the non-root `home-ai` user. `local-runtime.example` documents only placeholder
 values. Local integrated startup is owned by
 `infra/chatbot/run-local-chatbot.sh`; do not invoke the overlay directly and do
-not inject a migrator DSN into the runtime container. The current overlay does
-not yet inject the OpenAI variables; provider adapter tests use a fake transport
-and make no live request.
+not inject a migrator DSN into the runtime container. The overlay injects the
+validated OpenAI runtime variables only into the AI container. Provider adapter
+tests use a fake transport and make no live request.
 
 ## Verification
 
@@ -52,6 +52,38 @@ uv run pytest
 If the local Docker runtime cannot run the Testcontainers Reaper sidecar, use
 `TESTCONTAINERS_RYUK_DISABLED=true uv run pytest`. The PostgreSQL container is
 still stopped and removed by the fixture context manager.
+
+## Property golden verification
+
+The packaged golden catalog verifies `complex_identity`,
+`recent_trade_lookup`, `price_trend`, and the no-result path against the
+read-only `home_search.ai_read` connection. Offline mode replays only the
+catalog plan and deterministic claims, but still executes the production
+repository, observation, grounding, citation, freshness, and limitation
+validation path.
+
+```bash
+# HOME_AI_PROPERTY_DSN is already supplied by the protected runtime.
+uv run home-ai-property-golden --mode offline
+```
+
+Live mode is deliberately limited to one named case. It requires an explicit
+cost confirmation and can make at most six provider HTTP requests under the
+current primary retry and secondary fallback policy. Running it requires
+separate approval; the normal test suite never enables it.
+
+```bash
+# The DSN, API key, and model IDs are already supplied by the protected runtime.
+HOME_AI_GOLDEN_LIVE_CONFIRM=RUN_ONE_LIVE_GOLDEN_CASE \
+  uv run home-ai-property-golden --mode live \
+    --case-id complex-identity-jamsil-ells
+```
+
+The command reports only case IDs, readiness, counts, dates, and stable reason
+codes. It does not print questions, answers, DSNs, API keys, or provider error
+details. A passing local command is verification evidence; Capability status
+must remain unchanged until the data readiness report, live case, contract
+review, and activation approval are all complete.
 
 ## Dataset migration
 

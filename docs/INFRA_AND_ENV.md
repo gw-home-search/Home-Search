@@ -230,6 +230,26 @@ without printing their values, and injects them only into the AI container throu
 the chatbot Compose overlay. A live provider smoke still requires explicit approval;
 without valid runtime values the runner stops before Compose starts.
 
+Property chatbot activation uses the packaged golden CLI before changing the
+Capability Registry. Offline mode reads the production `ai_read` views through
+`home_search_ai_reader` and makes no provider request:
+
+```bash
+cd apps/ai
+# HOME_AI_PROPERTY_DSN is already supplied by the protected runtime.
+uv run home-ai-property-golden --mode offline
+```
+
+Live mode is not a general batch command. It rejects zero or multiple
+`--case-id` values and requires
+`HOME_AI_GOLDEN_LIVE_CONFIRM=RUN_ONE_LIVE_GOLDEN_CASE`. Under the current retry
+policy one live case has a provider request upper bound of six. Neither mode
+prints prompt/answer text, credentials, provider response bodies, or exception
+details. Do not place the confirmation variable in a committed env file or a
+long-lived Compose runtime; set it only for the separately approved command.
+DSN과 provider secret도 command argument나 shell history에 직접 입력하지 않고
+보호된 runtime secret injection으로 제공한다.
+
 The overlay is `infra/docker-compose.chatbot.yml`. Omitting that file leaves the
 existing property stack and public gateway unchanged. Including it replaces the
 gateway template with the exact JSON/SSE chatbot routes while retaining the

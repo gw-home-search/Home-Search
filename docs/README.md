@@ -86,8 +86,9 @@ Excluded from the property-data map/trade scope:
 
 `apps/ai/`와 `apps/chat-bff/`의 Slice 1 skeleton, AI dataset lifecycle, property
 `ai_read` 경계, grounded answer kernel, Slice 5의 Redis subject rate limit과
-browser-only IndexedDB 대화/UI까지 구현되었다. 운영 LLM provider가 아직
-선택되지 않아 실제 질문 Capability는 계속 `unavailable`이다.
+browser-only IndexedDB 대화/UI, OpenAI Responses adapter와 부동산 골든 질문
+검증 CLI까지 구현되었다. 운영 `ai_read` 전체 골든 실행과 승인된 live 1건이
+아직 완료되지 않아 실제 질문 Capability는 계속 `데이터 준비 중`이다.
 public gateway는 기본 stack에 포함되지 않고 preflight를 통과한 opt-in
 chatbot overlay에서만 연결된다. 두 서비스는
 `AI_SERVICE_PLAN.md`를 따르며 property-data map/trade critical path에는 들어가지 않는다.

@@ -87,3 +87,9 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 
 상태를 `지원`으로 바꾸는 변경에는 데이터 준비 보고서, 골든 질문 결과,
 계약 검증, `code-review`, `security-audit: 지적사항 = none|listed`를 함께 남긴다.
+
+2026-07-17 기준으로 부동산 3개 Capability의 골든 검증 CLI와 고정 catalog가
+추가되었다. 격리 PostgreSQL fixture를 사용한 offline 검증만 통과했으며 운영
+`ai_read` 전체 실행과 승인된 live 1건은 실행하지 않았다. 따라서
+`complex_identity`, `recent_trade_lookup`, `price_trend` 상태는 계속
+`데이터 준비 중`으로 유지한다.

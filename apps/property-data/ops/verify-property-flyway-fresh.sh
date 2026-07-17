@@ -8,6 +8,7 @@ readonly SUFFIX="${PPID}-$$"
 readonly NETWORK="home-search-property-flyway-${SUFFIX}"
 readonly DATABASE_CONTAINER="home-search-property-flyway-db-${SUFFIX}"
 readonly PASSWORD="flyway-smoke-only"
+readonly AI_READER_PASSWORD="ai-property-reader-smoke-only"
 readonly EVIDENCE_FILE="${TMPDIR:-/tmp}/home-search-property-flyway-${SUFFIX}.evidence"
 
 cleanup() {
@@ -37,10 +38,17 @@ for _ in $(seq 1 20); do
     fi
     sleep 1
 done
+docker exec -i "${DATABASE_CONTAINER}" psql -U home_search -d postgres -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
+CREATE ROLE ai_reader_stale_parent NOLOGIN;
+CREATE ROLE home_search_ai_reader LOGIN PASSWORD 'stale-ai-reader-password';
+GRANT ai_reader_stale_parent TO home_search_ai_reader;
+ALTER ROLE home_search_ai_reader INHERIT SUPERUSER CREATEDB CREATEROLE REPLICATION BYPASSRLS;
+SQL
 docker exec -i \
     -e POSTGRES_USER=home_search \
     -e PROPERTY_RUNTIME_DB_PASSWORD=property-runtime-smoke-only \
     -e PROPERTY_MIGRATOR_DB_PASSWORD="${PASSWORD}" \
+    -e AI_PROPERTY_READER_DB_PASSWORD="${AI_READER_PASSWORD}" \
     -e ADMIN_RUNTIME_DB_PASSWORD=admin-runtime-smoke-only \
     -e ADMIN_MIGRATOR_DB_PASSWORD=admin-migrator-smoke-only \
     -e USER_RUNTIME_DB_PASSWORD=user-runtime-smoke-only \
@@ -65,14 +73,58 @@ export PROPERTY_MIGRATOR_DB_PASSWORD="${PASSWORD}"
 export MIGRATION_DOCKER_NETWORK="${NETWORK}"
 export MIGRATION_EVIDENCE_FILE="${EVIDENCE_FILE}"
 
-"${SERVICE_ROOT}/ops/property-deployment-preflight.sh" before 8
-"${SERVICE_ROOT}/ops/property-flyway.sh" migrate 8 >/dev/null
-"${SERVICE_ROOT}/ops/property-deployment-preflight.sh" after 8
+"${SERVICE_ROOT}/ops/property-deployment-preflight.sh" before 9
+"${SERVICE_ROOT}/ops/property-flyway.sh" migrate 9 >/dev/null
+"${SERVICE_ROOT}/ops/property-deployment-preflight.sh" after 9
 "${SERVICE_ROOT}/ops/property-flyway.sh" validate >/dev/null
 installed_versions="$(docker exec "${DATABASE_CONTAINER}" psql -U home_search -d home_search \
     -v ON_ERROR_STOP=1 -Atc \
     "SELECT string_agg(version, ',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version IS NOT NULL AND success")"
-if [[ "${installed_versions}" != '1,2,4,5,6,7,8' ]]; then
+if [[ "${installed_versions}" != '1,2,4,5,6,7,8,9' ]]; then
     printf '예상하지 않은 property-data migration history: %s\n' "${installed_versions}" >&2
+    exit 1
+fi
+
+ai_reader_safety="$(docker exec "${DATABASE_CONTAINER}" psql -U home_search -d postgres -Atc \
+    "SELECT rolcanlogin||'|'||rolinherit||'|'||rolsuper||'|'||rolcreatedb||'|'||rolcreaterole||'|'||rolreplication||'|'||rolbypassrls||'|'||EXISTS (SELECT 1 FROM pg_auth_members WHERE member = 'home_search_ai_reader'::regrole) FROM pg_roles WHERE rolname='home_search_ai_reader'")"
+[[ "${ai_reader_safety}" == 'true|false|false|false|false|false|false|false' ]] || {
+    printf 'AI reader 최소 권한 검증 실패: %s\n' "${ai_reader_safety}" >&2
+    exit 1
+}
+ai_fact_count="$(docker run --rm --network "${NETWORK}" -e PGPASSWORD="${AI_READER_PASSWORD}" postgres:16.3-alpine \
+    psql -h "${DATABASE_CONTAINER}" -U home_search_ai_reader -d home_search -X -At \
+    -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM ai_read.complex_fact')"
+[[ "${ai_fact_count}" == '0' ]] || {
+    printf 'AI reader view 조회 검증 실패: %s\n' "${ai_fact_count}" >&2
+    exit 1
+}
+if docker run --rm --network "${NETWORK}" -e PGPASSWORD="${AI_READER_PASSWORD}" postgres:16.3-alpine \
+    psql -h "${DATABASE_CONTAINER}" -U home_search_ai_reader -d home_search -X \
+    -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM public.complex' >/dev/null 2>&1; then
+    printf 'AI reader가 public.complex를 조회했습니다.\n' >&2
+    exit 1
+fi
+if docker run --rm --network "${NETWORK}" -e PGPASSWORD="${AI_READER_PASSWORD}" postgres:16.3-alpine \
+    psql -h "${DATABASE_CONTAINER}" -U home_search_ai_reader -d home_search -X \
+    -v ON_ERROR_STOP=1 -c 'CREATE TABLE ai_read.forbidden_write (id bigint)' >/dev/null 2>&1; then
+    printf 'AI reader가 ai_read schema에 객체를 생성했습니다.\n' >&2
+    exit 1
+fi
+if docker run --rm --network "${NETWORK}" -e PGPASSWORD="${AI_READER_PASSWORD}" postgres:16.3-alpine \
+    psql -h "${DATABASE_CONTAINER}" -U home_search_ai_reader -d home_search -X \
+    -v ON_ERROR_STOP=1 -c 'CREATE TEMP TABLE forbidden_temp_write (id bigint)' >/dev/null 2>&1; then
+    printf 'AI reader가 임시 테이블을 생성했습니다.\n' >&2
+    exit 1
+fi
+if docker run --rm --network "${NETWORK}" -e PGPASSWORD="${AI_READER_PASSWORD}" postgres:16.3-alpine \
+    psql -h "${DATABASE_CONTAINER}" -U home_search_ai_reader -d home_search_admin -X \
+    -v ON_ERROR_STOP=1 -c 'SELECT 1' >/dev/null 2>&1; then
+    printf 'AI reader가 admin database에 연결했습니다.\n' >&2
+    exit 1
+fi
+if docker run --rm --network "${NETWORK}" -e PGPASSWORD="${AI_READER_PASSWORD}" postgres:16.3-alpine \
+    psql -h "${DATABASE_CONTAINER}" -U home_search_ai_reader -d postgres -X \
+    -v ON_ERROR_STOP=1 -c 'SELECT 1' >/dev/null 2>&1; then
+    printf 'AI reader가 postgres database에 연결했습니다.\n' >&2
     exit 1
 fi

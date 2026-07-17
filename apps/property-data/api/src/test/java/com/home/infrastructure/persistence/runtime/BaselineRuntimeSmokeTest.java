@@ -20,6 +20,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.ApplicationContext;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -57,10 +58,11 @@ class BaselineRuntimeSmokeTest {
 
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
+        bootstrapAiReaderRole();
         Flyway.configure()
                 .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
                 .locations(System.getProperty("propertyDataMigrationLocation"))
-                .schemas("public", "reference", "batch")
+                .schemas("public", "reference", "batch", "ai_read")
                 .defaultSchema("public")
                 .load()
                 .migrate();
@@ -70,6 +72,17 @@ class BaselineRuntimeSmokeTest {
         registry.add("spring.datasource.driver-class-name", POSTGRES::getDriverClassName);
         registry.add("spring.flyway.enabled", () -> "false");
         registry.add("home.region.sync.one-shot.enabled", () -> "true");
+    }
+
+    private static void bootstrapAiReaderRole() {
+        DriverManagerDataSource dataSource = new DriverManagerDataSource();
+        dataSource.setDriverClassName(POSTGRES.getDriverClassName());
+        dataSource.setUrl(POSTGRES.getJdbcUrl());
+        dataSource.setUsername(POSTGRES.getUsername());
+        dataSource.setPassword(POSTGRES.getPassword());
+        JdbcClient.create(dataSource)
+                .sql("CREATE ROLE home_search_ai_reader NOLOGIN")
+                .update();
     }
 
     @Test

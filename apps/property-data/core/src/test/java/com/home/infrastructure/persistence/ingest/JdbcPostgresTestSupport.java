@@ -43,6 +43,7 @@ public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSuppo
     @BeforeEach
     protected void resetDatabase() {
         initializeJdbc(POSTGRES);
+        ensureAiReaderRole();
         migrateLatestOnce();
         truncateTables();
     }

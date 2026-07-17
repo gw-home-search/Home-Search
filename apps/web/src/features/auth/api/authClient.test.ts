@@ -148,6 +148,38 @@ describe('authClient 인증 요청', () => {
     await expect(client.authenticatedRequest('/api/v1/favorites/501')).resolves.toMatchObject({ status: 401 });
     await expect(client.authenticatedRequest('/api/v1/favorites/501')).rejects.toThrow('Authentication required');
   });
+
+  it('chatbot request는 allowlist된 public API 경로에만 memory JWT를 전달한다', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ accessToken: 'memory-only-jwt' }))
+      .mockResolvedValueOnce(jsonResponse({
+        userId: 7, provider: 'GOOGLE', displayName: '홍길동', profileImage: null,
+      }))
+      .mockResolvedValueOnce(jsonResponse({ success: true, answer: '근거 답변' }));
+    const client = createAuthClient({
+      baseUrl: 'http://localhost:8082',
+      publicApiBaseUrl: 'http://localhost:8080',
+      fetch: fetchMock,
+    });
+    await client.restoreSession();
+
+    await expect(client.authenticatedRequest(
+      '/api/v1/chatbot/query',
+      { method: 'POST' },
+      'public',
+    )).resolves.toMatchObject({ status: 200 });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, 'http://localhost:8080/api/v1/chatbot/query', expect.objectContaining({
+      method: 'POST',
+      credentials: 'omit',
+      headers: expect.any(Headers),
+    }));
+    expect((fetchMock.mock.calls[2]?.[1]?.headers as Headers).get('Authorization')).toBe('Bearer memory-only-jwt');
+
+    await expect(client.authenticatedRequest('/api/v1/map/regions', {}, 'public'))
+      .rejects.toThrow('relative chatbot API path');
+    await expect(client.authenticatedRequest('https://evil.example/api/v1/chatbot/query', {}, 'public'))
+      .rejects.toThrow('relative chatbot API path');
+  });
 });
 
 function jsonResponse(body: unknown): Response {

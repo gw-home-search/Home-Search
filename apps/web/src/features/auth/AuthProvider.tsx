@@ -5,7 +5,7 @@ import { AuthDialog } from './AuthDialog';
 import { AUTH_MESSAGES, type AuthStatus, type CurrentUser, type OAuthProvider } from './authTypes';
 
 type AuthContextValue = {
-  authenticatedRequest(path: string, init?: RequestInit): Promise<Response>;
+  authenticatedRequest(path: string, init?: RequestInit, target?: 'user' | 'public'): Promise<Response>;
   closeDialog(): void;
   currentUser: CurrentUser | null;
   dialogError: string | null;
@@ -143,8 +143,12 @@ export function AuthProvider({ children, client, navigate = defaultNavigate }: A
     }
   }, [authClient]);
 
-  const authenticatedRequest = useCallback(async (path: string, init?: RequestInit) => {
-    const response = await authClient.authenticatedRequest(path, init);
+  const authenticatedRequest = useCallback(async (
+    path: string,
+    init?: RequestInit,
+    target: 'user' | 'public' = 'user',
+  ) => {
+    const response = await authClient.authenticatedRequest(path, init, target);
     if (response.status === 401 && mountedRef.current) {
       setCurrentUser(null);
       setStatus('anonymous');

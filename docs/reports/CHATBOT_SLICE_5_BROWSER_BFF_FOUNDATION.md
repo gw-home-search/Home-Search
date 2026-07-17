@@ -87,7 +87,7 @@ runtime secret 주입과 live 호출은 아직 검증하지 않아 실제 답변
 | `npm audit` | Pass — vulnerability 0 |
 | `infra/nginx/test-chatbot-public.sh` | Pass — property 회귀, JSON/SSE, CORS, 차단 경로 |
 | `infra/nginx/test-property-public.sh` | Pass |
-| `infra/chatbot/test-run-local-chatbot.sh` | Pass — preflight·비밀값 비노출 |
+| `infra/chatbot/test-run-local-chatbot.sh` | Pass — preflight·OpenAI key 비노출·model/timeout 검증 |
 | base + chatbot Compose `config --quiet` | Pass |
 | AI image build·container `/health` | Pass |
 | Redis + AI + BFF container smoke | Pass — non-root, health UP, 무인증 401 |
@@ -104,7 +104,8 @@ runtime secret 주입과 live 호출은 아직 검증하지 않아 실제 답변
 archive는 크기·shape·HTTPS citation URL을 검증한다. Redis 장애 시
 비용 보호를 위해 fail-closed한다. Runtime runner는 변수 파일을
 source하지 않고 값을 출력하지 않으며, BFF와 AI에는 user public key만
-mount한다. AI와 BFF runtime은 모두 non-root로 고정한다.
+mount한다. OpenAI API key는 AI container에만 주입하고 primary/secondary model과
+`1..30`초 timeout을 기동 전에 검증한다. AI와 BFF runtime은 모두 non-root로 고정한다.
 Signed JWT E2E는 실행마다 임시 RSA key와 5분 token을 생성하고 token은 권한
 `600` curl config에만 기록하며, 출력하지 않고 종료 시 `unlink`한다.
 OpenAI 요청은 `store: false`로 provider-side 저장을 끄고

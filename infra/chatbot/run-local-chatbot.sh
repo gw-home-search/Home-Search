@@ -66,6 +66,30 @@ required_value() {
     printf '%s' "$value"
 }
 
+optional_value() {
+    local path="$1"
+    local key="$2"
+    local default_value="$3"
+    local count
+    local value
+    count="$(awk -v key="$key" '
+        /^[[:space:]]*#/ { next }
+        index($0, key "=") == 1 { count += 1 }
+        END { print count + 0 }
+    ' "$path")"
+    [[ "$count" == "0" || "$count" == "1" ]] \
+        || reject "${key}는 최대 한 번 정의할 수 있습니다."
+    if [[ "$count" == "0" ]]; then
+        printf '%s' "$default_value"
+        return
+    fi
+    value="$(read_value "$path" "$key")"
+    [[ -n "$value" ]] || reject "${key} 값이 없습니다."
+    [[ "$value" != *'replace-with'* && "$value" != *'<'* && "$value" != *'>'* ]] \
+        || reject "${key} placeholder를 실제 설정으로 교체해야 합니다."
+    printf '%s' "$value"
+}
+
 for file in "$property_vars_file" "$user_vars_file" "$bff_vars_file" "$ai_vars_file"; do
     require_file "$file" "runtime vars"
 done
@@ -96,6 +120,10 @@ user_db_password="$(required_value "$user_vars_file" USER_DB_PASSWORD)"
 bff_public_key_paths="$(required_value "$bff_vars_file" HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS)"
 ai_property_dsn="$(required_value "$ai_vars_file" HOME_AI_PROPERTY_DSN)"
 ai_public_key_paths="$(required_value "$ai_vars_file" HOME_AI_JWT_PUBLIC_KEY_PATHS)"
+ai_openai_api_key="$(required_value "$ai_vars_file" HOME_AI_OPENAI_API_KEY)"
+ai_openai_primary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_PRIMARY_MODEL)"
+ai_openai_secondary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_SECONDARY_MODEL)"
+ai_openai_timeout_seconds="$(optional_value "$ai_vars_file" HOME_AI_OPENAI_TIMEOUT_SECONDS 8)"
 
 [[ "$user_active_kid" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] \
     || reject "USER_JWT_ACTIVE_KID 형식이 올바르지 않습니다."
@@ -148,6 +176,44 @@ then
     reject "HOME_AI_PROPERTY_DSN과 AI_PROPERTY_READER_DB_PASSWORD가 일치하지 않습니다."
 fi
 
+if ! AI_OPENAI_API_KEY="$ai_openai_api_key" \
+    AI_OPENAI_PRIMARY_MODEL="$ai_openai_primary_model" \
+    AI_OPENAI_SECONDARY_MODEL="$ai_openai_secondary_model" \
+    AI_OPENAI_TIMEOUT_SECONDS="$ai_openai_timeout_seconds" python3 - <<'PY'
+import math
+import os
+import sys
+
+
+def normalized(value: str, maximum: int) -> bool:
+    return (
+        value == value.strip()
+        and 0 < len(value) <= maximum
+        and all(ord(character) >= 32 and ord(character) != 127 for character in value)
+    )
+
+
+try:
+    api_key = os.environ["AI_OPENAI_API_KEY"]
+    primary = os.environ["AI_OPENAI_PRIMARY_MODEL"]
+    secondary = os.environ["AI_OPENAI_SECONDARY_MODEL"]
+    timeout = float(os.environ["AI_OPENAI_TIMEOUT_SECONDS"])
+    valid = (
+        normalized(api_key, 512)
+        and normalized(primary, 100)
+        and normalized(secondary, 100)
+        and primary != secondary
+        and math.isfinite(timeout)
+        and 1 <= timeout <= 30
+    )
+except (KeyError, ValueError):
+    valid = False
+sys.exit(0 if valid else 1)
+PY
+then
+    reject "HOME_AI_OPENAI 설정이 올바르지 않습니다."
+fi
+
 export HOME_SEARCH_DB_PASSWORD="$home_search_db_password"
 export PROPERTY_RUNTIME_DB_PASSWORD="$property_runtime_db_password"
 export PROPERTY_MIGRATOR_DB_PASSWORD="$property_migrator_db_password"
@@ -157,6 +223,10 @@ export USER_MIGRATOR_DB_PASSWORD="$user_migrator_db_password"
 export HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS="$bff_public_key_paths"
 export HOME_AI_PROPERTY_DSN="$ai_property_dsn"
 export HOME_AI_JWT_PUBLIC_KEY_PATHS="$ai_public_key_paths"
+export HOME_AI_OPENAI_API_KEY="$ai_openai_api_key"
+export HOME_AI_OPENAI_PRIMARY_MODEL="$ai_openai_primary_model"
+export HOME_AI_OPENAI_SECONDARY_MODEL="$ai_openai_secondary_model"
+export HOME_AI_OPENAI_TIMEOUT_SECONDS="$ai_openai_timeout_seconds"
 export CHATBOT_BFF_JAR_PATH="$bff_jar"
 export USER_JWT_PUBLIC_KEY_HOST_PATH="$user_public_key"
 export USER_JWT_PRIVATE_KEY_HOST_PATH="$user_private_key"

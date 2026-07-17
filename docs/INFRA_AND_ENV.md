@@ -224,10 +224,11 @@ property bootstrap password. It runs Compose `config --quiet` before `up`.
 
 The AI adapter additionally requires `HOME_AI_OPENAI_API_KEY`, explicit
 `HOME_AI_OPENAI_PRIMARY_MODEL` and `HOME_AI_OPENAI_SECONDARY_MODEL` IDs, and an
-optional `HOME_AI_OPENAI_TIMEOUT_SECONDS` in the range `1..30`. These variables
-are documented as placeholders but are not yet accepted or injected by the
-protected local runner/Compose overlay. Until that runtime boundary is updated
-and a live smoke test is approved, the adapter remains fail-closed.
+optional `HOME_AI_OPENAI_TIMEOUT_SECONDS` in the range `1..30` with default `8`.
+The local runner requires the API key and two distinct model IDs, validates them
+without printing their values, and injects them only into the AI container through
+the chatbot Compose overlay. A live provider smoke still requires explicit approval;
+without valid runtime values the runner stops before Compose starts.
 
 The overlay is `infra/docker-compose.chatbot.yml`. Omitting that file leaves the
 existing property stack and public gateway unchanged. Including it replaces the

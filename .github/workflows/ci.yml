@@ -18,6 +18,8 @@ jobs:
       frontend_changed: ${{ steps.classify.outputs.frontend_changed }}
       admin_service_changed: ${{ steps.classify.outputs.admin_service_changed }}
       admin_web_changed: ${{ steps.classify.outputs.admin_web_changed }}
+      ai_changed: ${{ steps.classify.outputs.ai_changed }}
+      chat_bff_changed: ${{ steps.classify.outputs.chat_bff_changed }}
       user_service_changed: ${{ steps.classify.outputs.user_service_changed }}
       infra_changed: ${{ steps.classify.outputs.infra_changed }}
       ml_changed: ${{ steps.classify.outputs.ml_changed }}
@@ -102,6 +104,44 @@ jobs:
       - name: Run source-data quality gate
         working-directory: apps/source-data
         run: ./gradlew sourceDataQualityCheck --no-daemon --stacktrace
+
+  ai-service-test:
+    name: ai-service-test
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.ai_changed == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.28"
+          enable-cache: true
+          cache-dependency-glob: apps/ai/uv.lock
+      - name: Sync exact AI test dependencies
+        working-directory: apps/ai
+        run: uv sync --frozen --group test
+      - name: Run AI service tests
+        working-directory: apps/ai
+        run: uv run pytest
+
+  chat-bff-test:
+    name: chat-bff-test
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.chat_bff_changed == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: Run chat BFF quality gate
+        working-directory: apps/chat-bff
+        run: ./gradlew chatBffQualityCheck --no-daemon --stacktrace
 
   frontend-test-build:
     name: frontend-test-build

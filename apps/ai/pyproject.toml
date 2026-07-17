@@ -13,6 +13,7 @@ dependencies = [
 
 [project.scripts]
 home-ai-migrate = "ai_service.datasets.migrate:main"
+home-ai-property-golden = "ai_service.property_chat.golden:main"
 
 [build-system]
 requires = ["hatchling"]

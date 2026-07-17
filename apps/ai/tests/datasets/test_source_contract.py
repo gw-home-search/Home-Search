@@ -21,7 +21,7 @@ def test_acquisition_url_must_not_persist_query_credentials() -> None:
             freshness_days=1,
             file_format="json",
             encoding="utf-8",
-            schema_version="v1",
+            schema_version="schema-v1",
             coordinate_system="EPSG:4326",
             unique_key_fields=("id",),
             required_fields=("id",),

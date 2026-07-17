@@ -177,7 +177,7 @@ parcel 좌표를 대체값으로 사용하는 기준으로 검사했다. 좌표�
 - 신규 view에는 권한이 자동 전파되지 않으며 후속 migration에서 명시적으로
   allowlist에 추가해야 한다.
 
-Fresh PostGIS에서 V1~V9 exact history, view 조회 허용, 원본 조회·schema 쓰기·타 DB
+Fresh PostGIS에서 Flyway migration 1~9 exact history, view 조회 허용, 원본 조회·schema 쓰기·타 DB
 접속 거부를 검증했다. 기존 local DB에도 2026-07-17 03:37:56 UTC에 V9를 적용했다.
 Flyway는 configured schema인 `ai_read`를 먼저 만들고 history 13번에
 `SCHEMA|"ai_read"`, 14번에 checksum `-1992481700`인 V9 SQL 성공 이력을 남겼다.

@@ -51,6 +51,8 @@ Excluded from the property-data map/trade scope:
 │   │   └── web/
 │   ├── user/
 │   │   └── service/
+│   ├── ai/                    # evidence-grounded chatbot core
+│   ├── chat-bff/              # authenticated chatbot boundary
 │   ├── ml/
 │   ├── property-data/
 │   ├── source-data/
@@ -69,6 +71,10 @@ Excluded from the property-data map/trade scope:
   built and deployed applications.
 - `apps/user/service/`: OAuth identity, user JWT, and refresh-token ownership
   boundary with its own build, container, and database.
+- `apps/ai/`: evidence-grounded FastAPI chatbot service. Slice 1에서는 외부
+  provider 없이 fail-closed skeleton만 활성화한다.
+- `apps/chat-bff/`: JWT를 다시 검증하고 AI timeout/error를 JSON/SSE 계약으로
+  변환하는 Spring WebFlux 경계다.
 - `apps/ml/`: optional prediction runtime. Model artifacts are supplied at
   runtime and are not stored in the image or repository.
 - `apps/source-data/`: coordinate-source migration and verification boundary,
@@ -78,9 +84,13 @@ Excluded from the property-data map/trade scope:
   services.
 - `infra/`: Postgres/PostGIS, Docker Compose, monitoring, and env docs.
 
-`apps/ai/` is a later-scope authenticated chatbot boundary described by
-`AI_SERVICE_PLAN.md`; it is not part of the current repository shape or the
-property-data map/trade critical path.
+`apps/ai/`와 `apps/chat-bff/`의 Slice 1 skeleton, AI dataset lifecycle, property
+`ai_read` 경계, grounded answer kernel, Slice 5의 Redis subject rate limit과
+browser-only IndexedDB 대화/UI까지 구현되었다. 운영 LLM provider가 아직
+선택되지 않아 실제 질문 Capability는 계속 `unavailable`이다.
+public gateway는 기본 stack에 포함되지 않고 preflight를 통과한 opt-in
+chatbot overlay에서만 연결된다. 두 서비스는
+`AI_SERVICE_PLAN.md`를 따르며 property-data map/trade critical path에는 들어가지 않는다.
 
 ## Reading Order
 
@@ -99,6 +109,10 @@ property-data map/trade critical path.
 13. [RESTRUCTURING_PLAN.md](RESTRUCTURING_PLAN.md)
 14. [USER_SERVICE_PLAN.md](USER_SERVICE_PLAN.md)
 15. [AI_SERVICE_PLAN.md](AI_SERVICE_PLAN.md)
+16. [CHATBOT_CAPABILITY_REGISTRY.md](CHATBOT_CAPABILITY_REGISTRY.md)
+17. [CHATBOT_DATA_SOURCES.md](CHATBOT_DATA_SOURCES.md)
+18. [CHATBOT_API_CONTRACT.md](CHATBOT_API_CONTRACT.md)
+19. [ADR 0001](adr/0001-evidence-grounded-chatbot-and-browser-memory.md)
 
 ## Non-Negotiable Decisions
 

@@ -568,16 +568,20 @@ address, or price snapshot is stored. The
 external Flyway container receives that credential; user `core` and `app`
 artifacts contain neither Flyway nor `db/migration/**` resources.
 
-ai-service owns its `ai` schema and migration history: conversations, POI and
-other reference datasets, legal corpus, chunks, embeddings, and indexing
-evidence. It receives `SELECT` only on domain-filtered `ai_read` views and no
-permission on property-data `public` tables. Cross-database joins are forbidden;
-references such as `user_id` and `complex_id` remain opaque ids across service
-boundaries.
+ai-service owns the `home_search_ai` database and its migration history for
+dataset source/acquisition/publication metadata, quality and quarantine evidence,
+POI and other reference snapshots, legal corpus, chunks, embeddings, and indexing
+evidence. Conversation text, user prompts, and generated answers are not stored in
+any server database; browser IndexedDB owns conversation history. ai-service receives
+`SELECT` only on domain-filtered `ai_read` views and no permission on property-data
+`public` tables. Cross-database joins are forbidden; references such as `complex_id`
+remain opaque ids across service boundaries.
 
-Imported POI or legal files must record checksum, source, refreshed date, and
-license before a one-shot seed/backfill runs. Unattributed datasets are not
-imported.
+Imported reference files must preserve immutable raw bytes and record checksum,
+source, acquisition URL, source date, collection time, license, schema, coordinate
+system, unique key, and coverage expectation before staging. Only a validated
+version can become the atomic active snapshot; rejected rows remain queryable with
+a reason and the previous active version remains available for rollback.
 
 ## Acceptance Criteria
 

@@ -76,7 +76,7 @@ apps/
 소유한다.
 
 ai-service는 later-scope 청사진이 아니라 user-service 다음 구현 milestone다.
-legacy chatbot 전체 parity 범위와 구현 순서는 `AI_SERVICE_PLAN.md`가 소유한다.
+근거 데이터 중심 Capability 범위와 구현 순서는 `AI_SERVICE_PLAN.md`가 소유한다.
 
 ## 서비스와 데이터 소유권
 
@@ -86,7 +86,7 @@ legacy chatbot 전체 parity 범위와 구현 순서는 `AI_SERVICE_PLAN.md`가 
 | admin-service | `home_search_admin`, Session/RBAC/audit | signed internal HTTP to property-data |
 | source-data | `home_search_coordinate_source` | import source; property-data receives read-only credential |
 | user-service | `home_search_user.users`, OAuth identity, refresh token | OAuth providers |
-| ai-service | `ai` conversation/POI/legal/RAG/reference data | `ai_read` SELECT, user JWT public keys, LLM/legal providers |
+| ai-service | `home_search_ai` dataset/quality/POI/legal/RAG evidence; no conversation text | `ai_read` SELECT, user JWT public keys, LLM/legal providers |
 | ml-inference | no durable product data | request/response inference only |
 
 Cross-database join은 금지한다. service 간 `user_id`, `complex_id`는 opaque

@@ -154,8 +154,11 @@ USER_JWT_MAXIMUM_LIFETIME=15m
 USER_JWT_PUBLIC_KEYS=active-kid=/run/keys/user-active-public,old-kid=/run/keys/user-old-public
 ```
 
-They fail at startup for empty/duplicate mappings, missing or oversized key
-files, RSA keys below 2048 bits, or active/overlap `kid` collisions. New public
+Production-enabled consumers fail at startup for empty/duplicate mappings,
+missing or oversized key files, RSA keys below 2048 bits, or active/overlap
+`kid` collisions. Slice 1의 route 미연결 AI/BFF skeleton만 health 확인을 위해
+empty mapping으로 기동할 수 있고, 이 경우 모든 chatbot 요청을 fail-closed로
+거부한다. 실제 route 활성화 전에는 non-empty mapping preflight가 필수다. New public
 keys are deployed before signing switches; old keys remain for at least the
 15-minute access-token lifetime. Runtime JWKS fetch is not used.
 
@@ -181,15 +184,67 @@ with the Postgres container because that would also expose OAuth credentials to
 it. PostgreSQL binds to host loopback only, and runtime services mount only their
 own artifact or application directory rather than the repository root.
 
+The property database bootstrap also requires `AI_PROPERTY_READER_DB_PASSWORD`.
+It creates the independent `home_search_ai_reader` login with `NOINHERIT` and no
+role-management privileges. This login can connect only to `home_search`, can
+`SELECT` only the explicitly granted `ai_read.complex_fact` and
+`ai_read.trade_fact` views, and receives no default privilege for future views.
+Keep this value distinct from property runtime, migrator, user, admin, and
+Postgres bootstrap credentials.
+
 ## Required AI-service Environment
 
-- ai-service database credentials limited to `ai` ownership and `ai_read`
-  `SELECT`.
+- ai-service uses `home_search_ai_reader` for `home_search.ai_read` `SELECT` and
+  separate credentials for `home_search_ai`; neither credential may be reused by
+  property-data runtime or migration jobs.
 - user JWT public keys plus exact user issuer/audience values.
 - LLM and legal-source credentials injected only when those adapters are
   enabled.
 
 Tests run with stub OAuth/LLM/legal providers and require no live secret.
+
+Local chatbot runtime is an explicit opt-in overlay. Prepare four separate
+runtime variable files for property bootstrap values, user-service values, BFF
+public-key mapping, and AI DSN/public-key mapping. Start it only through:
+
+```bash
+infra/chatbot/run-local-chatbot.sh \
+  <property-vars-file> \
+  <user-vars-file> \
+  <bff-vars-file> \
+  <ai-vars-file>
+```
+
+Use `apps/chat-bff/local-runtime.example` and `apps/ai/local-runtime.example`
+as placeholder-only templates. The runner parses assignments without sourcing
+the files, never prints their values, and rejects missing/duplicate variables,
+placeholder values, an invalid RSA pair, inconsistent `kid` mappings, mismatched
+user runtime DB passwords, and an AI reader DSN that does not match the
+property bootstrap password. It runs Compose `config --quiet` before `up`.
+
+The AI adapter additionally requires `HOME_AI_OPENAI_API_KEY`, explicit
+`HOME_AI_OPENAI_PRIMARY_MODEL` and `HOME_AI_OPENAI_SECONDARY_MODEL` IDs, and an
+optional `HOME_AI_OPENAI_TIMEOUT_SECONDS` in the range `1..30`. These variables
+are documented as placeholders but are not yet accepted or injected by the
+protected local runner/Compose overlay. Until that runtime boundary is updated
+and a live smoke test is approved, the adapter remains fail-closed.
+
+The overlay is `infra/docker-compose.chatbot.yml`. Omitting that file leaves the
+existing property stack and public gateway unchanged. Including it replaces the
+gateway template with the exact JSON/SSE chatbot routes while retaining the
+existing property routes and blocked `/internal`, `/api/v1/admin`, and actuator
+surfaces.
+
+The signed authentication transport can be verified without local credentials:
+
+```bash
+infra/chatbot/test-signed-jwt-e2e.sh
+```
+
+This test creates an ephemeral RSA pair and a five-minute user JWT, then verifies
+gateway -> BFF -> AI JSON/SSE, wrong-issuer rejection, and the existing property
+route. It mounts a test-only AI engine, so a pass proves authentication and
+transport wiring but does not claim live LLM provider readiness.
 
 ## Required Frontend Environment
 
@@ -252,14 +307,25 @@ wrapper는 expected database와 최고 pending version을 확인하고 `latest`,
 `repair`, `baseline`, 임의 option을 거부한다. mutation evidence에는 credential을
 제외한 timestamp, service, target, pinned image, Git SHA만 기록한다.
 
-Property-data deployment도 fresh-only다.
+Property-data deployment의 기본 경로는 fresh-only다.
 
 ```bash
-./ops/property-deployment-preflight.sh before 8
-./ops/property-flyway.sh migrate 8
-./ops/property-deployment-preflight.sh after 8
+./ops/property-deployment-preflight.sh before 9
+./ops/property-flyway.sh migrate 9
+./ops/property-deployment-preflight.sh after 9
 ./ops/property-flyway.sh validate
 ```
+
+### Completed local legacy V9 activation
+
+2026-07-17에 기존 local 전국 데이터 volume을 유지하면서 V9 `ai_read` view를
+적용했다. 적용 전 custom-format backup과 checksum, 적용된 Flyway history 및 권한
+검증 결과는 `docs/reports/CHATBOT_SLICE_3_PROPERTY_READINESS.md`에 보존한다.
+
+이 작업은 history를 `repair`, DELETE, UPDATE 또는 재작성하지 않았고, 완료 후
+일회성 `legacy-before|legacy-after` 및 local upgrade wrapper는 제거했다. 반복 운영
+interface는 `property-flyway.sh info|validate|migrate <numeric-target>`과 fresh-only
+`property-deployment-preflight.sh before|after <numeric-target>`만 유지한다.
 
 User-service는 application runtime과 분리된 official Docker Flyway CLI만
 사용한다. `core`/`app` artifact에는 Flyway dependency와 migration SQL이 없다.
@@ -373,8 +439,9 @@ local migration version 2 Java→SQL cutover는 완료됐고 executable repair s
 business fingerprint `b49e9afa...03fb4`, schema fingerprint
 `f4354488...d1b0`, validate `success`다. ignored
 `.migration-backup/20260713T104859Z-v2-history-cutover` backup은 local에 보존한다.
-현재 local DB의 JDBC/Deleted audit history는 fresh-only deployment preflight에서
-거부되는 것이 정상이며 일반 `info`/`validate`만 허용한다.
+현재 local DB의 JDBC/Deleted audit history는 일반 fresh-only deployment
+preflight에서 거부되는 것이 정상이다. local 검증은 read-only `info`/`validate`와
+Slice 3 준비 보고서의 실제 DB 감사 근거를 사용한다.
 
 ## Local Redis
 

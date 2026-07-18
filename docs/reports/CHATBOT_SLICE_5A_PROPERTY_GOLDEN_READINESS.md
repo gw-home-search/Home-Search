@@ -1,6 +1,7 @@
 # Slice 5A 부동산 골든 질문 준비도 보고서
 
-기준일: 2026-07-17  
+기준일: 2026-07-18
+
 판정: `Partial` — production read-only repository와 grounded answer kernel을
 통과하는 offline 골든 검증기를 구현하고 격리 PostgreSQL fixture에서 검증했다.
 운영 DB에서도 `home_search_ai_reader` 역할로 대상 단지·거래·추이를 직접
@@ -46,16 +47,25 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
   정규화됐지만 `psycopg.pool`이 host와 role을 포함한 연결 오류를 반복 출력했다.
   최소 GREEN은 골든 CLI 실행 범위에서만 pool logger를 비활성화하고 종료 시 원래
   상태를 복원하는 것이다.
+- 로컬 실행기 최초 RED: `.env`를 source하지 않으면서 필요한 값만 전달하고 live를
+  대표 1건으로 고정하는 실행 경계가 없어 runner 계약 테스트 3건이 파일 부재로
+  실패했다.
+- 로컬 실행기 최소 GREEN: regular file·권한·전용 reader DSN·provider 설정을
+  검증하고 offline credential 격리 및 live 확인값/고정 case를 강제하는 전용
+  실행기를 추가했다. 권한 오류, 승인되지 않은 DSN, 중복 provider key와 secret
+  비노출 회귀를 포함한 6건을 통과했다.
 
 ## 검증 근거 확인
 
 | 검사 | 결과 |
 |---|---|
 | 집중 골든 테스트 | Pass — 41 tests |
+| 로컬 실행기 계약 테스트 | Pass — 6 tests |
 | `uv sync --frozen --group test` | Pass |
-| `TESTCONTAINERS_RYUK_DISABLED=true uv run pytest` | Pass — 144 tests, coverage 91.95% |
+| `TESTCONTAINERS_RYUK_DISABLED=true uv run pytest` | Pass — 150 tests, coverage 91.95% |
 | 잘못된 reader password CLI | Pass — pool detail 없이 stable reason code만 출력 |
 | production OpenAI network request | not run |
+| 전용 실행기의 실제 `.env` offline 실행 | not run — 파일 권한 가드가 `chmod 600` 필요 상태로 거부 |
 | 운영 `ai_read` 역할·데이터 직접 감사 | Pass — reader `SELECT` 2개 view, 단지 단일 식별, 최근 거래 3건, 월별 추이 6개월 |
 | 운영 reader DSN 기반 offline CLI 전체 실행 | Pass — 4 cases, supported 3, unavailable 1 |
 | 기존 property public API URL·response 변경 | 없음 |
@@ -75,12 +85,17 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
   월별 추이를 전체 CLI의 fact/citation 검증까지 포함해 확인했다.
 - live model이 세 Capability의 plan과 모든 observed fact를 안정적으로 반환하는지
   확인하지 않았다. 첫 live 검증은 비용 경계를 확인하기 위해 1건만 실행해야 한다.
+- 저장소 hook 정책상 agent가 `.env` 권한을 직접 변경하지 않았다. 사용자가
+  `chmod 600 apps/ai/.env`를 적용한 뒤 전용 실행기로 offline과 승인된 live 1건을
+  순서대로 실행해야 한다.
 - catalog는 운영 데이터 변경에 따라 readiness가 달라질 수 있다. 이 경우 기대값을
   자동 완화하지 않고 데이터 준비도 또는 catalog 기준을 재검토해야 한다.
 
 ## 보안 영향
 
-보안 영향: CLI는 DB·provider credential을 환경에서만 읽고 출력하지 않는다.
+보안 영향: CLI와 전용 로컬 실행기는 DB·provider credential을 출력하지 않는다.
+전용 실행기는 `.env`를 source하지 않고 필요한 exact key만 읽으며 symlink,
+group/other 권한, 중복·빈 값, 승인되지 않은 reader DSN을 거부한다.
 운영 DB 연결은 `home_search_ai_reader`, database name, read-only transaction,
 statement timeout을 강제한다. live 실행은 한 case와 일회성 확인값으로 제한하며,
 질문·답변·provider 원문·예외 상세는 report에 포함하지 않는다. 문서 예시는 secret을
@@ -95,6 +110,7 @@ code-review: 지적사항 = none
 
 ## 다음 승인 조건
 
-1. 사용자가 비용 발생을 별도로 승인한 뒤 대표 live case 1건을 실행한다.
+1. 승인된 대표 live case 1건은 `.env` 권한을 `600`으로 제한하고 offline 재검증을
+   통과한 직후 실행한다.
 2. 계약 회귀, `code-review`, `security-audit` 결과와 함께 Capability 활성화를
    별도 승인한다.

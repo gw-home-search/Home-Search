@@ -63,9 +63,13 @@ repository, observation, grounding, citation, freshness, and limitation
 validation path.
 
 ```bash
-# HOME_AI_PROPERTY_DSN is already supplied by the protected runtime.
-uv run home-ai-property-golden --mode offline
+# Defaults to apps/ai/.env and reads only the required named values.
+apps/ai/ops/run-local-property-golden.sh offline
 ```
+
+The local vars file must be a regular non-symlink file with no group/other
+permissions (`chmod 600 apps/ai/.env`). The runner accepts only the dedicated
+`home_search_ai_reader` DSN and never sources the file into the shell.
 
 Live mode is deliberately limited to one named case. It requires an explicit
 cost confirmation and can make at most six provider HTTP requests under the
@@ -73,10 +77,8 @@ current primary retry and secondary fallback policy. Running it requires
 separate approval; the normal test suite never enables it.
 
 ```bash
-# The DSN, API key, and model IDs are already supplied by the protected runtime.
 HOME_AI_GOLDEN_LIVE_CONFIRM=RUN_ONE_LIVE_GOLDEN_CASE \
-  uv run home-ai-property-golden --mode live \
-    --case-id complex-identity-jamsil-ells
+  apps/ai/ops/run-local-property-golden.sh live
 ```
 
 The command reports only case IDs, readiness, counts, dates, and stable reason

@@ -235,9 +235,7 @@ Capability Registry. Offline mode reads the production `ai_read` views through
 `home_search_ai_reader` and makes no provider request:
 
 ```bash
-cd apps/ai
-# HOME_AI_PROPERTY_DSN is already supplied by the protected runtime.
-uv run home-ai-property-golden --mode offline
+apps/ai/ops/run-local-property-golden.sh offline
 ```
 
 Live mode is not a general batch command. It rejects zero or multiple
@@ -249,6 +247,14 @@ details. Do not place the confirmation variable in a committed env file or a
 long-lived Compose runtime; set it only for the separately approved command.
 DSN과 provider secret도 command argument나 shell history에 직접 입력하지 않고
 보호된 runtime secret injection으로 제공한다.
+로컬 전용 실행기는 기본적으로 `apps/ai/.env`에서 필요한 exact key만 읽고 파일을
+source하지 않는다. 해당 파일은 regular non-symlink file이어야 하며 group/other
+권한을 제거한 `600` 권한이어야 한다. 승인된 live 1건은 다음 명령으로만 실행한다.
+
+```bash
+HOME_AI_GOLDEN_LIVE_CONFIRM=RUN_ONE_LIVE_GOLDEN_CASE \
+  apps/ai/ops/run-local-property-golden.sh live
+```
 
 The overlay is `infra/docker-compose.chatbot.yml`. Omitting that file leaves the
 existing property stack and public gateway unchanged. Including it replaces the

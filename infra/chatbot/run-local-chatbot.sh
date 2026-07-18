@@ -178,8 +178,9 @@ ai_openai_api_key="$(required_value "$ai_vars_file" HOME_AI_OPENAI_API_KEY)"
 ai_openai_primary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_PRIMARY_MODEL)"
 ai_openai_secondary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_SECONDARY_MODEL)"
 ai_openai_timeout_seconds="$(optional_value "$ai_vars_file" HOME_AI_OPENAI_TIMEOUT_SECONDS 8)"
+ai_query_timeout_seconds="$(optional_value "$ai_vars_file" HOME_AI_QUERY_TIMEOUT_SECONDS 45)"
 if [[ "$using_default_runtime_files" == "true" ]]; then
-    ai_enabled_property_capabilities="$(optional_value "$ai_vars_file" HOME_AI_ENABLED_PROPERTY_CAPABILITIES complex_identity,recent_trade_lookup)"
+    ai_enabled_property_capabilities="$(optional_value "$ai_vars_file" HOME_AI_ENABLED_PROPERTY_CAPABILITIES complex_identity,recent_trade_lookup,price_trend)"
 else
     ai_enabled_property_capabilities="$(required_value "$ai_vars_file" HOME_AI_ENABLED_PROPERTY_CAPABILITIES)"
 fi
@@ -242,7 +243,8 @@ fi
 if ! AI_OPENAI_API_KEY="$ai_openai_api_key" \
     AI_OPENAI_PRIMARY_MODEL="$ai_openai_primary_model" \
     AI_OPENAI_SECONDARY_MODEL="$ai_openai_secondary_model" \
-    AI_OPENAI_TIMEOUT_SECONDS="$ai_openai_timeout_seconds" python3 - <<'PY'
+    AI_OPENAI_TIMEOUT_SECONDS="$ai_openai_timeout_seconds" \
+    AI_QUERY_TIMEOUT_SECONDS="$ai_query_timeout_seconds" python3 - <<'PY'
 import math
 import os
 import sys
@@ -261,6 +263,7 @@ try:
     primary = os.environ["AI_OPENAI_PRIMARY_MODEL"]
     secondary = os.environ["AI_OPENAI_SECONDARY_MODEL"]
     timeout = float(os.environ["AI_OPENAI_TIMEOUT_SECONDS"])
+    query_timeout = float(os.environ["AI_QUERY_TIMEOUT_SECONDS"])
     valid = (
         normalized(api_key, 512)
         and normalized(primary, 100)
@@ -268,6 +271,8 @@ try:
         and primary != secondary
         and math.isfinite(timeout)
         and 1 <= timeout <= 30
+        and math.isfinite(query_timeout)
+        and 1 <= query_timeout <= 60
     )
 except (KeyError, ValueError):
     valid = False
@@ -277,7 +282,7 @@ then
     reject "HOME_AI_OPENAI 설정이 올바르지 않습니다."
 fi
 case "$ai_enabled_property_capabilities" in
-    complex_identity | complex_identity,recent_trade_lookup) ;;
+    complex_identity | complex_identity,recent_trade_lookup | complex_identity,recent_trade_lookup,price_trend) ;;
     *) reject "HOME_AI_ENABLED_PROPERTY_CAPABILITIES는 승인된 누적 설정만 허용합니다." ;;
 esac
 
@@ -294,6 +299,7 @@ export HOME_AI_OPENAI_API_KEY="$ai_openai_api_key"
 export HOME_AI_OPENAI_PRIMARY_MODEL="$ai_openai_primary_model"
 export HOME_AI_OPENAI_SECONDARY_MODEL="$ai_openai_secondary_model"
 export HOME_AI_OPENAI_TIMEOUT_SECONDS="$ai_openai_timeout_seconds"
+export HOME_AI_QUERY_TIMEOUT_SECONDS="$ai_query_timeout_seconds"
 export HOME_AI_ENABLED_PROPERTY_CAPABILITIES="$ai_enabled_property_capabilities"
 export CHATBOT_BFF_JAR_PATH="$bff_jar"
 export USER_JWT_PUBLIC_KEY_HOST_PATH="$user_public_key"

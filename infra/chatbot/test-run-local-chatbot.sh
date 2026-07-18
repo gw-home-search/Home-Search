@@ -18,7 +18,7 @@ printf '%s\n' \
     '#!/usr/bin/env bash' \
     'if [[ "${1:-}" == "inspect" ]]; then printf "running|healthy\\n"; fi' \
     'if [[ "${HOME_AI_PROPERTY_DSN:-}" == *%40* ]]; then dsn_reserved_encoded=yes; else dsn_reserved_encoded=no; fi' \
-    'printf "%s|home-search-set=%s|property-runtime=%s|bff-mapping=%s|ai-mapping=%s|dsn-reserved-encoded=%s|openai-key-set=%s|primary=%s|secondary=%s|timeout=%s|capabilities=%s\\n" "$*" "${HOME_SEARCH_DB_PASSWORD:+yes}" "${PROPERTY_RUNTIME_DB_PASSWORD:-missing}" "${HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS:-missing}" "${HOME_AI_JWT_PUBLIC_KEY_PATHS:-missing}" "$dsn_reserved_encoded" "${HOME_AI_OPENAI_API_KEY:+yes}" "${HOME_AI_OPENAI_PRIMARY_MODEL:-missing}" "${HOME_AI_OPENAI_SECONDARY_MODEL:-missing}" "${HOME_AI_OPENAI_TIMEOUT_SECONDS:-missing}" "${HOME_AI_ENABLED_PROPERTY_CAPABILITIES:-missing}" >>"$CHATBOT_TEST_DOCKER_LOG"' \
+    'printf "%s|home-search-set=%s|property-runtime=%s|bff-mapping=%s|ai-mapping=%s|dsn-reserved-encoded=%s|openai-key-set=%s|primary=%s|secondary=%s|timeout=%s|query-timeout=%s|capabilities=%s\\n" "$*" "${HOME_SEARCH_DB_PASSWORD:+yes}" "${PROPERTY_RUNTIME_DB_PASSWORD:-missing}" "${HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS:-missing}" "${HOME_AI_JWT_PUBLIC_KEY_PATHS:-missing}" "$dsn_reserved_encoded" "${HOME_AI_OPENAI_API_KEY:+yes}" "${HOME_AI_OPENAI_PRIMARY_MODEL:-missing}" "${HOME_AI_OPENAI_SECONDARY_MODEL:-missing}" "${HOME_AI_OPENAI_TIMEOUT_SECONDS:-missing}" "${HOME_AI_QUERY_TIMEOUT_SECONDS:-missing}" "${HOME_AI_ENABLED_PROPERTY_CAPABILITIES:-missing}" >>"$CHATBOT_TEST_DOCKER_LOG"' \
     >"$tmp_dir/bin/docker"
 chmod +x "$tmp_dir/bin/docker"
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
@@ -53,6 +53,7 @@ printf '%s\n' \
     'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
     'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
     'HOME_AI_OPENAI_TIMEOUT_SECONDS=7' \
+    'HOME_AI_QUERY_TIMEOUT_SECONDS=40' \
     'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity' >"$ai_env"
 
 if [[ ! -x "$runner" ]]; then
@@ -63,7 +64,8 @@ bff_compose_section="$(sed -n '/^  chat-bff:/,/^  public-api-gateway:/p' "$chatb
 grep -Fq -- '- CMD' <<<"$bff_compose_section"
 grep -Fq -- '- bash' <<<"$bff_compose_section"
 grep -Fq -- '- -ec' <<<"$bff_compose_section"
-grep -Fq 'HOME_CHAT_BFF_AI_TIMEOUT: ${HOME_CHAT_BFF_AI_TIMEOUT:-55s}' <<<"$bff_compose_section"
+grep -Fq 'HOME_CHAT_BFF_AI_TIMEOUT: ${HOME_CHAT_BFF_AI_TIMEOUT:-70s}' <<<"$bff_compose_section"
+grep -Fq 'HOME_AI_QUERY_TIMEOUT_SECONDS: ${HOME_AI_QUERY_TIMEOUT_SECONDS:-45}' "$chatbot_compose"
 
 output="$(
     PATH="$tmp_dir/bin:$PATH" \
@@ -83,7 +85,7 @@ fi
 grep -Fq 'compose -f' "$docker_log"
 grep -Fq 'config --quiet' "$docker_log"
 grep -Fq 'property-runtime=property-runtime-secret' "$docker_log"
-grep -Fq 'openai-key-set=yes|primary=gpt-5-primary-test|secondary=gpt-5-secondary-test|timeout=7' "$docker_log"
+grep -Fq 'openai-key-set=yes|primary=gpt-5-primary-test|secondary=gpt-5-secondary-test|timeout=7|query-timeout=40' "$docker_log"
 grep -Fq 'capabilities=complex_identity' "$docker_log"
 grep -Fq -- '--profile user' "$docker_log"
 grep -Fq 'up -d --build --force-recreate --no-deps user-service ai chat-bff public-api-gateway' "$docker_log"
@@ -281,7 +283,7 @@ PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
     CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
     "$runner" "$property_env" "$user_env" "$bff_env" "$ai_env" >/dev/null
-grep -Fq 'openai-key-set=yes|primary=gpt-5-primary-test|secondary=gpt-5-secondary-test|timeout=8' "$docker_log"
+grep -Fq 'openai-key-set=yes|primary=gpt-5-primary-test|secondary=gpt-5-secondary-test|timeout=8|query-timeout=45' "$docker_log"
 
 printf '%s\n' \
     'HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS=wrong-kid=/run/keys/user-signing-public' >"$bff_env"
@@ -455,7 +457,28 @@ printf '%s\n' \
     'HOME_AI_OPENAI_API_KEY=openai-test-secret' \
     'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
     'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
+    'HOME_AI_QUERY_TIMEOUT_SECONDS=60' \
     'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend' >"$ai_env"
+if ! PATH="$tmp_dir/bin:$PATH" \
+    CHATBOT_TEST_DOCKER_LOG="$docker_log" \
+    CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
+    CHATBOT_AI_DOCKERFILE_PATH="$tmp_dir/Dockerfile" \
+    CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
+    CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
+    "$runner" "$property_env" "$user_env" "$bff_env" "$ai_env" \
+    >"$tmp_dir/capability-trend-approved.out" 2>&1; then
+    echo "상태: Fail - 승인된 price trend 누적 Capability가 허용되지 않았습니다." >&2
+    exit 1
+fi
+grep -Fq '상태: Pass - chatbot local preflight' "$tmp_dir/capability-trend-approved.out"
+
+printf '%s\n' \
+    'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \
+    'HOME_AI_JWT_PUBLIC_KEY_PATHS={"local-user-1":"/run/keys/user-signing-public"}' \
+    'HOME_AI_OPENAI_API_KEY=openai-test-secret' \
+    'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
+    'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
+    'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,price_trend' >"$ai_env"
 if PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_TEST_DOCKER_LOG="$docker_log" \
     CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
@@ -464,7 +487,7 @@ if PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
     "$runner" "$property_env" "$user_env" "$bff_env" "$ai_env" \
     >"$tmp_dir/capability-invalid.out" 2>&1; then
-    echo "상태: Fail - 승인되지 않은 price trend Capability가 거부되지 않았습니다." >&2
+    echo "상태: Fail - 중복 price trend Capability가 거부되지 않았습니다." >&2
     exit 1
 fi
 grep -Fq '거부됨: HOME_AI_ENABLED_PROPERTY_CAPABILITIES는 승인된 누적 설정만 허용합니다.' \

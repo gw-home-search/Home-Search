@@ -76,6 +76,13 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
 - 보호 runner 최초 RED: AI vars에는 allowlist가 있었지만 runner가 Compose 환경으로
   전달하지 않아 fake runtime에서 `capabilities=missing`으로 실패했다. 최소 GREEN은
   exact-value preflight, Compose 주입, 누락·혼합값 거부와 비밀 비노출 검증이다.
+- 통합 runtime RED: 기존 property `DB_*` 계약과 중복된 bootstrap 변수, 서로 다른
+  `kid` mapping, URL-encode되지 않은 reader password, `/bin/sh`에서 실행한 Bash 전용
+  healthcheck, AI retry budget보다 짧은 BFF `5s` timeout이 순서대로 기동·E2E를
+  차단했다.
+- 통합 runtime 최소 GREEN: 검증된 role alias와 active `kid` 파생 mapping, 고정 host의
+  percent-encoded reader DSN, `bash -ec` healthcheck, bounded `55s` BFF timeout,
+  base 서비스 health preflight와 `--no-deps` 기동을 적용했다.
 
 ## 검증 근거 확인
 
@@ -94,8 +101,12 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
 | 운영 `ai_read` 역할·데이터 직접 감사 | Pass — reader `SELECT` 2개 view, 단지 단일 식별, 최근 거래 3건, 월별 추이 6개월 |
 | 운영 reader DSN 기반 offline CLI 전체 실행 | Pass — 4 cases, supported 3, unavailable 1 |
 | `./gradlew chatBffQualityCheck --no-daemon --stacktrace` | Pass — `BUILD SUCCESSFUL` |
-| `infra/chatbot/test-run-local-chatbot.sh` | Pass — exact Capability 전달·누락/혼합 거부·비밀 비노출 |
+| `infra/chatbot/test-run-local-chatbot.sh` | Pass — 기존 DB 변수 호환, role 오용 거부, DSN encoding, Capability gate, 비밀 비노출 |
 | base + chatbot Compose `config --quiet` | Pass — synthetic non-secret validation values |
+| 실제 local runtime health | Pass — user-service, AI, BFF, gateway 기동; AI/BFF healthy |
+| 실제 signed JWT identity JSON | Pass — `200`, supported, facts 1, citations 1, `dataAsOf=2026-07-12` |
+| 실제 signed JWT identity SSE | Pass — `200`, final 1, error 0, JSON과 동일 fact/citation 의미 |
+| 비활성 최근 거래 JSON | Pass — `200`, unavailable, facts 0, citations 0, limitations 1 |
 | chatbot JSON/SSE 공개 계약 영향 | 없음 |
 | 기존 property public API URL·response 변경 | 없음 |
 
@@ -128,8 +139,11 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
 - 실제 live 검증은 `complex_identity` 한 건뿐이다. 최근 거래와 가격 추이는 offline
   production DB 경로를 통과했지만 LLM plan/draft의 live 안정성은 아직 확인하지 않았다.
 - Runtime은 `complex_identity`만 승인하며 비활성 Capability를 repository 조회 전에
-  차단한다. 로컬 실제 기동 전 `apps/ai/.env`에 exact allowlist를 추가해야 하며,
-  누락 시 preflight 또는 runtime이 fail-closed한다.
+  차단한다. 무인자 local runner는 승인된 `complex_identity`를 기본 주입하고,
+  사용자 지정 4인자 실행은 exact allowlist 누락·오류를 fail-closed한다.
+- 실제 local runtime에서 DB password 예약문자를 percent-encode한 고정 reader DSN,
+  user active `kid` 기반 public-key mapping, BFF `55s` bounded timeout을 적용해 signed
+  JWT JSON/SSE와 비활성 Capability 차단까지 확인했다.
 - catalog는 운영 데이터 변경에 따라 readiness가 달라질 수 있다. 이 경우 기대값을
   자동 완화하지 않고 데이터 준비도 또는 catalog 기준을 재검토해야 한다.
 
@@ -146,6 +160,9 @@ Provider HTTP 실패 body는 읽지 않으며 로컬 CLI에 출력 가능한 rea
 고정 allowlist로 제한한다.
 Runtime Capability 설정도 고정 allowlist와 strict parser를 통과해야 하며, 환경값만으로
 live 검증을 받지 않은 Capability를 활성화할 수 없다.
+무인자 runner는 secret을 출력하지 않고 DB role을 검증한 뒤 reader DSN의 password
+부분만 percent-encode하며, `--no-deps`로 기존 Postgres·Redis·property API를 재생성하지
+않는다.
 
 security-audit: 지적사항 = none
 
@@ -158,6 +175,5 @@ code-review: 지적사항 = none
 
 1. `recent_trade_lookup`, `price_trend`는 각각 대표 live case가 통과하기 전까지
    `데이터 준비 중`과 비활성을 유지한다.
-2. 로컬 통합 runtime을 시작하기 전에 `apps/ai/.env`에
-   `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity`를 추가하고 preflight를
-   통과한다.
+2. 다음 활성화는 `recent_trade_lookup` 대표 live case와 동일 조건 DB fact/citation
+   검증을 별도 승인한 뒤 진행한다.

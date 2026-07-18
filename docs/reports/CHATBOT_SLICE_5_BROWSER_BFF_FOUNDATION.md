@@ -92,6 +92,7 @@ runtime secret 주입과 live 호출은 아직 검증하지 않아 실제 답변
 | AI image build·container `/health` | Pass |
 | Redis + AI + BFF container smoke | Pass — non-root, health UP, 무인증 401 |
 | `infra/chatbot/test-signed-jwt-e2e.sh` | Pass — JSON/SSE, 이중 JWT 검증, 잘못된 issuer 401, property 회귀 |
+| production local runtime signed JWT E2E | Pass — `complex_identity` JSON/SSE supported, 비활성 최근 거래 unavailable |
 | `cd apps/ai && uv run pytest` | Pass — 103 tests, coverage 91.30% |
 | OpenAI provider fake-transport contract | Pass — `store: false`, strict schema, token/byte/timeout limit, refusal·오류 비노출 |
 | 기존 property-data public URL·response 변경 | 없음 |
@@ -124,9 +125,10 @@ code-review: 지적사항 = none
 
 ## 검증 공백과 잔여 위험
 
-- 실제 signed user JWT gateway → BFF → AI E2E는 test-only engine으로 통과했다.
-  OpenAI adapter는 fake transport로 검증했으며 protected Compose/runner에 secret을
-  전달하지 않으므로 실제 근거 답변과 live model fallback은 여전히 미검증이다.
+- 실제 signed user JWT gateway → BFF → production AI E2E에서
+  `complex_identity` JSON/SSE의 fact 1건·citation 1건과 비활성 최근 거래의 fact 0건을
+  확인했다. primary/secondary 전체 실패 fallback 경로의 실제 provider 재현은 비용과
+  장애 유발 위험 때문에 fake transport 검증으로 유지한다.
 - UI는 자동화된 DOM 계약을 검증했지만 실제 브라우저 screenshot 기반
   시각 QA는 아직 실행하지 않았다.
 - Redis 고정 window는 최초 요청 시점을 기준으로 하며 sliding window가 아니다.

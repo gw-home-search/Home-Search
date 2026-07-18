@@ -217,29 +217,39 @@ The existing four-path form remains available when an operator intentionally
 uses non-default runtime files. Do not put secret values directly on the command
 line.
 
-The property runtime file must define the Compose bootstrap values
-`HOME_SEARCH_DB_PASSWORD`, `PROPERTY_RUNTIME_DB_PASSWORD`,
-`PROPERTY_MIGRATOR_DB_PASSWORD`, `AI_PROPERTY_READER_DB_PASSWORD`,
-`USER_RUNTIME_DB_PASSWORD`, and `USER_MIGRATOR_DB_PASSWORD` exactly once. Keep
-the role passwords distinct except that `USER_RUNTIME_DB_PASSWORD` must match
-the user-service file's `USER_DB_PASSWORD`. These are not inferred from the
-property application's `DB_PASSWORD`.
+For the no-argument local path, an explicit `HOME_SEARCH_DB_PASSWORD` takes
+precedence. Otherwise the runner accepts the existing property application pair
+`DB_USERNAME=home_search` and `DB_PASSWORD` as the bootstrap login; it never
+reuses `DB_PASSWORD` when the username is a runtime role. The property runtime
+password uses the existing local Compose default unless explicitly supplied,
+and the user runtime password comes from the user-service file's
+`USER_DB_PASSWORD`. Migrator and AI reader passwords remain separate roles.
 
 Use `apps/chat-bff/local-runtime.example` and `apps/ai/local-runtime.example`
 as placeholder-only templates. The runner parses assignments without sourcing
 the files, never prints their values, and rejects missing/duplicate variables,
 placeholder values, an invalid RSA pair, inconsistent `kid` mappings, mismatched
 user runtime DB passwords, and an AI reader DSN that does not match the
-property bootstrap password. It runs Compose `config --quiet` before `up`.
+dedicated reader password. The no-argument path derives BFF/AI public-key
+mappings from `USER_JWT_ACTIVE_KID`, percent-encodes the AI reader password into
+the fixed local DSN, and supplies the approved `complex_identity` allowlist when
+that optional line is absent. The four-path form keeps strict explicit mapping,
+DSN, and Capability validation.
+
+The runner requires the existing `home-search-postgis` and `home-search-redis`
+containers to be healthy and `home-search-api` to be running. It then uses
+Compose `--no-deps` so chatbot startup cannot recreate the base data services.
+The local BFF timeout is `55s`, which covers the bounded two-stage AI retry
+budget while preserving a finite public timeout.
 
 The AI adapter additionally requires `HOME_AI_OPENAI_API_KEY`, explicit
 `HOME_AI_OPENAI_PRIMARY_MODEL` and `HOME_AI_OPENAI_SECONDARY_MODEL` IDs, and an
 optional `HOME_AI_OPENAI_TIMEOUT_SECONDS` in the range `1..30` with default `8`.
-It also requires
-`HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity`. The runtime and local
-preflight accept only that exact approved value; missing, duplicate, whitespace,
-mixed, or unapproved Capability values disable all property capabilities or stop
-startup before Compose runs.
+The only accepted runtime Capability value is
+`HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity`. The no-argument local
+runner supplies this already-approved value when omitted; explicit custom-file
+startup still rejects a missing value. Duplicate, mixed, or unapproved values
+remain fail-closed.
 The local runner requires the API key and two distinct model IDs, validates them
 without printing their values, and injects them only into the AI container through
 the chatbot Compose overlay. A live provider smoke still requires explicit approval;

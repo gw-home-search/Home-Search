@@ -44,6 +44,7 @@ services:
     command: [ "java", "-jar", "chat-bff.jar" ]
     environment:
       HOME_CHAT_BFF_AI_BASE_URL: http://ai:8000
+      HOME_CHAT_BFF_AI_TIMEOUT: ${HOME_CHAT_BFF_AI_TIMEOUT:-55s}
       HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS: ${HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS:?Set HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: "6379"
@@ -54,7 +55,9 @@ services:
       - ${USER_JWT_PUBLIC_KEY_HOST_PATH:-../runtime-keys/user/public}:/run/keys/user-signing-public:ro
     healthcheck:
       test:
-        - CMD-SHELL
+        - CMD
+        - bash
+        - -ec
         - >-
           exec 3<>/dev/tcp/127.0.0.1/8083
           && printf 'GET /actuator/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3

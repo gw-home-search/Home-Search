@@ -179,7 +179,7 @@ ai_openai_primary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_PRIMARY
 ai_openai_secondary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_SECONDARY_MODEL)"
 ai_openai_timeout_seconds="$(optional_value "$ai_vars_file" HOME_AI_OPENAI_TIMEOUT_SECONDS 8)"
 if [[ "$using_default_runtime_files" == "true" ]]; then
-    ai_enabled_property_capabilities="$(optional_value "$ai_vars_file" HOME_AI_ENABLED_PROPERTY_CAPABILITIES complex_identity)"
+    ai_enabled_property_capabilities="$(optional_value "$ai_vars_file" HOME_AI_ENABLED_PROPERTY_CAPABILITIES complex_identity,recent_trade_lookup)"
 else
     ai_enabled_property_capabilities="$(required_value "$ai_vars_file" HOME_AI_ENABLED_PROPERTY_CAPABILITIES)"
 fi
@@ -276,8 +276,10 @@ PY
 then
     reject "HOME_AI_OPENAI 설정이 올바르지 않습니다."
 fi
-[[ "$ai_enabled_property_capabilities" == "complex_identity" ]] \
-    || reject "HOME_AI_ENABLED_PROPERTY_CAPABILITIES는 승인된 complex_identity만 허용합니다."
+case "$ai_enabled_property_capabilities" in
+    complex_identity | complex_identity,recent_trade_lookup) ;;
+    *) reject "HOME_AI_ENABLED_PROPERTY_CAPABILITIES는 승인된 누적 설정만 허용합니다." ;;
+esac
 
 export HOME_SEARCH_DB_PASSWORD="$home_search_db_password"
 export PROPERTY_RUNTIME_DB_PASSWORD="$property_runtime_db_password"
@@ -319,4 +321,5 @@ require_base_container home-search-api false
 "${compose[@]}" config --quiet
 
 echo "상태: Pass - chatbot local preflight"
-"${compose[@]}" --profile user up -d --build --no-deps user-service ai chat-bff public-api-gateway
+"${compose[@]}" --profile user up -d --build --force-recreate --no-deps \
+    user-service ai chat-bff public-api-gateway

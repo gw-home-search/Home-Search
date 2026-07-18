@@ -86,7 +86,7 @@ grep -Fq 'property-runtime=property-runtime-secret' "$docker_log"
 grep -Fq 'openai-key-set=yes|primary=gpt-5-primary-test|secondary=gpt-5-secondary-test|timeout=7' "$docker_log"
 grep -Fq 'capabilities=complex_identity' "$docker_log"
 grep -Fq -- '--profile user' "$docker_log"
-grep -Fq 'up -d --build --no-deps user-service ai chat-bff public-api-gateway' "$docker_log"
+grep -Fq 'up -d --build --force-recreate --no-deps user-service ai chat-bff public-api-gateway' "$docker_log"
 
 default_output="$(
     PATH="$tmp_dir/bin:$PATH" \
@@ -436,6 +436,26 @@ printf '%s\n' \
     'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
     'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
     'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup' >"$ai_env"
+if ! PATH="$tmp_dir/bin:$PATH" \
+    CHATBOT_TEST_DOCKER_LOG="$docker_log" \
+    CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
+    CHATBOT_AI_DOCKERFILE_PATH="$tmp_dir/Dockerfile" \
+    CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
+    CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
+    "$runner" "$property_env" "$user_env" "$bff_env" "$ai_env" \
+    >"$tmp_dir/capability-approved.out" 2>&1; then
+    echo "상태: Fail - 승인된 recent trade 누적 Capability가 허용되지 않았습니다." >&2
+    exit 1
+fi
+grep -Fq '상태: Pass - chatbot local preflight' "$tmp_dir/capability-approved.out"
+
+printf '%s\n' \
+    'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \
+    'HOME_AI_JWT_PUBLIC_KEY_PATHS={"local-user-1":"/run/keys/user-signing-public"}' \
+    'HOME_AI_OPENAI_API_KEY=openai-test-secret' \
+    'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
+    'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
+    'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend' >"$ai_env"
 if PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_TEST_DOCKER_LOG="$docker_log" \
     CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
@@ -444,10 +464,10 @@ if PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
     "$runner" "$property_env" "$user_env" "$bff_env" "$ai_env" \
     >"$tmp_dir/capability-invalid.out" 2>&1; then
-    echo "상태: Fail - 승인되지 않은 property Capability가 거부되지 않았습니다." >&2
+    echo "상태: Fail - 승인되지 않은 price trend Capability가 거부되지 않았습니다." >&2
     exit 1
 fi
-grep -Fq '거부됨: HOME_AI_ENABLED_PROPERTY_CAPABILITIES는 승인된 complex_identity만 허용합니다.' \
+grep -Fq '거부됨: HOME_AI_ENABLED_PROPERTY_CAPABILITIES는 승인된 누적 설정만 허용합니다.' \
     "$tmp_dir/capability-invalid.out"
 
 if grep -R -Eq 'openai-test-secret' "$tmp_dir" --exclude='ai.env'; then

@@ -8,8 +8,9 @@
 감사하고 reader DSN을 사용한 offline CLI 전체 4건을 통과했다. 실제 OpenAI live
 1건은 최초 `PROVIDER_UNAVAILABLE`, 안전 진단 경계 적용 후 재실행에서는
 `PROVIDER_RATE_LIMITED`로 차단됐지만 사용 한도 등록 후 세 번째 실행에서
-`complex_identity`가 통과했다. `recent_trade_lookup`와 `price_trend` live 검증 및
-별도 활성화 승인이 남아 있어 부동산 Capability를 아직 `지원`으로 활성화하지 않는다.
+`complex_identity`가 통과했다. 이후 승인된 runtime exact allowlist와 fail-closed
+회귀를 구현해 `complex_identity`만 `지원`으로 활성화했다. 전체 판정은 live 검증이
+남은 `recent_trade_lookup`와 `price_trend` 때문에 계속 `Partial`이다.
 
 ## 검증 범위
 
@@ -66,6 +67,15 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
 - 자체 검토 RED: malformed provider JSON이 transport 실패로 잘못 분류되는 회귀가
   확인됐다. requester 호출과 response parsing 경계를 분리하고 allowlist 외 reason
   code 거부 테스트를 추가했다.
+- Capability gate 최초 RED: 엔진이 활성 allowlist를 받지 않아 비활성 최근 거래·가격
+  추이를 repository 조회 전에 차단할 수 없었고, 신규 query 테스트 2건이 생성자 인자
+  부재로 실패했다.
+- Capability gate 최소 GREEN: production composition이 exact
+  `complex_identity`만 허용한다. 비활성 plan은 repository를 조회하지 않고 fact 없는
+  limitation만 LLM에 전달하며 JSON과 SSE는 같은 `200/unavailable` 최종 의미를 갖는다.
+- 보호 runner 최초 RED: AI vars에는 allowlist가 있었지만 runner가 Compose 환경으로
+  전달하지 않아 fake runtime에서 `capabilities=missing`으로 실패했다. 최소 GREEN은
+  exact-value preflight, Compose 주입, 누락·혼합값 거부와 비밀 비노출 검증이다.
 
 ## 검증 근거 확인
 
@@ -74,7 +84,7 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
 | 집중 골든 테스트 | Pass — 41 tests |
 | 로컬 실행기 계약 테스트 | Pass — 6 tests |
 | `uv sync --frozen --group test` | Pass |
-| `TESTCONTAINERS_RYUK_DISABLED=true uv run pytest` | Pass — 158 tests, coverage 91.97% |
+| `TESTCONTAINERS_RYUK_DISABLED=true uv run pytest` | Pass — 169 tests, coverage 92.05% |
 | 잘못된 reader password CLI | Pass — pool detail 없이 stable reason code만 출력 |
 | 전용 실행기의 실제 `.env` offline 실행 | Pass — 4 cases, supported 3, unavailable 1 |
 | production OpenAI live 1건 | Fail — `complex-identity-jamsil-ells`, `PROVIDER_UNAVAILABLE`, 검증되지 않은 답변 비노출 |
@@ -84,6 +94,8 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
 | 운영 `ai_read` 역할·데이터 직접 감사 | Pass — reader `SELECT` 2개 view, 단지 단일 식별, 최근 거래 3건, 월별 추이 6개월 |
 | 운영 reader DSN 기반 offline CLI 전체 실행 | Pass — 4 cases, supported 3, unavailable 1 |
 | `./gradlew chatBffQualityCheck --no-daemon --stacktrace` | Pass — `BUILD SUCCESSFUL` |
+| `infra/chatbot/test-run-local-chatbot.sh` | Pass — exact Capability 전달·누락/혼합 거부·비밀 비노출 |
+| base + chatbot Compose `config --quiet` | Pass — synthetic non-secret validation values |
 | chatbot JSON/SSE 공개 계약 영향 | 없음 |
 | 기존 property public API URL·response 변경 | 없음 |
 
@@ -91,7 +103,7 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
 
 | Capability | 현재 판정 | 활성화 여부 |
 |---|---|---|
-| `complex_identity` | `Pass` | 비활성 — 별도 활성화 승인 대기 |
+| `complex_identity` | `Pass` | 활성 — exact runtime allowlist |
 | `recent_trade_lookup` | `Partial` | 비활성 |
 | `price_trend` | `Partial` | 비활성 |
 
@@ -115,9 +127,9 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
   fact/citation 검증까지 통과했다.
 - 실제 live 검증은 `complex_identity` 한 건뿐이다. 최근 거래와 가격 추이는 offline
   production DB 경로를 통과했지만 LLM plan/draft의 live 안정성은 아직 확인하지 않았다.
-- 현재 runtime은 세 부동산 Capability를 세분화해 활성화하는 gate가 없다. 문서 상태만
-  `지원`으로 바꾸지 말고 `complex_identity`만 허용하는 runtime gate와 회귀 테스트를
-  활성화 승인 변경에 포함해야 한다.
+- Runtime은 `complex_identity`만 승인하며 비활성 Capability를 repository 조회 전에
+  차단한다. 로컬 실제 기동 전 `apps/ai/.env`에 exact allowlist를 추가해야 하며,
+  누락 시 preflight 또는 runtime이 fail-closed한다.
 - catalog는 운영 데이터 변경에 따라 readiness가 달라질 수 있다. 이 경우 기대값을
   자동 완화하지 않고 데이터 준비도 또는 catalog 기준을 재검토해야 한다.
 
@@ -132,24 +144,20 @@ statement timeout을 강제한다. live 실행은 한 case와 일회성 확인�
 명령행에 직접 적지 않고 보호된 runtime injection으로 제공하도록 수정했다.
 Provider HTTP 실패 body는 읽지 않으며 로컬 CLI에 출력 가능한 reason code는 코드의
 고정 allowlist로 제한한다.
+Runtime Capability 설정도 고정 allowlist와 strict parser를 통과해야 하며, 환경값만으로
+live 검증을 받지 않은 Capability를 활성화할 수 없다.
 
 security-audit: 지적사항 = none
 
 검증 범위: catalog 입력 경계, DB 권한/timeout, live 호출 상한, 질문·답변·DSN·API
 key·provider 오류 비노출, package 포함 파일과 public API 무변경을 확인했다.
 
-code-review: 지적사항 = listed
-
-- 중간(Medium) C1 — 현재 AI runtime은 `complex_identity`,
-  `recent_trade_lookup`, `price_trend`를 Capability별로 fail-closed 처리하지 않는다.
-  OpenAI 설정과 route가 활성화되면 live 승인을 받지 않은 최근 거래·가격 추이도 실행될
-  수 있다. `complex_identity`만 allowlist로 허용하고 나머지는 fact 없는 검증된
-  `unavailable` limitation 경로로 차단하는 runtime gate와 회귀 테스트가 활성화 전
-  필요하다.
+code-review: 지적사항 = none
 
 ## 다음 승인 조건
 
-1. `complex_identity`만 허용하고 나머지 Capability를 fail-closed로 유지하는 runtime
-   Capability gate 구현과 상태 전환을 별도 승인한다.
-2. `recent_trade_lookup`, `price_trend`는 각각 대표 live case가 통과하기 전까지
+1. `recent_trade_lookup`, `price_trend`는 각각 대표 live case가 통과하기 전까지
    `데이터 준비 중`과 비활성을 유지한다.
+2. 로컬 통합 runtime을 시작하기 전에 `apps/ai/.env`에
+   `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity`를 추가하고 preflight를
+   통과한다.

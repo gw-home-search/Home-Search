@@ -225,6 +225,11 @@ property bootstrap password. It runs Compose `config --quiet` before `up`.
 The AI adapter additionally requires `HOME_AI_OPENAI_API_KEY`, explicit
 `HOME_AI_OPENAI_PRIMARY_MODEL` and `HOME_AI_OPENAI_SECONDARY_MODEL` IDs, and an
 optional `HOME_AI_OPENAI_TIMEOUT_SECONDS` in the range `1..30` with default `8`.
+It also requires
+`HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity`. The runtime and local
+preflight accept only that exact approved value; missing, duplicate, whitespace,
+mixed, or unapproved Capability values disable all property capabilities or stop
+startup before Compose runs.
 The local runner requires the API key and two distinct model IDs, validates them
 without printing their values, and injects them only into the AI container through
 the chatbot Compose overlay. A live provider smoke still requires explicit approval;

@@ -88,8 +88,12 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 상태를 `지원`으로 바꾸는 변경에는 데이터 준비 보고서, 골든 질문 결과,
 계약 검증, `code-review`, `security-audit: 지적사항 = none|listed`를 함께 남긴다.
 
-2026-07-17 기준으로 부동산 3개 Capability의 골든 검증 CLI와 고정 catalog가
-추가되었다. 격리 PostgreSQL fixture를 사용한 offline 검증만 통과했으며 운영
-`ai_read` 전체 실행과 승인된 live 1건은 실행하지 않았다. 따라서
-`complex_identity`, `recent_trade_lookup`, `price_trend` 상태는 계속
-`데이터 준비 중`으로 유지한다.
+2026-07-18 기준으로 부동산 3개 Capability의 운영 `ai_read` offline 검증은 모두
+통과했고, 승인된 OpenAI live 대표 질문에서는 `complex_identity`의 fact 1건과
+citation 1건이 검증됐다. Chatbot JSON/SSE 공개 계약과 BFF 품질 게이트도 통과했다.
+
+그러나 runtime에는 세 Capability를 세분화해 활성화하는 gate가 아직 없다. 문서만
+먼저 `지원`으로 바꾸지 않으며, `complex_identity` 전용 fail-closed gate와 회귀
+테스트를 포함한 별도 활성화 승인 전까지 세 Capability 모두 `데이터 준비 중` 상태를
+유지한다. `recent_trade_lookup`와 `price_trend`는 각각 live 대표 질문도 추가로
+통과해야 한다.

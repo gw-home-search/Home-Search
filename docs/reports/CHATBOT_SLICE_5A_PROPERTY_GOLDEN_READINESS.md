@@ -7,8 +7,9 @@
 운영 DB에서도 `home_search_ai_reader` 역할로 대상 단지·거래·추이를 직접
 감사하고 reader DSN을 사용한 offline CLI 전체 4건을 통과했다. 실제 OpenAI live
 1건은 최초 `PROVIDER_UNAVAILABLE`, 안전 진단 경계 적용 후 재실행에서는
-`PROVIDER_RATE_LIMITED`로 차단됐으므로 부동산 Capability를 아직 `지원`으로
-활성화하지 않는다.
+`PROVIDER_RATE_LIMITED`로 차단됐지만 사용 한도 등록 후 세 번째 실행에서
+`complex_identity`가 통과했다. `recent_trade_lookup`와 `price_trend` live 검증 및
+별도 활성화 승인이 남아 있어 부동산 Capability를 아직 `지원`으로 활성화하지 않는다.
 
 ## 검증 범위
 
@@ -78,16 +79,19 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
 | 전용 실행기의 실제 `.env` offline 실행 | Pass — 4 cases, supported 3, unavailable 1 |
 | production OpenAI live 1건 | Fail — `complex-identity-jamsil-ells`, `PROVIDER_UNAVAILABLE`, 검증되지 않은 답변 비노출 |
 | 안전 진단 적용 후 OpenAI live 재실행 | Fail — `complex-identity-jamsil-ells`, `PROVIDER_RATE_LIMITED`, 검증되지 않은 답변 비노출 |
+| 사용 한도 등록 후 OpenAI live 재실행 | Pass — `complex-identity-jamsil-ells`, supported, facts 1, citations 1, `dataAsOf=2026-07-12` |
 | OpenAI 모델 공식 계약 | Pass — `gpt-5.6-luna`, `gpt-5.6-terra` 모두 Responses API Structured Outputs 지원 |
 | 운영 `ai_read` 역할·데이터 직접 감사 | Pass — reader `SELECT` 2개 view, 단지 단일 식별, 최근 거래 3건, 월별 추이 6개월 |
 | 운영 reader DSN 기반 offline CLI 전체 실행 | Pass — 4 cases, supported 3, unavailable 1 |
+| `./gradlew chatBffQualityCheck --no-daemon --stacktrace` | Pass — `BUILD SUCCESSFUL` |
+| chatbot JSON/SSE 공개 계약 영향 | 없음 |
 | 기존 property public API URL·response 변경 | 없음 |
 
 ## 활성화 가능한 질문 유형
 
 | Capability | 현재 판정 | 활성화 여부 |
 |---|---|---|
-| `complex_identity` | `Partial` | 비활성 |
+| `complex_identity` | `Pass` | 비활성 — 별도 활성화 승인 대기 |
 | `recent_trade_lookup` | `Partial` | 비활성 |
 | `price_trend` | `Partial` | 비활성 |
 
@@ -107,8 +111,13 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
 - 새 allowlist 진단 경계로 원인을 확인하려면 비용이 발생할 수 있는 대표 live 1건을
   다시 실행했고 OpenAI HTTP `429` 범주인 `PROVIDER_RATE_LIMITED`를 확인했다.
   Provider 실패 body를 읽지 않는 정책상 순간 rate limit과 계정 quota/billing 제한은
-  더 세분화하지 않는다. OpenAI dashboard에서 사용 한도와 결제 상태를 확인하고 제한이
-  해소되기 전까지 Capability는 비활성을 유지한다.
+  더 세분화하지 않는다. 사용 한도 등록 후 같은 대표 case를 다시 실행해 grounded
+  fact/citation 검증까지 통과했다.
+- 실제 live 검증은 `complex_identity` 한 건뿐이다. 최근 거래와 가격 추이는 offline
+  production DB 경로를 통과했지만 LLM plan/draft의 live 안정성은 아직 확인하지 않았다.
+- 현재 runtime은 세 부동산 Capability를 세분화해 활성화하는 gate가 없다. 문서 상태만
+  `지원`으로 바꾸지 말고 `complex_identity`만 허용하는 runtime gate와 회귀 테스트를
+  활성화 승인 변경에 포함해야 한다.
 - catalog는 운영 데이터 변경에 따라 readiness가 달라질 수 있다. 이 경우 기대값을
   자동 완화하지 않고 데이터 준비도 또는 catalog 기준을 재검토해야 한다.
 
@@ -129,13 +138,18 @@ security-audit: 지적사항 = none
 검증 범위: catalog 입력 경계, DB 권한/timeout, live 호출 상한, 질문·답변·DSN·API
 key·provider 오류 비노출, package 포함 파일과 public API 무변경을 확인했다.
 
-code-review: 지적사항 = none
+code-review: 지적사항 = listed
+
+- 중간(Medium) C1 — 현재 AI runtime은 `complex_identity`,
+  `recent_trade_lookup`, `price_trend`를 Capability별로 fail-closed 처리하지 않는다.
+  OpenAI 설정과 route가 활성화되면 live 승인을 받지 않은 최근 거래·가격 추이도 실행될
+  수 있다. `complex_identity`만 allowlist로 허용하고 나머지는 fact 없는 검증된
+  `unavailable` limitation 경로로 차단하는 runtime gate와 회귀 테스트가 활성화 전
+  필요하다.
 
 ## 다음 승인 조건
 
-1. OpenAI dashboard에서 API 사용 한도·결제 상태와 두 모델의 project 접근 권한을
-   확인하고 `429` 제한을 해소한다.
-2. 제한 해소 후 대표 live case 1건의 재실행 비용과 최대 6회 provider HTTP request를
-   별도 승인한다.
-3. 계약 회귀, `code-review`, `security-audit` 결과와 함께 Capability 활성화를
-   별도 승인한다.
+1. `complex_identity`만 허용하고 나머지 Capability를 fail-closed로 유지하는 runtime
+   Capability gate 구현과 상태 전환을 별도 승인한다.
+2. `recent_trade_lookup`, `price_trend`는 각각 대표 live case가 통과하기 전까지
+   `데이터 준비 중`과 비활성을 유지한다.

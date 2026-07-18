@@ -119,7 +119,18 @@ def test_planning_uses_fixed_responses_endpoint_without_provider_storage() -> No
     assert body["text"]["format"]["type"] == "json_schema"
     assert body["text"]["format"]["strict"] is True
     assert body["text"]["format"]["schema"]["additionalProperties"] is False
+    plan_properties = body["text"]["format"]["schema"]["properties"]
+    assert plan_properties["complexName"]["pattern"] == r"^.{1,100}$"
+    assert plan_properties["exclusiveAreaSquareMeters"]["exclusiveMinimum"] == 0
+    assert plan_properties["exclusiveAreaSquareMeters"]["maximum"] == 1000
+    assert plan_properties["limit"]["minimum"] == 1
+    assert plan_properties["limit"]["maximum"] == 10
     assert "previous_response_id" not in body
+    developer_prompt = body["input"][0]["content"]
+    assert "monthly or period aggregates" in developer_prompt
+    assert "average, minimum, maximum, count, trend, or flow" in developer_prompt
+    assert "latest individual trade records" in developer_prompt
+    assert "Set limit to 5 when it is not used" in developer_prompt
 
 
 def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> None:

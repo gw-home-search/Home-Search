@@ -74,12 +74,14 @@ class FakeLanguageModel:
         self.plan = plan
         self.draft = draft
         self.received_fact_ids: list[str] = []
+        self.received_facts: list[EvidenceFact] = []
 
     async def plan_query(self, _request: ChatbotQueryRequest) -> PropertyQueryPlan:
         return self.plan
 
     async def draft_answer(self, *, facts, limitations, question) -> DraftAnswer:
         del limitations, question
+        self.received_facts = list(facts)
         self.received_fact_ids = [fact.fact_id for fact in facts]
         return self.draft
 
@@ -378,6 +380,15 @@ def test_monthly_trend_exposes_amount_and_volume_facts() -> None:
     assert response["evidenceSummary"]["capabilities"] == ["price_trend"]
     assert response["evidenceSummary"]["factCount"] == 1
     assert response["citations"][0]["factIds"] == ["property-trend-11471-2026-06"]
+    assert {
+        (claim.value, claim.unit) for claim in model.received_facts[0].claims
+    }.issuperset(
+        {
+            ("24억 5,000만원", "KOREAN_KRW_AVERAGE_DISPLAY"),
+            ("24억원", "KOREAN_KRW_MIN_DISPLAY"),
+            ("25억원", "KOREAN_KRW_MAX_DISPLAY"),
+        }
+    )
 
 
 @pytest.mark.parametrize(

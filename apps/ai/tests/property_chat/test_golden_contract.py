@@ -11,6 +11,7 @@ import pytest
 from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.property_chat import golden
 from ai_service.property_chat.engine import GroundingValidationError
+from ai_service.property_chat.language import LanguageModelStageError
 from ai_service.property_chat.golden import (
     GoldenCase,
     GoldenCaseResult,
@@ -472,6 +473,31 @@ def test_cli_reports_safe_provider_failure_category_from_cause(monkeypatch, caps
     output = capsys.readouterr().out
     assert exit_code == 1
     assert "reasonCode: PROVIDER_MODEL_UNAVAILABLE" in output
+
+
+def test_cli_combines_safe_language_stage_and_provider_category(
+    monkeypatch, capsys
+) -> None:
+    async def fail(*args, **kwargs):
+        del args, kwargs
+        try:
+            raise golden.OpenAIResponsesError("PROVIDER_RESPONSE_INVALID")
+        except golden.OpenAIResponsesError as provider_error:
+            try:
+                raise ChatbotProviderUnavailable() from provider_error
+            except ChatbotProviderUnavailable as unavailable:
+                raise LanguageModelStageError("DRAFT") from unavailable
+
+    monkeypatch.setenv("HOME_AI_PROPERTY_DSN", "test-dsn")
+    monkeypatch.setattr(golden, "PostgresPropertyFactRepository", CloseTrackingRepository)
+    monkeypatch.setattr(golden, "load_catalog", lambda path: (golden_case(),))
+    monkeypatch.setattr(golden, "_run_cases", fail)
+
+    exit_code = golden.main([])
+
+    output = capsys.readouterr().out
+    assert exit_code == 1
+    assert "reasonCode: DRAFT_PROVIDER_RESPONSE_INVALID" in output
 
 
 def test_cli_reports_safe_grounding_failure_category_from_cause(

@@ -280,9 +280,21 @@ def _trend_fact(record: MonthlyTrendRecord, data_as_of: date) -> EvidenceFact:
         claims=(
             FactClaim(record.month.strftime("%Y-%m"), "MONTH"),
             FactClaim(str(record.average_amount_ten_thousand_krw), "10_000_KRW"),
+            FactClaim(
+                _korean_krw_display(record.average_amount_ten_thousand_krw),
+                "KOREAN_KRW_AVERAGE_DISPLAY",
+            ),
             FactClaim(str(record.trade_count), "COUNT"),
             FactClaim(str(record.minimum_amount_ten_thousand_krw), "10_000_KRW_MIN"),
+            FactClaim(
+                _korean_krw_display(record.minimum_amount_ten_thousand_krw),
+                "KOREAN_KRW_MIN_DISPLAY",
+            ),
             FactClaim(str(record.maximum_amount_ten_thousand_krw), "10_000_KRW_MAX"),
+            FactClaim(
+                _korean_krw_display(record.maximum_amount_ten_thousand_krw),
+                "KOREAN_KRW_MAX_DISPLAY",
+            ),
         ),
         data_as_of=data_as_of,
         payload={

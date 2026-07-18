@@ -22,6 +22,7 @@ from .engine import (
     GroundingValidationError,
     PropertyFactRepository,
 )
+from .language import LanguageModelStageError
 from .models import (
     DraftAnswer,
     DraftClaim,
@@ -544,14 +545,20 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _provider_failure_reason(exception: ChatbotProviderUnavailable) -> str:
-    cause = exception.__cause__
+    stage: str | None = None
+    reason: str | None = None
+    cause: BaseException | None = exception
     while cause is not None:
-        if isinstance(cause, OpenAIResponsesError):
-            return cause.reason_code
-        if isinstance(cause, GroundingValidationError):
-            return cause.reason_code
+        if isinstance(cause, LanguageModelStageError):
+            stage = cause.stage
+        elif isinstance(cause, OpenAIResponsesError):
+            reason = cause.reason_code
+        elif isinstance(cause, GroundingValidationError):
+            reason = cause.reason_code
         cause = cause.__cause__
-    return "PROVIDER_UNAVAILABLE"
+    if reason is None:
+        return "PROVIDER_UNAVAILABLE"
+    return f"{stage}_{reason}" if stage is not None else reason
 
 
 if __name__ == "__main__":

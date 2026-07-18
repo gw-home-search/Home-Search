@@ -10,6 +10,7 @@ import pytest
 
 from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.property_chat import golden
+from ai_service.property_chat.engine import GroundingValidationError
 from ai_service.property_chat.golden import (
     GoldenCase,
     GoldenCaseResult,
@@ -471,6 +472,28 @@ def test_cli_reports_safe_provider_failure_category_from_cause(monkeypatch, caps
     output = capsys.readouterr().out
     assert exit_code == 1
     assert "reasonCode: PROVIDER_MODEL_UNAVAILABLE" in output
+
+
+def test_cli_reports_safe_grounding_failure_category_from_cause(
+    monkeypatch, capsys
+) -> None:
+    async def fail(*args, **kwargs):
+        del args, kwargs
+        try:
+            raise GroundingValidationError("GROUNDING_NUMBER_OUTSIDE_OBSERVATION")
+        except GroundingValidationError as validation_error:
+            raise ChatbotProviderUnavailable() from validation_error
+
+    monkeypatch.setenv("HOME_AI_PROPERTY_DSN", "test-dsn")
+    monkeypatch.setattr(golden, "PostgresPropertyFactRepository", CloseTrackingRepository)
+    monkeypatch.setattr(golden, "load_catalog", lambda path: (golden_case(),))
+    monkeypatch.setattr(golden, "_run_cases", fail)
+
+    exit_code = golden.main([])
+
+    output = capsys.readouterr().out
+    assert exit_code == 1
+    assert "reasonCode: GROUNDING_NUMBER_OUTSIDE_OBSERVATION" in output
 
 
 def test_cli_suppresses_connection_pool_details(monkeypatch, capsys, caplog) -> None:

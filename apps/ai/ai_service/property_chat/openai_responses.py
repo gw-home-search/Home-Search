@@ -146,13 +146,16 @@ class OpenAIResponsesLanguageModel:
         }
         output = await self._structured_response(
             name="grounded_property_answer",
-            schema=_DRAFT_SCHEMA,
+            schema=_draft_schema(facts),
             max_output_tokens=1600,
             developer_prompt=(
                 "Answer in Korean using only the supplied facts and limitations. "
                 "Every factual sentence must attach the exact factIds it uses and repeat "
                 "each stated value and unit in claims. Do not calculate, estimate, rank, "
                 "predict, or add a fact that is absent from the supplied evidence. "
+                "Every number token in sentence text must exactly match a value from the "
+                "claims attached to that sentence. Do not state fact counts, list numbers, "
+                "or converted units unless that exact value and unit are supplied as a claim. "
                 "If facts are empty, explain only the supplied limitation without numbers."
             ),
             user_payload=payload,
@@ -430,44 +433,53 @@ _PLAN_SCHEMA: dict[str, object] = {
     },
 }
 
-_DRAFT_SCHEMA: dict[str, object] = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": ["sentences"],
-    "properties": {
-        "sentences": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["text", "factIds", "claims"],
-                "properties": {
-                    "text": {"type": "string"},
-                    "factIds": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                    },
-                    "claims": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "additionalProperties": False,
-                            "required": ["factId", "value", "unit"],
-                            "properties": {
-                                "factId": {
-                                    "type": "string",
-                                },
-                                "value": {
-                                    "type": "string",
-                                },
-                                "unit": {
-                                    "type": "string",
+def _draft_schema(facts: list[EvidenceFact]) -> dict[str, object]:
+    fact_ids = list(dict.fromkeys(fact.fact_id for fact in facts))
+    has_facts = bool(fact_ids)
+    fact_id_items: dict[str, object] = {"type": "string"}
+    if has_facts:
+        fact_id_items["enum"] = fact_ids
+    minimum_references = 1 if has_facts else 0
+    maximum_fact_ids = _MAX_FACTS_PER_SENTENCE if has_facts else 0
+    maximum_claims = _MAX_CLAIMS_PER_SENTENCE if has_facts else 0
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["sentences"],
+        "properties": {
+            "sentences": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": _MAX_SENTENCES,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["text", "factIds", "claims"],
+                    "properties": {
+                        "text": {"type": "string"},
+                        "factIds": {
+                            "type": "array",
+                            "minItems": minimum_references,
+                            "maxItems": maximum_fact_ids,
+                            "items": fact_id_items,
+                        },
+                        "claims": {
+                            "type": "array",
+                            "minItems": minimum_references,
+                            "maxItems": maximum_claims,
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": ["factId", "value", "unit"],
+                                "properties": {
+                                    "factId": fact_id_items,
+                                    "value": {"type": "string"},
+                                    "unit": {"type": "string"},
                                 },
                             },
                         },
                     },
                 },
-            },
-        }
-    },
-}
+            }
+        },
+    }

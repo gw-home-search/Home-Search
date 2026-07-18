@@ -23,12 +23,14 @@ Runtime variables:
 - `HOME_AI_OPENAI_PRIMARY_MODEL`
 - `HOME_AI_OPENAI_SECONDARY_MODEL`
 - `HOME_AI_OPENAI_TIMEOUT_SECONDS` (optional, default `8`, allowed `1..30`)
-- `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity`
+- `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup`
 
-The runtime Capability setting is fail-closed. This activation permits only
-`complex_identity`; missing, duplicate, whitespace-padded, mixed, or unapproved
-values disable all property capabilities. Golden verification uses its own
-explicit candidate set and does not widen the runtime allowlist.
+The runtime Capability setting is fail-closed. This activation permits the
+identity-only rollback value or the cumulative
+`complex_identity,recent_trade_lookup` value. Missing, reordered, duplicate,
+whitespace-padded, or unapproved values disable all property capabilities.
+Golden verification uses its own explicit candidate set and does not widen the
+runtime allowlist.
 
 Do not rely on provider-side conversation state. The browser sends only the
 bounded `conversationContext`, and the AI service treats it as an untrusted
@@ -84,7 +86,8 @@ separate approval; the normal test suite never enables it.
 
 ```bash
 HOME_AI_GOLDEN_LIVE_CONFIRM=RUN_ONE_LIVE_GOLDEN_CASE \
-  apps/ai/ops/run-local-property-golden.sh live
+  apps/ai/ops/run-local-property-golden.sh live \
+  --case-id recent-trades-jamsil-ells-84
 ```
 
 The command reports only case IDs, readiness, counts, dates, and stable reason

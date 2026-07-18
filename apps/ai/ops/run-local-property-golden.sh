@@ -5,16 +5,39 @@ umask 077
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ai_root="$(cd "${script_dir}/.." && pwd)"
 mode="${1:-}"
-vars_file="${2:-${ai_root}/.env}"
+
+usage() {
+    cat >&2 <<EOF
+사용법:
+  $0 offline [ai-vars-file]
+  $0 live --case-id <approved-case-id> [ai-vars-file]
+EOF
+    exit 2
+}
 
 reject() {
     echo "거부됨: $1" >&2
     exit 1
 }
 
-if (( $# > 2 )) || [[ "$mode" != "offline" && "$mode" != "live" ]]; then
-    echo "사용법: $0 offline|live [ai-vars-file]" >&2
-    exit 2
+[[ -n "$mode" ]] || usage
+shift
+
+case_id=""
+if [[ "$mode" == "offline" ]]; then
+    (( $# <= 1 )) || usage
+    vars_file="${1:-${ai_root}/.env}"
+elif [[ "$mode" == "live" ]]; then
+    (( $# == 2 || $# == 3 )) || usage
+    [[ "$1" == "--case-id" && -n "$2" ]] || usage
+    case_id="$2"
+    vars_file="${3:-${ai_root}/.env}"
+    case "$case_id" in
+        complex-identity-jamsil-ells | recent-trades-jamsil-ells-84 | price-trend-jamsil-ells-84) ;;
+        *) reject "승인된 live case ID가 아닙니다." ;;
+    esac
+else
+    usage
 fi
 
 [[ -f "$vars_file" && ! -L "$vars_file" ]] \
@@ -157,4 +180,4 @@ HOME_AI_OPENAI_SECONDARY_MODEL="$secondary_model" \
 HOME_AI_OPENAI_TIMEOUT_SECONDS="$timeout_seconds" \
 HOME_AI_GOLDEN_LIVE_CONFIRM="RUN_ONE_LIVE_GOLDEN_CASE" \
     "$uv_bin" run home-ai-property-golden --mode live \
-        --case-id complex-identity-jamsil-ells
+        --case-id "$case_id"

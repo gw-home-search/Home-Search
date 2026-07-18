@@ -44,7 +44,15 @@ case "$*" in
     test "$HOME_AI_OPENAI_SECONDARY_MODEL" = 'gpt-5.6-terra'
     test "$HOME_AI_OPENAI_TIMEOUT_SECONDS" = '15'
     test "$HOME_AI_GOLDEN_LIVE_CONFIRM" = 'RUN_ONE_LIVE_GOLDEN_CASE'
-    printf live >"$FAKE_UV_MARKER"
+    printf complex-identity-jamsil-ells >"$FAKE_UV_MARKER"
+    ;;
+  'run home-ai-property-golden --mode live --case-id recent-trades-jamsil-ells-84')
+    test "$HOME_AI_OPENAI_API_KEY" = 'test-provider-secret'
+    test "$HOME_AI_OPENAI_PRIMARY_MODEL" = 'gpt-5.6-luna'
+    test "$HOME_AI_OPENAI_SECONDARY_MODEL" = 'gpt-5.6-terra'
+    test "$HOME_AI_OPENAI_TIMEOUT_SECONDS" = '15'
+    test "$HOME_AI_GOLDEN_LIVE_CONFIRM" = 'RUN_ONE_LIVE_GOLDEN_CASE'
+    printf recent-trades-jamsil-ells-84 >"$FAKE_UV_MARKER"
     ;;
   *) exit 91 ;;
 esac
@@ -58,6 +66,7 @@ def run_runner(
     tmp_path: Path,
     mode: str,
     *,
+    case_id: str | None = None,
     confirmation: str = "",
     mutate_vars: Callable[[Path], None] | None = None,
 ) -> subprocess.CompletedProcess[str]:
@@ -76,8 +85,12 @@ def run_runner(
             "HOME_AI_GOLDEN_LIVE_CONFIRM": confirmation,
         }
     )
+    arguments = [str(RUNNER), mode]
+    if case_id is not None:
+        arguments.extend(["--case-id", case_id])
+    arguments.append(str(vars_file))
     result = subprocess.run(
-        [str(RUNNER), mode, str(vars_file)],
+        arguments,
         cwd=AI_ROOT,
         env=environment,
         text=True,
@@ -97,17 +110,21 @@ def test_offline_runner_passes_only_property_credentials(tmp_path: Path) -> None
     assert "p@ss" not in result.stdout + result.stderr
 
 
-def test_live_runner_is_fixed_to_one_case_and_passes_provider_settings(
+def test_live_runner_runs_one_allowlisted_case_and_passes_provider_settings(
     tmp_path: Path,
 ) -> None:
     result = run_runner(
         tmp_path,
         "live",
+        case_id="recent-trades-jamsil-ells-84",
         confirmation="RUN_ONE_LIVE_GOLDEN_CASE",
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.marker.read_text(encoding="utf-8") == "live"  # type: ignore[attr-defined]
+    assert (  # type: ignore[attr-defined]
+        result.marker.read_text(encoding="utf-8")
+        == "recent-trades-jamsil-ells-84"
+    )
     assert "test-provider-secret" not in result.stdout + result.stderr
     assert "p@ss" not in result.stdout + result.stderr
 
@@ -115,7 +132,11 @@ def test_live_runner_is_fixed_to_one_case_and_passes_provider_settings(
 def test_live_runner_rejects_missing_confirmation_without_invoking_uv(
     tmp_path: Path,
 ) -> None:
-    result = run_runner(tmp_path, "live")
+    result = run_runner(
+        tmp_path,
+        "live",
+        case_id="complex-identity-jamsil-ells",
+    )
 
     assert result.returncode == 1
     assert "live 골든 확인값" in result.stderr
@@ -172,6 +193,7 @@ def test_live_runner_rejects_duplicate_provider_key_without_leaking_it(
     result = run_runner(
         tmp_path,
         "live",
+        case_id="complex-identity-jamsil-ells",
         confirmation="RUN_ONE_LIVE_GOLDEN_CASE",
         mutate_vars=append_duplicate_key,
     )
@@ -180,3 +202,32 @@ def test_live_runner_rejects_duplicate_provider_key_without_leaking_it(
     assert "정확히 한 번 정의" in result.stderr
     assert not result.marker.exists()  # type: ignore[attr-defined]
     assert duplicate_secret not in result.stdout + result.stderr
+
+
+def test_live_runner_rejects_missing_case_id_without_invoking_uv(
+    tmp_path: Path,
+) -> None:
+    result = run_runner(
+        tmp_path,
+        "live",
+        confirmation="RUN_ONE_LIVE_GOLDEN_CASE",
+    )
+
+    assert result.returncode == 2
+    assert "--case-id" in result.stderr
+    assert not result.marker.exists()  # type: ignore[attr-defined]
+
+
+def test_live_runner_rejects_unapproved_case_id_without_invoking_uv(
+    tmp_path: Path,
+) -> None:
+    result = run_runner(
+        tmp_path,
+        "live",
+        case_id="complex-not-found",
+        confirmation="RUN_ONE_LIVE_GOLDEN_CASE",
+    )
+
+    assert result.returncode == 1
+    assert "승인된 live case" in result.stderr
+    assert not result.marker.exists()  # type: ignore[attr-defined]

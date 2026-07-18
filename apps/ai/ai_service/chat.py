@@ -8,7 +8,12 @@ from .auth import AuthenticatedUser
 from .models import ChatbotQueryRequest
 from .property_chat.models import PropertyCapability
 
-_APPROVED_PROPERTY_CAPABILITIES = frozenset({"complex_identity"})
+_APPROVED_PROPERTY_CAPABILITY_CONFIGURATIONS = frozenset(
+    {
+        ("complex_identity",),
+        ("complex_identity", "recent_trade_lookup"),
+    }
+)
 
 
 class ChatbotProviderUnavailable(Exception):
@@ -81,7 +86,7 @@ def get_enabled_property_capabilities() -> frozenset[PropertyCapability]:
     if (
         any(not value or value != value.strip() for value in values)
         or len(values) != len(set(values))
-        or not set(values).issubset(_APPROVED_PROPERTY_CAPABILITIES)
+        or tuple(values) not in _APPROVED_PROPERTY_CAPABILITY_CONFIGURATIONS
     ):
         return frozenset()
     return cast(frozenset[PropertyCapability], frozenset(values))

@@ -6,7 +6,7 @@ from typing import TypeVar
 from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
 
-from .engine import GroundedLanguageModel
+from .engine import GroundedLanguageModel, validate_draft
 from .models import DraftAnswer, EvidenceFact, PropertyQueryPlan
 
 T = TypeVar("T")
@@ -49,13 +49,16 @@ class RetryingLanguageModel:
         limitations: list[str],
         question: str,
     ) -> DraftAnswer:
-        return await self._execute(
-            lambda model: model.draft_answer(
+        async def draft_and_validate(model: GroundedLanguageModel) -> DraftAnswer:
+            draft = await model.draft_answer(
                 facts=facts,
                 limitations=limitations,
                 question=question,
-            ),
-        )
+            )
+            validate_draft(draft, facts, "supported" if facts else "unavailable")
+            return draft
+
+        return await self._execute(draft_and_validate)
 
     async def _execute(
         self,

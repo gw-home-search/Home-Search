@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import date
 
 import pytest
 
 from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
 from ai_service.property_chat.language import RetryingLanguageModel
-from ai_service.property_chat.models import DraftAnswer, DraftSentence, PropertyQueryPlan
+from ai_service.property_chat.models import (
+    DraftAnswer,
+    DraftClaim,
+    DraftSentence,
+    EvidenceFact,
+    FactClaim,
+    PropertyQueryPlan,
+)
 
 
 class ScriptedLanguageModel:
@@ -65,3 +73,74 @@ def test_all_model_failures_are_mapped_without_provider_details() -> None:
         asyncio.run(model.plan_query(ChatbotQueryRequest(question="위치")))
 
     assert str(raised.value) == ""
+
+
+class ScriptedDraftModel:
+    def __init__(self, drafts: list[DraftAnswer]) -> None:
+        self._drafts = drafts
+        self.draft_calls = 0
+
+    async def plan_query(self, _request: ChatbotQueryRequest) -> PropertyQueryPlan:
+        return PropertyQueryPlan(capability="recent_trade_lookup", complex_name="잠실엘스")
+
+    async def draft_answer(self, **_kwargs: object) -> DraftAnswer:
+        draft = self._drafts[min(self.draft_calls, len(self._drafts) - 1)]
+        self.draft_calls += 1
+        return draft
+
+
+def _trade_fact() -> EvidenceFact:
+    return EvidenceFact(
+        fact_id="property-trade-7",
+        claims=(FactClaim("120000", "10_000_KRW"),),
+        data_as_of=date(2026, 7, 16),
+        payload={"dealAmountTenThousandKrw": 120000},
+    )
+
+
+def _trade_draft(text: str) -> DraftAnswer:
+    return DraftAnswer(
+        sentences=[
+            DraftSentence(
+                text=text,
+                fact_ids=["property-trade-7"],
+                claims=[
+                    DraftClaim(
+                        fact_id="property-trade-7",
+                        value="120000",
+                        unit="10_000_KRW",
+                    )
+                ],
+            )
+        ]
+    )
+
+
+def test_draft_retries_primary_when_grounding_validation_fails() -> None:
+    primary = ScriptedDraftModel(
+        [_trade_draft("최근 3건 중 120000만원입니다."), _trade_draft("120000만원입니다.")]
+    )
+    secondary = ScriptedDraftModel([_trade_draft("120000만원입니다.")])
+    model = RetryingLanguageModel(primary=primary, secondary=secondary)
+
+    draft = asyncio.run(
+        model.draft_answer(facts=[_trade_fact()], limitations=[], question="최근 거래")
+    )
+
+    assert draft.sentences[0].text == "120000만원입니다."
+    assert primary.draft_calls == 2
+    assert secondary.draft_calls == 0
+
+
+def test_draft_uses_secondary_after_two_grounding_validation_failures() -> None:
+    primary = ScriptedDraftModel([_trade_draft("최근 3건 중 120000만원입니다.")])
+    secondary = ScriptedDraftModel([_trade_draft("120000만원입니다.")])
+    model = RetryingLanguageModel(primary=primary, secondary=secondary)
+
+    draft = asyncio.run(
+        model.draft_answer(facts=[_trade_fact()], limitations=[], question="최근 거래")
+    )
+
+    assert draft.sentences[0].text == "120000만원입니다."
+    assert primary.draft_calls == 2
+    assert secondary.draft_calls == 1

@@ -16,7 +16,12 @@ from ai_service.auth import AuthenticatedUser
 from ai_service.chat import ChatbotProviderUnavailable, get_grounded_language_model
 from ai_service.models import ChatbotQueryRequest
 
-from .engine import GroundedChatbotEngine, GroundedLanguageModel, PropertyFactRepository
+from .engine import (
+    GroundedChatbotEngine,
+    GroundedLanguageModel,
+    GroundingValidationError,
+    PropertyFactRepository,
+)
 from .models import (
     DraftAnswer,
     DraftClaim,
@@ -542,6 +547,8 @@ def _provider_failure_reason(exception: ChatbotProviderUnavailable) -> str:
     cause = exception.__cause__
     while cause is not None:
         if isinstance(cause, OpenAIResponsesError):
+            return cause.reason_code
+        if isinstance(cause, GroundingValidationError):
             return cause.reason_code
         cause = cause.__cause__
     return "PROVIDER_UNAVAILABLE"

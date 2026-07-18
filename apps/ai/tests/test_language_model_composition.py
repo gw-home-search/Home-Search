@@ -70,12 +70,24 @@ def test_invalid_timeout_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     assert isinstance(get_grounded_language_model(), UnavailableLanguageModel)
 
 
-def test_only_approved_property_capability_is_enabled(
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("complex_identity", frozenset({"complex_identity"})),
+        (
+            "complex_identity,recent_trade_lookup",
+            frozenset({"complex_identity", "recent_trade_lookup"}),
+        ),
+    ],
+)
+def test_only_approved_property_capability_configuration_is_enabled(
     monkeypatch: pytest.MonkeyPatch,
+    value: str,
+    expected: frozenset[str],
 ) -> None:
-    monkeypatch.setenv("HOME_AI_ENABLED_PROPERTY_CAPABILITIES", "complex_identity")
+    monkeypatch.setenv("HOME_AI_ENABLED_PROPERTY_CAPABILITIES", value)
 
-    assert get_enabled_property_capabilities() == frozenset({"complex_identity"})
+    assert get_enabled_property_capabilities() == expected
 
 
 @pytest.mark.parametrize(
@@ -84,6 +96,7 @@ def test_only_approved_property_capability_is_enabled(
         None,
         "",
         "recent_trade_lookup",
+        "recent_trade_lookup,complex_identity",
         "complex_identity,price_trend",
         "complex_identity,complex_identity",
         "complex_identity, price_trend",

@@ -173,6 +173,56 @@ def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> N
     assert "subject" not in user_payload
     assert request_body["text"]["format"]["name"] == "grounded_property_answer"
     assert request_body["max_output_tokens"] == 1600
+    sentence_schema = request_body["text"]["format"]["schema"]["properties"][
+        "sentences"
+    ]["items"]
+    fact_ids_schema = sentence_schema["properties"]["factIds"]
+    claims_schema = sentence_schema["properties"]["claims"]
+    assert fact_ids_schema["minItems"] == 1
+    assert fact_ids_schema["maxItems"] == 20
+    assert fact_ids_schema["items"]["enum"] == ["property-trade-7"]
+    assert claims_schema["minItems"] == 1
+    assert claims_schema["maxItems"] == 50
+    assert claims_schema["items"]["properties"]["factId"]["enum"] == [
+        "property-trade-7"
+    ]
+    developer_prompt = request_body["input"][0]["content"]
+    assert "Every number token in sentence text must exactly match" in developer_prompt
+    assert "Do not state fact counts, list numbers, or converted units" in developer_prompt
+
+
+def test_draft_schema_for_empty_facts_forbids_fact_references() -> None:
+    requester = RecordingRequester(
+        _response(
+            {
+                "sentences": [
+                    {
+                        "text": "검증된 근거 데이터가 없습니다.",
+                        "factIds": [],
+                        "claims": [],
+                    }
+                ]
+            }
+        )
+    )
+    model = _model(requester)
+
+    asyncio.run(
+        model.draft_answer(
+            facts=[],
+            limitations=["조건에 맞는 검증된 근거 데이터가 없습니다."],
+            question="거래 내역은?",
+        )
+    )
+
+    request_body = json.loads(requester.calls[0][2])
+    sentence_schema = request_body["text"]["format"]["schema"]["properties"][
+        "sentences"
+    ]["items"]
+    fact_ids_schema = sentence_schema["properties"]["factIds"]
+    claims_schema = sentence_schema["properties"]["claims"]
+    assert fact_ids_schema["maxItems"] == 0
+    assert claims_schema["maxItems"] == 0
 
 
 @pytest.mark.parametrize(

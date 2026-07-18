@@ -6,6 +6,8 @@ from datetime import date
 
 import pytest
 
+from ai_service.chat import ChatbotProviderUnavailable
+from ai_service.property_chat.engine import GroundingValidationError
 from ai_service.property_chat.golden import (
     GoldenCase,
     GoldenSuiteRunner,
@@ -143,13 +145,15 @@ def test_suite_rejects_an_answer_that_omits_observed_facts(
         expected_username="test",
     )
     try:
-        with pytest.raises(GoldenValidationError, match="FACT_SET_MISMATCH"):
+        with pytest.raises(ChatbotProviderUnavailable) as raised:
             asyncio.run(
                 GoldenSuiteRunner(repository).run_case(
                     case,
                     PartialFactLanguageModel(case.plan),
                 )
             )
+        assert isinstance(raised.value.__cause__, GroundingValidationError)
+        assert raised.value.__cause__.reason_code == "GROUNDING_FACTS_OMITTED"
     finally:
         repository.close()
 

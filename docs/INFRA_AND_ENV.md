@@ -205,15 +205,25 @@ Tests run with stub OAuth/LLM/legal providers and require no live secret.
 
 Local chatbot runtime is an explicit opt-in overlay. Prepare four separate
 runtime variable files for property bootstrap values, user-service values, BFF
-public-key mapping, and AI DSN/public-key mapping. Start it only through:
+public-key mapping, and AI DSN/public-key mapping. The repository-local default
+paths are `apps/property-data/.env`, `apps/user/service/.env`,
+`apps/chat-bff/.env`, and `apps/ai/.env`. Start it only through:
 
 ```bash
-infra/chatbot/run-local-chatbot.sh \
-  <property-vars-file> \
-  <user-vars-file> \
-  <bff-vars-file> \
-  <ai-vars-file>
+infra/chatbot/run-local-chatbot.sh
 ```
+
+The existing four-path form remains available when an operator intentionally
+uses non-default runtime files. Do not put secret values directly on the command
+line.
+
+The property runtime file must define the Compose bootstrap values
+`HOME_SEARCH_DB_PASSWORD`, `PROPERTY_RUNTIME_DB_PASSWORD`,
+`PROPERTY_MIGRATOR_DB_PASSWORD`, `AI_PROPERTY_READER_DB_PASSWORD`,
+`USER_RUNTIME_DB_PASSWORD`, and `USER_MIGRATOR_DB_PASSWORD` exactly once. Keep
+the role passwords distinct except that `USER_RUNTIME_DB_PASSWORD` must match
+the user-service file's `USER_DB_PASSWORD`. These are not inferred from the
+property application's `DB_PASSWORD`.
 
 Use `apps/chat-bff/local-runtime.example` and `apps/ai/local-runtime.example`
 as placeholder-only templates. The runner parses assignments without sourcing

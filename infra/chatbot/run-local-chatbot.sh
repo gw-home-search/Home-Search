@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if (( $# != 4 )); then
-    echo "사용법: $0 <property-vars-file> <user-vars-file> <bff-vars-file> <ai-vars-file>" >&2
-    exit 2
-fi
-
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
-property_vars_file="$1"
-user_vars_file="$2"
-bff_vars_file="$3"
-ai_vars_file="$4"
+if (( $# == 0 )); then
+    property_vars_file="${CHATBOT_PROPERTY_VARS_FILE:-${repo_root}/apps/property-data/.env}"
+    user_vars_file="${CHATBOT_USER_VARS_FILE:-${repo_root}/apps/user/service/.env}"
+    bff_vars_file="${CHATBOT_BFF_VARS_FILE:-${repo_root}/apps/chat-bff/.env}"
+    ai_vars_file="${CHATBOT_AI_VARS_FILE:-${repo_root}/apps/ai/.env}"
+elif (( $# == 4 )); then
+    property_vars_file="$1"
+    user_vars_file="$2"
+    bff_vars_file="$3"
+    ai_vars_file="$4"
+else
+    echo "사용법: $0 [<property-vars-file> <user-vars-file> <bff-vars-file> <ai-vars-file>]" >&2
+    exit 2
+fi
 base_compose="${repo_root}/infra/docker-compose.local.yml"
 chatbot_compose="${repo_root}/infra/docker-compose.chatbot.yml"
 bff_jar="${CHATBOT_BFF_JAR_PATH:-${repo_root}/apps/chat-bff/build/libs/chat-bff.jar}"

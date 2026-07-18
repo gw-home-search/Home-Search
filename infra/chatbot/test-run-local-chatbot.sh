@@ -80,6 +80,26 @@ grep -Fq 'capabilities=complex_identity' "$docker_log"
 grep -Fq -- '--profile user' "$docker_log"
 grep -Fq 'up -d --build user-service ai chat-bff public-api-gateway' "$docker_log"
 
+default_output="$(
+    PATH="$tmp_dir/bin:$PATH" \
+    CHATBOT_TEST_DOCKER_LOG="$docker_log" \
+    CHATBOT_PROPERTY_VARS_FILE="$property_env" \
+    CHATBOT_USER_VARS_FILE="$user_env" \
+    CHATBOT_BFF_VARS_FILE="$bff_env" \
+    CHATBOT_AI_VARS_FILE="$ai_env" \
+    CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
+    CHATBOT_AI_DOCKERFILE_PATH="$tmp_dir/Dockerfile" \
+    CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
+    CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
+    "$runner"
+)"
+grep -Fq '상태: Pass - chatbot local preflight' <<<"$default_output"
+if grep -Eq 'cluster-secret|migrator-secret|reader-secret|runtime-secret|openai-test-secret' \
+    <<<"$default_output"; then
+    echo "상태: Fail - 무인자 runner 출력에 비밀값이 포함됐습니다." >&2
+    exit 1
+fi
+
 printf '%s\n' \
     'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \
     'HOME_AI_JWT_PUBLIC_KEY_PATHS={"local-user-1":"/run/keys/user-signing-public"}' \

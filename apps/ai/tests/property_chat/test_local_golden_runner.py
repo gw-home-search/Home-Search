@@ -62,6 +62,25 @@ esac
     path.chmod(0o700)
 
 
+def write_fake_gnu_stat(path: Path) -> None:
+    path.write_text(
+        """#!/bin/sh
+set -eu
+if [ "$1" = "-c" ] && [ "$2" = "%a" ]; then
+    printf '600'
+    exit 0
+fi
+if [ "$1" = "-f" ]; then
+    printf 'gnu-filesystem-stat'
+    exit 0
+fi
+exit 2
+""",
+        encoding="utf-8",
+    )
+    path.chmod(0o700)
+
+
 def run_runner(
     tmp_path: Path,
     mode: str,
@@ -108,6 +127,15 @@ def test_offline_runner_passes_only_property_credentials(tmp_path: Path) -> None
     assert result.marker.read_text(encoding="utf-8") == "offline"  # type: ignore[attr-defined]
     assert "test-provider-secret" not in result.stdout + result.stderr
     assert "p@ss" not in result.stdout + result.stderr
+
+
+def test_offline_runner_accepts_gnu_stat_permissions(tmp_path: Path) -> None:
+    write_fake_gnu_stat(tmp_path / "stat")
+
+    result = run_runner(tmp_path, "offline")
+
+    assert result.returncode == 0, result.stderr
+    assert result.marker.read_text(encoding="utf-8") == "offline"  # type: ignore[attr-defined]
 
 
 def test_live_runner_runs_one_allowlisted_case_and_passes_provider_settings(

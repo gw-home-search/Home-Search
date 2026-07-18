@@ -43,7 +43,7 @@ fi
 [[ -f "$vars_file" && ! -L "$vars_file" ]] \
     || reject "AI runtime vars 파일이 없거나 일반 파일이 아닙니다."
 
-permissions="$(stat -f '%Lp' "$vars_file" 2>/dev/null || stat -c '%a' "$vars_file" 2>/dev/null || true)"
+permissions="$(stat -c '%a' "$vars_file" 2>/dev/null || stat -f '%Lp' "$vars_file" 2>/dev/null || true)"
 [[ "$permissions" =~ ^[0-7]{3,4}$ ]] || reject "AI runtime vars 파일 권한을 확인할 수 없습니다."
 (( 10#$permissions % 100 == 0 )) \
     || reject "AI runtime vars 파일은 group/other 권한이 없어야 합니다. chmod 600을 적용하세요."

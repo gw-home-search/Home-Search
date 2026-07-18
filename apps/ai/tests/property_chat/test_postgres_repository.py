@@ -76,7 +76,11 @@ def test_repository_rejects_a_non_ai_reader_role(property_postgres_dsn: str) -> 
         )
 
 
-def test_latest_trade_date_reports_dataset_freshness(property_postgres_dsn: str) -> None:
+def test_latest_trade_date_loads_on_a_fresh_process_before_caching(
+    property_postgres_dsn: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("ai_service.property_chat.postgres.monotonic", lambda: 10.0)
     repository = PostgresPropertyFactRepository(
         property_postgres_dsn, expected_database="test", expected_username="test"
     )

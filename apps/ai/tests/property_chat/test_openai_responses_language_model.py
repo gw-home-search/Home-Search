@@ -176,15 +176,25 @@ def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> N
 
 
 @pytest.mark.parametrize(
-    "response",
+    ("response", "reason_code"),
     [
-        b'{"status":"incomplete","output":[]}',
-        b'{"status":"completed","output":[{"type":"message","content":[{"type":"refusal","refusal":"cannot comply"}]}]}',
-        b'{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"not-json"}]}]}',
+        (
+            b'{"status":"incomplete","output":[]}',
+            "PROVIDER_RESPONSE_INCOMPLETE",
+        ),
+        (
+            b'{"status":"completed","output":[{"type":"message","content":[{"type":"refusal","refusal":"cannot comply"}]}]}',
+            "PROVIDER_RESPONSE_REFUSED",
+        ),
+        (
+            b'{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"not-json"}]}]}',
+            "PROVIDER_RESPONSE_INVALID",
+        ),
     ],
 )
 def test_incomplete_refusal_and_malformed_output_are_rejected_without_details(
     response: bytes,
+    reason_code: str,
 ) -> None:
     model = _model(RecordingRequester(response))
 
@@ -192,6 +202,7 @@ def test_incomplete_refusal_and_malformed_output_are_rejected_without_details(
         asyncio.run(model.plan_query(ChatbotQueryRequest(question="잠실엘스 위치")))
 
     assert str(raised.value) == ""
+    assert raised.value.reason_code == reason_code
     assert "cannot comply" not in repr(raised.value)
 
 
@@ -331,6 +342,57 @@ def test_default_transport_rejects_redirect_without_reading_response(
 
 
 @pytest.mark.parametrize(
+    ("status", "reason_code"),
+    [
+        (400, "PROVIDER_REQUEST_REJECTED"),
+        (401, "PROVIDER_AUTHENTICATION_FAILED"),
+        (403, "PROVIDER_ACCESS_DENIED"),
+        (404, "PROVIDER_MODEL_UNAVAILABLE"),
+        (429, "PROVIDER_RATE_LIMITED"),
+        (500, "PROVIDER_SERVER_ERROR"),
+    ],
+)
+def test_default_transport_preserves_only_safe_http_failure_category(
+    monkeypatch: pytest.MonkeyPatch,
+    status: int,
+    reason_code: str,
+) -> None:
+    class FailureResponse:
+        def __init__(self) -> None:
+            self.status = status
+
+        def read(self, _size: int) -> bytes:
+            raise AssertionError("provider failure body must not be read")
+
+    class FailureConnection:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def request(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def getresponse(self) -> FailureResponse:
+            return FailureResponse()
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(openai_responses, "HTTPSConnection", FailureConnection)
+    model = OpenAIResponsesLanguageModel(
+        settings=OpenAIResponsesSettings(
+            api_key="test-api-key",
+            model="approved-test-model",
+        )
+    )
+
+    with pytest.raises(OpenAIResponsesError) as raised:
+        asyncio.run(model.plan_query(ChatbotQueryRequest(question="잠실엘스 위치")))
+
+    assert raised.value.reason_code == reason_code
+    assert str(raised.value) == ""
+
+
+@pytest.mark.parametrize(
     ("field", "value"),
     [
         ("api_key", ""),
@@ -351,3 +413,8 @@ def test_settings_reject_invalid_or_unsafe_values(field: str, value: object) -> 
 
     with pytest.raises(ValueError):
         OpenAIResponsesSettings(**kwargs)  # type: ignore[arg-type]
+
+
+def test_provider_error_rejects_non_allowlisted_reason() -> None:
+    with pytest.raises(ValueError):
+        OpenAIResponsesError("provider body must not become a reason")

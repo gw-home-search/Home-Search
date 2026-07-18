@@ -18,12 +18,34 @@ _DEFAULT_MAX_RESPONSE_BYTES = 262_144
 _MAX_SENTENCES = 12
 _MAX_FACTS_PER_SENTENCE = 20
 _MAX_CLAIMS_PER_SENTENCE = 50
+_SAFE_PROVIDER_FAILURE_REASONS = frozenset(
+    {
+        "PROVIDER_ACCESS_DENIED",
+        "PROVIDER_AUTHENTICATION_FAILED",
+        "PROVIDER_MODEL_UNAVAILABLE",
+        "PROVIDER_RATE_LIMITED",
+        "PROVIDER_REDIRECT_REJECTED",
+        "PROVIDER_REQUEST_REJECTED",
+        "PROVIDER_RESPONSE_INCOMPLETE",
+        "PROVIDER_RESPONSE_INVALID",
+        "PROVIDER_RESPONSE_REFUSED",
+        "PROVIDER_RESPONSE_TOO_LARGE",
+        "PROVIDER_SERVER_ERROR",
+        "PROVIDER_TRANSPORT_FAILED",
+    }
+)
 
 Requester = Callable[[str, Mapping[str, str], bytes, float], bytes]
 
 
 class OpenAIResponsesError(Exception):
     """Non-disclosing provider boundary error."""
+
+    def __init__(self, reason_code: str = "PROVIDER_RESPONSE_INVALID") -> None:
+        if reason_code not in _SAFE_PROVIDER_FAILURE_REASONS:
+            raise ValueError("invalid provider failure reason")
+        super().__init__()
+        self.reason_code = reason_code
 
 
 @dataclass(frozen=True)
@@ -178,6 +200,9 @@ class OpenAIResponsesLanguageModel:
                 ensure_ascii=False,
                 separators=(",", ":"),
             ).encode()
+        except Exception:
+            raise OpenAIResponsesError("PROVIDER_RESPONSE_INVALID") from None
+        try:
             raw_response = await asyncio.to_thread(
                 self._requester,
                 _RESPONSES_URL,
@@ -188,18 +213,23 @@ class OpenAIResponsesLanguageModel:
                 request_body,
                 float(self._settings.timeout_seconds),
             )
-            if (
-                not isinstance(raw_response, bytes)
-                or len(raw_response) > self._settings.max_response_bytes
-            ):
-                raise OpenAIResponsesError()
+        except OpenAIResponsesError:
+            raise
+        except Exception:
+            raise OpenAIResponsesError("PROVIDER_TRANSPORT_FAILED") from None
+        if (
+            not isinstance(raw_response, bytes)
+            or len(raw_response) > self._settings.max_response_bytes
+        ):
+            raise OpenAIResponsesError("PROVIDER_RESPONSE_TOO_LARGE")
+        try:
             response = _json_loads(raw_response.decode("utf-8"))
             output_text = _extract_output_text(response)
             return _json_loads(output_text)
         except OpenAIResponsesError:
             raise
         except Exception:
-            raise OpenAIResponsesError() from None
+            raise OpenAIResponsesError("PROVIDER_RESPONSE_INVALID") from None
 
 
 def _url_request(
@@ -215,10 +245,26 @@ def _url_request(
         connection.request("POST", "/v1/responses", body=body, headers=dict(headers))
         response = connection.getresponse()
         if response.status != 200:
-            raise OpenAIResponsesError()
+            raise OpenAIResponsesError(_http_failure_reason(response.status))
         return response.read(_DEFAULT_MAX_RESPONSE_BYTES + 1)
     finally:
         connection.close()
+
+
+def _http_failure_reason(status: int) -> str:
+    if status == 401:
+        return "PROVIDER_AUTHENTICATION_FAILED"
+    if status == 403:
+        return "PROVIDER_ACCESS_DENIED"
+    if status == 404:
+        return "PROVIDER_MODEL_UNAVAILABLE"
+    if status == 429:
+        return "PROVIDER_RATE_LIMITED"
+    if 300 <= status < 400:
+        return "PROVIDER_REDIRECT_REJECTED"
+    if 500 <= status < 600:
+        return "PROVIDER_SERVER_ERROR"
+    return "PROVIDER_REQUEST_REJECTED"
 
 
 def _json_loads(value: str | bytes) -> object:
@@ -231,7 +277,7 @@ def _json_loads(value: str | bytes) -> object:
 def _extract_output_text(response: object) -> str:
     root = _object(response)
     if root.get("status") != "completed":
-        raise OpenAIResponsesError()
+        raise OpenAIResponsesError("PROVIDER_RESPONSE_INCOMPLETE")
     output = root.get("output")
     if not isinstance(output, list):
         raise OpenAIResponsesError()
@@ -246,7 +292,7 @@ def _extract_output_text(response: object) -> str:
             if not isinstance(part, dict):
                 raise OpenAIResponsesError()
             if part.get("type") == "refusal":
-                raise OpenAIResponsesError()
+                raise OpenAIResponsesError("PROVIDER_RESPONSE_REFUSED")
             if part.get("type") == "output_text":
                 text = part.get("text")
                 if not isinstance(text, str) or not text:

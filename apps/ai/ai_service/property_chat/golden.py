@@ -24,6 +24,7 @@ from .models import (
     EvidenceFact,
     PropertyQueryPlan,
 )
+from .openai_responses import OpenAIResponsesError
 from .postgres import PostgresPropertyFactRepository
 
 GoldenMode = Literal["offline", "live"]
@@ -518,10 +519,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"caseId: {current_case}")
         print(f"reasonCode: {exception.code}")
         return 1
-    except ChatbotProviderUnavailable:
+    except ChatbotProviderUnavailable as exception:
         print("상태: Fail")
         print(f"caseId: {current_case}")
-        print("reasonCode: PROVIDER_UNAVAILABLE")
+        print(f"reasonCode: {_provider_failure_reason(exception)}")
         return 1
     except Exception:
         print("상태: Fail")
@@ -532,6 +533,15 @@ def main(argv: list[str] | None = None) -> int:
         if repository is not None:
             repository.close()
         pool_logger.disabled = pool_logger_was_disabled
+
+
+def _provider_failure_reason(exception: ChatbotProviderUnavailable) -> str:
+    cause = exception.__cause__
+    while cause is not None:
+        if isinstance(cause, OpenAIResponsesError):
+            return cause.reason_code
+        cause = cause.__cause__
+    return "PROVIDER_UNAVAILABLE"
 
 
 if __name__ == "__main__":

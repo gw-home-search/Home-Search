@@ -453,6 +453,26 @@ def test_cli_sanitizes_execution_failures(monkeypatch, capsys, exception, reason
     assert "secret detail" not in output
 
 
+def test_cli_reports_safe_provider_failure_category_from_cause(monkeypatch, capsys) -> None:
+    async def fail(*args, **kwargs):
+        del args, kwargs
+        try:
+            raise golden.OpenAIResponsesError("PROVIDER_MODEL_UNAVAILABLE")
+        except golden.OpenAIResponsesError as provider_error:
+            raise ChatbotProviderUnavailable() from provider_error
+
+    monkeypatch.setenv("HOME_AI_PROPERTY_DSN", "test-dsn")
+    monkeypatch.setattr(golden, "PostgresPropertyFactRepository", CloseTrackingRepository)
+    monkeypatch.setattr(golden, "load_catalog", lambda path: (golden_case(),))
+    monkeypatch.setattr(golden, "_run_cases", fail)
+
+    exit_code = golden.main([])
+
+    output = capsys.readouterr().out
+    assert exit_code == 1
+    assert "reasonCode: PROVIDER_MODEL_UNAVAILABLE" in output
+
+
 def test_cli_suppresses_connection_pool_details(monkeypatch, capsys, caplog) -> None:
     pool_logger = logging.getLogger("psycopg.pool")
     original_disabled = pool_logger.disabled

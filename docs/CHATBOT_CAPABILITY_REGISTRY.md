@@ -49,7 +49,7 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 | Capability | 대표 질문 | 상태 | 필수 데이터셋 | 최소 등급 | 허용 주장 | 금지 주장 | 신선도 | 대체 답변 |
 |---|---|---|---|---|---|---|---|---|
 | `complex_identity` | “잠실엘스 어디야?” | 지원 | `home_search.ai_read` 단지·지역·marker-safe 좌표 | A | 식별된 단지명, 주소, 공개 좌표 | 동명 단지를 임의 선택 | Slice 3 감사 통과 active view | 후보를 나열하고 지역 등 추가 조건 요청 |
-| `recent_trade_lookup` | “전용 84㎡ 최근 실거래 5건” | 데이터 준비 중 | `ai_read` 정상 거래·단지 | A | 실제 거래일, 전용면적, 금액, 층 | 호가·시세로 재해석, 미래 가격 | 최신 거래일과 coverage를 응답에 표시 | 조회 기간과 조건에서 거래 없음 안내 |
+| `recent_trade_lookup` | “전용 84㎡ 최근 실거래 5건” | 지원 | `ai_read` 정상 거래·단지 | A | 실제 거래일, 전용면적, 금액, 층 | 호가·시세로 재해석, 미래 가격 | 최신 거래일과 coverage를 응답에 표시 | 조회 기간과 조건에서 거래 없음 안내 |
 | `price_trend` | “최근 1년 가격 흐름” | 데이터 준비 중 | `ai_read` 정상 거래 | A | 동일 조건의 월별 집계와 거래량 | 미래 추세 단정, 표본 부족 은폐 | 요청 종료일 이하 active data | 계산 불가 기간과 최소 표본 부족 설명 |
 | `comparison` | “A와 B 가격·세대수 비교” | 데이터 준비 중 | 비교 항목별 동일 버전의 A/B 데이터 | A | 같은 기간·단위로 계산 가능한 항목 | 기준일·평형이 다른 수치의 직접 비교 | 모든 필수 항목이 freshness 통과 | 비교 가능한 항목만 답하고 누락을 분리 |
 | `recommendation` | “예산 20억, 역 가까운 후보” | 데이터 준비 중 | 부동산 A, 명시 조건에 필요한 공식 A/B | A | 결정론적 필터·공개 가중치로 계산한 후보 | “최고”, 수익 보장, LLM 임의 점수 | 사용한 모든 필수 dataset 통과 | 미지원 조건과 후보 0건 이유 설명 |
@@ -89,13 +89,13 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 계약 검증, `code-review`, `security-audit: 지적사항 = none|listed`를 함께 남긴다.
 
 2026-07-18 기준으로 부동산 3개 Capability의 운영 `ai_read` offline 검증은 모두
-통과했고, 승인된 OpenAI live 대표 질문에서는 `complex_identity`의 fact 1건과
-citation 1건이 검증됐다. Chatbot JSON/SSE 공개 계약과 BFF 품질 게이트도 통과했다.
+통과했다. 승인된 OpenAI live 대표 질문에서 `complex_identity`의 fact 1건과
+`recent_trade_lookup`의 fact 3건이 각각 A등급 citation으로 검증됐고,
+recent-trade JSON/SSE도 `dataAsOf=2026-07-16`과 같은 근거 의미를 확인했다.
 
-승인된 활성화 변경에서 runtime은 exact allowlist
-`HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity`만 허용한다. 누락·오류·혼합
-설정은 전체 비활성으로 처리하고, 비활성 Capability는 repository를 조회하지 않은 채
-LLM이 fact 없는 `unavailable` limitation만 작성한다. JSON/SSE의 최종 의미 일치와
-Compose preflight를 검증했으므로 `complex_identity`를 `지원`으로 전환한다.
-`recent_trade_lookup`와 `price_trend`는 각각 live 대표 질문을 통과하기 전까지
-`데이터 준비 중`을 유지한다.
+승인된 활성화 변경에서 runtime은 identity-only rollback 또는 exact cumulative
+allowlist `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup`
+만 허용한다. 누락·순서 변경·오류·미승인 혼합 설정은 전체 비활성으로 처리한다.
+근거 기반 금액 표시 claim, live golden, signed JWT JSON/SSE와 Compose preflight를
+검증했으므로 `complex_identity`와 `recent_trade_lookup`을 `지원`으로 유지한다.
+`price_trend`는 별도 live 대표 질문을 통과하기 전까지 `데이터 준비 중`이다.

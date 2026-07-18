@@ -2,15 +2,20 @@ from __future__ import annotations
 
 import pytest
 
-from ai_service.chat import get_grounded_language_model
+from ai_service.chat import (
+    get_enabled_property_capabilities,
+    get_grounded_language_model,
+)
 from ai_service.property_chat.language import RetryingLanguageModel, UnavailableLanguageModel
 
 
 @pytest.fixture(autouse=True)
 def clear_language_model_cache() -> None:
     get_grounded_language_model.cache_clear()
+    get_enabled_property_capabilities.cache_clear()
     yield
     get_grounded_language_model.cache_clear()
+    get_enabled_property_capabilities.cache_clear()
 
 
 def test_missing_openai_configuration_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -63,3 +68,35 @@ def test_invalid_timeout_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME_AI_OPENAI_TIMEOUT_SECONDS", "not-a-number")
 
     assert isinstance(get_grounded_language_model(), UnavailableLanguageModel)
+
+
+def test_only_approved_property_capability_is_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME_AI_ENABLED_PROPERTY_CAPABILITIES", "complex_identity")
+
+    assert get_enabled_property_capabilities() == frozenset({"complex_identity"})
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        "",
+        "recent_trade_lookup",
+        "complex_identity,price_trend",
+        "complex_identity,complex_identity",
+        "complex_identity, price_trend",
+        "unknown",
+    ],
+)
+def test_unapproved_or_invalid_property_capability_configuration_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    value: str | None,
+) -> None:
+    if value is None:
+        monkeypatch.delenv("HOME_AI_ENABLED_PROPERTY_CAPABILITIES", raising=False)
+    else:
+        monkeypatch.setenv("HOME_AI_ENABLED_PROPERTY_CAPABILITIES", value)
+
+    assert get_enabled_property_capabilities() == frozenset()

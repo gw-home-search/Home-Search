@@ -19,6 +19,10 @@ from ai_service.property_chat.models import (
     TradeRecord,
 )
 
+ALL_PROPERTY_CAPABILITIES = frozenset(
+    {"complex_identity", "recent_trade_lookup", "price_trend"}
+)
+
 
 class FakeRepository:
     def __init__(self) -> None:
@@ -27,9 +31,11 @@ class FakeRepository:
         self.trends: list[MonthlyTrendRecord] = []
         self.latest_trade_data_as_of = date(2026, 7, 16)
         self.trade_query: tuple[int, date | None, date | None, float | None, int] | None = None
+        self.complex_query_count = 0
 
     def find_complexes(self, name: str, region_name: str | None, limit: int) -> list[ComplexRecord]:
         del name, region_name, limit
+        self.complex_query_count += 1
         return self.complexes
 
     def recent_trades(
@@ -124,7 +130,11 @@ def test_recent_trade_answer_uses_only_observed_fact_and_citation() -> None:
             ]
         ),
     )
-    engine = GroundedChatbotEngine(repository=repository, language_model=model)
+    engine = GroundedChatbotEngine(
+        repository=repository,
+        language_model=model,
+        enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+    )
 
     response = run_query(
         engine,
@@ -189,7 +199,15 @@ def test_blocks_unknown_fact_or_numeric_mismatch(draft: DraftAnswer) -> None:
     )
 
     with pytest.raises(ChatbotProviderUnavailable):
-        run_query(GroundedChatbotEngine(repository=repository, language_model=model), "최근 거래", "request-1")
+        run_query(
+            GroundedChatbotEngine(
+                repository=repository,
+                language_model=model,
+                enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            ),
+            "최근 거래",
+            "request-1",
+        )
 
 
 def test_ambiguous_complex_is_not_selected_arbitrarily() -> None:
@@ -212,7 +230,11 @@ def test_ambiguous_complex_is_not_selected_arbitrarily() -> None:
     )
 
     response = run_query(
-        GroundedChatbotEngine(repository=repository, language_model=model),
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        ),
         "한빛아파트 어디야?",
         "request-2",
     )
@@ -258,7 +280,11 @@ def test_monthly_trend_exposes_amount_and_volume_facts() -> None:
     )
 
     response = run_query(
-        GroundedChatbotEngine(repository=repository, language_model=model),
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        ),
         "잠실엘스 최근 반년 가격 추이와 거래량",
         "request-3",
     )
@@ -293,7 +319,11 @@ def test_empty_observation_returns_llm_written_unavailable_answer(plan: Property
     )
 
     response = run_query(
-        GroundedChatbotEngine(repository=repository, language_model=model),
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        ),
         "조회해줘",
         "request-empty",
     )
@@ -303,6 +333,51 @@ def test_empty_observation_returns_llm_written_unavailable_answer(plan: Property
     assert response["evidenceSummary"]["status"] == "unavailable"
     assert response["citations"] == []
     assert response["dataAsOf"] is None
+
+
+@pytest.mark.parametrize("capability", ["recent_trade_lookup", "price_trend"])
+def test_disabled_capability_uses_llm_written_unavailable_without_repository_access(
+    capability: str,
+) -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    model = FakeLanguageModel(
+        PropertyQueryPlan(
+            capability=capability,
+            complex_name="잠실엘스",
+            start_date=date(2026, 1, 1) if capability == "price_trend" else None,
+            end_date=date(2026, 6, 30) if capability == "price_trend" else None,
+        ),
+        DraftAnswer(
+            sentences=[
+                DraftSentence(
+                    text="해당 질문 기능은 현재 데이터 준비와 검증이 진행 중입니다.",
+                    fact_ids=[],
+                )
+            ]
+        ),
+    )
+    engine = GroundedChatbotEngine(
+        repository=repository,
+        language_model=model,
+        enabled_capabilities=frozenset({"complex_identity"}),
+    )
+
+    response = run_query(engine, "조회해줘", "request-disabled")
+
+    assert response["success"] is False
+    assert response["status"] == "failed"
+    assert response["evidenceSummary"] == {
+        "status": "unavailable",
+        "capabilities": [capability],
+        "factCount": 0,
+        "citationCount": 0,
+    }
+    assert response["citations"] == []
+    assert response["dataAsOf"] is None
+    assert model.received_fact_ids == []
+    assert repository.complex_query_count == 0
+    assert repository.trade_query is None
 
 
 def test_identity_does_not_expose_unverified_coordinates() -> None:
@@ -329,7 +404,11 @@ def test_identity_does_not_expose_unverified_coordinates() -> None:
     )
 
     response = run_query(
-        GroundedChatbotEngine(repository=repository, language_model=model),
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        ),
         "잠실엘스 위치",
         "request-identity",
     )
@@ -375,7 +454,11 @@ def test_supported_answer_requires_fact_reference_on_every_sentence() -> None:
 
     with pytest.raises(ChatbotProviderUnavailable):
         run_query(
-            GroundedChatbotEngine(repository=repository, language_model=model),
+            GroundedChatbotEngine(
+                repository=repository,
+                language_model=model,
+                enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            ),
             "잠실엘스 위치",
             "request-invalid",
         )
@@ -399,7 +482,11 @@ def test_supported_answer_requires_a_validated_claim_on_every_sentence() -> None
 
     with pytest.raises(ChatbotProviderUnavailable):
         run_query(
-            GroundedChatbotEngine(repository=repository, language_model=model),
+            GroundedChatbotEngine(
+                repository=repository,
+                language_model=model,
+                enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            ),
             "잠실엘스 위치",
             "request-invalid-claim",
         )

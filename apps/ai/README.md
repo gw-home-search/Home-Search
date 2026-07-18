@@ -23,6 +23,12 @@ Runtime variables:
 - `HOME_AI_OPENAI_PRIMARY_MODEL`
 - `HOME_AI_OPENAI_SECONDARY_MODEL`
 - `HOME_AI_OPENAI_TIMEOUT_SECONDS` (optional, default `8`, allowed `1..30`)
+- `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity`
+
+The runtime Capability setting is fail-closed. This activation permits only
+`complex_identity`; missing, duplicate, whitespace-padded, mixed, or unapproved
+values disable all property capabilities. Golden verification uses its own
+explicit candidate set and does not widen the runtime allowlist.
 
 Do not rely on provider-side conversation state. The browser sends only the
 bounded `conversationContext`, and the AI service treats it as an untrusted

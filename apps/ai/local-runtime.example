@@ -5,3 +5,4 @@ HOME_AI_OPENAI_API_KEY=replace-with-openai-api-key
 HOME_AI_OPENAI_PRIMARY_MODEL=replace-with-approved-primary-model-id
 HOME_AI_OPENAI_SECONDARY_MODEL=replace-with-approved-secondary-model-id
 HOME_AI_OPENAI_TIMEOUT_SECONDS=8
+HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity

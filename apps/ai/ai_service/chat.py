@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
-from typing import Protocol
+from typing import Protocol, cast
 
 from .auth import AuthenticatedUser
 from .models import ChatbotQueryRequest
+from .property_chat.models import PropertyCapability
+
+_APPROVED_PROPERTY_CAPABILITIES = frozenset({"complex_identity"})
 
 
 class ChatbotProviderUnavailable(Exception):
@@ -69,6 +72,21 @@ def get_grounded_language_model() -> object:
     return RetryingLanguageModel(primary=primary, secondary=secondary)
 
 
+@lru_cache
+def get_enabled_property_capabilities() -> frozenset[PropertyCapability]:
+    raw_value = os.getenv("HOME_AI_ENABLED_PROPERTY_CAPABILITIES", "")
+    if not raw_value:
+        return frozenset()
+    values = raw_value.split(",")
+    if (
+        any(not value or value != value.strip() for value in values)
+        or len(values) != len(set(values))
+        or not set(values).issubset(_APPROVED_PROPERTY_CAPABILITIES)
+    ):
+        return frozenset()
+    return cast(frozenset[PropertyCapability], frozenset(values))
+
+
 class ConfiguredChatbotEngine:
     async def query(
         self,
@@ -82,6 +100,7 @@ class ConfiguredChatbotEngine:
         engine = GroundedChatbotEngine(
             repository=get_property_fact_repository(),  # type: ignore[arg-type]
             language_model=get_grounded_language_model(),  # type: ignore[arg-type]
+            enabled_capabilities=get_enabled_property_capabilities(),
         )
         return await engine.query(request=request, user=user, request_id=request_id)
 

@@ -17,6 +17,7 @@ from .models import (
     EvidenceFact,
     FactClaim,
     MonthlyTrendRecord,
+    PropertyCapability,
     PropertyQueryPlan,
     TradeRecord,
 )
@@ -69,9 +70,11 @@ class GroundedChatbotEngine:
         *,
         repository: PropertyFactRepository,
         language_model: GroundedLanguageModel,
+        enabled_capabilities: frozenset[PropertyCapability],
     ) -> None:
         self._repository = repository
         self._language_model = language_model
+        self._enabled_capabilities = enabled_capabilities
 
     async def query(
         self,
@@ -83,7 +86,14 @@ class GroundedChatbotEngine:
         del user
         try:
             plan = await self._language_model.plan_query(request)
-            facts, limitations, readiness = await self._observe(plan)
+            if plan.capability in self._enabled_capabilities:
+                facts, limitations, readiness = await self._observe(plan)
+            else:
+                facts, limitations, readiness = (
+                    [],
+                    ["해당 질문 기능은 현재 데이터 준비와 검증이 진행 중입니다."],
+                    "unavailable",
+                )
             draft = await self._language_model.draft_answer(
                 facts=facts,
                 limitations=limitations,

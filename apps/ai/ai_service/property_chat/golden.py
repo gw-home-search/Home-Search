@@ -142,6 +142,9 @@ class GoldenSuiteRunner:
         response = await GroundedChatbotEngine(
             repository=self._repository,
             language_model=language_model,
+            enabled_capabilities=frozenset(
+                {"complex_identity", "recent_trade_lookup", "price_trend"}
+            ),
         ).query(
             request=ChatbotQueryRequest(question=case.question),
             user=AuthenticatedUser(user_id=1),

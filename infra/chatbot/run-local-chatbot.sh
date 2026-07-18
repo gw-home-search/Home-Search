@@ -124,6 +124,7 @@ ai_openai_api_key="$(required_value "$ai_vars_file" HOME_AI_OPENAI_API_KEY)"
 ai_openai_primary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_PRIMARY_MODEL)"
 ai_openai_secondary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_SECONDARY_MODEL)"
 ai_openai_timeout_seconds="$(optional_value "$ai_vars_file" HOME_AI_OPENAI_TIMEOUT_SECONDS 8)"
+ai_enabled_property_capabilities="$(required_value "$ai_vars_file" HOME_AI_ENABLED_PROPERTY_CAPABILITIES)"
 
 [[ "$user_active_kid" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] \
     || reject "USER_JWT_ACTIVE_KID 형식이 올바르지 않습니다."
@@ -213,6 +214,8 @@ PY
 then
     reject "HOME_AI_OPENAI 설정이 올바르지 않습니다."
 fi
+[[ "$ai_enabled_property_capabilities" == "complex_identity" ]] \
+    || reject "HOME_AI_ENABLED_PROPERTY_CAPABILITIES는 승인된 complex_identity만 허용합니다."
 
 export HOME_SEARCH_DB_PASSWORD="$home_search_db_password"
 export PROPERTY_RUNTIME_DB_PASSWORD="$property_runtime_db_password"
@@ -227,6 +230,7 @@ export HOME_AI_OPENAI_API_KEY="$ai_openai_api_key"
 export HOME_AI_OPENAI_PRIMARY_MODEL="$ai_openai_primary_model"
 export HOME_AI_OPENAI_SECONDARY_MODEL="$ai_openai_secondary_model"
 export HOME_AI_OPENAI_TIMEOUT_SECONDS="$ai_openai_timeout_seconds"
+export HOME_AI_ENABLED_PROPERTY_CAPABILITIES="$ai_enabled_property_capabilities"
 export CHATBOT_BFF_JAR_PATH="$bff_jar"
 export USER_JWT_PUBLIC_KEY_HOST_PATH="$user_public_key"
 export USER_JWT_PRIVATE_KEY_HOST_PATH="$user_private_key"

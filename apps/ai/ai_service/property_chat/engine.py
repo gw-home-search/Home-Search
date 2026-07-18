@@ -17,6 +17,7 @@ from .models import (
     EvidenceFact,
     FactClaim,
     MonthlyTrendRecord,
+    PropertyCapability,
     PropertyQueryPlan,
     TradeRecord,
 )
@@ -59,8 +60,33 @@ class GroundedLanguageModel(Protocol):
     ) -> DraftAnswer: ...
 
 
+_GROUNDING_FAILURE_REASONS = frozenset(
+    {
+        "GROUNDING_CAPABILITY_UNSUPPORTED",
+        "GROUNDING_ANSWER_EMPTY",
+        "GROUNDING_SENTENCE_BLANK",
+        "GROUNDING_FACT_IDS_MISSING",
+        "GROUNDING_CLAIMS_MISSING",
+        "GROUNDING_FACT_IDS_DUPLICATE",
+        "GROUNDING_FACT_UNKNOWN",
+        "GROUNDING_FACTS_OMITTED",
+        "GROUNDING_CLAIM_NOT_ATTACHED",
+        "GROUNDING_CLAIM_MISMATCH",
+        "GROUNDING_RESULT_COUNT_OR_LIST_NUMBER",
+        "GROUNDING_AMOUNT_UNIT_CONVERSION",
+        "GROUNDING_NUMBER_OUTSIDE_OBSERVATION",
+    }
+)
+
+
 class GroundingValidationError(ValueError):
-    pass
+    """Non-disclosing validation failure with a stable diagnostic category."""
+
+    def __init__(self, reason_code: str) -> None:
+        if reason_code not in _GROUNDING_FAILURE_REASONS:
+            raise ValueError("invalid grounding failure reason")
+        super().__init__()
+        self.reason_code = reason_code
 
 
 class GroundedChatbotEngine:
@@ -69,9 +95,11 @@ class GroundedChatbotEngine:
         *,
         repository: PropertyFactRepository,
         language_model: GroundedLanguageModel,
+        enabled_capabilities: frozenset[PropertyCapability],
     ) -> None:
         self._repository = repository
         self._language_model = language_model
+        self._enabled_capabilities = enabled_capabilities
 
     async def query(
         self,
@@ -83,13 +111,20 @@ class GroundedChatbotEngine:
         del user
         try:
             plan = await self._language_model.plan_query(request)
-            facts, limitations, readiness = await self._observe(plan)
+            if plan.capability in self._enabled_capabilities:
+                facts, limitations, readiness = await self._observe(plan)
+            else:
+                facts, limitations, readiness = (
+                    [],
+                    ["해당 질문 기능은 현재 데이터 준비와 검증이 진행 중입니다."],
+                    "unavailable",
+                )
             draft = await self._language_model.draft_answer(
                 facts=facts,
                 limitations=limitations,
                 question=request.question,
             )
-            used_facts = _validate_draft(draft, facts, readiness)
+            used_facts = validate_draft(draft, facts, readiness)
             return _response(
                 request=request,
                 request_id=request_id,
@@ -176,7 +211,7 @@ class GroundedChatbotEngine:
             if plan.exclusive_area_square_meters is not None:
                 limitations.append("전용면적은 요청값 기준 ±1.0㎡ 범위로 집계했습니다.")
             return [_trend_fact(record, data_as_of) for record in trends], limitations, "supported"
-        raise GroundingValidationError("unsupported property capability")
+        raise GroundingValidationError("GROUNDING_CAPABILITY_UNSUPPORTED")
 
 
 def _complex_fact(record: ComplexRecord) -> EvidenceFact:
@@ -217,6 +252,10 @@ def _trade_fact(record: TradeRecord, data_as_of: date) -> EvidenceFact:
     claims = (
         FactClaim(record.deal_date.isoformat(), "DATE"),
         FactClaim(str(record.deal_amount_ten_thousand_krw), "10_000_KRW"),
+        FactClaim(
+            _korean_krw_display(record.deal_amount_ten_thousand_krw),
+            "KOREAN_KRW_DISPLAY",
+        ),
         FactClaim(_number(record.exclusive_area_square_meters), "SQUARE_METERS"),
         *(() if record.floor is None else (FactClaim(str(record.floor), "FLOOR"),)),
     )
@@ -241,9 +280,21 @@ def _trend_fact(record: MonthlyTrendRecord, data_as_of: date) -> EvidenceFact:
         claims=(
             FactClaim(record.month.strftime("%Y-%m"), "MONTH"),
             FactClaim(str(record.average_amount_ten_thousand_krw), "10_000_KRW"),
+            FactClaim(
+                _korean_krw_display(record.average_amount_ten_thousand_krw),
+                "KOREAN_KRW_AVERAGE_DISPLAY",
+            ),
             FactClaim(str(record.trade_count), "COUNT"),
             FactClaim(str(record.minimum_amount_ten_thousand_krw), "10_000_KRW_MIN"),
+            FactClaim(
+                _korean_krw_display(record.minimum_amount_ten_thousand_krw),
+                "KOREAN_KRW_MIN_DISPLAY",
+            ),
             FactClaim(str(record.maximum_amount_ten_thousand_krw), "10_000_KRW_MAX"),
+            FactClaim(
+                _korean_krw_display(record.maximum_amount_ten_thousand_krw),
+                "KOREAN_KRW_MAX_DISPLAY",
+            ),
         ),
         data_as_of=data_as_of,
         payload={
@@ -257,43 +308,59 @@ def _trend_fact(record: MonthlyTrendRecord, data_as_of: date) -> EvidenceFact:
     )
 
 
-def _validate_draft(
+def validate_draft(
     draft: DraftAnswer,
     facts: list[EvidenceFact],
     readiness: str,
 ) -> list[EvidenceFact]:
     if not draft.sentences:
-        raise GroundingValidationError("answer must contain at least one sentence")
+        raise GroundingValidationError("GROUNDING_ANSWER_EMPTY")
     fact_by_id = {fact.fact_id: fact for fact in facts}
     used_ids: list[str] = []
     for sentence in draft.sentences:
         if not sentence.text.strip():
-            raise GroundingValidationError("answer sentence must not be blank")
+            raise GroundingValidationError("GROUNDING_SENTENCE_BLANK")
         if readiness != "unavailable" and not sentence.fact_ids:
-            raise GroundingValidationError("grounded sentence is missing fact ids")
+            raise GroundingValidationError("GROUNDING_FACT_IDS_MISSING")
         if readiness != "unavailable" and not sentence.claims:
-            raise GroundingValidationError("grounded sentence is missing validated claims")
+            raise GroundingValidationError("GROUNDING_CLAIMS_MISSING")
         if len(sentence.fact_ids) != len(set(sentence.fact_ids)):
-            raise GroundingValidationError("sentence contains duplicate fact ids")
+            raise GroundingValidationError("GROUNDING_FACT_IDS_DUPLICATE")
         referenced: list[EvidenceFact] = []
         for fact_id in sentence.fact_ids:
             fact = fact_by_id.get(fact_id)
             if fact is None:
-                raise GroundingValidationError("answer references an unknown fact")
+                raise GroundingValidationError("GROUNDING_FACT_UNKNOWN")
             referenced.append(fact)
             if fact_id not in used_ids:
                 used_ids.append(fact_id)
         for claim in sentence.claims:
             if claim.fact_id not in sentence.fact_ids:
-                raise GroundingValidationError("claim fact is not attached to its sentence")
+                raise GroundingValidationError("GROUNDING_CLAIM_NOT_ATTACHED")
             fact = fact_by_id[claim.fact_id]
             if FactClaim(claim.value, claim.unit) not in fact.claims:
-                raise GroundingValidationError("claim value or unit differs from observation")
+                raise GroundingValidationError("GROUNDING_CLAIM_MISMATCH")
         allowed_numbers = _number_tokens(
             claim.value for fact in referenced for claim in fact.claims
         )
-        if not _number_tokens([sentence.text]).issubset(allowed_numbers):
-            raise GroundingValidationError("answer contains a number outside its observations")
+        unexpected_numbers = _number_tokens([sentence.text]) - allowed_numbers
+        if unexpected_numbers:
+            ordinal_candidates = {
+                str(index) for index in range(1, len(facts) + 1)
+            }
+            if unexpected_numbers.issubset(ordinal_candidates):
+                reason_code = "GROUNDING_RESULT_COUNT_OR_LIST_NUMBER"
+            elif any(
+                claim.unit.startswith("10_000_KRW")
+                for fact in referenced
+                for claim in fact.claims
+            ):
+                reason_code = "GROUNDING_AMOUNT_UNIT_CONVERSION"
+            else:
+                reason_code = "GROUNDING_NUMBER_OUTSIDE_OBSERVATION"
+            raise GroundingValidationError(reason_code)
+    if readiness != "unavailable" and set(used_ids) != set(fact_by_id):
+        raise GroundingValidationError("GROUNDING_FACTS_OMITTED")
     return [fact_by_id[fact_id] for fact_id in used_ids]
 
 
@@ -361,6 +428,15 @@ def _citations(facts: list[EvidenceFact]) -> list[dict[str, object]]:
 
 def _number(value: int | float) -> str:
     return format(Decimal(str(value)).normalize(), "f")
+
+
+def _korean_krw_display(amount_ten_thousand_krw: int) -> str:
+    eok, man_won = divmod(amount_ten_thousand_krw, 10_000)
+    if eok and man_won:
+        return f"{eok:,}억 {man_won:,}만원"
+    if eok:
+        return f"{eok:,}억원"
+    return f"{man_won:,}만원"
 
 
 def _number_tokens(values: Iterable[str]) -> set[str]:

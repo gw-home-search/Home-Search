@@ -103,6 +103,12 @@ LLM은 후보와 계산 근거를 설명할 뿐 점수와 사실을 만들지 �
   local runtime secret 주입과 live provider 검증 전에는 Capability를
   활성화하지 않으며 `Partial` 근거는
   `docs/reports/CHATBOT_SLICE_4_GROUNDED_KERNEL.md`에 기록한다.
+  2026-07-18 운영 DB offline 전체 검증과 승인된 OpenAI live 대표 질문,
+  JSON/SSE 계약 회귀를 통과한 `complex_identity`, `recent_trade_lookup`,
+  `price_trend`를 누적 runtime allowlist로 활성화했다. recent-trade 금액은 원본
+  `10_000_KRW`와 서버가 계산한 `KOREAN_KRW_DISPLAY` claim을 함께 제공해 LLM의
+  임의 단위 환산을 차단한다. price-trend도 평균·최저·최고 원본 단위와 서버 계산
+  한국어 표시 claim을 함께 제공하며 모든 월별 fact 사용을 검증한다.
 
 ### Slice 5: BFF와 최소 UI
 
@@ -112,9 +118,12 @@ LLM은 후보와 계산 근거를 설명할 뿐 점수와 사실을 만들지 �
 - 상태: BFF subject 기준 Redis rate limit과 browser-only IndexedDB 대화/UI는
   구현·검증 완료했다. 기본 Compose를 변경하지 않는 opt-in AI/BFF/gateway
   overlay와 JWT·DB credential preflight runner를 추가했다. 실제 route는 preflight
-  통과 후에만 기동한다. provider adapter는 구현됐지만 overlay secret 주입과
-  live 검증 전이므로 질문은 `503 CHATBOT_PROVIDER_UNAVAILABLE`로
-  fail-closed한다. `Partial` 근거는
+  통과 후에만 기동한다. provider adapter와 승인된 누적 Capability gate를
+  구현했으며, 누락·오류·미승인 allowlist 설정은 fail-closed한다. 검증된 완성
+  answer만 Unicode-safe `answer_delta`로 나눈 뒤 `final`을 보내며 delta 결합은
+  final answer와 byte-for-byte 동일하다. AI 전체 query budget은 local runtime에서
+  최대 `60s`, BFF timeout은 `70s`로 정렬해 AI가 먼저 fail-closed한다.
+  `Partial` 근거는
   `docs/reports/CHATBOT_SLICE_5_BROWSER_BFF_FOUNDATION.md`에 기록한다.
 
 ### Slice 6: 교육 데이터

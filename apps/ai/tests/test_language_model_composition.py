@@ -1,16 +1,30 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
-from ai_service.chat import get_grounded_language_model
+from ai_service.auth import AuthenticatedUser
+from ai_service.chat import (
+    ConfiguredChatbotEngine,
+    ChatbotProviderUnavailable,
+    get_enabled_property_capabilities,
+    get_grounded_language_model,
+    get_query_timeout_seconds,
+)
+from ai_service.models import ChatbotQueryRequest
 from ai_service.property_chat.language import RetryingLanguageModel, UnavailableLanguageModel
 
 
 @pytest.fixture(autouse=True)
 def clear_language_model_cache() -> None:
     get_grounded_language_model.cache_clear()
+    get_enabled_property_capabilities.cache_clear()
+    get_query_timeout_seconds.cache_clear()
     yield
     get_grounded_language_model.cache_clear()
+    get_enabled_property_capabilities.cache_clear()
+    get_query_timeout_seconds.cache_clear()
 
 
 def test_missing_openai_configuration_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -63,3 +77,112 @@ def test_invalid_timeout_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME_AI_OPENAI_TIMEOUT_SECONDS", "not-a-number")
 
     assert isinstance(get_grounded_language_model(), UnavailableLanguageModel)
+
+
+@pytest.mark.parametrize("value", ["not-a-number", "0", "61", "nan", "inf"])
+def test_invalid_total_query_timeout_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    value: str,
+) -> None:
+    monkeypatch.setenv("HOME_AI_QUERY_TIMEOUT_SECONDS", value)
+
+    assert get_query_timeout_seconds() is None
+
+
+def test_total_query_timeout_defaults_inside_bff_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HOME_AI_QUERY_TIMEOUT_SECONDS", raising=False)
+
+    assert get_query_timeout_seconds() == 45
+
+
+def test_total_query_timeout_accepts_sixty_seconds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME_AI_QUERY_TIMEOUT_SECONDS", "60")
+
+    assert get_query_timeout_seconds() == 60
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("complex_identity", frozenset({"complex_identity"})),
+        (
+            "complex_identity,recent_trade_lookup",
+            frozenset({"complex_identity", "recent_trade_lookup"}),
+        ),
+        (
+            "complex_identity,recent_trade_lookup,price_trend",
+            frozenset(
+                {"complex_identity", "recent_trade_lookup", "price_trend"}
+            ),
+        ),
+    ],
+)
+def test_only_approved_property_capability_configuration_is_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+    value: str,
+    expected: frozenset[str],
+) -> None:
+    monkeypatch.setenv("HOME_AI_ENABLED_PROPERTY_CAPABILITIES", value)
+
+    assert get_enabled_property_capabilities() == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        None,
+        "",
+        "recent_trade_lookup",
+        "recent_trade_lookup,complex_identity",
+        "complex_identity,price_trend",
+        "complex_identity,complex_identity",
+        "complex_identity, price_trend",
+        "unknown",
+    ],
+)
+def test_unapproved_or_invalid_property_capability_configuration_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    value: str | None,
+) -> None:
+    if value is None:
+        monkeypatch.delenv("HOME_AI_ENABLED_PROPERTY_CAPABILITIES", raising=False)
+    else:
+        monkeypatch.setenv("HOME_AI_ENABLED_PROPERTY_CAPABILITIES", value)
+
+    assert get_enabled_property_capabilities() == frozenset()
+
+
+def test_configured_engine_fails_closed_when_total_query_budget_expires(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class SlowPlanningModel:
+        async def plan_query(self, _request: object) -> object:
+            await asyncio.sleep(1)
+            raise AssertionError("query budget was not enforced")
+
+    monkeypatch.setattr(
+        "ai_service.chat.get_property_fact_repository", lambda: object()
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_grounded_language_model", lambda: SlowPlanningModel()
+    )
+    monkeypatch.setattr("ai_service.chat.get_query_timeout_seconds", lambda: 0.001)
+    monkeypatch.setenv(
+        "HOME_AI_ENABLED_PROPERTY_CAPABILITIES",
+        "complex_identity,recent_trade_lookup,price_trend",
+    )
+
+    with pytest.raises(ChatbotProviderUnavailable) as raised:
+        asyncio.run(
+            ConfiguredChatbotEngine().query(
+                request=ChatbotQueryRequest(question="가격 추이"),
+                user=AuthenticatedUser(user_id=42),
+                request_id="request-timeout",
+            )
+        )
+
+    assert str(raised.value) == ""

@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+import asyncio
+import math
 import os
 from functools import lru_cache
-from typing import Protocol
+from typing import Protocol, cast
 
 from .auth import AuthenticatedUser
 from .models import ChatbotQueryRequest
+from .property_chat.models import PropertyCapability
+
+_APPROVED_PROPERTY_CAPABILITY_CONFIGURATIONS = frozenset(
+    {
+        ("complex_identity",),
+        ("complex_identity", "recent_trade_lookup"),
+        ("complex_identity", "recent_trade_lookup", "price_trend"),
+    }
+)
 
 
 class ChatbotProviderUnavailable(Exception):
@@ -69,6 +80,32 @@ def get_grounded_language_model() -> object:
     return RetryingLanguageModel(primary=primary, secondary=secondary)
 
 
+@lru_cache
+def get_enabled_property_capabilities() -> frozenset[PropertyCapability]:
+    raw_value = os.getenv("HOME_AI_ENABLED_PROPERTY_CAPABILITIES", "")
+    if not raw_value:
+        return frozenset()
+    values = raw_value.split(",")
+    if (
+        any(not value or value != value.strip() for value in values)
+        or len(values) != len(set(values))
+        or tuple(values) not in _APPROVED_PROPERTY_CAPABILITY_CONFIGURATIONS
+    ):
+        return frozenset()
+    return cast(frozenset[PropertyCapability], frozenset(values))
+
+
+@lru_cache
+def get_query_timeout_seconds() -> float | None:
+    try:
+        timeout_seconds = float(os.getenv("HOME_AI_QUERY_TIMEOUT_SECONDS", "45"))
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(timeout_seconds) or not 1 <= timeout_seconds <= 60:
+        return None
+    return timeout_seconds
+
+
 class ConfiguredChatbotEngine:
     async def query(
         self,
@@ -79,11 +116,23 @@ class ConfiguredChatbotEngine:
     ) -> dict[str, object]:
         from .property_chat.engine import GroundedChatbotEngine
 
+        timeout_seconds = get_query_timeout_seconds()
+        if timeout_seconds is None:
+            raise ChatbotProviderUnavailable()
         engine = GroundedChatbotEngine(
             repository=get_property_fact_repository(),  # type: ignore[arg-type]
             language_model=get_grounded_language_model(),  # type: ignore[arg-type]
+            enabled_capabilities=get_enabled_property_capabilities(),
         )
-        return await engine.query(request=request, user=user, request_id=request_id)
+        try:
+            async with asyncio.timeout(timeout_seconds):
+                return await engine.query(
+                    request=request,
+                    user=user,
+                    request_id=request_id,
+                )
+        except TimeoutError as exception:
+            raise ChatbotProviderUnavailable() from exception
 
 
 _ENGINE = ConfiguredChatbotEngine()

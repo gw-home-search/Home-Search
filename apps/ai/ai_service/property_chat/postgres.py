@@ -45,7 +45,7 @@ class PostgresPropertyFactRepository:
         )
         self._freshness_lock = Lock()
         self._latest_trade_date_cache: date | None = None
-        self._latest_trade_date_checked_at = 0.0
+        self._latest_trade_date_checked_at: float | None = None
         try:
             with self._pool.connection() as connection:
                 if connection.info.dbname != expected_database:
@@ -213,7 +213,11 @@ class PostgresPropertyFactRepository:
     def latest_trade_date(self) -> date | None:
         now = monotonic()
         with self._freshness_lock:
-            if now - self._latest_trade_date_checked_at < _FRESHNESS_CACHE_SECONDS:
+            if (
+                self._latest_trade_date_checked_at is not None
+                and now - self._latest_trade_date_checked_at
+                < _FRESHNESS_CACHE_SECONDS
+            ):
                 return self._latest_trade_date_cache
             latest = self._load_latest_trade_date()
             self._latest_trade_date_cache = latest

@@ -205,30 +205,92 @@ Tests run with stub OAuth/LLM/legal providers and require no live secret.
 
 Local chatbot runtime is an explicit opt-in overlay. Prepare four separate
 runtime variable files for property bootstrap values, user-service values, BFF
-public-key mapping, and AI DSN/public-key mapping. Start it only through:
+public-key mapping, and AI DSN/public-key mapping. The repository-local default
+paths are `apps/property-data/.env`, `apps/user/service/.env`,
+`apps/chat-bff/.env`, and `apps/ai/.env`. Start it only through:
 
 ```bash
-infra/chatbot/run-local-chatbot.sh \
-  <property-vars-file> \
-  <user-vars-file> \
-  <bff-vars-file> \
-  <ai-vars-file>
+infra/chatbot/run-local-chatbot.sh
 ```
+
+The existing four-path form remains available when an operator intentionally
+uses non-default runtime files. Do not put secret values directly on the command
+line.
+
+For the no-argument local path, an explicit `HOME_SEARCH_DB_PASSWORD` takes
+precedence. Otherwise the runner accepts the existing property application pair
+`DB_USERNAME=home_search` and `DB_PASSWORD` as the bootstrap login; it never
+reuses `DB_PASSWORD` when the username is a runtime role. The property runtime
+password uses the existing local Compose default unless explicitly supplied,
+and the user runtime password comes from the user-service file's
+`USER_DB_PASSWORD`. Migrator and AI reader passwords remain separate roles.
 
 Use `apps/chat-bff/local-runtime.example` and `apps/ai/local-runtime.example`
 as placeholder-only templates. The runner parses assignments without sourcing
 the files, never prints their values, and rejects missing/duplicate variables,
 placeholder values, an invalid RSA pair, inconsistent `kid` mappings, mismatched
 user runtime DB passwords, and an AI reader DSN that does not match the
-property bootstrap password. It runs Compose `config --quiet` before `up`.
+dedicated reader password. The no-argument path derives BFF/AI public-key
+mappings from `USER_JWT_ACTIVE_KID`, percent-encodes the AI reader password into
+the fixed local DSN, and supplies the approved cumulative
+`complex_identity,recent_trade_lookup,price_trend` allowlist when that optional line is
+absent. The four-path form keeps strict explicit mapping,
+DSN, and Capability validation.
+
+The runner requires the existing `home-search-postgis` and `home-search-redis`
+containers to be healthy and `home-search-api` to be running. It then uses
+Compose `--no-deps` so chatbot startup cannot recreate the base data services.
+The targeted user/AI/BFF/gateway containers use `--force-recreate` so a rebuilt
+mounted BFF artifact is loaded without touching Postgres or Redis. The local BFF
+timeout is a finite `70s`. The AI total query budget accepts `1..60s` and defaults
+to `45s`, so the validated local `60s` maximum still ends before the BFF timeout.
+An operator must keep the BFF timeout greater than the AI query budget.
 
 The AI adapter additionally requires `HOME_AI_OPENAI_API_KEY`, explicit
 `HOME_AI_OPENAI_PRIMARY_MODEL` and `HOME_AI_OPENAI_SECONDARY_MODEL` IDs, and an
 optional `HOME_AI_OPENAI_TIMEOUT_SECONDS` in the range `1..30` with default `8`.
+`HOME_AI_QUERY_TIMEOUT_SECONDS` bounds the complete plan, repository, and draft
+flow to `1..60s`; invalid values fail closed.
+The accepted runtime Capability values are the identity-only rollback value
+`HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity` and the approved
+cumulative value
+`HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup`.
+The approved full cumulative value is
+`HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend`.
+The no-argument local runner supplies the full cumulative value when omitted;
+explicit custom-file startup still rejects a missing value. Reordered,
+duplicate, mixed, or unapproved values remain fail-closed.
 The local runner requires the API key and two distinct model IDs, validates them
 without printing their values, and injects them only into the AI container through
 the chatbot Compose overlay. A live provider smoke still requires explicit approval;
 without valid runtime values the runner stops before Compose starts.
+
+Property chatbot activation uses the packaged golden CLI before changing the
+Capability Registry. Offline mode reads the production `ai_read` views through
+`home_search_ai_reader` and makes no provider request:
+
+```bash
+apps/ai/ops/run-local-property-golden.sh offline
+```
+
+Live mode is not a general batch command. It rejects zero or multiple
+`--case-id` values and requires
+`HOME_AI_GOLDEN_LIVE_CONFIRM=RUN_ONE_LIVE_GOLDEN_CASE`. Under the current retry
+policy one live case has a provider request upper bound of six. Neither mode
+prints prompt/answer text, credentials, provider response bodies, or exception
+details. Do not place the confirmation variable in a committed env file or a
+long-lived Compose runtime; set it only for the separately approved command.
+DSN과 provider secret도 command argument나 shell history에 직접 입력하지 않고
+보호된 runtime secret injection으로 제공한다.
+로컬 전용 실행기는 기본적으로 `apps/ai/.env`에서 필요한 exact key만 읽고 파일을
+source하지 않는다. 해당 파일은 regular non-symlink file이어야 하며 group/other
+권한을 제거한 `600` 권한이어야 한다. 승인된 live 1건은 다음 명령으로만 실행한다.
+
+```bash
+HOME_AI_GOLDEN_LIVE_CONFIRM=RUN_ONE_LIVE_GOLDEN_CASE \
+  apps/ai/ops/run-local-property-golden.sh live \
+  --case-id price-trend-jamsil-ells-84
+```
 
 The overlay is `infra/docker-compose.chatbot.yml`. Omitting that file leaves the
 existing property stack and public gateway unchanged. Including it replaces the

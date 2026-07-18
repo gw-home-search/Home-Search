@@ -119,7 +119,18 @@ def test_planning_uses_fixed_responses_endpoint_without_provider_storage() -> No
     assert body["text"]["format"]["type"] == "json_schema"
     assert body["text"]["format"]["strict"] is True
     assert body["text"]["format"]["schema"]["additionalProperties"] is False
+    plan_properties = body["text"]["format"]["schema"]["properties"]
+    assert plan_properties["complexName"]["pattern"] == r"^.{1,100}$"
+    assert plan_properties["exclusiveAreaSquareMeters"]["exclusiveMinimum"] == 0
+    assert plan_properties["exclusiveAreaSquareMeters"]["maximum"] == 1000
+    assert plan_properties["limit"]["minimum"] == 1
+    assert plan_properties["limit"]["maximum"] == 10
     assert "previous_response_id" not in body
+    developer_prompt = body["input"][0]["content"]
+    assert "monthly or period aggregates" in developer_prompt
+    assert "average, minimum, maximum, count, trend, or flow" in developer_prompt
+    assert "latest individual trade records" in developer_prompt
+    assert "Set limit to 5 when it is not used" in developer_prompt
 
 
 def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> None:
@@ -173,18 +184,78 @@ def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> N
     assert "subject" not in user_payload
     assert request_body["text"]["format"]["name"] == "grounded_property_answer"
     assert request_body["max_output_tokens"] == 1600
+    sentence_schema = request_body["text"]["format"]["schema"]["properties"][
+        "sentences"
+    ]["items"]
+    fact_ids_schema = sentence_schema["properties"]["factIds"]
+    claims_schema = sentence_schema["properties"]["claims"]
+    assert fact_ids_schema["minItems"] == 1
+    assert fact_ids_schema["maxItems"] == 20
+    assert fact_ids_schema["items"]["enum"] == ["property-trade-7"]
+    assert claims_schema["minItems"] == 1
+    assert claims_schema["maxItems"] == 50
+    assert claims_schema["items"]["properties"]["factId"]["enum"] == [
+        "property-trade-7"
+    ]
+    developer_prompt = request_body["input"][0]["content"]
+    assert "Every number token in sentence text must exactly match" in developer_prompt
+    assert "Do not state fact counts, list numbers, or converted units" in developer_prompt
+
+
+def test_draft_schema_for_empty_facts_forbids_fact_references() -> None:
+    requester = RecordingRequester(
+        _response(
+            {
+                "sentences": [
+                    {
+                        "text": "검증된 근거 데이터가 없습니다.",
+                        "factIds": [],
+                        "claims": [],
+                    }
+                ]
+            }
+        )
+    )
+    model = _model(requester)
+
+    asyncio.run(
+        model.draft_answer(
+            facts=[],
+            limitations=["조건에 맞는 검증된 근거 데이터가 없습니다."],
+            question="거래 내역은?",
+        )
+    )
+
+    request_body = json.loads(requester.calls[0][2])
+    sentence_schema = request_body["text"]["format"]["schema"]["properties"][
+        "sentences"
+    ]["items"]
+    fact_ids_schema = sentence_schema["properties"]["factIds"]
+    claims_schema = sentence_schema["properties"]["claims"]
+    assert fact_ids_schema["maxItems"] == 0
+    assert claims_schema["maxItems"] == 0
 
 
 @pytest.mark.parametrize(
-    "response",
+    ("response", "reason_code"),
     [
-        b'{"status":"incomplete","output":[]}',
-        b'{"status":"completed","output":[{"type":"message","content":[{"type":"refusal","refusal":"cannot comply"}]}]}',
-        b'{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"not-json"}]}]}',
+        (
+            b'{"status":"incomplete","output":[]}',
+            "PROVIDER_RESPONSE_INCOMPLETE",
+        ),
+        (
+            b'{"status":"completed","output":[{"type":"message","content":[{"type":"refusal","refusal":"cannot comply"}]}]}',
+            "PROVIDER_RESPONSE_REFUSED",
+        ),
+        (
+            b'{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"not-json"}]}]}',
+            "PROVIDER_RESPONSE_INVALID",
+        ),
     ],
 )
 def test_incomplete_refusal_and_malformed_output_are_rejected_without_details(
     response: bytes,
+    reason_code: str,
 ) -> None:
     model = _model(RecordingRequester(response))
 
@@ -192,6 +263,7 @@ def test_incomplete_refusal_and_malformed_output_are_rejected_without_details(
         asyncio.run(model.plan_query(ChatbotQueryRequest(question="잠실엘스 위치")))
 
     assert str(raised.value) == ""
+    assert raised.value.reason_code == reason_code
     assert "cannot comply" not in repr(raised.value)
 
 
@@ -331,6 +403,57 @@ def test_default_transport_rejects_redirect_without_reading_response(
 
 
 @pytest.mark.parametrize(
+    ("status", "reason_code"),
+    [
+        (400, "PROVIDER_REQUEST_REJECTED"),
+        (401, "PROVIDER_AUTHENTICATION_FAILED"),
+        (403, "PROVIDER_ACCESS_DENIED"),
+        (404, "PROVIDER_MODEL_UNAVAILABLE"),
+        (429, "PROVIDER_RATE_LIMITED"),
+        (500, "PROVIDER_SERVER_ERROR"),
+    ],
+)
+def test_default_transport_preserves_only_safe_http_failure_category(
+    monkeypatch: pytest.MonkeyPatch,
+    status: int,
+    reason_code: str,
+) -> None:
+    class FailureResponse:
+        def __init__(self) -> None:
+            self.status = status
+
+        def read(self, _size: int) -> bytes:
+            raise AssertionError("provider failure body must not be read")
+
+    class FailureConnection:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def request(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def getresponse(self) -> FailureResponse:
+            return FailureResponse()
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(openai_responses, "HTTPSConnection", FailureConnection)
+    model = OpenAIResponsesLanguageModel(
+        settings=OpenAIResponsesSettings(
+            api_key="test-api-key",
+            model="approved-test-model",
+        )
+    )
+
+    with pytest.raises(OpenAIResponsesError) as raised:
+        asyncio.run(model.plan_query(ChatbotQueryRequest(question="잠실엘스 위치")))
+
+    assert raised.value.reason_code == reason_code
+    assert str(raised.value) == ""
+
+
+@pytest.mark.parametrize(
     ("field", "value"),
     [
         ("api_key", ""),
@@ -351,3 +474,8 @@ def test_settings_reject_invalid_or_unsafe_values(field: str, value: object) -> 
 
     with pytest.raises(ValueError):
         OpenAIResponsesSettings(**kwargs)  # type: ignore[arg-type]
+
+
+def test_provider_error_rejects_non_allowlisted_reason() -> None:
+    with pytest.raises(ValueError):
+        OpenAIResponsesError("provider body must not become a reason")

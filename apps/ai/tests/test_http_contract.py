@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from fastapi.testclient import TestClient
 
 from ai_service.auth import AuthenticatedUser, get_authenticator
@@ -26,6 +28,37 @@ class SuccessfulEngine:
 class CrashingEngine:
     async def query(self, **_kwargs: object) -> dict[str, object]:
         raise RuntimeError("internal provider detail")
+
+
+class DisabledCapabilityEngine:
+    async def query(self, **kwargs: object) -> dict[str, object]:
+        request = kwargs["request"]
+        return {
+            "success": False,
+            "status": "failed",
+            "question": request.question,
+            "fragments": [],
+            "result": {},
+            "message": "",
+            "executionSummary": {"total": 1, "succeeded": 0, "failed": 1},
+            "answer": "해당 질문 기능은 현재 데이터 준비와 검증이 진행 중입니다.",
+            "resolvedQuestion": request.question,
+            "conversationResolution": None,
+            "conversationMemoryPatch": None,
+            "uiActions": [],
+            "uiArtifacts": [],
+            "uiSummary": None,
+            "requestId": kwargs["request_id"],
+            "citations": [],
+            "dataAsOf": None,
+            "limitations": ["해당 질문 기능은 현재 데이터 준비와 검증이 진행 중입니다."],
+            "evidenceSummary": {
+                "status": "unavailable",
+                "capabilities": ["recent_trade_lookup"],
+                "factCount": 0,
+                "citationCount": 0,
+            },
+        }
 
 
 def setup_function() -> None:
@@ -100,6 +133,39 @@ def test_stream_emits_only_validated_final_event_after_success() -> None:
     assert "event: final" in response.text
     assert '"answer":"최근 거래 알려줘"' in response.text
     assert "event: error" not in response.text
+
+
+def test_disabled_capability_has_same_unavailable_meaning_in_json_and_sse() -> None:
+    request_id = "7bccd659-dabe-4761-900c-6e10dc82410a"
+    app.dependency_overrides[get_authenticator] = AcceptingAuthenticator
+    app.dependency_overrides[get_chatbot_engine] = DisabledCapabilityEngine
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer test-token", "X-Request-Id": request_id}
+    payload = {"question": "잠실엘스 최근 거래 알려줘"}
+
+    json_response = client.post("/api/v1/chatbot/query", headers=headers, json=payload)
+    stream_response = client.post(
+        "/api/v1/chatbot/query/stream",
+        headers=headers,
+        json=payload,
+    )
+
+    final_data = next(
+        json.loads(line.removeprefix("data: "))
+        for line in stream_response.text.splitlines()
+        if line.startswith("data: ")
+    )
+    assert json_response.status_code == 200
+    assert stream_response.status_code == 200
+    assert "event: final" in stream_response.text
+    assert "event: error" not in stream_response.text
+    assert final_data["response"] == json_response.json()
+    assert json_response.json()["evidenceSummary"] == {
+        "status": "unavailable",
+        "capabilities": ["recent_trade_lookup"],
+        "factCount": 0,
+        "citationCount": 0,
+    }
 
 
 def test_invalid_request_id_is_not_reflected() -> None:

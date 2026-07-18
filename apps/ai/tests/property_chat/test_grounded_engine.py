@@ -8,15 +8,25 @@ import pytest
 from ai_service.auth import AuthenticatedUser
 from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
-from ai_service.property_chat.engine import GroundedChatbotEngine
+from ai_service.property_chat.engine import (
+    GroundedChatbotEngine,
+    GroundingValidationError,
+    validate_draft,
+)
 from ai_service.property_chat.models import (
     ComplexRecord,
     DraftAnswer,
     DraftClaim,
     DraftSentence,
+    EvidenceFact,
+    FactClaim,
     MonthlyTrendRecord,
     PropertyQueryPlan,
     TradeRecord,
+)
+
+ALL_PROPERTY_CAPABILITIES = frozenset(
+    {"complex_identity", "recent_trade_lookup", "price_trend"}
 )
 
 
@@ -27,9 +37,11 @@ class FakeRepository:
         self.trends: list[MonthlyTrendRecord] = []
         self.latest_trade_data_as_of = date(2026, 7, 16)
         self.trade_query: tuple[int, date | None, date | None, float | None, int] | None = None
+        self.complex_query_count = 0
 
     def find_complexes(self, name: str, region_name: str | None, limit: int) -> list[ComplexRecord]:
         del name, region_name, limit
+        self.complex_query_count += 1
         return self.complexes
 
     def recent_trades(
@@ -62,12 +74,14 @@ class FakeLanguageModel:
         self.plan = plan
         self.draft = draft
         self.received_fact_ids: list[str] = []
+        self.received_facts: list[EvidenceFact] = []
 
     async def plan_query(self, _request: ChatbotQueryRequest) -> PropertyQueryPlan:
         return self.plan
 
     async def draft_answer(self, *, facts, limitations, question) -> DraftAnswer:
         del limitations, question
+        self.received_facts = list(facts)
         self.received_fact_ids = [fact.fact_id for fact in facts]
         return self.draft
 
@@ -124,7 +138,11 @@ def test_recent_trade_answer_uses_only_observed_fact_and_citation() -> None:
             ]
         ),
     )
-    engine = GroundedChatbotEngine(repository=repository, language_model=model)
+    engine = GroundedChatbotEngine(
+        repository=repository,
+        language_model=model,
+        enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+    )
 
     response = run_query(
         engine,
@@ -146,6 +164,86 @@ def test_recent_trade_answer_uses_only_observed_fact_and_citation() -> None:
     assert any("±1.0㎡" in limitation for limitation in response["limitations"])
     assert model.received_fact_ids == ["property-trade-7001"]
     assert repository.trade_query == (11471, date(2025, 7, 1), date(2026, 7, 16), 84.8, 5)
+
+
+def test_recent_trade_accepts_server_supplied_korean_amount_display_claim() -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    repository.trades = [
+        TradeRecord(7001, 11471, date(2026, 7, 15), 253_000, 84.8, 12)
+    ]
+    model = FakeLanguageModel(
+        PropertyQueryPlan(capability="recent_trade_lookup", complex_name="잠실엘스"),
+        DraftAnswer(
+            sentences=[
+                DraftSentence(
+                    text="거래 금액은 25억 3,000만원입니다.",
+                    fact_ids=["property-trade-7001"],
+                    claims=[
+                        DraftClaim(
+                            fact_id="property-trade-7001",
+                            value="25억 3,000만원",
+                            unit="KOREAN_KRW_DISPLAY",
+                        )
+                    ],
+                )
+            ]
+        ),
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        ),
+        "최근 거래",
+        "request-formatted-amount",
+    )
+
+    assert response["success"] is True
+    assert response["evidenceSummary"]["factCount"] == 1
+
+
+def test_supported_answer_rejects_omitted_observed_trade_fact() -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    repository.trades = [
+        TradeRecord(7001, 11471, date(2026, 7, 15), 250_000, 84.8, 12),
+        TradeRecord(7002, 11471, date(2026, 7, 14), 249_000, 84.8, 10),
+    ]
+    model = FakeLanguageModel(
+        PropertyQueryPlan(capability="recent_trade_lookup", complex_name="잠실엘스"),
+        DraftAnswer(
+            sentences=[
+                DraftSentence(
+                    text="250000만원 거래입니다.",
+                    fact_ids=["property-trade-7001"],
+                    claims=[
+                        DraftClaim(
+                            fact_id="property-trade-7001",
+                            value="250000",
+                            unit="10_000_KRW",
+                        )
+                    ],
+                )
+            ]
+        ),
+    )
+
+    with pytest.raises(ChatbotProviderUnavailable) as raised:
+        run_query(
+            GroundedChatbotEngine(
+                repository=repository,
+                language_model=model,
+                enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            ),
+            "최근 거래",
+            "request-omitted-fact",
+        )
+
+    assert isinstance(raised.value.__cause__, GroundingValidationError)
+    assert raised.value.__cause__.reason_code == "GROUNDING_FACTS_OMITTED"
 
 
 @pytest.mark.parametrize(
@@ -189,7 +287,15 @@ def test_blocks_unknown_fact_or_numeric_mismatch(draft: DraftAnswer) -> None:
     )
 
     with pytest.raises(ChatbotProviderUnavailable):
-        run_query(GroundedChatbotEngine(repository=repository, language_model=model), "최근 거래", "request-1")
+        run_query(
+            GroundedChatbotEngine(
+                repository=repository,
+                language_model=model,
+                enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            ),
+            "최근 거래",
+            "request-1",
+        )
 
 
 def test_ambiguous_complex_is_not_selected_arbitrarily() -> None:
@@ -212,7 +318,11 @@ def test_ambiguous_complex_is_not_selected_arbitrarily() -> None:
     )
 
     response = run_query(
-        GroundedChatbotEngine(repository=repository, language_model=model),
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        ),
         "한빛아파트 어디야?",
         "request-2",
     )
@@ -258,7 +368,11 @@ def test_monthly_trend_exposes_amount_and_volume_facts() -> None:
     )
 
     response = run_query(
-        GroundedChatbotEngine(repository=repository, language_model=model),
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        ),
         "잠실엘스 최근 반년 가격 추이와 거래량",
         "request-3",
     )
@@ -266,6 +380,15 @@ def test_monthly_trend_exposes_amount_and_volume_facts() -> None:
     assert response["evidenceSummary"]["capabilities"] == ["price_trend"]
     assert response["evidenceSummary"]["factCount"] == 1
     assert response["citations"][0]["factIds"] == ["property-trend-11471-2026-06"]
+    assert {
+        (claim.value, claim.unit) for claim in model.received_facts[0].claims
+    }.issuperset(
+        {
+            ("24억 5,000만원", "KOREAN_KRW_AVERAGE_DISPLAY"),
+            ("24억원", "KOREAN_KRW_MIN_DISPLAY"),
+            ("25억원", "KOREAN_KRW_MAX_DISPLAY"),
+        }
+    )
 
 
 @pytest.mark.parametrize(
@@ -293,7 +416,11 @@ def test_empty_observation_returns_llm_written_unavailable_answer(plan: Property
     )
 
     response = run_query(
-        GroundedChatbotEngine(repository=repository, language_model=model),
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        ),
         "조회해줘",
         "request-empty",
     )
@@ -303,6 +430,51 @@ def test_empty_observation_returns_llm_written_unavailable_answer(plan: Property
     assert response["evidenceSummary"]["status"] == "unavailable"
     assert response["citations"] == []
     assert response["dataAsOf"] is None
+
+
+@pytest.mark.parametrize("capability", ["recent_trade_lookup", "price_trend"])
+def test_disabled_capability_uses_llm_written_unavailable_without_repository_access(
+    capability: str,
+) -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    model = FakeLanguageModel(
+        PropertyQueryPlan(
+            capability=capability,
+            complex_name="잠실엘스",
+            start_date=date(2026, 1, 1) if capability == "price_trend" else None,
+            end_date=date(2026, 6, 30) if capability == "price_trend" else None,
+        ),
+        DraftAnswer(
+            sentences=[
+                DraftSentence(
+                    text="해당 질문 기능은 현재 데이터 준비와 검증이 진행 중입니다.",
+                    fact_ids=[],
+                )
+            ]
+        ),
+    )
+    engine = GroundedChatbotEngine(
+        repository=repository,
+        language_model=model,
+        enabled_capabilities=frozenset({"complex_identity"}),
+    )
+
+    response = run_query(engine, "조회해줘", "request-disabled")
+
+    assert response["success"] is False
+    assert response["status"] == "failed"
+    assert response["evidenceSummary"] == {
+        "status": "unavailable",
+        "capabilities": [capability],
+        "factCount": 0,
+        "citationCount": 0,
+    }
+    assert response["citations"] == []
+    assert response["dataAsOf"] is None
+    assert model.received_fact_ids == []
+    assert repository.complex_query_count == 0
+    assert repository.trade_query is None
 
 
 def test_identity_does_not_expose_unverified_coordinates() -> None:
@@ -329,7 +501,11 @@ def test_identity_does_not_expose_unverified_coordinates() -> None:
     )
 
     response = run_query(
-        GroundedChatbotEngine(repository=repository, language_model=model),
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        ),
         "잠실엘스 위치",
         "request-identity",
     )
@@ -375,7 +551,11 @@ def test_supported_answer_requires_fact_reference_on_every_sentence() -> None:
 
     with pytest.raises(ChatbotProviderUnavailable):
         run_query(
-            GroundedChatbotEngine(repository=repository, language_model=model),
+            GroundedChatbotEngine(
+                repository=repository,
+                language_model=model,
+                enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            ),
             "잠실엘스 위치",
             "request-invalid",
         )
@@ -399,10 +579,76 @@ def test_supported_answer_requires_a_validated_claim_on_every_sentence() -> None
 
     with pytest.raises(ChatbotProviderUnavailable):
         run_query(
-            GroundedChatbotEngine(repository=repository, language_model=model),
+            GroundedChatbotEngine(
+                repository=repository,
+                language_model=model,
+                enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            ),
             "잠실엘스 위치",
             "request-invalid-claim",
         )
+
+
+def test_grounding_diagnostic_classifies_result_count_or_list_number() -> None:
+    facts = [
+        EvidenceFact(
+            fact_id=f"property-trade-{index}",
+            claims=(FactClaim(str(120000 + index), "10_000_KRW"),),
+            data_as_of=date(2026, 7, 16),
+            payload={},
+        )
+        for index in range(1, 4)
+    ]
+    draft = DraftAnswer(
+        sentences=[
+            DraftSentence(
+                text="최근 3건의 거래입니다.",
+                fact_ids=[fact.fact_id for fact in facts],
+                claims=[
+                    DraftClaim(
+                        fact_id=fact.fact_id,
+                        value=fact.claims[0].value,
+                        unit=fact.claims[0].unit,
+                    )
+                    for fact in facts
+                ],
+            )
+        ]
+    )
+
+    with pytest.raises(GroundingValidationError) as raised:
+        validate_draft(draft, facts, "supported")
+
+    assert raised.value.reason_code == "GROUNDING_RESULT_COUNT_OR_LIST_NUMBER"
+
+
+def test_grounding_diagnostic_classifies_amount_unit_conversion() -> None:
+    fact = EvidenceFact(
+        fact_id="property-trade-7",
+        claims=(FactClaim("120000", "10_000_KRW"),),
+        data_as_of=date(2026, 7, 16),
+        payload={},
+    )
+    draft = DraftAnswer(
+        sentences=[
+            DraftSentence(
+                text="거래 금액은 12억원입니다.",
+                fact_ids=[fact.fact_id],
+                claims=[
+                    DraftClaim(
+                        fact_id=fact.fact_id,
+                        value="120000",
+                        unit="10_000_KRW",
+                    )
+                ],
+            )
+        ]
+    )
+
+    with pytest.raises(GroundingValidationError) as raised:
+        validate_draft(draft, [fact], "supported")
+
+    assert raised.value.reason_code == "GROUNDING_AMOUNT_UNIT_CONVERSION"
 
 
 def run_query(engine: GroundedChatbotEngine, question: str, request_id: str) -> dict[str, object]:

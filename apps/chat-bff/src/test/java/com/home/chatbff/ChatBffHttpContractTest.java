@@ -229,9 +229,11 @@ class ChatBffHttpContractTest {
     }
 
     @Test
-    @DisplayName("성공한 SSE는 request ID를 포함한 final event 하나만 반환한다")
-    void streamReturnsFinalEventAfterSuccessfulResponse() throws Exception {
-        JsonNode response = objectMapper.readTree("{\"answer\":\"준비 중\"}");
+    @DisplayName("성공한 SSE의 answer_delta 결합은 Unicode answer와 같고 final은 한 번이다")
+    void streamReturnsExactAnswerDeltasBeforeOneFinalEvent() throws Exception {
+        String answer = "검증된 실거래 답변🙂".repeat(40);
+        var response = objectMapper.createObjectNode();
+        response.put("answer", answer);
         when(aiClient.query(any(), anyString(), anyString(), any())).thenReturn(Mono.just(response));
 
         byte[] body = client.post()
@@ -247,7 +249,29 @@ class ChatBffHttpContractTest {
                 .getResponseBody();
 
         String events = new String(body, java.nio.charset.StandardCharsets.UTF_8);
-        assertThat(events).contains("event:final", "requestId", "준비 중").doesNotContain("event:error");
+        String currentEvent = "";
+        StringBuilder combinedDeltas = new StringBuilder();
+        int deltaCount = 0;
+        int finalCount = 0;
+        for (String line : events.split("\\R")) {
+            if (line.startsWith("event:")) {
+                currentEvent = line.substring("event:".length()).trim();
+            } else if (line.startsWith("data:")) {
+                JsonNode data =
+                        objectMapper.readTree(line.substring("data:".length()).trim());
+                if (currentEvent.equals("answer_delta")) {
+                    combinedDeltas.append(data.get("delta").asText());
+                    deltaCount++;
+                } else if (currentEvent.equals("final")) {
+                    assertThat(data.at("/response/answer").asText()).isEqualTo(answer);
+                    finalCount++;
+                }
+            }
+        }
+        assertThat(deltaCount).isGreaterThan(1);
+        assertThat(combinedDeltas.toString()).isEqualTo(answer);
+        assertThat(finalCount).isEqualTo(1);
+        assertThat(events).doesNotContain("event:error");
     }
 
     @Test

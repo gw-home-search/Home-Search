@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "caseId": "complex-identity-jamsil-ells",
+      "question": "잠실동 잠실엘스의 위치와 주소를 알려줘",
+      "expectedReadiness": "supported",
+      "plan": {
+        "capability": "complex_identity",
+        "complexName": "잠실엘스",
+        "regionName": "잠실동",
+        "startDate": null,
+        "endDate": null,
+        "exclusiveAreaSquareMeters": null,
+        "limit": 5
+      }
+    },
+    {
+      "caseId": "recent-trades-jamsil-ells-84",
+      "question": "잠실동 잠실엘스 전용 84㎡의 2026년 1월 1일부터 7월 16일까지 최근 실거래 3건을 알려줘",
+      "expectedReadiness": "supported",
+      "plan": {
+        "capability": "recent_trade_lookup",
+        "complexName": "잠실엘스",
+        "regionName": "잠실동",
+        "startDate": "2026-01-01",
+        "endDate": "2026-07-16",
+        "exclusiveAreaSquareMeters": 84.0,
+        "limit": 3
+      }
+    },
+    {
+      "caseId": "price-trend-jamsil-ells-84",
+      "question": "잠실동 잠실엘스 전용 84㎡의 2026년 1월 1일부터 6월 30일까지 월별 실거래 평균과 거래량을 알려줘",
+      "expectedReadiness": "supported",
+      "plan": {
+        "capability": "price_trend",
+        "complexName": "잠실엘스",
+        "regionName": "잠실동",
+        "startDate": "2026-01-01",
+        "endDate": "2026-06-30",
+        "exclusiveAreaSquareMeters": 84.0,
+        "limit": 5
+      }
+    },
+    {
+      "caseId": "complex-not-found",
+      "question": "홈서치골든질문존재하지않는단지를 찾아줘",
+      "expectedReadiness": "unavailable",
+      "plan": {
+        "capability": "complex_identity",
+        "complexName": "홈서치골든질문존재하지않는단지",
+        "regionName": null,
+        "startDate": null,
+        "endDate": null,
+        "exclusiveAreaSquareMeters": null,
+        "limit": 5
+      }
+    }
+  ]
+}

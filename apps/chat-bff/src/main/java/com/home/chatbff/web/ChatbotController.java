@@ -5,6 +5,8 @@ import com.home.chatbff.ai.ChatbotProviderUnavailableException;
 import com.home.chatbff.ai.ChatbotTimeoutException;
 import com.home.chatbff.auth.VerifiedChatUser;
 import jakarta.validation.Valid;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -23,6 +25,8 @@ import tools.jackson.databind.node.ObjectNode;
 
 @RestController
 final class ChatbotController {
+    private static final int ANSWER_DELTA_CODE_POINTS = 128;
+
     private final ChatbotGateway gateway;
     private final ObjectMapper objectMapper;
 
@@ -54,7 +58,7 @@ final class ChatbotController {
         String requestId = RequestIdWebFilter.required(exchange);
         return gateway.query(request, authorization, requestId, authenticatedUser(exchange))
                 .map(response -> withRequestId(response, requestId))
-                .flatMapMany(response -> Flux.just(event("final", finalData(requestId, response))))
+                .flatMapMany(response -> successEvents(requestId, response))
                 .onErrorResume(
                         ChatbotProviderUnavailableException.class,
                         ignored -> Flux.just(errorEvent(requestId, "CHATBOT_PROVIDER_UNAVAILABLE", "답변을 생성하지 못했습니다.")))
@@ -82,6 +86,27 @@ final class ChatbotController {
         data.put("requestId", requestId);
         data.set("response", response);
         return data;
+    }
+
+    private Flux<ServerSentEvent<JsonNode>> successEvents(String requestId, JsonNode response) {
+        JsonNode answerNode = response.get("answer");
+        if (answerNode == null || !answerNode.isTextual() || answerNode.asText().isBlank()) {
+            return Flux.error(new ChatbotProviderUnavailableException());
+        }
+        String answer = answerNode.asText();
+        List<ServerSentEvent<JsonNode>> events = new ArrayList<>();
+        int start = 0;
+        while (start < answer.length()) {
+            int end = answer.offsetByCodePoints(
+                    start, Math.min(ANSWER_DELTA_CODE_POINTS, answer.codePointCount(start, answer.length())));
+            ObjectNode data = objectMapper.createObjectNode();
+            data.put("requestId", requestId);
+            data.put("delta", answer.substring(start, end));
+            events.add(event("answer_delta", data));
+            start = end;
+        }
+        events.add(event("final", finalData(requestId, response)));
+        return Flux.fromIterable(events);
     }
 
     private ServerSentEvent<JsonNode> errorEvent(String requestId, String code, String message) {

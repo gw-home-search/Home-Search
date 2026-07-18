@@ -233,7 +233,7 @@ user runtime DB passwords, and an AI reader DSN that does not match the
 dedicated reader password. The no-argument path derives BFF/AI public-key
 mappings from `USER_JWT_ACTIVE_KID`, percent-encodes the AI reader password into
 the fixed local DSN, and supplies the approved cumulative
-`complex_identity,recent_trade_lookup` allowlist when that optional line is
+`complex_identity,recent_trade_lookup,price_trend` allowlist when that optional line is
 absent. The four-path form keeps strict explicit mapping,
 DSN, and Capability validation.
 
@@ -242,17 +242,22 @@ containers to be healthy and `home-search-api` to be running. It then uses
 Compose `--no-deps` so chatbot startup cannot recreate the base data services.
 The targeted user/AI/BFF/gateway containers use `--force-recreate` so a rebuilt
 mounted BFF artifact is loaded without touching Postgres or Redis. The local BFF
-timeout is a finite `55s`; a provider retry sequence that exceeds it returns the
-documented `504 CHATBOT_TIMEOUT` without exposing partial facts.
+timeout is a finite `70s`. The AI total query budget accepts `1..60s` and defaults
+to `45s`, so the validated local `60s` maximum still ends before the BFF timeout.
+An operator must keep the BFF timeout greater than the AI query budget.
 
 The AI adapter additionally requires `HOME_AI_OPENAI_API_KEY`, explicit
 `HOME_AI_OPENAI_PRIMARY_MODEL` and `HOME_AI_OPENAI_SECONDARY_MODEL` IDs, and an
 optional `HOME_AI_OPENAI_TIMEOUT_SECONDS` in the range `1..30` with default `8`.
+`HOME_AI_QUERY_TIMEOUT_SECONDS` bounds the complete plan, repository, and draft
+flow to `1..60s`; invalid values fail closed.
 The accepted runtime Capability values are the identity-only rollback value
 `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity` and the approved
 cumulative value
 `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup`.
-The no-argument local runner supplies the cumulative value when omitted;
+The approved full cumulative value is
+`HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend`.
+The no-argument local runner supplies the full cumulative value when omitted;
 explicit custom-file startup still rejects a missing value. Reordered,
 duplicate, mixed, or unapproved values remain fail-closed.
 The local runner requires the API key and two distinct model IDs, validates them
@@ -284,7 +289,7 @@ source하지 않는다. 해당 파일은 regular non-symlink file이어야 하�
 ```bash
 HOME_AI_GOLDEN_LIVE_CONFIRM=RUN_ONE_LIVE_GOLDEN_CASE \
   apps/ai/ops/run-local-property-golden.sh live \
-  --case-id recent-trades-jamsil-ells-84
+  --case-id price-trend-jamsil-ells-84
 ```
 
 The overlay is `infra/docker-compose.chatbot.yml`. Omitting that file leaves the

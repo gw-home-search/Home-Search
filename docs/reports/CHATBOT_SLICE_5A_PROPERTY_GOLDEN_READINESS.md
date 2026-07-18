@@ -6,8 +6,9 @@
 통과하는 offline 골든 검증기를 구현하고 격리 PostgreSQL fixture에서 검증했다.
 운영 DB에서도 `home_search_ai_reader` 역할로 대상 단지·거래·추이를 직접
 감사하고 reader DSN을 사용한 offline CLI 전체 4건을 통과했다. 실제 OpenAI live
-1건은 실행했지만 provider 단계에서 `PROVIDER_UNAVAILABLE`로 차단됐으므로 부동산
-Capability를 아직 `지원`으로 활성화하지 않는다.
+1건은 최초 `PROVIDER_UNAVAILABLE`, 안전 진단 경계 적용 후 재실행에서는
+`PROVIDER_RATE_LIMITED`로 차단됐으므로 부동산 Capability를 아직 `지원`으로
+활성화하지 않는다.
 
 ## 검증 범위
 
@@ -76,6 +77,7 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
 | 잘못된 reader password CLI | Pass — pool detail 없이 stable reason code만 출력 |
 | 전용 실행기의 실제 `.env` offline 실행 | Pass — 4 cases, supported 3, unavailable 1 |
 | production OpenAI live 1건 | Fail — `complex-identity-jamsil-ells`, `PROVIDER_UNAVAILABLE`, 검증되지 않은 답변 비노출 |
+| 안전 진단 적용 후 OpenAI live 재실행 | Fail — `complex-identity-jamsil-ells`, `PROVIDER_RATE_LIMITED`, 검증되지 않은 답변 비노출 |
 | OpenAI 모델 공식 계약 | Pass — `gpt-5.6-luna`, `gpt-5.6-terra` 모두 Responses API Structured Outputs 지원 |
 | 운영 `ai_read` 역할·데이터 직접 감사 | Pass — reader `SELECT` 2개 view, 단지 단일 식별, 최근 거래 3건, 월별 추이 6개월 |
 | 운영 reader DSN 기반 offline CLI 전체 실행 | Pass — 4 cases, supported 3, unavailable 1 |
@@ -103,7 +105,10 @@ DB 조회·fact 조립·grounding·citation 검증 경로는 그대로 실행한
   모델 ID와 Structured Outputs 지원을 확인했으므로 모델 문자열 자체의 오타는
   제외했다.
 - 새 allowlist 진단 경계로 원인을 확인하려면 비용이 발생할 수 있는 대표 live 1건을
-  다시 별도 승인받아야 한다. 추가 호출 전까지 Capability는 비활성을 유지한다.
+  다시 실행했고 OpenAI HTTP `429` 범주인 `PROVIDER_RATE_LIMITED`를 확인했다.
+  Provider 실패 body를 읽지 않는 정책상 순간 rate limit과 계정 quota/billing 제한은
+  더 세분화하지 않는다. OpenAI dashboard에서 사용 한도와 결제 상태를 확인하고 제한이
+  해소되기 전까지 Capability는 비활성을 유지한다.
 - catalog는 운영 데이터 변경에 따라 readiness가 달라질 수 있다. 이 경우 기대값을
   자동 완화하지 않고 데이터 준비도 또는 catalog 기준을 재검토해야 한다.
 
@@ -128,7 +133,9 @@ code-review: 지적사항 = none
 
 ## 다음 승인 조건
 
-1. 새 안전 진단 경계로 대표 live case 1건을 다시 실행하려면 비용 발생과 최대 6회
-   provider HTTP request를 별도 승인한다.
-2. 계약 회귀, `code-review`, `security-audit` 결과와 함께 Capability 활성화를
+1. OpenAI dashboard에서 API 사용 한도·결제 상태와 두 모델의 project 접근 권한을
+   확인하고 `429` 제한을 해소한다.
+2. 제한 해소 후 대표 live case 1건의 재실행 비용과 최대 6회 provider HTTP request를
+   별도 승인한다.
+3. 계약 회귀, `code-review`, `security-audit` 결과와 함께 Capability 활성화를
    별도 승인한다.

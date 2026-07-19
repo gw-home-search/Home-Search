@@ -85,7 +85,9 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
 | 철도 | fixed URL preflight·occurrence projection·merge `Pass`, URL 미확정 | 미채점 | `2.0/10 Partial` | 금지 |
 
 상세 readiness 근거는 `docs/reports/reference/readiness/`에 source별로 기록한다.
-2026-07-20 offline 회귀는 `460 passed`, coverage `90.42%`이며 실제 provider,
+F1은 file source의 prepared artifact upload와 대규모점포 generic refresher까지
+연결했지만 API source bundle과 adapter normalized row의 bounded-memory 전환이 남아
+`Partial`을 유지한다. 2026-07-20 offline 회귀는 `465 passed`, coverage `90.33%`이며 실제 provider,
 운영 DB, S3 live 검증은 실행하지 않았다.
 
 ## 공통 중단·롤백

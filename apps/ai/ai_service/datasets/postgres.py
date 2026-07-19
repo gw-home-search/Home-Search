@@ -75,6 +75,90 @@ class PostgresDatasetRepository:
     def close(self) -> None:
         return None
 
+    def start_refresh_run(
+        self,
+        *,
+        source_id: str,
+        provider: str,
+        profile: str,
+        trigger_type: str,
+        started_at: datetime,
+    ) -> UUID:
+        if trigger_type not in {"MANUAL", "SCHEDULED"}:
+            raise ValueError("invalid refresh trigger type")
+        if not source_id.strip() or not provider.strip() or not profile.strip():
+            raise ValueError("refresh run metadata must not be blank")
+        refresh_run_id = uuid4()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO dataset_source(source_id, provider, created_at)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (source_id) DO NOTHING
+                """,
+                (source_id, provider, started_at),
+            )
+            connection.execute(
+                """
+                INSERT INTO dataset_refresh_run(
+                    refresh_run_id, profile, trigger_type, started_at, status
+                ) VALUES (%s, %s, %s, %s, 'RUNNING')
+                """,
+                (refresh_run_id, profile, trigger_type, started_at),
+            )
+            connection.execute(
+                """
+                INSERT INTO dataset_refresh_run_item(
+                    refresh_run_id, source_id, started_at, status
+                ) VALUES (%s, %s, %s, 'RUNNING')
+                """,
+                (refresh_run_id, source_id, started_at),
+            )
+        return refresh_run_id
+
+    def finish_refresh_run(
+        self,
+        *,
+        refresh_run_id: UUID,
+        source_id: str,
+        acquisition_id: UUID | None,
+        status: str,
+        reason_codes: tuple[str, ...],
+        finished_at: datetime,
+    ) -> None:
+        if status not in {"PASS", "NO_CHANGE", "FAIL"}:
+            raise ValueError("invalid refresh item status")
+        run_status = "PASS" if status in {"PASS", "NO_CHANGE"} else "FAIL"
+        with self._connect() as connection:
+            item = connection.execute(
+                """
+                UPDATE dataset_refresh_run_item
+                SET acquisition_id = %s, finished_at = %s, status = %s,
+                    reason_codes = %s
+                WHERE refresh_run_id = %s AND source_id = %s AND status = 'RUNNING'
+                """,
+                (
+                    acquisition_id,
+                    finished_at,
+                    status,
+                    list(dict.fromkeys(reason_codes)),
+                    refresh_run_id,
+                    source_id,
+                ),
+            )
+            if item.rowcount != 1:
+                raise RuntimeError("refresh run item is not running")
+            run = connection.execute(
+                """
+                UPDATE dataset_refresh_run
+                SET finished_at = %s, status = %s
+                WHERE refresh_run_id = %s AND status = 'RUNNING'
+                """,
+                (finished_at, run_status, refresh_run_id),
+            )
+            if run.rowcount != 1:
+                raise RuntimeError("refresh run is not running")
+
     @contextmanager
     def source_lock(self, source_id: str) -> Iterator[None]:
         connection = self._connect()

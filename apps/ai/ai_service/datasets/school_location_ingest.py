@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import psycopg
@@ -47,6 +47,7 @@ def ingest_from_environment(
     client_factory: Callable[[], SchoolLocationApiClient] = SchoolLocationApiClient,
     raw_store_factory: Callable[[Mapping[str, str]], S3RawObjectStore] = s3_raw_store_from_environment,
     today: Callable[[], date] = date.today,
+    clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> SchoolLocationIngestReport:
     importer_dsn = _required(environment, "HOME_AI_IMPORTER_DSN")
     service_key = _required(environment, "HOME_AI_DATA_GO_KR_SERVICE_KEY")
@@ -70,6 +71,13 @@ def ingest_from_environment(
         raise SchoolLocationConfigurationError("school source contract is invalid") from exception
 
     repository = repository_factory(importer_dsn)
+    refresh_run_id = repository.start_refresh_run(
+        source_id=contract.source_id,
+        provider=contract.provider,
+        profile=f"source:{contract.source_id}",
+        trigger_type="MANUAL",
+        started_at=clock(),
+    )
     try:
         with repository.source_lock("edu.school-location"):
             collected = client_factory().collect(service_key)
@@ -90,6 +98,41 @@ def ingest_from_environment(
                     reason_codes=collected.reason_codes,
                     content_type="application/zip",
                 )
+    except SchoolLocationApiError as exception:
+        repository.finish_refresh_run(
+            refresh_run_id=refresh_run_id,
+            source_id=contract.source_id,
+            acquisition_id=None,
+            status="FAIL",
+            reason_codes=(exception.reason_code,),
+            finished_at=clock(),
+        )
+        raise
+    except Exception:
+        repository.finish_refresh_run(
+            refresh_run_id=refresh_run_id,
+            source_id=contract.source_id,
+            acquisition_id=None,
+            status="FAIL",
+            reason_codes=("INGEST_FAILED",),
+            finished_at=clock(),
+        )
+        raise
+    else:
+        repository.finish_refresh_run(
+            refresh_run_id=refresh_run_id,
+            source_id=contract.source_id,
+            acquisition_id=result.acquisition_id,
+            status=(
+                "PASS"
+                if result.status == "Pass"
+                else "NO_CHANGE"
+                if result.status == "NoChange"
+                else "FAIL"
+            ),
+            reason_codes=result.issue_codes,
+            finished_at=clock(),
+        )
     finally:
         repository.close()
     return SchoolLocationIngestReport(

@@ -4,6 +4,7 @@ import json
 from dataclasses import replace
 from datetime import UTC, date, datetime
 from pathlib import Path
+from uuid import UUID
 
 import psycopg
 import pytest
@@ -282,6 +283,79 @@ def test_invalid_payload_is_preserved_before_parse_failure(
     assert result.status == "Fail"
     assert "RAW_PARSE_FAILED" in result.issue_codes
     assert dataset_repository.raw_bytes(result.checksum) == b"not-json"
+
+
+def test_first_page_failure_records_refresh_evidence_without_acquisition(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    refresh_run_id = dataset_repository.start_refresh_run(
+        source_id="fixture.rail-station",
+        provider="Home Search fixture",
+        profile="source:fixture.rail-station",
+        trigger_type="MANUAL",
+        started_at=COLLECTED_AT,
+    )
+
+    dataset_repository.finish_refresh_run(
+        refresh_run_id=refresh_run_id,
+        source_id="fixture.rail-station",
+        acquisition_id=None,
+        status="FAIL",
+        reason_codes=("API_TRANSPORT_FAILED",),
+        finished_at=COLLECTED_AT,
+    )
+
+    with psycopg.connect(postgres_dsn) as connection:
+        evidence = connection.execute(
+            """
+            SELECT run.profile, run.trigger_type, run.status AS run_status,
+                   item.acquisition_id, item.status AS item_status, item.reason_codes
+            FROM dataset_refresh_run run
+            JOIN dataset_refresh_run_item item USING (refresh_run_id)
+            WHERE run.refresh_run_id = %s
+            """,
+            (refresh_run_id,),
+        ).fetchone()
+
+    assert evidence == (
+        "source:fixture.rail-station",
+        "MANUAL",
+        "FAIL",
+        None,
+        "FAIL",
+        ["API_TRANSPORT_FAILED"],
+    )
+
+
+def test_refresh_evidence_rejects_invalid_state_before_database() -> None:
+    repository = PostgresDatasetRepository("postgresql://unused")
+
+    with pytest.raises(ValueError, match="trigger type"):
+        repository.start_refresh_run(
+            source_id="fixture.source",
+            provider="Fixture",
+            profile="source:fixture.source",
+            trigger_type="UNKNOWN",
+            started_at=COLLECTED_AT,
+        )
+    with pytest.raises(ValueError, match="must not be blank"):
+        repository.start_refresh_run(
+            source_id=" ",
+            provider="Fixture",
+            profile="source:fixture.source",
+            trigger_type="MANUAL",
+            started_at=COLLECTED_AT,
+        )
+    with pytest.raises(ValueError, match="item status"):
+        repository.finish_refresh_run(
+            refresh_run_id=UUID(int=20),
+            source_id="fixture.source",
+            acquisition_id=None,
+            status="RUNNING",
+            reason_codes=(),
+            finished_at=COLLECTED_AT,
+        )
 
 
 def test_runtime_role_can_read_only_the_typed_reference_view(

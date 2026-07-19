@@ -95,6 +95,12 @@ class IdempotentRepository:
     def source_lock(self, _source_id: str):
         return nullcontext()
 
+    def start_refresh_run(self, **_kwargs):
+        return UUID(int=20)
+
+    def finish_refresh_run(self, **_kwargs) -> None:
+        return None
+
 
 class CompleteClient:
     def collect(self, service_key: str) -> CollectedSchoolBundle:
@@ -123,6 +129,59 @@ class VerifiedRawStore:
         )
 
 
+class TransportFailureClient:
+    def collect(self, service_key: str) -> CollectedSchoolBundle:
+        assert service_key == "key"
+        raise SchoolLocationApiError("API_TRANSPORT_FAILED")
+
+
+class UnexpectedFailureClient:
+    def collect(self, service_key: str) -> CollectedSchoolBundle:
+        assert service_key == "key"
+        raise RuntimeError("provider body must not be recorded")
+
+
+class RefreshEvidenceRepository:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, object]] = []
+        self.closed = False
+
+    def start_refresh_run(
+        self, *, source_id, provider, profile, trigger_type, started_at
+    ):
+        assert source_id == "edu.school-location"
+        assert provider
+        assert profile == "source:edu.school-location"
+        assert trigger_type == "MANUAL"
+        self.events.append(("started", started_at))
+        return UUID(int=20)
+
+    def finish_refresh_run(
+        self,
+        *,
+        refresh_run_id,
+        source_id,
+        acquisition_id,
+        status,
+        reason_codes,
+        finished_at,
+    ) -> None:
+        assert refresh_run_id == UUID(int=20)
+        assert source_id == "edu.school-location"
+        self.events.append(
+            (
+                "finished",
+                (acquisition_id, status, reason_codes, finished_at),
+            )
+        )
+
+    def source_lock(self, _source_id: str):
+        return nullcontext()
+
+    def close(self) -> None:
+        self.closed = True
+
+
 def _raw_store_factory(_environment):
     return VerifiedRawStore()
 
@@ -138,6 +197,45 @@ def test_ingest_uses_approved_contract_and_closes_repository() -> None:
 
     assert report.result.status == "Pass"
     assert report.page_count == 1
+
+
+def test_first_page_transport_failure_records_refresh_item_without_acquisition() -> None:
+    repository = RefreshEvidenceRepository()
+
+    with pytest.raises(SchoolLocationApiError) as error:
+        ingest_from_environment(
+            _environment(),
+            repository_factory=lambda _dsn: repository,  # type: ignore[arg-type]
+            client_factory=TransportFailureClient,
+            raw_store_factory=_raw_store_factory,  # type: ignore[arg-type]
+            today=lambda: date(2026, 7, 19),
+        )
+
+    assert error.value.reason_code == "API_TRANSPORT_FAILED"
+    assert repository.events[0][0] == "started"
+    acquisition_id, status, reason_codes, _finished_at = repository.events[1][1]
+    assert acquisition_id is None
+    assert status == "FAIL"
+    assert reason_codes == ("API_TRANSPORT_FAILED",)
+    assert repository.closed is True
+
+
+def test_unexpected_failure_records_only_generic_reason() -> None:
+    repository = RefreshEvidenceRepository()
+
+    with pytest.raises(RuntimeError, match="provider body must not be recorded"):
+        ingest_from_environment(
+            _environment(),
+            repository_factory=lambda _dsn: repository,  # type: ignore[arg-type]
+            client_factory=UnexpectedFailureClient,
+            raw_store_factory=_raw_store_factory,  # type: ignore[arg-type]
+            today=lambda: date(2026, 7, 19),
+        )
+
+    acquisition_id, status, reason_codes, _finished_at = repository.events[1][1]
+    assert acquisition_id is None
+    assert status == "FAIL"
+    assert reason_codes == ("INGEST_FAILED",)
 
 
 @pytest.mark.parametrize("missing_name", ["HOME_AI_RAW_S3_BUCKET", "HOME_AI_RAW_S3_PREFIX"])

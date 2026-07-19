@@ -5,6 +5,7 @@ import json
 import re
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -127,6 +128,7 @@ class ValidationOutcome:
     rejected_row_count: int
     staged_rows: tuple[StagedRow, ...]
     issues: tuple[QualityIssue, ...]
+    spool_path: Path | None = None
 
     @property
     def has_blocking_issues(self) -> bool:
@@ -184,3 +186,9 @@ class ActiveSnapshot:
     rows: tuple[dict[str, object], ...]
     normalized_checksum: str | None = None
     observed_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class ActiveSnapshotState:
+    normalized_checksum: str | None
+    row_count: int

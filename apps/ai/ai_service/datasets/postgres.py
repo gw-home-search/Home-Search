@@ -16,11 +16,13 @@ from psycopg.types.json import Jsonb
 from .models import (
     AcquisitionRecord,
     ActiveSnapshot,
+    ActiveSnapshotState,
     DatasetSourceContract,
     LifecycleResult,
     RejectedRow,
     ValidationOutcome,
 )
+from .normalized_spool import iter_spooled_rows
 from .service import PublicationStoreError
 from .raw_store import StoredRawObject
 
@@ -385,7 +387,7 @@ class PostgresDatasetRepository:
                     ) FROM STDIN
                     """
                 ) as copy:
-                    for row in outcome.staged_rows:
+                    for row in _outcome_rows(outcome):
                         if row.accepted:
                             copy.write_row(
                                 (
@@ -396,7 +398,7 @@ class PostgresDatasetRepository:
                                     True,
                                 )
                             )
-            for row in outcome.staged_rows:
+            for row in _outcome_rows(outcome):
                 for reason_code in row.rejection_codes:
                     connection.execute(
                         """
@@ -790,6 +792,28 @@ class PostgresDatasetRepository:
             observed_at=publication["observed_at"],
         )
 
+    def active_snapshot_state(self, source_id: str) -> ActiveSnapshotState | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT publication.normalized_checksum, count(snapshot.source_key) AS row_count
+                FROM dataset_active_snapshot active
+                JOIN dataset_publication publication
+                  ON publication.publication_id = active.publication_id
+                LEFT JOIN dataset_snapshot_row snapshot
+                  ON snapshot.publication_id = publication.publication_id
+                WHERE active.source_id = %s
+                GROUP BY publication.publication_id
+                """,
+                (source_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return ActiveSnapshotState(
+            normalized_checksum=row["normalized_checksum"],
+            row_count=row["row_count"],
+        )
+
     def rollback(self, source_id: str, publication_id: UUID, activated_at: datetime) -> None:
         with self._connect() as connection:
             connection.execute(
@@ -906,6 +930,12 @@ def _rejected_field_name(reason_code: str) -> str | None:
         "INVALID_COORDINATE": "position",
         "DUPLICATE_UNIQUE_KEY": "source_key",
     }.get(reason_code)
+
+
+def _outcome_rows(outcome: ValidationOutcome) -> Iterator:
+    if outcome.spool_path is not None:
+        return iter_spooled_rows(outcome.spool_path)
+    return iter(outcome.staged_rows)
 
 
 class SourceRefreshAlreadyRunning(RuntimeError):

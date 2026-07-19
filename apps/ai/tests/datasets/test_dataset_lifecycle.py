@@ -273,6 +273,43 @@ def test_observed_at_snapshot_preserves_temporal_basis_without_claiming_source_d
     assert result.dataset_version.startswith("20260716-")
 
 
+def test_same_observed_rows_on_same_day_create_no_second_publication(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    observed_contract = replace(
+        source_contract(),
+        source_id="fixture.observed-no-change",
+        temporal_basis="OBSERVED_AT",
+        schema_version="fixture-observed-v2",
+    )
+    lifecycle = service(dataset_repository)
+
+    first = lifecycle.ingest_validate_publish(
+        observed_contract,
+        payload(valid_rows()),
+        source_date=None,
+        observed_at=datetime(2026, 7, 16, 1, tzinfo=UTC),
+    )
+    unchanged = lifecycle.ingest_validate_publish(
+        observed_contract,
+        b'{ "rows": [{"longitude":126.978,"latitude":37.5665,"name":"Fixture Station 1","station_id":"station-1"}] }',
+        source_date=None,
+        observed_at=datetime(2026, 7, 16, 23, tzinfo=UTC),
+    )
+
+    assert first.status == "Pass"
+    assert unchanged.status == "NoChange"
+    assert dataset_repository.publication_count(observed_contract.source_id) == 1
+
+    with psycopg.connect(postgres_dsn) as connection:
+        staging_count = connection.execute(
+            "SELECT count(*) FROM dataset_staging_row WHERE acquisition_id = %s",
+            (unchanged.acquisition_id,),
+        ).fetchone()[0]
+    assert staging_count == 0
+
+
 def test_invalid_payload_is_preserved_before_parse_failure(
     dataset_repository: PostgresDatasetRepository,
 ) -> None:

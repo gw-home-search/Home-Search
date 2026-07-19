@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 from datetime import date, datetime
+from collections.abc import Callable, Iterable
 from typing import Any
 
 from .models import DatasetSourceContract, QualityIssue, StagedRow, ValidationOutcome
@@ -32,20 +33,25 @@ def parse_rows(raw_bytes: bytes, encoding: str) -> list[dict[str, object]]:
 
 def validate_rows(
     contract: DatasetSourceContract,
-    rows: list[dict[str, object]],
+    rows: Iterable[dict[str, object]],
     previous_active_row_count: int | None,
     *,
     source_date: date,
     collected_at: datetime,
     adapter_issues: tuple[QualityIssue, ...] = (),
     adapter_rejections: dict[int, tuple[str, ...]] | None = None,
+    row_sink: Callable[[StagedRow], None] | None = None,
+    retain_staged_rows: bool = True,
 ) -> ValidationOutcome:
     staged: list[StagedRow] = []
     issues: list[QualityIssue] = list(adapter_issues)
     seen_keys: set[tuple[str, ...]] = set()
     adapter_rejections = adapter_rejections or {}
+    raw_count = 0
+    rejected_count = 0
 
     for row_number, row in enumerate(rows, start=1):
+        raw_count += 1
         rejection_codes: list[str] = list(adapter_rejections.get(row_number, ()))
         missing = [field for field in contract.required_fields if _missing(row.get(field))]
         if missing:
@@ -63,15 +69,19 @@ def validate_rows(
                 seen_keys.add(key)
 
         accepted = not rejection_codes
-        staged.append(
-            StagedRow(
+        if not accepted:
+            rejected_count += 1
+        staged_row = StagedRow(
                 row_number=row_number,
                 row_data=dict(row),
                 accepted=accepted,
                 rejection_codes=tuple(rejection_codes),
                 source_key=source_key,
             )
-        )
+        if retain_staged_rows:
+            staged.append(staged_row)
+        if row_sink is not None:
+            row_sink(staged_row)
         for reason_code in dict.fromkeys(rejection_codes):
             issues.append(
                 QualityIssue(
@@ -82,8 +92,6 @@ def validate_rows(
                 )
             )
 
-    raw_count = len(rows)
-    rejected_count = sum(not row.accepted for row in staged)
     accepted_count = raw_count - rejected_count
     age_days = (collected_at.date() - source_date).days
     if age_days < 0:

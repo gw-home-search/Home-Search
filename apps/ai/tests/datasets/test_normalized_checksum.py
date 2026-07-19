@@ -52,6 +52,25 @@ def test_normalized_checksum_distinguishes_temporal_basis_value() -> None:
     assert by_source_date != by_observation
 
 
+def test_observed_at_checksum_uses_observation_date_not_exact_time() -> None:
+    rows = [{"academy_id": "B10|1", "status": "OPEN"}]
+
+    first = normalized_dataset_checksum(
+        source_id="edu.academy-registry",
+        normalization_schema_version="academy-registry-v2",
+        temporal_value=datetime(2026, 7, 19, 1, 2, 3, tzinfo=UTC),
+        rows=rows,
+    )
+    second = normalized_dataset_checksum(
+        source_id="edu.academy-registry",
+        normalization_schema_version="academy-registry-v2",
+        temporal_value=datetime(2026, 7, 19, 23, 59, 59, tzinfo=UTC),
+        rows=rows,
+    )
+
+    assert first == second
+
+
 def test_normalized_checksum_requires_stable_identity() -> None:
     with pytest.raises(ValueError):
         normalized_dataset_checksum(

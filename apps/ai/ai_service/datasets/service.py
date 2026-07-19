@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from typing import Protocol
 from uuid import UUID
@@ -9,13 +10,16 @@ from uuid import UUID
 from .models import (
     AcquisitionRecord,
     ActiveSnapshot,
+    ActiveSnapshotState,
     DatasetSourceContract,
     LifecycleResult,
     ParsedDataset,
     ValidationOutcome,
 )
-from .checksum import normalized_dataset_checksum
+from .checksum import normalized_dataset_checksum_from_hashes
+from .normalized_spool import NormalizedRowSpool
 from .raw_store import StoredRawObject
+from .secure_temp import SecureTempWorkspace
 from .validation import RawPayloadError, parse_rows, validate_rows
 
 
@@ -73,6 +77,8 @@ class DatasetRepository(Protocol):
     def result(self, acquisition_id: UUID, *, idempotent: bool) -> LifecycleResult: ...
 
     def active_snapshot(self, source_id: str) -> ActiveSnapshot | None: ...
+
+    def active_snapshot_state(self, source_id: str) -> ActiveSnapshotState | None: ...
 
     def rollback(self, source_id: str, publication_id: UUID, activated_at: datetime) -> None: ...
 
@@ -145,36 +151,49 @@ class DatasetLifecycleService:
             )
             return self._repository.result(acquisition.acquisition_id, idempotent=False)
 
-        active = self._repository.active_snapshot(contract.source_id)
+        active = self._repository.active_snapshot_state(contract.source_id)
         validation_date = source_date or observed_at.date()  # type: ignore[union-attr]
-        outcome = validate_rows(
-            contract,
-            parsed.rows,
-            len(active.rows) if active else None,
-            source_date=validation_date,
-            collected_at=collected_at,
-            adapter_issues=parsed.issues,
-            adapter_rejections=parsed.row_rejections,
-        )
-        normalized_checksum = normalized_dataset_checksum(
-            source_id=contract.source_id,
-            normalization_schema_version=contract.schema_version,
-            temporal_value=source_date or observed_at,  # type: ignore[arg-type]
-            rows=(row.row_data for row in outcome.staged_rows if row.accepted),
-        )
-        no_change = (
-            not outcome.has_blocking_issues
-            and active is not None
-            and active.normalized_checksum == normalized_checksum
-        )
-        self._repository.record_validation(
-            acquisition.acquisition_id,
-            outcome,
-            self._clock(),
-            normalized_checksum=normalized_checksum,
-            normalization_schema_version=contract.schema_version,
-            no_change=no_change,
-        )
+        with SecureTempWorkspace(required_free_bytes=max(len(raw_bytes) * 2, 1)) as workspace:
+            spool = NormalizedRowSpool(workspace.create_file("normalized.ndjson"))
+            outcome = validate_rows(
+                contract,
+                parsed.rows,
+                active.row_count if active else None,
+                source_date=validation_date,
+                collected_at=collected_at,
+                adapter_issues=parsed.issues,
+                adapter_rejections=parsed.row_rejections,
+                row_sink=spool.append,
+                retain_staged_rows=False,
+            )
+            spool.close()
+            temporal_value = source_date or observed_at
+            assert temporal_value is not None
+            normalized_checksum = normalized_dataset_checksum_from_hashes(
+                source_id=contract.source_id,
+                normalization_schema_version=contract.schema_version,
+                temporal_basis=contract.temporal_basis,
+                semantic_temporal_value=(
+                    temporal_value.date().isoformat()
+                    if isinstance(temporal_value, datetime)
+                    else temporal_value.isoformat()
+                ),
+                row_hashes=spool.accepted_row_hashes,
+            )
+            no_change = (
+                not outcome.has_blocking_issues
+                and active is not None
+                and active.normalized_checksum == normalized_checksum
+            )
+            outcome = replace(outcome, spool_path=spool.path)
+            self._repository.record_validation(
+                acquisition.acquisition_id,
+                outcome,
+                self._clock(),
+                normalized_checksum=normalized_checksum,
+                normalization_schema_version=contract.schema_version,
+                no_change=no_change,
+            )
         if outcome.has_blocking_issues:
             return self._repository.result(acquisition.acquisition_id, idempotent=False)
         if no_change:

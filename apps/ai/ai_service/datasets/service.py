@@ -164,7 +164,12 @@ class DatasetLifecycleService:
 
         selected_adapter = adapter or JsonDatasetAdapter()
         try:
-            parsed = selected_adapter.parse(raw_bytes, contract, source_date=source_date)
+            parse_lazy = getattr(selected_adapter, "parse_lazy", None)
+            parsed = (
+                parse_lazy(raw_bytes, contract, source_date=source_date)
+                if callable(parse_lazy)
+                else selected_adapter.parse(raw_bytes, contract, source_date=source_date)
+            )
         except RawPayloadError as exception:
             self._repository.record_parse_failure(
                 acquisition.acquisition_id, exception.reason_code, self._clock()

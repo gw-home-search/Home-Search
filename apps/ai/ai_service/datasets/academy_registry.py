@@ -3,11 +3,10 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
-from collections import defaultdict
 from datetime import date, datetime
 
 from .bundle import read_deterministic_bundle
-from .models import DatasetSourceContract, ParsedDataset, QualityIssue
+from .models import DatasetSourceContract, ParsedDataset, ParsedRow, QualityIssue
 from .validation import RawPayloadError
 from .contracts import ReferenceSourceContract
 
@@ -37,6 +36,28 @@ class AcademyRegistryAdapter:
         *,
         source_date: date | None,
     ) -> ParsedDataset:
+        lazy = self.parse_lazy(raw_bytes, contract, source_date=source_date)
+        rows: list[dict[str, object]] = []
+        issues: list[QualityIssue] = []
+        rejections: dict[int, tuple[str, ...]] = {}
+        for row_number, candidate in enumerate(lazy.rows, start=1):
+            assert isinstance(candidate, ParsedRow)
+            rows.append(candidate.row_data)
+            if candidate.rejection_codes:
+                rejections[row_number] = candidate.rejection_codes
+                issues.extend(
+                    QualityIssue(reason, "WARNING", row_number, {})
+                    for reason in candidate.rejection_codes
+                )
+        return ParsedDataset(rows=rows, issues=tuple(issues), row_rejections=rejections)
+
+    def parse_lazy(
+        self,
+        raw_bytes: bytes,
+        contract: DatasetSourceContract,
+        *,
+        source_date: date | None,
+    ) -> ParsedDataset:
         if (
             contract.source_id != SOURCE_ID
             or contract.temporal_basis != "OBSERVED_AT"
@@ -50,55 +71,65 @@ class AcademyRegistryAdapter:
         )
         if not isinstance(bundle.temporal_value, datetime):
             raise RawPayloadError("academy observed time is missing", "BUNDLE_MANIFEST_INVALID")
-        observed_at = bundle.temporal_value
-        office_pages: dict[str, dict[int, list[dict[str, object]]]] = defaultdict(dict)
-        office_totals: dict[str, int] = {}
-        for artifact in bundle.artifacts:
+        return ParsedDataset(
+            rows=self._iter_rows(
+                bundle.artifacts, bundle.temporal_value, contract.encoding
+            )
+        )
+
+    def _iter_rows(self, artifacts, observed_at: datetime, encoding: str):
+        completed_offices: set[str] = set()
+        current_office: str | None = None
+        expected_page = 1
+        expected_total = 0
+        seen_count = 0
+
+        def finish_office() -> None:
+            if current_office is not None and seen_count != expected_total:
+                raise RawPayloadError(
+                    "academy total count does not match rows",
+                    "PROVIDER_TOTAL_COUNT_MISMATCH",
+                )
+
+        for artifact in artifacts:
             match = re.fullmatch(r"([b-t][0-9]{2})-page-([0-9]{6})", artifact.logical_name)
             if artifact.media_type != "application/json" or match is None:
                 raise RawPayloadError("academy artifact metadata is invalid", "BUNDLE_MANIFEST_INVALID")
             office_code = match.group(1).upper()
             page_number = int(match.group(2))
-            if office_code not in _OFFICE_CODES or page_number in office_pages[office_code]:
+            if office_code not in _OFFICE_CODES:
                 raise RawPayloadError("academy page identity is invalid", "PROVIDER_PAGE_INVALID")
-            total_count, rows = _page(artifact.content, contract.encoding)
-            previous_total = office_totals.setdefault(office_code, total_count)
-            if previous_total != total_count:
+            if office_code != current_office:
+                finish_office()
+                if office_code in completed_offices:
+                    raise RawPayloadError("academy page order is invalid", "PROVIDER_PAGE_INVALID")
+                if current_office is not None and office_code < current_office:
+                    raise RawPayloadError("academy page order is invalid", "PROVIDER_PAGE_INVALID")
+                current_office = office_code
+                completed_offices.add(office_code)
+                expected_page = 1
+                expected_total = -1
+                seen_count = 0
+            if page_number != expected_page:
+                raise RawPayloadError("academy pages are not contiguous", "PROVIDER_PAGE_INVALID")
+            expected_page += 1
+            total_count, provider_rows = _page(artifact.content, encoding)
+            if expected_total == -1:
+                expected_total = total_count
+            elif expected_total != total_count:
                 raise RawPayloadError(
                     "academy provider total changed between pages",
                     "PROVIDER_TOTAL_COUNT_MISMATCH",
                 )
-            if any(_canonical(row.get("ATPT_OFCDC_SC_CODE")) != office_code for row in rows):
-                raise RawPayloadError("academy office coverage mismatch", "PROVIDER_PAGE_INVALID")
-            office_pages[office_code][page_number] = rows
-        if set(office_pages) != _OFFICE_CODES:
+            for provider_row in provider_rows:
+                if _canonical(provider_row.get("ATPT_OFCDC_SC_CODE")) != office_code:
+                    raise RawPayloadError("academy office coverage mismatch", "PROVIDER_PAGE_INVALID")
+                normalized, reasons = _normalize(provider_row, observed_at)
+                seen_count += 1
+                yield ParsedRow(normalized, tuple(reasons))
+        finish_office()
+        if completed_offices != _OFFICE_CODES:
             raise RawPayloadError("academy office coverage is incomplete", "PROVIDER_COVERAGE_INCOMPLETE")
-
-        provider_rows: list[dict[str, object]] = []
-        for office_code in sorted(_OFFICE_CODES):
-            pages = office_pages[office_code]
-            if sorted(pages) != list(range(1, len(pages) + 1)):
-                raise RawPayloadError("academy pages are not contiguous", "PROVIDER_PAGE_INVALID")
-            office_rows = [row for page in sorted(pages) for row in pages[page]]
-            if len(office_rows) != office_totals[office_code]:
-                raise RawPayloadError(
-                    "academy total count does not match rows",
-                    "PROVIDER_TOTAL_COUNT_MISMATCH",
-                )
-            provider_rows.extend(office_rows)
-
-        rows: list[dict[str, object]] = []
-        issues: list[QualityIssue] = []
-        rejections: dict[int, tuple[str, ...]] = {}
-        for row_number, provider_row in enumerate(provider_rows, start=1):
-            normalized, reasons = _normalize(provider_row, observed_at)
-            rows.append(normalized)
-            if reasons:
-                rejections[row_number] = tuple(reasons)
-                issues.extend(
-                    QualityIssue(reason, "WARNING", row_number, {}) for reason in reasons
-                )
-        return ParsedDataset(rows=rows, issues=tuple(issues), row_rejections=rejections)
 
 
 def academy_registry_source_contract(

@@ -10,9 +10,12 @@ QueryCapability = Literal[
     "price_trend",
     "school_location",
     "retail_location",
+    "academy_registry_summary",
 ]
 PropertyCapability = Literal["complex_identity", "recent_trade_lookup", "price_trend"]
-ReferenceCapability = Literal["school_location", "retail_location"]
+ReferenceCapability = Literal[
+    "school_location", "retail_location", "academy_registry_summary"
+]
 SchoolLevel = Literal["ELEMENTARY", "MIDDLE", "HIGH"]
 FacilitySubtype = Literal[
     "LARGE_MART",
@@ -105,6 +108,13 @@ class ComplexRecord:
     longitude: float | None
     marker_safe: bool
     data_updated_at: datetime
+
+
+@dataclass(frozen=True)
+class AdministrativeRegionContext:
+    province_name: str
+    district_name: str
+    education_office_name: str
 
 
 @dataclass(frozen=True)

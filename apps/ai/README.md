@@ -40,6 +40,12 @@ duplicate, whitespace-padded, or unapproved values disable all property capabili
 Golden verification uses its own explicit candidate set and does not widen the
 runtime allowlist.
 
+`academy_registry_summary` is implemented for offline review only. It resolves
+the property's province and district through the property read view, then runs
+an exact education-office plus district aggregate query against the separate AI
+database. It remains impossible to enable through the runtime allowlist until
+license and live readiness approval are recorded.
+
 Do not rely on provider-side conversation state. The browser sends only the
 bounded `conversationContext`, and the AI service treats it as an untrusted
 resolution hint. Provider output still passes the local fact ID, claim, numeric

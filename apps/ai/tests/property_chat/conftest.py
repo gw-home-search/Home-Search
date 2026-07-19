@@ -15,6 +15,13 @@ def property_postgres_dsn() -> Iterator[str]:
             connection.execute("CREATE SCHEMA ai_read")
             connection.execute(
                 """
+                CREATE TABLE ai_read.region_fact (
+                    region_id bigint PRIMARY KEY,
+                    parent_region_id bigint,
+                    region_code text NOT NULL UNIQUE,
+                    region_name text NOT NULL,
+                    region_type text NOT NULL
+                );
                 CREATE TABLE ai_read.complex_fact (
                     complex_id bigint PRIMARY KEY,
                     display_name text NOT NULL,
@@ -43,6 +50,10 @@ def property_postgres_dsn() -> Iterator[str]:
                      '서울 강남구 강남동 1', 37.50, 127.03, true, '2026-07-16T00:00:00Z'),
                     (3, '강남동 AB타워', 'AB타워', 'AB타워', '11680101', '강남동',
                      '서울 강남구 강남동 2', 37.51, 127.04, true, '2026-07-16T00:00:00Z');
+                INSERT INTO ai_read.region_fact VALUES
+                    (11, NULL, '11', '서울특별시', 'si-do'),
+                    (11710, 11, '11710', '송파구', 'si-gun-gu'),
+                    (11710101, 11710, '11710101', '잠실동', 'eup-myeon-dong');
                 INSERT INTO ai_read.trade_fact VALUES
                     (11, 1, '2026-01-01', 240000, 84.1, 10),
                     (12, 1, '2026-01-31', 250000, 84.9, 12),

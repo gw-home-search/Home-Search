@@ -6,3 +6,10 @@ include::{snippets}/edu.academy-registry/http-request.adoc[]
 include::{snippets}/edu.academy-registry/request-parameters.adoc[]
 include::{snippets}/edu.academy-registry/normalization-fields.adoc[]
 include::{snippets}/edu.academy-registry/failure-codes.adoc[]
+
+=== Grounded summary 경계
+
+`academy_registry_summary`는 property read view에서 시도·시군구 ancestor를 먼저
+해석하고, 별도 AI DB에서 교육청명과 시군구명을 exact match한다. 공개 근거는 등록
+총수, 운영 수, 관측일로 제한하며 반경·거리·교육 품질 표현은 허용하지 않는다.
+이용조건과 live readiness 승인 전에는 runtime allowlist에 추가하지 않는다.

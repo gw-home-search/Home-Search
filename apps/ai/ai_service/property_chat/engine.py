@@ -12,6 +12,7 @@ from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
 
 from .models import (
+    AdministrativeRegionContext,
     ComplexRecord,
     DraftAnswer,
     EvidenceFact,
@@ -25,6 +26,7 @@ from .models import (
     SchoolSnapshot,
     TradeRecord,
 )
+from .academy_registry import AcademyRegistrySummary
 from .reference_facilities import FacilityFact, FacilitySearchResult
 
 
@@ -51,6 +53,10 @@ class PropertyFactRepository(Protocol):
     ) -> list[MonthlyTrendRecord]: ...
 
     def latest_trade_date(self) -> date | None: ...
+
+    def resolve_region_context(
+        self, region_code: str
+    ) -> AdministrativeRegionContext | None: ...
 
 
 class GroundedLanguageModel(Protocol):
@@ -94,6 +100,12 @@ class PointFacilityFactRepository(Protocol):
     ) -> FacilitySearchResult: ...
 
 
+class AcademyRegistryFactRepository(Protocol):
+    def summary(
+        self, *, education_office_name: str, district_name: str
+    ) -> AcademyRegistrySummary | None: ...
+
+
 _GROUNDING_FAILURE_REASONS = frozenset(
     {
         "GROUNDING_CAPABILITY_UNSUPPORTED",
@@ -113,6 +125,7 @@ _GROUNDING_FAILURE_REASONS = frozenset(
         "GROUNDING_SCHOOL_TEXT_OUTSIDE_OBSERVATION",
         "GROUNDING_RETAIL_POLICY_VIOLATION",
         "GROUNDING_RETAIL_TEXT_OUTSIDE_OBSERVATION",
+        "GROUNDING_ACADEMY_REGISTRY_POLICY_VIOLATION",
     }
 )
 
@@ -136,16 +149,23 @@ class GroundedChatbotEngine:
         enabled_capabilities: frozenset[PropertyCapability],
         school_repository: SchoolFactRepository | None = None,
         point_facility_repository: PointFacilityFactRepository | None = None,
+        academy_registry_repository: AcademyRegistryFactRepository | None = None,
         enabled_reference_capabilities: frozenset[ReferenceCapability] = frozenset(),
         today: Callable[[], date] = date.today,
     ) -> None:
         self._repository = repository
         self._school_repository = school_repository
         self._point_facility_repository = point_facility_repository
+        self._academy_registry_repository = academy_registry_repository
         self._language_model = language_model
         self._enabled_capabilities = enabled_capabilities
         self._enabled_reference_capabilities = enabled_reference_capabilities
         self._today = today
+        self._reference_observers = {
+            "school_location": self._observe_schools,
+            "retail_location": self._observe_retail,
+            "academy_registry_summary": self._observe_academy_registry,
+        }
 
     async def query(
         self,
@@ -158,8 +178,7 @@ class GroundedChatbotEngine:
         try:
             plan = await self._language_model.plan_query(request)
             if plan.capability in self._enabled_capabilities or (
-                plan.capability in {"school_location", "retail_location"}
-                and plan.capability in self._enabled_reference_capabilities
+                plan.capability in self._enabled_reference_capabilities
             ):
                 facts, limitations, readiness = await self._observe(plan)
             else:
@@ -217,10 +236,9 @@ class GroundedChatbotEngine:
             )
 
         complex_record = complexes[0]
-        if plan.capability == "school_location":
-            return await self._observe_schools(plan, complex_record)
-        if plan.capability == "retail_location":
-            return await self._observe_retail(plan, complex_record)
+        reference_observer = self._reference_observers.get(plan.capability)
+        if reference_observer is not None:
+            return await reference_observer(plan, complex_record)
         if plan.capability == "complex_identity":
             limitations = []
             if not complex_record.marker_safe:
@@ -386,6 +404,37 @@ class GroundedChatbotEngine:
                 "좌표가 확인된 공식 자료의 결과이며 좌표가 없는 원장이 포함될 수 있어 시설이 전혀 없다고 단정할 수 없습니다."
             )
         return facts, limitations, "supported"
+
+    async def _observe_academy_registry(
+        self, plan: QueryPlan, complex_record: ComplexRecord
+    ) -> tuple[list[EvidenceFact], list[str], str]:
+        if complex_record.region_code is None:
+            return [], ["단지의 행정구역을 확인할 수 없습니다."], "unavailable"
+        if self._academy_registry_repository is None:
+            return [], ["공식 학원·교습소 등록 집계가 준비되지 않았습니다."], "unavailable"
+        region = await asyncio.to_thread(
+            self._repository.resolve_region_context, complex_record.region_code
+        )
+        if region is None:
+            return [], ["단지의 시도·시군구 행정구역을 확인할 수 없습니다."], "unavailable"
+        summary = await asyncio.to_thread(
+            self._academy_registry_repository.summary,
+            education_office_name=region.education_office_name,
+            district_name=region.district_name,
+        )
+        if summary is None:
+            return [], ["해당 시군구의 공식 등록 집계를 확인하지 못했습니다."], "unavailable"
+        age_days = (self._today() - summary.observed_at.date()).days
+        if age_days < 0 or age_days > summary.freshness_days:
+            return [], ["공식 등록 집계의 관측일이 freshness 범위를 벗어났습니다."], "unavailable"
+        return (
+            [_academy_registry_fact(summary)],
+            [
+                "시군구 단위 공식 등록 원장 집계이며 위치 검색이나 교육 품질을 의미하지 않습니다.",
+                "관측일 이후 등록·운영상태가 변경될 수 있습니다.",
+            ],
+            "supported",
+        )
 
 
 def _complex_fact(record: ComplexRecord) -> EvidenceFact:
@@ -555,6 +604,39 @@ def _school_scope_fact(
     )
 
 
+def _academy_registry_fact(summary: AcademyRegistrySummary) -> EvidenceFact:
+    observed_date = summary.observed_at.date()
+    return EvidenceFact(
+        fact_id=(
+            f"academy-registry-{summary.education_office_code}-"
+            f"{summary.district_name}"
+        ),
+        claims=(
+            FactClaim(summary.education_office_code, "EDUCATION_OFFICE_CODE"),
+            FactClaim(summary.education_office_name, "EDUCATION_OFFICE"),
+            FactClaim(summary.district_name, "DISTRICT"),
+            FactClaim(str(summary.total_count), "COUNT"),
+            FactClaim(str(summary.open_count), "OPEN_COUNT"),
+            FactClaim(observed_date.isoformat(), "DATE"),
+        ),
+        data_as_of=observed_date,
+        payload={
+            "educationOfficeCode": summary.education_office_code,
+            "educationOfficeName": summary.education_office_name,
+            "districtName": summary.district_name,
+            "registeredCount": summary.total_count,
+            "openCount": summary.open_count,
+            "observedDate": observed_date.isoformat(),
+            "datasetVersion": summary.dataset_version,
+        },
+        source_id="edu.academy-registry",
+        source_name="전국학원및교습소표준데이터",
+        source_url="https://www.data.go.kr/data/15096277/standard.do",
+        evidence_grade="A",
+        dataset_version_value=summary.dataset_version,
+    )
+
+
 def _retail_fact(record: FacilityFact) -> EvidenceFact:
     data_as_of = (
         record.data_as_of.date()
@@ -654,6 +736,9 @@ def validate_draft(
     fact_by_id = {fact.fact_id: fact for fact in facts}
     school_facts = [fact for fact in facts if fact.source_id == "edu.school-location"]
     retail_facts = [fact for fact in facts if fact.source_id == "retail.large-store"]
+    academy_registry_facts = [
+        fact for fact in facts if fact.source_id == "edu.academy-registry"
+    ]
     used_ids: list[str] = []
     for sentence in draft.sentences:
         if not sentence.text.strip():
@@ -682,6 +767,8 @@ def validate_draft(
             _validate_school_sentence(sentence.text, referenced)
         if retail_facts:
             _validate_retail_sentence(sentence.text, referenced)
+        if academy_registry_facts:
+            _validate_academy_registry_sentence(sentence.text)
         allowed_numbers = _number_tokens(
             claim.value for fact in referenced for claim in fact.claims
         )
@@ -828,6 +915,13 @@ def _validate_retail_sentence(text: str, referenced: list[EvidenceFact]) -> None
     ):
         if facility_name not in observed_text:
             raise GroundingValidationError("GROUNDING_RETAIL_TEXT_OUTSIDE_OBSERVATION")
+
+
+def _validate_academy_registry_sentence(text: str) -> None:
+    if re.search(r"반경|거리|주변|인근|가까", text):
+        raise GroundingValidationError(
+            "GROUNDING_ACADEMY_REGISTRY_POLICY_VIOLATION"
+        )
 
 
 def _number(value: int | float) -> str:

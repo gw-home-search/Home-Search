@@ -187,7 +187,25 @@ def test_planning_accepts_retail_location_with_default_radius_and_subtypes() -> 
     assert plan.radius_meters == 1000
     assert plan.facility_subtypes == ("LARGE_MART", "COMPLEX_MALL")
     schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
-    assert schema["properties"]["capability"]["enum"][-1] == "retail_location"
+    assert "retail_location" in schema["properties"]["capability"]["enum"]
+
+
+def test_planning_accepts_academy_registry_summary_without_location_semantics() -> None:
+    requester = RecordingRequester(
+        _response(_valid_plan(capability="academy_registry_summary"))
+    )
+
+    plan = asyncio.run(
+        _model(requester).plan_query(
+            ChatbotQueryRequest(question="잠실엘스 지역 공식 등록 학원 수")
+        )
+    )
+
+    assert plan.capability == "academy_registry_summary"
+    schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
+    assert schema["properties"]["capability"]["enum"][-1] == "academy_registry_summary"
+    prompt = json.loads(requester.calls[0][2])["input"][0]["content"]
+    assert "Do not interpret it as a nearby, radius, distance" in prompt
 
 
 def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> None:

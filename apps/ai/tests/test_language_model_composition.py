@@ -11,6 +11,7 @@ from ai_service.chat import (
     ChatbotProviderUnavailable,
     get_enabled_property_capabilities,
     get_enabled_reference_capabilities,
+    get_academy_registry_repository,
     get_grounded_language_model,
     get_query_timeout_seconds,
     get_school_fact_repository,
@@ -32,12 +33,14 @@ def clear_language_model_cache() -> None:
     get_enabled_property_capabilities.cache_clear()
     get_enabled_reference_capabilities.cache_clear()
     get_school_fact_repository.cache_clear()
+    get_academy_registry_repository.cache_clear()
     get_query_timeout_seconds.cache_clear()
     yield
     get_grounded_language_model.cache_clear()
     get_enabled_property_capabilities.cache_clear()
     get_enabled_reference_capabilities.cache_clear()
     get_school_fact_repository.cache_clear()
+    get_academy_registry_repository.cache_clear()
     get_query_timeout_seconds.cache_clear()
 
 
@@ -178,6 +181,7 @@ def test_unapproved_or_invalid_property_capability_configuration_fails_closed(
         ("", frozenset()),
         (" school_location", frozenset()),
         ("school_location,school_location", frozenset()),
+        ("academy_registry_summary", frozenset()),
         ("unknown", frozenset()),
     ],
 )
@@ -192,6 +196,67 @@ def test_reference_capability_allowlist_is_exact_and_fail_closed(
         monkeypatch.setenv("HOME_AI_ENABLED_REFERENCE_CAPABILITIES", value)
 
     assert get_enabled_reference_capabilities() == expected
+
+
+def test_academy_registry_repository_requires_reference_dsn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HOME_AI_REFERENCE_DSN", raising=False)
+
+    with pytest.raises(ChatbotProviderUnavailable):
+        get_academy_registry_repository()
+
+
+@pytest.mark.parametrize("repository_available", [True, False])
+def test_configured_engine_statically_composes_academy_registry_repository(
+    monkeypatch: pytest.MonkeyPatch,
+    repository_available: bool,
+) -> None:
+    captured: dict[str, object] = {}
+    academy_repository = object()
+
+    class RecordingEngine:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        async def query(self, **_kwargs: object) -> dict[str, object]:
+            repository = captured["academy_registry_repository"]
+            if not repository_available:
+                with pytest.raises(ChatbotProviderUnavailable):
+                    repository.summary()  # type: ignore[attr-defined]
+            return {"success": True}
+
+    monkeypatch.setattr(
+        "ai_service.chat.get_property_fact_repository", lambda: object()
+    )
+    monkeypatch.setattr("ai_service.chat.get_grounded_language_model", lambda: object())
+    monkeypatch.setattr(
+        "ai_service.chat.get_enabled_reference_capabilities",
+        lambda: frozenset({"academy_registry_summary"}),
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_academy_registry_repository",
+        (
+            (lambda: academy_repository)
+            if repository_available
+            else (lambda: (_ for _ in ()).throw(ChatbotProviderUnavailable()))
+        ),
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.engine.GroundedChatbotEngine", RecordingEngine
+    )
+
+    response = asyncio.run(
+        ConfiguredChatbotEngine().query(
+            request=ChatbotQueryRequest(question="공식 등록 학원 수"),
+            user=AuthenticatedUser(user_id=42),
+            request_id="request-academy-composition",
+        )
+    )
+
+    assert response == {"success": True}
+    if repository_available:
+        assert captured["academy_registry_repository"] is academy_repository
 
 
 def test_configured_engine_fails_closed_when_total_query_budget_expires(

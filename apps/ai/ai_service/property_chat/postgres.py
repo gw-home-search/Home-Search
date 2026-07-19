@@ -2,13 +2,19 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+import re
 from threading import Lock
 from time import monotonic
 
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
-from .models import ComplexRecord, MonthlyTrendRecord, TradeRecord
+from .models import (
+    AdministrativeRegionContext,
+    ComplexRecord,
+    MonthlyTrendRecord,
+    TradeRecord,
+)
 
 _AREA_TOLERANCE_SQUARE_METERS = Decimal("1.0")
 _FRESHNESS_CACHE_SECONDS = 300
@@ -158,6 +164,41 @@ class PostgresPropertyFactRepository:
                 ),
             ).fetchall()
         return [_trade_record(row) for row in rows]
+
+    def resolve_region_context(
+        self, region_code: str
+    ) -> AdministrativeRegionContext | None:
+        if re.fullmatch(r"[0-9]{2,10}", region_code) is None:
+            raise ValueError("region code is outside the supported range")
+        with self._pool.connection() as connection:
+            rows = connection.execute(
+                """
+                WITH RECURSIVE ancestors AS (
+                    SELECT region_id, parent_region_id, region_code,
+                           region_name, region_type
+                    FROM ai_read.region_fact
+                    WHERE region_code = %s
+                    UNION
+                    SELECT parent.region_id, parent.parent_region_id,
+                           parent.region_code, parent.region_name, parent.region_type
+                    FROM ai_read.region_fact parent
+                    JOIN ancestors child ON child.parent_region_id = parent.region_id
+                )
+                SELECT region_name, region_type
+                FROM ancestors
+                WHERE region_type IN ('si-do', 'si-gun-gu')
+                """,
+                (region_code,),
+            ).fetchall()
+        names_by_type = {str(row["region_type"]): str(row["region_name"]) for row in rows}
+        if len(rows) != 2 or set(names_by_type) != {"si-do", "si-gun-gu"}:
+            return None
+        province_name = names_by_type["si-do"]
+        return AdministrativeRegionContext(
+            province_name=province_name,
+            district_name=names_by_type["si-gun-gu"],
+            education_office_name=f"{province_name}교육청",
+        )
 
     def monthly_trends(
         self,

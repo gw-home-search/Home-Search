@@ -7,7 +7,10 @@ from uuid import UUID
 import pytest
 
 from ai_service.datasets.models import AcquisitionRecord, LifecycleResult
-from ai_service.datasets.school_location_client import CollectedSchoolBundle
+from ai_service.datasets.school_location_client import (
+    CollectedSchoolBundle,
+    SchoolLocationApiError,
+)
 from ai_service.datasets.school_location_ingest import (
     SchoolLocationConfigurationError,
     SchoolLocationIngestReport,
@@ -220,3 +223,20 @@ def test_main_maps_configuration_and_runtime_failures_to_safe_exit_codes(
     assert runtime_exit.value.code == 1
     assert "INGEST_FAILED" in output
     assert "secret detail" not in output
+
+
+def test_main_preserves_allowlisted_provider_failure_reason(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        "ai_service.datasets.school_location_ingest.ingest_from_environment",
+        lambda _environment: (_ for _ in ()).throw(
+            SchoolLocationApiError("API_AUTHENTICATION_FAILED")
+        ),
+    )
+
+    with pytest.raises(SystemExit) as provider_exit:
+        main()
+
+    output = capsys.readouterr().out
+    assert provider_exit.value.code == 1
+    assert "reasonCodes: API_AUTHENTICATION_FAILED" in output
+    assert "INGEST_FAILED" not in output

@@ -12,7 +12,7 @@ from psycopg.conninfo import conninfo_to_dict
 from .models import LifecycleResult
 from .postgres import PostgresDatasetRepository
 from .school_location import SchoolLocationAdapter, school_location_source_contract
-from .school_location_client import SchoolLocationApiClient
+from .school_location_client import SchoolLocationApiClient, SchoolLocationApiError
 from .service import DatasetLifecycleService
 from .contracts import load_reference_source_catalog
 from .raw_store import S3RawObjectStore, s3_raw_store_from_environment
@@ -105,6 +105,9 @@ def main() -> None:
     except SchoolLocationConfigurationError:
         _print_failure("CONFIGURATION_INVALID")
         raise SystemExit(2) from None
+    except SchoolLocationApiError as exception:
+        _print_failure(exception.reason_code)
+        raise SystemExit(1) from None
     except Exception:
         _print_failure("INGEST_FAILED")
         raise SystemExit(1) from None

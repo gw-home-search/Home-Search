@@ -76,6 +76,10 @@ grep -Fq 'rejectedRowCount: 0' <<<"$output"
 grep -Fq 'build --tag home-search-ai:local' "$docker_log"
 grep -Fq 'up -d --wait minio' "$docker_log"
 grep -Fq 'run --rm minio-init' "$docker_log"
+if grep -Fq -- '--env-file' "$docker_log"; then
+    echo '상태: Fail - refresh runner가 전체 env 파일을 Docker Compose에 전달했습니다.' >&2
+    exit 1
+fi
 grep -Fq -- '--env HOME_AI_MIGRATOR_DSN' "$docker_log"
 grep -Fq 'home-ai-migrate' "$docker_log"
 grep -Fq -- '--env HOME_AI_IMPORTER_DSN' "$docker_log"

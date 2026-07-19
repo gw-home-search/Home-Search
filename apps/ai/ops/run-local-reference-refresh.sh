@@ -74,6 +74,8 @@ command -v docker >/dev/null 2>&1 || reject_configuration "docker 명령을 찾�
 
 ai_data_migrator_password="$(read_value "$property_vars_file" AI_DATA_MIGRATOR_DB_PASSWORD)"
 ai_data_importer_password="$(read_value "$property_vars_file" AI_DATA_IMPORTER_DB_PASSWORD)"
+minio_root_user="$(read_value "$ai_vars_file" HOME_AI_MINIO_ROOT_USER)"
+minio_root_password="$(read_value "$ai_vars_file" HOME_AI_MINIO_ROOT_PASSWORD)"
 aws_access_key_id="$(read_value "$ai_vars_file" AWS_ACCESS_KEY_ID)"
 aws_secret_access_key="$(read_value "$ai_vars_file" AWS_SECRET_ACCESS_KEY)"
 raw_bucket="$(read_value "$ai_vars_file" HOME_AI_RAW_S3_BUCKET)"
@@ -84,6 +86,8 @@ data_go_kr_service_key="$(read_value "$ai_vars_file" HOME_AI_DATA_GO_KR_SERVICE_
 
 if ! AI_MIGRATOR_PASSWORD="$ai_data_migrator_password" \
     AI_IMPORTER_PASSWORD="$ai_data_importer_password" \
+    MINIO_ROOT_USER_VALUE="$minio_root_user" \
+    MINIO_ROOT_PASSWORD_VALUE="$minio_root_password" \
     AWS_ACCESS_KEY_VALUE="$aws_access_key_id" \
     AWS_SECRET_KEY_VALUE="$aws_secret_access_key" \
     RAW_BUCKET="$raw_bucket" \
@@ -108,6 +112,8 @@ def secret(name: str, maximum: int) -> bool:
 valid = (
     secret("AI_MIGRATOR_PASSWORD", 512)
     and secret("AI_IMPORTER_PASSWORD", 512)
+    and secret("MINIO_ROOT_USER_VALUE", 128)
+    and secret("MINIO_ROOT_PASSWORD_VALUE", 512)
     and secret("AWS_ACCESS_KEY_VALUE", 128)
     and secret("AWS_SECRET_KEY_VALUE", 512)
     and secret("DATA_SERVICE_KEY", 1024)
@@ -140,10 +146,26 @@ home_ai_importer_dsn="${dsn_values#*$'\n'}"
 docker build --tag "$image" "$ai_root" >/dev/null \
     || reject_runtime "AI importer image build에 실패했습니다."
 
-compose=(docker compose --env-file "$property_vars_file" --env-file "$ai_vars_file" -f "$compose_file")
-"${compose[@]}" up -d --wait minio \
+run_minio_compose() {
+    HOME_SEARCH_DB_PASSWORD=reference-refresh-not-used \
+    PROPERTY_MIGRATOR_DB_PASSWORD=reference-refresh-not-used \
+    AI_PROPERTY_READER_DB_PASSWORD=reference-refresh-not-used \
+    AI_DATA_MIGRATOR_DB_PASSWORD=reference-refresh-not-used \
+    AI_DATA_IMPORTER_DB_PASSWORD=reference-refresh-not-used \
+    AI_DATA_RUNTIME_DB_PASSWORD=reference-refresh-not-used \
+    USER_RUNTIME_DB_PASSWORD=reference-refresh-not-used \
+    USER_MIGRATOR_DB_PASSWORD=reference-refresh-not-used \
+    HOME_AI_MINIO_ROOT_USER="$minio_root_user" \
+    HOME_AI_MINIO_ROOT_PASSWORD="$minio_root_password" \
+    HOME_AI_RAW_S3_BUCKET="$raw_bucket" \
+    AWS_ACCESS_KEY_ID="$aws_access_key_id" \
+    AWS_SECRET_ACCESS_KEY="$aws_secret_access_key" \
+        docker compose -f "$compose_file" "$@"
+}
+
+run_minio_compose up -d --wait minio \
     || reject_runtime "MinIO 시작 또는 health 확인에 실패했습니다."
-"${compose[@]}" run --rm minio-init \
+run_minio_compose run --rm minio-init \
     || reject_runtime "MinIO bucket/versioning/object-lock 초기화에 실패했습니다."
 
 network_name="$(docker inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' home-search-postgis 2>/dev/null | head -n 1)"

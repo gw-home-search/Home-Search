@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 from uuid import UUID
 
 
-ReadinessStatus = Literal["Pass", "Partial", "Fail"]
+ReadinessStatus = Literal["Pass", "NoChange", "Partial", "Fail"]
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,7 @@ class DatasetSourceContract:
     maximum_rejected_ratio: float
     contains_personal_data: bool
     owner: str
+    temporal_basis: Literal["SOURCE_DATE", "OBSERVED_AT"] = "SOURCE_DATE"
 
     def __post_init__(self) -> None:
         if not re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", self.source_id):
@@ -84,7 +85,9 @@ class DatasetSourceContract:
         if not 0 <= self.maximum_rejected_ratio <= 1:
             raise ValueError("maximum_rejected_ratio must be between zero and one")
         if self.contains_personal_data:
-            raise ValueError("Slice 2 fixtures must not contain personal data")
+            raise ValueError("AI reference datasets must not contain personal data")
+        if self.temporal_basis not in {"SOURCE_DATE", "OBSERVED_AT"}:
+            raise ValueError("temporal basis is invalid")
 
     def as_json(self) -> dict[str, object]:
         value = asdict(self)
@@ -131,6 +134,13 @@ class ValidationOutcome:
 
 
 @dataclass(frozen=True)
+class ParsedDataset:
+    rows: list[dict[str, object]]
+    issues: tuple[QualityIssue, ...] = ()
+    row_rejections: dict[int, tuple[str, ...]] | None = None
+
+
+@dataclass(frozen=True)
 class AcquisitionRecord:
     acquisition_id: UUID
     created: bool
@@ -142,21 +152,25 @@ class LifecycleResult:
     source_id: str
     acquisition_id: UUID
     publication_id: UUID | None
+    dataset_version: str | None
     checksum: str
-    source_date: date
+    source_date: date | None
     collected_at: datetime
     raw_row_count: int
     accepted_row_count: int
     rejected_row_count: int
     issue_codes: tuple[str, ...]
     idempotent: bool
+    normalized_checksum: str | None = None
+    temporal_basis: Literal["SOURCE_DATE", "OBSERVED_AT"] = "SOURCE_DATE"
+    observed_at: datetime | None = None
 
 
 @dataclass(frozen=True)
 class RejectedRow:
     row_number: int
     reason_code: str
-    row_data: dict[str, object]
+    row_data: dict[str, object] | None
 
 
 @dataclass(frozen=True)
@@ -165,6 +179,8 @@ class ActiveSnapshot:
     publication_id: UUID
     acquisition_id: UUID
     dataset_version: str
-    source_date: date
+    source_date: date | None
     published_at: datetime
     rows: tuple[dict[str, object], ...]
+    normalized_checksum: str | None = None
+    observed_at: datetime | None = None

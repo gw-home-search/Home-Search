@@ -1,6 +1,63 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+: "${AI_DATA_MIGRATOR_DB_PASSWORD:?AI_DATA_MIGRATOR_DB_PASSWORD is required}"
+: "${AI_DATA_IMPORTER_DB_PASSWORD:?AI_DATA_IMPORTER_DB_PASSWORD is required}"
+: "${AI_DATA_RUNTIME_DB_PASSWORD:?AI_DATA_RUNTIME_DB_PASSWORD is required}"
+
+configure_ai_database() {
+  psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname postgres <<'SQL'
+\getenv ai_data_migrator_password AI_DATA_MIGRATOR_DB_PASSWORD
+\getenv ai_data_importer_password AI_DATA_IMPORTER_DB_PASSWORD
+\getenv ai_data_runtime_password AI_DATA_RUNTIME_DB_PASSWORD
+SELECT format('CREATE ROLE home_search_ai_migrator LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD %L', :'ai_data_migrator_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='home_search_ai_migrator') \gexec
+SELECT format('CREATE ROLE home_search_ai_importer LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD %L', :'ai_data_importer_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='home_search_ai_importer') \gexec
+SELECT format('CREATE ROLE home_search_ai_runtime LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD %L', :'ai_data_runtime_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='home_search_ai_runtime') \gexec
+SELECT format('ALTER ROLE home_search_ai_migrator PASSWORD %L', :'ai_data_migrator_password') \gexec
+SELECT format('ALTER ROLE home_search_ai_importer PASSWORD %L', :'ai_data_importer_password') \gexec
+SELECT format('ALTER ROLE home_search_ai_runtime PASSWORD %L', :'ai_data_runtime_password') \gexec
+ALTER ROLE home_search_ai_migrator NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ALTER ROLE home_search_ai_importer NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ALTER ROLE home_search_ai_runtime NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+SELECT format('REVOKE %I FROM home_search_ai_migrator', parent.rolname)
+FROM pg_auth_members membership
+JOIN pg_roles parent ON parent.oid = membership.roleid
+WHERE membership.member = 'home_search_ai_migrator'::regrole \gexec
+SELECT format('REVOKE %I FROM home_search_ai_importer', parent.rolname)
+FROM pg_auth_members membership
+JOIN pg_roles parent ON parent.oid = membership.roleid
+WHERE membership.member = 'home_search_ai_importer'::regrole \gexec
+SELECT format('REVOKE %I FROM home_search_ai_runtime', parent.rolname)
+FROM pg_auth_members membership
+JOIN pg_roles parent ON parent.oid = membership.roleid
+WHERE membership.member = 'home_search_ai_runtime'::regrole \gexec
+SQL
+
+  if ! psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname postgres -tAc \
+      "SELECT 1 FROM pg_database WHERE datname='home_search_ai'" | grep -q 1; then
+    createdb --username "${POSTGRES_USER}" --owner home_search_ai_migrator home_search_ai
+  fi
+
+  psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname postgres <<'SQL'
+ALTER DATABASE home_search_ai OWNER TO home_search_ai_migrator;
+REVOKE CONNECT ON DATABASE home_search_ai FROM PUBLIC;
+REVOKE TEMPORARY ON DATABASE home_search_ai FROM PUBLIC;
+GRANT CONNECT ON DATABASE home_search_ai TO home_search_ai_migrator, home_search_ai_importer, home_search_ai_runtime;
+SQL
+
+  psql -v ON_ERROR_STOP=1 --username "${POSTGRES_USER}" --dbname home_search_ai <<'SQL'
+CREATE EXTENSION IF NOT EXISTS postgis;
+SQL
+}
+
+if [[ "${AI_DATABASE_ONLY:-false}" == "true" ]]; then
+  configure_ai_database
+  exit 0
+fi
+
 : "${PROPERTY_RUNTIME_DB_PASSWORD:?PROPERTY_RUNTIME_DB_PASSWORD is required}"
 : "${PROPERTY_MIGRATOR_DB_PASSWORD:?PROPERTY_MIGRATOR_DB_PASSWORD is required}"
 : "${AI_PROPERTY_READER_DB_PASSWORD:?AI_PROPERTY_READER_DB_PASSWORD is required}"
@@ -74,3 +131,5 @@ GRANT CONNECT ON DATABASE home_search TO home_search_property_runtime, home_sear
 GRANT CONNECT ON DATABASE home_search_admin TO home_search_admin_runtime, home_search_admin_migrator;
 GRANT CONNECT ON DATABASE home_search_user TO home_search_user_runtime, home_search_user_migrator;
 SQL
+
+configure_ai_database

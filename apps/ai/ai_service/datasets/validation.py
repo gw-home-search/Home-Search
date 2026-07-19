@@ -9,7 +9,9 @@ from .models import DatasetSourceContract, QualityIssue, StagedRow, ValidationOu
 
 
 class RawPayloadError(ValueError):
-    pass
+    def __init__(self, message: str, reason_code: str = "RAW_PARSE_FAILED") -> None:
+        super().__init__(message)
+        self.reason_code = reason_code
 
 
 def parse_rows(raw_bytes: bytes, encoding: str) -> list[dict[str, object]]:
@@ -35,13 +37,16 @@ def validate_rows(
     *,
     source_date: date,
     collected_at: datetime,
+    adapter_issues: tuple[QualityIssue, ...] = (),
+    adapter_rejections: dict[int, tuple[str, ...]] | None = None,
 ) -> ValidationOutcome:
     staged: list[StagedRow] = []
-    issues: list[QualityIssue] = []
+    issues: list[QualityIssue] = list(adapter_issues)
     seen_keys: set[tuple[str, ...]] = set()
+    adapter_rejections = adapter_rejections or {}
 
     for row_number, row in enumerate(rows, start=1):
-        rejection_codes: list[str] = []
+        rejection_codes: list[str] = list(adapter_rejections.get(row_number, ()))
         missing = [field for field in contract.required_fields if _missing(row.get(field))]
         if missing:
             rejection_codes.append("REQUIRED_FIELD_MISSING")
@@ -64,10 +69,10 @@ def validate_rows(
                 row_data=dict(row),
                 accepted=accepted,
                 rejection_codes=tuple(rejection_codes),
-                source_key=source_key if accepted else None,
+                source_key=source_key,
             )
         )
-        for reason_code in rejection_codes:
+        for reason_code in dict.fromkeys(rejection_codes):
             issues.append(
                 QualityIssue(
                     reason_code=reason_code,

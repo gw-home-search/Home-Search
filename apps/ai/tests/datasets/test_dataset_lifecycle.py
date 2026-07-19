@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -86,6 +87,31 @@ def test_checksum_reingest_is_idempotent_and_does_not_duplicate_publication(
     assert dataset_repository.table_counts() == {
         "raw_objects": 1,
         "acquisitions": 1,
+        "publications": 1,
+    }
+
+
+def test_semantically_equal_raw_creates_no_second_publication(
+    dataset_repository: PostgresDatasetRepository,
+) -> None:
+    lifecycle = service(dataset_repository)
+    first_raw = b'{"rows":[{"station_id":"station-1","name":"Fixture Station","latitude":37.5665,"longitude":126.978}]}'
+    reordered_raw = b'{ "rows": [ { "longitude": 126.978, "latitude": 37.5665, "name": "Fixture Station", "station_id": "station-1" } ] }'
+
+    first = lifecycle.ingest_validate_publish(
+        source_contract(), first_raw, source_date=SOURCE_DATE
+    )
+    unchanged = lifecycle.ingest_validate_publish(
+        source_contract(), reordered_raw, source_date=SOURCE_DATE
+    )
+
+    assert first.status == "Pass"
+    assert unchanged.status == "NoChange"
+    assert unchanged.normalized_checksum == first.normalized_checksum
+    assert unchanged.publication_id is None
+    assert dataset_repository.table_counts() == {
+        "raw_objects": 2,
+        "acquisitions": 2,
         "publications": 1,
     }
 
@@ -185,7 +211,7 @@ def test_abnormal_row_count_blocks_publication_with_acquisition_issue(
     assert dataset_repository.active_snapshot("fixture.rail-station") is None
 
 
-def test_same_raw_is_revalidated_when_the_source_contract_changes(
+def test_same_raw_reuses_acquisition_when_only_the_source_contract_changes(
     dataset_repository: PostgresDatasetRepository,
 ) -> None:
     lifecycle = service(dataset_repository)
@@ -197,13 +223,12 @@ def test_same_raw_is_revalidated_when_the_source_contract_changes(
     )
 
     assert first.status == "Pass"
-    assert revalidated.status == "Fail"
-    assert revalidated.idempotent is False
-    assert revalidated.acquisition_id != first.acquisition_id
-    assert "ROW_COUNT_OUT_OF_RANGE" in revalidated.issue_codes
+    assert revalidated.status == "Pass"
+    assert revalidated.idempotent is True
+    assert revalidated.acquisition_id == first.acquisition_id
     assert dataset_repository.table_counts() == {
         "raw_objects": 1,
-        "acquisitions": 2,
+        "acquisitions": 1,
         "publications": 1,
     }
 
@@ -222,6 +247,31 @@ def test_stale_source_date_blocks_publication(
     assert dataset_repository.active_snapshot("fixture.rail-station") is None
 
 
+def test_observed_at_snapshot_preserves_temporal_basis_without_claiming_source_date(
+    dataset_repository: PostgresDatasetRepository,
+) -> None:
+    observed_at = datetime(2026, 7, 16, 7, 30, tzinfo=UTC)
+    observed_contract = replace(
+        source_contract(),
+        source_id="fixture.observed-source",
+        temporal_basis="OBSERVED_AT",
+    )
+
+    result = service(dataset_repository).ingest_validate_publish(
+        observed_contract,
+        payload(valid_rows()),
+        source_date=None,
+        observed_at=observed_at,
+    )
+
+    assert result.status == "Pass"
+    assert result.temporal_basis == "OBSERVED_AT"
+    assert result.source_date is None
+    assert result.observed_at == observed_at
+    assert result.dataset_version is not None
+    assert result.dataset_version.startswith("20260716-")
+
+
 def test_invalid_payload_is_preserved_before_parse_failure(
     dataset_repository: PostgresDatasetRepository,
 ) -> None:
@@ -232,6 +282,34 @@ def test_invalid_payload_is_preserved_before_parse_failure(
     assert result.status == "Fail"
     assert "RAW_PARSE_FAILED" in result.issue_codes
     assert dataset_repository.raw_bytes(result.checksum) == b"not-json"
+
+
+def test_runtime_role_can_read_only_the_typed_reference_view(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    del dataset_repository
+    with psycopg.connect(postgres_dsn) as connection:
+        connection.execute("SET ROLE home_search_ai_runtime")
+        assert connection.execute(
+            "SELECT count(*) FROM reference_read.school_location_fact"
+        ).fetchone()[0] == 0
+
+    with psycopg.connect(postgres_dsn) as connection:
+        connection.execute("SET ROLE home_search_ai_runtime")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            connection.execute("SELECT count(*) FROM dataset_raw_object")
+
+
+def test_importer_role_cannot_mutate_immutable_raw_objects(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    del dataset_repository
+    with psycopg.connect(postgres_dsn) as connection:
+        connection.execute("SET ROLE home_search_ai_importer")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            connection.execute("UPDATE dataset_raw_object SET byte_length = byte_length")
 
 
 def test_publication_failure_keeps_previous_active_snapshot(

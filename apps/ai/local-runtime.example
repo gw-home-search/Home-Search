@@ -1,5 +1,6 @@
 # Copy to apps/ai/.env and replace placeholders. Do not commit the populated file.
 HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:replace-with-url-encoded-password@postgis:5432/home_search
+HOME_AI_REFERENCE_DSN=postgresql://home_search_ai_runtime:replace-with-url-encoded-password@postgis:5432/home_search_ai
 HOME_AI_JWT_PUBLIC_KEY_PATHS={"replace-with-user-active-kid":"/run/keys/user-signing-public"}
 HOME_AI_OPENAI_API_KEY=replace-with-openai-api-key
 HOME_AI_OPENAI_PRIMARY_MODEL=replace-with-approved-primary-model-id
@@ -7,3 +8,5 @@ HOME_AI_OPENAI_SECONDARY_MODEL=replace-with-approved-secondary-model-id
 HOME_AI_OPENAI_TIMEOUT_SECONDS=8
 HOME_AI_QUERY_TIMEOUT_SECONDS=60
 HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend
+# Keep blank until the school readiness report is Pass and activation is approved.
+HOME_AI_ENABLED_REFERENCE_CAPABILITIES=

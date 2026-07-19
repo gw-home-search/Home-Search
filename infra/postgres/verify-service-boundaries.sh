@@ -4,6 +4,9 @@ set -Eeuo pipefail
 compose_file="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/docker-compose.local.yml"
 root="$(cd "$(dirname "${compose_file}")/.." && pwd)"
 role_init_script="${root}/infra/postgres/init/10-create-service-databases-and-roles.sh"
+ai_bootstrap_script="${root}/infra/postgres/bootstrap-ai-database.sh"
+chatbot_compose_file="${root}/infra/docker-compose.chatbot.yml"
+minio_importer_policy="${root}/infra/minio/ai-raw-importer-policy.template.json"
 
 if grep -Fq -- '- ..:/workspace' "${compose_file}"; then
   echo "ERROR: runtime services must not mount the repository root" >&2
@@ -25,8 +28,31 @@ if grep -Eq 'AI_PROPERTY_READER_DB_PASSWORD:-' "${compose_file}"; then
   echo "ERROR: AI property reader password must not have a repository-known default" >&2
   exit 1
 fi
+if grep -Eq 'AI_DATA_(MIGRATOR|IMPORTER|RUNTIME)_DB_PASSWORD:-' "${compose_file}"; then
+  echo "ERROR: AI data role passwords must not have repository-known defaults" >&2
+  exit 1
+fi
 if grep -Eq 'POSTGRES_PASSWORD:.*HOME_SEARCH_DB_PASSWORD:-' "${compose_file}"; then
   echo "ERROR: PostgreSQL superuser password must not have a repository-known default" >&2
+  exit 1
+fi
+if ! grep -Fq '127.0.0.1:${HOME_SEARCH_MINIO_API_PORT:-19000}:9000' "${compose_file}"; then
+  echo "ERROR: local MinIO API must bind to loopback only" >&2
+  exit 1
+fi
+if grep -Fq 'MINIO_ROOT_USER="$${AWS_ACCESS_KEY_ID}"' "${compose_file}"; then
+  echo "ERROR: MinIO root and importer credentials must be separated" >&2
+  exit 1
+fi
+if [[ ! -f "${minio_importer_policy}" ]] \
+  || ! grep -Fq '"s3:GetObject"' "${minio_importer_policy}" \
+  || ! grep -Fq '"s3:PutObject"' "${minio_importer_policy}" \
+  || grep -Eq 'DeleteObject|DeleteBucket|s3:\*' "${minio_importer_policy}"; then
+  echo "ERROR: MinIO importer policy must be limited to object get/put without delete" >&2
+  exit 1
+fi
+if grep -Eq 'HOME_AI_RAW_S3|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY' "${chatbot_compose_file}"; then
+  echo "ERROR: chatbot runtime must not receive raw S3 credentials" >&2
   exit 1
 fi
 
@@ -38,12 +64,32 @@ for password_binding in \
   'property_runtime_password PROPERTY_RUNTIME_DB_PASSWORD' \
   'property_migrator_password PROPERTY_MIGRATOR_DB_PASSWORD' \
   'ai_property_reader_password AI_PROPERTY_READER_DB_PASSWORD' \
+  'ai_data_migrator_password AI_DATA_MIGRATOR_DB_PASSWORD' \
+  'ai_data_importer_password AI_DATA_IMPORTER_DB_PASSWORD' \
+  'ai_data_runtime_password AI_DATA_RUNTIME_DB_PASSWORD' \
   'admin_runtime_password ADMIN_RUNTIME_DB_PASSWORD' \
   'admin_migrator_password ADMIN_MIGRATOR_DB_PASSWORD' \
   'user_runtime_password USER_RUNTIME_DB_PASSWORD' \
   'user_migrator_password USER_MIGRATOR_DB_PASSWORD'; do
   if ! grep -Fq "\\getenv ${password_binding}" "${role_init_script}"; then
     echo "ERROR: database role password must be read from the environment inside psql: ${password_binding}" >&2
+    exit 1
+  fi
+done
+for required_ai_data_guard in \
+  'CREATE ROLE home_search_ai_migrator LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' \
+  'CREATE ROLE home_search_ai_importer LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' \
+  'CREATE ROLE home_search_ai_runtime LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS' \
+  'ALTER DATABASE home_search_ai OWNER TO home_search_ai_migrator' \
+  'GRANT CONNECT ON DATABASE home_search_ai TO home_search_ai_migrator, home_search_ai_importer, home_search_ai_runtime'; do
+  if ! grep -Fq "${required_ai_data_guard}" "${role_init_script}"; then
+    echo "ERROR: AI data database least-privilege guard is missing: ${required_ai_data_guard}" >&2
+    exit 1
+  fi
+done
+for ai_role in home_search_ai_migrator home_search_ai_importer home_search_ai_runtime; do
+  if ! grep -Fq "membership.member = '${ai_role}'::regrole" "${role_init_script}"; then
+    echo "ERROR: AI data role membership revocation is missing: ${ai_role}" >&2
     exit 1
   fi
 done
@@ -69,7 +115,7 @@ for required_property_migrator_guard in \
     exit 1
   fi
 done
-for database in home_search home_search_admin home_search_user; do
+for database in home_search home_search_admin home_search_user home_search_ai; do
   if ! grep -Fq "REVOKE CONNECT ON DATABASE ${database} FROM PUBLIC" "${role_init_script}"; then
     echo "ERROR: PUBLIC database connect must be revoked: ${database}" >&2
     exit 1
@@ -81,6 +127,38 @@ for database in home_search home_search_admin home_search_user; do
 done
 if ! grep -Fq 'REVOKE CONNECT, TEMPORARY ON DATABASE postgres FROM PUBLIC' "${role_init_script}"; then
   echo 'ERROR: PUBLIC access to the postgres maintenance database must be revoked' >&2
+  exit 1
+fi
+
+if [[ ! -x "${ai_bootstrap_script}" ]]; then
+  echo "ERROR: existing-volume AI database bootstrap must be executable" >&2
+  exit 1
+fi
+if grep -Eq -- '--env[=[:space:]]+[A-Z0-9_]+=' "${ai_bootstrap_script}"; then
+  echo "ERROR: AI database bootstrap exposes a secret through a docker process argument" >&2
+  exit 1
+fi
+for required_bootstrap_env in \
+  '--env AI_DATA_MIGRATOR_DB_PASSWORD' \
+  '--env AI_DATA_IMPORTER_DB_PASSWORD' \
+  '--env AI_DATA_RUNTIME_DB_PASSWORD' \
+  '--env AI_DATABASE_ONLY'; do
+  if ! grep -Fq -- "${required_bootstrap_env}" "${ai_bootstrap_script}"; then
+    echo "ERROR: existing-volume AI database bootstrap environment is missing: ${required_bootstrap_env}" >&2
+    exit 1
+  fi
+done
+if ! grep -A40 '^  ai:' "${chatbot_compose_file}" | grep -Fq 'HOME_AI_REFERENCE_DSN:'; then
+  echo "ERROR: AI runtime reference DSN is missing" >&2
+  exit 1
+fi
+if ! grep -A40 '^  ai:' "${chatbot_compose_file}" | grep -Fq 'HOME_AI_ENABLED_REFERENCE_CAPABILITIES:'; then
+  echo "ERROR: AI runtime reference capability allowlist is missing" >&2
+  exit 1
+fi
+if grep -A40 '^  ai:' "${chatbot_compose_file}" | grep -Eq \
+    'HOME_AI_(MIGRATOR|IMPORTER)_DSN|HOME_AI_DATA_GO_KR_SERVICE_KEY|AI_DATA_(MIGRATOR|IMPORTER|RUNTIME)_DB_PASSWORD'; then
+  echo "ERROR: AI runtime receives a migration, import, API key, or database role password secret" >&2
   exit 1
 fi
 

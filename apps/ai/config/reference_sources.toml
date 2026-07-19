@@ -1,0 +1,442 @@
+# Fixed order is part of the runtime capability catalog. A source stays disabled
+# until its own license record is APPROVED and its readiness report is Pass.
+
+[[sources]]
+id = "edu.school-location"
+provider = "교육부·한국교육시설안전원"
+source_name = "전국초중등학교위치표준데이터"
+landing_url = "https://www.data.go.kr/data/15021148/standard.do"
+evidence_grade = "A"
+owner = "apps/ai"
+normalization_schema_version = "school-location-v2"
+
+[sources.acquisition]
+mode = "api"
+base_url = "https://api.data.go.kr/openapi/tn_pubr_public_elesch_mskul_lc_api"
+allowed_hosts = ["api.data.go.kr"]
+allowed_path_prefixes = ["/openapi/tn_pubr_public_elesch_mskul_lc_api"]
+format = "JSON"
+encoding = "UTF-8"
+source_crs = "EPSG:4326"
+maximum_bundle_bytes = 134217728
+redirect_policy = "REJECT"
+
+[sources.temporal]
+basis = "SOURCE_DATE"
+freshness_days = 214
+refresh_profile = "MONTHLY"
+
+[sources.quality]
+minimum_rows = 10000
+maximum_rows = 50000
+maximum_row_change_ratio = 0.10
+minimum_coordinate_ratio = 1.0
+minimum_region_coordinate_ratio = 1.0
+maximum_rejected_ratio = 0.0
+
+[sources.license]
+status = "APPROVED"
+terms_url = "https://www.data.go.kr/data/15021148/standard.do"
+terms_fingerprint = "9ba4610bc2277518229d794a9664326291aabc61b7807a71fcb53e47e90c5e30"
+reviewed_on = 2026-07-19
+reviewed_by = "user-approved-plan"
+attribution_text = "출처: 공공데이터포털 전국초중등학교위치표준데이터"
+raw_private_storage_allowed = true
+internal_derivative_allowed = true
+public_redistribution_allowed = false
+third_party_rights = false
+
+[[sources]]
+id = "edu.school-zone"
+provider = "학구도안내서비스"
+source_name = "학교 통학구역 release bundle"
+landing_url = "https://schoolzone.emac.kr/publicData/publicDataList.do"
+evidence_grade = "A"
+owner = "apps/ai"
+normalization_schema_version = "school-zone-v1"
+
+[sources.acquisition]
+mode = "release_bundle"
+base_url = "https://schoolzone.emac.kr/publicData/publicDataList.do"
+allowed_hosts = ["schoolzone.emac.kr"]
+allowed_path_prefixes = ["/publicData/"]
+format = "ZIP_SHAPEFILE"
+encoding = "UTF-8"
+source_crs = "EPSG:5186"
+maximum_bundle_bytes = 536870912
+redirect_policy = "ALLOWLISTED_ONE_HOP"
+
+[sources.temporal]
+basis = "SOURCE_DATE"
+freshness_days = 214
+refresh_profile = "SEMIANNUAL_MANUAL_RELEASE"
+
+[sources.quality]
+minimum_rows = 5000
+maximum_rows = 30000
+maximum_row_change_ratio = 0.10
+minimum_coordinate_ratio = 1.0
+minimum_region_coordinate_ratio = 1.0
+maximum_rejected_ratio = 0.0
+
+[sources.license]
+status = "PENDING"
+terms_url = "https://schoolzone.emac.kr/publicData/publicDataList.do"
+terms_fingerprint = ""
+reviewed_by = ""
+attribution_text = ""
+raw_private_storage_allowed = false
+internal_derivative_allowed = false
+public_redistribution_allowed = false
+third_party_rights = false
+
+[[sources]]
+id = "edu.academy-registry"
+provider = "교육부·17개 시도교육청"
+source_name = "전국학원및교습소표준데이터"
+landing_url = "https://www.data.go.kr/data/15096277/standard.do"
+evidence_grade = "A"
+owner = "apps/ai"
+normalization_schema_version = "academy-registry-v1"
+
+[sources.acquisition]
+mode = "api"
+base_url = "https://open.neis.go.kr/hub/acaInsTiInfo"
+allowed_hosts = ["open.neis.go.kr"]
+allowed_path_prefixes = ["/hub/acaInsTiInfo"]
+format = "JSON"
+encoding = "UTF-8"
+maximum_bundle_bytes = 536870912
+redirect_policy = "REJECT"
+
+[sources.temporal]
+basis = "OBSERVED_AT"
+freshness_days = 45
+refresh_profile = "MONTHLY"
+
+[sources.quality]
+minimum_rows = 100000
+maximum_rows = 250000
+maximum_row_change_ratio = 0.10
+minimum_coordinate_ratio = 0.0
+minimum_region_coordinate_ratio = 0.0
+maximum_rejected_ratio = 0.0
+
+[sources.license]
+status = "PENDING"
+terms_url = "https://www.data.go.kr/data/15096277/standard.do"
+terms_fingerprint = ""
+reviewed_by = ""
+attribution_text = ""
+raw_private_storage_allowed = false
+internal_derivative_allowed = false
+public_redistribution_allowed = false
+third_party_rights = false
+
+[[sources]]
+id = "place.sbiz-academy"
+provider = "소상공인시장진흥공단"
+source_name = "상가(상권)정보 API 교육업종"
+landing_url = "https://www.data.go.kr/data/15012005/openapi.do"
+evidence_grade = "B"
+owner = "apps/ai"
+normalization_schema_version = "sbiz-academy-v1"
+
+[sources.acquisition]
+mode = "api"
+base_url = "https://apis.data.go.kr/B553077/api/open/sdsc2/storeListInUpjong"
+allowed_hosts = ["apis.data.go.kr"]
+allowed_path_prefixes = ["/B553077/api/open/sdsc2/"]
+format = "JSON"
+encoding = "UTF-8"
+source_crs = "EPSG:4326"
+maximum_bundle_bytes = 1073741824
+redirect_policy = "REJECT"
+
+[sources.temporal]
+basis = "OBSERVED_AT"
+freshness_days = 45
+refresh_profile = "MONTHLY"
+
+[sources.quality]
+minimum_rows = 50000
+maximum_rows = 300000
+maximum_row_change_ratio = 0.10
+minimum_coordinate_ratio = 0.95
+minimum_region_coordinate_ratio = 0.90
+maximum_rejected_ratio = 0.0
+
+[sources.license]
+status = "PENDING"
+terms_url = "https://www.data.go.kr/data/15012005/openapi.do"
+terms_fingerprint = ""
+reviewed_by = ""
+attribution_text = ""
+raw_private_storage_allowed = false
+internal_derivative_allowed = false
+public_redistribution_allowed = false
+third_party_rights = false
+
+[[sources]]
+id = "retail.large-store"
+provider = "행정안전부"
+source_name = "전국대규모및준대규모점포표준데이터"
+landing_url = "https://www.data.go.kr/data/15114138/standard.do"
+evidence_grade = "A"
+owner = "apps/ai"
+normalization_schema_version = "large-store-v1"
+
+[sources.acquisition]
+mode = "file"
+base_url = "https://file.localdata.go.kr/file/large_scale_retail_stores/info"
+allowed_hosts = ["file.localdata.go.kr"]
+allowed_path_prefixes = ["/file/large_scale_retail_stores/"]
+format = "CSV"
+encoding = "UTF-8"
+source_crs = "EPSG:5174"
+maximum_bundle_bytes = 268435456
+redirect_policy = "ALLOWLISTED_ONE_HOP"
+
+[sources.temporal]
+basis = "SOURCE_DATE"
+freshness_days = 40
+refresh_profile = "MONTHLY"
+
+[sources.quality]
+minimum_rows = 2000
+maximum_rows = 10000
+maximum_row_change_ratio = 0.10
+minimum_coordinate_ratio = 0.95
+minimum_region_coordinate_ratio = 0.90
+maximum_rejected_ratio = 0.0
+
+[sources.license]
+status = "PENDING"
+terms_url = "https://www.data.go.kr/data/15114138/standard.do"
+terms_fingerprint = ""
+reviewed_by = ""
+attribution_text = ""
+raw_private_storage_allowed = false
+internal_derivative_allowed = false
+public_redistribution_allowed = false
+third_party_rights = false
+
+[[sources]]
+id = "transport.rail-station"
+provider = "국토교통부·지방공기업"
+source_name = "전국도시철도역사정보표준데이터"
+landing_url = "https://www.data.go.kr/data/15013205/standard.do"
+evidence_grade = "A"
+owner = "apps/ai"
+normalization_schema_version = "rail-station-v1"
+
+[sources.acquisition]
+mode = "file"
+base_url = "https://www.data.go.kr/data/15013205/standard.do"
+allowed_hosts = ["www.data.go.kr"]
+allowed_path_prefixes = ["/data/15013205/"]
+format = "XLSX"
+encoding = "UTF-8"
+source_crs = "EPSG:4326"
+maximum_bundle_bytes = 268435456
+redirect_policy = "ALLOWLISTED_ONE_HOP"
+
+[sources.temporal]
+basis = "SOURCE_DATE"
+freshness_days = 410
+refresh_profile = "MONTHLY"
+
+[sources.quality]
+minimum_rows = 500
+maximum_rows = 2000
+maximum_row_change_ratio = 0.10
+minimum_coordinate_ratio = 1.0
+minimum_region_coordinate_ratio = 1.0
+maximum_rejected_ratio = 0.0
+
+[sources.license]
+status = "PENDING"
+terms_url = "https://www.data.go.kr/data/15013205/standard.do"
+terms_fingerprint = ""
+reviewed_by = ""
+attribution_text = ""
+raw_private_storage_allowed = false
+internal_derivative_allowed = false
+public_redistribution_allowed = false
+third_party_rights = false
+
+[[sources]]
+id = "medical.hira-hospital"
+provider = "건강보험심사평가원"
+source_name = "병원정보서비스 기본목록"
+landing_url = "https://www.data.go.kr/data/15001698/openapi.do"
+evidence_grade = "A"
+owner = "apps/ai"
+normalization_schema_version = "hira-hospital-v1"
+
+[sources.acquisition]
+mode = "api"
+base_url = "https://apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList"
+allowed_hosts = ["apis.data.go.kr"]
+allowed_path_prefixes = ["/B551182/hospInfoServicev2/"]
+format = "XML"
+encoding = "UTF-8"
+source_crs = "EPSG:4326"
+maximum_bundle_bytes = 536870912
+redirect_policy = "REJECT"
+
+[sources.temporal]
+basis = "OBSERVED_AT"
+freshness_days = 45
+refresh_profile = "MONTHLY"
+
+[sources.quality]
+minimum_rows = 10000
+maximum_rows = 200000
+maximum_row_change_ratio = 0.10
+minimum_coordinate_ratio = 0.95
+minimum_region_coordinate_ratio = 0.90
+maximum_rejected_ratio = 0.0
+
+[sources.license]
+status = "PENDING"
+terms_url = "https://www.data.go.kr/data/15001698/openapi.do"
+terms_fingerprint = ""
+reviewed_by = ""
+attribution_text = ""
+raw_private_storage_allowed = false
+internal_derivative_allowed = false
+public_redistribution_allowed = false
+third_party_rights = false
+
+[[sources]]
+id = "medical.hira-pharmacy"
+provider = "건강보험심사평가원"
+source_name = "약국정보서비스 기본목록"
+landing_url = "https://www.data.go.kr/data/15001673/openapi.do"
+evidence_grade = "A"
+owner = "apps/ai"
+normalization_schema_version = "hira-pharmacy-v1"
+
+[sources.acquisition]
+mode = "api"
+base_url = "https://apis.data.go.kr/B551182/pharmacyInfoService/getParmacyBasisList"
+allowed_hosts = ["apis.data.go.kr"]
+allowed_path_prefixes = ["/B551182/pharmacyInfoService/"]
+format = "XML"
+encoding = "UTF-8"
+source_crs = "EPSG:4326"
+maximum_bundle_bytes = 536870912
+redirect_policy = "REJECT"
+
+[sources.temporal]
+basis = "OBSERVED_AT"
+freshness_days = 45
+refresh_profile = "MONTHLY"
+
+[sources.quality]
+minimum_rows = 10000
+maximum_rows = 200000
+maximum_row_change_ratio = 0.10
+minimum_coordinate_ratio = 0.95
+minimum_region_coordinate_ratio = 0.90
+maximum_rejected_ratio = 0.0
+
+[sources.license]
+status = "PENDING"
+terms_url = "https://www.data.go.kr/data/15001673/openapi.do"
+terms_fingerprint = ""
+reviewed_by = ""
+attribution_text = ""
+raw_private_storage_allowed = false
+internal_derivative_allowed = false
+public_redistribution_allowed = false
+third_party_rights = false
+
+[[sources]]
+id = "childcare.center"
+provider = "보건복지부"
+source_name = "전국어린이집표준데이터"
+landing_url = "https://www.data.go.kr/data/15013108/standard.do"
+evidence_grade = "A"
+owner = "apps/ai"
+normalization_schema_version = "childcare-center-v1"
+
+[sources.acquisition]
+mode = "api"
+base_url = "https://apis.data.go.kr/1741000/ChildCareInfo/getChildCareInfo"
+allowed_hosts = ["apis.data.go.kr"]
+allowed_path_prefixes = ["/1741000/ChildCareInfo/"]
+format = "XML"
+encoding = "UTF-8"
+source_crs = "EPSG:4326"
+maximum_bundle_bytes = 536870912
+redirect_policy = "REJECT"
+
+[sources.temporal]
+basis = "OBSERVED_AT"
+freshness_days = 45
+refresh_profile = "MONTHLY"
+
+[sources.quality]
+minimum_rows = 10000
+maximum_rows = 100000
+maximum_row_change_ratio = 0.10
+minimum_coordinate_ratio = 0.95
+minimum_region_coordinate_ratio = 0.90
+maximum_rejected_ratio = 0.0
+
+[sources.license]
+status = "PENDING"
+terms_url = "https://www.data.go.kr/data/15013108/standard.do"
+terms_fingerprint = ""
+reviewed_by = ""
+attribution_text = ""
+raw_private_storage_allowed = false
+internal_derivative_allowed = false
+public_redistribution_allowed = false
+third_party_rights = true
+
+[[sources]]
+id = "environment.city-park"
+provider = "행정안전부·지방자치단체"
+source_name = "전국도시공원정보표준데이터"
+landing_url = "https://www.data.go.kr/data/15012890/standard.do"
+evidence_grade = "A"
+owner = "apps/ai"
+normalization_schema_version = "city-park-v1"
+
+[sources.acquisition]
+mode = "api"
+base_url = "https://api.data.go.kr/openapi/tn_pubr_public_cty_park_info_api"
+allowed_hosts = ["api.data.go.kr"]
+allowed_path_prefixes = ["/openapi/tn_pubr_public_cty_park_info_api"]
+format = "JSON"
+encoding = "UTF-8"
+source_crs = "EPSG:4326"
+maximum_bundle_bytes = 536870912
+redirect_policy = "REJECT"
+
+[sources.temporal]
+basis = "OBSERVED_AT"
+freshness_days = 410
+refresh_profile = "MONTHLY"
+
+[sources.quality]
+minimum_rows = 5000
+maximum_rows = 50000
+maximum_row_change_ratio = 0.10
+minimum_coordinate_ratio = 0.95
+minimum_region_coordinate_ratio = 0.90
+maximum_rejected_ratio = 0.0
+
+[sources.license]
+status = "PENDING"
+terms_url = "https://www.data.go.kr/data/15012890/standard.do"
+terms_fingerprint = ""
+reviewed_by = ""
+attribution_text = ""
+raw_private_storage_allowed = false
+internal_derivative_allowed = false
+public_redistribution_allowed = false
+third_party_rights = false

@@ -1,0 +1,170 @@
+from __future__ import annotations
+
+import hashlib
+import io
+import json
+import re
+import zipfile
+from dataclasses import dataclass
+from datetime import date, datetime
+
+from .validation import RawPayloadError
+
+
+_FIXED_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
+
+
+@dataclass(frozen=True)
+class BundleArtifact:
+    logical_name: str
+    extension: str
+    media_type: str
+    content: bytes
+
+
+@dataclass(frozen=True)
+class ReadArtifact:
+    logical_name: str
+    media_type: str
+    content: bytes
+
+
+@dataclass(frozen=True)
+class ReadBundle:
+    source_id: str
+    complete: bool
+    endpoint_path: str
+    temporal_value: date | datetime | None
+    artifacts: tuple[ReadArtifact, ...]
+
+
+def build_deterministic_bundle(
+    *,
+    source_id: str,
+    endpoint_path: str,
+    artifacts: tuple[BundleArtifact, ...],
+    temporal_value: date | datetime | None,
+    complete: bool = True,
+) -> bytes:
+    if not artifacts or not endpoint_path.startswith("/"):
+        raise ValueError("bundle artifacts and endpoint path are required")
+    manifest: dict[str, object] = {
+        "bundleSchemaVersion": 1,
+        "sourceId": source_id,
+        "complete": complete,
+        "endpointPath": endpoint_path,
+        "artifacts": [],
+    }
+    if temporal_value is not None:
+        key = "observedAt" if isinstance(temporal_value, datetime) else "sourceDate"
+        manifest[key] = temporal_value.isoformat()
+    entries: list[tuple[str, bytes]] = []
+    for index, artifact in enumerate(artifacts, start=1):
+        if (
+            not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,99}", artifact.logical_name)
+            or not re.fullmatch(r"[a-z0-9]{1,10}", artifact.extension)
+            or not artifact.media_type.strip()
+        ):
+            raise ValueError("bundle artifact metadata is invalid")
+        entry_name = f"artifacts/{index:04d}.{artifact.extension}"
+        entries.append((entry_name, artifact.content))
+        manifest["artifacts"].append(  # type: ignore[union-attr]
+            {
+                "logicalName": artifact.logical_name,
+                "mediaType": artifact.media_type,
+                "byteLength": len(artifact.content),
+                "sha256": hashlib.sha256(artifact.content).hexdigest(),
+            }
+        )
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
+        _write(
+            archive,
+            "manifest.json",
+            json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(),
+        )
+        for name, content in entries:
+            _write(archive, name, content)
+    return output.getvalue()
+
+
+def read_deterministic_bundle(
+    content: bytes,
+    *,
+    expected_source_id: str,
+    maximum_bytes: int,
+) -> ReadBundle:
+    if len(content) > maximum_bytes:
+        raise RawPayloadError("bundle exceeds configured size", "BUNDLE_TOO_LARGE")
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            infos = archive.infolist()
+            names = [info.filename for info in infos]
+            if (
+                not names
+                or names[0] != "manifest.json"
+                or len(names) != len(set(names))
+                or any(info.is_dir() or info.file_size > maximum_bytes for info in infos)
+                or sum(info.file_size for info in infos) > maximum_bytes
+            ):
+                raise RawPayloadError("bundle entries are invalid", "BUNDLE_MANIFEST_INVALID")
+            expected_names = ["manifest.json"] + [
+                f"artifacts/{index:04d}.{name.rsplit('.', 1)[-1]}"
+                for index, name in enumerate(names[1:], start=1)
+            ]
+            if names != expected_names:
+                raise RawPayloadError("bundle entry order is invalid", "BUNDLE_MANIFEST_INVALID")
+            manifest = json.loads(archive.read("manifest.json"))
+            if not isinstance(manifest, dict):
+                raise ValueError
+            if (
+                manifest.get("bundleSchemaVersion") != 1
+                or manifest.get("sourceId") != expected_source_id
+                or manifest.get("complete") is not True
+                or not isinstance(manifest.get("endpointPath"), str)
+                or not isinstance(manifest.get("artifacts"), list)
+                or len(manifest["artifacts"]) != len(names) - 1
+            ):
+                raise RawPayloadError("bundle manifest is invalid", "BUNDLE_MANIFEST_INVALID")
+            artifacts: list[ReadArtifact] = []
+            for metadata, name in zip(manifest["artifacts"], names[1:], strict=True):
+                if not isinstance(metadata, dict) or set(metadata) != {
+                    "logicalName", "mediaType", "byteLength", "sha256"
+                }:
+                    raise RawPayloadError("artifact metadata is invalid", "BUNDLE_MANIFEST_INVALID")
+                artifact_content = archive.read(name)
+                if (
+                    metadata["byteLength"] != len(artifact_content)
+                    or metadata["sha256"] != hashlib.sha256(artifact_content).hexdigest()
+                ):
+                    raise RawPayloadError("artifact checksum mismatch", "BUNDLE_CHECKSUM_MISMATCH")
+                artifacts.append(
+                    ReadArtifact(
+                        logical_name=str(metadata["logicalName"]),
+                        media_type=str(metadata["mediaType"]),
+                        content=artifact_content,
+                    )
+                )
+            temporal_value: date | datetime | None = None
+            if isinstance(manifest.get("sourceDate"), str):
+                temporal_value = date.fromisoformat(manifest["sourceDate"])
+            elif isinstance(manifest.get("observedAt"), str):
+                temporal_value = datetime.fromisoformat(manifest["observedAt"])
+            return ReadBundle(
+                source_id=expected_source_id,
+                complete=True,
+                endpoint_path=manifest["endpointPath"],
+                temporal_value=temporal_value,
+                artifacts=tuple(artifacts),
+            )
+    except RawPayloadError:
+        raise
+    except (KeyError, ValueError, json.JSONDecodeError, zipfile.BadZipFile):
+        raise RawPayloadError("bundle is invalid", "BUNDLE_MANIFEST_INVALID") from None
+
+
+def _write(archive: zipfile.ZipFile, name: str, content: bytes) -> None:
+    info = zipfile.ZipInfo(name, date_time=_FIXED_TIMESTAMP)
+    info.compress_type = zipfile.ZIP_STORED
+    info.external_attr = 0o600 << 16
+    archive.writestr(info, content, compress_type=zipfile.ZIP_STORED)

@@ -6,7 +6,6 @@ root="$(cd "$(dirname "${compose_file}")/.." && pwd)"
 role_init_script="${root}/infra/postgres/init/10-create-service-databases-and-roles.sh"
 ai_bootstrap_script="${root}/infra/postgres/bootstrap-ai-database.sh"
 chatbot_compose_file="${root}/infra/docker-compose.chatbot.yml"
-minio_importer_policy="${root}/infra/minio/ai-raw-importer-policy.template.json"
 
 if grep -Fq -- '- ..:/workspace' "${compose_file}"; then
   echo "ERROR: runtime services must not mount the repository root" >&2
@@ -51,10 +50,15 @@ for minio_service in minio minio-init; do
     exit 1
   fi
 done
-if [[ ! -f "${minio_importer_policy}" ]] \
-  || ! grep -Fq '"s3:GetObject"' "${minio_importer_policy}" \
-  || ! grep -Fq '"s3:PutObject"' "${minio_importer_policy}" \
-  || grep -Eq 'DeleteObject|DeleteBucket|s3:\*' "${minio_importer_policy}"; then
+minio_init_section="$(sed -n '/^  minio-init:/,/^  [a-zA-Z0-9_-]*:/p' "${compose_file}")"
+if grep -Eq '(^|[[:space:];])sed[[:space:]]' <<<"${minio_init_section}"; then
+  echo "ERROR: minio-init must not depend on sed missing from the pinned mc image" >&2
+  exit 1
+fi
+if ! grep -Fq "printf '%s\\n'" <<<"${minio_init_section}" \
+  || ! grep -Fq 's3:GetObject' <<<"${minio_init_section}" \
+  || ! grep -Fq 's3:PutObject' <<<"${minio_init_section}" \
+  || grep -Eq 'DeleteObject|DeleteBucket|s3:\*' <<<"${minio_init_section}"; then
   echo "ERROR: MinIO importer policy must be limited to object get/put without delete" >&2
   exit 1
 fi

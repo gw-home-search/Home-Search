@@ -96,17 +96,17 @@ services:
         : "$${HOME_AI_MINIO_ROOT_PASSWORD:?HOME_AI_MINIO_ROOT_PASSWORD is required}";
         : "$${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID is required}";
         : "$${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required}";
+        case "$${HOME_AI_RAW_S3_BUCKET}" in ''|*[!a-z0-9.-]*) echo 'invalid raw bucket name' >&2; exit 2;; esac;
+        [ "$${#HOME_AI_RAW_S3_BUCKET}" -ge 3 ] && [ "$${#HOME_AI_RAW_S3_BUCKET}" -le 63 ] || { echo 'invalid raw bucket length' >&2; exit 2; };
         mc alias set local http://minio:9000 "$${HOME_AI_MINIO_ROOT_USER}" "$${HOME_AI_MINIO_ROOT_PASSWORD}";
         mc mb --ignore-existing --with-lock "local/$${HOME_AI_RAW_S3_BUCKET}";
         mc version enable "local/$${HOME_AI_RAW_S3_BUCKET}";
         mc retention set --default GOVERNANCE 365d "local/$${HOME_AI_RAW_S3_BUCKET}";
         mc anonymous set none "local/$${HOME_AI_RAW_S3_BUCKET}";
         mc admin user add local "$${AWS_ACCESS_KEY_ID}" "$${AWS_SECRET_ACCESS_KEY}";
-        sed "s/__BUCKET__/$${HOME_AI_RAW_S3_BUCKET}/g" /config/ai-raw-importer-policy.template.json > /tmp/ai-raw-importer-policy.json;
+        printf '%s\n' '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject"],"Resource":["arn:aws:s3:::'"$${HOME_AI_RAW_S3_BUCKET}"'/raw/*"]}]}' > /tmp/ai-raw-importer-policy.json;
         mc admin policy create local home-ai-raw-importer /tmp/ai-raw-importer-policy.json;
         mc admin policy attach local home-ai-raw-importer --user "$${AWS_ACCESS_KEY_ID}"
-    volumes:
-      - ./minio/ai-raw-importer-policy.template.json:/config/ai-raw-importer-policy.template.json:ro
     networks:
       - home-search-local
 

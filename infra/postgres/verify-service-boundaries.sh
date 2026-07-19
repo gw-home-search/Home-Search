@@ -44,6 +44,13 @@ if grep -Fq 'MINIO_ROOT_USER="$${AWS_ACCESS_KEY_ID}"' "${compose_file}"; then
   echo "ERROR: MinIO root and importer credentials must be separated" >&2
   exit 1
 fi
+for minio_service in minio minio-init; do
+  minio_section="$(sed -n "/^  ${minio_service}:/,/^  [a-zA-Z0-9_-]*:/p" "${compose_file}")"
+  if grep -Fq 'env_file:' <<<"${minio_section}"; then
+    echo "ERROR: ${minio_service} must not receive the complete AI env file" >&2
+    exit 1
+  fi
+done
 if [[ ! -f "${minio_importer_policy}" ]] \
   || ! grep -Fq '"s3:GetObject"' "${minio_importer_policy}" \
   || ! grep -Fq '"s3:PutObject"' "${minio_importer_policy}" \

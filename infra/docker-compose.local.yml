@@ -52,8 +52,9 @@ services:
     image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
     container_name: home-search-ai-raw-minio
     restart: unless-stopped
-    env_file:
-      - ../apps/ai/.env
+    environment:
+      HOME_AI_MINIO_ROOT_USER: ${HOME_AI_MINIO_ROOT_USER:?Set HOME_AI_MINIO_ROOT_USER}
+      HOME_AI_MINIO_ROOT_PASSWORD: ${HOME_AI_MINIO_ROOT_PASSWORD:?Set HOME_AI_MINIO_ROOT_PASSWORD}
     entrypoint: [ "/bin/sh", "-ec" ]
     command:
       - >-
@@ -78,8 +79,12 @@ services:
     image: minio/mc:RELEASE.2025-04-16T18-13-26Z
     container_name: home-search-ai-raw-minio-init
     restart: "no"
-    env_file:
-      - ../apps/ai/.env
+    environment:
+      HOME_AI_MINIO_ROOT_USER: ${HOME_AI_MINIO_ROOT_USER:?Set HOME_AI_MINIO_ROOT_USER}
+      HOME_AI_MINIO_ROOT_PASSWORD: ${HOME_AI_MINIO_ROOT_PASSWORD:?Set HOME_AI_MINIO_ROOT_PASSWORD}
+      HOME_AI_RAW_S3_BUCKET: ${HOME_AI_RAW_S3_BUCKET:?Set HOME_AI_RAW_S3_BUCKET}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?Set AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?Set AWS_SECRET_ACCESS_KEY}
     depends_on:
       minio:
         condition: service_healthy

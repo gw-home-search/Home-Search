@@ -20,7 +20,11 @@ cat >"$tmp_dir/bin/docker" <<'SH'
 set -euo pipefail
 printf '%s\n' "$*" >>"$REFERENCE_REFRESH_TEST_DOCKER_LOG"
 if [[ "${1:-}" == "inspect" ]]; then
-    printf '%s\n' 'home-search-local_home-search-local'
+    if [[ "$*" == *'.State.Status'* ]]; then
+        printf '%s\n' 'running|healthy'
+    else
+        printf '%s\n' 'home-search-local_home-search-local'
+    fi
     exit 0
 fi
 if [[ " $* " == *' home-ai-school-location-ingest '* ]]; then
@@ -75,6 +79,7 @@ grep -Fq '상태: Pass' <<<"$output"
 grep -Fq 'sourceId: edu.school-location' <<<"$output"
 grep -Fq 'rejectedRowCount: 0' <<<"$output"
 grep -Fq 'build --tag home-search-ai:local' "$docker_log"
+grep -Fq 'exec --env AI_DATA_MIGRATOR_DB_PASSWORD --env AI_DATA_IMPORTER_DB_PASSWORD --env AI_DATA_RUNTIME_DB_PASSWORD --env AI_DATABASE_ONLY -i home-search-postgis bash -s' "$docker_log"
 grep -Fq 'up -d --wait minio' "$docker_log"
 grep -Fq 'run --rm minio-init' "$docker_log"
 if grep -Fq -- '--env-file' "$docker_log"; then
@@ -86,6 +91,13 @@ grep -Fq 'home-ai-migrate' "$docker_log"
 grep -Fq -- '--env HOME_AI_IMPORTER_DSN' "$docker_log"
 grep -Fq -- '--env HOME_AI_DATA_GO_KR_SERVICE_KEY' "$docker_log"
 grep -Fq 'home-ai-school-location-ingest' "$docker_log"
+
+bootstrap_line="$(grep -n -F 'exec --env AI_DATA_MIGRATOR_DB_PASSWORD' "$docker_log" | cut -d: -f1)"
+migration_line="$(grep -n -F 'home-ai-migrate' "$docker_log" | cut -d: -f1)"
+[[ "$bootstrap_line" -lt "$migration_line" ]] || {
+    echo '상태: Fail - AI DB role bootstrap이 migration보다 먼저 실행되지 않았습니다.' >&2
+    exit 1
+}
 
 if grep -Eq 'fixture-secret|provider-fixture|migrator-fixture|importer-fixture|runtime-fixture' \
     <<<"$output"; then

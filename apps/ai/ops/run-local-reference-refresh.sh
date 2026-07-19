@@ -6,6 +6,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ai_root="$(cd "${script_dir}/.." && pwd)"
 repo_root="$(cd "${ai_root}/../.." && pwd)"
 compose_file="${repo_root}/infra/docker-compose.local.yml"
+ai_database_bootstrap="${repo_root}/infra/postgres/bootstrap-ai-database.sh"
 property_vars_file="${HOME_AI_REFERENCE_PROPERTY_VARS_FILE:-${repo_root}/apps/property-data/.env}"
 ai_vars_file="${HOME_AI_REFERENCE_AI_VARS_FILE:-${ai_root}/.env}"
 image="home-search-ai:local"
@@ -71,9 +72,12 @@ read_value() {
 require_vars_file "$property_vars_file" property
 require_vars_file "$ai_vars_file" AI
 command -v docker >/dev/null 2>&1 || reject_configuration "docker 명령을 찾을 수 없습니다."
+[[ -x "$ai_database_bootstrap" ]] \
+    || reject_configuration "AI DB role bootstrap 실행 파일을 찾을 수 없습니다."
 
 ai_data_migrator_password="$(read_value "$property_vars_file" AI_DATA_MIGRATOR_DB_PASSWORD)"
 ai_data_importer_password="$(read_value "$property_vars_file" AI_DATA_IMPORTER_DB_PASSWORD)"
+ai_data_runtime_password="$(read_value "$property_vars_file" AI_DATA_RUNTIME_DB_PASSWORD)"
 minio_root_user="$(read_value "$ai_vars_file" HOME_AI_MINIO_ROOT_USER)"
 minio_root_password="$(read_value "$ai_vars_file" HOME_AI_MINIO_ROOT_PASSWORD)"
 aws_access_key_id="$(read_value "$ai_vars_file" AWS_ACCESS_KEY_ID)"
@@ -86,6 +90,7 @@ data_go_kr_service_key="$(read_value "$ai_vars_file" HOME_AI_DATA_GO_KR_SERVICE_
 
 if ! AI_MIGRATOR_PASSWORD="$ai_data_migrator_password" \
     AI_IMPORTER_PASSWORD="$ai_data_importer_password" \
+    AI_RUNTIME_PASSWORD="$ai_data_runtime_password" \
     MINIO_ROOT_USER_VALUE="$minio_root_user" \
     MINIO_ROOT_PASSWORD_VALUE="$minio_root_password" \
     AWS_ACCESS_KEY_VALUE="$aws_access_key_id" \
@@ -112,6 +117,7 @@ def secret(name: str, maximum: int) -> bool:
 valid = (
     secret("AI_MIGRATOR_PASSWORD", 512)
     and secret("AI_IMPORTER_PASSWORD", 512)
+    and secret("AI_RUNTIME_PASSWORD", 512)
     and secret("MINIO_ROOT_USER_VALUE", 128)
     and secret("MINIO_ROOT_PASSWORD_VALUE", 512)
     and secret("AWS_ACCESS_KEY_VALUE", 128)
@@ -142,6 +148,13 @@ PY
 )"
 home_ai_migrator_dsn="${dsn_values%%$'\n'*}"
 home_ai_importer_dsn="${dsn_values#*$'\n'}"
+
+if ! AI_DATA_MIGRATOR_DB_PASSWORD="$ai_data_migrator_password" \
+    AI_DATA_IMPORTER_DB_PASSWORD="$ai_data_importer_password" \
+    AI_DATA_RUNTIME_DB_PASSWORD="$ai_data_runtime_password" \
+    "$ai_database_bootstrap" >/dev/null; then
+    reject_runtime "AI DB role bootstrap에 실패했습니다."
+fi
 
 docker build --tag "$image" "$ai_root" >/dev/null \
     || reject_runtime "AI importer image build에 실패했습니다."

@@ -1,0 +1,1 @@
+HTTP 200 application/json; sanitized NEIS page fixture without phone or tuition

@@ -1,0 +1,6 @@
+== Raw-first lifecycle
+
+`source contract -> secure temp artifact -> deterministic ZIP -> verified S3 object -> acquisition -> normalized spool -> validate -> atomic publication -> active pointer` 순서를 지킨다.
+
+S3 `HEAD` checksum과 byte length 검증 전에는 acquisition과 staging을 시작하지 않는다.
+`NoChange` acquisition은 staging하지 않으며, 실패 snapshot은 이전 active pointer를 유지한다.

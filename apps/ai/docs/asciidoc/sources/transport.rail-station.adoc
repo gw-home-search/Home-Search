@@ -1,0 +1,8 @@
+== transport.rail-station
+
+KRIC landing은 release 검토용이다. 고정된 실제 XLSX URL이 없으면 readiness는 `Partial`이다.
+
+include::{snippets}/transport.rail-station/download-request.adoc[]
+include::{snippets}/transport.rail-station/response-headers.adoc[]
+include::{snippets}/transport.rail-station/source-columns.adoc[]
+include::{snippets}/transport.rail-station/failure-codes.adoc[]

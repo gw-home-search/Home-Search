@@ -1,0 +1,8 @@
+== retail.large-store
+
+EPSG:5174 좌표를 WGS84로 변환한다. provider 행정코드 매핑이 검증되기 전에는 확정 0건을 주장하지 않는다.
+
+include::{snippets}/retail.large-store/download-request.adoc[]
+include::{snippets}/retail.large-store/response-headers.adoc[]
+include::{snippets}/retail.large-store/source-columns.adoc[]
+include::{snippets}/retail.large-store/failure-codes.adoc[]

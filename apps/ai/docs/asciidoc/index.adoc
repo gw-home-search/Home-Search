@@ -1,0 +1,16 @@
+= Home Search AI Reference Contracts
+:toc: left
+:sectanchors:
+
+== 목적과 대상
+
+이 문서는 reference importer 운영자와 grounded capability reviewer를 위한 문서다.
+근거 등급은 active snapshot의 품질 검증을 통과한 뒤에만 부여한다.
+
+include::lifecycle.adoc[]
+include::operations.adoc[]
+include::sources/edu.school-location.adoc[]
+include::sources/edu.academy-registry.adoc[]
+include::sources/place.sbiz-academy.adoc[]
+include::sources/retail.large-store.adoc[]
+include::sources/transport.rail-station.adoc[]

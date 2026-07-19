@@ -1,0 +1,8 @@
+== place.sbiz-academy
+
+tracked taxonomy fingerprint와 교육업종 소분류 allowlist가 일치할 때만 게시한다.
+
+include::{snippets}/place.sbiz-academy/http-request.adoc[]
+include::{snippets}/place.sbiz-academy/request-parameters.adoc[]
+include::{snippets}/place.sbiz-academy/normalization-fields.adoc[]
+include::{snippets}/place.sbiz-academy/failure-codes.adoc[]

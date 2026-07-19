@@ -1,0 +1,8 @@
+== edu.academy-registry
+
+17개 교육청 `acaInsTiInfo` page를 완전 수집한다. 전화번호와 교습비는 normalized projection에서 제외한다.
+
+include::{snippets}/edu.academy-registry/http-request.adoc[]
+include::{snippets}/edu.academy-registry/request-parameters.adoc[]
+include::{snippets}/edu.academy-registry/normalization-fields.adoc[]
+include::{snippets}/edu.academy-registry/failure-codes.adoc[]

@@ -4,9 +4,11 @@ import hashlib
 import io
 import json
 import re
+import shutil
 import zipfile
 from dataclasses import dataclass
 from datetime import date, datetime
+from pathlib import Path
 
 from .validation import RawPayloadError
 
@@ -20,6 +22,21 @@ class BundleArtifact:
     extension: str
     media_type: str
     content: bytes
+
+
+@dataclass(frozen=True)
+class FileBundleArtifact:
+    logical_name: str
+    extension: str
+    media_type: str
+    path: Path
+
+
+@dataclass(frozen=True)
+class PreparedBundle:
+    path: Path
+    byte_length: int
+    checksum: str
 
 
 @dataclass(frozen=True)
@@ -86,6 +103,66 @@ def build_deterministic_bundle(
         for name, content in entries:
             _write(archive, name, content)
     return output.getvalue()
+
+
+def build_deterministic_bundle_file(
+    *,
+    source_id: str,
+    endpoint_path: str,
+    artifacts: tuple[FileBundleArtifact, ...],
+    temporal_value: date | datetime | None,
+    target: Path,
+    complete: bool = True,
+) -> PreparedBundle:
+    if not artifacts or not endpoint_path.startswith("/"):
+        raise ValueError("bundle artifacts and endpoint path are required")
+    target_metadata = target.lstat()
+    if target.is_symlink() or not target.is_file() or target_metadata.st_mode & 0o077:
+        raise ValueError("bundle target must be an owner-only regular file")
+    manifest: dict[str, object] = {
+        "bundleSchemaVersion": 1,
+        "sourceId": source_id,
+        "complete": complete,
+        "endpointPath": endpoint_path,
+        "artifacts": [],
+    }
+    if temporal_value is not None:
+        key = "observedAt" if isinstance(temporal_value, datetime) else "sourceDate"
+        manifest[key] = temporal_value.isoformat()
+    entries: list[tuple[str, Path]] = []
+    for index, artifact in enumerate(artifacts, start=1):
+        _validate_artifact_metadata(
+            artifact.logical_name, artifact.extension, artifact.media_type
+        )
+        metadata = artifact.path.lstat()
+        if artifact.path.is_symlink() or not artifact.path.is_file():
+            raise ValueError("bundle artifact must be a regular file")
+        checksum = _file_sha256(artifact.path)
+        entry_name = f"artifacts/{index:04d}.{artifact.extension}"
+        entries.append((entry_name, artifact.path))
+        manifest["artifacts"].append(  # type: ignore[union-attr]
+            {
+                "logicalName": artifact.logical_name,
+                "mediaType": artifact.media_type,
+                "byteLength": metadata.st_size,
+                "sha256": checksum,
+            }
+        )
+    with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_STORED) as archive:
+        _write(
+            archive,
+            "manifest.json",
+            json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(),
+        )
+        for name, path in entries:
+            info = _zip_info(name)
+            with path.open("rb") as source, archive.open(info, "w") as destination:
+                shutil.copyfileobj(source, destination, length=1024 * 1024)
+    return PreparedBundle(
+        path=target,
+        byte_length=target.stat().st_size,
+        checksum=_file_sha256(target),
+    )
 
 
 def read_deterministic_bundle(
@@ -164,7 +241,29 @@ def read_deterministic_bundle(
 
 
 def _write(archive: zipfile.ZipFile, name: str, content: bytes) -> None:
+    info = _zip_info(name)
+    archive.writestr(info, content, compress_type=zipfile.ZIP_STORED)
+
+
+def _zip_info(name: str) -> zipfile.ZipInfo:
     info = zipfile.ZipInfo(name, date_time=_FIXED_TIMESTAMP)
     info.compress_type = zipfile.ZIP_STORED
     info.external_attr = 0o600 << 16
-    archive.writestr(info, content, compress_type=zipfile.ZIP_STORED)
+    return info
+
+
+def _validate_artifact_metadata(logical_name: str, extension: str, media_type: str) -> None:
+    if (
+        not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,99}", logical_name)
+        or not re.fullmatch(r"[a-z0-9]{1,10}", extension)
+        or not media_type.strip()
+    ):
+        raise ValueError("bundle artifact metadata is invalid")
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()

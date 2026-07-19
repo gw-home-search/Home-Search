@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import json
+import stat
 import zipfile
 from datetime import date
 
@@ -9,9 +11,12 @@ import pytest
 
 from ai_service.datasets.bundle import (
     BundleArtifact,
+    FileBundleArtifact,
     build_deterministic_bundle,
+    build_deterministic_bundle_file,
     read_deterministic_bundle,
 )
+from ai_service.datasets.secure_temp import SecureTempWorkspace
 from ai_service.datasets.validation import RawPayloadError
 
 
@@ -106,3 +111,36 @@ def test_bundle_reader_rejects_artifact_checksum_mismatch() -> None:
         )
 
     assert error.value.reason_code == "BUNDLE_CHECKSUM_MISMATCH"
+
+
+def test_file_bundle_matches_bytes_bundle_without_loading_artifact(tmp_path) -> None:
+    artifact_content = b'{"rows":[{"id":"one"}]}'
+    expected = build_deterministic_bundle(
+        source_id="fixture.source",
+        endpoint_path="/fixture",
+        artifacts=(
+            BundleArtifact("page-000001", "json", "application/json", artifact_content),
+        ),
+        temporal_value=date(2026, 7, 20),
+    )
+    source = tmp_path / "page.json"
+    source.write_bytes(artifact_content)
+
+    with SecureTempWorkspace(required_free_bytes=len(artifact_content) * 2) as workspace:
+        target = workspace.create_file("bundle.zip")
+        prepared = build_deterministic_bundle_file(
+            source_id="fixture.source",
+            endpoint_path="/fixture",
+            artifacts=(
+                FileBundleArtifact(
+                    "page-000001", "json", "application/json", source
+                ),
+            ),
+            temporal_value=date(2026, 7, 20),
+            target=target,
+        )
+
+        assert target.read_bytes() == expected
+        assert prepared.byte_length == len(expected)
+        assert prepared.checksum == hashlib.sha256(expected).hexdigest()
+        assert stat.S_IMODE(target.stat().st_mode) == 0o600

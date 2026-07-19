@@ -3,8 +3,10 @@ from __future__ import annotations
 import base64
 import hashlib
 import re
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlsplit
 
@@ -45,23 +47,74 @@ class S3RawObjectStore:
         content: bytes,
         content_type: str,
     ) -> StoredRawObject:
-        if not re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", source_id):
-            raise ValueError("source ID is invalid")
-        if not re.fullmatch(r"[0-9a-f]{64}", checksum):
-            raise ValueError("raw checksum must be lowercase SHA-256")
+        _validate_upload_identity(source_id, checksum, content_type)
         actual_checksum = hashlib.sha256(content).hexdigest()
         if actual_checksum != checksum:
             raise RawObjectIntegrityError("raw content checksum does not match")
-        if not content_type.strip() or len(content_type) > 100:
-            raise ValueError("raw content type is invalid")
+        return self._upload_and_verify(
+            source_id=source_id,
+            checksum=checksum,
+            body=content,
+            byte_length=len(content),
+            content_type=content_type,
+        )
 
+    def put_verified_file(
+        self,
+        *,
+        source_id: str,
+        checksum: str,
+        path: Path,
+        byte_length: int,
+        content_type: str,
+    ) -> StoredRawObject:
+        _validate_upload_identity(source_id, checksum, content_type)
+        try:
+            metadata = path.lstat()
+        except OSError as exception:
+            raise ValueError("raw artifact file is unavailable") from exception
+        if not path.is_file() or path.is_symlink() or metadata.st_size != byte_length:
+            raise ValueError("raw artifact file metadata is invalid")
+        if metadata.st_mode & 0o077:
+            raise ValueError("raw artifact file permissions must be owner-only")
+        actual_checksum = _file_checksum(path)
+        if actual_checksum != checksum:
+            raise RawObjectIntegrityError("raw content checksum does not match")
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags)
+        try:
+            with os.fdopen(descriptor, "rb") as body:
+                return self._upload_and_verify(
+                    source_id=source_id,
+                    checksum=checksum,
+                    body=body,
+                    byte_length=byte_length,
+                    content_type=content_type,
+                )
+        except Exception:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+            raise
+
+    def _upload_and_verify(
+        self,
+        *,
+        source_id: str,
+        checksum: str,
+        body: object,
+        byte_length: int,
+        content_type: str,
+    ) -> StoredRawObject:
         key = f"{self._prefix}/v1/{source_id}/{checksum[:2]}/{checksum}.zip"
         checksum_base64 = base64.b64encode(bytes.fromhex(checksum)).decode("ascii")
         try:
             response = self._client.put_object(
                 Bucket=self._bucket,
                 Key=key,
-                Body=content,
+                Body=body,
+                ContentLength=byte_length,
                 ContentType=content_type,
                 ChecksumAlgorithm="SHA256",
                 ChecksumSHA256=checksum_base64,
@@ -84,7 +137,7 @@ class S3RawObjectStore:
         if (
             head_checksum != checksum_base64
             or not isinstance(head_length, int)
-            or head_length != len(content)
+            or head_length != byte_length
             or (version_id is not None and head_version != version_id)
         ):
             raise RawObjectIntegrityError("S3 raw object verification failed")
@@ -93,9 +146,26 @@ class S3RawObjectStore:
             object_key=key,
             object_version_id=head_version or version_id,
             content_type=content_type,
-            byte_length=len(content),
+            byte_length=byte_length,
             checksum=checksum,
         )
+
+
+def _validate_upload_identity(source_id: str, checksum: str, content_type: str) -> None:
+    if not re.fullmatch(r"[a-z0-9]+(?:[.-][a-z0-9]+)*", source_id):
+        raise ValueError("source ID is invalid")
+    if not re.fullmatch(r"[0-9a-f]{64}", checksum):
+        raise ValueError("raw checksum must be lowercase SHA-256")
+    if not content_type.strip() or len(content_type) > 100:
+        raise ValueError("raw content type is invalid")
+
+
+def _file_checksum(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def s3_raw_store_from_environment(environment: Mapping[str, str]) -> S3RawObjectStore:

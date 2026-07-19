@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+from pathlib import Path
 
 import pytest
 
@@ -63,6 +64,83 @@ def test_s3_store_uses_content_addressed_key_and_verifies_head() -> None:
     assert stored.object_key == f"raw/v1/edu.school-location/{checksum[:2]}/{checksum}.zip"
     assert stored.object_version_id == "version-1"
     assert client.put_calls[0]["ChecksumSHA256"]
+
+
+class StreamingS3Client:
+    def __init__(self) -> None:
+        self.body_type: type[object] | None = None
+        self.content = b""
+
+    def put_object(self, **kwargs):
+        body = kwargs["Body"]
+        self.body_type = type(body)
+        self.content = body.read()
+        return {"VersionId": "stream-version"}
+
+    def head_object(self, **_kwargs):
+        return {
+            "ContentLength": len(self.content),
+            "ChecksumSHA256": __import__("base64").b64encode(
+                sha256(self.content).digest()
+            ).decode(),
+            "VersionId": "stream-version",
+        }
+
+
+def test_s3_store_uploads_verified_file_without_materializing_bytes(tmp_path: Path) -> None:
+    content = b"streamed-deterministic-bundle" * 1024
+    artifact = tmp_path / "bundle.zip"
+    artifact.write_bytes(content)
+    artifact.chmod(0o600)
+    client = StreamingS3Client()
+    store = S3RawObjectStore(client=client, bucket="private-raw", prefix="raw")
+
+    stored = store.put_verified_file(
+        source_id="edu.school-location",
+        checksum=sha256(content).hexdigest(),
+        path=artifact,
+        byte_length=len(content),
+        content_type="application/zip",
+    )
+
+    assert client.body_type is not bytes
+    assert client.content == content
+    assert stored.byte_length == len(content)
+
+
+def test_s3_store_rejects_unsafe_or_mismatched_file_before_upload(tmp_path: Path) -> None:
+    store = S3RawObjectStore(client=StreamingS3Client(), bucket="private-raw", prefix="raw")
+    missing = tmp_path / "missing.zip"
+    with pytest.raises(ValueError, match="unavailable"):
+        store.put_verified_file(
+            source_id="fixture.source",
+            checksum=sha256(b"").hexdigest(),
+            path=missing,
+            byte_length=0,
+            content_type="application/zip",
+        )
+
+    artifact = tmp_path / "bundle.zip"
+    artifact.write_bytes(b"bundle")
+    artifact.chmod(0o644)
+    with pytest.raises(ValueError, match="owner-only"):
+        store.put_verified_file(
+            source_id="fixture.source",
+            checksum=sha256(b"bundle").hexdigest(),
+            path=artifact,
+            byte_length=len(b"bundle"),
+            content_type="application/zip",
+        )
+
+    artifact.chmod(0o600)
+    with pytest.raises(RawObjectIntegrityError, match="does not match"):
+        store.put_verified_file(
+            source_id="fixture.source",
+            checksum=sha256(b"other").hexdigest(),
+            path=artifact,
+            byte_length=len(b"bundle"),
+            content_type="application/zip",
+        )
 
 
 def test_s3_store_rejects_head_mismatch_before_metadata_can_be_registered() -> None:

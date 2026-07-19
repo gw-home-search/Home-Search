@@ -10,7 +10,7 @@ import psycopg
 from psycopg.conninfo import conninfo_to_dict
 
 from .models import LifecycleResult
-from .postgres import PostgresDatasetRepository
+from .postgres import PostgresDatasetRepository, SourceRefreshAlreadyRunning
 from .school_location import SchoolLocationAdapter, school_location_source_contract
 from .school_location_client import SchoolLocationApiClient, SchoolLocationApiError
 from .service import DatasetLifecycleService
@@ -108,6 +108,16 @@ def ingest_from_environment(
             finished_at=clock(),
         )
         raise
+    except SourceRefreshAlreadyRunning:
+        repository.finish_refresh_run(
+            refresh_run_id=refresh_run_id,
+            source_id=contract.source_id,
+            acquisition_id=None,
+            status="FAIL",
+            reason_codes=("SOURCE_REFRESH_ALREADY_RUNNING",),
+            finished_at=clock(),
+        )
+        raise
     except Exception:
         repository.finish_refresh_run(
             refresh_run_id=refresh_run_id,
@@ -150,6 +160,9 @@ def main() -> None:
         raise SystemExit(2) from None
     except SchoolLocationApiError as exception:
         _print_failure(exception.reason_code)
+        raise SystemExit(1) from None
+    except SourceRefreshAlreadyRunning:
+        _print_failure("SOURCE_REFRESH_ALREADY_RUNNING")
         raise SystemExit(1) from None
     except Exception:
         _print_failure("INGEST_FAILED")

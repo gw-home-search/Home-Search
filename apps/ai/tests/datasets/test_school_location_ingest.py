@@ -7,6 +7,7 @@ from uuid import UUID
 import pytest
 
 from ai_service.datasets.models import AcquisitionRecord, LifecycleResult
+from ai_service.datasets.postgres import SourceRefreshAlreadyRunning
 from ai_service.datasets.school_location_client import (
     CollectedSchoolBundle,
     SchoolLocationApiError,
@@ -182,6 +183,18 @@ class RefreshEvidenceRepository:
         self.closed = True
 
 
+class ConcurrentRefreshRepository(RefreshEvidenceRepository):
+    def source_lock(self, _source_id: str):
+        class RejectedLock:
+            def __enter__(self):
+                raise SourceRefreshAlreadyRunning("SOURCE_REFRESH_ALREADY_RUNNING")
+
+            def __exit__(self, *_args) -> None:
+                return None
+
+        return RejectedLock()
+
+
 def _raw_store_factory(_environment):
     return VerifiedRawStore()
 
@@ -236,6 +249,24 @@ def test_unexpected_failure_records_only_generic_reason() -> None:
     assert acquisition_id is None
     assert status == "FAIL"
     assert reason_codes == ("INGEST_FAILED",)
+
+
+def test_concurrent_refresh_records_stable_reason_code() -> None:
+    repository = ConcurrentRefreshRepository()
+
+    with pytest.raises(SourceRefreshAlreadyRunning):
+        ingest_from_environment(
+            _environment(),
+            repository_factory=lambda _dsn: repository,  # type: ignore[arg-type]
+            client_factory=NeverCalled,
+            raw_store_factory=_raw_store_factory,  # type: ignore[arg-type]
+            today=lambda: date(2026, 7, 19),
+        )
+
+    acquisition_id, status, reason_codes, _finished_at = repository.events[1][1]
+    assert acquisition_id is None
+    assert status == "FAIL"
+    assert reason_codes == ("SOURCE_REFRESH_ALREADY_RUNNING",)
 
 
 @pytest.mark.parametrize("missing_name", ["HOME_AI_RAW_S3_BUCKET", "HOME_AI_RAW_S3_PREFIX"])
@@ -338,3 +369,19 @@ def test_main_preserves_allowlisted_provider_failure_reason(monkeypatch, capsys)
     assert provider_exit.value.code == 1
     assert "reasonCodes: API_AUTHENTICATION_FAILED" in output
     assert "INGEST_FAILED" not in output
+
+
+def test_main_preserves_concurrent_refresh_reason(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(
+        "ai_service.datasets.school_location_ingest.ingest_from_environment",
+        lambda _environment: (_ for _ in ()).throw(
+            SourceRefreshAlreadyRunning("SOURCE_REFRESH_ALREADY_RUNNING")
+        ),
+    )
+
+    with pytest.raises(SystemExit) as concurrent_exit:
+        main()
+
+    output = capsys.readouterr().out
+    assert concurrent_exit.value.code == 1
+    assert "reasonCodes: SOURCE_REFRESH_ALREADY_RUNNING" in output

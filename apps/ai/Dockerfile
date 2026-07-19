@@ -19,6 +19,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY --chown=home-ai:home-ai ai_service ./ai_service
 COPY --chown=home-ai:home-ai config ./config
+RUN uv sync --frozen --no-dev
 
 USER home-ai
 EXPOSE 8000

@@ -61,6 +61,7 @@ chmod 600 "$property_vars" "$ai_vars"
     exit 1
 }
 grep -Fq 'COPY --chown=home-ai:home-ai config ./config' "$dockerfile"
+grep -Fxq 'RUN uv sync --frozen --no-dev' "$dockerfile"
 
 output="$(
     PATH="$tmp_dir/bin:$PATH" \

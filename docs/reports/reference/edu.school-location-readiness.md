@@ -30,6 +30,9 @@
   `AI DB role bootstrap → MinIO → migration → importer` 실행 순서 테스트 통과
 - 첫 page provider 실패가 allowlist reason code만 출력하고 key, query URL,
   provider body를 출력하지 않는 회귀 테스트와 실제 실행 확인
+- 실제 첫 page transport 실패가 `dataset_refresh_run=FAIL`,
+  `dataset_refresh_run_item=FAIL`, `acquisition_id=NULL`,
+  `reason_codes={API_TRANSPORT_FAILED}`로 기록됨을 직접 SQL로 확인
 
 ## 검증 공백
 
@@ -40,8 +43,7 @@
   페이지는 수정일 `2026-05-06`, 표본 데이터 기준일 `2026-03-20`으로 계속
   제공 중이므로 source contract를 임의 변경하지 않고 provider 복구 뒤 재시도한다.
 - 첫 page 이전 실패라 raw object, acquisition, publication은 생성되지 않았다.
-  이 실패를 `dataset_refresh_run_item`에 남기는 generic refresh 운영 근거는 아직
-  school CLI wrapper에 연결되지 않았다.
+  실제 SQL에서 학교 acquisition과 publication이 각각 `0`임을 확인했다.
 - test engine 기반 signed JWT JSON/SSE E2E는 통과했지만 실제 학교 observation과
   LLM을 사용하는 live golden, 대표 공간 query 20회 p95 측정은 미완료다.
 

@@ -28,7 +28,7 @@ from .models import (
     DraftClaim,
     DraftSentence,
     EvidenceFact,
-    PropertyQueryPlan,
+    QueryPlan,
 )
 from .openai_responses import OpenAIResponsesError
 from .postgres import PostgresPropertyFactRepository
@@ -52,7 +52,7 @@ class GoldenValidationError(ValueError):
 class GoldenCase:
     case_id: str
     question: str
-    plan: PropertyQueryPlan
+    plan: QueryPlan
     expected_readiness: Readiness
 
     def __post_init__(self) -> None:
@@ -85,10 +85,10 @@ class _ExpectedObservation:
 
 
 class ReplayGoldenLanguageModel:
-    def __init__(self, plan: PropertyQueryPlan) -> None:
+    def __init__(self, plan: QueryPlan) -> None:
         self._plan = plan
 
-    async def plan_query(self, _request: ChatbotQueryRequest) -> PropertyQueryPlan:
+    async def plan_query(self, _request: ChatbotQueryRequest) -> QueryPlan:
         return self._plan
 
     async def draft_answer(
@@ -256,7 +256,7 @@ def _parse_case(value: object) -> GoldenCase:
     return GoldenCase(
         case_id=value["caseId"],
         question=value["question"],
-        plan=PropertyQueryPlan(
+        plan=QueryPlan(
             capability=capability,  # type: ignore[arg-type]
             complex_name=complex_name,
             region_name=region_name,
@@ -279,7 +279,7 @@ def _optional_date(value: object) -> date | None:
 
 def _expected_observation(
     repository: PropertyFactRepository,
-    plan: PropertyQueryPlan,
+    plan: QueryPlan,
 ) -> _ExpectedObservation:
     complexes = repository.find_complexes(plan.complex_name, plan.region_name, 6)
     if not complexes:
@@ -405,7 +405,12 @@ def _validate_response(
     expected_success = expected.readiness != "unavailable"
     if response.get("success") is not expected_success:
         raise GoldenValidationError("SUCCESS_MISMATCH")
-    if response.get("status") != ("success" if expected_success else "failed"):
+    expected_status = {
+        "supported": "success",
+        "partial": "partial_success",
+        "unavailable": "failed",
+    }[expected.readiness]
+    if response.get("status") != expected_status:
         raise GoldenValidationError("STATUS_MISMATCH")
     if not isinstance(response.get("answer"), str) or not str(response["answer"]).strip():
         raise GoldenValidationError("ANSWER_MISSING")

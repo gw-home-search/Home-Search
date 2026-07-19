@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Protocol
@@ -18,9 +18,14 @@ from .models import (
     FactClaim,
     MonthlyTrendRecord,
     PropertyCapability,
-    PropertyQueryPlan,
+    QueryPlan,
+    ReferenceCapability,
+    SchoolRecord,
+    SchoolSearchResult,
+    SchoolSnapshot,
     TradeRecord,
 )
+from .reference_facilities import FacilityFact, FacilitySearchResult
 
 
 class PropertyFactRepository(Protocol):
@@ -49,7 +54,7 @@ class PropertyFactRepository(Protocol):
 
 
 class GroundedLanguageModel(Protocol):
-    async def plan_query(self, request: ChatbotQueryRequest) -> PropertyQueryPlan: ...
+    async def plan_query(self, request: ChatbotQueryRequest) -> QueryPlan: ...
 
     async def draft_answer(
         self,
@@ -58,6 +63,35 @@ class GroundedLanguageModel(Protocol):
         limitations: list[str],
         question: str,
     ) -> DraftAnswer: ...
+
+
+class SchoolFactRepository(Protocol):
+    def active_snapshot(self) -> SchoolSnapshot | None: ...
+
+    def nearby_schools(
+        self,
+        *,
+        latitude: float,
+        longitude: float,
+        school_levels: tuple[str, ...],
+        radius_meters: int,
+        limit: int,
+    ) -> SchoolSearchResult: ...
+
+
+class PointFacilityFactRepository(Protocol):
+    def nearby(
+        self,
+        *,
+        source_id: str,
+        category: str,
+        latitude: float,
+        longitude: float,
+        radius_meters: int,
+        limit: int,
+        region_code: str,
+        subcategories: tuple[str, ...] = (),
+    ) -> FacilitySearchResult: ...
 
 
 _GROUNDING_FAILURE_REASONS = frozenset(
@@ -75,6 +109,10 @@ _GROUNDING_FAILURE_REASONS = frozenset(
         "GROUNDING_RESULT_COUNT_OR_LIST_NUMBER",
         "GROUNDING_AMOUNT_UNIT_CONVERSION",
         "GROUNDING_NUMBER_OUTSIDE_OBSERVATION",
+        "GROUNDING_SCHOOL_POLICY_VIOLATION",
+        "GROUNDING_SCHOOL_TEXT_OUTSIDE_OBSERVATION",
+        "GROUNDING_RETAIL_POLICY_VIOLATION",
+        "GROUNDING_RETAIL_TEXT_OUTSIDE_OBSERVATION",
     }
 )
 
@@ -96,10 +134,18 @@ class GroundedChatbotEngine:
         repository: PropertyFactRepository,
         language_model: GroundedLanguageModel,
         enabled_capabilities: frozenset[PropertyCapability],
+        school_repository: SchoolFactRepository | None = None,
+        point_facility_repository: PointFacilityFactRepository | None = None,
+        enabled_reference_capabilities: frozenset[ReferenceCapability] = frozenset(),
+        today: Callable[[], date] = date.today,
     ) -> None:
         self._repository = repository
+        self._school_repository = school_repository
+        self._point_facility_repository = point_facility_repository
         self._language_model = language_model
         self._enabled_capabilities = enabled_capabilities
+        self._enabled_reference_capabilities = enabled_reference_capabilities
+        self._today = today
 
     async def query(
         self,
@@ -111,7 +157,10 @@ class GroundedChatbotEngine:
         del user
         try:
             plan = await self._language_model.plan_query(request)
-            if plan.capability in self._enabled_capabilities:
+            if plan.capability in self._enabled_capabilities or (
+                plan.capability in {"school_location", "retail_location"}
+                and plan.capability in self._enabled_reference_capabilities
+            ):
                 facts, limitations, readiness = await self._observe(plan)
             else:
                 facts, limitations, readiness = (
@@ -124,7 +173,13 @@ class GroundedChatbotEngine:
                 limitations=limitations,
                 question=request.question,
             )
-            used_facts = validate_draft(draft, facts, readiness)
+            used_facts = validate_draft(
+                draft,
+                facts,
+                readiness,
+                limitations=limitations,
+                enforce_school_policy=plan.capability == "school_location",
+            )
             return _response(
                 request=request,
                 request_id=request_id,
@@ -140,7 +195,7 @@ class GroundedChatbotEngine:
             raise ChatbotProviderUnavailable() from exception
 
     async def _observe(
-        self, plan: PropertyQueryPlan
+        self, plan: QueryPlan
     ) -> tuple[list[EvidenceFact], list[str], str]:
         complexes = await asyncio.to_thread(
             self._repository.find_complexes,
@@ -162,6 +217,10 @@ class GroundedChatbotEngine:
             )
 
         complex_record = complexes[0]
+        if plan.capability == "school_location":
+            return await self._observe_schools(plan, complex_record)
+        if plan.capability == "retail_location":
+            return await self._observe_retail(plan, complex_record)
         if plan.capability == "complex_identity":
             limitations = []
             if not complex_record.marker_safe:
@@ -212,6 +271,121 @@ class GroundedChatbotEngine:
                 limitations.append("전용면적은 요청값 기준 ±1.0㎡ 범위로 집계했습니다.")
             return [_trend_fact(record, data_as_of) for record in trends], limitations, "supported"
         raise GroundingValidationError("GROUNDING_CAPABILITY_UNSUPPORTED")
+
+    async def _observe_schools(
+        self, plan: QueryPlan, complex_record: ComplexRecord
+    ) -> tuple[list[EvidenceFact], list[str], str]:
+        if not 100 <= plan.radius_meters <= 2000:
+            return (
+                [],
+                ["학교 검색 반경은 100m에서 2000m 사이로 지정해야 합니다."],
+                "unavailable",
+            )
+        if (
+            not complex_record.marker_safe
+            or complex_record.latitude is None
+            or complex_record.longitude is None
+        ):
+            return (
+                [],
+                ["검증된 단지 표시 좌표가 없어 주변 학교를 조회할 수 없습니다."],
+                "unavailable",
+            )
+        if self._school_repository is None:
+            return (
+                [],
+                ["공식 학교 위치 snapshot이 준비되지 않았습니다."],
+                "unavailable",
+            )
+        snapshot = await asyncio.to_thread(self._school_repository.active_snapshot)
+        if snapshot is None:
+            return (
+                [],
+                ["공식 학교 위치 active snapshot이 없습니다."],
+                "unavailable",
+            )
+        age_days = (self._today() - snapshot.source_date).days
+        if age_days < 0 or age_days > 214:
+            return (
+                [],
+                ["공식 학교 위치 snapshot의 기준일이 freshness 범위를 벗어났습니다."],
+                "unavailable",
+            )
+        result = await asyncio.to_thread(
+            self._school_repository.nearby_schools,
+            latitude=complex_record.latitude,
+            longitude=complex_record.longitude,
+            school_levels=plan.school_levels,
+            radius_meters=plan.radius_meters,
+            limit=plan.limit,
+        )
+        facts = [
+            _complex_fact(complex_record),
+            *(_school_fact(record, snapshot) for record in result.schools),
+            _school_scope_fact(plan, complex_record, result, snapshot),
+        ]
+        return (
+            facts,
+            [
+                "거리는 단지 표시 좌표 기준 직선거리이며 실제 보행 경로가 아닙니다.",
+                "통학구역 근거가 아니므로 배정학교를 의미하지 않습니다.",
+                "데이터 기준일 이후 학교 운영상태가 변경될 수 있습니다.",
+            ],
+            "supported",
+        )
+
+    async def _observe_retail(
+        self, plan: QueryPlan, complex_record: ComplexRecord
+    ) -> tuple[list[EvidenceFact], list[str], str]:
+        assert plan.radius_meters is not None
+        if not 100 <= plan.radius_meters <= 3000:
+            return (
+                [],
+                ["대규모점포 검색 반경은 100m에서 3000m 사이로 지정해야 합니다."],
+                "unavailable",
+            )
+        if (
+            not complex_record.marker_safe
+            or complex_record.latitude is None
+            or complex_record.longitude is None
+            or complex_record.region_code is None
+        ):
+            return (
+                [],
+                ["검증된 단지 좌표와 지역 코드가 없어 주변 대규모점포를 조회할 수 없습니다."],
+                "unavailable",
+            )
+        if self._point_facility_repository is None:
+            return (
+                [],
+                ["공식 대규모점포 active snapshot이 준비되지 않았습니다."],
+                "unavailable",
+            )
+        result = await asyncio.to_thread(
+            self._point_facility_repository.nearby,
+            source_id="retail.large-store",
+            category="RETAIL",
+            latitude=complex_record.latitude,
+            longitude=complex_record.longitude,
+            radius_meters=plan.radius_meters,
+            limit=plan.limit,
+            region_code=complex_record.region_code,
+            subcategories=plan.facility_subtypes,
+        )
+        facts = [
+            _complex_fact(complex_record),
+            *(_retail_fact(record) for record in result.facilities),
+            _retail_scope_fact(plan, complex_record, result),
+        ]
+        limitations = [
+            "거리는 단지 표시 좌표 기준 직선거리이며 실제 보행 경로가 아닙니다.",
+            "공식 snapshot 이후 운영상태가 변경될 수 있습니다.",
+        ]
+        if not result.facilities and not result.verified_zero:
+            limitations.append(
+                "좌표가 확인된 공식 자료의 결과이며 좌표가 없는 원장이 포함될 수 있어 시설이 전혀 없다고 단정할 수 없습니다."
+            )
+        return facts, limitations, "supported"
 
 
 def _complex_fact(record: ComplexRecord) -> EvidenceFact:
@@ -308,14 +482,178 @@ def _trend_fact(record: MonthlyTrendRecord, data_as_of: date) -> EvidenceFact:
     )
 
 
+def _school_fact(record: SchoolRecord, snapshot: SchoolSnapshot) -> EvidenceFact:
+    level_display = {
+        "ELEMENTARY": "초등학교",
+        "MIDDLE": "중학교",
+        "HIGH": "고등학교",
+    }[record.school_level]
+    address = record.road_address or record.lot_address
+    claims = [
+        FactClaim(record.school_id, "SCHOOL_ID"),
+        FactClaim(record.school_name, "TEXT"),
+        FactClaim(record.school_level, "SCHOOL_LEVEL"),
+        FactClaim(level_display, "SCHOOL_LEVEL_DISPLAY"),
+        FactClaim(record.operating_status, "OPERATING_STATUS"),
+        FactClaim(str(record.distance_meters), "METERS"),
+    ]
+    if address:
+        claims.append(FactClaim(address, "TEXT"))
+    return EvidenceFact(
+        fact_id=f"school-location-{record.school_id}",
+        claims=tuple(claims),
+        data_as_of=snapshot.source_date,
+        payload={
+            "schoolId": record.school_id,
+            "schoolName": record.school_name,
+            "schoolLevel": record.school_level,
+            "operatingStatus": record.operating_status,
+            "distanceMeters": record.distance_meters,
+            "address": address,
+            "datasetVersion": snapshot.dataset_version,
+            "dataAsOf": snapshot.source_date.isoformat(),
+        },
+        source_id="edu.school-location",
+        source_name="전국초중등학교위치표준데이터",
+        source_url="https://www.data.go.kr/data/15021148/standard.do",
+        evidence_grade="A",
+        dataset_version_value=snapshot.dataset_version,
+    )
+
+
+def _school_scope_fact(
+    plan: QueryPlan,
+    complex_record: ComplexRecord,
+    result: SchoolSearchResult,
+    snapshot: SchoolSnapshot,
+) -> EvidenceFact:
+    school_levels = ",".join(plan.school_levels)
+    return EvidenceFact(
+        fact_id=f"school-location-scope-{complex_record.complex_id}-{plan.radius_meters}",
+        claims=(
+            FactClaim(str(complex_record.complex_id), "COMPLEX_ID"),
+            FactClaim(str(plan.radius_meters), "RADIUS_METERS"),
+            FactClaim(school_levels, "SCHOOL_LEVELS"),
+            FactClaim(str(result.matched_count), "COUNT"),
+            FactClaim(str(result.returned_count), "RETURNED_COUNT"),
+            FactClaim(str(result.has_more).lower(), "BOOLEAN"),
+        ),
+        data_as_of=snapshot.source_date,
+        payload={
+            "complexId": complex_record.complex_id,
+            "radiusMeters": plan.radius_meters,
+            "schoolLevels": list(plan.school_levels),
+            "matchedCount": result.matched_count,
+            "returnedCount": result.returned_count,
+            "hasMore": result.has_more,
+        },
+        source_id="edu.school-location",
+        source_name="전국초중등학교위치표준데이터",
+        source_url="https://www.data.go.kr/data/15021148/standard.do",
+        evidence_grade="A",
+        dataset_version_value=snapshot.dataset_version,
+    )
+
+
+def _retail_fact(record: FacilityFact) -> EvidenceFact:
+    data_as_of = (
+        record.data_as_of.date()
+        if hasattr(record.data_as_of, "date") and not isinstance(record.data_as_of, date)
+        else record.data_as_of
+    )
+    claims = [
+        FactClaim(record.fact_id, "FACILITY_ID"),
+        FactClaim(record.name, "TEXT"),
+        FactClaim(record.category, "FACILITY_CATEGORY"),
+        FactClaim(record.status, "OPERATING_STATUS"),
+        FactClaim(str(record.distance_meters), "METERS"),
+    ]
+    if record.subcategory:
+        claims.append(FactClaim(record.subcategory, "FACILITY_SUBTYPE"))
+    if record.address:
+        claims.append(FactClaim(record.address, "TEXT"))
+    return EvidenceFact(
+        fact_id=f"reference-retail-{record.fact_id}",
+        claims=tuple(claims),
+        data_as_of=data_as_of,  # type: ignore[arg-type]
+        payload={
+            "factId": record.fact_id,
+            "facilityId": record.fact_id,
+            "facilityName": record.name,
+            "category": record.category,
+            "subcategory": record.subcategory,
+            "operatingStatus": record.status,
+            "distanceMeters": record.distance_meters,
+            "address": record.address,
+            "datasetVersion": record.dataset_version,
+            "dataAsOf": data_as_of.isoformat(),
+        },
+        source_id="retail.large-store",
+        source_name="전국대규모및준대규모점포표준데이터",
+        source_url="https://www.data.go.kr/data/15114138/standard.do",
+        evidence_grade="A",
+        dataset_version_value=record.dataset_version,
+    )
+
+
+def _retail_scope_fact(
+    plan: QueryPlan,
+    complex_record: ComplexRecord,
+    result: FacilitySearchResult,
+) -> EvidenceFact:
+    assert plan.radius_meters is not None
+    data_as_of = (
+        result.data_as_of.date()
+        if hasattr(result.data_as_of, "date") and not isinstance(result.data_as_of, date)
+        else result.data_as_of
+    )
+    subtypes = ",".join(plan.facility_subtypes)
+    claims = [
+        FactClaim(str(complex_record.complex_id), "COMPLEX_ID"),
+        FactClaim(str(plan.radius_meters), "RADIUS_METERS"),
+        FactClaim(subtypes or "ALL", "FACILITY_SUBTYPES"),
+        FactClaim(str(result.matched_count), "COUNT"),
+        FactClaim(str(result.returned_count), "RETURNED_COUNT"),
+        FactClaim(str(result.has_more).lower(), "BOOLEAN"),
+        FactClaim(str(result.verified_zero).lower(), "VERIFIED_ZERO"),
+    ]
+    if result.coordinate_coverage is not None:
+        claims.append(FactClaim(_number(result.coordinate_coverage), "COORDINATE_COVERAGE"))
+    return EvidenceFact(
+        fact_id=f"reference-retail-scope-{complex_record.complex_id}-{plan.radius_meters}",
+        claims=tuple(claims),
+        data_as_of=data_as_of,  # type: ignore[arg-type]
+        payload={
+            "complexId": complex_record.complex_id,
+            "radiusMeters": plan.radius_meters,
+            "requestedSubtypes": list(plan.facility_subtypes),
+            "matchedCount": result.matched_count,
+            "returnedCount": result.returned_count,
+            "hasMore": result.has_more,
+            "verifiedZero": result.verified_zero,
+            "coordinateCoverage": result.coordinate_coverage,
+        },
+        source_id="retail.large-store",
+        source_name="전국대규모및준대규모점포표준데이터",
+        source_url="https://www.data.go.kr/data/15114138/standard.do",
+        evidence_grade="A",
+        dataset_version_value=result.dataset_version,
+    )
+
+
 def validate_draft(
     draft: DraftAnswer,
     facts: list[EvidenceFact],
     readiness: str,
+    *,
+    limitations: list[str] | None = None,
+    enforce_school_policy: bool = False,
 ) -> list[EvidenceFact]:
     if not draft.sentences:
         raise GroundingValidationError("GROUNDING_ANSWER_EMPTY")
     fact_by_id = {fact.fact_id: fact for fact in facts}
+    school_facts = [fact for fact in facts if fact.source_id == "edu.school-location"]
+    retail_facts = [fact for fact in facts if fact.source_id == "retail.large-store"]
     used_ids: list[str] = []
     for sentence in draft.sentences:
         if not sentence.text.strip():
@@ -340,9 +678,15 @@ def validate_draft(
             fact = fact_by_id[claim.fact_id]
             if FactClaim(claim.value, claim.unit) not in fact.claims:
                 raise GroundingValidationError("GROUNDING_CLAIM_MISMATCH")
+        if school_facts or enforce_school_policy:
+            _validate_school_sentence(sentence.text, referenced)
+        if retail_facts:
+            _validate_retail_sentence(sentence.text, referenced)
         allowed_numbers = _number_tokens(
             claim.value for fact in referenced for claim in fact.claims
         )
+        if readiness == "unavailable" and limitations:
+            allowed_numbers.update(_number_tokens(limitations))
         unexpected_numbers = _number_tokens([sentence.text]) - allowed_numbers
         if unexpected_numbers:
             ordinal_candidates = {
@@ -368,7 +712,7 @@ def _response(
     *,
     request: ChatbotQueryRequest,
     request_id: str,
-    plan: PropertyQueryPlan,
+    plan: QueryPlan,
     draft: DraftAnswer,
     used_facts: list[EvidenceFact],
     limitations: list[str],
@@ -378,9 +722,12 @@ def _response(
     citations = _citations(used_facts)
     data_as_of = min((fact.data_as_of for fact in used_facts), default=None)
     success = readiness != "unavailable"
+    legacy_status = (
+        "failed" if readiness == "unavailable" else "partial_success" if readiness == "partial" else "success"
+    )
     return {
         "success": success,
-        "status": "success" if success else "failed",
+        "status": legacy_status,
         "question": request.question,
         "fragments": [],
         "result": {},
@@ -407,23 +754,80 @@ def _response(
 
 
 def _citations(facts: list[EvidenceFact]) -> list[dict[str, object]]:
-    grouped: dict[tuple[str, date], list[str]] = {}
+    grouped: dict[tuple[str, str, str | None, str, str, date], list[str]] = {}
     for fact in facts:
-        grouped.setdefault((fact.dataset_version, fact.data_as_of), []).append(fact.fact_id)
+        key = (
+            fact.source_id,
+            fact.source_name,
+            fact.source_url,
+            fact.evidence_grade,
+            fact.dataset_version,
+            fact.data_as_of,
+        )
+        grouped.setdefault(key, []).append(fact.fact_id)
     return [
         {
             "citationId": f"citation-{index}",
-            "sourceId": "property.ai_read",
-            "sourceName": "Home Search 실거래",
-            "sourceUrl": None,
-            "evidenceGrade": "A",
+            "sourceId": source_id,
+            "sourceName": source_name,
+            "sourceUrl": source_url,
+            "evidenceGrade": evidence_grade,
             "datasetVersion": version,
             "dataAsOf": data_as_of.isoformat(),
             "observedAt": None,
             "factIds": fact_ids,
         }
-        for index, ((version, data_as_of), fact_ids) in enumerate(grouped.items(), start=1)
+        for index, (
+            (source_id, source_name, source_url, evidence_grade, version, data_as_of),
+            fact_ids,
+        ) in enumerate(grouped.items(), start=1)
     ]
+
+
+def _validate_school_sentence(text: str, referenced: list[EvidenceFact]) -> None:
+    positive_assignment = "배정" in text and not re.search(
+        r"배정.{0,30}(?:의미하지|아니|않|근거가 없|확인할 수 없|판단할 수 없|알 수 없)",
+        text,
+    )
+    positive_attendance_zone = "통학구역" in text and not re.search(
+        r"통학구역.{0,30}(?:아니|근거가 없|확인할 수 없|판단할 수 없|알 수 없)",
+        text,
+    )
+    if positive_assignment or positive_attendance_zone or re.search(
+        r"통학시간은|(?:도보|통학)\s*(?:거리|시간|\d+\s*분)|걸어서|초품아(?:입니다|이며|라고)|명문(?:입니다|학교)|좋은\s*학교|교육\s*수준(?:이)?\s*(?:높|좋)|진학(?:이)?\s*(?:가능|보장)|폐교|휴교|운영\s*중단|개교\s*예정|(?:새로운|신규)\s*학교(?:가|는)?\s*(?:더\s*)?없",
+        text,
+    ):
+        raise GroundingValidationError("GROUNDING_SCHOOL_POLICY_VIOLATION")
+    observed_text = {
+        claim.value
+        for fact in referenced
+        for claim in fact.claims
+        if claim.unit in {"TEXT", "SCHOOL_LEVEL_DISPLAY"}
+    }
+    for school_name in re.findall(r"[가-힣A-Za-z0-9]+(?:초등학교|중학교|고등학교)", text):
+        if school_name not in observed_text:
+            raise GroundingValidationError("GROUNDING_SCHOOL_TEXT_OUTSIDE_OBSERVATION")
+
+
+def _validate_retail_sentence(text: str, referenced: list[EvidenceFact]) -> None:
+    if re.search(
+        r"(?:생활권|학군|투자가치|투자s*가치|추천|살기s*좋|상권).{0,20}(?:좋|높|우수|편리|가치|추천)|"
+        r"(?:좋|높|우수|편리)\S*.{0,20}(?:생활권|학군|투자가치|상권)|"
+        r"폐업|휴업|영업\s*중단|신규\s*(?:시설|점포).{0,20}(?:없|아니)",
+        text,
+    ):
+        raise GroundingValidationError("GROUNDING_RETAIL_POLICY_VIOLATION")
+    observed_text = {
+        claim.value
+        for fact in referenced
+        for claim in fact.claims
+        if claim.unit == "TEXT"
+    }
+    for facility_name in re.findall(
+        r"[가-힣A-Za-z0-9]+(?:대형마트|백화점|쇼핑센터|쇼핑몰|몰)", text
+    ):
+        if facility_name not in observed_text:
+            raise GroundingValidationError("GROUNDING_RETAIL_TEXT_OUTSIDE_OBSERVATION")
 
 
 def _number(value: int | float) -> str:

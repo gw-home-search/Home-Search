@@ -24,7 +24,7 @@ from ai_service.property_chat.models import (
     EvidenceFact,
     FactClaim,
     MonthlyTrendRecord,
-    PropertyQueryPlan,
+    QueryPlan,
     TradeRecord,
 )
 
@@ -86,7 +86,7 @@ def golden_case(
     return GoldenCase(
         case_id=f"case-{capability.replace('_', '-')}",
         question="검증 질문",
-        plan=PropertyQueryPlan(
+        plan=QueryPlan(
             capability=capability,  # type: ignore[arg-type]
             complex_name="단지",
             start_date=date(2026, 1, 1) if capability == "price_trend" else None,

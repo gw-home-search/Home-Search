@@ -8,7 +8,7 @@ from typing import Protocol, cast
 
 from .auth import AuthenticatedUser
 from .models import ChatbotQueryRequest
-from .property_chat.models import PropertyCapability
+from .property_chat.models import PropertyCapability, ReferenceCapability
 
 _APPROVED_PROPERTY_CAPABILITY_CONFIGURATIONS = frozenset(
     {
@@ -21,6 +21,14 @@ _APPROVED_PROPERTY_CAPABILITY_CONFIGURATIONS = frozenset(
 
 class ChatbotProviderUnavailable(Exception):
     pass
+
+
+class _UnavailableSchoolFactRepository:
+    def active_snapshot(self) -> object:
+        raise ChatbotProviderUnavailable()
+
+    def nearby_schools(self, **_kwargs: object) -> object:
+        raise ChatbotProviderUnavailable()
 
 
 class ChatbotEngine(Protocol):
@@ -42,6 +50,19 @@ def get_property_fact_repository() -> object:
 
     try:
         return PostgresPropertyFactRepository(dsn)
+    except Exception as exception:
+        raise ChatbotProviderUnavailable() from exception
+
+
+@lru_cache
+def get_school_fact_repository() -> object:
+    dsn = os.getenv("HOME_AI_REFERENCE_DSN", "").strip()
+    if not dsn:
+        raise ChatbotProviderUnavailable()
+    from .property_chat.school_postgres import PostgresSchoolFactRepository
+
+    try:
+        return PostgresSchoolFactRepository(dsn)
     except Exception as exception:
         raise ChatbotProviderUnavailable() from exception
 
@@ -96,6 +117,14 @@ def get_enabled_property_capabilities() -> frozenset[PropertyCapability]:
 
 
 @lru_cache
+def get_enabled_reference_capabilities() -> frozenset[ReferenceCapability]:
+    raw_value = os.getenv("HOME_AI_ENABLED_REFERENCE_CAPABILITIES", "")
+    if raw_value != "school_location":
+        return frozenset()
+    return frozenset({"school_location"})
+
+
+@lru_cache
 def get_query_timeout_seconds() -> float | None:
     try:
         timeout_seconds = float(os.getenv("HOME_AI_QUERY_TIMEOUT_SECONDS", "45"))
@@ -119,13 +148,24 @@ class ConfiguredChatbotEngine:
         timeout_seconds = get_query_timeout_seconds()
         if timeout_seconds is None:
             raise ChatbotProviderUnavailable()
-        engine = GroundedChatbotEngine(
-            repository=get_property_fact_repository(),  # type: ignore[arg-type]
-            language_model=get_grounded_language_model(),  # type: ignore[arg-type]
-            enabled_capabilities=get_enabled_property_capabilities(),
-        )
         try:
             async with asyncio.timeout(timeout_seconds):
+                repository = await asyncio.to_thread(get_property_fact_repository)
+                language_model = await asyncio.to_thread(get_grounded_language_model)
+                enabled_reference_capabilities = get_enabled_reference_capabilities()
+                school_repository = None
+                if enabled_reference_capabilities:
+                    try:
+                        school_repository = await asyncio.to_thread(get_school_fact_repository)
+                    except ChatbotProviderUnavailable:
+                        school_repository = _UnavailableSchoolFactRepository()
+                engine = GroundedChatbotEngine(
+                    repository=repository,  # type: ignore[arg-type]
+                    school_repository=school_repository,  # type: ignore[arg-type]
+                    language_model=language_model,  # type: ignore[arg-type]
+                    enabled_capabilities=get_enabled_property_capabilities(),
+                    enabled_reference_capabilities=enabled_reference_capabilities,
+                )
                 return await engine.query(
                     request=request,
                     user=user,

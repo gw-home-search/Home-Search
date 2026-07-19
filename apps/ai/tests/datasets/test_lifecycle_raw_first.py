@@ -12,6 +12,7 @@ from ai_service.datasets.postgres import SourceRefreshAlreadyRunning
 from ai_service.datasets.raw_store import RawObjectIntegrityError, StoredRawObject
 from ai_service.datasets.service import DatasetLifecycleService
 from ai_service.datasets.bundle import PreparedBundle
+from ai_service.datasets.models import ParsedDataset
 from tests.datasets.test_dataset_lifecycle import source_contract
 
 
@@ -61,6 +62,24 @@ def test_prepared_file_s3_failure_happens_before_database_and_uses_file_api(
         lifecycle.ingest_validate_publish_prepared(
             source_contract(), prepared, source_date=date(2026, 7, 19),
             content_type="application/zip",
+        )
+
+
+def test_prepared_file_checksum_mismatch_stops_before_database(tmp_path: Path) -> None:
+    content = b'{"rows":[]}'
+    path = tmp_path / "bundle.zip"
+    path.write_bytes(content)
+    path.chmod(0o600)
+    lifecycle = DatasetLifecycleService(
+        NeverCalledRepository(),  # type: ignore[arg-type]
+        raw_store=FileOnlyRawStore(),  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(ValueError, match="metadata does not match"):
+        lifecycle.ingest_validate_publish_prepared(
+            source_contract(),
+            PreparedBundle(path, len(content), "0" * 64),
+            source_date=date(2026, 7, 19),
         )
 
 
@@ -117,6 +136,60 @@ def test_prepared_lifecycle_registers_verified_file_without_bytes_upload(
 
     assert result.status == "Pass"
     assert result.raw_row_count == 1
+
+
+def test_prepared_lifecycle_uses_file_adapter_without_materializing_raw_bytes(
+    dataset_repository: PostgresDatasetRepository,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    content = b"prepared-file-content"
+    path = tmp_path / "prepared-bundle.zip"
+    path.write_bytes(content)
+    path.chmod(0o600)
+    called = False
+
+    class FileAdapter:
+        def parse_file(self, raw_path, contract, *, source_date):
+            nonlocal called
+            called = True
+            assert raw_path == path
+            assert contract.source_id == "fixture.rail-station"
+            assert source_date == date(2026, 7, 15)
+            return ParsedDataset(
+                rows=[{
+                    "station_id": "station-file-aware",
+                    "name": "File Aware Station",
+                    "latitude": 37.5,
+                    "longitude": 127.0,
+                }]
+            )
+
+        def parse(self, *_args, **_kwargs):
+            raise AssertionError("file-aware adapter must not use bytes parsing")
+
+    lifecycle = DatasetLifecycleService(
+        dataset_repository,
+        raw_store=FileOnlyRawStore(),  # type: ignore[arg-type]
+        clock=lambda: datetime(2026, 7, 19, tzinfo=UTC),
+    )
+    monkeypatch.setattr(
+        Path,
+        "read_bytes",
+        lambda _path: (_ for _ in ()).throw(
+            AssertionError("prepared bundle must not be materialized as bytes")
+        ),
+    )
+
+    result = lifecycle.ingest_validate_publish_prepared(
+        source_contract(),
+        PreparedBundle(path, len(content), sha256(content).hexdigest()),
+        source_date=date(2026, 7, 15),
+        adapter=FileAdapter(),  # type: ignore[arg-type]
+    )
+
+    assert called is True
+    assert result.status == "Pass"
 
 
 def test_verified_s3_metadata_is_registered_before_parse_and_inline_content_is_absent(

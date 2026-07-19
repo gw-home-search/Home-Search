@@ -83,6 +83,21 @@ def test_sbiz_adapter_requires_tracked_taxonomy_and_excludes_phone() -> None:
     assert "telNo" not in rows[0]
 
 
+def test_sbiz_file_adapter_matches_bytes_adapter(tmp_path) -> None:
+    content = _bundle()
+    path = tmp_path / "sbiz-academy.zip"
+    path.write_bytes(content)
+
+    rows = _rows(
+        SbizAcademyAdapter(_taxonomy()).parse_file(
+            path, _contract(), source_date=None
+        )
+    )
+
+    assert rows[0]["store_id"] == "store-1"
+    assert "telNo" not in rows[0]
+
+
 def test_sbiz_adapter_blocks_taxonomy_change_and_duplicate_store_id() -> None:
     changed = {**TAXONOMY, "taxonomy-small": [{"code": "P10102", "name": "changed"}]}
     with pytest.raises(RawPayloadError) as error:

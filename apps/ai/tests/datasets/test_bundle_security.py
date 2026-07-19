@@ -15,6 +15,7 @@ from ai_service.datasets.bundle import (
     build_deterministic_bundle,
     build_deterministic_bundle_file,
     read_deterministic_bundle,
+    read_deterministic_bundle_file,
 )
 from ai_service.datasets.secure_temp import SecureTempWorkspace
 from ai_service.datasets.validation import RawPayloadError
@@ -177,3 +178,98 @@ def test_file_bundle_preserves_incomplete_safe_reason_metadata(tmp_path) -> None
         )
 
         assert prepared.path.read_bytes() == expected
+
+
+def test_file_bundle_reader_verifies_artifact_bound_and_checksum_lazily(tmp_path) -> None:
+    path = tmp_path / "bundle.zip"
+    path.write_bytes(_valid_bundle())
+
+    with pytest.raises(RawPayloadError) as error:
+        read_deterministic_bundle_file(
+            path,
+            expected_source_id="fixture.source",
+            maximum_bytes=10_000,
+            maximum_artifact_bytes=1,
+        )
+    assert error.value.reason_code == "BUNDLE_MANIFEST_INVALID"
+
+    path.write_bytes(_rewrite(_valid_bundle(), artifact_content=b"[]"))
+    bundle = read_deterministic_bundle_file(
+        path,
+        expected_source_id="fixture.source",
+        maximum_bytes=10_000,
+        maximum_artifact_bytes=100,
+    )
+    with pytest.raises(RawPayloadError) as error:
+        tuple(bundle.artifacts)
+    assert error.value.reason_code == "BUNDLE_CHECKSUM_MISMATCH"
+
+
+@pytest.mark.parametrize(
+    "manifest_mutator",
+    [
+        lambda manifest: manifest.update(sourceId="other.source"),
+        lambda manifest: manifest["artifacts"][0].update(logicalName=1),
+        lambda manifest: manifest.update(sourceDate="not-a-date"),
+    ],
+)
+def test_file_bundle_reader_rejects_invalid_manifest_metadata(
+    tmp_path, manifest_mutator
+) -> None:
+    path = tmp_path / "invalid-manifest.zip"
+    path.write_bytes(_rewrite(_valid_bundle(), manifest_mutator=manifest_mutator))
+
+    with pytest.raises(RawPayloadError) as error:
+        read_deterministic_bundle_file(
+            path,
+            expected_source_id="fixture.source",
+            maximum_bytes=10_000,
+            maximum_artifact_bytes=100,
+        )
+
+    assert error.value.reason_code == "BUNDLE_MANIFEST_INVALID"
+
+
+def test_file_bundle_reader_rejects_entry_order_and_post_inspection_mutation(
+    tmp_path,
+) -> None:
+    path = tmp_path / "mutated-bundle.zip"
+    path.write_bytes(
+        _rewrite(_valid_bundle(), renamed_artifact="artifacts/0002.json")
+    )
+    with pytest.raises(RawPayloadError):
+        read_deterministic_bundle_file(
+            path,
+            expected_source_id="fixture.source",
+            maximum_bytes=10_000,
+            maximum_artifact_bytes=100,
+        )
+
+    path.write_bytes(_valid_bundle())
+    bundle = read_deterministic_bundle_file(
+        path,
+        expected_source_id="fixture.source",
+        maximum_bytes=10_000,
+        maximum_artifact_bytes=100,
+    )
+    path.write_bytes(b"not-a-zip")
+    with pytest.raises(RawPayloadError) as error:
+        tuple(bundle.artifacts)
+    assert error.value.reason_code == "BUNDLE_MANIFEST_INVALID"
+
+
+def test_file_bundle_reader_rejects_nested_artifact_entry(tmp_path) -> None:
+    path = tmp_path / "nested-entry.zip"
+    path.write_bytes(
+        _rewrite(_valid_bundle(), renamed_artifact="artifacts/0001.json/nested")
+    )
+
+    with pytest.raises(RawPayloadError) as error:
+        read_deterministic_bundle_file(
+            path,
+            expected_source_id="fixture.source",
+            maximum_bytes=10_000,
+            maximum_artifact_bytes=100,
+        )
+
+    assert error.value.reason_code == "BUNDLE_MANIFEST_INVALID"

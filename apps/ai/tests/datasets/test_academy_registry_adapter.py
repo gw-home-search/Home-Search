@@ -124,6 +124,20 @@ def test_neis_snapshot_requires_all_17_offices_and_excludes_sensitive_fields() -
     assert parsed.row_rejections == {}
 
 
+def test_neis_file_adapter_matches_bytes_adapter(tmp_path) -> None:
+    content = _bundle()
+    path = tmp_path / "academy-registry.zip"
+    path.write_bytes(content)
+
+    parsed = AcademyRegistryAdapter().parse_file(
+        path, _contract(), source_date=None
+    )
+    rows = [candidate.row_data for candidate in parsed.rows]
+
+    assert len(rows) == 17
+    assert {row["education_office_code"] for row in rows} == set(OFFICES)
+
+
 def test_unknown_registry_status_blocks_the_row() -> None:
     def mutate(code: str, row: dict[str, object]) -> None:
         if code == "B10":

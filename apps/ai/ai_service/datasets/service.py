@@ -123,6 +123,42 @@ class DatasetLifecycleService:
         content_type: str,
         stored_raw: StoredRawObject | None,
     ) -> LifecycleResult:
+        checksum = hashlib.sha256(raw_bytes).hexdigest()
+        selected_adapter = adapter or JsonDatasetAdapter()
+        parse_lazy = getattr(selected_adapter, "parse_lazy", None)
+        if callable(parse_lazy):
+            parser = lambda: parse_lazy(
+                raw_bytes, contract, source_date=source_date
+            )
+        else:
+            parser = lambda: selected_adapter.parse(
+                raw_bytes, contract, source_date=source_date
+            )
+        return self._register_validate_publish(
+            contract,
+            checksum=checksum,
+            raw_byte_length=len(raw_bytes),
+            raw_bytes=raw_bytes,
+            source_date=source_date,
+            observed_at=observed_at,
+            content_type=content_type,
+            stored_raw=stored_raw,
+            parser=parser,
+        )
+
+    def _register_validate_publish(
+        self,
+        contract: DatasetSourceContract,
+        *,
+        checksum: str,
+        raw_byte_length: int,
+        raw_bytes: bytes | None,
+        source_date: date | None,
+        observed_at: datetime | None,
+        content_type: str,
+        stored_raw: StoredRawObject | None,
+        parser: Callable[[], ParsedDataset],
+    ) -> LifecycleResult:
         collected_at = self._clock()
         if (
             contract.temporal_basis == "SOURCE_DATE"
@@ -132,11 +168,15 @@ class DatasetLifecycleService:
             and (source_date is not None or observed_at is None)
         ):
             raise ValueError("temporal value does not match source contract")
-        checksum = hashlib.sha256(raw_bytes).hexdigest()
         if stored_raw is not None:
-            if stored_raw.checksum != checksum or stored_raw.byte_length != len(raw_bytes):
+            if (
+                stored_raw.checksum != checksum
+                or stored_raw.byte_length != raw_byte_length
+            ):
                 raise ValueError("verified raw metadata does not match prepared content")
         elif self._raw_store is not None:
+            if raw_bytes is None:
+                raise ValueError("inline raw bytes are required")
             stored_raw = self._raw_store.put_verified(
                 source_id=contract.source_id,
                 checksum=checksum,
@@ -153,7 +193,7 @@ class DatasetLifecycleService:
                 contract,
                 contract_id,
                 checksum,
-                raw_bytes,
+                _required_raw_bytes(raw_bytes),
                 source_date,
                 observed_at,
                 collected_at,
@@ -162,14 +202,8 @@ class DatasetLifecycleService:
         if not acquisition.created:
             return self._repository.result(acquisition.acquisition_id, idempotent=True)
 
-        selected_adapter = adapter or JsonDatasetAdapter()
         try:
-            parse_lazy = getattr(selected_adapter, "parse_lazy", None)
-            parsed = (
-                parse_lazy(raw_bytes, contract, source_date=source_date)
-                if callable(parse_lazy)
-                else selected_adapter.parse(raw_bytes, contract, source_date=source_date)
-            )
+            parsed = parser()
         except RawPayloadError as exception:
             self._repository.record_parse_failure(
                 acquisition.acquisition_id, exception.reason_code, self._clock()
@@ -178,7 +212,9 @@ class DatasetLifecycleService:
 
         active = self._repository.active_snapshot_state(contract.source_id)
         validation_date = source_date or observed_at.date()  # type: ignore[union-attr]
-        with SecureTempWorkspace(required_free_bytes=max(len(raw_bytes) * 2, 1)) as workspace:
+        with SecureTempWorkspace(
+            required_free_bytes=max(raw_byte_length * 2, 1)
+        ) as workspace:
             spool = NormalizedRowSpool(workspace.create_file("normalized.ndjson"))
             try:
                 outcome = validate_rows(
@@ -257,6 +293,25 @@ class DatasetLifecycleService:
             byte_length=prepared.byte_length,
             content_type=content_type,
         )
+        checksum, byte_length = _file_checksum_and_length(prepared.path)
+        if checksum != prepared.checksum or byte_length != prepared.byte_length:
+            raise ValueError("prepared bundle metadata does not match file content")
+        selected_adapter = adapter or JsonDatasetAdapter()
+        parse_file = getattr(selected_adapter, "parse_file", None)
+        if callable(parse_file):
+            return self._register_validate_publish(
+                contract,
+                checksum=checksum,
+                raw_byte_length=byte_length,
+                raw_bytes=None,
+                source_date=source_date,
+                observed_at=observed_at,
+                content_type=content_type,
+                stored_raw=stored_raw,
+                parser=lambda: parse_file(
+                    prepared.path, contract, source_date=source_date
+                ),
+            )
         raw_bytes = prepared.path.read_bytes()
         return self._ingest_validate_publish(
             contract,
@@ -388,6 +443,24 @@ class JsonDatasetAdapter:
     ) -> ParsedDataset:
         del source_date
         return ParsedDataset(rows=parse_rows(raw_bytes, contract.encoding))
+
+
+def _required_raw_bytes(raw_bytes: bytes | None) -> bytes:
+    if raw_bytes is None:
+        raise ValueError("inline raw bytes are required")
+    return raw_bytes
+
+
+def _file_checksum_and_length(path: Path) -> tuple[str, int]:
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("prepared bundle must be a regular file")
+    digest = hashlib.sha256()
+    byte_length = 0
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+            byte_length += len(chunk)
+    return digest.hexdigest(), byte_length
 
 
 class RawObjectStore(Protocol):

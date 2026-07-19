@@ -4,8 +4,9 @@ import json
 import re
 import unicodedata
 from datetime import date, datetime
+from pathlib import Path
 
-from .bundle import read_deterministic_bundle
+from .bundle import read_deterministic_bundle, read_deterministic_bundle_file
 from .models import DatasetSourceContract, ParsedDataset, ParsedRow, QualityIssue
 from .validation import RawPayloadError
 from .contracts import ReferenceSourceContract
@@ -71,6 +72,37 @@ class AcademyRegistryAdapter:
         )
         if not isinstance(bundle.temporal_value, datetime):
             raise RawPayloadError("academy observed time is missing", "BUNDLE_MANIFEST_INVALID")
+        return ParsedDataset(
+            rows=self._iter_rows(
+                bundle.artifacts, bundle.temporal_value, contract.encoding
+            )
+        )
+
+    def parse_file(
+        self,
+        raw_path: Path,
+        contract: DatasetSourceContract,
+        *,
+        source_date: date | None,
+    ) -> ParsedDataset:
+        if (
+            contract.source_id != SOURCE_ID
+            or contract.temporal_basis != "OBSERVED_AT"
+            or source_date is not None
+        ):
+            raise RawPayloadError(
+                "academy source contract mismatch", "SOURCE_CONTRACT_MISMATCH"
+            )
+        bundle = read_deterministic_bundle_file(
+            raw_path,
+            expected_source_id=SOURCE_ID,
+            maximum_bytes=512 * 1024 * 1024,
+            maximum_artifact_bytes=8 * 1024 * 1024,
+        )
+        if not isinstance(bundle.temporal_value, datetime):
+            raise RawPayloadError(
+                "academy observed time is missing", "BUNDLE_MANIFEST_INVALID"
+            )
         return ParsedDataset(
             rows=self._iter_rows(
                 bundle.artifacts, bundle.temporal_value, contract.encoding

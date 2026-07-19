@@ -87,14 +87,16 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
 상세 readiness 근거는 `docs/reports/reference/readiness/`에 source별로 기록한다.
 F1은 file source뿐 아니라 NEIS·Sbiz API page도 owner-only temp file에 순차 기록하고,
 complete·incomplete deterministic bundle을 verified S3 file upload에 연결했다. 기존
-bytes collector API는 characterization wrapper로만 유지한다. 다만 complete bundle을
-adapter에 전달할 때 file 전체를 한 번 읽는 경로가 남아 `Partial`을 유지한다. F2는
+bytes collector API는 characterization wrapper로만 유지한다. NEIS·Sbiz adapter는
+ZIP manifest를 먼저 제한 검증하고 최대 8MiB artifact를 하나씩 checksum 검증·parse해
+complete bundle 전체 read를 제거했다. 다만 CSV/XLSX bytes-only adapter fallback이
+남아 F1은 `Partial`을 유지한다. F2는
 lazy `ParsedRow`, stream 중 parse failure rollback,
 NEIS·Sbiz normalized iterator, 30만 행 `<256MiB` peak memory gate를 통과했다.
 file source는 계약상 최대 1만 행 이하로 제한된다. 철도 refresher는 고정 XLSX URL,
 owner-only temp, verified S3 file upload, safe refresh-run 실패 기록을 static catalog에
 연결했으며 현재 landing URL은 network 호출 전에 거부한다. 2026-07-20 전체 offline
-회귀는 `481 passed`, coverage `90.10%`다. 실제 provider,
+회귀는 `491 passed`, coverage `90.04%`다. 실제 provider,
 운영 DB, S3 live 검증은 실행하지 않았다.
 
 철도 S4 구현 점수는 범위·계약·이용조건 상태 기록·raw-first 원자성·보안·실패 기록·

@@ -6,8 +6,9 @@ import math
 import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime
+from pathlib import Path
 
-from .bundle import read_deterministic_bundle
+from .bundle import read_deterministic_bundle, read_deterministic_bundle_file
 from .checksum import canonical_json_bytes
 from .models import DatasetSourceContract, ParsedDataset, ParsedRow
 from .validation import RawPayloadError
@@ -54,6 +55,35 @@ class SbizAcademyAdapter:
         if not isinstance(bundle.temporal_value, datetime):
             raise RawPayloadError("Sbiz observation time is missing", "BUNDLE_MANIFEST_INVALID")
         return ParsedDataset(rows=self._iter_rows(bundle.artifacts, bundle.temporal_value))
+
+    def parse_file(
+        self,
+        raw_path: Path,
+        contract: DatasetSourceContract,
+        *,
+        source_date: date | None,
+    ) -> ParsedDataset:
+        if (
+            contract.source_id != SOURCE_ID
+            or contract.temporal_basis != "OBSERVED_AT"
+            or source_date is not None
+        ):
+            raise RawPayloadError(
+                "Sbiz source contract mismatch", "SOURCE_CONTRACT_MISMATCH"
+            )
+        bundle = read_deterministic_bundle_file(
+            raw_path,
+            expected_source_id=SOURCE_ID,
+            maximum_bytes=1024 * 1024 * 1024,
+            maximum_artifact_bytes=8 * 1024 * 1024,
+        )
+        if not isinstance(bundle.temporal_value, datetime):
+            raise RawPayloadError(
+                "Sbiz observation time is missing", "BUNDLE_MANIFEST_INVALID"
+            )
+        return ParsedDataset(
+            rows=self._iter_rows(bundle.artifacts, bundle.temporal_value)
+        )
 
     def _iter_rows(self, artifacts, observed_at: datetime):
         taxonomy_values: dict[str, object] = {}

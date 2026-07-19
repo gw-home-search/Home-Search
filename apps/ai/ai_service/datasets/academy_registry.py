@@ -9,6 +9,7 @@ from datetime import date, datetime
 from .bundle import read_deterministic_bundle
 from .models import DatasetSourceContract, ParsedDataset, QualityIssue
 from .validation import RawPayloadError
+from .contracts import ReferenceSourceContract
 
 
 SOURCE_ID = "edu.academy-registry"
@@ -98,6 +99,40 @@ class AcademyRegistryAdapter:
                     QualityIssue(reason, "WARNING", row_number, {}) for reason in reasons
                 )
         return ParsedDataset(rows=rows, issues=tuple(issues), row_rejections=rejections)
+
+
+def academy_registry_source_contract(
+    reference_contract: ReferenceSourceContract,
+) -> DatasetSourceContract:
+    if reference_contract.id != SOURCE_ID:
+        raise ValueError("academy registry reference contract mismatch")
+    return DatasetSourceContract(
+        source_id=reference_contract.id,
+        provider=reference_contract.provider,
+        landing_url=reference_contract.landing_url,
+        acquisition_url=reference_contract.acquisition.base_url,
+        license_terms=reference_contract.license.terms_url,
+        attribution_requirements=reference_contract.license.attribution_text,
+        license_reviewed_on=reference_contract.license.reviewed_on,  # type: ignore[arg-type]
+        refresh_frequency=reference_contract.temporal.refresh_profile,
+        freshness_days=reference_contract.temporal.freshness_days,
+        file_format=reference_contract.acquisition.format,
+        encoding=reference_contract.acquisition.encoding,
+        schema_version=reference_contract.normalization_schema_version,
+        coordinate_system=reference_contract.acquisition.source_crs or "NONE",
+        unique_key_fields=("academy_id",),
+        required_fields=(
+            "academy_id", "education_office_code", "academy_type",
+            "academy_name", "status", "observed_at",
+        ),
+        expected_min_rows=reference_contract.quality.minimum_rows,
+        expected_max_rows=reference_contract.quality.maximum_rows,
+        maximum_row_change_ratio=reference_contract.quality.maximum_row_change_ratio,
+        maximum_rejected_ratio=reference_contract.quality.maximum_rejected_ratio,
+        contains_personal_data=False,
+        owner=reference_contract.owner,
+        temporal_basis="OBSERVED_AT",
+    )
 
 
 def _page(content: bytes, encoding: str) -> tuple[int, list[dict[str, object]]]:

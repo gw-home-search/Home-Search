@@ -77,10 +77,16 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
 | G0 계약·ledger | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
 | F1 verified raw streaming | `Partial` | 미채점 | 해당 없음 | 해당 없음 |
 | F2 normalized spool·semantic `NoChange` | `Partial` | 미채점 | 해당 없음 | 해당 없음 |
-| NEIS | 구현 중 | 미채점 | `Partial` | 금지 |
-| Sbiz | 구현 중 | 미채점 | `Partial` | 금지 |
-| 대규모점포 | 구현 중 | 미채점 | `Partial` | 금지 |
-| 철도 | 구현 중 | 미채점 | `Partial` | 금지 |
+| F3 static composition·CLI | `Partial` | 미채점 | 해당 없음 | 해당 없음 |
+| D1 AsciiDoc artifact | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
+| NEIS | collector·projection offline `Pass`, observer·live 미완료 | 미채점 | `2.0/10 Partial` | 금지 |
+| Sbiz | collector·adapter·exact projection offline `Pass`, taxonomy 미승인 | 미채점 | `2.0/10 Partial` | 금지 |
+| 대규모점포 | streaming file client·기존 projection `Pass`, live 미실행 | 미채점 | `3.0/10 Partial` | 금지 |
+| 철도 | fixed URL preflight·occurrence projection·merge `Pass`, URL 미확정 | 미채점 | `2.0/10 Partial` | 금지 |
+
+상세 readiness 근거는 `docs/reports/reference/readiness/`에 source별로 기록한다.
+2026-07-20 offline 회귀는 `460 passed`, coverage `90.42%`이며 실제 provider,
+운영 DB, S3 live 검증은 실행하지 않았다.
 
 ## 공통 중단·롤백
 

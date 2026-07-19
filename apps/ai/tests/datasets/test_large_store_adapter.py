@@ -242,7 +242,7 @@ def test_publication_routes_spatial_and_non_spatial_rows_to_typed_projections(
             limit=5,
             region_code="3010000",
         )
-        verified_zero = facility_repository.nearby(
+        mapped_region_zero = facility_repository.nearby(
             source_id="retail.large-store",
             category="RETAIL",
             latitude=37.0,
@@ -257,8 +257,8 @@ def test_publication_routes_spatial_and_non_spatial_rows_to_typed_projections(
     assert any(fact.fact_id == "store-boundary" for fact in boundary.facilities), boundary
     assert uncertain_zero.verified_zero is False
     assert uncertain_zero.coordinate_coverage == 0.5
-    assert verified_zero.verified_zero is True
-    assert verified_zero.coordinate_coverage == 1.0
+    assert mapped_region_zero.verified_zero is False
+    assert mapped_region_zero.coordinate_coverage == 1.0
 
     with psycopg.connect(postgres_dsn) as connection:
         connection.execute("SET ROLE home_search_ai_runtime")

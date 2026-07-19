@@ -19,6 +19,8 @@ dependencies = [
 [project.scripts]
 home-ai-migrate = "ai_service.datasets.migrate:main"
 home-ai-reference-refresh = "ai_service.datasets.reference_refresh:main"
+home-ai-reference-status = "ai_service.datasets.reference_inspection:status_main"
+home-ai-reference-audit = "ai_service.datasets.reference_inspection:audit_main"
 home-ai-school-location-ingest = "ai_service.datasets.school_location_ingest:main"
 home-ai-property-golden = "ai_service.property_chat.golden:main"
 

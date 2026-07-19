@@ -13,6 +13,7 @@ from .school_location_ingest import (
     SchoolLocationIngestReport,
     ingest_from_environment,
 )
+from .academy_registry_ingest import AcademyRegistryIngestReport, ingest_from_environment as ingest_academy_registry
 
 
 _CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "reference_sources.toml"
@@ -46,7 +47,27 @@ class RefreshFailure:
     configuration: bool
 
 
-RefreshOutcome = SchoolLocationIngestReport | RefreshFailure
+ReferenceIngestReport = SchoolLocationIngestReport | AcademyRegistryIngestReport
+RefreshOutcome = ReferenceIngestReport | RefreshFailure
+
+
+@dataclass(frozen=True)
+class SourceDefinition:
+    source_id: str
+    refresh: Callable[[Mapping[str, str]], ReferenceIngestReport]
+
+
+def _unavailable_refresh(_environment: Mapping[str, str]) -> ReferenceIngestReport:
+    raise SchoolLocationConfigurationError("source readiness prerequisites are incomplete")
+
+
+_SOURCE_DEFINITIONS = (
+    SourceDefinition("edu.school-location", ingest_from_environment),
+    SourceDefinition("edu.academy-registry", ingest_academy_registry),
+    SourceDefinition("place.sbiz-academy", _unavailable_refresh),
+    SourceDefinition("retail.large-store", _unavailable_refresh),
+    SourceDefinition("transport.rail-station", _unavailable_refresh),
+)
 
 
 def run(
@@ -54,6 +75,9 @@ def run(
     environment: Mapping[str, str],
     *,
     school_refresh: Callable[[Mapping[str, str]], SchoolLocationIngestReport] = ingest_from_environment,
+    refreshers: Mapping[
+        str, Callable[[Mapping[str, str]], ReferenceIngestReport]
+    ] | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(prog="home-ai-reference-refresh")
     group = parser.add_mutually_exclusive_group(required=True)
@@ -64,12 +88,17 @@ def run(
     catalog = load_reference_source_catalog(_CONFIG_PATH)
     source_ids = _selected_sources(parsed.source, parsed.family, parsed.profile, catalog.source_ids)
     outcomes: list[RefreshOutcome] = []
+    definitions = {definition.source_id: definition.refresh for definition in _SOURCE_DEFINITIONS}
+    definitions["edu.school-location"] = school_refresh
+    if refreshers:
+        definitions.update(refreshers)
     for source_id in source_ids:
         try:
             catalog.approved(source_id)
-            if source_id != "edu.school-location":
-                raise SchoolLocationConfigurationError("source adapter is not implemented")
-            outcomes.append(school_refresh(_source_environment(source_id, environment)))
+            refresher = definitions.get(source_id)
+            if refresher is None:
+                raise SchoolLocationConfigurationError("source is outside the static catalog")
+            outcomes.append(refresher(_source_environment(source_id, environment)))
         except (KeyError, LicenseNotApprovedError, SchoolLocationConfigurationError):
             outcomes.append(
                 RefreshFailure(

@@ -140,7 +140,11 @@ class PostgresPointFacilityRepository:
             raise RuntimeError("active source metadata is missing")
         matched_count = int(rows[0]["matched_count"]) if rows else 0
         coordinate_coverage = _coverage_ratio(coverage)
-        verified_zero = matched_count == 0 and _verified_zero(coverage)
+        verified_zero = (
+            matched_count == 0
+            and source_id != "retail.large-store"
+            and _verified_zero(coverage)
+        )
         data_as_of = coverage["source_date"] or coverage["observed_at"]
         if data_as_of is None:
             raise RuntimeError("active source temporal value is missing")

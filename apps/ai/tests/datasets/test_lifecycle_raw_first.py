@@ -189,3 +189,61 @@ def test_incomplete_bundle_is_preserved_but_never_parsed_or_published(
     assert result.publication_id is None
     assert result.issue_codes == ("API_SERVER_ERROR",)
     assert dataset_repository.publication_count("fixture.rail-station") == 0
+
+
+def test_incomplete_prepared_bundle_uses_verified_file_and_is_never_published(
+    dataset_repository: PostgresDatasetRepository,
+    tmp_path: Path,
+) -> None:
+    content = b"incomplete-provider-pages"
+    path = tmp_path / "incomplete-bundle.zip"
+    path.write_bytes(content)
+    path.chmod(0o600)
+    lifecycle = DatasetLifecycleService(
+        dataset_repository,
+        raw_store=FileOnlyRawStore(),  # type: ignore[arg-type]
+        clock=lambda: datetime(2026, 7, 19, tzinfo=UTC),
+    )
+
+    result = lifecycle.preserve_incomplete_prepared(
+        source_contract(),
+        PreparedBundle(path, len(content), sha256(content).hexdigest()),
+        source_date=date(2026, 7, 15),
+        reason_codes=("API_SERVER_ERROR",),
+    )
+
+    assert result.status == "Fail"
+    assert result.publication_id is None
+    assert result.issue_codes == ("API_SERVER_ERROR",)
+    assert dataset_repository.publication_count("fixture.rail-station") == 0
+
+
+def test_incomplete_prepared_bundle_rejects_missing_storage_reason_and_temporal_value(
+    tmp_path: Path,
+) -> None:
+    content = b"incomplete-provider-pages"
+    path = tmp_path / "invalid-incomplete-bundle.zip"
+    path.write_bytes(content)
+    prepared = PreparedBundle(path, len(content), sha256(content).hexdigest())
+
+    without_storage = DatasetLifecycleService(NeverCalledRepository())  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="verified external raw storage"):
+        without_storage.preserve_incomplete_prepared(
+            source_contract(), prepared, source_date=date(2026, 7, 15),
+            reason_codes=("API_SERVER_ERROR",),
+        )
+
+    lifecycle = DatasetLifecycleService(
+        NeverCalledRepository(),  # type: ignore[arg-type]
+        raw_store=FileOnlyRawStore(),  # type: ignore[arg-type]
+    )
+    with pytest.raises(ValueError, match="reason codes"):
+        lifecycle.preserve_incomplete_prepared(
+            source_contract(), prepared, source_date=date(2026, 7, 15),
+            reason_codes=(),
+        )
+    with pytest.raises(ValueError, match="temporal value"):
+        lifecycle.preserve_incomplete_prepared(
+            source_contract(), prepared, source_date=None,
+            reason_codes=("API_SERVER_ERROR",),
+        )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import stat
 from datetime import UTC, datetime
 
 import pytest
@@ -10,6 +11,7 @@ from ai_service.datasets.sbiz_academy import (
 )
 from ai_service.datasets import sbiz_academy_client
 from ai_service.datasets.sbiz_academy_client import SbizAcademyApiClient, SbizAcademyApiError
+from ai_service.datasets.secure_temp import SecureTempWorkspace
 from tests.datasets.test_sbiz_academy_adapter import _contract, _rows, _taxonomy, TAXONOMY
 
 
@@ -52,6 +54,25 @@ def test_sbiz_collector_partitions_only_allowlisted_taxonomy_without_key_in_path
     assert collected.raw_row_count == 1
     assert len(rows) == 1
     assert all("secret" not in path for path in paths)
+
+
+def test_sbiz_collects_into_owner_only_prepared_bundle() -> None:
+    observed_at = datetime(2026, 7, 20, tzinfo=UTC)
+    client = SbizAcademyApiClient(
+        taxonomy=_taxonomy(),
+        taxonomy_artifacts=TAXONOMY,
+        requester=lambda *_args: (200, {}, _page()),
+    )
+
+    with SecureTempWorkspace(required_free_bytes=1024 * 1024) as workspace:
+        collected = client.collect_prepared(
+            "secret", observed_at=observed_at, workspace=workspace
+        )
+
+        assert collected.prepared.path.is_file()
+        assert stat.S_IMODE(collected.prepared.path.stat().st_mode) == 0o600
+        assert collected.prepared.byte_length == collected.prepared.path.stat().st_size
+        assert collected.complete is True
 
 
 def test_sbiz_mid_collection_failure_preserves_incomplete_bundle() -> None:

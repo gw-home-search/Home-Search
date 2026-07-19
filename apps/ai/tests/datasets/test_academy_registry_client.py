@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import stat
 from datetime import UTC, datetime
 
 import pytest
@@ -11,6 +12,7 @@ from ai_service.datasets.academy_registry_client import (
 )
 from ai_service.datasets import academy_registry_client
 from ai_service.datasets.bundle import read_deterministic_bundle
+from ai_service.datasets.secure_temp import SecureTempWorkspace
 
 
 OFFICES = (
@@ -55,6 +57,29 @@ def test_collects_all_offices_with_fixed_page_size_and_observed_time() -> None:
     )
     assert bundle.temporal_value == observed_at
     assert len(bundle.artifacts) == 17
+
+
+def test_collects_pages_into_owner_only_prepared_bundle() -> None:
+    def requester(path: str, _timeout: float, _service_key: str):
+        office = next(code for code in OFFICES if f"ATPT_OFCDC_SC_CODE={code}" in path)
+        return 200, {}, _page(office)
+
+    observed_at = datetime(2026, 7, 20, 3, tzinfo=UTC)
+    with SecureTempWorkspace(required_free_bytes=1024 * 1024) as workspace:
+        collected = AcademyRegistryApiClient(requester=requester).collect_prepared(
+            "private-key", observed_at=observed_at, workspace=workspace
+        )
+
+        assert collected.prepared.path.is_file()
+        assert stat.S_IMODE(collected.prepared.path.stat().st_mode) == 0o600
+        assert collected.prepared.byte_length == collected.prepared.path.stat().st_size
+        assert collected.page_count == 17
+        bundle = read_deterministic_bundle(
+            collected.prepared.path.read_bytes(),
+            expected_source_id="edu.academy-registry",
+            maximum_bytes=1024 * 1024,
+        )
+        assert len(bundle.artifacts) == 17
 
 
 def test_first_page_failure_does_not_create_raw_bundle() -> None:

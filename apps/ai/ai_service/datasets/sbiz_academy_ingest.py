@@ -18,6 +18,7 @@ from .school_location_ingest import (
     SchoolLocationConfigurationError, _importer_repository, _required,
     _validate_importer_dsn,
 )
+from .secure_temp import SecureTempWorkspace
 from .service import DatasetLifecycleService
 
 
@@ -69,17 +70,21 @@ def ingest_from_environment(
         started_at=observed_at,
     )
     try:
-        with repository.source_lock(contract.source_id):
-            collected = client.collect(service_key, observed_at=observed_at)
+        with repository.source_lock(contract.source_id), SecureTempWorkspace(
+            required_free_bytes=reference.acquisition.maximum_bundle_bytes * 2
+        ) as workspace:
+            collected = client.collect_prepared(
+                service_key, observed_at=observed_at, workspace=workspace
+            )
             lifecycle = DatasetLifecycleService(repository, raw_store=raw_store)
             result = (
-                lifecycle.ingest_validate_publish(
-                    contract, collected.content, source_date=None,
+                lifecycle.ingest_validate_publish_prepared(
+                    contract, collected.prepared, source_date=None,
                     observed_at=observed_at, adapter=SbizAcademyAdapter(taxonomy),
                     content_type="application/zip",
                 )
-                if collected.complete else lifecycle.preserve_incomplete(
-                    contract, collected.content, source_date=None,
+                if collected.complete else lifecycle.preserve_incomplete_prepared(
+                    contract, collected.prepared, source_date=None,
                     observed_at=observed_at, reason_codes=collected.reason_codes,
                     content_type="application/zip",
                 )

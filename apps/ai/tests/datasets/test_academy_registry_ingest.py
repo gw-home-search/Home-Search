@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import nullcontext
 from dataclasses import replace
 from datetime import UTC, date, datetime
+from hashlib import sha256
 from uuid import UUID
 
 import pytest
@@ -10,8 +11,9 @@ import pytest
 from ai_service.datasets import academy_registry_ingest
 from ai_service.datasets.academy_registry_client import (
     AcademyRegistryApiError,
-    CollectedAcademyRegistryBundle,
+    PreparedAcademyRegistryBundle,
 )
+from ai_service.datasets.bundle import PreparedBundle
 from ai_service.datasets.contracts import load_reference_source_catalog
 from ai_service.datasets.models import AcquisitionRecord, LifecycleResult
 from ai_service.datasets.raw_store import StoredRawObject
@@ -89,18 +91,24 @@ class _Repository:
 
 
 class _Client:
-    def collect(self, key, *, observed_at):
+    def collect_prepared(self, key, *, observed_at, workspace):
         assert key == "neis-key"
-        return CollectedAcademyRegistryBundle(
-            b"bundle", observed_at, 17, 17, True, ()
+        path = workspace.create_file("fixture-bundle.zip")
+        path.write_bytes(b"bundle")
+        return PreparedAcademyRegistryBundle(
+            PreparedBundle(path, 6, sha256(b"bundle").hexdigest()),
+            observed_at, 17, 17, True, ()
         )
 
 
 class _RawStore:
-    def put_verified(self, *, source_id, checksum, content, content_type):
+    def put_verified(self, **_kwargs):
+        raise AssertionError("API refresh must use file upload")
+
+    def put_verified_file(self, *, source_id, checksum, path, byte_length, content_type):
         return StoredRawObject(
             "S3", f"raw/{checksum}.zip", "v1", content_type,
-            len(content), checksum,
+            byte_length, checksum,
         )
 
 
@@ -131,7 +139,7 @@ def test_academy_first_page_failure_records_only_safe_reason(monkeypatch) -> Non
     )
 
     class FailedClient:
-        def collect(self, _key, *, observed_at):
+        def collect_prepared(self, _key, *, observed_at, workspace):
             raise AcademyRegistryApiError("API_TRANSPORT_FAILED")
 
     with pytest.raises(AcademyRegistryApiError):

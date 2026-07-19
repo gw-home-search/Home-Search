@@ -120,9 +120,14 @@ def build_deterministic_bundle_file(
     temporal_value: date | datetime | None,
     target: Path,
     complete: bool = True,
+    reason_codes: tuple[str, ...] = (),
 ) -> PreparedBundle:
     if not artifacts or not endpoint_path.startswith("/"):
         raise ValueError("bundle artifacts and endpoint path are required")
+    if complete and reason_codes:
+        raise ValueError("complete bundle must not contain failure reasons")
+    if not complete and (not reason_codes or any(not code.strip() for code in reason_codes)):
+        raise ValueError("incomplete bundle requires safe reason codes")
     target_metadata = target.lstat()
     if target.is_symlink() or not target.is_file() or target_metadata.st_mode & 0o077:
         raise ValueError("bundle target must be an owner-only regular file")
@@ -136,6 +141,8 @@ def build_deterministic_bundle_file(
     if temporal_value is not None:
         key = "observedAt" if isinstance(temporal_value, datetime) else "sourceDate"
         manifest[key] = temporal_value.isoformat()
+    if reason_codes:
+        manifest["reasonCodes"] = list(dict.fromkeys(reason_codes))
     entries: list[tuple[str, Path]] = []
     for index, artifact in enumerate(artifacts, start=1):
         _validate_artifact_metadata(

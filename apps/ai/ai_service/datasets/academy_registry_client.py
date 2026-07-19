@@ -9,7 +9,8 @@ from http.client import HTTPSConnection
 from urllib.parse import quote
 
 from .academy_registry import _OFFICE_CODES, _page
-from .bundle import BundleArtifact, build_deterministic_bundle
+from .bundle import FileBundleArtifact, PreparedBundle, build_deterministic_bundle_file
+from .secure_temp import SecureTempWorkspace
 from .validation import RawPayloadError
 
 
@@ -54,6 +55,16 @@ class CollectedAcademyRegistryBundle:
     reason_codes: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class PreparedAcademyRegistryBundle:
+    prepared: PreparedBundle
+    observed_at: datetime
+    page_count: int
+    raw_row_count: int
+    complete: bool
+    reason_codes: tuple[str, ...]
+
+
 class AcademyRegistryApiClient:
     def __init__(
         self,
@@ -67,10 +78,30 @@ class AcademyRegistryApiClient:
         self._timeout = float(timeout_seconds)
 
     def collect(self, service_key: str, *, observed_at: datetime) -> CollectedAcademyRegistryBundle:
+        with SecureTempWorkspace(required_free_bytes=_MAX_BUNDLE_BYTES * 2) as workspace:
+            collected = self.collect_prepared(
+                service_key, observed_at=observed_at, workspace=workspace
+            )
+            return CollectedAcademyRegistryBundle(
+                collected.prepared.path.read_bytes(),
+                collected.observed_at,
+                collected.page_count,
+                collected.raw_row_count,
+                collected.complete,
+                collected.reason_codes,
+            )
+
+    def collect_prepared(
+        self,
+        service_key: str,
+        *,
+        observed_at: datetime,
+        workspace: SecureTempWorkspace,
+    ) -> PreparedAcademyRegistryBundle:
         key = service_key.strip()
         if not key or len(key) > 1024 or observed_at.tzinfo is None:
             raise ValueError("academy API collection configuration is invalid")
-        artifacts: list[BundleArtifact] = []
+        artifacts: list[FileBundleArtifact] = []
         raw_row_count = 0
         total_bytes = 0
         for office in sorted(_OFFICE_CODES):
@@ -88,52 +119,60 @@ class AcademyRegistryApiClient:
                 except AcademyRegistryApiError as exception:
                     if not artifacts:
                         raise
-                    return _incomplete(
-                        artifacts, observed_at, raw_row_count, exception.reason_code
+                    return _incomplete_prepared(
+                        artifacts, observed_at, raw_row_count, exception.reason_code,
+                        workspace,
                     )
                 except RawPayloadError:
                     if not artifacts:
                         raise AcademyRegistryApiError("PROVIDER_PAGE_INVALID") from None
-                    return _incomplete(
-                        artifacts, observed_at, raw_row_count, "PROVIDER_PAGE_INVALID"
+                    return _incomplete_prepared(
+                        artifacts, observed_at, raw_row_count, "PROVIDER_PAGE_INVALID",
+                        workspace,
                     )
                 if expected_total is None:
                     expected_total = total
                     total_pages = max(1, math.ceil(total / _PAGE_SIZE))
                     if total_pages > _MAX_PAGES_PER_OFFICE:
-                        return _incomplete(
-                            artifacts, observed_at, raw_row_count, "PROVIDER_PAGE_INVALID"
+                        return _incomplete_prepared(
+                            artifacts, observed_at, raw_row_count, "PROVIDER_PAGE_INVALID",
+                            workspace,
                         )
                 elif total != expected_total:
-                    return _incomplete(
+                    return _incomplete_prepared(
                         artifacts,
                         observed_at,
                         raw_row_count,
                         "PROVIDER_TOTAL_COUNT_MISMATCH",
+                        workspace,
                     )
                 total_bytes += len(content)
                 if total_bytes > _MAX_BUNDLE_BYTES:
-                    return _incomplete(
-                        artifacts, observed_at, raw_row_count, "API_PAGE_TOO_LARGE"
+                    return _incomplete_prepared(
+                        artifacts, observed_at, raw_row_count, "API_PAGE_TOO_LARGE",
+                        workspace,
                     )
+                path = workspace.create_file(f"page-{len(artifacts) + 1:06d}.json")
+                path.write_bytes(content)
                 artifacts.append(
-                    BundleArtifact(
+                    FileBundleArtifact(
                         logical_name=f"{office.lower()}-page-{page_index:06d}",
                         extension="json",
                         media_type="application/json",
-                        content=content,
+                        path=path,
                     )
                 )
                 raw_row_count += len(rows)
                 page_index += 1
-        content = build_deterministic_bundle(
+        prepared = build_deterministic_bundle_file(
             source_id="edu.academy-registry",
             endpoint_path=_PATH,
             artifacts=tuple(artifacts),
             temporal_value=observed_at,
+            target=workspace.create_file("bundle.zip"),
         )
-        return CollectedAcademyRegistryBundle(
-            content, observed_at, len(artifacts), raw_row_count, True, ()
+        return PreparedAcademyRegistryBundle(
+            prepared, observed_at, len(artifacts), raw_row_count, True, ()
         )
 
     def _load_page(self, path: str, service_key: str) -> bytes:
@@ -154,22 +193,24 @@ class AcademyRegistryApiClient:
         raise AcademyRegistryApiError("API_TRANSPORT_FAILED")
 
 
-def _incomplete(
-    artifacts: list[BundleArtifact],
+def _incomplete_prepared(
+    artifacts: list[FileBundleArtifact],
     observed_at: datetime,
     raw_row_count: int,
     reason_code: str,
-) -> CollectedAcademyRegistryBundle:
-    content = build_deterministic_bundle(
+    workspace: SecureTempWorkspace,
+) -> PreparedAcademyRegistryBundle:
+    prepared = build_deterministic_bundle_file(
         source_id="edu.academy-registry",
         endpoint_path=_PATH,
         artifacts=tuple(artifacts),
         temporal_value=observed_at,
+        target=workspace.create_file("bundle.zip"),
         complete=False,
         reason_codes=(reason_code,),
     )
-    return CollectedAcademyRegistryBundle(
-        content, observed_at, len(artifacts), raw_row_count, False, (reason_code,)
+    return PreparedAcademyRegistryBundle(
+        prepared, observed_at, len(artifacts), raw_row_count, False, (reason_code,)
     )
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import nullcontext
 from dataclasses import replace
 from datetime import UTC, date, datetime
+from hashlib import sha256
 from uuid import UUID
 
 import pytest
@@ -11,8 +12,9 @@ from ai_service.datasets import sbiz_academy_ingest
 from ai_service.datasets.contracts import load_reference_source_catalog
 from ai_service.datasets.models import AcquisitionRecord, LifecycleResult
 from ai_service.datasets.raw_store import StoredRawObject
+from ai_service.datasets.bundle import PreparedBundle
 from ai_service.datasets.sbiz_academy_client import (
-    CollectedSbizAcademyBundle, SbizAcademyApiError,
+    PreparedSbizAcademyBundle, SbizAcademyApiError,
 )
 from tests.datasets.test_sbiz_academy_adapter import TAXONOMY, _bundle, _taxonomy
 
@@ -66,14 +68,25 @@ class Repository:
 
 
 class Client:
-    def collect(self, key, *, observed_at):
+    def collect_prepared(self, key, *, observed_at, workspace):
         assert key == "key"
-        return CollectedSbizAcademyBundle(_bundle(), observed_at, 1, 1, True, ())
+        content = _bundle()
+        path = workspace.create_file("fixture-bundle.zip")
+        path.write_bytes(content)
+        return PreparedSbizAcademyBundle(
+            PreparedBundle(path, len(content), sha256(content).hexdigest()),
+            observed_at, 1, 1, True, (),
+        )
 
 
 class RawStore:
-    def put_verified(self, *, source_id, checksum, content, content_type):
-        return StoredRawObject("S3", f"raw/{checksum}.zip", "v1", content_type, len(content), checksum)
+    def put_verified(self, **_kwargs):
+        raise AssertionError("API refresh must use file upload")
+
+    def put_verified_file(self, *, source_id, checksum, path, byte_length, content_type):
+        return StoredRawObject(
+            "S3", f"raw/{checksum}.zip", "v1", content_type, byte_length, checksum
+        )
 
 
 def test_sbiz_refresh_uses_tracked_taxonomy_and_static_orchestration(monkeypatch) -> None:
@@ -97,7 +110,7 @@ def test_sbiz_first_page_failure_records_safe_reason(monkeypatch) -> None:
     monkeypatch.setattr(sbiz_academy_ingest, "load_reference_source_catalog", lambda _path: _catalog())
 
     class Failed:
-        def collect(self, _key, *, observed_at):
+        def collect_prepared(self, _key, *, observed_at, workspace):
             raise SbizAcademyApiError("API_TRANSPORT_FAILED")
 
     with pytest.raises(SbizAcademyApiError):

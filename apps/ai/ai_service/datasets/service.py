@@ -320,6 +320,53 @@ class DatasetLifecycleService:
             acquisition.acquisition_id, idempotent=not acquisition.created
         )
 
+    def preserve_incomplete_prepared(
+        self,
+        contract: DatasetSourceContract,
+        prepared: PreparedBundle,
+        *,
+        source_date: date | None,
+        observed_at: datetime | None = None,
+        reason_codes: tuple[str, ...],
+        content_type: str = "application/zip",
+    ) -> LifecycleResult:
+        if self._raw_store is None:
+            raise ValueError("incomplete bundles require verified external raw storage")
+        if not reason_codes or any(not reason.strip() for reason in reason_codes):
+            raise ValueError("incomplete bundle reason codes are required")
+        collected_at = self._clock()
+        if (
+            contract.temporal_basis == "SOURCE_DATE"
+            and (source_date is None or observed_at is not None)
+        ) or (
+            contract.temporal_basis == "OBSERVED_AT"
+            and (source_date is not None or observed_at is None)
+        ):
+            raise ValueError("temporal value does not match source contract")
+        stored_raw = self._raw_store.put_verified_file(
+            source_id=contract.source_id,
+            checksum=prepared.checksum,
+            path=prepared.path,
+            byte_length=prepared.byte_length,
+            content_type=content_type,
+        )
+        contract_id = self._repository.register_source_contract(contract, collected_at)
+        acquisition = self._repository.acquire_stored_raw(
+            contract,
+            contract_id,
+            stored_raw,
+            source_date,
+            observed_at,
+            collected_at,
+        )
+        if acquisition.created:
+            self._repository.record_incomplete(
+                acquisition.acquisition_id, reason_codes, self._clock()
+            )
+        return self._repository.result(
+            acquisition.acquisition_id, idempotent=not acquisition.created
+        )
+
 
 class DatasetAdapter(Protocol):
     def parse(

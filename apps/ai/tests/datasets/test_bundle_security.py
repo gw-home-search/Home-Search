@@ -144,3 +144,36 @@ def test_file_bundle_matches_bytes_bundle_without_loading_artifact(tmp_path) -> 
         assert prepared.byte_length == len(expected)
         assert prepared.checksum == hashlib.sha256(expected).hexdigest()
         assert stat.S_IMODE(target.stat().st_mode) == 0o600
+
+
+def test_file_bundle_preserves_incomplete_safe_reason_metadata(tmp_path) -> None:
+    artifact_content = b'{"partial":true}'
+    expected = build_deterministic_bundle(
+        source_id="fixture.source",
+        endpoint_path="/fixture",
+        artifacts=(
+            BundleArtifact("page-000001", "json", "application/json", artifact_content),
+        ),
+        temporal_value=date(2026, 7, 20),
+        complete=False,
+        reason_codes=("API_SERVER_ERROR",),
+    )
+    source = tmp_path / "page.json"
+    source.write_bytes(artifact_content)
+
+    with SecureTempWorkspace(required_free_bytes=len(artifact_content) * 2) as workspace:
+        prepared = build_deterministic_bundle_file(
+            source_id="fixture.source",
+            endpoint_path="/fixture",
+            artifacts=(
+                FileBundleArtifact(
+                    "page-000001", "json", "application/json", source
+                ),
+            ),
+            temporal_value=date(2026, 7, 20),
+            target=workspace.create_file("bundle.zip"),
+            complete=False,
+            reason_codes=("API_SERVER_ERROR",),
+        )
+
+        assert prepared.path.read_bytes() == expected

@@ -8,9 +8,10 @@ from datetime import datetime
 from http.client import HTTPSConnection
 from urllib.parse import quote
 
-from .bundle import BundleArtifact, build_deterministic_bundle
+from .bundle import FileBundleArtifact, PreparedBundle, build_deterministic_bundle_file
 from .checksum import canonical_json_bytes
 from .sbiz_academy import SbizTaxonomyContract, _page, taxonomy_fingerprint
+from .secure_temp import SecureTempWorkspace
 from .validation import RawPayloadError
 
 
@@ -49,6 +50,16 @@ class CollectedSbizAcademyBundle:
     reason_codes: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class PreparedSbizAcademyBundle:
+    prepared: PreparedBundle
+    observed_at: datetime
+    page_count: int
+    raw_row_count: int
+    complete: bool
+    reason_codes: tuple[str, ...]
+
+
 class SbizAcademyApiClient:
     def __init__(
         self,
@@ -71,16 +82,40 @@ class SbizAcademyApiClient:
         self._timeout = float(timeout_seconds)
 
     def collect(self, service_key: str, *, observed_at: datetime) -> CollectedSbizAcademyBundle:
+        with SecureTempWorkspace(required_free_bytes=_MAX_BUNDLE_BYTES * 2) as workspace:
+            collected = self.collect_prepared(
+                service_key, observed_at=observed_at, workspace=workspace
+            )
+            return CollectedSbizAcademyBundle(
+                collected.prepared.path.read_bytes(),
+                collected.observed_at,
+                collected.page_count,
+                collected.raw_row_count,
+                collected.complete,
+                collected.reason_codes,
+            )
+
+    def collect_prepared(
+        self,
+        service_key: str,
+        *,
+        observed_at: datetime,
+        workspace: SecureTempWorkspace,
+    ) -> PreparedSbizAcademyBundle:
         key = service_key.strip()
         if not key or len(key) > 1024 or observed_at.tzinfo is None:
             raise ValueError("Sbiz API collection configuration is invalid")
-        artifacts = [
-            BundleArtifact(name, "json", "application/json", canonical_json_bytes(value))
-            for name, value in sorted(self._taxonomy_artifacts.items())
-        ]
+        artifacts: list[FileBundleArtifact] = []
+        for name, value in sorted(self._taxonomy_artifacts.items()):
+            content = canonical_json_bytes(value)
+            path = workspace.create_file(f"artifact-{len(artifacts) + 1:06d}.json")
+            path.write_bytes(content)
+            artifacts.append(
+                FileBundleArtifact(name, "json", "application/json", path)
+            )
         page_count = 0
         raw_row_count = 0
-        total_bytes = sum(len(item.content) for item in artifacts)
+        total_bytes = sum(item.path.stat().st_size for item in artifacts)
         for code in sorted(self._taxonomy.allowed_small_categories):
             page_number = 1
             page_total = 1
@@ -100,36 +135,42 @@ class SbizAcademyApiClient:
                     )
                     if page_count == 0:
                         raise SbizAcademyApiError(reason) from None
-                    return _incomplete(
-                        artifacts, observed_at, page_count, raw_row_count, reason
+                    return _incomplete_prepared(
+                        artifacts, observed_at, page_count, raw_row_count, reason,
+                        workspace,
                     )
                 page_total = max(1, math.ceil(total / _PAGE_SIZE))
                 if page_total > _MAX_PAGES:
-                    return _incomplete(
+                    return _incomplete_prepared(
                         artifacts, observed_at, page_count, raw_row_count,
-                        "PROVIDER_PAGE_INVALID",
+                        "PROVIDER_PAGE_INVALID", workspace,
                     )
                 total_bytes += len(content)
                 if total_bytes > _MAX_BUNDLE_BYTES:
-                    return _incomplete(
+                    return _incomplete_prepared(
                         artifacts, observed_at, page_count, raw_row_count,
-                        "API_PAGE_TOO_LARGE",
+                        "API_PAGE_TOO_LARGE", workspace,
                     )
+                artifact_path = workspace.create_file(
+                    f"artifact-{len(artifacts) + 1:06d}.json"
+                )
+                artifact_path.write_bytes(content)
                 artifacts.append(
-                    BundleArtifact(
+                    FileBundleArtifact(
                         f"{code.lower()}-page-{page_number}", "json",
-                        "application/json", content,
+                        "application/json", artifact_path,
                     )
                 )
                 page_count += 1
                 raw_row_count += len(rows)
                 page_number += 1
-        content = build_deterministic_bundle(
+        prepared = build_deterministic_bundle_file(
             source_id="place.sbiz-academy", endpoint_path=_PATH,
             artifacts=tuple(artifacts), temporal_value=observed_at,
+            target=workspace.create_file("bundle.zip"),
         )
-        return CollectedSbizAcademyBundle(
-            content, observed_at, page_count, raw_row_count, True, ()
+        return PreparedSbizAcademyBundle(
+            prepared, observed_at, page_count, raw_row_count, True, ()
         )
 
     def _load(self, path: str, service_key: str) -> bytes:
@@ -150,17 +191,18 @@ class SbizAcademyApiClient:
         raise SbizAcademyApiError("API_TRANSPORT_FAILED")
 
 
-def _incomplete(
-    artifacts: list[BundleArtifact], observed_at: datetime, page_count: int,
-    raw_row_count: int, reason: str,
-) -> CollectedSbizAcademyBundle:
-    content = build_deterministic_bundle(
+def _incomplete_prepared(
+    artifacts: list[FileBundleArtifact], observed_at: datetime, page_count: int,
+    raw_row_count: int, reason: str, workspace: SecureTempWorkspace,
+) -> PreparedSbizAcademyBundle:
+    prepared = build_deterministic_bundle_file(
         source_id="place.sbiz-academy", endpoint_path=_PATH,
         artifacts=tuple(artifacts), temporal_value=observed_at,
+        target=workspace.create_file("bundle.zip"),
         complete=False, reason_codes=(reason,),
     )
-    return CollectedSbizAcademyBundle(
-        content, observed_at, page_count, raw_row_count, False, (reason,)
+    return PreparedSbizAcademyBundle(
+        prepared, observed_at, page_count, raw_row_count, False, (reason,)
     )
 
 

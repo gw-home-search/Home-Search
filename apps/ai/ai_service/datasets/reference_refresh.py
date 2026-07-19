@@ -19,9 +19,24 @@ _CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "reference_sourc
 _PRIORITY_ORDER = (
     "edu.school-location",
     "edu.academy-registry",
+    "place.sbiz-academy",
     "retail.large-store",
     "transport.rail-station",
 )
+_SHARED_ENVIRONMENT_KEYS = (
+    "HOME_AI_IMPORTER_DSN",
+    "HOME_AI_RAW_S3_BUCKET",
+    "HOME_AI_RAW_S3_PREFIX",
+    "HOME_AI_RAW_S3_REGION",
+    "HOME_AI_RAW_S3_ENDPOINT",
+)
+_SOURCE_SECRET_KEYS = {
+    "edu.school-location": ("HOME_AI_DATA_GO_KR_SERVICE_KEY",),
+    "edu.academy-registry": ("HOME_AI_NEIS_SERVICE_KEY",),
+    "place.sbiz-academy": ("HOME_AI_DATA_GO_KR_SERVICE_KEY",),
+    "retail.large-store": (),
+    "transport.rail-station": (),
+}
 
 
 @dataclass(frozen=True)
@@ -54,7 +69,7 @@ def run(
             catalog.approved(source_id)
             if source_id != "edu.school-location":
                 raise SchoolLocationConfigurationError("source adapter is not implemented")
-            outcomes.append(school_refresh(environment))
+            outcomes.append(school_refresh(_source_environment(source_id, environment)))
         except (KeyError, LicenseNotApprovedError, SchoolLocationConfigurationError):
             outcomes.append(
                 RefreshFailure(
@@ -133,3 +148,8 @@ def _print_outcome(outcome: RefreshOutcome) -> None:
     print("coordinateCoverage: 1.0")
     print(f"datasetVersion: {result.dataset_version or ''}")
     print(f"reasonCodes: {','.join(result.issue_codes)}")
+
+
+def _source_environment(source_id: str, environment: Mapping[str, str]) -> dict[str, str]:
+    allowed = (*_SHARED_ENVIRONMENT_KEYS, *_SOURCE_SECRET_KEYS.get(source_id, ()))
+    return {key: environment[key] for key in allowed if key in environment}

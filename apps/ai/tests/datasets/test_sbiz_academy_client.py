@@ -10,7 +10,7 @@ from ai_service.datasets.sbiz_academy import (
 )
 from ai_service.datasets import sbiz_academy_client
 from ai_service.datasets.sbiz_academy_client import SbizAcademyApiClient, SbizAcademyApiError
-from tests.datasets.test_sbiz_academy_adapter import _contract, _taxonomy, TAXONOMY
+from tests.datasets.test_sbiz_academy_adapter import _contract, _rows, _taxonomy, TAXONOMY
 
 
 def _page() -> bytes:
@@ -47,9 +47,10 @@ def test_sbiz_collector_partitions_only_allowlisted_taxonomy_without_key_in_path
     parsed = SbizAcademyAdapter(_taxonomy()).parse(
         collected.content, _contract(), source_date=None
     )
+    rows = _rows(parsed)
     assert collected.complete is True
     assert collected.raw_row_count == 1
-    assert len(parsed.rows) == 1
+    assert len(rows) == 1
     assert all("secret" not in path for path in paths)
 
 

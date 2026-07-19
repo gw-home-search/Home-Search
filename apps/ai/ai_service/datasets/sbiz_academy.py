@@ -9,7 +9,7 @@ from datetime import date, datetime
 
 from .bundle import read_deterministic_bundle
 from .checksum import canonical_json_bytes
-from .models import DatasetSourceContract, ParsedDataset
+from .models import DatasetSourceContract, ParsedDataset, ParsedRow
 from .validation import RawPayloadError
 
 
@@ -52,14 +52,29 @@ class SbizAcademyAdapter:
         )
         if not isinstance(bundle.temporal_value, datetime):
             raise RawPayloadError("Sbiz observation time is missing", "BUNDLE_MANIFEST_INVALID")
+        return ParsedDataset(rows=self._iter_rows(bundle.artifacts, bundle.temporal_value))
+
+    def _iter_rows(self, artifacts, observed_at: datetime):
         taxonomy_values: dict[str, object] = {}
-        pages: dict[str, dict[int, tuple[int, int, list[dict[str, object]]]]] = {}
-        for artifact in bundle.artifacts:
+        expected_page: dict[str, int] = {}
+        expected_total: dict[str, int] = {}
+        seen_count: dict[str, int] = {}
+        seen_ids: set[str] = set()
+        page_started = False
+        previous_identity: tuple[str, int] | None = None
+        for artifact in artifacts:
             if artifact.media_type != "application/json":
                 raise RawPayloadError("Sbiz artifact type is invalid", "BUNDLE_MANIFEST_INVALID")
             if artifact.logical_name in {"taxonomy-large", "taxonomy-middle", "taxonomy-small"}:
+                if page_started or artifact.logical_name in taxonomy_values:
+                    raise RawPayloadError("Sbiz taxonomy order is invalid", "TAXONOMY_CHANGED")
                 taxonomy_values[artifact.logical_name] = _json(artifact.content)
                 continue
+            if set(taxonomy_values) != {"taxonomy-large", "taxonomy-middle", "taxonomy-small"}:
+                raise RawPayloadError("Sbiz taxonomy artifacts are incomplete", "TAXONOMY_CHANGED")
+            if taxonomy_fingerprint(taxonomy_values) != self._taxonomy.fingerprint:
+                raise RawPayloadError("Sbiz taxonomy fingerprint changed", "TAXONOMY_CHANGED")
+            page_started = True
             parts = artifact.logical_name.rsplit("-page-", 1)
             if len(parts) != 2 or not parts[1].isdigit():
                 raise RawPayloadError("Sbiz page identity is invalid", "BUNDLE_MANIFEST_INVALID")
@@ -67,29 +82,17 @@ class SbizAcademyAdapter:
             if code not in self._taxonomy.allowed_small_categories:
                 raise RawPayloadError("Sbiz partition is not allowlisted", "TAXONOMY_CHANGED")
             page_number = int(page_text)
+            identity = (code, page_number)
+            if previous_identity is not None and identity <= previous_identity:
+                raise RawPayloadError("Sbiz page order is invalid", "PROVIDER_PAGE_INVALID")
+            previous_identity = identity
             total, page_size, items = _page(artifact.content)
-            if page_number in pages.setdefault(code, {}):
-                raise RawPayloadError("Sbiz page is duplicated", "PROVIDER_PAGE_INVALID")
-            pages[code][page_number] = (total, page_size, items)
-        if set(taxonomy_values) != {"taxonomy-large", "taxonomy-middle", "taxonomy-small"}:
-            raise RawPayloadError("Sbiz taxonomy artifacts are incomplete", "TAXONOMY_CHANGED")
-        if taxonomy_fingerprint(taxonomy_values) != self._taxonomy.fingerprint:
-            raise RawPayloadError("Sbiz taxonomy fingerprint changed", "TAXONOMY_CHANGED")
-        if set(pages) != set(self._taxonomy.allowed_small_categories):
-            raise RawPayloadError("Sbiz partitions are incomplete", "PROVIDER_COVERAGE_INCOMPLETE")
-
-        rows: list[dict[str, object]] = []
-        seen_ids: set[str] = set()
-        for code in sorted(pages):
-            partition = pages[code]
-            if sorted(partition) != list(range(1, len(partition) + 1)):
+            if page_number != expected_page.setdefault(code, 1):
                 raise RawPayloadError("Sbiz pages are not contiguous", "PROVIDER_PAGE_INVALID")
-            totals = {value[0] for value in partition.values()}
-            if len(totals) != 1:
+            expected_page[code] += 1
+            if expected_total.setdefault(code, total) != total:
                 raise RawPayloadError("Sbiz total changed", "PROVIDER_TOTAL_COUNT_MISMATCH")
-            items = [item for page in sorted(partition) for item in partition[page][2]]
-            if len(items) != next(iter(totals)):
-                raise RawPayloadError("Sbiz total does not match rows", "PROVIDER_TOTAL_COUNT_MISMATCH")
+            seen_count[code] = seen_count.get(code, 0) + len(items)
             for item in items:
                 store_id = _text(item.get("bizesId"))
                 item_code = _text(item.get("indsSclsCd"))
@@ -99,7 +102,7 @@ class SbizAcademyAdapter:
                 seen_ids.add(store_id)
                 latitude = _number(item.get("lat"))
                 longitude = _number(item.get("lon"))
-                rows.append(
+                yield ParsedRow(
                     {
                         "store_id": store_id,
                         "name": _text(item.get("bizesNm")),
@@ -111,11 +114,19 @@ class SbizAcademyAdapter:
                         "region_code": _optional(item.get("adongCd")),
                         "latitude": latitude,
                         "longitude": longitude,
-                        "observed_at": bundle.temporal_value.isoformat(),
+                        "observed_at": observed_at.isoformat(),
                         "status": "OPEN",
                     }
                 )
-        return ParsedDataset(rows=rows)
+        if set(taxonomy_values) != {"taxonomy-large", "taxonomy-middle", "taxonomy-small"}:
+            raise RawPayloadError("Sbiz taxonomy artifacts are incomplete", "TAXONOMY_CHANGED")
+        if taxonomy_fingerprint(taxonomy_values) != self._taxonomy.fingerprint:
+            raise RawPayloadError("Sbiz taxonomy fingerprint changed", "TAXONOMY_CHANGED")
+        if set(expected_page) != set(self._taxonomy.allowed_small_categories):
+            raise RawPayloadError("Sbiz partitions are incomplete", "PROVIDER_COVERAGE_INCOMPLETE")
+        for code, total in expected_total.items():
+            if seen_count.get(code, 0) != total:
+                raise RawPayloadError("Sbiz total does not match rows", "PROVIDER_TOTAL_COUNT_MISMATCH")
 
 
 def _json(content: bytes) -> object:

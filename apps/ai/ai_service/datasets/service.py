@@ -175,17 +175,26 @@ class DatasetLifecycleService:
         validation_date = source_date or observed_at.date()  # type: ignore[union-attr]
         with SecureTempWorkspace(required_free_bytes=max(len(raw_bytes) * 2, 1)) as workspace:
             spool = NormalizedRowSpool(workspace.create_file("normalized.ndjson"))
-            outcome = validate_rows(
-                contract,
-                parsed.rows,
-                active.row_count if active else None,
-                source_date=validation_date,
-                collected_at=collected_at,
-                adapter_issues=parsed.issues,
-                adapter_rejections=parsed.row_rejections,
-                row_sink=spool.append,
-                retain_staged_rows=False,
-            )
+            try:
+                outcome = validate_rows(
+                    contract,
+                    parsed.rows,
+                    active.row_count if active else None,
+                    source_date=validation_date,
+                    collected_at=collected_at,
+                    adapter_issues=parsed.issues,
+                    adapter_rejections=parsed.row_rejections,
+                    row_sink=spool.append,
+                    retain_staged_rows=False,
+                )
+            except RawPayloadError as exception:
+                spool.close()
+                self._repository.record_parse_failure(
+                    acquisition.acquisition_id, exception.reason_code, self._clock()
+                )
+                return self._repository.result(
+                    acquisition.acquisition_id, idempotent=False
+                )
             spool.close()
             temporal_value = source_date or observed_at
             assert temporal_value is not None

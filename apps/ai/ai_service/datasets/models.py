@@ -6,6 +6,7 @@ import re
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from pathlib import Path
+from collections.abc import Iterable
 from typing import Literal
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -137,9 +138,15 @@ class ValidationOutcome:
 
 @dataclass(frozen=True)
 class ParsedDataset:
-    rows: list[dict[str, object]]
+    rows: Iterable[dict[str, object] | ParsedRow]
     issues: tuple[QualityIssue, ...] = ()
     row_rejections: dict[int, tuple[str, ...]] | None = None
+
+
+@dataclass(frozen=True)
+class ParsedRow:
+    row_data: dict[str, object]
+    rejection_codes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

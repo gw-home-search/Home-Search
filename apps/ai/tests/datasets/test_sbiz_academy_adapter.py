@@ -15,6 +15,7 @@ from ai_service.datasets.sbiz_academy import (
 )
 from ai_service.datasets import sbiz_academy
 from ai_service.datasets.validation import RawPayloadError
+from ai_service.datasets.models import ParsedRow
 
 
 TAXONOMY = {
@@ -66,22 +67,34 @@ def _bundle(*, duplicate: bool = False, taxonomy=TAXONOMY) -> bytes:
     )
 
 
+def _rows(parsed):
+    return [
+        candidate.row_data if isinstance(candidate, ParsedRow) else candidate
+        for candidate in parsed.rows
+    ]
+
+
 def test_sbiz_adapter_requires_tracked_taxonomy_and_excludes_phone() -> None:
     parsed = SbizAcademyAdapter(_taxonomy()).parse(_bundle(), _contract(), source_date=None)
+    rows = _rows(parsed)
 
-    assert parsed.rows[0]["store_id"] == "store-1"
-    assert parsed.rows[0]["small_category_name"] == "fixture 학원"
-    assert "telNo" not in parsed.rows[0]
+    assert rows[0]["store_id"] == "store-1"
+    assert rows[0]["small_category_name"] == "fixture 학원"
+    assert "telNo" not in rows[0]
 
 
 def test_sbiz_adapter_blocks_taxonomy_change_and_duplicate_store_id() -> None:
     changed = {**TAXONOMY, "taxonomy-small": [{"code": "P10102", "name": "changed"}]}
     with pytest.raises(RawPayloadError) as error:
-        SbizAcademyAdapter(_taxonomy()).parse(_bundle(taxonomy=changed), _contract(), source_date=None)
+        _rows(SbizAcademyAdapter(_taxonomy()).parse(
+            _bundle(taxonomy=changed), _contract(), source_date=None
+        ))
     assert error.value.reason_code == "TAXONOMY_CHANGED"
 
     with pytest.raises(RawPayloadError) as error:
-        SbizAcademyAdapter(_taxonomy()).parse(_bundle(duplicate=True), _contract(), source_date=None)
+        _rows(SbizAcademyAdapter(_taxonomy()).parse(
+            _bundle(duplicate=True), _contract(), source_date=None
+        ))
     assert error.value.reason_code == "DUPLICATE_STORE_ID"
 
 

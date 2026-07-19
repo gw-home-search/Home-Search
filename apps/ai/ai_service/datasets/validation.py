@@ -6,7 +6,7 @@ from datetime import date, datetime
 from collections.abc import Callable, Iterable
 from typing import Any
 
-from .models import DatasetSourceContract, QualityIssue, StagedRow, ValidationOutcome
+from .models import DatasetSourceContract, ParsedRow, QualityIssue, StagedRow, ValidationOutcome
 
 
 class RawPayloadError(ValueError):
@@ -33,7 +33,7 @@ def parse_rows(raw_bytes: bytes, encoding: str) -> list[dict[str, object]]:
 
 def validate_rows(
     contract: DatasetSourceContract,
-    rows: Iterable[dict[str, object]],
+    rows: Iterable[dict[str, object] | ParsedRow],
     previous_active_row_count: int | None,
     *,
     source_date: date,
@@ -50,9 +50,17 @@ def validate_rows(
     raw_count = 0
     rejected_count = 0
 
-    for row_number, row in enumerate(rows, start=1):
+    for row_number, candidate in enumerate(rows, start=1):
+        if isinstance(candidate, ParsedRow):
+            row = candidate.row_data
+            candidate_rejections = candidate.rejection_codes
+        else:
+            row = candidate
+            candidate_rejections = ()
         raw_count += 1
-        rejection_codes: list[str] = list(adapter_rejections.get(row_number, ()))
+        rejection_codes: list[str] = [
+            *adapter_rejections.get(row_number, ()), *candidate_rejections
+        ]
         missing = [field for field in contract.required_fields if _missing(row.get(field))]
         if missing:
             rejection_codes.append("REQUIRED_FIELD_MISSING")

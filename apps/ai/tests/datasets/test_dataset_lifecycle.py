@@ -11,6 +11,8 @@ import pytest
 
 from ai_service.datasets import DatasetLifecycleService, DatasetSourceContract
 from ai_service.datasets.postgres import PostgresDatasetRepository
+from ai_service.datasets.models import ParsedDataset
+from ai_service.datasets.validation import RawPayloadError
 
 
 pytestmark = pytest.mark.postgres
@@ -69,6 +71,32 @@ def valid_rows(version: int = 1) -> list[dict[str, object]]:
 
 def service(repository: PostgresDatasetRepository) -> DatasetLifecycleService:
     return DatasetLifecycleService(repository, clock=lambda: COLLECTED_AT)
+
+
+def test_lazy_adapter_failure_is_recorded_without_partial_staging(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    class LazyAdapter:
+        def parse(self, _raw, _contract, *, source_date):
+            def rows():
+                yield valid_rows()[0]
+                raise RawPayloadError("later page failed", "PROVIDER_PAGE_INVALID")
+
+            return ParsedDataset(rows=rows())
+
+    result = service(dataset_repository).ingest_validate_publish(
+        source_contract(), b"lazy-provider-bundle", source_date=SOURCE_DATE,
+        adapter=LazyAdapter(),
+    )
+
+    assert result.status == "Fail"
+    assert result.issue_codes == ("PROVIDER_PAGE_INVALID",)
+    with psycopg.connect(postgres_dsn) as connection:
+        assert connection.execute(
+            "SELECT count(*) FROM dataset_staging_row WHERE acquisition_id = %s",
+            (result.acquisition_id,),
+        ).fetchone()[0] == 0
 
 
 def test_checksum_reingest_is_idempotent_and_does_not_duplicate_publication(

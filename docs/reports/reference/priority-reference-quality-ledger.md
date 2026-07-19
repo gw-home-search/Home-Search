@@ -87,7 +87,10 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
 상세 readiness 근거는 `docs/reports/reference/readiness/`에 source별로 기록한다.
 F1은 file source의 prepared artifact upload와 대규모점포 generic refresher까지
 연결했지만 API source bundle과 adapter normalized row의 bounded-memory 전환이 남아
-`Partial`을 유지한다. 2026-07-20 offline 회귀는 `465 passed`, coverage `90.33%`이며 실제 provider,
+`Partial`을 유지한다. F2는 lazy `ParsedRow`와 stream 중 parse failure rollback,
+Sbiz normalized iterator, 30만 행 `<256MiB` peak memory gate를 통과했지만 NEIS와
+학교 adapter의 list 전환이 남아 `Partial`을 유지한다. 2026-07-20 offline 회귀는
+`467 passed`, coverage `90.28%`이며 실제 provider,
 운영 DB, S3 live 검증은 실행하지 않았다.
 
 ## 공통 중단·롤백

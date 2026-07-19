@@ -80,7 +80,7 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
 | F3 static composition·CLI | `Partial` | 미채점 | 해당 없음 | 해당 없음 |
 | D1 AsciiDoc artifact | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
 | NEIS | collector·projection offline `Pass`, observer·live 미완료 | 미채점 | `2.0/10 Partial` | 금지 |
-| Sbiz | collector·adapter·exact projection offline `Pass`, taxonomy 미승인 | 미채점 | `2.0/10 Partial` | 금지 |
+| Sbiz | collector·adapter·exact projection·generic refresh offline `Pass`, taxonomy 미승인 | 미채점 | `2.0/10 Partial` | 금지 |
 | 대규모점포 | streaming file client·기존 projection `Pass`, live 미실행 | 미채점 | `3.0/10 Partial` | 금지 |
 | 철도 | fixed URL preflight·occurrence projection·merge `Pass`, URL 미확정 | 미채점 | `2.0/10 Partial` | 금지 |
 
@@ -89,9 +89,8 @@ F1은 file source의 prepared artifact upload와 대규모점포 generic refresh
 연결했지만 API source bundle과 adapter normalized row의 bounded-memory 전환이 남아
 `Partial`을 유지한다. F2는 lazy `ParsedRow`, stream 중 parse failure rollback,
 NEIS·Sbiz normalized iterator, 30만 행 `<256MiB` peak memory gate를 통과했다.
-file source는 계약상 최대 1만 행 이하로 제한된다. 2026-07-20 최근 전체 offline 회귀는
-`467 passed`, coverage `90.28%`이며 이후 NEIS lazy 경로 좁은 회귀 `19 passed`를
-확인했다. 실제 provider,
+file source는 계약상 최대 1만 행 이하로 제한된다. 2026-07-20 전체 offline 회귀는
+`470 passed`, coverage `90.06%`다. 실제 provider,
 운영 DB, S3 live 검증은 실행하지 않았다.
 
 ## 공통 중단·롤백

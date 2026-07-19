@@ -15,6 +15,7 @@ from .school_location_ingest import (
 )
 from .academy_registry_ingest import AcademyRegistryIngestReport, ingest_from_environment as ingest_academy_registry
 from .large_store_ingest import LargeStoreIngestReport, ingest_from_environment as ingest_large_store
+from .sbiz_academy_ingest import SbizAcademyIngestReport, ingest_from_environment as ingest_sbiz_academy
 
 
 _CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "reference_sources.toml"
@@ -50,6 +51,7 @@ class RefreshFailure:
 
 ReferenceIngestReport = (
     SchoolLocationIngestReport | AcademyRegistryIngestReport | LargeStoreIngestReport
+    | SbizAcademyIngestReport
 )
 RefreshOutcome = ReferenceIngestReport | RefreshFailure
 
@@ -67,7 +69,7 @@ def _unavailable_refresh(_environment: Mapping[str, str]) -> ReferenceIngestRepo
 _SOURCE_DEFINITIONS = (
     SourceDefinition("edu.school-location", ingest_from_environment),
     SourceDefinition("edu.academy-registry", ingest_academy_registry),
-    SourceDefinition("place.sbiz-academy", _unavailable_refresh),
+    SourceDefinition("place.sbiz-academy", ingest_sbiz_academy),
     SourceDefinition("retail.large-store", ingest_large_store),
     SourceDefinition("transport.rail-station", _unavailable_refresh),
 )

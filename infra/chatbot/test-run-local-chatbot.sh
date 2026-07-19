@@ -105,6 +105,18 @@ grep -Fq 'exec --env AI_DATA_MIGRATOR_DB_PASSWORD --env AI_DATA_IMPORTER_DB_PASS
 grep -Fq -- '--profile user' "$docker_log"
 grep -Fq 'up -d --build --force-recreate --no-deps user-service ai chat-bff public-api-gateway' "$docker_log"
 
+printf '%s\n' \
+    'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \
+    'HOME_AI_JWT_PUBLIC_KEY_PATHS={"local-user-1":"/run/keys/user-signing-public"}' \
+    'HOME_AI_OPENAI_API_KEY=openai-test-secret' \
+    'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
+    'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
+    'HOME_AI_OPENAI_TIMEOUT_SECONDS=7' \
+    'HOME_AI_QUERY_TIMEOUT_SECONDS=40' \
+    'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity' \
+    'HOME_AI_REFERENCE_DSN=postgresql://home_search_ai_runtime:stale-runtime-secret@postgis:5432/home_search_ai' \
+    'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=' >"$ai_env"
+
 default_output="$(
     PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_TEST_DOCKER_LOG="$docker_log" \

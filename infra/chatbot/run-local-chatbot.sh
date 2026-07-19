@@ -217,7 +217,11 @@ password = quote(os.environ["AI_RUNTIME_PASSWORD"], safe="")
 print(f"postgresql://home_search_ai_runtime:{password}@postgis:5432/home_search_ai")
 PY
 )"
-ai_reference_dsn="$(optional_value "$ai_vars_file" HOME_AI_REFERENCE_DSN "$default_ai_reference_dsn")"
+if [[ "$using_default_runtime_files" == "true" ]]; then
+    ai_reference_dsn="$default_ai_reference_dsn"
+else
+    ai_reference_dsn="$(optional_value "$ai_vars_file" HOME_AI_REFERENCE_DSN "$default_ai_reference_dsn")"
+fi
 ai_enabled_reference_capabilities="$(optional_blank_value "$ai_vars_file" HOME_AI_ENABLED_REFERENCE_CAPABILITIES "")"
 ai_openai_api_key="$(required_value "$ai_vars_file" HOME_AI_OPENAI_API_KEY)"
 ai_openai_primary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_PRIMARY_MODEL)"

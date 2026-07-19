@@ -189,7 +189,9 @@ data: {"requestId":"...","code":"CHATBOT_PROVIDER_UNAVAILABLE","message":"답변
 
 ## Empty와 실패 의미
 
-- 정상 조회 0건은 HTTP `200`, `evidenceSummary.status=unavailable|partial`로 반환한다.
+- 검증된 검색 범위 fact가 있는 정상 조회 0건은 HTTP `200`,
+  `evidenceSummary.status=supported`로 반환할 수 있다. 필수 observation이나 dataset이
+  부족한 0건은 `unavailable|partial`로 반환한다.
 - Kakao 0건을 시설 부재로 표현하지 않는다.
 - Data Readiness 실패 시 도구를 실행하지 않고 필요한 dataset을 설명한다.
 - LLM 검증 실패 시 정형 observation을 대신 최종 답변으로 노출하지 않는다.

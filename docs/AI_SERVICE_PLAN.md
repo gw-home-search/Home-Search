@@ -130,6 +130,11 @@ LLM은 후보와 계산 근거를 설명할 뿐 점수와 사실을 만들지 �
 
 - 학교 위치·상태, 초등 통학구역, 중·고 학교군, 학원·교습소
 - 학교 ID dedupe, 좌표/polygon, 경계와 전국 coverage 검증
+- 상태: Slice 6A의 학교 위치 최소 경로는 deterministic API bundle, source adapter,
+  one-shot importer, typed read view, Haversine reference repository와 default-disabled
+  grounded answer까지 구현했다. dataset-specific 이용 조건 승인과 실제 전국 import가
+  없으므로 `school_location`은 계속 `데이터 준비 중`이며 상세 공백은
+  `docs/reports/CHATBOT_SLICE_6A_SCHOOL_LOCATION_READINESS.md`에 기록한다.
 
 ### Slice 7: 교통·의료·보육 공식 데이터
 

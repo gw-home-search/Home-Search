@@ -187,10 +187,57 @@ own artifact or application directory rather than the repository root.
 The property database bootstrap also requires `AI_PROPERTY_READER_DB_PASSWORD`.
 It creates the independent `home_search_ai_reader` login with `NOINHERIT` and no
 role-management privileges. This login can connect only to `home_search`, can
-`SELECT` only the explicitly granted `ai_read.complex_fact` and
-`ai_read.trade_fact` views, and receives no default privilege for future views.
+`SELECT` only the explicitly granted `ai_read.complex_fact`,
+`ai_read.trade_fact`, and `ai_read.region_fact` views, and receives no default
+privilege for future views.
 Keep this value distinct from property runtime, migrator, user, admin, and
 Postgres bootstrap credentials.
+
+The same protected `apps/property-data/.env` bootstrap file must define three
+additional, distinct values without repository-known defaults:
+
+```dotenv
+AI_DATA_MIGRATOR_DB_PASSWORD=
+AI_DATA_IMPORTER_DB_PASSWORD=
+AI_DATA_RUNTIME_DB_PASSWORD=
+```
+
+Fresh PostgreSQL volumes create `home_search_ai` and the
+`home_search_ai_migrator`, `home_search_ai_importer`, and
+`home_search_ai_runtime` `NOINHERIT` roles during normal init. Existing
+volumes are upgraded without deletion or recreation by the idempotent command
+below. It passes password values through inherited Docker exec environment
+entries, not command arguments, and applies only the AI database boundary:
+
+```bash
+export AI_DATA_MIGRATOR_DB_PASSWORD
+export AI_DATA_IMPORTER_DB_PASSWORD
+export AI_DATA_RUNTIME_DB_PASSWORD
+infra/postgres/bootstrap-ai-database.sh
+```
+
+Do not run this command until the three variables contain protected local
+values. It never deletes a database, volume, publication, or raw object.
+
+Local raw storage uses a dedicated persistent MinIO volume. `apps/ai/.env`
+must keep MinIO administration credentials distinct from the importer S3
+credentials:
+
+```dotenv
+HOME_AI_MINIO_ROOT_USER=
+HOME_AI_MINIO_ROOT_PASSWORD=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+HOME_AI_RAW_S3_BUCKET=
+HOME_AI_RAW_S3_PREFIX=raw
+HOME_AI_RAW_S3_REGION=ap-northeast-2
+HOME_AI_RAW_S3_ENDPOINT=http://minio:9000
+```
+
+`minio-init` creates a private, versioned, object-locked bucket and attaches an
+importer policy limited to `s3:GetObject` and `s3:PutObject` under `raw/*`.
+The chatbot runtime receives none of these values. Never delete or recreate the
+MinIO volume to repair configuration.
 
 ## Required AI-service Environment
 
@@ -223,7 +270,8 @@ precedence. Otherwise the runner accepts the existing property application pair
 reuses `DB_PASSWORD` when the username is a runtime role. The property runtime
 password uses the existing local Compose default unless explicitly supplied,
 and the user runtime password comes from the user-service file's
-`USER_DB_PASSWORD`. Migrator and AI reader passwords remain separate roles.
+`USER_DB_PASSWORD`. Migrator, AI property reader, AI dataset
+migrator/importer, and AI reference runtime passwords remain separate roles.
 
 Use `apps/chat-bff/local-runtime.example` and `apps/ai/local-runtime.example`
 as placeholder-only templates. The runner parses assignments without sourcing
@@ -232,14 +280,20 @@ placeholder values, an invalid RSA pair, inconsistent `kid` mappings, mismatched
 user runtime DB passwords, and an AI reader DSN that does not match the
 dedicated reader password. The no-argument path derives BFF/AI public-key
 mappings from `USER_JWT_ACTIVE_KID`, percent-encodes the AI reader password into
-the fixed local DSN, and supplies the approved cumulative
+the fixed local DSN, derives the separate `home_search_ai_runtime` reference
+DSN from `AI_DATA_RUNTIME_DB_PASSWORD`, and supplies the approved cumulative
 `complex_identity,recent_trade_lookup,price_trend` allowlist when that optional line is
 absent. The four-path form keeps strict explicit mapping,
-DSN, and Capability validation.
+DSN, and Capability validation. `HOME_AI_ENABLED_REFERENCE_CAPABILITIES`
+defaults to blank; its only accepted non-empty value is exactly
+`school_location`.
 
 The runner requires the existing `home-search-postgis` and `home-search-redis`
 containers to be healthy and `home-search-api` to be running. It then uses
 Compose `--no-deps` so chatbot startup cannot recreate the base data services.
+After all base-container and Compose preflight checks pass, it runs the
+idempotent AI-only bootstrap immediately before chatbot startup. This supports
+existing volumes without `down -v`, volume deletion, or container recreation.
 The targeted user/AI/BFF/gateway containers use `--force-recreate` so a rebuilt
 mounted BFF artifact is loaded without touching Postgres or Redis. The local BFF
 timeout is a finite `70s`. The AI total query budget accepts `1..60s` and defaults

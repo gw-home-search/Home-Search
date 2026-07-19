@@ -3,6 +3,9 @@
 `apps/ai` is the evidence-grounded FastAPI service. Slice 2 adds the isolated
 `home_search_ai` dataset lifecycle. Slice 4 adds the provider-agnostic grounded
 property kernel and a separate read-only property connection pool.
+Slice 6A adds a default-disabled school-location reference path and a one-shot
+official API importer. It does not activate the Capability without a `Pass`
+readiness report.
 
 The property pool requires `HOME_AI_PROPERTY_DSN` to target database
 `home_search` as role `home_search_ai_reader`. It reads only `ai_read` views and
@@ -25,6 +28,9 @@ Runtime variables:
 - `HOME_AI_OPENAI_TIMEOUT_SECONDS` (optional, default `8`, allowed `1..30`)
 - `HOME_AI_QUERY_TIMEOUT_SECONDS` (optional, default `45`, allowed `1..60`)
 - `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend`
+- `HOME_AI_REFERENCE_DSN` (separate `home_search_ai_runtime` read-only pool)
+- `HOME_AI_ENABLED_REFERENCE_CAPABILITIES` (blank by default; the only approved
+  non-empty value is `school_location` after activation approval)
 
 The runtime Capability setting is fail-closed. This activation permits the
 identity-only rollback value or the cumulative
@@ -46,8 +52,10 @@ the non-root `home-ai` user. `local-runtime.example` documents only placeholder
 values. Local integrated startup is owned by
 `infra/chatbot/run-local-chatbot.sh`; do not invoke the overlay directly and do
 not inject a migrator DSN into the runtime container. The overlay injects the
-validated OpenAI runtime variables only into the AI container. Provider adapter
-tests use a fake transport and make no live request.
+validated OpenAI variables plus only `HOME_AI_REFERENCE_DSN` and
+`HOME_AI_ENABLED_REFERENCE_CAPABILITIES` into the AI container. It never
+injects the AI dataset migrator/importer DSN, role passwords, or public API key.
+Provider adapter tests use a fake transport and make no live request.
 
 ## Verification
 
@@ -108,5 +116,39 @@ HOME_AI_MIGRATOR_DSN='postgresql://...' uv run home-ai-migrate
 ```
 
 Do not expose `HOME_AI_MIGRATOR_DSN` to the runtime container. The runtime
-credential will be introduced with the first operational dataset slice and
-must not own schema objects or receive access to the property database.
+credential must not own schema objects or receive access to the property database.
+
+Before migration, fresh volumes receive the roles from PostgreSQL init. For an
+existing local volume, export the three protected `AI_DATA_*_DB_PASSWORD`
+values and run `infra/postgres/bootstrap-ai-database.sh`. The command is
+idempotent and does not delete or recreate a Docker volume.
+
+Migrations are discovered from `ai_service/datasets/migrations/NNNN_*.sql` in
+numeric order. Applied checksums are verified before pending migrations run;
+an applied file must never be edited.
+
+## School-location one-shot ingest
+
+The importer uses the official HTTPS endpoint with sequential 1,000-row pages,
+one bounded retry for timeout/5xx, and deterministic ZIP raw preservation. It
+does not log or persist the API key, request URL, HTTP error body, or query.
+Runtime does not receive importer/migrator credentials or the public-data key.
+
+Before any network or database object is created, the source entry in
+`config/reference_sources.toml` must have complete tracked license evidence and
+`status = "APPROVED"`. Approval is source-specific and is never inherited by a
+different public dataset.
+
+```bash
+HOME_AI_IMPORTER_DSN='postgresql://...' \
+HOME_AI_DATA_GO_KR_SERVICE_KEY='...' \
+HOME_AI_RAW_S3_BUCKET='private-bucket' \
+HOME_AI_RAW_S3_PREFIX='raw' \
+HOME_AI_RAW_S3_REGION='ap-northeast-2' \
+uv run home-ai-school-location-ingest
+```
+
+Use protected runtime secret injection rather than command-line literals in
+real operation. The command emits only `Pass|Fail`, source/date/page/row counts,
+dataset version, and stable reason codes. Configuration failure exits `2`;
+API, parse, quality, or publication failure exits `1`.

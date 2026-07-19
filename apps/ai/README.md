@@ -152,3 +152,15 @@ Use protected runtime secret injection rather than command-line literals in
 real operation. The command emits only `Pass|Fail`, source/date/page/row counts,
 dataset version, and stable reason codes. Configuration failure exits `2`;
 API, parse, quality, or publication failure exits `1`.
+
+For the local PostGIS/MinIO path, use the protected-file wrapper instead of
+sourcing either `.env` file:
+
+```bash
+apps/ai/ops/run-local-reference-refresh.sh --source edu.school-location
+```
+
+The wrapper derives dedicated migrator/importer DSNs from the protected role
+passwords, prepares the private versioned/object-locked MinIO bucket, runs
+migrations in a one-shot container, and then runs the importer. It passes
+secret names through Docker `--env` without placing values in process arguments.

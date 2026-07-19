@@ -20,15 +20,22 @@
 - 17개 교육청 coverage, 학교 ID 중복, 좌표·학교급·운영상태·기준일 검증 테스트
 - runtime active read view만 SELECT, raw/projection base table 쓰기 차단 테스트
 - 공개 JSON/SSE URL·field·error shape 변경 없음
+- 실제 AI DB role bootstrap과 chatbot image/health startup 통과
+- 실제 서명 JWT JSON/SSE, 잘못된 issuer `401`, property route 회귀 통과
+- local refresh wrapper의 secret 비노출과
+  `MinIO → migration → importer` 실행 순서 테스트 통과
 
 ## 검증 공백
 
-- 로컬 AI DB의 현재 runtime password와 `HOME_AI_REFERENCE_DSN`이 일치하지 않아
-  실제 migration/import/chatbot E2E를 수행하지 못했다.
+- no-argument chatbot runner가 runtime password에서 reference DSN을 재파생하도록
+  복구했으며 실제 AI DB bootstrap과 chatbot health는 통과했다.
 - 실제 전국 provider import, 10,000~50,000행, rejected `0`, 17개 교육청 실데이터
   coverage, 두 번째 `Pass|NoChange` 실행 근거가 없다.
-- 로컬 MinIO bucket 설정값이 없어 bucket/versioning/object-lock smoke가 미완료다.
-- signed JWT JSON/SSE live golden과 대표 공간 query 20회 p95 측정이 미완료다.
+- `apps/ai/.env`에 `AWS_ACCESS_KEY_ID`가 정확히 한 번 정의되지 않아 refresh가
+  provider 호출과 migration 전에 exit `2`로 중단됐다. MinIO
+  bucket/versioning/object-lock smoke도 이 지점에서 미완료다.
+- test engine 기반 signed JWT JSON/SSE E2E는 통과했지만 실제 학교 observation과
+  LLM을 사용하는 live golden, 대표 공간 query 20회 p95 측정은 미완료다.
 
 ## 잔여 위험
 
@@ -46,7 +53,8 @@ SSE error shape를 유지한다.
 
 S3 raw는 private·versioned·object-lock 대상으로 두고 runtime에 credential을 전달하지
 않는다. 로컬 MinIO root와 importer credential을 분리했으며 importer policy에는
-`s3:GetObject`, `s3:PutObject`만 두고 삭제 권한을 주지 않았다.
+`s3:GetObject`, `s3:PutObject`만 두고 삭제 권한을 주지 않았다. MinIO server/init은
+전체 AI env 파일 대신 각자 필요한 secret만 명시적으로 받는다.
 
 security-audit: 지적사항 = listed
 

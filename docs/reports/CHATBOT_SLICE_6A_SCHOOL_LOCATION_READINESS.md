@@ -1,8 +1,8 @@
 # Slice 6A 학교 위치 데이터 준비 보고서
 
 기준일: 2026-07-19
-판정: `Partial` — 현재 작업에서 학교 위치 이용조건은 tracked contract에 승인
-기록했으나 운영 `home_search_ai` migration, 전국 import, live E2E가 수행되지 않았다.
+판정: `Partial` — 학교 위치 이용조건과 local AI DB/chatbot transport는 검증했으나
+MinIO importer credential 미설정으로 전국 import와 학교 live golden이 수행되지 않았다.
 
 source별 최신 근거: `docs/reports/reference/edu.school-location-readiness.md`
 
@@ -54,19 +54,23 @@ source별 최신 근거: `docs/reports/reference/edu.school-location-readiness.m
   사용하며, fake Docker preflight에서 secret 비노출·멱등 exec 형태 검증
 - chatbot runtime에는 reference DSN/allowlist만 전달되고 migrator/importer
   credential과 공공 API key가 전달되지 않는 static boundary 검증
+- no-argument runner의 stale reference DSN 무시·안전한 재파생과 실제 chatbot
+  image/health startup 검증
+- 실제 서명 JWT JSON/SSE, 잘못된 issuer `401`, 기존 property route 회귀 검증
+- local refresh wrapper의 protected env parsing, Docker argument secret 비노출,
+  MinIO/migration/importer 실행 순서 검증
 - `api-contract`: `compatible`. 기존 JSON/SSE URL·method·top-level field·오류
   shape는 유지되고 `school_location`과 학교 citation 값만 기존 필드 안에 추가됨
 
 ## 검증 공백
 
-- 로컬 `AI_DATA_*_DB_PASSWORD`, AI migrator/importer/reference DSN,
-  공공데이터 service key 설정
-- 실제 기존 volume에서 `home_search_ai` bootstrap과 migration `0001..0002` 적용
+- `apps/ai/.env`의 `AWS_ACCESS_KEY_ID`와 나머지 MinIO importer 설정 완성
+- 실제 기존 volume에서 dataset migration `0001..0004` 적용
 - 공식 API 전체 page 수집과 10,000..50,000 row, rejected `0`, 17개 coverage 확인
 - 동일 실제 bundle 재실행의 acquisition/publication 멱등성
 - 운영 `home_search_ai_runtime` credential의 raw/staging/quarantine permission denied smoke
 - 실제 Haversine query 실행계획과 대표 20회 응답시간
-- 승인된 school live 질문, signed JWT JSON/SSE E2E
+- 승인된 school observation/LLM live 질문
 
 ## 잔여 위험
 
@@ -95,5 +99,5 @@ runtime typed view 최소 권한과 학교 금지 주장 grounding을 검토했�
 
 security-audit: 지적사항 = listed
 
-- 실제 MinIO importer policy, AWS SSE-KMS/IAM, 운영 role permission smoke가
-  미완료다.
+- 실제 MinIO importer policy/bucket/object-lock, AWS SSE-KMS/IAM, 운영 role
+  permission smoke가 미완료다.

@@ -79,8 +79,13 @@ def _snippets(source_id: str, source: dict[str, object], examples: Path) -> dict
     assert isinstance(acquisition, dict) and isinstance(temporal, dict)
     mode = acquisition["mode"]
     request_name = "http-request.adoc" if mode == "api" else "download-request.adoc"
+    request_target = (
+        "RELEASE_URL_UNRESOLVED"
+        if source_id == "transport.rail-station"
+        else f"GET {acquisition['base_url']}"
+    )
     result = {
-        request_name: f"[source,text]\n----\nGET {acquisition['base_url']}\n----\n",
+        request_name: f"[source,text]\n----\n{request_target}\n----\n",
         "http-response.adoc": f"[source,text]\n----\n{(examples / f'{source_id}.txt').read_text(encoding='utf-8').rstrip()}\n----\n",
         "response-fields.adoc": f"* provider: `{source['provider']}`\n* format: `{acquisition['format']}`\n* temporal basis: `{temporal['basis']}`\n",
         "normalization-fields.adoc": "\n".join(f"* `{field}`" for field in NORMALIZATION_FIELDS[source_id]) + "\n",

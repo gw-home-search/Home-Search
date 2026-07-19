@@ -9,6 +9,7 @@ from datetime import date, datetime
 from openpyxl import load_workbook
 
 from .bundle import read_deterministic_bundle
+from .contracts import ReferenceSourceContract
 from .models import DatasetSourceContract, ParsedDataset, QualityIssue
 from .validation import RawPayloadError
 
@@ -108,6 +109,46 @@ class RailStationAdapter:
             )
         finally:
             workbook.close()
+
+
+def rail_station_source_contract(
+    reference_contract: ReferenceSourceContract,
+) -> DatasetSourceContract:
+    if reference_contract.id != SOURCE_ID or reference_contract.license.reviewed_on is None:
+        raise ValueError("rail-station reference contract mismatch")
+    return DatasetSourceContract(
+        source_id=reference_contract.id,
+        provider=reference_contract.provider,
+        landing_url=reference_contract.landing_url,
+        acquisition_url=reference_contract.acquisition.base_url,
+        license_terms=reference_contract.license.terms_url,
+        attribution_requirements=reference_contract.license.attribution_text,
+        license_reviewed_on=reference_contract.license.reviewed_on,
+        refresh_frequency=reference_contract.temporal.refresh_profile,
+        freshness_days=reference_contract.temporal.freshness_days,
+        file_format=reference_contract.acquisition.format,
+        encoding=reference_contract.acquisition.encoding,
+        schema_version=reference_contract.normalization_schema_version,
+        coordinate_system=reference_contract.acquisition.source_crs or "NONE",
+        unique_key_fields=("station_occurrence_id",),
+        required_fields=(
+            "station_occurrence_id",
+            "operator",
+            "line_number",
+            "station_number",
+            "station_name",
+            "latitude",
+            "longitude",
+            "reference_date",
+        ),
+        expected_min_rows=reference_contract.quality.minimum_rows,
+        expected_max_rows=reference_contract.quality.maximum_rows,
+        maximum_row_change_ratio=reference_contract.quality.maximum_row_change_ratio,
+        maximum_rejected_ratio=reference_contract.quality.maximum_rejected_ratio,
+        contains_personal_data=False,
+        owner=reference_contract.owner,
+        temporal_basis="SOURCE_DATE",
+    )
 
 
 def _inspect_xlsx_archive(content: bytes) -> None:

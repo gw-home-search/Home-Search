@@ -39,6 +39,15 @@ fi
 for source in edu.school-location edu.academy-registry place.sbiz-academy retail.large-store transport.rail-station; do
     test -f "${tmp_dir}/first/generated-snippets/${source}/failure-codes.adoc"
 done
+rail_request="${tmp_dir}/first/generated-snippets/transport.rail-station/download-request.adoc"
+if ! rg -q '^RELEASE_URL_UNRESOLVED$' "$rail_request"; then
+    echo '상태: Fail - rail release URL 미확정 상태가 문서에 없습니다.' >&2
+    exit 1
+fi
+if rg -q '^GET https://www\.data\.go\.kr/data/15013205/standard\.do$' "$rail_request"; then
+    echo '상태: Fail - rail landing URL은 download request가 아닙니다.' >&2
+    exit 1
+fi
 
 mkdir -p "$build_root"
 find "$build_root" -type f -exec unlink {} \; 2>/dev/null || true

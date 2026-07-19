@@ -82,16 +82,23 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
 | NEIS | collector·projection offline `Pass`, observer·live 미완료 | 미채점 | `2.0/10 Partial` | 금지 |
 | Sbiz | collector·adapter·exact projection·generic refresh offline `Pass`, taxonomy 미승인 | 미채점 | `2.0/10 Partial` | 금지 |
 | 대규모점포 | streaming file client·기존 projection `Pass`, live 미실행 | 미채점 | `3.0/10 Partial` | 금지 |
-| 철도 | fixed URL preflight·occurrence projection·merge `Pass`, URL 미확정 | 미채점 | `2.0/10 Partial` | 금지 |
+| 철도 S4 collector | fixed URL collector orchestration·occurrence projection·merge offline `Pass`, URL 미확정 | `9.5/10` | `2.0/10 Partial` | 금지 |
 
 상세 readiness 근거는 `docs/reports/reference/readiness/`에 source별로 기록한다.
 F1은 file source의 prepared artifact upload와 대규모점포 generic refresher까지
 연결했지만 API source bundle과 adapter normalized row의 bounded-memory 전환이 남아
 `Partial`을 유지한다. F2는 lazy `ParsedRow`, stream 중 parse failure rollback,
 NEIS·Sbiz normalized iterator, 30만 행 `<256MiB` peak memory gate를 통과했다.
-file source는 계약상 최대 1만 행 이하로 제한된다. 2026-07-20 전체 offline 회귀는
-`470 passed`, coverage `90.06%`다. 실제 provider,
+file source는 계약상 최대 1만 행 이하로 제한된다. 철도 refresher는 고정 XLSX URL,
+owner-only temp, verified S3 file upload, safe refresh-run 실패 기록을 static catalog에
+연결했으며 현재 landing URL은 network 호출 전에 거부한다. 2026-07-20 전체 offline
+회귀는 `476 passed`, coverage `90.06%`다. 실제 provider,
 운영 DB, S3 live 검증은 실행하지 않았다.
+
+철도 S4 구현 점수는 범위·계약·이용조건 상태 기록·raw-first 원자성·보안·실패 기록·
+테스트·문서·리뷰 근거를 만점으로 평가했다. fake transport와 file size bound는
+검증했지만 실제 최대 XLSX의 peak memory 측정은 live 단계 전까지 남아 성능 항목
+`0.5`를 감점했다.
 
 ## 공통 중단·롤백
 

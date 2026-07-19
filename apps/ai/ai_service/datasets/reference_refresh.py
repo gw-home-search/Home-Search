@@ -15,6 +15,7 @@ from .school_location_ingest import (
 )
 from .academy_registry_ingest import AcademyRegistryIngestReport, ingest_from_environment as ingest_academy_registry
 from .large_store_ingest import LargeStoreIngestReport, ingest_from_environment as ingest_large_store
+from .rail_station_ingest import RailStationIngestReport, ingest_from_environment as ingest_rail_station
 from .sbiz_academy_ingest import SbizAcademyIngestReport, ingest_from_environment as ingest_sbiz_academy
 
 
@@ -51,7 +52,7 @@ class RefreshFailure:
 
 ReferenceIngestReport = (
     SchoolLocationIngestReport | AcademyRegistryIngestReport | LargeStoreIngestReport
-    | SbizAcademyIngestReport
+    | SbizAcademyIngestReport | RailStationIngestReport
 )
 RefreshOutcome = ReferenceIngestReport | RefreshFailure
 
@@ -62,16 +63,12 @@ class SourceDefinition:
     refresh: Callable[[Mapping[str, str]], ReferenceIngestReport]
 
 
-def _unavailable_refresh(_environment: Mapping[str, str]) -> ReferenceIngestReport:
-    raise SchoolLocationConfigurationError("source readiness prerequisites are incomplete")
-
-
 _SOURCE_DEFINITIONS = (
     SourceDefinition("edu.school-location", ingest_from_environment),
     SourceDefinition("edu.academy-registry", ingest_academy_registry),
     SourceDefinition("place.sbiz-academy", ingest_sbiz_academy),
     SourceDefinition("retail.large-store", ingest_large_store),
-    SourceDefinition("transport.rail-station", _unavailable_refresh),
+    SourceDefinition("transport.rail-station", ingest_rail_station),
 )
 
 

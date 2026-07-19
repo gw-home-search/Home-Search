@@ -17,6 +17,33 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 class AiReadMigrationTest extends JdbcMigrationTestSupport {
 
     @Test
+    @DisplayName("V10은 AI reader에 지역 계층 view만 SELECT로 공개한다")
+    void v10PublishesRegionHierarchyToAiReader() throws SQLException {
+        flyway(MigrationVersion.fromVersion("9")).clean();
+        flyway(MigrationVersion.fromVersion("9")).migrate();
+
+        flyway(MigrationVersion.fromVersion("10")).migrate();
+
+        JdbcClient reader = JdbcClient.create(readerDataSource());
+        assertThat(reader.sql("""
+            SELECT child.region_code || '|' || parent.region_code || '|' || child.region_type
+            FROM ai_read.region_fact child
+            JOIN ai_read.region_fact parent ON parent.region_id = child.parent_region_id
+            WHERE child.region_code = '11200108'
+            """).query(String.class).single()).isEqualTo("11200108|11200|eup-myeon-dong");
+        assertThat(jdbcClient
+                        .sql("SELECT has_table_privilege(:role, 'ai_read.region_fact', 'SELECT')")
+                        .param("role", AI_READER_ROLE)
+                        .query(Boolean.class)
+                        .single())
+                .isTrue();
+        assertThatThrownBy(() -> reader.sql("UPDATE ai_read.region_fact SET region_name = '변경'")
+                        .update())
+                .rootCause()
+                .hasMessageContaining("permission denied for view region_fact");
+    }
+
+    @Test
     @DisplayName("V9은 AI reader에 검증된 단지·정상 거래 view만 SELECT로 공개한다")
     void v9PublishesOnlyVerifiedPropertyFactsToAiReader() throws SQLException {
         flyway(MigrationVersion.fromVersion("8")).clean();

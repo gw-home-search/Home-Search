@@ -4,6 +4,7 @@ import hashlib
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
@@ -21,6 +22,7 @@ from .normalized_spool import NormalizedRowSpool
 from .raw_store import StoredRawObject
 from .secure_temp import SecureTempWorkspace
 from .validation import RawPayloadError, parse_rows, validate_rows
+from .bundle import PreparedBundle
 
 
 class PublicationStoreError(RuntimeError):
@@ -105,6 +107,22 @@ class DatasetLifecycleService:
         adapter: DatasetAdapter | None = None,
         content_type: str = "application/octet-stream",
     ) -> LifecycleResult:
+        return self._ingest_validate_publish(
+            contract, raw_bytes, source_date=source_date, observed_at=observed_at,
+            adapter=adapter, content_type=content_type, stored_raw=None,
+        )
+
+    def _ingest_validate_publish(
+        self,
+        contract: DatasetSourceContract,
+        raw_bytes: bytes,
+        *,
+        source_date: date | None,
+        observed_at: datetime | None,
+        adapter: DatasetAdapter | None,
+        content_type: str,
+        stored_raw: StoredRawObject | None,
+    ) -> LifecycleResult:
         collected_at = self._clock()
         if (
             contract.temporal_basis == "SOURCE_DATE"
@@ -115,8 +133,10 @@ class DatasetLifecycleService:
         ):
             raise ValueError("temporal value does not match source contract")
         checksum = hashlib.sha256(raw_bytes).hexdigest()
-        stored_raw = None
-        if self._raw_store is not None:
+        if stored_raw is not None:
+            if stored_raw.checksum != checksum or stored_raw.byte_length != len(raw_bytes):
+                raise ValueError("verified raw metadata does not match prepared content")
+        elif self._raw_store is not None:
             stored_raw = self._raw_store.put_verified(
                 source_id=contract.source_id,
                 checksum=checksum,
@@ -204,6 +224,36 @@ class DatasetLifecycleService:
             self._repository.record_publication_failure(acquisition.acquisition_id, self._clock())
         return self._repository.result(acquisition.acquisition_id, idempotent=False)
 
+    def ingest_validate_publish_prepared(
+        self,
+        contract: DatasetSourceContract,
+        prepared: PreparedBundle,
+        *,
+        source_date: date | None,
+        observed_at: datetime | None = None,
+        adapter: DatasetAdapter | None = None,
+        content_type: str = "application/zip",
+    ) -> LifecycleResult:
+        if self._raw_store is None:
+            raise ValueError("prepared bundles require verified external raw storage")
+        stored_raw = self._raw_store.put_verified_file(
+            source_id=contract.source_id,
+            checksum=prepared.checksum,
+            path=prepared.path,
+            byte_length=prepared.byte_length,
+            content_type=content_type,
+        )
+        raw_bytes = prepared.path.read_bytes()
+        return self._ingest_validate_publish(
+            contract,
+            raw_bytes,
+            source_date=source_date,
+            observed_at=observed_at,
+            adapter=adapter,
+            content_type=content_type,
+            stored_raw=stored_raw,
+        )
+
     def rollback(self, source_id: str, publication_id: UUID | None) -> None:
         if publication_id is None:
             raise ValueError("publication_id is required")
@@ -286,5 +336,15 @@ class RawObjectStore(Protocol):
         source_id: str,
         checksum: str,
         content: bytes,
+        content_type: str,
+    ) -> StoredRawObject: ...
+
+    def put_verified_file(
+        self,
+        *,
+        source_id: str,
+        checksum: str,
+        path: Path,
+        byte_length: int,
         content_type: str,
     ) -> StoredRawObject: ...

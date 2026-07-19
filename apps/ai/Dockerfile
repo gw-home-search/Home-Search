@@ -18,6 +18,7 @@ COPY --chown=home-ai:home-ai pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 COPY --chown=home-ai:home-ai ai_service ./ai_service
+COPY --chown=home-ai:home-ai config ./config
 
 USER home-ai
 EXPOSE 8000

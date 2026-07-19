@@ -20,6 +20,7 @@ ai-service는 user-service 다음의 later-scope 확장 milestone이다. 참조 
 - [CHATBOT_DATA_SOURCES.md](CHATBOT_DATA_SOURCES.md)
 - [CHATBOT_API_CONTRACT.md](CHATBOT_API_CONTRACT.md)
 - [ADR 0001](adr/0001-evidence-grounded-chatbot-and-browser-memory.md)
+- [생활 인프라 priority reference 품질 ledger](reports/reference/priority-reference-quality-ledger.md)
 
 ## 서비스와 데이터 경계
 

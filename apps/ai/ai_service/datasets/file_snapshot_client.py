@@ -30,6 +30,7 @@ _SAFE_REASONS = frozenset(
     }
 )
 _DATE_PATTERN = re.compile(r"(?<![0-9])(20[0-9]{2})[-_]?([01][0-9])[-_]?([0-3][0-9])(?![0-9])")
+_USER_AGENT = "HomeSearchReferenceImporter/1.0"
 
 
 class FileSnapshotError(RuntimeError):
@@ -192,7 +193,7 @@ def _stream_request(
     connection = HTTPSConnection(parsed.hostname, parsed.port or 443, timeout=timeout)
     try:
         request_target = parsed.path + (f"?{parsed.query}" if parsed.query else "")
-        headers = {"Accept": "*/*"}
+        headers = {"Accept": "*/*", "User-Agent": _USER_AGENT}
         if referer_url:
             headers["Referer"] = referer_url
         connection.request("GET", request_target, headers=headers)

@@ -5,7 +5,9 @@ KRIC landing은 사람이 release를 검토하는 용도로만 사용한다. col
 않는다. 2026-07-20 header preflight에서 filename
 `전체_도시철도역사정보_20260630.xlsx`, 길이 313,132 bytes,
 `application/octet-stream`을 확인했다. source date는 이 검증된 filename에서만 읽고,
-HTML을 XLSX로 처리하지 않는다.
+HTML을 XLSX로 처리하지 않는다. KRIC는 `User-Agent` 없는 GET에 HTML을 반환하므로
+collector는 비밀 없는 고정 `HomeSearchReferenceImporter/1.0` 식별자를 보내고,
+응답 media type 검증은 그대로 fail-closed로 유지한다.
 
 공공데이터포털 fileData `15093755`는 `이용허락범위 제한 없음`을 명시한다. KRIC
 일반 약관과의 충돌은 프로젝트 책임자가 KRIC에 전화로 문의해 Home Search의 계획된

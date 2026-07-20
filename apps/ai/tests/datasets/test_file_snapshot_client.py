@@ -168,6 +168,10 @@ def test_default_transport_preserves_validated_fixed_query(monkeypatch, tmp_path
         def request(self, method, path, headers):
             assert method == "GET"
             assert path == "/rips/dataset/download.file?type=filedata&id=32&operation=1"
+            assert headers == {
+                "Accept": "*/*",
+                "User-Agent": "HomeSearchReferenceImporter/1.0",
+            }
 
         def getresponse(self):
             return Response()
@@ -233,6 +237,7 @@ def test_default_transport_streams_chunks_to_owner_only_file(monkeypatch, tmp_pa
             assert headers == {
                 "Accept": "*/*",
                 "Referer": "https://file.localdata.go.kr/file/large_scale_retail_stores/info",
+                "User-Agent": "HomeSearchReferenceImporter/1.0",
             }
 
         def getresponse(self):

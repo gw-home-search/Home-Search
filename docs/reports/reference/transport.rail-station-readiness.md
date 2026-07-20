@@ -16,6 +16,11 @@ artifact는 owner-only temp에 기록한 뒤 deterministic bundle과 verified S3
 거치며, landing HTML URL은 network 호출 전 거부한다. 수집 실패는 provider body 없이
 safe reason code만 refresh-run에 기록한다.
 
+승인 후 첫 live GET은 KRIC가 `User-Agent` 없는 요청에 `200 text/html`을 반환해
+`FILE_MEDIA_TYPE_INVALID`로 안전하게 중단했다. 동일 URL은 고정 importer
+`User-Agent`에서 XLSX header를 반환함을 재현했고, TDD로 해당 header를 추가하면서
+media type·length·source date 검증은 완화하지 않았다.
+
 공공데이터포털 fileData `15093755`는 `이용허락범위 제한 없음`을 명시한다. 프로젝트
 책임자는 KRIC에 전화로 계획된 Home Search 이용 가능 여부를 문의해 가능하다는 답변을
 받았다고 2026-07-20 진술했고, 서면 transcript 부재를 수용해 contract 승인을 지시했다.
@@ -32,6 +37,9 @@ safe reason code만 refresh-run에 기록한다.
   Content-Disposition source date 검증을 추가했다.
 - 좁은 회귀: file contract·snapshot client·rail ingest `31 passed`; 철도 통합 `58 passed`.
 - 전체 AI 회귀: `554 passed`, coverage `90.18%`.
+- live failure RED: `User-Agent` 부재 요청은 `200 text/html`, audit
+  `FILE_MEDIA_TYPE_INVALID`; header 계약 2건 RED 후 file client `13 passed`, 전체 AI
+  `564 passed`, coverage `90.10%`.
 
 `api-contract: compatible`
 

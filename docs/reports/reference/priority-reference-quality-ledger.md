@@ -77,7 +77,7 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
 | G0 계약·ledger | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
 | F1 verified raw streaming | `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 | F2 normalized spool·semantic `NoChange` | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
-| F3 static composition·CLI | `Partial` | 미채점 | 해당 없음 | 해당 없음 |
+| F3 static composition·CLI | `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 | D1 AsciiDoc artifact | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
 | NEIS | collector·projection·summary observer offline `Pass`, live 미완료 | 미채점 | `2.0/10 Partial` | 금지 |
 | Sbiz S2 collector | collector·adapter·generic refresh offline `Pass`, taxonomy 미승인 | 미채점 | `2.0/10 Partial` | 금지 |
@@ -99,10 +99,17 @@ manifest·checksum 실패 경계를 통과했으며 기존 bytes API는 회귀 �
 F1을 `9.5/10 Pass`로 평가했다. F2는
 lazy `ParsedRow`, stream 중 parse failure rollback,
 NEIS·Sbiz normalized iterator, 30만 행 `<256MiB` peak memory gate를 통과했다.
+F3는 5개 source refresher와 feature-local projection writer를 고정 catalog로 합성하고,
+repository transaction 안에서 projection 이후에만 active pointer를 전환한다. generic
+CLI와 local wrapper는 source별 provider key만 선택하며 CSV/XLSX source는 provider key가
+없는 보호 파일로도 실행된다. `--family priority`는 고정 순서와 source 실패 후 계속
+실행을 유지하고 status/audit는 runtime read-only role과 3초 statement timeout을
+사용한다. 실제 provider 실행은 readiness 단계로 남아 `0.5`를 감점해 `9.5/10 Pass`로
+평가했다.
 file source는 계약상 최대 1만 행 이하로 제한된다. 철도 refresher는 고정 XLSX URL,
 owner-only temp, verified S3 file upload, safe refresh-run 실패 기록을 static catalog에
 연결했으며 현재 landing URL은 network 호출 전에 거부한다. 2026-07-20 전체 offline
-회귀는 `542 passed`, coverage `90.22%`다. NEIS summary observer는 property DB의
+회귀는 `544 passed`, coverage `90.30%`다. NEIS summary observer는 property DB의
 시도·시군구 ancestor를 먼저 해석한 뒤 AI DB를 별도 exact query하며, 반경·거리 표현을
 grounding 단계에서 거부한다. license와 live readiness가 미승인이므로 runtime
 allowlist에는 추가하지 않았다. 실제 provider,

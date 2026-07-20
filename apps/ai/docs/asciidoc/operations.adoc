@@ -2,8 +2,12 @@
 
 * 수집: `home-ai-reference-refresh --source <sourceId>`
 * 순차 수집: `home-ai-reference-refresh --family priority`
+* 로컬 보호 파일 실행: `ops/run-local-reference-refresh.sh --source <sourceId>` 또는
+  `ops/run-local-reference-refresh.sh --family priority`
 * 상태: `home-ai-reference-status`
 * 감사: `home-ai-reference-audit`
 * rollback은 이전 publication pointer 전환만 허용한다.
 
 CLI와 evidence에는 API key, DSN, provider 오류 body, 전화번호, 교습비를 기록하지 않는다.
+로컬 wrapper는 school·Sbiz에 data.go.kr key만, NEIS에 NEIS key만 전달하고 CSV/XLSX
+source에는 provider key를 읽거나 전달하지 않는다.

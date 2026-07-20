@@ -140,7 +140,7 @@ Migrations are discovered from `ai_service/datasets/migrations/NNNN_*.sql` in
 numeric order. Applied checksums are verified before pending migrations run;
 an applied file must never be edited.
 
-## School-location one-shot ingest
+## Reference one-shot ingest
 
 The importer uses the official HTTPS endpoint with sequential 1,000-row pages,
 one bounded retry for timeout/5xx, and deterministic ZIP raw preservation. It
@@ -171,9 +171,18 @@ sourcing either `.env` file:
 
 ```bash
 apps/ai/ops/run-local-reference-refresh.sh --source edu.school-location
+apps/ai/ops/run-local-reference-refresh.sh --source edu.academy-registry
+apps/ai/ops/run-local-reference-refresh.sh --source place.sbiz-academy
+apps/ai/ops/run-local-reference-refresh.sh --source retail.large-store
+apps/ai/ops/run-local-reference-refresh.sh --source transport.rail-station
+apps/ai/ops/run-local-reference-refresh.sh --family priority
 ```
 
 The wrapper derives dedicated migrator/importer DSNs from the protected role
 passwords, prepares the private versioned/object-locked MinIO bucket, runs
 migrations in a one-shot container, and then runs the importer. It passes
 secret names through Docker `--env` without placing values in process arguments.
+School and Sbiz receive only `HOME_AI_DATA_GO_KR_SERVICE_KEY`; NEIS receives
+only `HOME_AI_NEIS_SERVICE_KEY`; CSV/XLSX file sources receive neither provider
+key. The priority family starts one generic CLI container per source in fixed
+order, keeps those key boundaries, and continues after an individual failure.

@@ -12,7 +12,7 @@
 
 | 범위 | 명령 | 결과 |
 |---|---|---|
-| AI 전체 회귀 | `cd apps/ai && TESTCONTAINERS_RYUK_DISABLED=true uv run pytest` | `542 passed`, coverage `90.22%` |
+| AI 전체 회귀 | `cd apps/ai && TESTCONTAINERS_RYUK_DISABLED=true uv run pytest` | `544 passed`, coverage `90.30%` |
 | MinIO raw 복구 | `uv run pytest --no-cov tests/datasets/test_raw_store.py` | `8 passed`; checksum·length·version·byte 복구·동일 key 재사용 |
 | local refresh wrapper | `apps/ai/ops/test-run-local-reference-refresh.sh` | `Pass`; source별 secret 경계와 고정 순서 |
 | reference docs | `apps/ai/ops/build-reference-docs.sh --check` | `Pass`; 결정성·HTML·secret 검사 |

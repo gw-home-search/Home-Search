@@ -12,7 +12,7 @@ ai_vars_file="${HOME_AI_REFERENCE_AI_VARS_FILE:-${ai_root}/.env}"
 image="home-search-ai:local"
 
 usage() {
-    echo "사용법: $0 --source edu.school-location" >&2
+    echo "사용법: $0 --source <sourceId> | --family priority" >&2
     exit 2
 }
 
@@ -26,7 +26,31 @@ reject_runtime() {
     exit 1
 }
 
-[[ "$#" == "2" && "$1" == "--source" && "$2" == "edu.school-location" ]] || usage
+[[ "$#" == "2" ]] || usage
+selector="$1"
+selector_value="$2"
+needs_data_go_kr_key=false
+needs_neis_key=false
+if [[ "$selector" == "--family" && "$selector_value" == "priority" ]]; then
+    needs_data_go_kr_key=true
+    needs_neis_key=true
+elif [[ "$selector" == "--source" ]]; then
+    case "$selector_value" in
+        edu.school-location|place.sbiz-academy)
+            needs_data_go_kr_key=true
+            ;;
+        edu.academy-registry)
+            needs_neis_key=true
+            ;;
+        retail.large-store|transport.rail-station)
+            ;;
+        *)
+            usage
+            ;;
+    esac
+else
+    usage
+fi
 
 require_vars_file() {
     local path="$1"
@@ -44,6 +68,7 @@ require_vars_file() {
 read_value() {
     local path="$1"
     local key="$2"
+    local required="${3:-true}"
     local count
     local value
     count="$(awk -v key="$key" '
@@ -51,6 +76,10 @@ read_value() {
         index($0, key "=") == 1 { count += 1 }
         END { print count + 0 }
     ' "$path")"
+    if [[ "$count" == 0 && "$required" == false ]]; then
+        printf ''
+        return 0
+    fi
     [[ "$count" == "1" ]] || reject_configuration "${key}는 정확히 한 번 정의해야 합니다."
     value="$(awk -v key="$key" '
         /^[[:space:]]*#/ { next }
@@ -86,7 +115,18 @@ raw_bucket="$(read_value "$ai_vars_file" HOME_AI_RAW_S3_BUCKET)"
 raw_prefix="$(read_value "$ai_vars_file" HOME_AI_RAW_S3_PREFIX)"
 raw_region="$(read_value "$ai_vars_file" HOME_AI_RAW_S3_REGION)"
 raw_endpoint="$(read_value "$ai_vars_file" HOME_AI_RAW_S3_ENDPOINT)"
-data_go_kr_service_key="$(read_value "$ai_vars_file" HOME_AI_DATA_GO_KR_SERVICE_KEY)"
+data_go_kr_service_key=""
+neis_service_key=""
+if [[ "$selector" == "--family" ]]; then
+    data_go_kr_service_key="$(
+        read_value "$ai_vars_file" HOME_AI_DATA_GO_KR_SERVICE_KEY false
+    )"
+    neis_service_key="$(read_value "$ai_vars_file" HOME_AI_NEIS_SERVICE_KEY false)"
+elif [[ "$needs_data_go_kr_key" == true ]]; then
+    data_go_kr_service_key="$(read_value "$ai_vars_file" HOME_AI_DATA_GO_KR_SERVICE_KEY)"
+elif [[ "$needs_neis_key" == true ]]; then
+    neis_service_key="$(read_value "$ai_vars_file" HOME_AI_NEIS_SERVICE_KEY)"
+fi
 
 if ! AI_MIGRATOR_PASSWORD="$ai_data_migrator_password" \
     AI_IMPORTER_PASSWORD="$ai_data_importer_password" \
@@ -99,7 +139,8 @@ if ! AI_MIGRATOR_PASSWORD="$ai_data_migrator_password" \
     RAW_PREFIX="$raw_prefix" \
     RAW_REGION="$raw_region" \
     RAW_ENDPOINT="$raw_endpoint" \
-    DATA_SERVICE_KEY="$data_go_kr_service_key" python3 - <<'PY'
+    DATA_SERVICE_KEY="$data_go_kr_service_key" \
+    NEIS_SERVICE_KEY="$neis_service_key" python3 - <<'PY'
 import os
 import re
 import sys
@@ -114,6 +155,10 @@ def secret(name: str, maximum: int) -> bool:
     )
 
 
+def optional_secret(name: str, maximum: int) -> bool:
+    return os.environ[name] == "" or secret(name, maximum)
+
+
 valid = (
     secret("AI_MIGRATOR_PASSWORD", 512)
     and secret("AI_IMPORTER_PASSWORD", 512)
@@ -122,7 +167,8 @@ valid = (
     and secret("MINIO_ROOT_PASSWORD_VALUE", 512)
     and secret("AWS_ACCESS_KEY_VALUE", 128)
     and secret("AWS_SECRET_KEY_VALUE", 512)
-    and secret("DATA_SERVICE_KEY", 1024)
+    and optional_secret("DATA_SERVICE_KEY", 1024)
+    and optional_secret("NEIS_SERVICE_KEY", 1024)
     and re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", os.environ["RAW_BUCKET"])
     is not None
     and os.environ["RAW_PREFIX"] == "raw"
@@ -191,22 +237,86 @@ if ! HOME_AI_MIGRATOR_DSN="$home_ai_migrator_dsn" docker run --rm \
     reject_runtime "AI dataset migration에 실패했습니다."
 fi
 
-HOME_AI_IMPORTER_DSN="$home_ai_importer_dsn" \
-HOME_AI_DATA_GO_KR_SERVICE_KEY="$data_go_kr_service_key" \
-HOME_AI_RAW_S3_BUCKET="$raw_bucket" \
-HOME_AI_RAW_S3_PREFIX="$raw_prefix" \
-HOME_AI_RAW_S3_REGION="$raw_region" \
-HOME_AI_RAW_S3_ENDPOINT="$raw_endpoint" \
-AWS_ACCESS_KEY_ID="$aws_access_key_id" \
-AWS_SECRET_ACCESS_KEY="$aws_secret_access_key" \
-docker run --rm \
-    --network "$network_name" \
-    --env HOME_AI_IMPORTER_DSN \
-    --env HOME_AI_DATA_GO_KR_SERVICE_KEY \
-    --env HOME_AI_RAW_S3_BUCKET \
-    --env HOME_AI_RAW_S3_PREFIX \
-    --env HOME_AI_RAW_S3_REGION \
-    --env HOME_AI_RAW_S3_ENDPOINT \
-    --env AWS_ACCESS_KEY_ID \
-    --env AWS_SECRET_ACCESS_KEY \
-    "$image" home-ai-school-location-ingest
+print_source_configuration_failure() {
+    local source_id="$1"
+    printf '%s\n' \
+        '상태: Fail' \
+        "sourceId: $source_id" \
+        'temporalBasis:' \
+        'dataAsOf:' \
+        'pageCount: 0' \
+        'rawRowCount: 0' \
+        'acceptedRowCount: 0' \
+        'nonSpatialRowCount: 0' \
+        'rejectedRowCount: 0' \
+        'coordinateCoverage:' \
+        'datasetVersion:' \
+        'reasonCodes: CONFIGURATION_INVALID'
+}
+
+run_source() {
+    local source_id="$1"
+    local docker_environment=(
+        --env HOME_AI_IMPORTER_DSN
+        --env HOME_AI_RAW_S3_BUCKET
+        --env HOME_AI_RAW_S3_PREFIX
+        --env HOME_AI_RAW_S3_REGION
+        --env HOME_AI_RAW_S3_ENDPOINT
+        --env AWS_ACCESS_KEY_ID
+        --env AWS_SECRET_ACCESS_KEY
+    )
+    case "$source_id" in
+        edu.school-location|place.sbiz-academy)
+            if [[ -z "$data_go_kr_service_key" ]]; then
+                print_source_configuration_failure "$source_id"
+                return 2
+            fi
+            docker_environment+=(--env HOME_AI_DATA_GO_KR_SERVICE_KEY)
+            ;;
+        edu.academy-registry)
+            if [[ -z "$neis_service_key" ]]; then
+                print_source_configuration_failure "$source_id"
+                return 2
+            fi
+            docker_environment+=(--env HOME_AI_NEIS_SERVICE_KEY)
+            ;;
+    esac
+
+    HOME_AI_IMPORTER_DSN="$home_ai_importer_dsn" \
+    HOME_AI_DATA_GO_KR_SERVICE_KEY="$data_go_kr_service_key" \
+    HOME_AI_NEIS_SERVICE_KEY="$neis_service_key" \
+    HOME_AI_RAW_S3_BUCKET="$raw_bucket" \
+    HOME_AI_RAW_S3_PREFIX="$raw_prefix" \
+    HOME_AI_RAW_S3_REGION="$raw_region" \
+    HOME_AI_RAW_S3_ENDPOINT="$raw_endpoint" \
+    AWS_ACCESS_KEY_ID="$aws_access_key_id" \
+    AWS_SECRET_ACCESS_KEY="$aws_secret_access_key" \
+    docker run --rm \
+        --network "$network_name" \
+        "${docker_environment[@]}" \
+        "$image" home-ai-reference-refresh --source "$source_id"
+}
+
+if [[ "$selector" == "--source" ]]; then
+    run_source "$selector_value"
+else
+    family_exit_code=0
+    for source_id in \
+        edu.school-location \
+        edu.academy-registry \
+        place.sbiz-academy \
+        retail.large-store \
+        transport.rail-station; do
+        if run_source "$source_id"; then
+            continue
+        else
+            source_exit_code="$?"
+        fi
+        if [[ "$source_exit_code" == 2 ]]; then
+            family_exit_code=2
+        elif [[ "$family_exit_code" == 0 ]]; then
+            family_exit_code=1
+        fi
+    done
+    exit "$family_exit_code"
+fi

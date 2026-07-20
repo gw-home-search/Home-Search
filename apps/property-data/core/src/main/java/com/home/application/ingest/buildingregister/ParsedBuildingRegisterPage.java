@@ -12,4 +12,8 @@ public record ParsedBuildingRegisterPage(
     public boolean providerSuccessful() {
         return "00".equals(resultCode) || "000".equals(resultCode) || "NORMAL_CODE".equals(resultCode);
     }
+
+    public boolean authenticationOrQuotaFailure() {
+        return List.of("20", "21", "22", "30", "31", "32").contains(resultCode);
+    }
 }

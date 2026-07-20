@@ -28,4 +28,8 @@ public record BuildingRegisterPageResponse(
     public boolean httpSuccessful() {
         return httpStatus >= 200 && httpStatus < 300;
     }
+
+    public boolean authenticationOrQuotaFailure() {
+        return httpStatus == 401 || httpStatus == 403 || httpStatus == 429;
+    }
 }

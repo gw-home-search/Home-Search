@@ -42,6 +42,7 @@ public class JdbcBuildingRatioCandidateRepository implements BuildingRatioCandid
         EnumMap<BuildingRatioField, Long> selected = new EnumMap<>(BuildingRatioField.class);
         for (BuildingRatioField field : BuildingRatioField.values()) {
             BuildingRatioFieldEvaluation fieldEvaluation = evaluation.field(field);
+            resetEvaluation(matchId, field);
             for (BuildingRatioCandidate candidate : fieldEvaluation.candidates()) {
                 boolean isSelected = candidate.equals(fieldEvaluation.selectedCandidate());
                 long candidateId = findOrInsert(matchId, fieldEvaluation, candidate, isSelected);
@@ -50,6 +51,14 @@ public class JdbcBuildingRatioCandidateRepository implements BuildingRatioCandid
             }
         }
         return new BuildingRatioRecordedEvaluation(selected);
+    }
+
+    private void resetEvaluation(long matchId, BuildingRatioField field) {
+        jdbc.sql("""
+                    UPDATE building_ratio_candidate
+                    SET selected=false,status='INCOMPLETE',reason='superseded by reevaluation'
+                    WHERE match_id=:match AND field=:field
+                    """).param("match", matchId).param("field", field.name()).update();
     }
 
     private long findOrInsert(
@@ -74,11 +83,16 @@ public class JdbcBuildingRatioCandidateRepository implements BuildingRatioCandid
                 .optional()
                 .orElse(null);
         if (existing != null) {
-            if (selected) {
-                jdbc.sql("UPDATE building_ratio_candidate SET selected=true WHERE id=:id AND NOT selected")
-                        .param("id", existing)
-                        .update();
-            }
+            jdbc.sql("""
+                        UPDATE building_ratio_candidate
+                        SET status=:status,selected=:selected,reason=:reason
+                        WHERE id=:id
+                        """)
+                    .param("status", storedStatus(evaluation.status()))
+                    .param("selected", selected)
+                    .param("reason", reason(evaluation.status()))
+                    .param("id", existing)
+                    .update();
             return existing;
         }
         return jdbc.sql("""
@@ -94,15 +108,15 @@ public class JdbcBuildingRatioCandidateRepository implements BuildingRatioCandid
                 .param("projected", candidate.projectedValue())
                 .param("numerator", storedNumerator)
                 .param("denominator", storedDenominator)
-                .param(
-                        "status",
-                        evaluation.status() == BuildingRatioResolutionStatus.SOURCE_CONFLICT
-                                ? "SOURCE_CONFLICT"
-                                : "VALID")
+                .param("status", storedStatus(evaluation.status()))
                 .param("selected", selected)
                 .param("reason", reason(evaluation.status()))
                 .query(Long.class)
                 .single();
+    }
+
+    private String storedStatus(BuildingRatioResolutionStatus status) {
+        return status == BuildingRatioResolutionStatus.SOURCE_CONFLICT ? "SOURCE_CONFLICT" : "VALID";
     }
 
     private BigDecimal storedComponent(BigDecimal value) {

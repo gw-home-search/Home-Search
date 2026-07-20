@@ -14,6 +14,8 @@ import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.infrastructure.repeat.RepeatStatus;
 
 class BuildingRegisterCollectTasklet implements Tasklet {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(BuildingRegisterCollectTasklet.class);
+
     private final BuildingRegisterCampaignService service;
     private final BuildingMetadataExecutionLock executionLock;
     private final int dailyRequestQuota;
@@ -46,7 +48,14 @@ class BuildingRegisterCollectTasklet implements Tasklet {
                 optionalLong(params.get("fromComplexId")),
                 Long.parseLong(params.get("toComplexId").toString()));
         try (BuildingMetadataExecutionLock.Lock ignored = executionLock.acquire()) {
-            service.collect(command);
+            var summary = service.collect(command);
+            log.info(
+                    "building register collection completed targets={} pnus={} requests={} matches={} campaignCompleted={}",
+                    summary.targetCount(),
+                    summary.pnuCount(),
+                    summary.requestCount(),
+                    summary.matchCount(),
+                    summary.completed());
         }
         return RepeatStatus.FINISHED;
     }

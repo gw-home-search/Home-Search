@@ -6,5 +6,9 @@ import java.util.List;
 @FunctionalInterface
 public interface BuildingRegisterRawPageCompletion {
     void complete(
-            long rawPageId, BuildingRegisterRawPageStatus status, List<BuildingRegisterRecordSnapshotCommand> records);
+            long rawPageId,
+            long endpointSnapshotId,
+            Integer totalCount,
+            BuildingRegisterRawPageStatus status,
+            List<BuildingRegisterRecordSnapshotCommand> records);
 }

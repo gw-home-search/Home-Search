@@ -10,6 +10,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.home.domain.complex.buildingregister.BuildingRatioEvaluation;
+import com.home.domain.complex.buildingregister.BuildingRatioResolutionStatus;
 import com.home.domain.complex.buildingregister.BuildingRegisterCollectionMode;
 import com.home.domain.complex.buildingregister.BuildingRegisterCollectionStrategy;
 import com.home.domain.complex.buildingregister.BuildingRegisterComplexMatch;
@@ -57,7 +59,12 @@ class BuildingRegisterCampaignServiceTest {
         verify(campaigns, times(2)).recordMatch(any(), anyString(), anyInt(), match.capture());
         assertThat(match.getAllValues())
                 .allSatisfy(value -> assertThat(value.projectable()).isFalse());
-        verify(candidates, times(2)).record(anyLong(), any(), any());
+        ArgumentCaptor<BuildingRatioEvaluation> evaluation = ArgumentCaptor.forClass(BuildingRatioEvaluation.class);
+        verify(candidates, times(2)).record(anyLong(), evaluation.capture(), any());
+        assertThat(evaluation.getAllValues())
+                .allSatisfy(value -> assertThat(value.fields().values())
+                        .allSatisfy(field -> assertThat(field.status())
+                                .isEqualTo(BuildingRatioResolutionStatus.SKIPPED_SHARED_SCOPE)));
         assertThat(summary.requestCount()).isOne();
         assertThat(summary.completed()).isTrue();
     }

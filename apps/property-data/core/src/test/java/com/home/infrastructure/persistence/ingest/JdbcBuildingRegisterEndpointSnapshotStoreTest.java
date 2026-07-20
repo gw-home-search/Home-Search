@@ -61,6 +61,21 @@ class JdbcBuildingRegisterEndpointSnapshotStoreTest extends JdbcMigrationTestSup
         assertThat(status(empty.id())).isEqualTo("EMPTY");
     }
 
+    @Test
+    @DisplayName("완료된 endpoint snapshot만 다음 runDate에서 재사용한다")
+    void reusesCompletedSnapshotAcrossRunDatesButRestartsIncompleteSnapshot() {
+        var completed = store.open(COLLECTION_ID, PNU, BuildingRegisterEndpoint.RECAP_TITLE, runDate, 100);
+        store.complete(completed.id(), 3, BuildingRegisterCollectionStatus.COLLECTED);
+        var incomplete = store.open(COLLECTION_ID, PNU, BuildingRegisterEndpoint.TITLE, runDate, 100);
+
+        LocalDate nextRunDate = runDate.plusDays(1);
+        var reused = store.open(COLLECTION_ID, PNU, BuildingRegisterEndpoint.RECAP_TITLE, nextRunDate, 100);
+        var restarted = store.open(COLLECTION_ID, PNU, BuildingRegisterEndpoint.TITLE, nextRunDate, 100);
+
+        assertThat(reused.id()).isEqualTo(completed.id());
+        assertThat(restarted.id()).isNotEqualTo(incomplete.id());
+    }
+
     private String status(long id) {
         return jdbcClient
                 .sql("SELECT status FROM building_register_endpoint_snapshot WHERE id=:id")

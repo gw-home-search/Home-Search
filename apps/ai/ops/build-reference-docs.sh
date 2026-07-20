@@ -21,6 +21,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
+search_lines() {
+    if command -v rg >/dev/null 2>&1; then
+        rg -n "$@"
+    else
+        grep -ERn "$@"
+    fi
+}
+
+search_quiet() {
+    if command -v rg >/dev/null 2>&1; then
+        rg -q "$@"
+    else
+        grep -ERq "$@"
+    fi
+}
+
 generate() {
     local destination="$1"
     python3 "${script_dir}/generate-reference-docs.py" \
@@ -32,7 +48,7 @@ generate() {
 generate "${tmp_dir}/first"
 generate "${tmp_dir}/second"
 diff -ru "${tmp_dir}/first" "${tmp_dir}/second"
-if rg -n -i '(servicekey|api[_-]?key|secret|password)[=:][^<[:space:]]' "${tmp_dir}/first"; then
+if search_lines -i '(servicekey|api[_-]?key|secret|password)[=:][^<[:space:]]' "${tmp_dir}/first"; then
     echo '상태: Fail - generated reference docs에 secret pattern이 있습니다.' >&2
     exit 1
 fi
@@ -40,16 +56,16 @@ for source in edu.school-location edu.academy-registry place.sbiz-academy retail
     test -f "${tmp_dir}/first/generated-snippets/${source}/failure-codes.adoc"
 done
 rail_request="${tmp_dir}/first/generated-snippets/transport.rail-station/download-request.adoc"
-if ! rg -q '^GET https://data\.kric\.go\.kr/rips/dataset/download\.file\?type=filedata&id=32&operation=1$' "$rail_request"; then
+if ! search_quiet '^GET https://data\.kric\.go\.kr/rips/dataset/download\.file\?type=filedata&id=32&operation=1$' "$rail_request"; then
     echo '상태: Fail - 검증된 rail release URL이 문서와 일치하지 않습니다.' >&2
     exit 1
 fi
-if rg -q '^GET https://www\.data\.go\.kr/data/15013205/standard\.do$' "$rail_request"; then
+if search_quiet '^GET https://www\.data\.go\.kr/data/15013205/standard\.do$' "$rail_request"; then
     echo '상태: Fail - rail landing URL은 download request가 아닙니다.' >&2
     exit 1
 fi
 retail_request="${tmp_dir}/first/generated-snippets/retail.large-store/http-request.adoc"
-if ! rg -q '^GET https://apis\.data\.go\.kr/1741000/large_scale_retail_stores/info$' "$retail_request"; then
+if ! search_quiet '^GET https://apis\.data\.go\.kr/1741000/large_scale_retail_stores/info$' "$retail_request"; then
     echo '상태: Fail - 검증된 retail API request가 문서와 일치하지 않습니다.' >&2
     exit 1
 fi
@@ -68,7 +84,7 @@ docker run --rm \
     -D /output /documents/apps/ai/docs/asciidoc/index.adoc
 
 test -f "$build_root/html/index.html"
-if rg -n 'include::' "$build_root/html"; then
+if search_lines 'include::' "$build_root/html"; then
     echo '상태: Fail - reference docs include가 완성되지 않았습니다.' >&2
     exit 1
 fi

@@ -13,12 +13,18 @@ from .models import StagedRow
 class NormalizedRowSpool:
     """NDJSON spool that retains only accepted row hashes in memory."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(
+        self,
+        path: Path,
+        *,
+        semantic_hash_excluded_fields: frozenset[str] = frozenset(),
+    ) -> None:
         metadata = path.lstat()
         if path.is_symlink() or not path.is_file() or metadata.st_mode & 0o077:
             raise ValueError("normalized spool must be an owner-only regular file")
         self.path = path
         self._stream: BinaryIO | None = path.open("wb", buffering=1024 * 1024)
+        self._semantic_hash_excluded_fields = semantic_hash_excluded_fields
         self._accepted_row_hashes: list[str] = []
         self._row_count = 0
 
@@ -44,8 +50,13 @@ class NormalizedRowSpool:
         self._stream.write(b"\n")
         self._row_count += 1
         if row.accepted:
+            semantic_row = {
+                key: value
+                for key, value in row.row_data.items()
+                if key not in self._semantic_hash_excluded_fields
+            }
             self._accepted_row_hashes.append(
-                hashlib.sha256(canonical_json_bytes(row.row_data)).hexdigest()
+                hashlib.sha256(canonical_json_bytes(semantic_row)).hexdigest()
             )
 
     def iter_rows(self) -> Iterator[StagedRow]:

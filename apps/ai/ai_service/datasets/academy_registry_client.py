@@ -219,7 +219,7 @@ def _request(path: str, timeout: float, service_key: str) -> tuple[int, Mapping[
     keyed_path = f"{path}{separator}KEY={quote(service_key, safe='')}"
     connection = HTTPSConnection(_HOST, 443, timeout=timeout)
     try:
-        connection.request("GET", keyed_path, headers={"Accept": "application/json"})
+        connection.request("GET", keyed_path, headers={"Accept": "*/*"})
         response = connection.getresponse()
         return response.status, dict(response.getheaders()), response.read(_MAX_PAGE_BYTES + 1)
     finally:

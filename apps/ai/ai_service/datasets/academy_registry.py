@@ -20,6 +20,7 @@ _OFFICE_CODES = frozenset(
     }
 )
 _STATUS = {
+    "개원": "OPEN",
     "운영": "OPEN",
     "정상": "OPEN",
     "등록": "OPEN",
@@ -225,13 +226,15 @@ def _normalize(
 ) -> tuple[dict[str, object], list[str]]:
     office_code = _canonical(row.get("ATPT_OFCDC_SC_CODE"))
     source_academy_id = _canonical(row.get("ACA_ASNUM"))
-    academy_name = _canonical(row.get("ACA_NM"))
+    provider_academy_name = _canonical(row.get("ACA_NM"))
+    academy_name_missing = not provider_academy_name
+    academy_name = provider_academy_name or "명칭 미제공"
     academy_type = _canonical(row.get("ACA_INSTI_SC_NM"))
     provider_status = _canonical(row.get("REG_STTUS_NM"))
     status = _STATUS.get(provider_status)
     road_address = _optional(row.get("FA_RDNMA"))
     reasons: list[str] = []
-    if not office_code or not source_academy_id or not academy_name:
+    if not office_code or not source_academy_id:
         reasons.append("ACADEMY_IDENTITY_REQUIRED")
     if academy_type not in _ACADEMY_TYPES:
         reasons.append("ACADEMY_TYPE_UNKNOWN")
@@ -245,6 +248,7 @@ def _normalize(
             "district_name": _optional(row.get("ADMST_ZONE_NM")),
             "academy_type": academy_type,
             "academy_name": academy_name,
+            "academy_name_missing": academy_name_missing,
             "status": status or "UNKNOWN",
             "registration_date": _compact_date(row.get("REG_YMD")),
             "suspension_start_date": _compact_date(row.get("CAA_BEGIN_YMD")),
@@ -256,7 +260,7 @@ def _normalize(
             "road_address": road_address,
             "postal_code": _optional(row.get("FA_RDNZC")),
             "loaded_at": _optional(row.get("LOAD_DTM")),
-            "normalized_name_key": academy_name,
+            "normalized_name_key": provider_academy_name or None,
             "normalized_address_key": road_address,
             "observed_at": observed_at.isoformat(),
             "fact_kind": "REGISTRY",

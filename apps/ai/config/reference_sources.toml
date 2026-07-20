@@ -97,7 +97,7 @@ source_name = "전국학원및교습소표준데이터"
 landing_url = "https://www.data.go.kr/data/15096277/standard.do"
 evidence_grade = "A"
 owner = "apps/ai"
-normalization_schema_version = "academy-registry-v2"
+normalization_schema_version = "academy-registry-v4"
 
 [sources.acquisition]
 mode = "api"

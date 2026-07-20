@@ -448,6 +448,49 @@ def test_same_observed_rows_on_same_day_create_no_second_publication(
     assert staging_count == 0
 
 
+def test_same_observed_rows_ignore_exact_row_observation_time(
+    dataset_repository: PostgresDatasetRepository,
+) -> None:
+    class ObservationAdapter:
+        def parse(self, raw, _contract, *, source_date):
+            assert source_date is None
+            return ParsedDataset(
+                rows=[
+                    {
+                        **valid_rows()[0],
+                        "observed_at": raw.decode("ascii"),
+                    }
+                ]
+            )
+
+    observed_contract = replace(
+        source_contract(),
+        source_id="fixture.observed-row-no-change",
+        temporal_basis="OBSERVED_AT",
+        schema_version="fixture-observed-row-v1",
+    )
+    lifecycle = service(dataset_repository)
+
+    first = lifecycle.ingest_validate_publish(
+        observed_contract,
+        b"2026-07-16T01:00:00+00:00",
+        source_date=None,
+        observed_at=datetime(2026, 7, 16, 1, tzinfo=UTC),
+        adapter=ObservationAdapter(),
+    )
+    unchanged = lifecycle.ingest_validate_publish(
+        observed_contract,
+        b"2026-07-16T23:00:00+00:00",
+        source_date=None,
+        observed_at=datetime(2026, 7, 16, 23, tzinfo=UTC),
+        adapter=ObservationAdapter(),
+    )
+
+    assert first.status == "Pass"
+    assert unchanged.status == "NoChange"
+    assert dataset_repository.publication_count(observed_contract.source_id) == 1
+
+
 def test_invalid_payload_is_preserved_before_parse_failure(
     dataset_repository: PostgresDatasetRepository,
 ) -> None:

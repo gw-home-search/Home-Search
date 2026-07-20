@@ -239,7 +239,14 @@ class DatasetLifecycleService:
         with SecureTempWorkspace(
             required_free_bytes=max(raw_byte_length * 2, 1)
         ) as workspace:
-            spool = NormalizedRowSpool(workspace.create_file("normalized.ndjson"))
+            spool = NormalizedRowSpool(
+                workspace.create_file("normalized.ndjson"),
+                semantic_hash_excluded_fields=(
+                    frozenset({"observed_at"})
+                    if contract.temporal_basis == "OBSERVED_AT"
+                    else frozenset()
+                ),
+            )
             try:
                 outcome = validate_rows(
                     contract,

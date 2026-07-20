@@ -104,13 +104,22 @@ class PostgresAcademyLocationRepository:
                 WITH origin AS (
                     SELECT ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography AS point
                 ), within_radius AS (
-                    SELECT fact.*,
+                    SELECT fact.publication_id,
+                           fact.fact_id AS sbiz_fact_id,
+                           fact.name,
+                           fact.subcategory AS small_category_code,
+                           fact.status,
+                           fact.road_address,
+                           fact.lot_address,
+                           fact.dataset_version,
+                           fact.dataset_observed_at AS observed_at,
                            COALESCE(fact.road_address, fact.lot_address) AS address,
                            ST_Distance(fact.position, origin.point) AS distance_meters,
                            count(*) OVER () AS matched_count
-                    FROM reference_read.sbiz_academy_fact fact
+                    FROM reference_read.facility_point_fact fact
                     CROSS JOIN origin
-                    WHERE fact.status = 'OPEN'
+                    WHERE fact.source_id = 'place.sbiz-academy'
+                      AND fact.status = 'OPEN'
                       AND ST_DWithin(fact.position, origin.point, %s + 0.001)
                 )
                 SELECT * FROM within_radius
@@ -119,6 +128,39 @@ class PostgresAcademyLocationRepository:
                 """,
                 (longitude, latitude, radius_meters, limit),
             ).fetchall()
+            exact_by_id: dict[str, dict[str, object]] = {}
+            if rows:
+                publication_ids = {row["publication_id"] for row in rows}
+                if len(publication_ids) != 1:
+                    raise RuntimeError("nearby Sbiz publication is inconsistent")
+                exact_rows = connection.execute(
+                    """
+                    SELECT sbiz_fact_id, registry_fact_id,
+                           registry_academy_name, registry_status,
+                           registry_dataset_version, registry_observed_at
+                    FROM reference_read.sbiz_academy_exact_match
+                    WHERE sbiz_publication_id = %s
+                      AND sbiz_fact_id = ANY(%s::text[])
+                    """,
+                    (
+                        next(iter(publication_ids)),
+                        [str(row["sbiz_fact_id"]) for row in rows],
+                    ),
+                ).fetchall()
+                exact_by_id = {
+                    str(row["sbiz_fact_id"]): row for row in exact_rows
+                }
+            for row in rows:
+                exact = exact_by_id.get(str(row["sbiz_fact_id"]))
+                row["registry_match"] = "EXACT" if exact is not None else "UNMATCHED"
+                for field in (
+                    "registry_fact_id",
+                    "registry_academy_name",
+                    "registry_status",
+                    "registry_dataset_version",
+                    "registry_observed_at",
+                ):
+                    row[field] = exact[field] if exact is not None else None
             coverage = connection.execute(
                 """
                 SELECT sum(coverage.total_count)::bigint AS total_count,

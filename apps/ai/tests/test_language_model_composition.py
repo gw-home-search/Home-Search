@@ -13,6 +13,8 @@ from ai_service.chat import (
     get_enabled_reference_capabilities,
     get_academy_registry_repository,
     get_academy_location_repository,
+    get_point_facility_repository,
+    get_rail_station_repository,
     get_grounded_language_model,
     get_query_timeout_seconds,
     get_school_fact_repository,
@@ -36,6 +38,8 @@ def clear_language_model_cache() -> None:
     get_school_fact_repository.cache_clear()
     get_academy_registry_repository.cache_clear()
     get_academy_location_repository.cache_clear()
+    get_point_facility_repository.cache_clear()
+    get_rail_station_repository.cache_clear()
     get_query_timeout_seconds.cache_clear()
     yield
     get_grounded_language_model.cache_clear()
@@ -44,6 +48,8 @@ def clear_language_model_cache() -> None:
     get_school_fact_repository.cache_clear()
     get_academy_registry_repository.cache_clear()
     get_academy_location_repository.cache_clear()
+    get_point_facility_repository.cache_clear()
+    get_rail_station_repository.cache_clear()
     get_query_timeout_seconds.cache_clear()
 
 
@@ -180,12 +186,17 @@ def test_unapproved_or_invalid_property_capability_configuration_fails_closed(
     ("value", "expected"),
     [
         ("school_location", frozenset({"school_location"})),
+        ("academy_lookup", frozenset({"academy_lookup"})),
+        ("rail_station_lookup", frozenset({"rail_station_lookup"})),
+        (
+            "academy_lookup,rail_station_lookup",
+            frozenset({"academy_lookup", "rail_station_lookup"}),
+        ),
         (None, frozenset()),
         ("", frozenset()),
         (" school_location", frozenset()),
         ("school_location,school_location", frozenset()),
-        ("academy_registry_summary", frozenset()),
-        ("academy_lookup", frozenset()),
+        ("rail_station_lookup,academy_lookup", frozenset()),
         ("unknown", frozenset()),
     ],
 )
@@ -218,6 +229,39 @@ def test_academy_location_repository_requires_reference_dsn(
 
     with pytest.raises(ChatbotProviderUnavailable):
         get_academy_location_repository()
+
+
+def test_point_facility_repository_requires_reference_dsn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HOME_AI_REFERENCE_DSN", raising=False)
+
+    with pytest.raises(ChatbotProviderUnavailable):
+        get_point_facility_repository()
+
+
+def test_point_facility_repository_uses_reference_runtime_dsn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[str] = []
+    repository = object()
+    monkeypatch.setenv("HOME_AI_REFERENCE_DSN", "postgresql://runtime/reference")
+    monkeypatch.setattr(
+        "ai_service.property_chat.reference_facilities.PostgresPointFacilityRepository",
+        lambda dsn: captured.append(dsn) or repository,
+    )
+
+    assert get_point_facility_repository() is repository
+    assert captured == ["postgresql://runtime/reference"]
+
+
+def test_rail_station_repository_requires_reference_dsn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HOME_AI_REFERENCE_DSN", raising=False)
+
+    with pytest.raises(ChatbotProviderUnavailable):
+        get_rail_station_repository()
 
 
 @pytest.mark.parametrize("repository_available", [True, False])
@@ -322,6 +366,110 @@ def test_configured_engine_statically_composes_academy_location_repository(
     assert response == {"success": True}
     if repository_available:
         assert captured["academy_location_repository"] is location_repository
+
+
+@pytest.mark.parametrize("repository_available", [True, False])
+def test_configured_engine_statically_composes_rail_station_repository(
+    monkeypatch: pytest.MonkeyPatch,
+    repository_available: bool,
+) -> None:
+    captured: dict[str, object] = {}
+    rail_repository = object()
+
+    class RecordingEngine:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        async def query(self, **_kwargs: object) -> dict[str, object]:
+            repository = captured["rail_station_repository"]
+            if not repository_available:
+                with pytest.raises(ChatbotProviderUnavailable):
+                    repository.nearby()  # type: ignore[attr-defined]
+            return {"success": True}
+
+    monkeypatch.setattr(
+        "ai_service.chat.get_property_fact_repository", lambda: object()
+    )
+    monkeypatch.setattr("ai_service.chat.get_grounded_language_model", lambda: object())
+    monkeypatch.setattr(
+        "ai_service.chat.get_enabled_reference_capabilities",
+        lambda: frozenset({"rail_station_lookup"}),
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_rail_station_repository",
+        (
+            (lambda: rail_repository)
+            if repository_available
+            else (lambda: (_ for _ in ()).throw(ChatbotProviderUnavailable()))
+        ),
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.engine.GroundedChatbotEngine", RecordingEngine
+    )
+
+    response = asyncio.run(
+        ConfiguredChatbotEngine().query(
+            request=ChatbotQueryRequest(question="가까운 역과 노선"),
+            user=AuthenticatedUser(user_id=42),
+            request_id="request-rail-composition",
+        )
+    )
+
+    assert response == {"success": True}
+    if repository_available:
+        assert captured["rail_station_repository"] is rail_repository
+
+
+@pytest.mark.parametrize("repository_available", [True, False])
+def test_configured_engine_statically_composes_point_facility_repository(
+    monkeypatch: pytest.MonkeyPatch,
+    repository_available: bool,
+) -> None:
+    captured: dict[str, object] = {}
+    facility_repository = object()
+
+    class RecordingEngine:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        async def query(self, **_kwargs: object) -> dict[str, object]:
+            repository = captured["point_facility_repository"]
+            if not repository_available:
+                with pytest.raises(ChatbotProviderUnavailable):
+                    repository.nearby()  # type: ignore[attr-defined]
+            return {"success": True}
+
+    monkeypatch.setattr(
+        "ai_service.chat.get_property_fact_repository", lambda: object()
+    )
+    monkeypatch.setattr("ai_service.chat.get_grounded_language_model", lambda: object())
+    monkeypatch.setattr(
+        "ai_service.chat.get_enabled_reference_capabilities",
+        lambda: frozenset({"retail_location"}),
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_point_facility_repository",
+        (
+            (lambda: facility_repository)
+            if repository_available
+            else (lambda: (_ for _ in ()).throw(ChatbotProviderUnavailable()))
+        ),
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.engine.GroundedChatbotEngine", RecordingEngine
+    )
+
+    response = asyncio.run(
+        ConfiguredChatbotEngine().query(
+            request=ChatbotQueryRequest(question="주변 대규모점포"),
+            user=AuthenticatedUser(user_id=42),
+            request_id="request-retail-composition",
+        )
+    )
+
+    assert response == {"success": True}
+    if repository_available:
+        assert captured["point_facility_repository"] is facility_repository
 
 
 def test_configured_engine_fails_closed_when_total_query_budget_expires(

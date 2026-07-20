@@ -41,8 +41,8 @@ def test_rail_projection_preserves_line_occurrences_and_runtime_role_is_read_onl
             """
         ).fetchall()
         assert occurrences == [
-            ("서울교통공사|01|132", "1호선", ["2호선"]),
-            ("서울교통공사|02|201", "2호선", ["1호선"]),
+            ("서울교통공사|01|1호선|132", "1호선", ["2호선"]),
+            ("서울교통공사|02|2호선|201", "2호선", ["1호선"]),
         ]
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             connection.execute("SELECT * FROM reference_projection.rail_station_occurrence")
@@ -75,6 +75,6 @@ def test_rail_projection_preserves_nullable_row_provenance_date(
             """
         ).fetchall()
     assert dates == [
-        ("서울교통공사|02|201", date(2025, 12, 31)),
-        ("서울교통공사|02|202", None),
+        ("서울교통공사|02|2호선|201", date(2025, 12, 31)),
+        ("서울교통공사|02|2호선|202", None),
     ]

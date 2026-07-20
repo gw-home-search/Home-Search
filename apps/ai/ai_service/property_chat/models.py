@@ -12,10 +12,12 @@ QueryCapability = Literal[
     "retail_location",
     "academy_registry_summary",
     "academy_lookup",
+    "rail_station_lookup",
 ]
 PropertyCapability = Literal["complex_identity", "recent_trade_lookup", "price_trend"]
 ReferenceCapability = Literal[
-    "school_location", "retail_location", "academy_registry_summary", "academy_lookup"
+    "school_location", "retail_location", "academy_registry_summary", "academy_lookup",
+    "rail_station_lookup",
 ]
 SchoolLevel = Literal["ELEMENTARY", "MIDDLE", "HIGH"]
 FacilitySubtype = Literal[
@@ -62,6 +64,7 @@ class QueryPlan:
             "school_location",
             "retail_location",
             "academy_lookup",
+            "rail_station_lookup",
         } and self.limit > 5:
             raise ValueError("reference facility limit must be between 1 and 5")
         if (
@@ -94,7 +97,13 @@ class QueryPlan:
         object.__setattr__(self, "facility_subtypes", canonical_subtypes)
         radius_meters = self.radius_meters
         if radius_meters is None:
-            radius_meters = 1000 if self.capability == "retail_location" else 800
+            radius_meters = (
+                1500
+                if self.capability == "rail_station_lookup"
+                else 1000
+                if self.capability == "retail_location"
+                else 800
+            )
             object.__setattr__(self, "radius_meters", radius_meters)
         if not 0 <= radius_meters <= 10_000_000:
             raise ValueError("radius_meters cannot be represented safely")

@@ -10,13 +10,11 @@ tracked taxonomy fingerprint와 교육업종 소분류 allowlist가 일치할 �
 `3055e458f887b3c0b94a2059c3a2571a28053de8b17a4e2e566d6b189f6e1948`이고,
 저장소에는 UTF-8/LF로 정규화한 247행 artifact와 별도 checksum을 추적한다.
 
-collector는 추적 CSV에서 canonical 대·중·소 artifact를 결정적으로 생성한다. 매
-acquisition 시작에는 공식 활용가이드대로 `largeUpjongList`를 조회한 뒤
-`middleUpjongList`를 `indsLclsCd`별로, `smallUpjongList`를
-`indsLclsCd`+`indsMclsCd`별로 조회한다. parent별 code/name을 합친 전체가 tracked
-artifact와 정확히 일치한 경우에만 18개 교육업종 partition을 요청하며, parent별
-taxonomy 응답 bytes를 raw bundle에 보존한다. 불일치나 schema 오류는
-`TAXONOMY_CHANGED`로 store 요청 전에 중단한다. source 상가업소 API의
+collector는 추적 CSV에서 canonical 대·중·소 artifact를 결정적으로 생성하고 매
+acquisition raw bundle에 포함한다. legacy taxonomy endpoint의 현행 분류는 공식 tracked
+taxonomy와 달라 계약 근거로 사용하지 않는다. 18개 교육업종 partition의 실제 store
+row는 `indsSclsCd`와 `indsSclsNm`이 tracked allowlist와 정확히 일치해야 하며,
+불일치나 schema 오류는 publication을 차단한다. source 상가업소 API의
 `이용허락범위 제한 없음`, 제공기관,
 국세청/카드사 원천 고지와 공공데이터포털 제3자 권리 정책을 함께 검토했다. 검토
 evidence SHA-256은
@@ -45,6 +43,6 @@ NFKC 상호명과 공백 canonical 도로명주소가 모두 exact match하고 �
 전국 좌표 coverage 95% 미만이면 답변 생성을 차단한다. property 법정동 코드와 Sbiz
 행정코드의 검증된 mapping이 없으므로 지역 90% coverage와 정상 0건은 확정하지
 않으며 `verifiedZero=false`를 유지한다. Sbiz 수를 공식 등록 학원 수로 표현할 수
-없고, exact match되지 않은 결과는 교육업소 위치로만 표현한다. 실제 taxonomy
-endpoint 응답, coverage와 live readiness 승인 전에는 runtime allowlist에
-추가하지 않는다.
+없고, exact match되지 않은 결과는 교육업소 위치로만 표현한다. 실제 taxonomy,
+coverage, S3 복구, JSON/SSE grounding과 최대 반경 성능은 readiness에서 통과했으며,
+runtime allowlist 변경은 별도 activation commit에서만 수행한다.

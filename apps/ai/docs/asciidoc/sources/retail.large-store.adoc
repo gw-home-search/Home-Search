@@ -1,24 +1,29 @@
 == retail.large-store
 
-기존 LOCALDATA CSV는 stale source date와 공란 이용허락 때문에 운영 acquisition에서
-제외했다. collector는 공공데이터포털의 행정안전부 `생활_대규모점포 조회서비스`
-`GET /info`만 호출한다. 공식 계약은 일간 갱신, 2일 전 기준 현행화,
-`numOfRows` 최대 100, `totalCount` pagination을 명시한다. 정확한 release date를
-제공하지 않으므로 lifecycle은 수집 시작 UTC를 `OBSERVED_AT`으로 사용한다.
+collector는 공공데이터포털이 연결한 행정안전부 `생활_대규모점포` CSV의 고정 download
+path만 호출한다. LOCALDATA가 요구하는 같은 host의 tracked landing URL만 `Referer`로
+전달하며 provider key는 사용하지 않는다. 공식 상세는 일간 갱신·2일 전 기준 현행화를
+명시하지만 filename에는 검증 가능한 release date가 없으므로 수집 시작 UTC를
+`OBSERVED_AT`으로 사용하고 2일 provider lag를 운영 evidence에 남긴다.
 
 source 상세의 `이용허락범위 제한 없음`을 source별로 검토했으며 private raw 저장과
 내부 파생만 승인한다. raw 공개 재배포는 제품 정책상 비활성화한다. license evidence
-SHA-256은 `02bce96a68d777801a4e5ac4cfe71c3e8d9d958ef20eb8a8eb362dc21e6fe2d4`다.
-provider page는 raw JSON 그대로 verified S3 bundle에 보존하지만 전화번호는 normalized
-row와 projection에 포함하지 않는다.
+SHA-256은 `db24e0107b7b2e42abb55389468f64d2503bee116551e49c37eb20f58d719b38`다.
+실제 body는 response charset 표기와 달리 CP949이므로 source contract에 이를 고정했다.
+CSV는 verified S3 bundle에 그대로 보존하지만 전화번호는 normalized row와 projection에
+포함하지 않는다.
 
-EPSG:5174 좌표를 WGS84로 변환한다. provider 행정코드 매핑이 검증되기 전에는 확정
-0건을 주장하지 않는다.
+EPSG:5174 좌표를 WGS84로 변환한다. 현재 공식 status와 업태 값만 explicit mapping하며
+새 nonblank 값과 대한민국 밖 좌표는 publication을 차단한다. provider 행정코드 매핑이
+검증되기 전에는 확정 0건을 주장하지 않는다. 2026-07-20 live snapshot은 4,176건 중
+3,497건만 좌표가 있어 coverage 83.7404%이므로 local publication은 유지하되 activation은
+95% readiness 기준으로 차단한다.
 
-include::{snippets}/retail.large-store/http-request.adoc[]
-include::{snippets}/retail.large-store/request-parameters.adoc[]
+include::{snippets}/retail.large-store/download-request.adoc[]
 include::{snippets}/retail.large-store/http-response.adoc[]
 include::{snippets}/retail.large-store/response-fields.adoc[]
 include::{snippets}/retail.large-store/normalization-fields.adoc[]
+include::{snippets}/retail.large-store/response-headers.adoc[]
+include::{snippets}/retail.large-store/source-columns.adoc[]
 include::{snippets}/retail.large-store/failure-codes.adoc[]
 include::{snippets}/retail.large-store/cli-output.adoc[]

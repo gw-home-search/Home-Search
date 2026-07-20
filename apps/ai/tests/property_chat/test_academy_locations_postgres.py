@@ -22,18 +22,23 @@ def academy_location_postgres_dsn():
             connection.execute("CREATE SCHEMA reference_read")
             connection.execute(
                 """
-                CREATE TABLE reference_read.sbiz_academy_fact (
-                    sbiz_fact_id text PRIMARY KEY,
+                CREATE TABLE reference_read.facility_point_fact (
+                    publication_id uuid NOT NULL,
+                    source_id text NOT NULL,
+                    fact_id text PRIMARY KEY,
                     name text NOT NULL,
-                    small_category_code text NOT NULL,
+                    subcategory text NOT NULL,
                     status text NOT NULL,
                     road_address text,
                     lot_address text,
                     position geography(Point, 4326) NOT NULL,
                     dataset_version text NOT NULL,
-                    observed_at timestamptz NOT NULL,
+                    dataset_observed_at timestamptz NOT NULL
+                );
+                CREATE TABLE reference_read.sbiz_academy_exact_match (
+                    sbiz_publication_id uuid NOT NULL,
+                    sbiz_fact_id text PRIMARY KEY,
                     registry_fact_id text,
-                    registry_match text NOT NULL,
                     registry_academy_name text,
                     registry_status text,
                     registry_dataset_version text,
@@ -59,25 +64,29 @@ def academy_location_postgres_dsn():
                 INSERT INTO reference_read.source_coverage VALUES (
                     '00000000-0000-0000-0000-000000000001', '1171056600', 100, 100
                 );
-                INSERT INTO reference_read.sbiz_academy_fact VALUES
-                    ('exact', '가나다 학원', 'P10101', 'OPEN', '도로명', NULL,
+                INSERT INTO reference_read.facility_point_fact VALUES
+                    ('00000000-0000-0000-0000-000000000001',
+                     'place.sbiz-academy', 'exact', '가나다 학원', 'P10101', 'OPEN', '도로명', NULL,
                      ST_SetSRID(ST_MakePoint(127.082, 37.513), 4326)::geography,
-                     'sbiz-v1', '2026-07-20T00:00:00Z', 'B10|1', 'EXACT',
-                     '가나다 학원', 'OPEN', 'neis-v1', '2026-07-19T00:00:00Z'),
-                    ('boundary', '경계 교습소', 'P10102', 'OPEN', NULL, '지번',
+                     'sbiz-v1', '2026-07-20T00:00:00Z'),
+                    ('00000000-0000-0000-0000-000000000001',
+                     'place.sbiz-academy', 'boundary', '경계 교습소', 'P10102', 'OPEN', NULL, '지번',
                      ST_Project(
                          ST_SetSRID(ST_MakePoint(127.082, 37.513), 4326)::geography,
                          800, 0
                      ),
-                     'sbiz-v1', '2026-07-20T00:00:00Z', NULL, 'UNMATCHED',
-                     NULL, NULL, NULL, NULL),
-                    ('outside', '바깥 학원', 'P10101', 'OPEN', '도로명', NULL,
+                     'sbiz-v1', '2026-07-20T00:00:00Z'),
+                    ('00000000-0000-0000-0000-000000000001',
+                     'place.sbiz-academy', 'outside', '바깥 학원', 'P10101', 'OPEN', '도로명', NULL,
                      ST_Project(
                          ST_SetSRID(ST_MakePoint(127.082, 37.513), 4326)::geography,
                          801, 0
                      ),
-                     'sbiz-v1', '2026-07-20T00:00:00Z', NULL, 'UNMATCHED',
-                     NULL, NULL, NULL, NULL);
+                     'sbiz-v1', '2026-07-20T00:00:00Z');
+                INSERT INTO reference_read.sbiz_academy_exact_match VALUES (
+                    '00000000-0000-0000-0000-000000000001', 'exact', 'B10|1',
+                    '가나다 학원', 'OPEN', 'neis-v1', '2026-07-19T00:00:00Z'
+                );
                 """
             )
         yield dsn
@@ -110,6 +119,65 @@ def test_nearby_includes_exact_800_meter_boundary_and_exact_registry_evidence(
     assert result.locations[1].distance_meters == 800
     assert result.coordinate_coverage == 1.0
     assert result.verified_zero is False
+
+
+def test_nearby_returns_unverified_zero_without_loading_exact_evidence(
+    academy_location_postgres_dsn: str,
+) -> None:
+    repository = PostgresAcademyLocationRepository(
+        academy_location_postgres_dsn,
+        expected_database="test",
+        expected_username="test",
+    )
+    try:
+        result = repository.nearby(
+            latitude=33.5,
+            longitude=126.5,
+            radius_meters=800,
+            limit=5,
+        )
+    finally:
+        repository.close()
+
+    assert result.locations == ()
+    assert result.matched_count == 0
+    assert result.verified_zero is False
+
+
+def test_nearby_rejects_mixed_publications(
+    academy_location_postgres_dsn: str,
+) -> None:
+    with psycopg.connect(academy_location_postgres_dsn) as connection:
+        connection.execute(
+            """
+            INSERT INTO reference_read.facility_point_fact VALUES (
+                '00000000-0000-0000-0000-000000000002',
+                'place.sbiz-academy', 'mixed', '혼합 학원', 'P10101', 'OPEN', '도로명', NULL,
+                ST_SetSRID(ST_MakePoint(127.082, 37.513), 4326)::geography,
+                'sbiz-v2', '2026-07-20T00:00:00Z'
+            )
+            """
+        )
+
+    repository = PostgresAcademyLocationRepository(
+        academy_location_postgres_dsn,
+        expected_database="test",
+        expected_username="test",
+    )
+    try:
+        with pytest.raises(RuntimeError, match="publication is inconsistent"):
+            repository.nearby(
+                latitude=37.513,
+                longitude=127.082,
+                radius_meters=800,
+                limit=5,
+            )
+    finally:
+        repository.close()
+        with psycopg.connect(academy_location_postgres_dsn) as connection:
+            connection.execute(
+                "DELETE FROM reference_read.facility_point_fact WHERE fact_id = 'mixed'"
+            )
 
 
 @pytest.mark.parametrize(

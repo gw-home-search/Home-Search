@@ -129,9 +129,8 @@ grep -Fq 'home-ai-reference-refresh --source edu.academy-registry' "$docker_log"
 
 output="$(run_refresh --source retail.large-store)"
 grep -Fq 'sourceId: retail.large-store' <<<"$output"
-grep -Fq -- '--env HOME_AI_DATA_GO_KR_SERVICE_KEY' "$docker_log"
-if grep -Fq -- '--env HOME_AI_NEIS_SERVICE_KEY' "$docker_log"; then
-    echo '상태: Fail - retail refresh에 NEIS secret이 전달됐습니다.' >&2
+if grep -Eq -- '--env HOME_AI_(DATA_GO_KR|NEIS)_SERVICE_KEY' "$docker_log"; then
+    echo '상태: Fail - retail file refresh에 provider secret이 전달됐습니다.' >&2
     exit 1
 fi
 grep -Fq 'home-ai-reference-refresh --source retail.large-store' "$docker_log"
@@ -147,7 +146,7 @@ for source_id in \
     grep -Fq "sourceId: $source_id" <<<"$output"
     line="$(grep -F "home-ai-reference-refresh --source $source_id" "$docker_log")"
     case "$source_id" in
-        edu.school-location|place.sbiz-academy|retail.large-store)
+        edu.school-location|place.sbiz-academy)
             grep -Fq -- '--env HOME_AI_DATA_GO_KR_SERVICE_KEY' <<<"$line"
             ! grep -Fq -- '--env HOME_AI_NEIS_SERVICE_KEY' <<<"$line"
             ;;
@@ -155,7 +154,7 @@ for source_id in \
             grep -Fq -- '--env HOME_AI_NEIS_SERVICE_KEY' <<<"$line"
             ! grep -Fq -- '--env HOME_AI_DATA_GO_KR_SERVICE_KEY' <<<"$line"
             ;;
-        transport.rail-station)
+        retail.large-store|transport.rail-station)
             ! grep -Eq -- '--env HOME_AI_(DATA_GO_KR|NEIS)_SERVICE_KEY' <<<"$line"
             ;;
     esac

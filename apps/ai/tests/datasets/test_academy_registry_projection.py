@@ -14,6 +14,27 @@ from tests.datasets.test_academy_registry_adapter import _bundle, _contract
 pytestmark = pytest.mark.postgres
 
 
+def test_academy_summary_has_exact_region_lookup_index(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    with psycopg.connect(postgres_dsn) as connection:
+        index_definition = connection.execute(
+            """
+            SELECT indexdef
+            FROM pg_indexes
+            WHERE schemaname = 'reference_projection'
+              AND indexname = 'registry_fact_academy_region_summary_idx'
+            """
+        ).fetchone()
+
+    assert index_definition is not None
+    assert "(attributes ->> 'educationOfficeName'::text)" in index_definition[0]
+    assert "region_name" in index_definition[0]
+    assert "publication_id" in index_definition[0]
+    assert "WHERE (source_id = 'edu.academy-registry'::text)" in index_definition[0]
+
+
 def test_academy_publication_exposes_only_safe_aggregate_view(
     dataset_repository: PostgresDatasetRepository,
     postgres_dsn: str,

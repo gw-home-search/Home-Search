@@ -260,7 +260,10 @@ def _taxonomy_page(content: bytes, artifact_name: str) -> list[dict[str, str]]:
         if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
             raise ValueError
         normalized = [
-            {"code": _text(item.get(code_field)), "name": _text(item.get(name_field))}
+            {
+                "code": _taxonomy_text(item.get(code_field)),
+                "name": _taxonomy_text(item.get(name_field)),
+            }
             for item in items
         ]
         if (
@@ -274,6 +277,10 @@ def _taxonomy_page(content: bytes, artifact_name: str) -> list[dict[str, str]]:
         raise RawPayloadError(
             "Sbiz taxonomy page is invalid", "TAXONOMY_CHANGED"
         ) from None
+
+
+def _taxonomy_text(value: object) -> str:
+    return value if isinstance(value, str) and value.strip() else ""
 
 
 def _text(value: object) -> str:

@@ -64,9 +64,13 @@ if search_quiet '^GET https://www\.data\.go\.kr/data/15013205/standard\.do$' "$r
     echo '상태: Fail - rail landing URL은 download request가 아닙니다.' >&2
     exit 1
 fi
-retail_request="${tmp_dir}/first/generated-snippets/retail.large-store/http-request.adoc"
-if ! search_quiet '^GET https://apis\.data\.go\.kr/1741000/large_scale_retail_stores/info$' "$retail_request"; then
-    echo '상태: Fail - 검증된 retail API request가 문서와 일치하지 않습니다.' >&2
+retail_request="${tmp_dir}/first/generated-snippets/retail.large-store/download-request.adoc"
+if ! search_quiet '^GET https://file\.localdata\.go\.kr/file/download/large_scale_retail_stores/info$' "$retail_request"; then
+    echo '상태: Fail - 검증된 retail file request가 문서와 일치하지 않습니다.' >&2
+    exit 1
+fi
+if ! search_quiet '^Referer: https://file\.localdata\.go\.kr/file/large_scale_retail_stores/info$' "$retail_request"; then
+    echo '상태: Fail - 검증된 retail Referer가 문서와 일치하지 않습니다.' >&2
     exit 1
 fi
 

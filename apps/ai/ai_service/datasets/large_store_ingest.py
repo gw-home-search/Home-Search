@@ -5,8 +5,9 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 
+from .bundle import FileBundleArtifact, build_deterministic_bundle_file
 from .contracts import ReferenceSourceContract, load_reference_source_catalog
-from .large_store_client import LargeStoreApiClient, LargeStoreApiError
+from .file_snapshot_client import FileSnapshotClient, FileSnapshotError
 from .large_store import LargeStoreAdapter, large_store_source_contract
 from .models import LifecycleResult
 from .postgres import PostgresDatasetRepository
@@ -35,13 +36,12 @@ def ingest_from_environment(
     environment: Mapping[str, str],
     *,
     repository_factory: Callable[[str], PostgresDatasetRepository] = _importer_repository,
-    client_factory: Callable[[ReferenceSourceContract], LargeStoreApiClient] | None = None,
+    client_factory: Callable[[ReferenceSourceContract], FileSnapshotClient] | None = None,
     raw_store_factory: Callable[[Mapping[str, str]], S3RawObjectStore] = s3_raw_store_from_environment,
     today: Callable[[], date] = date.today,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> LargeStoreIngestReport:
     importer_dsn = _required(environment, "HOME_AI_IMPORTER_DSN")
-    service_key = _required(environment, "HOME_AI_DATA_GO_KR_SERVICE_KEY")
     _validate_importer_dsn(importer_dsn)
     try:
         reference = load_reference_source_catalog(_CONFIG_PATH).approved("retail.large-store")
@@ -64,23 +64,25 @@ def ingest_from_environment(
         with repository.source_lock(contract.source_id), SecureTempWorkspace(
             required_free_bytes=reference.acquisition.maximum_bundle_bytes * 2
         ) as workspace:
-            collected = client.collect_prepared(
-                service_key, observed_at=observed_at, workspace=workspace
+            artifact = client.collect(target=workspace.path / "provider.csv")
+            bundle = build_deterministic_bundle_file(
+                source_id=contract.source_id,
+                endpoint_path=artifact.endpoint_path,
+                artifacts=(
+                    FileBundleArtifact(
+                        "large-store", "csv", "text/csv", artifact.path
+                    ),
+                ),
+                temporal_value=observed_at,
+                target=workspace.create_file("bundle.zip"),
             )
-            lifecycle = DatasetLifecycleService(repository, raw_store=raw_store)
-            result = (
-                lifecycle.ingest_validate_publish_prepared(
-                    contract, collected.prepared, source_date=None,
-                    observed_at=observed_at, adapter=LargeStoreAdapter(),
-                    content_type="application/zip",
-                )
-                if collected.complete else lifecycle.preserve_incomplete_prepared(
-                    contract, collected.prepared, source_date=None,
-                    observed_at=observed_at, reason_codes=collected.reason_codes,
-                    content_type="application/zip",
-                )
+            result = DatasetLifecycleService(
+                repository, raw_store=raw_store
+            ).ingest_validate_publish_prepared(
+                contract, bundle, source_date=None, observed_at=observed_at,
+                adapter=LargeStoreAdapter(), content_type="application/zip",
             )
-    except LargeStoreApiError as exception:
+    except FileSnapshotError as exception:
         _finish_failure(repository, refresh_run_id, contract.source_id, exception.reason_code, clock())
         raise
     except Exception:
@@ -96,19 +98,26 @@ def ingest_from_environment(
     finally:
         repository.close()
     return LargeStoreIngestReport(
-        result=result, page_count=collected.page_count,
-        raw_row_count=collected.raw_row_count,
+        result=result, page_count=1, raw_row_count=result.raw_row_count
     )
 
 
-def _client(reference: ReferenceSourceContract) -> LargeStoreApiClient:
-    if (
-        reference.acquisition.mode != "api"
-        or reference.acquisition.base_url
-        != "https://apis.data.go.kr/1741000/large_scale_retail_stores/info"
-    ):
-        raise ValueError("large-store API acquisition contract mismatch")
-    return LargeStoreApiClient()
+def _client(reference: ReferenceSourceContract) -> FileSnapshotClient:
+    acquisition = reference.acquisition
+    if acquisition.mode != "file" or reference.temporal.basis != "OBSERVED_AT":
+        raise ValueError("large-store file acquisition contract mismatch")
+    return FileSnapshotClient(
+        source_id=reference.id,
+        url=acquisition.base_url,
+        allowed_hosts=acquisition.allowed_hosts,
+        allowed_path_prefixes=acquisition.allowed_path_prefixes,
+        media_types=("text/csv",),
+        extension="csv",
+        maximum_bytes=acquisition.maximum_bundle_bytes,
+        allow_one_redirect=acquisition.redirect_policy == "ALLOWLISTED_ONE_HOP",
+        require_source_date=False,
+        referer_url=acquisition.referer_url,
+    )
 
 
 def _finish_failure(

@@ -105,6 +105,34 @@ grep -Fq 'exec --env AI_DATA_MIGRATOR_DB_PASSWORD --env AI_DATA_IMPORTER_DB_PASS
 grep -Fq -- '--profile user' "$docker_log"
 grep -Fq 'up -d --build --force-recreate --no-deps user-service ai chat-bff public-api-gateway' "$docker_log"
 
+override_output="$(
+    PATH="$tmp_dir/bin:$PATH" \
+    CHATBOT_TEST_DOCKER_LOG="$docker_log" \
+    CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
+    CHATBOT_AI_DOCKERFILE_PATH="$tmp_dir/Dockerfile" \
+    CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
+    CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
+    "$runner" --reference-capabilities academy_lookup,rail_station_lookup \
+        "$property_env" "$user_env" "$bff_env" "$ai_env"
+)"
+grep -Fq '상태: Pass - chatbot local preflight' <<<"$override_output"
+grep -Fq 'reference-capabilities=academy_lookup,rail_station_lookup' "$docker_log"
+
+if PATH="$tmp_dir/bin:$PATH" \
+    CHATBOT_TEST_DOCKER_LOG="$docker_log" \
+    CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
+    CHATBOT_AI_DOCKERFILE_PATH="$tmp_dir/Dockerfile" \
+    CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
+    CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
+    "$runner" --reference-capabilities rail_station_lookup,academy_lookup \
+        "$property_env" "$user_env" "$bff_env" "$ai_env" \
+        >"$tmp_dir/reference-order-invalid.out" 2>&1; then
+    echo '상태: Fail - 역순 reference capability가 허용됐습니다.' >&2
+    exit 1
+fi
+grep -Fq '고정 catalog 순서의 중복 없는 subset' \
+    "$tmp_dir/reference-order-invalid.out"
+
 printf '%s\n' \
     'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \
     'HOME_AI_JWT_PUBLIC_KEY_PATHS={"local-user-1":"/run/keys/user-signing-public"}' \
@@ -565,7 +593,7 @@ if PATH="$tmp_dir/bin:$PATH" \
     echo "상태: Fail - 중복 school_location Capability가 거부되지 않았습니다." >&2
     exit 1
 fi
-grep -Fq '거부됨: HOME_AI_ENABLED_REFERENCE_CAPABILITIES는 빈 값 또는 school_location만 허용합니다.' \
+grep -Fq '거부됨: HOME_AI_ENABLED_REFERENCE_CAPABILITIES는 고정 catalog 순서의 중복 없는 subset만 허용합니다.' \
     "$tmp_dir/reference-capability-invalid.out"
 
 printf '%s\n' \

@@ -36,7 +36,7 @@
 
 ## 검증 공백
 
-- 대표 공간 query 20회 p95와 live chatbot golden 근거가 아직 없다.
+- 실제 observation과 LLM을 사용하는 live chatbot golden 근거가 아직 없다.
 - 2026-07-19 실제 실행에서 Docker와 host 모두 `api.data.go.kr:443` DNS·TLS
   연결 뒤 응답을 받지 못해 `API_TRANSPORT_FAILED`로 중단됐다. 공식 dataset
   페이지는 수정일 `2026-05-06`, 표본 데이터 기준일 `2026-03-20`으로 계속
@@ -59,14 +59,19 @@
   key를 사용해 self-deadlock이 발생했다. `refresh:` namespace를 분리하고 validation 직후
   interruption된 acquisition을 checksum 재수집에서 resume하는 회귀 경로를 추가했다.
 - raw S3 object는 7,254,385 bytes와 version ID를 확인했고 active pointer, snapshot,
-  typed projection이 각각 정확히 한 publication과 12,011행을 가리킨다.
+  typed projection이 각각 정확히 한 publication과 12,011행을 가리킨다. 2026-07-20
+  해당 version을 MinIO에서 다시 스트리밍 복구해 DB의 SHA-256
+  `68a982be33220a7464850ff84ade95db67dd1a33cfb8d5c134b953d5095617da`와
+  byte length가 모두 일치함을 확인했다.
 - 두 번째 actual refresh도 13페이지·12,011행·rejected `0`으로 `Pass`했다. 동일 raw
   checksum이라 acquisition `2d9809e6-f732-42aa-847f-b9b946fb8bc7`과 publication
   `09f11e92-f79a-4cfd-bdd3-87cc9329d1f2`를 idempotent 재사용했고 새 publication은
   생성하지 않았다. raw bytes가 달라지고 normalized rows만 같을 때 사용하는 semantic
   `NoChange`와 달리, byte-identical 재수집은 기존 `Pass`를 반환하는 계약이다.
+- 실제 runtime role에서 서울시청 인근 2km 학교 조회를 20회 측정한 결과 p95
+  `114.066ms`, max `137.701ms`로 200ms 기준을 통과했다.
 - test engine 기반 signed JWT JSON/SSE E2E는 통과했지만 실제 학교 observation과
-  LLM을 사용하는 live golden, 대표 공간 query 20회 p95 측정은 미완료다.
+  LLM을 사용하는 live golden은 미완료다.
 
 ## 잔여 위험
 

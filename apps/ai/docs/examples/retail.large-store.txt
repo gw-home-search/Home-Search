@@ -1,1 +1,1 @@
-HTTP 200 application/json; sanitized paginated large-store fixture
+HTTP 200 text/csv; CP949 sanitized large-store fixture without telephone values

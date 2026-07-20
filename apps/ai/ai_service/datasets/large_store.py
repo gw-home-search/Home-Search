@@ -31,6 +31,7 @@ _STATUS = {
     "영업중": "OPEN",
     "폐업": "CLOSED",
     "휴업": "SUSPENDED",
+    "취소/말소/만료/정지/중지": "CLOSED",
 }
 _SUBCATEGORY = {
     "대형마트": "LARGE_MART",
@@ -39,19 +40,25 @@ _SUBCATEGORY = {
     "복합쇼핑몰": "COMPLEX_MALL",
     "그 밖의 대규모점포": "OTHER_LARGE_STORE",
     "그밖의 대규모점포": "OTHER_LARGE_STORE",
+    "전문점": "SPECIALTY_STORE",
+    "시장": "MARKET",
+    "구분없음": "UNCLASSIFIED",
+    "": "UNCLASSIFIED",
 }
 _REQUIRED_COLUMNS = {
     "관리번호",
     "개방자치단체코드",
     "영업상태명",
     "사업장명",
-    "소재지전체주소",
-    "도로명전체주소",
     "업태구분명",
     "좌표정보(X)",
     "좌표정보(Y)",
-    "데이터갱신일자",
 }
+_REQUIRED_COLUMN_ALIASES = (
+    ("소재지전체주소", "지번주소"),
+    ("도로명전체주소", "도로명주소"),
+    ("데이터갱신일자", "최종수정시점"),
+)
 
 
 class LargeStoreAdapter:
@@ -69,6 +76,28 @@ class LargeStoreAdapter:
             expected_source_id=SOURCE_ID,
             maximum_bytes=_MAX_BUNDLE_BYTES,
         )
+        if (
+            contract.temporal_basis == "OBSERVED_AT"
+            and source_date is None
+            and contract.file_format == "CSV"
+        ):
+            if not isinstance(bundle.temporal_value, datetime):
+                raise RawPayloadError(
+                    "large-store observed time is missing", "BUNDLE_MANIFEST_INVALID"
+                )
+            if len(bundle.artifacts) != 1 or bundle.artifacts[0].media_type != "text/csv":
+                raise RawPayloadError(
+                    "large-store bundle metadata mismatch", "BUNDLE_MANIFEST_INVALID"
+                )
+            try:
+                text = bundle.artifacts[0].content.decode(contract.encoding)
+            except (LookupError, UnicodeDecodeError):
+                raise RawPayloadError(
+                    "large-store CSV encoding mismatch", "CSV_ENCODING_INVALID"
+                ) from None
+            return _parse_csv(
+                io.StringIO(text, newline=""), bundle.temporal_value.date()
+            )
         if contract.temporal_basis == "OBSERVED_AT" and source_date is None:
             if not isinstance(bundle.temporal_value, datetime):
                 raise RawPayloadError(
@@ -102,6 +131,36 @@ class LargeStoreAdapter:
             raise RawPayloadError(
                 "large-store source contract mismatch", "SOURCE_CONTRACT_MISMATCH"
             )
+        if (
+            contract.temporal_basis == "OBSERVED_AT"
+            and source_date is None
+            and contract.file_format == "CSV"
+        ):
+            with SecureTempWorkspace(required_free_bytes=_MAX_ARTIFACT_BYTES) as workspace:
+                bundle = extract_single_artifact_bundle_file(
+                    raw_path,
+                    workspace.create_file("large-store.csv"),
+                    expected_source_id=SOURCE_ID,
+                    maximum_bytes=_MAX_BUNDLE_BYTES,
+                    maximum_artifact_bytes=_MAX_ARTIFACT_BYTES,
+                )
+                if (
+                    not isinstance(bundle.temporal_value, datetime)
+                    or bundle.media_type != "text/csv"
+                ):
+                    raise RawPayloadError(
+                        "large-store bundle metadata mismatch",
+                        "BUNDLE_MANIFEST_INVALID",
+                    )
+                try:
+                    with bundle.artifact_path.open(
+                        "r", encoding=contract.encoding, newline=""
+                    ) as stream:
+                        return _parse_csv(stream, bundle.temporal_value.date())
+                except (LookupError, UnicodeDecodeError):
+                    raise RawPayloadError(
+                        "large-store CSV encoding mismatch", "CSV_ENCODING_INVALID"
+                    ) from None
         if contract.temporal_basis == "OBSERVED_AT" and source_date is None:
             bundle = read_deterministic_bundle_file(
                 raw_path, expected_source_id=SOURCE_ID,
@@ -142,7 +201,11 @@ class LargeStoreAdapter:
 
 def _parse_csv(stream: TextIO, source_date: date) -> ParsedDataset:
     reader = csv.DictReader(stream)
-    if reader.fieldnames is None or not _REQUIRED_COLUMNS.issubset(reader.fieldnames):
+    if (
+        reader.fieldnames is None
+        or not _REQUIRED_COLUMNS.issubset(reader.fieldnames)
+        or any(not set(aliases).intersection(reader.fieldnames) for aliases in _REQUIRED_COLUMN_ALIASES)
+    ):
         raise RawPayloadError("large-store CSV schema mismatch", "SOURCE_SCHEMA_MISMATCH")
     rows: list[dict[str, object]] = []
     issues: list[QualityIssue] = []
@@ -266,11 +329,16 @@ def _normalize(provider_row: dict[str, object], reference_date: date):
         "category": "RETAIL",
         "subcategory": subtype or subtype_value,
         "status": status or "UNKNOWN",
-        "road_address": _optional(provider_row.get("도로명전체주소")),
-        "lot_address": _optional(provider_row.get("소재지전체주소")),
+        "road_address": _optional(
+            _first(provider_row, "도로명전체주소", "도로명주소")
+        ),
+        "lot_address": _optional(
+            _first(provider_row, "소재지전체주소", "지번주소")
+        ),
         "region_code": _optional(provider_row.get("개방자치단체코드")),
         "region_name": _region_name(
-            provider_row.get("도로명전체주소") or provider_row.get("소재지전체주소")
+            _first(provider_row, "도로명전체주소", "도로명주소")
+            or _first(provider_row, "소재지전체주소", "지번주소")
         ),
         "latitude": latitude,
         "longitude": longitude,
@@ -319,6 +387,14 @@ def large_store_source_contract(
 
 def _clean(value: object) -> str:
     return " ".join(value.split()) if isinstance(value, str) else ""
+
+
+def _first(row: dict[str, object], *fields: str) -> object:
+    for field in fields:
+        value = row.get(field)
+        if value is not None and _clean(value):
+            return value
+    return None
 
 
 def _optional(value: object) -> str | None:

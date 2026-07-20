@@ -480,6 +480,13 @@ def _object(value: object) -> dict[str, Any]:
 
 
 def _integer(value: object, *, minimum: int) -> int:
+    if (
+        isinstance(value, str)
+        and value.isascii()
+        and value.isdigit()
+        and len(value) <= 10
+    ):
+        value = int(value)
     if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
         raise ValueError("integer required")
     return value

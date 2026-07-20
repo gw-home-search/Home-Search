@@ -47,9 +47,11 @@ def _row(index: int) -> dict[str, object]:
 
 def test_client_encodes_decoding_key_once_and_uses_fixed_query() -> None:
     paths: list[str] = []
+    timeouts: list[float] = []
 
-    def requester(path: str, _timeout: float):
+    def requester(path: str, timeout: float):
         paths.append(path)
+        timeouts.append(timeout)
         return 200, {}, _page(1, 1, [_row(1)])
 
     result = SchoolLocationApiClient(requester=requester).collect("decoded+/= key")
@@ -58,6 +60,7 @@ def test_client_encodes_decoding_key_once_and_uses_fixed_query() -> None:
     assert result.source_date.isoformat() == "2026-03-20"  # type: ignore[union-attr]
     assert "serviceKey=decoded%2B%2F%3D%20key" in paths[0]
     assert "numOfRows=1000&type=json" in paths[0]
+    assert timeouts == [20.0]
 
 
 def test_client_tolerates_additive_provider_envelope_fields() -> None:
@@ -76,6 +79,35 @@ def test_client_tolerates_additive_provider_envelope_fields() -> None:
 
     assert result.complete is True
     assert result.raw_row_count == 1
+
+
+def test_client_accepts_provider_pagination_as_decimal_strings() -> None:
+    content = json.loads(_page(1, 1, [_row(1)]))
+    body = content["response"]["body"]
+    body.update(pageNo="1", numOfRows="1000", totalCount="1")
+
+    result = SchoolLocationApiClient(
+        requester=lambda _path, _timeout: (200, {}, json.dumps(content).encode())
+    ).collect("key")
+
+    assert result.complete is True
+    assert result.page_count == 1
+    assert result.raw_row_count == 1
+
+
+@pytest.mark.parametrize("invalid_page", [" 1", "1.0", "１", "1" * 11])
+def test_client_rejects_non_contract_pagination_strings(
+    invalid_page: str,
+) -> None:
+    content = json.loads(_page(1, 1, [_row(1)]))
+    content["response"]["body"]["pageNo"] = invalid_page
+
+    with pytest.raises(SchoolLocationApiError) as error:
+        SchoolLocationApiClient(
+            requester=lambda _path, _timeout: (200, {}, json.dumps(content).encode())
+        ).collect("key")
+
+    assert error.value.reason_code == "API_ENVELOPE_INVALID"
 
 
 def test_client_retries_one_5xx_but_not_429() -> None:

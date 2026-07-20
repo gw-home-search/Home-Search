@@ -51,7 +51,7 @@ class SchoolLocationApiClient:
         self,
         *,
         requester: Requester | None = None,
-        timeout_seconds: float = 10,
+        timeout_seconds: float = 20,
     ) -> None:
         if not math.isfinite(timeout_seconds) or not 1 <= timeout_seconds <= 30:
             raise ValueError("school API timeout is outside the supported range")

@@ -376,29 +376,10 @@ case "$ai_enabled_property_capabilities" in
     complex_identity | complex_identity,recent_trade_lookup | complex_identity,recent_trade_lookup,price_trend) ;;
     *) reject "HOME_AI_ENABLED_PROPERTY_CAPABILITIES는 승인된 누적 설정만 허용합니다." ;;
 esac
-if ! AI_REFERENCE_CAPABILITIES="$ai_enabled_reference_capabilities" python3 - <<'PY'
-import os
-import sys
-
-order = (
-    "school_location",
-    "academy_registry_summary",
-    "academy_lookup",
-    "retail_location",
-    "rail_station_lookup",
-)
-raw = os.environ["AI_REFERENCE_CAPABILITIES"]
-values = raw.split(",") if raw else []
-valid = (
-    all(value and value == value.strip() for value in values)
-    and len(values) == len(set(values))
-    and tuple(values) == tuple(value for value in order if value in values)
-)
-sys.exit(0 if valid else 1)
-PY
-then
-    reject "HOME_AI_ENABLED_REFERENCE_CAPABILITIES는 고정 catalog 순서의 중복 없는 subset만 허용합니다."
-fi
+case "$ai_enabled_reference_capabilities" in
+    "" | academy_lookup) ;;
+    *) reject "HOME_AI_ENABLED_REFERENCE_CAPABILITIES는 승인된 reference 조합만 허용합니다." ;;
+esac
 
 export HOME_SEARCH_DB_PASSWORD="$home_search_db_password"
 export PROPERTY_RUNTIME_DB_PASSWORD="$property_runtime_db_password"

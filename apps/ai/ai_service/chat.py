@@ -17,12 +17,10 @@ _APPROVED_PROPERTY_CAPABILITY_CONFIGURATIONS = frozenset(
         ("complex_identity", "recent_trade_lookup", "price_trend"),
     }
 )
-_REFERENCE_CAPABILITY_ORDER: tuple[ReferenceCapability, ...] = (
-    "school_location",
-    "academy_registry_summary",
-    "academy_lookup",
-    "retail_location",
-    "rail_station_lookup",
+_APPROVED_REFERENCE_CAPABILITY_CONFIGURATIONS = frozenset(
+    {
+        ("academy_lookup",),
+    }
 )
 
 
@@ -204,8 +202,7 @@ def get_enabled_reference_capabilities() -> frozenset[ReferenceCapability]:
     if (
         any(not value or value != value.strip() for value in values)
         or len(values) != len(set(values))
-        or tuple(values)
-        != tuple(capability for capability in _REFERENCE_CAPABILITY_ORDER if capability in values)
+        or tuple(values) not in _APPROVED_REFERENCE_CAPABILITY_CONFIGURATIONS
     ):
         return frozenset()
     return cast(frozenset[ReferenceCapability], frozenset(values))

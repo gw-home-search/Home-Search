@@ -29,7 +29,7 @@ dataset의 private raw 저장·가공 승인으로 확대하지 않는다.
 | sourceId | 공식 확인 내용 | contract 상태 | activation blocker |
 |---|---|---|---|
 | `edu.academy-registry` | NEIS 상세 페이지의 `이용 허락 범위 제한없음`, provider·주기·attribution evidence SHA-256 고정 | `APPROVED` | acquisition·S3·전국 138,412행·p95 통과; chatbot golden·pointer rollback 미검증 |
-| `place.sbiz-academy` | API의 무제한 이용 허락, 국세청/카드사 provenance·제3자 정책, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | 필수 readiness 통과; 별도 activation commit 승인 |
+| `place.sbiz-academy` | API의 무제한 이용 허락, 국세청/카드사 provenance·제3자 정책, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | 필수 readiness 통과; `academy_lookup` 활성화 |
 | `retail.large-store` | 공식 fileData 상세의 `이용허락범위 제한 없음`, 일간·2일 전 현행화, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | 좌표 83.7404%와 live chatbot golden 실패로 activation 차단 |
 | `transport.rail-station` | fileData `15093755`의 `이용허락범위 제한 없음`과 프로젝트 책임자가 보고한 KRIC 전화 승인; 서면 transcript 부재를 evidence에 명시 | `APPROVED` | 필수 readiness 통과; 별도 activation commit 승인 |
 
@@ -82,8 +82,8 @@ live 필수 항목이 남으면 readiness를 `Partial`로 유지한다.
 | F3 static composition·CLI | `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 | D1 AsciiDoc artifact | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
 | NEIS | source 이용조건·collector·projection·summary observer·전국 live 수집 `Pass` | `10.0/10` | `8.0/10 Partial` | 금지 |
-| Sbiz S2 collector | 공식 taxonomy 18 partition·191,250행·S3 복구·`NoChange` `Pass` | `10.0/10` | `10.0/10 Pass` | 별도 activation commit 승인 |
-| Sbiz S2-P grounded location | exact projection·Sbiz B+NEIS A signed JWT JSON/SSE `Pass` | `10.0/10` | `10.0/10 Pass` | 별도 activation commit 승인 |
+| Sbiz S2 collector | 공식 taxonomy 18 partition·191,250행·S3 복구·`NoChange` `Pass` | `10.0/10` | `10.0/10 Pass` | 활성화 |
+| Sbiz S2-P grounded location | exact projection·Sbiz B+NEIS A signed JWT JSON/SSE `Pass` | `10.0/10` | `10.0/10 Pass` | 활성화 |
 | 대규모점포 | 공식 CSV 4,176행·S3 복구·`NoChange`·runtime composition `Pass` | `10.0/10` | `8.0/10 Partial` | coverage·golden으로 금지 |
 | 철도 S4/S4-P | fixed XLSX·1,097 occurrence·좌표 100%·S3·병합·signed JWT JSON/SSE `Pass` | `9.5/10` | `10.0/10 Pass` | 별도 activation commit 승인 |
 | Offline priority integration | AI·PostGIS·MinIO·property-data·chat-bff·JWT·Compose `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
@@ -141,8 +141,8 @@ Sbiz `academy_lookup` observer는 기본 800m, 명시 범위 100..2,000m, 최대
 전국 좌표 coverage 95%를 fail-closed로 적용한다. Sbiz 위치는 B등급이며 NFKC 상호명,
 canonical 도로명주소, 선택적 우편번호가 모두 exact match할 때만 NEIS A등급 근거를
 추가한다. fuzzy match와 공식 등록 수 표현은 grounding 단계에서 거부한다. 검증된
-행정코드 mapping이 없어 정상 0건은 확정하지 않으며, `academy_lookup`은 별도 activation
-commit 전까지 runtime allowlist에 추가하지 않았다.
+행정코드 mapping이 없어 정상 0건은 확정하지 않는다. 2026-07-21 activation은
+`academy_lookup`만 runtime template에 추가하고 빈 값을 rollback으로 유지한다.
 
 Sbiz S2 collector 구현 점수는 source별 무제한 이용 허락과 제3자 provenance evidence,
 공식 OAS endpoint·field fixture, 현행 taxonomy code/name exact preflight, 18개

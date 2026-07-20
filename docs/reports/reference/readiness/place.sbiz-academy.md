@@ -8,7 +8,8 @@
   p95 `156.927ms`
 - 중단: 없음
 - 안전 제한: fuzzy match 금지, 행정코드 mapping 전 `verifiedZero=false`
-- 활성화: 별도 activation commit에서만 승인
+- 활성화: 2026-07-21 local runtime template의 `academy_lookup` 승인; rollback은 빈 값
+- activation smoke: 제한 재검증 JSON/SSE `200/success`, A+B citation, SSE error 0
 
 최초 live taxonomy parse failure는 삭제하지 않았다. taxonomy evidence는 원문 문자를
 보존하며 store 행 code/name만 exact allowlist로 검증한다. 최신 raw 복구 SHA-256은

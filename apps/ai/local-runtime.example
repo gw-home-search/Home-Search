@@ -8,5 +8,5 @@ HOME_AI_OPENAI_SECONDARY_MODEL=replace-with-approved-secondary-model-id
 HOME_AI_OPENAI_TIMEOUT_SECONDS=8
 HOME_AI_QUERY_TIMEOUT_SECONDS=60
 HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend
-# Keep blank until the school readiness report is Pass and activation is approved.
-HOME_AI_ENABLED_REFERENCE_CAPABILITIES=
+# Approved local reference activation. Use a blank value to roll back.
+HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup

@@ -185,15 +185,14 @@ def test_unapproved_or_invalid_property_capability_configuration_fails_closed(
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
-        ("school_location", frozenset({"school_location"})),
         ("academy_lookup", frozenset({"academy_lookup"})),
-        ("rail_station_lookup", frozenset({"rail_station_lookup"})),
-        (
-            "academy_lookup,rail_station_lookup",
-            frozenset({"academy_lookup", "rail_station_lookup"}),
-        ),
         (None, frozenset()),
         ("", frozenset()),
+        ("school_location", frozenset()),
+        ("academy_registry_summary", frozenset()),
+        ("retail_location", frozenset()),
+        ("rail_station_lookup", frozenset()),
+        ("academy_lookup,rail_station_lookup", frozenset()),
         (" school_location", frozenset()),
         ("school_location,school_location", frozenset()),
         ("rail_station_lookup,academy_lookup", frozenset()),
@@ -557,7 +556,34 @@ class _ReferenceBoundaryLanguageModel:
         )
 
 
-def test_reference_pool_failure_is_503_for_school_query(
+def test_reference_pool_failure_is_503_for_academy_lookup_query(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "ai_service.chat.get_property_fact_repository",
+        lambda: _ReferenceBoundaryPropertyRepository(),
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_grounded_language_model",
+        lambda: _ReferenceBoundaryLanguageModel("academy_lookup"),
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_academy_location_repository",
+        lambda: (_ for _ in ()).throw(ChatbotProviderUnavailable()),
+    )
+    monkeypatch.setenv("HOME_AI_ENABLED_REFERENCE_CAPABILITIES", "academy_lookup")
+
+    with pytest.raises(ChatbotProviderUnavailable):
+        asyncio.run(
+            ConfiguredChatbotEngine().query(
+                request=ChatbotQueryRequest(question="잠실엘스 주변 교육업소"),
+                user=AuthenticatedUser(user_id=42),
+                request_id="request-reference-failure",
+            )
+        )
+
+
+def test_inactive_school_composition_remains_fail_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -569,17 +595,20 @@ def test_reference_pool_failure_is_503_for_school_query(
         lambda: _ReferenceBoundaryLanguageModel("school_location"),
     )
     monkeypatch.setattr(
+        "ai_service.chat.get_enabled_reference_capabilities",
+        lambda: frozenset({"school_location"}),
+    )
+    monkeypatch.setattr(
         "ai_service.chat.get_school_fact_repository",
         lambda: (_ for _ in ()).throw(ChatbotProviderUnavailable()),
     )
-    monkeypatch.setenv("HOME_AI_ENABLED_REFERENCE_CAPABILITIES", "school_location")
 
     with pytest.raises(ChatbotProviderUnavailable):
         asyncio.run(
             ConfiguredChatbotEngine().query(
                 request=ChatbotQueryRequest(question="잠실엘스 주변 학교"),
                 user=AuthenticatedUser(user_id=42),
-                request_id="request-reference-failure",
+                request_id="request-inactive-school-failure",
             )
         )
 
@@ -596,11 +625,11 @@ def test_reference_pool_failure_does_not_break_property_query(
         lambda: _ReferenceBoundaryLanguageModel("complex_identity"),
     )
     monkeypatch.setattr(
-        "ai_service.chat.get_school_fact_repository",
+        "ai_service.chat.get_academy_location_repository",
         lambda: (_ for _ in ()).throw(ChatbotProviderUnavailable()),
     )
     monkeypatch.setenv("HOME_AI_ENABLED_PROPERTY_CAPABILITIES", "complex_identity")
-    monkeypatch.setenv("HOME_AI_ENABLED_REFERENCE_CAPABILITIES", "school_location")
+    monkeypatch.setenv("HOME_AI_ENABLED_REFERENCE_CAPABILITIES", "academy_lookup")
 
     response = asyncio.run(
         ConfiguredChatbotEngine().query(

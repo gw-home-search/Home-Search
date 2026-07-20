@@ -41,9 +41,12 @@
 
 - provider 행정코드와 property 법정동 code mapping이 없어 정상 0건은
   `verifiedZero=false`다.
-- mandatory chatbot grounding과 최대 반경 성능 기준을 모두 통과했다. tracked runtime
-  allowlist는 이번 live 검증 변경에 포함하지 않으며 `academy_lookup`은 별도 activation
-  commit에서만 승인한다.
+- mandatory chatbot grounding과 최대 반경 성능 기준을 모두 통과했다. 2026-07-21
+  local runtime template에서 `academy_lookup`만 승인했으며 빈 allowlist를 rollback으로
+  유지한다.
+- activation smoke의 첫 공개 호출은 JSON `503`, SSE error로 fail-closed했고 직접
+  engine 진단은 정상 근거를 반환했다. 제한 재검증에서 JSON/SSE 모두 `200/success`,
+  Sbiz B+NEIS A citation과 active datasetVersion, SSE final 1·error 0을 확인했다.
 
 taxonomy evidence:
 

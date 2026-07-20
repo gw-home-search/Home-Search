@@ -15,8 +15,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
-import org.springframework.web.client.RestClient;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClient;
 
 public class PublicBuildingRegisterPageClient implements BuildingRegisterPageClient {
     private static final long MAX_RESPONSE_BYTES = 2_097_152;

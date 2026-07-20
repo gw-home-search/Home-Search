@@ -64,7 +64,9 @@ class JdbcBuildingRegisterEvidenceMigrationTest extends JdbcMigrationTestSupport
                 "building_register_match_evidence_id_seq",
                 "building_ratio_candidate_id_seq",
                 "building_ratio_projection_id_seq");
-        assertThat(sequences).allSatisfy(sequence -> assertThat(hasSequencePrivilege(sequence, "USAGE,SELECT")).isTrue());
+        assertThat(sequences)
+                .allSatisfy(sequence -> assertThat(hasSequencePrivilege(sequence, "USAGE,SELECT"))
+                        .isTrue());
     }
 
     @Test

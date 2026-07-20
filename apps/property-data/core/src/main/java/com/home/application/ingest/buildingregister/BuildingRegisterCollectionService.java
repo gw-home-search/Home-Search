@@ -13,8 +13,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class BuildingRegisterCollectionService {
     private static final int[] PAGE_SIZES = {100, 50, 25, 10};
-    private static final String EMPTY_BODY_SHA256 =
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    private static final String EMPTY_BODY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
     private final BuildingRegisterPageClient client;
     private final BuildingRegisterPageParser parser;
@@ -86,8 +85,7 @@ public class BuildingRegisterCollectionService {
                 budget.consume();
                 BuildingRegisterPageResponse response;
                 try {
-                    response =
-                            client.fetch(new BuildingRegisterPageRequest(endpoint, command.pnu(), pageNo, pageSize));
+                    response = client.fetch(new BuildingRegisterPageRequest(endpoint, command.pnu(), pageNo, pageSize));
                 } catch (BuildingRegisterPageFetchException failure) {
                     long rawPageId = receiver.receive(new BuildingRegisterRawPageReceiptCommand(
                             snapshot.id(),
@@ -139,7 +137,12 @@ public class BuildingRegisterCollectionService {
                     parsed = parser.parse(response);
                 } catch (RuntimeException exception) {
                     completion.complete(
-                            rawPageId, snapshot.id(), null, null, BuildingRegisterRawPageStatus.PARSE_FAILED, List.of());
+                            rawPageId,
+                            snapshot.id(),
+                            null,
+                            null,
+                            BuildingRegisterRawPageStatus.PARSE_FAILED,
+                            List.of());
                     snapshots.complete(snapshot.id(), 0, BuildingRegisterCollectionStatus.PARSE_FAILED);
                     return new EndpointResult(BuildingRegisterCollectionStatus.PARSE_FAILED, records);
                 }

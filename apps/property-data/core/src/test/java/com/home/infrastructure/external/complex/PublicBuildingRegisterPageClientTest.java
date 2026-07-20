@@ -6,8 +6,8 @@ import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import com.home.application.ingest.buildingregister.BuildingRegisterPageRequest;
 import com.home.application.ingest.buildingregister.BuildingRegisterPageFetchException;
+import com.home.application.ingest.buildingregister.BuildingRegisterPageRequest;
 import com.home.domain.complex.buildingregister.BuildingRegisterEndpoint;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -80,8 +80,8 @@ class PublicBuildingRegisterPageClientTest {
         PublicBuildingRegisterPageClient client = new PublicBuildingRegisterPageClient(
                 builder.build(), "https://bld.example.test", "BLD-KEY", "/recap", "/title", "/basic", 0);
 
-        assertThatThrownBy(() -> client.fetch(
-                        new BuildingRegisterPageRequest(BuildingRegisterEndpoint.TITLE, PNU, 1, 100)))
+        assertThatThrownBy(() ->
+                        client.fetch(new BuildingRegisterPageRequest(BuildingRegisterEndpoint.TITLE, PNU, 1, 100)))
                 .isInstanceOf(BuildingRegisterPageFetchException.class)
                 .hasMessage("TRANSPORT_TIMEOUT")
                 .hasNoCause();

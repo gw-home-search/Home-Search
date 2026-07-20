@@ -19,7 +19,8 @@ class JdbcCleanCoreReferenceDataMigrationTest extends JdbcMigrationTestSupport {
 
         migrateToLatest();
 
-        assertThat(appliedMigrationVersions()).containsExactly("1", "2", "4", "5", "6", "7", "8", "9", "10", "11");
+        assertThat(appliedMigrationVersions())
+                .containsExactly("1", "2", "4", "5", "6", "7", "8", "9", "10", "11", "12");
         assertThat(regclass("batch.BATCH_JOB_INSTANCE")).isEqualTo("batch.batch_job_instance");
         assertThat(count("SELECT count(*) FROM region WHERE region_type = 'si-do'"))
                 .isGreaterThanOrEqualTo(17);
@@ -75,7 +76,7 @@ class JdbcCleanCoreReferenceDataMigrationTest extends JdbcMigrationTestSupport {
         flyway(null).migrate();
         jdbcClient = org.springframework.jdbc.core.simple.JdbcClient.create(dataSource);
 
-        assertThat(schemaFingerprint()).isEqualTo("788608031d1ca83192be4c5d6f2957ea");
+        assertThat(schemaFingerprint()).isEqualTo("ca5504430c4fc5eb9c6ec115d3775a9c");
         assertThat(seedFingerprint()).isEqualTo("4cc3b683cff740f5eb20dc09271f117d");
         assertThat(sequenceFingerprint()).isEqualTo("588869ab552608ed168a0b29266f5e91");
     }

@@ -61,7 +61,7 @@ ops/run-batch-jar.sh \
   toComplexId=<same-required-id>
 ```
 
-같은 날짜의 `PARSED`·`EMPTY` page는 다시 호출하거나 중복 저장하지 않는다. 날짜가 바뀐 미완성 endpoint snapshot은 보존하고 page 1부터 새 snapshot을 시작한다. 모든 target이 terminal match 상태가 되어야 campaign이 `COMPLETED`가 된다.
+완료된 endpoint snapshot(`PARSED|EMPTY`)은 날짜가 바뀌어도 같은 캠페인에서 재사용하므로 다시 호출하거나 중복 저장하지 않는다. 날짜가 바뀐 미완성 endpoint snapshot은 보존하고 page 1부터 새 snapshot을 시작한다. 모든 target이 terminal match 상태가 되어야 campaign이 `COMPLETED`가 된다.
 
 ## 4. 수집 결과 검증
 

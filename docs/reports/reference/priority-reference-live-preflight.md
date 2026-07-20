@@ -12,6 +12,8 @@ safe reason code와 count만 기록했고 provider body, API key, DSN은 기록�
 | 순서 | sourceId | 결과 | 검증 근거 확인 |
 |---:|---|---|---|
 | 1 | `edu.school-location` | exit `1` | JSON media type은 확인했으나 JSON parse 이전 `API_ENVELOPE_INVALID`; dataset별 활용승인/key 또는 gateway 응답 확인 필요, acquisition `0` |
+| 1b | `edu.school-location` | `Pass` | decimal-string pagination 반영 후 12,011행/rejected 0/17개 교육청; lock namespace·validated resume 보완, active datasetVersion `2026-03-20-b148752f1e38` |
+| 1c | `edu.school-location` | `Pass` | 두 번째 13-page refresh가 동일 acquisition/publication을 재사용; acquisition 총 2개는 이전 incomplete 1개와 published 1개, publication은 계속 1개 |
 | 2 | `edu.academy-registry` | exit `1` | 재시도에도 configured NEIS key는 첫 page `API_SERVER_ERROR`; acquisition `0`, active datasetVersion 없음 |
 | 3 | `place.sbiz-academy` | exit `1` | key 수정 후 인증 통과, live unscoped taxonomy `25/266/1,255`가 공식 포털·가이드 `10/75/247`과 불일치해 `TAXONOMY_CHANGED`; acquisition `0` |
 | 4 | `retail.large-store` | exit `1` | 재시도에도 첫 page `API_AUTHENTICATION_FAILED`; dataset `15154948` 활용신청 미반영 가능성, acquisition `0` |
@@ -69,6 +71,11 @@ malformed 날짜 6건을 `RAIL_ROW_REFERENCE_DATE_INVALID` warning으로 기록�
 - 학교 client는 non-JSON media type과 envelope 구조 단계를 body 비노출 reason code로
   분리하고 additive provider field를 허용한다. live 응답은 JSON media type이지만 JSON
   parse 이전에 실패해 schema 완화 대상이 아닌 provider/승인 확인 대상으로 좁혀졌다.
+- 후속 safe 진단에서 정상 `resultCode='00'`과 decimal-string pagination을 확인해 parser를
+  제한적으로 수정했다. actual full refresh는 12,011행을 게시했고, 이 과정에서 발견된
+  refresh/publish advisory self-deadlock과 validated acquisition resume도 회귀 테스트로
+  보완했다. 두 번째 actual refresh도 동일 raw checksum의 기존 acquisition/publication을
+  재사용해 `Pass`했고 duplicate publication은 생성하지 않았다.
 - 철도 row 기준일을 release date와 비교해 전 행을 거부하던 오류를 수정하고 nullable
   provenance projection migration을 추가했다. occurrence identity 중복은 완화하지 않았다.
 

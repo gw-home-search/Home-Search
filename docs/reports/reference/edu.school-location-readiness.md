@@ -36,8 +36,7 @@
 
 ## 검증 공백
 
-- 실제 전국 provider import, 10,000~50,000행, rejected `0`, 17개 교육청 실데이터
-  coverage, 두 번째 `Pass|NoChange` 실행 근거가 없다.
+- 대표 공간 query 20회 p95와 live chatbot golden 근거가 아직 없다.
 - 2026-07-19 실제 실행에서 Docker와 host 모두 `api.data.go.kr:443` DNS·TLS
   연결 뒤 응답을 받지 못해 `API_TRANSPORT_FAILED`로 중단됐다. 공식 dataset
   페이지는 수정일 `2026-05-06`, 표본 데이터 기준일 `2026-03-20`으로 계속
@@ -47,13 +46,31 @@
   items 구조를 body 비노출 reason code로 분리하고 additive field를 허용하도록 보강했다.
   동일 결과가 유지되므로 dataset별 활용승인·Decoding key 또는 provider gateway 응답을
   확인하기 전 schema를 더 완화하지 않는다.
-- 첫 page 이전 실패라 raw object, acquisition, publication은 생성되지 않았다.
-  실제 SQL에서 학교 acquisition과 publication이 각각 `0`임을 확인했다.
+- 이후 safe 구조 진단에서 key는 decoded 형태이고 provider `resultCode='00'`임을 확인했다.
+  실제 pagination 값이 JSON number가 아니라 decimal string인 반면 client가 `int`만
+  허용한 것이 `API_ENVELOPE_INVALID`의 원인이었다. ASCII decimal string만 제한적으로
+  허용하고 page timeout을 10초에서 20초로 조정했다.
+- actual full refresh는 raw 12,011행을 모두 검증해 rejected `0`, 17개 시도교육청,
+  invalid coordinate `0`을 확인했다. acquisition
+  `2d9809e6-f732-42aa-847f-b9b946fb8bc7`, publication
+  `09f11e92-f79a-4cfd-bdd3-87cc9329d1f2`, datasetVersion
+  `2026-03-20-b148752f1e38`로 게시했다.
+- 첫 publish에서 session refresh lock과 transaction publication lock이 같은 advisory
+  key를 사용해 self-deadlock이 발생했다. `refresh:` namespace를 분리하고 validation 직후
+  interruption된 acquisition을 checksum 재수집에서 resume하는 회귀 경로를 추가했다.
+- raw S3 object는 7,254,385 bytes와 version ID를 확인했고 active pointer, snapshot,
+  typed projection이 각각 정확히 한 publication과 12,011행을 가리킨다.
+- 두 번째 actual refresh도 13페이지·12,011행·rejected `0`으로 `Pass`했다. 동일 raw
+  checksum이라 acquisition `2d9809e6-f732-42aa-847f-b9b946fb8bc7`과 publication
+  `09f11e92-f79a-4cfd-bdd3-87cc9329d1f2`를 idempotent 재사용했고 새 publication은
+  생성하지 않았다. raw bytes가 달라지고 normalized rows만 같을 때 사용하는 semantic
+  `NoChange`와 달리, byte-identical 재수집은 기존 `Pass`를 반환하는 계약이다.
 - test engine 기반 signed JWT JSON/SSE E2E는 통과했지만 실제 학교 observation과
   LLM을 사용하는 live golden, 대표 공간 query 20회 p95 측정은 미완료다.
 
 ## 잔여 위험
 
+- provider page latency가 길어 전체 13페이지 수집이 수 분 걸릴 수 있다.
 - 실제 provider schema나 page total이 contract와 다르면 게시가 차단된다.
 - 실제 readiness `Pass` 전까지 `HOME_AI_ENABLED_REFERENCE_CAPABILITIES`는 blank이며
   `school_location`을 운영에서 활성화하지 않는다.

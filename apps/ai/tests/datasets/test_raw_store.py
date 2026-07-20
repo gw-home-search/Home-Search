@@ -1,15 +1,56 @@
 from __future__ import annotations
 
+from contextlib import closing
 from hashlib import sha256
 from pathlib import Path
 
+import boto3
 import pytest
+from botocore.config import Config
+from testcontainers.core.container import DockerContainer
+from testcontainers.core.wait_strategies import HttpWaitStrategy
 
 from ai_service.datasets.raw_store import (
     RawObjectIntegrityError,
     S3RawObjectStore,
     s3_raw_store_from_environment,
 )
+
+
+@pytest.fixture(scope="module")
+def minio_s3_client():
+    access_key = "integration-access"
+    secret_key = "integration-secret-key"
+    container = (
+        DockerContainer("quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z")
+        .with_exposed_ports(9000)
+        .with_env("MINIO_ROOT_USER", access_key)
+        .with_env("MINIO_ROOT_PASSWORD", secret_key)
+        .with_command("server /data --address :9000")
+        .waiting_for(HttpWaitStrategy(9000, "/minio/health/live"))
+    )
+    with container:
+        endpoint = (
+            f"http://{container.get_container_host_ip()}:"
+            f"{container.get_exposed_port(9000)}"
+        )
+        client = boto3.client(
+            "s3",
+            endpoint_url=endpoint,
+            region_name="ap-northeast-2",
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            config=Config(
+                signature_version="s3v4",
+                s3={"addressing_style": "path"},
+            ),
+        )
+        client.create_bucket(Bucket="private-raw")
+        client.put_bucket_versioning(
+            Bucket="private-raw",
+            VersioningConfiguration={"Status": "Enabled"},
+        )
+        yield client
 
 
 class FakeS3Client:
@@ -64,6 +105,52 @@ def test_s3_store_uses_content_addressed_key_and_verifies_head() -> None:
     assert stored.object_key == f"raw/v1/edu.school-location/{checksum[:2]}/{checksum}.zip"
     assert stored.object_version_id == "version-1"
     assert client.put_calls[0]["ChecksumSHA256"]
+
+
+def test_minio_recovers_verified_versioned_raw_file(
+    minio_s3_client, tmp_path: Path
+) -> None:
+    content = b"recoverable-versioned-raw-bundle" * 1024
+    artifact = tmp_path / "bundle.zip"
+    artifact.write_bytes(content)
+    artifact.chmod(0o600)
+    checksum = sha256(content).hexdigest()
+    store = S3RawObjectStore(
+        client=minio_s3_client,
+        bucket="private-raw",
+        prefix="raw",
+    )
+
+    first = store.put_verified_file(
+        source_id="retail.large-store",
+        checksum=checksum,
+        path=artifact,
+        byte_length=len(content),
+        content_type="application/zip",
+    )
+    second = store.put_verified_file(
+        source_id="retail.large-store",
+        checksum=checksum,
+        path=artifact,
+        byte_length=len(content),
+        content_type="application/zip",
+    )
+    recovered = minio_s3_client.get_object(
+        Bucket="private-raw",
+        Key=first.object_key,
+        VersionId=first.object_version_id,
+        ChecksumMode="ENABLED",
+    )
+    with closing(recovered["Body"]) as body:
+        recovered_content = body.read()
+
+    assert first.object_version_id is not None
+    assert second.object_key == first.object_key
+    assert second.object_version_id == first.object_version_id
+    assert recovered_content == content
+    assert recovered["ChecksumSHA256"] == __import__("base64").b64encode(
+        sha256(content).digest()
+    ).decode()
 
 
 class StreamingS3Client:

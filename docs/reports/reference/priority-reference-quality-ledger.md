@@ -84,6 +84,7 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
 | Sbiz S2-P grounded location | exact projection·grounded location observer offline `Pass` | `9.5/10` | `2.0/10 Partial` | 금지 |
 | 대규모점포 | streaming file client·기존 projection `Pass`, live 미실행 | 미채점 | `3.0/10 Partial` | 금지 |
 | 철도 S4 collector | fixed URL collector orchestration·occurrence projection·merge offline `Pass`, URL 미확정 | `9.5/10` | `2.0/10 Partial` | 금지 |
+| Offline priority integration | AI·PostGIS·MinIO·property-data·chat-bff·JWT·Compose `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 
 상세 readiness 근거는 `docs/reports/reference/readiness/`에 source별로 기록한다.
 F1은 file source뿐 아니라 NEIS·Sbiz API page도 owner-only temp file에 순차 기록하고,
@@ -97,7 +98,7 @@ NEIS·Sbiz normalized iterator, 30만 행 `<256MiB` peak memory gate를 통과�
 file source는 계약상 최대 1만 행 이하로 제한된다. 철도 refresher는 고정 XLSX URL,
 owner-only temp, verified S3 file upload, safe refresh-run 실패 기록을 static catalog에
 연결했으며 현재 landing URL은 network 호출 전에 거부한다. 2026-07-20 전체 offline
-회귀는 `533 passed`, coverage `90.04%`다. NEIS summary observer는 property DB의
+회귀는 `534 passed`, coverage `90.04%`다. NEIS summary observer는 property DB의
 시도·시군구 ancestor를 먼저 해석한 뒤 AI DB를 별도 exact query하며, 반경·거리 표현을
 grounding 단계에서 거부한다. license와 live readiness가 미승인이므로 runtime
 allowlist에는 추가하지 않았다. 실제 provider,
@@ -114,6 +115,12 @@ Sbiz S2-P 구현 점수는 범위·공개/내부 계약·데이터 정확성·�
 문서·bounded query·리뷰 근거를 충족했다. source별 이용조건과 실제 taxonomy 승인이
 `PENDING`이므로 이용조건 항목에서 `0.5`를 감점해 `9.5/10`으로 평가했다. 이는
 구현 commit만 허용하며 실제 데이터 readiness나 capability 활성화를 승인하지 않는다.
+
+Offline priority integration은 실제 PostGIS와 MinIO container, raw version byte 복구,
+property-data fresh Flyway, chat-bff, signed JWT JSON/SSE, DB role, base+chatbot Compose를
+통과했다. 1GiB raw와 21GiB ephemeral storage를 실제 할당하지 않은 성능·자원 증거
+공백으로 `0.5`를 감점했다. 명령별 결과와 잔여 위험은
+`priority-reference-offline-verification.md`에 기록했다.
 
 철도 S4 구현 점수는 범위·계약·이용조건 상태 기록·raw-first 원자성·보안·실패 기록·
 테스트·문서·리뷰 근거를 만점으로 평가했다. fake transport와 file size bound는

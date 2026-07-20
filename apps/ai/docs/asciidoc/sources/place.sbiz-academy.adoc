@@ -2,6 +2,19 @@
 
 tracked taxonomy fingerprint와 교육업종 소분류 allowlist가 일치할 때만 게시한다.
 
+=== Tracked taxonomy provenance
+
+공식 업종코드 원문은 공공데이터포털 `15067631`의 2023-02-28 CSV이며, 포털에
+대분류 10개·중분류 75개·소분류 247개와 이용허락범위 제한 없음으로 게시되어 있다.
+원본 CP949 bytes SHA-256은
+`3055e458f887b3c0b94a2059c3a2571a28053de8b17a4e2e566d6b189f6e1948`이고,
+저장소에는 UTF-8/LF로 정규화한 247행 artifact와 별도 checksum을 추적한다.
+
+collector는 추적 CSV에서 대·중·소 artifact를 결정적으로 재생성하고 canonical
+fingerprint를 검증한다. 교육업종 allowlist는 공식 대분류 `P1`(`교육 서비스업`)의
+소분류 18개 전체와 정확히 같아야 한다. source 상가업소 API의 이용조건과 실제
+taxonomy endpoint schema 비교가 승인되기 전에는 live 호출과 활성화를 금지한다.
+
 include::{snippets}/place.sbiz-academy/http-request.adoc[]
 include::{snippets}/place.sbiz-academy/request-parameters.adoc[]
 include::{snippets}/place.sbiz-academy/normalization-fields.adoc[]
@@ -19,4 +32,5 @@ NFKC 상호명과 공백 canonical 도로명주소가 모두 exact match하고 �
 행정코드의 검증된 mapping이 없으므로 지역 90% coverage와 정상 0건은 확정하지
 않으며 `verifiedZero=false`를 유지한다. Sbiz 수를 공식 등록 학원 수로 표현할 수
 없고, exact match되지 않은 결과는 교육업소 위치로만 표현한다. 이용조건, 실제
-taxonomy, coverage와 live readiness 승인 전에는 runtime allowlist에 추가하지 않는다.
+taxonomy endpoint schema, coverage와 live readiness 승인 전에는 runtime allowlist에
+추가하지 않는다.

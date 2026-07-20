@@ -29,7 +29,7 @@ dataset의 private raw 저장·가공 승인으로 확대하지 않는다.
 | sourceId | 공식 확인 내용 | contract 상태 | activation blocker |
 |---|---|---|---|
 | `edu.academy-registry` | NEIS 기반 전국 학원·교습소, 수시 갱신 | `PENDING` | source별 이용허락·private raw 저장·내부 파생물 조건과 fingerprint 미확정 |
-| `place.sbiz-academy` | 상권업종 247개 체계와 store ID 비연속 변경 공지 확인 | `PENDING` | 활용가이드, 실제 taxonomy artifact, 정확한 교육업종 allowlist 미확정 |
+| `place.sbiz-academy` | 공식 247행 taxonomy와 P1 교육업종 18개 allowlist 고정 | `PENDING` | 상가업소 API 이용조건·private raw 저장·실제 taxonomy endpoint schema 미승인 |
 | `retail.large-store` | LOCALDATA CSV URL, EPSG:5174, 수시/2일 전 현행화 확인 | `PENDING` | 이용허락 표시와 private raw 저장·파생 조건 fingerprint 미확정 |
 | `transport.rail-station` | KRIC landing, 연간 XLSX, 1,073행, 기준일 2024-12-31 확인 | `PENDING` | 고정된 실제 XLSX release URL과 이용조건 fingerprint 미확정 |
 
@@ -80,7 +80,7 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
 | F3 static composition·CLI | `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 | D1 AsciiDoc artifact | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
 | NEIS | collector·projection·summary observer offline `Pass`, live 미완료 | `9.5/10` | `2.0/10 Partial` | 금지 |
-| Sbiz S2 collector | collector·adapter·generic refresh offline `Pass`, taxonomy 미승인 | 미채점 | `2.0/10 Partial` | 금지 |
+| Sbiz S2 collector | 공식 taxonomy contract·collector·adapter·generic refresh offline `Pass`, live taxonomy schema 미승인 | 미채점 | `2.0/10 Partial` | 금지 |
 | Sbiz S2-P grounded location | exact projection·grounded location observer offline `Pass` | `9.5/10` | `2.0/10 Partial` | 금지 |
 | 대규모점포 | streaming file client·기존 projection `Pass`, live 미실행 | `9.5/10` | `3.0/10 Partial` | 금지 |
 | 철도 S4 collector | fixed URL collector orchestration·occurrence projection·merge offline `Pass`, URL 미확정 | `9.5/10` | `2.0/10 Partial` | 금지 |
@@ -109,7 +109,7 @@ CLI와 local wrapper는 source별 provider key만 선택하며 CSV/XLSX source�
 file source는 계약상 최대 1만 행 이하로 제한된다. 철도 refresher는 고정 XLSX URL,
 owner-only temp, verified S3 file upload, safe refresh-run 실패 기록을 static catalog에
 연결했으며 현재 landing URL은 network 호출 전에 거부한다. 2026-07-20 전체 offline
-회귀는 `544 passed`, coverage `90.30%`다. NEIS summary observer는 property DB의
+회귀는 `546 passed`, coverage `90.21%`다. NEIS summary observer는 property DB의
 시도·시군구 ancestor를 먼저 해석한 뒤 AI DB를 별도 exact query하며, 반경·거리 표현을
 grounding 단계에서 거부한다. license와 live readiness가 미승인이므로 runtime
 allowlist에는 추가하지 않았다. 실제 provider,

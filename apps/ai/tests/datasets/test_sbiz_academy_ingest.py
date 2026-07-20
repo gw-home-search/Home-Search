@@ -4,6 +4,8 @@ from contextlib import nullcontext
 from dataclasses import replace
 from datetime import UTC, date, datetime
 from hashlib import sha256
+import json
+from pathlib import Path
 from uuid import UUID
 
 import pytest
@@ -125,6 +127,58 @@ def test_sbiz_first_page_failure_records_safe_reason(monkeypatch) -> None:
     assert repository.closed is True
 
 
-def test_pending_license_stops_before_missing_taxonomy_file() -> None:
+def test_pending_license_stops_before_loading_taxonomy_file() -> None:
     with pytest.raises(RuntimeError):
         sbiz_academy_ingest.ingest_from_environment(_environment())
+
+
+def test_tracked_official_taxonomy_loads_all_247_categories_and_education_allowlist() -> None:
+    taxonomy, artifacts = sbiz_academy_ingest._load_taxonomy()
+
+    assert {name: len(rows) for name, rows in artifacts.items()} == {
+        "taxonomy-large": 10,
+        "taxonomy-middle": 75,
+        "taxonomy-small": 247,
+    }
+    assert taxonomy.fingerprint == (
+        "1ffabae679945e7151dd62d463100d760a168f5806cd18af8eb570bde04fabfc"
+    )
+    assert taxonomy.allowed_small_categories == {
+        "P10501": "입시·교과학원",
+        "P10601": "태권도/무술학원",
+        "P10603": "요가/필라테스 학원",
+        "P10605": "레크리에이션 교육기관",
+        "P10607": "청소년 수련시설",
+        "P10609": "음악학원",
+        "P10611": "미술학원",
+        "P10613": "기타 예술/스포츠 교육기관",
+        "P10615": "외국어학원",
+        "P10617": "전문자격/고시학원",
+        "P10619": "사회교육시설",
+        "P10621": "직원 훈련기관",
+        "P10623": "운전학원",
+        "P10625": "기타 기술/직업 훈련학원",
+        "P10627": "컴퓨터 학원",
+        "P10629": "그 외 기타 교육기관",
+        "P10701": "교육컨설팅업",
+        "P10799": "기타 교육지원 서비스업",
+    }
+
+
+def test_tracked_official_taxonomy_rejects_source_checksum_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = json.loads(sbiz_academy_ingest._TAXONOMY_PATH.read_text(encoding="utf-8"))
+    tracked_source = (
+        sbiz_academy_ingest._TAXONOMY_PATH.parent
+        / config["source"]["trackedFile"]
+    )
+    changed_source = tmp_path / "taxonomy.csv"
+    changed_source.write_bytes(tracked_source.read_bytes() + b"\n")
+    config["source"]["trackedFile"] = changed_source.name
+    config_path = tmp_path / "taxonomy.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    monkeypatch.setattr(sbiz_academy_ingest, "_TAXONOMY_PATH", config_path)
+
+    with pytest.raises(ValueError, match="checksum changed"):
+        sbiz_academy_ingest._load_taxonomy()

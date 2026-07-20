@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "landingUrl": "https://www.data.go.kr/data/15067631/fileData.do",
+    "downloadUrl": "https://www.data.go.kr/cmm/cmm/fileDownload.do?atchFileId=FILE_000000002719340&fileDetailSn=1&insertDataPrcus=N",
+    "fileName": "소상공인시장진흥공단_상가(상권)정보 업종코드_20230228.csv",
+    "downloadedOn": "2026-07-20",
+    "providerEncoding": "CP949",
+    "downloadSha256": "3055e458f887b3c0b94a2059c3a2571a28053de8b17a4e2e566d6b189f6e1948",
+    "trackedFile": "sbiz_industry_taxonomy_20230228.csv",
+    "trackedEncoding": "UTF-8",
+    "trackedSha256": "f076ee0aa84ef829ae4279d259391d0d65790b052be7f8dab950e3dcc26a706f",
+    "license": "이용허락범위 제한 없음"
+  },
+  "expectedCounts": {
+    "taxonomy-large": 10,
+    "taxonomy-middle": 75,
+    "taxonomy-small": 247
+  },
+  "educationMajorCategory": {
+    "code": "P1",
+    "name": "교육 서비스업"
+  },
+  "allowedSmallCategories": {
+    "P10501": "입시·교과학원",
+    "P10601": "태권도/무술학원",
+    "P10603": "요가/필라테스 학원",
+    "P10605": "레크리에이션 교육기관",
+    "P10607": "청소년 수련시설",
+    "P10609": "음악학원",
+    "P10611": "미술학원",
+    "P10613": "기타 예술/스포츠 교육기관",
+    "P10615": "외국어학원",
+    "P10617": "전문자격/고시학원",
+    "P10619": "사회교육시설",
+    "P10621": "직원 훈련기관",
+    "P10623": "운전학원",
+    "P10625": "기타 기술/직업 훈련학원",
+    "P10627": "컴퓨터 학원",
+    "P10629": "그 외 기타 교육기관",
+    "P10701": "교육컨설팅업",
+    "P10799": "기타 교육지원 서비스업"
+  },
+  "fingerprint": "1ffabae679945e7151dd62d463100d760a168f5806cd18af8eb570bde04fabfc"
+}

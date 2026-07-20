@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import hashlib
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -12,6 +14,7 @@ from .postgres import PostgresDatasetRepository
 from .raw_store import S3RawObjectStore, s3_raw_store_from_environment
 from .sbiz_academy import (
     SbizAcademyAdapter, SbizTaxonomyContract, sbiz_academy_source_contract,
+    taxonomy_fingerprint,
 )
 from .sbiz_academy_client import SbizAcademyApiClient, SbizAcademyApiError
 from .school_location_ingest import (
@@ -24,6 +27,9 @@ from .service import DatasetLifecycleService
 
 _CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "reference_sources.toml"
 _TAXONOMY_PATH = Path(__file__).resolve().parents[2] / "config" / "sbiz_academy_taxonomy.json"
+_TAXONOMY_COLUMNS = (
+    "대분류코드", "대분류명", "중분류코드", "중분류명", "소분류코드", "소분류명",
+)
 
 
 @dataclass(frozen=True)
@@ -109,18 +115,105 @@ def ingest_from_environment(
 
 def _load_taxonomy() -> tuple[SbizTaxonomyContract, dict[str, object]]:
     value = json.loads(_TAXONOMY_PATH.read_text(encoding="utf-8"))
-    if not isinstance(value, dict):
+    if not isinstance(value, dict) or value.get("schemaVersion") != 1:
         raise ValueError("Sbiz taxonomy config is invalid")
+    source = value.get("source")
+    expected_counts = value.get("expectedCounts")
+    education_category = value.get("educationMajorCategory")
     fingerprint = value.get("fingerprint")
     allowed = value.get("allowedSmallCategories")
-    artifacts = value.get("artifacts")
     if (
-        not isinstance(fingerprint, str) or not isinstance(allowed, dict)
-        or not all(isinstance(key, str) and isinstance(item, str) for key, item in allowed.items())
-        or not isinstance(artifacts, dict)
+        not isinstance(source, dict)
+        or not isinstance(expected_counts, dict)
+        or not isinstance(education_category, dict)
+        or not isinstance(fingerprint, str)
+        or not isinstance(allowed, dict)
+        or not all(
+            isinstance(key, str) and isinstance(item, str)
+            for key, item in allowed.items()
+        )
     ):
         raise ValueError("Sbiz taxonomy config is invalid")
+    tracked_file = source.get("trackedFile")
+    tracked_checksum = source.get("trackedSha256")
+    if (
+        not isinstance(tracked_file, str)
+        or Path(tracked_file).name != tracked_file
+        or not isinstance(tracked_checksum, str)
+        or len(tracked_checksum) != 64
+    ):
+        raise ValueError("Sbiz taxonomy source metadata is invalid")
+    source_path = _TAXONOMY_PATH.parent / tracked_file
+    if source_path.is_symlink() or not source_path.is_file():
+        raise ValueError("Sbiz taxonomy source file is invalid")
+    content = source_path.read_bytes()
+    if hashlib.sha256(content).hexdigest() != tracked_checksum:
+        raise ValueError("Sbiz taxonomy source checksum changed")
+    try:
+        reader = csv.DictReader(content.decode("utf-8").splitlines())
+        if tuple(reader.fieldnames or ()) != _TAXONOMY_COLUMNS:
+            raise ValueError("Sbiz taxonomy source schema changed")
+        rows = list(reader)
+    except (csv.Error, UnicodeDecodeError) as exception:
+        raise ValueError("Sbiz taxonomy source is invalid") from exception
+    if not rows or any(
+        set(row) != set(_TAXONOMY_COLUMNS)
+        or any(
+            not isinstance(row[column], str) or not row[column].strip()
+            for column in _TAXONOMY_COLUMNS
+        )
+        for row in rows
+    ):
+        raise ValueError("Sbiz taxonomy source row is invalid")
+
+    large = _taxonomy_level(rows, "대분류코드", "대분류명")
+    middle = _taxonomy_level(rows, "중분류코드", "중분류명")
+    small = _taxonomy_level(rows, "소분류코드", "소분류명")
+    artifacts: dict[str, object] = {
+        "taxonomy-large": _taxonomy_artifact(large),
+        "taxonomy-middle": _taxonomy_artifact(middle),
+        "taxonomy-small": _taxonomy_artifact(small),
+    }
+    actual_counts = {name: len(items) for name, items in artifacts.items()}
+    if expected_counts != actual_counts:
+        raise ValueError("Sbiz taxonomy source count changed")
+
+    education_code = education_category.get("code")
+    education_name = education_category.get("name")
+    if not isinstance(education_code, str) or not isinstance(education_name, str):
+        raise ValueError("Sbiz education category is invalid")
+    if large.get(education_code) != education_name:
+        raise ValueError("Sbiz education category changed")
+    derived_allowlist = {
+        row["소분류코드"]: row["소분류명"]
+        for row in rows
+        if row["대분류코드"] == education_code
+    }
+    if allowed != dict(sorted(derived_allowlist.items())):
+        raise ValueError("Sbiz education allowlist changed")
+    if taxonomy_fingerprint(artifacts) != fingerprint:
+        raise ValueError("Sbiz taxonomy fingerprint changed")
     return SbizTaxonomyContract(fingerprint, allowed), artifacts
+
+
+def _taxonomy_level(
+    rows: list[dict[str, str]], code_field: str, name_field: str
+) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for row in rows:
+        code = row[code_field]
+        name = row[name_field]
+        previous = values.setdefault(code, name)
+        if previous != name:
+            raise ValueError("Sbiz taxonomy code is ambiguous")
+    return values
+
+
+def _taxonomy_artifact(values: dict[str, str]) -> list[dict[str, str]]:
+    return [
+        {"code": code, "name": name}
+        for code, name in sorted(values.items())
+    ]
 
 
 def _finish_failure(repository, refresh_run_id, source_id, reason_code, finished_at):

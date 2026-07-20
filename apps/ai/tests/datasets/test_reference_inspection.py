@@ -89,6 +89,7 @@ def test_status_reports_active_and_partial_sources_without_sensitive_fields(monk
     assert "상태: Partial" in output
     assert "dataAsOf: 2026-07-20T00:00:00+00:00" in output
     assert "DSN" not in output
+    assert "%s::text IS NULL" in connection.query
 
 
 def test_status_unknown_source_is_safe_failure(monkeypatch, capsys) -> None:
@@ -120,6 +121,34 @@ def test_audit_is_bounded_and_reports_only_safe_evidence(monkeypatch, capsys) ->
 
     with pytest.raises(ReferenceInspectionConfigurationError):
         audit_run(["--source", "edu.academy-registry", "--limit", "101"], _environment())
+
+
+def test_audit_reports_pre_acquisition_failure_without_none_identifier(
+    monkeypatch, capsys
+) -> None:
+    connection = _Connection(
+        [{
+            "acquisition_id": None,
+            "status": "FAIL",
+            "raw_row_count": 0,
+            "accepted_row_count": 0,
+            "rejected_row_count": 0,
+            "collected_at": datetime(2026, 7, 20, tzinfo=UTC),
+            "reason_codes": ["API_SERVER_ERROR"],
+        }]
+    )
+    monkeypatch.setattr(
+        reference_inspection.psycopg,
+        "connect",
+        lambda *_args, **_kwargs: connection,
+    )
+
+    assert audit_run(["--source", "edu.academy-registry"], _environment()) == 0
+    output = capsys.readouterr().out
+    assert "상태: FAIL" in output
+    assert "reasonCodes: API_SERVER_ERROR" in output
+    assert "acquisitionId: \n" in output
+    assert "acquisitionId: None" not in output
 
 
 def test_cli_mains_map_success_and_configuration_failure_to_bounded_exit(monkeypatch, capsys) -> None:

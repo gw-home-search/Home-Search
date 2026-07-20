@@ -29,7 +29,7 @@ def status_run(arguments: Sequence[str], environment: Mapping[str, str]) -> int:
             SELECT source_id, dataset_version, temporal_basis, source_date,
                    observed_at, published_at
             FROM reference_read.source_status
-            WHERE (%s IS NULL OR source_id = %s)
+            WHERE (%s::text IS NULL OR source_id = %s)
             ORDER BY source_id
             """,
             (parsed.source, parsed.source),
@@ -74,7 +74,7 @@ def audit_run(arguments: Sequence[str], environment: Mapping[str, str]) -> int:
             (parsed.source, parsed.limit),
         ).fetchall()
     for row in rows:
-        print(f"acquisitionId: {row['acquisition_id']}")
+        print(f"acquisitionId: {row['acquisition_id'] or ''}")
         print(f"상태: {row['status']}")
         print(f"rawRowCount: {row['raw_row_count']}")
         print(f"acceptedRowCount: {row['accepted_row_count']}")

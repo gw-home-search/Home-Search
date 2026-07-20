@@ -46,7 +46,7 @@
 | 데이터 정확성·원자성 | `1.5/1.5` | verified raw-first, 관리번호 dedupe, status·업태 allowlist, EPSG:5174→4326, 대한민국 범위, typed projection 후 pointer 전환 검증 |
 | 보안·개인정보 | `1.0/1.0` | HTTPS allowlist·same-host no-query Referer·one-hop redirect·owner-only temp·runtime read view만 허용하고 검증 전 `verifiedZero=false` 유지 |
 | 실패·복구·관측 | `1.0/1.0` | media/length/official metadata date/size/redirect safe reason, partial file 정리, freshness 차단, refresh audit, publication rollback 경계 검증 |
-| 테스트 품질 | `1.5/1.5` | collector·adapter·ingest·PostGIS 1km·grounding·composition 집중 테스트 `103 passed`; 전체 AI `552 passed`, coverage `90.18%` |
+| 테스트 품질 | `1.5/1.5` | collector·adapter·ingest·PostGIS 1km·grounding·composition 집중 테스트 `103 passed`; 전체 AI `554 passed`, coverage `90.18%` |
 | 문서·운영 가능성 | `1.0/1.0` | source AsciiDoc, generated download/header/column/failure snippet, generic refresh·status·audit runbook 일치 |
 | 성능·자원 제한 | `0.5/0.5` | 1MiB chunk download, 256MiB file limit, 2,000..10,000 row contract, 3초 runtime query timeout과 최대 5건 제한 검증 |
 | 리뷰·commit 추적성 | `0.5/0.5` | file streaming·projection composition·observer 회귀 commit과 mapping 잔여 위험을 분리 기록 |
@@ -73,7 +73,7 @@ TESTCONTAINERS_RYUK_DISABLED=true uv run pytest --no-cov \
 # 103 passed
 ```
 
-전체 coverage 근거는 `priority-reference-offline-verification.md`의 `552 passed`,
+전체 coverage 근거는 `priority-reference-offline-verification.md`의 `554 passed`,
 `90.18%` 결과다.
 
 ## 계약·보안 영향
@@ -92,3 +92,6 @@ preflight blocker evidence는
 TDD 근거는 안내 HTML을 CSV로 취급하는 기존 URL, 날짜 없는 download filename,
 Referer 미전달을 확인한 4개 최초 RED와 exact download·tracked source date·same-host
 Referer 최소 GREEN이다. file contract·snapshot·ingest 좁은 회귀는 `29 passed`다.
+
+2026-07-20 live preflight는 license `PENDING`을 `CONFIGURATION_INVALID`로 반환해
+provider body 요청 전 exit `2` 중단했다.

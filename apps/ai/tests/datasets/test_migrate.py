@@ -127,6 +127,53 @@ def test_failed_migration_does_not_record_history(
         ).fetchone()[0] is None
 
 
+def test_acquisition_audit_includes_failed_run_without_acquisition(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    del dataset_repository
+    with psycopg.connect(postgres_dsn) as connection:
+        connection.execute(
+            """
+            INSERT INTO dataset_source(source_id, provider, created_at)
+            VALUES ('edu.academy-registry', 'NEIS', now())
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO dataset_refresh_run(
+                refresh_run_id, profile, trigger_type, started_at,
+                finished_at, status
+            ) VALUES (
+                '00000000-0000-0000-0000-000000000020',
+                'source:edu.academy-registry', 'MANUAL', now(), now(), 'FAIL'
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO dataset_refresh_run_item(
+                refresh_run_id, source_id, started_at, finished_at,
+                status, reason_codes
+            ) VALUES (
+                '00000000-0000-0000-0000-000000000020',
+                'edu.academy-registry', now(), now(), 'FAIL',
+                ARRAY['API_SERVER_ERROR']
+            )
+            """
+        )
+        row = connection.execute(
+            """
+            SELECT acquisition_id, status, raw_row_count,
+                   accepted_row_count, rejected_row_count, reason_codes
+            FROM reference_read.acquisition_audit
+            WHERE source_id = 'edu.academy-registry'
+            """
+        ).fetchone()
+
+    assert row == (None, "FAIL", 0, 0, 0, ["API_SERVER_ERROR"])
+
+
 @pytest.mark.parametrize(
     ("expected_database", "expected_username", "message"),
     [

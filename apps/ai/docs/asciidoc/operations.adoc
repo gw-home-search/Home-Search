@@ -6,8 +6,14 @@
   `ops/run-local-reference-refresh.sh --family priority`
 * 상태: `home-ai-reference-status`
 * 감사: `home-ai-reference-audit`
+* 로컬 read-only 상태: `ops/run-local-reference-inspection.sh status [--source <sourceId>]`
+* 로컬 read-only 감사: `ops/run-local-reference-inspection.sh audit --source <sourceId> [--limit 1..100]`
 * rollback은 이전 publication pointer 전환만 허용한다.
 
 CLI와 evidence에는 API key, DSN, provider 오류 body, 전화번호, 교습비를 기록하지 않는다.
 로컬 wrapper는 school·Sbiz에 data.go.kr key만, NEIS에 NEIS key만 전달하고 CSV/XLSX
 source에는 provider key를 읽거나 전달하지 않는다.
+inspection wrapper는 owner-only property vars에서 runtime password만 읽고
+`home_search_ai_runtime` DSN만 컨테이너에 전달한다. CLI는 transaction read-only와
+3초 statement timeout을 강제한다. acquisition 전에 실패한 refresh도 빈
+`acquisitionId`, 0 counts, safe reason code로 audit에 남긴다.

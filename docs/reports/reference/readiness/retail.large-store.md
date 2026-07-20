@@ -7,6 +7,8 @@
 - 안전 제한: provider 행정코드와 property 법정동 코드 매핑 전 `verifiedZero=false`
 - 활성화: 금지
 
+2026-07-20 live preflight: `CONFIGURATION_INVALID`, provider body 요청 없음.
+
 행정코드 mapping이 검증되기 전에는 query 결과가 0건이어도 `verifiedZero=false`를
 강제한다. 구현 점수의 `0.5` 감점은 이용조건 승인 증거 부재에만 적용하며 실제 데이터
 readiness와 활성화 상태는 올리지 않는다.

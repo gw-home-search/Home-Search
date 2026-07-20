@@ -7,6 +7,8 @@
 - offline 검증: static catalog 연결, safe reason code 기록, fixed-query 계약 집중 테스트 `31 passed`
 - 활성화: 금지
 
+2026-07-20 live preflight: `CONFIGURATION_INVALID`, provider body 요청 없음.
+
 blocker evidence SHA-256:
 `7c7b5bcc34c53cc7edbe8518394a4f507df610ae0f23c9dace4414dc88927ae9`
 

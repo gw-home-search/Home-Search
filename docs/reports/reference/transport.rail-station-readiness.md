@@ -30,7 +30,7 @@ safe reason code만 refresh-run에 기록한다.
 - 최소 GREEN: file-only non-secret `fixed_query`, exact query transport, 공식 media type,
   Content-Disposition source date 검증을 추가했다.
 - 좁은 회귀: file contract·snapshot client·rail ingest `31 passed`; 철도 통합 `58 passed`.
-- 전체 AI 회귀: `552 passed`, coverage `90.18%`.
+- 전체 AI 회귀: `554 passed`, coverage `90.18%`.
 
 `api-contract: compatible`
 
@@ -41,3 +41,5 @@ safe reason code만 refresh-run에 기록한다.
 - blocker evidence는
   `apps/ai/config/preflight_evidence/transport.rail-station.txt`에 고정했고 SHA-256은
   `7c7b5bcc34c53cc7edbe8518394a4f507df610ae0f23c9dace4414dc88927ae9`다.
+- 2026-07-20 live preflight는 license `PENDING`을 `CONFIGURATION_INVALID`로 반환해
+  provider body 요청 전 exit `2` 중단했다.

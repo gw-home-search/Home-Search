@@ -7,4 +7,6 @@
 - 활성화: 금지
 - 잔여 위험: 실제 현행 taxonomy와 tracked artifact 차이 가능성, Sbiz 행정코드와 property 법정동 코드 mapping 미검증으로 `verifiedZero=false`
 
+2026-07-20 live preflight: data.go.kr key 미설정으로 외부 호출 전 exit `2`.
+
 `security-audit: 지적사항 = none`

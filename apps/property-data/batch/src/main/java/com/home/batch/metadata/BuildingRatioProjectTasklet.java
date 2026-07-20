@@ -10,6 +10,8 @@ import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.infrastructure.repeat.RepeatStatus;
 
 class BuildingRatioProjectTasklet implements Tasklet {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(BuildingRatioProjectTasklet.class);
+
     private final BuildingRatioProjectionService service;
     private final BuildingMetadataExecutionLock executionLock;
 
@@ -28,7 +30,11 @@ class BuildingRatioProjectTasklet implements Tasklet {
                 optionalLong(params.get("fromComplexId")),
                 optionalLong(params.get("toComplexId")));
         try (BuildingMetadataExecutionLock.Lock ignored = executionLock.acquire()) {
-            service.project(command);
+            var summary = service.project(command);
+            log.info(
+                    "building ratio projection completed candidates={} outcomes={}",
+                    summary.candidateCount(),
+                    summary.outcomes());
         }
         return RepeatStatus.FINISHED;
     }

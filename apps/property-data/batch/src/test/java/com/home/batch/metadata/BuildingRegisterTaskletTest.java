@@ -8,8 +8,10 @@ import static org.mockito.Mockito.verify;
 
 import com.home.application.ingest.buildingregister.BuildingRatioProjectCommand;
 import com.home.application.ingest.buildingregister.BuildingRatioProjectionService;
+import com.home.application.ingest.buildingregister.BuildingRatioProjectionSummary;
 import com.home.application.ingest.buildingregister.BuildingRegisterCampaignCommand;
 import com.home.application.ingest.buildingregister.BuildingRegisterCampaignService;
+import com.home.application.ingest.buildingregister.BuildingRegisterCampaignSummary;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -23,6 +25,8 @@ class BuildingRegisterTaskletTest {
         BuildingMetadataExecutionLock lock = mock(BuildingMetadataExecutionLock.class);
         BuildingMetadataExecutionLock.Lock acquired = mock(BuildingMetadataExecutionLock.Lock.class);
         given(lock.acquire()).willReturn(acquired);
+        given(service.collect(org.mockito.ArgumentMatchers.any(BuildingRegisterCampaignCommand.class)))
+                .willReturn(new BuildingRegisterCampaignSummary(1, 1, 1, 1, true));
         var tasklet = new BuildingRegisterCollectTasklet(service, lock, 1000);
 
         tasklet.execute(
@@ -62,6 +66,8 @@ class BuildingRegisterTaskletTest {
         BuildingMetadataExecutionLock lock = mock(BuildingMetadataExecutionLock.class);
         BuildingMetadataExecutionLock.Lock acquired = mock(BuildingMetadataExecutionLock.Lock.class);
         given(lock.acquire()).willReturn(acquired);
+        given(service.project(org.mockito.ArgumentMatchers.any(BuildingRatioProjectCommand.class)))
+                .willReturn(new BuildingRatioProjectionSummary(1, Map.of()));
 
         new BuildingRatioProjectTasklet(service, lock)
                 .execute(

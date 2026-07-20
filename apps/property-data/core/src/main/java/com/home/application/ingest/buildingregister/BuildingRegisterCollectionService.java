@@ -50,7 +50,9 @@ public class BuildingRegisterCollectionService {
         if (titles.status() != BuildingRegisterCollectionStatus.COLLECTED) {
             return result(titles.status(), budget.used(), recap.records(), titles.records(), List.of(), decision);
         }
-        EndpointResult overview = decision.fetchBasicOverview()
+        boolean multipleStandaloneCandidates =
+                recap.records().isEmpty() && titles.records().size() > 1;
+        EndpointResult overview = decision.fetchBasicOverview() || multipleStandaloneCandidates
                 ? collectEndpoint(command, BuildingRegisterEndpoint.BASIC_OVERVIEW, budget)
                 : EndpointResult.collected(List.of());
         return result(
@@ -84,7 +86,8 @@ public class BuildingRegisterCollectionService {
                         client.fetch(new BuildingRegisterPageRequest(endpoint, command.pnu(), pageNo, pageSize));
                 long rawPageId = receiver.receive(receipt(command, snapshot, response));
                 if (response.oversized()) {
-                    completion.complete(rawPageId, BuildingRegisterRawPageStatus.OVERSIZED, List.of());
+                    completion.complete(
+                            rawPageId, snapshot.id(), null, BuildingRegisterRawPageStatus.OVERSIZED, List.of());
                     boolean permanent = pageSize == PAGE_SIZES[PAGE_SIZES.length - 1];
                     snapshots.abandonOversized(snapshot.id(), pageSize, permanent);
                     if (permanent)
@@ -92,8 +95,12 @@ public class BuildingRegisterCollectionService {
                     break;
                 }
                 if (!response.httpSuccessful()) {
-                    completion.complete(rawPageId, BuildingRegisterRawPageStatus.PROVIDER_FAILED, List.of());
+                    completion.complete(
+                            rawPageId, snapshot.id(), null, BuildingRegisterRawPageStatus.PROVIDER_FAILED, List.of());
                     snapshots.complete(snapshot.id(), 0, BuildingRegisterCollectionStatus.PROVIDER_FAILED);
+                    if (response.authenticationOrQuotaFailure()) {
+                        throw new BuildingRegisterFatalProviderException(Integer.toString(response.httpStatus()));
+                    }
                     return new EndpointResult(BuildingRegisterCollectionStatus.PROVIDER_FAILED, records);
                 }
 
@@ -101,21 +108,25 @@ public class BuildingRegisterCollectionService {
                 try {
                     parsed = parser.parse(response);
                 } catch (RuntimeException exception) {
-                    completion.complete(rawPageId, BuildingRegisterRawPageStatus.PARSE_FAILED, List.of());
+                    completion.complete(
+                            rawPageId, snapshot.id(), null, BuildingRegisterRawPageStatus.PARSE_FAILED, List.of());
                     snapshots.complete(snapshot.id(), 0, BuildingRegisterCollectionStatus.PARSE_FAILED);
                     return new EndpointResult(BuildingRegisterCollectionStatus.PARSE_FAILED, records);
                 }
                 if (!parsed.providerSuccessful()) {
-                    completion.complete(rawPageId, BuildingRegisterRawPageStatus.PROVIDER_FAILED, List.of());
+                    completion.complete(
+                            rawPageId, snapshot.id(), null, BuildingRegisterRawPageStatus.PROVIDER_FAILED, List.of());
                     snapshots.complete(
                             snapshot.id(), parsed.totalCount(), BuildingRegisterCollectionStatus.PROVIDER_FAILED);
+                    if (parsed.authenticationOrQuotaFailure()) {
+                        throw new BuildingRegisterFatalProviderException(parsed.resultCode());
+                    }
                     return new EndpointResult(BuildingRegisterCollectionStatus.PROVIDER_FAILED, records);
                 }
                 BuildingRegisterRawPageStatus rawStatus = parsed.records().isEmpty()
                         ? BuildingRegisterRawPageStatus.EMPTY
                         : BuildingRegisterRawPageStatus.PARSED;
-                completion.complete(rawPageId, rawStatus, parsed.records());
-                snapshots.observeTotalCount(snapshot.id(), parsed.totalCount());
+                completion.complete(rawPageId, snapshot.id(), parsed.totalCount(), rawStatus, parsed.records());
                 records.addAll(parsed.records());
                 if (pageNo * pageSize >= parsed.totalCount()) {
                     snapshots.complete(snapshot.id(), parsed.totalCount(), BuildingRegisterCollectionStatus.COLLECTED);

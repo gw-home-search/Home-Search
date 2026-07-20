@@ -32,6 +32,7 @@ class BuildingRegisterCollectionServiceTest {
         assertThat(result.requestCount()).isOne();
         assertThat(result.recapRecords()).hasSize(1);
         assertThat(result.titleRecords()).isEmpty();
+        assertThat(fixture.store.observedTotalCounts).containsExactly(1);
     }
 
     @Test
@@ -45,6 +46,22 @@ class BuildingRegisterCollectionServiceTest {
 
         assertThat(fixture.client.calls).containsExactly("RECAP_TITLE:1:100", "TITLE:1:100", "BASIC_OVERVIEW:1:100");
         assertThat(result.fallbackFields()).extracting(Enum::name).containsExactly("FLOOR_AREA_RATIO");
+    }
+
+    @Test
+    void adaptiveCollectionFetchesBasicOverviewWhenEmptyRecapHasMultipleTitles() {
+        Fixture fixture = new Fixture();
+        fixture.client.respond(
+                BuildingRegisterEndpoint.RECAP_TITLE,
+                new ParsedBuildingRegisterPage("00", "NORMAL SERVICE", 0, List.of()));
+        fixture.client.respond(
+                BuildingRegisterEndpoint.TITLE,
+                new ParsedBuildingRegisterPage("00", "NORMAL SERVICE", 2, List.of(title(), title())));
+        fixture.client.respond(BuildingRegisterEndpoint.BASIC_OVERVIEW, page(basic(), 1));
+
+        fixture.service.collect(command(10));
+
+        assertThat(fixture.client.calls).containsExactly("RECAP_TITLE:1:100", "TITLE:1:100", "BASIC_OVERVIEW:1:100");
     }
 
     @Test
@@ -66,6 +83,43 @@ class BuildingRegisterCollectionServiceTest {
         BuildingRegisterCollectionResult result = fixture.service.collect(command(10));
 
         assertThat(result.status()).isEqualTo(BuildingRegisterCollectionStatus.PROVIDER_FAILED);
+        assertThat(fixture.client.calls).containsExactly("RECAP_TITLE:1:100");
+        assertThat(fixture.finalizations).containsExactly(BuildingRegisterRawPageStatus.PROVIDER_FAILED);
+    }
+
+    @Test
+    void authenticationOrQuotaHttpFailureStopsTheCollectionRun() {
+        Fixture fixture = new Fixture();
+        fixture.client.respond(
+                BuildingRegisterEndpoint.RECAP_TITLE,
+                new BuildingRegisterPageResponse(
+                        BuildingRegisterEndpoint.RECAP_TITLE,
+                        PNU,
+                        1,
+                        100,
+                        429,
+                        "quota exceeded",
+                        14,
+                        "a".repeat(64),
+                        false));
+
+        assertThatThrownBy(() -> fixture.service.collect(command(10)))
+                .isInstanceOf(BuildingRegisterFatalProviderException.class)
+                .hasMessageContaining("429");
+        assertThat(fixture.client.calls).containsExactly("RECAP_TITLE:1:100");
+        assertThat(fixture.finalizations).containsExactly(BuildingRegisterRawPageStatus.PROVIDER_FAILED);
+    }
+
+    @Test
+    void authenticationOrQuotaProviderCodeStopsTheCollectionRun() {
+        Fixture fixture = new Fixture();
+        fixture.client.respond(
+                BuildingRegisterEndpoint.RECAP_TITLE,
+                new ParsedBuildingRegisterPage("22", "quota exceeded", 0, List.of()));
+
+        assertThatThrownBy(() -> fixture.service.collect(command(10)))
+                .isInstanceOf(BuildingRegisterFatalProviderException.class)
+                .hasMessageContaining("22");
         assertThat(fixture.client.calls).containsExactly("RECAP_TITLE:1:100");
         assertThat(fixture.finalizations).containsExactly(BuildingRegisterRawPageStatus.PROVIDER_FAILED);
     }
@@ -182,7 +236,10 @@ class BuildingRegisterCollectionServiceTest {
                 response -> client.parsed.remove(0),
                 store,
                 command -> 1000L + command.pageNo(),
-                (rawPageId, status, records) -> finalizations.add(status));
+                (rawPageId, snapshotId, totalCount, status, records) -> {
+                    finalizations.add(status);
+                    if (totalCount != null) store.observeTotalCount(snapshotId, totalCount);
+                });
     }
 
     private static final class FakeClient implements BuildingRegisterPageClient {
@@ -220,6 +277,7 @@ class BuildingRegisterCollectionServiceTest {
     private static final class FakeSnapshotStore implements BuildingRegisterEndpointSnapshotStore {
         final Map<String, BuildingRegisterCompletedPage> completed = new HashMap<>();
         final List<Integer> abandonedPageSizes = new ArrayList<>();
+        final List<Integer> observedTotalCounts = new ArrayList<>();
         long sequence;
 
         @Override
@@ -242,6 +300,11 @@ class BuildingRegisterCollectionServiceTest {
 
         @Override
         public void complete(long snapshotId, int totalCount, BuildingRegisterCollectionStatus status) {}
+
+        @Override
+        public void observeTotalCount(long snapshotId, int totalCount) {
+            observedTotalCounts.add(totalCount);
+        }
 
         @Override
         public void abandonOversized(long snapshotId, int pageSize, boolean permanent) {

@@ -184,4 +184,56 @@ class JdbcBuildingRatioCandidateRepositoryTest extends JdbcMigrationTestSupport 
                         .list())
                 .containsExactly("ROOT-1:NUMERATOR", "ROOT-1:NUMERATOR", "TITLE-1:DENOMINATOR", "TITLE-1:DENOMINATOR");
     }
+
+    @Test
+    void clearsStaleSelectionWhenReevaluationFindsSourceConflict() {
+        BuildingRegisterRecord agreed = recap("20", "200");
+        BuildingRegisterRecord conflicting = recap("21", "200");
+        BuildingRatioEvaluator evaluator = new BuildingRatioEvaluator();
+
+        repository.record(
+                matchId,
+                evaluator.evaluate(BuildingRatioEvaluationContext.uniqueRoot(
+                        BuildingRegisterCollectionStrategy.ADAPTIVE, agreed, List.of(), Set.of(), true)),
+                Map.of("ROOT-1", recordId));
+        repository.record(
+                matchId,
+                evaluator.evaluate(BuildingRatioEvaluationContext.uniqueRoot(
+                        BuildingRegisterCollectionStrategy.ADAPTIVE, conflicting, List.of(), Set.of(), true)),
+                Map.of("ROOT-1", recordId));
+
+        assertThat(jdbcClient
+                        .sql("""
+                            SELECT count(*) FROM building_ratio_candidate
+                            WHERE match_id=:match AND field='BUILDING_COVERAGE_RATIO' AND selected
+                            """)
+                        .param("match", matchId)
+                        .query(Integer.class)
+                        .single())
+                .isZero();
+        assertThat(jdbcClient
+                        .sql("""
+                            SELECT count(*) FROM building_ratio_candidate
+                            WHERE match_id=:match AND field='BUILDING_COVERAGE_RATIO' AND status='SOURCE_CONFLICT'
+                            """)
+                        .param("match", matchId)
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(2);
+    }
+
+    private BuildingRegisterRecord recap(String directBuildingRatio, String archArea) {
+        return new BuildingRegisterRecord(
+                "ROOT-1",
+                null,
+                1,
+                null,
+                "02000",
+                new BigDecimal("1000"),
+                new BigDecimal(archArea),
+                null,
+                new BigDecimal("800"),
+                new BigDecimal(directBuildingRatio),
+                new BigDecimal("80"));
+    }
 }

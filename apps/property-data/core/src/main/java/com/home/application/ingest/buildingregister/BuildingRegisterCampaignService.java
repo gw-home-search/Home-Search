@@ -106,7 +106,7 @@ public class BuildingRegisterCampaignService {
             if (match.status() != BuildingRegisterMatchStatus.RESOLVED || match.rootManagementKey() == null) continue;
             BuildingRegisterSourceScope scope = scopeByKey.get(match.rootManagementKey());
             if (scope == null) continue;
-            var evaluation = evaluate(command.strategy(), scope, collected);
+            var evaluation = evaluate(command.strategy(), match.scope(), scope, collected);
             candidates.record(matchId, evaluation, sourceRecordIds);
         }
         return matches.size();
@@ -114,9 +114,10 @@ public class BuildingRegisterCampaignService {
 
     private com.home.domain.complex.buildingregister.BuildingRatioEvaluation evaluate(
             BuildingRegisterCollectionStrategy strategy,
+            BuildingRatioScope matchedScope,
             BuildingRegisterSourceScope scope,
             BuildingRegisterCollectionResult collected) {
-        if (scope.scope() == BuildingRatioScope.STANDALONE_TITLE) {
+        if (matchedScope == BuildingRatioScope.STANDALONE_TITLE) {
             BuildingRegisterRecord title = collected.titleRecords().stream()
                     .filter(record -> scope.rootManagementKey().equals(record.managementKey()))
                     .findFirst()
@@ -131,7 +132,7 @@ public class BuildingRegisterCampaignService {
                 .orElseThrow();
         List<BuildingRegisterRecord> titles =
                 collected.titleRecords().stream().map(this::ratioRecord).toList();
-        BuildingRatioEvaluationContext context = scope.scope() == BuildingRatioScope.SHARED_RECAP
+        BuildingRatioEvaluationContext context = matchedScope == BuildingRatioScope.SHARED_RECAP
                 ? BuildingRatioEvaluationContext.sharedRoot(
                         strategy, recap, titles, scope.expectedManagementKeys(), scope.hierarchyComplete())
                 : BuildingRatioEvaluationContext.uniqueRoot(

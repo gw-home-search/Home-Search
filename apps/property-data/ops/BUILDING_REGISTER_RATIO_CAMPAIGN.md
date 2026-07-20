@@ -41,7 +41,7 @@ ops/run-batch-jar.sh \
 
 `missing|retry` 모두 캠페인 시작 시 두 비율 중 하나라도 NULL인 단지를 동결하며 mode 값은 캠페인 운영 분류로 보존된다. 이미 생성된 캠페인의 미완료 대상을 이어서 처리할 때는 최초 실행과 같은 mode를 사용한다. `adaptive`는 총괄 직접 비율이 완전하면 fallback endpoint를 호출하지 않으며, `full-hierarchy`는 검증 표본에서 세 endpoint를 모두 수집한다.
 
-HTTP/provider/parser 실패는 정상 empty로 취급하지 않는다. 인증·quota 오류가 발생하면 실행을 중단하고 후속 호출을 금지한다. 응답이 2MiB를 넘으면 endpoint snapshot을 증거로 남기고 `100 → 50 → 25 → 10` 순서의 새 snapshot으로 재시작한다.
+HTTP/provider/parser 실패는 정상 empty로 취급하지 않는다. HTTP `401|403|429` 또는 provider 인증·quota 코드 `20|21|22|30|31|32`가 발생하면 job을 실패시키고 후속 호출을 금지한다. 응답이 2MiB를 넘으면 endpoint snapshot을 증거로 남기고 `100 → 50 → 25 → 10` 순서의 새 snapshot으로 재시작한다.
 
 ## 3. 같은 캠페인 재개
 

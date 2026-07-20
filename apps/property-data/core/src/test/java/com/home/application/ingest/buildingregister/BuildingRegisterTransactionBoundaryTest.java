@@ -15,7 +15,13 @@ class BuildingRegisterTransactionBoundaryTest {
                 .getMethod("receive", BuildingRegisterRawPageReceiptCommand.class)
                 .getAnnotation(Transactional.class);
         Transactional finalizer = BuildingRegisterRawPageFinalizer.class
-                .getMethod("complete", long.class, BuildingRegisterRawPageStatus.class, List.class)
+                .getMethod(
+                        "complete",
+                        long.class,
+                        long.class,
+                        Integer.class,
+                        BuildingRegisterRawPageStatus.class,
+                        List.class)
                 .getAnnotation(Transactional.class);
 
         assertThat(receipt.propagation()).isEqualTo(Propagation.REQUIRES_NEW);

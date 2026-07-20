@@ -30,7 +30,7 @@ dataset의 private raw 저장·가공 승인으로 확대하지 않는다.
 |---|---|---|---|
 | `edu.academy-registry` | NEIS 상세 페이지의 `이용 허락 범위 제한없음`, provider·주기·attribution evidence SHA-256 고정 | `APPROVED` | 실제 key·acquisition·S3·전국 row/freshness·chatbot golden 미검증 |
 | `place.sbiz-academy` | API의 무제한 이용 허락, 국세청/카드사 provenance·제3자 정책, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | 실제 taxonomy/store acquisition·S3·coverage·chatbot golden 미검증 |
-| `retail.large-store` | LOCALDATA direct CSV·same-host Referer·공식 metadata date, EPSG:5174 확인 | `PENDING` | 이용허락·private raw 조건 fingerprint와 fresh metadata 미확정 |
+| `retail.large-store` | direct CSV header·same-host Referer·EPSG:5174 확인; dataset 이용허락 공란, LOCALDATA 본 사이트 폐쇄, metadata `20251127` 불일치 evidence 고정 | `PENDING` | 이용허락·private raw 조건과 fresh dated release 미확정 |
 | `transport.rail-station` | KRIC `id=32` 고정 download endpoint와 2026-06-30 XLSX header 확인 | `PENDING` | dataset별 이용조건 fingerprint와 전체 artifact 미검증 |
 
 빈 `terms_fingerprint`는 미검토가 아니라 승인 근거가 없음을 뜻한다. 승인 전에는

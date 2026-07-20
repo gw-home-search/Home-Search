@@ -1,0 +1,14 @@
+source_id=retail.large-store
+reviewed_on=2026-07-20
+dataset_url=https://www.data.go.kr/data/15114138/standard.do
+legacy_service_url=https://www.localdata.go.kr/portal/end.do
+download_landing_url=https://file.localdata.go.kr/file/large_scale_retail_stores/info
+license_label=<blank>
+metadata_file_name=행정안전부_생활_대규모점포_20251127
+metadata_modified_on=2026-02-12
+metadata_refresh_claim=매일 갱신, 2일 전 기준 현행화
+legacy_service_closed_at=2026-04-16T00:00:00+09:00
+header_preflight_content_type=text/csv;charset=UTF-8
+header_preflight_content_length=1183334
+header_preflight_filename=생활_대규모점포.csv
+review_decision=PENDING; source-specific license and fresh dated release are not established

@@ -6,6 +6,12 @@
 `text/csv`, 날짜 없는 filename을 확인했다. source date는 공공데이터포털의 공식
 파일 metadata `2025-11-27`을 사용하며 현재 시각으로 대체하지 않는다.
 
+공공데이터포털 dataset 상세의 이용허락 값은 비어 있고, LOCALDATA 본 사이트는
+2026-04-16 폐쇄 안내로 전환됐다. 공공데이터포털이 계속 게시하는 file landing의
+header만 확인했을 뿐이므로 source별 이용허락과 fresh dated release가 확인될 때까지
+contract는 `PENDING`이고 body acquisition을 금지한다. blocker evidence SHA-256은
+`4efb46f84a1dbf11f27eb8ad84d60b4c88b453d1c1083d7f1ba9c226940b40b2`다.
+
 EPSG:5174 좌표를 WGS84로 변환한다. provider 행정코드 매핑이 검증되기 전에는 확정
 0건을 주장하지 않는다.
 

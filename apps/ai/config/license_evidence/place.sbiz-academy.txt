@@ -1,0 +1,12 @@
+source_id=place.sbiz-academy
+reviewed_on=2026-07-20
+terms_url=https://www.data.go.kr/data/15012005/openapi.do
+policy_url=https://www.data.go.kr/ugs/selectPortalPolicyView.do
+source_name=소상공인시장진흥공단_상가(상권)정보_API
+provider=소상공인시장진흥공단
+source_modified_on=2026-04-20
+license_label=이용허락범위 제한 없음
+data_source=국세청/카드사
+third_party_policy=제3자 권리가 포함된 공공데이터는 권리자의 정당한 이용허락을 확보해야 함
+review_decision=private raw storage and internal derivatives approved; third-party provenance recorded; public redistribution disabled
+attribution=출처: 공공데이터포털 소상공인시장진흥공단 상가(상권)정보 API

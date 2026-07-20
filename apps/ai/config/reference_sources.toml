@@ -168,15 +168,16 @@ minimum_region_coordinate_ratio = 0.90
 maximum_rejected_ratio = 0.0
 
 [sources.license]
-status = "PENDING"
+status = "APPROVED"
 terms_url = "https://www.data.go.kr/data/15012005/openapi.do"
-terms_fingerprint = ""
-reviewed_by = ""
-attribution_text = ""
-raw_private_storage_allowed = false
-internal_derivative_allowed = false
+terms_fingerprint = "e66a879b6ce35af441c4b92b58711c7a2d7d538c87659883da6ab298fd98c86d"
+reviewed_on = 2026-07-20
+reviewed_by = "official-source-review"
+attribution_text = "출처: 공공데이터포털 소상공인시장진흥공단 상가(상권)정보 API"
+raw_private_storage_allowed = true
+internal_derivative_allowed = true
 public_redistribution_allowed = false
-third_party_rights = false
+third_party_rights = true
 
 [[sources]]
 id = "retail.large-store"

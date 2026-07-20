@@ -11,7 +11,10 @@ from uuid import UUID
 import pytest
 
 from ai_service.datasets import sbiz_academy_ingest
-from ai_service.datasets.contracts import load_reference_source_catalog
+from ai_service.datasets.contracts import (
+    ReferenceSourceCatalog,
+    load_reference_source_catalog,
+)
 from ai_service.datasets.models import AcquisitionRecord, LifecycleResult
 from ai_service.datasets.raw_store import StoredRawObject
 from ai_service.datasets.bundle import PreparedBundle
@@ -127,9 +130,41 @@ def test_sbiz_first_page_failure_records_safe_reason(monkeypatch) -> None:
     assert repository.closed is True
 
 
-def test_pending_license_stops_before_loading_taxonomy_file() -> None:
-    with pytest.raises(RuntimeError):
-        sbiz_academy_ingest.ingest_from_environment(_environment())
+def test_pending_license_stops_before_loading_taxonomy_file(monkeypatch) -> None:
+    source = load_reference_source_catalog(sbiz_academy_ingest._CONFIG_PATH).get(
+        "place.sbiz-academy"
+    )
+    pending = replace(
+        source,
+        license=replace(
+            source.license,
+            status="PENDING",
+            terms_fingerprint="",
+            reviewed_on=None,
+            reviewed_by="",
+            attribution_text="",
+            raw_private_storage_allowed=False,
+            internal_derivative_allowed=False,
+        ),
+    )
+    monkeypatch.setattr(
+        sbiz_academy_ingest,
+        "load_reference_source_catalog",
+        lambda _path: ReferenceSourceCatalog((pending,)),
+    )
+    taxonomy_loaded = False
+
+    def load_taxonomy():
+        nonlocal taxonomy_loaded
+        taxonomy_loaded = True
+        raise AssertionError("pending license must stop before taxonomy loading")
+
+    with pytest.raises(sbiz_academy_ingest.SchoolLocationConfigurationError):
+        sbiz_academy_ingest.ingest_from_environment(
+            _environment(), taxonomy_loader=load_taxonomy
+        )
+
+    assert taxonomy_loaded is False
 
 
 def test_tracked_official_taxonomy_loads_all_247_categories_and_education_allowlist() -> None:

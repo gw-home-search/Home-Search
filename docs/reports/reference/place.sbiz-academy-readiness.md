@@ -2,8 +2,8 @@
 
 기준일: 2026-07-20
 상태: `Partial`
-실제 데이터 readiness: `2.0/10 Partial`
-S2 collector 구현 품질: `9.5/10 Pass`
+실제 데이터 readiness: `3.0/10 Partial`
+S2 collector 구현 품질: `10.0/10 Pass`
 taxonomy contract foundation 구현 품질: `10.0/10 Pass`
 
 ## 검증 근거 확인
@@ -22,6 +22,9 @@ taxonomy contract foundation 구현 품질: `10.0/10 Pass`
 - 2025-11-28 공식 OpenAPI 활용가이드와 포털 OAS에서 store field 계약을 대조했고,
   `newZipcd` 신우편번호와 `indsSclsCd`/`indsSclsNm` code-name 일치를 적용했다.
 - 위치 projection·NEIS exact match·800m observer의 기존 offline 검증은 유지된다.
+- API 상세 페이지의 `이용허락범위 제한 없음`, 제공기관, 국세청/카드사 원천 고지와
+  공공데이터포털 제3자 권리 정책을 함께 검토했다. 제3자 provenance를 명시하고
+  private raw 저장·내부 파생만 승인했으며 공개 재배포는 금지했다.
 
 공식 taxonomy landing URL:
 `https://www.data.go.kr/data/15067631/fileData.do`
@@ -59,7 +62,7 @@ taxonomy foundation 점수는 S2 전체 collector 점수나 실제 데이터 rea
 |---|---:|---|
 | 범위·최소성 | `1.0/1.0` | Sbiz taxonomy·교육업종 partition collector와 adapter만 static catalog에 연결했고 scheduler·동적 plugin을 추가하지 않음 |
 | 공개·내부 계약 | `1.0/1.0` | 공식 OAS의 taxonomy 3개와 `storeListInUpjong`, `newZipcd`, code/name 필드를 fixture 계약으로 고정하고 기존 JSON/SSE field를 변경하지 않음 |
-| 이용조건·출처 | `0.5/1.0` | taxonomy artifact 출처·checksum·이용허락은 고정했으나 API private raw 저장·가공 승인은 `PENDING` |
+| 이용조건·출처 | `1.0/1.0` | API source별 무제한 이용 허락, 제3자 원천·공통 정책, private raw·내부 파생 승인, 보수적 공개 재배포 금지, attribution과 evidence SHA-256을 고정 |
 | 데이터 정확성·원자성 | `1.5/1.5` | 현행 taxonomy exact 비교 후에만 18개 partition 수집, total·page·중복 ID 검증, verified raw-first와 incomplete 미게시를 검증 |
 | 보안·개인정보 | `1.0/1.0` | service key를 request path·bundle·DB·로그에서 제외하고 전화번호와 provider 오류 body를 투영·보존하지 않음 |
 | 실패·복구·관측 | `1.0/1.0` | taxonomy 변경은 store 요청 전 중단하고 첫 page 실패는 raw 생성 없이 실패, 중간 실패는 safe reason incomplete bundle로 보존 |
@@ -68,14 +71,15 @@ taxonomy foundation 점수는 S2 전체 collector 점수나 실제 데이터 rea
 | 성능·자원 제한 | `0.5/0.5` | page 8MiB, bundle 1GiB, partition당 500 page, timeout 1..30초, retry 1회, owner-only temp streaming 제한 검증 |
 | 리뷰·commit 추적성 | `0.5/0.5` | 공식 taxonomy foundation, schema 정렬, live preflight 책임과 잔여 위험을 분리 기록 |
 
-구현 점수는 `9.5/10 Pass`다. 감점은 API 이용조건 승인 증거가 없는 항목에만
-적용했고 계약·데이터 정확성·보안·테스트 필수 항목은 감점하지 않았다. 실제 provider
-호출이나 capability 활성화를 승인하지 않는다.
+구현 점수는 `10.0/10 Pass`다. 계약·데이터 정확성·보안·테스트 필수 항목을
+포함해 offline 구현 평가를 충족했다. 실제 provider 호출이나 capability 활성화를
+승인하지 않는다.
 
 ## 검증 공백 / 잔여 위험
 
-- 업종코드 파일의 이용허락 제한 없음은 확인했지만, 상가업소 API raw를 private S3에
-  저장·가공하는 이용조건 승인은 별도 `PENDING`이다.
+- 이용조건 evidence는 `apps/ai/config/license_evidence/place.sbiz-academy.txt`에
+  고정했고 SHA-256은
+  `e66a879b6ce35af441c4b92b58711c7a2d7d538c87659883da6ab298fd98c86d`다.
 - 공식 OAS와 fake transport로 현행 taxonomy preflight 동작을 검증했지만 실제
   대·중·소 endpoint 응답을 호출해 tracked artifact와 비교하지 않았다.
 - 실제 store acquisition, 좌표 전국 95%·지역 90% coverage, S3 복구, 두 번째 수집,

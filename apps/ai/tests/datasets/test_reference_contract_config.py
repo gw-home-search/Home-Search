@@ -25,6 +25,12 @@ NEIS_LICENSE_EVIDENCE_PATH = (
     / "license_evidence"
     / "edu.academy-registry.txt"
 )
+SBIZ_LICENSE_EVIDENCE_PATH = (
+    Path(__file__).parents[2]
+    / "config"
+    / "license_evidence"
+    / "place.sbiz-academy.txt"
+)
 
 
 def test_catalog_loads_the_fixed_source_order_and_approved_sources() -> None:
@@ -61,6 +67,22 @@ def test_catalog_loads_the_fixed_source_order_and_approved_sources() -> None:
     )
     assert academy.license.terms_fingerprint == sha256(
         NEIS_LICENSE_EVIDENCE_PATH.read_bytes()
+    ).hexdigest()
+    sbiz = catalog.approved("place.sbiz-academy")
+    assert sbiz.license.status == "APPROVED"
+    assert sbiz.license.terms_url == (
+        "https://www.data.go.kr/data/15012005/openapi.do"
+    )
+    assert sbiz.license.reviewed_on == date(2026, 7, 20)
+    assert sbiz.license.raw_private_storage_allowed is True
+    assert sbiz.license.internal_derivative_allowed is True
+    assert sbiz.license.public_redistribution_allowed is False
+    assert sbiz.license.third_party_rights is True
+    assert sbiz.license.attribution_text == (
+        "출처: 공공데이터포털 소상공인시장진흥공단 상가(상권)정보 API"
+    )
+    assert sbiz.license.terms_fingerprint == sha256(
+        SBIZ_LICENSE_EVIDENCE_PATH.read_bytes()
     ).hexdigest()
     retail = catalog.get("retail.large-store")
     assert retail.acquisition.base_url == (

@@ -29,7 +29,7 @@ dataset의 private raw 저장·가공 승인으로 확대하지 않는다.
 | sourceId | 공식 확인 내용 | contract 상태 | activation blocker |
 |---|---|---|---|
 | `edu.academy-registry` | NEIS 상세 페이지의 `이용 허락 범위 제한없음`, provider·주기·attribution evidence SHA-256 고정 | `APPROVED` | 실제 key·acquisition·S3·전국 row/freshness·chatbot golden 미검증 |
-| `place.sbiz-academy` | 공식 247행 taxonomy와 P1 교육업종 18개 allowlist 고정 | `PENDING` | 상가업소 API 이용조건·private raw 저장·실제 taxonomy endpoint 응답 미검증 |
+| `place.sbiz-academy` | API의 무제한 이용 허락, 국세청/카드사 provenance·제3자 정책, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | 실제 taxonomy/store acquisition·S3·coverage·chatbot golden 미검증 |
 | `retail.large-store` | LOCALDATA direct CSV·same-host Referer·공식 metadata date, EPSG:5174 확인 | `PENDING` | 이용허락·private raw 조건 fingerprint와 fresh metadata 미확정 |
 | `transport.rail-station` | KRIC `id=32` 고정 download endpoint와 2026-06-30 XLSX header 확인 | `PENDING` | dataset별 이용조건 fingerprint와 전체 artifact 미검증 |
 
@@ -81,8 +81,8 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다. 
 | F3 static composition·CLI | `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 | D1 AsciiDoc artifact | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
 | NEIS | source 이용조건·collector·projection·summary observer offline `Pass`, live 미완료 | `10.0/10` | `3.0/10 Partial` | 금지 |
-| Sbiz S2 collector | 공식 taxonomy contract·현행 taxonomy preflight·collector·adapter·generic refresh offline `Pass`, live 미실행 | `9.5/10` | `2.0/10 Partial` | 금지 |
-| Sbiz S2-P grounded location | exact projection·grounded location observer offline `Pass` | `9.5/10` | `2.0/10 Partial` | 금지 |
+| Sbiz S2 collector | source 이용조건·공식 taxonomy contract·현행 taxonomy preflight·collector·adapter·generic refresh offline `Pass`, live 미실행 | `10.0/10` | `3.0/10 Partial` | 금지 |
+| Sbiz S2-P grounded location | exact projection·grounded location observer offline `Pass` | `10.0/10` | `3.0/10 Partial` | 금지 |
 | 대규모점포 | streaming file client·기존 projection `Pass`, live 미실행 | `9.5/10` | `3.0/10 Partial` | 금지 |
 | 철도 S4 collector | 공식 fixed download endpoint·occurrence projection·merge offline `Pass`, live artifact 미실행 | `9.5/10` | `2.0/10 Partial` | 금지 |
 | Offline priority integration | AI·PostGIS·MinIO·property-data·chat-bff·JWT·Compose `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
@@ -130,17 +130,15 @@ canonical 도로명주소, 선택적 우편번호가 모두 exact match할 때�
 행정코드 mapping이 없어 지역 90% coverage와 정상 0건은 확정하지 않으며,
 `academy_lookup`은 runtime allowlist에 추가하지 않았다.
 
-Sbiz S2 collector 구현 점수는 공식 OAS endpoint·field fixture, 현행 taxonomy
-code/name exact preflight, 18개 allowlisted partition, verified raw-first,
-pagination·total·중복 ID 차단, safe incomplete와 개인정보 비투영 근거를 충족했다.
-API private raw 저장·가공 이용조건 승인이 `PENDING`이므로 이용조건 항목에서 `0.5`를
-감점해 `9.5/10`으로 평가했다. 실제 taxonomy/store endpoint는 호출하지 않았으며
-readiness는 `2.0/10 Partial`로 유지한다.
+Sbiz S2 collector 구현 점수는 source별 무제한 이용 허락과 제3자 provenance evidence,
+공식 OAS endpoint·field fixture, 현행 taxonomy code/name exact preflight, 18개
+allowlisted partition, verified raw-first, pagination·total·중복 ID 차단, safe
+incomplete와 개인정보 비투영 근거를 충족해 `10.0/10`으로 평가했다. 실제
+taxonomy/store endpoint는 호출하지 않았으며 readiness는 `3.0/10 Partial`이다.
 
-Sbiz S2-P 구현 점수는 범위·공개/내부 계약·데이터 정확성·보안·실패 처리·테스트·
-문서·bounded query·리뷰 근거를 충족했다. source별 이용조건과 실제 taxonomy 승인이
-`PENDING`이므로 이용조건 항목에서 `0.5`를 감점해 `9.5/10`으로 평가했다. 이는
-구현 commit만 허용하며 실제 데이터 readiness나 capability 활성화를 승인하지 않는다.
+Sbiz S2-P 구현 점수는 이용조건·범위·공개/내부 계약·데이터 정확성·보안·실패 처리·
+테스트·문서·bounded query·리뷰 근거를 충족해 `10.0/10`으로 평가했다. 이는 실제
+데이터 readiness나 capability 활성화를 승인하지 않는다.
 
 대규모점포 구현 점수는 official direct download와 same-host Referer, tracked metadata
 날짜, UTF-8·status·업태·EPSG:5174 계약, typed projection, 1km 경계와 grounding 근거를

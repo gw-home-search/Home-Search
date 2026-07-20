@@ -45,7 +45,7 @@ checksum:
 - live taxonomy preflight 최소 GREEN: 고정 endpoint 순서, raw response 보존,
   code/name exact 비교와 `TAXONOMY_CHANGED` fail-closed를 추가했다.
 - 좁은 회귀: Sbiz collector·adapter·ingest·projection·observer·composition `87 passed`.
-- 전체 AI 회귀: `547 passed`, coverage `90.17%`.
+- 전체 AI 회귀: `550 passed`, coverage `90.15%`.
 
 taxonomy contract foundation은 공식 artifact 이용조건·출처, 고정 schema, 원본/추적
 checksum, 계층 count, P1 allowlist, canonical fingerprint, path·symlink 경계, fail-closed
@@ -63,7 +63,7 @@ taxonomy foundation 점수는 S2 전체 collector 점수나 실제 데이터 rea
 | 데이터 정확성·원자성 | `1.5/1.5` | 현행 taxonomy exact 비교 후에만 18개 partition 수집, total·page·중복 ID 검증, verified raw-first와 incomplete 미게시를 검증 |
 | 보안·개인정보 | `1.0/1.0` | service key를 request path·bundle·DB·로그에서 제외하고 전화번호와 provider 오류 body를 투영·보존하지 않음 |
 | 실패·복구·관측 | `1.0/1.0` | taxonomy 변경은 store 요청 전 중단하고 첫 page 실패는 raw 생성 없이 실패, 중간 실패는 safe reason incomplete bundle로 보존 |
-| 테스트 품질 | `1.5/1.5` | taxonomy 호출 누락·schema envelope·변경 후 store 요청의 예상 RED 5건, 집중 회귀 `87 passed`, 전체 AI `547 passed`, coverage `90.17%` |
+| 테스트 품질 | `1.5/1.5` | taxonomy 호출 누락·schema envelope·변경 후 store 요청의 예상 RED 5건, 집중 회귀 `87 passed`, 전체 AI `550 passed`, coverage `90.15%` |
 | 문서·운영 가능성 | `1.0/1.0` | source AsciiDoc, generated snippets, generic refresh·status·audit와 readiness blocker를 일치시킴 |
 | 성능·자원 제한 | `0.5/0.5` | page 8MiB, bundle 1GiB, partition당 500 page, timeout 1..30초, retry 1회, owner-only temp streaming 제한 검증 |
 | 리뷰·commit 추적성 | `0.5/0.5` | 공식 taxonomy foundation, schema 정렬, live preflight 책임과 잔여 위험을 분리 기록 |

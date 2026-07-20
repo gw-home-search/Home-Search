@@ -28,7 +28,7 @@ FAILURE_CODES = {
     "edu.academy-registry": ("API_TRANSPORT_FAILED", "PROVIDER_TOTAL_COUNT_MISMATCH", "PROVIDER_COVERAGE_INCOMPLETE"),
     "place.sbiz-academy": ("TAXONOMY_CHANGED", "PROVIDER_TOTAL_COUNT_MISMATCH", "DUPLICATE_STORE_ID"),
     "retail.large-store": ("SOURCE_DATE_UNAVAILABLE", "SOURCE_SCHEMA_MISMATCH", "KOREA_COORDINATE_OUT_OF_RANGE"),
-    "transport.rail-station": ("RELEASE_URL_UNRESOLVED", "XLSX_MACRO_REJECTED", "RAIL_STATION_COORDINATE_REQUIRED"),
+    "transport.rail-station": ("SOURCE_DATE_UNVERIFIED", "XLSX_MACRO_REJECTED", "RAIL_STATION_COORDINATE_REQUIRED"),
 }
 
 
@@ -79,11 +79,10 @@ def _snippets(source_id: str, source: dict[str, object], examples: Path) -> dict
     assert isinstance(acquisition, dict) and isinstance(temporal, dict)
     mode = acquisition["mode"]
     request_name = "http-request.adoc" if mode == "api" else "download-request.adoc"
-    request_target = (
-        "RELEASE_URL_UNRESOLVED"
-        if source_id == "transport.rail-station"
-        else f"GET {acquisition['base_url']}"
-    )
+    fixed_query = acquisition.get("fixed_query", "")
+    request_target = f"GET {acquisition['base_url']}"
+    if fixed_query:
+        request_target += f"?{fixed_query}"
     result = {
         request_name: f"[source,text]\n----\n{request_target}\n----\n",
         "http-response.adoc": f"[source,text]\n----\n{(examples / f'{source_id}.txt').read_text(encoding='utf-8').rstrip()}\n----\n",

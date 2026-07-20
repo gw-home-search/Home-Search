@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
 
 
 LicenseStatus = Literal["APPROVED", "PENDING", "REJECTED"]
@@ -28,6 +28,7 @@ class AcquisitionContract:
     source_crs: str | None
     maximum_bundle_bytes: int
     redirect_policy: Literal["REJECT", "ALLOWLISTED_ONE_HOP"]
+    fixed_query: str = ""
 
     def __post_init__(self) -> None:
         parsed = urlsplit(self.base_url)
@@ -45,6 +46,10 @@ class AcquisitionContract:
             raise ValueError("maximum bundle bytes is invalid")
         if any(not prefix.startswith("/") or ".." in prefix for prefix in self.allowed_path_prefixes):
             raise ValueError("allowed path prefix is invalid")
+        if self.fixed_query and (
+            self.mode != "file" or not _is_safe_fixed_query(self.fixed_query)
+        ):
+            raise ValueError("acquisition fixed query is invalid")
 
 
 @dataclass(frozen=True)
@@ -196,6 +201,7 @@ def _source(value: object) -> ReferenceSourceContract:
             source_crs=_optional_text(acquisition.get("source_crs")),
             maximum_bundle_bytes=_integer(acquisition, "maximum_bundle_bytes"),
             redirect_policy=_text(acquisition, "redirect_policy"),  # type: ignore[arg-type]
+            fixed_query=_optional_text(acquisition.get("fixed_query")) or "",
         ),
         temporal=TemporalContract(
             basis=_text(temporal, "basis"),  # type: ignore[arg-type]
@@ -257,6 +263,29 @@ def _integer(parent: dict[str, object], key: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool):
         raise ValueError(f"{key} must be an integer")
     return value
+
+
+def _is_safe_fixed_query(value: str) -> bool:
+    if not value or len(value) > 512 or value.startswith("?"):
+        return False
+    try:
+        pairs = parse_qsl(value, keep_blank_values=True, strict_parsing=True)
+    except ValueError:
+        return False
+    names = [name for name, _value in pairs]
+    return (
+        bool(pairs)
+        and len(names) == len(set(names))
+        and all(
+            re.fullmatch(r"[A-Za-z0-9._~-]+", name) is not None
+            and re.fullmatch(r"[A-Za-z0-9._~-]+", item) is not None
+            for name, item in pairs
+        )
+        and not any(
+            re.search(r"key|token|secret|password|credential|auth", name, re.IGNORECASE)
+            for name in names
+        )
+    )
 
 
 def _float(parent: dict[str, object], key: str) -> float:

@@ -15,11 +15,11 @@ from ai_service.datasets.models import AcquisitionRecord, LifecycleResult
 from ai_service.datasets.raw_store import StoredRawObject
 
 
-def _approved_source(*, fixed_release: bool = True):
+def _approved_source(*, fixture_release: bool = True):
     source = load_reference_source_catalog(rail_station_ingest._CONFIG_PATH).get(
         "transport.rail-station"
     )
-    if fixed_release:
+    if fixture_release:
         source = replace(
             source,
             acquisition=AcquisitionContract(
@@ -49,8 +49,8 @@ def _approved_source(*, fixed_release: bool = True):
     )
 
 
-def _approved_catalog(*, fixed_release: bool = True):
-    source = _approved_source(fixed_release=fixed_release)
+def _approved_catalog(*, fixture_release: bool = True):
+    source = _approved_source(fixture_release=fixture_release)
     return type("Catalog", (), {"approved": lambda self, _source_id: source})()
 
 
@@ -166,15 +166,44 @@ def test_rail_refresh_uses_fixed_release_and_prepared_lifecycle(monkeypatch) -> 
 
 
 def test_landing_page_is_rejected_as_acquisition_before_network() -> None:
+    source = _approved_source(fixture_release=False)
     with pytest.raises(ValueError, match="fixed release XLSX URL"):
-        rail_station_ingest._client(_approved_source(fixed_release=False))
+        rail_station_ingest._client(
+            replace(
+                source,
+                acquisition=replace(
+                    source.acquisition,
+                    base_url="https://www.data.go.kr/data/15013205/standard.do",
+                    allowed_hosts=("www.data.go.kr",),
+                    allowed_path_prefixes=("/data/15013205/",),
+                    fixed_query="",
+                ),
+            )
+        )
+
+
+def test_tracked_kric_release_builds_client_before_network() -> None:
+    rail_station_ingest._client(_approved_source(fixture_release=False))
 
 
 def test_landing_page_preflight_stops_before_raw_store_creation(monkeypatch) -> None:
+    source = _approved_source(fixture_release=False)
+    invalid_source = replace(
+        source,
+        acquisition=replace(
+            source.acquisition,
+            base_url="https://www.data.go.kr/data/15013205/standard.do",
+            allowed_hosts=("www.data.go.kr",),
+            allowed_path_prefixes=("/data/15013205/",),
+            fixed_query="",
+        ),
+    )
     monkeypatch.setattr(
         rail_station_ingest,
         "load_reference_source_catalog",
-        lambda _path: _approved_catalog(fixed_release=False),
+        lambda _path: type(
+            "Catalog", (), {"approved": lambda self, _source_id: invalid_source}
+        )(),
     )
 
     def raw_store_factory(_environment):

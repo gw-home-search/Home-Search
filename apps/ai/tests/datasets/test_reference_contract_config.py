@@ -36,6 +36,11 @@ def test_catalog_loads_the_fixed_source_order_and_only_school_is_approved() -> N
         "environment.city-park",
     )
     assert catalog.approved("edu.school-location").license.status == "APPROVED"
+    rail = catalog.get("transport.rail-station")
+    assert rail.acquisition.base_url == (
+        "https://data.kric.go.kr/rips/dataset/download.file"
+    )
+    assert rail.acquisition.fixed_query == "type=filedata&id=32&operation=1"
 
     with pytest.raises(LicenseNotApprovedError):
         catalog.approved("retail.large-store")
@@ -111,6 +116,26 @@ def test_contract_value_objects_reject_unsafe_bounds_and_incomplete_approval() -
             maximum_bundle_bytes=0,
             redirect_policy="REJECT",
         )
+
+    for fixed_query in (
+        "serviceKey=secret",
+        "id=32&id=33",
+        "id=%0A",
+        "?id=32",
+    ):
+        with pytest.raises(ValueError, match="fixed query"):
+            AcquisitionContract(
+                mode="file",
+                base_url="https://api.example.invalid/allowed/source",
+                allowed_hosts=("api.example.invalid",),
+                allowed_path_prefixes=("/allowed/",),
+                format="XLSX",
+                encoding="UTF-8",
+                source_crs=None,
+                maximum_bundle_bytes=1024,
+                redirect_policy="REJECT",
+                fixed_query=fixed_query,
+            )
 
 
 def _valid_acquisition() -> AcquisitionContract:

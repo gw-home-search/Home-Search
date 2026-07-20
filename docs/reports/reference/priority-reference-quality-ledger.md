@@ -31,7 +31,7 @@ dataset의 private raw 저장·가공 승인으로 확대하지 않는다.
 | `edu.academy-registry` | NEIS 기반 전국 학원·교습소, 수시 갱신 | `PENDING` | source별 이용허락·private raw 저장·내부 파생물 조건과 fingerprint 미확정 |
 | `place.sbiz-academy` | 공식 247행 taxonomy와 P1 교육업종 18개 allowlist 고정 | `PENDING` | 상가업소 API 이용조건·private raw 저장·실제 taxonomy endpoint 응답 미검증 |
 | `retail.large-store` | LOCALDATA CSV URL, EPSG:5174, 수시/2일 전 현행화 확인 | `PENDING` | 이용허락 표시와 private raw 저장·파생 조건 fingerprint 미확정 |
-| `transport.rail-station` | KRIC landing, 연간 XLSX, 1,073행, 기준일 2024-12-31 확인 | `PENDING` | 고정된 실제 XLSX release URL과 이용조건 fingerprint 미확정 |
+| `transport.rail-station` | KRIC `id=32` 고정 download endpoint와 2026-06-30 XLSX header 확인 | `PENDING` | dataset별 이용조건 fingerprint와 전체 artifact 미검증 |
 
 빈 `terms_fingerprint`는 미검토가 아니라 승인 근거가 없음을 뜻한다. 승인 전에는
 collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
@@ -83,7 +83,7 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
 | Sbiz S2 collector | 공식 taxonomy contract·현행 taxonomy preflight·collector·adapter·generic refresh offline `Pass`, live 미실행 | `9.5/10` | `2.0/10 Partial` | 금지 |
 | Sbiz S2-P grounded location | exact projection·grounded location observer offline `Pass` | `9.5/10` | `2.0/10 Partial` | 금지 |
 | 대규모점포 | streaming file client·기존 projection `Pass`, live 미실행 | `9.5/10` | `3.0/10 Partial` | 금지 |
-| 철도 S4 collector | fixed URL collector orchestration·occurrence projection·merge offline `Pass`, URL 미확정 | `9.5/10` | `2.0/10 Partial` | 금지 |
+| 철도 S4 collector | 공식 fixed download endpoint·occurrence projection·merge offline `Pass`, live artifact 미실행 | `9.5/10` | `2.0/10 Partial` | 금지 |
 | Offline priority integration | AI·PostGIS·MinIO·property-data·chat-bff·JWT·Compose `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 
 상세 readiness 근거는 `docs/reports/reference/readiness/`에 source별로 기록한다.
@@ -106,10 +106,11 @@ CLI와 local wrapper는 source별 provider key만 선택하며 CSV/XLSX source�
 실행을 유지하고 status/audit는 runtime read-only role과 3초 statement timeout을
 사용한다. 실제 provider 실행은 readiness 단계로 남아 `0.5`를 감점해 `9.5/10 Pass`로
 평가했다.
-file source는 계약상 최대 1만 행 이하로 제한된다. 철도 refresher는 고정 XLSX URL,
+file source는 계약상 최대 1만 행 이하로 제한된다. 철도 refresher는 고정 KRIC download
+endpoint와 non-secret exact query, 공식 XLSX response media type,
 owner-only temp, verified S3 file upload, safe refresh-run 실패 기록을 static catalog에
-연결했으며 현재 landing URL은 network 호출 전에 거부한다. 2026-07-20 전체 offline
-회귀는 `547 passed`, coverage `90.17%`다. NEIS summary observer는 property DB의
+연결했으며 landing URL은 network 호출 전에 거부한다. 2026-07-20 전체 offline
+회귀는 `550 passed`, coverage `90.15%`다. NEIS summary observer는 property DB의
 시도·시군구 ancestor를 먼저 해석한 뒤 AI DB를 별도 exact query하며, 반경·거리 표현을
 grounding 단계에서 거부한다. license와 live readiness가 미승인이므로 runtime
 allowlist에는 추가하지 않았다. 실제 provider,
@@ -160,7 +161,7 @@ property-data fresh Flyway, chat-bff, signed JWT JSON/SSE, DB role, base+chatbot
 ## 공통 중단·롤백
 
 - 중단: public field 변경, DB 간 SQL join, S3 checksum 불일치, 필수 ID 중복,
-  coverage 기준 미달, 안정적인 rail release URL 부재, 이용조건 불명확.
+  coverage 기준 미달, rail release URL 변경, 이용조건 불명확.
 - 롤백: capability allowlist 제거와 이전 publication pointer 전환만 사용한다.
 - raw object, publication, quarantine, readiness evidence, Docker volume은 삭제하지 않는다.
 

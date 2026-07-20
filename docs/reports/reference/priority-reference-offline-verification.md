@@ -12,7 +12,7 @@
 
 | 범위 | 명령 | 결과 |
 |---|---|---|
-| AI 전체 회귀 | `cd apps/ai && TESTCONTAINERS_RYUK_DISABLED=true uv run pytest` | `547 passed`, coverage `90.17%` |
+| AI 전체 회귀 | `cd apps/ai && TESTCONTAINERS_RYUK_DISABLED=true uv run pytest` | `550 passed`, coverage `90.15%` |
 | MinIO raw 복구 | `uv run pytest --no-cov tests/datasets/test_raw_store.py` | `8 passed`; checksum·length·version·byte 복구·동일 key 재사용 |
 | local refresh wrapper | `apps/ai/ops/test-run-local-reference-refresh.sh` | `Pass`; source별 secret 경계와 고정 순서 |
 | reference docs | `apps/ai/ops/build-reference-docs.sh --check` | `Pass`; 결정성·HTML·secret 검사 |
@@ -57,7 +57,7 @@ artifact에 저장하지 않았다.
 - 1GiB raw 파일과 21GiB ephemeral storage를 실제 할당하지는 않았다. 9MiB artifact
   file streaming 구조와 30만 normalized row memory gate로 검증해 성능·자원 항목
   `0.5`를 감점했다.
-- source별 이용조건, 실제 taxonomy 응답/release URL, 실제 row·freshness·coverage, S3 운영
+- source별 이용조건, 실제 taxonomy 응답/rail 전체 artifact, 실제 row·freshness·coverage, S3 운영
   복구, spatial query p95와 live golden은 readiness 단계의 blocker다.
 - readiness `9.0/10` 미만 capability는 runtime allowlist에 추가하지 않았다.
 

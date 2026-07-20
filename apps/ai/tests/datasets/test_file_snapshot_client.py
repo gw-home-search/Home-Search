@@ -85,6 +85,82 @@ def test_rail_release_requires_a_fixed_xlsx_url() -> None:
         )
 
 
+def test_kric_release_accepts_only_the_tracked_non_secret_query(tmp_path) -> None:
+    calls: list[str] = []
+    body = b"fixture-xlsx"
+
+    def request(url: str, _timeout: float):
+        calls.append(url)
+        return 200, {
+            "content-type": "application/octet-stream;charset=UTF-8",
+            "content-length": str(len(body)),
+            "content-disposition": 'attachment; filename="rail-stations-20260630.xlsx"',
+        }, body
+
+    collected = FileSnapshotClient(
+        source_id="transport.rail-station",
+        url="https://data.kric.go.kr/rips/dataset/download.file",
+        fixed_query="type=filedata&id=32&operation=1",
+        allowed_hosts=("data.kric.go.kr",),
+        allowed_path_prefixes=("/rips/dataset/download.file",),
+        media_types=("application/octet-stream",),
+        extension="xlsx",
+        maximum_bytes=1024,
+        allow_one_redirect=True,
+        requester=request,
+    ).collect(target=tmp_path / "rail.xlsx")
+
+    assert calls == [
+        "https://data.kric.go.kr/rips/dataset/download.file"
+        "?type=filedata&id=32&operation=1"
+    ]
+    assert collected.source_date == date(2026, 6, 30)
+
+
+def test_default_transport_preserves_validated_fixed_query(monkeypatch, tmp_path) -> None:
+    body_chunks = iter((b"xlsx", b""))
+
+    class Response:
+        status = 200
+
+        def getheaders(self):
+            return [
+                ("content-type", "application/octet-stream"),
+                ("content-length", "4"),
+                ("content-disposition", 'filename="rail-20260630.xlsx"'),
+            ]
+
+        def read(self, _size):
+            return next(body_chunks)
+
+    class Connection:
+        def __init__(self, host, port, timeout):
+            assert (host, port, timeout) == ("data.kric.go.kr", 443, 20.0)
+
+        def request(self, method, path, headers):
+            assert method == "GET"
+            assert path == "/rips/dataset/download.file?type=filedata&id=32&operation=1"
+
+        def getresponse(self):
+            return Response()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(file_snapshot_client, "HTTPSConnection", Connection)
+    collected = FileSnapshotClient(
+        source_id="transport.rail-station",
+        url="https://data.kric.go.kr/rips/dataset/download.file",
+        fixed_query="type=filedata&id=32&operation=1",
+        allowed_hosts=("data.kric.go.kr",),
+        allowed_path_prefixes=("/rips/dataset/download.file",),
+        media_types=("application/octet-stream",), extension="xlsx",
+        maximum_bytes=1024, allow_one_redirect=True,
+    ).collect(target=tmp_path / "rail.xlsx")
+
+    assert collected.source_date == date(2026, 6, 30)
+
+
 def test_redirect_cannot_escape_allowlist_or_chain(tmp_path) -> None:
     client = FileSnapshotClient(
         source_id="retail.large-store",

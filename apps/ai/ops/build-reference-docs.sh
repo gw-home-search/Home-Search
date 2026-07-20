@@ -40,8 +40,8 @@ for source in edu.school-location edu.academy-registry place.sbiz-academy retail
     test -f "${tmp_dir}/first/generated-snippets/${source}/failure-codes.adoc"
 done
 rail_request="${tmp_dir}/first/generated-snippets/transport.rail-station/download-request.adoc"
-if ! rg -q '^RELEASE_URL_UNRESOLVED$' "$rail_request"; then
-    echo '상태: Fail - rail release URL 미확정 상태가 문서에 없습니다.' >&2
+if ! rg -q '^GET https://data\.kric\.go\.kr/rips/dataset/download\.file\?type=filedata&id=32&operation=1$' "$rail_request"; then
+    echo '상태: Fail - 검증된 rail release URL이 문서와 일치하지 않습니다.' >&2
     exit 1
 fi
 if rg -q '^GET https://www\.data\.go\.kr/data/15013205/standard\.do$' "$rail_request"; then

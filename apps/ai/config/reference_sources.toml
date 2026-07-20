@@ -232,9 +232,10 @@ normalization_schema_version = "rail-station-v1"
 
 [sources.acquisition]
 mode = "file"
-base_url = "https://www.data.go.kr/data/15013205/standard.do"
-allowed_hosts = ["www.data.go.kr"]
-allowed_path_prefixes = ["/data/15013205/"]
+base_url = "https://data.kric.go.kr/rips/dataset/download.file"
+fixed_query = "type=filedata&id=32&operation=1"
+allowed_hosts = ["data.kric.go.kr"]
+allowed_path_prefixes = ["/rips/dataset/download.file"]
 format = "XLSX"
 encoding = "UTF-8"
 source_crs = "EPSG:4326"

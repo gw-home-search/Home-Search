@@ -24,6 +24,10 @@ from .service import DatasetLifecycleService
 
 _CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "reference_sources.toml"
 _XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+_XLSX_MEDIA_TYPES = (
+    _XLSX_MEDIA_TYPE,
+    "application/octet-stream",
+)
 
 
 @dataclass(frozen=True)
@@ -131,10 +135,11 @@ def _client(reference: ReferenceSourceContract) -> FileSnapshotClient:
         url=acquisition.base_url,
         allowed_hosts=acquisition.allowed_hosts,
         allowed_path_prefixes=acquisition.allowed_path_prefixes,
-        media_types=(_XLSX_MEDIA_TYPE,),
+        media_types=_XLSX_MEDIA_TYPES,
         extension="xlsx",
         maximum_bytes=acquisition.maximum_bundle_bytes,
         allow_one_redirect=acquisition.redirect_policy == "ALLOWLISTED_ONE_HOP",
+        fixed_query=acquisition.fixed_query,
     )
 
 

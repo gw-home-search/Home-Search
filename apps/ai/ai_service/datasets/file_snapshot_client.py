@@ -12,6 +12,8 @@ from http.client import HTTPSConnection
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
+from .contracts import _is_safe_fixed_query
+
 
 Requester = Callable[[str, float], tuple[int, Mapping[str, str], bytes]]
 
@@ -60,6 +62,7 @@ class FileSnapshotClient:
         extension: str,
         maximum_bytes: int,
         allow_one_redirect: bool,
+        fixed_query: str = "",
         requester: Requester | None = None,
         timeout_seconds: float = 20,
     ) -> None:
@@ -77,10 +80,16 @@ class FileSnapshotClient:
         self._hosts = allowed_hosts
         self._prefixes = allowed_path_prefixes
         self._validate_url(url)
-        if extension == "xlsx" and not urlsplit(url).path.lower().endswith(".xlsx"):
+        if fixed_query and not _is_safe_fixed_query(fixed_query):
+            raise ValueError("file snapshot fixed query is invalid")
+        if (
+            extension == "xlsx"
+            and not urlsplit(url).path.lower().endswith(".xlsx")
+            and not fixed_query
+        ):
             raise ValueError("rail collector requires a fixed release XLSX URL")
         self._source_id = source_id
-        self._url = url
+        self._url = f"{url}?{fixed_query}" if fixed_query else url
         self._media_types = frozenset(value.lower() for value in media_types)
         self._extension = extension
         self._maximum_bytes = maximum_bytes
@@ -169,7 +178,8 @@ def _stream_request(
     parsed = urlsplit(url)
     connection = HTTPSConnection(parsed.hostname, parsed.port or 443, timeout=timeout)
     try:
-        connection.request("GET", parsed.path, headers={"Accept": "*/*"})
+        request_target = parsed.path + (f"?{parsed.query}" if parsed.query else "")
+        connection.request("GET", request_target, headers={"Accept": "*/*"})
         response = connection.getresponse()
         headers = dict(response.getheaders())
         if 300 <= response.status < 400:

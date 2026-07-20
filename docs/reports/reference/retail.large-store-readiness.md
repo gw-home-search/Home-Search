@@ -35,7 +35,7 @@
 | 데이터 정확성·원자성 | `1.5/1.5` | verified raw-first, 관리번호 dedupe, status·업태 allowlist, EPSG:5174→4326, 대한민국 범위, typed projection 후 pointer 전환 검증 |
 | 보안·개인정보 | `1.0/1.0` | HTTPS allowlist·one-hop redirect·owner-only temp·runtime read view만 허용하고 검증 전 `verifiedZero=false` 유지 |
 | 실패·복구·관측 | `1.0/1.0` | media/length/date/size/redirect safe reason, partial file 정리, refresh audit, publication rollback 경계 검증 |
-| 테스트 품질 | `1.5/1.5` | collector·adapter·ingest·PostGIS 1km·grounding·composition 집중 테스트 `87 passed`; 전체 AI `547 passed`, coverage `90.17%` |
+| 테스트 품질 | `1.5/1.5` | collector·adapter·ingest·PostGIS 1km·grounding·composition 집중 테스트 `87 passed`; 전체 AI `550 passed`, coverage `90.15%` |
 | 문서·운영 가능성 | `1.0/1.0` | source AsciiDoc, generated download/header/column/failure snippet, generic refresh·status·audit runbook 일치 |
 | 성능·자원 제한 | `0.5/0.5` | 1MiB chunk download, 256MiB file limit, 2,000..10,000 row contract, 3초 runtime query timeout과 최대 5건 제한 검증 |
 | 리뷰·commit 추적성 | `0.5/0.5` | file streaming·projection composition·observer 회귀 commit과 mapping 잔여 위험을 분리 기록 |
@@ -61,8 +61,8 @@ TESTCONTAINERS_RYUK_DISABLED=true uv run pytest --no-cov \
 # 87 passed
 ```
 
-전체 coverage 근거는 `priority-reference-offline-verification.md`의 `547 passed`,
-`90.17%` 결과다.
+전체 coverage 근거는 `priority-reference-offline-verification.md`의 `550 passed`,
+`90.15%` 결과다.
 
 ## 계약·보안 영향
 

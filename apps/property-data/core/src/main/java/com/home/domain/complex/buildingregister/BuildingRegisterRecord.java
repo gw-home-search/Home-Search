@@ -40,9 +40,11 @@ public record BuildingRegisterRecord(
     }
 
     public boolean isAggregateTitleFor(String rootManagementKey) {
-        return (registerKindCode == 2 || registerKindCode == 3)
-                && rootManagementKey != null
-                && rootManagementKey.equals(parentManagementKey);
+        return isAggregateTitle() && rootManagementKey != null && rootManagementKey.equals(parentManagementKey);
+    }
+
+    public boolean isAggregateTitle() {
+        return registerKindCode == 2 || registerKindCode == 3;
     }
 
     private static String trimToNull(String value) {

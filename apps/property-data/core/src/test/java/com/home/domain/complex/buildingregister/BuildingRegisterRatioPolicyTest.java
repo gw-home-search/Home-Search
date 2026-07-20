@@ -146,6 +146,32 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("기본개요로 확인한 표제부는 provider 상위 관리번호가 없어도 합산한다")
+    void aggregatesExpectedTitlesWhenProviderOmitsParentManagementKey() {
+        List<BuildingRegisterRecord> titles = List.of(
+                title("T-1", null, "1000", "100", "300", null, null, "02000"),
+                title("T-2", null, "1000", "100", "500", null, null, "03000"));
+
+        var evaluation = evaluator.evaluate(BuildingRatioEvaluationContext.uniqueRoot(
+                BuildingRegisterCollectionStrategy.FULL_HIERARCHY,
+                recap("1000", null, null, null, null),
+                titles,
+                Set.of("T-1", "T-2"),
+                true));
+
+        assertCandidate(
+                evaluation,
+                BuildingRatioField.BUILDING_COVERAGE_RATIO,
+                BuildingRatioResolutionMethod.TITLE_AGGREGATE_CALC,
+                "20.00");
+        assertCandidate(
+                evaluation,
+                BuildingRatioField.FLOOR_AREA_RATIO,
+                BuildingRatioResolutionMethod.TITLE_AGGREGATE_CALC,
+                "80.00");
+    }
+
+    @Test
     @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void doesNotAggregateWhenAnExpectedTitleIsMissing() {
         BuildingRegisterRecord title = title("T-1", ROOT, "1000", "200", "800", null, null, "02000");

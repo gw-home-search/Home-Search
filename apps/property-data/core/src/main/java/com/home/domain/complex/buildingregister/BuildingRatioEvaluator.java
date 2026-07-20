@@ -127,10 +127,9 @@ public final class BuildingRatioEvaluator {
 
     private List<BuildingRegisterRecord> completeTitles(BuildingRatioEvaluationContext context) {
         if (!context.hierarchyComplete() || context.expectedTitleKeys().isEmpty()) return List.of();
-        String rootKey = context.recap().managementKey();
         Map<String, List<BuildingRegisterRecord>> byKey = new HashMap<>();
         context.titles().stream()
-                .filter(record -> record.isAggregateTitleFor(rootKey))
+                .filter(BuildingRegisterRecord::isAggregateTitle)
                 .filter(record -> context.expectedTitleKeys().contains(record.managementKey()))
                 .forEach(record -> byKey.computeIfAbsent(record.managementKey(), ignored -> new ArrayList<>())
                         .add(record));

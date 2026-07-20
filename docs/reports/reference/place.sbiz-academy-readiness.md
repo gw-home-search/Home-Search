@@ -14,11 +14,12 @@ taxonomy contract foundation 구현 품질: `10.0/10 Pass`
 - 공식 `P1`(`교육 서비스업`) 아래 소분류 18개 전체를 code/name allowlist로 고정했다.
 - loader는 tracked file path·checksum·schema·계층별 count·P1 name·allowlist·canonical
   fingerprint 중 하나라도 달라지면 collector 구성 단계에서 중단한다.
-- collector는 각 acquisition 시작에 공식 `largeUpjongList`, `middleUpjongList`,
-  `smallUpjongList`를 고정 순서로 조회하고, code/name 전체가 tracked artifact와
+- collector는 각 acquisition 시작에 공식 활용가이드대로 `largeUpjongList`를 조회한
+  뒤 `middleUpjongList`를 `indsLclsCd`별로, `smallUpjongList`를
+  `indsLclsCd`+`indsMclsCd`별로 조회하고, 합친 code/name 전체가 tracked artifact와
   일치할 때만 store partition을 요청한다.
-- 성공한 현행 taxonomy 응답 bytes를 raw bundle에 포함하고, adapter가 다시
-  fingerprint·partition·store ID·page total을 검증한다.
+- 성공한 parent별 taxonomy 응답 bytes를 raw bundle에 포함하고, adapter가 다시
+  hierarchy·fingerprint·partition·store ID·page total을 검증한다.
 - 2025-11-28 공식 OpenAPI 활용가이드와 포털 OAS에서 store field 계약을 대조했고,
   `newZipcd` 신우편번호와 `indsSclsCd`/`indsSclsNm` code-name 일치를 적용했다.
 - 위치 projection·NEIS exact match·800m observer의 기존 offline 검증은 유지된다.
@@ -47,8 +48,12 @@ checksum:
   요청하는 5개 실패를 확인했다.
 - live taxonomy preflight 최소 GREEN: 고정 endpoint 순서, raw response 보존,
   code/name exact 비교와 `TAXONOMY_CHANGED` fail-closed를 추가했다.
+- hierarchy request 최초 RED: 중·소분류 요청에 공식 가이드의 parent parameter가
+  없음을 exact path assertion으로 확인했다.
+- hierarchy request 최소 GREEN: 모든 tracked parent를 scoped 조회하고 parent별 원문
+  artifact를 보존하며 합산 fingerprint와 parent hierarchy를 재검증한다.
 - 좁은 회귀: Sbiz collector·adapter·ingest·projection·observer·composition `87 passed`.
-- 최신 전체 AI 회귀: `564 passed`, coverage `90.10%`.
+- 최신 전체 AI 회귀: `569 passed`, coverage `90.05%`.
 
 taxonomy contract foundation은 공식 artifact 이용조건·출처, 고정 schema, 원본/추적
 checksum, 계층 count, P1 allowlist, canonical fingerprint, path·symlink 경계, fail-closed
@@ -56,9 +61,12 @@ checksum, 계층 count, P1 allowlist, canonical fingerprint, path·symlink 경�
 taxonomy foundation 점수는 S2 전체 collector 점수나 실제 데이터 readiness를
 대신하지 않는다.
 
-2026-07-20 live 재검증은 key 인증 후 official taxonomy와 tracked fingerprint가
-달라 `TAXONOMY_CHANGED`로 store partition 요청 전에 중단했다. acquisition은 `0`이며
-activation은 계속 금지한다.
+2026-07-20 live 재검증은 key 인증 후 unscoped taxonomy 응답이
+대·중·소 `25/266/1,255`로, 공식 포털과 2025-11-28 활용가이드의 `10/75/247`과
+달라 `TAXONOMY_CHANGED`로 store partition 요청 전에 중단했다. 기존 교육업종 18개가
+응답에 남아 있어도 학교·온라인·인적용역 등 새 분류를 위치 allowlist에 임의로
+추가하지 않는다. hierarchy request 수정 후에도 첫 대분류 mismatch에서 안전 중단하며,
+acquisition은 `0`, activation은 계속 금지한다.
 
 ## S2 collector 구현 품질 평가
 
@@ -84,14 +92,14 @@ activation은 계속 금지한다.
 - 이용조건 evidence는 `apps/ai/config/license_evidence/place.sbiz-academy.txt`에
   고정했고 SHA-256은
   `e66a879b6ce35af441c4b92b58711c7a2d7d538c87659883da6ab298fd98c86d`다.
-- 공식 OAS와 fake transport로 현행 taxonomy preflight 동작을 검증했지만 실제
-  대·중·소 endpoint 응답을 호출해 tracked artifact와 비교하지 않았다.
+- 실제 taxonomy endpoint는 호출했지만 공식 포털·활용가이드 count와 live 응답이
+  불일치한다. provider가 현행 taxonomy의 공식 버전·분류 범위를 확인하기 전에는
+  tracked fingerprint와 교육 위치 allowlist를 변경하지 않는다.
 - 실제 store acquisition, 좌표 전국 95%·지역 90% coverage, S3 복구, 두 번째 수집,
   chatbot JSON/SSE golden은 미검증이다.
 - Sbiz 행정코드와 property 법정동 코드 mapping 전에는 `verifiedZero=false`를 유지한다.
 - runtime allowlist에는 `academy_lookup`을 추가하지 않았다.
-- 2026-07-20 live preflight는 `HOME_AI_DATA_GO_KR_SERVICE_KEY` 미설정으로 외부 호출 전
-  exit `2` 중단했다.
+- 2026-07-20 key 수정 후 인증은 통과했고 taxonomy mismatch로 안전 중단했다.
 
 `api-contract: compatible`
 

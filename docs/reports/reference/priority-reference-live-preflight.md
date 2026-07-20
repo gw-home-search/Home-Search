@@ -13,7 +13,7 @@ safe reason code와 count만 기록했고 provider body, API key, DSN은 기록�
 |---:|---|---|---|
 | 1 | `edu.school-location` | exit `2` | 최초 실행에서 `HOME_AI_DATA_GO_KR_SERVICE_KEY` exact-once 설정 실패, 외부 호출 전 중단 |
 | 2 | `edu.academy-registry` | exit `1` | DB role·MinIO·migration preflight 통과 후 첫 page `API_SERVER_ERROR`; acquisition `0`, active datasetVersion 없음 |
-| 3 | `place.sbiz-academy` | exit `1` | key 수정 후 인증 통과, 공식 taxonomy fingerprint 불일치로 `TAXONOMY_CHANGED`; acquisition `0` |
+| 3 | `place.sbiz-academy` | exit `1` | key 수정 후 인증 통과, live unscoped taxonomy `25/266/1,255`가 공식 포털·가이드 `10/75/247`과 불일치해 `TAXONOMY_CHANGED`; acquisition `0` |
 | 4 | `retail.large-store` | exit `1` | 새 공식 API·license 계약 적용 후 첫 page `API_AUTHENTICATION_FAILED`; dataset `15154948` 활용신청 미반영 가능성, acquisition `0` |
 | 5a | `transport.rail-station` | exit `2` | 최초 실행은 license `PENDING`으로 `CONFIGURATION_INVALID`; provider body 요청 전 중단 |
 | 5b | `transport.rail-station` | exit `1` | 승인 후 `User-Agent` 없는 GET이 `200 text/html`; `FILE_MEDIA_TYPE_INVALID`로 안전 중단 |
@@ -37,8 +37,9 @@ runtime inspection 결과는 source를 `Partial`로 표시했고 active
 datasetVersion과 dataAsOf가 비어 있었다. NEIS audit는 빈 `acquisitionId`, row count
 모두 `0`, `reasonCodes: API_SERVER_ERROR`를 반환했다.
 
-키 문자열은 Sbiz taxonomy endpoint 인증을 통과했으므로 유효하다. Sbiz publication은
-`TAXONOMY_CHANGED`로 fail-closed했고, 대규모점포는 동일 키에 새 API 활용신청이
+키 문자열은 Sbiz taxonomy endpoint 인증을 통과했으므로 유효하다. Sbiz collector는
+공식 가이드의 parent scoped 중·소분류 요청으로 수정했지만 첫 대분류부터 공식
+taxonomy count와 달라 `TAXONOMY_CHANGED`로 fail-closed한다. 대규모점포는 동일 키에 새 API 활용신청이
 연결되기 전까지 `API_AUTHENTICATION_FAILED`로 유지한다.
 
 철도는 source contract 승인 후 실제 XLSX download와 verified raw 저장까지 진행했다.

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import stat
 from datetime import UTC, datetime
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -47,7 +48,14 @@ def _response(path: str, taxonomy=TAXONOMY) -> bytes:
     }
     for endpoint, artifact_name in endpoint_to_artifact.items():
         if endpoint in path:
-            return _taxonomy_page(artifact_name, taxonomy[artifact_name])
+            rows = taxonomy[artifact_name]
+            parameters = parse_qs(urlsplit(path).query)
+            parent = (
+                parameters.get("indsMclsCd", parameters.get("indsLclsCd", [""]))[0]
+            )
+            if parent:
+                rows = [row for row in rows if row["code"].startswith(parent)]
+            return _taxonomy_page(artifact_name, rows)
     return _page()
 
 
@@ -73,10 +81,65 @@ def test_sbiz_collector_partitions_only_allowlisted_taxonomy_without_key_in_path
     assert collected.raw_row_count == 1
     assert len(rows) == 1
     assert all("secret" not in path for path in paths)
-    assert [path.split("/")[-1].split("?", 1)[0] for path in paths[:3]] == [
-        "largeUpjongList",
-        "middleUpjongList",
-        "smallUpjongList",
+    assert paths[:3] == [
+        "/B553077/api/open/sdsc2/largeUpjongList?type=json",
+        "/B553077/api/open/sdsc2/middleUpjongList?indsLclsCd=P1&type=json",
+        (
+            "/B553077/api/open/sdsc2/smallUpjongList"
+            "?indsLclsCd=P1&indsMclsCd=P101&type=json"
+        ),
+    ]
+
+
+def test_sbiz_collector_scopes_every_taxonomy_parent_and_preserves_raw_pages() -> None:
+    taxonomy_artifacts = {
+        "taxonomy-large": [
+            {"code": "P1", "name": "교육"},
+            {"code": "P2", "name": "소매"},
+        ],
+        "taxonomy-middle": [
+            {"code": "P101", "name": "교육서비스"},
+            {"code": "P201", "name": "소매서비스"},
+        ],
+        "taxonomy-small": [
+            {"code": "P10101", "name": "fixture 학원"},
+            {"code": "P20101", "name": "fixture 소매"},
+        ],
+    }
+    taxonomy = SbizTaxonomyContract(
+        taxonomy_fingerprint(taxonomy_artifacts),
+        {"P10101": "fixture 학원"},
+    )
+    paths: list[str] = []
+
+    def request(path, _timeout, _key):
+        paths.append(path)
+        return 200, {}, _response(path, taxonomy_artifacts)
+
+    collected = SbizAcademyApiClient(
+        taxonomy=taxonomy,
+        taxonomy_artifacts=taxonomy_artifacts,
+        requester=request,
+    ).collect("secret", observed_at=datetime(2026, 7, 20, tzinfo=UTC))
+
+    rows = _rows(
+        SbizAcademyAdapter(taxonomy).parse(
+            collected.content, _contract(), source_date=None
+        )
+    )
+    assert len(rows) == 1
+    assert paths[:5] == [
+        "/B553077/api/open/sdsc2/largeUpjongList?type=json",
+        "/B553077/api/open/sdsc2/middleUpjongList?indsLclsCd=P1&type=json",
+        "/B553077/api/open/sdsc2/middleUpjongList?indsLclsCd=P2&type=json",
+        (
+            "/B553077/api/open/sdsc2/smallUpjongList"
+            "?indsLclsCd=P1&indsMclsCd=P101&type=json"
+        ),
+        (
+            "/B553077/api/open/sdsc2/smallUpjongList"
+            "?indsLclsCd=P2&indsMclsCd=P201&type=json"
+        ),
     ]
 
 
@@ -136,6 +199,13 @@ def test_sbiz_invalid_evidence_configuration_and_first_payload_fail_closed() -> 
             taxonomy=_taxonomy(), taxonomy_artifacts={}, requester=lambda *_args: (200, {}, b"{}")
         )
     with pytest.raises(ValueError):
+        SbizAcademyApiClient(
+            taxonomy=SbizTaxonomyContract(
+                taxonomy_fingerprint(TAXONOMY), {"P99999": "없는 분류"}
+            ),
+            taxonomy_artifacts=TAXONOMY,
+        )
+    with pytest.raises(ValueError):
         SbizAcademyApiError("secret")
     client = SbizAcademyApiClient(
         taxonomy=_taxonomy(), taxonomy_artifacts=TAXONOMY,
@@ -167,6 +237,30 @@ def test_sbiz_live_taxonomy_change_stops_before_store_collection() -> None:
 
     assert error.value.reason_code == "TAXONOMY_CHANGED"
     assert store_requested is False
+
+
+def test_sbiz_live_large_taxonomy_change_stops_before_child_requests() -> None:
+    changed = {
+        **TAXONOMY,
+        "taxonomy-large": [
+            *TAXONOMY["taxonomy-large"],
+            {"code": "P2", "name": "추가 분류"},
+        ],
+    }
+    paths: list[str] = []
+
+    def request(path, _timeout, _key):
+        paths.append(path)
+        return 200, {}, _response(path, changed)
+
+    client = SbizAcademyApiClient(
+        taxonomy=_taxonomy(), taxonomy_artifacts=TAXONOMY, requester=request,
+    )
+    with pytest.raises(SbizAcademyApiError) as error:
+        client.collect("key", observed_at=datetime(2026, 7, 20, tzinfo=UTC))
+
+    assert error.value.reason_code == "TAXONOMY_CHANGED"
+    assert paths == ["/B553077/api/open/sdsc2/largeUpjongList?type=json"]
 
 
 @pytest.mark.parametrize(

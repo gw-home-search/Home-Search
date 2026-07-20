@@ -21,11 +21,9 @@ from .validation import RawPayloadError
 
 _HOST = "apis.data.go.kr"
 _PATH = "/B553077/api/open/sdsc2/storeListInUpjong"
-_TAXONOMY_PATHS = (
-    ("taxonomy-large", "/B553077/api/open/sdsc2/largeUpjongList"),
-    ("taxonomy-middle", "/B553077/api/open/sdsc2/middleUpjongList"),
-    ("taxonomy-small", "/B553077/api/open/sdsc2/smallUpjongList"),
-)
+_LARGE_TAXONOMY_PATH = "/B553077/api/open/sdsc2/largeUpjongList"
+_MIDDLE_TAXONOMY_PATH = "/B553077/api/open/sdsc2/middleUpjongList"
+_SMALL_TAXONOMY_PATH = "/B553077/api/open/sdsc2/smallUpjongList"
 _PAGE_SIZE = 1000
 _MAX_PAGES = 500
 _MAX_PAGE_BYTES = 8 * 1024 * 1024
@@ -86,8 +84,12 @@ class SbizAcademyApiClient:
             or not 1 <= timeout_seconds <= 30
         ):
             raise ValueError("Sbiz taxonomy evidence is not approved")
+        middle_to_large, small_codes = _taxonomy_hierarchy(taxonomy_artifacts)
+        if not set(taxonomy.allowed_small_categories).issubset(small_codes):
+            raise ValueError("Sbiz taxonomy evidence is not approved")
         self._taxonomy = taxonomy
         self._taxonomy_artifacts = taxonomy_artifacts
+        self._middle_to_large = middle_to_large
         self._requester = requester or _request
         self._timeout = float(timeout_seconds)
 
@@ -116,24 +118,49 @@ class SbizAcademyApiClient:
         if not key or len(key) > 1024 or observed_at.tzinfo is None:
             raise ValueError("Sbiz API collection configuration is invalid")
         artifacts: list[FileBundleArtifact] = []
-        for name, endpoint in _TAXONOMY_PATHS:
-            try:
-                content = self._load(f"{endpoint}?type=json", key)
-                live_taxonomy = _taxonomy_page(content, name)
-            except (SbizAcademyApiError, RawPayloadError) as exception:
-                reason = (
-                    exception.reason_code
-                    if isinstance(exception, SbizAcademyApiError)
-                    else "TAXONOMY_CHANGED"
-                )
-                raise SbizAcademyApiError(reason) from None
-            if live_taxonomy != self._taxonomy_artifacts[name]:
-                raise SbizAcademyApiError("TAXONOMY_CHANGED")
-            path = workspace.create_file(f"artifact-{len(artifacts) + 1:06d}.json")
-            path.write_bytes(content)
-            artifacts.append(
-                FileBundleArtifact(name, "json", "application/json", path)
+        large = self._load_taxonomy(
+            f"{_LARGE_TAXONOMY_PATH}?type=json", "taxonomy-large", key
+        )
+        if large[0] != self._taxonomy_artifacts["taxonomy-large"]:
+            raise SbizAcademyApiError("TAXONOMY_CHANGED")
+        _append_taxonomy_artifact(artifacts, "taxonomy-large", large[1], workspace)
+
+        live_middle: list[dict[str, str]] = []
+        for item in large[0]:
+            parent = item["code"]
+            path = (
+                f"{_MIDDLE_TAXONOMY_PATH}?indsLclsCd={quote(parent, safe='')}"
+                "&type=json"
             )
+            rows, content = self._load_taxonomy(path, "taxonomy-middle", key)
+            if any(not row["code"].startswith(parent) for row in rows):
+                raise SbizAcademyApiError("TAXONOMY_CHANGED")
+            live_middle.extend(rows)
+            _append_taxonomy_artifact(
+                artifacts, f"taxonomy-middle-{parent.lower()}", content, workspace
+            )
+        live_middle.sort(key=lambda item: item["code"])
+        if live_middle != self._taxonomy_artifacts["taxonomy-middle"]:
+            raise SbizAcademyApiError("TAXONOMY_CHANGED")
+
+        live_small: list[dict[str, str]] = []
+        for item in live_middle:
+            parent = item["code"]
+            large_parent = self._middle_to_large[parent]
+            path = (
+                f"{_SMALL_TAXONOMY_PATH}?indsLclsCd={quote(large_parent, safe='')}"
+                f"&indsMclsCd={quote(parent, safe='')}&type=json"
+            )
+            rows, content = self._load_taxonomy(path, "taxonomy-small", key)
+            if any(not row["code"].startswith(parent) for row in rows):
+                raise SbizAcademyApiError("TAXONOMY_CHANGED")
+            live_small.extend(rows)
+            _append_taxonomy_artifact(
+                artifacts, f"taxonomy-small-{parent.lower()}", content, workspace
+            )
+        live_small.sort(key=lambda item: item["code"])
+        if live_small != self._taxonomy_artifacts["taxonomy-small"]:
+            raise SbizAcademyApiError("TAXONOMY_CHANGED")
         page_count = 0
         raw_row_count = 0
         total_bytes = sum(item.path.stat().st_size for item in artifacts)
@@ -210,6 +237,75 @@ class SbizAcademyApiClient:
                 continue
             raise SbizAcademyApiError(_http_reason(status))
         raise SbizAcademyApiError("API_TRANSPORT_FAILED")
+
+    def _load_taxonomy(
+        self, path: str, artifact_name: str, service_key: str
+    ) -> tuple[list[dict[str, str]], bytes]:
+        try:
+            content = self._load(path, service_key)
+            return _taxonomy_page(content, artifact_name), content
+        except (SbizAcademyApiError, RawPayloadError) as exception:
+            reason = (
+                exception.reason_code
+                if isinstance(exception, SbizAcademyApiError)
+                else "TAXONOMY_CHANGED"
+            )
+            raise SbizAcademyApiError(reason) from None
+
+
+def _append_taxonomy_artifact(
+    artifacts: list[FileBundleArtifact], logical_name: str, content: bytes,
+    workspace: SecureTempWorkspace,
+) -> None:
+    path = workspace.create_file(f"artifact-{len(artifacts) + 1:06d}.json")
+    path.write_bytes(content)
+    artifacts.append(
+        FileBundleArtifact(logical_name, "json", "application/json", path)
+    )
+
+
+def _taxonomy_hierarchy(
+    artifacts: dict[str, object],
+) -> tuple[dict[str, str], set[str]]:
+    try:
+        levels = {
+            name: {
+                item["code"]
+                for item in value
+                if isinstance(item, dict)
+                and isinstance(item.get("code"), str)
+                and isinstance(item.get("name"), str)
+                and item["code"]
+                and item["name"]
+            }
+            for name, value in artifacts.items()
+            if isinstance(value, list)
+        }
+        if (
+            set(levels) != {"taxonomy-large", "taxonomy-middle", "taxonomy-small"}
+            or any(len(levels[name]) != len(artifacts[name]) for name in levels)
+        ):
+            raise ValueError
+        middle_to_large = {
+            middle: _single_parent(middle, levels["taxonomy-large"])
+            for middle in levels["taxonomy-middle"]
+        }
+        for small in levels["taxonomy-small"]:
+            _single_parent(small, levels["taxonomy-middle"])
+        return middle_to_large, levels["taxonomy-small"]
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("Sbiz taxonomy evidence is not approved") from None
+
+
+def _single_parent(code: str, candidates: set[str]) -> str:
+    parents = [
+        candidate
+        for candidate in candidates
+        if len(candidate) < len(code) and code.startswith(candidate)
+    ]
+    if len(parents) != 1:
+        raise ValueError
+    return parents[0]
 
 
 def _incomplete_prepared(

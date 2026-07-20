@@ -11,11 +11,13 @@ tracked taxonomy fingerprint와 교육업종 소분류 allowlist가 일치할 �
 저장소에는 UTF-8/LF로 정규화한 247행 artifact와 별도 checksum을 추적한다.
 
 collector는 추적 CSV에서 canonical 대·중·소 artifact를 결정적으로 생성한다. 매
-acquisition 시작에는 공식 `largeUpjongList`, `middleUpjongList`,
-`smallUpjongList`를 고정 순서로 조회한다. code/name 전체가 tracked artifact와
-정확히 일치한 경우에만 18개 교육업종 partition을 요청하며, 현행 taxonomy 응답
-bytes를 raw bundle에 보존한다. 불일치나 schema 오류는 `TAXONOMY_CHANGED`로 store
-요청 전에 중단한다. source 상가업소 API의 `이용허락범위 제한 없음`, 제공기관,
+acquisition 시작에는 공식 활용가이드대로 `largeUpjongList`를 조회한 뒤
+`middleUpjongList`를 `indsLclsCd`별로, `smallUpjongList`를
+`indsLclsCd`+`indsMclsCd`별로 조회한다. parent별 code/name을 합친 전체가 tracked
+artifact와 정확히 일치한 경우에만 18개 교육업종 partition을 요청하며, parent별
+taxonomy 응답 bytes를 raw bundle에 보존한다. 불일치나 schema 오류는
+`TAXONOMY_CHANGED`로 store 요청 전에 중단한다. source 상가업소 API의
+`이용허락범위 제한 없음`, 제공기관,
 국세청/카드사 원천 고지와 공공데이터포털 제3자 권리 정책을 함께 검토했다. 검토
 evidence SHA-256은
 `e66a879b6ce35af441c4b92b58711c7a2d7d538c87659883da6ab298fd98c86d`다. 제3자

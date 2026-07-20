@@ -91,7 +91,14 @@ class SbizAcademyAdapter:
         )
 
     def _iter_rows(self, artifacts, observed_at: datetime):
-        taxonomy_values: dict[str, object] = {}
+        taxonomy_values: dict[str, list[dict[str, str]]] = {
+            "taxonomy-large": [],
+            "taxonomy-middle": [],
+            "taxonomy-small": [],
+        }
+        taxonomy_artifacts_seen: set[str] = set()
+        taxonomy_stage = -1
+        taxonomy_validated = False
         expected_page: dict[str, int] = {}
         expected_total: dict[str, int] = {}
         seen_count: dict[str, int] = {}
@@ -101,17 +108,35 @@ class SbizAcademyAdapter:
         for artifact in artifacts:
             if artifact.media_type != "application/json":
                 raise RawPayloadError("Sbiz artifact type is invalid", "BUNDLE_MANIFEST_INVALID")
-            if artifact.logical_name in {"taxonomy-large", "taxonomy-middle", "taxonomy-small"}:
-                if page_started or artifact.logical_name in taxonomy_values:
+            taxonomy_identity = _taxonomy_artifact_identity(artifact.logical_name)
+            if taxonomy_identity is not None:
+                artifact_name, parent_code, stage = taxonomy_identity
+                if (
+                    page_started
+                    or stage < taxonomy_stage
+                    or artifact.logical_name in taxonomy_artifacts_seen
+                ):
                     raise RawPayloadError("Sbiz taxonomy order is invalid", "TAXONOMY_CHANGED")
-                taxonomy_values[artifact.logical_name] = _taxonomy_page(
-                    artifact.content, artifact.logical_name
-                )
+                rows = _taxonomy_page(artifact.content, artifact_name)
+                if parent_code is not None and any(
+                    not row["code"].startswith(parent_code) for row in rows
+                ):
+                    raise RawPayloadError(
+                        "Sbiz taxonomy parent changed", "TAXONOMY_CHANGED"
+                    )
+                existing_codes = {row["code"] for row in taxonomy_values[artifact_name]}
+                if any(row["code"] in existing_codes for row in rows):
+                    raise RawPayloadError(
+                        "Sbiz taxonomy code is duplicated", "TAXONOMY_CHANGED"
+                    )
+                taxonomy_values[artifact_name].extend(rows)
+                taxonomy_values[artifact_name].sort(key=lambda item: item["code"])
+                taxonomy_artifacts_seen.add(artifact.logical_name)
+                taxonomy_stage = stage
                 continue
-            if set(taxonomy_values) != {"taxonomy-large", "taxonomy-middle", "taxonomy-small"}:
-                raise RawPayloadError("Sbiz taxonomy artifacts are incomplete", "TAXONOMY_CHANGED")
-            if taxonomy_fingerprint(taxonomy_values) != self._taxonomy.fingerprint:
-                raise RawPayloadError("Sbiz taxonomy fingerprint changed", "TAXONOMY_CHANGED")
+            if not taxonomy_validated:
+                _validate_taxonomy_values(taxonomy_values, self._taxonomy.fingerprint)
+                taxonomy_validated = True
             page_started = True
             parts = artifact.logical_name.rsplit("-page-", 1)
             if len(parts) != 2 or not parts[1].isdigit():
@@ -161,15 +186,42 @@ class SbizAcademyAdapter:
                         "status": "OPEN",
                     }
                 )
-        if set(taxonomy_values) != {"taxonomy-large", "taxonomy-middle", "taxonomy-small"}:
-            raise RawPayloadError("Sbiz taxonomy artifacts are incomplete", "TAXONOMY_CHANGED")
-        if taxonomy_fingerprint(taxonomy_values) != self._taxonomy.fingerprint:
-            raise RawPayloadError("Sbiz taxonomy fingerprint changed", "TAXONOMY_CHANGED")
+        if not taxonomy_validated:
+            _validate_taxonomy_values(taxonomy_values, self._taxonomy.fingerprint)
         if set(expected_page) != set(self._taxonomy.allowed_small_categories):
             raise RawPayloadError("Sbiz partitions are incomplete", "PROVIDER_COVERAGE_INCOMPLETE")
         for code, total in expected_total.items():
             if seen_count.get(code, 0) != total:
                 raise RawPayloadError("Sbiz total does not match rows", "PROVIDER_TOTAL_COUNT_MISMATCH")
+
+
+def _taxonomy_artifact_identity(
+    logical_name: str,
+) -> tuple[str, str | None, int] | None:
+    if logical_name == "taxonomy-large":
+        return "taxonomy-large", None, 0
+    for artifact_name, stage in (("taxonomy-middle", 1), ("taxonomy-small", 2)):
+        if logical_name == artifact_name:
+            return artifact_name, None, stage
+        prefix = f"{artifact_name}-"
+        if logical_name.startswith(prefix):
+            parent = logical_name[len(prefix):].upper()
+            if parent and parent.isalnum():
+                return artifact_name, parent, stage
+    return None
+
+
+def _validate_taxonomy_values(
+    values: dict[str, list[dict[str, str]]], expected_fingerprint: str
+) -> None:
+    if any(not rows for rows in values.values()):
+        raise RawPayloadError(
+            "Sbiz taxonomy artifacts are incomplete", "TAXONOMY_CHANGED"
+        )
+    if taxonomy_fingerprint(values) != expected_fingerprint:
+        raise RawPayloadError(
+            "Sbiz taxonomy fingerprint changed", "TAXONOMY_CHANGED"
+        )
 
 
 def _json(content: bytes) -> object:

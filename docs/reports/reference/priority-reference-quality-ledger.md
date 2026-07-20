@@ -82,7 +82,7 @@ live 필수 항목이 남으면 readiness를 `Partial`로 유지한다.
 | F3 static composition·CLI | `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 | D1 AsciiDoc artifact | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
 | NEIS | source 이용조건·collector·projection·summary observer offline `Pass`, live 미완료 | `10.0/10` | `3.0/10 Partial` | 금지 |
-| Sbiz S2 collector | source 이용조건·공식 taxonomy contract·collector·adapter·generic refresh offline `Pass`, live taxonomy 변경 감지 | `10.0/10` | `3.0/10 Partial` | 금지 |
+| Sbiz S2 collector | source 이용조건·공식 taxonomy contract·parent scoped collector·adapter·generic refresh offline `Pass`, live taxonomy 변경 감지 | `10.0/10` | `3.0/10 Partial` | 금지 |
 | Sbiz S2-P grounded location | exact projection·grounded location observer offline `Pass` | `10.0/10` | `3.0/10 Partial` | 금지 |
 | 대규모점포 | bounded API client·raw JSON pages·OBSERVED_AT adapter·기존 projection `Pass`, live auth 차단 | `10.0/10` | `2.0/10 Partial` | 금지 |
 | 철도 S4 collector | source 계약·download·1,099행/좌표 100% 확인, provider key 중복·row 기준일 혼재로 quality fail | `9.5/10` | `3.0/10 Partial` | 금지 |
@@ -129,6 +129,12 @@ NEIS 구현 점수는 source별 이용조건 evidence SHA-256, private raw·내�
 비투영, exact 지역 집계, A등급 grounding, 고정 자원 제한과 회귀 근거를 충족해
 `10.0/10`으로 평가했다. 실제 key·provider·S3·운영 DB·chatbot 검증은 남아 실제
 데이터 readiness는 `3.0/10 Partial`이고 activation은 금지한다.
+
+Sbiz live taxonomy unscoped 응답은 대·중·소 `25/266/1,255`로 공식 포털과 활용가이드의
+`10/75/247`과 달랐다. collector는 공식 가이드대로 중분류를 대분류별로, 소분류를
+대·중분류별로 요청하고 parent별 raw response를 보존하도록 수정했지만 첫 대분류
+mismatch에서 store 요청 전 차단한다. 새 학교·온라인·인적용역 분류를 교육 위치
+allowlist로 임의 편입하지 않는다.
 
 Sbiz `academy_lookup` observer는 기본 800m, 명시 범위 100..2,000m, 최대 5건과
 전국 좌표 coverage 95%를 fail-closed로 적용한다. Sbiz 위치는 B등급이며 NFKC 상호명,

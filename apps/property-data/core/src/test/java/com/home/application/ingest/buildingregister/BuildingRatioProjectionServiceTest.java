@@ -3,6 +3,7 @@ package com.home.application.ingest.buildingregister;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.home.domain.complex.buildingregister.BuildingRatioField;
 import com.home.domain.complex.buildingregister.BuildingRatioProjectionOutcome;
 import java.util.List;
 import java.util.UUID;
@@ -33,7 +34,7 @@ class BuildingRatioProjectionServiceTest {
         assertThat(summary.candidateCount()).isEqualTo(2);
         assertThat(summary.outcomes())
                 .containsEntry(BuildingRatioProjectionOutcome.APPLIED, 1)
-                .containsEntry(BuildingRatioProjectionOutcome.ALREADY_EQUAL, 1);
+                .containsEntry(BuildingRatioProjectionOutcome.SOURCE_MISSING, 1);
     }
 
     private static final class FakeRepository implements BuildingRatioProjectionRepository {
@@ -45,15 +46,18 @@ class BuildingRatioProjectionServiceTest {
         }
 
         @Override
-        public List<Long> findSelectedCandidateIds(UUID collectionId, Long fromComplexId, Long toComplexId, int limit) {
-            return List.of(1L, 2L);
+        public List<BuildingRatioProjectionTarget> findProjectionTargets(
+                UUID collectionId, Long fromComplexId, Long toComplexId, int limit) {
+            return List.of(
+                    new BuildingRatioProjectionTarget(10, BuildingRatioField.BUILDING_COVERAGE_RATIO, 1L),
+                    new BuildingRatioProjectionTarget(10, BuildingRatioField.FLOOR_AREA_RATIO, null));
         }
 
         @Override
-        public BuildingRatioProjectionOutcome project(UUID requestId, long candidateId) {
-            return candidateId == 1
+        public BuildingRatioProjectionOutcome project(UUID requestId, BuildingRatioProjectionTarget target) {
+            return target.candidateId() != null
                     ? BuildingRatioProjectionOutcome.APPLIED
-                    : BuildingRatioProjectionOutcome.ALREADY_EQUAL;
+                    : BuildingRatioProjectionOutcome.SOURCE_MISSING;
         }
     }
 }

@@ -47,7 +47,6 @@ chmod +x "$tmp_dir/bin/docker"
 
 property_vars="$tmp_dir/property.env"
 ai_vars="$tmp_dir/ai.env"
-ai_vars_without_provider="$tmp_dir/ai-without-provider.env"
 ai_vars_without_neis="$tmp_dir/ai-without-neis.env"
 printf '%s\n' \
     'AI_DATA_MIGRATOR_DB_PASSWORD=migrator-fixture-secret' \
@@ -64,11 +63,8 @@ printf '%s\n' \
     'HOME_AI_RAW_S3_ENDPOINT=http://minio:9000' \
     'HOME_AI_DATA_GO_KR_SERVICE_KEY=provider-fixture-secret' \
     'HOME_AI_NEIS_SERVICE_KEY=neis-fixture-secret' >"$ai_vars"
-grep -Ev '^HOME_AI_(DATA_GO_KR|NEIS)_SERVICE_KEY=' "$ai_vars" \
-    >"$ai_vars_without_provider"
 grep -Ev '^HOME_AI_NEIS_SERVICE_KEY=' "$ai_vars" >"$ai_vars_without_neis"
-chmod 600 "$property_vars" "$ai_vars" "$ai_vars_without_provider" \
-    "$ai_vars_without_neis"
+chmod 600 "$property_vars" "$ai_vars" "$ai_vars_without_neis"
 
 [[ -x "$runner" ]] || {
     echo '상태: Fail - local reference refresh runner가 없습니다.' >&2
@@ -131,13 +127,11 @@ if grep -Fq -- '--env HOME_AI_DATA_GO_KR_SERVICE_KEY' "$docker_log"; then
 fi
 grep -Fq 'home-ai-reference-refresh --source edu.academy-registry' "$docker_log"
 
-output="$(
-    REFERENCE_REFRESH_TEST_AI_VARS_FILE="$ai_vars_without_provider" \
-        run_refresh --source retail.large-store
-)"
+output="$(run_refresh --source retail.large-store)"
 grep -Fq 'sourceId: retail.large-store' <<<"$output"
-if grep -Eq -- '--env HOME_AI_(DATA_GO_KR|NEIS)_SERVICE_KEY' "$docker_log"; then
-    echo '상태: Fail - file refresh에 provider secret이 전달됐습니다.' >&2
+grep -Fq -- '--env HOME_AI_DATA_GO_KR_SERVICE_KEY' "$docker_log"
+if grep -Fq -- '--env HOME_AI_NEIS_SERVICE_KEY' "$docker_log"; then
+    echo '상태: Fail - retail refresh에 NEIS secret이 전달됐습니다.' >&2
     exit 1
 fi
 grep -Fq 'home-ai-reference-refresh --source retail.large-store' "$docker_log"
@@ -153,7 +147,7 @@ for source_id in \
     grep -Fq "sourceId: $source_id" <<<"$output"
     line="$(grep -F "home-ai-reference-refresh --source $source_id" "$docker_log")"
     case "$source_id" in
-        edu.school-location|place.sbiz-academy)
+        edu.school-location|place.sbiz-academy|retail.large-store)
             grep -Fq -- '--env HOME_AI_DATA_GO_KR_SERVICE_KEY' <<<"$line"
             ! grep -Fq -- '--env HOME_AI_NEIS_SERVICE_KEY' <<<"$line"
             ;;
@@ -161,7 +155,7 @@ for source_id in \
             grep -Fq -- '--env HOME_AI_NEIS_SERVICE_KEY' <<<"$line"
             ! grep -Fq -- '--env HOME_AI_DATA_GO_KR_SERVICE_KEY' <<<"$line"
             ;;
-        retail.large-store|transport.rail-station)
+        transport.rail-station)
             ! grep -Eq -- '--env HOME_AI_(DATA_GO_KR|NEIS)_SERVICE_KEY' <<<"$line"
             ;;
     esac

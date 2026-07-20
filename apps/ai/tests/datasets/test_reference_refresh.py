@@ -96,6 +96,20 @@ def test_static_source_composition_matches_fixed_priority_order() -> None:
     )
 
 
+def test_retail_source_receives_data_go_kr_key_and_not_neis_key() -> None:
+    assert reference_refresh._source_environment(
+        "retail.large-store",
+        {
+            "HOME_AI_DATA_GO_KR_SERVICE_KEY": "data-key",
+            "HOME_AI_NEIS_SERVICE_KEY": "must-not-leak",
+            "HOME_AI_IMPORTER_DSN": "dsn",
+        },
+    ) == {
+        "HOME_AI_DATA_GO_KR_SERVICE_KEY": "data-key",
+        "HOME_AI_IMPORTER_DSN": "dsn",
+    }
+
+
 def test_approved_neis_source_uses_static_override_and_only_neis_secret(monkeypatch, capsys) -> None:
     class Catalog:
         source_ids = ("edu.academy-registry",)

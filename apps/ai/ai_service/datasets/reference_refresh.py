@@ -38,7 +38,7 @@ _SOURCE_SECRET_KEYS = {
     "edu.school-location": ("HOME_AI_DATA_GO_KR_SERVICE_KEY",),
     "edu.academy-registry": ("HOME_AI_NEIS_SERVICE_KEY",),
     "place.sbiz-academy": ("HOME_AI_DATA_GO_KR_SERVICE_KEY",),
-    "retail.large-store": (),
+    "retail.large-store": ("HOME_AI_DATA_GO_KR_SERVICE_KEY",),
     "transport.rail-station": (),
 }
 

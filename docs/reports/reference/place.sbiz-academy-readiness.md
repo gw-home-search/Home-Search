@@ -48,13 +48,17 @@ checksum:
 - live taxonomy preflight 최소 GREEN: 고정 endpoint 순서, raw response 보존,
   code/name exact 비교와 `TAXONOMY_CHANGED` fail-closed를 추가했다.
 - 좁은 회귀: Sbiz collector·adapter·ingest·projection·observer·composition `87 passed`.
-- 전체 AI 회귀: `554 passed`, coverage `90.18%`.
+- 최신 전체 AI 회귀: `564 passed`, coverage `90.10%`.
 
 taxonomy contract foundation은 공식 artifact 이용조건·출처, 고정 schema, 원본/추적
 checksum, 계층 count, P1 allowlist, canonical fingerprint, path·symlink 경계, fail-closed
 오류, TDD·전체 회귀, AsciiDoc와 추적성을 모두 충족해 `10.0/10 Pass`로 평가한다.
 taxonomy foundation 점수는 S2 전체 collector 점수나 실제 데이터 readiness를
 대신하지 않는다.
+
+2026-07-20 live 재검증은 key 인증 후 official taxonomy와 tracked fingerprint가
+달라 `TAXONOMY_CHANGED`로 store partition 요청 전에 중단했다. acquisition은 `0`이며
+activation은 계속 금지한다.
 
 ## S2 collector 구현 품질 평가
 

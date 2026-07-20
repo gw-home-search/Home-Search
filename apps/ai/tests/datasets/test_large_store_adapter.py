@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import zipfile
 from dataclasses import replace
 from datetime import UTC, date, datetime
@@ -107,6 +108,54 @@ def test_epsg_5174_coordinates_are_preserved_and_transformed_to_wgs84() -> None:
     assert abs(float(point["longitude"]) - 126.978) < 0.00001
     assert point["subcategory"] == "LARGE_MART"
     assert point["status"] == "OPEN"
+
+
+def test_api_pages_map_to_existing_projection_without_telephone() -> None:
+    observed_at = datetime(2026, 7, 20, 5, tzinfo=UTC)
+    legacy = _row()
+    provider_row = {
+        "MNG_NO": legacy["관리번호"],
+        "OPN_ATMY_GRP_CD": legacy["개방자치단체코드"],
+        "SALS_STTS_NM": legacy["영업상태명"],
+        "BPLC_NM": legacy["사업장명"],
+        "LOTNO_ADDR": legacy["소재지전체주소"],
+        "ROAD_NM_ADDR": legacy["도로명전체주소"],
+        "BZSTAT_SE_NM": legacy["업태구분명"],
+        "CRD_INFO_X": legacy["좌표정보(X)"],
+        "CRD_INFO_Y": legacy["좌표정보(Y)"],
+        "DAT_UPDT_PNT": "20260718000000",
+        "TELNO": "02-0000-0000",
+    }
+    content = json.dumps(
+        {
+            "response": {
+                "header": {"resultCode": "00", "resultMsg": "NORMAL SERVICE."},
+                "body": {
+                    "dataType": "JSON", "numOfRows": 100, "pageNo": 1,
+                    "totalCount": 1, "items": {"item": [provider_row]},
+                },
+            }
+        }
+    ).encode()
+    bundle = build_deterministic_bundle(
+        source_id="retail.large-store",
+        endpoint_path="/1741000/large_scale_retail_stores/info",
+        artifacts=(BundleArtifact("page-000001", "json", "application/json", content),),
+        temporal_value=observed_at,
+    )
+    contract = replace(
+        _contract(), temporal_basis="OBSERVED_AT", file_format="JSON",
+        schema_version="large-store-v2",
+        acquisition_url="https://apis.data.go.kr/1741000/large_scale_retail_stores/info",
+    )
+
+    rows = list(LargeStoreAdapter().parse(bundle, contract, source_date=None).rows)
+
+    row = rows[0].row_data
+    assert row["facility_id"] == "store-1"
+    assert row["reference_date"] == "2026-07-20"
+    assert "TELNO" not in row
+    assert "telephone" not in row
 
 
 def test_large_store_file_adapter_streams_bundle_artifact(

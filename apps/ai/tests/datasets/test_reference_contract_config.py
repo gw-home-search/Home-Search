@@ -31,6 +31,9 @@ SBIZ_LICENSE_EVIDENCE_PATH = (
     / "license_evidence"
     / "place.sbiz-academy.txt"
 )
+RETAIL_LICENSE_EVIDENCE_PATH = (
+    Path(__file__).parents[2] / "config" / "license_evidence" / "retail.large-store.txt"
+)
 
 
 def test_catalog_loads_the_fixed_source_order_and_approved_sources() -> None:
@@ -84,23 +87,25 @@ def test_catalog_loads_the_fixed_source_order_and_approved_sources() -> None:
     assert sbiz.license.terms_fingerprint == sha256(
         SBIZ_LICENSE_EVIDENCE_PATH.read_bytes()
     ).hexdigest()
-    retail = catalog.get("retail.large-store")
+    retail = catalog.approved("retail.large-store")
     assert retail.acquisition.base_url == (
-        "https://file.localdata.go.kr/file/download/large_scale_retail_stores/info"
+        "https://apis.data.go.kr/1741000/large_scale_retail_stores/info"
     )
-    assert retail.acquisition.source_date == date(2025, 11, 27)
-    assert retail.acquisition.referer_url == (
-        "https://file.localdata.go.kr/file/large_scale_retail_stores/info"
+    assert retail.acquisition.mode == "api"
+    assert retail.acquisition.source_date is None
+    assert retail.temporal.basis == "OBSERVED_AT"
+    assert retail.license.terms_url == (
+        "https://www.data.go.kr/data/15154948/openapi.do"
     )
+    assert retail.license.terms_fingerprint == sha256(
+        RETAIL_LICENSE_EVIDENCE_PATH.read_bytes()
+    ).hexdigest()
+    assert retail.license.public_redistribution_allowed is False
     rail = catalog.get("transport.rail-station")
     assert rail.acquisition.base_url == (
         "https://data.kric.go.kr/rips/dataset/download.file"
     )
     assert rail.acquisition.fixed_query == "type=filedata&id=32&operation=1"
-
-    with pytest.raises(LicenseNotApprovedError):
-        catalog.approved("retail.large-store")
-
 
 def test_contract_rejects_credentials_queries_and_unallowlisted_acquisition_paths(
     tmp_path: Path,

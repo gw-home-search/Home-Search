@@ -1,1 +1,1 @@
-HTTP 200 text/csv; sanitized large-store header fixture
+HTTP 200 application/json; sanitized paginated large-store fixture

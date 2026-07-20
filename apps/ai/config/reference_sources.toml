@@ -182,29 +182,27 @@ third_party_rights = true
 [[sources]]
 id = "retail.large-store"
 provider = "행정안전부"
-source_name = "전국대규모및준대규모점포표준데이터"
-landing_url = "https://www.data.go.kr/data/15114138/standard.do"
+source_name = "생활_대규모점포 조회서비스"
+landing_url = "https://www.data.go.kr/data/15154948/openapi.do"
 evidence_grade = "A"
 owner = "apps/ai"
-normalization_schema_version = "large-store-v1"
+normalization_schema_version = "large-store-v2"
 
 [sources.acquisition]
-mode = "file"
-base_url = "https://file.localdata.go.kr/file/download/large_scale_retail_stores/info"
-referer_url = "https://file.localdata.go.kr/file/large_scale_retail_stores/info"
-allowed_hosts = ["file.localdata.go.kr"]
-allowed_path_prefixes = ["/file/download/large_scale_retail_stores/"]
-format = "CSV"
+mode = "api"
+base_url = "https://apis.data.go.kr/1741000/large_scale_retail_stores/info"
+allowed_hosts = ["apis.data.go.kr"]
+allowed_path_prefixes = ["/1741000/large_scale_retail_stores/"]
+format = "JSON"
 encoding = "UTF-8"
 source_crs = "EPSG:5174"
-source_date = 2025-11-27
 maximum_bundle_bytes = 268435456
-redirect_policy = "ALLOWLISTED_ONE_HOP"
+redirect_policy = "REJECT"
 
 [sources.temporal]
-basis = "SOURCE_DATE"
-freshness_days = 40
-refresh_profile = "MONTHLY"
+basis = "OBSERVED_AT"
+freshness_days = 3
+refresh_profile = "DAILY"
 
 [sources.quality]
 minimum_rows = 2000
@@ -215,15 +213,16 @@ minimum_region_coordinate_ratio = 0.90
 maximum_rejected_ratio = 0.0
 
 [sources.license]
-status = "PENDING"
-terms_url = "https://www.data.go.kr/data/15114138/standard.do"
-terms_fingerprint = ""
-reviewed_by = ""
-attribution_text = ""
-raw_private_storage_allowed = false
-internal_derivative_allowed = false
+status = "APPROVED"
+terms_url = "https://www.data.go.kr/data/15154948/openapi.do"
+terms_fingerprint = "02bce96a68d777801a4e5ac4cfe71c3e8d9d958ef20eb8a8eb362dc21e6fe2d4"
+reviewed_on = 2026-07-20
+reviewed_by = "official-source-review"
+attribution_text = "출처: 공공데이터포털 행정안전부 생활_대규모점포 조회서비스"
+raw_private_storage_allowed = true
+internal_derivative_allowed = true
 public_redistribution_allowed = false
-third_party_rights = false
+third_party_rights = true
 
 [[sources]]
 id = "transport.rail-station"

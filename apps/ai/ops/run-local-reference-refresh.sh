@@ -36,13 +36,13 @@ if [[ "$selector" == "--family" && "$selector_value" == "priority" ]]; then
     needs_neis_key=true
 elif [[ "$selector" == "--source" ]]; then
     case "$selector_value" in
-        edu.school-location|place.sbiz-academy)
+        edu.school-location|place.sbiz-academy|retail.large-store)
             needs_data_go_kr_key=true
             ;;
         edu.academy-registry)
             needs_neis_key=true
             ;;
-        retail.large-store|transport.rail-station)
+        transport.rail-station)
             ;;
         *)
             usage
@@ -266,7 +266,7 @@ run_source() {
         --env AWS_SECRET_ACCESS_KEY
     )
     case "$source_id" in
-        edu.school-location|place.sbiz-academy)
+        edu.school-location|place.sbiz-academy|retail.large-store)
             if [[ -z "$data_go_kr_service_key" ]]; then
                 print_source_configuration_failure "$source_id"
                 return 2

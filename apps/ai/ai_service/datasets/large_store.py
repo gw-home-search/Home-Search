@@ -2,16 +2,21 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import math
-from datetime import date
+import re
+from datetime import date, datetime
 from pathlib import Path
 from typing import TextIO
 
 from pyproj import Transformer
 
-from .bundle import extract_single_artifact_bundle_file, read_deterministic_bundle
+from .bundle import (
+    extract_single_artifact_bundle_file, read_deterministic_bundle,
+    read_deterministic_bundle_file,
+)
 from .contracts import ReferenceSourceContract
-from .models import DatasetSourceContract, ParsedDataset, QualityIssue
+from .models import DatasetSourceContract, ParsedDataset, ParsedRow, QualityIssue
 from .secure_temp import SecureTempWorkspace
 from .validation import RawPayloadError
 
@@ -57,14 +62,25 @@ class LargeStoreAdapter:
         *,
         source_date: date | None,
     ) -> ParsedDataset:
-        if contract.source_id != SOURCE_ID or source_date is None:
+        if contract.source_id != SOURCE_ID:
             raise RawPayloadError("large-store source contract mismatch", "SOURCE_CONTRACT_MISMATCH")
         bundle = read_deterministic_bundle(
             raw_bytes,
             expected_source_id=SOURCE_ID,
             maximum_bytes=_MAX_BUNDLE_BYTES,
         )
-        if bundle.temporal_value != source_date or len(bundle.artifacts) != 1:
+        if contract.temporal_basis == "OBSERVED_AT" and source_date is None:
+            if not isinstance(bundle.temporal_value, datetime):
+                raise RawPayloadError(
+                    "large-store observed time is missing", "BUNDLE_MANIFEST_INVALID"
+                )
+            return ParsedDataset(rows=_iter_api_rows(bundle.artifacts, bundle.temporal_value))
+        if (
+            contract.temporal_basis != "SOURCE_DATE"
+            or source_date is None
+            or bundle.temporal_value != source_date
+            or len(bundle.artifacts) != 1
+        ):
             raise RawPayloadError("large-store bundle metadata mismatch", "BUNDLE_MANIFEST_INVALID")
         artifact = bundle.artifacts[0]
         if artifact.media_type != "text/csv":
@@ -82,7 +98,22 @@ class LargeStoreAdapter:
         *,
         source_date: date | None,
     ) -> ParsedDataset:
-        if contract.source_id != SOURCE_ID or source_date is None:
+        if contract.source_id != SOURCE_ID:
+            raise RawPayloadError(
+                "large-store source contract mismatch", "SOURCE_CONTRACT_MISMATCH"
+            )
+        if contract.temporal_basis == "OBSERVED_AT" and source_date is None:
+            bundle = read_deterministic_bundle_file(
+                raw_path, expected_source_id=SOURCE_ID,
+                maximum_bytes=_MAX_BUNDLE_BYTES,
+                maximum_artifact_bytes=4 * 1024 * 1024,
+            )
+            if not isinstance(bundle.temporal_value, datetime):
+                raise RawPayloadError(
+                    "large-store observed time is missing", "BUNDLE_MANIFEST_INVALID"
+                )
+            return ParsedDataset(rows=_iter_api_rows(bundle.artifacts, bundle.temporal_value))
+        if contract.temporal_basis != "SOURCE_DATE" or source_date is None:
             raise RawPayloadError(
                 "large-store source contract mismatch", "SOURCE_CONTRACT_MISMATCH"
             )
@@ -117,49 +148,7 @@ def _parse_csv(stream: TextIO, source_date: date) -> ParsedDataset:
     issues: list[QualityIssue] = []
     rejections: dict[int, tuple[str, ...]] = {}
     for row_number, provider_row in enumerate(reader, start=1):
-        status_value = _clean(provider_row.get("영업상태명"))
-        subtype_value = _clean(provider_row.get("업태구분명"))
-        status = _STATUS.get(status_value)
-        subtype = _SUBCATEGORY.get(subtype_value)
-        reasons: list[str] = []
-        if status is None:
-            reasons.append("PROVIDER_STATUS_UNKNOWN")
-        if subtype is None:
-            reasons.append("RETAIL_SUBTYPE_NOT_ALLOWED")
-        original_x = _number(provider_row.get("좌표정보(X)"))
-        original_y = _number(provider_row.get("좌표정보(Y)"))
-        longitude: float | None = None
-        latitude: float | None = None
-        fact_kind = "REGISTRY"
-        if original_x is not None or original_y is not None:
-            if original_x is None or original_y is None:
-                reasons.append("COORDINATE_PAIR_INCOMPLETE")
-            else:
-                longitude, latitude = _TRANSFORMER.transform(original_x, original_y)
-                if not _korea_coordinate(latitude, longitude):
-                    reasons.append("KOREA_COORDINATE_OUT_OF_RANGE")
-                else:
-                    fact_kind = "POINT"
-        normalized = {
-            "facility_id": _clean(provider_row.get("관리번호")),
-            "name": _clean(provider_row.get("사업장명")),
-            "category": "RETAIL",
-            "subcategory": subtype or subtype_value,
-            "status": status or "UNKNOWN",
-            "road_address": _optional(provider_row.get("도로명전체주소")),
-            "lot_address": _optional(provider_row.get("소재지전체주소")),
-            "region_code": _optional(provider_row.get("개방자치단체코드")),
-            "region_name": _region_name(
-                provider_row.get("도로명전체주소") or provider_row.get("소재지전체주소")
-            ),
-            "latitude": latitude,
-            "longitude": longitude,
-            "original_crs": "EPSG:5174",
-            "original_x": original_x,
-            "original_y": original_y,
-            "reference_date": source_date.isoformat(),
-            "fact_kind": fact_kind,
-        }
+        normalized, reasons = _normalize(provider_row, source_date)
         rows.append(normalized)
         if reasons:
             rejections[row_number] = tuple(reasons)
@@ -167,6 +156,131 @@ def _parse_csv(stream: TextIO, source_date: date) -> ParsedDataset:
                 QualityIssue(reason, "WARNING", row_number, {}) for reason in reasons
             )
     return ParsedDataset(rows=rows, issues=tuple(issues), row_rejections=rejections)
+
+
+def _iter_api_rows(artifacts, observed_at: datetime):
+    expected_page = 1
+    expected_total: int | None = None
+    seen_count = 0
+    for artifact in artifacts:
+        match = re.fullmatch(r"page-([0-9]{6})", artifact.logical_name)
+        if artifact.media_type != "application/json" or match is None:
+            raise RawPayloadError(
+                "large-store artifact metadata is invalid", "BUNDLE_MANIFEST_INVALID"
+            )
+        page_number = int(match.group(1))
+        if page_number != expected_page:
+            raise RawPayloadError(
+                "large-store pages are not contiguous", "PROVIDER_PAGE_INVALID"
+            )
+        page_total, provider_rows = _api_page(artifact.content, page_number)
+        if expected_total is None:
+            expected_total = page_total
+        elif page_total != expected_total:
+            raise RawPayloadError(
+                "large-store total changed between pages",
+                "PROVIDER_TOTAL_COUNT_MISMATCH",
+            )
+        for provider_row in provider_rows:
+            seen_count += 1
+            normalized, reasons = _normalize(_api_to_legacy(provider_row), observed_at.date())
+            yield ParsedRow(normalized, tuple(reasons))
+        expected_page += 1
+    if expected_total is None or seen_count != expected_total:
+        raise RawPayloadError(
+            "large-store total count does not match rows",
+            "PROVIDER_TOTAL_COUNT_MISMATCH",
+        )
+
+
+def _api_page(content: bytes, expected_page: int) -> tuple[int, list[dict[str, object]]]:
+    try:
+        value = json.loads(content)
+        response = value["response"]
+        header = response["header"]
+        body = response["body"]
+        rows = body["items"]["item"]
+        total = body["totalCount"]
+        if (
+            header["resultCode"] != "00"
+            or body["dataType"] != "JSON"
+            or body["numOfRows"] != 100
+            or body["pageNo"] != expected_page
+            or isinstance(total, bool)
+            or not isinstance(total, int)
+            or total < 0
+            or not isinstance(rows, list)
+            or len(rows) > 100
+            or not all(isinstance(row, dict) for row in rows)
+        ):
+            raise ValueError
+        return total, rows
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        raise RawPayloadError(
+            "large-store provider page is invalid", "PROVIDER_PAGE_INVALID"
+        ) from None
+
+
+def _api_to_legacy(row: dict[str, object]) -> dict[str, object]:
+    return {
+        "관리번호": row.get("MNG_NO"),
+        "개방자치단체코드": row.get("OPN_ATMY_GRP_CD"),
+        "영업상태명": row.get("SALS_STTS_NM"),
+        "사업장명": row.get("BPLC_NM"),
+        "소재지전체주소": row.get("LOTNO_ADDR"),
+        "도로명전체주소": row.get("ROAD_NM_ADDR"),
+        "업태구분명": row.get("BZSTAT_SE_NM"),
+        "좌표정보(X)": row.get("CRD_INFO_X"),
+        "좌표정보(Y)": row.get("CRD_INFO_Y"),
+        "데이터갱신일자": row.get("DAT_UPDT_PNT"),
+    }
+
+
+def _normalize(provider_row: dict[str, object], reference_date: date):
+    status_value = _clean(provider_row.get("영업상태명"))
+    subtype_value = _clean(provider_row.get("업태구분명"))
+    status = _STATUS.get(status_value)
+    subtype = _SUBCATEGORY.get(subtype_value)
+    reasons: list[str] = []
+    if status is None:
+        reasons.append("PROVIDER_STATUS_UNKNOWN")
+    if subtype is None:
+        reasons.append("RETAIL_SUBTYPE_NOT_ALLOWED")
+    original_x = _number(provider_row.get("좌표정보(X)"))
+    original_y = _number(provider_row.get("좌표정보(Y)"))
+    longitude: float | None = None
+    latitude: float | None = None
+    fact_kind = "REGISTRY"
+    if original_x is not None or original_y is not None:
+        if original_x is None or original_y is None:
+            reasons.append("COORDINATE_PAIR_INCOMPLETE")
+        else:
+            longitude, latitude = _TRANSFORMER.transform(original_x, original_y)
+            if not _korea_coordinate(latitude, longitude):
+                reasons.append("KOREA_COORDINATE_OUT_OF_RANGE")
+            else:
+                fact_kind = "POINT"
+    normalized = {
+        "facility_id": _clean(provider_row.get("관리번호")),
+        "name": _clean(provider_row.get("사업장명")),
+        "category": "RETAIL",
+        "subcategory": subtype or subtype_value,
+        "status": status or "UNKNOWN",
+        "road_address": _optional(provider_row.get("도로명전체주소")),
+        "lot_address": _optional(provider_row.get("소재지전체주소")),
+        "region_code": _optional(provider_row.get("개방자치단체코드")),
+        "region_name": _region_name(
+            provider_row.get("도로명전체주소") or provider_row.get("소재지전체주소")
+        ),
+        "latitude": latitude,
+        "longitude": longitude,
+        "original_crs": "EPSG:5174",
+        "original_x": original_x,
+        "original_y": original_y,
+        "reference_date": reference_date.isoformat(),
+        "fact_kind": fact_kind,
+    }
+    return normalized, reasons
 
 
 def large_store_source_contract(
@@ -199,7 +313,7 @@ def large_store_source_contract(
         maximum_rejected_ratio=reference_contract.quality.maximum_rejected_ratio,
         contains_personal_data=False,
         owner=reference_contract.owner,
-        temporal_basis="SOURCE_DATE",
+        temporal_basis=reference_contract.temporal.basis,
     )
 
 

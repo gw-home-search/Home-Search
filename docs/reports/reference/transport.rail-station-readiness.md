@@ -16,12 +16,13 @@ artifact는 owner-only temp에 기록한 뒤 deterministic bundle과 verified S3
 거치며, landing HTML URL은 network 호출 전 거부한다. 수집 실패는 provider body 없이
 safe reason code만 refresh-run에 기록한다.
 
-공공데이터포털 dataset별 이용허락 값은 비어 있다. KRIC 약관은 활용기관의 직접
-이용·재가공·배포를 정의하지만, 포털의 사전 승낙 없는 영리행위를 금지하고
-공유서비스 저작권을 제공기관에 둔다. 운영기관 원천 데이터라는 공식 provenance도
-확인했으므로 commercial/private raw 허용을 추측하지 않고 이용조건을 `PENDING`으로
-유지한다. 실제 연간 release, 500~2,000행, 좌표 100%, 역 단위 답변 병합,
-1.5km/3km chatbot live golden은 미완료다. 운영 capability는 활성화하지 않았다.
+공공데이터포털 fileData `15093755`는 `이용허락범위 제한 없음`을 명시한다. 프로젝트
+책임자는 KRIC에 전화로 계획된 Home Search 이용 가능 여부를 문의해 가능하다는 답변을
+받았다고 2026-07-20 진술했고, 서면 transcript 부재를 수용해 contract 승인을 지시했다.
+승인 범위는 원본 XLSX의 private 보관, 역명·노선·환승·좌표의 내부 가공과 출처표시
+응답이며 원본 공개 재배포와 전화번호 projection은 금지한다. 실제 연간 release,
+500~2,000행, 좌표 100%, 역 단위 답변 병합, 1.5km/3km chatbot live golden은
+미완료다. 운영 capability는 활성화하지 않았다.
 
 ## TDD 근거
 
@@ -38,8 +39,8 @@ safe reason code만 refresh-run에 기록한다.
 
 - 전체 release 구조·checksum, parser peak memory, 운영 role permission smoke가
   readiness 공백으로 남는다.
-- blocker evidence는
-  `apps/ai/config/preflight_evidence/transport.rail-station.txt`에 고정했고 SHA-256은
-  `7c7b5bcc34c53cc7edbe8518394a4f507df610ae0f23c9dace4414dc88927ae9`다.
-- 2026-07-20 live preflight는 license `PENDING`을 `CONFIGURATION_INVALID`로 반환해
-  provider body 요청 전 exit `2` 중단했다.
+- license evidence는
+  `apps/ai/config/license_evidence/transport.rail-station.txt`에 고정했고 SHA-256은
+  `14d6a007c272b75456998f5289e08ff8f61cb82f04bb2fc6a72ef9c11327ff0d`다.
+- 2026-07-20 최초 live preflight는 승인 전 license `PENDING`을
+  `CONFIGURATION_INVALID`로 반환해 provider body 요청 전 exit `2` 중단했다.

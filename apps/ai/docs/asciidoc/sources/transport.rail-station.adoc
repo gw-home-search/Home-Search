@@ -7,12 +7,14 @@ KRIC landing은 사람이 release를 검토하는 용도로만 사용한다. col
 `application/octet-stream`을 확인했다. source date는 이 검증된 filename에서만 읽고,
 HTML을 XLSX로 처리하지 않는다.
 
-공공데이터포털 dataset 이용허락 값은 비어 있다. KRIC 약관은 활용기관의 재가공·
-배포를 정의하지만 사전 승낙 없는 영리행위를 금지하고 공유서비스 저작권을
-제공기관에 둔다. 운영기관 원천 provenance도 확인했으므로 commercial/private raw
-허용을 추측하지 않는다. blocker evidence SHA-256은
-`7c7b5bcc34c53cc7edbe8518394a4f507df610ae0f23c9dace4414dc88927ae9`다. 이용조건과
-전체 artifact live 검증 전 readiness는 `Partial`이다.
+공공데이터포털 fileData `15093755`는 `이용허락범위 제한 없음`을 명시한다. KRIC
+일반 약관과의 충돌은 프로젝트 책임자가 KRIC에 전화로 문의해 Home Search의 계획된
+이용이 가능하다는 답변을 받았다고 진술해 승인했다. 서면 transcript는 없다는 제한을
+evidence에 함께 기록했으며 원본 XLSX의 private 보관, 역명·노선·환승·좌표의 내부
+가공과 출처표시 응답만 허용한다. 원본 공개 재배포와 전화번호 projection은 금지한다.
+license evidence SHA-256은
+`14d6a007c272b75456998f5289e08ff8f61cb82f04bb2fc6a72ef9c11327ff0d`다. 전체 artifact
+live 검증 전 readiness는 `Partial`이다.
 
 include::{snippets}/transport.rail-station/download-request.adoc[]
 include::{snippets}/transport.rail-station/response-headers.adoc[]

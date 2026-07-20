@@ -31,11 +31,12 @@ dataset의 private raw 저장·가공 승인으로 확대하지 않는다.
 | `edu.academy-registry` | NEIS 상세 페이지의 `이용 허락 범위 제한없음`, provider·주기·attribution evidence SHA-256 고정 | `APPROVED` | 실제 key·acquisition·S3·전국 row/freshness·chatbot golden 미검증 |
 | `place.sbiz-academy` | API의 무제한 이용 허락, 국세청/카드사 provenance·제3자 정책, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | 실제 taxonomy/store acquisition·S3·coverage·chatbot golden 미검증 |
 | `retail.large-store` | 새 행정안전부 OpenAPI 상세의 `이용허락범위 제한 없음`, 일간·2일 전 현행화, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | dataset `15154948` 활용신청 반영과 full acquisition·S3·coverage 미검증 |
-| `transport.rail-station` | fileData 상세는 `이용허락범위 제한 없음`이나 KRIC 약관은 사전 승낙 없는 영리·상업적 이용을 금지 | `PENDING` | 상충 조건의 KRIC 서면 확인과 전체 artifact 미검증 |
+| `transport.rail-station` | fileData `15093755`의 `이용허락범위 제한 없음`과 프로젝트 책임자가 보고한 KRIC 전화 승인; 서면 transcript 부재를 evidence에 명시 | `APPROVED` | 전체 artifact·S3·좌표 100%·chatbot golden 미검증 |
 
-빈 `terms_fingerprint`는 미검토가 아니라 승인 근거가 없음을 뜻한다. 승인 전에는
-collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다. NEIS는 source별
-근거를 승인했지만 live 필수 항목이 남아 동일하게 `Partial`이다.
+빈 `terms_fingerprint`는 미검토가 아니라 승인 근거가 없음을 뜻한다. 철도는 공식
+fileData 이용허락과 프로젝트 책임자의 KRIC 전화 승인 진술을 fingerprint로 고정했다.
+서면 기록이 없다는 잔여 위험은 수용하되 약관 변경 시 재검토한다. 승인된 source도
+live 필수 항목이 남으면 readiness를 `Partial`로 유지한다.
 
 ## 구현 품질 평가
 
@@ -84,7 +85,7 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다. 
 | Sbiz S2 collector | source 이용조건·공식 taxonomy contract·collector·adapter·generic refresh offline `Pass`, live taxonomy 변경 감지 | `10.0/10` | `3.0/10 Partial` | 금지 |
 | Sbiz S2-P grounded location | exact projection·grounded location observer offline `Pass` | `10.0/10` | `3.0/10 Partial` | 금지 |
 | 대규모점포 | bounded API client·raw JSON pages·OBSERVED_AT adapter·기존 projection `Pass`, live auth 차단 | `10.0/10` | `2.0/10 Partial` | 금지 |
-| 철도 S4 collector | 공식 fixed download endpoint·occurrence projection·merge offline `Pass`, live artifact 미실행 | `9.5/10` | `2.0/10 Partial` | 금지 |
+| 철도 S4 collector | source 계약 승인·공식 fixed download endpoint·occurrence projection·merge offline `Pass`, live artifact 미실행 | `9.5/10` | `3.0/10 Partial` | 금지 |
 | Offline priority integration | AI·PostGIS·MinIO·property-data·chat-bff·JWT·Compose `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 
 상세 readiness 근거는 `docs/reports/reference/readiness/`에 source별로 기록한다.
@@ -118,8 +119,8 @@ grounding 단계에서 거부한다. source 이용조건은 승인했지만 live
 provider, 운영 DB, S3 live 검증을 실행하지 않았다.
 
 후속 live preflight는 최초 key 설정 실패, NEIS `API_SERVER_ERROR`, Sbiz
-`TAXONOMY_CHANGED`, retail `API_AUTHENTICATION_FAILED`, rail license `PENDING` 차단을
-확인했다. additive migration `0010`과 runtime-only local
+`TAXONOMY_CHANGED`, retail `API_AUTHENTICATION_FAILED`, rail의 승인 전 `PENDING` 차단을
+확인했다. 철도는 이후 프로젝트 책임자의 전화 승인 진술로 계약을 승인했다. additive migration `0010`과 runtime-only local
 inspection wrapper로 acquisition 이전 실패도 0 counts·safe reason code로 audit한다.
 상세 결과는 `priority-reference-live-preflight.md`에 기록했다.
 
@@ -162,7 +163,7 @@ property-data fresh Flyway, chat-bff, signed JWT JSON/SSE, DB role, base+chatbot
 공백으로 `0.5`를 감점했다. 명령별 결과와 잔여 위험은
 `priority-reference-offline-verification.md`에 기록했다.
 
-철도 S4 구현 점수는 범위·계약·이용조건 상태 기록·raw-first 원자성·보안·실패 기록·
+철도 S4 구현 점수는 범위·계약·이용조건 승인 기록·raw-first 원자성·보안·실패 기록·
 테스트·문서·리뷰 근거를 만점으로 평가했다. fake transport와 file size bound는
 검증했지만 실제 최대 XLSX의 peak memory 측정은 live 단계 전까지 남아 성능 항목
 `0.5`를 감점했다.

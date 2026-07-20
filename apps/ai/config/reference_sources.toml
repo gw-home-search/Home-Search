@@ -259,15 +259,16 @@ minimum_region_coordinate_ratio = 1.0
 maximum_rejected_ratio = 0.0
 
 [sources.license]
-status = "PENDING"
-terms_url = "https://www.data.go.kr/data/15013205/standard.do"
-terms_fingerprint = ""
-reviewed_by = ""
-attribution_text = ""
-raw_private_storage_allowed = false
-internal_derivative_allowed = false
+status = "APPROVED"
+terms_url = "https://www.data.go.kr/data/15093755/fileData.do"
+terms_fingerprint = "14d6a007c272b75456998f5289e08ff8f61cb82f04bb2fc6a72ef9c11327ff0d"
+reviewed_on = 2026-07-20
+reviewed_by = "project-owner-telephone-attestation"
+attribution_text = "출처: 공공데이터포털·철도산업정보센터 전국도시철도역사정보표준데이터"
+raw_private_storage_allowed = true
+internal_derivative_allowed = true
 public_redistribution_allowed = false
-third_party_rights = false
+third_party_rights = true
 
 [[sources]]
 id = "medical.hira-hospital"

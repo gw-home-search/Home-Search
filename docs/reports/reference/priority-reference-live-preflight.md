@@ -15,7 +15,7 @@ safe reason code와 count만 기록했고 provider body, API key, DSN은 기록�
 | 2 | `edu.academy-registry` | exit `1` | DB role·MinIO·migration preflight 통과 후 첫 page `API_SERVER_ERROR`; acquisition `0`, active datasetVersion 없음 |
 | 3 | `place.sbiz-academy` | exit `1` | key 수정 후 인증 통과, 공식 taxonomy fingerprint 불일치로 `TAXONOMY_CHANGED`; acquisition `0` |
 | 4 | `retail.large-store` | exit `1` | 새 공식 API·license 계약 적용 후 첫 page `API_AUTHENTICATION_FAILED`; dataset `15154948` 활용신청 미반영 가능성, acquisition `0` |
-| 5 | `transport.rail-station` | exit `2` | license `PENDING`으로 `CONFIGURATION_INVALID`; provider body 요청 전 중단 |
+| 5 | `transport.rail-station` | exit `2` | 최초 실행은 license `PENDING`으로 `CONFIGURATION_INVALID`; 이후 프로젝트 책임자의 KRIC 전화 승인 진술로 contract `APPROVED`, full import 재검증 예정 |
 
 실행 명령:
 
@@ -63,7 +63,7 @@ reference docs: Pass
 - `academy_registry_summary`: readiness `3.0/10 Partial`, 활성화 금지
 - `academy_lookup`: readiness `3.0/10 Partial`, 활성화 금지
 - `retail_location`: readiness `2.0/10 Partial`, 활성화 금지
-- `rail_station_lookup`: readiness `2.0/10 Partial`, 활성화 금지
+- `rail_station_lookup`: readiness `3.0/10 Partial`, 활성화 금지
 
 기존 active pointer를 변경한 source는 없고 raw/publication 삭제나 Docker volume
 초기화도 수행하지 않았다.

@@ -34,6 +34,12 @@ SBIZ_LICENSE_EVIDENCE_PATH = (
 RETAIL_LICENSE_EVIDENCE_PATH = (
     Path(__file__).parents[2] / "config" / "license_evidence" / "retail.large-store.txt"
 )
+RAIL_LICENSE_EVIDENCE_PATH = (
+    Path(__file__).parents[2]
+    / "config"
+    / "license_evidence"
+    / "transport.rail-station.txt"
+)
 
 
 def test_catalog_loads_the_fixed_source_order_and_approved_sources() -> None:
@@ -101,11 +107,26 @@ def test_catalog_loads_the_fixed_source_order_and_approved_sources() -> None:
         RETAIL_LICENSE_EVIDENCE_PATH.read_bytes()
     ).hexdigest()
     assert retail.license.public_redistribution_allowed is False
-    rail = catalog.get("transport.rail-station")
+    rail = catalog.approved("transport.rail-station")
     assert rail.acquisition.base_url == (
         "https://data.kric.go.kr/rips/dataset/download.file"
     )
     assert rail.acquisition.fixed_query == "type=filedata&id=32&operation=1"
+    assert rail.license.terms_url == (
+        "https://www.data.go.kr/data/15093755/fileData.do"
+    )
+    assert rail.license.reviewed_on == date(2026, 7, 20)
+    assert rail.license.reviewed_by == "project-owner-telephone-attestation"
+    assert rail.license.raw_private_storage_allowed is True
+    assert rail.license.internal_derivative_allowed is True
+    assert rail.license.public_redistribution_allowed is False
+    assert rail.license.third_party_rights is True
+    assert rail.license.attribution_text == (
+        "출처: 공공데이터포털·철도산업정보센터 전국도시철도역사정보표준데이터"
+    )
+    assert rail.license.terms_fingerprint == sha256(
+        RAIL_LICENSE_EVIDENCE_PATH.read_bytes()
+    ).hexdigest()
 
 def test_contract_rejects_credentials_queries_and_unallowlisted_acquisition_paths(
     tmp_path: Path,

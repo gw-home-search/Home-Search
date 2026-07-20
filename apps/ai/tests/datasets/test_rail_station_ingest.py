@@ -9,7 +9,11 @@ from uuid import UUID
 import pytest
 
 from ai_service.datasets import rail_station_ingest, reference_refresh
-from ai_service.datasets.contracts import AcquisitionContract, load_reference_source_catalog
+from ai_service.datasets.contracts import (
+    AcquisitionContract,
+    ReferenceSourceCatalog,
+    load_reference_source_catalog,
+)
 from ai_service.datasets.file_snapshot_client import CollectedFileSnapshot, FileSnapshotError
 from ai_service.datasets.models import AcquisitionRecord, LifecycleResult
 from ai_service.datasets.raw_store import StoredRawObject
@@ -217,7 +221,15 @@ def test_landing_page_preflight_stops_before_raw_store_creation(monkeypatch) -> 
         )
 
 
-def test_pending_license_stops_before_repository_client_or_raw_store() -> None:
+def test_pending_license_stops_before_repository_client_or_raw_store(monkeypatch) -> None:
+    source = _approved_source()
+    pending_source = replace(source, license=replace(source.license, status="PENDING"))
+    monkeypatch.setattr(
+        rail_station_ingest,
+        "load_reference_source_catalog",
+        lambda _path: ReferenceSourceCatalog((pending_source,)),
+    )
+
     class NeverCalled:
         def __init__(self, *_args, **_kwargs):
             raise AssertionError("external dependency must not be created")

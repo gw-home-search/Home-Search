@@ -5,8 +5,14 @@ KRIC landing은 사람이 release를 검토하는 용도로만 사용한다. col
 않는다. 2026-07-20 header preflight에서 filename
 `전체_도시철도역사정보_20260630.xlsx`, 길이 313,132 bytes,
 `application/octet-stream`을 확인했다. source date는 이 검증된 filename에서만 읽고,
-HTML을 XLSX로 처리하지 않는다. 이용조건과 전체 artifact live 검증 전 readiness는
-`Partial`이다.
+HTML을 XLSX로 처리하지 않는다.
+
+공공데이터포털 dataset 이용허락 값은 비어 있다. KRIC 약관은 활용기관의 재가공·
+배포를 정의하지만 사전 승낙 없는 영리행위를 금지하고 공유서비스 저작권을
+제공기관에 둔다. 운영기관 원천 provenance도 확인했으므로 commercial/private raw
+허용을 추측하지 않는다. blocker evidence SHA-256은
+`7c7b5bcc34c53cc7edbe8518394a4f507df610ae0f23c9dace4414dc88927ae9`다. 이용조건과
+전체 artifact live 검증 전 readiness는 `Partial`이다.
 
 include::{snippets}/transport.rail-station/download-request.adoc[]
 include::{snippets}/transport.rail-station/response-headers.adoc[]

@@ -1,0 +1,15 @@
+source_id=transport.rail-station
+reviewed_on=2026-07-20
+dataset_url=https://www.data.go.kr/data/15013205/standard.do
+terms_url=https://data.kric.go.kr/rips/serviceInfo/clause.do
+release_landing_url=https://data.kric.go.kr/rips/M_01_01/detail.do?id=32
+license_label=<blank>
+portal_terms=활용기관은 공유서비스를 직접 이용하거나 재가공하여 배포하는 기관
+commercial_term=포털의 사전 승낙 없이 서비스를 이용한 영리행위 금지
+copyright_term=공유서비스 저작권은 제공기관에 있음
+source_provenance=전국 도시철도 운영기관 원천 데이터
+metadata_file_name=국가철도공단_도시광역철도_역사정보_20241231
+header_preflight_filename=전체_도시철도역사정보_20260630.xlsx
+header_preflight_content_type=application/octet-stream;charset=UTF-8
+header_preflight_content_length=313132
+review_decision=PENDING; commercial/private raw permission is not established for this dataset

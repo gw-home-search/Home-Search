@@ -16,9 +16,12 @@ artifact는 owner-only temp에 기록한 뒤 deterministic bundle과 verified S3
 거치며, landing HTML URL은 network 호출 전 거부한다. 수집 실패는 provider body 없이
 safe reason code만 refresh-run에 기록한다.
 
-이용조건은 `PENDING`이며 실제 연간 release, 500~2,000행, 좌표 100%,
-역 단위 답변 병합, 1.5km/3km chatbot live golden은 미완료다. 운영 capability는
-활성화하지 않았다.
+공공데이터포털 dataset별 이용허락 값은 비어 있다. KRIC 약관은 활용기관의 직접
+이용·재가공·배포를 정의하지만, 포털의 사전 승낙 없는 영리행위를 금지하고
+공유서비스 저작권을 제공기관에 둔다. 운영기관 원천 데이터라는 공식 provenance도
+확인했으므로 commercial/private raw 허용을 추측하지 않고 이용조건을 `PENDING`으로
+유지한다. 실제 연간 release, 500~2,000행, 좌표 100%, 역 단위 답변 병합,
+1.5km/3km chatbot live golden은 미완료다. 운영 capability는 활성화하지 않았다.
 
 ## TDD 근거
 
@@ -35,3 +38,6 @@ safe reason code만 refresh-run에 기록한다.
 
 - 전체 release 구조·checksum, parser peak memory, 운영 role permission smoke가
   readiness 공백으로 남는다.
+- blocker evidence는
+  `apps/ai/config/preflight_evidence/transport.rail-station.txt`에 고정했고 SHA-256은
+  `7c7b5bcc34c53cc7edbe8518394a4f507df610ae0f23c9dace4414dc88927ae9`다.

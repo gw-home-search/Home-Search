@@ -82,7 +82,7 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
 | NEIS | collector·projection·summary observer offline `Pass`, live 미완료 | `9.5/10` | `2.0/10 Partial` | 금지 |
 | Sbiz S2 collector | collector·adapter·generic refresh offline `Pass`, taxonomy 미승인 | 미채점 | `2.0/10 Partial` | 금지 |
 | Sbiz S2-P grounded location | exact projection·grounded location observer offline `Pass` | `9.5/10` | `2.0/10 Partial` | 금지 |
-| 대규모점포 | streaming file client·기존 projection `Pass`, live 미실행 | 미채점 | `3.0/10 Partial` | 금지 |
+| 대규모점포 | streaming file client·기존 projection `Pass`, live 미실행 | `9.5/10` | `3.0/10 Partial` | 금지 |
 | 철도 S4 collector | fixed URL collector orchestration·occurrence projection·merge offline `Pass`, URL 미확정 | `9.5/10` | `2.0/10 Partial` | 금지 |
 | Offline priority integration | AI·PostGIS·MinIO·property-data·chat-bff·JWT·Compose `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 
@@ -132,6 +132,12 @@ Sbiz S2-P 구현 점수는 범위·공개/내부 계약·데이터 정확성·�
 문서·bounded query·리뷰 근거를 충족했다. source별 이용조건과 실제 taxonomy 승인이
 `PENDING`이므로 이용조건 항목에서 `0.5`를 감점해 `9.5/10`으로 평가했다. 이는
 구현 commit만 허용하며 실제 데이터 readiness나 capability 활성화를 승인하지 않는다.
+
+대규모점포 구현 점수는 allowlisted one-hop streaming download, 검증된 filename 날짜,
+UTF-8·status·업태·EPSG:5174 계약, typed projection, 1km 경계와 grounding 회귀 근거를
+충족했다. 이용조건과 private raw 저장 승인이 `PENDING`이므로 이용조건 항목에서
+`0.5`를 감점해 `9.5/10`으로 평가했다. 행정코드 mapping 전에는 정상 0건을 주장하지
+않으며 실제 데이터 readiness는 `3.0/10 Partial`로 유지한다.
 
 Offline priority integration은 실제 PostGIS와 MinIO container, raw version byte 복구,
 property-data fresh Flyway, chat-bff, signed JWT JSON/SSE, DB role, base+chatbot Compose를

@@ -172,7 +172,9 @@ property-data fresh Flyway, chat-bff, signed JWT JSON/SSE, DB role, base+chatbot
 철도 S4 구현 점수는 범위·계약·이용조건 승인 기록·raw-first 원자성·보안·실패 기록·
 테스트·문서·리뷰 근거를 만점으로 평가했다. fake transport와 file size bound는
 검증했지만 실제 최대 XLSX의 peak memory 측정은 live 단계 전까지 남아 성능 항목
-`0.5`를 감점했다. 최신 KRIC exact header는 `rail-station-v2`로 분리했고, 동일 raw의
+`0.5`를 감점했다. 최신 KRIC exact header는 `rail-station-v2`로 분리했고, row 기준일을
+nullable provenance로 바로잡은 normalization은 `rail-station-v3`, malformed provenance
+날짜를 queryable warning으로 남기는 계약은 `rail-station-v4`로 분리했다. 동일 raw의
 이전 `PARSE_FAILED`를 보존하면서 새 normalization schema만 재처리하도록 acquisition
 dedupe를 `(source_id, checksum, normalization_schema_version)`으로 제한했다.
 

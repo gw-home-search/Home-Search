@@ -35,6 +35,14 @@ schema 재수집과 품질 기준만 바뀐 contract는 계속 기존 acquisitio
 publication을 차단했으며 active pointer는 없다. stop condition에 따라 임의 dedupe나
 identity 확장은 하지 않는다.
 
+row `데이터기준일자`는 파일 release date가 아니라 기관별 provenance임을 live 분포로
+확인했다. 검증된 filename의 2026-06-30은 dataset `SOURCE_DATE`로 유지하고 row 값은
+nullable provenance로 보존하도록 `rail-station-v3`와 additive migration
+`0012_nullable_rail_row_provenance_date.sql`을 적용했다. 같은 verified raw 재처리는
+1,099행 중 1,094행을 유효화하고 중복 key의 후행 5행만 거부했다. 동일 v3 재수집은
+acquisition `f6d9ca2d-7805-48c7-abe5-73961bb55a34`를 재사용했다. provider 근거 없는
+최신행 선택이나 identity 확장은 하지 않아 publication과 active pointer는 여전히 없다.
+
 공공데이터포털 fileData `15093755`는 `이용허락범위 제한 없음`을 명시한다. 프로젝트
 책임자는 KRIC에 전화로 계획된 Home Search 이용 가능 여부를 문의해 가능하다는 답변을
 받았다고 2026-07-20 진술했고, 서면 transcript 부재를 수용해 contract 승인을 지시했다.
@@ -57,6 +65,18 @@ identity 확장은 하지 않는다.
 - schema recovery RED: 최신 KRIC header fixture는 `SOURCE_SCHEMA_MISMATCH`, 동일 raw의
   새 schema 재처리는 기존 실패를 반환; exact alias와 schema-scoped acquisition
   dedupe 후 Postgres 집중 회귀 `57 passed`, 전체 AI `566 passed`, coverage `90.08%`.
+- row provenance RED: source date와 다른 정상 row date가 `SOURCE_DATE_MIXED`로 거부되고
+  release date로 덮어써졌으며 공란은 nullable projection이 불가능했다. nullable row
+  provenance와 v3 migration 후 rail 집중 회귀 `37 passed`, live accepted `1,094/1,099`.
+- quality evidence RED: 공란과 nonblank malformed row date가 모두 조용히 `NULL`이 되어
+  provider 이상을 조회할 수 없었다. v4에서 malformed 값만
+  `RAIL_ROW_REFERENCE_DATE_INVALID` warning으로 기록하고 공란은 warning 없이 허용한다.
+
+v4 actual refresh는 acquisition `d246e9c4-cb19-4cda-862a-92e8a260adbd`에 raw 1,099행,
+accepted 1,094행, rejected 5행을 기록했다. quality issue 집계는
+`RAIL_ROW_REFERENCE_DATE_INVALID:6`, `DUPLICATE_UNIQUE_KEY:5`,
+`REJECTED_ROW_RATIO_EXCEEDED:1`이다. 두 번째 v4 실행은 같은 acquisition을 재사용했다.
+성공 publication과 active pointer가 없으므로 `NoChange` 결과는 생성하지 않았다.
 
 `api-contract: compatible`
 

@@ -42,6 +42,11 @@
   연결 뒤 응답을 받지 못해 `API_TRANSPORT_FAILED`로 중단됐다. 공식 dataset
   페이지는 수정일 `2026-05-06`, 표본 데이터 기준일 `2026-03-20`으로 계속
   제공 중이므로 source contract를 임의 변경하지 않고 provider 복구 뒤 재시도한다.
+- 2026-07-20 재시도는 HTTP 200과 JSON media type까지 확인했지만 JSON parsing 이전
+  `API_ENVELOPE_INVALID`로 중단됐다. client는 non-JSON media type과 root/response/body/
+  items 구조를 body 비노출 reason code로 분리하고 additive field를 허용하도록 보강했다.
+  동일 결과가 유지되므로 dataset별 활용승인·Decoding key 또는 provider gateway 응답을
+  확인하기 전 schema를 더 완화하지 않는다.
 - 첫 page 이전 실패라 raw object, acquisition, publication은 생성되지 않았다.
   실제 SQL에서 학교 acquisition과 publication이 각각 `0`임을 확인했다.
 - test engine 기반 signed JWT JSON/SSE E2E는 통과했지만 실제 학교 observation과

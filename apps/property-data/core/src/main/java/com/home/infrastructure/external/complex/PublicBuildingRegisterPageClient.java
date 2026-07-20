@@ -1,12 +1,14 @@
 package com.home.infrastructure.external.complex;
 
 import com.home.application.ingest.buildingregister.BuildingRegisterPageClient;
+import com.home.application.ingest.buildingregister.BuildingRegisterPageFetchException;
 import com.home.application.ingest.buildingregister.BuildingRegisterPageRequest;
 import com.home.application.ingest.buildingregister.BuildingRegisterPageResponse;
 import com.home.domain.complex.buildingregister.BuildingRegisterEndpoint;
 import com.home.infrastructure.external.ExternalApiUri;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -14,6 +16,7 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResourceAccessException;
 
 public class PublicBuildingRegisterPageClient implements BuildingRegisterPageClient {
     private static final long MAX_RESPONSE_BYTES = 2_097_152;
@@ -51,25 +54,40 @@ public class PublicBuildingRegisterPageClient implements BuildingRegisterPageCli
         if (serviceKey == null) throw new IllegalStateException("BLD_SERVICE_KEY is required");
         throttle();
         String path = paths.get(request.endpoint());
-        return client.get()
-                .uri(ExternalApiUri.create(baseUrl, path, query(request)))
-                .exchange((httpRequest, response) -> {
-                    try {
-                        BodyRead body = readBody(response.getBody());
-                        return new BuildingRegisterPageResponse(
-                                request.endpoint(),
-                                request.pnu(),
-                                request.pageNo(),
-                                request.pageSize(),
-                                response.getStatusCode().value(),
-                                body.body(),
-                                body.byteSize(),
-                                body.hash(),
-                                body.oversized());
-                    } catch (IOException exception) {
-                        throw new IllegalStateException("building register response read failed", exception);
-                    }
-                });
+        try {
+            return client.get()
+                    .uri(ExternalApiUri.create(baseUrl, path, query(request)))
+                    .exchange((httpRequest, response) -> {
+                        try {
+                            BodyRead body = readBody(response.getBody());
+                            return new BuildingRegisterPageResponse(
+                                    request.endpoint(),
+                                    request.pnu(),
+                                    request.pageNo(),
+                                    request.pageSize(),
+                                    response.getStatusCode().value(),
+                                    body.body(),
+                                    body.byteSize(),
+                                    body.hash(),
+                                    body.oversized());
+                        } catch (IOException exception) {
+                            throw fetchFailure(exception);
+                        }
+                    });
+        } catch (ResourceAccessException exception) {
+            throw fetchFailure(exception);
+        }
+    }
+
+    private BuildingRegisterPageFetchException fetchFailure(Throwable failure) {
+        Throwable current = failure;
+        while (current != null) {
+            if (current instanceof SocketTimeoutException) {
+                return new BuildingRegisterPageFetchException("TRANSPORT_TIMEOUT");
+            }
+            current = current.getCause();
+        }
+        return new BuildingRegisterPageFetchException("TRANSPORT_IO");
     }
 
     private String query(BuildingRegisterPageRequest request) {

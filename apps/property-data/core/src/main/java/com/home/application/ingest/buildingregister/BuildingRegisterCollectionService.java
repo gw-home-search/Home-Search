@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class BuildingRegisterCollectionService {
     private static final int[] PAGE_SIZES = {100, 50, 25, 10};
+    private static final String EMPTY_BODY_SHA256 =
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
     private final BuildingRegisterPageClient client;
     private final BuildingRegisterPageParser parser;
@@ -82,8 +84,26 @@ public class BuildingRegisterCollectionService {
                 }
 
                 budget.consume();
-                BuildingRegisterPageResponse response =
-                        client.fetch(new BuildingRegisterPageRequest(endpoint, command.pnu(), pageNo, pageSize));
+                BuildingRegisterPageResponse response;
+                try {
+                    response =
+                            client.fetch(new BuildingRegisterPageRequest(endpoint, command.pnu(), pageNo, pageSize));
+                } catch (BuildingRegisterPageFetchException failure) {
+                    long rawPageId = receiver.receive(new BuildingRegisterRawPageReceiptCommand(
+                            snapshot.id(),
+                            command.requestId(),
+                            pageNo,
+                            snapshot.attemptNo(),
+                            null,
+                            EMPTY_BODY_SHA256,
+                            0,
+                            null,
+                            failure.failureCode()));
+                    completion.complete(
+                            rawPageId, snapshot.id(), null, BuildingRegisterRawPageStatus.PROVIDER_FAILED, List.of());
+                    snapshots.complete(snapshot.id(), 0, BuildingRegisterCollectionStatus.PROVIDER_FAILED);
+                    return new EndpointResult(BuildingRegisterCollectionStatus.PROVIDER_FAILED, records);
+                }
                 long rawPageId = receiver.receive(receipt(command, snapshot, response));
                 if (response.oversized()) {
                     completion.complete(

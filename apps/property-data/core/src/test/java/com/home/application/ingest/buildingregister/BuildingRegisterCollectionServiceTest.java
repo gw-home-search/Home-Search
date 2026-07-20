@@ -93,6 +93,26 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("전송 timeout은 raw 실패 증거로 남기고 fallback을 호출하지 않는다")
+    void transportTimeoutIsRecordedAndNeverTriggersFallback() {
+        Fixture fixture = new Fixture();
+        fixture.client.fail("TRANSPORT_TIMEOUT");
+
+        BuildingRegisterCollectionResult result = fixture.service.collect(command(10));
+
+        assertThat(result.status()).isEqualTo(BuildingRegisterCollectionStatus.PROVIDER_FAILED);
+        assertThat(result.requestCount()).isOne();
+        assertThat(fixture.client.calls).containsExactly("RECAP_TITLE:1:100");
+        assertThat(fixture.finalizations).containsExactly(BuildingRegisterRawPageStatus.PROVIDER_FAILED);
+        assertThat(fixture.receipts).singleElement().satisfies(receipt -> {
+            assertThat(receipt.httpStatus()).isNull();
+            assertThat(receipt.responseBody()).isNull();
+            assertThat(receipt.byteCount()).isZero();
+            assertThat(receipt.providerStatus()).isEqualTo("TRANSPORT_TIMEOUT");
+        });
+    }
+
+    @Test
     @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void authenticationOrQuotaHttpFailureStopsTheCollectionRun() {
         Fixture fixture = new Fixture();
@@ -339,12 +359,16 @@ class BuildingRegisterCollectionServiceTest {
     private static final class Fixture {
         final FakeClient client = new FakeClient();
         final FakeSnapshotStore store = new FakeSnapshotStore();
+        final List<BuildingRegisterRawPageReceiptCommand> receipts = new ArrayList<>();
         final List<BuildingRegisterRawPageStatus> finalizations = new ArrayList<>();
         final BuildingRegisterCollectionService service = new BuildingRegisterCollectionService(
                 client,
                 response -> client.parsed.remove(0),
                 store,
-                command -> 1000L + command.pageNo(),
+                command -> {
+                    receipts.add(command);
+                    return 1000L + command.pageNo();
+                },
                 (rawPageId, snapshotId, totalCount, status, records) -> {
                     finalizations.add(status);
                     if (totalCount != null) store.observeTotalCount(snapshotId, totalCount);
@@ -365,10 +389,15 @@ class BuildingRegisterCollectionServiceTest {
             responses.add(response);
         }
 
+        void fail(String failureCode) {
+            responses.add(new BuildingRegisterPageFetchException(failureCode));
+        }
+
         @Override
         public BuildingRegisterPageResponse fetch(BuildingRegisterPageRequest request) {
             calls.add(request.endpoint() + ":" + request.pageNo() + ":" + request.pageSize());
             Object response = responses.remove(0);
+            if (response instanceof BuildingRegisterPageFetchException failure) throw failure;
             if (response instanceof BuildingRegisterPageResponse page) return page;
             return new BuildingRegisterPageResponse(
                     request.endpoint(),

@@ -59,8 +59,7 @@ TESTCONTAINERS_RYUK_DISABLED=true uv run pytest --no-cov \
 # 119 passed
 ```
 
-전체 coverage 근거는 `priority-reference-offline-verification.md`의 `554 passed`,
-`90.18%` 결과를 사용한다. 부분 테스트만 coverage와 함께 실행하면 저장소 전역
+최신 전체 coverage 근거는 `569 passed`, `90.05%`다. 부분 테스트만 coverage와 함께 실행하면 저장소 전역
 `fail-under=90` 특성상 동작이 모두 통과해도 종료 코드가 실패하므로 점수 근거로
 사용하지 않는다.
 
@@ -75,6 +74,9 @@ security-audit: 지적사항 = none
 잔여 위험은 실제 NEIS key·quota·schema·전국 total, raw S3 복구, 운영 AI DB role,
 chatbot JSON/SSE golden을 아직 검증하지 않은 readiness 공백이다.
 
-live preflight에서는 DB role·MinIO·migration까지 통과했으나 첫 page
-`API_SERVER_ERROR`로 중단했다. acquisition은 생성되지 않았고 active datasetVersion도
-없다. runtime audit는 빈 `acquisitionId`, 0 counts, safe reason code를 확인했다.
+live 재시도에서는 DB role·MinIO·migration까지 통과했으나 configured NEIS key의 첫
+page가 다시 `API_SERVER_ERROR`로 중단했다. acquisition은 생성되지 않았고 active
+datasetVersion도 없다. body-free 비교에서 no-key sample은 `HTTP 200/INFO-000`이지만
+`pSize=1000`에도 총 25,522행 중 5행만 반환했고, 명백한 invalid key는
+`HTTP 200/ERROR-290`이었다. sample을 full acquisition 우회로 사용하지 않으며 NEIS
+포털에서 별도 발급한 `HOME_AI_NEIS_SERVICE_KEY`의 상태를 확인해야 한다.

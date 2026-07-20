@@ -28,13 +28,14 @@ dataset의 private raw 저장·가공 승인으로 확대하지 않는다.
 
 | sourceId | 공식 확인 내용 | contract 상태 | activation blocker |
 |---|---|---|---|
-| `edu.academy-registry` | NEIS 기반 전국 학원·교습소, 수시 갱신 | `PENDING` | source별 이용허락·private raw 저장·내부 파생물 조건과 fingerprint 미확정 |
+| `edu.academy-registry` | NEIS 상세 페이지의 `이용 허락 범위 제한없음`, provider·주기·attribution evidence SHA-256 고정 | `APPROVED` | 실제 key·acquisition·S3·전국 row/freshness·chatbot golden 미검증 |
 | `place.sbiz-academy` | 공식 247행 taxonomy와 P1 교육업종 18개 allowlist 고정 | `PENDING` | 상가업소 API 이용조건·private raw 저장·실제 taxonomy endpoint 응답 미검증 |
 | `retail.large-store` | LOCALDATA direct CSV·same-host Referer·공식 metadata date, EPSG:5174 확인 | `PENDING` | 이용허락·private raw 조건 fingerprint와 fresh metadata 미확정 |
 | `transport.rail-station` | KRIC `id=32` 고정 download endpoint와 2026-06-30 XLSX header 확인 | `PENDING` | dataset별 이용조건 fingerprint와 전체 artifact 미검증 |
 
 빈 `terms_fingerprint`는 미검토가 아니라 승인 근거가 없음을 뜻한다. 승인 전에는
-collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
+collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다. NEIS는 source별
+근거를 승인했지만 live 필수 항목이 남아 동일하게 `Partial`이다.
 
 ## 구현 품질 평가
 
@@ -79,7 +80,7 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
 | F2 normalized spool·semantic `NoChange` | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
 | F3 static composition·CLI | `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 | D1 AsciiDoc artifact | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
-| NEIS | collector·projection·summary observer offline `Pass`, live 미완료 | `9.5/10` | `2.0/10 Partial` | 금지 |
+| NEIS | source 이용조건·collector·projection·summary observer offline `Pass`, live 미완료 | `10.0/10` | `3.0/10 Partial` | 금지 |
 | Sbiz S2 collector | 공식 taxonomy contract·현행 taxonomy preflight·collector·adapter·generic refresh offline `Pass`, live 미실행 | `9.5/10` | `2.0/10 Partial` | 금지 |
 | Sbiz S2-P grounded location | exact projection·grounded location observer offline `Pass` | `9.5/10` | `2.0/10 Partial` | 금지 |
 | 대규모점포 | streaming file client·기존 projection `Pass`, live 미실행 | `9.5/10` | `3.0/10 Partial` | 금지 |
@@ -112,15 +113,15 @@ owner-only temp, verified S3 file upload, safe refresh-run 실패 기록을 stat
 연결했으며 landing URL은 network 호출 전에 거부한다. 2026-07-20 전체 offline
 회귀는 `552 passed`, coverage `90.18%`다. NEIS summary observer는 property DB의
 시도·시군구 ancestor를 먼저 해석한 뒤 AI DB를 별도 exact query하며, 반경·거리 표현을
-grounding 단계에서 거부한다. license와 live readiness가 미승인이므로 runtime
-allowlist에는 추가하지 않았다. 실제 provider,
+grounding 단계에서 거부한다. source 이용조건은 승인했지만 live readiness가
+미승인이므로 runtime allowlist에는 추가하지 않았다. 실제 provider,
 운영 DB, S3 live 검증은 실행하지 않았다.
 
-NEIS 구현 점수는 17개 교육청 pagination·total·coverage, verified raw-first,
-incomplete 보존, 개인정보 비투영, exact 지역 집계, A등급 grounding, 고정 자원 제한과
-회귀 근거를 충족했다. source별 이용조건 fingerprint와 private raw 저장 승인이
-`PENDING`이므로 이용조건 항목에서 `0.5`를 감점해 `9.5/10`으로 평가했다. 이 점수는
-offline 구현만 통과시키며 실제 데이터 readiness는 `2.0/10 Partial`로 유지한다.
+NEIS 구현 점수는 source별 이용조건 evidence SHA-256, private raw·내부 파생 승인,
+17개 교육청 pagination·total·coverage, verified raw-first, incomplete 보존, 개인정보
+비투영, exact 지역 집계, A등급 grounding, 고정 자원 제한과 회귀 근거를 충족해
+`10.0/10`으로 평가했다. 실제 key·provider·S3·운영 DB·chatbot 검증은 남아 실제
+데이터 readiness는 `3.0/10 Partial`이고 activation은 금지한다.
 
 Sbiz `academy_lookup` observer는 기본 800m, 명시 범위 100..2,000m, 최대 5건과
 전국 좌표 coverage 95%를 fail-closed로 적용한다. Sbiz 위치는 B등급이며 NFKC 상호명,

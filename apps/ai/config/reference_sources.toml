@@ -123,13 +123,14 @@ minimum_region_coordinate_ratio = 0.0
 maximum_rejected_ratio = 0.0
 
 [sources.license]
-status = "PENDING"
-terms_url = "https://www.data.go.kr/data/15096277/standard.do"
-terms_fingerprint = ""
-reviewed_by = ""
-attribution_text = ""
-raw_private_storage_allowed = false
-internal_derivative_allowed = false
+status = "APPROVED"
+terms_url = "https://open.neis.go.kr/portal/data/service/selectServicePage.do?infId=OPEN19220231012134453534385&infSeq=1&page=1&rows=10&sortColumn=&sortDirection="
+terms_fingerprint = "ce16b39dff31b1a41ea9cb8f362310c56258e725c5f470e4347cf81b73d4aac8"
+reviewed_on = 2026-07-20
+reviewed_by = "official-source-review"
+attribution_text = "출처: 나이스 교육정보 개방 포털 학원교습소정보 (교육부·17개 시도교육청)"
+raw_private_storage_allowed = true
+internal_derivative_allowed = true
 public_redistribution_allowed = false
 third_party_rights = false
 

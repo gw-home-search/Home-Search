@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -18,9 +19,15 @@ from datetime import date
 
 
 CONFIG_PATH = Path(__file__).parents[2] / "config" / "reference_sources.toml"
+NEIS_LICENSE_EVIDENCE_PATH = (
+    Path(__file__).parents[2]
+    / "config"
+    / "license_evidence"
+    / "edu.academy-registry.txt"
+)
 
 
-def test_catalog_loads_the_fixed_source_order_and_only_school_is_approved() -> None:
+def test_catalog_loads_the_fixed_source_order_and_approved_sources() -> None:
     catalog = load_reference_source_catalog(CONFIG_PATH)
 
     assert catalog.source_ids == (
@@ -36,6 +43,25 @@ def test_catalog_loads_the_fixed_source_order_and_only_school_is_approved() -> N
         "environment.city-park",
     )
     assert catalog.approved("edu.school-location").license.status == "APPROVED"
+    academy = catalog.approved("edu.academy-registry")
+    assert academy.license.status == "APPROVED"
+    assert academy.license.terms_url == (
+        "https://open.neis.go.kr/portal/data/service/selectServicePage.do"
+        "?infId=OPEN19220231012134453534385&infSeq=1&page=1&rows=10"
+        "&sortColumn=&sortDirection="
+    )
+    assert academy.license.reviewed_on == date(2026, 7, 20)
+    assert academy.license.raw_private_storage_allowed is True
+    assert academy.license.internal_derivative_allowed is True
+    assert academy.license.public_redistribution_allowed is False
+    assert academy.license.third_party_rights is False
+    assert academy.license.attribution_text == (
+        "출처: 나이스 교육정보 개방 포털 학원교습소정보 "
+        "(교육부·17개 시도교육청)"
+    )
+    assert academy.license.terms_fingerprint == sha256(
+        NEIS_LICENSE_EVIDENCE_PATH.read_bytes()
+    ).hexdigest()
     retail = catalog.get("retail.large-store")
     assert retail.acquisition.base_url == (
         "https://file.localdata.go.kr/file/download/large_scale_retail_stores/info"

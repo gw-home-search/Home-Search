@@ -1,0 +1,9 @@
+source_id=edu.academy-registry
+reviewed_on=2026-07-20
+terms_url=https://open.neis.go.kr/portal/data/service/selectServicePage.do?infId=OPEN19220231012134453534385&infSeq=1&page=1&rows=10&sortColumn=&sortDirection=
+source_name=학원교습소정보
+provider=교육부, 17개 시도교육청
+license_label=이용 허락 범위 제한없음
+refresh_cycle=매주
+review_decision=private raw storage and internal derivatives approved; public redistribution disabled
+attribution=출처: 나이스 교육정보 개방 포털 학원교습소정보 (교육부·17개 시도교육청)

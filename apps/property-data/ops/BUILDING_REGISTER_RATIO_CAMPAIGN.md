@@ -7,6 +7,7 @@
 - DB에 property Flyway V12까지 적용되어 있어야 한다. V12는 batch runtime role에 evidence table의 삭제 없는 최소 쓰기 권한을 부여한다.
 - `complexBuildingMetadataJob`과 새 캠페인 job을 동시에 실행하지 않는다. 두 job은 같은 PostgreSQL advisory lock을 사용한다.
 - 건축HUB 승인 quota와 배포 환경의 `complex.metadata.daily-request-quota`를 확인한다. `maxRequests`는 둘 중 작은 값의 90% 이하여야 한다.
+- 수집 job은 shared advisory lock 안에서 같은 `runDate`의 전체 캠페인 raw page 수를 실제 사용량으로 다시 센다. `기존 사용량 + maxRequests`가 90% 한도를 넘으면 외부 호출 전에 실행을 거절하므로, 재개 시에는 남은 일일 예산 이하로 지정한다.
 - 서비스키는 secret manager 또는 프로세스 환경변수 `BLD_SERVICE_KEY`로만 주입한다. 명령 기록, 로그, SQL, metric label에 키나 요청 URL을 남기지 않는다.
 - live provider 호출과 projection은 각각 별도 운영 승인을 받은 뒤 실행한다.
 - 최초 검증 캠페인은 `strategy=full-hierarchy`로 약 250개 PNU만 수집하고 projection하지 않는다.

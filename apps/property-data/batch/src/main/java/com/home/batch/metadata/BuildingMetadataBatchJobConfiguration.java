@@ -3,6 +3,7 @@ package com.home.batch.metadata;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataBatchService;
 import com.home.application.ingest.buildingregister.BuildingRatioProjectionService;
 import com.home.application.ingest.buildingregister.BuildingRegisterCampaignService;
+import com.home.application.ingest.buildingregister.BuildingRegisterDailyRequestUsage;
 import com.home.application.ingest.metadata.OdcMetadataGapFillService;
 import com.home.infrastructure.external.complex.ComplexMetadataProperties;
 import javax.sql.DataSource;
@@ -110,12 +111,14 @@ class BuildingMetadataBatchJobConfiguration {
             PlatformTransactionManager transactionManager,
             BuildingRegisterCampaignService service,
             BuildingMetadataExecutionLock executionLock,
+            BuildingRegisterDailyRequestUsage requestUsage,
             ComplexMetadataProperties properties) {
         return step(
                 "complexBuildingRegisterCollectStep",
                 repository,
                 transactionManager,
-                new BuildingRegisterCollectTasklet(service, executionLock, properties.dailyRequestQuota()));
+                new BuildingRegisterCollectTasklet(
+                        service, executionLock, requestUsage, properties.dailyRequestQuota()));
     }
 
     private Step step(

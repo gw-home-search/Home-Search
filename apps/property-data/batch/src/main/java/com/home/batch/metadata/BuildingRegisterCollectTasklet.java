@@ -2,6 +2,7 @@ package com.home.batch.metadata;
 
 import com.home.application.ingest.buildingregister.BuildingRegisterCampaignCommand;
 import com.home.application.ingest.buildingregister.BuildingRegisterCampaignService;
+import com.home.application.ingest.buildingregister.BuildingRegisterDailyRequestUsage;
 import com.home.domain.complex.buildingregister.BuildingRegisterCollectionMode;
 import com.home.domain.complex.buildingregister.BuildingRegisterCollectionStrategy;
 import java.time.LocalDate;
@@ -18,14 +19,17 @@ class BuildingRegisterCollectTasklet implements Tasklet {
 
     private final BuildingRegisterCampaignService service;
     private final BuildingMetadataExecutionLock executionLock;
+    private final BuildingRegisterDailyRequestUsage requestUsage;
     private final int dailyRequestQuota;
 
     BuildingRegisterCollectTasklet(
             BuildingRegisterCampaignService service,
             BuildingMetadataExecutionLock executionLock,
+            BuildingRegisterDailyRequestUsage requestUsage,
             int dailyRequestQuota) {
         this.service = service;
         this.executionLock = executionLock;
+        this.requestUsage = requestUsage;
         this.dailyRequestQuota = dailyRequestQuota;
     }
 
@@ -48,6 +52,10 @@ class BuildingRegisterCollectTasklet implements Tasklet {
                 optionalLong(params.get("fromComplexId")),
                 Long.parseLong(params.get("toComplexId").toString()));
         try (BuildingMetadataExecutionLock.Lock ignored = executionLock.acquire()) {
+            int usedRequests = requestUsage.usedRequests(command.runDate());
+            if (usedRequests < 0 || maxRequests > approvedLimit - usedRequests) {
+                throw new IllegalArgumentException("maxRequests exceeds remaining daily request budget");
+            }
             var summary = service.collect(command);
             log.info(
                     "building register collection completed targets={} pnus={} requests={} matches={} campaignCompleted={}",

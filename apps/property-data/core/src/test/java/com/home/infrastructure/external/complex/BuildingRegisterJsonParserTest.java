@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.home.application.ingest.buildingregister.BuildingRegisterPageResponse;
 import com.home.domain.complex.buildingregister.BuildingRegisterEndpoint;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -11,6 +12,7 @@ class BuildingRegisterJsonParserTest {
     private static final String PNU = "1168010300101400001";
 
     @Test
+    @DisplayName("건축물대장 응답 파싱을 검증한다")
     void parsesHierarchyAndRatioCalculationComponentsWithoutFilteringPurpose() {
         String body = """
                 {"response":{"header":{"resultCode":"00","resultMsg":"NORMAL SERVICE"},
@@ -42,6 +44,7 @@ class BuildingRegisterJsonParserTest {
     }
 
     @Test
+    @DisplayName("건축물대장 응답 파싱을 검증한다")
     void preservesProviderFailureAsParsedFailureInsteadOfEmpty() {
         String body = """
                 {"response":{"header":{"resultCode":"30","resultMsg":"SERVICE KEY ERROR"},

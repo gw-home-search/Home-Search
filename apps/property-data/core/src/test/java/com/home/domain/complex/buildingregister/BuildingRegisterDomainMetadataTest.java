@@ -2,10 +2,12 @@ package com.home.domain.complex.buildingregister;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class BuildingRegisterDomainMetadataTest {
     @Test
+    @DisplayName("건축물대장 도메인 상태와 메타데이터를 검증한다")
     void persistedBuildingRegisterEnumsExposeKoreanOperationalMetadata() {
         for (BuildingRatioField value : BuildingRatioField.values())
             assertMetadata(value.titleKo(), value.descriptionKo());
@@ -34,6 +36,7 @@ class BuildingRegisterDomainMetadataTest {
     }
 
     @Test
+    @DisplayName("건축물대장 도메인 상태와 메타데이터를 검증한다")
     void rawPageStateMachineOnlyAllowsFinalizationAndParseRecovery() {
         assertThat(BuildingRegisterRawPageStatus.RECEIVED.isFinalized()).isFalse();
         assertThat(BuildingRegisterRawPageStatus.PARSED.isFinalized()).isTrue();

@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class BuildingRegisterCommandValidationTest {
@@ -25,6 +26,7 @@ class BuildingRegisterCommandValidationTest {
     private static final String SHA256 = "a".repeat(64);
 
     @Test
+    @DisplayName("건축물대장 명령 검증 규칙을 확인한다")
     void rejectsUnsafeProjectionRanges() {
         assertThatThrownBy(() -> new BuildingRatioProjectCommand(null, REQUEST_ID, 1, null, null))
                 .isInstanceOf(NullPointerException.class);
@@ -47,6 +49,7 @@ class BuildingRegisterCommandValidationTest {
     }
 
     @Test
+    @DisplayName("건축물대장 명령 검증 규칙을 확인한다")
     void validatesRawReceiptIntegrityAndSize() {
         assertThatThrownBy(() -> receipt(0, 1, 1, "{}", 2, SHA256, 200)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new BuildingRegisterRawPageReceiptCommand(1, null, 1, 1, "{}", SHA256, 2, 200, null))
@@ -69,6 +72,7 @@ class BuildingRegisterCommandValidationTest {
     }
 
     @Test
+    @DisplayName("건축물대장 명령 검증 규칙을 확인한다")
     void validatesProviderResponseCoordinatesAndFailureClassification() {
         assertThatThrownBy(() -> response(null, PNU, 1, 100, 200, "{}", 2, SHA256, false))
                 .isInstanceOf(NullPointerException.class);
@@ -105,6 +109,7 @@ class BuildingRegisterCommandValidationTest {
     }
 
     @Test
+    @DisplayName("건축물대장 명령 검증 규칙을 확인한다")
     void validatesCampaignAndPageCommands() {
         assertThatThrownBy(() -> campaign(null, REQUEST_ID, LocalDate.now(), 1, null, 1))
                 .isInstanceOf(NullPointerException.class);
@@ -157,6 +162,7 @@ class BuildingRegisterCommandValidationTest {
     }
 
     @Test
+    @DisplayName("건축물대장 명령 검증 규칙을 확인한다")
     void copiesEvidenceCollectionsAtApplicationBoundary() {
         List<BuildingRegisterRecordSnapshotCommand> records = new ArrayList<>();
         Set<BuildingRatioField> fields = new HashSet<>();

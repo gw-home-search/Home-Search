@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class BuildingRegisterRatioPolicyTest {
@@ -13,6 +14,7 @@ class BuildingRegisterRatioPolicyTest {
     private final BuildingRatioEvaluator evaluator = new BuildingRatioEvaluator();
 
     @Test
+    @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void skipsFallbackWhenSingleRecapHasBothDirectRatios() {
         var decision = collectionPolicy.afterRecap(
                 BuildingRegisterCollectionStrategy.ADAPTIVE, List.of(recap("1000", "200", "800", "20", "80")), 1);
@@ -23,6 +25,7 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void fetchesFallbackOnlyForMissingFloorAreaRatioAndKeepsCoverageFromRecap() {
         BuildingRegisterRecord recap = recap("1000", "200", null, "20", "0");
         var decision = collectionPolicy.afterRecap(BuildingRegisterCollectionStrategy.ADAPTIVE, List.of(recap), 1);
@@ -48,6 +51,7 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void calculatesRecapComponentsWhenDirectRatiosAreMissing() {
         BuildingRegisterRecord recap = recap("1000", "200", "800", null, null);
 
@@ -67,6 +71,7 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void combinesRecapNumeratorWithConsensusTitleDenominator() {
         BuildingRegisterRecord recap = recap(null, "200", "800", null, null);
         List<BuildingRegisterRecord> titles = List.of(
@@ -89,6 +94,7 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void createsTitleDirectConsensusWhenEveryExpectedTitleAgreesAtProjectionScale() {
         List<BuildingRegisterRecord> titles = List.of(
                 title("T-1", ROOT, "1000", null, null, "20.001", "80.001", "02000"),
@@ -114,6 +120,7 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void calculatesCompleteTitleAggregateEvenWhenTitleDirectRatiosDiffer() {
         List<BuildingRegisterRecord> titles = List.of(
                 title("T-1", ROOT, "1000", "100", "300", "10", "30", "02000"),
@@ -139,6 +146,7 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void doesNotAggregateWhenAnExpectedTitleIsMissing() {
         BuildingRegisterRecord title = title("T-1", ROOT, "1000", "200", "800", null, null, "02000");
 
@@ -156,6 +164,7 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void neverUsesTotalAreaAsFloorAreaRatioNumerator() {
         BuildingRegisterRecord title = new BuildingRegisterRecord(
                 "T-1", ROOT, 3, "0", "02000", decimal("1000"), decimal("200"), decimal("9999"), null, null, null);
@@ -172,6 +181,7 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void includesNonApartmentChildPurposesInAggregate() {
         List<BuildingRegisterRecord> titles = List.of(
                 title("T-1", ROOT, "1000", "150", "700", null, null, "02000"),
@@ -197,6 +207,7 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void excludesUnitRecordsAndRecordsFromAnotherRoot() {
         List<BuildingRegisterRecord> titles = List.of(
                 title("T-1", ROOT, "1000", "200", "800", null, null, "02000"),
@@ -223,6 +234,7 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void rejectsCandidatesThatDifferByMoreThanPointZeroOneAtProjectionScale() {
         BuildingRegisterRecord recap = recap("1000", "200", null, "20", null);
         BuildingRegisterRecord title = title("T-1", ROOT, "1000", "201", null, null, null, "02000");
@@ -236,6 +248,7 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void sharedRecapCanKeepCandidateEvidenceButIsNeverProjectable() {
         BuildingRegisterRecord recap = recap("1000", "200", "800", "20", "80");
 
@@ -249,6 +262,7 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void selectsStandaloneDirectValueBeforeItsMatchingComponentCalculation() {
         BuildingRegisterRecord title = title("T-1", null, "1000", "200", "800", "20", "80", "02000");
 
@@ -267,6 +281,7 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void acceptsCandidateDifferenceOfExactlyPointZeroOneAtProjectionScale() {
         BuildingRegisterRecord recap = recap("1000", "200", null, "20", null);
         BuildingRegisterRecord title = title("T-1", ROOT, "1000", "200.1", null, null, null, "02000");
@@ -282,6 +297,7 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void evaluatesTitleNumeratorCompletenessIndependentlyForEachRatioField() {
         List<BuildingRegisterRecord> titles = List.of(
                 title("T-1", ROOT, "1000", "100", "300", null, null, "02000"),

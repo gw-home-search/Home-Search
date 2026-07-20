@@ -10,6 +10,7 @@ import com.home.infrastructure.persistence.ingest.matching.JdbcBuildingRatioProj
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 
@@ -45,6 +46,7 @@ class JdbcBuildingRatioProjectionRepositoryTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("건축물대장 비율 투영 저장을 검증한다")
     void appliesOnlyNullFieldAndPreservesExistingMetadataState() {
         assertThat(repository.project(REQUEST_ID, target(BuildingRatioField.BUILDING_COVERAGE_RATIO, bcCandidateId)))
                 .isEqualTo(BuildingRatioProjectionOutcome.APPLIED);
@@ -67,6 +69,7 @@ class JdbcBuildingRatioProjectionRepositoryTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("건축물대장 비율 투영 저장을 검증한다")
     void repeatedRequestReturnsStoredOutcomeWithoutDuplicateHistory() {
         BuildingRatioProjectionTarget target = target(BuildingRatioField.BUILDING_COVERAGE_RATIO, bcCandidateId);
         assertThat(repository.project(REQUEST_ID, target)).isEqualTo(BuildingRatioProjectionOutcome.APPLIED);
@@ -81,6 +84,7 @@ class JdbcBuildingRatioProjectionRepositoryTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("건축물대장 비율 투영 저장을 검증한다")
     void recordsAlreadyEqualWithoutUpdatingExistingValue() {
         jdbcClient.sql("UPDATE complex SET vl_rat=80.34 WHERE id=501").update();
 
@@ -89,6 +93,7 @@ class JdbcBuildingRatioProjectionRepositoryTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("건축물대장 비율 투영 저장을 검증한다")
     void neverProjectsSharedRecapCandidate() {
         jdbcClient.sql("""
                     UPDATE building_register_complex_match
@@ -106,6 +111,7 @@ class JdbcBuildingRatioProjectionRepositoryTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("건축물대장 비율 투영 저장을 검증한다")
     void recordsSourceConflictWithoutApplyingRepresentativeCandidate() {
         long conflictCandidate =
                 jdbcClient.sql("""
@@ -127,6 +133,7 @@ class JdbcBuildingRatioProjectionRepositoryTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("건축물대장 비율 투영 저장을 검증한다")
     void recordsSourceMissingAtMatchAndFieldScopeWithoutFabricatingCandidate() {
         jdbcClient
                 .sql("DELETE FROM building_ratio_candidate WHERE id=:candidate")
@@ -155,6 +162,7 @@ class JdbcBuildingRatioProjectionRepositoryTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("건축물대장 비율 투영 저장을 검증한다")
     void databaseRejectsCandidateEvidenceAttachedToAnotherFieldScope() {
         assertThatThrownBy(() -> jdbcClient
                         .sql("""

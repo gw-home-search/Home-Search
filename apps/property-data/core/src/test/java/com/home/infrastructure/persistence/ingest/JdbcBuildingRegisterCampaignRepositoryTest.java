@@ -31,6 +31,11 @@ class JdbcBuildingRegisterCampaignRepositoryTest extends JdbcMigrationTestSuppor
         jdbcClient
                 .sql("INSERT INTO complex(id,parcel_id,complex_pk,name) VALUES (501,1001,'RTMS:501','Sample')")
                 .update();
+        jdbcClient.sql("""
+                    INSERT INTO complex_name_alias
+                        (complex_id,alias_type,alias_name,normalized_name,source)
+                    VALUES (501,'ADMIN_ALIAS','Sample Alias','samplealias','TEST')
+                    """).update();
         repository = new JdbcBuildingRegisterCampaignRepository(jdbcClient, transactionTemplate);
     }
 
@@ -41,6 +46,7 @@ class JdbcBuildingRegisterCampaignRepositoryTest extends JdbcMigrationTestSuppor
         var resumed = repository.freezeOrLoad(command(1000));
 
         assertThat(first).hasSize(1).isEqualTo(resumed);
+        assertThat(first.getFirst().names()).containsExactlyInAnyOrder("Sample", "Sample Alias");
         assertThatThrownBy(() -> repository.freezeOrLoad(command(999)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("frozen");

@@ -40,34 +40,56 @@ public class JdbcBuildingRegisterCampaignRepository implements BuildingRegisterC
                 .param("collection", command.collectionId())
                 .query(this::targetRow)
                 .list();
+        Map<Long, Set<String>> aliases = evidence(command.collectionId(), """
+                SELECT alias.complex_id,alias.alias_name AS value
+                FROM building_register_collection_target target
+                JOIN complex_name_alias alias ON alias.complex_id=target.complex_id
+                WHERE target.collection_id=:collection
+                ORDER BY target.target_ordinal,alias.alias_name
+                """);
+        Map<Long, Set<String>> tradeDongs = evidence(command.collectionId(), """
+                SELECT DISTINCT target.complex_id,trade.apt_dong AS value
+                FROM building_register_collection_target target
+                JOIN trade ON trade.complex_id=target.complex_id
+                WHERE target.collection_id=:collection
+                  AND trade.apt_dong IS NOT NULL AND btrim(trade.apt_dong)<>''
+                ORDER BY target.complex_id,trade.apt_dong
+                """);
+        Map<Long, Set<String>> footprintDongs = evidence(command.collectionId(), """
+                SELECT DISTINCT target.complex_id,footprint.dong_name AS value
+                FROM building_register_collection_target target
+                JOIN complex_building_link link ON link.complex_id=target.complex_id AND link.status='RESOLVED'
+                JOIN building_footprint_snapshot footprint ON footprint.id=link.building_footprint_id
+                WHERE target.collection_id=:collection
+                  AND footprint.dong_name IS NOT NULL AND btrim(footprint.dong_name)<>''
+                ORDER BY target.complex_id,footprint.dong_name
+                """);
         List<BuildingRegisterCampaignTarget> targets = new ArrayList<>();
         for (TargetRow row : rows) {
             Set<String> names = new LinkedHashSet<>();
             if (row.name() != null && !row.name().isBlank()) names.add(row.name());
-            names.addAll(jdbc.sql("SELECT alias_name FROM complex_name_alias WHERE complex_id=:id")
-                    .param("id", row.complexId())
-                    .query(String.class)
-                    .list());
-            Set<String> tradeDongs = new LinkedHashSet<>(jdbc.sql("""
-                        SELECT DISTINCT apt_dong FROM trade
-                        WHERE complex_id=:id AND apt_dong IS NOT NULL AND btrim(apt_dong)<>''
-                        """)
-                    .param("id", row.complexId())
-                    .query(String.class)
-                    .list());
-            Set<String> footprintDongs = new LinkedHashSet<>(jdbc.sql("""
-                        SELECT DISTINCT f.dong_name
-                        FROM complex_building_link l JOIN building_footprint_snapshot f ON f.id=l.building_footprint_id
-                        WHERE l.complex_id=:id AND l.status='RESOLVED'
-                          AND f.dong_name IS NOT NULL AND btrim(f.dong_name)<>''
-                        """)
-                    .param("id", row.complexId())
-                    .query(String.class)
-                    .list());
+            names.addAll(aliases.getOrDefault(row.complexId(), Set.of()));
             targets.add(new BuildingRegisterCampaignTarget(
-                    row.complexId(), row.pnu(), row.existingKey(), names, tradeDongs, footprintDongs));
+                    row.complexId(),
+                    row.pnu(),
+                    row.existingKey(),
+                    names,
+                    tradeDongs.getOrDefault(row.complexId(), Set.of()),
+                    footprintDongs.getOrDefault(row.complexId(), Set.of())));
         }
         return List.copyOf(targets);
+    }
+
+    private Map<Long, Set<String>> evidence(UUID collectionId, String sql) {
+        Map<Long, Set<String>> result = new LinkedHashMap<>();
+        jdbc.sql(sql)
+                .param("collection", collectionId)
+                .query((resultSet, rowNumber) ->
+                        new EvidenceRow(resultSet.getLong("complex_id"), resultSet.getString("value")))
+                .list()
+                .forEach(row -> result.computeIfAbsent(row.complexId(), ignored -> new LinkedHashSet<>())
+                        .add(row.value()));
+        return result;
     }
 
     private void freeze(BuildingRegisterCampaignCommand command) {
@@ -234,6 +256,8 @@ public class JdbcBuildingRegisterCampaignRepository implements BuildingRegisterC
     private record Campaign(String mode, String strategy, Long fromId, long toId) {}
 
     private record TargetRow(long complexId, String pnu, String existingKey, String name) {}
+
+    private record EvidenceRow(long complexId, String value) {}
 
     private record SourceRecord(String key, long id) {}
 }

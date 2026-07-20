@@ -79,7 +79,7 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
 | F2 normalized spool·semantic `NoChange` | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
 | F3 static composition·CLI | `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 | D1 AsciiDoc artifact | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
-| NEIS | collector·projection·summary observer offline `Pass`, live 미완료 | 미채점 | `2.0/10 Partial` | 금지 |
+| NEIS | collector·projection·summary observer offline `Pass`, live 미완료 | `9.5/10` | `2.0/10 Partial` | 금지 |
 | Sbiz S2 collector | collector·adapter·generic refresh offline `Pass`, taxonomy 미승인 | 미채점 | `2.0/10 Partial` | 금지 |
 | Sbiz S2-P grounded location | exact projection·grounded location observer offline `Pass` | `9.5/10` | `2.0/10 Partial` | 금지 |
 | 대규모점포 | streaming file client·기존 projection `Pass`, live 미실행 | 미채점 | `3.0/10 Partial` | 금지 |
@@ -114,6 +114,12 @@ owner-only temp, verified S3 file upload, safe refresh-run 실패 기록을 stat
 grounding 단계에서 거부한다. license와 live readiness가 미승인이므로 runtime
 allowlist에는 추가하지 않았다. 실제 provider,
 운영 DB, S3 live 검증은 실행하지 않았다.
+
+NEIS 구현 점수는 17개 교육청 pagination·total·coverage, verified raw-first,
+incomplete 보존, 개인정보 비투영, exact 지역 집계, A등급 grounding, 고정 자원 제한과
+회귀 근거를 충족했다. source별 이용조건 fingerprint와 private raw 저장 승인이
+`PENDING`이므로 이용조건 항목에서 `0.5`를 감점해 `9.5/10`으로 평가했다. 이 점수는
+offline 구현만 통과시키며 실제 데이터 readiness는 `2.0/10 Partial`로 유지한다.
 
 Sbiz `academy_lookup` observer는 기본 800m, 명시 범위 100..2,000m, 최대 5건과
 전국 좌표 coverage 95%를 fail-closed로 적용한다. Sbiz 위치는 B등급이며 NFKC 상호명,

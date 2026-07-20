@@ -6,21 +6,43 @@
   min-width: 0;
   align-items: center;
   justify-content: flex-end;
+  gap: 12px;
+}
+
+.account-control::before {
+  width: 1px;
+  height: 24px;
+  flex: 0 0 1px;
+  background: var(--hs-map-color-header-line);
+  content: "";
 }
 
 .account-login-button,
 .account-login-placeholder {
-  width: 84px;
-  height: 36px;
-  flex: 0 0 84px;
-  border: 1px solid var(--hs-map-color-line);
-  border-radius: 6px;
-  background: var(--hs-map-color-surface);
+  width: 88px;
+  height: 40px;
+  flex: 0 0 88px;
+  border-radius: 7px;
 }
-.account-login-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--hs-map-color-action); cursor: pointer; font-size: 13px; font-weight: 800; }
+.account-login-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  background: transparent;
+  color: var(--hs-map-color-ink-soft);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 760;
+  text-decoration: none;
+  transition: background-color 120ms ease, color 120ms ease;
+}
 .account-login-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
-.account-login-button:hover { background: var(--hs-map-color-brand-soft); }
-.account-login-placeholder { display: block; background: var(--hs-map-color-surface-muted); }
+.account-login-button:hover { background: var(--hs-map-color-surface-muted); color: var(--hs-map-color-brand); }
+.account-login-button:active { background: var(--hs-map-color-brand-soft); }
+.account-login-button span { border: 0; text-decoration: none; }
+.account-login-placeholder { display: block; border: 0; background: var(--hs-map-color-surface-muted); }
 
 .account-chip {
   display: grid;
@@ -140,9 +162,27 @@
 }
 
 @media (max-width: 720px) {
+  .account-control { gap: 8px; }
+  .account-control::before { height: 22px; }
   .account-login-button,
   .account-login-placeholder { height: 40px; }
-  .account-chip { width: max-content; max-width: min(160px, 46vw); height: 44px; }
+  .account-chip {
+    width: 44px;
+    max-width: 44px;
+    height: 44px;
+    grid-template-columns: 32px;
+    justify-content: center;
+    gap: 0;
+    padding: 6px;
+  }
+  .account-chip-copy {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .account-chip-chevron { display: none; }
   .auth-dialog {
     width: 100%;
     max-width: none;

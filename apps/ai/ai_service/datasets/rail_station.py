@@ -1,0 +1,302 @@
+from __future__ import annotations
+
+import io
+import math
+import re
+import zipfile
+from datetime import date, datetime
+from pathlib import Path
+
+from openpyxl import load_workbook
+
+from .bundle import extract_single_artifact_bundle_file, read_deterministic_bundle
+from .contracts import ReferenceSourceContract
+from .models import DatasetSourceContract, ParsedDataset, QualityIssue
+from .secure_temp import SecureTempWorkspace
+from .validation import RawPayloadError
+
+
+SOURCE_ID = "transport.rail-station"
+_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+_MAX_XLSX_BYTES = 128 * 1024 * 1024
+_MAX_BUNDLE_BYTES = _MAX_XLSX_BYTES + 5 * 1024 * 1024
+_MAX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024
+_MAX_COMPRESSION_RATIO = 100
+_MAX_SHEETS = 10
+_MAX_CELLS = 500_000
+_COLUMN_ALIASES = {
+    "operator": ("운영기관명", "철도운영기관명"),
+    "line_number": ("노선번호",),
+    "line_name": ("노선명", "선명"),
+    "station_number": ("역번호",),
+    "station_name": ("역사명", "역명"),
+    "road_address": ("역사도로명주소", "도로명주소"),
+    "latitude": ("역위도",),
+    "longitude": ("역경도",),
+    "transfer_lines": ("환승노선명",),
+    "reference_date": ("데이터기준일자",),
+}
+
+
+class RailStationAdapter:
+    def parse(
+        self,
+        raw_bytes: bytes,
+        contract: DatasetSourceContract,
+        *,
+        source_date: date | None,
+    ) -> ParsedDataset:
+        if contract.source_id != SOURCE_ID or source_date is None:
+            raise RawPayloadError("rail source contract mismatch", "SOURCE_CONTRACT_MISMATCH")
+        bundle = read_deterministic_bundle(
+            raw_bytes,
+            expected_source_id=SOURCE_ID,
+            maximum_bytes=_MAX_BUNDLE_BYTES,
+        )
+        if bundle.temporal_value != source_date or len(bundle.artifacts) != 1:
+            raise RawPayloadError("rail bundle metadata mismatch", "BUNDLE_MANIFEST_INVALID")
+        artifact = bundle.artifacts[0]
+        if artifact.media_type != _MEDIA_TYPE:
+            raise RawPayloadError("rail artifact type mismatch", "BUNDLE_MANIFEST_INVALID")
+        _inspect_xlsx_archive(artifact.content)
+        return _parse_xlsx(io.BytesIO(artifact.content), source_date)
+
+    def parse_file(
+        self,
+        raw_path: Path,
+        contract: DatasetSourceContract,
+        *,
+        source_date: date | None,
+    ) -> ParsedDataset:
+        if contract.source_id != SOURCE_ID or source_date is None:
+            raise RawPayloadError(
+                "rail source contract mismatch", "SOURCE_CONTRACT_MISMATCH"
+            )
+        with SecureTempWorkspace(required_free_bytes=_MAX_XLSX_BYTES) as workspace:
+            bundle = extract_single_artifact_bundle_file(
+                raw_path,
+                workspace.create_file("rail-stations.xlsx"),
+                expected_source_id=SOURCE_ID,
+                maximum_bytes=_MAX_BUNDLE_BYTES,
+                maximum_artifact_bytes=_MAX_XLSX_BYTES,
+            )
+            if bundle.temporal_value != source_date or bundle.media_type != _MEDIA_TYPE:
+                raise RawPayloadError(
+                    "rail bundle metadata mismatch", "BUNDLE_MANIFEST_INVALID"
+                )
+            _inspect_xlsx_archive(bundle.artifact_path)
+            return _parse_xlsx(bundle.artifact_path, source_date)
+
+
+def _parse_xlsx(source: io.BytesIO | Path, source_date: date) -> ParsedDataset:
+    try:
+        workbook = load_workbook(
+            source,
+            read_only=True,
+            data_only=True,
+            keep_links=False,
+        )
+    except Exception:
+        raise RawPayloadError("rail XLSX cannot be parsed", "XLSX_INVALID") from None
+    try:
+        if not 1 <= len(workbook.worksheets) <= _MAX_SHEETS:
+            raise RawPayloadError("rail XLSX sheet count is invalid", "XLSX_SIZE_LIMIT")
+        rows: list[dict[str, object]] = []
+        issues: list[QualityIssue] = []
+        rejections: dict[int, tuple[str, ...]] = {}
+        total_cells = 0
+        for sheet in workbook.worksheets:
+            iterator = sheet.iter_rows(values_only=True)
+            header_values = next(iterator, None)
+            if header_values is None:
+                continue
+            headers = tuple(_clean(value) for value in header_values)
+            if not all(
+                any(alias in headers for alias in aliases)
+                for aliases in _COLUMN_ALIASES.values()
+            ):
+                raise RawPayloadError("rail XLSX schema mismatch", "SOURCE_SCHEMA_MISMATCH")
+            header_index = {header: index for index, header in enumerate(headers)}
+            for values in iterator:
+                total_cells += len(values)
+                if total_cells > _MAX_CELLS:
+                    raise RawPayloadError("rail XLSX cell limit exceeded", "XLSX_SIZE_LIMIT")
+                if not any(value is not None and str(value).strip() for value in values):
+                    continue
+                provider_row = {
+                    header: values[index] if index < len(values) else None
+                    for header, index in header_index.items()
+                }
+                row_number = len(rows) + 1
+                normalized, reasons = _normalize(provider_row, source_date)
+                rows.append(normalized)
+                if reasons:
+                    rejections[row_number] = tuple(reasons)
+                    issues.extend(
+                        QualityIssue(reason, "WARNING", row_number, {})
+                        for reason in reasons
+                    )
+        if not rows:
+            raise RawPayloadError("rail XLSX contains no data rows", "SOURCE_EMPTY")
+        return ParsedDataset(
+            rows=rows,
+            issues=tuple(issues),
+            row_rejections=rejections,
+        )
+    finally:
+        workbook.close()
+
+
+def rail_station_source_contract(
+    reference_contract: ReferenceSourceContract,
+) -> DatasetSourceContract:
+    if reference_contract.id != SOURCE_ID or reference_contract.license.reviewed_on is None:
+        raise ValueError("rail-station reference contract mismatch")
+    return DatasetSourceContract(
+        source_id=reference_contract.id,
+        provider=reference_contract.provider,
+        landing_url=reference_contract.landing_url,
+        acquisition_url=reference_contract.acquisition.base_url,
+        license_terms=reference_contract.license.terms_url,
+        attribution_requirements=reference_contract.license.attribution_text,
+        license_reviewed_on=reference_contract.license.reviewed_on,
+        refresh_frequency=reference_contract.temporal.refresh_profile,
+        freshness_days=reference_contract.temporal.freshness_days,
+        file_format=reference_contract.acquisition.format,
+        encoding=reference_contract.acquisition.encoding,
+        schema_version=reference_contract.normalization_schema_version,
+        coordinate_system=reference_contract.acquisition.source_crs or "NONE",
+        unique_key_fields=("station_occurrence_id",),
+        required_fields=(
+            "station_occurrence_id",
+            "operator",
+            "line_number",
+            "station_number",
+            "station_name",
+            "latitude",
+            "longitude",
+            "reference_date",
+        ),
+        expected_min_rows=reference_contract.quality.minimum_rows,
+        expected_max_rows=reference_contract.quality.maximum_rows,
+        maximum_row_change_ratio=reference_contract.quality.maximum_row_change_ratio,
+        maximum_rejected_ratio=reference_contract.quality.maximum_rejected_ratio,
+        contains_personal_data=False,
+        owner=reference_contract.owner,
+        temporal_basis="SOURCE_DATE",
+    )
+
+
+def _inspect_xlsx_archive(content: bytes | Path) -> None:
+    try:
+        source = io.BytesIO(content) if isinstance(content, bytes) else content
+        with zipfile.ZipFile(source) as archive:
+            infos = archive.infolist()
+            names = [info.filename for info in infos]
+            if len(names) != len(set(names)):
+                raise RawPayloadError("duplicate XLSX archive entry", "XLSX_INVALID")
+            if any(name == "xl/vbaProject.bin" for name in names):
+                raise RawPayloadError("XLSX macro is forbidden", "XLSX_MACRO_REJECTED")
+            if any(name.startswith("xl/externalLinks/") for name in names):
+                raise RawPayloadError(
+                    "XLSX external links are forbidden", "XLSX_EXTERNAL_LINK_REJECTED"
+                )
+            total_uncompressed = sum(info.file_size for info in infos)
+            if total_uncompressed > _MAX_UNCOMPRESSED_BYTES:
+                raise RawPayloadError("XLSX expands beyond limit", "XLSX_SIZE_LIMIT")
+            for info in infos:
+                if info.file_size and info.compress_size == 0:
+                    raise RawPayloadError("XLSX compression metadata is invalid", "XLSX_SIZE_LIMIT")
+                if info.compress_size and info.file_size / info.compress_size > _MAX_COMPRESSION_RATIO:
+                    raise RawPayloadError("XLSX compression ratio is unsafe", "XLSX_SIZE_LIMIT")
+    except RawPayloadError:
+        raise
+    except zipfile.BadZipFile:
+        raise RawPayloadError("XLSX archive is invalid", "XLSX_INVALID") from None
+
+
+def _normalize(
+    row: dict[str, object], source_date: date
+) -> tuple[dict[str, object], list[str]]:
+    operator = _clean(_provider_value(row, "operator"))
+    line_number = _clean(_provider_value(row, "line_number"))
+    line_name = _clean(_provider_value(row, "line_name"))
+    station_number = _clean(_provider_value(row, "station_number"))
+    station_name = _clean(_provider_value(row, "station_name"))
+    latitude = _number(_provider_value(row, "latitude"))
+    longitude = _number(_provider_value(row, "longitude"))
+    reasons: list[str] = []
+    if not all((operator, line_number, station_number, station_name)):
+        reasons.append("RAIL_STATION_IDENTITY_REQUIRED")
+    if (
+        latitude is None
+        or longitude is None
+        or not 32 <= latitude <= 39.5
+        or not 124 <= longitude <= 132
+    ):
+        reasons.append("RAIL_STATION_COORDINATE_REQUIRED")
+    row_date = _date(_provider_value(row, "reference_date"))
+    if row_date != source_date:
+        reasons.append("SOURCE_DATE_MIXED")
+    transfer_lines = _transfer_lines(_provider_value(row, "transfer_lines"))
+    return (
+        {
+            "station_occurrence_id": f"{operator}|{line_number}|{station_number}",
+            "operator": operator,
+            "line_number": line_number,
+            "line_name": line_name,
+            "station_number": station_number,
+            "station_name": station_name,
+            "road_address": _optional(_provider_value(row, "road_address")),
+            "latitude": latitude,
+            "longitude": longitude,
+            "transfer_lines": transfer_lines,
+            "reference_date": source_date.isoformat(),
+        },
+        reasons,
+    )
+
+
+def _provider_value(row: dict[str, object], field: str) -> object:
+    for alias in _COLUMN_ALIASES[field]:
+        if alias in row:
+            return row[alias]
+    return None
+
+
+def _clean(value: object) -> str:
+    if value is None:
+        return ""
+    return " ".join(str(value).split())
+
+
+def _optional(value: object) -> str | None:
+    value = _clean(value)
+    return value or None
+
+
+def _number(value: object) -> float | None:
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _date(value: object) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(_clean(value)[:10])
+    except ValueError:
+        return None
+
+
+def _transfer_lines(value: object) -> list[str]:
+    text = _clean(value)
+    if not text:
+        return []
+    lines = [" ".join(part.split()) for part in re.split(r"[,;|]", text)]
+    return list(dict.fromkeys(line for line in lines if line))

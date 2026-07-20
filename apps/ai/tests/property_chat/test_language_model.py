@@ -14,7 +14,7 @@ from ai_service.property_chat.models import (
     DraftSentence,
     EvidenceFact,
     FactClaim,
-    PropertyQueryPlan,
+    QueryPlan,
 )
 
 
@@ -24,11 +24,11 @@ class ScriptedLanguageModel:
         self.plan_calls = 0
         self.draft_calls = 0
 
-    async def plan_query(self, _request: ChatbotQueryRequest) -> PropertyQueryPlan:
+    async def plan_query(self, _request: ChatbotQueryRequest) -> QueryPlan:
         self.plan_calls += 1
         if self.plan_calls <= self.failures:
             raise RuntimeError("provider detail must not escape")
-        return PropertyQueryPlan(capability="complex_identity", complex_name="잠실엘스")
+        return QueryPlan(capability="complex_identity", complex_name="잠실엘스")
 
     async def draft_answer(self, **_kwargs: object) -> DraftAnswer:
         self.draft_calls += 1
@@ -101,8 +101,8 @@ class ScriptedDraftModel:
         self._drafts = drafts
         self.draft_calls = 0
 
-    async def plan_query(self, _request: ChatbotQueryRequest) -> PropertyQueryPlan:
-        return PropertyQueryPlan(capability="recent_trade_lookup", complex_name="잠실엘스")
+    async def plan_query(self, _request: ChatbotQueryRequest) -> QueryPlan:
+        return QueryPlan(capability="recent_trade_lookup", complex_name="잠실엘스")
 
     async def draft_answer(self, **_kwargs: object) -> DraftAnswer:
         draft = self._drafts[min(self.draft_calls, len(self._drafts) - 1)]

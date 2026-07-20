@@ -23,6 +23,36 @@ def test_complex_lookup_escapes_like_wildcards_and_applies_region(
     assert [record.complex_id for record in exact] == [1]
 
 
+def test_region_context_resolves_exact_province_and_district_ancestors(
+    property_postgres_dsn: str,
+) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        context = repository.resolve_region_context("11710101")
+        missing = repository.resolve_region_context("99999999")
+    finally:
+        repository.close()
+
+    assert context is not None
+    assert context.province_name == "서울특별시"
+    assert context.district_name == "송파구"
+    assert context.education_office_name == "서울특별시교육청"
+    assert missing is None
+
+
+def test_region_context_rejects_noncanonical_code(property_postgres_dsn: str) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        with pytest.raises(ValueError, match="region code"):
+            repository.resolve_region_context("11710%")
+    finally:
+        repository.close()
+
+
 def test_recent_trade_query_keeps_date_boundaries_area_tolerance_and_latest_order(
     property_postgres_dsn: str,
 ) -> None:

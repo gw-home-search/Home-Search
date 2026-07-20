@@ -12,7 +12,6 @@ import type { RegionMapMarker, SidebarMode } from './mapAppTypes';
 import { declutterComplexMarkers } from '../features/map/markerViewModel';
 import { AppHeader } from './AppHeader';
 import { useFavoriteComplex } from '../features/favorites/hooks/useFavoriteComplex';
-import { ChatbotPanel } from '../features/chat/ChatbotPanel';
 import type { IndexedDbChatConversationStore } from '../features/chat/storage/chatConversationStore';
 
 export type MapAppProps = {
@@ -29,16 +28,18 @@ export function MapApp({
   chatConversationStore,
 }: MapAppProps) {
   const [isExplorationOpen, setIsExplorationOpen] = useState(() => window.innerWidth > 720);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const explorationButtonRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    function keepDesktopRailOpen() {
-      if (window.innerWidth > 720) setIsExplorationOpen(true);
+    function syncExplorationWithViewport() {
+      if (isChatOpen && window.innerWidth <= 1279) setIsExplorationOpen(false);
+      else if (window.innerWidth > 720) setIsExplorationOpen(true);
     }
-    window.addEventListener('resize', keepDesktopRailOpen);
-    return () => window.removeEventListener('resize', keepDesktopRailOpen);
-  }, []);
+    window.addEventListener('resize', syncExplorationWithViewport);
+    return () => window.removeEventListener('resize', syncExplorationWithViewport);
+  }, [isChatOpen]);
   const viewport = useMapViewport(initialMapLevel);
   const markerData = useMapMarkers(viewport.viewport);
   const detail = useComplexDetail();
@@ -85,13 +86,23 @@ export function MapApp({
     queueMicrotask(() => explorationButtonRef.current?.focus());
   }, [detail.closeDetail]);
 
+  const handleChatOpenChange = useCallback((isOpen: boolean) => {
+    setIsChatOpen(isOpen);
+    if (isOpen && window.innerWidth <= 1279) setIsExplorationOpen(false);
+    else if (!isOpen && window.innerWidth > 720) setIsExplorationOpen(true);
+  }, []);
+
   return (
     <main
       className="app-shell"
+      data-chat-open={isChatOpen ? 'true' : 'false'}
       data-detail-open={detail.selectedComplex == null ? 'false' : 'true'}
       data-ui-surface="map-first"
     >
-      <AppHeader />
+      <AppHeader
+        chatConversationStore={chatConversationStore}
+        onChatOpenChange={handleChatOpenChange}
+      />
 
       <div
         className="map-workspace"
@@ -180,7 +191,6 @@ export function MapApp({
           />
         </div>
       </div>
-      <ChatbotPanel store={chatConversationStore} />
     </main>
   );
 }

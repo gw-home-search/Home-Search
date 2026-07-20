@@ -1,0 +1,6 @@
+== edu.school-location
+
+include::{snippets}/edu.school-location/http-request.adoc[]
+include::{snippets}/edu.school-location/request-parameters.adoc[]
+include::{snippets}/edu.school-location/normalization-fields.adoc[]
+include::{snippets}/edu.school-location/failure-codes.adoc[]

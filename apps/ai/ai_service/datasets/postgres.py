@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import re
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -9,28 +13,191 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from .academy_registry_projection import (
+    write_projection as write_academy_registry_projection,
+)
+from .large_store_projection import write_projection as write_large_store_projection
 from .models import (
     AcquisitionRecord,
     ActiveSnapshot,
+    ActiveSnapshotState,
     DatasetSourceContract,
     LifecycleResult,
     RejectedRow,
     ValidationOutcome,
 )
+from .normalized_spool import iter_spooled_rows
+from .projection import ProjectionWriter
+from .rail_station_projection import write_projection as write_rail_station_projection
+from .raw_store import StoredRawObject
+from .sbiz_academy_projection import (
+    write_projection as write_sbiz_academy_projection,
+)
+from .school_location_projection import (
+    write_projection as write_school_location_projection,
+)
 from .service import PublicationStoreError
 
 
+_PROJECTION_WRITERS: dict[str, ProjectionWriter] = {
+    "edu.school-location": write_school_location_projection,
+    "edu.academy-registry": write_academy_registry_projection,
+    "place.sbiz-academy": write_sbiz_academy_projection,
+    "retail.large-store": write_large_store_projection,
+    "transport.rail-station": write_rail_station_projection,
+}
+
+
+@dataclass(frozen=True)
+class Migration:
+    version: int
+    description: str
+    path: Path
+    checksum: str
+
+
+def discover_migrations(directory: Path) -> tuple[Migration, ...]:
+    migrations: list[Migration] = []
+    versions: set[int] = set()
+    for path in sorted(directory.glob("[0-9][0-9][0-9][0-9]_*.sql")):
+        match = re.fullmatch(r"(\d{4})_([a-z0-9_]+)\.sql", path.name)
+        if match is None:
+            continue
+        version = int(match.group(1))
+        if version in versions:
+            raise RuntimeError("duplicate AI migration version")
+        versions.add(version)
+        sql = path.read_bytes()
+        migrations.append(
+            Migration(
+                version=version,
+                description=match.group(2).replace("_", " "),
+                path=path,
+                checksum=hashlib.sha256(sql).hexdigest(),
+            )
+        )
+    if not migrations:
+        raise RuntimeError("no AI migrations found")
+    return tuple(sorted(migrations, key=lambda migration: migration.version))
+
+
 class PostgresDatasetRepository:
-    def __init__(self, dsn: str) -> None:
+    def __init__(
+        self,
+        dsn: str,
+        *,
+        migration_directory: Path | None = None,
+        expected_database: str | None = None,
+        expected_username: str | None = None,
+    ) -> None:
         self._dsn = dsn
+        self._migration_directory = migration_directory or Path(__file__).with_name("migrations")
+        self._expected_database = expected_database
+        self._expected_username = expected_username
 
     def close(self) -> None:
         return None
 
+    def start_refresh_run(
+        self,
+        *,
+        source_id: str,
+        provider: str,
+        profile: str,
+        trigger_type: str,
+        started_at: datetime,
+    ) -> UUID:
+        if trigger_type not in {"MANUAL", "SCHEDULED"}:
+            raise ValueError("invalid refresh trigger type")
+        if not source_id.strip() or not provider.strip() or not profile.strip():
+            raise ValueError("refresh run metadata must not be blank")
+        refresh_run_id = uuid4()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO dataset_source(source_id, provider, created_at)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (source_id) DO NOTHING
+                """,
+                (source_id, provider, started_at),
+            )
+            connection.execute(
+                """
+                INSERT INTO dataset_refresh_run(
+                    refresh_run_id, profile, trigger_type, started_at, status
+                ) VALUES (%s, %s, %s, %s, 'RUNNING')
+                """,
+                (refresh_run_id, profile, trigger_type, started_at),
+            )
+            connection.execute(
+                """
+                INSERT INTO dataset_refresh_run_item(
+                    refresh_run_id, source_id, started_at, status
+                ) VALUES (%s, %s, %s, 'RUNNING')
+                """,
+                (refresh_run_id, source_id, started_at),
+            )
+        return refresh_run_id
+
+    def finish_refresh_run(
+        self,
+        *,
+        refresh_run_id: UUID,
+        source_id: str,
+        acquisition_id: UUID | None,
+        status: str,
+        reason_codes: tuple[str, ...],
+        finished_at: datetime,
+    ) -> None:
+        if status not in {"PASS", "NO_CHANGE", "FAIL"}:
+            raise ValueError("invalid refresh item status")
+        run_status = "PASS" if status in {"PASS", "NO_CHANGE"} else "FAIL"
+        with self._connect() as connection:
+            item = connection.execute(
+                """
+                UPDATE dataset_refresh_run_item
+                SET acquisition_id = %s, finished_at = %s, status = %s,
+                    reason_codes = %s
+                WHERE refresh_run_id = %s AND source_id = %s AND status = 'RUNNING'
+                """,
+                (
+                    acquisition_id,
+                    finished_at,
+                    status,
+                    list(dict.fromkeys(reason_codes)),
+                    refresh_run_id,
+                    source_id,
+                ),
+            )
+            if item.rowcount != 1:
+                raise RuntimeError("refresh run item is not running")
+            run = connection.execute(
+                """
+                UPDATE dataset_refresh_run
+                SET finished_at = %s, status = %s
+                WHERE refresh_run_id = %s AND status = 'RUNNING'
+                """,
+                (finished_at, run_status, refresh_run_id),
+            )
+            if run.rowcount != 1:
+                raise RuntimeError("refresh run is not running")
+
+    @contextmanager
+    def source_lock(self, source_id: str) -> Iterator[None]:
+        connection = self._connect()
+        try:
+            acquired = connection.execute(
+                "SELECT pg_try_advisory_lock(hashtextextended(%s, 0)) AS acquired",
+                (source_id,),
+            ).fetchone()["acquired"]
+            if not acquired:
+                raise SourceRefreshAlreadyRunning("SOURCE_REFRESH_ALREADY_RUNNING")
+            yield
+        finally:
+            connection.close()
+
     def migrate(self) -> None:
-        migration = Path(__file__).with_name("migrations") / "0001_dataset_lifecycle.sql"
-        sql = migration.read_text(encoding="utf-8")
-        checksum = hashlib.sha256(sql.encode()).hexdigest()
+        migrations = discover_migrations(self._migration_directory)
         with self._connect() as connection:
             connection.execute("SELECT pg_advisory_xact_lock(721002)")
             connection.execute(
@@ -43,18 +210,27 @@ class PostgresDatasetRepository:
                 )
                 """
             )
-            existing = connection.execute(
-                "SELECT checksum FROM ai_schema_history WHERE version = %s", (1,)
-            ).fetchone()
-            if existing:
-                if existing["checksum"] != checksum:
-                    raise RuntimeError("applied AI migration checksum mismatch")
-                return
-            connection.execute(sql)
-            connection.execute(
-                "INSERT INTO ai_schema_history(version, description, checksum) VALUES (%s, %s, %s)",
-                (1, "dataset lifecycle", checksum),
-            )
+            applied = {
+                int(row["version"]): str(row["checksum"])
+                for row in connection.execute(
+                    "SELECT version, checksum FROM ai_schema_history ORDER BY version"
+                ).fetchall()
+            }
+            known_versions = {migration.version for migration in migrations}
+            if set(applied) - known_versions:
+                raise RuntimeError("applied AI migration file is missing")
+            for migration in migrations:
+                existing_checksum = applied.get(migration.version)
+                if existing_checksum is not None:
+                    if existing_checksum != migration.checksum:
+                        raise RuntimeError("applied AI migration checksum mismatch")
+                    continue
+                sql = migration.path.read_text(encoding="utf-8")
+                connection.execute(sql)
+                connection.execute(
+                    "INSERT INTO ai_schema_history(version, description, checksum) VALUES (%s, %s, %s)",
+                    (migration.version, migration.description, migration.checksum),
+                )
 
     def register_source_contract(
         self, contract: DatasetSourceContract, registered_at: datetime
@@ -99,15 +275,19 @@ class PostgresDatasetRepository:
         contract_id: UUID,
         checksum: str,
         raw_bytes: bytes,
-        source_date: date,
+        source_date: date | None,
+        observed_at: datetime | None,
         collected_at: datetime,
     ) -> AcquisitionRecord:
         acquisition_id = uuid4()
         with self._connect() as connection:
             connection.execute(
                 """
-                INSERT INTO dataset_raw_object(checksum, content, byte_length, collected_at)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO dataset_raw_object(
+                    checksum, content, byte_length, collected_at,
+                    storage_backend, content_type
+                )
+                VALUES (%s, %s, %s, %s, 'INLINE_DB', 'application/octet-stream')
                 ON CONFLICT (checksum) DO NOTHING
                 """,
                 (checksum, raw_bytes, len(raw_bytes), collected_at),
@@ -115,46 +295,155 @@ class PostgresDatasetRepository:
             inserted = connection.execute(
                 """
                 INSERT INTO dataset_acquisition(
-                    acquisition_id, source_id, contract_id, checksum, source_date, collected_at, status
-                ) VALUES (%s, %s, %s, %s, %s, %s, 'ACQUIRED')
-                ON CONFLICT (source_id, checksum, contract_id) DO NOTHING
+                    acquisition_id, source_id, contract_id, checksum, temporal_basis,
+                    source_date, observed_at, collected_at, status,
+                    normalization_schema_version
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ACQUIRED', %s)
+                ON CONFLICT (source_id, checksum, normalization_schema_version)
+                DO NOTHING
                 RETURNING acquisition_id
                 """,
-                (acquisition_id, contract.source_id, contract_id, checksum, source_date, collected_at),
+                (
+                    acquisition_id,
+                    contract.source_id,
+                    contract_id,
+                    checksum,
+                    contract.temporal_basis,
+                    source_date,
+                    observed_at,
+                    collected_at,
+                    contract.schema_version,
+                ),
             ).fetchone()
             if inserted:
                 return AcquisitionRecord(acquisition_id=inserted["acquisition_id"], created=True)
             existing = connection.execute(
                 """
                 SELECT acquisition_id FROM dataset_acquisition
-                WHERE source_id = %s AND checksum = %s AND contract_id = %s
+                WHERE source_id = %s AND checksum = %s
+                  AND normalization_schema_version = %s
                 """,
-                (contract.source_id, checksum, contract_id),
+                (contract.source_id, checksum, contract.schema_version),
+            ).fetchone()
+            return AcquisitionRecord(acquisition_id=existing["acquisition_id"], created=False)
+
+    def acquire_stored_raw(
+        self,
+        contract: DatasetSourceContract,
+        contract_id: UUID,
+        raw_object: StoredRawObject,
+        source_date: date | None,
+        observed_at: datetime | None,
+        collected_at: datetime,
+    ) -> AcquisitionRecord:
+        acquisition_id = uuid4()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO dataset_raw_object(
+                    checksum, content, byte_length, collected_at, storage_backend,
+                    object_key, object_version_id, content_type
+                ) VALUES (%s, NULL, %s, %s, 'S3', %s, %s, %s)
+                ON CONFLICT (checksum) DO NOTHING
+                """,
+                (
+                    raw_object.checksum,
+                    raw_object.byte_length,
+                    collected_at,
+                    raw_object.object_key,
+                    raw_object.object_version_id,
+                    raw_object.content_type,
+                ),
+            )
+            inserted = connection.execute(
+                """
+                INSERT INTO dataset_acquisition(
+                    acquisition_id, source_id, contract_id, checksum, temporal_basis,
+                    source_date, observed_at, collected_at, status,
+                    normalization_schema_version
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ACQUIRED', %s)
+                ON CONFLICT (source_id, checksum, normalization_schema_version)
+                DO NOTHING
+                RETURNING acquisition_id
+                """,
+                (
+                    acquisition_id,
+                    contract.source_id,
+                    contract_id,
+                    raw_object.checksum,
+                    contract.temporal_basis,
+                    source_date,
+                    observed_at,
+                    collected_at,
+                    contract.schema_version,
+                ),
+            ).fetchone()
+            if inserted:
+                return AcquisitionRecord(acquisition_id=inserted["acquisition_id"], created=True)
+            existing = connection.execute(
+                """
+                SELECT acquisition_id FROM dataset_acquisition
+                WHERE source_id = %s AND checksum = %s
+                  AND normalization_schema_version = %s
+                """,
+                (contract.source_id, raw_object.checksum, contract.schema_version),
             ).fetchone()
             return AcquisitionRecord(acquisition_id=existing["acquisition_id"], created=False)
 
     def record_validation(
-        self, acquisition_id: UUID, outcome: ValidationOutcome, validated_at: datetime
+        self,
+        acquisition_id: UUID,
+        outcome: ValidationOutcome,
+        validated_at: datetime,
+        *,
+        normalized_checksum: str,
+        normalization_schema_version: str,
+        no_change: bool,
     ) -> None:
-        status = "QUALITY_FAILED" if outcome.has_blocking_issues else "VALIDATED"
+        status = (
+            "QUALITY_FAILED"
+            if outcome.has_blocking_issues
+            else "NO_CHANGE"
+            if no_change
+            else "VALIDATED"
+        )
         with self._connect() as connection:
-            for row in outcome.staged_rows:
-                connection.execute(
+            if status == "VALIDATED":
+                with connection.cursor().copy(
                     """
-                    INSERT INTO dataset_staging_row(
+                    COPY dataset_staging_row(
                         acquisition_id, row_number, row_data, source_key, accepted
-                    ) VALUES (%s, %s, %s, %s, %s)
-                    """,
-                    (acquisition_id, row.row_number, Jsonb(row.row_data), row.source_key, row.accepted),
-                )
+                    ) FROM STDIN
+                    """
+                ) as copy:
+                    for row in _outcome_rows(outcome):
+                        if row.accepted:
+                            copy.write_row(
+                                (
+                                    acquisition_id,
+                                    row.row_number,
+                                    Jsonb(row.row_data),
+                                    row.source_key,
+                                    True,
+                                )
+                            )
+            for row in _outcome_rows(outcome):
                 for reason_code in row.rejection_codes:
                     connection.execute(
                         """
                         INSERT INTO dataset_rejected_row(
-                            acquisition_id, row_number, reason_code, row_data, recorded_at
-                        ) VALUES (%s, %s, %s, %s, %s)
+                            acquisition_id, row_number, reason_code, row_data,
+                            source_key, field_name, evidence, recorded_at
+                        ) VALUES (%s, %s, %s, NULL, %s, %s, '{}'::jsonb, %s)
                         """,
-                        (acquisition_id, row.row_number, reason_code, Jsonb(row.row_data), validated_at),
+                        (
+                            acquisition_id,
+                            row.row_number,
+                            reason_code,
+                            row.source_key,
+                            _rejected_field_name(reason_code),
+                            validated_at,
+                        ),
                     )
             for issue in outcome.issues:
                 self._insert_issue(
@@ -170,7 +459,8 @@ class PostgresDatasetRepository:
                 """
                 UPDATE dataset_acquisition
                 SET status = %s, raw_row_count = %s, accepted_row_count = %s,
-                    rejected_row_count = %s, validated_at = %s
+                    rejected_row_count = %s, validated_at = %s,
+                    normalized_checksum = %s, normalization_schema_version = %s
                 WHERE acquisition_id = %s AND status = 'ACQUIRED'
                 """,
                 (
@@ -179,16 +469,20 @@ class PostgresDatasetRepository:
                     outcome.accepted_row_count,
                     outcome.rejected_row_count,
                     validated_at,
+                    normalized_checksum,
+                    normalization_schema_version,
                     acquisition_id,
                 ),
             )
 
-    def record_parse_failure(self, acquisition_id: UUID, recorded_at: datetime) -> None:
+    def record_parse_failure(
+        self, acquisition_id: UUID, reason_code: str, recorded_at: datetime
+    ) -> None:
         with self._connect() as connection:
             self._insert_issue(
                 connection,
                 acquisition_id,
-                "RAW_PARSE_FAILED",
+                reason_code,
                 "BLOCKING",
                 None,
                 {},
@@ -197,7 +491,30 @@ class PostgresDatasetRepository:
             connection.execute(
                 """
                 UPDATE dataset_acquisition
-                SET status = 'QUALITY_FAILED', validated_at = %s
+                SET status = 'PARSE_FAILED', validated_at = %s
+                WHERE acquisition_id = %s AND status = 'ACQUIRED'
+                """,
+                (recorded_at, acquisition_id),
+            )
+
+    def record_incomplete(
+        self, acquisition_id: UUID, reason_codes: tuple[str, ...], recorded_at: datetime
+    ) -> None:
+        with self._connect() as connection:
+            for reason_code in dict.fromkeys(reason_codes):
+                self._insert_issue(
+                    connection,
+                    acquisition_id,
+                    reason_code,
+                    "BLOCKING",
+                    None,
+                    {},
+                    recorded_at,
+                )
+            connection.execute(
+                """
+                UPDATE dataset_acquisition
+                SET status = 'INCOMPLETE', validated_at = %s
                 WHERE acquisition_id = %s AND status = 'ACQUIRED'
                 """,
                 (recorded_at, acquisition_id),
@@ -209,7 +526,9 @@ class PostgresDatasetRepository:
             with self._connect() as connection:
                 acquisition = connection.execute(
                     """
-                    SELECT source_id, source_date, checksum FROM dataset_acquisition
+                    SELECT source_id, source_date, observed_at, temporal_basis, checksum,
+                           normalized_checksum, normalization_schema_version
+                    FROM dataset_acquisition
                     WHERE acquisition_id = %s AND status = 'VALIDATED'
                     FOR UPDATE
                     """,
@@ -221,13 +540,21 @@ class PostgresDatasetRepository:
                     "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
                     (acquisition["source_id"],),
                 )
-                version_prefix = acquisition["source_date"].isoformat()
-                dataset_version = f"{version_prefix}-{str(acquisition['checksum'])[:12]}"
+                temporal_value = acquisition["source_date"] or acquisition["observed_at"]
+                if acquisition["temporal_basis"] == "SOURCE_DATE":
+                    version_prefix = temporal_value.isoformat()
+                else:
+                    version_prefix = temporal_value.strftime("%Y%m%d")
+                dataset_version = (
+                    f"{version_prefix}-{str(acquisition['normalized_checksum'])[:12]}"
+                )
                 connection.execute(
                     """
                     INSERT INTO dataset_publication(
-                        publication_id, source_id, acquisition_id, dataset_version, source_date, published_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                        publication_id, source_id, acquisition_id, dataset_version,
+                        source_date, observed_at, temporal_basis, raw_checksum,
+                        normalized_checksum, normalization_schema_version, published_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         publication_id,
@@ -235,6 +562,11 @@ class PostgresDatasetRepository:
                         acquisition_id,
                         dataset_version,
                         acquisition["source_date"],
+                        acquisition["observed_at"],
+                        acquisition["temporal_basis"],
+                        acquisition["checksum"],
+                        acquisition["normalized_checksum"],
+                        acquisition["normalization_schema_version"],
                         published_at,
                     ),
                 )
@@ -246,6 +578,16 @@ class PostgresDatasetRepository:
                     """,
                     (publication_id, acquisition_id),
                 )
+                projection_writer = _PROJECTION_WRITERS.get(
+                    str(acquisition["source_id"])
+                )
+                if projection_writer is not None:
+                    projection_writer(
+                        connection,
+                        publication_id,
+                        acquisition_id,
+                        str(acquisition["source_id"]),
+                    )
                 connection.execute(
                     """
                     INSERT INTO dataset_active_snapshot(source_id, publication_id, activated_at)
@@ -294,9 +636,10 @@ class PostgresDatasetRepository:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                SELECT a.source_id, a.acquisition_id, a.checksum, a.source_date, a.collected_at,
+                SELECT a.source_id, a.acquisition_id, a.checksum, a.normalized_checksum,
+                       a.temporal_basis, a.source_date, a.observed_at, a.collected_at,
                        a.status, a.raw_row_count, a.accepted_row_count, a.rejected_row_count,
-                       p.publication_id,
+                       p.publication_id, p.dataset_version,
                        COALESCE(array_agg(DISTINCT q.reason_code) FILTER (WHERE q.reason_code IS NOT NULL), '{}') AS issue_codes
                 FROM dataset_acquisition a
                 LEFT JOIN dataset_publication p ON p.acquisition_id = a.acquisition_id
@@ -306,12 +649,19 @@ class PostgresDatasetRepository:
                 """,
                 (acquisition_id,),
             ).fetchone()
-        status = "Pass" if row["status"] == "PUBLISHED" else "Fail"
+        status = (
+            "Pass"
+            if row["status"] == "PUBLISHED"
+            else "NoChange"
+            if row["status"] == "NO_CHANGE"
+            else "Fail"
+        )
         return LifecycleResult(
             status=status,
             source_id=row["source_id"],
             acquisition_id=row["acquisition_id"],
             publication_id=row["publication_id"],
+            dataset_version=row["dataset_version"],
             checksum=str(row["checksum"]),
             source_date=row["source_date"],
             collected_at=row["collected_at"],
@@ -320,6 +670,9 @@ class PostgresDatasetRepository:
             rejected_row_count=row["rejected_row_count"],
             issue_codes=tuple(sorted(row["issue_codes"])),
             idempotent=idempotent,
+            normalized_checksum=row["normalized_checksum"],
+            temporal_basis=row["temporal_basis"],
+            observed_at=row["observed_at"],
         )
 
     def active_snapshot(self, source_id: str) -> ActiveSnapshot | None:
@@ -327,7 +680,7 @@ class PostgresDatasetRepository:
             publication = connection.execute(
                 """
                 SELECT p.publication_id, p.acquisition_id, p.dataset_version,
-                       p.source_date, p.published_at
+                       p.source_date, p.observed_at, p.normalized_checksum, p.published_at
                 FROM dataset_active_snapshot active
                 JOIN dataset_publication p ON p.publication_id = active.publication_id
                 WHERE active.source_id = %s
@@ -351,6 +704,30 @@ class PostgresDatasetRepository:
             source_date=publication["source_date"],
             published_at=publication["published_at"],
             rows=tuple(row["row_data"] for row in rows),
+            normalized_checksum=publication["normalized_checksum"],
+            observed_at=publication["observed_at"],
+        )
+
+    def active_snapshot_state(self, source_id: str) -> ActiveSnapshotState | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT publication.normalized_checksum, count(snapshot.source_key) AS row_count
+                FROM dataset_active_snapshot active
+                JOIN dataset_publication publication
+                  ON publication.publication_id = active.publication_id
+                LEFT JOIN dataset_snapshot_row snapshot
+                  ON snapshot.publication_id = publication.publication_id
+                WHERE active.source_id = %s
+                GROUP BY publication.publication_id
+                """,
+                (source_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return ActiveSnapshotState(
+            normalized_checksum=row["normalized_checksum"],
+            row_count=row["row_count"],
         )
 
     def rollback(self, source_id: str, publication_id: UUID, activated_at: datetime) -> None:
@@ -426,7 +803,22 @@ class PostgresDatasetRepository:
         return tuple(row["action"] for row in rows)
 
     def _connect(self) -> psycopg.Connection:
-        return psycopg.connect(self._dsn, row_factory=dict_row)
+        connection = psycopg.connect(self._dsn, row_factory=dict_row)
+        try:
+            if (
+                self._expected_database is not None
+                and connection.info.dbname != self._expected_database
+            ):
+                raise ValueError("dataset DSN must target the expected database")
+            if (
+                self._expected_username is not None
+                and connection.info.user != self._expected_username
+            ):
+                raise ValueError("dataset DSN must use the expected role")
+        except Exception:
+            connection.close()
+            raise
+        return connection
 
     @staticmethod
     def _insert_issue(
@@ -446,3 +838,21 @@ class PostgresDatasetRepository:
             """,
             (acquisition_id, reason_code, severity, row_number, Jsonb(details), recorded_at),
         )
+
+
+def _rejected_field_name(reason_code: str) -> str | None:
+    return {
+        "REQUIRED_FIELD_MISSING": "required_fields",
+        "INVALID_COORDINATE": "position",
+        "DUPLICATE_UNIQUE_KEY": "source_key",
+    }.get(reason_code)
+
+
+def _outcome_rows(outcome: ValidationOutcome) -> Iterator:
+    if outcome.spool_path is not None:
+        return iter_spooled_rows(outcome.spool_path)
+    return iter(outcome.staged_rows)
+
+
+class SourceRefreshAlreadyRunning(RuntimeError):
+    pass

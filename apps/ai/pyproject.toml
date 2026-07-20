@@ -4,15 +4,24 @@ version = "0.1.0"
 description = "Evidence-grounded Home Search AI service"
 requires-python = ">=3.13,<3.15"
 dependencies = [
+  "boto3>=1.40,<2",
+  "defusedxml>=0.7,<1",
   "fastapi>=0.116,<1",
+  "openpyxl>=3.1,<4",
   "psycopg[binary]>=3.3.4,<4",
   "psycopg-pool>=3.3,<4",
+  "pyproj>=3.7,<4",
+  "pyshp>=3,<4",
   "pyjwt[crypto]>=2.10,<3",
   "uvicorn>=0.35,<1",
 ]
 
 [project.scripts]
 home-ai-migrate = "ai_service.datasets.migrate:main"
+home-ai-reference-refresh = "ai_service.datasets.reference_refresh:main"
+home-ai-reference-status = "ai_service.datasets.reference_inspection:status_main"
+home-ai-reference-audit = "ai_service.datasets.reference_inspection:audit_main"
+home-ai-school-location-ingest = "ai_service.datasets.school_location_ingest:main"
 home-ai-property-golden = "ai_service.property_chat.golden:main"
 
 [build-system]

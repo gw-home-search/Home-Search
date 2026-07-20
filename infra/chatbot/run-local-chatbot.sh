@@ -21,6 +21,7 @@ else
 fi
 base_compose="${repo_root}/infra/docker-compose.local.yml"
 chatbot_compose="${repo_root}/infra/docker-compose.chatbot.yml"
+ai_database_bootstrap="${repo_root}/infra/postgres/bootstrap-ai-database.sh"
 bff_jar="${CHATBOT_BFF_JAR_PATH:-${repo_root}/apps/chat-bff/build/libs/chat-bff.jar}"
 ai_dockerfile="${CHATBOT_AI_DOCKERFILE_PATH:-${repo_root}/apps/ai/Dockerfile}"
 user_public_key="${CHATBOT_USER_PUBLIC_KEY_PATH:-${repo_root}/runtime-keys/user/public}"
@@ -109,11 +110,42 @@ optional_value() {
     printf '%s' "$value"
 }
 
+optional_blank_value() {
+    local path="$1"
+    local key="$2"
+    local default_value="$3"
+    local count
+    local value
+    count="$(awk -v key="$key" '
+        /^[[:space:]]*#/ { next }
+        {
+            line = $0
+            sub(/^[[:space:]]*/, "", line)
+        }
+        index(line, key "=") == 1 { count += 1 }
+        END { print count + 0 }
+    ' "$path")"
+    [[ "$count" == "0" || "$count" == "1" ]] \
+        || reject "${key}는 최대 한 번 정의할 수 있습니다."
+    if [[ "$count" == "0" ]]; then
+        printf '%s' "$default_value"
+        return
+    fi
+    value="$(read_value "$path" "$key")"
+    if [[ -n "$value" ]]; then
+        [[ "$value" != *'replace-with'* && "$value" != *'<'* && "$value" != *'>'* ]] \
+            || reject "${key} placeholder를 실제 설정으로 교체해야 합니다."
+    fi
+    printf '%s' "$value"
+}
+
 for file in "$property_vars_file" "$user_vars_file" "$bff_vars_file" "$ai_vars_file"; do
     require_file "$file" "runtime vars"
 done
 require_file "$base_compose" "base compose"
 require_file "$chatbot_compose" "chatbot compose"
+require_file "$ai_database_bootstrap" "AI DB bootstrap"
+[[ -x "$ai_database_bootstrap" ]] || reject "AI DB bootstrap을 실행할 수 없습니다."
 require_file "$bff_jar" "chat BFF artifact"
 require_file "$ai_dockerfile" "AI Dockerfile"
 require_file "$user_public_key" "user JWT public key"
@@ -148,6 +180,9 @@ fi
 property_runtime_db_password="$(optional_value "$property_vars_file" PROPERTY_RUNTIME_DB_PASSWORD property_runtime_local_password)"
 property_migrator_db_password="$(required_value "$property_vars_file" PROPERTY_MIGRATOR_DB_PASSWORD)"
 ai_property_reader_db_password="$(required_value "$property_vars_file" AI_PROPERTY_READER_DB_PASSWORD)"
+ai_data_migrator_db_password="$(required_value "$property_vars_file" AI_DATA_MIGRATOR_DB_PASSWORD)"
+ai_data_importer_db_password="$(required_value "$property_vars_file" AI_DATA_IMPORTER_DB_PASSWORD)"
+ai_data_runtime_db_password="$(required_value "$property_vars_file" AI_DATA_RUNTIME_DB_PASSWORD)"
 user_active_kid="$(required_value "$user_vars_file" USER_JWT_ACTIVE_KID)"
 user_db_password="$(required_value "$user_vars_file" USER_DB_PASSWORD)"
 user_runtime_db_password="$(optional_value "$property_vars_file" USER_RUNTIME_DB_PASSWORD "$user_db_password")"
@@ -174,6 +209,20 @@ PY
 else
     ai_property_dsn="$(required_value "$ai_vars_file" HOME_AI_PROPERTY_DSN)"
 fi
+default_ai_reference_dsn="$(AI_RUNTIME_PASSWORD="$ai_data_runtime_db_password" python3 - <<'PY'
+import os
+from urllib.parse import quote
+
+password = quote(os.environ["AI_RUNTIME_PASSWORD"], safe="")
+print(f"postgresql://home_search_ai_runtime:{password}@postgis:5432/home_search_ai")
+PY
+)"
+if [[ "$using_default_runtime_files" == "true" ]]; then
+    ai_reference_dsn="$default_ai_reference_dsn"
+else
+    ai_reference_dsn="$(optional_value "$ai_vars_file" HOME_AI_REFERENCE_DSN "$default_ai_reference_dsn")"
+fi
+ai_enabled_reference_capabilities="$(optional_blank_value "$ai_vars_file" HOME_AI_ENABLED_REFERENCE_CAPABILITIES "")"
 ai_openai_api_key="$(required_value "$ai_vars_file" HOME_AI_OPENAI_API_KEY)"
 ai_openai_primary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_PRIMARY_MODEL)"
 ai_openai_secondary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_SECONDARY_MODEL)"
@@ -240,6 +289,40 @@ then
     reject "HOME_AI_PROPERTY_DSN과 AI_PROPERTY_READER_DB_PASSWORD가 일치하지 않습니다."
 fi
 
+[[ "$ai_reference_dsn" != *[[:space:]]* ]] \
+    || reject "HOME_AI_REFERENCE_DSN에 공백을 사용할 수 없습니다."
+if ! AI_REFERENCE_DSN="$ai_reference_dsn" AI_RUNTIME_PASSWORD="$ai_data_runtime_db_password" python3 - <<'PY'
+import os
+import sys
+from urllib.parse import quote, unquote, urlsplit
+
+try:
+    raw_dsn = os.environ["AI_REFERENCE_DSN"]
+    runtime_password = os.environ["AI_RUNTIME_PASSWORD"]
+    expected_dsn = (
+        "postgresql://home_search_ai_runtime:"
+        f"{quote(runtime_password, safe='')}@postgis:5432/home_search_ai"
+    )
+    parsed = urlsplit(raw_dsn)
+    valid = (
+        raw_dsn == expected_dsn
+        and parsed.scheme == "postgresql"
+        and parsed.username == "home_search_ai_runtime"
+        and unquote(parsed.password or "") == runtime_password
+        and parsed.hostname == "postgis"
+        and parsed.port == 5432
+        and parsed.path == "/home_search_ai"
+        and not parsed.query
+        and not parsed.fragment
+    )
+except (KeyError, ValueError):
+    valid = False
+sys.exit(0 if valid else 1)
+PY
+then
+    reject "HOME_AI_REFERENCE_DSN과 AI_DATA_RUNTIME_DB_PASSWORD가 일치하지 않습니다."
+fi
+
 if ! AI_OPENAI_API_KEY="$ai_openai_api_key" \
     AI_OPENAI_PRIMARY_MODEL="$ai_openai_primary_model" \
     AI_OPENAI_SECONDARY_MODEL="$ai_openai_secondary_model" \
@@ -285,11 +368,18 @@ case "$ai_enabled_property_capabilities" in
     complex_identity | complex_identity,recent_trade_lookup | complex_identity,recent_trade_lookup,price_trend) ;;
     *) reject "HOME_AI_ENABLED_PROPERTY_CAPABILITIES는 승인된 누적 설정만 허용합니다." ;;
 esac
+case "$ai_enabled_reference_capabilities" in
+    "" | school_location) ;;
+    *) reject "HOME_AI_ENABLED_REFERENCE_CAPABILITIES는 빈 값 또는 school_location만 허용합니다." ;;
+esac
 
 export HOME_SEARCH_DB_PASSWORD="$home_search_db_password"
 export PROPERTY_RUNTIME_DB_PASSWORD="$property_runtime_db_password"
 export PROPERTY_MIGRATOR_DB_PASSWORD="$property_migrator_db_password"
 export AI_PROPERTY_READER_DB_PASSWORD="$ai_property_reader_db_password"
+export AI_DATA_MIGRATOR_DB_PASSWORD="$ai_data_migrator_db_password"
+export AI_DATA_IMPORTER_DB_PASSWORD="$ai_data_importer_db_password"
+export AI_DATA_RUNTIME_DB_PASSWORD="$ai_data_runtime_db_password"
 export USER_RUNTIME_DB_PASSWORD="$user_runtime_db_password"
 export USER_MIGRATOR_DB_PASSWORD="$user_migrator_db_password"
 export HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS="$bff_public_key_paths"
@@ -301,6 +391,8 @@ export HOME_AI_OPENAI_SECONDARY_MODEL="$ai_openai_secondary_model"
 export HOME_AI_OPENAI_TIMEOUT_SECONDS="$ai_openai_timeout_seconds"
 export HOME_AI_QUERY_TIMEOUT_SECONDS="$ai_query_timeout_seconds"
 export HOME_AI_ENABLED_PROPERTY_CAPABILITIES="$ai_enabled_property_capabilities"
+export HOME_AI_REFERENCE_DSN="$ai_reference_dsn"
+export HOME_AI_ENABLED_REFERENCE_CAPABILITIES="$ai_enabled_reference_capabilities"
 export CHATBOT_BFF_JAR_PATH="$bff_jar"
 export USER_JWT_PUBLIC_KEY_HOST_PATH="$user_public_key"
 export USER_JWT_PRIVATE_KEY_HOST_PATH="$user_private_key"
@@ -325,6 +417,7 @@ require_base_container home-search-postgis true
 require_base_container home-search-redis true
 require_base_container home-search-api false
 "${compose[@]}" config --quiet
+"$ai_database_bootstrap"
 
 echo "상태: Pass - chatbot local preflight"
 "${compose[@]}" --profile user up -d --build --force-recreate --no-deps \

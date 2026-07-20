@@ -4,18 +4,41 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Literal
 
+QueryCapability = Literal[
+    "complex_identity",
+    "recent_trade_lookup",
+    "price_trend",
+    "school_location",
+    "retail_location",
+    "academy_registry_summary",
+    "academy_lookup",
+]
 PropertyCapability = Literal["complex_identity", "recent_trade_lookup", "price_trend"]
+ReferenceCapability = Literal[
+    "school_location", "retail_location", "academy_registry_summary", "academy_lookup"
+]
+SchoolLevel = Literal["ELEMENTARY", "MIDDLE", "HIGH"]
+FacilitySubtype = Literal[
+    "LARGE_MART",
+    "DEPARTMENT_STORE",
+    "SHOPPING_CENTER",
+    "COMPLEX_MALL",
+    "OTHER_LARGE_STORE",
+]
 
 
 @dataclass(frozen=True)
-class PropertyQueryPlan:
-    capability: PropertyCapability
+class QueryPlan:
+    capability: QueryCapability
     complex_name: str
     region_name: str | None = None
     start_date: date | None = None
     end_date: date | None = None
     exclusive_area_square_meters: float | None = None
     limit: int = 5
+    school_levels: tuple[SchoolLevel, ...] = ("ELEMENTARY", "MIDDLE", "HIGH")
+    facility_subtypes: tuple[FacilitySubtype, ...] = ()
+    radius_meters: int | None = None
 
     def __post_init__(self) -> None:
         normalized_name = self.complex_name.strip()
@@ -35,6 +58,46 @@ class PropertyQueryPlan:
             raise ValueError("exclusive area is outside the supported range")
         if not 1 <= self.limit <= 10:
             raise ValueError("limit must be between 1 and 10")
+        if self.capability in {
+            "school_location",
+            "retail_location",
+            "academy_lookup",
+        } and self.limit > 5:
+            raise ValueError("reference facility limit must be between 1 and 5")
+        if (
+            not self.school_levels
+            or len(self.school_levels) != len(set(self.school_levels))
+            or any(level not in {"ELEMENTARY", "MIDDLE", "HIGH"} for level in self.school_levels)
+        ):
+            raise ValueError("school_levels are outside the supported set")
+        canonical_levels = tuple(
+            level
+            for level in ("ELEMENTARY", "MIDDLE", "HIGH")
+            if level in self.school_levels
+        )
+        object.__setattr__(self, "school_levels", canonical_levels)
+        allowed_subtypes = (
+            "LARGE_MART",
+            "DEPARTMENT_STORE",
+            "SHOPPING_CENTER",
+            "COMPLEX_MALL",
+            "OTHER_LARGE_STORE",
+        )
+        if (
+            len(self.facility_subtypes) != len(set(self.facility_subtypes))
+            or any(subtype not in allowed_subtypes for subtype in self.facility_subtypes)
+        ):
+            raise ValueError("facility_subtypes are outside the supported set")
+        canonical_subtypes = tuple(
+            subtype for subtype in allowed_subtypes if subtype in self.facility_subtypes
+        )
+        object.__setattr__(self, "facility_subtypes", canonical_subtypes)
+        radius_meters = self.radius_meters
+        if radius_meters is None:
+            radius_meters = 1000 if self.capability == "retail_location" else 800
+            object.__setattr__(self, "radius_meters", radius_meters)
+        if not 0 <= radius_meters <= 10_000_000:
+            raise ValueError("radius_meters cannot be represented safely")
         if self.capability == "price_trend" and (self.start_date is None or self.end_date is None):
             raise ValueError("price_trend requires start_date and end_date")
 
@@ -50,6 +113,13 @@ class ComplexRecord:
     longitude: float | None
     marker_safe: bool
     data_updated_at: datetime
+
+
+@dataclass(frozen=True)
+class AdministrativeRegionContext:
+    province_name: str
+    district_name: str
+    education_office_name: str
 
 
 @dataclass(frozen=True)
@@ -70,6 +140,40 @@ class MonthlyTrendRecord:
     trade_count: int
     minimum_amount_ten_thousand_krw: int
     maximum_amount_ten_thousand_krw: int
+
+
+@dataclass(frozen=True)
+class SchoolSnapshot:
+    dataset_version: str
+    source_date: date
+    published_at: datetime
+
+
+@dataclass(frozen=True)
+class SchoolRecord:
+    school_id: str
+    school_name: str
+    school_level: SchoolLevel
+    operating_status: str
+    road_address: str | None
+    lot_address: str | None
+    latitude: float
+    longitude: float
+    distance_meters: int
+
+
+@dataclass(frozen=True)
+class SchoolSearchResult:
+    schools: tuple[SchoolRecord, ...]
+    matched_count: int
+
+    @property
+    def returned_count(self) -> int:
+        return len(self.schools)
+
+    @property
+    def has_more(self) -> bool:
+        return self.matched_count > self.returned_count
 
 
 @dataclass(frozen=True)
@@ -103,7 +207,12 @@ class EvidenceFact:
     claims: tuple[FactClaim, ...]
     data_as_of: date
     payload: dict[str, object]
+    source_id: str = "property.ai_read"
+    source_name: str = "Home Search 실거래"
+    source_url: str | None = None
+    evidence_grade: str = "A"
+    dataset_version_value: str | None = None
 
     @property
     def dataset_version(self) -> str:
-        return f"property-{self.data_as_of.isoformat()}"
+        return self.dataset_version_value or f"property-{self.data_as_of.isoformat()}"

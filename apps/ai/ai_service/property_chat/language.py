@@ -7,7 +7,7 @@ from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
 
 from .engine import GroundedLanguageModel, validate_draft
-from .models import DraftAnswer, EvidenceFact, PropertyQueryPlan
+from .models import DraftAnswer, EvidenceFact, QueryPlan
 
 T = TypeVar("T")
 
@@ -21,7 +21,7 @@ class LanguageModelStageError(ChatbotProviderUnavailable):
 
 
 class UnavailableLanguageModel:
-    async def plan_query(self, _request: ChatbotQueryRequest) -> PropertyQueryPlan:
+    async def plan_query(self, _request: ChatbotQueryRequest) -> QueryPlan:
         raise ChatbotProviderUnavailable()
 
     async def draft_answer(
@@ -45,7 +45,7 @@ class RetryingLanguageModel:
         self._primary = primary
         self._secondary = secondary
 
-    async def plan_query(self, request: ChatbotQueryRequest) -> PropertyQueryPlan:
+    async def plan_query(self, request: ChatbotQueryRequest) -> QueryPlan:
         try:
             return await self._execute(
                 lambda model: model.plan_query(request),
@@ -66,7 +66,12 @@ class RetryingLanguageModel:
                 limitations=limitations,
                 question=question,
             )
-            validate_draft(draft, facts, "supported" if facts else "unavailable")
+            validate_draft(
+                draft,
+                facts,
+                "supported" if facts else "unavailable",
+                limitations=limitations,
+            )
             return draft
 
         try:

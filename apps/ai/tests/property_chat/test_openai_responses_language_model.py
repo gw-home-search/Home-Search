@@ -133,6 +133,105 @@ def test_planning_uses_fixed_responses_endpoint_without_provider_storage() -> No
     assert "Set limit to 5 when it is not used" in developer_prompt
 
 
+def test_planning_accepts_school_location_with_explicit_levels_and_radius() -> None:
+    requester = RecordingRequester(
+        _response(
+            {
+                **_valid_plan(
+                    capability="school_location",
+                    schoolLevels=["ELEMENTARY", "MIDDLE"],
+                    radiusMeters=800,
+                )
+            }
+        )
+    )
+
+    plan = asyncio.run(
+        _model(requester).plan_query(
+            ChatbotQueryRequest(question="잠실엘스 800m 안 초등학교와 중학교")
+        )
+    )
+
+    assert plan.capability == "school_location"
+    assert plan.school_levels == ("ELEMENTARY", "MIDDLE")
+    assert plan.radius_meters == 800
+    schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
+    assert "school_location" in schema["properties"]["capability"]["enum"]
+    assert schema["properties"]["radiusMeters"] == {
+        "type": ["integer", "null"],
+        "minimum": 0,
+        "maximum": 10000000,
+    }
+
+
+def test_planning_accepts_retail_location_with_default_radius_and_subtypes() -> None:
+    requester = RecordingRequester(
+        _response(
+            {
+                **_valid_plan(
+                    capability="retail_location",
+                    facilitySubtypes=["LARGE_MART", "COMPLEX_MALL"],
+                    radiusMeters=None,
+                )
+            }
+        )
+    )
+
+    plan = asyncio.run(
+        _model(requester).plan_query(
+            ChatbotQueryRequest(question="잠실엘스 주변 대형마트와 복합쇼핑몰")
+        )
+    )
+
+    assert plan.capability == "retail_location"
+    assert plan.radius_meters == 1000
+    assert plan.facility_subtypes == ("LARGE_MART", "COMPLEX_MALL")
+    schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
+    assert "retail_location" in schema["properties"]["capability"]["enum"]
+
+
+def test_planning_accepts_academy_registry_summary_without_location_semantics() -> None:
+    requester = RecordingRequester(
+        _response(_valid_plan(capability="academy_registry_summary"))
+    )
+
+    plan = asyncio.run(
+        _model(requester).plan_query(
+            ChatbotQueryRequest(question="잠실엘스 지역 공식 등록 학원 수")
+        )
+    )
+
+    assert plan.capability == "academy_registry_summary"
+    schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
+    assert "academy_registry_summary" in schema["properties"]["capability"]["enum"]
+    prompt = json.loads(requester.calls[0][2])["input"][0]["content"]
+    assert "Do not interpret it as a nearby, radius, distance" in prompt
+
+
+def test_planning_accepts_academy_lookup_with_800_meter_default() -> None:
+    requester = RecordingRequester(
+        _response(
+            _valid_plan(
+                capability="academy_lookup",
+                schoolLevels=["ELEMENTARY", "MIDDLE", "HIGH"],
+                facilitySubtypes=[],
+                radiusMeters=None,
+            )
+        )
+    )
+
+    plan = asyncio.run(
+        _model(requester).plan_query(
+            ChatbotQueryRequest(question="잠실엘스 주변 학원 위치")
+        )
+    )
+
+    assert plan.capability == "academy_lookup"
+    assert plan.radius_meters == 800
+    schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
+    assert schema["properties"]["capability"]["enum"][-1] == "academy_lookup"
+
+
 def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> None:
     requester = RecordingRequester(
         _response(

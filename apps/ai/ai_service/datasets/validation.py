@@ -3,13 +3,16 @@ from __future__ import annotations
 import json
 import math
 from datetime import date, datetime
+from collections.abc import Callable, Iterable
 from typing import Any
 
-from .models import DatasetSourceContract, QualityIssue, StagedRow, ValidationOutcome
+from .models import DatasetSourceContract, ParsedRow, QualityIssue, StagedRow, ValidationOutcome
 
 
 class RawPayloadError(ValueError):
-    pass
+    def __init__(self, message: str, reason_code: str = "RAW_PARSE_FAILED") -> None:
+        super().__init__(message)
+        self.reason_code = reason_code
 
 
 def parse_rows(raw_bytes: bytes, encoding: str) -> list[dict[str, object]]:
@@ -30,18 +33,34 @@ def parse_rows(raw_bytes: bytes, encoding: str) -> list[dict[str, object]]:
 
 def validate_rows(
     contract: DatasetSourceContract,
-    rows: list[dict[str, object]],
+    rows: Iterable[dict[str, object] | ParsedRow],
     previous_active_row_count: int | None,
     *,
     source_date: date,
     collected_at: datetime,
+    adapter_issues: tuple[QualityIssue, ...] = (),
+    adapter_rejections: dict[int, tuple[str, ...]] | None = None,
+    row_sink: Callable[[StagedRow], None] | None = None,
+    retain_staged_rows: bool = True,
 ) -> ValidationOutcome:
     staged: list[StagedRow] = []
-    issues: list[QualityIssue] = []
+    issues: list[QualityIssue] = list(adapter_issues)
     seen_keys: set[tuple[str, ...]] = set()
+    adapter_rejections = adapter_rejections or {}
+    raw_count = 0
+    rejected_count = 0
 
-    for row_number, row in enumerate(rows, start=1):
-        rejection_codes: list[str] = []
+    for row_number, candidate in enumerate(rows, start=1):
+        if isinstance(candidate, ParsedRow):
+            row = candidate.row_data
+            candidate_rejections = candidate.rejection_codes
+        else:
+            row = candidate
+            candidate_rejections = ()
+        raw_count += 1
+        rejection_codes: list[str] = [
+            *adapter_rejections.get(row_number, ()), *candidate_rejections
+        ]
         missing = [field for field in contract.required_fields if _missing(row.get(field))]
         if missing:
             rejection_codes.append("REQUIRED_FIELD_MISSING")
@@ -58,16 +77,20 @@ def validate_rows(
                 seen_keys.add(key)
 
         accepted = not rejection_codes
-        staged.append(
-            StagedRow(
+        if not accepted:
+            rejected_count += 1
+        staged_row = StagedRow(
                 row_number=row_number,
                 row_data=dict(row),
                 accepted=accepted,
                 rejection_codes=tuple(rejection_codes),
-                source_key=source_key if accepted else None,
+                source_key=source_key,
             )
-        )
-        for reason_code in rejection_codes:
+        if retain_staged_rows:
+            staged.append(staged_row)
+        if row_sink is not None:
+            row_sink(staged_row)
+        for reason_code in dict.fromkeys(rejection_codes):
             issues.append(
                 QualityIssue(
                     reason_code=reason_code,
@@ -77,8 +100,6 @@ def validate_rows(
                 )
             )
 
-    raw_count = len(rows)
-    rejected_count = sum(not row.accepted for row in staged)
     accepted_count = raw_count - rejected_count
     age_days = (collected_at.date() - source_date).days
     if age_days < 0:

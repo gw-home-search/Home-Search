@@ -21,7 +21,7 @@ from ai_service.property_chat.models import (
     DraftAnswer,
     DraftClaim,
     DraftSentence,
-    PropertyQueryPlan,
+    QueryPlan,
 )
 from ai_service.property_chat.postgres import PostgresPropertyFactRepository
 
@@ -31,7 +31,7 @@ def cases() -> tuple[GoldenCase, ...]:
         GoldenCase(
             case_id="complex-identity",
             question="잠실동 잠실엘스 위치를 알려줘",
-            plan=PropertyQueryPlan(
+            plan=QueryPlan(
                 capability="complex_identity",
                 complex_name="잠실엘스",
                 region_name="잠실동",
@@ -41,7 +41,7 @@ def cases() -> tuple[GoldenCase, ...]:
         GoldenCase(
             case_id="recent-trades",
             question="잠실엘스 전용 84㎡의 2026년 1월부터 2월까지 최근 거래 3건을 알려줘",
-            plan=PropertyQueryPlan(
+            plan=QueryPlan(
                 capability="recent_trade_lookup",
                 complex_name="잠실엘스",
                 region_name="잠실동",
@@ -55,7 +55,7 @@ def cases() -> tuple[GoldenCase, ...]:
         GoldenCase(
             case_id="price-trend",
             question="잠실엘스 전용 84㎡의 2026년 1월부터 2월까지 월별 가격과 거래량을 알려줘",
-            plan=PropertyQueryPlan(
+            plan=QueryPlan(
                 capability="price_trend",
                 complex_name="잠실엘스",
                 region_name="잠실동",
@@ -68,7 +68,7 @@ def cases() -> tuple[GoldenCase, ...]:
         GoldenCase(
             case_id="complex-not-found",
             question="홈서치골든질문존재하지않는단지를 찾아줘",
-            plan=PropertyQueryPlan(
+            plan=QueryPlan(
                 capability="complex_identity",
                 complex_name="홈서치골든질문존재하지않는단지",
             ),

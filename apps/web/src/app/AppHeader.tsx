@@ -1,6 +1,13 @@
 import { AccountControl } from '../features/auth/AccountControl';
+import { ChatbotPanel } from '../features/chat/ChatbotPanel';
+import type { IndexedDbChatConversationStore } from '../features/chat/storage/chatConversationStore';
 
-export function AppHeader() {
+type AppHeaderProps = {
+  chatConversationStore?: IndexedDbChatConversationStore;
+  onChatOpenChange?: (isOpen: boolean) => void;
+};
+
+export function AppHeader({ chatConversationStore, onChatOpenChange }: AppHeaderProps) {
   return (
     <header aria-label="상단 앱 바" className="app-bar">
       <div className="app-brand">
@@ -17,7 +24,10 @@ export function AppHeader() {
           <span>HomeSearch · 실거래가 인사이트</span>
         </span>
       </div>
-      <AccountControl />
+      <div className="app-header-actions">
+        <ChatbotPanel onOpenChange={onChatOpenChange} store={chatConversationStore} />
+        <AccountControl />
+      </div>
     </header>
   );
 }

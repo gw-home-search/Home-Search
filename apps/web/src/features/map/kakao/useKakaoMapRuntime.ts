@@ -128,10 +128,11 @@ export function useKakaoMapRuntime({
       const center = map.getCenter?.();
       map.relayout?.();
       if (center) map.setCenter?.(center);
+      onViewportChange(viewportFromMap(map));
     });
     observer.observe(host);
     return () => observer.disconnect();
-  }, [map, runtimeState]);
+  }, [map, onViewportChange, runtimeState]);
 
   useEffect(() => {
     if (runtimeState !== 'ready' || !map) return;

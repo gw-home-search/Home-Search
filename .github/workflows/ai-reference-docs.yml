@@ -1,0 +1,30 @@
+name: ai-reference-docs
+
+on:
+  pull_request:
+    paths: ["apps/ai/**", ".github/workflows/ai-reference-docs.yml"]
+  push:
+    branches: [main]
+    paths: ["apps/ai/**", ".github/workflows/ai-reference-docs.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build deterministic reference docs
+        run: apps/ai/ops/build-reference-docs.sh --check
+      - name: Upload reference docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-reference-docs-${{ github.sha }}
+          path: |
+            apps/ai/build/reference-docs/html/
+            apps/ai/build/reference-docs/manifest.json
+            apps/ai/build/reference-docs/SHA256SUMS
+          retention-days: 30
+          if-no-files-found: error

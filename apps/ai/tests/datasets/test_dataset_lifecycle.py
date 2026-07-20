@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from pathlib import Path
+from uuid import UUID
 
 import psycopg
 import pytest
 
 from ai_service.datasets import DatasetLifecycleService, DatasetSourceContract
 from ai_service.datasets.postgres import PostgresDatasetRepository
+from ai_service.datasets.models import ParsedDataset
+from ai_service.datasets.raw_store import StoredRawObject
+from ai_service.datasets.validation import RawPayloadError
 
 
 pytestmark = pytest.mark.postgres
@@ -69,6 +74,32 @@ def service(repository: PostgresDatasetRepository) -> DatasetLifecycleService:
     return DatasetLifecycleService(repository, clock=lambda: COLLECTED_AT)
 
 
+def test_lazy_adapter_failure_is_recorded_without_partial_staging(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    class LazyAdapter:
+        def parse(self, _raw, _contract, *, source_date):
+            def rows():
+                yield valid_rows()[0]
+                raise RawPayloadError("later page failed", "PROVIDER_PAGE_INVALID")
+
+            return ParsedDataset(rows=rows())
+
+    result = service(dataset_repository).ingest_validate_publish(
+        source_contract(), b"lazy-provider-bundle", source_date=SOURCE_DATE,
+        adapter=LazyAdapter(),
+    )
+
+    assert result.status == "Fail"
+    assert result.issue_codes == ("PROVIDER_PAGE_INVALID",)
+    with psycopg.connect(postgres_dsn) as connection:
+        assert connection.execute(
+            "SELECT count(*) FROM dataset_staging_row WHERE acquisition_id = %s",
+            (result.acquisition_id,),
+        ).fetchone()[0] == 0
+
+
 def test_checksum_reingest_is_idempotent_and_does_not_duplicate_publication(
     dataset_repository: PostgresDatasetRepository,
 ) -> None:
@@ -86,6 +117,108 @@ def test_checksum_reingest_is_idempotent_and_does_not_duplicate_publication(
     assert dataset_repository.table_counts() == {
         "raw_objects": 1,
         "acquisitions": 1,
+        "publications": 1,
+    }
+
+
+def test_same_raw_can_be_reprocessed_under_a_new_normalization_contract(
+    dataset_repository: PostgresDatasetRepository,
+) -> None:
+    class RejectingAdapter:
+        def parse(self, _raw, _contract, *, source_date):
+            raise RawPayloadError("fixture schema mismatch", "SOURCE_SCHEMA_MISMATCH")
+
+    lifecycle = service(dataset_repository)
+    raw = payload(valid_rows())
+    failed = lifecycle.ingest_validate_publish(
+        source_contract(), raw, source_date=SOURCE_DATE, adapter=RejectingAdapter()
+    )
+    recovered = lifecycle.ingest_validate_publish(
+        replace(source_contract(), schema_version="fixture-v2"),
+        raw,
+        source_date=SOURCE_DATE,
+    )
+
+    assert failed.status == "Fail"
+    assert recovered.status == "Pass"
+    assert recovered.acquisition_id != failed.acquisition_id
+    assert dataset_repository.table_counts() == {
+        "raw_objects": 1,
+        "acquisitions": 2,
+        "publications": 1,
+    }
+
+
+def test_stored_raw_acquisition_dedupe_is_scoped_to_normalization_schema(
+    dataset_repository: PostgresDatasetRepository,
+) -> None:
+    first_contract = source_contract()
+    first_contract_id = dataset_repository.register_source_contract(
+        first_contract, COLLECTED_AT
+    )
+    stored = StoredRawObject(
+        storage_backend="S3",
+        object_key="raw/fixture.zip",
+        object_version_id="v1",
+        content_type="application/zip",
+        byte_length=1,
+        checksum="a" * 64,
+    )
+    first = dataset_repository.acquire_stored_raw(
+        first_contract, first_contract_id, stored, SOURCE_DATE, None, COLLECTED_AT
+    )
+    quality_contract = source_contract(expected_min_rows=2)
+    quality_contract_id = dataset_repository.register_source_contract(
+        quality_contract, COLLECTED_AT
+    )
+    quality_only = dataset_repository.acquire_stored_raw(
+        quality_contract,
+        quality_contract_id,
+        stored,
+        SOURCE_DATE,
+        None,
+        COLLECTED_AT,
+    )
+    schema_contract = replace(first_contract, schema_version="fixture-v2")
+    schema_contract_id = dataset_repository.register_source_contract(
+        schema_contract, COLLECTED_AT
+    )
+    new_schema = dataset_repository.acquire_stored_raw(
+        schema_contract,
+        schema_contract_id,
+        stored,
+        SOURCE_DATE,
+        None,
+        COLLECTED_AT,
+    )
+
+    assert first.created is True
+    assert quality_only == replace(first, created=False)
+    assert new_schema.created is True
+    assert new_schema.acquisition_id != first.acquisition_id
+
+
+def test_semantically_equal_raw_creates_no_second_publication(
+    dataset_repository: PostgresDatasetRepository,
+) -> None:
+    lifecycle = service(dataset_repository)
+    first_raw = b'{"rows":[{"station_id":"station-1","name":"Fixture Station","latitude":37.5665,"longitude":126.978}]}'
+    reordered_raw = b'{ "rows": [ { "longitude": 126.978, "latitude": 37.5665, "name": "Fixture Station", "station_id": "station-1" } ] }'
+
+    first = lifecycle.ingest_validate_publish(
+        source_contract(), first_raw, source_date=SOURCE_DATE
+    )
+    unchanged = lifecycle.ingest_validate_publish(
+        source_contract(), reordered_raw, source_date=SOURCE_DATE
+    )
+
+    assert first.status == "Pass"
+    assert unchanged.status == "NoChange"
+    assert unchanged.normalized_checksum == first.normalized_checksum
+    assert unchanged.publication_id is None
+    assert dataset_repository.table_counts() == {
+        "raw_objects": 2,
+        "acquisitions": 2,
         "publications": 1,
     }
 
@@ -185,7 +318,7 @@ def test_abnormal_row_count_blocks_publication_with_acquisition_issue(
     assert dataset_repository.active_snapshot("fixture.rail-station") is None
 
 
-def test_same_raw_is_revalidated_when_the_source_contract_changes(
+def test_same_raw_reuses_acquisition_when_only_the_source_contract_changes(
     dataset_repository: PostgresDatasetRepository,
 ) -> None:
     lifecycle = service(dataset_repository)
@@ -197,13 +330,12 @@ def test_same_raw_is_revalidated_when_the_source_contract_changes(
     )
 
     assert first.status == "Pass"
-    assert revalidated.status == "Fail"
-    assert revalidated.idempotent is False
-    assert revalidated.acquisition_id != first.acquisition_id
-    assert "ROW_COUNT_OUT_OF_RANGE" in revalidated.issue_codes
+    assert revalidated.status == "Pass"
+    assert revalidated.idempotent is True
+    assert revalidated.acquisition_id == first.acquisition_id
     assert dataset_repository.table_counts() == {
         "raw_objects": 1,
-        "acquisitions": 2,
+        "acquisitions": 1,
         "publications": 1,
     }
 
@@ -222,6 +354,68 @@ def test_stale_source_date_blocks_publication(
     assert dataset_repository.active_snapshot("fixture.rail-station") is None
 
 
+def test_observed_at_snapshot_preserves_temporal_basis_without_claiming_source_date(
+    dataset_repository: PostgresDatasetRepository,
+) -> None:
+    observed_at = datetime(2026, 7, 16, 7, 30, tzinfo=UTC)
+    observed_contract = replace(
+        source_contract(),
+        source_id="fixture.observed-source",
+        temporal_basis="OBSERVED_AT",
+    )
+
+    result = service(dataset_repository).ingest_validate_publish(
+        observed_contract,
+        payload(valid_rows()),
+        source_date=None,
+        observed_at=observed_at,
+    )
+
+    assert result.status == "Pass"
+    assert result.temporal_basis == "OBSERVED_AT"
+    assert result.source_date is None
+    assert result.observed_at == observed_at
+    assert result.dataset_version is not None
+    assert result.dataset_version.startswith("20260716-")
+
+
+def test_same_observed_rows_on_same_day_create_no_second_publication(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    observed_contract = replace(
+        source_contract(),
+        source_id="fixture.observed-no-change",
+        temporal_basis="OBSERVED_AT",
+        schema_version="fixture-observed-v2",
+    )
+    lifecycle = service(dataset_repository)
+
+    first = lifecycle.ingest_validate_publish(
+        observed_contract,
+        payload(valid_rows()),
+        source_date=None,
+        observed_at=datetime(2026, 7, 16, 1, tzinfo=UTC),
+    )
+    unchanged = lifecycle.ingest_validate_publish(
+        observed_contract,
+        b'{ "rows": [{"longitude":126.978,"latitude":37.5665,"name":"Fixture Station 1","station_id":"station-1"}] }',
+        source_date=None,
+        observed_at=datetime(2026, 7, 16, 23, tzinfo=UTC),
+    )
+
+    assert first.status == "Pass"
+    assert unchanged.status == "NoChange"
+    assert dataset_repository.publication_count(observed_contract.source_id) == 1
+
+    with psycopg.connect(postgres_dsn) as connection:
+        staging_count = connection.execute(
+            "SELECT count(*) FROM dataset_staging_row WHERE acquisition_id = %s",
+            (unchanged.acquisition_id,),
+        ).fetchone()[0]
+    assert staging_count == 0
+
+
 def test_invalid_payload_is_preserved_before_parse_failure(
     dataset_repository: PostgresDatasetRepository,
 ) -> None:
@@ -232,6 +426,107 @@ def test_invalid_payload_is_preserved_before_parse_failure(
     assert result.status == "Fail"
     assert "RAW_PARSE_FAILED" in result.issue_codes
     assert dataset_repository.raw_bytes(result.checksum) == b"not-json"
+
+
+def test_first_page_failure_records_refresh_evidence_without_acquisition(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    refresh_run_id = dataset_repository.start_refresh_run(
+        source_id="fixture.rail-station",
+        provider="Home Search fixture",
+        profile="source:fixture.rail-station",
+        trigger_type="MANUAL",
+        started_at=COLLECTED_AT,
+    )
+
+    dataset_repository.finish_refresh_run(
+        refresh_run_id=refresh_run_id,
+        source_id="fixture.rail-station",
+        acquisition_id=None,
+        status="FAIL",
+        reason_codes=("API_TRANSPORT_FAILED",),
+        finished_at=COLLECTED_AT,
+    )
+
+    with psycopg.connect(postgres_dsn) as connection:
+        evidence = connection.execute(
+            """
+            SELECT run.profile, run.trigger_type, run.status AS run_status,
+                   item.acquisition_id, item.status AS item_status, item.reason_codes
+            FROM dataset_refresh_run run
+            JOIN dataset_refresh_run_item item USING (refresh_run_id)
+            WHERE run.refresh_run_id = %s
+            """,
+            (refresh_run_id,),
+        ).fetchone()
+
+    assert evidence == (
+        "source:fixture.rail-station",
+        "MANUAL",
+        "FAIL",
+        None,
+        "FAIL",
+        ["API_TRANSPORT_FAILED"],
+    )
+
+
+def test_refresh_evidence_rejects_invalid_state_before_database() -> None:
+    repository = PostgresDatasetRepository("postgresql://unused")
+
+    with pytest.raises(ValueError, match="trigger type"):
+        repository.start_refresh_run(
+            source_id="fixture.source",
+            provider="Fixture",
+            profile="source:fixture.source",
+            trigger_type="UNKNOWN",
+            started_at=COLLECTED_AT,
+        )
+    with pytest.raises(ValueError, match="must not be blank"):
+        repository.start_refresh_run(
+            source_id=" ",
+            provider="Fixture",
+            profile="source:fixture.source",
+            trigger_type="MANUAL",
+            started_at=COLLECTED_AT,
+        )
+    with pytest.raises(ValueError, match="item status"):
+        repository.finish_refresh_run(
+            refresh_run_id=UUID(int=20),
+            source_id="fixture.source",
+            acquisition_id=None,
+            status="RUNNING",
+            reason_codes=(),
+            finished_at=COLLECTED_AT,
+        )
+
+
+def test_runtime_role_can_read_only_the_typed_reference_view(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    del dataset_repository
+    with psycopg.connect(postgres_dsn) as connection:
+        connection.execute("SET ROLE home_search_ai_runtime")
+        assert connection.execute(
+            "SELECT count(*) FROM reference_read.school_location_fact"
+        ).fetchone()[0] == 0
+
+    with psycopg.connect(postgres_dsn) as connection:
+        connection.execute("SET ROLE home_search_ai_runtime")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            connection.execute("SELECT count(*) FROM dataset_raw_object")
+
+
+def test_importer_role_cannot_mutate_immutable_raw_objects(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    del dataset_repository
+    with psycopg.connect(postgres_dsn) as connection:
+        connection.execute("SET ROLE home_search_ai_importer")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            connection.execute("UPDATE dataset_raw_object SET byte_length = byte_length")
 
 
 def test_publication_failure_keeps_previous_active_snapshot(

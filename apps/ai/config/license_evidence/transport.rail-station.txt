@@ -1,0 +1,17 @@
+source_id=transport.rail-station
+evidence_type=official_dataset_terms_plus_project_owner_telephone_attestation
+reviewed_on=2026-07-20
+official_dataset_url=https://www.data.go.kr/data/15093755/fileData.do
+official_dataset_license_label=이용허락범위 제한 없음
+provider_terms_url=https://data.kric.go.kr/rips/serviceInfo/clause.do
+provider_dataset_url=https://data.kric.go.kr/rips/M_01_01/detail.do?id=32
+provider_contact_channel=telephone
+written_provider_record_available=false
+attestation_recorded_on=2026-07-20
+attestation_statement=The project owner reports that KRIC answered that the described Home Search use is permitted.
+approved_scope=private storage of the original XLSX; internal normalization of station, line, transfer, and coordinate facts; display of those derived facts with attribution
+public_raw_redistribution_allowed=false
+excluded_projection=telephone number
+attribution=출처: 공공데이터포털·철도산업정보센터 전국도시철도역사정보표준데이터
+residual_risk=The provider approval was verbal and has no written transcript; the project owner accepts this evidence limitation and must re-review if the provider terms or dataset license changes.
+review_decision=APPROVED_BY_PROJECT_OWNER

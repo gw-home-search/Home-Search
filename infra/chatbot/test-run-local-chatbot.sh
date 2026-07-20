@@ -19,6 +19,7 @@ printf '%s\n' \
     'if [[ "${1:-}" == "inspect" ]]; then printf "running|healthy\\n"; fi' \
     'if [[ "${HOME_AI_PROPERTY_DSN:-}" == *%40* ]]; then dsn_reserved_encoded=yes; else dsn_reserved_encoded=no; fi' \
     'printf "%s|home-search-set=%s|property-runtime=%s|bff-mapping=%s|ai-mapping=%s|dsn-reserved-encoded=%s|openai-key-set=%s|primary=%s|secondary=%s|timeout=%s|query-timeout=%s|capabilities=%s\\n" "$*" "${HOME_SEARCH_DB_PASSWORD:+yes}" "${PROPERTY_RUNTIME_DB_PASSWORD:-missing}" "${HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS:-missing}" "${HOME_AI_JWT_PUBLIC_KEY_PATHS:-missing}" "$dsn_reserved_encoded" "${HOME_AI_OPENAI_API_KEY:+yes}" "${HOME_AI_OPENAI_PRIMARY_MODEL:-missing}" "${HOME_AI_OPENAI_SECONDARY_MODEL:-missing}" "${HOME_AI_OPENAI_TIMEOUT_SECONDS:-missing}" "${HOME_AI_QUERY_TIMEOUT_SECONDS:-missing}" "${HOME_AI_ENABLED_PROPERTY_CAPABILITIES:-missing}" >>"$CHATBOT_TEST_DOCKER_LOG"' \
+    'printf "reference-dsn-set=%s|reference-capabilities=%s\\n" "${HOME_AI_REFERENCE_DSN:+yes}" "${HOME_AI_ENABLED_REFERENCE_CAPABILITIES:-}" >>"$CHATBOT_TEST_DOCKER_LOG"' \
     >"$tmp_dir/bin/docker"
 chmod +x "$tmp_dir/bin/docker"
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
@@ -34,6 +35,13 @@ bff_env="$tmp_dir/bff.env"
 ai_env="$tmp_dir/ai.env"
 docker_log="$tmp_dir/docker.log"
 
+append_ai_data_passwords() {
+    printf '%s\n' \
+        'AI_DATA_MIGRATOR_DB_PASSWORD=ai-data-migrator-secret' \
+        'AI_DATA_IMPORTER_DB_PASSWORD=ai-data-importer-secret' \
+        'AI_DATA_RUNTIME_DB_PASSWORD=ai-data-runtime-secret' >>"$property_env"
+}
+
 printf '%s\n' \
     'HOME_SEARCH_DB_PASSWORD=cluster-secret' \
     'PROPERTY_RUNTIME_DB_PASSWORD=property-runtime-secret' \
@@ -41,6 +49,7 @@ printf '%s\n' \
     'AI_PROPERTY_READER_DB_PASSWORD=ai-reader-secret' \
     'USER_RUNTIME_DB_PASSWORD=user-runtime-secret' \
     'USER_MIGRATOR_DB_PASSWORD=user-migrator-secret' >"$property_env"
+append_ai_data_passwords
 printf '%s\n' \
     'USER_JWT_ACTIVE_KID=local-user-1' \
     'USER_DB_PASSWORD=user-runtime-secret' >"$user_env"
@@ -54,7 +63,9 @@ printf '%s\n' \
     'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
     'HOME_AI_OPENAI_TIMEOUT_SECONDS=7' \
     'HOME_AI_QUERY_TIMEOUT_SECONDS=40' \
-    'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity' >"$ai_env"
+    'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity' \
+    'HOME_AI_REFERENCE_DSN=postgresql://home_search_ai_runtime:ai-data-runtime-secret@postgis:5432/home_search_ai' \
+    'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=' >"$ai_env"
 
 if [[ ! -x "$runner" ]]; then
     echo "상태: Fail - local chatbot runner가 없습니다." >&2
@@ -66,6 +77,8 @@ grep -Fq -- '- bash' <<<"$bff_compose_section"
 grep -Fq -- '- -ec' <<<"$bff_compose_section"
 grep -Fq 'HOME_CHAT_BFF_AI_TIMEOUT: ${HOME_CHAT_BFF_AI_TIMEOUT:-70s}' <<<"$bff_compose_section"
 grep -Fq 'HOME_AI_QUERY_TIMEOUT_SECONDS: ${HOME_AI_QUERY_TIMEOUT_SECONDS:-45}' "$chatbot_compose"
+grep -Fq 'HOME_AI_REFERENCE_DSN: ${HOME_AI_REFERENCE_DSN:?Set HOME_AI_REFERENCE_DSN}' "$chatbot_compose"
+grep -Fq 'HOME_AI_ENABLED_REFERENCE_CAPABILITIES: ${HOME_AI_ENABLED_REFERENCE_CAPABILITIES:-}' "$chatbot_compose"
 
 output="$(
     PATH="$tmp_dir/bin:$PATH" \
@@ -87,8 +100,22 @@ grep -Fq 'config --quiet' "$docker_log"
 grep -Fq 'property-runtime=property-runtime-secret' "$docker_log"
 grep -Fq 'openai-key-set=yes|primary=gpt-5-primary-test|secondary=gpt-5-secondary-test|timeout=7|query-timeout=40' "$docker_log"
 grep -Fq 'capabilities=complex_identity' "$docker_log"
+grep -Fq 'reference-dsn-set=yes|reference-capabilities=' "$docker_log"
+grep -Fq 'exec --env AI_DATA_MIGRATOR_DB_PASSWORD --env AI_DATA_IMPORTER_DB_PASSWORD --env AI_DATA_RUNTIME_DB_PASSWORD --env AI_DATABASE_ONLY -i home-search-postgis bash -s' "$docker_log"
 grep -Fq -- '--profile user' "$docker_log"
 grep -Fq 'up -d --build --force-recreate --no-deps user-service ai chat-bff public-api-gateway' "$docker_log"
+
+printf '%s\n' \
+    'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \
+    'HOME_AI_JWT_PUBLIC_KEY_PATHS={"local-user-1":"/run/keys/user-signing-public"}' \
+    'HOME_AI_OPENAI_API_KEY=openai-test-secret' \
+    'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
+    'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
+    'HOME_AI_OPENAI_TIMEOUT_SECONDS=7' \
+    'HOME_AI_QUERY_TIMEOUT_SECONDS=40' \
+    'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity' \
+    'HOME_AI_REFERENCE_DSN=postgresql://home_search_ai_runtime:stale-runtime-secret@postgis:5432/home_search_ai' \
+    'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=' >"$ai_env"
 
 default_output="$(
     PATH="$tmp_dir/bin:$PATH" \
@@ -142,6 +169,7 @@ printf '%s\n' \
     'AI_PROPERTY_READER_DB_PASSWORD=ai@reader-secret' \
     'USER_RUNTIME_DB_PASSWORD=user-runtime-secret' \
     'USER_MIGRATOR_DB_PASSWORD=user-migrator-secret' >"$property_env"
+append_ai_data_passwords
 printf '%s\n' \
     'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai@reader-secret@postgis:5432/home_search' \
     'HOME_AI_JWT_PUBLIC_KEY_PATHS={"local-user-1":"/run/keys/user-signing-public"}' \
@@ -183,6 +211,7 @@ printf '%s\n' \
     'AI_PROPERTY_READER_DB_PASSWORD=ai-reader-secret' \
     'USER_RUNTIME_DB_PASSWORD=user-runtime-secret' \
     'USER_MIGRATOR_DB_PASSWORD=user-migrator-secret' >"$property_env"
+append_ai_data_passwords
 
 printf '%s\n' \
     'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \
@@ -226,6 +255,7 @@ printf '%s\n' \
     'DB_PASSWORD=cluster-secret' \
     'PROPERTY_MIGRATOR_DB_PASSWORD=property-migrator-secret' \
     'AI_PROPERTY_READER_DB_PASSWORD=ai-reader-secret' >"$property_env"
+append_ai_data_passwords
 PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_TEST_DOCKER_LOG="$docker_log" \
     CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
@@ -242,6 +272,7 @@ printf '%s\n' \
     'PROPERTY_MIGRATOR_DB_PASSWORD=property-migrator-secret' \
     'AI_PROPERTY_READER_DB_PASSWORD=ai-reader-secret' \
     'USER_MIGRATOR_DB_PASSWORD=user-migrator-secret' >"$property_env"
+append_ai_data_passwords
 if PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_TEST_DOCKER_LOG="$docker_log" \
     CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
@@ -268,6 +299,7 @@ printf '%s\n' \
     'AI_PROPERTY_READER_DB_PASSWORD=ai-reader-secret' \
     'USER_RUNTIME_DB_PASSWORD=user-runtime-secret' \
     'USER_MIGRATOR_DB_PASSWORD=user-migrator-secret' >"$property_env"
+append_ai_data_passwords
 
 printf '%s\n' \
     'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \
@@ -493,8 +525,74 @@ fi
 grep -Fq '거부됨: HOME_AI_ENABLED_PROPERTY_CAPABILITIES는 승인된 누적 설정만 허용합니다.' \
     "$tmp_dir/capability-invalid.out"
 
-if grep -R -Eq 'openai-test-secret' "$tmp_dir" --exclude='ai.env'; then
-    echo "상태: Fail - runner artifact에 OpenAI 비밀값이 포함됐습니다." >&2
+printf '%s\n' \
+    'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \
+    'HOME_AI_JWT_PUBLIC_KEY_PATHS={"local-user-1":"/run/keys/user-signing-public"}' \
+    'HOME_AI_OPENAI_API_KEY=openai-test-secret' \
+    'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
+    'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
+    'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend' \
+    'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=school_location' >"$ai_env"
+if ! PATH="$tmp_dir/bin:$PATH" \
+    CHATBOT_TEST_DOCKER_LOG="$docker_log" \
+    CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
+    CHATBOT_AI_DOCKERFILE_PATH="$tmp_dir/Dockerfile" \
+    CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
+    CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
+    "$runner" "$property_env" "$user_env" "$bff_env" "$ai_env" \
+    >"$tmp_dir/reference-capability-approved.out" 2>&1; then
+    echo "상태: Fail - 승인된 school_location Capability가 허용되지 않았습니다." >&2
+    exit 1
+fi
+grep -Fq 'reference-dsn-set=yes|reference-capabilities=school_location' "$docker_log"
+
+printf '%s\n' \
+    'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \
+    'HOME_AI_JWT_PUBLIC_KEY_PATHS={"local-user-1":"/run/keys/user-signing-public"}' \
+    'HOME_AI_OPENAI_API_KEY=openai-test-secret' \
+    'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
+    'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
+    'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend' \
+    'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=school_location,school_location' >"$ai_env"
+if PATH="$tmp_dir/bin:$PATH" \
+    CHATBOT_TEST_DOCKER_LOG="$docker_log" \
+    CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
+    CHATBOT_AI_DOCKERFILE_PATH="$tmp_dir/Dockerfile" \
+    CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
+    CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
+    "$runner" "$property_env" "$user_env" "$bff_env" "$ai_env" \
+    >"$tmp_dir/reference-capability-invalid.out" 2>&1; then
+    echo "상태: Fail - 중복 school_location Capability가 거부되지 않았습니다." >&2
+    exit 1
+fi
+grep -Fq '거부됨: HOME_AI_ENABLED_REFERENCE_CAPABILITIES는 빈 값 또는 school_location만 허용합니다.' \
+    "$tmp_dir/reference-capability-invalid.out"
+
+printf '%s\n' \
+    'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \
+    'HOME_AI_REFERENCE_DSN=postgresql://home_search_ai_runtime:different-secret@postgis:5432/home_search_ai' \
+    'HOME_AI_JWT_PUBLIC_KEY_PATHS={"local-user-1":"/run/keys/user-signing-public"}' \
+    'HOME_AI_OPENAI_API_KEY=openai-test-secret' \
+    'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
+    'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
+    'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend' >"$ai_env"
+if PATH="$tmp_dir/bin:$PATH" \
+    CHATBOT_TEST_DOCKER_LOG="$docker_log" \
+    CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
+    CHATBOT_AI_DOCKERFILE_PATH="$tmp_dir/Dockerfile" \
+    CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
+    CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
+    "$runner" "$property_env" "$user_env" "$bff_env" "$ai_env" \
+    >"$tmp_dir/reference-dsn-invalid.out" 2>&1; then
+    echo "상태: Fail - reference runtime password 불일치가 거부되지 않았습니다." >&2
+    exit 1
+fi
+grep -Fq '거부됨: HOME_AI_REFERENCE_DSN과 AI_DATA_RUNTIME_DB_PASSWORD가 일치하지 않습니다.' \
+    "$tmp_dir/reference-dsn-invalid.out"
+
+if grep -R -Eq 'openai-test-secret|ai-data-(migrator|importer|runtime)-secret' "$tmp_dir" \
+    --exclude='ai.env' --exclude='property.env'; then
+    echo "상태: Fail - runner artifact에 비밀값이 포함됐습니다." >&2
     exit 1
 fi
 

@@ -114,7 +114,65 @@ single-line display name, and a down chevron only. Provider identity stays in
 the opened account menu. Hover uses Surface Muted; expanded state uses Brand
 Soft plus chevron rotation, avoiding a permanent card-like box in the app bar.
 The trigger is content-sized and right-aligned so the name and chevron remain
-a compact group instead of being separated by a flexible middle column.
+a compact group instead of being separated by a flexible middle column. At
+`<=720px`, only the avatar remains visible so brand, chatbot Beta action, and
+account access fit without compressing the app bar.
+
+## Chatbot
+
+The authenticated chatbot entry is a compact, borderless app-header action
+beside the account control. It uses three compact rounded data bars, rendered as
+a local SVG so the mark stays crisp and aligns with the 20px `AI` label baseline.
+The compact app-bar action pairs the mark
+with the visible `AI` label, and the same mark appears beside the open drawer
+title without adding a surrounding tile or badge. `Beta` stays out of the app bar and appears only beside the
+`홈서치 AI` title after the drawer opens. The open state stays borderless and
+does not add a persistent box around the app-bar action. Opening it creates a flat right drawer
+below the app header, not a floating launcher or a card-like modal. On desktop
+and short landscape screens, the drawer stays between 420px and 460px using
+`clamp(420px, 30vw, 460px)` and consumes that width from the map workspace
+instead of covering it. Between 721px and 1279px, opening chat closes the
+exploration rail so the side-by-side map keeps a usable width. At `<=900px`
+with enough vertical room, chat becomes a bottom split:
+the conversation uses up to `62dvh` while the filter and at least 180px of map
+remain visible above it. Kakao map relayout preserves its center
+and refreshes viewport-bound data after either split changes size.
+
+Conversation history stays in browser IndexedDB. The main drawer never shows a
+persistent conversation sidebar or a second brand block. The flat toolbar uses
+an asymmetric Home Search composition: the AI data mark, title, and small
+`Beta` stay grouped on the left, while a labeled new-conversation action, history,
+and close controls stay on the right. History opens a 320px `내 대화` popover for selection,
+import, export, and deletion. The empty conversation uses a left-anchored 440px
+content column instead of centering the narrower content block. Its greeting is
+15px, the task heading is 23px, and guidance is 15/24px. Mobile keeps the same
+left edge while stepping the task heading to 21px and guidance to 14/22px. Three
+separate soft recommendation cards share that left edge. The section
+heading is 15px, each card uses a 14px radius, and the category and 14px question
+copy keep a lighter hierarchy than the previous table-like divider rows. Each card names one
+supported capability (`최근 실거래`, `가격 흐름`, or `단지 정보`) and uses a
+different apartment complex so the available question range is visible before
+selection. Example copy asks for specific output such as transaction date,
+floor, monthly volume, or identity details instead of using short generic
+prompts.
+On desktop, the examples consume the empty conversation column's remaining
+space and settle above the composer, with a 34px minimum separation from the
+introduction when height is constrained. Mobile uses a fixed 32px separation
+so the examples remain reachable inside the bottom split.
+The app-bar AI action and drawer toolbar actions keep transparent surfaces in
+hover, pressed, and expanded states; only icon/text color changes. Keyboard
+`focus-visible` outlines remain, so removing the gray press box does not remove
+the accessible focus signal.
+The composer starts as a 58px pill and grows with the question up to four
+24px lines. A single-line textarea is optically centered against the 40px send
+action; as the question grows, only the circular send action stays aligned to
+the lower edge. Longer questions scroll inside the textarea so the send action
+and map context stay visible. The action uses a heavier upward arrow, an inset
+focus line, and 16px input text. The
+small italic `Beta` wordmark uses Inter/SF Pro Display without a badge box or
+all-caps treatment. Answer evidence stays
+collapsed until requested. No chatbot UI decision changes the JSON/SSE
+contract or adds server-side conversation persistence.
 
 ## Exploration
 
@@ -136,8 +194,9 @@ owns a centered 32px control and each trail label owns its own ellipsis box.
 
 Region navigation uses a quiet single-line breadcrumb as the only visible
 region heading on the white panel. Its stage actions are unframed text, the
-current stage is distinguished by weight, and each transition uses a dedicated
-14px right chevron separator. Breadcrumb items never compress their labels;
+current stage uses 14px Sky text and a 2px underline while ancestors step back
+to smaller muted text. Each transition uses a quiet 12px right chevron
+separator. Breadcrumb items never compress their labels;
 the row scrolls horizontally and brings the current stage into view. Region
 choices are a three-column grid of 52px
 white tiles with restrained, visibly rounded 4px corners and Sky hover/selection states. Tile labels stay
@@ -151,7 +210,10 @@ with household/building counts aligned on the right.
 The breadcrumb is the only region-stage navigation label. Do not render a
 separate `시군구 선택` or `읍면동 선택` summary row. `시도 선택` and every
 selected ancestor are 32px breadcrumb buttons; selecting an ancestor reloads
-that region, truncates deeper trail items, and returns to its child grid.
+that region, truncates deeper trail items, and returns to its child grid. A map
+marker extends the trail only when its id is present in the currently loaded
+child grid; otherwise it starts a new trail so unrelated regions are never
+presented as an administrative hierarchy.
 
 Region complex rows are leaf-only. Their list uses 76px comparison rows without
 an outer rounded card: complex name plus address/approval year stay on the left,
@@ -257,14 +319,17 @@ Raw public colors live only in `design-system.css` `--hs-map-*` and
 `--hs-auth-*` declarations.
 Deep teal Sky is brand/action, exploration region controls, and map-marker
 emphasis; the brighter teal is reserved for focus and lightweight borders.
-Blue-gray neutrals separate surfaces without competing with the Kakao map.
+Blue-gray neutrals separate borders without competing with the Kakao map.
 Ink is price text, and Red is reserved for failures and the explicit favorite
-heart state. Use
+heart state. App bars, panels, markers, and controls keep a clean white default
+surface. A near-white teal tint is limited to repeated functional groups: the
+search band, filter band, chatbot recommendations, and composer band. It is not
+used as the page or panel base. Use
 6/10/12/14/16/999px semantic radii and KOSA's restrained
 appbar/card/marker/dropdown shadows.
 
-Layers are host 0, markers 10, notices 20, controls 30, rail/sheet 40, header 50,
-popover 60. Notice and zoom stay at map top corners; the map-type toggle shares
+Layers are host 0, markers 10, notices 20, controls 30, rail/sheet 40, popover 60,
+and app header/chat drawer 61. Notice and zoom stay at map top corners; the map-type toggle shares
 the right-side tool rail below zoom without covering Kakao attribution. Body/workspace are hidden. Search/region and detail each own one vertical
 scroll; chips own horizontal scroll; only constrained popovers scroll.
 

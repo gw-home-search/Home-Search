@@ -1,0 +1,10 @@
+== Raw-first lifecycle
+
+`source contract -> secure temp artifact -> deterministic ZIP -> verified S3 object -> acquisition -> normalized spool -> validate -> atomic publication -> active pointer` 순서를 지킨다.
+
+S3 `HEAD` checksum과 byte length 검증 전에는 acquisition과 staging을 시작하지 않는다.
+`NoChange` acquisition은 staging하지 않으며, 실패 snapshot은 이전 active pointer를 유지한다.
+
+Prepared CSV/XLSX bundle은 전체 bytes로 다시 읽지 않는다. manifest를 제한 검증한 뒤
+artifact를 owner-only temporary file로 chunk 추출하면서 byte length와 SHA-256을
+검증하고 file adapter에 전달한다. 기존 bytes parser는 회귀 호환 wrapper로 유지한다.

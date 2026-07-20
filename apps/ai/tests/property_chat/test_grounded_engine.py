@@ -21,7 +21,7 @@ from ai_service.property_chat.models import (
     EvidenceFact,
     FactClaim,
     MonthlyTrendRecord,
-    PropertyQueryPlan,
+    QueryPlan,
     TradeRecord,
 )
 
@@ -70,13 +70,13 @@ class FakeRepository:
 
 
 class FakeLanguageModel:
-    def __init__(self, plan: PropertyQueryPlan, draft: DraftAnswer) -> None:
+    def __init__(self, plan: QueryPlan, draft: DraftAnswer) -> None:
         self.plan = plan
         self.draft = draft
         self.received_fact_ids: list[str] = []
         self.received_facts: list[EvidenceFact] = []
 
-    async def plan_query(self, _request: ChatbotQueryRequest) -> PropertyQueryPlan:
+    async def plan_query(self, _request: ChatbotQueryRequest) -> QueryPlan:
         return self.plan
 
     async def draft_answer(self, *, facts, limitations, question) -> DraftAnswer:
@@ -114,7 +114,7 @@ def test_recent_trade_answer_uses_only_observed_fact_and_citation() -> None:
         )
     ]
     model = FakeLanguageModel(
-        PropertyQueryPlan(
+        QueryPlan(
             capability="recent_trade_lookup",
             complex_name="잠실엘스",
             start_date=date(2025, 7, 1),
@@ -173,7 +173,7 @@ def test_recent_trade_accepts_server_supplied_korean_amount_display_claim() -> N
         TradeRecord(7001, 11471, date(2026, 7, 15), 253_000, 84.8, 12)
     ]
     model = FakeLanguageModel(
-        PropertyQueryPlan(capability="recent_trade_lookup", complex_name="잠실엘스"),
+        QueryPlan(capability="recent_trade_lookup", complex_name="잠실엘스"),
         DraftAnswer(
             sentences=[
                 DraftSentence(
@@ -213,7 +213,7 @@ def test_supported_answer_rejects_omitted_observed_trade_fact() -> None:
         TradeRecord(7002, 11471, date(2026, 7, 14), 249_000, 84.8, 10),
     ]
     model = FakeLanguageModel(
-        PropertyQueryPlan(capability="recent_trade_lookup", complex_name="잠실엘스"),
+        QueryPlan(capability="recent_trade_lookup", complex_name="잠실엘스"),
         DraftAnswer(
             sentences=[
                 DraftSentence(
@@ -282,7 +282,7 @@ def test_blocks_unknown_fact_or_numeric_mismatch(draft: DraftAnswer) -> None:
         TradeRecord(7001, 11471, date(2026, 7, 15), 250_000, 84.8, 12)
     ]
     model = FakeLanguageModel(
-        PropertyQueryPlan(capability="recent_trade_lookup", complex_name="잠실엘스"),
+        QueryPlan(capability="recent_trade_lookup", complex_name="잠실엘스"),
         draft,
     )
 
@@ -302,7 +302,7 @@ def test_ambiguous_complex_is_not_selected_arbitrarily() -> None:
     repository = FakeRepository()
     repository.complexes = [complex_record(1, "중앙동 한빛"), complex_record(2, "서초동 한빛")]
     model = FakeLanguageModel(
-        PropertyQueryPlan(capability="complex_identity", complex_name="한빛"),
+        QueryPlan(capability="complex_identity", complex_name="한빛"),
         DraftAnswer(
             sentences=[
                 DraftSentence(
@@ -328,6 +328,7 @@ def test_ambiguous_complex_is_not_selected_arbitrarily() -> None:
     )
 
     assert response["evidenceSummary"]["status"] == "partial"
+    assert response["status"] == "partial_success"
     assert response["evidenceSummary"]["factCount"] == 2
     assert "동명 단지" in response["limitations"][0]
     assert repository.trade_query is None
@@ -347,7 +348,7 @@ def test_monthly_trend_exposes_amount_and_volume_facts() -> None:
         )
     ]
     model = FakeLanguageModel(
-        PropertyQueryPlan(
+        QueryPlan(
             capability="price_trend",
             complex_name="잠실엘스",
             start_date=date(2026, 1, 1),
@@ -394,9 +395,9 @@ def test_monthly_trend_exposes_amount_and_volume_facts() -> None:
 @pytest.mark.parametrize(
     "plan",
     [
-        PropertyQueryPlan(capability="recent_trade_lookup", complex_name="없는단지"),
-        PropertyQueryPlan(capability="recent_trade_lookup", complex_name="잠실엘스"),
-        PropertyQueryPlan(
+        QueryPlan(capability="recent_trade_lookup", complex_name="없는단지"),
+        QueryPlan(capability="recent_trade_lookup", complex_name="잠실엘스"),
+        QueryPlan(
             capability="price_trend",
             complex_name="잠실엘스",
             start_date=date(2026, 1, 1),
@@ -404,7 +405,7 @@ def test_monthly_trend_exposes_amount_and_volume_facts() -> None:
         ),
     ],
 )
-def test_empty_observation_returns_llm_written_unavailable_answer(plan: PropertyQueryPlan) -> None:
+def test_empty_observation_returns_llm_written_unavailable_answer(plan: QueryPlan) -> None:
     repository = FakeRepository()
     if plan.complex_name == "잠실엘스":
         repository.complexes = [complex_record()]
@@ -439,7 +440,7 @@ def test_disabled_capability_uses_llm_written_unavailable_without_repository_acc
     repository = FakeRepository()
     repository.complexes = [complex_record()]
     model = FakeLanguageModel(
-        PropertyQueryPlan(
+        QueryPlan(
             capability=capability,
             complex_name="잠실엘스",
             start_date=date(2026, 1, 1) if capability == "price_trend" else None,
@@ -486,7 +487,7 @@ def test_identity_does_not_expose_unverified_coordinates() -> None:
         )
     ]
     model = FakeLanguageModel(
-        PropertyQueryPlan(capability="complex_identity", complex_name="잠실엘스"),
+        QueryPlan(capability="complex_identity", complex_name="잠실엘스"),
         DraftAnswer(
             sentences=[
                 DraftSentence(
@@ -517,23 +518,39 @@ def test_identity_does_not_expose_unverified_coordinates() -> None:
 @pytest.mark.parametrize(
     "factory",
     [
-        lambda: PropertyQueryPlan(capability="complex_identity", complex_name=" "),
-        lambda: PropertyQueryPlan(
+        lambda: QueryPlan(capability="complex_identity", complex_name=" "),
+        lambda: QueryPlan(
             capability="complex_identity", complex_name="단지", region_name=" "
         ),
-        lambda: PropertyQueryPlan(
+        lambda: QueryPlan(
             capability="recent_trade_lookup",
             complex_name="단지",
             start_date=date(2026, 2, 1),
             end_date=date(2026, 1, 1),
         ),
-        lambda: PropertyQueryPlan(
+        lambda: QueryPlan(
             capability="recent_trade_lookup",
             complex_name="단지",
             exclusive_area_square_meters=0,
         ),
-        lambda: PropertyQueryPlan(capability="recent_trade_lookup", complex_name="단지", limit=11),
-        lambda: PropertyQueryPlan(capability="price_trend", complex_name="단지"),
+        lambda: QueryPlan(capability="recent_trade_lookup", complex_name="단지", limit=11),
+        lambda: QueryPlan(capability="school_location", complex_name="단지", limit=6),
+        lambda: QueryPlan(
+            capability="school_location",
+            complex_name="단지",
+            school_levels=("ELEMENTARY", "ELEMENTARY"),
+        ),
+        lambda: QueryPlan(
+            capability="retail_location",
+            complex_name="단지",
+            facility_subtypes=("LARGE_MART", "LARGE_MART"),
+        ),
+        lambda: QueryPlan(
+            capability="retail_location",
+            complex_name="단지",
+            radius_meters=-1,
+        ),
+        lambda: QueryPlan(capability="price_trend", complex_name="단지"),
     ],
 )
 def test_query_plan_rejects_unsafe_or_incomplete_constraints(factory) -> None:
@@ -545,7 +562,7 @@ def test_supported_answer_requires_fact_reference_on_every_sentence() -> None:
     repository = FakeRepository()
     repository.complexes = [complex_record()]
     model = FakeLanguageModel(
-        PropertyQueryPlan(capability="complex_identity", complex_name="잠실엘스"),
+        QueryPlan(capability="complex_identity", complex_name="잠실엘스"),
         DraftAnswer(sentences=[DraftSentence(text="위치를 확인했습니다.", fact_ids=[])]),
     )
 
@@ -565,7 +582,7 @@ def test_supported_answer_requires_a_validated_claim_on_every_sentence() -> None
     repository = FakeRepository()
     repository.complexes = [complex_record()]
     model = FakeLanguageModel(
-        PropertyQueryPlan(capability="complex_identity", complex_name="잠실엘스"),
+        QueryPlan(capability="complex_identity", complex_name="잠실엘스"),
         DraftAnswer(
             sentences=[
                 DraftSentence(

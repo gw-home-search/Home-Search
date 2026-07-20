@@ -336,7 +336,7 @@
   margin: 0;
   padding: 8px var(--hs-map-space-6);
   border-bottom: 1px solid var(--hs-map-color-line);
-  background: var(--hs-map-color-surface);
+  background: var(--hs-map-color-surface-tint);
   box-shadow: none;
 }
 

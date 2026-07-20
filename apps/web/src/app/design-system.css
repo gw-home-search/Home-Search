@@ -60,9 +60,11 @@
   --hs-map-color-muted: #667085;
   --hs-map-color-surface: #ffffff;
   --hs-map-color-surface-muted: #f6f8f9;
+  --hs-map-color-surface-tint: #f9fdfd;
   --hs-map-color-map: #edf2f3;
   --hs-map-color-line: #dce4e8;
   --hs-map-color-line-strong: #c7d2d9;
+  --hs-map-color-header-line: #e6e9ec;
   --hs-map-color-brand: #0e7490;
   --hs-map-color-brand-soft: #ecf7f8;
   --hs-map-color-action: #0e7490;
@@ -90,6 +92,11 @@
   --hs-map-tablet-rail-width: 336px;
   --hs-map-rail-width: var(--hs-map-rail-width-wide);
   --hs-map-mobile-min-height: 180px;
+  --hs-chat-drawer-width: clamp(420px, 30vw, 460px);
+  --hs-chat-mobile-height: min(
+    62dvh,
+    calc(100dvh - var(--hs-map-mobile-brand-height) - var(--hs-map-filter-height) - var(--hs-map-mobile-min-height))
+  );
   --hs-map-space-1: 4px;
   --hs-map-space-2: 8px;
   --hs-map-space-3: 12px;
@@ -120,7 +127,7 @@
   --hs-map-z-notice: 20;
   --hs-map-z-control: 30;
   --hs-map-z-rail: 40;
-  --hs-map-z-appbar: 50;
+  --hs-map-z-appbar: 61;
   --hs-map-z-filter-popover: 60;
   --hs-map-shadow-card: 0 2px 10px rgb(14 116 144 / 7%);
   --hs-map-shadow-marker: 0 2px 7px rgb(23 32 51 / 14%);

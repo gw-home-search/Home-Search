@@ -281,7 +281,7 @@
 .chatbot-empty-intro > strong { font-size: 23px; font-weight: 820; line-height: 32px; letter-spacing: -.03em; text-wrap: balance; }
 .chatbot-empty-intro > p { margin: 9px 0 0; color: var(--hs-map-color-ink-soft); font-size: 15px; line-height: 24px; text-wrap: pretty; }
 
-.chatbot-example-section { margin-top: clamp(96px, 18dvh, 220px); }
+.chatbot-example-section { margin-top: auto; padding-top: 34px; }
 .chatbot-example-section > strong { display: block; margin-bottom: 10px; color: var(--hs-map-color-ink); font-size: 15px; font-weight: 790; line-height: 21px; letter-spacing: -.025em; }
 .chatbot-example-questions { display: grid; width: 100%; gap: 8px; }
 
@@ -294,7 +294,7 @@
   padding: 11px 14px;
   border: 0;
   border-radius: 14px;
-  background: var(--hs-map-color-surface-muted);
+  background: var(--hs-map-color-surface-tint);
   color: var(--hs-map-color-ink-soft);
   cursor: pointer;
   text-align: left;
@@ -356,7 +356,7 @@
   line-height: 16px;
 }
 
-.chatbot-form { display: grid; gap: 7px; padding: 10px 20px 13px; border-top: 1px solid var(--hs-map-color-header-line); }
+.chatbot-form { display: grid; gap: 7px; padding: 10px 20px 13px; border-top: 1px solid var(--hs-map-color-header-line); background: var(--hs-map-color-surface-tint); }
 .chatbot-form-heading > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .chatbot-form > p { margin: 0; color: var(--hs-map-color-muted); font-size: 10px; line-height: 15px; text-align: center; }
 
@@ -364,7 +364,7 @@
   display: grid;
   min-height: 58px;
   grid-template-columns: minmax(0, 1fr) 40px;
-  align-items: end;
+  align-items: center;
   gap: 8px;
   padding: 7px 8px 7px 18px;
   border: 1px solid var(--hs-map-color-line-strong);
@@ -383,6 +383,7 @@
   display: inline-flex;
   width: 40px;
   height: 40px;
+  align-self: end;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -409,7 +410,7 @@
   .chatbot-empty-intro > svg { margin-bottom: 11px; }
   .chatbot-empty-intro > strong { font-size: 21px; line-height: 29px; }
   .chatbot-empty-intro > p { margin-top: 6px; font-size: 14px; line-height: 22px; }
-  .chatbot-example-section { margin-top: 32px; }
+  .chatbot-example-section { margin-top: 32px; padding-top: 0; }
   .chatbot-example-questions button { min-height: 62px; padding: 10px 12px; }
   .chatbot-example-copy { font-size: 13.5px; line-height: 20px; }
   .chatbot-form { gap: 5px; padding: 9px 12px 11px; }

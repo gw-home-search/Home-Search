@@ -155,19 +155,20 @@ different apartment complex so the available question range is visible before
 selection. Example copy asks for specific output such as transaction date,
 floor, monthly volume, or identity details instead of using short generic
 prompts.
-The vertical space between the introduction and examples scales with viewport
-height but stops at 220px, avoiding the oversized empty band seen on tall
-desktop screens. Mobile uses a fixed 32px separation so the examples remain
-reachable inside the bottom split.
+On desktop, the examples consume the empty conversation column's remaining
+space and settle above the composer, with a 34px minimum separation from the
+introduction when height is constrained. Mobile uses a fixed 32px separation
+so the examples remain reachable inside the bottom split.
 The app-bar AI action and drawer toolbar actions keep transparent surfaces in
 hover, pressed, and expanded states; only icon/text color changes. Keyboard
 `focus-visible` outlines remain, so removing the gray press box does not remove
 the accessible focus signal.
 The composer starts as a 58px pill and grows with the question up to four
-24px lines. Longer questions scroll inside the textarea so the send action and
-map context stay visible. The 40px circular send action sits at the lower edge
-of a multiline composer and uses a heavier upward arrow, an inset focus line,
-and 16px input text. The
+24px lines. A single-line textarea is optically centered against the 40px send
+action; as the question grows, only the circular send action stays aligned to
+the lower edge. Longer questions scroll inside the textarea so the send action
+and map context stay visible. The action uses a heavier upward arrow, an inset
+focus line, and 16px input text. The
 small italic `Beta` wordmark uses Inter/SF Pro Display without a badge box or
 all-caps treatment. Answer evidence stays
 collapsed until requested. No chatbot UI decision changes the JSON/SSE
@@ -318,9 +319,12 @@ Raw public colors live only in `design-system.css` `--hs-map-*` and
 `--hs-auth-*` declarations.
 Deep teal Sky is brand/action, exploration region controls, and map-marker
 emphasis; the brighter teal is reserved for focus and lightweight borders.
-Blue-gray neutrals separate surfaces without competing with the Kakao map.
+Blue-gray neutrals separate borders without competing with the Kakao map.
 Ink is price text, and Red is reserved for failures and the explicit favorite
-heart state. Use
+heart state. App bars, panels, markers, and controls keep a clean white default
+surface. A near-white teal tint is limited to repeated functional groups: the
+search band, filter band, chatbot recommendations, and composer band. It is not
+used as the page or panel base. Use
 6/10/12/14/16/999px semantic radii and KOSA's restrained
 appbar/card/marker/dropdown shadows.
 

@@ -44,6 +44,19 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(designSystem).toContain('--hs-map-type-row-meta-size: 11px;');
   });
 
+  it('주요 surface는 흰색으로 두고 기능 grouping에만 옅은 brand tint를 사용한다', () => {
+    expect(designSystem).toContain('--hs-map-color-surface-tint: #f9fdfd;');
+    expect(exploration).toContain('background: var(--hs-map-color-surface);');
+    expect(exploration).toContain('background: var(--hs-map-color-surface-tint);');
+    expect(map).toContain('.filter-panel {');
+    expect(map).toContain('background: var(--hs-map-color-surface-tint);');
+    expect(chat).toContain('background: var(--hs-map-color-surface-tint);');
+    expect(chat).toContain('.chatbot-composer {');
+    expect(chat).toContain('background: var(--hs-map-color-surface);');
+    expect(shell).toContain('.app-bar {');
+    expect(shell).toContain('background: var(--hs-map-color-surface);');
+  });
+
   it('거래 추세 차트 fallback을 public map trend color와 일치시킨다', () => {
     expect(tradeTrendChart).toContain("const TREND_LINE_FALLBACK = '#0e7490';");
     expect(tradeTrendChart).not.toContain('rgb(189 87 39)');
@@ -200,7 +213,8 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(chat).toContain('font-style: italic;');
     expect(chat).toContain('max-width: 440px;');
     expect(chat).toContain('margin: 0;');
-    expect(chat).toContain('margin-top: clamp(96px, 18dvh, 220px);');
+    expect(chat).toContain('.chatbot-example-section { margin-top: auto; padding-top: 34px; }');
+    expect(chat).toContain('.chatbot-example-section { margin-top: 32px; padding-top: 0; }');
     expect(chat).toContain('.chatbot-empty-intro > span { margin-bottom: 5px; font-size: 15px;');
     expect(chat).toContain('.chatbot-empty-intro > strong { font-size: 23px;');
     expect(chat).toContain('.chatbot-empty-intro > p { margin: 9px 0 0;');
@@ -214,9 +228,11 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(chat).toContain('.chatbot-composer textarea {');
     expect(chat).toContain('font-size: 16px;');
     expect(chat).toContain('min-height: 58px;');
+    expect(chat).toContain('align-items: center;');
     expect(chat).toContain('min-height: 24px; max-height: 96px; overflow-y: hidden;');
     expect(chat).toContain('border-radius: 30px;');
     expect(chat).toContain('width: 40px;');
+    expect(chat).toContain('align-self: end;');
     expect(chat).toContain('border-radius: 50%;');
     expect(chat).toContain('.chatbot-send-icon { width: 20px; height: 20px; stroke-width: 2.4; }');
   });

@@ -52,6 +52,7 @@
   gap: var(--hs-map-space-2);
   padding: 8px 16px;
   border-bottom: 1px solid var(--hs-map-color-line);
+  background: var(--hs-map-color-surface-tint);
 }
 
 .exploration-search-panel[hidden] { display: none; }

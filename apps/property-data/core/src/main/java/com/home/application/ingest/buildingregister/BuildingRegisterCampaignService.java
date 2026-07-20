@@ -59,6 +59,7 @@ public class BuildingRegisterCampaignService {
                         command.strategy(),
                         remaining));
             } catch (BuildingRegisterRequestBudgetExceededException exhausted) {
+                requests += exhausted.consumedRequests();
                 break;
             }
             requests += collected.requestCount();

@@ -175,7 +175,7 @@ class BuildingRegisterCampaignServiceTest {
 
         var summary = new BuildingRegisterCampaignService(collection, campaigns, candidates).collect(command());
 
-        assertThat(summary.requestCount()).isZero();
+        assertThat(summary.requestCount()).isEqualTo(10);
         assertThat(summary.matchCount()).isZero();
         verify(campaigns).completeIfAllTargetsMatched(COLLECTION_ID);
         verifyNoInteractions(candidates);

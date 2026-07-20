@@ -9,6 +9,7 @@ public interface BuildingRegisterRawPageCompletion {
             long rawPageId,
             long endpointSnapshotId,
             Integer totalCount,
+            String providerStatus,
             BuildingRegisterRawPageStatus status,
             List<BuildingRegisterRecordSnapshotCommand> records);
 }

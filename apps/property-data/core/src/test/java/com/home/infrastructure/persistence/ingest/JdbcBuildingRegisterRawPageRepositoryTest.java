@@ -96,9 +96,28 @@ class JdbcBuildingRegisterRawPageRepositoryTest extends JdbcMigrationTestSupport
         assertThat(recordCount(rawPageId)).isOne();
     }
 
+    @Test
+    @DisplayName("parser가 확인한 provider status를 raw page finalization에 저장한다")
+    void finalizationStoresProviderStatusObservedAfterRawReceipt() {
+        long rawPageId = repository.receive(receipt("{\"providerFailure\":true}", null));
+
+        repository.complete(rawPageId, BuildingRegisterRawPageStatus.PROVIDER_FAILED, "99", List.of());
+
+        assertThat(jdbcClient
+                        .sql("SELECT provider_status FROM building_register_raw_page WHERE id=:id")
+                        .param("id", rawPageId)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("99");
+    }
+
     private BuildingRegisterRawPageReceiptCommand receipt(String body) {
+        return receipt(body, "00");
+    }
+
+    private BuildingRegisterRawPageReceiptCommand receipt(String body, String providerStatus) {
         return new BuildingRegisterRawPageReceiptCommand(
-                snapshotId, REQUEST_ID, 1, 1, body, "a".repeat(64), body.getBytes().length, 200, "00");
+                snapshotId, REQUEST_ID, 1, 1, body, "a".repeat(64), body.getBytes().length, 200, providerStatus);
     }
 
     private BuildingRegisterRecordSnapshotCommand record() {

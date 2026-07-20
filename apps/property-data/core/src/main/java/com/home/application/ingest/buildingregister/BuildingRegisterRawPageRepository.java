@@ -9,5 +9,13 @@ public interface BuildingRegisterRawPageRepository {
     void complete(
             long rawPageId, BuildingRegisterRawPageStatus status, List<BuildingRegisterRecordSnapshotCommand> records);
 
+    default void complete(
+            long rawPageId,
+            BuildingRegisterRawPageStatus status,
+            String providerStatus,
+            List<BuildingRegisterRecordSnapshotCommand> records) {
+        complete(rawPageId, status, records);
+    }
+
     String body(long rawPageId);
 }

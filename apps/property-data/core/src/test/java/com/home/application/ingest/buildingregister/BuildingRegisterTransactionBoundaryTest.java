@@ -22,6 +22,7 @@ class BuildingRegisterTransactionBoundaryTest {
                         long.class,
                         long.class,
                         Integer.class,
+                        String.class,
                         BuildingRegisterRawPageStatus.class,
                         List.class)
                 .getAnnotation(Transactional.class);

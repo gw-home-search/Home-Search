@@ -23,9 +23,10 @@ public class BuildingRegisterRawPageFinalizer implements BuildingRegisterRawPage
             long rawPageId,
             long endpointSnapshotId,
             Integer totalCount,
+            String providerStatus,
             BuildingRegisterRawPageStatus status,
             List<BuildingRegisterRecordSnapshotCommand> records) {
-        repository.complete(rawPageId, status, records);
+        repository.complete(rawPageId, status, providerStatus, records);
         if (totalCount != null) snapshots.observeTotalCount(endpointSnapshotId, totalCount);
     }
 }

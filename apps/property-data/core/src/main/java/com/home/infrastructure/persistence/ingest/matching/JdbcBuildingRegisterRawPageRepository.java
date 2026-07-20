@@ -58,13 +58,31 @@ public class JdbcBuildingRegisterRawPageRepository implements BuildingRegisterRa
     @Override
     public void complete(
             long rawPageId, BuildingRegisterRawPageStatus next, List<BuildingRegisterRecordSnapshotCommand> records) {
+        complete(rawPageId, next, null, records);
+    }
+
+    @Override
+    public void complete(
+            long rawPageId,
+            BuildingRegisterRawPageStatus next,
+            String providerStatus,
+            List<BuildingRegisterRecordSnapshotCommand> records) {
         Objects.requireNonNull(next, "status");
         Objects.requireNonNull(records, "records");
-        transaction.executeWithoutResult(ignored -> completeInTransaction(rawPageId, next, records));
+        String normalizedProviderStatus = providerStatus == null ? null : providerStatus.trim();
+        if (normalizedProviderStatus != null
+                && (normalizedProviderStatus.isEmpty() || normalizedProviderStatus.length() > 32)) {
+            throw new IllegalArgumentException("providerStatus must be 1..32 characters");
+        }
+        transaction.executeWithoutResult(
+                ignored -> completeInTransaction(rawPageId, next, normalizedProviderStatus, records));
     }
 
     private void completeInTransaction(
-            long rawPageId, BuildingRegisterRawPageStatus next, List<BuildingRegisterRecordSnapshotCommand> records) {
+            long rawPageId,
+            BuildingRegisterRawPageStatus next,
+            String providerStatus,
+            List<BuildingRegisterRecordSnapshotCommand> records) {
         BuildingRegisterRawPageStatus current = jdbc.sql(
                         "SELECT status FROM building_register_raw_page WHERE id=:id FOR UPDATE")
                 .param("id", rawPageId)
@@ -72,6 +90,16 @@ public class JdbcBuildingRegisterRawPageRepository implements BuildingRegisterRa
                 .optional()
                 .map(BuildingRegisterRawPageStatus::valueOf)
                 .orElseThrow(() -> new IllegalArgumentException("raw page not found: " + rawPageId));
+        if (providerStatus != null) {
+            int updated = jdbc.sql("""
+                        UPDATE building_register_raw_page SET provider_status=:provider
+                        WHERE id=:id AND (provider_status IS NULL OR provider_status=:provider)
+                        """)
+                    .param("provider", providerStatus)
+                    .param("id", rawPageId)
+                    .update();
+            if (updated != 1) throw new IllegalStateException("raw page provider status conflicts with stored state");
+        }
         if (current == next && current.isFinalized()) return;
         if (!current.canTransitionTo(next)) {
             throw new IllegalStateException("invalid raw page transition: " + current + " -> " + next);

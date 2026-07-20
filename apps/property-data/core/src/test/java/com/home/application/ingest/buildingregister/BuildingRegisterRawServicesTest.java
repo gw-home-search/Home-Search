@@ -33,9 +33,9 @@ class BuildingRegisterRawServicesTest {
         BuildingRegisterEndpointSnapshotStore snapshots = mock(BuildingRegisterEndpointSnapshotStore.class);
         BuildingRegisterRawPageFinalizer finalizer = new BuildingRegisterRawPageFinalizer(repository, snapshots);
 
-        finalizer.complete(10, 20, 3, BuildingRegisterRawPageStatus.PARSED, List.of());
+        finalizer.complete(10, 20, 3, null, BuildingRegisterRawPageStatus.PARSED, List.of());
 
-        verify(repository).complete(10, BuildingRegisterRawPageStatus.PARSED, List.of());
+        verify(repository).complete(10, BuildingRegisterRawPageStatus.PARSED, null, List.of());
         verify(snapshots).observeTotalCount(20, 3);
     }
 
@@ -46,9 +46,9 @@ class BuildingRegisterRawServicesTest {
         BuildingRegisterEndpointSnapshotStore snapshots = mock(BuildingRegisterEndpointSnapshotStore.class);
 
         new BuildingRegisterRawPageFinalizer(repository, snapshots)
-                .complete(10, 20, null, BuildingRegisterRawPageStatus.PARSE_FAILED, List.of());
+                .complete(10, 20, null, null, BuildingRegisterRawPageStatus.PARSE_FAILED, List.of());
 
-        verify(repository).complete(10, BuildingRegisterRawPageStatus.PARSE_FAILED, List.of());
+        verify(repository).complete(10, BuildingRegisterRawPageStatus.PARSE_FAILED, null, List.of());
         verifyNoInteractions(snapshots);
     }
 }

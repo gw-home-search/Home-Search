@@ -246,6 +246,7 @@ class BuildingRegisterCollectionServiceTest {
 
         assertThat(result.status()).isEqualTo(BuildingRegisterCollectionStatus.PROVIDER_FAILED);
         assertThat(fixture.finalizations).containsExactly(BuildingRegisterRawPageStatus.PROVIDER_FAILED);
+        assertThat(fixture.finalizedProviderStatuses).containsExactly("99");
     }
 
     @Test
@@ -360,6 +361,7 @@ class BuildingRegisterCollectionServiceTest {
         final FakeClient client = new FakeClient();
         final FakeSnapshotStore store = new FakeSnapshotStore();
         final List<BuildingRegisterRawPageReceiptCommand> receipts = new ArrayList<>();
+        final List<String> finalizedProviderStatuses = new ArrayList<>();
         final List<BuildingRegisterRawPageStatus> finalizations = new ArrayList<>();
         final BuildingRegisterCollectionService service = new BuildingRegisterCollectionService(
                 client,
@@ -369,7 +371,8 @@ class BuildingRegisterCollectionServiceTest {
                     receipts.add(command);
                     return 1000L + command.pageNo();
                 },
-                (rawPageId, snapshotId, totalCount, status, records) -> {
+                (rawPageId, snapshotId, totalCount, providerStatus, status, records) -> {
+                    finalizedProviderStatuses.add(providerStatus);
                     finalizations.add(status);
                     if (totalCount != null) store.observeTotalCount(snapshotId, totalCount);
                 });

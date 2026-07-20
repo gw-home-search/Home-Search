@@ -250,7 +250,7 @@ def test_adapter_rejects_source_and_incomplete_bundle_contracts() -> None:
 @pytest.mark.parametrize(
     ("document", "reason_code"),
     [
-        ({"unexpected": {}}, "API_ENVELOPE_INVALID"),
+        ({"unexpected": {}}, "API_ENVELOPE_ROOT_INVALID"),
         (
             {
                 "response": {

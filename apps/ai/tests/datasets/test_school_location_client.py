@@ -60,6 +60,24 @@ def test_client_encodes_decoding_key_once_and_uses_fixed_query() -> None:
     assert "numOfRows=1000&type=json" in paths[0]
 
 
+def test_client_tolerates_additive_provider_envelope_fields() -> None:
+    content = json.loads(_page(1, 1, [_row(1)]))
+    content["providerMetadata"] = {"ignored": True}
+    content["response"]["traceId"] = "ignored"
+    content["response"]["body"]["providerExtension"] = "ignored"
+
+    result = SchoolLocationApiClient(
+        requester=lambda _path, _timeout: (
+            200,
+            {"Content-Type": "application/json; charset=UTF-8"},
+            json.dumps(content).encode(),
+        )
+    ).collect("key")
+
+    assert result.complete is True
+    assert result.raw_row_count == 1
+
+
 def test_client_retries_one_5xx_but_not_429() -> None:
     calls = 0
 
@@ -126,6 +144,63 @@ def test_malformed_first_page_is_not_persisted() -> None:
     assert error.value.reason_code == "API_ENVELOPE_INVALID"
 
 
+def test_non_json_media_type_is_classified_without_persisting_body() -> None:
+    client = SchoolLocationApiClient(
+        requester=lambda _path, _timeout: (
+            200,
+            {"Content-Type": "text/html; charset=UTF-8"},
+            b"provider body must not be persisted",
+        )
+    )
+
+    with pytest.raises(SchoolLocationApiError) as error:
+        client.collect("key")
+
+    assert error.value.reason_code == "API_MEDIA_TYPE_INVALID"
+
+
+@pytest.mark.parametrize(
+    ("body", "reason"),
+    [
+        ({"unexpected": {}}, "API_ENVELOPE_ROOT_INVALID"),
+        ({"response": {"unexpected": {}}}, "API_ENVELOPE_RESPONSE_INVALID"),
+        (
+            {"response": {"header": {"resultCode": "00"}, "body": {}}},
+            "API_ENVELOPE_BODY_INVALID",
+        ),
+        (
+            {
+                "response": {
+                    "header": {"resultCode": "00"},
+                    "body": {
+                        "items": {"item": []},
+                        "pageNo": 1,
+                        "numOfRows": 1000,
+                        "totalCount": 0,
+                    },
+                }
+            },
+            "API_ENVELOPE_ITEMS_INVALID",
+        ),
+    ],
+)
+def test_invalid_envelope_reports_only_the_structural_stage(
+    body: dict[str, object], reason: str
+) -> None:
+    client = SchoolLocationApiClient(
+        requester=lambda _path, _timeout: (
+            200,
+            {"Content-Type": "application/json"},
+            json.dumps(body).encode(),
+        )
+    )
+
+    with pytest.raises(SchoolLocationApiError) as error:
+        client.collect("key")
+
+    assert error.value.reason_code == reason
+
+
 def test_malformed_middle_page_preserves_only_previously_valid_pages() -> None:
     first_rows = [_row(index) for index in range(1, 1001)]
 
@@ -140,7 +215,7 @@ def test_malformed_middle_page_preserves_only_previously_valid_pages() -> None:
     assert result.page_count == 1
     assert result.raw_row_count == 1000
     assert b"must-not-be-persisted" not in result.content
-    assert result.reason_codes == ("API_ENVELOPE_INVALID",)
+    assert result.reason_codes == ("API_ENVELOPE_ROOT_INVALID",)
 
 
 @pytest.mark.parametrize(

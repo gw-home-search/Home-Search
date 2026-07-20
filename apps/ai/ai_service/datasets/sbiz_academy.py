@@ -16,6 +16,11 @@ from .contracts import ReferenceSourceContract
 
 
 SOURCE_ID = "place.sbiz-academy"
+_TAXONOMY_FIELDS = {
+    "taxonomy-large": ("indsLclsCd", "indsLclsNm"),
+    "taxonomy-middle": ("indsMclsCd", "indsMclsNm"),
+    "taxonomy-small": ("indsSclsCd", "indsSclsNm"),
+}
 
 
 @dataclass(frozen=True)
@@ -99,7 +104,9 @@ class SbizAcademyAdapter:
             if artifact.logical_name in {"taxonomy-large", "taxonomy-middle", "taxonomy-small"}:
                 if page_started or artifact.logical_name in taxonomy_values:
                     raise RawPayloadError("Sbiz taxonomy order is invalid", "TAXONOMY_CHANGED")
-                taxonomy_values[artifact.logical_name] = _json(artifact.content)
+                taxonomy_values[artifact.logical_name] = _taxonomy_page(
+                    artifact.content, artifact.logical_name
+                )
                 continue
             if set(taxonomy_values) != {"taxonomy-large", "taxonomy-middle", "taxonomy-small"}:
                 raise RawPayloadError("Sbiz taxonomy artifacts are incomplete", "TAXONOMY_CHANGED")
@@ -189,6 +196,32 @@ def _page(content: bytes) -> tuple[int, int, list[dict[str, object]]]:
         return total, page_size, items
     except (AssertionError, KeyError, TypeError, ValueError):
         raise RawPayloadError("Sbiz page is invalid", "SOURCE_SCHEMA_MISMATCH") from None
+
+
+def _taxonomy_page(content: bytes, artifact_name: str) -> list[dict[str, str]]:
+    try:
+        code_field, name_field = _TAXONOMY_FIELDS[artifact_name]
+        value = _json(content)
+        assert isinstance(value, dict)
+        body = value["body"]
+        items = body["items"]
+        if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+            raise ValueError
+        normalized = [
+            {"code": _text(item.get(code_field)), "name": _text(item.get(name_field))}
+            for item in items
+        ]
+        if (
+            not normalized
+            or any(not item["code"] or not item["name"] for item in normalized)
+            or len({item["code"] for item in normalized}) != len(normalized)
+        ):
+            raise ValueError
+        return sorted(normalized, key=lambda item: item["code"])
+    except (AssertionError, KeyError, TypeError, ValueError):
+        raise RawPayloadError(
+            "Sbiz taxonomy page is invalid", "TAXONOMY_CHANGED"
+        ) from None
 
 
 def _text(value: object) -> str:

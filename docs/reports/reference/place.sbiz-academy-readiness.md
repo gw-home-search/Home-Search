@@ -3,6 +3,7 @@
 기준일: 2026-07-20
 상태: `Partial`
 실제 데이터 readiness: `2.0/10 Partial`
+S2 collector 구현 품질: `9.5/10 Pass`
 taxonomy contract foundation 구현 품질: `10.0/10 Pass`
 
 ## 검증 근거 확인
@@ -13,8 +14,11 @@ taxonomy contract foundation 구현 품질: `10.0/10 Pass`
 - 공식 `P1`(`교육 서비스업`) 아래 소분류 18개 전체를 code/name allowlist로 고정했다.
 - loader는 tracked file path·checksum·schema·계층별 count·P1 name·allowlist·canonical
   fingerprint 중 하나라도 달라지면 collector 구성 단계에서 중단한다.
-- 각 acquisition bundle에 이 계약에서 결정적으로 생성한 대·중·소 taxonomy artifact를
-  포함하고, adapter가 fingerprint·partition·store ID·page total을 다시 검증한다.
+- collector는 각 acquisition 시작에 공식 `largeUpjongList`, `middleUpjongList`,
+  `smallUpjongList`를 고정 순서로 조회하고, code/name 전체가 tracked artifact와
+  일치할 때만 store partition을 요청한다.
+- 성공한 현행 taxonomy 응답 bytes를 raw bundle에 포함하고, adapter가 다시
+  fingerprint·partition·store ID·page total을 검증한다.
 - 2025-11-28 공식 OpenAPI 활용가이드와 포털 OAS에서 store field 계약을 대조했고,
   `newZipcd` 신우편번호와 `indsSclsCd`/`indsSclsNm` code-name 일치를 적용했다.
 - 위치 projection·NEIS exact match·800m observer의 기존 offline 검증은 유지된다.
@@ -35,20 +39,45 @@ checksum:
 - 예상 RED 실패: 합성 fixture만 있고 tracked official artifact가 없음을 정확히 확인했다.
 - 최소 GREEN: official CSV·provenance config·결정적 parser를 추가하고 source checksum
   변경, 공식 `newZipcd`, store taxonomy name drift 차단 테스트를 보강했다.
-- 좁은 회귀: Sbiz collector·adapter·ingest·projection·observer·composition `86 passed`.
-- 전체 AI 회귀: `546 passed`, coverage `90.22%`.
+- live taxonomy preflight 최초 RED: response envelope을 adapter가 읽지 못하고,
+  collector가 세 taxonomy endpoint를 호출하지 않으며 변경 taxonomy 뒤에도 store를
+  요청하는 5개 실패를 확인했다.
+- live taxonomy preflight 최소 GREEN: 고정 endpoint 순서, raw response 보존,
+  code/name exact 비교와 `TAXONOMY_CHANGED` fail-closed를 추가했다.
+- 좁은 회귀: Sbiz collector·adapter·ingest·projection·observer·composition `87 passed`.
+- 전체 AI 회귀: `547 passed`, coverage `90.17%`.
 
 taxonomy contract foundation은 공식 artifact 이용조건·출처, 고정 schema, 원본/추적
 checksum, 계층 count, P1 allowlist, canonical fingerprint, path·symlink 경계, fail-closed
 오류, TDD·전체 회귀, AsciiDoc와 추적성을 모두 충족해 `10.0/10 Pass`로 평가한다.
-이는 S2 전체 collector 점수나 실제 데이터 readiness를 대신하지 않는다.
+taxonomy foundation 점수는 S2 전체 collector 점수나 실제 데이터 readiness를
+대신하지 않는다.
+
+## S2 collector 구현 품질 평가
+
+| 항목 | 점수 | 검증 근거 확인 |
+|---|---:|---|
+| 범위·최소성 | `1.0/1.0` | Sbiz taxonomy·교육업종 partition collector와 adapter만 static catalog에 연결했고 scheduler·동적 plugin을 추가하지 않음 |
+| 공개·내부 계약 | `1.0/1.0` | 공식 OAS의 taxonomy 3개와 `storeListInUpjong`, `newZipcd`, code/name 필드를 fixture 계약으로 고정하고 기존 JSON/SSE field를 변경하지 않음 |
+| 이용조건·출처 | `0.5/1.0` | taxonomy artifact 출처·checksum·이용허락은 고정했으나 API private raw 저장·가공 승인은 `PENDING` |
+| 데이터 정확성·원자성 | `1.5/1.5` | 현행 taxonomy exact 비교 후에만 18개 partition 수집, total·page·중복 ID 검증, verified raw-first와 incomplete 미게시를 검증 |
+| 보안·개인정보 | `1.0/1.0` | service key를 request path·bundle·DB·로그에서 제외하고 전화번호와 provider 오류 body를 투영·보존하지 않음 |
+| 실패·복구·관측 | `1.0/1.0` | taxonomy 변경은 store 요청 전 중단하고 첫 page 실패는 raw 생성 없이 실패, 중간 실패는 safe reason incomplete bundle로 보존 |
+| 테스트 품질 | `1.5/1.5` | taxonomy 호출 누락·schema envelope·변경 후 store 요청의 예상 RED 5건, 집중 회귀 `87 passed`, 전체 AI `547 passed`, coverage `90.17%` |
+| 문서·운영 가능성 | `1.0/1.0` | source AsciiDoc, generated snippets, generic refresh·status·audit와 readiness blocker를 일치시킴 |
+| 성능·자원 제한 | `0.5/0.5` | page 8MiB, bundle 1GiB, partition당 500 page, timeout 1..30초, retry 1회, owner-only temp streaming 제한 검증 |
+| 리뷰·commit 추적성 | `0.5/0.5` | 공식 taxonomy foundation, schema 정렬, live preflight 책임과 잔여 위험을 분리 기록 |
+
+구현 점수는 `9.5/10 Pass`다. 감점은 API 이용조건 승인 증거가 없는 항목에만
+적용했고 계약·데이터 정확성·보안·테스트 필수 항목은 감점하지 않았다. 실제 provider
+호출이나 capability 활성화를 승인하지 않는다.
 
 ## 검증 공백 / 잔여 위험
 
 - 업종코드 파일의 이용허락 제한 없음은 확인했지만, 상가업소 API raw를 private S3에
   저장·가공하는 이용조건 승인은 별도 `PENDING`이다.
-- 실제 대·중·소 taxonomy endpoint의 현행 response schema와 tracked artifact 비교는
-  아직 수행하지 않았다. 따라서 S2 전체 구현 점수는 확정하지 않는다.
+- 공식 OAS와 fake transport로 현행 taxonomy preflight 동작을 검증했지만 실제
+  대·중·소 endpoint 응답을 호출해 tracked artifact와 비교하지 않았다.
 - 실제 store acquisition, 좌표 전국 95%·지역 90% coverage, S3 복구, 두 번째 수집,
   chatbot JSON/SSE golden은 미검증이다.
 - Sbiz 행정코드와 property 법정동 코드 mapping 전에는 `verifiedZero=false`를 유지한다.

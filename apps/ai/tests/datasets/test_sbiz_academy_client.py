@@ -12,7 +12,13 @@ from ai_service.datasets.sbiz_academy import (
 from ai_service.datasets import sbiz_academy_client
 from ai_service.datasets.sbiz_academy_client import SbizAcademyApiClient, SbizAcademyApiError
 from ai_service.datasets.secure_temp import SecureTempWorkspace
-from tests.datasets.test_sbiz_academy_adapter import _contract, _rows, _taxonomy, TAXONOMY
+from tests.datasets.test_sbiz_academy_adapter import (
+    TAXONOMY,
+    _contract,
+    _rows,
+    _taxonomy,
+    _taxonomy_page,
+)
 
 
 def _page() -> bytes:
@@ -33,13 +39,25 @@ def _page() -> bytes:
     ).encode()
 
 
+def _response(path: str, taxonomy=TAXONOMY) -> bytes:
+    endpoint_to_artifact = {
+        "largeUpjongList": "taxonomy-large",
+        "middleUpjongList": "taxonomy-middle",
+        "smallUpjongList": "taxonomy-small",
+    }
+    for endpoint, artifact_name in endpoint_to_artifact.items():
+        if endpoint in path:
+            return _taxonomy_page(artifact_name, taxonomy[artifact_name])
+    return _page()
+
+
 def test_sbiz_collector_partitions_only_allowlisted_taxonomy_without_key_in_path() -> None:
     paths = []
 
     def request(path, _timeout, key):
         paths.append(path)
         assert key == "secret"
-        return 200, {}, _page()
+        return 200, {}, _response(path)
 
     observed_at = datetime(2026, 7, 20, tzinfo=UTC)
     collected = SbizAcademyApiClient(
@@ -55,6 +73,11 @@ def test_sbiz_collector_partitions_only_allowlisted_taxonomy_without_key_in_path
     assert collected.raw_row_count == 1
     assert len(rows) == 1
     assert all("secret" not in path for path in paths)
+    assert [path.split("/")[-1].split("?", 1)[0] for path in paths[:3]] == [
+        "largeUpjongList",
+        "middleUpjongList",
+        "smallUpjongList",
+    ]
 
 
 def test_sbiz_collects_into_owner_only_prepared_bundle() -> None:
@@ -62,7 +85,7 @@ def test_sbiz_collects_into_owner_only_prepared_bundle() -> None:
     client = SbizAcademyApiClient(
         taxonomy=_taxonomy(),
         taxonomy_artifacts=TAXONOMY,
-        requester=lambda *_args: (200, {}, _page()),
+        requester=lambda path, *_args: (200, {}, _response(path)),
     )
 
     with SecureTempWorkspace(required_free_bytes=1024 * 1024) as workspace:
@@ -90,8 +113,10 @@ def test_sbiz_mid_collection_failure_preserves_incomplete_bundle() -> None:
     )
     calls = 0
 
-    def request(_path, _timeout, _key):
+    def request(path, _timeout, _key):
         nonlocal calls
+        if "UpjongList" in path:
+            return 200, {}, _response(path, taxonomy_artifacts)
         calls += 1
         return (200, {}, _page()) if calls == 1 else (500, {}, b"provider body")
 
@@ -118,7 +143,30 @@ def test_sbiz_invalid_evidence_configuration_and_first_payload_fail_closed() -> 
     )
     with pytest.raises(SbizAcademyApiError) as error:
         client.collect("key", observed_at=datetime(2026, 7, 20, tzinfo=UTC))
-    assert error.value.reason_code == "PROVIDER_PAGE_INVALID"
+    assert error.value.reason_code == "TAXONOMY_CHANGED"
+
+
+def test_sbiz_live_taxonomy_change_stops_before_store_collection() -> None:
+    changed = {
+        **TAXONOMY,
+        "taxonomy-small": [{"code": "P10101", "name": "changed"}],
+    }
+    store_requested = False
+
+    def request(path, _timeout, _key):
+        nonlocal store_requested
+        if "storeListInUpjong" in path:
+            store_requested = True
+        return 200, {}, _response(path, changed)
+
+    client = SbizAcademyApiClient(
+        taxonomy=_taxonomy(), taxonomy_artifacts=TAXONOMY, requester=request,
+    )
+    with pytest.raises(SbizAcademyApiError) as error:
+        client.collect("key", observed_at=datetime(2026, 7, 20, tzinfo=UTC))
+
+    assert error.value.reason_code == "TAXONOMY_CHANGED"
+    assert store_requested is False
 
 
 @pytest.mark.parametrize(

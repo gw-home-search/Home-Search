@@ -61,8 +61,13 @@ def _bundle(
     if duplicate:
         items.append(dict(items[0]))
     artifacts = [
-        BundleArtifact(name, "json", "application/json", json.dumps(value).encode())
-        for name, value in taxonomy.items()
+        BundleArtifact(
+            artifact_name,
+            "json",
+            "application/json",
+            _taxonomy_page(artifact_name, value),
+        )
+        for artifact_name, value in taxonomy.items()
     ]
     artifacts.append(BundleArtifact(
         "p10101-page-000001", "json", "application/json",
@@ -72,6 +77,20 @@ def _bundle(
         source_id="place.sbiz-academy", endpoint_path="/B553077/api/open/sdsc2/storeListInUpjong",
         artifacts=tuple(artifacts), temporal_value=datetime(2026, 7, 20, tzinfo=UTC),
     )
+
+
+def _taxonomy_page(name: str, rows: list[dict[str, str]]) -> bytes:
+    fields = {
+        "taxonomy-large": ("indsLclsCd", "indsLclsNm"),
+        "taxonomy-middle": ("indsMclsCd", "indsMclsNm"),
+        "taxonomy-small": ("indsSclsCd", "indsSclsNm"),
+    }
+    code_field, name_field = fields[name]
+    items = [
+        {code_field: row["code"], name_field: row["name"]}
+        for row in rows
+    ]
+    return json.dumps({"body": {"items": items}}, ensure_ascii=False).encode()
 
 
 def _rows(parsed):

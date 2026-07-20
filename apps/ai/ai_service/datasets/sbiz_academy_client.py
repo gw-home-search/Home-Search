@@ -9,14 +9,23 @@ from http.client import HTTPSConnection
 from urllib.parse import quote
 
 from .bundle import FileBundleArtifact, PreparedBundle, build_deterministic_bundle_file
-from .checksum import canonical_json_bytes
-from .sbiz_academy import SbizTaxonomyContract, _page, taxonomy_fingerprint
+from .sbiz_academy import (
+    SbizTaxonomyContract,
+    _page,
+    _taxonomy_page,
+    taxonomy_fingerprint,
+)
 from .secure_temp import SecureTempWorkspace
 from .validation import RawPayloadError
 
 
 _HOST = "apis.data.go.kr"
 _PATH = "/B553077/api/open/sdsc2/storeListInUpjong"
+_TAXONOMY_PATHS = (
+    ("taxonomy-large", "/B553077/api/open/sdsc2/largeUpjongList"),
+    ("taxonomy-middle", "/B553077/api/open/sdsc2/middleUpjongList"),
+    ("taxonomy-small", "/B553077/api/open/sdsc2/smallUpjongList"),
+)
 _PAGE_SIZE = 1000
 _MAX_PAGES = 500
 _MAX_PAGE_BYTES = 8 * 1024 * 1024
@@ -26,6 +35,7 @@ _SAFE_REASONS = frozenset(
         "API_AUTHENTICATION_FAILED", "API_BAD_REQUEST", "API_PAGE_TOO_LARGE",
         "API_RATE_LIMITED", "API_REDIRECT_REJECTED", "API_SERVER_ERROR",
         "API_TRANSPORT_FAILED", "PROVIDER_PAGE_INVALID",
+        "TAXONOMY_CHANGED",
     }
 )
 
@@ -106,8 +116,19 @@ class SbizAcademyApiClient:
         if not key or len(key) > 1024 or observed_at.tzinfo is None:
             raise ValueError("Sbiz API collection configuration is invalid")
         artifacts: list[FileBundleArtifact] = []
-        for name, value in sorted(self._taxonomy_artifacts.items()):
-            content = canonical_json_bytes(value)
+        for name, endpoint in _TAXONOMY_PATHS:
+            try:
+                content = self._load(f"{endpoint}?type=json", key)
+                live_taxonomy = _taxonomy_page(content, name)
+            except (SbizAcademyApiError, RawPayloadError) as exception:
+                reason = (
+                    exception.reason_code
+                    if isinstance(exception, SbizAcademyApiError)
+                    else "TAXONOMY_CHANGED"
+                )
+                raise SbizAcademyApiError(reason) from None
+            if live_taxonomy != self._taxonomy_artifacts[name]:
+                raise SbizAcademyApiError("TAXONOMY_CHANGED")
             path = workspace.create_file(f"artifact-{len(artifacts) + 1:06d}.json")
             path.write_bytes(content)
             artifacts.append(

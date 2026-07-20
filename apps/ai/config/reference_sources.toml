@@ -188,12 +188,14 @@ normalization_schema_version = "large-store-v1"
 
 [sources.acquisition]
 mode = "file"
-base_url = "https://file.localdata.go.kr/file/large_scale_retail_stores/info"
+base_url = "https://file.localdata.go.kr/file/download/large_scale_retail_stores/info"
+referer_url = "https://file.localdata.go.kr/file/large_scale_retail_stores/info"
 allowed_hosts = ["file.localdata.go.kr"]
-allowed_path_prefixes = ["/file/large_scale_retail_stores/"]
+allowed_path_prefixes = ["/file/download/large_scale_retail_stores/"]
 format = "CSV"
 encoding = "UTF-8"
 source_crs = "EPSG:5174"
+source_date = 2025-11-27
 maximum_bundle_bytes = 268435456
 redirect_policy = "ALLOWLISTED_ONE_HOP"
 

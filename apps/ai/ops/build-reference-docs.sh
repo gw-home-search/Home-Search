@@ -48,6 +48,12 @@ if rg -q '^GET https://www\.data\.go\.kr/data/15013205/standard\.do$' "$rail_req
     echo '상태: Fail - rail landing URL은 download request가 아닙니다.' >&2
     exit 1
 fi
+retail_request="${tmp_dir}/first/generated-snippets/retail.large-store/download-request.adoc"
+if ! rg -q '^GET https://file\.localdata\.go\.kr/file/download/large_scale_retail_stores/info$' "$retail_request" \
+    || ! rg -q '^Referer: https://file\.localdata\.go\.kr/file/large_scale_retail_stores/info$' "$retail_request"; then
+    echo '상태: Fail - 검증된 retail download request가 문서와 일치하지 않습니다.' >&2
+    exit 1
+fi
 
 mkdir -p "$build_root"
 find "$build_root" -type f -exec unlink {} \; 2>/dev/null || true

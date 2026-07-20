@@ -83,6 +83,9 @@ def _snippets(source_id: str, source: dict[str, object], examples: Path) -> dict
     request_target = f"GET {acquisition['base_url']}"
     if fixed_query:
         request_target += f"?{fixed_query}"
+    referer_url = acquisition.get("referer_url", "")
+    if referer_url:
+        request_target += f"\nReferer: {referer_url}"
     result = {
         request_name: f"[source,text]\n----\n{request_target}\n----\n",
         "http-response.adoc": f"[source,text]\n----\n{(examples / f'{source_id}.txt').read_text(encoding='utf-8').rstrip()}\n----\n",

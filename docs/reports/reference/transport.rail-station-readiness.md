@@ -27,7 +27,7 @@ safe reason code만 refresh-run에 기록한다.
 - 최소 GREEN: file-only non-secret `fixed_query`, exact query transport, 공식 media type,
   Content-Disposition source date 검증을 추가했다.
 - 좁은 회귀: file contract·snapshot client·rail ingest `31 passed`; 철도 통합 `58 passed`.
-- 전체 AI 회귀: `550 passed`, coverage `90.15%`.
+- 전체 AI 회귀: `552 passed`, coverage `90.18%`.
 
 `api-contract: compatible`
 

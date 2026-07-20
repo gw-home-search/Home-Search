@@ -31,7 +31,7 @@ live golden은 미완료다. `HOME_AI_ENABLED_REFERENCE_CAPABILITIES` allowlist�
 | 데이터 정확성·원자성 | `1.5/1.5` | 17개 교육청 coverage, page·total 일치, unique ID, verified raw-first, rejected row 차단, transaction 안 projection 후 pointer 전환 검증 |
 | 보안·개인정보 | `1.0/1.0` | key·전체 query·provider 오류 body 비보존, 전화번호·교습비 비투영, runtime base table 접근 거부 검증 |
 | 실패·복구·관측 | `1.0/1.0` | 첫 page 실패는 acquisition 없이 safe reason만 기록하고, 중간 실패는 incomplete raw만 보존하며 active publication을 변경하지 않음 |
-| 테스트 품질 | `1.5/1.5` | collector·adapter·ingest·PostGIS projection·observer·LLM contract 집중 테스트 `119 passed`; 전체 AI `550 passed`, coverage `90.15%` |
+| 테스트 품질 | `1.5/1.5` | collector·adapter·ingest·PostGIS projection·observer·LLM contract 집중 테스트 `119 passed`; 전체 AI `552 passed`, coverage `90.18%` |
 | 문서·운영 가능성 | `1.0/1.0` | source AsciiDoc, generated request/field/failure snippet, generic refresh·status·audit runbook 일치 |
 | 성능·자원 제한 | `0.5/0.5` | page 8MiB, bundle 512MiB, office당 300 page, timeout 1..30초, retry 1회, secure file streaming 제한 검증 |
 | 리뷰·commit 추적성 | `0.5/0.5` | collector·projection·observer·streaming·composition 책임 commit과 readiness 잔여 위험을 분리 기록 |
@@ -56,8 +56,8 @@ TESTCONTAINERS_RYUK_DISABLED=true uv run pytest --no-cov \
 # 119 passed
 ```
 
-전체 coverage 근거는 `priority-reference-offline-verification.md`의 `550 passed`,
-`90.15%` 결과를 사용한다. 부분 테스트만 coverage와 함께 실행하면 저장소 전역
+전체 coverage 근거는 `priority-reference-offline-verification.md`의 `552 passed`,
+`90.18%` 결과를 사용한다. 부분 테스트만 coverage와 함께 실행하면 저장소 전역
 `fail-under=90` 특성상 동작이 모두 통과해도 종료 코드가 실패하므로 점수 근거로
 사용하지 않는다.
 

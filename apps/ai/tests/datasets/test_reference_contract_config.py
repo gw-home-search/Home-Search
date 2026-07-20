@@ -36,6 +36,14 @@ def test_catalog_loads_the_fixed_source_order_and_only_school_is_approved() -> N
         "environment.city-park",
     )
     assert catalog.approved("edu.school-location").license.status == "APPROVED"
+    retail = catalog.get("retail.large-store")
+    assert retail.acquisition.base_url == (
+        "https://file.localdata.go.kr/file/download/large_scale_retail_stores/info"
+    )
+    assert retail.acquisition.source_date == date(2025, 11, 27)
+    assert retail.acquisition.referer_url == (
+        "https://file.localdata.go.kr/file/large_scale_retail_stores/info"
+    )
     rail = catalog.get("transport.rail-station")
     assert rail.acquisition.base_url == (
         "https://data.kric.go.kr/rips/dataset/download.file"
@@ -136,6 +144,62 @@ def test_contract_value_objects_reject_unsafe_bounds_and_incomplete_approval() -
                 redirect_policy="REJECT",
                 fixed_query=fixed_query,
             )
+
+    with pytest.raises(ValueError, match="source date"):
+        AcquisitionContract(
+            mode="api",
+            base_url="https://api.example.invalid/allowed/source",
+            allowed_hosts=("api.example.invalid",),
+            allowed_path_prefixes=("/allowed/",),
+            format="JSON",
+            encoding="UTF-8",
+            source_crs=None,
+            maximum_bundle_bytes=1024,
+            redirect_policy="REJECT",
+            source_date=date(2025, 11, 27),
+        )
+
+    with pytest.raises(ValueError, match="source date"):
+        AcquisitionContract(
+            mode="file",
+            base_url="https://api.example.invalid/allowed/source",
+            allowed_hosts=("api.example.invalid",),
+            allowed_path_prefixes=("/allowed/",),
+            format="CSV",
+            encoding="UTF-8",
+            source_crs=None,
+            maximum_bundle_bytes=1024,
+            redirect_policy="REJECT",
+            source_date="2025-11-27",  # type: ignore[arg-type]
+        )
+
+    with pytest.raises(ValueError, match="referer"):
+        AcquisitionContract(
+            mode="file",
+            base_url="https://api.example.invalid/allowed/source",
+            allowed_hosts=("api.example.invalid",),
+            allowed_path_prefixes=("/allowed/",),
+            format="XLSX",
+            encoding="UTF-8",
+            source_crs=None,
+            maximum_bundle_bytes=1024,
+            redirect_policy="REJECT",
+            referer_url="https://evil.invalid/landing",
+        )
+
+    with pytest.raises(ValueError, match="referer"):
+        AcquisitionContract(
+            mode="file",
+            base_url="https://api.example.invalid/allowed/source",
+            allowed_hosts=("api.example.invalid",),
+            allowed_path_prefixes=("/allowed/",),
+            format="CSV",
+            encoding="UTF-8",
+            source_crs=None,
+            maximum_bundle_bytes=1024,
+            redirect_policy="REJECT",
+            referer_url="https://api.example.invalid/landing\nInjected: value",
+        )
 
 
 def _valid_acquisition() -> AcquisitionContract:

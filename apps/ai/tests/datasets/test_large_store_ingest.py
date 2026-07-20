@@ -128,6 +128,25 @@ def test_large_store_refresh_downloads_file_builds_bundle_and_uses_prepared_life
     assert repository.closed is True
 
 
+def test_large_store_client_uses_tracked_download_and_source_date(monkeypatch) -> None:
+    source = load_reference_source_catalog(large_store_ingest._CONFIG_PATH).get(
+        "retail.large-store"
+    )
+    captured = {}
+
+    monkeypatch.setattr(
+        large_store_ingest,
+        "FileSnapshotClient",
+        lambda **kwargs: captured.update(kwargs) or object(),
+    )
+
+    large_store_ingest._client(source)
+
+    assert captured["url"].endswith("/file/download/large_scale_retail_stores/info")
+    assert captured["source_date"] == date(2025, 11, 27)
+    assert captured["referer_url"].endswith("/file/large_scale_retail_stores/info")
+
+
 def test_pending_license_stops_before_repository_client_or_raw_store() -> None:
     class NeverCalled:
         def __init__(self, *_args, **_kwargs):

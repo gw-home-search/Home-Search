@@ -29,6 +29,8 @@ class AcquisitionContract:
     maximum_bundle_bytes: int
     redirect_policy: Literal["REJECT", "ALLOWLISTED_ONE_HOP"]
     fixed_query: str = ""
+    source_date: date | None = None
+    referer_url: str = ""
 
     def __post_init__(self) -> None:
         parsed = urlsplit(self.base_url)
@@ -50,6 +52,15 @@ class AcquisitionContract:
             self.mode != "file" or not _is_safe_fixed_query(self.fixed_query)
         ):
             raise ValueError("acquisition fixed query is invalid")
+        if self.source_date is not None and (
+            type(self.source_date) is not date or self.mode != "file"
+        ):
+            raise ValueError("acquisition source date is invalid")
+        if self.referer_url and (
+            self.mode != "file"
+            or not _is_safe_referer_url(self.referer_url, self.allowed_hosts)
+        ):
+            raise ValueError("acquisition referer URL is invalid")
 
 
 @dataclass(frozen=True)
@@ -202,6 +213,8 @@ def _source(value: object) -> ReferenceSourceContract:
             maximum_bundle_bytes=_integer(acquisition, "maximum_bundle_bytes"),
             redirect_policy=_text(acquisition, "redirect_policy"),  # type: ignore[arg-type]
             fixed_query=_optional_text(acquisition.get("fixed_query")) or "",
+            source_date=_optional_date(acquisition.get("source_date")),
+            referer_url=_optional_text(acquisition.get("referer_url")) or "",
         ),
         temporal=TemporalContract(
             basis=_text(temporal, "basis"),  # type: ignore[arg-type]
@@ -285,6 +298,21 @@ def _is_safe_fixed_query(value: str) -> bool:
             re.search(r"key|token|secret|password|credential|auth", name, re.IGNORECASE)
             for name in names
         )
+    )
+
+
+def _is_safe_referer_url(value: str, allowed_hosts: tuple[str, ...]) -> bool:
+    parsed = urlsplit(value)
+    return (
+        value.isascii()
+        and all(33 <= ord(character) <= 126 for character in value)
+        and parsed.scheme == "https"
+        and not parsed.username
+        and not parsed.password
+        and not parsed.query
+        and not parsed.fragment
+        and parsed.hostname in allowed_hosts
+        and bool(parsed.path)
     )
 
 

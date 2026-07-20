@@ -107,6 +107,8 @@ def _client(reference: ReferenceSourceContract) -> FileSnapshotClient:
         media_types=("text/csv",), extension="csv",
         maximum_bytes=acquisition.maximum_bundle_bytes,
         allow_one_redirect=acquisition.redirect_policy == "ALLOWLISTED_ONE_HOP",
+        source_date=acquisition.source_date,
+        referer_url=acquisition.referer_url,
     )
 
 

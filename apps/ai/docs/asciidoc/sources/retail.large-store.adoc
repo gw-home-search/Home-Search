@@ -1,6 +1,13 @@
 == retail.large-store
 
-EPSG:5174 좌표를 WGS84로 변환한다. provider 행정코드 매핑이 검증되기 전에는 확정 0건을 주장하지 않는다.
+공식 LOCALDATA 안내 HTML은 acquisition artifact가 아니다. collector는 안내 페이지가
+명시한 `/file/download/large_scale_retail_stores/info`만 요청하며, 같은 host의 tracked
+안내 URL만 `Referer`로 보낸다. 2026-07-20 header preflight에서 1,183,334 bytes,
+`text/csv`, 날짜 없는 filename을 확인했다. source date는 공공데이터포털의 공식
+파일 metadata `2025-11-27`을 사용하며 현재 시각으로 대체하지 않는다.
+
+EPSG:5174 좌표를 WGS84로 변환한다. provider 행정코드 매핑이 검증되기 전에는 확정
+0건을 주장하지 않는다.
 
 include::{snippets}/retail.large-store/download-request.adoc[]
 include::{snippets}/retail.large-store/response-headers.adoc[]

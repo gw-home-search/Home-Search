@@ -12,7 +12,7 @@ from http.client import HTTPSConnection
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
-from .contracts import _is_safe_fixed_query
+from .contracts import _is_safe_fixed_query, _is_safe_referer_url
 
 
 Requester = Callable[[str, float], tuple[int, Mapping[str, str], bytes]]
@@ -63,6 +63,8 @@ class FileSnapshotClient:
         maximum_bytes: int,
         allow_one_redirect: bool,
         fixed_query: str = "",
+        source_date: date | None = None,
+        referer_url: str = "",
         requester: Requester | None = None,
         timeout_seconds: float = 20,
     ) -> None:
@@ -75,6 +77,7 @@ class FileSnapshotClient:
             or not 1 <= maximum_bytes <= 512 * 1024 * 1024
             or not math.isfinite(timeout_seconds)
             or not 1 <= timeout_seconds <= 30
+            or (source_date is not None and type(source_date) is not date)
         ):
             raise ValueError("file snapshot configuration is invalid")
         self._hosts = allowed_hosts
@@ -82,6 +85,8 @@ class FileSnapshotClient:
         self._validate_url(url)
         if fixed_query and not _is_safe_fixed_query(fixed_query):
             raise ValueError("file snapshot fixed query is invalid")
+        if referer_url and not _is_safe_referer_url(referer_url, allowed_hosts):
+            raise ValueError("file snapshot referer URL is invalid")
         if (
             extension == "xlsx"
             and not urlsplit(url).path.lower().endswith(".xlsx")
@@ -94,6 +99,8 @@ class FileSnapshotClient:
         self._extension = extension
         self._maximum_bytes = maximum_bytes
         self._allow_one_redirect = allow_one_redirect
+        self._configured_source_date = source_date
+        self._referer_url = referer_url
         self._requester = requester
         self._timeout = float(timeout_seconds)
 
@@ -130,7 +137,7 @@ class FileSnapshotClient:
                 raise FileSnapshotError("FILE_LENGTH_MISMATCH")
             source_date = _source_date(
                 normalized_headers.get("content-disposition", ""), current_url
-            )
+            ) or self._configured_source_date
             if source_date is None:
                 _discard(target)
                 raise FileSnapshotError("SOURCE_DATE_UNVERIFIED")
@@ -156,7 +163,9 @@ class FileSnapshotClient:
                 raise FileSnapshotError("FILE_TOO_LARGE")
             _write_owner_only(target, content)
             return status, headers, len(content)
-        return _stream_request(url, self._timeout, target, self._maximum_bytes)
+        return _stream_request(
+            url, self._timeout, target, self._maximum_bytes, self._referer_url
+        )
 
     def _validate_url(self, value: str) -> None:
         parsed = urlsplit(value)
@@ -173,13 +182,20 @@ class FileSnapshotClient:
 
 
 def _stream_request(
-    url: str, timeout: float, target: Path, maximum_bytes: int
+    url: str,
+    timeout: float,
+    target: Path,
+    maximum_bytes: int,
+    referer_url: str,
 ) -> tuple[int, Mapping[str, str], int]:
     parsed = urlsplit(url)
     connection = HTTPSConnection(parsed.hostname, parsed.port or 443, timeout=timeout)
     try:
         request_target = parsed.path + (f"?{parsed.query}" if parsed.query else "")
-        connection.request("GET", request_target, headers={"Accept": "*/*"})
+        headers = {"Accept": "*/*"}
+        if referer_url:
+            headers["Referer"] = referer_url
+        connection.request("GET", request_target, headers=headers)
         response = connection.getresponse()
         headers = dict(response.getheaders())
         if 300 <= response.status < 400:

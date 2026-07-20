@@ -42,6 +42,34 @@ def test_large_store_download_accepts_one_allowlisted_redirect_and_filename_date
     assert len(calls) == 2
 
 
+def test_large_store_uses_only_tracked_release_metadata_when_filename_has_no_date(
+    tmp_path,
+) -> None:
+    body = b"header\nvalue\n"
+    collected = FileSnapshotClient(
+        source_id="retail.large-store",
+        url="https://file.localdata.go.kr/file/download/large_scale_retail_stores/info",
+        allowed_hosts=("file.localdata.go.kr",),
+        allowed_path_prefixes=("/file/download/large_scale_retail_stores/",),
+        media_types=("text/csv",),
+        extension="csv",
+        maximum_bytes=256 * 1024 * 1024,
+        allow_one_redirect=True,
+        source_date=date(2025, 11, 27),
+        requester=lambda *_args: (
+            200,
+            {
+                "content-type": "text/csv;charset=UTF-8",
+                "content-length": str(len(body)),
+                "content-disposition": "attachment; filename*=UTF-8''retail.csv",
+            },
+            body,
+        ),
+    ).collect(target=tmp_path / "snapshot.csv")
+
+    assert collected.source_date == date(2025, 11, 27)
+
+
 @pytest.mark.parametrize(
     ("headers", "body", "reason"),
     [
@@ -201,7 +229,11 @@ def test_default_transport_streams_chunks_to_owner_only_file(monkeypatch, tmp_pa
 
         def request(self, method, path, headers):
             assert method == "GET"
-            assert path.startswith("/file/large_scale_retail_stores/")
+            assert path.startswith("/file/download/large_scale_retail_stores/")
+            assert headers == {
+                "Accept": "*/*",
+                "Referer": "https://file.localdata.go.kr/file/large_scale_retail_stores/info",
+            }
 
         def getresponse(self):
             return Response()
@@ -213,11 +245,12 @@ def test_default_transport_streams_chunks_to_owner_only_file(monkeypatch, tmp_pa
     target = tmp_path / "snapshot.csv"
     collected = FileSnapshotClient(
         source_id="retail.large-store",
-        url="https://file.localdata.go.kr/file/large_scale_retail_stores/info",
+        url="https://file.localdata.go.kr/file/download/large_scale_retail_stores/info",
         allowed_hosts=("file.localdata.go.kr",),
-        allowed_path_prefixes=("/file/large_scale_retail_stores/",),
+        allowed_path_prefixes=("/file/download/large_scale_retail_stores/",),
         media_types=("text/csv",), extension="csv", maximum_bytes=1024,
         allow_one_redirect=True,
+        referer_url="https://file.localdata.go.kr/file/large_scale_retail_stores/info",
     ).collect(target=target)
 
     assert collected.byte_length == 13

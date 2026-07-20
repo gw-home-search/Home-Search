@@ -23,6 +23,22 @@ class BuildingRegisterHierarchyMatcherTest {
     }
 
     @Test
+    @DisplayName("기본개요가 증명한 root 관계로 parent가 없는 표제부를 연결한다")
+    void resolvesTitleWithoutParentFromBasicOverviewRelationship() {
+        var result = hierarchy.resolve(List.of(
+                record(BuildingRegisterEndpoint.RECAP_TITLE, "ROOT", null, 1, "1", "Sample", null),
+                record(BuildingRegisterEndpoint.BASIC_OVERVIEW, "TITLE-1", "ROOT", 3, "1", "Sample", "101"),
+                record(BuildingRegisterEndpoint.TITLE, "TITLE-1", null, 3, "1", "Sample", "101")));
+
+        assertThat(result.status()).isEqualTo(BuildingRegisterHierarchyStatus.RESOLVED);
+        assertThat(result.scopes()).singleElement().satisfies(scope -> {
+            assertThat(scope.expectedManagementKeys()).containsExactly("TITLE-1");
+            assertThat(scope.dongNames()).containsExactly("101");
+            assertThat(scope.hierarchyComplete()).isTrue();
+        });
+    }
+
+    @Test
     @DisplayName("건축물대장 계층과 단지 매칭을 검증한다")
     void rejectsConflictingDuplicateManagementKey() {
         var result = hierarchy.resolve(List.of(

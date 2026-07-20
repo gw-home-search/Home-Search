@@ -36,6 +36,10 @@ public final class BuildingRegisterHierarchyPolicy {
         if (roots.isEmpty()) return standalone(distinct);
 
         List<BuildingRegisterSourceScope> scopes = new ArrayList<>();
+        Set<String> actualTitleKeys = distinct.stream()
+                .filter(BuildingRegisterHierarchyRecord::isTitleLike)
+                .map(BuildingRegisterHierarchyRecord::managementKey)
+                .collect(java.util.stream.Collectors.toSet());
         for (BuildingRegisterHierarchyRecord root : roots) {
             Set<String> expected = distinct.stream()
                     .filter(BuildingRegisterHierarchyRecord::isExpectedChild)
@@ -44,12 +48,9 @@ public final class BuildingRegisterHierarchyPolicy {
                     .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
             List<BuildingRegisterHierarchyRecord> titles = distinct.stream()
                     .filter(BuildingRegisterHierarchyRecord::isTitleLike)
-                    .filter(record -> root.managementKey().equals(record.parentManagementKey()))
+                    .filter(record -> expected.contains(record.managementKey()))
                     .toList();
-            Set<String> actual = titles.stream()
-                    .map(BuildingRegisterHierarchyRecord::managementKey)
-                    .collect(java.util.stream.Collectors.toSet());
-            if (!actual.containsAll(expected)) {
+            if (!actualTitleKeys.containsAll(expected)) {
                 return result(
                         BuildingRegisterHierarchyStatus.INCOMPLETE_HIERARCHY,
                         "expected title management key is missing");

@@ -1,6 +1,8 @@
 package com.home.batch.metadata;
 
 import com.home.application.ingest.buildingmetadata.BuildingMetadataBatchService;
+import com.home.application.ingest.buildingregister.BuildingRatioProjectionService;
+import com.home.application.ingest.buildingregister.BuildingRegisterCampaignService;
 import com.home.application.ingest.metadata.OdcMetadataGapFillService;
 import com.home.infrastructure.external.complex.ComplexMetadataProperties;
 import javax.sql.DataSource;
@@ -43,6 +45,22 @@ class BuildingMetadataBatchJobConfiguration {
 
     @Bean
     @Lazy
+    Job complexBuildingRatioProjectJob(JobRepository repository, Step complexBuildingRatioProjectStep) {
+        return new JobBuilder("complexBuildingRatioProjectJob", repository)
+                .start(complexBuildingRatioProjectStep)
+                .build();
+    }
+
+    @Bean
+    @Lazy
+    Job complexBuildingRegisterCollectJob(JobRepository repository, Step complexBuildingRegisterCollectStep) {
+        return new JobBuilder("complexBuildingRegisterCollectJob", repository)
+                .start(complexBuildingRegisterCollectStep)
+                .build();
+    }
+
+    @Bean
+    @Lazy
     Step complexOdcMetadataGapFillStep(
             JobRepository repository,
             PlatformTransactionManager transactionManager,
@@ -69,6 +87,35 @@ class BuildingMetadataBatchJobConfiguration {
                 repository,
                 transactionManager,
                 new BuildingMetadataCollectTasklet(service, executionLock, properties.dailyRequestQuota()));
+    }
+
+    @Bean
+    @Lazy
+    Step complexBuildingRatioProjectStep(
+            JobRepository repository,
+            PlatformTransactionManager transactionManager,
+            BuildingRatioProjectionService service,
+            BuildingMetadataExecutionLock executionLock) {
+        return step(
+                "complexBuildingRatioProjectStep",
+                repository,
+                transactionManager,
+                new BuildingRatioProjectTasklet(service, executionLock));
+    }
+
+    @Bean
+    @Lazy
+    Step complexBuildingRegisterCollectStep(
+            JobRepository repository,
+            PlatformTransactionManager transactionManager,
+            BuildingRegisterCampaignService service,
+            BuildingMetadataExecutionLock executionLock,
+            ComplexMetadataProperties properties) {
+        return step(
+                "complexBuildingRegisterCollectStep",
+                repository,
+                transactionManager,
+                new BuildingRegisterCollectTasklet(service, executionLock, properties.dailyRequestQuota()));
     }
 
     private Step step(

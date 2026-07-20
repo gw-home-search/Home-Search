@@ -45,6 +45,8 @@ class PropertyDataBatchContextBoundaryTest {
                     .hasBean("rtmsDailyRefreshJob")
                     .hasBean("complexBuildingMetadataJob")
                     .hasBean("complexOdcMetadataGapFillJob")
+                    .hasBean("complexBuildingRegisterCollectJob")
+                    .hasBean("complexBuildingRatioProjectJob")
                     .doesNotHaveBean("complexMetadataReplayJob")
                     .hasBean("coordinatePreflightStep")
                     .hasBean("rtmsDailyMonthlyIngestStep")

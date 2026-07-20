@@ -156,4 +156,41 @@ class BatchJobArgumentsTest {
                 .isInstanceOf(BatchExitCodeException.class)
                 .hasMessageContaining("toComplexId");
     }
+
+    @Test
+    @DisplayName("building register 수집 job은 고정 campaign과 adaptive 전략 입력을 보존한다")
+    void parsesBuildingRegisterCollectionArguments() {
+        BatchJobArguments arguments = BatchJobArguments.from(
+                "complexBuildingRegisterCollectJob",
+                Map.of(
+                        "collectionId", "123e4567-e89b-12d3-a456-426614174010",
+                        "requestId", "123e4567-e89b-12d3-a456-426614174011",
+                        "runDate", "2026-07-20",
+                        "mode", "missing",
+                        "strategy", "adaptive",
+                        "maxRequests", "900",
+                        "toComplexId", "200"),
+                clock);
+
+        assertThat(arguments.jobParameters().getString("collectionId"))
+                .isEqualTo("123e4567-e89b-12d3-a456-426614174010");
+        assertThat(arguments.jobParameters().getString("strategy")).isEqualTo("adaptive");
+        assertThat(arguments.jobParameters().getString("toComplexId")).isEqualTo("200");
+    }
+
+    @Test
+    @DisplayName("building ratio 투영 job은 완료 campaign과 적용 상한을 요구한다")
+    void parsesBuildingRatioProjectionArguments() {
+        BatchJobArguments arguments = BatchJobArguments.from(
+                "complexBuildingRatioProjectJob",
+                Map.of(
+                        "collectionId", "123e4567-e89b-12d3-a456-426614174010",
+                        "requestId", "123e4567-e89b-12d3-a456-426614174012",
+                        "runDate", "2026-07-20",
+                        "maxTargets", "100"),
+                clock);
+
+        assertThat(arguments.jobParameters().getString("maxTargets")).isEqualTo("100");
+        assertThat(arguments.jobParameters().getString("runDate")).isEqualTo("2026-07-20");
+    }
 }

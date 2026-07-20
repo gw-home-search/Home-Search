@@ -88,6 +88,9 @@ MIGRATION_VERSION_PATHS = (
     "apps/property-data/api/src/test/java/com/home/foundation/CoordinateImportOpsConfigurationTest.java",
 )
 
+AI_MACHINE_VERSION_SUFFIXES = {".py", ".sql", ".toml"}
+AI_MACHINE_VERSION_RE = re.compile(r"\b(?:[a-z0-9][a-z0-9-]*-)?v[0-9]+\b(?!-slice-harness\b)")
+
 USER_VISIBLE_FILES = [
     ".github/pull_request_template.md",
     ".codex/harness/pr_lint.py",
@@ -195,6 +198,8 @@ def mask_allowed_fragments(path: Path, line: str) -> str:
         masked = pattern.sub("", masked)
     if rel(path).startswith(MIGRATION_VERSION_PATHS):
         masked = re.sub(r"\b[Vv][0-9]+\b", "", masked)
+    if rel(path).startswith("apps/ai/") and path.suffix in AI_MACHINE_VERSION_SUFFIXES:
+        masked = AI_MACHINE_VERSION_RE.sub("", masked)
     return masked
 
 
@@ -316,6 +321,14 @@ def run_self_test() -> int:
         scan_text(REPO_ROOT / "SELF_TEST.txt", "V1 API stays at /api/v1/search/complexes") != [],
         scan_text(REPO_ROOT / "SELF_TEST.txt", "V2 ranking") != [],
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "prompt-version: news-signal-v1"),
+        not scan_text(
+            REPO_ROOT / "apps/ai/config/reference_sources.toml",
+            'normalization_schema_version = "school-zone-v1"',
+        ),
+        not scan_text(REPO_ROOT / "apps/ai/tests/datasets/test_raw_store.py", 'dataset_version="v1"'),
+        not scan_text(REPO_ROOT / "apps/ai/ai_service/datasets/raw_store.py", 'key = f"raw/v1/{checksum}.zip"'),
+        scan_text(REPO_ROOT / "apps/ai/ai_service/sample.py", "$v1-slice-harness mode=run") != [],
+        scan_text(REPO_ROOT / "docs/README.md", 'dataset_version="v1"') != [],
         not scan_text(REPO_ROOT / "apps/source-data/README.md", "V1 is the fresh database schema"),
         scan_text(REPO_ROOT / "docs/README.md", "V1 is the product milestone") != [],
         should_skip(REPO_ROOT / ".codex/harness/reports/sample.md"),

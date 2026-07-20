@@ -22,6 +22,8 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
     private static final String BACKFILL_JOB = "rtmsBackfillJob";
     private static final String BUILDING_METADATA_JOB = "complexBuildingMetadataJob";
     private static final String ODC_METADATA_GAP_FILL_JOB = "complexOdcMetadataGapFillJob";
+    private static final String BUILDING_REGISTER_COLLECT_JOB = "complexBuildingRegisterCollectJob";
+    private static final String BUILDING_RATIO_PROJECT_JOB = "complexBuildingRatioProjectJob";
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     public static BatchJobArguments from(String jobName, ApplicationArguments arguments, Clock clock) {
@@ -36,8 +38,50 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
             case BACKFILL_JOB -> backfill(normalizedJobName, params);
             case BUILDING_METADATA_JOB -> buildingMetadata(normalizedJobName, params, clock);
             case ODC_METADATA_GAP_FILL_JOB -> odcMetadataGapFill(normalizedJobName, params, clock);
+            case BUILDING_REGISTER_COLLECT_JOB -> buildingRegisterCollect(normalizedJobName, params, clock);
+            case BUILDING_RATIO_PROJECT_JOB -> buildingRatioProject(normalizedJobName, params, clock);
             default -> throw invalid("Unsupported SPRING_BATCH_JOB_NAME: " + normalizedJobName);
         };
+    }
+
+    private static BatchJobArguments buildingRegisterCollect(
+            String jobName, Map<String, String> arguments, Clock clock) {
+        String mode = requireText(arguments.get("mode"), "mode is required");
+        if (!List.of("missing", "retry").contains(mode)) throw invalid("mode must be missing or retry");
+        String strategy = requireText(arguments.get("strategy"), "strategy is required");
+        if (!List.of("adaptive", "full-hierarchy").contains(strategy)) {
+            throw invalid("strategy must be adaptive or full-hierarchy");
+        }
+        Long fromId = optionalPositiveLong(arguments.get("fromComplexId"), "fromComplexId");
+        Long toId = optionalPositiveLong(arguments.get("toComplexId"), "toComplexId");
+        if (toId == null) throw invalid("toComplexId is required");
+        if (fromId != null && fromId > toId) throw invalid("fromComplexId must be <= toComplexId");
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("collectionId", canonicalUuid(arguments.get("collectionId"), "collectionId"));
+        values.put("requestId", canonicalRequestId(arguments.get("requestId")));
+        values.put("runDate", runDate(arguments.get("runDate"), clock));
+        values.put("mode", mode);
+        values.put("strategy", strategy);
+        values.put("maxRequests", Integer.toString(positiveInt(arguments.get("maxRequests"), "maxRequests")));
+        values.put("toComplexId", toId.toString());
+        if (fromId != null) values.put("fromComplexId", fromId.toString());
+        return new BatchJobArguments(jobName, parameters(values));
+    }
+
+    private static BatchJobArguments buildingRatioProject(String jobName, Map<String, String> arguments, Clock clock) {
+        Long fromId = optionalPositiveLong(arguments.get("fromComplexId"), "fromComplexId");
+        Long toId = optionalPositiveLong(arguments.get("toComplexId"), "toComplexId");
+        if (fromId != null && toId != null && fromId > toId) {
+            throw invalid("fromComplexId must be <= toComplexId");
+        }
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("collectionId", canonicalUuid(arguments.get("collectionId"), "collectionId"));
+        values.put("requestId", canonicalRequestId(arguments.get("requestId")));
+        values.put("runDate", runDate(arguments.get("runDate"), clock));
+        values.put("maxTargets", Integer.toString(positiveInt(arguments.get("maxTargets"), "maxTargets")));
+        if (fromId != null) values.put("fromComplexId", fromId.toString());
+        if (toId != null) values.put("toComplexId", toId.toString());
+        return new BatchJobArguments(jobName, parameters(values));
     }
 
     private static BatchJobArguments odcMetadataGapFill(String jobName, Map<String, String> arguments, Clock clock) {
@@ -170,6 +214,31 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
             return ExecutionCorrelationId.from(requestId).toString();
         } catch (IllegalArgumentException exception) {
             throw invalid("requestId must be a canonical UUID");
+        }
+    }
+
+    private static String canonicalUuid(String value, String name) {
+        String candidate = requireText(value, name + " is required");
+        try {
+            String canonical = java.util.UUID.fromString(candidate).toString();
+            if (!canonical.equals(candidate)) throw new IllegalArgumentException();
+            return canonical;
+        } catch (IllegalArgumentException exception) {
+            throw invalid(name + " must be a canonical UUID");
+        }
+    }
+
+    private static String runDate(String value, Clock clock) {
+        String result = text(value);
+        if (result == null) {
+            result = LocalDate.now((clock == null ? Clock.system(KST) : clock).withZone(KST))
+                    .toString();
+        }
+        try {
+            LocalDate.parse(result);
+            return result;
+        } catch (RuntimeException exception) {
+            throw invalid("runDate must use yyyy-MM-dd");
         }
     }
 

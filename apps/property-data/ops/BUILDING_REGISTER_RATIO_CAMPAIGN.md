@@ -44,6 +44,8 @@ ops/run-batch-jar.sh \
 
 HTTP/provider/parser 실패는 정상 empty로 취급하지 않는다. HTTP `401|403|429` 또는 provider 인증·quota 코드 `20|21|22|30|31|32`가 발생하면 job을 실패시키고 후속 호출을 금지한다. 응답이 2MiB를 넘으면 endpoint snapshot을 증거로 남기고 `100 → 50 → 25 → 10` 순서의 새 snapshot으로 재시작한다.
 
+provider 성공 응답의 `pageNo` 또는 `numOfRows`가 요청값과 다르거나 누락되면 해당 raw page를 `PARSE_FAILED`로 보존하고 endpoint를 완료 처리하지 않는다. 조용한 page-size 제한이나 잘못된 페이지 응답을 완전한 snapshot으로 해석하지 않는다.
+
 ## 3. 같은 캠페인 재개
 
 날짜가 바뀌었거나 request budget이 소진된 경우 `collectionId`와 동결 범위·mode·strategy는 유지하고 `requestId`, `runDate`, `maxRequests`만 바꿔 다시 실행한다.

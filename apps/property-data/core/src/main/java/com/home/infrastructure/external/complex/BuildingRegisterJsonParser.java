@@ -31,6 +31,7 @@ public class BuildingRegisterJsonParser implements BuildingRegisterPageParser {
             String resultCode = text(header, "resultCode", "RESULT_CODE");
             String resultMessage = text(header, "resultMsg", "RESULT_MSG");
             int totalCount = defaultValue(integer(body, "totalCount", "total_count"), 0);
+            validatePagination(response, body, resultCode);
             List<JsonNode> items = nodes(body == null ? null : path(body, "items", "item"));
             List<BuildingRegisterRecordSnapshotCommand> records = new ArrayList<>();
             for (int index = 0; index < items.size(); index++) {
@@ -41,6 +42,15 @@ public class BuildingRegisterJsonParser implements BuildingRegisterPageParser {
             throw exception;
         } catch (Exception exception) {
             throw new IllegalArgumentException("building register JSON parsing failed", exception);
+        }
+    }
+
+    private void validatePagination(BuildingRegisterPageResponse response, JsonNode body, String resultCode) {
+        if (!List.of("00", "000", "NORMAL_CODE").contains(resultCode)) return;
+        Integer pageNo = integer(body, "pageNo", "page_no");
+        Integer pageSize = integer(body, "numOfRows", "num_of_rows");
+        if (!Objects.equals(pageNo, response.pageNo()) || !Objects.equals(pageSize, response.pageSize())) {
+            throw new IllegalArgumentException("building register pagination metadata does not match request");
         }
     }
 

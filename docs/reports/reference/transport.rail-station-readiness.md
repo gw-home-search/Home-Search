@@ -28,6 +28,13 @@ media type·length·source date 검증은 완화하지 않았다.
 있도록 additive migration `0011_schema_scoped_acquisition_dedupe.sql`을 추가했다. 동일
 schema 재수집과 품질 기준만 바뀐 contract는 계속 기존 acquisition을 재사용한다.
 
+`rail-station-v2` live parse는 1,099행과 좌표 누락 0행을 확인했다. 그러나
+`운영기관명+노선번호+역번호` 5개 key가 10행에서 중복됐고 row 기준일은
+2022-04-27..2026-06-25로 혼재하며 공란 7행과 비정상 `1900-01-00` 6행을 포함했다.
+`DUPLICATE_UNIQUE_KEY`, `SOURCE_DATE_MIXED`, `REJECTED_ROW_RATIO_EXCEEDED`로 staging과
+publication을 차단했으며 active pointer는 없다. stop condition에 따라 임의 dedupe나
+identity 확장은 하지 않는다.
+
 공공데이터포털 fileData `15093755`는 `이용허락범위 제한 없음`을 명시한다. 프로젝트
 책임자는 KRIC에 전화로 계획된 Home Search 이용 가능 여부를 문의해 가능하다는 답변을
 받았다고 2026-07-20 진술했고, 서면 transcript 부재를 수용해 contract 승인을 지시했다.

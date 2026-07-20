@@ -85,7 +85,7 @@ live 필수 항목이 남으면 readiness를 `Partial`로 유지한다.
 | Sbiz S2 collector | source 이용조건·공식 taxonomy contract·collector·adapter·generic refresh offline `Pass`, live taxonomy 변경 감지 | `10.0/10` | `3.0/10 Partial` | 금지 |
 | Sbiz S2-P grounded location | exact projection·grounded location observer offline `Pass` | `10.0/10` | `3.0/10 Partial` | 금지 |
 | 대규모점포 | bounded API client·raw JSON pages·OBSERVED_AT adapter·기존 projection `Pass`, live auth 차단 | `10.0/10` | `2.0/10 Partial` | 금지 |
-| 철도 S4 collector | source 계약 승인·공식 fixed download endpoint·occurrence projection·merge offline `Pass`, live artifact 미실행 | `9.5/10` | `3.0/10 Partial` | 금지 |
+| 철도 S4 collector | source 계약·download·1,099행/좌표 100% 확인, provider key 중복·row 기준일 혼재로 quality fail | `9.5/10` | `3.0/10 Partial` | 금지 |
 | Offline priority integration | AI·PostGIS·MinIO·property-data·chat-bff·JWT·Compose `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 
 상세 readiness 근거는 `docs/reports/reference/readiness/`에 source별로 기록한다.

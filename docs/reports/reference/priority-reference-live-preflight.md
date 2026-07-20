@@ -15,7 +15,10 @@ safe reason code와 count만 기록했고 provider body, API key, DSN은 기록�
 | 2 | `edu.academy-registry` | exit `1` | DB role·MinIO·migration preflight 통과 후 첫 page `API_SERVER_ERROR`; acquisition `0`, active datasetVersion 없음 |
 | 3 | `place.sbiz-academy` | exit `1` | key 수정 후 인증 통과, 공식 taxonomy fingerprint 불일치로 `TAXONOMY_CHANGED`; acquisition `0` |
 | 4 | `retail.large-store` | exit `1` | 새 공식 API·license 계약 적용 후 첫 page `API_AUTHENTICATION_FAILED`; dataset `15154948` 활용신청 미반영 가능성, acquisition `0` |
-| 5 | `transport.rail-station` | exit `2` | 최초 실행은 license `PENDING`으로 `CONFIGURATION_INVALID`; 이후 프로젝트 책임자의 KRIC 전화 승인 진술로 contract `APPROVED`, full import 재검증 예정 |
+| 5a | `transport.rail-station` | exit `2` | 최초 실행은 license `PENDING`으로 `CONFIGURATION_INVALID`; provider body 요청 전 중단 |
+| 5b | `transport.rail-station` | exit `1` | 승인 후 `User-Agent` 없는 GET이 `200 text/html`; `FILE_MEDIA_TYPE_INVALID`로 안전 중단 |
+| 5c | `transport.rail-station` | exit `1` | 실제 최신 header와 fixture 불일치를 `SOURCE_SCHEMA_MISMATCH`로 차단; exact alias와 `rail-station-v2` 적용 |
+| 5d | `transport.rail-station` | exit `1` | 전체 1,099행·좌표 누락 0행을 읽었으나 occurrence key 5개/10행 중복, row 기준일 혼재·공란·비정상 값으로 `DUPLICATE_UNIQUE_KEY`, `SOURCE_DATE_MIXED`, `REJECTED_ROW_RATIO_EXCEEDED`; publication 없음 |
 
 실행 명령:
 
@@ -37,6 +40,11 @@ datasetVersion과 dataAsOf가 비어 있었다. NEIS audit는 빈 `acquisitionId
 키 문자열은 Sbiz taxonomy endpoint 인증을 통과했으므로 유효하다. Sbiz publication은
 `TAXONOMY_CHANGED`로 fail-closed했고, 대규모점포는 동일 키에 새 API 활용신청이
 연결되기 전까지 `API_AUTHENTICATION_FAILED`로 유지한다.
+
+철도는 source contract 승인 후 실제 XLSX download와 verified raw 저장까지 진행했다.
+최신 header는 exact alias로 고정했고 같은 raw의 이전 parse failure를 삭제하지 않고
+새 normalization schema에서 재처리했다. 최종 quality gate는 provider의 필수 occurrence
+key 중복과 서로 다른 row 기준일을 확인해 pointer 전환 전에 중단했다.
 
 ## live에서 발견해 수정한 공백
 

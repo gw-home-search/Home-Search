@@ -24,6 +24,12 @@ live 검증 전 readiness는 `Partial`이다.
 명시적 alias로만 허용하며 fuzzy header matching은 하지 않는다. 이 변경은
 `rail-station-v2`로 구분한다.
 
+검증된 filename의 날짜는 dataset `SOURCE_DATE`로 사용한다. provider별
+`데이터기준일자`는 release date와 같음을 요구하지 않고 nullable row provenance로
+보존한다. 이 normalization은 `rail-station-v3`, nonblank malformed 날짜를 row 거부 없이
+quality warning으로 남기는 계약은 `rail-station-v4`로 구분한다. occurrence identity는
+계속 `운영기관명+노선번호+역번호`이고 중복 key는 publication을 차단한다.
+
 include::{snippets}/transport.rail-station/download-request.adoc[]
 include::{snippets}/transport.rail-station/response-headers.adoc[]
 include::{snippets}/transport.rail-station/source-columns.adoc[]

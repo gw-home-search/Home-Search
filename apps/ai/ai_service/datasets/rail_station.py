@@ -59,7 +59,7 @@ class RailStationAdapter:
         if artifact.media_type != _MEDIA_TYPE:
             raise RawPayloadError("rail artifact type mismatch", "BUNDLE_MANIFEST_INVALID")
         _inspect_xlsx_archive(artifact.content)
-        return _parse_xlsx(io.BytesIO(artifact.content), source_date)
+        return _parse_xlsx(io.BytesIO(artifact.content))
 
     def parse_file(
         self,
@@ -85,10 +85,10 @@ class RailStationAdapter:
                     "rail bundle metadata mismatch", "BUNDLE_MANIFEST_INVALID"
                 )
             _inspect_xlsx_archive(bundle.artifact_path)
-            return _parse_xlsx(bundle.artifact_path, source_date)
+            return _parse_xlsx(bundle.artifact_path)
 
 
-def _parse_xlsx(source: io.BytesIO | Path, source_date: date) -> ParsedDataset:
+def _parse_xlsx(source: io.BytesIO | Path) -> ParsedDataset:
     try:
         workbook = load_workbook(
             source,
@@ -128,8 +128,17 @@ def _parse_xlsx(source: io.BytesIO | Path, source_date: date) -> ParsedDataset:
                     for header, index in header_index.items()
                 }
                 row_number = len(rows) + 1
-                normalized, reasons = _normalize(provider_row, source_date)
+                normalized, reasons, row_date_invalid = _normalize(provider_row)
                 rows.append(normalized)
+                if row_date_invalid:
+                    issues.append(
+                        QualityIssue(
+                            "RAIL_ROW_REFERENCE_DATE_INVALID",
+                            "WARNING",
+                            row_number,
+                            {},
+                        )
+                    )
                 if reasons:
                     rejections[row_number] = tuple(reasons)
                     issues.extend(
@@ -175,7 +184,6 @@ def rail_station_source_contract(
             "station_name",
             "latitude",
             "longitude",
-            "reference_date",
         ),
         expected_min_rows=reference_contract.quality.minimum_rows,
         expected_max_rows=reference_contract.quality.maximum_rows,
@@ -216,8 +224,8 @@ def _inspect_xlsx_archive(content: bytes | Path) -> None:
 
 
 def _normalize(
-    row: dict[str, object], source_date: date
-) -> tuple[dict[str, object], list[str]]:
+    row: dict[str, object],
+) -> tuple[dict[str, object], list[str], bool]:
     operator = _clean(_provider_value(row, "operator"))
     line_number = _clean(_provider_value(row, "line_number"))
     line_name = _clean(_provider_value(row, "line_name"))
@@ -235,9 +243,9 @@ def _normalize(
         or not 124 <= longitude <= 132
     ):
         reasons.append("RAIL_STATION_COORDINATE_REQUIRED")
-    row_date = _date(_provider_value(row, "reference_date"))
-    if row_date != source_date:
-        reasons.append("SOURCE_DATE_MIXED")
+    row_date_value = _provider_value(row, "reference_date")
+    row_date = _date(row_date_value)
+    row_date_invalid = bool(_clean(row_date_value)) and row_date is None
     transfer_lines = _transfer_lines(_provider_value(row, "transfer_lines"))
     return (
         {
@@ -251,9 +259,10 @@ def _normalize(
             "latitude": latitude,
             "longitude": longitude,
             "transfer_lines": transfer_lines,
-            "reference_date": source_date.isoformat(),
+            "reference_date": row_date.isoformat() if row_date is not None else None,
         },
         reasons,
+        row_date_invalid,
     )
 
 

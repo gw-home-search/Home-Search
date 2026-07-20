@@ -78,7 +78,6 @@ def _contract() -> DatasetSourceContract:
             "station_name",
             "latitude",
             "longitude",
-            "reference_date",
         ),
         expected_min_rows=1,
         expected_max_rows=10,
@@ -151,6 +150,8 @@ def test_live_kric_headers_are_normalized_without_projecting_phone() -> None:
     assert parsed.rows[0]["station_name"] == "시청"
     assert parsed.rows[0]["line_name"] == "2호선"
     assert parsed.rows[0]["road_address"] == "서울 중구"
+    assert parsed.rows[0]["reference_date"] == "2026-06-30"
+    assert parsed.row_rejections == {}
     assert "phone" not in parsed.rows[0]
 
 
@@ -321,7 +322,7 @@ def test_schema_mismatch_fails_closed() -> None:
     assert error.value.reason_code == "SOURCE_SCHEMA_MISMATCH"
 
 
-def test_identity_coordinate_and_mixed_date_rejections_accumulate() -> None:
+def test_identity_and_coordinate_rejections_preserve_row_provenance_date() -> None:
     rows = [
         ["", "", "2호선", "", "시청", "서울 중구", 91, 181, "2호선, 2호선;1호선", "2026-01-02"]
     ]
@@ -333,9 +334,26 @@ def test_identity_coordinate_and_mixed_date_rejections_accumulate() -> None:
     assert parsed.row_rejections[1] == (
         "RAIL_STATION_IDENTITY_REQUIRED",
         "RAIL_STATION_COORDINATE_REQUIRED",
-        "SOURCE_DATE_MIXED",
     )
     assert parsed.rows[0]["transfer_lines"] == ["2호선", "1호선"]
+    assert parsed.rows[0]["reference_date"] == "2026-01-02"
+
+
+def test_blank_or_invalid_row_date_is_nullable_provenance() -> None:
+    rows = [
+        ["서울교통공사", "02", "2호선", "201", "시청", "서울 중구", 37.5657, 126.977, "", ""],
+        ["서울교통공사", "02", "2호선", "202", "을지로입구", "서울 중구", 37.566, 126.982, "", "1900-01-00"],
+    ]
+
+    parsed = RailStationAdapter().parse(
+        _bundle(_xlsx(rows)), _contract(), source_date=date(2026, 1, 1)
+    )
+
+    assert [row["reference_date"] for row in parsed.rows] == [None, None]
+    assert parsed.row_rejections == {}
+    assert [(issue.reason_code, issue.severity, issue.row_number) for issue in parsed.issues] == [
+        ("RAIL_ROW_REFERENCE_DATE_INVALID", "WARNING", 2),
+    ]
 
 
 def test_empty_workbook_fails_closed() -> None:

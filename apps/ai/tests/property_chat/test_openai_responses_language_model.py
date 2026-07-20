@@ -203,9 +203,33 @@ def test_planning_accepts_academy_registry_summary_without_location_semantics() 
 
     assert plan.capability == "academy_registry_summary"
     schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
-    assert schema["properties"]["capability"]["enum"][-1] == "academy_registry_summary"
+    assert "academy_registry_summary" in schema["properties"]["capability"]["enum"]
     prompt = json.loads(requester.calls[0][2])["input"][0]["content"]
     assert "Do not interpret it as a nearby, radius, distance" in prompt
+
+
+def test_planning_accepts_academy_lookup_with_800_meter_default() -> None:
+    requester = RecordingRequester(
+        _response(
+            _valid_plan(
+                capability="academy_lookup",
+                schoolLevels=["ELEMENTARY", "MIDDLE", "HIGH"],
+                facilitySubtypes=[],
+                radiusMeters=None,
+            )
+        )
+    )
+
+    plan = asyncio.run(
+        _model(requester).plan_query(
+            ChatbotQueryRequest(question="잠실엘스 주변 학원 위치")
+        )
+    )
+
+    assert plan.capability == "academy_lookup"
+    assert plan.radius_meters == 800
+    schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
+    assert schema["properties"]["capability"]["enum"][-1] == "academy_lookup"
 
 
 def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> None:

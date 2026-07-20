@@ -11,10 +11,11 @@ QueryCapability = Literal[
     "school_location",
     "retail_location",
     "academy_registry_summary",
+    "academy_lookup",
 ]
 PropertyCapability = Literal["complex_identity", "recent_trade_lookup", "price_trend"]
 ReferenceCapability = Literal[
-    "school_location", "retail_location", "academy_registry_summary"
+    "school_location", "retail_location", "academy_registry_summary", "academy_lookup"
 ]
 SchoolLevel = Literal["ELEMENTARY", "MIDDLE", "HIGH"]
 FacilitySubtype = Literal[
@@ -57,7 +58,11 @@ class QueryPlan:
             raise ValueError("exclusive area is outside the supported range")
         if not 1 <= self.limit <= 10:
             raise ValueError("limit must be between 1 and 10")
-        if self.capability in {"school_location", "retail_location"} and self.limit > 5:
+        if self.capability in {
+            "school_location",
+            "retail_location",
+            "academy_lookup",
+        } and self.limit > 5:
             raise ValueError("reference facility limit must be between 1 and 5")
         if (
             not self.school_levels

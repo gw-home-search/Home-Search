@@ -45,9 +45,14 @@ def _contract() -> DatasetSourceContract:
     )
 
 
-def _bundle(*, duplicate: bool = False, taxonomy=TAXONOMY) -> bytes:
+def _bundle(
+    *,
+    duplicate: bool = False,
+    taxonomy=TAXONOMY,
+    name: str = "가나다 학원",
+) -> bytes:
     items = [{
-        "bizesId": "store-1", "bizesNm": "가나다 학원", "indsSclsCd": "P10101",
+        "bizesId": "store-1", "bizesNm": name, "indsSclsCd": "P10101",
         "rdnmAdr": "서울특별시 송파구 올림픽로 300", "lnoAdr": "서울 송파구 1", "zipcd": "05551",
         "adongCd": "1171056600", "lat": "37.5", "lon": "127.1", "telNo": "02-secret",
     }]

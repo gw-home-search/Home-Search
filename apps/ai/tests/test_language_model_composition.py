@@ -12,6 +12,7 @@ from ai_service.chat import (
     get_enabled_property_capabilities,
     get_enabled_reference_capabilities,
     get_academy_registry_repository,
+    get_academy_location_repository,
     get_grounded_language_model,
     get_query_timeout_seconds,
     get_school_fact_repository,
@@ -34,6 +35,7 @@ def clear_language_model_cache() -> None:
     get_enabled_reference_capabilities.cache_clear()
     get_school_fact_repository.cache_clear()
     get_academy_registry_repository.cache_clear()
+    get_academy_location_repository.cache_clear()
     get_query_timeout_seconds.cache_clear()
     yield
     get_grounded_language_model.cache_clear()
@@ -41,6 +43,7 @@ def clear_language_model_cache() -> None:
     get_enabled_reference_capabilities.cache_clear()
     get_school_fact_repository.cache_clear()
     get_academy_registry_repository.cache_clear()
+    get_academy_location_repository.cache_clear()
     get_query_timeout_seconds.cache_clear()
 
 
@@ -182,6 +185,7 @@ def test_unapproved_or_invalid_property_capability_configuration_fails_closed(
         (" school_location", frozenset()),
         ("school_location,school_location", frozenset()),
         ("academy_registry_summary", frozenset()),
+        ("academy_lookup", frozenset()),
         ("unknown", frozenset()),
     ],
 )
@@ -205,6 +209,15 @@ def test_academy_registry_repository_requires_reference_dsn(
 
     with pytest.raises(ChatbotProviderUnavailable):
         get_academy_registry_repository()
+
+
+def test_academy_location_repository_requires_reference_dsn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HOME_AI_REFERENCE_DSN", raising=False)
+
+    with pytest.raises(ChatbotProviderUnavailable):
+        get_academy_location_repository()
 
 
 @pytest.mark.parametrize("repository_available", [True, False])
@@ -257,6 +270,58 @@ def test_configured_engine_statically_composes_academy_registry_repository(
     assert response == {"success": True}
     if repository_available:
         assert captured["academy_registry_repository"] is academy_repository
+
+
+@pytest.mark.parametrize("repository_available", [True, False])
+def test_configured_engine_statically_composes_academy_location_repository(
+    monkeypatch: pytest.MonkeyPatch,
+    repository_available: bool,
+) -> None:
+    captured: dict[str, object] = {}
+    location_repository = object()
+
+    class RecordingEngine:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        async def query(self, **_kwargs: object) -> dict[str, object]:
+            repository = captured["academy_location_repository"]
+            if not repository_available:
+                with pytest.raises(ChatbotProviderUnavailable):
+                    repository.nearby()  # type: ignore[attr-defined]
+            return {"success": True}
+
+    monkeypatch.setattr(
+        "ai_service.chat.get_property_fact_repository", lambda: object()
+    )
+    monkeypatch.setattr("ai_service.chat.get_grounded_language_model", lambda: object())
+    monkeypatch.setattr(
+        "ai_service.chat.get_enabled_reference_capabilities",
+        lambda: frozenset({"academy_lookup"}),
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_academy_location_repository",
+        (
+            (lambda: location_repository)
+            if repository_available
+            else (lambda: (_ for _ in ()).throw(ChatbotProviderUnavailable()))
+        ),
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.engine.GroundedChatbotEngine", RecordingEngine
+    )
+
+    response = asyncio.run(
+        ConfiguredChatbotEngine().query(
+            request=ChatbotQueryRequest(question="주변 학원 위치"),
+            user=AuthenticatedUser(user_id=42),
+            request_id="request-academy-location-composition",
+        )
+    )
+
+    assert response == {"success": True}
+    if repository_available:
+        assert captured["academy_location_repository"] is location_repository
 
 
 def test_configured_engine_fails_closed_when_total_query_budget_expires(

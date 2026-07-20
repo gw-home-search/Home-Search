@@ -46,6 +46,13 @@ an exact education-office plus district aggregate query against the separate AI
 database. It remains impossible to enable through the runtime allowlist until
 license and live readiness approval are recorded.
 
+`academy_lookup` is also implemented for offline review only. It queries at
+most five Sbiz education-store points within 800m by default, or an explicit
+100..2,000m radius. Unmatched results remain Sbiz B-grade location evidence;
+only Unicode NFKC name plus canonical road-address exact matches may add NEIS
+A-grade registry evidence. The runtime allowlist cannot enable this capability
+until license, taxonomy, coordinate coverage, and live readiness are approved.
+
 Do not rely on provider-side conversation state. The browser sends only the
 bounded `conversationContext`, and the AI service treats it as an untrusted
 resolution hint. Provider output still passes the local fact ID, claim, numeric

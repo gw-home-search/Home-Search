@@ -27,6 +27,11 @@ from .models import (
     TradeRecord,
 )
 from .academy_registry import AcademyRegistrySummary
+from .academy_locations import (
+    AcademyLocation,
+    AcademyLocationSearchResult,
+    RegistryExactMatch,
+)
 from .reference_facilities import FacilityFact, FacilitySearchResult
 
 
@@ -106,6 +111,17 @@ class AcademyRegistryFactRepository(Protocol):
     ) -> AcademyRegistrySummary | None: ...
 
 
+class AcademyLocationFactRepository(Protocol):
+    def nearby(
+        self,
+        *,
+        latitude: float,
+        longitude: float,
+        radius_meters: int,
+        limit: int,
+    ) -> AcademyLocationSearchResult: ...
+
+
 _GROUNDING_FAILURE_REASONS = frozenset(
     {
         "GROUNDING_CAPABILITY_UNSUPPORTED",
@@ -126,6 +142,8 @@ _GROUNDING_FAILURE_REASONS = frozenset(
         "GROUNDING_RETAIL_POLICY_VIOLATION",
         "GROUNDING_RETAIL_TEXT_OUTSIDE_OBSERVATION",
         "GROUNDING_ACADEMY_REGISTRY_POLICY_VIOLATION",
+        "GROUNDING_ACADEMY_LOOKUP_POLICY_VIOLATION",
+        "GROUNDING_ACADEMY_LOOKUP_TEXT_OUTSIDE_OBSERVATION",
     }
 )
 
@@ -150,6 +168,7 @@ class GroundedChatbotEngine:
         school_repository: SchoolFactRepository | None = None,
         point_facility_repository: PointFacilityFactRepository | None = None,
         academy_registry_repository: AcademyRegistryFactRepository | None = None,
+        academy_location_repository: AcademyLocationFactRepository | None = None,
         enabled_reference_capabilities: frozenset[ReferenceCapability] = frozenset(),
         today: Callable[[], date] = date.today,
     ) -> None:
@@ -157,6 +176,7 @@ class GroundedChatbotEngine:
         self._school_repository = school_repository
         self._point_facility_repository = point_facility_repository
         self._academy_registry_repository = academy_registry_repository
+        self._academy_location_repository = academy_location_repository
         self._language_model = language_model
         self._enabled_capabilities = enabled_capabilities
         self._enabled_reference_capabilities = enabled_reference_capabilities
@@ -165,6 +185,7 @@ class GroundedChatbotEngine:
             "school_location": self._observe_schools,
             "retail_location": self._observe_retail,
             "academy_registry_summary": self._observe_academy_registry,
+            "academy_lookup": self._observe_academy_lookup,
         }
 
     async def query(
@@ -436,6 +457,64 @@ class GroundedChatbotEngine:
             "supported",
         )
 
+    async def _observe_academy_lookup(
+        self, plan: QueryPlan, complex_record: ComplexRecord
+    ) -> tuple[list[EvidenceFact], list[str], str]:
+        assert plan.radius_meters is not None
+        if not 100 <= plan.radius_meters <= 2000:
+            return (
+                [],
+                ["교육업소 검색 반경은 100m에서 2000m 사이로 지정해야 합니다."],
+                "unavailable",
+            )
+        if (
+            not complex_record.marker_safe
+            or complex_record.latitude is None
+            or complex_record.longitude is None
+        ):
+            return (
+                [],
+                ["검증된 단지 표시 좌표가 없어 교육업소를 조회할 수 없습니다."],
+                "unavailable",
+            )
+        if self._academy_location_repository is None:
+            return [], ["Sbiz 교육업소 active snapshot이 준비되지 않았습니다."], "unavailable"
+        result = await asyncio.to_thread(
+            self._academy_location_repository.nearby,
+            latitude=complex_record.latitude,
+            longitude=complex_record.longitude,
+            radius_meters=plan.radius_meters,
+            limit=plan.limit,
+        )
+        age_days = (self._today() - result.observed_at.date()).days
+        if (
+            result.coordinate_coverage < 0.95
+            or age_days < 0
+            or age_days > result.freshness_days
+        ):
+            return (
+                [],
+                ["Sbiz 교육업소 snapshot의 좌표 coverage 또는 관측일이 기준을 충족하지 못했습니다."],
+                "unavailable",
+            )
+        facts: list[EvidenceFact] = []
+        for location in result.locations:
+            facts.append(_academy_location_fact(location))
+            if location.registry_match is not None:
+                facts.append(
+                    _academy_exact_match_fact(location, location.registry_match)
+                )
+        facts.append(_academy_lookup_scope_fact(plan, complex_record, result))
+        limitations = [
+            "거리는 단지 표시 좌표 기준 직선거리이며 실제 보행 경로가 아닙니다.",
+            "미결합 교육업소는 Sbiz 위치 근거이며 NEIS 공식 등록 여부를 의미하지 않습니다.",
+        ]
+        if not result.locations and not result.verified_zero:
+            limitations.append(
+                "행정코드 체계의 지역 coverage가 검증되지 않아 교육업소가 전혀 없다고 단정할 수 없습니다."
+            )
+        return facts, limitations, "supported"
+
 
 def _complex_fact(record: ComplexRecord) -> EvidenceFact:
     claims = [
@@ -637,6 +716,101 @@ def _academy_registry_fact(summary: AcademyRegistrySummary) -> EvidenceFact:
     )
 
 
+def _academy_location_fact(location: AcademyLocation) -> EvidenceFact:
+    claims = [
+        FactClaim(location.store_id, "FACILITY_ID"),
+        FactClaim(location.name, "TEXT"),
+        FactClaim(location.small_category_code, "FACILITY_SUBTYPE"),
+        FactClaim(location.status, "OPERATING_STATUS"),
+        FactClaim(str(location.distance_meters), "METERS"),
+    ]
+    if location.address:
+        claims.append(FactClaim(location.address, "TEXT"))
+    return EvidenceFact(
+        fact_id=f"sbiz-academy-location-{location.store_id}",
+        claims=tuple(claims),
+        data_as_of=location.observed_at.date(),
+        payload={
+            "facilityId": location.store_id,
+            "facilityName": location.name,
+            "smallCategoryCode": location.small_category_code,
+            "operatingStatus": location.status,
+            "distanceMeters": location.distance_meters,
+            "address": location.address,
+            "registryMatch": (
+                "EXACT" if location.registry_match is not None else "UNMATCHED"
+            ),
+            "datasetVersion": location.dataset_version,
+        },
+        source_id="place.sbiz-academy",
+        source_name="상가(상권)정보 API 교육업종",
+        source_url="https://www.data.go.kr/data/15012005/openapi.do",
+        evidence_grade="B",
+        dataset_version_value=location.dataset_version,
+    )
+
+
+def _academy_exact_match_fact(
+    location: AcademyLocation, match: RegistryExactMatch
+) -> EvidenceFact:
+    return EvidenceFact(
+        fact_id=f"academy-registry-exact-{match.registry_fact_id}",
+        claims=(
+            FactClaim(match.registry_fact_id, "REGISTRY_FACT_ID"),
+            FactClaim(match.academy_name, "TEXT"),
+            FactClaim(match.status, "REGISTRY_STATUS"),
+            FactClaim("EXACT", "MATCH_TYPE"),
+        ),
+        data_as_of=match.observed_at.date(),
+        payload={
+            "facilityId": location.store_id,
+            "registryFactId": match.registry_fact_id,
+            "academyName": match.academy_name,
+            "registryStatus": match.status,
+            "matchType": "EXACT",
+            "datasetVersion": match.dataset_version,
+        },
+        source_id="edu.academy-registry",
+        source_name="전국학원및교습소표준데이터",
+        source_url="https://www.data.go.kr/data/15096277/standard.do",
+        evidence_grade="A",
+        dataset_version_value=match.dataset_version,
+    )
+
+
+def _academy_lookup_scope_fact(
+    plan: QueryPlan,
+    complex_record: ComplexRecord,
+    result: AcademyLocationSearchResult,
+) -> EvidenceFact:
+    return EvidenceFact(
+        fact_id=f"sbiz-academy-scope-{complex_record.complex_id}-{plan.radius_meters}",
+        claims=(
+            FactClaim(str(plan.radius_meters), "RADIUS_METERS"),
+            FactClaim(str(result.matched_count), "COUNT"),
+            FactClaim(str(result.returned_count), "RETURNED_COUNT"),
+            FactClaim(str(result.has_more).lower(), "BOOLEAN"),
+            FactClaim(str(result.verified_zero).lower(), "VERIFIED_ZERO"),
+            FactClaim(_number(result.coordinate_coverage), "COVERAGE_RATIO"),
+        ),
+        data_as_of=result.observed_at.date(),
+        payload={
+            "complexId": complex_record.complex_id,
+            "radiusMeters": plan.radius_meters,
+            "matchedCount": result.matched_count,
+            "returnedCount": result.returned_count,
+            "hasMore": result.has_more,
+            "verifiedZero": result.verified_zero,
+            "coordinateCoverage": result.coordinate_coverage,
+        },
+        source_id="place.sbiz-academy",
+        source_name="상가(상권)정보 API 교육업종",
+        source_url="https://www.data.go.kr/data/15012005/openapi.do",
+        evidence_grade="B",
+        dataset_version_value=result.dataset_version,
+    )
+
+
 def _retail_fact(record: FacilityFact) -> EvidenceFact:
     data_as_of = (
         record.data_as_of.date()
@@ -737,7 +911,13 @@ def validate_draft(
     school_facts = [fact for fact in facts if fact.source_id == "edu.school-location"]
     retail_facts = [fact for fact in facts if fact.source_id == "retail.large-store"]
     academy_registry_facts = [
-        fact for fact in facts if fact.source_id == "edu.academy-registry"
+        fact
+        for fact in facts
+        if fact.source_id == "edu.academy-registry"
+        and not fact.fact_id.startswith("academy-registry-exact-")
+    ]
+    academy_location_facts = [
+        fact for fact in facts if fact.source_id == "place.sbiz-academy"
     ]
     used_ids: list[str] = []
     for sentence in draft.sentences:
@@ -769,6 +949,8 @@ def validate_draft(
             _validate_retail_sentence(sentence.text, referenced)
         if academy_registry_facts:
             _validate_academy_registry_sentence(sentence.text)
+        if academy_location_facts:
+            _validate_academy_lookup_sentence(sentence.text, referenced)
         allowed_numbers = _number_tokens(
             claim.value for fact in referenced for claim in fact.claims
         )
@@ -922,6 +1104,31 @@ def _validate_academy_registry_sentence(text: str) -> None:
         raise GroundingValidationError(
             "GROUNDING_ACADEMY_REGISTRY_POLICY_VIOLATION"
         )
+
+
+def _validate_academy_lookup_sentence(
+    text: str, referenced: list[EvidenceFact]
+) -> None:
+    if re.search(
+        r"(?:공식\s*등록\s*(?:학원|업소)?\s*(?:총수|수는|개수|건수))|"
+        r"(?:등록\s*학원\s*(?:총수|수는|개수|건수))|"
+        r"유사|비슷|추정|퍼지|fuzzy",
+        text,
+        re.IGNORECASE,
+    ):
+        raise GroundingValidationError("GROUNDING_ACADEMY_LOOKUP_POLICY_VIOLATION")
+    observed_text = {
+        claim.value
+        for fact in referenced
+        for claim in fact.claims
+        if claim.unit == "TEXT"
+    }
+    for academy_name in re.findall(r"[가-힣A-Za-z0-9 ]+(?:학원|교습소)", text):
+        candidate = academy_name.strip()
+        if candidate and candidate not in observed_text:
+            raise GroundingValidationError(
+                "GROUNDING_ACADEMY_LOOKUP_TEXT_OUTSIDE_OBSERVATION"
+            )
 
 
 def _number(value: int | float) -> str:

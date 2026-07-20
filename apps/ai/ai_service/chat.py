@@ -36,6 +36,11 @@ class _UnavailableAcademyRegistryRepository:
         raise ChatbotProviderUnavailable()
 
 
+class _UnavailableAcademyLocationRepository:
+    def nearby(self, **_kwargs: object) -> object:
+        raise ChatbotProviderUnavailable()
+
+
 class ChatbotEngine(Protocol):
     async def query(
         self,
@@ -81,6 +86,19 @@ def get_academy_registry_repository() -> object:
 
     try:
         return PostgresAcademyRegistryRepository(dsn)
+    except Exception as exception:
+        raise ChatbotProviderUnavailable() from exception
+
+
+@lru_cache
+def get_academy_location_repository() -> object:
+    dsn = os.getenv("HOME_AI_REFERENCE_DSN", "").strip()
+    if not dsn:
+        raise ChatbotProviderUnavailable()
+    from .property_chat.academy_locations import PostgresAcademyLocationRepository
+
+    try:
+        return PostgresAcademyLocationRepository(dsn)
     except Exception as exception:
         raise ChatbotProviderUnavailable() from exception
 
@@ -173,6 +191,7 @@ class ConfiguredChatbotEngine:
                 enabled_reference_capabilities = get_enabled_reference_capabilities()
                 school_repository = None
                 academy_registry_repository = None
+                academy_location_repository = None
                 if "school_location" in enabled_reference_capabilities:
                     try:
                         school_repository = await asyncio.to_thread(get_school_fact_repository)
@@ -187,11 +206,23 @@ class ConfiguredChatbotEngine:
                         academy_registry_repository = (
                             _UnavailableAcademyRegistryRepository()
                         )
+                if "academy_lookup" in enabled_reference_capabilities:
+                    try:
+                        academy_location_repository = await asyncio.to_thread(
+                            get_academy_location_repository
+                        )
+                    except ChatbotProviderUnavailable:
+                        academy_location_repository = (
+                            _UnavailableAcademyLocationRepository()
+                        )
                 engine = GroundedChatbotEngine(
                     repository=repository,  # type: ignore[arg-type]
                     school_repository=school_repository,  # type: ignore[arg-type]
                     academy_registry_repository=(
                         academy_registry_repository  # type: ignore[arg-type]
+                    ),
+                    academy_location_repository=(
+                        academy_location_repository  # type: ignore[arg-type]
                     ),
                     language_model=language_model,  # type: ignore[arg-type]
                     enabled_capabilities=get_enabled_property_capabilities(),

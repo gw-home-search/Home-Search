@@ -6,3 +6,17 @@ include::{snippets}/place.sbiz-academy/http-request.adoc[]
 include::{snippets}/place.sbiz-academy/request-parameters.adoc[]
 include::{snippets}/place.sbiz-academy/normalization-fields.adoc[]
 include::{snippets}/place.sbiz-academy/failure-codes.adoc[]
+
+=== Grounded location 경계
+
+`academy_lookup`은 기본 800m, 명시 범위 100..2,000m에서 최대 5개 교육업소를
+거리순으로 조회한다. 좌표가 유효한 Sbiz 교육업소 위치는 B등급 근거이며, Unicode
+NFKC 상호명과 공백 canonical 도로명주소가 모두 exact match하고 양쪽 우편번호가
+있으면 그 값도 같은 경우에만 NEIS A등급 등록 근거를 추가한다. punctuation 제거,
+유사도, 음절거리, LLM match는 허용하지 않는다.
+
+전국 좌표 coverage 95% 미만이면 답변 생성을 차단한다. property 법정동 코드와 Sbiz
+행정코드의 검증된 mapping이 없으므로 지역 90% coverage와 정상 0건은 확정하지
+않으며 `verifiedZero=false`를 유지한다. Sbiz 수를 공식 등록 학원 수로 표현할 수
+없고, exact match되지 않은 결과는 교육업소 위치로만 표현한다. 이용조건, 실제
+taxonomy, coverage와 live readiness 승인 전에는 runtime allowlist에 추가하지 않는다.

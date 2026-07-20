@@ -80,7 +80,8 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
 | F3 static composition·CLI | `Partial` | 미채점 | 해당 없음 | 해당 없음 |
 | D1 AsciiDoc artifact | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
 | NEIS | collector·projection·summary observer offline `Pass`, live 미완료 | 미채점 | `2.0/10 Partial` | 금지 |
-| Sbiz | collector·adapter·exact projection·generic refresh offline `Pass`, taxonomy 미승인 | 미채점 | `2.0/10 Partial` | 금지 |
+| Sbiz S2 collector | collector·adapter·generic refresh offline `Pass`, taxonomy 미승인 | 미채점 | `2.0/10 Partial` | 금지 |
+| Sbiz S2-P grounded location | exact projection·grounded location observer offline `Pass` | `9.5/10` | `2.0/10 Partial` | 금지 |
 | 대규모점포 | streaming file client·기존 projection `Pass`, live 미실행 | 미채점 | `3.0/10 Partial` | 금지 |
 | 철도 S4 collector | fixed URL collector orchestration·occurrence projection·merge offline `Pass`, URL 미확정 | `9.5/10` | `2.0/10 Partial` | 금지 |
 
@@ -96,11 +97,23 @@ NEIS·Sbiz normalized iterator, 30만 행 `<256MiB` peak memory gate를 통과�
 file source는 계약상 최대 1만 행 이하로 제한된다. 철도 refresher는 고정 XLSX URL,
 owner-only temp, verified S3 file upload, safe refresh-run 실패 기록을 static catalog에
 연결했으며 현재 landing URL은 network 호출 전에 거부한다. 2026-07-20 전체 offline
-회귀는 `511 passed`, coverage `90.02%`다. NEIS summary observer는 property DB의
+회귀는 `533 passed`, coverage `90.04%`다. NEIS summary observer는 property DB의
 시도·시군구 ancestor를 먼저 해석한 뒤 AI DB를 별도 exact query하며, 반경·거리 표현을
 grounding 단계에서 거부한다. license와 live readiness가 미승인이므로 runtime
 allowlist에는 추가하지 않았다. 실제 provider,
 운영 DB, S3 live 검증은 실행하지 않았다.
+
+Sbiz `academy_lookup` observer는 기본 800m, 명시 범위 100..2,000m, 최대 5건과
+전국 좌표 coverage 95%를 fail-closed로 적용한다. Sbiz 위치는 B등급이며 NFKC 상호명,
+canonical 도로명주소, 선택적 우편번호가 모두 exact match할 때만 NEIS A등급 근거를
+추가한다. fuzzy match와 공식 등록 수 표현은 grounding 단계에서 거부한다. 검증된
+행정코드 mapping이 없어 지역 90% coverage와 정상 0건은 확정하지 않으며,
+`academy_lookup`은 runtime allowlist에 추가하지 않았다.
+
+Sbiz S2-P 구현 점수는 범위·공개/내부 계약·데이터 정확성·보안·실패 처리·테스트·
+문서·bounded query·리뷰 근거를 충족했다. source별 이용조건과 실제 taxonomy 승인이
+`PENDING`이므로 이용조건 항목에서 `0.5`를 감점해 `9.5/10`으로 평가했다. 이는
+구현 commit만 허용하며 실제 데이터 readiness나 capability 활성화를 승인하지 않는다.
 
 철도 S4 구현 점수는 범위·계약·이용조건 상태 기록·raw-first 원자성·보안·실패 기록·
 테스트·문서·리뷰 근거를 만점으로 평가했다. fake transport와 file size bound는
@@ -116,4 +129,4 @@ allowlist에는 추가하지 않았다. 실제 provider,
 
 `api-contract: compatible`
 
-`security-audit: 지적사항 = none`은 최종 diff 보안 검토 뒤에만 확정한다.
+`security-audit: 지적사항 = none`

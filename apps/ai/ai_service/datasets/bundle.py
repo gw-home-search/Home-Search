@@ -65,6 +65,16 @@ class ReadFileBundle:
     artifacts: Iterable[ReadArtifact]
 
 
+@dataclass(frozen=True)
+class ExtractedArtifactBundle:
+    source_id: str
+    endpoint_path: str
+    temporal_value: date | datetime | None
+    logical_name: str
+    media_type: str
+    artifact_path: Path
+
+
 def build_deterministic_bundle(
     *,
     source_id: str,
@@ -358,6 +368,123 @@ def read_deterministic_bundle_file(
     except RawPayloadError:
         raise
     except (KeyError, ValueError, json.JSONDecodeError, zipfile.BadZipFile):
+        raise RawPayloadError(
+            "bundle file is invalid", "BUNDLE_MANIFEST_INVALID"
+        ) from None
+
+
+def extract_single_artifact_bundle_file(
+    path: Path,
+    target: Path,
+    *,
+    expected_source_id: str,
+    maximum_bytes: int,
+    maximum_artifact_bytes: int,
+) -> ExtractedArtifactBundle:
+    if (
+        path.is_symlink()
+        or not path.is_file()
+        or path.stat().st_size > maximum_bytes
+        or not 1 <= maximum_artifact_bytes <= maximum_bytes
+    ):
+        raise RawPayloadError("bundle file exceeds configured size", "BUNDLE_TOO_LARGE")
+    target_metadata = target.lstat()
+    if (
+        target.is_symlink()
+        or not target.is_file()
+        or target_metadata.st_mode & 0o077
+    ):
+        raise RawPayloadError(
+            "bundle extraction target is invalid", "BUNDLE_MANIFEST_INVALID"
+        )
+    try:
+        with zipfile.ZipFile(path) as archive:
+            infos = archive.infolist()
+            if (
+                len(infos) != 2
+                or infos[0].filename != "manifest.json"
+                or infos[0].file_size > 4 * 1024 * 1024
+                or len({info.filename for info in infos}) != 2
+                or any(info.is_dir() or info.compress_type != zipfile.ZIP_STORED for info in infos)
+                or infos[1].file_size > maximum_artifact_bytes
+                or sum(info.file_size for info in infos) > maximum_bytes
+                or re.fullmatch(
+                    r"artifacts/0001\.[a-z0-9]{1,10}", infos[1].filename
+                )
+                is None
+            ):
+                raise RawPayloadError(
+                    "bundle file entries are invalid", "BUNDLE_MANIFEST_INVALID"
+                )
+            manifest = json.loads(archive.read("manifest.json"))
+            if (
+                not isinstance(manifest, dict)
+                or manifest.get("bundleSchemaVersion") != 1
+                or manifest.get("sourceId") != expected_source_id
+                or manifest.get("complete") is not True
+                or not isinstance(manifest.get("endpointPath"), str)
+                or not manifest["endpointPath"].startswith("/")
+                or not isinstance(manifest.get("artifacts"), list)
+                or len(manifest["artifacts"]) != 1
+            ):
+                raise RawPayloadError(
+                    "bundle file manifest is invalid", "BUNDLE_MANIFEST_INVALID"
+                )
+            metadata = manifest["artifacts"][0]
+            if (
+                not isinstance(metadata, dict)
+                or set(metadata)
+                != {"logicalName", "mediaType", "byteLength", "sha256"}
+                or not isinstance(metadata["byteLength"], int)
+                or isinstance(metadata["byteLength"], bool)
+                or metadata["byteLength"] != infos[1].file_size
+                or not isinstance(metadata["logicalName"], str)
+                or re.fullmatch(
+                    r"[a-z0-9][a-z0-9._-]{0,99}", metadata["logicalName"]
+                )
+                is None
+                or not isinstance(metadata["mediaType"], str)
+                or not metadata["mediaType"].strip()
+                or not isinstance(metadata["sha256"], str)
+                or re.fullmatch(r"[0-9a-f]{64}", metadata["sha256"]) is None
+            ):
+                raise RawPayloadError(
+                    "bundle file artifact metadata is invalid",
+                    "BUNDLE_MANIFEST_INVALID",
+                )
+            digest = hashlib.sha256()
+            byte_length = 0
+            with archive.open(infos[1], "r") as source, target.open(
+                "wb"
+            ) as destination:
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    byte_length += len(chunk)
+                    digest.update(chunk)
+                    destination.write(chunk)
+            if (
+                byte_length != metadata["byteLength"]
+                or digest.hexdigest() != metadata["sha256"]
+            ):
+                raise RawPayloadError(
+                    "bundle file artifact checksum mismatch",
+                    "BUNDLE_CHECKSUM_MISMATCH",
+                )
+            temporal_value: date | datetime | None = None
+            if isinstance(manifest.get("sourceDate"), str):
+                temporal_value = date.fromisoformat(manifest["sourceDate"])
+            elif isinstance(manifest.get("observedAt"), str):
+                temporal_value = datetime.fromisoformat(manifest["observedAt"])
+            return ExtractedArtifactBundle(
+                source_id=expected_source_id,
+                endpoint_path=manifest["endpointPath"],
+                temporal_value=temporal_value,
+                logical_name=metadata["logicalName"],
+                media_type=metadata["mediaType"],
+                artifact_path=target,
+            )
+    except RawPayloadError:
+        raise
+    except (KeyError, OSError, ValueError, json.JSONDecodeError, zipfile.BadZipFile):
         raise RawPayloadError(
             "bundle file is invalid", "BUNDLE_MANIFEST_INVALID"
         ) from None

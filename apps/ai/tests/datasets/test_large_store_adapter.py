@@ -2,15 +2,23 @@ from __future__ import annotations
 
 import csv
 import io
+import zipfile
+from dataclasses import replace
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 from pyproj import Transformer
 import pytest
 
-from ai_service.datasets.bundle import BundleArtifact, build_deterministic_bundle
+from ai_service.datasets.bundle import (
+    BundleArtifact,
+    FileBundleArtifact,
+    build_deterministic_bundle,
+    build_deterministic_bundle_file,
+)
 from ai_service.datasets.large_store import LargeStoreAdapter
 from ai_service.datasets.models import DatasetSourceContract
-from ai_service.datasets.validation import validate_rows
+from ai_service.datasets.validation import RawPayloadError, validate_rows
 from ai_service.datasets.postgres import PostgresDatasetRepository
 from ai_service.datasets.service import DatasetLifecycleService
 from ai_service.property_chat.reference_facilities import PostgresPointFacilityRepository
@@ -99,6 +107,93 @@ def test_epsg_5174_coordinates_are_preserved_and_transformed_to_wgs84() -> None:
     assert abs(float(point["longitude"]) - 126.978) < 0.00001
     assert point["subcategory"] == "LARGE_MART"
     assert point["status"] == "OPEN"
+
+
+def test_large_store_file_adapter_streams_bundle_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with zipfile.ZipFile(io.BytesIO(_bundle(_row()))) as archive:
+        csv_content = archive.read("artifacts/0001.csv")
+    provider_path = tmp_path / "provider.csv"
+    provider_path.write_bytes(csv_content)
+    provider_path.chmod(0o600)
+    bundle_path = tmp_path / "bundle.zip"
+    bundle_path.touch(mode=0o600)
+    build_deterministic_bundle_file(
+        source_id="retail.large-store",
+        endpoint_path="/file/large_scale_retail_stores/info",
+        artifacts=(
+            FileBundleArtifact("large-store", "csv", "text/csv", provider_path),
+        ),
+        temporal_value=SOURCE_DATE,
+        target=bundle_path,
+    )
+    original_read = zipfile.ZipFile.read
+
+    def reject_outer_artifact_read(archive, name, *args, **kwargs):
+        if Path(archive.filename) == bundle_path and str(name).startswith("artifacts/"):
+            raise AssertionError("prepared artifact must be streamed")
+        return original_read(archive, name, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_bytes", lambda _path: (_ for _ in ()).throw(
+        AssertionError("prepared bundle must not be materialized")
+    ))
+    monkeypatch.setattr(zipfile.ZipFile, "read", reject_outer_artifact_read)
+
+    parsed = LargeStoreAdapter().parse_file(
+        bundle_path, _contract(), source_date=SOURCE_DATE
+    )
+
+    assert parsed.rows[0]["facility_id"] == "store-1"
+
+
+def test_large_store_file_adapter_fails_closed_on_contract_metadata_and_encoding(
+    tmp_path: Path,
+) -> None:
+    adapter = LargeStoreAdapter()
+    with pytest.raises(RawPayloadError) as error:
+        adapter.parse_file(tmp_path / "missing.zip", _contract(), source_date=None)
+    assert error.value.reason_code == "SOURCE_CONTRACT_MISMATCH"
+
+    with zipfile.ZipFile(io.BytesIO(_bundle(_row()))) as archive:
+        csv_content = archive.read("artifacts/0001.csv")
+    provider_path = tmp_path / "provider.csv"
+    provider_path.write_bytes(csv_content)
+    provider_path.chmod(0o600)
+
+    wrong_media_bundle = tmp_path / "wrong-media.zip"
+    wrong_media_bundle.touch(mode=0o600)
+    build_deterministic_bundle_file(
+        source_id="retail.large-store",
+        endpoint_path="/file/large_scale_retail_stores/info",
+        artifacts=(
+            FileBundleArtifact("large-store", "csv", "text/plain", provider_path),
+        ),
+        temporal_value=SOURCE_DATE,
+        target=wrong_media_bundle,
+    )
+    with pytest.raises(RawPayloadError) as error:
+        adapter.parse_file(wrong_media_bundle, _contract(), source_date=SOURCE_DATE)
+    assert error.value.reason_code == "BUNDLE_MANIFEST_INVALID"
+
+    invalid_encoding_bundle = tmp_path / "invalid-encoding.zip"
+    invalid_encoding_bundle.touch(mode=0o600)
+    build_deterministic_bundle_file(
+        source_id="retail.large-store",
+        endpoint_path="/file/large_scale_retail_stores/info",
+        artifacts=(
+            FileBundleArtifact("large-store", "csv", "text/csv", provider_path),
+        ),
+        temporal_value=SOURCE_DATE,
+        target=invalid_encoding_bundle,
+    )
+    with pytest.raises(RawPayloadError) as error:
+        adapter.parse_file(
+            invalid_encoding_bundle,
+            replace(_contract(), encoding="ascii"),
+            source_date=SOURCE_DATE,
+        )
+    assert error.value.reason_code == "CSV_ENCODING_INVALID"
 
 
 def test_unknown_provider_status_blocks_publication_instead_of_defaulting_open() -> None:

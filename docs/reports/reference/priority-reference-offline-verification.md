@@ -12,7 +12,7 @@
 
 | 범위 | 명령 | 결과 |
 |---|---|---|
-| AI 전체 회귀 | `cd apps/ai && TESTCONTAINERS_RYUK_DISABLED=true uv run pytest` | `534 passed`, coverage `90.04%` |
+| AI 전체 회귀 | `cd apps/ai && TESTCONTAINERS_RYUK_DISABLED=true uv run pytest` | `542 passed`, coverage `90.22%` |
 | MinIO raw 복구 | `uv run pytest --no-cov tests/datasets/test_raw_store.py` | `8 passed`; checksum·length·version·byte 복구·동일 key 재사용 |
 | local refresh wrapper | `apps/ai/ops/test-run-local-reference-refresh.sh` | `Pass`; source별 secret 경계와 고정 순서 |
 | reference docs | `apps/ai/ops/build-reference-docs.sh --check` | `Pass`; 결정성·HTML·secret 검사 |
@@ -37,6 +37,9 @@ artifact에 저장하지 않았다.
   candidate만 staging, incomplete bundle 미게시를 전체 AI 회귀에서 확인했다.
 - raw object는 file stream upload 후 `HEAD` checksum·length·version을 검증했고,
   저장된 version을 지정해 원본 byte를 복구했다.
+- 대규모점포 CSV와 철도 XLSX prepared bundle은 bytes 재적재 없이 owner-only temp로
+  1MiB chunk 추출하며 artifact 길이·SHA-256을 검증했다. 9MiB fixture와 checksum,
+  manifest, target 권한 실패를 확인했다.
 - publication rollback, active pointer 보존, runtime/base table 접근 거부,
   importer/migrator/runtime role 경계를 확인했다.
 - 800m, 1km, 1.5km 경계와 NEIS/Sbiz fuzzy match 거부, 철도 occurrence 보존·역
@@ -51,8 +54,9 @@ artifact에 저장하지 않았다.
 
 ## 검증 공백과 잔여 위험
 
-- 1GiB raw 파일과 21GiB ephemeral storage를 실제 할당하지는 않았다. file streaming
-  구조와 30만 normalized row memory gate로 검증해 성능·자원 항목 `0.5`를 감점했다.
+- 1GiB raw 파일과 21GiB ephemeral storage를 실제 할당하지는 않았다. 9MiB artifact
+  file streaming 구조와 30만 normalized row memory gate로 검증해 성능·자원 항목
+  `0.5`를 감점했다.
 - source별 이용조건, 실제 taxonomy/release URL, 실제 row·freshness·coverage, S3 운영
   복구, spatial query p95와 live golden은 readiness 단계의 blocker다.
 - readiness `9.0/10` 미만 capability는 runtime allowlist에 추가하지 않았다.

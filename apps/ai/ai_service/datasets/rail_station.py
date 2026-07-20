@@ -5,18 +5,21 @@ import math
 import re
 import zipfile
 from datetime import date, datetime
+from pathlib import Path
 
 from openpyxl import load_workbook
 
-from .bundle import read_deterministic_bundle
+from .bundle import extract_single_artifact_bundle_file, read_deterministic_bundle
 from .contracts import ReferenceSourceContract
 from .models import DatasetSourceContract, ParsedDataset, QualityIssue
+from .secure_temp import SecureTempWorkspace
 from .validation import RawPayloadError
 
 
 SOURCE_ID = "transport.rail-station"
 _MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 _MAX_XLSX_BYTES = 128 * 1024 * 1024
+_MAX_BUNDLE_BYTES = _MAX_XLSX_BYTES + 5 * 1024 * 1024
 _MAX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024
 _MAX_COMPRESSION_RATIO = 100
 _MAX_SHEETS = 10
@@ -48,7 +51,7 @@ class RailStationAdapter:
         bundle = read_deterministic_bundle(
             raw_bytes,
             expected_source_id=SOURCE_ID,
-            maximum_bytes=_MAX_XLSX_BYTES,
+            maximum_bytes=_MAX_BUNDLE_BYTES,
         )
         if bundle.temporal_value != source_date or len(bundle.artifacts) != 1:
             raise RawPayloadError("rail bundle metadata mismatch", "BUNDLE_MANIFEST_INVALID")
@@ -56,59 +59,89 @@ class RailStationAdapter:
         if artifact.media_type != _MEDIA_TYPE:
             raise RawPayloadError("rail artifact type mismatch", "BUNDLE_MANIFEST_INVALID")
         _inspect_xlsx_archive(artifact.content)
-        try:
-            workbook = load_workbook(
-                io.BytesIO(artifact.content),
-                read_only=True,
-                data_only=True,
-                keep_links=False,
+        return _parse_xlsx(io.BytesIO(artifact.content), source_date)
+
+    def parse_file(
+        self,
+        raw_path: Path,
+        contract: DatasetSourceContract,
+        *,
+        source_date: date | None,
+    ) -> ParsedDataset:
+        if contract.source_id != SOURCE_ID or source_date is None:
+            raise RawPayloadError(
+                "rail source contract mismatch", "SOURCE_CONTRACT_MISMATCH"
             )
-        except Exception:
-            raise RawPayloadError("rail XLSX cannot be parsed", "XLSX_INVALID") from None
-        try:
-            if not 1 <= len(workbook.worksheets) <= _MAX_SHEETS:
-                raise RawPayloadError("rail XLSX sheet count is invalid", "XLSX_SIZE_LIMIT")
-            rows: list[dict[str, object]] = []
-            issues: list[QualityIssue] = []
-            rejections: dict[int, tuple[str, ...]] = {}
-            total_cells = 0
-            for sheet in workbook.worksheets:
-                iterator = sheet.iter_rows(values_only=True)
-                header_values = next(iterator, None)
-                if header_values is None:
+        with SecureTempWorkspace(required_free_bytes=_MAX_XLSX_BYTES) as workspace:
+            bundle = extract_single_artifact_bundle_file(
+                raw_path,
+                workspace.create_file("rail-stations.xlsx"),
+                expected_source_id=SOURCE_ID,
+                maximum_bytes=_MAX_BUNDLE_BYTES,
+                maximum_artifact_bytes=_MAX_XLSX_BYTES,
+            )
+            if bundle.temporal_value != source_date or bundle.media_type != _MEDIA_TYPE:
+                raise RawPayloadError(
+                    "rail bundle metadata mismatch", "BUNDLE_MANIFEST_INVALID"
+                )
+            _inspect_xlsx_archive(bundle.artifact_path)
+            return _parse_xlsx(bundle.artifact_path, source_date)
+
+
+def _parse_xlsx(source: io.BytesIO | Path, source_date: date) -> ParsedDataset:
+    try:
+        workbook = load_workbook(
+            source,
+            read_only=True,
+            data_only=True,
+            keep_links=False,
+        )
+    except Exception:
+        raise RawPayloadError("rail XLSX cannot be parsed", "XLSX_INVALID") from None
+    try:
+        if not 1 <= len(workbook.worksheets) <= _MAX_SHEETS:
+            raise RawPayloadError("rail XLSX sheet count is invalid", "XLSX_SIZE_LIMIT")
+        rows: list[dict[str, object]] = []
+        issues: list[QualityIssue] = []
+        rejections: dict[int, tuple[str, ...]] = {}
+        total_cells = 0
+        for sheet in workbook.worksheets:
+            iterator = sheet.iter_rows(values_only=True)
+            header_values = next(iterator, None)
+            if header_values is None:
+                continue
+            headers = tuple(_clean(value) for value in header_values)
+            if not _REQUIRED_COLUMNS.issubset(headers):
+                raise RawPayloadError("rail XLSX schema mismatch", "SOURCE_SCHEMA_MISMATCH")
+            header_index = {header: index for index, header in enumerate(headers)}
+            for values in iterator:
+                total_cells += len(values)
+                if total_cells > _MAX_CELLS:
+                    raise RawPayloadError("rail XLSX cell limit exceeded", "XLSX_SIZE_LIMIT")
+                if not any(value is not None and str(value).strip() for value in values):
                     continue
-                headers = tuple(_clean(value) for value in header_values)
-                if not _REQUIRED_COLUMNS.issubset(headers):
-                    raise RawPayloadError("rail XLSX schema mismatch", "SOURCE_SCHEMA_MISMATCH")
-                header_index = {header: index for index, header in enumerate(headers)}
-                for values in iterator:
-                    total_cells += len(values)
-                    if total_cells > _MAX_CELLS:
-                        raise RawPayloadError("rail XLSX cell limit exceeded", "XLSX_SIZE_LIMIT")
-                    if not any(value is not None and str(value).strip() for value in values):
-                        continue
-                    provider_row = {
-                        header: values[index] if index < len(values) else None
-                        for header, index in header_index.items()
-                    }
-                    row_number = len(rows) + 1
-                    normalized, reasons = _normalize(provider_row, source_date)
-                    rows.append(normalized)
-                    if reasons:
-                        rejections[row_number] = tuple(reasons)
-                        issues.extend(
-                            QualityIssue(reason, "WARNING", row_number, {})
-                            for reason in reasons
-                        )
-            if not rows:
-                raise RawPayloadError("rail XLSX contains no data rows", "SOURCE_EMPTY")
-            return ParsedDataset(
-                rows=rows,
-                issues=tuple(issues),
-                row_rejections=rejections,
-            )
-        finally:
-            workbook.close()
+                provider_row = {
+                    header: values[index] if index < len(values) else None
+                    for header, index in header_index.items()
+                }
+                row_number = len(rows) + 1
+                normalized, reasons = _normalize(provider_row, source_date)
+                rows.append(normalized)
+                if reasons:
+                    rejections[row_number] = tuple(reasons)
+                    issues.extend(
+                        QualityIssue(reason, "WARNING", row_number, {})
+                        for reason in reasons
+                    )
+        if not rows:
+            raise RawPayloadError("rail XLSX contains no data rows", "SOURCE_EMPTY")
+        return ParsedDataset(
+            rows=rows,
+            issues=tuple(issues),
+            row_rejections=rejections,
+        )
+    finally:
+        workbook.close()
 
 
 def rail_station_source_contract(
@@ -151,9 +184,10 @@ def rail_station_source_contract(
     )
 
 
-def _inspect_xlsx_archive(content: bytes) -> None:
+def _inspect_xlsx_archive(content: bytes | Path) -> None:
     try:
-        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        source = io.BytesIO(content) if isinstance(content, bytes) else content
+        with zipfile.ZipFile(source) as archive:
             infos = archive.infolist()
             names = [info.filename for info in infos]
             if len(names) != len(set(names)):

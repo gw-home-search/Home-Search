@@ -75,7 +75,7 @@ collector를 실제 호출하지 않고 readiness를 `Partial`로 유지한다.
 | Slice | 구현 상태 | 구현 점수 | readiness | 활성화 |
 |---|---|---:|---:|---|
 | G0 계약·ledger | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
-| F1 verified raw streaming | `Partial` | 미채점 | 해당 없음 | 해당 없음 |
+| F1 verified raw streaming | `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 | F2 normalized spool·semantic `NoChange` | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
 | F3 static composition·CLI | `Partial` | 미채점 | 해당 없음 | 해당 없음 |
 | D1 AsciiDoc artifact | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
@@ -91,14 +91,18 @@ F1은 file source뿐 아니라 NEIS·Sbiz API page도 owner-only temp file에 �
 complete·incomplete deterministic bundle을 verified S3 file upload에 연결했다. 기존
 bytes collector API는 characterization wrapper로만 유지한다. NEIS·Sbiz adapter는
 ZIP manifest를 먼저 제한 검증하고 최대 8MiB artifact를 하나씩 checksum 검증·parse해
-complete bundle 전체 read를 제거했다. 다만 CSV/XLSX bytes-only adapter fallback이
-남아 F1은 `Partial`을 유지한다. F2는
+complete bundle 전체 read를 제거했다. 대규모점포 CSV와 철도 XLSX adapter도
+prepared bundle과 artifact를 bytes로 재적재하지 않고 owner-only temp file로 1MiB씩
+추출하면서 길이와 SHA-256을 검증한다. 9MiB artifact streaming fixture, unsafe target,
+manifest·checksum 실패 경계를 통과했으며 기존 bytes API는 회귀 호환 wrapper로만
+유지한다. 1GiB raw fixture를 실제 할당하지 않은 성능 증거 공백으로 `0.5`를 감점해
+F1을 `9.5/10 Pass`로 평가했다. F2는
 lazy `ParsedRow`, stream 중 parse failure rollback,
 NEIS·Sbiz normalized iterator, 30만 행 `<256MiB` peak memory gate를 통과했다.
 file source는 계약상 최대 1만 행 이하로 제한된다. 철도 refresher는 고정 XLSX URL,
 owner-only temp, verified S3 file upload, safe refresh-run 실패 기록을 static catalog에
 연결했으며 현재 landing URL은 network 호출 전에 거부한다. 2026-07-20 전체 offline
-회귀는 `534 passed`, coverage `90.04%`다. NEIS summary observer는 property DB의
+회귀는 `542 passed`, coverage `90.22%`다. NEIS summary observer는 property DB의
 시도·시군구 ancestor를 먼저 해석한 뒤 AI DB를 별도 exact query하며, 반경·거리 표현을
 grounding 단계에서 거부한다. license와 live readiness가 미승인이므로 runtime
 allowlist에는 추가하지 않았다. 실제 provider,

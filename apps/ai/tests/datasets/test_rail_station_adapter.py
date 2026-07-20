@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import zipfile
 from datetime import date, datetime
+from pathlib import Path
 
 import pytest
 from openpyxl import Workbook
@@ -10,9 +11,11 @@ from openpyxl import Workbook
 from ai_service.datasets import rail_station
 from ai_service.datasets.bundle import (
     BundleArtifact,
+    FileBundleArtifact,
     ReadArtifact,
     ReadBundle,
     build_deterministic_bundle,
+    build_deterministic_bundle_file,
 )
 from ai_service.datasets.models import DatasetSourceContract
 from ai_service.datasets.rail_station import RailStationAdapter
@@ -111,6 +114,109 @@ def test_same_station_name_on_multiple_lines_keeps_distinct_occurrences() -> Non
     assert parsed.rows[0]["transfer_lines"] == ["1호선"]
     assert parsed.rows[1]["transfer_lines"] == ["2호선"]
     assert parsed.row_rejections == {}
+
+
+def test_rail_file_adapter_streams_bundle_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    xlsx_path = tmp_path / "release.xlsx"
+    xlsx_path.write_bytes(
+        _xlsx(
+            [[
+                "서울교통공사", "02", "2호선", "201", "시청", "서울 중구",
+                37.5657, 126.977, "1호선", "2026-01-01",
+            ]]
+        )
+    )
+    xlsx_path.chmod(0o600)
+    bundle_path = tmp_path / "bundle.zip"
+    bundle_path.touch(mode=0o600)
+    build_deterministic_bundle_file(
+        source_id="transport.rail-station",
+        endpoint_path="/data/15013205/standard.do",
+        temporal_value=date(2026, 1, 1),
+        artifacts=(
+            FileBundleArtifact(
+                "annual-release",
+                "xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                xlsx_path,
+            ),
+        ),
+        target=bundle_path,
+    )
+    original_read = zipfile.ZipFile.read
+
+    def reject_outer_artifact_read(archive, name, *args, **kwargs):
+        if Path(archive.filename) == bundle_path and str(name).startswith("artifacts/"):
+            raise AssertionError("prepared artifact must be streamed")
+        return original_read(archive, name, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_bytes", lambda _path: (_ for _ in ()).throw(
+        AssertionError("prepared bundle must not be materialized")
+    ))
+    monkeypatch.setattr(zipfile.ZipFile, "read", reject_outer_artifact_read)
+
+    parsed = RailStationAdapter().parse_file(
+        bundle_path, _contract(), source_date=date(2026, 1, 1)
+    )
+
+    assert parsed.rows[0]["station_occurrence_id"] == "서울교통공사|02|201"
+
+
+def test_rail_file_adapter_fails_closed_on_contract_metadata_and_parser(
+    tmp_path: Path,
+) -> None:
+    adapter = RailStationAdapter()
+    with pytest.raises(RawPayloadError) as error:
+        adapter.parse_file(tmp_path / "missing.zip", _contract(), source_date=None)
+    assert error.value.reason_code == "SOURCE_CONTRACT_MISMATCH"
+
+    xlsx_path = tmp_path / "release.xlsx"
+    xlsx_path.write_bytes(_xlsx([]))
+    xlsx_path.chmod(0o600)
+    wrong_media_bundle = tmp_path / "wrong-media.zip"
+    wrong_media_bundle.touch(mode=0o600)
+    build_deterministic_bundle_file(
+        source_id="transport.rail-station",
+        endpoint_path="/data/15013205/standard.do",
+        temporal_value=date(2026, 1, 1),
+        artifacts=(
+            FileBundleArtifact("annual-release", "xlsx", "text/plain", xlsx_path),
+        ),
+        target=wrong_media_bundle,
+    )
+    with pytest.raises(RawPayloadError) as error:
+        adapter.parse_file(
+            wrong_media_bundle, _contract(), source_date=date(2026, 1, 1)
+        )
+    assert error.value.reason_code == "BUNDLE_MANIFEST_INVALID"
+
+    malformed_xlsx = tmp_path / "malformed.xlsx"
+    with zipfile.ZipFile(malformed_xlsx, "w") as archive:
+        archive.writestr("placeholder", b"not-an-openxml-workbook")
+    malformed_xlsx.chmod(0o600)
+    malformed_bundle = tmp_path / "malformed-bundle.zip"
+    malformed_bundle.touch(mode=0o600)
+    build_deterministic_bundle_file(
+        source_id="transport.rail-station",
+        endpoint_path="/data/15013205/standard.do",
+        temporal_value=date(2026, 1, 1),
+        artifacts=(
+            FileBundleArtifact(
+                "annual-release",
+                "xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                malformed_xlsx,
+            ),
+        ),
+        target=malformed_bundle,
+    )
+    with pytest.raises(RawPayloadError) as error:
+        adapter.parse_file(
+            malformed_bundle, _contract(), source_date=date(2026, 1, 1)
+        )
+    assert error.value.reason_code == "XLSX_INVALID"
 
 
 def test_missing_station_location_is_blocking_row_rejection() -> None:

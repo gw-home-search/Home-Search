@@ -14,6 +14,9 @@ public record BuildingApiProperties(
         @DefaultValue("") String buildingTitlePath,
         @DefaultValue("") String buildingRecapTitlePath,
 
+        @DefaultValue("/1613000/BldRgstHubService/getBrBasisOulnInfo")
+        String buildingBasicOverviewPath,
+
         @DefaultValue("/1613000/BldRgstHubService/getBrRecapTitleInfo")
         String bldTitlePath,
 

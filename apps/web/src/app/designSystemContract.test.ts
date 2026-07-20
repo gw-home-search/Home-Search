@@ -8,6 +8,7 @@ const detail = readFileSync(`${appDirectory}/styles/detail.css`, 'utf8');
 const exploration = readFileSync(`${appDirectory}/styles/exploration.css`, 'utf8');
 const map = readFileSync(`${appDirectory}/styles/map.css`, 'utf8');
 const responsive = readFileSync(`${appDirectory}/styles/responsive.css`, 'utf8');
+const chat = readFileSync(`${process.cwd()}/src/features/chat/chat.css`, 'utf8');
 const icons = readFileSync(`${process.cwd()}/src/shared/icons/index.tsx`, 'utf8');
 const mapApp = readFileSync(`${appDirectory}/MapApp.tsx`, 'utf8');
 const appHeader = readFileSync(`${appDirectory}/AppHeader.tsx`, 'utf8');
@@ -148,7 +149,7 @@ describe('공개 지도 디자인 시스템 계약', () => {
   });
 
   it('선택한 Home Search 이미지 로고를 header와 browser icon에 공통 적용한다', () => {
-    expect(mapApp).toContain('<AppHeader />');
+    expect(mapApp).toContain('<AppHeader');
     expect(appHeader).toContain('className="app-brand-mark"');
     expect(appHeader).toContain('src="/home-search-logo.png"');
     expect(appHeader).toContain('HomeSearch · 실거래가 인사이트');
@@ -172,6 +173,58 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(exploration).not.toContain('404px');
     expect(responsive).toContain('(orientation: landscape)');
     expect(responsive).toContain('320px minmax(0, 1fr)');
+  });
+
+  it('챗봇을 열면 지도 위를 덮지 않고 desktop side와 mobile bottom split을 사용한다', () => {
+    expect(designSystem).toContain('--hs-chat-drawer-width: min(520px, 40vw);');
+    expect(designSystem).toContain('--hs-chat-mobile-height: min(');
+    expect(shell).toContain('.app-shell[data-chat-open="true"] .map-workspace {');
+    expect(shell).toContain('margin-right: var(--hs-chat-drawer-width);');
+    expect(shell).toContain('margin-bottom: var(--hs-chat-mobile-height);');
+    expect(chat).toContain('width: var(--hs-chat-drawer-width);');
+    expect(chat).toContain('height: var(--hs-chat-mobile-height);');
+    expect(chat).toContain('@media (max-width: 900px) and (min-height: 501px)');
+  });
+
+  it('AI 진입은 간결한 전용 mark를 사용하고 추천 질문은 soft card로 구분해 보여준다', () => {
+    expect(chat).toContain('min-width: 60px;');
+    expect(chat).toContain('.chatbot-ai-mark {');
+    expect(chat).toContain('.chatbot-ai-mark-bar { stroke: none; }');
+    expect(chat).toContain('.chatbot-launcher-label');
+    expect(chat).not.toContain('.chatbot-home-scan-mark');
+    expect(chat).toContain('grid-template-columns: minmax(0, 1fr) auto;');
+    expect(chat).not.toContain('.chatbot-launcher-beta');
+    expect(chat).toContain('font-family: Inter, "SF Pro Display", "Helvetica Neue", sans-serif;');
+    expect(chat).toContain('font-style: italic;');
+    expect(chat).toContain('max-width: 440px;');
+    expect(chat).toContain('margin: 0;');
+    expect(chat).toContain('.chatbot-empty-intro > span { margin-bottom: 5px; font-size: 15px;');
+    expect(chat).toContain('.chatbot-empty-intro > strong { font-size: 23px;');
+    expect(chat).toContain('.chatbot-empty-intro > p { margin: 9px 0 0;');
+    expect(chat).toContain('font-size: 15px; line-height: 24px;');
+    expect(chat).toContain('.chatbot-empty-intro > strong { font-size: 21px; line-height: 29px; }');
+    expect(chat).toContain('.chatbot-example-questions button {');
+    expect(chat).toContain('.chatbot-example-kind {');
+    expect(chat).toContain('.chatbot-example-questions { display: grid; width: 100%; gap: 8px; }');
+    expect(chat).toContain('border-radius: 14px;');
+    expect(chat).toContain('.chatbot-example-copy { color: var(--hs-map-color-ink); font-size: 14px;');
+    expect(chat).toContain('.chatbot-composer textarea {');
+    expect(chat).toContain('font-size: 16px;');
+    expect(chat).toContain('min-height: 58px;');
+    expect(chat).toContain('min-height: 24px; max-height: 96px; overflow-y: hidden;');
+    expect(chat).toContain('border-radius: 30px;');
+    expect(chat).toContain('width: 40px;');
+    expect(chat).toContain('border-radius: 50%;');
+    expect(chat).toContain('.chatbot-send-icon { width: 20px; height: 20px; stroke-width: 2.4; }');
+  });
+
+  it('챗봇 header action은 hover, pressed, expanded 상태에서도 배경 box를 만들지 않는다', () => {
+    expect(chat).toContain('.chatbot-launcher:hover { background: transparent; color: var(--hs-map-color-action); }');
+    expect(chat).toContain('.chatbot-history-trigger[aria-expanded="true"] { background: transparent; color: var(--hs-map-color-brand); }');
+    expect(chat).toContain('.chatbot-toolbar-actions > button:active,');
+    expect(chat).toContain('.chatbot-history-trigger:active { background: transparent; box-shadow: none; }');
+    expect(chat).not.toContain('.chatbot-history-trigger:hover { background: var(--hs-map-color-surface-muted);');
+    expect(chat).toContain('.chatbot-panel button:focus-visible');
   });
 
   it('panel text와 filter range가 좁은 폭에서도 깨지지 않는 sizing contract를 유지한다', () => {

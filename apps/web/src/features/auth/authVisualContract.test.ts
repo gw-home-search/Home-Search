@@ -49,4 +49,15 @@ describe('auth 반응형 디자인 계약', () => {
     expect(authCss).toContain('.account-chip[aria-expanded="true"] .account-chip-chevron');
     expect(authCss).toContain('transform: rotate(180deg);');
   });
+
+  it('anonymous 로그인도 outline box 대신 중립색 header action과 왼쪽 구분선을 사용한다', () => {
+    const loginRule = authCss.match(/\.account-login-button \{([^}]*)\}/)?.[1] ?? '';
+    expect(loginRule).toContain('border: 0;');
+    expect(loginRule).toContain('background: transparent;');
+    expect(loginRule).toContain('color: var(--hs-map-color-ink-soft);');
+    expect(loginRule).toContain('text-decoration: none;');
+    expect(authCss).toContain('.account-control::before');
+    expect(authCss).toContain('background: var(--hs-map-color-header-line);');
+    expect(designSystem).toContain('--hs-map-color-header-line:');
+  });
 });

@@ -1,6 +1,8 @@
 import { act } from 'react';
+import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AuthClient } from './appTestHarness';
+import { IndexedDbChatConversationStore } from '../features/chat/storage/chatConversationStore';
 import {
   createFakeKakaoSdk,
   deferred,
@@ -70,10 +72,48 @@ describe('App 지도 shell', () => {
 
     expect(rootElement.querySelector('[aria-label="지도 화면"]')).not.toBeNull();
     expect(rootElement.querySelector('.account-login-button')?.textContent).toBe('로그인');
+    expect(rootElement.querySelector('.app-bar .chatbot-launcher')?.getAttribute('aria-label'))
+      .toBe('홈서치 AI 열기');
     expect(fetchMock).toHaveBeenCalledWith(
       resolveApiUrl('/api/v1/map/regions'),
       expect.objectContaining({ method: 'POST' }),
     );
+
+    unmount(root);
+  });
+
+  it('챗봇을 열고 닫으면 shell이 지도와 대화의 push layout 상태를 노출한다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+    const authClient: AuthClient = {
+      authenticatedRequest: async () => new Response('{}', { status: 503 }),
+      authorizationUrl: (provider) => `http://localhost:8082/oauth2/authorization/${provider}`,
+      logout: async () => undefined,
+      restoreSession: async () => ({
+        kind: 'authenticated',
+        currentUser: { userId: 1, provider: 'google', displayName: '지도 사용자', profileImage: null },
+      }),
+    };
+    const chatConversationStore = new IndexedDbChatConversationStore(
+      new IDBFactory(),
+      'map-shell-chat-layout',
+    );
+
+    const { root, rootElement } = await renderApp({ authClient, chatConversationStore });
+    await flushAsyncState();
+    const shell = rootElement.querySelector<HTMLElement>('.app-shell');
+    expect(shell?.getAttribute('data-chat-open')).toBe('false');
+
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('.chatbot-launcher')?.click());
+    await flushAsyncState();
+    expect(shell?.getAttribute('data-chat-open')).toBe('true');
+    expect(rootElement.querySelector('[aria-label="지도 화면"]')).not.toBeNull();
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 });
+    act(() => window.dispatchEvent(new Event('resize')));
+    expect(rootElement.querySelector('#exploration-panel')?.hasAttribute('hidden')).toBe(true);
+
+    await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="챗봇 닫기"]')?.click());
+    expect(shell?.getAttribute('data-chat-open')).toBe('false');
 
     unmount(root);
   });
@@ -517,8 +557,9 @@ describe('App 지도 shell', () => {
       bounds: { swLat: 37.45, swLng: 126.85, neLat: 37.7, neLng: 127.2 },
       level: 4,
     });
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+    vi.stubGlobal('fetch', fetchMock);
     vi.stubGlobal('kakao', sdk.kakao);
 
     const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
@@ -527,12 +568,37 @@ describe('App 지도 shell', () => {
     const host = rootElement.querySelector<HTMLElement>('[aria-label="카카오 지도 화면"]');
     expect(observe).toHaveBeenCalledWith(host);
     const relayoutCallsBeforeResize = sdk.map.relayout.mock.calls.length;
+    sdk.setViewport({
+      bounds: { swLat: 37.5, swLng: 126.9, neLat: 37.65, neLng: 127.1 },
+      level: 4,
+    });
     act(() => {
       resizeCallback?.([], {} as ResizeObserver);
     });
-
     expect(sdk.map.relayout).toHaveBeenCalledTimes(relayoutCallsBeforeResize + 1);
     expect(sdk.map.setCenter).toHaveBeenLastCalledWith(sdk.center);
+
+    await flushAsyncState();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      resolveApiUrl('/api/v1/map/complexes'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          swLat: 37.5,
+          swLng: 126.9,
+          neLat: 37.65,
+          neLng: 127.1,
+          pyeongMin: null,
+          pyeongMax: null,
+          priceEokMin: null,
+          priceEokMax: null,
+          ageMin: null,
+          ageMax: null,
+          unitMin: null,
+          unitMax: null,
+        }),
+      }),
+    );
 
     unmount(root);
     expect(disconnect).toHaveBeenCalledTimes(1);

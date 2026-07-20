@@ -114,7 +114,59 @@ single-line display name, and a down chevron only. Provider identity stays in
 the opened account menu. Hover uses Surface Muted; expanded state uses Brand
 Soft plus chevron rotation, avoiding a permanent card-like box in the app bar.
 The trigger is content-sized and right-aligned so the name and chevron remain
-a compact group instead of being separated by a flexible middle column.
+a compact group instead of being separated by a flexible middle column. At
+`<=720px`, only the avatar remains visible so brand, chatbot Beta action, and
+account access fit without compressing the app bar.
+
+## Chatbot
+
+The authenticated chatbot entry is a compact, borderless app-header action
+beside the account control. It uses three compact rounded data bars, rendered as
+a local SVG so the mark stays crisp and aligns with the 20px `AI` label baseline.
+The compact app-bar action pairs the mark
+with the visible `AI` label, and the same mark appears beside the open drawer
+title without adding a surrounding tile or badge. `Beta` stays out of the app bar and appears only beside the
+`홈서치 AI` title after the drawer opens. The open state stays borderless and
+does not add a persistent box around the app-bar action. Opening it creates a flat right drawer
+below the app header, not a floating launcher or a card-like modal. On desktop
+and short landscape screens, the drawer uses
+`min(520px, 40vw)` and consumes that width from the map workspace instead of
+covering it. At `<=900px` with enough vertical room, it becomes a bottom split:
+the conversation uses up to `62dvh` while the filter and at least 180px of map
+remain visible above it. Opening chat also closes the exploration panel in this
+narrow layout so the map stays usable. Kakao map relayout preserves its center
+and refreshes viewport-bound data after either split changes size.
+
+Conversation history stays in browser IndexedDB. The main drawer never shows a
+persistent conversation sidebar or a second brand block. The flat toolbar uses
+an asymmetric Home Search composition: the AI data mark, title, and small
+`Beta` stay grouped on the left, while a labeled new-conversation action, history,
+and close controls stay on the right. History opens a 320px `내 대화` popover for selection,
+import, export, and deletion. The empty conversation uses a left-anchored 440px
+content column instead of centering the narrower content block. Its greeting is
+15px, the task heading is 23px, and guidance is 15/24px. Mobile keeps the same
+left edge while stepping the task heading to 21px and guidance to 14/22px. Three
+separate soft recommendation cards share that left edge. The section
+heading is 15px, each card uses a 14px radius, and the category and 14px question
+copy keep a lighter hierarchy than the previous table-like divider rows. Each card names one
+supported capability (`최근 실거래`, `가격 흐름`, or `단지 정보`) and uses a
+different apartment complex so the available question range is visible before
+selection. Example copy asks for specific output such as transaction date,
+floor, monthly volume, or identity details instead of using short generic
+prompts.
+The app-bar AI action and drawer toolbar actions keep transparent surfaces in
+hover, pressed, and expanded states; only icon/text color changes. Keyboard
+`focus-visible` outlines remain, so removing the gray press box does not remove
+the accessible focus signal.
+The composer starts as a 58px pill and grows with the question up to four
+24px lines. Longer questions scroll inside the textarea so the send action and
+map context stay visible. The 40px circular send action sits at the lower edge
+of a multiline composer and uses a heavier upward arrow, an inset focus line,
+and 16px input text. The
+small italic `Beta` wordmark uses Inter/SF Pro Display without a badge box or
+all-caps treatment. Answer evidence stays
+collapsed until requested. No chatbot UI decision changes the JSON/SSE
+contract or adds server-side conversation persistence.
 
 ## Exploration
 
@@ -263,8 +315,8 @@ heart state. Use
 6/10/12/14/16/999px semantic radii and KOSA's restrained
 appbar/card/marker/dropdown shadows.
 
-Layers are host 0, markers 10, notices 20, controls 30, rail/sheet 40, header 50,
-popover 60. Notice and zoom stay at map top corners; the map-type toggle shares
+Layers are host 0, markers 10, notices 20, controls 30, rail/sheet 40, popover 60,
+and app header/chat drawer 61. Notice and zoom stay at map top corners; the map-type toggle shares
 the right-side tool rail below zoom without covering Kakao attribution. Body/workspace are hidden. Search/region and detail each own one vertical
 scroll; chips own horizontal scroll; only constrained popovers scroll.
 

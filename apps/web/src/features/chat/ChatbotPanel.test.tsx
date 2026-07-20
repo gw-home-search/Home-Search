@@ -6,7 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from '../auth/AuthProvider';
 import type { AuthClient } from '../auth/api/authClient';
 import { ChatbotPanel } from './ChatbotPanel';
-import { IndexedDbChatConversationStore } from './storage/chatConversationStore';
+import {
+  IndexedDbChatConversationStore,
+  type ChatConversation,
+} from './storage/chatConversationStore';
 
 describe('챗봇 패널', () => {
   let root: Root | undefined;
@@ -63,10 +66,11 @@ describe('챗봇 패널', () => {
     await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
     await waitFor(() => host?.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]')?.disabled === false);
 
-    await click(buttonByText(host, '새 대화'));
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-new-conversation'));
     await waitFor(async () => (await store.list()).length === 2);
     expect(await store.list()).toHaveLength(2);
-    await click(buttonByText(host, '현재 삭제'));
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="대화 목록 열기"]'));
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="현재 대화 삭제"]'));
     await waitFor(async () => (await store.list()).length === 1);
     expect(await store.list()).toHaveLength(1);
 
@@ -76,7 +80,113 @@ describe('챗봇 패널', () => {
     expect(await store.list()).toHaveLength(0);
     expect(host.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]')?.disabled).toBe(true);
   });
+
+  it('대화 목록을 GPT형 내비게이션으로 보여주고 목록에서 대화를 전환한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-navigation');
+    await store.save(conversation('older', '잠실엘스 최근 거래', '2026-07-18T09:00:00.000Z'));
+    await store.save(conversation('newer', '마포래미안 비교', '2026-07-19T09:00:00.000Z'));
+    ({ root, host } = await renderPanel(authenticatedClient(), store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="대화 목록 열기"]'));
+    await waitFor(() => host?.querySelectorAll('.chatbot-conversation-list button').length === 2);
+
+    const conversationList = host.querySelector<HTMLElement>('.chatbot-conversation-list');
+    expect(conversationList).not.toBeNull();
+    const newer = conversationList ? buttonByText(conversationList, '마포래미안 비교') : null;
+    const older = conversationList ? buttonByText(conversationList, '잠실엘스 최근 거래') : null;
+    expect(newer?.getAttribute('aria-pressed')).toBe('true');
+    expect(older?.getAttribute('aria-pressed')).toBe('false');
+
+    await click(older);
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="대화 목록 열기"]'));
+    const reopenedList = host.querySelector<HTMLElement>('.chatbot-conversation-list');
+    expect(reopenedList ? buttonByText(reopenedList, '잠실엘스 최근 거래')?.getAttribute('aria-pressed') : null)
+      .toBe('true');
+  });
+
+  it('빈 대화에서 단지와 조회 유형이 다른 질문 예시를 입력창에 채운다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-prompts');
+    ({ root, host } = await renderPanel(authenticatedClient(), store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    const recentTradeQuestion = '마포래미안푸르지오 전용 84㎡의 최근 실거래 5건을 거래일과 층까지 알려줘';
+    const priceTrendQuestion = '헬리오시티 전용 59㎡의 최근 1년 월별 가격 흐름과 거래량을 보여줘';
+    const identityQuestion = '래미안원베일리의 정확한 주소와 단지 기본 정보를 확인해줘';
+    await waitFor(() => host?.querySelector<HTMLButtonElement>(`button[aria-label="${recentTradeQuestion}"]`) != null);
+
+    expect(host.querySelector<HTMLButtonElement>(`button[aria-label="${priceTrendQuestion}"]`)).not.toBeNull();
+    expect(host.querySelector<HTMLButtonElement>(`button[aria-label="${identityQuestion}"]`)).not.toBeNull();
+    expect([...host.querySelectorAll('.chatbot-example-kind')].map(({ textContent }) => textContent))
+      .toEqual(['최근 실거래', '가격 흐름', '단지 정보']);
+    await click(host.querySelector<HTMLButtonElement>(`button[aria-label="${recentTradeQuestion}"]`));
+    expect(host.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]')?.value)
+      .toBe(recentTradeQuestion);
+  });
+
+  it('긴 질문은 네 줄까지 입력창 높이를 늘리고 이후에는 내부 스크롤로 전환한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-autogrow');
+    ({ root, host } = await renderPanel(authenticatedClient(), store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(() => host?.querySelector<HTMLTextAreaElement>('#chatbot-question')?.disabled === false);
+    const textarea = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
+    expect(textarea).not.toBeNull();
+
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 72 });
+    await change(textarea, '마포래미안푸르지오 전용 84㎡의 최근 실거래를 거래일과 층까지 자세히 알려줘');
+    expect(textarea?.style.height).toBe('72px');
+    expect(textarea?.style.overflowY).toBe('hidden');
+
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 144 });
+    await change(textarea, '마포래미안푸르지오와 헬리오시티의 최근 실거래와 가격 흐름을 면적별로 길게 비교해줘');
+    expect(textarea?.style.height).toBe('96px');
+    expect(textarea?.style.overflowY).toBe('auto');
+  });
+
+  it('앱 헤더 진입 버튼은 간결하게 유지하고 열린 패널은 홈서치 전용 identity를 사용한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-beta');
+    ({ root, host } = await renderPanel(authenticatedClient(), store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    const launcher = host.querySelector<HTMLButtonElement>('.chatbot-launcher');
+    expect(launcher?.querySelector('svg.chatbot-ai-mark')).not.toBeNull();
+    expect(launcher?.querySelectorAll('.chatbot-ai-mark-bar')).toHaveLength(3);
+    expect(launcher?.querySelector('.chatbot-launcher-label')?.textContent).toBe('AI');
+    expect(launcher?.querySelector('.chatbot-beta-badge')).toBeNull();
+
+    await click(launcher);
+    await waitFor(() => host?.querySelector('.chatbot-panel-brand .chatbot-beta-badge') != null);
+    expect(host.querySelector('.chatbot-panel-brand')?.textContent).toContain('홈서치 AI');
+    expect(host.querySelector('.chatbot-panel-brand svg.chatbot-ai-mark')).not.toBeNull();
+    expect(host.querySelector('.chatbot-panel-brand .chatbot-beta-badge')?.textContent).toBe('Beta');
+    expect(host.querySelector('.chatbot-new-conversation')?.textContent).toContain('새 대화');
+    expect(host.querySelector('.chatbot-panel-toolbar')?.querySelector('.chatbot-sparkle-mark')).toBeNull();
+    expect(host.querySelector('.chatbot-form .chatbot-beta-badge')).toBeNull();
+    await waitFor(() => host?.querySelector('.chatbot-empty-intro') != null);
+    expect(host.querySelector('.chatbot-example-questions')?.querySelector('svg')).toBeNull();
+    expect(host.querySelectorAll('.chatbot-example-questions button')).toHaveLength(3);
+    expect(document.activeElement).toBe(host.querySelector<HTMLTextAreaElement>('#chatbot-question'));
+    expect(host.querySelector('.chatbot-empty-intro')?.textContent).toContain('어떤 집을 찾고 계세요?');
+    const question = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
+    expect(question?.placeholder).toBe('원하는 지역과 조건을 입력해 보세요.');
+    expect(question?.getAttribute('rows')).toBe('1');
+    expect(host.querySelector('.chatbot-composer .chatbot-send-icon')).not.toBeNull();
+  });
 });
+
+function conversation(id: string, title: string, updatedAt: string): ChatConversation {
+  return {
+    id,
+    title,
+    createdAt: updatedAt,
+    updatedAt,
+    messages: [],
+  };
+}
 
 function authenticatedClient(): AuthClient {
   return {

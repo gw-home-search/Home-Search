@@ -43,7 +43,7 @@ body {
   min-width: 0;
   height: var(--hs-map-shell-bar-height);
   padding: 0 20px;
-  border-bottom: 1px solid var(--hs-map-color-line);
+  border-bottom: 1px solid var(--hs-map-color-header-line);
   background: var(--hs-map-color-surface);
   box-shadow: none;
 }
@@ -86,6 +86,14 @@ body {
   white-space: nowrap;
 }
 
+.app-header-actions {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+}
+
 .map-workspace {
   position: relative;
   display: grid;
@@ -94,6 +102,17 @@ body {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+.app-shell[data-chat-open="true"] .map-workspace {
+  margin-right: var(--hs-chat-drawer-width);
+}
+
+@media (max-width: 900px) and (min-height: 501px) {
+  .app-shell[data-chat-open="true"] .map-workspace {
+    margin-right: 0;
+    margin-bottom: var(--hs-chat-mobile-height);
+  }
 }
 
 .map-column {

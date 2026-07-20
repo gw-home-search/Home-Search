@@ -163,6 +163,100 @@ class BuildingRegisterCollectionServiceTest {
         assertThat(result.recapRecords()).hasSize(1);
     }
 
+    @Test
+    void paginatesUntilEveryReportedRecordIsCollected() {
+        Fixture fixture = new Fixture();
+        fixture.client.respond(BuildingRegisterEndpoint.RECAP_TITLE, page(recap("20", "80"), 101));
+        fixture.client.respond(BuildingRegisterEndpoint.RECAP_TITLE, page(recap("20", "80"), 101));
+        fixture.client.respond(
+                BuildingRegisterEndpoint.TITLE, new ParsedBuildingRegisterPage("00", "NORMAL SERVICE", 0, List.of()));
+        fixture.client.respond(
+                BuildingRegisterEndpoint.BASIC_OVERVIEW,
+                new ParsedBuildingRegisterPage("00", "NORMAL SERVICE", 0, List.of()));
+
+        BuildingRegisterCollectionResult result = fixture.service.collect(command(10));
+
+        assertThat(fixture.client.calls)
+                .containsExactly("RECAP_TITLE:1:100", "RECAP_TITLE:2:100", "TITLE:1:100", "BASIC_OVERVIEW:1:100");
+        assertThat(result.recapRecords()).hasSize(2);
+        assertThat(fixture.finalizations)
+                .containsExactly(
+                        BuildingRegisterRawPageStatus.PARSED,
+                        BuildingRegisterRawPageStatus.PARSED,
+                        BuildingRegisterRawPageStatus.EMPTY,
+                        BuildingRegisterRawPageStatus.EMPTY);
+    }
+
+    @Test
+    void parseFailureIsRecordedAndDoesNotTriggerFallback() {
+        Fixture fixture = new Fixture();
+        fixture.client.respond(
+                BuildingRegisterEndpoint.RECAP_TITLE,
+                new BuildingRegisterPageResponse(
+                        BuildingRegisterEndpoint.RECAP_TITLE, PNU, 1, 100, 200, "malformed", 9, "a".repeat(64), false));
+
+        BuildingRegisterCollectionResult result = fixture.service.collect(command(10));
+
+        assertThat(result.status()).isEqualTo(BuildingRegisterCollectionStatus.PARSE_FAILED);
+        assertThat(fixture.client.calls).containsExactly("RECAP_TITLE:1:100");
+        assertThat(fixture.finalizations).containsExactly(BuildingRegisterRawPageStatus.PARSE_FAILED);
+    }
+
+    @Test
+    void nonFatalProviderCodeIsRecordedWithoutStoppingTheWholeRun() {
+        Fixture fixture = new Fixture();
+        fixture.client.respond(
+                BuildingRegisterEndpoint.RECAP_TITLE,
+                new ParsedBuildingRegisterPage("99", "temporary provider failure", 0, List.of()));
+
+        BuildingRegisterCollectionResult result = fixture.service.collect(command(10));
+
+        assertThat(result.status()).isEqualTo(BuildingRegisterCollectionStatus.PROVIDER_FAILED);
+        assertThat(fixture.finalizations).containsExactly(BuildingRegisterRawPageStatus.PROVIDER_FAILED);
+    }
+
+    @Test
+    void oversizedAtMinimumPageSizeBecomesPermanent() {
+        Fixture fixture = new Fixture();
+        for (int pageSize : List.of(100, 50, 25, 10)) {
+            fixture.client.respond(
+                    BuildingRegisterEndpoint.RECAP_TITLE,
+                    new BuildingRegisterPageResponse(
+                            BuildingRegisterEndpoint.RECAP_TITLE,
+                            PNU,
+                            1,
+                            pageSize,
+                            200,
+                            null,
+                            2_097_153,
+                            "b".repeat(64),
+                            true));
+        }
+
+        BuildingRegisterCollectionResult result = fixture.service.collect(command(10));
+
+        assertThat(result.status()).isEqualTo(BuildingRegisterCollectionStatus.PERMANENT_OVERSIZED);
+        assertThat(fixture.client.calls)
+                .containsExactly("RECAP_TITLE:1:100", "RECAP_TITLE:1:50", "RECAP_TITLE:1:25", "RECAP_TITLE:1:10");
+        assertThat(fixture.store.permanentOversized).containsExactly(false, false, false, true);
+    }
+
+    @Test
+    void titleFailurePreservesRecapEvidenceAndStopsBeforeBasicOverview() {
+        Fixture fixture = new Fixture();
+        fixture.client.respond(BuildingRegisterEndpoint.RECAP_TITLE, page(recap("20", "0"), 1));
+        fixture.client.respond(
+                BuildingRegisterEndpoint.TITLE,
+                new BuildingRegisterPageResponse(
+                        BuildingRegisterEndpoint.TITLE, PNU, 1, 100, 503, "unavailable", 11, "a".repeat(64), false));
+
+        BuildingRegisterCollectionResult result = fixture.service.collect(command(10));
+
+        assertThat(result.status()).isEqualTo(BuildingRegisterCollectionStatus.PROVIDER_FAILED);
+        assertThat(result.recapRecords()).hasSize(1);
+        assertThat(fixture.client.calls).containsExactly("RECAP_TITLE:1:100", "TITLE:1:100");
+    }
+
     private static BuildingRegisterCollectCommand command(int maxRequests) {
         return new BuildingRegisterCollectCommand(
                 COLLECTION_ID,
@@ -278,6 +372,7 @@ class BuildingRegisterCollectionServiceTest {
         final Map<String, BuildingRegisterCompletedPage> completed = new HashMap<>();
         final List<Integer> abandonedPageSizes = new ArrayList<>();
         final List<Integer> observedTotalCounts = new ArrayList<>();
+        final List<Boolean> permanentOversized = new ArrayList<>();
         long sequence;
 
         @Override
@@ -309,6 +404,7 @@ class BuildingRegisterCollectionServiceTest {
         @Override
         public void abandonOversized(long snapshotId, int pageSize, boolean permanent) {
             abandonedPageSizes.add(pageSize);
+            permanentOversized.add(permanent);
         }
     }
 }

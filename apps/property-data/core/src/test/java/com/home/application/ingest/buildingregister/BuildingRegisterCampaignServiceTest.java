@@ -9,6 +9,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.home.domain.complex.buildingregister.BuildingRatioEvaluation;
 import com.home.domain.complex.buildingregister.BuildingRatioResolutionStatus;
@@ -16,6 +17,7 @@ import com.home.domain.complex.buildingregister.BuildingRegisterCollectionMode;
 import com.home.domain.complex.buildingregister.BuildingRegisterCollectionStrategy;
 import com.home.domain.complex.buildingregister.BuildingRegisterComplexMatch;
 import com.home.domain.complex.buildingregister.BuildingRegisterEndpoint;
+import com.home.domain.complex.buildingregister.BuildingRegisterMatchStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -69,6 +71,129 @@ class BuildingRegisterCampaignServiceTest {
         assertThat(summary.completed()).isTrue();
     }
 
+    @Test
+    void evaluatesStandaloneTitleMatchedByExistingManagementKey() {
+        BuildingRegisterCollectionService collection = mock(BuildingRegisterCollectionService.class);
+        BuildingRegisterCampaignRepository campaigns = mock(BuildingRegisterCampaignRepository.class);
+        BuildingRatioCandidateRepository candidates = mock(BuildingRatioCandidateRepository.class);
+        var target = new BuildingRegisterCampaignTarget(
+                1, "1168010300101400001", "TITLE-1", Set.of("Sample"), Set.of(), Set.of());
+        given(campaigns.freezeOrLoad(any())).willReturn(List.of(target));
+        given(collection.collect(any()))
+                .willReturn(new BuildingRegisterCollectionResult(
+                        BuildingRegisterCollectionStatus.COLLECTED,
+                        1,
+                        List.of(),
+                        List.of(record(BuildingRegisterEndpoint.TITLE, "TITLE-1", null, "3", "20", "80")),
+                        List.of(),
+                        Set.of()));
+        given(campaigns.recordMatch(any(), anyString(), anyInt(), any())).willReturn(20L);
+        given(campaigns.sourceRecordIds(any(), anyString())).willReturn(Map.of("TITLE-1", 200L));
+
+        var summary = new BuildingRegisterCampaignService(collection, campaigns, candidates).collect(command());
+
+        ArgumentCaptor<BuildingRatioEvaluation> evaluation = ArgumentCaptor.forClass(BuildingRatioEvaluation.class);
+        verify(candidates).record(anyLong(), evaluation.capture(), any());
+        assertThat(evaluation.getValue().fields().values())
+                .allSatisfy(field -> assertThat(field.projectable()).isTrue());
+        assertThat(summary.matchCount()).isOne();
+    }
+
+    @Test
+    void evaluatesUniqueRecapWithoutReinterpretingExistingComplexKey() {
+        BuildingRegisterCollectionService collection = mock(BuildingRegisterCollectionService.class);
+        BuildingRegisterCampaignRepository campaigns = mock(BuildingRegisterCampaignRepository.class);
+        BuildingRatioCandidateRepository candidates = mock(BuildingRatioCandidateRepository.class);
+        var target = new BuildingRegisterCampaignTarget(
+                1, "1168010300101400001", "ROOT-1", Set.of("Sample"), Set.of(), Set.of());
+        given(campaigns.freezeOrLoad(any())).willReturn(List.of(target));
+        given(collection.collect(any()))
+                .willReturn(new BuildingRegisterCollectionResult(
+                        BuildingRegisterCollectionStatus.COLLECTED,
+                        1,
+                        List.of(recap()),
+                        List.of(),
+                        List.of(),
+                        Set.of()));
+        given(campaigns.recordMatch(any(), anyString(), anyInt(), any())).willReturn(21L);
+        given(campaigns.sourceRecordIds(any(), anyString())).willReturn(Map.of("ROOT-1", 201L));
+
+        new BuildingRegisterCampaignService(collection, campaigns, candidates).collect(command());
+
+        verify(candidates).record(anyLong(), any(), any());
+    }
+
+    @Test
+    void recordsEveryUnresolvedHierarchyReasonWithoutCreatingCandidates() {
+        assertHierarchyFailure(List.of(), BuildingRegisterMatchStatus.SOURCE_MISSING);
+        assertHierarchyFailure(
+                List.of(
+                        record(BuildingRegisterEndpoint.TITLE, "TITLE-1", null, "3", "20", "80"),
+                        record(BuildingRegisterEndpoint.TITLE, "TITLE-1", null, "3", "21", "80", "Other")),
+                BuildingRegisterMatchStatus.SOURCE_CONFLICT);
+        assertHierarchyFailure(
+                List.of(
+                        record(BuildingRegisterEndpoint.RECAP_TITLE, "ROOT-1", null, "1", "20", "80"),
+                        record(BuildingRegisterEndpoint.RECAP_TITLE, "ROOT-2", null, "1", "20", "80")),
+                BuildingRegisterMatchStatus.AMBIGUOUS_GENERATION);
+
+        BuildingRegisterCollectionService collection = mock(BuildingRegisterCollectionService.class);
+        BuildingRegisterCampaignRepository campaigns = mock(BuildingRegisterCampaignRepository.class);
+        BuildingRatioCandidateRepository candidates = mock(BuildingRatioCandidateRepository.class);
+        given(campaigns.freezeOrLoad(any())).willReturn(List.of(target(1, "A")));
+        given(collection.collect(any()))
+                .willReturn(new BuildingRegisterCollectionResult(
+                        BuildingRegisterCollectionStatus.COLLECTED,
+                        1,
+                        List.of(recap()),
+                        List.of(),
+                        List.of(record(BuildingRegisterEndpoint.BASIC_OVERVIEW, "TITLE-1", "ROOT-1", "3", null, null)),
+                        Set.of()));
+
+        new BuildingRegisterCampaignService(collection, campaigns, candidates).collect(command());
+
+        ArgumentCaptor<BuildingRegisterComplexMatch> match =
+                ArgumentCaptor.forClass(BuildingRegisterComplexMatch.class);
+        verify(campaigns).recordMatch(any(), anyString(), anyInt(), match.capture());
+        assertThat(match.getValue().status()).isEqualTo(BuildingRegisterMatchStatus.INCOMPLETE_HIERARCHY);
+        verifyNoInteractions(candidates);
+    }
+
+    @Test
+    void requestBudgetExhaustionLeavesCampaignResumable() {
+        BuildingRegisterCollectionService collection = mock(BuildingRegisterCollectionService.class);
+        BuildingRegisterCampaignRepository campaigns = mock(BuildingRegisterCampaignRepository.class);
+        BuildingRatioCandidateRepository candidates = mock(BuildingRatioCandidateRepository.class);
+        given(campaigns.freezeOrLoad(any())).willReturn(List.of(target(1, "A")));
+        given(collection.collect(any())).willThrow(new BuildingRegisterRequestBudgetExceededException(10));
+
+        var summary = new BuildingRegisterCampaignService(collection, campaigns, candidates).collect(command());
+
+        assertThat(summary.requestCount()).isZero();
+        assertThat(summary.matchCount()).isZero();
+        verify(campaigns).completeIfAllTargetsMatched(COLLECTION_ID);
+        verifyNoInteractions(candidates);
+    }
+
+    private void assertHierarchyFailure(
+            List<BuildingRegisterRecordSnapshotCommand> records, BuildingRegisterMatchStatus expectedStatus) {
+        BuildingRegisterCollectionService collection = mock(BuildingRegisterCollectionService.class);
+        BuildingRegisterCampaignRepository campaigns = mock(BuildingRegisterCampaignRepository.class);
+        BuildingRatioCandidateRepository candidates = mock(BuildingRatioCandidateRepository.class);
+        given(campaigns.freezeOrLoad(any())).willReturn(List.of(target(1, "A")));
+        given(collection.collect(any()))
+                .willReturn(new BuildingRegisterCollectionResult(
+                        BuildingRegisterCollectionStatus.COLLECTED, 1, List.of(), records, List.of(), Set.of()));
+
+        new BuildingRegisterCampaignService(collection, campaigns, candidates).collect(command());
+
+        ArgumentCaptor<BuildingRegisterComplexMatch> match =
+                ArgumentCaptor.forClass(BuildingRegisterComplexMatch.class);
+        verify(campaigns).recordMatch(any(), anyString(), anyInt(), match.capture());
+        assertThat(match.getValue().status()).isEqualTo(expectedStatus);
+        verifyNoInteractions(candidates);
+    }
+
     private BuildingRegisterCampaignCommand command() {
         return new BuildingRegisterCampaignCommand(
                 COLLECTION_ID,
@@ -86,25 +211,53 @@ class BuildingRegisterCampaignServiceTest {
     }
 
     private BuildingRegisterRecordSnapshotCommand recap() {
+        return record(BuildingRegisterEndpoint.RECAP_TITLE, "ROOT-1", null, "1", "20", "80");
+    }
+
+    private BuildingRegisterRecordSnapshotCommand record(
+            BuildingRegisterEndpoint endpoint,
+            String managementKey,
+            String parentManagementKey,
+            String registerKindCode,
+            String buildingCoverageRatio,
+            String floorAreaRatio) {
+        return record(
+                endpoint,
+                managementKey,
+                parentManagementKey,
+                registerKindCode,
+                buildingCoverageRatio,
+                floorAreaRatio,
+                "Sample");
+    }
+
+    private BuildingRegisterRecordSnapshotCommand record(
+            BuildingRegisterEndpoint endpoint,
+            String managementKey,
+            String parentManagementKey,
+            String registerKindCode,
+            String buildingCoverageRatio,
+            String floorAreaRatio,
+            String buildingName) {
         return new BuildingRegisterRecordSnapshotCommand(
                 0,
                 "1168010300101400001",
-                BuildingRegisterEndpoint.RECAP_TITLE,
-                "ROOT-1",
+                endpoint,
+                managementKey,
+                parentManagementKey,
+                "1",
+                registerKindCode,
+                "1",
                 null,
-                "1",
-                "1",
-                "1",
-                null,
-                "Shared",
+                buildingName,
                 null,
                 "02000",
                 new BigDecimal("1000"),
                 new BigDecimal("200"),
                 new BigDecimal("900"),
                 new BigDecimal("800"),
-                new BigDecimal("20"),
-                new BigDecimal("80"),
+                buildingCoverageRatio == null ? null : new BigDecimal(buildingCoverageRatio),
+                floorAreaRatio == null ? null : new BigDecimal(floorAreaRatio),
                 2,
                 0,
                 700,

@@ -1,1 +1,2 @@
-HTTP 200 application/json; sanitized education store fixture without phone
+HTTP 200 application/json
+{"body":{"totalCount":1,"numOfRows":1000,"items":[{"bizesId":"fixture-store-1","bizesNm":"가나다 학원","indsSclsCd":"P10501","indsSclsNm":"입시·교과학원","rdnmAdr":"서울특별시 송파구 예시로 1","lnoAdr":"서울특별시 송파구 예시동 1","newZipcd":"05551","adongCd":"11710566","lat":"37.51","lon":"127.10"}]}}

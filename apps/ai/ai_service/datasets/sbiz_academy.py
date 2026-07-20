@@ -127,9 +127,14 @@ class SbizAcademyAdapter:
             for item in items:
                 store_id = _text(item.get("bizesId"))
                 item_code = _text(item.get("indsSclsCd"))
+                item_name = _text(item.get("indsSclsNm"))
                 if not store_id or item_code != code or store_id in seen_ids:
                     reason = "DUPLICATE_STORE_ID" if store_id in seen_ids else "SOURCE_SCHEMA_MISMATCH"
                     raise RawPayloadError("Sbiz store identity is invalid", reason)
+                if item_name != self._taxonomy.allowed_small_categories[code]:
+                    raise RawPayloadError(
+                        "Sbiz store taxonomy changed", "TAXONOMY_CHANGED"
+                    )
                 seen_ids.add(store_id)
                 latitude = _number(item.get("lat"))
                 longitude = _number(item.get("lon"))
@@ -141,7 +146,7 @@ class SbizAcademyAdapter:
                         "small_category_name": self._taxonomy.allowed_small_categories[code],
                         "road_address": _optional(item.get("rdnmAdr")),
                         "lot_address": _optional(item.get("lnoAdr")),
-                        "postal_code": _optional(item.get("zipcd")),
+                        "postal_code": _optional(item.get("newZipcd")),
                         "region_code": _optional(item.get("adongCd")),
                         "latitude": latitude,
                         "longitude": longitude,

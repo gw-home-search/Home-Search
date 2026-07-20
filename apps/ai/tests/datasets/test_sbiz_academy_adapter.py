@@ -50,10 +50,12 @@ def _bundle(
     duplicate: bool = False,
     taxonomy=TAXONOMY,
     name: str = "가나다 학원",
+    small_category_name: str = "fixture 학원",
 ) -> bytes:
     items = [{
         "bizesId": "store-1", "bizesNm": name, "indsSclsCd": "P10101",
-        "rdnmAdr": "서울특별시 송파구 올림픽로 300", "lnoAdr": "서울 송파구 1", "zipcd": "05551",
+        "indsSclsNm": small_category_name,
+        "rdnmAdr": "서울특별시 송파구 올림픽로 300", "lnoAdr": "서울 송파구 1", "newZipcd": "05551",
         "adongCd": "1171056600", "lat": "37.5", "lon": "127.1", "telNo": "02-secret",
     }]
     if duplicate:
@@ -85,6 +87,7 @@ def test_sbiz_adapter_requires_tracked_taxonomy_and_excludes_phone() -> None:
 
     assert rows[0]["store_id"] == "store-1"
     assert rows[0]["small_category_name"] == "fixture 학원"
+    assert rows[0]["postal_code"] == "05551"
     assert "telNo" not in rows[0]
 
 
@@ -116,6 +119,14 @@ def test_sbiz_adapter_blocks_taxonomy_change_and_duplicate_store_id() -> None:
             _bundle(duplicate=True), _contract(), source_date=None
         ))
     assert error.value.reason_code == "DUPLICATE_STORE_ID"
+
+    with pytest.raises(RawPayloadError) as error:
+        _rows(SbizAcademyAdapter(_taxonomy()).parse(
+            _bundle(small_category_name="변경된 업종명"),
+            _contract(),
+            source_date=None,
+        ))
+    assert error.value.reason_code == "TAXONOMY_CHANGED"
 
 
 def test_sbiz_contract_taxonomy_and_page_shapes_fail_closed() -> None:

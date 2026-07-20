@@ -23,8 +23,9 @@ def _page() -> bytes:
                 "numOfRows": 1000,
                 "items": [{
                     "bizesId": "store-1", "bizesNm": "가나다 학원",
-                    "indsSclsCd": "P10101", "rdnmAdr": "서울특별시 송파구 올림픽로 300",
-                    "lnoAdr": "서울특별시 송파구", "zipcd": "05551",
+                    "indsSclsCd": "P10101", "indsSclsNm": "fixture 학원",
+                    "rdnmAdr": "서울특별시 송파구 올림픽로 300",
+                    "lnoAdr": "서울특별시 송파구", "newZipcd": "05551",
                     "adongCd": "11710566", "lat": "37.51", "lon": "127.10",
                 }],
             }

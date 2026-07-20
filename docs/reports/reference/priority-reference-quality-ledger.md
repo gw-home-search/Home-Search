@@ -109,7 +109,7 @@ CLI와 local wrapper는 source별 provider key만 선택하며 CSV/XLSX source�
 file source는 계약상 최대 1만 행 이하로 제한된다. 철도 refresher는 고정 XLSX URL,
 owner-only temp, verified S3 file upload, safe refresh-run 실패 기록을 static catalog에
 연결했으며 현재 landing URL은 network 호출 전에 거부한다. 2026-07-20 전체 offline
-회귀는 `546 passed`, coverage `90.21%`다. NEIS summary observer는 property DB의
+회귀는 `546 passed`, coverage `90.22%`다. NEIS summary observer는 property DB의
 시도·시군구 ancestor를 먼저 해석한 뒤 AI DB를 별도 exact query하며, 반경·거리 표현을
 grounding 단계에서 거부한다. license와 live readiness가 미승인이므로 runtime
 allowlist에는 추가하지 않았다. 실제 provider,

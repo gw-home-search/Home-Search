@@ -15,6 +15,8 @@ taxonomy contract foundation 구현 품질: `10.0/10 Pass`
   fingerprint 중 하나라도 달라지면 collector 구성 단계에서 중단한다.
 - 각 acquisition bundle에 이 계약에서 결정적으로 생성한 대·중·소 taxonomy artifact를
   포함하고, adapter가 fingerprint·partition·store ID·page total을 다시 검증한다.
+- 2025-11-28 공식 OpenAPI 활용가이드와 포털 OAS에서 store field 계약을 대조했고,
+  `newZipcd` 신우편번호와 `indsSclsCd`/`indsSclsNm` code-name 일치를 적용했다.
 - 위치 projection·NEIS exact match·800m observer의 기존 offline 검증은 유지된다.
 
 공식 taxonomy landing URL:
@@ -32,9 +34,9 @@ checksum:
   247개 taxonomy와 P1 allowlist 테스트가 `FileNotFoundError`로 실패했다.
 - 예상 RED 실패: 합성 fixture만 있고 tracked official artifact가 없음을 정확히 확인했다.
 - 최소 GREEN: official CSV·provenance config·결정적 parser를 추가하고 source checksum
-  변경 차단 테스트를 보강했다.
+  변경, 공식 `newZipcd`, store taxonomy name drift 차단 테스트를 보강했다.
 - 좁은 회귀: Sbiz collector·adapter·ingest·projection·observer·composition `86 passed`.
-- 전체 AI 회귀: `546 passed`, coverage `90.21%`.
+- 전체 AI 회귀: `546 passed`, coverage `90.22%`.
 
 taxonomy contract foundation은 공식 artifact 이용조건·출처, 고정 schema, 원본/추적
 checksum, 계층 count, P1 allowlist, canonical fingerprint, path·symlink 경계, fail-closed

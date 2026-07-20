@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
@@ -43,9 +44,13 @@ public class BuildingRegisterCampaignService {
         Map<String, List<BuildingRegisterCampaignTarget>> byPnu = targets.stream()
                 .collect(Collectors.groupingBy(
                         BuildingRegisterCampaignTarget::pnu, LinkedHashMap::new, Collectors.toList()));
+        Set<String> fullyMatchedPnus = campaigns.isCompleted(command.collectionId())
+                ? Set.of()
+                : campaigns.fullyMatchedPnus(command.collectionId());
         int requests = 0;
         int matches = 0;
         for (var entry : byPnu.entrySet()) {
+            if (fullyMatchedPnus.contains(entry.getKey())) continue;
             int remaining = command.maxRequests() - requests;
             if (remaining <= 0) break;
             BuildingRegisterCollectionResult collected;

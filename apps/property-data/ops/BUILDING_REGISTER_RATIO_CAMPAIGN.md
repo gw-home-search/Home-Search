@@ -62,7 +62,7 @@ ops/run-batch-jar.sh \
   toComplexId=<same-required-id>
 ```
 
-완료된 endpoint snapshot(`PARSED|EMPTY`)은 날짜가 바뀌어도 같은 캠페인에서 재사용하므로 다시 호출하거나 중복 저장하지 않는다. 날짜가 바뀐 미완성 endpoint snapshot은 보존하고 page 1부터 새 snapshot을 시작한다. 모든 target이 terminal match 상태가 되어야 campaign이 `COMPLETED`가 된다.
+미완료 캠페인을 재개할 때 해당 PNU의 모든 target에 match가 이미 있으면 수집·평가를 건너뛴다. 완료된 endpoint snapshot(`PARSED|EMPTY`)은 날짜가 바뀌어도 같은 캠페인에서 재사용하므로 다시 호출하거나 중복 저장하지 않는다. 날짜가 바뀐 미완성 endpoint snapshot은 보존하고 page 1부터 새 snapshot을 시작한다. 모든 target이 terminal match 상태가 되어야 campaign이 `COMPLETED`가 된다. 완료 캠페인을 같은 인자로 다시 실행하면 저장된 raw를 외부 호출 없이 재평가할 수 있다.
 
 ## 4. 수집 결과 검증
 

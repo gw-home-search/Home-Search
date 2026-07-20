@@ -79,6 +79,49 @@ class JdbcBuildingRegisterCampaignRepositoryTest extends JdbcMigrationTestSuppor
                 .isOne();
     }
 
+    @Test
+    @DisplayName("캠페인 재개를 위한 완료 상태와 완전 매칭 PNU를 조회한다")
+    void loadsCompletedStateAndFullyMatchedPnus() {
+        jdbcClient
+                .sql("INSERT INTO complex(id,parcel_id,complex_pk,name) VALUES (502,1001,'RTMS:502','Shared')")
+                .update();
+        repository.freezeOrLoad(command(1000));
+
+        assertThat(repository.isCompleted(COLLECTION_ID)).isFalse();
+        assertThat(repository.fullyMatchedPnus(COLLECTION_ID)).isEmpty();
+
+        repository.recordMatch(
+                COLLECTION_ID,
+                "1168010300101400001",
+                2,
+                new BuildingRegisterComplexMatch(
+                        501,
+                        "ROOT-1",
+                        BuildingRatioScope.UNIQUE_ROOT,
+                        BuildingRegisterMatchStatus.RESOLVED,
+                        null,
+                        true,
+                        null));
+
+        assertThat(repository.fullyMatchedPnus(COLLECTION_ID)).isEmpty();
+        repository.recordMatch(
+                COLLECTION_ID,
+                "1168010300101400001",
+                2,
+                new BuildingRegisterComplexMatch(
+                        502,
+                        "ROOT-2",
+                        BuildingRatioScope.UNIQUE_ROOT,
+                        BuildingRegisterMatchStatus.RESOLVED,
+                        null,
+                        true,
+                        null));
+
+        assertThat(repository.fullyMatchedPnus(COLLECTION_ID)).containsExactly("1168010300101400001");
+        assertThat(repository.completeIfAllTargetsMatched(COLLECTION_ID)).isTrue();
+        assertThat(repository.isCompleted(COLLECTION_ID)).isTrue();
+    }
+
     private BuildingRegisterCampaignCommand command(long toComplexId) {
         return new BuildingRegisterCampaignCommand(
                 COLLECTION_ID,

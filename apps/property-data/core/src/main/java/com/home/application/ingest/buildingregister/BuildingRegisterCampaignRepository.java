@@ -3,10 +3,15 @@ package com.home.application.ingest.buildingregister;
 import com.home.domain.complex.buildingregister.BuildingRegisterComplexMatch;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public interface BuildingRegisterCampaignRepository {
     List<BuildingRegisterCampaignTarget> freezeOrLoad(BuildingRegisterCampaignCommand command);
+
+    boolean isCompleted(UUID collectionId);
+
+    Set<String> fullyMatchedPnus(UUID collectionId);
 
     long recordMatch(UUID collectionId, String pnu, int pnuComplexCount, BuildingRegisterComplexMatch match);
 

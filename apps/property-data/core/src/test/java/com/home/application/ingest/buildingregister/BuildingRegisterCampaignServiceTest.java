@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -31,6 +32,65 @@ import org.mockito.ArgumentCaptor;
 class BuildingRegisterCampaignServiceTest {
     private static final UUID COLLECTION_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174180");
     private static final UUID REQUEST_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174181");
+
+    @Test
+    @DisplayName("미완료 캠페인 재개 시 완전히 평가된 PNU는 다시 수집하지 않는다")
+    void skipsFullyMatchedPnuWhileResumingIncompleteCampaign() {
+        BuildingRegisterCollectionService collection = mock(BuildingRegisterCollectionService.class);
+        BuildingRegisterCampaignRepository campaigns = mock(BuildingRegisterCampaignRepository.class);
+        BuildingRatioCandidateRepository candidates = mock(BuildingRatioCandidateRepository.class);
+        var completed = target(1, "1168010300101400001", "Completed");
+        var pending = target(2, "1168010300101400002", "Pending");
+        given(campaigns.freezeOrLoad(any())).willReturn(List.of(completed, pending));
+        given(campaigns.isCompleted(COLLECTION_ID)).willReturn(false);
+        given(campaigns.fullyMatchedPnus(COLLECTION_ID)).willReturn(Set.of(completed.pnu()));
+        given(collection.collect(any()))
+                .willReturn(new BuildingRegisterCollectionResult(
+                        BuildingRegisterCollectionStatus.COLLECTED,
+                        1,
+                        List.of(recap()),
+                        List.of(),
+                        List.of(),
+                        Set.of()));
+        given(campaigns.recordMatch(any(), anyString(), anyInt(), any())).willReturn(10L);
+        given(campaigns.sourceRecordIds(any(), anyString())).willReturn(Map.of("ROOT-1", 100L));
+
+        var summary = new BuildingRegisterCampaignService(collection, campaigns, candidates).collect(command());
+
+        ArgumentCaptor<BuildingRegisterCollectCommand> collectCommand =
+                ArgumentCaptor.forClass(BuildingRegisterCollectCommand.class);
+        verify(collection).collect(collectCommand.capture());
+        assertThat(collectCommand.getValue().pnu()).isEqualTo(pending.pnu());
+        assertThat(summary.requestCount()).isOne();
+        assertThat(summary.matchCount()).isOne();
+    }
+
+    @Test
+    @DisplayName("완료 캠페인은 저장된 raw 재평가를 위해 기존 PNU를 다시 평가한다")
+    void reevaluatesMatchedPnuForCompletedCampaign() {
+        BuildingRegisterCollectionService collection = mock(BuildingRegisterCollectionService.class);
+        BuildingRegisterCampaignRepository campaigns = mock(BuildingRegisterCampaignRepository.class);
+        BuildingRatioCandidateRepository candidates = mock(BuildingRatioCandidateRepository.class);
+        var target = target(1, "1168010300101400001", "Completed");
+        given(campaigns.freezeOrLoad(any())).willReturn(List.of(target));
+        given(campaigns.isCompleted(COLLECTION_ID)).willReturn(true);
+        given(collection.collect(any()))
+                .willReturn(new BuildingRegisterCollectionResult(
+                        BuildingRegisterCollectionStatus.COLLECTED,
+                        0,
+                        List.of(recap()),
+                        List.of(),
+                        List.of(),
+                        Set.of()));
+        given(campaigns.recordMatch(any(), anyString(), anyInt(), any())).willReturn(10L);
+        given(campaigns.sourceRecordIds(any(), anyString())).willReturn(Map.of("ROOT-1", 100L));
+
+        var summary = new BuildingRegisterCampaignService(collection, campaigns, candidates).collect(command());
+
+        verify(collection).collect(any());
+        verify(campaigns, never()).fullyMatchedPnus(COLLECTION_ID);
+        assertThat(summary.matchCount()).isOne();
+    }
 
     @Test
     @DisplayName("건축물대장 수집 캠페인 처리를 검증한다")
@@ -213,7 +273,11 @@ class BuildingRegisterCampaignServiceTest {
     }
 
     private BuildingRegisterCampaignTarget target(long id, String name) {
-        return new BuildingRegisterCampaignTarget(id, "1168010300101400001", null, Set.of(name), Set.of(), Set.of());
+        return target(id, "1168010300101400001", name);
+    }
+
+    private BuildingRegisterCampaignTarget target(long id, String pnu, String name) {
+        return new BuildingRegisterCampaignTarget(id, pnu, null, Set.of(name), Set.of(), Set.of());
     }
 
     private BuildingRegisterRecordSnapshotCommand recap() {

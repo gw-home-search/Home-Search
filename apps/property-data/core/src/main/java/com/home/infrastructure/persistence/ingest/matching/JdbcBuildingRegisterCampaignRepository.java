@@ -145,6 +145,35 @@ public class JdbcBuildingRegisterCampaignRepository implements BuildingRegisterC
     }
 
     @Override
+    public boolean isCompleted(UUID collectionId) {
+        return jdbc.sql("""
+                    SELECT status='COMPLETED'
+                    FROM building_register_collection_campaign
+                    WHERE collection_id=:collection
+                    """)
+                .param("collection", collectionId)
+                .query(Boolean.class)
+                .single();
+    }
+
+    @Override
+    public Set<String> fullyMatchedPnus(UUID collectionId) {
+        return Set.copyOf(jdbc.sql("""
+                    SELECT target.pnu
+                    FROM building_register_collection_target target
+                    LEFT JOIN building_register_complex_match match
+                      ON match.collection_id=target.collection_id
+                     AND match.complex_id=target.complex_id
+                    WHERE target.collection_id=:collection
+                    GROUP BY target.pnu
+                    HAVING count(*)=count(match.id)
+                    """)
+                .param("collection", collectionId)
+                .query(String.class)
+                .list());
+    }
+
+    @Override
     public long recordMatch(UUID collectionId, String pnu, int pnuComplexCount, BuildingRegisterComplexMatch match) {
         long matchId = jdbc.sql("""
                     INSERT INTO building_register_complex_match

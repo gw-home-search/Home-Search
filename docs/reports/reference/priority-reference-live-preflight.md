@@ -14,7 +14,10 @@ safe reason code와 count만 기록했고 provider body, API key, DSN은 기록�
 | 1 | `edu.school-location` | exit `1` | JSON media type은 확인했으나 JSON parse 이전 `API_ENVELOPE_INVALID`; dataset별 활용승인/key 또는 gateway 응답 확인 필요, acquisition `0` |
 | 1b | `edu.school-location` | `Pass` | decimal-string pagination 반영 후 12,011행/rejected 0/17개 교육청; lock namespace·validated resume 보완, active datasetVersion `2026-03-20-b148752f1e38` |
 | 1c | `edu.school-location` | `Pass` | 두 번째 13-page refresh가 동일 acquisition/publication을 재사용; acquisition 총 2개는 이전 incomplete 1개와 published 1개, publication은 계속 1개 |
-| 2 | `edu.academy-registry` | exit `1` | 재시도에도 configured NEIS key는 첫 page `API_SERVER_ERROR`; acquisition `0`, active datasetVersion 없음 |
+| 2a | `edu.academy-registry` | exit `1` | `Accept: application/json`에 대한 NEIS gateway `HTTP 500 text/html`을 `API_SERVER_ERROR`로 안전 중단; key·body 비노출 |
+| 2b | `edu.academy-registry` | exit `1` | gateway header 수정 후 138,412행을 수집했으나 live status `개원`과 명칭 공란 1건을 quality gate에서 차단; publication 없음 |
+| 2c | `edu.academy-registry` | `Pass` | v4 full refresh 17개 교육청/146 pages/138,412 accepted/rejected 0; active datasetVersion `20260720-3bb7d33261d5` |
+| 2d | `edu.academy-registry` | `NoChange` | 같은 날 두 번째 146-page refresh의 semantic checksum 동일; staging 0, v4 publication 1, active pointer 유지 |
 | 3 | `place.sbiz-academy` | exit `1` | key 수정 후 인증 통과, live unscoped taxonomy `25/266/1,255`가 공식 포털·가이드 `10/75/247`과 불일치해 `TAXONOMY_CHANGED`; acquisition `0` |
 | 4 | `retail.large-store` | exit `1` | 재시도에도 첫 page `API_AUTHENTICATION_FAILED`; dataset `15154948` 활용신청 미반영 가능성, acquisition `0` |
 | 5a | `transport.rail-station` | exit `2` | 최초 실행은 license `PENDING`으로 `CONFIGURATION_INVALID`; provider body 요청 전 중단 |
@@ -37,12 +40,12 @@ apps/ai/ops/run-local-reference-inspection.sh audit \
   --source edu.academy-registry --limit 3
 ```
 
-runtime inspection 결과는 source를 `Partial`로 표시했고 active
-datasetVersion과 dataAsOf가 비어 있었다. NEIS audit는 빈 `acquisitionId`, row count
-모두 `0`, `reasonCodes: API_SERVER_ERROR`를 반환했다. 별도 body-free 진단에서 NEIS
-no-key sample은 `HTTP 200/INFO-000`이지만 `pSize=1000`에도 총 25,522행 중 5행만
-반환했고, 명백한 invalid key는 `HTTP 200/ERROR-290`이었다. sample을 full acquisition
-대안으로 사용하지 않으며 `HOME_AI_NEIS_SERVICE_KEY`의 NEIS 발급 상태를 다시 확인해야 한다.
+NEIS body-free 진단에서 key 문제가 아니라 gateway의 `Accept` header 호환 문제가
+원인임을 분리했다. 동일 실제 key의 B10 `pSize=1000`, `Accept: */*` 요청은
+`HTTP 200/INFO-000`, 총 25,522행 중 1,000행을 반환했다. 전국 raw aggregate에서 status
+전부가 `개원`이고 명칭 공란 1건만 존재함을 확인해 status mapping과 fail-closed exact
+match를 보완했다. 최종 runtime status는 active datasetVersion
+`20260720-3bb7d33261d5`, projection 138,412건을 반환한다.
 
 키 문자열은 Sbiz taxonomy endpoint 인증을 통과했으므로 유효하다. Sbiz collector는
 공식 가이드의 parent scoped 중·소분류 요청으로 수정했지만 첫 대분류부터 공식
@@ -76,6 +79,15 @@ malformed 날짜 6건을 `RAIL_ROW_REFERENCE_DATE_INVALID` warning으로 기록�
   refresh/publish advisory self-deadlock과 validated acquisition resume도 회귀 테스트로
   보완했다. 두 번째 actual refresh도 동일 raw checksum의 기존 acquisition/publication을
   재사용해 `Pass`했고 duplicate publication은 생성하지 않았다.
+- NEIS gateway의 `Accept: application/json` 고정이 모든 요청을 `HTTP 500`으로 만들던
+  원인을 재현하고 `Accept: */*`로 제한 수정했다. JSON query·parser·envelope 검증은
+  그대로 유지한다.
+- live status `개원` 138,412건은 `OPEN`으로 고정했고 provider 명칭 공란 1건은
+  `명칭 미제공`과 `nameMissing=true`로 보존하되 exact-match key를 `NULL`로 만들었다.
+- `OBSERVED_AT` exact timestamp가 normalized row hash에 섞여 같은 날 재수집에도 새
+  publication을 만들던 문제를 실제로 재현했다. 정확한 시각은 evidence에 보존하고
+  semantic hash에서만 제외해 v4 두 번째 actual refresh가 `NoChange` 및 staging 0임을
+  확인했다.
 - 철도 row 기준일을 release date와 비교해 전 행을 거부하던 오류를 수정하고 nullable
   provenance projection migration을 추가했다. occurrence identity 중복은 완화하지 않았다.
 
@@ -84,19 +96,19 @@ malformed 날짜 6건을 `RAIL_ROW_REFERENCE_DATE_INVALID` warning으로 기록�
 ```text
 reference inspection + migration focused: 11 passed
 local inspection wrapper: Pass
-AI full: 564 passed, coverage 90.10%
+AI full: 589 passed, coverage 90.05%
 reference docs: Pass
 ```
 
 ## 활성화 판단
 
-- `academy_registry_summary`: readiness `3.0/10 Partial`, 활성화 금지
+- `academy_registry_summary`: readiness `8.0/10 Partial`, 활성화 금지
 - `academy_lookup`: readiness `3.0/10 Partial`, 활성화 금지
 - `retail_location`: readiness `2.0/10 Partial`, 활성화 금지
 - `rail_station_lookup`: readiness `3.0/10 Partial`, 활성화 금지
 
-기존 active pointer를 변경한 source는 없고 raw/publication 삭제나 Docker volume
-초기화도 수행하지 않았다.
+학교와 NEIS의 검증된 publication만 active pointer가 가리킨다. 실패·이전 publication,
+raw, quarantine은 삭제하지 않았고 Docker volume 초기화도 수행하지 않았다.
 
 `api-contract: compatible`
 

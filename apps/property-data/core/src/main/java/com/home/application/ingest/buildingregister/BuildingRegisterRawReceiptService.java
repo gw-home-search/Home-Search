@@ -6,7 +6,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class BuildingRegisterRawReceiptService {
+public class BuildingRegisterRawReceiptService implements BuildingRegisterRawPageReceiver {
     private final BuildingRegisterRawPageRepository repository;
 
     public BuildingRegisterRawReceiptService(BuildingRegisterRawPageRepository repository) {
@@ -14,6 +14,7 @@ public class BuildingRegisterRawReceiptService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Override
     public long receive(BuildingRegisterRawPageReceiptCommand command) {
         return repository.receive(command);
     }

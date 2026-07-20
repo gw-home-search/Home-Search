@@ -2,6 +2,8 @@ package com.home.infrastructure.external.complex;
 
 import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceClient;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceParser;
+import com.home.application.ingest.buildingregister.BuildingRegisterPageClient;
+import com.home.application.ingest.buildingregister.BuildingRegisterPageParser;
 import com.home.application.ingest.metadata.OdcloudPnuPrefixAliasLookup;
 import com.home.infrastructure.configuration.ExternalApiCredentialProperties;
 import com.home.infrastructure.external.odcloud.OdcloudProperties;
@@ -26,6 +28,27 @@ public class ComplexMetadataClientConfiguration {
     @Bean
     BuildingMetadataSourceParser buildingMetadataSourceParser(ObjectMapper objectMapper) {
         return new BuildingMetadataJsonParser(objectMapper);
+    }
+
+    @Bean
+    BuildingRegisterPageParser buildingRegisterPageParser(ObjectMapper objectMapper) {
+        return new BuildingRegisterJsonParser(objectMapper);
+    }
+
+    @Bean
+    BuildingRegisterPageClient buildingRegisterPageClient(
+            BuildingApiProperties building,
+            ComplexMetadataProperties metadata,
+            ExternalApiCredentialProperties credentials) {
+        BuildingMetadataEndpointPaths paths = paths(building);
+        return new PublicBuildingRegisterPageClient(
+                buildRestClient(building.baseUrl().toString(), metadata),
+                building.baseUrl().toString(),
+                credentials.bldServiceKey(building.bldServiceKey()),
+                paths.recap(),
+                paths.title(),
+                building.buildingBasicOverviewPath(),
+                metadata.minRequestIntervalMillis());
     }
 
     @Bean

@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class BuildingRegisterRawPageFinalizer {
+public class BuildingRegisterRawPageFinalizer implements BuildingRegisterRawPageCompletion {
     private final BuildingRegisterRawPageRepository repository;
 
     public BuildingRegisterRawPageFinalizer(BuildingRegisterRawPageRepository repository) {
@@ -15,6 +15,7 @@ public class BuildingRegisterRawPageFinalizer {
     }
 
     @Transactional
+    @Override
     public void complete(
             long rawPageId, BuildingRegisterRawPageStatus status, List<BuildingRegisterRecordSnapshotCommand> records) {
         repository.complete(rawPageId, status, records);

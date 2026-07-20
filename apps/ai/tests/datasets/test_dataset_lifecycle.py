@@ -12,6 +12,7 @@ import pytest
 from ai_service.datasets import DatasetLifecycleService, DatasetSourceContract
 from ai_service.datasets.postgres import PostgresDatasetRepository
 from ai_service.datasets.models import ParsedDataset
+from ai_service.datasets.raw_store import StoredRawObject
 from ai_service.datasets.validation import RawPayloadError
 
 
@@ -118,6 +119,83 @@ def test_checksum_reingest_is_idempotent_and_does_not_duplicate_publication(
         "acquisitions": 1,
         "publications": 1,
     }
+
+
+def test_same_raw_can_be_reprocessed_under_a_new_normalization_contract(
+    dataset_repository: PostgresDatasetRepository,
+) -> None:
+    class RejectingAdapter:
+        def parse(self, _raw, _contract, *, source_date):
+            raise RawPayloadError("fixture schema mismatch", "SOURCE_SCHEMA_MISMATCH")
+
+    lifecycle = service(dataset_repository)
+    raw = payload(valid_rows())
+    failed = lifecycle.ingest_validate_publish(
+        source_contract(), raw, source_date=SOURCE_DATE, adapter=RejectingAdapter()
+    )
+    recovered = lifecycle.ingest_validate_publish(
+        replace(source_contract(), schema_version="fixture-v2"),
+        raw,
+        source_date=SOURCE_DATE,
+    )
+
+    assert failed.status == "Fail"
+    assert recovered.status == "Pass"
+    assert recovered.acquisition_id != failed.acquisition_id
+    assert dataset_repository.table_counts() == {
+        "raw_objects": 1,
+        "acquisitions": 2,
+        "publications": 1,
+    }
+
+
+def test_stored_raw_acquisition_dedupe_is_scoped_to_normalization_schema(
+    dataset_repository: PostgresDatasetRepository,
+) -> None:
+    first_contract = source_contract()
+    first_contract_id = dataset_repository.register_source_contract(
+        first_contract, COLLECTED_AT
+    )
+    stored = StoredRawObject(
+        storage_backend="S3",
+        object_key="raw/fixture.zip",
+        object_version_id="v1",
+        content_type="application/zip",
+        byte_length=1,
+        checksum="a" * 64,
+    )
+    first = dataset_repository.acquire_stored_raw(
+        first_contract, first_contract_id, stored, SOURCE_DATE, None, COLLECTED_AT
+    )
+    quality_contract = source_contract(expected_min_rows=2)
+    quality_contract_id = dataset_repository.register_source_contract(
+        quality_contract, COLLECTED_AT
+    )
+    quality_only = dataset_repository.acquire_stored_raw(
+        quality_contract,
+        quality_contract_id,
+        stored,
+        SOURCE_DATE,
+        None,
+        COLLECTED_AT,
+    )
+    schema_contract = replace(first_contract, schema_version="fixture-v2")
+    schema_contract_id = dataset_repository.register_source_contract(
+        schema_contract, COLLECTED_AT
+    )
+    new_schema = dataset_repository.acquire_stored_raw(
+        schema_contract,
+        schema_contract_id,
+        stored,
+        SOURCE_DATE,
+        None,
+        COLLECTED_AT,
+    )
+
+    assert first.created is True
+    assert quality_only == replace(first, created=False)
+    assert new_schema.created is True
+    assert new_schema.acquisition_id != first.acquisition_id
 
 
 def test_semantically_equal_raw_creates_no_second_publication(

@@ -18,6 +18,12 @@ license evidence SHA-256은
 `14d6a007c272b75456998f5289e08ff8f61cb82f04bb2fc6a72ef9c11327ff0d`다. 전체 artifact
 live 검증 전 readiness는 `Partial`이다.
 
+2026-06-30 release의 provider field는 `운영기관명`, `노선번호`, `노선명`, `역번호`,
+`역사명`, `역사도로명주소`, `역위도`, `역경도`, `환승노선명`, `데이터기준일자`를
+각 normalized field로 exact mapping한다. 이전 표준 명칭은 raw replay 호환을 위한
+명시적 alias로만 허용하며 fuzzy header matching은 하지 않는다. 이 변경은
+`rail-station-v2`로 구분한다.
+
 include::{snippets}/transport.rail-station/download-request.adoc[]
 include::{snippets}/transport.rail-station/response-headers.adoc[]
 include::{snippets}/transport.rail-station/source-columns.adoc[]

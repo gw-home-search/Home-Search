@@ -296,9 +296,11 @@ class PostgresDatasetRepository:
                 """
                 INSERT INTO dataset_acquisition(
                     acquisition_id, source_id, contract_id, checksum, temporal_basis,
-                    source_date, observed_at, collected_at, status
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ACQUIRED')
-                ON CONFLICT (source_id, checksum) DO NOTHING
+                    source_date, observed_at, collected_at, status,
+                    normalization_schema_version
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ACQUIRED', %s)
+                ON CONFLICT (source_id, checksum, normalization_schema_version)
+                DO NOTHING
                 RETURNING acquisition_id
                 """,
                 (
@@ -310,6 +312,7 @@ class PostgresDatasetRepository:
                     source_date,
                     observed_at,
                     collected_at,
+                    contract.schema_version,
                 ),
             ).fetchone()
             if inserted:
@@ -318,8 +321,9 @@ class PostgresDatasetRepository:
                 """
                 SELECT acquisition_id FROM dataset_acquisition
                 WHERE source_id = %s AND checksum = %s
+                  AND normalization_schema_version = %s
                 """,
-                (contract.source_id, checksum),
+                (contract.source_id, checksum, contract.schema_version),
             ).fetchone()
             return AcquisitionRecord(acquisition_id=existing["acquisition_id"], created=False)
 
@@ -355,9 +359,11 @@ class PostgresDatasetRepository:
                 """
                 INSERT INTO dataset_acquisition(
                     acquisition_id, source_id, contract_id, checksum, temporal_basis,
-                    source_date, observed_at, collected_at, status
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ACQUIRED')
-                ON CONFLICT (source_id, checksum) DO NOTHING
+                    source_date, observed_at, collected_at, status,
+                    normalization_schema_version
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'ACQUIRED', %s)
+                ON CONFLICT (source_id, checksum, normalization_schema_version)
+                DO NOTHING
                 RETURNING acquisition_id
                 """,
                 (
@@ -369,6 +375,7 @@ class PostgresDatasetRepository:
                     source_date,
                     observed_at,
                     collected_at,
+                    contract.schema_version,
                 ),
             ).fetchone()
             if inserted:
@@ -377,8 +384,9 @@ class PostgresDatasetRepository:
                 """
                 SELECT acquisition_id FROM dataset_acquisition
                 WHERE source_id = %s AND checksum = %s
+                  AND normalization_schema_version = %s
                 """,
-                (contract.source_id, raw_object.checksum),
+                (contract.source_id, raw_object.checksum, contract.schema_version),
             ).fetchone()
             return AcquisitionRecord(acquisition_id=existing["acquisition_id"], created=False)
 

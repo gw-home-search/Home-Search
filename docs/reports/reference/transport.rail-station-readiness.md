@@ -21,6 +21,13 @@ safe reason code만 refresh-run에 기록한다.
 `User-Agent`에서 XLSX header를 반환함을 재현했고, TDD로 해당 header를 추가하면서
 media type·length·source date 검증은 완화하지 않았다.
 
+다음 live 시도는 2026-06-30 XLSX의 최신 exact header가 이전 fixture 명칭과 달라
+`SOURCE_SCHEMA_MISMATCH`로 publication 전에 중단했다. 실제 header를 데이터 행 없이
+확인해 exact alias를 추가하고 normalization schema를 `rail-station-v2`로 올렸다.
+동일 raw의 이전 `PARSE_FAILED` acquisition을 삭제하지 않고 새 schema에서 재처리할 수
+있도록 additive migration `0011_schema_scoped_acquisition_dedupe.sql`을 추가했다. 동일
+schema 재수집과 품질 기준만 바뀐 contract는 계속 기존 acquisition을 재사용한다.
+
 공공데이터포털 fileData `15093755`는 `이용허락범위 제한 없음`을 명시한다. 프로젝트
 책임자는 KRIC에 전화로 계획된 Home Search 이용 가능 여부를 문의해 가능하다는 답변을
 받았다고 2026-07-20 진술했고, 서면 transcript 부재를 수용해 contract 승인을 지시했다.
@@ -40,6 +47,9 @@ media type·length·source date 검증은 완화하지 않았다.
 - live failure RED: `User-Agent` 부재 요청은 `200 text/html`, audit
   `FILE_MEDIA_TYPE_INVALID`; header 계약 2건 RED 후 file client `13 passed`, 전체 AI
   `564 passed`, coverage `90.10%`.
+- schema recovery RED: 최신 KRIC header fixture는 `SOURCE_SCHEMA_MISMATCH`, 동일 raw의
+  새 schema 재처리는 기존 실패를 반환; exact alias와 schema-scoped acquisition
+  dedupe 후 Postgres 집중 회귀 `57 passed`, 전체 AI `566 passed`, coverage `90.08%`.
 
 `api-contract: compatible`
 

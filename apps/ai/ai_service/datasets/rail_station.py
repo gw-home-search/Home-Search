@@ -24,17 +24,17 @@ _MAX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024
 _MAX_COMPRESSION_RATIO = 100
 _MAX_SHEETS = 10
 _MAX_CELLS = 500_000
-_REQUIRED_COLUMNS = {
-    "철도운영기관명",
-    "노선번호",
-    "선명",
-    "역번호",
-    "역명",
-    "도로명주소",
-    "역위도",
-    "역경도",
-    "환승노선명",
-    "데이터기준일자",
+_COLUMN_ALIASES = {
+    "operator": ("운영기관명", "철도운영기관명"),
+    "line_number": ("노선번호",),
+    "line_name": ("노선명", "선명"),
+    "station_number": ("역번호",),
+    "station_name": ("역사명", "역명"),
+    "road_address": ("역사도로명주소", "도로명주소"),
+    "latitude": ("역위도",),
+    "longitude": ("역경도",),
+    "transfer_lines": ("환승노선명",),
+    "reference_date": ("데이터기준일자",),
 }
 
 
@@ -111,7 +111,10 @@ def _parse_xlsx(source: io.BytesIO | Path, source_date: date) -> ParsedDataset:
             if header_values is None:
                 continue
             headers = tuple(_clean(value) for value in header_values)
-            if not _REQUIRED_COLUMNS.issubset(headers):
+            if not all(
+                any(alias in headers for alias in aliases)
+                for aliases in _COLUMN_ALIASES.values()
+            ):
                 raise RawPayloadError("rail XLSX schema mismatch", "SOURCE_SCHEMA_MISMATCH")
             header_index = {header: index for index, header in enumerate(headers)}
             for values in iterator:
@@ -215,13 +218,13 @@ def _inspect_xlsx_archive(content: bytes | Path) -> None:
 def _normalize(
     row: dict[str, object], source_date: date
 ) -> tuple[dict[str, object], list[str]]:
-    operator = _clean(row.get("철도운영기관명"))
-    line_number = _clean(row.get("노선번호"))
-    line_name = _clean(row.get("선명"))
-    station_number = _clean(row.get("역번호"))
-    station_name = _clean(row.get("역명"))
-    latitude = _number(row.get("역위도"))
-    longitude = _number(row.get("역경도"))
+    operator = _clean(_provider_value(row, "operator"))
+    line_number = _clean(_provider_value(row, "line_number"))
+    line_name = _clean(_provider_value(row, "line_name"))
+    station_number = _clean(_provider_value(row, "station_number"))
+    station_name = _clean(_provider_value(row, "station_name"))
+    latitude = _number(_provider_value(row, "latitude"))
+    longitude = _number(_provider_value(row, "longitude"))
     reasons: list[str] = []
     if not all((operator, line_number, station_number, station_name)):
         reasons.append("RAIL_STATION_IDENTITY_REQUIRED")
@@ -232,10 +235,10 @@ def _normalize(
         or not 124 <= longitude <= 132
     ):
         reasons.append("RAIL_STATION_COORDINATE_REQUIRED")
-    row_date = _date(row.get("데이터기준일자"))
+    row_date = _date(_provider_value(row, "reference_date"))
     if row_date != source_date:
         reasons.append("SOURCE_DATE_MIXED")
-    transfer_lines = _transfer_lines(row.get("환승노선명"))
+    transfer_lines = _transfer_lines(_provider_value(row, "transfer_lines"))
     return (
         {
             "station_occurrence_id": f"{operator}|{line_number}|{station_number}",
@@ -244,7 +247,7 @@ def _normalize(
             "line_name": line_name,
             "station_number": station_number,
             "station_name": station_name,
-            "road_address": _optional(row.get("도로명주소")),
+            "road_address": _optional(_provider_value(row, "road_address")),
             "latitude": latitude,
             "longitude": longitude,
             "transfer_lines": transfer_lines,
@@ -252,6 +255,13 @@ def _normalize(
         },
         reasons,
     )
+
+
+def _provider_value(row: dict[str, object], field: str) -> object:
+    for alias in _COLUMN_ALIASES[field]:
+        if alias in row:
+            return row[alias]
+    return None
 
 
 def _clean(value: object) -> str:

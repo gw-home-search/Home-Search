@@ -35,6 +35,24 @@ HEADERS = [
     "데이터기준일자",
 ]
 
+LIVE_HEADERS = [
+    "역번호",
+    "역사명",
+    "노선번호",
+    "노선명",
+    "영문역사명",
+    "한자역사명",
+    "환승역구분",
+    "환승노선번호",
+    "환승노선명",
+    "역위도",
+    "역경도",
+    "운영기관명",
+    "역사도로명주소",
+    "역사전화번호",
+    "데이터기준일자",
+]
+
 
 def _contract() -> DatasetSourceContract:
     return DatasetSourceContract(
@@ -71,11 +89,11 @@ def _contract() -> DatasetSourceContract:
     )
 
 
-def _xlsx(rows: list[list[object]]) -> bytes:
+def _xlsx(rows: list[list[object]], *, headers: list[str] = HEADERS) -> bytes:
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "도시철도역사"
-    sheet.append(HEADERS)
+    sheet.append(headers)
     for row in rows:
         sheet.append(row)
     output = io.BytesIO()
@@ -114,6 +132,26 @@ def test_same_station_name_on_multiple_lines_keeps_distinct_occurrences() -> Non
     assert parsed.rows[0]["transfer_lines"] == ["1호선"]
     assert parsed.rows[1]["transfer_lines"] == ["2호선"]
     assert parsed.row_rejections == {}
+
+
+def test_live_kric_headers_are_normalized_without_projecting_phone() -> None:
+    row = [
+        "201", "시청", "02", "2호선", "City Hall", "市廳", "환승역", "01",
+        "1호선", 37.5657, 126.977, "서울교통공사", "서울 중구", "02-0000-0000",
+        "2026-06-30",
+    ]
+
+    parsed = RailStationAdapter().parse(
+        _bundle(_xlsx([row], headers=LIVE_HEADERS)),
+        _contract(),
+        source_date=date(2026, 1, 1),
+    )
+
+    assert parsed.rows[0]["station_occurrence_id"] == "서울교통공사|02|201"
+    assert parsed.rows[0]["station_name"] == "시청"
+    assert parsed.rows[0]["line_name"] == "2호선"
+    assert parsed.rows[0]["road_address"] == "서울 중구"
+    assert "phone" not in parsed.rows[0]
 
 
 def test_rail_file_adapter_streams_bundle_artifact(

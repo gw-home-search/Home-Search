@@ -231,7 +231,7 @@ source_name = "전국도시철도역사정보표준데이터"
 landing_url = "https://www.data.go.kr/data/15013205/standard.do"
 evidence_grade = "A"
 owner = "apps/ai"
-normalization_schema_version = "rail-station-v1"
+normalization_schema_version = "rail-station-v2"
 
 [sources.acquisition]
 mode = "file"

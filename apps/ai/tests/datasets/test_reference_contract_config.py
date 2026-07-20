@@ -112,6 +112,7 @@ def test_catalog_loads_the_fixed_source_order_and_approved_sources() -> None:
         "https://data.kric.go.kr/rips/dataset/download.file"
     )
     assert rail.acquisition.fixed_query == "type=filedata&id=32&operation=1"
+    assert rail.normalization_schema_version == "rail-station-v2"
     assert rail.license.terms_url == (
         "https://www.data.go.kr/data/15093755/fileData.do"
     )

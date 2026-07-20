@@ -76,6 +76,21 @@ class BuildingRegisterHierarchyMatcherTest {
     }
 
     @Test
+    @DisplayName("총괄 없이 표제부 하나이면 기본개요가 함께 있어도 standalone으로 평가한다")
+    void permitsSingleStandaloneTitleWithBasicOverviewEvidence() {
+        var source = hierarchy.resolve(List.of(
+                record(BuildingRegisterEndpoint.TITLE, "TITLE-1", null, 3, "1", "Sample", "101"),
+                record(BuildingRegisterEndpoint.BASIC_OVERVIEW, "TITLE-1", null, 3, "1", "Sample", "101"),
+                record(BuildingRegisterEndpoint.BASIC_OVERVIEW, "UNIT-1", "TITLE-1", 4, "1", "Sample", "101")));
+
+        assertThat(source.status()).isEqualTo(BuildingRegisterHierarchyStatus.RESOLVED);
+        assertThat(source.scopes()).singleElement().satisfies(scope -> {
+            assertThat(scope.scope()).isEqualTo(BuildingRatioScope.STANDALONE_TITLE);
+            assertThat(scope.rootManagementKey()).isEqualTo("TITLE-1");
+        });
+    }
+
+    @Test
     @DisplayName("건축물대장 계층과 단지 매칭을 검증한다")
     void appliesStructuralMatchPriorityWithoutSimilarity() {
         List<BuildingRegisterSourceScope> roots =

@@ -75,7 +75,7 @@ public final class BuildingRegisterHierarchyPolicy {
         List<BuildingRegisterHierarchyRecord> titles = records.stream()
                 .filter(BuildingRegisterHierarchyRecord::isTitleLike)
                 .toList();
-        if (titles.size() != 1 || records.size() != 1) {
+        if (titles.size() != 1) {
             return result(BuildingRegisterHierarchyStatus.SOURCE_MISSING, "standalone title is not unique");
         }
         BuildingRegisterHierarchyRecord title = titles.getFirst();

@@ -1,18 +1,23 @@
 package com.home.infrastructure.persistence.ingest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.home.application.ingest.buildingregister.BuildingRatioProjectionTarget;
+import com.home.domain.complex.buildingregister.BuildingRatioField;
 import com.home.domain.complex.buildingregister.BuildingRatioProjectionOutcome;
 import com.home.infrastructure.persistence.ingest.matching.JdbcBuildingRatioProjectionRepository;
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 
 class JdbcBuildingRatioProjectionRepositoryTest extends JdbcMigrationTestSupport {
     private static final UUID COLLECTION_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174140");
     private static final UUID REQUEST_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174141");
     private JdbcBuildingRatioProjectionRepository repository;
+    private long matchId;
     private long bcCandidateId;
     private long vlCandidateId;
 
@@ -33,7 +38,7 @@ class JdbcBuildingRatioProjectionRepositoryTest extends JdbcMigrationTestSupport
                     (collection_id,mode,strategy,to_complex_id,status,completed_at)
                     VALUES (:id,'missing','ADAPTIVE',1000,'COMPLETED',now())
                     """).param("id", COLLECTION_ID).update();
-        long matchId = match("UNIQUE_ROOT", true);
+        matchId = match("UNIQUE_ROOT", true);
         bcCandidateId = candidate(matchId, "BUILDING_COVERAGE_RATIO", "20.12");
         vlCandidateId = candidate(matchId, "FLOOR_AREA_RATIO", "80.34");
         repository = new JdbcBuildingRatioProjectionRepository(jdbcClient, transactionTemplate);
@@ -41,8 +46,9 @@ class JdbcBuildingRatioProjectionRepositoryTest extends JdbcMigrationTestSupport
 
     @Test
     void appliesOnlyNullFieldAndPreservesExistingMetadataState() {
-        assertThat(repository.project(REQUEST_ID, bcCandidateId)).isEqualTo(BuildingRatioProjectionOutcome.APPLIED);
-        assertThat(repository.project(REQUEST_ID, vlCandidateId))
+        assertThat(repository.project(REQUEST_ID, target(BuildingRatioField.BUILDING_COVERAGE_RATIO, bcCandidateId)))
+                .isEqualTo(BuildingRatioProjectionOutcome.APPLIED);
+        assertThat(repository.project(REQUEST_ID, target(BuildingRatioField.FLOOR_AREA_RATIO, vlCandidateId)))
                 .isEqualTo(BuildingRatioProjectionOutcome.SKIPPED_EXISTING_CONFLICT);
 
         var state = jdbcClient
@@ -62,8 +68,9 @@ class JdbcBuildingRatioProjectionRepositoryTest extends JdbcMigrationTestSupport
 
     @Test
     void repeatedRequestReturnsStoredOutcomeWithoutDuplicateHistory() {
-        assertThat(repository.project(REQUEST_ID, bcCandidateId)).isEqualTo(BuildingRatioProjectionOutcome.APPLIED);
-        assertThat(repository.project(REQUEST_ID, bcCandidateId)).isEqualTo(BuildingRatioProjectionOutcome.APPLIED);
+        BuildingRatioProjectionTarget target = target(BuildingRatioField.BUILDING_COVERAGE_RATIO, bcCandidateId);
+        assertThat(repository.project(REQUEST_ID, target)).isEqualTo(BuildingRatioProjectionOutcome.APPLIED);
+        assertThat(repository.project(REQUEST_ID, target)).isEqualTo(BuildingRatioProjectionOutcome.APPLIED);
 
         assertThat(jdbcClient
                         .sql("SELECT count(*) FROM building_ratio_projection WHERE request_id=:request")
@@ -77,7 +84,7 @@ class JdbcBuildingRatioProjectionRepositoryTest extends JdbcMigrationTestSupport
     void recordsAlreadyEqualWithoutUpdatingExistingValue() {
         jdbcClient.sql("UPDATE complex SET vl_rat=80.34 WHERE id=501").update();
 
-        assertThat(repository.project(REQUEST_ID, vlCandidateId))
+        assertThat(repository.project(REQUEST_ID, target(BuildingRatioField.FLOOR_AREA_RATIO, vlCandidateId)))
                 .isEqualTo(BuildingRatioProjectionOutcome.ALREADY_EQUAL);
     }
 
@@ -89,7 +96,7 @@ class JdbcBuildingRatioProjectionRepositoryTest extends JdbcMigrationTestSupport
                     WHERE collection_id=:collection AND complex_id=501
                     """).param("collection", COLLECTION_ID).update();
 
-        assertThat(repository.project(REQUEST_ID, bcCandidateId))
+        assertThat(repository.project(REQUEST_ID, target(BuildingRatioField.BUILDING_COVERAGE_RATIO, bcCandidateId)))
                 .isEqualTo(BuildingRatioProjectionOutcome.SKIPPED_SHARED_SCOPE);
         assertThat(jdbcClient
                         .sql("SELECT bc_rat FROM complex WHERE id=501")
@@ -100,14 +107,6 @@ class JdbcBuildingRatioProjectionRepositoryTest extends JdbcMigrationTestSupport
 
     @Test
     void recordsSourceConflictWithoutApplyingRepresentativeCandidate() {
-        long matchId = jdbcClient
-                .sql("""
-                    SELECT id FROM building_register_complex_match
-                    WHERE collection_id=:collection AND complex_id=501
-                    """)
-                .param("collection", COLLECTION_ID)
-                .query(Long.class)
-                .single();
         long conflictCandidate =
                 jdbcClient.sql("""
                     INSERT INTO building_ratio_candidate
@@ -117,13 +116,61 @@ class JdbcBuildingRatioProjectionRepositoryTest extends JdbcMigrationTestSupport
                     RETURNING id
                     """).param("match", matchId).query(Long.class).single();
 
-        assertThat(repository.project(REQUEST_ID, conflictCandidate))
+        assertThat(repository.project(
+                        REQUEST_ID, target(BuildingRatioField.BUILDING_COVERAGE_RATIO, conflictCandidate)))
                 .isEqualTo(BuildingRatioProjectionOutcome.SKIPPED_SOURCE_CONFLICT);
         assertThat(jdbcClient
                         .sql("SELECT bc_rat FROM complex WHERE id=501")
                         .query(BigDecimal.class)
                         .optional())
                 .isEmpty();
+    }
+
+    @Test
+    void recordsSourceMissingAtMatchAndFieldScopeWithoutFabricatingCandidate() {
+        jdbcClient
+                .sql("DELETE FROM building_ratio_candidate WHERE id=:candidate")
+                .param("candidate", bcCandidateId)
+                .update();
+        BuildingRatioProjectionTarget missing = repository.findProjectionTargets(COLLECTION_ID, null, null, 10).stream()
+                .filter(target -> target.field() == BuildingRatioField.BUILDING_COVERAGE_RATIO)
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(missing.candidateId()).isNull();
+        assertThat(repository.project(REQUEST_ID, missing)).isEqualTo(BuildingRatioProjectionOutcome.SOURCE_MISSING);
+
+        assertThat(jdbcClient
+                        .sql("""
+                            SELECT count(*) FROM building_ratio_projection
+                            WHERE request_id=:request AND match_id=:match
+                              AND field='BUILDING_COVERAGE_RATIO' AND candidate_id IS NULL
+                              AND outcome='SOURCE_MISSING'
+                            """)
+                        .param("request", REQUEST_ID)
+                        .param("match", matchId)
+                        .query(Integer.class)
+                        .single())
+                .isOne();
+    }
+
+    @Test
+    void databaseRejectsCandidateEvidenceAttachedToAnotherFieldScope() {
+        assertThatThrownBy(() -> jdbcClient
+                        .sql("""
+                            INSERT INTO building_ratio_projection
+                                (request_id,match_id,candidate_id,complex_id,field,outcome)
+                            VALUES (:request,:match,:candidate,501,'FLOOR_AREA_RATIO','APPLIED')
+                            """)
+                        .param("request", REQUEST_ID)
+                        .param("match", matchId)
+                        .param("candidate", bcCandidateId)
+                        .update())
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    private BuildingRatioProjectionTarget target(BuildingRatioField field, long candidateId) {
+        return new BuildingRatioProjectionTarget(matchId, field, candidateId);
     }
 
     private long match(String scope, boolean projectable) {

@@ -38,6 +38,12 @@ class BuildingRegisterCommandValidationTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new BuildingRatioProjectCommand(COLLECTION_ID, REQUEST_ID, 1, 2L, 1L))
                 .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new BuildingRatioProjectionTarget(0, BuildingRatioField.BUILDING_COVERAGE_RATIO, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new BuildingRatioProjectionTarget(1, null, null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new BuildingRatioProjectionTarget(1, BuildingRatioField.BUILDING_COVERAGE_RATIO, 0L))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

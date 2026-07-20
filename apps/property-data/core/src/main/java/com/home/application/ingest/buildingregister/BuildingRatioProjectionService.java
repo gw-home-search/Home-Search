@@ -18,12 +18,12 @@ public class BuildingRatioProjectionService {
         if (!repository.isCampaignCompleted(command.collectionId())) {
             throw new IllegalStateException("building register campaign must be COMPLETED before projection");
         }
-        List<Long> candidates = repository.findSelectedCandidateIds(
+        List<BuildingRatioProjectionTarget> targets = repository.findProjectionTargets(
                 command.collectionId(), command.fromComplexId(), command.toComplexId(), command.maxTargets());
         EnumMap<BuildingRatioProjectionOutcome, Integer> outcomes = new EnumMap<>(BuildingRatioProjectionOutcome.class);
-        for (long candidateId : candidates) {
-            outcomes.merge(repository.project(command.requestId(), candidateId), 1, Integer::sum);
+        for (BuildingRatioProjectionTarget target : targets) {
+            outcomes.merge(repository.project(command.requestId(), target), 1, Integer::sum);
         }
-        return new BuildingRatioProjectionSummary(candidates.size(), outcomes);
+        return new BuildingRatioProjectionSummary(targets.size(), outcomes);
     }
 }

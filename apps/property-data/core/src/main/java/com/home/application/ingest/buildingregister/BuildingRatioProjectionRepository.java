@@ -7,7 +7,8 @@ import java.util.UUID;
 public interface BuildingRatioProjectionRepository {
     boolean isCampaignCompleted(UUID collectionId);
 
-    List<Long> findSelectedCandidateIds(UUID collectionId, Long fromComplexId, Long toComplexId, int limit);
+    List<BuildingRatioProjectionTarget> findProjectionTargets(
+            UUID collectionId, Long fromComplexId, Long toComplexId, int limit);
 
-    BuildingRatioProjectionOutcome project(UUID requestId, long candidateId);
+    BuildingRatioProjectionOutcome project(UUID requestId, BuildingRatioProjectionTarget target);
 }

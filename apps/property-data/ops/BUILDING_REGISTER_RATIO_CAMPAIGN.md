@@ -158,15 +158,14 @@ ops/run-batch-jar.sh \
   toComplexId=<optional-positive-id>
 ```
 
-각 비율은 독립 transaction에서 단지 row를 잠그고 NULL일 때만 갱신한다. 같은 `requestId`와 candidate를 재실행하면 기존 projection 결과를 반환하며 duplicate update를 만들지 않는다.
+각 비율은 독립 transaction에서 단지 row를 잠그고 NULL일 때만 갱신한다. 같은 `requestId`, match, field를 재실행하면 기존 projection 결과를 반환하며 duplicate update를 만들지 않는다. candidate가 없는 필드도 `candidate_id IS NULL`, `outcome='SOURCE_MISSING'`으로 남긴다.
 
 projection 검증:
 
 ```sql
 SELECT p.field, p.outcome, count(*)
 FROM building_ratio_projection p
-JOIN building_ratio_candidate c ON c.id = p.candidate_id
-JOIN building_register_complex_match m ON m.id = c.match_id
+JOIN building_register_complex_match m ON m.id = p.match_id
 WHERE m.collection_id = :'collection_id'::uuid
 GROUP BY p.field, p.outcome
 ORDER BY p.field, p.outcome;
@@ -177,8 +176,7 @@ WHERE outcome = 'APPLIED' AND previous_value IS NOT NULL;
 
 SELECT count(*)
 FROM building_ratio_projection p
-JOIN building_ratio_candidate c ON c.id = p.candidate_id
-JOIN building_register_complex_match m ON m.id = c.match_id
+JOIN building_register_complex_match m ON m.id = p.match_id
 WHERE m.collection_id = :'collection_id'::uuid
   AND m.scope = 'SHARED_RECAP'
   AND p.outcome = 'APPLIED';
@@ -186,7 +184,7 @@ WHERE m.collection_id = :'collection_id'::uuid
 SELECT count(*)
 FROM building_ratio_projection p
 JOIN building_ratio_candidate c ON c.id = p.candidate_id
-JOIN building_register_complex_match m ON m.id = c.match_id
+JOIN building_register_complex_match m ON m.id = p.match_id
 WHERE m.collection_id = :'collection_id'::uuid
   AND c.status = 'SOURCE_CONFLICT'
   AND p.outcome = 'APPLIED';

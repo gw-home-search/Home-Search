@@ -76,6 +76,8 @@ class DatasetRepository(Protocol):
 
     def record_publication_failure(self, acquisition_id: UUID, recorded_at: datetime) -> None: ...
 
+    def publication_pending(self, acquisition_id: UUID) -> bool: ...
+
     def result(self, acquisition_id: UUID, *, idempotent: bool) -> LifecycleResult: ...
 
     def active_snapshot(self, source_id: str) -> ActiveSnapshot | None: ...
@@ -200,7 +202,29 @@ class DatasetLifecycleService:
             )
         )
         if not acquisition.created:
-            return self._repository.result(acquisition.acquisition_id, idempotent=True)
+            existing = self._repository.result(
+                acquisition.acquisition_id, idempotent=True
+            )
+            if existing.status in {"Pass", "NoChange"}:
+                return existing
+            if not self._repository.publication_pending(acquisition.acquisition_id):
+                return existing
+            try:
+                self._repository.publish(acquisition.acquisition_id, self._clock())
+            except PublicationStoreError:
+                self._repository.record_publication_failure(
+                    acquisition.acquisition_id, self._clock()
+                )
+            except ValueError:
+                concurrent = self._repository.result(
+                    acquisition.acquisition_id, idempotent=True
+                )
+                if concurrent.status != "Pass":
+                    raise
+                return concurrent
+            return self._repository.result(
+                acquisition.acquisition_id, idempotent=True
+            )
 
         try:
             parsed = parser()

@@ -121,6 +121,38 @@ def test_checksum_reingest_is_idempotent_and_does_not_duplicate_publication(
     }
 
 
+def test_checksum_reingest_resumes_a_validated_publication_after_interruption(
+    dataset_repository: PostgresDatasetRepository,
+) -> None:
+    class InterruptBeforePublish:
+        def __init__(self, delegate: PostgresDatasetRepository) -> None:
+            self._delegate = delegate
+
+        def __getattr__(self, name: str):
+            return getattr(self._delegate, name)
+
+        def publish(self, _acquisition_id: UUID, _published_at: datetime) -> UUID:
+            raise KeyboardInterrupt
+
+    raw = (FIXTURE_DIR / "valid.json").read_bytes()
+    with pytest.raises(KeyboardInterrupt):
+        service(InterruptBeforePublish(dataset_repository)).ingest_validate_publish(  # type: ignore[arg-type]
+            source_contract(), raw, source_date=SOURCE_DATE
+        )
+
+    recovered = service(dataset_repository).ingest_validate_publish(
+        source_contract(), raw, source_date=SOURCE_DATE
+    )
+
+    assert recovered.status == "Pass"
+    assert recovered.idempotent is True
+    assert dataset_repository.table_counts() == {
+        "raw_objects": 1,
+        "acquisitions": 1,
+        "publications": 1,
+    }
+
+
 def test_same_raw_can_be_reprocessed_under_a_new_normalization_contract(
     dataset_repository: PostgresDatasetRepository,
 ) -> None:

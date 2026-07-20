@@ -188,7 +188,7 @@ class PostgresDatasetRepository:
         try:
             acquired = connection.execute(
                 "SELECT pg_try_advisory_lock(hashtextextended(%s, 0)) AS acquired",
-                (source_id,),
+                (f"refresh:{source_id}",),
             ).fetchone()["acquired"]
             if not acquired:
                 raise SourceRefreshAlreadyRunning("SOURCE_REFRESH_ALREADY_RUNNING")
@@ -631,6 +631,19 @@ class PostgresDatasetRepository:
                 """,
                 (acquisition_id,),
             )
+
+    def publication_pending(self, acquisition_id: UUID) -> bool:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT EXISTS(
+                    SELECT 1 FROM dataset_acquisition
+                    WHERE acquisition_id = %s AND status = 'VALIDATED'
+                ) AS pending
+                """,
+                (acquisition_id,),
+            ).fetchone()
+        return bool(row["pending"])
 
     def result(self, acquisition_id: UUID, *, idempotent: bool) -> LifecycleResult:
         with self._connect() as connection:

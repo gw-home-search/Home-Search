@@ -4,7 +4,7 @@
 
 ## 1. 실행 전 확인
 
-- DB에 property Flyway V11까지 적용되어 있어야 한다.
+- DB에 property Flyway V12까지 적용되어 있어야 한다. V12는 batch runtime role에 evidence table의 삭제 없는 최소 쓰기 권한을 부여한다.
 - `complexBuildingMetadataJob`과 새 캠페인 job을 동시에 실행하지 않는다. 두 job은 같은 PostgreSQL advisory lock을 사용한다.
 - 건축HUB 승인 quota와 배포 환경의 `complex.metadata.daily-request-quota`를 확인한다. `maxRequests`는 둘 중 작은 값의 90% 이하여야 한다.
 - 서비스키는 secret manager 또는 프로세스 환경변수 `BLD_SERVICE_KEY`로만 주입한다. 명령 기록, 로그, SQL, metric label에 키나 요청 URL을 남기지 않는다.

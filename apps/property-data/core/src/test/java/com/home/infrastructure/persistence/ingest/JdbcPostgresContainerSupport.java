@@ -17,6 +17,8 @@ public abstract class JdbcPostgresContainerSupport {
 
     protected static final String AI_READER_ROLE = "home_search_ai_reader";
     protected static final String AI_READER_PASSWORD = "ai-reader-test-only";
+    protected static final String PROPERTY_RUNTIME_ROLE = "home_search_property_runtime";
+    protected static final String PROPERTY_RUNTIME_PASSWORD = "property-runtime-test-only";
 
     private static final DockerImageName POSTGIS_IMAGE =
             DockerImageName.parse("postgis/postgis:16-3.4").asCompatibleSubstituteFor("postgres");
@@ -72,6 +74,24 @@ public abstract class JdbcPostgresContainerSupport {
                 .sql("ALTER ROLE " + AI_READER_ROLE
                         + " NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '"
                         + AI_READER_PASSWORD + "'")
+                .update();
+    }
+
+    protected void ensurePropertyRuntimeRole() {
+        Boolean exists = jdbcClient
+                .sql("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :role)")
+                .param("role", PROPERTY_RUNTIME_ROLE)
+                .query(Boolean.class)
+                .single();
+        if (!exists) {
+            jdbcClient
+                    .sql("CREATE ROLE " + PROPERTY_RUNTIME_ROLE + " LOGIN PASSWORD '" + PROPERTY_RUNTIME_PASSWORD + "'")
+                    .update();
+        }
+        jdbcClient
+                .sql("ALTER ROLE " + PROPERTY_RUNTIME_ROLE
+                        + " INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '"
+                        + PROPERTY_RUNTIME_PASSWORD + "'")
                 .update();
     }
 

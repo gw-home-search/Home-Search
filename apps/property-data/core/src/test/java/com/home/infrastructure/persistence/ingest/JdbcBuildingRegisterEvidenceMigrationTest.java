@@ -34,6 +34,40 @@ class JdbcBuildingRegisterEvidenceMigrationTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("건축물대장 evidence schema는 runtime role에 삭제 없는 최소 쓰기 권한을 부여한다")
+    void grantsRuntimeRoleOnlyTheEvidencePrivilegesRequiredByBatchJobs() {
+        flyway(null).clean();
+        flyway(null).migrate();
+
+        List<String> tables = List.of(
+                "building_register_collection_campaign",
+                "building_register_collection_target",
+                "building_register_endpoint_snapshot",
+                "building_register_raw_page",
+                "building_register_record_snapshot",
+                "building_register_complex_match",
+                "building_register_match_evidence",
+                "building_ratio_candidate",
+                "building_ratio_candidate_input",
+                "building_ratio_projection");
+        assertThat(tables).allSatisfy(table -> {
+            assertThat(hasTablePrivilege(table, "SELECT,INSERT,UPDATE")).isTrue();
+            assertThat(hasTablePrivilege(table, "DELETE")).isFalse();
+        });
+
+        List<String> sequences = List.of(
+                "building_register_collection_target_id_seq",
+                "building_register_endpoint_snapshot_id_seq",
+                "building_register_raw_page_id_seq",
+                "building_register_record_snapshot_id_seq",
+                "building_register_complex_match_id_seq",
+                "building_register_match_evidence_id_seq",
+                "building_ratio_candidate_id_seq",
+                "building_ratio_projection_id_seq");
+        assertThat(sequences).allSatisfy(sequence -> assertThat(hasSequencePrivilege(sequence, "USAGE,SELECT")).isTrue());
+    }
+
+    @Test
     @DisplayName("건축물대장 증거 schema 제약을 검증한다")
     void enforcesFrozenTargetPnuAndCampaignUniqueness() {
         migrateAndSeedTarget();
@@ -114,6 +148,26 @@ class JdbcBuildingRegisterEvidenceMigrationTest extends JdbcMigrationTestSupport
                     VALUES (:collection,'missing','ADAPTIVE',1000,'COLLECTING')
                     """).param("collection", COLLECTION_ID).update();
         insertTarget(1, 501, "1168010300101400001");
+    }
+
+    private boolean hasTablePrivilege(String table, String privileges) {
+        return jdbcClient
+                .sql("SELECT has_table_privilege(:role, :table, :privileges)")
+                .param("role", PROPERTY_RUNTIME_ROLE)
+                .param("table", table)
+                .param("privileges", privileges)
+                .query(Boolean.class)
+                .single();
+    }
+
+    private boolean hasSequencePrivilege(String sequence, String privileges) {
+        return jdbcClient
+                .sql("SELECT has_sequence_privilege(:role, :sequence, :privileges)")
+                .param("role", PROPERTY_RUNTIME_ROLE)
+                .param("sequence", sequence)
+                .param("privileges", privileges)
+                .query(Boolean.class)
+                .single();
     }
 
     private void insertTarget(long ordinal, long complexId, String pnu) {

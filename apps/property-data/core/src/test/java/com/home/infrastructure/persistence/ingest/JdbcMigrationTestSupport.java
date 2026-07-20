@@ -15,5 +15,6 @@ public abstract class JdbcMigrationTestSupport extends JdbcPostgresContainerSupp
     protected void initializeMigrationDatabase() {
         initializeJdbc(POSTGRES);
         ensureAiReaderRole();
+        ensurePropertyRuntimeRole();
     }
 }

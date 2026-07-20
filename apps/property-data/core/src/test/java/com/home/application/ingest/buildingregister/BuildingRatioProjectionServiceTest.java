@@ -7,6 +7,7 @@ import com.home.domain.complex.buildingregister.BuildingRatioField;
 import com.home.domain.complex.buildingregister.BuildingRatioProjectionOutcome;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class BuildingRatioProjectionServiceTest {
@@ -14,6 +15,7 @@ class BuildingRatioProjectionServiceTest {
     private static final UUID REQUEST_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174161");
 
     @Test
+    @DisplayName("건축물대장 비율 투영 결과를 검증한다")
     void rejectsIncompleteCampaign() {
         FakeRepository repository = new FakeRepository();
 
@@ -24,6 +26,7 @@ class BuildingRatioProjectionServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 비율 투영 결과를 검증한다")
     void projectsSelectedCandidatesAndSummarizesOutcomes() {
         FakeRepository repository = new FakeRepository();
         repository.completed = true;

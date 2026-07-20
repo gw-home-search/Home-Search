@@ -7,6 +7,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.home.application.ingest.buildingregister.BuildingRegisterPageRequest;
 import com.home.domain.complex.buildingregister.BuildingRegisterEndpoint;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -16,6 +17,7 @@ class PublicBuildingRegisterPageClientTest {
     private static final String PNU = "1168010300101400001";
 
     @Test
+    @DisplayName("건축물대장 외부 페이지 요청을 검증한다")
     void callsAllBuildingRegisterEndpointsWithExplicitPagination() {
         RestClient.Builder builder = RestClient.builder().baseUrl("https://bld.example.test");
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
@@ -47,6 +49,7 @@ class PublicBuildingRegisterPageClientTest {
     }
 
     @Test
+    @DisplayName("건축물대장 외부 페이지 요청을 검증한다")
     void dropsOversizedBodyButKeepsHashAndObservedSize() {
         RestClient.Builder builder = RestClient.builder().baseUrl("https://bld.example.test");
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();

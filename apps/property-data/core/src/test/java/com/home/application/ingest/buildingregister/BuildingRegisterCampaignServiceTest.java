@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -32,6 +33,7 @@ class BuildingRegisterCampaignServiceTest {
     private static final UUID REQUEST_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174181");
 
     @Test
+    @DisplayName("건축물대장 수집 캠페인 처리를 검증한다")
     void collectsSharedPnuOnceAndKeepsBothMatchesNonProjectable() {
         BuildingRegisterCollectionService collection = mock(BuildingRegisterCollectionService.class);
         BuildingRegisterCampaignRepository campaigns = mock(BuildingRegisterCampaignRepository.class);
@@ -72,6 +74,7 @@ class BuildingRegisterCampaignServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 수집 캠페인 처리를 검증한다")
     void evaluatesStandaloneTitleMatchedByExistingManagementKey() {
         BuildingRegisterCollectionService collection = mock(BuildingRegisterCollectionService.class);
         BuildingRegisterCampaignRepository campaigns = mock(BuildingRegisterCampaignRepository.class);
@@ -100,6 +103,7 @@ class BuildingRegisterCampaignServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 수집 캠페인 처리를 검증한다")
     void evaluatesUniqueRecapWithoutReinterpretingExistingComplexKey() {
         BuildingRegisterCollectionService collection = mock(BuildingRegisterCollectionService.class);
         BuildingRegisterCampaignRepository campaigns = mock(BuildingRegisterCampaignRepository.class);
@@ -124,6 +128,7 @@ class BuildingRegisterCampaignServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 수집 캠페인 처리를 검증한다")
     void recordsEveryUnresolvedHierarchyReasonWithoutCreatingCandidates() {
         assertHierarchyFailure(List.of(), BuildingRegisterMatchStatus.SOURCE_MISSING);
         assertHierarchyFailure(
@@ -160,6 +165,7 @@ class BuildingRegisterCampaignServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 수집 캠페인 처리를 검증한다")
     void requestBudgetExhaustionLeavesCampaignResumable() {
         BuildingRegisterCollectionService collection = mock(BuildingRegisterCollectionService.class);
         BuildingRegisterCampaignRepository campaigns = mock(BuildingRegisterCampaignRepository.class);

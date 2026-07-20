@@ -9,10 +9,12 @@ import static org.mockito.Mockito.when;
 import com.home.domain.complex.buildingregister.BuildingRegisterRawPageStatus;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class BuildingRegisterRawServicesTest {
     @Test
+    @DisplayName("건축물대장 원문 저장 처리를 검증한다")
     void receiptServiceReturnsTheIndependentlyStoredRawPageId() {
         BuildingRegisterRawPageRepository repository = mock(BuildingRegisterRawPageRepository.class);
         BuildingRegisterRawPageReceiptCommand command = new BuildingRegisterRawPageReceiptCommand(
@@ -25,6 +27,7 @@ class BuildingRegisterRawServicesTest {
     }
 
     @Test
+    @DisplayName("건축물대장 원문 저장 처리를 검증한다")
     void finalizerStoresNormalizedRecordsBeforePublishingTotalCount() {
         BuildingRegisterRawPageRepository repository = mock(BuildingRegisterRawPageRepository.class);
         BuildingRegisterEndpointSnapshotStore snapshots = mock(BuildingRegisterEndpointSnapshotStore.class);
@@ -37,6 +40,7 @@ class BuildingRegisterRawServicesTest {
     }
 
     @Test
+    @DisplayName("건축물대장 원문 저장 처리를 검증한다")
     void finalizerDoesNotInventTotalCountForTransportOrParseFailures() {
         BuildingRegisterRawPageRepository repository = mock(BuildingRegisterRawPageRepository.class);
         BuildingRegisterEndpointSnapshotStore snapshots = mock(BuildingRegisterEndpointSnapshotStore.class);

@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class JdbcBuildingRatioCandidateRepositoryTest extends JdbcMigrationTestSupport {
@@ -71,6 +72,7 @@ class JdbcBuildingRatioCandidateRepositoryTest extends JdbcMigrationTestSupport 
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 저장을 검증한다")
     void storesEveryCandidateSelectedCandidateAndSourceInputsIdempotently() {
         BuildingRegisterRecord recap = new BuildingRegisterRecord(
                 "ROOT-1",
@@ -111,6 +113,7 @@ class JdbcBuildingRatioCandidateRepositoryTest extends JdbcMigrationTestSupport 
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 저장을 검증한다")
     void normalizesRepeatingCalculatedValuesBeforeIdempotencyLookup() {
         BuildingRegisterRecord recap = new BuildingRegisterRecord(
                 "ROOT-1",
@@ -140,6 +143,7 @@ class JdbcBuildingRatioCandidateRepositoryTest extends JdbcMigrationTestSupport 
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 저장을 검증한다")
     void recordsHybridRecapNumeratorAndTitleDenominatorRolesSeparately() {
         long titleRecordId =
                 jdbcClient.sql("""
@@ -186,6 +190,7 @@ class JdbcBuildingRatioCandidateRepositoryTest extends JdbcMigrationTestSupport 
     }
 
     @Test
+    @DisplayName("건축물대장 비율 후보 저장을 검증한다")
     void clearsStaleSelectionWhenReevaluationFindsSourceConflict() {
         BuildingRegisterRecord agreed = recap("20", "200");
         BuildingRegisterRecord conflicting = recap("21", "200");

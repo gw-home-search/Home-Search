@@ -4,12 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.home.domain.complex.buildingregister.BuildingRegisterRawPageStatus;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 class BuildingRegisterTransactionBoundaryTest {
     @Test
+    @DisplayName("건축물대장 원문 트랜잭션 경계를 검증한다")
     void separatesRequiresNewRawReceiptFromRequiredFinalization() throws Exception {
         Transactional receipt = BuildingRegisterRawReceiptService.class
                 .getMethod("receive", BuildingRegisterRawPageReceiptCommand.class)

@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class BuildingRegisterCollectionServiceTest {
@@ -22,6 +23,7 @@ class BuildingRegisterCollectionServiceTest {
     private static final UUID REQUEST_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174121");
 
     @Test
+    @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void adaptiveCollectionStopsAfterValidSingleRecap() {
         Fixture fixture = new Fixture();
         fixture.client.respond(BuildingRegisterEndpoint.RECAP_TITLE, page(recap("20", "80"), 1));
@@ -36,6 +38,7 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void adaptiveCollectionFetchesTitleAndBasicOverviewWhenOneRecapRatioIsZero() {
         Fixture fixture = new Fixture();
         fixture.client.respond(BuildingRegisterEndpoint.RECAP_TITLE, page(recap("20", "0"), 1));
@@ -49,6 +52,7 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void adaptiveCollectionFetchesBasicOverviewWhenEmptyRecapHasMultipleTitles() {
         Fixture fixture = new Fixture();
         fixture.client.respond(
@@ -65,6 +69,7 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void providerFailureIsNotTreatedAsEmptyAndNeverTriggersFallback() {
         Fixture fixture = new Fixture();
         fixture.client.respond(
@@ -88,6 +93,7 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void authenticationOrQuotaHttpFailureStopsTheCollectionRun() {
         Fixture fixture = new Fixture();
         fixture.client.respond(
@@ -111,6 +117,7 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void authenticationOrQuotaProviderCodeStopsTheCollectionRun() {
         Fixture fixture = new Fixture();
         fixture.client.respond(
@@ -125,6 +132,7 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void actualRequestsConsumeBudgetBeforeFallbackCall() {
         Fixture fixture = new Fixture();
         fixture.client.respond(BuildingRegisterEndpoint.RECAP_TITLE, page(recap("20", "0"), 1));
@@ -135,6 +143,7 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void oversizedResponseRestartsEndpointSnapshotWithSmallerPageSize() {
         Fixture fixture = new Fixture();
         fixture.client.respond(
@@ -151,6 +160,7 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void completedPageIsReusedWithoutExternalRequest() {
         Fixture fixture = new Fixture();
         fixture.store.completed.put(
@@ -164,6 +174,7 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void paginatesUntilEveryReportedRecordIsCollected() {
         Fixture fixture = new Fixture();
         fixture.client.respond(BuildingRegisterEndpoint.RECAP_TITLE, page(recap("20", "80"), 101));
@@ -188,6 +199,7 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void parseFailureIsRecordedAndDoesNotTriggerFallback() {
         Fixture fixture = new Fixture();
         fixture.client.respond(
@@ -203,6 +215,7 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void nonFatalProviderCodeIsRecordedWithoutStoppingTheWholeRun() {
         Fixture fixture = new Fixture();
         fixture.client.respond(
@@ -216,6 +229,7 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void oversizedAtMinimumPageSizeBecomesPermanent() {
         Fixture fixture = new Fixture();
         for (int pageSize : List.of(100, 50, 25, 10)) {
@@ -242,6 +256,7 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void titleFailurePreservesRecapEvidenceAndStopsBeforeBasicOverview() {
         Fixture fixture = new Fixture();
         fixture.client.respond(BuildingRegisterEndpoint.RECAP_TITLE, page(recap("20", "0"), 1));

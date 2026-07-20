@@ -8,6 +8,7 @@ import com.home.infrastructure.persistence.ingest.matching.JdbcBuildingRegisterE
 import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class JdbcBuildingRegisterEndpointSnapshotStoreTest extends JdbcMigrationTestSupport {
@@ -29,6 +30,7 @@ class JdbcBuildingRegisterEndpointSnapshotStoreTest extends JdbcMigrationTestSup
     }
 
     @Test
+    @DisplayName("건축물대장 endpoint snapshot 저장을 검증한다")
     void resumesSameActiveSnapshotButStartsNewAttemptAfterOversizedAbandonment() {
         var first = store.open(COLLECTION_ID, PNU, BuildingRegisterEndpoint.TITLE, runDate, 100);
         var resumed = store.open(COLLECTION_ID, PNU, BuildingRegisterEndpoint.TITLE, runDate, 100);
@@ -48,6 +50,7 @@ class JdbcBuildingRegisterEndpointSnapshotStoreTest extends JdbcMigrationTestSup
     }
 
     @Test
+    @DisplayName("건축물대장 endpoint snapshot 저장을 검증한다")
     void mapsCollectedSnapshotToParsedOrEmptyTerminalState() {
         var parsed = store.open(COLLECTION_ID, PNU, BuildingRegisterEndpoint.RECAP_TITLE, runDate, 100);
         store.complete(parsed.id(), 3, BuildingRegisterCollectionStatus.COLLECTED);

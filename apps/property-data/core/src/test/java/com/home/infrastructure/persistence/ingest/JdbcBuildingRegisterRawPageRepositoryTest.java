@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class JdbcBuildingRegisterRawPageRepositoryTest extends JdbcMigrationTestSupport {
@@ -40,6 +41,7 @@ class JdbcBuildingRegisterRawPageRepositoryTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("건축물대장 원문 페이지 저장을 검증한다")
     void commitsRawPageBeforeNormalizedRecordsAndFinalizesParsedState() {
         long rawPageId = repository.receive(receipt("{\"response\":{}}"));
 
@@ -59,6 +61,7 @@ class JdbcBuildingRegisterRawPageRepositoryTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("건축물대장 원문 페이지 저장을 검증한다")
     void sameAttemptReceiptIsIdempotentWithoutOverwritingRawBody() {
         long first = repository.receive(receipt("{\"first\":true}"));
         long second = repository.receive(receipt("{\"second\":true}"));
@@ -79,6 +82,7 @@ class JdbcBuildingRegisterRawPageRepositoryTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("건축물대장 원문 페이지 저장을 검증한다")
     void parseFailureKeepsRawBodyAndCanBeReplayedWithoutAnotherReceipt() {
         long rawPageId = repository.receive(receipt("{\"recoverable\":true}"));
         repository.complete(rawPageId, BuildingRegisterRawPageStatus.PARSE_FAILED, List.of());

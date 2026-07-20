@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 
@@ -13,6 +14,7 @@ class JdbcBuildingRegisterEvidenceMigrationTest extends JdbcMigrationTestSupport
     private static final UUID REQUEST_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174101");
 
     @Test
+    @DisplayName("건축물대장 증거 schema 제약을 검증한다")
     void createsAppendOnlyBuildingRegisterEvidenceSchema() {
         flyway(null).clean();
         flyway(null).migrate();
@@ -32,6 +34,7 @@ class JdbcBuildingRegisterEvidenceMigrationTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("건축물대장 증거 schema 제약을 검증한다")
     void enforcesFrozenTargetPnuAndCampaignUniqueness() {
         migrateAndSeedTarget();
 
@@ -42,6 +45,7 @@ class JdbcBuildingRegisterEvidenceMigrationTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("건축물대장 증거 schema 제약을 검증한다")
     void keepsRawAttemptsButAllowsOnlyOneCompletedPagePerSnapshot() {
         migrateAndSeedTarget();
         long snapshotId = insertEndpointSnapshot();
@@ -53,6 +57,7 @@ class JdbcBuildingRegisterEvidenceMigrationTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("건축물대장 증거 schema 제약을 검증한다")
     void requiresRawPageBeforeNormalizedRecordAndPreventsEvidenceDeletion() {
         migrateAndSeedTarget();
         long snapshotId = insertEndpointSnapshot();
@@ -78,6 +83,7 @@ class JdbcBuildingRegisterEvidenceMigrationTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("건축물대장 증거 schema 제약을 검증한다")
     void allowsAtMostOneSelectedCandidatePerMatchAndField() {
         migrateAndSeedTarget();
         long matchId = insertMatch();

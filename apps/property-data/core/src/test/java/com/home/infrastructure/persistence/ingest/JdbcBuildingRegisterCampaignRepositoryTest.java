@@ -13,6 +13,7 @@ import com.home.infrastructure.persistence.ingest.matching.JdbcBuildingRegisterC
 import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class JdbcBuildingRegisterCampaignRepositoryTest extends JdbcMigrationTestSupport {
@@ -34,6 +35,7 @@ class JdbcBuildingRegisterCampaignRepositoryTest extends JdbcMigrationTestSuppor
     }
 
     @Test
+    @DisplayName("건축물대장 캠페인 저장을 검증한다")
     void freezesTargetScopeAndRejectsChangedCampaignParameters() {
         var first = repository.freezeOrLoad(command(1000));
         var resumed = repository.freezeOrLoad(command(1000));
@@ -45,6 +47,7 @@ class JdbcBuildingRegisterCampaignRepositoryTest extends JdbcMigrationTestSuppor
     }
 
     @Test
+    @DisplayName("건축물대장 캠페인 저장을 검증한다")
     void persistsTerminalMatchEvidenceAndCompletesCampaign() {
         repository.freezeOrLoad(command(1000));
         long matchId = repository.recordMatch(

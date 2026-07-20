@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.Set;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class BuildingRegisterHierarchyMatcherTest {
@@ -11,6 +12,7 @@ class BuildingRegisterHierarchyMatcherTest {
     private final BuildingRegisterComplexMatchPolicy matcher = new BuildingRegisterComplexMatchPolicy();
 
     @Test
+    @DisplayName("건축물대장 계층과 단지 매칭을 검증한다")
     void marksRootIncompleteWhenExpectedBasicOverviewChildIsMissingFromTitles() {
         var result = hierarchy.resolve(List.of(
                 record(BuildingRegisterEndpoint.RECAP_TITLE, "ROOT", null, 1, "1", "Sample", null),
@@ -21,6 +23,7 @@ class BuildingRegisterHierarchyMatcherTest {
     }
 
     @Test
+    @DisplayName("건축물대장 계층과 단지 매칭을 검증한다")
     void rejectsConflictingDuplicateManagementKey() {
         var result = hierarchy.resolve(List.of(
                 record(BuildingRegisterEndpoint.RECAP_TITLE, "ROOT", null, 1, "1", "Sample", null),
@@ -31,6 +34,7 @@ class BuildingRegisterHierarchyMatcherTest {
     }
 
     @Test
+    @DisplayName("건축물대장 계층과 단지 매칭을 검증한다")
     void rejectsMultipleNewGenerationRecaps() {
         var result = hierarchy.resolve(List.of(
                 record(BuildingRegisterEndpoint.RECAP_TITLE, "ROOT-1", null, 1, "1", "A", null),
@@ -40,6 +44,7 @@ class BuildingRegisterHierarchyMatcherTest {
     }
 
     @Test
+    @DisplayName("건축물대장 계층과 단지 매칭을 검증한다")
     void permitsSingleStandaloneTitleOnlyForSinglePnuComplex() {
         var source = hierarchy.resolve(
                 List.of(record(BuildingRegisterEndpoint.TITLE, "TITLE-1", null, 3, "1", "Sample", "101")));
@@ -55,6 +60,7 @@ class BuildingRegisterHierarchyMatcherTest {
     }
 
     @Test
+    @DisplayName("건축물대장 계층과 단지 매칭을 검증한다")
     void appliesStructuralMatchPriorityWithoutSimilarity() {
         List<BuildingRegisterSourceScope> roots =
                 List.of(scope("ROOT-A", "Alpha", Set.of("101", "102")), scope("ROOT-B", "Beta", Set.of("201", "202")));
@@ -73,6 +79,7 @@ class BuildingRegisterHierarchyMatcherTest {
     }
 
     @Test
+    @DisplayName("건축물대장 계층과 단지 매칭을 검증한다")
     void usesExactDongSetOnlyWhenMutuallyUnique() {
         List<BuildingRegisterSourceScope> roots = List.of(
                 scope("ROOT-A", "Unknown A", Set.of("101", "102")), scope("ROOT-B", "Unknown B", Set.of("201", "202")));
@@ -86,6 +93,7 @@ class BuildingRegisterHierarchyMatcherTest {
     }
 
     @Test
+    @DisplayName("건축물대장 계층과 단지 매칭을 검증한다")
     void marksOneRecapSharedByMultipleComplexesAsNonProjectable() {
         List<BuildingRegisterComplexTarget> targets =
                 List.of(target(1, null, Set.of("A"), Set.of("101")), target(2, null, Set.of("B"), Set.of("102")));
@@ -100,6 +108,7 @@ class BuildingRegisterHierarchyMatcherTest {
     }
 
     @Test
+    @DisplayName("건축물대장 계층과 단지 매칭을 검증한다")
     void leavesPartialSubstringNameUnmatched() {
         var matches = matcher.match(
                 List.of(target(1, null, Set.of("Sample Apartment"), Set.of())),

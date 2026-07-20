@@ -129,12 +129,13 @@ title without adding a surrounding tile or badge. `Beta` stays out of the app ba
 `홈서치 AI` title after the drawer opens. The open state stays borderless and
 does not add a persistent box around the app-bar action. Opening it creates a flat right drawer
 below the app header, not a floating launcher or a card-like modal. On desktop
-and short landscape screens, the drawer uses
-`min(520px, 40vw)` and consumes that width from the map workspace instead of
-covering it. At `<=900px` with enough vertical room, it becomes a bottom split:
+and short landscape screens, the drawer stays between 420px and 460px using
+`clamp(420px, 30vw, 460px)` and consumes that width from the map workspace
+instead of covering it. Between 721px and 1279px, opening chat closes the
+exploration rail so the side-by-side map keeps a usable width. At `<=900px`
+with enough vertical room, chat becomes a bottom split:
 the conversation uses up to `62dvh` while the filter and at least 180px of map
-remain visible above it. Opening chat also closes the exploration panel in this
-narrow layout so the map stays usable. Kakao map relayout preserves its center
+remain visible above it. Kakao map relayout preserves its center
 and refreshes viewport-bound data after either split changes size.
 
 Conversation history stays in browser IndexedDB. The main drawer never shows a
@@ -154,6 +155,10 @@ different apartment complex so the available question range is visible before
 selection. Example copy asks for specific output such as transaction date,
 floor, monthly volume, or identity details instead of using short generic
 prompts.
+The vertical space between the introduction and examples scales with viewport
+height but stops at 220px, avoiding the oversized empty band seen on tall
+desktop screens. Mobile uses a fixed 32px separation so the examples remain
+reachable inside the bottom split.
 The app-bar AI action and drawer toolbar actions keep transparent surfaces in
 hover, pressed, and expanded states; only icon/text color changes. Keyboard
 `focus-visible` outlines remain, so removing the gray press box does not remove
@@ -188,8 +193,9 @@ owns a centered 32px control and each trail label owns its own ellipsis box.
 
 Region navigation uses a quiet single-line breadcrumb as the only visible
 region heading on the white panel. Its stage actions are unframed text, the
-current stage is distinguished by weight, and each transition uses a dedicated
-14px right chevron separator. Breadcrumb items never compress their labels;
+current stage uses 14px Sky text and a 2px underline while ancestors step back
+to smaller muted text. Each transition uses a quiet 12px right chevron
+separator. Breadcrumb items never compress their labels;
 the row scrolls horizontally and brings the current stage into view. Region
 choices are a three-column grid of 52px
 white tiles with restrained, visibly rounded 4px corners and Sky hover/selection states. Tile labels stay
@@ -203,7 +209,10 @@ with household/building counts aligned on the right.
 The breadcrumb is the only region-stage navigation label. Do not render a
 separate `시군구 선택` or `읍면동 선택` summary row. `시도 선택` and every
 selected ancestor are 32px breadcrumb buttons; selecting an ancestor reloads
-that region, truncates deeper trail items, and returns to its child grid.
+that region, truncates deeper trail items, and returns to its child grid. A map
+marker extends the trail only when its id is present in the currently loaded
+child grid; otherwise it starts a new trail so unrelated regions are never
+presented as an administrative hierarchy.
 
 Region complex rows are leaf-only. Their list uses 76px comparison rows without
 an outer rounded card: complex name plus address/approval year stay on the left,

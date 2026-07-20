@@ -699,6 +699,68 @@ describe('App 검색과 지역', () => {
     unmount(root);
   });
 
+  it('현재 상세의 child가 아닌 지도 지역 marker를 누르면 잘못된 breadcrumb를 이어 붙이지 않는다', async () => {
+    const fetchMock = vi.fn((url: RequestInfo | URL) => {
+      const requestUrl = String(url);
+      if (requestUrl === resolveApiUrl('/api/v1/region')) {
+        return Promise.resolve(jsonResponse([{ id: 1, name: 'Seoul' }]));
+      }
+      if (requestUrl === resolveApiUrl('/api/v1/region/1')) {
+        return Promise.resolve(jsonResponse({
+          id: 1,
+          name: 'Seoul',
+          latitude: 37.5663,
+          longitude: 126.978,
+          children: [{ id: 11, name: 'Gangnam-gu' }],
+        }));
+      }
+      if (requestUrl === resolveApiUrl('/api/v1/region/26')) {
+        return Promise.resolve(jsonResponse({
+          id: 26,
+          name: 'Busan',
+          latitude: 35.1796,
+          longitude: 129.0756,
+          children: [{ id: 261, name: 'Haeundae-gu' }],
+        }));
+      }
+      if (requestUrl === resolveApiUrl('/api/v1/map/regions')) {
+        return Promise.resolve(jsonResponse([{
+          id: 26,
+          name: 'Busan',
+          lat: 35.1796,
+          lng: 129.0756,
+          unitCntSum: 900,
+        }]));
+      }
+      return Promise.resolve(jsonResponse([]));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp({ initialRegionLoad: true, kakaoMapAppKey: '' });
+    await flushAsyncState();
+    await flushAsyncState();
+
+    await act(async () => {
+      rootElement.querySelector<HTMLButtonElement>('button[aria-label="지역 이동 Seoul"]')?.click();
+    });
+    await flushAsyncState();
+    expect(rootElement.querySelector('[aria-label="지역 단계"]')?.textContent).toContain('Seoul');
+
+    const unrelatedMapMarker = rootElement.querySelector<HTMLButtonElement>(
+      '[data-fallback-marker-id="region-26"]',
+    );
+    expect(unrelatedMapMarker).not.toBeNull();
+    await act(async () => unrelatedMapMarker?.click());
+    await flushAsyncState();
+    await flushAsyncState();
+
+    const breadcrumb = rootElement.querySelector('[aria-label="지역 단계"]');
+    expect(breadcrumb?.textContent).toContain('Busan');
+    expect(breadcrumb?.textContent).not.toContain('Seoul');
+
+    unmount(root);
+  });
+
   it('지역 marker 세대수가 없으면 0세대 대신 세대수 없음으로 표시한다', async () => {
     const fetchMock = vi.fn((url: RequestInfo | URL) => {
       if (String(url) === resolveApiUrl('/api/v1/map/regions')) {

@@ -34,7 +34,7 @@ export function MapApp({
 
   useEffect(() => {
     function syncExplorationWithViewport() {
-      if (isChatOpen && window.innerWidth <= 900) setIsExplorationOpen(false);
+      if (isChatOpen && window.innerWidth <= 1279) setIsExplorationOpen(false);
       else if (window.innerWidth > 720) setIsExplorationOpen(true);
     }
     window.addEventListener('resize', syncExplorationWithViewport);
@@ -88,7 +88,8 @@ export function MapApp({
 
   const handleChatOpenChange = useCallback((isOpen: boolean) => {
     setIsChatOpen(isOpen);
-    if (isOpen && window.innerWidth <= 900) setIsExplorationOpen(false);
+    if (isOpen && window.innerWidth <= 1279) setIsExplorationOpen(false);
+    else if (!isOpen && window.innerWidth > 720) setIsExplorationOpen(true);
   }, []);
 
   return (

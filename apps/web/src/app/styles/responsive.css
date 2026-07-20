@@ -21,6 +21,22 @@
   .filter-chip { width: 88px; }
 }
 
+@media (min-width: 721px) and (max-width: 1279px) {
+  .app-shell[data-chat-open="true"] .map-workspace[data-exploration-open="false"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-shell[data-chat-open="true"] .map-workspace[data-exploration-open="false"] .map-column {
+    grid-column: 1;
+  }
+}
+
+@media (min-width: 1280px) and (max-width: 1679px) {
+  .app-shell[data-chat-open="true"] {
+    --hs-map-rail-width: var(--hs-map-rail-width-standard);
+  }
+}
+
 @media (max-width: 720px) {
   .app-shell[data-ui-surface="map-first"] {
     grid-template-rows: var(--hs-map-mobile-brand-height) minmax(0, 1fr);

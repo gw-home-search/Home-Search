@@ -91,7 +91,7 @@
   --hs-map-tablet-rail-width: 336px;
   --hs-map-rail-width: var(--hs-map-rail-width-wide);
   --hs-map-mobile-min-height: 180px;
-  --hs-chat-drawer-width: min(520px, 40vw);
+  --hs-chat-drawer-width: clamp(420px, 30vw, 460px);
   --hs-chat-mobile-height: min(
     62dvh,
     calc(100dvh - var(--hs-map-mobile-brand-height) - var(--hs-map-filter-height) - var(--hs-map-mobile-min-height))

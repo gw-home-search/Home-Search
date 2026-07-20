@@ -176,7 +176,7 @@ describe('공개 지도 디자인 시스템 계약', () => {
   });
 
   it('챗봇을 열면 지도 위를 덮지 않고 desktop side와 mobile bottom split을 사용한다', () => {
-    expect(designSystem).toContain('--hs-chat-drawer-width: min(520px, 40vw);');
+    expect(designSystem).toContain('--hs-chat-drawer-width: clamp(420px, 30vw, 460px);');
     expect(designSystem).toContain('--hs-chat-mobile-height: min(');
     expect(shell).toContain('.app-shell[data-chat-open="true"] .map-workspace {');
     expect(shell).toContain('margin-right: var(--hs-chat-drawer-width);');
@@ -184,6 +184,8 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(chat).toContain('width: var(--hs-chat-drawer-width);');
     expect(chat).toContain('height: var(--hs-chat-mobile-height);');
     expect(chat).toContain('@media (max-width: 900px) and (min-height: 501px)');
+    expect(responsive).toContain('@media (min-width: 721px) and (max-width: 1279px)');
+    expect(responsive).toContain('.app-shell[data-chat-open="true"] .map-workspace[data-exploration-open="false"]');
   });
 
   it('AI 진입은 간결한 전용 mark를 사용하고 추천 질문은 soft card로 구분해 보여준다', () => {
@@ -198,6 +200,7 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(chat).toContain('font-style: italic;');
     expect(chat).toContain('max-width: 440px;');
     expect(chat).toContain('margin: 0;');
+    expect(chat).toContain('margin-top: clamp(96px, 18dvh, 220px);');
     expect(chat).toContain('.chatbot-empty-intro > span { margin-bottom: 5px; font-size: 15px;');
     expect(chat).toContain('.chatbot-empty-intro > strong { font-size: 23px;');
     expect(chat).toContain('.chatbot-empty-intro > p { margin: 9px 0 0;');
@@ -314,13 +317,14 @@ describe('공개 지도 디자인 시스템 계약', () => {
   it('지역 breadcrumb를 박스 장식 없는 가벼운 텍스트 탐색으로 유지한다', () => {
     expect(exploration).toContain('padding: 0 2px 8px;');
     expect(exploration).toContain('border-bottom: 1px solid var(--hs-map-color-line);');
-    expect(exploration).toContain('.region-breadcrumb-link[aria-current="page"] { color: var(--hs-map-color-ink) !important; font-weight: 800; }');
-    expect(exploration).toContain('.region-breadcrumb-step > svg { width: 14px; height: 14px;');
+    expect(exploration).toContain('.region-breadcrumb-link[aria-current="page"] { position: relative; color: var(--hs-map-color-action) !important; font-size: 14px; font-weight: 760; }');
+    expect(exploration).toContain('.region-breadcrumb-link[aria-current="page"]::after {');
+    expect(exploration).toContain('.region-breadcrumb-step > svg { width: 12px; height: 12px;');
     expect(exploration).toContain('overflow-x: auto;');
     expect(exploration).toContain('.region-breadcrumb-step { display: inline-flex; min-width: max-content; flex: 0 0 auto;');
     expect(exploration).not.toContain('transform: rotate(-90deg);');
     expect(icons).toContain('export function ChevronRightIcon');
-    expect(exploration).toContain('color: var(--hs-map-color-line-strong); stroke-width: 2;');
+    expect(exploration).toContain('color: var(--hs-map-color-line-strong); stroke-width: 1.8;');
     expect(exploration).not.toContain('box-shadow: inset 0 0 0 1px var(--hs-map-color-primary);');
     expect(exploration).not.toContain('border-radius: var(--hs-map-radius-pill); background: var(--hs-map-color-surface); color: var(--hs-map-color-action); stroke-width: 2.25;');
   });

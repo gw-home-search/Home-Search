@@ -281,7 +281,7 @@
 .chatbot-empty-intro > strong { font-size: 23px; font-weight: 820; line-height: 32px; letter-spacing: -.03em; text-wrap: balance; }
 .chatbot-empty-intro > p { margin: 9px 0 0; color: var(--hs-map-color-ink-soft); font-size: 15px; line-height: 24px; text-wrap: pretty; }
 
-.chatbot-example-section { margin-top: auto; padding-top: 34px; }
+.chatbot-example-section { margin-top: clamp(96px, 18dvh, 220px); }
 .chatbot-example-section > strong { display: block; margin-bottom: 10px; color: var(--hs-map-color-ink); font-size: 15px; font-weight: 790; line-height: 21px; letter-spacing: -.025em; }
 .chatbot-example-questions { display: grid; width: 100%; gap: 8px; }
 
@@ -409,7 +409,7 @@
   .chatbot-empty-intro > svg { margin-bottom: 11px; }
   .chatbot-empty-intro > strong { font-size: 21px; line-height: 29px; }
   .chatbot-empty-intro > p { margin-top: 6px; font-size: 14px; line-height: 22px; }
-  .chatbot-example-section { padding-top: 24px; }
+  .chatbot-example-section { margin-top: 32px; }
   .chatbot-example-questions button { min-height: 62px; padding: 10px 12px; }
   .chatbot-example-copy { font-size: 13.5px; line-height: 20px; }
   .chatbot-form { gap: 5px; padding: 9px 12px 11px; }

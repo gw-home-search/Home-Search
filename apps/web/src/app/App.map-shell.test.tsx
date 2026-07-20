@@ -82,7 +82,8 @@ describe('App 지도 shell', () => {
     unmount(root);
   });
 
-  it('챗봇을 열고 닫으면 shell이 지도와 대화의 push layout 상태를 노출한다', async () => {
+  it('챗봇을 열면 중간 폭 화면에서 탐색 rail을 닫고 지도와 대화의 split 상태를 노출한다', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1180 });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
     const authClient: AuthClient = {
       authenticatedRequest: async () => new Response('{}', { status: 503 }),
@@ -107,13 +108,11 @@ describe('App 지도 shell', () => {
     await flushAsyncState();
     expect(shell?.getAttribute('data-chat-open')).toBe('true');
     expect(rootElement.querySelector('[aria-label="지도 화면"]')).not.toBeNull();
-
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 });
-    act(() => window.dispatchEvent(new Event('resize')));
     expect(rootElement.querySelector('#exploration-panel')?.hasAttribute('hidden')).toBe(true);
 
     await act(async () => rootElement.querySelector<HTMLButtonElement>('button[aria-label="챗봇 닫기"]')?.click());
     expect(shell?.getAttribute('data-chat-open')).toBe('false');
+    expect(rootElement.querySelector('#exploration-panel')?.hasAttribute('hidden')).toBe(false);
 
     unmount(root);
   });

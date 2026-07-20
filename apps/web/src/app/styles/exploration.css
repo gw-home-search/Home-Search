@@ -121,6 +121,7 @@
 .region-breadcrumb::-webkit-scrollbar { display: none; }
 
 .region-breadcrumb-link {
+  position: relative;
   display: inline-flex;
   height: 32px;
   min-width: 0;
@@ -130,19 +131,29 @@
   padding: 0 4px !important;
   border-radius: var(--hs-map-radius-rail-compact) !important;
   background: transparent !important;
-  color: var(--hs-map-color-ink-soft) !important;
-  font-size: 13px;
-  font-weight: 600;
+  color: var(--hs-map-color-muted) !important;
+  font-size: 12px;
+  font-weight: 560;
   line-height: var(--hs-map-type-control-line);
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
 }
-.region-breadcrumb-link:hover { background: var(--hs-map-color-surface-muted) !important; color: var(--hs-map-color-ink) !important; }
-.region-breadcrumb-link[aria-current="page"] { color: var(--hs-map-color-ink) !important; font-weight: 800; }
+.region-breadcrumb-link:hover { background: transparent !important; color: var(--hs-map-color-action) !important; }
+.region-breadcrumb-link[aria-current="page"] { position: relative; color: var(--hs-map-color-action) !important; font-size: 14px; font-weight: 760; }
+.region-breadcrumb-link[aria-current="page"]::after {
+  position: absolute;
+  right: 4px;
+  bottom: 0;
+  left: 4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--hs-map-color-primary);
+  content: "";
+}
 .region-breadcrumb-root { flex: 0 0 auto; }
-.region-breadcrumb-step { display: inline-flex; min-width: max-content; flex: 0 0 auto; align-items: center; gap: 2px; color: var(--hs-map-color-line-strong); }
-.region-breadcrumb-step > svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--hs-map-color-line-strong); stroke-width: 2; }
+.region-breadcrumb-step { display: inline-flex; min-width: max-content; flex: 0 0 auto; align-items: center; gap: 0; color: var(--hs-map-color-line-strong); }
+.region-breadcrumb-step > svg { width: 12px; height: 12px; flex: 0 0 auto; color: var(--hs-map-color-line-strong); stroke-width: 1.8; }
 .region-breadcrumb-step .region-breadcrumb-link { flex: 0 0 auto; }
 
 .panel-list { display: grid; min-width: 0; gap: var(--hs-map-space-2); margin: 0; padding: 0; list-style: none; }

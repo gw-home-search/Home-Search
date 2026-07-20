@@ -83,7 +83,12 @@ export function useRegionExplorer({
   }
 
   function handleMapRegionSelect(region: RegionTrailItem, currentMapLevel: number) {
-    loadRegion(region, regionTrail, nextRegionMapLevel(currentMapLevel));
+    const isVerifiedChild = rootRegions.some((child) => child.id === region.id);
+    loadRegion(
+      region,
+      isVerifiedChild ? regionTrail : [],
+      nextRegionMapLevel(currentMapLevel),
+    );
   }
 
   function handleRegionTrailSelect(region: RegionTrailItem, index: number) {

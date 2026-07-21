@@ -109,6 +109,41 @@ class BuildingRegisterProfileAnalysisServiceTest {
                 .isEqualTo(com.home.domain.complex.buildingprofile.BuildingProfileComparisonStatus.MATCH);
     }
 
+    @Test
+    @DisplayName("site field 충돌은 projectable complex readiness에서 제외한다")
+    void excludesConflictingSiteFieldsFromProjectableReadiness(@TempDir Path output) {
+        FakeRepository repository = new FakeRepository();
+        repository.records = List.of(
+                record(
+                        1,
+                        BuildingRegisterEndpoint.RECAP_TITLE,
+                        "ROOT",
+                        null,
+                        1,
+                        Map.of(BuildingProfileField.PLAT_AREA, decimal("200"))),
+                record(
+                        2,
+                        BuildingRegisterEndpoint.TITLE,
+                        "TITLE",
+                        "ROOT",
+                        3,
+                        Map.of(BuildingProfileField.PLAT_AREA, decimal("300"))));
+        repository.complexes = List.of(new BuildingProfileAnalysisComplex(501, PNU, 1));
+        repository.weights = Map.of(PNU, 1.0d);
+
+        new BuildingProfileAnalysisService(repository)
+                .analyze(new BuildingProfileAnalysisCommand(
+                        UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "PROFILE_V1", output));
+
+        assertThat(repository.quality.stream()
+                        .filter(value -> value.field() == BuildingProfileField.PLAT_AREA)
+                        .filter(value -> value.stratum().equals("WEIGHTED_NATIONAL"))
+                        .findFirst())
+                .get()
+                .extracting(BuildingProfileFieldQualityEvidence::projectableComplexReadiness)
+                .isEqualTo(0.0d);
+    }
+
     private BuildingProfileAnalysisRecord record(
             long id,
             BuildingRegisterEndpoint endpoint,
@@ -138,6 +173,7 @@ class BuildingRegisterProfileAnalysisServiceTest {
         List<BuildingProfileAnalysisComplex> complexes = List.of();
         Map<String, Double> weights = Map.of();
         List<BuildingProfileComparisonEvidence> comparisons = new ArrayList<>();
+        List<BuildingProfileFieldQualityEvidence> quality = new ArrayList<>();
 
         @Override
         public boolean startOrLoad(BuildingProfileAnalysisCommand command) {
@@ -194,7 +230,9 @@ class BuildingRegisterProfileAnalysisServiceTest {
         }
 
         @Override
-        public void recordFieldQuality(UUID analysisRunId, List<BuildingProfileFieldQualityEvidence> quality) {}
+        public void recordFieldQuality(UUID analysisRunId, List<BuildingProfileFieldQualityEvidence> quality) {
+            this.quality = List.copyOf(quality);
+        }
 
         @Override
         public void complete(UUID analysisRunId, String reportManifestJson) {}

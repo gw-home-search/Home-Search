@@ -462,8 +462,16 @@ public class BuildingProfileAnalysisService {
         double pnuCoverage = rate(pnuNumerator, totalWeight);
         List<BuildingProfileComplexMatchEvidence> eligibleMatches =
                 matches.stream().filter(match -> pnuSet.contains(match.pnu())).toList();
+        Set<String> unprojectablePnus = comparisons.stream()
+                .filter(value -> value.field() == field)
+                .filter(value -> value.status() == BuildingProfileComparisonStatus.CONFLICT
+                        || value.status() == BuildingProfileComparisonStatus.INCOMPLETE)
+                .map(value -> scopePnus.get(value.scopeHash()))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
         long readyComplexes = eligibleMatches.stream()
                 .filter(BuildingProfileComplexMatchEvidence::projectable)
+                .filter(match -> !unprojectablePnus.contains(match.pnu()))
                 .filter(match -> byPnu.getOrDefault(match.pnu(), List.of()).stream()
                         .anyMatch(record -> valid(field, record.value(field))))
                 .count();

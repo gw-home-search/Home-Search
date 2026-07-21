@@ -2,6 +2,7 @@ package com.home.domain.complex.buildingregister;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.home.domain.complex.buildingprofile.BuildingProfileField;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -33,6 +34,8 @@ class BuildingRegisterDomainMetadataTest {
             assertMetadata(value.titleKo(), value.descriptionKo());
         for (BuildingRegisterRawPageStatus value : BuildingRegisterRawPageStatus.values())
             assertMetadata(value.titleKo(), value.descriptionKo());
+        for (BuildingProfileField value : BuildingProfileField.values())
+            assertMetadata(value.titleKo(), value.descriptionKo());
     }
 
     @Test
@@ -57,5 +60,7 @@ class BuildingRegisterDomainMetadataTest {
     private void assertMetadata(String titleKo, String descriptionKo) {
         assertThat(titleKo).isNotBlank();
         assertThat(descriptionKo).isNotBlank();
+        assertThat(titleKo).containsPattern("[가-힣]");
+        assertThat(descriptionKo).containsPattern("[가-힣]");
     }
 }

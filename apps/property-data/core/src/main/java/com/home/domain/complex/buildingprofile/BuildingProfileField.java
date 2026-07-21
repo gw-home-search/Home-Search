@@ -150,11 +150,11 @@ public enum BuildingProfileField {
     }
 
     public String titleKo() {
-        return name();
+        return "건축물대장 필드 " + name();
     }
 
     public String descriptionKo() {
-        return scope.titleKo() + " " + valueType.titleKo() + " profile field";
+        return "건축물대장 " + scope.titleKo() + " 범위의 " + valueType.titleKo() + " 형식 필드";
     }
 
     public static Optional<BuildingProfileField> fromProviderKey(String key) {

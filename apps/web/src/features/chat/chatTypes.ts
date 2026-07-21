@@ -29,4 +29,6 @@ export type ChatbotResponse = ChatEvidence & {
   success: boolean;
   status: 'success' | 'partial_success' | 'failed';
   answer: string;
+  artifacts: ChatArtifact[];
 };
+import type { ChatArtifact } from './artifactContract';

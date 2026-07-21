@@ -1,5 +1,8 @@
 import type { ConversationContext } from '../storage/chatConversationStore';
+import { readChatArtifacts } from '../artifactContract';
 import type { ChatbotResponse, ChatCitation, ChatEvidenceSummary } from '../chatTypes';
+
+type ChatbotWireResponse = Omit<ChatbotResponse, 'artifacts'> & { uiArtifacts?: unknown };
 
 export type AuthenticatedChatbotRequest = (
   path: string,
@@ -25,7 +28,8 @@ export async function queryChatbot(
   try {
     const body: unknown = await response.json();
     if (!isChatbotResponse(body)) throw new Error();
-    return body;
+    const factIds = new Set(body.citations.flatMap((citation) => citation.factIds));
+    return { ...body, artifacts: readChatArtifacts(body.uiArtifacts, factIds) };
   } catch {
     throw new Error('챗봇 응답을 확인하지 못했습니다.');
   }
@@ -38,7 +42,7 @@ function errorMessage(status: number): string {
   return '챗봇 요청을 완료하지 못했습니다.';
 }
 
-function isChatbotResponse(value: unknown): value is ChatbotResponse {
+function isChatbotResponse(value: unknown): value is ChatbotWireResponse {
   if (!isRecord(value)
     || typeof value.success !== 'boolean'
     || !['success', 'partial_success', 'failed'].includes(String(value.status))

@@ -28,6 +28,24 @@ describe('챗봇 질문 client', () => {
         factCount: 1,
         citationCount: 1,
       },
+      uiArtifacts: [{
+        type: 'factList',
+        version: 1,
+        artifactId: 'artifact-1',
+        title: '확인된 단지 정보',
+        items: [{ label: '단지명', value: '잠실엘스', factIds: ['property-trade-1'] }],
+      }, {
+        type: 'futureArtifact',
+        version: 1,
+        artifactId: 'future-1',
+      }, {
+        type: 'factList',
+        version: 1,
+        artifactId: 'malformed-1',
+        title: '잘못된 artifact',
+        items: [{ label: '단지명', value: '<script>alert(1)</script>', factIds: [] }],
+      }],
+      uiActions: [],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
 
     const response = await queryChatbot(authenticatedRequest, {
@@ -45,6 +63,13 @@ describe('챗봇 질문 client', () => {
     }), 'public');
     expect(response.evidenceSummary.status).toBe('supported');
     expect(response.citations[0]?.factIds).toEqual(['property-trade-1']);
+    expect(response.artifacts).toEqual([{
+      type: 'factList',
+      version: 1,
+      artifactId: 'artifact-1',
+      title: '확인된 단지 정보',
+      items: [{ label: '단지명', value: '잠실엘스', factIds: ['property-trade-1'] }],
+    }]);
   });
 
   it('잘못된 성공 body를 거부하고 응답 원문 노출 없이 실패를 변환한다', async () => {

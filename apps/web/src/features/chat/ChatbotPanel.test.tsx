@@ -39,6 +39,8 @@ describe('챗봇 패널', () => {
     expect(host.textContent).toContain('출처 1개');
     expect(host.textContent).toContain('Home Search 실거래');
     expect(host.textContent).toContain('근거 등급 A');
+    expect(host.querySelector('.chatbot-fact-list')?.textContent).toContain('확인된 단지 정보');
+    expect(host.querySelector('.chatbot-fact-list')?.textContent).toContain('잠실엘스');
     expect(client.authenticatedRequest).toHaveBeenCalledWith(
       '/api/v1/chatbot/query',
       expect.any(Object),
@@ -47,6 +49,7 @@ describe('챗봇 패널', () => {
     const saved = await store.list();
     expect(saved[0]?.messages.map(({ role }) => role)).toEqual(['user', 'assistant']);
     expect(saved[0]?.messages[1]?.evidence?.citations[0]?.sourceId).toBe('property.ai_read');
+    expect(saved[0]?.messages[1]?.artifacts).toHaveLength(1);
 
     act(() => root?.unmount());
     root = undefined;
@@ -214,6 +217,14 @@ function authenticatedClient(): AuthClient {
         factCount: 1,
         citationCount: 1,
       },
+      uiArtifacts: [{
+        type: 'factList',
+        version: 1,
+        artifactId: 'artifact-1',
+        title: '확인된 단지 정보',
+        items: [{ label: '단지명', value: '잠실엘스', factIds: ['property-trade-1'] }],
+      }],
+      uiActions: [],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })),
     authorizationUrl: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),

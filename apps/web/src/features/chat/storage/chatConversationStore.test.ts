@@ -39,6 +39,18 @@ describe('IndexedDB 챗봇 대화 저장소', () => {
     const source = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-test-export');
     const target = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-test-import');
     const first = conversation('first', '2026-07-17T00:00:00.000Z');
+    first.messages[0] = {
+      ...first.messages[0]!,
+      role: 'assistant',
+      evidence: evidence('https://example.com/source'),
+      artifacts: [{
+        type: 'factList',
+        version: 1,
+        artifactId: 'artifact-1',
+        title: '확인된 단지 정보',
+        items: [{ label: '단지명', value: '잠실엘스', factIds: ['property-trade-1'] }],
+      }],
+    };
     await source.save(first);
 
     const archive = await source.exportArchive('2026-07-17T02:00:00.000Z');

@@ -1,0 +1,46 @@
+.chatbot-artifacts {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chatbot-fact-list {
+  border: 1px solid rgba(15, 38, 32, 0.12);
+  border-radius: 12px;
+  background: rgba(239, 247, 243, 0.78);
+  padding: 10px 12px;
+}
+
+.chatbot-fact-list h4 {
+  margin: 0 0 8px;
+  color: #173d33;
+  font-size: 12px;
+}
+
+.chatbot-fact-list dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.chatbot-fact-list dl > div {
+  display: grid;
+  grid-template-columns: minmax(52px, auto) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.chatbot-fact-list dt,
+.chatbot-fact-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.chatbot-fact-list dt {
+  color: #65756f;
+}
+
+.chatbot-fact-list dd {
+  color: #18342d;
+  font-weight: 650;
+}

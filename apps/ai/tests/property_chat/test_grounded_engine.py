@@ -13,6 +13,11 @@ from ai_service.property_chat.engine import (
     GroundingValidationError,
     validate_draft,
 )
+from ai_service.property_chat.answer_document import (
+    FactListArtifact,
+    FactListItem,
+    FactListPresenter,
+)
 from ai_service.property_chat.models import (
     ComplexRecord,
     DraftAnswer,
@@ -513,6 +518,138 @@ def test_identity_does_not_expose_unverified_coordinates() -> None:
 
     assert response["evidenceSummary"]["status"] == "supported"
     assert "표시 좌표" in response["limitations"][0]
+
+
+def test_complex_identity_returns_fact_list_artifact_from_the_validated_fact() -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    model = FakeLanguageModel(
+        QueryPlan(capability="complex_identity", complex_name="잠실엘스"),
+        DraftAnswer(
+            sentences=[
+                DraftSentence(
+                    text="잠실동 잠실엘스의 주소는 서울 송파구 잠실동 19입니다.",
+                    fact_ids=["property-complex-11471"],
+                    claims=[
+                        DraftClaim(
+                            "property-complex-11471",
+                            "잠실동 잠실엘스",
+                            "TEXT",
+                        ),
+                        DraftClaim(
+                            "property-complex-11471",
+                            "서울 송파구 잠실동 19",
+                            "TEXT",
+                        ),
+                    ],
+                )
+            ]
+        ),
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        ),
+        "잠실엘스 위치",
+        "request-identity-artifact",
+    )
+
+    assert response["uiArtifacts"] == [
+        {
+            "type": "factList",
+            "version": 1,
+            "artifactId": "fact-list-complex-11471",
+            "title": "확인된 단지 정보",
+            "items": [
+                {
+                    "label": "단지명",
+                    "value": "잠실동 잠실엘스",
+                    "factIds": ["property-complex-11471"],
+                },
+                {
+                    "label": "지역",
+                    "value": "잠실동",
+                    "factIds": ["property-complex-11471"],
+                },
+                {
+                    "label": "주소",
+                    "value": "서울 송파구 잠실동 19",
+                    "factIds": ["property-complex-11471"],
+                },
+                {
+                    "label": "위치",
+                    "value": "37.513, 127.082",
+                    "factIds": ["property-complex-11471"],
+                },
+            ],
+        }
+    ]
+    assert response["citations"][0]["factIds"] == ["property-complex-11471"]
+
+
+@pytest.mark.parametrize(
+    ("label", "value", "fact_ids"),
+    [
+        (" ", "value", ("fact-1",)),
+        ("label", " ", ("fact-1",)),
+        ("label", "value", ()),
+        ("label", "value", ("fact-1", "fact-1")),
+    ],
+)
+def test_fact_list_item_rejects_invalid_public_fields(
+    label: str, value: str, fact_ids: tuple[str, ...]
+) -> None:
+    with pytest.raises(ValueError):
+        FactListItem(label, value, fact_ids)
+
+
+def test_fact_list_artifact_enforces_title_item_and_serialized_size_limits() -> None:
+    item = FactListItem("항목", "값", ("fact-1",))
+    with pytest.raises(ValueError):
+        FactListArtifact("artifact-1", " ", (item,))
+    with pytest.raises(ValueError):
+        FactListArtifact("artifact-1", "제목", ())
+
+    oversized_items = tuple(
+        FactListItem(f"항목-{index}", "🙂" * 2_000, (f"fact-{index}",))
+        for index in range(10)
+    )
+    with pytest.raises(ValueError):
+        FactListArtifact("artifact-oversized", "제목", oversized_items).to_public_dict()
+
+
+def test_fact_list_presenter_ignores_other_capabilities_and_invalid_identity_payloads() -> None:
+    fact = EvidenceFact(
+        fact_id="property-complex-1",
+        claims=(FactClaim("1", "COMPLEX_ID"),),
+        data_as_of=date(2026, 7, 16),
+        payload={"complexId": "1", "displayName": "단지"},
+    )
+    presenter = FactListPresenter()
+
+    assert presenter.present(
+        plan=QueryPlan(capability="recent_trade_lookup", complex_name="단지"),
+        used_facts=[fact],
+        readiness="supported",
+    ) == []
+    assert presenter.present(
+        plan=QueryPlan(capability="complex_identity", complex_name="단지"),
+        used_facts=[fact],
+        readiness="unavailable",
+    ) == []
+    assert presenter.present(
+        plan=QueryPlan(capability="complex_identity", complex_name="단지"),
+        used_facts=[],
+        readiness="supported",
+    ) == []
+    assert presenter.present(
+        plan=QueryPlan(capability="complex_identity", complex_name="단지"),
+        used_facts=[fact],
+        readiness="supported",
+    ) == []
 
 
 @pytest.mark.parametrize(

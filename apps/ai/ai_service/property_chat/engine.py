@@ -11,6 +11,7 @@ from ai_service.auth import AuthenticatedUser
 from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
 
+from .answer_document import AnswerDocument, FactListPresenter
 from .models import (
     AdministrativeRegionContext,
     ComplexRecord,
@@ -237,7 +238,12 @@ class GroundedChatbotEngine:
                 limitations=limitations,
                 enforce_school_policy=plan.capability == "school_location",
             )
-            return _response(
+            artifacts = FactListPresenter().present(
+                plan=plan,
+                used_facts=used_facts,
+                readiness=readiness,
+            )
+            return AnswerDocument.from_grounded_result(
                 request=request,
                 request_id=request_id,
                 plan=plan,
@@ -245,7 +251,8 @@ class GroundedChatbotEngine:
                 used_facts=used_facts,
                 limitations=limitations,
                 readiness=readiness,
-            )
+                artifacts=artifacts,
+            ).to_public_dict()
         except ChatbotProviderUnavailable:
             raise
         except Exception as exception:
@@ -1109,82 +1116,6 @@ def validate_draft(
     if readiness != "unavailable" and set(used_ids) != set(fact_by_id):
         raise GroundingValidationError("GROUNDING_FACTS_OMITTED")
     return [fact_by_id[fact_id] for fact_id in used_ids]
-
-
-def _response(
-    *,
-    request: ChatbotQueryRequest,
-    request_id: str,
-    plan: QueryPlan,
-    draft: DraftAnswer,
-    used_facts: list[EvidenceFact],
-    limitations: list[str],
-    readiness: str,
-) -> dict[str, object]:
-    answer = " ".join(sentence.text.strip() for sentence in draft.sentences)
-    citations = _citations(used_facts)
-    data_as_of = min((fact.data_as_of for fact in used_facts), default=None)
-    success = readiness != "unavailable"
-    legacy_status = (
-        "failed" if readiness == "unavailable" else "partial_success" if readiness == "partial" else "success"
-    )
-    return {
-        "success": success,
-        "status": legacy_status,
-        "question": request.question,
-        "fragments": [],
-        "result": {},
-        "message": "",
-        "executionSummary": {"total": 1, "succeeded": int(success), "failed": int(not success)},
-        "answer": answer,
-        "resolvedQuestion": request.question,
-        "conversationResolution": None,
-        "conversationMemoryPatch": None,
-        "uiActions": [],
-        "uiArtifacts": [],
-        "uiSummary": None,
-        "requestId": request_id,
-        "citations": citations,
-        "dataAsOf": data_as_of.isoformat() if data_as_of else None,
-        "limitations": limitations,
-        "evidenceSummary": {
-            "status": readiness,
-            "capabilities": [plan.capability],
-            "factCount": len(used_facts),
-            "citationCount": len(citations),
-        },
-    }
-
-
-def _citations(facts: list[EvidenceFact]) -> list[dict[str, object]]:
-    grouped: dict[tuple[str, str, str | None, str, str, date], list[str]] = {}
-    for fact in facts:
-        key = (
-            fact.source_id,
-            fact.source_name,
-            fact.source_url,
-            fact.evidence_grade,
-            fact.dataset_version,
-            fact.data_as_of,
-        )
-        grouped.setdefault(key, []).append(fact.fact_id)
-    return [
-        {
-            "citationId": f"citation-{index}",
-            "sourceId": source_id,
-            "sourceName": source_name,
-            "sourceUrl": source_url,
-            "evidenceGrade": evidence_grade,
-            "datasetVersion": version,
-            "dataAsOf": data_as_of.isoformat(),
-            "observedAt": None,
-            "factIds": fact_ids,
-        }
-        for index, (
-            (source_id, source_name, source_url, evidence_grade, version, data_as_of),
-            fact_ids,
-        ) in enumerate(grouped.items(), start=1)
-    ]
 
 
 def _validate_school_sentence(text: str, referenced: list[EvidenceFact]) -> None:

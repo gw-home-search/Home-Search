@@ -39,3 +39,21 @@ commit: `docs(ai): define grounded lifestyle answer gates`
 ```
 
 후속 Slice는 완료할 때 같은 필드 순서로 이 ledger에 한 항목씩 추가한다.
+
+```text
+Slice: S1 — 구조화 답변 최소 vertical path
+요구사항: complex_identity가 동일 EvidenceFact 기반 factList/v1을 텍스트와 함께 반환·저장·표시한다.
+구현 범위: AI AnswerDocument/FactListPresenter, web strict adapter·IndexedDB optional artifact·FactList UI; BFF는 JsonNode passthrough 유지
+지적사항: none — macOS case-insensitive module 이름 충돌은 GREEN 전에 artifactContract.ts로 수정
+검증 근거 확인: 최초 RED에서 AI uiArtifacts=[]와 web adapter/storage/UI 누락 확인; `uv run pytest --no-cov tests/property_chat tests/test_http_contract.py` 244 passed; `uv run pytest` 640 passed, coverage 90.16%; `./gradlew chatBffQualityCheck --no-daemon --stacktrace` Pass; `npm run lint` 0 errors(기존 warning 8); `npm run test` 238 passed; `npm run build` Pass; `git diff --check` Pass
+검증 공백: none
+과설계 판정: factList 한 종류만 구현; registry·reflection·dynamic import 없음
+코드 스멜: engine.py 1,265줄(기준 1,334 미만), ChatbotPanel.tsx 443줄(기준 470 미만)
+공통화 결정: response와 archive 두 실제 소비자가 공유하는 artifact validator만 추출; presenter base class 없음
+UI 연결: ChatMessageBody와 ChatArtifacts 분리, React text node 렌더, unknown/malformed fallback 유지
+잔여 위험: 현재 renderer는 의도적으로 factList/v1만 지원; lint warning 8건은 변경 전 기존 항목
+점수: 10.0/10 Pass
+api-contract: compatible
+security-audit: 지적사항 = none
+commit: `feat(ai): return grounded answer artifacts`
+```

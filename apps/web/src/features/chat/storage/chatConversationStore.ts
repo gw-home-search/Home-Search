@@ -1,4 +1,5 @@
 import type { ChatCitation, ChatEvidence } from '../chatTypes';
+import { readChatArtifacts, type ChatArtifact } from '../artifactContract';
 
 export type ChatMessageRole = 'user' | 'assistant';
 
@@ -8,6 +9,7 @@ export type ChatMessage = {
   content: string;
   createdAt: string;
   evidence?: ChatEvidence;
+  artifacts?: ChatArtifact[];
 };
 
 export type ChatConversation = {
@@ -210,6 +212,11 @@ function validateMessage(candidate: unknown): ChatMessage {
     createdAt: requireIsoTimestamp(candidate.createdAt, 'message createdAt'),
   };
   if (candidate.evidence !== undefined) message.evidence = validateEvidence(candidate.evidence);
+  if (candidate.artifacts !== undefined) {
+    const factIds = new Set(message.evidence?.citations.flatMap((citation) => citation.factIds) ?? []);
+    const artifacts = readChatArtifacts(candidate.artifacts, factIds);
+    if (artifacts.length > 0) message.artifacts = artifacts;
+  }
   return message;
 }
 

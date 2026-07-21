@@ -7,6 +7,7 @@ import pytest
 from testcontainers.postgres import PostgresContainer
 
 from ai_service.property_chat.school_postgres import PostgresSchoolFactRepository
+from ai_service.property_chat.comparison import CandidatePoint
 
 
 @pytest.fixture(scope="module")
@@ -69,6 +70,27 @@ def test_nearby_school_query_includes_boundary_and_excludes_outside_closed_and_o
     assert result.schools[0].distance_meters == 800
     assert snapshot is not None
     assert snapshot.source_date == date(2026, 3, 20)
+
+
+def test_school_batch_returns_nearest_school_per_requested_level(
+    reference_postgres_dsn: str,
+) -> None:
+    repository = PostgresSchoolFactRepository(
+        reference_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        batch = repository.nearest_by_level_batch(
+            points=(CandidatePoint(1, 37.513, 127.082, "11710"),),
+            school_levels=("ELEMENTARY", "MIDDLE"), radius_meters=1500,
+        )
+    finally:
+        repository.close()
+
+    assert batch is not None
+    _, results = batch
+    assert {school.school_level for school in results[1].schools} == {
+        "ELEMENTARY", "MIDDLE",
+    }
 
 
 @pytest.mark.parametrize(

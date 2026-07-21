@@ -10,6 +10,7 @@ from ai_service.datasets.childcare import ChildcareAdapter
 from ai_service.datasets.postgres import PostgresDatasetRepository, _PROJECTION_WRITERS
 from ai_service.datasets.service import DatasetLifecycleService
 from ai_service.property_chat.childcare_centers import PostgresChildcareRepository
+from ai_service.property_chat.comparison import CandidatePoint
 from tests.datasets.test_childcare_adapter import OBSERVED_AT, _bundle, _contract, _response
 
 
@@ -86,6 +87,10 @@ def test_childcare_projection_reuses_facility_point_and_exposes_typed_view(
             limit=5,
             region_code="11710",
         )
+        batch = repository.nearby_batch(
+            points=(CandidatePoint(1, 37.5131, 127.0822, "11710"),),
+            radius_meters=800,
+        )
     finally:
         repository.close()
 
@@ -94,6 +99,9 @@ def test_childcare_projection_reuses_facility_point_and_exposes_typed_view(
     assert nearby.coordinate_coverage == 1.0
     assert nearby.centers[0].center_name == "꿈나무어린이집"
     assert nearby.centers[0].capacity == 50
+    assert batch is not None
+    assert batch[1].matched_count == 1
+    assert batch[1].centers[0].center_name == "꿈나무어린이집"
 
     with pytest.raises(ValueError, match="expected database"):
         PostgresChildcareRepository(

@@ -7,7 +7,7 @@ import math
 import re
 
 from .comparison import RecentThreeTradeBasis
-from .models import ComplexRecord
+from .models import ComplexRecord, LifestyleTheme
 
 POLICY_VERSION = "recommendation-policy-v1"
 
@@ -18,6 +18,8 @@ class RecommendationCandidate:
     trade_basis: RecentThreeTradeBasis
     rail_distance_meters: int | None
     retail_distance_meters: int | None
+    student_score_ratio: float | None = None
+    young_child_score_ratio: float | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -29,6 +31,14 @@ class RecommendationCandidate:
                 value is not None and (isinstance(value, bool) or value < 0)
                 for value in (self.rail_distance_meters, self.retail_distance_meters)
             )
+            or any(
+                value is not None and (
+                    not math.isfinite(value) or not 0 <= value <= 1
+                )
+                for value in (
+                    self.student_score_ratio, self.young_child_score_ratio
+                )
+            )
         ):
             raise ValueError("recommendation candidate is invalid")
 
@@ -38,23 +48,41 @@ class ScoreBreakdown:
     price_points: float
     rail_points: float
     retail_points: float
+    student_points: float = 0.0
+    young_child_points: float = 0.0
+    rail_weight: float = 25.0
+    retail_weight: float = 15.0
+    student_weight: float = 0.0
+    young_child_weight: float = 0.0
     policy_version: str = POLICY_VERSION
 
     def __post_init__(self) -> None:
         if (
             self.policy_version != POLICY_VERSION
             or self.price_points != 60.0
-            or not 0 <= self.rail_points <= 25
-            or not 0 <= self.retail_points <= 15
+            or not 0 <= self.rail_points <= self.rail_weight
+            or not 0 <= self.retail_points <= self.retail_weight
+            or not 0 <= self.student_points <= self.student_weight
+            or not 0 <= self.young_child_points <= self.young_child_weight
+            or not math.isclose(
+                self.rail_weight + self.retail_weight
+                + self.student_weight + self.young_child_weight,
+                40,
+            )
             or not all(math.isfinite(value) for value in (
-                self.price_points, self.rail_points, self.retail_points
+                self.price_points, self.rail_points, self.retail_points,
+                self.student_points, self.young_child_points,
             ))
         ):
             raise ValueError("recommendation score breakdown is invalid")
 
     @property
     def total_score(self) -> float:
-        return round(self.price_points + self.rail_points + self.retail_points, 1)
+        return round(
+            self.price_points + self.rail_points + self.retail_points
+            + self.student_points + self.young_child_points,
+            1,
+        )
 
 
 @dataclass(frozen=True)
@@ -68,13 +96,27 @@ class RecommendationResult:
 
 
 class RecommendationPolicy:
-    def __init__(self, *, maximum_budget_ten_thousand_krw: int) -> None:
+    def __init__(
+        self,
+        *,
+        maximum_budget_ten_thousand_krw: int,
+        lifestyle_themes: tuple[LifestyleTheme, ...] = (),
+    ) -> None:
         if (
             isinstance(maximum_budget_ten_thousand_krw, bool)
             or not 1 <= maximum_budget_ten_thousand_krw <= 100_000_000
         ):
             raise ValueError("recommendation budget is outside the supported range")
         self._maximum_budget = maximum_budget_ten_thousand_krw
+        if (
+            len(lifestyle_themes) != len(set(lifestyle_themes))
+            or len(lifestyle_themes) > 3
+            or any(theme not in {
+                "TRANSIT", "STUDENT", "YOUNG_CHILD", "SHOPPING"
+            } for theme in lifestyle_themes)
+        ):
+            raise ValueError("recommendation lifestyle themes are invalid")
+        self._themes = lifestyle_themes
 
     def is_budget_qualified(self, basis: RecentThreeTradeBasis) -> bool:
         return (
@@ -86,17 +128,36 @@ class RecommendationPolicy:
     def rank(
         self, candidates: tuple[RecommendationCandidate, ...]
     ) -> tuple[RecommendationResult, ...]:
+        if (
+            "STUDENT" in self._themes
+            and any(candidate.student_score_ratio is None for candidate in candidates)
+        ) or (
+            "YOUNG_CHILD" in self._themes
+            and any(candidate.young_child_score_ratio is None for candidate in candidates)
+        ):
+            return ()
+        weights = self._weights()
         results = tuple(
             RecommendationResult(
                 candidate=candidate,
                 breakdown=ScoreBreakdown(
                     price_points=60.0,
                     rail_points=_distance_points(
-                        candidate.rail_distance_meters, maximum_distance=1500, weight=25.0
+                        candidate.rail_distance_meters, maximum_distance=1500,
+                        weight=weights["TRANSIT"],
                     ),
                     retail_points=_distance_points(
-                        candidate.retail_distance_meters, maximum_distance=1000, weight=15.0
+                        candidate.retail_distance_meters, maximum_distance=1000,
+                        weight=weights["SHOPPING"],
                     ),
+                    student_points=weights["STUDENT"] * (candidate.student_score_ratio or 0),
+                    young_child_points=(
+                        weights["YOUNG_CHILD"] * (candidate.young_child_score_ratio or 0)
+                    ),
+                    rail_weight=weights["TRANSIT"],
+                    retail_weight=weights["SHOPPING"],
+                    student_weight=weights["STUDENT"],
+                    young_child_weight=weights["YOUNG_CHILD"],
                 ),
             )
             for candidate in candidates
@@ -109,6 +170,20 @@ class RecommendationPolicy:
                 result.candidate.complex_record.complex_id,
             ),
         ))
+
+    def _weights(self) -> dict[LifestyleTheme, float]:
+        if not self._themes:
+            return {
+                "TRANSIT": 25.0, "SHOPPING": 15.0,
+                "STUDENT": 0.0, "YOUNG_CHILD": 0.0,
+            }
+        share = 25.0 / len(self._themes)
+        return {
+            "TRANSIT": 10.0 + (share if "TRANSIT" in self._themes else 0.0),
+            "SHOPPING": 5.0 + (share if "SHOPPING" in self._themes else 0.0),
+            "STUDENT": share if "STUDENT" in self._themes else 0.0,
+            "YOUNG_CHILD": share if "YOUNG_CHILD" in self._themes else 0.0,
+        }
 
 
 def _distance_points(
@@ -127,10 +202,11 @@ class RecommendationScoreItem:
     points: float
     distance_meters: int | None
     fact_ids: tuple[str, ...]
+    details: tuple[str, ...] = ()
 
     def to_public_dict(self) -> dict[str, object]:
         if (
-            self.key not in {"PRICE", "TRANSIT", "SHOPPING"}
+            self.key not in {"PRICE", "TRANSIT", "SHOPPING", "STUDENT", "YOUNG_CHILD"}
             or not 1 <= len(self.label.strip()) <= 100
             or not math.isfinite(self.weight)
             or not math.isfinite(self.points)
@@ -141,6 +217,8 @@ class RecommendationScoreItem:
                 isinstance(self.distance_meters, bool) or self.distance_meters < 0
             )
             or not _valid_fact_ids(self.fact_ids)
+            or len(self.details) > 5
+            or any(not 1 <= len(value.strip()) <= 200 for value in self.details)
         ):
             raise ValueError("recommendation score item is invalid")
         return {
@@ -150,6 +228,7 @@ class RecommendationScoreItem:
             "points": self.points,
             "distanceMeters": self.distance_meters,
             "factIds": list(self.fact_ids),
+            "details": [value.strip() for value in self.details],
         }
 
 
@@ -167,6 +246,7 @@ class RecommendationCard:
     score_breakdown: tuple[RecommendationScoreItem, ...]
     limitations: tuple[str, ...]
     fact_ids: tuple[str, ...]
+    active_themes: tuple[LifestyleTheme, ...] = ()
 
     def to_public_dict(self) -> dict[str, object]:
         if (
@@ -177,9 +257,14 @@ class RecommendationCard:
             or not 0 <= self.total_score <= 100
             or self.latest_trade_amount_ten_thousand_krw <= 0
             or self.median_amount_ten_thousand_krw <= 0
-            or len(self.score_breakdown) != 3
-            or tuple(item.key for item in self.score_breakdown)
+            or not 3 <= len(self.score_breakdown) <= 5
+            or tuple(item.key for item in self.score_breakdown[:3])
             != ("PRICE", "TRANSIT", "SHOPPING")
+            or tuple(item.key for item in self.score_breakdown[3:])
+            != tuple(
+                theme for theme in ("STUDENT", "YOUNG_CHILD")
+                if theme in self.active_themes
+            )
             or len(self.limitations) > 5
             or any(not 1 <= len(value.strip()) <= 2_000 for value in self.limitations)
             or not self.latest_trade_fact_ids
@@ -195,7 +280,9 @@ class RecommendationCard:
                 not set(item.fact_ids).issubset(self.fact_ids)
                 for item in self.score_breakdown
             )
-            or sum(item.weight for item in self.score_breakdown) != 100
+            or not math.isclose(
+                sum(item.weight for item in self.score_breakdown), 100
+            )
             or round(sum(item.points for item in self.score_breakdown), 1)
             != self.total_score
         ):
@@ -215,6 +302,7 @@ class RecommendationCard:
                 "factIds": list(self.median_fact_ids),
             },
             "scoreBreakdown": [item.to_public_dict() for item in self.score_breakdown],
+            "activeThemes": list(self.active_themes),
             "limitations": [value.strip() for value in self.limitations],
             "factIds": list(self.fact_ids),
         }

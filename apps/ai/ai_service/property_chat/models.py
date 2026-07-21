@@ -28,6 +28,7 @@ ReferenceCapability = Literal[
 ]
 NearbyPlaceCategory = Literal["HOSPITAL", "DAYCARE_KINDERGARTEN"]
 SchoolLevel = Literal["ELEMENTARY", "MIDDLE", "HIGH"]
+LifestyleTheme = Literal["TRANSIT", "STUDENT", "YOUNG_CHILD", "SHOPPING"]
 FacilitySubtype = Literal[
     "LARGE_MART",
     "DEPARTMENT_STORE",
@@ -52,6 +53,7 @@ class QueryPlan:
     place_category: NearbyPlaceCategory | None = None
     complex_names: tuple[str, ...] = ()
     maximum_budget_ten_thousand_krw: int | None = None
+    lifestyle_themes: tuple[LifestyleTheme, ...] = ()
 
     def __post_init__(self) -> None:
         normalized_name = self.complex_name.strip()
@@ -154,6 +156,16 @@ class QueryPlan:
             raise ValueError(
                 "maximum_budget_ten_thousand_krw is only supported for recommendation"
             )
+        theme_order = ("TRANSIT", "STUDENT", "YOUNG_CHILD", "SHOPPING")
+        if (
+            len(self.lifestyle_themes) != len(set(self.lifestyle_themes))
+            or any(theme not in theme_order for theme in self.lifestyle_themes)
+            or self.lifestyle_themes and self.capability not in {"recommendation", "comparison"}
+        ):
+            raise ValueError("lifestyle themes are invalid")
+        object.__setattr__(self, "lifestyle_themes", tuple(
+            theme for theme in theme_order if theme in self.lifestyle_themes
+        ))
 
 
 @dataclass(frozen=True)

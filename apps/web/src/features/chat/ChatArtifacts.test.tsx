@@ -79,6 +79,7 @@ describe('추천카드 artifact UI', () => {
         ],
         limitations: ['가격 통과 후보에는 추가 가격 가산점이 없습니다.'],
         factIds: ['complex-501', 'trade-501', 'rail-501', 'retail-501'],
+        activeThemes: [],
       }],
     };
 
@@ -91,5 +92,31 @@ describe('추천카드 artifact UI', () => {
     expect(html).toContain('<summary>점수 근거</summary>');
     expect(html).toContain('20 / 25점 · 300m');
     expect(html).not.toContain('투자');
+  });
+
+  it('명시적으로 반영한 생활조건 badge를 표시한다', () => {
+    const artifact: RecommendationCardsArtifact = {
+      type: 'recommendationCards', version: 1, artifactId: 'recommendation-themed',
+      title: '조건을 충족한 단지', policyVersion: 'recommendation-policy-v1',
+      cards: [{
+        rank: 1, complexId: 1, complexName: '후보 1', totalScore: 100,
+        latestTrade: { date: '2026-07-20', amountTenThousandKrw: 190000, factIds: ['trade'] },
+        recentThreeMedian: { amountTenThousandKrw: 190000, factIds: ['trade'] },
+        scoreBreakdown: [
+          { key: 'PRICE', label: '예산 조건', weight: 60, points: 60, distanceMeters: null, factIds: ['trade'] },
+          { key: 'TRANSIT', label: '철도 접근성', weight: 22.5, points: 22.5, distanceMeters: 0, factIds: ['rail'] },
+          { key: 'SHOPPING', label: '대규모점포 접근성', weight: 5, points: 5, distanceMeters: 0, factIds: ['retail'] },
+          { key: 'STUDENT', label: '학생 조건', weight: 12.5, points: 12.5, distanceMeters: null, factIds: ['student'], details: ['ELEMENTARY: 가까운초등학교 300m', '800m 내 Sbiz 교육업소 5곳'] },
+        ],
+        limitations: [], factIds: ['complex', 'trade', 'rail', 'retail', 'student'],
+        activeThemes: ['TRANSIT', 'STUDENT'],
+      }],
+    };
+
+    const html = renderToStaticMarkup(<ChatArtifacts artifacts={[artifact]} />);
+    expect(html).toContain('aria-label="반영한 생활조건"');
+    expect(html).toContain('>교통<');
+    expect(html).toContain('>학생<');
+    expect(html).toContain('800m 내 Sbiz 교육업소 5곳');
   });
 });

@@ -5,6 +5,7 @@ import math
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+from .comparison import CandidatePoint
 from .models import SchoolRecord, SchoolSearchResult, SchoolSnapshot
 
 
@@ -135,6 +136,99 @@ class PostgresSchoolFactRepository:
         )
         matched_count = int(rows[0]["matched_count"]) if rows else 0
         return SchoolSearchResult(schools=schools, matched_count=matched_count)
+
+    def nearest_by_level_batch(
+        self,
+        *,
+        points: tuple[CandidatePoint, ...],
+        school_levels: tuple[str, ...],
+        radius_meters: int,
+    ) -> tuple[SchoolSnapshot, dict[int, SchoolSearchResult]] | None:
+        if (
+            not 1 <= len(points) <= 100
+            or len({point.complex_id for point in points}) != len(points)
+        ):
+            raise ValueError("school batch points are invalid")
+        for point in points:
+            _validate_query(
+                point.latitude, point.longitude, school_levels, radius_meters, 5,
+            )
+        with self._pool.connection() as connection:
+            metadata = connection.execute(
+                """
+                SELECT dataset_version, reference_date, published_at
+                FROM reference_read.school_location_fact LIMIT 1
+                """
+            ).fetchone()
+            rows = connection.execute(
+                """
+                WITH candidates AS (
+                    SELECT complex_id, latitude, longitude
+                    FROM unnest(%s::bigint[], %s::double precision[], %s::double precision[])
+                         AS value(complex_id, latitude, longitude)
+                ), measured AS (
+                    SELECT candidate.complex_id, school.*,
+                           %s * 2 * asin(sqrt(
+                               power(sin(radians(school.latitude - candidate.latitude) / 2), 2)
+                               + cos(radians(candidate.latitude)) * cos(radians(school.latitude))
+                               * power(sin(radians(school.longitude - candidate.longitude) / 2), 2)
+                           )) AS distance_meters
+                    FROM candidates candidate
+                    JOIN reference_read.school_location_fact school
+                      ON school.operating_status = '운영'
+                     AND school.school_level = ANY(%s)
+                     AND school.latitude BETWEEN
+                         candidate.latitude - degrees(%s / %s)
+                         AND candidate.latitude + degrees(%s / %s)
+                     AND school.longitude BETWEEN
+                         candidate.longitude - degrees(%s / %s)
+                           / greatest(cos(radians(candidate.latitude)), 0.01)
+                         AND candidate.longitude + degrees(%s / %s)
+                           / greatest(cos(radians(candidate.latitude)), 0.01)
+                ), ranked AS (
+                    SELECT *, row_number() OVER (
+                        PARTITION BY complex_id, school_level
+                        ORDER BY distance_meters, school_id
+                    ) AS distance_rank
+                    FROM measured WHERE distance_meters <= %s
+                )
+                SELECT * FROM ranked WHERE distance_rank = 1
+                ORDER BY complex_id, school_level
+                """,
+                (
+                    [point.complex_id for point in points],
+                    [point.latitude for point in points],
+                    [point.longitude for point in points],
+                    _EARTH_RADIUS_METERS, list(school_levels),
+                    radius_meters, _EARTH_RADIUS_METERS,
+                    radius_meters, _EARTH_RADIUS_METERS,
+                    radius_meters, _EARTH_RADIUS_METERS,
+                    radius_meters, _EARTH_RADIUS_METERS,
+                    radius_meters,
+                ),
+            ).fetchall()
+        if metadata is None:
+            return None
+        snapshot = SchoolSnapshot(
+            str(metadata["dataset_version"]), metadata["reference_date"],
+            metadata["published_at"],
+        )
+        by_complex = {point.complex_id: [] for point in points}
+        for row in rows:
+            by_complex[int(row["complex_id"])].append(SchoolRecord(
+                school_id=str(row["school_id"]),
+                school_name=str(row["school_name"]),
+                school_level=str(row["school_level"]),  # type: ignore[arg-type]
+                operating_status=str(row["operating_status"]),
+                road_address=row["road_address"],  # type: ignore[arg-type]
+                lot_address=row["lot_address"],  # type: ignore[arg-type]
+                latitude=float(row["latitude"]), longitude=float(row["longitude"]),
+                distance_meters=round(float(row["distance_meters"])),
+            ))
+        return snapshot, {
+            complex_id: SchoolSearchResult(tuple(schools), len(schools))
+            for complex_id, schools in by_complex.items()
+        }
 
 
 def _validate_query(

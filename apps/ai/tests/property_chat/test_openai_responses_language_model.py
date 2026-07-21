@@ -359,6 +359,7 @@ def test_planning_requires_typed_recommendation_region_budget_and_area() -> None
             regionName="송파구",
             exclusiveAreaSquareMeters=84.0,
             maximumBudgetTenThousandKrw=200_000,
+            lifestyleThemes=["TRANSIT", "STUDENT"],
         ))
     )
 
@@ -369,6 +370,7 @@ def test_planning_requires_typed_recommendation_region_budget_and_area() -> None
     assert plan.capability == "recommendation"
     assert plan.region_name == "송파구"
     assert plan.maximum_budget_ten_thousand_krw == 200_000
+    assert plan.lifestyle_themes == ("TRANSIT", "STUDENT")
     body = json.loads(requester.calls[0][2])
     schema = body["text"]["format"]["schema"]
     assert "maximumBudgetTenThousandKrw" in schema["required"]
@@ -378,6 +380,7 @@ def test_planning_requires_typed_recommendation_region_budget_and_area() -> None
         "maximum": 100000000,
     }
     assert "server owns those decisions" in body["input"][0]["content"]
+    assert "server revalidates them" in body["input"][0]["content"]
 
 
 def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> None:

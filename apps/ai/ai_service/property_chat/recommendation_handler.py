@@ -1,17 +1,30 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Protocol
 
+from .academy_locations import AcademyLocationSearchResult
 from .capability_handlers import CapabilityResult, EvidenceFactBuilders
+from .childcare_centers import ChildcareSearchResult
 from .comparison import CandidatePoint, RecentThreeTradeBasis
+from .lifestyle_metrics import (
+    childcare_details,
+    childcare_observation_fact,
+    childcare_ratio,
+    student_details,
+    student_observation_fact,
+    student_ratio,
+)
 from .models import (
     ComplexRecord,
     EvidenceFact,
     FactClaim,
     QueryCapability,
     QueryPlan,
+    SchoolSearchResult,
+    SchoolSnapshot,
     TradeRecord,
 )
 from .rail_stations import RailStationSearchResult
@@ -55,6 +68,25 @@ class RecommendationRetailRepository(Protocol):
     ) -> dict[int, FacilitySearchResult] | None: ...
 
 
+class RecommendationSchoolRepository(Protocol):
+    def nearest_by_level_batch(
+        self, *, points: tuple[CandidatePoint, ...], school_levels: tuple[str, ...],
+        radius_meters: int,
+    ) -> tuple[SchoolSnapshot, dict[int, SchoolSearchResult]] | None: ...
+
+
+class RecommendationAcademyRepository(Protocol):
+    def nearby_counts_batch(
+        self, *, points: tuple[CandidatePoint, ...], radius_meters: int
+    ) -> dict[int, AcademyLocationSearchResult] | None: ...
+
+
+class RecommendationChildcareRepository(Protocol):
+    def nearby_batch(
+        self, *, points: tuple[CandidatePoint, ...], radius_meters: int
+    ) -> dict[int, ChildcareSearchResult] | None: ...
+
+
 class RecommendationHandler:
     capability: QueryCapability = "recommendation"
 
@@ -63,12 +95,20 @@ class RecommendationHandler:
         repository: RecommendationPropertyRepository,
         rail_repository: RecommendationRailRepository | None,
         retail_repository: RecommendationRetailRepository | None,
+        school_repository: RecommendationSchoolRepository | None,
+        academy_repository: RecommendationAcademyRepository | None,
+        childcare_repository: RecommendationChildcareRepository | None,
         builders: EvidenceFactBuilders,
+        today: Callable[[], date],
     ) -> None:
         self._repository = repository
         self._rail_repository = rail_repository
         self._retail_repository = retail_repository
+        self._school_repository = school_repository
+        self._academy_repository = academy_repository
+        self._childcare_repository = childcare_repository
         self._builders = builders
+        self._today = today
 
     async def observe(self, plan: QueryPlan) -> CapabilityResult:
         if plan.capability != "recommendation":
@@ -86,6 +126,11 @@ class RecommendationHandler:
             return CapabilityResult(
                 [],
                 ["추천을 실행하려면 다음 조건이 필요합니다: " + ", ".join(missing)],
+                "unavailable",
+            )
+        if len(plan.lifestyle_themes) > 3:
+            return CapabilityResult(
+                [], ["생활조건은 교통·학생·영유아·쇼핑 중 최대 3개로 지정해 주세요."],
                 "unavailable",
             )
         region_name = plan.region_name
@@ -118,9 +163,8 @@ class RecommendationHandler:
         if len(observations) > 100:
             raise ValueError("recommendation candidate cap was exceeded")
         policy = RecommendationPolicy(
-            maximum_budget_ten_thousand_krw=(
-                budget
-            )
+            maximum_budget_ten_thousand_krw=budget,
+            lifestyle_themes=plan.lifestyle_themes,
         )
         bases = {
             complex_id: RecentThreeTradeBasis.from_trades(
@@ -188,6 +232,51 @@ class RecommendationHandler:
             return _source_unavailable("철도")
         if retail_results is None:
             return _source_unavailable("대규모점포")
+        student_results = None
+        academy_results = None
+        if "STUDENT" in plan.lifestyle_themes:
+            if self._school_repository is None or self._academy_repository is None:
+                return _source_unavailable("학교 또는 Sbiz 교육업소")
+            student_results, academy_results = await asyncio.gather(
+                asyncio.to_thread(
+                    self._school_repository.nearest_by_level_batch,
+                    points=points, school_levels=plan.school_levels,
+                    radius_meters=1500,
+                ),
+                asyncio.to_thread(
+                    self._academy_repository.nearby_counts_batch,
+                    points=points, radius_meters=800,
+                ),
+            )
+            if student_results is None or academy_results is None:
+                return _source_unavailable("학교 또는 Sbiz 교육업소")
+            snapshot, school_by_complex = student_results
+            school_age = (self._today() - snapshot.source_date).days
+            if school_age < 0 or school_age > 214 or any(
+                (self._today() - result.observed_at.date()).days < 0
+                or (self._today() - result.observed_at.date()).days > result.freshness_days
+                or result.coordinate_coverage < 0.95
+                for result in academy_results.values()
+            ):
+                return _source_unavailable("학교 또는 Sbiz 교육업소")
+        else:
+            school_by_complex = {}
+        childcare_results = None
+        if "YOUNG_CHILD" in plan.lifestyle_themes:
+            if self._childcare_repository is None:
+                return _source_unavailable("어린이집")
+            childcare_results = await asyncio.to_thread(
+                self._childcare_repository.nearby_batch,
+                points=points, radius_meters=800,
+            )
+            if childcare_results is None or any(
+                result.coordinate_coverage is None
+                or result.coordinate_coverage < 0.9
+                or (self._today() - result.observed_at.date()).days < 0
+                or (self._today() - result.observed_at.date()).days > result.freshness_days
+                for result in childcare_results.values()
+            ):
+                return _source_unavailable("어린이집")
         candidates = tuple(
             RecommendationCandidate(
                 complex_record=record,
@@ -197,6 +286,17 @@ class RecommendationHandler:
                 ),
                 retail_distance_meters=_retail_distance(
                     retail_results.get(record.complex_id)
+                ),
+                student_score_ratio=(
+                    student_ratio(
+                        school_by_complex[record.complex_id],
+                        academy_results[record.complex_id], plan.school_levels,
+                    )
+                    if academy_results is not None else None
+                ),
+                young_child_score_ratio=(
+                    childcare_ratio(childcare_results[record.complex_id])
+                    if childcare_results is not None else None
                 ),
             )
             for record, basis in qualified
@@ -214,12 +314,46 @@ class RecommendationHandler:
                 candidate.trade_basis, budget
             )
             rail_fact = _rail_fact(
-                record.complex_id, rail_result, result.breakdown.rail_points
+                record.complex_id, rail_result,
+                result.breakdown.rail_weight, result.breakdown.rail_points,
             )
             retail_fact = _retail_fact(
-                record.complex_id, retail_result, result.breakdown.retail_points
+                record.complex_id, retail_result,
+                result.breakdown.retail_weight, result.breakdown.retail_points,
             )
-            facts.extend((complex_fact, trade_fact, rail_fact, retail_fact))
+            extra_facts: list[EvidenceFact] = []
+            extra_scores: list[RecommendationScoreItem] = []
+            if student_results is not None and academy_results is not None:
+                student_fact = student_observation_fact(
+                    record.complex_id, school_by_complex[record.complex_id],
+                    student_results[0], academy_results[record.complex_id],
+                    plan.school_levels, result.breakdown.student_weight,
+                    result.breakdown.student_points,
+                )
+                extra_facts.append(student_fact)
+                extra_scores.append(RecommendationScoreItem(
+                    "STUDENT", "학생 조건", result.breakdown.student_weight,
+                    result.breakdown.student_points, None, (student_fact.fact_id,),
+                    student_details(
+                        school_by_complex[record.complex_id],
+                        academy_results[record.complex_id], plan.school_levels,
+                    ),
+                ))
+            if childcare_results is not None:
+                childcare_fact = childcare_observation_fact(
+                    record.complex_id, childcare_results[record.complex_id],
+                    result.breakdown.young_child_weight,
+                    result.breakdown.young_child_points,
+                )
+                extra_facts.append(childcare_fact)
+                extra_scores.append(RecommendationScoreItem(
+                    "YOUNG_CHILD", "영유아 조건",
+                    result.breakdown.young_child_weight,
+                    result.breakdown.young_child_points, None,
+                    (childcare_fact.fact_id,),
+                    childcare_details(childcare_results[record.complex_id]),
+                ))
+            facts.extend((complex_fact, trade_fact, rail_fact, retail_fact, *extra_facts))
             cards.append(RecommendationCard(
                 rank=rank,
                 complex_id=record.complex_id,
@@ -240,15 +374,15 @@ class RecommendationHandler:
                         result.breakdown.price_points, None, (trade_fact.fact_id,),
                     ),
                     RecommendationScoreItem(
-                        "TRANSIT", "철도 접근성", 25.0,
+                        "TRANSIT", "철도 접근성", result.breakdown.rail_weight,
                         result.breakdown.rail_points,
                         candidate.rail_distance_meters, (rail_fact.fact_id,),
                     ),
                     RecommendationScoreItem(
-                        "SHOPPING", "대규모점포 접근성", 15.0,
+                        "SHOPPING", "대규모점포 접근성", result.breakdown.retail_weight,
                         result.breakdown.retail_points,
                         candidate.retail_distance_meters, (retail_fact.fact_id,),
-                    ),
+                    ), *extra_scores,
                 ),
                 limitations=(
                     "최근 365일 동일 면적 거래 3건과 단지 좌표 기준 직선거리입니다.",
@@ -257,7 +391,9 @@ class RecommendationHandler:
                 fact_ids=(
                     complex_fact.fact_id, trade_fact.fact_id,
                     rail_fact.fact_id, retail_fact.fact_id,
+                    *(fact.fact_id for fact in extra_facts),
                 ),
+                active_themes=plan.lifestyle_themes,
             ))
         artifact = RecommendationCardsArtifact(
             artifact_id=(
@@ -267,6 +403,7 @@ class RecommendationHandler:
             cards=tuple(cards),
         ).to_public_dict()
         artifact_fact_ids = tuple(dict.fromkeys(_fact_ids(artifact)))
+        score = ranked[0].breakdown
         return CapabilityResult(
             _deduplicate_facts(facts),
             [
@@ -274,7 +411,9 @@ class RecommendationHandler:
                 f"{cutoff.isoformat()}까지 전용면적 "
                 f"{area:g}㎡ ±1.0㎡의 최근 거래 "
                 "3건을 기준으로 예산을 먼저 적용했습니다.",
-                "조건 충족도는 가격 60점, 철도 25점, 대규모점포 15점입니다.",
+                f"조건 충족도 weight는 가격 60점, 철도 {score.rail_weight:g}점, "
+                f"대규모점포 {score.retail_weight:g}점, 학생 {score.student_weight:g}점, "
+                f"영유아 {score.young_child_weight:g}점입니다.",
                 "가격은 예산 hard filter이며 통과 후보에 추가 가격 가산점이 없습니다.",
                 "이 결과는 미래가격·수익성·투자 가치를 평가하지 않습니다.",
             ],
@@ -375,13 +514,13 @@ def _scope_fact(
 
 
 def _rail_fact(
-    complex_id: int, result: RailStationSearchResult, points: float
+    complex_id: int, result: RailStationSearchResult, weight: float, points: float
 ) -> EvidenceFact:
     station = result.stations[0] if result.stations else None
     claims = [
         FactClaim("1500", "METERS"),
         FactClaim(result.source_date.isoformat(), "DATE"),
-        FactClaim("25", "WEIGHT_POINTS"),
+        FactClaim(format(weight, ".15g"), "WEIGHT_POINTS"),
         FactClaim(format(points, ".15g"), "POINTS"),
     ]
     if station is None:
@@ -401,7 +540,7 @@ def _rail_fact(
             "nearestDistanceMeters": None if station is None else station.distance_meters,
             "stationName": None if station is None else station.station_name,
             "datasetVersion": result.dataset_version,
-            "weight": 25,
+            "weight": weight,
             "points": points,
         },
         source_id="transport.rail-station",
@@ -412,12 +551,12 @@ def _rail_fact(
 
 
 def _retail_fact(
-    complex_id: int, result: FacilitySearchResult, points: float
+    complex_id: int, result: FacilitySearchResult, weight: float, points: float
 ) -> EvidenceFact:
     facility = result.facilities[0] if result.facilities else None
     claims = [
         FactClaim("1000", "METERS"),
-        FactClaim("15", "WEIGHT_POINTS"),
+        FactClaim(format(weight, ".15g"), "WEIGHT_POINTS"),
         FactClaim(format(points, ".15g"), "POINTS"),
     ]
     if facility is None:
@@ -437,7 +576,7 @@ def _retail_fact(
             "nearestDistanceMeters": None if facility is None else facility.distance_meters,
             "facilityName": None if facility is None else facility.name,
             "datasetVersion": result.dataset_version,
-            "weight": 15,
+            "weight": weight,
             "points": points,
         },
         source_id="retail.large-store",

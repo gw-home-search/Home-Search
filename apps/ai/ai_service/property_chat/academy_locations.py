@@ -7,6 +7,8 @@ import math
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+from .comparison import CandidatePoint
+
 
 @dataclass(frozen=True)
 class RegistryExactMatch:
@@ -193,6 +195,70 @@ class PostgresAcademyLocationRepository:
             verified_zero=False,
             freshness_days=int(coverage["freshness_days"]),
         )
+
+    def nearby_counts_batch(
+        self, *, points: tuple[CandidatePoint, ...], radius_meters: int
+    ) -> dict[int, AcademyLocationSearchResult] | None:
+        if (
+            not 1 <= len(points) <= 100
+            or len({point.complex_id for point in points}) != len(points)
+        ):
+            raise ValueError("academy batch points are invalid")
+        for point in points:
+            _validate_query(point.latitude, point.longitude, radius_meters, 5)
+        with self._pool.connection() as connection:
+            rows = connection.execute(
+                """
+                WITH candidates AS (
+                    SELECT complex_id, latitude, longitude
+                    FROM unnest(%s::bigint[], %s::double precision[], %s::double precision[])
+                         AS value(complex_id, latitude, longitude)
+                )
+                SELECT candidate.complex_id, count(fact.fact_id)::integer AS matched_count
+                FROM candidates candidate
+                LEFT JOIN reference_read.facility_point_fact fact
+                  ON fact.source_id = 'place.sbiz-academy'
+                 AND fact.status = 'OPEN'
+                 AND ST_DWithin(
+                     fact.position,
+                     ST_SetSRID(ST_MakePoint(candidate.longitude, candidate.latitude), 4326)::geography,
+                     %s + 0.001
+                 )
+                GROUP BY candidate.complex_id ORDER BY candidate.complex_id
+                """,
+                (
+                    [point.complex_id for point in points],
+                    [point.latitude for point in points],
+                    [point.longitude for point in points], radius_meters,
+                ),
+            ).fetchall()
+            coverage = connection.execute(
+                """
+                SELECT sum(coverage.total_count)::bigint AS total_count,
+                       sum(coverage.spatial_count)::bigint AS spatial_count,
+                       metadata.dataset_version, metadata.observed_at,
+                       metadata.freshness_days
+                FROM reference_read.active_source_metadata metadata
+                LEFT JOIN reference_read.source_coverage coverage
+                  ON coverage.publication_id = metadata.publication_id
+                WHERE metadata.source_id = 'place.sbiz-academy'
+                GROUP BY metadata.dataset_version, metadata.observed_at,
+                         metadata.freshness_days
+                """
+            ).fetchone()
+        if coverage is None or not coverage["total_count"] or coverage["observed_at"] is None:
+            return None
+        ratio = int(coverage["spatial_count"] or 0) / int(coverage["total_count"])
+        return {
+            int(row["complex_id"]): AcademyLocationSearchResult(
+                locations=(), matched_count=int(row["matched_count"]),
+                coordinate_coverage=ratio,
+                dataset_version=str(coverage["dataset_version"]),
+                observed_at=coverage["observed_at"], verified_zero=int(row["matched_count"]) == 0,
+                freshness_days=int(coverage["freshness_days"]),
+            )
+            for row in rows
+        }
 
 
 def _location(row: dict[str, object]) -> AcademyLocation:

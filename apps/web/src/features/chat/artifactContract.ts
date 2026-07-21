@@ -35,12 +35,13 @@ export type ComparisonTableArtifact = {
 };
 
 export type RecommendationScoreItem = {
-  key: 'PRICE' | 'TRANSIT' | 'SHOPPING';
+  key: 'PRICE' | 'TRANSIT' | 'SHOPPING' | 'STUDENT' | 'YOUNG_CHILD';
   label: string;
   weight: number;
   points: number;
   distanceMeters: number | null;
   factIds: string[];
+  details?: string[];
 };
 
 export type RecommendationCard = {
@@ -53,6 +54,7 @@ export type RecommendationCard = {
   scoreBreakdown: RecommendationScoreItem[];
   limitations: string[];
   factIds: string[];
+  activeThemes: Array<'TRANSIT' | 'STUDENT' | 'YOUNG_CHILD' | 'SHOPPING'>;
 };
 
 export type RecommendationCardsArtifact = {
@@ -120,11 +122,16 @@ function readRecommendationCard(
   value: unknown,
   allowedFactIds: ReadonlySet<string>,
 ): RecommendationCard | null {
+  const hasCurrentKeys = isRecord(value) && hasExactKeys(value, [
+    'rank', 'complexId', 'complexName', 'totalScore', 'latestTrade',
+    'recentThreeMedian', 'scoreBreakdown', 'limitations', 'factIds', 'activeThemes',
+  ]);
+  const hasLegacyKeys = isRecord(value) && hasExactKeys(value, [
+    'rank', 'complexId', 'complexName', 'totalScore', 'latestTrade',
+    'recentThreeMedian', 'scoreBreakdown', 'limitations', 'factIds',
+  ]);
   if (!isRecord(value)
-    || !hasExactKeys(value, [
-      'rank', 'complexId', 'complexName', 'totalScore', 'latestTrade',
-      'recentThreeMedian', 'scoreBreakdown', 'limitations', 'factIds',
-    ])
+    || (!hasCurrentKeys && !hasLegacyKeys)
     || !isIntegerInRange(value.rank, 1, 5)
     || !isIntegerInRange(value.complexId, 1, Number.MAX_SAFE_INTEGER)
     || !isDisplayText(value.complexName, 100)
@@ -141,23 +148,44 @@ function readRecommendationCard(
     || !isIntegerInRange(value.latestTrade.amountTenThousandKrw, 1, Number.MAX_SAFE_INTEGER)
     || !isFactIds(value.latestTrade.factIds, allowedFactIds, false)
     || !Array.isArray(value.scoreBreakdown)
-    || value.scoreBreakdown.length !== 3
+    || value.scoreBreakdown.length < 3
+    || value.scoreBreakdown.length > 5
     || !Array.isArray(value.limitations)
     || value.limitations.length > 5
     || !value.limitations.every((item) => isDisplayText(item, 2_000))
     || !isFactIds(value.factIds, allowedFactIds, false)) return null;
+  const rawActiveThemes = hasCurrentKeys ? value.activeThemes : [];
+  if (!Array.isArray(rawActiveThemes)
+    || rawActiveThemes.length > 3
+    || !rawActiveThemes.every((theme) => (
+      theme === 'TRANSIT' || theme === 'STUDENT'
+      || theme === 'YOUNG_CHILD' || theme === 'SHOPPING'
+    ))
+    || new Set(rawActiveThemes).size !== rawActiveThemes.length) return null;
   const scoreBreakdown = value.scoreBreakdown.flatMap((item) => {
     const parsed = readRecommendationScoreItem(item, allowedFactIds);
     return parsed == null ? [] : [parsed];
   });
-  const expectedKeys = ['PRICE', 'TRANSIT', 'SHOPPING'];
-  const expectedWeights = [60, 25, 15];
+  const activeThemes = rawActiveThemes as RecommendationCard['activeThemes'];
+  const canonicalThemes = ['TRANSIT', 'STUDENT', 'YOUNG_CHILD', 'SHOPPING']
+    .filter((theme) => activeThemes.includes(theme as RecommendationCard['activeThemes'][number]));
+  if (activeThemes.some((theme, index) => theme !== canonicalThemes[index])) return null;
+  const optionalKeys = ['STUDENT', 'YOUNG_CHILD'].filter((key) => activeThemes.includes(key as 'STUDENT' | 'YOUNG_CHILD'));
+  const expectedKeys = ['PRICE', 'TRANSIT', 'SHOPPING', ...optionalKeys];
+  const dynamicShare = activeThemes.length === 0 ? 0 : 25 / activeThemes.length;
+  const expectedWeights = [
+    60,
+    activeThemes.length === 0 ? 25 : 10 + (activeThemes.includes('TRANSIT') ? dynamicShare : 0),
+    activeThemes.length === 0 ? 15 : 5 + (activeThemes.includes('SHOPPING') ? dynamicShare : 0),
+    ...optionalKeys.map(() => dynamicShare),
+  ];
   const scoreTotal = Math.round(
     scoreBreakdown.reduce((total, item) => total + item.points, 0) * 10,
   ) / 10;
-  if (scoreBreakdown.length !== 3
+  if (scoreBreakdown.length !== expectedKeys.length
     || scoreBreakdown.some((item, index) => (
-      item.key !== expectedKeys[index] || item.weight !== expectedWeights[index]
+      item.key !== expectedKeys[index]
+      || Math.abs(item.weight - (expectedWeights[index] ?? -1)) > 1e-9
     ))
     || scoreTotal !== value.totalScore) return null;
   const cardFactIds = new Set(value.factIds);
@@ -184,6 +212,7 @@ function readRecommendationCard(
     scoreBreakdown,
     limitations: value.limitations.map((item) => item.trim()),
     factIds: value.factIds,
+    activeThemes,
   };
 }
 
@@ -192,16 +221,24 @@ function readRecommendationScoreItem(
   allowedFactIds: ReadonlySet<string>,
 ): RecommendationScoreItem | null {
   if (!isRecord(value)
-    || !hasExactKeys(value, [
+    || (!hasExactKeys(value, [
       'key', 'label', 'weight', 'points', 'distanceMeters', 'factIds',
-    ])
-    || (value.key !== 'PRICE' && value.key !== 'TRANSIT' && value.key !== 'SHOPPING')
+    ]) && !hasExactKeys(value, [
+      'key', 'label', 'weight', 'points', 'distanceMeters', 'factIds', 'details',
+    ]))
+    || (value.key !== 'PRICE' && value.key !== 'TRANSIT' && value.key !== 'SHOPPING'
+      && value.key !== 'STUDENT' && value.key !== 'YOUNG_CHILD')
     || !isDisplayText(value.label, 100)
     || !isNumberInRange(value.weight, 0, 100)
     || !isNumberInRange(value.points, 0, value.weight)
     || (value.distanceMeters !== null
       && !isIntegerInRange(value.distanceMeters, 0, 10_000_000))
-    || !isFactIds(value.factIds, allowedFactIds, false)) return null;
+    || !isFactIds(value.factIds, allowedFactIds, false)
+    || (value.details !== undefined && (
+      !Array.isArray(value.details)
+      || value.details.length > 5
+      || !value.details.every((item) => isDisplayText(item, 200))
+    ))) return null;
   return {
     key: value.key,
     label: value.label.trim(),
@@ -209,6 +246,9 @@ function readRecommendationScoreItem(
     points: value.points,
     distanceMeters: value.distanceMeters,
     factIds: value.factIds,
+    ...(value.details === undefined
+      ? {}
+      : { details: value.details.map((item) => item.trim()) }),
   };
 }
 

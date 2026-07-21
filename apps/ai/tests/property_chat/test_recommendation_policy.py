@@ -23,6 +23,8 @@ def _candidate(
     *,
     rail_distance: int | None = 750,
     retail_distance: int | None = 500,
+    student_score_ratio: float | None = None,
+    young_child_score_ratio: float | None = None,
 ) -> RecommendationCandidate:
     cutoff = date(2026, 7, 20)
     trades = tuple(
@@ -56,6 +58,8 @@ def _candidate(
         ),
         rail_distance_meters=rail_distance,
         retail_distance_meters=retail_distance,
+        student_score_ratio=student_score_ratio,
+        young_child_score_ratio=young_child_score_ratio,
     )
 
 
@@ -159,3 +163,55 @@ def test_recommendation_value_objects_reject_invalid_policy_artifacts() -> None:
         replace(card, total_score=99.0).to_public_dict()
     with pytest.raises(ValueError, match="bounds"):
         RecommendationCardsArtifact("recommendation-empty", ()).to_public_dict()
+
+
+def test_explicit_student_and_transit_themes_split_dynamic_points_equally() -> None:
+    result = RecommendationPolicy(
+        maximum_budget_ten_thousand_krw=200_000,
+        lifestyle_themes=("TRANSIT", "STUDENT"),
+    ).rank((_candidate(
+        1,
+        (180_000, 190_000, 200_000),
+        rail_distance=0,
+        retail_distance=0,
+        student_score_ratio=1.0,
+    ),))[0]
+
+    assert result.breakdown.rail_weight == 22.5
+    assert result.breakdown.retail_weight == 5.0
+    assert result.breakdown.student_weight == 12.5
+    assert result.breakdown.rail_points == 22.5
+    assert result.breakdown.retail_points == 5.0
+    assert result.breakdown.student_points == 12.5
+    assert result.total_score == 100.0
+
+
+def test_unmentioned_young_child_metric_never_changes_default_score() -> None:
+    result = RecommendationPolicy(
+        maximum_budget_ten_thousand_krw=200_000,
+        lifestyle_themes=("TRANSIT",),
+    ).rank((_candidate(
+        1,
+        (180_000, 190_000, 200_000),
+        rail_distance=0,
+        retail_distance=0,
+        young_child_score_ratio=1.0,
+    ),))[0]
+
+    assert result.breakdown.young_child_weight == 0.0
+    assert result.breakdown.young_child_points == 0.0
+
+
+def test_three_themes_share_25_points_without_internal_rounding() -> None:
+    result = RecommendationPolicy(
+        maximum_budget_ten_thousand_krw=200_000,
+        lifestyle_themes=("TRANSIT", "STUDENT", "YOUNG_CHILD"),
+    ).rank((_candidate(
+        1, (180_000, 190_000, 200_000), rail_distance=0, retail_distance=0,
+        student_score_ratio=1.0, young_child_score_ratio=1.0,
+    ),))[0]
+
+    assert result.breakdown.student_weight == 25 / 3
+    assert result.breakdown.young_child_weight == 25 / 3
+    assert result.breakdown.rail_weight == 10 + 25 / 3
+    assert result.total_score == 100.0

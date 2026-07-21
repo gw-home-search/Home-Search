@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import re
 from collections.abc import Callable, Iterable
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Protocol
@@ -36,6 +37,7 @@ from .capability_handlers import (
 )
 from .comparison_handler import ComparisonHandler
 from .recommendation_handler import RecommendationHandler
+from .lifestyle_themes import detect_explicit_themes, detect_school_levels
 from .models import (
     ComplexRecord,
     DraftAnswer,
@@ -104,6 +106,8 @@ _GROUNDING_FAILURE_REASONS = frozenset(
         "GROUNDING_ACTION_FACT_UNKNOWN",
         "GROUNDING_ARTIFACT_FACT_UNKNOWN",
         "GROUNDING_COMPARISON_POLICY_VIOLATION",
+        "GROUNDING_RECOMMENDATION_POLICY_VIOLATION",
+        "GROUNDING_RECOMMENDATION_TEXT_OUTSIDE_OBSERVATION",
     }
 )
 
@@ -175,13 +179,21 @@ class GroundedChatbotEngine:
                     repository,  # type: ignore[arg-type]
                     rail_station_repository,  # type: ignore[arg-type]
                     point_facility_repository,  # type: ignore[arg-type]
+                    school_repository,  # type: ignore[arg-type]
+                    academy_location_repository,  # type: ignore[arg-type]
+                    childcare_repository,  # type: ignore[arg-type]
                     builders,
+                    today,
                 ),
                 RecommendationHandler(
                     repository,  # type: ignore[arg-type]
                     rail_station_repository,  # type: ignore[arg-type]
                     point_facility_repository,  # type: ignore[arg-type]
+                    school_repository,  # type: ignore[arg-type]
+                    academy_location_repository,  # type: ignore[arg-type]
+                    childcare_repository,  # type: ignore[arg-type]
                     builders,
+                    today,
                 ),
             ),
         )
@@ -196,6 +208,17 @@ class GroundedChatbotEngine:
         del user
         try:
             plan = await self._language_model.plan_query(request)
+            if plan.capability in {"recommendation", "comparison"}:
+                verified_themes = detect_explicit_themes(
+                    request.question, plan.lifestyle_themes
+                )
+                plan = replace(
+                    plan,
+                    lifestyle_themes=verified_themes,
+                    school_levels=detect_school_levels(
+                        request.question, verified_themes
+                    ),
+                )
             if plan.capability in self._enabled_capabilities or (
                 plan.capability in self._enabled_reference_capabilities
             ):
@@ -896,7 +919,7 @@ def validate_draft(
         if enforce_comparison_policy:
             _validate_comparison_sentence(sentence.text)
         if enforce_recommendation_policy:
-            _validate_recommendation_sentence(sentence.text)
+            _validate_recommendation_sentence(sentence.text, referenced)
         allowed_numbers = _number_tokens(
             claim.value for fact in referenced for claim in fact.claims
         )
@@ -1106,19 +1129,34 @@ def _validate_comparison_sentence(text: str) -> None:
         raise GroundingValidationError("GROUNDING_COMPARISON_POLICY_VIOLATION")
 
 
-def _validate_recommendation_sentence(text: str) -> None:
+def _validate_recommendation_sentence(
+    text: str, referenced: list[EvidenceFact]
+) -> None:
     unsupported = re.search(
         r"(?:투자\s*가치|수익(?:성|률)?|미래\s*가격|오를|상승\s*예상|"
-        r"저렴.{0,20}(?:좋|우수|추천)|싼.{0,20}(?:좋|우수|추천))",
+        r"저렴.{0,20}(?:좋|우수|추천)|싼.{0,20}(?:좋|우수|추천)|"
+        r"학군|교육\s*수준|보육\s*(?:품질|수준)|입소\s*가능)",
         text,
     )
     negative = re.search(
-        r"(?:투자\s*가치|수익(?:성|률)?|미래\s*가격).{0,30}"
-        r"(?:판단하지|평가하지|의미하지|아니|않|없)",
+        r"(?:투자\s*가치|수익(?:성|률)?|미래\s*가격|학군|교육\s*수준|"
+        r"보육\s*(?:품질|수준)|입소\s*가능).{0,30}"
+        r"(?:판단하지|평가하지|의미하지|포함되지|확인할\s*수\s*없|아니|않|없)",
         text,
     )
     if unsupported and not negative:
         raise GroundingValidationError("GROUNDING_RECOMMENDATION_POLICY_VIOLATION")
+    observed_text = {
+        claim.value for fact in referenced for claim in fact.claims
+        if claim.unit == "TEXT"
+    }
+    observed_names = (
+        re.findall(r"[가-힣A-Za-z0-9]+(?:초등학교|중학교|고등학교)", text)
+        + re.findall(r"[\w가-힣()]+어린이집", text)
+    )
+    for name in observed_names:
+        if name not in observed_text:
+            raise GroundingValidationError("GROUNDING_RECOMMENDATION_TEXT_OUTSIDE_OBSERVATION")
 
 
 def _number(value: int | float) -> str:

@@ -15,6 +15,11 @@ export function RecommendationCardsArtifactView({
               <strong>{card.rank}. {card.complexName}</strong>
               <span>조건 충족도 {formatScore(card.totalScore)}점</span>
             </div>
+            {card.activeThemes.length > 0 && (
+              <div aria-label="반영한 생활조건" className="chatbot-recommendation-themes">
+                {card.activeThemes.map((theme) => <span key={theme}>{themeLabel(theme)}</span>)}
+              </div>
+            )}
             <dl>
               <div>
                 <dt>최근 거래</dt>
@@ -30,11 +35,12 @@ export function RecommendationCardsArtifactView({
               <ul>
                 {card.scoreBreakdown.map((item) => (
                   <li key={item.key}>
-                    <span>{item.label}</span>
-                    <span>
-                      {formatScore(item.points)} / {formatScore(item.weight)}점
-                      {item.distanceMeters == null ? '' : ` · ${item.distanceMeters.toLocaleString('ko-KR')}m`}
-                    </span>
+                    <div>
+                      <span>{item.label}</span>
+                      {item.details?.map((detail) => <small key={detail}>{detail}</small>)}
+                    </div>
+                    <span>{formatScore(item.points)} / {formatScore(item.weight)}점
+                      {item.distanceMeters == null ? '' : ` · ${item.distanceMeters.toLocaleString('ko-KR')}m`}</span>
                   </li>
                 ))}
               </ul>
@@ -57,4 +63,8 @@ function formatKrw(amountTenThousandKrw: number): string {
   if (eok > 0 && manWon > 0) return `${eok.toLocaleString('ko-KR')}억 ${manWon.toLocaleString('ko-KR')}만원`;
   if (eok > 0) return `${eok.toLocaleString('ko-KR')}억원`;
   return `${manWon.toLocaleString('ko-KR')}만원`;
+}
+
+function themeLabel(theme: RecommendationCardsArtifact['cards'][number]['activeThemes'][number]) {
+  return { TRANSIT: '교통', STUDENT: '학생', YOUNG_CHILD: '영유아', SHOPPING: '쇼핑' }[theme];
 }

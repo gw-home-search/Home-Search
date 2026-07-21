@@ -20,6 +20,9 @@ from ai_service.property_chat.models import (
 )
 from ai_service.property_chat.rail_stations import RailStation, RailStationSearchResult
 from ai_service.property_chat.reference_facilities import FacilityFact, FacilitySearchResult
+from ai_service.property_chat.academy_locations import AcademyLocationSearchResult
+from ai_service.property_chat.childcare_centers import ChildcareCenter, ChildcareSearchResult
+from ai_service.property_chat.models import SchoolRecord, SchoolSearchResult, SchoolSnapshot
 
 
 def _complex(complex_id: int, name: str, lat: float, lng: float) -> ComplexRecord:
@@ -173,6 +176,10 @@ def _query(
     rail_repository: RailRepository | None = None,
     retail_repository: RetailRepository | None = None,
     without_references: bool = False,
+    school_repository=None,
+    academy_repository=None,
+    childcare_repository=None,
+    question: str = "잠실엘스와 헬리오시티 84㎡ 비교",
 ):
     property_repository = property_repository or PropertyRepository()
     rail_repository = None if without_references else rail_repository or RailRepository()
@@ -183,9 +190,13 @@ def _query(
         enabled_capabilities=frozenset({"comparison"}),
         rail_station_repository=rail_repository,
         point_facility_repository=retail_repository,
+        school_repository=school_repository,
+        academy_location_repository=academy_repository,
+        childcare_repository=childcare_repository,
+        today=lambda: date(2026, 7, 20),
     )
     response = asyncio.run(engine.query(
-        request=ChatbotQueryRequest(question="잠실엘스와 헬리오시티 84㎡ 비교"),
+        request=ChatbotQueryRequest(question=question),
         user=AuthenticatedUser(user_id=1),
         request_id="request-comparison",
     ))
@@ -314,3 +325,68 @@ def test_comparison_is_unavailable_without_a_global_or_explicit_cutoff() -> None
     assert response["uiArtifacts"] == []
     assert property_repository.batch_trade_calls == 0
     assert any("최신 거래일" in item for item in response["limitations"])
+
+
+def test_comparison_adds_student_rows_only_for_an_explicit_student_theme() -> None:
+    class StudentModel(LanguageModel):
+        async def plan_query(self, request):
+            return replace(
+                await super().plan_query(request), lifestyle_themes=("STUDENT",)
+            )
+
+    class Schools:
+        def nearest_by_level_batch(self, *, points, school_levels, radius_meters):
+            return SchoolSnapshot(
+                "school-v1", date(2026, 6, 30), datetime(2026, 7, 1, tzinfo=UTC)
+            ), {
+                point.complex_id: SchoolSearchResult((SchoolRecord(
+                    school_id=f"school-{point.complex_id}", school_name="가까운초등학교",
+                    school_level="ELEMENTARY", operating_status="운영", road_address=None,
+                    lot_address=None, latitude=point.latitude, longitude=point.longitude,
+                    distance_meters=300,
+                ),), 1) for point in points
+            }
+
+    class Academies:
+        def nearby_counts_batch(self, *, points, radius_meters):
+            return {point.complex_id: AcademyLocationSearchResult(
+                (), 5, 1.0, "academy-v1", datetime(2026, 7, 1, tzinfo=UTC), False
+            ) for point in points}
+
+    response, *_ = _query(
+        StudentModel(), school_repository=Schools(), academy_repository=Academies(),
+        question="학생 기준으로 잠실엘스와 헬리오시티 84㎡ 비교",
+    )
+
+    table = response["uiArtifacts"][0]
+    assert table["rows"][-1]["key"] == "studentAccess"
+    assert all("Sbiz 교육업소 5곳" in cell["value"] for cell in table["rows"][-1]["cells"])
+
+
+def test_comparison_adds_official_childcare_count_and_nearest_row() -> None:
+    class ChildModel(LanguageModel):
+        async def plan_query(self, request):
+            return replace(
+                await super().plan_query(request), lifestyle_themes=("YOUNG_CHILD",)
+            )
+
+    class Childcare:
+        def nearby_batch(self, *, points, radius_meters):
+            return {point.complex_id: ChildcareSearchResult(
+                centers=(ChildcareCenter(
+                    f"center-{point.complex_id}", "해뜰어린이집", "국공립", 50, 250,
+                    date(2026, 7, 1), "child-v1",
+                ),), matched_count=3, returned_count=1, has_more=True,
+                verified_zero=False, coordinate_coverage=1.0, dataset_version="child-v1",
+                observed_at=datetime(2026, 7, 1, tzinfo=UTC), freshness_days=45,
+            ) for point in points}
+
+    response, *_ = _query(
+        ChildModel(), childcare_repository=Childcare(),
+        question="영유아 기준으로 잠실엘스와 헬리오시티 84㎡ 비교",
+    )
+
+    row = response["uiArtifacts"][0]["rows"][-1]
+    assert row["key"] == "youngChildAccess"
+    assert all("공식 운영 어린이집 3곳" in cell["value"] for cell in row["cells"])
+    assert "정원" not in str(row)

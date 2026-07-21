@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import date, timedelta
 from typing import Protocol
 
+from .academy_locations import AcademyLocationSearchResult
 from .capability_handlers import CapabilityResult, EvidenceFactBuilders
+from .childcare_centers import ChildcareSearchResult
 from .comparison import (
     CandidatePoint,
     ComparisonCell,
@@ -14,12 +17,15 @@ from .comparison import (
     ComparisonTableArtifact,
     RecentThreeTradeBasis,
 )
+from .lifestyle_metrics import childcare_observation_fact, student_observation_fact
 from .models import (
     ComplexRecord,
     EvidenceFact,
     FactClaim,
     QueryCapability,
     QueryPlan,
+    SchoolSearchResult,
+    SchoolSnapshot,
     TradeRecord,
 )
 from .rail_stations import RailStationSearchResult
@@ -60,6 +66,25 @@ class ComparisonRetailRepository(Protocol):
     ) -> dict[int, FacilitySearchResult] | None: ...
 
 
+class ComparisonSchoolRepository(Protocol):
+    def nearest_by_level_batch(
+        self, *, points: tuple[CandidatePoint, ...], school_levels: tuple[str, ...],
+        radius_meters: int,
+    ) -> tuple[SchoolSnapshot, dict[int, SchoolSearchResult]] | None: ...
+
+
+class ComparisonAcademyRepository(Protocol):
+    def nearby_counts_batch(
+        self, *, points: tuple[CandidatePoint, ...], radius_meters: int,
+    ) -> dict[int, AcademyLocationSearchResult] | None: ...
+
+
+class ComparisonChildcareRepository(Protocol):
+    def nearby_batch(
+        self, *, points: tuple[CandidatePoint, ...], radius_meters: int,
+    ) -> dict[int, ChildcareSearchResult] | None: ...
+
+
 class ComparisonHandler:
     capability: QueryCapability = "comparison"
 
@@ -68,12 +93,20 @@ class ComparisonHandler:
         repository: ComparisonPropertyRepository,
         rail_repository: ComparisonRailRepository | None,
         retail_repository: ComparisonRetailRepository | None,
+        school_repository: ComparisonSchoolRepository | None,
+        academy_repository: ComparisonAcademyRepository | None,
+        childcare_repository: ComparisonChildcareRepository | None,
         builders: EvidenceFactBuilders,
+        today: Callable[[], date],
     ) -> None:
         self._repository = repository
         self._rail_repository = rail_repository
         self._retail_repository = retail_repository
+        self._school_repository = school_repository
+        self._academy_repository = academy_repository
+        self._childcare_repository = childcare_repository
         self._builders = builders
+        self._today = today
 
     async def observe(self, plan: QueryPlan) -> CapabilityResult:
         if plan.capability != "comparison" or plan.exclusive_area_square_meters is None:
@@ -147,6 +180,8 @@ class ComparisonHandler:
         basis_facts = {key: _trade_basis_fact(value) for key, value in bases.items()}
         rail_facts: dict[int, EvidenceFact] = {}
         retail_facts: dict[int, EvidenceFact] = {}
+        student_facts: dict[int, EvidenceFact] = {}
+        childcare_facts: dict[int, EvidenceFact] = {}
         for record in complexes:
             rail_result = rail_results.get(record.complex_id) if rail_results is not None else None
             if rail_result is not None and rail_result.stations:
@@ -164,6 +199,56 @@ class ComparisonHandler:
                     self._builders.retail_fact(retail_result.facilities[0]),
                     record.complex_id,
                 )
+        student_ready = False
+        if "STUDENT" in plan.lifestyle_themes and points:
+            if self._school_repository is not None and self._academy_repository is not None:
+                school_bundle, academy_results = await asyncio.gather(
+                    asyncio.to_thread(
+                        self._school_repository.nearest_by_level_batch,
+                        points=points, school_levels=plan.school_levels, radius_meters=1500,
+                    ),
+                    asyncio.to_thread(
+                        self._academy_repository.nearby_counts_batch,
+                        points=points, radius_meters=800,
+                    ),
+                )
+                if school_bundle is not None and academy_results is not None:
+                    snapshot, school_results = school_bundle
+                    student_ready = (
+                        0 <= (self._today() - snapshot.source_date).days <= 214
+                        and all(
+                            result.coordinate_coverage >= 0.95
+                            and 0 <= (self._today() - result.observed_at.date()).days
+                            <= result.freshness_days
+                            for result in academy_results.values()
+                        )
+                    )
+                    if student_ready:
+                        student_facts = {
+                            record.complex_id: student_observation_fact(
+                                record.complex_id, school_results[record.complex_id], snapshot,
+                                academy_results[record.complex_id], plan.school_levels, 0, 0,
+                            ) for record in complexes if record.complex_id in school_results
+                        }
+        childcare_ready = False
+        if "YOUNG_CHILD" in plan.lifestyle_themes and points and self._childcare_repository is not None:
+            childcare_results = await asyncio.to_thread(
+                self._childcare_repository.nearby_batch, points=points, radius_meters=800,
+            )
+            if childcare_results is not None:
+                childcare_ready = all(
+                    result.coordinate_coverage is not None
+                    and result.coordinate_coverage >= 0.9
+                    and 0 <= (self._today() - result.observed_at.date()).days
+                    <= result.freshness_days
+                    for result in childcare_results.values()
+                )
+                if childcare_ready:
+                    childcare_facts = {
+                        record.complex_id: childcare_observation_fact(
+                            record.complex_id, childcare_results[record.complex_id], 0, 0,
+                        ) for record in complexes if record.complex_id in childcare_results
+                    }
         rows = _rows(
             complexes,
             bases,
@@ -175,6 +260,16 @@ class ComparisonHandler:
             retail_results is not None,
             {point.complex_id for point in points},
         )
+        if "STUDENT" in plan.lifestyle_themes:
+            rows += (ComparisonRow("studentAccess", "학교 위치·800m 교육업소", tuple(
+                _lifestyle_cell(student_facts.get(item.complex_id), student_ready, "학생 조건 source")
+                for item in complexes
+            )),)
+        if "YOUNG_CHILD" in plan.lifestyle_themes:
+            rows += (ComparisonRow("youngChildAccess", "800m 공식 어린이집", tuple(
+                _lifestyle_cell(childcare_facts.get(item.complex_id), childcare_ready, "어린이집 source")
+                for item in complexes
+            )),)
         artifact = ComparisonTableArtifact(
             artifact_id="comparison-" + "-".join(str(value) for value in complex_ids),
             columns=tuple(
@@ -195,6 +290,8 @@ class ComparisonHandler:
             *basis_facts.values(),
             *rail_facts.values(),
             *retail_facts.values(),
+            *student_facts.values(),
+            *childcare_facts.values(),
         ])
         has_unavailable = any(
             cell.availability == "unavailable" for row in rows for cell in row.cells
@@ -356,6 +453,42 @@ def _price_unavailable(fact: EvidenceFact) -> ComparisonCell:
     return ComparisonCell(
         "unavailable", None, "10_000_KRW",
         "동일 면적의 최근 거래 표본이 3건 미만입니다.", (fact.fact_id,),
+    )
+
+
+def _lifestyle_cell(
+    fact: EvidenceFact | None, source_ready: bool, source_label: str
+) -> ComparisonCell:
+    if fact is None:
+        return ComparisonCell(
+            "unavailable", None, "LIFESTYLE_ACCESS",
+            (
+                "검증된 단지 표시 좌표가 없습니다."
+                if source_ready else f"{source_label}가 준비되지 않았습니다."
+            ),
+            (),
+        )
+    if fact.source_id == "lifestyle.student-observation":
+        nearest = fact.payload.get("nearestSchools")
+        school_values = []
+        if isinstance(nearest, dict):
+            labels = {"ELEMENTARY": "초등학교", "MIDDLE": "중학교", "HIGH": "고등학교"}
+            for level in ("ELEMENTARY", "MIDDLE", "HIGH"):
+                value = nearest.get(level)
+                if isinstance(value, dict):
+                    school_values.append(
+                        f"{labels[level]} {value.get('name')} {value.get('distanceMeters')}m"
+                    )
+        count = fact.payload.get("sbizEducationCountWithin800m")
+        rendered = " · ".join((*school_values, f"Sbiz 교육업소 {count}곳"))
+    else:
+        count = fact.payload.get("countWithin800m")
+        name = fact.payload.get("nearestCenterName")
+        distance = fact.payload.get("nearestDistanceMeters")
+        nearest_text = "최근접 없음" if name is None else f"최근접 {name} {distance}m"
+        rendered = f"공식 운영 어린이집 {count}곳 · {nearest_text}"
+    return ComparisonCell(
+        "available", rendered, "LIFESTYLE_ACCESS", None, (fact.fact_id,)
     )
 
 

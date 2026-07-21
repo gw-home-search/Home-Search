@@ -165,3 +165,21 @@ api-contract: compatible — 기존 chatbot URL/request/result/uiSummary/JSON/SS
 security-audit: 지적사항 = none — SQL은 parameterized되고 region descendant·후보 100·최종 5·365일·±1.0㎡·3초 observation timeout으로 bounded; secret·provider body·Kakao 결과·연락처를 저장하거나 표시하지 않으며 외부 문자열은 React text node로만 렌더링
 commit: `feat(ai): recommend budget-qualified apartments`
 ```
+
+```text
+Slice: S8 — 질문 반응형 학생·영유아 조건
+요구사항: 현재 추천·비교 질문에 명시된 교통·학생·영유아·쇼핑 조건만 검증해 기본 철도 10점·대규모점포 5점을 유지하면서 동적 25점을 결정론적으로 배분한다.
+구현 범위: 고정 lifestyle theme detector·school level detector·RecommendationPolicy 동적 weight·학교/Sbiz/어린이집 batch observation·비교 조건부 row·recommendationCards activeThemes/details·strict web adapter/UI badge
+지적사항: none — 자체 findings-first 리뷰에서 어린이집 batch가 전국 unknown region을 0으로 고정하던 중간(Medium), 과거 S7 card의 activeThemes 부재를 거부하던 중간(Medium), 추천 제한 문장·시설명 validator와 reason allowlist가 불완전하던 중간(Medium) 지적사항을 각각 aggregate coverage, legacy normalization, 좁은 name validator·stable reason 등록으로 수정 후 재검증
+검증 근거 확인: 최초 RED에서 lifestyle theme module 부재와 동적 점수 미지원 확인; coverage 89.98% 최초 gate 실패 후 정상 verified-zero 경계를 추가 검증; recommendation/comparison 관련 19 passed; 학교·Sbiz·어린이집 Postgres batch 통합 검증 Pass; `TESTCONTAINERS_RYUK_DISABLED=true uv run pytest` 765 passed, coverage 90.04%; `./gradlew chatBffQualityCheck --no-daemon --stacktrace` Pass; `npm run lint` 0 errors(기존 warning 8); `npm run test` 252 passed; `npm run build` Pass; `ops/build-reference-docs.sh --check` Pass; `.github/scripts/test-classify-changes.sh` Pass; `git diff --check` Pass
+검증 공백: none — live childcare 호출은 승인 대기 중이므로 실행하지 않았고 runtime activation도 하지 않음; collector·projection·batch query는 sanitized fixture와 실제 Postgres schema로 검증
+과설계 판정: 고정 enum·trigger와 pure calculator만 추가; 사용자 weight·규칙 DSL·theme plugin·metric registry·신규 DB table·workflow engine 없음
+코드 스멜: engine.py 1,183줄로 최초 기준 1,334줄 미만; ChatbotPanel.tsx 459줄 유지; lifestyle 계산·theme 검증은 독립 pure module이며 source별 repository field mapping은 feature-local 유지
+공통화 결정: recommendation score와 comparison raw fact가 실제 공유하는 lifestyle observation 계산·EvidenceFact만 공통화하고 표현 객체와 source별 batch SQL은 분리 유지
+UI 연결: card에 활성 theme badge와 실제 weight·학교 level별 최근접 위치·Sbiz 교육업소 수·공식 어린이집 수/최근접 거리를 text node로 표시; comparison은 같은 observation의 조건부 row만 추가
+잔여 위험: childcare live service 승인·전국 coverage readiness가 통과하기 전 YOUNG_CHILD와 childcare capability 활성화 금지; recommendation/comparison exact runtime allowlist 역시 S9 activation 전 비활성
+점수: 10.0/10 Pass
+api-contract: compatible — 기존 chatbot URL/request/result/uiSummary/JSON/SSE와 property-data 공개 계약을 변경하지 않고 documented artifact에 additive field만 추가; S7 archive의 activeThemes 부재는 빈 theme로 정상화
+security-audit: 지적사항 = none — 질문 theme는 LLM 제안을 현재 질문 trigger로 재검증하고 후보 100·batch query·3초 timeout을 유지; secret·provider body·전화·팩스·홈페이지·Kakao 결과를 저장/표시하지 않으며 외부 문자열은 React text node만 사용
+commit: `feat(ai): score explicit lifestyle conditions`
+```

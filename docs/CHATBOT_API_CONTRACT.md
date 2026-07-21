@@ -213,6 +213,9 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
 - 금액 unit은 기존 `10_000_KRW` 의미를 바꾸지 않는다.
 - `basis`는 모든 column에 동일하게 적용된 cutoff, 365일 window 시작일,
   전용면적(㎡)을 담으며 LLM이 생성하거나 column별로 바꿀 수 없다.
+- 현재 질문에 학생 조건이 명시되면 요청 level별 최근접 운영 학교와 800m Sbiz 교육업소
+  수를, 영유아 조건이 명시되면 800m 공식 운영 어린이집 수와 최근접 시설을 조건부 row로
+  추가한다. source unavailable cell은 0이 아니라 이유가 있는 `unavailable`이다.
 
 #### `recommendationCards/v1`
 
@@ -244,7 +247,8 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
         "weight": 60,
         "points": 60,
         "distanceMeters": null,
-        "factIds": ["fact-trades-501"]
+        "factIds": ["fact-trades-501"],
+        "details": []
       },
       {
         "key": "TRANSIT",
@@ -252,7 +256,8 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
         "weight": 25,
         "points": 20,
         "distanceMeters": 300,
-        "factIds": ["fact-rail-501"]
+        "factIds": ["fact-rail-501"],
+        "details": []
       },
       {
         "key": "SHOPPING",
@@ -260,7 +265,8 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
         "weight": 15,
         "points": 7.5,
         "distanceMeters": 500,
-        "factIds": ["fact-retail-501"]
+        "factIds": ["fact-retail-501"],
+        "details": []
       }
     ],
     "limitations": ["최근 365일 동일 면적 거래 3건과 직선거리 기준입니다."],
@@ -269,7 +275,8 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
       "fact-trades-501",
       "fact-rail-501",
       "fact-retail-501"
-    ]
+    ],
+    "activeThemes": []
   }]
 }
 ```
@@ -287,6 +294,16 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
 - 정렬은 `totalScore` 내림차순, 동점이면 `complexId` 오름차순이며 LLM이 바꿀 수 없다.
 - 철도 또는 대규모점포 source가 unavailable이면 거리를 0점으로 바꾸지 않고 추천 전체를
   `unavailable`로 처리한다. 정상 active source에서 반경 내 시설이 없는 경우만 0점이다.
+- 현재 질문에서 명시적으로 검증된 `TRANSIT|STUDENT|YOUNG_CHILD|SHOPPING`만
+  `activeThemes`에 canonical order로 포함한다. 1개면 동적 25점 전부, 2개면 각 12.5점,
+  3개면 각 `25/3`점을 배분하며 내부 계산은 반올림하지 않고 최종 `totalScore`만 소수점
+  1자리로 반올림한다. 철도 기본 10점과 대규모점포 기본 5점은 항상 유지한다.
+- `STUDENT`는 요청 level별 최근접 운영 학교 거리 50%와 800m 내 Sbiz 교육업소 수
+  (5곳 cap) 50%다. 이는 통학구역·학군·학교 품질 또는 공식 등록 학원 수가 아니다.
+- `YOUNG_CHILD`는 최근접 공식 운영 어린이집 거리 50%와 800m 내 운영 어린이집 수
+  (5곳 cap) 50%다. 정원 여유·입소 가능·보육 품질은 계산하지 않는다.
+- 활성 theme source가 stale/inactive이거나 coverage 기준을 충족하지 못하면 해당 점수를
+  0으로 바꾸지 않고 추천을 `unavailable`로 처리한다.
 - card, 거래 표시값, score breakdown의 사실 필드는 각각 비어 있지 않은 `factIds`가
   필요하고 실제 observation의 값·단위와 일치해야 한다.
 - 투자성, 미래가격, 품질, 입소 가능 여부처럼 근거로 허용되지 않은 badge나 field는

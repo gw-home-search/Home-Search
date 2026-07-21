@@ -1,24 +1,35 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, date, datetime
 
 import pytest
 
 from ai_service.auth import AuthenticatedUser
+from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
 from ai_service.property_chat.comparison import CandidatePoint
-from ai_service.property_chat.engine import GroundedChatbotEngine
+from ai_service.property_chat.engine import (
+    GroundedChatbotEngine,
+    GroundingValidationError,
+    validate_draft,
+)
 from ai_service.property_chat.models import (
     ComplexRecord,
     DraftAnswer,
     DraftClaim,
     DraftSentence,
+    EvidenceFact,
+    FactClaim,
     QueryPlan,
     TradeRecord,
 )
 from ai_service.property_chat.rail_stations import RailStation, RailStationSearchResult
 from ai_service.property_chat.reference_facilities import FacilityFact, FacilitySearchResult
+from ai_service.property_chat.academy_locations import AcademyLocationSearchResult
+from ai_service.property_chat.childcare_centers import ChildcareCenter, ChildcareSearchResult
+from ai_service.property_chat.models import SchoolRecord, SchoolSearchResult, SchoolSnapshot
 
 
 def _complex(complex_id: int) -> ComplexRecord:
@@ -159,6 +170,50 @@ class LanguageModel:
         )])
 
 
+class SchoolRepository:
+    def nearest_by_level_batch(self, *, points, school_levels, radius_meters):
+        assert school_levels == ("ELEMENTARY", "MIDDLE", "HIGH")
+        assert radius_meters == 1500
+        return SchoolSnapshot("school-v1", date(2026, 6, 30), datetime(2026, 7, 1, tzinfo=UTC)), {
+            point.complex_id: SchoolSearchResult(tuple(
+                SchoolRecord(
+                    school_id=f"{point.complex_id}-{level}", school_name=f"{level} 학교",
+                    school_level=level, operating_status="운영", road_address=None,
+                    lot_address=None, latitude=point.latitude, longitude=point.longitude,
+                    distance_meters=0,
+                )
+                for level in school_levels
+            ), 3)
+            for point in points
+        }
+
+
+class AcademyRepository:
+    def nearby_counts_batch(self, *, points, radius_meters):
+        assert radius_meters == 800
+        return {
+            point.complex_id: AcademyLocationSearchResult(
+                locations=(), matched_count=5, coordinate_coverage=1.0,
+                dataset_version="academy-v1", observed_at=datetime(2026, 7, 1, tzinfo=UTC),
+                verified_zero=False,
+            )
+            for point in points
+        }
+
+
+class ChildcareRepository:
+    def nearby_batch(self, *, points, radius_meters):
+        assert radius_meters == 800
+        return {point.complex_id: ChildcareSearchResult(
+            centers=(ChildcareCenter(
+                f"center-{point.complex_id}", "해뜰어린이집", "국공립", 50, 0,
+                date(2026, 7, 1), "child-v1",
+            ),), matched_count=5, returned_count=1, has_more=True,
+            verified_zero=False, coordinate_coverage=1.0, dataset_version="child-v1",
+            observed_at=datetime(2026, 7, 1, tzinfo=UTC), freshness_days=45,
+        ) for point in points}
+
+
 def _query(*, rail_ready: bool = True):
     property_repository = PropertyRepository()
     rail_repository = RailRepository(ready=rail_ready)
@@ -240,12 +295,15 @@ def test_recommendation_rejects_investment_and_low_price_quality_claims() -> Non
         point_facility_repository=RetailRepository(),
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(ChatbotProviderUnavailable) as raised:
         asyncio.run(engine.query(
             request=ChatbotQueryRequest(question="송파구 20억 이하 전용 84㎡ 추천"),
             user=AuthenticatedUser(user_id=1),
             request_id="request-recommendation-invalid",
         ))
+
+    assert isinstance(raised.value.__cause__, GroundingValidationError)
+    assert raised.value.__cause__.reason_code == "GROUNDING_RECOMMENDATION_POLICY_VIOLATION"
 
 
 def test_recommendation_lists_missing_required_inputs_without_observation() -> None:
@@ -307,3 +365,120 @@ def test_recommendation_returns_grounded_verified_zero_without_facility_queries(
     assert rail_repository.calls == 0
     assert retail_repository.calls == 0
     assert any("통과한 단지를 확인하지 못했습니다" in item for item in response["limitations"])
+
+
+def test_recommendation_applies_only_verified_student_and_transit_themes() -> None:
+    class ThemedLanguageModel(LanguageModel):
+        async def plan_query(self, _request):
+            return QueryPlan(
+                capability="recommendation", complex_name="송파구", region_name="송파구",
+                exclusive_area_square_meters=84.0,
+                maximum_budget_ten_thousand_krw=200_000,
+                lifestyle_themes=("TRANSIT", "STUDENT", "YOUNG_CHILD"),
+            )
+
+    engine = GroundedChatbotEngine(
+        repository=PropertyRepository(), language_model=ThemedLanguageModel(),
+        enabled_capabilities=frozenset({"recommendation"}),
+        rail_station_repository=RailRepository(), point_facility_repository=RetailRepository(),
+        school_repository=SchoolRepository(), academy_location_repository=AcademyRepository(),
+        today=lambda: date(2026, 7, 20),
+    )
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(question="학생이 있고 역도 가까운 송파구 후보 추천"),
+        user=AuthenticatedUser(user_id=1), request_id="request-themed-recommendation",
+    ))
+
+    card = response["uiArtifacts"][0]["cards"][0]
+    assert card["activeThemes"] == ["TRANSIT", "STUDENT"]
+    assert [(item["key"], item["weight"]) for item in card["scoreBreakdown"]] == [
+        ("PRICE", 60.0), ("TRANSIT", 22.5), ("SHOPPING", 5.0),
+        ("STUDENT", 12.5),
+    ]
+    assert "YOUNG_CHILD" not in [item["key"] for item in card["scoreBreakdown"]]
+
+
+def test_recommendation_does_not_zero_score_a_missing_childcare_source() -> None:
+    class ChildThemeLanguageModel(LanguageModel):
+        async def plan_query(self, _request):
+            return replace(
+                await super().plan_query(_request),
+                lifestyle_themes=("YOUNG_CHILD",),
+            )
+
+    engine = GroundedChatbotEngine(
+        repository=PropertyRepository(), language_model=ChildThemeLanguageModel(),
+        enabled_capabilities=frozenset({"recommendation"}),
+        rail_station_repository=RailRepository(), point_facility_repository=RetailRepository(),
+        childcare_repository=None,
+    )
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(question="어린아이가 있는 집을 추천해줘"),
+        user=AuthenticatedUser(user_id=1), request_id="request-child-source-missing",
+    ))
+
+    assert response["status"] == "failed"
+    assert any("어린이집" in value for value in response["limitations"])
+
+
+def test_recommendation_scores_explicit_young_child_theme_without_capacity() -> None:
+    class ChildThemeLanguageModel(LanguageModel):
+        async def plan_query(self, _request):
+            return replace(
+                await super().plan_query(_request), lifestyle_themes=("YOUNG_CHILD",)
+            )
+
+    engine = GroundedChatbotEngine(
+        repository=PropertyRepository(), language_model=ChildThemeLanguageModel(),
+        enabled_capabilities=frozenset({"recommendation"}),
+        rail_station_repository=RailRepository(), point_facility_repository=RetailRepository(),
+        childcare_repository=ChildcareRepository(), today=lambda: date(2026, 7, 20),
+    )
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(question="어린아이가 있는 집을 추천해줘"),
+        user=AuthenticatedUser(user_id=1), request_id="request-child-theme",
+    ))
+
+    card = response["uiArtifacts"][0]["cards"][0]
+    assert card["activeThemes"] == ["YOUNG_CHILD"]
+    assert [(item["key"], item["weight"]) for item in card["scoreBreakdown"]] == [
+        ("PRICE", 60.0), ("TRANSIT", 10.0), ("SHOPPING", 5.0),
+        ("YOUNG_CHILD", 25.0),
+    ]
+    assert "공식 운영 어린이집 5곳" in card["scoreBreakdown"][-1]["details"][0]
+    assert "정원" not in str(card)
+
+
+def test_recommendation_allows_grounded_name_in_a_negative_quality_limitation() -> None:
+    fact = EvidenceFact(
+        fact_id="recommendation-childcare-501",
+        claims=(FactClaim("해뜰어린이집", "TEXT"),),
+        data_as_of=date(2026, 7, 1), payload={}, source_id="lifestyle.childcare",
+    )
+    draft = DraftAnswer([DraftSentence(
+        "해뜰어린이집 정보는 입소 가능 여부나 보육 품질을 의미하지 않습니다.",
+        [fact.fact_id], [DraftClaim(fact.fact_id, "해뜰어린이집", "TEXT")],
+    )])
+
+    assert validate_draft(
+        draft, [fact], "supported", enforce_recommendation_policy=True,
+    ) == [fact]
+
+
+def test_recommendation_rejects_an_unobserved_lifestyle_facility_name() -> None:
+    fact = EvidenceFact(
+        fact_id="recommendation-childcare-501",
+        claims=(FactClaim("해뜰어린이집", "TEXT"),),
+        data_as_of=date(2026, 7, 1), payload={}, source_id="lifestyle.childcare",
+    )
+    draft = DraftAnswer([DraftSentence(
+        "확인되지않은어린이집이 가깝습니다.",
+        [fact.fact_id], [DraftClaim(fact.fact_id, "해뜰어린이집", "TEXT")],
+    )])
+
+    with pytest.raises(GroundingValidationError) as raised:
+        validate_draft(
+            draft, [fact], "supported", enforce_recommendation_policy=True,
+        )
+
+    assert raised.value.reason_code == "GROUNDING_RECOMMENDATION_TEXT_OUTSIDE_OBSERVATION"

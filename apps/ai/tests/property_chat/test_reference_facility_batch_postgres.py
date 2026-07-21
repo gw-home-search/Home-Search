@@ -57,7 +57,7 @@ def facility_postgres_dsn():
                     '00000000-0000-0000-0000-000000000001', 'ALL', 1, 1
                 );
                 INSERT INTO reference_read.facility_point_fact VALUES (
-                    'store-1', 'retail.large-store', '롯데마트', 'LARGE_STORE',
+                    'store-1', 'retail.large-store', '롯데마트', 'RETAIL',
                     'LARGE_MART', 'OPEN', '서울 송파구', NULL,
                     ST_SetSRID(ST_MakePoint(127.082, 37.513), 4326)::geography,
                     'retail-v1', '2026-06-30', NULL

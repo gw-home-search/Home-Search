@@ -1,53 +1,49 @@
 # `retail.large-store` readiness
 
-기준일: 2026-07-20
+기준일: 2026-07-21
 
-상태: `Partial`
+상태: `Limited Pass`
 
-실제 데이터 readiness: `8.0/10 Partial`
+실제 데이터 readiness: `제한 지원`
 
 ## 검증 근거 확인
 
-- 공식 파일 상세 `15045013`의 `이용허락범위 제한 없음`, 일간 갱신·2일 전 기준
-  현행화, CSV download URL을 source별 evidence로 고정했다.
-- collector는 고정된 `file.localdata.go.kr/file/download/large_scale_retail_stores/info`
-  와 같은 host의 tracked `Referer`만 사용한다. provider key는 읽거나 전달하지 않는다.
-- filename에 검증 가능한 release date가 없으므로 계약은 수집 시작 UTC의
-  `OBSERVED_AT`이며, 실제 CP949 body를 `large-store-v3`로 분리했다.
-- 현재 공식 status와 업태 값은 explicit mapping한다. 새로운 nonblank 값, 필수 ID
-  중복, 대한민국 밖 좌표는 publication을 차단한다. 전화번호는 raw 밖으로 투영하지 않는다.
+- 공식 파일 상세 `15045013`의 이용허락, 일간 갱신, CSV download URL을
+  source evidence로 고정했다.
+- active datasetVersion은 `20260720-e61a2e1ce389`이며 원본 `4,176`행,
+  rejected `0`, 두 번째 수집 `NoChange`, verified raw 복구를 확인했다.
+- 원본 좌표는 `3,497`행에 있다. 좌표가 없는 `679`행 중 법정동과 지번을 정확히
+  식별해 19자리 PNU를 만들 수 있고 Coordinate Source DB에서 같은 PNU가 한 건으로
+  확인된 `211`행만 별도 불변 evidence로 게시했다.
+- 현재 좌표 확인 범위는 `3,708/4,176` (`88.7931%`)이고 미확인 원장은 `468`행이다.
+- property DB와 coordinate-source DB는 애플리케이션에서 각각 읽고 DB 간 SQL join을
+  하지 않는다. 원본 registry fact와 active pointer도 변경하지 않는다.
+- 주소 API, 임의 geocoding, fuzzy 주소 매칭은 사용하지 않았다. `읍·면·리`, 불완전
+  지번, 복수 해석 주소는 미확인으로 남긴다.
+- 1km query 20회 p95 `57.356ms`, 3km query 20회 p95 `53.259ms`로 200ms 기준을
+  통과한 기존 공간 조회 경로를 그대로 사용한다.
 
-## live 결과
+## 제한 활성화 결정
 
-- 첫 수집: `Pass`, 1 file, raw/accepted `4,176`, rejected `0`, active datasetVersion
-  `20260720-e61a2e1ce389`.
-- projection: 고유 fact `4,176`, spatial `3,497`, non-spatial `679`, OPEN `2,970`,
-  공식 분류 `8`종, unknown region `0`.
-- 좌표 coverage는 `83.7404%`로 전국 `95%` readiness 기준에 미달한다.
-- 좌표가 없는 679건은 원본 X/Y가 모두 비어 있으며 운영 중인 점포 483건도
-  포함한다. 679건 모두 주소 후보는 있으나 `호`처럼 좌표 보완에 사용할 수 없는
-  불완전 주소도 있어 단순 주소 변환으로 exact-match 품질을 보장할 수 없다.
-- 두 번째 수집: `NoChange`, staging `0`, publication 총 `1`; active pointer 유지.
-- 서울 대표 좌표의 1km 공간 query 20회 실측 p95는 `57.356ms`, max는
-  `59.828ms`로 200ms 기준을 통과했다.
-- 최대 반경 3km의 warm-up 후 20회 p95는 `53.259ms`, max는 `53.945ms`다.
-- runtime static composition과 공식 fileData citation URL을 검증했지만 승인 질문의
-  live JSON은 `503`, SSE는 error event로 끝나 chatbot golden을 통과하지 못했다.
-- 최신 raw bundle은 MinIO version object에서 복구해 DB와 동일한 SHA-256
-  `e43231a24aa74adf41274d2bbee6222a9fae510c81c036845b7b31ae96ceed0e`,
-  `1,183,918` bytes를 확인했다.
-- 이전 OpenAPI `API_AUTHENTICATION_FAILED` refresh evidence는 삭제하지 않고 audit에
-  보존했다.
+프로젝트 책임자가 현 단계의 `88.79%`를 허용했으므로 이 source에만 적용하는
+`88%` fail-closed 기준으로 `retail_location`, 비교의 대규모점포 행,
+`CRITERIA/SHOPPING`, `BUDGET` 추천을 제한 활성화한다.
 
-## 잔여 위험과 활성화
+- 모든 사용자 응답에는 좌표가 확인된 공식 원장 범위만 반영했다는 제한을 표시한다.
+- 좌표 미확인 `468`행을 0건이나 부재로 해석하지 않으며 `verifiedZero=false`를 유지한다.
+- coverage가 `88%` 아래로 내려가거나 active metadata가 없으면 실행 전에 unavailable로
+  종료한다.
+- 어린이집·유치원은 이 결정과 무관하며 runtime allowlist에 포함하지 않는다.
+- 향후 공식 주소 좌표 source가 승인되면 별도 보완 Slice에서 coverage를 높일 수 있다.
 
-- 좌표 coverage 미달이므로 `retail_location` activation은 금지한다.
-- 승인된 공식 주소→좌표 보완 source의 credential·license·exact-match 검증 전에는
-  임의 geocoding을 적용하거나 좌표 없는 행을 제외해 coverage 기준을 우회하지 않는다.
-- provider 개방자치단체 code와 property 법정동 code mapping 전에는 정상 0건도
-  `verifiedZero=false`를 유지한다.
-- chatbot JSON/SSE live golden은 실패 상태로 보존한다.
-- local publication과 raw evidence는 보존하며 rollback은 이전 pointer 전환만 사용한다.
+## 검증 공백과 롤백
+
+- 이번 변경의 OpenAI live 대표 질문은 비용 승인을 받지 않아 실행하지 않았다.
+  deterministic observation, grounding, artifact, local runtime, JSON/SSE transport를
+  검증 대상으로 삼는다.
+- 문제 발생 시 reference allowlist를
+  `academy_lookup,rail_station_lookup,school_location`으로 되돌리면 retail repository와
+  `BUDGET` mode가 함께 비활성화된다. 원본·보완 evidence는 삭제하지 않는다.
 
 license evidence:
 `apps/ai/config/license_evidence/retail.large-store.txt`

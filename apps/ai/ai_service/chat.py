@@ -35,6 +35,12 @@ _APPROVED_REFERENCE_CAPABILITY_CONFIGURATIONS = frozenset(
         ("academy_lookup",),
         ("academy_lookup", "rail_station_lookup"),
         ("academy_lookup", "rail_station_lookup", "school_location"),
+        (
+            "academy_lookup",
+            "rail_station_lookup",
+            "school_location",
+            "retail_location",
+        ),
     }
 )
 
@@ -343,7 +349,11 @@ class ConfiguredChatbotEngine:
                     language_model=language_model,  # type: ignore[arg-type]
                     enabled_capabilities=get_enabled_property_capabilities(),
                     enabled_reference_capabilities=enabled_reference_capabilities,
-                    enabled_recommendation_modes=frozenset({"CRITERIA"}),
+                    enabled_recommendation_modes=(
+                        frozenset({"CRITERIA", "BUDGET"})
+                        if "retail_location" in enabled_reference_capabilities
+                        else frozenset({"CRITERIA"})
+                    ),
                 )
                 return await engine.query(
                     request=request,

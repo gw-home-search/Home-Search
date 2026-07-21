@@ -30,7 +30,7 @@ dataset의 private raw 저장·가공 승인으로 확대하지 않는다.
 |---|---|---|---|
 | `edu.academy-registry` | NEIS 상세 페이지의 `이용 허락 범위 제한없음`, provider·주기·attribution evidence SHA-256 고정 | `APPROVED` | acquisition·S3·전국 138,412행·p95 통과; chatbot golden·pointer rollback 미검증 |
 | `place.sbiz-academy` | API의 무제한 이용 허락, 국세청/카드사 provenance·제3자 정책, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | 필수 readiness 통과; `academy_lookup` 활성화 |
-| `retail.large-store` | 공식 fileData 상세의 `이용허락범위 제한 없음`, 일간·2일 전 현행화, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | 좌표 83.7404%와 live chatbot golden 실패로 activation 차단 |
+| `retail.large-store` | 공식 fileData 상세의 `이용허락범위 제한 없음`, 일간·2일 전 현행화, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | exact PNU 211건 보완 후 좌표 88.7931%; 부분 coverage 명시 조건으로 제한 활성화 |
 | `transport.rail-station` | fileData `15093755`의 `이용허락범위 제한 없음`과 프로젝트 책임자가 보고한 KRIC 전화 승인; 서면 transcript 부재를 evidence에 명시 | `APPROVED` | 필수 readiness 통과; `rail_station_lookup` 활성화 |
 
 빈 `terms_fingerprint`는 미검토가 아니라 승인 근거가 없음을 뜻한다. 철도는 공식
@@ -84,7 +84,7 @@ live 필수 항목이 남으면 readiness를 `Partial`로 유지한다.
 | NEIS | source 이용조건·collector·projection·summary observer·전국 live 수집 `Pass` | `10.0/10` | `8.0/10 Partial` | 금지 |
 | Sbiz S2 collector | 공식 taxonomy 18 partition·191,250행·S3 복구·`NoChange` `Pass` | `10.0/10` | `10.0/10 Pass` | 활성화 |
 | Sbiz S2-P grounded location | exact projection·Sbiz B+NEIS A signed JWT JSON/SSE `Pass` | `10.0/10` | `10.0/10 Pass` | 활성화 |
-| 대규모점포 | 공식 CSV 4,176행·S3 복구·`NoChange`·runtime composition `Pass` | `10.0/10` | `8.0/10 Partial` | coverage·golden으로 금지 |
+| 대규모점포 | 공식 CSV 4,176행·S3 복구·`NoChange`·exact PNU 211건·runtime composition `Pass` | `10.0/10` | `Limited Pass` | 88% fail-closed·부분 coverage 표시 |
 | 철도 S4/S4-P | fixed XLSX·1,097 occurrence·좌표 100%·S3·병합·signed JWT JSON/SSE `Pass` | `9.5/10` | `10.0/10 Pass` | 활성화 |
 | Offline priority integration | AI·PostGIS·MinIO·property-data·chat-bff·JWT·Compose `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 
@@ -160,9 +160,10 @@ Sbiz S2-P 구현 점수는 이용조건·범위·공개/내부 계약·데이터
 대규모점포 collector는 공식 fileData CSV의 fixed host/path·Referer, owner-only streaming,
 CP949 schema, OBSERVED_AT semantic checksum, 전화번호 비투영, status·업태·EPSG:5174
 계약과 typed projection을 검증했다. 실제 4,176행 게시·두 번째 `NoChange`·S3 복구는
-통과했지만 좌표 coverage `83.7404%`가 전국 95% 기준에 미달했다. 1km
-query 20회 p95 `57.356ms`와 3km p95 `53.259ms`를 통과했지만 live chatbot
-golden도 실패해 readiness는 `8.0/10 Partial`이다.
+통과했다. 후속 exact lot/PNU 보완은 Coordinate Source DB에 같은 PNU가 있는 211건만
+additive evidence로 게시해 좌표 coverage를 `88.7931%`로 높였다. 프로젝트 책임자가
+이 source에 한해 88% fail-closed와 부분 coverage 표시를 승인해 `Limited Pass`로
+전환했다. 1km query 20회 p95 `57.356ms`와 3km p95 `53.259ms`를 유지한다.
 행정코드 mapping 전에는 정상 0건을 주장하지 않는다.
 
 Offline priority integration은 실제 PostGIS와 MinIO container, raw version byte 복구,

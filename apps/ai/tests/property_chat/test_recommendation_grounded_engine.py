@@ -803,6 +803,23 @@ def test_criteria_observation_rejects_stale_incomplete_and_missing_batches() -> 
         assert isinstance(result, CapabilityResult)
         assert result.readiness == "unavailable"
 
+    approved_retail = BatchStub({
+        501: FacilitySearchResult(
+            (), 0, 0, False, False, 0.88769157,
+            "retail-v1", date(2026, 6, 30),
+        )
+    })
+    approved = asyncio.run(RecommendationHandler(
+        repository=PropertyRepository(), rail_repository=None,
+        retail_repository=approved_retail, school_repository=None,
+        academy_repository=None, childcare_repository=None,
+        builders=None,  # type: ignore[arg-type]
+        today=lambda: date(2026, 7, 20),
+    )._criteria_observations(  # noqa: SLF001
+        ("SHOPPING",), (point,), ("ELEMENTARY", "MIDDLE", "HIGH")
+    ))
+    assert not isinstance(approved, CapabilityResult)
+
     for value in (None, {}):
         stub = BatchStub(value)
         handler = RecommendationHandler(

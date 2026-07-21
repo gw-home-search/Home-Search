@@ -234,6 +234,17 @@ def test_unapproved_or_invalid_property_capability_configuration_fails_closed(
                 {"academy_lookup", "rail_station_lookup", "school_location"}
             ),
         ),
+        (
+            "academy_lookup,rail_station_lookup,school_location,retail_location",
+            frozenset(
+                {
+                    "academy_lookup",
+                    "rail_station_lookup",
+                    "school_location",
+                    "retail_location",
+                }
+            ),
+        ),
         (" school_location", frozenset()),
         ("school_location,school_location", frozenset()),
         ("rail_station_lookup,academy_lookup", frozenset()),
@@ -902,3 +913,52 @@ def test_school_activation_composes_only_the_approved_cumulative_sources(
     assert captured["rail_station_repository"] is rail_repository
     assert captured["childcare_repository"] is None
     assert captured["point_facility_repository"] is None
+
+
+def test_retail_activation_enables_shopping_and_budget_without_childcare(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    retail_repository = object()
+
+    class RecordingEngine:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        async def query(self, **_kwargs: object) -> dict[str, object]:
+            return {"success": True}
+
+    monkeypatch.setenv(
+        "HOME_AI_ENABLED_PROPERTY_CAPABILITIES",
+        "complex_identity,recent_trade_lookup,price_trend,recommendation,comparison",
+    )
+    monkeypatch.setenv(
+        "HOME_AI_ENABLED_REFERENCE_CAPABILITIES",
+        "academy_lookup,rail_station_lookup,school_location,retail_location",
+    )
+    monkeypatch.setattr("ai_service.chat.get_property_fact_repository", lambda: object())
+    monkeypatch.setattr("ai_service.chat.get_grounded_language_model", lambda: object())
+    monkeypatch.setattr("ai_service.chat.get_school_fact_repository", lambda: object())
+    monkeypatch.setattr("ai_service.chat.get_academy_location_repository", lambda: object())
+    monkeypatch.setattr("ai_service.chat.get_rail_station_repository", lambda: object())
+    monkeypatch.setattr(
+        "ai_service.chat.get_point_facility_repository", lambda: retail_repository
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_childcare_repository",
+        lambda: (_ for _ in ()).throw(AssertionError("childcare must stay inactive")),
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.engine.GroundedChatbotEngine", RecordingEngine
+    )
+
+    response = asyncio.run(ConfiguredChatbotEngine().query(
+        request=ChatbotQueryRequest(question="송파구 20억 이하 84㎡ 추천"),
+        user=AuthenticatedUser(user_id=42),
+        request_id="request-budget-activation",
+    ))
+
+    assert response == {"success": True}
+    assert captured["point_facility_repository"] is retail_repository
+    assert captured["enabled_recommendation_modes"] == frozenset({"CRITERIA", "BUDGET"})
+    assert captured["childcare_repository"] is None

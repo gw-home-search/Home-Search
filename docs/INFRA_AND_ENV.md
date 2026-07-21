@@ -286,8 +286,9 @@ DSN from `AI_DATA_RUNTIME_DB_PASSWORD`, and supplies the approved cumulative
 optional line is absent. The four-path form keeps strict explicit mapping,
 DSN, and Capability validation. The approved reference rollback is blank and
 the 2026-07-21 approved values are exactly `academy_lookup`, the cumulative
-`academy_lookup,rail_station_lookup`, and the cumulative
-`academy_lookup,rail_station_lookup,school_location`. Any other combination,
+`academy_lookup,rail_station_lookup`, the cumulative
+`academy_lookup,rail_station_lookup,school_location`, and the full cumulative
+`academy_lookup,rail_station_lookup,school_location,retail_location`. Any other combination,
 including rail or school alone, fails closed until its own readiness and
 activation commit pass.
 
@@ -317,10 +318,11 @@ The price/trend rollback value is
 The approved full cumulative value is
 `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison`.
 The previous value ending in `recommendation` is the comparison rollback.
-This activation runs explicit `ACADEMY`, `TRANSIT`, and `SCHOOL` criteria only.
-Requests that need `SHOPPING`, BUDGET recommendation, childcare, or
-kindergarten remain unavailable until their source-specific readiness and
-activation commits pass.
+This activation runs explicit `ACADEMY`, `TRANSIT`, `SCHOOL`, and `SHOPPING`
+criteria. The full reference value also enables `BUDGET` recommendation. Retail
+results use only coordinate-confirmed official rows and retain the partial-coverage
+limitation. Childcare and kindergarten remain unavailable until their
+source-specific readiness and activation commits pass.
 The no-argument local runner supplies the full cumulative value when omitted;
 explicit custom-file startup still rejects a missing value. Reordered,
 duplicate, mixed, or unapproved values remain fail-closed.

@@ -26,8 +26,8 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 |---|---|---|---|
 | `simple_lookup` | `complex_identity`, `recent_trade_lookup` | 데이터 준비 중 | 지역 가격 순위는 현재 미지원 |
 | `price_trend` | `price_trend` | 데이터 준비 중 | 과거 관찰 집계만 허용 |
-| `comparison` | `comparison` | 제한 지원 | 부동산·철도·학교/학원 항목 활성; 쇼핑은 readiness 대기 |
-| `recommendation` | `recommendation` | 제한 지원 | `CRITERIA`의 학원·철도·학교 조건만 활성; BUDGET·쇼핑은 readiness 대기 |
+| `comparison` | `comparison` | 제한 지원 | 부동산·철도·학교/학원과 좌표 확인 대규모점포 항목 활성 |
+| `recommendation` | `recommendation` | 제한 지원 | `CRITERIA` 4개 시설 조건과 `BUDGET` 활성; 어린이집·유치원 제외 |
 | 복합 질문 | `compound_question` | 데이터 준비 중 | 하위 Capability를 독립 검증 |
 | 미래 가격·주관적 학군·개인 법률 판단 | 미지원 Capability | 미지원 | 대체 가능한 근거 질문을 안내 |
 
@@ -52,8 +52,8 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 | `complex_identity` | “잠실엘스 어디야?” | 지원 | `home_search.ai_read` 단지·지역·marker-safe 좌표 | A | 식별된 단지명, 주소, 공개 좌표 | 동명 단지를 임의 선택 | Slice 3 감사 통과 active view | 후보를 나열하고 지역 등 추가 조건 요청 |
 | `recent_trade_lookup` | “전용 84㎡ 최근 실거래 5건” | 지원 | `ai_read` 정상 거래·단지 | A | 실제 거래일, 전용면적, 금액, 층 | 호가·시세로 재해석, 미래 가격 | 최신 거래일과 coverage를 응답에 표시 | 조회 기간과 조건에서 거래 없음 안내 |
 | `price_trend` | “최근 1년 가격 흐름” | 지원 | `ai_read` 정상 거래 | A | 동일 조건의 월별 집계와 거래량 | 미래 추세 단정, 표본 부족 은폐 | 요청 종료일 이하 active data | 계산 불가 기간과 최소 표본 부족 설명 |
-| `comparison` | “A와 B 가격·세대수 비교” | 제한 지원 | 부동산 A, 철도 A, 명시 시 학교 A·학원 B | A | 같은 기간·단위로 계산 가능한 항목과 항목별 차이 | 기준일·평형이 다른 수치의 직접 비교, overall winner, unavailable을 열세로 해석 | 사용한 항목의 freshness 통과 | 비교 가능한 항목만 답하고 누락을 분리 |
-| `recommendation` | “영등포구 500세대 이상, 학원 우선 후보” | 제한 지원 | 부동산 A, Sbiz 학원 B, 철도 A, 학교 A | A | `CRITERIA` mode에서 세대수 선필터와 명시한 학원·철도·학교 우선순위로 계산한 후보 | BUDGET·쇼핑 실행, 절대평가, 수익 보장, LLM 임의 점수 | 사용한 모든 필수 dataset 통과 | 비활성 조건과 후보 0건 이유 설명 |
+| `comparison` | “A와 B 가격·세대수 비교” | 제한 지원 | 부동산 A, 철도 A, 좌표 확인 대규모점포 A, 명시 시 학교 A·학원 B | A | 같은 기간·단위로 계산 가능한 항목과 항목별 차이 | 기준일·평형이 다른 수치의 직접 비교, overall winner, unavailable을 열세로 해석 | 사용한 항목의 freshness·coverage 통과 | 비교 가능한 항목만 답하고 누락을 분리 |
+| `recommendation` | “영등포구 500세대 이상, 학원 우선 후보” | 제한 지원 | 부동산 A, Sbiz 학원 B, 철도 A, 학교 A, 좌표 확인 대규모점포 A | A | `CRITERIA`에서 명시 조건 순위, `BUDGET`에서 예산·면적 선필터와 결정론적 조건 충족도 | 절대평가, 수익 보장, LLM 임의 점수, 좌표 미확인 점포를 포함한 전체 현황 주장 | 사용한 모든 필수 dataset 통과 | 비활성 조건과 후보 0건 이유 설명 |
 | `school_location` | “주변 운영 중 초등학교” | 지원 | 학교 위치·운영상태 snapshot | A | 학교 유형, 운영 상태, 직선거리 | 학교 품질·서열·진학 성과 | 반기 갱신 + grace 31일 이내 | 공식 snapshot 미준비 안내; Kakao는 별도 보조 결과 |
 | `elementary_attendance_zone` | “배정 초등학교는?” | 미지원 | 현재 범위에 통학구역 polygon 없음 | 미지원 | 학교 위치 질문으로 전환 안내 | 직선거리로 배정학교 단정 | 해당 없음 | 통학구역은 현재 지원 범위 밖임을 안내 |
 | `middle_high_school_zone` | “어느 학교군이야?” | 미지원 | 현재 범위에 학교군 polygon 없음 | 미지원 | 학교 위치 질문으로 전환 안내 | 특정 학교 진학 보장 | 해당 없음 | 학교군은 현재 지원 범위 밖임을 안내 |
@@ -61,6 +61,7 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 | `academy_lookup` | “단지 800m 안 교육업소는?” | 지원 | Sbiz 교육업소 active snapshot, 선택적 NEIS exact match | B | 지정 반경의 교육업소 위치와 직선거리; exact match 성공 시 공식 등록 상태 | Sbiz 수를 공식 등록 학원 수로 표현, fuzzy match, 교육 품질 | 월간 관측 + grace 15일 이내 | 지정 조건에서 확인되지 않음 또는 snapshot 미준비 안내 |
 | `education_metrics` | “학생·교사 수는?” | 미지원 | 현재 범위에 학생·교사 지표 없음 | 미지원 | 학교 위치와 학원 접근성 질문 안내 | 학생·교사 수 추정, 자체 학교 서열화 | 해당 없음 | 교육지표는 현재 지원 범위 밖임을 안내 |
 | `rail_station_lookup` | “가까운 역과 노선” | 지원 | 도시철도 역사 snapshot | A | 역명, 노선, 직선거리 | 통근시간·배차·혼잡도 | 연간 갱신 + grace 45일 이내 | 위치 기준선 미준비 안내; Kakao는 탐색 보조만 가능 |
+| `retail_location` | “주변 대형마트·백화점” | 제한 지원 | 좌표 확인 대규모점포 active snapshot | A | 업소명, 허용 업태, 지정 반경 직선거리 | 좌표 미확인 원장을 포함한 전체 현황, 상권 품질·투자 가치, 시설 부재 단정 | 전국 좌표 coverage 88% 이상과 active metadata | 좌표 확인 범위 미달 또는 지정 범위에서 확인되지 않음 안내 |
 | `hospital_lookup` | “주변 병원 유형” | 미지원 | 현재 범위에 HIRA 병원 원장 없음 | 미지원 | Kakao 지도 탐색 action으로 전환 안내 | 공식 의료기관 현황·유형·진료 가능·의료 품질 주장 | 해당 없음 | `showNearbyCategory(HOSPITAL)`로 지도 탐색만 제공 |
 | `childcare_lookup` | “주변 어린이집 유형·정원” | 데이터 준비 중 | 전국어린이집 active snapshot/API | A 또는 B | 공개된 유형·정원·거리 | 입소 가능 여부 | source 계약의 수시/실시간 SLA | 공개 항목 미확인 안내 |
 | `kindergarten_location` | “주변 유치원 위치” | 데이터 준비 중 | 승인된 공식 유치원 위치·운영상태 snapshot | A 또는 B | 승인 후 위치·운영상태·직선거리 | 입학 가능 여부·교육 품질; Kakao 결과를 공식 현황으로 표현 | source 계약 승인 후 정의 | 현재는 사용자 실행형 Kakao 지도 탐색만 별도 제공 |
@@ -142,3 +143,13 @@ recommendation 값은 rollback으로 유지한다. 송파구 상위 행정구역
 region code로 해석하는 batch lookup RED→GREEN과 OpenAI live 대표 질문 fact 6건,
 citation 4건을 통과했다. 대규모점포 행은 좌표 coverage `83.7404%`로 readiness에
 미달해 `unavailable`이며 점수 0이나 열세로 해석하지 않는다.
+
+2026-07-21 후속 결정에서 `retail.large-store`의 좌표 없는 원장 중 exact lot/PNU와
+Coordinate Source DB가 일치한 211건을 additive evidence로 보완했다. 좌표 확인 범위는
+`3,708/4,176` (`88.7931%`)이며, 프로젝트 책임자가 이 source 전용 `88%` 최소선과
+부분 coverage 표시를 승인했다. 누적 reference allowlist에
+`academy_lookup,rail_station_lookup,school_location,retail_location`을 추가해
+`retail_location`, comparison 대규모점포 행, `CRITERIA/SHOPPING`, `BUDGET`을 제한
+활성화한다. 미확인 468행은 시설 부재로 해석하지 않고 coverage 미달 시 fail-closed한다.
+어린이집·유치원은 계속 runtime에서 제외한다. 상세 근거는
+`docs/reports/CHATBOT_RETAIL_BUDGET_ACTIVATION.md`에 기록한다.

@@ -73,7 +73,7 @@ if [[ ! -x "$runner" ]]; then
     echo "상태: Fail - local chatbot runner가 없습니다." >&2
     exit 1
 fi
-grep -Fqx 'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup,rail_station_lookup,school_location' \
+grep -Fqx 'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup,rail_station_lookup,school_location,retail_location' \
     "$ai_runtime_example"
 grep -Fqx 'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison' \
     "$ai_runtime_example"
@@ -554,7 +554,7 @@ printf '%s\n' \
     'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
     'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
     'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison' \
-    'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup,rail_station_lookup,school_location' >"$ai_env"
+    'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup,rail_station_lookup,school_location,retail_location' >"$ai_env"
 if ! PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_TEST_DOCKER_LOG="$docker_log" \
     CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
@@ -630,7 +630,7 @@ if ! PATH="$tmp_dir/bin:$PATH" \
     echo "상태: Fail - 승인된 누적 reference Capability가 허용되지 않았습니다." >&2
     exit 1
 fi
-grep -Fq 'reference-dsn-set=yes|reference-capabilities=academy_lookup,rail_station_lookup,school_location' "$docker_log"
+grep -Fq 'reference-dsn-set=yes|reference-capabilities=academy_lookup,rail_station_lookup,school_location,retail_location' "$docker_log"
 
 printf '%s\n' \
     'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \

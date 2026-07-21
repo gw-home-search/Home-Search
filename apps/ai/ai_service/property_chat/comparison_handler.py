@@ -29,7 +29,7 @@ from .models import (
     TradeRecord,
 )
 from .rail_stations import RailStationSearchResult
-from .reference_facilities import FacilitySearchResult
+from .reference_facilities import FacilitySearchResult, retail_coordinate_ready
 
 
 class ComparisonPropertyRepository(Protocol):
@@ -303,6 +303,7 @@ class ComparisonHandler:
                 f"전용면적 {plan.exclusive_area_square_meters:g}㎡ ±1.0㎡ 기준입니다.",
                 "거래가 3건 미만인 단지의 가격 항목은 확인 불가로 표시합니다.",
                 "철도와 대규모점포 거리는 단지 표시 좌표 기준 직선거리입니다.",
+                "대규모점포는 전국 공식 원장 중 좌표가 확인된 범위만 반영했습니다.",
                 "조건별 관찰값을 나란히 보여드리며, 중요하게 보는 조건에 따라 선택이 달라질 수 있습니다.",
             ],
             "partial" if has_unavailable else "supported",
@@ -324,13 +325,18 @@ class ComparisonHandler:
     ) -> dict[int, FacilitySearchResult] | None:
         if self._retail_repository is None or not points:
             return None
-        return await asyncio.to_thread(
+        results = await asyncio.to_thread(
             self._retail_repository.nearest_batch,
             source_id="retail.large-store",
             category="LARGE_STORE",
             points=points,
             radius_meters=1000,
         )
+        if results is None or any(
+            not retail_coordinate_ready(result) for result in results.values()
+        ):
+            return None
+        return results
 
 
 def _trade_basis_fact(basis: RecentThreeTradeBasis) -> EvidenceFact:

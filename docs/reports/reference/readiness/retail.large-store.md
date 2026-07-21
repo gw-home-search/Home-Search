@@ -1,18 +1,18 @@
 # retail.large-store readiness
 
-- 상태: `Partial` (`8.0/10`)
-- 통과: 공식 CP949 CSV full acquisition, 4,176 고유 ID, rejected 0, verified S3 raw
-  복구, typed projection·active pointer, 두 번째 `NoChange`와 staging 0,
-  1km query 20회 p95 `57.356ms`, 3km query 20회 p95 `53.259ms`
-- 중단: 좌표 `3,497/4,176` (`83.7404%`)로 전국 `95%` 기준 미달 및
-  live JSON `503`·SSE error
-- 안전 제한: provider 행정코드 mapping 전 `verifiedZero=false`
-- 활성화: 금지
+- 상태: `Limited Pass` (`제한 지원`)
+- 통과: 공식 CP949 CSV `4,176` 고유 ID, rejected `0`, verified raw 복구,
+  typed projection·active pointer, 두 번째 `NoChange`, exact lot/PNU 좌표 보완 `211`건,
+  1km p95 `57.356ms`, 3km p95 `53.259ms`
+- 현재 범위: 좌표 `3,708/4,176` (`88.7931%`), 미확인 `468`
+- 안전 제한: 이 source 전용 `88%` fail-closed, 사용자 제한 문구, `verifiedZero=false`,
+  주소 API·fuzzy geocoding 미사용
+- 활성화: `retail_location`, comparison retail row, `CRITERIA/SHOPPING`, `BUDGET`
+- 비활성 유지: 어린이집·유치원
+- 검증 공백: OpenAI live 대표 질문 `not run` (비용 승인 없음)
 
-local DB에는 spatial `3,497`, non-spatial `679` fact를 구분해 보존했다. filename에
-검증 가능한 release date가 없어 수집 시작 UTC의 `OBSERVED_AT`을 사용하며 공식
-2일 provider lag를 evidence에 기록한다. 이전 API 인증 실패 audit와 모든 raw object는
-삭제하지 않았다.
+좌표 보완은 원본 registry fact를 수정하지 않는 additive evidence다. 법정동·지번으로
+만든 정확한 19자리 PNU가 Coordinate Source DB에 존재할 때만 위치를 게시한다.
 
 license evidence SHA-256:
 `db24e0107b7b2e42abb55389468f64d2503bee116551e49c37eb20f58d719b38`

@@ -608,11 +608,72 @@ def test_publication_routes_spatial_and_non_spatial_rows_to_typed_projections(
 
     assert any(fact.fact_id == "store-boundary" for fact in boundary.facilities), boundary
     assert uncertain_zero.verified_zero is False
-    assert uncertain_zero.coordinate_coverage == 0.5
+    assert uncertain_zero.coordinate_coverage == pytest.approx(2 / 3)
     assert mapped_region_zero.verified_zero is False
-    assert mapped_region_zero.coordinate_coverage == 1.0
+    assert mapped_region_zero.coordinate_coverage == pytest.approx(2 / 3)
 
     with psycopg.connect(postgres_dsn) as connection:
         connection.execute("SET ROLE home_search_ai_runtime")
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             connection.execute("SELECT count(*) FROM reference_projection.facility_point")
+
+
+def test_exact_retail_coordinate_enrichment_is_additive_and_updates_coverage(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    lifecycle = DatasetLifecycleService(
+        dataset_repository,
+        clock=lambda: datetime(2026, 7, 19, tzinfo=UTC),
+    )
+    result = lifecycle.ingest_validate_publish(
+        _contract(),
+        _bundle(
+            _row(),
+            _row(
+                **{
+                    "관리번호": "store-2",
+                    "사업장명": "좌표 보완 백화점",
+                    "업태구분명": "백화점",
+                    "좌표정보(X)": "",
+                    "좌표정보(Y)": "",
+                }
+            ),
+        ),
+        source_date=SOURCE_DATE,
+        adapter=LargeStoreAdapter(),
+    )
+
+    with psycopg.connect(postgres_dsn) as connection:
+        connection.execute(
+            """
+            INSERT INTO reference_projection.retail_coordinate_enrichment(
+                publication_id, fact_id, pnu, position,
+                coordinate_snapshot_version, resolution_method, resolved_at
+            ) VALUES (
+                %s, 'store-2', '1111010100100010000',
+                ST_SetSRID(ST_MakePoint(126.98, 37.57), 4326)::geography,
+                'coordinate-2026-07', 'EXACT_LOT_PNU', %s
+            )
+            """,
+            (result.publication_id, datetime(2026, 7, 21, tzinfo=UTC)),
+        )
+        facts = connection.execute(
+            """
+            SELECT fact_id, latitude, longitude
+            FROM reference_read.facility_point_fact
+            WHERE source_id = 'retail.large-store'
+            ORDER BY fact_id
+            """
+        ).fetchall()
+        coverage = connection.execute(
+            """
+            SELECT total_count, spatial_count, non_spatial_count
+            FROM reference_read.source_coverage
+            WHERE source_id = 'retail.large-store' AND region_code = '3010000'
+            """
+        ).fetchone()
+
+    assert [row[0] for row in facts] == ["store-1", "store-2"]
+    assert facts[1][1:] == pytest.approx((37.57, 126.98))
+    assert coverage == (2, 2, 0)

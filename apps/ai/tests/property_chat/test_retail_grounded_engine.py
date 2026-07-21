@@ -98,7 +98,9 @@ class LanguageModel:
         return DraftAnswer(sentences=sentences)
 
 
-def _result(*, verified_zero: bool = False) -> FacilitySearchResult:
+def _result(
+    *, verified_zero: bool = False, coordinate_coverage: float = 1.0
+) -> FacilitySearchResult:
     facilities = () if verified_zero else (
         FacilityFact(
             fact_id="store-1",
@@ -118,7 +120,7 @@ def _result(*, verified_zero: bool = False) -> FacilitySearchResult:
         returned_count=len(facilities),
         has_more=False,
         verified_zero=verified_zero,
-        coordinate_coverage=1.0,
+        coordinate_coverage=coordinate_coverage,
         dataset_version="20260212-abc123def456",
         data_as_of=date(2026, 2, 12),
     )
@@ -182,6 +184,20 @@ def test_retail_zero_fact_preserves_coverage_based_verification() -> None:
     )
     assert scope_fact_id in retail_citation["factIds"]
     assert "true" in response["answer"]
+
+
+def test_retail_requires_the_approved_88_percent_coordinate_floor() -> None:
+    below = _query(
+        FacilityRepository(_result(coordinate_coverage=0.8799)), LanguageModel()
+    )
+    approved = _query(
+        FacilityRepository(_result(coordinate_coverage=0.88769157)), LanguageModel()
+    )
+
+    assert below["status"] == "failed"
+    assert any("좌표 확인 범위" in text for text in below["limitations"])
+    assert approved["success"] is True
+    assert any("88.77%" in text for text in approved["limitations"])
 
 
 @pytest.mark.parametrize(

@@ -328,6 +328,8 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
   정렬한다. 동점은 `complexId` 오름차순이다.
 - `ACADEMY`는 800m 내 Sbiz 교육업소 count 내림차순, 최근접 거리 오름차순이다.
 - `SCHOOL`, `TRANSIT`, `SHOPPING`은 available 직선거리 오름차순이다.
+- `SHOPPING`은 active 공식 원장 중 좌표가 확인된 범위만 사용한다. 현재 source 전용
+  최소 coverage는 88%이며, 미확인 행을 0건이나 시설 부재로 해석하지 않는다.
 - `unavailable`은 0으로 바꾸거나 열세로 해석하지 않는다.
 - row는 최대 5개, scope 후보는 최대 100개다.
 - `CHILDCARE`는 source·타입 구현을 보존하지만 이 version의 active metric, 점수, 표,
@@ -410,14 +412,17 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
 - 정렬은 `totalScore` 내림차순, 동점이면 `complexId` 오름차순이며 LLM이 바꿀 수 없다.
 - 철도 또는 대규모점포 데이터가 준비되지 않으면 거리를 0점으로 바꾸지 않고 추천 전체를
   `unavailable`로 처리한다. 정상 active source에서 반경 내 시설이 없는 경우만 0점이다.
+- 대규모점포 source는 전국 좌표 coverage가 88% 미만이면 준비되지 않은 것으로 처리하고,
+  통과하더라도 좌표가 확인된 공식 원장 범위만 반영했다는 제한을 표시한다.
 - 현재 질문에서 명시적으로 검증된 `TRANSIT|STUDENT|YOUNG_CHILD|SHOPPING`만
   `activeThemes`에 canonical order로 포함한다. 1개면 동적 25점 전부, 2개면 각 12.5점,
   3개면 각 `25/3`점을 배분하며 내부 계산은 반올림하지 않고 최종 `totalScore`만 소수점
   1자리로 반올림한다. 철도 기본 10점과 대규모점포 기본 5점은 항상 유지한다.
 - `STUDENT`는 요청 level별 최근접 운영 학교 거리 50%와 800m 내 Sbiz 교육업소 수
   (5곳 cap) 50%다. 이는 통학구역·학군·학교 품질 또는 공식 등록 학원 수가 아니다.
-- `YOUNG_CHILD`는 최근접 공식 운영 어린이집 거리 50%와 800m 내 운영 어린이집 수
-  (5곳 cap) 50%다. 정원 여유·입소 가능·보육 품질은 계산하지 않는다.
+- `YOUNG_CHILD` 계산 구조는 후속 연결을 위해 보존하지만 현재 runtime에서는 실행하지
+  않는다. 어린이집·유치원은 각각 공식 source 승인과 별도 activation 전까지 추천 근거가
+  아니다.
 - 활성 생활조건 데이터가 freshness/coverage 기준을 충족하지 못하면 해당 점수를
   0으로 바꾸지 않고 추천을 `unavailable`로 처리한다.
 - card, 거래 표시값, score breakdown의 사실 필드는 각각 비어 있지 않은 `factIds`가

@@ -33,7 +33,7 @@ snapshot 또는 검증된 실시간 응답에만 실제 근거 등급을 부여�
 | `edu.school-zone` | [학구도안내서비스 공개자료](https://schoolzone.emac.kr/publicData/publicDataList.do) | 교육부 계열 / 반기 release | 미지원 | 현재 생활 인프라 chatbot 범위 밖 | contract 후보는 보존하되 수집·활성화하지 않음 |
 | `edu.academy-registry` | [전국학원및교습소표준데이터](https://www.data.go.kr/data/15096277/standard.do) | 교육부·17개 시도교육청 / 월간 관측 | A | 공식 등록 학원·교습소 시군구 집계 | 17개 교육청 adapter 검증; 이용조건·실제 수집 미완료 |
 | `place.sbiz-academy` | [상가(상권)정보 API](https://www.data.go.kr/data/15012005/openapi.do) | 소상공인시장진흥공단 / 월간 관측 | B | 교육업소 좌표와 NEIS exact match | tracked contract 등록; 이용조건·adapter 미완료 |
-| `retail.large-store` | [전국대규모및준대규모점포표준데이터](https://www.data.go.kr/data/15114138/standard.do) | 행정안전부 / 월간 | A | 대형마트·백화점·쇼핑센터·복합쇼핑몰 | CSV/PostGIS offline 검증; 이용조건·실제 수집 미완료 |
+| `retail.large-store` | [전국대규모및준대규모점포표준데이터](https://www.data.go.kr/data/15114138/standard.do) | 행정안전부 / 일간 관측 | A | 대형마트·백화점·쇼핑센터·복합쇼핑몰 | 4,176행 게시·좌표 확인 3,708행(88.7931%); 제한 활성화 |
 | `edu.school-info` | [학교알리미 공개용 데이터](https://www.data.go.kr/data/15014351/fileData.do) | KERIS / 파일 버전별 | 미지원 | 현재 생활 인프라 chatbot 범위 밖 | 학생·교사·품질 지표를 수집·활성화하지 않음 |
 | `edu.statistics` | [교육통계서비스 유초중등 데이터셋](https://www.data.go.kr/data/15139276/fileData.do) | 교육부 / 파일 버전별 | 미지원 | 현재 생활 인프라 chatbot 범위 밖 | 교육지표를 수집·활성화하지 않음 |
 | `transport.rail-station` | [전국도시철도역사정보표준데이터](https://www.data.go.kr/data/15013205/standard.do) | 국토교통부·국가철도공단 / 연간 | A | 역명, 노선, 위치 | 계약 등록됨; 미수집 |

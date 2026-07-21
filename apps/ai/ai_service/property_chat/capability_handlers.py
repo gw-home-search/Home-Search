@@ -24,7 +24,12 @@ from .models import (
     TradeRecord,
 )
 from .rail_stations import RailStation, RailStationSearchResult
-from .reference_facilities import FacilityFact, FacilitySearchResult
+from .reference_facilities import (
+    FacilityFact,
+    FacilitySearchResult,
+    RETAIL_MIN_COORDINATE_COVERAGE,
+    retail_coordinate_ready,
+)
 
 
 class PropertyFactRepository(Protocol):
@@ -534,9 +539,21 @@ class RetailLocationHandler:
             region_code=complex_record.region_code,
             subcategories=plan.facility_subtypes,
         )
+        if not retail_coordinate_ready(result):
+            return CapabilityResult(
+                [],
+                [
+                    "대규모점포 원장의 좌표 확인 범위가 "
+                    f"활성화 기준 {RETAIL_MIN_COORDINATE_COVERAGE * 100:g}%에 "
+                    "미치지 못했습니다."
+                ],
+                "unavailable",
+            )
         limitations = [
             "거리는 단지 표시 좌표 기준 직선거리이며 실제 보행 경로가 아닙니다.",
             "공식 snapshot 이후 운영상태가 변경될 수 있습니다.",
+            "전국 대규모점포 원장 중 좌표가 확인된 "
+            f"{result.coordinate_coverage * 100:.2f}% 범위만 반영했습니다.",
         ]
         if not result.facilities and not result.verified_zero:
             limitations.append(

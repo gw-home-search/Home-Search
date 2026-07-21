@@ -30,7 +30,7 @@ Runtime variables:
 - `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison`
 - `HOME_AI_REFERENCE_DSN` (separate `home_search_ai_runtime` read-only pool)
 - `HOME_AI_ENABLED_REFERENCE_CAPABILITIES` (blank by default; only the exact
-  academy/rail/school cumulative tuples recorded in `ai_service.chat` are
+  academy/rail/school/retail cumulative tuples recorded in `ai_service.chat` are
   currently approved)
 
 The runtime Capability setting is fail-closed. This activation permits the
@@ -39,17 +39,30 @@ identity-only rollback value or the cumulative
 `complex_identity,recent_trade_lookup,price_trend` rollback value, or the approved
 `complex_identity,recent_trade_lookup,price_trend,recommendation` rollback value, or
 the active `complex_identity,recent_trade_lookup,price_trend,recommendation,comparison`
-value. The active
-recommendation facility scope is limited to explicit `ACADEMY`, `TRANSIT`, and
-`SCHOOL` criteria;
+value. The active recommendation facility scope supports explicit `ACADEMY`,
+`TRANSIT`, `SCHOOL`, and limited-coverage `SHOPPING` criteria. `BUDGET` mode is
+enabled only with the full cumulative reference allowlist;
 `MIN_UNIT_COUNT` remains an optional server-enforced filter. Missing,
 reordered, duplicate, whitespace-padded, or unapproved values disable all property
-capabilities. Comparison is limited to ready property, rail, and explicitly requested
-school/academy observations; unavailable cells are not treated as worse values.
-`SHOPPING` and childcare/kindergarten execution remain inactive until their separate
-readiness gates pass.
+capabilities. Comparison is limited to ready property, rail, retail, and explicitly
+requested school/academy observations; unavailable cells are not treated as worse
+values. Retail observations use only the coordinate-confirmed 88.79% of the active
+official registry and never claim a verified zero. Childcare/kindergarten execution
+remains inactive until its separate readiness gates pass.
 Golden verification uses its own explicit candidate set and does not widen the
 runtime allowlist.
+
+Local retail coordinate enrichment is a bounded, idempotent one-shot step:
+
+```bash
+apps/ai/ops/run-local-retail-coordinate-enrichment.sh
+```
+
+It reads the protected property vars file, applies AI dataset migrations, derives
+only exact dong/lot PNU values, and looks up at most 1,000 PNU values through the
+read-only Coordinate Source DB role. It appends evidence to `home_search_ai`; it
+does not update source registry rows, join the databases, call a geocoding API, or
+change Docker volumes.
 
 `academy_registry_summary` is implemented for offline review only. It resolves
 the property's province and district through the property read view, then runs

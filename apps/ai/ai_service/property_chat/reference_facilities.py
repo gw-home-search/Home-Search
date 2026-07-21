@@ -10,6 +10,9 @@ from psycopg_pool import ConnectionPool
 from .comparison import CandidatePoint
 
 
+RETAIL_MIN_COORDINATE_COVERAGE = 0.88
+
+
 @dataclass(frozen=True)
 class FacilityFact:
     fact_id: str
@@ -119,23 +122,23 @@ class PostgresPointFacilityRepository:
             ).fetchall()
             coverage = connection.execute(
                 """
-                SELECT target.total_count, target.spatial_count,
-                       target.non_spatial_count, target.stale_row_count,
-                       COALESCE(all_regions.unknown_region_count, 0) AS unknown_region_count,
+                SELECT sum(coverage.total_count)::bigint AS total_count,
+                       sum(coverage.spatial_count)::bigint AS spatial_count,
+                       sum(coverage.non_spatial_count)::bigint AS non_spatial_count,
+                       sum(coverage.stale_row_count)::bigint AS stale_row_count,
+                       sum(coverage.unknown_region_count)::bigint AS unknown_region_count,
                        metadata.temporal_basis, metadata.source_date,
                        metadata.observed_at, metadata.freshness_days,
                        metadata.dataset_version
                 FROM reference_read.active_source_metadata metadata
-                LEFT JOIN reference_read.source_coverage target
-                  ON target.publication_id = metadata.publication_id
-                 AND target.region_code = %s
-                LEFT JOIN (
-                    SELECT publication_id, sum(unknown_region_count) AS unknown_region_count
-                    FROM reference_read.source_coverage GROUP BY publication_id
-                ) all_regions ON all_regions.publication_id = metadata.publication_id
+                LEFT JOIN reference_read.source_coverage coverage
+                  ON coverage.publication_id = metadata.publication_id
                 WHERE metadata.source_id = %s
+                GROUP BY metadata.temporal_basis, metadata.source_date,
+                         metadata.observed_at, metadata.freshness_days,
+                         metadata.dataset_version
                 """,
-                (region_code, source_id),
+                (source_id,),
             ).fetchone()
         facilities = tuple(_facility(row) for row in rows)
         if coverage is None:
@@ -224,7 +227,7 @@ class PostgresPointFacilityRepository:
                     [point.latitude for point in points],
                     [point.longitude for point in points],
                     source_id,
-                    category,
+                    "RETAIL",
                     radius_meters,
                 ),
             ).fetchall()
@@ -269,6 +272,13 @@ class PostgresPointFacilityRepository:
                 data_as_of=data_as_of,  # type: ignore[arg-type]
             )
         return result
+
+
+def retail_coordinate_ready(result: FacilitySearchResult) -> bool:
+    return (
+        result.coordinate_coverage is not None
+        and result.coordinate_coverage >= RETAIL_MIN_COORDINATE_COVERAGE
+    )
 
 
 def _facility(row: dict[str, object]) -> FacilityFact:

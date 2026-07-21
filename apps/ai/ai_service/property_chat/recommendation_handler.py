@@ -48,7 +48,7 @@ from .recommendation import (
     RecommendationPolicy,
     RecommendationScoreItem,
 )
-from .reference_facilities import FacilitySearchResult
+from .reference_facilities import FacilitySearchResult, retail_coordinate_ready
 
 
 class RecommendationPropertyRepository(Protocol):
@@ -268,7 +268,9 @@ class RecommendationHandler:
         )
         if rail_results is None:
             return _source_unavailable("철도")
-        if retail_results is None:
+        if retail_results is None or any(
+            not retail_coordinate_ready(result) for result in retail_results.values()
+        ):
             return _source_unavailable("대규모점포")
         student_results = None
         academy_results = None
@@ -425,6 +427,7 @@ class RecommendationHandler:
                 limitations=(
                     "최근 365일 동일 면적 거래 3건과 단지 좌표 기준 직선거리입니다.",
                     "예산을 통과한 후보는 가격 점수가 모두 같으며 저렴할수록 가산하지 않습니다.",
+                    "대규모점포는 전국 공식 원장 중 좌표가 확인된 범위만 반영했습니다.",
                 ),
                 fact_ids=(
                     complex_fact.fact_id, trade_fact.fact_id,
@@ -454,6 +457,7 @@ class RecommendationHandler:
                 f"영유아 {score.young_child_weight:g}점입니다.",
                 "예산은 후보를 먼저 거르는 조건이며 통과 후보에 추가 가격 가산점이 없습니다.",
                 "이 결과는 미래가격·수익성·투자 가치를 평가하지 않습니다.",
+                "대규모점포는 전국 공식 원장 중 좌표가 확인된 범위만 반영했습니다.",
             ],
             "supported",
             artifacts=(artifact,),
@@ -717,6 +721,11 @@ class RecommendationHandler:
                 "학원은 단지 중심 800m 내 Sbiz 교육업소 관찰값입니다."
                 if "ACADEMY" in plan.recommendation_criteria
                 else "시설 거리는 단지 중심 직선거리 관찰값입니다.",
+                *(
+                    ["대규모점포는 전국 공식 원장 중 좌표가 확인된 범위만 반영했습니다."]
+                    if "SHOPPING" in plan.recommendation_criteria
+                    else []
+                ),
             ],
             "supported",
             artifacts=(artifact,),
@@ -797,8 +806,7 @@ class RecommendationHandler:
             ):
                 return _source_unavailable("철도")
             if key == "SHOPPING" and any(
-                item.coordinate_coverage is None or item.coordinate_coverage < 0.95
-                for item in result_by_complex.values()
+                not retail_coordinate_ready(item) for item in result_by_complex.values()
             ):
                 return _source_unavailable("대규모점포")
             for point in points:

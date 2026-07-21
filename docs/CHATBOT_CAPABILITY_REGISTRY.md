@@ -26,7 +26,7 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 |---|---|---|---|
 | `simple_lookup` | `complex_identity`, `recent_trade_lookup` | 데이터 준비 중 | 지역 가격 순위는 현재 미지원 |
 | `price_trend` | `price_trend` | 데이터 준비 중 | 과거 관찰 집계만 허용 |
-| `comparison` | `comparison` | 데이터 준비 중 | 같은 기준일·단위의 항목만 비교 |
+| `comparison` | `comparison` | 제한 지원 | 부동산·철도·학교/학원 항목 활성; 쇼핑은 readiness 대기 |
 | `recommendation` | `recommendation` | 제한 지원 | `CRITERIA`의 학원·철도·학교 조건만 활성; BUDGET·쇼핑은 readiness 대기 |
 | 복합 질문 | `compound_question` | 데이터 준비 중 | 하위 Capability를 독립 검증 |
 | 미래 가격·주관적 학군·개인 법률 판단 | 미지원 Capability | 미지원 | 대체 가능한 근거 질문을 안내 |
@@ -52,7 +52,7 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 | `complex_identity` | “잠실엘스 어디야?” | 지원 | `home_search.ai_read` 단지·지역·marker-safe 좌표 | A | 식별된 단지명, 주소, 공개 좌표 | 동명 단지를 임의 선택 | Slice 3 감사 통과 active view | 후보를 나열하고 지역 등 추가 조건 요청 |
 | `recent_trade_lookup` | “전용 84㎡ 최근 실거래 5건” | 지원 | `ai_read` 정상 거래·단지 | A | 실제 거래일, 전용면적, 금액, 층 | 호가·시세로 재해석, 미래 가격 | 최신 거래일과 coverage를 응답에 표시 | 조회 기간과 조건에서 거래 없음 안내 |
 | `price_trend` | “최근 1년 가격 흐름” | 지원 | `ai_read` 정상 거래 | A | 동일 조건의 월별 집계와 거래량 | 미래 추세 단정, 표본 부족 은폐 | 요청 종료일 이하 active data | 계산 불가 기간과 최소 표본 부족 설명 |
-| `comparison` | “A와 B 가격·세대수 비교” | 데이터 준비 중 | 비교 항목별 동일 버전의 A/B 데이터 | A | 같은 기간·단위로 계산 가능한 항목 | 기준일·평형이 다른 수치의 직접 비교 | 모든 필수 항목이 freshness 통과 | 비교 가능한 항목만 답하고 누락을 분리 |
+| `comparison` | “A와 B 가격·세대수 비교” | 제한 지원 | 부동산 A, 철도 A, 명시 시 학교 A·학원 B | A | 같은 기간·단위로 계산 가능한 항목과 항목별 차이 | 기준일·평형이 다른 수치의 직접 비교, overall winner, unavailable을 열세로 해석 | 사용한 항목의 freshness 통과 | 비교 가능한 항목만 답하고 누락을 분리 |
 | `recommendation` | “영등포구 500세대 이상, 학원 우선 후보” | 제한 지원 | 부동산 A, Sbiz 학원 B, 철도 A, 학교 A | A | `CRITERIA` mode에서 세대수 선필터와 명시한 학원·철도·학교 우선순위로 계산한 후보 | BUDGET·쇼핑 실행, 절대평가, 수익 보장, LLM 임의 점수 | 사용한 모든 필수 dataset 통과 | 비활성 조건과 후보 0건 이유 설명 |
 | `school_location` | “주변 운영 중 초등학교” | 지원 | 학교 위치·운영상태 snapshot | A | 학교 유형, 운영 상태, 직선거리 | 학교 품질·서열·진학 성과 | 반기 갱신 + grace 31일 이내 | 공식 snapshot 미준비 안내; Kakao는 별도 보조 결과 |
 | `elementary_attendance_zone` | “배정 초등학교는?” | 미지원 | 현재 범위에 통학구역 polygon 없음 | 미지원 | 학교 위치 질문으로 전환 안내 | 직선거리로 배정학교 단정 | 해당 없음 | 통학구역은 현재 지원 범위 밖임을 안내 |
@@ -134,3 +134,11 @@ runtime p95 `114.066ms`, 실제 observation과 승인된 OpenAI live 대표 질�
 `academy_lookup,rail_station_lookup,school_location`이며 학교 단독 또는 순서가 다른
 설정은 fail-closed한다. 이 구성에서는 explicit `CRITERIA` 추천의 `SCHOOL` 조건도
 같은 공식 snapshot을 사용한다. 통학구역·학교군·품질·서열·도보시간은 계속 미지원이다.
+
+2026-07-21 `comparison`은 가격·거래 표본·세대수·사용승인일·철도와 사용자가 명시한
+학교/학원 항목에 한해 `제한 지원`으로 활성화했다. 누적 property allowlist는
+`complex_identity,recent_trade_lookup,price_trend,recommendation,comparison`이며 직전
+recommendation 값은 rollback으로 유지한다. 송파구 상위 행정구역을 descendant
+region code로 해석하는 batch lookup RED→GREEN과 OpenAI live 대표 질문 fact 6건,
+citation 4건을 통과했다. 대규모점포 행은 좌표 coverage `83.7404%`로 readiness에
+미달해 `unavailable`이며 점수 0이나 열세로 해석하지 않는다.

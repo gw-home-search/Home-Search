@@ -159,6 +159,18 @@ def test_total_query_timeout_accepts_sixty_seconds(
                 }
             ),
         ),
+        (
+            "complex_identity,recent_trade_lookup,price_trend,recommendation,comparison",
+            frozenset(
+                {
+                    "complex_identity",
+                    "recent_trade_lookup",
+                    "price_trend",
+                    "recommendation",
+                    "comparison",
+                }
+            ),
+        ),
     ],
 )
 def test_only_approved_property_capability_configuration_is_enabled(
@@ -183,6 +195,7 @@ def test_only_approved_property_capability_configuration_is_enabled(
         "complex_identity, price_trend",
         "comparison",
         "complex_identity,recent_trade_lookup,price_trend,comparison",
+        "complex_identity,recent_trade_lookup,price_trend,recommendation,comparison,childcare_lookup",
         "complex_identity,recent_trade_lookup,price_trend,recommendation,childcare_lookup",
         "unknown",
     ],

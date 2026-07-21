@@ -124,13 +124,33 @@ class PostgresPropertyFactRepository:
         ):
             raise ValueError("comparison complex lookup is outside the supported range")
         normalized_names = tuple(name.strip() for name in names)
+        normalized_region = region_name.strip() if region_name is not None else None
+        if normalized_region is not None and not 1 <= len(normalized_region) <= 100:
+            raise ValueError("comparison region lookup is outside the supported range")
         region_pattern = (
-            f"%{_escape_like(region_name.strip())}%" if region_name is not None else None
+            f"%{_escape_like(normalized_region)}%"
+            if normalized_region is not None
+            else None
         )
         with self._pool.connection() as connection:
             rows = connection.execute(
                 """
-                WITH requested AS (
+                WITH RECURSIVE matched_roots AS (
+                    SELECT region_id, parent_region_id, region_code
+                    FROM ai_read.region_fact
+                    WHERE lower(region_name) = lower(%s)
+                ), root_count AS (
+                    SELECT count(*)::integer AS match_count FROM matched_roots
+                ), target_regions AS (
+                    SELECT region_id, region_code
+                    FROM matched_roots
+                    WHERE (SELECT match_count FROM root_count) = 1
+                    UNION ALL
+                    SELECT child.region_id, child.region_code
+                    FROM ai_read.region_fact child
+                    JOIN target_regions parent
+                      ON child.parent_region_id = parent.region_id
+                ), requested AS (
                     SELECT requested_name, ordinal
                     FROM unnest(%s::text[]) WITH ORDINALITY AS value(requested_name, ordinal)
                 ), matches AS (
@@ -156,13 +176,28 @@ class PostgresPropertyFactRepository:
                         OR fact.trade_name ILIKE ('%%' || replace(replace(replace(
                             requested.requested_name, '\\', '\\\\'), '%%', '\\%%'), '_', '\\_') || '%%') ESCAPE '\\'
                     )
-                    WHERE (%s::text IS NULL OR fact.region_name ILIKE %s ESCAPE '\\')
+                    WHERE (
+                        %s::text IS NULL
+                        OR fact.region_name ILIKE %s ESCAPE '\\'
+                        OR fact.address ILIKE %s ESCAPE '\\'
+                        OR EXISTS (
+                            SELECT 1 FROM target_regions region
+                            WHERE region.region_code = fact.region_code
+                        )
+                    )
                 )
                 SELECT * FROM matches
                 WHERE match_rank <= %s
                 ORDER BY ordinal, match_rank
                 """,
-                (list(normalized_names), region_pattern, region_pattern, limit_per_name),
+                (
+                    normalized_region,
+                    list(normalized_names),
+                    region_pattern,
+                    region_pattern,
+                    region_pattern,
+                    limit_per_name,
+                ),
             ).fetchall()
         result: dict[str, list[ComplexRecord]] = {name: [] for name in normalized_names}
         for row in rows:

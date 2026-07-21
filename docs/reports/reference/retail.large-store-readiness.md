@@ -24,6 +24,9 @@
 - projection: 고유 fact `4,176`, spatial `3,497`, non-spatial `679`, OPEN `2,970`,
   공식 분류 `8`종, unknown region `0`.
 - 좌표 coverage는 `83.7404%`로 전국 `95%` readiness 기준에 미달한다.
+- 좌표가 없는 679건은 원본 X/Y가 모두 비어 있으며 운영 중인 점포 483건도
+  포함한다. 679건 모두 주소 후보는 있으나 `호`처럼 좌표 보완에 사용할 수 없는
+  불완전 주소도 있어 단순 주소 변환으로 exact-match 품질을 보장할 수 없다.
 - 두 번째 수집: `NoChange`, staging `0`, publication 총 `1`; active pointer 유지.
 - 서울 대표 좌표의 1km 공간 query 20회 실측 p95는 `57.356ms`, max는
   `59.828ms`로 200ms 기준을 통과했다.
@@ -39,6 +42,8 @@
 ## 잔여 위험과 활성화
 
 - 좌표 coverage 미달이므로 `retail_location` activation은 금지한다.
+- 승인된 공식 주소→좌표 보완 source의 credential·license·exact-match 검증 전에는
+  임의 geocoding을 적용하거나 좌표 없는 행을 제외해 coverage 기준을 우회하지 않는다.
 - provider 개방자치단체 code와 property 법정동 code mapping 전에는 정상 0건도
   `verifiedZero=false`를 유지한다.
 - chatbot JSON/SSE live golden은 실패 상태로 보존한다.

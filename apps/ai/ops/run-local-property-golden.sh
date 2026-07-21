@@ -44,7 +44,7 @@ elif [[ "$mode" == "live" ]]; then
     case_id="$2"
     vars_file="${3:-${ai_root}/.env}"
     case "$case_id" in
-        complex-identity-jamsil-ells | recent-trades-jamsil-ells-84 | price-trend-jamsil-ells-84 | criteria-recommendation-academy-transit | school-location-jamsil-ells) ;;
+        complex-identity-jamsil-ells | recent-trades-jamsil-ells-84 | price-trend-jamsil-ells-84 | criteria-recommendation-academy-transit | school-location-jamsil-ells | comparison-jamsil-ells-helio-84) ;;
         *) reject "승인된 live case ID가 아닙니다." ;;
     esac
 else
@@ -127,7 +127,7 @@ fi
 host_property_dsn="host=127.0.0.1 port=15432 dbname=home_search user=home_search_ai_reader"
 host_property_uri=""
 host_reference_uri=""
-if [[ "$case_id" == "school-location-jamsil-ells" ]]; then
+if [[ "$case_id" == "school-location-jamsil-ells" || "$case_id" == "comparison-jamsil-ells-helio-84" ]]; then
     reference_property_vars_file="${HOME_AI_REFERENCE_PROPERTY_VARS_FILE:-}"
     if [[ -z "$reference_property_vars_file" && "$vars_file" == "${ai_root}/.env" ]]; then
         reference_property_vars_file="${ai_root}/../property-data/.env"
@@ -273,6 +273,10 @@ PY
 then
     reject "HOME_AI_OPENAI 설정이 올바르지 않습니다."
 fi
+activation_timeout_seconds="$timeout_seconds"
+if [[ "$case_id" == "comparison-jamsil-ells-helio-84" ]]; then
+    activation_timeout_seconds=30
+fi
 
 if [[ "$case_id" == "criteria-recommendation-academy-transit" ]]; then
     HOME_AI_OPENAI_API_KEY="$api_key" \
@@ -281,15 +285,16 @@ if [[ "$case_id" == "criteria-recommendation-academy-transit" ]]; then
     HOME_AI_OPENAI_TIMEOUT_SECONDS="$timeout_seconds" \
     HOME_AI_GOLDEN_LIVE_CONFIRM="RUN_ONE_LIVE_GOLDEN_CASE" \
         "$uv_bin" run python -m ai_service.property_chat.criteria_activation
-elif [[ "$case_id" == "school-location-jamsil-ells" ]]; then
+elif [[ "$case_id" == "school-location-jamsil-ells" || "$case_id" == "comparison-jamsil-ells-helio-84" ]]; then
     activation_stderr="$(mktemp "${TMPDIR:-/tmp}/home-ai-school-activation.XXXXXX")"
     if ! HOME_AI_PROPERTY_DSN="$host_property_uri" \
         HOME_AI_REFERENCE_DSN="$host_reference_uri" \
         HOME_AI_OPENAI_API_KEY="$api_key" \
         HOME_AI_OPENAI_PRIMARY_MODEL="$primary_model" \
         HOME_AI_OPENAI_SECONDARY_MODEL="$secondary_model" \
-        HOME_AI_OPENAI_TIMEOUT_SECONDS="$timeout_seconds" \
+        HOME_AI_OPENAI_TIMEOUT_SECONDS="$activation_timeout_seconds" \
         HOME_AI_GOLDEN_LIVE_CONFIRM="RUN_ONE_LIVE_GOLDEN_CASE" \
+        HOME_AI_REFERENCE_ACTIVATION_CASE_ID="$case_id" \
             "$uv_bin" run python -m ai_service.property_chat.reference_activation \
             2>"$activation_stderr"; then
         exit 1

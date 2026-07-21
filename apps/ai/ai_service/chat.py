@@ -21,6 +21,13 @@ _APPROVED_PROPERTY_CAPABILITY_CONFIGURATIONS = frozenset(
             "price_trend",
             "recommendation",
         ),
+        (
+            "complex_identity",
+            "recent_trade_lookup",
+            "price_trend",
+            "recommendation",
+            "comparison",
+        ),
     }
 )
 _APPROVED_REFERENCE_CAPABILITY_CONFIGURATIONS = frozenset(

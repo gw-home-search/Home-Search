@@ -73,9 +73,16 @@ case "$*" in
     test "$HOME_AI_OPENAI_API_KEY" = 'test-provider-secret'
     test "$HOME_AI_OPENAI_PRIMARY_MODEL" = 'gpt-5.6-luna'
     test "$HOME_AI_OPENAI_SECONDARY_MODEL" = 'gpt-5.6-terra'
-    test "$HOME_AI_OPENAI_TIMEOUT_SECONDS" = '15'
+    case "$HOME_AI_REFERENCE_ACTIVATION_CASE_ID" in
+      comparison-jamsil-ells-helio-84) test "$HOME_AI_OPENAI_TIMEOUT_SECONDS" = '30' ;;
+      *) test "$HOME_AI_OPENAI_TIMEOUT_SECONDS" = '15' ;;
+    esac
     test "$HOME_AI_GOLDEN_LIVE_CONFIRM" = 'RUN_ONE_LIVE_GOLDEN_CASE'
-    printf school-location-jamsil-ells >"$FAKE_UV_MARKER"
+    case "$HOME_AI_REFERENCE_ACTIVATION_CASE_ID" in
+      school-location-jamsil-ells | comparison-jamsil-ells-helio-84)
+        printf '%s' "$HOME_AI_REFERENCE_ACTIVATION_CASE_ID" >"$FAKE_UV_MARKER" ;;
+      *) exit 92 ;;
+    esac
     ;;
   *) exit 91 ;;
 esac
@@ -219,6 +226,24 @@ def test_live_runner_runs_school_reference_activation_case(
     assert (  # type: ignore[attr-defined]
         result.marker.read_text(encoding="utf-8")
         == "school-location-jamsil-ells"
+    )
+    assert "test-provider-secret" not in result.stdout + result.stderr
+    assert "p@ss" not in result.stdout + result.stderr
+    assert "r@ss" not in result.stdout + result.stderr
+
+
+def test_live_runner_runs_comparison_activation_case(tmp_path: Path) -> None:
+    result = run_runner(
+        tmp_path,
+        "live",
+        case_id="comparison-jamsil-ells-helio-84",
+        confirmation="RUN_ONE_LIVE_GOLDEN_CASE",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (  # type: ignore[attr-defined]
+        result.marker.read_text(encoding="utf-8")
+        == "comparison-jamsil-ells-helio-84"
     )
     assert "test-provider-secret" not in result.stdout + result.stderr
     assert "p@ss" not in result.stdout + result.stderr

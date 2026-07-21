@@ -282,7 +282,7 @@ dedicated reader password. The no-argument path derives BFF/AI public-key
 mappings from `USER_JWT_ACTIVE_KID`, percent-encodes the AI reader password into
 the fixed local DSN, derives the separate `home_search_ai_runtime` reference
 DSN from `AI_DATA_RUNTIME_DB_PASSWORD`, and supplies the approved cumulative
-`complex_identity,recent_trade_lookup,price_trend,recommendation` allowlist when that
+`complex_identity,recent_trade_lookup,price_trend,recommendation,comparison` allowlist when that
 optional line is absent. The four-path form keeps strict explicit mapping,
 DSN, and Capability validation. The approved reference rollback is blank and
 the 2026-07-21 approved values are exactly `academy_lookup`, the cumulative
@@ -305,7 +305,7 @@ An operator must keep the BFF timeout greater than the AI query budget.
 
 The AI adapter additionally requires `HOME_AI_OPENAI_API_KEY`, explicit
 `HOME_AI_OPENAI_PRIMARY_MODEL` and `HOME_AI_OPENAI_SECONDARY_MODEL` IDs, and an
-optional `HOME_AI_OPENAI_TIMEOUT_SECONDS` in the range `1..30` with default `8`.
+optional `HOME_AI_OPENAI_TIMEOUT_SECONDS` in the range `1..30` with default `30`.
 `HOME_AI_QUERY_TIMEOUT_SECONDS` bounds the complete plan, repository, and draft
 flow to `1..60s`; invalid values fail closed.
 The accepted runtime Capability values are the identity-only rollback value
@@ -315,9 +315,10 @@ cumulative value
 The price/trend rollback value is
 `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend`.
 The approved full cumulative value is
-`HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation`.
+`HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison`.
+The previous value ending in `recommendation` is the comparison rollback.
 This activation runs explicit `ACADEMY`, `TRANSIT`, and `SCHOOL` criteria only.
-Requests that need `SHOPPING`, BUDGET recommendation, comparison, childcare, or
+Requests that need `SHOPPING`, BUDGET recommendation, childcare, or
 kindergarten remain unavailable until their source-specific readiness and
 activation commits pass.
 The no-argument local runner supplies the full cumulative value when omitted;

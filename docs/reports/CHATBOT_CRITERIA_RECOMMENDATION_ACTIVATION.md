@@ -5,7 +5,8 @@
 판정: `Pass (제한 지원)` — 최초 활성화에서는 `recommendation`의 `CRITERIA` mode 중
 사용자가 명시한 `MIN_UNIT_COUNT`와 시설 조건 `ACADEMY`·`TRANSIT`를 활성화했다.
 2026-07-21 학교 activation에서 `SCHOOL`을 같은 제한 mode에 추가했다. 가격 기반
-추천, 쇼핑, 어린이집, 유치원, 비교는 아직 포함하지 않았다.
+추천, 쇼핑, 어린이집, 유치원은 아직 포함하지 않았다. 비교는 후속 activation에서
+준비된 항목만 제한 지원으로 추가했다.
 
 ## 범위와 정책
 

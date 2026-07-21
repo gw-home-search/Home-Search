@@ -25,9 +25,9 @@ Runtime variables:
 - `HOME_AI_OPENAI_API_KEY`
 - `HOME_AI_OPENAI_PRIMARY_MODEL`
 - `HOME_AI_OPENAI_SECONDARY_MODEL`
-- `HOME_AI_OPENAI_TIMEOUT_SECONDS` (optional, default `8`, allowed `1..30`)
+- `HOME_AI_OPENAI_TIMEOUT_SECONDS` (optional, default `30`, allowed `1..30`)
 - `HOME_AI_QUERY_TIMEOUT_SECONDS` (optional, default `45`, allowed `1..60`)
-- `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation`
+- `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison`
 - `HOME_AI_REFERENCE_DSN` (separate `home_search_ai_runtime` read-only pool)
 - `HOME_AI_ENABLED_REFERENCE_CAPABILITIES` (blank by default; only the exact
   academy/rail/school cumulative tuples recorded in `ai_service.chat` are
@@ -37,13 +37,17 @@ The runtime Capability setting is fail-closed. This activation permits the
 identity-only rollback value or the cumulative
 `complex_identity,recent_trade_lookup` value, or the approved cumulative
 `complex_identity,recent_trade_lookup,price_trend` rollback value, or the approved
-`complex_identity,recent_trade_lookup,price_trend,recommendation` value. The active
+`complex_identity,recent_trade_lookup,price_trend,recommendation` rollback value, or
+the active `complex_identity,recent_trade_lookup,price_trend,recommendation,comparison`
+value. The active
 recommendation facility scope is limited to explicit `ACADEMY`, `TRANSIT`, and
 `SCHOOL` criteria;
 `MIN_UNIT_COUNT` remains an optional server-enforced filter. Missing,
 reordered, duplicate, whitespace-padded, or unapproved values disable all property
-capabilities. `comparison`, `SHOPPING`, and childcare/kindergarten execution remain
-inactive until their separate readiness gates pass.
+capabilities. Comparison is limited to ready property, rail, and explicitly requested
+school/academy observations; unavailable cells are not treated as worse values.
+`SHOPPING` and childcare/kindergarten execution remain inactive until their separate
+readiness gates pass.
 Golden verification uses its own explicit candidate set and does not widen the
 runtime allowlist.
 

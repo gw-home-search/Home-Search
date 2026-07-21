@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 from collections.abc import Mapping
 from datetime import date
@@ -16,9 +17,12 @@ from .engine import (
     PropertyFactRepository,
 )
 from .school_postgres import PostgresSchoolFactRepository
+from .openai_responses import OpenAIResponsesError
 
 SCHOOL_CASE_ID = "school-location-jamsil-ells"
 SCHOOL_QUESTION = "잠실엘스 단지 중심 800m 안의 운영 중인 초등학교 위치를 알려줘"
+COMPARISON_CASE_ID = "comparison-jamsil-ells-helio-84"
+COMPARISON_QUESTION = "송파구 잠실엘스와 헬리오시티 전용 84㎡를 같은 기준으로 비교해줘"
 
 
 class ReferenceActivationError(ValueError):
@@ -35,9 +39,11 @@ class _TrackingLanguageModel:
     def __init__(self, model: GroundedLanguageModel) -> None:
         self._model = model
         self.stage = "PLAN_PENDING"
+        self.plan: object | None = None
 
     async def plan_query(self, request: ChatbotQueryRequest) -> object:
         result = await self._model.plan_query(request)
+        self.plan = result
         self.stage = "PLAN_DONE"
         return result
 
@@ -87,10 +93,79 @@ async def run_school_activation_case(
     return validate_school_activation_response(response)
 
 
+async def run_comparison_activation_case(
+    *,
+    property_repository: PropertyFactRepository,
+    rail_repository: object,
+    language_model: GroundedLanguageModel,
+) -> dict[str, object]:
+    tracking_model = _TrackingLanguageModel(language_model)
+    try:
+        response = await GroundedChatbotEngine(
+            repository=property_repository,
+            rail_station_repository=rail_repository,  # type: ignore[arg-type]
+            language_model=tracking_model,  # type: ignore[arg-type]
+            enabled_capabilities=frozenset({"comparison"}),
+        ).query(
+            request=ChatbotQueryRequest(question=COMPARISON_QUESTION),
+            user=AuthenticatedUser(user_id=1),
+            request_id="activation-comparison-jamsil-ells-helio-84",
+        )
+    except Exception as exception:
+        grounding_reason = _grounding_reason(exception)
+        if grounding_reason is not None:
+            raise ReferenceActivationError(
+                f"COMPARISON_DRAFT_{grounding_reason}"
+            ) from None
+        provider_reason = _provider_reason(exception)
+        if provider_reason is not None:
+            raise ReferenceActivationError(
+                f"COMPARISON_DRAFT_{provider_reason}"
+            ) from None
+        reason_by_stage = {
+            "PLAN_PENDING": "COMPARISON_PLAN_STAGE_FAILED",
+            "PLAN_DONE": "COMPARISON_OBSERVATION_FAILED",
+            "DRAFT_PENDING": "COMPARISON_DRAFT_STAGE_FAILED",
+            "DRAFT_DONE": "COMPARISON_GROUNDING_FAILED",
+        }
+        raise ReferenceActivationError(reason_by_stage[tracking_model.stage]) from None
+    plan_reason = _comparison_plan_reason(tracking_model.plan)
+    if plan_reason is not None:
+        raise ReferenceActivationError(plan_reason)
+    return validate_comparison_activation_response(response)
+
+
+def _comparison_plan_reason(plan: object | None) -> str | None:
+    fragments = getattr(plan, "fragments", None)
+    if isinstance(fragments, tuple) and len(fragments) == 1:
+        plan = fragments[0]
+    if getattr(plan, "capability", None) != "comparison":
+        return "COMPARISON_PLAN_CAPABILITY_INVALID"
+    complex_names = tuple(getattr(plan, "complex_names", ()))
+    if len(complex_names) != 2 or set(complex_names) != {"잠실엘스", "헬리오시티"}:
+        return "COMPARISON_PLAN_COMPLEX_NAMES_INVALID"
+    if getattr(plan, "region_name", None) != "송파구":
+        return "COMPARISON_PLAN_REGION_INVALID"
+    if getattr(plan, "exclusive_area_square_meters", None) != 84.0:
+        return "COMPARISON_PLAN_AREA_INVALID"
+    return None
+
+
 def _grounding_reason(exception: BaseException) -> str | None:
     current: BaseException | None = exception
     for _ in range(8):
         if isinstance(current, GroundingValidationError):
+            return current.reason_code
+        current = current.__cause__
+        if current is None:
+            return None
+    return None
+
+
+def _provider_reason(exception: BaseException) -> str | None:
+    current: BaseException | None = exception
+    for _ in range(8):
+        if isinstance(current, OpenAIResponsesError):
             return current.reason_code
         current = current.__cause__
         if current is None:
@@ -181,35 +256,131 @@ def validate_school_activation_response(
     }
 
 
+def validate_comparison_activation_response(response: object) -> dict[str, object]:
+    if not isinstance(response, dict):
+        raise ReferenceActivationError("COMPARISON_RESPONSE_SHAPE_INVALID")
+    summary = response.get("evidenceSummary")
+    citations = response.get("citations")
+    ui_summary = response.get("uiSummary")
+    artifacts = response.get("uiArtifacts")
+    if response.get("success") is not True:
+        raise ReferenceActivationError("COMPARISON_RESPONSE_NOT_SUCCESSFUL")
+    if response.get("status") != "partial_success":
+        raise ReferenceActivationError("COMPARISON_RESPONSE_STATUS_INVALID")
+    if not isinstance(summary, Mapping) or summary.get("status") != "partial":
+        raise ReferenceActivationError("COMPARISON_RESPONSE_READINESS_INVALID")
+    if summary.get("capabilities") != ["comparison"]:
+        raise ReferenceActivationError("COMPARISON_RESPONSE_CAPABILITY_INVALID")
+    if not isinstance(summary.get("factCount"), int):
+        raise ReferenceActivationError("COMPARISON_RESPONSE_FACT_COUNT_INVALID")
+    if summary["factCount"] < 4:
+        raise ReferenceActivationError("COMPARISON_RESPONSE_FACT_COUNT_LOW")
+    if summary["factCount"] > 12:
+        raise ReferenceActivationError("COMPARISON_RESPONSE_FACT_COUNT_HIGH")
+    if not isinstance(citations, list):
+        raise ReferenceActivationError("COMPARISON_RESPONSE_CITATIONS_INVALID")
+    if (
+        not isinstance(ui_summary, Mapping)
+        or ui_summary.get("version") != 1
+        or not isinstance(ui_summary.get("headline"), Mapping)
+        or not isinstance(artifacts, list)
+    ):
+        raise ReferenceActivationError("COMPARISON_RESPONSE_UI_INVALID")
+    if not isinstance(response.get("dataAsOf"), str):
+        raise ReferenceActivationError("COMPARISON_RESPONSE_DATE_INVALID")
+    tables = [
+        artifact
+        for artifact in artifacts
+        if isinstance(artifact, Mapping)
+        and artifact.get("type") == "comparisonTable"
+        and artifact.get("version") == 1
+    ]
+    if len(tables) != 1:
+        raise ReferenceActivationError("COMPARISON_TABLE_INVALID")
+    table = tables[0]
+    rows = table.get("rows")
+    columns = table.get("columns")
+    if not isinstance(rows, list) or not isinstance(columns, list) or len(columns) != 2:
+        raise ReferenceActivationError("COMPARISON_TABLE_INVALID")
+    by_key = {
+        row.get("key"): row
+        for row in rows
+        if isinstance(row, Mapping) and isinstance(row.get("key"), str)
+    }
+    required = {"latestTrade", "recentThreeMedian", "unitCount", "nearestRail", "nearestRetail"}
+    if not required.issubset(by_key):
+        raise ReferenceActivationError("COMPARISON_TABLE_INVALID")
+    for key in ("latestTrade", "recentThreeMedian", "nearestRail"):
+        cells = by_key[key].get("cells")
+        if not isinstance(cells, list) or len(cells) != 2 or any(
+            not isinstance(cell, Mapping) or cell.get("availability") != "available"
+            for cell in cells
+        ):
+            raise ReferenceActivationError("COMPARISON_AVAILABLE_CELL_INVALID")
+    retail_cells = by_key["nearestRetail"].get("cells")
+    if not isinstance(retail_cells, list) or len(retail_cells) != 2 or any(
+        not isinstance(cell, Mapping) or cell.get("availability") != "unavailable"
+        for cell in retail_cells
+    ):
+        raise ReferenceActivationError("COMPARISON_RETAIL_CELL_INVALID")
+    source_ids = {
+        citation.get("sourceId")
+        for citation in citations
+        if isinstance(citation, Mapping) and citation.get("factIds")
+    }
+    if source_ids != {"property.ai_read", "transport.rail-station"}:
+        raise ReferenceActivationError("COMPARISON_CITATION_INVALID")
+    return {
+        "caseId": COMPARISON_CASE_ID,
+        "capability": "comparison",
+        "factCount": summary["factCount"],
+        "citationCount": len(citations),
+        "dataAsOf": response["dataAsOf"],
+    }
+
+
 def main() -> int:
     from ai_service.chat import (
         get_grounded_language_model,
         get_property_fact_repository,
+        get_rail_station_repository,
         get_school_fact_repository,
     )
 
+    case_id = os.getenv("HOME_AI_REFERENCE_ACTIVATION_CASE_ID", SCHOOL_CASE_ID)
     property_repository = None
     school_repository = None
+    rail_repository = None
     try:
         property_repository = get_property_fact_repository()
-        school_repository = get_school_fact_repository()
-        result = asyncio.run(run_school_activation_case(
-            property_repository=property_repository,  # type: ignore[arg-type]
-            school_repository=school_repository,  # type: ignore[arg-type]
-            language_model=get_grounded_language_model(),  # type: ignore[arg-type]
-        ))
+        if case_id == SCHOOL_CASE_ID:
+            school_repository = get_school_fact_repository()
+            result = asyncio.run(run_school_activation_case(
+                property_repository=property_repository,  # type: ignore[arg-type]
+                school_repository=school_repository,  # type: ignore[arg-type]
+                language_model=get_grounded_language_model(),  # type: ignore[arg-type]
+            ))
+        elif case_id == COMPARISON_CASE_ID:
+            rail_repository = get_rail_station_repository()
+            result = asyncio.run(run_comparison_activation_case(
+                property_repository=property_repository,  # type: ignore[arg-type]
+                rail_repository=rail_repository,
+                language_model=get_grounded_language_model(),  # type: ignore[arg-type]
+            ))
+        else:
+            raise ReferenceActivationError("ACTIVATION_CASE_INVALID")
     except ReferenceActivationError as exception:
         print("상태: Fail")
-        print(f"caseId: {SCHOOL_CASE_ID}")
+        print(f"caseId: {case_id}")
         print(f"reasonCode: {exception}")
         return 1
     except Exception:
         print("상태: Fail")
-        print(f"caseId: {SCHOOL_CASE_ID}")
-        print("reasonCode: SCHOOL_ACTIVATION_FAILED")
+        print(f"caseId: {case_id}")
+        print("reasonCode: REFERENCE_ACTIVATION_FAILED")
         return 1
     finally:
-        for repository in (school_repository, property_repository):
+        for repository in (school_repository, rail_repository, property_repository):
             close = getattr(repository, "close", None)
             if callable(close):
                 close()

@@ -75,7 +75,7 @@ if [[ ! -x "$runner" ]]; then
 fi
 grep -Fqx 'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup,rail_station_lookup,school_location' \
     "$ai_runtime_example"
-grep -Fqx 'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation' \
+grep -Fqx 'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison' \
     "$ai_runtime_example"
 if grep -Eq '^HOME_AI_ENABLED_REFERENCE_CAPABILITIES=.*childcare_lookup' \
     "$ai_runtime_example"; then
@@ -358,7 +358,7 @@ PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
     CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
     "$runner" "$property_env" "$user_env" "$bff_env" "$ai_env" >/dev/null
-grep -Fq 'openai-key-set=yes|primary=gpt-5-primary-test|secondary=gpt-5-secondary-test|timeout=8|query-timeout=45' "$docker_log"
+grep -Fq 'openai-key-set=yes|primary=gpt-5-primary-test|secondary=gpt-5-secondary-test|timeout=30|query-timeout=45' "$docker_log"
 
 printf '%s\n' \
     'HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS=wrong-kid=/run/keys/user-signing-public' >"$bff_env"
@@ -553,7 +553,7 @@ printf '%s\n' \
     'HOME_AI_OPENAI_API_KEY=openai-test-secret' \
     'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
     'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
-    'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation' \
+    'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison' \
     'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup,rail_station_lookup,school_location' >"$ai_env"
 if ! PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_TEST_DOCKER_LOG="$docker_log" \
@@ -566,7 +566,7 @@ if ! PATH="$tmp_dir/bin:$PATH" \
     echo "상태: Fail - 승인된 criteria recommendation 누적 Capability가 허용되지 않았습니다." >&2
     exit 1
 fi
-grep -Fq 'capabilities=complex_identity,recent_trade_lookup,price_trend,recommendation' \
+grep -Fq 'capabilities=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison' \
     "$docker_log"
 
 printf '%s\n' \
@@ -575,7 +575,7 @@ printf '%s\n' \
     'HOME_AI_OPENAI_API_KEY=openai-test-secret' \
     'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
     'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
-    'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,childcare_lookup' >"$ai_env"
+    'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison,childcare_lookup' >"$ai_env"
 if PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_TEST_DOCKER_LOG="$docker_log" \
     CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \

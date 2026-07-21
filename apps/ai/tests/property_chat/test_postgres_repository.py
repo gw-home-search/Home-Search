@@ -85,6 +85,9 @@ def test_comparison_lookup_and_trades_use_two_bounded_batch_queries(
         complexes = repository.find_complexes_batch(
             ("잠실엘스", "A_타워"), None, 6
         )
+        district_complexes = repository.find_complexes_batch(
+            ("잠실엘스", "A_타워"), "송파구", 6
+        )
         trades = repository.recent_trades_batch(
             (1, 2), date(2025, 7, 21), date(2026, 7, 20), 84.0, 3
         )
@@ -94,6 +97,7 @@ def test_comparison_lookup_and_trades_use_two_bounded_batch_queries(
     assert [record.complex_id for record in complexes["잠실엘스"]] == [1]
     assert [record.complex_id for record in complexes["A_타워"]] == [2]
     assert complexes["잠실엘스"][0].unit_count == 5678
+    assert [record.complex_id for record in district_complexes["잠실엘스"]] == [1]
     assert [record.trade_id for record in trades[1]] == [14, 12, 11]
     assert trades[2] == ()
 

@@ -7,13 +7,18 @@ from types import SimpleNamespace
 import pytest
 
 from ai_service.property_chat.engine import GroundingValidationError
+from ai_service.property_chat.openai_responses import OpenAIResponsesError
 from ai_service.property_chat.reference_activation import (
     ReferenceActivationError,
     _TrackingLanguageModel,
     _grounding_reason,
+    _comparison_plan_reason,
+    _provider_reason,
     _preflight_school_observation,
     main,
+    run_comparison_activation_case,
     run_school_activation_case,
+    validate_comparison_activation_response,
     validate_school_activation_response,
 )
 
@@ -35,6 +40,46 @@ def _response() -> dict[str, object]:
             "citationCount": 2,
         },
         "dataAsOf": "2026-03-20",
+    }
+
+
+def _comparison_response() -> dict[str, object]:
+    def row(key: str, availability: str) -> dict[str, object]:
+        return {
+            "key": key,
+            "cells": [
+                {"availability": availability},
+                {"availability": availability},
+            ],
+        }
+
+    return {
+        "success": True,
+        "status": "partial_success",
+        "uiSummary": {"version": 1, "headline": {"text": "단지 비교"}},
+        "uiArtifacts": [{
+            "type": "comparisonTable",
+            "version": 1,
+            "columns": [{"key": "1"}, {"key": "2"}],
+            "rows": [
+                row("latestTrade", "available"),
+                row("recentThreeMedian", "available"),
+                row("unitCount", "available"),
+                row("nearestRail", "available"),
+                row("nearestRetail", "unavailable"),
+            ],
+        }],
+        "citations": [
+            {"sourceId": "property.ai_read", "factIds": ["property-1"]},
+            {"sourceId": "transport.rail-station", "factIds": ["rail-1"]},
+        ],
+        "evidenceSummary": {
+            "status": "partial",
+            "capabilities": ["comparison"],
+            "factCount": 6,
+            "citationCount": 2,
+        },
+        "dataAsOf": "2026-07-04",
     }
 
 
@@ -62,6 +107,178 @@ def test_school_activation_requires_both_citation_sources() -> None:
 
     with pytest.raises(ReferenceActivationError, match="SCHOOL_RESPONSE_INVALID"):
         validate_school_activation_response(response)
+
+
+def test_comparison_activation_accepts_partial_retail_table() -> None:
+    assert validate_comparison_activation_response(_comparison_response()) == {
+        "caseId": "comparison-jamsil-ells-helio-84",
+        "capability": "comparison",
+        "factCount": 6,
+        "citationCount": 2,
+        "dataAsOf": "2026-07-04",
+    }
+
+
+def test_comparison_activation_rejects_non_object_response() -> None:
+    with pytest.raises(ReferenceActivationError, match="COMPARISON_RESPONSE_SHAPE_INVALID"):
+        validate_comparison_activation_response(None)
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda response: response.update(status="success"),
+        lambda response: response.update(success=False),
+        lambda response: response["evidenceSummary"].update(status="supported"),
+        lambda response: response["evidenceSummary"].update(capabilities=[]),
+        lambda response: response.update(uiArtifacts=[]),
+        lambda response: response["uiArtifacts"][0]["rows"][-1]["cells"][0].update(
+            availability="available"
+        ),
+        lambda response: response.update(citations=[]),
+        lambda response: response["evidenceSummary"].update(factCount=3),
+        lambda response: response["evidenceSummary"].update(factCount=13),
+        lambda response: response["evidenceSummary"].update(factCount=None),
+        lambda response: response.update(citations=None),
+        lambda response: response.update(dataAsOf=None),
+        lambda response: response.update(uiSummary=None),
+        lambda response: response["uiArtifacts"][0].update(columns=[]),
+        lambda response: response["uiArtifacts"][0].update(rows=[]),
+        lambda response: response["uiArtifacts"][0]["rows"][0]["cells"][0].update(
+            availability="unavailable"
+        ),
+    ],
+)
+def test_comparison_activation_rejects_incomplete_evidence(mutate) -> None:
+    response = _comparison_response()
+    mutate(response)
+
+    with pytest.raises(ReferenceActivationError, match="COMPARISON_"):
+        validate_comparison_activation_response(response)
+
+
+def test_comparison_activation_runs_the_grounded_engine(monkeypatch) -> None:
+    class Engine:
+        def __init__(self, **kwargs):
+            assert kwargs["enabled_capabilities"] == frozenset({"comparison"})
+            kwargs["language_model"].plan = SimpleNamespace(
+                capability="comparison",
+                complex_names=("잠실엘스", "헬리오시티"),
+                region_name="송파구",
+                exclusive_area_square_meters=84.0,
+            )
+
+        async def query(self, **kwargs):
+            assert "84㎡" in kwargs["request"].question
+            return _comparison_response()
+
+    monkeypatch.setattr(
+        "ai_service.property_chat.reference_activation.GroundedChatbotEngine", Engine
+    )
+
+    result = asyncio.run(run_comparison_activation_case(
+        property_repository=object(),
+        rail_repository=object(),
+        language_model=object(),
+    ))
+
+    assert result["capability"] == "comparison"
+
+
+@pytest.mark.parametrize(
+    ("plan", "reason"),
+    [
+        (None, "COMPARISON_PLAN_CAPABILITY_INVALID"),
+        (
+            SimpleNamespace(
+                capability="comparison", complex_names=("잠실엘스",),
+                region_name="송파구", exclusive_area_square_meters=84.0,
+            ),
+            "COMPARISON_PLAN_COMPLEX_NAMES_INVALID",
+        ),
+        (
+            SimpleNamespace(
+                capability="comparison", complex_names=("잠실엘스", "헬리오시티"),
+                region_name=None, exclusive_area_square_meters=84.0,
+            ),
+            "COMPARISON_PLAN_REGION_INVALID",
+        ),
+        (
+            SimpleNamespace(
+                capability="comparison", complex_names=("잠실엘스", "헬리오시티"),
+                region_name="송파구", exclusive_area_square_meters=59.0,
+            ),
+            "COMPARISON_PLAN_AREA_INVALID",
+        ),
+    ],
+)
+def test_comparison_plan_reason_identifies_typed_mismatch(plan, reason) -> None:
+    assert _comparison_plan_reason(plan) == reason
+
+
+def test_comparison_plan_reason_accepts_single_fragment_and_name_order() -> None:
+    plan = SimpleNamespace(
+        capability="comparison",
+        complex_names=("헬리오시티", "잠실엘스"),
+        region_name="송파구",
+        exclusive_area_square_meters=84.0,
+    )
+
+    assert _comparison_plan_reason(SimpleNamespace(fragments=(plan,))) is None
+
+
+def test_provider_reason_reads_only_the_safe_cause_code() -> None:
+    exception = RuntimeError("must-not-leak")
+    exception.__cause__ = OpenAIResponsesError("PROVIDER_RESPONSE_INCOMPLETE")
+
+    assert _provider_reason(exception) == "PROVIDER_RESPONSE_INCOMPLETE"
+    assert _provider_reason(RuntimeError("safe")) is None
+
+
+def test_comparison_activation_maps_provider_failure(monkeypatch) -> None:
+    class Engine:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def query(self, **_kwargs):
+            raise RuntimeError("must-not-leak") from OpenAIResponsesError(
+                "PROVIDER_TRANSPORT_FAILED"
+            )
+
+    monkeypatch.setattr(
+        "ai_service.property_chat.reference_activation.GroundedChatbotEngine", Engine
+    )
+
+    with pytest.raises(
+        ReferenceActivationError,
+        match="COMPARISON_DRAFT_PROVIDER_TRANSPORT_FAILED",
+    ):
+        asyncio.run(run_comparison_activation_case(
+            property_repository=object(), rail_repository=object(), language_model=object()
+        ))
+
+
+def test_comparison_activation_maps_grounding_failure(monkeypatch) -> None:
+    class Engine:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def query(self, **_kwargs):
+            raise RuntimeError("must-not-leak") from GroundingValidationError(
+                "GROUNDING_FACTS_OMITTED"
+            )
+
+    monkeypatch.setattr(
+        "ai_service.property_chat.reference_activation.GroundedChatbotEngine", Engine
+    )
+
+    with pytest.raises(
+        ReferenceActivationError,
+        match="COMPARISON_DRAFT_GROUNDING_FACTS_OMITTED",
+    ):
+        asyncio.run(run_comparison_activation_case(
+            property_repository=object(), rail_repository=object(), language_model=object()
+        ))
 
 
 @pytest.mark.parametrize(
@@ -320,3 +537,40 @@ def test_school_activation_main_returns_stable_failure(monkeypatch, capsys) -> N
     assert "SCHOOL_DRAFT_STAGE_FAILED" in output
     assert property_repository.closed is True
     assert school_repository.closed is True
+
+
+def test_comparison_activation_main_uses_rail_and_closes_repositories(
+    monkeypatch, capsys
+) -> None:
+    property_repository = _PropertyRepository()
+    rail_repository = _PropertyRepository()
+    monkeypatch.setenv(
+        "HOME_AI_REFERENCE_ACTIVATION_CASE_ID",
+        "comparison-jamsil-ells-helio-84",
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_property_fact_repository", lambda: property_repository
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_rail_station_repository", lambda: rail_repository
+    )
+    monkeypatch.setattr("ai_service.chat.get_grounded_language_model", object)
+
+    async def successful_case(**_kwargs):
+        return {
+            "caseId": "comparison-jamsil-ells-helio-84",
+            "capability": "comparison",
+            "factCount": 6,
+            "citationCount": 4,
+            "dataAsOf": "2026-06-12",
+        }
+
+    monkeypatch.setattr(
+        "ai_service.property_chat.reference_activation.run_comparison_activation_case",
+        successful_case,
+    )
+
+    assert main() == 0
+    assert property_repository.closed is True
+    assert rail_repository.closed is True
+    assert "capability: comparison" in capsys.readouterr().out

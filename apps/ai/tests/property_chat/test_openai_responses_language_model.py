@@ -521,6 +521,8 @@ def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> N
     assert "Do not omit scope or complex facts" in developer_prompt
     assert "copy factId, value, and unit from one claim object" in developer_prompt
     assert "never combine a value or unit with a different factId" in developer_prompt
+    assert "Do not state the count of complexes" in developer_prompt
+    assert "attach at most one claim" in developer_prompt
 
 
 def test_draft_schema_for_empty_facts_forbids_fact_references() -> None:

@@ -125,6 +125,147 @@ legacy `success`와 `status` 의미는 유지한다.
 - `result`, `fragments`, `uiArtifacts`에 내부 prompt, provider credential, SQL, raw
   LLM trace를 노출하지 않는다.
 
+### 구조화 답변 artifact 계약
+
+`uiArtifacts`는 검증된 `EvidenceFact`에서 서버가 결정론적으로 조립한 표시 모델이다.
+LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 클라이언트는 모르는
+`type`을 무시하고 `answer`와 `citations`를 계속 표시해야 한다. Markdown parsing,
+임의 HTML, generic component registry, dynamic import는 계약에 포함되지 않는다.
+
+공통 제한:
+
+- response당 `fragments` 최대 4개, `uiArtifacts` 최대 8개다.
+- `uiArtifacts` 전체 JSON 직렬화 크기는 UTF-8 기준 최대 65,536 bytes다.
+- 모든 `label`, row/column header, card title은 trim 후 1..100자다.
+- 사용자에게 표시하는 개별 문자열은 trim 후 1..2,000자다.
+- `factIds`는 해당 response observation에 실제로 존재하는 id만 포함하고 중복할 수 없다.
+- 외부 source 문자열은 text로만 렌더링하며 HTML로 해석하지 않는다.
+- 제한을 넘거나 schema가 잘못된 artifact 하나는 전체 답변을 실패시키지 않고 제외한다.
+
+허용 artifact는 아래 세 종류뿐이다.
+
+#### `factList/v1`
+
+```json
+{
+  "type": "factList",
+  "version": 1,
+  "artifactId": "artifact-1",
+  "title": "확인된 단지 정보",
+  "items": [{
+    "label": "단지명",
+    "value": "잠실엘스",
+    "factIds": ["property-complex-501"]
+  }]
+}
+```
+
+- `items`는 1..10개다.
+- 각 item의 `factIds`는 비어 있을 수 없다.
+- `value`는 표시 문자열이며 source 원문을 HTML로 포함하지 않는다.
+
+#### `comparisonTable/v1`
+
+```json
+{
+  "type": "comparisonTable",
+  "version": 1,
+  "artifactId": "artifact-2",
+  "title": "동일 기준 단지 비교",
+  "columns": [
+    { "key": "501", "label": "잠실엘스", "factIds": ["property-complex-501"] },
+    { "key": "502", "label": "헬리오시티", "factIds": ["property-complex-502"] }
+  ],
+  "rows": [{
+    "key": "latestTrade",
+    "label": "가장 최근 거래",
+    "cells": [
+      {
+        "availability": "available",
+        "value": "20억 5,000만원",
+        "unit": "10_000_KRW",
+        "reason": null,
+        "factIds": ["fact-trade-501"]
+      },
+      {
+        "availability": "unavailable",
+        "value": null,
+        "unit": "10_000_KRW",
+        "reason": "동일 면적의 최근 거래 표본이 부족합니다.",
+        "factIds": []
+      }
+    ]
+  }]
+}
+```
+
+- `columns`는 2..4개, `rows`는 1..12개이며 각 row의 cell 수는 column 수와 같다.
+- 각 column의 `factIds`는 단지 식별 fact를 하나 이상 포함한다.
+- `availability`는 `available|unavailable`이다.
+- `available` cell은 `value`와 비어 있지 않은 `factIds`가 필요하다.
+- `unavailable` cell은 `value=null`, 구체적인 `reason`이 필요하다. 관측된 준비상태나
+  표본 부족 fact가 있으면 그 id를 사용하고, 그런 fact가 없으면 `factIds=[]`를 사용한다.
+- 금액 unit은 기존 `10_000_KRW` 의미를 바꾸지 않는다.
+
+#### `recommendationCards/v1`
+
+```json
+{
+  "type": "recommendationCards",
+  "version": 1,
+  "artifactId": "artifact-3",
+  "title": "조건을 통과한 후보",
+  "policyVersion": "recommendation-policy-v1",
+  "cards": [{
+    "rank": 1,
+    "complexId": 501,
+    "complexName": "잠실엘스",
+    "totalScore": 87.5,
+    "latestTrade": { "value": 195000, "unit": "10_000_KRW", "factIds": ["fact-trade-501"] },
+    "recentThreeMedian": { "value": 198000, "unit": "10_000_KRW", "factIds": ["fact-trades-501"] },
+    "scoreBreakdown": [{ "label": "가격 조건", "weight": 60, "points": 60, "factIds": ["fact-trades-501"] }],
+    "limitations": [],
+    "factIds": ["property-complex-501", "fact-trades-501"]
+  }]
+}
+```
+
+- `cards`는 1..5개이며 `rank`와 정렬은 서버 정책 결과와 같아야 한다.
+- `policyVersion`은 점수 정책을 고정하며 LLM은 `totalScore`와 breakdown을 변경하지 않는다.
+- card, 거래 표시값, score breakdown의 사실 필드는 각각 비어 있지 않은 `factIds`가
+  필요하고 실제 observation의 값·단위와 일치해야 한다.
+- 투자성, 미래가격, 품질, 입소 가능 여부처럼 근거로 허용되지 않은 badge나 field는
+  추가하지 않는다.
+
+### 지도 UI action 계약
+
+`uiActions`는 서버가 검증된 단지 좌표 fact에서 만든 one-shot 명령이다. response당
+최대 4개, 전체 JSON 직렬화 크기는 UTF-8 기준 최대 16,384 bytes다. AI와 BFF는
+Kakao 장소 검색을 실행하지 않고, 사용자가 버튼을 누른 뒤 web이 기존 viewport
+주변시설 endpoint를 호출한다.
+
+허용 action은 `showNearbyCategory/v1` 하나뿐이다.
+
+```json
+{
+  "type": "showNearbyCategory",
+  "version": 1,
+  "actionId": "action-1",
+  "label": "지도에서 병원 보기",
+  "category": "HOSPITAL",
+  "center": { "lat": 37.5, "lng": 127.1 },
+  "level": 4,
+  "factIds": ["property-complex-501"]
+}
+```
+
+- `category`는 이 기능에서 `HOSPITAL|DAYCARE_KINDERGARTEN`만 허용한다.
+- `center`는 WGS84 유한 좌표이고 `level`은 정확히 `4`다.
+- `factIds`는 marker-safe 단지 좌표를 증명하는 id를 하나 이상 포함해야 한다.
+- 같은 `actionId`는 한 web session에서 한 번만 소비한다.
+- action 실행 실패는 chat message를 실패시키거나 panel을 닫지 않는다.
+- Kakao 장소 응답, 전화, URL은 chat message, server DB, IndexedDB archive에 저장하지 않는다.
+
 ## SSE 응답
 
 `POST /api/v1/chatbot/query/stream`은 `text/event-stream`을 반환한다.

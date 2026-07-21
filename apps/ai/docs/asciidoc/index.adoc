@@ -9,6 +9,7 @@
 
 include::lifecycle.adoc[]
 include::operations.adoc[]
+include::answer-contract.adoc[]
 include::sources/edu.school-location.adoc[]
 include::sources/edu.academy-registry.adoc[]
 include::sources/place.sbiz-academy.adoc[]

@@ -129,23 +129,27 @@ LLM은 후보와 계산 근거를 설명할 뿐 점수와 사실을 만들지 �
 
 ### Slice 6: 교육 데이터
 
-- 학교 위치·상태, 초등 통학구역, 중·고 학교군, 학원·교습소
-- 학교 ID dedupe, 좌표/polygon, 경계와 전국 coverage 검증
+- 학교 위치·상태와 학원·교습소 접근성
+- 학교 ID dedupe, 좌표와 전국 coverage 검증
+- 통학구역·학교군·학생·교사 지표는 현재 생활 인프라 chatbot 비범위
 - 상태: Slice 6A의 학교 위치 최소 경로는 deterministic API bundle, source adapter,
   one-shot importer, typed read view, Haversine reference repository와 default-disabled
   grounded answer까지 구현했다. dataset-specific 이용 조건 승인과 실제 전국 import가
   없으므로 `school_location`은 계속 `데이터 준비 중`이며 상세 공백은
   `docs/reports/CHATBOT_SLICE_6A_SCHOOL_LOCATION_READINESS.md`에 기록한다.
 
-### Slice 7: 교통·의료·보육 공식 데이터
+### Slice 7: 교통·보육 공식 데이터
 
-- 도시철도 역사, HIRA 병원, 전국 어린이집
+- 도시철도 역사와 전국 어린이집
 - 기관 ID dedupe, 운영 상태, 좌표, freshness 검증
+- 병원은 HIRA를 수집하지 않고 기존 Kakao 지도 탐색으로만 제공
 
 ### Slice 8: Kakao 실시간 장소 탐색
 
 - keyword/category/address/coordinate adapter와 quota 관측
 - 검색 조건·시각 표시, 정책 승인 범위 내 무저장 또는 TTL cache
+- 병원·어린이집은 검증된 단지 좌표 기반 `showNearbyCategory/v1` action으로 기존
+  web viewport overlay를 열며 ai-service가 Kakao를 직접 호출하지 않음
 
 ### Slice 9: 단지 비교
 

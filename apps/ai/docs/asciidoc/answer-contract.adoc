@@ -1,0 +1,18 @@
+== Grounded answer artifacts and actions
+
+`uiArtifacts`와 `uiActions`는 LLM 출력이 아니라 검증된 `EvidenceFact`에서 조립한다.
+공개 schema의 단독 소유자는 `docs/CHATBOT_API_CONTRACT.md`이며 이 문서는 AI 운영자가
+지켜야 할 생성 경계만 설명한다.
+
+허용 artifact는 `factList/v1`, `comparisonTable/v1`,
+`recommendationCards/v1` 세 종류다. 허용 action은
+`showNearbyCategory/v1` 하나다. 임의 Markdown/HTML, generic renderer payload,
+`mapPoints`, chart schema, dynamic plugin은 만들지 않는다.
+
+모든 표시 fact는 observation에 존재하는 `factIds`를 사용한다. 정상적으로 관측할 수
+없는 비교 cell은 이유를 표시하되 존재하지 않는 fact id를 만들지 않는다. payload
+개수·문자열·직렬화 크기 제한을 넘거나 schema가 잘못된 항목은 공개 response 조립 전에
+제외한다. JSON과 SSE는 검증이 끝난 동일한 artifact/action 집합을 반환한다.
+
+지도 action은 marker-safe 단지 좌표 fact만 사용한다. ai-service는 Kakao API를
+호출하지 않고, Kakao 장소 응답·전화·URL을 대화나 archive에 저장하지 않는다.

@@ -57,3 +57,21 @@ api-contract: compatible
 security-audit: 지적사항 = none
 commit: `feat(ai): return grounded answer artifacts`
 ```
+
+```text
+Slice: S2 — 기존 capability 정적 composition
+요구사항: 기존 property·학교·학원·철도·대규모점포 capability를 고정 순서 handler catalog로 실행하면서 기존 답변 계약을 보존한다.
+구현 범위: CapabilityCatalog, 여덟 typed handler, repository protocol·CapabilityResult 경계, GroundedChatbotEngine orchestration 축소
+지적사항: none — 반복 전체 실행 중 공용 dataset DB 오류가 일시 발생했으나 실패 44건 격리 재실행과 깨끗한 전체 재실행에서 모두 통과해 코드 회귀가 아님을 확인
+검증 근거 확인: 최초 RED에서 capability_handlers import 실패 확인; `uv run pytest --no-cov tests/property_chat/test_capability_catalog.py tests/property_chat/test_grounded_engine.py` 35 passed; `uv run pytest --no-cov tests/property_chat` 240 passed; 실패 집합 `uv run pytest --no-cov --lf` 44 passed; `uv run pytest -q` 641 passed, coverage 90.27%; `git diff --check` Pass; secret pattern 검사 Pass
+검증 공백: none
+과설계 판정: 생성자 고정 catalog만 사용하며 runtime plugin·reflection·workflow engine·handler 상속 계층 없음
+코드 스멜: engine.py 899줄(S1 1,265줄, 최초 기준 1,334줄 미만); legacy `_reference_observers`와 capability `if/elif` dispatch 제거
+공통화 결정: readiness와 source별 claim policy는 concrete handler에 유지하고 EvidenceFact pure builder 주입만 공유; presenter base class 없음
+UI 연결: 공개 JSON/SSE shape와 S1 factList 경로를 변경하지 않아 기존 web 소비자 회귀 없음
+잔여 위험: source별 direct factList 확장은 이번 동작 보존 refactor 범위에서 의도적으로 추가하지 않음
+점수: 9.5/10 Pass — 신규 사용자 기능 없이 내부 composition만 변경한 Slice라 UI 실행 근거 0.5 감점
+api-contract: compatible
+security-audit: 지적사항 = none
+commit: `refactor(ai): compose grounded capability handlers`
+```

@@ -12,8 +12,25 @@ from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
 
 from .answer_document import AnswerDocument, FactListPresenter
+from .capability_handlers import (
+    AcademyLocationFactRepository,
+    AcademyLookupHandler,
+    AcademyRegistryFactRepository,
+    AcademyRegistrySummaryHandler,
+    CapabilityCatalog,
+    EvidenceFactBuilders,
+    PointFacilityFactRepository,
+    PriceTrendHandler,
+    PropertyFactRepository,
+    PropertyIdentityHandler,
+    RailStationFactRepository,
+    RailStationHandler,
+    RecentTradeHandler,
+    RetailLocationHandler,
+    SchoolFactRepository,
+    SchoolLocationHandler,
+)
 from .models import (
-    AdministrativeRegionContext,
     ComplexRecord,
     DraftAnswer,
     EvidenceFact,
@@ -37,35 +54,6 @@ from .reference_facilities import FacilityFact, FacilitySearchResult
 from .rail_stations import RailStation, RailStationSearchResult
 
 
-class PropertyFactRepository(Protocol):
-    def find_complexes(
-        self, name: str, region_name: str | None, limit: int
-    ) -> list[ComplexRecord]: ...
-
-    def recent_trades(
-        self,
-        complex_id: int,
-        start_date: date | None,
-        end_date: date | None,
-        exclusive_area_square_meters: float | None,
-        limit: int,
-    ) -> list[TradeRecord]: ...
-
-    def monthly_trends(
-        self,
-        complex_id: int,
-        start_date: date,
-        end_date: date,
-        exclusive_area_square_meters: float | None,
-    ) -> list[MonthlyTrendRecord]: ...
-
-    def latest_trade_date(self) -> date | None: ...
-
-    def resolve_region_context(
-        self, region_code: str
-    ) -> AdministrativeRegionContext | None: ...
-
-
 class GroundedLanguageModel(Protocol):
     async def plan_query(self, request: ChatbotQueryRequest) -> QueryPlan: ...
 
@@ -76,63 +64,6 @@ class GroundedLanguageModel(Protocol):
         limitations: list[str],
         question: str,
     ) -> DraftAnswer: ...
-
-
-class SchoolFactRepository(Protocol):
-    def active_snapshot(self) -> SchoolSnapshot | None: ...
-
-    def nearby_schools(
-        self,
-        *,
-        latitude: float,
-        longitude: float,
-        school_levels: tuple[str, ...],
-        radius_meters: int,
-        limit: int,
-    ) -> SchoolSearchResult: ...
-
-
-class PointFacilityFactRepository(Protocol):
-    def nearby(
-        self,
-        *,
-        source_id: str,
-        category: str,
-        latitude: float,
-        longitude: float,
-        radius_meters: int,
-        limit: int,
-        region_code: str,
-        subcategories: tuple[str, ...] = (),
-    ) -> FacilitySearchResult: ...
-
-
-class AcademyRegistryFactRepository(Protocol):
-    def summary(
-        self, *, education_office_name: str, district_name: str
-    ) -> AcademyRegistrySummary | None: ...
-
-
-class AcademyLocationFactRepository(Protocol):
-    def nearby(
-        self,
-        *,
-        latitude: float,
-        longitude: float,
-        radius_meters: int,
-        limit: int,
-    ) -> AcademyLocationSearchResult: ...
-
-
-class RailStationFactRepository(Protocol):
-    def nearby(
-        self,
-        *,
-        latitude: float,
-        longitude: float,
-        radius_meters: int,
-        limit: int,
-    ) -> RailStationSearchResult: ...
 
 
 _GROUNDING_FAILURE_REASONS = frozenset(
@@ -189,22 +120,38 @@ class GroundedChatbotEngine:
         today: Callable[[], date] = date.today,
     ) -> None:
         self._repository = repository
-        self._school_repository = school_repository
-        self._point_facility_repository = point_facility_repository
-        self._academy_registry_repository = academy_registry_repository
-        self._academy_location_repository = academy_location_repository
-        self._rail_station_repository = rail_station_repository
         self._language_model = language_model
         self._enabled_capabilities = enabled_capabilities
         self._enabled_reference_capabilities = enabled_reference_capabilities
-        self._today = today
-        self._reference_observers = {
-            "school_location": self._observe_schools,
-            "retail_location": self._observe_retail,
-            "academy_registry_summary": self._observe_academy_registry,
-            "academy_lookup": self._observe_academy_lookup,
-            "rail_station_lookup": self._observe_rail_stations,
-        }
+        builders = EvidenceFactBuilders(
+            complex_fact=_complex_fact,
+            trade_fact=_trade_fact,
+            trend_fact=_trend_fact,
+            school_fact=_school_fact,
+            school_scope_fact=_school_scope_fact,
+            academy_registry_fact=_academy_registry_fact,
+            academy_location_fact=_academy_location_fact,
+            academy_exact_match_fact=_academy_exact_match_fact,
+            academy_lookup_scope_fact=_academy_lookup_scope_fact,
+            retail_fact=_retail_fact,
+            retail_scope_fact=_retail_scope_fact,
+            rail_station_fact=_rail_station_fact,
+            rail_scope_fact=_rail_scope_fact,
+        )
+        self._catalog = CapabilityCatalog(
+            (
+                PropertyIdentityHandler(builders),
+                RecentTradeHandler(repository, builders),
+                PriceTrendHandler(repository, builders),
+                SchoolLocationHandler(school_repository, builders, today),
+                AcademyLookupHandler(academy_location_repository, builders, today),
+                AcademyRegistrySummaryHandler(
+                    repository, academy_registry_repository, builders, today
+                ),
+                RailStationHandler(rail_station_repository, builders, today),
+                RetailLocationHandler(point_facility_repository, builders),
+            )
+        )
 
     async def query(
         self,
@@ -279,318 +226,11 @@ class GroundedChatbotEngine:
                 ["동명 단지가 여러 곳이므로 지역이나 주소 조건을 추가해야 합니다."],
                 "partial",
             )
-
-        complex_record = complexes[0]
-        reference_observer = self._reference_observers.get(plan.capability)
-        if reference_observer is not None:
-            return await reference_observer(plan, complex_record)
-        if plan.capability == "complex_identity":
-            limitations = []
-            if not complex_record.marker_safe:
-                limitations.append("검증된 표시 좌표가 없어 위치 좌표는 제공하지 않습니다.")
-            return [_complex_fact(complex_record)], limitations, "supported"
-        if plan.capability == "recent_trade_lookup":
-            trades = await asyncio.to_thread(
-                self._repository.recent_trades,
-                complex_record.complex_id,
-                plan.start_date,
-                plan.end_date,
-                plan.exclusive_area_square_meters,
-                plan.limit,
-            )
-            if not trades:
-                return (
-                    [],
-                    ["지정한 기간과 면적 조건에서 확인된 실거래가 없습니다."],
-                    "unavailable",
-                )
-            latest_trade_date = await asyncio.to_thread(self._repository.latest_trade_date)
-            data_as_of = latest_trade_date or max(record.deal_date for record in trades)
-            limitations = ["신고 취소 또는 지연 신고가 이후 반영될 수 있습니다."]
-            if plan.exclusive_area_square_meters is not None:
-                limitations.append("전용면적은 요청값 기준 ±1.0㎡ 범위로 조회했습니다.")
-            return [_trade_fact(record, data_as_of) for record in trades], limitations, "supported"
-        if plan.capability == "price_trend":
-            assert plan.start_date is not None and plan.end_date is not None
-            trends = await asyncio.to_thread(
-                self._repository.monthly_trends,
-                complex_record.complex_id,
-                plan.start_date,
-                plan.end_date,
-                plan.exclusive_area_square_meters,
-            )
-            if not trends:
-                return (
-                    [],
-                    ["지정한 기간과 면적 조건으로 월별 추이를 계산할 거래가 없습니다."],
-                    "unavailable",
-                )
-            latest_trade_date = await asyncio.to_thread(self._repository.latest_trade_date)
-            data_as_of = latest_trade_date or min(
-                plan.end_date, max(_month_end(record.month) for record in trends)
-            )
-            limitations = ["월별 수치는 실제 거래 관찰값이며 미래 가격을 의미하지 않습니다."]
-            if plan.exclusive_area_square_meters is not None:
-                limitations.append("전용면적은 요청값 기준 ±1.0㎡ 범위로 집계했습니다.")
-            return [_trend_fact(record, data_as_of) for record in trends], limitations, "supported"
-        raise GroundingValidationError("GROUNDING_CAPABILITY_UNSUPPORTED")
-
-    async def _observe_schools(
-        self, plan: QueryPlan, complex_record: ComplexRecord
-    ) -> tuple[list[EvidenceFact], list[str], str]:
-        if not 100 <= plan.radius_meters <= 2000:
-            return (
-                [],
-                ["학교 검색 반경은 100m에서 2000m 사이로 지정해야 합니다."],
-                "unavailable",
-            )
-        if (
-            not complex_record.marker_safe
-            or complex_record.latitude is None
-            or complex_record.longitude is None
-        ):
-            return (
-                [],
-                ["검증된 단지 표시 좌표가 없어 주변 학교를 조회할 수 없습니다."],
-                "unavailable",
-            )
-        if self._school_repository is None:
-            return (
-                [],
-                ["공식 학교 위치 snapshot이 준비되지 않았습니다."],
-                "unavailable",
-            )
-        snapshot = await asyncio.to_thread(self._school_repository.active_snapshot)
-        if snapshot is None:
-            return (
-                [],
-                ["공식 학교 위치 active snapshot이 없습니다."],
-                "unavailable",
-            )
-        age_days = (self._today() - snapshot.source_date).days
-        if age_days < 0 or age_days > 214:
-            return (
-                [],
-                ["공식 학교 위치 snapshot의 기준일이 freshness 범위를 벗어났습니다."],
-                "unavailable",
-            )
-        result = await asyncio.to_thread(
-            self._school_repository.nearby_schools,
-            latitude=complex_record.latitude,
-            longitude=complex_record.longitude,
-            school_levels=plan.school_levels,
-            radius_meters=plan.radius_meters,
-            limit=plan.limit,
-        )
-        facts = [
-            _complex_fact(complex_record),
-            *(_school_fact(record, snapshot) for record in result.schools),
-            _school_scope_fact(plan, complex_record, result, snapshot),
-        ]
-        return (
-            facts,
-            [
-                "거리는 단지 표시 좌표 기준 직선거리이며 실제 보행 경로가 아닙니다.",
-                "통학구역 근거가 아니므로 배정학교를 의미하지 않습니다.",
-                "데이터 기준일 이후 학교 운영상태가 변경될 수 있습니다.",
-            ],
-            "supported",
-        )
-
-    async def _observe_retail(
-        self, plan: QueryPlan, complex_record: ComplexRecord
-    ) -> tuple[list[EvidenceFact], list[str], str]:
-        assert plan.radius_meters is not None
-        if not 100 <= plan.radius_meters <= 3000:
-            return (
-                [],
-                ["대규모점포 검색 반경은 100m에서 3000m 사이로 지정해야 합니다."],
-                "unavailable",
-            )
-        if (
-            not complex_record.marker_safe
-            or complex_record.latitude is None
-            or complex_record.longitude is None
-            or complex_record.region_code is None
-        ):
-            return (
-                [],
-                ["검증된 단지 좌표와 지역 코드가 없어 주변 대규모점포를 조회할 수 없습니다."],
-                "unavailable",
-            )
-        if self._point_facility_repository is None:
-            return (
-                [],
-                ["공식 대규모점포 active snapshot이 준비되지 않았습니다."],
-                "unavailable",
-            )
-        result = await asyncio.to_thread(
-            self._point_facility_repository.nearby,
-            source_id="retail.large-store",
-            category="RETAIL",
-            latitude=complex_record.latitude,
-            longitude=complex_record.longitude,
-            radius_meters=plan.radius_meters,
-            limit=plan.limit,
-            region_code=complex_record.region_code,
-            subcategories=plan.facility_subtypes,
-        )
-        facts = [
-            _complex_fact(complex_record),
-            *(_retail_fact(record) for record in result.facilities),
-            _retail_scope_fact(plan, complex_record, result),
-        ]
-        limitations = [
-            "거리는 단지 표시 좌표 기준 직선거리이며 실제 보행 경로가 아닙니다.",
-            "공식 snapshot 이후 운영상태가 변경될 수 있습니다.",
-        ]
-        if not result.facilities and not result.verified_zero:
-            limitations.append(
-                "좌표가 확인된 공식 자료의 결과이며 좌표가 없는 원장이 포함될 수 있어 시설이 전혀 없다고 단정할 수 없습니다."
-            )
-        return facts, limitations, "supported"
-
-    async def _observe_academy_registry(
-        self, plan: QueryPlan, complex_record: ComplexRecord
-    ) -> tuple[list[EvidenceFact], list[str], str]:
-        if complex_record.region_code is None:
-            return [], ["단지의 행정구역을 확인할 수 없습니다."], "unavailable"
-        if self._academy_registry_repository is None:
-            return [], ["공식 학원·교습소 등록 집계가 준비되지 않았습니다."], "unavailable"
-        region = await asyncio.to_thread(
-            self._repository.resolve_region_context, complex_record.region_code
-        )
-        if region is None:
-            return [], ["단지의 시도·시군구 행정구역을 확인할 수 없습니다."], "unavailable"
-        summary = await asyncio.to_thread(
-            self._academy_registry_repository.summary,
-            education_office_name=region.education_office_name,
-            district_name=region.district_name,
-        )
-        if summary is None:
-            return [], ["해당 시군구의 공식 등록 집계를 확인하지 못했습니다."], "unavailable"
-        age_days = (self._today() - summary.observed_at.date()).days
-        if age_days < 0 or age_days > summary.freshness_days:
-            return [], ["공식 등록 집계의 관측일이 freshness 범위를 벗어났습니다."], "unavailable"
-        return (
-            [_academy_registry_fact(summary)],
-            [
-                "시군구 단위 공식 등록 원장 집계이며 위치 검색이나 교육 품질을 의미하지 않습니다.",
-                "관측일 이후 등록·운영상태가 변경될 수 있습니다.",
-            ],
-            "supported",
-        )
-
-    async def _observe_academy_lookup(
-        self, plan: QueryPlan, complex_record: ComplexRecord
-    ) -> tuple[list[EvidenceFact], list[str], str]:
-        assert plan.radius_meters is not None
-        if not 100 <= plan.radius_meters <= 2000:
-            return (
-                [],
-                ["교육업소 검색 반경은 100m에서 2000m 사이로 지정해야 합니다."],
-                "unavailable",
-            )
-        if (
-            not complex_record.marker_safe
-            or complex_record.latitude is None
-            or complex_record.longitude is None
-        ):
-            return (
-                [],
-                ["검증된 단지 표시 좌표가 없어 교육업소를 조회할 수 없습니다."],
-                "unavailable",
-            )
-        if self._academy_location_repository is None:
-            return [], ["Sbiz 교육업소 active snapshot이 준비되지 않았습니다."], "unavailable"
-        result = await asyncio.to_thread(
-            self._academy_location_repository.nearby,
-            latitude=complex_record.latitude,
-            longitude=complex_record.longitude,
-            radius_meters=plan.radius_meters,
-            limit=plan.limit,
-        )
-        age_days = (self._today() - result.observed_at.date()).days
-        if (
-            result.coordinate_coverage < 0.95
-            or age_days < 0
-            or age_days > result.freshness_days
-        ):
-            return (
-                [],
-                ["Sbiz 교육업소 snapshot의 좌표 coverage 또는 관측일이 기준을 충족하지 못했습니다."],
-                "unavailable",
-            )
-        facts: list[EvidenceFact] = []
-        for location in result.locations:
-            facts.append(_academy_location_fact(location))
-            if location.registry_match is not None:
-                facts.append(
-                    _academy_exact_match_fact(location, location.registry_match)
-                )
-        facts.append(_academy_lookup_scope_fact(plan, complex_record, result))
-        limitations = [
-            "거리는 단지 표시 좌표 기준 직선거리이며 실제 보행 경로가 아닙니다.",
-            "미결합 교육업소는 Sbiz 위치 근거이며 NEIS 공식 등록 여부를 의미하지 않습니다.",
-        ]
-        if not result.locations and not result.verified_zero:
-            limitations.append(
-                "행정코드 체계의 지역 coverage가 검증되지 않아 교육업소가 전혀 없다고 단정할 수 없습니다."
-            )
-        return facts, limitations, "supported"
-
-    async def _observe_rail_stations(
-        self, plan: QueryPlan, complex_record: ComplexRecord
-    ) -> tuple[list[EvidenceFact], list[str], str]:
-        assert plan.radius_meters is not None
-        if not 100 <= plan.radius_meters <= 3000:
-            return (
-                [],
-                ["철도역 검색 반경은 100m에서 3000m 사이로 지정해야 합니다."],
-                "unavailable",
-            )
-        if (
-            not complex_record.marker_safe
-            or complex_record.latitude is None
-            or complex_record.longitude is None
-        ):
-            return (
-                [],
-                ["검증된 단지 표시 좌표가 없어 주변 철도역을 조회할 수 없습니다."],
-                "unavailable",
-            )
-        if self._rail_station_repository is None:
-            return [], ["공식 철도역 active snapshot이 준비되지 않았습니다."], "unavailable"
-        result = await asyncio.to_thread(
-            self._rail_station_repository.nearby,
-            latitude=complex_record.latitude,
-            longitude=complex_record.longitude,
-            radius_meters=plan.radius_meters,
-            limit=plan.limit,
-        )
-        age_days = (self._today() - result.source_date).days
-        if (
-            result.coordinate_coverage < 1.0
-            or age_days < 0
-            or age_days > result.freshness_days
-        ):
-            return (
-                [],
-                ["철도역 snapshot의 좌표 coverage 또는 기준일이 활성화 기준을 충족하지 못했습니다."],
-                "unavailable",
-            )
-        facts = [
-            *(_rail_station_fact(station, result) for station in result.stations),
-            _rail_scope_fact(plan, complex_record, result),
-        ]
-        return (
-            facts,
-            [
-                "거리는 단지 표시 좌표 기준 직선거리이며 실제 보행 경로가 아닙니다.",
-                "통근시간·배차·혼잡도는 현재 근거에 포함되지 않습니다.",
-            ],
-            "supported",
-        )
+        handler = self._catalog.handler_for(plan.capability)
+        if handler is None:
+            raise GroundingValidationError("GROUNDING_CAPABILITY_UNSUPPORTED")
+        result = await handler.observe(plan, complexes[0])
+        return result.facts, result.limitations, result.readiness
 
 
 def _complex_fact(record: ComplexRecord) -> EvidenceFact:
@@ -1257,9 +897,3 @@ def _number_tokens(values: Iterable[str]) -> set[str]:
             except InvalidOperation:
                 continue
     return tokens
-
-
-def _month_end(month: date) -> date:
-    if month.month == 12:
-        return date(month.year, 12, 31)
-    return date.fromordinal(date(month.year, month.month + 1, 1).toordinal() - 1)

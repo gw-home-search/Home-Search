@@ -411,6 +411,33 @@ def test_planning_requires_typed_recommendation_region_budget_and_area() -> None
     assert plan.region_name == "송파구"
     assert plan.maximum_budget_ten_thousand_krw == 200_000
     assert plan.lifestyle_themes == ("TRANSIT", "STUDENT")
+
+
+def test_planning_accepts_typed_criteria_recommendation_without_budget_or_area() -> None:
+    requester = RecordingRequester(_response(_valid_plan(
+        capability="recommendation",
+        complexName="영등포구",
+        regionName="영등포구",
+        maximumBudgetTenThousandKrw=None,
+        lifestyleThemes=[],
+        recommendationMode="CRITERIA",
+        minimumUnitCount=500,
+        recommendationCriteria=["ACADEMY"],
+        criteriaOrder=["ACADEMY"],
+        stationName=None,
+    )))
+
+    plan = asyncio.run(_model(requester).plan_query(
+        ChatbotQueryRequest(question="영등포구 500세대 이상 학원 우선 추천")
+    ))
+
+    assert plan.recommendation_mode == "CRITERIA"
+    assert plan.minimum_unit_count == 500
+    assert plan.recommendation_criteria == ("ACADEMY",)
+    schema = _recorded_plan_schema(requester)
+    assert schema["properties"]["recommendationCriteria"]["items"]["enum"] == [
+        "TRANSIT", "ACADEMY", "SCHOOL", "SHOPPING",
+    ]
     schema = _recorded_plan_schema(requester)
     body = json.loads(requester.calls[0][2])
     assert "maximumBudgetTenThousandKrw" in schema["required"]

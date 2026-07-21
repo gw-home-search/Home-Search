@@ -1,5 +1,7 @@
 import type { ChatAction } from './actionContract';
 import type { ChatArtifact } from './artifactContract';
+import type { ChatUiSummary } from './summaryContract';
+import type { ChatFragment } from './fragmentContract';
 
 export type ChatCitation = {
   citationId: string;
@@ -34,4 +36,6 @@ export type ChatbotResponse = ChatEvidence & {
   answer: string;
   artifacts: ChatArtifact[];
   actions: ChatAction[];
+  summary: ChatUiSummary | null;
+  fragments: ChatFragment[];
 };

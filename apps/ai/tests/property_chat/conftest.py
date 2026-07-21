@@ -9,9 +9,10 @@ from testcontainers.postgres import PostgresContainer
 
 @pytest.fixture(scope="session")
 def property_postgres_dsn() -> Iterator[str]:
-    with PostgresContainer("postgres:16-alpine") as postgres:
+    with PostgresContainer("postgis/postgis:16-3.4") as postgres:
         dsn = postgres.get_connection_url().replace("postgresql+psycopg2", "postgresql")
         with psycopg.connect(dsn) as connection:
+            connection.execute("CREATE EXTENSION IF NOT EXISTS postgis")
             connection.execute("CREATE SCHEMA ai_read")
             connection.execute(
                 """

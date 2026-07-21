@@ -2,10 +2,14 @@ import type { ConversationContext } from '../storage/chatConversationStore';
 import { readChatArtifacts } from '../artifactContract';
 import { readChatActions } from '../actionContract';
 import type { ChatbotResponse, ChatCitation, ChatEvidenceSummary } from '../chatTypes';
+import { readChatUiSummary } from '../summaryContract';
+import { readChatFragments } from '../fragmentContract';
 
-type ChatbotWireResponse = Omit<ChatbotResponse, 'artifacts' | 'actions'> & {
+type ChatbotWireResponse = Omit<ChatbotResponse, 'artifacts' | 'actions' | 'summary' | 'fragments'> & {
   uiArtifacts?: unknown;
   uiActions?: unknown;
+  uiSummary?: unknown;
+  fragments?: unknown;
 };
 
 export type AuthenticatedChatbotRequest = (
@@ -33,10 +37,14 @@ export async function queryChatbot(
     const body: unknown = await response.json();
     if (!isChatbotResponse(body)) throw new Error();
     const factIds = new Set(body.citations.flatMap((citation) => citation.factIds));
+    const artifacts = readChatArtifacts(body.uiArtifacts, factIds);
+    const actions = readChatActions(body.uiActions, factIds);
     return {
       ...body,
-      artifacts: readChatArtifacts(body.uiArtifacts, factIds),
-      actions: readChatActions(body.uiActions, factIds),
+      artifacts,
+      actions,
+      summary: readChatUiSummary(body.uiSummary, factIds),
+      fragments: readChatFragments(body.fragments, factIds, artifacts, actions),
     };
   } catch {
     throw new Error('챗봇 응답을 확인하지 못했습니다.');

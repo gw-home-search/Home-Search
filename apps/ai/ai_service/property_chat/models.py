@@ -29,6 +29,17 @@ ReferenceCapability = Literal[
 NearbyPlaceCategory = Literal["HOSPITAL", "DAYCARE_KINDERGARTEN"]
 SchoolLevel = Literal["ELEMENTARY", "MIDDLE", "HIGH"]
 LifestyleTheme = Literal["TRANSIT", "STUDENT", "YOUNG_CHILD", "SHOPPING"]
+RecommendationMode = Literal["BUDGET", "CRITERIA"]
+RecommendationCriterion = Literal["TRANSIT", "ACADEMY", "SCHOOL", "SHOPPING"]
+RecommendationClarificationCode = Literal[
+    "AMBIGUOUS_EDUCATION",
+    "MISSING_PRIORITY",
+    "NUMERIC_CONDITION_MISMATCH",
+    "REGION_NOT_CONFIRMED",
+    "STATION_RADIUS_REQUIRED",
+    "STATION_RADIUS_OUT_OF_RANGE",
+    "UNSUPPORTED_CHILDCARE",
+]
 FacilitySubtype = Literal[
     "LARGE_MART",
     "DEPARTMENT_STORE",
@@ -54,6 +65,12 @@ class QueryPlan:
     complex_names: tuple[str, ...] = ()
     maximum_budget_ten_thousand_krw: int | None = None
     lifestyle_themes: tuple[LifestyleTheme, ...] = ()
+    recommendation_mode: RecommendationMode | None = None
+    minimum_unit_count: int | None = None
+    recommendation_criteria: tuple[RecommendationCriterion, ...] = ()
+    criteria_order: tuple[RecommendationCriterion, ...] = ()
+    station_name: str | None = None
+    clarification_code: RecommendationClarificationCode | None = None
 
     def __post_init__(self) -> None:
         normalized_name = self.complex_name.strip()
@@ -110,7 +127,7 @@ class QueryPlan:
         )
         object.__setattr__(self, "facility_subtypes", canonical_subtypes)
         radius_meters = self.radius_meters
-        if radius_meters is None:
+        if radius_meters is None and self.capability != "recommendation":
             radius_meters = (
                 1500
                 if self.capability == "rail_station_lookup"
@@ -119,7 +136,7 @@ class QueryPlan:
                 else 800
             )
             object.__setattr__(self, "radius_meters", radius_meters)
-        if not 0 <= radius_meters <= 10_000_000:
+        if radius_meters is not None and not 0 <= radius_meters <= 10_000_000:
             raise ValueError("radius_meters cannot be represented safely")
         if self.capability == "price_trend" and (self.start_date is None or self.end_date is None):
             raise ValueError("price_trend requires start_date and end_date")
@@ -152,10 +169,66 @@ class QueryPlan:
                 )
             ):
                 raise ValueError("recommendation budget or limit is invalid")
+            mode = self.recommendation_mode
+            if mode is None:
+                mode = (
+                    "CRITERIA"
+                    if self.minimum_unit_count is not None
+                    or self.recommendation_criteria
+                    or self.criteria_order
+                    or self.station_name is not None
+                    else "BUDGET"
+                )
+                object.__setattr__(self, "recommendation_mode", mode)
+            if mode not in {"BUDGET", "CRITERIA"}:
+                raise ValueError("recommendation mode is invalid")
+            if self.minimum_unit_count is not None and (
+                isinstance(self.minimum_unit_count, bool)
+                or not 1 <= self.minimum_unit_count <= 100_000
+            ):
+                raise ValueError("minimum unit count is invalid")
+            allowed_criteria = ("TRANSIT", "ACADEMY", "SCHOOL", "SHOPPING")
+            if (
+                len(self.recommendation_criteria)
+                != len(set(self.recommendation_criteria))
+                or any(key not in allowed_criteria for key in self.recommendation_criteria)
+                or len(self.criteria_order) != len(set(self.criteria_order))
+                or any(key not in allowed_criteria for key in self.criteria_order)
+                or not set(self.criteria_order).issubset(self.recommendation_criteria)
+            ):
+                raise ValueError("recommendation criteria are invalid")
+            if len(self.recommendation_criteria) == 1 and not self.criteria_order:
+                object.__setattr__(
+                    self, "criteria_order", self.recommendation_criteria
+                )
+            if self.station_name is not None:
+                station_name = self.station_name.strip()
+                if not 1 <= len(station_name) <= 100:
+                    raise ValueError("station name is invalid")
+                object.__setattr__(self, "station_name", station_name)
+            if self.clarification_code is not None and self.clarification_code not in {
+                "AMBIGUOUS_EDUCATION",
+                "MISSING_PRIORITY",
+                "NUMERIC_CONDITION_MISMATCH",
+                "REGION_NOT_CONFIRMED",
+                "STATION_RADIUS_REQUIRED",
+                "STATION_RADIUS_OUT_OF_RANGE",
+                "UNSUPPORTED_CHILDCARE",
+            }:
+                raise ValueError("recommendation clarification code is invalid")
         elif budget is not None:
             raise ValueError(
                 "maximum_budget_ten_thousand_krw is only supported for recommendation"
             )
+        elif (
+            self.recommendation_mode is not None
+            or self.minimum_unit_count is not None
+            or self.recommendation_criteria
+            or self.criteria_order
+            or self.station_name is not None
+            or self.clarification_code is not None
+        ):
+            raise ValueError("recommendation fields are only supported for recommendation")
         theme_order = ("TRANSIT", "STUDENT", "YOUNG_CHILD", "SHOPPING")
         if (
             len(self.lifestyle_themes) != len(set(self.lifestyle_themes))
@@ -211,6 +284,7 @@ def _merge_duplicate_plan(left: QueryPlan, right: QueryPlan) -> QueryPlan:
         "complex_name", "region_name", "start_date", "end_date",
         "exclusive_area_square_meters", "radius_meters", "place_category",
         "maximum_budget_ten_thousand_krw",
+        "recommendation_mode", "minimum_unit_count", "station_name",
     )
     if any(
         getattr(left, name) is not None
@@ -244,6 +318,14 @@ def _merge_duplicate_plan(left: QueryPlan, right: QueryPlan) -> QueryPlan:
         lifestyle_themes=merged_values(
             left.lifestyle_themes, right.lifestyle_themes
         ),
+        recommendation_mode=left.recommendation_mode or right.recommendation_mode,
+        minimum_unit_count=left.minimum_unit_count or right.minimum_unit_count,
+        recommendation_criteria=merged_values(
+            left.recommendation_criteria, right.recommendation_criteria
+        ),
+        criteria_order=merged_values(left.criteria_order, right.criteria_order),
+        station_name=left.station_name or right.station_name,
+        clarification_code=left.clarification_code or right.clarification_code,
     )
 
 

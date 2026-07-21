@@ -79,7 +79,7 @@ class CompoundEngine:
                     "fragmentId": "fragment-2", "capability": "childcare_lookup",
                     "status": "failed", "answer": "데이터를 준비 중입니다.",
                     "factIds": [], "artifactIds": [], "actionIds": [],
-                    "limitations": ["어린이집 source가 준비되지 않았습니다."],
+                    "limitations": ["어린이집 데이터가 준비되지 않았습니다."],
                 },
             ],
             "result": {}, "message": "",
@@ -89,7 +89,7 @@ class CompoundEngine:
             "conversationMemoryPatch": None, "uiActions": [], "uiArtifacts": [],
             "uiSummary": None, "requestId": kwargs["request_id"], "citations": [],
             "dataAsOf": None,
-            "limitations": ["어린이집 source가 준비되지 않았습니다."],
+            "limitations": ["어린이집 데이터가 준비되지 않았습니다."],
             "evidenceSummary": {
                 "status": "partial", "capabilities": [
                     "complex_identity", "childcare_lookup",

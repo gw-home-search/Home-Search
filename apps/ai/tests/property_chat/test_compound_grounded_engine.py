@@ -113,6 +113,11 @@ def test_compound_query_aggregates_grounded_artifact_and_map_action() -> None:
     assert [artifact["type"] for artifact in response["uiArtifacts"]] == ["factList"]
     assert [action["category"] for action in response["uiActions"]] == ["HOSPITAL"]
     assert response["evidenceSummary"]["factCount"] == 1
+    assert response["uiSummary"]["version"] == 1
+    assert response["uiSummary"]["headline"]["text"] == "2개 요청을 모두 확인했습니다."
+    assert [item["fragmentId"] for item in response["uiSummary"]["fragmentSummaries"]] == [
+        "fragment-1", "fragment-2",
+    ]
 
 
 def test_compound_query_preserves_success_when_one_fragment_is_unavailable() -> None:

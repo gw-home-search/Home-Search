@@ -262,12 +262,12 @@ class ComparisonHandler:
         )
         if "STUDENT" in plan.lifestyle_themes:
             rows += (ComparisonRow("studentAccess", "학교 위치·800m 교육업소", tuple(
-                _lifestyle_cell(student_facts.get(item.complex_id), student_ready, "학생 조건 source")
+                _lifestyle_cell(student_facts.get(item.complex_id), student_ready, "학생 조건 데이터")
                 for item in complexes
             )),)
         if "YOUNG_CHILD" in plan.lifestyle_themes:
             rows += (ComparisonRow("youngChildAccess", "800m 공식 어린이집", tuple(
-                _lifestyle_cell(childcare_facts.get(item.complex_id), childcare_ready, "어린이집 source")
+                _lifestyle_cell(childcare_facts.get(item.complex_id), childcare_ready, "어린이집 데이터")
                 for item in complexes
             )),)
         artifact = ComparisonTableArtifact(
@@ -303,7 +303,7 @@ class ComparisonHandler:
                 f"전용면적 {plan.exclusive_area_square_meters:g}㎡ ±1.0㎡ 기준입니다.",
                 "거래가 3건 미만인 단지의 가격 항목은 확인 불가로 표시합니다.",
                 "철도와 대규모점포 거리는 단지 표시 좌표 기준 직선거리입니다.",
-                "비교표는 우승 단지나 투자 가치를 판단하지 않습니다.",
+                "조건별 관찰값을 나란히 보여드리며, 중요하게 보는 조건에 따라 선택이 달라질 수 있습니다.",
             ],
             "partial" if has_unavailable else "supported",
             artifacts=(artifact,),
@@ -515,7 +515,7 @@ def _facility_cell(
             if not coordinate_available
             else f"{missing_label}을 확인하지 못했습니다."
             if source_ready
-            else "시설 source가 준비되지 않았습니다."
+            else "필요한 시설 데이터가 아직 준비되지 않았습니다."
         )
         return ComparisonCell("unavailable", None, "STRAIGHT_LINE_METER", reason, ())
     payload = fact.payload

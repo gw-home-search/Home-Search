@@ -8,6 +8,7 @@ from datetime import date
 from ai_service.models import ChatbotQueryRequest
 
 from .models import DraftAnswer, EvidenceFact, QueryPlan
+from .presentation import AnswerPresentation, FragmentPresentation, GroundedPresentationText
 
 _MAX_ARTIFACT_BYTES = 65_536
 _MAX_LABEL_LENGTH = 100
@@ -200,6 +201,7 @@ class AnswerDocument:
     readiness: str
     artifacts: tuple[dict[str, object], ...] = ()
     actions: tuple[dict[str, object], ...] = ()
+    presentation: AnswerPresentation | None = None
 
     @classmethod
     def from_grounded_result(
@@ -214,6 +216,7 @@ class AnswerDocument:
         readiness: str,
         artifacts: list[dict[str, object]],
         actions: list[dict[str, object]],
+        presentation: AnswerPresentation | None = None,
     ) -> AnswerDocument:
         return cls(
             request=request,
@@ -226,8 +229,9 @@ class AnswerDocument:
             used_facts=tuple(used_facts),
             limitations=tuple(limitations),
             readiness=readiness,
-            artifacts=tuple(artifacts[:8]),
+            artifacts=_bounded_artifacts(artifacts),
             actions=tuple(actions[:4]),
+            presentation=presentation,
         )
 
     def to_public_dict(self) -> dict[str, object]:
@@ -260,7 +264,10 @@ class AnswerDocument:
             "conversationMemoryPatch": None,
             "uiActions": list(self.actions),
             "uiArtifacts": list(self.artifacts),
-            "uiSummary": None,
+            "uiSummary": (
+                self.presentation.to_public_dict({fact.fact_id for fact in self.used_facts})
+                if self.presentation else None
+            ),
             "requestId": self.request_id,
             "citations": citations,
             "dataAsOf": data_as_of.isoformat() if data_as_of else None,
@@ -364,7 +371,9 @@ class CompoundAnswerDocument:
             "conversationMemoryPatch": None,
             "uiActions": list(actions),
             "uiArtifacts": list(artifacts),
-            "uiSummary": None,
+            "uiSummary": _compound_presentation(
+                self.fragments, succeeded, failed, facts
+            ),
             "requestId": self.request_id,
             "citations": citations,
             "dataAsOf": data_as_of.isoformat() if data_as_of else None,
@@ -467,3 +476,37 @@ def _citations(facts: tuple[EvidenceFact, ...]) -> list[dict[str, object]]:
             fact_ids,
         ) in enumerate(grouped.items(), start=1)
     ]
+
+
+def _compound_presentation(
+    fragments: tuple[AnswerDocument, ...],
+    succeeded: int,
+    failed: int,
+    facts: tuple[EvidenceFact, ...],
+) -> dict[str, object] | None:
+    if not facts:
+        return None
+    fact_ids = tuple(fact.fact_id for fact in facts)
+    headline = (
+        f"{len(fragments)}개 요청을 모두 확인했습니다."
+        if failed == 0
+        else f"{len(fragments)}개 중 {succeeded}개 요청을 확인했습니다."
+    )
+    presentation = AnswerPresentation(
+        headline=GroundedPresentationText(headline, fact_ids),
+        fragment_summaries=tuple(
+            FragmentPresentation(
+                fragment_id=f"fragment-{index}",
+                capability=fragment.plan.capability,
+                status=("failed" if fragment.readiness == "unavailable" else "success"),
+                headline=(
+                    fragment.presentation.headline.text
+                    if fragment.presentation
+                    else "필요한 데이터가 아직 준비되지 않았습니다."
+                ),
+                fact_ids=tuple(fact.fact_id for fact in fragment.used_facts),
+            )
+            for index, fragment in enumerate(fragments, start=1)
+        ),
+    )
+    return presentation.to_public_dict(set(fact_ids))

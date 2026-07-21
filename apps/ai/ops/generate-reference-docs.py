@@ -40,12 +40,15 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--examples", type=Path, required=True)
+    parser.add_argument("--answer-goldens", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    generate(args.config, args.examples, args.output)
+    generate(args.config, args.examples, args.answer_goldens, args.output)
 
 
-def generate(config_path: Path, examples: Path, output: Path) -> None:
+def generate(
+    config_path: Path, examples: Path, answer_goldens: Path, output: Path
+) -> None:
     document = tomllib.loads(config_path.read_text(encoding="utf-8"))
     by_id = {source["id"]: source for source in document["sources"]}
     if set(PRIORITY_SOURCES) - set(by_id):
@@ -61,6 +64,11 @@ def generate(config_path: Path, examples: Path, output: Path) -> None:
             path = target / name
             path.write_text(content, encoding="utf-8", newline="\n")
             hashes[str(path.relative_to(output))] = _sha256(path)
+    golden_path = output / "answer-goldens.adoc"
+    golden_path.write_text(
+        _answer_golden_snippet(answer_goldens), encoding="utf-8", newline="\n"
+    )
+    hashes[str(golden_path.relative_to(output))] = _sha256(golden_path)
     manifest = {
         "schemaVersion": 1,
         "sources": list(PRIORITY_SOURCES),
@@ -114,6 +122,58 @@ def _clear_directory(path: Path) -> None:
     for child in sorted(path.rglob("*"), reverse=True):
         child.unlink() if child.is_file() or child.is_symlink() else child.rmdir()
     path.rmdir()
+
+
+def _answer_golden_snippet(path: Path) -> str:
+    root = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(root, dict) or set(root) != {"version", "cases"}:
+        raise ValueError("answer golden fixture is invalid")
+    cases = root["cases"]
+    if root["version"] != 1 or not isinstance(cases, list) or len(cases) != 10:
+        raise ValueError("answer golden case count is invalid")
+    required = {
+        "id", "title", "question", "plan", "serverValidation", "observation",
+        "evidenceFacts", "presentationBasis", "artifact", "uiSummary", "screen",
+        "textFallback", "limitations", "rejectedSentence",
+    }
+    lines = ["== 구조화 답변 골든 모음", ""]
+    seen: set[str] = set()
+    for case in cases:
+        if not isinstance(case, dict) or set(case) != required:
+            raise ValueError("answer golden case shape is invalid")
+        case_id = case["id"]
+        if (
+            not isinstance(case_id, str)
+            or not case_id.replace("-", "").isalnum()
+            or case_id in seen
+        ):
+            raise ValueError("answer golden case id is invalid")
+        seen.add(case_id)
+        lines.extend([
+            f"=== {case['title']}", "",
+            f"* fixture: `{case_id}`", f"* 질문: {case['question']}", "",
+        ])
+        for label, key in (
+            ("plan", "plan"),
+            ("server validation", "serverValidation"),
+            ("observation", "observation"),
+            ("EvidenceFact", "evidenceFacts"),
+            ("presentationBasis", "presentationBasis"),
+            ("artifact JSON", "artifact"),
+            ("uiSummary JSON", "uiSummary"),
+        ):
+            lines.extend([
+                f".{label}", "[source,json]", "----",
+                json.dumps(case[key], ensure_ascii=False, sort_keys=True, indent=2),
+                "----", "",
+            ])
+        lines.extend([
+            f"* 사용자가 보는 화면: {case['screen']}",
+            f"* text fallback: {case['textFallback']}",
+            f"* 제한사항: {case['limitations']}",
+            f"* 거부 문장: `{case['rejectedSentence']}`", "",
+        ])
+    return "\n".join(lines) + "\n"
 
 
 def _sha256(path: Path) -> str:

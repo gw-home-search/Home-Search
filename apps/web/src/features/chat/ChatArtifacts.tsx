@@ -1,6 +1,9 @@
 import type { ChatArtifact, FactListArtifact } from './artifactContract';
 import { ComparisonTableArtifactView } from './ComparisonTableArtifactView';
 import { RecommendationCardsArtifactView } from './RecommendationCardsArtifactView';
+import { RecommendationTableArtifactView } from './RecommendationTableArtifactView';
+import { TradeTableArtifactView } from './TradeTableArtifactView';
+import { TrendTableArtifactView } from './TrendTableArtifactView';
 
 export function ChatArtifacts({ artifacts }: { artifacts: ChatArtifact[] }) {
   if (artifacts.length === 0) return null;
@@ -11,6 +14,12 @@ export function ChatArtifacts({ artifacts }: { artifacts: ChatArtifact[] }) {
           ? <ComparisonTableArtifactView artifact={artifact} key={artifact.artifactId} />
           : artifact.type === 'recommendationCards'
             ? <RecommendationCardsArtifactView artifact={artifact} key={artifact.artifactId} />
+            : artifact.type === 'recommendationTable'
+              ? <RecommendationTableArtifactView artifact={artifact} key={artifact.artifactId} />
+            : artifact.type === 'tradeTable'
+              ? <TradeTableArtifactView artifact={artifact} key={artifact.artifactId} />
+              : artifact.type === 'trendTable'
+                ? <TrendTableArtifactView artifact={artifact} key={artifact.artifactId} />
             : <FactListArtifactView artifact={artifact} key={artifact.artifactId} />
       ))}
     </div>

@@ -205,6 +205,8 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
           evidence,
           artifacts: response.artifacts,
           actions: response.actions,
+          ...(response.fragments.length === 0 ? {} : { fragments: response.fragments }),
+          ...(response.summary == null ? {} : { summary: response.summary }),
         }],
       });
     } catch (requestError) {

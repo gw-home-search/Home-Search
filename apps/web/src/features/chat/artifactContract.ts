@@ -12,6 +12,40 @@ export type FactListArtifact = {
   items: FactListArtifactItem[];
 };
 
+export type TradeTableArtifact = {
+  type: 'tradeTable';
+  version: 1;
+  artifactId: string;
+  title: string;
+  amountUnit: '10_000_KRW';
+  rows: Array<{
+    tradeId: number;
+    dealDate: string;
+    exclusiveAreaSquareMeters: number;
+    amountTenThousandKrw: number;
+    floor: number | null;
+    factIds: string[];
+  }>;
+};
+
+export type TrendTableArtifact = {
+  type: 'trendTable';
+  version: 1;
+  artifactId: string;
+  title: string;
+  amountUnit: '10_000_KRW';
+  rows: Array<{
+    month: string;
+    averageAmountTenThousandKrw: number | null;
+    minimumAmountTenThousandKrw: number | null;
+    maximumAmountTenThousandKrw: number | null;
+    tradeCount: number | null;
+    availability: 'available' | 'unavailable';
+    reason: string | null;
+    factIds: string[];
+  }>;
+};
+
 export type ComparisonTableCell = {
   availability: 'available' | 'unavailable';
   value: string | number | null;
@@ -66,7 +100,42 @@ export type RecommendationCardsArtifact = {
   cards: RecommendationCard[];
 };
 
-export type ChatArtifact = FactListArtifact | ComparisonTableArtifact | RecommendationCardsArtifact;
+export type RecommendationMetricKey = 'TRANSIT' | 'ACADEMY' | 'SCHOOL' | 'SHOPPING';
+
+export type RecommendationTableMetric = {
+  availability: 'available' | 'unavailable';
+  value: number | null;
+  unit: 'COUNT' | 'METERS';
+  nearestDistanceMeters: number | null;
+  reason: string | null;
+  factIds: string[];
+};
+
+export type RecommendationTableArtifact = {
+  type: 'recommendationTable';
+  version: 1;
+  artifactId: string;
+  title: string;
+  policyVersion: 'criteria-recommendation-policy-v1';
+  basis: {
+    scopeType: 'ADMIN_REGION' | 'STATION_RADIUS';
+    scopeLabel: string;
+    criteriaOrder: RecommendationMetricKey[];
+    minimumUnitCount: number | null;
+    radiusMeters: number | null;
+  };
+  rows: Array<{
+    order: number;
+    complexId: number;
+    complexName: string;
+    unitCount: number | null;
+    metrics: Partial<Record<RecommendationMetricKey, RecommendationTableMetric>>;
+    factIds: string[];
+  }>;
+};
+
+export type ChatArtifact = FactListArtifact | TradeTableArtifact | TrendTableArtifact
+  | ComparisonTableArtifact | RecommendationCardsArtifact | RecommendationTableArtifact;
 
 const MAX_ARTIFACT_BYTES = 65_536;
 
@@ -79,10 +148,231 @@ export function readChatArtifacts(value: unknown, allowedFactIds: ReadonlySet<st
   }
   return value.flatMap((candidate) => {
     const artifact = readFactListArtifact(candidate, allowedFactIds)
+      ?? readTradeTableArtifact(candidate, allowedFactIds)
+      ?? readTrendTableArtifact(candidate, allowedFactIds)
       ?? readComparisonTableArtifact(candidate, allowedFactIds)
+      ?? readRecommendationTableArtifact(candidate, allowedFactIds)
       ?? readRecommendationCardsArtifact(candidate, allowedFactIds);
     return artifact == null ? [] : [artifact];
   });
+}
+
+function readRecommendationTableArtifact(
+  value: unknown,
+  allowedFactIds: ReadonlySet<string>,
+): RecommendationTableArtifact | null {
+  if (!isRecord(value)
+    || !hasExactKeys(value, [
+      'type', 'version', 'artifactId', 'title', 'policyVersion', 'basis', 'rows',
+    ])
+    || value.type !== 'recommendationTable'
+    || value.version !== 1
+    || !isIdentifier(value.artifactId)
+    || !isDisplayText(value.title, 100)
+    || value.policyVersion !== 'criteria-recommendation-policy-v1'
+    || !isRecord(value.basis)
+    || !hasExactKeys(value.basis, [
+      'scopeType', 'scopeLabel', 'criteriaOrder', 'minimumUnitCount', 'radiusMeters',
+    ])
+    || (value.basis.scopeType !== 'ADMIN_REGION'
+      && value.basis.scopeType !== 'STATION_RADIUS')
+    || !isDisplayText(value.basis.scopeLabel, 100)
+    || !Array.isArray(value.basis.criteriaOrder)
+    || value.basis.criteriaOrder.length > 4
+    || !value.basis.criteriaOrder.every(isRecommendationMetricKey)
+    || new Set(value.basis.criteriaOrder).size !== value.basis.criteriaOrder.length
+    || (value.basis.minimumUnitCount !== null
+      && !isIntegerInRange(value.basis.minimumUnitCount, 1, 100_000))
+    || (value.basis.radiusMeters !== null
+      && !isIntegerInRange(value.basis.radiusMeters, 100, 3_000))
+    || !Array.isArray(value.rows)
+    || value.rows.length === 0
+    || value.rows.length > 5) return null;
+  const criteriaOrder = value.basis.criteriaOrder as RecommendationMetricKey[];
+  const rows = value.rows.flatMap((row) => {
+    if (!isRecord(row)
+      || !hasExactKeys(row, [
+        'order', 'complexId', 'complexName', 'unitCount', 'metrics', 'factIds',
+      ])
+      || !isIntegerInRange(row.order, 1, 5)
+      || !isIntegerInRange(row.complexId, 1, Number.MAX_SAFE_INTEGER)
+      || !isDisplayText(row.complexName, 100)
+      || (row.unitCount !== null && !isIntegerInRange(row.unitCount, 0, 100_000))
+      || !isRecord(row.metrics)
+      || !isFactIds(row.factIds, allowedFactIds, false)) return [];
+    const rowFactIds = row.factIds;
+    const metricKeys = Object.keys(row.metrics);
+    if (metricKeys.length !== criteriaOrder.length
+      || metricKeys.some((key) => !criteriaOrder.includes(key as RecommendationMetricKey))) {
+      return [];
+    }
+    const metrics: Partial<Record<RecommendationMetricKey, RecommendationTableMetric>> = {};
+    for (const key of criteriaOrder) {
+      const metric = readRecommendationTableMetric(row.metrics[key], key, allowedFactIds);
+      if (metric == null || !metric.factIds.every((factId) => rowFactIds.includes(factId))) {
+        return [];
+      }
+      metrics[key] = metric;
+    }
+    return [{
+      order: row.order,
+      complexId: row.complexId,
+      complexName: row.complexName.trim(),
+      unitCount: row.unitCount,
+      metrics,
+      factIds: rowFactIds,
+    }];
+  });
+  if (rows.length !== value.rows.length
+    || rows.some((row, index) => row.order !== index + 1)
+    || new Set(rows.map(({ complexId }) => complexId)).size !== rows.length) return null;
+  return {
+    type: 'recommendationTable', version: 1,
+    artifactId: value.artifactId, title: value.title.trim(),
+    policyVersion: 'criteria-recommendation-policy-v1',
+    basis: {
+      scopeType: value.basis.scopeType,
+      scopeLabel: value.basis.scopeLabel.trim(),
+      criteriaOrder,
+      minimumUnitCount: value.basis.minimumUnitCount,
+      radiusMeters: value.basis.radiusMeters,
+    },
+    rows,
+  };
+}
+
+function readRecommendationTableMetric(
+  value: unknown,
+  key: RecommendationMetricKey,
+  allowedFactIds: ReadonlySet<string>,
+): RecommendationTableMetric | null {
+  const expectedUnit = key === 'ACADEMY' ? 'COUNT' : 'METERS';
+  if (!isRecord(value)
+    || !hasExactKeys(value, [
+      'availability', 'value', 'unit', 'nearestDistanceMeters', 'reason', 'factIds',
+    ])
+    || (value.availability !== 'available' && value.availability !== 'unavailable')
+    || value.unit !== expectedUnit
+    || !isFactIds(value.factIds, allowedFactIds, false)) return null;
+  if (value.availability === 'available') {
+    if (!isIntegerInRange(value.value, 0, Number.MAX_SAFE_INTEGER)
+      || (value.nearestDistanceMeters !== null
+        && !isIntegerInRange(value.nearestDistanceMeters, 0, 10_000_000))
+      || value.reason !== null) return null;
+  } else if (value.value !== null
+    || value.nearestDistanceMeters !== null
+    || !isDisplayText(value.reason, 2_000)) return null;
+  return {
+    availability: value.availability,
+    value: value.value as number | null,
+    unit: expectedUnit,
+    nearestDistanceMeters: value.nearestDistanceMeters as number | null,
+    reason: value.reason as string | null,
+    factIds: value.factIds,
+  };
+}
+
+function isRecommendationMetricKey(value: unknown): value is RecommendationMetricKey {
+  return value === 'TRANSIT' || value === 'ACADEMY'
+    || value === 'SCHOOL' || value === 'SHOPPING';
+}
+
+function readTradeTableArtifact(
+  value: unknown,
+  allowedFactIds: ReadonlySet<string>,
+): TradeTableArtifact | null {
+  if (!isRecord(value)
+    || !hasExactKeys(value, ['type', 'version', 'artifactId', 'title', 'amountUnit', 'rows'])
+    || value.type !== 'tradeTable'
+    || value.version !== 1
+    || !isIdentifier(value.artifactId)
+    || !isDisplayText(value.title, 100)
+    || value.amountUnit !== '10_000_KRW'
+    || !Array.isArray(value.rows)
+    || value.rows.length === 0
+    || value.rows.length > 10) return null;
+  const rows = value.rows.flatMap((row) => {
+    if (!isRecord(row)
+      || !hasExactKeys(row, [
+        'tradeId', 'dealDate', 'exclusiveAreaSquareMeters',
+        'amountTenThousandKrw', 'floor', 'factIds',
+      ])
+      || !isIntegerInRange(row.tradeId, 1, Number.MAX_SAFE_INTEGER)
+      || !isIsoDate(row.dealDate)
+      || !isNumberInRange(row.exclusiveAreaSquareMeters, Number.MIN_VALUE, 1_000)
+      || !isIntegerInRange(row.amountTenThousandKrw, 1, Number.MAX_SAFE_INTEGER)
+      || (row.floor !== null && !isIntegerInRange(row.floor, -100, 1_000))
+      || !isFactIds(row.factIds, allowedFactIds, false)) return [];
+    return [{
+      tradeId: row.tradeId,
+      dealDate: row.dealDate,
+      exclusiveAreaSquareMeters: row.exclusiveAreaSquareMeters,
+      amountTenThousandKrw: row.amountTenThousandKrw,
+      floor: row.floor,
+      factIds: row.factIds,
+    }];
+  });
+  if (rows.length !== value.rows.length
+    || new Set(rows.map(({ tradeId }) => tradeId)).size !== rows.length) return null;
+  return {
+    type: 'tradeTable', version: 1, artifactId: value.artifactId,
+    title: value.title.trim(), amountUnit: '10_000_KRW', rows,
+  };
+}
+
+function readTrendTableArtifact(
+  value: unknown,
+  allowedFactIds: ReadonlySet<string>,
+): TrendTableArtifact | null {
+  if (!isRecord(value)
+    || !hasExactKeys(value, ['type', 'version', 'artifactId', 'title', 'amountUnit', 'rows'])
+    || value.type !== 'trendTable'
+    || value.version !== 1
+    || !isIdentifier(value.artifactId)
+    || !isDisplayText(value.title, 100)
+    || value.amountUnit !== '10_000_KRW'
+    || !Array.isArray(value.rows)
+    || value.rows.length === 0
+    || value.rows.length > 24) return null;
+  const rows = value.rows.flatMap((row) => {
+    if (!isRecord(row)
+      || !hasExactKeys(row, [
+        'month', 'averageAmountTenThousandKrw', 'minimumAmountTenThousandKrw',
+        'maximumAmountTenThousandKrw', 'tradeCount', 'availability', 'reason', 'factIds',
+      ])
+      || typeof row.month !== 'string'
+      || !/^\d{4}-\d{2}$/.test(row.month)
+      || (row.availability !== 'available' && row.availability !== 'unavailable')
+      || !isFactIds(row.factIds, allowedFactIds, row.availability === 'unavailable')) return [];
+    if (row.availability === 'available') {
+      if (!isIntegerInRange(row.averageAmountTenThousandKrw, 1, Number.MAX_SAFE_INTEGER)
+        || !isIntegerInRange(row.minimumAmountTenThousandKrw, 1, Number.MAX_SAFE_INTEGER)
+        || !isIntegerInRange(row.maximumAmountTenThousandKrw, 1, Number.MAX_SAFE_INTEGER)
+        || !isIntegerInRange(row.tradeCount, 1, Number.MAX_SAFE_INTEGER)
+        || row.reason !== null
+        || row.factIds.length === 0) return [];
+    } else if (row.averageAmountTenThousandKrw !== null
+      || row.minimumAmountTenThousandKrw !== null
+      || row.maximumAmountTenThousandKrw !== null
+      || row.tradeCount !== null
+      || !isDisplayText(row.reason, 2_000)) return [];
+    return [{
+      month: row.month,
+      averageAmountTenThousandKrw: row.averageAmountTenThousandKrw as number | null,
+      minimumAmountTenThousandKrw: row.minimumAmountTenThousandKrw as number | null,
+      maximumAmountTenThousandKrw: row.maximumAmountTenThousandKrw as number | null,
+      tradeCount: row.tradeCount as number | null,
+      availability: row.availability as 'available' | 'unavailable',
+      reason: row.reason as string | null,
+      factIds: row.factIds,
+    }];
+  });
+  if (rows.length !== value.rows.length
+    || new Set(rows.map(({ month }) => month)).size !== rows.length) return null;
+  return {
+    type: 'trendTable', version: 1, artifactId: value.artifactId,
+    title: value.title.trim(), amountUnit: '10_000_KRW', rows,
+  };
 }
 
 function readRecommendationCardsArtifact(

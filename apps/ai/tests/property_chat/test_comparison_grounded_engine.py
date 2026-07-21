@@ -300,7 +300,7 @@ def test_comparison_keeps_static_rows_when_reference_sources_are_unavailable() -
     assert retail_repository is None
     table = response["uiArtifacts"][0]
     assert all(
-        cell["reason"] == "시설 source가 준비되지 않았습니다."
+        cell["reason"] == "필요한 시설 데이터가 아직 준비되지 않았습니다."
         for row in table["rows"][5:]
         for cell in row["cells"]
     )
@@ -402,7 +402,7 @@ def test_comparison_adds_student_rows_only_for_an_explicit_student_theme() -> No
     assert all("Sbiz 교육업소 5곳" in cell["value"] for cell in table["rows"][-1]["cells"])
 
 
-def test_comparison_adds_official_childcare_count_and_nearest_row() -> None:
+def test_comparison_keeps_childcare_out_of_active_rows() -> None:
     class ChildModel(LanguageModel):
         async def plan_query(self, request):
             return replace(
@@ -425,7 +425,6 @@ def test_comparison_adds_official_childcare_count_and_nearest_row() -> None:
         question="영유아 기준으로 잠실엘스와 헬리오시티 84㎡ 비교",
     )
 
-    row = response["uiArtifacts"][0]["rows"][-1]
-    assert row["key"] == "youngChildAccess"
-    assert all("공식 운영 어린이집 3곳" in cell["value"] for cell in row["cells"])
-    assert "정원" not in str(row)
+    rows = response["uiArtifacts"][0]["rows"]
+    assert "youngChildAccess" not in [row["key"] for row in rows]
+    assert "어린이집" not in str(rows)

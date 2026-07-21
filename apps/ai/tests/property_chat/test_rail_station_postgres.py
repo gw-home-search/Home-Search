@@ -152,6 +152,29 @@ def test_nearest_batch_uses_one_bounded_query_for_all_complexes(
     assert results[502].stations == ()
 
 
+def test_station_scope_resolver_uses_exact_name_and_merges_lines(
+    rail_station_postgres_dsn: str,
+) -> None:
+    repository = PostgresRailStationRepository(
+        rail_station_postgres_dsn,
+        expected_database="test",
+        expected_username="test",
+    )
+    try:
+        result = repository.resolve_station("잠실역")
+        missing = repository.resolve_station("없는역")
+    finally:
+        repository.close()
+
+    assert result is not None
+    assert len(result.matches) == 1
+    assert result.matches[0].station_name == "잠실"
+    assert result.matches[0].lines == ("2호선", "8호선")
+    assert result.matches[0].latitude == 37.513
+    assert result.matches[0].longitude == 127.082
+    assert missing is None
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [

@@ -333,6 +333,18 @@
 .chatbot-message-content > strong { color: var(--hs-map-color-muted); font-size: 11px; font-weight: 760; line-height: 17px; }
 .chatbot-message-content > p { margin: 0; color: var(--hs-map-color-ink); font-size: 14px; font-weight: 450; line-height: 1.72; overflow-wrap: anywhere; white-space: pre-wrap; }
 .chatbot-message-user .chatbot-message-content > p { font-weight: 640; }
+.chatbot-structured-answer { display: grid; gap: 12px; }
+.chatbot-structured-answer > h3 { margin: 0; color: var(--hs-map-color-ink); font-size: 16px; line-height: 23px; }
+.chatbot-structured-answer h4 { margin: 0 0 6px; color: var(--hs-map-color-ink-soft); font-size: 12px; line-height: 18px; }
+.chatbot-structured-answer p { margin: 0; color: var(--hs-map-color-ink); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.chatbot-scope-notice { border-left: 3px solid var(--hs-map-color-brand); padding-left: 9px; color: var(--hs-map-color-muted) !important; }
+.chatbot-summary-criteria dl { display: grid; gap: 5px; margin: 0; }
+.chatbot-summary-criteria dl > div { display: grid; grid-template-columns: minmax(78px, .7fr) minmax(0, 1.3fr); gap: 8px; }
+.chatbot-summary-criteria dt { color: var(--hs-map-color-muted); }
+.chatbot-summary-criteria dd { margin: 0; color: var(--hs-map-color-ink); }
+.chatbot-summary-interpretations, .chatbot-summary-limitations, .chatbot-fragment-summaries { display: grid; gap: 8px; }
+.chatbot-summary-interpretations strong { display: block; margin-bottom: 2px; color: var(--hs-map-color-action); font-size: 12px; }
+.chatbot-summary-follow-up { border-radius: 8px; padding: 9px 10px; background: var(--hs-map-color-brand-soft); }
 
 .chatbot-evidence { margin-top: 5px; border-top: 1px solid var(--hs-map-color-line); color: var(--hs-map-color-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .chatbot-evidence summary { display: flex; min-height: 32px; align-items: center; gap: 8px; cursor: pointer; list-style: none; }

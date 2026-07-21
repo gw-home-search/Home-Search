@@ -123,6 +123,47 @@ def test_recommendation_candidates_resolve_descendants_and_return_latest_three(
     assert missing_region is None
 
 
+def test_criteria_candidates_resolve_unique_suffix_and_keep_unit_count(
+    property_postgres_dsn: str,
+) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        exact = repository.criteria_candidates("송파구", 101)
+        suffix_omitted = repository.criteria_candidates("송파", 101)
+        full_name = repository.criteria_candidates("서울특별시 송파구", 101)
+        wrong_parent = repository.criteria_candidates("부산광역시 송파구", 101)
+        missing = repository.criteria_candidates("없는 지역", 101)
+    finally:
+        repository.close()
+
+    assert exact is not None
+    assert suffix_omitted is not None
+    assert full_name is not None
+    assert exact.scope_label == suffix_omitted.scope_label == full_name.scope_label == "송파구"
+    assert [item.complex_id for item in exact.candidates] == [1]
+    assert exact.candidates[0].unit_count == 5678
+    assert wrong_parent is None
+    assert missing is None
+
+
+def test_station_scope_candidates_use_coordinates_without_cross_database_join(
+    property_postgres_dsn: str,
+) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        candidates = repository.criteria_candidates_near_point(
+            37.513, 127.082, 800, 101
+        )
+    finally:
+        repository.close()
+
+    assert [candidate.complex_id for candidate in candidates] == [1]
+
+
 def test_recommendation_candidate_observation_p95_is_bounded(
     property_postgres_dsn: str,
 ) -> None:

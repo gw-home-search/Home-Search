@@ -1,6 +1,8 @@
 import type { ChatCitation, ChatEvidence } from '../chatTypes';
 import { readChatArtifacts, type ChatArtifact } from '../artifactContract';
 import { readChatActions, type ChatAction } from '../actionContract';
+import { readChatUiSummary, type ChatUiSummary } from '../summaryContract';
+import { readChatFragments, type ChatFragment } from '../fragmentContract';
 
 export type ChatMessageRole = 'user' | 'assistant';
 
@@ -12,6 +14,8 @@ export type ChatMessage = {
   evidence?: ChatEvidence;
   artifacts?: ChatArtifact[];
   actions?: ChatAction[];
+  summary?: ChatUiSummary;
+  fragments?: ChatFragment[];
 };
 
 export type ChatConversation = {
@@ -223,6 +227,18 @@ function validateMessage(candidate: unknown): ChatMessage {
     const factIds = new Set(message.evidence?.citations.flatMap((citation) => citation.factIds) ?? []);
     const actions = readChatActions(candidate.actions, factIds);
     if (actions.length > 0) message.actions = actions;
+  }
+  if (candidate.summary !== undefined) {
+    const factIds = new Set(message.evidence?.citations.flatMap((citation) => citation.factIds) ?? []);
+    const summary = readChatUiSummary(candidate.summary, factIds);
+    if (summary != null) message.summary = summary;
+  }
+  if (candidate.fragments !== undefined) {
+    const factIds = new Set(message.evidence?.citations.flatMap((citation) => citation.factIds) ?? []);
+    const fragments = readChatFragments(
+      candidate.fragments, factIds, message.artifacts ?? [], message.actions ?? [],
+    );
+    if (fragments.length > 0) message.fragments = fragments;
   }
   return message;
 }

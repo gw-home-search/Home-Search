@@ -13,6 +13,7 @@ from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
 
 from .answer_document import AnswerDocument, CompoundAnswerDocument, FactListPresenter
+from .presentation import PresentationAssembler
 from .capability_handlers import (
     AcademyLocationFactRepository,
     AcademyLookupHandler,
@@ -111,6 +112,7 @@ _GROUNDING_FAILURE_REASONS = frozenset(
         "GROUNDING_COMPARISON_POLICY_VIOLATION",
         "GROUNDING_RECOMMENDATION_POLICY_VIOLATION",
         "GROUNDING_RECOMMENDATION_TEXT_OUTSIDE_OBSERVATION",
+        "GROUNDING_USER_COPY_POLICY_VIOLATION",
     }
 )
 
@@ -216,7 +218,9 @@ class GroundedChatbotEngine:
                 else QueryPlanBundle((planned,))
             )
             plans = tuple(
-                _verify_lifestyle_plan(plan, request.question)
+                _verify_recommendation_plan(
+                    _verify_lifestyle_plan(plan, request.question), request.question
+                )
                 for plan in bundle.fragments
             )
             documents = tuple(await asyncio.gather(*(
@@ -289,6 +293,12 @@ class GroundedChatbotEngine:
         artifacts = list(result.artifacts) or FactListPresenter().present(
             plan=plan, used_facts=used_facts, readiness=result.readiness
         )
+        presentation, artifacts = PresentationAssembler().present(
+            plan=plan,
+            used_facts=used_facts,
+            readiness=result.readiness,
+            artifacts=artifacts,
+        )
         return AnswerDocument.from_grounded_result(
             request=request,
             request_id=request_id,
@@ -299,6 +309,7 @@ class GroundedChatbotEngine:
             readiness=result.readiness,
             artifacts=artifacts,
             actions=[action.to_public_dict(request_id) for action in result.actions],
+            presentation=presentation,
         )
 
     async def _observe(
@@ -851,10 +862,118 @@ def _verify_lifestyle_plan(plan: QueryPlan, question: str) -> QueryPlan:
     if plan.capability not in {"recommendation", "comparison"}:
         return plan
     themes = detect_explicit_themes(question, plan.lifestyle_themes)
+    themes = tuple(theme for theme in themes if theme != "YOUNG_CHILD")
     return replace(
         plan,
         lifestyle_themes=themes,
         school_levels=detect_school_levels(question, themes),
+    )
+
+
+def _verify_recommendation_plan(plan: QueryPlan, question: str) -> QueryPlan:
+    if plan.capability != "recommendation":
+        return plan
+    normalized = " ".join(question.split())
+    childcare_requested = bool(
+        re.search(r"(?:어린이집|유치원|영유아|어린아이)", normalized)
+    )
+    unit_match = re.search(r"([0-9][0-9,]*)\s*세대\s*이상", normalized)
+    minimum_unit_count = (
+        int(unit_match.group(1).replace(",", "")) if unit_match else None
+    )
+    numeric_mismatch = (
+        plan.minimum_unit_count is not None
+        and plan.minimum_unit_count != minimum_unit_count
+    )
+    if plan.recommendation_mode != "CRITERIA":
+        budget_criteria = (
+            ("ACADEMY",)
+            if re.search(r"(?:학원가|학원|교습소)", normalized)
+            else ()
+        )
+        return replace(
+            plan,
+            minimum_unit_count=minimum_unit_count,
+            recommendation_criteria=budget_criteria,  # type: ignore[arg-type]
+            criteria_order=budget_criteria,  # type: ignore[arg-type]
+            clarification_code=(
+                "UNSUPPORTED_CHILDCARE"
+                if childcare_requested
+                else "NUMERIC_CONDITION_MISMATCH" if numeric_mismatch else None
+            ),
+        )
+    criteria: list[str] = []
+    if re.search(r"(?:학원가|학원|교습소)", normalized):
+        criteria.append("ACADEMY")
+    if re.search(r"(?:초등학교|중학교|고등학교|학교)", normalized):
+        criteria.append("SCHOOL")
+    if re.search(r"(?:역세권|지하철|철도|교통|역\s*(?:접근|거리|가까))", normalized):
+        criteria.append("TRANSIT")
+    if re.search(r"(?:대형마트|백화점|쇼핑센터|복합몰|쇼핑)", normalized):
+        criteria.append("SHOPPING")
+    clarification = None
+    if re.search(r"(?:학생|교육)(?!업소)", normalized) and not {
+        "ACADEMY", "SCHOOL"
+    }.intersection(criteria):
+        clarification = "AMBIGUOUS_EDUCATION"
+    if childcare_requested:
+        clarification = "UNSUPPORTED_CHILDCARE"
+    if numeric_mismatch:
+        clarification = "NUMERIC_CONDITION_MISMATCH"
+    typed_criteria = tuple(
+        key
+        for key in ("ACADEMY", "SCHOOL", "TRANSIT", "SHOPPING")
+        if key in criteria
+    )
+    explicit_priority = bool(re.search(r"(?:우선|먼저|그다음|다음으로)", normalized))
+    criteria_order = tuple(
+        key for key in plan.criteria_order if key in typed_criteria
+    )
+    if len(typed_criteria) == 1:
+        criteria_order = typed_criteria
+    elif len(typed_criteria) > 1 and (
+        not explicit_priority or set(criteria_order) != set(typed_criteria)
+    ):
+        criteria_order = ()
+        clarification = clarification or "MISSING_PRIORITY"
+    region_name = plan.region_name
+    if region_name is not None:
+        region_token = re.sub(
+            r"(?:특별시|광역시|특별자치시|특별자치도|시|군|구)$", "", region_name
+        )
+        if region_name not in normalized and region_token not in normalized:
+            clarification = clarification or "REGION_NOT_CONFIRMED"
+    radius_meters = plan.radius_meters
+    if plan.station_name is not None:
+        station_token = plan.station_name.removesuffix("역").strip()
+        if station_token not in normalized:
+            clarification = clarification or "REGION_NOT_CONFIRMED"
+        radius_match = re.search(
+            r"([0-9]+(?:\.[0-9]+)?)\s*(km|킬로미터|킬로|m|미터)",
+            normalized,
+            re.IGNORECASE,
+        )
+        if radius_match is None:
+            clarification = clarification or "STATION_RADIUS_REQUIRED"
+        else:
+            raw_radius = float(radius_match.group(1))
+            extracted_radius = round(
+                raw_radius * 1000
+                if radius_match.group(2).lower() in {"km", "킬로미터", "킬로"}
+                else raw_radius
+            )
+            if radius_meters is not None and radius_meters != extracted_radius:
+                clarification = clarification or "NUMERIC_CONDITION_MISMATCH"
+            if not 300 <= extracted_radius <= 2_000:
+                clarification = clarification or "STATION_RADIUS_OUT_OF_RANGE"
+            radius_meters = extracted_radius
+    return replace(
+        plan,
+        minimum_unit_count=minimum_unit_count,
+        recommendation_criteria=typed_criteria,  # type: ignore[arg-type]
+        criteria_order=criteria_order,  # type: ignore[arg-type]
+        radius_meters=radius_meters,
+        clarification_code=clarification,  # type: ignore[arg-type]
     )
 
 
@@ -932,6 +1051,7 @@ def validate_draft(
             _validate_comparison_sentence(sentence.text)
         if enforce_recommendation_policy:
             _validate_recommendation_sentence(sentence.text, referenced)
+        _validate_user_facing_copy(sentence.text)
         allowed_numbers = _number_tokens(
             claim.value for fact in referenced for claim in fact.claims
         )
@@ -1129,16 +1249,20 @@ def _validate_map_action_sentence(text: str) -> None:
 
 
 def _validate_comparison_sentence(text: str) -> None:
-    unsupported = re.search(
-        r"(?:우승|승자|최고|최상|더\s*좋|가장\s*좋|추천|투자\s*가치|수익)", text
-    )
-    negative = re.search(
-        r"(?:판단|선정|추천|순위|우승|투자\s*가치).{0,15}"
-        r"(?:않|아니|없|제공하지)",
-        text,
-    )
-    if unsupported and not negative:
+    if re.search(r"(?:추천|투자\s*가치|수익)", text):
         raise GroundingValidationError("GROUNDING_COMPARISON_POLICY_VIOLATION")
+
+
+def _validate_user_facing_copy(text: str) -> None:
+    if re.search(
+        r"(?:우승|승자|압도적|최고|최상|무조건|더\s*좋은\s*단지|"
+        r"살기\s*좋은\s*단지|명문\s*학군|교육\s*수준이?\s*높|"
+        r"투자\s*가치가?\s*높|오를\s*가능성이?\s*높|"
+        r"\bweight\b|hard\s*filter|source\s+unavailable)",
+        text,
+        re.IGNORECASE,
+    ):
+        raise GroundingValidationError("GROUNDING_USER_COPY_POLICY_VIOLATION")
 
 
 def _validate_recommendation_sentence(

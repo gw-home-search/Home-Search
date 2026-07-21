@@ -42,6 +42,7 @@ generate() {
     python3 "${script_dir}/generate-reference-docs.py" \
         --config "${ai_root}/config/reference_sources.toml" \
         --examples "${ai_root}/docs/examples" \
+        --answer-goldens "${ai_root}/docs/examples/answer-goldens-v1.json" \
         --output "${destination}/generated-snippets"
 }
 

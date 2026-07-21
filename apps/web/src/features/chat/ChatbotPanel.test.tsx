@@ -63,6 +63,44 @@ describe('챗봇 패널', () => {
     expect(host.textContent).toContain('기준일 2026-07-16');
   });
 
+  it('구조화 summary가 있으면 text fallback을 중복 표시하지 않고 전달 순서대로 표시한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-summary');
+    const client = authenticatedClient();
+    const response = JSON.parse(await (await client.authenticatedRequest(
+      '/api/v1/chatbot/query', {}, 'public',
+    )).text());
+    response.answer = '중복되면 안 되는 text fallback';
+    response.uiSummary = {
+      version: 1,
+      scopeNotice: { text: '잠실엘스 기준으로 확인했습니다.', factIds: ['property-trade-1'] },
+      headline: { text: '최근 거래를 확인했습니다.', factIds: ['property-trade-1'] },
+      criteria: [{ key: 'END_DATE', label: '기준일', value: '2026-07-16', factIds: ['property-trade-1'] }],
+      interpretations: [{
+        key: 'RECENT_TRADE', label: '최근 거래 해석', text: '현재 데이터 기준 거래입니다.',
+        factIds: ['property-trade-1'],
+      }],
+      followUp: '기간을 바꿔 확인할 수 있습니다.',
+      fragmentSummaries: [],
+    };
+    client.authenticatedRequest = vi.fn().mockResolvedValue(new Response(JSON.stringify(response)));
+    ({ root, host } = await renderPanel(client, store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(() => host?.querySelector<HTMLTextAreaElement>('#chatbot-question')?.disabled === false);
+    await change(host.querySelector<HTMLTextAreaElement>('#chatbot-question'), '잠실엘스 최근 거래');
+    await click(host.querySelector<HTMLButtonElement>('button[type="submit"]'));
+    await waitFor(() => host?.textContent?.includes('최근 거래를 확인했습니다.') === true);
+
+    expect(host.textContent).not.toContain('중복되면 안 되는 text fallback');
+    const structured = host.querySelector('.chatbot-structured-answer');
+    expect(structured?.textContent).toContain('잠실엘스 기준으로 확인했습니다.');
+    expect(structured?.textContent).toContain('기준일');
+    expect(structured?.textContent).toContain('현재 데이터 기준 거래입니다.');
+    expect(structured?.textContent).toContain('신고 지연이 반영될 수 있습니다.');
+    expect(structured?.textContent).toContain('기간을 바꿔 확인할 수 있습니다.');
+  });
+
   it('서버 저장 없이 새 대화와 선택·전체 삭제를 지원한다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-lifecycle');
     ({ root, host } = await renderPanel(authenticatedClient(), store));

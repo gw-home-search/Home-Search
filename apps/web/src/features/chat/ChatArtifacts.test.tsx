@@ -5,7 +5,42 @@ import { ChatArtifacts } from './ChatArtifacts';
 import type {
   ComparisonTableArtifact,
   RecommendationCardsArtifact,
+  RecommendationTableArtifact,
+  TradeTableArtifact,
+  TrendTableArtifact,
 } from './artifactContract';
+import { readChatArtifacts } from './artifactContract';
+
+describe('조회표 artifact UI', () => {
+  it('실거래와 월별 관찰값을 각각 고정 표 component로 표시한다', () => {
+    const trade: TradeTableArtifact = {
+      type: 'tradeTable', version: 1, artifactId: 'trade-table-1',
+      title: '최근 실거래', amountUnit: '10_000_KRW',
+      rows: [{
+        tradeId: 1, dealDate: '2026-07-15', exclusiveAreaSquareMeters: 84.8,
+        amountTenThousandKrw: 250000, floor: 12, factIds: ['trade-1'],
+      }],
+    };
+    const trend: TrendTableArtifact = {
+      type: 'trendTable', version: 1, artifactId: 'trend-table-1',
+      title: '월별 가격 관찰값', amountUnit: '10_000_KRW',
+      rows: [{
+        month: '2026-06', averageAmountTenThousandKrw: 245000,
+        minimumAmountTenThousandKrw: 240000, maximumAmountTenThousandKrw: 250000,
+        tradeCount: 3, availability: 'available', reason: null,
+        factIds: ['trend-1'],
+      }],
+    };
+
+    const html = renderToStaticMarkup(<ChatArtifacts artifacts={[trade, trend]} />);
+
+    expect(html).toContain('25억원');
+    expect(html).toContain('2026-06');
+    expect(html).toContain('3건');
+    expect(html).toContain('chatbot-trade-table');
+    expect(html).toContain('chatbot-trend-table');
+  });
+});
 
 describe('비교표 artifact UI', () => {
   it('실제 table header와 확인 불가 이유·동일 기준을 표시한다', () => {
@@ -118,5 +153,62 @@ describe('추천카드 artifact UI', () => {
     expect(html).toContain('>교통<');
     expect(html).toContain('>학생<');
     expect(html).toContain('800m 내 Sbiz 교육업소 5곳');
+  });
+});
+
+describe('조건 추천표 artifact UI', () => {
+  it('세대수와 요청한 고정 metric만 표로 표시한다', () => {
+    const artifact: RecommendationTableArtifact = {
+      type: 'recommendationTable', version: 1,
+      artifactId: 'criteria-recommendation-2026-07-20-500-academy',
+      title: '조건 기반 후보', policyVersion: 'criteria-recommendation-policy-v1',
+      basis: {
+        scopeType: 'ADMIN_REGION', scopeLabel: '영등포구',
+        criteriaOrder: ['ACADEMY'], minimumUnitCount: 500, radiusMeters: 800,
+      },
+      rows: [{
+        order: 1, complexId: 503, complexName: '후보 503', unitCount: 1200,
+        metrics: {
+          ACADEMY: {
+            availability: 'available', value: 10, unit: 'COUNT',
+            nearestDistanceMeters: 100, reason: null, factIds: ['academy-503'],
+          },
+        },
+        factIds: ['complex-503', 'academy-503'],
+      }],
+    };
+
+    const html = renderToStaticMarkup(<ChatArtifacts artifacts={[artifact]} />);
+
+    expect(html).toContain('1. 후보 503');
+    expect(html).toContain('1,200세대');
+    expect(html).toContain('10곳 · 최근접 100m');
+    expect(html).toContain('영등포구 · 최소 500세대');
+    expect(html).not.toContain('점수');
+  });
+
+  it('허용하지 않은 metric이나 근거 id가 있으면 artifact를 제외한다', () => {
+    const base = {
+      type: 'recommendationTable', version: 1, artifactId: 'criteria-invalid',
+      title: '조건 기반 후보', policyVersion: 'criteria-recommendation-policy-v1',
+      basis: {
+        scopeType: 'ADMIN_REGION', scopeLabel: '영등포구',
+        criteriaOrder: ['ACADEMY'], minimumUnitCount: 500, radiusMeters: 800,
+      },
+      rows: [{
+        order: 1, complexId: 503, complexName: '후보 503', unitCount: 1200,
+        metrics: {
+          CHILDCARE: {
+            availability: 'available', value: 10, unit: 'COUNT',
+            nearestDistanceMeters: 100, reason: null, factIds: ['childcare-503'],
+          },
+        },
+        factIds: ['complex-503', 'childcare-503'],
+      }],
+    };
+
+    expect(readChatArtifacts(
+      [base], new Set(['complex-503', 'childcare-503']),
+    )).toEqual([]);
   });
 });

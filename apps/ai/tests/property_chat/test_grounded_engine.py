@@ -11,6 +11,7 @@ from ai_service.models import ChatbotQueryRequest
 from ai_service.property_chat.engine import (
     GroundedChatbotEngine,
     GroundingValidationError,
+    _verify_recommendation_plan,
     validate_draft,
 )
 from ai_service.property_chat.answer_document import (
@@ -166,6 +167,15 @@ def test_recent_trade_answer_uses_only_observed_fact_and_citation() -> None:
         "citationCount": 1,
     }
     assert response["citations"][0]["factIds"] == ["property-trade-7001"]
+    assert response["uiArtifacts"][0]["type"] == "tradeTable"
+    assert response["uiArtifacts"][0]["rows"][0] == {
+        "tradeId": 7001,
+        "dealDate": "2026-07-15",
+        "exclusiveAreaSquareMeters": 84.8,
+        "amountTenThousandKrw": 250000,
+        "floor": 12,
+        "factIds": ["property-trade-7001"],
+    }
     assert any("±1.0㎡" in limitation for limitation in response["limitations"])
     assert model.received_fact_ids == ["property-trade-7001"]
     assert repository.trade_query == (11471, date(2025, 7, 1), date(2026, 7, 16), 84.8, 5)
@@ -395,6 +405,11 @@ def test_monthly_trend_exposes_amount_and_volume_facts() -> None:
             ("25억원", "KOREAN_KRW_MAX_DISPLAY"),
         }
     )
+    assert response["uiArtifacts"][0]["type"] == "trendTable"
+    assert response["uiArtifacts"][0]["rows"][0]["month"] == "2026-06"
+    assert response["uiArtifacts"][0]["rows"][0]["factIds"] == [
+        "property-trend-11471-2026-06"
+    ]
 
 
 @pytest.mark.parametrize(
@@ -588,6 +603,45 @@ def test_complex_identity_returns_fact_list_artifact_from_the_validated_fact() -
         }
     ]
     assert response["citations"][0]["factIds"] == ["property-complex-11471"]
+
+
+def test_complex_identity_returns_grounded_ui_summary_v1() -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    model = FakeLanguageModel(
+        QueryPlan(capability="complex_identity", complex_name="잠실엘스"),
+        DraftAnswer(sentences=[DraftSentence(
+            text="잠실동 잠실엘스를 확인했습니다.",
+            fact_ids=["property-complex-11471"],
+            claims=[DraftClaim("property-complex-11471", "잠실동 잠실엘스", "TEXT")],
+        )]),
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        ),
+        "잠실엘스 위치",
+        "request-identity-summary",
+    )
+
+    assert response["uiSummary"] == {
+        "version": 1,
+        "scopeNotice": {
+            "text": "‘잠실엘스’ 단지를 기준으로 확인했습니다.",
+            "factIds": ["property-complex-11471"],
+        },
+        "headline": {
+            "text": "잠실동 잠실엘스의 확인된 단지 정보를 정리했습니다.",
+            "factIds": ["property-complex-11471"],
+        },
+        "criteria": [],
+        "interpretations": [],
+        "followUp": "최근 실거래, 가격 흐름 또는 주변 시설을 이어서 확인할 수 있습니다.",
+        "fragmentSummaries": [],
+    }
 
 
 @pytest.mark.parametrize(
@@ -813,3 +867,82 @@ def run_query(engine: GroundedChatbotEngine, question: str, request_id: str) -> 
             request_id=request_id,
         )
     )
+
+
+@pytest.mark.parametrize(
+    ("plan", "question", "clarification"),
+    (
+        (
+            QueryPlan(
+                capability="recommendation", complex_name="송파구",
+                region_name="송파구", recommendation_mode="CRITERIA",
+            ),
+            "송파구 교육 조건으로 추천",
+            "AMBIGUOUS_EDUCATION",
+        ),
+        (
+            QueryPlan(
+                capability="recommendation", complex_name="송파구",
+                region_name="송파구", recommendation_mode="CRITERIA",
+                minimum_unit_count=700, recommendation_criteria=("ACADEMY",),
+                criteria_order=("ACADEMY",),
+            ),
+            "송파구 500세대 이상 학원 추천",
+            "NUMERIC_CONDITION_MISMATCH",
+        ),
+        (
+            QueryPlan(
+                capability="recommendation", complex_name="마포구",
+                region_name="마포구", recommendation_mode="CRITERIA",
+                recommendation_criteria=("ACADEMY",), criteria_order=("ACADEMY",),
+            ),
+            "송파구 학원 추천",
+            "REGION_NOT_CONFIRMED",
+        ),
+        (
+            QueryPlan(
+                capability="recommendation", complex_name="여의도역",
+                recommendation_mode="CRITERIA", station_name="여의도",
+                radius_meters=800, recommendation_criteria=("ACADEMY",),
+                criteria_order=("ACADEMY",),
+            ),
+            "다른 역 800m 학원 추천",
+            "REGION_NOT_CONFIRMED",
+        ),
+        (
+            QueryPlan(
+                capability="recommendation", complex_name="여의도역",
+                recommendation_mode="CRITERIA", station_name="여의도",
+                recommendation_criteria=("ACADEMY",), criteria_order=("ACADEMY",),
+            ),
+            "여의도역 학원 추천",
+            "STATION_RADIUS_REQUIRED",
+        ),
+        (
+            QueryPlan(
+                capability="recommendation", complex_name="여의도역",
+                recommendation_mode="CRITERIA", station_name="여의도",
+                radius_meters=500, recommendation_criteria=("ACADEMY",),
+                criteria_order=("ACADEMY",),
+            ),
+            "여의도역 800m 학원 추천",
+            "NUMERIC_CONDITION_MISMATCH",
+        ),
+        (
+            QueryPlan(
+                capability="recommendation", complex_name="여의도역",
+                recommendation_mode="CRITERIA", station_name="여의도",
+                radius_meters=250, recommendation_criteria=("ACADEMY",),
+                criteria_order=("ACADEMY",),
+            ),
+            "여의도역 250m 학원 추천",
+            "STATION_RADIUS_OUT_OF_RANGE",
+        ),
+    ),
+)
+def test_server_revalidates_criteria_conditions_from_the_current_question(
+    plan: QueryPlan, question: str, clarification: str,
+) -> None:
+    verified = _verify_recommendation_plan(plan, question)
+
+    assert verified.clarification_code == clarification

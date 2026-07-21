@@ -64,6 +64,22 @@ describe('챗봇 질문 client', () => {
         level: 4,
         factIds: ['property-trade-1'],
       }],
+      uiSummary: {
+        version: 1,
+        scopeNotice: { text: '잠실엘스 기준으로 확인했습니다.', factIds: ['property-trade-1'] },
+        headline: { text: '최근 거래를 확인했습니다.', factIds: ['property-trade-1'] },
+        criteria: [{
+          key: 'END_DATE', label: '기준일', value: '2026-07-16', factIds: ['property-trade-1'],
+        }],
+        interpretations: [],
+        followUp: '기간이나 면적을 바꿔 다시 확인할 수 있습니다.',
+        fragmentSummaries: [],
+      },
+      fragments: [{
+        fragmentId: 'fragment-1', capability: 'recent_trade_lookup', status: 'success',
+        answer: '거래를 확인했습니다.', factIds: ['property-trade-1'],
+        artifactIds: ['artifact-1'], actionIds: ['action-1'], limitations: [],
+      }],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
 
     const response = await queryChatbot(authenticatedRequest, {
@@ -98,6 +114,22 @@ describe('챗봇 질문 client', () => {
       level: 4,
       factIds: ['property-trade-1'],
     }]);
+    expect(response.summary?.headline.text).toBe('최근 거래를 확인했습니다.');
+    expect(response.fragments[0]?.artifactIds).toEqual(['artifact-1']);
+  });
+
+  it('잘못된 uiSummary는 무시하고 text fallback을 유지한다', async () => {
+    const authenticatedRequest = vi.fn<AuthenticatedChatbotRequest>().mockResolvedValue(
+      responseWithSummary({
+        version: 2,
+        headline: { text: '지원하지 않는 버전', factIds: ['property-trade-1'] },
+      }),
+    );
+
+    const response = await queryChatbot(authenticatedRequest, { question: '잠실엘스 최근 거래' });
+
+    expect(response.answer).toBe('text fallback');
+    expect(response.summary).toBeNull();
   });
 
   it('잘못된 성공 body를 거부하고 응답 원문 노출 없이 실패를 변환한다', async () => {
@@ -111,3 +143,25 @@ describe('챗봇 질문 client', () => {
     await expect(queryChatbot(unavailable, { question: '질문' })).rejects.toThrow('챗봇을 잠시 사용할 수 없습니다.');
   });
 });
+
+function responseWithSummary(uiSummary: unknown): Response {
+  return new Response(JSON.stringify({
+    success: true,
+    status: 'success',
+    answer: 'text fallback',
+    requestId: 'request-1',
+    citations: [{
+      citationId: 'citation-1', sourceId: 'property.ai_read', sourceName: 'Home Search 실거래',
+      sourceUrl: null, evidenceGrade: 'A', datasetVersion: 'property-2026-07-16',
+      dataAsOf: '2026-07-16', observedAt: null, factIds: ['property-trade-1'],
+    }],
+    dataAsOf: '2026-07-16',
+    limitations: [],
+    evidenceSummary: {
+      status: 'supported', capabilities: ['recent_trade_lookup'], factCount: 1, citationCount: 1,
+    },
+    uiArtifacts: [],
+    uiActions: [],
+    uiSummary,
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+}

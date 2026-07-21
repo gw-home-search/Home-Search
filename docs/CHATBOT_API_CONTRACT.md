@@ -68,7 +68,21 @@ legacy 호환 필드는 유지하고 근거 metadata를 추가한다.
   "conversationMemoryPatch": null,
   "uiActions": [],
   "uiArtifacts": [],
-  "uiSummary": null,
+  "uiSummary": {
+    "version": 1,
+    "scopeNotice": {
+      "text": "‘잠실엘스’ 단지를 기준으로 확인했습니다.",
+      "factIds": ["property-complex-501"]
+    },
+    "headline": {
+      "text": "잠실엘스의 확인된 단지 정보를 정리했습니다.",
+      "factIds": ["property-complex-501"]
+    },
+    "criteria": [],
+    "interpretations": [],
+    "followUp": "최근 실거래, 가격 흐름 또는 주변 시설을 이어서 확인할 수 있습니다.",
+    "fragmentSummaries": []
+  },
   "requestId": "b8f12b67-0369-4e4a-bf5f-ce8af0315386",
   "citations": [
     {
@@ -173,7 +187,25 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
 - 외부 source 문자열은 text로만 렌더링하며 HTML로 해석하지 않는다.
 - 제한을 넘거나 schema가 잘못된 artifact 하나는 전체 답변을 실패시키지 않고 제외한다.
 
-허용 artifact는 아래 세 종류뿐이다.
+허용 artifact는 아래 여섯 종류뿐이다. `answer`는 구조화 표시 여부와 무관하게
+항상 보존하는 text fallback이다.
+
+### `uiSummary/v1`
+
+`uiSummary`는 기존 nullable seam을 사용하는 optional additive field다. `null`도 계속
+유효하며 URL, request body, `result`, `answer`, JSON/SSE 상태 의미는 바꾸지 않는다.
+
+- `scopeNotice`: `null` 또는 1개. 질문을 어떤 단지·지역 범위로 해석했는지 표시한다.
+- `headline`: 정확히 1개.
+- `criteria`: 최대 8개. 각 항목은 `key`, `label`, `value`, `factIds`를 가진다.
+- `interpretations`: 최대 4개. 각 항목은 `key`, `label`, `text`, `factIds`를 가진다.
+- `followUp`: `null` 또는 최대 2,000자의 사용 안내다.
+- `fragmentSummaries`: 복합 질문에서만 최대 4개다.
+- 사실 문장은 실제 observation에 존재하는 `factIds`를 하나 이상 사용한다.
+- client는 exact `version=1`과 strict shape를 모두 확인한다. unknown version이나 malformed
+  object는 무시하고 `answer`를 표시한다.
+- 유효한 summary가 있으면 Web은 범위 → 결론 → 조건 → artifact → 해석 → 제한사항 →
+  후속 안내/action → 답변 근거 순서로 표시하며 전체 `answer`를 중복 표시하지 않는다.
 
 #### `factList/v1`
 
@@ -246,7 +278,60 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
   전용면적(㎡)을 담으며 LLM이 생성하거나 column별로 바꿀 수 없다.
 - 현재 질문에 학생 조건이 명시되면 요청 level별 최근접 운영 학교와 800m Sbiz 교육업소
   수를, 영유아 조건이 명시되면 800m 공식 운영 어린이집 수와 최근접 시설을 조건부 row로
-  추가한다. source unavailable cell은 0이 아니라 이유가 있는 `unavailable`이다.
+  추가한다. 필요한 데이터가 아직 준비되지 않은 cell은 0이 아니라 이유가 있는
+  `unavailable`이다.
+
+#### `recommendationTable/v1`
+
+가격·면적이 필수가 아닌 조건 기반 추천 결과다. 후보, metric, 정렬 순서와 `factIds`는
+서버의 고정 catalog와 `criteria-recommendation-policy-v1`이 결정한다.
+
+```json
+{
+  "type": "recommendationTable",
+  "version": 1,
+  "artifactId": "criteria-recommendation-2026-07-20-500-academy",
+  "title": "조건 기반 후보",
+  "policyVersion": "criteria-recommendation-policy-v1",
+  "basis": {
+    "scopeType": "ADMIN_REGION",
+    "scopeLabel": "영등포구",
+    "criteriaOrder": ["ACADEMY"],
+    "minimumUnitCount": 500,
+    "radiusMeters": 800
+  },
+  "rows": [{
+    "order": 1,
+    "complexId": 503,
+    "complexName": "후보 단지",
+    "unitCount": 1200,
+    "metrics": {
+      "ACADEMY": {
+        "availability": "available",
+        "value": 10,
+        "unit": "COUNT",
+        "nearestDistanceMeters": 100,
+        "reason": null,
+        "factIds": ["criteria-academy-503-2026-07-01"]
+      }
+    },
+    "factIds": ["property-complex-503", "criteria-academy-503-2026-07-01"]
+  }]
+}
+```
+
+- `scopeType`: `ADMIN_REGION|STATION_RADIUS`. 역 범위는 active 철도 exact occurrence의
+  좌표만 사용하고 property DB에는 좌표와 반경만 전달한다.
+- `criteriaOrder`와 `metrics` key는 `TRANSIT|ACADEMY|SCHOOL|SHOPPING`만 허용한다.
+- `MIN_UNIT_COUNT`는 source batch 관측 전에 적용한다.
+- metric 하나는 해당 관찰값으로, 둘 이상은 사용자가 명시한 순서로 lexicographic
+  정렬한다. 동점은 `complexId` 오름차순이다.
+- `ACADEMY`는 800m 내 Sbiz 교육업소 count 내림차순, 최근접 거리 오름차순이다.
+- `SCHOOL`, `TRANSIT`, `SHOPPING`은 available 직선거리 오름차순이다.
+- `unavailable`은 0으로 바꾸거나 열세로 해석하지 않는다.
+- row는 최대 5개, scope 후보는 최대 100개다.
+- `CHILDCARE`는 source·타입 구현을 보존하지만 이 version의 active metric, 점수, 표,
+  runtime allowlist에서 제외한다. 유치원은 별도 공식 source 승인 전 포함하지 않는다.
 
 #### `recommendationCards/v1`
 
@@ -316,14 +401,14 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
 - 지역·최대 예산·전용면적 중 하나라도 없으면 observation과 추천을 실행하지 않고 누락
   조건을 `limitations`로 안내한다.
 - `policyVersion`은 점수 정책을 고정하며 LLM은 `totalScore`와 breakdown을 변경하지 않는다.
-- 기본 `recommendation-policy-v1`은 예산 hard filter 통과 60점, 최근접 철도역
+- 기본 `recommendation-policy-v1`은 예산 조건 통과 60점, 최근접 철도역
   0..1,500m 선형 25점, 최근접 대규모점포 0..1,000m 선형 15점이다. 예산을 통과한
   후보 사이에는 가격 차이로 추가 점수를 주지 않는다.
 - 후보는 요청 지역 또는 하위 지역, marker-safe 좌표, 전역 최신 거래일 기준 최근 365일,
   요청 전용면적 ±1.0㎡의 가장 최근 거래 3건을 모두 만족해야 하며 observation은 최대
   100개, 최종 card는 최대 5개다.
 - 정렬은 `totalScore` 내림차순, 동점이면 `complexId` 오름차순이며 LLM이 바꿀 수 없다.
-- 철도 또는 대규모점포 source가 unavailable이면 거리를 0점으로 바꾸지 않고 추천 전체를
+- 철도 또는 대규모점포 데이터가 준비되지 않으면 거리를 0점으로 바꾸지 않고 추천 전체를
   `unavailable`로 처리한다. 정상 active source에서 반경 내 시설이 없는 경우만 0점이다.
 - 현재 질문에서 명시적으로 검증된 `TRANSIT|STUDENT|YOUNG_CHILD|SHOPPING`만
   `activeThemes`에 canonical order로 포함한다. 1개면 동적 25점 전부, 2개면 각 12.5점,
@@ -333,12 +418,28 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
   (5곳 cap) 50%다. 이는 통학구역·학군·학교 품질 또는 공식 등록 학원 수가 아니다.
 - `YOUNG_CHILD`는 최근접 공식 운영 어린이집 거리 50%와 800m 내 운영 어린이집 수
   (5곳 cap) 50%다. 정원 여유·입소 가능·보육 품질은 계산하지 않는다.
-- 활성 theme source가 stale/inactive이거나 coverage 기준을 충족하지 못하면 해당 점수를
+- 활성 생활조건 데이터가 freshness/coverage 기준을 충족하지 못하면 해당 점수를
   0으로 바꾸지 않고 추천을 `unavailable`로 처리한다.
 - card, 거래 표시값, score breakdown의 사실 필드는 각각 비어 있지 않은 `factIds`가
   필요하고 실제 observation의 값·단위와 일치해야 한다.
 - 투자성, 미래가격, 품질, 입소 가능 여부처럼 근거로 허용되지 않은 badge나 field는
   추가하지 않는다.
+
+#### `tradeTable/v1`
+
+- 최근 실거래 row는 최대 10개다.
+- 각 row는 `tradeId`, `dealDate`, `exclusiveAreaSquareMeters`,
+  `amountTenThousandKrw`, nullable `floor`, `factIds`를 가진다.
+- artifact의 `amountUnit`은 `10_000_KRW`다.
+- 정상 0건이면 표를 만들지 않고 확인 범위와 0건의 의미를 설명한다.
+
+#### `trendTable/v1`
+
+- 월별 row는 최대 24개이며 `month`, 평균·최솟값·최댓값, 거래 수,
+  `availability=available|unavailable`, nullable `reason`, `factIds`를 가진다.
+- 금액 unit은 `10_000_KRW`다.
+- `unavailable` row는 금액과 거래 수가 `null`이고 구체적인 reason을 표시한다.
+- 과거 관찰값만 전달하며 미래 추세를 나타내는 field나 chart schema는 포함하지 않는다.
 
 ### 지도 UI action 계약
 
@@ -447,3 +548,5 @@ data: {"requestId":"...","code":"CHATBOT_PROVIDER_UNAVAILABLE","message":"답변
 - additive chatbot metadata는 위 필드명과 타입을 유지한다.
 - JSON/SSE fixture는 같은 use case 결과의 의미와 citation 집합을 비교한다.
 - 계약 변경은 이 문서, BFF contract test, web adapter fixture를 같은 slice에서 갱신한다.
+- `uiSummary/v1`, `tradeTable/v1`, `trendTable/v1` 추가의 계약 판정은
+  `compatible/additive`다. BFF는 payload를 재작성하지 않고 계속 passthrough한다.

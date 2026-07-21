@@ -18,7 +18,11 @@ public class PropertyDataBatchApplication {
             "complexBuildingMetadataJob",
             "complexOdcMetadataGapFillJob",
             "complexBuildingRegisterCollectJob",
-            "complexBuildingRatioProjectJob");
+            "complexBuildingRatioProjectJob",
+            "complexBuildingRegisterProfileReplayJob",
+            "complexBuildingRegisterProfileCollectJob",
+            "complexBuildingRegisterProfileAnalyzeJob",
+            "legalDongCodeMappingImportJob");
 
     public static void main(String[] args) {
         String jobName = jobName();
@@ -27,7 +31,7 @@ public class PropertyDataBatchApplication {
             System.exit(2);
             return;
         }
-        if (!SUPPORTED_JOB_NAMES.contains(jobName)) {
+        if (!supportsJobName(jobName)) {
             System.err.println("Unknown batch job: " + jobName);
             System.exit(2);
             return;
@@ -45,6 +49,10 @@ public class PropertyDataBatchApplication {
             }
         }
         System.exit(exitCode);
+    }
+
+    static boolean supportsJobName(String jobName) {
+        return SUPPORTED_JOB_NAMES.contains(jobName);
     }
 
     private static String jobName() {

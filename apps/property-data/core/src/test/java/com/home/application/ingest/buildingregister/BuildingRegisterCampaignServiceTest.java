@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.home.domain.complex.buildingregister.BuildingRatioEvaluation;
 import com.home.domain.complex.buildingregister.BuildingRatioResolutionStatus;
+import com.home.domain.complex.buildingregister.BuildingRatioScope;
 import com.home.domain.complex.buildingregister.BuildingRegisterCollectionMode;
 import com.home.domain.complex.buildingregister.BuildingRegisterCollectionStrategy;
 import com.home.domain.complex.buildingregister.BuildingRegisterComplexMatch;
@@ -25,6 +26,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -163,6 +167,38 @@ class BuildingRegisterCampaignServiceTest {
     }
 
     @Test
+    @DisplayName("여러 단지가 공유하는 standalone 표제부는 후보 평가 없이 모호 상태로 남긴다")
+    void recordsSharedStandaloneTitleAsAmbiguousWithoutEvaluation() {
+        BuildingRegisterCollectionService collection = mock(BuildingRegisterCollectionService.class);
+        BuildingRegisterCampaignRepository campaigns = mock(BuildingRegisterCampaignRepository.class);
+        BuildingRatioCandidateRepository candidates = mock(BuildingRatioCandidateRepository.class);
+        var targets = List.of(target(1, "A"), target(2, "B"));
+        given(campaigns.freezeOrLoad(any())).willReturn(targets);
+        given(collection.collect(any()))
+                .willReturn(new BuildingRegisterCollectionResult(
+                        BuildingRegisterCollectionStatus.COLLECTED,
+                        1,
+                        List.of(),
+                        List.of(record(BuildingRegisterEndpoint.TITLE, "TITLE-1", null, "3", "20", "80")),
+                        List.of(),
+                        Set.of()));
+        given(campaigns.recordMatch(any(), anyString(), anyInt(), any())).willReturn(22L, 23L);
+
+        var summary = new BuildingRegisterCampaignService(collection, campaigns, candidates).collect(command());
+
+        ArgumentCaptor<BuildingRegisterComplexMatch> match =
+                ArgumentCaptor.forClass(BuildingRegisterComplexMatch.class);
+        verify(campaigns, times(2)).recordMatch(any(), anyString(), anyInt(), match.capture());
+        assertThat(match.getAllValues()).allSatisfy(value -> {
+            assertThat(value.status()).isEqualTo(BuildingRegisterMatchStatus.AMBIGUOUS);
+            assertThat(value.scope()).isEqualTo(BuildingRatioScope.STANDALONE_TITLE);
+            assertThat(value.projectable()).isFalse();
+        });
+        verifyNoInteractions(candidates);
+        assertThat(summary.matchCount()).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("건축물대장 수집 캠페인 처리를 검증한다")
     void evaluatesUniqueRecapWithoutReinterpretingExistingComplexKey() {
         BuildingRegisterCollectionService collection = mock(BuildingRegisterCollectionService.class);
@@ -241,6 +277,44 @@ class BuildingRegisterCampaignServiceTest {
         verifyNoInteractions(candidates);
     }
 
+    @Test
+    @DisplayName("병렬 수집은 동시 실행 수와 전체 request budget을 함께 제한한다")
+    void boundsParallelCollectionWithoutExceedingRequestBudget() {
+        BuildingRegisterCollectionService collection = mock(BuildingRegisterCollectionService.class);
+        BuildingRegisterCampaignRepository campaigns = mock(BuildingRegisterCampaignRepository.class);
+        BuildingRatioCandidateRepository candidates = mock(BuildingRatioCandidateRepository.class);
+        given(campaigns.freezeOrLoad(any()))
+                .willReturn(List.of(
+                        target(1, "1168010300101400001", "A"),
+                        target(2, "1168010300101400002", "B"),
+                        target(3, "1168010300101400003", "C"),
+                        target(4, "1168010300101400004", "D"),
+                        target(5, "1168010300101400005", "E")));
+        AtomicInteger active = new AtomicInteger();
+        AtomicInteger maximum = new AtomicInteger();
+        CountDownLatch threeStarted = new CountDownLatch(3);
+        given(collection.collect(any())).willAnswer(invocation -> {
+            int current = active.incrementAndGet();
+            maximum.accumulateAndGet(current, Math::max);
+            threeStarted.countDown();
+            threeStarted.await(1, TimeUnit.SECONDS);
+            active.decrementAndGet();
+            return new BuildingRegisterCollectionResult(
+                    BuildingRegisterCollectionStatus.PROVIDER_FAILED, 1, List.of(), List.of(), List.of(), Set.of());
+        });
+
+        var summary = new BuildingRegisterCampaignService(collection, campaigns, candidates).collect(command(5, 3));
+
+        assertThat(maximum).hasValue(3);
+        assertThat(summary.requestCount()).isEqualTo(5);
+        verify(collection, times(5)).collect(any());
+        ArgumentCaptor<BuildingRegisterCollectCommand> command =
+                ArgumentCaptor.forClass(BuildingRegisterCollectCommand.class);
+        verify(collection, times(5)).collect(command.capture());
+        assertThat(command.getAllValues())
+                .allSatisfy(value -> assertThat(value.maxRequests()).isOne());
+    }
+
     private void assertHierarchyFailure(
             List<BuildingRegisterRecordSnapshotCommand> records, BuildingRegisterMatchStatus expectedStatus) {
         BuildingRegisterCollectionService collection = mock(BuildingRegisterCollectionService.class);
@@ -261,15 +335,20 @@ class BuildingRegisterCampaignServiceTest {
     }
 
     private BuildingRegisterCampaignCommand command() {
+        return command(10, 1);
+    }
+
+    private BuildingRegisterCampaignCommand command(int maxRequests, int parallelism) {
         return new BuildingRegisterCampaignCommand(
                 COLLECTION_ID,
                 REQUEST_ID,
                 LocalDate.of(2026, 7, 20),
                 BuildingRegisterCollectionMode.MISSING,
                 BuildingRegisterCollectionStrategy.ADAPTIVE,
-                10,
+                maxRequests,
                 null,
-                100L);
+                100L,
+                parallelism);
     }
 
     private BuildingRegisterCampaignTarget target(long id, String name) {

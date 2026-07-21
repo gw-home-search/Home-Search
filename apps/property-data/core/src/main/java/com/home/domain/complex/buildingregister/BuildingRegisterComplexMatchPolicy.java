@@ -14,7 +14,12 @@ public final class BuildingRegisterComplexMatchPolicy {
             List<BuildingRegisterComplexTarget> sourceTargets, List<BuildingRegisterSourceScope> sourceScopes) {
         List<BuildingRegisterComplexTarget> targets = sourceTargets == null ? List.of() : List.copyOf(sourceTargets);
         List<BuildingRegisterSourceScope> scopes = sourceScopes == null ? List.of() : List.copyOf(sourceScopes);
-        if (scopes.size() == 1 && targets.size() > 1) return shared(targets, scopes.getFirst());
+        if (scopes.size() == 1 && targets.size() > 1) {
+            BuildingRegisterSourceScope scope = scopes.getFirst();
+            return scope.scope() == BuildingRatioScope.UNIQUE_ROOT
+                    ? shared(targets, scope)
+                    : ambiguousSharedStandalone(targets);
+        }
 
         Map<Long, BuildingRegisterComplexMatch> resolved = new LinkedHashMap<>();
         Set<String> claimedRoots = new LinkedHashSet<>();
@@ -152,6 +157,19 @@ public final class BuildingRegisterComplexMatchPolicy {
                         null,
                         false,
                         "one recap root is shared by multiple complexes"))
+                .toList();
+    }
+
+    private List<BuildingRegisterComplexMatch> ambiguousSharedStandalone(List<BuildingRegisterComplexTarget> targets) {
+        return targets.stream()
+                .map(target -> new BuildingRegisterComplexMatch(
+                        target.complexId(),
+                        null,
+                        BuildingRatioScope.STANDALONE_TITLE,
+                        BuildingRegisterMatchStatus.AMBIGUOUS,
+                        null,
+                        false,
+                        "standalone title cannot be shared by multiple complexes"))
                 .toList();
     }
 }

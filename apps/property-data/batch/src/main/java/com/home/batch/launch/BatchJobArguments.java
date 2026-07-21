@@ -63,9 +63,17 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
         values.put("mode", mode);
         values.put("strategy", strategy);
         values.put("maxRequests", Integer.toString(positiveInt(arguments.get("maxRequests"), "maxRequests")));
+        values.put("parallelism", Integer.toString(boundedParallelism(arguments.get("parallelism"))));
         values.put("toComplexId", toId.toString());
         if (fromId != null) values.put("fromComplexId", fromId.toString());
         return new BatchJobArguments(jobName, parameters(values));
+    }
+
+    private static int boundedParallelism(String value) {
+        if (text(value) == null) return 1;
+        int parallelism = positiveInt(value, "parallelism");
+        if (parallelism > 4) throw invalid("parallelism must be at most 4");
+        return parallelism;
     }
 
     private static BatchJobArguments buildingRatioProject(String jobName, Map<String, String> arguments, Clock clock) {

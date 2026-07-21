@@ -18,6 +18,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
@@ -47,6 +52,9 @@ public class BuildingRegisterCampaignService {
         Set<String> fullyMatchedPnus = campaigns.isCompleted(command.collectionId())
                 ? Set.of()
                 : campaigns.fullyMatchedPnus(command.collectionId());
+        if (command.parallelism() > 1) {
+            return collectParallel(command, targets.size(), byPnu, fullyMatchedPnus);
+        }
         int requests = 0;
         int matches = 0;
         for (var entry : byPnu.entrySet()) {
@@ -73,6 +81,68 @@ public class BuildingRegisterCampaignService {
         }
         boolean completed = campaigns.completeIfAllTargetsMatched(command.collectionId());
         return new BuildingRegisterCampaignSummary(targets.size(), byPnu.size(), requests, matches, completed);
+    }
+
+    private BuildingRegisterCampaignSummary collectParallel(
+            BuildingRegisterCampaignCommand command,
+            int targetCount,
+            Map<String, List<BuildingRegisterCampaignTarget>> byPnu,
+            Set<String> fullyMatchedPnus) {
+        ExecutorService executor = Executors.newFixedThreadPool(command.parallelism());
+        CompletionService<PnuCollectionResult> completion = new ExecutorCompletionService<>(executor);
+        var entries = byPnu.entrySet().iterator();
+        int submitted = 0;
+        int completedTasks = 0;
+        int requests = 0;
+        int matches = 0;
+        try {
+            while (entries.hasNext() || completedTasks < submitted) {
+                while (entries.hasNext()
+                        && submitted - completedTasks < command.parallelism()
+                        && requests + submitted - completedTasks < command.maxRequests()) {
+                    var entry = entries.next();
+                    if (fullyMatchedPnus.contains(entry.getKey())) continue;
+                    completion.submit(() -> collectPnu(command, entry.getKey(), entry.getValue()));
+                    submitted++;
+                }
+                if (completedTasks == submitted) break;
+                PnuCollectionResult result = completed(completion);
+                completedTasks++;
+                requests += result.requests();
+                matches += result.matches();
+                if (requests >= command.maxRequests()) break;
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+        boolean campaignCompleted = campaigns.completeIfAllTargetsMatched(command.collectionId());
+        return new BuildingRegisterCampaignSummary(targetCount, byPnu.size(), requests, matches, campaignCompleted);
+    }
+
+    private PnuCollectionResult collectPnu(
+            BuildingRegisterCampaignCommand command, String pnu, List<BuildingRegisterCampaignTarget> targets) {
+        BuildingRegisterCollectionResult collected;
+        try {
+            collected = collectionService.collect(command.collectCommand(pnu, targets.size(), 1));
+        } catch (BuildingRegisterRequestBudgetExceededException exhausted) {
+            return new PnuCollectionResult(exhausted.consumedRequests(), 0);
+        }
+        int matches = collected.status() == BuildingRegisterCollectionStatus.COLLECTED
+                ? evaluatePnu(command, pnu, targets, collected)
+                : 0;
+        return new PnuCollectionResult(collected.requestCount(), matches);
+    }
+
+    private PnuCollectionResult completed(CompletionService<PnuCollectionResult> completion) {
+        try {
+            return completion.take().get();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("building register parallel collection interrupted", exception);
+        } catch (ExecutionException exception) {
+            if (exception.getCause() instanceof RuntimeException runtime) throw runtime;
+            throw new IllegalStateException("building register parallel collection failed", exception.getCause());
+        }
     }
 
     private int evaluatePnu(
@@ -195,4 +265,6 @@ public class BuildingRegisterCampaignService {
             case SOURCE_MISSING -> BuildingRegisterMatchStatus.SOURCE_MISSING;
         };
     }
+
+    private record PnuCollectionResult(int requests, int matches) {}
 }

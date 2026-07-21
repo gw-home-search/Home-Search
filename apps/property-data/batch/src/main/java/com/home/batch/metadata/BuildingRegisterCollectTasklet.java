@@ -50,7 +50,10 @@ class BuildingRegisterCollectTasklet implements Tasklet {
                 strategy(params.get("strategy").toString()),
                 maxRequests,
                 optionalLong(params.get("fromComplexId")),
-                Long.parseLong(params.get("toComplexId").toString()));
+                Long.parseLong(params.get("toComplexId").toString()),
+                params.get("parallelism") == null
+                        ? 1
+                        : Integer.parseInt(params.get("parallelism").toString()));
         try (BuildingMetadataExecutionLock.Lock ignored = executionLock.acquire()) {
             int usedRequests = requestUsage.usedRequests(command.runDate());
             if (usedRequests < 0 || maxRequests > approvedLimit - usedRequests) {

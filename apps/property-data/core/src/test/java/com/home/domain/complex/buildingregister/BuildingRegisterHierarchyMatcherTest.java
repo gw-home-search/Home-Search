@@ -139,6 +139,24 @@ class BuildingRegisterHierarchyMatcherTest {
     }
 
     @Test
+    @DisplayName("여러 단지가 공유하는 standalone 표제부는 총괄로 재해석하지 않는다")
+    void leavesStandaloneTitleSharedByMultipleComplexesAmbiguous() {
+        List<BuildingRegisterComplexTarget> targets =
+                List.of(target(1, null, Set.of("A"), Set.of("101")), target(2, null, Set.of("B"), Set.of("102")));
+        var standalone = new BuildingRegisterSourceScope(
+                "TITLE-1", BuildingRatioScope.STANDALONE_TITLE, "Shared", Set.of("101"), Set.of("TITLE-1"));
+
+        var matches = matcher.match(targets, List.of(standalone));
+
+        assertThat(matches).allSatisfy(match -> {
+            assertThat(match.scope()).isEqualTo(BuildingRatioScope.STANDALONE_TITLE);
+            assertThat(match.projectable()).isFalse();
+            assertThat(match.status()).isEqualTo(BuildingRegisterMatchStatus.AMBIGUOUS);
+            assertThat(match.rootManagementKey()).isNull();
+        });
+    }
+
+    @Test
     @DisplayName("건축물대장 계층과 단지 매칭을 검증한다")
     void leavesPartialSubstringNameUnmatched() {
         var matches = matcher.match(

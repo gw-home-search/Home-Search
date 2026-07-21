@@ -169,13 +169,38 @@ class BatchJobArgumentsTest {
                         "mode", "missing",
                         "strategy", "adaptive",
                         "maxRequests", "900",
+                        "parallelism", "3",
                         "toComplexId", "200"),
                 clock);
 
         assertThat(arguments.jobParameters().getString("collectionId"))
                 .isEqualTo("123e4567-e89b-12d3-a456-426614174010");
         assertThat(arguments.jobParameters().getString("strategy")).isEqualTo("adaptive");
+        assertThat(arguments.jobParameters().getString("parallelism")).isEqualTo("3");
         assertThat(arguments.jobParameters().getString("toComplexId")).isEqualTo("200");
+    }
+
+    @Test
+    @DisplayName("building register 수집 job은 parallelism 기본값과 상한을 강제한다")
+    void defaultsAndBoundsBuildingRegisterParallelism() {
+        Map<String, String> required = Map.of(
+                "collectionId", "123e4567-e89b-12d3-a456-426614174010",
+                "requestId", "123e4567-e89b-12d3-a456-426614174011",
+                "runDate", "2026-07-20",
+                "mode", "missing",
+                "strategy", "adaptive",
+                "maxRequests", "25",
+                "toComplexId", "200");
+
+        assertThat(BatchJobArguments.from("complexBuildingRegisterCollectJob", required, clock)
+                        .jobParameters()
+                        .getString("parallelism"))
+                .isEqualTo("1");
+        Map<String, String> tooWide = new java.util.HashMap<>(required);
+        tooWide.put("parallelism", "5");
+        assertThatThrownBy(() -> BatchJobArguments.from("complexBuildingRegisterCollectJob", tooWide, clock))
+                .isInstanceOf(BatchExitCodeException.class)
+                .hasMessageContaining("parallelism");
     }
 
     @Test

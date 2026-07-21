@@ -341,6 +341,34 @@ def test_recommendation_lists_missing_required_inputs_without_observation() -> N
     )
 
 
+def test_runtime_mode_gate_stops_budget_recommendation_before_observation() -> None:
+    class ModeGatedLanguageModel(LanguageModel):
+        async def draft_answer(self, *, facts, limitations, question):
+            del question
+            assert facts == []
+            return DraftAnswer([DraftSentence(limitations[0], [], [])])
+
+    repository = PropertyRepository()
+    engine = GroundedChatbotEngine(
+        repository=repository,
+        language_model=ModeGatedLanguageModel(),
+        enabled_capabilities=frozenset({"recommendation"}),
+        enabled_recommendation_modes=frozenset({"CRITERIA"}),
+    )
+
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(question="송파구 20억 이하 전용 84㎡ 추천"),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-budget-mode-gated",
+    ))
+
+    assert response["status"] == "failed"
+    assert response["limitations"] == [
+        "이 추천 방식은 현재 데이터 준비와 검증이 진행 중입니다."
+    ]
+    assert repository.calls == 0
+
+
 def test_criteria_recommendation_uses_units_and_academy_without_budget_or_area() -> None:
     class CriteriaPropertyRepository(PropertyRepository):
         def criteria_candidates(self, region_name, limit):

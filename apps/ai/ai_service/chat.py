@@ -15,6 +15,12 @@ _APPROVED_PROPERTY_CAPABILITY_CONFIGURATIONS = frozenset(
         ("complex_identity",),
         ("complex_identity", "recent_trade_lookup"),
         ("complex_identity", "recent_trade_lookup", "price_trend"),
+        (
+            "complex_identity",
+            "recent_trade_lookup",
+            "price_trend",
+            "recommendation",
+        ),
     }
 )
 _APPROVED_REFERENCE_CAPABILITY_CONFIGURATIONS = frozenset(
@@ -329,6 +335,7 @@ class ConfiguredChatbotEngine:
                     language_model=language_model,  # type: ignore[arg-type]
                     enabled_capabilities=get_enabled_property_capabilities(),
                     enabled_reference_capabilities=enabled_reference_capabilities,
+                    enabled_recommendation_modes=frozenset({"CRITERIA"}),
                 )
                 return await engine.query(
                     request=request,

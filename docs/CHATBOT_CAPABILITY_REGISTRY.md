@@ -13,6 +13,8 @@ Data Readiness가 충족되지 않으면 사용자에게 지원 중인 기능으
 ## 상태
 
 - `지원`: 구현과 데이터가 모두 준비되었고 골든 질문 검증을 통과했다.
+- `제한 지원`: 문서에 명시한 mode·조건·source 조합만 활성화되었고 나머지 조합은
+  unavailable로 종료한다.
 - `데이터 준비 중`: 질문 유형은 승인되었으나 구현 또는 active snapshot이 없다.
 - `미지원`: 현재 확보 가능한 근거로 안전하게 답할 수 없거나 제품 범위 밖이다.
 
@@ -25,7 +27,7 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 | `simple_lookup` | `complex_identity`, `recent_trade_lookup` | 데이터 준비 중 | 지역 가격 순위는 현재 미지원 |
 | `price_trend` | `price_trend` | 데이터 준비 중 | 과거 관찰 집계만 허용 |
 | `comparison` | `comparison` | 데이터 준비 중 | 같은 기준일·단위의 항목만 비교 |
-| `recommendation` | `recommendation` | 구현 완료·활성화 대기 | BUDGET/CRITERIA offline gate 통과 후 exact allowlist 필요 |
+| `recommendation` | `recommendation` | 제한 지원 | `CRITERIA`의 학원·철도 조건만 활성; BUDGET·학교·쇼핑은 readiness 대기 |
 | 복합 질문 | `compound_question` | 데이터 준비 중 | 하위 Capability를 독립 검증 |
 | 미래 가격·주관적 학군·개인 법률 판단 | 미지원 Capability | 미지원 | 대체 가능한 근거 질문을 안내 |
 
@@ -51,7 +53,7 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 | `recent_trade_lookup` | “전용 84㎡ 최근 실거래 5건” | 지원 | `ai_read` 정상 거래·단지 | A | 실제 거래일, 전용면적, 금액, 층 | 호가·시세로 재해석, 미래 가격 | 최신 거래일과 coverage를 응답에 표시 | 조회 기간과 조건에서 거래 없음 안내 |
 | `price_trend` | “최근 1년 가격 흐름” | 지원 | `ai_read` 정상 거래 | A | 동일 조건의 월별 집계와 거래량 | 미래 추세 단정, 표본 부족 은폐 | 요청 종료일 이하 active data | 계산 불가 기간과 최소 표본 부족 설명 |
 | `comparison` | “A와 B 가격·세대수 비교” | 데이터 준비 중 | 비교 항목별 동일 버전의 A/B 데이터 | A | 같은 기간·단위로 계산 가능한 항목 | 기준일·평형이 다른 수치의 직접 비교 | 모든 필수 항목이 freshness 통과 | 비교 가능한 항목만 답하고 누락을 분리 |
-| `recommendation` | “영등포구 500세대 이상, 학원 우선 후보” | 구현 완료·활성화 대기 | 부동산 A, 명시 조건에 필요한 공식 A/B | A | 선필터와 명시 우선순위로 계산한 후보 | 절대평가, 수익 보장, LLM 임의 점수 | 사용한 모든 필수 dataset 통과 | 미지원 조건과 후보 0건 이유 설명 |
+| `recommendation` | “영등포구 500세대 이상, 학원 우선 후보” | 제한 지원 | 부동산 A, Sbiz 학원 B, 철도 A | A | `CRITERIA` mode에서 세대수 선필터와 명시한 학원·철도 우선순위로 계산한 후보 | BUDGET·학교·쇼핑 실행, 절대평가, 수익 보장, LLM 임의 점수 | 사용한 모든 필수 dataset 통과 | 비활성 조건과 후보 0건 이유 설명 |
 | `school_location` | “주변 운영 중 초등학교” | 데이터 준비 중 | 학교 위치·운영상태 snapshot | A | 학교 유형, 운영 상태, 직선거리 | 학교 품질·서열·진학 성과 | 반기 갱신 + grace 31일 이내 | 공식 snapshot 미준비 안내; Kakao는 별도 보조 결과 |
 | `elementary_attendance_zone` | “배정 초등학교는?” | 미지원 | 현재 범위에 통학구역 polygon 없음 | 미지원 | 학교 위치 질문으로 전환 안내 | 직선거리로 배정학교 단정 | 해당 없음 | 통학구역은 현재 지원 범위 밖임을 안내 |
 | `middle_high_school_zone` | “어느 학교군이야?” | 미지원 | 현재 범위에 학교군 polygon 없음 | 미지원 | 학교 위치 질문으로 전환 안내 | 특정 학교 진학 보장 | 해당 없음 | 학교군은 현재 지원 범위 밖임을 안내 |
@@ -61,6 +63,7 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 | `rail_station_lookup` | “가까운 역과 노선” | 지원 | 도시철도 역사 snapshot | A | 역명, 노선, 직선거리 | 통근시간·배차·혼잡도 | 연간 갱신 + grace 45일 이내 | 위치 기준선 미준비 안내; Kakao는 탐색 보조만 가능 |
 | `hospital_lookup` | “주변 병원 유형” | 미지원 | 현재 범위에 HIRA 병원 원장 없음 | 미지원 | Kakao 지도 탐색 action으로 전환 안내 | 공식 의료기관 현황·유형·진료 가능·의료 품질 주장 | 해당 없음 | `showNearbyCategory(HOSPITAL)`로 지도 탐색만 제공 |
 | `childcare_lookup` | “주변 어린이집 유형·정원” | 데이터 준비 중 | 전국어린이집 active snapshot/API | A 또는 B | 공개된 유형·정원·거리 | 입소 가능 여부 | source 계약의 수시/실시간 SLA | 공개 항목 미확인 안내 |
+| `kindergarten_location` | “주변 유치원 위치” | 데이터 준비 중 | 승인된 공식 유치원 위치·운영상태 snapshot | A 또는 B | 승인 후 위치·운영상태·직선거리 | 입학 가능 여부·교육 품질; Kakao 결과를 공식 현황으로 표현 | source 계약 승인 후 정의 | 현재는 사용자 실행형 Kakao 지도 탐색만 별도 제공 |
 | `kakao_place_search` | “지금 주변 마트·카페” | 데이터 준비 중 | Kakao Local 조회 응답 | C | 검색 시점·반경·페이지 안의 장소 | 지역 전체 개수, 완전한 상권 밀도 | 요청 시각 표시 | “지정 조건에서 확인되지 않음”으로 표현 |
 | `redevelopment_official_evidence` | “정비사업 현재 단계” | 데이터 준비 중 | 지자체·국토부 allowlist 공식 문서 | D | 원문에 명시된 단계·게시일 | 사업 확정·수익성 보장 | 문서별 게시일과 확인일 표시 | 공식 원문을 확인하지 못했다고 안내 |
 | `compound_question` | “비교+학군+교통+예산” | 데이터 준비 중 | 하위 Capability 전체 | 하위 항목 중 가장 높은 요구 | 독립 검증된 하위 결과의 교집합 | 일부 실패를 전체 성공처럼 표현 | 하위 dataset별 표시 | 성공·부분·불가 항목을 분리 |
@@ -111,3 +114,15 @@ raw 복구, 동일 release 재수집 재사용, 최대 3km p95 `25.565ms`, exact
 signed JWT JSON/SSE A등급 citation을 통과해 `지원`으로 승인했다. 승인된 누적
 reference allowlist는 `academy_lookup,rail_station_lookup`이며 rail 단독 설정은
 fail-closed한다.
+
+2026-07-21 `recommendation`은 explicit `CRITERIA` mode에서 `MIN_UNIT_COUNT`와
+시설 조건 `ACADEMY`·`TRANSIT`만 제한 지원으로 활성화했다. 승인된 누적 property allowlist는
+`HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation`이며
+직전 가격·추이 설정은 rollback 값으로 유지한다. reference allowlist는 이미 readiness
+`Pass`인 `academy_lookup,rail_station_lookup`만 사용하고 runtime mode gate는
+`BUDGET` 관찰을 DB 조회 전에 종료한다. OpenAI live 대표 질문은
+`criteria-recommendation-academy-transit`에서 `CRITERIA`, `ACADEMY→TRANSIT`, 근거
+4건으로 통과했다. 대규모점포는 전국 좌표
+coverage `83.7404%`로 기준 `95%`에 미달하므로 BUDGET 추천·comparison·SHOPPING을
+활성화하지 않는다. 학교, 어린이집, 유치원도 각각 별도 readiness와 승인 commit 전까지
+실행 경로와 allowlist에서 제외한다.

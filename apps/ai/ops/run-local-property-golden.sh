@@ -33,7 +33,7 @@ elif [[ "$mode" == "live" ]]; then
     case_id="$2"
     vars_file="${3:-${ai_root}/.env}"
     case "$case_id" in
-        complex-identity-jamsil-ells | recent-trades-jamsil-ells-84 | price-trend-jamsil-ells-84) ;;
+        complex-identity-jamsil-ells | recent-trades-jamsil-ells-84 | price-trend-jamsil-ells-84 | criteria-recommendation-academy-transit) ;;
         *) reject "승인된 live case ID가 아닙니다." ;;
     esac
 else
@@ -172,12 +172,21 @@ then
     reject "HOME_AI_OPENAI 설정이 올바르지 않습니다."
 fi
 
-PGPASSWORD="$property_password" \
-HOME_AI_PROPERTY_DSN="$host_property_dsn" \
-HOME_AI_OPENAI_API_KEY="$api_key" \
-HOME_AI_OPENAI_PRIMARY_MODEL="$primary_model" \
-HOME_AI_OPENAI_SECONDARY_MODEL="$secondary_model" \
-HOME_AI_OPENAI_TIMEOUT_SECONDS="$timeout_seconds" \
-HOME_AI_GOLDEN_LIVE_CONFIRM="RUN_ONE_LIVE_GOLDEN_CASE" \
-    "$uv_bin" run home-ai-property-golden --mode live \
-        --case-id "$case_id"
+if [[ "$case_id" == "criteria-recommendation-academy-transit" ]]; then
+    HOME_AI_OPENAI_API_KEY="$api_key" \
+    HOME_AI_OPENAI_PRIMARY_MODEL="$primary_model" \
+    HOME_AI_OPENAI_SECONDARY_MODEL="$secondary_model" \
+    HOME_AI_OPENAI_TIMEOUT_SECONDS="$timeout_seconds" \
+    HOME_AI_GOLDEN_LIVE_CONFIRM="RUN_ONE_LIVE_GOLDEN_CASE" \
+        "$uv_bin" run python -m ai_service.property_chat.criteria_activation
+else
+    PGPASSWORD="$property_password" \
+    HOME_AI_PROPERTY_DSN="$host_property_dsn" \
+    HOME_AI_OPENAI_API_KEY="$api_key" \
+    HOME_AI_OPENAI_PRIMARY_MODEL="$primary_model" \
+    HOME_AI_OPENAI_SECONDARY_MODEL="$secondary_model" \
+    HOME_AI_OPENAI_TIMEOUT_SECONDS="$timeout_seconds" \
+    HOME_AI_GOLDEN_LIVE_CONFIRM="RUN_ONE_LIVE_GOLDEN_CASE" \
+        "$uv_bin" run home-ai-property-golden --mode live \
+            --case-id "$case_id"
+fi

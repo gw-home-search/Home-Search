@@ -282,8 +282,8 @@ dedicated reader password. The no-argument path derives BFF/AI public-key
 mappings from `USER_JWT_ACTIVE_KID`, percent-encodes the AI reader password into
 the fixed local DSN, derives the separate `home_search_ai_runtime` reference
 DSN from `AI_DATA_RUNTIME_DB_PASSWORD`, and supplies the approved cumulative
-`complex_identity,recent_trade_lookup,price_trend` allowlist when that optional line is
-absent. The four-path form keeps strict explicit mapping,
+`complex_identity,recent_trade_lookup,price_trend,recommendation` allowlist when that
+optional line is absent. The four-path form keeps strict explicit mapping,
 DSN, and Capability validation. The approved reference rollback is blank and
 the 2026-07-21 approved values are exactly `academy_lookup` and the cumulative
 `academy_lookup,rail_station_lookup`. Any other combination, including rail
@@ -310,8 +310,14 @@ The accepted runtime Capability values are the identity-only rollback value
 `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity` and the approved
 cumulative value
 `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup`.
-The approved full cumulative value is
+The price/trend rollback value is
 `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend`.
+The approved full cumulative value is
+`HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation`.
+This activation runs explicit `ACADEMY` and `TRANSIT` criteria only. Requests that
+need `SCHOOL`, `SHOPPING`, BUDGET recommendation, comparison, childcare, or
+kindergarten remain unavailable until their source-specific readiness and activation
+commits pass.
 The no-argument local runner supplies the full cumulative value when omitted;
 explicit custom-file startup still rejects a missing value. Reordered,
 duplicate, mixed, or unapproved values remain fail-closed.

@@ -48,6 +48,7 @@ from .models import (
     PropertyCapability,
     QueryPlan,
     QueryPlanBundle,
+    RecommendationMode,
     ReferenceCapability,
     SchoolRecord,
     SchoolSearchResult,
@@ -141,12 +142,16 @@ class GroundedChatbotEngine:
         rail_station_repository: RailStationFactRepository | None = None,
         childcare_repository: ChildcareFactRepository | None = None,
         enabled_reference_capabilities: frozenset[ReferenceCapability] = frozenset(),
+        enabled_recommendation_modes: frozenset[RecommendationMode] = frozenset(
+            {"BUDGET", "CRITERIA"}
+        ),
         today: Callable[[], date] = date.today,
     ) -> None:
         self._repository = repository
         self._language_model = language_model
         self._enabled_capabilities = enabled_capabilities
         self._enabled_reference_capabilities = enabled_reference_capabilities
+        self._enabled_recommendation_modes = enabled_recommendation_modes
         builders = EvidenceFactBuilders(
             complex_fact=_complex_fact,
             trade_fact=_trade_fact,
@@ -242,7 +247,16 @@ class GroundedChatbotEngine:
         request: ChatbotQueryRequest,
         request_id: str,
     ) -> AnswerDocument:
-        if plan.capability in self._enabled_capabilities or (
+        if (
+            plan.capability == "recommendation"
+            and plan.recommendation_mode not in self._enabled_recommendation_modes
+        ):
+            result = CapabilityResult(
+                [],
+                ["이 추천 방식은 현재 데이터 준비와 검증이 진행 중입니다."],
+                "unavailable",
+            )
+        elif plan.capability in self._enabled_capabilities or (
             plan.capability in self._enabled_reference_capabilities
         ):
             plan_handler = self._catalog.plan_handler_for(plan.capability)
@@ -1148,12 +1162,40 @@ def _validate_academy_lookup_sentence(
         for claim in fact.claims
         if claim.unit == "TEXT"
     }
-    for academy_name in re.findall(r"[가-힣A-Za-z0-9 ]+(?:학원|교습소)", text):
+    observed_academy_names = {
+        value
+        for value in observed_text
+        if value.endswith(("학원", "교습소"))
+    }
+    compact_observed_names = {
+        re.sub(r"\s+", "", value) for value in observed_academy_names
+    }
+    for academy_name in re.findall(r"[가-힣A-Za-z0-9()]+(?:학원|교습소)", text):
         candidate = academy_name.strip()
-        if candidate and candidate not in observed_text:
+        if (
+            candidate not in {"학원", "교습소"}
+            and candidate not in compact_observed_names
+            and not any(name.endswith(candidate) for name in observed_academy_names)
+        ):
             raise GroundingValidationError(
                 "GROUNDING_ACADEMY_LOOKUP_TEXT_OUTSIDE_OBSERVATION"
             )
+    for match in re.finditer(
+        r"([가-힣A-Za-z0-9()]+)\s+(학원|교습소)", text
+    ):
+        prefix, kind = match.groups()
+        candidate = f"{prefix} {kind}"
+        if candidate in observed_academy_names or any(
+            name.endswith(candidate) for name in observed_academy_names
+        ):
+            continue
+        if prefix in {"주변", "인근", "근처"} or re.search(
+            r"(?:은|는|이|가|을|를|의|과|와|도|에서|으로|보다|중)$", prefix
+        ):
+            continue
+        raise GroundingValidationError(
+            "GROUNDING_ACADEMY_LOOKUP_TEXT_OUTSIDE_OBSERVATION"
+        )
 
 
 def _validate_rail_sentence(

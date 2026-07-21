@@ -27,7 +27,7 @@ Runtime variables:
 - `HOME_AI_OPENAI_SECONDARY_MODEL`
 - `HOME_AI_OPENAI_TIMEOUT_SECONDS` (optional, default `8`, allowed `1..30`)
 - `HOME_AI_QUERY_TIMEOUT_SECONDS` (optional, default `45`, allowed `1..60`)
-- `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend`
+- `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation`
 - `HOME_AI_REFERENCE_DSN` (separate `home_search_ai_runtime` read-only pool)
 - `HOME_AI_ENABLED_REFERENCE_CAPABILITIES` (blank by default; only the exact
   academy/rail tuples recorded in `ai_service.chat` are currently approved)
@@ -35,8 +35,13 @@ Runtime variables:
 The runtime Capability setting is fail-closed. This activation permits the
 identity-only rollback value or the cumulative
 `complex_identity,recent_trade_lookup` value, or the approved cumulative
-`complex_identity,recent_trade_lookup,price_trend` value. Missing, reordered,
-duplicate, whitespace-padded, or unapproved values disable all property capabilities.
+`complex_identity,recent_trade_lookup,price_trend` rollback value, or the approved
+`complex_identity,recent_trade_lookup,price_trend,recommendation` value. The active
+recommendation facility scope is limited to explicit `ACADEMY` and `TRANSIT` criteria;
+`MIN_UNIT_COUNT` remains an optional server-enforced filter. Missing,
+reordered, duplicate, whitespace-padded, or unapproved values disable all property
+capabilities. `comparison`, `SCHOOL`, `SHOPPING`, and childcare/kindergarten execution
+remain inactive until their separate readiness gates pass.
 Golden verification uses its own explicit candidate set and does not widen the
 runtime allowlist.
 
@@ -46,12 +51,13 @@ an exact education-office plus district aggregate query against the separate AI
 database. It remains impossible to enable through the runtime allowlist until
 license and live readiness approval are recorded.
 
-`academy_lookup` is also implemented for offline review only. It queries at
+`academy_lookup` is active and may also be used by the limited `CRITERIA`
+recommendation path. It queries at
 most five Sbiz education-store points within 800m by default, or an explicit
 100..2,000m radius. Unmatched results remain Sbiz B-grade location evidence;
 only Unicode NFKC name plus canonical road-address exact matches may add NEIS
-A-grade registry evidence. The runtime allowlist cannot enable this capability
-until license, taxonomy, coordinate coverage, and live readiness are approved.
+A-grade registry evidence. License, taxonomy, coordinate coverage, and live
+readiness approval are recorded in the reference readiness reports.
 
 `childcare_lookup` is implemented but intentionally absent from the runtime
 activation allowlist while the official service application is pending. Its
@@ -59,6 +65,11 @@ typed handler uses only active `childcare.center` snapshots, a default 800m
 radius (explicit 100..2,000m), and at most five operating centers. It exposes
 center type, capacity, straight-line distance, and reference date; admission
 availability, waiting time, childcare quality, and rankings are rejected.
+Kindergarten has no approved official snapshot in this slice. The existing
+`DAYCARE_KINDERGARTEN` map action remains a user-triggered Kakao discovery path,
+not an official kindergarten fact source or a recommendation metric. Both
+childcare and kindergarten wording fail closed in recommendation until their
+separate source readiness and activation approvals pass.
 
 Do not rely on provider-side conversation state. The browser sends only the
 bounded `conversationContext`, and the AI service treats it as an untrusted

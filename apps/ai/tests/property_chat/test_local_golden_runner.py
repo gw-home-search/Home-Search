@@ -31,14 +31,16 @@ def write_fake_uv(path: Path) -> None:
     path.write_text(
         """#!/bin/sh
 set -eu
-test "$PGPASSWORD" = 'p@ss'
-test "$HOME_AI_PROPERTY_DSN" = 'host=127.0.0.1 port=15432 dbname=home_search user=home_search_ai_reader'
 case "$*" in
   'run home-ai-property-golden --mode offline')
+    test "$PGPASSWORD" = 'p@ss'
+    test "$HOME_AI_PROPERTY_DSN" = 'host=127.0.0.1 port=15432 dbname=home_search user=home_search_ai_reader'
     test -z "${HOME_AI_OPENAI_API_KEY:-}"
     printf offline >"$FAKE_UV_MARKER"
     ;;
   'run home-ai-property-golden --mode live --case-id complex-identity-jamsil-ells')
+    test "$PGPASSWORD" = 'p@ss'
+    test "$HOME_AI_PROPERTY_DSN" = 'host=127.0.0.1 port=15432 dbname=home_search user=home_search_ai_reader'
     test "$HOME_AI_OPENAI_API_KEY" = 'test-provider-secret'
     test "$HOME_AI_OPENAI_PRIMARY_MODEL" = 'gpt-5.6-luna'
     test "$HOME_AI_OPENAI_SECONDARY_MODEL" = 'gpt-5.6-terra'
@@ -47,12 +49,22 @@ case "$*" in
     printf complex-identity-jamsil-ells >"$FAKE_UV_MARKER"
     ;;
   'run home-ai-property-golden --mode live --case-id recent-trades-jamsil-ells-84')
+    test "$PGPASSWORD" = 'p@ss'
+    test "$HOME_AI_PROPERTY_DSN" = 'host=127.0.0.1 port=15432 dbname=home_search user=home_search_ai_reader'
     test "$HOME_AI_OPENAI_API_KEY" = 'test-provider-secret'
     test "$HOME_AI_OPENAI_PRIMARY_MODEL" = 'gpt-5.6-luna'
     test "$HOME_AI_OPENAI_SECONDARY_MODEL" = 'gpt-5.6-terra'
     test "$HOME_AI_OPENAI_TIMEOUT_SECONDS" = '15'
     test "$HOME_AI_GOLDEN_LIVE_CONFIRM" = 'RUN_ONE_LIVE_GOLDEN_CASE'
     printf recent-trades-jamsil-ells-84 >"$FAKE_UV_MARKER"
+    ;;
+  'run python -m ai_service.property_chat.criteria_activation')
+    test "$HOME_AI_OPENAI_API_KEY" = 'test-provider-secret'
+    test "$HOME_AI_OPENAI_PRIMARY_MODEL" = 'gpt-5.6-luna'
+    test "$HOME_AI_OPENAI_SECONDARY_MODEL" = 'gpt-5.6-terra'
+    test "$HOME_AI_OPENAI_TIMEOUT_SECONDS" = '15'
+    test "$HOME_AI_GOLDEN_LIVE_CONFIRM" = 'RUN_ONE_LIVE_GOLDEN_CASE'
+    printf criteria-recommendation-academy-transit >"$FAKE_UV_MARKER"
     ;;
   *) exit 91 ;;
 esac
@@ -152,6 +164,25 @@ def test_live_runner_runs_one_allowlisted_case_and_passes_provider_settings(
     assert (  # type: ignore[attr-defined]
         result.marker.read_text(encoding="utf-8")
         == "recent-trades-jamsil-ells-84"
+    )
+    assert "test-provider-secret" not in result.stdout + result.stderr
+    assert "p@ss" not in result.stdout + result.stderr
+
+
+def test_live_runner_runs_criteria_recommendation_activation_case(
+    tmp_path: Path,
+) -> None:
+    result = run_runner(
+        tmp_path,
+        "live",
+        case_id="criteria-recommendation-academy-transit",
+        confirmation="RUN_ONE_LIVE_GOLDEN_CASE",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (  # type: ignore[attr-defined]
+        result.marker.read_text(encoding="utf-8")
+        == "criteria-recommendation-academy-transit"
     )
     assert "test-provider-secret" not in result.stdout + result.stderr
     assert "p@ss" not in result.stdout + result.stderr

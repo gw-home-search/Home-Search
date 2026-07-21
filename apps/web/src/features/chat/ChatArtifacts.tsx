@@ -1,5 +1,6 @@
 import type { ChatArtifact, FactListArtifact } from './artifactContract';
 import { ComparisonTableArtifactView } from './ComparisonTableArtifactView';
+import { RecommendationCardsArtifactView } from './RecommendationCardsArtifactView';
 
 export function ChatArtifacts({ artifacts }: { artifacts: ChatArtifact[] }) {
   if (artifacts.length === 0) return null;
@@ -8,7 +9,9 @@ export function ChatArtifacts({ artifacts }: { artifacts: ChatArtifact[] }) {
       {artifacts.map((artifact) => (
         artifact.type === 'comparisonTable'
           ? <ComparisonTableArtifactView artifact={artifact} key={artifact.artifactId} />
-          : <FactListArtifactView artifact={artifact} key={artifact.artifactId} />
+          : artifact.type === 'recommendationCards'
+            ? <RecommendationCardsArtifactView artifact={artifact} key={artifact.artifactId} />
+            : <FactListArtifactView artifact={artifact} key={artifact.artifactId} />
       ))}
     </div>
   );

@@ -35,6 +35,7 @@ from .capability_handlers import (
     SchoolLocationHandler,
 )
 from .comparison_handler import ComparisonHandler
+from .recommendation_handler import RecommendationHandler
 from .models import (
     ComplexRecord,
     DraftAnswer,
@@ -176,6 +177,12 @@ class GroundedChatbotEngine:
                     point_facility_repository,  # type: ignore[arg-type]
                     builders,
                 ),
+                RecommendationHandler(
+                    repository,  # type: ignore[arg-type]
+                    rail_station_repository,  # type: ignore[arg-type]
+                    point_facility_repository,  # type: ignore[arg-type]
+                    builders,
+                ),
             ),
         )
 
@@ -227,6 +234,7 @@ class GroundedChatbotEngine:
                 enforce_childcare_policy=plan.capability == "childcare_lookup",
                 enforce_map_action_policy=plan.capability == "kakao_place_search",
                 enforce_comparison_policy=plan.capability == "comparison",
+                enforce_recommendation_policy=plan.capability == "recommendation",
             )
             if capability_result.artifact_fact_ids:
                 fact_by_id = {fact.fact_id: fact for fact in facts}
@@ -825,6 +833,7 @@ def validate_draft(
     enforce_childcare_policy: bool = False,
     enforce_map_action_policy: bool = False,
     enforce_comparison_policy: bool = False,
+    enforce_recommendation_policy: bool = False,
 ) -> list[EvidenceFact]:
     if not draft.sentences:
         raise GroundingValidationError("GROUNDING_ANSWER_EMPTY")
@@ -886,6 +895,8 @@ def validate_draft(
             _validate_map_action_sentence(sentence.text)
         if enforce_comparison_policy:
             _validate_comparison_sentence(sentence.text)
+        if enforce_recommendation_policy:
+            _validate_recommendation_sentence(sentence.text)
         allowed_numbers = _number_tokens(
             claim.value for fact in referenced for claim in fact.claims
         )
@@ -1093,6 +1104,21 @@ def _validate_comparison_sentence(text: str) -> None:
     )
     if unsupported and not negative:
         raise GroundingValidationError("GROUNDING_COMPARISON_POLICY_VIOLATION")
+
+
+def _validate_recommendation_sentence(text: str) -> None:
+    unsupported = re.search(
+        r"(?:투자\s*가치|수익(?:성|률)?|미래\s*가격|오를|상승\s*예상|"
+        r"저렴.{0,20}(?:좋|우수|추천)|싼.{0,20}(?:좋|우수|추천))",
+        text,
+    )
+    negative = re.search(
+        r"(?:투자\s*가치|수익(?:성|률)?|미래\s*가격).{0,30}"
+        r"(?:판단하지|평가하지|의미하지|아니|않|없)",
+        text,
+    )
+    if unsupported and not negative:
+        raise GroundingValidationError("GROUNDING_RECOMMENDATION_POLICY_VIOLATION")
 
 
 def _number(value: int | float) -> str:

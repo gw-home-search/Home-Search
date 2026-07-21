@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from time import perf_counter
 
 import pytest
 
@@ -95,6 +96,54 @@ def test_comparison_lookup_and_trades_use_two_bounded_batch_queries(
     assert complexes["잠실엘스"][0].unit_count == 5678
     assert [record.trade_id for record in trades[1]] == [14, 12, 11]
     assert trades[2] == ()
+
+
+def test_recommendation_candidates_resolve_descendants_and_return_latest_three(
+    property_postgres_dsn: str,
+) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        candidates = repository.recommendation_candidates(
+            "송파구", date(2025, 2, 16), date(2026, 2, 15), 84.0, 100
+        )
+        missing_region = repository.recommendation_candidates(
+            "없는 지역", date(2025, 2, 16), date(2026, 2, 15), 84.0, 100
+        )
+    finally:
+        repository.close()
+
+    assert candidates is not None
+    assert list(candidates) == [1]
+    complex_record, trades = candidates[1]
+    assert complex_record.display_name == "잠실동 잠실엘스"
+    assert complex_record.marker_safe is True
+    assert [trade.trade_id for trade in trades] == [14, 12, 11]
+    assert missing_region is None
+
+
+def test_recommendation_candidate_observation_p95_is_bounded(
+    property_postgres_dsn: str,
+) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        repository.recommendation_candidates(
+            "송파구", date(2025, 2, 16), date(2026, 2, 15), 84.0, 100
+        )
+        durations = []
+        for _ in range(20):
+            started = perf_counter()
+            repository.recommendation_candidates(
+                "송파구", date(2025, 2, 16), date(2026, 2, 15), 84.0, 100
+            )
+            durations.append(perf_counter() - started)
+    finally:
+        repository.close()
+
+    assert sorted(durations)[18] < 0.2
 
 
 def test_monthly_trend_uses_the_same_period_and_area_filter(

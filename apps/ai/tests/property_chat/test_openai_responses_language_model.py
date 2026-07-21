@@ -351,6 +351,35 @@ def test_planning_accepts_two_to_four_complex_comparison() -> None:
     assert "never choose a winner" in body["input"][0]["content"]
 
 
+def test_planning_requires_typed_recommendation_region_budget_and_area() -> None:
+    requester = RecordingRequester(
+        _response(_valid_plan(
+            capability="recommendation",
+            complexName="송파구",
+            regionName="송파구",
+            exclusiveAreaSquareMeters=84.0,
+            maximumBudgetTenThousandKrw=200_000,
+        ))
+    )
+
+    plan = asyncio.run(_model(requester).plan_query(
+        ChatbotQueryRequest(question="송파구 20억 이하 전용 84㎡ 후보 추천")
+    ))
+
+    assert plan.capability == "recommendation"
+    assert plan.region_name == "송파구"
+    assert plan.maximum_budget_ten_thousand_krw == 200_000
+    body = json.loads(requester.calls[0][2])
+    schema = body["text"]["format"]["schema"]
+    assert "maximumBudgetTenThousandKrw" in schema["required"]
+    assert schema["properties"]["maximumBudgetTenThousandKrw"] == {
+        "type": ["integer", "null"],
+        "minimum": 1,
+        "maximum": 100000000,
+    }
+    assert "server owns those decisions" in body["input"][0]["content"]
+
+
 def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> None:
     requester = RecordingRequester(
         _response(

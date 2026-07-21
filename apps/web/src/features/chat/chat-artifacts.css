@@ -143,3 +143,46 @@
   font-size: 11px;
   line-height: 1.5;
 }
+
+.chatbot-recommendation-cards > h4 {
+  margin: 0 0 8px;
+  color: #173d33;
+  font-size: 12px;
+}
+
+.chatbot-recommendation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.chatbot-recommendation-list > article {
+  min-width: 0;
+  border: 1px solid rgba(15, 38, 32, 0.12);
+  border-radius: 12px;
+  background: var(--hs-map-color-surface);
+  padding: 11px 12px;
+  color: #18342d;
+  font-size: 12px;
+}
+
+.chatbot-recommendation-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chatbot-recommendation-heading > strong { overflow-wrap: anywhere; font-size: 13px; }
+.chatbot-recommendation-heading > span { color: var(--hs-map-color-action); font-weight: 750; }
+.chatbot-recommendation-list dl { display: grid; gap: 5px; margin: 9px 0 0; }
+.chatbot-recommendation-list dl > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px; }
+.chatbot-recommendation-list dt,
+.chatbot-recommendation-list dd { margin: 0; overflow-wrap: anywhere; }
+.chatbot-recommendation-list dt { color: var(--hs-map-color-muted); }
+.chatbot-recommendation-list dd { font-weight: 650; }
+.chatbot-recommendation-list details { margin-top: 8px; border-top: 1px solid var(--hs-map-color-line); padding-top: 7px; }
+.chatbot-recommendation-list summary { cursor: pointer; color: #526a62; font-weight: 700; }
+.chatbot-recommendation-list ul { display: grid; gap: 4px; margin: 7px 0; padding: 0; list-style: none; }
+.chatbot-recommendation-list li { display: flex; justify-content: space-between; gap: 8px; }
+.chatbot-recommendation-list details p { margin: 4px 0 0; color: var(--hs-map-color-muted); line-height: 1.5; }

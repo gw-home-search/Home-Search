@@ -34,7 +34,37 @@ export type ComparisonTableArtifact = {
   };
 };
 
-export type ChatArtifact = FactListArtifact | ComparisonTableArtifact;
+export type RecommendationScoreItem = {
+  key: 'PRICE' | 'TRANSIT' | 'SHOPPING';
+  label: string;
+  weight: number;
+  points: number;
+  distanceMeters: number | null;
+  factIds: string[];
+};
+
+export type RecommendationCard = {
+  rank: number;
+  complexId: number;
+  complexName: string;
+  totalScore: number;
+  latestTrade: { date: string; amountTenThousandKrw: number; factIds: string[] };
+  recentThreeMedian: { amountTenThousandKrw: number; factIds: string[] };
+  scoreBreakdown: RecommendationScoreItem[];
+  limitations: string[];
+  factIds: string[];
+};
+
+export type RecommendationCardsArtifact = {
+  type: 'recommendationCards';
+  version: 1;
+  artifactId: string;
+  title: string;
+  policyVersion: 'recommendation-policy-v1';
+  cards: RecommendationCard[];
+};
+
+export type ChatArtifact = FactListArtifact | ComparisonTableArtifact | RecommendationCardsArtifact;
 
 const MAX_ARTIFACT_BYTES = 65_536;
 
@@ -47,9 +77,139 @@ export function readChatArtifacts(value: unknown, allowedFactIds: ReadonlySet<st
   }
   return value.flatMap((candidate) => {
     const artifact = readFactListArtifact(candidate, allowedFactIds)
-      ?? readComparisonTableArtifact(candidate, allowedFactIds);
+      ?? readComparisonTableArtifact(candidate, allowedFactIds)
+      ?? readRecommendationCardsArtifact(candidate, allowedFactIds);
     return artifact == null ? [] : [artifact];
   });
+}
+
+function readRecommendationCardsArtifact(
+  value: unknown,
+  allowedFactIds: ReadonlySet<string>,
+): RecommendationCardsArtifact | null {
+  if (!isRecord(value)
+    || !hasExactKeys(value, [
+      'type', 'version', 'artifactId', 'title', 'policyVersion', 'cards',
+    ])
+    || value.type !== 'recommendationCards'
+    || value.version !== 1
+    || !isIdentifier(value.artifactId)
+    || !isDisplayText(value.title, 100)
+    || value.policyVersion !== 'recommendation-policy-v1'
+    || !Array.isArray(value.cards)
+    || value.cards.length === 0
+    || value.cards.length > 5) return null;
+  const cards = value.cards.flatMap((card) => {
+    const parsed = readRecommendationCard(card, allowedFactIds);
+    return parsed == null ? [] : [parsed];
+  });
+  if (cards.length !== value.cards.length
+    || cards.some((card, index) => card.rank !== index + 1)
+    || new Set(cards.map(({ complexId }) => complexId)).size !== cards.length) return null;
+  return {
+    type: 'recommendationCards',
+    version: 1,
+    artifactId: value.artifactId,
+    title: value.title.trim(),
+    policyVersion: 'recommendation-policy-v1',
+    cards,
+  };
+}
+
+function readRecommendationCard(
+  value: unknown,
+  allowedFactIds: ReadonlySet<string>,
+): RecommendationCard | null {
+  if (!isRecord(value)
+    || !hasExactKeys(value, [
+      'rank', 'complexId', 'complexName', 'totalScore', 'latestTrade',
+      'recentThreeMedian', 'scoreBreakdown', 'limitations', 'factIds',
+    ])
+    || !isIntegerInRange(value.rank, 1, 5)
+    || !isIntegerInRange(value.complexId, 1, Number.MAX_SAFE_INTEGER)
+    || !isDisplayText(value.complexName, 100)
+    || !isNumberInRange(value.totalScore, 0, 100)
+    || !isRecord(value.recentThreeMedian)
+    || !hasExactKeys(value.recentThreeMedian, ['amountTenThousandKrw', 'factIds'])
+    || !isIntegerInRange(
+      value.recentThreeMedian.amountTenThousandKrw, 1, Number.MAX_SAFE_INTEGER,
+    )
+    || !isFactIds(value.recentThreeMedian.factIds, allowedFactIds, false)
+    || !isRecord(value.latestTrade)
+    || !hasExactKeys(value.latestTrade, ['date', 'amountTenThousandKrw', 'factIds'])
+    || !isIsoDate(value.latestTrade.date)
+    || !isIntegerInRange(value.latestTrade.amountTenThousandKrw, 1, Number.MAX_SAFE_INTEGER)
+    || !isFactIds(value.latestTrade.factIds, allowedFactIds, false)
+    || !Array.isArray(value.scoreBreakdown)
+    || value.scoreBreakdown.length !== 3
+    || !Array.isArray(value.limitations)
+    || value.limitations.length > 5
+    || !value.limitations.every((item) => isDisplayText(item, 2_000))
+    || !isFactIds(value.factIds, allowedFactIds, false)) return null;
+  const scoreBreakdown = value.scoreBreakdown.flatMap((item) => {
+    const parsed = readRecommendationScoreItem(item, allowedFactIds);
+    return parsed == null ? [] : [parsed];
+  });
+  const expectedKeys = ['PRICE', 'TRANSIT', 'SHOPPING'];
+  const expectedWeights = [60, 25, 15];
+  const scoreTotal = Math.round(
+    scoreBreakdown.reduce((total, item) => total + item.points, 0) * 10,
+  ) / 10;
+  if (scoreBreakdown.length !== 3
+    || scoreBreakdown.some((item, index) => (
+      item.key !== expectedKeys[index] || item.weight !== expectedWeights[index]
+    ))
+    || scoreTotal !== value.totalScore) return null;
+  const cardFactIds = new Set(value.factIds);
+  const nestedFactIds = [
+    ...value.latestTrade.factIds,
+    ...value.recentThreeMedian.factIds,
+    ...scoreBreakdown.flatMap(({ factIds }) => factIds),
+  ];
+  if (!nestedFactIds.every((factId) => cardFactIds.has(factId))) return null;
+  return {
+    rank: value.rank,
+    complexId: value.complexId,
+    complexName: value.complexName.trim(),
+    totalScore: value.totalScore,
+    latestTrade: {
+      date: value.latestTrade.date,
+      amountTenThousandKrw: value.latestTrade.amountTenThousandKrw,
+      factIds: value.latestTrade.factIds,
+    },
+    recentThreeMedian: {
+      amountTenThousandKrw: value.recentThreeMedian.amountTenThousandKrw,
+      factIds: value.recentThreeMedian.factIds,
+    },
+    scoreBreakdown,
+    limitations: value.limitations.map((item) => item.trim()),
+    factIds: value.factIds,
+  };
+}
+
+function readRecommendationScoreItem(
+  value: unknown,
+  allowedFactIds: ReadonlySet<string>,
+): RecommendationScoreItem | null {
+  if (!isRecord(value)
+    || !hasExactKeys(value, [
+      'key', 'label', 'weight', 'points', 'distanceMeters', 'factIds',
+    ])
+    || (value.key !== 'PRICE' && value.key !== 'TRANSIT' && value.key !== 'SHOPPING')
+    || !isDisplayText(value.label, 100)
+    || !isNumberInRange(value.weight, 0, 100)
+    || !isNumberInRange(value.points, 0, value.weight)
+    || (value.distanceMeters !== null
+      && !isIntegerInRange(value.distanceMeters, 0, 10_000_000))
+    || !isFactIds(value.factIds, allowedFactIds, false)) return null;
+  return {
+    key: value.key,
+    label: value.label.trim(),
+    weight: value.weight,
+    points: value.points,
+    distanceMeters: value.distanceMeters,
+    factIds: value.factIds,
+  };
 }
 
 function readComparisonTableArtifact(
@@ -195,6 +355,17 @@ function readFactListItem(
 
 function isDisplayText(value: unknown, maximumLength: number): value is string {
   return typeof value === 'string' && value.trim().length > 0 && value.length <= maximumLength;
+}
+
+function isNumberInRange(value: unknown, minimum: number, maximum: number): value is number {
+  return typeof value === 'number'
+    && Number.isFinite(value)
+    && value >= minimum
+    && value <= maximum;
+}
+
+function isIntegerInRange(value: unknown, minimum: number, maximum: number): value is number {
+  return isNumberInRange(value, minimum, maximum) && Number.isInteger(value);
 }
 
 function isFactIds(

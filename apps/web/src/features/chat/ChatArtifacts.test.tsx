@@ -2,7 +2,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { ChatArtifacts } from './ChatArtifacts';
-import type { ComparisonTableArtifact } from './artifactContract';
+import type {
+  ComparisonTableArtifact,
+  RecommendationCardsArtifact,
+} from './artifactContract';
 
 describe('비교표 artifact UI', () => {
   it('실제 table header와 확인 불가 이유·동일 기준을 표시한다', () => {
@@ -49,5 +52,44 @@ describe('비교표 artifact UI', () => {
     expect(html).toContain('확인 불가 · 동일 면적의 최근 거래 표본이 3건 미만입니다.');
     expect(html).toContain('기준일 2026-07-20 · 최근 365일 · 전용면적');
     expect(html).toContain('tabindex="0"');
+  });
+});
+
+describe('추천카드 artifact UI', () => {
+  it('핵심 거래 기준과 펼칠 수 있는 결정론적 점수 근거를 표시한다', () => {
+    const artifact: RecommendationCardsArtifact = {
+      type: 'recommendationCards',
+      version: 1,
+      artifactId: 'recommendation-2026-07-20-84-200000',
+      title: '조건을 충족한 단지',
+      policyVersion: 'recommendation-policy-v1',
+      cards: [{
+        rank: 1,
+        complexId: 501,
+        complexName: '잠실엘스',
+        totalScore: 92.5,
+        latestTrade: {
+          date: '2026-07-20', amountTenThousandKrw: 195000, factIds: ['trade-501'],
+        },
+        recentThreeMedian: { amountTenThousandKrw: 190000, factIds: ['trade-501'] },
+        scoreBreakdown: [
+          { key: 'PRICE', label: '예산 조건', weight: 60, points: 60, distanceMeters: null, factIds: ['trade-501'] },
+          { key: 'TRANSIT', label: '철도 접근성', weight: 25, points: 20, distanceMeters: 300, factIds: ['rail-501'] },
+          { key: 'SHOPPING', label: '대규모점포 접근성', weight: 15, points: 12.5, distanceMeters: 167, factIds: ['retail-501'] },
+        ],
+        limitations: ['가격 통과 후보에는 추가 가격 가산점이 없습니다.'],
+        factIds: ['complex-501', 'trade-501', 'rail-501', 'retail-501'],
+      }],
+    };
+
+    const html = renderToStaticMarkup(<ChatArtifacts artifacts={[artifact]} />);
+
+    expect(html).toContain('1. 잠실엘스');
+    expect(html).toContain('조건 충족도 92.5점');
+    expect(html).toContain('2026-07-20 · 19억 5,000만원');
+    expect(html).toContain('최근 3건 중앙값');
+    expect(html).toContain('<summary>점수 근거</summary>');
+    expect(html).toContain('20 / 25점 · 300m');
+    expect(html).not.toContain('투자');
   });
 });

@@ -221,24 +221,72 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
   "type": "recommendationCards",
   "version": 1,
   "artifactId": "artifact-3",
-  "title": "조건을 통과한 후보",
+  "title": "조건을 충족한 단지",
   "policyVersion": "recommendation-policy-v1",
   "cards": [{
     "rank": 1,
     "complexId": 501,
     "complexName": "잠실엘스",
     "totalScore": 87.5,
-    "latestTrade": { "value": 195000, "unit": "10_000_KRW", "factIds": ["fact-trade-501"] },
-    "recentThreeMedian": { "value": 198000, "unit": "10_000_KRW", "factIds": ["fact-trades-501"] },
-    "scoreBreakdown": [{ "label": "가격 조건", "weight": 60, "points": 60, "factIds": ["fact-trades-501"] }],
-    "limitations": [],
-    "factIds": ["property-complex-501", "fact-trades-501"]
+    "latestTrade": {
+      "date": "2026-07-20",
+      "amountTenThousandKrw": 195000,
+      "factIds": ["fact-trades-501"]
+    },
+    "recentThreeMedian": {
+      "amountTenThousandKrw": 198000,
+      "factIds": ["fact-trades-501"]
+    },
+    "scoreBreakdown": [
+      {
+        "key": "PRICE",
+        "label": "예산 조건",
+        "weight": 60,
+        "points": 60,
+        "distanceMeters": null,
+        "factIds": ["fact-trades-501"]
+      },
+      {
+        "key": "TRANSIT",
+        "label": "철도 접근성",
+        "weight": 25,
+        "points": 20,
+        "distanceMeters": 300,
+        "factIds": ["fact-rail-501"]
+      },
+      {
+        "key": "SHOPPING",
+        "label": "대규모점포 접근성",
+        "weight": 15,
+        "points": 7.5,
+        "distanceMeters": 500,
+        "factIds": ["fact-retail-501"]
+      }
+    ],
+    "limitations": ["최근 365일 동일 면적 거래 3건과 직선거리 기준입니다."],
+    "factIds": [
+      "property-complex-501",
+      "fact-trades-501",
+      "fact-rail-501",
+      "fact-retail-501"
+    ]
   }]
 }
 ```
 
 - `cards`는 1..5개이며 `rank`와 정렬은 서버 정책 결과와 같아야 한다.
+- 지역·최대 예산·전용면적 중 하나라도 없으면 observation과 추천을 실행하지 않고 누락
+  조건을 `limitations`로 안내한다.
 - `policyVersion`은 점수 정책을 고정하며 LLM은 `totalScore`와 breakdown을 변경하지 않는다.
+- 기본 `recommendation-policy-v1`은 예산 hard filter 통과 60점, 최근접 철도역
+  0..1,500m 선형 25점, 최근접 대규모점포 0..1,000m 선형 15점이다. 예산을 통과한
+  후보 사이에는 가격 차이로 추가 점수를 주지 않는다.
+- 후보는 요청 지역 또는 하위 지역, marker-safe 좌표, 전역 최신 거래일 기준 최근 365일,
+  요청 전용면적 ±1.0㎡의 가장 최근 거래 3건을 모두 만족해야 하며 observation은 최대
+  100개, 최종 card는 최대 5개다.
+- 정렬은 `totalScore` 내림차순, 동점이면 `complexId` 오름차순이며 LLM이 바꿀 수 없다.
+- 철도 또는 대규모점포 source가 unavailable이면 거리를 0점으로 바꾸지 않고 추천 전체를
+  `unavailable`로 처리한다. 정상 active source에서 반경 내 시설이 없는 경우만 0점이다.
 - card, 거래 표시값, score breakdown의 사실 필드는 각각 비어 있지 않은 `factIds`가
   필요하고 실제 observation의 값·단위와 일치해야 한다.
 - 투자성, 미래가격, 품질, 입소 가능 여부처럼 근거로 허용되지 않은 badge나 field는

@@ -215,6 +215,99 @@ class PostgresPropertyFactRepository:
             result[int(row["complex_id"])].append(_trade_record(row))
         return {complex_id: tuple(trades) for complex_id, trades in result.items()}
 
+    def recommendation_candidates(
+        self,
+        region_name: str,
+        start_date: date,
+        end_date: date,
+        exclusive_area_square_meters: float,
+        limit: int,
+    ) -> dict[int, tuple[ComplexRecord, tuple[TradeRecord, ...]]] | None:
+        normalized_region = region_name.strip()
+        if not normalized_region or len(normalized_region) > 100 or limit != 100:
+            raise ValueError("recommendation candidate query is outside the supported range")
+        _validate_trade_query(
+            1, start_date, end_date, exclusive_area_square_meters
+        )
+        area = Decimal(str(exclusive_area_square_meters))
+        with self._pool.connection() as connection:
+            rows = connection.execute(
+                """
+                WITH RECURSIVE matched_roots AS (
+                    SELECT region_id, parent_region_id, region_code, region_name
+                    FROM ai_read.region_fact
+                    WHERE lower(region_name) = lower(%s)
+                ), root_count AS (
+                    SELECT count(*)::integer AS match_count FROM matched_roots
+                ), target_regions AS (
+                    SELECT region_id, region_code
+                    FROM matched_roots
+                    WHERE (SELECT match_count FROM root_count) = 1
+                    UNION ALL
+                    SELECT child.region_id, child.region_code
+                    FROM ai_read.region_fact child
+                    JOIN target_regions parent
+                      ON child.parent_region_id = parent.region_id
+                ), ranked AS (
+                    SELECT complex.complex_id, complex.display_name,
+                           complex.region_code, complex.region_name, complex.address,
+                           complex.latitude, complex.longitude, complex.marker_safe,
+                           complex.data_updated_at, complex.unit_count, complex.use_date,
+                           trade.trade_id, trade.deal_date,
+                           trade.deal_amount_ten_thousand_krw,
+                           trade.exclusive_area_square_meters, trade.floor,
+                           row_number() OVER (
+                               PARTITION BY complex.complex_id
+                               ORDER BY trade.deal_date DESC, trade.trade_id DESC
+                           ) AS trade_rank
+                    FROM ai_read.complex_fact complex
+                    JOIN target_regions region
+                      ON region.region_code = complex.region_code
+                    JOIN ai_read.trade_fact trade
+                      ON trade.complex_id = complex.complex_id
+                    WHERE complex.marker_safe
+                      AND trade.deal_date >= %s AND trade.deal_date <= %s
+                      AND trade.exclusive_area_square_meters
+                          BETWEEN %s - %s AND %s + %s
+                ), eligible AS (
+                    SELECT complex_id
+                    FROM ranked
+                    GROUP BY complex_id
+                    HAVING count(*) >= 3
+                    ORDER BY complex_id
+                    LIMIT %s
+                ), selected AS (
+                    SELECT ranked.*
+                    FROM ranked
+                    JOIN eligible USING (complex_id)
+                    WHERE ranked.trade_rank <= 3
+                )
+                SELECT root_count.match_count, selected.*
+                FROM root_count
+                LEFT JOIN selected ON true
+                ORDER BY selected.complex_id, selected.trade_rank
+                """,
+                (
+                    normalized_region, start_date, end_date, area,
+                    _AREA_TOLERANCE_SQUARE_METERS, area,
+                    _AREA_TOLERANCE_SQUARE_METERS, limit,
+                ),
+            ).fetchall()
+        if not rows or int(rows[0]["match_count"]) != 1:
+            return None
+        result: dict[int, tuple[ComplexRecord, list[TradeRecord]]] = {}
+        for row in rows:
+            if row["complex_id"] is None:
+                continue
+            complex_id = int(row["complex_id"])
+            if complex_id not in result:
+                result[complex_id] = (_complex_record(row), [])
+            result[complex_id][1].append(_trade_record(row))
+        return {
+            complex_id: (record, tuple(trades))
+            for complex_id, (record, trades) in result.items()
+        }
+
     def recent_trades(
         self,
         complex_id: int,

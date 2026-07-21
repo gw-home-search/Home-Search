@@ -16,9 +16,11 @@ QueryCapability = Literal[
     "childcare_lookup",
     "kakao_place_search",
     "comparison",
+    "recommendation",
 ]
 PropertyCapability = Literal[
-    "complex_identity", "recent_trade_lookup", "price_trend", "comparison"
+    "complex_identity", "recent_trade_lookup", "price_trend", "comparison",
+    "recommendation",
 ]
 ReferenceCapability = Literal[
     "school_location", "retail_location", "academy_registry_summary", "academy_lookup",
@@ -49,6 +51,7 @@ class QueryPlan:
     radius_meters: int | None = None
     place_category: NearbyPlaceCategory | None = None
     complex_names: tuple[str, ...] = ()
+    maximum_budget_ten_thousand_krw: int | None = None
 
     def __post_init__(self) -> None:
         normalized_name = self.complex_name.strip()
@@ -136,6 +139,21 @@ class QueryPlan:
         elif normalized_names:
             raise ValueError("complex_names are only supported for comparison")
         object.__setattr__(self, "complex_names", normalized_names)
+        budget = self.maximum_budget_ten_thousand_krw
+        if self.capability == "recommendation":
+            if (
+                self.limit > 5
+                or budget is not None
+                and (
+                    isinstance(budget, bool)
+                    or not 1 <= budget <= 100_000_000
+                )
+            ):
+                raise ValueError("recommendation budget or limit is invalid")
+        elif budget is not None:
+            raise ValueError(
+                "maximum_budget_ten_thousand_krw is only supported for recommendation"
+            )
 
 
 @dataclass(frozen=True)

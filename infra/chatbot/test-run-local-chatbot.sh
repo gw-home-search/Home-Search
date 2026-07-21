@@ -568,7 +568,7 @@ printf '%s\n' \
     'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
     'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
     'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend' \
-    'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup' >"$ai_env"
+    'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup,rail_station_lookup' >"$ai_env"
 if ! PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_TEST_DOCKER_LOG="$docker_log" \
     CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
@@ -577,10 +577,10 @@ if ! PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
     "$runner" "$property_env" "$user_env" "$bff_env" "$ai_env" \
     >"$tmp_dir/reference-capability-approved.out" 2>&1; then
-    echo "상태: Fail - 승인된 academy_lookup Capability가 허용되지 않았습니다." >&2
+    echo "상태: Fail - 승인된 누적 reference Capability가 허용되지 않았습니다." >&2
     exit 1
 fi
-grep -Fq 'reference-dsn-set=yes|reference-capabilities=academy_lookup' "$docker_log"
+grep -Fq 'reference-dsn-set=yes|reference-capabilities=academy_lookup,rail_station_lookup' "$docker_log"
 
 printf '%s\n' \
     'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \

@@ -22,6 +22,9 @@ class BuildingRegisterProfileJsonParserTest {
                   "pageNo":1,"numOfRows":100,"totalCount":1,"items":{"item":[{
                     "mgmBldrgstPk":"ROOT-1","regstrKindCd":"1","platArea":"1000.25",
                     "hhldCnt":"0","engrGrade":"1+","engrRat":"12.3","rserthqkDsgnApplyYn":"1",
+                    "regstrGbCdNm":"집합","regstrKindCdNm":"총괄표제부","newOldRegstrGbCdNm":"신대장",
+                    "mainAtchGbCdNm":"주건축물","rnum":1,"splotNm":"특수지명","block":"A",
+                    "lot":"B","bylotCnt":2,"rserthqkAblty":"VII-0.176g",
                     "unknownFutureField":"future"
                   }]}}}}
                 """;
@@ -46,6 +49,32 @@ class BuildingRegisterProfileJsonParserTest {
                         .value(BuildingProfileField.ENGR_GRADE)
                         .textValue())
                 .isEqualTo("1+");
+        assertThat(page.records().getFirst().values().keySet())
+                .extracting(Enum::name)
+                .contains(
+                        "REGSTR_GB_CD_NM",
+                        "REGSTR_KIND_CD_NM",
+                        "NEW_OLD_REGSTR_GB_CD_NM",
+                        "MAIN_ATCH_GB_CD_NM",
+                        "RNUM",
+                        "SPLOT_NM",
+                        "BLOCK",
+                        "LOT",
+                        "BYLOT_CNT");
+        assertThat(BuildingProfileField.fromProviderKey("rserthqkAblty"))
+                .contains(BuildingProfileField.RSERTHQK_ABILITY);
+        assertThat(page.records().getFirst().value(BuildingProfileField.RNUM).integerValue())
+                .isEqualTo(1L);
+        assertThat(page.records()
+                        .getFirst()
+                        .value(BuildingProfileField.BYLOT_CNT)
+                        .integerValue())
+                .isEqualTo(2L);
+        assertThat(page.records()
+                        .getFirst()
+                        .value(BuildingProfileField.RSERTHQK_ABILITY)
+                        .textValue())
+                .isEqualTo("VII-0.176g");
         assertThat(page.unknownKeys()).containsExactly("unknownFutureField");
     }
 

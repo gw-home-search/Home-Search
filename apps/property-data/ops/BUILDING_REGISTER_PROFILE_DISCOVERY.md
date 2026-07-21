@@ -42,7 +42,7 @@ export SPRING_BATCH_JOB_NAME=complexBuildingRegisterProfileReplayJob
 ops/run-batch-jar.sh \
   sourceCollectionId=<existing-collection-uuid> \
   parseRunId=<new-parse-run-uuid> \
-  parserVersion=PROFILE_V1 \
+  parserVersion=PROFILE_V2 \
   maxPages=<positive-resume-unit>
 ```
 
@@ -92,7 +92,7 @@ ops/run-batch-jar.sh \
 
 ## 5. Profile parse와 분석
 
-신규 collection이 `COMPLETED`가 되면 해당 raw를 `PROFILE_V1`으로 replay한 뒤 분석한다. analysis는 완료된 collection/parse run만 허용하며 같은 `analysisRunId` 재실행은 duplicate evidence를 만들지 않는다.
+신규 collection이 `COMPLETED`가 되면 해당 raw를 `PROFILE_V2`로 replay한 뒤 분석한다. analysis는 완료된 collection/parse run만 허용하며 같은 `analysisRunId` 재실행은 duplicate evidence를 만들지 않는다.
 
 ```bash
 export SPRING_BATCH_JOB_NAME=complexBuildingRegisterProfileAnalyzeJob

@@ -308,6 +308,47 @@ class BuildingRegisterCollectionServiceTest {
         assertThat(fixture.client.calls).containsExactly("RECAP_TITLE:1:100", "TITLE:1:100");
     }
 
+    @Test
+    @DisplayName("profile mode는 완전한 총괄이 있어도 표제부를 수집하고 단일 명확 root에서는 기본개요를 생략한다")
+    void profileModeAlwaysFetchesTitleButSkipsUnneededBasicOverview() {
+        Fixture fixture = new Fixture();
+        fixture.client.respond(BuildingRegisterEndpoint.RECAP_TITLE, page(recap("20", "80"), 1));
+        fixture.client.respond(BuildingRegisterEndpoint.TITLE, page(title(), 1));
+
+        BuildingRegisterCollectionResult result = fixture.service.collect(profileCommand(1, 10));
+
+        assertThat(result.status()).isEqualTo(BuildingRegisterCollectionStatus.COLLECTED);
+        assertThat(fixture.client.calls).containsExactly("RECAP_TITLE:1:100", "TITLE:1:100");
+    }
+
+    @Test
+    @DisplayName("profile mode는 shared PNU 계층 사유가 있으면 기본개요를 수집한다")
+    void profileModeFetchesBasicOverviewForSharedPnu() {
+        Fixture fixture = new Fixture();
+        fixture.client.respond(BuildingRegisterEndpoint.RECAP_TITLE, page(recap("20", "80"), 1));
+        fixture.client.respond(BuildingRegisterEndpoint.TITLE, page(title(), 1));
+        fixture.client.respond(BuildingRegisterEndpoint.BASIC_OVERVIEW, page(basic(), 1));
+
+        fixture.service.collect(profileCommand(2, 10));
+
+        assertThat(fixture.client.calls).containsExactly("RECAP_TITLE:1:100", "TITLE:1:100", "BASIC_OVERVIEW:1:100");
+    }
+
+    @Test
+    @DisplayName("profile mode는 동일 총괄 중복을 복수 root로 오인하지 않는다")
+    void profileModeDeduplicatesIdenticalRecapBeforeBasicDecision() {
+        Fixture fixture = new Fixture();
+        BuildingRegisterRecordSnapshotCommand recap = recap("20", "80");
+        fixture.client.respond(
+                BuildingRegisterEndpoint.RECAP_TITLE,
+                new ParsedBuildingRegisterPage("00", "NORMAL SERVICE", 2, List.of(recap, recap)));
+        fixture.client.respond(BuildingRegisterEndpoint.TITLE, page(title(), 1));
+
+        fixture.service.collect(profileCommand(1, 10));
+
+        assertThat(fixture.client.calls).containsExactly("RECAP_TITLE:1:100", "TITLE:1:100");
+    }
+
     private static BuildingRegisterCollectCommand command(int maxRequests) {
         return new BuildingRegisterCollectCommand(
                 COLLECTION_ID,
@@ -316,6 +357,17 @@ class BuildingRegisterCollectionServiceTest {
                 PNU,
                 1,
                 BuildingRegisterCollectionStrategy.ADAPTIVE,
+                maxRequests);
+    }
+
+    private static BuildingRegisterCollectCommand profileCommand(int pnuComplexCount, int maxRequests) {
+        return new BuildingRegisterCollectCommand(
+                COLLECTION_ID,
+                REQUEST_ID,
+                LocalDate.of(2026, 7, 20),
+                PNU,
+                pnuComplexCount,
+                BuildingRegisterCollectionStrategy.COMPARE_RECAP_TITLE,
                 maxRequests);
     }
 

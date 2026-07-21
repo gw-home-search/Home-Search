@@ -14,6 +14,9 @@ public final class BuildingRegisterCollectionPolicy {
         if (strategy == null) throw new IllegalArgumentException("collection strategy is required");
         if (pnuComplexCount <= 0) throw new IllegalArgumentException("PNU complex count must be positive");
         List<BuildingRegisterRecord> safeRecaps = recaps == null ? List.of() : List.copyOf(recaps);
+        if (strategy == BuildingRegisterCollectionStrategy.COMPARE_RECAP_TITLE) {
+            return new BuildingRegisterFollowUpDecision(true, pnuComplexCount > 1 || safeRecaps.size() > 1, Set.of());
+        }
         if (strategy == BuildingRegisterCollectionStrategy.FULL_HIERARCHY) {
             return new BuildingRegisterFollowUpDecision(true, true, EnumSet.allOf(BuildingRatioField.class));
         }
@@ -41,8 +44,7 @@ public final class BuildingRegisterCollectionPolicy {
         if (pnuComplexCount <= 0) throw new IllegalArgumentException("PNU complex count must be positive");
         List<BuildingRegisterRecord> safeRecaps = recaps == null ? List.of() : List.copyOf(recaps);
         List<BuildingRegisterRecord> safeTitles = titles == null ? List.of() : List.copyOf(titles);
-        Set<BuildingRatioField> safeFallbackFields =
-                fallbackFields == null ? Set.of() : Set.copyOf(fallbackFields);
+        Set<BuildingRatioField> safeFallbackFields = fallbackFields == null ? Set.of() : Set.copyOf(fallbackFields);
         if (strategy == BuildingRegisterCollectionStrategy.FULL_HIERARCHY) return true;
         if (safeRecaps.isEmpty()) return safeTitles.size() > 1;
         if (safeRecaps.size() != 1 || pnuComplexCount != 1) return true;

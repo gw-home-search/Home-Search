@@ -27,13 +27,8 @@ public enum BuildingRatioResolutionMethod {
 
     public boolean usesTitleHierarchyEvidence() {
         return switch (this) {
-            case TITLE_DIRECT_CONSENSUS,
-                    RECAP_NUMERATOR_TITLE_DENOMINATOR,
-                    TITLE_AGGREGATE_CALC -> true;
-            case RECAP_DIRECT,
-                    RECAP_COMPONENT_CALC,
-                    STANDALONE_TITLE_DIRECT,
-                    STANDALONE_TITLE_COMPONENT_CALC -> false;
+            case TITLE_DIRECT_CONSENSUS, RECAP_NUMERATOR_TITLE_DENOMINATOR, TITLE_AGGREGATE_CALC -> true;
+            case RECAP_DIRECT, RECAP_COMPONENT_CALC, STANDALONE_TITLE_DIRECT, STANDALONE_TITLE_COMPONENT_CALC -> false;
         };
     }
 }

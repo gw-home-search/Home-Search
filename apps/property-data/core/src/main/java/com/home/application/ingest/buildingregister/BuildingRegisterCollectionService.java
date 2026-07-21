@@ -1,8 +1,12 @@
 package com.home.application.ingest.buildingregister;
 
+import com.home.domain.complex.buildingprofile.BuildingProfileCollectionPolicy;
+import com.home.domain.complex.buildingprofile.BuildingProfileHierarchyFacts;
 import com.home.domain.complex.buildingregister.BuildingRegisterCollectionPolicy;
+import com.home.domain.complex.buildingregister.BuildingRegisterCollectionStrategy;
 import com.home.domain.complex.buildingregister.BuildingRegisterEndpoint;
 import com.home.domain.complex.buildingregister.BuildingRegisterFollowUpDecision;
+import com.home.domain.complex.buildingregister.BuildingRegisterHierarchyRecord;
 import com.home.domain.complex.buildingregister.BuildingRegisterRawPageStatus;
 import com.home.domain.complex.buildingregister.BuildingRegisterRecord;
 import java.util.ArrayList;
@@ -21,6 +25,7 @@ public class BuildingRegisterCollectionService {
     private final BuildingRegisterRawPageReceiver receiver;
     private final BuildingRegisterRawPageCompletion completion;
     private final BuildingRegisterCollectionPolicy policy = new BuildingRegisterCollectionPolicy();
+    private final BuildingProfileCollectionPolicy profilePolicy = new BuildingProfileCollectionPolicy();
 
     public BuildingRegisterCollectionService(
             BuildingRegisterPageClient client,
@@ -36,10 +41,15 @@ public class BuildingRegisterCollectionService {
     }
 
     public BuildingRegisterCollectionResult collect(BuildingRegisterCollectCommand command) {
-        RequestBudget budget = new RequestBudget(command.maxRequests());
+        return collect(command, new BuildingRegisterRequestBudget(command.maxRequests()));
+    }
+
+    public BuildingRegisterCollectionResult collect(
+            BuildingRegisterCollectCommand command, BuildingRegisterRequestBudget budget) {
+        int initialUsage = budget.used();
         EndpointResult recap = collectEndpoint(command, BuildingRegisterEndpoint.RECAP_TITLE, budget);
         if (recap.status() != BuildingRegisterCollectionStatus.COLLECTED) {
-            return result(recap.status(), budget.used(), recap.records(), List.of(), List.of(), null);
+            return result(recap.status(), budget.used() - initialUsage, recap.records(), List.of(), List.of(), null);
         }
         BuildingRegisterFollowUpDecision decision = policy.afterRecap(
                 command.strategy(),
@@ -49,23 +59,41 @@ public class BuildingRegisterCollectionService {
                 ? collectEndpoint(command, BuildingRegisterEndpoint.TITLE, budget)
                 : EndpointResult.collected(List.of());
         if (titles.status() != BuildingRegisterCollectionStatus.COLLECTED) {
-            return result(titles.status(), budget.used(), recap.records(), titles.records(), List.of(), decision);
+            return result(
+                    titles.status(),
+                    budget.used() - initialUsage,
+                    recap.records(),
+                    titles.records(),
+                    List.of(),
+                    decision);
         }
-        boolean fetchBasicOverview = policy.shouldFetchBasicOverview(
-                command.strategy(),
-                recap.records().stream().map(this::domainRecord).toList(),
-                titles.records().stream().map(this::domainRecord).toList(),
-                command.pnuComplexCount(),
-                decision.fallbackFields());
+        boolean fetchBasicOverview = command.strategy() == BuildingRegisterCollectionStrategy.COMPARE_RECAP_TITLE
+                ? profilePolicy
+                        .decide(BuildingProfileHierarchyFacts.from(
+                                command.pnuComplexCount(), hierarchyRecords(recap.records(), titles.records())))
+                        .fetchBasicOverview()
+                : policy.shouldFetchBasicOverview(
+                        command.strategy(),
+                        recap.records().stream().map(this::domainRecord).toList(),
+                        titles.records().stream().map(this::domainRecord).toList(),
+                        command.pnuComplexCount(),
+                        decision.fallbackFields());
         EndpointResult overview = fetchBasicOverview
                 ? collectEndpoint(command, BuildingRegisterEndpoint.BASIC_OVERVIEW, budget)
                 : EndpointResult.collected(List.of());
         return result(
-                overview.status(), budget.used(), recap.records(), titles.records(), overview.records(), decision);
+                overview.status(),
+                budget.used() - initialUsage,
+                recap.records(),
+                titles.records(),
+                overview.records(),
+                decision);
     }
 
     private EndpointResult collectEndpoint(
-            BuildingRegisterCollectCommand command, BuildingRegisterEndpoint endpoint, RequestBudget budget) {
+            BuildingRegisterCollectCommand command,
+            BuildingRegisterEndpoint endpoint,
+            BuildingRegisterRequestBudget budget) {
         for (int pageSize : PAGE_SIZES) {
             BuildingRegisterEndpointSnapshot snapshot =
                     snapshots.open(command.collectionId(), command.pnu(), endpoint, command.runDate(), pageSize);
@@ -217,6 +245,20 @@ public class BuildingRegisterCollectionService {
                 record.floorAreaRatio());
     }
 
+    private List<BuildingRegisterHierarchyRecord> hierarchyRecords(
+            List<BuildingRegisterRecordSnapshotCommand> recaps, List<BuildingRegisterRecordSnapshotCommand> titles) {
+        return java.util.stream.Stream.concat(recaps.stream(), titles.stream())
+                .map(record -> new BuildingRegisterHierarchyRecord(
+                        record.endpoint(),
+                        record.managementKey(),
+                        record.parentManagementKey(),
+                        integer(record.registerKindCode()),
+                        record.newOldRegisterCode(),
+                        record.buildingName(),
+                        record.dongName()))
+                .toList();
+    }
+
     private int integer(String value) {
         if (value == null || value.isBlank()) return 0;
         try {
@@ -241,24 +283,6 @@ public class BuildingRegisterCollectionService {
             BuildingRegisterCollectionStatus status, List<BuildingRegisterRecordSnapshotCommand> records) {
         static EndpointResult collected(List<BuildingRegisterRecordSnapshotCommand> records) {
             return new EndpointResult(BuildingRegisterCollectionStatus.COLLECTED, records);
-        }
-    }
-
-    private static final class RequestBudget {
-        private final int max;
-        private int used;
-
-        private RequestBudget(int max) {
-            this.max = max;
-        }
-
-        void consume() {
-            if (used >= max) throw new BuildingRegisterRequestBudgetExceededException(max);
-            used++;
-        }
-
-        int used() {
-            return used;
         }
     }
 }

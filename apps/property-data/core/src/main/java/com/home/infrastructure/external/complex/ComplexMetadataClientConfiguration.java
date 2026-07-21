@@ -2,6 +2,7 @@ package com.home.infrastructure.external.complex;
 
 import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceClient;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataSourceParser;
+import com.home.application.ingest.buildingprofile.BuildingProfilePageParser;
 import com.home.application.ingest.buildingregister.BuildingRegisterPageClient;
 import com.home.application.ingest.buildingregister.BuildingRegisterPageParser;
 import com.home.application.ingest.metadata.OdcloudPnuPrefixAliasLookup;
@@ -33,6 +34,11 @@ public class ComplexMetadataClientConfiguration {
     @Bean
     BuildingRegisterPageParser buildingRegisterPageParser(ObjectMapper objectMapper) {
         return new BuildingRegisterJsonParser(objectMapper);
+    }
+
+    @Bean
+    BuildingProfilePageParser buildingProfilePageParser(ObjectMapper objectMapper) {
+        return new BuildingRegisterProfileJsonParser(objectMapper);
     }
 
     @Bean

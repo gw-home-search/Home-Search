@@ -258,7 +258,7 @@ tasks.register('verifyApiMigrationCatalog') {
             throw new GradleException("Duplicate API migration versions: ${duplicates.keySet().sort()}")
         }
         def versions = byVersion.keySet().findAll { it != null }.sort()
-        def expectedVersions = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        def expectedVersions = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
         if (versions != expectedVersions) {
             throw new GradleException("API migration versions must be exact: ${expectedVersions}; actual=${versions}")
         }

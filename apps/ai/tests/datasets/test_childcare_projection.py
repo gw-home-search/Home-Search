@@ -4,10 +4,12 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import psycopg
+import pytest
 
 from ai_service.datasets.childcare import ChildcareAdapter
 from ai_service.datasets.postgres import PostgresDatasetRepository, _PROJECTION_WRITERS
 from ai_service.datasets.service import DatasetLifecycleService
+from ai_service.property_chat.childcare_centers import PostgresChildcareRepository
 from tests.datasets.test_childcare_adapter import OBSERVED_AT, _bundle, _contract, _response
 
 
@@ -70,6 +72,41 @@ def test_childcare_projection_reuses_facility_point_and_exposes_typed_view(
     )
     assert "phone" not in {column[0] for column in columns}
     assert "homepage" not in {column[0] for column in columns}
+
+    repository = PostgresChildcareRepository(
+        postgres_dsn,
+        expected_database="test",
+        expected_username="test",
+    )
+    try:
+        nearby = repository.nearby(
+            latitude=37.5131,
+            longitude=127.0822,
+            radius_meters=800,
+            limit=5,
+            region_code="11710",
+        )
+    finally:
+        repository.close()
+
+    assert nearby is not None
+    assert nearby.verified_zero is False
+    assert nearby.coordinate_coverage == 1.0
+    assert nearby.centers[0].center_name == "꿈나무어린이집"
+    assert nearby.centers[0].capacity == 50
+
+    with pytest.raises(ValueError, match="expected database"):
+        PostgresChildcareRepository(
+            postgres_dsn,
+            expected_database="wrong",
+            expected_username="test",
+        )
+    with pytest.raises(ValueError, match="runtime role"):
+        PostgresChildcareRepository(
+            postgres_dsn,
+            expected_database="test",
+            expected_username="wrong",
+        )
 
 
 def test_same_semantic_childcare_snapshot_is_no_change_without_second_publication(

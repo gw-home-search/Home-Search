@@ -39,7 +39,7 @@ snapshot 또는 검증된 실시간 응답에만 실제 근거 등급을 부여�
 | `transport.rail-station` | [전국도시철도역사정보표준데이터](https://www.data.go.kr/data/15013205/standard.do) | 국토교통부·국가철도공단 / 연간 | A | 역명, 노선, 위치 | 계약 등록됨; 미수집 |
 | `medical.hira-hospital` | [건강보험심사평가원 병원정보서비스](https://www.data.go.kr/data/15001698/openapi.do?recommendDataYn=Y) | 건강보험심사평가원 / API | 미지원 | 현재 생활 인프라 chatbot 범위 밖 | HIRA 수집 없음; 병원은 Kakao 지도 탐색 action만 제공 |
 | `medical.hira-pharmacy` | [건강보험심사평가원 약국정보서비스](https://www.data.go.kr/data/15001673/openapi.do) | 건강보험심사평가원 / API | 미지원 | 현재 생활 인프라 chatbot 범위 밖 | HIRA 수집 없음 |
-| `childcare.center` | [전국어린이집표준데이터](https://www.data.go.kr/data/15013108/standard.do?recommendDataYn=Y) | 교육부·한국사회보장정보원 / 수시 | A 또는 B | 유형, 운영현황, 정원, 위치, 기준일 | `cpmsapi030` collector·projection fixture 검증 완료; 신청 승인·live completeness 전 비활성 |
+| `childcare.center` | [전국어린이집표준데이터](https://www.data.go.kr/data/15013108/standard.do?recommendDataYn=Y) | 교육부·한국사회보장정보원 / 수시 | A 또는 B | 유형, 운영현황, 정원, 위치, 기준일 | `cpmsapi030` collector·projection·grounded lookup 코드 검증 완료; 신청 승인·live completeness 전 비활성 |
 | `environment.city-park` | [전국도시공원정보표준데이터](https://www.data.go.kr/data/15012890/standard.do) | 지자체 / 월간 관측 | A | 조성 완료 공원 위치·면적 | tracked contract 등록; 이용조건·adapter 미완료 |
 | `place.kakao-local` | [Kakao Local REST API](https://developers.kakao.com/docs/ko/local/dev-guide) | Kakao / 실시간 검색 | C | 주소·좌표 변환, 키워드·카테고리 장소 탐색 | 운영정책·캐시 승인 전 비활성 |
 | `official.redevelopment` | 지자체·국토부·공공기관 allowlist | 문서별 | D | 정비사업 공식 공고의 현재 단계 | allowlist 미확정 |

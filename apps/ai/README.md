@@ -29,8 +29,8 @@ Runtime variables:
 - `HOME_AI_QUERY_TIMEOUT_SECONDS` (optional, default `45`, allowed `1..60`)
 - `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend`
 - `HOME_AI_REFERENCE_DSN` (separate `home_search_ai_runtime` read-only pool)
-- `HOME_AI_ENABLED_REFERENCE_CAPABILITIES` (blank by default; the only approved
-  non-empty value is `school_location` after activation approval)
+- `HOME_AI_ENABLED_REFERENCE_CAPABILITIES` (blank by default; only the exact
+  academy/rail tuples recorded in `ai_service.chat` are currently approved)
 
 The runtime Capability setting is fail-closed. This activation permits the
 identity-only rollback value or the cumulative
@@ -52,6 +52,13 @@ most five Sbiz education-store points within 800m by default, or an explicit
 only Unicode NFKC name plus canonical road-address exact matches may add NEIS
 A-grade registry evidence. The runtime allowlist cannot enable this capability
 until license, taxonomy, coordinate coverage, and live readiness are approved.
+
+`childcare_lookup` is implemented but intentionally absent from the runtime
+activation allowlist while the official service application is pending. Its
+typed handler uses only active `childcare.center` snapshots, a default 800m
+radius (explicit 100..2,000m), and at most five operating centers. It exposes
+center type, capacity, straight-line distance, and reference date; admission
+availability, waiting time, childcare quality, and rankings are rejected.
 
 Do not rely on provider-side conversation state. The browser sends only the
 bounded `conversationContext`, and the AI service treats it as an untrusted

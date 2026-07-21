@@ -13,11 +13,12 @@ QueryCapability = Literal[
     "academy_registry_summary",
     "academy_lookup",
     "rail_station_lookup",
+    "childcare_lookup",
 ]
 PropertyCapability = Literal["complex_identity", "recent_trade_lookup", "price_trend"]
 ReferenceCapability = Literal[
     "school_location", "retail_location", "academy_registry_summary", "academy_lookup",
-    "rail_station_lookup",
+    "rail_station_lookup", "childcare_lookup",
 ]
 SchoolLevel = Literal["ELEMENTARY", "MIDDLE", "HIGH"]
 FacilitySubtype = Literal[
@@ -65,6 +66,7 @@ class QueryPlan:
             "retail_location",
             "academy_lookup",
             "rail_station_lookup",
+            "childcare_lookup",
         } and self.limit > 5:
             raise ValueError("reference facility limit must be between 1 and 5")
         if (

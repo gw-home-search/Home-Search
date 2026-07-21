@@ -8,6 +8,7 @@ from typing import Protocol, cast
 
 from .academy_locations import AcademyLocation, AcademyLocationSearchResult, RegistryExactMatch
 from .academy_registry import AcademyRegistrySummary
+from .childcare_centers import ChildcareCenter, ChildcareSearchResult
 from .models import (
     AdministrativeRegionContext,
     ComplexRecord,
@@ -110,6 +111,18 @@ class RailStationFactRepository(Protocol):
     ) -> RailStationSearchResult: ...
 
 
+class ChildcareFactRepository(Protocol):
+    def nearby(
+        self,
+        *,
+        latitude: float,
+        longitude: float,
+        radius_meters: int,
+        limit: int,
+        region_code: str | None,
+    ) -> ChildcareSearchResult | None: ...
+
+
 @dataclass(frozen=True)
 class CapabilityResult:
     facts: list[EvidenceFact]
@@ -163,6 +176,10 @@ class EvidenceFactBuilders:
     rail_station_fact: Callable[[RailStation, RailStationSearchResult], EvidenceFact]
     rail_scope_fact: Callable[
         [QueryPlan, ComplexRecord, RailStationSearchResult], EvidenceFact
+    ]
+    childcare_fact: Callable[[ChildcareCenter], EvidenceFact]
+    childcare_scope_fact: Callable[
+        [QueryPlan, ComplexRecord, ChildcareSearchResult], EvidenceFact
     ]
 
 
@@ -509,8 +526,101 @@ class RetailLocationHandler:
         )
 
 
+class ChildcareLookupHandler:
+    capability: QueryCapability = "childcare_lookup"
+
+    def __init__(
+        self,
+        repository: ChildcareFactRepository | None,
+        builders: EvidenceFactBuilders,
+        today: Callable[[], date],
+    ) -> None:
+        self._repository = repository
+        self._builders = builders
+        self._today = today
+
+    async def observe(
+        self, plan: QueryPlan, complex_record: ComplexRecord
+    ) -> CapabilityResult:
+        assert plan.radius_meters is not None
+        if not 100 <= plan.radius_meters <= 2000:
+            return CapabilityResult(
+                [],
+                ["어린이집 검색 반경은 100m에서 2000m 사이로 지정해야 합니다."],
+                "unavailable",
+            )
+        if not _has_marker_coordinates(complex_record):
+            return CapabilityResult(
+                [],
+                ["검증된 단지 표시 좌표가 없어 주변 어린이집을 조회할 수 없습니다."],
+                "unavailable",
+            )
+        if self._repository is None:
+            return CapabilityResult(
+                [],
+                ["공식 어린이집 active snapshot이 준비되지 않았습니다."],
+                "unavailable",
+            )
+        region_code = _district_region_code(complex_record.region_code)
+        result = await asyncio.to_thread(
+            self._repository.nearby,
+            latitude=complex_record.latitude,
+            longitude=complex_record.longitude,
+            radius_meters=plan.radius_meters,
+            limit=plan.limit,
+            region_code=region_code,
+        )
+        if result is None:
+            return CapabilityResult(
+                [],
+                ["공식 어린이집 active snapshot이 없습니다."],
+                "unavailable",
+            )
+        age_days = (self._today() - result.observed_at.date()).days
+        if (
+            age_days < 0
+            or age_days > result.freshness_days
+            or result.coordinate_coverage is None
+            or result.coordinate_coverage < 0.9
+        ):
+            return CapabilityResult(
+                [],
+                ["공식 어린이집 snapshot의 관측일 또는 지역 좌표 coverage가 활성화 기준을 충족하지 못했습니다."],
+                "unavailable",
+            )
+        facts = [
+            *(self._builders.childcare_fact(center) for center in result.centers),
+            self._builders.childcare_scope_fact(plan, complex_record, result),
+        ]
+        limitations = [
+            "거리는 단지 표시 좌표 기준 직선거리이며 실제 보행 경로가 아닙니다.",
+            "정원은 시설의 수용 정원이며 현재 이용 가능 여부를 의미하지 않습니다.",
+            "입소 대기와 보육 품질은 현재 근거에 포함되지 않습니다.",
+            "데이터 기준일 이후 운영상태가 변경될 수 있습니다.",
+        ]
+        readiness = (
+            "supported"
+            if result.centers or result.verified_zero
+            else "partial"
+        )
+        if not result.centers and not result.verified_zero:
+            limitations.append(
+                "지정 반경의 0건 여부를 지역 coverage로 확정할 수 없습니다."
+            )
+        return CapabilityResult(facts, limitations, readiness)
+
+
 def _has_marker_coordinates(record: ComplexRecord) -> bool:
     return record.marker_safe and record.latitude is not None and record.longitude is not None
+
+
+def _district_region_code(value: str | None) -> str | None:
+    if value is None:
+        return None
+    candidate = value[:5]
+    if len(candidate) == 5 and candidate.isascii() and candidate.isdigit():
+        return candidate
+    return None
 
 
 def _month_end(month: date) -> date:

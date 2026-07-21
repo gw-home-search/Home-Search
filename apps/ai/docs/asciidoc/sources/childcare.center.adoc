@@ -21,6 +21,12 @@ API에 provider total 또는 pagination이 없으므로 fixture 검증만으로 
 capability activation을 승인하지 않는다. 기존 `reference_projection.facility_point`와
 GIST/index를 재사용하며 별도 공간 table은 만들지 않는다.
 
+`childcare_lookup` handler와 `factList/v1` 표현은 fixture·PostGIS 통합 테스트로
+구현돼 있다. 기본 반경은 800m, 명시 반경은 100..2,000m, 최대 결과는 5개다.
+운영 중 시설의 유형·정원·직선거리·기준일만 제공하며 입소 가능, 대기기간,
+보육 품질, 추천 순위 주장은 grounding 단계에서 거부한다. source 신청 승인과 live
+readiness 전에는 runtime exact allowlist에 포함하지 않는다.
+
 include::{snippets}/childcare.center/http-request.adoc[]
 include::{snippets}/childcare.center/http-response.adoc[]
 include::{snippets}/childcare.center/response-fields.adoc[]

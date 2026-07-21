@@ -15,6 +15,7 @@ from ai_service.chat import (
     get_academy_location_repository,
     get_point_facility_repository,
     get_rail_station_repository,
+    get_childcare_repository,
     get_grounded_language_model,
     get_query_timeout_seconds,
     get_school_fact_repository,
@@ -40,6 +41,7 @@ def clear_language_model_cache() -> None:
     get_academy_location_repository.cache_clear()
     get_point_facility_repository.cache_clear()
     get_rail_station_repository.cache_clear()
+    get_childcare_repository.cache_clear()
     get_query_timeout_seconds.cache_clear()
     yield
     get_grounded_language_model.cache_clear()
@@ -50,6 +52,7 @@ def clear_language_model_cache() -> None:
     get_academy_location_repository.cache_clear()
     get_point_facility_repository.cache_clear()
     get_rail_station_repository.cache_clear()
+    get_childcare_repository.cache_clear()
     get_query_timeout_seconds.cache_clear()
 
 
@@ -192,6 +195,7 @@ def test_unapproved_or_invalid_property_capability_configuration_fails_closed(
         ("academy_registry_summary", frozenset()),
         ("retail_location", frozenset()),
         ("rail_station_lookup", frozenset()),
+        ("childcare_lookup", frozenset()),
         (
             "academy_lookup,rail_station_lookup",
             frozenset({"academy_lookup", "rail_station_lookup"}),
@@ -264,6 +268,45 @@ def test_rail_station_repository_requires_reference_dsn(
 
     with pytest.raises(ChatbotProviderUnavailable):
         get_rail_station_repository()
+
+
+def test_childcare_repository_requires_reference_dsn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HOME_AI_REFERENCE_DSN", raising=False)
+
+    with pytest.raises(ChatbotProviderUnavailable):
+        get_childcare_repository()
+
+
+def test_childcare_repository_uses_reference_runtime_dsn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[str] = []
+    repository = object()
+    monkeypatch.setenv("HOME_AI_REFERENCE_DSN", "postgresql://runtime/reference")
+    monkeypatch.setattr(
+        "ai_service.property_chat.childcare_centers.PostgresChildcareRepository",
+        lambda dsn: captured.append(dsn) or repository,
+    )
+
+    assert get_childcare_repository() is repository
+    assert captured == ["postgresql://runtime/reference"]
+
+
+def test_childcare_repository_wraps_connection_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME_AI_REFERENCE_DSN", "postgresql://runtime/reference")
+    monkeypatch.setattr(
+        "ai_service.property_chat.childcare_centers.PostgresChildcareRepository",
+        lambda _dsn: (_ for _ in ()).throw(ValueError("private connection detail")),
+    )
+
+    with pytest.raises(ChatbotProviderUnavailable) as error:
+        get_childcare_repository()
+
+    assert "private connection detail" not in str(error.value)
 
 
 @pytest.mark.parametrize("repository_available", [True, False])
@@ -420,6 +463,58 @@ def test_configured_engine_statically_composes_rail_station_repository(
     assert response == {"success": True}
     if repository_available:
         assert captured["rail_station_repository"] is rail_repository
+
+
+@pytest.mark.parametrize("repository_available", [True, False])
+def test_configured_engine_statically_composes_childcare_repository(
+    monkeypatch: pytest.MonkeyPatch,
+    repository_available: bool,
+) -> None:
+    captured: dict[str, object] = {}
+    childcare_repository = object()
+
+    class RecordingEngine:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        async def query(self, **_kwargs: object) -> dict[str, object]:
+            repository = captured["childcare_repository"]
+            if not repository_available:
+                with pytest.raises(ChatbotProviderUnavailable):
+                    repository.nearby()  # type: ignore[attr-defined]
+            return {"success": True}
+
+    monkeypatch.setattr(
+        "ai_service.chat.get_property_fact_repository", lambda: object()
+    )
+    monkeypatch.setattr("ai_service.chat.get_grounded_language_model", lambda: object())
+    monkeypatch.setattr(
+        "ai_service.chat.get_enabled_reference_capabilities",
+        lambda: frozenset({"childcare_lookup"}),
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_childcare_repository",
+        (
+            (lambda: childcare_repository)
+            if repository_available
+            else (lambda: (_ for _ in ()).throw(ChatbotProviderUnavailable()))
+        ),
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.engine.GroundedChatbotEngine", RecordingEngine
+    )
+
+    response = asyncio.run(
+        ConfiguredChatbotEngine().query(
+            request=ChatbotQueryRequest(question="주변 어린이집"),
+            user=AuthenticatedUser(user_id=42),
+            request_id="request-childcare-composition",
+        )
+    )
+
+    assert response == {"success": True}
+    if repository_available:
+        assert captured["childcare_repository"] is childcare_repository
 
 
 @pytest.mark.parametrize("repository_available", [True, False])

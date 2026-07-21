@@ -93,3 +93,21 @@ api-contract: compatible
 security-audit: 지적사항 = none — 전용 key는 request 조립 시에만 사용하고 keyed URL/provider 오류 body는 raw metadata·log·reason에 남지 않으며 연락처·대표자는 private raw 외 normalized/projection/evidence에 노출하지 않음
 commit: `feat(ai): collect official childcare snapshots`
 ```
+
+```text
+Slice: S4 — 어린이집 grounded answer
+요구사항: 단지 주변 공식 운영 어린이집의 유형·정원·직선거리·기준일만 grounded text와 factList/v1로 제공한다.
+구현 범위: childcare_lookup plan schema·정적 handler·PostgresChildcareRepository·source-specific fact/policy validator·기존 factList presenter·비활성 runtime composition
+지적사항: none — 최초 전체 coverage 89.93% Fail에서 지역 coverage 미확인·partial·DB/role fail-closed 분기 테스트를 보강해 90.16%로 통과; artifact label 경계 초과가 텍스트 답변까지 실패시키는 위험은 artifact 무시 fallback으로 수정
+검증 근거 확인: 최초 RED에서 `childcare_centers` module import 실패 확인; childcare handler/repository 27 passed; 관련 parser/composition 포함 좁은 회귀 116 passed; PostGIS publication→runtime read 통합 2 passed; 관련 전체 322 passed; `TESTCONTAINERS_RYUK_DISABLED=true uv run pytest -q` 703 passed, coverage 90.16%; `npm run lint` 0 errors(기존 warning 8); `npm run test` 238 passed; `npm run build` Pass; reference docs check와 `git diff --check` Pass
+검증 공백: 승인 key 기반 live snapshot이 없어 실제 provider row로 capability 응답을 실행하지 않음; exact runtime allowlist에서 childcare_lookup을 제외해 노출 차단
+과설계 판정: childcare 전용 typed repository/handler만 추가하고 generic facility handler·plugin·registry·신규 DB table·source별 React component 없음
+코드 스멜: engine.py 1,021줄로 최초 기준 1,334줄 미만; artifact rendering은 기존 presenter와 web FactListArtifactView 재사용
+공통화 결정: facility_point/GIST와 AnswerDocument/FactListArtifact lifecycle만 재사용하고 정원·입소 금지 정책과 typed SQL은 childcare feature-local 유지
+UI 연결: 기존 factList/v1 renderer로 최대 5개 시설을 표시하며 malformed/oversize label은 artifact만 숨기고 text/evidence 유지
+잔여 위험: S3 live completeness·좌표 coverage·schema 검증과 source readiness 9.0 이상 전에는 activation 불가
+점수: 9.5/10 Pass — code·fixture·PostGIS·UI 회귀는 충족했으나 live source readiness 미검증 0.5 감점
+api-contract: compatible
+security-audit: 지적사항 = none — 전화·팩스·홈페이지·대표자·현원은 query/fact/artifact에 없고 SQL은 parameterized·100..2,000m·최대 5건·3초 timeout으로 bounded
+commit: `feat(ai): ground official childcare facts`
+```

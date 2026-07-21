@@ -18,6 +18,8 @@ from .capability_handlers import (
     AcademyRegistryFactRepository,
     AcademyRegistrySummaryHandler,
     CapabilityCatalog,
+    ChildcareFactRepository,
+    ChildcareLookupHandler,
     EvidenceFactBuilders,
     PointFacilityFactRepository,
     PriceTrendHandler,
@@ -45,6 +47,7 @@ from .models import (
     TradeRecord,
 )
 from .academy_registry import AcademyRegistrySummary
+from .childcare_centers import ChildcareCenter, ChildcareSearchResult
 from .academy_locations import (
     AcademyLocation,
     AcademyLocationSearchResult,
@@ -90,6 +93,8 @@ _GROUNDING_FAILURE_REASONS = frozenset(
         "GROUNDING_ACADEMY_LOOKUP_TEXT_OUTSIDE_OBSERVATION",
         "GROUNDING_RAIL_POLICY_VIOLATION",
         "GROUNDING_RAIL_TEXT_OUTSIDE_OBSERVATION",
+        "GROUNDING_CHILDCARE_POLICY_VIOLATION",
+        "GROUNDING_CHILDCARE_TEXT_OUTSIDE_OBSERVATION",
     }
 )
 
@@ -116,6 +121,7 @@ class GroundedChatbotEngine:
         academy_registry_repository: AcademyRegistryFactRepository | None = None,
         academy_location_repository: AcademyLocationFactRepository | None = None,
         rail_station_repository: RailStationFactRepository | None = None,
+        childcare_repository: ChildcareFactRepository | None = None,
         enabled_reference_capabilities: frozenset[ReferenceCapability] = frozenset(),
         today: Callable[[], date] = date.today,
     ) -> None:
@@ -137,6 +143,8 @@ class GroundedChatbotEngine:
             retail_scope_fact=_retail_scope_fact,
             rail_station_fact=_rail_station_fact,
             rail_scope_fact=_rail_scope_fact,
+            childcare_fact=_childcare_fact,
+            childcare_scope_fact=_childcare_scope_fact,
         )
         self._catalog = CapabilityCatalog(
             (
@@ -150,6 +158,7 @@ class GroundedChatbotEngine:
                 ),
                 RailStationHandler(rail_station_repository, builders, today),
                 RetailLocationHandler(point_facility_repository, builders),
+                ChildcareLookupHandler(childcare_repository, builders, today),
             )
         )
 
@@ -184,6 +193,7 @@ class GroundedChatbotEngine:
                 readiness,
                 limitations=limitations,
                 enforce_school_policy=plan.capability == "school_location",
+                enforce_childcare_policy=plan.capability == "childcare_lookup",
             )
             artifacts = FactListPresenter().present(
                 plan=plan,
@@ -673,6 +683,71 @@ def _rail_scope_fact(
     )
 
 
+def _childcare_fact(center: ChildcareCenter) -> EvidenceFact:
+    return EvidenceFact(
+        fact_id=f"childcare-center-{center.center_id}",
+        claims=(
+            FactClaim(center.center_id, "FACILITY_ID"),
+            FactClaim(center.center_name, "TEXT"),
+            FactClaim(center.center_type, "CHILDCARE_TYPE"),
+            FactClaim(str(center.capacity), "CAPACITY_PERSONS"),
+            FactClaim(str(center.distance_meters), "METERS"),
+            FactClaim(center.reference_date.isoformat(), "DATE"),
+        ),
+        data_as_of=center.reference_date,
+        payload={
+            "centerId": center.center_id,
+            "centerName": center.center_name,
+            "centerType": center.center_type,
+            "capacity": center.capacity,
+            "distanceMeters": center.distance_meters,
+            "referenceDate": center.reference_date.isoformat(),
+            "datasetVersion": center.dataset_version,
+        },
+        source_id="childcare.center",
+        source_name="어린이집별 기본정보 조회",
+        source_url="https://www.data.go.kr/data/15013108/standard.do",
+        evidence_grade="A",
+        dataset_version_value=center.dataset_version,
+    )
+
+
+def _childcare_scope_fact(
+    plan: QueryPlan,
+    complex_record: ComplexRecord,
+    result: ChildcareSearchResult,
+) -> EvidenceFact:
+    assert plan.radius_meters is not None
+    assert result.coordinate_coverage is not None
+    return EvidenceFact(
+        fact_id=f"childcare-scope-{complex_record.complex_id}-{plan.radius_meters}",
+        claims=(
+            FactClaim(str(plan.radius_meters), "RADIUS_METERS"),
+            FactClaim(str(result.matched_count), "COUNT"),
+            FactClaim(str(result.returned_count), "RETURNED_COUNT"),
+            FactClaim(str(result.has_more).lower(), "BOOLEAN"),
+            FactClaim(str(result.verified_zero).lower(), "VERIFIED_ZERO"),
+            FactClaim(_number(result.coordinate_coverage), "COORDINATE_COVERAGE"),
+        ),
+        data_as_of=result.observed_at.date(),
+        payload={
+            "complexId": complex_record.complex_id,
+            "radiusMeters": plan.radius_meters,
+            "matchedCount": result.matched_count,
+            "returnedCount": result.returned_count,
+            "hasMore": result.has_more,
+            "verifiedZero": result.verified_zero,
+            "coordinateCoverage": result.coordinate_coverage,
+            "observedAt": result.observed_at.isoformat(),
+        },
+        source_id="childcare.center",
+        source_name="어린이집별 기본정보 조회",
+        source_url="https://www.data.go.kr/data/15013108/standard.do",
+        evidence_grade="A",
+        dataset_version_value=result.dataset_version,
+    )
+
+
 def validate_draft(
     draft: DraftAnswer,
     facts: list[EvidenceFact],
@@ -680,6 +755,7 @@ def validate_draft(
     *,
     limitations: list[str] | None = None,
     enforce_school_policy: bool = False,
+    enforce_childcare_policy: bool = False,
 ) -> list[EvidenceFact]:
     if not draft.sentences:
         raise GroundingValidationError("GROUNDING_ANSWER_EMPTY")
@@ -697,6 +773,9 @@ def validate_draft(
     ]
     rail_facts = [
         fact for fact in facts if fact.source_id == "transport.rail-station"
+    ]
+    childcare_facts = [
+        fact for fact in facts if fact.source_id == "childcare.center"
     ]
     used_ids: list[str] = []
     for sentence in draft.sentences:
@@ -732,6 +811,8 @@ def validate_draft(
             _validate_academy_lookup_sentence(sentence.text, referenced)
         if rail_facts:
             _validate_rail_sentence(sentence.text, referenced)
+        if childcare_facts or enforce_childcare_policy:
+            _validate_childcare_sentence(sentence.text, referenced)
         allowed_numbers = _number_tokens(
             claim.value for fact in referenced for claim in fact.claims
         )
@@ -872,6 +953,47 @@ def _validate_rail_sentence(
         if station_name not in allowed_station_names:
             raise GroundingValidationError(
                 "GROUNDING_RAIL_TEXT_OUTSIDE_OBSERVATION"
+            )
+
+
+def _validate_childcare_sentence(
+    text: str, referenced: list[EvidenceFact]
+) -> None:
+    availability = re.search(
+        r"(?:입소|등록|자리).{0,20}(?:가능|여유|남아|받을\s*수|할\s*수)",
+        text,
+    )
+    availability_negative = re.search(
+        r"(?:입소|등록|자리).{0,30}(?:의미하지\s*않|확인할\s*수\s*없|"
+        r"알\s*수\s*없|근거가\s*없|포함되지\s*않)",
+        text,
+    )
+    unsupported = re.search(
+        r"입소\s*대기|대기\s*(?:기간|순번)|보육\s*(?:품질|수준)|추천\s*순위",
+        text,
+    )
+    unsupported_negative = re.search(
+        r"(?:입소\s*대기|대기\s*(?:기간|순번)|보육\s*(?:품질|수준)|추천\s*순위)"
+        r".{0,50}(?:의미하지\s*않|확인할\s*수\s*없|알\s*수\s*없|"
+        r"근거가\s*없|포함되지\s*않|지원하지\s*않)",
+        text,
+    )
+    if (
+        (availability and not availability_negative)
+        or (unsupported and not unsupported_negative)
+        or re.search(r"정원.{0,20}(?:빈자리|여유|남아)", text)
+    ):
+        raise GroundingValidationError("GROUNDING_CHILDCARE_POLICY_VIOLATION")
+    observed_text = {
+        claim.value
+        for fact in referenced
+        for claim in fact.claims
+        if claim.unit == "TEXT"
+    }
+    for center_name in re.findall(r"[\w가-힣()]+어린이집", text):
+        if center_name not in observed_text:
+            raise GroundingValidationError(
+                "GROUNDING_CHILDCARE_TEXT_OUTSIDE_OBSERVATION"
             )
 
 

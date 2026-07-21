@@ -74,7 +74,11 @@ class FactListPresenter:
         used_facts: list[EvidenceFact],
         readiness: str,
     ) -> list[dict[str, object]]:
-        if plan.capability != "complex_identity" or readiness != "supported":
+        if readiness != "supported":
+            return []
+        if plan.capability == "childcare_lookup":
+            return self._present_childcare(plan, used_facts)
+        if plan.capability != "complex_identity":
             return []
         if len(used_facts) != 1:
             return []
@@ -103,6 +107,78 @@ class FactListPresenter:
             items=tuple(items),
         )
         return [artifact.to_public_dict()]
+
+    @staticmethod
+    def _present_childcare(
+        plan: QueryPlan,
+        used_facts: list[EvidenceFact],
+    ) -> list[dict[str, object]]:
+        scope = next(
+            (
+                fact
+                for fact in used_facts
+                if fact.fact_id.startswith("childcare-scope-")
+            ),
+            None,
+        )
+        if scope is None or plan.radius_meters is None:
+            return []
+        complex_id = scope.payload.get("complexId")
+        if not isinstance(complex_id, int):
+            return []
+        items: list[FactListItem] = []
+        for fact in used_facts:
+            if not fact.fact_id.startswith("childcare-center-"):
+                continue
+            payload = fact.payload
+            center_name = payload.get("centerName")
+            center_type = payload.get("centerType")
+            capacity = payload.get("capacity")
+            distance = payload.get("distanceMeters")
+            reference_date = payload.get("referenceDate")
+            if (
+                not isinstance(center_name, str)
+                or not 1 <= len(center_name.strip()) <= _MAX_LABEL_LENGTH
+                or not isinstance(center_type, str)
+                or not center_type.strip()
+                or isinstance(capacity, bool)
+                or not isinstance(capacity, int)
+                or isinstance(distance, bool)
+                or not isinstance(distance, int)
+                or not isinstance(reference_date, str)
+            ):
+                return []
+            items.append(
+                FactListItem(
+                    center_name,
+                    (
+                        f"{center_type} · 정원 {capacity}명 · 직선거리 {distance}m · "
+                        f"기준일 {reference_date}"
+                    ),
+                    (fact.fact_id,),
+                )
+            )
+        if not items:
+            matched_count = scope.payload.get("matchedCount")
+            verified_zero = scope.payload.get("verifiedZero")
+            if matched_count != 0 or verified_zero is not True:
+                return []
+            items.append(
+                FactListItem(
+                    "검색 결과",
+                    f"반경 {plan.radius_meters}m에서 확인되지 않음",
+                    (scope.fact_id,),
+                )
+            )
+        return [
+            FactListArtifact(
+                artifact_id=(
+                    f"fact-list-childcare-{complex_id}-{plan.radius_meters}"
+                ),
+                title="확인된 공식 어린이집",
+                items=tuple(items),
+            ).to_public_dict()
+        ]
 
     @staticmethod
     def _append_text(

@@ -253,11 +253,40 @@ def test_planning_accepts_rail_station_lookup_with_1500_meter_default() -> None:
     assert plan.capability == "rail_station_lookup"
     assert plan.radius_meters == 1500
     schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
-    assert schema["properties"]["capability"]["enum"][-1] == "rail_station_lookup"
+    assert "rail_station_lookup" in schema["properties"]["capability"]["enum"]
     assert "uniqueItems" not in schema["properties"]["schoolLevels"]
     assert "uniqueItems" not in schema["properties"]["facilitySubtypes"]
     prompt = json.loads(requester.calls[0][2])["input"][0]["content"]
     assert "Do not claim commute time, schedule, or congestion" in prompt
+
+
+def test_planning_accepts_childcare_lookup_with_800_meter_default() -> None:
+    requester = RecordingRequester(
+        _response(
+            _valid_plan(
+                capability="childcare_lookup",
+                schoolLevels=["ELEMENTARY", "MIDDLE", "HIGH"],
+                facilitySubtypes=[],
+                radiusMeters=None,
+            )
+        )
+    )
+
+    plan = asyncio.run(
+        _model(requester).plan_query(
+            ChatbotQueryRequest(question="잠실엘스 주변 어린이집")
+        )
+    )
+
+    assert plan.capability == "childcare_lookup"
+    assert plan.radius_meters == 800
+    body = json.loads(requester.calls[0][2])
+    assert "childcare_lookup" in body["text"]["format"]["schema"]["properties"][
+        "capability"
+    ]["enum"]
+    assert "Do not claim current admission availability" in body["input"][0][
+        "content"
+    ]
 
 
 def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> None:

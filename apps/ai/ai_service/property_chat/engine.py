@@ -1230,8 +1230,23 @@ def _validate_rail_sentence(
     allowed_station_names = observed_text | {
         name if name.endswith("역") else f"{name}역" for name in observed_text
     }
+    generic_station_labels = {
+        "가까운역",
+        "도시철도역",
+        "인근역",
+        "전철역",
+        "주변역",
+        "지하철역",
+        "철도역",
+        "최근접역",
+        "최근접지하철역",
+        "해당역",
+    }
     for station_name in re.findall(r"[\w가-힣()]+역", text):
-        if station_name not in allowed_station_names:
+        if (
+            station_name not in allowed_station_names
+            and station_name not in generic_station_labels
+        ):
             raise GroundingValidationError(
                 "GROUNDING_RAIL_TEXT_OUTSIDE_OBSERVATION"
             )

@@ -494,13 +494,14 @@ def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> N
         {
             "factId": "property-trade-7",
             "claims": [{"value": "120000", "unit": "10_000_KRW"}],
-            "dataAsOf": "2026-06-30",
-            "payload": {"dealAmountTenThousandKrw": 120000},
         }
     ]
     assert "subject" not in user_payload
+    assert "dataAsOf" not in user_payload["facts"][0]
+    assert "payload" not in user_payload["facts"][0]
     assert request_body["text"]["format"]["name"] == "grounded_property_answer"
     assert request_body["max_output_tokens"] == 3200
+    assert request_body["reasoning"] == {"effort": "none"}
     sentence_schema = request_body["text"]["format"]["schema"]["properties"][
         "sentences"
     ]["items"]
@@ -599,6 +600,17 @@ def test_transport_failure_and_oversized_response_do_not_expose_provider_data() 
             asyncio.run(model.plan_query(ChatbotQueryRequest(question="잠실엘스 위치")))
         assert str(raised.value) == ""
         assert "test-api-key" not in repr(raised.value)
+
+
+def test_provider_timeout_uses_a_non_disclosing_specific_reason() -> None:
+    model = _model(RecordingRequester(TimeoutError("secret provider detail")))
+
+    with pytest.raises(OpenAIResponsesError) as raised:
+        asyncio.run(model.plan_query(ChatbotQueryRequest(question="잠실엘스 위치")))
+
+    assert raised.value.reason_code == "PROVIDER_TIMEOUT"
+    assert str(raised.value) == ""
+    assert "secret provider detail" not in repr(raised.value)
 
 
 @pytest.mark.parametrize(

@@ -159,3 +159,9 @@ Coordinate Source DB가 일치한 211건을 additive evidence로 보완했다. �
 3건 조회로 수정해 observation을 통과했으나, 5곳과 3곳 질문 모두 답변 생성 단계에서
 `PROVIDER_TRANSPORT_FAILED`가 재현됐다. 따라서 현재 제한 활성화 코드는 유지하되 이
 live gate가 통과하기 전에는 운영 배포 승인으로 판정하지 않는다.
+
+후속 진단에서 draft의 기본 reasoning `medium`을 `none`으로 낮추자 provider timeout은
+해소됐다. claim-only 입력으로 숫자 grounding 오류를 제거하고 일반 철도 명칭 validator를
+보완했지만, 최종 live는 `GROUNDING_RAIL_TEXT_OUTSIDE_OBSERVATION`으로 종료됐다. 응답
+원문 비노출 정책과 세 번 수정 stop rule에 따라 추가 호출을 중단했으며 운영 배포 gate는
+계속 `Fail`이다.

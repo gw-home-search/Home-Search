@@ -44,6 +44,11 @@ Coordinate Source DB를 서로 다른 read-only 연결로 조회하며, 정확�
 - live 최초 RED: 송파구 후보 조회가 3초 statement timeout으로 종료됨
 - 최소 GREEN: 행정구역을 먼저 exact/descendant code로 확정하고, 단지별 최근 거래
   3건을 한 번의 bounded SQL에서 조회하도록 변경. repository 통합·성능 테스트 통과
+- provider 후속 RED: draft 요청이 기본 reasoning `medium`에서 timeout되고, 모델에
+  claim 밖의 `payload`·`dataAsOf` 값이 노출되며, 일반 철도 명칭을 고유 역명으로
+  오인하는 validator 경계가 확인됨
+- 후속 GREEN: draft에만 `reasoning.effort=none`, claim-only 입력, timeout 전용
+  비노출 오류 코드, 일반 철도 명칭/미관찰 고유 역명 회귀 테스트를 적용
 
 ## 계약 영향
 
@@ -58,6 +63,9 @@ Coordinate Source DB를 서로 다른 read-only 연결로 조회하며, 정확�
 - coordinate-source 연결은 read-only, 3초 timeout, 최대 1,000 PNU exact lookup이다.
 - runner는 DSN과 password를 출력하지 않으며 Docker volume을 변경하거나 삭제하지 않는다.
 - DB 간 직접 join, 외부 geocoding, fuzzy 주소 매칭은 없다.
+- draft provider에는 인용 가능한 `factId`와 `claims`만 전달하고 내부 artifact용
+  `payload`·`dataAsOf`는 전달하지 않는다. timeout과 grounding 실패는 고정 reasonCode만
+  출력하며 provider 응답 원문이나 secret을 로그에 남기지 않는다.
 
 security-audit: 지적사항 = none
 
@@ -65,14 +73,14 @@ security-audit: 지적사항 = none
 
 | 검사 | 결과 |
 |---|---|
-| 전체 AI gate | Pass — 948 tests, coverage 90.01% |
+| 전체 AI gate | Pass — 951 tests, coverage 90.03% |
 | 좌표 보완 runner | Pass — DB 경계 전달, secret 비노출, idempotent 재실행 |
 | local chatbot preflight | Pass — exact 누적 allowlist, childcare 혼합 거부, secret 비노출 |
 | reference 문서 결정성 | Pass |
 | signed JWT JSON/SSE | Pass — 실제 서명, 잘못된 issuer 401, property 회귀 |
 | service DB boundary | Pass — credential 분리, runtime Flyway 비활성 |
 | change classifier·diff | Pass |
-| OpenAI live 대표 질문 | Fail — observation 수정 후에도 답변 생성 단계가 `PROVIDER_TRANSPORT_FAILED` |
+| OpenAI live 대표 질문 | Fail — provider timeout은 해소됐으나 최종 rail grounding gate 미통과 |
 
 ## 검증 공백과 잔여 위험
 
@@ -83,6 +91,14 @@ security-audit: 지적사항 = none
   provider body, secret을 출력하지 않았고 실패 응답도 사용자 답변으로 노출하지 않았다.
 - 동일 오류가 축소된 근거 묶음에서도 재현되어 추가 유료 재시도는 중단했다. provider
   답변 생성 경계가 통과하기 전에는 이 기능을 운영 배포 승인으로 간주하지 않는다.
+- 후속 실행에서 [GPT-5.6 공식 지침](https://developers.openai.com/api/docs/guides/model-guidance?model=gpt-5.6)에 따라
+  deterministic draft의 reasoning을 `none`으로 낮춘 뒤 provider 응답은 timeout 없이
+  반환됐다. 이어 claim-only 입력으로 숫자 grounding 오류도 제거했다.
+- 일반 `지하철역` 표현을 고유 역명으로 오인하는 validator RED→GREEN 뒤에도 live
+  응답은 `BUDGET_RETAIL_DRAFT_GROUNDING_RAIL_TEXT_OUTSIDE_OBSERVATION`으로 종료됐다.
+  실제 provider 문구는 비노출 정책상 저장하지 않았고, 세 번의 후속 수정·재실행 후
+  stop rule을 적용했다. 다음 Slice는 사용자 응답을 노출하지 않는 typed rail token
+  진단 또는 recommendation fallback의 서버 결정형 문장 조립을 먼저 설계해야 한다.
 - 88%는 대규모점포 source에만 적용한 임시 최소선이다. 현재 88.7931%와의 여유가
   작으므로 새 active snapshot에서 기준 미달 시 자동 비활성화될 수 있다.
 - 좌표 미확인 `468`행과 provider 행정코드 mapping 부재 때문에 정상 0건을 확정하지

@@ -7,7 +7,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date
 from http.client import HTTPSConnection
-from typing import Any
+from typing import Any, Literal
 
 from ai_service.models import ChatbotQueryRequest
 
@@ -38,6 +38,7 @@ _SAFE_PROVIDER_FAILURE_REASONS = frozenset(
         "PROVIDER_RESPONSE_REFUSED",
         "PROVIDER_RESPONSE_TOO_LARGE",
         "PROVIDER_SERVER_ERROR",
+        "PROVIDER_TIMEOUT",
         "PROVIDER_TRANSPORT_FAILED",
     }
 )
@@ -214,8 +215,6 @@ class OpenAIResponsesLanguageModel:
                         {"value": claim.value, "unit": claim.unit}
                         for claim in fact.claims
                     ],
-                    "dataAsOf": fact.data_as_of.isoformat(),
-                    "payload": fact.payload,
                 }
                 for fact in facts
             ],
@@ -225,6 +224,7 @@ class OpenAIResponsesLanguageModel:
             name="grounded_property_answer",
             schema=_draft_schema(facts),
             max_output_tokens=3200,
+            reasoning_effort="none",
             developer_prompt=(
                 "Answer in Korean using only the supplied facts and limitations. "
                 "Use every supplied fact at least once. Do not omit scope or complex facts "
@@ -288,33 +288,37 @@ class OpenAIResponsesLanguageModel:
         max_output_tokens: int,
         developer_prompt: str,
         user_payload: dict[str, object],
+        reasoning_effort: Literal["none", "low", "medium", "high"] | None = None,
     ) -> object:
         try:
-            request_body = json.dumps(
-                {
-                    "model": self._settings.model,
-                    "store": False,
-                    "max_output_tokens": max_output_tokens,
-                    "input": [
-                        {"role": "developer", "content": developer_prompt},
-                        {
-                            "role": "user",
-                            "content": json.dumps(
-                                user_payload,
-                                ensure_ascii=False,
-                                separators=(",", ":"),
-                            ),
-                        },
-                    ],
-                    "text": {
-                        "format": {
-                            "type": "json_schema",
-                            "name": name,
-                            "strict": True,
-                            "schema": schema,
-                        }
+            provider_request: dict[str, object] = {
+                "model": self._settings.model,
+                "store": False,
+                "max_output_tokens": max_output_tokens,
+                "input": [
+                    {"role": "developer", "content": developer_prompt},
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            user_payload,
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                        ),
                     },
+                ],
+                "text": {
+                    "format": {
+                        "type": "json_schema",
+                        "name": name,
+                        "strict": True,
+                        "schema": schema,
+                    }
                 },
+            }
+            if reasoning_effort is not None:
+                provider_request["reasoning"] = {"effort": reasoning_effort}
+            request_body = json.dumps(
+                provider_request,
                 ensure_ascii=False,
                 separators=(",", ":"),
             ).encode()
@@ -333,6 +337,8 @@ class OpenAIResponsesLanguageModel:
             )
         except OpenAIResponsesError:
             raise
+        except TimeoutError:
+            raise OpenAIResponsesError("PROVIDER_TIMEOUT") from None
         except Exception:
             raise OpenAIResponsesError("PROVIDER_TRANSPORT_FAILED") from None
         if (

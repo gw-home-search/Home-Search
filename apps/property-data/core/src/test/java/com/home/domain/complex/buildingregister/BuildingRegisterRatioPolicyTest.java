@@ -51,6 +51,51 @@ class BuildingRegisterRatioPolicyTest {
     }
 
     @Test
+    @DisplayName("표제부 fallback 후보가 없으면 적응형 수집에서 기본개요를 생략한다")
+    void skipsBasicOverviewWhenCollectedTitlesCannotProduceFallbackCandidate() {
+        BuildingRegisterRecord recap = recap("1000", "200", "800", "20", "0");
+        BuildingRegisterRecord title = title("T-1", null, null, null, null, null, null, "02000");
+
+        boolean fetchBasicOverview = collectionPolicy.shouldFetchBasicOverview(
+                BuildingRegisterCollectionStrategy.ADAPTIVE,
+                List.of(recap),
+                List.of(title),
+                1,
+                Set.of(BuildingRatioField.FLOOR_AREA_RATIO));
+
+        assertThat(fetchBasicOverview).isFalse();
+    }
+
+    @Test
+    @DisplayName("표제부 fallback 후보가 있으면 계층 검증을 위해 기본개요를 수집한다")
+    void fetchesBasicOverviewWhenCollectedTitlesCanProduceFallbackCandidate() {
+        BuildingRegisterRecord recap = recap("1000", "200", "800", "20", "0");
+        BuildingRegisterRecord title = title("T-1", null, "1000", null, "800", null, "80", "02000");
+
+        boolean fetchBasicOverview = collectionPolicy.shouldFetchBasicOverview(
+                BuildingRegisterCollectionStrategy.ADAPTIVE,
+                List.of(recap),
+                List.of(title),
+                1,
+                Set.of(BuildingRatioField.FLOOR_AREA_RATIO));
+
+        assertThat(fetchBasicOverview).isTrue();
+    }
+
+    @Test
+    @DisplayName("full-hierarchy 수집은 후보 가능성과 무관하게 기본개요를 수집한다")
+    void fullHierarchyAlwaysFetchesBasicOverview() {
+        boolean fetchBasicOverview = collectionPolicy.shouldFetchBasicOverview(
+                BuildingRegisterCollectionStrategy.FULL_HIERARCHY,
+                List.of(recap("1000", "200", "800", "20", "80")),
+                List.of(),
+                1,
+                Set.of());
+
+        assertThat(fetchBasicOverview).isTrue();
+    }
+
+    @Test
     @DisplayName("건축물대장 비율 후보 해석 정책을 검증한다")
     void calculatesRecapComponentsWhenDirectRatiosAreMissing() {
         BuildingRegisterRecord recap = recap("1000", "200", "800", null, null);

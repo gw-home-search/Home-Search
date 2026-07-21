@@ -52,6 +52,21 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("표제부에 fallback 후보 구성요소가 없으면 기본개요를 호출하지 않는다")
+    void adaptiveCollectionSkipsBasicOverviewWhenTitleCannotProduceFallbackCandidate() {
+        Fixture fixture = new Fixture();
+        fixture.client.respond(BuildingRegisterEndpoint.RECAP_TITLE, page(recap("20", "0"), 1));
+        fixture.client.respond(BuildingRegisterEndpoint.TITLE, page(titleWithoutRatioCandidate(), 1));
+        fixture.client.respond(BuildingRegisterEndpoint.BASIC_OVERVIEW, page(basic(), 1));
+
+        BuildingRegisterCollectionResult result = fixture.service.collect(command(10));
+
+        assertThat(fixture.client.calls).containsExactly("RECAP_TITLE:1:100", "TITLE:1:100");
+        assertThat(result.basicOverviewRecords()).isEmpty();
+        assertThat(result.fallbackFields()).extracting(Enum::name).containsExactly("FLOOR_AREA_RATIO");
+    }
+
+    @Test
     @DisplayName("건축물대장 적응형 수집 처리를 검증한다")
     void adaptiveCollectionFetchesBasicOverviewWhenEmptyRecapHasMultipleTitles() {
         Fixture fixture = new Fixture();
@@ -314,6 +329,33 @@ class BuildingRegisterCollectionServiceTest {
 
     private static BuildingRegisterRecordSnapshotCommand title() {
         return record(BuildingRegisterEndpoint.TITLE, "TITLE-1", "ROOT-1", "3", "20", "80");
+    }
+
+    private static BuildingRegisterRecordSnapshotCommand titleWithoutRatioCandidate() {
+        return new BuildingRegisterRecordSnapshotCommand(
+                0,
+                PNU,
+                BuildingRegisterEndpoint.TITLE,
+                "TITLE-1",
+                null,
+                "1",
+                "3",
+                "0",
+                "0",
+                "Sample",
+                "101",
+                "02000",
+                null,
+                null,
+                new BigDecimal("999"),
+                null,
+                null,
+                null,
+                2,
+                1,
+                740,
+                LocalDate.of(2015, 3, 20),
+                LocalDate.of(2026, 7, 20));
     }
 
     private static BuildingRegisterRecordSnapshotCommand basic() {

@@ -51,9 +51,13 @@ public class BuildingRegisterCollectionService {
         if (titles.status() != BuildingRegisterCollectionStatus.COLLECTED) {
             return result(titles.status(), budget.used(), recap.records(), titles.records(), List.of(), decision);
         }
-        boolean multipleStandaloneCandidates =
-                recap.records().isEmpty() && titles.records().size() > 1;
-        EndpointResult overview = decision.fetchBasicOverview() || multipleStandaloneCandidates
+        boolean fetchBasicOverview = policy.shouldFetchBasicOverview(
+                command.strategy(),
+                recap.records().stream().map(this::domainRecord).toList(),
+                titles.records().stream().map(this::domainRecord).toList(),
+                command.pnuComplexCount(),
+                decision.fallbackFields());
+        EndpointResult overview = fetchBasicOverview
                 ? collectEndpoint(command, BuildingRegisterEndpoint.BASIC_OVERVIEW, budget)
                 : EndpointResult.collected(List.of());
         return result(

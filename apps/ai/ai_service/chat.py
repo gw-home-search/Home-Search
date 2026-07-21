@@ -17,6 +17,12 @@ _APPROVED_PROPERTY_CAPABILITY_CONFIGURATIONS = frozenset(
         ("complex_identity", "recent_trade_lookup", "price_trend"),
     }
 )
+_APPROVED_REFERENCE_CAPABILITY_CONFIGURATIONS = frozenset(
+    {
+        ("academy_lookup",),
+        ("academy_lookup", "rail_station_lookup"),
+    }
+)
 
 
 class ChatbotProviderUnavailable(Exception):
@@ -37,6 +43,16 @@ class _UnavailableAcademyRegistryRepository:
 
 
 class _UnavailableAcademyLocationRepository:
+    def nearby(self, **_kwargs: object) -> object:
+        raise ChatbotProviderUnavailable()
+
+
+class _UnavailablePointFacilityRepository:
+    def nearby(self, **_kwargs: object) -> object:
+        raise ChatbotProviderUnavailable()
+
+
+class _UnavailableRailStationRepository:
     def nearby(self, **_kwargs: object) -> object:
         raise ChatbotProviderUnavailable()
 
@@ -104,6 +120,32 @@ def get_academy_location_repository() -> object:
 
 
 @lru_cache
+def get_point_facility_repository() -> object:
+    dsn = os.getenv("HOME_AI_REFERENCE_DSN", "").strip()
+    if not dsn:
+        raise ChatbotProviderUnavailable()
+    from .property_chat.reference_facilities import PostgresPointFacilityRepository
+
+    try:
+        return PostgresPointFacilityRepository(dsn)
+    except Exception as exception:
+        raise ChatbotProviderUnavailable() from exception
+
+
+@lru_cache
+def get_rail_station_repository() -> object:
+    dsn = os.getenv("HOME_AI_REFERENCE_DSN", "").strip()
+    if not dsn:
+        raise ChatbotProviderUnavailable()
+    from .property_chat.rail_stations import PostgresRailStationRepository
+
+    try:
+        return PostgresRailStationRepository(dsn)
+    except Exception as exception:
+        raise ChatbotProviderUnavailable() from exception
+
+
+@lru_cache
 def get_grounded_language_model() -> object:
     from .property_chat.language import RetryingLanguageModel, UnavailableLanguageModel
     from .property_chat.openai_responses import (
@@ -155,9 +197,16 @@ def get_enabled_property_capabilities() -> frozenset[PropertyCapability]:
 @lru_cache
 def get_enabled_reference_capabilities() -> frozenset[ReferenceCapability]:
     raw_value = os.getenv("HOME_AI_ENABLED_REFERENCE_CAPABILITIES", "")
-    if raw_value != "school_location":
+    if not raw_value:
         return frozenset()
-    return frozenset({"school_location"})
+    values = raw_value.split(",")
+    if (
+        any(not value or value != value.strip() for value in values)
+        or len(values) != len(set(values))
+        or tuple(values) not in _APPROVED_REFERENCE_CAPABILITY_CONFIGURATIONS
+    ):
+        return frozenset()
+    return cast(frozenset[ReferenceCapability], frozenset(values))
 
 
 @lru_cache
@@ -192,6 +241,8 @@ class ConfiguredChatbotEngine:
                 school_repository = None
                 academy_registry_repository = None
                 academy_location_repository = None
+                point_facility_repository = None
+                rail_station_repository = None
                 if "school_location" in enabled_reference_capabilities:
                     try:
                         school_repository = await asyncio.to_thread(get_school_fact_repository)
@@ -215,6 +266,22 @@ class ConfiguredChatbotEngine:
                         academy_location_repository = (
                             _UnavailableAcademyLocationRepository()
                         )
+                if "retail_location" in enabled_reference_capabilities:
+                    try:
+                        point_facility_repository = await asyncio.to_thread(
+                            get_point_facility_repository
+                        )
+                    except ChatbotProviderUnavailable:
+                        point_facility_repository = (
+                            _UnavailablePointFacilityRepository()
+                        )
+                if "rail_station_lookup" in enabled_reference_capabilities:
+                    try:
+                        rail_station_repository = await asyncio.to_thread(
+                            get_rail_station_repository
+                        )
+                    except ChatbotProviderUnavailable:
+                        rail_station_repository = _UnavailableRailStationRepository()
                 engine = GroundedChatbotEngine(
                     repository=repository,  # type: ignore[arg-type]
                     school_repository=school_repository,  # type: ignore[arg-type]
@@ -223,6 +290,12 @@ class ConfiguredChatbotEngine:
                     ),
                     academy_location_repository=(
                         academy_location_repository  # type: ignore[arg-type]
+                    ),
+                    point_facility_repository=(
+                        point_facility_repository  # type: ignore[arg-type]
+                    ),
+                    rail_station_repository=(
+                        rail_station_repository  # type: ignore[arg-type]
                     ),
                     language_model=language_model,  # type: ignore[arg-type]
                     enabled_capabilities=get_enabled_property_capabilities(),

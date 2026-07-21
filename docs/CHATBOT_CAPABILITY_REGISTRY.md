@@ -57,9 +57,9 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 | `elementary_attendance_zone` | “배정 초등학교는?” | 데이터 준비 중 | 초등 통학구역 polygon, 학교 ID | A | 좌표가 포함된 공식 구역과 공동통학 여부 | 직선거리로 배정학교 단정 | 반기 갱신 + grace 31일 이내 | 공식 polygon 근거 없음을 명시 |
 | `middle_high_school_zone` | “어느 학교군이야?” | 데이터 준비 중 | 중학교·고등학교 학교군 polygon | A | 공식 학교군 포함 여부 | 특정 학교 진학 보장 | 반기 갱신 + grace 31일 이내 | 학교군 데이터 미준비 또는 범위 밖 안내 |
 | `academy_registry_summary` | “이 시군구의 공식 등록 학원은 몇 곳?” | 데이터 준비 중 | NEIS 학원·교습소 active snapshot | A | 시도교육청+시군구 기준 등록 총수·운영 수·관측일 | 반경·거리, 교육 품질·성과 | source 계약의 수시 갱신 SLA | 공식 snapshot 미준비 또는 지역 식별 불가 안내 |
-| `academy_lookup` | “단지 800m 안 교육업소는?” | 데이터 준비 중 | Sbiz 교육업소 active snapshot, 선택적 NEIS exact match | B | 지정 반경의 교육업소 위치와 직선거리; exact match 성공 시 공식 등록 상태 | Sbiz 수를 공식 등록 학원 수로 표현, fuzzy match, 교육 품질 | 월간 관측 + grace 15일 이내 | 지정 조건에서 확인되지 않음 또는 snapshot 미준비 안내 |
+| `academy_lookup` | “단지 800m 안 교육업소는?” | 지원 | Sbiz 교육업소 active snapshot, 선택적 NEIS exact match | B | 지정 반경의 교육업소 위치와 직선거리; exact match 성공 시 공식 등록 상태 | Sbiz 수를 공식 등록 학원 수로 표현, fuzzy match, 교육 품질 | 월간 관측 + grace 15일 이내 | 지정 조건에서 확인되지 않음 또는 snapshot 미준비 안내 |
 | `education_metrics` | “학생·교사 수는?” | 데이터 준비 중 | 학교알리미·교육통계의 승인된 지표 | A | 정의와 분모가 고정된 공개 지표 | 자체 학교 서열화 | 지표별 계약에 명시 | 지표 정의 또는 최신 버전 미확정 안내 |
-| `rail_station_lookup` | “가까운 역과 노선” | 데이터 준비 중 | 도시철도 역사 snapshot | A | 역명, 노선, 직선거리 | 통근시간·배차·혼잡도 | 연간 갱신 + grace 45일 이내 | 위치 기준선 미준비 안내; Kakao는 탐색 보조만 가능 |
+| `rail_station_lookup` | “가까운 역과 노선” | 지원 | 도시철도 역사 snapshot | A | 역명, 노선, 직선거리 | 통근시간·배차·혼잡도 | 연간 갱신 + grace 45일 이내 | 위치 기준선 미준비 안내; Kakao는 탐색 보조만 가능 |
 | `hospital_lookup` | “주변 병원 유형” | 데이터 준비 중 | HIRA 병원정보 API 응답/snapshot | B | 조회 시점 기관 유형과 거리 | 의료 품질·치료 효과·진료 가능 보장 | 조회 시각 표시; snapshot은 별도 SLA | 공식 응답 실패와 재시도 가능 시점 안내 |
 | `childcare_lookup` | “주변 어린이집 유형·정원” | 데이터 준비 중 | 전국어린이집 active snapshot/API | A 또는 B | 공개된 유형·정원·거리 | 입소 가능 여부 | source 계약의 수시/실시간 SLA | 공개 항목 미확인 안내 |
 | `kakao_place_search` | “지금 주변 마트·카페” | 데이터 준비 중 | Kakao Local 조회 응답 | C | 검색 시점·반경·페이지 안의 장소 | 지역 전체 개수, 완전한 상권 밀도 | 요청 시각 표시 | “지정 조건에서 확인되지 않음”으로 표현 |
@@ -101,3 +101,15 @@ allowlist
 근거 기반 금액 표시 claim, live golden, signed JWT JSON/SSE와 Compose preflight를
 검증했으므로 세 부동산 Capability를 `지원`으로 유지한다. 상세 근거는
 `docs/reports/CHATBOT_SLICE_5B_PRICE_TREND_ACTIVATION.md`에 기록한다.
+
+2026-07-21 `academy_lookup`은 Sbiz 191,250행·좌표 100%, verified raw 복구,
+재수집 `NoChange`, 최대 2km p95 `156.927ms`, Sbiz B+NEIS exact A citation과 signed
+JWT JSON/SSE를 통과해 `지원`으로 승인했다. reference allowlist는 빈 rollback 또는
+`academy_lookup`만 허용하며 학교·NEIS summary·retail·rail은 이 activation에
+포함하지 않는다.
+
+2026-07-21 `rail_station_lookup`은 fixed XLSX 1,097 occurrence·좌표 100%, verified
+raw 복구, 동일 release 재수집 재사용, 최대 3km p95 `25.565ms`, exact 역 병합과
+signed JWT JSON/SSE A등급 citation을 통과해 `지원`으로 승인했다. 승인된 누적
+reference allowlist는 `academy_lookup,rail_station_lookup`이며 rail 단독 설정은
+fail-closed한다.

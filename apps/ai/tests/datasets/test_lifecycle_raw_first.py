@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 import psycopg
+from psycopg.conninfo import make_conninfo
 
 from ai_service.datasets.postgres import PostgresDatasetRepository
 from ai_service.datasets.postgres import SourceRefreshAlreadyRunning
@@ -240,6 +241,30 @@ def test_source_advisory_lock_rejects_concurrent_same_source(
                     raise AssertionError("unreachable")
     finally:
         other.close()
+
+
+def test_source_refresh_lock_does_not_block_its_publication_transaction(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    repository = PostgresDatasetRepository(
+        make_conninfo(postgres_dsn, options="-c lock_timeout=200ms")
+    )
+    lifecycle = DatasetLifecycleService(
+        repository,
+        clock=lambda: datetime(2026, 7, 19, tzinfo=UTC),
+    )
+    raw = b'{"rows":[{"station_id":"station-1","name":"Station","latitude":37.5,"longitude":127.0}]}'
+
+    try:
+        with repository.source_lock("fixture.rail-station"):
+            result = lifecycle.ingest_validate_publish(
+                source_contract(), raw, source_date=date(2026, 7, 19)
+            )
+    finally:
+        repository.close()
+
+    assert result.status == "Pass"
 
 
 def test_incomplete_bundle_is_preserved_but_never_parsed_or_published(

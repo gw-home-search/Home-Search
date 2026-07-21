@@ -121,6 +121,38 @@ def test_checksum_reingest_is_idempotent_and_does_not_duplicate_publication(
     }
 
 
+def test_checksum_reingest_resumes_a_validated_publication_after_interruption(
+    dataset_repository: PostgresDatasetRepository,
+) -> None:
+    class InterruptBeforePublish:
+        def __init__(self, delegate: PostgresDatasetRepository) -> None:
+            self._delegate = delegate
+
+        def __getattr__(self, name: str):
+            return getattr(self._delegate, name)
+
+        def publish(self, _acquisition_id: UUID, _published_at: datetime) -> UUID:
+            raise KeyboardInterrupt
+
+    raw = (FIXTURE_DIR / "valid.json").read_bytes()
+    with pytest.raises(KeyboardInterrupt):
+        service(InterruptBeforePublish(dataset_repository)).ingest_validate_publish(  # type: ignore[arg-type]
+            source_contract(), raw, source_date=SOURCE_DATE
+        )
+
+    recovered = service(dataset_repository).ingest_validate_publish(
+        source_contract(), raw, source_date=SOURCE_DATE
+    )
+
+    assert recovered.status == "Pass"
+    assert recovered.idempotent is True
+    assert dataset_repository.table_counts() == {
+        "raw_objects": 1,
+        "acquisitions": 1,
+        "publications": 1,
+    }
+
+
 def test_same_raw_can_be_reprocessed_under_a_new_normalization_contract(
     dataset_repository: PostgresDatasetRepository,
 ) -> None:
@@ -414,6 +446,49 @@ def test_same_observed_rows_on_same_day_create_no_second_publication(
             (unchanged.acquisition_id,),
         ).fetchone()[0]
     assert staging_count == 0
+
+
+def test_same_observed_rows_ignore_exact_row_observation_time(
+    dataset_repository: PostgresDatasetRepository,
+) -> None:
+    class ObservationAdapter:
+        def parse(self, raw, _contract, *, source_date):
+            assert source_date is None
+            return ParsedDataset(
+                rows=[
+                    {
+                        **valid_rows()[0],
+                        "observed_at": raw.decode("ascii"),
+                    }
+                ]
+            )
+
+    observed_contract = replace(
+        source_contract(),
+        source_id="fixture.observed-row-no-change",
+        temporal_basis="OBSERVED_AT",
+        schema_version="fixture-observed-row-v1",
+    )
+    lifecycle = service(dataset_repository)
+
+    first = lifecycle.ingest_validate_publish(
+        observed_contract,
+        b"2026-07-16T01:00:00+00:00",
+        source_date=None,
+        observed_at=datetime(2026, 7, 16, 1, tzinfo=UTC),
+        adapter=ObservationAdapter(),
+    )
+    unchanged = lifecycle.ingest_validate_publish(
+        observed_contract,
+        b"2026-07-16T23:00:00+00:00",
+        source_date=None,
+        observed_at=datetime(2026, 7, 16, 23, tzinfo=UTC),
+        adapter=ObservationAdapter(),
+    )
+
+    assert first.status == "Pass"
+    assert unchanged.status == "NoChange"
+    assert dataset_repository.publication_count(observed_contract.source_id) == 1
 
 
 def test_invalid_payload_is_preserved_before_parse_failure(

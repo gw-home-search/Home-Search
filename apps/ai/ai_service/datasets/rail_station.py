@@ -59,7 +59,7 @@ class RailStationAdapter:
         if artifact.media_type != _MEDIA_TYPE:
             raise RawPayloadError("rail artifact type mismatch", "BUNDLE_MANIFEST_INVALID")
         _inspect_xlsx_archive(artifact.content)
-        return _parse_xlsx(io.BytesIO(artifact.content), source_date)
+        return _parse_xlsx(io.BytesIO(artifact.content))
 
     def parse_file(
         self,
@@ -85,10 +85,10 @@ class RailStationAdapter:
                     "rail bundle metadata mismatch", "BUNDLE_MANIFEST_INVALID"
                 )
             _inspect_xlsx_archive(bundle.artifact_path)
-            return _parse_xlsx(bundle.artifact_path, source_date)
+            return _parse_xlsx(bundle.artifact_path)
 
 
-def _parse_xlsx(source: io.BytesIO | Path, source_date: date) -> ParsedDataset:
+def _parse_xlsx(source: io.BytesIO | Path) -> ParsedDataset:
     try:
         workbook = load_workbook(
             source,
@@ -128,8 +128,17 @@ def _parse_xlsx(source: io.BytesIO | Path, source_date: date) -> ParsedDataset:
                     for header, index in header_index.items()
                 }
                 row_number = len(rows) + 1
-                normalized, reasons = _normalize(provider_row, source_date)
+                normalized, reasons, row_date_invalid = _normalize(provider_row)
                 rows.append(normalized)
+                if row_date_invalid:
+                    issues.append(
+                        QualityIssue(
+                            "RAIL_ROW_REFERENCE_DATE_INVALID",
+                            "WARNING",
+                            row_number,
+                            {},
+                        )
+                    )
                 if reasons:
                     rejections[row_number] = tuple(reasons)
                     issues.extend(
@@ -138,11 +147,7 @@ def _parse_xlsx(source: io.BytesIO | Path, source_date: date) -> ParsedDataset:
                     )
         if not rows:
             raise RawPayloadError("rail XLSX contains no data rows", "SOURCE_EMPTY")
-        return ParsedDataset(
-            rows=rows,
-            issues=tuple(issues),
-            row_rejections=rejections,
-        )
+        return _reconcile_occurrences(rows, issues, rejections)
     finally:
         workbook.close()
 
@@ -171,11 +176,11 @@ def rail_station_source_contract(
             "station_occurrence_id",
             "operator",
             "line_number",
+            "line_name",
             "station_number",
             "station_name",
             "latitude",
             "longitude",
-            "reference_date",
         ),
         expected_min_rows=reference_contract.quality.minimum_rows,
         expected_max_rows=reference_contract.quality.maximum_rows,
@@ -216,8 +221,8 @@ def _inspect_xlsx_archive(content: bytes | Path) -> None:
 
 
 def _normalize(
-    row: dict[str, object], source_date: date
-) -> tuple[dict[str, object], list[str]]:
+    row: dict[str, object],
+) -> tuple[dict[str, object], list[str], bool]:
     operator = _clean(_provider_value(row, "operator"))
     line_number = _clean(_provider_value(row, "line_number"))
     line_name = _clean(_provider_value(row, "line_name"))
@@ -226,7 +231,7 @@ def _normalize(
     latitude = _number(_provider_value(row, "latitude"))
     longitude = _number(_provider_value(row, "longitude"))
     reasons: list[str] = []
-    if not all((operator, line_number, station_number, station_name)):
+    if not all((operator, line_number, line_name, station_number, station_name)):
         reasons.append("RAIL_STATION_IDENTITY_REQUIRED")
     if (
         latitude is None
@@ -235,13 +240,15 @@ def _normalize(
         or not 124 <= longitude <= 132
     ):
         reasons.append("RAIL_STATION_COORDINATE_REQUIRED")
-    row_date = _date(_provider_value(row, "reference_date"))
-    if row_date != source_date:
-        reasons.append("SOURCE_DATE_MIXED")
+    row_date_value = _provider_value(row, "reference_date")
+    row_date = _date(row_date_value)
+    row_date_invalid = bool(_clean(row_date_value)) and row_date is None
     transfer_lines = _transfer_lines(_provider_value(row, "transfer_lines"))
     return (
         {
-            "station_occurrence_id": f"{operator}|{line_number}|{station_number}",
+            "station_occurrence_id": (
+                f"{operator}|{line_number}|{line_name}|{station_number}"
+            ),
             "operator": operator,
             "line_number": line_number,
             "line_name": line_name,
@@ -251,9 +258,76 @@ def _normalize(
             "latitude": latitude,
             "longitude": longitude,
             "transfer_lines": transfer_lines,
-            "reference_date": source_date.isoformat(),
+            "reference_date": row_date.isoformat() if row_date is not None else None,
         },
         reasons,
+        row_date_invalid,
+    )
+
+
+def _reconcile_occurrences(
+    rows: list[dict[str, object]],
+    issues: list[QualityIssue],
+    rejections: dict[int, tuple[str, ...]],
+) -> ParsedDataset:
+    grouped: dict[str, list[int]] = {}
+    for index, row in enumerate(rows):
+        occurrence_id = str(row["station_occurrence_id"])
+        grouped.setdefault(occurrence_id, []).append(index)
+
+    superseded: set[int] = set()
+    for indexes in grouped.values():
+        if len(indexes) < 2 or any(index + 1 in rejections for index in indexes):
+            continue
+        dated = [
+            (index, _date(rows[index].get("reference_date"))) for index in indexes
+        ]
+        if any(value is None for _index, value in dated):
+            continue
+        latest_date = max(value for _index, value in dated if value is not None)
+        latest = [index for index, value in dated if value == latest_date]
+        if len(latest) != 1:
+            continue
+        superseded.update(index for index in indexes if index != latest[0])
+
+    if not superseded:
+        return ParsedDataset(
+            rows=rows,
+            issues=tuple(issues),
+            row_rejections=rejections,
+        )
+
+    remapped: dict[int, int] = {}
+    reconciled_rows: list[dict[str, object]] = []
+    for index, row in enumerate(rows):
+        if index in superseded:
+            continue
+        reconciled_rows.append(row)
+        remapped[index + 1] = len(reconciled_rows)
+
+    reconciled_issues = [
+        QualityIssue(
+            issue.reason_code,
+            issue.severity,
+            remapped[issue.row_number] if issue.row_number is not None else None,
+            issue.details,
+        )
+        for issue in issues
+        if issue.row_number is None or issue.row_number in remapped
+    ]
+    reconciled_issues.extend(
+        QualityIssue("RAIL_SUPERSEDED_OCCURRENCE", "WARNING", None, {})
+        for _index in sorted(superseded)
+    )
+    reconciled_rejections = {
+        remapped[row_number]: reasons
+        for row_number, reasons in rejections.items()
+        if row_number in remapped
+    }
+    return ParsedDataset(
+        rows=reconciled_rows,
+        issues=tuple(reconciled_issues),
+        row_rejections=reconciled_rejections,
     )
 
 

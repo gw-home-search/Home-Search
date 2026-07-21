@@ -164,7 +164,7 @@ def test_default_https_request_encodes_key_and_closes_connection(monkeypatch) ->
 
         def request(self, _method, path, headers):
             state["path"] = path
-            assert headers == {"Accept": "application/json"}
+            assert headers == {"Accept": "*/*"}
 
         def getresponse(self):
             return Response()

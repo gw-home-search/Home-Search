@@ -38,7 +38,7 @@ _SOURCE_SECRET_KEYS = {
     "edu.school-location": ("HOME_AI_DATA_GO_KR_SERVICE_KEY",),
     "edu.academy-registry": ("HOME_AI_NEIS_SERVICE_KEY",),
     "place.sbiz-academy": ("HOME_AI_DATA_GO_KR_SERVICE_KEY",),
-    "retail.large-store": ("HOME_AI_DATA_GO_KR_SERVICE_KEY",),
+    "retail.large-store": (),
     "transport.rail-station": (),
 }
 
@@ -174,9 +174,9 @@ def _print_outcome(outcome: RefreshOutcome) -> None:
     print(f"pageCount: {outcome.page_count}")
     print(f"rawRowCount: {outcome.raw_row_count}")
     print(f"acceptedRowCount: {result.accepted_row_count}")
-    print("nonSpatialRowCount: 0")
+    print("nonSpatialRowCount: ")
     print(f"rejectedRowCount: {result.rejected_row_count}")
-    print("coordinateCoverage: 1.0")
+    print("coordinateCoverage: ")
     print(f"datasetVersion: {result.dataset_version or ''}")
     print(f"reasonCodes: {','.join(result.issue_codes)}")
 

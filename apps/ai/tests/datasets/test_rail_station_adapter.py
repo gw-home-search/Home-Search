@@ -19,7 +19,7 @@ from ai_service.datasets.bundle import (
 )
 from ai_service.datasets.models import DatasetSourceContract
 from ai_service.datasets.rail_station import RailStationAdapter
-from ai_service.datasets.validation import RawPayloadError
+from ai_service.datasets.validation import RawPayloadError, validate_rows
 
 
 HEADERS = [
@@ -74,11 +74,11 @@ def _contract() -> DatasetSourceContract:
             "station_occurrence_id",
             "operator",
             "line_number",
+            "line_name",
             "station_number",
             "station_name",
             "latitude",
             "longitude",
-            "reference_date",
         ),
         expected_min_rows=1,
         expected_max_rows=10,
@@ -134,6 +134,65 @@ def test_same_station_name_on_multiple_lines_keeps_distinct_occurrences() -> Non
     assert parsed.row_rejections == {}
 
 
+def test_same_line_number_with_different_line_names_keeps_distinct_occurrences() -> None:
+    rows = [
+        ["한국철도공사", "I4108", "경의중앙선", "1202", "상봉역", "서울 중랑구", 37.596754, 127.085553, "경춘선", "2025-04-08"],
+        ["한국철도공사", "I4108", "경춘선", "1202", "상봉역", "서울 중랑구", 37.595254, 127.085853, "경의중앙선", "2025-12-31"],
+    ]
+
+    parsed = RailStationAdapter().parse(
+        _bundle(_xlsx(rows)), _contract(), source_date=date(2026, 1, 1)
+    )
+
+    assert {row["station_occurrence_id"] for row in parsed.rows} == {
+        "한국철도공사|I4108|경의중앙선|1202",
+        "한국철도공사|I4108|경춘선|1202",
+    }
+
+
+def test_exact_occurrence_keeps_only_unique_latest_reference_row() -> None:
+    rows = [
+        ["서울교통공사", "S1107", "7호선", "0736", "총신대입구(이수)", "서울 동작구", 37.485258, 126.981766, "4호선", "2024-12-31"],
+        ["서울교통공사", "S1107", "7호선", "0736", "이수", "서울 동작구", 37.485258, 126.981766, "4호선", "2025-12-31"],
+    ]
+
+    parsed = RailStationAdapter().parse(
+        _bundle(_xlsx(rows)), _contract(), source_date=date(2026, 1, 1)
+    )
+
+    assert len(parsed.rows) == 1
+    assert parsed.rows[0]["station_name"] == "이수"
+    assert parsed.rows[0]["reference_date"] == "2025-12-31"
+    assert [issue.reason_code for issue in parsed.issues] == [
+        "RAIL_SUPERSEDED_OCCURRENCE"
+    ]
+
+
+def test_exact_occurrence_with_tied_latest_date_remains_blocking() -> None:
+    rows = [
+        ["서울교통공사", "S1107", "7호선", "0736", "이수", "서울 동작구", 37.485258, 126.981766, "4호선", "2025-12-31"],
+        ["서울교통공사", "S1107", "7호선", "0736", "총신대입구(이수)", "서울 동작구", 37.485258, 126.981766, "4호선", "2025-12-31"],
+    ]
+    parsed = RailStationAdapter().parse(
+        _bundle(_xlsx(rows)), _contract(), source_date=date(2026, 1, 1)
+    )
+
+    outcome = validate_rows(
+        _contract(),
+        parsed.rows,
+        None,
+        source_date=date(2026, 1, 1),
+        collected_at=datetime(2026, 1, 2),
+        adapter_issues=parsed.issues,
+        adapter_rejections=parsed.row_rejections,
+    )
+
+    assert outcome.rejected_row_count == 1
+    assert "DUPLICATE_UNIQUE_KEY" in {
+        issue.reason_code for issue in outcome.issues
+    }
+
+
 def test_live_kric_headers_are_normalized_without_projecting_phone() -> None:
     row = [
         "201", "시청", "02", "2호선", "City Hall", "市廳", "환승역", "01",
@@ -147,10 +206,12 @@ def test_live_kric_headers_are_normalized_without_projecting_phone() -> None:
         source_date=date(2026, 1, 1),
     )
 
-    assert parsed.rows[0]["station_occurrence_id"] == "서울교통공사|02|201"
+    assert parsed.rows[0]["station_occurrence_id"] == "서울교통공사|02|2호선|201"
     assert parsed.rows[0]["station_name"] == "시청"
     assert parsed.rows[0]["line_name"] == "2호선"
     assert parsed.rows[0]["road_address"] == "서울 중구"
+    assert parsed.rows[0]["reference_date"] == "2026-06-30"
+    assert parsed.row_rejections == {}
     assert "phone" not in parsed.rows[0]
 
 
@@ -199,7 +260,7 @@ def test_rail_file_adapter_streams_bundle_artifact(
         bundle_path, _contract(), source_date=date(2026, 1, 1)
     )
 
-    assert parsed.rows[0]["station_occurrence_id"] == "서울교통공사|02|201"
+    assert parsed.rows[0]["station_occurrence_id"] == "서울교통공사|02|2호선|201"
 
 
 def test_rail_file_adapter_fails_closed_on_contract_metadata_and_parser(
@@ -321,7 +382,7 @@ def test_schema_mismatch_fails_closed() -> None:
     assert error.value.reason_code == "SOURCE_SCHEMA_MISMATCH"
 
 
-def test_identity_coordinate_and_mixed_date_rejections_accumulate() -> None:
+def test_identity_and_coordinate_rejections_preserve_row_provenance_date() -> None:
     rows = [
         ["", "", "2호선", "", "시청", "서울 중구", 91, 181, "2호선, 2호선;1호선", "2026-01-02"]
     ]
@@ -333,9 +394,26 @@ def test_identity_coordinate_and_mixed_date_rejections_accumulate() -> None:
     assert parsed.row_rejections[1] == (
         "RAIL_STATION_IDENTITY_REQUIRED",
         "RAIL_STATION_COORDINATE_REQUIRED",
-        "SOURCE_DATE_MIXED",
     )
     assert parsed.rows[0]["transfer_lines"] == ["2호선", "1호선"]
+    assert parsed.rows[0]["reference_date"] == "2026-01-02"
+
+
+def test_blank_or_invalid_row_date_is_nullable_provenance() -> None:
+    rows = [
+        ["서울교통공사", "02", "2호선", "201", "시청", "서울 중구", 37.5657, 126.977, "", ""],
+        ["서울교통공사", "02", "2호선", "202", "을지로입구", "서울 중구", 37.566, 126.982, "", "1900-01-00"],
+    ]
+
+    parsed = RailStationAdapter().parse(
+        _bundle(_xlsx(rows)), _contract(), source_date=date(2026, 1, 1)
+    )
+
+    assert [row["reference_date"] for row in parsed.rows] == [None, None]
+    assert parsed.row_rejections == {}
+    assert [(issue.reason_code, issue.severity, issue.row_number) for issue in parsed.issues] == [
+        ("RAIL_ROW_REFERENCE_DATE_INVALID", "WARNING", 2),
+    ]
 
 
 def test_empty_workbook_fails_closed() -> None:

@@ -44,7 +44,7 @@ class FileSnapshotError(RuntimeError):
 @dataclass(frozen=True)
 class CollectedFileSnapshot:
     path: Path
-    source_date: date
+    source_date: date | None
     byte_length: int
     checksum: str
     media_type: str
@@ -65,6 +65,7 @@ class FileSnapshotClient:
         allow_one_redirect: bool,
         fixed_query: str = "",
         source_date: date | None = None,
+        require_source_date: bool = True,
         referer_url: str = "",
         requester: Requester | None = None,
         timeout_seconds: float = 20,
@@ -79,6 +80,7 @@ class FileSnapshotClient:
             or not math.isfinite(timeout_seconds)
             or not 1 <= timeout_seconds <= 30
             or (source_date is not None and type(source_date) is not date)
+            or not isinstance(require_source_date, bool)
         ):
             raise ValueError("file snapshot configuration is invalid")
         self._hosts = allowed_hosts
@@ -101,6 +103,7 @@ class FileSnapshotClient:
         self._maximum_bytes = maximum_bytes
         self._allow_one_redirect = allow_one_redirect
         self._configured_source_date = source_date
+        self._require_source_date = require_source_date
         self._referer_url = referer_url
         self._requester = requester
         self._timeout = float(timeout_seconds)
@@ -139,7 +142,7 @@ class FileSnapshotClient:
             source_date = _source_date(
                 normalized_headers.get("content-disposition", ""), current_url
             ) or self._configured_source_date
-            if source_date is None:
+            if source_date is None and self._require_source_date:
                 _discard(target)
                 raise FileSnapshotError("SOURCE_DATE_UNVERIFIED")
             return CollectedFileSnapshot(

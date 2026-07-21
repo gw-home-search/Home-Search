@@ -41,6 +41,9 @@ def test_school_source_uses_wrapper_and_prints_bounded_report(capsys) -> None:
     assert "상태: Pass" in output
     assert "temporalBasis: SOURCE_DATE" in output
     assert "dataAsOf: 2026-03-20" in output
+    assert "nonSpatialRowCount: \n" in output
+    assert "coordinateCoverage: \n" in output
+    assert "coordinateCoverage: 1.0" not in output
 
 
 def test_priority_family_continues_after_each_unready_source(capsys) -> None:
@@ -96,7 +99,7 @@ def test_static_source_composition_matches_fixed_priority_order() -> None:
     )
 
 
-def test_retail_source_receives_data_go_kr_key_and_not_neis_key() -> None:
+def test_retail_file_source_receives_no_provider_key() -> None:
     assert reference_refresh._source_environment(
         "retail.large-store",
         {
@@ -105,7 +108,6 @@ def test_retail_source_receives_data_go_kr_key_and_not_neis_key() -> None:
             "HOME_AI_IMPORTER_DSN": "dsn",
         },
     ) == {
-        "HOME_AI_DATA_GO_KR_SERVICE_KEY": "data-key",
         "HOME_AI_IMPORTER_DSN": "dsn",
     }
 

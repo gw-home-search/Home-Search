@@ -28,10 +28,10 @@ dataset의 private raw 저장·가공 승인으로 확대하지 않는다.
 
 | sourceId | 공식 확인 내용 | contract 상태 | activation blocker |
 |---|---|---|---|
-| `edu.academy-registry` | NEIS 상세 페이지의 `이용 허락 범위 제한없음`, provider·주기·attribution evidence SHA-256 고정 | `APPROVED` | 실제 key·acquisition·S3·전국 row/freshness·chatbot golden 미검증 |
-| `place.sbiz-academy` | API의 무제한 이용 허락, 국세청/카드사 provenance·제3자 정책, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | 실제 taxonomy/store acquisition·S3·coverage·chatbot golden 미검증 |
-| `retail.large-store` | 새 행정안전부 OpenAPI 상세의 `이용허락범위 제한 없음`, 일간·2일 전 현행화, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | dataset `15154948` 활용신청 반영과 full acquisition·S3·coverage 미검증 |
-| `transport.rail-station` | fileData `15093755`의 `이용허락범위 제한 없음`과 프로젝트 책임자가 보고한 KRIC 전화 승인; 서면 transcript 부재를 evidence에 명시 | `APPROVED` | 전체 artifact·S3·좌표 100%·chatbot golden 미검증 |
+| `edu.academy-registry` | NEIS 상세 페이지의 `이용 허락 범위 제한없음`, provider·주기·attribution evidence SHA-256 고정 | `APPROVED` | acquisition·S3·전국 138,412행·p95 통과; chatbot golden·pointer rollback 미검증 |
+| `place.sbiz-academy` | API의 무제한 이용 허락, 국세청/카드사 provenance·제3자 정책, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | 필수 readiness 통과; `academy_lookup` 활성화 |
+| `retail.large-store` | 공식 fileData 상세의 `이용허락범위 제한 없음`, 일간·2일 전 현행화, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | 좌표 83.7404%와 live chatbot golden 실패로 activation 차단 |
+| `transport.rail-station` | fileData `15093755`의 `이용허락범위 제한 없음`과 프로젝트 책임자가 보고한 KRIC 전화 승인; 서면 transcript 부재를 evidence에 명시 | `APPROVED` | 필수 readiness 통과; `rail_station_lookup` 활성화 |
 
 빈 `terms_fingerprint`는 미검토가 아니라 승인 근거가 없음을 뜻한다. 철도는 공식
 fileData 이용허락과 프로젝트 책임자의 KRIC 전화 승인 진술을 fingerprint로 고정했다.
@@ -81,11 +81,11 @@ live 필수 항목이 남으면 readiness를 `Partial`로 유지한다.
 | F2 normalized spool·semantic `NoChange` | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
 | F3 static composition·CLI | `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 | D1 AsciiDoc artifact | `Pass` | `9.0/10` | 해당 없음 | 해당 없음 |
-| NEIS | source 이용조건·collector·projection·summary observer offline `Pass`, live 미완료 | `10.0/10` | `3.0/10 Partial` | 금지 |
-| Sbiz S2 collector | source 이용조건·공식 taxonomy contract·parent scoped collector·adapter·generic refresh offline `Pass`, live taxonomy 변경 감지 | `10.0/10` | `3.0/10 Partial` | 금지 |
-| Sbiz S2-P grounded location | exact projection·grounded location observer offline `Pass` | `10.0/10` | `3.0/10 Partial` | 금지 |
-| 대규모점포 | bounded API client·raw JSON pages·OBSERVED_AT adapter·기존 projection `Pass`, live auth 차단 | `10.0/10` | `2.0/10 Partial` | 금지 |
-| 철도 S4 collector | source 계약·download·1,099행/좌표 100% 확인, provider key 중복·row 기준일 혼재로 quality fail | `9.5/10` | `3.0/10 Partial` | 금지 |
+| NEIS | source 이용조건·collector·projection·summary observer·전국 live 수집 `Pass` | `10.0/10` | `8.0/10 Partial` | 금지 |
+| Sbiz S2 collector | 공식 taxonomy 18 partition·191,250행·S3 복구·`NoChange` `Pass` | `10.0/10` | `10.0/10 Pass` | 활성화 |
+| Sbiz S2-P grounded location | exact projection·Sbiz B+NEIS A signed JWT JSON/SSE `Pass` | `10.0/10` | `10.0/10 Pass` | 활성화 |
+| 대규모점포 | 공식 CSV 4,176행·S3 복구·`NoChange`·runtime composition `Pass` | `10.0/10` | `8.0/10 Partial` | coverage·golden으로 금지 |
+| 철도 S4/S4-P | fixed XLSX·1,097 occurrence·좌표 100%·S3·병합·signed JWT JSON/SSE `Pass` | `9.5/10` | `10.0/10 Pass` | 활성화 |
 | Offline priority integration | AI·PostGIS·MinIO·property-data·chat-bff·JWT·Compose `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 
 상세 readiness 근거는 `docs/reports/reference/readiness/`에 source별로 기록한다.
@@ -103,7 +103,7 @@ lazy `ParsedRow`, stream 중 parse failure rollback,
 NEIS·Sbiz normalized iterator, 30만 행 `<256MiB` peak memory gate를 통과했다.
 F3는 5개 source refresher와 feature-local projection writer를 고정 catalog로 합성하고,
 repository transaction 안에서 projection 이후에만 active pointer를 전환한다. generic
-CLI와 local wrapper는 source별 provider key만 선택하며 철도 XLSX만 provider key 없이
+CLI와 local wrapper는 source별 provider key만 선택하며 철도 XLSX와 대규모점포 CSV는 provider key 없이
 실행된다. `--family priority`는 고정 순서와 source 실패 후 계속
 실행을 유지하고 status/audit는 runtime read-only role과 3초 statement timeout을
 사용한다. 실제 provider 실행은 readiness 단계로 남아 `0.5`를 감점해 `9.5/10 Pass`로
@@ -112,7 +112,7 @@ CLI와 local wrapper는 source별 provider key만 선택하며 철도 XLSX만 pr
 endpoint와 non-secret exact query, 공식 XLSX response media type,
 owner-only temp, verified S3 file upload, safe refresh-run 실패 기록을 static catalog에
 연결했으며 landing URL은 network 호출 전에 거부한다. 2026-07-20 전체 offline
-회귀는 최신 기준 `564 passed`, coverage `90.10%`다. NEIS summary observer는 property DB의
+회귀는 최신 기준 `630 passed`, coverage `90.03%`다. NEIS summary observer는 property DB의
 시도·시군구 ancestor를 먼저 해석한 뒤 AI DB를 별도 exact query하며, 반경·거리 표현을
 grounding 단계에서 거부한다. source 이용조건은 승인했지만 live readiness가
 미승인이므로 runtime allowlist에는 추가하지 않았다. offline checkpoint에서는 실제
@@ -120,7 +120,8 @@ provider, 운영 DB, S3 live 검증을 실행하지 않았다.
 
 후속 live preflight는 최초 key 설정 실패, NEIS `API_SERVER_ERROR`, Sbiz
 `TAXONOMY_CHANGED`, retail `API_AUTHENTICATION_FAILED`, rail의 승인 전 `PENDING` 차단을
-확인했다. 철도는 이후 프로젝트 책임자의 전화 승인 진술로 계약을 승인했다. additive migration `0010`과 runtime-only local
+확인했다. 이후 Sbiz tracked taxonomy, retail official file, rail v5를 통해 세 source의
+local publication과 재수집까지 완료했다. 철도는 프로젝트 책임자의 전화 승인 진술로 계약을 승인했다. additive migration `0010`과 runtime-only local
 inspection wrapper로 acquisition 이전 실패도 0 counts·safe reason code로 audit한다.
 상세 결과는 `priority-reference-live-preflight.md`에 기록했다.
 
@@ -128,40 +129,41 @@ NEIS 구현 점수는 source별 이용조건 evidence SHA-256, private raw·내�
 17개 교육청 pagination·total·coverage, verified raw-first, incomplete 보존, 개인정보
 비투영, exact 지역 집계, A등급 grounding, 고정 자원 제한과 회귀 근거를 충족해
 `10.0/10`으로 평가했다. 실제 key·provider·S3·운영 DB·chatbot 검증은 남아 실제
-데이터 readiness는 `3.0/10 Partial`이고 activation은 금지한다.
+데이터 readiness는 `8.0/10 Partial`이고 activation은 금지한다.
 
-Sbiz live taxonomy unscoped 응답은 대·중·소 `25/266/1,255`로 공식 포털과 활용가이드의
-`10/75/247`과 달랐다. collector는 공식 가이드대로 중분류를 대분류별로, 소분류를
-대·중분류별로 요청하고 parent별 raw response를 보존하도록 수정했지만 첫 대분류
-mismatch에서 store 요청 전 차단한다. 새 학교·온라인·인적용역 분류를 교육 위치
-allowlist로 임의 편입하지 않는다.
+Sbiz legacy taxonomy endpoint의 대·중·소 `25/266/1,255` 응답은 공식 포털 artifact
+`10/75/247`과 달라 현행 계약으로 사용하지 않는다. collector는 checksum 고정된 공식
+taxonomy 3개 artifact를 acquisition에 포함하고 실제 18개 store partition의 code/name을
+allowlist와 exact 비교한다. 새 학교·온라인·인적용역 분류를 교육 위치 allowlist로
+임의 편입하지 않는다.
 
 Sbiz `academy_lookup` observer는 기본 800m, 명시 범위 100..2,000m, 최대 5건과
 전국 좌표 coverage 95%를 fail-closed로 적용한다. Sbiz 위치는 B등급이며 NFKC 상호명,
 canonical 도로명주소, 선택적 우편번호가 모두 exact match할 때만 NEIS A등급 근거를
 추가한다. fuzzy match와 공식 등록 수 표현은 grounding 단계에서 거부한다. 검증된
-행정코드 mapping이 없어 지역 90% coverage와 정상 0건은 확정하지 않으며,
-`academy_lookup`은 runtime allowlist에 추가하지 않았다.
+행정코드 mapping이 없어 정상 0건은 확정하지 않는다. 2026-07-21 activation은
+`academy_lookup`만 runtime template에 추가하고 빈 값을 rollback으로 유지한다.
 
 Sbiz S2 collector 구현 점수는 source별 무제한 이용 허락과 제3자 provenance evidence,
 공식 OAS endpoint·field fixture, 현행 taxonomy code/name exact preflight, 18개
 allowlisted partition, verified raw-first, pagination·total·중복 ID 차단, safe
-incomplete와 개인정보 비투영 근거를 충족해 `10.0/10`으로 평가했다. 실제
-live에서 taxonomy endpoint는 호출됐으나 tracked fingerprint와 달라
-`TAXONOMY_CHANGED`로 store partition 호출 전에 중단했다. readiness는
-`3.0/10 Partial`이다.
+incomplete와 개인정보 비투영 근거를 충족해 `10.0/10`으로 평가했다. 실제 201 pages,
+191,250행·좌표 100%를 게시하고 두 번째 수집 `NoChange`, staging 0과 S3 byte 복구를
+확인했다. 800m query와 signed JWT JSON/SSE dual citation을 통과했고, nearest 5건과
+해당 ID의 exact evidence만 분리 조회해 최대 2km query p95 `156.927ms`를 달성했다.
+readiness는 `10.0/10 Pass`다.
 
 Sbiz S2-P 구현 점수는 이용조건·범위·공개/내부 계약·데이터 정확성·보안·실패 처리·
 테스트·문서·bounded query·리뷰 근거를 충족해 `10.0/10`으로 평가했다. 이는 실제
 데이터 readiness나 capability 활성화를 승인하지 않는다.
 
-대규모점포 구현 점수는 공식 REST `GET /info`, source별 무제한 이용허락 evidence,
-100행 bounded pagination, total 불일치·partial 실패, verified raw JSON page 보존,
-OBSERVED_AT semantic checksum, 전화번호 비투영, status·업태·EPSG:5174 계약, typed
-projection, 1km 경계와 grounding 근거를 충족해 `10.0/10`으로 평가했다. 같은 key가
-Sbiz 인증을 통과했지만 새 API 첫 page가 `API_AUTHENTICATION_FAILED`이므로 dataset
-활용신청 반영 전까지 실제 readiness는 `2.0/10 Partial`이다. 행정코드 mapping 전에는
-정상 0건을 주장하지 않는다.
+대규모점포 collector는 공식 fileData CSV의 fixed host/path·Referer, owner-only streaming,
+CP949 schema, OBSERVED_AT semantic checksum, 전화번호 비투영, status·업태·EPSG:5174
+계약과 typed projection을 검증했다. 실제 4,176행 게시·두 번째 `NoChange`·S3 복구는
+통과했지만 좌표 coverage `83.7404%`가 전국 95% 기준에 미달했다. 1km
+query 20회 p95 `57.356ms`와 3km p95 `53.259ms`를 통과했지만 live chatbot
+golden도 실패해 readiness는 `8.0/10 Partial`이다.
+행정코드 mapping 전에는 정상 0건을 주장하지 않는다.
 
 Offline priority integration은 실제 PostGIS와 MinIO container, raw version byte 복구,
 property-data fresh Flyway, chat-bff, signed JWT JSON/SSE, DB role, base+chatbot Compose를
@@ -172,9 +174,18 @@ property-data fresh Flyway, chat-bff, signed JWT JSON/SSE, DB role, base+chatbot
 철도 S4 구현 점수는 범위·계약·이용조건 승인 기록·raw-first 원자성·보안·실패 기록·
 테스트·문서·리뷰 근거를 만점으로 평가했다. fake transport와 file size bound는
 검증했지만 실제 최대 XLSX의 peak memory 측정은 live 단계 전까지 남아 성능 항목
-`0.5`를 감점했다. 최신 KRIC exact header는 `rail-station-v2`로 분리했고, 동일 raw의
+`0.5`를 감점했다. 최신 KRIC exact header는 `rail-station-v2`로 분리했고, row 기준일을
+nullable provenance로 바로잡은 normalization은 `rail-station-v3`, malformed provenance
+날짜를 queryable warning으로 남기는 계약은 `rail-station-v4`로 분리했다. 동일 raw의
 이전 `PARSE_FAILED`를 보존하면서 새 normalization schema만 재처리하도록 acquisition
 dedupe를 `(source_id, checksum, normalization_schema_version)`으로 제한했다.
+실제 duplicate pair를 재검토해 `line_name`을 occurrence identity에 포함하고 유일 최신
+유효일만 유지하는 `rail-station-v5`를 추가했다. 1,097 occurrence·좌표 100%를 게시하고
+동일 release 재수집의 acquisition/publication 재사용과 raw byte 복구를 확인했다.
+1.5km query p95 `7.971ms`, 3km p95 `25.565ms`, live exact 역 병합과 signed JWT
+JSON/SSE A등급 grounding을 통과해 readiness는 `10.0/10 Pass`다. 2026-07-21
+`academy_lookup,rail_station_lookup` 누적 activation을 승인했고 rollback은
+`academy_lookup`이다.
 
 ## 공통 중단·롤백
 

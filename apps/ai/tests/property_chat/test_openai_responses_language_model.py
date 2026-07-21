@@ -229,7 +229,35 @@ def test_planning_accepts_academy_lookup_with_800_meter_default() -> None:
     assert plan.capability == "academy_lookup"
     assert plan.radius_meters == 800
     schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
-    assert schema["properties"]["capability"]["enum"][-1] == "academy_lookup"
+    assert "academy_lookup" in schema["properties"]["capability"]["enum"]
+
+
+def test_planning_accepts_rail_station_lookup_with_1500_meter_default() -> None:
+    requester = RecordingRequester(
+        _response(
+            _valid_plan(
+                capability="rail_station_lookup",
+                schoolLevels=["ELEMENTARY", "MIDDLE", "HIGH"],
+                facilitySubtypes=[],
+                radiusMeters=None,
+            )
+        )
+    )
+
+    plan = asyncio.run(
+        _model(requester).plan_query(
+            ChatbotQueryRequest(question="잠실엘스 가까운 역과 노선")
+        )
+    )
+
+    assert plan.capability == "rail_station_lookup"
+    assert plan.radius_meters == 1500
+    schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
+    assert schema["properties"]["capability"]["enum"][-1] == "rail_station_lookup"
+    assert "uniqueItems" not in schema["properties"]["schoolLevels"]
+    assert "uniqueItems" not in schema["properties"]["facilitySubtypes"]
+    prompt = json.loads(requester.calls[0][2])["input"][0]["content"]
+    assert "Do not claim commute time, schedule, or congestion" in prompt
 
 
 def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> None:
@@ -282,7 +310,7 @@ def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> N
     ]
     assert "subject" not in user_payload
     assert request_body["text"]["format"]["name"] == "grounded_property_answer"
-    assert request_body["max_output_tokens"] == 1600
+    assert request_body["max_output_tokens"] == 3200
     sentence_schema = request_body["text"]["format"]["schema"]["properties"][
         "sentences"
     ]["items"]

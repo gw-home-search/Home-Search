@@ -3,6 +3,11 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
+reference_capabilities_override=""
+if (( $# >= 2 )) && [[ "$1" == "--reference-capabilities" ]]; then
+    reference_capabilities_override="$2"
+    shift 2
+fi
 using_default_runtime_files=false
 if (( $# == 0 )); then
     using_default_runtime_files=true
@@ -16,7 +21,7 @@ elif (( $# == 4 )); then
     bff_vars_file="$3"
     ai_vars_file="$4"
 else
-    echo "사용법: $0 [<property-vars-file> <user-vars-file> <bff-vars-file> <ai-vars-file>]" >&2
+    echo "사용법: $0 [--reference-capabilities <ordered-subset>] [<property-vars-file> <user-vars-file> <bff-vars-file> <ai-vars-file>]" >&2
     exit 2
 fi
 base_compose="${repo_root}/infra/docker-compose.local.yml"
@@ -223,6 +228,9 @@ else
     ai_reference_dsn="$(optional_value "$ai_vars_file" HOME_AI_REFERENCE_DSN "$default_ai_reference_dsn")"
 fi
 ai_enabled_reference_capabilities="$(optional_blank_value "$ai_vars_file" HOME_AI_ENABLED_REFERENCE_CAPABILITIES "")"
+if [[ -n "$reference_capabilities_override" ]]; then
+    ai_enabled_reference_capabilities="$reference_capabilities_override"
+fi
 ai_openai_api_key="$(required_value "$ai_vars_file" HOME_AI_OPENAI_API_KEY)"
 ai_openai_primary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_PRIMARY_MODEL)"
 ai_openai_secondary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_SECONDARY_MODEL)"
@@ -369,8 +377,8 @@ case "$ai_enabled_property_capabilities" in
     *) reject "HOME_AI_ENABLED_PROPERTY_CAPABILITIES는 승인된 누적 설정만 허용합니다." ;;
 esac
 case "$ai_enabled_reference_capabilities" in
-    "" | school_location) ;;
-    *) reject "HOME_AI_ENABLED_REFERENCE_CAPABILITIES는 빈 값 또는 school_location만 허용합니다." ;;
+    "" | academy_lookup | academy_lookup,rail_station_lookup) ;;
+    *) reject "HOME_AI_ENABLED_REFERENCE_CAPABILITIES는 승인된 reference 조합만 허용합니다." ;;
 esac
 
 export HOME_SEARCH_DB_PASSWORD="$home_search_db_password"
@@ -386,6 +394,11 @@ export HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS="$bff_public_key_paths"
 export HOME_AI_PROPERTY_DSN="$ai_property_dsn"
 export HOME_AI_JWT_PUBLIC_KEY_PATHS="$ai_public_key_paths"
 export HOME_AI_OPENAI_API_KEY="$ai_openai_api_key"
+export HOME_AI_MINIO_ROOT_USER="chatbot-compose-not-used"
+export HOME_AI_MINIO_ROOT_PASSWORD="chatbot-compose-not-used"
+export HOME_AI_RAW_S3_BUCKET="chatbot-compose-not-used"
+export AWS_ACCESS_KEY_ID="chatbot-compose-not-used"
+export AWS_SECRET_ACCESS_KEY="chatbot-compose-not-used"
 export HOME_AI_OPENAI_PRIMARY_MODEL="$ai_openai_primary_model"
 export HOME_AI_OPENAI_SECONDARY_MODEL="$ai_openai_secondary_model"
 export HOME_AI_OPENAI_TIMEOUT_SECONDS="$ai_openai_timeout_seconds"

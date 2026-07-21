@@ -55,6 +55,11 @@ BUNDLE_FAILURE_REASON_CODES = frozenset(
         "API_BAD_REQUEST",
         "API_BUNDLE_TOO_LARGE",
         "API_ENVELOPE_INVALID",
+        "API_ENVELOPE_BODY_INVALID",
+        "API_ENVELOPE_ITEMS_INVALID",
+        "API_ENVELOPE_RESPONSE_INVALID",
+        "API_ENVELOPE_ROOT_INVALID",
+        "API_MEDIA_TYPE_INVALID",
         "API_PAGE_TOO_LARGE",
         "API_PAGINATION_INVALID",
         "API_PROVIDER_REJECTED",
@@ -385,11 +390,22 @@ def _bundle_source_date(pages: list[bytes]) -> date | None:
 def _parse_page(raw_page: bytes, expected_page_no: int) -> tuple[list[dict[str, object]], int]:
     try:
         root = _object(_json(raw_page))
-        if set(root) != {"response"}:
-            raise ValueError
-        response = _object(root["response"])
-        if set(response) != {"header", "body"}:
-            raise ValueError
+        if "response" not in root:
+            raise RawPayloadError(
+                "school API root envelope invalid", "API_ENVELOPE_ROOT_INVALID"
+            )
+        try:
+            response = _object(root["response"])
+        except ValueError:
+            raise RawPayloadError(
+                "school API response envelope invalid",
+                "API_ENVELOPE_RESPONSE_INVALID",
+            ) from None
+        if not {"header", "body"}.issubset(response):
+            raise RawPayloadError(
+                "school API response envelope invalid",
+                "API_ENVELOPE_RESPONSE_INVALID",
+            )
         header = _object(response["header"])
         result_code = header.get("resultCode")
         if result_code not in {"00", "0"}:
@@ -402,16 +418,25 @@ def _parse_page(raw_page: bytes, expected_page_no: int) -> tuple[list[dict[str, 
             else:
                 reason_code = "API_PROVIDER_REJECTED"
             raise RawPayloadError("school API provider failure", reason_code)
-        body = _object(response["body"])
-        if set(body) != {"items", "pageNo", "numOfRows", "totalCount"}:
-            raise ValueError
+        try:
+            body = _object(response["body"])
+        except ValueError:
+            raise RawPayloadError(
+                "school API body envelope invalid", "API_ENVELOPE_BODY_INVALID"
+            ) from None
+        if not {"items", "pageNo", "numOfRows", "totalCount"}.issubset(body):
+            raise RawPayloadError(
+                "school API body envelope invalid", "API_ENVELOPE_BODY_INVALID"
+            )
         if _integer(body["pageNo"], minimum=1) != expected_page_no:
             raise RawPayloadError("school API page number mismatch", "API_PAGE_NUMBER_MISMATCH")
         if _integer(body["numOfRows"], minimum=1) != PAGE_SIZE:
             raise RawPayloadError("school API page size mismatch", "API_PAGE_SIZE_MISMATCH")
         rows = body["items"]
         if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
-            raise ValueError
+            raise RawPayloadError(
+                "school API items envelope invalid", "API_ENVELOPE_ITEMS_INVALID"
+            )
         return rows, _integer(body["totalCount"], minimum=0)
     except RawPayloadError:
         raise
@@ -455,6 +480,13 @@ def _object(value: object) -> dict[str, Any]:
 
 
 def _integer(value: object, *, minimum: int) -> int:
+    if (
+        isinstance(value, str)
+        and value.isascii()
+        and value.isdigit()
+        and len(value) <= 10
+    ):
+        value = int(value)
     if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
         raise ValueError("integer required")
     return value

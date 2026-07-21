@@ -17,6 +17,7 @@ from ai_service.datasets.bundle import (
     build_deterministic_bundle,
     build_deterministic_bundle_file,
 )
+from ai_service.datasets import large_store
 from ai_service.datasets.large_store import LargeStoreAdapter
 from ai_service.datasets.models import DatasetSourceContract
 from ai_service.datasets.validation import RawPayloadError, validate_rows
@@ -156,6 +157,213 @@ def test_api_pages_map_to_existing_projection_without_telephone() -> None:
     assert row["reference_date"] == "2026-07-20"
     assert "TELNO" not in row
     assert "telephone" not in row
+
+
+def test_observed_cp949_file_maps_the_current_official_columns() -> None:
+    observed_at = datetime(2026, 7, 20, 13, tzinfo=UTC)
+    x, y = Transformer.from_crs(
+        "EPSG:4326", "EPSG:5174", always_xy=True
+    ).transform(126.978, 37.5665)
+    output = io.StringIO(newline="")
+    fieldnames = [
+        "개방자치단체코드", "관리번호", "영업상태명", "사업장명",
+        "업태구분명", "도로명주소", "지번주소", "좌표정보(X)",
+        "좌표정보(Y)", "최종수정시점", "전화번호",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    writer.writerow(
+        {
+            "개방자치단체코드": "3010000",
+            "관리번호": "store-current-file",
+            "영업상태명": "영업/정상",
+            "사업장명": "서울 대형마트",
+            "업태구분명": "대형마트",
+            "도로명주소": "서울특별시 중구 세종대로 1",
+            "지번주소": "서울특별시 중구",
+            "좌표정보(X)": str(x),
+            "좌표정보(Y)": str(y),
+            "최종수정시점": "20260718120000",
+            "전화번호": "02-secret",
+        }
+    )
+    bundle = build_deterministic_bundle(
+        source_id="retail.large-store",
+        endpoint_path="/file/download/large_scale_retail_stores/info",
+        artifacts=(
+            BundleArtifact(
+                "large-store", "csv", "text/csv",
+                output.getvalue().encode("cp949"),
+            ),
+        ),
+        temporal_value=observed_at,
+    )
+    contract = replace(
+        _contract(), temporal_basis="OBSERVED_AT", file_format="CSV",
+        encoding="cp949", schema_version="large-store-v3",
+        acquisition_url=(
+            "https://file.localdata.go.kr/file/download/"
+            "large_scale_retail_stores/info"
+        ),
+    )
+
+    rows = list(LargeStoreAdapter().parse(bundle, contract, source_date=None).rows)
+
+    assert rows[0]["facility_id"] == "store-current-file"
+    assert rows[0]["road_address"] == "서울특별시 중구 세종대로 1"
+    assert rows[0]["lot_address"] == "서울특별시 중구"
+    assert rows[0]["reference_date"] == "2026-07-20"
+    assert "전화번호" not in rows[0]
+
+
+@pytest.mark.parametrize(
+    ("media_type", "content", "encoding", "reason"),
+    [
+        ("text/plain", b"not-csv", "cp949", "BUNDLE_MANIFEST_INVALID"),
+        ("text/csv", b"\xff", "ascii", "CSV_ENCODING_INVALID"),
+    ],
+)
+def test_observed_bytes_adapter_rejects_media_type_and_encoding_drift(
+    media_type: str,
+    content: bytes,
+    encoding: str,
+    reason: str,
+) -> None:
+    bundle = build_deterministic_bundle(
+        source_id="retail.large-store",
+        endpoint_path="/file/download/large_scale_retail_stores/info",
+        artifacts=(BundleArtifact("large-store", "csv", media_type, content),),
+        temporal_value=datetime(2026, 7, 20, 13, tzinfo=UTC),
+    )
+    contract = replace(
+        _contract(), temporal_basis="OBSERVED_AT", file_format="CSV",
+        encoding=encoding, schema_version="large-store-v3",
+    )
+
+    with pytest.raises(RawPayloadError) as error:
+        LargeStoreAdapter().parse(bundle, contract, source_date=None)
+
+    assert error.value.reason_code == reason
+
+
+def test_observed_cp949_file_adapter_streams_the_current_official_columns(
+    tmp_path: Path,
+) -> None:
+    observed_at = datetime(2026, 7, 20, 13, tzinfo=UTC)
+    x, y = Transformer.from_crs(
+        "EPSG:4326", "EPSG:5174", always_xy=True
+    ).transform(126.978, 37.5665)
+    output = io.StringIO(newline="")
+    fieldnames = [
+        "개방자치단체코드", "관리번호", "영업상태명", "사업장명",
+        "업태구분명", "도로명주소", "지번주소", "좌표정보(X)",
+        "좌표정보(Y)", "최종수정시점",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    writer.writerow(
+        {
+            "개방자치단체코드": "3010000",
+            "관리번호": "store-current-file-stream",
+            "영업상태명": "영업/정상",
+            "사업장명": "서울 대형마트",
+            "업태구분명": "대형마트",
+            "도로명주소": "서울특별시 중구 세종대로 1",
+            "지번주소": "서울특별시 중구",
+            "좌표정보(X)": str(x),
+            "좌표정보(Y)": str(y),
+            "최종수정시점": "20260718120000",
+        }
+    )
+    provider_path = tmp_path / "provider-current.csv"
+    provider_path.write_bytes(output.getvalue().encode("cp949"))
+    provider_path.chmod(0o600)
+    bundle_path = tmp_path / "observed-current.zip"
+    bundle_path.touch(mode=0o600)
+    build_deterministic_bundle_file(
+        source_id="retail.large-store",
+        endpoint_path="/file/download/large_scale_retail_stores/info",
+        artifacts=(
+            FileBundleArtifact(
+                "large-store", "csv", "text/csv", provider_path
+            ),
+        ),
+        temporal_value=observed_at,
+        target=bundle_path,
+    )
+    contract = replace(
+        _contract(), temporal_basis="OBSERVED_AT", file_format="CSV",
+        encoding="cp949", schema_version="large-store-v3",
+    )
+
+    rows = LargeStoreAdapter().parse_file(
+        bundle_path, contract, source_date=None
+    ).rows
+
+    assert rows[0]["facility_id"] == "store-current-file-stream"
+    assert rows[0]["reference_date"] == "2026-07-20"
+
+
+@pytest.mark.parametrize(
+    ("media_type", "content", "encoding", "reason"),
+    [
+        ("text/plain", b"not-csv", "cp949", "BUNDLE_MANIFEST_INVALID"),
+        ("text/csv", b"\xff", "ascii", "CSV_ENCODING_INVALID"),
+    ],
+)
+def test_observed_file_adapter_rejects_media_type_and_encoding_drift(
+    tmp_path: Path,
+    media_type: str,
+    content: bytes,
+    encoding: str,
+    reason: str,
+) -> None:
+    provider_path = tmp_path / f"provider-{reason}.csv"
+    provider_path.write_bytes(content)
+    provider_path.chmod(0o600)
+    bundle_path = tmp_path / f"bundle-{reason}.zip"
+    bundle_path.touch(mode=0o600)
+    build_deterministic_bundle_file(
+        source_id="retail.large-store",
+        endpoint_path="/file/download/large_scale_retail_stores/info",
+        artifacts=(
+            FileBundleArtifact("large-store", "csv", media_type, provider_path),
+        ),
+        temporal_value=datetime(2026, 7, 20, 13, tzinfo=UTC),
+        target=bundle_path,
+    )
+    contract = replace(
+        _contract(), temporal_basis="OBSERVED_AT", file_format="CSV",
+        encoding=encoding, schema_version="large-store-v3",
+    )
+
+    with pytest.raises(RawPayloadError) as error:
+        LargeStoreAdapter().parse_file(
+            bundle_path, contract, source_date=None
+        )
+
+    assert error.value.reason_code == reason
+
+
+@pytest.mark.parametrize(
+    ("status", "subtype", "expected_status", "expected_subtype"),
+    [
+        ("취소/말소/만료/정지/중지", "전문점", "CLOSED", "SPECIALTY_STORE"),
+        ("영업/정상", "시장", "OPEN", "MARKET"),
+        ("영업/정상", "구분없음", "OPEN", "UNCLASSIFIED"),
+        ("영업/정상", "", "OPEN", "UNCLASSIFIED"),
+    ],
+)
+def test_current_official_status_and_subtypes_are_explicitly_classified(
+    status: str, subtype: str, expected_status: str, expected_subtype: str
+) -> None:
+    normalized, reasons = large_store._normalize(
+        _row(영업상태명=status, 업태구분명=subtype), SOURCE_DATE
+    )
+
+    assert normalized["status"] == expected_status
+    assert normalized["subcategory"] == expected_subtype
+    assert reasons == []
 
 
 def test_large_store_file_adapter_streams_bundle_artifact(

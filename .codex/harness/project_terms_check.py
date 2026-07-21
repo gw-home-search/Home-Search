@@ -23,6 +23,7 @@ SKIP_DIRS = {
     ".next",
     ".vite",
     ".venv",
+    ".worktrees",
     "__pycache__",
     "bin",
     "build",
@@ -193,6 +194,10 @@ def mask_allowed_fragments(path: Path, line: str) -> str:
     masked = line.replace(r"\/", "/")
     for pattern in ALLOW_PATTERNS:
         masked = pattern.sub("", masked)
+    if rel(path).startswith("apps/ai/"):
+        masked = re.sub(r"\b[a-z0-9]+(?:-[a-z0-9]+)*-v[0-9]+\b", "", masked)
+        masked = re.sub(r'''["']v[0-9]+["']''', "", masked)
+        masked = re.sub(r"/v[0-9]+/", "", masked)
     if rel(path).startswith(MIGRATION_VERSION_PATHS):
         masked = re.sub(r"\b[Vv][0-9]+\b", "", masked)
     return masked
@@ -312,6 +317,12 @@ def run_self_test() -> int:
         not scan_text(REPO_ROOT / "SELF_TEST.txt", 'connection.request("POST", "/v1/responses")'),
         not scan_text(REPO_ROOT / "SELF_TEST.txt", r"/^\/api\/v1\/chatbot\/query$/"),
         not scan_text(REPO_ROOT / "SELF_TEST.txt", 'schema_version="fixture-v1"'),
+        not scan_text(REPO_ROOT / "apps/ai/tests/example.py", 'dataset_version="rail-v1"'),
+        not scan_text(REPO_ROOT / "apps/ai/tests/example.py", 'dataset_version="v1"'),
+        not scan_text(REPO_ROOT / "apps/ai/tests/example.py", 'object_key="raw/v1/source/checksum.zip"'),
+        scan_text(REPO_ROOT / "docs/README.md", 'dataset_version="rail-v1"') != [],
+        scan_text(REPO_ROOT / "docs/README.md", 'dataset_version="v1"') != [],
+        scan_text(REPO_ROOT / "docs/README.md", 'object_key="raw/v1/source/checksum.zip"') != [],
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "home-search:prediction:v1:F37:complex:501"),
         scan_text(REPO_ROOT / "SELF_TEST.txt", "V1 API stays at /api/v1/search/complexes") != [],
         scan_text(REPO_ROOT / "SELF_TEST.txt", "V2 ranking") != [],
@@ -319,6 +330,7 @@ def run_self_test() -> int:
         not scan_text(REPO_ROOT / "apps/source-data/README.md", "V1 is the fresh database schema"),
         scan_text(REPO_ROOT / "docs/README.md", "V1 is the product milestone") != [],
         should_skip(REPO_ROOT / ".codex/harness/reports/sample.md"),
+        should_skip(REPO_ROOT / ".worktrees/example/apps/ai/example.py"),
         should_skip(REPO_ROOT / "apps/ai/.venv/lib/python/site-packages/example.py"),
         should_skip(REPO_ROOT / "runtime-keys/admin-e2e/private.pem"),
         bool(bad_language),

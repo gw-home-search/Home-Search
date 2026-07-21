@@ -284,9 +284,10 @@ the fixed local DSN, derives the separate `home_search_ai_runtime` reference
 DSN from `AI_DATA_RUNTIME_DB_PASSWORD`, and supplies the approved cumulative
 `complex_identity,recent_trade_lookup,price_trend` allowlist when that optional line is
 absent. The four-path form keeps strict explicit mapping,
-DSN, and Capability validation. `HOME_AI_ENABLED_REFERENCE_CAPABILITIES`
-defaults to blank; its only accepted non-empty value is exactly
-`school_location`.
+DSN, and Capability validation. The approved reference rollback is blank and
+the 2026-07-21 approved values are exactly `academy_lookup` and the cumulative
+`academy_lookup,rail_station_lookup`. Any other combination, including rail
+alone, fails closed until its own readiness and activation commit pass.
 
 The runner requires the existing `home-search-postgis` and `home-search-redis`
 containers to be healthy and `home-search-api` to be running. It then uses

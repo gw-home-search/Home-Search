@@ -153,6 +153,12 @@ def test_retail_uses_1000_meter_default_and_official_snapshot_citation() -> None
         "property.ai_read",
         "retail.large-store",
     }
+    retail_citation = next(
+        item for item in response["citations"] if item["sourceId"] == "retail.large-store"
+    )
+    assert retail_citation["sourceUrl"] == (
+        "https://www.data.go.kr/data/15045013/fileData.do"
+    )
 
 
 def test_retail_explicit_radius_outside_3000_is_not_clamped() -> None:

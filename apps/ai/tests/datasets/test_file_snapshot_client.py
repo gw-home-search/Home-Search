@@ -70,6 +70,33 @@ def test_large_store_uses_only_tracked_release_metadata_when_filename_has_no_dat
     assert collected.source_date == date(2025, 11, 27)
 
 
+def test_observed_file_snapshot_allows_an_official_undated_filename(tmp_path) -> None:
+    body = b"header\nvalue\n"
+
+    collected = FileSnapshotClient(
+        source_id="retail.large-store",
+        url="https://file.localdata.go.kr/file/download/large_scale_retail_stores/info",
+        allowed_hosts=("file.localdata.go.kr",),
+        allowed_path_prefixes=("/file/download/large_scale_retail_stores/",),
+        media_types=("text/csv",),
+        extension="csv",
+        maximum_bytes=256 * 1024 * 1024,
+        allow_one_redirect=False,
+        require_source_date=False,
+        requester=lambda *_args: (
+            200,
+            {
+                "content-type": "text/csv;charset=UTF-8",
+                "content-length": str(len(body)),
+                "content-disposition": "attachment; filename*=UTF-8''retail.csv",
+            },
+            body,
+        ),
+    ).collect(target=tmp_path / "snapshot.csv")
+
+    assert collected.source_date is None
+
+
 @pytest.mark.parametrize(
     ("headers", "body", "reason"),
     [

@@ -1,6 +1,12 @@
 == edu.academy-registry
 
 17개 교육청 `acaInsTiInfo` page를 완전 수집한다. 전화번호와 교습비는 normalized projection에서 제외한다.
+NEIS gateway 호환을 위해 JSON format은 `Type=json` query로 고정하고 HTTP `Accept`는
+`*/*`를 사용한다. live `개원` status는 `OPEN`으로 정규화한다. 안정 ID가 있지만
+`ACA_NM`만 공란인 row는 `명칭 미제공`, `nameMissing=true`, exact-match key `NULL`로
+보존한다. 정확한 `observed_at`은 acquisition과 projection evidence에 유지하되
+같은 날 의미가 같은 행의 checksum에서는 제외하며, 이 계약은
+`academy-registry-v4`로 구분한다.
 
 include::{snippets}/edu.academy-registry/http-request.adoc[]
 include::{snippets}/edu.academy-registry/request-parameters.adoc[]

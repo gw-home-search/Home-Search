@@ -150,6 +150,34 @@ def test_unknown_registry_status_blocks_the_row() -> None:
     assert parsed.row_rejections == {1: ("ACADEMY_STATUS_UNKNOWN",)}
 
 
+def test_live_open_status_is_accepted() -> None:
+    def mutate(code: str, row: dict[str, object]) -> None:
+        if code == "B10":
+            row["REG_STTUS_NM"] = "개원"
+
+    parsed = AcademyRegistryAdapter().parse(
+        _bundle(mutate=mutate), _contract(), source_date=None
+    )
+
+    assert parsed.rows[0]["status"] == "OPEN"
+    assert parsed.row_rejections == {}
+
+
+def test_missing_name_uses_explicit_placeholder_without_exact_match_key() -> None:
+    def mutate(code: str, row: dict[str, object]) -> None:
+        if code == "B10":
+            row["ACA_NM"] = ""
+
+    parsed = AcademyRegistryAdapter().parse(
+        _bundle(mutate=mutate), _contract(), source_date=None
+    )
+
+    assert parsed.rows[0]["academy_name"] == "명칭 미제공"
+    assert parsed.rows[0]["academy_name_missing"] is True
+    assert parsed.rows[0]["normalized_name_key"] is None
+    assert parsed.row_rejections == {}
+
+
 def test_office_total_count_mismatch_is_blocking() -> None:
     with pytest.raises(RawPayloadError) as error:
         AcademyRegistryAdapter().parse(

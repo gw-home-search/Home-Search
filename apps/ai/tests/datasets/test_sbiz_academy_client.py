@@ -13,6 +13,7 @@ from ai_service.datasets.sbiz_academy import (
 from ai_service.datasets import sbiz_academy_client
 from ai_service.datasets.sbiz_academy_client import SbizAcademyApiClient, SbizAcademyApiError
 from ai_service.datasets.secure_temp import SecureTempWorkspace
+from ai_service.datasets.validation import RawPayloadError
 from tests.datasets.test_sbiz_academy_adapter import (
     TAXONOMY,
     _contract,
@@ -22,7 +23,7 @@ from tests.datasets.test_sbiz_academy_adapter import (
 )
 
 
-def _page() -> bytes:
+def _page(*, small_category_name: str = "fixture 학원") -> bytes:
     return json.dumps(
         {
             "body": {
@@ -30,7 +31,7 @@ def _page() -> bytes:
                 "numOfRows": 1000,
                 "items": [{
                     "bizesId": "store-1", "bizesNm": "가나다 학원",
-                    "indsSclsCd": "P10101", "indsSclsNm": "fixture 학원",
+                    "indsSclsCd": "P10101", "indsSclsNm": small_category_name,
                     "rdnmAdr": "서울특별시 송파구 올림픽로 300",
                     "lnoAdr": "서울특별시 송파구", "newZipcd": "05551",
                     "adongCd": "11710566", "lat": "37.51", "lon": "127.10",
@@ -81,17 +82,46 @@ def test_sbiz_collector_partitions_only_allowlisted_taxonomy_without_key_in_path
     assert collected.raw_row_count == 1
     assert len(rows) == 1
     assert all("secret" not in path for path in paths)
-    assert paths[:3] == [
-        "/B553077/api/open/sdsc2/largeUpjongList?type=json",
-        "/B553077/api/open/sdsc2/middleUpjongList?indsLclsCd=P1&type=json",
-        (
-            "/B553077/api/open/sdsc2/smallUpjongList"
-            "?indsLclsCd=P1&indsMclsCd=P101&type=json"
-        ),
+    assert paths == [
+        "/B553077/api/open/sdsc2/storeListInUpjong"
+        "?divId=indsSclsCd&key=P10101&pageNo=1&numOfRows=1000&type=json"
     ]
 
 
-def test_sbiz_collector_scopes_every_taxonomy_parent_and_preserves_raw_pages() -> None:
+def test_sbiz_collector_uses_tracked_taxonomy_without_legacy_taxonomy_requests() -> None:
+    paths: list[str] = []
+
+    def request(path, _timeout, _key):
+        paths.append(path)
+        if any(
+            endpoint in path
+            for endpoint in (
+                "largeUpjongList",
+                "middleUpjongList",
+                "smallUpjongList",
+            )
+        ):
+            raise AssertionError("legacy taxonomy endpoint must not be requested")
+        return 200, {}, _page()
+
+    observed_at = datetime(2026, 7, 20, tzinfo=UTC)
+    collected = SbizAcademyApiClient(
+        taxonomy=_taxonomy(),
+        taxonomy_artifacts=TAXONOMY,
+        requester=request,
+    ).collect("secret", observed_at=observed_at)
+
+    parsed = SbizAcademyAdapter(_taxonomy()).parse(
+        collected.content, _contract(), source_date=None
+    )
+    assert len(_rows(parsed)) == 1
+    assert paths == [
+        "/B553077/api/open/sdsc2/storeListInUpjong"
+        "?divId=indsSclsCd&key=P10101&pageNo=1&numOfRows=1000&type=json"
+    ]
+
+
+def test_sbiz_collector_embeds_full_tracked_taxonomy_and_preserves_raw_pages() -> None:
     taxonomy_artifacts = {
         "taxonomy-large": [
             {"code": "P1", "name": "교육"},
@@ -128,18 +158,9 @@ def test_sbiz_collector_scopes_every_taxonomy_parent_and_preserves_raw_pages() -
         )
     )
     assert len(rows) == 1
-    assert paths[:5] == [
-        "/B553077/api/open/sdsc2/largeUpjongList?type=json",
-        "/B553077/api/open/sdsc2/middleUpjongList?indsLclsCd=P1&type=json",
-        "/B553077/api/open/sdsc2/middleUpjongList?indsLclsCd=P2&type=json",
-        (
-            "/B553077/api/open/sdsc2/smallUpjongList"
-            "?indsLclsCd=P1&indsMclsCd=P101&type=json"
-        ),
-        (
-            "/B553077/api/open/sdsc2/smallUpjongList"
-            "?indsLclsCd=P2&indsMclsCd=P201&type=json"
-        ),
+    assert paths == [
+        "/B553077/api/open/sdsc2/storeListInUpjong"
+        "?divId=indsSclsCd&key=P10101&pageNo=1&numOfRows=1000&type=json"
     ]
 
 
@@ -213,33 +234,33 @@ def test_sbiz_invalid_evidence_configuration_and_first_payload_fail_closed() -> 
     )
     with pytest.raises(SbizAcademyApiError) as error:
         client.collect("key", observed_at=datetime(2026, 7, 20, tzinfo=UTC))
-    assert error.value.reason_code == "TAXONOMY_CHANGED"
+    assert error.value.reason_code == "PROVIDER_PAGE_INVALID"
 
 
-def test_sbiz_live_taxonomy_change_stops_before_store_collection() -> None:
-    changed = {
-        **TAXONOMY,
-        "taxonomy-small": [{"code": "P10101", "name": "changed"}],
-    }
-    store_requested = False
-
-    def request(path, _timeout, _key):
-        nonlocal store_requested
-        if "storeListInUpjong" in path:
-            store_requested = True
-        return 200, {}, _response(path, changed)
-
+def test_sbiz_store_taxonomy_change_is_preserved_for_adapter_rejection() -> None:
     client = SbizAcademyApiClient(
-        taxonomy=_taxonomy(), taxonomy_artifacts=TAXONOMY, requester=request,
+        taxonomy=_taxonomy(),
+        taxonomy_artifacts=TAXONOMY,
+        requester=lambda *_args: (
+            200,
+            {},
+            _page(small_category_name="changed"),
+        ),
     )
-    with pytest.raises(SbizAcademyApiError) as error:
-        client.collect("key", observed_at=datetime(2026, 7, 20, tzinfo=UTC))
+    collected = client.collect(
+        "key", observed_at=datetime(2026, 7, 20, tzinfo=UTC)
+    )
 
+    with pytest.raises(RawPayloadError) as error:
+        _rows(
+            SbizAcademyAdapter(_taxonomy()).parse(
+                collected.content, _contract(), source_date=None
+            )
+        )
     assert error.value.reason_code == "TAXONOMY_CHANGED"
-    assert store_requested is False
 
 
-def test_sbiz_live_large_taxonomy_change_stops_before_child_requests() -> None:
+def test_sbiz_unapproved_tracked_taxonomy_stops_before_store_requests() -> None:
     changed = {
         **TAXONOMY,
         "taxonomy-large": [
@@ -249,18 +270,14 @@ def test_sbiz_live_large_taxonomy_change_stops_before_child_requests() -> None:
     }
     paths: list[str] = []
 
-    def request(path, _timeout, _key):
-        paths.append(path)
-        return 200, {}, _response(path, changed)
+    with pytest.raises(ValueError):
+        SbizAcademyApiClient(
+            taxonomy=_taxonomy(),
+            taxonomy_artifacts=changed,
+            requester=lambda path, *_args: paths.append(path),
+        )
 
-    client = SbizAcademyApiClient(
-        taxonomy=_taxonomy(), taxonomy_artifacts=TAXONOMY, requester=request,
-    )
-    with pytest.raises(SbizAcademyApiError) as error:
-        client.collect("key", observed_at=datetime(2026, 7, 20, tzinfo=UTC))
-
-    assert error.value.reason_code == "TAXONOMY_CHANGED"
-    assert paths == ["/B553077/api/open/sdsc2/largeUpjongList?type=json"]
+    assert paths == []
 
 
 @pytest.mark.parametrize(

@@ -1,16 +1,16 @@
 sourceId: retail.large-store
 reviewedOn: 2026-07-20
-officialDataset: 행정안전부_생활_대규모점포 조회서비스
-officialUrl: https://www.data.go.kr/data/15154948/openapi.do
+officialDataset: 행정안전부_생활_대규모점포
+officialUrl: https://www.data.go.kr/data/15045013/fileData.do
 provider: 행정안전부
 licenseStatement: 이용허락범위 제한 없음
-apiType: REST
-format: JSON+XML
-updateFrequency: 일간
-approval: 개발단계 자동승인, 운영단계 자동승인
-baseUrl: https://apis.data.go.kr/1741000/large_scale_retail_stores
-operation: GET /info
-pagination: pageNo, numOfRows (max 100), totalCount
+deliveryType: 기관자체 다운로드
+format: CSV
+updateFrequency: 수시 (자동 갱신)
+landingUrl: https://file.localdata.go.kr/file/large_scale_retail_stores/info
+downloadUrl: https://file.localdata.go.kr/file/download/large_scale_retail_stores/info
 freshnessStatement: 해당 데이터는 매일 갱신되는 데이터로 2일전 기준으로 현행화 됩니다.
+temporalDecision: filename has no verified release date; use collection-start UTC as OBSERVED_AT and retain the stated two-day provider lag
+encodingEvidence: provider body is CP949 despite text/csv;charset=UTF-8 response metadata
 reviewDecision: private raw storage and internal normalized derivatives approved; public raw redistribution disabled by product policy
-attribution: 출처: 공공데이터포털 행정안전부 생활_대규모점포 조회서비스
+attribution: 출처: 공공데이터포털 행정안전부 생활_대규모점포

@@ -95,13 +95,18 @@ def test_catalog_loads_the_fixed_source_order_and_approved_sources() -> None:
     ).hexdigest()
     retail = catalog.approved("retail.large-store")
     assert retail.acquisition.base_url == (
-        "https://apis.data.go.kr/1741000/large_scale_retail_stores/info"
+        "https://file.localdata.go.kr/file/download/large_scale_retail_stores/info"
     )
-    assert retail.acquisition.mode == "api"
+    assert retail.acquisition.referer_url == (
+        "https://file.localdata.go.kr/file/large_scale_retail_stores/info"
+    )
+    assert retail.acquisition.mode == "file"
+    assert retail.acquisition.encoding == "CP949"
     assert retail.acquisition.source_date is None
     assert retail.temporal.basis == "OBSERVED_AT"
+    assert retail.normalization_schema_version == "large-store-v3"
     assert retail.license.terms_url == (
-        "https://www.data.go.kr/data/15154948/openapi.do"
+        "https://www.data.go.kr/data/15045013/fileData.do"
     )
     assert retail.license.terms_fingerprint == sha256(
         RETAIL_LICENSE_EVIDENCE_PATH.read_bytes()
@@ -112,7 +117,7 @@ def test_catalog_loads_the_fixed_source_order_and_approved_sources() -> None:
         "https://data.kric.go.kr/rips/dataset/download.file"
     )
     assert rail.acquisition.fixed_query == "type=filedata&id=32&operation=1"
-    assert rail.normalization_schema_version == "rail-station-v2"
+    assert rail.normalization_schema_version == "rail-station-v5"
     assert rail.license.terms_url == (
         "https://www.data.go.kr/data/15093755/fileData.do"
     )

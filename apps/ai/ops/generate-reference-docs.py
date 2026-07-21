@@ -15,7 +15,6 @@ API_PARAMETERS = {
     "edu.school-location": ("serviceKey", "pageNo", "numOfRows", "type"),
     "edu.academy-registry": ("KEY", "Type", "pIndex", "pSize", "ATPT_OFCDC_SC_CODE"),
     "place.sbiz-academy": ("serviceKey", "divId", "key", "indsSclsCd", "pageNo", "numOfRows", "type"),
-    "retail.large-store": ("serviceKey", "pageNo", "numOfRows", "returnType"),
 }
 NORMALIZATION_FIELDS = {
     "edu.school-location": ("school_id", "school_name", "school_level", "operating_status", "latitude", "longitude"),
@@ -28,7 +27,7 @@ FAILURE_CODES = {
     "edu.school-location": ("API_TRANSPORT_FAILED", "API_PAGINATION_INVALID", "API_BUNDLE_TOO_LARGE"),
     "edu.academy-registry": ("API_TRANSPORT_FAILED", "PROVIDER_TOTAL_COUNT_MISMATCH", "PROVIDER_COVERAGE_INCOMPLETE"),
     "place.sbiz-academy": ("TAXONOMY_CHANGED", "PROVIDER_TOTAL_COUNT_MISMATCH", "DUPLICATE_STORE_ID"),
-    "retail.large-store": ("API_TRANSPORT_FAILED", "PROVIDER_PAGE_INVALID", "PROVIDER_TOTAL_COUNT_MISMATCH", "KOREA_COORDINATE_OUT_OF_RANGE"),
+    "retail.large-store": ("FILE_TRANSPORT_FAILED", "FILE_MEDIA_TYPE_INVALID", "FILE_LENGTH_MISMATCH", "SOURCE_SCHEMA_MISMATCH", "KOREA_COORDINATE_OUT_OF_RANGE"),
     "transport.rail-station": ("SOURCE_DATE_UNVERIFIED", "XLSX_MACRO_REJECTED", "RAIL_STATION_COORDINATE_REQUIRED"),
 }
 

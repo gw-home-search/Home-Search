@@ -15,14 +15,23 @@ collector는 비밀 없는 고정 `HomeSearchReferenceImporter/1.0` 식별자를
 evidence에 함께 기록했으며 원본 XLSX의 private 보관, 역명·노선·환승·좌표의 내부
 가공과 출처표시 응답만 허용한다. 원본 공개 재배포와 전화번호 projection은 금지한다.
 license evidence SHA-256은
-`14d6a007c272b75456998f5289e08ff8f61cb82f04bb2fc6a72ef9c11327ff0d`다. 전체 artifact
-live 검증 전 readiness는 `Partial`이다.
+`14d6a007c272b75456998f5289e08ff8f61cb82f04bb2fc6a72ef9c11327ff0d`다. 전체 artifact,
+좌표 100%, raw 복구, runtime query와 signed JWT JSON/SSE 검증을 통과해 readiness는
+`Pass`다. 서면 승인 transcript 부재는 낮음(Low) 잔여 위험으로 유지한다.
 
 2026-06-30 release의 provider field는 `운영기관명`, `노선번호`, `노선명`, `역번호`,
 `역사명`, `역사도로명주소`, `역위도`, `역경도`, `환승노선명`, `데이터기준일자`를
 각 normalized field로 exact mapping한다. 이전 표준 명칭은 raw replay 호환을 위한
 명시적 alias로만 허용하며 fuzzy header matching은 하지 않는다. 이 변경은
 `rail-station-v2`로 구분한다.
+
+검증된 filename의 날짜는 dataset `SOURCE_DATE`로 사용한다. provider별
+`데이터기준일자`는 release date와 같음을 요구하지 않고 nullable row provenance로
+보존한다. 이 normalization은 `rail-station-v3`, nonblank malformed 날짜를 row 거부 없이
+quality warning으로 남기는 계약은 `rail-station-v4`로 구분한다. live 중복 근거로
+`운영기관명+노선번호+노선명+역번호`를 occurrence identity로 보강하고, 같은 확장
+identity의 과거행은 유일한 최신 `데이터기준일자`가 있을 때만 supersede하는 계약을
+`rail-station-v5`로 구분한다. 최신일 동률·날짜 누락은 publication을 차단한다.
 
 include::{snippets}/transport.rail-station/download-request.adoc[]
 include::{snippets}/transport.rail-station/response-headers.adoc[]

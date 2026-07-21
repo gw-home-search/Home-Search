@@ -44,6 +44,44 @@ def test_normalized_spool_rejects_non_private_file(tmp_path) -> None:
         NormalizedRowSpool(path)
 
 
+def test_semantic_hash_can_exclude_observation_time_without_changing_spooled_row(
+    tmp_path,
+) -> None:
+    paths = [tmp_path / "first.ndjson", tmp_path / "second.ndjson"]
+    for path in paths:
+        path.touch(mode=0o600)
+        path.chmod(0o600)
+
+    first = NormalizedRowSpool(
+        paths[0], semantic_hash_excluded_fields=frozenset({"observed_at"})
+    )
+    second = NormalizedRowSpool(
+        paths[1], semantic_hash_excluded_fields=frozenset({"observed_at"})
+    )
+    first.append(
+        StagedRow(
+            1,
+            {"id": "academy-1", "observed_at": "2026-07-20T01:00:00Z"},
+            True,
+            (),
+            "academy-1",
+        )
+    )
+    second.append(
+        StagedRow(
+            1,
+            {"id": "academy-1", "observed_at": "2026-07-20T23:00:00Z"},
+            True,
+            (),
+            "academy-1",
+        )
+    )
+
+    assert first.accepted_row_hashes == second.accepted_row_hashes
+    assert next(first.iter_rows()).row_data["observed_at"] == "2026-07-20T01:00:00Z"
+    assert next(second.iter_rows()).row_data["observed_at"] == "2026-07-20T23:00:00Z"
+
+
 def test_300k_normalized_candidates_spool_with_bounded_memory() -> None:
     row_count = 300_000
     contract = source_contract(

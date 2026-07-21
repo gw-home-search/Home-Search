@@ -110,6 +110,26 @@ def test_sbiz_adapter_requires_tracked_taxonomy_and_excludes_phone() -> None:
     assert "telNo" not in rows[0]
 
 
+def test_sbiz_adapter_preserves_official_taxonomy_compatibility_characters() -> None:
+    taxonomy = {
+        **TAXONOMY,
+        "taxonomy-middle": [
+            {"code": "P101", "name": "사업시설 유지ㆍ관리 서비스업"}
+        ],
+    }
+    contract = SbizTaxonomyContract(
+        taxonomy_fingerprint(taxonomy), {"P10101": "fixture 학원"}
+    )
+
+    rows = _rows(
+        SbizAcademyAdapter(contract).parse(
+            _bundle(taxonomy=taxonomy), _contract(), source_date=None
+        )
+    )
+
+    assert rows[0]["store_id"] == "store-1"
+
+
 def test_sbiz_file_adapter_matches_bytes_adapter(tmp_path) -> None:
     content = _bundle()
     path = tmp_path / "sbiz-academy.zip"

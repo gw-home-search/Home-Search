@@ -4,70 +4,51 @@
 
 상태: `Partial`
 
-구현 품질: `10.0/10 Pass`
-
-실제 데이터 readiness: `2.0/10 Partial`
+실제 데이터 readiness: `8.0/10 Partial`
 
 ## 검증 근거 확인
 
-- 기존 LOCALDATA CSV는 이용허락 공란과 stale `2025-11-27` metadata 때문에 운영
-  acquisition에서 제외했다.
-- 새 공식 `행정안전부_생활_대규모점포 조회서비스`는 source 상세에
-  `이용허락범위 제한 없음`, 일간 갱신, 2일 전 기준 현행화, 자동승인을 명시한다.
-- official Swagger의 `GET /info`, `pageNo`, 최대 `numOfRows=100`, `totalCount`,
-  `items.item` 및 provider field를 fixture contract로 고정했다.
-- page JSON은 키가 없는 endpoint identity와 함께 verified raw bundle에 그대로
-  보존한다. 전화번호 `TELNO`는 normalized row와 projection에 포함하지 않는다.
-- release date가 없으므로 수집 시작 UTC를 `OBSERVED_AT`으로 사용하며
-  normalization schema는 `large-store-v2`로 분리했다.
-- provider status·업태 allowlist, EPSG:5174 원좌표 보존과 EPSG:4326 변환,
-  대한민국 범위, typed projection, PostGIS 1,000m 경계를 유지한다.
-- 첫 page 실패는 raw를 만들지 않고 중간 실패는 safe reason의 incomplete bundle만
-  보존한다. total/page 불일치와 100 page·256MiB 초과는 fail-closed다.
+- 공식 파일 상세 `15045013`의 `이용허락범위 제한 없음`, 일간 갱신·2일 전 기준
+  현행화, CSV download URL을 source별 evidence로 고정했다.
+- collector는 고정된 `file.localdata.go.kr/file/download/large_scale_retail_stores/info`
+  와 같은 host의 tracked `Referer`만 사용한다. provider key는 읽거나 전달하지 않는다.
+- filename에 검증 가능한 release date가 없으므로 계약은 수집 시작 UTC의
+  `OBSERVED_AT`이며, 실제 CP949 body를 `large-store-v3`로 분리했다.
+- 현재 공식 status와 업태 값은 explicit mapping한다. 새로운 nonblank 값, 필수 ID
+  중복, 대한민국 밖 좌표는 publication을 차단한다. 전화번호는 raw 밖으로 투영하지 않는다.
 
-## live 결과와 잔여 위험
+## live 결과
 
-- 2026-07-20 새 API live refresh는 DB role·MinIO·migration preflight 후 첫 page에서
-  `API_AUTHENTICATION_FAILED`로 중단했다. acquisition은 `0`이고 provider body·키는
-  저장하거나 출력하지 않았다.
-- 같은 `HOME_AI_DATA_GO_KR_SERVICE_KEY`가 Sbiz taxonomy endpoint 인증을 통과했으므로
-  키 문자열 자체보다 dataset `15154948` 활용신청 미반영 가능성이 높다.
-- 활용신청 승인 후 full pagination, 필수 ID·중복, row count·freshness, 전국 95%·지역
-  90% 좌표 coverage, S3 byte 복구, 두 번째 `NoChange`, p95, JSON/SSE golden이 남아 있다.
-- property 법정동 code와 provider 개방자치단체 code mapping 전에는
+- 첫 수집: `Pass`, 1 file, raw/accepted `4,176`, rejected `0`, active datasetVersion
+  `20260720-e61a2e1ce389`.
+- projection: 고유 fact `4,176`, spatial `3,497`, non-spatial `679`, OPEN `2,970`,
+  공식 분류 `8`종, unknown region `0`.
+- 좌표 coverage는 `83.7404%`로 전국 `95%` readiness 기준에 미달한다.
+- 두 번째 수집: `NoChange`, staging `0`, publication 총 `1`; active pointer 유지.
+- 서울 대표 좌표의 1km 공간 query 20회 실측 p95는 `57.356ms`, max는
+  `59.828ms`로 200ms 기준을 통과했다.
+- 최대 반경 3km의 warm-up 후 20회 p95는 `53.259ms`, max는 `53.945ms`다.
+- runtime static composition과 공식 fileData citation URL을 검증했지만 승인 질문의
+  live JSON은 `503`, SSE는 error event로 끝나 chatbot golden을 통과하지 못했다.
+- 최신 raw bundle은 MinIO version object에서 복구해 DB와 동일한 SHA-256
+  `e43231a24aa74adf41274d2bbee6222a9fae510c81c036845b7b31ae96ceed0e`,
+  `1,183,918` bytes를 확인했다.
+- 이전 OpenAPI `API_AUTHENTICATION_FAILED` refresh evidence는 삭제하지 않고 audit에
+  보존했다.
+
+## 잔여 위험과 활성화
+
+- 좌표 coverage 미달이므로 `retail_location` activation은 금지한다.
+- provider 개방자치단체 code와 property 법정동 code mapping 전에는 정상 0건도
   `verifiedZero=false`를 유지한다.
-- 운영 reference allowlist에는 `retail_location`을 추가하지 않았다.
-
-## 구현 품질 평가
-
-| 항목 | 점수 | 검증 근거 확인 |
-|---|---:|---|
-| 범위·최소성 | `1.0/1.0` | file path를 새 공식 API collector로만 교체, scheduler·mapping table 없음 |
-| 공개·내부 계약 | `1.0/1.0` | 내부 acquisition만 변경, 공개 JSON/SSE URL·field shape 유지 |
-| 이용조건·출처 | `1.0/1.0` | source별 무제한 이용허락 evidence와 attribution SHA-256 고정 |
-| 데이터 정확성·원자성 | `1.5/1.5` | raw JSON first, pagination·total, dedupe, OBSERVED_AT checksum, atomic pointer |
-| 보안·개인정보 | `1.0/1.0` | HTTPS fixed host/path, key·provider body 비노출, 전화번호 비투영, owner-only temp |
-| 실패·복구·관측 | `1.0/1.0` | first/middle failure, incomplete, safe audit, 기존 active pointer 보존 |
-| 테스트 품질 | `1.5/1.5` | 최초 RED 후 client·adapter·ingest·ops·전체 AI `564 passed`, coverage `90.10%` |
-| 문서·운영 가능성 | `1.0/1.0` | source AsciiDoc·generated API snippets·wrapper 일치 |
-| 성능·자원 제한 | `0.5/0.5` | 100행/page, 최대 100 pages, 4MiB/page, 256MiB bundle |
-| 리뷰·commit 추적성 | `0.5/0.5` | API 전환 slice와 live activation을 분리 |
+- chatbot JSON/SSE live golden은 실패 상태로 보존한다.
+- local publication과 raw evidence는 보존하며 rollback은 이전 pointer 전환만 사용한다.
 
 license evidence:
 `apps/ai/config/license_evidence/retail.large-store.txt`
 
 SHA-256:
-`02bce96a68d777801a4e5ac4cfe71c3e8d9d958ef20eb8a8eb362dc21e6fe2d4`
-
-검증:
-
-```text
-focused client/adapter/ingest/config/CLI: 35 passed
-local reference refresh wrapper: Pass
-reference docs deterministic HTML/secret check: Pass
-AI full: 564 passed, coverage 90.10%
-live audit: API_AUTHENTICATION_FAILED, acquisition 0
-```
+`db24e0107b7b2e42abb55389468f64d2503bee116551e49c37eb20f58d719b38`
 
 `api-contract: compatible`
 

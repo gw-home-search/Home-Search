@@ -14,6 +14,27 @@ from tests.datasets.test_academy_registry_adapter import _bundle, _contract
 pytestmark = pytest.mark.postgres
 
 
+def test_academy_summary_has_exact_region_lookup_index(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    with psycopg.connect(postgres_dsn) as connection:
+        index_definition = connection.execute(
+            """
+            SELECT indexdef
+            FROM pg_indexes
+            WHERE schemaname = 'reference_projection'
+              AND indexname = 'registry_fact_academy_region_summary_idx'
+            """
+        ).fetchone()
+
+    assert index_definition is not None
+    assert "(attributes ->> 'educationOfficeName'::text)" in index_definition[0]
+    assert "region_name" in index_definition[0]
+    assert "publication_id" in index_definition[0]
+    assert "WHERE (source_id = 'edu.academy-registry'::text)" in index_definition[0]
+
+
 def test_academy_publication_exposes_only_safe_aggregate_view(
     dataset_repository: PostgresDatasetRepository,
     postgres_dsn: str,
@@ -54,3 +75,38 @@ def test_academy_publication_exposes_only_safe_aggregate_view(
             connection.execute(
                 "SELECT normalized_name_key FROM reference_projection.registry_fact"
             )
+
+
+def test_academy_projection_preserves_missing_name_without_exact_match_key(
+    dataset_repository: PostgresDatasetRepository,
+    postgres_dsn: str,
+) -> None:
+    def mutate(code: str, row: dict[str, object]) -> None:
+        if code == "B10":
+            row["ACA_NM"] = ""
+            row["REG_STTUS_NM"] = "개원"
+
+    observed_at = datetime(2026, 7, 19, 1, tzinfo=UTC)
+    result = DatasetLifecycleService(
+        dataset_repository,
+        clock=lambda: datetime(2026, 7, 19, 2, tzinfo=UTC),
+    ).ingest_validate_publish(
+        _contract(),
+        _bundle(mutate=mutate),
+        source_date=None,
+        observed_at=observed_at,
+        adapter=AcademyRegistryAdapter(),
+        content_type="application/zip",
+    )
+
+    assert result.status == "Pass"
+    with psycopg.connect(postgres_dsn) as connection:
+        fact = connection.execute(
+            """
+            SELECT name, normalized_name_key, attributes -> 'nameMissing'
+            FROM reference_projection.registry_fact
+            WHERE publication_id = %s AND fact_id = 'B10|B10-001'
+            """,
+            (result.publication_id,),
+        ).fetchone()
+    assert fact == ("명칭 미제공", None, True)

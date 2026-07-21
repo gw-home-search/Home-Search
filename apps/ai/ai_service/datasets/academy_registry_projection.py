@@ -28,7 +28,10 @@ def write_projection(
                (row_data ->> 'observed_at')::timestamptz,
                jsonb_build_object(
                    'educationOfficeCode', row_data ->> 'education_office_code',
-                   'educationOfficeName', row_data ->> 'education_office_name'
+                   'educationOfficeName', row_data ->> 'education_office_name',
+                   'nameMissing', COALESCE(
+                       (row_data ->> 'academy_name_missing')::boolean, false
+                   )
                )
         FROM dataset_staging_row
         WHERE acquisition_id = %s AND accepted = true

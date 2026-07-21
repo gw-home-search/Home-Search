@@ -1,71 +1,60 @@
 # `transport.rail-station` readiness
 
 기준일: 2026-07-20
-상태: `Partial`
 
-read-only/data-only XLSX adapter와 `운영기관+노선번호+역번호` 고유키, 환승노선 배열,
-좌표 필수 검증을 구현했다. macro, external link, 중복 ZIP entry, 과도한 sheet/cell,
-uncompressed size와 compression ratio를 fail-closed로 거부한다.
+상태: `Pass`
 
-공식 KRIC detail `id=32`가 제공하는 고정 download endpoint를 tracked config에 연결했다.
-2026-07-20 body 수신 전 header preflight에서
-`전체_도시철도역사정보_20260630.xlsx`, 313,132 bytes,
-`application/octet-stream`을 확인했다. base URL query 금지는 유지하고 file source 전용
-`fixed_query`만 분리 검증하며, secret 성격의 parameter와 query redirect는 거부한다.
-artifact는 owner-only temp에 기록한 뒤 deterministic bundle과 verified S3 file upload를
-거치며, landing HTML URL은 network 호출 전 거부한다. 수집 실패는 provider body 없이
-safe reason code만 refresh-run에 기록한다.
+실제 데이터 readiness: `10.0/10 Pass`
 
-승인 후 첫 live GET은 KRIC가 `User-Agent` 없는 요청에 `200 text/html`을 반환해
-`FILE_MEDIA_TYPE_INVALID`로 안전하게 중단했다. 동일 URL은 고정 importer
-`User-Agent`에서 XLSX header를 반환함을 재현했고, TDD로 해당 header를 추가하면서
-media type·length·source date 검증은 완화하지 않았다.
+## 검증 근거 확인
 
-다음 live 시도는 2026-06-30 XLSX의 최신 exact header가 이전 fixture 명칭과 달라
-`SOURCE_SCHEMA_MISMATCH`로 publication 전에 중단했다. 실제 header를 데이터 행 없이
-확인해 exact alias를 추가하고 normalization schema를 `rail-station-v2`로 올렸다.
-동일 raw의 이전 `PARSE_FAILED` acquisition을 삭제하지 않고 새 schema에서 재처리할 수
-있도록 additive migration `0011_schema_scoped_acquisition_dedupe.sql`을 추가했다. 동일
-schema 재수집과 품질 기준만 바뀐 contract는 계속 기존 acquisition을 재사용한다.
+- KRIC `id=32` 고정 download와 2026-06-30 XLSX를 사용한다. macro, external link,
+  duplicate ZIP entry, 과도한 sheet/cell·압축을 fail-closed로 거부한다.
+- live 중복 5쌍을 raw에서 재검토했다. 공식 field인 `line_name`을 occurrence identity에
+  포함하고, 동일 확장 identity는 유일한 최신 유효 기준일이 있을 때만 최신 occurrence를
+  유지한다. 최신일 동률·날짜 부재는 계속 duplicate로 차단한다.
+- normalization schema는 `rail-station-v5`; superseded 2행은
+  `RAIL_SUPERSEDED_OCCURRENCE` warning으로 evidence에 남긴다.
+- 프로젝트 책임자의 전화 승인 진술과 공공데이터포털 fileData의
+  `이용허락범위 제한 없음`에 따라 private raw·내부 파생만 승인하며 원본 공개 재배포는
+  금지한다.
 
-`rail-station-v2` live parse는 1,099행과 좌표 누락 0행을 확인했다. 그러나
-`운영기관명+노선번호+역번호` 5개 key가 10행에서 중복됐고 row 기준일은
-2022-04-27..2026-06-25로 혼재하며 공란 7행과 비정상 `1900-01-00` 6행을 포함했다.
-`DUPLICATE_UNIQUE_KEY`, `SOURCE_DATE_MIXED`, `REJECTED_ROW_RATIO_EXCEEDED`로 staging과
-publication을 차단했으며 active pointer는 없다. stop condition에 따라 임의 dedupe나
-identity 확장은 하지 않는다.
+## live 결과
 
-공공데이터포털 fileData `15093755`는 `이용허락범위 제한 없음`을 명시한다. 프로젝트
-책임자는 KRIC에 전화로 계획된 Home Search 이용 가능 여부를 문의해 가능하다는 답변을
-받았다고 2026-07-20 진술했고, 서면 transcript 부재를 수용해 contract 승인을 지시했다.
-승인 범위는 원본 XLSX의 private 보관, 역명·노선·환승·좌표의 내부 가공과 출처표시
-응답이며 원본 공개 재배포와 전화번호 projection은 금지한다. 실제 연간 release,
-500~2,000행, 좌표 100%, 역 단위 답변 병합, 1.5km/3km chatbot live golden은
-미완료다. 운영 capability는 활성화하지 않았다.
+- 실제 refresh: `Pass`, source date `2026-06-30`, raw `1,099`, accepted occurrence
+  `1,097`, rejected `0`, 좌표 `100%`, duplicate key `0`.
+- warning: `RAIL_ROW_REFERENCE_DATE_INVALID 6`,
+  `RAIL_SUPERSEDED_OCCURRENCE 2`.
+- active occurrence와 distinct ID 모두 `1,097`, 좌표 누락 `0`, datasetVersion
+  `2026-06-30-ff91cb28f356`.
+- 같은 release 두 번째 refresh는 동일 acquisition/publication을 재사용해 `Pass`였고,
+  v5 publication은 총 `1`개다.
+- 서울 대표 좌표의 1.5km 공간 query 20회 실측 p95는 `7.971ms`, max는
+  `8.469ms`로 200ms 기준을 통과했다.
+- 최대 반경 3km의 warm-up 후 20회 p95는 `25.565ms`, max는 `30.258ms`다.
+- 잠실엘스 1.5km signed JWT live JSON/SSE는 모두 `200`, capability
+  `rail_station_lookup`, fact 5건, A등급 official citation, active datasetVersion
+  `2026-06-30-ff91cb28f356`을 반환했다. SSE final은 1건이고 error event는 0건이다.
+- live `고잔역` 2개 노선 occurrence는 exact 역명·250m 이내 규칙으로 1개 역으로
+  병합됐고, 250m 밖 동일 역명 occurrence는 병합되지 않았다.
+- raw bundle 복구 SHA-256
+  `919c7b7763fa146d65e5f7483d73d1ab19628b27daa7ba7f3e35321e189eb515`,
+  `313,741` bytes가 DB metadata와 일치한다.
+- v2~v4 parse/quality failure acquisition은 삭제하지 않고 audit에 보존했다.
 
-## TDD 근거
+## 잔여 위험과 활성화
 
-- 최초 RED: KRIC fixed query 미지원, landing URL config, query 누락 transport로 6건 실패.
-- 예상 RED 실패: 공식 download endpoint가 기존 `.xlsx` suffix와 no-query 계약에 막힘.
-- 최소 GREEN: file-only non-secret `fixed_query`, exact query transport, 공식 media type,
-  Content-Disposition source date 검증을 추가했다.
-- 좁은 회귀: file contract·snapshot client·rail ingest `31 passed`; 철도 통합 `58 passed`.
-- 전체 AI 회귀: `554 passed`, coverage `90.18%`.
-- live failure RED: `User-Agent` 부재 요청은 `200 text/html`, audit
-  `FILE_MEDIA_TYPE_INVALID`; header 계약 2건 RED 후 file client `13 passed`, 전체 AI
-  `564 passed`, coverage `90.10%`.
-- schema recovery RED: 최신 KRIC header fixture는 `SOURCE_SCHEMA_MISMATCH`, 동일 raw의
-  새 schema 재처리는 기존 실패를 반환; exact alias와 schema-scoped acquisition
-  dedupe 후 Postgres 집중 회귀 `57 passed`, 전체 AI `566 passed`, coverage `90.08%`.
+- 서면 이용 승인 transcript가 없다는 낮음(Low) 잔여 위험이 있다.
+- 필수 항목을 포함한 readiness는 `10.0`으로 승인한다. 2026-07-21 다른 source와
+  분리된 commit에서 누적 local runtime template
+  `academy_lookup,rail_station_lookup`을 승인했으며 rollback은 `academy_lookup`이다.
+- activation smoke의 JSON은 `200/success`였고 첫 SSE는 error event로 fail-closed했다.
+  직접 engine 진단은 정상 근거를 반환했으며 제한 재검증 SSE는 `200/success`, A등급
+  citation, active datasetVersion, final 1·error 0을 확인했다.
+
+license evidence SHA-256:
+`14d6a007c272b75456998f5289e08ff8f61cb82f04bb2fc6a72ef9c11327ff0d`
 
 `api-contract: compatible`
 
-`security-audit: 지적사항 = none`
-
-- 전체 release 구조·checksum, parser peak memory, 운영 role permission smoke가
-  readiness 공백으로 남는다.
-- license evidence는
-  `apps/ai/config/license_evidence/transport.rail-station.txt`에 고정했고 SHA-256은
-  `14d6a007c272b75456998f5289e08ff8f61cb82f04bb2fc6a72ef9c11327ff0d`다.
-- 2026-07-20 최초 live preflight는 승인 전 license `PENDING`을
-  `CONFIGURATION_INVALID`로 반환해 provider body 요청 전 exit `2` 중단했다.
+security-audit: 지적사항 = none

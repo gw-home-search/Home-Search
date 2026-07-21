@@ -33,6 +33,7 @@ from .academy_locations import (
     RegistryExactMatch,
 )
 from .reference_facilities import FacilityFact, FacilitySearchResult
+from .rail_stations import RailStation, RailStationSearchResult
 
 
 class PropertyFactRepository(Protocol):
@@ -122,6 +123,17 @@ class AcademyLocationFactRepository(Protocol):
     ) -> AcademyLocationSearchResult: ...
 
 
+class RailStationFactRepository(Protocol):
+    def nearby(
+        self,
+        *,
+        latitude: float,
+        longitude: float,
+        radius_meters: int,
+        limit: int,
+    ) -> RailStationSearchResult: ...
+
+
 _GROUNDING_FAILURE_REASONS = frozenset(
     {
         "GROUNDING_CAPABILITY_UNSUPPORTED",
@@ -144,6 +156,8 @@ _GROUNDING_FAILURE_REASONS = frozenset(
         "GROUNDING_ACADEMY_REGISTRY_POLICY_VIOLATION",
         "GROUNDING_ACADEMY_LOOKUP_POLICY_VIOLATION",
         "GROUNDING_ACADEMY_LOOKUP_TEXT_OUTSIDE_OBSERVATION",
+        "GROUNDING_RAIL_POLICY_VIOLATION",
+        "GROUNDING_RAIL_TEXT_OUTSIDE_OBSERVATION",
     }
 )
 
@@ -169,6 +183,7 @@ class GroundedChatbotEngine:
         point_facility_repository: PointFacilityFactRepository | None = None,
         academy_registry_repository: AcademyRegistryFactRepository | None = None,
         academy_location_repository: AcademyLocationFactRepository | None = None,
+        rail_station_repository: RailStationFactRepository | None = None,
         enabled_reference_capabilities: frozenset[ReferenceCapability] = frozenset(),
         today: Callable[[], date] = date.today,
     ) -> None:
@@ -177,6 +192,7 @@ class GroundedChatbotEngine:
         self._point_facility_repository = point_facility_repository
         self._academy_registry_repository = academy_registry_repository
         self._academy_location_repository = academy_location_repository
+        self._rail_station_repository = rail_station_repository
         self._language_model = language_model
         self._enabled_capabilities = enabled_capabilities
         self._enabled_reference_capabilities = enabled_reference_capabilities
@@ -186,6 +202,7 @@ class GroundedChatbotEngine:
             "retail_location": self._observe_retail,
             "academy_registry_summary": self._observe_academy_registry,
             "academy_lookup": self._observe_academy_lookup,
+            "rail_station_lookup": self._observe_rail_stations,
         }
 
     async def query(
@@ -514,6 +531,59 @@ class GroundedChatbotEngine:
                 "행정코드 체계의 지역 coverage가 검증되지 않아 교육업소가 전혀 없다고 단정할 수 없습니다."
             )
         return facts, limitations, "supported"
+
+    async def _observe_rail_stations(
+        self, plan: QueryPlan, complex_record: ComplexRecord
+    ) -> tuple[list[EvidenceFact], list[str], str]:
+        assert plan.radius_meters is not None
+        if not 100 <= plan.radius_meters <= 3000:
+            return (
+                [],
+                ["철도역 검색 반경은 100m에서 3000m 사이로 지정해야 합니다."],
+                "unavailable",
+            )
+        if (
+            not complex_record.marker_safe
+            or complex_record.latitude is None
+            or complex_record.longitude is None
+        ):
+            return (
+                [],
+                ["검증된 단지 표시 좌표가 없어 주변 철도역을 조회할 수 없습니다."],
+                "unavailable",
+            )
+        if self._rail_station_repository is None:
+            return [], ["공식 철도역 active snapshot이 준비되지 않았습니다."], "unavailable"
+        result = await asyncio.to_thread(
+            self._rail_station_repository.nearby,
+            latitude=complex_record.latitude,
+            longitude=complex_record.longitude,
+            radius_meters=plan.radius_meters,
+            limit=plan.limit,
+        )
+        age_days = (self._today() - result.source_date).days
+        if (
+            result.coordinate_coverage < 1.0
+            or age_days < 0
+            or age_days > result.freshness_days
+        ):
+            return (
+                [],
+                ["철도역 snapshot의 좌표 coverage 또는 기준일이 활성화 기준을 충족하지 못했습니다."],
+                "unavailable",
+            )
+        facts = [
+            *(_rail_station_fact(station, result) for station in result.stations),
+            _rail_scope_fact(plan, complex_record, result),
+        ]
+        return (
+            facts,
+            [
+                "거리는 단지 표시 좌표 기준 직선거리이며 실제 보행 경로가 아닙니다.",
+                "통근시간·배차·혼잡도는 현재 근거에 포함되지 않습니다.",
+            ],
+            "supported",
+        )
 
 
 def _complex_fact(record: ComplexRecord) -> EvidenceFact:
@@ -846,7 +916,7 @@ def _retail_fact(record: FacilityFact) -> EvidenceFact:
         },
         source_id="retail.large-store",
         source_name="전국대규모및준대규모점포표준데이터",
-        source_url="https://www.data.go.kr/data/15114138/standard.do",
+        source_url="https://www.data.go.kr/data/15045013/fileData.do",
         evidence_grade="A",
         dataset_version_value=record.dataset_version,
     )
@@ -891,7 +961,66 @@ def _retail_scope_fact(
         },
         source_id="retail.large-store",
         source_name="전국대규모및준대규모점포표준데이터",
-        source_url="https://www.data.go.kr/data/15114138/standard.do",
+        source_url="https://www.data.go.kr/data/15045013/fileData.do",
+        evidence_grade="A",
+        dataset_version_value=result.dataset_version,
+    )
+
+
+def _rail_station_fact(
+    station: RailStation, result: RailStationSearchResult
+) -> EvidenceFact:
+    lines = ",".join(station.lines)
+    return EvidenceFact(
+        fact_id=f"rail-station-{station.occurrence_ids[0]}",
+        claims=(
+            FactClaim(station.station_name, "TEXT"),
+            FactClaim(lines, "RAIL_LINES"),
+            *(FactClaim(line, "RAIL_LINE") for line in station.lines),
+            FactClaim(str(station.distance_meters), "METERS"),
+            FactClaim(str(len(station.occurrence_ids)), "OCCURRENCE_COUNT"),
+        ),
+        data_as_of=result.source_date,
+        payload={
+            "stationName": station.station_name,
+            "lines": list(station.lines),
+            "occurrenceIds": list(station.occurrence_ids),
+            "distanceMeters": station.distance_meters,
+            "datasetVersion": result.dataset_version,
+        },
+        source_id="transport.rail-station",
+        source_name="전국도시철도역사정보표준데이터",
+        source_url="https://www.data.go.kr/data/15013205/standard.do",
+        evidence_grade="A",
+        dataset_version_value=result.dataset_version,
+    )
+
+
+def _rail_scope_fact(
+    plan: QueryPlan,
+    complex_record: ComplexRecord,
+    result: RailStationSearchResult,
+) -> EvidenceFact:
+    assert plan.radius_meters is not None
+    return EvidenceFact(
+        fact_id=f"rail-scope-{complex_record.complex_id}-{plan.radius_meters}",
+        claims=(
+            FactClaim(str(plan.radius_meters), "RADIUS_METERS"),
+            FactClaim(str(len(result.stations)), "COUNT"),
+            FactClaim(str(result.occurrence_count), "OCCURRENCE_COUNT"),
+            FactClaim(_number(result.coordinate_coverage), "COORDINATE_COVERAGE"),
+        ),
+        data_as_of=result.source_date,
+        payload={
+            "complexId": complex_record.complex_id,
+            "radiusMeters": plan.radius_meters,
+            "stationCount": len(result.stations),
+            "occurrenceCount": result.occurrence_count,
+            "coordinateCoverage": result.coordinate_coverage,
+        },
+        source_id="transport.rail-station",
+        source_name="전국도시철도역사정보표준데이터",
+        source_url="https://www.data.go.kr/data/15013205/standard.do",
         evidence_grade="A",
         dataset_version_value=result.dataset_version,
     )
@@ -918,6 +1047,9 @@ def validate_draft(
     ]
     academy_location_facts = [
         fact for fact in facts if fact.source_id == "place.sbiz-academy"
+    ]
+    rail_facts = [
+        fact for fact in facts if fact.source_id == "transport.rail-station"
     ]
     used_ids: list[str] = []
     for sentence in draft.sentences:
@@ -951,6 +1083,8 @@ def validate_draft(
             _validate_academy_registry_sentence(sentence.text)
         if academy_location_facts:
             _validate_academy_lookup_sentence(sentence.text, referenced)
+        if rail_facts:
+            _validate_rail_sentence(sentence.text, referenced)
         allowed_numbers = _number_tokens(
             claim.value for fact in referenced for claim in fact.claims
         )
@@ -1128,6 +1262,45 @@ def _validate_academy_lookup_sentence(
         if candidate and candidate not in observed_text:
             raise GroundingValidationError(
                 "GROUNDING_ACADEMY_LOOKUP_TEXT_OUTSIDE_OBSERVATION"
+            )
+
+
+def _validate_rail_sentence(
+    text: str, referenced: list[EvidenceFact]
+) -> None:
+    unsupported = re.search(
+        r"통근\s*시간|소요\s*시간|배차|혼잡|운행\s*간격|걸어서|"
+        r"(?:도보|통근)\s*(?:거리|시간)",
+        text,
+    )
+    explicit_negative = re.search(
+        r"(?:통근\s*시간|소요\s*시간|배차|혼잡도?|운행\s*간격|걸어서|"
+        r"(?:도보|통근)\s*(?:거리|시간)).{0,50}"
+        r"(?:포함되지\s*않|제공되지\s*않|확인할\s*수\s*없|"
+        r"알\s*수\s*없|근거가\s*없|지원하지\s*않)",
+        text,
+    )
+    positive_value = re.search(
+        r"(?:통근|소요).{0,15}\d+\s*분|"
+        r"배차.{0,20}(?:\d+\s*(?:분|회)|자주|드물)|"
+        r"혼잡.{0,20}(?:높|낮|보통|심하)",
+        text,
+    )
+    if positive_value or (unsupported and not explicit_negative):
+        raise GroundingValidationError("GROUNDING_RAIL_POLICY_VIOLATION")
+    observed_text = {
+        claim.value
+        for fact in referenced
+        for claim in fact.claims
+        if claim.unit == "TEXT"
+    }
+    allowed_station_names = observed_text | {
+        name if name.endswith("역") else f"{name}역" for name in observed_text
+    }
+    for station_name in re.findall(r"[\w가-힣()]+역", text):
+        if station_name not in allowed_station_names:
+            raise GroundingValidationError(
+                "GROUNDING_RAIL_TEXT_OUTSIDE_OBSERVATION"
             )
 
 

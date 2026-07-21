@@ -9,8 +9,10 @@ import pytest
 
 from ai_service.datasets import large_store_ingest
 from ai_service.datasets.contracts import load_reference_source_catalog
-from ai_service.datasets.bundle import FileBundleArtifact, build_deterministic_bundle_file
-from ai_service.datasets.large_store_client import LargeStoreApiError, PreparedLargeStoreBundle
+from ai_service.datasets.file_snapshot_client import (
+    CollectedFileSnapshot,
+    FileSnapshotError,
+)
 from ai_service.datasets.models import AcquisitionRecord, LifecycleResult
 from ai_service.datasets.raw_store import StoredRawObject
 
@@ -36,7 +38,6 @@ def _environment():
         "HOME_AI_IMPORTER_DSN": "postgresql://home_search_ai_importer@db/home_search_ai",
         "HOME_AI_RAW_S3_BUCKET": "private-raw", "HOME_AI_RAW_S3_PREFIX": "raw",
         "HOME_AI_RAW_S3_REGION": "ap-northeast-2",
-        "HOME_AI_DATA_GO_KR_SERVICE_KEY": "data-key",
     }
 
 
@@ -83,18 +84,16 @@ class Repository:
 
 
 class Client:
-    def collect_prepared(self, service_key, *, observed_at, workspace):
-        assert service_key == "data-key"
-        artifact = workspace.create_file("page.json")
-        artifact.write_bytes(b"{}")
-        prepared = build_deterministic_bundle_file(
-            source_id="retail.large-store",
-            endpoint_path="/1741000/large_scale_retail_stores/info",
-            artifacts=(FileBundleArtifact("page-000001", "json", "application/json", artifact),),
-            temporal_value=observed_at,
-            target=workspace.create_file("bundle.zip"),
+    def collect(self, *, target):
+        target.write_bytes(b"fixture-csv")
+        return CollectedFileSnapshot(
+            path=target,
+            source_date=None,
+            byte_length=target.stat().st_size,
+            checksum="a" * 64,
+            media_type="text/csv",
+            endpoint_path="/file/download/large_scale_retail_stores/info",
         )
-        return PreparedLargeStoreBundle(prepared, observed_at, 41, 4003, True, ())
 
 
 class RawStore:
@@ -110,7 +109,7 @@ class RawStore:
         raise AssertionError("file refresh must not use bytes upload")
 
 
-def test_large_store_refresh_collects_api_bundle_and_uses_prepared_lifecycle(
+def test_large_store_refresh_collects_observed_file_without_provider_key(
     monkeypatch,
 ) -> None:
     repository = Repository()
@@ -133,7 +132,7 @@ def test_large_store_refresh_collects_api_bundle_and_uses_prepared_lifecycle(
     assert repository.closed is True
 
 
-def test_large_store_client_uses_tracked_api_contract(monkeypatch) -> None:
+def test_large_store_client_uses_tracked_file_contract(monkeypatch) -> None:
     source = load_reference_source_catalog(large_store_ingest._CONFIG_PATH).get(
         "retail.large-store"
     )
@@ -141,8 +140,8 @@ def test_large_store_client_uses_tracked_api_contract(monkeypatch) -> None:
 
     monkeypatch.setattr(
         large_store_ingest,
-        "LargeStoreApiClient",
-        lambda: instance,
+        "FileSnapshotClient",
+        lambda **_kwargs: instance,
     )
 
     assert large_store_ingest._client(source) is instance
@@ -169,7 +168,7 @@ def test_pending_license_stops_before_repository_client_or_raw_store(monkeypatch
         )
 
 
-def test_api_failure_records_only_safe_reason_and_closes_repository(monkeypatch) -> None:
+def test_file_failure_records_only_safe_reason_and_closes_repository(monkeypatch) -> None:
     repository = Repository()
     monkeypatch.setattr(
         large_store_ingest, "load_reference_source_catalog",
@@ -177,10 +176,10 @@ def test_api_failure_records_only_safe_reason_and_closes_repository(monkeypatch)
     )
 
     class FailedClient:
-        def collect_prepared(self, *_args, **_kwargs):
-            raise LargeStoreApiError("API_TRANSPORT_FAILED")
+        def collect(self, **_kwargs):
+            raise FileSnapshotError("FILE_TRANSPORT_FAILED")
 
-    with pytest.raises(LargeStoreApiError):
+    with pytest.raises(FileSnapshotError):
         large_store_ingest.ingest_from_environment(
             _environment(), repository_factory=lambda _dsn: repository,
             client_factory=lambda _reference: FailedClient(),
@@ -189,5 +188,5 @@ def test_api_failure_records_only_safe_reason_and_closes_repository(monkeypatch)
         )
 
     assert repository.finished["acquisition_id"] is None
-    assert repository.finished["reason_codes"] == ("API_TRANSPORT_FAILED",)
+    assert repository.finished["reason_codes"] == ("FILE_TRANSPORT_FAILED",)
     assert repository.closed is True

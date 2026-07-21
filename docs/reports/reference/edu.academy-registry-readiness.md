@@ -3,7 +3,7 @@
 기준일: 2026-07-20
 상태: `Partial`
 구현 품질: `10.0/10 Pass`
-실제 데이터 readiness: `3.0/10 Partial`
+실제 데이터 readiness: `8.0/10 Partial`
 
 17개 시도교육청 page coverage와 교육청별 `list_total_count` 일치를 강제하는 NEIS
 adapter를 구현했다. 전화번호와 교습비는 normalized projection 후보에서 제외하고,
@@ -20,9 +20,10 @@ fixture와 missing/stale region evidence의 fail-closed 경계를 검증했다.
 NEIS source 상세 페이지의 `이용 허락 범위 제한없음` 표시를 2026-07-20에
 검토하고, provider·source·허락 문구·attribution·검토 결정을 owner-controlled
 evidence file과 SHA-256 fingerprint로 고정했다. private raw 저장과 내부 파생 가공만
-승인했고 공개 재배포는 보수적으로 금지했다. 실제 100,000~250,000행 snapshot,
-시군구 집계, live golden은 미완료다. `HOME_AI_ENABLED_REFERENCE_CAPABILITIES`
-allowlist에는 추가하지 않아 운영 capability는 활성화하지 않았다.
+승인했고 공개 재배포는 보수적으로 금지했다. 실제 전국 snapshot과 시군구 집계는
+게시했지만 live chatbot golden·rollback 검증은 미완료다.
+`HOME_AI_ENABLED_REFERENCE_CAPABILITIES` allowlist에는 추가하지 않아 운영 capability는
+활성화하지 않았다.
 
 ## 구현 품질 평가
 
@@ -59,7 +60,7 @@ TESTCONTAINERS_RYUK_DISABLED=true uv run pytest --no-cov \
 # 119 passed
 ```
 
-최신 전체 coverage 근거는 `569 passed`, `90.05%`다. 부분 테스트만 coverage와 함께 실행하면 저장소 전역
+최신 전체 coverage 근거는 `589 passed`, `90.05%`다. 부분 테스트만 coverage와 함께 실행하면 저장소 전역
 `fail-under=90` 특성상 동작이 모두 통과해도 종료 코드가 실패하므로 점수 근거로
 사용하지 않는다.
 
@@ -71,12 +72,44 @@ security-audit: 지적사항 = none
 - file: `apps/ai/config/license_evidence/edu.academy-registry.txt`
 - SHA-256: `ce16b39dff31b1a41ea9cb8f362310c56258e725c5f470e4347cf81b73d4aac8`
 
-잔여 위험은 실제 NEIS key·quota·schema·전국 total, raw S3 복구, 운영 AI DB role,
-chatbot JSON/SSE golden을 아직 검증하지 않은 readiness 공백이다.
+## 실제 데이터 검증
 
-live 재시도에서는 DB role·MinIO·migration까지 통과했으나 configured NEIS key의 첫
-page가 다시 `API_SERVER_ERROR`로 중단했다. acquisition은 생성되지 않았고 active
-datasetVersion도 없다. body-free 비교에서 no-key sample은 `HTTP 200/INFO-000`이지만
-`pSize=1000`에도 총 25,522행 중 5행만 반환했고, 명백한 invalid key는
-`HTTP 200/ERROR-290`이었다. sample을 full acquisition 우회로 사용하지 않으며 NEIS
-포털에서 별도 발급한 `HOME_AI_NEIS_SERVICE_KEY`의 상태를 확인해야 한다.
+NEIS gateway는 `Accept: application/json` 요청에 key 유효성과 무관하게
+`HTTP 500 text/html`을 반환하고 `Accept: */*`에는 `HTTP 200 application/json`을
+반환했다. `Type=json` query와 JSON parser·envelope 검증은 유지하면서 header만
+gateway 호환값으로 고쳤다. 실제 key의 B10 `pSize=1000` probe는 `INFO-000`,
+`list_total_count=25,522`, page row `1,000`으로 확인됐다.
+
+첫 full parse에서 live status 138,412건이 모두 `개원`이고 provider name 공란이
+1건임을 raw를 메모리에 전부 적재하지 않는 safe aggregate로 확인했다. `개원`을
+`OPEN`으로 고정하고 공란 명칭은 안정 ID를 유지한 `명칭 미제공`/`nameMissing=true`로
+보존하되 exact-match key는 `NULL`로 차단했다. 전화번호·교습비와 provider 오류 body는
+projection과 진단 출력에 포함하지 않았다.
+
+`academy-registry-v4` actual full refresh 결과는 17개 교육청, 146 pages,
+raw/accepted `138,412`, rejected `0`, duplicate fact ID `0`, active datasetVersion
+`20260720-3bb7d33261d5`다. active projection도 `138,412`건이고 raw object는 S3
+verified checksum, byte length `101,792,940`, version ID를 보존한다. 2026-07-20
+해당 object version을 MinIO에서 다시 스트리밍 복구해 DB의 SHA-256
+`c2df59f229793e8dcd78c5e125b0f0867a061792f5b9e208a180c21b5fa80fca`와 byte
+length가 모두 일치함을 확인했다. 학원 `95,264`,
+교습소 `43,148`, `OPEN` `138,412`, 명칭 미제공·NULL match key는 각각 1건이다.
+
+같은 날 두 번째 146-page actual refresh는 `NoChange`였고 v4 normalized checksum이
+동일했다. `NoChange` acquisition staging은 `0`, v4 publication은 `1`, active pointer와
+datasetVersion은 유지됐다. v3 이전 진단 publication 두 건과 quality-failed acquisition은
+삭제하지 않고 감사 이력으로 보존한다.
+
+실제 runtime role의 경기도교육청·성남시 집계는 index 적용 전 `333.886ms`로 기준을
+넘겼다. `0013_academy_registry_summary_index.sql`에 NEIS source 전용 exact-region
+partial expression index를 추가했고, 적용 후 20회 측정은 p95 `120.906ms`, max
+`146.150ms`로 200ms 기준을 통과했다. 최초 RED는 index 부재 1건 실패, 최소 GREEN과
+migration 집중 회귀는 `13 passed`다.
+
+잔여 위험은 승인된 대표 질문의 live JSON/signed JWT SSE golden과 active pointer
+rollback을 아직 검증하지 않은 readiness 공백이다. 따라서
+readiness는 `8.0/10 Partial`이며 capability activation은 계속 보류한다.
+
+`api-contract: compatible`
+
+`security-audit: 지적사항 = none`

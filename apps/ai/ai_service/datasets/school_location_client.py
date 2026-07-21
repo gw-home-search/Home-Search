@@ -51,7 +51,7 @@ class SchoolLocationApiClient:
         self,
         *,
         requester: Requester | None = None,
-        timeout_seconds: float = 10,
+        timeout_seconds: float = 20,
     ) -> None:
         if not math.isfinite(timeout_seconds) or not 1 <= timeout_seconds <= 30:
             raise ValueError("school API timeout is outside the supported range")
@@ -146,7 +146,7 @@ class SchoolLocationApiClient:
         )
         for attempt in range(2):
             try:
-                status, _headers, body = self._requester(path, self._timeout_seconds)
+                status, headers, body = self._requester(path, self._timeout_seconds)
             except (TimeoutError, socket.timeout):
                 if attempt == 0:
                     continue
@@ -156,6 +156,16 @@ class SchoolLocationApiClient:
             if status == 200:
                 if len(body) > _MAX_PAGE_BYTES:
                     raise SchoolLocationApiError("API_PAGE_TOO_LARGE")
+                media_type = next(
+                    (
+                        str(value).split(";", 1)[0].strip().lower()
+                        for key, value in headers.items()
+                        if str(key).lower() == "content-type"
+                    ),
+                    "",
+                )
+                if media_type and media_type != "application/json":
+                    raise SchoolLocationApiError("API_MEDIA_TYPE_INVALID")
                 return body
             reason = _http_reason(status)
             if 500 <= status < 600 and attempt == 0:

@@ -4,6 +4,11 @@
 판정: `Partial` — 학교 위치 이용조건과 local AI DB/chatbot transport는 검증했으나
 MinIO importer credential 미설정으로 전국 import와 학교 live golden이 수행되지 않았다.
 
+> 2026-07-21 갱신: 이 문서는 최초 준비 Slice의 당시 판정을 보존한다. 이후 actual
+> import·성능·live golden·activation 결과는
+> `docs/reports/reference/edu.school-location-readiness.md`와
+> `docs/reports/CHATBOT_SCHOOL_LOCATION_ACTIVATION.md`에서 `Pass`로 닫혔다.
+
 source별 최신 근거: `docs/reports/reference/edu.school-location-readiness.md`
 
 ## 출처와 이용 조건

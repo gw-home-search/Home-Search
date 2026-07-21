@@ -1,7 +1,7 @@
 # `edu.school-location` readiness
 
-기준일: 2026-07-19
-상태: `Partial`
+기준일: 2026-07-21
+상태: `Pass`
 
 ## 출처 / 이용 조건
 
@@ -34,7 +34,7 @@
   `dataset_refresh_run_item=FAIL`, `acquisition_id=NULL`,
   `reason_codes={API_TRANSPORT_FAILED}`로 기록됨을 직접 SQL로 확인
 
-## 검증 공백
+## actual import·readiness 이력
 
 - 실제 observation과 LLM을 사용하는 live chatbot golden 근거가 아직 없다.
 - 2026-07-19 실제 실행에서 Docker와 host 모두 `api.data.go.kr:443` DNS·TLS
@@ -70,15 +70,18 @@
   `NoChange`와 달리, byte-identical 재수집은 기존 `Pass`를 반환하는 계약이다.
 - 실제 runtime role에서 서울시청 인근 2km 학교 조회를 20회 측정한 결과 p95
   `114.066ms`, max `137.701ms`로 200ms 기준을 통과했다.
-- test engine 기반 signed JWT JSON/SSE E2E는 통과했지만 실제 학교 observation과
-  LLM을 사용하는 live golden은 미완료다.
+- 실제 observation과 승인된 OpenAI live 대표 질문
+  `school-location-jamsil-ells`가 `school_location`, fact 4건, citation 2건,
+  기준일 `2026-03-20`으로 통과했다. 응답은 `uiSummary/v1`과 학교 fact artifact를
+  함께 검증했다.
 
 ## 잔여 위험
 
 - provider page latency가 길어 전체 13페이지 수집이 수 분 걸릴 수 있다.
 - 실제 provider schema나 page total이 contract와 다르면 게시가 차단된다.
-- 실제 readiness `Pass` 전까지 `HOME_AI_ENABLED_REFERENCE_CAPABILITIES`는 blank이며
-  `school_location`을 운영에서 활성화하지 않는다.
+- 활성화 값은 exact cumulative
+  `academy_lookup,rail_station_lookup,school_location`이며 blank와 직전
+  `academy_lookup,rail_station_lookup`은 rollback 값으로 유지한다.
 - 기존 Docker volume과 생성된 MinIO volume은 삭제하거나 초기화하지 않았다.
 
 ## 계약 영향

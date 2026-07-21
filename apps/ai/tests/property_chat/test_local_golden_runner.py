@@ -13,6 +13,7 @@ RUNNER = AI_ROOT / "ops" / "run-local-property-golden.sh"
 def write_vars(path: Path, *, include_provider: bool = True) -> None:
     lines = [
         "HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:p%40ss@postgis:5432/home_search",
+        "HOME_AI_REFERENCE_DSN=postgresql://home_search_ai_runtime:r%40ss@postgis:5432/home_search_ai",
     ]
     if include_provider:
         lines.extend(
@@ -66,6 +67,16 @@ case "$*" in
     test "$HOME_AI_GOLDEN_LIVE_CONFIRM" = 'RUN_ONE_LIVE_GOLDEN_CASE'
     printf criteria-recommendation-academy-transit >"$FAKE_UV_MARKER"
     ;;
+  'run python -m ai_service.property_chat.reference_activation')
+    test "$HOME_AI_PROPERTY_DSN" = 'postgresql://home_search_ai_reader:p%40ss@127.0.0.1:15432/home_search'
+    test "$HOME_AI_REFERENCE_DSN" = 'postgresql://home_search_ai_runtime:r%40ss@127.0.0.1:15432/home_search_ai'
+    test "$HOME_AI_OPENAI_API_KEY" = 'test-provider-secret'
+    test "$HOME_AI_OPENAI_PRIMARY_MODEL" = 'gpt-5.6-luna'
+    test "$HOME_AI_OPENAI_SECONDARY_MODEL" = 'gpt-5.6-terra'
+    test "$HOME_AI_OPENAI_TIMEOUT_SECONDS" = '15'
+    test "$HOME_AI_GOLDEN_LIVE_CONFIRM" = 'RUN_ONE_LIVE_GOLDEN_CASE'
+    printf school-location-jamsil-ells >"$FAKE_UV_MARKER"
+    ;;
   *) exit 91 ;;
 esac
 """,
@@ -104,7 +115,12 @@ def run_runner(
     vars_file = tmp_path / "ai.env"
     fake_uv = tmp_path / "uv"
     marker = tmp_path / "called"
+    property_vars_file = tmp_path / "property.env"
     write_vars(vars_file)
+    property_vars_file.write_text(
+        "AI_DATA_RUNTIME_DB_PASSWORD=r@ss\n", encoding="utf-8"
+    )
+    property_vars_file.chmod(0o600)
     if mutate_vars is not None:
         mutate_vars(vars_file)
     write_fake_uv(fake_uv)
@@ -114,6 +130,7 @@ def run_runner(
             "PATH": f"{tmp_path}{os.pathsep}{environment['PATH']}",
             "FAKE_UV_MARKER": str(marker),
             "HOME_AI_GOLDEN_LIVE_CONFIRM": confirmation,
+            "HOME_AI_REFERENCE_PROPERTY_VARS_FILE": str(property_vars_file),
         }
     )
     arguments = [str(RUNNER), mode]
@@ -186,6 +203,26 @@ def test_live_runner_runs_criteria_recommendation_activation_case(
     )
     assert "test-provider-secret" not in result.stdout + result.stderr
     assert "p@ss" not in result.stdout + result.stderr
+
+
+def test_live_runner_runs_school_reference_activation_case(
+    tmp_path: Path,
+) -> None:
+    result = run_runner(
+        tmp_path,
+        "live",
+        case_id="school-location-jamsil-ells",
+        confirmation="RUN_ONE_LIVE_GOLDEN_CASE",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (  # type: ignore[attr-defined]
+        result.marker.read_text(encoding="utf-8")
+        == "school-location-jamsil-ells"
+    )
+    assert "test-provider-secret" not in result.stdout + result.stderr
+    assert "p@ss" not in result.stdout + result.stderr
+    assert "r@ss" not in result.stdout + result.stderr
 
 
 def test_live_runner_rejects_missing_confirmation_without_invoking_uv(

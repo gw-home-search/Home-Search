@@ -285,9 +285,11 @@ DSN from `AI_DATA_RUNTIME_DB_PASSWORD`, and supplies the approved cumulative
 `complex_identity,recent_trade_lookup,price_trend,recommendation` allowlist when that
 optional line is absent. The four-path form keeps strict explicit mapping,
 DSN, and Capability validation. The approved reference rollback is blank and
-the 2026-07-21 approved values are exactly `academy_lookup` and the cumulative
-`academy_lookup,rail_station_lookup`. Any other combination, including rail
-alone, fails closed until its own readiness and activation commit pass.
+the 2026-07-21 approved values are exactly `academy_lookup`, the cumulative
+`academy_lookup,rail_station_lookup`, and the cumulative
+`academy_lookup,rail_station_lookup,school_location`. Any other combination,
+including rail or school alone, fails closed until its own readiness and
+activation commit pass.
 
 The runner requires the existing `home-search-postgis` and `home-search-redis`
 containers to be healthy and `home-search-api` to be running. It then uses
@@ -314,10 +316,10 @@ The price/trend rollback value is
 `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend`.
 The approved full cumulative value is
 `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation`.
-This activation runs explicit `ACADEMY` and `TRANSIT` criteria only. Requests that
-need `SCHOOL`, `SHOPPING`, BUDGET recommendation, comparison, childcare, or
-kindergarten remain unavailable until their source-specific readiness and activation
-commits pass.
+This activation runs explicit `ACADEMY`, `TRANSIT`, and `SCHOOL` criteria only.
+Requests that need `SHOPPING`, BUDGET recommendation, comparison, childcare, or
+kindergarten remain unavailable until their source-specific readiness and
+activation commits pass.
 The no-argument local runner supplies the full cumulative value when omitted;
 explicit custom-file startup still rejects a missing value. Reordered,
 duplicate, mixed, or unapproved values remain fail-closed.

@@ -27,7 +27,7 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 | `simple_lookup` | `complex_identity`, `recent_trade_lookup` | 데이터 준비 중 | 지역 가격 순위는 현재 미지원 |
 | `price_trend` | `price_trend` | 데이터 준비 중 | 과거 관찰 집계만 허용 |
 | `comparison` | `comparison` | 데이터 준비 중 | 같은 기준일·단위의 항목만 비교 |
-| `recommendation` | `recommendation` | 제한 지원 | `CRITERIA`의 학원·철도 조건만 활성; BUDGET·학교·쇼핑은 readiness 대기 |
+| `recommendation` | `recommendation` | 제한 지원 | `CRITERIA`의 학원·철도·학교 조건만 활성; BUDGET·쇼핑은 readiness 대기 |
 | 복합 질문 | `compound_question` | 데이터 준비 중 | 하위 Capability를 독립 검증 |
 | 미래 가격·주관적 학군·개인 법률 판단 | 미지원 Capability | 미지원 | 대체 가능한 근거 질문을 안내 |
 
@@ -53,8 +53,8 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 | `recent_trade_lookup` | “전용 84㎡ 최근 실거래 5건” | 지원 | `ai_read` 정상 거래·단지 | A | 실제 거래일, 전용면적, 금액, 층 | 호가·시세로 재해석, 미래 가격 | 최신 거래일과 coverage를 응답에 표시 | 조회 기간과 조건에서 거래 없음 안내 |
 | `price_trend` | “최근 1년 가격 흐름” | 지원 | `ai_read` 정상 거래 | A | 동일 조건의 월별 집계와 거래량 | 미래 추세 단정, 표본 부족 은폐 | 요청 종료일 이하 active data | 계산 불가 기간과 최소 표본 부족 설명 |
 | `comparison` | “A와 B 가격·세대수 비교” | 데이터 준비 중 | 비교 항목별 동일 버전의 A/B 데이터 | A | 같은 기간·단위로 계산 가능한 항목 | 기준일·평형이 다른 수치의 직접 비교 | 모든 필수 항목이 freshness 통과 | 비교 가능한 항목만 답하고 누락을 분리 |
-| `recommendation` | “영등포구 500세대 이상, 학원 우선 후보” | 제한 지원 | 부동산 A, Sbiz 학원 B, 철도 A | A | `CRITERIA` mode에서 세대수 선필터와 명시한 학원·철도 우선순위로 계산한 후보 | BUDGET·학교·쇼핑 실행, 절대평가, 수익 보장, LLM 임의 점수 | 사용한 모든 필수 dataset 통과 | 비활성 조건과 후보 0건 이유 설명 |
-| `school_location` | “주변 운영 중 초등학교” | 데이터 준비 중 | 학교 위치·운영상태 snapshot | A | 학교 유형, 운영 상태, 직선거리 | 학교 품질·서열·진학 성과 | 반기 갱신 + grace 31일 이내 | 공식 snapshot 미준비 안내; Kakao는 별도 보조 결과 |
+| `recommendation` | “영등포구 500세대 이상, 학원 우선 후보” | 제한 지원 | 부동산 A, Sbiz 학원 B, 철도 A, 학교 A | A | `CRITERIA` mode에서 세대수 선필터와 명시한 학원·철도·학교 우선순위로 계산한 후보 | BUDGET·쇼핑 실행, 절대평가, 수익 보장, LLM 임의 점수 | 사용한 모든 필수 dataset 통과 | 비활성 조건과 후보 0건 이유 설명 |
+| `school_location` | “주변 운영 중 초등학교” | 지원 | 학교 위치·운영상태 snapshot | A | 학교 유형, 운영 상태, 직선거리 | 학교 품질·서열·진학 성과 | 반기 갱신 + grace 31일 이내 | 공식 snapshot 미준비 안내; Kakao는 별도 보조 결과 |
 | `elementary_attendance_zone` | “배정 초등학교는?” | 미지원 | 현재 범위에 통학구역 polygon 없음 | 미지원 | 학교 위치 질문으로 전환 안내 | 직선거리로 배정학교 단정 | 해당 없음 | 통학구역은 현재 지원 범위 밖임을 안내 |
 | `middle_high_school_zone` | “어느 학교군이야?” | 미지원 | 현재 범위에 학교군 polygon 없음 | 미지원 | 학교 위치 질문으로 전환 안내 | 특정 학교 진학 보장 | 해당 없음 | 학교군은 현재 지원 범위 밖임을 안내 |
 | `academy_registry_summary` | “이 시군구의 공식 등록 학원은 몇 곳?” | 데이터 준비 중 | NEIS 학원·교습소 active snapshot | A | 시도교육청+시군구 기준 등록 총수·운영 수·관측일 | 반경·거리, 교육 품질·성과 | source 계약의 수시 갱신 SLA | 공식 snapshot 미준비 또는 지역 식별 불가 안내 |
@@ -124,5 +124,13 @@ fail-closed한다.
 `criteria-recommendation-academy-transit`에서 `CRITERIA`, `ACADEMY→TRANSIT`, 근거
 4건으로 통과했다. 대규모점포는 전국 좌표
 coverage `83.7404%`로 기준 `95%`에 미달하므로 BUDGET 추천·comparison·SHOPPING을
-활성화하지 않는다. 학교, 어린이집, 유치원도 각각 별도 readiness와 승인 commit 전까지
+활성화하지 않는다. 어린이집과 유치원도 각각 별도 readiness와 승인 commit 전까지
 실행 경로와 allowlist에서 제외한다.
+
+2026-07-21 `school_location`은 전국 12,011행·rejected `0`·17개 교육청·좌표
+100%인 `2026-03-20-b148752f1e38` active snapshot, 동일 원본 재수집 멱등성,
+runtime p95 `114.066ms`, 실제 observation과 승인된 OpenAI live 대표 질문을 통과해
+`지원`으로 승인했다. 승인된 누적 reference allowlist는
+`academy_lookup,rail_station_lookup,school_location`이며 학교 단독 또는 순서가 다른
+설정은 fail-closed한다. 이 구성에서는 explicit `CRITERIA` 추천의 `SCHOOL` 조건도
+같은 공식 snapshot을 사용한다. 통학구역·학교군·품질·서열·도보시간은 계속 미지원이다.

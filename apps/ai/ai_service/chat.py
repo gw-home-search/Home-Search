@@ -27,6 +27,7 @@ _APPROVED_REFERENCE_CAPABILITY_CONFIGURATIONS = frozenset(
     {
         ("academy_lookup",),
         ("academy_lookup", "rail_station_lookup"),
+        ("academy_lookup", "rail_station_lookup", "school_location"),
     }
 )
 

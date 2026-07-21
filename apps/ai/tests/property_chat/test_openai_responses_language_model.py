@@ -517,6 +517,10 @@ def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> N
     developer_prompt = request_body["input"][0]["content"]
     assert "Every number token in sentence text must exactly match" in developer_prompt
     assert "Do not state fact counts, list numbers, or converted units" in developer_prompt
+    assert "Use every supplied fact at least once" in developer_prompt
+    assert "Do not omit scope or complex facts" in developer_prompt
+    assert "copy factId, value, and unit from one claim object" in developer_prompt
+    assert "never combine a value or unit with a different factId" in developer_prompt
 
 
 def test_draft_schema_for_empty_facts_forbids_fact_references() -> None:

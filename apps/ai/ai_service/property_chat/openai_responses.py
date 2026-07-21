@@ -227,6 +227,10 @@ class OpenAIResponsesLanguageModel:
             max_output_tokens=3200,
             developer_prompt=(
                 "Answer in Korean using only the supplied facts and limitations. "
+                "Use every supplied fact at least once. Do not omit scope or complex facts "
+                "even when they appear redundant. "
+                "For every attached claim, copy factId, value, and unit from one claim object "
+                "inside the same supplied fact; never combine a value or unit with a different factId. "
                 "Every factual sentence must attach the exact factIds it uses and repeat "
                 "each stated value and unit in claims. Do not calculate, estimate, rank, "
                 "predict, or add a fact that is absent from the supplied evidence. "

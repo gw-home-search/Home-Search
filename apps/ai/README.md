@@ -3,9 +3,9 @@
 `apps/ai` is the evidence-grounded FastAPI service. Slice 2 adds the isolated
 `home_search_ai` dataset lifecycle. Slice 4 adds the provider-agnostic grounded
 property kernel and a separate read-only property connection pool.
-Slice 6A adds a default-disabled school-location reference path and a one-shot
-official API importer. It does not activate the Capability without a `Pass`
-readiness report.
+Slice 6A adds a school-location reference path and a one-shot official API
+importer. The path remains fail-closed until its source-specific `Pass`
+readiness and activation record are complete.
 
 The property pool requires `HOME_AI_PROPERTY_DSN` to target database
 `home_search` as role `home_search_ai_reader`. It reads only `ai_read` views and
@@ -30,18 +30,20 @@ Runtime variables:
 - `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation`
 - `HOME_AI_REFERENCE_DSN` (separate `home_search_ai_runtime` read-only pool)
 - `HOME_AI_ENABLED_REFERENCE_CAPABILITIES` (blank by default; only the exact
-  academy/rail tuples recorded in `ai_service.chat` are currently approved)
+  academy/rail/school cumulative tuples recorded in `ai_service.chat` are
+  currently approved)
 
 The runtime Capability setting is fail-closed. This activation permits the
 identity-only rollback value or the cumulative
 `complex_identity,recent_trade_lookup` value, or the approved cumulative
 `complex_identity,recent_trade_lookup,price_trend` rollback value, or the approved
 `complex_identity,recent_trade_lookup,price_trend,recommendation` value. The active
-recommendation facility scope is limited to explicit `ACADEMY` and `TRANSIT` criteria;
+recommendation facility scope is limited to explicit `ACADEMY`, `TRANSIT`, and
+`SCHOOL` criteria;
 `MIN_UNIT_COUNT` remains an optional server-enforced filter. Missing,
 reordered, duplicate, whitespace-padded, or unapproved values disable all property
-capabilities. `comparison`, `SCHOOL`, `SHOPPING`, and childcare/kindergarten execution
-remain inactive until their separate readiness gates pass.
+capabilities. `comparison`, `SHOPPING`, and childcare/kindergarten execution remain
+inactive until their separate readiness gates pass.
 Golden verification uses its own explicit candidate set and does not widen the
 runtime allowlist.
 
@@ -58,6 +60,12 @@ most five Sbiz education-store points within 800m by default, or an explicit
 only Unicode NFKC name plus canonical road-address exact matches may add NEIS
 A-grade registry evidence. License, taxonomy, coordinate coverage, and live
 readiness approval are recorded in the reference readiness reports.
+
+`school_location` is active for operating-school location and straight-line
+distance facts from the nationwide official snapshot. It may also be used by
+the limited `CRITERIA` recommendation path when the user explicitly requests
+`SCHOOL`. School quality, ranking, attendance zones, admission outcomes, and
+walking time remain unsupported.
 
 `childcare_lookup` is implemented but intentionally absent from the runtime
 activation allowlist while the official service application is pending. Its

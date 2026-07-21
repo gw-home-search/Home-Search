@@ -2,9 +2,10 @@
 
 기준일: 2026-07-21
 
-판정: `Pass (제한 지원)` — `recommendation`의 `CRITERIA` mode 중 사용자가 명시한
-`MIN_UNIT_COUNT`와 시설 조건 `ACADEMY`·`TRANSIT`만 활성화했다. 가격 기반 추천, 학교, 쇼핑, 어린이집,
-유치원, 비교는 이번 활성화에 포함하지 않았다.
+판정: `Pass (제한 지원)` — 최초 활성화에서는 `recommendation`의 `CRITERIA` mode 중
+사용자가 명시한 `MIN_UNIT_COUNT`와 시설 조건 `ACADEMY`·`TRANSIT`를 활성화했다.
+2026-07-21 학교 activation에서 `SCHOOL`을 같은 제한 mode에 추가했다. 가격 기반
+추천, 쇼핑, 어린이집, 유치원, 비교는 아직 포함하지 않았다.
 
 ## 범위와 정책
 
@@ -19,8 +20,9 @@
 - LLM 역할: typed plan과 근거 문장 작성. 후보·값·순위·표는 서버가 결정
 
 `BUDGET` 요청은 runtime mode gate에서 관찰 쿼리 전에 unavailable로 종료한다.
-`SCHOOL`·`SHOPPING`은 활성 repository가 없어 실행하지 않으며, 어린이집·유치원
-문구는 서버가 현재 질문에서 재확인해 `UNSUPPORTED_CHILDCARE` 안내로 종료한다.
+`SHOPPING`은 활성 repository가 없어 실행하지 않으며, 어린이집·유치원 문구는 서버가
+현재 질문에서 재확인해 `UNSUPPORTED_CHILDCARE` 안내로 종료한다. `SCHOOL`은 학교
+activation 이후 사용자가 명시한 조건에서만 공식 학교 위치 snapshot을 사용한다.
 
 ## 데이터 준비도
 
@@ -29,7 +31,7 @@
 | Sbiz 교육업소 | Pass | 800m count·최근접 직선거리, B등급 |
 | 철도역 위치 | Pass | 최근접 역 1,500m 직선거리, A등급 |
 | 대규모점포 | Partial | 좌표 `3,497/4,176` (`83.7404%`)로 95% 기준 미달; 비활성 |
-| 학교 | Partial | 전국 live import와 live golden 미완료; 비활성 |
+| 학교 | Pass | 전국 12,011행·좌표 100%·live golden; explicit `SCHOOL` 활성 |
 | 어린이집 | 준비 코드만 유지 | collector·projection·typed handler·fixture 보존; 승인 key와 전국 coverage 전 비활성 |
 | 유치원 | 연결 경계만 유지 | `DAYCARE_KINDERGARTEN` 지도 action은 Kakao 탐색 전용; 공식 source 승인·adapter·readiness 전 추천 근거로 사용하지 않음 |
 
@@ -80,8 +82,10 @@ grounding policy, fixture를 삭제하지 않는다. 승인 key로 실제 schema
 활성값은
 `complex_identity,recent_trade_lookup,price_trend,recommendation`이다. 문제 발생 시
 `complex_identity,recent_trade_lookup,price_trend`로 되돌리고 AI/BFF를 재기동한다.
-reference allowlist는 `academy_lookup,rail_station_lookup`을 유지한다. migration,
-데이터 재수집, Docker volume 변경은 없다.
+reference allowlist는 학교 활성화 후 누적
+`academy_lookup,rail_station_lookup,school_location`을 사용한다. 학교 문제만 발생하면
+직전 `academy_lookup,rail_station_lookup`으로 되돌린다. migration, 데이터 재수집,
+Docker volume 변경은 없다.
 
 ## 검증 공백과 잔여 위험
 
@@ -92,7 +96,7 @@ reference allowlist는 `academy_lookup,rail_station_lookup`을 유지한다. mig
   `DRAFT_GROUNDING` 단계만 식별하도록 보강했다. provider 변동과 일시 오류는 잔여 위험이다.
 - 대규모점포 좌표 coverage가 기준에 미달하므로 가격 기반 추천과 쇼핑 조건을 활성화하면
   안 된다.
-- 학교·어린이집·유치원은 source별 승인과 live readiness 없이는 사용할 수 없다.
+- 어린이집·유치원은 source별 승인과 live readiness 없이는 사용할 수 없다.
 
 ## 보안 영향
 

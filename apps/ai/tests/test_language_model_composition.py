@@ -215,9 +215,20 @@ def test_unapproved_or_invalid_property_capability_configuration_fails_closed(
             "academy_lookup,rail_station_lookup",
             frozenset({"academy_lookup", "rail_station_lookup"}),
         ),
+        (
+            "academy_lookup,rail_station_lookup,school_location",
+            frozenset(
+                {"academy_lookup", "rail_station_lookup", "school_location"}
+            ),
+        ),
         (" school_location", frozenset()),
         ("school_location,school_location", frozenset()),
         ("rail_station_lookup,academy_lookup", frozenset()),
+        ("school_location,academy_lookup,rail_station_lookup", frozenset()),
+        (
+            "academy_lookup,rail_station_lookup,school_location,childcare_lookup",
+            frozenset(),
+        ),
         ("unknown", frozenset()),
     ],
 )
@@ -815,4 +826,66 @@ def test_criteria_recommendation_activation_uses_only_approved_reference_sources
     assert captured["rail_station_repository"] is rail_repository
     assert captured["childcare_repository"] is None
     assert captured["school_repository"] is None
+    assert captured["point_facility_repository"] is None
+
+
+def test_school_activation_composes_only_the_approved_cumulative_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    school_repository = object()
+    academy_repository = object()
+    rail_repository = object()
+
+    class RecordingEngine:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        async def query(self, **_kwargs: object) -> dict[str, object]:
+            return {"success": True}
+
+    monkeypatch.setenv(
+        "HOME_AI_ENABLED_REFERENCE_CAPABILITIES",
+        "academy_lookup,rail_station_lookup,school_location",
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_property_fact_repository", lambda: object()
+    )
+    monkeypatch.setattr("ai_service.chat.get_grounded_language_model", lambda: object())
+    monkeypatch.setattr(
+        "ai_service.chat.get_school_fact_repository", lambda: school_repository
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_academy_location_repository",
+        lambda: academy_repository,
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_rail_station_repository", lambda: rail_repository
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_childcare_repository",
+        lambda: (_ for _ in ()).throw(AssertionError("childcare must stay inactive")),
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_point_facility_repository",
+        lambda: (_ for _ in ()).throw(AssertionError("retail must stay inactive")),
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.engine.GroundedChatbotEngine", RecordingEngine
+    )
+
+    response = asyncio.run(ConfiguredChatbotEngine().query(
+        request=ChatbotQueryRequest(question="잠실엘스 주변 초등학교"),
+        user=AuthenticatedUser(user_id=42),
+        request_id="request-school-activation",
+    ))
+
+    assert response == {"success": True}
+    assert captured["enabled_reference_capabilities"] == frozenset({
+        "academy_lookup", "rail_station_lookup", "school_location",
+    })
+    assert captured["school_repository"] is school_repository
+    assert captured["academy_location_repository"] is academy_repository
+    assert captured["rail_station_repository"] is rail_repository
+    assert captured["childcare_repository"] is None
     assert captured["point_facility_repository"] is None

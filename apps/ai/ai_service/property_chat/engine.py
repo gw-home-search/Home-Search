@@ -12,7 +12,7 @@ from ai_service.auth import AuthenticatedUser
 from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
 
-from .answer_document import AnswerDocument, FactListPresenter
+from .answer_document import AnswerDocument, CompoundAnswerDocument, FactListPresenter
 from .capability_handlers import (
     AcademyLocationFactRepository,
     AcademyLookupHandler,
@@ -46,6 +46,7 @@ from .models import (
     MonthlyTrendRecord,
     PropertyCapability,
     QueryPlan,
+    QueryPlanBundle,
     ReferenceCapability,
     SchoolRecord,
     SchoolSearchResult,
@@ -65,7 +66,9 @@ from .rail_stations import RailStation, RailStationSearchResult
 
 
 class GroundedLanguageModel(Protocol):
-    async def plan_query(self, request: ChatbotQueryRequest) -> QueryPlan: ...
+    async def plan_query(
+        self, request: ChatbotQueryRequest
+    ) -> QueryPlan | QueryPlanBundle: ...
 
     async def draft_answer(
         self,
@@ -207,98 +210,96 @@ class GroundedChatbotEngine:
     ) -> dict[str, object]:
         del user
         try:
-            plan = await self._language_model.plan_query(request)
-            if plan.capability in {"recommendation", "comparison"}:
-                verified_themes = detect_explicit_themes(
-                    request.question, plan.lifestyle_themes
-                )
-                plan = replace(
-                    plan,
-                    lifestyle_themes=verified_themes,
-                    school_levels=detect_school_levels(
-                        request.question, verified_themes
-                    ),
-                )
-            if plan.capability in self._enabled_capabilities or (
-                plan.capability in self._enabled_reference_capabilities
-            ):
-                plan_handler = self._catalog.plan_handler_for(plan.capability)
-                if plan_handler is not None:
-                    async with asyncio.timeout(3):
-                        capability_result = await plan_handler.observe(plan)
-                    facts = capability_result.facts
-                    limitations = capability_result.limitations
-                    readiness = capability_result.readiness
-                    action_intents = capability_result.actions
-                else:
-                    facts, limitations, readiness, action_intents = await self._observe(plan)
-                    capability_result = CapabilityResult(
-                        facts, limitations, readiness, action_intents
-                    )
-            else:
-                facts, limitations, readiness, action_intents = (
-                    [],
-                    ["해당 질문 기능은 현재 데이터 준비와 검증이 진행 중입니다."],
-                    "unavailable",
-                    (),
-                )
-                capability_result = CapabilityResult(facts, limitations, readiness)
-            draft = await self._language_model.draft_answer(
-                facts=facts,
-                limitations=limitations,
-                question=request.question,
+            planned = await self._language_model.plan_query(request)
+            bundle = (
+                planned if isinstance(planned, QueryPlanBundle)
+                else QueryPlanBundle((planned,))
             )
-            used_facts = validate_draft(
-                draft,
-                facts,
-                readiness,
-                limitations=limitations,
-                enforce_school_policy=plan.capability == "school_location",
-                enforce_childcare_policy=plan.capability == "childcare_lookup",
-                enforce_map_action_policy=plan.capability == "kakao_place_search",
-                enforce_comparison_policy=plan.capability == "comparison",
-                enforce_recommendation_policy=plan.capability == "recommendation",
+            plans = tuple(
+                _verify_lifestyle_plan(plan, request.question)
+                for plan in bundle.fragments
             )
-            if capability_result.artifact_fact_ids:
-                fact_by_id = {fact.fact_id: fact for fact in facts}
-                if any(
-                    fact_id not in fact_by_id
-                    for fact_id in capability_result.artifact_fact_ids
-                ):
-                    raise GroundingValidationError("GROUNDING_ARTIFACT_FACT_UNKNOWN")
-                used_ids = {fact.fact_id for fact in used_facts}
-                used_facts.extend(
-                    fact_by_id[fact_id]
-                    for fact_id in capability_result.artifact_fact_ids
-                    if fact_id not in used_ids
-                )
-            used_fact_ids = {fact.fact_id for fact in used_facts}
-            if any(
-                not set(action.fact_ids).issubset(used_fact_ids)
-                for action in action_intents
-            ):
-                raise GroundingValidationError("GROUNDING_ACTION_FACT_UNKNOWN")
-            actions = [
-                action.to_public_dict(request_id) for action in action_intents
-            ]
-            artifacts = list(capability_result.artifacts) or FactListPresenter().present(
-                plan=plan, used_facts=used_facts, readiness=readiness
-            )
-            return AnswerDocument.from_grounded_result(
-                request=request,
-                request_id=request_id,
-                plan=plan,
-                draft=draft,
-                used_facts=used_facts,
-                limitations=limitations,
-                readiness=readiness,
-                artifacts=artifacts,
-                actions=actions,
+            documents = tuple(await asyncio.gather(*(
+                self._execute_fragment(plan, request, request_id) for plan in plans
+            )))
+            if len(documents) == 1:
+                return documents[0].to_public_dict()
+            return CompoundAnswerDocument(
+                request, request_id, documents
             ).to_public_dict()
         except ChatbotProviderUnavailable:
             raise
         except Exception as exception:
             raise ChatbotProviderUnavailable() from exception
+
+    async def _execute_fragment(
+        self,
+        plan: QueryPlan,
+        request: ChatbotQueryRequest,
+        request_id: str,
+    ) -> AnswerDocument:
+        if plan.capability in self._enabled_capabilities or (
+            plan.capability in self._enabled_reference_capabilities
+        ):
+            plan_handler = self._catalog.plan_handler_for(plan.capability)
+            if plan_handler is not None:
+                async with asyncio.timeout(3):
+                    result = await plan_handler.observe(plan)
+            else:
+                facts, limitations, readiness, actions = await self._observe(plan)
+                result = CapabilityResult(facts, limitations, readiness, actions)
+        else:
+            result = CapabilityResult(
+                [],
+                ["해당 질문 기능은 현재 데이터 준비와 검증이 진행 중입니다."],
+                "unavailable",
+            )
+        draft = await self._language_model.draft_answer(
+            facts=result.facts,
+            limitations=result.limitations,
+            question=request.question,
+        )
+        used_facts = validate_draft(
+            draft,
+            result.facts,
+            result.readiness,
+            limitations=result.limitations,
+            enforce_school_policy=plan.capability == "school_location",
+            enforce_childcare_policy=plan.capability == "childcare_lookup",
+            enforce_map_action_policy=plan.capability == "kakao_place_search",
+            enforce_comparison_policy=plan.capability == "comparison",
+            enforce_recommendation_policy=plan.capability == "recommendation",
+        )
+        if result.artifact_fact_ids:
+            fact_by_id = {fact.fact_id: fact for fact in result.facts}
+            if any(fact_id not in fact_by_id for fact_id in result.artifact_fact_ids):
+                raise GroundingValidationError("GROUNDING_ARTIFACT_FACT_UNKNOWN")
+            used_ids = {fact.fact_id for fact in used_facts}
+            used_facts.extend(
+                fact_by_id[fact_id]
+                for fact_id in result.artifact_fact_ids
+                if fact_id not in used_ids
+            )
+        used_fact_ids = {fact.fact_id for fact in used_facts}
+        if any(
+            not set(action.fact_ids).issubset(used_fact_ids)
+            for action in result.actions
+        ):
+            raise GroundingValidationError("GROUNDING_ACTION_FACT_UNKNOWN")
+        artifacts = list(result.artifacts) or FactListPresenter().present(
+            plan=plan, used_facts=used_facts, readiness=result.readiness
+        )
+        return AnswerDocument.from_grounded_result(
+            request=request,
+            request_id=request_id,
+            plan=plan,
+            draft=draft,
+            used_facts=used_facts,
+            limitations=result.limitations,
+            readiness=result.readiness,
+            artifacts=artifacts,
+            actions=[action.to_public_dict(request_id) for action in result.actions],
+        )
 
     async def _observe(
         self, plan: QueryPlan
@@ -843,6 +844,17 @@ def _childcare_scope_fact(
         source_url="https://www.data.go.kr/data/15013108/standard.do",
         evidence_grade="A",
         dataset_version_value=result.dataset_version,
+    )
+
+
+def _verify_lifestyle_plan(plan: QueryPlan, question: str) -> QueryPlan:
+    if plan.capability not in {"recommendation", "comparison"}:
+        return plan
+    themes = detect_explicit_themes(question, plan.lifestyle_themes)
+    return replace(
+        plan,
+        lifestyle_themes=themes,
+        school_levels=detect_school_levels(question, themes),
     )
 
 

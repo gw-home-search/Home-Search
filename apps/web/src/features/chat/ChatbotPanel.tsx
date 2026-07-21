@@ -350,7 +350,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
                   <div className="chatbot-empty-intro">
                     <span>안녕하세요!</span>
                     <strong>어떤 집을 찾고 계세요?</strong>
-                    <p>지역과 예산, 면적을 알려주시면<br />검증된 부동산 데이터로 비교해드릴게요.</p>
+                    <p>단지와 면적, 궁금한 생활 조건을 알려주시면<br />검증된 데이터 범위에서 답해드릴게요.</p>
                   </div>
                   <div className="chatbot-example-section">
                     <strong>이런 질문은 어때요?</strong>
@@ -414,9 +414,9 @@ const EXAMPLE_QUESTIONS = [
     question: '헬리오시티 전용 59㎡의 최근 1년 월별 가격 흐름과 거래량을 보여줘',
   },
   {
-    kind: 'complex-identity',
-    label: '단지 정보',
-    question: '래미안원베일리의 정확한 주소와 단지 기본 정보를 확인해줘',
+    kind: 'lifestyle-infrastructure',
+    label: '생활 인프라',
+    question: '잠실엘스 주변 학원 위치와 가까운 역·노선을 함께 알려줘',
   },
 ];
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 
@@ -271,6 +272,170 @@ class AnswerDocument:
                 "citationCount": len(citations),
             },
         }
+
+
+@dataclass(frozen=True)
+class CompoundAnswerDocument:
+    request: ChatbotQueryRequest
+    request_id: str
+    fragments: tuple[AnswerDocument, ...]
+
+    def __post_init__(self) -> None:
+        if not 2 <= len(self.fragments) <= 4:
+            raise ValueError("compound answer must contain 2..4 fragments")
+        if any(
+            fragment.request != self.request or fragment.request_id != self.request_id
+            for fragment in self.fragments
+        ):
+            raise ValueError("compound answer fragment request does not match")
+
+    def to_public_dict(self) -> dict[str, object]:
+        facts = _deduplicate_facts(self.fragments)
+        citations = _citations(facts)
+        data_as_of = min((fact.data_as_of for fact in facts), default=None)
+        succeeded = sum(
+            fragment.readiness != "unavailable" for fragment in self.fragments
+        )
+        failed = len(self.fragments) - succeeded
+        evidence_status = (
+            "unavailable"
+            if succeeded == 0
+            else "partial"
+            if any(fragment.readiness != "supported" for fragment in self.fragments)
+            else "supported"
+        )
+        status = (
+            "failed"
+            if succeeded == 0
+            else "partial_success"
+            if failed or evidence_status == "partial"
+            else "success"
+        )
+        answer = " ".join(
+            section.text
+            for fragment in self.fragments
+            for section in fragment.sections
+        )
+        if not answer or len(answer) > 20_000:
+            raise ValueError("compound answer text exceeds the public contract")
+        limitations = tuple(dict.fromkeys(
+            limitation
+            for fragment in self.fragments
+            for limitation in fragment.limitations
+        ))[:50]
+        artifacts = _bounded_artifacts(
+            artifact
+            for fragment in self.fragments
+            for artifact in fragment.artifacts
+        )
+        actions = tuple(
+            action
+            for fragment in self.fragments
+            for action in fragment.actions
+        )[:4]
+        artifact_ids = {
+            artifact_id
+            for artifact in artifacts
+            if isinstance((artifact_id := artifact.get("artifactId")), str)
+        }
+        action_ids = {
+            action_id
+            for action in actions
+            if isinstance((action_id := action.get("actionId")), str)
+        }
+        return {
+            "success": succeeded > 0,
+            "status": status,
+            "question": self.request.question,
+            "fragments": [
+                _fragment_dict(index, fragment, artifact_ids, action_ids)
+                for index, fragment in enumerate(self.fragments, start=1)
+            ],
+            "result": {},
+            "message": "",
+            "executionSummary": {
+                "total": len(self.fragments),
+                "succeeded": succeeded,
+                "failed": failed,
+            },
+            "answer": answer,
+            "resolvedQuestion": self.request.question,
+            "conversationResolution": None,
+            "conversationMemoryPatch": None,
+            "uiActions": list(actions),
+            "uiArtifacts": list(artifacts),
+            "uiSummary": None,
+            "requestId": self.request_id,
+            "citations": citations,
+            "dataAsOf": data_as_of.isoformat() if data_as_of else None,
+            "limitations": list(limitations),
+            "evidenceSummary": {
+                "status": evidence_status,
+                "capabilities": [
+                    fragment.plan.capability for fragment in self.fragments
+                ],
+                "factCount": len(facts),
+                "citationCount": len(citations),
+            },
+        }
+
+
+def _fragment_dict(
+    index: int,
+    fragment: AnswerDocument,
+    allowed_artifact_ids: set[str],
+    allowed_action_ids: set[str],
+) -> dict[str, object]:
+    succeeded = fragment.readiness != "unavailable"
+    return {
+        "fragmentId": f"fragment-{index}",
+        "capability": fragment.plan.capability,
+        "status": "success" if succeeded else "failed",
+        "answer": " ".join(section.text for section in fragment.sections),
+        "factIds": [fact.fact_id for fact in fragment.used_facts],
+        "artifactIds": [
+            artifact_id
+            for artifact in fragment.artifacts
+            if isinstance((artifact_id := artifact.get("artifactId")), str)
+            and artifact_id in allowed_artifact_ids
+        ],
+        "actionIds": [
+            action_id
+            for action in fragment.actions
+            if isinstance((action_id := action.get("actionId")), str)
+            and action_id in allowed_action_ids
+        ],
+        "limitations": list(fragment.limitations),
+    }
+
+
+def _deduplicate_facts(
+    fragments: tuple[AnswerDocument, ...],
+) -> tuple[EvidenceFact, ...]:
+    by_id: dict[str, EvidenceFact] = {}
+    for fragment in fragments:
+        for fact in fragment.used_facts:
+            existing = by_id.get(fact.fact_id)
+            if existing is not None and existing != fact:
+                raise ValueError("compound fragments disagree on an evidence fact")
+            by_id.setdefault(fact.fact_id, fact)
+    return tuple(by_id.values())
+
+
+def _bounded_artifacts(
+    artifacts: Iterable[dict[str, object]],
+) -> tuple[dict[str, object], ...]:
+    accepted: list[dict[str, object]] = []
+    encoded_bytes = 2
+    for artifact in artifacts:
+        if len(accepted) == 8:
+            break
+        size = len(json.dumps(artifact, ensure_ascii=False).encode("utf-8"))
+        if encoded_bytes + size + int(bool(accepted)) > _MAX_ARTIFACT_BYTES:
+            continue
+        accepted.append(artifact)
+        encoded_bytes += size + int(len(accepted) > 1)
+    return tuple(accepted)
 
 
 def _citations(facts: tuple[EvidenceFact, ...]) -> list[dict[str, object]]:

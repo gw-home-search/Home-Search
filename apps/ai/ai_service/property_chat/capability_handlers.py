@@ -11,6 +11,7 @@ from .academy_registry import AcademyRegistrySummary
 from .childcare_centers import ChildcareCenter, ChildcareSearchResult
 from .models import (
     AdministrativeRegionContext,
+    CAPABILITY_EXECUTION_ORDER,
     ComplexRecord,
     EvidenceFact,
     MonthlyTrendRecord,
@@ -166,7 +167,12 @@ class CapabilityCatalog:
 
     @property
     def capabilities(self) -> tuple[QueryCapability, ...]:
-        return tuple(self._by_capability) + tuple(self._plan_by_capability)
+        return tuple(
+            capability
+            for capability in CAPABILITY_EXECUTION_ORDER
+            if capability in self._by_capability
+            or capability in self._plan_by_capability
+        )
 
     def handler_for(self, capability: str) -> CapabilityHandler | None:
         return self._by_capability.get(cast(QueryCapability, capability))

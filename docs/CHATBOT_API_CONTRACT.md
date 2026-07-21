@@ -114,6 +114,37 @@ legacy `success`와 `status` 의미는 유지한다.
 작성한 데이터 부족 안내를 `answer`로 반환한다. 인증, validation, rate limit,
 내부·provider 장애는 ProblemDetail 또는 SSE `error`다.
 
+### 복합 질문 fragment
+
+단일 Capability 질문은 호환을 위해 `fragments=[]`를 유지한다. 두 개 이상의
+Capability로 분해된 질문은 정적 catalog 순서로 최대 4개의 검증 완료 fragment를
+채운다. 같은 Capability의 호환 가능한 list 조건은 한 plan으로 합치며, 서로 충돌하는
+단지·기간·면적·반경 조건의 중복 plan은 provider validation 실패로 처리한다.
+
+```json
+{
+  "fragmentId": "fragment-1",
+  "capability": "comparison",
+  "status": "success",
+  "answer": "...",
+  "factIds": ["fact-comparison-501"],
+  "artifactIds": ["comparison-501-502"],
+  "actionIds": [],
+  "limitations": []
+}
+```
+
+- `fragmentId`는 response 안에서 `fragment-1`부터 순서대로 부여한다.
+- `status`는 `success|failed`만 허용한다. source inactive/stale, 단지 좌표 없음,
+  정상적인 근거 부족은 해당 fragment만 `failed`가 되며 다른 fragment를 제거하지 않는다.
+- `factIds`는 해당 fragment가 검증에 사용한 fact만 포함하고 모두 top-level citation의
+  `factIds`에 존재해야 한다.
+- `artifactIds`와 `actionIds`는 같은 response의 `uiArtifacts[].artifactId`와
+  `uiActions[].actionId`에 실제로 존재하는 값만 포함한다.
+- fragment별 observation은 3초로 제한하고, 전체 요청은 기존 query timeout을 유지한다.
+  provider/internal/grounding validation 장애는 부분 성공으로 위장하지 않고 기존
+  ProblemDetail 또는 SSE `error`로 처리한다.
+
 ### 근거 필드 규칙
 
 - `answer`의 모든 사실·수치 문장은 하나 이상의 유효한 `factId`를 사용해야 한다.

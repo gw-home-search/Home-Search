@@ -16,6 +16,7 @@ from ai_service.property_chat.models import (
     DraftClaim,
     DraftSentence,
     QueryPlan,
+    QueryPlanBundle,
     TradeRecord,
 )
 from ai_service.property_chat.rail_stations import RailStation, RailStationSearchResult
@@ -235,6 +236,44 @@ def test_comparison_uses_batch_queries_and_keeps_partial_price_cells() -> None:
     retail_cells = table["rows"][6]["cells"]
     assert rail_cells[0]["factIds"] != rail_cells[1]["factIds"]
     assert retail_cells[0]["factIds"] != retail_cells[1]["factIds"]
+
+
+def test_compound_comparison_and_hospital_map_action_keep_independent_results() -> None:
+    class CompoundPropertyRepository(PropertyRepository):
+        def find_complexes(self, name, region_name, limit):
+            assert (name, region_name, limit) == ("잠실엘스", None, 6)
+            return list(self.complexes[name])
+
+    class CompoundLanguageModel(LanguageModel):
+        async def plan_query(self, request):
+            return QueryPlanBundle((
+                QueryPlan(
+                    capability="kakao_place_search", complex_name="잠실엘스",
+                    place_category="HOSPITAL",
+                ),
+                await super().plan_query(request),
+            ))
+
+    engine = GroundedChatbotEngine(
+        repository=CompoundPropertyRepository(), language_model=CompoundLanguageModel(),
+        enabled_capabilities=frozenset({"comparison"}),
+        enabled_reference_capabilities=frozenset({"kakao_place_search"}),
+        rail_station_repository=RailRepository(),
+        point_facility_repository=RetailRepository(),
+        today=lambda: date(2026, 7, 20),
+    )
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(
+            question="잠실엘스와 헬리오시티 84㎡를 비교하고 병원도 지도에 보여줘"
+        ),
+        user=AuthenticatedUser(user_id=1), request_id="request-comparison-map",
+    ))
+
+    assert [fragment["capability"] for fragment in response["fragments"]] == [
+        "comparison", "kakao_place_search",
+    ]
+    assert response["uiArtifacts"][0]["type"] == "comparisonTable"
+    assert response["uiActions"][0]["category"] == "HOSPITAL"
 
 
 def test_comparison_rejects_winner_language() -> None:

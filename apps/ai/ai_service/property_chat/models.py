@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Literal
 
@@ -166,6 +166,85 @@ class QueryPlan:
         object.__setattr__(self, "lifestyle_themes", tuple(
             theme for theme in theme_order if theme in self.lifestyle_themes
         ))
+
+
+CAPABILITY_EXECUTION_ORDER: tuple[QueryCapability, ...] = (
+    "complex_identity",
+    "recent_trade_lookup",
+    "price_trend",
+    "comparison",
+    "recommendation",
+    "school_location",
+    "academy_lookup",
+    "academy_registry_summary",
+    "rail_station_lookup",
+    "retail_location",
+    "childcare_lookup",
+    "kakao_place_search",
+)
+
+
+@dataclass(frozen=True)
+class QueryPlanBundle:
+    fragments: tuple[QueryPlan, ...]
+
+    def __post_init__(self) -> None:
+        if not 1 <= len(self.fragments) <= 4:
+            raise ValueError("query plan bundle must contain 1..4 fragments")
+        merged: dict[QueryCapability, QueryPlan] = {}
+        for plan in self.fragments:
+            existing = merged.get(plan.capability)
+            merged[plan.capability] = (
+                plan if existing is None else _merge_duplicate_plan(existing, plan)
+            )
+        object.__setattr__(self, "fragments", tuple(
+            merged[capability]
+            for capability in CAPABILITY_EXECUTION_ORDER
+            if capability in merged
+        ))
+
+
+def _merge_duplicate_plan(left: QueryPlan, right: QueryPlan) -> QueryPlan:
+    if left == right:
+        return left
+    scalar_fields = (
+        "complex_name", "region_name", "start_date", "end_date",
+        "exclusive_area_square_meters", "radius_meters", "place_category",
+        "maximum_budget_ten_thousand_krw",
+    )
+    if any(
+        getattr(left, name) is not None
+        and getattr(right, name) is not None
+        and getattr(left, name) != getattr(right, name)
+        for name in scalar_fields
+    ):
+        raise ValueError("duplicate capability plans conflict")
+
+    def merged_values(first: tuple[object, ...], second: tuple[object, ...]) -> tuple:
+        return tuple(dict.fromkeys((*first, *second)))
+
+    return replace(
+        left,
+        region_name=left.region_name or right.region_name,
+        start_date=left.start_date or right.start_date,
+        end_date=left.end_date or right.end_date,
+        exclusive_area_square_meters=(
+            left.exclusive_area_square_meters or right.exclusive_area_square_meters
+        ),
+        limit=max(left.limit, right.limit),
+        school_levels=merged_values(left.school_levels, right.school_levels),
+        facility_subtypes=merged_values(left.facility_subtypes, right.facility_subtypes),
+        radius_meters=left.radius_meters or right.radius_meters,
+        place_category=left.place_category or right.place_category,
+        complex_names=merged_values(left.complex_names, right.complex_names),
+        maximum_budget_ten_thousand_krw=(
+            left.maximum_budget_ten_thousand_krw
+            or right.maximum_budget_ten_thousand_krw
+        ),
+        lifestyle_themes=merged_values(
+            left.lifestyle_themes, right.lifestyle_themes
+        ),
+    )
 
 
 @dataclass(frozen=True)

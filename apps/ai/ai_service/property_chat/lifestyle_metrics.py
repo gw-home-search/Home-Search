@@ -91,8 +91,10 @@ def student_observation_fact(
         },
         source_id="lifestyle.student-observation",
         source_name="학교 위치 + Sbiz 교육업소",
-        evidence_grade="A+B",
-        dataset_version_value=f"{snapshot.dataset_version}+{academies.dataset_version}",
+        evidence_grade="B",
+        dataset_version_value=(
+            f"{snapshot.dataset_version}:{academies.dataset_version}"
+        ),
     )
 
 

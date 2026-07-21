@@ -11,7 +11,14 @@ from typing import Any
 
 from ai_service.models import ChatbotQueryRequest
 
-from .models import DraftAnswer, DraftClaim, DraftSentence, EvidenceFact, QueryPlan
+from .models import (
+    DraftAnswer,
+    DraftClaim,
+    DraftSentence,
+    EvidenceFact,
+    QueryPlan,
+    QueryPlanBundle,
+)
 
 _RESPONSES_URL = "https://api.openai.com/v1/responses"
 _DEFAULT_MAX_RESPONSE_BYTES = 262_144
@@ -93,7 +100,9 @@ class OpenAIResponsesLanguageModel:
         self._settings = settings
         self._requester = requester or _url_request
 
-    async def plan_query(self, request: ChatbotQueryRequest) -> QueryPlan:
+    async def plan_query(
+        self, request: ChatbotQueryRequest
+    ) -> QueryPlan | QueryPlanBundle:
         context = []
         if request.conversationContext is not None:
             context = [
@@ -107,9 +116,11 @@ class OpenAIResponsesLanguageModel:
         output = await self._structured_response(
             name="property_query_plan",
             schema=_PLAN_SCHEMA,
-            max_output_tokens=500,
+            max_output_tokens=1_400,
             developer_prompt=(
-                "Classify the request into exactly one supported property capability. "
+                "Split the current request into one to four independent supported property "
+                "capability fragments. Return one fragment for a simple request. Merge repeated "
+                "capabilities into one fragment and do not create dependencies between fragments. "
                 "Use complex_identity only for complex identity, location, or address. "
                 "Use recent_trade_lookup for latest individual trade records. "
                 "Use price_trend for monthly or period aggregates such as average, minimum, "
@@ -171,7 +182,7 @@ class OpenAIResponsesLanguageModel:
             user_payload=payload,
         )
         try:
-            return _parse_plan(output)
+            return _parse_plan_bundle(output)
         except Exception:
             raise OpenAIResponsesError() from None
 
@@ -390,6 +401,15 @@ def _extract_output_text(response: object) -> str:
     return texts[0]
 
 
+def _parse_plan_bundle(value: object) -> QueryPlan | QueryPlanBundle:
+    if isinstance(value, dict) and set(value) == {"fragments"}:
+        fragments = value["fragments"]
+        if not isinstance(fragments, list) or not 1 <= len(fragments) <= 4:
+            raise ValueError("invalid plan fragments")
+        return QueryPlanBundle(tuple(_parse_plan(fragment) for fragment in fragments))
+    return _parse_plan(value)
+
+
 def _parse_plan(value: object) -> QueryPlan:
     plan = _object(value)
     base_keys = {
@@ -567,7 +587,7 @@ def _optional_date(value: object) -> date | None:
     return None if value is None else date.fromisoformat(_string(value, 10, 10))
 
 
-_PLAN_SCHEMA: dict[str, object] = {
+_PLAN_ITEM_SCHEMA: dict[str, object] = {
     "type": "object",
     "additionalProperties": False,
     "required": [
@@ -660,6 +680,20 @@ _PLAN_SCHEMA: dict[str, object] = {
                 "type": "string",
                 "enum": ["TRANSIT", "STUDENT", "YOUNG_CHILD", "SHOPPING"],
             },
+        },
+    },
+}
+
+_PLAN_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["fragments"],
+    "properties": {
+        "fragments": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": _PLAN_ITEM_SCHEMA,
         },
     },
 }

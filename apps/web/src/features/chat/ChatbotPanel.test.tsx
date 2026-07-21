@@ -156,13 +156,13 @@ describe('챗봇 패널', () => {
     await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
     const recentTradeQuestion = '마포래미안푸르지오 전용 84㎡의 최근 실거래 5건을 거래일과 층까지 알려줘';
     const priceTrendQuestion = '헬리오시티 전용 59㎡의 최근 1년 월별 가격 흐름과 거래량을 보여줘';
-    const identityQuestion = '래미안원베일리의 정확한 주소와 단지 기본 정보를 확인해줘';
+    const lifestyleQuestion = '잠실엘스 주변 학원 위치와 가까운 역·노선을 함께 알려줘';
     await waitFor(() => host?.querySelector<HTMLButtonElement>(`button[aria-label="${recentTradeQuestion}"]`) != null);
 
     expect(host.querySelector<HTMLButtonElement>(`button[aria-label="${priceTrendQuestion}"]`)).not.toBeNull();
-    expect(host.querySelector<HTMLButtonElement>(`button[aria-label="${identityQuestion}"]`)).not.toBeNull();
+    expect(host.querySelector<HTMLButtonElement>(`button[aria-label="${lifestyleQuestion}"]`)).not.toBeNull();
     expect([...host.querySelectorAll('.chatbot-example-kind')].map(({ textContent }) => textContent))
-      .toEqual(['최근 실거래', '가격 흐름', '단지 정보']);
+      .toEqual(['최근 실거래', '가격 흐름', '생활 인프라']);
     await click(host.querySelector<HTMLButtonElement>(`button[aria-label="${recentTradeQuestion}"]`));
     expect(host.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]')?.value)
       .toBe(recentTradeQuestion);
@@ -211,6 +211,9 @@ describe('챗봇 패널', () => {
     await waitFor(() => host?.querySelector('.chatbot-empty-intro') != null);
     expect(host.querySelector('.chatbot-example-questions')?.querySelector('svg')).toBeNull();
     expect(host.querySelectorAll('.chatbot-example-questions button')).toHaveLength(3);
+    expect(host.querySelector('.chatbot-example-questions')?.textContent).toContain(
+      '주변 학원 위치와 가까운 역·노선',
+    );
     expect(document.activeElement).toBe(host.querySelector<HTMLTextAreaElement>('#chatbot-question'));
     expect(host.querySelector('.chatbot-empty-intro')?.textContent).toContain('어떤 집을 찾고 계세요?');
     const question = host.querySelector<HTMLTextAreaElement>('#chatbot-question');

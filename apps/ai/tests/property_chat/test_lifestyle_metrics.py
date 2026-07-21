@@ -35,6 +35,8 @@ def test_student_metric_combines_level_distance_and_sbiz_count_without_quality_c
     fact = student_observation_fact(
         1, schools, snapshot, _academies(), ("ELEMENTARY",), 25, 25
     )
+    assert fact.evidence_grade == "B"
+    assert fact.dataset_version == "school-v1:academy-v1"
     assert fact.payload["sbizEducationCountWithin800m"] == 5
     assert "학군" not in str(fact.payload)
 

@@ -1,11 +1,14 @@
 import type { ChatArtifact, FactListArtifact } from './artifactContract';
+import { ComparisonTableArtifactView } from './ComparisonTableArtifactView';
 
 export function ChatArtifacts({ artifacts }: { artifacts: ChatArtifact[] }) {
   if (artifacts.length === 0) return null;
   return (
     <div aria-label="구조화된 답변" className="chatbot-artifacts">
       {artifacts.map((artifact) => (
-        <FactListArtifactView artifact={artifact} key={artifact.artifactId} />
+        artifact.type === 'comparisonTable'
+          ? <ComparisonTableArtifactView artifact={artifact} key={artifact.artifactId} />
+          : <FactListArtifactView artifact={artifact} key={artifact.artifactId} />
       ))}
     </div>
   );

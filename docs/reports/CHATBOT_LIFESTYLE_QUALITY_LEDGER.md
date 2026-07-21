@@ -129,3 +129,21 @@ api-contract: compatible
 security-audit: 지적사항 = none — action은 citation factId와 marker-safe 국내 좌표에 묶이고 외부 문자열은 React text node로만 렌더링하며 Kakao 전화·URL·장소 응답은 chat request/message/IndexedDB archive에 저장하지 않음
 commit: `feat(web): connect chatbot place actions to map`
 ```
+
+```text
+Slice: S6 — 단지 비교 vertical slice
+요구사항: 2~4개 단지를 동일 cutoff·365일·전용면적 ±1.0㎡·동일 단위로 비교하고 partial 가격 cell을 보존한 표와 텍스트를 제공한다.
+구현 범위: comparison typed plan/정적 plan handler·RecentThreeTradeBasis·property/rail/retail batch query·comparison fact policy·comparisonTable/v1 strict adapter·접근 가능한 가로 scroll table UI
+지적사항: none — 자체 리뷰에서 동일 역·점포가 두 단지에 잡힐 때 source factId가 서로 다른 거리를 합칠 수 있는 중간(Medium) 위험을 발견해 단지별 comparison factId로 분리한 뒤 재검증; 최초 전체 coverage 89.97% Fail은 값 객체 실패 경계와 cutoff 없음 테스트를 추가해 90.17%로 통과
+검증 근거 확인: 최초 RED에서 comparison domain module 부재와 web artifact adapter 미지원 확인; comparison domain/handler 17 passed; property·철도·점포 PostGIS batch 통합 21 passed; 관련 AI 회귀 118 passed; `TESTCONTAINERS_RYUK_DISABLED=true uv run pytest` 734 passed, coverage 90.17%; `./gradlew chatBffQualityCheck --no-daemon --stacktrace` Pass; `npm run lint` 0 errors(기존 warning 8); `npm run test` 246 passed; `npm run build` Pass; `ops/build-reference-docs.sh --check` Pass; `git diff --check` Pass
+검증 공백: none
+과설계 판정: comparison 전용 typed row builder와 실제 두 execution shape를 위한 정적 plan handler만 추가; metric plugin·generic table registry·workflow engine·신규 DB table 없음
+코드 스멜: engine.py 1,119줄로 최초 기준 1,334줄 미만; ChatbotPanel.tsx 459줄 유지; table renderer를 별도 ComparisonTableArtifactView로 분리
+공통화 결정: comparison과 다음 recommendation이 실제 공유할 RecentThreeTradeBasis·CandidatePoint만 pure domain object로 추출; UI metric registry는 만들지 않음
+UI 연결: 2개 기본 폭, 3~4개 내부 가로 scroll, 첫 metric column sticky, 실제 th/scope, 확인 불가 이유·cutoff·365일·면적·표본 기준 표시, winner 색상 없음
+잔여 위험: comparison은 exact runtime allowlist 밖에 있어 S9 activation 전 노출되지 않음; 학생·영유아 조건부 row는 S8 범위
+점수: 10.0/10 Pass
+api-contract: compatible — 기존 request/URL/result/uiSummary/JSON/SSE 의미와 property-data 공개 계약은 변경하지 않고 uiArtifacts의 documented comparisonTable/v1만 채움
+security-audit: 지적사항 = none — SQL은 parameterized이고 이름 2~4·거래 3건·source별 batch 1회·3초 observation timeout으로 bounded; LLM은 row/value/order를 만들지 못하며 외부 문자열은 React text node로만 표시
+commit: `feat(ai): compare grounded apartment facts`
+```

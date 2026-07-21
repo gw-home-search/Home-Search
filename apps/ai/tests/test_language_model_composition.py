@@ -170,6 +170,7 @@ def test_only_approved_property_capability_configuration_is_enabled(
         "complex_identity,price_trend",
         "complex_identity,complex_identity",
         "complex_identity, price_trend",
+        "comparison",
         "unknown",
     ],
 )

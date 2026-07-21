@@ -15,8 +15,11 @@ QueryCapability = Literal[
     "rail_station_lookup",
     "childcare_lookup",
     "kakao_place_search",
+    "comparison",
 ]
-PropertyCapability = Literal["complex_identity", "recent_trade_lookup", "price_trend"]
+PropertyCapability = Literal[
+    "complex_identity", "recent_trade_lookup", "price_trend", "comparison"
+]
 ReferenceCapability = Literal[
     "school_location", "retail_location", "academy_registry_summary", "academy_lookup",
     "rail_station_lookup", "childcare_lookup", "kakao_place_search",
@@ -45,6 +48,7 @@ class QueryPlan:
     facility_subtypes: tuple[FacilitySubtype, ...] = ()
     radius_meters: int | None = None
     place_category: NearbyPlaceCategory | None = None
+    complex_names: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         normalized_name = self.complex_name.strip()
@@ -119,6 +123,19 @@ class QueryPlan:
                 raise ValueError("kakao_place_search requires a supported place category")
         elif self.place_category is not None:
             raise ValueError("place_category is only supported for kakao_place_search")
+        normalized_names = tuple(name.strip() for name in self.complex_names)
+        if self.capability == "comparison":
+            if (
+                not 2 <= len(normalized_names) <= 4
+                or len(normalized_names) != len(set(normalized_names))
+                or any(not name or len(name) > 100 for name in normalized_names)
+                or self.exclusive_area_square_meters is None
+            ):
+                raise ValueError("comparison requires 2..4 complexes and one exclusive area")
+            object.__setattr__(self, "complex_name", normalized_names[0])
+        elif normalized_names:
+            raise ValueError("complex_names are only supported for comparison")
+        object.__setattr__(self, "complex_names", normalized_names)
 
 
 @dataclass(frozen=True)
@@ -168,6 +185,8 @@ class ComplexRecord:
     longitude: float | None
     marker_safe: bool
     data_updated_at: datetime
+    unit_count: int | None = None
+    use_date: date | None = None
 
 
 @dataclass(frozen=True)

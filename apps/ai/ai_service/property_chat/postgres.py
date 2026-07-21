@@ -81,7 +81,8 @@ class PostgresPropertyFactRepository:
             rows = connection.execute(
                 """
                 SELECT complex_id, display_name, region_code, region_name, address,
-                       latitude, longitude, marker_safe, data_updated_at
+                       latitude, longitude, marker_safe, data_updated_at,
+                       unit_count, use_date
                 FROM ai_read.complex_fact
                 WHERE (
                     display_name ILIKE %s ESCAPE '\\'
@@ -105,20 +106,114 @@ class PostgresPropertyFactRepository:
                     limit,
                 ),
             ).fetchall()
-        return [
-            ComplexRecord(
-                complex_id=row["complex_id"],
-                display_name=row["display_name"],
-                region_code=row["region_code"],
-                region_name=row["region_name"],
-                address=row["address"],
-                latitude=_optional_float(row["latitude"]),
-                longitude=_optional_float(row["longitude"]),
-                marker_safe=row["marker_safe"],
-                data_updated_at=row["data_updated_at"],
-            )
-            for row in rows
-        ]
+        return [_complex_record(row) for row in rows]
+
+    def find_complexes_batch(
+        self,
+        names: tuple[str, ...],
+        region_name: str | None,
+        limit_per_name: int,
+    ) -> dict[str, tuple[ComplexRecord, ...]]:
+        if (
+            not 2 <= len(names) <= 4
+            or len(names) != len(set(names))
+            or any(not name.strip() or len(name.strip()) > 100 for name in names)
+            or not 1 <= limit_per_name <= 6
+        ):
+            raise ValueError("comparison complex lookup is outside the supported range")
+        normalized_names = tuple(name.strip() for name in names)
+        region_pattern = (
+            f"%{_escape_like(region_name.strip())}%" if region_name is not None else None
+        )
+        with self._pool.connection() as connection:
+            rows = connection.execute(
+                """
+                WITH requested AS (
+                    SELECT requested_name, ordinal
+                    FROM unnest(%s::text[]) WITH ORDINALITY AS value(requested_name, ordinal)
+                ), matches AS (
+                    SELECT requested.requested_name, requested.ordinal,
+                           fact.complex_id, fact.display_name, fact.region_code,
+                           fact.region_name, fact.address, fact.latitude, fact.longitude,
+                           fact.marker_safe, fact.data_updated_at, fact.unit_count, fact.use_date,
+                           row_number() OVER (
+                               PARTITION BY requested.ordinal
+                               ORDER BY CASE
+                                   WHEN lower(fact.display_name) = lower(requested.requested_name)
+                                     OR lower(fact.name) = lower(requested.requested_name)
+                                     OR lower(fact.trade_name) = lower(requested.requested_name)
+                                   THEN 0 ELSE 1 END,
+                                   fact.display_name, fact.complex_id
+                           ) AS match_rank
+                    FROM requested
+                    JOIN ai_read.complex_fact fact ON (
+                        fact.display_name ILIKE ('%%' || replace(replace(replace(
+                            requested.requested_name, '\\', '\\\\'), '%%', '\\%%'), '_', '\\_') || '%%') ESCAPE '\\'
+                        OR fact.name ILIKE ('%%' || replace(replace(replace(
+                            requested.requested_name, '\\', '\\\\'), '%%', '\\%%'), '_', '\\_') || '%%') ESCAPE '\\'
+                        OR fact.trade_name ILIKE ('%%' || replace(replace(replace(
+                            requested.requested_name, '\\', '\\\\'), '%%', '\\%%'), '_', '\\_') || '%%') ESCAPE '\\'
+                    )
+                    WHERE (%s::text IS NULL OR fact.region_name ILIKE %s ESCAPE '\\')
+                )
+                SELECT * FROM matches
+                WHERE match_rank <= %s
+                ORDER BY ordinal, match_rank
+                """,
+                (list(normalized_names), region_pattern, region_pattern, limit_per_name),
+            ).fetchall()
+        result: dict[str, list[ComplexRecord]] = {name: [] for name in normalized_names}
+        for row in rows:
+            result[str(row["requested_name"])].append(_complex_record(row))
+        return {name: tuple(records) for name, records in result.items()}
+
+    def recent_trades_batch(
+        self,
+        complex_ids: tuple[int, ...],
+        start_date: date,
+        end_date: date,
+        exclusive_area_square_meters: float,
+        limit_per_complex: int,
+    ) -> dict[int, tuple[TradeRecord, ...]]:
+        if (
+            not 2 <= len(complex_ids) <= 4
+            or len(complex_ids) != len(set(complex_ids))
+            or any(complex_id <= 0 for complex_id in complex_ids)
+            or not 1 <= limit_per_complex <= 3
+        ):
+            raise ValueError("comparison trade query is outside the supported range")
+        _validate_trade_query(
+            complex_ids[0], start_date, end_date, exclusive_area_square_meters
+        )
+        area = Decimal(str(exclusive_area_square_meters))
+        with self._pool.connection() as connection:
+            rows = connection.execute(
+                """
+                WITH ranked AS (
+                    SELECT trade_id, complex_id, deal_date,
+                           deal_amount_ten_thousand_krw,
+                           exclusive_area_square_meters, floor,
+                           row_number() OVER (
+                               PARTITION BY complex_id ORDER BY deal_date DESC, trade_id DESC
+                           ) AS trade_rank
+                    FROM ai_read.trade_fact
+                    WHERE complex_id = ANY(%s::bigint[])
+                      AND deal_date >= %s AND deal_date <= %s
+                      AND exclusive_area_square_meters BETWEEN %s - %s AND %s + %s
+                )
+                SELECT * FROM ranked WHERE trade_rank <= %s
+                ORDER BY complex_id, trade_rank
+                """,
+                (
+                    list(complex_ids), start_date, end_date, area,
+                    _AREA_TOLERANCE_SQUARE_METERS, area,
+                    _AREA_TOLERANCE_SQUARE_METERS, limit_per_complex,
+                ),
+            ).fetchall()
+        result: dict[int, list[TradeRecord]] = {complex_id: [] for complex_id in complex_ids}
+        for row in rows:
+            result[int(row["complex_id"])].append(_trade_record(row))
+        return {complex_id: tuple(trades) for complex_id, trades in result.items()}
 
     def recent_trades(
         self,
@@ -283,6 +378,22 @@ class PostgresPropertyFactRepository:
 
 def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _complex_record(row: dict[str, object]) -> ComplexRecord:
+    return ComplexRecord(
+        complex_id=int(row["complex_id"]),
+        display_name=str(row["display_name"]),
+        region_code=str(row["region_code"]) if row["region_code"] is not None else None,
+        region_name=str(row["region_name"]) if row["region_name"] is not None else None,
+        address=str(row["address"]) if row["address"] is not None else None,
+        latitude=_optional_float(row["latitude"]),  # type: ignore[arg-type]
+        longitude=_optional_float(row["longitude"]),  # type: ignore[arg-type]
+        marker_safe=bool(row["marker_safe"]),
+        data_updated_at=row["data_updated_at"],  # type: ignore[arg-type]
+        unit_count=int(row["unit_count"]) if row["unit_count"] is not None else None,
+        use_date=row["use_date"],  # type: ignore[arg-type]
+    )
 
 
 def _optional_decimal(value: float | None) -> Decimal | None:

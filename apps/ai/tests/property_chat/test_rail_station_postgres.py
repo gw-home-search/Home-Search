@@ -10,6 +10,7 @@ from ai_service.property_chat.rail_stations import (
     PostgresRailStationRepository,
     _validate_query,
 )
+from ai_service.property_chat.comparison import CandidatePoint
 
 
 @pytest.fixture(scope="module")
@@ -124,6 +125,31 @@ def test_nearby_includes_boundary_and_merges_exact_station_occurrences(
     assert result.dataset_version == "rail-v1"
     assert result.source_date == date(2026, 6, 30)
     assert result.coordinate_coverage == 1.0
+
+
+def test_nearest_batch_uses_one_bounded_query_for_all_complexes(
+    rail_station_postgres_dsn: str,
+) -> None:
+    repository = PostgresRailStationRepository(
+        rail_station_postgres_dsn,
+        expected_database="test",
+        expected_username="test",
+    )
+    try:
+        results = repository.nearest_batch(
+            points=(
+                CandidatePoint(501, 37.513, 127.082, "11710"),
+                CandidatePoint(502, 37.70, 127.30, "11710"),
+            ),
+            radius_meters=1500,
+        )
+    finally:
+        repository.close()
+
+    assert results is not None
+    assert results[501].stations[0].station_name == "잠실"
+    assert results[501].stations[0].lines == ("2호선", "8호선")
+    assert results[502].stations == ()
 
 
 @pytest.mark.parametrize(

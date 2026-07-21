@@ -195,7 +195,12 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
         "factIds": []
       }
     ]
-  }]
+  }],
+  "basis": {
+    "cutoffDate": "2026-07-20",
+    "startDate": "2025-07-21",
+    "exclusiveAreaSquareMeters": 84
+  }
 }
 ```
 
@@ -206,6 +211,8 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
 - `unavailable` cell은 `value=null`, 구체적인 `reason`이 필요하다. 관측된 준비상태나
   표본 부족 fact가 있으면 그 id를 사용하고, 그런 fact가 없으면 `factIds=[]`를 사용한다.
 - 금액 unit은 기존 `10_000_KRW` 의미를 바꾸지 않는다.
+- `basis`는 모든 column에 동일하게 적용된 cutoff, 365일 window 시작일,
+  전용면적(㎡)을 담으며 LLM이 생성하거나 column별로 바꿀 수 없다.
 
 #### `recommendationCards/v1`
 

@@ -323,6 +323,34 @@ def test_planning_accepts_kakao_hospital_map_action() -> None:
     ]
 
 
+def test_planning_accepts_two_to_four_complex_comparison() -> None:
+    requester = RecordingRequester(
+        _response(_valid_plan(
+            capability="comparison",
+            complexName="잠실엘스",
+            exclusiveAreaSquareMeters=84.0,
+            schoolLevels=["ELEMENTARY", "MIDDLE", "HIGH"],
+            facilitySubtypes=[],
+            radiusMeters=None,
+            placeCategory=None,
+            complexNames=["잠실엘스", "헬리오시티"],
+        ))
+    )
+
+    plan = asyncio.run(_model(requester).plan_query(
+        ChatbotQueryRequest(question="잠실엘스와 헬리오시티 84㎡ 비교")
+    ))
+
+    assert plan.capability == "comparison"
+    assert plan.complex_names == ("잠실엘스", "헬리오시티")
+    assert plan.exclusive_area_square_meters == 84.0
+    body = json.loads(requester.calls[0][2])
+    assert "comparison" in body["text"]["format"]["schema"]["properties"][
+        "capability"
+    ]["enum"]
+    assert "never choose a winner" in body["input"][0]["content"]
+
+
 def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> None:
     requester = RecordingRequester(
         _response(

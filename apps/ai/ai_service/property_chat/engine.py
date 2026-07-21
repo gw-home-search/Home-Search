@@ -18,6 +18,7 @@ from .capability_handlers import (
     AcademyRegistryFactRepository,
     AcademyRegistrySummaryHandler,
     CapabilityCatalog,
+    CapabilityResult,
     ChildcareFactRepository,
     ChildcareLookupHandler,
     EvidenceFactBuilders,
@@ -33,6 +34,7 @@ from .capability_handlers import (
     SchoolFactRepository,
     SchoolLocationHandler,
 )
+from .comparison_handler import ComparisonHandler
 from .models import (
     ComplexRecord,
     DraftAnswer,
@@ -99,6 +101,8 @@ _GROUNDING_FAILURE_REASONS = frozenset(
         "GROUNDING_CHILDCARE_TEXT_OUTSIDE_OBSERVATION",
         "GROUNDING_MAP_ACTION_POLICY_VIOLATION",
         "GROUNDING_ACTION_FACT_UNKNOWN",
+        "GROUNDING_ARTIFACT_FACT_UNKNOWN",
+        "GROUNDING_COMPARISON_POLICY_VIOLATION",
     }
 )
 
@@ -164,7 +168,15 @@ class GroundedChatbotEngine:
                 RetailLocationHandler(point_facility_repository, builders),
                 ChildcareLookupHandler(childcare_repository, builders, today),
                 KakaoPlaceSearchHandler(builders),
-            )
+            ),
+            plan_handlers=(
+                ComparisonHandler(
+                    repository,  # type: ignore[arg-type]
+                    rail_station_repository,  # type: ignore[arg-type]
+                    point_facility_repository,  # type: ignore[arg-type]
+                    builders,
+                ),
+            ),
         )
 
     async def query(
@@ -180,7 +192,19 @@ class GroundedChatbotEngine:
             if plan.capability in self._enabled_capabilities or (
                 plan.capability in self._enabled_reference_capabilities
             ):
-                facts, limitations, readiness, action_intents = await self._observe(plan)
+                plan_handler = self._catalog.plan_handler_for(plan.capability)
+                if plan_handler is not None:
+                    async with asyncio.timeout(3):
+                        capability_result = await plan_handler.observe(plan)
+                    facts = capability_result.facts
+                    limitations = capability_result.limitations
+                    readiness = capability_result.readiness
+                    action_intents = capability_result.actions
+                else:
+                    facts, limitations, readiness, action_intents = await self._observe(plan)
+                    capability_result = CapabilityResult(
+                        facts, limitations, readiness, action_intents
+                    )
             else:
                 facts, limitations, readiness, action_intents = (
                     [],
@@ -188,6 +212,7 @@ class GroundedChatbotEngine:
                     "unavailable",
                     (),
                 )
+                capability_result = CapabilityResult(facts, limitations, readiness)
             draft = await self._language_model.draft_answer(
                 facts=facts,
                 limitations=limitations,
@@ -201,7 +226,21 @@ class GroundedChatbotEngine:
                 enforce_school_policy=plan.capability == "school_location",
                 enforce_childcare_policy=plan.capability == "childcare_lookup",
                 enforce_map_action_policy=plan.capability == "kakao_place_search",
+                enforce_comparison_policy=plan.capability == "comparison",
             )
+            if capability_result.artifact_fact_ids:
+                fact_by_id = {fact.fact_id: fact for fact in facts}
+                if any(
+                    fact_id not in fact_by_id
+                    for fact_id in capability_result.artifact_fact_ids
+                ):
+                    raise GroundingValidationError("GROUNDING_ARTIFACT_FACT_UNKNOWN")
+                used_ids = {fact.fact_id for fact in used_facts}
+                used_facts.extend(
+                    fact_by_id[fact_id]
+                    for fact_id in capability_result.artifact_fact_ids
+                    if fact_id not in used_ids
+                )
             used_fact_ids = {fact.fact_id for fact in used_facts}
             if any(
                 not set(action.fact_ids).issubset(used_fact_ids)
@@ -211,10 +250,8 @@ class GroundedChatbotEngine:
             actions = [
                 action.to_public_dict(request_id) for action in action_intents
             ]
-            artifacts = FactListPresenter().present(
-                plan=plan,
-                used_facts=used_facts,
-                readiness=readiness,
+            artifacts = list(capability_result.artifacts) or FactListPresenter().present(
+                plan=plan, used_facts=used_facts, readiness=readiness
             )
             return AnswerDocument.from_grounded_result(
                 request=request,
@@ -283,6 +320,12 @@ def _complex_fact(record: ComplexRecord) -> EvidenceFact:
         "address": record.address,
         "markerSafe": record.marker_safe,
     }
+    if record.unit_count is not None:
+        claims.append(FactClaim(str(record.unit_count), "HOUSEHOLD_COUNT"))
+        payload["unitCount"] = record.unit_count
+    if record.use_date is not None:
+        claims.append(FactClaim(record.use_date.isoformat(), "DATE"))
+        payload["useDate"] = record.use_date.isoformat()
     claims.append(FactClaim(str(record.marker_safe).lower(), "BOOLEAN"))
     if record.marker_safe and record.latitude is not None and record.longitude is not None:
         claims.extend(
@@ -781,6 +824,7 @@ def validate_draft(
     enforce_school_policy: bool = False,
     enforce_childcare_policy: bool = False,
     enforce_map_action_policy: bool = False,
+    enforce_comparison_policy: bool = False,
 ) -> list[EvidenceFact]:
     if not draft.sentences:
         raise GroundingValidationError("GROUNDING_ANSWER_EMPTY")
@@ -840,6 +884,8 @@ def validate_draft(
             _validate_childcare_sentence(sentence.text, referenced)
         if enforce_map_action_policy:
             _validate_map_action_sentence(sentence.text)
+        if enforce_comparison_policy:
+            _validate_comparison_sentence(sentence.text)
         allowed_numbers = _number_tokens(
             claim.value for fact in referenced for claim in fact.claims
         )
@@ -1034,6 +1080,19 @@ def _validate_map_action_sentence(text: str) -> None:
         text,
     ):
         raise GroundingValidationError("GROUNDING_MAP_ACTION_POLICY_VIOLATION")
+
+
+def _validate_comparison_sentence(text: str) -> None:
+    unsupported = re.search(
+        r"(?:우승|승자|최고|최상|더\s*좋|가장\s*좋|추천|투자\s*가치|수익)", text
+    )
+    negative = re.search(
+        r"(?:판단|선정|추천|순위|우승|투자\s*가치).{0,15}"
+        r"(?:않|아니|없|제공하지)",
+        text,
+    )
+    if unsupported and not negative:
+        raise GroundingValidationError("GROUNDING_COMPARISON_POLICY_VIOLATION")
 
 
 def _number(value: int | float) -> str:

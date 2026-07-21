@@ -130,6 +130,8 @@ class CapabilityResult:
     limitations: list[str]
     readiness: str
     actions: tuple[ShowNearbyCategoryAction, ...] = ()
+    artifacts: tuple[dict[str, object], ...] = ()
+    artifact_fact_ids: tuple[str, ...] = ()
 
 
 class CapabilityHandler(Protocol):
@@ -140,20 +142,37 @@ class CapabilityHandler(Protocol):
     ) -> CapabilityResult: ...
 
 
+class PlanCapabilityHandler(Protocol):
+    capability: QueryCapability
+
+    async def observe(self, plan: QueryPlan) -> CapabilityResult: ...
+
+
 class CapabilityCatalog:
-    def __init__(self, handlers: tuple[CapabilityHandler, ...]) -> None:
-        capabilities = tuple(handler.capability for handler in handlers)
+    def __init__(
+        self,
+        handlers: tuple[CapabilityHandler, ...],
+        *,
+        plan_handlers: tuple[PlanCapabilityHandler, ...] = (),
+    ) -> None:
+        capabilities = tuple(handler.capability for handler in (*handlers, *plan_handlers))
         if len(capabilities) != len(set(capabilities)):
             raise ValueError("duplicate capability handler")
         self._handlers = handlers
         self._by_capability = {handler.capability: handler for handler in handlers}
+        self._plan_by_capability = {
+            handler.capability: handler for handler in plan_handlers
+        }
 
     @property
     def capabilities(self) -> tuple[QueryCapability, ...]:
-        return tuple(handler.capability for handler in self._handlers)
+        return tuple(self._by_capability) + tuple(self._plan_by_capability)
 
     def handler_for(self, capability: str) -> CapabilityHandler | None:
         return self._by_capability.get(cast(QueryCapability, capability))
+
+    def plan_handler_for(self, capability: str) -> PlanCapabilityHandler | None:
+        return self._plan_by_capability.get(cast(QueryCapability, capability))
 
 
 @dataclass(frozen=True)

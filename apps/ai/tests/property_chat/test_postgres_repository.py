@@ -74,6 +74,29 @@ def test_recent_trade_query_keeps_date_boundaries_area_tolerance_and_latest_orde
     assert records[-1].deal_date == date(2026, 1, 1)
 
 
+def test_comparison_lookup_and_trades_use_two_bounded_batch_queries(
+    property_postgres_dsn: str,
+) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        complexes = repository.find_complexes_batch(
+            ("잠실엘스", "A_타워"), None, 6
+        )
+        trades = repository.recent_trades_batch(
+            (1, 2), date(2025, 7, 21), date(2026, 7, 20), 84.0, 3
+        )
+    finally:
+        repository.close()
+
+    assert [record.complex_id for record in complexes["잠실엘스"]] == [1]
+    assert [record.complex_id for record in complexes["A_타워"]] == [2]
+    assert complexes["잠실엘스"][0].unit_count == 5678
+    assert [record.trade_id for record in trades[1]] == [14, 12, 11]
+    assert trades[2] == ()
+
+
 def test_monthly_trend_uses_the_same_period_and_area_filter(
     property_postgres_dsn: str,
 ) -> None:

@@ -70,3 +70,76 @@
   color: #18342d;
   font-weight: 650;
 }
+
+.chatbot-comparison-table {
+  min-width: 0;
+  border: 1px solid rgba(15, 38, 32, 0.12);
+  border-radius: 12px;
+  background: var(--hs-map-color-surface);
+  padding: 10px;
+}
+
+.chatbot-comparison-table h4 {
+  margin: 0 0 8px;
+  color: #173d33;
+  font-size: 12px;
+}
+
+.chatbot-comparison-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: 8px;
+}
+
+.chatbot-comparison-scroll:focus-visible {
+  outline: 2px solid var(--hs-map-color-action);
+  outline-offset: 2px;
+}
+
+.chatbot-comparison-table table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: #18342d;
+  font-size: 12px;
+}
+
+.chatbot-comparison-table th,
+.chatbot-comparison-table td {
+  min-width: 132px;
+  border-right: 1px solid var(--hs-map-color-line);
+  border-bottom: 1px solid var(--hs-map-color-line);
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.chatbot-comparison-table th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 112px;
+  background: #f6faf8;
+  color: #526a62;
+}
+
+.chatbot-comparison-table thead th {
+  background: #edf5f1;
+  font-weight: 750;
+}
+
+.chatbot-comparison-table thead th:first-child {
+  z-index: 2;
+}
+
+.chatbot-comparison-table td[data-availability="unavailable"] {
+  color: var(--hs-map-color-muted);
+}
+
+.chatbot-comparison-basis {
+  margin: 8px 0 0;
+  color: var(--hs-map-color-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}

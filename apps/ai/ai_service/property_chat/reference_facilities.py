@@ -7,6 +7,8 @@ from datetime import date, datetime
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+from .comparison import CandidatePoint
+
 
 @dataclass(frozen=True)
 class FacilityFact:
@@ -158,6 +160,115 @@ class PostgresPointFacilityRepository:
             dataset_version=str(coverage["dataset_version"]),
             data_as_of=data_as_of,  # type: ignore[arg-type]
         )
+
+    def nearest_batch(
+        self,
+        *,
+        source_id: str,
+        category: str,
+        points: tuple[CandidatePoint, ...],
+        radius_meters: int,
+    ) -> dict[int, FacilitySearchResult] | None:
+        if (
+            source_id != "retail.large-store"
+            or category != "LARGE_STORE"
+            or not 1 <= len(points) <= 100
+            or len({point.complex_id for point in points}) != len(points)
+            or not 100 <= radius_meters <= 3000
+        ):
+            raise ValueError("reference facility batch query is invalid")
+        for point in points:
+            _validate_query(
+                point.latitude, point.longitude, radius_meters, 1,
+                point.region_code or "00000", (),
+            )
+        with self._pool.connection() as connection:
+            rows = connection.execute(
+                """
+                WITH candidates AS (
+                    SELECT complex_id, latitude, longitude
+                    FROM unnest(%s::bigint[], %s::double precision[], %s::double precision[])
+                         AS value(complex_id, latitude, longitude)
+                )
+                SELECT candidate.complex_id, nearest.*
+                FROM candidates candidate
+                JOIN LATERAL (
+                    SELECT fact.fact_id, fact.name, fact.category, fact.subcategory,
+                           fact.status, COALESCE(fact.road_address, fact.lot_address) AS address,
+                           ST_Distance(
+                               fact.position,
+                               ST_SetSRID(ST_MakePoint(
+                                   candidate.longitude, candidate.latitude
+                               ), 4326)::geography
+                           ) AS distance_meters,
+                           fact.dataset_version, fact.source_date,
+                           fact.dataset_observed_at
+                    FROM reference_read.facility_point_fact fact
+                    WHERE fact.source_id = %s
+                      AND fact.category = %s
+                      AND fact.status = 'OPEN'
+                      AND ST_DWithin(
+                          fact.position,
+                          ST_SetSRID(ST_MakePoint(
+                              candidate.longitude, candidate.latitude
+                          ), 4326)::geography,
+                          %s + 0.001
+                      )
+                    ORDER BY distance_meters, fact.fact_id
+                    LIMIT 1
+                ) nearest ON true
+                ORDER BY candidate.complex_id
+                """,
+                (
+                    [point.complex_id for point in points],
+                    [point.latitude for point in points],
+                    [point.longitude for point in points],
+                    source_id,
+                    category,
+                    radius_meters,
+                ),
+            ).fetchall()
+            metadata = connection.execute(
+                """
+                SELECT metadata.dataset_version, metadata.source_date,
+                       metadata.observed_at,
+                       sum(coverage.total_count)::bigint AS total_count,
+                       sum(coverage.spatial_count)::bigint AS spatial_count
+                FROM reference_read.active_source_metadata metadata
+                LEFT JOIN reference_read.source_coverage coverage
+                  ON coverage.publication_id = metadata.publication_id
+                WHERE metadata.source_id = %s
+                GROUP BY metadata.dataset_version, metadata.source_date,
+                         metadata.observed_at
+                """,
+                (source_id,),
+            ).fetchone()
+        if (
+            metadata is None
+            or metadata["total_count"] is None
+            or int(metadata["total_count"]) <= 0
+        ):
+            return None
+        row_by_complex = {int(row["complex_id"]): row for row in rows}
+        data_as_of = metadata["source_date"] or metadata["observed_at"]
+        if data_as_of is None:
+            return None
+        coverage = int(metadata["spatial_count"] or 0) / int(metadata["total_count"])
+        result: dict[int, FacilitySearchResult] = {}
+        for point in points:
+            row = row_by_complex.get(point.complex_id)
+            facilities = () if row is None else (_facility(row),)
+            result[point.complex_id] = FacilitySearchResult(
+                facilities=facilities,
+                matched_count=len(facilities),
+                returned_count=len(facilities),
+                has_more=False,
+                verified_zero=False,
+                coordinate_coverage=coverage,
+                dataset_version=str(metadata["dataset_version"]),
+                data_as_of=data_as_of,  # type: ignore[arg-type]
+            )
+        return result
 
 
 def _facility(row: dict[str, object]) -> FacilityFact:

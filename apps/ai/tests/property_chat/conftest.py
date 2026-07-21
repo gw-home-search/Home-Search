@@ -33,7 +33,9 @@ def property_postgres_dsn() -> Iterator[str]:
                     latitude numeric,
                     longitude numeric,
                     marker_safe boolean NOT NULL,
-                    data_updated_at timestamptz NOT NULL
+                    data_updated_at timestamptz NOT NULL,
+                    unit_count integer,
+                    use_date date
                 );
                 CREATE TABLE ai_read.trade_fact (
                     trade_id bigint PRIMARY KEY,
@@ -45,11 +47,11 @@ def property_postgres_dsn() -> Iterator[str]:
                 );
                 INSERT INTO ai_read.complex_fact VALUES
                     (1, '잠실동 잠실엘스', '잠실엘스', '잠실엘스', '11710101', '잠실동',
-                     '서울 송파구 잠실동 19', 37.513, 127.082, true, '2026-07-16T00:00:00Z'),
+                     '서울 송파구 잠실동 19', 37.513, 127.082, true, '2026-07-16T00:00:00Z', 5678, '2008-09-30'),
                     (2, '강남동 A_타워', 'A_타워', 'A_타워', '11680101', '강남동',
-                     '서울 강남구 강남동 1', 37.50, 127.03, true, '2026-07-16T00:00:00Z'),
+                     '서울 강남구 강남동 1', 37.50, 127.03, true, '2026-07-16T00:00:00Z', 100, '2010-01-01'),
                     (3, '강남동 AB타워', 'AB타워', 'AB타워', '11680101', '강남동',
-                     '서울 강남구 강남동 2', 37.51, 127.04, true, '2026-07-16T00:00:00Z');
+                     '서울 강남구 강남동 2', 37.51, 127.04, true, '2026-07-16T00:00:00Z', 200, '2011-01-01');
                 INSERT INTO ai_read.region_fact VALUES
                     (11, NULL, '11', '서울특별시', 'si-do'),
                     (11710, 11, '11710', '송파구', 'si-gun-gu'),

@@ -377,7 +377,7 @@ case "$ai_enabled_property_capabilities" in
     *) reject "HOME_AI_ENABLED_PROPERTY_CAPABILITIES는 승인된 누적 설정만 허용합니다." ;;
 esac
 case "$ai_enabled_reference_capabilities" in
-    "" | academy_lookup) ;;
+    "" | academy_lookup | academy_lookup,rail_station_lookup) ;;
     *) reject "HOME_AI_ENABLED_REFERENCE_CAPABILITIES는 승인된 reference 조합만 허용합니다." ;;
 esac
 

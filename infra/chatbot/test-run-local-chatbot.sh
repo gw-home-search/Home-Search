@@ -73,11 +73,11 @@ if [[ ! -x "$runner" ]]; then
     echo "상태: Fail - local chatbot runner가 없습니다." >&2
     exit 1
 fi
-grep -Fqx 'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup' \
+grep -Fqx 'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup,rail_station_lookup' \
     "$ai_runtime_example"
 grep -Fq '| `academy_lookup` | “단지 800m 안 교육업소는?” | 지원 |' \
     "$capability_registry"
-grep -Fq '| `rail_station_lookup` | “가까운 역과 노선” | 데이터 준비 중 |' \
+grep -Fq '| `rail_station_lookup` | “가까운 역과 노선” | 지원 |' \
     "$capability_registry"
 bff_compose_section="$(sed -n '/^  chat-bff:/,/^  public-api-gateway:/p' "$chatbot_compose")"
 grep -Fq -- '- CMD' <<<"$bff_compose_section"
@@ -120,11 +120,11 @@ override_output="$(
     CHATBOT_AI_DOCKERFILE_PATH="$tmp_dir/Dockerfile" \
     CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
     CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
-    "$runner" --reference-capabilities academy_lookup \
+    "$runner" --reference-capabilities academy_lookup,rail_station_lookup \
         "$property_env" "$user_env" "$bff_env" "$ai_env"
 )"
 grep -Fq '상태: Pass - chatbot local preflight' <<<"$override_output"
-grep -Fq 'reference-capabilities=academy_lookup' "$docker_log"
+grep -Fq 'reference-capabilities=academy_lookup,rail_station_lookup' "$docker_log"
 
 if PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_TEST_DOCKER_LOG="$docker_log" \
@@ -132,10 +132,10 @@ if PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_AI_DOCKERFILE_PATH="$tmp_dir/Dockerfile" \
     CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
     CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
-    "$runner" --reference-capabilities academy_lookup,rail_station_lookup \
+    "$runner" --reference-capabilities rail_station_lookup \
         "$property_env" "$user_env" "$bff_env" "$ai_env" \
         >"$tmp_dir/reference-order-invalid.out" 2>&1; then
-    echo '상태: Fail - 미승인 rail capability가 허용됐습니다.' >&2
+    echo '상태: Fail - rail 단독 capability가 허용됐습니다.' >&2
     exit 1
 fi
 grep -Fq '승인된 reference 조합' \

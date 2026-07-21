@@ -45,8 +45,12 @@
 ## 잔여 위험과 활성화
 
 - 서면 이용 승인 transcript가 없다는 낮음(Low) 잔여 위험이 있다.
-- 필수 항목을 포함한 readiness는 `10.0`으로 승인한다. activation은 다른 source와
-  분리된 commit으로 수행하며 그전까지 기본 allowlist는 빈 값으로 유지한다.
+- 필수 항목을 포함한 readiness는 `10.0`으로 승인한다. 2026-07-21 다른 source와
+  분리된 commit에서 누적 local runtime template
+  `academy_lookup,rail_station_lookup`을 승인했으며 rollback은 `academy_lookup`이다.
+- activation smoke의 JSON은 `200/success`였고 첫 SSE는 error event로 fail-closed했다.
+  직접 engine 진단은 정상 근거를 반환했으며 제한 재검증 SSE는 `200/success`, A등급
+  citation, active datasetVersion, final 1·error 0을 확인했다.
 
 license evidence SHA-256:
 `14d6a007c272b75456998f5289e08ff8f61cb82f04bb2fc6a72ef9c11327ff0d`

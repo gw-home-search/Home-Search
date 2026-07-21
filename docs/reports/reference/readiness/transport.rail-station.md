@@ -7,7 +7,8 @@
   signed JWT JSON/SSE `200`·A등급 citation·SSE error 0
 - 중단: 없음
 - 안전 제한: fuzzy name 병합 금지, latest-date 동률·날짜 부재 duplicate 차단
-- 활성화: readiness 승인; 별도 activation commit 전까지 기본 allowlist는 빈 값 유지
+- 활성화: 2026-07-21 누적 local runtime template 승인; rollback은 `academy_lookup`
+- activation smoke: JSON `200/success`, 제한 재검증 SSE final 1·error 0, A등급 citation
 
 `rail-station-v5`는 `operator+line_number+line_name+station_number` occurrence를
 보존하고 동일 identity의 유일한 최신 기준일만 유지한다. superseded 2행과 malformed

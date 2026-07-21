@@ -20,6 +20,7 @@ _APPROVED_PROPERTY_CAPABILITY_CONFIGURATIONS = frozenset(
 _APPROVED_REFERENCE_CAPABILITY_CONFIGURATIONS = frozenset(
     {
         ("academy_lookup",),
+        ("academy_lookup", "rail_station_lookup"),
     }
 )
 

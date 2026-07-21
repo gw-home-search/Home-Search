@@ -192,7 +192,10 @@ def test_unapproved_or_invalid_property_capability_configuration_fails_closed(
         ("academy_registry_summary", frozenset()),
         ("retail_location", frozenset()),
         ("rail_station_lookup", frozenset()),
-        ("academy_lookup,rail_station_lookup", frozenset()),
+        (
+            "academy_lookup,rail_station_lookup",
+            frozenset({"academy_lookup", "rail_station_lookup"}),
+        ),
         (" school_location", frozenset()),
         ("school_location,school_location", frozenset()),
         ("rail_station_lookup,academy_lookup", frozenset()),

@@ -31,7 +31,7 @@ dataset의 private raw 저장·가공 승인으로 확대하지 않는다.
 | `edu.academy-registry` | NEIS 상세 페이지의 `이용 허락 범위 제한없음`, provider·주기·attribution evidence SHA-256 고정 | `APPROVED` | acquisition·S3·전국 138,412행·p95 통과; chatbot golden·pointer rollback 미검증 |
 | `place.sbiz-academy` | API의 무제한 이용 허락, 국세청/카드사 provenance·제3자 정책, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | 필수 readiness 통과; `academy_lookup` 활성화 |
 | `retail.large-store` | 공식 fileData 상세의 `이용허락범위 제한 없음`, 일간·2일 전 현행화, private raw·내부 파생 evidence SHA-256 고정 | `APPROVED` | 좌표 83.7404%와 live chatbot golden 실패로 activation 차단 |
-| `transport.rail-station` | fileData `15093755`의 `이용허락범위 제한 없음`과 프로젝트 책임자가 보고한 KRIC 전화 승인; 서면 transcript 부재를 evidence에 명시 | `APPROVED` | 필수 readiness 통과; 별도 activation commit 승인 |
+| `transport.rail-station` | fileData `15093755`의 `이용허락범위 제한 없음`과 프로젝트 책임자가 보고한 KRIC 전화 승인; 서면 transcript 부재를 evidence에 명시 | `APPROVED` | 필수 readiness 통과; `rail_station_lookup` 활성화 |
 
 빈 `terms_fingerprint`는 미검토가 아니라 승인 근거가 없음을 뜻한다. 철도는 공식
 fileData 이용허락과 프로젝트 책임자의 KRIC 전화 승인 진술을 fingerprint로 고정했다.
@@ -85,7 +85,7 @@ live 필수 항목이 남으면 readiness를 `Partial`로 유지한다.
 | Sbiz S2 collector | 공식 taxonomy 18 partition·191,250행·S3 복구·`NoChange` `Pass` | `10.0/10` | `10.0/10 Pass` | 활성화 |
 | Sbiz S2-P grounded location | exact projection·Sbiz B+NEIS A signed JWT JSON/SSE `Pass` | `10.0/10` | `10.0/10 Pass` | 활성화 |
 | 대규모점포 | 공식 CSV 4,176행·S3 복구·`NoChange`·runtime composition `Pass` | `10.0/10` | `8.0/10 Partial` | coverage·golden으로 금지 |
-| 철도 S4/S4-P | fixed XLSX·1,097 occurrence·좌표 100%·S3·병합·signed JWT JSON/SSE `Pass` | `9.5/10` | `10.0/10 Pass` | 별도 activation commit 승인 |
+| 철도 S4/S4-P | fixed XLSX·1,097 occurrence·좌표 100%·S3·병합·signed JWT JSON/SSE `Pass` | `9.5/10` | `10.0/10 Pass` | 활성화 |
 | Offline priority integration | AI·PostGIS·MinIO·property-data·chat-bff·JWT·Compose `Pass` | `9.5/10` | 해당 없음 | 해당 없음 |
 
 상세 readiness 근거는 `docs/reports/reference/readiness/`에 source별로 기록한다.
@@ -183,8 +183,9 @@ dedupe를 `(source_id, checksum, normalization_schema_version)`으로 제한했�
 유효일만 유지하는 `rail-station-v5`를 추가했다. 1,097 occurrence·좌표 100%를 게시하고
 동일 release 재수집의 acquisition/publication 재사용과 raw byte 복구를 확인했다.
 1.5km query p95 `7.971ms`, 3km p95 `25.565ms`, live exact 역 병합과 signed JWT
-JSON/SSE A등급 grounding을 통과해 readiness는 `10.0/10 Pass`다. 기본 allowlist는
-별도 activation commit 전까지 빈 값으로 유지한다.
+JSON/SSE A등급 grounding을 통과해 readiness는 `10.0/10 Pass`다. 2026-07-21
+`academy_lookup,rail_station_lookup` 누적 activation을 승인했고 rollback은
+`academy_lookup`이다.
 
 ## 공통 중단·롤백
 

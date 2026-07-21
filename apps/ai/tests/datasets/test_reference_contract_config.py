@@ -133,6 +133,12 @@ def test_catalog_loads_the_fixed_source_order_and_approved_sources() -> None:
     assert rail.license.terms_fingerprint == sha256(
         RAIL_LICENSE_EVIDENCE_PATH.read_bytes()
     ).hexdigest()
+    childcare = catalog.get("childcare.center")
+    assert childcare.license.status == "PENDING"
+    assert childcare.acquisition.base_url == (
+        "https://api.childcare.go.kr/mediate/rest/cpmsapi030/cpmsapi030/request"
+    )
+    assert childcare.acquisition.allowed_hosts == ("api.childcare.go.kr",)
 
 def test_contract_rejects_credentials_queries_and_unallowlisted_acquisition_paths(
     tmp_path: Path,

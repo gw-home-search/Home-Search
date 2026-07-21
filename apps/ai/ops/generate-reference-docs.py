@@ -10,11 +10,13 @@ from pathlib import Path
 PRIORITY_SOURCES = (
     "edu.school-location", "edu.academy-registry", "place.sbiz-academy",
     "retail.large-store", "transport.rail-station",
+    "childcare.center",
 )
 API_PARAMETERS = {
     "edu.school-location": ("serviceKey", "pageNo", "numOfRows", "type"),
     "edu.academy-registry": ("KEY", "Type", "pIndex", "pSize", "ATPT_OFCDC_SC_CODE"),
     "place.sbiz-academy": ("serviceKey", "divId", "key", "indsSclsCd", "pageNo", "numOfRows", "type"),
+    "childcare.center": ("key", "arcode", "stcode"),
 }
 NORMALIZATION_FIELDS = {
     "edu.school-location": ("school_id", "school_name", "school_level", "operating_status", "latitude", "longitude"),
@@ -22,6 +24,7 @@ NORMALIZATION_FIELDS = {
     "place.sbiz-academy": ("store_id", "name", "small_category_code", "road_address", "postal_code", "latitude", "longitude"),
     "retail.large-store": ("facility_id", "subcategory", "status", "road_address", "latitude", "longitude"),
     "transport.rail-station": ("station_occurrence_id", "operator", "line_number", "station_name", "latitude", "longitude"),
+    "childcare.center": ("center_id", "center_name", "center_type", "operating_status", "address", "capacity", "latitude", "longitude", "reference_date"),
 }
 FAILURE_CODES = {
     "edu.school-location": ("API_TRANSPORT_FAILED", "API_PAGINATION_INVALID", "API_BUNDLE_TOO_LARGE"),
@@ -29,6 +32,7 @@ FAILURE_CODES = {
     "place.sbiz-academy": ("TAXONOMY_CHANGED", "PROVIDER_TOTAL_COUNT_MISMATCH", "DUPLICATE_STORE_ID"),
     "retail.large-store": ("FILE_TRANSPORT_FAILED", "FILE_MEDIA_TYPE_INVALID", "FILE_LENGTH_MISMATCH", "SOURCE_SCHEMA_MISMATCH", "KOREA_COORDINATE_OUT_OF_RANGE"),
     "transport.rail-station": ("SOURCE_DATE_UNVERIFIED", "XLSX_MACRO_REJECTED", "RAIL_STATION_COORDINATE_REQUIRED"),
+    "childcare.center": ("API_TRANSPORT_FAILED", "API_XML_INVALID", "SOURCE_SCHEMA_MISMATCH", "OPERATING_STATUS_UNKNOWN", "KOREA_COORDINATE_OUT_OF_RANGE"),
 }
 
 

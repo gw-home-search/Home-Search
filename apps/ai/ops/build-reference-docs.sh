@@ -52,7 +52,7 @@ if search_lines -i '(servicekey|api[_-]?key|secret|password)[=:][^<[:space:]]' "
     echo '상태: Fail - generated reference docs에 secret pattern이 있습니다.' >&2
     exit 1
 fi
-for source in edu.school-location edu.academy-registry place.sbiz-academy retail.large-store transport.rail-station; do
+for source in edu.school-location edu.academy-registry place.sbiz-academy retail.large-store transport.rail-station childcare.center; do
     test -f "${tmp_dir}/first/generated-snippets/${source}/failure-codes.adoc"
 done
 rail_request="${tmp_dir}/first/generated-snippets/transport.rail-station/download-request.adoc"

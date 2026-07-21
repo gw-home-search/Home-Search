@@ -75,3 +75,21 @@ api-contract: compatible
 security-audit: 지적사항 = none
 commit: `refactor(ai): compose grounded capability handlers`
 ```
+
+```text
+Slice: S3 — 공식 어린이집 수집·projection
+요구사항: 공식 어린이집 응답을 raw-first로 수집하고 검증된 facility_point projection으로 게시하며 동일 semantic 재수집은 NoChange가 된다.
+구현 범위: cpmsapi030 XML collector·strict adapter·전용 key/env 경계·기존 lifecycle/S3 raw/spool/facility_point writer·childcare_center_fact read view·운영 문서
+지적사항: none — 자체 리뷰에서 generic `craddr`를 도로명주소로 오인한 mapping과 provider XML 재직렬화로 raw checksum 복구가 깨지는 문제를 발견해 commit 전에 각각 generic address attribute와 원문 private raw 보존으로 수정
+검증 근거 확인: 최초 RED에서 childcare module import 3건 실패 확인; `uv run pytest --no-cov tests/datasets/test_childcare_client.py tests/datasets/test_childcare_adapter.py tests/datasets/test_childcare_ingest.py tests/datasets/test_childcare_projection.py` 27 passed; `TESTCONTAINERS_RYUK_DISABLED=true uv run pytest -q` 669 passed, coverage 90.05%; `ops/test-run-local-reference-refresh.sh` Pass; `ops/build-reference-docs.sh --check` Pass; `git diff --check` Pass
+검증 공백: 신청 승인 전이므로 live provider schema·전국 시군구 scope·row total·좌표 coverage는 검증하지 못함; 이 공백은 source PENDING과 capability 비활성으로 차단
+과설계 판정: 기존 lifecycle·secure raw·normalized spool·facility_point·GIST/index를 재사용; 신규 scheduler·framework·source 전용 공간 table 없음
+코드 스멜: source mapping과 forbidden-field 경계를 feature-local로 유지; provider가 제공하지 않는 pagination/total을 추측하는 fallback 없음
+공통화 결정: 기존 projection writer registry와 refresh composition만 재사용하고 childcare collector/adapter/policy는 별도 유지
+UI 연결: 없음 — typed read view와 CLI status만 제공하며 source/capability는 활성화하지 않음
+잔여 위험: 승인된 key와 공식 현재 시군구 코드 목록으로 live completeness·전국/지역별 좌표 coverage·실제 schema를 확인해야 publication 및 S4 활성화 가능
+점수: 9.0/10 Pass — fixture 기반 정확성·계약·보안 gate는 충족했으나 승인 대기 중인 live readiness 1.0 감점
+api-contract: compatible
+security-audit: 지적사항 = none — 전용 key는 request 조립 시에만 사용하고 keyed URL/provider 오류 body는 raw metadata·log·reason에 남지 않으며 연락처·대표자는 private raw 외 normalized/projection/evidence에 노출하지 않음
+commit: `feat(ai): collect official childcare snapshots`
+```

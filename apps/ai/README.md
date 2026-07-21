@@ -175,6 +175,7 @@ apps/ai/ops/run-local-reference-refresh.sh --source edu.academy-registry
 apps/ai/ops/run-local-reference-refresh.sh --source place.sbiz-academy
 apps/ai/ops/run-local-reference-refresh.sh --source retail.large-store
 apps/ai/ops/run-local-reference-refresh.sh --source transport.rail-station
+apps/ai/ops/run-local-reference-refresh.sh --source childcare.center
 apps/ai/ops/run-local-reference-refresh.sh --family priority
 ```
 
@@ -183,6 +184,10 @@ passwords, prepares the private versioned/object-locked MinIO bucket, runs
 migrations in a one-shot container, and then runs the importer. It passes
 secret names through Docker `--env` without placing values in process arguments.
 School and Sbiz receive only `HOME_AI_DATA_GO_KR_SERVICE_KEY`; NEIS receives
-only `HOME_AI_NEIS_SERVICE_KEY`; CSV/XLSX file sources receive neither provider
-key. The priority family starts one generic CLI container per source in fixed
-order, keeps those key boundaries, and continues after an individual failure.
+only `HOME_AI_NEIS_SERVICE_KEY`; childcare receives only
+`HOME_AI_CHILDCARE_SERVICE_KEY` and the bounded
+`HOME_AI_CHILDCARE_REGION_CODES` scope; CSV/XLSX file sources receive no provider
+key. Childcare remains outside the priority family until its source license and
+live completeness evidence are approved. The priority family starts one generic
+CLI container per active source in fixed order, keeps those key boundaries, and
+continues after an individual failure.

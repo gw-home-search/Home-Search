@@ -1,0 +1,30 @@
+== childcare.center
+
+collector는 어린이집정보공개포털 `어린이집별 기본정보 조회(cpmsapi030)`를 시군구
+`arcode`별로 호출한다. provider key는 `HOME_AI_CHILDCARE_SERVICE_KEY`에만 두고 keyed
+URL을 raw manifest, failure reason, log에 저장하지 않는다. 신청 승인 전 source license는
+`PENDING`이며 generic refresh는 provider 호출 전에 `CONFIGURATION_INVALID`로 종료한다.
+
+공식 v1.7 명세에서 어린이집 코드, 이름, 유형, 운영현황, generic 주소, 정원, 위도·경도,
+데이터기준일자만 normalized row로 사용한다. provider 응답 원문은 checksum 복구가
+가능한 private raw bundle에 보존한다. 전화, 팩스, 홈페이지, 대표자, 현원·입소대기
+정보는 normalized row와 projection, log, 운영 evidence에 포함하지 않는다.
+`정상`, `재개`, `휴지`, `폐지`만 명시적으로
+mapping하고 unknown status, 대한민국 밖 좌표, 중복 어린이집 코드는 publication을
+차단한다.
+
+provider `craddr`는 도로명·지번 구분이 없으므로 `road_address`나 `lot_address`로
+재해석하지 않고 `address` attribute로만 보존한다.
+
+전국 완전 수집은 승인된 운영계정과 현재 공식 시군구 코드 목록으로 live 검증해야 한다.
+API에 provider total 또는 pagination이 없으므로 fixture 검증만으로 source readiness나
+capability activation을 승인하지 않는다. 기존 `reference_projection.facility_point`와
+GIST/index를 재사용하며 별도 공간 table은 만들지 않는다.
+
+include::{snippets}/childcare.center/http-request.adoc[]
+include::{snippets}/childcare.center/http-response.adoc[]
+include::{snippets}/childcare.center/response-fields.adoc[]
+include::{snippets}/childcare.center/request-parameters.adoc[]
+include::{snippets}/childcare.center/normalization-fields.adoc[]
+include::{snippets}/childcare.center/failure-codes.adoc[]
+include::{snippets}/childcare.center/cli-output.adoc[]

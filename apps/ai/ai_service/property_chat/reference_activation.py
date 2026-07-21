@@ -23,6 +23,8 @@ SCHOOL_CASE_ID = "school-location-jamsil-ells"
 SCHOOL_QUESTION = "잠실엘스 단지 중심 800m 안의 운영 중인 초등학교 위치를 알려줘"
 COMPARISON_CASE_ID = "comparison-jamsil-ells-helio-84"
 COMPARISON_QUESTION = "송파구 잠실엘스와 헬리오시티 전용 84㎡를 같은 기준으로 비교해줘"
+BUDGET_RETAIL_CASE_ID = "budget-recommendation-songpa-84-retail"
+BUDGET_RETAIL_QUESTION = "송파구에서 20억원 이하 전용 84㎡ 아파트 3곳을 추천해줘"
 
 
 class ReferenceActivationError(ValueError):
@@ -135,6 +137,51 @@ async def run_comparison_activation_case(
     return validate_comparison_activation_response(response)
 
 
+async def run_budget_retail_activation_case(
+    *,
+    property_repository: PropertyFactRepository,
+    rail_repository: object,
+    retail_repository: object,
+    language_model: GroundedLanguageModel,
+) -> dict[str, object]:
+    tracking_model = _TrackingLanguageModel(language_model)
+    try:
+        response = await GroundedChatbotEngine(
+            repository=property_repository,
+            rail_station_repository=rail_repository,  # type: ignore[arg-type]
+            point_facility_repository=retail_repository,  # type: ignore[arg-type]
+            language_model=tracking_model,  # type: ignore[arg-type]
+            enabled_capabilities=frozenset({"recommendation"}),
+            enabled_recommendation_modes=frozenset({"BUDGET"}),
+        ).query(
+            request=ChatbotQueryRequest(question=BUDGET_RETAIL_QUESTION),
+            user=AuthenticatedUser(user_id=1),
+            request_id="activation-budget-recommendation-songpa-84-retail",
+        )
+    except Exception as exception:
+        grounding_reason = _grounding_reason(exception)
+        if grounding_reason is not None:
+            raise ReferenceActivationError(
+                f"BUDGET_RETAIL_DRAFT_{grounding_reason}"
+            ) from None
+        provider_reason = _provider_reason(exception)
+        if provider_reason is not None:
+            raise ReferenceActivationError(
+                f"BUDGET_RETAIL_DRAFT_{provider_reason}"
+            ) from None
+        reason_by_stage = {
+            "PLAN_PENDING": "BUDGET_RETAIL_PLAN_STAGE_FAILED",
+            "PLAN_DONE": "BUDGET_RETAIL_OBSERVATION_FAILED",
+            "DRAFT_PENDING": "BUDGET_RETAIL_DRAFT_STAGE_FAILED",
+            "DRAFT_DONE": "BUDGET_RETAIL_GROUNDING_FAILED",
+        }
+        raise ReferenceActivationError(reason_by_stage[tracking_model.stage]) from None
+    plan_reason = _budget_retail_plan_reason(tracking_model.plan)
+    if plan_reason is not None:
+        raise ReferenceActivationError(plan_reason)
+    return validate_budget_retail_activation_response(response)
+
+
 def _comparison_plan_reason(plan: object | None) -> str | None:
     fragments = getattr(plan, "fragments", None)
     if isinstance(fragments, tuple) and len(fragments) == 1:
@@ -148,6 +195,29 @@ def _comparison_plan_reason(plan: object | None) -> str | None:
         return "COMPARISON_PLAN_REGION_INVALID"
     if getattr(plan, "exclusive_area_square_meters", None) != 84.0:
         return "COMPARISON_PLAN_AREA_INVALID"
+    return None
+
+
+def _budget_retail_plan_reason(plan: object | None) -> str | None:
+    fragments = getattr(plan, "fragments", None)
+    if isinstance(fragments, tuple) and len(fragments) == 1:
+        plan = fragments[0]
+    if getattr(plan, "capability", None) != "recommendation":
+        return "BUDGET_RETAIL_PLAN_CAPABILITY_INVALID"
+    if getattr(plan, "recommendation_mode", None) != "BUDGET":
+        return "BUDGET_RETAIL_PLAN_MODE_INVALID"
+    if getattr(plan, "region_name", None) != "송파구":
+        return "BUDGET_RETAIL_PLAN_REGION_INVALID"
+    if getattr(plan, "maximum_budget_ten_thousand_krw", None) != 200_000:
+        return "BUDGET_RETAIL_PLAN_BUDGET_INVALID"
+    if getattr(plan, "exclusive_area_square_meters", None) != 84.0:
+        return "BUDGET_RETAIL_PLAN_AREA_INVALID"
+    if getattr(plan, "limit", None) != 3:
+        return "BUDGET_RETAIL_PLAN_LIMIT_INVALID"
+    if tuple(getattr(plan, "recommendation_criteria", ())) or tuple(
+        getattr(plan, "lifestyle_themes", ())
+    ):
+        return "BUDGET_RETAIL_PLAN_UNMENTIONED_CONDITION"
     return None
 
 
@@ -339,9 +409,90 @@ def validate_comparison_activation_response(response: object) -> dict[str, objec
     }
 
 
+def validate_budget_retail_activation_response(response: object) -> dict[str, object]:
+    if not isinstance(response, dict):
+        raise ReferenceActivationError("BUDGET_RETAIL_RESPONSE_SHAPE_INVALID")
+    summary = response.get("evidenceSummary")
+    citations = response.get("citations")
+    ui_summary = response.get("uiSummary")
+    artifacts = response.get("uiArtifacts")
+    if (
+        response.get("success") is not True
+        or response.get("status") != "success"
+        or not isinstance(summary, Mapping)
+        or summary.get("status") != "supported"
+        or summary.get("capabilities") != ["recommendation"]
+        or not isinstance(summary.get("factCount"), int)
+        or not 4 <= summary["factCount"] <= 15
+        or not isinstance(summary.get("citationCount"), int)
+        or not isinstance(citations, list)
+        or len(citations) != summary["citationCount"]
+        or not isinstance(ui_summary, Mapping)
+        or ui_summary.get("version") != 1
+        or not isinstance(ui_summary.get("headline"), Mapping)
+        or not isinstance(artifacts, list)
+        or not isinstance(response.get("dataAsOf"), str)
+    ):
+        raise ReferenceActivationError("BUDGET_RETAIL_RESPONSE_INVALID")
+    cards_artifacts = [
+        artifact
+        for artifact in artifacts
+        if isinstance(artifact, Mapping)
+        and artifact.get("type") == "recommendationCards"
+        and artifact.get("version") == 1
+        and artifact.get("policyVersion") == "recommendation-policy-v1"
+    ]
+    if len(cards_artifacts) != 1:
+        raise ReferenceActivationError("BUDGET_RETAIL_ARTIFACT_INVALID")
+    cards = cards_artifacts[0].get("cards")
+    if not isinstance(cards, list) or not 1 <= len(cards) <= 3:
+        raise ReferenceActivationError("BUDGET_RETAIL_CARDS_INVALID")
+    for expected_rank, card in enumerate(cards, start=1):
+        if not isinstance(card, Mapping) or card.get("rank") != expected_rank:
+            raise ReferenceActivationError("BUDGET_RETAIL_CARD_RANK_INVALID")
+        breakdown = card.get("scoreBreakdown")
+        if not isinstance(breakdown, list) or {
+            item.get("key")
+            for item in breakdown
+            if isinstance(item, Mapping)
+        } != {"PRICE", "TRANSIT", "SHOPPING"}:
+            raise ReferenceActivationError("BUDGET_RETAIL_BREAKDOWN_INVALID")
+        if not isinstance(card.get("factIds"), list) or not card["factIds"]:
+            raise ReferenceActivationError("BUDGET_RETAIL_CARD_FACTS_INVALID")
+    source_ids = {
+        citation.get("sourceId")
+        for citation in citations
+        if isinstance(citation, Mapping) and citation.get("factIds")
+    }
+    if source_ids != {
+        "property.ai_read",
+        "transport.rail-station",
+        "retail.large-store",
+    }:
+        raise ReferenceActivationError("BUDGET_RETAIL_CITATION_INVALID")
+    criteria = ui_summary.get("criteria")
+    if not isinstance(criteria, list):
+        raise ReferenceActivationError("BUDGET_RETAIL_CRITERIA_INVALID")
+    criterion_keys = {
+        criterion.get("key")
+        for criterion in criteria
+        if isinstance(criterion, Mapping)
+    }
+    if criterion_keys != {"REGION", "MAX_BUDGET", "EXCLUSIVE_AREA"}:
+        raise ReferenceActivationError("BUDGET_RETAIL_CRITERIA_INVALID")
+    return {
+        "caseId": BUDGET_RETAIL_CASE_ID,
+        "capability": "recommendation",
+        "factCount": summary["factCount"],
+        "citationCount": len(citations),
+        "dataAsOf": response["dataAsOf"],
+    }
+
+
 def main() -> int:
     from ai_service.chat import (
         get_grounded_language_model,
+        get_point_facility_repository,
         get_property_fact_repository,
         get_rail_station_repository,
         get_school_fact_repository,
@@ -351,6 +502,7 @@ def main() -> int:
     property_repository = None
     school_repository = None
     rail_repository = None
+    retail_repository = None
     try:
         property_repository = get_property_fact_repository()
         if case_id == SCHOOL_CASE_ID:
@@ -367,6 +519,15 @@ def main() -> int:
                 rail_repository=rail_repository,
                 language_model=get_grounded_language_model(),  # type: ignore[arg-type]
             ))
+        elif case_id == BUDGET_RETAIL_CASE_ID:
+            rail_repository = get_rail_station_repository()
+            retail_repository = get_point_facility_repository()
+            result = asyncio.run(run_budget_retail_activation_case(
+                property_repository=property_repository,  # type: ignore[arg-type]
+                rail_repository=rail_repository,
+                retail_repository=retail_repository,
+                language_model=get_grounded_language_model(),  # type: ignore[arg-type]
+            ))
         else:
             raise ReferenceActivationError("ACTIVATION_CASE_INVALID")
     except ReferenceActivationError as exception:
@@ -380,7 +541,12 @@ def main() -> int:
         print("reasonCode: REFERENCE_ACTIVATION_FAILED")
         return 1
     finally:
-        for repository in (school_repository, rail_repository, property_repository):
+        for repository in (
+            school_repository,
+            rail_repository,
+            retail_repository,
+            property_repository,
+        ):
             close = getattr(repository, "close", None)
             if callable(close):
                 close()

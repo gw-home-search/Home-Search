@@ -153,3 +153,9 @@ Coordinate Source DB가 일치한 211건을 additive evidence로 보완했다. �
 활성화한다. 미확인 468행은 시설 부재로 해석하지 않고 coverage 미달 시 fail-closed한다.
 어린이집·유치원은 계속 runtime에서 제외한다. 상세 근거는
 `docs/reports/CHATBOT_RETAIL_BUDGET_ACTIVATION.md`에 기록한다.
+
+2026-07-22 운영 배포 전 승인 case `budget-recommendation-songpa-84-retail`을 실행했다.
+송파구 후보 SQL timeout은 exact descendant region code 선조회와 bounded lateral 최근
+3건 조회로 수정해 observation을 통과했으나, 5곳과 3곳 질문 모두 답변 생성 단계에서
+`PROVIDER_TRANSPORT_FAILED`가 재현됐다. 따라서 현재 제한 활성화 코드는 유지하되 이
+live gate가 통과하기 전에는 운영 배포 승인으로 판정하지 않는다.

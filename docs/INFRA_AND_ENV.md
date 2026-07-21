@@ -355,7 +355,7 @@ source하지 않는다. 해당 파일은 regular non-symlink file이어야 하�
 ```bash
 HOME_AI_GOLDEN_LIVE_CONFIRM=RUN_ONE_LIVE_GOLDEN_CASE \
   apps/ai/ops/run-local-property-golden.sh live \
-  --case-id price-trend-jamsil-ells-84
+  --case-id budget-recommendation-songpa-84-retail
 ```
 
 The overlay is `infra/docker-compose.chatbot.yml`. Omitting that file leaves the

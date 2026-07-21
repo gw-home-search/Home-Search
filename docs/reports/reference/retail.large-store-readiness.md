@@ -38,9 +38,9 @@
 
 ## 검증 공백과 롤백
 
-- 이번 변경의 OpenAI live 대표 질문은 비용 승인을 받지 않아 실행하지 않았다.
-  deterministic observation, grounding, artifact, local runtime, JSON/SSE transport를
-  검증 대상으로 삼는다.
+- 승인된 OpenAI live 대표 질문은 데이터 관찰까지 통과했지만 답변 생성 단계에서
+  `PROVIDER_TRANSPORT_FAILED`가 재현되어 운영 배포 gate는 `Fail`이다. deterministic
+  observation, grounding, artifact, local runtime, JSON/SSE transport 검증은 유지한다.
 - 문제 발생 시 reference allowlist를
   `academy_lookup,rail_station_lookup,school_location`으로 되돌리면 retail repository와
   `BUDGET` mode가 함께 비활성화된다. 원본·보완 evidence는 삭제하지 않는다.

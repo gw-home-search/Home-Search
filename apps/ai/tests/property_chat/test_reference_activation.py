@@ -11,14 +11,17 @@ from ai_service.property_chat.openai_responses import OpenAIResponsesError
 from ai_service.property_chat.reference_activation import (
     ReferenceActivationError,
     _TrackingLanguageModel,
+    _budget_retail_plan_reason,
     _grounding_reason,
     _comparison_plan_reason,
     _provider_reason,
     _preflight_school_observation,
     main,
+    run_budget_retail_activation_case,
     run_comparison_activation_case,
     run_school_activation_case,
     validate_comparison_activation_response,
+    validate_budget_retail_activation_response,
     validate_school_activation_response,
 )
 
@@ -83,6 +86,48 @@ def _comparison_response() -> dict[str, object]:
     }
 
 
+def _budget_retail_response() -> dict[str, object]:
+    return {
+        "success": True,
+        "status": "success",
+        "uiSummary": {
+            "version": 1,
+            "headline": {"text": "가격 기반 후보"},
+            "criteria": [
+                {"key": "REGION"},
+                {"key": "MAX_BUDGET"},
+                {"key": "EXCLUSIVE_AREA"},
+            ],
+        },
+        "uiArtifacts": [{
+            "type": "recommendationCards",
+            "version": 1,
+            "policyVersion": "recommendation-policy-v1",
+            "cards": [{
+                "rank": 1,
+                "factIds": ["property-1", "trade-1", "rail-1", "retail-1"],
+                "scoreBreakdown": [
+                    {"key": "PRICE"},
+                    {"key": "TRANSIT"},
+                    {"key": "SHOPPING"},
+                ],
+            }],
+        }],
+        "citations": [
+            {"sourceId": "property.ai_read", "factIds": ["property-1", "trade-1"]},
+            {"sourceId": "transport.rail-station", "factIds": ["rail-1"]},
+            {"sourceId": "retail.large-store", "factIds": ["retail-1"]},
+        ],
+        "evidenceSummary": {
+            "status": "supported",
+            "capabilities": ["recommendation"],
+            "factCount": 4,
+            "citationCount": 3,
+        },
+        "dataAsOf": "2026-06-12",
+    }
+
+
 def test_school_activation_accepts_grounded_structured_response() -> None:
     assert validate_school_activation_response(_response()) == {
         "caseId": "school-location-jamsil-ells",
@@ -117,6 +162,127 @@ def test_comparison_activation_accepts_partial_retail_table() -> None:
         "citationCount": 2,
         "dataAsOf": "2026-07-04",
     }
+
+
+def test_budget_retail_activation_accepts_grounded_cards() -> None:
+    assert validate_budget_retail_activation_response(_budget_retail_response()) == {
+        "caseId": "budget-recommendation-songpa-84-retail",
+        "capability": "recommendation",
+        "factCount": 4,
+        "citationCount": 3,
+        "dataAsOf": "2026-06-12",
+    }
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda response: response.update(success=False),
+        lambda response: response.update(status="partial_success"),
+        lambda response: response["evidenceSummary"].update(status="partial"),
+        lambda response: response["evidenceSummary"].update(capabilities=[]),
+        lambda response: response.update(uiSummary=None),
+        lambda response: response.update(uiArtifacts=[]),
+        lambda response: response["uiArtifacts"][0].update(cards=[]),
+        lambda response: response["uiArtifacts"][0]["cards"][0].update(rank=2),
+        lambda response: response["uiArtifacts"][0]["cards"][0].update(
+            scoreBreakdown=[{"key": "PRICE"}]
+        ),
+        lambda response: response.update(citations=[]),
+        lambda response: response["evidenceSummary"].update(citationCount=2),
+        lambda response: response["uiSummary"].update(criteria=None),
+        lambda response: response["uiSummary"].update(
+            criteria=[{"key": "REGION"}, {"key": "MAX_BUDGET"}]
+        ),
+    ],
+)
+def test_budget_retail_activation_rejects_incomplete_evidence(mutate) -> None:
+    response = _budget_retail_response()
+    mutate(response)
+
+    with pytest.raises(ReferenceActivationError, match="BUDGET_RETAIL_"):
+        validate_budget_retail_activation_response(response)
+
+
+def test_budget_retail_activation_rejects_more_than_three_cards() -> None:
+    response = _budget_retail_response()
+    card = response["uiArtifacts"][0]["cards"][0]
+    response["uiArtifacts"][0]["cards"] = [
+        {**card, "rank": rank}
+        for rank in range(1, 5)
+    ]
+
+    with pytest.raises(ReferenceActivationError, match="BUDGET_RETAIL_CARDS_INVALID"):
+        validate_budget_retail_activation_response(response)
+
+
+def test_budget_retail_plan_rejects_unmentioned_conditions() -> None:
+    valid = SimpleNamespace(
+        capability="recommendation",
+        recommendation_mode="BUDGET",
+        region_name="송파구",
+        maximum_budget_ten_thousand_krw=200_000,
+        exclusive_area_square_meters=84.0,
+        limit=3,
+        recommendation_criteria=(),
+        lifestyle_themes=(),
+    )
+    assert _budget_retail_plan_reason(SimpleNamespace(fragments=(valid,))) is None
+    valid.lifestyle_themes = ("SHOPPING",)
+    assert (
+        _budget_retail_plan_reason(valid)
+        == "BUDGET_RETAIL_PLAN_UNMENTIONED_CONDITION"
+    )
+
+
+def test_budget_retail_plan_requires_explicit_three_candidate_limit() -> None:
+    plan = SimpleNamespace(
+        capability="recommendation",
+        recommendation_mode="BUDGET",
+        region_name="송파구",
+        maximum_budget_ten_thousand_krw=200_000,
+        exclusive_area_square_meters=84.0,
+        limit=5,
+        recommendation_criteria=(),
+        lifestyle_themes=(),
+    )
+
+    assert _budget_retail_plan_reason(plan) == "BUDGET_RETAIL_PLAN_LIMIT_INVALID"
+
+
+def test_budget_retail_activation_runs_the_bounded_engine(monkeypatch) -> None:
+    class Engine:
+        def __init__(self, **kwargs):
+            assert kwargs["enabled_capabilities"] == frozenset({"recommendation"})
+            assert kwargs["enabled_recommendation_modes"] == frozenset({"BUDGET"})
+            kwargs["language_model"].plan = SimpleNamespace(
+                capability="recommendation",
+                recommendation_mode="BUDGET",
+                region_name="송파구",
+                maximum_budget_ten_thousand_krw=200_000,
+                exclusive_area_square_meters=84.0,
+                limit=3,
+                recommendation_criteria=(),
+                lifestyle_themes=(),
+            )
+
+        async def query(self, **kwargs):
+            assert "20억원" in kwargs["request"].question
+            assert "3곳" in kwargs["request"].question
+            return _budget_retail_response()
+
+    monkeypatch.setattr(
+        "ai_service.property_chat.reference_activation.GroundedChatbotEngine", Engine
+    )
+
+    result = asyncio.run(run_budget_retail_activation_case(
+        property_repository=object(),
+        rail_repository=object(),
+        retail_repository=object(),
+        language_model=object(),
+    ))
+
+    assert result["capability"] == "recommendation"
 
 
 def test_comparison_activation_rejects_non_object_response() -> None:

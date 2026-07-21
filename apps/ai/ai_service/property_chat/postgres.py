@@ -268,10 +268,10 @@ class PostgresPropertyFactRepository:
         )
         area = Decimal(str(exclusive_area_square_meters))
         with self._pool.connection() as connection:
-            rows = connection.execute(
+            region_rows = connection.execute(
                 """
                 WITH RECURSIVE matched_roots AS (
-                    SELECT region_id, parent_region_id, region_code, region_name
+                    SELECT region_id, parent_region_id, region_code
                     FROM ai_read.region_fact
                     WHERE lower(region_name) = lower(%s)
                 ), root_count AS (
@@ -285,57 +285,72 @@ class PostgresPropertyFactRepository:
                     FROM ai_read.region_fact child
                     JOIN target_regions parent
                       ON child.parent_region_id = parent.region_id
-                ), ranked AS (
+                )
+                SELECT root_count.match_count, target_regions.region_code
+                FROM root_count
+                LEFT JOIN target_regions ON root_count.match_count = 1
+                ORDER BY target_regions.region_code
+                """,
+                (normalized_region,),
+            ).fetchall()
+            if not region_rows or int(region_rows[0]["match_count"]) != 1:
+                return None
+            region_codes = [
+                str(row["region_code"])
+                for row in region_rows
+                if row["region_code"] is not None
+            ]
+            if not region_codes:
+                return {}
+            rows = connection.execute(
+                """
+                WITH candidate_complexes AS (
                     SELECT complex.complex_id, complex.display_name,
                            complex.region_code, complex.region_name, complex.address,
                            complex.latitude, complex.longitude, complex.marker_safe,
-                           complex.data_updated_at, complex.unit_count, complex.use_date,
-                           trade.trade_id, trade.deal_date,
-                           trade.deal_amount_ten_thousand_krw,
-                           trade.exclusive_area_square_meters, trade.floor,
-                           row_number() OVER (
-                               PARTITION BY complex.complex_id
-                               ORDER BY trade.deal_date DESC, trade.trade_id DESC
-                           ) AS trade_rank
+                           complex.data_updated_at, complex.unit_count, complex.use_date
                     FROM ai_read.complex_fact complex
-                    JOIN target_regions region
-                      ON region.region_code = complex.region_code
-                    JOIN ai_read.trade_fact trade
-                      ON trade.complex_id = complex.complex_id
-                    WHERE complex.marker_safe
-                      AND trade.deal_date >= %s AND trade.deal_date <= %s
-                      AND trade.exclusive_area_square_meters
-                          BETWEEN %s - %s AND %s + %s
+                    WHERE complex.region_code = ANY(%s)
+                      AND complex.marker_safe
+                ), selected AS MATERIALIZED (
+                    SELECT complex.*, trade.trade_id, trade.deal_date,
+                           trade.deal_amount_ten_thousand_krw,
+                           trade.exclusive_area_square_meters, trade.floor
+                    FROM candidate_complexes complex
+                    CROSS JOIN LATERAL (
+                        SELECT trade.trade_id, trade.deal_date,
+                               trade.deal_amount_ten_thousand_krw,
+                               trade.exclusive_area_square_meters, trade.floor
+                        FROM ai_read.trade_fact trade
+                        WHERE trade.complex_id = complex.complex_id
+                          AND trade.deal_date >= %s AND trade.deal_date <= %s
+                          AND trade.exclusive_area_square_meters
+                              BETWEEN %s - %s AND %s + %s
+                        ORDER BY trade.deal_date DESC, trade.trade_id DESC
+                        LIMIT 3
+                    ) trade
                 ), eligible AS (
                     SELECT complex_id
-                    FROM ranked
+                    FROM selected
                     GROUP BY complex_id
-                    HAVING count(*) >= 3
+                    HAVING count(*) = 3
                     ORDER BY complex_id
                     LIMIT %s
-                ), selected AS (
-                    SELECT ranked.*
-                    FROM ranked
-                    JOIN eligible USING (complex_id)
-                    WHERE ranked.trade_rank <= 3
                 )
-                SELECT root_count.match_count, selected.*
-                FROM root_count
-                LEFT JOIN selected ON true
-                ORDER BY selected.complex_id, selected.trade_rank
+                SELECT selected.*
+                FROM selected
+                JOIN eligible USING (complex_id)
+                ORDER BY selected.complex_id,
+                         selected.deal_date DESC, selected.trade_id DESC
                 """,
                 (
-                    normalized_region, start_date, end_date, area,
+                    region_codes, start_date, end_date, area,
                     _AREA_TOLERANCE_SQUARE_METERS, area,
                     _AREA_TOLERANCE_SQUARE_METERS, limit,
                 ),
             ).fetchall()
-        if not rows or int(rows[0]["match_count"]) != 1:
-            return None
         result: dict[int, tuple[ComplexRecord, list[TradeRecord]]] = {}
         for row in rows:
-            if row["complex_id"] is None:
-                continue
             complex_id = int(row["complex_id"])
             if complex_id not in result:
                 result[complex_id] = (_complex_record(row), [])

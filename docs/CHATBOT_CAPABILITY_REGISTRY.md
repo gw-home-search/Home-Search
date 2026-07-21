@@ -4,7 +4,7 @@
 
 이 문서는 챗봇이 어떤 질문을 어떤 근거로 답할 수 있는지 결정하는 기준이다.
 `kosa-team5`의 질문과 실행 흐름은 질문 유형을 식별하는 참고 자료로만 사용했다.
-해당 구현 코드, fixture, POI 파일, 법령 corpus는 이 저장소로 복사하지 않는다.
+해당 구현 코드, fixture, POI 파일은 이 저장소로 복사하지 않는다.
 
 Capability는 `필수 데이터셋`, `최소 근거 등급`, `허용 주장`, `금지 주장`,
 `신선도`, `대체 답변`을 모두 충족해야 활성화할 수 있다. 서비스 코드가 존재해도
@@ -26,7 +26,6 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 | `price_trend` | `price_trend` | 데이터 준비 중 | 과거 관찰 집계만 허용 |
 | `comparison` | `comparison` | 데이터 준비 중 | 같은 기준일·단위의 항목만 비교 |
 | `recommendation` | `recommendation` | 데이터 준비 중 | deterministic filter/score 필요 |
-| `legal_contract` | `legal_contract` | 데이터 준비 중 | 공식 법령 version과 조문 근거 필요 |
 | 복합 질문 | `compound_question` | 데이터 준비 중 | 하위 Capability를 독립 검증 |
 | 미래 가격·주관적 학군·개인 법률 판단 | 미지원 Capability | 미지원 | 대체 가능한 근거 질문을 안내 |
 
@@ -63,7 +62,6 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 | `hospital_lookup` | “주변 병원 유형” | 데이터 준비 중 | HIRA 병원정보 API 응답/snapshot | B | 조회 시점 기관 유형과 거리 | 의료 품질·치료 효과·진료 가능 보장 | 조회 시각 표시; snapshot은 별도 SLA | 공식 응답 실패와 재시도 가능 시점 안내 |
 | `childcare_lookup` | “주변 어린이집 유형·정원” | 데이터 준비 중 | 전국어린이집 active snapshot/API | A 또는 B | 공개된 유형·정원·거리 | 입소 가능 여부 | source 계약의 수시/실시간 SLA | 공개 항목 미확인 안내 |
 | `kakao_place_search` | “지금 주변 마트·카페” | 데이터 준비 중 | Kakao Local 조회 응답 | C | 검색 시점·반경·페이지 안의 장소 | 지역 전체 개수, 완전한 상권 밀도 | 요청 시각 표시 | “지정 조건에서 확인되지 않음”으로 표현 |
-| `legal_contract` | “계약금 해제 관련 조문” | 데이터 준비 중 | 국가법령정보 원문·시행일·버전·chunk | A | 시행 시점이 확인된 일반 법률 정보 | 개인 사건 결론·승소 가능성·법률대리 | 질문 기준일에 유효한 버전 | 법률 상담이 아님을 알리고 공식 상담 경로 안내 |
 | `redevelopment_official_evidence` | “정비사업 현재 단계” | 데이터 준비 중 | 지자체·국토부 allowlist 공식 문서 | D | 원문에 명시된 단계·게시일 | 사업 확정·수익성 보장 | 문서별 게시일과 확인일 표시 | 공식 원문을 확인하지 못했다고 안내 |
 | `compound_question` | “비교+학군+교통+예산” | 데이터 준비 중 | 하위 Capability 전체 | 하위 항목 중 가장 높은 요구 | 독립 검증된 하위 결과의 교집합 | 일부 실패를 전체 성공처럼 표현 | 하위 dataset별 표시 | 성공·부분·불가 항목을 분리 |
 | `region_price_ranking` | “강남구 최고가 TOP 5” | 미지원 | 현재 범위에 ranking dataset 없음 | 미지원 | 실제 거래 조회 범위 안내 | 순위표·최고 지역 단정 | 해당 없음 | 단지 또는 지역의 기간별 실거래 질문 제안 |
@@ -71,7 +69,7 @@ Slice 0 종료 시점에는 챗봇 runtime이 없으므로 `지원` Capability�
 | `future_price_prediction` | “내년에 얼마나 오를까?” | 미지원 | 없음 | 미지원 | 과거 관찰값과 한계 안내 | 상승률·가격 예측 | 해당 없음 | 과거 거래 추이 질문 제안 |
 | `subjective_school_ranking` | “명문 학군 순위” | 미지원 | 없음 | 미지원 | 공개 지표의 정의 설명 | 자체 서열·진학 보장 | 해당 없음 | 측정 가능한 공식 지표 질문 제안 |
 | `actual_commute_time` | “출근에 몇 분?” | 미지원 | 검증된 경로·시간 dataset 없음 | 미지원 | 역 직선거리만 별도 Capability로 안내 | 실제 통근시간·배차 추정 | 해당 없음 | 출발·도착과 공식 교통 데이터 준비 필요 안내 |
-| `personal_legal_judgment` | “제가 이길까요?” | 미지원 | 없음 | 미지원 | 일반 법률 정보 범위 설명 | 개인 사건 판단 | 해당 없음 | 법률 전문가 상담 권고 |
+| `personal_legal_judgment` | “제가 이길까요?” | 미지원 | 없음 | 미지원 | 지원 범위 밖 안내 | 개인 사건 판단·일반 법률 정보 제공 | 해당 없음 | 법률 전문가 상담 권고 |
 | `unrelated_general_chat` | 날씨·의료 진단 등 | 미지원 | 없음 | 미지원 | 챗봇 지원 범위 안내 | 근거 없는 일반 답변 | 해당 없음 | 지원 가능한 부동산 질문 예시 제공 |
 
 ## 공통 실행 규칙

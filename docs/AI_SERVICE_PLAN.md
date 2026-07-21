@@ -4,7 +4,7 @@
 
 ai-service는 user-service 다음의 later-scope 확장 milestone이다. 참조 구현
 `/Users/gwongwangjae/kosa-team5`는 질문 유형과 UX 흐름만 읽기 전용으로 참고하며
-코드, fixture, POI, 법령 corpus를 이관하지 않는다.
+코드, fixture, POI를 이관하지 않는다.
 
 목표는 검증된 전국 데이터로 답할 수 있는 질문만 단계적으로 활성화하는 것이다.
 
@@ -157,22 +157,17 @@ LLM은 후보와 계산 근거를 설명할 뿐 점수와 사실을 만들지 �
 - 예산·지역·면적·거래 시점 deterministic filter
 - 공개 가중치 score와 Kakao soft enrichment
 
-### Slice 11: 부동산 계약 법률 RAG
-
-- 국가법령정보 원본, 법령 ID, 공포·시행일, version, 조문 chunk/embedding
-- 일반 정보 고지와 조문 citation
-
-### Slice 12: 공식 최신 웹 근거
+### Slice 11: 공식 최신 웹 근거
 
 - 지자체·국토부·공공기관 allowlist
 - 공식 원문 URL·게시일을 확인한 정비사업 D등급 근거
 
-### Slice 13: 복합 질문과 최종 UX
+### Slice 12: 복합 질문과 최종 UX
 
 - 하위 Capability 분해·독립 검증·부분 실패
 - browser context 재검증과 기준일 충돌 처리
 
-### Slice 14: 운영 강화와 단계 활성화
+### Slice 13: 운영 강화와 단계 활성화
 
 - dataset freshness, quarantine, coverage, fact/citation 실패 관측
 - 원문 없는 로그/trace, feature flag, snapshot/gateway rollback
@@ -197,7 +192,7 @@ Compose config 검증은 root `AGENTS.md`에 정의된 validation-only password�
 
 - 골든 질문 수치가 DB 또는 active snapshot과 일치한다.
 - 모든 사실 문장이 유효한 fact ID와 citation을 가진다.
-- 제공되지 않은 수치·시설·법령 생성은 응답을 차단한다.
+- 제공되지 않은 수치·시설·정비사업 단계 생성은 응답을 차단한다.
 - stale/failed dataset의 Capability는 자동 비활성화된다.
 - Kakao를 전체 현황, 공식 학군, 통근 정보로 표현하지 않는다.
 - 대화 원문은 서버 DB·로그·trace에 남지 않는다.

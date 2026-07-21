@@ -42,7 +42,6 @@ snapshot 또는 검증된 실시간 응답에만 실제 근거 등급을 부여�
 | `childcare.center` | [전국어린이집표준데이터](https://www.data.go.kr/data/15013108/standard.do?recommendDataYn=Y) | 교육부·한국사회보장정보원 / 수시 | A 또는 B | 유형, 정원 등 공개 항목 | 후보 등록; 이용조건·수집 미완료 |
 | `environment.city-park` | [전국도시공원정보표준데이터](https://www.data.go.kr/data/15012890/standard.do) | 지자체 / 월간 관측 | A | 조성 완료 공원 위치·면적 | tracked contract 등록; 이용조건·adapter 미완료 |
 | `place.kakao-local` | [Kakao Local REST API](https://developers.kakao.com/docs/ko/local/dev-guide) | Kakao / 실시간 검색 | C | 주소·좌표 변환, 키워드·카테고리 장소 탐색 | 운영정책·캐시 승인 전 비활성 |
-| `law.open-law` | [국가법령정보 공동활용](https://open.law.go.kr/LSO/openApi/guideList.do) | 법제처 / 현행·연혁 API | A | 법령, 시행령·시행규칙, 조문 버전 | 이용 조건·대상 법령 계약 미확정 |
 | `official.redevelopment` | 지자체·국토부·공공기관 allowlist | 문서별 | D | 정비사업 공식 공고의 현재 단계 | allowlist 미확정 |
 
 공공데이터포털 landing page에 표시된 갱신 주기는 수집 SLA의 입력값일 뿐이다.

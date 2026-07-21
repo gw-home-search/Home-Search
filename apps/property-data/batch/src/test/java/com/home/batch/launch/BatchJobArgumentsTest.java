@@ -218,4 +218,54 @@ class BatchJobArgumentsTest {
         assertThat(arguments.jobParameters().getString("maxTargets")).isEqualTo("100");
         assertThat(arguments.jobParameters().getString("runDate")).isEqualTo("2026-07-20");
     }
+
+    @Test
+    @DisplayName("building profile 운영 job 4종의 identifying parameter를 허용하고 보존한다")
+    void parsesBuildingProfileJobArguments() {
+        BatchJobArguments replay = BatchJobArguments.from(
+                "complexBuildingRegisterProfileReplayJob",
+                Map.of(
+                        "sourceCollectionId", "123e4567-e89b-12d3-a456-426614174020",
+                        "parseRunId", "123e4567-e89b-12d3-a456-426614174021",
+                        "parserVersion", "PROFILE_V1",
+                        "maxPages", "100"),
+                clock);
+        BatchJobArguments collect = BatchJobArguments.from(
+                "complexBuildingRegisterProfileCollectJob",
+                Map.of(
+                        "collectionId", "123e4567-e89b-12d3-a456-426614174022",
+                        "requestId", "123e4567-e89b-12d3-a456-426614174023",
+                        "runDate", "2026-07-21",
+                        "purpose", "profile-discovery",
+                        "targetScope", "validation-sample",
+                        "strategy", "compare-recap-title",
+                        "sampleSize", "1500",
+                        "selectionSeed", "profile-v1-fixed-seed",
+                        "maxRequests", "900",
+                        "parallelism", "2"),
+                clock);
+        BatchJobArguments analyze = BatchJobArguments.from(
+                "complexBuildingRegisterProfileAnalyzeJob",
+                Map.of(
+                        "collectionId", "123e4567-e89b-12d3-a456-426614174022",
+                        "parseRunId", "123e4567-e89b-12d3-a456-426614174024",
+                        "analysisRunId", "123e4567-e89b-12d3-a456-426614174025",
+                        "rulesVersion", "PROFILE_V1",
+                        "outputDirectory", "/tmp/profile-report"),
+                clock);
+        BatchJobArguments legalImport = BatchJobArguments.from(
+                "legalDongCodeMappingImportJob",
+                Map.of(
+                        "importId", "123e4567-e89b-12d3-a456-426614174026",
+                        "effectiveDate", "2026-07-01",
+                        "sourceFile", "/tmp/legal-dong.csv"),
+                clock);
+
+        assertThat(replay.jobParameters().getString("parserVersion")).isEqualTo("PROFILE_V1");
+        assertThat(replay.jobParameters().getString("maxPages")).isEqualTo("100");
+        assertThat(collect.jobParameters().getString("sampleSize")).isEqualTo("1500");
+        assertThat(collect.jobParameters().getString("parallelism")).isEqualTo("2");
+        assertThat(analyze.jobParameters().getString("outputDirectory")).isEqualTo("/tmp/profile-report");
+        assertThat(legalImport.jobParameters().getString("effectiveDate")).isEqualTo("2026-07-01");
+    }
 }

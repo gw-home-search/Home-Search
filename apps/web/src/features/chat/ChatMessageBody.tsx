@@ -1,16 +1,37 @@
 import { ChatArtifacts } from './ChatArtifacts';
+import { ChatActions } from './ChatActions';
+import type { ChatAction } from './actionContract';
 import type { ChatEvidence } from './chatTypes';
 import type { ChatMessage } from './storage/chatConversationStore';
 
-export function ChatMessageBody({ message }: { message: ChatMessage }) {
+type ChatMessageBodyProps = {
+  message: ChatMessage;
+  executedActionIds?: ReadonlySet<string>;
+  onUiAction?: (action: ChatAction) => void;
+};
+
+export function ChatMessageBody({
+  message,
+  executedActionIds = EMPTY_ACTION_IDS,
+  onUiAction,
+}: ChatMessageBodyProps) {
   return (
     <>
       <p>{message.content}</p>
       {message.artifacts ? <ChatArtifacts artifacts={message.artifacts} /> : null}
+      {message.actions ? (
+        <ChatActions
+          actions={message.actions}
+          executedActionIds={executedActionIds}
+          onExecute={onUiAction}
+        />
+      ) : null}
       {message.evidence ? <Evidence evidence={message.evidence} /> : null}
     </>
   );
 }
+
+const EMPTY_ACTION_IDS: ReadonlySet<string> = new Set();
 
 function Evidence({ evidence }: { evidence: ChatEvidence }) {
   return (

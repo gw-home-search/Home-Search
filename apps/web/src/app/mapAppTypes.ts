@@ -23,6 +23,12 @@ export type MapFocusTarget = {
   seq: number;
 };
 
+export type MapUiCommand = {
+  type: 'showNearbyCategory';
+  actionId: string;
+  category: 'HOSPITAL' | 'DAYCARE_KINDERGARTEN';
+};
+
 export type ComplexSelection = {
   parcelId: number | null;
   complexId: number | null;

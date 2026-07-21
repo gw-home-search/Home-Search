@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ComplexSelection, MapDisplayMode, MapFocusTarget, MapViewport } from '../../app/mapAppTypes';
+import type {
+  ComplexSelection,
+  MapDisplayMode,
+  MapFocusTarget,
+  MapUiCommand,
+  MapViewport,
+} from '../../app/mapAppTypes';
 import type { MapMarkersResult } from './api/fetchMapMarkers';
 import { KakaoMapSurface, type KakaoMapRuntimeState } from './KakaoMapSurface';
 import { MapOverlayPanels } from './MapOverlayPanels';
@@ -27,6 +33,7 @@ type MapWorkspaceProps = {
   hiddenMarkerCount: number;
   selectedComplex: ComplexSelection | null;
   viewport: MapViewport;
+  uiCommand: MapUiCommand | null;
   onComplexMarkerSelect: (marker: ComplexMapMarker) => void;
   onFilterReset: () => void;
   onRegionMarkerSelect: (marker: RegionMapMarker) => void;
@@ -34,6 +41,7 @@ type MapWorkspaceProps = {
   onViewportChange: (viewport: MapViewport) => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
+  onUiCommandConsumed: (actionId: string) => void;
 };
 
 export function MapWorkspace({
@@ -47,6 +55,7 @@ export function MapWorkspace({
   hiddenMarkerCount,
   selectedComplex,
   viewport,
+  uiCommand,
   onComplexMarkerSelect,
   onFilterReset,
   onRegionMarkerSelect,
@@ -54,12 +63,14 @@ export function MapWorkspace({
   onViewportChange,
   onZoomIn,
   onZoomOut,
+  onUiCommandConsumed,
 }: MapWorkspaceProps) {
   const [mapRuntimeState, setMapRuntimeState] = useState<KakaoMapRuntimeState>('loading');
   const [mapRuntimeError, setMapRuntimeError] = useState<string | null>(null);
   const [mapDisplayMode, setMapDisplayMode] = useState<MapDisplayMode>('roadmap');
   const toolToggleRef = useRef<HTMLButtonElement>(null);
   const mapTools = useMapToolState();
+  const exitActiveTool = mapTools.exitActiveTool;
   const [facilityCategories, setFacilityCategories] = useState<NearbyPlaceCategory[]>([]);
   const [selectedNearbyPlaceId, setSelectedNearbyPlaceId] = useState<string | null>(null);
   const facilitiesEnabled = mapRuntimeState === 'ready'
@@ -80,6 +91,14 @@ export function MapWorkspace({
   useEffect(() => {
     if (mapTools.activeTool === 'roadview') setSelectedNearbyPlaceId(null);
   }, [mapTools.activeTool]);
+
+  useEffect(() => {
+    if (uiCommand == null) return;
+    exitActiveTool();
+    setFacilityCategories([uiCommand.category]);
+    setSelectedNearbyPlaceId(null);
+    onUiCommandConsumed(uiCommand.actionId);
+  }, [exitActiveTool, onUiCommandConsumed, uiCommand]);
 
   return (
     <section

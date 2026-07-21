@@ -196,6 +196,7 @@ def test_unapproved_or_invalid_property_capability_configuration_fails_closed(
         ("retail_location", frozenset()),
         ("rail_station_lookup", frozenset()),
         ("childcare_lookup", frozenset()),
+        ("kakao_place_search", frozenset()),
         (
             "academy_lookup,rail_station_lookup",
             frozenset({"academy_lookup", "rail_station_lookup"}),

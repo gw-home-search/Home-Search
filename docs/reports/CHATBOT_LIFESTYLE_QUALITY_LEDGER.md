@@ -111,3 +111,21 @@ api-contract: compatible
 security-audit: 지적사항 = none — 전화·팩스·홈페이지·대표자·현원은 query/fact/artifact에 없고 SQL은 parameterized·100..2,000m·최대 5건·3초 timeout으로 bounded
 commit: `feat(ai): ground official childcare facts`
 ```
+
+```text
+Slice: S5 — Chatbot → Kakao 지도 action
+요구사항: 병원·어린이집 지도 질문이 검증된 단지 좌표 기반 one-shot action을 만들고 사용자가 누를 때만 기존 Kakao 주변시설 overlay를 연다.
+구현 범위: kakao_place_search typed plan/handler·showNearbyCategory/v1 strict validator·BFF passthrough·IndexedDB optional action·ChatActions·MapApp props command·기존 viewport nearby-place hook 연결
+지적사항: none — 자체 리뷰에서 새 placeCategory가 기존 reference planner fixture를 거부하는 additive 호환 문제와 공식 의료기관으로 오인할 수 있는 문장을 발견해 각각 legacy field-set 허용과 map action claim policy로 수정
+검증 근거 확인: 최초 RED에서 QueryPlan place_category 부재와 action button→map command 미연결 확인; 공식 병원 오인 문장 추가 RED 1건 확인 후 GREEN; 관련 AI 회귀 138 passed; `uv run pytest` 712 passed, coverage 90% 이상; `./gradlew chatBffQualityCheck --no-daemon --stacktrace` Pass; `npm run lint` 0 errors(기존 warning 8); `npm run test` 243 passed; `npm run build` Pass; `npm run test:live-api` Pass; `git diff --check` Pass
+검증 공백: none — 실제 Kakao 장소 결과는 기존 live API smoke로 확인하고 action의 click 전 0회·click 후 category 1회·one-shot은 deterministic test로 분리 검증
+과설계 판정: showNearbyCategory 한 종류와 MapUiCommand 한 종류만 구현; AI Kakao client·전역 event bus·Redux·generic command registry 없음
+코드 스멜: engine.py 1,060줄로 최초 기준 1,334줄 미만; ChatbotPanel.tsx 459줄로 최초 기준 470줄 미만; action renderer와 map command 소비를 별도 component/workspace에 유지
+공통화 결정: 기존 useMapViewport와 useViewportNearbyPlaces lifecycle만 재사용하고 action contract validator와 one-shot props command만 추가
+UI 연결: center 이동·level 4·category 하나로 교체·selected POI 해제; 실행 버튼은 focus를 유지하며 지도 오류가 chat panel을 닫지 않음
+잔여 위험: runtime exact allowlist에는 kakao_place_search를 포함하지 않아 S9 readiness activation 전 사용자에게 노출되지 않음; childcare category 역시 S3 live readiness 전 활성화 금지
+점수: 9.5/10 Pass — deterministic UI·live public API는 검증했으나 capability activation 이후 실제 browser action smoke는 S9에서 재확인 필요
+api-contract: compatible
+security-audit: 지적사항 = none — action은 citation factId와 marker-safe 국내 좌표에 묶이고 외부 문자열은 React text node로만 렌더링하며 Kakao 전화·URL·장소 응답은 chat request/message/IndexedDB archive에 저장하지 않음
+commit: `feat(web): connect chatbot place actions to map`
+```

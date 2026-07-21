@@ -45,7 +45,25 @@ describe('챗봇 질문 client', () => {
         title: '잘못된 artifact',
         items: [{ label: '단지명', value: '<script>alert(1)</script>', factIds: [] }],
       }],
-      uiActions: [],
+      uiActions: [{
+        type: 'showNearbyCategory',
+        version: 1,
+        actionId: 'action-1',
+        label: '지도에서 병원 보기',
+        category: 'HOSPITAL',
+        center: { lat: 37.513, lng: 127.082 },
+        level: 4,
+        factIds: ['property-trade-1'],
+      }, {
+        type: 'showNearbyCategory',
+        version: 1,
+        actionId: 'malformed-action',
+        label: '<script>bad</script>',
+        category: 'CAFE',
+        center: { lat: 37.513, lng: 127.082 },
+        level: 4,
+        factIds: ['property-trade-1'],
+      }],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
 
     const response = await queryChatbot(authenticatedRequest, {
@@ -69,6 +87,16 @@ describe('챗봇 질문 client', () => {
       artifactId: 'artifact-1',
       title: '확인된 단지 정보',
       items: [{ label: '단지명', value: '잠실엘스', factIds: ['property-trade-1'] }],
+    }]);
+    expect(response.actions).toEqual([{
+      type: 'showNearbyCategory',
+      version: 1,
+      actionId: 'action-1',
+      label: '지도에서 병원 보기',
+      category: 'HOSPITAL',
+      center: { lat: 37.513, lng: 127.082 },
+      level: 4,
+      factIds: ['property-trade-1'],
     }]);
   });
 

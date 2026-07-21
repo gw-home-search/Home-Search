@@ -1,3 +1,6 @@
+import type { ChatAction } from './actionContract';
+import type { ChatArtifact } from './artifactContract';
+
 export type ChatCitation = {
   citationId: string;
   sourceId: string;
@@ -30,5 +33,5 @@ export type ChatbotResponse = ChatEvidence & {
   status: 'success' | 'partial_success' | 'failed';
   answer: string;
   artifacts: ChatArtifact[];
+  actions: ChatAction[];
 };
-import type { ChatArtifact } from './artifactContract';

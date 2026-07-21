@@ -289,6 +289,40 @@ def test_planning_accepts_childcare_lookup_with_800_meter_default() -> None:
     ]
 
 
+def test_planning_accepts_kakao_hospital_map_action() -> None:
+    requester = RecordingRequester(
+        _response(
+            _valid_plan(
+                capability="kakao_place_search",
+                schoolLevels=["ELEMENTARY", "MIDDLE", "HIGH"],
+                facilitySubtypes=[],
+                radiusMeters=None,
+                placeCategory="HOSPITAL",
+            )
+        )
+    )
+
+    plan = asyncio.run(
+        _model(requester).plan_query(
+            ChatbotQueryRequest(question="잠실엘스 주변 병원을 지도에 보여줘")
+        )
+    )
+
+    assert plan.capability == "kakao_place_search"
+    assert plan.place_category == "HOSPITAL"
+    body = json.loads(requester.calls[0][2])
+    assert "kakao_place_search" in body["text"]["format"]["schema"]["properties"][
+        "capability"
+    ]["enum"]
+    assert body["text"]["format"]["schema"]["properties"]["placeCategory"] == {
+        "type": ["string", "null"],
+        "enum": ["HOSPITAL", "DAYCARE_KINDERGARTEN", None],
+    }
+    assert "map search runs only after the user clicks" in body["input"][0][
+        "content"
+    ]
+
+
 def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> None:
     requester = RecordingRequester(
         _response(

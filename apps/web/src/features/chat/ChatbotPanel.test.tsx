@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from '../auth/AuthProvider';
 import type { AuthClient } from '../auth/api/authClient';
 import { ChatbotPanel } from './ChatbotPanel';
+import type { ChatAction } from './actionContract';
 import {
   IndexedDbChatConversationStore,
   type ChatConversation,
@@ -82,6 +83,44 @@ describe('챗봇 패널', () => {
     await waitFor(async () => (await store.list()).length === 0);
     expect(await store.list()).toHaveLength(0);
     expect(host.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]')?.disabled).toBe(true);
+  });
+
+  it('지도 action은 버튼을 누를 때 한 번만 전달하고 대화에는 action만 저장한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-action');
+    const onUiAction = vi.fn((_action: ChatAction) => true);
+    const action = {
+      type: 'showNearbyCategory',
+      version: 1,
+      actionId: 'action-request-1-hospital',
+      label: '지도에서 병원 보기',
+      category: 'HOSPITAL',
+      center: { lat: 37.513, lng: 127.082 },
+      level: 4,
+      factIds: ['property-trade-1'],
+    };
+    ({ root, host } = await renderPanel(authenticatedClient([action]), store, onUiAction));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(() => host?.querySelector<HTMLTextAreaElement>('#chatbot-question')?.disabled === false);
+    await change(host.querySelector<HTMLTextAreaElement>('#chatbot-question'), '잠실엘스 주변 병원 지도');
+    await click(host.querySelector<HTMLButtonElement>('button[type="submit"]'));
+    await waitFor(() => (host ? buttonByText(host, '지도에서 병원 보기') : null) != null);
+
+    expect(onUiAction).not.toHaveBeenCalled();
+    const actionButton = host ? buttonByText(host, '지도에서 병원 보기') : null;
+    await click(actionButton);
+    expect(onUiAction).toHaveBeenCalledTimes(1);
+    expect(onUiAction).toHaveBeenCalledWith(action);
+    expect(actionButton?.textContent).toBe('지도에 표시됨');
+    expect(actionButton?.getAttribute('aria-disabled')).toBe('true');
+    await click(actionButton);
+    expect(onUiAction).toHaveBeenCalledTimes(1);
+
+    const saved = await store.list();
+    expect(saved[0]?.messages[1]?.actions).toEqual([action]);
+    expect(JSON.stringify(saved)).not.toContain('placeUrl');
+    expect(JSON.stringify(saved)).not.toContain('phone');
   });
 
   it('대화 목록을 GPT형 내비게이션으로 보여주고 목록에서 대화를 전환한다', async () => {
@@ -191,7 +230,7 @@ function conversation(id: string, title: string, updatedAt: string): ChatConvers
   };
 }
 
-function authenticatedClient(): AuthClient {
+function authenticatedClient(uiActions: unknown[] = []): AuthClient {
   return {
     authenticatedRequest: vi.fn().mockResolvedValue(new Response(JSON.stringify({
       success: true,
@@ -224,7 +263,7 @@ function authenticatedClient(): AuthClient {
         title: '확인된 단지 정보',
         items: [{ label: '단지명', value: '잠실엘스', factIds: ['property-trade-1'] }],
       }],
-      uiActions: [],
+      uiActions,
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })),
     authorizationUrl: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),
@@ -235,13 +274,17 @@ function authenticatedClient(): AuthClient {
   };
 }
 
-async function renderPanel(client: AuthClient, store: IndexedDbChatConversationStore) {
+async function renderPanel(
+  client: AuthClient,
+  store: IndexedDbChatConversationStore,
+  onUiAction?: (action: ChatAction) => boolean,
+) {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
   await act(async () => root.render(
     <AuthProvider client={client}>
-      <ChatbotPanel store={store} />
+      <ChatbotPanel onUiAction={onUiAction} store={store} />
     </AuthProvider>,
   ));
   await act(async () => Promise.resolve());

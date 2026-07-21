@@ -21,6 +21,7 @@ from .capability_handlers import (
     ChildcareFactRepository,
     ChildcareLookupHandler,
     EvidenceFactBuilders,
+    KakaoPlaceSearchHandler,
     PointFacilityFactRepository,
     PriceTrendHandler,
     PropertyFactRepository,
@@ -45,6 +46,7 @@ from .models import (
     SchoolSearchResult,
     SchoolSnapshot,
     TradeRecord,
+    ShowNearbyCategoryAction,
 )
 from .academy_registry import AcademyRegistrySummary
 from .childcare_centers import ChildcareCenter, ChildcareSearchResult
@@ -95,6 +97,8 @@ _GROUNDING_FAILURE_REASONS = frozenset(
         "GROUNDING_RAIL_TEXT_OUTSIDE_OBSERVATION",
         "GROUNDING_CHILDCARE_POLICY_VIOLATION",
         "GROUNDING_CHILDCARE_TEXT_OUTSIDE_OBSERVATION",
+        "GROUNDING_MAP_ACTION_POLICY_VIOLATION",
+        "GROUNDING_ACTION_FACT_UNKNOWN",
     }
 )
 
@@ -159,6 +163,7 @@ class GroundedChatbotEngine:
                 RailStationHandler(rail_station_repository, builders, today),
                 RetailLocationHandler(point_facility_repository, builders),
                 ChildcareLookupHandler(childcare_repository, builders, today),
+                KakaoPlaceSearchHandler(builders),
             )
         )
 
@@ -175,12 +180,13 @@ class GroundedChatbotEngine:
             if plan.capability in self._enabled_capabilities or (
                 plan.capability in self._enabled_reference_capabilities
             ):
-                facts, limitations, readiness = await self._observe(plan)
+                facts, limitations, readiness, action_intents = await self._observe(plan)
             else:
-                facts, limitations, readiness = (
+                facts, limitations, readiness, action_intents = (
                     [],
                     ["해당 질문 기능은 현재 데이터 준비와 검증이 진행 중입니다."],
                     "unavailable",
+                    (),
                 )
             draft = await self._language_model.draft_answer(
                 facts=facts,
@@ -194,7 +200,17 @@ class GroundedChatbotEngine:
                 limitations=limitations,
                 enforce_school_policy=plan.capability == "school_location",
                 enforce_childcare_policy=plan.capability == "childcare_lookup",
+                enforce_map_action_policy=plan.capability == "kakao_place_search",
             )
+            used_fact_ids = {fact.fact_id for fact in used_facts}
+            if any(
+                not set(action.fact_ids).issubset(used_fact_ids)
+                for action in action_intents
+            ):
+                raise GroundingValidationError("GROUNDING_ACTION_FACT_UNKNOWN")
+            actions = [
+                action.to_public_dict(request_id) for action in action_intents
+            ]
             artifacts = FactListPresenter().present(
                 plan=plan,
                 used_facts=used_facts,
@@ -209,6 +225,7 @@ class GroundedChatbotEngine:
                 limitations=limitations,
                 readiness=readiness,
                 artifacts=artifacts,
+                actions=actions,
             ).to_public_dict()
         except ChatbotProviderUnavailable:
             raise
@@ -217,7 +234,12 @@ class GroundedChatbotEngine:
 
     async def _observe(
         self, plan: QueryPlan
-    ) -> tuple[list[EvidenceFact], list[str], str]:
+    ) -> tuple[
+        list[EvidenceFact],
+        list[str],
+        str,
+        tuple[ShowNearbyCategoryAction, ...],
+    ]:
         complexes = await asyncio.to_thread(
             self._repository.find_complexes,
             plan.complex_name,
@@ -229,18 +251,20 @@ class GroundedChatbotEngine:
                 [],
                 ["지정한 이름과 지역 조건으로 단지를 식별하지 못했습니다."],
                 "unavailable",
+                (),
             )
         if len(complexes) > 1:
             return (
                 [_complex_fact(record) for record in complexes],
                 ["동명 단지가 여러 곳이므로 지역이나 주소 조건을 추가해야 합니다."],
                 "partial",
+                (),
             )
         handler = self._catalog.handler_for(plan.capability)
         if handler is None:
             raise GroundingValidationError("GROUNDING_CAPABILITY_UNSUPPORTED")
         result = await handler.observe(plan, complexes[0])
-        return result.facts, result.limitations, result.readiness
+        return result.facts, result.limitations, result.readiness, result.actions
 
 
 def _complex_fact(record: ComplexRecord) -> EvidenceFact:
@@ -756,6 +780,7 @@ def validate_draft(
     limitations: list[str] | None = None,
     enforce_school_policy: bool = False,
     enforce_childcare_policy: bool = False,
+    enforce_map_action_policy: bool = False,
 ) -> list[EvidenceFact]:
     if not draft.sentences:
         raise GroundingValidationError("GROUNDING_ANSWER_EMPTY")
@@ -813,6 +838,8 @@ def validate_draft(
             _validate_rail_sentence(sentence.text, referenced)
         if childcare_facts or enforce_childcare_policy:
             _validate_childcare_sentence(sentence.text, referenced)
+        if enforce_map_action_policy:
+            _validate_map_action_sentence(sentence.text)
         allowed_numbers = _number_tokens(
             claim.value for fact in referenced for claim in fact.claims
         )
@@ -995,6 +1022,18 @@ def _validate_childcare_sentence(
             raise GroundingValidationError(
                 "GROUNDING_CHILDCARE_TEXT_OUTSIDE_OBSERVATION"
             )
+
+
+def _validate_map_action_sentence(text: str) -> None:
+    if re.search(
+        r"(?:공식|공인|인증|검증).{0,20}(?:병원|의료기관|어린이집|유치원)",
+        text,
+    ) or re.search(
+        r"(?:병원|의료기관|어린이집|유치원).{0,30}"
+        r"(?:\d+\s*개|있(?:습니다|다|는)|가까|거리|운영|입소|추천|좋|우수)",
+        text,
+    ):
+        raise GroundingValidationError("GROUNDING_MAP_ACTION_POLICY_VIOLATION")
 
 
 def _number(value: int | float) -> str:

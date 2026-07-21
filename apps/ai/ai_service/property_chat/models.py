@@ -14,12 +14,14 @@ QueryCapability = Literal[
     "academy_lookup",
     "rail_station_lookup",
     "childcare_lookup",
+    "kakao_place_search",
 ]
 PropertyCapability = Literal["complex_identity", "recent_trade_lookup", "price_trend"]
 ReferenceCapability = Literal[
     "school_location", "retail_location", "academy_registry_summary", "academy_lookup",
-    "rail_station_lookup", "childcare_lookup",
+    "rail_station_lookup", "childcare_lookup", "kakao_place_search",
 ]
+NearbyPlaceCategory = Literal["HOSPITAL", "DAYCARE_KINDERGARTEN"]
 SchoolLevel = Literal["ELEMENTARY", "MIDDLE", "HIGH"]
 FacilitySubtype = Literal[
     "LARGE_MART",
@@ -42,6 +44,7 @@ class QueryPlan:
     school_levels: tuple[SchoolLevel, ...] = ("ELEMENTARY", "MIDDLE", "HIGH")
     facility_subtypes: tuple[FacilitySubtype, ...] = ()
     radius_meters: int | None = None
+    place_category: NearbyPlaceCategory | None = None
 
     def __post_init__(self) -> None:
         normalized_name = self.complex_name.strip()
@@ -111,6 +114,47 @@ class QueryPlan:
             raise ValueError("radius_meters cannot be represented safely")
         if self.capability == "price_trend" and (self.start_date is None or self.end_date is None):
             raise ValueError("price_trend requires start_date and end_date")
+        if self.capability == "kakao_place_search":
+            if self.place_category not in {"HOSPITAL", "DAYCARE_KINDERGARTEN"}:
+                raise ValueError("kakao_place_search requires a supported place category")
+        elif self.place_category is not None:
+            raise ValueError("place_category is only supported for kakao_place_search")
+
+
+@dataclass(frozen=True)
+class ShowNearbyCategoryAction:
+    label: str
+    category: NearbyPlaceCategory
+    latitude: float
+    longitude: float
+    fact_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not 1 <= len(self.label.strip()) <= 100
+            or self.category not in {"HOSPITAL", "DAYCARE_KINDERGARTEN"}
+            or not 32 <= self.latitude <= 39.5
+            or not 123 <= self.longitude <= 132
+            or not self.fact_ids
+            or len(self.fact_ids) > 10
+            or len(self.fact_ids) != len(set(self.fact_ids))
+        ):
+            raise ValueError("nearby category action is invalid")
+
+    def to_public_dict(self, request_id: str) -> dict[str, object]:
+        action_id = f"action-{request_id}-{self.category.lower()}"
+        if len(action_id) > 200:
+            raise ValueError("nearby category action id is too long")
+        return {
+            "type": "showNearbyCategory",
+            "version": 1,
+            "actionId": action_id,
+            "label": self.label.strip(),
+            "category": self.category,
+            "center": {"lat": self.latitude, "lng": self.longitude},
+            "level": 4,
+            "factIds": list(self.fact_ids),
+        }
 
 
 @dataclass(frozen=True)

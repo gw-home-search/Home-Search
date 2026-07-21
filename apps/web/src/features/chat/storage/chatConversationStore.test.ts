@@ -50,6 +50,16 @@ describe('IndexedDB 챗봇 대화 저장소', () => {
         title: '확인된 단지 정보',
         items: [{ label: '단지명', value: '잠실엘스', factIds: ['property-trade-1'] }],
       }],
+      actions: [{
+        type: 'showNearbyCategory',
+        version: 1,
+        actionId: 'action-1',
+        label: '지도에서 병원 보기',
+        category: 'HOSPITAL',
+        center: { lat: 37.513, lng: 127.082 },
+        level: 4,
+        factIds: ['property-trade-1'],
+      }],
     };
     await source.save(first);
 

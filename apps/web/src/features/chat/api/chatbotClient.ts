@@ -1,8 +1,12 @@
 import type { ConversationContext } from '../storage/chatConversationStore';
 import { readChatArtifacts } from '../artifactContract';
+import { readChatActions } from '../actionContract';
 import type { ChatbotResponse, ChatCitation, ChatEvidenceSummary } from '../chatTypes';
 
-type ChatbotWireResponse = Omit<ChatbotResponse, 'artifacts'> & { uiArtifacts?: unknown };
+type ChatbotWireResponse = Omit<ChatbotResponse, 'artifacts' | 'actions'> & {
+  uiArtifacts?: unknown;
+  uiActions?: unknown;
+};
 
 export type AuthenticatedChatbotRequest = (
   path: string,
@@ -29,7 +33,11 @@ export async function queryChatbot(
     const body: unknown = await response.json();
     if (!isChatbotResponse(body)) throw new Error();
     const factIds = new Set(body.citations.flatMap((citation) => citation.factIds));
-    return { ...body, artifacts: readChatArtifacts(body.uiArtifacts, factIds) };
+    return {
+      ...body,
+      artifacts: readChatArtifacts(body.uiArtifacts, factIds),
+      actions: readChatActions(body.uiActions, factIds),
+    };
   } catch {
     throw new Error('챗봇 응답을 확인하지 못했습니다.');
   }

@@ -1,5 +1,6 @@
 import type { ChatCitation, ChatEvidence } from '../chatTypes';
 import { readChatArtifacts, type ChatArtifact } from '../artifactContract';
+import { readChatActions, type ChatAction } from '../actionContract';
 
 export type ChatMessageRole = 'user' | 'assistant';
 
@@ -10,6 +11,7 @@ export type ChatMessage = {
   createdAt: string;
   evidence?: ChatEvidence;
   artifacts?: ChatArtifact[];
+  actions?: ChatAction[];
 };
 
 export type ChatConversation = {
@@ -216,6 +218,11 @@ function validateMessage(candidate: unknown): ChatMessage {
     const factIds = new Set(message.evidence?.citations.flatMap((citation) => citation.factIds) ?? []);
     const artifacts = readChatArtifacts(candidate.artifacts, factIds);
     if (artifacts.length > 0) message.artifacts = artifacts;
+  }
+  if (candidate.actions !== undefined) {
+    const factIds = new Set(message.evidence?.citations.flatMap((citation) => citation.factIds) ?? []);
+    const actions = readChatActions(candidate.actions, factIds);
+    if (actions.length > 0) message.actions = actions;
   }
   return message;
 }

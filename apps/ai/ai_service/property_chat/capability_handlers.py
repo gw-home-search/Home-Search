@@ -19,6 +19,7 @@ from .models import (
     SchoolRecord,
     SchoolSearchResult,
     SchoolSnapshot,
+    ShowNearbyCategoryAction,
     TradeRecord,
 )
 from .rail_stations import RailStation, RailStationSearchResult
@@ -128,6 +129,7 @@ class CapabilityResult:
     facts: list[EvidenceFact]
     limitations: list[str]
     readiness: str
+    actions: tuple[ShowNearbyCategoryAction, ...] = ()
 
 
 class CapabilityHandler(Protocol):
@@ -608,6 +610,49 @@ class ChildcareLookupHandler:
                 "지정 반경의 0건 여부를 지역 coverage로 확정할 수 없습니다."
             )
         return CapabilityResult(facts, limitations, readiness)
+
+
+class KakaoPlaceSearchHandler:
+    capability: QueryCapability = "kakao_place_search"
+
+    def __init__(self, builders: EvidenceFactBuilders) -> None:
+        self._builders = builders
+
+    async def observe(
+        self, plan: QueryPlan, complex_record: ComplexRecord
+    ) -> CapabilityResult:
+        if not _has_marker_coordinates(complex_record):
+            return CapabilityResult(
+                [],
+                ["검증된 단지 표시 좌표가 없어 Kakao 지도 검색을 열 수 없습니다."],
+                "unavailable",
+            )
+        assert plan.place_category is not None
+        assert complex_record.latitude is not None
+        assert complex_record.longitude is not None
+        fact = self._builders.complex_fact(complex_record)
+        label = (
+            "지도에서 병원 보기"
+            if plan.place_category == "HOSPITAL"
+            else "지도에서 어린이집 보기"
+        )
+        return CapabilityResult(
+            [fact],
+            [
+                "Kakao 장소 검색은 버튼을 누른 뒤 실행되며 공식 시설 현황 근거가 아닙니다.",
+                "Kakao 검색 결과는 chatbot 답변이나 대화 archive에 저장하지 않습니다.",
+            ],
+            "supported",
+            (
+                ShowNearbyCategoryAction(
+                    label=label,
+                    category=plan.place_category,
+                    latitude=complex_record.latitude,
+                    longitude=complex_record.longitude,
+                    fact_ids=(fact.fact_id,),
+                ),
+            ),
+        )
 
 
 def _has_marker_coordinates(record: ComplexRecord) -> bool:

@@ -198,6 +198,7 @@ class AnswerDocument:
     limitations: tuple[str, ...]
     readiness: str
     artifacts: tuple[dict[str, object], ...] = ()
+    actions: tuple[dict[str, object], ...] = ()
 
     @classmethod
     def from_grounded_result(
@@ -211,6 +212,7 @@ class AnswerDocument:
         limitations: list[str],
         readiness: str,
         artifacts: list[dict[str, object]],
+        actions: list[dict[str, object]],
     ) -> AnswerDocument:
         return cls(
             request=request,
@@ -224,6 +226,7 @@ class AnswerDocument:
             limitations=tuple(limitations),
             readiness=readiness,
             artifacts=tuple(artifacts[:8]),
+            actions=tuple(actions[:4]),
         )
 
     def to_public_dict(self) -> dict[str, object]:
@@ -254,7 +257,7 @@ class AnswerDocument:
             "resolvedQuestion": self.request.question,
             "conversationResolution": None,
             "conversationMemoryPatch": None,
-            "uiActions": [],
+            "uiActions": list(self.actions),
             "uiArtifacts": list(self.artifacts),
             "uiSummary": None,
             "requestId": self.request_id,

@@ -3,6 +3,7 @@ import { type ChangeEvent, type FormEvent, useEffect, useLayoutEffect, useMemo, 
 import { useAuth } from '../auth/AuthProvider';
 import { queryChatbot } from './api/chatbotClient';
 import { ChatMessageBody } from './ChatMessageBody';
+import type { ChatAction } from './actionContract';
 import type { ChatEvidence } from './chatTypes';
 import {
   buildConversationContext,
@@ -14,13 +15,14 @@ import {
 
 type ChatbotPanelProps = {
   onOpenChange?: (isOpen: boolean) => void;
+  onUiAction?: (action: ChatAction) => boolean;
   store?: IndexedDbChatConversationStore;
 };
 
 const QUESTION_MIN_HEIGHT_PX = 24;
 const QUESTION_MAX_HEIGHT_PX = 96;
 
-export function ChatbotPanel({ onOpenChange, store }: ChatbotPanelProps) {
+export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelProps) {
   const auth = useAuth();
   const storeRef = useRef(store);
   const launcherRef = useRef<HTMLButtonElement>(null);
@@ -33,6 +35,9 @@ export function ChatbotPanel({ onOpenChange, store }: ChatbotPanelProps) {
   const [question, setQuestion] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'sending'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [executedActionIds, setExecutedActionIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const selected = useMemo(
     () => conversations.find(({ id }) => id === selectedId) ?? null,
     [conversations, selectedId],
@@ -199,6 +204,7 @@ export function ChatbotPanel({ onOpenChange, store }: ChatbotPanelProps) {
           createdAt: answeredAt,
           evidence,
           artifacts: response.artifacts,
+          actions: response.actions,
         }],
       });
     } catch (requestError) {
@@ -230,6 +236,12 @@ export function ChatbotPanel({ onOpenChange, store }: ChatbotPanelProps) {
   function selectExampleQuestion(example: string) {
     setQuestion(example);
     questionRef.current?.focus();
+  }
+
+  function executeUiAction(action: ChatAction) {
+    if (executedActionIds.has(action.actionId) || onUiAction == null) return;
+    if (!onUiAction(action)) return;
+    setExecutedActionIds((current) => new Set(current).add(action.actionId));
   }
 
   return (
@@ -326,7 +338,11 @@ export function ChatbotPanel({ onOpenChange, store }: ChatbotPanelProps) {
                   </span>
                   <div className="chatbot-message-content">
                     <strong>{message.role === 'user' ? '나' : '홈서치 AI'}</strong>
-                    <ChatMessageBody message={message} />
+                    <ChatMessageBody
+                      executedActionIds={executedActionIds}
+                      message={message}
+                      onUiAction={executeUiAction}
+                    />
                   </div>
                 </article>
               )) : (

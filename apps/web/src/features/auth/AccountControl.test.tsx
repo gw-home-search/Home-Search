@@ -1,5 +1,6 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AuthClient } from './api/authClient';
@@ -39,6 +40,8 @@ describe('AccountControl 사용자 메뉴', () => {
 
     await act(async () => chip?.click());
     expect(host.querySelector('[role="menu"]')?.textContent).toContain('Google 계정');
+    expect(Array.from(host.querySelectorAll<HTMLAnchorElement>('a[role="menuitem"]')).map((link) => link.getAttribute('href')))
+      .toEqual(['/my', '/my/favorites']);
   });
 
   it('menu는 Escape와 outside pointer로 닫고 Escape 후 chip focus를 복원한다', async () => {
@@ -61,7 +64,7 @@ describe('AccountControl 사용자 메뉴', () => {
     const successClient = authenticatedClient();
     ({ root, host } = await renderAccount(successClient));
     await act(async () => host!.querySelector<HTMLButtonElement>('.account-chip')?.click());
-    await act(async () => host!.querySelector<HTMLButtonElement>('[role="menuitem"]')?.click());
+    await act(async () => host!.querySelector<HTMLButtonElement>('button[role="menuitem"]')?.click());
     expect(successClient.logout).toHaveBeenCalledTimes(1);
     expect(host.querySelector('.account-chip')).toBeNull();
     expect(host.textContent).toContain('로그인');
@@ -71,7 +74,7 @@ describe('AccountControl 사용자 메뉴', () => {
     const failureClient = authenticatedClient(true);
     ({ root, host } = await renderAccount(failureClient));
     await act(async () => host!.querySelector<HTMLButtonElement>('.account-chip')?.click());
-    await act(async () => host!.querySelector<HTMLButtonElement>('[role="menuitem"]')?.click());
+    await act(async () => host!.querySelector<HTMLButtonElement>('button[role="menuitem"]')?.click());
     expect(host.querySelector('.account-chip')).toBeNull();
     expect(host.textContent).toContain('로그인');
     expect(host.textContent).toContain('로그아웃하지 못했습니다. 다시 시도해주세요.');
@@ -109,9 +112,11 @@ async function renderAccount(client: AuthClient): Promise<{ root: Root; host: HT
   document.body.append(host);
   const root = createRoot(host);
   await act(async () => root.render(
-    <AuthProvider client={client} navigate={vi.fn()}>
-      <AccountControl />
-    </AuthProvider>,
+    <MemoryRouter>
+      <AuthProvider client={client} navigate={vi.fn()}>
+        <AccountControl />
+      </AuthProvider>
+    </MemoryRouter>,
   ));
   await act(async () => Promise.resolve());
   return { root, host };

@@ -4,12 +4,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthProvider } from '../../auth/AuthProvider';
 import type { AuthClient } from '../../auth/api/authClient';
+import { resetFavoriteStore } from '../favoriteStore';
 import { useFavoriteComplex } from './useFavoriteComplex';
 
 describe('useFavoriteComplex 즐겨찾기 상태', () => {
   let root: Root | null = null;
   let host: HTMLDivElement | null = null;
-  afterEach(() => { if (root) act(() => root?.unmount()); host?.remove(); root = null; host = null; });
+  afterEach(() => { if (root) act(() => root?.unmount()); host?.remove(); root = null; host = null; resetFavoriteStore(); });
 
   it('anonymous에서는 network 요청 없이 로그인용 상태를 제공한다', async () => {
     const request = vi.fn<AuthClient['authenticatedRequest']>();
@@ -51,6 +52,31 @@ describe('useFavoriteComplex 즐겨찾기 상태', () => {
 
     await act(async () => mutation.resolve(new Response(null, { status: 503 })));
     expect(host.dataset.phase).toBe('error');
+    expect(host.dataset.favorite).toBe('false');
+  });
+
+  it('다른 사용자로 바뀌면 이전 사용자의 cached favorite를 사용하지 않는다', async () => {
+    const firstRequest = vi.fn<AuthClient['authenticatedRequest']>()
+      .mockResolvedValue(jsonResponse({ complexId: 501, favorite: true, savedAt: '2026-07-13T06:00:00Z' }));
+    const firstClient = authClient({ kind: 'authenticated', currentUser: {
+      userId: 77, provider: 'google', displayName: '첫 사용자', profileImage: null,
+    } }, firstRequest);
+    ({ root, host } = await render(firstClient, 501));
+    expect(host.dataset.favorite).toBe('true');
+
+    act(() => root?.unmount());
+    host.remove();
+    root = null;
+    host = null;
+
+    const secondRequest = vi.fn<AuthClient['authenticatedRequest']>()
+      .mockResolvedValue(jsonResponse({ complexId: 501, favorite: false, savedAt: null }));
+    const secondClient = authClient({ kind: 'authenticated', currentUser: {
+      userId: 88, provider: 'google', displayName: '둘째 사용자', profileImage: null,
+    } }, secondRequest);
+    ({ root, host } = await render(secondClient, 501));
+
+    expect(secondRequest).toHaveBeenCalledTimes(1);
     expect(host.dataset.favorite).toBe('false');
   });
 });

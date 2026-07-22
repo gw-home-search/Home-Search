@@ -104,7 +104,7 @@ export function createAuthClient(options: AuthClientOptions = {}): AuthClient {
   return {
     async authenticatedRequest(path, init = {}, target = 'user') {
       const chatbotPath = /^\/api\/v1\/chatbot\/query(?:\/stream)?$/;
-      const userPath = /^\/api\/v1\/(?:users(?:\/|$)|favorites(?:\/|$))/;
+      const userPath = /^\/api\/v1\/(?:users(?:[/?]|$)|favorites(?:[/?]|$))/;
       if (path.startsWith('//') || (target === 'public' ? !chatbotPath.test(path) : !userPath.test(path))) {
         throw new Error(`authenticatedRequest requires a relative ${target === 'public' ? 'chatbot' : 'user'} API path`);
       }

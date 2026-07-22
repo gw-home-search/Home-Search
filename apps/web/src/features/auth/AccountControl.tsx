@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { ChevronDownIcon } from '../../shared/icons';
 import type { CurrentUser, OAuthProvider } from './authTypes';
@@ -12,6 +13,7 @@ const PROVIDER_LABELS: Record<OAuthProvider, string> = {
 
 export function AccountControl() {
   const auth = useAuth();
+  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const controlRef = useRef<HTMLDivElement>(null);
   const chipRef = useRef<HTMLButtonElement>(null);
@@ -77,9 +79,15 @@ export function AccountControl() {
                 <strong>{auth.currentUser.displayName}</strong>
                 <span>{PROVIDER_LABELS[auth.currentUser.provider]} 계정</span>
               </div>
+              <Link onClick={() => setIsMenuOpen(false)} role="menuitem" to="/my">
+                마이페이지
+              </Link>
+              <Link onClick={() => setIsMenuOpen(false)} role="menuitem" to="/my/favorites">
+                관심 단지
+              </Link>
               <button
                 disabled={auth.isLoggingOut}
-                onClick={() => void auth.logout()}
+                onClick={() => void auth.logout().then(() => navigate('/'))}
                 role="menuitem"
                 type="button"
               >

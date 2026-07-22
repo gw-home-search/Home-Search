@@ -3,9 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../auth/AuthProvider';
 import { createFavoriteClient, FavoriteClientError } from '../api/favoriteClient';
 import type { FavoriteState } from '../favoriteTypes';
-
-const favoriteCache = new Map<number, boolean>();
-let favoriteCacheOwner: number | null = null;
+import { getCachedFavorite, setCachedFavorite, syncFavoriteOwner } from '../favoriteStore';
 
 export function useFavoriteComplex(complexId: number | null | undefined) {
   const { authenticatedRequest, currentUser, openDialog, status } = useAuth();
@@ -22,14 +20,10 @@ export function useFavoriteComplex(complexId: number | null | undefined) {
 
   useEffect(() => {
     if (status !== 'authenticated' || currentUser == null) {
-      favoriteCache.clear();
-      favoriteCacheOwner = null;
+      syncFavoriteOwner(null);
       return;
     }
-    if (favoriteCacheOwner !== currentUser.userId) {
-      favoriteCache.clear();
-      favoriteCacheOwner = currentUser.userId;
-    }
+    syncFavoriteOwner(currentUser.userId);
   }, [currentUser, status]);
 
   useEffect(() => {
@@ -57,7 +51,7 @@ export function useFavoriteComplex(complexId: number | null | undefined) {
       setFavoriteState({ phase: 'auth-checking', favorite: null });
       return;
     }
-    const cached = favoriteCache.get(complexId);
+    const cached = getCachedFavorite(complexId);
     if (cached != null) {
       setFavoriteState({ phase: 'ready', favorite: cached });
       return;
@@ -69,7 +63,7 @@ export function useFavoriteComplex(complexId: number | null | undefined) {
     client.get(complexId, controller.signal)
       .then((result) => {
         if (controller.signal.aborted || requestSequence.current !== nextSequence || selectionRef.current !== complexId) return;
-        favoriteCache.set(complexId, result.favorite);
+        setCachedFavorite(complexId, result.favorite);
         setFavoriteState({ phase: 'ready', favorite: result.favorite });
       })
       .catch((error: unknown) => {
@@ -103,7 +97,7 @@ export function useFavoriteComplex(complexId: number | null | undefined) {
       else await client.remove(selectedId, controller.signal);
       if (controller.signal.aborted || requestSequence.current !== sequence || selectionRef.current !== selectedId) return;
       const nextFavorite = action === 'save';
-      favoriteCache.set(selectedId, nextFavorite);
+      setCachedFavorite(selectedId, nextFavorite);
       setFavoriteState({ phase: 'ready', favorite: nextFavorite });
       setLiveMessage(nextFavorite ? '관심 단지에 저장했습니다.' : '관심 단지에서 해제했습니다.');
     } catch (error) {

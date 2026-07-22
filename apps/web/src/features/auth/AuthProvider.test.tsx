@@ -1,6 +1,7 @@
 import { StrictMode, act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 
 import { AccountControl } from './AccountControl';
 import { AuthProvider, useAuth } from './AuthProvider';
@@ -56,6 +57,19 @@ describe('AuthProvider와 AccountControl', () => {
     expect(window.location.pathname).toBe('/');
     expect(host.textContent).toContain('홍길동');
     expect(host.querySelector('[aria-live="polite"]')?.textContent).toContain('로그인되었습니다.');
+  });
+
+  it('/auth/success는 허용된 마이페이지 복귀 경로만 복원한다', async () => {
+    window.history.replaceState({}, '', '/auth/success');
+    window.sessionStorage.setItem('home-search:return-to', '/my/favorites');
+    const client = authClient({
+      kind: 'authenticated',
+      currentUser: { userId: 17, provider: 'google', displayName: '홍길동', profileImage: null },
+    });
+    ({ root, host } = await renderAuth(client));
+
+    expect(window.location.pathname).toBe('/my/favorites');
+    expect(window.sessionStorage.getItem('home-search:return-to')).toBeNull();
   });
 
   it('authenticated request 401은 memory session을 지우고 만료 dialog를 연다', async () => {
@@ -124,9 +138,11 @@ async function renderAuth(client: AuthClient, strict = false): Promise<{ root: R
   document.body.append(host);
   const root = createRoot(host);
   const content = (
-    <AuthProvider client={client} navigate={vi.fn()}>
-      <AccountControl />
-    </AuthProvider>
+    <MemoryRouter>
+      <AuthProvider client={client} navigate={vi.fn()}>
+        <AccountControl />
+      </AuthProvider>
+    </MemoryRouter>
   );
   await act(async () => root.render(strict ? <StrictMode>{content}</StrictMode> : content));
   await act(async () => Promise.resolve());

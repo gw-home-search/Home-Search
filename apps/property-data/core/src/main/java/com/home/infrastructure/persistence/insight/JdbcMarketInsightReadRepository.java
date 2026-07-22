@@ -38,7 +38,8 @@ public class JdbcMarketInsightReadRepository implements MarketInsightReadReposit
                     WHERE period_type = 'DAILY'
                       AND build_status = 'PUBLISHED'
                       AND scope_type = :scopeType
-                      AND ((:regionCode IS NULL AND region_code IS NULL) OR region_code = :regionCode)
+                      AND ((CAST(:regionCode AS varchar) IS NULL AND region_code IS NULL)
+                           OR region_code = :regionCode)
                       AND period_start <= :onOrBefore
                     ORDER BY period_start DESC, generated_at DESC
                     LIMIT 1

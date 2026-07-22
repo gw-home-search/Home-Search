@@ -77,8 +77,8 @@ class BuildingProfileCollectTasklet implements Tasklet {
         return switch (value) {
             case "validation-sample" -> BuildingProfileTargetScope.VALIDATION_SAMPLE;
             case "nationwide-staging" -> BuildingProfileTargetScope.NATIONWIDE_STAGING;
-            default -> throw new IllegalArgumentException(
-                    "targetScope must be validation-sample or nationwide-staging");
+            default ->
+                throw new IllegalArgumentException("targetScope must be validation-sample or nationwide-staging");
         };
     }
 

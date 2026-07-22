@@ -52,8 +52,10 @@ public class JdbcBuildingProfileSampleRepository implements BuildingProfileSampl
                     """)
                 .param("collection", command.collectionId())
                 .query((rs, rowNum) -> new Campaign(
-                        rs.getString("mode"), rs.getString("strategy"),
-                        rs.getString("target_scope"), rs.getString("selection_seed"),
+                        rs.getString("mode"),
+                        rs.getString("strategy"),
+                        rs.getString("target_scope"),
+                        rs.getString("selection_seed"),
                         rs.getObject("sample_size", Integer.class)))
                 .optional()
                 .orElse(null);

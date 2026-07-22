@@ -150,8 +150,7 @@ class BuildingRegisterProfileAnalysisServiceTest {
     void recordsSourceMissingMatchesWhenPnuHasNoProfileRecords(@TempDir Path output) {
         FakeRepository repository = new FakeRepository();
         repository.complexes = List.of(
-                new BuildingProfileAnalysisComplex(501, PNU, 2),
-                new BuildingProfileAnalysisComplex(502, PNU, 2));
+                new BuildingProfileAnalysisComplex(501, PNU, 2), new BuildingProfileAnalysisComplex(502, PNU, 2));
         repository.weights = Map.of(PNU, 1.0d);
 
         BuildingProfileAnalysisSummary summary = new BuildingProfileAnalysisService(repository)
@@ -159,14 +158,11 @@ class BuildingRegisterProfileAnalysisServiceTest {
                         UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "PROFILE_V1", output));
 
         assertThat(summary.complexMatchCount()).isEqualTo(2);
-        assertThat(repository.matches)
-                .hasSize(2)
-                .allSatisfy(match -> {
-                    assertThat(match.status())
-                            .isEqualTo(com.home.domain.complex.buildingprofile.BuildingProfileAssignmentStatus
-                                    .SOURCE_MISSING);
-                    assertThat(match.projectable()).isFalse();
-                });
+        assertThat(repository.matches).hasSize(2).allSatisfy(match -> {
+            assertThat(match.status())
+                    .isEqualTo(com.home.domain.complex.buildingprofile.BuildingProfileAssignmentStatus.SOURCE_MISSING);
+            assertThat(match.projectable()).isFalse();
+        });
     }
 
     @Test
@@ -205,15 +201,13 @@ class BuildingRegisterProfileAnalysisServiceTest {
                 .analyze(new BuildingProfileAnalysisCommand(
                         UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "PROFILE_V1", output));
 
-        assertThat(weightedQuality(repository, BuildingProfileField.PLAT_AREA)
-                        .projectableComplexReadiness())
+        assertThat(weightedQuality(repository, BuildingProfileField.PLAT_AREA).projectableComplexReadiness())
                 .isEqualTo(0.1d);
         assertThat(weightedQuality(repository, BuildingProfileField.ARCH_AREA).buildingCoverage())
                 .isEqualTo(0.1d);
     }
 
-    private BuildingProfileFieldQualityEvidence weightedQuality(
-            FakeRepository repository, BuildingProfileField field) {
+    private BuildingProfileFieldQualityEvidence weightedQuality(FakeRepository repository, BuildingProfileField field) {
         return repository.quality.stream()
                 .filter(value -> value.field() == field)
                 .filter(value -> value.stratum().equals("WEIGHTED_NATIONAL"))

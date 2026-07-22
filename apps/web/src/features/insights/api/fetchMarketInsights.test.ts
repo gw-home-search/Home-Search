@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { resolveApiUrl } from '../../map/api/resolveApiUrl';
 import { fetchMarketInsights } from './fetchMarketInsights';
 
 describe('fetchMarketInsights', () => {
@@ -26,7 +27,7 @@ describe('fetchMarketInsights', () => {
     const result = await fetchMarketInsights({ date: '2026-07-22' });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:8080/api/v1/insights/trades/latest?scope=NATIONWIDE&date=2026-07-22&limit=10',
+      resolveApiUrl('/api/v1/insights/trades/latest?scope=NATIONWIDE&date=2026-07-22&limit=10'),
       expect.objectContaining({ method: 'GET' }),
     );
     expect(result.dataStatus).toBe('UNAVAILABLE');

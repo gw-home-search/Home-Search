@@ -511,9 +511,8 @@ public class BuildingProfileAnalysisService {
         double totalBuildingWeight = eligible.stream()
                 .mapToDouble(record -> weights.getOrDefault(record.pnu(), 0.0d))
                 .sum();
-        double buildingCoverage = field.scope() == BuildingProfileScope.BUILDING
-                ? rate(validBuildingWeight, totalBuildingWeight)
-                : 0;
+        double buildingCoverage =
+                field.scope() == BuildingProfileScope.BUILDING ? rate(validBuildingWeight, totalBuildingWeight) : 0;
         var metrics = new BuildingProfileQualityMetrics(
                 field.scope(),
                 sourceCoverage,

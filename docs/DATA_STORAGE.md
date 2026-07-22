@@ -608,6 +608,11 @@ snapshots without changing raw-first ingest or normalized trade identity.
 - `market_insight_trade_item` stores at most 50 ranked items per metric and
   keeps internal trade/comparison/complex relations plus exact `excl_area`.
 
+Property migrations V15-V17 add this storage and grant
+`home_search_property_runtime` only `SELECT`, `INSERT`, and `UPDATE` on the
+four insight evidence/snapshot tables. Runtime `DELETE` remains denied; data
+retention and cleanup stay under an explicit maintenance path.
+
 Nationwide publication requires a `DAILY`, `NATIONWIDE` execution with every
 planned work unit terminal and `COMPLETED`. A complete execution with zero new
 normalized trades still produces a fresh empty snapshot. Rejected builds do

@@ -166,6 +166,31 @@ class JdbcMarketInsightRepositoryIntegrationTest extends JdbcPostgresTestSupport
                 .isEmpty();
     }
 
+    @Test
+    @DisplayName("property runtime은 insight evidence를 읽고 생성·갱신하되 삭제할 수 없다")
+    void propertyRuntimeOwnsMinimumInsightPrivileges() {
+        assertThat(hasTablePrivilege("rtms_collection_execution", "SELECT,INSERT,UPDATE"))
+                .isTrue();
+        assertThat(hasTablePrivilege("rtms_collection_work_unit", "SELECT,INSERT,UPDATE"))
+                .isTrue();
+        assertThat(hasTablePrivilege("market_insight_snapshot", "SELECT,INSERT,UPDATE"))
+                .isTrue();
+        assertThat(hasTablePrivilege("market_insight_trade_item", "SELECT,INSERT,UPDATE"))
+                .isTrue();
+        assertThat(hasTablePrivilege("market_insight_snapshot", "DELETE")).isFalse();
+        assertThat(hasTablePrivilege("market_insight_trade_item", "DELETE")).isFalse();
+    }
+
+    private boolean hasTablePrivilege(String table, String privileges) {
+        return jdbcClient
+                .sql("SELECT has_table_privilege(:role, :table, :privileges)")
+                .param("role", PROPERTY_RUNTIME_ROLE)
+                .param("table", table)
+                .param("privileges", privileges)
+                .query(Boolean.class)
+                .single();
+    }
+
     private static OffsetDateTime offset(String instant) {
         return OffsetDateTime.ofInstant(Instant.parse(instant), ZoneOffset.UTC);
     }

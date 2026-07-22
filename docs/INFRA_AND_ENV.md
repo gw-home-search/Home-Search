@@ -461,11 +461,14 @@ wrapper는 expected database와 최고 pending version을 확인하고 `latest`,
 Property-data deployment의 기본 경로는 fresh-only다.
 
 ```bash
-./ops/property-deployment-preflight.sh before 12
-./ops/property-flyway.sh migrate 12
-./ops/property-deployment-preflight.sh after 12
+./ops/property-deployment-preflight.sh before 17
+./ops/property-flyway.sh migrate 17
+./ops/property-deployment-preflight.sh after 17
 ./ops/property-flyway.sh validate
 ```
+
+V17 grants `home_search_property_runtime` the minimum insight-table privileges:
+`SELECT`, `INSERT`, and `UPDATE`. It intentionally does not grant `DELETE`.
 
 ### Completed local legacy V9 activation
 

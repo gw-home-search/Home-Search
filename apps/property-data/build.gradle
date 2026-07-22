@@ -258,7 +258,7 @@ tasks.register('verifyApiMigrationCatalog') {
             throw new GradleException("Duplicate API migration versions: ${duplicates.keySet().sort()}")
         }
         def versions = byVersion.keySet().findAll { it != null }.sort()
-        def expectedVersions = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        def expectedVersions = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
         if (versions != expectedVersions) {
             throw new GradleException("API migration versions must be exact: ${expectedVersions}; actual=${versions}")
         }
@@ -277,7 +277,8 @@ tasks.register('verifyApiMigrationCatalog') {
             'V13__add_building_register_profile_discovery.sql': 'fbf6681fe942ac5023cf450ebf7c12bce45dc9d92fe3fb6fd24b7cbb5172fb80',
             'V14__allow_nationwide_building_register_profile_staging.sql': '4c50730addb3576cedfc0c045215b48339a041395c49809b3e58599a606a4817',
             'V15__add_rtms_collection_execution_evidence.sql': '2baf11566f83941e2b234b34b0f5450f48ea8d9c0dbed9f1017ace07d523c421',
-            'V16__add_market_insight_snapshots.sql': '82152ecee8aa51d022735419fa757d56235362299518854455c0d548bc79837d'
+            'V16__add_market_insight_snapshots.sql': '82152ecee8aa51d022735419fa757d56235362299518854455c0d548bc79837d',
+            'V17__grant_market_insight_runtime_privileges.sql': 'bc49e9edda0ea8e2381478b118b9462cd7627a8d0b98009bfb5271438d8c5a9e'
         ].each { fileName, expected ->
             def file = files.find { it.name == fileName }
             if (file == null || sha256(file) != expected) {

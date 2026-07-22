@@ -11,12 +11,10 @@ export function groupConversationsByDate(
   const grouped = new Map<ChatHistoryDateGroup, ChatConversation[]>(
     CHAT_HISTORY_DATE_GROUPS.map((group) => [group, []]),
   );
-  const today = startOfLocalDay(now);
+  const today = localDateSerial(now);
   for (const conversation of conversations) {
     const updatedAt = new Date(conversation.updatedAt);
-    const ageInDays = Math.floor(
-      (today.getTime() - startOfLocalDay(updatedAt).getTime()) / 86_400_000,
-    );
+    const ageInDays = Math.floor((today - localDateSerial(updatedAt)) / 86_400_000);
     const group: ChatHistoryDateGroup = ageInDays <= 0
       ? '오늘'
       : ageInDays === 1
@@ -27,6 +25,6 @@ export function groupConversationsByDate(
   return grouped;
 }
 
-function startOfLocalDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+function localDateSerial(date: Date): number {
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
 }

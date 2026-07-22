@@ -61,7 +61,7 @@ describe('챗봇 대화 기록', () => {
 
     await keyDown(host.querySelector<HTMLElement>('.chatbot-history-popover'), 'Escape');
     expect(onClose).toHaveBeenCalledTimes(1);
-    await act(async () => new Promise((resolve) => requestAnimationFrame(resolve)));
+    await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
     expect(document.activeElement).toBe(trigger);
     trigger.remove();
   });
@@ -111,7 +111,7 @@ async function keyDown(element: HTMLElement | null, key: string) {
     cancelable: true,
     key,
   })));
-  await act(async () => new Promise((resolve) => requestAnimationFrame(resolve)));
+  await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
 }
 
 function buttonByText(container: HTMLElement | null, text: string): HTMLButtonElement | null {

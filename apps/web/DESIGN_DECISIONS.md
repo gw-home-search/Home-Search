@@ -138,12 +138,20 @@ the conversation uses up to `62dvh` while the filter and at least 180px of map
 remain visible above it. Kakao map relayout preserves its center
 and refreshes viewport-bound data after either split changes size.
 
-Conversation history stays in browser IndexedDB. The main drawer never shows a
-persistent conversation sidebar or a second brand block. The flat toolbar uses
-an asymmetric Home Search composition: the AI data mark, title, and small
-`Beta` stay grouped on the left, while a labeled new-conversation action, history,
-and close controls stay on the right. History opens a 320px `내 대화` popover for selection,
-import, export, and deletion. The empty conversation uses a left-anchored 440px
+Conversation history stays in browser IndexedDB, but a blank conversation is a
+memory-only draft. Opening the drawer or repeatedly selecting `새 대화` does
+not create stored records; the first submitted question creates the record and
+its title. A legacy record with no messages is removed on the next load, while
+every conversation containing a message is retained. The main drawer never
+shows a persistent conversation sidebar or a second brand block. The flat
+toolbar uses an asymmetric Home Search composition: the AI data mark, title,
+and small `Beta` stay grouped on the left, while a labeled new-conversation
+action, history, and close controls stay on the right. History opens a 320px
+`내 대화` popover grouped by `오늘`, `어제`, `최근 7일`, and `이전`.
+Selection is a quiet muted row; deletion lives in each row's `⋯` menu and uses
+a recoverability warning. Import, export, and delete-all live in the popover
+header menu rather than in a permanently visible tool footer. The empty
+conversation uses a left-anchored 440px
 content column instead of centering the narrower content block. Its greeting is
 15px, the task heading is 23px, and guidance is 15/24px. Mobile keeps the same
 left edge while stepping the task heading to 21px and guidance to 14/22px. Three
@@ -163,16 +171,32 @@ The app-bar AI action and drawer toolbar actions keep transparent surfaces in
 hover, pressed, and expanded states; only icon/text color changes. Keyboard
 `focus-visible` outlines remain, so removing the gray press box does not remove
 the accessible focus signal.
-The composer starts as a 58px pill and grows with the question up to four
+User questions are right-aligned muted bubbles without a border, shadow,
+avatar, or visible speaker name. Assistant answers occupy the full left column
+as ordinary content without a bubble, avatar, or repeated `홈서치 AI` label.
+Whitespace separates turns; horizontal dividers do not. Structured answers
+keep headings, tables, and interpretation order, but scope notices, fact lists,
+limitations, and follow-ups use flat text and data rows rather than nested
+tinted cards. Recommendation results alone keep a neutral 1px outlined surface
+to distinguish separate complexes.
+
+The composer starts as a 56px white pill and grows with the question up to four
 24px lines. A single-line textarea is optically centered against the 40px send
 action; as the question grows, only the circular send action stays aligned to
 the lower edge. Longer questions scroll inside the textarea so the send action
-and map context stay visible. The action uses a heavier upward arrow, an inset
-focus line, and 16px input text. The
+and map context stay visible. Enter submits once, Shift+Enter inserts a newline,
+and IME composition Enter never submits. The action uses a heavier upward
+arrow, a brand focus ring, and 16px input text. While a response is pending,
+the thread shows the flat `데이터를 확인하고 있어요` status and the send
+action exposes the accessible name `답변 생성 중`. The
 small italic `Beta` wordmark uses Inter/SF Pro Display without a badge box or
-all-caps treatment. Answer evidence stays
-collapsed until requested. No chatbot UI decision changes the JSON/SSE
-contract or adds server-side conversation persistence.
+all-caps treatment. Evidence metadata (`requestId`, data date, counts, and
+grade) remains stored for validation and archive compatibility but is not
+rendered as a separate evidence panel. With no citations, no source UI is
+rendered. With actual citations, unique source names appear at the end of the
+answer; four or more sources use a compact `출처 전체 보기` menu. No chatbot
+UI decision changes the JSON/SSE contract or adds server-side conversation
+persistence.
 
 ## Exploration
 

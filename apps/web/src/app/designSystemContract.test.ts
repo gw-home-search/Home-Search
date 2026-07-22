@@ -227,10 +227,10 @@ describe('공개 지도 디자인 시스템 계약', () => {
     expect(chat).toContain('.chatbot-example-copy { color: var(--hs-map-color-ink); font-size: 14px;');
     expect(chat).toContain('.chatbot-composer textarea {');
     expect(chat).toContain('font-size: 16px;');
-    expect(chat).toContain('min-height: 58px;');
+    expect(chat).toContain('min-height: 56px;');
     expect(chat).toContain('align-items: center;');
     expect(chat).toContain('min-height: 24px; max-height: 96px; overflow-y: hidden;');
-    expect(chat).toContain('border-radius: 30px;');
+    expect(chat).toContain('border-radius: 28px;');
     expect(chat).toContain('width: 40px;');
     expect(chat).toContain('align-self: end;');
     expect(chat).toContain('border-radius: 50%;');

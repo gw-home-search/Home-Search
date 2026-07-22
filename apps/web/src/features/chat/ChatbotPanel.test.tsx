@@ -25,6 +25,7 @@ describe('챗봇 패널', () => {
   it('Enter로 질문을 보내고 Shift+Enter와 한글 조합 Enter는 전송하지 않는다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-enter');
     const client = authenticatedClient();
+    const authenticatedRequest = vi.mocked(client.authenticatedRequest);
     ({ root, host } = await renderPanel(client, store));
 
     await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
@@ -38,7 +39,7 @@ describe('챗봇 패널', () => {
     expect(client.authenticatedRequest).not.toHaveBeenCalled();
 
     await keyDown(textarea, { key: 'Enter' });
-    await waitFor(() => client.authenticatedRequest.mock.calls.length === 1);
+    await waitFor(() => authenticatedRequest.mock.calls.length === 1);
     expect(client.authenticatedRequest).toHaveBeenCalledTimes(1);
   });
 

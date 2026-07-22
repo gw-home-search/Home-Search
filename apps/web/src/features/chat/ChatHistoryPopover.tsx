@@ -41,7 +41,10 @@ export function ChatHistoryPopover({
   const grouped = useMemo(() => groupConversationsByDate(conversations), [conversations]);
 
   useEffect(() => {
-    popoverRef.current?.focus();
+    const popover = popoverRef.current;
+    const selected = popover?.querySelector<HTMLButtonElement>('[aria-current="page"]');
+    const firstControl = popover?.querySelector<HTMLButtonElement>('button:not(:disabled)');
+    (selected ?? firstControl)?.focus();
   }, []);
 
   useEffect(() => {
@@ -55,11 +58,7 @@ export function ChatHistoryPopover({
 
   function handleEscape() {
     if (confirmation != null) {
-      const focusTargetId = confirmation.kind === 'all'
-        ? 'chat-history-delete-all'
-        : `chat-history-delete-${confirmation.id}`;
-      setConfirmation(null);
-      requestAnimationFrame(() => document.getElementById(focusTargetId)?.focus());
+      closeConfirmation();
       return;
     }
     if (rowMenuId != null) {
@@ -74,6 +73,15 @@ export function ChatHistoryPopover({
       return;
     }
     closeHistory();
+  }
+
+  function closeConfirmation() {
+    if (confirmation == null) return;
+    const focusTargetId = confirmation.kind === 'all'
+      ? 'chat-history-delete-all'
+      : `chat-history-delete-${confirmation.id}`;
+    setConfirmation(null);
+    requestAnimationFrame(() => document.getElementById(focusTargetId)?.focus());
   }
 
   async function confirmDelete() {
@@ -230,7 +238,7 @@ export function ChatHistoryPopover({
                 : `“${confirmation.title}” 대화는 삭제 후 복구할 수 없습니다.`}
             </p>
             <div>
-              <button disabled={isDeleting} onClick={() => setConfirmation(null)} ref={confirmationRef} type="button">취소</button>
+              <button disabled={isDeleting} onClick={closeConfirmation} ref={confirmationRef} type="button">취소</button>
               <button className="chatbot-confirm-delete" disabled={isDeleting} onClick={() => void confirmDelete()} type="button">
                 {isDeleting ? '삭제 중' : '삭제'}
               </button>

@@ -1,18 +1,19 @@
-import { type ChangeEvent, type FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type ChangeEvent, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '../auth/AuthProvider';
 import { queryChatbot } from './api/chatbotClient';
+import { ChatComposer } from './ChatComposer';
 import { ChatHistoryPopover } from './ChatHistoryPopover';
 import { ChatPendingMessage, ChatThreadMessage } from './ChatThreadMessage';
 import type { ChatAction } from './actionContract';
 import type { ChatEvidence } from './chatTypes';
 import {
   buildConversationContext,
-  createChatDraft,
   IndexedDbChatConversationStore,
   type ChatConversation,
   type ChatMessage,
 } from './storage/chatConversationStore';
+import { useChatConversationWorkspace } from './useChatConversationWorkspace';
 
 type ChatbotPanelProps = {
   onOpenChange?: (isOpen: boolean) => void;
@@ -20,26 +21,15 @@ type ChatbotPanelProps = {
   store?: IndexedDbChatConversationStore;
 };
 
-const QUESTION_MIN_HEIGHT_PX = 24;
-const QUESTION_MAX_HEIGHT_PX = 96;
-
-type ActiveConversation =
-  | { kind: 'draft'; conversation: ChatConversation }
-  | { kind: 'saved'; id: string };
-
 export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelProps) {
   const auth = useAuth();
-  const storeRef = useRef(store);
+  const workspace = useChatConversationWorkspace(store);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const historyTriggerRef = useRef<HTMLButtonElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const questionRef = useRef<HTMLTextAreaElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [conversations, setConversations] = useState<ChatConversation[]>([]);
-  const [activeConversation, setActiveConversation] = useState<ActiveConversation>(
-    () => ({ kind: 'draft', conversation: createChatDraft() }),
-  );
   const [question, setQuestion] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'sending'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -47,23 +37,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
     () => new Set(),
   );
   const requestSequenceRef = useRef(0);
-  const selectedId = activeConversation.kind === 'saved' ? activeConversation.id : null;
-  const selected = useMemo(
-    () => activeConversation.kind === 'draft'
-      ? activeConversation.conversation
-      : conversations.find(({ id }) => id === activeConversation.id) ?? null,
-    [activeConversation, conversations],
-  );
-
-  useLayoutEffect(() => {
-    const textarea = questionRef.current;
-    if (textarea == null) return;
-
-    textarea.style.height = 'auto';
-    const contentHeight = Math.max(textarea.scrollHeight, QUESTION_MIN_HEIGHT_PX);
-    textarea.style.height = `${Math.min(contentHeight, QUESTION_MAX_HEIGHT_PX)}px`;
-    textarea.style.overflowY = contentHeight > QUESTION_MAX_HEIGHT_PX ? 'auto' : 'hidden';
-  }, [isOpen, question]);
+  const { conversations, selected, selectedId } = workspace;
 
   useEffect(() => {
     if (isOpen && status === 'idle' && selected != null) questionRef.current?.focus();
@@ -76,10 +50,11 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
     }
     setIsOpen(true);
     onOpenChange?.(true);
+    if (status === 'sending') return;
     setStatus('loading');
     setError(null);
     try {
-      await reloadConversations();
+      await workspace.load();
     } catch {
       setError('브라우저 대화 저장소를 열지 못했습니다.');
     } finally {
@@ -87,31 +62,10 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
     }
   }
 
-  function requiredStore(): IndexedDbChatConversationStore {
-    storeRef.current ??= new IndexedDbChatConversationStore();
-    return storeRef.current;
-  }
-
-  async function reloadConversations() {
-    const stored = await requiredStore().list();
-    const emptyConversationIds = stored
-      .filter(({ messages }) => messages.length === 0)
-      .map(({ id }) => id);
-    await Promise.all(emptyConversationIds.map((id) => requiredStore().delete(id)));
-    const next = stored.filter(({ messages }) => messages.length > 0);
-    setConversations(next);
-    setActiveConversation((current) => {
-      if (current.kind === 'saved' && next.some(({ id }) => id === current.id)) return current;
-      return next[0] == null
-        ? { kind: 'draft', conversation: createChatDraft() }
-        : { kind: 'saved', id: next[0].id };
-    });
-  }
-
   function createConversation() {
     if (status === 'sending') return;
     setError(null);
-    setActiveConversation({ kind: 'draft', conversation: createChatDraft() });
+    workspace.startDraft();
     setQuestion('');
     setIsHistoryOpen(false);
     questionRef.current?.focus();
@@ -120,8 +74,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
   async function deleteConversation(id: string) {
     setError(null);
     try {
-      await requiredStore().delete(id);
-      await reloadConversations();
+      await workspace.deleteConversation(id);
     } catch {
       setError('대화를 삭제하지 못했습니다.');
       throw new Error('대화를 삭제하지 못했습니다.');
@@ -131,9 +84,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
   async function deleteAll() {
     setError(null);
     try {
-      await requiredStore().clear();
-      setConversations([]);
-      setActiveConversation({ kind: 'draft', conversation: createChatDraft() });
+      await workspace.deleteAll();
     } catch {
       setError('전체 대화를 삭제하지 못했습니다.');
       throw new Error('전체 대화를 삭제하지 못했습니다.');
@@ -143,7 +94,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
   async function exportConversations() {
     setError(null);
     try {
-      const archive = await requiredStore().exportArchive();
+      const archive = await workspace.exportArchive();
       const url = URL.createObjectURL(new Blob([archive], { type: 'application/json' }));
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -165,15 +116,13 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
     }
     setError(null);
     try {
-      await requiredStore().importArchive(await file.text(), 'merge');
-      await reloadConversations();
+      await workspace.importArchive(await file.text());
     } catch {
       setError('가져올 대화 파일을 확인해주세요.');
     }
   }
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function submit() {
     const content = question.trim();
     if (selected == null || content.length === 0 || content.length > 2_000 || status === 'sending') return;
     const now = new Date().toISOString();
@@ -194,7 +143,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
     setError(null);
     const requestSequence = ++requestSequenceRef.current;
     try {
-      await saveAndRefresh(pending, true);
+      await workspace.save(pending, true);
       const response = await queryChatbot(auth.authenticatedRequest, {
         question: content,
         conversationContext: buildConversationContext(selected.messages),
@@ -207,7 +156,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
         limitations: response.limitations,
         evidenceSummary: response.evidenceSummary,
       };
-      await saveAndRefresh({
+      await workspace.save({
         ...pending,
         updatedAt: answeredAt,
         messages: [...pending.messages, {
@@ -231,13 +180,6 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
     }
   }
 
-  async function saveAndRefresh(conversation: ChatConversation, activate: boolean) {
-    await requiredStore().save(conversation);
-    const next = (await requiredStore().list()).filter(({ messages }) => messages.length > 0);
-    setConversations(next);
-    if (activate) setActiveConversation({ kind: 'saved', id: conversation.id });
-  }
-
   function closePanel() {
     setIsOpen(false);
     onOpenChange?.(false);
@@ -247,7 +189,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
 
   function selectConversation(id: string) {
     if (status === 'sending') return;
-    setActiveConversation({ kind: 'saved', id });
+    workspace.select(id);
     setIsHistoryOpen(false);
     setQuestion('');
   }
@@ -338,7 +280,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
           </header>
 
           <section aria-label="선택한 대화" className="chatbot-thread">
-            <div aria-busy={status === 'loading'} aria-live="polite" className="chatbot-messages">
+            <div aria-busy={status === 'loading' || status === 'sending'} aria-live="polite" className="chatbot-messages">
               {status === 'loading' ? (
                 <p className="chatbot-loading">대화를 불러오는 중입니다.</p>
               ) : selected?.messages.length ? selected.messages.map((message) => (
@@ -377,37 +319,14 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
             </div>
 
             {error ? <p aria-live="assertive" className="chatbot-error">{error}</p> : null}
-            <form className="chatbot-form" onSubmit={(event) => void submit(event)}>
-              <div className="chatbot-form-heading">
-                <label htmlFor="chatbot-question">홈서치 AI에게 질문하기</label>
-              </div>
-              <div className="chatbot-composer">
-                <textarea
-                  disabled={status === 'sending' || selected == null}
-                  id="chatbot-question"
-                  maxLength={2_000}
-                  name="chatbot-question"
-                  onChange={(event) => setQuestion(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
-                    event.preventDefault();
-                    event.currentTarget.form?.requestSubmit();
-                  }}
-                  placeholder="원하는 지역과 조건을 입력해 보세요."
-                  ref={questionRef}
-                  rows={1}
-                  value={question}
-                />
-                <button
-                  aria-label={status === 'sending' ? '답변 생성 중' : '질문 보내기'}
-                  disabled={question.trim().length === 0 || status === 'sending'}
-                  type="submit"
-                >
-                  {status === 'sending' ? <span aria-hidden="true" className="chatbot-sending-mark" /> : <SendIcon />}
-                </button>
-              </div>
-              <p>답변은 신고 지연 등으로 실제와 다를 수 있으니 출처와 기준일을 확인해 주세요.</p>
-            </form>
+            <ChatComposer
+              disabled={status === 'sending' || selected == null}
+              isSending={status === 'sending'}
+              onChange={setQuestion}
+              onSubmit={() => void submit()}
+              ref={questionRef}
+              value={question}
+            />
           </section>
         </aside>
       ) : null}
@@ -453,8 +372,4 @@ function CloseIcon() {
 
 function MenuIcon() {
   return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14" /></svg>;
-}
-
-function SendIcon() {
-  return <svg aria-hidden="true" className="chatbot-send-icon" fill="none" viewBox="0 0 24 24"><path d="M12 18V6M6.5 11.5 12 6l5.5 5.5" /></svg>;
 }

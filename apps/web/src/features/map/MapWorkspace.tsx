@@ -67,6 +67,7 @@ export function MapWorkspace({
 }: MapWorkspaceProps) {
   const [mapRuntimeState, setMapRuntimeState] = useState<KakaoMapRuntimeState>('loading');
   const [mapRuntimeError, setMapRuntimeError] = useState<string | null>(null);
+  const [mapRetryNonce, setMapRetryNonce] = useState(0);
   const [mapDisplayMode, setMapDisplayMode] = useState<MapDisplayMode>('roadmap');
   const toolToggleRef = useRef<HTMLButtonElement>(null);
   const mapTools = useMapToolState();
@@ -119,6 +120,7 @@ export function MapWorkspace({
         cadastralEnabled={mapTools.cadastralEnabled}
         distanceState={mapTools.distance}
         mapDisplayMode={mapDisplayMode}
+        retryNonce={mapRetryNonce}
         markers={markers}
         facilitiesEnabled={facilitiesEnabled}
         nearbyPlaces={visibleNearbyPlaces}
@@ -194,6 +196,7 @@ export function MapWorkspace({
           selectedComplex={selectedComplex}
           onComplexMarkerSelect={onComplexMarkerSelect}
           onRegionMarkerSelect={onRegionMarkerSelect}
+          onRetryMap={() => setMapRetryNonce((current) => current + 1)}
           onRetryMarkers={onRetryMarkers}
           onResetFilters={onFilterReset}
         />

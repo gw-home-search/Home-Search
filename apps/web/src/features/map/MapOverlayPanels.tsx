@@ -32,6 +32,7 @@ type MapOverlayPanelsProps = {
   selectedComplex: ComplexSelection | null;
   onComplexMarkerSelect: (marker: ComplexMapMarker) => void;
   onRegionMarkerSelect: (marker: RegionMapMarker) => void;
+  onRetryMap: () => void;
   onRetryMarkers: () => void;
   onResetFilters: () => void;
 };
@@ -50,6 +51,7 @@ export function MapOverlayPanels({
   selectedComplex,
   onComplexMarkerSelect,
   onRegionMarkerSelect,
+  onRetryMap,
   onRetryMarkers,
   onResetFilters,
 }: MapOverlayPanelsProps) {
@@ -92,9 +94,9 @@ export function MapOverlayPanels({
             state="error"
             loadingMessage="지도를 불러오는 중"
             emptyMessage=""
-            errorMessage="지도를 불러오지 못했어요"
-            secondaryMessage="기본 지도 화면에서 탐색을 계속할 수 있습니다"
+            errorMessage="지도를 잠시 불러오지 못했어요"
             technicalError={mapRuntimeError}
+            onRetry={onRetryMap}
           />
         ) : null}
       </div>

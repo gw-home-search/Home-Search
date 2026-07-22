@@ -58,7 +58,9 @@ class LocalRuntimeStackConfigurationTest {
         assertThat(content).doesNotContain("SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS");
         assertThat(content).doesNotContain("SPRING_FLYWAY_VALIDATE_ON_MIGRATE");
         assertThat(content).contains("VITE_API_SERVER_IP: ${VITE_API_SERVER_IP:-http://localhost:8080}");
-        assertThat(content).doesNotContain("VITE_KAKAO_MAP_APP_KEY: ${VITE_KAKAO_MAP_APP_KEY:-}");
+        assertThat(content).contains("VITE_KAKAO_MAP_APP_KEY: ${VITE_KAKAO_MAP_APP_KEY:-}");
+        assertThat(content).contains("VITE_KAKAO_MAP_APP_KEY is required");
+        assertThat(content).contains("http://127.0.0.1:5173/");
         assertThat(content).doesNotContain("APT_SERVICE_KEY:");
         assertThat(content).doesNotContain("VW_SERVICE_KEY:");
     }

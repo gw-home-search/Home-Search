@@ -18,6 +18,7 @@ type UseKakaoMapRuntimeArgs = {
   initialLevel: number;
   level: number;
   mapDisplayMode: MapDisplayMode;
+  retryNonce: number;
   onRuntimeErrorChange: (message: string | null) => void;
   onRuntimeStateChange: (state: KakaoMapRuntimeState) => void;
   onViewportChange: (viewport: MapViewport) => void;
@@ -33,6 +34,7 @@ export function useKakaoMapRuntime({
   initialLevel,
   level,
   mapDisplayMode,
+  retryNonce,
   onRuntimeErrorChange,
   onRuntimeStateChange,
   onViewportChange,
@@ -92,7 +94,7 @@ export function useKakaoMapRuntime({
         loadedMaps?.event.removeListener?.(idleMap, 'idle', idleHandler);
       }
     };
-  }, [appKey, initialLevel, onRuntimeErrorChange, onRuntimeStateChange, onViewportChange]);
+  }, [appKey, initialLevel, onRuntimeErrorChange, onRuntimeStateChange, onViewportChange, retryNonce]);
 
   useEffect(() => {
     if (runtimeState !== 'ready' || !focusTarget || !map || !maps) return;

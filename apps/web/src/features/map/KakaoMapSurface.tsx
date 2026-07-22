@@ -38,6 +38,7 @@ type KakaoMapSurfaceProps = {
   nearbyPlaces: MapNearbyPlace[];
   roadviewInitialPoint: MapPoint | null;
   roadviewState: RoadviewRuntimeState;
+  retryNonce: number;
   selectedComplex: ComplexSelection | null;
   selectedNearbyPlaceId: string | null;
   onComplexMarkerSelect: (marker: ComplexMapMarker) => void;
@@ -66,6 +67,7 @@ export function KakaoMapSurface({
   nearbyPlaces,
   roadviewInitialPoint,
   roadviewState,
+  retryNonce,
   selectedComplex,
   selectedNearbyPlaceId,
   onComplexMarkerSelect,
@@ -88,6 +90,7 @@ export function KakaoMapSurface({
     initialLevel,
     level,
     mapDisplayMode,
+    retryNonce,
     onRuntimeErrorChange,
     onRuntimeStateChange,
     onViewportChange,

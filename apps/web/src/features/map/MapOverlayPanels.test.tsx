@@ -44,6 +44,7 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           selectedComplex={{ parcelId: 1001, complexId: 501 }}
           onComplexMarkerSelect={vi.fn()}
           onRegionMarkerSelect={vi.fn()}
+          onRetryMap={vi.fn()}
           onRetryMarkers={vi.fn()}
           onResetFilters={vi.fn()}
         />,
@@ -79,6 +80,7 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           selectedComplex={null}
           onComplexMarkerSelect={vi.fn()}
           onRegionMarkerSelect={vi.fn()}
+          onRetryMap={vi.fn()}
           onRetryMarkers={vi.fn()}
           onResetFilters={vi.fn()}
         />,
@@ -111,6 +113,7 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           selectedComplex={null}
           onComplexMarkerSelect={vi.fn()}
           onRegionMarkerSelect={vi.fn()}
+          onRetryMap={vi.fn()}
           onRetryMarkers={vi.fn()}
           onResetFilters={vi.fn()}
         />,
@@ -142,6 +145,7 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           selectedComplex={null}
           onComplexMarkerSelect={vi.fn()}
           onRegionMarkerSelect={vi.fn()}
+          onRetryMap={vi.fn()}
           onRetryMarkers={vi.fn()}
           onResetFilters={vi.fn()}
         />,
@@ -149,5 +153,42 @@ describe('MapOverlayPanels 지도 오버레이', () => {
     });
 
     expect(host.querySelectorAll('.map-notices > .map-feedback')).toHaveLength(2);
+  });
+
+  it('map runtime error는 짧은 문구와 다시 시도 동작을 제공한다', async () => {
+    const host = document.createElement('div');
+    const onRetryMap = vi.fn();
+    root = createRoot(host);
+
+    await act(async () => {
+      root?.render(
+        <MapOverlayPanels
+          activeFilterCount={0}
+          bounds={{ swLat: 37.4, swLng: 126.9, neLat: 37.6, neLng: 127.1 }}
+          cadastralEnabled={false}
+          mapRuntimeError="technical detail"
+          mapRuntimeState="error"
+          markerError={null}
+          markerState="ready"
+          level={10}
+          markers={{ kind: 'complex', markers: [] }}
+          selectedComplex={null}
+          onComplexMarkerSelect={vi.fn()}
+          onRegionMarkerSelect={vi.fn()}
+          onRetryMap={onRetryMap}
+          onRetryMarkers={vi.fn()}
+          onResetFilters={vi.fn()}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain('지도를 잠시 불러오지 못했어요');
+    expect(host.textContent).not.toContain('기본 지도 화면에서 탐색을 계속할 수 있습니다');
+
+    const retry = Array.from(host.querySelectorAll('button'))
+      .find((button) => button.textContent === '다시 시도');
+    expect(retry).toBeDefined();
+    act(() => retry?.click());
+    expect(onRetryMap).toHaveBeenCalledTimes(1);
   });
 });

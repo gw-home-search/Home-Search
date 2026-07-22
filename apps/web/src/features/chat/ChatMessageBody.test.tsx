@@ -49,4 +49,53 @@ describe('복합 구조화 답변', () => {
     expect(html.match(/학원 결과표<\/h4>/g)).toHaveLength(1);
     expect(html).not.toContain('text fallback');
   });
+
+  it('출처가 없으면 근거 UI를 만들지 않고 limitation을 답변에 포함한다', () => {
+    const message: ChatMessage = {
+      id: 'message-no-source', role: 'assistant', content: '현재 확인 가능한 답변입니다.',
+      createdAt: '2026-07-21T00:00:00Z',
+      evidence: {
+        requestId: 'request-no-source', dataAsOf: null, citations: [],
+        limitations: ['신고 지연으로 실제 거래와 차이가 있을 수 있습니다.'],
+        evidenceSummary: { status: 'unavailable', capabilities: [], factCount: 0, citationCount: 0 },
+      },
+    };
+
+    const html = renderToStaticMarkup(<ChatMessageBody message={message} />);
+
+    expect(html).toContain('확인할 점');
+    expect(html).toContain('신고 지연으로 실제 거래와 차이가 있을 수 있습니다.');
+    expect(html).not.toContain('답변 출처');
+    expect(html).not.toContain('답변 근거');
+    expect(html).not.toContain('근거 0개');
+    expect(html).not.toContain('출처 0개');
+  });
+
+  it('동일한 실제 출처는 한 번만 표시하고 근거 메타데이터는 숨긴다', () => {
+    const duplicate = {
+      citationId: 'citation-duplicate', sourceId: 'property.ai_read',
+      sourceName: 'Home Search 실거래', sourceUrl: 'https://example.com/trades',
+      evidenceGrade: 'A' as const, datasetVersion: 'property-v1', dataAsOf: '2026-07-20',
+      observedAt: null, factIds: ['fact-1'],
+    };
+    const message: ChatMessage = {
+      id: 'message-sources', role: 'assistant', content: '거래를 확인했습니다.',
+      createdAt: '2026-07-21T00:00:00Z',
+      evidence: {
+        requestId: 'request-sources', dataAsOf: '2026-07-20', limitations: [],
+        evidenceSummary: { status: 'supported', capabilities: [], factCount: 1, citationCount: 2 },
+        citations: [
+          { ...duplicate, citationId: 'citation-1' },
+          { ...duplicate, citationId: 'citation-2' },
+        ],
+      },
+    };
+
+    const html = renderToStaticMarkup(<ChatMessageBody message={message} />);
+
+    expect(html.match(/Home Search 실거래/g)).toHaveLength(1);
+    expect(html).toContain('href="https://example.com/trades"');
+    expect(html).not.toContain('2026-07-20');
+    expect(html).not.toContain('근거 등급');
+  });
 });

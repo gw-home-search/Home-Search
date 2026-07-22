@@ -81,7 +81,7 @@ describe('챗봇 패널', () => {
     expect(saved?.messages[0]?.content).toBe('실패해도 남아야 하는 질문');
   });
 
-  it('제한된 인증 질문을 보내고 재마운트 후에도 답변 근거를 유지한다', async () => {
+  it('제한된 인증 질문을 보내고 재마운트 후에도 실제 출처를 유지한다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-persist');
     const client = authenticatedClient();
     ({ root, host } = await renderPanel(client, store));
@@ -95,10 +95,12 @@ describe('챗봇 패널', () => {
     await waitFor(() => host?.textContent?.includes('근거가 확인된 답변입니다.') === true);
 
     expect(host.textContent).toContain('근거가 확인된 답변입니다.');
-    expect(host.textContent).toContain('기준일 2026-07-16');
-    expect(host.textContent).toContain('출처 1개');
     expect(host.textContent).toContain('Home Search 실거래');
-    expect(host.textContent).toContain('근거 등급 A');
+    expect(host.textContent).not.toContain('답변 근거');
+    expect(host.textContent).not.toContain('근거 등급');
+    expect(host.querySelector('[aria-label="내 질문"]')?.textContent).toBe('잠실엘스 최근 거래');
+    expect(host.querySelector('[aria-label="홈서치 AI 답변"]')?.textContent).toContain('근거가 확인된 답변입니다.');
+    expect(host.querySelector('.chatbot-message-avatar')).toBeNull();
     expect(host.querySelector('.chatbot-fact-list')?.textContent).toContain('확인된 단지 정보');
     expect(host.querySelector('.chatbot-fact-list')?.textContent).toContain('잠실엘스');
     expect(client.authenticatedRequest).toHaveBeenCalledWith(
@@ -119,7 +121,7 @@ describe('챗봇 패널', () => {
     await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
     await waitFor(() => host?.textContent?.includes('근거가 확인된 답변입니다.') === true);
     expect(host.textContent).toContain('근거가 확인된 답변입니다.');
-    expect(host.textContent).toContain('기준일 2026-07-16');
+    expect(host.textContent).toContain('Home Search 실거래');
   });
 
   it('구조화 summary가 있으면 text fallback을 중복 표시하지 않고 전달 순서대로 표시한다', async () => {

@@ -3,7 +3,7 @@ import { type ChangeEvent, type FormEvent, useEffect, useLayoutEffect, useMemo, 
 import { useAuth } from '../auth/AuthProvider';
 import { queryChatbot } from './api/chatbotClient';
 import { ChatHistoryPopover } from './ChatHistoryPopover';
-import { ChatMessageBody } from './ChatMessageBody';
+import { ChatPendingMessage, ChatThreadMessage } from './ChatThreadMessage';
 import type { ChatAction } from './actionContract';
 import type { ChatEvidence } from './chatTypes';
 import {
@@ -342,19 +342,12 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
               {status === 'loading' ? (
                 <p className="chatbot-loading">대화를 불러오는 중입니다.</p>
               ) : selected?.messages.length ? selected.messages.map((message) => (
-                <article className={`chatbot-message chatbot-message-${message.role}`} key={message.id}>
-                  <span aria-hidden="true" className="chatbot-message-avatar">
-                    {message.role === 'user' ? '나' : 'AI'}
-                  </span>
-                  <div className="chatbot-message-content">
-                    <strong>{message.role === 'user' ? '나' : '홈서치 AI'}</strong>
-                    <ChatMessageBody
-                      executedActionIds={executedActionIds}
-                      message={message}
-                      onUiAction={executeUiAction}
-                    />
-                  </div>
-                </article>
+                <ChatThreadMessage
+                  executedActionIds={executedActionIds}
+                  key={message.id}
+                  message={message}
+                  onUiAction={executeUiAction}
+                />
               )) : (
                 <div className="chatbot-empty">
                   <div className="chatbot-empty-intro">
@@ -380,6 +373,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
                   </div>
                 </div>
               )}
+              {status === 'sending' ? <ChatPendingMessage /> : null}
             </div>
 
             {error ? <p aria-live="assertive" className="chatbot-error">{error}</p> : null}
@@ -404,8 +398,12 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
                   rows={1}
                   value={question}
                 />
-                <button aria-label="질문 보내기" disabled={question.trim().length === 0 || status === 'sending'} type="submit">
-                  {status === 'sending' ? <span className="chatbot-sending">확인 중</span> : <SendIcon />}
+                <button
+                  aria-label={status === 'sending' ? '답변 생성 중' : '질문 보내기'}
+                  disabled={question.trim().length === 0 || status === 'sending'}
+                  type="submit"
+                >
+                  {status === 'sending' ? <span aria-hidden="true" className="chatbot-sending-mark" /> : <SendIcon />}
                 </button>
               </div>
               <p>답변은 신고 지연 등으로 실제와 다를 수 있으니 출처와 기준일을 확인해 주세요.</p>

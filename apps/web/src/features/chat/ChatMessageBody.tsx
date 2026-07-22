@@ -1,7 +1,7 @@
+import { AnswerSources } from './AnswerSources';
 import { ChatArtifacts } from './ChatArtifacts';
 import { ChatActions } from './ChatActions';
 import type { ChatAction } from './actionContract';
-import type { ChatEvidence } from './chatTypes';
 import type { ChatMessage } from './storage/chatConversationStore';
 import type { ChatUiSummary } from './summaryContract';
 
@@ -33,9 +33,13 @@ export function ChatMessageBody({
           onExecute={onUiAction}
         />
       ) : null}
-      {message.evidence ? (
-        <Evidence evidence={message.evidence} showLimitations={message.summary == null} />
+      {message.summary == null && message.evidence?.limitations.length ? (
+        <section className="chatbot-answer-limitations">
+          <h4>확인할 점</h4>
+          {message.evidence.limitations.map((limitation) => <p key={limitation}>{limitation}</p>)}
+        </section>
       ) : null}
+      <AnswerSources citations={message.evidence?.citations ?? []} />
     </>
   );
 }
@@ -104,7 +108,7 @@ function StructuredAnswer({
       ) : null}
       {message.evidence?.limitations.length ? (
         <section className="chatbot-summary-limitations">
-          <h4>확인 기준과 한계</h4>
+          <h4>확인할 점</h4>
           {message.evidence.limitations.map((limitation) => <p key={limitation}>{limitation}</p>)}
         </section>
       ) : null}
@@ -131,33 +135,3 @@ function capabilityLabel(capability: string): string {
 }
 
 const EMPTY_ACTION_IDS: ReadonlySet<string> = new Set();
-
-function Evidence({ evidence, showLimitations }: { evidence: ChatEvidence; showLimitations: boolean }) {
-  return (
-    <details className="chatbot-evidence">
-      <summary>
-        <span>답변 근거</span>
-        <span>{evidence.dataAsOf ? `기준일 ${evidence.dataAsOf}` : '조회 시점 근거'}</span>
-        <span>출처 {evidence.citations.length}개</span>
-        <span>근거 {evidence.evidenceSummary.factCount}개</span>
-      </summary>
-      <div>
-        <ul aria-label="답변 출처">
-          {evidence.citations.map((citation) => (
-            <li key={citation.citationId}>
-              {citation.sourceUrl ? (
-                <a href={citation.sourceUrl} rel="noreferrer noopener" target="_blank">
-                  {citation.sourceName}
-                </a>
-              ) : citation.sourceName}
-              <span>근거 등급 {citation.evidenceGrade}</span>
-            </li>
-          ))}
-        </ul>
-        {showLimitations
-          ? evidence.limitations.map((limitation) => <small key={limitation}>{limitation}</small>)
-          : null}
-      </div>
-    </details>
-  );
-}

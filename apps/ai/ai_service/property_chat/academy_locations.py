@@ -216,14 +216,21 @@ class PostgresAcademyLocationRepository:
                 )
                 SELECT candidate.complex_id, count(fact.fact_id)::integer AS matched_count
                 FROM candidates candidate
-                LEFT JOIN reference_read.facility_point_fact fact
-                  ON fact.source_id = 'place.sbiz-academy'
-                 AND fact.status = 'OPEN'
-                 AND ST_DWithin(
-                     fact.position,
-                     ST_SetSRID(ST_MakePoint(candidate.longitude, candidate.latitude), 4326)::geography,
-                     %s + 0.001
-                 )
+                LEFT JOIN LATERAL (
+                    SELECT item.fact_id
+                    FROM reference_read.facility_point_fact item
+                    WHERE item.source_id = 'place.sbiz-academy'
+                      AND item.status = 'OPEN'
+                      AND ST_DWithin(
+                          item.position,
+                          ST_SetSRID(
+                              ST_MakePoint(candidate.longitude, candidate.latitude),
+                              4326
+                          )::geography,
+                          %s + 0.001
+                      )
+                    OFFSET 0
+                ) fact ON true
                 GROUP BY candidate.complex_id ORDER BY candidate.complex_id
                 """,
                 (

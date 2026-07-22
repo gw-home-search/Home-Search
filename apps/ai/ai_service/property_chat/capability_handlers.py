@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
-from typing import Protocol, cast
+from typing import Literal, Protocol, cast
 
 from .academy_locations import AcademyLocation, AcademyLocationSearchResult, RegistryExactMatch
 from .academy_registry import AcademyRegistrySummary
@@ -33,6 +33,8 @@ from .reference_facilities import (
 
 
 class PropertyFactRepository(Protocol):
+    def find_complex_by_id(self, complex_id: int) -> ComplexRecord | None: ...
+
     def find_complexes(
         self, name: str, region_name: str | None, limit: int
     ) -> list[ComplexRecord]: ...
@@ -130,14 +132,42 @@ class ChildcareFactRepository(Protocol):
     ) -> ChildcareSearchResult | None: ...
 
 
+CapabilityOutcomeState = Literal[
+    "EXACT", "DEGRADED", "EMPTY", "UNAVAILABLE", "ERROR"
+]
+
+
 @dataclass(frozen=True)
-class CapabilityResult:
+class CapabilityOutcome:
     facts: list[EvidenceFact]
     limitations: list[str]
     readiness: str
     actions: tuple[ShowNearbyCategoryAction, ...] = ()
     artifacts: tuple[dict[str, object], ...] = ()
     artifact_fact_ids: tuple[str, ...] = ()
+    state: CapabilityOutcomeState | None = None
+    assumptions: tuple[str, ...] = ()
+    fallback_steps: tuple[str, ...] = ()
+    recoverable: bool = True
+
+    def __post_init__(self) -> None:
+        if self.readiness not in {"supported", "partial", "unavailable"}:
+            raise ValueError("capability outcome readiness is invalid")
+        if self.state is None:
+            state: CapabilityOutcomeState = (
+                "UNAVAILABLE"
+                if self.readiness == "unavailable"
+                else "DEGRADED"
+                if self.readiness == "partial"
+                else "EXACT"
+                if self.facts
+                else "EMPTY"
+            )
+            object.__setattr__(self, "state", state)
+
+
+# Temporary source-compatible name while handlers migrate independently.
+CapabilityResult = CapabilityOutcome
 
 
 class CapabilityHandler(Protocol):
@@ -248,8 +278,40 @@ class RecentTradeHandler:
             plan.limit,
         )
         if not trades:
-            return CapabilityResult(
-                [], ["지정한 기간과 면적 조건에서 확인된 실거래가 없습니다."], "unavailable"
+            same_area_reference = await asyncio.to_thread(
+                self._repository.recent_trades,
+                complex_record.complex_id,
+                None,
+                None,
+                plan.exclusive_area_square_meters,
+                plan.limit,
+            )
+            if same_area_reference:
+                latest_trade_date = await asyncio.to_thread(
+                    self._repository.latest_trade_date
+                )
+                data_as_of = latest_trade_date or max(
+                    record.deal_date for record in same_area_reference
+                )
+                return CapabilityOutcome(
+                    [
+                        self._builders.trade_fact(record, data_as_of)
+                        for record in same_area_reference
+                    ],
+                    [
+                        "정확 조건에서는 0건이어서 같은 면적의 확인 가능한 최근 거래를 참고 거래로 표시했습니다.",
+                        "신고 취소 또는 지연 신고가 이후 반영될 수 있습니다.",
+                    ],
+                    "partial",
+                    state="DEGRADED",
+                    fallback_steps=("SAME_AREA_ANY_PERIOD",),
+                )
+            return CapabilityOutcome(
+                [],
+                ["정확 조건과 같은 면적의 참고 범위에서도 확인된 실거래가 없습니다."],
+                "unavailable",
+                state="EMPTY",
+                fallback_steps=("SAME_AREA_ANY_PERIOD",),
             )
         latest_trade_date = await asyncio.to_thread(self._repository.latest_trade_date)
         data_as_of = latest_trade_date or max(record.deal_date for record in trades)
@@ -280,8 +342,40 @@ class PriceTrendHandler:
             plan.exclusive_area_square_meters,
         )
         if not trends:
-            return CapabilityResult(
-                [], ["지정한 기간과 면적 조건으로 월별 추이를 계산할 거래가 없습니다."], "unavailable"
+            reference_trades = await asyncio.to_thread(
+                self._repository.recent_trades,
+                complex_record.complex_id,
+                plan.start_date,
+                plan.end_date,
+                plan.exclusive_area_square_meters,
+                min(plan.limit, 5),
+            )
+            if reference_trades:
+                latest_trade_date = await asyncio.to_thread(
+                    self._repository.latest_trade_date
+                )
+                data_as_of = latest_trade_date or max(
+                    record.deal_date for record in reference_trades
+                )
+                return CapabilityOutcome(
+                    [
+                        self._builders.trade_fact(record, data_as_of)
+                        for record in reference_trades
+                    ],
+                    [
+                        "월별 추이를 만들 표본이 없어 같은 조건의 최근 개별 거래를 참고로 표시했습니다.",
+                        "개별 거래만으로 가격 방향이나 미래 흐름을 판단할 수 없습니다.",
+                    ],
+                    "partial",
+                    state="DEGRADED",
+                    fallback_steps=("RECENT_INDIVIDUAL_TRADES",),
+                )
+            return CapabilityOutcome(
+                [],
+                ["월별 추이와 같은 조건의 최근 개별 거래를 모두 확인하지 못했습니다."],
+                "unavailable",
+                state="EMPTY",
+                fallback_steps=("RECENT_INDIVIDUAL_TRADES",),
             )
         latest_trade_date = await asyncio.to_thread(self._repository.latest_trade_date)
         data_as_of = latest_trade_date or min(
@@ -377,7 +471,7 @@ class AcademyLookupHandler:
                 [], ["검증된 단지 표시 좌표가 없어 교육업소를 조회할 수 없습니다."], "unavailable"
             )
         if self._repository is None:
-            return CapabilityResult([], ["Sbiz 교육업소 active snapshot이 준비되지 않았습니다."], "unavailable")
+            return CapabilityResult([], ["학원 위치 데이터가 준비되지 않았습니다."], "unavailable")
         result = await asyncio.to_thread(
             self._repository.nearby,
             latitude=complex_record.latitude,
@@ -388,7 +482,7 @@ class AcademyLookupHandler:
         age_days = (self._today() - result.observed_at.date()).days
         if result.coordinate_coverage < 0.95 or age_days < 0 or age_days > result.freshness_days:
             return CapabilityResult(
-                [], ["Sbiz 교육업소 snapshot의 좌표 coverage 또는 관측일이 기준을 충족하지 못했습니다."], "unavailable"
+                [], ["학원 위치 데이터의 좌표 범위 또는 관측일이 기준을 충족하지 못했습니다."], "unavailable"
             )
         facts: list[EvidenceFact] = []
         for location in result.locations:
@@ -400,11 +494,11 @@ class AcademyLookupHandler:
         facts.append(self._builders.academy_lookup_scope_fact(plan, complex_record, result))
         limitations = [
             "거리는 단지 표시 좌표 기준 직선거리이며 실제 보행 경로가 아닙니다.",
-            "미결합 교육업소는 Sbiz 위치 근거이며 NEIS 공식 등록 여부를 의미하지 않습니다.",
+            "표시된 학원 위치는 공식 학원 등록 여부와 별도로 관찰된 위치 정보입니다.",
         ]
         if not result.locations and not result.verified_zero:
             limitations.append(
-                "행정코드 체계의 지역 coverage가 검증되지 않아 교육업소가 전혀 없다고 단정할 수 없습니다."
+                "지역 범위가 충분히 검증되지 않아 학원이 전혀 없다고 단정할 수 없습니다."
             )
         return CapabilityResult(facts, limitations, "supported")
 

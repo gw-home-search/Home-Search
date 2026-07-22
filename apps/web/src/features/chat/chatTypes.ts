@@ -2,6 +2,11 @@ import type { ChatAction } from './actionContract';
 import type { ChatArtifact } from './artifactContract';
 import type { ChatUiSummary } from './summaryContract';
 import type { ChatFragment } from './fragmentContract';
+import type {
+  ChatConversationResolution,
+  ConversationMemory,
+} from './conversationContract';
+import type { ChatUiReport } from './reportContract';
 
 export type ChatCitation = {
   citationId: string;
@@ -38,4 +43,7 @@ export type ChatbotResponse = ChatEvidence & {
   actions: ChatAction[];
   summary: ChatUiSummary | null;
   fragments: ChatFragment[];
+  conversationResolution: ChatConversationResolution | null;
+  conversationMemoryPatch: ConversationMemory | null;
+  report: ChatUiReport | null;
 };

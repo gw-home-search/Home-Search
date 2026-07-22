@@ -22,7 +22,129 @@ describe('챗봇 패널', () => {
     vi.restoreAllMocks();
   });
 
-  it('제한된 인증 질문을 보내고 재마운트 후에도 답변 근거를 유지한다', async () => {
+  it('Enter로 질문을 보내고 Shift+Enter와 한글 조합 Enter는 전송하지 않는다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-enter');
+    const client = authenticatedClient();
+    const authenticatedRequest = vi.mocked(client.authenticatedRequest);
+    ({ root, host } = await renderPanel(client, store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    const textarea = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
+    await waitFor(() => textarea?.disabled === false);
+
+    await change(textarea, '잠실엘스 최근 거래');
+    await keyDown(textarea, { key: 'Enter', shiftKey: true });
+    await keyDown(textarea, { key: 'Enter', isComposing: true });
+    expect(client.authenticatedRequest).not.toHaveBeenCalled();
+
+    await keyDown(textarea, { key: 'Enter' });
+    await waitFor(() => authenticatedRequest.mock.calls.length === 1);
+    expect(client.authenticatedRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('질문 전송 직후 새 질문이 보이도록 대화 화면을 질문 위치로 내린다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-submit-scroll');
+    const client = authenticatedClient();
+    const successfulResponse = await client.authenticatedRequest(
+      '/api/v1/chatbot/query', {}, 'public',
+    );
+    let completeRequest: ((response: Response) => void) | undefined;
+    client.authenticatedRequest = vi.fn().mockImplementation(() => new Promise<Response>((resolve) => {
+      completeRequest = resolve;
+    }));
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    ({ root, host } = await renderPanel(client, store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    const textarea = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
+    await waitFor(() => textarea?.disabled === false);
+    await change(textarea, '영등포구 500세대 이상 단지 중 학원 접근성을 우선해서 5곳을 알려줘');
+    await keyDown(textarea, { key: 'Enter' });
+
+    await waitFor(() => host?.querySelector('[aria-label="내 질문"]') != null);
+    expect(host.querySelector('[aria-label="내 질문"]')?.textContent).toContain('영등포구 500세대');
+    await waitFor(() => scrollIntoView.mock.calls.length > 0);
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' });
+
+    await act(async () => completeRequest?.(successfulResponse));
+    await waitFor(() => host?.textContent?.includes('근거가 확인된 답변입니다.') === true);
+  });
+
+  it('하단에서 질문한 경우 답변이 도착하면 마지막 답변까지 따라간다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-answer-follow');
+    await store.save(conversation('existing', '기존 대화', '2026-07-19T09:00:00.000Z'));
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    ({ root, host } = await renderPanel(authenticatedClient(), store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(() => host?.textContent?.includes('기존 대화') === true);
+    scrollIntoView.mockClear();
+    const messages = host.querySelector<HTMLElement>('.chatbot-messages');
+    Object.defineProperties(messages, {
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 500 },
+      scrollTop: { configurable: true, value: 500, writable: true },
+    });
+    const textarea = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
+    await waitFor(() => textarea?.disabled === false);
+    await change(textarea, '답변까지 따라가줘');
+    await keyDown(textarea, { key: 'Enter' });
+
+    await waitFor(() => host?.textContent?.includes('근거가 확인된 답변입니다.') === true);
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'end' });
+  });
+
+  it('패널 열기와 반복 새 대화는 저장하지 않고 첫 질문을 보낼 때만 저장한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-draft');
+    ({ root, host } = await renderPanel(authenticatedClient(), store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(() => host?.querySelector<HTMLTextAreaElement>('#chatbot-question')?.disabled === false);
+    expect(await store.list()).toHaveLength(0);
+
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-new-conversation'));
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-new-conversation'));
+    expect(await store.list()).toHaveLength(0);
+
+    const textarea = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
+    await change(textarea, '잠실엘스 최근 거래');
+    await keyDown(textarea, { key: 'Enter' });
+    await waitFor(async () => (await store.list())[0]?.messages.length === 2);
+    expect(await store.list()).toHaveLength(1);
+  });
+
+  it('API 실패 후에도 보낸 질문을 대화에 유지한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-failed-request');
+    const client = authenticatedClient();
+    client.authenticatedRequest = vi.fn().mockRejectedValue(new Error('잠시 후 다시 시도해주세요.'));
+    ({ root, host } = await renderPanel(client, store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    const textarea = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
+    await waitFor(() => textarea?.disabled === false);
+    await change(textarea, '실패해도 남아야 하는 질문');
+    await keyDown(textarea, { key: 'Enter' });
+    await waitFor(() => host?.textContent?.includes('챗봇 요청을 완료하지 못했습니다.') === true);
+
+    const [saved] = await store.list();
+    expect(saved?.messages).toHaveLength(1);
+    expect(saved?.messages[0]?.content).toBe('실패해도 남아야 하는 질문');
+  });
+
+  it('제한된 인증 질문을 보내고 재마운트 후에도 실제 출처를 유지한다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-persist');
     const client = authenticatedClient();
     ({ root, host } = await renderPanel(client, store));
@@ -36,10 +158,12 @@ describe('챗봇 패널', () => {
     await waitFor(() => host?.textContent?.includes('근거가 확인된 답변입니다.') === true);
 
     expect(host.textContent).toContain('근거가 확인된 답변입니다.');
-    expect(host.textContent).toContain('기준일 2026-07-16');
-    expect(host.textContent).toContain('출처 1개');
     expect(host.textContent).toContain('Home Search 실거래');
-    expect(host.textContent).toContain('근거 등급 A');
+    expect(host.textContent).not.toContain('답변 근거');
+    expect(host.textContent).not.toContain('근거 등급');
+    expect(host.querySelector('[aria-label="내 질문"]')?.textContent).toBe('잠실엘스 최근 거래');
+    expect(host.querySelector('[aria-label="홈서치 AI 답변"]')?.textContent).toContain('근거가 확인된 답변입니다.');
+    expect(host.querySelector('.chatbot-message-avatar')).toBeNull();
     expect(host.querySelector('.chatbot-fact-list')?.textContent).toContain('확인된 단지 정보');
     expect(host.querySelector('.chatbot-fact-list')?.textContent).toContain('잠실엘스');
     expect(client.authenticatedRequest).toHaveBeenCalledWith(
@@ -60,7 +184,7 @@ describe('챗봇 패널', () => {
     await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
     await waitFor(() => host?.textContent?.includes('근거가 확인된 답변입니다.') === true);
     expect(host.textContent).toContain('근거가 확인된 답변입니다.');
-    expect(host.textContent).toContain('기준일 2026-07-16');
+    expect(host.textContent).toContain('Home Search 실거래');
   });
 
   it('구조화 summary가 있으면 text fallback을 중복 표시하지 않고 전달 순서대로 표시한다', async () => {
@@ -101,26 +225,21 @@ describe('챗봇 패널', () => {
     expect(structured?.textContent).toContain('기간을 바꿔 확인할 수 있습니다.');
   });
 
-  it('서버 저장 없이 새 대화와 선택·전체 삭제를 지원한다', async () => {
+  it('새 대화는 첫 질문 전까지 저장하지 않고 입력 가능한 draft로 유지한다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-lifecycle');
     ({ root, host } = await renderPanel(authenticatedClient(), store));
     await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
     await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
     await waitFor(() => host?.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]')?.disabled === false);
 
-    await click(host.querySelector<HTMLButtonElement>('.chatbot-new-conversation'));
-    await waitFor(async () => (await store.list()).length === 2);
-    expect(await store.list()).toHaveLength(2);
-    await click(host.querySelector<HTMLButtonElement>('button[aria-label="대화 목록 열기"]'));
-    await click(host.querySelector<HTMLButtonElement>('button[aria-label="현재 대화 삭제"]'));
+    const textarea = host.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]');
+    await change(textarea, '저장될 첫 질문');
+    await keyDown(textarea, { key: 'Enter' });
     await waitFor(async () => (await store.list()).length === 1);
-    expect(await store.list()).toHaveLength(1);
 
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    await click(buttonByText(host, '전체 삭제'));
-    await waitFor(async () => (await store.list()).length === 0);
-    expect(await store.list()).toHaveLength(0);
-    expect(host.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]')?.disabled).toBe(true);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-new-conversation'));
+    expect(await store.list()).toHaveLength(1);
+    expect(host.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]')?.disabled).toBe(false);
   });
 
   it('지도 action은 버튼을 누를 때 한 번만 전달하고 대화에는 action만 저장한다', async () => {
@@ -170,20 +289,99 @@ describe('챗봇 패널', () => {
     await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
     await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
     await click(host.querySelector<HTMLButtonElement>('button[aria-label="대화 목록 열기"]'));
-    await waitFor(() => host?.querySelectorAll('.chatbot-conversation-list button').length === 2);
+    await waitFor(() => host?.querySelectorAll('.chatbot-history-select').length === 2);
 
     const conversationList = host.querySelector<HTMLElement>('.chatbot-conversation-list');
     expect(conversationList).not.toBeNull();
-    const newer = conversationList ? buttonByText(conversationList, '마포래미안 비교') : null;
-    const older = conversationList ? buttonByText(conversationList, '잠실엘스 최근 거래') : null;
-    expect(newer?.getAttribute('aria-pressed')).toBe('true');
-    expect(older?.getAttribute('aria-pressed')).toBe('false');
+    const newer = conversationList?.querySelector<HTMLButtonElement>('[title="마포래미안 비교"]') ?? null;
+    const older = conversationList?.querySelector<HTMLButtonElement>('[title="잠실엘스 최근 거래"]') ?? null;
+    expect(newer?.getAttribute('aria-current')).toBe('page');
+    expect(older?.getAttribute('aria-current')).toBeNull();
 
     await click(older);
     await click(host.querySelector<HTMLButtonElement>('button[aria-label="대화 목록 열기"]'));
     const reopenedList = host.querySelector<HTMLElement>('.chatbot-conversation-list');
-    expect(reopenedList ? buttonByText(reopenedList, '잠실엘스 최근 거래')?.getAttribute('aria-pressed') : null)
-      .toBe('true');
+    expect(reopenedList?.querySelector<HTMLButtonElement>('[title="잠실엘스 최근 거래"]')?.getAttribute('aria-current'))
+      .toBe('page');
+
+    await click(host.querySelector<HTMLButtonElement>('[aria-label="잠실엘스 최근 거래 대화 관리"]'));
+    await click(buttonByText(host, '대화 삭제'));
+    await click(buttonByText(host, '삭제'));
+    await waitFor(async () => (await store.list()).length === 1);
+    expect((await store.list()).map(({ id }) => id)).toEqual(['newer']);
+  });
+
+  it('패널을 다시 열면 최신 대화와 그 마지막 턴으로 이동한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-latest-turn');
+    await store.save(conversation('older', '이전 대화', '2026-07-18T09:00:00.000Z'));
+    await store.save({
+      ...conversation('newer', '최신 대화', '2026-07-19T09:00:00.000Z'),
+      messages: [{
+        id: 'newer-user', role: 'user', content: '최신 질문',
+        createdAt: '2026-07-19T09:00:00.000Z',
+      }, {
+        id: 'newer-assistant', role: 'assistant', content: '최신 답변',
+        createdAt: '2026-07-19T09:00:01.000Z',
+      }],
+    });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    ({ root, host } = await renderPanel(authenticatedClient(), store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="대화 목록 열기"]'));
+    await click(host.querySelector<HTMLButtonElement>('[title="이전 대화"]'));
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-close'));
+    scrollIntoView.mockClear();
+
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(() => host?.textContent?.includes('최신 답변') === true);
+    expect(host.textContent).not.toContain('이전 대화');
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'end' });
+  });
+
+  it('작성 중인 입력이 있으면 패널을 다시 열어도 선택 대화와 draft를 유지한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-unsent-draft');
+    await store.save(conversation('older', '작성 중 대화', '2026-07-18T09:00:00.000Z'));
+    await store.save(conversation('newer', '최신 대화', '2026-07-19T09:00:00.000Z'));
+    ({ root, host } = await renderPanel(authenticatedClient(), store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="대화 목록 열기"]'));
+    await click(host.querySelector<HTMLButtonElement>('[title="작성 중 대화"]'));
+    const textarea = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
+    await change(textarea, '아직 보내지 않은 질문');
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-close'));
+
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+
+    expect(host.querySelector<HTMLTextAreaElement>('#chatbot-question')?.value)
+      .toBe('아직 보내지 않은 질문');
+    expect(host.textContent).toContain('작성 중 대화');
+    expect(host.textContent).not.toContain('최신 대화');
+  });
+
+  it('첫 로드에서 legacy 빈 대화만 정리하고 내용 있는 대화는 유지한다', async () => {
+    const indexedDB = new IDBFactory();
+    const databaseName = 'chat-panel-legacy-cleanup';
+    await seedLegacyConversation(indexedDB, databaseName, {
+      id: 'empty', title: '새 대화', createdAt: '2026-07-20T00:00:00.000Z',
+      updatedAt: '2026-07-20T00:00:00.000Z', messages: [],
+    });
+    const meaningful = conversation('meaningful', '남아야 하는 대화', '2026-07-21T00:00:00.000Z');
+    await seedLegacyConversation(indexedDB, databaseName, meaningful);
+    const store = new IndexedDbChatConversationStore(indexedDB, databaseName);
+    ({ root, host } = await renderPanel(authenticatedClient(), store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(async () => (await store.list()).length === 1);
+    expect(await store.list()).toEqual([meaningful]);
   });
 
   it('빈 대화에서 단지와 조회 유형이 다른 질문 예시를 입력창에 채운다', async () => {
@@ -267,8 +465,33 @@ function conversation(id: string, title: string, updatedAt: string): ChatConvers
     title,
     createdAt: updatedAt,
     updatedAt,
-    messages: [],
+    messages: [{
+      id: `${id}-message`,
+      role: 'user',
+      content: title,
+      createdAt: updatedAt,
+    }],
   };
+}
+
+async function seedLegacyConversation(
+  indexedDB: IDBFactory,
+  databaseName: string,
+  value: ChatConversation,
+) {
+  const database = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(databaseName, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('conversations', { keyPath: 'id' });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction('conversations', 'readwrite');
+    transaction.objectStore('conversations').put(value);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+  database.close();
 }
 
 function authenticatedClient(uiActions: unknown[] = []): AuthClient {
@@ -346,6 +569,14 @@ async function change(input: HTMLTextAreaElement | null, value: string) {
     setter?.call(input, value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
+}
+
+async function keyDown(input: HTMLTextAreaElement | null, init: KeyboardEventInit) {
+  expect(input).not.toBeNull();
+  await act(async () => {
+    input?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+  });
+  await act(async () => Promise.resolve());
 }
 
 function buttonByText(container: HTMLElement, text: string): HTMLButtonElement | null {

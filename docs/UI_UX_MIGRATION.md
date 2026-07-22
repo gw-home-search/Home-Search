@@ -63,6 +63,31 @@ Use a map-first layout:
 - Favorite state uses user-service `/api/v1/favorites/{complexId}` with the
   memory-only access token. Anonymous users can still use every public map and
   detail flow and are prompted to log in only when activating the heart.
+- Chatbot submit captures the current map bounds, map level, and a complete
+  `complexId`/`parcelId` selection pair. The server treats these values only as
+  hints and revalidates the selected complex against property facts.
+- New conversations never inherit another conversation's memory. A saved
+  conversation may keep only the version 1 complex/region memory patch in its
+  browser IndexedDB record; the server does not persist the conversation or UI
+  context.
+- `BEST_EFFORT`, `PARTIAL`, and `NO_RESULT` are answer states, not retry-only
+  errors. The answer renders first, followed only when present by at most three
+  applied assumptions and the omitted items. A retry action is reserved for a
+  hard transient HTTP error.
+- Decision reports render in this order: direct result, applied basis, primary
+  table, two grounded candidate differences, candidate details, actions, and
+  sources. A successful scope or method statement is not repeated as a warning.
+- Recommendation and comparison data use native tables. Vertical rules and
+  nested card surfaces are avoided; only data rows use subtle horizontal rules.
+- Candidate detail uses native `details`; rank one starts open and later rows
+  start closed. Empty sections are omitted.
+- Opening the panel selects the greatest `updatedAt` conversation and reveals
+  its final turn. Submitting reveals the new question. A completed answer follows
+  only when the reader remains near the bottom; otherwise a `새 답변 보기`
+  control appears.
+- A recommendation with two or more verified candidates stores only their ranked
+  `complexId` values in browser-owned conversation memory v2. Follow-up comparison
+  requests reuse and revalidate those ids; a new conversation starts without them.
 
 ## Component Direction
 

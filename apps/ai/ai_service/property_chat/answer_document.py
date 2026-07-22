@@ -8,6 +8,7 @@ from datetime import date
 from ai_service.models import ChatbotQueryRequest
 
 from .models import DraftAnswer, EvidenceFact, QueryPlan
+from .answer_report import build_answer_report
 from .presentation import AnswerPresentation, FragmentPresentation, GroundedPresentationText
 from .recommendation_errors import RecommendationExecutionError
 
@@ -203,6 +204,10 @@ class AnswerDocument:
     artifacts: tuple[dict[str, object], ...] = ()
     actions: tuple[dict[str, object], ...] = ()
     presentation: AnswerPresentation | None = None
+    outcome_state: str = "EXACT"
+    assumptions: tuple[str, ...] = ()
+    fallback_steps: tuple[str, ...] = ()
+    recoverable: bool = True
 
     @classmethod
     def from_grounded_result(
@@ -218,6 +223,10 @@ class AnswerDocument:
         artifacts: list[dict[str, object]],
         actions: list[dict[str, object]],
         presentation: AnswerPresentation | None = None,
+        outcome_state: str = "EXACT",
+        assumptions: tuple[str, ...] = (),
+        fallback_steps: tuple[str, ...] = (),
+        recoverable: bool = True,
     ) -> AnswerDocument:
         return cls(
             request=request,
@@ -233,6 +242,10 @@ class AnswerDocument:
             artifacts=_bounded_artifacts(artifacts),
             actions=tuple(actions[:4]),
             presentation=presentation,
+            outcome_state=outcome_state,
+            assumptions=assumptions,
+            fallback_steps=fallback_steps,
+            recoverable=recoverable,
         )
 
     def to_public_dict(self) -> dict[str, object]:
@@ -267,6 +280,13 @@ class AnswerDocument:
                     "RECOMMENDATION_UI_SUMMARY_SERIALIZATION_FAILED"
                 ) from exception
             raise
+        ui_report, public_artifacts = build_answer_report(
+            plan=self.plan,
+            ui_summary=ui_summary,
+            artifacts=self.artifacts,
+            actions=self.actions,
+            facts=self.used_facts,
+        )
         return {
             "success": success,
             "status": legacy_status,
@@ -281,11 +301,14 @@ class AnswerDocument:
             },
             "answer": answer,
             "resolvedQuestion": self.request.question,
-            "conversationResolution": None,
-            "conversationMemoryPatch": None,
+            "conversationResolution": _conversation_resolution((self,)),
+            "conversationMemoryPatch": _conversation_memory_patch(
+                self.plan, self.used_facts
+            ),
             "uiActions": list(self.actions),
-            "uiArtifacts": list(self.artifacts),
+            "uiArtifacts": list(public_artifacts),
             "uiSummary": ui_summary,
+            "uiReport": ui_report,
             "requestId": self.request_id,
             "citations": citations,
             "dataAsOf": data_as_of.isoformat() if data_as_of else None,
@@ -385,8 +408,8 @@ class CompoundAnswerDocument:
             },
             "answer": answer,
             "resolvedQuestion": self.request.question,
-            "conversationResolution": None,
-            "conversationMemoryPatch": None,
+            "conversationResolution": _conversation_resolution(self.fragments),
+            "conversationMemoryPatch": _conversation_memory_patch(None, facts),
             "uiActions": list(actions),
             "uiArtifacts": list(artifacts),
             "uiSummary": _compound_presentation(
@@ -434,6 +457,132 @@ def _fragment_dict(
         ],
         "limitations": list(fragment.limitations),
     }
+
+
+def _conversation_resolution(
+    fragments: tuple[AnswerDocument, ...],
+) -> dict[str, object]:
+    has_unavailable = any(
+        fragment.readiness == "unavailable" for fragment in fragments
+    )
+    has_degraded = any(
+        fragment.readiness == "partial" or fragment.outcome_state == "DEGRADED"
+        for fragment in fragments
+    )
+    has_only_empty_results = all(
+        fragment.outcome_state == "EMPTY" for fragment in fragments
+    )
+    answer_mode = (
+        "NO_RESULT"
+        if all(fragment.readiness == "unavailable" for fragment in fragments)
+        or has_only_empty_results
+        else "PARTIAL"
+        if has_unavailable
+        else "BEST_EFFORT"
+        if has_degraded
+        else "COMPLETE"
+    )
+    assumptions = []
+    for fragment in fragments:
+        for step in fragment.fallback_steps:
+            assumptions.append({
+                "code": step,
+                "text": _fallback_step_text(step),
+            })
+        for index, text in enumerate(fragment.assumptions, start=1):
+            assumptions.append({
+                "code": f"ASSUMPTION_{index}",
+                "text": text,
+            })
+    unique_assumptions = list({
+        (item["code"], item["text"]): item for item in assumptions
+    }.values())[:8]
+    omissions = list(dict.fromkeys(
+        limitation
+        for fragment in fragments
+        if fragment.readiness == "unavailable"
+        for limitation in fragment.limitations
+    ))[:8]
+    return {
+        "version": 1,
+        "answerMode": answer_mode,
+        "goals": [
+            {
+                "capability": fragment.plan.capability,
+                "status": (
+                    "unavailable"
+                    if fragment.readiness == "unavailable"
+                    else "degraded"
+                    if fragment.readiness == "partial"
+                    or fragment.outcome_state in {"DEGRADED", "EMPTY"}
+                    else "answered"
+                ),
+            }
+            for fragment in fragments
+        ],
+        "assumptions": unique_assumptions,
+        "omissions": omissions,
+    }
+
+
+def _fallback_step_text(step: str) -> str:
+    return {
+        "SAME_AREA_ANY_PERIOD": (
+            "정확 조건에 거래가 없어 같은 면적의 확인 가능한 최근 거래를 참고했습니다."
+        ),
+        "RECENT_INDIVIDUAL_TRADES": (
+            "월별 추이를 만들 표본이 없어 같은 조건의 최근 개별 거래를 참고했습니다."
+        ),
+        "DEFAULT_PERIOD_ONE_YEAR": "기간을 지정하지 않아 최근 1년을 기준으로 확인했습니다.",
+        "DEFAULT_FACILITY_RADIUS": "시설별 기본 검색 반경을 적용했습니다.",
+        "PARTIAL_RECOMMENDATION_METRICS": (
+            "확인 가능한 기준만 사용해 추천 후보를 정리했습니다."
+        ),
+        "NEAREST_CONSTRAINT_CANDIDATES": (
+            "정확 조건을 충족한 후보가 없어 조건 차이가 작은 후보를 참고했습니다."
+        ),
+    }.get(step, "확인 가능한 대체 근거를 함께 사용했습니다.")
+
+
+def _conversation_memory_patch(
+    plan: QueryPlan | None,
+    facts: tuple[EvidenceFact, ...],
+) -> dict[str, object] | None:
+    candidate_facts = tuple(
+        fact
+        for fact in facts
+        if fact.fact_id.startswith("property-complex-")
+        and isinstance(fact.payload.get("complexId"), int)
+        and not isinstance(fact.payload.get("complexId"), bool)
+    )
+    if plan is not None and plan.capability == "recommendation":
+        complex_ids = list(dict.fromkeys(
+            fact.payload["complexId"] for fact in candidate_facts
+        ))[:5]
+        if len(complex_ids) >= 2:
+            patch: dict[str, object] = {
+                "version": 2,
+                "complexIds": complex_ids,
+                "scopeKind": "RECOMMENDATION",
+            }
+            region_code = candidate_facts[0].payload.get("regionCode")
+            if isinstance(region_code, str) and region_code.isdigit():
+                patch["regionCode"] = region_code
+            return patch
+    for fact in facts:
+        complex_id = fact.payload.get("complexId")
+        if not isinstance(complex_id, int) or isinstance(complex_id, bool) or complex_id <= 0:
+            continue
+        patch: dict[str, object] = {
+            "version": 1,
+            "complexId": complex_id,
+            "scopeKind": "COMPLEX",
+        }
+        region_code = fact.payload.get("regionCode")
+        if isinstance(region_code, str) and region_code.isdigit():
+            patch["regionCode"] = region_code
+        return patch
+    return None
 
 
 def _deduplicate_facts(

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { ChatArtifacts } from './ChatArtifacts';
 import type {
   ComparisonTableArtifact,
+  CandidateProfileArtifact,
   RecommendationCardsArtifact,
   RecommendationTableArtifact,
   TradeTableArtifact,
@@ -88,6 +89,35 @@ describe('비교표 artifact UI', () => {
     expect(html).toContain('기준일 2026-07-20 · 최근 365일 · 전용면적');
     expect(html).toContain('tabindex="0"');
   });
+
+  it('면적 없는 v2 비교표는 가격을 만들지 않고 비교 group과 기준을 표시한다', () => {
+    const artifact: ComparisonTableArtifact = {
+      type: 'comparisonTable', version: 2, artifactId: 'comparison-501-502',
+      title: '확인 가능한 기준으로 단지 비교',
+      columns: [
+        { key: '501', label: '잠실엘스', factIds: ['complex-501'] },
+        { key: '502', label: '헬리오시티', factIds: ['complex-502'] },
+      ],
+      rows: [
+        { key: 'unitCount', label: '세대수', group: 'SCALE', cells: [
+          { availability: 'available', value: '5,000세대', unit: 'COUNT', reason: null, factIds: ['complex-501'] },
+          { availability: 'available', value: '9,510세대', unit: 'COUNT', reason: null, factIds: ['complex-502'] },
+        ] },
+        { key: 'nearestRail', label: '최근접 철도역', group: 'TRANSPORT', cells: [
+          { availability: 'available', value: '잠실역 420m', unit: 'METERS', reason: null, factIds: ['rail-501'] },
+          { availability: 'available', value: '송파역 310m', unit: 'METERS', reason: null, factIds: ['rail-502'] },
+        ] },
+      ],
+      basis: { cutoffDate: null, startDate: null, exclusiveAreaSquareMeters: null },
+    };
+
+    const html = renderToStaticMarkup(<ChatArtifacts artifacts={[artifact]} />);
+
+    expect(html).toContain('기본정보');
+    expect(html).toContain('교통');
+    expect(html).not.toContain('>가격<');
+    expect(html).toContain('면적 조건이 없어 가격을 제외하고');
+  });
 });
 
 describe('추천카드 artifact UI', () => {
@@ -141,7 +171,7 @@ describe('추천카드 artifact UI', () => {
           { key: 'PRICE', label: '예산 조건', weight: 60, points: 60, distanceMeters: null, factIds: ['trade'] },
           { key: 'TRANSIT', label: '철도 접근성', weight: 22.5, points: 22.5, distanceMeters: 0, factIds: ['rail'] },
           { key: 'SHOPPING', label: '대규모점포 접근성', weight: 5, points: 5, distanceMeters: 0, factIds: ['retail'] },
-          { key: 'STUDENT', label: '학생 조건', weight: 12.5, points: 12.5, distanceMeters: null, factIds: ['student'], details: ['ELEMENTARY: 가까운초등학교 300m', '800m 내 Sbiz 교육업소 5곳'] },
+          { key: 'STUDENT', label: '학생 조건', weight: 12.5, points: 12.5, distanceMeters: null, factIds: ['student'], details: ['ELEMENTARY: 가까운초등학교 300m', '800m 내 학원 위치 5곳'] },
         ],
         limitations: [], factIds: ['complex', 'trade', 'rail', 'retail', 'student'],
         activeThemes: ['TRANSIT', 'STUDENT'],
@@ -152,7 +182,7 @@ describe('추천카드 artifact UI', () => {
     expect(html).toContain('aria-label="반영한 생활조건"');
     expect(html).toContain('>교통<');
     expect(html).toContain('>학생<');
-    expect(html).toContain('800m 내 Sbiz 교육업소 5곳');
+    expect(html).toContain('800m 내 학원 위치 5곳');
   });
 });
 
@@ -209,6 +239,40 @@ describe('조건 추천표 artifact UI', () => {
 
     expect(readChatArtifacts(
       [base], new Set(['complex-503', 'childcare-503']),
+    )).toEqual([]);
+  });
+});
+
+describe('후보 상세 artifact UI', () => {
+  it('첫 후보만 펼치고 확인된 섹션만 보여준다', () => {
+    const profiles: CandidateProfileArtifact[] = [{
+      type: 'candidateProfile', version: 1, artifactId: 'candidate-profile-503',
+      title: '후보 503', rank: 1, complexId: 503,
+      address: '서울 영등포구 후보 503', unitCount: 1200, useDate: '2018-03-01',
+      reasons: [{ text: '주변 학원 수가 후보 중 가장 많습니다.', factIds: ['academy-503'] }],
+      sections: [{
+        key: 'EDUCATION', label: '교육',
+        items: [{ label: '학원 접근성', value: '800m 내 10곳 · 최근접 100m', factIds: ['academy-503'] }],
+      }],
+      factIds: ['complex-503', 'academy-503'],
+    }, {
+      type: 'candidateProfile', version: 1, artifactId: 'candidate-profile-502',
+      title: '후보 502', rank: 2, complexId: 502,
+      address: '서울 영등포구 후보 502', unitCount: 800, useDate: null,
+      reasons: [{ text: '주변 학원 접근성을 함께 비교할 후보입니다.', factIds: ['academy-502'] }],
+      sections: [], factIds: ['complex-502', 'academy-502'],
+    }];
+
+    const html = renderToStaticMarkup(<ChatArtifacts artifacts={profiles} />);
+
+    expect(html).toContain('candidate-profile-503');
+    expect(html).toContain('open=""');
+    expect((html.match(/open=""/g) ?? [])).toHaveLength(1);
+    expect(html).toContain('주변 학원 수가 후보 중 가장 많습니다.');
+    expect(html).not.toContain('Sbiz');
+    expect(readChatArtifacts(
+      [{ ...profiles[0], version: 2 }],
+      new Set(['complex-503', 'academy-503']),
     )).toEqual([]);
   });
 });

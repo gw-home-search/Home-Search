@@ -49,4 +49,109 @@ describe('복합 구조화 답변', () => {
     expect(html.match(/학원 결과표<\/h4>/g)).toHaveLength(1);
     expect(html).not.toContain('text fallback');
   });
+
+  it('출처가 없으면 근거 UI를 만들지 않고 limitation을 답변에 포함한다', () => {
+    const message: ChatMessage = {
+      id: 'message-no-source', role: 'assistant', content: '현재 확인 가능한 답변입니다.',
+      createdAt: '2026-07-21T00:00:00Z',
+      evidence: {
+        requestId: 'request-no-source', dataAsOf: null, citations: [],
+        limitations: ['신고 지연으로 실제 거래와 차이가 있을 수 있습니다.'],
+        evidenceSummary: { status: 'unavailable', capabilities: [], factCount: 0, citationCount: 0 },
+      },
+    };
+
+    const html = renderToStaticMarkup(<ChatMessageBody message={message} />);
+
+    expect(html).toContain('참고');
+    expect(html).toContain('신고 지연으로 실제 거래와 차이가 있을 수 있습니다.');
+    expect(html).not.toContain('답변 출처');
+    expect(html).not.toContain('답변 근거');
+    expect(html).not.toContain('근거 0개');
+    expect(html).not.toContain('출처 0개');
+  });
+
+  it('답변과 동일한 limitation 및 omission은 한 번만 표시한다', () => {
+    const repeated = '일부 데이터를 확인하지 못해 이 항목은 답변에서 제외했습니다.';
+    const message: ChatMessage = {
+      id: 'message-repeated-limitation', role: 'assistant', content: repeated,
+      createdAt: '2026-07-22T00:00:00Z',
+      evidence: {
+        requestId: 'request-repeated', dataAsOf: null, citations: [],
+        limitations: [repeated],
+        evidenceSummary: {
+          status: 'unavailable', capabilities: ['recommendation'],
+          factCount: 0, citationCount: 0,
+        },
+      },
+      resolution: {
+        version: 1, answerMode: 'NO_RESULT', assumptions: [],
+        goals: [{ capability: 'recommendation', status: 'unavailable' }],
+        omissions: [repeated],
+      },
+    };
+
+    const html = renderToStaticMarkup(<ChatMessageBody message={message} />);
+
+    expect(html.match(new RegExp(repeated, 'g'))).toHaveLength(1);
+    expect(html).not.toContain('참고');
+    expect(html).not.toContain('확인하지 못한 항목');
+  });
+
+  it('의사결정 리포트에서는 성공 설명을 경고로 반복하지 않고 실제 제한만 표시한다', () => {
+    const message: ChatMessage = {
+      id: 'message-report-limitations', role: 'assistant', content: 'fallback',
+      createdAt: '2026-07-22T00:00:00Z',
+      evidence: {
+        requestId: 'request-report', dataAsOf: '2026-07-20', citations: [],
+        limitations: [
+          '송파구에서 요청한 조건을 적용한 후보를 정리했습니다.',
+          '일부 학교 자료를 확인하지 못해 해당 기준은 제외했습니다.',
+        ],
+        evidenceSummary: {
+          status: 'partial', capabilities: ['recommendation'], factCount: 1, citationCount: 0,
+        },
+      },
+      report: {
+        version: 1, kind: 'RECOMMENDATION',
+        opening: { text: '먼저 살펴볼 후보를 정리했어요.', factIds: ['scope-1'] },
+        basis: [{ text: '송파구를 기준으로 확인했습니다.', factIds: ['scope-1'] }],
+        primaryArtifactId: null, highlights: [], detailArtifactIds: [], actionIds: [],
+      },
+    };
+
+    const html = renderToStaticMarkup(<ChatMessageBody message={message} />);
+
+    expect(html).not.toContain('요청한 조건을 적용한 후보를 정리했습니다.');
+    expect(html).toContain('일부 학교 자료를 확인하지 못해 해당 기준은 제외했습니다.');
+    expect(html.match(/확인할 점/g)).toHaveLength(1);
+  });
+
+  it('동일한 실제 출처는 한 번만 표시하고 근거 메타데이터는 숨긴다', () => {
+    const duplicate = {
+      citationId: 'citation-duplicate', sourceId: 'property.ai_read',
+      sourceName: 'Home Search 실거래', sourceUrl: 'https://example.com/trades',
+      evidenceGrade: 'A' as const, datasetVersion: 'property-v1', dataAsOf: '2026-07-20',
+      observedAt: null, factIds: ['fact-1'],
+    };
+    const message: ChatMessage = {
+      id: 'message-sources', role: 'assistant', content: '거래를 확인했습니다.',
+      createdAt: '2026-07-21T00:00:00Z',
+      evidence: {
+        requestId: 'request-sources', dataAsOf: '2026-07-20', limitations: [],
+        evidenceSummary: { status: 'supported', capabilities: [], factCount: 1, citationCount: 2 },
+        citations: [
+          { ...duplicate, citationId: 'citation-1' },
+          { ...duplicate, citationId: 'citation-2' },
+        ],
+      },
+    };
+
+    const html = renderToStaticMarkup(<ChatMessageBody message={message} />);
+
+    expect(html.match(/Home Search 실거래/g)).toHaveLength(1);
+    expect(html).toContain('href="https://example.com/trades"');
+    expect(html).not.toContain('2026-07-20');
+    expect(html).not.toContain('근거 등급');
+  });
 });

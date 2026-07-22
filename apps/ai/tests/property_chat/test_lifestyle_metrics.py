@@ -29,7 +29,7 @@ def test_student_metric_combines_level_distance_and_sbiz_count_without_quality_c
     snapshot = SchoolSnapshot("school-v1", date(2026, 6, 30), datetime(2026, 7, 1, tzinfo=UTC))
 
     assert student_ratio(schools, _academies(), ("ELEMENTARY",)) == 1.0
-    assert "Sbiz 교육업소 5곳" in student_details(
+    assert "학원 위치 5곳" in student_details(
         schools, _academies(), ("ELEMENTARY",)
     )[-1]
     fact = student_observation_fact(

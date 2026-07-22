@@ -37,7 +37,7 @@ export function RecommendationCardsArtifactView({
                   <li key={item.key}>
                     <div>
                       <span>{item.label}</span>
-                      {item.details?.map((detail) => <small key={detail}>{detail}</small>)}
+                      {item.details?.map((detail) => <small key={detail}>{publicMetricText(detail)}</small>)}
                     </div>
                     <span>{formatScore(item.points)} / {formatScore(item.weight)}점
                       {item.distanceMeters == null ? '' : ` · ${item.distanceMeters.toLocaleString('ko-KR')}m`}</span>
@@ -67,4 +67,8 @@ function formatKrw(amountTenThousandKrw: number): string {
 
 function themeLabel(theme: RecommendationCardsArtifact['cards'][number]['activeThemes'][number]) {
   return { TRANSIT: '교통', STUDENT: '학생', YOUNG_CHILD: '영유아', SHOPPING: '쇼핑' }[theme];
+}
+
+function publicMetricText(value: string): string {
+  return value.replace(/Sbiz\s*교육업소/gi, '학원 위치');
 }

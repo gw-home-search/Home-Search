@@ -2,6 +2,7 @@ package com.home.chatbff.web;
 
 import com.home.chatbff.ai.ChatbotProviderUnavailableException;
 import com.home.chatbff.ai.ChatbotTimeoutException;
+import org.springframework.core.codec.DecodingException;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -18,6 +19,11 @@ final class ChatbotExceptionHandler {
 
     @ExceptionHandler(ServerWebInputException.class)
     ProblemDetail invalidInput(ServerWebInputException ignored, ServerWebExchange exchange) {
+        return ChatbotProblems.invalidRequest(path(exchange), RequestIdWebFilter.required(exchange));
+    }
+
+    @ExceptionHandler(DecodingException.class)
+    ProblemDetail invalidJsonType(DecodingException ignored, ServerWebExchange exchange) {
         return ChatbotProblems.invalidRequest(path(exchange), RequestIdWebFilter.required(exchange));
     }
 

@@ -7,6 +7,8 @@ import pytest
 
 from ai_service.auth import AuthenticatedUser
 from ai_service.chat import (
+    _apply_presentation_rollbacks,
+    _answer_outcome_metric,
     ConfiguredChatbotEngine,
     ChatbotProviderUnavailable,
     get_enabled_property_capabilities,
@@ -18,6 +20,13 @@ from ai_service.chat import (
     get_childcare_repository,
     get_grounded_language_model,
     get_query_timeout_seconds,
+    get_answer_first_enabled,
+    get_answer_first_fallback_capabilities,
+    get_dependent_workflow_enabled,
+    get_artifact_v2_enabled,
+    get_decision_report_enabled,
+    get_property_overview_enabled,
+    get_semantic_goal_planner_enabled,
     get_school_fact_repository,
 )
 from ai_service.models import ChatbotQueryRequest
@@ -132,6 +141,122 @@ def test_total_query_timeout_accepts_sixty_seconds(
     monkeypatch.setenv("HOME_AI_QUERY_TIMEOUT_SECONDS", "60")
 
     assert get_query_timeout_seconds() == 60
+
+
+def test_answer_first_flags_default_on_and_can_be_rolled_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HOME_AI_ANSWER_FIRST_ORCHESTRATION_ENABLED", raising=False)
+    monkeypatch.delenv("HOME_AI_PROPERTY_OVERVIEW_ENABLED", raising=False)
+    monkeypatch.delenv("HOME_AI_SEMANTIC_GOAL_PLANNER_ENABLED", raising=False)
+    monkeypatch.delenv("HOME_AI_DEPENDENT_WORKFLOW_ENABLED", raising=False)
+    monkeypatch.delenv("HOME_AI_DECISION_REPORT_ENABLED", raising=False)
+    monkeypatch.delenv("HOME_AI_ARTIFACT_V2_ENABLED", raising=False)
+    assert get_answer_first_enabled() is True
+    assert get_property_overview_enabled() is True
+    assert get_semantic_goal_planner_enabled() is True
+    assert get_dependent_workflow_enabled() is True
+    assert get_decision_report_enabled() is True
+    assert get_artifact_v2_enabled() is True
+
+    monkeypatch.setenv("HOME_AI_ANSWER_FIRST_ORCHESTRATION_ENABLED", "false")
+    monkeypatch.setenv("HOME_AI_PROPERTY_OVERVIEW_ENABLED", "false")
+    monkeypatch.setenv("HOME_AI_SEMANTIC_GOAL_PLANNER_ENABLED", "false")
+    monkeypatch.setenv("HOME_AI_DEPENDENT_WORKFLOW_ENABLED", "false")
+    monkeypatch.setenv("HOME_AI_DECISION_REPORT_ENABLED", "false")
+    monkeypatch.setenv("HOME_AI_ARTIFACT_V2_ENABLED", "false")
+    assert get_answer_first_enabled() is False
+    assert get_property_overview_enabled() is False
+    assert get_semantic_goal_planner_enabled() is False
+    assert get_dependent_workflow_enabled() is False
+    assert get_decision_report_enabled() is False
+    assert get_artifact_v2_enabled() is False
+
+
+def test_presentation_rollbacks_keep_legacy_answer_and_remove_new_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = {
+        "answer": "기존 답변",
+        "uiArtifacts": [
+            {"artifactId": "comparison-v2", "type": "comparisonTable", "version": 2},
+            {"artifactId": "profile-v1", "type": "candidateProfile", "version": 1},
+            {"artifactId": "fact-v1", "type": "factList", "version": 1},
+        ],
+        "uiReport": {
+            "primaryArtifactId": "comparison-v2",
+            "detailArtifactIds": ["profile-v1"],
+        },
+    }
+    monkeypatch.setenv("HOME_AI_ARTIFACT_V2_ENABLED", "false")
+    monkeypatch.setenv("HOME_AI_DECISION_REPORT_ENABLED", "true")
+
+    without_v2 = _apply_presentation_rollbacks(response)
+
+    assert without_v2["answer"] == "기존 답변"
+    assert [
+        artifact["artifactId"] for artifact in without_v2["uiArtifacts"]
+    ] == ["profile-v1", "fact-v1"]
+    assert without_v2["uiReport"] is None
+
+    monkeypatch.setenv("HOME_AI_ARTIFACT_V2_ENABLED", "true")
+    monkeypatch.setenv("HOME_AI_DECISION_REPORT_ENABLED", "false")
+    without_report = _apply_presentation_rollbacks(response)
+    assert [
+        artifact["artifactId"] for artifact in without_report["uiArtifacts"]
+    ] == ["comparison-v2", "fact-v1"]
+    assert without_report["uiReport"] is None
+
+
+def test_invalid_answer_first_flag_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOME_AI_ANSWER_FIRST_ORCHESTRATION_ENABLED", "yes")
+    assert get_answer_first_enabled() is False
+
+
+def test_answer_first_capability_fallbacks_are_independently_configurable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "HOME_AI_ANSWER_FIRST_FALLBACK_CAPABILITIES",
+        "recent_trade_lookup,school_location",
+    )
+    assert get_answer_first_fallback_capabilities() == frozenset(
+        {"recent_trade_lookup", "school_location"}
+    )
+
+    monkeypatch.setenv(
+        "HOME_AI_ANSWER_FIRST_FALLBACK_CAPABILITIES",
+        "recent_trade_lookup,unknown",
+    )
+    assert get_answer_first_fallback_capabilities() == frozenset()
+
+
+def test_answer_outcome_metric_contains_no_question_or_context() -> None:
+    metric = _answer_outcome_metric(
+        {
+            "question": "잠실엘스 가격",
+            "conversationResolution": {
+                "version": 1,
+                "answerMode": "PARTIAL",
+                "goals": [
+                    {"capability": "price_trend", "status": "answered"},
+                    {"capability": "school_location", "status": "unavailable"},
+                ],
+            },
+        },
+        elapsed_milliseconds=125,
+    )
+
+    assert metric == {
+        "event": "chatbot_answer_completed",
+        "answer_mode": "PARTIAL",
+        "goal_count": 2,
+        "answered_goal_count": 1,
+        "degraded_goal_count": 0,
+        "unavailable_goal_count": 1,
+        "elapsed_milliseconds": 125,
+    }
+    assert "잠실엘스" not in str(metric)
 
 
 @pytest.mark.parametrize(
@@ -704,7 +829,7 @@ class _ReferenceBoundaryLanguageModel:
         )
 
 
-def test_reference_pool_failure_is_503_for_academy_lookup_query(
+def test_reference_pool_failure_preserves_complex_result_for_academy_query(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -721,17 +846,24 @@ def test_reference_pool_failure_is_503_for_academy_lookup_query(
     )
     monkeypatch.setenv("HOME_AI_ENABLED_REFERENCE_CAPABILITIES", "academy_lookup")
 
-    with pytest.raises(ChatbotProviderUnavailable):
-        asyncio.run(
-            ConfiguredChatbotEngine().query(
-                request=ChatbotQueryRequest(question="잠실엘스 주변 교육업소"),
-                user=AuthenticatedUser(user_id=42),
-                request_id="request-reference-failure",
-            )
+    response = asyncio.run(
+        ConfiguredChatbotEngine().query(
+            request=ChatbotQueryRequest(question="잠실엘스 주변 교육업소"),
+            user=AuthenticatedUser(user_id=42),
+            request_id="request-reference-failure",
         )
+    )
+
+    assert response["success"] is True
+    assert response["conversationResolution"]["answerMode"] == "BEST_EFFORT"
+    assert response["conversationResolution"]["goals"] == [
+        {"capability": "academy_lookup", "status": "degraded"}
+    ]
+    assert "잠실동 잠실엘스" in response["answer"]
+    assert "단지 기본정보만" in response["limitations"][-1]
 
 
-def test_inactive_school_composition_remains_fail_closed(
+def test_inactive_school_composition_preserves_complex_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -751,14 +883,20 @@ def test_inactive_school_composition_remains_fail_closed(
         lambda: (_ for _ in ()).throw(ChatbotProviderUnavailable()),
     )
 
-    with pytest.raises(ChatbotProviderUnavailable):
-        asyncio.run(
-            ConfiguredChatbotEngine().query(
-                request=ChatbotQueryRequest(question="잠실엘스 주변 학교"),
-                user=AuthenticatedUser(user_id=42),
-                request_id="request-inactive-school-failure",
-            )
+    response = asyncio.run(
+        ConfiguredChatbotEngine().query(
+            request=ChatbotQueryRequest(question="잠실엘스 주변 학교"),
+            user=AuthenticatedUser(user_id=42),
+            request_id="request-inactive-school-failure",
         )
+    )
+
+    assert response["success"] is True
+    assert response["conversationResolution"]["answerMode"] == "BEST_EFFORT"
+    assert response["conversationResolution"]["goals"] == [
+        {"capability": "school_location", "status": "degraded"}
+    ]
+    assert "잠실동 잠실엘스" in response["answer"]
 
 
 def test_reference_pool_failure_does_not_break_property_query(

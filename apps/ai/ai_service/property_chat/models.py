@@ -151,9 +151,8 @@ class QueryPlan:
                 not 2 <= len(normalized_names) <= 4
                 or len(normalized_names) != len(set(normalized_names))
                 or any(not name or len(name) > 100 for name in normalized_names)
-                or self.exclusive_area_square_meters is None
             ):
-                raise ValueError("comparison requires 2..4 complexes and one exclusive area")
+                raise ValueError("comparison requires 2..4 unique complexes")
             object.__setattr__(self, "complex_name", normalized_names[0])
         elif normalized_names:
             raise ValueError("complex_names are only supported for comparison")

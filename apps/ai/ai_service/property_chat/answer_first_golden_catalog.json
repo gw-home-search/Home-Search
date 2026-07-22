@@ -1,0 +1,799 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "caseId": "exact-simple-01",
+      "category": "exact_simple",
+      "question": "잠실엘스 전용 84㎡ 최근 실거래 5건을 알려줘",
+      "allowedModes": [
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "exact-simple-02",
+      "category": "exact_simple",
+      "question": "헬리오시티 전용 59㎡ 최근 1년 가격 흐름을 보여줘",
+      "allowedModes": [
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "exact-simple-03",
+      "category": "exact_simple",
+      "question": "래미안원베일리 주소와 기본정보를 알려줘",
+      "allowedModes": [
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "exact-simple-04",
+      "category": "exact_simple",
+      "question": "마포래미안푸르지오 주변 초등학교를 알려줘",
+      "allowedModes": [
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "exact-simple-05",
+      "category": "exact_simple",
+      "question": "잠실엘스 1.5km 안 철도역을 알려줘",
+      "allowedModes": [
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "exact-simple-06",
+      "category": "exact_simple",
+      "question": "반포자이 1km 안 대규모점포를 알려줘",
+      "allowedModes": [
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "exact-simple-07",
+      "category": "exact_simple",
+      "question": "올림픽파크포레온 주변 학원을 알려줘",
+      "allowedModes": [
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "exact-simple-08",
+      "category": "exact_simple",
+      "question": "아크로리버파크 주변 어린이집을 알려줘",
+      "allowedModes": [
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "exact-simple-09",
+      "category": "exact_simple",
+      "question": "잠실엘스와 헬리오시티 전용 84㎡를 비교해줘",
+      "allowedModes": [
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "exact-simple-10",
+      "category": "exact_simple",
+      "question": "영등포구 500세대 이상 중 철도 접근성으로 5곳 추천해줘",
+      "allowedModes": [
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "exact-simple-11",
+      "category": "exact_simple",
+      "question": "여의도역 800m 안 대단지를 추천해줘",
+      "allowedModes": [
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "exact-simple-12",
+      "category": "exact_simple",
+      "question": "잠실엘스 위치를 지도에서 보여줘",
+      "allowedModes": [
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "missing-conditions-01",
+      "category": "missing_conditions",
+      "question": "잠실엘스 최근 거래 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "missing-conditions-02",
+      "category": "missing_conditions",
+      "question": "헬리오시티 가격 흐름 보여줘",
+      "allowedModes": [
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "missing-conditions-03",
+      "category": "missing_conditions",
+      "question": "송파구에서 살펴볼 단지 추천해줘",
+      "allowedModes": [
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "missing-conditions-04",
+      "category": "missing_conditions",
+      "question": "잠실엘스 주변 학교 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "missing-conditions-05",
+      "category": "missing_conditions",
+      "question": "잠실엘스 주변 학원 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "missing-conditions-06",
+      "category": "missing_conditions",
+      "question": "잠실엘스 주변 철도역 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "missing-conditions-07",
+      "category": "missing_conditions",
+      "question": "잠실엘스 주변 쇼핑시설 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "missing-conditions-08",
+      "category": "missing_conditions",
+      "question": "잠실엘스 주변 어린이집 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "missing-conditions-09",
+      "category": "missing_conditions",
+      "question": "마포구 대단지 중 교통과 학원 기준으로 추천해줘",
+      "allowedModes": [
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "missing-conditions-10",
+      "category": "missing_conditions",
+      "question": "강남구 예산 안에서 추천해줘",
+      "allowedModes": [
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "missing-conditions-11",
+      "category": "missing_conditions",
+      "question": "잠실엘스와 헬리오시티 비교해줘",
+      "allowedModes": [
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "missing-conditions-12",
+      "category": "missing_conditions",
+      "question": "교육이 편한 송파구 단지를 추천해줘",
+      "allowedModes": [
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "zero-alternative-01",
+      "category": "zero_alternative",
+      "question": "잠실엘스 전용 200㎡ 최근 거래를 알려줘",
+      "allowedModes": [
+        "NO_RESULT",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "zero-alternative-02",
+      "category": "zero_alternative",
+      "question": "헬리오시티 전용 20㎡ 가격 흐름을 보여줘",
+      "allowedModes": [
+        "NO_RESULT",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "zero-alternative-03",
+      "category": "zero_alternative",
+      "question": "최근 한 달 거래가 없는 단지의 참고 거래를 알려줘",
+      "allowedModes": [
+        "NO_RESULT",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "zero-alternative-04",
+      "category": "zero_alternative",
+      "question": "5000세대 이상 조건에 가까운 마포구 후보를 알려줘",
+      "allowedModes": [
+        "NO_RESULT",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "zero-alternative-05",
+      "category": "zero_alternative",
+      "question": "반경 300m 안 학교가 없으면 그대로 알려줘",
+      "allowedModes": [
+        "NO_RESULT",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "zero-alternative-06",
+      "category": "zero_alternative",
+      "question": "반경 300m 안 철도역이 없으면 가까운 역을 알려줘",
+      "allowedModes": [
+        "NO_RESULT",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "zero-alternative-07",
+      "category": "zero_alternative",
+      "question": "예산 조건을 넘는 경우 가까운 후보를 알려줘",
+      "allowedModes": [
+        "NO_RESULT",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "zero-alternative-08",
+      "category": "zero_alternative",
+      "question": "거래 표본이 부족하면 최근 개별 거래를 알려줘",
+      "allowedModes": [
+        "NO_RESULT",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "zero-alternative-09",
+      "category": "zero_alternative",
+      "question": "정확 면적 거래가 없으면 다른 면적 거래를 구분해 보여줘",
+      "allowedModes": [
+        "NO_RESULT",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "zero-alternative-10",
+      "category": "zero_alternative",
+      "question": "조건을 모두 만족하는 단지가 없으면 차이가 작은 후보를 알려줘",
+      "allowedModes": [
+        "NO_RESULT",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "zero-alternative-11",
+      "category": "zero_alternative",
+      "question": "주변 대규모점포가 0곳인지 확인해줘",
+      "allowedModes": [
+        "NO_RESULT",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "zero-alternative-12",
+      "category": "zero_alternative",
+      "question": "동일 기간 가격 추이가 없으면 단지 기본정보라도 알려줘",
+      "allowedModes": [
+        "NO_RESULT",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "partial-source-01",
+      "category": "partial_source",
+      "question": "학교 데이터가 없어도 잠실엘스 기본정보와 거래를 알려줘",
+      "allowedModes": [
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "partial-source-02",
+      "category": "partial_source",
+      "question": "철도 데이터가 없어도 송파구 후보를 추천해줘",
+      "allowedModes": [
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "partial-source-03",
+      "category": "partial_source",
+      "question": "학원 데이터가 없어도 나머지 기준으로 추천해줘",
+      "allowedModes": [
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "partial-source-04",
+      "category": "partial_source",
+      "question": "쇼핑 데이터가 없어도 교통 기준 후보를 보여줘",
+      "allowedModes": [
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "partial-source-05",
+      "category": "partial_source",
+      "question": "어린이집 데이터가 없어도 단지 비교를 계속해줘",
+      "allowedModes": [
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "partial-source-06",
+      "category": "partial_source",
+      "question": "거래 조회 일부가 실패해도 단지 주소를 알려줘",
+      "allowedModes": [
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "partial-source-07",
+      "category": "partial_source",
+      "question": "가격 흐름이 실패해도 최근 거래를 알려줘",
+      "allowedModes": [
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "partial-source-08",
+      "category": "partial_source",
+      "question": "한 단지 식별이 실패해도 나머지 단지를 비교해줘",
+      "allowedModes": [
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "partial-source-09",
+      "category": "partial_source",
+      "question": "학교와 학원 중 하나만 가능해도 확인값을 알려줘",
+      "allowedModes": [
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "partial-source-10",
+      "category": "partial_source",
+      "question": "시설 source가 오래됐으면 제외하고 거래 결과를 알려줘",
+      "allowedModes": [
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "partial-source-11",
+      "category": "partial_source",
+      "question": "복합 질문 중 한 항목이 실패해도 성공 결과를 남겨줘",
+      "allowedModes": [
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "partial-source-12",
+      "category": "partial_source",
+      "question": "일부 추천 metric이 비어도 5개 후보를 보여줘",
+      "allowedModes": [
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "compound-01",
+      "category": "compound",
+      "question": "잠실엘스 주소와 최근 거래를 함께 알려줘",
+      "allowedModes": [
+        "COMPLETE",
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "compound-02",
+      "category": "compound",
+      "question": "헬리오시티 거래와 1년 가격 흐름을 함께 보여줘",
+      "allowedModes": [
+        "COMPLETE",
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "compound-03",
+      "category": "compound",
+      "question": "잠실엘스 최근 거래와 가까운 철도역을 알려줘",
+      "allowedModes": [
+        "COMPLETE",
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "compound-04",
+      "category": "compound",
+      "question": "래미안원베일리 기본정보와 주변 학교를 알려줘",
+      "allowedModes": [
+        "COMPLETE",
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "compound-05",
+      "category": "compound",
+      "question": "마포래미안푸르지오 가격 흐름과 학원 접근성을 알려줘",
+      "allowedModes": [
+        "COMPLETE",
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "compound-06",
+      "category": "compound",
+      "question": "잠실엘스와 헬리오시티 비교하고 지도에서 보여줘",
+      "allowedModes": [
+        "COMPLETE",
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "compound-07",
+      "category": "compound",
+      "question": "송파구 추천 후보와 각 후보의 철도 기준을 알려줘",
+      "allowedModes": [
+        "COMPLETE",
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "compound-08",
+      "category": "compound",
+      "question": "단지 주소와 어린이집, 대규모점포를 함께 알려줘",
+      "allowedModes": [
+        "COMPLETE",
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "compound-09",
+      "category": "compound",
+      "question": "최근 거래와 가격 흐름, 거래량을 한 번에 알려줘",
+      "allowedModes": [
+        "COMPLETE",
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "compound-10",
+      "category": "compound",
+      "question": "두 단지 거래와 학교 접근성을 비교해줘",
+      "allowedModes": [
+        "COMPLETE",
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "compound-11",
+      "category": "compound",
+      "question": "이 단지 기본정보와 생활 인프라를 균형 있게 알려줘",
+      "allowedModes": [
+        "COMPLETE",
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "compound-12",
+      "category": "compound",
+      "question": "후보 5곳과 적용한 추천 기준을 함께 설명해줘",
+      "allowedModes": [
+        "COMPLETE",
+        "PARTIAL",
+        "BEST_EFFORT"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "provider-failure-01",
+      "category": "provider_failure",
+      "question": "문장 생성이 실패해도 잠실엘스 거래 결과를 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "provider-failure-02",
+      "category": "provider_failure",
+      "question": "계획 모델이 실패해도 잠실엘스 위치를 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "provider-failure-03",
+      "category": "provider_failure",
+      "question": "secondary model도 실패하면 질문을 결정적으로 해석해줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "provider-failure-04",
+      "category": "provider_failure",
+      "question": "학원 provider가 실패해도 단지 기본정보를 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "provider-failure-05",
+      "category": "provider_failure",
+      "question": "학교 provider timeout에도 확인된 거래를 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "provider-failure-06",
+      "category": "provider_failure",
+      "question": "철도 조회 오류에도 나머지 추천 기준으로 후보를 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "provider-failure-07",
+      "category": "provider_failure",
+      "question": "답변 grounding이 실패하면 결정형 답변을 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "provider-failure-08",
+      "category": "provider_failure",
+      "question": "답변 품질 검증이 실패하면 확인된 fact로 복구해줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "ambiguous-typo-01",
+      "category": "ambiguous_typo",
+      "question": "한빛아파트 위치를 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "ambiguous-typo-02",
+      "category": "ambiguous_typo",
+      "question": "잠실 엘쓰 최근 거래 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "ambiguous-typo-03",
+      "category": "ambiguous_typo",
+      "question": "레미안원베일리 주소 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "ambiguous-typo-04",
+      "category": "ambiguous_typo",
+      "question": "중앙아파트 주변 학교 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "ambiguous-typo-05",
+      "category": "ambiguous_typo",
+      "question": "잠실엘스와 잠실엘쓰를 비교해줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "ambiguous-typo-06",
+      "category": "ambiguous_typo",
+      "question": "동명 단지 후보를 주소와 함께 보여줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "broad-overview-01",
+      "category": "broad_overview",
+      "question": "이 단지 전체적으로 어때?",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL",
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "broad-overview-02",
+      "category": "broad_overview",
+      "question": "여기 살기 괜찮아?",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL",
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "broad-overview-03",
+      "category": "broad_overview",
+      "question": "잠실엘스에 대해 전반적으로 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL",
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "broad-overview-04",
+      "category": "broad_overview",
+      "question": "이 아파트의 장단점을 확인 가능한 데이터로 설명해줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL",
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "broad-overview-05",
+      "category": "broad_overview",
+      "question": "선택한 단지를 한눈에 정리해줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL",
+        "COMPLETE"
+      ],
+      "answerable": true
+    },
+    {
+      "caseId": "broad-overview-06",
+      "category": "broad_overview",
+      "question": "이곳의 거래와 생활 인프라를 균형 있게 알려줘",
+      "allowedModes": [
+        "BEST_EFFORT",
+        "PARTIAL",
+        "COMPLETE"
+      ],
+      "answerable": true
+    }
+  ]
+}

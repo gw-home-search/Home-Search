@@ -56,15 +56,20 @@ export type ComparisonTableCell = {
 
 export type ComparisonTableArtifact = {
   type: 'comparisonTable';
-  version: 1;
+  version: 1 | 2;
   artifactId: string;
   title: string;
   columns: Array<{ key: string; label: string; factIds: string[] }>;
-  rows: Array<{ key: string; label: string; cells: ComparisonTableCell[] }>;
+  rows: Array<{
+    key: string;
+    label: string;
+    group?: 'PRICE' | 'SCALE' | 'TRANSPORT' | 'EDUCATION' | 'LIFESTYLE';
+    cells: ComparisonTableCell[];
+  }>;
   basis: {
-    cutoffDate: string;
-    startDate: string;
-    exclusiveAreaSquareMeters: number;
+    cutoffDate: string | null;
+    startDate: string | null;
+    exclusiveAreaSquareMeters: number | null;
   };
 };
 
@@ -134,8 +139,28 @@ export type RecommendationTableArtifact = {
   }>;
 };
 
+export type CandidateProfileArtifact = {
+  type: 'candidateProfile';
+  version: 1;
+  artifactId: string;
+  title: string;
+  rank: number;
+  complexId: number;
+  address: string | null;
+  unitCount: number | null;
+  useDate: string | null;
+  reasons: Array<{ text: string; factIds: string[] }>;
+  sections: Array<{
+    key: 'TRADE' | 'TRANSPORT' | 'EDUCATION' | 'LIFESTYLE';
+    label: string;
+    items: Array<{ label: string; value: string; factIds: string[] }>;
+  }>;
+  factIds: string[];
+};
+
 export type ChatArtifact = FactListArtifact | TradeTableArtifact | TrendTableArtifact
-  | ComparisonTableArtifact | RecommendationCardsArtifact | RecommendationTableArtifact;
+  | ComparisonTableArtifact | RecommendationCardsArtifact | RecommendationTableArtifact
+  | CandidateProfileArtifact;
 
 const MAX_ARTIFACT_BYTES = 65_536;
 
@@ -152,9 +177,83 @@ export function readChatArtifacts(value: unknown, allowedFactIds: ReadonlySet<st
       ?? readTrendTableArtifact(candidate, allowedFactIds)
       ?? readComparisonTableArtifact(candidate, allowedFactIds)
       ?? readRecommendationTableArtifact(candidate, allowedFactIds)
+      ?? readCandidateProfileArtifact(candidate, allowedFactIds)
       ?? readRecommendationCardsArtifact(candidate, allowedFactIds);
     return artifact == null ? [] : [artifact];
   });
+}
+
+function readCandidateProfileArtifact(
+  value: unknown,
+  allowedFactIds: ReadonlySet<string>,
+): CandidateProfileArtifact | null {
+  if (!isRecord(value)
+    || !hasExactKeys(value, [
+      'type', 'version', 'artifactId', 'title', 'rank', 'complexId', 'address',
+      'unitCount', 'useDate', 'reasons', 'sections', 'factIds',
+    ])
+    || value.type !== 'candidateProfile'
+    || value.version !== 1
+    || !isIdentifier(value.artifactId)
+    || !isDisplayText(value.title, 100)
+    || !isIntegerInRange(value.rank, 1, 5)
+    || !isIntegerInRange(value.complexId, 1, Number.MAX_SAFE_INTEGER)
+    || (value.address !== null && !isDisplayText(value.address, 300))
+    || (value.unitCount !== null && !isIntegerInRange(value.unitCount, 0, 100_000))
+    || (value.useDate !== null && !isIsoDate(value.useDate))
+    || !Array.isArray(value.reasons)
+    || value.reasons.length === 0
+    || value.reasons.length > 3
+    || !Array.isArray(value.sections)
+    || value.sections.length > 4
+    || !isFactIds(value.factIds, allowedFactIds, false)) return null;
+  const profileFactIds = new Set(value.factIds);
+  const reasons = value.reasons.flatMap((reason) => {
+    if (!isRecord(reason)
+      || !hasExactKeys(reason, ['text', 'factIds'])
+      || !isDisplayText(reason.text, 500)
+      || !isFactIds(reason.factIds, allowedFactIds, false)
+      || !reason.factIds.every((factId) => profileFactIds.has(factId))) return [];
+    return [{ text: reason.text.trim(), factIds: reason.factIds }];
+  });
+  const sections = value.sections.flatMap((section) => {
+    if (!isRecord(section)
+      || !hasExactKeys(section, ['key', 'label', 'items'])
+      || !isCandidateSectionKey(section.key)
+      || !isDisplayText(section.label, 100)
+      || !Array.isArray(section.items)
+      || section.items.length === 0
+      || section.items.length > 8) return [];
+    const items = section.items.flatMap((item) => {
+      if (!isRecord(item)
+        || !hasExactKeys(item, ['label', 'value', 'factIds'])
+        || !isDisplayText(item.label, 100)
+        || !isDisplayText(item.value, 500)
+        || !isFactIds(item.factIds, allowedFactIds, false)
+        || !item.factIds.every((factId) => profileFactIds.has(factId))) return [];
+      return [{ label: item.label.trim(), value: item.value.trim(), factIds: item.factIds }];
+    });
+    return items.length === section.items.length
+      ? [{ key: section.key, label: section.label.trim(), items }]
+      : [];
+  });
+  if (reasons.length !== value.reasons.length
+    || sections.length !== value.sections.length
+    || new Set(sections.map(({ key }) => key)).size !== sections.length) return null;
+  return {
+    type: 'candidateProfile', version: 1,
+    artifactId: value.artifactId, title: value.title.trim(), rank: value.rank,
+    complexId: value.complexId, address: value.address?.trim() ?? null,
+    unitCount: value.unitCount, useDate: value.useDate,
+    reasons, sections, factIds: value.factIds,
+  };
+}
+
+function isCandidateSectionKey(
+  value: unknown,
+): value is CandidateProfileArtifact['sections'][number]['key'] {
+  return value === 'TRADE' || value === 'TRANSPORT'
+    || value === 'EDUCATION' || value === 'LIFESTYLE';
 }
 
 function readRecommendationTableArtifact(
@@ -561,6 +660,7 @@ function readComparisonTableArtifact(
     || value.rows.length === 0
     || value.rows.length > 12
     || !isRecord(value.basis)) return null;
+  const version = value.version as 1 | 2;
   const columns = value.columns.flatMap((column) => {
     if (!isRecord(column)
       || !hasExactKeys(column, ['key', 'label', 'factIds'])
@@ -571,44 +671,73 @@ function readComparisonTableArtifact(
   });
   if (columns.length !== value.columns.length
     || new Set(columns.map(({ key }) => key)).size !== columns.length) return null;
-  const rows = value.rows.flatMap((row) => {
+  const rows: ComparisonTableArtifact['rows'] = value.rows.flatMap((row) => {
+    const expectedRowKeys = version === 2
+      ? ['key', 'label', 'group', 'cells']
+      : ['key', 'label', 'cells'];
     if (!isRecord(row)
-      || !hasExactKeys(row, ['key', 'label', 'cells'])
+      || !hasExactKeys(row, expectedRowKeys)
       || !isIdentifier(row.key)
       || !isDisplayText(row.label, 100)
+      || (version === 2 && !isComparisonGroup(row.group))
       || !Array.isArray(row.cells)
       || row.cells.length !== columns.length) return [];
     const cells = row.cells.flatMap((cell) => {
       const parsed = readComparisonCell(cell, allowedFactIds);
       return parsed == null ? [] : [parsed];
     });
-    return cells.length === columns.length
-      ? [{ key: row.key, label: row.label.trim(), cells }]
-      : [];
+    if (cells.length !== columns.length) return [];
+    const parsedRow: ComparisonTableArtifact['rows'][number] = {
+      key: row.key,
+      label: row.label.trim(),
+      cells,
+    };
+    if (version === 2 && isComparisonGroup(row.group)) parsedRow.group = row.group;
+    return [parsedRow];
   });
   const basis = value.basis;
   if (rows.length !== value.rows.length
     || new Set(rows.map(({ key }) => key)).size !== rows.length
-    || !hasExactKeys(basis, ['cutoffDate', 'startDate', 'exclusiveAreaSquareMeters'])
-    || !isIsoDate(basis.cutoffDate)
-    || !isIsoDate(basis.startDate)
-    || typeof basis.exclusiveAreaSquareMeters !== 'number'
-    || !Number.isFinite(basis.exclusiveAreaSquareMeters)
-    || basis.exclusiveAreaSquareMeters <= 0
-    || basis.exclusiveAreaSquareMeters > 1000) return null;
+    || !hasExactKeys(basis, ['cutoffDate', 'startDate', 'exclusiveAreaSquareMeters'])) return null;
+  let parsedBasis: ComparisonTableArtifact['basis'];
+  if (version === 1) {
+    if (!isIsoDate(basis.cutoffDate)
+      || !isIsoDate(basis.startDate)
+      || typeof basis.exclusiveAreaSquareMeters !== 'number'
+      || !Number.isFinite(basis.exclusiveAreaSquareMeters)
+      || basis.exclusiveAreaSquareMeters <= 0
+      || basis.exclusiveAreaSquareMeters > 1000) return null;
+    parsedBasis = {
+      cutoffDate: basis.cutoffDate,
+      startDate: basis.startDate,
+      exclusiveAreaSquareMeters: basis.exclusiveAreaSquareMeters,
+    };
+  } else {
+    if (basis.cutoffDate !== null
+      || basis.startDate !== null
+      || basis.exclusiveAreaSquareMeters !== null) return null;
+    parsedBasis = {
+      cutoffDate: null,
+      startDate: null,
+      exclusiveAreaSquareMeters: null,
+    };
+  }
   return {
     type: 'comparisonTable',
-    version: 1,
+    version,
     artifactId: value.artifactId,
     title: value.title.trim(),
     columns,
     rows,
-    basis: {
-      cutoffDate: basis.cutoffDate,
-      startDate: basis.startDate,
-      exclusiveAreaSquareMeters: basis.exclusiveAreaSquareMeters,
-    },
+    basis: parsedBasis,
   };
+}
+
+function isComparisonGroup(
+  value: unknown,
+): value is NonNullable<ComparisonTableArtifact['rows'][number]['group']> {
+  return value === 'PRICE' || value === 'SCALE' || value === 'TRANSPORT'
+    || value === 'EDUCATION' || value === 'LIFESTYLE';
 }
 
 function readComparisonCell(

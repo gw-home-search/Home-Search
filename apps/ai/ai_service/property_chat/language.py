@@ -85,11 +85,10 @@ class RetryingLanguageModel:
         self,
         operation: Callable[[GroundedLanguageModel], Awaitable[T]],
     ) -> T:
-        for _attempt in range(2):
-            try:
-                return await operation(self._primary)
-            except Exception:
-                pass
+        try:
+            return await operation(self._primary)
+        except Exception:
+            pass
         try:
             return await operation(self._secondary)
         except Exception as exception:

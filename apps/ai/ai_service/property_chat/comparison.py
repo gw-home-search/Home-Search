@@ -94,9 +94,9 @@ class ComparisonTableArtifact:
     artifact_id: str
     columns: tuple[ComparisonColumn, ...]
     rows: tuple[ComparisonRow, ...]
-    cutoff: date
-    start_date: date
-    exclusive_area_square_meters: float
+    cutoff: date | None
+    start_date: date | None
+    exclusive_area_square_meters: float | None
 
     def to_public_dict(self) -> dict[str, object]:
         if (
@@ -107,22 +107,43 @@ class ComparisonTableArtifact:
             or len({row.key for row in self.rows}) != len(self.rows)
         ):
             raise ValueError("comparison table bounds are invalid")
+        is_partial_basis = self.exclusive_area_square_meters is None
+        if is_partial_basis != (self.cutoff is None or self.start_date is None):
+            raise ValueError("comparison basis is inconsistent")
         artifact: dict[str, object] = {
             "type": "comparisonTable",
-            "version": 1,
+            "version": 2 if is_partial_basis else 1,
             "artifactId": self.artifact_id,
-            "title": "동일 기준 단지 비교",
+            "title": "확인 가능한 기준으로 단지 비교" if is_partial_basis else "동일 기준 단지 비교",
             "columns": [column.to_public_dict() for column in self.columns],
-            "rows": [row.to_public_dict() for row in self.rows],
+            "rows": [
+                {
+                    **row.to_public_dict(),
+                    **({"group": _comparison_group(row.key)} if is_partial_basis else {}),
+                }
+                for row in self.rows
+            ],
             "basis": {
-                "cutoffDate": self.cutoff.isoformat(),
-                "startDate": self.start_date.isoformat(),
+                "cutoffDate": self.cutoff.isoformat() if self.cutoff is not None else None,
+                "startDate": self.start_date.isoformat() if self.start_date is not None else None,
                 "exclusiveAreaSquareMeters": self.exclusive_area_square_meters,
             },
         }
         if len(json.dumps(artifact, ensure_ascii=False).encode("utf-8")) > 65_536:
             raise ValueError("comparison table exceeds the public size limit")
         return artifact
+
+
+def _comparison_group(row_key: str) -> str:
+    if row_key in {"latestTrade", "recentThreeMedian", "tradeSampleCount"}:
+        return "PRICE"
+    if row_key in {"nearestRail"}:
+        return "TRANSPORT"
+    if row_key in {"studentAccess"}:
+        return "EDUCATION"
+    if row_key in {"nearestRetail", "youngChildAccess"}:
+        return "LIFESTYLE"
+    return "SCALE"
 
 
 @dataclass(frozen=True)

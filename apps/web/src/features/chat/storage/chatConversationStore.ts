@@ -3,6 +3,13 @@ import { readChatArtifacts, type ChatArtifact } from '../artifactContract';
 import { readChatActions, type ChatAction } from '../actionContract';
 import { readChatUiSummary, type ChatUiSummary } from '../summaryContract';
 import { readChatFragments, type ChatFragment } from '../fragmentContract';
+import {
+  readConversationMemory,
+  readConversationResolution,
+  type ChatConversationResolution,
+  type ConversationMemory,
+} from '../conversationContract';
+import { readChatUiReport, type ChatUiReport } from '../reportContract';
 
 export type ChatMessageRole = 'user' | 'assistant';
 
@@ -16,6 +23,8 @@ export type ChatMessage = {
   actions?: ChatAction[];
   summary?: ChatUiSummary;
   fragments?: ChatFragment[];
+  resolution?: ChatConversationResolution;
+  report?: ChatUiReport;
 };
 
 export type ChatConversation = {
@@ -24,10 +33,12 @@ export type ChatConversation = {
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];
+  memory?: ConversationMemory;
 };
 
 export type ConversationContext = {
   messages: Array<Pick<ChatMessage, 'role' | 'content'>>;
+  memory?: ConversationMemory;
 };
 
 type ChatArchive = {
@@ -78,6 +89,7 @@ export class IndexedDbChatConversationStore {
 
   async save(conversation: ChatConversation): Promise<void> {
     const validated = validateConversation(conversation);
+    if (validated.messages.length === 0) throw new Error('Empty chat conversations are drafts');
     const database = await this.open();
     const transaction = database.transaction(STORE_NAME, 'readwrite');
     transaction.objectStore(STORE_NAME).put(validated);
@@ -104,7 +116,7 @@ export class IndexedDbChatConversationStore {
     const archive: ChatArchive = {
       version: 1,
       exportedAt,
-      conversations: await this.list(),
+      conversations: (await this.list()).filter(({ messages }) => messages.length > 0),
     };
     return JSON.stringify(archive);
   }
@@ -115,7 +127,9 @@ export class IndexedDbChatConversationStore {
     const transaction = database.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
     if (mode === 'replace') store.clear();
-    for (const conversation of archive.conversations) store.put(conversation);
+    for (const conversation of archive.conversations) {
+      if (conversation.messages.length > 0) store.put(conversation);
+    }
     await transactionComplete(transaction);
   }
 
@@ -136,7 +150,7 @@ export class IndexedDbChatConversationStore {
   }
 }
 
-export function createChatConversation({
+export function createChatDraft({
   id = crypto.randomUUID(),
   now = new Date().toISOString(),
   title = '새 대화',
@@ -157,7 +171,10 @@ export function createChatConversation({
   };
 }
 
-export function buildConversationContext(messages: readonly ChatMessage[]): ConversationContext {
+export function buildConversationContext(
+  messages: readonly ChatMessage[],
+  memory?: ConversationMemory,
+): ConversationContext {
   const selected: ConversationContext['messages'] = [];
   let totalLength = 0;
   for (let index = messages.length - 1; index >= 0 && selected.length < MAX_CONTEXT_MESSAGES; index -= 1) {
@@ -171,7 +188,7 @@ export function buildConversationContext(messages: readonly ChatMessage[]): Conv
     totalLength += boundedContent.length;
   }
   selected.reverse();
-  return { messages: selected };
+  return { messages: selected, ...(memory ? { memory } : {}) };
 }
 
 function parseArchive(serialized: string): ChatArchive {
@@ -203,7 +220,9 @@ function validateConversation(candidate: unknown): ChatConversation {
     if (candidate.messages.length > MAX_MESSAGES_PER_CONVERSATION) throw new Error();
     const messages = candidate.messages.map(validateMessage);
     if (new Set(messages.map((message) => message.id)).size !== messages.length) throw new Error();
-    return { id, title, createdAt, updatedAt, messages };
+    const memory = candidate.memory === undefined ? null : readConversationMemory(candidate.memory);
+    if (candidate.memory !== undefined && memory == null) throw new Error();
+    return { id, title, createdAt, updatedAt, messages, ...(memory ? { memory } : {}) };
   } catch {
     throw new Error('Invalid chat archive');
   }
@@ -239,6 +258,17 @@ function validateMessage(candidate: unknown): ChatMessage {
       candidate.fragments, factIds, message.artifacts ?? [], message.actions ?? [],
     );
     if (fragments.length > 0) message.fragments = fragments;
+  }
+  if (candidate.resolution !== undefined) {
+    const resolution = readConversationResolution(candidate.resolution);
+    if (resolution != null) message.resolution = resolution;
+  }
+  if (candidate.report !== undefined) {
+    const factIds = new Set(message.evidence?.citations.flatMap((citation) => citation.factIds) ?? []);
+    const report = readChatUiReport(
+      candidate.report, factIds, message.artifacts ?? [], message.actions ?? [],
+    );
+    if (report != null) message.report = report;
   }
   return message;
 }

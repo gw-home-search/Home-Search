@@ -1,9 +1,10 @@
+import { AnswerSources } from './AnswerSources';
 import { ChatArtifacts } from './ChatArtifacts';
 import { ChatActions } from './ChatActions';
 import type { ChatAction } from './actionContract';
-import type { ChatEvidence } from './chatTypes';
 import type { ChatMessage } from './storage/chatConversationStore';
 import type { ChatUiSummary } from './summaryContract';
+import { DecisionAnswerReport } from './DecisionAnswerReport';
 
 type ChatMessageBodyProps = {
   message: ChatMessage;
@@ -16,10 +17,17 @@ export function ChatMessageBody({
   executedActionIds = EMPTY_ACTION_IDS,
   onUiAction,
 }: ChatMessageBodyProps) {
+  const supportingDetails = visibleSupportingDetails(message);
   return (
     <>
-      {message.summary ? (
-        <StructuredAnswer message={message} summary={message.summary} />
+      {message.report ? (
+        <DecisionAnswerReport limitations={supportingDetails.limitations} message={message} />
+      ) : message.summary ? (
+        <StructuredAnswer
+          limitations={supportingDetails.limitations}
+          message={message}
+          summary={message.summary}
+        />
       ) : (
         <>
           <p>{message.content}</p>
@@ -33,17 +41,24 @@ export function ChatMessageBody({
           onExecute={onUiAction}
         />
       ) : null}
-      {message.evidence ? (
-        <Evidence evidence={message.evidence} showLimitations={message.summary == null} />
+      {message.summary == null && message.report == null && supportingDetails.limitations.length ? (
+        <section className="chatbot-answer-limitations">
+          <h4>참고</h4>
+          {supportingDetails.limitations.map((limitation) => <p key={limitation}>{limitation}</p>)}
+        </section>
       ) : null}
+      <ResolutionDetails message={message} omissions={supportingDetails.omissions} />
+      <AnswerSources citations={message.evidence?.citations ?? []} />
     </>
   );
 }
 
 function StructuredAnswer({
+  limitations,
   message,
   summary,
 }: {
+  limitations: string[];
   message: ChatMessage;
   summary: ChatUiSummary;
 }) {
@@ -102,15 +117,83 @@ function StructuredAnswer({
           ))}
         </section>
       ) : null}
-      {message.evidence?.limitations.length ? (
+      {limitations.length ? (
         <section className="chatbot-summary-limitations">
-          <h4>확인 기준과 한계</h4>
-          {message.evidence.limitations.map((limitation) => <p key={limitation}>{limitation}</p>)}
+          <h4>참고</h4>
+          {limitations.map((limitation) => <p key={limitation}>{limitation}</p>)}
         </section>
       ) : null}
       {summary.followUp ? <p className="chatbot-summary-follow-up">{summary.followUp}</p> : null}
     </div>
   );
+}
+
+function ResolutionDetails({
+  message,
+  omissions,
+}: {
+  message: ChatMessage;
+  omissions: string[];
+}) {
+  const assumptions = message.resolution?.assumptions.slice(0, 3) ?? [];
+  if (assumptions.length === 0 && omissions.length === 0) return null;
+  return (
+    <div className="chatbot-resolution-details">
+      {assumptions.length > 0 ? (
+        <section>
+          <h4>적용한 기준</h4>
+          {assumptions.map(({ code, text }) => <p key={code}>{text}</p>)}
+        </section>
+      ) : null}
+      {omissions.length > 0 ? (
+        <section>
+          <h4>확인하지 못한 항목</h4>
+          {omissions.map((omission) => <p key={omission}>{omission}</p>)}
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function visibleSupportingDetails(message: ChatMessage): {
+  limitations: string[];
+  omissions: string[];
+} {
+  const displayed = new Set<string>();
+  if (message.summary == null) {
+    displayed.add(message.content.trim());
+  } else {
+    const summary = message.summary;
+    for (const text of [
+      summary.scopeNotice?.text,
+      summary.headline.text,
+      summary.followUp,
+      ...summary.fragmentSummaries.map(({ headline }) => headline),
+      ...(message.fragments?.flatMap(({ limitations }) => limitations) ?? []),
+    ]) {
+      if (text?.trim()) displayed.add(text.trim());
+    }
+  }
+  if (message.report != null) {
+    displayed.add(message.report.opening.text.trim());
+    for (const item of message.report.basis) displayed.add(item.text.trim());
+    for (const item of message.report.highlights) displayed.add(item.body.trim());
+  }
+  const limitations = uniqueText(message.evidence?.limitations ?? [])
+    .filter((text) => !displayed.has(text))
+    .filter((text) => message.report == null || isActionableLimitation(text));
+  for (const limitation of limitations) displayed.add(limitation);
+  const omissions = uniqueText(message.resolution?.omissions ?? [])
+    .filter((text) => !displayed.has(text));
+  return { limitations, omissions };
+}
+
+function isActionableLimitation(text: string): boolean {
+  return /(못|없|제외|지연|불가|주의|아니|않|미만|부족|차이|대체|표본|오래|중단)/.test(text);
+}
+
+function uniqueText(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
 function capabilityLabel(capability: string): string {
@@ -131,33 +214,3 @@ function capabilityLabel(capability: string): string {
 }
 
 const EMPTY_ACTION_IDS: ReadonlySet<string> = new Set();
-
-function Evidence({ evidence, showLimitations }: { evidence: ChatEvidence; showLimitations: boolean }) {
-  return (
-    <details className="chatbot-evidence">
-      <summary>
-        <span>답변 근거</span>
-        <span>{evidence.dataAsOf ? `기준일 ${evidence.dataAsOf}` : '조회 시점 근거'}</span>
-        <span>출처 {evidence.citations.length}개</span>
-        <span>근거 {evidence.evidenceSummary.factCount}개</span>
-      </summary>
-      <div>
-        <ul aria-label="답변 출처">
-          {evidence.citations.map((citation) => (
-            <li key={citation.citationId}>
-              {citation.sourceUrl ? (
-                <a href={citation.sourceUrl} rel="noreferrer noopener" target="_blank">
-                  {citation.sourceName}
-                </a>
-              ) : citation.sourceName}
-              <span>근거 등급 {citation.evidenceGrade}</span>
-            </li>
-          ))}
-        </ul>
-        {showLimitations
-          ? evidence.limitations.map((limitation) => <small key={limitation}>{limitation}</small>)
-          : null}
-      </div>
-    </details>
-  );
-}

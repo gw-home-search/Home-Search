@@ -29,11 +29,29 @@ numeric `sub`, `role=USER`를 검증한다. 사용자 id는 request body에서 �
 ```json
 {
   "question": "잠실엘스 전용 84㎡ 최근 1년 실거래를 알려줘",
+  "uiContext": {
+    "mapViewport": {
+      "bounds": {
+        "swLat": 37.45,
+        "swLng": 126.85,
+        "neLat": 37.70,
+        "neLng": 127.20
+      },
+      "level": 4
+    },
+    "selectedComplex": { "parcelId": 1001, "complexId": 501 }
+  },
   "conversationContext": {
     "messages": [
       { "role": "user", "content": "잠실엘스 위치 알려줘" },
       { "role": "assistant", "content": "..." }
-    ]
+    ],
+    "memory": {
+      "version": 1,
+      "complexId": 501,
+      "regionCode": "11710",
+      "scopeKind": "COMPLEX"
+    }
   }
 }
 ```
@@ -41,14 +59,28 @@ numeric `sub`, `role=USER`를 검증한다. 사용자 id는 request body에서 �
 | 필드 | 타입 | 필수 | 규칙 |
 |---|---|---|---|
 | `question` | string | yes | trim 후 1..2000자 |
+| `uiContext` | object | no | 제출 시점의 브라우저 지도 hint; 권한이나 fact가 아님 |
+| `uiContext.mapViewport` | object | no | `bounds`와 `level`을 모두 포함 |
+| `uiContext.mapViewport.bounds` | object | yes | WGS84 finite number, `33<=lat<=39`, `124<=lng<=132`, `sw<ne`, 위도 span `<=6`, 경도 span `<=8` |
+| `uiContext.mapViewport.level` | integer | yes | `1..12` |
+| `uiContext.selectedComplex` | object | no | `parcelId`와 `complexId`를 모두 포함하며 각각 positive safe integer |
 | `conversationContext` | object | no | 브라우저가 선택한 최근 문맥; 신뢰할 수 없는 힌트 |
 | `conversationContext.messages` | array | no | 최근 순서 최대 12개, 전체 `content` 합계 최대 12000자 |
+| `conversationContext.memory` | object | no | 같은 대화에서 직전 응답이 제공한 bounded memory |
+| `conversationContext.memory.version` | integer | yes | `1|2`; 알 수 없는 request version은 `400` |
+| `conversationContext.memory.complexId` | integer | no | positive safe integer |
+| `conversationContext.memory.complexIds` | array | no | version 2 추천 memory에서 순위를 보존한 unique positive safe integer `2..5`개 |
+| `conversationContext.memory.regionCode` | string | no | ASCII 숫자 `2..10`자 |
+| `conversationContext.memory.scopeKind` | enum | yes | version 1은 `COMPLEX|ADMIN_REGION|MAP_VIEWPORT`, version 2는 `RECOMMENDATION` |
 | `role` | `user|assistant` | yes | `system`, `tool` 등은 허용하지 않음 |
 | `content` | string | yes | trim 후 1..2000자 |
 
 알 수 없는 top-level/context 필드는 `400 INVALID_CHATBOT_REQUEST`로 거부한다.
 `conversationContext`의 단지, 기간, 조건은 권한이나 fact가 아니며 현재 요청에서
 다시 식별·검증한다. 서버는 대화 context를 DB에 저장하거나 다음 요청을 위해 보존하지 않는다.
+`uiContext`와 memory도 같은 untrusted hint이며 AI가 `ai_read` fact로 다시 검증한다.
+syntactically valid하지만 stale하거나 서로 불일치하는 ID는 요청 오류로 만들지 않고 무시하거나
+degraded 결과로 처리한다. Web은 `selectedComplex`의 두 ID가 모두 유효할 때만 객체를 보낸다.
 
 ## JSON 응답
 
@@ -66,8 +98,22 @@ legacy 호환 필드는 유지하고 근거 metadata를 추가한다.
   "executionSummary": { "total": 1, "succeeded": 1, "failed": 0 },
   "answer": "...",
   "resolvedQuestion": "...",
-  "conversationResolution": null,
-  "conversationMemoryPatch": null,
+  "conversationResolution": {
+    "version": 1,
+    "answerMode": "BEST_EFFORT",
+    "goals": [{ "capability": "recent_trade_lookup", "status": "degraded" }],
+    "assumptions": [{
+      "code": "DEFAULT_PERIOD_ONE_YEAR",
+      "text": "기간을 생략해 최근 1년을 기준으로 확인했습니다."
+    }],
+    "omissions": []
+  },
+  "conversationMemoryPatch": {
+    "version": 1,
+    "complexId": 501,
+    "regionCode": "11710",
+    "scopeKind": "COMPLEX"
+  },
   "uiActions": [],
   "uiArtifacts": [],
   "uiSummary": {
@@ -109,6 +155,30 @@ legacy 호환 필드는 유지하고 근거 metadata를 추가한다.
   }
 }
 ```
+
+### `conversationResolution/v1`과 `conversationMemoryPatch/v1|v2`
+
+두 필드는 기존 nullable seam을 활성화하는 optional additive metadata다. `null` 또는 omission도
+계속 유효하며 기존 `success`, `status`, `evidenceSummary.status`, HTTP status 의미를 대체하거나
+재정의하지 않는다.
+
+- `conversationResolution.version`: 정확히 `1`.
+- `answerMode`: `COMPLETE|BEST_EFFORT|PARTIAL|NO_RESULT`.
+- `goals`: 최대 4개. `capability`는 identifier, `status`는
+  `answered|degraded|unavailable`.
+- `assumptions`: 최대 8개. `code`는 identifier, `text`는 trim 후 `1..2000`자.
+- `omissions`: 최대 8개, 각 trim 후 `1..2000`자.
+- `conversationMemoryPatch/v1`의 `complexId`, `regionCode`, `scopeKind`는 기존
+  request memory와 같은 타입과 의미다.
+- 추천 결과에 검증된 후보가 둘 이상이면 `conversationMemoryPatch/v2`가
+  `scopeKind=RECOMMENDATION`과 순위 순 `complexIds` 최대 5개를 반환한다.
+- v2 memory는 “방금 추천한 1위와 2위 비교”처럼 같은 대화의 후속 비교에서만
+  사용하며, 서버는 각 ID를 `ai_read` 단지 fact로 다시 확인한다. 후보가 둘 미만으로
+  재검증되면 memory를 무시하고 현재 질문의 일반 계획을 유지한다.
+- patch는 해당 대화의 이전 memory를 대체한다. 새 대화는 memory 없이 시작한다.
+- Web은 unknown version 또는 malformed response object만 무시하고 `answer`를 계속 표시한다.
+- BFF는 두 필드를 재작성하지 않고 JSON과 SSE `final.response`에 그대로 전달한다.
+- 질문, context, memory, answer는 BFF·AI DB나 application log·trace에 저장하지 않는다.
 
 ### 실행 상태와 근거 준비 상태
 
@@ -333,7 +403,8 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
 - `SHOPPING`은 active 공식 원장 중 좌표가 확인된 범위만 사용한다. 현재 source 전용
   최소 coverage는 88%이며, 미확인 행을 0건이나 시설 부재로 해석하지 않는다.
 - `unavailable`은 0으로 바꾸거나 열세로 해석하지 않는다.
-- row는 최대 5개, scope 후보는 최대 100개다.
+- row는 최대 5개다. scope 후보는 최대 5,000개까지 관찰하고 전체 eligible 후보에서
+  결정론적으로 정렬한다.
 - `CHILDCARE`는 source·타입 구현을 보존하지만 이 version의 active metric, 점수, 표,
   runtime allowlist에서 제외한다. 유치원은 별도 공식 source 승인 전 포함하지 않는다.
 
@@ -402,18 +473,20 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
 ```
 
 - `cards`는 1..5개이며 `rank`와 정렬은 서버 정책 결과와 같아야 한다.
-- 지역·최대 예산·전용면적 중 하나라도 없으면 observation과 추천을 실행하지 않고 누락
-  조건을 `limitations`로 안내한다.
+- 지역·최대 예산·전용면적 중 하나가 없으면 가격 점수형 추천 대신 조건 기반 추천으로
+  전환해 확인 가능한 단지·거래·생활 인프라 기준으로 후보를 먼저 제공한다.
 - `policyVersion`은 점수 정책을 고정하며 LLM은 `totalScore`와 breakdown을 변경하지 않는다.
 - 기본 `recommendation-policy-v1`은 예산 조건 통과 60점, 최근접 철도역
   0..1,500m 선형 25점, 최근접 대규모점포 0..1,000m 선형 15점이다. 예산을 통과한
   후보 사이에는 가격 차이로 추가 점수를 주지 않는다.
 - 후보는 요청 지역 또는 하위 지역, marker-safe 좌표, 전역 최신 거래일 기준 최근 365일,
-  요청 전용면적 ±1.0㎡의 가장 최근 거래 3건을 모두 만족해야 하며 observation은 최대
-  100개, 최종 card는 최대 5개다.
+  요청 전용면적 ±1.0㎡의 가장 최근 거래 3건을 기준으로 최대 5,000개까지 관찰하며,
+  최종 card는 최대 5개다. exact 예산·세대수 조건을 만족한 후보가 없으면 조건 차이가
+  작은 후보를 별도 가까운 후보로 표시하고 `BEST_EFFORT`로 구분한다.
 - 정렬은 `totalScore` 내림차순, 동점이면 `complexId` 오름차순이며 LLM이 바꿀 수 없다.
-- 철도 또는 대규모점포 데이터가 준비되지 않으면 거리를 0점으로 바꾸지 않고 추천 전체를
-  `unavailable`로 처리한다. 정상 active source에서 반경 내 시설이 없는 경우만 0점이다.
+- 철도 또는 대규모점포 데이터가 준비되지 않으면 거리를 0점으로 바꾸지 않는다. 해당
+  metric만 제외하고 가격·거래 근거로 후보를 제공하며 `PARTIAL`로 구분한다. 정상 active
+  source에서 반경 내 시설이 없는 경우만 verified zero로 처리한다.
 - 대규모점포 source는 전국 좌표 coverage가 88% 미만이면 준비되지 않은 것으로 처리하고,
   통과하더라도 좌표가 확인된 공식 원장 범위만 반영했다는 제한을 표시한다.
 - 현재 질문에서 명시적으로 검증된 `TRANSIT|STUDENT|YOUNG_CHILD|SHOPPING`만
@@ -477,6 +550,50 @@ Kakao 장소 검색을 실행하지 않고, 사용자가 버튼을 누른 뒤 we
 - action 실행 실패는 chat message를 실패시키거나 panel을 닫지 않는다.
 - Kakao 장소 응답, 전화, URL은 chat message, server DB, IndexedDB archive에 저장하지 않는다.
 
+### 의사결정 리포트 계약
+
+`uiReport/v1`은 기존 `answer`, `uiSummary`, `uiArtifacts` 위에 섹션 순서만 더하는
+optional additive 계약이다. Web은 검증에 실패하거나 알 수 없는 version이면 해당 필드를
+무시하고 기존 `answer`를 표시한다.
+
+```json
+{
+  "version": 1,
+  "kind": "RECOMMENDATION",
+  "opening": { "text": "먼저 살펴볼 후보 5곳입니다.", "factIds": ["scope-1"] },
+  "basis": [{ "text": "학교 위치와 학원 접근성을 우선했습니다.", "factIds": ["scope-1"] }],
+  "primaryArtifactId": "criteria-recommendation-1",
+  "highlights": [{
+    "complexId": 501,
+    "title": "1순위 · 후보 단지",
+    "body": "학교 위치 관찰값을 우선 비교했습니다.",
+    "factIds": ["school-501"]
+  }],
+  "detailArtifactIds": ["candidate-profile-501"],
+  "actionIds": []
+}
+```
+
+- `kind`: `RECOMMENDATION|COMPARISON|RECENT_TRADE|PRICE_TREND|PROPERTY_OVERVIEW|GENERAL`.
+- opening, basis, highlight의 모든 서술은 response citation에 포함된 fact ID만 참조한다.
+- `primaryArtifactId`, `detailArtifactIds`, `actionIds`는 같은 response에 실제로 존재하는
+  artifact/action만 참조한다.
+- 추천의 `candidateProfile/v1`은 최대 5개이며 주소·세대수·사용승인일, 추천 이유와
+  `TRADE|TRANSPORT|EDUCATION|LIFESTYLE` 중 값이 있는 section만 가진다.
+- 조건 기반 추천에 전용면적이 있으면 최근 1년의 같은 면적(허용 오차 `±1.0㎡`)
+  거래가 3건 이상 확인된 단지를 먼저 사용하고, 후보 상세에 최근 거래와 최근 3건
+  중앙값을 표시한다. 해당 거래 표본이나 전역 최신 거래일을 확인할 수 없으면 단지
+  후보는 유지하되 면적을 순위에서 제외하고 `PARTIAL`로 명시한다.
+- `30평대`는 공급면적을 전용면적으로 기계 환산하지 않는다. 공통 비교가 필요한 경우
+  전용 `84㎡`를 대표 비교 면적으로 적용했다는 기준을 응답에 표시한다.
+- 후보 상세 첫 항목만 기본으로 펼치며 나머지는 Web에서 점진적으로 공개한다.
+- `comparisonTable/v2`는 면적이 없는 비교에 사용한다. 가격 row를 만들지 않고 각 row에
+  `PRICE|SCALE|TRANSPORT|EDUCATION|LIFESTYLE` group을 부여하며 basis의 날짜·면적은
+  `null`이다. 면적이 있는 기존 `comparisonTable/v1`은 그대로 유지한다.
+- `recommendationTable/v1`, `comparisonTable/v1`, 기존 archive는 계속 렌더링한다.
+- 본문에는 source ID, 내부 policy 이름, `Sbiz` 약어를 표시하지 않는다. 실제 출처명은
+  답변 마지막의 출처 영역에만 표시한다.
+
 ## SSE 응답
 
 `POST /api/v1/chatbot/query/stream`은 `text/event-stream`을 반환한다.
@@ -534,7 +651,7 @@ data: {"requestId":"...","code":"CHATBOT_PROVIDER_UNAVAILABLE","message":"답변
 | `401` | `AUTHENTICATION_REQUIRED` | token 누락·만료·검증 실패 |
 | `429` | `CHATBOT_RATE_LIMITED` | subject 기반 요청 제한 또는 비용 예산 초과 |
 | `503` | `CHATBOT_RATE_LIMIT_UNAVAILABLE` | Redis guard 장애로 fail-closed |
-| `503` | `CHATBOT_PROVIDER_UNAVAILABLE` | 1차 재시도와 2차 provider 모두 실패 |
+| `503` | `CHATBOT_PROVIDER_UNAVAILABLE` | 계획 해석과 결정형 router가 모두 실패하거나 검증 가능한 property baseline·안전한 응답 조립 경로가 없음 |
 | `504` | `CHATBOT_TIMEOUT` | BFF의 bounded ai-service timeout |
 
 오류에는 stack trace, 내부 URL, model/provider 이름, prompt, 질문 원문을 넣지 않는다.
@@ -546,8 +663,11 @@ data: {"requestId":"...","code":"CHATBOT_PROVIDER_UNAVAILABLE","message":"답변
   부족한 0건은 `unavailable|partial`로 반환한다.
 - Kakao 0건을 시설 부재로 표현하지 않는다.
 - Data Readiness 실패 시 도구를 실행하지 않고 필요한 dataset을 설명한다.
-- LLM 검증 실패 시 정형 observation을 대신 최종 답변으로 노출하지 않는다.
-- 모든 model 시도가 실패하면 `503` 또는 시작된 SSE의 `error`로 종료한다.
+- LLM draft 또는 grounding 검증이 실패해도 observation이 있으면 서버의 결정형
+  presenter가 동일 fact ID로 답변을 조립한다.
+- 모든 model 시도가 실패했다는 이유만으로 `503`을 반환하지 않는다. 결정형 router도
+  질문을 해석하지 못하거나 property baseline이 전혀 없거나 grounding/serialization
+  invariant를 안전하게 복구할 수 없을 때만 `503` 또는 시작된 SSE `error`로 종료한다.
 
 ## 호환성 규칙
 
@@ -555,5 +675,6 @@ data: {"requestId":"...","code":"CHATBOT_PROVIDER_UNAVAILABLE","message":"답변
 - additive chatbot metadata는 위 필드명과 타입을 유지한다.
 - JSON/SSE fixture는 같은 use case 결과의 의미와 citation 집합을 비교한다.
 - 계약 변경은 이 문서, BFF contract test, web adapter fixture를 같은 slice에서 갱신한다.
-- `uiSummary/v1`, `tradeTable/v1`, `trendTable/v1` 추가의 계약 판정은
+- `uiSummary/v1`, `uiReport/v1`, `candidateProfile/v1`, `comparisonTable/v2`,
+  `tradeTable/v1`, `trendTable/v1` 추가의 계약 판정은
   `compatible/additive`다. BFF는 payload를 재작성하지 않고 계속 passthrough한다.

@@ -6,7 +6,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.home.chatbff.auth.VerifiedChatUser;
 import com.home.chatbff.web.ChatbotQueryRequest;
 import com.home.chatbff.web.ChatbotQueryRequest.ConversationContext;
+import com.home.chatbff.web.ChatbotQueryRequest.ConversationMemory;
 import com.home.chatbff.web.ChatbotQueryRequest.ConversationMessage;
+import com.home.chatbff.web.ChatbotQueryRequest.MapBounds;
+import com.home.chatbff.web.ChatbotQueryRequest.MapViewport;
+import com.home.chatbff.web.ChatbotQueryRequest.ScopeKind;
+import com.home.chatbff.web.ChatbotQueryRequest.SelectedComplex;
+import com.home.chatbff.web.ChatbotQueryRequest.UiContext;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
@@ -35,27 +41,38 @@ class WebClientChatbotAiClientTest {
     void forwardsHeadersAndReturnsJson() {
         AtomicReference<String> authorization = new AtomicReference<>();
         AtomicReference<String> requestId = new AtomicReference<>();
+        AtomicReference<String> forwardedBody = new AtomicReference<>();
         server = HttpServer.create()
                 .host("127.0.0.1")
                 .port(0)
                 .handle((request, response) -> {
                     authorization.set(request.requestHeaders().get(HttpHeaders.AUTHORIZATION));
                     requestId.set(request.requestHeaders().get("X-Request-Id"));
-                    return response.header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                            .sendString(Mono.just("""
-                                    {"answer":"준비 중","uiSummary":{"version":1,
-                                    "scopeNotice":null,
-                                    "headline":{"text":"최근 거래를 확인했습니다.","factIds":["fact-1"]},
-                                    "criteria":[],"interpretations":[],"followUp":null,
-                                    "fragmentSummaries":[]}}
-                                    """));
+                    return request.receive().aggregate().asString().flatMap(body -> {
+                        forwardedBody.set(body);
+                        return response.header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                                .sendString(Mono.just("""
+                                        {"answer":"준비 중","uiSummary":{"version":1,
+                                        "scopeNotice":null,
+                                        "headline":{"text":"최근 거래를 확인했습니다.","factIds":["fact-1"]},
+                                        "criteria":[],"interpretations":[],"followUp":null,
+                                        "fragmentSummaries":[]}}
+                                        """))
+                                .then();
+                    });
                 })
                 .bindNow();
         var client = client(URI.create("http://127.0.0.1:" + server.port()));
 
         JsonNode result = client.query(
                         new ChatbotQueryRequest(
-                                "최근 거래", new ConversationContext(List.of(new ConversationMessage("user", "이전 질문")))),
+                                "최근 거래",
+                                new UiContext(
+                                        new MapViewport(new MapBounds(37.45, 126.85, 37.70, 127.20), 4),
+                                        new SelectedComplex(501L, 1001L)),
+                                new ConversationContext(
+                                        List.of(new ConversationMessage("user", "이전 질문")),
+                                        new ConversationMemory(1, 501L, "11710", ScopeKind.COMPLEX))),
                         "Bearer user-token",
                         "request-1",
                         new VerifiedChatUser(42L))
@@ -67,6 +84,12 @@ class WebClientChatbotAiClientTest {
                 .isEqualTo("최근 거래를 확인했습니다.");
         assertThat(authorization).hasValue("Bearer user-token");
         assertThat(requestId).hasValue("request-1");
+        assertThat(forwardedBody.get())
+                .contains("\"uiContext\"")
+                .contains("\"complexId\":501")
+                .contains("\"parcelId\":1001")
+                .contains("\"memory\"")
+                .contains("\"scopeKind\":\"COMPLEX\"");
     }
 
     @Test

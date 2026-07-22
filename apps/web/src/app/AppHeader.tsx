@@ -2,14 +2,16 @@ import { AccountControl } from '../features/auth/AccountControl';
 import { ChatbotPanel } from '../features/chat/ChatbotPanel';
 import type { IndexedDbChatConversationStore } from '../features/chat/storage/chatConversationStore';
 import type { ChatAction } from '../features/chat/actionContract';
+import type { ChatUiContext } from '../features/chat/conversationContract';
 
 type AppHeaderProps = {
   chatConversationStore?: IndexedDbChatConversationStore;
   onChatOpenChange?: (isOpen: boolean) => void;
   onUiAction?: (action: ChatAction) => boolean;
+  chatUiContext?: ChatUiContext;
 };
 
-export function AppHeader({ chatConversationStore, onChatOpenChange, onUiAction }: AppHeaderProps) {
+export function AppHeader({ chatConversationStore, chatUiContext, onChatOpenChange, onUiAction }: AppHeaderProps) {
   return (
     <header aria-label="상단 앱 바" className="app-bar">
       <div className="app-brand">
@@ -31,6 +33,7 @@ export function AppHeader({ chatConversationStore, onChatOpenChange, onUiAction 
           onOpenChange={onChatOpenChange}
           onUiAction={onUiAction}
           store={chatConversationStore}
+          uiContext={chatUiContext}
         />
         <AccountControl />
       </div>

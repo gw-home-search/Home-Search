@@ -41,6 +41,12 @@ class PropertyRepository:
         return date(2026, 7, 20)
 
 
+class PartiallyFailingPropertyRepository(PropertyRepository):
+    def recent_trades(self, *args):
+        del args
+        raise RuntimeError("must-not-leak")
+
+
 class CompoundLanguageModel:
     def __init__(self, plans: tuple[QueryPlan, ...]) -> None:
         self._plans = plans
@@ -139,6 +145,35 @@ def test_compound_query_preserves_success_when_one_fragment_is_unavailable() -> 
     ]
     assert response["evidenceSummary"]["status"] == "partial"
     assert response["uiArtifacts"][0]["type"] == "factList"
+
+
+def test_compound_query_preserves_success_when_one_fragment_raises() -> None:
+    plans = (
+        QueryPlan("complex_identity", "잠실엘스"),
+        QueryPlan("recent_trade_lookup", "잠실엘스"),
+    )
+    engine = GroundedChatbotEngine(
+        repository=PartiallyFailingPropertyRepository(),
+        language_model=CompoundLanguageModel(plans),
+        enabled_capabilities=frozenset({"complex_identity", "recent_trade_lookup"}),
+        answer_first_enabled=True,
+    )
+
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(question="잠실엘스 위치와 최근 거래를 알려줘"),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-partial-exception",
+    ))
+
+    assert response["success"] is True
+    assert response["status"] == "partial_success"
+    assert response["executionSummary"] == {"total": 2, "succeeded": 2, "failed": 0}
+    assert [fragment["status"] for fragment in response["fragments"]] == [
+        "success", "success",
+    ]
+    assert response["conversationResolution"]["answerMode"] == "BEST_EFFORT"
+    assert response["conversationResolution"]["goals"][1]["status"] == "degraded"
+    assert "must-not-leak" not in str(response)
 
 
 def test_compound_query_is_failed_when_every_fragment_is_unavailable() -> None:

@@ -1,14 +1,32 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 import os
+import time
 from functools import lru_cache
 from typing import Protocol, cast
 
 from .auth import AuthenticatedUser
 from .models import ChatbotQueryRequest
-from .property_chat.models import PropertyCapability, ReferenceCapability
+from .property_chat.models import PropertyCapability, QueryCapability, ReferenceCapability
+
+_LOGGER = logging.getLogger(__name__)
+_ANSWER_FIRST_FALLBACK_CAPABILITIES = frozenset({
+    "complex_identity",
+    "recent_trade_lookup",
+    "price_trend",
+    "school_location",
+    "retail_location",
+    "academy_registry_summary",
+    "academy_lookup",
+    "rail_station_lookup",
+    "childcare_lookup",
+    "kakao_place_search",
+    "comparison",
+    "recommendation",
+})
 
 _APPROVED_PROPERTY_CAPABILITY_CONFIGURATIONS = frozenset(
     {
@@ -258,6 +276,56 @@ def get_query_timeout_seconds() -> float | None:
     return timeout_seconds
 
 
+def get_answer_first_enabled() -> bool:
+    return _boolean_flag("HOME_AI_ANSWER_FIRST_ORCHESTRATION_ENABLED", True)
+
+
+def get_property_overview_enabled() -> bool:
+    return _boolean_flag("HOME_AI_PROPERTY_OVERVIEW_ENABLED", True)
+
+
+def get_semantic_goal_planner_enabled() -> bool:
+    return _boolean_flag("HOME_AI_SEMANTIC_GOAL_PLANNER_ENABLED", True)
+
+
+def get_dependent_workflow_enabled() -> bool:
+    return _boolean_flag("HOME_AI_DEPENDENT_WORKFLOW_ENABLED", True)
+
+
+def get_decision_report_enabled() -> bool:
+    return _boolean_flag("HOME_AI_DECISION_REPORT_ENABLED", True)
+
+
+def get_artifact_v2_enabled() -> bool:
+    return _boolean_flag("HOME_AI_ARTIFACT_V2_ENABLED", True)
+
+
+def get_answer_first_fallback_capabilities() -> frozenset[QueryCapability]:
+    raw_value = os.getenv("HOME_AI_ANSWER_FIRST_FALLBACK_CAPABILITIES")
+    if raw_value is None:
+        return cast(
+            frozenset[QueryCapability], _ANSWER_FIRST_FALLBACK_CAPABILITIES
+        )
+    configured = frozenset(
+        value.strip() for value in raw_value.split(",") if value.strip()
+    )
+    if not configured or not configured.issubset(_ANSWER_FIRST_FALLBACK_CAPABILITIES):
+        return frozenset()
+    return cast(frozenset[QueryCapability], configured)
+
+
+def _boolean_flag(name: str, default: bool) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    value = raw_value.strip().lower()
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    return False
+
+
 class ConfiguredChatbotEngine:
     async def query(
         self,
@@ -271,6 +339,7 @@ class ConfiguredChatbotEngine:
         timeout_seconds = get_query_timeout_seconds()
         if timeout_seconds is None:
             raise ChatbotProviderUnavailable()
+        started_at = time.monotonic()
         try:
             async with asyncio.timeout(timeout_seconds):
                 repository = await asyncio.to_thread(get_property_fact_repository)
@@ -354,14 +423,110 @@ class ConfiguredChatbotEngine:
                         if "retail_location" in enabled_reference_capabilities
                         else frozenset({"CRITERIA"})
                     ),
+                    answer_first_enabled=get_answer_first_enabled(),
+                    property_overview_enabled=get_property_overview_enabled(),
+                    answer_first_fallback_capabilities=(
+                        get_answer_first_fallback_capabilities()
+                    ),
+                    semantic_goal_planner_enabled=get_semantic_goal_planner_enabled(),
+                    dependent_workflow_enabled=get_dependent_workflow_enabled(),
+                    polish_budget_seconds=max(timeout_seconds - 5, 0),
                 )
-                return await engine.query(
+                response = _apply_presentation_rollbacks(await engine.query(
                     request=request,
                     user=user,
                     request_id=request_id,
+                ))
+                _LOGGER.info(
+                    "chatbot_answer_completed",
+                    extra=_answer_outcome_metric(
+                        response,
+                        elapsed_milliseconds=round(
+                            (time.monotonic() - started_at) * 1000
+                        ),
+                    ),
                 )
+                return response
         except TimeoutError as exception:
             raise ChatbotProviderUnavailable() from exception
+
+
+def _answer_outcome_metric(
+    response: dict[str, object], *, elapsed_milliseconds: int
+) -> dict[str, object]:
+    resolution = response.get("conversationResolution")
+    answer_mode = "UNKNOWN"
+    statuses: list[str] = []
+    if isinstance(resolution, dict) and resolution.get("version") == 1:
+        candidate_mode = resolution.get("answerMode")
+        if candidate_mode in {"COMPLETE", "BEST_EFFORT", "PARTIAL", "NO_RESULT"}:
+            answer_mode = candidate_mode
+        goals = resolution.get("goals")
+        if isinstance(goals, list):
+            statuses = [
+                status
+                for goal in goals
+                if isinstance(goal, dict)
+                and (status := goal.get("status"))
+                in {"answered", "degraded", "unavailable"}
+            ]
+    return {
+        "event": "chatbot_answer_completed",
+        "answer_mode": answer_mode,
+        "goal_count": len(statuses),
+        "answered_goal_count": statuses.count("answered"),
+        "degraded_goal_count": statuses.count("degraded"),
+        "unavailable_goal_count": statuses.count("unavailable"),
+        "elapsed_milliseconds": max(elapsed_milliseconds, 0),
+    }
+
+
+def _apply_presentation_rollbacks(
+    response: dict[str, object],
+) -> dict[str, object]:
+    result = dict(response)
+    artifacts = result.get("uiArtifacts")
+    if not isinstance(artifacts, list):
+        return result
+    filtered = list(artifacts)
+    if not get_artifact_v2_enabled():
+        filtered = [
+            artifact
+            for artifact in filtered
+            if not isinstance(artifact, dict) or artifact.get("version") != 2
+        ]
+    if not get_decision_report_enabled():
+        filtered = [
+            artifact
+            for artifact in filtered
+            if not isinstance(artifact, dict)
+            or artifact.get("type") != "candidateProfile"
+        ]
+        result["uiReport"] = None
+    else:
+        available_ids = {
+            artifact_id
+            for artifact in filtered
+            if isinstance(artifact, dict)
+            and isinstance((artifact_id := artifact.get("artifactId")), str)
+        }
+        report = result.get("uiReport")
+        if isinstance(report, dict):
+            primary_id = report.get("primaryArtifactId")
+            detail_ids = report.get("detailArtifactIds")
+            if (
+                isinstance(primary_id, str) and primary_id not in available_ids
+            ) or (
+                isinstance(detail_ids, list)
+                and any(
+                    isinstance(artifact_id, str)
+                    and artifact_id not in available_ids
+                    for artifact_id in detail_ids
+                )
+            ):
+                result["uiReport"] = None
+    result["uiArtifacts"] = filtered
+    return result
 
 
 _ENGINE = ConfiguredChatbotEngine()

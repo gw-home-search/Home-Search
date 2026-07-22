@@ -52,6 +52,8 @@ from .recommendation_errors import RecommendationExecutionError
 from .reference_facilities import FacilitySearchResult, retail_coordinate_ready
 
 _BatchResult = TypeVar("_BatchResult")
+_CRITERIA_CANDIDATE_LIMIT = 5_000
+_REPOSITORY_BATCH_SIZE = 100
 
 
 class RecommendationPropertyRepository(Protocol):
@@ -199,7 +201,7 @@ class RecommendationHandler:
                 start_date,
                 cutoff,
                 area,
-                100,
+                _CRITERIA_CANDIDATE_LIMIT,
             )
         except Exception as exception:
             raise RecommendationExecutionError(
@@ -211,11 +213,10 @@ class RecommendationHandler:
                 ["지역을 하나로 식별하지 못했습니다. 시·도와 시·군·구를 함께 입력해 주세요."],
                 "unavailable",
             )
-        if len(observations) > 100:
+        if len(observations) > _CRITERIA_CANDIDATE_LIMIT:
             raise ValueError("recommendation candidate cap was exceeded")
-        policy = RecommendationPolicy(
+        budget_policy = RecommendationPolicy(
             maximum_budget_ten_thousand_krw=budget,
-            lifestyle_themes=plan.lifestyle_themes,
         )
         bases = {
             complex_id: RecentThreeTradeBasis.from_trades(
@@ -237,9 +238,58 @@ class RecommendationHandler:
                 or record.unit_count is not None
                 and record.unit_count >= plan.minimum_unit_count
             )
-            and policy.is_budget_qualified(bases[complex_id])
+            and budget_policy.is_budget_qualified(bases[complex_id])
         )
         if not qualified:
+            closest = tuple(sorted(
+                (
+                    (record, bases[complex_id])
+                    for complex_id, (record, _) in observations.items()
+                    if record.marker_safe
+                    and record.latitude is not None
+                    and record.longitude is not None
+                    and bases[complex_id].sample_count == 3
+                    and bases[complex_id].median_amount_ten_thousand_krw is not None
+                    and (
+                        plan.minimum_unit_count is None
+                        or record.unit_count is not None
+                    )
+                ),
+                key=lambda item: (
+                    int(
+                        plan.minimum_unit_count is not None
+                        and (item[0].unit_count or 0) < plan.minimum_unit_count
+                    )
+                    + int(
+                        (item[1].median_amount_ten_thousand_krw or 0) > budget
+                    ),
+                    max(
+                        (plan.minimum_unit_count or 0) - (item[0].unit_count or 0),
+                        0,
+                    ),
+                    max(
+                        (item[1].median_amount_ten_thousand_krw or 0) - budget,
+                        0,
+                    ),
+                    item[0].complex_id,
+                ),
+            ))
+            if closest:
+                return _degraded_recommendation(
+                    await self._observe_budget_criteria(
+                        plan,
+                        closest,
+                        region_name,
+                        start_date,
+                        cutoff,
+                        area,
+                        budget,
+                        near_constraint_mode=True,
+                    ),
+                    "정확한 예산·세대수 조건을 모두 충족한 단지가 없어 "
+                    "조건 차이가 작은 가까운 후보를 표시했습니다.",
+                    fallback_step="NEAREST_CONSTRAINT_CANDIDATES",
+                )
             scope_fact = _scope_fact(
                 region_name=region_name,
                 start_date=start_date,
@@ -263,9 +313,37 @@ class RecommendationHandler:
                 plan, qualified, region_name, start_date, cutoff, area, budget
             )
         if self._rail_repository is None:
-            return _source_unavailable("철도")
+            if self._builders is None:
+                return _source_unavailable("철도")
+            return _degraded_recommendation(
+                await self._observe_budget_criteria(
+                    plan, qualified, region_name, start_date, cutoff, area, budget
+                ),
+                "철도 기준을 확인하지 못해 거래 근거로 후보를 정리했습니다.",
+            )
         if self._retail_repository is None:
-            return _source_unavailable("대규모점포")
+            if self._builders is None:
+                return _source_unavailable("대규모점포")
+            return _degraded_recommendation(
+                await self._observe_budget_criteria(
+                    plan, qualified, region_name, start_date, cutoff, area, budget
+                ),
+                "대규모점포 기준을 확인하지 못해 거래 근거로 후보를 정리했습니다.",
+            )
+        effective_themes = list(plan.lifestyle_themes)
+        degraded_reasons: list[str] = []
+        if "STUDENT" in effective_themes and (
+            self._school_repository is None or self._academy_repository is None
+        ):
+            effective_themes.remove("STUDENT")
+            degraded_reasons.append("학교 또는 학원 위치 기준을 제외했습니다.")
+        if "YOUNG_CHILD" in effective_themes and self._childcare_repository is None:
+            effective_themes.remove("YOUNG_CHILD")
+            degraded_reasons.append("어린이집 기준을 제외했습니다.")
+        policy = RecommendationPolicy(
+            maximum_budget_ten_thousand_krw=budget,
+            lifestyle_themes=tuple(effective_themes),
+        )
         points = tuple(
             CandidatePoint(
                 record.complex_id,
@@ -275,65 +353,96 @@ class RecommendationHandler:
             )
             for record, _ in qualified
         )
-        rail_results, retail_results = await asyncio.gather(
-            _observe_batch(
-                "RECOMMENDATION_RAIL_BATCH_FAILED",
-                self._rail_repository.nearest_batch,
-                points=points,
-                radius_meters=1500,
-            ),
-            _observe_batch(
-                "RECOMMENDATION_RETAIL_BATCH_FAILED",
-                self._retail_repository.nearest_batch,
-                source_id="retail.large-store",
-                category="LARGE_STORE",
-                points=points,
-                radius_meters=1000,
-            ),
-        )
+        try:
+            rail_results, retail_results = await asyncio.gather(
+                _observe_batch(
+                    "RECOMMENDATION_RAIL_BATCH_FAILED",
+                    self._rail_repository.nearest_batch,
+                    points=points,
+                    radius_meters=1500,
+                ),
+                _observe_batch(
+                    "RECOMMENDATION_RETAIL_BATCH_FAILED",
+                    self._retail_repository.nearest_batch,
+                    source_id="retail.large-store",
+                    category="LARGE_STORE",
+                    points=points,
+                    radius_meters=1000,
+                ),
+            )
+        except RecommendationExecutionError:
+            return _degraded_recommendation(
+                await self._observe_budget_criteria(
+                    plan, qualified, region_name, start_date, cutoff, area, budget
+                ),
+                "일부 생활 인프라 기준을 확인하지 못해 거래 근거로 후보를 정리했습니다.",
+            )
         if rail_results is None:
-            return _source_unavailable("철도")
+            return _degraded_recommendation(
+                await self._observe_budget_criteria(
+                    plan, qualified, region_name, start_date, cutoff, area, budget
+                ),
+                "철도 기준을 확인하지 못해 거래 근거로 후보를 정리했습니다.",
+            )
         if retail_results is None or any(
             not retail_coordinate_ready(result) for result in retail_results.values()
         ):
-            return _source_unavailable("대규모점포")
+            return _degraded_recommendation(
+                await self._observe_budget_criteria(
+                    plan, qualified, region_name, start_date, cutoff, area, budget
+                ),
+                "대규모점포 기준을 확인하지 못해 거래 근거로 후보를 정리했습니다.",
+            )
         student_results = None
         academy_results = None
-        if "STUDENT" in plan.lifestyle_themes:
-            if self._school_repository is None or self._academy_repository is None:
-                return _source_unavailable("학교 또는 Sbiz 교육업소")
-            student_results, academy_results = await asyncio.gather(
-                asyncio.to_thread(
-                    self._school_repository.nearest_by_level_batch,
-                    points=points, school_levels=plan.school_levels,
-                    radius_meters=1500,
-                ),
-                asyncio.to_thread(
-                    self._academy_repository.nearby_counts_batch,
-                    points=points, radius_meters=800,
-                ),
-            )
+        if "STUDENT" in effective_themes:
+            assert self._school_repository is not None
+            assert self._academy_repository is not None
+            try:
+                student_results, academy_results = await asyncio.gather(
+                    asyncio.to_thread(
+                        self._school_repository.nearest_by_level_batch,
+                        points=points, school_levels=plan.school_levels,
+                        radius_meters=1500,
+                    ),
+                    asyncio.to_thread(
+                        self._academy_repository.nearby_counts_batch,
+                        points=points, radius_meters=800,
+                    ),
+                )
+            except Exception:
+                student_results = None
+                academy_results = None
             if student_results is None or academy_results is None:
-                return _source_unavailable("학교 또는 Sbiz 교육업소")
-            snapshot, school_by_complex = student_results
-            school_age = (self._today() - snapshot.source_date).days
-            if school_age < 0 or school_age > 214 or any(
-                (self._today() - result.observed_at.date()).days < 0
-                or (self._today() - result.observed_at.date()).days > result.freshness_days
-                or result.coordinate_coverage < 0.95
-                for result in academy_results.values()
-            ):
-                return _source_unavailable("학교 또는 Sbiz 교육업소")
+                degraded_reasons.append("학교 또는 학원 위치 기준을 제외했습니다.")
+                student_results = None
+                academy_results = None
+                school_by_complex = {}
+            else:
+                snapshot, school_by_complex = student_results
+                school_age = (self._today() - snapshot.source_date).days
+                if school_age < 0 or school_age > 214 or any(
+                    (self._today() - result.observed_at.date()).days < 0
+                    or (self._today() - result.observed_at.date()).days > result.freshness_days
+                    or result.coordinate_coverage < 0.95
+                    for result in academy_results.values()
+                ):
+                    degraded_reasons.append("학교 또는 학원 위치 기준을 제외했습니다.")
+                    student_results = None
+                    academy_results = None
+                    school_by_complex = {}
         else:
             school_by_complex = {}
         childcare_results = None
-        if "YOUNG_CHILD" in plan.lifestyle_themes:
-            if self._childcare_repository is None:
-                return _source_unavailable("어린이집")
-            childcare_results = await asyncio.to_thread(
-                self._childcare_repository.nearby_batch,
-                points=points, radius_meters=800,
-            )
+        if "YOUNG_CHILD" in effective_themes:
+            assert self._childcare_repository is not None
+            try:
+                childcare_results = await asyncio.to_thread(
+                    self._childcare_repository.nearby_batch,
+                    points=points, radius_meters=800,
+                )
+            except Exception:
+                childcare_results = None
             if childcare_results is None or any(
                 result.coordinate_coverage is None
                 or result.coordinate_coverage < 0.9
@@ -341,7 +450,8 @@ class RecommendationHandler:
                 or (self._today() - result.observed_at.date()).days > result.freshness_days
                 for result in childcare_results.values()
             ):
-                return _source_unavailable("어린이집")
+                degraded_reasons.append("어린이집 기준을 제외했습니다.")
+                childcare_results = None
         candidates = tuple(
             RecommendationCandidate(
                 complex_record=record,
@@ -459,7 +569,7 @@ class RecommendationHandler:
                     rail_fact.fact_id, retail_fact.fact_id,
                     *(fact.fact_id for fact in extra_facts),
                 ),
-                active_themes=plan.lifestyle_themes,
+                active_themes=tuple(effective_themes),
             ))
         artifact = RecommendationCardsArtifact(
             artifact_id=(
@@ -483,10 +593,13 @@ class RecommendationHandler:
                 "예산은 후보를 먼저 거르는 조건이며 통과 후보에 추가 가격 가산점이 없습니다.",
                 "이 결과는 미래가격·수익성·투자 가치를 평가하지 않습니다.",
                 "대규모점포는 전국 공식 원장 중 좌표가 확인된 범위만 반영했습니다.",
+                *degraded_reasons,
             ],
-            "supported",
+            "partial" if degraded_reasons else "supported",
             artifacts=(artifact,),
             artifact_fact_ids=artifact_fact_ids,
+            state=("DEGRADED" if degraded_reasons else "EXACT"),
+            fallback_steps=("PARTIAL_RECOMMENDATION_METRICS",) if degraded_reasons else (),
         )
 
     async def _observe_budget_criteria(
@@ -498,6 +611,7 @@ class RecommendationHandler:
         cutoff: date,
         area: float,
         budget: int,
+        near_constraint_mode: bool = False,
     ) -> CapabilityResult:
         points = tuple(
             CandidatePoint(
@@ -513,17 +627,34 @@ class RecommendationHandler:
         )
         if isinstance(observations, CapabilityResult):
             return observations
-        metrics_by_complex, metric_facts = observations
+        metrics_by_complex, metric_facts, unavailable_criteria = observations
+        available_criteria = tuple(
+            key for key in plan.recommendation_criteria
+            if key not in unavailable_criteria
+        )
+        available_order = tuple(
+            key for key in plan.criteria_order if key in available_criteria
+        )
         candidates = tuple(
             CriteriaRecommendationCandidate(record, metrics_by_complex[record.complex_id])
             for record, _ in qualified
         )
-        ranked = CriteriaRecommendationPolicy(
-            minimum_unit_count=plan.minimum_unit_count,
-            criteria=plan.recommendation_criteria,
-            criteria_order=plan.criteria_order,
-        ).rank(candidates)[: plan.limit]
         basis_by_complex = {basis.complex_id: basis for _, basis in qualified}
+        if available_criteria:
+            ranked = CriteriaRecommendationPolicy(
+                minimum_unit_count=plan.minimum_unit_count,
+                criteria=available_criteria,
+                criteria_order=available_order,
+            ).rank(candidates)[: plan.limit]
+        else:
+            ranked = tuple(sorted(
+                candidates,
+                key=lambda candidate: (
+                    basis_by_complex[candidate.complex_record.complex_id]
+                    .median_amount_ten_thousand_krw or 2_147_483_647,
+                    candidate.complex_record.complex_id,
+                ),
+            ))[: plan.limit]
         scope = CriteriaCandidateScope(
             region_name, tuple(record for record, _ in qualified)
         )
@@ -537,7 +668,7 @@ class RecommendationHandler:
             trade_fact = _trade_basis_fact(basis_by_complex[record.complex_id], budget)
             metric_ids = tuple(
                 fact_id
-                for key in plan.recommendation_criteria
+                for key in available_criteria
                 for fact_id in candidate.metrics[key].fact_ids
             )
             row_fact_ids = tuple(dict.fromkeys((
@@ -546,7 +677,7 @@ class RecommendationHandler:
             facts.extend((complex_fact, trade_fact))
             facts.extend(
                 metric_facts[(record.complex_id, key)]
-                for key in plan.recommendation_criteria
+                for key in available_criteria
             )
             rows.append(CriteriaRecommendationRow(
                 order, record.complex_id, record.display_name, record.unit_count,
@@ -559,33 +690,51 @@ class RecommendationHandler:
             ),
             scope_type="ADMIN_REGION",
             scope_label=region_name,
-            criteria_order=plan.criteria_order,
+            criteria_order=available_order,
             minimum_unit_count=plan.minimum_unit_count,
-            radius_meters=800 if "ACADEMY" in plan.recommendation_criteria else None,
+            radius_meters=800 if "ACADEMY" in available_criteria else None,
             rows=tuple(rows),
         ).to_public_dict()
         return CapabilityResult(
             _deduplicate_facts(facts),
             [
-                f"{start_date.isoformat()}부터 {cutoff.isoformat()}까지 전용면적 "
-                f"{area:g}㎡ ±1.0㎡ 최근 거래 3건과 예산 조건을 먼저 적용했습니다.",
-                "예산 통과 후보를 대상으로 단지 중심 800m 내 Sbiz 교육업소 관찰값을 정리했습니다.",
+                (
+                    f"{start_date.isoformat()}부터 {cutoff.isoformat()}까지 전용면적 "
+                    f"{area:g}㎡ ±1.0㎡ 최근 거래 3건을 기준으로, 정확 조건과 "
+                    "차이가 작은 후보를 정리했습니다."
+                    if near_constraint_mode
+                    else f"{start_date.isoformat()}부터 {cutoff.isoformat()}까지 "
+                    f"전용면적 {area:g}㎡ ±1.0㎡ 최근 거래 3건과 예산 조건을 "
+                    "먼저 적용했습니다."
+                ),
+                (
+                    "가까운 후보를 대상으로 확인 가능한 조건을 비교했습니다."
+                    if near_constraint_mode
+                    else "예산 통과 후보를 대상으로 단지 중심 800m 내 "
+                    "학원 위치 관찰값을 비교했습니다."
+                ),
+                *(
+                    [
+                        "일부 기준 자료를 확인하지 못해 거래 근거와 나머지 기준으로 후보를 정리했습니다: "
+                        + ", ".join(_criterion_label(key) for key in unavailable_criteria)
+                    ]
+                    if unavailable_criteria else []
+                ),
             ],
-            "supported",
+            "partial" if unavailable_criteria else "supported",
             artifacts=(artifact,),
             artifact_fact_ids=tuple(dict.fromkeys(_fact_ids(artifact))),
+            state=("DEGRADED" if unavailable_criteria else "EXACT"),
+            fallback_steps=("PARTIAL_RECOMMENDATION_METRICS",) if unavailable_criteria else (),
         )
 
     async def _observe_criteria(self, plan: QueryPlan) -> CapabilityResult:
         clarification = _criteria_clarification(plan)
         if clarification is not None:
             return CapabilityResult([], [clarification], "unavailable")
-        if not plan.recommendation_criteria and plan.minimum_unit_count is None:
-            return CapabilityResult(
-                [], ["세대수·학원·학교·철도·쇼핑 중 확인할 조건을 알려주세요."],
-                "unavailable",
-            )
         station_scope_fact = None
+        area_bases: dict[int, RecentThreeTradeBasis] = {}
+        area_basis_limitation: str | None = None
         if plan.station_name is not None:
             if self._rail_repository is None:
                 return _source_unavailable("철도")
@@ -614,7 +763,7 @@ class RecommendationHandler:
                 match.latitude,
                 match.longitude,
                 plan.radius_meters,
-                101,
+                _CRITERIA_CANDIDATE_LIMIT,
             )
             scope = CriteriaCandidateScope(
                 f"{match.station_name}역 직선거리 {plan.radius_meters}m",
@@ -627,20 +776,64 @@ class RecommendationHandler:
                 return CapabilityResult(
                     [], ["조건 기반 후보를 확인할 지역을 알려주세요."], "unavailable"
                 )
-            scope = await asyncio.to_thread(
-                self._repository.criteria_candidates, plan.region_name, 101
-            )
+            scope = None
+            if plan.exclusive_area_square_meters is not None:
+                try:
+                    cutoff = await asyncio.to_thread(self._repository.latest_trade_date)
+                    if cutoff is not None:
+                        area_start = cutoff - timedelta(days=364)
+                        area_observations = await asyncio.to_thread(
+                            self._repository.recommendation_candidates,
+                            plan.region_name,
+                            area_start,
+                            cutoff,
+                            plan.exclusive_area_square_meters,
+                            _CRITERIA_CANDIDATE_LIMIT,
+                        )
+                        if area_observations is None:
+                            return CapabilityResult(
+                                [],
+                                ["지역을 하나로 식별하지 못했습니다. 시·도와 시·군·구를 함께 입력해 주세요."],
+                                "unavailable",
+                            )
+                        if area_observations:
+                            area_bases = {
+                                complex_id: RecentThreeTradeBasis.from_trades(
+                                    complex_id=complex_id,
+                                    cutoff=cutoff,
+                                    exclusive_area_square_meters=plan.exclusive_area_square_meters,
+                                    trades=trades,
+                                )
+                                for complex_id, (_, trades) in area_observations.items()
+                            }
+                            scope = CriteriaCandidateScope(
+                                plan.region_name,
+                                tuple(record for record, _ in area_observations.values()),
+                            )
+                        else:
+                            area_basis_limitation = (
+                                f"최근 1년 전용면적 {plan.exclusive_area_square_meters:g}㎡ ±1.0㎡ "
+                                "거래 3건이 확인되는 단지가 없어 면적을 순위에서 제외했습니다."
+                            )
+                    else:
+                        area_basis_limitation = (
+                            "최신 거래 기준일을 확인하지 못해 면적을 순위에서 제외했습니다."
+                        )
+                except Exception:
+                    area_basis_limitation = (
+                        "같은 면적의 최근 거래를 확인하지 못해 면적을 순위에서 제외했습니다."
+                    )
+            if scope is None:
+                scope = await asyncio.to_thread(
+                    self._repository.criteria_candidates,
+                    plan.region_name,
+                    _CRITERIA_CANDIDATE_LIMIT,
+                )
             scope_type = "ADMIN_REGION"
         if scope is None:
             return CapabilityResult(
                 [],
                 ["지역을 하나로 식별하지 못했습니다. 시·도와 시·군·구를 함께 입력해 주세요."],
-                "unavailable",
-            )
-        if len(scope.candidates) > 100:
-            return CapabilityResult(
-                [],
-                ["후보가 100개를 넘어 동 또는 특정 역 주변으로 범위를 좁혀주세요."],
                 "unavailable",
             )
         eligible = tuple(
@@ -655,12 +848,32 @@ class RecommendationHandler:
                 and record.unit_count >= plan.minimum_unit_count
             )
         )
+        near_candidate_mode = False
+        rankable_records = eligible
+        if not rankable_records and plan.minimum_unit_count is not None:
+            rankable_records = tuple(
+                sorted(
+                    (
+                        record
+                        for record in scope.candidates
+                        if record.marker_safe
+                        and record.latitude is not None
+                        and record.longitude is not None
+                        and record.unit_count is not None
+                    ),
+                    key=lambda record: (
+                        max(plan.minimum_unit_count - record.unit_count, 0),
+                        record.complex_id,
+                    ),
+                )
+            )
+            near_candidate_mode = bool(rankable_records)
         property_as_of = min(
             (record.data_updated_at.date() for record in scope.candidates),
             default=self._today(),
         )
         scope_fact = _criteria_scope_fact(plan, scope, len(eligible), property_as_of)
-        if not eligible:
+        if not rankable_records:
             return CapabilityResult(
                 [scope_fact, *([station_scope_fact] if station_scope_fact else [])],
                 [
@@ -676,43 +889,102 @@ class RecommendationHandler:
                 record.longitude,  # type: ignore[arg-type]
                 record.region_code,
             )
-            for record in eligible
+            for record in rankable_records
         )
         observations = await self._criteria_observations(
             plan.recommendation_criteria, points, plan.school_levels
         )
         if isinstance(observations, CapabilityResult):
             return observations
-        metrics_by_complex, metric_facts = observations
+        metrics_by_complex, metric_facts, unavailable_criteria = observations
+        available_criteria = tuple(
+            key for key in plan.recommendation_criteria
+            if key not in unavailable_criteria
+        )
+        available_order = tuple(
+            key for key in plan.criteria_order if key in available_criteria
+        )
+        if len(available_criteria) > 1 and set(available_order) != set(available_criteria):
+            available_order = available_criteria
         candidates = tuple(
             CriteriaRecommendationCandidate(
                 complex_record=record,
                 metrics=metrics_by_complex[record.complex_id],
             )
-            for record in eligible
+            for record in rankable_records
         )
-        policy = CriteriaRecommendationPolicy(
-            minimum_unit_count=plan.minimum_unit_count,
-            criteria=plan.recommendation_criteria,
-            criteria_order=plan.criteria_order,
-        )
-        ranked = policy.rank(candidates)[: plan.limit]
+        if near_candidate_mode:
+            criterion_order = {
+                candidate.complex_record.complex_id: index
+                for index, candidate in enumerate(
+                    (
+                        CriteriaRecommendationPolicy(
+                            minimum_unit_count=None,
+                            criteria=available_criteria,
+                            criteria_order=available_order,
+                        ).rank(candidates)
+                        if available_criteria
+                        else candidates
+                    )
+                )
+            }
+            ranked = tuple(sorted(
+                candidates,
+                key=lambda candidate: (
+                    max(
+                        (plan.minimum_unit_count or 0)
+                        - (candidate.complex_record.unit_count or 0),
+                        0,
+                    ),
+                    criterion_order[candidate.complex_record.complex_id],
+                    candidate.complex_record.complex_id,
+                ),
+            ))[: plan.limit]
+        elif available_criteria or plan.minimum_unit_count is not None:
+            policy = CriteriaRecommendationPolicy(
+                minimum_unit_count=plan.minimum_unit_count,
+                criteria=available_criteria,
+                criteria_order=available_order,
+            )
+            ranked = policy.rank(candidates)[: plan.limit]
+        else:
+            ranked = tuple(sorted(
+                candidates,
+                key=lambda candidate: (
+                    candidate.complex_record.unit_count is None,
+                    -(candidate.complex_record.unit_count or 0),
+                    candidate.complex_record.use_date is None,
+                    -(
+                        candidate.complex_record.use_date.toordinal()
+                        if candidate.complex_record.use_date is not None else 0
+                    ),
+                    candidate.complex_record.complex_id,
+                ),
+            ))[: plan.limit]
         facts: list[EvidenceFact] = [scope_fact]
         if station_scope_fact is not None:
             facts.append(station_scope_fact)
         rows: list[CriteriaRecommendationRow] = []
         for order, candidate in enumerate(ranked, start=1):
             complex_fact = self._builders.complex_fact(candidate.complex_record)
+            area_basis = area_bases.get(candidate.complex_record.complex_id)
+            area_fact = _criteria_area_trade_fact(area_basis) if area_basis is not None else None
             selected_facts = tuple(
                 fact_id
-                for key in plan.recommendation_criteria
+                for key in available_criteria
                 for fact_id in candidate.metrics[key].fact_ids
             )
-            row_fact_ids = tuple(dict.fromkeys((complex_fact.fact_id, *selected_facts)))
+            row_fact_ids = tuple(dict.fromkeys((
+                complex_fact.fact_id,
+                *((area_fact.fact_id,) if area_fact is not None else ()),
+                *selected_facts,
+            )))
             facts.append(complex_fact)
+            if area_fact is not None:
+                facts.append(area_fact)
             facts.extend(
                 metric_facts[(candidate.complex_record.complex_id, key)]
-                for key in plan.recommendation_criteria
+                for key in available_criteria
             )
             rows.append(CriteriaRecommendationRow(
                 order=order,
@@ -730,12 +1002,12 @@ class RecommendationHandler:
             )[:200],
             scope_type=scope_type,  # type: ignore[arg-type]
             scope_label=scope.scope_label,
-            criteria_order=plan.criteria_order,
+            criteria_order=available_order,
             minimum_unit_count=plan.minimum_unit_count,
             radius_meters=(
                 plan.radius_meters
                 if scope_type == "STATION_RADIUS"
-                else 800 if "ACADEMY" in plan.recommendation_criteria else None
+                else 800 if "ACADEMY" in available_criteria else None
             ),
             rows=tuple(rows),
         ).to_public_dict()
@@ -743,18 +1015,46 @@ class RecommendationHandler:
             _deduplicate_facts(facts),
             [
                 f"{scope.scope_label}에서 요청한 조건을 적용한 후보를 정리했습니다.",
-                "학원은 단지 중심 800m 내 Sbiz 교육업소 관찰값입니다."
-                if "ACADEMY" in plan.recommendation_criteria
-                else "시설 거리는 단지 중심 직선거리 관찰값입니다.",
+                "학원 접근성은 단지 중심 800m 내 위치 관찰값으로 비교했습니다."
+                if "ACADEMY" in available_criteria
+                else "단지 규모와 확인 가능한 기본정보를 기준으로 먼저 살펴볼 후보를 정리했습니다.",
                 *(
                     ["대규모점포는 전국 공식 원장 중 좌표가 확인된 범위만 반영했습니다."]
-                    if "SHOPPING" in plan.recommendation_criteria
+                    if "SHOPPING" in available_criteria
                     else []
                 ),
+                *(
+                    [
+                        "일부 기준 자료를 확인하지 못해 나머지 기준과 단지 정보로 후보를 정리했습니다: "
+                        + ", ".join(_criterion_label(key) for key in unavailable_criteria)
+                    ]
+                    if unavailable_criteria else []
+                ),
+                *([area_basis_limitation] if area_basis_limitation else []),
+                *(
+                    [
+                        "정확한 세대수 조건을 충족한 단지가 없어 기준 차이가 작은 가까운 후보를 별도로 표시했습니다."
+                    ]
+                    if near_candidate_mode else []
+                ),
             ],
-            "supported",
+            "partial" if unavailable_criteria or near_candidate_mode or area_basis_limitation else "supported",
             artifacts=(artifact,),
             artifact_fact_ids=tuple(dict.fromkeys(_fact_ids(artifact))),
+            state=(
+                "DEGRADED"
+                if unavailable_criteria or near_candidate_mode or area_basis_limitation
+                else "EXACT"
+            ),
+            fallback_steps=tuple(
+                step
+                for condition, step in (
+                    (bool(unavailable_criteria), "PARTIAL_RECOMMENDATION_METRICS"),
+                    (near_candidate_mode, "NEAREST_CONSTRAINT_CANDIDATES"),
+                    (bool(area_basis_limitation), "AREA_TRADE_BASIS_UNAVAILABLE"),
+                )
+                if condition
+            ),
         )
 
     async def _criteria_observations(
@@ -766,6 +1066,7 @@ class RecommendationHandler:
         tuple[
             dict[int, dict[str, RecommendationMetric]],
             dict[tuple[int, str], EvidenceFact],
+            tuple[str, ...],
         ]
         | CapabilityResult
     ):
@@ -774,46 +1075,48 @@ class RecommendationHandler:
         for key in criteria:
             if key == "ACADEMY":
                 if self._academy_repository is None:
-                    return _source_unavailable("Sbiz 교육업소")
-                operations.append(asyncio.to_thread(
-                    self._academy_repository.nearby_counts_batch,
-                    points=points, radius_meters=800,
-                ))
+                    operations.append(_unavailable_observation())
+                else:
+                    operations.append(self._observe_criterion_batches(
+                        key, points, school_levels
+                    ))
             elif key == "TRANSIT":
                 if self._rail_repository is None:
-                    return _source_unavailable("철도")
-                operations.append(asyncio.to_thread(
-                    self._rail_repository.nearest_batch,
-                    points=points, radius_meters=1500,
-                ))
+                    operations.append(_unavailable_observation())
+                else:
+                    operations.append(self._observe_criterion_batches(
+                        key, points, school_levels
+                    ))
             elif key == "SHOPPING":
                 if self._retail_repository is None:
-                    return _source_unavailable("대규모점포")
-                operations.append(asyncio.to_thread(
-                    self._retail_repository.nearest_batch,
-                    source_id="retail.large-store", category="LARGE_STORE",
-                    points=points, radius_meters=1000,
-                ))
+                    operations.append(_unavailable_observation())
+                else:
+                    operations.append(self._observe_criterion_batches(
+                        key, points, school_levels
+                    ))
             elif key == "SCHOOL":
                 if self._school_repository is None:
-                    return _source_unavailable("학교")
-                operations.append(asyncio.to_thread(
-                    self._school_repository.nearest_by_level_batch,
-                    points=points, school_levels=school_levels, radius_meters=1500,
-                ))
+                    operations.append(_unavailable_observation())
+                else:
+                    operations.append(self._observe_criterion_batches(
+                        key, points, school_levels
+                    ))
             keys.append(key)
-        results = await asyncio.gather(*operations)
+        results = await asyncio.gather(*operations, return_exceptions=True)
         metrics: dict[int, dict[str, RecommendationMetric]] = {
             point.complex_id: {} for point in points
         }
         facts: dict[tuple[int, str], EvidenceFact] = {}
+        unavailable: list[str] = []
         for key, result in zip(keys, results, strict=True):
-            if result is None:
-                return _source_unavailable(_criterion_label(key))
+            if isinstance(result, Exception) or result is None:
+                unavailable.append(key)
+                continue
             if key == "SCHOOL":
                 snapshot, result_by_complex = result
                 if not 0 <= (self._today() - snapshot.source_date).days <= 214:
-                    return _source_unavailable("학교")
+                    unavailable.append(key)
+                    continue
             else:
                 result_by_complex = result
             if key == "ACADEMY" and any(
@@ -822,29 +1125,99 @@ class RecommendationHandler:
                 <= item.freshness_days
                 for item in result_by_complex.values()
             ):
-                return _source_unavailable("Sbiz 교육업소")
+                unavailable.append(key)
+                continue
             if key == "TRANSIT" and any(
                 item.coordinate_coverage < 0.95
                 or not 0 <= (self._today() - item.source_date).days
                 <= item.freshness_days
                 for item in result_by_complex.values()
             ):
-                return _source_unavailable("철도")
+                unavailable.append(key)
+                continue
             if key == "SHOPPING" and any(
                 not retail_coordinate_ready(item) for item in result_by_complex.values()
             ):
-                return _source_unavailable("대규모점포")
+                unavailable.append(key)
+                continue
+            missing_item = False
             for point in points:
                 item = result_by_complex.get(point.complex_id)
                 if item is None:
-                    return _source_unavailable(_criterion_label(key))
+                    missing_item = True
+                    break
                 metric, fact = _criteria_metric(
                     key, point.complex_id, item,
                     snapshot if key == "SCHOOL" else None,
                 )
                 metrics[point.complex_id][key] = metric
                 facts[(point.complex_id, key)] = fact
-        return metrics, facts
+            if missing_item:
+                unavailable.append(key)
+                for point in points:
+                    metrics[point.complex_id].pop(key, None)
+                    facts.pop((point.complex_id, key), None)
+        if len(unavailable) == len(criteria) and not any(
+            point for point in points
+        ):
+            return _source_unavailable("추천 기준")
+        return metrics, facts, tuple(dict.fromkeys(unavailable))
+
+    async def _observe_criterion_batches(
+        self,
+        key: str,
+        points: tuple[CandidatePoint, ...],
+        school_levels: tuple[str, ...],
+    ) -> object:
+        combined: dict[int, object] = {}
+        school_snapshot: SchoolSnapshot | None = None
+        for offset in range(0, len(points), _REPOSITORY_BATCH_SIZE):
+            batch = points[offset:offset + _REPOSITORY_BATCH_SIZE]
+            if key == "ACADEMY":
+                assert self._academy_repository is not None
+                result = await asyncio.to_thread(
+                    self._academy_repository.nearby_counts_batch,
+                    points=batch,
+                    radius_meters=800,
+                )
+            elif key == "TRANSIT":
+                assert self._rail_repository is not None
+                result = await asyncio.to_thread(
+                    self._rail_repository.nearest_batch,
+                    points=batch,
+                    radius_meters=1500,
+                )
+            elif key == "SHOPPING":
+                assert self._retail_repository is not None
+                result = await asyncio.to_thread(
+                    self._retail_repository.nearest_batch,
+                    source_id="retail.large-store",
+                    category="LARGE_STORE",
+                    points=batch,
+                    radius_meters=1000,
+                )
+            elif key == "SCHOOL":
+                assert self._school_repository is not None
+                school_result = await asyncio.to_thread(
+                    self._school_repository.nearest_by_level_batch,
+                    points=batch,
+                    school_levels=school_levels,
+                    radius_meters=1500,
+                )
+                if school_result is None:
+                    return None
+                current_snapshot, result = school_result
+                if school_snapshot is not None and school_snapshot != current_snapshot:
+                    return None
+                school_snapshot = current_snapshot
+            else:
+                return None
+            if result is None:
+                return None
+            combined.update(result)
+        if key == "SCHOOL":
+            return (school_snapshot, combined) if school_snapshot is not None else None
+        return combined
 
 
 def _criteria_clarification(plan: QueryPlan) -> str | None:
@@ -859,9 +1232,13 @@ def _criteria_clarification(plan: QueryPlan) -> str | None:
     }.get(plan.clarification_code)
 
 
+async def _unavailable_observation() -> None:
+    return None
+
+
 def _criterion_label(key: str) -> str:
     return {
-        "ACADEMY": "Sbiz 교육업소",
+        "ACADEMY": "학원 위치",
         "TRANSIT": "철도",
         "SCHOOL": "학교",
         "SHOPPING": "대규모점포",
@@ -1072,6 +1449,29 @@ def _source_unavailable(label: str) -> CapabilityResult:
     )
 
 
+def _degraded_recommendation(
+    result: CapabilityResult,
+    reason: str,
+    *,
+    fallback_step: str = "PARTIAL_RECOMMENDATION_METRICS",
+) -> CapabilityResult:
+    return CapabilityResult(
+        facts=result.facts,
+        limitations=[*result.limitations, reason],
+        readiness="partial",
+        actions=result.actions,
+        artifacts=result.artifacts,
+        artifact_fact_ids=result.artifact_fact_ids,
+        state="DEGRADED",
+        assumptions=result.assumptions,
+        fallback_steps=tuple(dict.fromkeys((
+            *result.fallback_steps,
+            fallback_step,
+        ))),
+        recoverable=result.recoverable,
+    )
+
+
 async def _observe_batch(
     reason_code: str,
     operation: Callable[..., _BatchResult],
@@ -1127,6 +1527,38 @@ def _trade_basis_fact(
             "medianAmountTenThousandKrw": median,
             "maximumBudgetTenThousandKrw": maximum_budget_ten_thousand_krw,
             "pricePoints": 60,
+        },
+    )
+
+
+def _criteria_area_trade_fact(basis: RecentThreeTradeBasis) -> EvidenceFact:
+    latest = basis.latest_trade
+    median = basis.median_amount_ten_thousand_krw
+    if latest is None or median is None or basis.sample_count != 3:
+        raise ValueError("criteria recommendation trade basis is invalid")
+    return EvidenceFact(
+        fact_id=(
+            f"criteria-trade-basis-{basis.complex_id}-{basis.cutoff.isoformat()}-"
+            f"{basis.exclusive_area_square_meters:g}"
+        ),
+        claims=(
+            FactClaim("3", "COUNT"),
+            FactClaim(basis.cutoff.isoformat(), "DATE"),
+            FactClaim(f"{basis.exclusive_area_square_meters:g}", "SQUARE_METERS"),
+            FactClaim(latest.deal_date.isoformat(), "LATEST_TRADE_DATE"),
+            FactClaim(str(latest.deal_amount_ten_thousand_krw), "LATEST_10_000_KRW"),
+            FactClaim(str(median), "MEDIAN_10_000_KRW"),
+        ),
+        data_as_of=basis.cutoff,
+        payload={
+            "complexId": basis.complex_id,
+            "sampleCount": 3,
+            "cutoffDate": basis.cutoff.isoformat(),
+            "startDate": basis.start_date.isoformat(),
+            "exclusiveAreaSquareMeters": basis.exclusive_area_square_meters,
+            "latestTradeDate": latest.deal_date.isoformat(),
+            "latestTradeAmountTenThousandKrw": latest.deal_amount_ten_thousand_krw,
+            "medianAmountTenThousandKrw": median,
         },
     )
 

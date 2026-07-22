@@ -4,12 +4,22 @@ import { readChatActions } from '../actionContract';
 import type { ChatbotResponse, ChatCitation, ChatEvidenceSummary } from '../chatTypes';
 import { readChatUiSummary } from '../summaryContract';
 import { readChatFragments } from '../fragmentContract';
+import {
+  normalizeUiContext,
+  readConversationMemory,
+  readConversationResolution,
+  type ChatUiContext,
+} from '../conversationContract';
+import { readChatUiReport } from '../reportContract';
 
-type ChatbotWireResponse = Omit<ChatbotResponse, 'artifacts' | 'actions' | 'summary' | 'fragments'> & {
+type ChatbotWireResponse = Omit<ChatbotResponse, 'artifacts' | 'actions' | 'summary' | 'fragments' | 'report'> & {
   uiArtifacts?: unknown;
   uiActions?: unknown;
   uiSummary?: unknown;
   fragments?: unknown;
+  conversationResolution?: unknown;
+  conversationMemoryPatch?: unknown;
+  uiReport?: unknown;
 };
 
 export type AuthenticatedChatbotRequest = (
@@ -20,13 +30,24 @@ export type AuthenticatedChatbotRequest = (
 
 export async function queryChatbot(
   authenticatedRequest: AuthenticatedChatbotRequest,
-  request: { question: string; conversationContext?: ConversationContext },
+  request: {
+    question: string;
+    conversationContext?: ConversationContext;
+    uiContext?: ChatUiContext;
+  },
 ): Promise<ChatbotResponse> {
   const question = request.question.trim();
   if (question.length === 0 || question.length > 2_000) throw new Error('질문을 확인해주세요.');
-  const payload = request.conversationContext?.messages.length
-    ? { question, conversationContext: request.conversationContext }
-    : { question };
+  const conversationContext = request.conversationContext;
+  const uiContext = normalizeUiContext(request.uiContext);
+  const payload = {
+    question,
+    ...(uiContext ? { uiContext } : {}),
+    ...(conversationContext
+      && (conversationContext.messages.length > 0 || conversationContext.memory != null)
+      ? { conversationContext }
+      : {}),
+  };
   let response: Response;
   try {
     response = await authenticatedRequest('/api/v1/chatbot/query', {
@@ -53,6 +74,9 @@ export async function queryChatbot(
       actions,
       summary: readChatUiSummary(body.uiSummary, factIds),
       fragments: readChatFragments(body.fragments, factIds, artifacts, actions),
+      report: readChatUiReport(body.uiReport, factIds, artifacts, actions),
+      conversationResolution: readConversationResolution(body.conversationResolution),
+      conversationMemoryPatch: readConversationMemory(body.conversationMemoryPatch),
     };
   } catch {
     throw new Error('챗봇 응답을 확인하지 못했습니다.');

@@ -49,6 +49,11 @@ Coordinate Source DB를 서로 다른 read-only 연결로 조회하며, 정확�
   오인하는 validator 경계가 확인됨
 - 후속 GREEN: draft에만 `reasoning.effort=none`, claim-only 입력, timeout 전용
   비노출 오류 코드, 일반 철도 명칭/미관찰 고유 역명 회귀 테스트를 적용
+- fallback 구조 RED: 서버가 후보·점수·근거를 확정한 뒤에도 LLM draft가 사용자 문장을
+  다시 생성해 rail grounding과 충돌함
+- 최소 GREEN: BUDGET·CRITERIA 추천의 text fallback을 서버
+  `RecommendationTextPresenter`가 facts·readiness·limitations로 결정적으로 조립하고,
+  추천 경로에서는 `draft_answer()`를 호출하지 않음
 
 ## 계약 영향
 
@@ -63,9 +68,9 @@ Coordinate Source DB를 서로 다른 read-only 연결로 조회하며, 정확�
 - coordinate-source 연결은 read-only, 3초 timeout, 최대 1,000 PNU exact lookup이다.
 - runner는 DSN과 password를 출력하지 않으며 Docker volume을 변경하거나 삭제하지 않는다.
 - DB 간 직접 join, 외부 geocoding, fuzzy 주소 매칭은 없다.
-- draft provider에는 인용 가능한 `factId`와 `claims`만 전달하고 내부 artifact용
-  `payload`·`dataAsOf`는 전달하지 않는다. timeout과 grounding 실패는 고정 reasonCode만
-  출력하며 provider 응답 원문이나 secret을 로그에 남기지 않는다.
+- 추천 provider는 typed plan 제안에만 사용하고 사용자 답변 fallback을 생성하지 않는다.
+  timeout과 grounding 실패는 고정 reasonCode만 출력하며 provider 응답 원문이나 secret을
+  로그에 남기지 않는다.
 
 security-audit: 지적사항 = none
 
@@ -73,14 +78,14 @@ security-audit: 지적사항 = none
 
 | 검사 | 결과 |
 |---|---|
-| 전체 AI gate | Pass — 951 tests, coverage 90.03% |
+| 전체 AI gate | Pass — 956 tests, coverage 90.00% |
 | 좌표 보완 runner | Pass — DB 경계 전달, secret 비노출, idempotent 재실행 |
 | local chatbot preflight | Pass — exact 누적 allowlist, childcare 혼합 거부, secret 비노출 |
 | reference 문서 결정성 | Pass |
 | signed JWT JSON/SSE | Pass — 실제 서명, 잘못된 issuer 401, property 회귀 |
 | service DB boundary | Pass — credential 분리, runtime Flyway 비활성 |
 | change classifier·diff | Pass |
-| OpenAI live 대표 질문 | Fail — provider timeout은 해소됐으나 최종 rail grounding gate 미통과 |
+| OpenAI live 대표 질문 | Fail — LLM draft 경로 제거 뒤 typed plan 검증 또는 observation 구간에서 종료 |
 
 ## 검증 공백과 잔여 위험
 
@@ -96,9 +101,16 @@ security-audit: 지적사항 = none
   반환됐다. 이어 claim-only 입력으로 숫자 grounding 오류도 제거했다.
 - 일반 `지하철역` 표현을 고유 역명으로 오인하는 validator RED→GREEN 뒤에도 live
   응답은 `BUDGET_RETAIL_DRAFT_GROUNDING_RAIL_TEXT_OUTSIDE_OBSERVATION`으로 종료됐다.
-  실제 provider 문구는 비노출 정책상 저장하지 않았고, 세 번의 후속 수정·재실행 후
-  stop rule을 적용했다. 다음 Slice는 사용자 응답을 노출하지 않는 typed rail token
-  진단 또는 recommendation fallback의 서버 결정형 문장 조립을 먼저 설계해야 한다.
+  실제 provider 문구는 비노출 정책상 저장하지 않았다.
+- 후속 Slice에서 추천 fallback을 서버 결정형 문장 조립으로 바꾸고 provider draft를
+  강제로 실패시키는 RED→GREEN 및 추천·presentation·activation 회귀 140건을 통과했다.
+  운영 live 3회는 모두 `BUDGET_RETAIL_OBSERVATION_FAILED`로 종료됐다. 추가 진단으로
+  outer timeout과 server text/structured presentation 조립 단계는 제외했으므로, 남은
+  범위는 typed plan 재검증, `RecommendationHandler.observe()` 내부 또는 최종 response
+  serialization이다.
+  세 번 반복 후 stop rule을 적용했으며 다음 Slice는 provider 호출 없이 plan 검증,
+  property candidate, rail batch, retail batch, response serialization을 고정 phase code로
+  분리해야 한다.
 - 88%는 대규모점포 source에만 적용한 임시 최소선이다. 현재 88.7931%와의 여유가
   작으므로 새 active snapshot에서 기준 미달 시 자동 비활성화될 수 있다.
 - 좌표 미확인 `468`행과 provider 행정코드 mapping 부재 때문에 정상 0건을 확정하지

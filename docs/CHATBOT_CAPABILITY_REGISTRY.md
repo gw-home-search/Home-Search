@@ -165,3 +165,10 @@ live gate가 통과하기 전에는 운영 배포 승인으로 판정하지 않�
 보완했지만, 최종 live는 `GROUNDING_RAIL_TEXT_OUTSIDE_OBSERVATION`으로 종료됐다. 응답
 원문 비노출 정책과 세 번 수정 stop rule에 따라 추가 호출을 중단했으며 운영 배포 gate는
 계속 `Fail`이다.
+
+추천 fallback은 이후 서버 `RecommendationTextPresenter`가 observation fact로 직접
+조립하도록 변경해 추천 경로의 LLM draft 호출을 제거했다. 관련 offline 회귀와 전체 AI
+gate는 통과했지만 승인 live 3회는 모두 `BUDGET_RETAIL_OBSERVATION_FAILED`로 종료됐다.
+timeout과 서버 text/structured presentation 조립 단계는 제외했다. typed plan 재검증,
+recommendation observation 또는 최종 response serialization phase를 분리하기 전까지
+운영 배포 gate는 계속 `Fail`이다.

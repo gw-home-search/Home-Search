@@ -38,6 +38,7 @@ from .capability_handlers import (
 )
 from .comparison_handler import ComparisonHandler
 from .recommendation_handler import RecommendationHandler
+from .recommendation_presentation import RecommendationTextPresenter
 from .lifestyle_themes import detect_explicit_themes, detect_school_levels
 from .models import (
     ComplexRecord,
@@ -124,6 +125,22 @@ class GroundingValidationError(ValueError):
     def __init__(self, reason_code: str) -> None:
         if reason_code not in _GROUNDING_FAILURE_REASONS:
             raise ValueError("invalid grounding failure reason")
+        super().__init__()
+        self.reason_code = reason_code
+
+
+class RecommendationExecutionError(RuntimeError):
+    """Stable non-disclosing phase failure for server-owned presentation."""
+
+    _REASONS = frozenset({
+        "RECOMMENDATION_TEXT_PRESENTATION_FAILED",
+        "RECOMMENDATION_STRUCTURED_PRESENTATION_FAILED",
+        "RECOMMENDATION_DOCUMENT_FAILED",
+    })
+
+    def __init__(self, reason_code: str) -> None:
+        if reason_code not in self._REASONS:
+            raise ValueError("invalid recommendation execution failure reason")
         super().__init__()
         self.reason_code = reason_code
 
@@ -272,11 +289,23 @@ class GroundedChatbotEngine:
                 ["해당 질문 기능은 현재 데이터 준비와 검증이 진행 중입니다."],
                 "unavailable",
             )
-        draft = await self._language_model.draft_answer(
-            facts=result.facts,
-            limitations=result.limitations,
-            question=request.question,
-        )
+        if plan.capability == "recommendation":
+            try:
+                draft = RecommendationTextPresenter().present(
+                    facts=result.facts,
+                    limitations=result.limitations,
+                    readiness=result.readiness,
+                )
+            except Exception as exception:
+                raise RecommendationExecutionError(
+                    "RECOMMENDATION_TEXT_PRESENTATION_FAILED"
+                ) from exception
+        else:
+            draft = await self._language_model.draft_answer(
+                facts=result.facts,
+                limitations=result.limitations,
+                question=request.question,
+            )
         used_facts = validate_draft(
             draft,
             result.facts,
@@ -304,27 +333,41 @@ class GroundedChatbotEngine:
             for action in result.actions
         ):
             raise GroundingValidationError("GROUNDING_ACTION_FACT_UNKNOWN")
-        artifacts = list(result.artifacts) or FactListPresenter().present(
-            plan=plan, used_facts=used_facts, readiness=result.readiness
-        )
-        presentation, artifacts = PresentationAssembler().present(
-            plan=plan,
-            used_facts=used_facts,
-            readiness=result.readiness,
-            artifacts=artifacts,
-        )
-        return AnswerDocument.from_grounded_result(
-            request=request,
-            request_id=request_id,
-            plan=plan,
-            draft=draft,
-            used_facts=used_facts,
-            limitations=result.limitations,
-            readiness=result.readiness,
-            artifacts=artifacts,
-            actions=[action.to_public_dict(request_id) for action in result.actions],
-            presentation=presentation,
-        )
+        try:
+            artifacts = list(result.artifacts) or FactListPresenter().present(
+                plan=plan, used_facts=used_facts, readiness=result.readiness
+            )
+            presentation, artifacts = PresentationAssembler().present(
+                plan=plan,
+                used_facts=used_facts,
+                readiness=result.readiness,
+                artifacts=artifacts,
+            )
+        except Exception as exception:
+            if plan.capability == "recommendation":
+                raise RecommendationExecutionError(
+                    "RECOMMENDATION_STRUCTURED_PRESENTATION_FAILED"
+                ) from exception
+            raise
+        try:
+            return AnswerDocument.from_grounded_result(
+                request=request,
+                request_id=request_id,
+                plan=plan,
+                draft=draft,
+                used_facts=used_facts,
+                limitations=result.limitations,
+                readiness=result.readiness,
+                artifacts=artifacts,
+                actions=[action.to_public_dict(request_id) for action in result.actions],
+                presentation=presentation,
+            )
+        except Exception as exception:
+            if plan.capability == "recommendation":
+                raise RecommendationExecutionError(
+                    "RECOMMENDATION_DOCUMENT_FAILED"
+                ) from exception
+            raise
 
     async def _observe(
         self, plan: QueryPlan

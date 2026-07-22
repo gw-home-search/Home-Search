@@ -15,6 +15,7 @@ from .engine import (
     GroundedLanguageModel,
     GroundingValidationError,
     PropertyFactRepository,
+    RecommendationExecutionError,
 )
 from .school_postgres import PostgresSchoolFactRepository
 from .openai_responses import OpenAIResponsesError
@@ -159,6 +160,11 @@ async def run_budget_retail_activation_case(
             request_id="activation-budget-recommendation-songpa-84-retail",
         )
     except Exception as exception:
+        execution_reason = _recommendation_execution_reason(exception)
+        if execution_reason is not None:
+            raise ReferenceActivationError(
+                f"BUDGET_RETAIL_{execution_reason}"
+            ) from None
         grounding_reason = _grounding_reason(exception)
         if grounding_reason is not None:
             raise ReferenceActivationError(
@@ -168,6 +174,10 @@ async def run_budget_retail_activation_case(
         if provider_reason is not None:
             raise ReferenceActivationError(
                 f"BUDGET_RETAIL_DRAFT_{provider_reason}"
+            ) from None
+        if tracking_model.stage == "PLAN_DONE" and _contains_timeout(exception):
+            raise ReferenceActivationError(
+                "BUDGET_RETAIL_OBSERVATION_TIMEOUT"
             ) from None
         reason_by_stage = {
             "PLAN_PENDING": "BUDGET_RETAIL_PLAN_STAGE_FAILED",
@@ -241,6 +251,28 @@ def _provider_reason(exception: BaseException) -> str | None:
         if current is None:
             return None
     return None
+
+
+def _recommendation_execution_reason(exception: BaseException) -> str | None:
+    current: BaseException | None = exception
+    for _ in range(8):
+        if isinstance(current, RecommendationExecutionError):
+            return current.reason_code
+        current = current.__cause__
+        if current is None:
+            return None
+    return None
+
+
+def _contains_timeout(exception: BaseException) -> bool:
+    current: BaseException | None = exception
+    for _ in range(8):
+        if isinstance(current, TimeoutError):
+            return True
+        current = current.__cause__
+        if current is None:
+            return False
+    return False
 
 
 async def _preflight_school_observation(

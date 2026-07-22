@@ -13,7 +13,12 @@ from ai_service.property_chat.comparison import CandidatePoint
 from ai_service.property_chat.engine import (
     GroundedChatbotEngine,
     GroundingValidationError,
+    RecommendationExecutionError,
     validate_draft,
+)
+from ai_service.property_chat.presentation import PresentationAssembler
+from ai_service.property_chat.recommendation_presentation import (
+    RecommendationTextPresenter,
 )
 from ai_service.property_chat.models import (
     ComplexRecord,
@@ -279,21 +284,14 @@ def test_recommendation_is_unavailable_when_a_required_source_is_unavailable() -
     assert any("철도" in item and "준비" in item for item in response["limitations"])
 
 
-def test_recommendation_rejects_investment_and_low_price_quality_claims() -> None:
+def test_recommendation_uses_server_fallback_without_language_model_draft() -> None:
     model = LanguageModel()
 
-    async def invalid_draft(*, facts, limitations, question):
-        del limitations, question
-        return DraftAnswer([DraftSentence(
-            "가장 저렴해서 좋은 투자 가치가 있는 후보입니다.",
-            [fact.fact_id for fact in facts],
-            [
-                DraftClaim(fact.fact_id, fact.claims[0].value, fact.claims[0].unit)
-                for fact in facts
-            ],
-        )])
+    async def forbidden_draft(*, facts, limitations, question):
+        del facts, limitations, question
+        raise AssertionError("recommendation fallback must not use language model draft")
 
-    model.draft_answer = invalid_draft  # type: ignore[method-assign]
+    model.draft_answer = forbidden_draft  # type: ignore[method-assign]
     engine = GroundedChatbotEngine(
         repository=PropertyRepository(),
         language_model=model,
@@ -302,15 +300,59 @@ def test_recommendation_rejects_investment_and_low_price_quality_claims() -> Non
         point_facility_repository=RetailRepository(),
     )
 
-    with pytest.raises(ChatbotProviderUnavailable) as raised:
-        asyncio.run(engine.query(
-            request=ChatbotQueryRequest(question="송파구 20억 이하 전용 84㎡ 추천"),
-            user=AuthenticatedUser(user_id=1),
-            request_id="request-recommendation-invalid",
-        ))
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(question="송파구 20억 이하 전용 84㎡ 추천"),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-recommendation-server-fallback",
+    ))
 
-    assert isinstance(raised.value.__cause__, GroundingValidationError)
-    assert raised.value.__cause__.reason_code == "GROUNDING_RECOMMENDATION_POLICY_VIOLATION"
+    assert response["status"] == "success"
+    assert response["answer"] == (
+        "현재 데이터 기준으로 요청한 조건에서 확인된 후보를 정리했습니다."
+    )
+
+
+def test_recommendation_maps_server_text_presentation_failure(monkeypatch) -> None:
+    def fail_text_presentation(*_args, **_kwargs):
+        raise ValueError("must-not-leak")
+
+    monkeypatch.setattr(
+        RecommendationTextPresenter,
+        "present",
+        fail_text_presentation,
+    )
+
+    with pytest.raises(ChatbotProviderUnavailable) as raised:
+        _query()
+
+    assert isinstance(raised.value.__cause__, RecommendationExecutionError)
+    assert raised.value.__cause__.reason_code == (
+        "RECOMMENDATION_TEXT_PRESENTATION_FAILED"
+    )
+
+
+def test_recommendation_maps_structured_presentation_failure(monkeypatch) -> None:
+    def fail_structured_presentation(*_args, **_kwargs):
+        raise ValueError("must-not-leak")
+
+    monkeypatch.setattr(
+        PresentationAssembler,
+        "present",
+        fail_structured_presentation,
+    )
+
+    with pytest.raises(ChatbotProviderUnavailable) as raised:
+        _query()
+
+    assert isinstance(raised.value.__cause__, RecommendationExecutionError)
+    assert raised.value.__cause__.reason_code == (
+        "RECOMMENDATION_STRUCTURED_PRESENTATION_FAILED"
+    )
+
+
+def test_recommendation_execution_error_rejects_unknown_reason() -> None:
+    with pytest.raises(ValueError, match="invalid recommendation execution"):
+        RecommendationExecutionError("UNKNOWN")
 
 
 def test_recommendation_lists_missing_required_inputs_without_observation() -> None:

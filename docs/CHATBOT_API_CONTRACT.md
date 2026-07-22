@@ -10,7 +10,9 @@
 - `POST /api/v1/chatbot/query/stream`
 - 두 endpoint 모두 user-service access token이 필요하다.
 - JSON과 SSE는 하나의 use case를 실행하고 동일한 최종 response 의미를 가진다.
-- 모든 성공 답변은 LLM을 통과하지만 검증된 fact 밖의 사실은 포함할 수 없다.
+- 모든 성공 답변은 서버 grounding 검증을 통과하며 검증된 fact 밖의 사실은 포함할 수
+  없다. LLM은 typed plan과 일부 capability의 문장 초안에만 사용하고, 추천 text
+  fallback은 서버 presenter가 결정적으로 조립한다.
 
 ## 인증과 공통 헤더
 
@@ -120,12 +122,12 @@ legacy `success`와 `status` 의미는 유지한다.
 
 - `supported`: 요청한 모든 Capability가 근거 기준을 충족했다.
 - `partial`: 일부 Capability만 충족했다. `limitations`에 누락 범위를 표시한다.
-- `unavailable`: 필수 dataset 또는 freshness가 부족하다. 추정 대신 부족한 데이터와
-  가능한 다음 질문을 LLM이 설명한다.
+- `unavailable`: 필수 dataset 또는 freshness가 부족하다. 추정 대신 서버가 검증한
+  부족한 데이터와 가능한 다음 질문을 설명한다.
 
 `partial`과 `unavailable`도 처리된 사용자 질문 결과이므로 HTTP `200`이다.
-`unavailable`이면 legacy 실행 상태는 `success=false`, `status=failed`이고, LLM이
-작성한 데이터 부족 안내를 `answer`로 반환한다. 인증, validation, rate limit,
+`unavailable`이면 legacy 실행 상태는 `success=false`, `status=failed`이고, 검증된
+데이터 부족 안내를 `answer`로 반환한다. 인증, validation, rate limit,
 내부·provider 장애는 ProblemDetail 또는 SSE `error`다.
 
 ### 복합 질문 fragment

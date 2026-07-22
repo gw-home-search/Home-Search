@@ -6,7 +6,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from ai_service.property_chat.engine import GroundingValidationError
+from ai_service.property_chat.engine import (
+    GroundingValidationError,
+    RecommendationExecutionError,
+)
 from ai_service.property_chat.openai_responses import OpenAIResponsesError
 from ai_service.property_chat.reference_activation import (
     ReferenceActivationError,
@@ -283,6 +286,60 @@ def test_budget_retail_activation_runs_the_bounded_engine(monkeypatch) -> None:
     ))
 
     assert result["capability"] == "recommendation"
+
+
+def test_budget_retail_activation_distinguishes_observation_timeout(
+    monkeypatch,
+) -> None:
+    class Engine:
+        def __init__(self, **kwargs):
+            kwargs["language_model"].stage = "PLAN_DONE"
+
+        async def query(self, **_kwargs):
+            raise RuntimeError("must-not-leak") from TimeoutError()
+
+    monkeypatch.setattr(
+        "ai_service.property_chat.reference_activation.GroundedChatbotEngine", Engine
+    )
+
+    with pytest.raises(
+        ReferenceActivationError,
+        match="BUDGET_RETAIL_OBSERVATION_TIMEOUT",
+    ):
+        asyncio.run(run_budget_retail_activation_case(
+            property_repository=object(),
+            rail_repository=object(),
+            retail_repository=object(),
+            language_model=object(),
+        ))
+
+
+def test_budget_retail_activation_preserves_safe_server_execution_phase(
+    monkeypatch,
+) -> None:
+    class Engine:
+        def __init__(self, **kwargs):
+            kwargs["language_model"].stage = "PLAN_DONE"
+
+        async def query(self, **_kwargs):
+            raise RuntimeError("must-not-leak") from RecommendationExecutionError(
+                "RECOMMENDATION_TEXT_PRESENTATION_FAILED"
+            )
+
+    monkeypatch.setattr(
+        "ai_service.property_chat.reference_activation.GroundedChatbotEngine", Engine
+    )
+
+    with pytest.raises(
+        ReferenceActivationError,
+        match="BUDGET_RETAIL_RECOMMENDATION_TEXT_PRESENTATION_FAILED",
+    ):
+        asyncio.run(run_budget_retail_activation_case(
+            property_repository=object(),
+            rail_repository=object(),
+            retail_repository=object(),
+            language_model=object(),
+        ))
 
 
 def test_comparison_activation_rejects_non_object_response() -> None:

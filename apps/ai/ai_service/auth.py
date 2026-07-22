@@ -82,8 +82,11 @@ class JwtAuthenticator:
                 algorithms=["RS256"],
                 issuer=self._settings.issuer,
                 audience=self._settings.audience,
-                options={"require": ["exp", "iat", "iss", "aud", "sub", "jti"], "strict_aud": True},
+                options={"require": ["exp", "iat", "iss", "aud", "sub", "jti"]},
             )
+            audience = claims["aud"]
+            if audience != self._settings.audience and audience != [self._settings.audience]:
+                raise AuthenticationRequired()
             issued_at = int(claims["iat"])
             expires_at = int(claims["exp"])
             if expires_at <= issued_at or expires_at - issued_at > self._settings.maximum_lifetime.total_seconds():

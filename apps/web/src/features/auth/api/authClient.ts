@@ -2,6 +2,7 @@ import type { CurrentUser, OAuthProvider } from '../authTypes';
 import { resolveUserApiUrl } from './resolveUserApiUrl';
 
 const AUTH_REQUEST_TIMEOUT_MS = 5_000;
+const CHATBOT_REQUEST_TIMEOUT_MS = 75_000;
 const OAUTH_PROVIDERS: readonly OAuthProvider[] = ['google', 'kakao', 'naver'];
 
 export type AuthRestoreResult =
@@ -26,6 +27,7 @@ type AuthClientOptions = {
   publicApiBaseUrl?: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
+  chatbotTimeoutMs?: number;
 };
 
 export function createAuthClient(options: AuthClientOptions = {}): AuthClient {
@@ -33,15 +35,21 @@ export function createAuthClient(options: AuthClientOptions = {}): AuthClient {
   const publicApiBaseUrl = options.publicApiBaseUrl ?? resolvePublicApiBaseUrl();
   const fetchImplementation = options.fetch ?? globalThis.fetch;
   const timeoutMs = options.timeoutMs ?? AUTH_REQUEST_TIMEOUT_MS;
+  const chatbotTimeoutMs = options.chatbotTimeoutMs ?? CHATBOT_REQUEST_TIMEOUT_MS;
   let restorePromise: Promise<AuthRestoreResult> | null = null;
   let accessToken: string | null = null;
 
-  async function request(requestBaseUrl: string, path: string, init: RequestInit): Promise<Response> {
+  async function request(
+    requestBaseUrl: string,
+    path: string,
+    init: RequestInit,
+    requestTimeoutMs = timeoutMs,
+  ): Promise<Response> {
     const controller = new AbortController();
     const abortFromCaller = () => controller.abort();
     if (init.signal?.aborted) controller.abort();
     else init.signal?.addEventListener('abort', abortFromCaller, { once: true });
-    const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+    const timeout = globalThis.setTimeout(() => controller.abort(), requestTimeoutMs);
     try {
       return await fetchImplementation(`${requestBaseUrl}${path}`, { ...init, signal: controller.signal });
     } finally {
@@ -107,7 +115,7 @@ export function createAuthClient(options: AuthClientOptions = {}): AuthClient {
         ...init,
         credentials: 'omit',
         headers,
-      });
+      }, target === 'public' ? chatbotTimeoutMs : timeoutMs);
       if (response.status === 401) {
         accessToken = null;
         restorePromise = null;

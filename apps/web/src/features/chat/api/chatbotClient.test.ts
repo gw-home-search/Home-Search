@@ -142,6 +142,15 @@ describe('챗봇 질문 client', () => {
     const unavailable = vi.fn<AuthenticatedChatbotRequest>().mockResolvedValue(new Response('provider detail', { status: 503 }));
     await expect(queryChatbot(unavailable, { question: '질문' })).rejects.toThrow('챗봇을 잠시 사용할 수 없습니다.');
   });
+
+  it('브라우저 abort 내부 문구를 사용자 안내로 변환한다', async () => {
+    const aborted = vi.fn<AuthenticatedChatbotRequest>().mockRejectedValue(
+      new DOMException('signal is aborted without reason', 'AbortError'),
+    );
+
+    await expect(queryChatbot(aborted, { question: '질문' }))
+      .rejects.toThrow('답변 생성 시간이 길어졌습니다. 잠시 후 다시 시도해주세요.');
+  });
 });
 
 function responseWithSummary(uiSummary: unknown): Response {

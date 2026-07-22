@@ -180,6 +180,53 @@ describe('authClient 인증 요청', () => {
     await expect(client.authenticatedRequest('https://evil.example/api/v1/chatbot/query', {}, 'public'))
       .rejects.toThrow('relative chatbot API path');
   });
+
+  it('chatbot request는 짧은 auth timeout과 분리된 timeout을 사용한다', async () => {
+    vi.useFakeTimers();
+    try {
+      let chatbotSignal: AbortSignal | null | undefined;
+      const fetchMock = vi.fn<typeof fetch>()
+        .mockResolvedValueOnce(jsonResponse({ accessToken: 'memory-only-jwt' }))
+        .mockResolvedValueOnce(jsonResponse({
+          userId: 7, provider: 'GOOGLE', displayName: '홍길동', profileImage: null,
+        }))
+        .mockImplementationOnce((_input, init) => new Promise((_resolve, reject) => {
+          chatbotSignal = init?.signal;
+          init?.signal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('signal is aborted without reason', 'AbortError')),
+            { once: true },
+          );
+        }));
+      const client = createAuthClient({
+        baseUrl: 'http://localhost:8082',
+        publicApiBaseUrl: 'http://localhost:8080',
+        fetch: fetchMock,
+        timeoutMs: 50,
+        chatbotTimeoutMs: 100,
+      });
+      await client.restoreSession();
+
+      const request = client.authenticatedRequest(
+        '/api/v1/chatbot/query',
+        { method: 'POST' },
+        'public',
+      );
+      const result = request.then(
+        () => null,
+        (error: unknown) => error,
+      );
+      await vi.advanceTimersByTimeAsync(50);
+
+      expect(chatbotSignal?.aborted).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(50);
+      await expect(result).resolves.toMatchObject({ name: 'AbortError' });
+      expect(chatbotSignal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 function jsonResponse(body: unknown): Response {

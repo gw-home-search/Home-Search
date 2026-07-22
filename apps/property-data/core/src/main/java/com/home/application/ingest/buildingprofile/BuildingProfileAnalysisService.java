@@ -65,6 +65,18 @@ public class BuildingProfileAnalysisService {
                     matches,
                     comparisons);
         }
+        for (var entry : complexesByPnu.entrySet()) {
+            if (byPnu.containsKey(entry.getKey())) continue;
+            for (BuildingProfileAnalysisComplex complex : entry.getValue()) {
+                matches.add(new BuildingProfileComplexMatchEvidence(
+                        complex.complexId(),
+                        entry.getKey(),
+                        null,
+                        BuildingProfileAssignmentStatus.SOURCE_MISSING,
+                        false,
+                        "no profile source record"));
+            }
+        }
         repository.recordAssignments(command.analysisRunId(), assignments);
         repository.recordComplexMatches(command.analysisRunId(), command.collectionId(), matches);
         repository.recordComparisons(command.analysisRunId(), comparisons);
@@ -469,13 +481,17 @@ public class BuildingProfileAnalysisService {
                 .map(value -> scopePnus.get(value.scopeHash()))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        long readyComplexes = eligibleMatches.stream()
+        double readyComplexWeight = eligibleMatches.stream()
                 .filter(BuildingProfileComplexMatchEvidence::projectable)
                 .filter(match -> !unprojectablePnus.contains(match.pnu()))
                 .filter(match -> byPnu.getOrDefault(match.pnu(), List.of()).stream()
                         .anyMatch(record -> valid(field, record.value(field))))
-                .count();
-        double readiness = rate(readyComplexes, eligibleMatches.size());
+                .mapToDouble(match -> weights.getOrDefault(match.pnu(), 0.0d))
+                .sum();
+        double totalComplexWeight = eligibleMatches.stream()
+                .mapToDouble(match -> weights.getOrDefault(match.pnu(), 0.0d))
+                .sum();
+        double readiness = rate(readyComplexWeight, totalComplexWeight);
         List<BuildingProfileComparisonEvidence> comparable = comparisons.stream()
                 .filter(value -> pnuSet.contains(scopePnus.get(value.scopeHash())))
                 .filter(value -> value.field() == field)
@@ -488,7 +504,16 @@ public class BuildingProfileAnalysisService {
                 .count();
         double conflictRate = rate(conflicts, comparable.size());
         double invalidRate = rate(invalidRecords, eligible.size());
-        double buildingCoverage = field.scope() == BuildingProfileScope.BUILDING ? sourceCoverage : 0;
+        double validBuildingWeight = eligible.stream()
+                .filter(record -> valid(field, record.value(field)))
+                .mapToDouble(record -> weights.getOrDefault(record.pnu(), 0.0d))
+                .sum();
+        double totalBuildingWeight = eligible.stream()
+                .mapToDouble(record -> weights.getOrDefault(record.pnu(), 0.0d))
+                .sum();
+        double buildingCoverage = field.scope() == BuildingProfileScope.BUILDING
+                ? rate(validBuildingWeight, totalBuildingWeight)
+                : 0;
         var metrics = new BuildingProfileQualityMetrics(
                 field.scope(),
                 sourceCoverage,

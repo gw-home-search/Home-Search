@@ -20,6 +20,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 class BuildingRegisterProfileAnalysisServiceTest {
     private static final String PNU = "1168010300101400001";
+    private static final String SECOND_PNU = "1168010300101400002";
 
     @Test
     @DisplayName("분석은 vlRat을 vlRatEstmTotArea로 계산하고 식별자를 report에서 제외한다")
@@ -144,6 +145,82 @@ class BuildingRegisterProfileAnalysisServiceTest {
                 .isEqualTo(0.0d);
     }
 
+    @Test
+    @DisplayName("원천 record가 없는 PNU의 모든 complex도 SOURCE_MISSING evidence로 남긴다")
+    void recordsSourceMissingMatchesWhenPnuHasNoProfileRecords(@TempDir Path output) {
+        FakeRepository repository = new FakeRepository();
+        repository.complexes = List.of(
+                new BuildingProfileAnalysisComplex(501, PNU, 2),
+                new BuildingProfileAnalysisComplex(502, PNU, 2));
+        repository.weights = Map.of(PNU, 1.0d);
+
+        BuildingProfileAnalysisSummary summary = new BuildingProfileAnalysisService(repository)
+                .analyze(new BuildingProfileAnalysisCommand(
+                        UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "PROFILE_V1", output));
+
+        assertThat(summary.complexMatchCount()).isEqualTo(2);
+        assertThat(repository.matches)
+                .hasSize(2)
+                .allSatisfy(match -> {
+                    assertThat(match.status())
+                            .isEqualTo(com.home.domain.complex.buildingprofile.BuildingProfileAssignmentStatus
+                                    .SOURCE_MISSING);
+                    assertThat(match.projectable()).isFalse();
+                });
+    }
+
+    @Test
+    @DisplayName("전국 building coverage와 projectable readiness에 PNU sampling weight를 적용한다")
+    void weightsBuildingCoverageAndProjectableReadiness(@TempDir Path output) {
+        FakeRepository repository = new FakeRepository();
+        repository.records = List.of(
+                record(
+                        1,
+                        PNU,
+                        BuildingRegisterEndpoint.RECAP_TITLE,
+                        "ROOT-1",
+                        null,
+                        1,
+                        Map.of(
+                                BuildingProfileField.PLAT_AREA, decimal("100"),
+                                BuildingProfileField.ARCH_AREA, decimal("100"))),
+                record(
+                        2,
+                        PNU,
+                        BuildingRegisterEndpoint.TITLE,
+                        "TITLE-1",
+                        "ROOT-1",
+                        3,
+                        Map.of(
+                                BuildingProfileField.PLAT_AREA, decimal("100"),
+                                BuildingProfileField.ARCH_AREA, decimal("100"))),
+                record(3, SECOND_PNU, BuildingRegisterEndpoint.RECAP_TITLE, "ROOT-2", null, 1, Map.of()),
+                record(4, SECOND_PNU, BuildingRegisterEndpoint.TITLE, "TITLE-2", "ROOT-2", 3, Map.of()));
+        repository.complexes = List.of(
+                new BuildingProfileAnalysisComplex(501, PNU, 1),
+                new BuildingProfileAnalysisComplex(502, SECOND_PNU, 1));
+        repository.weights = Map.of(PNU, 1.0d, SECOND_PNU, 9.0d);
+
+        new BuildingProfileAnalysisService(repository)
+                .analyze(new BuildingProfileAnalysisCommand(
+                        UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "PROFILE_V1", output));
+
+        assertThat(weightedQuality(repository, BuildingProfileField.PLAT_AREA)
+                        .projectableComplexReadiness())
+                .isEqualTo(0.1d);
+        assertThat(weightedQuality(repository, BuildingProfileField.ARCH_AREA).buildingCoverage())
+                .isEqualTo(0.1d);
+    }
+
+    private BuildingProfileFieldQualityEvidence weightedQuality(
+            FakeRepository repository, BuildingProfileField field) {
+        return repository.quality.stream()
+                .filter(value -> value.field() == field)
+                .filter(value -> value.stratum().equals("WEIGHTED_NATIONAL"))
+                .findFirst()
+                .orElseThrow();
+    }
+
     private BuildingProfileAnalysisRecord record(
             long id,
             BuildingRegisterEndpoint endpoint,
@@ -151,9 +228,20 @@ class BuildingRegisterProfileAnalysisServiceTest {
             String parent,
             int kind,
             Map<BuildingProfileField, BuildingProfileTypedValue> supplied) {
+        return record(id, PNU, endpoint, key, parent, kind, supplied);
+    }
+
+    private BuildingProfileAnalysisRecord record(
+            long id,
+            String pnu,
+            BuildingRegisterEndpoint endpoint,
+            String key,
+            String parent,
+            int kind,
+            Map<BuildingProfileField, BuildingProfileTypedValue> supplied) {
         EnumMap<BuildingProfileField, BuildingProfileTypedValue> values = new EnumMap<>(BuildingProfileField.class);
         values.putAll(supplied);
-        return new BuildingProfileAnalysisRecord(id, PNU, endpoint, key, parent, kind, "1", values);
+        return new BuildingProfileAnalysisRecord(id, pnu, endpoint, key, parent, kind, "1", values);
     }
 
     private BuildingProfileTypedValue decimal(String value) {
@@ -172,6 +260,7 @@ class BuildingRegisterProfileAnalysisServiceTest {
         List<BuildingProfileAnalysisRecord> records = List.of();
         List<BuildingProfileAnalysisComplex> complexes = List.of();
         Map<String, Double> weights = Map.of();
+        List<BuildingProfileComplexMatchEvidence> matches = new ArrayList<>();
         List<BuildingProfileComparisonEvidence> comparisons = new ArrayList<>();
         List<BuildingProfileFieldQualityEvidence> quality = new ArrayList<>();
 
@@ -222,7 +311,9 @@ class BuildingRegisterProfileAnalysisServiceTest {
 
         @Override
         public void recordComplexMatches(
-                UUID analysisRunId, UUID collectionId, List<BuildingProfileComplexMatchEvidence> matches) {}
+                UUID analysisRunId, UUID collectionId, List<BuildingProfileComplexMatchEvidence> matches) {
+            this.matches = List.copyOf(matches);
+        }
 
         @Override
         public void recordComparisons(UUID analysisRunId, List<BuildingProfileComparisonEvidence> values) {

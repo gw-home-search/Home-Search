@@ -2,6 +2,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 
 import { createAuthClient, type AuthClient, type AuthRestoreResult } from './api/authClient';
 import { AuthDialog } from './AuthDialog';
+import { AUTH_RETURN_TO_KEY, readSafeAuthReturnTo } from './authReturnPath';
 import { AUTH_MESSAGES, type AuthStatus, type CurrentUser, type OAuthProvider } from './authTypes';
 
 type AuthContextValue = {
@@ -23,12 +24,18 @@ type AuthProviderProps = {
   children: ReactNode;
   client?: AuthClient;
   navigate?: (url: string) => void;
+  replaceRoute?: (path: string) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 let defaultClient: AuthClient | null = null;
 
-export function AuthProvider({ children, client, navigate = defaultNavigate }: AuthProviderProps) {
+export function AuthProvider({
+  children,
+  client,
+  navigate = defaultNavigate,
+  replaceRoute = defaultReplaceRoute,
+}: AuthProviderProps) {
   const authClient = useMemo(() => client ?? getDefaultClient(), [client]);
   const [status, setStatus] = useState<AuthStatus>('checking');
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -74,22 +81,28 @@ export function AuthProvider({ children, client, navigate = defaultNavigate }: A
       restoreStartedRef.current = true;
       const callbackPath = window.location.pathname;
       if (callbackPath === '/auth/failure') {
-        window.history.replaceState({}, '', '/');
+        window.sessionStorage.removeItem(AUTH_RETURN_TO_KEY);
+        replaceRoute('/');
         setStatus('anonymous');
         setDialogError(AUTH_MESSAGES.callbackFailure);
         setIsDialogOpen(true);
       } else {
         const callbackSuccess = callbackPath === '/auth/success';
-        if (callbackSuccess) window.history.replaceState({}, '', '/');
         void authClient.restoreSession().then((result) => {
-          if (mountedRef.current) applyRestore(result, callbackSuccess, true);
+          if (!mountedRef.current) return;
+          applyRestore(result, callbackSuccess, true);
+          if (callbackSuccess) {
+            const returnTo = readSafeAuthReturnTo();
+            window.sessionStorage.removeItem(AUTH_RETURN_TO_KEY);
+            replaceRoute(result.kind === 'authenticated' ? returnTo ?? '/' : '/');
+          }
         });
       }
     }
     return () => {
       mountedRef.current = false;
     };
-  }, [applyRestore, authClient]);
+  }, [applyRestore, authClient, replaceRoute]);
 
   useEffect(() => {
     if (notice == null) return;
@@ -224,4 +237,8 @@ function unavailableAuthClient(): AuthClient {
 
 function defaultNavigate(url: string) {
   window.location.assign(url);
+}
+
+function defaultReplaceRoute(path: string) {
+  window.history.replaceState({}, '', path);
 }

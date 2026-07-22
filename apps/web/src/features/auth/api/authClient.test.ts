@@ -149,6 +149,27 @@ describe('authClient 인증 요청', () => {
     await expect(client.authenticatedRequest('/api/v1/favorites/501')).rejects.toThrow('Authentication required');
   });
 
+  it('favorite 목록의 허용된 pagination query를 user API로 전달한다', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ accessToken: 'memory-only-jwt' }))
+      .mockResolvedValueOnce(jsonResponse({
+        userId: 7, provider: 'GOOGLE', displayName: '홍길동', profileImage: null,
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        content: [], page: 0, size: 20, totalElements: 0, totalPages: 0,
+      }));
+    const client = createAuthClient({ baseUrl: 'http://localhost:8082', fetch: fetchMock });
+    await client.restoreSession();
+
+    await expect(client.authenticatedRequest('/api/v1/favorites?page=0&size=20'))
+      .resolves.toMatchObject({ status: 200 });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://localhost:8082/api/v1/favorites?page=0&size=20',
+      expect.objectContaining({ credentials: 'omit' }),
+    );
+  });
+
   it('chatbot request는 allowlist된 public API 경로에만 memory JWT를 전달한다', async () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse({ accessToken: 'memory-only-jwt' }))

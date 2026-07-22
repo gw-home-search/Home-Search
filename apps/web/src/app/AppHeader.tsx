@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 import { AccountControl } from '../features/auth/AccountControl';
 import { ChatbotPanel } from '../features/chat/ChatbotPanel';
 import type { IndexedDbChatConversationStore } from '../features/chat/storage/chatConversationStore';
@@ -14,7 +16,7 @@ type AppHeaderProps = {
 export function AppHeader({ chatConversationStore, chatUiContext, onChatOpenChange, onUiAction }: AppHeaderProps) {
   return (
     <header aria-label="상단 앱 바" className="app-bar">
-      <div className="app-brand">
+      <Link aria-label="홈서치 지도 홈" className="app-brand" to="/">
         <img
           alt=""
           aria-hidden="true"
@@ -27,7 +29,7 @@ export function AppHeader({ chatConversationStore, chatUiContext, onChatOpenChan
           <h1>홈서치</h1>
           <span>HomeSearch · 실거래가 인사이트</span>
         </span>
-      </div>
+      </Link>
       <div className="app-header-actions">
         <ChatbotPanel
           onOpenChange={onChatOpenChange}

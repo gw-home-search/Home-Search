@@ -55,6 +55,7 @@ body {
   min-width: 0;
   height: 100%;
   color: var(--hs-map-color-brand);
+  text-decoration: none;
 }
 
 .app-brand-mark {

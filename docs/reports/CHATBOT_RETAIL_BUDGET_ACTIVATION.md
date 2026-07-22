@@ -54,6 +54,15 @@ Coordinate Source DB를 서로 다른 read-only 연결로 조회하며, 정확�
 - 최소 GREEN: BUDGET·CRITERIA 추천의 text fallback을 서버
   `RecommendationTextPresenter`가 facts·readiness·limitations로 결정적으로 조립하고,
   추천 경로에서는 `draft_answer()`를 호출하지 않음
+- phase 진단 RED: plan validation, property candidate, rail batch, retail batch,
+  observation assembly, citation, `uiSummary`, 최종 response serialization 실패가 모두
+  같은 observation 오류로 축약됨
+- phase 진단 GREEN: 외부에 원문을 노출하지 않는 고정 reasonCode로 각 경계를 분리하고,
+  점포 `observed_at`의 `datetime`을 fact 생성 시 `date`로 정규화
+- 계획 숫자 RED: 승인 질문의 `3곳`이 서버에서 재검증되지 않아 모델 기본값 5가
+  실행 계획에 남음
+- 계획 숫자 GREEN: 현재 질문의 명시 결과 수를 서버가 다시 추출하고 불일치 시 조회 전
+  clarification으로 차단하며, provider 지침은 명시 수를 복사하고 생략 시에만 5를 사용
 
 ## 계약 영향
 
@@ -78,14 +87,14 @@ security-audit: 지적사항 = none
 
 | 검사 | 결과 |
 |---|---|
-| 전체 AI gate | Pass — 956 tests, coverage 90.00% |
+| 전체 AI gate | Pass — 971 tests, coverage 90.00% |
 | 좌표 보완 runner | Pass — DB 경계 전달, secret 비노출, idempotent 재실행 |
 | local chatbot preflight | Pass — exact 누적 allowlist, childcare 혼합 거부, secret 비노출 |
 | reference 문서 결정성 | Pass |
 | signed JWT JSON/SSE | Pass — 실제 서명, 잘못된 issuer 401, property 회귀 |
 | service DB boundary | Pass — credential 분리, runtime Flyway 비활성 |
 | change classifier·diff | Pass |
-| OpenAI live 대표 질문 | Fail — LLM draft 경로 제거 뒤 typed plan 검증 또는 observation 구간에서 종료 |
+| OpenAI live 대표 질문 | Fail — 날짜 직렬화 수정 뒤 `BUDGET_RETAIL_PLAN_LIMIT_INVALID`로 계획 검증에서 차단 |
 
 ## 검증 공백과 잔여 위험
 
@@ -111,6 +120,19 @@ security-audit: 지적사항 = none
   세 번 반복 후 stop rule을 적용했으며 다음 Slice는 provider 호출 없이 plan 검증,
   property candidate, rail batch, retail batch, response serialization을 고정 phase code로
   분리해야 한다.
+- 고정 phase code를 적용한 live에서
+  `BUDGET_RETAIL_RECOMMENDATION_RESPONSE_SERIALIZATION_FAILED`를 확인했다. citation과
+  `uiSummary`를 별도 분리한 뒤에도 같은 오류가 재현됐고, offline 재현에서 대규모점포
+  `observed_at`의 `datetime`과 다른 fact의 `date`를 `min()`으로 비교할 때 발생하는
+  `TypeError`가 원인임을 확정했다. 점포 fact 경계에서 날짜를 정규화한 회귀 테스트는
+  통과했다.
+- 날짜 수정 뒤 승인 case를 한 번 실행해 response serialization 구간을 통과했지만,
+  provider가 질문의 `3곳` 대신 기본 `limit=5`를 반환해
+  `BUDGET_RETAIL_PLAN_LIMIT_INVALID`로 차단됐다. 서버는 이제 현재 질문의 명시 결과 수를
+  다시 추출하고 불일치 계획을 observation 전에 종료하며, provider prompt도 명시 결과
+  수 복사를 요구한다. 이번 실행은 반복 실패 stop rule의 세 번째 live였으므로 수정 후
+  추가 유료 호출은 하지 않았다. 따라서 운영 배포 gate는 계속 `Fail`이며 다음 승인된
+  단일 live에서 최종 확인해야 한다.
 - 88%는 대규모점포 source에만 적용한 임시 최소선이다. 현재 88.7931%와의 여유가
   작으므로 새 active snapshot에서 기준 미달 시 자동 비활성화될 수 있다.
 - 좌표 미확인 `468`행과 provider 행정코드 mapping 부재 때문에 정상 0건을 확정하지

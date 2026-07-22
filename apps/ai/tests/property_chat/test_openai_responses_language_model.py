@@ -137,7 +137,7 @@ def test_planning_uses_fixed_responses_endpoint_without_provider_storage() -> No
     assert "monthly or period aggregates" in developer_prompt
     assert "average, minimum, maximum, count, trend, or flow" in developer_prompt
     assert "latest individual trade records" in developer_prompt
-    assert "Set limit to 5 when it is not used" in developer_prompt
+    assert "Set limit to 5 only when" in developer_prompt
 
 
 def test_planning_accepts_a_bounded_compound_bundle() -> None:
@@ -411,6 +411,37 @@ def test_planning_requires_typed_recommendation_region_budget_and_area() -> None
     assert plan.region_name == "송파구"
     assert plan.maximum_budget_ten_thousand_krw == 200_000
     assert plan.lifestyle_themes == ("TRANSIT", "STUDENT")
+
+
+def test_planning_prompt_requires_copying_explicit_recommendation_limit() -> None:
+    requester = RecordingRequester(
+        _response(_valid_plan(
+            capability="recommendation",
+            complexName="송파구",
+            regionName="송파구",
+            exclusiveAreaSquareMeters=84.0,
+            maximumBudgetTenThousandKrw=200_000,
+            lifestyleThemes=[],
+            recommendationMode="BUDGET",
+            minimumUnitCount=None,
+            recommendationCriteria=[],
+            criteriaOrder=[],
+            stationName=None,
+            limit=3,
+        ))
+    )
+
+    plan = asyncio.run(_model(requester).plan_query(
+        ChatbotQueryRequest(
+            question="송파구에서 20억원 이하 전용 84㎡ 아파트 3곳을 추천해줘"
+        )
+    ))
+
+    assert plan.limit == 3
+    body = json.loads(requester.calls[0][2])
+    assert "Copy an explicit requested result count to limit" in body["input"][0][
+        "content"
+    ]
 
 
 def test_planning_accepts_typed_criteria_recommendation_without_budget_or_area() -> None:

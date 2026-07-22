@@ -38,6 +38,7 @@ from .capability_handlers import (
 )
 from .comparison_handler import ComparisonHandler
 from .recommendation_handler import RecommendationHandler
+from .recommendation_errors import RecommendationExecutionError
 from .recommendation_presentation import RecommendationTextPresenter
 from .lifestyle_themes import detect_explicit_themes, detect_school_levels
 from .models import (
@@ -125,22 +126,6 @@ class GroundingValidationError(ValueError):
     def __init__(self, reason_code: str) -> None:
         if reason_code not in _GROUNDING_FAILURE_REASONS:
             raise ValueError("invalid grounding failure reason")
-        super().__init__()
-        self.reason_code = reason_code
-
-
-class RecommendationExecutionError(RuntimeError):
-    """Stable non-disclosing phase failure for server-owned presentation."""
-
-    _REASONS = frozenset({
-        "RECOMMENDATION_TEXT_PRESENTATION_FAILED",
-        "RECOMMENDATION_STRUCTURED_PRESENTATION_FAILED",
-        "RECOMMENDATION_DOCUMENT_FAILED",
-    })
-
-    def __init__(self, reason_code: str) -> None:
-        if reason_code not in self._REASONS:
-            raise ValueError("invalid recommendation execution failure reason")
         super().__init__()
         self.reason_code = reason_code
 
@@ -240,19 +225,37 @@ class GroundedChatbotEngine:
                 else QueryPlanBundle((planned,))
             )
             plans = tuple(
-                _verify_recommendation_plan(
-                    _verify_lifestyle_plan(plan, request.question), request.question
-                )
-                for plan in bundle.fragments
+                _verify_plan(plan, request.question) for plan in bundle.fragments
             )
             documents = tuple(await asyncio.gather(*(
                 self._execute_fragment(plan, request, request_id) for plan in plans
             )))
             if len(documents) == 1:
-                return documents[0].to_public_dict()
-            return CompoundAnswerDocument(
-                request, request_id, documents
-            ).to_public_dict()
+                try:
+                    return documents[0].to_public_dict()
+                except RecommendationExecutionError:
+                    raise
+                except Exception as exception:
+                    if documents[0].plan.capability == "recommendation":
+                        raise RecommendationExecutionError(
+                            "RECOMMENDATION_RESPONSE_SERIALIZATION_FAILED"
+                        ) from exception
+                    raise
+            try:
+                return CompoundAnswerDocument(
+                    request, request_id, documents
+                ).to_public_dict()
+            except RecommendationExecutionError:
+                raise
+            except Exception as exception:
+                if any(
+                    document.plan.capability == "recommendation"
+                    for document in documents
+                ):
+                    raise RecommendationExecutionError(
+                        "RECOMMENDATION_RESPONSE_SERIALIZATION_FAILED"
+                    ) from exception
+                raise
         except ChatbotProviderUnavailable:
             raise
         except Exception as exception:
@@ -927,6 +930,19 @@ def _verify_lifestyle_plan(plan: QueryPlan, question: str) -> QueryPlan:
     )
 
 
+def _verify_plan(plan: QueryPlan, question: str) -> QueryPlan:
+    if plan.capability != "recommendation":
+        return _verify_lifestyle_plan(plan, question)
+    try:
+        return _verify_recommendation_plan(
+            _verify_lifestyle_plan(plan, question), question
+        )
+    except Exception as exception:
+        raise RecommendationExecutionError(
+            "RECOMMENDATION_PLAN_VALIDATION_FAILED"
+        ) from exception
+
+
 def _verify_recommendation_plan(plan: QueryPlan, question: str) -> QueryPlan:
     if plan.capability != "recommendation":
         return plan
@@ -938,10 +954,21 @@ def _verify_recommendation_plan(plan: QueryPlan, question: str) -> QueryPlan:
     minimum_unit_count = (
         int(unit_match.group(1).replace(",", "")) if unit_match else None
     )
+    limit_match = re.search(
+        r"(?<![0-9])([0-9]{1,2})\s*(?:곳|개)(?:을|를)?\s*"
+        r"(?:추천|골라|선정|보여|알려)",
+        normalized,
+    )
+    requested_limit = int(limit_match.group(1)) if limit_match else 5
+    limit_mismatch = (
+        limit_match is not None
+        and (not 1 <= requested_limit <= 5 or plan.limit != requested_limit)
+    )
+    verified_limit = requested_limit if 1 <= requested_limit <= 5 else plan.limit
     numeric_mismatch = (
         plan.minimum_unit_count is not None
         and plan.minimum_unit_count != minimum_unit_count
-    )
+    ) or limit_mismatch
     if plan.recommendation_mode != "CRITERIA":
         budget_criteria = (
             ("ACADEMY",)
@@ -950,6 +977,7 @@ def _verify_recommendation_plan(plan: QueryPlan, question: str) -> QueryPlan:
         )
         return replace(
             plan,
+            limit=verified_limit,
             minimum_unit_count=minimum_unit_count,
             recommendation_criteria=budget_criteria,  # type: ignore[arg-type]
             criteria_order=budget_criteria,  # type: ignore[arg-type]
@@ -1026,6 +1054,7 @@ def _verify_recommendation_plan(plan: QueryPlan, question: str) -> QueryPlan:
             radius_meters = extracted_radius
     return replace(
         plan,
+        limit=verified_limit,
         minimum_unit_count=minimum_unit_count,
         recommendation_criteria=typed_criteria,  # type: ignore[arg-type]
         criteria_order=criteria_order,  # type: ignore[arg-type]

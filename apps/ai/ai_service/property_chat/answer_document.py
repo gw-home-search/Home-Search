@@ -9,6 +9,7 @@ from ai_service.models import ChatbotQueryRequest
 
 from .models import DraftAnswer, EvidenceFact, QueryPlan
 from .presentation import AnswerPresentation, FragmentPresentation, GroundedPresentationText
+from .recommendation_errors import RecommendationExecutionError
 
 _MAX_ARTIFACT_BYTES = 65_536
 _MAX_LABEL_LENGTH = 100
@@ -236,7 +237,14 @@ class AnswerDocument:
 
     def to_public_dict(self) -> dict[str, object]:
         answer = " ".join(section.text for section in self.sections)
-        citations = _citations(self.used_facts)
+        try:
+            citations = _citations(self.used_facts)
+        except Exception as exception:
+            if self.plan.capability == "recommendation":
+                raise RecommendationExecutionError(
+                    "RECOMMENDATION_CITATION_SERIALIZATION_FAILED"
+                ) from exception
+            raise
         data_as_of = min((fact.data_as_of for fact in self.used_facts), default=None)
         success = self.readiness != "unavailable"
         legacy_status = (
@@ -246,6 +254,19 @@ class AnswerDocument:
             if self.readiness == "partial"
             else "success"
         )
+        try:
+            ui_summary = (
+                self.presentation.to_public_dict(
+                    {fact.fact_id for fact in self.used_facts}
+                )
+                if self.presentation else None
+            )
+        except Exception as exception:
+            if self.plan.capability == "recommendation":
+                raise RecommendationExecutionError(
+                    "RECOMMENDATION_UI_SUMMARY_SERIALIZATION_FAILED"
+                ) from exception
+            raise
         return {
             "success": success,
             "status": legacy_status,
@@ -264,10 +285,7 @@ class AnswerDocument:
             "conversationMemoryPatch": None,
             "uiActions": list(self.actions),
             "uiArtifacts": list(self.artifacts),
-            "uiSummary": (
-                self.presentation.to_public_dict({fact.fact_id for fact in self.used_facts})
-                if self.presentation else None
-            ),
+            "uiSummary": ui_summary,
             "requestId": self.request_id,
             "citations": citations,
             "dataAsOf": data_as_of.isoformat() if data_as_of else None,

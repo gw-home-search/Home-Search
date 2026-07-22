@@ -946,3 +946,27 @@ def test_server_revalidates_criteria_conditions_from_the_current_question(
     verified = _verify_recommendation_plan(plan, question)
 
     assert verified.clarification_code == clarification
+
+
+def test_server_revalidates_explicit_recommendation_result_limit() -> None:
+    verified = _verify_recommendation_plan(
+        QueryPlan(
+            capability="recommendation",
+            complex_name="송파구",
+            region_name="송파구",
+            recommendation_mode="BUDGET",
+            maximum_budget_ten_thousand_krw=200_000,
+            exclusive_area_square_meters=84.0,
+            limit=5,
+        ),
+        "송파구에서 20억원 이하 전용 84㎡ 아파트 3곳을 추천해줘",
+    )
+
+    assert verified.limit == 3
+    assert verified.clarification_code == "NUMERIC_CONDITION_MISMATCH"
+
+
+def test_recommendation_verifier_leaves_non_recommendation_plan_unchanged() -> None:
+    plan = QueryPlan(capability="complex_identity", complex_name="잠실엘스")
+
+    assert _verify_recommendation_plan(plan, "잠실엘스 알려줘") is plan

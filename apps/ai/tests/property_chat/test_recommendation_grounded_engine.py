@@ -10,13 +10,14 @@ from ai_service.auth import AuthenticatedUser
 from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
 from ai_service.property_chat.comparison import CandidatePoint
+from ai_service.property_chat.answer_document import AnswerDocument
 from ai_service.property_chat.engine import (
     GroundedChatbotEngine,
     GroundingValidationError,
     RecommendationExecutionError,
     validate_draft,
 )
-from ai_service.property_chat.presentation import PresentationAssembler
+from ai_service.property_chat.presentation import AnswerPresentation, PresentationAssembler
 from ai_service.property_chat.recommendation_presentation import (
     RecommendationTextPresenter,
 )
@@ -276,6 +277,26 @@ def test_recommendation_filters_before_deterministic_scoring_and_uses_batch_quer
     assert set(card["factIds"]).issubset(citation_fact_ids)
 
 
+def test_recommendation_normalizes_retail_observed_at_before_serialization() -> None:
+    class ObservedAtRetailRepository(RetailRepository):
+        def nearest_batch(self, **kwargs):
+            results = super().nearest_batch(**kwargs)
+            return {
+                complex_id: replace(
+                    result,
+                    data_as_of=datetime(2026, 6, 30, 12, 0, tzinfo=UTC),
+                )
+                for complex_id, result in results.items()
+            }
+
+    response = _query_with_repositories(
+        retail_repository=ObservedAtRetailRepository()
+    )
+
+    assert response["status"] == "success"
+    assert response["dataAsOf"] == "2026-06-30"
+
+
 def test_recommendation_is_unavailable_when_a_required_source_is_unavailable() -> None:
     response, _, _, _ = _query(rail_ready=False)
 
@@ -355,6 +376,147 @@ def test_recommendation_execution_error_rejects_unknown_reason() -> None:
         RecommendationExecutionError("UNKNOWN")
 
 
+def test_recommendation_maps_typed_plan_validation_failure(monkeypatch) -> None:
+    def fail_plan_validation(*_args, **_kwargs):
+        raise ValueError("must-not-leak")
+
+    monkeypatch.setattr(
+        "ai_service.property_chat.engine._verify_recommendation_plan",
+        fail_plan_validation,
+    )
+
+    _assert_recommendation_phase(
+        lambda: _query(), "RECOMMENDATION_PLAN_VALIDATION_FAILED"
+    )
+
+
+def test_recommendation_maps_property_candidate_failure() -> None:
+    class FailingPropertyRepository(PropertyRepository):
+        def latest_trade_date(self):
+            raise ValueError("must-not-leak")
+
+    _assert_recommendation_phase(
+        lambda: _query_with_repositories(repository=FailingPropertyRepository()),
+        "RECOMMENDATION_PROPERTY_CANDIDATE_FAILED",
+    )
+
+
+def test_recommendation_maps_property_candidate_query_failure() -> None:
+    class FailingPropertyRepository(PropertyRepository):
+        def recommendation_candidates(self, *_args):
+            raise ValueError("must-not-leak")
+
+    _assert_recommendation_phase(
+        lambda: _query_with_repositories(repository=FailingPropertyRepository()),
+        "RECOMMENDATION_PROPERTY_CANDIDATE_FAILED",
+    )
+
+
+def test_recommendation_maps_rail_batch_failure() -> None:
+    class FailingRailRepository(RailRepository):
+        def nearest_batch(self, **_kwargs):
+            raise ValueError("must-not-leak")
+
+    _assert_recommendation_phase(
+        lambda: _query_with_repositories(rail_repository=FailingRailRepository()),
+        "RECOMMENDATION_RAIL_BATCH_FAILED",
+    )
+
+
+def test_recommendation_maps_retail_batch_failure() -> None:
+    class FailingRetailRepository(RetailRepository):
+        def nearest_batch(self, **_kwargs):
+            raise ValueError("must-not-leak")
+
+    _assert_recommendation_phase(
+        lambda: _query_with_repositories(
+            retail_repository=FailingRetailRepository()
+        ),
+        "RECOMMENDATION_RETAIL_BATCH_FAILED",
+    )
+
+
+def test_recommendation_maps_observation_assembly_failure() -> None:
+    class IncompleteRailRepository(RailRepository):
+        def nearest_batch(self, **_kwargs):
+            return {}
+
+    _assert_recommendation_phase(
+        lambda: _query_with_repositories(
+            rail_repository=IncompleteRailRepository()
+        ),
+        "RECOMMENDATION_OBSERVATION_ASSEMBLY_FAILED",
+    )
+
+
+def test_recommendation_maps_response_serialization_failure(monkeypatch) -> None:
+    def fail_serialization(*_args, **_kwargs):
+        raise ValueError("must-not-leak")
+
+    monkeypatch.setattr(AnswerDocument, "to_public_dict", fail_serialization)
+
+    _assert_recommendation_phase(
+        lambda: _query(), "RECOMMENDATION_RESPONSE_SERIALIZATION_FAILED"
+    )
+
+
+def test_recommendation_maps_citation_serialization_failure(monkeypatch) -> None:
+    def fail_citations(*_args, **_kwargs):
+        raise ValueError("must-not-leak")
+
+    monkeypatch.setattr(
+        "ai_service.property_chat.answer_document._citations",
+        fail_citations,
+    )
+
+    _assert_recommendation_phase(
+        lambda: _query(), "RECOMMENDATION_CITATION_SERIALIZATION_FAILED"
+    )
+
+
+def test_recommendation_maps_ui_summary_serialization_failure(monkeypatch) -> None:
+    def fail_ui_summary(*_args, **_kwargs):
+        raise ValueError("must-not-leak")
+
+    monkeypatch.setattr(
+        AnswerPresentation,
+        "to_public_dict",
+        fail_ui_summary,
+    )
+
+    _assert_recommendation_phase(
+        lambda: _query(), "RECOMMENDATION_UI_SUMMARY_SERIALIZATION_FAILED"
+    )
+
+
+def _query_with_repositories(
+    *,
+    repository=None,
+    rail_repository=None,
+    retail_repository=None,
+):
+    engine = GroundedChatbotEngine(
+        repository=repository or PropertyRepository(),
+        language_model=LanguageModel(),
+        enabled_capabilities=frozenset({"recommendation"}),
+        rail_station_repository=rail_repository or RailRepository(),
+        point_facility_repository=retail_repository or RetailRepository(),
+    )
+    return asyncio.run(engine.query(
+        request=ChatbotQueryRequest(question="송파구 20억 이하 전용 84㎡ 추천"),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-recommendation-phase",
+    ))
+
+
+def _assert_recommendation_phase(call, expected_reason: str) -> None:
+    with pytest.raises(ChatbotProviderUnavailable) as raised:
+        call()
+
+    assert isinstance(raised.value.__cause__, RecommendationExecutionError)
+    assert raised.value.__cause__.reason_code == expected_reason
+
+
 def test_recommendation_lists_missing_required_inputs_without_observation() -> None:
     class MissingInputLanguageModel(LanguageModel):
         async def plan_query(self, _request):
@@ -381,6 +543,33 @@ def test_recommendation_lists_missing_required_inputs_without_observation() -> N
         all(label in limitation for label in ("지역", "최대 예산", "전용면적"))
         for limitation in response["limitations"]
     )
+
+
+def test_recommendation_does_not_observe_when_explicit_limit_mismatches_plan() -> None:
+    repository = PropertyRepository()
+    rail_repository = RailRepository()
+    retail_repository = RetailRepository()
+    engine = GroundedChatbotEngine(
+        repository=repository,
+        language_model=LanguageModel(),
+        enabled_capabilities=frozenset({"recommendation"}),
+        rail_station_repository=rail_repository,
+        point_facility_repository=retail_repository,
+    )
+
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(
+            question="송파구에서 20억원 이하 전용 84㎡ 아파트 3곳을 추천해줘"
+        ),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-recommendation-limit-mismatch",
+    ))
+
+    assert response["status"] == "failed"
+    assert any("결과 수" in limitation for limitation in response["limitations"])
+    assert repository.calls == 0
+    assert rail_repository.calls == 0
+    assert retail_repository.calls == 0
 
 
 def test_runtime_mode_gate_stops_budget_recommendation_before_observation() -> None:
@@ -970,8 +1159,9 @@ def test_budget_recommendation_handler_guards_source_and_candidate_boundaries() 
 
     assert any("최신 거래일" in text for text in observe(LatestMissing()).limitations)
     assert any("하나로 식별" in text for text in observe(RegionMissing()).limitations)
-    with pytest.raises(ValueError, match="cap"):
+    with pytest.raises(RecommendationExecutionError) as raised:
         observe(TooMany())
+    assert raised.value.reason_code == "RECOMMENDATION_OBSERVATION_ASSEMBLY_FAILED"
     assert any("철도" in text for text in observe(PropertyRepository()).limitations)
     assert any(
         "대규모점포" in text

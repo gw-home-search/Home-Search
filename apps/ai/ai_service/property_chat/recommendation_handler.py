@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import hashlib
-from typing import Protocol
+from typing import Protocol, TypeVar
 
 from .academy_locations import AcademyLocationSearchResult
 from .capability_handlers import CapabilityResult, EvidenceFactBuilders
@@ -48,7 +48,10 @@ from .recommendation import (
     RecommendationPolicy,
     RecommendationScoreItem,
 )
+from .recommendation_errors import RecommendationExecutionError
 from .reference_facilities import FacilitySearchResult, retail_coordinate_ready
+
+_BatchResult = TypeVar("_BatchResult")
 
 
 class RecommendationPropertyRepository(Protocol):
@@ -136,6 +139,16 @@ class RecommendationHandler:
     async def observe(self, plan: QueryPlan) -> CapabilityResult:
         if plan.capability != "recommendation":
             raise ValueError("recommendation plan is invalid")
+        try:
+            return await self._observe(plan)
+        except RecommendationExecutionError:
+            raise
+        except Exception as exception:
+            raise RecommendationExecutionError(
+                "RECOMMENDATION_OBSERVATION_ASSEMBLY_FAILED"
+            ) from exception
+
+    async def _observe(self, plan: QueryPlan) -> CapabilityResult:
         if plan.recommendation_mode == "CRITERIA":
             return await self._observe_criteria(plan)
         clarification = _criteria_clarification(plan)
@@ -165,23 +178,33 @@ class RecommendationHandler:
         area = plan.exclusive_area_square_meters
         budget = plan.maximum_budget_ten_thousand_krw
         assert region_name is not None and area is not None and budget is not None
-        cutoff = plan.end_date or await asyncio.to_thread(
-            self._repository.latest_trade_date
-        )
+        try:
+            cutoff = plan.end_date or await asyncio.to_thread(
+                self._repository.latest_trade_date
+            )
+        except Exception as exception:
+            raise RecommendationExecutionError(
+                "RECOMMENDATION_PROPERTY_CANDIDATE_FAILED"
+            ) from exception
         if cutoff is None:
             return CapabilityResult(
                 [], ["추천 기준으로 사용할 전역 최신 거래일을 확인하지 못했습니다."],
                 "unavailable",
             )
         start_date = cutoff - timedelta(days=364)
-        observations = await asyncio.to_thread(
-            self._repository.recommendation_candidates,
-            region_name,
-            start_date,
-            cutoff,
-            area,
-            100,
-        )
+        try:
+            observations = await asyncio.to_thread(
+                self._repository.recommendation_candidates,
+                region_name,
+                start_date,
+                cutoff,
+                area,
+                100,
+            )
+        except Exception as exception:
+            raise RecommendationExecutionError(
+                "RECOMMENDATION_PROPERTY_CANDIDATE_FAILED"
+            ) from exception
         if observations is None:
             return CapabilityResult(
                 [],
@@ -253,12 +276,14 @@ class RecommendationHandler:
             for record, _ in qualified
         )
         rail_results, retail_results = await asyncio.gather(
-            asyncio.to_thread(
+            _observe_batch(
+                "RECOMMENDATION_RAIL_BATCH_FAILED",
                 self._rail_repository.nearest_batch,
                 points=points,
                 radius_meters=1500,
             ),
-            asyncio.to_thread(
+            _observe_batch(
+                "RECOMMENDATION_RETAIL_BATCH_FAILED",
                 self._retail_repository.nearest_batch,
                 source_id="retail.large-store",
                 category="LARGE_STORE",
@@ -826,7 +851,7 @@ def _criteria_clarification(plan: QueryPlan) -> str | None:
     return {
         "AMBIGUOUS_EDUCATION": "교육 조건은 학교 위치와 학원 접근성 중 사용할 기준을 알려주세요.",
         "MISSING_PRIORITY": "조건이 여러 개입니다. 먼저 볼 조건과 그다음 조건의 순서를 알려주세요.",
-        "NUMERIC_CONDITION_MISMATCH": "세대수 조건을 정확히 확인하지 못했습니다. ‘500세대 이상’처럼 다시 알려주세요.",
+        "NUMERIC_CONDITION_MISMATCH": "요청한 숫자 조건을 정확히 확인하지 못했습니다. 세대수 또는 결과 수를 숫자로 다시 알려주세요.",
         "REGION_NOT_CONFIRMED": "현재 질문에서 지역을 확인하지 못했습니다. 시·도와 시·군·구를 함께 알려주세요.",
         "STATION_RADIUS_REQUIRED": "역 주변 범위는 500m·800m·1km 중 원하는 반경을 알려주세요.",
         "STATION_RADIUS_OUT_OF_RANGE": "역 주변 반경은 300m 이상 2,000m 이하로 알려주세요.",
@@ -955,11 +980,7 @@ def _criteria_metric(
         return _distance_metric(nearest, result.source_date, fact, 1500), fact
     if key == "SHOPPING" and isinstance(result, FacilitySearchResult):
         nearest = result.facilities[0].distance_meters if result.facilities else None
-        observed_on = (
-            result.data_as_of.date()
-            if hasattr(result.data_as_of, "date")
-            else result.data_as_of
-        )
+        observed_on = _as_date(result.data_as_of)
         fact = _criteria_observation_fact(
             key=key,
             complex_id=complex_id,
@@ -1049,6 +1070,17 @@ def _source_unavailable(label: str) -> CapabilityResult:
         [], [f"{label} 데이터가 아직 준비되지 않아 조건 충족도를 계산하지 못했습니다."],
         "unavailable",
     )
+
+
+async def _observe_batch(
+    reason_code: str,
+    operation: Callable[..., _BatchResult],
+    **kwargs: object,
+) -> _BatchResult:
+    try:
+        return await asyncio.to_thread(operation, **kwargs)
+    except Exception as exception:
+        raise RecommendationExecutionError(reason_code) from exception
 
 
 def _rail_distance(result: RailStationSearchResult | None) -> int | None:
@@ -1197,7 +1229,7 @@ def _retail_fact(
     return EvidenceFact(
         fact_id=f"recommendation-retail-{complex_id}-{result.dataset_version}",
         claims=tuple(claims),
-        data_as_of=result.data_as_of,
+        data_as_of=_as_date(result.data_as_of),
         payload={
             "complexId": complex_id,
             "radiusMeters": 1000,
@@ -1212,6 +1244,10 @@ def _retail_fact(
         evidence_grade="A",
         dataset_version_value=result.dataset_version,
     )
+
+
+def _as_date(value: date | datetime) -> date:
+    return value.date() if isinstance(value, datetime) else value
 
 
 def _fact_ids(value: object) -> list[str]:

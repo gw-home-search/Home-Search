@@ -172,3 +172,12 @@ gate는 통과했지만 승인 live 3회는 모두 `BUDGET_RETAIL_OBSERVATION_FA
 timeout과 서버 text/structured presentation 조립 단계는 제외했다. typed plan 재검증,
 recommendation observation 또는 최종 response serialization phase를 분리하기 전까지
 운영 배포 gate는 계속 `Fail`이다.
+
+후속 phase 분리로 plan, property, rail, retail, observation assembly, citation,
+`uiSummary`, response serialization을 비노출 reasonCode로 구분했다. live에서 확인된
+response serialization 실패는 대규모점포 `observed_at`의 `datetime`과 다른 fact의
+`date`가 섞인 것이 원인이었고, 점포 fact 경계의 날짜 정규화로 offline 재현을
+해소했다. 다음 승인 live는 질문의 `3곳`과 provider 기본 `limit=5` 불일치로
+`BUDGET_RETAIL_PLAN_LIMIT_INVALID`에서 차단됐다. 현재 질문의 명시 결과 수를 서버가
+재검증하고 불일치 시 observation 전에 종료하도록 보완했지만 stop rule에 따라 추가
+live는 실행하지 않았으므로 운영 배포 gate는 계속 `Fail`이다.

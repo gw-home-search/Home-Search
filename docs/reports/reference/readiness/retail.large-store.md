@@ -9,8 +9,9 @@
   주소 API·fuzzy geocoding 미사용
 - 활성화: `retail_location`, comparison retail row, `CRITERIA/SHOPPING`, `BUDGET`
 - 비활성 유지: 어린이집·유치원
-- 검증 공백: OpenAI live provider timeout은 해소됐으나 최종
-  `GROUNDING_RAIL_TEXT_OUTSIDE_OBSERVATION`; 운영 배포 gate `Fail`
+- 검증 공백: 점포 `observed_at` 날짜 직렬화는 해소됐으나 다음 OpenAI live에서 질문의
+  `3곳`과 provider `limit=5` 불일치가 확인됨. 서버 재검증·provider 지침 보완 후
+  stop rule로 추가 live는 `not run`; 운영 배포 gate `Fail`
 
 좌표 보완은 원본 registry fact를 수정하지 않는 additive evidence다. 법정동·지번으로
 만든 정확한 19자리 PNU가 Coordinate Source DB에 존재할 때만 위치를 게시한다.

@@ -6,8 +6,13 @@ from datetime import UTC, date, datetime
 import pytest
 
 from ai_service.auth import AuthenticatedUser
+from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
-from ai_service.property_chat.engine import GroundedChatbotEngine
+from ai_service.property_chat.answer_document import CompoundAnswerDocument
+from ai_service.property_chat.engine import (
+    GroundedChatbotEngine,
+    RecommendationExecutionError,
+)
 from ai_service.property_chat.models import (
     ComplexRecord,
     DraftAnswer,
@@ -147,3 +152,36 @@ def test_compound_query_is_failed_when_every_fragment_is_unavailable() -> None:
     assert response["executionSummary"] == {"total": 2, "succeeded": 0, "failed": 2}
     assert response["uiArtifacts"] == []
     assert response["uiActions"] == []
+
+
+def test_compound_recommendation_maps_response_serialization_failure(
+    monkeypatch,
+) -> None:
+    def fail_serialization(*_args, **_kwargs):
+        raise ValueError("must-not-leak")
+
+    monkeypatch.setattr(
+        CompoundAnswerDocument,
+        "to_public_dict",
+        fail_serialization,
+    )
+    engine = GroundedChatbotEngine(
+        repository=PropertyRepository(),
+        language_model=CompoundLanguageModel((
+            QueryPlan("complex_identity", "잠실엘스"),
+            QueryPlan("recommendation", "추천 조건 확인"),
+        )),
+        enabled_capabilities=frozenset({"complex_identity", "recommendation"}),
+    )
+
+    with pytest.raises(ChatbotProviderUnavailable) as raised:
+        asyncio.run(engine.query(
+            request=ChatbotQueryRequest(question="잠실엘스를 확인하고 추천해줘"),
+            user=AuthenticatedUser(user_id=1),
+            request_id="request-compound-recommendation-failure",
+        ))
+
+    assert isinstance(raised.value.__cause__, RecommendationExecutionError)
+    assert raised.value.__cause__.reason_code == (
+        "RECOMMENDATION_RESPONSE_SERIALIZATION_FAILED"
+    )

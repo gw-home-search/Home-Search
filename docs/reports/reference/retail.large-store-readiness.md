@@ -1,6 +1,6 @@
 # `retail.large-store` readiness
 
-기준일: 2026-07-21
+기준일: 2026-07-22
 
 상태: `Limited Pass`
 
@@ -41,8 +41,12 @@
 - 승인된 OpenAI live 대표 질문은 데이터 관찰까지 통과했지만 답변 생성 단계에서
   시작된 timeout은 `reasoning.effort=none`으로 해소됐다. 다만 claim-only 입력과 rail
   validator 보완 뒤에도 `GROUNDING_RAIL_TEXT_OUTSIDE_OBSERVATION`이 재현되어 운영 배포
-  gate는 `Fail`이다. deterministic observation, grounding, artifact, local runtime,
-  JSON/SSE transport 검증은 유지한다.
+  gate는 `Fail`이었다. 이후 서버 결정형 fallback과 phase 진단을 적용해 점포
+  `observed_at`의 `datetime` 직렬화 원인을 찾아 날짜 정규화 회귀를 통과했다. 다음
+  승인 live는 질문의 `3곳`과 provider `limit=5` 불일치로 계획 검증에서 차단됐고,
+  서버 재검증과 provider 지침을 보완한 뒤 stop rule에 따라 추가 live는 실행하지 않았다.
+  따라서 운영 배포 gate는 계속 `Fail`이다. deterministic observation, grounding,
+  artifact, local runtime, JSON/SSE transport 검증은 유지한다.
 - 문제 발생 시 reference allowlist를
   `academy_lookup,rail_station_lookup,school_location`으로 되돌리면 retail repository와
   `BUDGET` mode가 함께 비활성화된다. 원본·보완 evidence는 삭제하지 않는다.

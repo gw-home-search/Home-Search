@@ -61,7 +61,7 @@ print(
     jwt.encode(
         {
             "iss": issuer,
-            "aud": "home-search-user-api",
+            "aud": ["home-search-user-api"],
             "sub": "42",
             "jti": "signed-e2e-token",
             "iat": now,
@@ -229,4 +229,4 @@ property_status="$(curl --silent --show-error --output /dev/null --write-out '%{
     "${base_url}/api/v1/map/regions")"
 [[ "$property_status" == "200" ]] || fail "기존 property route는 200이어야 합니다: ${property_status}"
 
-echo "상태: Pass - 실제 서명 JWT JSON/SSE, 잘못된 issuer 401, property 회귀를 확인했습니다."
+echo "상태: Pass - user-service 형식의 서명 JWT JSON/SSE, 잘못된 issuer 401, property 회귀를 확인했습니다."

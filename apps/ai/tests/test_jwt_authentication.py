@@ -36,7 +36,7 @@ def issue(
     private_pem: str,
     *,
     issuer: str = "user-service",
-    audience: str = "home-search-user-api",
+    audience: object = "home-search-user-api",
     subject: str = "42",
     role: str = "USER",
     lifetime: timedelta = timedelta(minutes=15),
@@ -67,6 +67,17 @@ def test_verifies_canonical_user_token() -> None:
     assert authenticated.user_id == 42
 
 
+def test_verifies_single_audience_list_issued_by_user_service() -> None:
+    private_pem, public_pem = key_pair()
+    authenticator = JwtAuthenticator(JwtSettings(public_keys={"active": public_pem}))
+
+    authenticated = authenticator.authenticate(
+        f"Bearer {issue(private_pem, audience=['home-search-user-api'])}"
+    )
+
+    assert authenticated.user_id == 42
+
+
 @pytest.mark.parametrize(
     ("issuer", "audience"),
     [("wrong", "home-search-user-api"), ("user-service", "wrong")],
@@ -77,6 +88,16 @@ def test_rejects_wrong_issuer_or_audience(issuer: str, audience: str) -> None:
 
     with pytest.raises(AuthenticationRequired):
         authenticator.authenticate(f"Bearer {issue(private_pem, issuer=issuer, audience=audience)}")
+
+
+def test_rejects_multiple_audiences_even_when_canonical_audience_is_present() -> None:
+    private_pem, public_pem = key_pair()
+    authenticator = JwtAuthenticator(JwtSettings(public_keys={"active": public_pem}))
+
+    with pytest.raises(AuthenticationRequired):
+        authenticator.authenticate(
+            f"Bearer {issue(private_pem, audience=['home-search-user-api', 'another-service'])}"
+        )
 
 
 def test_rejects_unknown_key_id() -> None:

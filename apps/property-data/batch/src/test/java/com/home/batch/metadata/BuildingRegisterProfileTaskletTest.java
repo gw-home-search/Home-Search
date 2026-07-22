@@ -45,6 +45,8 @@ class BuildingRegisterProfileTaskletTest {
                 ArgumentCaptor.forClass(BuildingProfileCollectCommand.class);
         verify(service).collect(command.capture());
         assertThat(command.getValue().sampleSize()).isEqualTo(1500);
+        assertThat(command.getValue().targetScope()).isEqualTo(
+                com.home.domain.complex.buildingprofile.BuildingProfileTargetScope.VALIDATION_SAMPLE);
         assertThat(command.getValue().parallelism()).isEqualTo(2);
 
         Map<String, Object> invalid = new java.util.HashMap<>(parameters);
@@ -83,6 +85,30 @@ class BuildingRegisterProfileTaskletTest {
                                 "rulesVersion", "PROFILE_V1",
                                 "outputDirectory", "/tmp/home-search-profile-test")));
         verify(analyze).analyze(org.mockito.ArgumentMatchers.any(BuildingProfileAnalysisCommand.class));
+    }
+
+    @Test
+    void nationwideCollectDerivesPopulationAndUsesRequestedParallelism() throws Exception {
+        BuildingProfileCollectionService service = mock(BuildingProfileCollectionService.class);
+        BuildingRegisterDailyRequestUsage usage = mock(BuildingRegisterDailyRequestUsage.class);
+        given(service.collect(org.mockito.ArgumentMatchers.any(BuildingProfileCollectCommand.class)))
+                .willReturn(new BuildingProfileCollectSummary(43_721, 10, 2, 0, false));
+        BuildingProfileCollectTasklet tasklet = new BuildingProfileCollectTasklet(service, lock(), usage, 400_000);
+        Map<String, Object> parameters = new java.util.HashMap<>(collectParameters());
+        parameters.put("targetScope", "nationwide-staging");
+        parameters.remove("sampleSize");
+        parameters.put("maxRequests", "300000");
+        parameters.put("parallelism", "3");
+
+        tasklet.execute(null, context(parameters));
+
+        ArgumentCaptor<BuildingProfileCollectCommand> command =
+                ArgumentCaptor.forClass(BuildingProfileCollectCommand.class);
+        verify(service).collect(command.capture());
+        assertThat(command.getValue().targetScope()).isEqualTo(
+                com.home.domain.complex.buildingprofile.BuildingProfileTargetScope.NATIONWIDE_STAGING);
+        assertThat(command.getValue().sampleSize()).isNull();
+        assertThat(command.getValue().parallelism()).isEqualTo(3);
     }
 
     @Test

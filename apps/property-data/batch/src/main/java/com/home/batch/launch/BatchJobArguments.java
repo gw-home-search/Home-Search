@@ -65,18 +65,25 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
     private static BatchJobArguments buildingProfileCollect(
             String jobName, Map<String, String> arguments, Clock clock) {
         requireLiteral(arguments, "purpose", "profile-discovery");
-        requireLiteral(arguments, "targetScope", "validation-sample");
         requireLiteral(arguments, "strategy", "compare-recap-title");
-        int sampleSize = positiveInt(arguments.get("sampleSize"), "sampleSize");
-        if (sampleSize != 1500) throw invalid("sampleSize must be exactly 1500");
+        String targetScope = requireText(arguments.get("targetScope"), "targetScope is required");
+        if (!List.of("validation-sample", "nationwide-staging").contains(targetScope)) {
+            throw invalid("targetScope must be validation-sample or nationwide-staging");
+        }
         Map<String, String> values = new LinkedHashMap<>();
         values.put("collectionId", canonicalUuid(arguments.get("collectionId"), "collectionId"));
         values.put("requestId", canonicalRequestId(arguments.get("requestId")));
         values.put("runDate", runDate(arguments.get("runDate"), clock));
         values.put("purpose", "profile-discovery");
-        values.put("targetScope", "validation-sample");
+        values.put("targetScope", targetScope);
         values.put("strategy", "compare-recap-title");
-        values.put("sampleSize", Integer.toString(sampleSize));
+        if ("validation-sample".equals(targetScope)) {
+            int sampleSize = positiveInt(arguments.get("sampleSize"), "sampleSize");
+            if (sampleSize != 1500) throw invalid("sampleSize must be exactly 1500");
+            values.put("sampleSize", Integer.toString(sampleSize));
+        } else if (text(arguments.get("sampleSize")) != null) {
+            throw invalid("sampleSize must be omitted for nationwide-staging");
+        }
         values.put("selectionSeed", requireText(arguments.get("selectionSeed"), "selectionSeed is required"));
         values.put("maxRequests", Integer.toString(positiveInt(arguments.get("maxRequests"), "maxRequests")));
         values.put("parallelism", Integer.toString(profileParallelism(arguments.get("parallelism"))));

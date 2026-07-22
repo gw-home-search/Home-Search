@@ -10,6 +10,7 @@ import com.home.application.ingest.buildingprofile.LegalDongCodeMapping;
 import com.home.domain.complex.buildingprofile.BuildingProfileCodeComparisonStatus;
 import com.home.domain.complex.buildingprofile.BuildingProfileHierarchyReason;
 import com.home.domain.complex.buildingprofile.BuildingProfileLookupResult;
+import com.home.domain.complex.buildingprofile.BuildingProfileTargetScope;
 import com.home.infrastructure.persistence.ingest.matching.JdbcBuildingProfileSampleRepository;
 import com.home.infrastructure.persistence.ingest.matching.JdbcLegalDongCodeImportRepository;
 import java.time.LocalDate;
@@ -42,7 +43,14 @@ class JdbcBuildingProfileSampleRepositoryTest extends JdbcMigrationTestSupport {
     @Test
     void freezesSampleAndPersistsResumeHierarchyAndCodeTransitionEvidence() {
         BuildingProfileCollectCommand command = new BuildingProfileCollectCommand(
-                COLLECTION, UUID.randomUUID(), LocalDate.of(2026, 7, 21), 1, "fixed-seed", 20, 1);
+                COLLECTION,
+                UUID.randomUUID(),
+                LocalDate.of(2026, 7, 21),
+                BuildingProfileTargetScope.VALIDATION_SAMPLE,
+                1,
+                "fixed-seed",
+                20,
+                1);
 
         assertThat(repository.freezeOrLoad(command)).singleElement().satisfies(target -> {
             assertThat(target.pnu()).isEqualTo(PNU);
@@ -50,7 +58,14 @@ class JdbcBuildingProfileSampleRepositoryTest extends JdbcMigrationTestSupport {
         });
         assertThat(repository.freezeOrLoad(command)).hasSize(1);
         assertThatThrownBy(() -> repository.freezeOrLoad(new BuildingProfileCollectCommand(
-                        COLLECTION, UUID.randomUUID(), command.runDate(), 1, "different", 20, 1)))
+                        COLLECTION,
+                        UUID.randomUUID(),
+                        command.runDate(),
+                        BuildingProfileTargetScope.VALIDATION_SAMPLE,
+                        1,
+                        "different",
+                        20,
+                        1)))
                 .isInstanceOf(IllegalArgumentException.class);
 
         UUID importId = UUID.randomUUID();
@@ -94,5 +109,49 @@ class JdbcBuildingProfileSampleRepositoryTest extends JdbcMigrationTestSupport {
                         .query(String.class)
                         .single())
                 .isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void freezesNationwidePopulationWithoutRequiringSampleSize() {
+        UUID collectionId = UUID.fromString("123e4567-e89b-12d3-a456-426614174231");
+        BuildingProfileCollectCommand command = new BuildingProfileCollectCommand(
+                collectionId,
+                UUID.randomUUID(),
+                LocalDate.of(2026, 7, 22),
+                BuildingProfileTargetScope.NATIONWIDE_STAGING,
+                null,
+                "nationwide-v1",
+                20,
+                3);
+
+        assertThat(repository.freezeOrLoad(command)).singleElement().satisfies(target -> {
+            assertThat(target.pnu()).isEqualTo(PNU);
+            assertThat(target.complexCount()).isOne();
+        });
+        assertThat(repository.freezeOrLoad(command)).hasSize(1);
+        assertThat(jdbcClient
+                        .sql("""
+                            SELECT target_scope,sample_size
+                            FROM building_register_collection_campaign
+                            WHERE collection_id=:id
+                            """)
+                        .param("id", collectionId)
+                        .query((rs, rowNum) -> List.of(rs.getString("target_scope"), rs.getString("sample_size")))
+                        .single())
+                .containsExactly("NATIONWIDE_STAGING", "1");
+        assertThat(jdbcClient
+                        .sql("""
+                            SELECT stratum,population_count,sample_count,sampling_weight
+                            FROM building_register_profile_sample_stratum
+                            WHERE collection_id=:id
+                            """)
+                        .param("id", collectionId)
+                        .query((rs, rowNum) -> List.of(
+                                rs.getString("stratum"),
+                                rs.getString("population_count"),
+                                rs.getString("sample_count"),
+                                rs.getString("sampling_weight")))
+                        .single())
+                .containsExactly("NATIONWIDE_CENSUS", "1", "1", "1.0000000000");
     }
 }

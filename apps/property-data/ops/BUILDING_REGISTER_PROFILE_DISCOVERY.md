@@ -9,7 +9,7 @@
 - replay와 analyze는 외부 API를 호출하지 않는다.
 - collect만 `BLD_SERVICE_KEY`를 사용하며 키·keyed URL·raw body를 로그나 보고서에 남기지 않는다.
 - 소유자정보·전유부 endpoint는 이 job의 endpoint 목록에 없다.
-- V13 적용 전 `./gradlew verifyPropertyFlywayFresh --no-daemon --stacktrace`를 통과해야 한다.
+- V14 적용 전 `./gradlew verifyPropertyFlywayFresh --no-daemon --stacktrace`를 통과해야 한다.
 - 출력 directory는 Git worktree 밖의 untracked 절대 경로를 사용한다.
 
 ## 1. 법정동코드 mapping import
@@ -72,9 +72,28 @@ ops/run-batch-jar.sh \
 
 법정동코드 mapping 영향 PNU는 기존 PNU와 앞 10자리만 치환한 candidate PNU를 독립 조회한다. HTTP/provider/parse 실패는 코드 불일치로 판정하지 않는다. 관리번호 원문은 보고서 대신 DB 내부 hash 집합으로 비교한다.
 
-## 4. 수집 재개
+## 4. 전국 staging 수집
 
-날짜 또는 quota가 바뀌면 `collectionId`, `sampleSize`, `selectionSeed`는 유지하고 새 `requestId`, `runDate`, 남은 `maxRequests`로 다시 실행한다. 완료 page는 재호출하지 않는다. 인증·quota 오류는 즉시 실패하며 정상 empty로 바꾸지 않는다.
+전국 수집은 `sampleSize`를 받지 않는다. 최초 실행 시 유효한 19자리 PNU 전체를 `NATIONWIDE_CENSUS`, weight `1`로 동결하며 이후 신규 complex가 생겨도 같은 `collectionId`의 대상은 바뀌지 않는다. 운영 `complex`와 기존 projection은 수정하지 않는다.
+
+```bash
+ops/run-batch-jar.sh \
+  collectionId=<nationwide-profile-collection-uuid> \
+  requestId=<execution-uuid> \
+  runDate=<yyyy-MM-dd> \
+  purpose=profile-discovery \
+  targetScope=nationwide-staging \
+  strategy=compare-recap-title \
+  selectionSeed=<fixed-reviewed-seed> \
+  maxRequests=<approved-limit> \
+  parallelism=3
+```
+
+`parallelism=3`으로 시작하고 인증·quota 오류가 없으며 provider failure가 안정적인 경우에만 새 execution에서 `4`로 올린다. 허용 범위는 계속 `1..4`다.
+
+## 5. 수집 재개
+
+날짜 또는 quota가 바뀌면 `collectionId`, `targetScope`, `selectionSeed`는 유지하고 새 `requestId`, `runDate`, 남은 `maxRequests`로 다시 실행한다. 검증 표본만 같은 `sampleSize=1500`을 유지한다. 전국 수집에는 `sampleSize`를 넣지 않는다. 완료 PNU는 건너뛰고, 중단 당시 `ACTIVE` endpoint snapshot과 이미 완료된 page도 다음 `runDate`에서 그대로 재개한다. 인증·quota 오류는 즉시 실패하며 정상 empty로 바꾸지 않는다.
 
 ```bash
 ops/run-batch-jar.sh \
@@ -82,15 +101,16 @@ ops/run-batch-jar.sh \
   requestId=<new-execution-uuid> \
   runDate=<new-yyyy-MM-dd> \
   purpose=profile-discovery \
-  targetScope=validation-sample \
+  targetScope=<validation-sample|nationwide-staging> \
   strategy=compare-recap-title \
-  sampleSize=1500 \
   selectionSeed=<same-fixed-seed> \
   maxRequests=<remaining-approved-limit> \
   parallelism=2
 ```
 
-## 5. Profile parse와 분석
+검증 표본을 재개할 때만 위 명령에 `sampleSize=1500`을 추가한다.
+
+## 6. Profile parse와 분석
 
 신규 collection이 `COMPLETED`가 되면 해당 raw를 `PROFILE_V2`로 replay한 뒤 분석한다. analysis는 완료된 collection/parse run만 허용하며 같은 `analysisRunId` 재실행은 duplicate evidence를 만들지 않는다.
 
@@ -113,7 +133,7 @@ ops/run-batch-jar.sh \
 
 파일에는 PNU·관리번호·raw body·서비스키가 포함되지 않는다. 상세 assignment와 code-transition evidence는 DB에서만 제한적으로 조회한다.
 
-## 6. 판정과 검증
+## 7. 판정과 검증
 
 - `PROMOTE_CANDIDATE`는 site의 weighted PNU coverage/projectable readiness 또는 building의 weighted building/PNU coverage가 모두 90% 이상이고 invalid 0.1% 이하, comparable conflict 0.5% 이하일 때만 추천한다.
 - 낮은 coverage는 typed 저장 거절 사유가 아니다. 유효한 희소 값은 `RETAIN_PROFILE`로 남긴다.
@@ -140,4 +160,4 @@ WHERE analysis_run_id=:'analysis_run_id'::uuid
 ORDER BY field_id;
 ```
 
-전국 수집, 운영 schema projection, 새 공개 API 필드 추가는 이 보고서와 최대 30건 수동 대조를 검토한 뒤 별도 승인으로 진행한다.
+운영 schema projection, staging archive/정리, 새 공개 API 필드 추가는 전국 수집 완료와 최대 30건 수동 대조를 검토한 뒤 별도 실행한다.

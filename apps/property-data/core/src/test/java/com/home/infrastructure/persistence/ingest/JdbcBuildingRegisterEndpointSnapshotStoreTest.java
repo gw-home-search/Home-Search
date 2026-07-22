@@ -62,8 +62,8 @@ class JdbcBuildingRegisterEndpointSnapshotStoreTest extends JdbcMigrationTestSup
     }
 
     @Test
-    @DisplayName("완료된 endpoint snapshot만 다음 runDate에서 재사용한다")
-    void reusesCompletedSnapshotAcrossRunDatesButRestartsIncompleteSnapshot() {
+    @DisplayName("완료 여부와 무관하게 같은 campaign의 endpoint snapshot을 다음 runDate에서 재개한다")
+    void resumesCompletedAndIncompleteSnapshotsAcrossRunDates() {
         var completed = store.open(COLLECTION_ID, PNU, BuildingRegisterEndpoint.RECAP_TITLE, runDate, 100);
         store.complete(completed.id(), 3, BuildingRegisterCollectionStatus.COLLECTED);
         var incomplete = store.open(COLLECTION_ID, PNU, BuildingRegisterEndpoint.TITLE, runDate, 100);
@@ -73,7 +73,7 @@ class JdbcBuildingRegisterEndpointSnapshotStoreTest extends JdbcMigrationTestSup
         var restarted = store.open(COLLECTION_ID, PNU, BuildingRegisterEndpoint.TITLE, nextRunDate, 100);
 
         assertThat(reused.id()).isEqualTo(completed.id());
-        assertThat(restarted.id()).isNotEqualTo(incomplete.id());
+        assertThat(restarted.id()).isEqualTo(incomplete.id());
     }
 
     private String status(long id) {

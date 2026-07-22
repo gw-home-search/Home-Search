@@ -46,29 +46,33 @@ public class JdbcBuildingProfileSampleRepository implements BuildingProfileSampl
 
     private void freeze(BuildingProfileCollectCommand command) {
         Campaign existing = jdbc.sql("""
-                    SELECT mode,strategy,selection_seed,sample_size
+                    SELECT mode,strategy,target_scope,selection_seed,sample_size
                     FROM building_register_collection_campaign
                     WHERE collection_id=:collection FOR UPDATE
                     """)
                 .param("collection", command.collectionId())
                 .query((rs, rowNum) -> new Campaign(
                         rs.getString("mode"), rs.getString("strategy"),
-                        rs.getString("selection_seed"), rs.getInt("sample_size")))
+                        rs.getString("target_scope"), rs.getString("selection_seed"),
+                        rs.getObject("sample_size", Integer.class)))
                 .optional()
                 .orElse(null);
         if (existing != null) {
             if (!"profile".equals(existing.mode())
                     || !"COMPARE_RECAP_TITLE".equals(existing.strategy())
+                    || !command.targetScope().name().equals(existing.targetScope())
                     || !command.selectionSeed().equals(existing.selectionSeed())
-                    || command.sampleSize() != existing.sampleSize()) {
+                    || (command.targetScope().isValidationSample()
+                            && !command.sampleSize().equals(existing.sampleSize()))) {
                 throw new IllegalArgumentException("collectionId is already frozen with different profile inputs");
             }
             return;
         }
 
         List<BuildingProfileSampleCandidate> candidates = candidates();
-        BuildingProfileSampleSelection selection =
-                sampler.select(candidates, command.sampleSize(), command.selectionSeed());
+        BuildingProfileSampleSelection selection = command.targetScope().isValidationSample()
+                ? sampler.select(candidates, command.sampleSize(), command.selectionSeed())
+                : sampler.selectAll(candidates, command.selectionSeed());
         long maxComplexId = jdbc.sql("SELECT COALESCE(max(id),0) FROM complex")
                 .query(Long.class)
                 .single();
@@ -77,12 +81,13 @@ public class JdbcBuildingProfileSampleRepository implements BuildingProfileSampl
                     INSERT INTO building_register_collection_campaign
                       (collection_id,mode,strategy,to_complex_id,status,purpose,target_scope,selection_seed,sample_size)
                     VALUES (:collection,'profile','COMPARE_RECAP_TITLE',:to_id,'COLLECTING',
-                            'PROFILE_DISCOVERY','VALIDATION_SAMPLE',:seed,:sample_size)
+                            'PROFILE_DISCOVERY',:target_scope,:seed,:sample_size)
                     """)
                 .param("collection", command.collectionId())
                 .param("to_id", maxComplexId)
+                .param("target_scope", command.targetScope().name())
                 .param("seed", command.selectionSeed())
-                .param("sample_size", command.sampleSize())
+                .param("sample_size", selection.entries().size())
                 .update();
         selection
                 .strata()
@@ -288,7 +293,8 @@ public class JdbcBuildingProfileSampleRepository implements BuildingProfileSampl
         });
     }
 
-    private record Campaign(String mode, String strategy, String selectionSeed, int sampleSize) {}
+    private record Campaign(
+            String mode, String strategy, String targetScope, String selectionSeed, Integer sampleSize) {}
 
     private String hashes(Set<String> values) {
         return values.stream()

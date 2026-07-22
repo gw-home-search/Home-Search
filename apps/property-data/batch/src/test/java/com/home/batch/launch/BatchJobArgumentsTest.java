@@ -268,4 +268,26 @@ class BatchJobArgumentsTest {
         assertThat(analyze.jobParameters().getString("outputDirectory")).isEqualTo("/tmp/profile-report");
         assertThat(legalImport.jobParameters().getString("effectiveDate")).isEqualTo("2026-07-01");
     }
+
+    @Test
+    @DisplayName("전국 profile 수집은 표본 크기 없이 nationwide staging 범위를 보존한다")
+    void parsesNationwideBuildingProfileCollectionArguments() {
+        BatchJobArguments collect = BatchJobArguments.from(
+                "complexBuildingRegisterProfileCollectJob",
+                Map.of(
+                        "collectionId", "123e4567-e89b-12d3-a456-426614174027",
+                        "requestId", "123e4567-e89b-12d3-a456-426614174028",
+                        "runDate", "2026-07-22",
+                        "purpose", "profile-discovery",
+                        "targetScope", "nationwide-staging",
+                        "strategy", "compare-recap-title",
+                        "selectionSeed", "profile-nationwide-v1",
+                        "maxRequests", "300000",
+                        "parallelism", "3"),
+                clock);
+
+        assertThat(collect.jobParameters().getString("targetScope")).isEqualTo("nationwide-staging");
+        assertThat(collect.jobParameters().getString("sampleSize")).isNull();
+        assertThat(collect.jobParameters().getString("parallelism")).isEqualTo("3");
+    }
 }

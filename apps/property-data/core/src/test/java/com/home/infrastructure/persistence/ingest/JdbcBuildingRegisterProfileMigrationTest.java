@@ -112,6 +112,22 @@ class JdbcBuildingRegisterProfileMigrationTest extends JdbcMigrationTestSupport 
                                     'PROFILE_DISCOVERY','VALIDATION_SAMPLE',1500)
                             """).param("id", UUID.randomUUID()).update())
                 .isInstanceOf(DataIntegrityViolationException.class);
+
+        jdbcClient.sql("""
+                    INSERT INTO building_register_collection_campaign
+                      (collection_id,mode,strategy,to_complex_id,status,purpose,target_scope,selection_seed,sample_size)
+                    VALUES (:id,'profile','COMPARE_RECAP_TITLE',1,'CREATED',
+                            'PROFILE_DISCOVERY','NATIONWIDE_STAGING','nationwide-v1',43721)
+                    """).param("id", UUID.randomUUID()).update();
+
+        assertThatThrownBy(
+                        () -> jdbcClient.sql("""
+                            INSERT INTO building_register_collection_campaign
+                              (collection_id,mode,strategy,to_complex_id,status,purpose,target_scope,selection_seed,sample_size)
+                            VALUES (:id,'profile','COMPARE_RECAP_TITLE',1,'CREATED',
+                                    'PROFILE_DISCOVERY','UNKNOWN_SCOPE','seed',1)
+                            """).param("id", UUID.randomUUID()).update())
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     private Seed seedRawPage() {

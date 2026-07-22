@@ -10,6 +10,7 @@ import com.home.application.ingest.buildingregister.BuildingRegisterCollectionSe
 import com.home.application.ingest.buildingregister.BuildingRegisterCollectionStatus;
 import com.home.application.ingest.buildingregister.BuildingRegisterRecordSnapshotCommand;
 import com.home.domain.complex.buildingprofile.BuildingProfileHierarchyReason;
+import com.home.domain.complex.buildingprofile.BuildingProfileTargetScope;
 import com.home.domain.complex.buildingregister.BuildingRegisterEndpoint;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -92,7 +93,14 @@ class BuildingProfileCollectionServiceTest {
 
     private BuildingProfileCollectCommand command(int budget) {
         return new BuildingProfileCollectCommand(
-                UUID.randomUUID(), UUID.randomUUID(), LocalDate.of(2026, 7, 21), 1, "seed", budget, 1);
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                LocalDate.of(2026, 7, 21),
+                BuildingProfileTargetScope.VALIDATION_SAMPLE,
+                1,
+                "seed",
+                budget,
+                1);
     }
 
     private BuildingRegisterCollectionResult result(

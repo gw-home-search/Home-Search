@@ -3,6 +3,7 @@ package com.home.batch.metadata;
 import com.home.application.ingest.buildingprofile.BuildingProfileCollectCommand;
 import com.home.application.ingest.buildingprofile.BuildingProfileCollectionService;
 import com.home.application.ingest.buildingregister.BuildingRegisterDailyRequestUsage;
+import com.home.domain.complex.buildingprofile.BuildingProfileTargetScope;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
@@ -33,10 +34,11 @@ class BuildingProfileCollectTasklet implements Tasklet {
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
         Map<String, Object> params = chunkContext.getStepContext().getJobParameters();
         requireLiteral(params, "purpose", "profile-discovery");
-        requireLiteral(params, "targetScope", "validation-sample");
         requireLiteral(params, "strategy", "compare-recap-title");
-        int sampleSize = Integer.parseInt(required(params, "sampleSize"));
-        if (sampleSize != 1500) throw new IllegalArgumentException("validation sampleSize must be exactly 1500");
+        BuildingProfileTargetScope targetScope = targetScope(required(params, "targetScope"));
+        Integer sampleSize = params.get("sampleSize") == null
+                ? null
+                : Integer.parseInt(params.get("sampleSize").toString());
         int maxRequests = Integer.parseInt(required(params, "maxRequests"));
         int approvedLimit = (int) Math.floor(dailyRequestQuota * 0.9d);
         if (dailyRequestQuota <= 0 || maxRequests <= 0 || maxRequests > approvedLimit) {
@@ -47,6 +49,7 @@ class BuildingProfileCollectTasklet implements Tasklet {
                 UUID.fromString(required(params, "collectionId")),
                 UUID.fromString(required(params, "requestId")),
                 runDate,
+                targetScope,
                 sampleSize,
                 required(params, "selectionSeed"),
                 maxRequests,
@@ -68,6 +71,15 @@ class BuildingProfileCollectTasklet implements Tasklet {
                     summary.completed());
         }
         return RepeatStatus.FINISHED;
+    }
+
+    private BuildingProfileTargetScope targetScope(String value) {
+        return switch (value) {
+            case "validation-sample" -> BuildingProfileTargetScope.VALIDATION_SAMPLE;
+            case "nationwide-staging" -> BuildingProfileTargetScope.NATIONWIDE_STAGING;
+            default -> throw new IllegalArgumentException(
+                    "targetScope must be validation-sample or nationwide-staging");
+        };
     }
 
     private void requireLiteral(Map<String, Object> params, String name, String expected) {

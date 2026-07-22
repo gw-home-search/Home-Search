@@ -14,6 +14,32 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 public final class BuildingProfileSampler {
+    public BuildingProfileSampleSelection selectAll(
+            List<BuildingProfileSampleCandidate> candidates, String selectionSeed) {
+        if (selectionSeed == null || selectionSeed.isBlank()) {
+            throw new IllegalArgumentException("selectionSeed is required");
+        }
+        Map<String, BuildingProfileSampleCandidate> unique = new LinkedHashMap<>();
+        for (BuildingProfileSampleCandidate candidate : candidates) {
+            if (unique.putIfAbsent(candidate.pnu(), candidate) != null) {
+                throw new IllegalArgumentException("duplicate PNU candidate");
+            }
+        }
+        if (unique.isEmpty()) throw new IllegalArgumentException("population is empty");
+        BuildingProfileSampleStratum stratum = BuildingProfileSampleStratum.NATIONWIDE_CENSUS;
+        List<BuildingProfileSampleEntry> entries = unique.values().stream()
+                .map(candidate -> new BuildingProfileSampleEntry(
+                        candidate.pnu(), stratum, rank(selectionSeed, stratum, candidate.pnu()), 1.0d,
+                        candidate.complexCount()))
+                .sorted(Comparator.comparingLong(BuildingProfileSampleEntry::seedRank)
+                        .thenComparing(BuildingProfileSampleEntry::pnu))
+                .toList();
+        return new BuildingProfileSampleSelection(
+                selectionSeed,
+                entries,
+                List.of(new BuildingProfileStratumStats(stratum, entries.size(), entries.size(), 1.0d)));
+    }
+
     public BuildingProfileSampleSelection select(
             List<BuildingProfileSampleCandidate> candidates, int sampleSize, String selectionSeed) {
         if (selectionSeed == null || selectionSeed.isBlank())

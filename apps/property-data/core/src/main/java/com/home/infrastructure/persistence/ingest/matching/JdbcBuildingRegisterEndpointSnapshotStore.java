@@ -52,12 +52,13 @@ public class JdbcBuildingRegisterEndpointSnapshotStore implements BuildingRegist
                 .query(this::snapshot)
                 .optional();
         if (existing.isPresent()) return existing.get();
-        Optional<BuildingRegisterEndpointSnapshot> completed = jdbc.sql("""
+        Optional<BuildingRegisterEndpointSnapshot> resumable = jdbc.sql("""
                     SELECT id,endpoint,page_size,attempt_no
                     FROM building_register_endpoint_snapshot
                     WHERE collection_id=:collection AND pnu=:pnu AND endpoint=:endpoint
-                      AND page_size=:page_size AND status IN ('PARSED','EMPTY')
-                    ORDER BY run_date DESC,attempt_no DESC,id DESC LIMIT 1
+                      AND page_size=:page_size AND status IN ('ACTIVE','PARSED','EMPTY')
+                    ORDER BY CASE status WHEN 'ACTIVE' THEN 0 ELSE 1 END,
+                             run_date DESC,attempt_no DESC,id DESC LIMIT 1
                     FOR UPDATE
                     """)
                 .param("collection", collectionId)
@@ -66,7 +67,7 @@ public class JdbcBuildingRegisterEndpointSnapshotStore implements BuildingRegist
                 .param("page_size", pageSize)
                 .query(this::snapshot)
                 .optional();
-        if (completed.isPresent()) return completed.get();
+        if (resumable.isPresent()) return resumable.get();
         int attempt = jdbc.sql("""
                     SELECT COALESCE(max(attempt_no),0)+1
                     FROM building_register_endpoint_snapshot

@@ -50,6 +50,12 @@ class FakeRepository:
         self.complex_query_count += 1
         return self.complexes
 
+    def find_complex_by_id(self, complex_id: int) -> ComplexRecord | None:
+        return next(
+            (record for record in self.complexes if record.complex_id == complex_id),
+            None,
+        )
+
     def recent_trades(
         self,
         complex_id: int,
@@ -75,6 +81,33 @@ class FakeRepository:
         return self.latest_trade_data_as_of
 
 
+class FallbackTradeRepository(FakeRepository):
+    def __init__(self) -> None:
+        super().__init__()
+        self.trade_queries: list[tuple[int, date | None, date | None, float | None, int]] = []
+
+    def recent_trades(
+        self,
+        complex_id: int,
+        start_date: date | None,
+        end_date: date | None,
+        exclusive_area_square_meters: float | None,
+        limit: int,
+    ) -> list[TradeRecord]:
+        self.trade_queries.append(
+            (complex_id, start_date, end_date, exclusive_area_square_meters, limit)
+        )
+        if len(self.trade_queries) == 1:
+            return []
+        return [TradeRecord(7009, complex_id, date(2024, 12, 20), 230_000, 84.8, 9)]
+
+
+class TrendFallbackRepository(FakeRepository):
+    def recent_trades(self, complex_id, start_date, end_date, area, limit):
+        self.trade_query = (complex_id, start_date, end_date, area, limit)
+        return [TradeRecord(7010, complex_id, date(2026, 6, 1), 240_000, 84.8, 10)]
+
+
 class FakeLanguageModel:
     def __init__(self, plan: QueryPlan, draft: DraftAnswer) -> None:
         self.plan = plan
@@ -90,6 +123,61 @@ class FakeLanguageModel:
         self.received_facts = list(facts)
         self.received_fact_ids = [fact.fact_id for fact in facts]
         return self.draft
+
+
+class DraftFailingLanguageModel(FakeLanguageModel):
+    async def draft_answer(self, *, facts, limitations, question) -> DraftAnswer:
+        del facts, limitations, question
+        raise ChatbotProviderUnavailable()
+
+
+class UnavailablePlanningLanguageModel(FakeLanguageModel):
+    async def plan_query(self, _request: ChatbotQueryRequest) -> QueryPlan:
+        raise ChatbotProviderUnavailable()
+
+
+def test_broad_question_revalidates_selected_complex_and_returns_overview_fragments() -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    repository.trades = [
+        TradeRecord(7001, 11471, date(2026, 7, 15), 250_000, 84.8, 12)
+    ]
+    repository.trends = [
+        MonthlyTrendRecord(11471, date(2026, 7, 1), 250_000, 1, 250_000, 250_000)
+    ]
+    model = DraftFailingLanguageModel(
+        QueryPlan("complex_identity", "이 단지"),
+        DraftAnswer([]),
+    )
+    engine = GroundedChatbotEngine(
+        repository=repository,
+        language_model=model,
+        enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        answer_first_enabled=True,
+        property_overview_enabled=True,
+        today=lambda: date(2026, 7, 20),
+    )
+
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest.model_validate({
+            "question": "이 단지 전체적으로 어때?",
+            "uiContext": {
+                "selectedComplex": {"complexId": 11471, "parcelId": 501}
+            },
+        }),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-overview",
+    ))
+
+    assert response["status"] == "partial_success"
+    assert [fragment["capability"] for fragment in response["fragments"]] == [
+        "complex_identity",
+        "recent_trade_lookup",
+        "price_trend",
+        "rail_station_lookup",
+    ]
+    assert response["executionSummary"] == {"total": 4, "succeeded": 3, "failed": 1}
+    assert response["conversationMemoryPatch"]["complexId"] == 11471
 
 
 def complex_record(complex_id: int = 11471, display_name: str = "잠실동 잠실엘스") -> ComplexRecord:
@@ -166,6 +254,13 @@ def test_recent_trade_answer_uses_only_observed_fact_and_citation() -> None:
         "factCount": 1,
         "citationCount": 1,
     }
+    assert response["conversationResolution"] == {
+        "version": 1,
+        "answerMode": "COMPLETE",
+        "goals": [{"capability": "recent_trade_lookup", "status": "answered"}],
+        "assumptions": [],
+        "omissions": [],
+    }
     assert response["citations"][0]["factIds"] == ["property-trade-7001"]
     assert response["uiArtifacts"][0]["type"] == "tradeTable"
     assert response["uiArtifacts"][0]["rows"][0] == {
@@ -179,6 +274,275 @@ def test_recent_trade_answer_uses_only_observed_fact_and_citation() -> None:
     assert any("±1.0㎡" in limitation for limitation in response["limitations"])
     assert model.received_fact_ids == ["property-trade-7001"]
     assert repository.trade_query == (11471, date(2025, 7, 1), date(2026, 7, 16), 84.8, 5)
+
+
+def test_observed_fact_returns_deterministic_answer_when_draft_provider_fails() -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    model = DraftFailingLanguageModel(
+        QueryPlan(capability="complex_identity", complex_name="잠실엘스"),
+        DraftAnswer([]),
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            answer_first_enabled=True,
+        ),
+        "잠실엘스 위치를 알려줘",
+        "request-deterministic-fallback",
+    )
+
+    assert response["success"] is True
+    assert response["status"] == "success"
+    assert response["answer"] == (
+        "잠실동 잠실엘스의 주소는 서울 송파구 잠실동 19로 확인했습니다."
+    )
+    assert response["evidenceSummary"]["factCount"] == 1
+
+
+def test_reserved_assembly_budget_skips_optional_llm_polish() -> None:
+    class PolishMustNotRun(FakeLanguageModel):
+        async def draft_answer(self, *, facts, limitations, question) -> DraftAnswer:
+            del facts, limitations, question
+            raise AssertionError("optional polish must not consume assembly reserve")
+
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    model = PolishMustNotRun(
+        QueryPlan(capability="complex_identity", complex_name="잠실엘스"),
+        DraftAnswer([]),
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            answer_first_enabled=True,
+            polish_budget_seconds=0,
+        ),
+        "잠실엘스 위치를 알려줘",
+        "request-assembly-reserve",
+    )
+
+    assert "잠실동 잠실엘스" in response["answer"]
+
+
+def test_capability_fallback_can_be_rolled_back_independently() -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    model = DraftFailingLanguageModel(
+        QueryPlan(capability="complex_identity", complex_name="잠실엘스"),
+        DraftAnswer([]),
+    )
+    engine = GroundedChatbotEngine(
+        repository=repository,
+        language_model=model,
+        enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        answer_first_enabled=True,
+        answer_first_fallback_capabilities=frozenset(),
+    )
+
+    with pytest.raises(ChatbotProviderUnavailable):
+        run_query(
+            engine,
+            "잠실엘스 위치를 알려줘",
+            "request-capability-fallback-disabled",
+        )
+
+
+def test_observed_fact_replaces_request_only_draft_with_result() -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    model = FakeLanguageModel(
+        QueryPlan(capability="complex_identity", complex_name="잠실엘스"),
+        DraftAnswer([
+            DraftSentence(
+                text="조건에 맞는 단지를 더 알려주세요.",
+                fact_ids=["property-complex-11471"],
+                claims=[DraftClaim("property-complex-11471", "11471", "COMPLEX_ID")],
+            )
+        ]),
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            answer_first_enabled=True,
+        ),
+        "잠실엘스 위치를 알려줘",
+        "request-quality-gate",
+    )
+
+    assert response["answer"] == (
+        "잠실동 잠실엘스의 주소는 서울 송파구 잠실동 19로 확인했습니다."
+    )
+
+
+def test_clear_identity_question_uses_deterministic_router_when_planning_fails() -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    model = UnavailablePlanningLanguageModel(
+        QueryPlan(capability="complex_identity", complex_name="unused"),
+        DraftAnswer([]),
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            answer_first_enabled=True,
+        ),
+        "잠실엘스 위치와 주소를 알려줘",
+        "request-router-fallback",
+    )
+
+    assert response["success"] is True
+    assert response["evidenceSummary"]["capabilities"] == ["complex_identity"]
+
+
+def test_recent_trade_without_period_uses_one_year_default() -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    repository.trades = [
+        TradeRecord(7001, 11471, date(2026, 7, 15), 250_000, 84.8, 12)
+    ]
+    model = FakeLanguageModel(
+        QueryPlan(capability="recent_trade_lookup", complex_name="잠실엘스"),
+        DraftAnswer([
+            DraftSentence(
+                text="250000만원 거래입니다.",
+                fact_ids=["property-trade-7001"],
+                claims=[DraftClaim("property-trade-7001", "250000", "10_000_KRW")],
+            )
+        ]),
+    )
+    engine = GroundedChatbotEngine(
+        repository=repository,
+        language_model=model,
+        enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        answer_first_enabled=True,
+        today=lambda: date(2026, 7, 22),
+    )
+
+    run_query(engine, "잠실엘스 최근 실거래 알려줘", "request-default-period")
+
+    assert repository.trade_query == (
+        11471, date(2025, 7, 22), date(2026, 7, 22), None, 5,
+    )
+
+
+def test_recent_trade_exact_empty_returns_same_area_reference_trade() -> None:
+    repository = FallbackTradeRepository()
+    repository.complexes = [complex_record()]
+    model = FakeLanguageModel(
+        QueryPlan(
+            capability="recent_trade_lookup",
+            complex_name="잠실엘스",
+            start_date=date(2025, 7, 22),
+            end_date=date(2026, 7, 22),
+            exclusive_area_square_meters=84.8,
+        ),
+        DraftAnswer([]),
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+        repository=repository,
+        language_model=model,
+        enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        answer_first_enabled=True,
+        ),
+        "잠실엘스 전용 84.8㎡ 최근 실거래 알려줘",
+        "request-reference-trade",
+    )
+
+    assert response["success"] is True
+    assert response["status"] == "partial_success"
+    assert response["conversationResolution"]["answerMode"] == "BEST_EFFORT"
+    assert response["conversationResolution"]["goals"] == [
+        {"capability": "recent_trade_lookup", "status": "degraded"}
+    ]
+    assert response["conversationResolution"]["assumptions"][0]["code"] == (
+        "SAME_AREA_ANY_PERIOD"
+    )
+    assert response["uiArtifacts"][0]["type"] == "tradeTable"
+    assert any("정확 조건에서는 0건" in item for item in response["limitations"])
+    assert repository.trade_queries == [
+        (11471, date(2025, 7, 22), date(2026, 7, 22), 84.8, 5),
+        (11471, None, None, 84.8, 5),
+    ]
+
+
+def test_price_trend_empty_returns_recent_individual_trade_reference() -> None:
+    repository = TrendFallbackRepository()
+    repository.complexes = [complex_record()]
+    model = FakeLanguageModel(
+        QueryPlan(
+            capability="price_trend",
+            complex_name="잠실엘스",
+            start_date=date(2025, 7, 22),
+            end_date=date(2026, 7, 22),
+            exclusive_area_square_meters=84.8,
+        ),
+        DraftAnswer([]),
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+        repository=repository,
+        language_model=model,
+        enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        answer_first_enabled=True,
+        ),
+        "잠실엘스 전용 84.8㎡ 가격 흐름 알려줘",
+        "request-trend-reference",
+    )
+
+    assert response["success"] is True
+    assert response["status"] == "partial_success"
+    assert response["evidenceSummary"]["factCount"] == 1
+    assert any("월별 추이" in item and "개별 거래" in item for item in response["limitations"])
+
+
+def test_trade_with_no_exact_or_reference_result_keeps_verified_complex() -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    model = DraftFailingLanguageModel(
+        QueryPlan(
+            capability="recent_trade_lookup",
+            complex_name="잠실엘스",
+            exclusive_area_square_meters=84.8,
+        ),
+        DraftAnswer([]),
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            answer_first_enabled=True,
+        ),
+        "잠실엘스 전용 84.8㎡ 최근 실거래 알려줘",
+        "request-no-trade-reference",
+    )
+
+    assert response["success"] is True
+    assert response["status"] == "partial_success"
+    assert response["conversationResolution"]["answerMode"] == "NO_RESULT"
+    assert response["conversationResolution"]["goals"] == [
+        {"capability": "recent_trade_lookup", "status": "degraded"}
+    ]
+    assert "잠실동 잠실엘스" in response["answer"]
+    assert "실거래가 없습니다" in response["limitations"][0]
+    assert response["conversationMemoryPatch"]["complexId"] == 11471
 
 
 def test_recent_trade_accepts_server_supplied_korean_amount_display_claim() -> None:
@@ -208,9 +572,10 @@ def test_recent_trade_accepts_server_supplied_korean_amount_display_claim() -> N
 
     response = run_query(
         GroundedChatbotEngine(
-            repository=repository,
-            language_model=model,
-            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+                repository=repository,
+                language_model=model,
+                enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+                answer_first_enabled=True,
         ),
         "최근 거래",
         "request-formatted-amount",
@@ -220,7 +585,7 @@ def test_recent_trade_accepts_server_supplied_korean_amount_display_claim() -> N
     assert response["evidenceSummary"]["factCount"] == 1
 
 
-def test_supported_answer_rejects_omitted_observed_trade_fact() -> None:
+def test_supported_answer_recovers_when_model_omits_an_observed_trade_fact() -> None:
     repository = FakeRepository()
     repository.complexes = [complex_record()]
     repository.trades = [
@@ -246,19 +611,19 @@ def test_supported_answer_rejects_omitted_observed_trade_fact() -> None:
         ),
     )
 
-    with pytest.raises(ChatbotProviderUnavailable) as raised:
-        run_query(
-            GroundedChatbotEngine(
+    response = run_query(
+        GroundedChatbotEngine(
                 repository=repository,
                 language_model=model,
                 enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
-            ),
-            "최근 거래",
-            "request-omitted-fact",
-        )
+                answer_first_enabled=True,
+        ),
+        "최근 거래",
+        "request-omitted-fact",
+    )
 
-    assert isinstance(raised.value.__cause__, GroundingValidationError)
-    assert raised.value.__cause__.reason_code == "GROUNDING_FACTS_OMITTED"
+    assert response["status"] == "success"
+    assert response["evidenceSummary"]["factCount"] == 2
 
 
 @pytest.mark.parametrize(
@@ -290,7 +655,7 @@ def test_supported_answer_rejects_omitted_observed_trade_fact() -> None:
         ),
     ],
 )
-def test_blocks_unknown_fact_or_numeric_mismatch(draft: DraftAnswer) -> None:
+def test_recovers_from_unknown_fact_or_numeric_mismatch(draft: DraftAnswer) -> None:
     repository = FakeRepository()
     repository.complexes = [complex_record()]
     repository.trades = [
@@ -301,16 +666,20 @@ def test_blocks_unknown_fact_or_numeric_mismatch(draft: DraftAnswer) -> None:
         draft,
     )
 
-    with pytest.raises(ChatbotProviderUnavailable):
-        run_query(
-            GroundedChatbotEngine(
-                repository=repository,
-                language_model=model,
-                enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
-            ),
-            "최근 거래",
-            "request-1",
-        )
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            answer_first_enabled=True,
+        ),
+        "최근 거래",
+        "request-1",
+    )
+
+    assert response["status"] == "success"
+    assert "999999" not in response["answer"]
+    assert "존재하지" not in response["answer"]
 
 
 def test_ambiguous_complex_is_not_selected_arbitrarily() -> None:
@@ -337,6 +706,7 @@ def test_ambiguous_complex_is_not_selected_arbitrarily() -> None:
             repository=repository,
             language_model=model,
             enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            answer_first_enabled=True,
         ),
         "한빛아파트 어디야?",
         "request-2",
@@ -749,7 +1119,7 @@ def test_query_plan_rejects_unsafe_or_incomplete_constraints(factory) -> None:
         factory()
 
 
-def test_supported_answer_requires_fact_reference_on_every_sentence() -> None:
+def test_supported_answer_recovers_when_fact_reference_is_missing() -> None:
     repository = FakeRepository()
     repository.complexes = [complex_record()]
     model = FakeLanguageModel(
@@ -757,19 +1127,20 @@ def test_supported_answer_requires_fact_reference_on_every_sentence() -> None:
         DraftAnswer(sentences=[DraftSentence(text="위치를 확인했습니다.", fact_ids=[])]),
     )
 
-    with pytest.raises(ChatbotProviderUnavailable):
-        run_query(
-            GroundedChatbotEngine(
-                repository=repository,
-                language_model=model,
-                enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
-            ),
-            "잠실엘스 위치",
-            "request-invalid",
-        )
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            answer_first_enabled=True,
+        ),
+        "잠실엘스 위치",
+        "request-invalid",
+    )
+    assert response["status"] == "success"
 
 
-def test_supported_answer_requires_a_validated_claim_on_every_sentence() -> None:
+def test_supported_answer_recovers_when_validated_claim_is_missing() -> None:
     repository = FakeRepository()
     repository.complexes = [complex_record()]
     model = FakeLanguageModel(
@@ -785,16 +1156,17 @@ def test_supported_answer_requires_a_validated_claim_on_every_sentence() -> None
         ),
     )
 
-    with pytest.raises(ChatbotProviderUnavailable):
-        run_query(
-            GroundedChatbotEngine(
-                repository=repository,
-                language_model=model,
-                enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
-            ),
-            "잠실엘스 위치",
-            "request-invalid-claim",
-        )
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+            answer_first_enabled=True,
+        ),
+        "잠실엘스 위치",
+        "request-invalid-claim",
+    )
+    assert response["status"] == "success"
 
 
 def test_grounding_diagnostic_classifies_result_count_or_list_number() -> None:
@@ -878,7 +1250,7 @@ def run_query(engine: GroundedChatbotEngine, question: str, request_id: str) -> 
                 region_name="송파구", recommendation_mode="CRITERIA",
             ),
             "송파구 교육 조건으로 추천",
-            "AMBIGUOUS_EDUCATION",
+            None,
         ),
         (
             QueryPlan(
@@ -888,7 +1260,7 @@ def run_query(engine: GroundedChatbotEngine, question: str, request_id: str) -> 
                 criteria_order=("ACADEMY",),
             ),
             "송파구 500세대 이상 학원 추천",
-            "NUMERIC_CONDITION_MISMATCH",
+            None,
         ),
         (
             QueryPlan(
@@ -916,7 +1288,7 @@ def run_query(engine: GroundedChatbotEngine, question: str, request_id: str) -> 
                 recommendation_criteria=("ACADEMY",), criteria_order=("ACADEMY",),
             ),
             "여의도역 학원 추천",
-            "STATION_RADIUS_REQUIRED",
+            None,
         ),
         (
             QueryPlan(
@@ -926,7 +1298,7 @@ def run_query(engine: GroundedChatbotEngine, question: str, request_id: str) -> 
                 criteria_order=("ACADEMY",),
             ),
             "여의도역 800m 학원 추천",
-            "NUMERIC_CONDITION_MISMATCH",
+            None,
         ),
         (
             QueryPlan(
@@ -936,12 +1308,12 @@ def run_query(engine: GroundedChatbotEngine, question: str, request_id: str) -> 
                 criteria_order=("ACADEMY",),
             ),
             "여의도역 250m 학원 추천",
-            "STATION_RADIUS_OUT_OF_RANGE",
+            None,
         ),
     ),
 )
 def test_server_revalidates_criteria_conditions_from_the_current_question(
-    plan: QueryPlan, question: str, clarification: str,
+    plan: QueryPlan, question: str, clarification: str | None,
 ) -> None:
     verified = _verify_recommendation_plan(plan, question)
 
@@ -963,7 +1335,7 @@ def test_server_revalidates_explicit_recommendation_result_limit() -> None:
     )
 
     assert verified.limit == 3
-    assert verified.clarification_code == "NUMERIC_CONDITION_MISMATCH"
+    assert verified.clarification_code is None
 
 
 def test_recommendation_verifier_leaves_non_recommendation_plan_unchanged() -> None:

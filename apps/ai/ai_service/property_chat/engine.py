@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 from collections.abc import Callable, Iterable
 from dataclasses import replace
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Protocol
 
@@ -13,6 +14,7 @@ from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
 
 from .answer_document import AnswerDocument, CompoundAnswerDocument, FactListPresenter
+from .answer_quality import AnswerQualityError, AnswerQualityGate
 from .presentation import PresentationAssembler
 from .capability_handlers import (
     AcademyLocationFactRepository,
@@ -37,6 +39,8 @@ from .capability_handlers import (
     SchoolLocationHandler,
 )
 from .comparison_handler import ComparisonHandler
+from .deterministic_answer import DeterministicAnswerPresenter
+from .deterministic_router import DeterministicQueryRouter
 from .recommendation_handler import RecommendationHandler
 from .recommendation_errors import RecommendationExecutionError
 from .recommendation_presentation import RecommendationTextPresenter
@@ -48,6 +52,7 @@ from .models import (
     FactClaim,
     MonthlyTrendRecord,
     PropertyCapability,
+    QueryCapability,
     QueryPlan,
     QueryPlanBundle,
     RecommendationMode,
@@ -147,6 +152,12 @@ class GroundedChatbotEngine:
         enabled_recommendation_modes: frozenset[RecommendationMode] = frozenset(
             {"BUDGET", "CRITERIA"}
         ),
+        answer_first_enabled: bool = False,
+        property_overview_enabled: bool = False,
+        answer_first_fallback_capabilities: frozenset[QueryCapability] | None = None,
+        semantic_goal_planner_enabled: bool = True,
+        dependent_workflow_enabled: bool = False,
+        polish_budget_seconds: float | None = None,
         today: Callable[[], date] = date.today,
     ) -> None:
         self._repository = repository
@@ -154,6 +165,30 @@ class GroundedChatbotEngine:
         self._enabled_capabilities = enabled_capabilities
         self._enabled_reference_capabilities = enabled_reference_capabilities
         self._enabled_recommendation_modes = enabled_recommendation_modes
+        self._answer_first_enabled = answer_first_enabled
+        self._property_overview_enabled = property_overview_enabled
+        self._answer_first_fallback_capabilities = (
+            answer_first_fallback_capabilities
+            if answer_first_fallback_capabilities is not None
+            else frozenset({
+                "complex_identity",
+                "recent_trade_lookup",
+                "price_trend",
+                "school_location",
+                "retail_location",
+                "academy_registry_summary",
+                "academy_lookup",
+                "rail_station_lookup",
+                "childcare_lookup",
+                "kakao_place_search",
+                "comparison",
+                "recommendation",
+            })
+        )
+        self._semantic_goal_planner_enabled = semantic_goal_planner_enabled
+        self._dependent_workflow_enabled = dependent_workflow_enabled
+        self._polish_budget_seconds = polish_budget_seconds
+        self._today = today
         builders = EvidenceFactBuilders(
             complex_fact=_complex_fact,
             trade_fact=_trade_fact,
@@ -218,17 +253,42 @@ class GroundedChatbotEngine:
         request_id: str,
     ) -> dict[str, object]:
         del user
+        polish_deadline = (
+            time.monotonic() + self._polish_budget_seconds
+            if self._polish_budget_seconds is not None
+            else None
+        )
         try:
-            planned = await self._language_model.plan_query(request)
+            try:
+                planned = await self._language_model.plan_query(request)
+            except ChatbotProviderUnavailable:
+                if not self._answer_first_enabled:
+                    raise
+                planned = DeterministicQueryRouter(today=self._today()).plan(request)
+                if planned is None:
+                    raise
+            if self._dependent_workflow_enabled:
+                planned = await self._apply_dependent_context(request, planned)
+            if self._answer_first_enabled and self._property_overview_enabled:
+                planned = await self._apply_overview_context(request, planned)
             bundle = (
                 planned if isinstance(planned, QueryPlanBundle)
                 else QueryPlanBundle((planned,))
             )
             plans = tuple(
-                _verify_plan(plan, request.question) for plan in bundle.fragments
+                _verify_plan(
+                    _apply_answer_first_defaults(plan, self._today())
+                    if self._answer_first_enabled else plan,
+                    request.question,
+                    semantic_goal_planner_enabled=self._semantic_goal_planner_enabled,
+                )
+                for plan in bundle.fragments
             )
             documents = tuple(await asyncio.gather(*(
-                self._execute_fragment(plan, request, request_id) for plan in plans
+                self._execute_fragment(
+                    plan, request, request_id, polish_deadline=polish_deadline
+                )
+                for plan in plans
             )))
             if len(documents) == 1:
                 try:
@@ -261,36 +321,136 @@ class GroundedChatbotEngine:
         except Exception as exception:
             raise ChatbotProviderUnavailable() from exception
 
+    async def _apply_dependent_context(
+        self,
+        request: ChatbotQueryRequest,
+        planned: QueryPlan | QueryPlanBundle,
+    ) -> QueryPlan | QueryPlanBundle:
+        context = request.conversationContext
+        memory = context.memory if context is not None else None
+        if (
+            memory is None
+            or memory.version != 2
+            or memory.scopeKind != "RECOMMENDATION"
+            or not memory.complexIds
+            or re.search(r"(?:비교|차이|대조)", request.question) is None
+        ):
+            return planned
+        selected_indexes = tuple(
+            index
+            for index in _referenced_candidate_indexes(request.question)
+            if index < len(memory.complexIds)
+        )
+        candidate_ids = (
+            tuple(memory.complexIds[index] for index in selected_indexes)
+            if len(selected_indexes) >= 2
+            else tuple(memory.complexIds[:4])
+        )
+        records = await asyncio.gather(*(
+            asyncio.to_thread(self._repository.find_complex_by_id, complex_id)
+            for complex_id in candidate_ids
+        ))
+        verified = tuple(record for record in records if record is not None)
+        if len(verified) < 2:
+            return planned
+        first_plan = (
+            planned.fragments[0] if isinstance(planned, QueryPlanBundle) else planned
+        )
+        return QueryPlan(
+            capability="comparison",
+            complex_name=verified[0].display_name,
+            complex_names=tuple(record.display_name for record in verified),
+            region_name=first_plan.region_name,
+            exclusive_area_square_meters=first_plan.exclusive_area_square_meters,
+            start_date=first_plan.start_date,
+            end_date=first_plan.end_date,
+            lifestyle_themes=first_plan.lifestyle_themes,
+            school_levels=first_plan.school_levels,
+            limit=min(len(verified), 4),
+        )
+
+    async def _apply_overview_context(
+        self,
+        request: ChatbotQueryRequest,
+        planned: QueryPlan | QueryPlanBundle,
+    ) -> QueryPlan | QueryPlanBundle:
+        if re.search(r"(?:전체적|전반적|이\s*단지\s*어때|여기\s*(?:어때|괜찮)|살기\s*괜찮)", request.question) is None:
+            return planned
+        complex_id = None
+        conversation_context = request.conversationContext
+        if conversation_context is not None and conversation_context.memory is not None:
+            complex_id = conversation_context.memory.complexId
+        ui_context = request.uiContext
+        if ui_context is not None and ui_context.selectedComplex is not None:
+            complex_id = ui_context.selectedComplex.complexId
+        record = None
+        if complex_id is not None:
+            finder = getattr(self._repository, "find_complex_by_id", None)
+            if finder is not None:
+                record = await asyncio.to_thread(finder, complex_id)
+        if record is not None:
+            return DeterministicQueryRouter(today=self._today()).overview(
+                record.display_name,
+                record.region_name,
+            )
+        first_plan = (
+            planned.fragments[0]
+            if isinstance(planned, QueryPlanBundle)
+            else planned
+        )
+        if first_plan.complex_name not in {"이 단지", "여기", "이곳"}:
+            return DeterministicQueryRouter(today=self._today()).overview(
+                first_plan.complex_name,
+                first_plan.region_name,
+            )
+        return planned
+
     async def _execute_fragment(
         self,
         plan: QueryPlan,
         request: ChatbotQueryRequest,
         request_id: str,
+        *,
+        polish_deadline: float | None,
     ) -> AnswerDocument:
-        if (
-            plan.capability == "recommendation"
-            and plan.recommendation_mode not in self._enabled_recommendation_modes
-        ):
+        try:
+            if (
+                plan.capability == "recommendation"
+                and plan.recommendation_mode not in self._enabled_recommendation_modes
+            ):
+                result = CapabilityResult(
+                    [],
+                    ["이 추천 방식은 현재 데이터 준비와 검증이 진행 중입니다."],
+                    "unavailable",
+                )
+            elif plan.capability in self._enabled_capabilities or (
+                plan.capability in self._enabled_reference_capabilities
+            ):
+                plan_handler = self._catalog.plan_handler_for(plan.capability)
+                if plan_handler is not None:
+                    async with asyncio.timeout(_fragment_timeout_seconds(plan.capability)):
+                        result = await plan_handler.observe(plan)
+                else:
+                    result = await self._observe(plan)
+            else:
+                result = CapabilityResult(
+                    [],
+                    ["해당 질문 기능은 현재 데이터 준비와 검증이 진행 중입니다."],
+                    "unavailable",
+                )
+        except RecommendationExecutionError:
+            raise
+        except (TimeoutError, OSError, RuntimeError, ChatbotProviderUnavailable):
+            if not self._fallback_enabled(plan.capability):
+                raise
             result = CapabilityResult(
                 [],
-                ["이 추천 방식은 현재 데이터 준비와 검증이 진행 중입니다."],
+                ["일부 데이터를 확인하지 못해 이 항목은 답변에서 제외했습니다."],
                 "unavailable",
             )
-        elif plan.capability in self._enabled_capabilities or (
-            plan.capability in self._enabled_reference_capabilities
-        ):
-            plan_handler = self._catalog.plan_handler_for(plan.capability)
-            if plan_handler is not None:
-                async with asyncio.timeout(3):
-                    result = await plan_handler.observe(plan)
-            else:
-                facts, limitations, readiness, actions = await self._observe(plan)
-                result = CapabilityResult(facts, limitations, readiness, actions)
-        else:
-            result = CapabilityResult(
-                [],
-                ["해당 질문 기능은 현재 데이터 준비와 검증이 진행 중입니다."],
-                "unavailable",
+        if self._answer_first_enabled:
+            result = _annotate_answer_first_assumptions(
+                result, plan, request.question
             )
         if plan.capability == "recommendation":
             try:
@@ -304,22 +464,66 @@ class GroundedChatbotEngine:
                     "RECOMMENDATION_TEXT_PRESENTATION_FAILED"
                 ) from exception
         else:
-            draft = await self._language_model.draft_answer(
+            try:
+                if polish_deadline is None:
+                    draft = await self._language_model.draft_answer(
+                        facts=result.facts,
+                        limitations=result.limitations,
+                        question=request.question,
+                    )
+                else:
+                    remaining = polish_deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise TimeoutError
+                    async with asyncio.timeout(remaining):
+                        draft = await self._language_model.draft_answer(
+                            facts=result.facts,
+                            limitations=result.limitations,
+                            question=request.question,
+                        )
+            except (TimeoutError, OSError, RuntimeError, ChatbotProviderUnavailable):
+                if not self._fallback_enabled(plan.capability):
+                    raise
+                draft = DeterministicAnswerPresenter().present(
+                    plan=plan,
+                    facts=result.facts,
+                    limitations=result.limitations,
+                    readiness=result.readiness,
+                )
+        validation_options = {
+            "limitations": result.limitations,
+            "enforce_school_policy": plan.capability == "school_location",
+            "enforce_childcare_policy": plan.capability == "childcare_lookup",
+            "enforce_map_action_policy": plan.capability == "kakao_place_search",
+            "enforce_comparison_policy": plan.capability == "comparison",
+            "enforce_recommendation_policy": plan.capability == "recommendation",
+        }
+        try:
+            used_facts = validate_draft(
+                draft, result.facts, result.readiness, **validation_options
+            )
+            AnswerQualityGate().validate(
+                draft=draft,
+                facts=result.facts,
+                readiness=result.readiness,
+            )
+        except (GroundingValidationError, AnswerQualityError):
+            if not self._fallback_enabled(plan.capability):
+                raise
+            draft = DeterministicAnswerPresenter().present(
+                plan=plan,
                 facts=result.facts,
                 limitations=result.limitations,
-                question=request.question,
+                readiness=result.readiness,
             )
-        used_facts = validate_draft(
-            draft,
-            result.facts,
-            result.readiness,
-            limitations=result.limitations,
-            enforce_school_policy=plan.capability == "school_location",
-            enforce_childcare_policy=plan.capability == "childcare_lookup",
-            enforce_map_action_policy=plan.capability == "kakao_place_search",
-            enforce_comparison_policy=plan.capability == "comparison",
-            enforce_recommendation_policy=plan.capability == "recommendation",
-        )
+            used_facts = validate_draft(
+                draft, result.facts, result.readiness, **validation_options
+            )
+            AnswerQualityGate().validate(
+                draft=draft,
+                facts=result.facts,
+                readiness=result.readiness,
+            )
         if result.artifact_fact_ids:
             fact_by_id = {fact.fact_id: fact for fact in result.facts}
             if any(fact_id not in fact_by_id for fact_id in result.artifact_fact_ids):
@@ -364,6 +568,10 @@ class GroundedChatbotEngine:
                 artifacts=artifacts,
                 actions=[action.to_public_dict(request_id) for action in result.actions],
                 presentation=presentation,
+                outcome_state=result.state or "EXACT",
+                assumptions=result.assumptions,
+                fallback_steps=result.fallback_steps,
+                recoverable=result.recoverable,
             )
         except Exception as exception:
             if plan.capability == "recommendation":
@@ -372,14 +580,7 @@ class GroundedChatbotEngine:
                 ) from exception
             raise
 
-    async def _observe(
-        self, plan: QueryPlan
-    ) -> tuple[
-        list[EvidenceFact],
-        list[str],
-        str,
-        tuple[ShowNearbyCategoryAction, ...],
-    ]:
+    async def _observe(self, plan: QueryPlan) -> CapabilityResult:
         complexes = await asyncio.to_thread(
             self._repository.find_complexes,
             plan.complex_name,
@@ -387,24 +588,53 @@ class GroundedChatbotEngine:
             6,
         )
         if not complexes:
-            return (
+            return CapabilityResult(
                 [],
                 ["지정한 이름과 지역 조건으로 단지를 식별하지 못했습니다."],
                 "unavailable",
-                (),
             )
         if len(complexes) > 1:
-            return (
+            return CapabilityResult(
                 [_complex_fact(record) for record in complexes],
-                ["동명 단지가 여러 곳이므로 지역이나 주소 조건을 추가해야 합니다."],
+                ["동명 단지가 여러 곳이어서 지역과 주소를 함께 표시했습니다."],
                 "partial",
-                (),
+                state="DEGRADED",
+                fallback_steps=("AMBIGUOUS_COMPLEX_CANDIDATES",),
             )
         handler = self._catalog.handler_for(plan.capability)
         if handler is None:
             raise GroundingValidationError("GROUNDING_CAPABILITY_UNSUPPORTED")
-        result = await handler.observe(plan, complexes[0])
-        return result.facts, result.limitations, result.readiness, result.actions
+        try:
+            result = await handler.observe(plan, complexes[0])
+        except (TimeoutError, OSError, RuntimeError, ChatbotProviderUnavailable):
+            if not self._fallback_enabled(plan.capability):
+                raise
+            return CapabilityResult(
+                [_complex_fact(complexes[0])],
+                ["요청한 세부 데이터는 현재 확인하지 못해 단지 기본정보만 정리했습니다."],
+                "partial",
+                state="DEGRADED",
+                fallback_steps=("PRESERVED_COMPLEX_IDENTITY",),
+                recoverable=True,
+            )
+        if self._fallback_enabled(plan.capability) and result.state == "EMPTY" and not result.facts:
+            return replace(
+                result,
+                facts=[_complex_fact(complexes[0])],
+                readiness="partial",
+            )
+        return result
+
+    def _fallback_enabled(self, capability: QueryCapability) -> bool:
+        return (
+            self._answer_first_enabled
+            and capability in self._answer_first_fallback_capabilities
+        )
+
+
+def _fragment_timeout_seconds(capability: QueryCapability) -> float:
+    # Recommendation handlers combine several independently bounded read queries.
+    return 8.0 if capability == "recommendation" else 3.0
 
 
 def _complex_fact(record: ComplexRecord) -> EvidenceFact:
@@ -922,7 +1152,6 @@ def _verify_lifestyle_plan(plan: QueryPlan, question: str) -> QueryPlan:
     if plan.capability not in {"recommendation", "comparison"}:
         return plan
     themes = detect_explicit_themes(question, plan.lifestyle_themes)
-    themes = tuple(theme for theme in themes if theme != "YOUNG_CHILD")
     return replace(
         plan,
         lifestyle_themes=themes,
@@ -930,12 +1159,66 @@ def _verify_lifestyle_plan(plan: QueryPlan, question: str) -> QueryPlan:
     )
 
 
-def _verify_plan(plan: QueryPlan, question: str) -> QueryPlan:
+def _apply_answer_first_defaults(plan: QueryPlan, today: date) -> QueryPlan:
+    if (
+        plan.capability == "recent_trade_lookup"
+        and plan.start_date is None
+        and plan.end_date is None
+    ):
+        return replace(
+            plan,
+            start_date=today - timedelta(days=365),
+            end_date=today,
+        )
+    return plan
+
+
+def _annotate_answer_first_assumptions(
+    result: CapabilityResult,
+    plan: QueryPlan,
+    question: str,
+) -> CapabilityResult:
+    if result.readiness == "unavailable":
+        return result
+    assumptions = list(result.assumptions)
+    fallback_steps = list(result.fallback_steps)
+    if plan.capability in {"recent_trade_lookup", "price_trend"} and re.search(
+        r"(?:[0-9]+\s*(?:년|개월|일)|[0-9]{4}[.년-]|부터|까지)", question
+    ) is None:
+        fallback_steps.append("DEFAULT_PERIOD_ONE_YEAR")
+    if plan.capability in {
+        "school_location",
+        "academy_lookup",
+        "rail_station_lookup",
+        "retail_location",
+        "childcare_lookup",
+    } and re.search(r"[0-9]+(?:\.[0-9]+)?\s*(?:km|킬로미터|킬로|m|미터)", question) is None:
+        assumptions.append(
+            f"검색 반경을 지정하지 않아 직선거리 {plan.radius_meters}m를 적용했습니다."
+        )
+    if not assumptions:
+        return result
+    return replace(
+        result,
+        state="DEGRADED" if result.state == "EXACT" else result.state,
+        assumptions=tuple(dict.fromkeys(assumptions)),
+        fallback_steps=tuple(dict.fromkeys(fallback_steps)),
+    )
+
+
+def _verify_plan(
+    plan: QueryPlan,
+    question: str,
+    *,
+    semantic_goal_planner_enabled: bool = True,
+) -> QueryPlan:
     if plan.capability != "recommendation":
         return _verify_lifestyle_plan(plan, question)
     try:
         return _verify_recommendation_plan(
-            _verify_lifestyle_plan(plan, question), question
+            _verify_lifestyle_plan(plan, question),
+            question,
+            semantic_goal_planner_enabled=semantic_goal_planner_enabled,
         )
     except Exception as exception:
         raise RecommendationExecutionError(
@@ -943,13 +1226,15 @@ def _verify_plan(plan: QueryPlan, question: str) -> QueryPlan:
         ) from exception
 
 
-def _verify_recommendation_plan(plan: QueryPlan, question: str) -> QueryPlan:
+def _verify_recommendation_plan(
+    plan: QueryPlan,
+    question: str,
+    *,
+    semantic_goal_planner_enabled: bool = True,
+) -> QueryPlan:
     if plan.capability != "recommendation":
         return plan
     normalized = " ".join(question.split())
-    childcare_requested = bool(
-        re.search(r"(?:어린이집|유치원|영유아|어린아이)", normalized)
-    )
     unit_match = re.search(r"([0-9][0-9,]*)\s*세대\s*이상", normalized)
     minimum_unit_count = (
         int(unit_match.group(1).replace(",", "")) if unit_match else None
@@ -960,67 +1245,63 @@ def _verify_recommendation_plan(plan: QueryPlan, question: str) -> QueryPlan:
         normalized,
     )
     requested_limit = int(limit_match.group(1)) if limit_match else 5
-    limit_mismatch = (
-        limit_match is not None
-        and (not 1 <= requested_limit <= 5 or plan.limit != requested_limit)
-    )
     verified_limit = requested_limit if 1 <= requested_limit <= 5 else plan.limit
-    numeric_mismatch = (
-        plan.minimum_unit_count is not None
-        and plan.minimum_unit_count != minimum_unit_count
-    ) or limit_mismatch
-    if plan.recommendation_mode != "CRITERIA":
-        budget_criteria = (
-            ("ACADEMY",)
-            if re.search(r"(?:학원가|학원|교습소)", normalized)
-            else ()
-        )
+    use_criteria_mode = (
+        plan.recommendation_mode == "CRITERIA"
+        or plan.maximum_budget_ten_thousand_krw is None
+        or plan.exclusive_area_square_meters is None
+    )
+    if not use_criteria_mode:
+        budget_criteria = tuple(dict.fromkeys((
+            *plan.recommendation_criteria,
+            *(("ACADEMY",) if re.search(r"(?:학원가|학원|교습소)", normalized) else ()),
+        )))
         return replace(
             plan,
             limit=verified_limit,
             minimum_unit_count=minimum_unit_count,
             recommendation_criteria=budget_criteria,  # type: ignore[arg-type]
             criteria_order=budget_criteria,  # type: ignore[arg-type]
-            clarification_code=(
-                "UNSUPPORTED_CHILDCARE"
-                if childcare_requested
-                else "NUMERIC_CONDITION_MISMATCH" if numeric_mismatch else None
-            ),
+            clarification_code=None,
         )
-    criteria: list[str] = []
-    if re.search(r"(?:학원가|학원|교습소)", normalized):
-        criteria.append("ACADEMY")
-    if re.search(r"(?:초등학교|중학교|고등학교|학교)", normalized):
-        criteria.append("SCHOOL")
-    if re.search(r"(?:역세권|지하철|철도|교통|역\s*(?:접근|거리|가까))", normalized):
-        criteria.append("TRANSIT")
-    if re.search(r"(?:대형마트|백화점|쇼핑센터|복합몰|쇼핑)", normalized):
-        criteria.append("SHOPPING")
+    criterion_patterns = {
+        "ACADEMY": r"(?:학원가|학원|교습소)",
+        "SCHOOL": r"(?:초등학교|중학교|고등학교|학교)",
+        "TRANSIT": r"(?:역세권|지하철|철도|교통|역\s*(?:접근|거리|가까))",
+        "SHOPPING": r"(?:대형마트|백화점|쇼핑센터|복합몰|쇼핑)",
+    }
+    criteria_positions = [
+        (match.start(), key)
+        for key, pattern in criterion_patterns.items()
+        if (match := re.search(pattern, normalized)) is not None
+    ]
+    criteria = [key for _, key in sorted(criteria_positions)]
     clarification = None
     if re.search(r"(?:학생|교육)(?!업소)", normalized) and not {
         "ACADEMY", "SCHOOL"
     }.intersection(criteria):
-        clarification = "AMBIGUOUS_EDUCATION"
-    if childcare_requested:
-        clarification = "UNSUPPORTED_CHILDCARE"
-    if numeric_mismatch:
-        clarification = "NUMERIC_CONDITION_MISMATCH"
-    typed_criteria = tuple(
-        key
-        for key in ("ACADEMY", "SCHOOL", "TRANSIT", "SHOPPING")
-        if key in criteria
+        criteria.extend(("SCHOOL", "ACADEMY"))
+    # The model selects from a closed runtime metric catalog. Preserve those
+    # semantic choices for broad preferences, while an explicit narrow metric
+    # request must not inherit unrelated model-proposed criteria.
+    broad_preference = re.search(
+        r"(?:학군|교육|아이|자녀|키우|생활|편의|가성비|좋은|괜찮)", normalized
+    ) is not None
+    semantic_criteria = (
+        plan.recommendation_criteria
+        if broad_preference and semantic_goal_planner_enabled
+        else ()
     )
+    typed_criteria = tuple(dict.fromkeys((*criteria, *semantic_criteria)))
     explicit_priority = bool(re.search(r"(?:우선|먼저|그다음|다음으로)", normalized))
     criteria_order = tuple(
         key for key in plan.criteria_order if key in typed_criteria
     )
     if len(typed_criteria) == 1:
         criteria_order = typed_criteria
-    elif len(typed_criteria) > 1 and (
-        not explicit_priority or set(criteria_order) != set(typed_criteria)
-    ):
-        criteria_order = ()
-        clarification = clarification or "MISSING_PRIORITY"
+    elif len(typed_criteria) > 1:
+        if not explicit_priority or set(criteria_order) != set(typed_criteria):
+            criteria_order = typed_criteria
     region_name = plan.region_name
     if region_name is not None:
         region_token = re.sub(
@@ -1039,7 +1320,7 @@ def _verify_recommendation_plan(plan: QueryPlan, question: str) -> QueryPlan:
             re.IGNORECASE,
         )
         if radius_match is None:
-            clarification = clarification or "STATION_RADIUS_REQUIRED"
+            radius_meters = 1500
         else:
             raw_radius = float(radius_match.group(1))
             extracted_radius = round(
@@ -1047,13 +1328,13 @@ def _verify_recommendation_plan(plan: QueryPlan, question: str) -> QueryPlan:
                 if radius_match.group(2).lower() in {"km", "킬로미터", "킬로"}
                 else raw_radius
             )
-            if radius_meters is not None and radius_meters != extracted_radius:
-                clarification = clarification or "NUMERIC_CONDITION_MISMATCH"
             if not 300 <= extracted_radius <= 2_000:
-                clarification = clarification or "STATION_RADIUS_OUT_OF_RANGE"
-            radius_meters = extracted_radius
+                radius_meters = 1500
+            else:
+                radius_meters = extracted_radius
     return replace(
         plan,
+        recommendation_mode="CRITERIA",
         limit=verified_limit,
         minimum_unit_count=minimum_unit_count,
         recommendation_criteria=typed_criteria,  # type: ignore[arg-type]
@@ -1061,6 +1342,22 @@ def _verify_recommendation_plan(plan: QueryPlan, question: str) -> QueryPlan:
         radius_meters=radius_meters,
         clarification_code=clarification,  # type: ignore[arg-type]
     )
+
+
+def _referenced_candidate_indexes(question: str) -> tuple[int, ...]:
+    references: list[tuple[int, int]] = []
+    patterns = (
+        (0, r"(?:1\s*위|첫\s*번째|첫째)"),
+        (1, r"(?:2\s*위|두\s*번째|둘째)"),
+        (2, r"(?:3\s*위|세\s*번째|셋째)"),
+        (3, r"(?:4\s*위|네\s*번째|넷째)"),
+        (4, r"(?:5\s*위|다섯\s*번째|다섯째)"),
+    )
+    for index, pattern in patterns:
+        match = re.search(pattern, question)
+        if match is not None:
+            references.append((match.start(), index))
+    return tuple(index for _, index in sorted(references))
 
 
 def validate_draft(

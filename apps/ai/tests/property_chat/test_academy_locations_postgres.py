@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import psycopg
 import pytest
@@ -12,6 +14,73 @@ from ai_service.property_chat.academy_locations import (
     _validate_query,
 )
 from ai_service.property_chat.comparison import CandidatePoint
+
+
+def test_academy_batch_keeps_spatial_lookup_correlated_for_each_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    queries: list[str] = []
+
+    class FakeResult:
+        def __init__(self, *, rows=None, row=None):
+            self._rows = rows
+            self._row = row
+
+        def fetchall(self):
+            return self._rows
+
+        def fetchone(self):
+            return self._row
+
+    class FakeConnection:
+        info = SimpleNamespace(dbname="test", user="test")
+
+        def execute(self, query, _params=None):
+            queries.append(query)
+            if "WITH candidates" in query:
+                return FakeResult(rows=[{"complex_id": 1, "matched_count": 2}])
+            return FakeResult(row={
+                "total_count": 10,
+                "spatial_count": 10,
+                "dataset_version": "academy-v1",
+                "observed_at": datetime(2026, 7, 20, tzinfo=UTC),
+                "freshness_days": 45,
+            })
+
+    class FakePool:
+        @staticmethod
+        def check_connection(_connection):
+            return None
+
+        def __init__(self, **_kwargs):
+            self._connection = FakeConnection()
+
+        @contextmanager
+        def connection(self):
+            yield self._connection
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(
+        "ai_service.property_chat.academy_locations.ConnectionPool", FakePool
+    )
+    repository = PostgresAcademyLocationRepository(
+        "postgresql://test:test@localhost/test",
+        expected_database="test",
+        expected_username="test",
+    )
+
+    result = repository.nearby_counts_batch(
+        points=(CandidatePoint(1, 37.513, 127.082, "11710"),),
+        radius_meters=800,
+    )
+
+    candidate_query = next(query for query in queries if "WITH candidates" in query)
+    assert "LEFT JOIN LATERAL" in candidate_query
+    assert "OFFSET 0" in candidate_query
+    assert result is not None
+    assert result[1].matched_count == 2
 
 
 @pytest.fixture(scope="module")

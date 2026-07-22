@@ -1,4 +1,4 @@
-import { type ChangeEvent, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, useLayoutEffect, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '../auth/AuthProvider';
 import { queryChatbot } from './api/chatbotClient';
@@ -7,6 +7,7 @@ import { ChatHistoryPopover } from './ChatHistoryPopover';
 import { ChatPendingMessage, ChatThreadMessage } from './ChatThreadMessage';
 import type { ChatAction } from './actionContract';
 import type { ChatEvidence } from './chatTypes';
+import type { ChatUiContext } from './conversationContract';
 import {
   buildConversationContext,
   IndexedDbChatConversationStore,
@@ -19,25 +20,63 @@ type ChatbotPanelProps = {
   onOpenChange?: (isOpen: boolean) => void;
   onUiAction?: (action: ChatAction) => boolean;
   store?: IndexedDbChatConversationStore;
+  uiContext?: ChatUiContext;
 };
 
-export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelProps) {
+export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: ChatbotPanelProps) {
   const auth = useAuth();
   const workspace = useChatConversationWorkspace(store);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const historyTriggerRef = useRef<HTMLButtonElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const questionRef = useRef<HTMLTextAreaElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const latestTurnRef = useRef<HTMLElement>(null);
+  const questionToRevealRef = useRef<string | null>(null);
+  const answerToRevealRef = useRef<string | null>(null);
+  const revealLatestTurnRef = useRef(false);
+  const followAnswerRef = useRef(true);
   const [isOpen, setIsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [question, setQuestion] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'sending'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [hasUnseenAnswer, setHasUnseenAnswer] = useState(false);
   const [executedActionIds, setExecutedActionIds] = useState<Set<string>>(
     () => new Set(),
   );
   const requestSequenceRef = useRef(0);
   const { conversations, selected, selectedId } = workspace;
+  const latestMessage = selected?.messages[selected.messages.length - 1];
+
+  useLayoutEffect(() => {
+    if (latestMessage?.id === questionToRevealRef.current && latestMessage.role === 'user') {
+      const questionElement = latestTurnRef.current;
+      if (typeof questionElement?.scrollIntoView === 'function') {
+        questionElement.scrollIntoView({ behavior: 'auto', block: 'start' });
+      }
+      questionToRevealRef.current = null;
+      revealLatestTurnRef.current = false;
+      return;
+    }
+    if (latestMessage?.id === answerToRevealRef.current && latestMessage.role === 'assistant') {
+      const answerElement = latestTurnRef.current;
+      if (typeof answerElement?.scrollIntoView === 'function') {
+        answerElement.scrollIntoView({ behavior: 'auto', block: 'end' });
+      }
+      answerToRevealRef.current = null;
+      revealLatestTurnRef.current = false;
+      setHasUnseenAnswer(false);
+      return;
+    }
+    if (latestMessage != null && revealLatestTurnRef.current) {
+      const latestElement = latestTurnRef.current;
+      if (typeof latestElement?.scrollIntoView === 'function') {
+        latestElement.scrollIntoView({ behavior: 'auto', block: 'end' });
+      }
+      revealLatestTurnRef.current = false;
+    }
+  }, [latestMessage]);
 
   useEffect(() => {
     if (isOpen && status === 'idle' && selected != null) questionRef.current?.focus();
@@ -51,10 +90,18 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
     setIsOpen(true);
     onOpenChange?.(true);
     if (status === 'sending') return;
+    if (selected != null && question.trim().length > 0) {
+      setError(null);
+      setHasUnseenAnswer(false);
+      revealLatestTurnRef.current = false;
+      return;
+    }
     setStatus('loading');
     setError(null);
+    setHasUnseenAnswer(false);
+    revealLatestTurnRef.current = true;
     try {
-      await workspace.load();
+      await workspace.load(true);
     } catch {
       setError('브라우저 대화 저장소를 열지 못했습니다.');
     } finally {
@@ -65,6 +112,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
   function createConversation() {
     if (status === 'sending') return;
     setError(null);
+    setHasUnseenAnswer(false);
     workspace.startDraft();
     setQuestion('');
     setIsHistoryOpen(false);
@@ -141,14 +189,20 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
     setQuestion('');
     setStatus('sending');
     setError(null);
+    followAnswerRef.current = isNearBottom(messagesRef.current);
+    questionToRevealRef.current = userMessage.id;
     const requestSequence = ++requestSequenceRef.current;
     try {
       await workspace.save(pending, true);
       const response = await queryChatbot(auth.authenticatedRequest, {
         question: content,
-        conversationContext: buildConversationContext(selected.messages),
+        conversationContext: buildConversationContext(selected.messages, selected.memory),
+        uiContext,
       });
       const answeredAt = new Date().toISOString();
+      const assistantMessageId = crypto.randomUUID();
+      if (followAnswerRef.current) answerToRevealRef.current = assistantMessageId;
+      else setHasUnseenAnswer(true);
       const evidence: ChatEvidence = {
         requestId: response.requestId,
         citations: response.citations,
@@ -158,9 +212,12 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
       };
       await workspace.save({
         ...pending,
+        ...(response.conversationMemoryPatch
+          ? { memory: response.conversationMemoryPatch }
+          : {}),
         updatedAt: answeredAt,
         messages: [...pending.messages, {
-          id: crypto.randomUUID(),
+          id: assistantMessageId,
           role: 'assistant',
           content: response.answer,
           createdAt: answeredAt,
@@ -169,6 +226,10 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
           actions: response.actions,
           ...(response.fragments.length === 0 ? {} : { fragments: response.fragments }),
           ...(response.summary == null ? {} : { summary: response.summary }),
+          ...(response.conversationResolution == null
+            ? {}
+            : { resolution: response.conversationResolution }),
+          ...(response.report == null ? {} : { report: response.report }),
         }],
       }, false);
     } catch (requestError) {
@@ -189,9 +250,11 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
 
   function selectConversation(id: string) {
     if (status === 'sending') return;
+    revealLatestTurnRef.current = true;
     workspace.select(id);
     setIsHistoryOpen(false);
     setQuestion('');
+    setHasUnseenAnswer(false);
   }
 
   function selectExampleQuestion(example: string) {
@@ -280,7 +343,17 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
           </header>
 
           <section aria-label="선택한 대화" className="chatbot-thread">
-            <div aria-busy={status === 'loading' || status === 'sending'} aria-live="polite" className="chatbot-messages">
+            <div
+              aria-busy={status === 'loading' || status === 'sending'}
+              aria-live="polite"
+              className="chatbot-messages"
+              onScroll={(event) => {
+                const atBottom = isNearBottom(event.currentTarget);
+                followAnswerRef.current = atBottom;
+                if (atBottom) setHasUnseenAnswer(false);
+              }}
+              ref={messagesRef}
+            >
               {status === 'loading' ? (
                 <p className="chatbot-loading">대화를 불러오는 중입니다.</p>
               ) : selected?.messages.length ? selected.messages.map((message) => (
@@ -288,6 +361,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
                   executedActionIds={executedActionIds}
                   key={message.id}
                   message={message}
+                  messageRef={message.id === latestMessage?.id ? latestTurnRef : undefined}
                   onUiAction={executeUiAction}
                 />
               )) : (
@@ -318,6 +392,19 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
               {status === 'sending' ? <ChatPendingMessage /> : null}
             </div>
 
+            {hasUnseenAnswer ? (
+              <button
+                className="chatbot-new-answer"
+                onClick={() => {
+                  latestTurnRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                  setHasUnseenAnswer(false);
+                }}
+                type="button"
+              >
+                새 답변 보기
+              </button>
+            ) : null}
+
             {error ? <p aria-live="assertive" className="chatbot-error">{error}</p> : null}
             <ChatComposer
               disabled={status === 'sending' || selected == null}
@@ -332,6 +419,11 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
       ) : null}
     </>
   );
+}
+
+function isNearBottom(element: HTMLElement | null): boolean {
+  if (element == null) return true;
+  return element.scrollHeight - element.scrollTop - element.clientHeight <= 48;
 }
 
 const EXAMPLE_QUESTIONS = [

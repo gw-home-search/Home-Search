@@ -2,6 +2,8 @@ spring:
   application:
     name: home-search-chat-bff
   jackson:
+    mapper:
+      allow-coercion-of-scalars: false
     deserialization:
       fail-on-unknown-properties: true
 

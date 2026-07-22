@@ -43,6 +43,68 @@ describe('챗봇 패널', () => {
     expect(client.authenticatedRequest).toHaveBeenCalledTimes(1);
   });
 
+  it('질문 전송 직후 새 질문이 보이도록 대화 화면을 질문 위치로 내린다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-submit-scroll');
+    const client = authenticatedClient();
+    const successfulResponse = await client.authenticatedRequest(
+      '/api/v1/chatbot/query', {}, 'public',
+    );
+    let completeRequest: ((response: Response) => void) | undefined;
+    client.authenticatedRequest = vi.fn().mockImplementation(() => new Promise<Response>((resolve) => {
+      completeRequest = resolve;
+    }));
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    ({ root, host } = await renderPanel(client, store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    const textarea = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
+    await waitFor(() => textarea?.disabled === false);
+    await change(textarea, '영등포구 500세대 이상 단지 중 학원 접근성을 우선해서 5곳을 알려줘');
+    await keyDown(textarea, { key: 'Enter' });
+
+    await waitFor(() => host?.querySelector('[aria-label="내 질문"]') != null);
+    expect(host.querySelector('[aria-label="내 질문"]')?.textContent).toContain('영등포구 500세대');
+    await waitFor(() => scrollIntoView.mock.calls.length > 0);
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' });
+
+    await act(async () => completeRequest?.(successfulResponse));
+    await waitFor(() => host?.textContent?.includes('근거가 확인된 답변입니다.') === true);
+  });
+
+  it('하단에서 질문한 경우 답변이 도착하면 마지막 답변까지 따라간다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-answer-follow');
+    await store.save(conversation('existing', '기존 대화', '2026-07-19T09:00:00.000Z'));
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    ({ root, host } = await renderPanel(authenticatedClient(), store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(() => host?.textContent?.includes('기존 대화') === true);
+    scrollIntoView.mockClear();
+    const messages = host.querySelector<HTMLElement>('.chatbot-messages');
+    Object.defineProperties(messages, {
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 500 },
+      scrollTop: { configurable: true, value: 500, writable: true },
+    });
+    const textarea = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
+    await waitFor(() => textarea?.disabled === false);
+    await change(textarea, '답변까지 따라가줘');
+    await keyDown(textarea, { key: 'Enter' });
+
+    await waitFor(() => host?.textContent?.includes('근거가 확인된 답변입니다.') === true);
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'end' });
+  });
+
   it('패널 열기와 반복 새 대화는 저장하지 않고 첫 질문을 보낼 때만 저장한다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-draft');
     ({ root, host } = await renderPanel(authenticatedClient(), store));
@@ -247,6 +309,61 @@ describe('챗봇 패널', () => {
     await click(buttonByText(host, '삭제'));
     await waitFor(async () => (await store.list()).length === 1);
     expect((await store.list()).map(({ id }) => id)).toEqual(['newer']);
+  });
+
+  it('패널을 다시 열면 최신 대화와 그 마지막 턴으로 이동한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-latest-turn');
+    await store.save(conversation('older', '이전 대화', '2026-07-18T09:00:00.000Z'));
+    await store.save({
+      ...conversation('newer', '최신 대화', '2026-07-19T09:00:00.000Z'),
+      messages: [{
+        id: 'newer-user', role: 'user', content: '최신 질문',
+        createdAt: '2026-07-19T09:00:00.000Z',
+      }, {
+        id: 'newer-assistant', role: 'assistant', content: '최신 답변',
+        createdAt: '2026-07-19T09:00:01.000Z',
+      }],
+    });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    ({ root, host } = await renderPanel(authenticatedClient(), store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="대화 목록 열기"]'));
+    await click(host.querySelector<HTMLButtonElement>('[title="이전 대화"]'));
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-close'));
+    scrollIntoView.mockClear();
+
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(() => host?.textContent?.includes('최신 답변') === true);
+    expect(host.textContent).not.toContain('이전 대화');
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'end' });
+  });
+
+  it('작성 중인 입력이 있으면 패널을 다시 열어도 선택 대화와 draft를 유지한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-unsent-draft');
+    await store.save(conversation('older', '작성 중 대화', '2026-07-18T09:00:00.000Z'));
+    await store.save(conversation('newer', '최신 대화', '2026-07-19T09:00:00.000Z'));
+    ({ root, host } = await renderPanel(authenticatedClient(), store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await click(host.querySelector<HTMLButtonElement>('button[aria-label="대화 목록 열기"]'));
+    await click(host.querySelector<HTMLButtonElement>('[title="작성 중 대화"]'));
+    const textarea = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
+    await change(textarea, '아직 보내지 않은 질문');
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-close'));
+
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+
+    expect(host.querySelector<HTMLTextAreaElement>('#chatbot-question')?.value)
+      .toBe('아직 보내지 않은 질문');
+    expect(host.textContent).toContain('작성 중 대화');
+    expect(host.textContent).not.toContain('최신 대화');
   });
 
   it('첫 로드에서 legacy 빈 대화만 정리하고 내용 있는 대화는 유지한다', async () => {

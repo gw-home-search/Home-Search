@@ -403,6 +403,34 @@ Loading is delayed to avoid flash, empty/error copy is task-local, and marker
 errors keep the map usable. Focus, selected, open, disabled, and error states do
 not rely on color alone. Reduced motion disables nonessential transitions.
 
+## Chatbot Decision Report
+
+The chatbot is a map-side decision aid, not a second dashboard. User questions
+use one quiet right-aligned bubble; assistant responses remain flat, left-aligned
+documents without repeated avatars, speaker labels, or turn dividers.
+
+Recommendation responses keep a stable reading order: result, basis, comparison
+table, two grounded differences, candidate details, actions, and sources. The
+comparison table uses native table semantics and horizontal row rules only.
+Candidate one is open by default; candidates two through five are native collapsed
+details. Gray tint is reserved for the user bubble, selected tab, and compact
+status controls rather than large panel backgrounds.
+
+The composer grows from one to four lines. Enter submits, Shift+Enter inserts a
+line break, and IME composition never submits. On submit the question itself is
+revealed immediately. Answers follow only while the reader is near the bottom;
+otherwise a compact `새 답변 보기` action preserves the reader's position.
+
+Successful observation notes such as scope and source method belong in report
+basis or Sources, not under `확인할 점`. Internal source abbreviations and policy
+identifiers never appear in visible prose. Legacy v1 artifacts remain readable,
+including narrow-panel table overflow contained inside the table surface.
+
+Recommendation follow-ups keep only ranked complex ids in the current
+conversation's IndexedDB memory. The assistant can therefore compare “1위와
+2위” without asking the user to repeat names, while a new conversation has no
+candidate memory.
+
 ## Verification
 
 Run `npm run test` and `npm run build`. For meaningful visual changes, inspect

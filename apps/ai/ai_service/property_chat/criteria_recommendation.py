@@ -40,7 +40,7 @@ class CriteriaCandidateScope:
     def __post_init__(self) -> None:
         if (
             not 1 <= len(self.scope_label.strip()) <= 100
-            or len(self.candidates) > 101
+            or len(self.candidates) > 5_000
             or len({item.complex_id for item in self.candidates}) != len(self.candidates)
         ):
             raise ValueError("criteria candidate scope is invalid")

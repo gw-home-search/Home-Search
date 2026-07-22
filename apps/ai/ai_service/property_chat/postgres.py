@@ -45,6 +45,7 @@ class PostgresPropertyFactRepository:
             conninfo=dsn,
             min_size=min_pool_size,
             max_size=max_pool_size,
+            check=ConnectionPool.check_connection,
             kwargs={
                 "row_factory": dict_row,
                 "options": "-c default_transaction_read_only=on -c statement_timeout=5000",
@@ -66,6 +67,22 @@ class PostgresPropertyFactRepository:
 
     def close(self) -> None:
         self._pool.close()
+
+    def find_complex_by_id(self, complex_id: int) -> ComplexRecord | None:
+        if isinstance(complex_id, bool) or complex_id <= 0:
+            raise ValueError("complex id must be positive")
+        with self._pool.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT complex_id, display_name, region_code, region_name, address,
+                       latitude, longitude, marker_safe, data_updated_at,
+                       unit_count, use_date
+                FROM ai_read.complex_fact
+                WHERE complex_id = %s
+                """,
+                (complex_id,),
+            ).fetchone()
+        return _complex_record(row) if row is not None else None
 
     def find_complexes(
         self, name: str, region_name: str | None, limit: int
@@ -261,7 +278,11 @@ class PostgresPropertyFactRepository:
         limit: int,
     ) -> dict[int, tuple[ComplexRecord, tuple[TradeRecord, ...]]] | None:
         normalized_region = region_name.strip()
-        if not normalized_region or len(normalized_region) > 100 or limit != 100:
+        if (
+            not normalized_region
+            or len(normalized_region) > 100
+            or not 1 <= limit <= 5_000
+        ):
             raise ValueError("recommendation candidate query is outside the supported range")
         _validate_trade_query(
             1, start_date, end_date, exclusive_area_square_meters
@@ -364,7 +385,7 @@ class PostgresPropertyFactRepository:
         self, region_name: str, limit: int
     ) -> CriteriaCandidateScope | None:
         normalized_region = region_name.strip()
-        if not normalized_region or len(normalized_region) > 100 or limit != 101:
+        if not normalized_region or len(normalized_region) > 100 or not 1 <= limit <= 5_000:
             raise ValueError("criteria candidate query is outside the supported range")
         leaf_region = normalized_region.rsplit(maxsplit=1)[-1]
         with self._pool.connection() as connection:
@@ -477,7 +498,7 @@ class PostgresPropertyFactRepository:
             or not 33 <= latitude <= 39
             or not 124 <= longitude <= 132
             or not 300 <= radius_meters <= 2_000
-            or limit != 101
+            or not 1 <= limit <= 5_000
         ):
             raise ValueError("station criteria candidate query is outside the supported range")
         with self._pool.connection() as connection:

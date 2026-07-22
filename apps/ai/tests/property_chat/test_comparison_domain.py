@@ -87,13 +87,9 @@ def test_recent_three_basis_rejects_mixed_or_duplicate_observations(
         {"complex_names": ("잠실엘스",)},
         {"complex_names": ("잠실엘스", "잠실엘스")},
         {"complex_names": ("A", "B", "C", "D", "E")},
-        {
-            "complex_names": ("잠실엘스", "헬리오시티"),
-            "exclusive_area_square_meters": None,
-        },
     ],
 )
-def test_comparison_plan_requires_two_to_four_unique_names_and_area(
+def test_comparison_plan_requires_two_to_four_unique_names(
     kwargs: dict[str, object],
 ) -> None:
     values: dict[str, object] = {
@@ -105,6 +101,17 @@ def test_comparison_plan_requires_two_to_four_unique_names_and_area(
     values.update(kwargs)
     with pytest.raises(ValueError):
         QueryPlan(**values)  # type: ignore[arg-type]
+
+
+def test_comparison_plan_accepts_missing_area_for_non_price_comparison() -> None:
+    plan = QueryPlan(
+        capability="comparison",
+        complex_name="잠실엘스",
+        complex_names=("잠실엘스", "헬리오시티"),
+        exclusive_area_square_meters=None,
+    )
+
+    assert plan.exclusive_area_square_meters is None
 
 
 def test_comparison_public_value_objects_reject_invalid_contract_states() -> None:

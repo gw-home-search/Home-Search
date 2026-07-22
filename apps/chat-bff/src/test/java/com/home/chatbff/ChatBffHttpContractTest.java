@@ -399,4 +399,84 @@ class ChatBffHttpContractTest {
                     .isEqualTo("INVALID_CHATBOT_REQUEST");
         }
     }
+
+    @Test
+    @DisplayName("경계가 검증된 uiContext와 versioned memory를 허용한다")
+    void validUiContextAndMemoryAreAccepted() {
+        when(aiClient.query(any(), anyString(), anyString(), any()))
+                .thenReturn(Mono.just(objectMapper.createObjectNode().put("answer", "확인했습니다")));
+
+        client.post()
+                .uri("/api/v1/chatbot/query")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer valid-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "question":"이 단지 전체적으로 어때?",
+                          "uiContext":{
+                            "mapViewport":{"bounds":{"swLat":37.45,"swLng":126.85,"neLat":37.70,"neLng":127.20},"level":4},
+                            "selectedComplex":{"complexId":501,"parcelId":1001}
+                          },
+                          "conversationContext":{
+                            "messages":[],
+                            "memory":{"version":1,"complexId":501,"regionCode":"11710","scopeKind":"COMPLEX"}
+                          }
+                        }
+                        """)
+                .exchange()
+                .expectStatus()
+                .isOk();
+
+        client.post()
+                .uri("/api/v1/chatbot/query")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer valid-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("""
+                        {
+                          "question":"방금 추천한 1위와 2위를 비교해줘",
+                          "conversationContext":{
+                            "messages":[],
+                            "memory":{
+                              "version":2,
+                              "complexIds":[501,502,503],
+                              "regionCode":"11710",
+                              "scopeKind":"RECOMMENDATION"
+                            }
+                          }
+                        }
+                        """)
+                .exchange()
+                .expectStatus()
+                .isOk();
+    }
+
+    @Test
+    @DisplayName("잘못된 uiContext와 memory는 AI를 호출하지 않고 400으로 거부한다")
+    void invalidUiContextAndMemoryAreRejected() {
+        for (String extra : new String[] {
+            "\"uiContext\":{}",
+            "\"uiContext\":{\"selectedComplex\":{\"complexId\":501}}",
+            "\"uiContext\":{\"selectedComplex\":{\"complexId\":\"501\",\"parcelId\":1001}}",
+            "\"uiContext\":{\"mapViewport\":{\"bounds\":{\"swLat\":\"37.45\",\"swLng\":126.85,\"neLat\":37.70,\"neLng\":127.20},\"level\":\"4\"}}",
+            "\"uiContext\":{\"mapViewport\":{\"bounds\":{\"swLat\":37.7,\"swLng\":127.2,\"neLat\":37.4,\"neLng\":126.8},\"level\":4}}",
+            "\"conversationContext\":{\"memory\":{\"version\":2,\"scopeKind\":\"MAP_VIEWPORT\"}}",
+            "\"conversationContext\":{\"memory\":{\"version\":2,\"complexIds\":[501],\"scopeKind\":\"RECOMMENDATION\"}}",
+            "\"conversationContext\":{\"memory\":{\"version\":2,\"complexIds\":[501,501],\"scopeKind\":\"RECOMMENDATION\"}}",
+            "\"conversationContext\":{\"memory\":{\"version\":2,\"complexId\":501,\"complexIds\":[501,502],\"scopeKind\":\"RECOMMENDATION\"}}",
+            "\"conversationContext\":{\"memory\":{\"version\":\"1\",\"scopeKind\":\"MAP_VIEWPORT\"}}",
+            "\"conversationContext\":{\"memory\":{\"version\":1,\"scopeKind\":\"COMPLEX\"}}"
+        }) {
+            client.post()
+                    .uri("/api/v1/chatbot/query")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer valid-token")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"question\":\"최근 거래\"," + extra + "}")
+                    .exchange()
+                    .expectStatus()
+                    .isBadRequest()
+                    .expectBody()
+                    .jsonPath("$.code")
+                    .isEqualTo("INVALID_CHATBOT_REQUEST");
+        }
+    }
 }

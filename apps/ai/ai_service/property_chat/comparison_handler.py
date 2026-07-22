@@ -109,7 +109,7 @@ class ComparisonHandler:
         self._today = today
 
     async def observe(self, plan: QueryPlan) -> CapabilityResult:
-        if plan.capability != "comparison" or plan.exclusive_area_square_meters is None:
+        if plan.capability != "comparison":
             raise ValueError("comparison plan is invalid")
         matches = await asyncio.to_thread(
             self._repository.find_complexes_batch,
@@ -141,32 +141,36 @@ class ComparisonHandler:
                 ["같은 단지가 둘 이상의 비교 이름으로 식별되어 다른 단지명을 입력해야 합니다."],
                 "partial",
             )
-        cutoff = plan.end_date or await asyncio.to_thread(self._repository.latest_trade_date)
-        if cutoff is None:
-            return CapabilityResult(
-                [self._builders.complex_fact(record) for record in complexes],
-                ["비교에 사용할 전역 최신 거래일을 확인하지 못했습니다."],
-                "unavailable",
-            )
-        start_date = cutoff - timedelta(days=364)
         complex_ids = tuple(record.complex_id for record in complexes)
-        trades = await asyncio.to_thread(
-            self._repository.recent_trades_batch,
-            complex_ids,
-            start_date,
-            cutoff,
-            plan.exclusive_area_square_meters,
-            3,
-        )
-        bases = {
-            record.complex_id: RecentThreeTradeBasis.from_trades(
-                complex_id=record.complex_id,
-                cutoff=cutoff,
-                exclusive_area_square_meters=plan.exclusive_area_square_meters,
-                trades=trades.get(record.complex_id, ()),
+        cutoff: date | None = None
+        start_date: date | None = None
+        bases: dict[int, RecentThreeTradeBasis] = {}
+        if plan.exclusive_area_square_meters is not None:
+            cutoff = plan.end_date or await asyncio.to_thread(self._repository.latest_trade_date)
+            if cutoff is None:
+                return CapabilityResult(
+                    [self._builders.complex_fact(record) for record in complexes],
+                    ["비교에 사용할 전역 최신 거래일을 확인하지 못했습니다."],
+                    "unavailable",
+                )
+            start_date = cutoff - timedelta(days=364)
+            trades = await asyncio.to_thread(
+                self._repository.recent_trades_batch,
+                complex_ids,
+                start_date,
+                cutoff,
+                plan.exclusive_area_square_meters,
+                3,
             )
-            for record in complexes
-        }
+            bases = {
+                record.complex_id: RecentThreeTradeBasis.from_trades(
+                    complex_id=record.complex_id,
+                    cutoff=cutoff,
+                    exclusive_area_square_meters=plan.exclusive_area_square_meters,
+                    trades=trades.get(record.complex_id, ()),
+                )
+                for record in complexes
+            }
         points = tuple(
             CandidatePoint(record.complex_id, record.latitude, record.longitude, record.region_code)
             for record in complexes
@@ -298,10 +302,14 @@ class ComparisonHandler:
         )
         return CapabilityResult(
             all_facts,
-            [
+            ([
                 f"모든 단지는 {start_date.isoformat()}부터 {cutoff.isoformat()}까지 "
                 f"전용면적 {plan.exclusive_area_square_meters:g}㎡ ±1.0㎡ 기준입니다.",
                 "거래가 3건 미만인 단지의 가격 항목은 확인 불가로 표시합니다.",
+            ] if start_date is not None and cutoff is not None
+            and plan.exclusive_area_square_meters is not None else [
+                "면적 조건이 없어 가격 우열은 만들지 않고 단지 규모와 확인 가능한 생활 조건을 비교했습니다.",
+            ]) + [
                 "철도와 대규모점포 거리는 단지 표시 좌표 기준 직선거리입니다.",
                 "대규모점포는 전국 공식 원장 중 좌표가 확인된 범위만 반영했습니다.",
                 "조건별 관찰값을 나란히 보여드리며, 중요하게 보는 조건에 따라 선택이 달라질 수 있습니다.",
@@ -395,7 +403,7 @@ def _rows(
     retail_ready: bool,
     coordinate_complex_ids: set[int],
 ) -> tuple[ComparisonRow, ...]:
-    return (
+    price_rows = (
         ComparisonRow("latestTrade", "가장 최근 거래", tuple(
             _latest_cell(bases[item.complex_id], basis_facts[item.complex_id])
             for item in complexes
@@ -410,6 +418,8 @@ def _rows(
                 (basis_facts[item.complex_id].fact_id,),
             ) for item in complexes
         )),
+    ) if bases else ()
+    return (*price_rows,
         ComparisonRow("unitCount", "세대수", tuple(
             _static_cell(item.unit_count, "세대", "HOUSEHOLD_COUNT", complex_facts[item.complex_id])
             for item in complexes
@@ -486,7 +496,7 @@ def _lifestyle_cell(
                         f"{labels[level]} {value.get('name')} {value.get('distanceMeters')}m"
                     )
         count = fact.payload.get("sbizEducationCountWithin800m")
-        rendered = " · ".join((*school_values, f"Sbiz 교육업소 {count}곳"))
+        rendered = " · ".join((*school_values, f"학원 위치 {count}곳"))
     else:
         count = fact.payload.get("countWithin800m")
         name = fact.payload.get("nearestCenterName")

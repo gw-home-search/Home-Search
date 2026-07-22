@@ -56,7 +56,7 @@ async def run_activation_case(model: ActivationLanguageModel) -> dict[str, objec
         draft = await model.draft_answer(
             facts=facts,
             limitations=[
-                "학원은 단지 중심 직선거리 800m 내 Sbiz 교육업소 관찰값입니다.",
+                "학원 접근성은 단지 중심 직선거리 800m 내 위치 관찰값입니다.",
                 "교통은 최근접 철도역 직선거리 관찰값입니다.",
             ],
             question=QUESTION,

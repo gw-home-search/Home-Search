@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import replace
 from datetime import UTC, date, datetime
+from time import sleep
 
 import pytest
 
@@ -15,6 +16,7 @@ from ai_service.property_chat.engine import (
     GroundedChatbotEngine,
     GroundingValidationError,
     RecommendationExecutionError,
+    _verify_recommendation_plan,
     validate_draft,
 )
 from ai_service.property_chat.presentation import AnswerPresentation, PresentationAssembler
@@ -82,7 +84,7 @@ class PropertyRepository:
     ):
         self.calls += 1
         assert (region_name, start_date, end_date, area, limit) == (
-            "송파구", date(2025, 7, 21), date(2026, 7, 20), 84.0, 100,
+            "송파구", date(2025, 7, 21), date(2026, 7, 20), 84.0, 5_000,
         )
         return {
             501: (_complex(501), _trades(501, (195_000, 190_000, 185_000))),
@@ -275,6 +277,34 @@ def test_recommendation_filters_before_deterministic_scoring_and_uses_batch_quer
         fact_id for citation in response["citations"] for fact_id in citation["factIds"]
     }
     assert set(card["factIds"]).issubset(citation_fact_ids)
+    report = response["uiReport"]
+    assert report["kind"] == "RECOMMENDATION"
+    assert report["highlights"] == [{
+        "complexId": 501,
+        "title": f"1순위 · {card['complexName']}",
+        "body": "후보 501: 2026-07-20 최근 거래 금액은 19억 5,000만원입니다.",
+        "factIds": ["recommendation-trade-basis-501-2026-07-20-84"],
+    }]
+    profile = next(
+        artifact for artifact in response["uiArtifacts"]
+        if artifact["type"] == "candidateProfile"
+    )
+    assert profile["sections"] == [{
+        "key": "TRADE",
+        "label": "최근 실거래",
+        "items": [
+            {
+                "label": "최근 거래",
+                "value": "2026-07-20 · 19억 5,000만원",
+                "factIds": ["recommendation-trade-basis-501-2026-07-20-84"],
+            },
+            {
+                "label": "최근 3건 중앙값",
+                "value": "19억원",
+                "factIds": ["recommendation-trade-basis-501-2026-07-20-84"],
+            },
+        ],
+    }]
 
 
 def test_recommendation_normalizes_retail_observed_at_before_serialization() -> None:
@@ -297,12 +327,12 @@ def test_recommendation_normalizes_retail_observed_at_before_serialization() -> 
     assert response["dataAsOf"] == "2026-06-30"
 
 
-def test_recommendation_is_unavailable_when_a_required_source_is_unavailable() -> None:
+def test_recommendation_uses_trade_fallback_when_a_source_is_unavailable() -> None:
     response, _, _, _ = _query(rail_ready=False)
 
-    assert response["status"] == "failed"
-    assert response["uiArtifacts"] == []
-    assert any("철도" in item and "준비" in item for item in response["limitations"])
+    assert response["status"] == "partial_success"
+    assert response["uiArtifacts"][0]["type"] == "recommendationTable"
+    assert any("철도" in item and "거래 근거" in item for item in response["limitations"])
 
 
 def test_recommendation_uses_server_fallback_without_language_model_draft() -> None:
@@ -417,10 +447,13 @@ def test_recommendation_maps_rail_batch_failure() -> None:
         def nearest_batch(self, **_kwargs):
             raise ValueError("must-not-leak")
 
-    _assert_recommendation_phase(
-        lambda: _query_with_repositories(rail_repository=FailingRailRepository()),
-        "RECOMMENDATION_RAIL_BATCH_FAILED",
+    response = _query_with_repositories(
+        rail_repository=FailingRailRepository()
     )
+
+    assert response["status"] == "partial_success"
+    assert response["uiArtifacts"][0]["type"] == "recommendationTable"
+    assert "must-not-leak" not in str(response)
 
 
 def test_recommendation_maps_retail_batch_failure() -> None:
@@ -428,12 +461,13 @@ def test_recommendation_maps_retail_batch_failure() -> None:
         def nearest_batch(self, **_kwargs):
             raise ValueError("must-not-leak")
 
-    _assert_recommendation_phase(
-        lambda: _query_with_repositories(
-            retail_repository=FailingRetailRepository()
-        ),
-        "RECOMMENDATION_RETAIL_BATCH_FAILED",
+    response = _query_with_repositories(
+        retail_repository=FailingRetailRepository()
     )
+
+    assert response["status"] == "partial_success"
+    assert response["uiArtifacts"][0]["type"] == "recommendationTable"
+    assert "must-not-leak" not in str(response)
 
 
 def test_recommendation_maps_observation_assembly_failure() -> None:
@@ -539,13 +573,180 @@ def test_recommendation_lists_missing_required_inputs_without_observation() -> N
 
     assert response["status"] == "failed"
     assert repository.calls == 0
+    assert any("지역" in limitation for limitation in response["limitations"])
+    assert all("최대 예산" not in limitation for limitation in response["limitations"])
+
+
+def test_region_recommendation_returns_neutral_candidates_without_budget() -> None:
+    class NeutralCandidateRepository(PropertyRepository):
+        def recommendation_candidates(self, region_name, start_date, end_date, area, limit):
+            self.calls += 1
+            assert (region_name, start_date, end_date, area, limit) == (
+                "마포구", date(2025, 7, 21), date(2026, 7, 20), 84.0, 5_000,
+            )
+            return {
+                501: (replace(_complex(501), region_name="마포구", unit_count=900), _trades(501, (100_000, 99_000, 98_000))),
+                502: (replace(_complex(502), region_name="마포구", unit_count=1500), _trades(502, (110_000, 109_000, 108_000))),
+                503: (replace(_complex(503), region_name="마포구", unit_count=700), _trades(503, (90_000, 89_000, 88_000))),
+            }
+
+        def criteria_candidates(self, region_name, limit):
+            raise AssertionError("area-backed criteria recommendation must use observed trades")
+
+    class NeutralLanguageModel(LanguageModel):
+        async def plan_query(self, _request):
+            return QueryPlan(
+                capability="recommendation",
+                complex_name="마포구 30평대",
+                region_name="마포구",
+                exclusive_area_square_meters=84.0,
+                recommendation_mode="BUDGET",
+            )
+
+    repository = NeutralCandidateRepository()
+    response = asyncio.run(GroundedChatbotEngine(
+        repository=repository,
+        language_model=NeutralLanguageModel(),
+        enabled_capabilities=frozenset({"recommendation"}),
+    ).query(
+        request=ChatbotQueryRequest(question="마포구 30평대 아파트를 추천해줘"),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-neutral-recommendation",
+    ))
+
+    assert response["status"] == "success"
+    assert repository.calls == 1
+    assert [row["complexId"] for row in response["uiArtifacts"][0]["rows"]] == [502, 501, 503]
+    assert "추천을 실행하려면" not in " ".join(response["limitations"])
+    assert response["uiReport"]["kind"] == "RECOMMENDATION"
     assert any(
-        all(label in limitation for label in ("지역", "최대 예산", "전용면적"))
-        for limitation in response["limitations"]
+        criterion["label"] == "거래 면적"
+        for criterion in response["uiSummary"]["criteria"]
+    )
+    profile = next(
+        artifact for artifact in response["uiArtifacts"]
+        if artifact["type"] == "candidateProfile" and artifact["rank"] == 1
+    )
+    assert profile["sections"][0]["key"] == "TRADE"
+
+
+def test_region_recommendation_keeps_candidates_when_area_trade_lookup_fails() -> None:
+    class AreaFailureRepository(PropertyRepository):
+        def recommendation_candidates(self, *_args):
+            raise RuntimeError("trade source unavailable")
+
+        def criteria_candidates(self, region_name, limit):
+            assert (region_name, limit) == ("마포구", 5_000)
+            return CriteriaCandidateScope("마포구", (
+                replace(_complex(501), region_name="마포구", unit_count=900),
+                replace(_complex(502), region_name="마포구", unit_count=1500),
+            ))
+
+    class AreaFailureLanguageModel(LanguageModel):
+        async def plan_query(self, _request):
+            return QueryPlan(
+                capability="recommendation",
+                complex_name="마포구 30평대",
+                region_name="마포구",
+                exclusive_area_square_meters=84.0,
+                recommendation_mode="CRITERIA",
+            )
+
+    response = asyncio.run(GroundedChatbotEngine(
+        repository=AreaFailureRepository(),
+        language_model=AreaFailureLanguageModel(),
+        enabled_capabilities=frozenset({"recommendation"}),
+    ).query(
+        request=ChatbotQueryRequest(question="마포구 30평대 아파트를 추천해줘"),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-area-fallback-recommendation",
+    ))
+
+    assert response["success"] is True
+    assert response["status"] == "partial_success"
+    assert response["uiArtifacts"][0]["type"] == "recommendationTable"
+    assert any("면적을 순위에서 제외" in item for item in response["limitations"])
+    assert all(
+        criterion["label"] != "거래 면적"
+        for criterion in response["uiSummary"]["criteria"]
     )
 
 
-def test_recommendation_does_not_observe_when_explicit_limit_mismatches_plan() -> None:
+@pytest.mark.parametrize(
+    ("mode", "expected_status", "expected_limitation", "expects_candidates"),
+    [
+        (
+            "empty",
+            "partial_success",
+            "거래 3건이 확인되는 단지가 없어 면적을 순위에서 제외했습니다.",
+            True,
+        ),
+        (
+            "no-cutoff",
+            "partial_success",
+            "최신 거래 기준일을 확인하지 못해 면적을 순위에서 제외했습니다.",
+            True,
+        ),
+        (
+            "unresolved-region",
+            "failed",
+            "지역을 하나로 식별하지 못했습니다.",
+            False,
+        ),
+    ],
+)
+def test_area_backed_recommendation_handles_empty_and_unavailable_trade_boundaries(
+    mode: str,
+    expected_status: str,
+    expected_limitation: str,
+    expects_candidates: bool,
+) -> None:
+    class AreaBoundaryRepository(PropertyRepository):
+        def latest_trade_date(self):
+            return None if mode == "no-cutoff" else date(2026, 7, 20)
+
+        def recommendation_candidates(self, *_args):
+            return None if mode == "unresolved-region" else {}
+
+        def criteria_candidates(self, region_name, limit):
+            assert (region_name, limit) == ("마포구", 5_000)
+            return CriteriaCandidateScope("마포구", (
+                replace(_complex(501), region_name="마포구", unit_count=900),
+                replace(_complex(502), region_name="마포구", unit_count=1500),
+            ))
+
+    class AreaBoundaryLanguageModel(LanguageModel):
+        async def plan_query(self, _request):
+            return QueryPlan(
+                capability="recommendation",
+                complex_name="마포구 30평대",
+                region_name="마포구",
+                exclusive_area_square_meters=84.0,
+                recommendation_mode="CRITERIA",
+            )
+
+    response = asyncio.run(GroundedChatbotEngine(
+        repository=AreaBoundaryRepository(),
+        language_model=AreaBoundaryLanguageModel(),
+        enabled_capabilities=frozenset({"recommendation"}),
+    ).query(
+        request=ChatbotQueryRequest(question="마포구 30평대 아파트를 추천해줘"),
+        user=AuthenticatedUser(user_id=1),
+        request_id=f"request-area-boundary-{mode}",
+    ))
+
+    assert response["status"] == expected_status
+    assert any(expected_limitation in item for item in response["limitations"])
+    assert bool(response["uiArtifacts"]) is expects_candidates
+    if expects_candidates:
+        assert response["uiArtifacts"][0]["type"] == "recommendationTable"
+        assert all(
+            criterion["label"] != "거래 면적"
+            for criterion in response["uiSummary"]["criteria"]
+        )
+
+
+def test_recommendation_uses_the_explicit_result_limit_instead_of_asking_again() -> None:
     repository = PropertyRepository()
     rail_repository = RailRepository()
     retail_repository = RetailRepository()
@@ -565,11 +766,11 @@ def test_recommendation_does_not_observe_when_explicit_limit_mismatches_plan() -
         request_id="request-recommendation-limit-mismatch",
     ))
 
-    assert response["status"] == "failed"
-    assert any("결과 수" in limitation for limitation in response["limitations"])
-    assert repository.calls == 0
-    assert rail_repository.calls == 0
-    assert retail_repository.calls == 0
+    assert response["status"] == "success"
+    assert len(response["uiArtifacts"][0]["cards"]) <= 3
+    assert repository.calls == 1
+    assert rail_repository.calls == 1
+    assert retail_repository.calls == 1
 
 
 def test_runtime_mode_gate_stops_budget_recommendation_before_observation() -> None:
@@ -604,7 +805,7 @@ def test_criteria_recommendation_uses_units_and_academy_without_budget_or_area()
     class CriteriaPropertyRepository(PropertyRepository):
         def criteria_candidates(self, region_name, limit):
             self.calls += 1
-            assert (region_name, limit) == ("영등포구", 101)
+            assert (region_name, limit) == ("영등포구", 5_000)
             return CriteriaCandidateScope(
                 "영등포구",
                 (
@@ -695,6 +896,115 @@ def test_criteria_recommendation_uses_units_and_academy_without_budget_or_area()
     assert response["uiSummary"]["scopeNotice"]["text"] == (
         "‘영등포구’ 기준으로 해석했습니다."
     )
+    report = response["uiReport"]
+    assert report["version"] == 1
+    assert report["kind"] == "RECOMMENDATION"
+    assert report["primaryArtifactId"] == table["artifactId"]
+    assert [item["complexId"] for item in report["highlights"]] == [503, 502]
+    assert report["highlights"][0]["factIds"] != report["highlights"][1]["factIds"]
+    profiles = [
+        artifact
+        for artifact in response["uiArtifacts"]
+        if artifact["type"] == "candidateProfile"
+    ]
+    assert [profile["complexId"] for profile in profiles] == [503, 502]
+    assert report["detailArtifactIds"] == [
+        profile["artifactId"] for profile in profiles
+    ]
+    assert response["conversationMemoryPatch"] == {
+        "version": 2,
+        "complexIds": [503, 502],
+        "regionCode": "11560",
+        "scopeKind": "RECOMMENDATION",
+    }
+    assert "Sbiz" not in response["answer"]
+    assert "Sbiz" not in " ".join(response["limitations"])
+
+
+def test_criteria_recommendation_keeps_bounded_multi_query_work_within_its_fragment_budget() -> None:
+    class SlowCriteriaRepository(PropertyRepository):
+        def criteria_candidates(self, region_name, limit):
+            assert (region_name, limit) == ("영등포구", 5_000)
+            sleep(3.05)
+            return CriteriaCandidateScope(
+                "영등포구",
+                (replace(
+                    _complex(502),
+                    region_code="11560",
+                    region_name="영등포구",
+                    unit_count=800,
+                ),),
+            )
+
+    class CriteriaLanguageModel(LanguageModel):
+        async def plan_query(self, _request):
+            return QueryPlan(
+                capability="recommendation",
+                complex_name="영등포구",
+                region_name="영등포구",
+                recommendation_mode="CRITERIA",
+                minimum_unit_count=500,
+            )
+
+    response = asyncio.run(GroundedChatbotEngine(
+        repository=SlowCriteriaRepository(),
+        language_model=CriteriaLanguageModel(),
+        enabled_capabilities=frozenset({"recommendation"}),
+        today=lambda: date(2026, 7, 20),
+    ).query(
+        request=ChatbotQueryRequest(
+            question="영등포구 500세대 이상 단지 5곳을 알려줘"
+        ),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-slow-bounded-criteria",
+    ))
+
+    assert response["status"] == "success"
+    assert response["uiArtifacts"][0]["type"] == "recommendationTable"
+    assert [row["complexId"] for row in response["uiArtifacts"][0]["rows"]] == [502]
+
+
+def test_criteria_recommendation_returns_nearest_candidates_when_exact_is_empty() -> None:
+    class NearCandidateRepository(PropertyRepository):
+        def criteria_candidates(self, _region_name, _limit):
+            return CriteriaCandidateScope(
+                "영등포구",
+                (
+                    replace(_complex(501), unit_count=420),
+                    replace(_complex(502), unit_count=490),
+                    replace(_complex(503), unit_count=470),
+                ),
+            )
+
+    class MinimumUnitsLanguageModel(LanguageModel):
+        async def plan_query(self, _request):
+            return QueryPlan(
+                capability="recommendation",
+                complex_name="영등포구",
+                region_name="영등포구",
+                recommendation_mode="CRITERIA",
+                minimum_unit_count=500,
+            )
+
+    response = asyncio.run(GroundedChatbotEngine(
+        repository=NearCandidateRepository(),
+        language_model=MinimumUnitsLanguageModel(),
+        enabled_capabilities=frozenset({"recommendation"}),
+        answer_first_enabled=True,
+    ).query(
+        request=ChatbotQueryRequest(question="영등포구 500세대 이상 단지 2곳 추천"),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-nearest-candidates",
+    ))
+
+    assert response["status"] == "partial_success"
+    assert response["conversationResolution"]["answerMode"] == "BEST_EFFORT"
+    assert response["conversationResolution"]["assumptions"][-1]["code"] == (
+        "NEAREST_CONSTRAINT_CANDIDATES"
+    )
+    rows = response["uiArtifacts"][0]["rows"]
+    assert [row["complexId"] for row in rows] == [502, 503]
+    assert any("가까운 후보" in text for text in response["limitations"])
 
 
 def test_criteria_recommendation_supports_an_exact_station_radius_scope() -> None:
@@ -704,7 +1014,7 @@ def test_criteria_recommendation_supports_an_exact_station_radius_scope() -> Non
         ):
             self.calls += 1
             assert (latitude, longitude, radius_meters, limit) == (
-                37.521, 126.924, 800, 101,
+                37.521, 126.924, 800, 5_000,
             )
             return (replace(
                 _complex(502), region_code="11560", region_name="영등포구",
@@ -810,7 +1120,7 @@ def test_criteria_recommendation_observes_all_active_sources_once_in_priority_or
     class AllCriteriaPropertyRepository(PropertyRepository):
         def criteria_candidates(self, region_name, limit):
             self.calls += 1
-            assert (region_name, limit) == ("송파구", 101)
+            assert (region_name, limit) == ("송파구", 5_000)
             return CriteriaCandidateScope(
                 "송파구", (replace(_complex(501), unit_count=800),)
             )
@@ -860,9 +1170,11 @@ def test_criteria_recommendation_observes_all_active_sources_once_in_priority_or
     }
     assert table["rows"][0]["metrics"]["ACADEMY"]["unit"] == "COUNT"
     assert table["rows"][0]["metrics"]["TRANSIT"]["unit"] == "METERS"
+    interpretations = response["uiSummary"]["interpretations"]
+    assert "학원 위치" in interpretations[0]["text"]
 
 
-def test_criteria_recommendation_requests_priority_instead_of_guessing_weights() -> None:
+def test_criteria_recommendation_uses_question_order_when_priority_is_omitted() -> None:
     class MultipleLanguageModel(LanguageModel):
         async def plan_query(self, _request):
             return QueryPlan(
@@ -872,22 +1184,49 @@ def test_criteria_recommendation_requests_priority_instead_of_guessing_weights()
                 criteria_order=(),
             )
 
-    repository = PropertyRepository()
-    engine = GroundedChatbotEngine(
-        repository=repository,
-        language_model=MultipleLanguageModel(),
-        enabled_capabilities=frozenset({"recommendation"}),
+    plan = _verify_recommendation_plan(
+        asyncio.run(MultipleLanguageModel().plan_query(None)),  # type: ignore[arg-type]
+        "영등포구 학원과 교통 조건으로 추천",
     )
 
-    response = asyncio.run(engine.query(
-        request=ChatbotQueryRequest(question="영등포구 학원과 교통 조건으로 추천"),
-        user=AuthenticatedUser(user_id=1),
-        request_id="request-priority-clarification",
-    ))
+    assert plan.criteria_order == ("ACADEMY", "TRANSIT")
+    assert plan.clarification_code is None
 
-    assert response["status"] == "failed"
-    assert repository.calls == 0
-    assert any("순서" in limitation for limitation in response["limitations"])
+
+def test_semantic_school_metrics_from_the_planner_are_not_removed_by_phrase_matching() -> None:
+    plan = _verify_recommendation_plan(
+        QueryPlan(
+            capability="recommendation",
+            complex_name="송파구",
+            region_name="송파구",
+            recommendation_mode="CRITERIA",
+            recommendation_criteria=("SCHOOL", "ACADEMY"),
+            criteria_order=("SCHOOL", "ACADEMY"),
+        ),
+        "송파구에 학군 좋은 30평대 아파트를 추천해줘",
+    )
+
+    assert plan.recommendation_criteria == ("SCHOOL", "ACADEMY")
+    assert plan.criteria_order == ("SCHOOL", "ACADEMY")
+    assert plan.clarification_code is None
+
+
+def test_semantic_metric_selection_has_an_independent_rollback_flag() -> None:
+    plan = _verify_recommendation_plan(
+        QueryPlan(
+            capability="recommendation",
+            complex_name="송파구",
+            region_name="송파구",
+            recommendation_mode="CRITERIA",
+            recommendation_criteria=("SCHOOL", "ACADEMY"),
+            criteria_order=("SCHOOL", "ACADEMY"),
+        ),
+        "송파구에 학군 좋은 아파트를 추천해줘",
+        semantic_goal_planner_enabled=False,
+    )
+
+    assert plan.recommendation_criteria == ()
+    assert plan.criteria_order == ()
 
 
 @pytest.mark.parametrize(
@@ -900,8 +1239,8 @@ def test_criteria_recommendation_requests_priority_instead_of_guessing_weights()
                 "영등포구",
                 tuple(replace(_complex(index), unit_count=800) for index in range(1, 102)),
             ),
-            "failed",
-            "100개를 넘어",
+            "partial_success",
+            "후보를 정리했습니다",
         ),
     ),
 )
@@ -939,7 +1278,7 @@ def test_criteria_recommendation_handles_region_scope_boundaries(
 @pytest.mark.parametrize(
     ("criterion", "question", "source_label"),
     (
-        ("ACADEMY", "학원", "Sbiz 교육업소"),
+        ("ACADEMY", "학원", "학원 위치"),
         ("TRANSIT", "교통", "철도"),
         ("SCHOOL", "학교", "학교"),
         ("SHOPPING", "쇼핑", "대규모점포"),
@@ -975,7 +1314,7 @@ def test_criteria_recommendation_reports_each_missing_active_source(
         user=AuthenticatedUser(user_id=1), request_id=f"request-missing-{criterion}",
     ))
 
-    assert response["status"] == "failed"
+    assert response["status"] == "partial_success"
     assert any(source_label in text for text in response["limitations"])
 
 
@@ -1031,8 +1370,8 @@ def test_criteria_observation_rejects_stale_incomplete_and_missing_batches() -> 
         result = asyncio.run(handler._criteria_observations(  # noqa: SLF001
             (criterion,), (point,), ("ELEMENTARY", "MIDDLE", "HIGH")
         ))
-        assert isinstance(result, CapabilityResult)
-        assert result.readiness == "unavailable"
+        assert not isinstance(result, CapabilityResult)
+        assert result[2] == (criterion,)
 
     approved_retail = BatchStub({
         501: FacilitySearchResult(
@@ -1063,8 +1402,8 @@ def test_criteria_observation_rejects_stale_incomplete_and_missing_batches() -> 
         result = asyncio.run(handler._criteria_observations(  # noqa: SLF001
             ("ACADEMY",), (point,), ("ELEMENTARY", "MIDDLE", "HIGH")
         ))
-        assert isinstance(result, CapabilityResult)
-        assert result.readiness == "unavailable"
+        assert not isinstance(result, CapabilityResult)
+        assert result[2] == ("ACADEMY",)
 
 
 def test_recommendation_handler_guards_invalid_and_unresolved_scopes() -> None:
@@ -1145,7 +1484,7 @@ def test_budget_recommendation_handler_guards_source_and_candidate_boundaries() 
     class TooMany(PropertyRepository):
         def recommendation_candidates(self, *_args):
             return {
-                index: (_complex(index), ()) for index in range(1, 102)
+                index: (_complex(index), ()) for index in range(1, 5_002)
             }
 
     def observe(repository, *, rail=None, retail=None):
@@ -1177,7 +1516,14 @@ def test_childcare_and_kindergarten_stay_out_of_active_criteria_recommendation()
                 minimum_unit_count=500,
             )
 
-    repository = PropertyRepository()
+    class CriteriaPropertyRepository(PropertyRepository):
+        def criteria_candidates(self, _region_name, _limit):
+            self.calls += 1
+            return CriteriaCandidateScope(
+                "영등포구", (replace(_complex(501), unit_count=800),)
+            )
+
+    repository = CriteriaPropertyRepository()
     engine = GroundedChatbotEngine(
         repository=repository,
         language_model=ChildcareLanguageModel(),
@@ -1190,9 +1536,9 @@ def test_childcare_and_kindergarten_stay_out_of_active_criteria_recommendation()
         request_id="request-childcare-deferred",
     ))
 
-    assert response["status"] == "failed"
-    assert repository.calls == 0
-    assert any("핵심 추천에서 제외" in limitation for limitation in response["limitations"])
+    assert response["status"] == "success"
+    assert repository.calls == 1
+    assert response["uiArtifacts"][0]["rows"][0]["metrics"] == {}
 
 
 def test_recommendation_returns_grounded_verified_zero_without_facility_queries() -> None:
@@ -1262,9 +1608,10 @@ def test_budget_recommendation_applies_minimum_unit_count_before_sources() -> No
         request_id="request-budget-unit-count",
     ))
 
-    assert response["status"] == "success"
-    assert response["uiArtifacts"] == []
-    assert rail.calls == retail.calls == 0
+    assert response["status"] == "partial_success"
+    assert response["uiArtifacts"][0]["rows"][0]["complexId"] == 501
+    assert response["conversationResolution"]["answerMode"] == "BEST_EFFORT"
+    assert any("가까운 후보" in item for item in response["limitations"])
     assert response["uiSummary"]["criteria"][-1]["key"] == "MIN_UNIT_COUNT"
 
 
@@ -1347,8 +1694,8 @@ def test_recommendation_does_not_zero_score_a_missing_childcare_source() -> None
         user=AuthenticatedUser(user_id=1), request_id="request-child-source-missing",
     ))
 
-    assert response["status"] == "failed"
-    assert any("어린이집" in value for value in response["limitations"])
+    assert response["status"] == "partial_success"
+    assert any("어린이집 기준을 제외" in value for value in response["limitations"])
 
 
 def test_recommendation_keeps_childcare_deferred_even_when_repository_exists() -> None:
@@ -1369,9 +1716,8 @@ def test_recommendation_keeps_childcare_deferred_even_when_repository_exists() -
         user=AuthenticatedUser(user_id=1), request_id="request-child-theme",
     ))
 
-    assert response["status"] == "failed"
-    assert response["uiArtifacts"] == []
-    assert any("핵심 추천에서 제외" in value for value in response["limitations"])
+    assert response["status"] == "success"
+    assert response["uiArtifacts"][0]["cards"][0]["activeThemes"] == ["YOUNG_CHILD"]
 
 
 def test_recommendation_allows_grounded_name_in_a_negative_quality_limitation() -> None:

@@ -156,6 +156,143 @@ def test_query_echoes_valid_request_id_after_successful_engine_call() -> None:
     assert response.json() == {"answer": "최근 거래 알려줘", "requestId": request_id}
 
 
+def test_query_accepts_bounded_ui_context_and_versioned_memory() -> None:
+    app.dependency_overrides[get_authenticator] = AcceptingAuthenticator
+    app.dependency_overrides[get_chatbot_engine] = SuccessfulEngine
+
+    response = TestClient(app).post(
+        "/api/v1/chatbot/query",
+        headers={"Authorization": "Bearer test-token"},
+        json={
+            "question": "이 단지 전체적으로 어때?",
+            "uiContext": {
+                "mapViewport": {
+                    "bounds": {
+                        "swLat": 37.45,
+                        "swLng": 126.85,
+                        "neLat": 37.70,
+                        "neLng": 127.20,
+                    },
+                    "level": 4,
+                },
+                "selectedComplex": {"complexId": 501, "parcelId": 1001},
+            },
+            "conversationContext": {
+                "messages": [],
+                "memory": {
+                    "version": 1,
+                    "complexId": 501,
+                    "regionCode": "11710",
+                    "scopeKind": "COMPLEX",
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "이 단지 전체적으로 어때?"
+
+    recommendation_context = TestClient(app).post(
+        "/api/v1/chatbot/query",
+        headers={"Authorization": "Bearer test-token"},
+        json={
+            "question": "방금 추천한 1위와 2위를 비교해줘",
+            "conversationContext": {
+                "messages": [],
+                "memory": {
+                    "version": 2,
+                    "complexIds": [501, 502, 503],
+                    "regionCode": "11710",
+                    "scopeKind": "RECOMMENDATION",
+                },
+            },
+        },
+    )
+
+    assert recommendation_context.status_code == 200
+
+
+def test_query_rejects_invalid_ui_context_and_memory() -> None:
+    app.dependency_overrides[get_authenticator] = AcceptingAuthenticator
+    app.dependency_overrides[get_chatbot_engine] = SuccessfulEngine
+    client = TestClient(app)
+    invalid_payloads = [
+        {"uiContext": {}},
+        {
+            "uiContext": {
+                "mapViewport": {
+                    "bounds": {
+                        "swLat": 37.7,
+                        "swLng": 127.2,
+                        "neLat": 37.4,
+                        "neLng": 126.8,
+                    },
+                    "level": 4,
+                }
+            }
+        },
+        {"uiContext": {"selectedComplex": {"complexId": 501}}},
+        {
+            "uiContext": {
+                "selectedComplex": {"complexId": "501", "parcelId": 1001}
+            }
+        },
+        {
+            "uiContext": {
+                "mapViewport": {
+                    "bounds": {
+                        "swLat": "37.45",
+                        "swLng": 126.85,
+                        "neLat": 37.70,
+                        "neLng": 127.20,
+                    },
+                    "level": "4",
+                }
+            }
+        },
+        {"conversationContext": {"memory": {"version": 2, "scopeKind": "MAP_VIEWPORT"}}},
+        {
+            "conversationContext": {
+                "memory": {
+                    "version": 2,
+                    "complexIds": [501],
+                    "scopeKind": "RECOMMENDATION",
+                }
+            }
+        },
+        {
+            "conversationContext": {
+                "memory": {
+                    "version": 2,
+                    "complexIds": [501, 501],
+                    "scopeKind": "RECOMMENDATION",
+                }
+            }
+        },
+        {"conversationContext": {"memory": {"version": "1", "scopeKind": "MAP_VIEWPORT"}}},
+        {"conversationContext": {"memory": {"version": 1, "scopeKind": "COMPLEX"}}},
+        {
+            "conversationContext": {
+                "memory": {
+                    "version": 1,
+                    "scopeKind": "ADMIN_REGION",
+                    "regionCode": "seoul",
+                }
+            }
+        },
+    ]
+
+    for extra in invalid_payloads:
+        response = client.post(
+            "/api/v1/chatbot/query",
+            headers={"Authorization": "Bearer test-token"},
+            json={"question": "최근 거래", **extra},
+        )
+
+        assert response.status_code == 400
+        assert response.json()["code"] == "INVALID_CHATBOT_REQUEST"
+
+
 def test_stream_emits_only_validated_final_event_after_success() -> None:
     app.dependency_overrides[get_authenticator] = AcceptingAuthenticator
     app.dependency_overrides[get_chatbot_engine] = SuccessfulEngine

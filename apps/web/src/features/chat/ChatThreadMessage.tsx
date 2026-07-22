@@ -1,3 +1,5 @@
+import type { Ref } from 'react';
+
 import type { ChatAction } from './actionContract';
 import { ChatMessageBody } from './ChatMessageBody';
 import type { ChatMessage } from './storage/chatConversationStore';
@@ -5,12 +7,14 @@ import type { ChatMessage } from './storage/chatConversationStore';
 type ChatThreadMessageProps = {
   executedActionIds?: ReadonlySet<string>;
   message: ChatMessage;
+  messageRef?: Ref<HTMLElement>;
   onUiAction?: (action: ChatAction) => void;
 };
 
 export function ChatThreadMessage({
   executedActionIds,
   message,
+  messageRef,
   onUiAction,
 }: ChatThreadMessageProps) {
   const isUser = message.role === 'user';
@@ -18,6 +22,7 @@ export function ChatThreadMessage({
     <article
       aria-label={isUser ? '내 질문' : '홈서치 AI 답변'}
       className={`chatbot-message chatbot-message-${message.role}`}
+      ref={messageRef}
     >
       {isUser ? (
         <p>{message.content}</p>

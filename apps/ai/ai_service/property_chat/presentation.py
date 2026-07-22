@@ -317,16 +317,18 @@ class PresentationAssembler:
                 f"‘{plan.region_name}’ 지역과 사용자가 지정한 조건을 기준으로 확인했습니다.", ids
             ) if plan.region_name else None,
             headline=GroundedPresentationText(
-                "요청한 조건을 통과한 후보를 정리했습니다.", ids
+                "최근 거래와 확인 가능한 생활 조건으로 후보를 정리했습니다.", ids
             ),
             criteria=_recommendation_criteria(plan, ids),
             interpretations=(Interpretation(
                 "CONDITION_FIT",
-                "조건별 부합도",
-                "표시된 후보는 사용자가 지정한 조건에서 먼저 비교해볼 수 있습니다.",
+                "비교 기준",
+                "최근 거래와 단지·생활 인프라의 확인 가능한 수치를 함께 비교했습니다.",
                 ids,
             ),),
-            follow_up=FollowUpPrompt("예산·면적·생활 조건을 조정해 후보 범위를 다시 확인할 수 있습니다."),
+            follow_up=FollowUpPrompt(
+                "상위 후보의 최근 실거래나 교육·교통 차이를 이어서 비교할 수 있어요."
+            ),
         )
 
     @staticmethod
@@ -368,6 +370,16 @@ class PresentationAssembler:
                     "MIN_UNIT_COUNT", "최소 세대수",
                     f"{plan.minimum_unit_count:,}세대 이상", (scope_fact.fact_id,),
                 ))
+            area_facts = tuple(
+                fact.fact_id for fact in facts
+                if fact.fact_id.startswith("criteria-trade-basis-")
+            )
+            if plan.exclusive_area_square_meters is not None and area_facts:
+                criteria.append(AppliedCriterion(
+                    "EXCLUSIVE_AREA", "거래 면적",
+                    f"전용면적 {plan.exclusive_area_square_meters:g}㎡ ±1.0㎡ · 최근 거래 3건",
+                    area_facts,
+                ))
         criteria.extend(_criteria_metric_presentations(plan, facts))
         interpretations: list[Interpretation] = []
         if isinstance(rows, list):
@@ -375,19 +387,32 @@ class PresentationAssembler:
                 if not isinstance(row, dict):
                     continue
                 name = row.get("complexName")
-                row_fact_ids = row.get("factIds")
-                if not isinstance(name, str) or not isinstance(row_fact_ids, list):
+                metrics = row.get("metrics")
+                if not isinstance(name, str) or not isinstance(metrics, dict):
                     continue
+                available = [
+                    (key, metric)
+                    for key in (*plan.criteria_order, *plan.recommendation_criteria)
+                    if isinstance((metric := metrics.get(key)), dict)
+                    and metric.get("availability") == "available"
+                ]
+                unique_available = list(dict.fromkeys(key for key, _ in available))
+                if not unique_available:
+                    continue
+                key = unique_available[min(index - 1, len(unique_available) - 1)]
+                metric = metrics[key]
+                fact_ids = metric.get("factIds")
                 grounded_ids = tuple(
-                    fact_id for fact_id in row_fact_ids if isinstance(fact_id, str)
+                    fact_id for fact_id in fact_ids if isinstance(fact_id, str)
+                ) if isinstance(fact_ids, list) else ()
+                if not grounded_ids:
+                    continue
+                label, text = _criteria_candidate_interpretation(
+                    name, key, metric, plan.radius_meters
                 )
-                if grounded_ids:
-                    interpretations.append(Interpretation(
-                        f"CONDITION_FIT_{index}",
-                        "조건별 부합 후보",
-                        f"{name}은 사용자가 지정한 조건에서 먼저 비교해볼 수 있습니다.",
-                        grounded_ids,
-                    ))
+                interpretations.append(Interpretation(
+                    f"CONDITION_FIT_{index}", label, text, grounded_ids,
+                ))
         return AnswerPresentation(
             scope_notice=ScopeNotice(
                 f"‘{scope_label}’ 기준으로 해석했습니다.", (scope_fact.fact_id,)
@@ -396,9 +421,43 @@ class PresentationAssembler:
             criteria=tuple(criteria[:8]),
             interpretations=tuple(interpretations),
             follow_up=FollowUpPrompt(
-                "동 또는 특정 역 주변과 원하는 반경을 알려주면 범위를 더 좁힐 수 있습니다."
+                "상위 후보의 최근 실거래를 보거나 교육·교통 기준으로 다시 정렬할 수 있어요."
             ),
         )
+
+
+def _criteria_candidate_interpretation(
+    name: str,
+    key: str,
+    metric: dict[str, object],
+    radius_meters: int | None,
+) -> tuple[str, str]:
+    value = metric.get("value")
+    nearest = metric.get("nearestDistanceMeters")
+    if key == "ACADEMY" and isinstance(value, int):
+        radius = (
+            f"반경 {radius_meters:,}m 안에서 "
+            if radius_meters is not None
+            else "주변에서 "
+        )
+        detail = (
+            f"{radius}학원 위치 {value:,}곳, 최근접 학원 직선거리 {nearest:,}m로 확인했습니다."
+            if isinstance(nearest, int)
+            else f"{radius}학원 위치 {value:,}곳을 확인했습니다."
+        )
+        return (
+            "학원 접근성",
+            f"{name}: {detail}",
+        )
+    labels = {
+        "SCHOOL": "학교 위치",
+        "TRANSIT": "철도역 접근성",
+        "SHOPPING": "생활 인프라",
+    }
+    label = labels.get(key, "확인 기준")
+    if isinstance(value, int):
+        return label, f"{name}: {label} 기준 직선거리 {value:,}m로 확인됐습니다."
+    return label, f"{name}: {label} 관찰값이 확인된 후보입니다."
 
 
 def _trade_criteria(plan: QueryPlan, fact_ids: tuple[str, ...]) -> tuple[AppliedCriterion, ...]:
@@ -458,7 +517,7 @@ def _criteria_metric_presentations(
     facts: list[EvidenceFact],
 ) -> list[AppliedCriterion]:
     definitions = {
-        "ACADEMY": ("학원 접근성", "단지 중심 800m 내 Sbiz 교육업소"),
+        "ACADEMY": ("학원 접근성", "단지 중심 800m 내 학원 위치"),
         "SCHOOL": ("학교 위치 접근성", "단지 중심 직선거리 1,500m 내 운영 학교"),
         "TRANSIT": ("철도 접근성", "단지 중심 직선거리 1,500m 내 철도역"),
         "SHOPPING": ("대규모점포 접근성", "단지 중심 직선거리 1,000m 내 대규모점포"),

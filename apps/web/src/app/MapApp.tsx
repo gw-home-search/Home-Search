@@ -17,6 +17,7 @@ import { AppHeader } from './AppHeader';
 import { useFavoriteComplex } from '../features/favorites/hooks/useFavoriteComplex';
 import type { IndexedDbChatConversationStore } from '../features/chat/storage/chatConversationStore';
 import type { ChatAction } from '../features/chat/actionContract';
+import type { ChatUiContext } from '../features/chat/conversationContract';
 
 export type MapAppProps = {
   initialMapLevel?: number;
@@ -70,6 +71,17 @@ export function MapApp({
     const result = declutterComplexMarkers(markerData.markers.markers, detail.selectedComplex, viewport.viewport.level);
     return { markers: { ...markerData.markers, markers: result.markers }, hiddenCount: result.hiddenCount };
   }, [detail.selectedComplex, markerData.markers, viewport.viewport.level]);
+  const chatUiContext = useMemo<ChatUiContext>(() => ({
+    mapViewport: viewport.viewport,
+    ...(detail.selectedComplex?.complexId != null && detail.selectedComplex.parcelId != null
+      ? {
+        selectedComplex: {
+          complexId: detail.selectedComplex.complexId,
+          parcelId: detail.selectedComplex.parcelId,
+        },
+      }
+      : {}),
+  }), [detail.selectedComplex, viewport.viewport]);
 
   const handleRegionMarkerSelect = useCallback((marker: RegionMapMarker) => {
     setIsExplorationOpen(true);
@@ -129,6 +141,7 @@ export function MapApp({
     >
       <AppHeader
         chatConversationStore={chatConversationStore}
+        chatUiContext={chatUiContext}
         onChatOpenChange={handleChatOpenChange}
         onUiAction={handleChatUiAction}
       />

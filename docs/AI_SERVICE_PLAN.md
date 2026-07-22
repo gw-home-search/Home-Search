@@ -10,7 +10,7 @@ ai-service는 user-service 다음의 later-scope 확장 milestone이다. 참조 
 
 - 기존 부동산 사실은 `home_search.ai_read`를 SELECT-only로 사용한다.
 - 신규 공식 dataset은 원본 보존과 품질 검사를 통과한 active snapshot만 사용한다.
-- 모든 답변은 LLM을 통과하지만 observation에 없는 사실은 서버 검증에서 차단한다.
+- 모든 사실 답변은 observation 검증을 통과하며 LLM 문장 정리는 선택 단계로 둔다.
 - 대화는 서버에 저장하지 않고 브라우저 IndexedDB에만 저장한다.
 - 기존 property-data 공개 API URL과 응답 계약은 변경하지 않는다.
 
@@ -52,8 +52,32 @@ AI는 두 DB에 별도 pool을 사용하고 DB 간 SQL join을 하지 않는다.
 5. LLM은 답변과 사용한 `factId`를 구조적으로 반환한다.
 6. 서버가 fact 존재, 수치·단위 일치, citation 누락을 검증한다.
 7. 검증된 fact로만 citation을 조립한다.
-8. 근거 부족도 LLM이 부족한 dataset과 가능한 다음 질문으로 설명한다.
-9. 1차 model 재시도 후 2차 model로 전환한다. 모두 실패하면 `503`/SSE error다.
+8. exact 결과가 없으면 가까운 기간·조건·후보를 조회하고 exact와 참고 결과를 구분한다.
+9. primary model 1회와 secondary model 1회가 모두 실패하면 결정형 router와
+   presenter로 복구한다. 검증된 근거가 전혀 없거나 안전 invariant를 복구할 수 없을
+   때만 `503`/SSE error로 종료한다.
+
+### Answer-first orchestration
+
+답변은 `COMPLETE`, `BEST_EFFORT`, `PARTIAL`, `NO_RESULT` 중 하나로 끝난다.
+단순 0건, 일부 reference source 장애, 누락된 기간·반경, 동명 단지는 HTTP 오류가
+아니다. 확인된 결과를 먼저 제공하고 적용한 기본값과 제외 항목을 version 1
+`conversationResolution`에 기록한다.
+
+- 기간 미지정 거래·추이는 최근 1년, 결과 수는 5건을 기본으로 한다.
+- 시설 반경은 학교·학원·어린이집 800m, 대규모점포 1,000m, 철도 1,500m다.
+- 최근 거래와 추이가 0건이면 참고 거래를 찾고, 끝까지 없으면 검증된 단지
+  기본정보와 exact 0건 사유를 반환한다.
+- 복합 질문 fragment는 독립 실행하며 하나의 오류가 다른 성공 결과를 제거하지 않는다.
+- 추천은 현재 scope의 marker-safe 후보를 최대 5,000건까지 bounded query로 관찰한 뒤
+  전체 eligible 집합에서 최대 5곳을 결정론적으로 선택한다. exact 세대수 후보가
+  없거나 exact 예산 후보가 없으면 조건 차이가 작은 후보를 별도 가까운 후보로 표시한다.
+- LLM draft와 grounding/품질 gate가 실패하면 fact payload 기반 결정형 한국어 답변을
+  1회 조립한다. 마지막 5초는 답변 조립·검증을 위해 예약한다.
+- 80개 answer-first catalog는 단순 exact, 조건 누락, 0건 대안, source 일부 실패,
+  복합 질문, provider 실패, 동명·오타, broad overview 분포를 고정한다.
+- 서버 구조화 로그에는 answer mode, goal 상태별 개수, 소요시간만 남기며 질문,
+  대화 context, UI context는 기록하지 않는다.
 
 추천 후보 필터와 점수는 A/B 데이터와 사용자의 명시 조건으로 결정론적으로 계산한다.
 LLM은 후보와 계산 근거를 설명할 뿐 점수와 사실을 만들지 않는다.
@@ -100,7 +124,7 @@ LLM은 후보와 계산 근거를 설명할 뿐 점수와 사실을 만들지 �
 - observation -> LLM -> fact/citation validation
 - 상태: kernel과 `ai_read` reader, OpenAI Responses strict Structured Outputs
   adapter를 구현했다. adapter는 `store: false`, 응답·token·timeout 제한,
-  primary 1회 재시도 후 secondary 전환, 설정 누락 fail-closed를 적용한다.
+  primary 1회와 secondary 1회, 설정 누락 fail-closed를 적용한다.
   local runtime secret 주입과 live provider 검증 전에는 Capability를
   활성화하지 않으며 `Partial` 근거는
   `docs/reports/CHATBOT_SLICE_4_GROUNDED_KERNEL.md`에 기록한다.

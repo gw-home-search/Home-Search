@@ -1,11 +1,44 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import date
+from types import SimpleNamespace
 from time import perf_counter
 
 import pytest
 
 from ai_service.property_chat.postgres import PostgresPropertyFactRepository
+
+
+def test_property_pool_checks_connection_health_before_checkout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakePool:
+        @staticmethod
+        def check_connection(_connection: object) -> None:
+            return None
+
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        @contextmanager
+        def connection(self):
+            yield SimpleNamespace(info=SimpleNamespace(dbname="test", user="test"))
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr("ai_service.property_chat.postgres.ConnectionPool", FakePool)
+    repository = PostgresPropertyFactRepository(
+        "postgresql://test:test@localhost/test",
+        expected_database="test",
+        expected_username="test",
+    )
+    repository.close()
+
+    assert captured["check"] is FakePool.check_connection
 
 
 def test_complex_lookup_escapes_like_wildcards_and_applies_region(
@@ -110,10 +143,10 @@ def test_recommendation_candidates_resolve_descendants_and_return_latest_three(
     )
     try:
         candidates = repository.recommendation_candidates(
-            "송파구", date(2025, 2, 16), date(2026, 2, 15), 84.0, 100
+            "송파구", date(2025, 2, 16), date(2026, 2, 15), 84.0, 5_000
         )
         missing_region = repository.recommendation_candidates(
-            "없는 지역", date(2025, 2, 16), date(2026, 2, 15), 84.0, 100
+            "없는 지역", date(2025, 2, 16), date(2026, 2, 15), 84.0, 5_000
         )
     finally:
         repository.close()
@@ -176,13 +209,13 @@ def test_recommendation_candidate_observation_p95_is_bounded(
     )
     try:
         repository.recommendation_candidates(
-            "송파구", date(2025, 2, 16), date(2026, 2, 15), 84.0, 100
+            "송파구", date(2025, 2, 16), date(2026, 2, 15), 84.0, 5_000
         )
         durations = []
         for _ in range(20):
             started = perf_counter()
             repository.recommendation_candidates(
-                "송파구", date(2025, 2, 16), date(2026, 2, 15), 84.0, 100
+                "송파구", date(2025, 2, 16), date(2026, 2, 15), 84.0, 5_000
             )
             durations.append(perf_counter() - started)
     finally:

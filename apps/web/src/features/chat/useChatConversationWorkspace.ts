@@ -29,7 +29,7 @@ export function useChatConversationWorkspace(providedStore?: IndexedDbChatConver
     return storeRef.current;
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (selectLatest = false) => {
     const store = requiredStore();
     const stored = await store.list();
     const emptyIds = stored.filter(({ messages }) => messages.length === 0).map(({ id }) => id);
@@ -37,7 +37,7 @@ export function useChatConversationWorkspace(providedStore?: IndexedDbChatConver
     const next = stored.filter(({ messages }) => messages.length > 0);
     setConversations(next);
     setActive((current) => {
-      if (current.kind === 'saved' && next.some(({ id }) => id === current.id)) return current;
+      if (!selectLatest && current.kind === 'saved' && next.some(({ id }) => id === current.id)) return current;
       return next[0] == null
         ? { kind: 'draft', conversation: createChatDraft() }
         : { kind: 'saved', id: next[0].id };

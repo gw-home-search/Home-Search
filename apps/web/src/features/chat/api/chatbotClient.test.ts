@@ -1,8 +1,28 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { queryChatbot, type AuthenticatedChatbotRequest } from './chatbotClient';
+import { readConversationMemory } from '../conversationContract';
 
 describe('챗봇 질문 client', () => {
+  it('추천 후보 순서를 보존하는 conversation memory v2를 검증한다', () => {
+    expect(readConversationMemory({
+      version: 2,
+      scopeKind: 'RECOMMENDATION',
+      complexIds: [501, 502, 503],
+      regionCode: '11710',
+    })).toEqual({
+      version: 2,
+      scopeKind: 'RECOMMENDATION',
+      complexIds: [501, 502, 503],
+      regionCode: '11710',
+    });
+    expect(readConversationMemory({
+      version: 2,
+      scopeKind: 'RECOMMENDATION',
+      complexIds: [501, 501],
+    })).toBeNull();
+  });
+
   it('고정 JSON 경로와 제한된 문맥을 사용하고 근거 응답을 검증한다', async () => {
     const authenticatedRequest = vi.fn<AuthenticatedChatbotRequest>().mockResolvedValue(new Response(JSON.stringify({
       success: true,
@@ -75,16 +95,49 @@ describe('챗봇 질문 client', () => {
         followUp: '기간이나 면적을 바꿔 다시 확인할 수 있습니다.',
         fragmentSummaries: [],
       },
+      uiReport: {
+        version: 1,
+        kind: 'RECENT_TRADE',
+        opening: { text: '최근 거래를 확인했습니다.', factIds: ['property-trade-1'] },
+        basis: [{ text: '기준일: 2026-07-16', factIds: ['property-trade-1'] }],
+        primaryArtifactId: 'artifact-1',
+        highlights: [],
+        detailArtifactIds: [],
+        actionIds: ['action-1'],
+      },
       fragments: [{
         fragmentId: 'fragment-1', capability: 'recent_trade_lookup', status: 'success',
         answer: '거래를 확인했습니다.', factIds: ['property-trade-1'],
         artifactIds: ['artifact-1'], actionIds: ['action-1'], limitations: [],
       }],
+      conversationResolution: {
+        version: 1,
+        answerMode: 'BEST_EFFORT',
+        goals: [{ capability: 'recent_trade_lookup', status: 'degraded' }],
+        assumptions: [{ code: 'DEFAULT_PERIOD_ONE_YEAR', text: '최근 1년을 기준으로 확인했습니다.' }],
+        omissions: [],
+      },
+      conversationMemoryPatch: {
+        version: 1,
+        complexId: 501,
+        regionCode: '11710',
+        scopeKind: 'COMPLEX',
+      },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
 
     const response = await queryChatbot(authenticatedRequest, {
       question: '잠실엘스 최근 거래',
-      conversationContext: { messages: [{ role: 'user', content: '잠실엘스 위치' }] },
+      uiContext: {
+        mapViewport: {
+          bounds: { swLat: 37.45, swLng: 126.85, neLat: 37.7, neLng: 127.2 },
+          level: 4,
+        },
+        selectedComplex: { complexId: 501, parcelId: 1001 },
+      },
+      conversationContext: {
+        messages: [{ role: 'user', content: '잠실엘스 위치' }],
+        memory: { version: 1, complexId: 501, scopeKind: 'COMPLEX' },
+      },
     });
 
     expect(authenticatedRequest).toHaveBeenCalledWith('/api/v1/chatbot/query', expect.objectContaining({
@@ -92,7 +145,17 @@ describe('챗봇 질문 client', () => {
       headers: expect.objectContaining({ Accept: 'application/json', 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         question: '잠실엘스 최근 거래',
-        conversationContext: { messages: [{ role: 'user', content: '잠실엘스 위치' }] },
+        uiContext: {
+          mapViewport: {
+            bounds: { swLat: 37.45, swLng: 126.85, neLat: 37.7, neLng: 127.2 },
+            level: 4,
+          },
+          selectedComplex: { complexId: 501, parcelId: 1001 },
+        },
+        conversationContext: {
+          messages: [{ role: 'user', content: '잠실엘스 위치' }],
+          memory: { version: 1, complexId: 501, scopeKind: 'COMPLEX' },
+        },
       }),
     }), 'public');
     expect(response.evidenceSummary.status).toBe('supported');
@@ -116,6 +179,40 @@ describe('챗봇 질문 client', () => {
     }]);
     expect(response.summary?.headline.text).toBe('최근 거래를 확인했습니다.');
     expect(response.fragments[0]?.artifactIds).toEqual(['artifact-1']);
+    expect(response.conversationResolution?.answerMode).toBe('BEST_EFFORT');
+    expect(response.conversationMemoryPatch).toEqual({
+      version: 1, complexId: 501, regionCode: '11710', scopeKind: 'COMPLEX',
+    });
+    expect(response.report?.primaryArtifactId).toBe('artifact-1');
+    expect(response.report?.actionIds).toEqual(['action-1']);
+  });
+
+  it('유효하지 않은 선택 단지는 버리고 유효한 viewport만 보낸다', async () => {
+    const authenticatedRequest = vi.fn<AuthenticatedChatbotRequest>().mockResolvedValue(
+      responseWithSummary(null),
+    );
+
+    await queryChatbot(authenticatedRequest, {
+      question: '이 주변은 어때?',
+      uiContext: {
+        mapViewport: {
+          bounds: { swLat: 37.45, swLng: 126.85, neLat: 37.7, neLng: 127.2 },
+          level: 4,
+        },
+        selectedComplex: { complexId: 501, parcelId: 0 },
+      },
+    });
+
+    const [, init] = authenticatedRequest.mock.calls[0] ?? [];
+    expect(JSON.parse(String(init?.body))).toEqual({
+      question: '이 주변은 어때?',
+      uiContext: {
+        mapViewport: {
+          bounds: { swLat: 37.45, swLng: 126.85, neLat: 37.7, neLng: 127.2 },
+          level: 4,
+        },
+      },
+    });
   });
 
   it('잘못된 uiSummary는 무시하고 text fallback을 유지한다', async () => {

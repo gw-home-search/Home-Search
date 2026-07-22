@@ -82,6 +82,16 @@ class PropertyRepository:
     def find_complexes(self, *_args):
         raise AssertionError("comparison must use one batch complex query")
 
+    def find_complex_by_id(self, complex_id):
+        return next(
+            (
+                records[0]
+                for records in self.complexes.values()
+                if records[0].complex_id == complex_id
+            ),
+            None,
+        )
+
     def recent_trades(self, *_args):
         raise AssertionError("comparison must use one batch trade query")
 
@@ -236,6 +246,82 @@ def test_comparison_uses_batch_queries_and_keeps_partial_price_cells() -> None:
     retail_cells = table["rows"][6]["cells"]
     assert rail_cells[0]["factIds"] != rail_cells[1]["factIds"]
     assert retail_cells[0]["factIds"] != retail_cells[1]["factIds"]
+
+
+def test_comparison_without_area_keeps_non_price_result_and_skips_trade_query() -> None:
+    class NoAreaModel(LanguageModel):
+        async def plan_query(self, request):
+            del request
+            return QueryPlan(
+                capability="comparison",
+                complex_name="잠실엘스",
+                complex_names=("잠실엘스", "헬리오시티"),
+                exclusive_area_square_meters=None,
+            )
+
+    response, property_repository, _, _ = _query(
+        NoAreaModel(),
+        question="잠실엘스와 헬리오시티를 교육과 교통으로 비교해줘",
+    )
+
+    assert response["success"] is True
+    assert property_repository.batch_trade_calls == 0
+    table = response["uiArtifacts"][0]
+    assert table["version"] == 2
+    assert table["basis"] == {
+        "cutoffDate": None,
+        "startDate": None,
+        "exclusiveAreaSquareMeters": None,
+    }
+    assert [row["key"] for row in table["rows"]] == [
+        "unitCount", "useDate", "nearestRail", "nearestRetail",
+    ]
+    assert [row["group"] for row in table["rows"]] == [
+        "SCALE", "SCALE", "TRANSPORT", "LIFESTYLE",
+    ]
+    assert all("가격" not in row["label"] for row in table["rows"])
+
+
+def test_comparison_reuses_ranked_candidates_from_recommendation_memory() -> None:
+    class ContextModel(LanguageModel):
+        async def plan_query(self, _request):
+            return QueryPlan(
+                capability="comparison",
+                complex_name="이전 추천",
+                complex_names=("이전 추천 1", "이전 추천 2"),
+                exclusive_area_square_meters=None,
+            )
+
+    repository = PropertyRepository()
+    engine = GroundedChatbotEngine(
+        repository=repository,
+        language_model=ContextModel(),
+        enabled_capabilities=frozenset({"comparison"}),
+        dependent_workflow_enabled=True,
+        today=lambda: date(2026, 7, 20),
+    )
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest.model_validate({
+            "question": "방금 추천한 1위와 2위를 교육과 교통으로 비교해줘",
+            "conversationContext": {
+                "messages": [],
+                "memory": {
+                    "version": 2,
+                    "scopeKind": "RECOMMENDATION",
+                    "complexIds": [501, 502],
+                    "regionCode": "11710",
+                },
+            },
+        }),
+        user=AuthenticatedUser(user_id=1),
+        request_id="request-dependent-comparison",
+    ))
+
+    table = response["uiArtifacts"][0]
+    assert table["type"] == "comparisonTable"
+    assert [column["label"] for column in table["columns"]] == [
+        "잠실엘스", "헬리오시티",
+    ]
 
 
 def test_compound_comparison_and_hospital_map_action_keep_independent_results() -> None:
@@ -399,10 +485,10 @@ def test_comparison_adds_student_rows_only_for_an_explicit_student_theme() -> No
 
     table = response["uiArtifacts"][0]
     assert table["rows"][-1]["key"] == "studentAccess"
-    assert all("Sbiz 교육업소 5곳" in cell["value"] for cell in table["rows"][-1]["cells"])
+    assert all("학원 위치 5곳" in cell["value"] for cell in table["rows"][-1]["cells"])
 
 
-def test_comparison_keeps_childcare_out_of_active_rows() -> None:
+def test_comparison_includes_verified_childcare_in_active_rows() -> None:
     class ChildModel(LanguageModel):
         async def plan_query(self, request):
             return replace(
@@ -426,5 +512,7 @@ def test_comparison_keeps_childcare_out_of_active_rows() -> None:
     )
 
     rows = response["uiArtifacts"][0]["rows"]
-    assert "youngChildAccess" not in [row["key"] for row in rows]
-    assert "어린이집" not in str(rows)
+    childcare_row = next(row for row in rows if row["key"] == "youngChildAccess")
+    assert childcare_row["label"] == "800m 공식 어린이집"
+    assert all(cell["availability"] == "available" for cell in childcare_row["cells"])
+    assert all("어린이집" in cell["value"] for cell in childcare_row["cells"])

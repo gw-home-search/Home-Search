@@ -81,6 +81,37 @@
   font-size: 12px;
 }
 
+.chatbot-comparison-tabs {
+  display: flex;
+  max-width: 100%;
+  gap: 3px;
+  margin: 0 0 8px;
+  overflow-x: auto;
+}
+
+.chatbot-comparison-tabs button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 0 10px;
+  color: var(--hs-map-color-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.chatbot-comparison-tabs button[aria-pressed="true"] {
+  background: var(--hs-map-color-surface-muted);
+  color: var(--hs-map-color-action);
+}
+
+.chatbot-comparison-tabs button:focus-visible {
+  outline: 2px solid var(--hs-map-color-action);
+  outline-offset: 1px;
+}
+
 .chatbot-comparison-scroll {
   max-width: 100%;
   overflow-x: auto;
@@ -104,7 +135,6 @@
 .chatbot-comparison-table th,
 .chatbot-comparison-table td {
   min-width: 132px;
-  border-right: 1px solid var(--hs-map-color-line);
   border-bottom: 1px solid var(--hs-map-color-line);
   padding: 8px;
   text-align: left;
@@ -138,6 +168,244 @@
   color: var(--hs-map-color-muted);
   font-size: 11px;
   line-height: 1.5;
+}
+
+.chatbot-recommendation-table {
+  min-width: 0;
+}
+
+.chatbot-recommendation-table > h4 {
+  margin: 0 0 9px;
+  color: var(--hs-map-color-ink);
+  font-size: 13px;
+}
+
+.chatbot-recommendation-table table {
+  width: 100%;
+  min-width: 440px;
+  border-collapse: collapse;
+  color: var(--hs-map-color-ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chatbot-recommendation-table th,
+.chatbot-recommendation-table td {
+  padding: 10px 9px;
+  border-bottom: 1px solid var(--hs-map-color-line);
+  text-align: right;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.chatbot-recommendation-table th:first-child,
+.chatbot-recommendation-table td:first-child {
+  text-align: left;
+}
+
+.chatbot-recommendation-table thead th {
+  color: var(--hs-map-color-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.chatbot-recommendation-table tbody th {
+  max-width: 190px;
+  color: var(--hs-map-color-ink);
+  font-size: 12.5px;
+  font-weight: 740;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.chatbot-recommendation-table tbody tr:hover {
+  background: color-mix(in srgb, var(--hs-map-color-action) 3%, transparent);
+}
+
+.chatbot-decision-report {
+  display: grid;
+  gap: 18px;
+}
+
+.chatbot-decision-report > h3 {
+  margin: 0;
+  color: var(--hs-map-color-ink);
+  font-size: 17px;
+  line-height: 1.5;
+  letter-spacing: -.015em;
+}
+
+.chatbot-decision-report h4 {
+  margin: 0 0 8px;
+  color: var(--hs-map-color-ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.chatbot-report-basis ul,
+.chatbot-report-highlights p,
+.chatbot-candidate-profile ul {
+  margin: 0;
+}
+
+.chatbot-report-basis ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  padding: 0;
+  list-style: none;
+  color: var(--hs-map-color-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.chatbot-report-basis li::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  margin: 0 6px 3px 0;
+  border-radius: 50%;
+  background: var(--hs-map-color-action);
+}
+
+.chatbot-report-highlights > div {
+  display: grid;
+  gap: 10px;
+}
+
+.chatbot-report-highlights article {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+}
+
+.chatbot-report-highlights article > span,
+.chatbot-candidate-rank {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--hs-map-color-surface-muted);
+  color: var(--hs-map-color-action);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.chatbot-report-highlights strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 13px;
+}
+
+.chatbot-report-highlights p {
+  color: var(--hs-map-color-ink-soft);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.chatbot-report-details > .chatbot-artifacts {
+  gap: 5px;
+  margin-top: 0;
+}
+
+.chatbot-candidate-profile {
+  border-bottom: 1px solid var(--hs-map-color-line);
+}
+
+.chatbot-candidate-profile > summary {
+  display: grid;
+  min-height: 50px;
+  grid-template-columns: 24px minmax(0, 1fr) 22px;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 2px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.chatbot-candidate-profile > summary::-webkit-details-marker { display: none; }
+.chatbot-candidate-profile > summary::after {
+  content: "+";
+  grid-column: 3;
+  color: var(--hs-map-color-muted);
+  font-size: 17px;
+}
+.chatbot-candidate-profile[open] > summary::after { content: "−"; }
+.chatbot-candidate-profile > summary > span:nth-child(2) { min-width: 0; }
+.chatbot-candidate-profile > summary strong,
+.chatbot-candidate-profile > summary small { display: block; }
+.chatbot-candidate-profile > summary strong {
+  color: var(--hs-map-color-ink);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.chatbot-candidate-profile > summary small {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--hs-map-color-muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chatbot-candidate-profile-body {
+  display: grid;
+  gap: 13px;
+  padding: 4px 4px 15px 36px;
+}
+
+.chatbot-candidate-meta {
+  margin: 0;
+  color: var(--hs-map-color-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.chatbot-candidate-profile h5 {
+  margin: 0 0 5px;
+  color: var(--hs-map-color-ink-soft);
+  font-size: 11px;
+}
+
+.chatbot-candidate-profile ul {
+  display: grid;
+  gap: 4px;
+  padding-left: 16px;
+  color: var(--hs-map-color-ink-soft);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.chatbot-candidate-profile dl {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+.chatbot-candidate-profile dl > div {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 8px;
+  font-size: 12px;
+}
+.chatbot-candidate-profile dt,
+.chatbot-candidate-profile dd { margin: 0; }
+.chatbot-candidate-profile dt { color: var(--hs-map-color-muted); }
+.chatbot-candidate-profile dd { color: var(--hs-map-color-ink); font-weight: 650; }
+
+@media (max-width: 460px) {
+  .chatbot-recommendation-table table { min-width: 390px; }
+  .chatbot-recommendation-table th,
+  .chatbot-recommendation-table td { padding: 9px 7px; }
+  .chatbot-recommendation-table th:nth-child(2),
+  .chatbot-recommendation-table td:nth-child(2) { font-size: 11px; }
+  .chatbot-candidate-profile-body { padding-left: 34px; }
 }
 
 .chatbot-recommendation-cards > h4 {

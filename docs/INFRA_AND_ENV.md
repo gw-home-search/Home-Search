@@ -308,7 +308,21 @@ The AI adapter additionally requires `HOME_AI_OPENAI_API_KEY`, explicit
 `HOME_AI_OPENAI_PRIMARY_MODEL` and `HOME_AI_OPENAI_SECONDARY_MODEL` IDs, and an
 optional `HOME_AI_OPENAI_TIMEOUT_SECONDS` in the range `1..30` with default `30`.
 `HOME_AI_QUERY_TIMEOUT_SECONDS` bounds the complete plan, repository, and draft
-flow to `1..60s`; invalid values fail closed.
+flow to `1..60s`; invalid values fail closed. Answer-first execution reserves
+the final five seconds of this budget for deterministic response assembly and
+grounding validation.
+`HOME_AI_ANSWER_FIRST_ORCHESTRATION_ENABLED` and
+`HOME_AI_PROPERTY_OVERVIEW_ENABLED`, `HOME_AI_SEMANTIC_GOAL_PLANNER_ENABLED`,
+`HOME_AI_DEPENDENT_WORKFLOW_ENABLED`, `HOME_AI_DECISION_REPORT_ENABLED`, and
+`HOME_AI_ARTIFACT_V2_ENABLED` default to `true`; set one to the exact value
+`false` for its independent rollback path. Disabling the report preserves the
+legacy answer and removes candidate profile artifacts; disabling artifact v2
+removes v2 tables and any report that references them. Any other non-empty
+boolean value fails closed. `HOME_AI_ANSWER_FIRST_FALLBACK_CAPABILITIES` optionally limits degraded
+observation, deterministic draft, and quality-gate recovery to a comma-separated
+subset of canonical chatbot capability names. It defaults to every capability;
+an empty or unknown set disables capability fallback rather than silently
+enabling it.
 The accepted runtime Capability values are the identity-only rollback value
 `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity` and the approved
 cumulative value

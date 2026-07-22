@@ -42,7 +42,7 @@ def student_details(
         if level in by_level else f"{labels[level]}: 1,500m 내 확인되지 않음"
         for level in levels
     )
-    return (*values, f"800m 내 Sbiz 교육업소 {academies.matched_count}곳")
+    return (*values, f"800m 내 학원 위치 {academies.matched_count}곳")
 
 
 def childcare_details(result: ChildcareSearchResult) -> tuple[str, ...]:
@@ -90,7 +90,7 @@ def student_observation_fact(
             "sbizEducationCountScoreCap": 5, "weight": weight, "points": points,
         },
         source_id="lifestyle.student-observation",
-        source_name="학교 위치 + Sbiz 교육업소",
+        source_name="학교 위치·소상공인시장진흥공단 교육업소 위치",
         evidence_grade="B",
         dataset_version_value=(
             f"{snapshot.dataset_version}:{academies.dataset_version}"

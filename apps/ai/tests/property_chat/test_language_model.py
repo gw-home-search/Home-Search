@@ -44,7 +44,7 @@ def test_language_model_stage_rejects_non_allowlisted_value() -> None:
         LanguageModelStageError("QUESTION")  # type: ignore[arg-type]
 
 
-def test_retries_primary_once_before_using_secondary() -> None:
+def test_uses_primary_once_before_secondary() -> None:
     primary = ScriptedLanguageModel(failures=2)
     secondary = ScriptedLanguageModel(failures=0)
     model = RetryingLanguageModel(primary=primary, secondary=secondary)
@@ -52,11 +52,11 @@ def test_retries_primary_once_before_using_secondary() -> None:
     plan = asyncio.run(model.plan_query(ChatbotQueryRequest(question="위치")))
 
     assert plan.complex_name == "잠실엘스"
-    assert primary.plan_calls == 2
+    assert primary.plan_calls == 1
     assert secondary.plan_calls == 1
 
 
-def test_draft_uses_primary_when_retry_succeeds() -> None:
+def test_draft_uses_secondary_after_primary_failure() -> None:
     primary = ScriptedLanguageModel(failures=1)
     secondary = ScriptedLanguageModel(failures=0)
     model = RetryingLanguageModel(primary=primary, secondary=secondary)
@@ -64,8 +64,8 @@ def test_draft_uses_primary_when_retry_succeeds() -> None:
     draft = asyncio.run(model.draft_answer(facts=[], limitations=[], question="위치"))
 
     assert draft.sentences[0].text == "근거가 없습니다."
-    assert primary.draft_calls == 2
-    assert secondary.draft_calls == 0
+    assert primary.draft_calls == 1
+    assert secondary.draft_calls == 1
 
 
 def test_all_model_failures_are_mapped_without_provider_details() -> None:
@@ -137,7 +137,7 @@ def _trade_draft(text: str) -> DraftAnswer:
     )
 
 
-def test_draft_retries_primary_when_grounding_validation_fails() -> None:
+def test_draft_uses_secondary_when_primary_grounding_validation_fails() -> None:
     primary = ScriptedDraftModel(
         [_trade_draft("최근 3건 중 120000만원입니다."), _trade_draft("120000만원입니다.")]
     )
@@ -149,11 +149,11 @@ def test_draft_retries_primary_when_grounding_validation_fails() -> None:
     )
 
     assert draft.sentences[0].text == "120000만원입니다."
-    assert primary.draft_calls == 2
-    assert secondary.draft_calls == 0
+    assert primary.draft_calls == 1
+    assert secondary.draft_calls == 1
 
 
-def test_draft_uses_secondary_after_two_grounding_validation_failures() -> None:
+def test_draft_uses_secondary_after_primary_grounding_validation_failure() -> None:
     primary = ScriptedDraftModel([_trade_draft("최근 3건 중 120000만원입니다.")])
     secondary = ScriptedDraftModel([_trade_draft("120000만원입니다.")])
     model = RetryingLanguageModel(primary=primary, secondary=secondary)
@@ -163,5 +163,5 @@ def test_draft_uses_secondary_after_two_grounding_validation_failures() -> None:
     )
 
     assert draft.sentences[0].text == "120000만원입니다."
-    assert primary.draft_calls == 2
+    assert primary.draft_calls == 1
     assert secondary.draft_calls == 1

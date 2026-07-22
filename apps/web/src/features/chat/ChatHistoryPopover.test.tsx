@@ -18,12 +18,13 @@ describe('챗봇 대화 기록', () => {
   });
 
   it('local date 기준으로 오늘·어제·최근 7일·이전을 나눈다', () => {
+    const now = localTimestamp(2026, 7, 22, 12);
     const grouped = groupConversationsByDate([
-      conversation('today', '오늘 대화', '2026-07-22T00:30:00+09:00'),
-      conversation('yesterday', '어제 대화', '2026-07-21T23:00:00+09:00'),
-      conversation('week', '이번 주 대화', '2026-07-17T12:00:00+09:00'),
-      conversation('older', '이전 대화', '2026-07-10T12:00:00+09:00'),
-    ], new Date('2026-07-22T12:00:00+09:00'));
+      conversation('today', '오늘 대화', localTimestamp(2026, 7, 22, 0, 30).toISOString()),
+      conversation('yesterday', '어제 대화', localTimestamp(2026, 7, 21, 23).toISOString()),
+      conversation('week', '이번 주 대화', localTimestamp(2026, 7, 17, 12).toISOString()),
+      conversation('older', '이전 대화', localTimestamp(2026, 7, 10, 12).toISOString()),
+    ], now);
 
     expect(grouped.get('오늘')?.map(({ id }) => id)).toEqual(['today']);
     expect(grouped.get('어제')?.map(({ id }) => id)).toEqual(['yesterday']);
@@ -96,6 +97,10 @@ function conversation(id: string, title: string, updatedAt: string): ChatConvers
     updatedAt,
     messages: [{ id: `${id}-message`, role: 'user', content: title, createdAt: updatedAt }],
   };
+}
+
+function localTimestamp(year: number, month: number, day: number, hour: number, minute = 0): Date {
+  return new Date(year, month - 1, day, hour, minute);
 }
 
 async function click(button: HTMLButtonElement | null) {

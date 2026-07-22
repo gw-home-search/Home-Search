@@ -181,3 +181,9 @@ response serialization 실패는 대규모점포 `observed_at`의 `datetime`과 
 `BUDGET_RETAIL_PLAN_LIMIT_INVALID`에서 차단됐다. 현재 질문의 명시 결과 수를 서버가
 재검증하고 불일치 시 observation 전에 종료하도록 보완했지만 stop rule에 따라 추가
 live는 실행하지 않았으므로 운영 배포 gate는 계속 `Fail`이다.
+
+결과 수 재검증과 provider 지침 보완 뒤 승인 case를 단일 재실행했다. 최종 live는
+`recommendation`, fact 12건, citation 5건, 기준일 `2026-06-12`, provider 요청 상한
+6으로 통과했다. 따라서 대규모점포와 `BUDGET` 추천의 운영 배포 gate는 `Pass`로
+전환한다. `retail.large-store` 전용 88% fail-closed, 좌표 미확인 원장 비포함 안내,
+정상 0건 미확정 정책은 유지하며 어린이집·유치원은 runtime에서 계속 제외한다.

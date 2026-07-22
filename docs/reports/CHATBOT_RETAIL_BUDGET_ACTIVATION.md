@@ -4,7 +4,7 @@
 
 기능 판정: `Limited Pass (제한 지원)`
 
-운영 배포 전 live gate: `Fail`
+운영 배포 전 live gate: `Pass`
 
 ## 범위
 
@@ -94,7 +94,7 @@ security-audit: 지적사항 = none
 | signed JWT JSON/SSE | Pass — 실제 서명, 잘못된 issuer 401, property 회귀 |
 | service DB boundary | Pass — credential 분리, runtime Flyway 비활성 |
 | change classifier·diff | Pass |
-| OpenAI live 대표 질문 | Fail — 날짜 직렬화 수정 뒤 `BUDGET_RETAIL_PLAN_LIMIT_INVALID`로 계획 검증에서 차단 |
+| OpenAI live 대표 질문 | Pass — `recommendation`, fact 12건, citation 5건, 기준일 `2026-06-12`, provider 요청 상한 6 |
 
 ## 검증 공백과 잔여 위험
 
@@ -133,11 +133,15 @@ security-audit: 지적사항 = none
   수 복사를 요구한다. 이번 실행은 반복 실패 stop rule의 세 번째 live였으므로 수정 후
   추가 유료 호출은 하지 않았다. 따라서 운영 배포 gate는 계속 `Fail`이며 다음 승인된
   단일 live에서 최종 확인해야 한다.
+- 결과 수 재검증과 provider 지침 보완 뒤 승인 case를 단일 재실행했다. 최종 응답은
+  `recommendation`, fact 12건, citation 5건, 기준일 `2026-06-12`로 검증됐고 provider
+  요청 상한 6을 지켰다. prompt, 답변, provider body, secret은 runner 출력에 포함되지
+  않았다. 이에 따라 현재 운영 배포 전 live gate는 `Pass`다.
 - 88%는 대규모점포 source에만 적용한 임시 최소선이다. 현재 88.7931%와의 여유가
   작으므로 새 active snapshot에서 기준 미달 시 자동 비활성화될 수 있다.
 - 좌표 미확인 `468`행과 provider 행정코드 mapping 부재 때문에 정상 0건을 확정하지
   않는다.
 - 후속 공식 주소 좌표 source 승인은 coverage 개선에는 유용하지만 현재 제한 활성화의
-  필수 조건은 아니다.
+  필수 조건은 아니다. 어린이집·유치원은 별도 source 승인 전까지 계속 비활성이다.
 
 code-review: 지적사항 = none

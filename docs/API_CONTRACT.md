@@ -56,6 +56,10 @@ recommendations, auth flows, or heavy analytics. The additive authenticated
 favorite APIs documented below are owned by user-service and do not change the
 unauthenticated property-data map/search/detail/trade contract.
 
+ADR 0002 separately approves additive market insight and news APIs plus
+user-service subscription/inbox APIs. They do not alter or become dependencies
+of the existing map/search/detail/trade APIs.
+
 ## Common Conventions
 
 - Canonical URLs include a leading slash, for example `/api/v1/map/regions`.
@@ -1077,6 +1081,92 @@ Status:
 - `404`: complex id does not exist.
 - `500`: unexpected server error.
 
+## Public Market Insight APIs
+
+These additive property-data endpoints are unauthenticated. Amounts are in
+10,000 KRW, `exclArea` is square meters with the stored two-decimal precision,
+and dates/timestamps use ISO-8601. Internal audit identifiers such as
+`complex_pk`, `apt_seq`, `source_key`, raw ids, and request ids are not public.
+
+Implementation status: `/api/v1/insights/trades/latest` is the first active
+slice. The weekly, trends, and news contracts below are approved follow-up
+slices and must not be treated as deployed until their producer tests and
+feature-flagged jobs are present.
+
+### GET `/api/v1/insights/trades/latest`
+
+Query parameters:
+
+- `scope`: `NATIONWIDE|SIDO`, default `NATIONWIDE`.
+- `regionCode`: required only for `SIDO`.
+- `date`: optional `YYYY-MM-DD`, default current Seoul date.
+- `limit`: default `10`, allowed `1..50`.
+
+Response sections are `newTrades`, `highestDeals`, `recordHighs`,
+`previousRises`, `previousFalls`, and `cancellations`.
+
+```json
+{
+  "snapshotId": "d0fb824c-938e-4cc8-a674-336262ef4206",
+  "periodStart": "2026-07-22",
+  "periodEnd": "2026-07-22",
+  "generatedAt": "2026-07-22T06:31:00+09:00",
+  "dataCutoff": "2026-07-22T06:30:00+09:00",
+  "dataStatus": "FRESH",
+  "scope": { "type": "NATIONWIDE", "regionCode": null },
+  "newTrades": [{
+    "rank": 1,
+    "complexId": 501,
+    "parcelId": 1001,
+    "complexName": "Sample Apartment",
+    "sidoName": "서울특별시",
+    "sigunguName": "강남구",
+    "exclArea": 84.99,
+    "dealAmount": 125000,
+    "dealDate": "2026-07-01",
+    "disclosedAt": "2026-07-22T03:14:15+09:00",
+    "previousAmount": null,
+    "previousDealDate": null,
+    "deltaAmount": null,
+    "deltaRate": null,
+    "tradeStatus": "ACTIVE"
+  }],
+  "highestDeals": [],
+  "recordHighs": [],
+  "previousRises": [],
+  "previousFalls": [],
+  "cancellations": []
+}
+```
+
+### GET `/api/v1/insights/trades/weekly`
+
+Query parameters are `scope`, conditional `regionCode`, optional ISO Monday
+`weekStart`, and `limit` (`1..50`, default `10`). Sections are
+`highestDeals`, `recordHighs`, `previousRises`, `previousFalls`, `activity`,
+and `cancellations`. Common metadata and trade items use the latest response
+shape above.
+
+### GET `/api/v1/insights/trends`
+
+This P1 endpoint exposes publication-buffered 30/90-day and monthly observed
+metrics. It is unavailable until the P1 feature flag is enabled and never
+selects a month whose end plus 30 days is after `dataCutoff`.
+
+### GET `/api/v1/insights/news`
+
+Returns the six fixed news categories in provider order from the Redis current
+or last-good cache. Titles/descriptions contain decoded text with provider
+`<b>` tags removed. Article URLs are verified `http` or `https` URLs and prefer
+`originallink`; no inferred publisher or popularity score is returned.
+
+Insight status rules:
+
+- `200` + `dataStatus=FRESH`: requested published snapshot is current.
+- `200` + `dataStatus=STALE`: only an older normal snapshot is available.
+- `200` + `dataStatus=UNAVAILABLE`: no normal snapshot; every section is empty.
+- `400` ProblemDetail: invalid scope/region/date/week/limit only.
+
 ## Authenticated User APIs
 
 These APIs are owned by user-service. Existing property-data map, search,
@@ -1084,6 +1174,10 @@ detail, trend, and trade APIs remain unauthenticated. Access tokens use RS256,
 remain memory-only in the browser, and must contain `iss=user-service`, exactly
 one `aud=home-search-user-api`, a positive numeric `sub`, and `role=USER`. The
 verified `sub` is the only accepted user id.
+
+The subscription and inbox contracts below are approved follow-up slices. They
+are not active user-service routes until V6, authenticated controller tests,
+and the separate user batch composition root are implemented.
 
 Authentication failures return `401` with code `AUTHENTICATION_REQUIRED` and
 the common `ProblemDetail` fields. Auth refresh/logout mutations accept only the
@@ -1168,6 +1262,34 @@ For every favorite item endpoint, `complexId` must be a positive integer.
 Invalid values return `400` with code `INVALID_COMPLEX_ID`. Favorite rows store
 only `userId`, opaque `complexId`, and `savedAt`; user-service does not join or
 foreign-key the property-data database.
+
+### GET `/api/v1/insights/subscription`
+
+Returns the verified user's current opt-in settings. Missing persisted settings
+are represented as all-disabled with an empty `regionCodes` list.
+
+### PUT `/api/v1/insights/subscription`
+
+```json
+{
+  "inAppEnabled": true,
+  "emailEnabled": false,
+  "dailyNewsEnabled": true,
+  "weeklyTradeEnabled": true,
+  "regionCodes": ["11", "41"]
+}
+```
+
+The list may contain at most five distinct supported SIDO codes. Email can be
+enabled only when the current account has an email and explicit consent is
+recorded. A later OAuth email change disables email until renewed consent.
+
+### GET `/api/v1/insights/inbox?page=0&size=20`
+
+Returns an authenticated page envelope ordered newest first. Inbox items keep
+digest identity, title, creation/expiry time, a property snapshot identifier,
+and the current `/insights` deep link; they do not retain provider news article
+descriptions for 90 days.
 
 ## Admin APIs
 

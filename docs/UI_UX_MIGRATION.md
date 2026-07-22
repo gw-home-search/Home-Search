@@ -126,3 +126,17 @@ Mobile is not the first project target, but the layout should not block it:
 - The same API contract works before and after UI/UX redesign.
 - Filter changes refresh complex markers.
 - Detail drawer clearly shows complex info and trade list.
+
+## Additive Insights Routes
+
+- Public `/insights` owns its own route and request state. Its failure must not
+  affect the `/` map route.
+- It supports nationwide/SIDO filtering and separately renders `FRESH`,
+  `STALE`, `UNAVAILABLE`, loading, empty, and error states.
+- Copy must explain that "today" means newly disclosed/normalized in the DAILY
+  collection, not a contract signed today, and must show both `dealDate` and
+  `disclosedAt`.
+- Trade card selection navigates to `/?complexId={complexId}`.
+- `/my/insights` combines authenticated inbox and opt-in delivery settings.
+- External news strings are rendered as text. The web app never renders NAVER
+  title/description HTML.

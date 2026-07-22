@@ -258,7 +258,7 @@ tasks.register('verifyApiMigrationCatalog') {
             throw new GradleException("Duplicate API migration versions: ${duplicates.keySet().sort()}")
         }
         def versions = byVersion.keySet().findAll { it != null }.sort()
-        def expectedVersions = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+        def expectedVersions = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
         if (versions != expectedVersions) {
             throw new GradleException("API migration versions must be exact: ${expectedVersions}; actual=${versions}")
         }
@@ -273,7 +273,11 @@ tasks.register('verifyApiMigrationCatalog') {
             'V9__publish_ai_read_property_facts.sql': '7d1fde99ad9050a4cf3da591b887ba4870e6337c07d5dcbe27434a1f3d2aff12',
             'V10__publish_ai_read_region_hierarchy.sql': 'd5aeabda3015c9d5509bc8058171d1c267f02e953e746653a4f895a88bd6aacf',
             'V11__add_building_register_ratio_evidence.sql': '11cec6b80a9e0b64c75484002c25ba3d5c6b85ccbce43f2f0d5f27d0d52bf34d',
-            'V12__grant_building_register_ratio_runtime_privileges.sql': 'ebb746c2ba4cb6da535679c8a2e24ad9871b0782753e7e476649bcdfd182f472'
+            'V12__grant_building_register_ratio_runtime_privileges.sql': 'ebb746c2ba4cb6da535679c8a2e24ad9871b0782753e7e476649bcdfd182f472',
+            'V13__add_building_register_profile_discovery.sql': 'fbf6681fe942ac5023cf450ebf7c12bce45dc9d92fe3fb6fd24b7cbb5172fb80',
+            'V14__allow_nationwide_building_register_profile_staging.sql': '4c50730addb3576cedfc0c045215b48339a041395c49809b3e58599a606a4817',
+            'V15__add_rtms_collection_execution_evidence.sql': '2baf11566f83941e2b234b34b0f5450f48ea8d9c0dbed9f1017ace07d523c421',
+            'V16__add_market_insight_snapshots.sql': '82152ecee8aa51d022735419fa757d56235362299518854455c0d548bc79837d'
         ].each { fileName, expected ->
             def file = files.find { it.name == fileName }
             if (file == null || sha256(file) != expected) {

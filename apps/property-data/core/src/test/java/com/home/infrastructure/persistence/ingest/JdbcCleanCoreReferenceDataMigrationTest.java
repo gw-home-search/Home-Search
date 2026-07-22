@@ -20,7 +20,8 @@ class JdbcCleanCoreReferenceDataMigrationTest extends JdbcMigrationTestSupport {
         migrateToLatest();
 
         assertThat(appliedMigrationVersions())
-                .containsExactly("1", "2", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13");
+                .containsExactly(
+                        "1", "2", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16");
         assertThat(regclass("batch.BATCH_JOB_INSTANCE")).isEqualTo("batch.batch_job_instance");
         assertThat(count("SELECT count(*) FROM region WHERE region_type = 'si-do'"))
                 .isGreaterThanOrEqualTo(17);
@@ -70,7 +71,7 @@ class JdbcCleanCoreReferenceDataMigrationTest extends JdbcMigrationTestSupport {
     }
 
     @Test
-    @DisplayName("migration version 2 fresh baseline은 Java parity로 확정한 schema와 seed fingerprint를 유지한다")
+    @DisplayName("latest fresh baseline은 Java parity로 확정한 schema와 seed fingerprint를 유지한다")
     void sqlV2FreshBaselineMatchesGoldenFingerprint() {
         flyway(null).clean();
         flyway(null).migrate();

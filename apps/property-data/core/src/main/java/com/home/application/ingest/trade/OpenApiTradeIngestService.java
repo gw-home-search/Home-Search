@@ -1,5 +1,6 @@
 package com.home.application.ingest.trade;
 
+import com.home.domain.ingest.run.ExecutionCorrelationId;
 import com.home.ingestcore.rtms.OpenApiTradeItem;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
@@ -25,10 +26,14 @@ public class OpenApiTradeIngestService {
      * @return raw 저장, normalized insert, duplicate, 실패 count
      */
     public IngestResult ingest(OpenApiTradeIngestBatch batch) {
+        return ingest(batch, null);
+    }
+
+    public IngestResult ingest(OpenApiTradeIngestBatch batch, ExecutionCorrelationId executionCorrelationId) {
         TradeIngestItemOutcome.Accumulator accumulator = TradeIngestItemOutcome.accumulator();
 
         for (OpenApiTradeItem item : batch.items()) {
-            accumulator.add(itemProcessor.process(batch, item));
+            accumulator.add(itemProcessor.process(batch, item, executionCorrelationId));
         }
 
         IngestResult result =

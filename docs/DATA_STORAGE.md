@@ -590,3 +590,26 @@ a reason and the previous active version remains available for rollback.
 - Failed matches are queryable.
 - Normalized trades can be joined to complex and parcel by `complex_id`.
 - Map marker APIs work without ranking or trend tables.
+
+## Additive Market Insight Storage
+
+ADR 0002 adds collection-completeness evidence and materialized insight
+snapshots without changing raw-first ingest or normalized trade identity.
+
+- `rtms_collection_execution` identifies one `requestId`, collection mode,
+  scope, run date, state, planned work-unit count, timestamps, and redacted
+  failure reason.
+- `rtms_collection_work_unit` stores the unique
+  `(execution_id, lawd_cd, deal_ymd)` plan and its terminal result/run link.
+- `raw_trade_ingest.execution_correlation_id` is nullable for historical rows
+  and required by the application for new production RTMS executions.
+- `market_insight_snapshot` stores period, scope, region, coverage counts,
+  cutoff, build status, and source execution.
+- `market_insight_trade_item` stores at most 50 ranked items per metric and
+  keeps internal trade/comparison/complex relations plus exact `excl_area`.
+
+Nationwide publication requires a `DAILY`, `NATIONWIDE` execution with every
+planned work unit terminal and `COMPLETED`. A complete execution with zero new
+normalized trades still produces a fresh empty snapshot. Rejected builds do
+not replace the last published snapshot. Snapshot/item retention is 400 days;
+this retention never deletes raw ingest or normalized trade evidence.

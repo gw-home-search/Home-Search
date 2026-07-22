@@ -40,6 +40,11 @@ Excluded from the property-data map/trade scope:
   `AI_SERVICE_PLAN.md`.
 - Query-heavy analytical optimizations unrelated to map display.
 
+The additive market insight/news/digest expansion is separately approved by
+[ADR 0002](adr/0002-market-insight-news-and-digest-boundary.md). It remains
+isolated from the property-data map/search/detail/trade critical path and is
+disabled by default until its per-feature rollout gates pass.
+
 ## Target Repository Shape
 
 ```text
@@ -115,6 +120,7 @@ chatbot overlay에서만 연결된다. 두 서비스는
 17. [CHATBOT_DATA_SOURCES.md](CHATBOT_DATA_SOURCES.md)
 18. [CHATBOT_API_CONTRACT.md](CHATBOT_API_CONTRACT.md)
 19. [ADR 0001](adr/0001-evidence-grounded-chatbot-and-browser-memory.md)
+20. [ADR 0002](adr/0002-market-insight-news-and-digest-boundary.md)
 
 ## Non-Negotiable Decisions
 

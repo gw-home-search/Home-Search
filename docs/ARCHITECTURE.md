@@ -197,6 +197,30 @@ ai-service -> home_search_ai reference/quality/RAG data
 The implementation order is user-service first, evidence-grounded chatbot
 capabilities second, then image/ECR CI and AWS deployment preparation.
 
+## Market Insight And Digest Expansion
+
+Property-data keeps insight calculation and news integration inside its
+existing service boundary:
+
+```text
+RTMS batch -> collection execution/work-unit evidence -> insight snapshot
+NAVER API HUB -> property batch -> Redis current/last-good news cache
+property public API -> web /insights
+property public API -> user batch -> user inbox / SES
+```
+
+The `core` module owns `domain.insight`, `application.insight`, feature-local
+JDBC snapshot adapters, the NAVER adapter, and news cache adapters. The `api`
+module owns only public insight/news HTTP DTOs and controllers. The `batch`
+module owns collection evidence lifecycle and insight/news job composition.
+Existing map/search/detail/trade packages must not import insight packages.
+
+User-service keeps subscription/inbox/delivery domain and persistence in
+`core`, authenticated subscription/inbox HTTP in `app`, and delivery execution
+in a separate `batch` composition root. The batch calls property-data over HTTP
+and does not receive property database credentials, OAuth client secrets, or a
+JWT private key.
+
 The backend should connect to the coordinate source database through a dedicated
 coordinate lookup component. It should not copy nationwide coordinate snapshots
 into `home_search`, and it should not treat

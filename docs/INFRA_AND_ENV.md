@@ -107,6 +107,10 @@ Home Search backend collection and map display need:
 - `HOME_MAP_MARKER_CACHE_TTL`, for example `5m`, to bound stale marker data.
 - `SPRING_DATA_REDIS_HOST` and `SPRING_DATA_REDIS_PORT` when marker caching is
   enabled outside the local Docker network.
+- `HOME_INSIGHT_TRADE_ENABLED=false` for trade insight batch/API activation.
+- `HOME_NEWS_NAVER_ENABLED=false`, NAVER API HUB credentials, a provider-call
+  budget, and Redis settings for news activation. Credentials are injected only
+  into property Batch.
 
 Property-data receives neither admin database credentials nor an internal
 signing private key. It receives only the active/overlap internal JWT public
@@ -143,6 +147,10 @@ credential.
 - user-service RS256 private key, active `kid`, issuer, audience, access TTL,
   and refresh TTL.
 - public-key overlap set for verifying tokens during key rotation.
+- `HOME_USER_DIGEST_ENABLED=false` for the user batch and
+  `HOME_USER_EMAIL_ENABLED=false` for SES delivery. The user batch receives the
+  property API base URL and SES configuration, but no OAuth client secret or
+  JWT signing private key.
 
 Consumer services that validate user tokens receive only the allowlisted
 public-key mapping and canonical verification policy:
@@ -453,9 +461,9 @@ wrapper는 expected database와 최고 pending version을 확인하고 `latest`,
 Property-data deployment의 기본 경로는 fresh-only다.
 
 ```bash
-./ops/property-deployment-preflight.sh before 9
-./ops/property-flyway.sh migrate 9
-./ops/property-deployment-preflight.sh after 9
+./ops/property-deployment-preflight.sh before 12
+./ops/property-flyway.sh migrate 12
+./ops/property-deployment-preflight.sh after 12
 ./ops/property-flyway.sh validate
 ```
 

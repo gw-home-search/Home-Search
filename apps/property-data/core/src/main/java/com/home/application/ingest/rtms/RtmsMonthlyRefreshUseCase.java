@@ -62,13 +62,16 @@ public class RtmsMonthlyRefreshUseCase {
             RtmsApartmentTradeRequest firstRequest,
             ExecutionCorrelationId executionCorrelationId) {
         Instant startedAt = clock.instant();
-        MonthlyRefreshOutcome outcome = executeMonth(ingestService, firstRequest, startedAt);
+        MonthlyRefreshOutcome outcome = executeMonth(ingestService, firstRequest, startedAt, executionCorrelationId);
         RtmsIngestRunRecord saved = ingestRunRepository.save(outcome.toRecord(executionCorrelationId));
         return outcome.toSummary(saved.id());
     }
 
     private MonthlyRefreshOutcome executeMonth(
-            OpenApiTradeIngestService ingestService, RtmsApartmentTradeRequest firstRequest, Instant startedAt) {
+            OpenApiTradeIngestService ingestService,
+            RtmsApartmentTradeRequest firstRequest,
+            Instant startedAt,
+            ExecutionCorrelationId executionCorrelationId) {
         RtmsApartmentTradeRequest currentRequest = firstRequest;
         IngestResult total = IngestResult.empty();
         int pageCount = 0;
@@ -76,7 +79,10 @@ public class RtmsMonthlyRefreshUseCase {
             while (true) {
                 RtmsApartmentTradePage page = fetchPageWithRetry(currentRequest);
                 OpenApiTradeIngestBatch batch = page.batch();
-                total = total.plus(ingestService.ingest(batch));
+                total = total.plus(
+                        executionCorrelationId == null
+                                ? ingestService.ingest(batch)
+                                : ingestService.ingest(batch, executionCorrelationId));
                 pageCount++;
                 if (!page.hasNextPage()) {
                     return MonthlyRefreshOutcome.completed(firstRequest, pageCount, total, startedAt, clock.instant());

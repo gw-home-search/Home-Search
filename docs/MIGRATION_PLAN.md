@@ -184,6 +184,11 @@ Keep these out of property-data implementation unless explicitly re-scoped:
 - Mail batch.
 - Analytics dashboards.
 
+Market trade insights, NAVER news, opt-in inbox delivery, and SES email are no
+longer unapproved later-scope. They are an additive bounded expansion governed
+by `docs/adr/0002-market-insight-news-and-digest-boundary.md`. Existing map,
+search, detail, and trade work remains independent of this expansion.
+
 ## Expansion Milestones
 
 The map/trade baseline is complete enough to begin isolated product services.

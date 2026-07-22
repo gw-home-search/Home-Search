@@ -33,6 +33,9 @@ apis:
     min-request-interval-millis: 200
 
 home:
+  insight:
+    trade:
+      enabled: "${HOME_INSIGHT_TRADE_ENABLED:false}"
   ops:
     hermes:
       enabled: false

@@ -1,4 +1,8 @@
 = Home Search public API
+
+== Market insight
+
+operation::market-insight-latest-unavailable[]
 :doctype: book
 :icons: font
 :source-highlighter: coderay

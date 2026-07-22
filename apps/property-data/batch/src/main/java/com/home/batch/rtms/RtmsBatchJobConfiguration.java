@@ -2,6 +2,7 @@ package com.home.batch.rtms;
 
 import com.home.application.ingest.rtms.RtmsCoordinateSourcePreflight;
 import com.home.application.ingest.rtms.RtmsMonthlyRefreshUseCase;
+import com.home.application.insight.collection.RtmsCollectionExecutionTracker;
 import com.home.application.region.RegionSiGunGuCodeReader;
 import com.home.application.region.RegionUnitCntSynchronizationService;
 import com.home.infrastructure.external.rtms.RtmsIngestProperties;
@@ -79,6 +80,7 @@ class RtmsBatchJobConfiguration {
             PlatformTransactionManager transactionManager,
             RtmsMonthlyRefreshUseCase useCase,
             RtmsRefreshWorksetPlanner planner,
+            RtmsCollectionExecutionTracker collectionTracker,
             RtmsIngestProperties properties) {
         return taskletStep(
                 "monthlyIngestStep",
@@ -89,7 +91,8 @@ class RtmsBatchJobConfiguration {
                         planner,
                         properties.daily().lawdCds(),
                         properties.daily().lookbackMonths(),
-                        true));
+                        true,
+                        collectionTracker));
     }
 
     @Bean
@@ -98,12 +101,13 @@ class RtmsBatchJobConfiguration {
             JobRepository jobRepository,
             PlatformTransactionManager transactionManager,
             RtmsMonthlyRefreshUseCase useCase,
-            RtmsRefreshWorksetPlanner planner) {
+            RtmsRefreshWorksetPlanner planner,
+            RtmsCollectionExecutionTracker collectionTracker) {
         return taskletStep(
                 "monthlyIngestStep",
                 jobRepository,
                 transactionManager,
-                new RtmsMonthlyRefreshTasklet(useCase, planner, "", 0, false));
+                new RtmsMonthlyRefreshTasklet(useCase, planner, "", 0, false, collectionTracker));
     }
 
     @Bean

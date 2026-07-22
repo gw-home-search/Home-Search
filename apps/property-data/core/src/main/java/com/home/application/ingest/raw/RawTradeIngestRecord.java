@@ -1,6 +1,7 @@
 package com.home.application.ingest.raw;
 
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
+import com.home.domain.ingest.run.ExecutionCorrelationId;
 import com.home.domain.ingest.source.IngestSource;
 import com.home.domain.ingest.source.IngestSourceKey;
 import com.home.ingestcore.rtms.RtmsDealMonth;
@@ -22,7 +23,37 @@ public record RawTradeIngestRecord(
         RawTradeIngestStatus status,
         String failureReason,
         Instant createdAt,
-        Instant processedAt) {
+        Instant processedAt,
+        ExecutionCorrelationId executionCorrelationId) {
+
+    public RawTradeIngestRecord(
+            Long id,
+            String source,
+            String sourceKey,
+            String lawdCd,
+            String dealYmd,
+            Integer pageNo,
+            String payload,
+            String payloadHash,
+            RawTradeIngestStatus status,
+            String failureReason,
+            Instant createdAt,
+            Instant processedAt) {
+        this(
+                id,
+                source,
+                sourceKey,
+                lawdCd,
+                dealYmd,
+                pageNo,
+                payload,
+                payloadHash,
+                status,
+                failureReason,
+                createdAt,
+                processedAt,
+                null);
+    }
 
     public static RawTradeIngestRecord received(
             String source,
@@ -32,6 +63,18 @@ public record RawTradeIngestRecord(
             Integer pageNo,
             String payload,
             String payloadHash) {
+        return received(source, sourceKey, lawdCd, dealYmd, pageNo, payload, payloadHash, null);
+    }
+
+    public static RawTradeIngestRecord received(
+            String source,
+            String sourceKey,
+            String lawdCd,
+            String dealYmd,
+            Integer pageNo,
+            String payload,
+            String payloadHash,
+            ExecutionCorrelationId executionCorrelationId) {
         return new RawTradeIngestRecord(
                 null,
                 source,
@@ -44,7 +87,8 @@ public record RawTradeIngestRecord(
                 RawTradeIngestStatus.RECEIVED,
                 null,
                 Instant.now(),
-                null);
+                null,
+                executionCorrelationId);
     }
 
     public RawTradeIngestRecord {
@@ -74,7 +118,8 @@ public record RawTradeIngestRecord(
                 status,
                 failureReason,
                 createdAt,
-                processedAt);
+                processedAt,
+                executionCorrelationId);
     }
 
     public RawTradeIngestRecord withStatus(RawTradeIngestStatus status, String failureReason) {
@@ -90,7 +135,8 @@ public record RawTradeIngestRecord(
                 status,
                 failureReason,
                 createdAt,
-                Instant.now());
+                Instant.now(),
+                executionCorrelationId);
     }
 
     private static boolean hasText(String value) {

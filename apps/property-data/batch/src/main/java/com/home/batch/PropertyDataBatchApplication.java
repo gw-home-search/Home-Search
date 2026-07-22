@@ -22,6 +22,7 @@ public class PropertyDataBatchApplication {
             "complexBuildingRegisterProfileReplayJob",
             "complexBuildingRegisterProfileCollectJob",
             "complexBuildingRegisterProfileAnalyzeJob",
+            "marketInsightDailyJob",
             "legalDongCodeMappingImportJob");
 
     public static void main(String[] args) {

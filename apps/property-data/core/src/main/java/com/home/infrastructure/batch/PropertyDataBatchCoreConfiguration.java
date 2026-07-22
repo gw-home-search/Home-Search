@@ -20,6 +20,8 @@ import com.home.application.ingest.rtms.RtmsMonthlyRefreshUseCase;
 import com.home.application.ingest.trade.OpenApiTradeIngestService;
 import com.home.application.ingest.trade.TradeIngestFinalizer;
 import com.home.application.ingest.trade.TradeIngestItemProcessor;
+import com.home.application.insight.collection.RtmsCollectionExecutionService;
+import com.home.application.insight.generation.MarketInsightDailyBuildService;
 import com.home.application.region.RegionUnitCntSynchronizationService;
 import com.home.infrastructure.external.complex.ComplexMetadataClientConfiguration;
 import com.home.infrastructure.external.rtms.RtmsBatchOrchestrationConfiguration;
@@ -60,10 +62,16 @@ import org.springframework.stereotype.Repository;
                             OpenApiTradeIngestService.class,
                             TradeIngestFinalizer.class,
                             TradeIngestItemProcessor.class,
+                            RtmsCollectionExecutionService.class,
+                            MarketInsightDailyBuildService.class,
                             RegionUnitCntSynchronizationService.class
                         }))
 @ComponentScan(
-        basePackages = {"com.home.infrastructure.persistence.ingest", "com.home.infrastructure.persistence.region"},
+        basePackages = {
+            "com.home.infrastructure.persistence.ingest",
+            "com.home.infrastructure.persistence.insight",
+            "com.home.infrastructure.persistence.region"
+        },
         useDefaultFilters = false,
         includeFilters =
                 @ComponentScan.Filter(

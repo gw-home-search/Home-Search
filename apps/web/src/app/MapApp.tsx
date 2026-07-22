@@ -7,12 +7,16 @@ import { MapWorkspace } from '../features/map/MapWorkspace';
 import { useMapMarkers } from '../features/map/hooks/useMapMarkers';
 import { useMapViewport } from '../features/map/hooks/useMapViewport';
 import { useRegionExplorer } from '../features/region/hooks/useRegionExplorer';
-import { useComplexSearch } from '../features/search/hooks/useComplexSearch';
-import type { RegionMapMarker, SidebarMode } from './mapAppTypes';
+import {
+  SEARCH_FOCUS_DELTA,
+  useComplexSearch,
+} from '../features/search/hooks/useComplexSearch';
+import type { MapUiCommand, RegionMapMarker, SidebarMode } from './mapAppTypes';
 import { declutterComplexMarkers } from '../features/map/markerViewModel';
 import { AppHeader } from './AppHeader';
 import { useFavoriteComplex } from '../features/favorites/hooks/useFavoriteComplex';
 import type { IndexedDbChatConversationStore } from '../features/chat/storage/chatConversationStore';
+import type { ChatAction } from '../features/chat/actionContract';
 
 export type MapAppProps = {
   initialMapLevel?: number;
@@ -29,6 +33,8 @@ export function MapApp({
 }: MapAppProps) {
   const [isExplorationOpen, setIsExplorationOpen] = useState(() => window.innerWidth > 720);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [mapUiCommand, setMapUiCommand] = useState<MapUiCommand | null>(null);
+  const consumedMapActionIds = useRef(new Set<string>());
   const explorationButtonRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -92,6 +98,28 @@ export function MapApp({
     else if (!isOpen && window.innerWidth > 720) setIsExplorationOpen(true);
   }, []);
 
+  const focusMap = viewport.focusMap;
+  const handleChatUiAction = useCallback((action: ChatAction) => {
+    if (consumedMapActionIds.current.has(action.actionId)) return false;
+    consumedMapActionIds.current.add(action.actionId);
+    focusMap(
+      action.center.lat,
+      action.center.lng,
+      action.level,
+      SEARCH_FOCUS_DELTA,
+    );
+    setMapUiCommand({
+      type: 'showNearbyCategory',
+      actionId: action.actionId,
+      category: action.category,
+    });
+    return true;
+  }, [focusMap]);
+
+  const handleMapUiCommandConsumed = useCallback((actionId: string) => {
+    setMapUiCommand((current) => current?.actionId === actionId ? null : current);
+  }, []);
+
   return (
     <main
       className="app-shell"
@@ -102,6 +130,7 @@ export function MapApp({
       <AppHeader
         chatConversationStore={chatConversationStore}
         onChatOpenChange={handleChatOpenChange}
+        onUiAction={handleChatUiAction}
       />
 
       <div
@@ -180,6 +209,7 @@ export function MapApp({
             hiddenMarkerCount={visibleMarkerData.hiddenCount}
             selectedComplex={detail.selectedComplex}
             viewport={viewport.viewport}
+            uiCommand={mapUiCommand}
             onComplexMarkerSelect={detail.selectComplexMarker}
             activeFilterCount={markerData.activeFilterCount}
             onFilterReset={markerData.resetMarkerFilters}
@@ -188,6 +218,7 @@ export function MapApp({
             onViewportChange={viewport.handleViewportChange}
             onZoomIn={viewport.handleZoomIn}
             onZoomOut={viewport.handleZoomOut}
+            onUiCommandConsumed={handleMapUiCommandConsumed}
           />
         </div>
       </div>

@@ -15,6 +15,7 @@ from ai_service.chat import (
     get_academy_location_repository,
     get_point_facility_repository,
     get_rail_station_repository,
+    get_childcare_repository,
     get_grounded_language_model,
     get_query_timeout_seconds,
     get_school_fact_repository,
@@ -40,6 +41,7 @@ def clear_language_model_cache() -> None:
     get_academy_location_repository.cache_clear()
     get_point_facility_repository.cache_clear()
     get_rail_station_repository.cache_clear()
+    get_childcare_repository.cache_clear()
     get_query_timeout_seconds.cache_clear()
     yield
     get_grounded_language_model.cache_clear()
@@ -50,6 +52,7 @@ def clear_language_model_cache() -> None:
     get_academy_location_repository.cache_clear()
     get_point_facility_repository.cache_clear()
     get_rail_station_repository.cache_clear()
+    get_childcare_repository.cache_clear()
     get_query_timeout_seconds.cache_clear()
 
 
@@ -145,6 +148,29 @@ def test_total_query_timeout_accepts_sixty_seconds(
                 {"complex_identity", "recent_trade_lookup", "price_trend"}
             ),
         ),
+        (
+            "complex_identity,recent_trade_lookup,price_trend,recommendation",
+            frozenset(
+                {
+                    "complex_identity",
+                    "recent_trade_lookup",
+                    "price_trend",
+                    "recommendation",
+                }
+            ),
+        ),
+        (
+            "complex_identity,recent_trade_lookup,price_trend,recommendation,comparison",
+            frozenset(
+                {
+                    "complex_identity",
+                    "recent_trade_lookup",
+                    "price_trend",
+                    "recommendation",
+                    "comparison",
+                }
+            ),
+        ),
     ],
 )
 def test_only_approved_property_capability_configuration_is_enabled(
@@ -167,6 +193,10 @@ def test_only_approved_property_capability_configuration_is_enabled(
         "complex_identity,price_trend",
         "complex_identity,complex_identity",
         "complex_identity, price_trend",
+        "comparison",
+        "complex_identity,recent_trade_lookup,price_trend,comparison",
+        "complex_identity,recent_trade_lookup,price_trend,recommendation,comparison,childcare_lookup",
+        "complex_identity,recent_trade_lookup,price_trend,recommendation,childcare_lookup",
         "unknown",
     ],
 )
@@ -192,13 +222,37 @@ def test_unapproved_or_invalid_property_capability_configuration_fails_closed(
         ("academy_registry_summary", frozenset()),
         ("retail_location", frozenset()),
         ("rail_station_lookup", frozenset()),
+        ("childcare_lookup", frozenset()),
+        ("kakao_place_search", frozenset()),
         (
             "academy_lookup,rail_station_lookup",
             frozenset({"academy_lookup", "rail_station_lookup"}),
         ),
+        (
+            "academy_lookup,rail_station_lookup,school_location",
+            frozenset(
+                {"academy_lookup", "rail_station_lookup", "school_location"}
+            ),
+        ),
+        (
+            "academy_lookup,rail_station_lookup,school_location,retail_location",
+            frozenset(
+                {
+                    "academy_lookup",
+                    "rail_station_lookup",
+                    "school_location",
+                    "retail_location",
+                }
+            ),
+        ),
         (" school_location", frozenset()),
         ("school_location,school_location", frozenset()),
         ("rail_station_lookup,academy_lookup", frozenset()),
+        ("school_location,academy_lookup,rail_station_lookup", frozenset()),
+        (
+            "academy_lookup,rail_station_lookup,school_location,childcare_lookup",
+            frozenset(),
+        ),
         ("unknown", frozenset()),
     ],
 )
@@ -264,6 +318,45 @@ def test_rail_station_repository_requires_reference_dsn(
 
     with pytest.raises(ChatbotProviderUnavailable):
         get_rail_station_repository()
+
+
+def test_childcare_repository_requires_reference_dsn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HOME_AI_REFERENCE_DSN", raising=False)
+
+    with pytest.raises(ChatbotProviderUnavailable):
+        get_childcare_repository()
+
+
+def test_childcare_repository_uses_reference_runtime_dsn(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[str] = []
+    repository = object()
+    monkeypatch.setenv("HOME_AI_REFERENCE_DSN", "postgresql://runtime/reference")
+    monkeypatch.setattr(
+        "ai_service.property_chat.childcare_centers.PostgresChildcareRepository",
+        lambda dsn: captured.append(dsn) or repository,
+    )
+
+    assert get_childcare_repository() is repository
+    assert captured == ["postgresql://runtime/reference"]
+
+
+def test_childcare_repository_wraps_connection_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HOME_AI_REFERENCE_DSN", "postgresql://runtime/reference")
+    monkeypatch.setattr(
+        "ai_service.property_chat.childcare_centers.PostgresChildcareRepository",
+        lambda _dsn: (_ for _ in ()).throw(ValueError("private connection detail")),
+    )
+
+    with pytest.raises(ChatbotProviderUnavailable) as error:
+        get_childcare_repository()
+
+    assert "private connection detail" not in str(error.value)
 
 
 @pytest.mark.parametrize("repository_available", [True, False])
@@ -420,6 +513,58 @@ def test_configured_engine_statically_composes_rail_station_repository(
     assert response == {"success": True}
     if repository_available:
         assert captured["rail_station_repository"] is rail_repository
+
+
+@pytest.mark.parametrize("repository_available", [True, False])
+def test_configured_engine_statically_composes_childcare_repository(
+    monkeypatch: pytest.MonkeyPatch,
+    repository_available: bool,
+) -> None:
+    captured: dict[str, object] = {}
+    childcare_repository = object()
+
+    class RecordingEngine:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        async def query(self, **_kwargs: object) -> dict[str, object]:
+            repository = captured["childcare_repository"]
+            if not repository_available:
+                with pytest.raises(ChatbotProviderUnavailable):
+                    repository.nearby()  # type: ignore[attr-defined]
+            return {"success": True}
+
+    monkeypatch.setattr(
+        "ai_service.chat.get_property_fact_repository", lambda: object()
+    )
+    monkeypatch.setattr("ai_service.chat.get_grounded_language_model", lambda: object())
+    monkeypatch.setattr(
+        "ai_service.chat.get_enabled_reference_capabilities",
+        lambda: frozenset({"childcare_lookup"}),
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_childcare_repository",
+        (
+            (lambda: childcare_repository)
+            if repository_available
+            else (lambda: (_ for _ in ()).throw(ChatbotProviderUnavailable()))
+        ),
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.engine.GroundedChatbotEngine", RecordingEngine
+    )
+
+    response = asyncio.run(
+        ConfiguredChatbotEngine().query(
+            request=ChatbotQueryRequest(question="주변 어린이집"),
+            user=AuthenticatedUser(user_id=42),
+            request_id="request-childcare-composition",
+        )
+    )
+
+    assert response == {"success": True}
+    if repository_available:
+        assert captured["childcare_repository"] is childcare_repository
 
 
 @pytest.mark.parametrize("repository_available", [True, False])
@@ -644,3 +789,176 @@ def test_reference_pool_failure_does_not_break_property_query(
 
     assert response["success"] is True
     assert response["evidenceSummary"]["capabilities"] == ["complex_identity"]
+
+
+def test_criteria_recommendation_activation_uses_only_approved_reference_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    academy_repository = object()
+    rail_repository = object()
+
+    class RecordingEngine:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        async def query(self, **_kwargs: object) -> dict[str, object]:
+            return {"success": True}
+
+    monkeypatch.setenv(
+        "HOME_AI_ENABLED_PROPERTY_CAPABILITIES",
+        "complex_identity,recent_trade_lookup,price_trend,recommendation",
+    )
+    monkeypatch.setenv(
+        "HOME_AI_ENABLED_REFERENCE_CAPABILITIES",
+        "academy_lookup,rail_station_lookup",
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_property_fact_repository", lambda: object()
+    )
+    monkeypatch.setattr("ai_service.chat.get_grounded_language_model", lambda: object())
+    monkeypatch.setattr(
+        "ai_service.chat.get_academy_location_repository",
+        lambda: academy_repository,
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_rail_station_repository", lambda: rail_repository
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_childcare_repository",
+        lambda: (_ for _ in ()).throw(AssertionError("childcare must stay inactive")),
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.engine.GroundedChatbotEngine", RecordingEngine
+    )
+
+    response = asyncio.run(ConfiguredChatbotEngine().query(
+        request=ChatbotQueryRequest(question="영등포구 학원 우선 후보"),
+        user=AuthenticatedUser(user_id=42),
+        request_id="request-criteria-activation",
+    ))
+
+    assert response == {"success": True}
+    assert captured["enabled_capabilities"] == frozenset({
+        "complex_identity", "recent_trade_lookup", "price_trend", "recommendation",
+    })
+    assert captured["enabled_reference_capabilities"] == frozenset({
+        "academy_lookup", "rail_station_lookup",
+    })
+    assert captured["enabled_recommendation_modes"] == frozenset({"CRITERIA"})
+    assert captured["academy_location_repository"] is academy_repository
+    assert captured["rail_station_repository"] is rail_repository
+    assert captured["childcare_repository"] is None
+    assert captured["school_repository"] is None
+    assert captured["point_facility_repository"] is None
+
+
+def test_school_activation_composes_only_the_approved_cumulative_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    school_repository = object()
+    academy_repository = object()
+    rail_repository = object()
+
+    class RecordingEngine:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        async def query(self, **_kwargs: object) -> dict[str, object]:
+            return {"success": True}
+
+    monkeypatch.setenv(
+        "HOME_AI_ENABLED_REFERENCE_CAPABILITIES",
+        "academy_lookup,rail_station_lookup,school_location",
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_property_fact_repository", lambda: object()
+    )
+    monkeypatch.setattr("ai_service.chat.get_grounded_language_model", lambda: object())
+    monkeypatch.setattr(
+        "ai_service.chat.get_school_fact_repository", lambda: school_repository
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_academy_location_repository",
+        lambda: academy_repository,
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_rail_station_repository", lambda: rail_repository
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_childcare_repository",
+        lambda: (_ for _ in ()).throw(AssertionError("childcare must stay inactive")),
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_point_facility_repository",
+        lambda: (_ for _ in ()).throw(AssertionError("retail must stay inactive")),
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.engine.GroundedChatbotEngine", RecordingEngine
+    )
+
+    response = asyncio.run(ConfiguredChatbotEngine().query(
+        request=ChatbotQueryRequest(question="잠실엘스 주변 초등학교"),
+        user=AuthenticatedUser(user_id=42),
+        request_id="request-school-activation",
+    ))
+
+    assert response == {"success": True}
+    assert captured["enabled_reference_capabilities"] == frozenset({
+        "academy_lookup", "rail_station_lookup", "school_location",
+    })
+    assert captured["school_repository"] is school_repository
+    assert captured["academy_location_repository"] is academy_repository
+    assert captured["rail_station_repository"] is rail_repository
+    assert captured["childcare_repository"] is None
+    assert captured["point_facility_repository"] is None
+
+
+def test_retail_activation_enables_shopping_and_budget_without_childcare(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    retail_repository = object()
+
+    class RecordingEngine:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        async def query(self, **_kwargs: object) -> dict[str, object]:
+            return {"success": True}
+
+    monkeypatch.setenv(
+        "HOME_AI_ENABLED_PROPERTY_CAPABILITIES",
+        "complex_identity,recent_trade_lookup,price_trend,recommendation,comparison",
+    )
+    monkeypatch.setenv(
+        "HOME_AI_ENABLED_REFERENCE_CAPABILITIES",
+        "academy_lookup,rail_station_lookup,school_location,retail_location",
+    )
+    monkeypatch.setattr("ai_service.chat.get_property_fact_repository", lambda: object())
+    monkeypatch.setattr("ai_service.chat.get_grounded_language_model", lambda: object())
+    monkeypatch.setattr("ai_service.chat.get_school_fact_repository", lambda: object())
+    monkeypatch.setattr("ai_service.chat.get_academy_location_repository", lambda: object())
+    monkeypatch.setattr("ai_service.chat.get_rail_station_repository", lambda: object())
+    monkeypatch.setattr(
+        "ai_service.chat.get_point_facility_repository", lambda: retail_repository
+    )
+    monkeypatch.setattr(
+        "ai_service.chat.get_childcare_repository",
+        lambda: (_ for _ in ()).throw(AssertionError("childcare must stay inactive")),
+    )
+    monkeypatch.setattr(
+        "ai_service.property_chat.engine.GroundedChatbotEngine", RecordingEngine
+    )
+
+    response = asyncio.run(ConfiguredChatbotEngine().query(
+        request=ChatbotQueryRequest(question="송파구 20억 이하 84㎡ 추천"),
+        user=AuthenticatedUser(user_id=42),
+        request_id="request-budget-activation",
+    ))
+
+    assert response == {"success": True}
+    assert captured["point_facility_repository"] is retail_repository
+    assert captured["enabled_recommendation_modes"] == frozenset({"CRITERIA", "BUDGET"})
+    assert captured["childcare_repository"] is None

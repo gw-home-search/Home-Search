@@ -42,7 +42,13 @@ class WebClientChatbotAiClientTest {
                     authorization.set(request.requestHeaders().get(HttpHeaders.AUTHORIZATION));
                     requestId.set(request.requestHeaders().get("X-Request-Id"));
                     return response.header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                            .sendString(Mono.just("{\"answer\":\"준비 중\"}"));
+                            .sendString(Mono.just("""
+                                    {"answer":"준비 중","uiSummary":{"version":1,
+                                    "scopeNotice":null,
+                                    "headline":{"text":"최근 거래를 확인했습니다.","factIds":["fact-1"]},
+                                    "criteria":[],"interpretations":[],"followUp":null,
+                                    "fragmentSummaries":[]}}
+                                    """));
                 })
                 .bindNow();
         var client = client(URI.create("http://127.0.0.1:" + server.port()));
@@ -56,6 +62,9 @@ class WebClientChatbotAiClientTest {
                 .block(Duration.ofSeconds(3));
 
         assertThat(result.path("answer").asText()).isEqualTo("준비 중");
+        assertThat(result.path("uiSummary").path("version").asInt()).isEqualTo(1);
+        assertThat(result.path("uiSummary").path("headline").path("text").asText())
+                .isEqualTo("최근 거래를 확인했습니다.");
         assertThat(authorization).hasValue("Bearer user-token");
         assertThat(requestId).hasValue("request-1");
     }

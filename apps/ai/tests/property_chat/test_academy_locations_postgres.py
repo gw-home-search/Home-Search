@@ -11,6 +11,7 @@ from ai_service.property_chat.academy_locations import (
     _location,
     _validate_query,
 )
+from ai_service.property_chat.comparison import CandidatePoint
 
 
 @pytest.fixture(scope="module")
@@ -119,6 +120,25 @@ def test_nearby_includes_exact_800_meter_boundary_and_exact_registry_evidence(
     assert result.locations[1].distance_meters == 800
     assert result.coordinate_coverage == 1.0
     assert result.verified_zero is False
+
+
+def test_academy_batch_counts_all_candidates_without_individual_queries(
+    academy_location_postgres_dsn: str,
+) -> None:
+    repository = PostgresAcademyLocationRepository(
+        academy_location_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        results = repository.nearby_counts_batch(
+            points=(CandidatePoint(1, 37.513, 127.082, "11710"),),
+            radius_meters=800,
+        )
+    finally:
+        repository.close()
+
+    assert results is not None
+    assert results[1].matched_count == 2
+    assert results[1].coordinate_coverage == 1.0
 
 
 def test_nearby_returns_unverified_zero_without_loading_exact_evidence(

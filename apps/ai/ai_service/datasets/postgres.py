@@ -16,6 +16,7 @@ from psycopg.types.json import Jsonb
 from .academy_registry_projection import (
     write_projection as write_academy_registry_projection,
 )
+from .childcare_projection import write_projection as write_childcare_projection
 from .large_store_projection import write_projection as write_large_store_projection
 from .models import (
     AcquisitionRecord,
@@ -45,6 +46,7 @@ _PROJECTION_WRITERS: dict[str, ProjectionWriter] = {
     "place.sbiz-academy": write_sbiz_academy_projection,
     "retail.large-store": write_large_store_projection,
     "transport.rail-station": write_rail_station_projection,
+    "childcare.center": write_childcare_projection,
 }
 
 

@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Callable
 
 from .contracts import LicenseNotApprovedError, load_reference_source_catalog
+from .childcare_ingest import (
+    ChildcareIngestReport,
+    ingest_from_environment as ingest_childcare,
+)
 from .school_location_ingest import (
     SchoolLocationConfigurationError,
     SchoolLocationIngestReport,
@@ -40,6 +44,10 @@ _SOURCE_SECRET_KEYS = {
     "place.sbiz-academy": ("HOME_AI_DATA_GO_KR_SERVICE_KEY",),
     "retail.large-store": (),
     "transport.rail-station": (),
+    "childcare.center": (
+        "HOME_AI_CHILDCARE_SERVICE_KEY",
+        "HOME_AI_CHILDCARE_REGION_CODES",
+    ),
 }
 
 
@@ -53,6 +61,7 @@ class RefreshFailure:
 ReferenceIngestReport = (
     SchoolLocationIngestReport | AcademyRegistryIngestReport | LargeStoreIngestReport
     | SbizAcademyIngestReport | RailStationIngestReport
+    | ChildcareIngestReport
 )
 RefreshOutcome = ReferenceIngestReport | RefreshFailure
 
@@ -69,6 +78,7 @@ _SOURCE_DEFINITIONS = (
     SourceDefinition("place.sbiz-academy", ingest_sbiz_academy),
     SourceDefinition("retail.large-store", ingest_large_store),
     SourceDefinition("transport.rail-station", ingest_rail_station),
+    SourceDefinition("childcare.center", ingest_childcare),
 )
 
 

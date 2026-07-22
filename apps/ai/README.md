@@ -3,9 +3,9 @@
 `apps/ai` is the evidence-grounded FastAPI service. Slice 2 adds the isolated
 `home_search_ai` dataset lifecycle. Slice 4 adds the provider-agnostic grounded
 property kernel and a separate read-only property connection pool.
-Slice 6A adds a default-disabled school-location reference path and a one-shot
-official API importer. It does not activate the Capability without a `Pass`
-readiness report.
+Slice 6A adds a school-location reference path and a one-shot official API
+importer. The path remains fail-closed until its source-specific `Pass`
+readiness and activation record are complete.
 
 The property pool requires `HOME_AI_PROPERTY_DSN` to target database
 `home_search` as role `home_search_ai_reader`. It reads only `ai_read` views and
@@ -25,20 +25,44 @@ Runtime variables:
 - `HOME_AI_OPENAI_API_KEY`
 - `HOME_AI_OPENAI_PRIMARY_MODEL`
 - `HOME_AI_OPENAI_SECONDARY_MODEL`
-- `HOME_AI_OPENAI_TIMEOUT_SECONDS` (optional, default `8`, allowed `1..30`)
+- `HOME_AI_OPENAI_TIMEOUT_SECONDS` (optional, default `30`, allowed `1..30`)
 - `HOME_AI_QUERY_TIMEOUT_SECONDS` (optional, default `45`, allowed `1..60`)
-- `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend`
+- `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison`
 - `HOME_AI_REFERENCE_DSN` (separate `home_search_ai_runtime` read-only pool)
-- `HOME_AI_ENABLED_REFERENCE_CAPABILITIES` (blank by default; the only approved
-  non-empty value is `school_location` after activation approval)
+- `HOME_AI_ENABLED_REFERENCE_CAPABILITIES` (blank by default; only the exact
+  academy/rail/school/retail cumulative tuples recorded in `ai_service.chat` are
+  currently approved)
 
 The runtime Capability setting is fail-closed. This activation permits the
 identity-only rollback value or the cumulative
 `complex_identity,recent_trade_lookup` value, or the approved cumulative
-`complex_identity,recent_trade_lookup,price_trend` value. Missing, reordered,
-duplicate, whitespace-padded, or unapproved values disable all property capabilities.
+`complex_identity,recent_trade_lookup,price_trend` rollback value, or the approved
+`complex_identity,recent_trade_lookup,price_trend,recommendation` rollback value, or
+the active `complex_identity,recent_trade_lookup,price_trend,recommendation,comparison`
+value. The active recommendation facility scope supports explicit `ACADEMY`,
+`TRANSIT`, `SCHOOL`, and limited-coverage `SHOPPING` criteria. `BUDGET` mode is
+enabled only with the full cumulative reference allowlist;
+`MIN_UNIT_COUNT` remains an optional server-enforced filter. Missing,
+reordered, duplicate, whitespace-padded, or unapproved values disable all property
+capabilities. Comparison is limited to ready property, rail, retail, and explicitly
+requested school/academy observations; unavailable cells are not treated as worse
+values. Retail observations use only the coordinate-confirmed 88.79% of the active
+official registry and never claim a verified zero. Childcare/kindergarten execution
+remains inactive until its separate readiness gates pass.
 Golden verification uses its own explicit candidate set and does not widen the
 runtime allowlist.
+
+Local retail coordinate enrichment is a bounded, idempotent one-shot step:
+
+```bash
+apps/ai/ops/run-local-retail-coordinate-enrichment.sh
+```
+
+It reads the protected property vars file, applies AI dataset migrations, derives
+only exact dong/lot PNU values, and looks up at most 1,000 PNU values through the
+read-only Coordinate Source DB role. It appends evidence to `home_search_ai`; it
+does not update source registry rows, join the databases, call a geocoding API, or
+change Docker volumes.
 
 `academy_registry_summary` is implemented for offline review only. It resolves
 the property's province and district through the property read view, then runs
@@ -46,12 +70,31 @@ an exact education-office plus district aggregate query against the separate AI
 database. It remains impossible to enable through the runtime allowlist until
 license and live readiness approval are recorded.
 
-`academy_lookup` is also implemented for offline review only. It queries at
+`academy_lookup` is active and may also be used by the limited `CRITERIA`
+recommendation path. It queries at
 most five Sbiz education-store points within 800m by default, or an explicit
 100..2,000m radius. Unmatched results remain Sbiz B-grade location evidence;
 only Unicode NFKC name plus canonical road-address exact matches may add NEIS
-A-grade registry evidence. The runtime allowlist cannot enable this capability
-until license, taxonomy, coordinate coverage, and live readiness are approved.
+A-grade registry evidence. License, taxonomy, coordinate coverage, and live
+readiness approval are recorded in the reference readiness reports.
+
+`school_location` is active for operating-school location and straight-line
+distance facts from the nationwide official snapshot. It may also be used by
+the limited `CRITERIA` recommendation path when the user explicitly requests
+`SCHOOL`. School quality, ranking, attendance zones, admission outcomes, and
+walking time remain unsupported.
+
+`childcare_lookup` is implemented but intentionally absent from the runtime
+activation allowlist while the official service application is pending. Its
+typed handler uses only active `childcare.center` snapshots, a default 800m
+radius (explicit 100..2,000m), and at most five operating centers. It exposes
+center type, capacity, straight-line distance, and reference date; admission
+availability, waiting time, childcare quality, and rankings are rejected.
+Kindergarten has no approved official snapshot in this slice. The existing
+`DAYCARE_KINDERGARTEN` map action remains a user-triggered Kakao discovery path,
+not an official kindergarten fact source or a recommendation metric. Both
+childcare and kindergarten wording fail closed in recommendation until their
+separate source readiness and activation approvals pass.
 
 Do not rely on provider-side conversation state. The browser sends only the
 bounded `conversationContext`, and the AI service treats it as an untrusted
@@ -175,6 +218,7 @@ apps/ai/ops/run-local-reference-refresh.sh --source edu.academy-registry
 apps/ai/ops/run-local-reference-refresh.sh --source place.sbiz-academy
 apps/ai/ops/run-local-reference-refresh.sh --source retail.large-store
 apps/ai/ops/run-local-reference-refresh.sh --source transport.rail-station
+apps/ai/ops/run-local-reference-refresh.sh --source childcare.center
 apps/ai/ops/run-local-reference-refresh.sh --family priority
 ```
 
@@ -183,6 +227,10 @@ passwords, prepares the private versioned/object-locked MinIO bucket, runs
 migrations in a one-shot container, and then runs the importer. It passes
 secret names through Docker `--env` without placing values in process arguments.
 School and Sbiz receive only `HOME_AI_DATA_GO_KR_SERVICE_KEY`; NEIS receives
-only `HOME_AI_NEIS_SERVICE_KEY`; CSV/XLSX file sources receive neither provider
-key. The priority family starts one generic CLI container per source in fixed
-order, keeps those key boundaries, and continues after an individual failure.
+only `HOME_AI_NEIS_SERVICE_KEY`; childcare receives only
+`HOME_AI_CHILDCARE_SERVICE_KEY` and the bounded
+`HOME_AI_CHILDCARE_REGION_CODES` scope; CSV/XLSX file sources receive no provider
+key. Childcare remains outside the priority family until its source license and
+live completeness evidence are approved. The priority family starts one generic
+CLI container per active source in fixed order, keeps those key boundaries, and
+continues after an individual failure.

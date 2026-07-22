@@ -62,7 +62,9 @@ printf '%s\n' \
     'HOME_AI_RAW_S3_REGION=ap-northeast-2' \
     'HOME_AI_RAW_S3_ENDPOINT=http://minio:9000' \
     'HOME_AI_DATA_GO_KR_SERVICE_KEY=provider-fixture-secret' \
-    'HOME_AI_NEIS_SERVICE_KEY=neis-fixture-secret' >"$ai_vars"
+    'HOME_AI_NEIS_SERVICE_KEY=neis-fixture-secret' \
+    'HOME_AI_CHILDCARE_SERVICE_KEY=childcare-fixture-secret' \
+    'HOME_AI_CHILDCARE_REGION_CODES=11680,11710' >"$ai_vars"
 grep -Ev '^HOME_AI_NEIS_SERVICE_KEY=' "$ai_vars" >"$ai_vars_without_neis"
 chmod 600 "$property_vars" "$ai_vars" "$ai_vars_without_neis"
 
@@ -134,6 +136,16 @@ if grep -Eq -- '--env HOME_AI_(DATA_GO_KR|NEIS)_SERVICE_KEY' "$docker_log"; then
     exit 1
 fi
 grep -Fq 'home-ai-reference-refresh --source retail.large-store' "$docker_log"
+
+output="$(run_refresh --source childcare.center)"
+grep -Fq 'sourceId: childcare.center' <<<"$output"
+grep -Fq -- '--env HOME_AI_CHILDCARE_SERVICE_KEY' "$docker_log"
+grep -Fq -- '--env HOME_AI_CHILDCARE_REGION_CODES' "$docker_log"
+if grep -Eq -- '--env HOME_AI_(DATA_GO_KR|NEIS)_SERVICE_KEY' "$docker_log"; then
+    echo '상태: Fail - childcare refresh에 다른 provider secret이 전달됐습니다.' >&2
+    exit 1
+fi
+grep -Fq 'home-ai-reference-refresh --source childcare.center' "$docker_log"
 
 output="$(run_refresh --family priority)"
 [[ "$(grep -c 'home-ai-reference-refresh --source' "$docker_log")" == 5 ]]

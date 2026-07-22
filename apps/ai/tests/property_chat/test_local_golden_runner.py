@@ -13,6 +13,7 @@ RUNNER = AI_ROOT / "ops" / "run-local-property-golden.sh"
 def write_vars(path: Path, *, include_provider: bool = True) -> None:
     lines = [
         "HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:p%40ss@postgis:5432/home_search",
+        "HOME_AI_REFERENCE_DSN=postgresql://home_search_ai_runtime:r%40ss@postgis:5432/home_search_ai",
     ]
     if include_provider:
         lines.extend(
@@ -31,14 +32,16 @@ def write_fake_uv(path: Path) -> None:
     path.write_text(
         """#!/bin/sh
 set -eu
-test "$PGPASSWORD" = 'p@ss'
-test "$HOME_AI_PROPERTY_DSN" = 'host=127.0.0.1 port=15432 dbname=home_search user=home_search_ai_reader'
 case "$*" in
   'run home-ai-property-golden --mode offline')
+    test "$PGPASSWORD" = 'p@ss'
+    test "$HOME_AI_PROPERTY_DSN" = 'host=127.0.0.1 port=15432 dbname=home_search user=home_search_ai_reader'
     test -z "${HOME_AI_OPENAI_API_KEY:-}"
     printf offline >"$FAKE_UV_MARKER"
     ;;
   'run home-ai-property-golden --mode live --case-id complex-identity-jamsil-ells')
+    test "$PGPASSWORD" = 'p@ss'
+    test "$HOME_AI_PROPERTY_DSN" = 'host=127.0.0.1 port=15432 dbname=home_search user=home_search_ai_reader'
     test "$HOME_AI_OPENAI_API_KEY" = 'test-provider-secret'
     test "$HOME_AI_OPENAI_PRIMARY_MODEL" = 'gpt-5.6-luna'
     test "$HOME_AI_OPENAI_SECONDARY_MODEL" = 'gpt-5.6-terra'
@@ -47,12 +50,39 @@ case "$*" in
     printf complex-identity-jamsil-ells >"$FAKE_UV_MARKER"
     ;;
   'run home-ai-property-golden --mode live --case-id recent-trades-jamsil-ells-84')
+    test "$PGPASSWORD" = 'p@ss'
+    test "$HOME_AI_PROPERTY_DSN" = 'host=127.0.0.1 port=15432 dbname=home_search user=home_search_ai_reader'
     test "$HOME_AI_OPENAI_API_KEY" = 'test-provider-secret'
     test "$HOME_AI_OPENAI_PRIMARY_MODEL" = 'gpt-5.6-luna'
     test "$HOME_AI_OPENAI_SECONDARY_MODEL" = 'gpt-5.6-terra'
     test "$HOME_AI_OPENAI_TIMEOUT_SECONDS" = '15'
     test "$HOME_AI_GOLDEN_LIVE_CONFIRM" = 'RUN_ONE_LIVE_GOLDEN_CASE'
     printf recent-trades-jamsil-ells-84 >"$FAKE_UV_MARKER"
+    ;;
+  'run python -m ai_service.property_chat.criteria_activation')
+    test "$HOME_AI_OPENAI_API_KEY" = 'test-provider-secret'
+    test "$HOME_AI_OPENAI_PRIMARY_MODEL" = 'gpt-5.6-luna'
+    test "$HOME_AI_OPENAI_SECONDARY_MODEL" = 'gpt-5.6-terra'
+    test "$HOME_AI_OPENAI_TIMEOUT_SECONDS" = '15'
+    test "$HOME_AI_GOLDEN_LIVE_CONFIRM" = 'RUN_ONE_LIVE_GOLDEN_CASE'
+    printf criteria-recommendation-academy-transit >"$FAKE_UV_MARKER"
+    ;;
+  'run python -m ai_service.property_chat.reference_activation')
+    test "$HOME_AI_PROPERTY_DSN" = 'postgresql://home_search_ai_reader:p%40ss@127.0.0.1:15432/home_search'
+    test "$HOME_AI_REFERENCE_DSN" = 'postgresql://home_search_ai_runtime:r%40ss@127.0.0.1:15432/home_search_ai'
+    test "$HOME_AI_OPENAI_API_KEY" = 'test-provider-secret'
+    test "$HOME_AI_OPENAI_PRIMARY_MODEL" = 'gpt-5.6-luna'
+    test "$HOME_AI_OPENAI_SECONDARY_MODEL" = 'gpt-5.6-terra'
+    case "$HOME_AI_REFERENCE_ACTIVATION_CASE_ID" in
+      comparison-jamsil-ells-helio-84 | budget-recommendation-songpa-84-retail) test "$HOME_AI_OPENAI_TIMEOUT_SECONDS" = '30' ;;
+      *) test "$HOME_AI_OPENAI_TIMEOUT_SECONDS" = '15' ;;
+    esac
+    test "$HOME_AI_GOLDEN_LIVE_CONFIRM" = 'RUN_ONE_LIVE_GOLDEN_CASE'
+    case "$HOME_AI_REFERENCE_ACTIVATION_CASE_ID" in
+      school-location-jamsil-ells | comparison-jamsil-ells-helio-84 | budget-recommendation-songpa-84-retail)
+        printf '%s' "$HOME_AI_REFERENCE_ACTIVATION_CASE_ID" >"$FAKE_UV_MARKER" ;;
+      *) exit 92 ;;
+    esac
     ;;
   *) exit 91 ;;
 esac
@@ -92,7 +122,12 @@ def run_runner(
     vars_file = tmp_path / "ai.env"
     fake_uv = tmp_path / "uv"
     marker = tmp_path / "called"
+    property_vars_file = tmp_path / "property.env"
     write_vars(vars_file)
+    property_vars_file.write_text(
+        "AI_DATA_RUNTIME_DB_PASSWORD=r@ss\n", encoding="utf-8"
+    )
+    property_vars_file.chmod(0o600)
     if mutate_vars is not None:
         mutate_vars(vars_file)
     write_fake_uv(fake_uv)
@@ -102,6 +137,7 @@ def run_runner(
             "PATH": f"{tmp_path}{os.pathsep}{environment['PATH']}",
             "FAKE_UV_MARKER": str(marker),
             "HOME_AI_GOLDEN_LIVE_CONFIRM": confirmation,
+            "HOME_AI_REFERENCE_PROPERTY_VARS_FILE": str(property_vars_file),
         }
     )
     arguments = [str(RUNNER), mode]
@@ -155,6 +191,81 @@ def test_live_runner_runs_one_allowlisted_case_and_passes_provider_settings(
     )
     assert "test-provider-secret" not in result.stdout + result.stderr
     assert "p@ss" not in result.stdout + result.stderr
+
+
+def test_live_runner_runs_criteria_recommendation_activation_case(
+    tmp_path: Path,
+) -> None:
+    result = run_runner(
+        tmp_path,
+        "live",
+        case_id="criteria-recommendation-academy-transit",
+        confirmation="RUN_ONE_LIVE_GOLDEN_CASE",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (  # type: ignore[attr-defined]
+        result.marker.read_text(encoding="utf-8")
+        == "criteria-recommendation-academy-transit"
+    )
+    assert "test-provider-secret" not in result.stdout + result.stderr
+    assert "p@ss" not in result.stdout + result.stderr
+
+
+def test_live_runner_runs_school_reference_activation_case(
+    tmp_path: Path,
+) -> None:
+    result = run_runner(
+        tmp_path,
+        "live",
+        case_id="school-location-jamsil-ells",
+        confirmation="RUN_ONE_LIVE_GOLDEN_CASE",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (  # type: ignore[attr-defined]
+        result.marker.read_text(encoding="utf-8")
+        == "school-location-jamsil-ells"
+    )
+    assert "test-provider-secret" not in result.stdout + result.stderr
+    assert "p@ss" not in result.stdout + result.stderr
+    assert "r@ss" not in result.stdout + result.stderr
+
+
+def test_live_runner_runs_comparison_activation_case(tmp_path: Path) -> None:
+    result = run_runner(
+        tmp_path,
+        "live",
+        case_id="comparison-jamsil-ells-helio-84",
+        confirmation="RUN_ONE_LIVE_GOLDEN_CASE",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (  # type: ignore[attr-defined]
+        result.marker.read_text(encoding="utf-8")
+        == "comparison-jamsil-ells-helio-84"
+    )
+    assert "test-provider-secret" not in result.stdout + result.stderr
+    assert "p@ss" not in result.stdout + result.stderr
+    assert "r@ss" not in result.stdout + result.stderr
+
+
+def test_live_runner_runs_budget_retail_activation_case(tmp_path: Path) -> None:
+    result = run_runner(
+        tmp_path,
+        "live",
+        case_id="budget-recommendation-songpa-84-retail",
+        confirmation="RUN_ONE_LIVE_GOLDEN_CASE",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (  # type: ignore[attr-defined]
+        result.marker.read_text(encoding="utf-8")
+        == "budget-recommendation-songpa-84-retail"
+    )
+    assert "test-provider-secret" not in result.stdout + result.stderr
+    assert "p@ss" not in result.stdout + result.stderr
+    assert "r@ss" not in result.stdout + result.stderr
 
 
 def test_live_runner_rejects_missing_confirmation_without_invoking_uv(

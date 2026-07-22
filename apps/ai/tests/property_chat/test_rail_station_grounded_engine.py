@@ -206,6 +206,57 @@ def test_rail_lookup_rejects_commute_time_claim() -> None:
         _query(RailRepository(), model)
 
 
+def test_rail_lookup_allows_a_generic_station_label_with_observed_name() -> None:
+    model = LanguageModel()
+
+    async def generic_label_draft(*, facts, limitations, question):
+        draft = await LanguageModel().draft_answer(
+            facts=facts, limitations=limitations, question=question
+        )
+        first = draft.sentences[0]
+        return DraftAnswer(
+            [
+                DraftSentence(
+                    "최근접 지하철역은 잠실역이며 직선거리 640m입니다.",
+                    first.fact_ids,
+                    first.claims,
+                ),
+                *draft.sentences[1:],
+            ]
+        )
+
+    model.draft_answer = generic_label_draft  # type: ignore[method-assign]
+
+    response = _query(RailRepository(), model)
+
+    assert response["success"] is True
+
+
+def test_rail_lookup_still_rejects_an_unobserved_station_name() -> None:
+    model = LanguageModel()
+
+    async def invented_station_draft(*, facts, limitations, question):
+        draft = await LanguageModel().draft_answer(
+            facts=facts, limitations=limitations, question=question
+        )
+        first = draft.sentences[0]
+        return DraftAnswer(
+            [
+                DraftSentence(
+                    "강남역은 직선거리 640m입니다.",
+                    first.fact_ids,
+                    first.claims,
+                ),
+                *draft.sentences[1:],
+            ]
+        )
+
+    model.draft_answer = invented_station_draft  # type: ignore[method-assign]
+
+    with pytest.raises(Exception):
+        _query(RailRepository(), model)
+
+
 def test_rail_lookup_allows_explicit_unsupported_service_limitation() -> None:
     model = LanguageModel()
 

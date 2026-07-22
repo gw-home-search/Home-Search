@@ -234,10 +234,10 @@ fi
 ai_openai_api_key="$(required_value "$ai_vars_file" HOME_AI_OPENAI_API_KEY)"
 ai_openai_primary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_PRIMARY_MODEL)"
 ai_openai_secondary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_SECONDARY_MODEL)"
-ai_openai_timeout_seconds="$(optional_value "$ai_vars_file" HOME_AI_OPENAI_TIMEOUT_SECONDS 8)"
+ai_openai_timeout_seconds="$(optional_value "$ai_vars_file" HOME_AI_OPENAI_TIMEOUT_SECONDS 30)"
 ai_query_timeout_seconds="$(optional_value "$ai_vars_file" HOME_AI_QUERY_TIMEOUT_SECONDS 45)"
 if [[ "$using_default_runtime_files" == "true" ]]; then
-    ai_enabled_property_capabilities="$(optional_value "$ai_vars_file" HOME_AI_ENABLED_PROPERTY_CAPABILITIES complex_identity,recent_trade_lookup,price_trend)"
+    ai_enabled_property_capabilities="$(optional_value "$ai_vars_file" HOME_AI_ENABLED_PROPERTY_CAPABILITIES complex_identity,recent_trade_lookup,price_trend,recommendation,comparison)"
 else
     ai_enabled_property_capabilities="$(required_value "$ai_vars_file" HOME_AI_ENABLED_PROPERTY_CAPABILITIES)"
 fi
@@ -373,11 +373,11 @@ then
     reject "HOME_AI_OPENAI 설정이 올바르지 않습니다."
 fi
 case "$ai_enabled_property_capabilities" in
-    complex_identity | complex_identity,recent_trade_lookup | complex_identity,recent_trade_lookup,price_trend) ;;
+    complex_identity | complex_identity,recent_trade_lookup | complex_identity,recent_trade_lookup,price_trend | complex_identity,recent_trade_lookup,price_trend,recommendation | complex_identity,recent_trade_lookup,price_trend,recommendation,comparison) ;;
     *) reject "HOME_AI_ENABLED_PROPERTY_CAPABILITIES는 승인된 누적 설정만 허용합니다." ;;
 esac
 case "$ai_enabled_reference_capabilities" in
-    "" | academy_lookup | academy_lookup,rail_station_lookup) ;;
+    "" | academy_lookup | academy_lookup,rail_station_lookup | academy_lookup,rail_station_lookup,school_location | academy_lookup,rail_station_lookup,school_location,retail_location) ;;
     *) reject "HOME_AI_ENABLED_REFERENCE_CAPABILITIES는 승인된 reference 조합만 허용합니다." ;;
 esac
 

@@ -8,7 +8,7 @@ from datetime import date
 import pytest
 
 from ai_service.models import ChatbotQueryRequest, ConversationContext, ConversationMessage
-from ai_service.property_chat.models import EvidenceFact, FactClaim
+from ai_service.property_chat.models import EvidenceFact, FactClaim, QueryPlanBundle
 from ai_service.property_chat import openai_responses
 from ai_service.property_chat.openai_responses import (
     OpenAIResponsesError,
@@ -80,6 +80,11 @@ def _valid_plan(**overrides: object) -> dict[str, object]:
     return value
 
 
+def _recorded_plan_schema(requester: RecordingRequester) -> dict[str, object]:
+    schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
+    return schema["properties"]["fragments"]["items"]
+
+
 def test_planning_uses_fixed_responses_endpoint_without_provider_storage() -> None:
     requester = RecordingRequester(
         _response(
@@ -115,11 +120,13 @@ def test_planning_uses_fixed_responses_endpoint_without_provider_storage() -> No
     assert timeout == 7
     assert body["model"] == "approved-test-model"
     assert body["store"] is False
-    assert body["max_output_tokens"] == 500
+    assert body["max_output_tokens"] == 1_400
     assert body["text"]["format"]["type"] == "json_schema"
     assert body["text"]["format"]["strict"] is True
     assert body["text"]["format"]["schema"]["additionalProperties"] is False
-    plan_properties = body["text"]["format"]["schema"]["properties"]
+    plan_properties = body["text"]["format"]["schema"]["properties"][
+        "fragments"
+    ]["items"]["properties"]
     assert plan_properties["complexName"]["pattern"] == r"^.{1,100}$"
     assert plan_properties["exclusiveAreaSquareMeters"]["exclusiveMinimum"] == 0
     assert plan_properties["exclusiveAreaSquareMeters"]["maximum"] == 1000
@@ -130,7 +137,37 @@ def test_planning_uses_fixed_responses_endpoint_without_provider_storage() -> No
     assert "monthly or period aggregates" in developer_prompt
     assert "average, minimum, maximum, count, trend, or flow" in developer_prompt
     assert "latest individual trade records" in developer_prompt
-    assert "Set limit to 5 when it is not used" in developer_prompt
+    assert "Set limit to 5 only when" in developer_prompt
+
+
+def test_planning_accepts_a_bounded_compound_bundle() -> None:
+    requester = RecordingRequester(_response({"fragments": [
+        _valid_plan(
+            capability="comparison", complexNames=["잠실엘스", "헬리오시티"],
+            complexName="잠실엘스", exclusiveAreaSquareMeters=84.0,
+            schoolLevels=["ELEMENTARY", "MIDDLE", "HIGH"],
+            facilitySubtypes=[], radiusMeters=None, placeCategory=None,
+            maximumBudgetTenThousandKrw=None, lifestyleThemes=[],
+        ),
+        _valid_plan(
+            capability="kakao_place_search", complexName="잠실엘스",
+            placeCategory="HOSPITAL",
+            schoolLevels=["ELEMENTARY", "MIDDLE", "HIGH"],
+            facilitySubtypes=[], radiusMeters=None, complexNames=[],
+            maximumBudgetTenThousandKrw=None, lifestyleThemes=[],
+        ),
+    ]}))
+
+    bundle = asyncio.run(_model(requester).plan_query(
+        ChatbotQueryRequest(question="잠실엘스와 헬리오시티를 비교하고 병원도 보여줘")
+    ))
+
+    assert isinstance(bundle, QueryPlanBundle)
+    assert [plan.capability for plan in bundle.fragments] == [
+        "comparison", "kakao_place_search",
+    ]
+    root_schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
+    assert root_schema["properties"]["fragments"]["maxItems"] == 4
 
 
 def test_planning_accepts_school_location_with_explicit_levels_and_radius() -> None:
@@ -155,7 +192,7 @@ def test_planning_accepts_school_location_with_explicit_levels_and_radius() -> N
     assert plan.capability == "school_location"
     assert plan.school_levels == ("ELEMENTARY", "MIDDLE")
     assert plan.radius_meters == 800
-    schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
+    schema = _recorded_plan_schema(requester)
     assert "school_location" in schema["properties"]["capability"]["enum"]
     assert schema["properties"]["radiusMeters"] == {
         "type": ["integer", "null"],
@@ -186,7 +223,7 @@ def test_planning_accepts_retail_location_with_default_radius_and_subtypes() -> 
     assert plan.capability == "retail_location"
     assert plan.radius_meters == 1000
     assert plan.facility_subtypes == ("LARGE_MART", "COMPLEX_MALL")
-    schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
+    schema = _recorded_plan_schema(requester)
     assert "retail_location" in schema["properties"]["capability"]["enum"]
 
 
@@ -202,7 +239,7 @@ def test_planning_accepts_academy_registry_summary_without_location_semantics() 
     )
 
     assert plan.capability == "academy_registry_summary"
-    schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
+    schema = _recorded_plan_schema(requester)
     assert "academy_registry_summary" in schema["properties"]["capability"]["enum"]
     prompt = json.loads(requester.calls[0][2])["input"][0]["content"]
     assert "Do not interpret it as a nearby, radius, distance" in prompt
@@ -228,7 +265,7 @@ def test_planning_accepts_academy_lookup_with_800_meter_default() -> None:
 
     assert plan.capability == "academy_lookup"
     assert plan.radius_meters == 800
-    schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
+    schema = _recorded_plan_schema(requester)
     assert "academy_lookup" in schema["properties"]["capability"]["enum"]
 
 
@@ -252,12 +289,196 @@ def test_planning_accepts_rail_station_lookup_with_1500_meter_default() -> None:
 
     assert plan.capability == "rail_station_lookup"
     assert plan.radius_meters == 1500
-    schema = json.loads(requester.calls[0][2])["text"]["format"]["schema"]
-    assert schema["properties"]["capability"]["enum"][-1] == "rail_station_lookup"
+    schema = _recorded_plan_schema(requester)
+    assert "rail_station_lookup" in schema["properties"]["capability"]["enum"]
     assert "uniqueItems" not in schema["properties"]["schoolLevels"]
     assert "uniqueItems" not in schema["properties"]["facilitySubtypes"]
     prompt = json.loads(requester.calls[0][2])["input"][0]["content"]
     assert "Do not claim commute time, schedule, or congestion" in prompt
+
+
+def test_planning_accepts_childcare_lookup_with_800_meter_default() -> None:
+    requester = RecordingRequester(
+        _response(
+            _valid_plan(
+                capability="childcare_lookup",
+                schoolLevels=["ELEMENTARY", "MIDDLE", "HIGH"],
+                facilitySubtypes=[],
+                radiusMeters=None,
+            )
+        )
+    )
+
+    plan = asyncio.run(
+        _model(requester).plan_query(
+            ChatbotQueryRequest(question="잠실엘스 주변 어린이집")
+        )
+    )
+
+    assert plan.capability == "childcare_lookup"
+    assert plan.radius_meters == 800
+    schema = _recorded_plan_schema(requester)
+    body = json.loads(requester.calls[0][2])
+    assert "childcare_lookup" in schema["properties"][
+        "capability"
+    ]["enum"]
+    assert "Do not claim current admission availability" in body["input"][0][
+        "content"
+    ]
+
+
+def test_planning_accepts_kakao_hospital_map_action() -> None:
+    requester = RecordingRequester(
+        _response(
+            _valid_plan(
+                capability="kakao_place_search",
+                schoolLevels=["ELEMENTARY", "MIDDLE", "HIGH"],
+                facilitySubtypes=[],
+                radiusMeters=None,
+                placeCategory="HOSPITAL",
+            )
+        )
+    )
+
+    plan = asyncio.run(
+        _model(requester).plan_query(
+            ChatbotQueryRequest(question="잠실엘스 주변 병원을 지도에 보여줘")
+        )
+    )
+
+    assert plan.capability == "kakao_place_search"
+    assert plan.place_category == "HOSPITAL"
+    schema = _recorded_plan_schema(requester)
+    body = json.loads(requester.calls[0][2])
+    assert "kakao_place_search" in schema["properties"][
+        "capability"
+    ]["enum"]
+    assert schema["properties"]["placeCategory"] == {
+        "type": ["string", "null"],
+        "enum": ["HOSPITAL", "DAYCARE_KINDERGARTEN", None],
+    }
+    assert "map search runs only after the user clicks" in body["input"][0][
+        "content"
+    ]
+
+
+def test_planning_accepts_two_to_four_complex_comparison() -> None:
+    requester = RecordingRequester(
+        _response(_valid_plan(
+            capability="comparison",
+            complexName="잠실엘스",
+            exclusiveAreaSquareMeters=84.0,
+            schoolLevels=["ELEMENTARY", "MIDDLE", "HIGH"],
+            facilitySubtypes=[],
+            radiusMeters=None,
+            placeCategory=None,
+            complexNames=["잠실엘스", "헬리오시티"],
+        ))
+    )
+
+    plan = asyncio.run(_model(requester).plan_query(
+        ChatbotQueryRequest(question="잠실엘스와 헬리오시티 84㎡ 비교")
+    ))
+
+    assert plan.capability == "comparison"
+    assert plan.complex_names == ("잠실엘스", "헬리오시티")
+    assert plan.exclusive_area_square_meters == 84.0
+    schema = _recorded_plan_schema(requester)
+    body = json.loads(requester.calls[0][2])
+    assert "comparison" in schema["properties"][
+        "capability"
+    ]["enum"]
+    assert "never choose a winner" in body["input"][0]["content"]
+
+
+def test_planning_requires_typed_recommendation_region_budget_and_area() -> None:
+    requester = RecordingRequester(
+        _response(_valid_plan(
+            capability="recommendation",
+            complexName="송파구",
+            regionName="송파구",
+            exclusiveAreaSquareMeters=84.0,
+            maximumBudgetTenThousandKrw=200_000,
+            lifestyleThemes=["TRANSIT", "STUDENT"],
+        ))
+    )
+
+    plan = asyncio.run(_model(requester).plan_query(
+        ChatbotQueryRequest(question="송파구 20억 이하 전용 84㎡ 후보 추천")
+    ))
+
+    assert plan.capability == "recommendation"
+    assert plan.region_name == "송파구"
+    assert plan.maximum_budget_ten_thousand_krw == 200_000
+    assert plan.lifestyle_themes == ("TRANSIT", "STUDENT")
+
+
+def test_planning_prompt_requires_copying_explicit_recommendation_limit() -> None:
+    requester = RecordingRequester(
+        _response(_valid_plan(
+            capability="recommendation",
+            complexName="송파구",
+            regionName="송파구",
+            exclusiveAreaSquareMeters=84.0,
+            maximumBudgetTenThousandKrw=200_000,
+            lifestyleThemes=[],
+            recommendationMode="BUDGET",
+            minimumUnitCount=None,
+            recommendationCriteria=[],
+            criteriaOrder=[],
+            stationName=None,
+            limit=3,
+        ))
+    )
+
+    plan = asyncio.run(_model(requester).plan_query(
+        ChatbotQueryRequest(
+            question="송파구에서 20억원 이하 전용 84㎡ 아파트 3곳을 추천해줘"
+        )
+    ))
+
+    assert plan.limit == 3
+    body = json.loads(requester.calls[0][2])
+    assert "Copy an explicit requested result count to limit" in body["input"][0][
+        "content"
+    ]
+
+
+def test_planning_accepts_typed_criteria_recommendation_without_budget_or_area() -> None:
+    requester = RecordingRequester(_response(_valid_plan(
+        capability="recommendation",
+        complexName="영등포구",
+        regionName="영등포구",
+        maximumBudgetTenThousandKrw=None,
+        lifestyleThemes=[],
+        recommendationMode="CRITERIA",
+        minimumUnitCount=500,
+        recommendationCriteria=["ACADEMY"],
+        criteriaOrder=["ACADEMY"],
+        stationName=None,
+    )))
+
+    plan = asyncio.run(_model(requester).plan_query(
+        ChatbotQueryRequest(question="영등포구 500세대 이상 학원 우선 추천")
+    ))
+
+    assert plan.recommendation_mode == "CRITERIA"
+    assert plan.minimum_unit_count == 500
+    assert plan.recommendation_criteria == ("ACADEMY",)
+    schema = _recorded_plan_schema(requester)
+    assert schema["properties"]["recommendationCriteria"]["items"]["enum"] == [
+        "TRANSIT", "ACADEMY", "SCHOOL", "SHOPPING",
+    ]
+    schema = _recorded_plan_schema(requester)
+    body = json.loads(requester.calls[0][2])
+    assert "maximumBudgetTenThousandKrw" in schema["required"]
+    assert schema["properties"]["maximumBudgetTenThousandKrw"] == {
+        "type": ["integer", "null"],
+        "minimum": 1,
+        "maximum": 100000000,
+    }
+    assert "server owns those decisions" in body["input"][0]["content"]
+    assert "server revalidates them" in body["input"][0]["content"]
 
 
 def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> None:
@@ -304,13 +525,14 @@ def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> N
         {
             "factId": "property-trade-7",
             "claims": [{"value": "120000", "unit": "10_000_KRW"}],
-            "dataAsOf": "2026-06-30",
-            "payload": {"dealAmountTenThousandKrw": 120000},
         }
     ]
     assert "subject" not in user_payload
+    assert "dataAsOf" not in user_payload["facts"][0]
+    assert "payload" not in user_payload["facts"][0]
     assert request_body["text"]["format"]["name"] == "grounded_property_answer"
     assert request_body["max_output_tokens"] == 3200
+    assert request_body["reasoning"] == {"effort": "none"}
     sentence_schema = request_body["text"]["format"]["schema"]["properties"][
         "sentences"
     ]["items"]
@@ -327,6 +549,12 @@ def test_draft_answer_serializes_only_supplied_evidence_and_parses_claims() -> N
     developer_prompt = request_body["input"][0]["content"]
     assert "Every number token in sentence text must exactly match" in developer_prompt
     assert "Do not state fact counts, list numbers, or converted units" in developer_prompt
+    assert "Use every supplied fact at least once" in developer_prompt
+    assert "Do not omit scope or complex facts" in developer_prompt
+    assert "copy factId, value, and unit from one claim object" in developer_prompt
+    assert "never combine a value or unit with a different factId" in developer_prompt
+    assert "Do not state the count of complexes" in developer_prompt
+    assert "attach at most one claim" in developer_prompt
 
 
 def test_draft_schema_for_empty_facts_forbids_fact_references() -> None:
@@ -403,6 +631,17 @@ def test_transport_failure_and_oversized_response_do_not_expose_provider_data() 
             asyncio.run(model.plan_query(ChatbotQueryRequest(question="잠실엘스 위치")))
         assert str(raised.value) == ""
         assert "test-api-key" not in repr(raised.value)
+
+
+def test_provider_timeout_uses_a_non_disclosing_specific_reason() -> None:
+    model = _model(RecordingRequester(TimeoutError("secret provider detail")))
+
+    with pytest.raises(OpenAIResponsesError) as raised:
+        asyncio.run(model.plan_query(ChatbotQueryRequest(question="잠실엘스 위치")))
+
+    assert raised.value.reason_code == "PROVIDER_TIMEOUT"
+    assert str(raised.value) == ""
+    assert "secret provider detail" not in repr(raised.value)
 
 
 @pytest.mark.parametrize(

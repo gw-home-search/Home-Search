@@ -1,0 +1,1 @@
+HTTP 200 application/xml; official v1.7 contract fixture, credentials and contact fields omitted

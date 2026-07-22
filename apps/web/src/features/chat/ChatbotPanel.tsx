@@ -2,6 +2,8 @@ import { type ChangeEvent, type FormEvent, useEffect, useLayoutEffect, useMemo, 
 
 import { useAuth } from '../auth/AuthProvider';
 import { queryChatbot } from './api/chatbotClient';
+import { ChatMessageBody } from './ChatMessageBody';
+import type { ChatAction } from './actionContract';
 import type { ChatEvidence } from './chatTypes';
 import {
   buildConversationContext,
@@ -13,13 +15,14 @@ import {
 
 type ChatbotPanelProps = {
   onOpenChange?: (isOpen: boolean) => void;
+  onUiAction?: (action: ChatAction) => boolean;
   store?: IndexedDbChatConversationStore;
 };
 
 const QUESTION_MIN_HEIGHT_PX = 24;
 const QUESTION_MAX_HEIGHT_PX = 96;
 
-export function ChatbotPanel({ onOpenChange, store }: ChatbotPanelProps) {
+export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelProps) {
   const auth = useAuth();
   const storeRef = useRef(store);
   const launcherRef = useRef<HTMLButtonElement>(null);
@@ -32,6 +35,9 @@ export function ChatbotPanel({ onOpenChange, store }: ChatbotPanelProps) {
   const [question, setQuestion] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'sending'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [executedActionIds, setExecutedActionIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const selected = useMemo(
     () => conversations.find(({ id }) => id === selectedId) ?? null,
     [conversations, selectedId],
@@ -197,6 +203,10 @@ export function ChatbotPanel({ onOpenChange, store }: ChatbotPanelProps) {
           content: response.answer,
           createdAt: answeredAt,
           evidence,
+          artifacts: response.artifacts,
+          actions: response.actions,
+          ...(response.fragments.length === 0 ? {} : { fragments: response.fragments }),
+          ...(response.summary == null ? {} : { summary: response.summary }),
         }],
       });
     } catch (requestError) {
@@ -228,6 +238,12 @@ export function ChatbotPanel({ onOpenChange, store }: ChatbotPanelProps) {
   function selectExampleQuestion(example: string) {
     setQuestion(example);
     questionRef.current?.focus();
+  }
+
+  function executeUiAction(action: ChatAction) {
+    if (executedActionIds.has(action.actionId) || onUiAction == null) return;
+    if (!onUiAction(action)) return;
+    setExecutedActionIds((current) => new Set(current).add(action.actionId));
   }
 
   return (
@@ -324,8 +340,11 @@ export function ChatbotPanel({ onOpenChange, store }: ChatbotPanelProps) {
                   </span>
                   <div className="chatbot-message-content">
                     <strong>{message.role === 'user' ? '나' : '홈서치 AI'}</strong>
-                    <p>{message.content}</p>
-                    {message.evidence ? <Evidence evidence={message.evidence} /> : null}
+                    <ChatMessageBody
+                      executedActionIds={executedActionIds}
+                      message={message}
+                      onUiAction={executeUiAction}
+                    />
                   </div>
                 </article>
               )) : (
@@ -333,7 +352,7 @@ export function ChatbotPanel({ onOpenChange, store }: ChatbotPanelProps) {
                   <div className="chatbot-empty-intro">
                     <span>안녕하세요!</span>
                     <strong>어떤 집을 찾고 계세요?</strong>
-                    <p>지역과 예산, 면적을 알려주시면<br />검증된 부동산 데이터로 비교해드릴게요.</p>
+                    <p>단지와 면적, 궁금한 생활 조건을 알려주시면<br />검증된 데이터 범위에서 답해드릴게요.</p>
                   </div>
                   <div className="chatbot-example-section">
                     <strong>이런 질문은 어때요?</strong>
@@ -385,34 +404,6 @@ export function ChatbotPanel({ onOpenChange, store }: ChatbotPanelProps) {
   );
 }
 
-function Evidence({ evidence }: { evidence: ChatEvidence }) {
-  return (
-    <details className="chatbot-evidence">
-      <summary>
-        <span>답변 근거</span>
-        <span>{evidence.dataAsOf ? `기준일 ${evidence.dataAsOf}` : '조회 시점 근거'}</span>
-        <span>출처 {evidence.citations.length}개</span>
-        <span>근거 {evidence.evidenceSummary.factCount}개</span>
-      </summary>
-      <div>
-        <ul aria-label="답변 출처">
-          {evidence.citations.map((citation) => (
-            <li key={citation.citationId}>
-              {citation.sourceUrl ? (
-                <a href={citation.sourceUrl} rel="noreferrer noopener" target="_blank">
-                  {citation.sourceName}
-                </a>
-              ) : citation.sourceName}
-              <span>근거 등급 {citation.evidenceGrade}</span>
-            </li>
-          ))}
-        </ul>
-        {evidence.limitations.map((limitation) => <small key={limitation}>{limitation}</small>)}
-      </div>
-    </details>
-  );
-}
-
 const EXAMPLE_QUESTIONS = [
   {
     kind: 'recent-trade',
@@ -425,9 +416,9 @@ const EXAMPLE_QUESTIONS = [
     question: '헬리오시티 전용 59㎡의 최근 1년 월별 가격 흐름과 거래량을 보여줘',
   },
   {
-    kind: 'complex-identity',
-    label: '단지 정보',
-    question: '래미안원베일리의 정확한 주소와 단지 기본 정보를 확인해줘',
+    kind: 'lifestyle-infrastructure',
+    label: '생활 인프라',
+    question: '잠실엘스 주변 학원 위치와 가까운 역·노선을 함께 알려줘',
   },
 ];
 

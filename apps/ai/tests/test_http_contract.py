@@ -61,6 +61,43 @@ class DisabledCapabilityEngine:
         }
 
 
+class CompoundEngine:
+    async def query(self, **kwargs: object) -> dict[str, object]:
+        request = kwargs["request"]
+        return {
+            "success": True,
+            "status": "partial_success",
+            "question": request.question,
+            "fragments": [
+                {
+                    "fragmentId": "fragment-1", "capability": "complex_identity",
+                    "status": "success", "answer": "단지를 확인했습니다.",
+                    "factIds": [], "artifactIds": [], "actionIds": [],
+                    "limitations": [],
+                },
+                {
+                    "fragmentId": "fragment-2", "capability": "childcare_lookup",
+                    "status": "failed", "answer": "데이터를 준비 중입니다.",
+                    "factIds": [], "artifactIds": [], "actionIds": [],
+                    "limitations": ["어린이집 데이터가 준비되지 않았습니다."],
+                },
+            ],
+            "result": {}, "message": "",
+            "executionSummary": {"total": 2, "succeeded": 1, "failed": 1},
+            "answer": "단지를 확인했습니다. 데이터를 준비 중입니다.",
+            "resolvedQuestion": request.question, "conversationResolution": None,
+            "conversationMemoryPatch": None, "uiActions": [], "uiArtifacts": [],
+            "uiSummary": None, "requestId": kwargs["request_id"], "citations": [],
+            "dataAsOf": None,
+            "limitations": ["어린이집 데이터가 준비되지 않았습니다."],
+            "evidenceSummary": {
+                "status": "partial", "capabilities": [
+                    "complex_identity", "childcare_lookup",
+                ], "factCount": 0, "citationCount": 0,
+            },
+        }
+
+
 def setup_function() -> None:
     app.dependency_overrides.clear()
 
@@ -166,6 +203,32 @@ def test_disabled_capability_has_same_unavailable_meaning_in_json_and_sse() -> N
         "factCount": 0,
         "citationCount": 0,
     }
+
+
+def test_compound_fragment_set_is_identical_in_json_and_sse_final() -> None:
+    app.dependency_overrides[get_authenticator] = AcceptingAuthenticator
+    app.dependency_overrides[get_chatbot_engine] = CompoundEngine
+    client = TestClient(app)
+    headers = {
+        "Authorization": "Bearer test-token",
+        "X-Request-Id": "e65b0960-3150-4f39-86d7-f2a7582d4aa4",
+    }
+    payload = {"question": "단지를 확인하고 어린이집도 알려줘"}
+
+    json_response = client.post("/api/v1/chatbot/query", headers=headers, json=payload)
+    stream_response = client.post(
+        "/api/v1/chatbot/query/stream", headers=headers, json=payload,
+    )
+    final_data = next(
+        json.loads(line.removeprefix("data: "))
+        for line in stream_response.text.splitlines()
+        if line.startswith("data: ")
+    )
+
+    assert final_data["response"] == json_response.json()
+    assert [fragment["status"] for fragment in json_response.json()["fragments"]] == [
+        "success", "failed",
+    ]
 
 
 def test_invalid_request_id_is_not_reflected() -> None:

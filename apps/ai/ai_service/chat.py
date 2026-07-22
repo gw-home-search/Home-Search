@@ -15,12 +15,32 @@ _APPROVED_PROPERTY_CAPABILITY_CONFIGURATIONS = frozenset(
         ("complex_identity",),
         ("complex_identity", "recent_trade_lookup"),
         ("complex_identity", "recent_trade_lookup", "price_trend"),
+        (
+            "complex_identity",
+            "recent_trade_lookup",
+            "price_trend",
+            "recommendation",
+        ),
+        (
+            "complex_identity",
+            "recent_trade_lookup",
+            "price_trend",
+            "recommendation",
+            "comparison",
+        ),
     }
 )
 _APPROVED_REFERENCE_CAPABILITY_CONFIGURATIONS = frozenset(
     {
         ("academy_lookup",),
         ("academy_lookup", "rail_station_lookup"),
+        ("academy_lookup", "rail_station_lookup", "school_location"),
+        (
+            "academy_lookup",
+            "rail_station_lookup",
+            "school_location",
+            "retail_location",
+        ),
     }
 )
 
@@ -53,6 +73,11 @@ class _UnavailablePointFacilityRepository:
 
 
 class _UnavailableRailStationRepository:
+    def nearby(self, **_kwargs: object) -> object:
+        raise ChatbotProviderUnavailable()
+
+
+class _UnavailableChildcareRepository:
     def nearby(self, **_kwargs: object) -> object:
         raise ChatbotProviderUnavailable()
 
@@ -141,6 +166,19 @@ def get_rail_station_repository() -> object:
 
     try:
         return PostgresRailStationRepository(dsn)
+    except Exception as exception:
+        raise ChatbotProviderUnavailable() from exception
+
+
+@lru_cache
+def get_childcare_repository() -> object:
+    dsn = os.getenv("HOME_AI_REFERENCE_DSN", "").strip()
+    if not dsn:
+        raise ChatbotProviderUnavailable()
+    from .property_chat.childcare_centers import PostgresChildcareRepository
+
+    try:
+        return PostgresChildcareRepository(dsn)
     except Exception as exception:
         raise ChatbotProviderUnavailable() from exception
 
@@ -243,6 +281,7 @@ class ConfiguredChatbotEngine:
                 academy_location_repository = None
                 point_facility_repository = None
                 rail_station_repository = None
+                childcare_repository = None
                 if "school_location" in enabled_reference_capabilities:
                     try:
                         school_repository = await asyncio.to_thread(get_school_fact_repository)
@@ -282,6 +321,13 @@ class ConfiguredChatbotEngine:
                         )
                     except ChatbotProviderUnavailable:
                         rail_station_repository = _UnavailableRailStationRepository()
+                if "childcare_lookup" in enabled_reference_capabilities:
+                    try:
+                        childcare_repository = await asyncio.to_thread(
+                            get_childcare_repository
+                        )
+                    except ChatbotProviderUnavailable:
+                        childcare_repository = _UnavailableChildcareRepository()
                 engine = GroundedChatbotEngine(
                     repository=repository,  # type: ignore[arg-type]
                     school_repository=school_repository,  # type: ignore[arg-type]
@@ -297,9 +343,17 @@ class ConfiguredChatbotEngine:
                     rail_station_repository=(
                         rail_station_repository  # type: ignore[arg-type]
                     ),
+                    childcare_repository=(
+                        childcare_repository  # type: ignore[arg-type]
+                    ),
                     language_model=language_model,  # type: ignore[arg-type]
                     enabled_capabilities=get_enabled_property_capabilities(),
                     enabled_reference_capabilities=enabled_reference_capabilities,
+                    enabled_recommendation_modes=(
+                        frozenset({"CRITERIA", "BUDGET"})
+                        if "retail_location" in enabled_reference_capabilities
+                        else frozenset({"CRITERIA"})
+                    ),
                 )
                 return await engine.query(
                     request=request,

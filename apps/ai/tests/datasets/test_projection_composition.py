@@ -23,6 +23,7 @@ def test_projection_writers_are_feature_local_and_statically_composed() -> None:
         "place.sbiz-academy",
         "retail.large-store",
         "transport.rail-station",
+        "childcare.center",
     )
     assert tuple(writer.__module__ for writer in _PROJECTION_WRITERS.values()) == (
         "ai_service.datasets.school_location_projection",
@@ -30,6 +31,7 @@ def test_projection_writers_are_feature_local_and_statically_composed() -> None:
         "ai_service.datasets.sbiz_academy_projection",
         "ai_service.datasets.large_store_projection",
         "ai_service.datasets.rail_station_projection",
+        "ai_service.datasets.childcare_projection",
     )
 
 

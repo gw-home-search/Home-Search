@@ -8,6 +8,8 @@ from datetime import date
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+from .comparison import CandidatePoint
+
 
 @dataclass(frozen=True)
 class RailOccurrence:
@@ -36,6 +38,24 @@ class RailStationSearchResult:
     source_date: date
     coordinate_coverage: float = 1.0
     freshness_days: int = 410
+
+
+@dataclass(frozen=True)
+class StationScopeMatch:
+    station_name: str
+    latitude: float
+    longitude: float
+    lines: tuple[str, ...]
+    occurrence_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class StationScopeResolution:
+    matches: tuple[StationScopeMatch, ...]
+    dataset_version: str
+    source_date: date
+    coordinate_coverage: float
+    freshness_days: int
 
 
 class PostgresRailStationRepository:
@@ -144,14 +164,221 @@ class PostgresRailStationRepository:
             freshness_days=int(metadata["freshness_days"]),
         )
 
+    def nearest_batch(
+        self, *, points: tuple[CandidatePoint, ...], radius_meters: int
+    ) -> dict[int, RailStationSearchResult] | None:
+        _validate_points(points, radius_meters)
+        with self._pool.connection() as connection:
+            rows = connection.execute(
+                """
+                WITH candidates AS (
+                    SELECT complex_id, latitude, longitude
+                    FROM unnest(%s::bigint[], %s::double precision[], %s::double precision[])
+                         AS value(complex_id, latitude, longitude)
+                ), ranked AS (
+                    SELECT candidate.complex_id, occurrence.occurrence_id,
+                           occurrence.station_name, occurrence.line_name,
+                           occurrence.transfer_lines, occurrence.latitude,
+                           occurrence.longitude,
+                           ST_Distance(
+                               occurrence.position,
+                               ST_SetSRID(ST_MakePoint(
+                                   candidate.longitude, candidate.latitude
+                               ), 4326)::geography
+                           ) AS distance_meters,
+                           row_number() OVER (
+                               PARTITION BY candidate.complex_id
+                               ORDER BY ST_Distance(
+                                   occurrence.position,
+                                   ST_SetSRID(ST_MakePoint(
+                                       candidate.longitude, candidate.latitude
+                                   ), 4326)::geography
+                               ), occurrence.occurrence_id
+                           ) AS occurrence_rank
+                    FROM candidates candidate
+                    JOIN reference_read.rail_station_occurrence occurrence
+                      ON ST_DWithin(
+                          occurrence.position,
+                          ST_SetSRID(ST_MakePoint(
+                              candidate.longitude, candidate.latitude
+                          ), 4326)::geography,
+                          %s + 0.001
+                      )
+                )
+                SELECT * FROM ranked WHERE occurrence_rank <= 25
+                ORDER BY complex_id, occurrence_rank
+                """,
+                (
+                    [point.complex_id for point in points],
+                    [point.latitude for point in points],
+                    [point.longitude for point in points],
+                    radius_meters,
+                ),
+            ).fetchall()
+            metadata = connection.execute(
+                """
+                SELECT metadata.dataset_version, metadata.source_date,
+                       metadata.freshness_days,
+                       sum(coverage.total_count)::bigint AS total_count,
+                       sum(coverage.spatial_count)::bigint AS spatial_count
+                FROM reference_read.active_source_metadata metadata
+                LEFT JOIN reference_read.source_coverage coverage
+                  ON coverage.publication_id = metadata.publication_id
+                WHERE metadata.source_id = 'transport.rail-station'
+                GROUP BY metadata.dataset_version, metadata.source_date,
+                         metadata.freshness_days
+                """
+            ).fetchone()
+        if (
+            metadata is None
+            or metadata["source_date"] is None
+            or metadata["total_count"] is None
+            or int(metadata["total_count"]) <= 0
+        ):
+            return None
+        by_complex: dict[int, list[RailOccurrence]] = {
+            point.complex_id: [] for point in points
+        }
+        for row in rows:
+            by_complex[int(row["complex_id"])].append(RailOccurrence(
+                occurrence_id=str(row["occurrence_id"]),
+                station_name=str(row["station_name"]),
+                line_name=str(row["line_name"]),
+                transfer_lines=tuple(str(value) for value in row["transfer_lines"] or ()),
+                latitude=float(row["latitude"]),
+                longitude=float(row["longitude"]),
+                distance_meters=round(float(row["distance_meters"])),
+            ))
+        coverage = int(metadata["spatial_count"] or 0) / int(metadata["total_count"])
+        return {
+            point.complex_id: RailStationSearchResult(
+                stations=merge_station_occurrences(
+                    tuple(by_complex[point.complex_id]), limit=1
+                ),
+                occurrence_count=len(by_complex[point.complex_id]),
+                dataset_version=str(metadata["dataset_version"]),
+                source_date=metadata["source_date"],
+                coordinate_coverage=coverage,
+                freshness_days=int(metadata["freshness_days"]),
+            )
+            for point in points
+        }
+
+    def resolve_station(self, station_name: str) -> StationScopeResolution | None:
+        normalized_name = _name(station_name)
+        if normalized_name.endswith("역"):
+            normalized_name = normalized_name[:-1].strip()
+        if not normalized_name or len(normalized_name) > 100:
+            raise ValueError("station scope name is invalid")
+        with self._pool.connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT occurrence_id, station_name, line_name, transfer_lines,
+                       latitude, longitude
+                FROM reference_read.rail_station_occurrence
+                WHERE lower(regexp_replace(station_name, '역$', '')) = lower(%s)
+                ORDER BY occurrence_id
+                LIMIT 25
+                """,
+                (normalized_name,),
+            ).fetchall()
+            metadata = connection.execute(
+                """
+                SELECT metadata.dataset_version, metadata.source_date,
+                       metadata.freshness_days,
+                       sum(coverage.total_count)::bigint AS total_count,
+                       sum(coverage.spatial_count)::bigint AS spatial_count
+                FROM reference_read.active_source_metadata metadata
+                LEFT JOIN reference_read.source_coverage coverage
+                  ON coverage.publication_id = metadata.publication_id
+                WHERE metadata.source_id = 'transport.rail-station'
+                GROUP BY metadata.dataset_version, metadata.source_date,
+                         metadata.freshness_days
+                """
+            ).fetchone()
+        if not rows:
+            return None
+        if (
+            metadata is None
+            or metadata["source_date"] is None
+            or metadata["total_count"] is None
+            or int(metadata["total_count"]) <= 0
+        ):
+            raise RuntimeError("active rail station metadata is missing")
+        occurrences = tuple(
+            RailOccurrence(
+                occurrence_id=str(row["occurrence_id"]),
+                station_name=str(row["station_name"]),
+                line_name=str(row["line_name"]),
+                transfer_lines=tuple(str(value) for value in row["transfer_lines"] or ()),
+                latitude=float(row["latitude"]),
+                longitude=float(row["longitude"]),
+                distance_meters=0,
+            )
+            for row in rows
+        )
+        groups = _group_occurrences(occurrences)
+        return StationScopeResolution(
+            matches=tuple(
+                StationScopeMatch(
+                    station_name=_name(group[0].station_name),
+                    latitude=group[0].latitude,
+                    longitude=group[0].longitude,
+                    lines=tuple(dict.fromkeys(
+                        line
+                        for occurrence in group
+                        for line in (occurrence.line_name, *occurrence.transfer_lines)
+                        if line.strip()
+                    )),
+                    occurrence_ids=tuple(item.occurrence_id for item in group),
+                )
+                for group in groups
+            ),
+            dataset_version=str(metadata["dataset_version"]),
+            source_date=metadata["source_date"],
+            coordinate_coverage=(
+                int(metadata["spatial_count"] or 0) / int(metadata["total_count"])
+            ),
+            freshness_days=int(metadata["freshness_days"]),
+        )
+
 
 def merge_station_occurrences(
     occurrences: tuple[RailOccurrence, ...], *, limit: int = 5
 ) -> tuple[RailStation, ...]:
     if not 1 <= limit <= 5 or len(occurrences) > 25:
         raise ValueError("rail occurrence merge bounds are invalid")
+    groups = _group_occurrences(occurrences)
+    stations = []
+    for group in groups[:limit]:
+        lines = tuple(
+            dict.fromkeys(
+                line
+                for occurrence in group
+                for line in (occurrence.line_name, *occurrence.transfer_lines)
+                if line.strip()
+            )
+        )
+        stations.append(
+            RailStation(
+                station_name=_name(group[0].station_name),
+                lines=lines,
+                occurrence_ids=tuple(item.occurrence_id for item in group),
+                distance_meters=min(item.distance_meters for item in group),
+            )
+        )
+    return tuple(stations)
+
+
+def _group_occurrences(
+    occurrences: tuple[RailOccurrence, ...],
+) -> list[list[RailOccurrence]]:
+    if len(occurrences) > 25:
+        raise ValueError("rail occurrence merge bounds are invalid")
     groups: list[list[RailOccurrence]] = []
-    for occurrence in sorted(occurrences, key=lambda item: (item.distance_meters, item.occurrence_id)):
+    for occurrence in sorted(
+        occurrences, key=lambda item: (item.distance_meters, item.occurrence_id)
+    ):
         if (
             not occurrence.occurrence_id.strip()
             or not _name(occurrence.station_name)
@@ -172,25 +399,7 @@ def merge_station_occurrences(
             groups.append([occurrence])
         else:
             matching.append(occurrence)
-    stations = []
-    for group in groups[:limit]:
-        lines = tuple(
-            dict.fromkeys(
-                line
-                for occurrence in group
-                for line in (occurrence.line_name, *occurrence.transfer_lines)
-                if line.strip()
-            )
-        )
-        stations.append(
-            RailStation(
-                station_name=_name(group[0].station_name),
-                lines=lines,
-                occurrence_ids=tuple(item.occurrence_id for item in group),
-                distance_meters=min(item.distance_meters for item in group),
-            )
-        )
-    return tuple(stations)
+    return groups
 
 
 def _name(value: str) -> str:
@@ -218,3 +427,20 @@ def _validate_query(
         or not 1 <= limit <= 5
     ):
         raise ValueError("rail station query is invalid")
+
+
+def _validate_points(points: tuple[CandidatePoint, ...], radius_meters: int) -> None:
+    if (
+        not 1 <= len(points) <= 100
+        or len({point.complex_id for point in points}) != len(points)
+        or not 100 <= radius_meters <= 3000
+        or any(
+            point.complex_id <= 0
+            or not math.isfinite(point.latitude)
+            or not math.isfinite(point.longitude)
+            or not 33 <= point.latitude <= 39
+            or not 124 <= point.longitude <= 132
+            for point in points
+        )
+    ):
+        raise ValueError("rail station batch query is invalid")

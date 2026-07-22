@@ -10,11 +10,13 @@ from pathlib import Path
 PRIORITY_SOURCES = (
     "edu.school-location", "edu.academy-registry", "place.sbiz-academy",
     "retail.large-store", "transport.rail-station",
+    "childcare.center",
 )
 API_PARAMETERS = {
     "edu.school-location": ("serviceKey", "pageNo", "numOfRows", "type"),
     "edu.academy-registry": ("KEY", "Type", "pIndex", "pSize", "ATPT_OFCDC_SC_CODE"),
     "place.sbiz-academy": ("serviceKey", "divId", "key", "indsSclsCd", "pageNo", "numOfRows", "type"),
+    "childcare.center": ("key", "arcode", "stcode"),
 }
 NORMALIZATION_FIELDS = {
     "edu.school-location": ("school_id", "school_name", "school_level", "operating_status", "latitude", "longitude"),
@@ -22,6 +24,7 @@ NORMALIZATION_FIELDS = {
     "place.sbiz-academy": ("store_id", "name", "small_category_code", "road_address", "postal_code", "latitude", "longitude"),
     "retail.large-store": ("facility_id", "subcategory", "status", "road_address", "latitude", "longitude"),
     "transport.rail-station": ("station_occurrence_id", "operator", "line_number", "station_name", "latitude", "longitude"),
+    "childcare.center": ("center_id", "center_name", "center_type", "operating_status", "address", "capacity", "latitude", "longitude", "reference_date"),
 }
 FAILURE_CODES = {
     "edu.school-location": ("API_TRANSPORT_FAILED", "API_PAGINATION_INVALID", "API_BUNDLE_TOO_LARGE"),
@@ -29,6 +32,7 @@ FAILURE_CODES = {
     "place.sbiz-academy": ("TAXONOMY_CHANGED", "PROVIDER_TOTAL_COUNT_MISMATCH", "DUPLICATE_STORE_ID"),
     "retail.large-store": ("FILE_TRANSPORT_FAILED", "FILE_MEDIA_TYPE_INVALID", "FILE_LENGTH_MISMATCH", "SOURCE_SCHEMA_MISMATCH", "KOREA_COORDINATE_OUT_OF_RANGE"),
     "transport.rail-station": ("SOURCE_DATE_UNVERIFIED", "XLSX_MACRO_REJECTED", "RAIL_STATION_COORDINATE_REQUIRED"),
+    "childcare.center": ("API_TRANSPORT_FAILED", "API_XML_INVALID", "SOURCE_SCHEMA_MISMATCH", "OPERATING_STATUS_UNKNOWN", "KOREA_COORDINATE_OUT_OF_RANGE"),
 }
 
 
@@ -36,12 +40,15 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--examples", type=Path, required=True)
+    parser.add_argument("--answer-goldens", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    generate(args.config, args.examples, args.output)
+    generate(args.config, args.examples, args.answer_goldens, args.output)
 
 
-def generate(config_path: Path, examples: Path, output: Path) -> None:
+def generate(
+    config_path: Path, examples: Path, answer_goldens: Path, output: Path
+) -> None:
     document = tomllib.loads(config_path.read_text(encoding="utf-8"))
     by_id = {source["id"]: source for source in document["sources"]}
     if set(PRIORITY_SOURCES) - set(by_id):
@@ -57,6 +64,11 @@ def generate(config_path: Path, examples: Path, output: Path) -> None:
             path = target / name
             path.write_text(content, encoding="utf-8", newline="\n")
             hashes[str(path.relative_to(output))] = _sha256(path)
+    golden_path = output / "answer-goldens.adoc"
+    golden_path.write_text(
+        _answer_golden_snippet(answer_goldens), encoding="utf-8", newline="\n"
+    )
+    hashes[str(golden_path.relative_to(output))] = _sha256(golden_path)
     manifest = {
         "schemaVersion": 1,
         "sources": list(PRIORITY_SOURCES),
@@ -110,6 +122,58 @@ def _clear_directory(path: Path) -> None:
     for child in sorted(path.rglob("*"), reverse=True):
         child.unlink() if child.is_file() or child.is_symlink() else child.rmdir()
     path.rmdir()
+
+
+def _answer_golden_snippet(path: Path) -> str:
+    root = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(root, dict) or set(root) != {"version", "cases"}:
+        raise ValueError("answer golden fixture is invalid")
+    cases = root["cases"]
+    if root["version"] != 1 or not isinstance(cases, list) or len(cases) != 10:
+        raise ValueError("answer golden case count is invalid")
+    required = {
+        "id", "title", "question", "plan", "serverValidation", "observation",
+        "evidenceFacts", "presentationBasis", "artifact", "uiSummary", "screen",
+        "textFallback", "limitations", "rejectedSentence",
+    }
+    lines = ["== 구조화 답변 골든 모음", ""]
+    seen: set[str] = set()
+    for case in cases:
+        if not isinstance(case, dict) or set(case) != required:
+            raise ValueError("answer golden case shape is invalid")
+        case_id = case["id"]
+        if (
+            not isinstance(case_id, str)
+            or not case_id.replace("-", "").isalnum()
+            or case_id in seen
+        ):
+            raise ValueError("answer golden case id is invalid")
+        seen.add(case_id)
+        lines.extend([
+            f"=== {case['title']}", "",
+            f"* fixture: `{case_id}`", f"* 질문: {case['question']}", "",
+        ])
+        for label, key in (
+            ("plan", "plan"),
+            ("server validation", "serverValidation"),
+            ("observation", "observation"),
+            ("EvidenceFact", "evidenceFacts"),
+            ("presentationBasis", "presentationBasis"),
+            ("artifact JSON", "artifact"),
+            ("uiSummary JSON", "uiSummary"),
+        ):
+            lines.extend([
+                f".{label}", "[source,json]", "----",
+                json.dumps(case[key], ensure_ascii=False, sort_keys=True, indent=2),
+                "----", "",
+            ])
+        lines.extend([
+            f"* 사용자가 보는 화면: {case['screen']}",
+            f"* text fallback: {case['textFallback']}",
+            f"* 제한사항: {case['limitations']}",
+            f"* 거부 문장: `{case['rejectedSentence']}`", "",
+        ])
+    return "\n".join(lines) + "\n"
 
 
 def _sha256(path: Path) -> str:

@@ -216,6 +216,33 @@ def test_lookup_rejects_registry_count_or_fuzzy_match_claim(
         _query(AcademyLocationRepository(exact=True), model)
 
 
+def test_lookup_rejects_an_unobserved_academy_name_with_a_space() -> None:
+    model = LanguageModel()
+
+    async def invalid_draft(*, facts, limitations, question):
+        draft = await LanguageModel().draft_answer(
+            facts=facts, limitations=limitations, question=question
+        )
+        sentences = list(draft.sentences)
+        location_index = next(
+            index
+            for index, sentence in enumerate(sentences)
+            if sentence.fact_ids[0].startswith("sbiz-academy-location-")
+        )
+        original = sentences[location_index]
+        sentences[location_index] = DraftSentence(
+            "가짜 학원은 직선거리 800m의 교육업소입니다.",
+            original.fact_ids,
+            original.claims,
+        )
+        return DraftAnswer(sentences)
+
+    model.draft_answer = invalid_draft  # type: ignore[method-assign]
+
+    with pytest.raises(Exception):
+        _query(AcademyLocationRepository(exact=False), model)
+
+
 def test_lookup_fails_closed_below_nationwide_coordinate_coverage() -> None:
     response = _query(
         AcademyLocationRepository(exact=False, coordinate_coverage=0.949)

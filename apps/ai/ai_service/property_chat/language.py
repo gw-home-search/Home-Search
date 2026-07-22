@@ -7,7 +7,7 @@ from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
 
 from .engine import GroundedLanguageModel, validate_draft
-from .models import DraftAnswer, EvidenceFact, QueryPlan
+from .models import DraftAnswer, EvidenceFact, QueryPlan, QueryPlanBundle
 
 T = TypeVar("T")
 
@@ -45,7 +45,9 @@ class RetryingLanguageModel:
         self._primary = primary
         self._secondary = secondary
 
-    async def plan_query(self, request: ChatbotQueryRequest) -> QueryPlan:
+    async def plan_query(
+        self, request: ChatbotQueryRequest
+    ) -> QueryPlan | QueryPlanBundle:
         try:
             return await self._execute(
                 lambda model: model.plan_query(request),

@@ -5,4 +5,5 @@
 @import "./styles/detail.css";
 @import "../features/auth/auth.css";
 @import "../features/chat/chat.css";
+@import "../features/chat/chat-artifacts.css";
 @import "./styles/responsive.css";

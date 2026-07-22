@@ -30,19 +30,18 @@ snapshot 또는 검증된 실시간 응답에만 실제 근거 등급을 부여�
 |---|---|---|---|---|---|
 | `property.ai_read` | 기존 `home_search`의 승인된 read-only view | property-data / 운영 데이터 | A | 단지, 거래, 가격 집계 | Slice 3 감사와 view/role 필요 |
 | `edu.school-location` | [전국초중등학교위치표준데이터](https://www.data.go.kr/data/15021148/standard.do?recommendDataYn=Y) | 교육부 계열 / 반기 | A | 학교 ID, 유형, 운영상태, 위치 | Slice 6A 코드·fixture 검증 완료; dataset-specific 이용조건·실제 수집 미완료 |
-| `edu.school-zone` | [학구도안내서비스 공개자료](https://schoolzone.emac.kr/publicData/publicDataList.do) | 교육부 계열 / 반기 release | A | 초등 통학구역·중학구/학교군·고교 구역과 학교 관계 | tracked contract 등록; 이용조건·수집 미완료 |
+| `edu.school-zone` | [학구도안내서비스 공개자료](https://schoolzone.emac.kr/publicData/publicDataList.do) | 교육부 계열 / 반기 release | 미지원 | 현재 생활 인프라 chatbot 범위 밖 | contract 후보는 보존하되 수집·활성화하지 않음 |
 | `edu.academy-registry` | [전국학원및교습소표준데이터](https://www.data.go.kr/data/15096277/standard.do) | 교육부·17개 시도교육청 / 월간 관측 | A | 공식 등록 학원·교습소 시군구 집계 | 17개 교육청 adapter 검증; 이용조건·실제 수집 미완료 |
 | `place.sbiz-academy` | [상가(상권)정보 API](https://www.data.go.kr/data/15012005/openapi.do) | 소상공인시장진흥공단 / 월간 관측 | B | 교육업소 좌표와 NEIS exact match | tracked contract 등록; 이용조건·adapter 미완료 |
-| `retail.large-store` | [전국대규모및준대규모점포표준데이터](https://www.data.go.kr/data/15114138/standard.do) | 행정안전부 / 월간 | A | 대형마트·백화점·쇼핑센터·복합쇼핑몰 | CSV/PostGIS offline 검증; 이용조건·실제 수집 미완료 |
-| `edu.school-info` | [학교알리미 공개용 데이터](https://www.data.go.kr/data/15014351/fileData.do) | KERIS / 파일 버전별 | A | 승인된 학생·교사·시설 지표 | 지표·freshness 계약 미확정 |
-| `edu.statistics` | [교육통계서비스 유초중등 데이터셋](https://www.data.go.kr/data/15139276/fileData.do) | 교육부 / 파일 버전별 | A | 정의가 고정된 교육 통계 | 지표·freshness 계약 미확정 |
+| `retail.large-store` | [전국대규모및준대규모점포표준데이터](https://www.data.go.kr/data/15114138/standard.do) | 행정안전부 / 일간 관측 | A | 대형마트·백화점·쇼핑센터·복합쇼핑몰 | 4,176행 게시·좌표 확인 3,708행(88.7931%); 제한 활성화 |
+| `edu.school-info` | [학교알리미 공개용 데이터](https://www.data.go.kr/data/15014351/fileData.do) | KERIS / 파일 버전별 | 미지원 | 현재 생활 인프라 chatbot 범위 밖 | 학생·교사·품질 지표를 수집·활성화하지 않음 |
+| `edu.statistics` | [교육통계서비스 유초중등 데이터셋](https://www.data.go.kr/data/15139276/fileData.do) | 교육부 / 파일 버전별 | 미지원 | 현재 생활 인프라 chatbot 범위 밖 | 교육지표를 수집·활성화하지 않음 |
 | `transport.rail-station` | [전국도시철도역사정보표준데이터](https://www.data.go.kr/data/15013205/standard.do) | 국토교통부·국가철도공단 / 연간 | A | 역명, 노선, 위치 | 계약 등록됨; 미수집 |
-| `medical.hira-hospital` | [건강보험심사평가원 병원정보서비스](https://www.data.go.kr/data/15001698/openapi.do?recommendDataYn=Y) | 건강보험심사평가원 / API | B | 공식 의료기관 유형·위치 | API operation·쿼터 계약 미확정 |
-| `medical.hira-pharmacy` | [건강보험심사평가원 약국정보서비스](https://www.data.go.kr/data/15001673/openapi.do) | 건강보험심사평가원 / API | B | 공식 약국 위치 | API operation·쿼터 계약 미확정 |
-| `childcare.center` | [전국어린이집표준데이터](https://www.data.go.kr/data/15013108/standard.do?recommendDataYn=Y) | 교육부·한국사회보장정보원 / 수시 | A 또는 B | 유형, 정원 등 공개 항목 | 후보 등록; 이용조건·수집 미완료 |
+| `medical.hira-hospital` | [건강보험심사평가원 병원정보서비스](https://www.data.go.kr/data/15001698/openapi.do?recommendDataYn=Y) | 건강보험심사평가원 / API | 미지원 | 현재 생활 인프라 chatbot 범위 밖 | HIRA 수집 없음; 병원은 Kakao 지도 탐색 action만 제공 |
+| `medical.hira-pharmacy` | [건강보험심사평가원 약국정보서비스](https://www.data.go.kr/data/15001673/openapi.do) | 건강보험심사평가원 / API | 미지원 | 현재 생활 인프라 chatbot 범위 밖 | HIRA 수집 없음 |
+| `childcare.center` | [전국어린이집표준데이터](https://www.data.go.kr/data/15013108/standard.do?recommendDataYn=Y) | 교육부·한국사회보장정보원 / 수시 | A 또는 B | 유형, 운영현황, 정원, 위치, 기준일 | `cpmsapi030` collector·projection·grounded lookup 코드 검증 완료; 신청 승인·live completeness 전 비활성 |
 | `environment.city-park` | [전국도시공원정보표준데이터](https://www.data.go.kr/data/15012890/standard.do) | 지자체 / 월간 관측 | A | 조성 완료 공원 위치·면적 | tracked contract 등록; 이용조건·adapter 미완료 |
 | `place.kakao-local` | [Kakao Local REST API](https://developers.kakao.com/docs/ko/local/dev-guide) | Kakao / 실시간 검색 | C | 주소·좌표 변환, 키워드·카테고리 장소 탐색 | 운영정책·캐시 승인 전 비활성 |
-| `law.open-law` | [국가법령정보 공동활용](https://open.law.go.kr/LSO/openApi/guideList.do) | 법제처 / 현행·연혁 API | A | 법령, 시행령·시행규칙, 조문 버전 | 이용 조건·대상 법령 계약 미확정 |
 | `official.redevelopment` | 지자체·국토부·공공기관 allowlist | 문서별 | D | 정비사업 공식 공고의 현재 단계 | allowlist 미확정 |
 
 공공데이터포털 landing page에 표시된 갱신 주기는 수집 SLA의 입력값일 뿐이다.

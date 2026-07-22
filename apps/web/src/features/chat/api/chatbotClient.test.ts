@@ -28,6 +28,58 @@ describe('챗봇 질문 client', () => {
         factCount: 1,
         citationCount: 1,
       },
+      uiArtifacts: [{
+        type: 'factList',
+        version: 1,
+        artifactId: 'artifact-1',
+        title: '확인된 단지 정보',
+        items: [{ label: '단지명', value: '잠실엘스', factIds: ['property-trade-1'] }],
+      }, {
+        type: 'futureArtifact',
+        version: 1,
+        artifactId: 'future-1',
+      }, {
+        type: 'factList',
+        version: 1,
+        artifactId: 'malformed-1',
+        title: '잘못된 artifact',
+        items: [{ label: '단지명', value: '<script>alert(1)</script>', factIds: [] }],
+      }],
+      uiActions: [{
+        type: 'showNearbyCategory',
+        version: 1,
+        actionId: 'action-1',
+        label: '지도에서 병원 보기',
+        category: 'HOSPITAL',
+        center: { lat: 37.513, lng: 127.082 },
+        level: 4,
+        factIds: ['property-trade-1'],
+      }, {
+        type: 'showNearbyCategory',
+        version: 1,
+        actionId: 'malformed-action',
+        label: '<script>bad</script>',
+        category: 'CAFE',
+        center: { lat: 37.513, lng: 127.082 },
+        level: 4,
+        factIds: ['property-trade-1'],
+      }],
+      uiSummary: {
+        version: 1,
+        scopeNotice: { text: '잠실엘스 기준으로 확인했습니다.', factIds: ['property-trade-1'] },
+        headline: { text: '최근 거래를 확인했습니다.', factIds: ['property-trade-1'] },
+        criteria: [{
+          key: 'END_DATE', label: '기준일', value: '2026-07-16', factIds: ['property-trade-1'],
+        }],
+        interpretations: [],
+        followUp: '기간이나 면적을 바꿔 다시 확인할 수 있습니다.',
+        fragmentSummaries: [],
+      },
+      fragments: [{
+        fragmentId: 'fragment-1', capability: 'recent_trade_lookup', status: 'success',
+        answer: '거래를 확인했습니다.', factIds: ['property-trade-1'],
+        artifactIds: ['artifact-1'], actionIds: ['action-1'], limitations: [],
+      }],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
 
     const response = await queryChatbot(authenticatedRequest, {
@@ -45,6 +97,39 @@ describe('챗봇 질문 client', () => {
     }), 'public');
     expect(response.evidenceSummary.status).toBe('supported');
     expect(response.citations[0]?.factIds).toEqual(['property-trade-1']);
+    expect(response.artifacts).toEqual([{
+      type: 'factList',
+      version: 1,
+      artifactId: 'artifact-1',
+      title: '확인된 단지 정보',
+      items: [{ label: '단지명', value: '잠실엘스', factIds: ['property-trade-1'] }],
+    }]);
+    expect(response.actions).toEqual([{
+      type: 'showNearbyCategory',
+      version: 1,
+      actionId: 'action-1',
+      label: '지도에서 병원 보기',
+      category: 'HOSPITAL',
+      center: { lat: 37.513, lng: 127.082 },
+      level: 4,
+      factIds: ['property-trade-1'],
+    }]);
+    expect(response.summary?.headline.text).toBe('최근 거래를 확인했습니다.');
+    expect(response.fragments[0]?.artifactIds).toEqual(['artifact-1']);
+  });
+
+  it('잘못된 uiSummary는 무시하고 text fallback을 유지한다', async () => {
+    const authenticatedRequest = vi.fn<AuthenticatedChatbotRequest>().mockResolvedValue(
+      responseWithSummary({
+        version: 2,
+        headline: { text: '지원하지 않는 버전', factIds: ['property-trade-1'] },
+      }),
+    );
+
+    const response = await queryChatbot(authenticatedRequest, { question: '잠실엘스 최근 거래' });
+
+    expect(response.answer).toBe('text fallback');
+    expect(response.summary).toBeNull();
   });
 
   it('잘못된 성공 body를 거부하고 응답 원문 노출 없이 실패를 변환한다', async () => {
@@ -58,3 +143,25 @@ describe('챗봇 질문 client', () => {
     await expect(queryChatbot(unavailable, { question: '질문' })).rejects.toThrow('챗봇을 잠시 사용할 수 없습니다.');
   });
 });
+
+function responseWithSummary(uiSummary: unknown): Response {
+  return new Response(JSON.stringify({
+    success: true,
+    status: 'success',
+    answer: 'text fallback',
+    requestId: 'request-1',
+    citations: [{
+      citationId: 'citation-1', sourceId: 'property.ai_read', sourceName: 'Home Search 실거래',
+      sourceUrl: null, evidenceGrade: 'A', datasetVersion: 'property-2026-07-16',
+      dataAsOf: '2026-07-16', observedAt: null, factIds: ['property-trade-1'],
+    }],
+    dataAsOf: '2026-07-16',
+    limitations: [],
+    evidenceSummary: {
+      status: 'supported', capabilities: ['recent_trade_lookup'], factCount: 1, citationCount: 1,
+    },
+    uiArtifacts: [],
+    uiActions: [],
+    uiSummary,
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+}

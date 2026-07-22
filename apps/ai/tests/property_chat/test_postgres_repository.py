@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from time import perf_counter
 
 import pytest
 
@@ -72,6 +73,122 @@ def test_recent_trade_query_keeps_date_boundaries_area_tolerance_and_latest_orde
 
     assert [record.trade_id for record in records] == [14, 12, 11]
     assert records[-1].deal_date == date(2026, 1, 1)
+
+
+def test_comparison_lookup_and_trades_use_two_bounded_batch_queries(
+    property_postgres_dsn: str,
+) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        complexes = repository.find_complexes_batch(
+            ("잠실엘스", "A_타워"), None, 6
+        )
+        district_complexes = repository.find_complexes_batch(
+            ("잠실엘스", "A_타워"), "송파구", 6
+        )
+        trades = repository.recent_trades_batch(
+            (1, 2), date(2025, 7, 21), date(2026, 7, 20), 84.0, 3
+        )
+    finally:
+        repository.close()
+
+    assert [record.complex_id for record in complexes["잠실엘스"]] == [1]
+    assert [record.complex_id for record in complexes["A_타워"]] == [2]
+    assert complexes["잠실엘스"][0].unit_count == 5678
+    assert [record.complex_id for record in district_complexes["잠실엘스"]] == [1]
+    assert [record.trade_id for record in trades[1]] == [14, 12, 11]
+    assert trades[2] == ()
+
+
+def test_recommendation_candidates_resolve_descendants_and_return_latest_three(
+    property_postgres_dsn: str,
+) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        candidates = repository.recommendation_candidates(
+            "송파구", date(2025, 2, 16), date(2026, 2, 15), 84.0, 100
+        )
+        missing_region = repository.recommendation_candidates(
+            "없는 지역", date(2025, 2, 16), date(2026, 2, 15), 84.0, 100
+        )
+    finally:
+        repository.close()
+
+    assert candidates is not None
+    assert list(candidates) == [1]
+    complex_record, trades = candidates[1]
+    assert complex_record.display_name == "잠실동 잠실엘스"
+    assert complex_record.marker_safe is True
+    assert [trade.trade_id for trade in trades] == [14, 12, 11]
+    assert missing_region is None
+
+
+def test_criteria_candidates_resolve_unique_suffix_and_keep_unit_count(
+    property_postgres_dsn: str,
+) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        exact = repository.criteria_candidates("송파구", 101)
+        suffix_omitted = repository.criteria_candidates("송파", 101)
+        full_name = repository.criteria_candidates("서울특별시 송파구", 101)
+        wrong_parent = repository.criteria_candidates("부산광역시 송파구", 101)
+        missing = repository.criteria_candidates("없는 지역", 101)
+    finally:
+        repository.close()
+
+    assert exact is not None
+    assert suffix_omitted is not None
+    assert full_name is not None
+    assert exact.scope_label == suffix_omitted.scope_label == full_name.scope_label == "송파구"
+    assert [item.complex_id for item in exact.candidates] == [1]
+    assert exact.candidates[0].unit_count == 5678
+    assert wrong_parent is None
+    assert missing is None
+
+
+def test_station_scope_candidates_use_coordinates_without_cross_database_join(
+    property_postgres_dsn: str,
+) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        candidates = repository.criteria_candidates_near_point(
+            37.513, 127.082, 800, 101
+        )
+    finally:
+        repository.close()
+
+    assert [candidate.complex_id for candidate in candidates] == [1]
+
+
+def test_recommendation_candidate_observation_p95_is_bounded(
+    property_postgres_dsn: str,
+) -> None:
+    repository = PostgresPropertyFactRepository(
+        property_postgres_dsn, expected_database="test", expected_username="test"
+    )
+    try:
+        repository.recommendation_candidates(
+            "송파구", date(2025, 2, 16), date(2026, 2, 15), 84.0, 100
+        )
+        durations = []
+        for _ in range(20):
+            started = perf_counter()
+            repository.recommendation_candidates(
+                "송파구", date(2025, 2, 16), date(2026, 2, 15), 84.0, 100
+            )
+            durations.append(perf_counter() - started)
+    finally:
+        repository.close()
+
+    assert sorted(durations)[18] < 0.2
 
 
 def test_monthly_trend_uses_the_same_period_and_area_filter(

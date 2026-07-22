@@ -31,6 +31,7 @@ selector="$1"
 selector_value="$2"
 needs_data_go_kr_key=false
 needs_neis_key=false
+needs_childcare_key=false
 if [[ "$selector" == "--family" && "$selector_value" == "priority" ]]; then
     needs_data_go_kr_key=true
     needs_neis_key=true
@@ -43,6 +44,9 @@ elif [[ "$selector" == "--source" ]]; then
             needs_neis_key=true
             ;;
         retail.large-store|transport.rail-station)
+            ;;
+        childcare.center)
+            needs_childcare_key=true
             ;;
         *)
             usage
@@ -117,6 +121,8 @@ raw_region="$(read_value "$ai_vars_file" HOME_AI_RAW_S3_REGION)"
 raw_endpoint="$(read_value "$ai_vars_file" HOME_AI_RAW_S3_ENDPOINT)"
 data_go_kr_service_key=""
 neis_service_key=""
+childcare_service_key=""
+childcare_region_codes=""
 if [[ "$selector" == "--family" ]]; then
     data_go_kr_service_key="$(
         read_value "$ai_vars_file" HOME_AI_DATA_GO_KR_SERVICE_KEY false
@@ -126,6 +132,9 @@ elif [[ "$needs_data_go_kr_key" == true ]]; then
     data_go_kr_service_key="$(read_value "$ai_vars_file" HOME_AI_DATA_GO_KR_SERVICE_KEY)"
 elif [[ "$needs_neis_key" == true ]]; then
     neis_service_key="$(read_value "$ai_vars_file" HOME_AI_NEIS_SERVICE_KEY)"
+elif [[ "$needs_childcare_key" == true ]]; then
+    childcare_service_key="$(read_value "$ai_vars_file" HOME_AI_CHILDCARE_SERVICE_KEY)"
+    childcare_region_codes="$(read_value "$ai_vars_file" HOME_AI_CHILDCARE_REGION_CODES)"
 fi
 
 if ! AI_MIGRATOR_PASSWORD="$ai_data_migrator_password" \
@@ -140,7 +149,9 @@ if ! AI_MIGRATOR_PASSWORD="$ai_data_migrator_password" \
     RAW_REGION="$raw_region" \
     RAW_ENDPOINT="$raw_endpoint" \
     DATA_SERVICE_KEY="$data_go_kr_service_key" \
-    NEIS_SERVICE_KEY="$neis_service_key" python3 - <<'PY'
+    NEIS_SERVICE_KEY="$neis_service_key" \
+    CHILDCARE_SERVICE_KEY="$childcare_service_key" \
+    CHILDCARE_REGION_CODES="$childcare_region_codes" python3 - <<'PY'
 import os
 import re
 import sys
@@ -169,6 +180,12 @@ valid = (
     and secret("AWS_SECRET_KEY_VALUE", 512)
     and optional_secret("DATA_SERVICE_KEY", 1024)
     and optional_secret("NEIS_SERVICE_KEY", 1024)
+    and optional_secret("CHILDCARE_SERVICE_KEY", 1024)
+    and (
+        os.environ["CHILDCARE_REGION_CODES"] == ""
+        or re.fullmatch(r"[0-9]{5}(,[0-9]{5}){0,299}", os.environ["CHILDCARE_REGION_CODES"])
+        is not None
+    )
     and re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", os.environ["RAW_BUCKET"])
     is not None
     and os.environ["RAW_PREFIX"] == "raw"
@@ -280,11 +297,23 @@ run_source() {
             fi
             docker_environment+=(--env HOME_AI_NEIS_SERVICE_KEY)
             ;;
+        childcare.center)
+            if [[ -z "$childcare_service_key" || -z "$childcare_region_codes" ]]; then
+                print_source_configuration_failure "$source_id"
+                return 2
+            fi
+            docker_environment+=(
+                --env HOME_AI_CHILDCARE_SERVICE_KEY
+                --env HOME_AI_CHILDCARE_REGION_CODES
+            )
+            ;;
     esac
 
     HOME_AI_IMPORTER_DSN="$home_ai_importer_dsn" \
     HOME_AI_DATA_GO_KR_SERVICE_KEY="$data_go_kr_service_key" \
     HOME_AI_NEIS_SERVICE_KEY="$neis_service_key" \
+    HOME_AI_CHILDCARE_SERVICE_KEY="$childcare_service_key" \
+    HOME_AI_CHILDCARE_REGION_CODES="$childcare_region_codes" \
     HOME_AI_RAW_S3_BUCKET="$raw_bucket" \
     HOME_AI_RAW_S3_PREFIX="$raw_prefix" \
     HOME_AI_RAW_S3_REGION="$raw_region" \

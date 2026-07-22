@@ -96,6 +96,7 @@ def test_static_source_composition_matches_fixed_priority_order() -> None:
         "place.sbiz-academy",
         "retail.large-store",
         "transport.rail-station",
+        "childcare.center",
     )
 
 
@@ -108,6 +109,23 @@ def test_retail_file_source_receives_no_provider_key() -> None:
             "HOME_AI_IMPORTER_DSN": "dsn",
         },
     ) == {
+        "HOME_AI_IMPORTER_DSN": "dsn",
+    }
+
+
+def test_childcare_source_receives_only_its_dedicated_key_and_region_scope() -> None:
+    assert reference_refresh._source_environment(
+        "childcare.center",
+        {
+            "HOME_AI_CHILDCARE_SERVICE_KEY": "childcare-key",
+            "HOME_AI_CHILDCARE_REGION_CODES": "11680,11710",
+            "HOME_AI_DATA_GO_KR_SERVICE_KEY": "must-not-leak",
+            "HOME_AI_NEIS_SERVICE_KEY": "must-not-leak",
+            "HOME_AI_IMPORTER_DSN": "dsn",
+        },
+    ) == {
+        "HOME_AI_CHILDCARE_SERVICE_KEY": "childcare-key",
+        "HOME_AI_CHILDCARE_REGION_CODES": "11680,11710",
         "HOME_AI_IMPORTER_DSN": "dsn",
     }
 

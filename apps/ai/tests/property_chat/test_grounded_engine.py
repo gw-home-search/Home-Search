@@ -11,7 +11,13 @@ from ai_service.models import ChatbotQueryRequest
 from ai_service.property_chat.engine import (
     GroundedChatbotEngine,
     GroundingValidationError,
+    _verify_recommendation_plan,
     validate_draft,
+)
+from ai_service.property_chat.answer_document import (
+    FactListArtifact,
+    FactListItem,
+    FactListPresenter,
 )
 from ai_service.property_chat.models import (
     ComplexRecord,
@@ -161,6 +167,15 @@ def test_recent_trade_answer_uses_only_observed_fact_and_citation() -> None:
         "citationCount": 1,
     }
     assert response["citations"][0]["factIds"] == ["property-trade-7001"]
+    assert response["uiArtifacts"][0]["type"] == "tradeTable"
+    assert response["uiArtifacts"][0]["rows"][0] == {
+        "tradeId": 7001,
+        "dealDate": "2026-07-15",
+        "exclusiveAreaSquareMeters": 84.8,
+        "amountTenThousandKrw": 250000,
+        "floor": 12,
+        "factIds": ["property-trade-7001"],
+    }
     assert any("±1.0㎡" in limitation for limitation in response["limitations"])
     assert model.received_fact_ids == ["property-trade-7001"]
     assert repository.trade_query == (11471, date(2025, 7, 1), date(2026, 7, 16), 84.8, 5)
@@ -390,6 +405,11 @@ def test_monthly_trend_exposes_amount_and_volume_facts() -> None:
             ("25억원", "KOREAN_KRW_MAX_DISPLAY"),
         }
     )
+    assert response["uiArtifacts"][0]["type"] == "trendTable"
+    assert response["uiArtifacts"][0]["rows"][0]["month"] == "2026-06"
+    assert response["uiArtifacts"][0]["rows"][0]["factIds"] == [
+        "property-trend-11471-2026-06"
+    ]
 
 
 @pytest.mark.parametrize(
@@ -513,6 +533,177 @@ def test_identity_does_not_expose_unverified_coordinates() -> None:
 
     assert response["evidenceSummary"]["status"] == "supported"
     assert "표시 좌표" in response["limitations"][0]
+
+
+def test_complex_identity_returns_fact_list_artifact_from_the_validated_fact() -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    model = FakeLanguageModel(
+        QueryPlan(capability="complex_identity", complex_name="잠실엘스"),
+        DraftAnswer(
+            sentences=[
+                DraftSentence(
+                    text="잠실동 잠실엘스의 주소는 서울 송파구 잠실동 19입니다.",
+                    fact_ids=["property-complex-11471"],
+                    claims=[
+                        DraftClaim(
+                            "property-complex-11471",
+                            "잠실동 잠실엘스",
+                            "TEXT",
+                        ),
+                        DraftClaim(
+                            "property-complex-11471",
+                            "서울 송파구 잠실동 19",
+                            "TEXT",
+                        ),
+                    ],
+                )
+            ]
+        ),
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        ),
+        "잠실엘스 위치",
+        "request-identity-artifact",
+    )
+
+    assert response["uiArtifacts"] == [
+        {
+            "type": "factList",
+            "version": 1,
+            "artifactId": "fact-list-complex-11471",
+            "title": "확인된 단지 정보",
+            "items": [
+                {
+                    "label": "단지명",
+                    "value": "잠실동 잠실엘스",
+                    "factIds": ["property-complex-11471"],
+                },
+                {
+                    "label": "지역",
+                    "value": "잠실동",
+                    "factIds": ["property-complex-11471"],
+                },
+                {
+                    "label": "주소",
+                    "value": "서울 송파구 잠실동 19",
+                    "factIds": ["property-complex-11471"],
+                },
+                {
+                    "label": "위치",
+                    "value": "37.513, 127.082",
+                    "factIds": ["property-complex-11471"],
+                },
+            ],
+        }
+    ]
+    assert response["citations"][0]["factIds"] == ["property-complex-11471"]
+
+
+def test_complex_identity_returns_grounded_ui_summary_v1() -> None:
+    repository = FakeRepository()
+    repository.complexes = [complex_record()]
+    model = FakeLanguageModel(
+        QueryPlan(capability="complex_identity", complex_name="잠실엘스"),
+        DraftAnswer(sentences=[DraftSentence(
+            text="잠실동 잠실엘스를 확인했습니다.",
+            fact_ids=["property-complex-11471"],
+            claims=[DraftClaim("property-complex-11471", "잠실동 잠실엘스", "TEXT")],
+        )]),
+    )
+
+    response = run_query(
+        GroundedChatbotEngine(
+            repository=repository,
+            language_model=model,
+            enabled_capabilities=ALL_PROPERTY_CAPABILITIES,
+        ),
+        "잠실엘스 위치",
+        "request-identity-summary",
+    )
+
+    assert response["uiSummary"] == {
+        "version": 1,
+        "scopeNotice": {
+            "text": "‘잠실엘스’ 단지를 기준으로 확인했습니다.",
+            "factIds": ["property-complex-11471"],
+        },
+        "headline": {
+            "text": "잠실동 잠실엘스의 확인된 단지 정보를 정리했습니다.",
+            "factIds": ["property-complex-11471"],
+        },
+        "criteria": [],
+        "interpretations": [],
+        "followUp": "최근 실거래, 가격 흐름 또는 주변 시설을 이어서 확인할 수 있습니다.",
+        "fragmentSummaries": [],
+    }
+
+
+@pytest.mark.parametrize(
+    ("label", "value", "fact_ids"),
+    [
+        (" ", "value", ("fact-1",)),
+        ("label", " ", ("fact-1",)),
+        ("label", "value", ()),
+        ("label", "value", ("fact-1", "fact-1")),
+    ],
+)
+def test_fact_list_item_rejects_invalid_public_fields(
+    label: str, value: str, fact_ids: tuple[str, ...]
+) -> None:
+    with pytest.raises(ValueError):
+        FactListItem(label, value, fact_ids)
+
+
+def test_fact_list_artifact_enforces_title_item_and_serialized_size_limits() -> None:
+    item = FactListItem("항목", "값", ("fact-1",))
+    with pytest.raises(ValueError):
+        FactListArtifact("artifact-1", " ", (item,))
+    with pytest.raises(ValueError):
+        FactListArtifact("artifact-1", "제목", ())
+
+    oversized_items = tuple(
+        FactListItem(f"항목-{index}", "🙂" * 2_000, (f"fact-{index}",))
+        for index in range(10)
+    )
+    with pytest.raises(ValueError):
+        FactListArtifact("artifact-oversized", "제목", oversized_items).to_public_dict()
+
+
+def test_fact_list_presenter_ignores_other_capabilities_and_invalid_identity_payloads() -> None:
+    fact = EvidenceFact(
+        fact_id="property-complex-1",
+        claims=(FactClaim("1", "COMPLEX_ID"),),
+        data_as_of=date(2026, 7, 16),
+        payload={"complexId": "1", "displayName": "단지"},
+    )
+    presenter = FactListPresenter()
+
+    assert presenter.present(
+        plan=QueryPlan(capability="recent_trade_lookup", complex_name="단지"),
+        used_facts=[fact],
+        readiness="supported",
+    ) == []
+    assert presenter.present(
+        plan=QueryPlan(capability="complex_identity", complex_name="단지"),
+        used_facts=[fact],
+        readiness="unavailable",
+    ) == []
+    assert presenter.present(
+        plan=QueryPlan(capability="complex_identity", complex_name="단지"),
+        used_facts=[],
+        readiness="supported",
+    ) == []
+    assert presenter.present(
+        plan=QueryPlan(capability="complex_identity", complex_name="단지"),
+        used_facts=[fact],
+        readiness="supported",
+    ) == []
 
 
 @pytest.mark.parametrize(
@@ -676,3 +867,106 @@ def run_query(engine: GroundedChatbotEngine, question: str, request_id: str) -> 
             request_id=request_id,
         )
     )
+
+
+@pytest.mark.parametrize(
+    ("plan", "question", "clarification"),
+    (
+        (
+            QueryPlan(
+                capability="recommendation", complex_name="송파구",
+                region_name="송파구", recommendation_mode="CRITERIA",
+            ),
+            "송파구 교육 조건으로 추천",
+            "AMBIGUOUS_EDUCATION",
+        ),
+        (
+            QueryPlan(
+                capability="recommendation", complex_name="송파구",
+                region_name="송파구", recommendation_mode="CRITERIA",
+                minimum_unit_count=700, recommendation_criteria=("ACADEMY",),
+                criteria_order=("ACADEMY",),
+            ),
+            "송파구 500세대 이상 학원 추천",
+            "NUMERIC_CONDITION_MISMATCH",
+        ),
+        (
+            QueryPlan(
+                capability="recommendation", complex_name="마포구",
+                region_name="마포구", recommendation_mode="CRITERIA",
+                recommendation_criteria=("ACADEMY",), criteria_order=("ACADEMY",),
+            ),
+            "송파구 학원 추천",
+            "REGION_NOT_CONFIRMED",
+        ),
+        (
+            QueryPlan(
+                capability="recommendation", complex_name="여의도역",
+                recommendation_mode="CRITERIA", station_name="여의도",
+                radius_meters=800, recommendation_criteria=("ACADEMY",),
+                criteria_order=("ACADEMY",),
+            ),
+            "다른 역 800m 학원 추천",
+            "REGION_NOT_CONFIRMED",
+        ),
+        (
+            QueryPlan(
+                capability="recommendation", complex_name="여의도역",
+                recommendation_mode="CRITERIA", station_name="여의도",
+                recommendation_criteria=("ACADEMY",), criteria_order=("ACADEMY",),
+            ),
+            "여의도역 학원 추천",
+            "STATION_RADIUS_REQUIRED",
+        ),
+        (
+            QueryPlan(
+                capability="recommendation", complex_name="여의도역",
+                recommendation_mode="CRITERIA", station_name="여의도",
+                radius_meters=500, recommendation_criteria=("ACADEMY",),
+                criteria_order=("ACADEMY",),
+            ),
+            "여의도역 800m 학원 추천",
+            "NUMERIC_CONDITION_MISMATCH",
+        ),
+        (
+            QueryPlan(
+                capability="recommendation", complex_name="여의도역",
+                recommendation_mode="CRITERIA", station_name="여의도",
+                radius_meters=250, recommendation_criteria=("ACADEMY",),
+                criteria_order=("ACADEMY",),
+            ),
+            "여의도역 250m 학원 추천",
+            "STATION_RADIUS_OUT_OF_RANGE",
+        ),
+    ),
+)
+def test_server_revalidates_criteria_conditions_from_the_current_question(
+    plan: QueryPlan, question: str, clarification: str,
+) -> None:
+    verified = _verify_recommendation_plan(plan, question)
+
+    assert verified.clarification_code == clarification
+
+
+def test_server_revalidates_explicit_recommendation_result_limit() -> None:
+    verified = _verify_recommendation_plan(
+        QueryPlan(
+            capability="recommendation",
+            complex_name="송파구",
+            region_name="송파구",
+            recommendation_mode="BUDGET",
+            maximum_budget_ten_thousand_krw=200_000,
+            exclusive_area_square_meters=84.0,
+            limit=5,
+        ),
+        "송파구에서 20억원 이하 전용 84㎡ 아파트 3곳을 추천해줘",
+    )
+
+    assert verified.limit == 3
+    assert verified.clarification_code == "NUMERIC_CONDITION_MISMATCH"
+
+
+def test_recommendation_verifier_leaves_non_recommendation_plan_unchanged() -> None:
+    plan = QueryPlan(capability="complex_identity", complex_name="잠실엘스")
+
+    assert _verify_recommendation_plan(plan, "잠실엘스 알려줘") is plan

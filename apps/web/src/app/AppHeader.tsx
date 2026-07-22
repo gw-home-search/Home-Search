@@ -1,13 +1,15 @@
 import { AccountControl } from '../features/auth/AccountControl';
 import { ChatbotPanel } from '../features/chat/ChatbotPanel';
 import type { IndexedDbChatConversationStore } from '../features/chat/storage/chatConversationStore';
+import type { ChatAction } from '../features/chat/actionContract';
 
 type AppHeaderProps = {
   chatConversationStore?: IndexedDbChatConversationStore;
   onChatOpenChange?: (isOpen: boolean) => void;
+  onUiAction?: (action: ChatAction) => boolean;
 };
 
-export function AppHeader({ chatConversationStore, onChatOpenChange }: AppHeaderProps) {
+export function AppHeader({ chatConversationStore, onChatOpenChange, onUiAction }: AppHeaderProps) {
   return (
     <header aria-label="상단 앱 바" className="app-bar">
       <div className="app-brand">
@@ -25,7 +27,11 @@ export function AppHeader({ chatConversationStore, onChatOpenChange }: AppHeader
         </span>
       </div>
       <div className="app-header-actions">
-        <ChatbotPanel onOpenChange={onChatOpenChange} store={chatConversationStore} />
+        <ChatbotPanel
+          onOpenChange={onChatOpenChange}
+          onUiAction={onUiAction}
+          store={chatConversationStore}
+        />
         <AccountControl />
       </div>
     </header>

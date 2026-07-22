@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+import math
 import re
 from threading import Lock
 from time import monotonic
@@ -9,6 +10,7 @@ from time import monotonic
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+from .criteria_recommendation import CriteriaCandidateScope
 from .models import (
     AdministrativeRegionContext,
     ComplexRecord,
@@ -81,7 +83,8 @@ class PostgresPropertyFactRepository:
             rows = connection.execute(
                 """
                 SELECT complex_id, display_name, region_code, region_name, address,
-                       latitude, longitude, marker_safe, data_updated_at
+                       latitude, longitude, marker_safe, data_updated_at,
+                       unit_count, use_date
                 FROM ai_read.complex_fact
                 WHERE (
                     display_name ILIKE %s ESCAPE '\\'
@@ -105,20 +108,411 @@ class PostgresPropertyFactRepository:
                     limit,
                 ),
             ).fetchall()
-        return [
-            ComplexRecord(
-                complex_id=row["complex_id"],
-                display_name=row["display_name"],
-                region_code=row["region_code"],
-                region_name=row["region_name"],
-                address=row["address"],
-                latitude=_optional_float(row["latitude"]),
-                longitude=_optional_float(row["longitude"]),
-                marker_safe=row["marker_safe"],
-                data_updated_at=row["data_updated_at"],
-            )
-            for row in rows
-        ]
+        return [_complex_record(row) for row in rows]
+
+    def find_complexes_batch(
+        self,
+        names: tuple[str, ...],
+        region_name: str | None,
+        limit_per_name: int,
+    ) -> dict[str, tuple[ComplexRecord, ...]]:
+        if (
+            not 2 <= len(names) <= 4
+            or len(names) != len(set(names))
+            or any(not name.strip() or len(name.strip()) > 100 for name in names)
+            or not 1 <= limit_per_name <= 6
+        ):
+            raise ValueError("comparison complex lookup is outside the supported range")
+        normalized_names = tuple(name.strip() for name in names)
+        normalized_region = region_name.strip() if region_name is not None else None
+        if normalized_region is not None and not 1 <= len(normalized_region) <= 100:
+            raise ValueError("comparison region lookup is outside the supported range")
+        region_pattern = (
+            f"%{_escape_like(normalized_region)}%"
+            if normalized_region is not None
+            else None
+        )
+        with self._pool.connection() as connection:
+            rows = connection.execute(
+                """
+                WITH RECURSIVE matched_roots AS (
+                    SELECT region_id, parent_region_id, region_code
+                    FROM ai_read.region_fact
+                    WHERE lower(region_name) = lower(%s)
+                ), root_count AS (
+                    SELECT count(*)::integer AS match_count FROM matched_roots
+                ), target_regions AS (
+                    SELECT region_id, region_code
+                    FROM matched_roots
+                    WHERE (SELECT match_count FROM root_count) = 1
+                    UNION ALL
+                    SELECT child.region_id, child.region_code
+                    FROM ai_read.region_fact child
+                    JOIN target_regions parent
+                      ON child.parent_region_id = parent.region_id
+                ), requested AS (
+                    SELECT requested_name, ordinal
+                    FROM unnest(%s::text[]) WITH ORDINALITY AS value(requested_name, ordinal)
+                ), matches AS (
+                    SELECT requested.requested_name, requested.ordinal,
+                           fact.complex_id, fact.display_name, fact.region_code,
+                           fact.region_name, fact.address, fact.latitude, fact.longitude,
+                           fact.marker_safe, fact.data_updated_at, fact.unit_count, fact.use_date,
+                           row_number() OVER (
+                               PARTITION BY requested.ordinal
+                               ORDER BY CASE
+                                   WHEN lower(fact.display_name) = lower(requested.requested_name)
+                                     OR lower(fact.name) = lower(requested.requested_name)
+                                     OR lower(fact.trade_name) = lower(requested.requested_name)
+                                   THEN 0 ELSE 1 END,
+                                   fact.display_name, fact.complex_id
+                           ) AS match_rank
+                    FROM requested
+                    JOIN ai_read.complex_fact fact ON (
+                        fact.display_name ILIKE ('%%' || replace(replace(replace(
+                            requested.requested_name, '\\', '\\\\'), '%%', '\\%%'), '_', '\\_') || '%%') ESCAPE '\\'
+                        OR fact.name ILIKE ('%%' || replace(replace(replace(
+                            requested.requested_name, '\\', '\\\\'), '%%', '\\%%'), '_', '\\_') || '%%') ESCAPE '\\'
+                        OR fact.trade_name ILIKE ('%%' || replace(replace(replace(
+                            requested.requested_name, '\\', '\\\\'), '%%', '\\%%'), '_', '\\_') || '%%') ESCAPE '\\'
+                    )
+                    WHERE (
+                        %s::text IS NULL
+                        OR fact.region_name ILIKE %s ESCAPE '\\'
+                        OR fact.address ILIKE %s ESCAPE '\\'
+                        OR EXISTS (
+                            SELECT 1 FROM target_regions region
+                            WHERE region.region_code = fact.region_code
+                        )
+                    )
+                )
+                SELECT * FROM matches
+                WHERE match_rank <= %s
+                ORDER BY ordinal, match_rank
+                """,
+                (
+                    normalized_region,
+                    list(normalized_names),
+                    region_pattern,
+                    region_pattern,
+                    region_pattern,
+                    limit_per_name,
+                ),
+            ).fetchall()
+        result: dict[str, list[ComplexRecord]] = {name: [] for name in normalized_names}
+        for row in rows:
+            result[str(row["requested_name"])].append(_complex_record(row))
+        return {name: tuple(records) for name, records in result.items()}
+
+    def recent_trades_batch(
+        self,
+        complex_ids: tuple[int, ...],
+        start_date: date,
+        end_date: date,
+        exclusive_area_square_meters: float,
+        limit_per_complex: int,
+    ) -> dict[int, tuple[TradeRecord, ...]]:
+        if (
+            not 2 <= len(complex_ids) <= 4
+            or len(complex_ids) != len(set(complex_ids))
+            or any(complex_id <= 0 for complex_id in complex_ids)
+            or not 1 <= limit_per_complex <= 3
+        ):
+            raise ValueError("comparison trade query is outside the supported range")
+        _validate_trade_query(
+            complex_ids[0], start_date, end_date, exclusive_area_square_meters
+        )
+        area = Decimal(str(exclusive_area_square_meters))
+        with self._pool.connection() as connection:
+            rows = connection.execute(
+                """
+                WITH ranked AS (
+                    SELECT trade_id, complex_id, deal_date,
+                           deal_amount_ten_thousand_krw,
+                           exclusive_area_square_meters, floor,
+                           row_number() OVER (
+                               PARTITION BY complex_id ORDER BY deal_date DESC, trade_id DESC
+                           ) AS trade_rank
+                    FROM ai_read.trade_fact
+                    WHERE complex_id = ANY(%s::bigint[])
+                      AND deal_date >= %s AND deal_date <= %s
+                      AND exclusive_area_square_meters BETWEEN %s - %s AND %s + %s
+                )
+                SELECT * FROM ranked WHERE trade_rank <= %s
+                ORDER BY complex_id, trade_rank
+                """,
+                (
+                    list(complex_ids), start_date, end_date, area,
+                    _AREA_TOLERANCE_SQUARE_METERS, area,
+                    _AREA_TOLERANCE_SQUARE_METERS, limit_per_complex,
+                ),
+            ).fetchall()
+        result: dict[int, list[TradeRecord]] = {complex_id: [] for complex_id in complex_ids}
+        for row in rows:
+            result[int(row["complex_id"])].append(_trade_record(row))
+        return {complex_id: tuple(trades) for complex_id, trades in result.items()}
+
+    def recommendation_candidates(
+        self,
+        region_name: str,
+        start_date: date,
+        end_date: date,
+        exclusive_area_square_meters: float,
+        limit: int,
+    ) -> dict[int, tuple[ComplexRecord, tuple[TradeRecord, ...]]] | None:
+        normalized_region = region_name.strip()
+        if not normalized_region or len(normalized_region) > 100 or limit != 100:
+            raise ValueError("recommendation candidate query is outside the supported range")
+        _validate_trade_query(
+            1, start_date, end_date, exclusive_area_square_meters
+        )
+        area = Decimal(str(exclusive_area_square_meters))
+        with self._pool.connection() as connection:
+            region_rows = connection.execute(
+                """
+                WITH RECURSIVE matched_roots AS (
+                    SELECT region_id, parent_region_id, region_code
+                    FROM ai_read.region_fact
+                    WHERE lower(region_name) = lower(%s)
+                ), root_count AS (
+                    SELECT count(*)::integer AS match_count FROM matched_roots
+                ), target_regions AS (
+                    SELECT region_id, region_code
+                    FROM matched_roots
+                    WHERE (SELECT match_count FROM root_count) = 1
+                    UNION ALL
+                    SELECT child.region_id, child.region_code
+                    FROM ai_read.region_fact child
+                    JOIN target_regions parent
+                      ON child.parent_region_id = parent.region_id
+                )
+                SELECT root_count.match_count, target_regions.region_code
+                FROM root_count
+                LEFT JOIN target_regions ON root_count.match_count = 1
+                ORDER BY target_regions.region_code
+                """,
+                (normalized_region,),
+            ).fetchall()
+            if not region_rows or int(region_rows[0]["match_count"]) != 1:
+                return None
+            region_codes = [
+                str(row["region_code"])
+                for row in region_rows
+                if row["region_code"] is not None
+            ]
+            if not region_codes:
+                return {}
+            rows = connection.execute(
+                """
+                WITH candidate_complexes AS (
+                    SELECT complex.complex_id, complex.display_name,
+                           complex.region_code, complex.region_name, complex.address,
+                           complex.latitude, complex.longitude, complex.marker_safe,
+                           complex.data_updated_at, complex.unit_count, complex.use_date
+                    FROM ai_read.complex_fact complex
+                    WHERE complex.region_code = ANY(%s)
+                      AND complex.marker_safe
+                ), selected AS MATERIALIZED (
+                    SELECT complex.*, trade.trade_id, trade.deal_date,
+                           trade.deal_amount_ten_thousand_krw,
+                           trade.exclusive_area_square_meters, trade.floor
+                    FROM candidate_complexes complex
+                    CROSS JOIN LATERAL (
+                        SELECT trade.trade_id, trade.deal_date,
+                               trade.deal_amount_ten_thousand_krw,
+                               trade.exclusive_area_square_meters, trade.floor
+                        FROM ai_read.trade_fact trade
+                        WHERE trade.complex_id = complex.complex_id
+                          AND trade.deal_date >= %s AND trade.deal_date <= %s
+                          AND trade.exclusive_area_square_meters
+                              BETWEEN %s - %s AND %s + %s
+                        ORDER BY trade.deal_date DESC, trade.trade_id DESC
+                        LIMIT 3
+                    ) trade
+                ), eligible AS (
+                    SELECT complex_id
+                    FROM selected
+                    GROUP BY complex_id
+                    HAVING count(*) = 3
+                    ORDER BY complex_id
+                    LIMIT %s
+                )
+                SELECT selected.*
+                FROM selected
+                JOIN eligible USING (complex_id)
+                ORDER BY selected.complex_id,
+                         selected.deal_date DESC, selected.trade_id DESC
+                """,
+                (
+                    region_codes, start_date, end_date, area,
+                    _AREA_TOLERANCE_SQUARE_METERS, area,
+                    _AREA_TOLERANCE_SQUARE_METERS, limit,
+                ),
+            ).fetchall()
+        result: dict[int, tuple[ComplexRecord, list[TradeRecord]]] = {}
+        for row in rows:
+            complex_id = int(row["complex_id"])
+            if complex_id not in result:
+                result[complex_id] = (_complex_record(row), [])
+            result[complex_id][1].append(_trade_record(row))
+        return {
+            complex_id: (record, tuple(trades))
+            for complex_id, (record, trades) in result.items()
+        }
+
+    def criteria_candidates(
+        self, region_name: str, limit: int
+    ) -> CriteriaCandidateScope | None:
+        normalized_region = region_name.strip()
+        if not normalized_region or len(normalized_region) > 100 or limit != 101:
+            raise ValueError("criteria candidate query is outside the supported range")
+        leaf_region = normalized_region.rsplit(maxsplit=1)[-1]
+        with self._pool.connection() as connection:
+            rows = connection.execute(
+                """
+                WITH RECURSIVE region_leaves AS (
+                    SELECT region_id, parent_region_id, region_code, region_name,
+                           CASE WHEN lower(region_name) = lower(%s) THEN 0 ELSE 1 END AS priority
+                    FROM ai_read.region_fact
+                    WHERE lower(region_name) = lower(%s)
+                       OR lower(regexp_replace(region_name, '(시|군|구)$', '')) = lower(%s)
+                ), region_paths AS (
+                    SELECT leaf.region_id AS root_region_id,
+                           leaf.parent_region_id AS next_parent_region_id,
+                           leaf.region_code AS root_region_code,
+                           leaf.region_name AS root_region_name,
+                           leaf.region_name::text AS full_path,
+                           leaf.priority
+                    FROM region_leaves leaf
+                    UNION ALL
+                    SELECT path.root_region_id, parent.parent_region_id,
+                           path.root_region_code, path.root_region_name,
+                           parent.region_name || ' ' || path.full_path,
+                           path.priority
+                    FROM region_paths path
+                    JOIN ai_read.region_fact parent
+                      ON parent.region_id = path.next_parent_region_id
+                ), region_matches AS (
+                    SELECT root_region_id AS region_id,
+                           root_region_code AS region_code,
+                           root_region_name AS region_name,
+                           CASE
+                               WHEN right(lower(' ' || full_path), char_length(' ' || %s))
+                                    = lower(' ' || %s) THEN 0
+                               WHEN position(' ' in %s) = 0 THEN priority
+                               ELSE 2
+                           END AS priority
+                    FROM region_paths
+                    WHERE next_parent_region_id IS NULL
+                ), preferred_priority AS (
+                    SELECT min(priority) AS priority
+                    FROM region_matches
+                    WHERE priority < 2
+                ), matched_roots AS (
+                    SELECT match.region_id, match.region_code, match.region_name
+                    FROM region_matches match
+                    JOIN preferred_priority preferred USING (priority)
+                    WHERE match.priority < 2
+                ), root_count AS (
+                    SELECT count(*)::integer AS match_count FROM matched_roots
+                ), target_regions AS (
+                    SELECT region_id, region_code
+                    FROM matched_roots
+                    WHERE (SELECT match_count FROM root_count) = 1
+                    UNION ALL
+                    SELECT child.region_id, child.region_code
+                    FROM ai_read.region_fact child
+                    JOIN target_regions parent
+                      ON child.parent_region_id = parent.region_id
+                ), selected AS (
+                    SELECT complex.complex_id, complex.display_name,
+                           complex.region_code, complex.region_name, complex.address,
+                           complex.latitude, complex.longitude, complex.marker_safe,
+                           complex.data_updated_at, complex.unit_count, complex.use_date
+                    FROM ai_read.complex_fact complex
+                    JOIN target_regions region
+                      ON region.region_code = complex.region_code
+                    WHERE complex.marker_safe
+                    ORDER BY complex.complex_id
+                    LIMIT %s
+                )
+                SELECT root_count.match_count, root.region_name AS scope_label, selected.*
+                FROM root_count
+                LEFT JOIN matched_roots root
+                  ON (SELECT match_count FROM root_count) = 1
+                LEFT JOIN selected ON true
+                ORDER BY selected.complex_id
+                """,
+                (
+                    leaf_region,
+                    leaf_region,
+                    re.sub(r"(시|군|구)$", "", leaf_region),
+                    normalized_region,
+                    normalized_region,
+                    normalized_region,
+                    limit,
+                ),
+            ).fetchall()
+        if not rows or int(rows[0]["match_count"]) != 1:
+            return None
+        return CriteriaCandidateScope(
+            scope_label=str(rows[0]["scope_label"]),
+            candidates=tuple(
+                _complex_record(row) for row in rows if row["complex_id"] is not None
+            ),
+        )
+
+    def criteria_candidates_near_point(
+        self,
+        latitude: float,
+        longitude: float,
+        radius_meters: int,
+        limit: int,
+    ) -> tuple[ComplexRecord, ...]:
+        if (
+            isinstance(latitude, bool)
+            or isinstance(longitude, bool)
+            or not math.isfinite(latitude)
+            or not math.isfinite(longitude)
+            or not 33 <= latitude <= 39
+            or not 124 <= longitude <= 132
+            or not 300 <= radius_meters <= 2_000
+            or limit != 101
+        ):
+            raise ValueError("station criteria candidate query is outside the supported range")
+        with self._pool.connection() as connection:
+            rows = connection.execute(
+                """
+                WITH origin AS (
+                    SELECT ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography AS point
+                )
+                SELECT complex.complex_id, complex.display_name,
+                       complex.region_code, complex.region_name, complex.address,
+                       complex.latitude, complex.longitude, complex.marker_safe,
+                       complex.data_updated_at, complex.unit_count, complex.use_date
+                FROM ai_read.complex_fact complex
+                CROSS JOIN origin
+                WHERE complex.marker_safe
+                  AND complex.latitude IS NOT NULL
+                  AND complex.longitude IS NOT NULL
+                  AND ST_DWithin(
+                      ST_SetSRID(ST_MakePoint(
+                          complex.longitude, complex.latitude
+                      ), 4326)::geography,
+                      origin.point,
+                      %s + 0.001
+                  )
+                ORDER BY ST_Distance(
+                    ST_SetSRID(ST_MakePoint(
+                        complex.longitude, complex.latitude
+                    ), 4326)::geography,
+                    origin.point
+                ), complex.complex_id
+                LIMIT %s
+                """,
+                (longitude, latitude, radius_meters, limit),
+            ).fetchall()
+        return tuple(_complex_record(row) for row in rows)
 
     def recent_trades(
         self,
@@ -283,6 +677,22 @@ class PostgresPropertyFactRepository:
 
 def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _complex_record(row: dict[str, object]) -> ComplexRecord:
+    return ComplexRecord(
+        complex_id=int(row["complex_id"]),
+        display_name=str(row["display_name"]),
+        region_code=str(row["region_code"]) if row["region_code"] is not None else None,
+        region_name=str(row["region_name"]) if row["region_name"] is not None else None,
+        address=str(row["address"]) if row["address"] is not None else None,
+        latitude=_optional_float(row["latitude"]),  # type: ignore[arg-type]
+        longitude=_optional_float(row["longitude"]),  # type: ignore[arg-type]
+        marker_safe=bool(row["marker_safe"]),
+        data_updated_at=row["data_updated_at"],  # type: ignore[arg-type]
+        unit_count=int(row["unit_count"]) if row["unit_count"] is not None else None,
+        use_date=row["use_date"],  # type: ignore[arg-type]
+    )
 
 
 def _optional_decimal(value: float | None) -> Decimal | None:

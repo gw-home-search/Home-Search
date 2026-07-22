@@ -361,8 +361,8 @@ third_party_rights = false
 
 [[sources]]
 id = "childcare.center"
-provider = "보건복지부"
-source_name = "전국어린이집표준데이터"
+provider = "교육부·한국사회보장정보원"
+source_name = "어린이집별 기본정보 조회"
 landing_url = "https://www.data.go.kr/data/15013108/standard.do"
 evidence_grade = "A"
 owner = "apps/ai"
@@ -370,9 +370,9 @@ normalization_schema_version = "childcare-center-v1"
 
 [sources.acquisition]
 mode = "api"
-base_url = "https://apis.data.go.kr/1741000/ChildCareInfo/getChildCareInfo"
-allowed_hosts = ["apis.data.go.kr"]
-allowed_path_prefixes = ["/1741000/ChildCareInfo/"]
+base_url = "https://api.childcare.go.kr/mediate/rest/cpmsapi030/cpmsapi030/request"
+allowed_hosts = ["api.childcare.go.kr"]
+allowed_path_prefixes = ["/mediate/rest/cpmsapi030/cpmsapi030/"]
 format = "XML"
 encoding = "UTF-8"
 source_crs = "EPSG:4326"

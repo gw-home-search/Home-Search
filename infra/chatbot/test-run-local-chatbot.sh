@@ -73,8 +73,15 @@ if [[ ! -x "$runner" ]]; then
     echo "상태: Fail - local chatbot runner가 없습니다." >&2
     exit 1
 fi
-grep -Fqx 'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup,rail_station_lookup' \
+grep -Fqx 'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup,rail_station_lookup,school_location,retail_location' \
     "$ai_runtime_example"
+grep -Fqx 'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison' \
+    "$ai_runtime_example"
+if grep -Eq '^HOME_AI_ENABLED_REFERENCE_CAPABILITIES=.*childcare_lookup' \
+    "$ai_runtime_example"; then
+    echo "상태: Fail - 어린이집 capability가 local runtime template에 활성화됐습니다." >&2
+    exit 1
+fi
 grep -Fq '| `academy_lookup` | “단지 800m 안 교육업소는?” | 지원 |' \
     "$capability_registry"
 grep -Fq '| `rail_station_lookup` | “가까운 역과 노선” | 지원 |' \
@@ -351,7 +358,7 @@ PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
     CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
     "$runner" "$property_env" "$user_env" "$bff_env" "$ai_env" >/dev/null
-grep -Fq 'openai-key-set=yes|primary=gpt-5-primary-test|secondary=gpt-5-secondary-test|timeout=8|query-timeout=45' "$docker_log"
+grep -Fq 'openai-key-set=yes|primary=gpt-5-primary-test|secondary=gpt-5-secondary-test|timeout=30|query-timeout=45' "$docker_log"
 
 printf '%s\n' \
     'HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS=wrong-kid=/run/keys/user-signing-public' >"$bff_env"
@@ -546,6 +553,49 @@ printf '%s\n' \
     'HOME_AI_OPENAI_API_KEY=openai-test-secret' \
     'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
     'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
+    'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison' \
+    'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup,rail_station_lookup,school_location,retail_location' >"$ai_env"
+if ! PATH="$tmp_dir/bin:$PATH" \
+    CHATBOT_TEST_DOCKER_LOG="$docker_log" \
+    CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
+    CHATBOT_AI_DOCKERFILE_PATH="$tmp_dir/Dockerfile" \
+    CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
+    CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
+    "$runner" "$property_env" "$user_env" "$bff_env" "$ai_env" \
+    >"$tmp_dir/capability-recommendation-approved.out" 2>&1; then
+    echo "상태: Fail - 승인된 criteria recommendation 누적 Capability가 허용되지 않았습니다." >&2
+    exit 1
+fi
+grep -Fq 'capabilities=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison' \
+    "$docker_log"
+
+printf '%s\n' \
+    'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \
+    'HOME_AI_JWT_PUBLIC_KEY_PATHS={"local-user-1":"/run/keys/user-signing-public"}' \
+    'HOME_AI_OPENAI_API_KEY=openai-test-secret' \
+    'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
+    'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
+    'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison,childcare_lookup' >"$ai_env"
+if PATH="$tmp_dir/bin:$PATH" \
+    CHATBOT_TEST_DOCKER_LOG="$docker_log" \
+    CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
+    CHATBOT_AI_DOCKERFILE_PATH="$tmp_dir/Dockerfile" \
+    CHATBOT_USER_PUBLIC_KEY_PATH="$tmp_dir/keys/public" \
+    CHATBOT_USER_PRIVATE_KEY_PATH="$tmp_dir/keys/private" \
+    "$runner" "$property_env" "$user_env" "$bff_env" "$ai_env" \
+    >"$tmp_dir/capability-childcare-invalid.out" 2>&1; then
+    echo "상태: Fail - 어린이집 Capability가 승인 없이 허용됐습니다." >&2
+    exit 1
+fi
+grep -Fq '거부됨: HOME_AI_ENABLED_PROPERTY_CAPABILITIES는 승인된 누적 설정만 허용합니다.' \
+    "$tmp_dir/capability-childcare-invalid.out"
+
+printf '%s\n' \
+    'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \
+    'HOME_AI_JWT_PUBLIC_KEY_PATHS={"local-user-1":"/run/keys/user-signing-public"}' \
+    'HOME_AI_OPENAI_API_KEY=openai-test-secret' \
+    'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
+    'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
     'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,price_trend' >"$ai_env"
 if PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_TEST_DOCKER_LOG="$docker_log" \
@@ -568,7 +618,7 @@ printf '%s\n' \
     'HOME_AI_OPENAI_PRIMARY_MODEL=gpt-5-primary-test' \
     'HOME_AI_OPENAI_SECONDARY_MODEL=gpt-5-secondary-test' \
     'HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend' \
-    'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup,rail_station_lookup' >"$ai_env"
+    'HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup,rail_station_lookup,school_location' >"$ai_env"
 if ! PATH="$tmp_dir/bin:$PATH" \
     CHATBOT_TEST_DOCKER_LOG="$docker_log" \
     CHATBOT_BFF_JAR_PATH="$tmp_dir/chat-bff.jar" \
@@ -580,7 +630,7 @@ if ! PATH="$tmp_dir/bin:$PATH" \
     echo "상태: Fail - 승인된 누적 reference Capability가 허용되지 않았습니다." >&2
     exit 1
 fi
-grep -Fq 'reference-dsn-set=yes|reference-capabilities=academy_lookup,rail_station_lookup' "$docker_log"
+grep -Fq 'reference-dsn-set=yes|reference-capabilities=academy_lookup,rail_station_lookup,school_location,retail_location' "$docker_log"
 
 printf '%s\n' \
     'HOME_AI_PROPERTY_DSN=postgresql://home_search_ai_reader:ai-reader-secret@postgis:5432/home_search' \

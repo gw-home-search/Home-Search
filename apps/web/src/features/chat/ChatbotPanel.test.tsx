@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from '../auth/AuthProvider';
 import type { AuthClient } from '../auth/api/authClient';
 import { ChatbotPanel } from './ChatbotPanel';
+import type { ChatAction } from './actionContract';
 import {
   IndexedDbChatConversationStore,
   type ChatConversation,
@@ -39,6 +40,8 @@ describe('챗봇 패널', () => {
     expect(host.textContent).toContain('출처 1개');
     expect(host.textContent).toContain('Home Search 실거래');
     expect(host.textContent).toContain('근거 등급 A');
+    expect(host.querySelector('.chatbot-fact-list')?.textContent).toContain('확인된 단지 정보');
+    expect(host.querySelector('.chatbot-fact-list')?.textContent).toContain('잠실엘스');
     expect(client.authenticatedRequest).toHaveBeenCalledWith(
       '/api/v1/chatbot/query',
       expect.any(Object),
@@ -47,6 +50,7 @@ describe('챗봇 패널', () => {
     const saved = await store.list();
     expect(saved[0]?.messages.map(({ role }) => role)).toEqual(['user', 'assistant']);
     expect(saved[0]?.messages[1]?.evidence?.citations[0]?.sourceId).toBe('property.ai_read');
+    expect(saved[0]?.messages[1]?.artifacts).toHaveLength(1);
 
     act(() => root?.unmount());
     root = undefined;
@@ -57,6 +61,44 @@ describe('챗봇 패널', () => {
     await waitFor(() => host?.textContent?.includes('근거가 확인된 답변입니다.') === true);
     expect(host.textContent).toContain('근거가 확인된 답변입니다.');
     expect(host.textContent).toContain('기준일 2026-07-16');
+  });
+
+  it('구조화 summary가 있으면 text fallback을 중복 표시하지 않고 전달 순서대로 표시한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-summary');
+    const client = authenticatedClient();
+    const response = JSON.parse(await (await client.authenticatedRequest(
+      '/api/v1/chatbot/query', {}, 'public',
+    )).text());
+    response.answer = '중복되면 안 되는 text fallback';
+    response.uiSummary = {
+      version: 1,
+      scopeNotice: { text: '잠실엘스 기준으로 확인했습니다.', factIds: ['property-trade-1'] },
+      headline: { text: '최근 거래를 확인했습니다.', factIds: ['property-trade-1'] },
+      criteria: [{ key: 'END_DATE', label: '기준일', value: '2026-07-16', factIds: ['property-trade-1'] }],
+      interpretations: [{
+        key: 'RECENT_TRADE', label: '최근 거래 해석', text: '현재 데이터 기준 거래입니다.',
+        factIds: ['property-trade-1'],
+      }],
+      followUp: '기간을 바꿔 확인할 수 있습니다.',
+      fragmentSummaries: [],
+    };
+    client.authenticatedRequest = vi.fn().mockResolvedValue(new Response(JSON.stringify(response)));
+    ({ root, host } = await renderPanel(client, store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(() => host?.querySelector<HTMLTextAreaElement>('#chatbot-question')?.disabled === false);
+    await change(host.querySelector<HTMLTextAreaElement>('#chatbot-question'), '잠실엘스 최근 거래');
+    await click(host.querySelector<HTMLButtonElement>('button[type="submit"]'));
+    await waitFor(() => host?.textContent?.includes('최근 거래를 확인했습니다.') === true);
+
+    expect(host.textContent).not.toContain('중복되면 안 되는 text fallback');
+    const structured = host.querySelector('.chatbot-structured-answer');
+    expect(structured?.textContent).toContain('잠실엘스 기준으로 확인했습니다.');
+    expect(structured?.textContent).toContain('기준일');
+    expect(structured?.textContent).toContain('현재 데이터 기준 거래입니다.');
+    expect(structured?.textContent).toContain('신고 지연이 반영될 수 있습니다.');
+    expect(structured?.textContent).toContain('기간을 바꿔 확인할 수 있습니다.');
   });
 
   it('서버 저장 없이 새 대화와 선택·전체 삭제를 지원한다', async () => {
@@ -79,6 +121,44 @@ describe('챗봇 패널', () => {
     await waitFor(async () => (await store.list()).length === 0);
     expect(await store.list()).toHaveLength(0);
     expect(host.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]')?.disabled).toBe(true);
+  });
+
+  it('지도 action은 버튼을 누를 때 한 번만 전달하고 대화에는 action만 저장한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-action');
+    const onUiAction = vi.fn((_action: ChatAction) => true);
+    const action = {
+      type: 'showNearbyCategory',
+      version: 1,
+      actionId: 'action-request-1-hospital',
+      label: '지도에서 병원 보기',
+      category: 'HOSPITAL',
+      center: { lat: 37.513, lng: 127.082 },
+      level: 4,
+      factIds: ['property-trade-1'],
+    };
+    ({ root, host } = await renderPanel(authenticatedClient([action]), store, onUiAction));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(() => host?.querySelector<HTMLTextAreaElement>('#chatbot-question')?.disabled === false);
+    await change(host.querySelector<HTMLTextAreaElement>('#chatbot-question'), '잠실엘스 주변 병원 지도');
+    await click(host.querySelector<HTMLButtonElement>('button[type="submit"]'));
+    await waitFor(() => (host ? buttonByText(host, '지도에서 병원 보기') : null) != null);
+
+    expect(onUiAction).not.toHaveBeenCalled();
+    const actionButton = host ? buttonByText(host, '지도에서 병원 보기') : null;
+    await click(actionButton);
+    expect(onUiAction).toHaveBeenCalledTimes(1);
+    expect(onUiAction).toHaveBeenCalledWith(action);
+    expect(actionButton?.textContent).toBe('지도에 표시됨');
+    expect(actionButton?.getAttribute('aria-disabled')).toBe('true');
+    await click(actionButton);
+    expect(onUiAction).toHaveBeenCalledTimes(1);
+
+    const saved = await store.list();
+    expect(saved[0]?.messages[1]?.actions).toEqual([action]);
+    expect(JSON.stringify(saved)).not.toContain('placeUrl');
+    expect(JSON.stringify(saved)).not.toContain('phone');
   });
 
   it('대화 목록을 GPT형 내비게이션으로 보여주고 목록에서 대화를 전환한다', async () => {
@@ -114,13 +194,13 @@ describe('챗봇 패널', () => {
     await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
     const recentTradeQuestion = '마포래미안푸르지오 전용 84㎡의 최근 실거래 5건을 거래일과 층까지 알려줘';
     const priceTrendQuestion = '헬리오시티 전용 59㎡의 최근 1년 월별 가격 흐름과 거래량을 보여줘';
-    const identityQuestion = '래미안원베일리의 정확한 주소와 단지 기본 정보를 확인해줘';
+    const lifestyleQuestion = '잠실엘스 주변 학원 위치와 가까운 역·노선을 함께 알려줘';
     await waitFor(() => host?.querySelector<HTMLButtonElement>(`button[aria-label="${recentTradeQuestion}"]`) != null);
 
     expect(host.querySelector<HTMLButtonElement>(`button[aria-label="${priceTrendQuestion}"]`)).not.toBeNull();
-    expect(host.querySelector<HTMLButtonElement>(`button[aria-label="${identityQuestion}"]`)).not.toBeNull();
+    expect(host.querySelector<HTMLButtonElement>(`button[aria-label="${lifestyleQuestion}"]`)).not.toBeNull();
     expect([...host.querySelectorAll('.chatbot-example-kind')].map(({ textContent }) => textContent))
-      .toEqual(['최근 실거래', '가격 흐름', '단지 정보']);
+      .toEqual(['최근 실거래', '가격 흐름', '생활 인프라']);
     await click(host.querySelector<HTMLButtonElement>(`button[aria-label="${recentTradeQuestion}"]`));
     expect(host.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]')?.value)
       .toBe(recentTradeQuestion);
@@ -169,6 +249,9 @@ describe('챗봇 패널', () => {
     await waitFor(() => host?.querySelector('.chatbot-empty-intro') != null);
     expect(host.querySelector('.chatbot-example-questions')?.querySelector('svg')).toBeNull();
     expect(host.querySelectorAll('.chatbot-example-questions button')).toHaveLength(3);
+    expect(host.querySelector('.chatbot-example-questions')?.textContent).toContain(
+      '주변 학원 위치와 가까운 역·노선',
+    );
     expect(document.activeElement).toBe(host.querySelector<HTMLTextAreaElement>('#chatbot-question'));
     expect(host.querySelector('.chatbot-empty-intro')?.textContent).toContain('어떤 집을 찾고 계세요?');
     const question = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
@@ -188,7 +271,7 @@ function conversation(id: string, title: string, updatedAt: string): ChatConvers
   };
 }
 
-function authenticatedClient(): AuthClient {
+function authenticatedClient(uiActions: unknown[] = []): AuthClient {
   return {
     authenticatedRequest: vi.fn().mockResolvedValue(new Response(JSON.stringify({
       success: true,
@@ -214,6 +297,14 @@ function authenticatedClient(): AuthClient {
         factCount: 1,
         citationCount: 1,
       },
+      uiArtifacts: [{
+        type: 'factList',
+        version: 1,
+        artifactId: 'artifact-1',
+        title: '확인된 단지 정보',
+        items: [{ label: '단지명', value: '잠실엘스', factIds: ['property-trade-1'] }],
+      }],
+      uiActions,
     }), { status: 200, headers: { 'Content-Type': 'application/json' } })),
     authorizationUrl: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),
@@ -224,13 +315,17 @@ function authenticatedClient(): AuthClient {
   };
 }
 
-async function renderPanel(client: AuthClient, store: IndexedDbChatConversationStore) {
+async function renderPanel(
+  client: AuthClient,
+  store: IndexedDbChatConversationStore,
+  onUiAction?: (action: ChatAction) => boolean,
+) {
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
   await act(async () => root.render(
     <AuthProvider client={client}>
-      <ChatbotPanel store={store} />
+      <ChatbotPanel onUiAction={onUiAction} store={store} />
     </AuthProvider>,
   ));
   await act(async () => Promise.resolve());

@@ -282,12 +282,15 @@ dedicated reader password. The no-argument path derives BFF/AI public-key
 mappings from `USER_JWT_ACTIVE_KID`, percent-encodes the AI reader password into
 the fixed local DSN, derives the separate `home_search_ai_runtime` reference
 DSN from `AI_DATA_RUNTIME_DB_PASSWORD`, and supplies the approved cumulative
-`complex_identity,recent_trade_lookup,price_trend` allowlist when that optional line is
-absent. The four-path form keeps strict explicit mapping,
+`complex_identity,recent_trade_lookup,price_trend,recommendation,comparison` allowlist when that
+optional line is absent. The four-path form keeps strict explicit mapping,
 DSN, and Capability validation. The approved reference rollback is blank and
-the 2026-07-21 approved values are exactly `academy_lookup` and the cumulative
-`academy_lookup,rail_station_lookup`. Any other combination, including rail
-alone, fails closed until its own readiness and activation commit pass.
+the 2026-07-21 approved values are exactly `academy_lookup`, the cumulative
+`academy_lookup,rail_station_lookup`, the cumulative
+`academy_lookup,rail_station_lookup,school_location`, and the full cumulative
+`academy_lookup,rail_station_lookup,school_location,retail_location`. Any other combination,
+including rail or school alone, fails closed until its own readiness and
+activation commit pass.
 
 The runner requires the existing `home-search-postgis` and `home-search-redis`
 containers to be healthy and `home-search-api` to be running. It then uses
@@ -303,15 +306,23 @@ An operator must keep the BFF timeout greater than the AI query budget.
 
 The AI adapter additionally requires `HOME_AI_OPENAI_API_KEY`, explicit
 `HOME_AI_OPENAI_PRIMARY_MODEL` and `HOME_AI_OPENAI_SECONDARY_MODEL` IDs, and an
-optional `HOME_AI_OPENAI_TIMEOUT_SECONDS` in the range `1..30` with default `8`.
+optional `HOME_AI_OPENAI_TIMEOUT_SECONDS` in the range `1..30` with default `30`.
 `HOME_AI_QUERY_TIMEOUT_SECONDS` bounds the complete plan, repository, and draft
 flow to `1..60s`; invalid values fail closed.
 The accepted runtime Capability values are the identity-only rollback value
 `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity` and the approved
 cumulative value
 `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup`.
-The approved full cumulative value is
+The price/trend rollback value is
 `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend`.
+The approved full cumulative value is
+`HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison`.
+The previous value ending in `recommendation` is the comparison rollback.
+This activation runs explicit `ACADEMY`, `TRANSIT`, `SCHOOL`, and `SHOPPING`
+criteria. The full reference value also enables `BUDGET` recommendation. Retail
+results use only coordinate-confirmed official rows and retain the partial-coverage
+limitation. Childcare and kindergarten remain unavailable until their
+source-specific readiness and activation commits pass.
 The no-argument local runner supplies the full cumulative value when omitted;
 explicit custom-file startup still rejects a missing value. Reordered,
 duplicate, mixed, or unapproved values remain fail-closed.
@@ -344,7 +355,7 @@ source하지 않는다. 해당 파일은 regular non-symlink file이어야 하�
 ```bash
 HOME_AI_GOLDEN_LIVE_CONFIRM=RUN_ONE_LIVE_GOLDEN_CASE \
   apps/ai/ops/run-local-property-golden.sh live \
-  --case-id price-trend-jamsil-ells-84
+  --case-id budget-recommendation-songpa-84-retail
 ```
 
 The overlay is `infra/docker-compose.chatbot.yml`. Omitting that file leaves the

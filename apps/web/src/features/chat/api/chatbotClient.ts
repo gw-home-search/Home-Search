@@ -27,11 +27,19 @@ export async function queryChatbot(
   const payload = request.conversationContext?.messages.length
     ? { question, conversationContext: request.conversationContext }
     : { question };
-  const response = await authenticatedRequest('/api/v1/chatbot/query', {
-    method: 'POST',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  }, 'public');
+  let response: Response;
+  try {
+    response = await authenticatedRequest('/api/v1/chatbot/query', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }, 'public');
+  } catch (error) {
+    if (isRecord(error) && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
+      throw new Error('답변 생성 시간이 길어졌습니다. 잠시 후 다시 시도해주세요.');
+    }
+    throw new Error('챗봇 요청을 완료하지 못했습니다.');
+  }
   if (!response.ok) throw new Error(errorMessage(response.status));
   try {
     const body: unknown = await response.json();

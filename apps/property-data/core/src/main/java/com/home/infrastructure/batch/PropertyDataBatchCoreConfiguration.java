@@ -5,6 +5,15 @@ import com.home.application.coordinate.lookup.ParcelCoordinateOverrideRepository
 import com.home.application.coordinate.lookup.ParcelCoordinateResolver;
 import com.home.application.coordinate.lookup.ParcelCoordinateSourceRepository;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataBatchService;
+import com.home.application.ingest.buildingprofile.BuildingProfileAnalysisService;
+import com.home.application.ingest.buildingprofile.BuildingProfileCollectionService;
+import com.home.application.ingest.buildingprofile.BuildingProfileReplayService;
+import com.home.application.ingest.buildingprofile.LegalDongCodeImportService;
+import com.home.application.ingest.buildingregister.BuildingRatioProjectionService;
+import com.home.application.ingest.buildingregister.BuildingRegisterCampaignService;
+import com.home.application.ingest.buildingregister.BuildingRegisterCollectionService;
+import com.home.application.ingest.buildingregister.BuildingRegisterRawPageFinalizer;
+import com.home.application.ingest.buildingregister.BuildingRegisterRawReceiptService;
 import com.home.application.ingest.metadata.OdcMetadataGapFillService;
 import com.home.application.ingest.raw.RawReceiptService;
 import com.home.application.ingest.rtms.RtmsMonthlyRefreshUseCase;
@@ -36,6 +45,15 @@ import org.springframework.stereotype.Repository;
                         type = FilterType.ASSIGNABLE_TYPE,
                         classes = {
                             BuildingMetadataBatchService.class,
+                            BuildingProfileReplayService.class,
+                            BuildingProfileCollectionService.class,
+                            BuildingProfileAnalysisService.class,
+                            LegalDongCodeImportService.class,
+                            BuildingRegisterCampaignService.class,
+                            BuildingRegisterCollectionService.class,
+                            BuildingRegisterRawReceiptService.class,
+                            BuildingRegisterRawPageFinalizer.class,
+                            BuildingRatioProjectionService.class,
                             OdcMetadataGapFillService.class,
                             RawReceiptService.class,
                             RtmsMonthlyRefreshUseCase.class,

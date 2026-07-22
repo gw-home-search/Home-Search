@@ -37,6 +37,19 @@ class PropertyDataBatchContextBoundaryTest {
                     "home.test.non-batch.enabled=true");
 
     @Test
+    @DisplayName("packaged entrypoint는 building profile 운영 job 4종을 허용한다")
+    void profileJobsAreSupportedByPackagedEntrypoint() {
+        assertThat(PropertyDataBatchApplication.supportsJobName("complexBuildingRegisterProfileReplayJob"))
+                .isTrue();
+        assertThat(PropertyDataBatchApplication.supportsJobName("complexBuildingRegisterProfileCollectJob"))
+                .isTrue();
+        assertThat(PropertyDataBatchApplication.supportsJobName("complexBuildingRegisterProfileAnalyzeJob"))
+                .isTrue();
+        assertThat(PropertyDataBatchApplication.supportsJobName("legalDongCodeMappingImportJob"))
+                .isTrue();
+    }
+
+    @Test
     @DisplayName("비-Batch feature를 활성화해도 Batch context에는 유입되지 않는다")
     void enabledNonBatchFeatureIsNotScanned() {
         contextRunner.run(context -> {
@@ -45,6 +58,8 @@ class PropertyDataBatchContextBoundaryTest {
                     .hasBean("rtmsDailyRefreshJob")
                     .hasBean("complexBuildingMetadataJob")
                     .hasBean("complexOdcMetadataGapFillJob")
+                    .hasBean("complexBuildingRegisterCollectJob")
+                    .hasBean("complexBuildingRatioProjectJob")
                     .doesNotHaveBean("complexMetadataReplayJob")
                     .hasBean("coordinatePreflightStep")
                     .hasBean("rtmsDailyMonthlyIngestStep")

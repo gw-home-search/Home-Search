@@ -3,12 +3,19 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildConversationContext,
-  createChatConversation,
+  createChatDraft,
   IndexedDbChatConversationStore,
   type ChatConversation,
 } from './chatConversationStore';
 
 describe('IndexedDB 챗봇 대화 저장소', () => {
+  it('메모리 draft인 빈 대화는 저장하지 않는다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-test-empty-draft');
+
+    await expect(store.save(createChatDraft())).rejects.toThrow('Empty chat conversations are drafts');
+    await expect(store.list()).resolves.toEqual([]);
+  });
+
   it('여러 대화를 저장하고 최근 수정 순서로 조회한다', async () => {
     const indexedDB = new IDBFactory();
     const firstStore = new IndexedDbChatConversationStore(indexedDB, 'chat-test-persist');
@@ -87,6 +94,20 @@ describe('IndexedDB 챗봇 대화 저장소', () => {
     await expect(store.list()).resolves.toEqual([replacement]);
   });
 
+  it('legacy archive의 빈 대화는 가져오기와 내보내기에서 제외한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-test-empty-import');
+    const meaningful = conversation('meaningful', '2026-07-17T03:00:00.000Z');
+
+    await store.importArchive(JSON.stringify({
+      version: 1,
+      exportedAt: '2026-07-17T04:00:00.000Z',
+      conversations: [createChatDraft({ id: 'empty' }), meaningful],
+    }), 'merge');
+
+    await expect(store.list()).resolves.toEqual([meaningful]);
+    expect(JSON.parse(await store.exportArchive()).conversations).toEqual([meaningful]);
+  });
+
   it('브라우저 가져오기 한도를 초과한 archive를 거부한다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-test-size-limit');
     const oversized = JSON.stringify({
@@ -120,7 +141,7 @@ describe('IndexedDB 챗봇 대화 저장소', () => {
 
 describe('챗봇 대화 helper', () => {
   it('브라우저 전용 빈 대화를 생성한다', () => {
-    const created = createChatConversation({
+    const created = createChatDraft({
       id: 'new-id',
       now: '2026-07-17T05:00:00.000Z',
       title: ' 새 대화 ',

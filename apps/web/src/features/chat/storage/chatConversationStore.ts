@@ -78,6 +78,7 @@ export class IndexedDbChatConversationStore {
 
   async save(conversation: ChatConversation): Promise<void> {
     const validated = validateConversation(conversation);
+    if (validated.messages.length === 0) throw new Error('Empty chat conversations are drafts');
     const database = await this.open();
     const transaction = database.transaction(STORE_NAME, 'readwrite');
     transaction.objectStore(STORE_NAME).put(validated);
@@ -104,7 +105,7 @@ export class IndexedDbChatConversationStore {
     const archive: ChatArchive = {
       version: 1,
       exportedAt,
-      conversations: await this.list(),
+      conversations: (await this.list()).filter(({ messages }) => messages.length > 0),
     };
     return JSON.stringify(archive);
   }
@@ -115,7 +116,9 @@ export class IndexedDbChatConversationStore {
     const transaction = database.transaction(STORE_NAME, 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
     if (mode === 'replace') store.clear();
-    for (const conversation of archive.conversations) store.put(conversation);
+    for (const conversation of archive.conversations) {
+      if (conversation.messages.length > 0) store.put(conversation);
+    }
     await transactionComplete(transaction);
   }
 
@@ -136,7 +139,7 @@ export class IndexedDbChatConversationStore {
   }
 }
 
-export function createChatConversation({
+export function createChatDraft({
   id = crypto.randomUUID(),
   now = new Date().toISOString(),
   title = '새 대화',

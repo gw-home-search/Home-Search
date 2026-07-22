@@ -22,6 +22,65 @@ describe('챗봇 패널', () => {
     vi.restoreAllMocks();
   });
 
+  it('Enter로 질문을 보내고 Shift+Enter와 한글 조합 Enter는 전송하지 않는다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-enter');
+    const client = authenticatedClient();
+    ({ root, host } = await renderPanel(client, store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    const textarea = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
+    await waitFor(() => textarea?.disabled === false);
+
+    await change(textarea, '잠실엘스 최근 거래');
+    await keyDown(textarea, { key: 'Enter', shiftKey: true });
+    await keyDown(textarea, { key: 'Enter', isComposing: true });
+    expect(client.authenticatedRequest).not.toHaveBeenCalled();
+
+    await keyDown(textarea, { key: 'Enter' });
+    await waitFor(() => client.authenticatedRequest.mock.calls.length === 1);
+    expect(client.authenticatedRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('패널 열기와 반복 새 대화는 저장하지 않고 첫 질문을 보낼 때만 저장한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-draft');
+    ({ root, host } = await renderPanel(authenticatedClient(), store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(() => host?.querySelector<HTMLTextAreaElement>('#chatbot-question')?.disabled === false);
+    expect(await store.list()).toHaveLength(0);
+
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-new-conversation'));
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-new-conversation'));
+    expect(await store.list()).toHaveLength(0);
+
+    const textarea = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
+    await change(textarea, '잠실엘스 최근 거래');
+    await keyDown(textarea, { key: 'Enter' });
+    await waitFor(async () => (await store.list())[0]?.messages.length === 2);
+    expect(await store.list()).toHaveLength(1);
+  });
+
+  it('API 실패 후에도 보낸 질문을 대화에 유지한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-failed-request');
+    const client = authenticatedClient();
+    client.authenticatedRequest = vi.fn().mockRejectedValue(new Error('잠시 후 다시 시도해주세요.'));
+    ({ root, host } = await renderPanel(client, store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    const textarea = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
+    await waitFor(() => textarea?.disabled === false);
+    await change(textarea, '실패해도 남아야 하는 질문');
+    await keyDown(textarea, { key: 'Enter' });
+    await waitFor(() => host?.textContent?.includes('챗봇 요청을 완료하지 못했습니다.') === true);
+
+    const [saved] = await store.list();
+    expect(saved?.messages).toHaveLength(1);
+    expect(saved?.messages[0]?.content).toBe('실패해도 남아야 하는 질문');
+  });
+
   it('제한된 인증 질문을 보내고 재마운트 후에도 답변 근거를 유지한다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-persist');
     const client = authenticatedClient();
@@ -101,26 +160,21 @@ describe('챗봇 패널', () => {
     expect(structured?.textContent).toContain('기간을 바꿔 확인할 수 있습니다.');
   });
 
-  it('서버 저장 없이 새 대화와 선택·전체 삭제를 지원한다', async () => {
+  it('새 대화는 첫 질문 전까지 저장하지 않고 입력 가능한 draft로 유지한다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-lifecycle');
     ({ root, host } = await renderPanel(authenticatedClient(), store));
     await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
     await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
     await waitFor(() => host?.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]')?.disabled === false);
 
-    await click(host.querySelector<HTMLButtonElement>('.chatbot-new-conversation'));
-    await waitFor(async () => (await store.list()).length === 2);
-    expect(await store.list()).toHaveLength(2);
-    await click(host.querySelector<HTMLButtonElement>('button[aria-label="대화 목록 열기"]'));
-    await click(host.querySelector<HTMLButtonElement>('button[aria-label="현재 대화 삭제"]'));
+    const textarea = host.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]');
+    await change(textarea, '저장될 첫 질문');
+    await keyDown(textarea, { key: 'Enter' });
     await waitFor(async () => (await store.list()).length === 1);
-    expect(await store.list()).toHaveLength(1);
 
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    await click(buttonByText(host, '전체 삭제'));
-    await waitFor(async () => (await store.list()).length === 0);
-    expect(await store.list()).toHaveLength(0);
-    expect(host.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]')?.disabled).toBe(true);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-new-conversation'));
+    expect(await store.list()).toHaveLength(1);
+    expect(host.querySelector<HTMLTextAreaElement>('textarea[name="chatbot-question"]')?.disabled).toBe(false);
   });
 
   it('지도 action은 버튼을 누를 때 한 번만 전달하고 대화에는 action만 저장한다', async () => {
@@ -267,7 +321,12 @@ function conversation(id: string, title: string, updatedAt: string): ChatConvers
     title,
     createdAt: updatedAt,
     updatedAt,
-    messages: [],
+    messages: [{
+      id: `${id}-message`,
+      role: 'user',
+      content: title,
+      createdAt: updatedAt,
+    }],
   };
 }
 
@@ -346,6 +405,14 @@ async function change(input: HTMLTextAreaElement | null, value: string) {
     setter?.call(input, value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
+}
+
+async function keyDown(input: HTMLTextAreaElement | null, init: KeyboardEventInit) {
+  expect(input).not.toBeNull();
+  await act(async () => {
+    input?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }));
+  });
+  await act(async () => Promise.resolve());
 }
 
 function buttonByText(container: HTMLElement, text: string): HTMLButtonElement | null {

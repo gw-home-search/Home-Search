@@ -2,6 +2,7 @@ import { type ChangeEvent, type FormEvent, useEffect, useLayoutEffect, useMemo, 
 
 import { useAuth } from '../auth/AuthProvider';
 import { queryChatbot } from './api/chatbotClient';
+import { ChatHistoryPopover } from './ChatHistoryPopover';
 import { ChatMessageBody } from './ChatMessageBody';
 import type { ChatAction } from './actionContract';
 import type { ChatEvidence } from './chatTypes';
@@ -30,6 +31,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
   const auth = useAuth();
   const storeRef = useRef(store);
   const launcherRef = useRef<HTMLButtonElement>(null);
+  const historyTriggerRef = useRef<HTMLButtonElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const questionRef = useRef<HTMLTextAreaElement>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -115,19 +117,18 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
     questionRef.current?.focus();
   }
 
-  async function deleteSelected() {
-    if (selected == null) return;
+  async function deleteConversation(id: string) {
     setError(null);
     try {
-      await requiredStore().delete(selected.id);
+      await requiredStore().delete(id);
       await reloadConversations();
     } catch {
       setError('대화를 삭제하지 못했습니다.');
+      throw new Error('대화를 삭제하지 못했습니다.');
     }
   }
 
   async function deleteAll() {
-    if (!window.confirm('브라우저에 저장된 모든 챗봇 대화를 삭제할까요?')) return;
     setError(null);
     try {
       await requiredStore().clear();
@@ -135,6 +136,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
       setActiveConversation({ kind: 'draft', conversation: createChatDraft() });
     } catch {
       setError('전체 대화를 삭제하지 못했습니다.');
+      throw new Error('전체 대화를 삭제하지 못했습니다.');
     }
   }
 
@@ -296,38 +298,29 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store }: ChatbotPanelPr
               <div className="chatbot-history-switcher">
                 <button
                   aria-expanded={isHistoryOpen}
+                  aria-haspopup="menu"
                   aria-label={isHistoryOpen ? '대화 목록 닫기' : '대화 목록 열기'}
                   className="chatbot-history-trigger"
+                  disabled={status === 'sending'}
                   onClick={() => setIsHistoryOpen((open) => !open)}
+                  ref={historyTriggerRef}
                   type="button"
                 >
                   <MenuIcon />
                 </button>
                 {isHistoryOpen ? (
-                  <nav aria-label="저장된 대화" className="chatbot-history-popover">
-                    <div className="chatbot-history-heading">
-                      <strong>내 대화</strong>
-                    </div>
-                    <div className="chatbot-conversation-list">
-                      {conversations.length > 0 ? conversations.map((conversation) => (
-                        <button
-                          aria-pressed={conversation.id === selectedId}
-                          key={conversation.id}
-                          onClick={() => selectConversation(conversation.id)}
-                          title={conversation.title}
-                          type="button"
-                        >
-                          {conversation.title}
-                        </button>
-                      )) : <p>저장된 대화가 없습니다.</p>}
-                    </div>
-                    <div className="chatbot-history-tools">
-                      <button aria-label="현재 대화 삭제" disabled={selected == null} onClick={() => void deleteSelected()} type="button"><TrashIcon />현재 삭제</button>
-                      <button onClick={() => void exportConversations()} type="button"><DownloadIcon />내보내기</button>
-                      <button onClick={() => importInputRef.current?.click()} type="button"><UploadIcon />가져오기</button>
-                      <button onClick={() => void deleteAll()} type="button"><TrashIcon />전체 삭제</button>
-                    </div>
-                  </nav>
+                  <ChatHistoryPopover
+                    conversations={conversations}
+                    disabled={status === 'sending'}
+                    onClose={() => setIsHistoryOpen(false)}
+                    onDelete={deleteConversation}
+                    onDeleteAll={deleteAll}
+                    onExport={() => void exportConversations()}
+                    onImport={() => importInputRef.current?.click()}
+                    onSelect={selectConversation}
+                    selectedId={selectedId}
+                    trigger={historyTriggerRef.current}
+                  />
                 ) : null}
                 <input
                   accept="application/json,.json"
@@ -462,18 +455,6 @@ function CloseIcon() {
 
 function MenuIcon() {
   return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14" /></svg>;
-}
-
-function TrashIcon() {
-  return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6.5 7l.7 13h9.6l.7-13M10 11v5M14 11v5" /></svg>;
-}
-
-function DownloadIcon() {
-  return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 20h14" /></svg>;
-}
-
-function UploadIcon() {
-  return <svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M12 16V5m0 0 4 4m-4-4L8 9M5 20h14" /></svg>;
 }
 
 function SendIcon() {

@@ -224,20 +224,44 @@ describe('챗봇 패널', () => {
     await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
     await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
     await click(host.querySelector<HTMLButtonElement>('button[aria-label="대화 목록 열기"]'));
-    await waitFor(() => host?.querySelectorAll('.chatbot-conversation-list button').length === 2);
+    await waitFor(() => host?.querySelectorAll('.chatbot-history-select').length === 2);
 
     const conversationList = host.querySelector<HTMLElement>('.chatbot-conversation-list');
     expect(conversationList).not.toBeNull();
-    const newer = conversationList ? buttonByText(conversationList, '마포래미안 비교') : null;
-    const older = conversationList ? buttonByText(conversationList, '잠실엘스 최근 거래') : null;
-    expect(newer?.getAttribute('aria-pressed')).toBe('true');
-    expect(older?.getAttribute('aria-pressed')).toBe('false');
+    const newer = conversationList?.querySelector<HTMLButtonElement>('[title="마포래미안 비교"]') ?? null;
+    const older = conversationList?.querySelector<HTMLButtonElement>('[title="잠실엘스 최근 거래"]') ?? null;
+    expect(newer?.getAttribute('aria-current')).toBe('page');
+    expect(older?.getAttribute('aria-current')).toBeNull();
 
     await click(older);
     await click(host.querySelector<HTMLButtonElement>('button[aria-label="대화 목록 열기"]'));
     const reopenedList = host.querySelector<HTMLElement>('.chatbot-conversation-list');
-    expect(reopenedList ? buttonByText(reopenedList, '잠실엘스 최근 거래')?.getAttribute('aria-pressed') : null)
-      .toBe('true');
+    expect(reopenedList?.querySelector<HTMLButtonElement>('[title="잠실엘스 최근 거래"]')?.getAttribute('aria-current'))
+      .toBe('page');
+
+    await click(host.querySelector<HTMLButtonElement>('[aria-label="잠실엘스 최근 거래 대화 관리"]'));
+    await click(buttonByText(host, '대화 삭제'));
+    await click(buttonByText(host, '삭제'));
+    await waitFor(async () => (await store.list()).length === 1);
+    expect((await store.list()).map(({ id }) => id)).toEqual(['newer']);
+  });
+
+  it('첫 로드에서 legacy 빈 대화만 정리하고 내용 있는 대화는 유지한다', async () => {
+    const indexedDB = new IDBFactory();
+    const databaseName = 'chat-panel-legacy-cleanup';
+    await seedLegacyConversation(indexedDB, databaseName, {
+      id: 'empty', title: '새 대화', createdAt: '2026-07-20T00:00:00.000Z',
+      updatedAt: '2026-07-20T00:00:00.000Z', messages: [],
+    });
+    const meaningful = conversation('meaningful', '남아야 하는 대화', '2026-07-21T00:00:00.000Z');
+    await seedLegacyConversation(indexedDB, databaseName, meaningful);
+    const store = new IndexedDbChatConversationStore(indexedDB, databaseName);
+    ({ root, host } = await renderPanel(authenticatedClient(), store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(async () => (await store.list()).length === 1);
+    expect(await store.list()).toEqual([meaningful]);
   });
 
   it('빈 대화에서 단지와 조회 유형이 다른 질문 예시를 입력창에 채운다', async () => {
@@ -328,6 +352,26 @@ function conversation(id: string, title: string, updatedAt: string): ChatConvers
       createdAt: updatedAt,
     }],
   };
+}
+
+async function seedLegacyConversation(
+  indexedDB: IDBFactory,
+  databaseName: string,
+  value: ChatConversation,
+) {
+  const database = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(databaseName, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('conversations', { keyPath: 'id' });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction('conversations', 'readwrite');
+    transaction.objectStore('conversations').put(value);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+  database.close();
 }
 
 function authenticatedClient(uiActions: unknown[] = []): AuthClient {

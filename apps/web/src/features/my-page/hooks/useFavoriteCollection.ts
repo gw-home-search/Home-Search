@@ -3,7 +3,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../auth/AuthProvider';
 import { fetchComplexDetailByComplexId, type ComplexDetail } from '../../complex-detail/api/fetchComplexDetail';
 import { createFavoriteClient, FavoriteClientError } from '../../favorites/api/favoriteClient';
-import { setCachedFavorite, syncFavoriteOwner } from '../../favorites/favoriteStore';
+import {
+  getCachedFavorite,
+  primeCachedFavorite,
+  setCachedFavorite,
+  subscribeFavoriteStore,
+  syncFavoriteOwner,
+} from '../../favorites/favoriteStore';
 
 export type FavoriteCollectionItem = {
   complexId: number;
@@ -21,7 +27,7 @@ type FavoriteCollectionState =
 
 const DETAIL_CONCURRENCY = 4;
 
-export function useFavoriteCollection(page: number, size: number) {
+export function useFavoriteCollection(size: number, incremental = false) {
   const { authenticatedRequest, currentUser, status } = useAuth();
   const client = useMemo(() => createFavoriteClient(authenticatedRequest), [authenticatedRequest]);
   const [state, setState] = useState<FavoriteCollectionState>({
@@ -29,6 +35,10 @@ export function useFavoriteCollection(page: number, size: number) {
   });
   const [reloadSequence, setReloadSequence] = useState(0);
   const [liveMessage, setLiveMessage] = useState('');
+  const [requestedPage, setRequestedPage] = useState(0);
+  const [lastLoadedPage, setLastLoadedPage] = useState(-1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
   const requestSequence = useRef(0);
   const detailControllers = useRef(new Map<number, AbortController>());
   const mutationControllers = useRef(new Map<number, AbortController>());
@@ -38,14 +48,49 @@ export function useFavoriteCollection(page: number, size: number) {
   }, [currentUser, status]);
 
   useEffect(() => {
+    if (status !== 'authenticated' || currentUser == null) return undefined;
+    return subscribeFavoriteStore((change) => {
+      if (change.ownerUserId !== currentUser.userId) return;
+      if (!change.favorite) {
+        setState((current) => {
+          const hasItem = current.items.some((item) => item.complexId === change.complexId);
+          return {
+            ...current,
+            items: hasItem
+              ? current.items.filter((item) => item.complexId !== change.complexId)
+              : current.items,
+            totalElements: Math.max(0, current.totalElements - 1),
+          };
+        });
+        if (incremental) {
+          setRequestedPage(Math.max(0, lastLoadedPage));
+          setReloadSequence((value) => value + 1);
+        }
+        return;
+      }
+      setLiveMessage('');
+      setRequestedPage(0);
+      setReloadSequence((value) => value + 1);
+    });
+  }, [currentUser, incremental, lastLoadedPage, status]);
+
+  useEffect(() => {
     if (status !== 'authenticated' || currentUser == null) return;
     const sequence = requestSequence.current + 1;
     requestSequence.current = sequence;
     const controller = new AbortController();
-    setLiveMessage('');
-    setState({ phase: 'loading', items: [], totalElements: 0, totalPages: 0 });
+    const initialPage = requestedPage === 0;
+    setLoadMoreError(false);
+    if (initialPage) {
+      setLastLoadedPage(-1);
+      setState((current) => current.items.length > 0
+        ? current
+        : { phase: 'loading', items: [], totalElements: 0, totalPages: 0 });
+    } else {
+      setLoadingMore(true);
+    }
 
-    void client.list(page, size, controller.signal)
+    void client.list(requestedPage, size, controller.signal)
       .then(async (result) => {
         const baseItems: FavoriteCollectionItem[] = result.content.map((item) => ({
           ...item,
@@ -54,30 +99,35 @@ export function useFavoriteCollection(page: number, size: number) {
           mutationPhase: 'idle',
           mutationError: null,
         }));
+        const enrichedItems = await enrichFavoriteDetails(baseItems, controller.signal);
         if (controller.signal.aborted || requestSequence.current !== sequence) return;
-        setState({
+        const items = enrichedItems.filter((item) => getCachedFavorite(item.complexId) !== false);
+        const locallyRemovedCount = enrichedItems.length - items.length;
+        items.forEach((item) => primeCachedFavorite(item.complexId, true));
+        setState((current) => ({
           phase: 'ready',
-          items: baseItems,
-          totalElements: result.totalElements,
+          items: initialPage ? items : mergeFavoriteItems(current.items, items),
+          totalElements: Math.max(items.length, result.totalElements - locallyRemovedCount),
           totalPages: result.totalPages,
-        });
-        const items = await enrichFavoriteDetails(baseItems, controller.signal);
-        if (controller.signal.aborted || requestSequence.current !== sequence) return;
-        setState({
-          phase: 'ready',
-          items,
-          totalElements: result.totalElements,
-          totalPages: result.totalPages,
-        });
+        }));
+        setLastLoadedPage(result.page);
+        setLoadingMore(false);
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted || requestSequence.current !== sequence) return;
         if (error instanceof FavoriteClientError && error.kind === 'session-expired') return;
-        setState({ phase: 'error', items: [], totalElements: 0, totalPages: 0 });
+        if (initialPage) {
+          setState((current) => current.items.length > 0
+            ? { ...current, phase: 'ready' }
+            : { phase: 'error', items: [], totalElements: 0, totalPages: 0 });
+          setLiveMessage('기존 관심 단지는 유지했어요. 최신 목록은 잠시 후 다시 확인해주세요.');
+        }
+        else setLoadMoreError(true);
+        setLoadingMore(false);
       });
 
     return () => controller.abort();
-  }, [client, currentUser, page, reloadSequence, size, status]);
+  }, [client, currentUser, reloadSequence, requestedPage, size, status]);
 
   useEffect(() => () => {
     detailControllers.current.forEach((controller) => controller.abort());
@@ -86,7 +136,23 @@ export function useFavoriteCollection(page: number, size: number) {
     mutationControllers.current.clear();
   }, []);
 
-  const retry = useCallback(() => setReloadSequence((value) => value + 1), []);
+  const retry = useCallback(() => {
+    setLiveMessage('');
+    setRequestedPage(0);
+    setReloadSequence((value) => value + 1);
+  }, []);
+
+  const loadMore = useCallback(() => {
+    if (!incremental || loadingMore || loadMoreError || state.items.length >= state.totalElements) return;
+    setLiveMessage('');
+    setRequestedPage(lastLoadedPage + 1);
+  }, [incremental, lastLoadedPage, loadMoreError, loadingMore, state.items.length, state.totalElements]);
+
+  const retryLoadMore = useCallback(() => {
+    if (!loadMoreError) return;
+    setLiveMessage('');
+    setReloadSequence((value) => value + 1);
+  }, [loadMoreError]);
 
   const retryDetail = useCallback(async (complexId: number) => {
     detailControllers.current.get(complexId)?.abort();
@@ -128,11 +194,6 @@ export function useFavoriteCollection(page: number, size: number) {
     try {
       await client.remove(complexId, controller.signal);
       setCachedFavorite(complexId, false);
-      setState((current) => ({
-        ...current,
-        items: current.items.filter((item) => item.complexId !== complexId),
-        totalElements: Math.max(0, current.totalElements - 1),
-      }));
       setLiveMessage('관심 단지에서 해제했습니다.');
     } catch (error) {
       if (controller.signal.aborted) return;
@@ -150,7 +211,18 @@ export function useFavoriteCollection(page: number, size: number) {
     }
   }, [client]);
 
-  return { liveMessage, remove, retry, retryDetail, state };
+  return {
+    hasMore: incremental && state.items.length < state.totalElements,
+    liveMessage,
+    loadingMore,
+    loadMore,
+    loadMoreError,
+    remove,
+    retry,
+    retryDetail,
+    retryLoadMore,
+    state,
+  };
 }
 
 async function enrichFavoriteDetails(
@@ -187,4 +259,12 @@ function updateItem(
   update: (item: FavoriteCollectionItem) => FavoriteCollectionItem,
 ): FavoriteCollectionItem[] {
   return items.map((item) => item.complexId === complexId ? update(item) : item);
+}
+
+function mergeFavoriteItems(
+  current: FavoriteCollectionItem[],
+  next: FavoriteCollectionItem[],
+): FavoriteCollectionItem[] {
+  const nextIds = new Set(next.map((item) => item.complexId));
+  return [...current.filter((item) => !nextIds.has(item.complexId)), ...next];
 }

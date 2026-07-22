@@ -1,10 +1,9 @@
 import { useCallback } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 
 import { MapApp, type MapAppProps } from './MapApp';
 import { AuthProvider } from '../features/auth/AuthProvider';
 import type { AuthClient } from '../features/auth/api/authClient';
-import { MyPageRoutes } from '../features/my-page/MyPageRoutes';
 import './App.css';
 
 export type AppProps = MapAppProps & {
@@ -35,14 +34,24 @@ function RoutedApp({
       replaceRoute={replaceRoute}
     >
       <Routes>
-        <Route element={<MapApp {...mapProps} />} path="/" />
-        <Route element={<MyPageRoutes />} path="/my/*" />
         <Route element={<AuthCallbackPage />} path="/auth/success" />
         <Route element={<AuthCallbackPage />} path="/auth/failure" />
-        <Route element={<Navigate replace to="/" />} path="*" />
+        <Route element={<MapRoute mapProps={mapProps} />} path="*" />
       </Routes>
     </AuthProvider>
   );
+}
+
+function MapRoute({ mapProps }: { mapProps: MapAppProps }) {
+  const location = useLocation();
+  if (location.pathname !== '/' && !isMyPagePath(location.pathname)) {
+    return <Navigate replace to="/" />;
+  }
+  return <MapApp {...mapProps} />;
+}
+
+function isMyPagePath(pathname: string): boolean {
+  return pathname === '/my' || pathname.startsWith('/my/');
 }
 
 function AuthCallbackPage() {

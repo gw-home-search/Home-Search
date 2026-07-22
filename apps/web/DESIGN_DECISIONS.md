@@ -53,6 +53,7 @@ React/CSS components; no Tailwind, `lucide-react`, Redux, or
 - `data-cadastral-visible`: independent cadastral overlay state.
 - `data-roadview-state` and `data-distance-phase`: public UI seams for tool progress and completion.
 - `data-auth-status`: header auth state without exposing token or email data.
+- `data-my-page-section`: persistent map-rail section (`overview`, `favorites`, or `account`).
 - `data-ui-component="auth-dialog"` and `data-auth-provider`: login dialog and
   allowlisted provider actions.
 
@@ -84,6 +85,38 @@ detail trade table may scroll horizontally. Short portrait screens keep the
 The docked sheet and its nested rail controls use a consistent restrained 1px
 corner. The sheet never overlays Kakao attribution. Grid rows/columns are not animated.
 `ResizeObserver` preserves center around `map.relayout()`.
+
+## My Page And Favorites
+
+`/my`, `/my/favorites`, and `/my/account` are map-workspace states, not
+standalone pages. They replace the left exploration rail while preserving the
+same Kakao map instance, map center, level, filters, and search input. The rail
+uses the existing 380/360/336px shell widths, a 62px toolbar aligned with the
+map filter row, and a 44px text-only route navigation. The selected route uses
+action-colored type plus a 2px underline; the UI does not add a second large
+page heading, a 216px nested navigation, or a tinted page background.
+
+At `<=720px`, My Page becomes a docked bottom sheet using
+`minmax(242px, 1fr) / min(52dvh, calc(100dvh - 300px))`. This leaves at least
+180px of actual map below the 62px filter row. At `<=900px`, `<=500px`
+landscape, it becomes the same 320px left rail as exploration. The sheet has no
+decorative drag handle because it is not draggable.
+
+Overview and account content use flat definition and summary rows. Favorite
+collections have no outer card; 1px dividers separate 96px rows, and the only
+repeated accent is the 40px favorite action (44px mobile). The row body opens
+the existing complex detail without navigating away from `/my/favorites`.
+Closing detail restores the list scroll and the previous row focus, or the
+current route link if that row was removed. The map stays focused on the
+selected complex. Pagination is an explicit `더 보기` action that appends 20
+items; it never clears already loaded rows when a later page fails.
+
+Anonymous My Page routes render the map and an inline login invitation first.
+They do not call favorite APIs or automatically open the login dialog. The
+header account disclosure contains only the identity summary, `마이페이지`,
+and `로그아웃`; `관심 단지` remains inside My Page navigation. On widths below
+1280px, an open AI drawer temporarily hides rather than unmounts My Page so its
+section and scroll position return when chat closes.
 
 ## Header And Icons
 

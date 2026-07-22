@@ -29,7 +29,7 @@ describe('AccountControl 사용자 메뉴', () => {
     const chip = host.querySelector<HTMLButtonElement>('.account-chip');
     expect(chip?.textContent).toContain('매우 긴 한국어 사용자 이름');
     expect(chip?.textContent).not.toContain('Google');
-    expect(chip?.getAttribute('aria-haspopup')).toBe('menu');
+    expect(chip?.hasAttribute('aria-haspopup')).toBe(false);
     expect(chip?.querySelector('.account-chip-chevron')?.tagName).toBe('svg');
     expect(host.textContent).not.toContain('person@example.com');
     expect(host.textContent).not.toContain('userId');
@@ -39,32 +39,33 @@ describe('AccountControl 사용자 메뉴', () => {
     expect(host.querySelector('.account-avatar-fallback')?.textContent).toBe('매');
 
     await act(async () => chip?.click());
-    expect(host.querySelector('[role="menu"]')?.textContent).toContain('Google 계정');
-    expect(Array.from(host.querySelectorAll<HTMLAnchorElement>('a[role="menuitem"]')).map((link) => link.getAttribute('href')))
-      .toEqual(['/my', '/my/favorites']);
+    expect(host.querySelector('[aria-label="계정 메뉴"]')?.textContent).toContain('Google 계정');
+    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(Array.from(host.querySelectorAll<HTMLAnchorElement>('.account-menu a')).map((link) => link.getAttribute('href')))
+      .toEqual(['/my']);
   });
 
   it('menu는 Escape와 outside pointer로 닫고 Escape 후 chip focus를 복원한다', async () => {
     ({ root, host } = await renderAccount(authenticatedClient()));
     const chip = host.querySelector<HTMLButtonElement>('.account-chip');
     await act(async () => chip?.click());
-    expect(host.querySelector('[role="menu"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="계정 메뉴"]')).not.toBeNull();
 
     await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
     await act(async () => Promise.resolve());
-    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(host.querySelector('[aria-label="계정 메뉴"]')).toBeNull();
     expect(document.activeElement).toBe(chip);
 
     await act(async () => chip?.click());
     await act(async () => document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
-    expect(host.querySelector('[role="menu"]')).toBeNull();
+    expect(host.querySelector('[aria-label="계정 메뉴"]')).toBeNull();
   });
 
   it('logout은 응답 성공 여부와 무관하게 anonymous로 전환하고 실패 안내를 유지한다', async () => {
     const successClient = authenticatedClient();
     ({ root, host } = await renderAccount(successClient));
     await act(async () => host!.querySelector<HTMLButtonElement>('.account-chip')?.click());
-    await act(async () => host!.querySelector<HTMLButtonElement>('button[role="menuitem"]')?.click());
+    await act(async () => host!.querySelector<HTMLButtonElement>('.account-menu > button')?.click());
     expect(successClient.logout).toHaveBeenCalledTimes(1);
     expect(host.querySelector('.account-chip')).toBeNull();
     expect(host.textContent).toContain('로그인');
@@ -74,7 +75,7 @@ describe('AccountControl 사용자 메뉴', () => {
     const failureClient = authenticatedClient(true);
     ({ root, host } = await renderAccount(failureClient));
     await act(async () => host!.querySelector<HTMLButtonElement>('.account-chip')?.click());
-    await act(async () => host!.querySelector<HTMLButtonElement>('button[role="menuitem"]')?.click());
+    await act(async () => host!.querySelector<HTMLButtonElement>('.account-menu > button')?.click());
     expect(host.querySelector('.account-chip')).toBeNull();
     expect(host.textContent).toContain('로그인');
     expect(host.textContent).toContain('로그아웃하지 못했습니다. 다시 시도해주세요.');

@@ -89,7 +89,8 @@
 .account-menu-user { display: grid; gap: 2px; padding: 14px 16px 12px; }
 .account-menu-user strong { overflow: hidden; color: var(--hs-map-color-ink); font-size: 13px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
 .account-menu-user span { color: var(--hs-map-color-muted); font-size: 11px; line-height: 16px; }
-.account-menu > :is(a, button) { display: flex; width: 100%; min-height: 40px; align-items: center; border: 0; border-top: 1px solid var(--hs-map-color-line); padding: 0 16px; background: var(--hs-map-color-surface); color: var(--hs-map-color-ink-soft); cursor: pointer; font-size: 12px; font-weight: 700; text-align: left; text-decoration: none; }
+.account-menu > :is(a, button) { display: flex; width: 100%; min-height: 40px; align-items: center; border: 0; padding: 0 16px; background: var(--hs-map-color-surface); color: var(--hs-map-color-ink-soft); cursor: pointer; font-size: 12px; font-weight: 700; text-align: left; text-decoration: none; }
+.account-menu > a:first-of-type { border-top: 1px solid var(--hs-map-color-line); }
 .account-menu > :is(a, button):hover { background: var(--hs-map-color-surface-muted); }
 .account-menu > button:disabled { cursor: wait; opacity: .6; }
 .account-menu-error { margin: 0; border-top: 1px solid var(--hs-map-color-error-line); padding: 10px 16px; background: var(--hs-map-color-error-soft); color: var(--hs-map-color-error); font-size: 11px; line-height: 16px; }

@@ -59,7 +59,6 @@ export function AccountControl() {
           <button
             aria-controls={menuId}
             aria-expanded={isMenuOpen}
-            aria-haspopup="menu"
             aria-label={`${auth.currentUser.displayName} 계정 메뉴`}
             className="account-chip"
             disabled={auth.isLoggingOut}
@@ -74,21 +73,17 @@ export function AccountControl() {
             <ChevronDownIcon aria-hidden="true" className="account-chip-chevron" />
           </button>
           {isMenuOpen ? (
-            <div aria-label="계정 메뉴" className="account-menu" id={menuId} role="menu">
+            <div aria-label="계정 메뉴" className="account-menu" id={menuId}>
               <div className="account-menu-user">
                 <strong>{auth.currentUser.displayName}</strong>
                 <span>{PROVIDER_LABELS[auth.currentUser.provider]} 계정</span>
               </div>
-              <Link onClick={() => setIsMenuOpen(false)} role="menuitem" to="/my">
+              <Link onClick={() => setIsMenuOpen(false)} to="/my">
                 마이페이지
-              </Link>
-              <Link onClick={() => setIsMenuOpen(false)} role="menuitem" to="/my/favorites">
-                관심 단지
               </Link>
               <button
                 disabled={auth.isLoggingOut}
                 onClick={() => void auth.logout().then(() => navigate('/'))}
-                role="menuitem"
                 type="button"
               >
                 {auth.isLoggingOut ? '로그아웃 중...' : '로그아웃'}

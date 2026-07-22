@@ -1,5 +1,3 @@
-import { Link } from 'react-router-dom';
-
 import type { FavoriteCollectionItem } from '../hooks/useFavoriteCollection';
 import { useFavoriteCollection } from '../hooks/useFavoriteCollection';
 
@@ -9,12 +7,16 @@ export function FavoriteCollection({
   emptyAction,
   emptyDescription,
   emptyTitle,
+  onExplore,
+  onFavoriteSelect,
 }: {
   collection: ReturnType<typeof useFavoriteCollection>;
   compact?: boolean;
   emptyAction: string;
   emptyDescription: string;
   emptyTitle: string;
+  onExplore(): void;
+  onFavoriteSelect(complexId: number, trigger: HTMLElement): void;
 }) {
   const { state } = collection;
   if (state.phase === 'loading') return <FavoriteSkeleton compact={compact} />;
@@ -30,10 +32,9 @@ export function FavoriteCollection({
   if (state.items.length === 0) {
     return (
       <div className="my-local-state my-empty-state">
-        <HeartIcon />
         <strong>{emptyTitle}</strong>
         <p>{emptyDescription}</p>
-        <Link to="/">{emptyAction}</Link>
+        <button onClick={onExplore} type="button">{emptyAction}</button>
       </div>
     );
   }
@@ -45,6 +46,7 @@ export function FavoriteCollection({
             compact={compact}
             item={item}
             key={item.complexId}
+            onFavoriteSelect={onFavoriteSelect}
             onRemove={() => void collection.remove(item.complexId)}
             onRetry={() => void collection.retryDetail(item.complexId)}
           />
@@ -60,17 +62,24 @@ function FavoriteRow({
   item,
   onRemove,
   onRetry,
+  onFavoriteSelect,
 }: {
   compact: boolean;
   item: FavoriteCollectionItem;
   onRemove(): void;
   onRetry(): void;
+  onFavoriteSelect(complexId: number, trigger: HTMLElement): void;
 }) {
   const displayName = favoriteName(item);
   const metadata = favoriteMetadata(item);
   return (
     <li className="favorite-row" data-detail-phase={item.detailPhase}>
-      <Link aria-label={`${displayName} 지도에서 보기`} className="favorite-row-main" to={`/?complexId=${item.complexId}`}>
+      <button
+        aria-label={`${displayName} 지도에서 보기`}
+        className="favorite-row-main"
+        onClick={(event) => onFavoriteSelect(item.complexId, event.currentTarget)}
+        type="button"
+      >
         <span className="favorite-row-title">{displayName}</span>
         {item.detailPhase === 'loading' ? <span className="favorite-row-loading">단지 정보를 불러오는 중</span> : null}
         {item.detail?.address ? <span className="favorite-row-address">{item.detail.address}</span> : null}
@@ -81,12 +90,11 @@ function FavoriteRow({
           <time dateTime={item.savedAt}>{formatSavedAt(item.savedAt)}</time>
           {compact ? ' 관심 단지에 추가했어요' : ' 저장'}
         </span>
-      </Link>
+      </button>
       <div className="favorite-row-actions">
         {item.detailPhase === 'error' ? (
           <button className="favorite-retry" onClick={onRetry} type="button">정보 다시 불러오기</button>
         ) : null}
-        {!compact ? <Link to={`/?complexId=${item.complexId}`}>지도에서 보기</Link> : null}
         <button
           aria-label={`${displayName} 관심 해제`}
           className="favorite-remove"
@@ -95,7 +103,7 @@ function FavoriteRow({
           type="button"
         >
           <HeartIcon filled />
-          <span>{item.mutationPhase === 'removing' ? '해제 중' : '관심 해제'}</span>
+          <span className="my-visually-hidden">{item.mutationPhase === 'removing' ? '해제 중' : '관심 해제'}</span>
         </button>
       </div>
       {item.mutationError ? <p className="favorite-row-error" role="alert">{item.mutationError}</p> : null}
@@ -133,5 +141,7 @@ function favoriteMetadata(item: FavoriteCollectionItem): string[] {
 }
 
 function formatSavedAt(value: string): string {
-  return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '저장 날짜 확인 불가';
+  return new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(date);
 }

@@ -81,7 +81,8 @@ public class BuildingProfileCollectionService {
                         pnu,
                         complexCount,
                         BuildingRegisterCollectionStrategy.COMPARE_RECAP_TITLE,
-                        command.maxRequests()),
+                        command.maxRequests(),
+                        command.targetScope().isValidationSample()),
                 budget);
     }
 

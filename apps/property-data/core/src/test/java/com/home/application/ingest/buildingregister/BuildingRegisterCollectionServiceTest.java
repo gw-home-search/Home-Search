@@ -335,6 +335,22 @@ class BuildingRegisterCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("profile 선저장 mode는 계층 사유가 있어도 기본개요를 미루고 총괄표제부와 표제부만 수집한다")
+    void profileModeCanDeferBasicOverviewForSharedPnu() {
+        Fixture fixture = new Fixture();
+        fixture.client.respond(BuildingRegisterEndpoint.RECAP_TITLE, page(recap("20", "80"), 1));
+        fixture.client.respond(BuildingRegisterEndpoint.TITLE, page(title(), 1));
+        fixture.client.respond(BuildingRegisterEndpoint.BASIC_OVERVIEW, page(basic(), 1));
+
+        BuildingRegisterCollectionResult result =
+                fixture.service.collect(profileCommandWithoutBasicOverview(2, 10));
+
+        assertThat(result.status()).isEqualTo(BuildingRegisterCollectionStatus.COLLECTED);
+        assertThat(result.basicOverviewRecords()).isEmpty();
+        assertThat(fixture.client.calls).containsExactly("RECAP_TITLE:1:100", "TITLE:1:100");
+    }
+
+    @Test
     @DisplayName("profile mode는 동일 총괄 중복을 복수 root로 오인하지 않는다")
     void profileModeDeduplicatesIdenticalRecapBeforeBasicDecision() {
         Fixture fixture = new Fixture();
@@ -369,6 +385,19 @@ class BuildingRegisterCollectionServiceTest {
                 pnuComplexCount,
                 BuildingRegisterCollectionStrategy.COMPARE_RECAP_TITLE,
                 maxRequests);
+    }
+
+    private static BuildingRegisterCollectCommand profileCommandWithoutBasicOverview(
+            int pnuComplexCount, int maxRequests) {
+        return new BuildingRegisterCollectCommand(
+                COLLECTION_ID,
+                REQUEST_ID,
+                LocalDate.of(2026, 7, 20),
+                PNU,
+                pnuComplexCount,
+                BuildingRegisterCollectionStrategy.COMPARE_RECAP_TITLE,
+                maxRequests,
+                false);
     }
 
     private static ParsedBuildingRegisterPage page(BuildingRegisterRecordSnapshotCommand record, int totalCount) {

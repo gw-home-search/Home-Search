@@ -143,13 +143,14 @@ class ReadApiControllerContractTest {
     @Test
     @DisplayName("GET /api/v1/region은 root region을 반환한다")
     void rootRegionsReturnCanonicalFields() throws Exception {
-        given(regionNavigationService.getRootRegions()).willReturn(List.of(new RegionSummaryResult(1L, "Seoul")));
+        given(regionNavigationService.getRootRegions()).willReturn(List.of(new RegionSummaryResult(1L, "Seoul", "11")));
 
         mockMvc.perform(get("/api/v1/region"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$[0].id").value(1))
-                .andExpect(jsonPath("$[0].name").value("Seoul"));
+                .andExpect(jsonPath("$[0].name").value("Seoul"))
+                .andExpect(jsonPath("$[0].code").value("11"));
     }
 
     @Test
@@ -157,16 +158,23 @@ class ReadApiControllerContractTest {
     void regionDetailReturnsChildrenAndCenter() throws Exception {
         given(regionNavigationService.getRegionDetail(1L))
                 .willReturn(new RegionDetailResult(
-                        1L, "Seoul", 37.5663, 126.9780, List.of(new RegionSummaryResult(11L, "Gangnam-gu"))));
+                        1L,
+                        "Seoul",
+                        "11",
+                        37.5663,
+                        126.9780,
+                        List.of(new RegionSummaryResult(11L, "Gangnam-gu", "11680"))));
 
         mockMvc.perform(get("/api/v1/region/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.name").value("Seoul"))
+                .andExpect(jsonPath("$.code").value("11"))
                 .andExpect(jsonPath("$.latitude").value(37.5663))
                 .andExpect(jsonPath("$.longitude").value(126.9780))
                 .andExpect(jsonPath("$.children[0].id").value(11))
-                .andExpect(jsonPath("$.children[0].name").value("Gangnam-gu"));
+                .andExpect(jsonPath("$.children[0].name").value("Gangnam-gu"))
+                .andExpect(jsonPath("$.children[0].code").value("11680"));
     }
 
     @Test

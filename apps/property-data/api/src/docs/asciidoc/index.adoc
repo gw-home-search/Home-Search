@@ -1,4 +1,10 @@
 = Home Search public API
+
+== Market insight
+
+operation::market-insight-latest-unavailable[]
+
+operation::market-insight-weekly-unavailable[]
 :doctype: book
 :icons: font
 :source-highlighter: coderay

@@ -17,5 +17,5 @@ public record RtmsIngestProperties(
 
     public record Daily(
             @DefaultValue("") String lawdCds,
-            @Positive @DefaultValue("1") int lookbackMonths) {}
+            @Positive @DefaultValue("2") int lookbackMonths) {}
 }

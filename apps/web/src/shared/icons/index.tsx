@@ -68,3 +68,31 @@ export function CheckIcon(props: IconProps) {
 export function HeartIcon({ filled = false, ...props }: IconProps & { filled?: boolean }) {
   return <svg {...sharedProps} {...props}><path fill={filled ? 'currentColor' : 'none'} d="M20.8 4.8a5.4 5.4 0 0 0-7.6 0L12 6l-1.2-1.2a5.4 5.4 0 0 0-7.6 7.6L12 21l8.8-8.6a5.4 5.4 0 0 0 0-7.6Z" /></svg>;
 }
+
+export function MapGridIcon(props: IconProps) {
+  return <svg {...sharedProps} {...props}><rect x="4" y="4" width="6" height="6" /><rect x="14" y="4" width="6" height="6" /><rect x="4" y="14" width="6" height="6" /><rect x="14" y="14" width="6" height="6" /></svg>;
+}
+
+export function NewTradeIcon(props: IconProps) {
+  return <svg {...sharedProps} {...props}><path d="M6 3h9l3 3v15H6z" /><path d="M14 3v4h4M9 13h6M12 10v6" /></svg>;
+}
+
+export function HighestDealIcon(props: IconProps) {
+  return <svg {...sharedProps} {...props}><path d="M4 19 9 14l3 3 8-10" /><path d="M15 7h5v5" /></svg>;
+}
+
+export function RecordHighIcon(props: IconProps) {
+  return <svg {...sharedProps} {...props}><path d="M6 21V4M6 5h10l-2.5 3L16 11H6" /><path d="m10 17 3-3 2 2 4-5" /></svg>;
+}
+
+export function RiseIcon(props: IconProps) {
+  return <svg {...sharedProps} {...props}><path d="m4 17 5-5 4 3 7-8" /><path d="M15 7h5v5" /></svg>;
+}
+
+export function FallIcon(props: IconProps) {
+  return <svg {...sharedProps} {...props}><path d="m4 7 5 5 4-3 7 8" /><path d="M15 17h5v-5" /></svg>;
+}
+
+export function CancellationIcon(props: IconProps) {
+  return <svg {...sharedProps} {...props}><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="m9 9 6 6M15 9l-6 6" /></svg>;
+}

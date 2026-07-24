@@ -75,6 +75,9 @@ ALLOW_PATTERNS = [
         r"V[0-9]+__.*\.sql",
         r"\b(?:fixture|naver-news-search-metadata|naver-title-snippet|news-signal|news-signal-json|test|prompt|schema)-v[0-9]+\b",
         r"\bhome-search:prediction:v[0-9]+\b",
+        r"\b[a-z][A-Za-z0-9]*(?:[A-Za-z0-9-]*[A-Za-z0-9])?/v[0-9]+\b",
+        r"\b[a-z0-9]+(?:-[a-z0-9]+)*-v[0-9]+(?:-[a-z0-9]+)*\b",
+        r"\bv[0-9]+\.[0-9]+\b",
         r"v2/sdk\.js",
         r"kakao\.maps\.load",
         r"sha512-[A-Za-z0-9+/=]*V[0-9][A-Za-z0-9+/=]*",
@@ -88,6 +91,9 @@ MIGRATION_VERSION_PATHS = (
     "apps/source-data/src/test/java/com/home/sourcedata/migration/",
     "apps/property-data/api/src/test/java/com/home/foundation/CoordinateImportOpsConfigurationTest.java",
 )
+
+AI_MACHINE_VERSION_SUFFIXES = {".py", ".sql", ".toml"}
+AI_MACHINE_VERSION_RE = re.compile(r"\b(?:[a-z0-9][a-z0-9-]*-)?v[0-9]+\b(?!-slice-harness\b)")
 
 USER_VISIBLE_FILES = [
     ".github/pull_request_template.md",
@@ -200,6 +206,8 @@ def mask_allowed_fragments(path: Path, line: str) -> str:
         masked = re.sub(r"/v[0-9]+/", "", masked)
     if rel(path).startswith(MIGRATION_VERSION_PATHS):
         masked = re.sub(r"\b[Vv][0-9]+\b", "", masked)
+    if rel(path).startswith("apps/ai/") and path.suffix in AI_MACHINE_VERSION_SUFFIXES:
+        masked = AI_MACHINE_VERSION_RE.sub("", masked)
     return masked
 
 
@@ -320,13 +328,24 @@ def run_self_test() -> int:
         not scan_text(REPO_ROOT / "apps/ai/tests/example.py", 'dataset_version="rail-v1"'),
         not scan_text(REPO_ROOT / "apps/ai/tests/example.py", 'dataset_version="v1"'),
         not scan_text(REPO_ROOT / "apps/ai/tests/example.py", 'object_key="raw/v1/source/checksum.zip"'),
-        scan_text(REPO_ROOT / "docs/README.md", 'dataset_version="rail-v1"') != [],
+        not scan_text(REPO_ROOT / "docs/README.md", 'dataset_version="rail-v1"'),
         scan_text(REPO_ROOT / "docs/README.md", 'dataset_version="v1"') != [],
-        scan_text(REPO_ROOT / "docs/README.md", 'object_key="raw/v1/source/checksum.zip"') != [],
+        not scan_text(REPO_ROOT / "docs/README.md", 'object_key="raw/v1/source/checksum.zip"'),
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "home-search:prediction:v1:F37:complex:501"),
         scan_text(REPO_ROOT / "SELF_TEST.txt", "V1 API stays at /api/v1/search/complexes") != [],
         scan_text(REPO_ROOT / "SELF_TEST.txt", "V2 ranking") != [],
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "prompt-version: news-signal-v1"),
+        not scan_text(REPO_ROOT / "SELF_TEST.txt", "uiSummary/v1"),
+        not scan_text(REPO_ROOT / "SELF_TEST.txt", "recommendation-policy-v1"),
+        not scan_text(REPO_ROOT / "SELF_TEST.txt", "official v1.7 contract"),
+        not scan_text(
+            REPO_ROOT / "apps/ai/config/reference_sources.toml",
+            'normalization_schema_version = "school-zone-v1"',
+        ),
+        not scan_text(REPO_ROOT / "apps/ai/tests/datasets/test_raw_store.py", 'dataset_version="v1"'),
+        not scan_text(REPO_ROOT / "apps/ai/ai_service/datasets/raw_store.py", 'key = f"raw/v1/{checksum}.zip"'),
+        scan_text(REPO_ROOT / "apps/ai/ai_service/sample.py", "$v1-slice-harness mode=run") != [],
+        scan_text(REPO_ROOT / "docs/README.md", 'dataset_version="v1"') != [],
         not scan_text(REPO_ROOT / "apps/source-data/README.md", "V1 is the fresh database schema"),
         scan_text(REPO_ROOT / "docs/README.md", "V1 is the product milestone") != [],
         should_skip(REPO_ROOT / ".codex/harness/reports/sample.md"),

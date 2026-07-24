@@ -324,7 +324,15 @@ services:
     depends_on:
       - api
     working_dir: /workspace/apps/web
-    command: [ "sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0 --port 5173" ]
+    env_file:
+      - ../apps/web/.env
+    command:
+      - sh
+      - -c
+      - >-
+        test -n "$$VITE_KAKAO_MAP_APP_KEY" ||
+        { printf '%s\n' 'VITE_KAKAO_MAP_APP_KEY is required' >&2; exit 2; };
+        npm ci && npm run dev -- --host 0.0.0.0 --port 5173
     environment:
       VITE_API_SERVER_IP: ${VITE_API_SERVER_IP:-http://localhost:8080}
       VITE_USER_API_SERVER_IP: ${VITE_USER_API_SERVER_IP:-http://localhost:8082}
@@ -333,6 +341,12 @@ services:
     volumes:
       - ../apps/web:/workspace/apps/web
       - home-search-web-node-modules:/workspace/apps/web/node_modules
+    healthcheck:
+      test: [ "CMD", "node", "-e", "require('http').get('http://127.0.0.1:5173/', response => process.exit(response.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))" ]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 3
     networks:
       - home-search-local
 

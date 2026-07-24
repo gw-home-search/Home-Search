@@ -58,6 +58,29 @@ describe('loadKakaoMapSdk helper 동작', () => {
 
     await expect(sdkPromise).rejects.toThrow('Kakao map SDK did not expose map constructors');
   });
+
+  it('SDK load 실패 후 실패 script를 제거하고 새 요청으로 다시 초기화한다', async () => {
+    const { loadKakaoMapSdk } = await import('./loadKakaoMapSdk');
+
+    const firstPromise = loadKakaoMapSdk('test-app-key');
+    const firstScript = document.head.querySelector<HTMLScriptElement>(
+      'script[src*="dapi.kakao.com/v2/maps/sdk.js"]',
+    );
+    firstScript?.onerror?.call(firstScript, new Event('error'));
+
+    await expect(firstPromise).rejects.toThrow('Kakao map SDK failed to load');
+    expect(document.head.querySelectorAll('script[src*="dapi.kakao.com/v2/maps/sdk.js"]')).toHaveLength(0);
+
+    const retryPromise = loadKakaoMapSdk('test-app-key');
+    const retryScript = document.head.querySelector<HTMLScriptElement>(
+      'script[src*="dapi.kakao.com/v2/maps/sdk.js"]',
+    );
+    expect(retryScript).not.toBeNull();
+    expect(retryScript).not.toBe(firstScript);
+
+    retryScript?.onerror?.call(retryScript, new Event('error'));
+    await expect(retryPromise).rejects.toThrow('Kakao map SDK failed to load');
+  });
 });
 
 function fakeKakaoMapsApi(): KakaoMapsApi {

@@ -5,6 +5,7 @@ import com.home.application.ingest.raw.RawTradeIngestFailureSummary;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
 import com.home.domain.ingest.raw.RawTradeIngestStatus;
+import com.home.domain.ingest.run.ExecutionCorrelationId;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -42,7 +43,12 @@ public class JdbcRawTradeIngestRepository implements RawTradeIngestRepository {
 			    status,
 			    failure_reason,
 			    created_at,
-			    processed_at
+			    processed_at,
+			    execution_correlation_id,
+			    registration_date_raw,
+			    registration_date,
+			    cancellation_date_raw,
+			    cancellation_date
 			)
 			VALUES (
 			    :source,
@@ -55,7 +61,12 @@ public class JdbcRawTradeIngestRepository implements RawTradeIngestRepository {
 			    :status,
 			    :failureReason,
 			    :createdAt,
-			    :processedAt
+			    :processedAt,
+			    :executionCorrelationId,
+			    :registrationDateRaw,
+			    :registrationDate,
+			    :cancellationDateRaw,
+			    :cancellationDate
 			)
 			RETURNING *
 			""")
@@ -70,6 +81,15 @@ public class JdbcRawTradeIngestRepository implements RawTradeIngestRepository {
                 .param("failureReason", record.failureReason())
                 .param("createdAt", offset(record.createdAt()))
                 .param("processedAt", offset(record.processedAt()))
+                .param(
+                        "executionCorrelationId",
+                        record.executionCorrelationId() == null
+                                ? null
+                                : record.executionCorrelationId().value())
+                .param("registrationDateRaw", record.registrationDateRaw())
+                .param("registrationDate", record.registrationDate())
+                .param("cancellationDateRaw", record.cancellationDateRaw())
+                .param("cancellationDate", record.cancellationDate())
                 .query(this::mapRecord)
                 .single();
     }
@@ -192,7 +212,12 @@ public class JdbcRawTradeIngestRepository implements RawTradeIngestRepository {
                 RawTradeIngestStatus.valueOf(resultSet.getString("status")),
                 resultSet.getString("failure_reason"),
                 instantOrNull(resultSet, "created_at"),
-                instantOrNull(resultSet, "processed_at"));
+                instantOrNull(resultSet, "processed_at"),
+                executionCorrelationId(resultSet),
+                resultSet.getString("registration_date_raw"),
+                resultSet.getObject("registration_date", java.time.LocalDate.class),
+                resultSet.getString("cancellation_date_raw"),
+                resultSet.getObject("cancellation_date", java.time.LocalDate.class));
     }
 
     private RawTradeIngestFailureSummary mapFailureSummary(ResultSet resultSet, int rowNumber) throws SQLException {
@@ -213,6 +238,11 @@ public class JdbcRawTradeIngestRepository implements RawTradeIngestRepository {
     private Instant instantOrNull(ResultSet resultSet, String column) throws SQLException {
         OffsetDateTime value = resultSet.getObject(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();
+    }
+
+    private ExecutionCorrelationId executionCorrelationId(ResultSet resultSet) throws SQLException {
+        java.util.UUID value = resultSet.getObject("execution_correlation_id", java.util.UUID.class);
+        return value == null ? null : new ExecutionCorrelationId(value);
     }
 
     private OffsetDateTime offset(Instant instant) {

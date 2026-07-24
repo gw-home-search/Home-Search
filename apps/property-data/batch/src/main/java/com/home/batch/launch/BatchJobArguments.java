@@ -20,8 +20,16 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
 
     private static final String DAILY_JOB = "rtmsDailyRefreshJob";
     private static final String BACKFILL_JOB = "rtmsBackfillJob";
+    private static final String INSIGHT_DAILY_JOB = "marketInsightDailyJob";
+    private static final String INSIGHT_ROLLING_7D_JOB = "marketInsightRolling7dJob";
     private static final String BUILDING_METADATA_JOB = "complexBuildingMetadataJob";
     private static final String ODC_METADATA_GAP_FILL_JOB = "complexOdcMetadataGapFillJob";
+    private static final String BUILDING_REGISTER_COLLECT_JOB = "complexBuildingRegisterCollectJob";
+    private static final String BUILDING_RATIO_PROJECT_JOB = "complexBuildingRatioProjectJob";
+    private static final String BUILDING_PROFILE_REPLAY_JOB = "complexBuildingRegisterProfileReplayJob";
+    private static final String BUILDING_PROFILE_COLLECT_JOB = "complexBuildingRegisterProfileCollectJob";
+    private static final String BUILDING_PROFILE_ANALYZE_JOB = "complexBuildingRegisterProfileAnalyzeJob";
+    private static final String LEGAL_DONG_CODE_IMPORT_JOB = "legalDongCodeMappingImportJob";
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     public static BatchJobArguments from(String jobName, ApplicationArguments arguments, Clock clock) {
@@ -33,11 +41,139 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
         Map<String, String> params = arguments == null ? Map.of() : Map.copyOf(arguments);
         return switch (normalizedJobName) {
             case DAILY_JOB -> daily(normalizedJobName, params, clock);
+            case INSIGHT_DAILY_JOB -> daily(normalizedJobName, params, clock);
+            case INSIGHT_ROLLING_7D_JOB -> daily(normalizedJobName, params, clock);
             case BACKFILL_JOB -> backfill(normalizedJobName, params);
             case BUILDING_METADATA_JOB -> buildingMetadata(normalizedJobName, params, clock);
             case ODC_METADATA_GAP_FILL_JOB -> odcMetadataGapFill(normalizedJobName, params, clock);
+            case BUILDING_REGISTER_COLLECT_JOB -> buildingRegisterCollect(normalizedJobName, params, clock);
+            case BUILDING_RATIO_PROJECT_JOB -> buildingRatioProject(normalizedJobName, params, clock);
+            case BUILDING_PROFILE_REPLAY_JOB -> buildingProfileReplay(normalizedJobName, params);
+            case BUILDING_PROFILE_COLLECT_JOB -> buildingProfileCollect(normalizedJobName, params, clock);
+            case BUILDING_PROFILE_ANALYZE_JOB -> buildingProfileAnalyze(normalizedJobName, params);
+            case LEGAL_DONG_CODE_IMPORT_JOB -> legalDongCodeImport(normalizedJobName, params);
             default -> throw invalid("Unsupported SPRING_BATCH_JOB_NAME: " + normalizedJobName);
         };
+    }
+
+    private static BatchJobArguments buildingProfileReplay(String jobName, Map<String, String> arguments) {
+        return new BatchJobArguments(
+                jobName,
+                parameters(Map.of(
+                        "sourceCollectionId", canonicalUuid(arguments.get("sourceCollectionId"), "sourceCollectionId"),
+                        "parseRunId", canonicalUuid(arguments.get("parseRunId"), "parseRunId"),
+                        "parserVersion", requireText(arguments.get("parserVersion"), "parserVersion is required"),
+                        "maxPages", Integer.toString(positiveInt(arguments.get("maxPages"), "maxPages")))));
+    }
+
+    private static BatchJobArguments buildingProfileCollect(
+            String jobName, Map<String, String> arguments, Clock clock) {
+        requireLiteral(arguments, "purpose", "profile-discovery");
+        requireLiteral(arguments, "strategy", "compare-recap-title");
+        String targetScope = requireText(arguments.get("targetScope"), "targetScope is required");
+        if (!List.of("validation-sample", "nationwide-staging").contains(targetScope)) {
+            throw invalid("targetScope must be validation-sample or nationwide-staging");
+        }
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("collectionId", canonicalUuid(arguments.get("collectionId"), "collectionId"));
+        values.put("requestId", canonicalRequestId(arguments.get("requestId")));
+        values.put("runDate", runDate(arguments.get("runDate"), clock));
+        values.put("purpose", "profile-discovery");
+        values.put("targetScope", targetScope);
+        values.put("strategy", "compare-recap-title");
+        if ("validation-sample".equals(targetScope)) {
+            int sampleSize = positiveInt(arguments.get("sampleSize"), "sampleSize");
+            if (sampleSize != 1500) throw invalid("sampleSize must be exactly 1500");
+            values.put("sampleSize", Integer.toString(sampleSize));
+        } else if (text(arguments.get("sampleSize")) != null) {
+            throw invalid("sampleSize must be omitted for nationwide-staging");
+        }
+        values.put("selectionSeed", requireText(arguments.get("selectionSeed"), "selectionSeed is required"));
+        values.put("maxRequests", Integer.toString(positiveInt(arguments.get("maxRequests"), "maxRequests")));
+        values.put("parallelism", Integer.toString(profileParallelism(arguments.get("parallelism"))));
+        return new BatchJobArguments(jobName, parameters(values));
+    }
+
+    private static BatchJobArguments buildingProfileAnalyze(String jobName, Map<String, String> arguments) {
+        return new BatchJobArguments(
+                jobName,
+                parameters(Map.of(
+                        "collectionId", canonicalUuid(arguments.get("collectionId"), "collectionId"),
+                        "parseRunId", canonicalUuid(arguments.get("parseRunId"), "parseRunId"),
+                        "analysisRunId", canonicalUuid(arguments.get("analysisRunId"), "analysisRunId"),
+                        "rulesVersion", requireText(arguments.get("rulesVersion"), "rulesVersion is required"),
+                        "outputDirectory",
+                                requireText(arguments.get("outputDirectory"), "outputDirectory is required"))));
+    }
+
+    private static BatchJobArguments legalDongCodeImport(String jobName, Map<String, String> arguments) {
+        return new BatchJobArguments(
+                jobName,
+                parameters(Map.of(
+                        "importId", canonicalUuid(arguments.get("importId"), "importId"),
+                        "effectiveDate", requiredDate(arguments.get("effectiveDate"), "effectiveDate"),
+                        "sourceFile", requireText(arguments.get("sourceFile"), "sourceFile is required"))));
+    }
+
+    private static void requireLiteral(Map<String, String> arguments, String name, String expected) {
+        if (!expected.equals(requireText(arguments.get(name), name + " is required"))) {
+            throw invalid(name + " must be " + expected);
+        }
+    }
+
+    private static int profileParallelism(String value) {
+        if (text(value) == null) return 2;
+        int parallelism = positiveInt(value, "parallelism");
+        if (parallelism > 4) throw invalid("parallelism must be at most 4");
+        return parallelism;
+    }
+
+    private static BatchJobArguments buildingRegisterCollect(
+            String jobName, Map<String, String> arguments, Clock clock) {
+        String mode = requireText(arguments.get("mode"), "mode is required");
+        if (!List.of("missing", "retry").contains(mode)) throw invalid("mode must be missing or retry");
+        String strategy = requireText(arguments.get("strategy"), "strategy is required");
+        if (!List.of("adaptive", "full-hierarchy").contains(strategy)) {
+            throw invalid("strategy must be adaptive or full-hierarchy");
+        }
+        Long fromId = optionalPositiveLong(arguments.get("fromComplexId"), "fromComplexId");
+        Long toId = optionalPositiveLong(arguments.get("toComplexId"), "toComplexId");
+        if (toId == null) throw invalid("toComplexId is required");
+        if (fromId != null && fromId > toId) throw invalid("fromComplexId must be <= toComplexId");
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("collectionId", canonicalUuid(arguments.get("collectionId"), "collectionId"));
+        values.put("requestId", canonicalRequestId(arguments.get("requestId")));
+        values.put("runDate", runDate(arguments.get("runDate"), clock));
+        values.put("mode", mode);
+        values.put("strategy", strategy);
+        values.put("maxRequests", Integer.toString(positiveInt(arguments.get("maxRequests"), "maxRequests")));
+        values.put("parallelism", Integer.toString(boundedParallelism(arguments.get("parallelism"))));
+        values.put("toComplexId", toId.toString());
+        if (fromId != null) values.put("fromComplexId", fromId.toString());
+        return new BatchJobArguments(jobName, parameters(values));
+    }
+
+    private static int boundedParallelism(String value) {
+        if (text(value) == null) return 1;
+        int parallelism = positiveInt(value, "parallelism");
+        if (parallelism > 4) throw invalid("parallelism must be at most 4");
+        return parallelism;
+    }
+
+    private static BatchJobArguments buildingRatioProject(String jobName, Map<String, String> arguments, Clock clock) {
+        Long fromId = optionalPositiveLong(arguments.get("fromComplexId"), "fromComplexId");
+        Long toId = optionalPositiveLong(arguments.get("toComplexId"), "toComplexId");
+        if (fromId != null && toId != null && fromId > toId) {
+            throw invalid("fromComplexId must be <= toComplexId");
+        }
+        Map<String, String> values = new LinkedHashMap<>();
+        values.put("collectionId", canonicalUuid(arguments.get("collectionId"), "collectionId"));
+        values.put("requestId", canonicalRequestId(arguments.get("requestId")));
+        values.put("runDate", runDate(arguments.get("runDate"), clock));
+        values.put("maxTargets", Integer.toString(positiveInt(arguments.get("maxTargets"), "maxTargets")));
+        if (fromId != null) values.put("fromComplexId", fromId.toString());
+        if (toId != null) values.put("toComplexId", toId.toString());
+        return new BatchJobArguments(jobName, parameters(values));
     }
 
     private static BatchJobArguments odcMetadataGapFill(String jobName, Map<String, String> arguments, Clock clock) {
@@ -105,6 +241,11 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
         identifyingParameters.put("runDate", runDate);
         String requestId = canonicalRequestId(arguments.get("requestId"));
         identifyingParameters.put("requestId", requestId);
+        String restartAttempt = text(arguments.get("restartAttempt"));
+        if (restartAttempt != null) {
+            identifyingParameters.put(
+                    "restartAttempt", Integer.toString(positiveInt(restartAttempt, "restartAttempt")));
+        }
         return new BatchJobArguments(jobName, parameters(identifyingParameters));
     }
 
@@ -170,6 +311,40 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
             return ExecutionCorrelationId.from(requestId).toString();
         } catch (IllegalArgumentException exception) {
             throw invalid("requestId must be a canonical UUID");
+        }
+    }
+
+    private static String canonicalUuid(String value, String name) {
+        String candidate = requireText(value, name + " is required");
+        try {
+            String canonical = java.util.UUID.fromString(candidate).toString();
+            if (!canonical.equals(candidate)) throw new IllegalArgumentException();
+            return canonical;
+        } catch (IllegalArgumentException exception) {
+            throw invalid(name + " must be a canonical UUID");
+        }
+    }
+
+    private static String runDate(String value, Clock clock) {
+        String result = text(value);
+        if (result == null) {
+            result = LocalDate.now((clock == null ? Clock.system(KST) : clock).withZone(KST))
+                    .toString();
+        }
+        try {
+            LocalDate.parse(result);
+            return result;
+        } catch (RuntimeException exception) {
+            throw invalid("runDate must use yyyy-MM-dd");
+        }
+    }
+
+    private static String requiredDate(String value, String name) {
+        String result = requireText(value, name + " is required");
+        try {
+            return LocalDate.parse(result).toString();
+        } catch (RuntimeException exception) {
+            throw invalid(name + " must use yyyy-MM-dd");
         }
     }
 

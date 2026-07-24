@@ -26,7 +26,7 @@ public class JdbcRegionNavigationReader implements RegionNavigationReader {
     @Override
     public List<RegionSummaryResult> findRootRegions() {
         return jdbcClient.sql("""
-			SELECT id, name
+			SELECT id, name, code
 			FROM region
 			WHERE parent_id IS NULL
 			ORDER BY id
@@ -37,7 +37,7 @@ public class JdbcRegionNavigationReader implements RegionNavigationReader {
     public Optional<RegionDetailResult> findRegionDetail(Long regionId) {
         Optional<RegionRow> region = jdbcClient
                 .sql("""
-			SELECT id, name, center_lat, center_lng
+			SELECT id, name, code, center_lat, center_lng
 			FROM region
 			WHERE id = :regionId
 			""")
@@ -49,7 +49,7 @@ public class JdbcRegionNavigationReader implements RegionNavigationReader {
         }
         List<RegionSummaryResult> children = jdbcClient
                 .sql("""
-			SELECT id, name
+			SELECT id, name, code
 			FROM region
 			WHERE parent_id = :regionId
 			ORDER BY id
@@ -58,7 +58,8 @@ public class JdbcRegionNavigationReader implements RegionNavigationReader {
                 .query(this::mapRegionSummary)
                 .list();
         RegionRow row = region.get();
-        return Optional.of(new RegionDetailResult(row.id(), row.name(), row.latitude(), row.longitude(), children));
+        return Optional.of(
+                new RegionDetailResult(row.id(), row.name(), row.code(), row.latitude(), row.longitude(), children));
     }
 
     @Override
@@ -117,13 +118,15 @@ public class JdbcRegionNavigationReader implements RegionNavigationReader {
     }
 
     private RegionSummaryResult mapRegionSummary(ResultSet resultSet, int rowNumber) throws SQLException {
-        return new RegionSummaryResult(resultSet.getLong("id"), resultSet.getString("name"));
+        return new RegionSummaryResult(
+                resultSet.getLong("id"), resultSet.getString("name"), resultSet.getString("code"));
     }
 
     private RegionRow mapRegionRow(ResultSet resultSet, int rowNumber) throws SQLException {
         return new RegionRow(
                 resultSet.getLong("id"),
                 resultSet.getString("name"),
+                resultSet.getString("code"),
                 doubleOrNull(resultSet, "center_lat"),
                 doubleOrNull(resultSet, "center_lng"));
     }
@@ -151,5 +154,5 @@ public class JdbcRegionNavigationReader implements RegionNavigationReader {
         return value == null ? null : value.doubleValue();
     }
 
-    private record RegionRow(Long id, String name, Double latitude, Double longitude) {}
+    private record RegionRow(Long id, String name, String code, Double latitude, Double longitude) {}
 }

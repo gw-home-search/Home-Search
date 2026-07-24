@@ -2,6 +2,7 @@ package com.home.global.error;
 
 import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
 import com.home.application.ingest.metadata.admin.InvalidMetadataAdminRequestException;
+import com.home.application.insight.read.InvalidInsightQueryException;
 import com.home.application.place.InvalidNearbyPlaceRequestException;
 import com.home.application.place.NearbyPlaceCenterUnavailableException;
 import com.home.application.place.NearbyPlaceProviderUnavailableException;
@@ -49,6 +50,7 @@ public class ApiExceptionHandler {
         ConstraintViolationException.class,
         InvalidCoordinateOverrideException.class,
         InvalidMetadataAdminRequestException.class,
+        InvalidInsightQueryException.class,
         InvalidReadRequestException.class,
         InvalidNearbyPlaceRequestException.class
     })

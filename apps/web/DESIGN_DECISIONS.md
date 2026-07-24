@@ -281,6 +281,15 @@ shows only the next region grid and must not request or render
 selected region has no children; changing stages clears stale complex rows
 before the next response.
 
+## Market Insights
+
+The map rail exposes region navigation plus five user-facing trade metrics:
+new, highest deal, record high, rise, and fall. Cancellation evidence remains
+an API and data-quality concern and is not presented as a visible metric,
+badge, quality notice, or empty state. A legacy `metric=cancellation` deep link
+is replaced with the default new-trade view while keeping the selected scope
+and region.
+
 ## Filters
 
 Each chip is two-line label/summary: 92×46px desktop, 88×46px tablet, and
@@ -456,7 +465,7 @@ otherwise a compact `새 답변 보기` action preserves the reader's position.
 
 Successful observation notes such as scope and source method belong in report
 basis or Sources, not under `확인할 점`. Internal source abbreviations and policy
-identifiers never appear in visible prose. Legacy v1 artifacts remain readable,
+identifiers never appear in visible prose. Legacy artifacts remain readable,
 including narrow-panel table overflow contained inside the table surface.
 
 Recommendation follow-ups keep only ranked complex ids in the current

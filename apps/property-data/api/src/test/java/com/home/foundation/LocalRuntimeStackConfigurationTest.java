@@ -31,6 +31,7 @@ class LocalRuntimeStackConfigurationTest {
         assertThat(LOCAL_COMPOSE).exists();
 
         String content = Files.readString(LOCAL_COMPOSE);
+        String webService = content.substring(content.indexOf("\n  web:"), content.indexOf("\n  admin-service:"));
         String operationalDbUrl = "DB_JDBC_URL: jdbc:postgresql://postgis:5432/${HOME_SEARCH_DB_NAME:-home_search}";
         String coordinateSourceDbUrl =
                 "COORDINATE_SOURCE_DB_JDBC_URL: ${COORDINATE_SOURCE_DB_JDBC_URL:-jdbc:postgresql://${COORDINATE_SOURCE_DB_HOST:-home-search-coordinate-source-postgis-arm64-v4}:5432/${COORDINATE_SOURCE_DB_NAME:-home_search_coordinate_source}}";
@@ -58,7 +59,12 @@ class LocalRuntimeStackConfigurationTest {
         assertThat(content).doesNotContain("SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS");
         assertThat(content).doesNotContain("SPRING_FLYWAY_VALIDATE_ON_MIGRATE");
         assertThat(content).contains("VITE_API_SERVER_IP: ${VITE_API_SERVER_IP:-http://localhost:8080}");
-        assertThat(content).doesNotContain("VITE_KAKAO_MAP_APP_KEY: ${VITE_KAKAO_MAP_APP_KEY:-}");
+        assertThat(webService).contains("env_file:\n      - ../apps/web/.env");
+        assertThat(webService).doesNotContain("VITE_KAKAO_MAP_APP_KEY: ${VITE_KAKAO_MAP_APP_KEY:-}");
+        assertThat(webService).contains("VITE_KAKAO_MAP_APP_KEY is required");
+        assertThat(content).contains("http://127.0.0.1:5173/");
+        assertThat(webService).contains("test: [ \"CMD\", \"node\", \"-e\"");
+        assertThat(webService).doesNotContain("wget -q -O /dev/null http://127.0.0.1:5173/");
         assertThat(content).doesNotContain("APT_SERVICE_KEY:");
         assertThat(content).doesNotContain("VW_SERVICE_KEY:");
     }

@@ -58,6 +58,23 @@ class BackendPackageBoundaryTest {
             .dependOnClassesThat()
             .resideInAPackage("com.home.infrastructure.persistence..");
 
+    private static final ArchRule EXISTING_PUBLIC_READS_DO_NOT_DEPEND_ON_INSIGHT = noClasses()
+            .that()
+            .resideInAnyPackage(
+                    "com.home.application.map..",
+                    "com.home.application.search..",
+                    "com.home.application.regionnavigation..",
+                    "com.home.application.propertydetail..",
+                    "com.home.application.tradehistory..",
+                    "com.home.infrastructure.persistence.map..",
+                    "com.home.infrastructure.persistence.search..",
+                    "com.home.infrastructure.persistence.regionnavigation..",
+                    "com.home.infrastructure.persistence.propertydetail..",
+                    "com.home.infrastructure.persistence.tradehistory..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAnyPackage("com.home.application.insight..", "com.home.domain.insight..");
+
     @Test
     @DisplayName("현재 property-data core의 계층 경계가 유지된다")
     void currentPropertyDataCoreRespectsLayerBoundaries() {
@@ -67,6 +84,7 @@ class BackendPackageBoundaryTest {
         APPLICATION_BOUNDARY.check(productionClasses);
         JDBC_PERSISTENCE_BOUNDARY.check(productionClasses);
         EXTERNAL_ADAPTER_BOUNDARY.check(productionClasses);
+        EXISTING_PUBLIC_READS_DO_NOT_DEPEND_ON_INSIGHT.check(productionClasses);
     }
 
     @Test

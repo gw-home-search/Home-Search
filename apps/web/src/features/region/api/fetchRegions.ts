@@ -5,6 +5,7 @@ import { fetchWithTimeout } from '../../../shared/http/fetchWithTimeout';
 export type RegionSummary = {
   id: number;
   name: string;
+  code: string;
 };
 
 export type RegionDetail = RegionSummary & {
@@ -28,6 +29,7 @@ export type RegionComplexSummary = {
 type RegionSummaryResponse = {
   id?: number | string;
   name?: string;
+  code?: string;
 };
 
 type RegionDetailResponse = RegionSummaryResponse & {
@@ -73,9 +75,10 @@ export async function fetchRootRegions(): Promise<RegionSummary[]> {
   }, normalizeRootRegions);
 }
 
-export async function fetchRegionDetail(regionId: number): Promise<RegionDetail> {
+export async function fetchRegionDetail(regionId: number, signal?: AbortSignal): Promise<RegionDetail> {
   const response = await fetchWithTimeout(resolveApiUrl(`${REGION_PATH}/${regionId}`), {
     method: 'GET',
+    signal,
   });
 
   if (!response.ok) {
@@ -180,6 +183,7 @@ function normalizeRegionSummary(
   return {
     id: toRequiredNumber(region.id, 'id', responseName),
     name: toRequiredString(region.name, 'name', responseName),
+    code: toRequiredString(region.code, 'code', responseName),
   };
 }
 

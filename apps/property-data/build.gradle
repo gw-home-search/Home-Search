@@ -258,7 +258,7 @@ tasks.register('verifyApiMigrationCatalog') {
             throw new GradleException("Duplicate API migration versions: ${duplicates.keySet().sort()}")
         }
         def versions = byVersion.keySet().findAll { it != null }.sort()
-        def expectedVersions = [1, 2, 4, 5, 6, 7, 8, 9, 10]
+        def expectedVersions = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
         if (versions != expectedVersions) {
             throw new GradleException("API migration versions must be exact: ${expectedVersions}; actual=${versions}")
         }
@@ -271,7 +271,16 @@ tasks.register('verifyApiMigrationCatalog') {
             'V7__add_building_register_metadata_fields.sql': '4a0d7cf77640937f4c5aeb5e4462959ff0469eb670631bb3b31df82fcbdadf50',
             'V8__add_complex_display_search_projection.sql': '23aa88583332e2c8d24b62432d67da3581874f738016cd363f6474d1db3b6d4b',
             'V9__publish_ai_read_property_facts.sql': '7d1fde99ad9050a4cf3da591b887ba4870e6337c07d5dcbe27434a1f3d2aff12',
-            'V10__publish_ai_read_region_hierarchy.sql': 'd5aeabda3015c9d5509bc8058171d1c267f02e953e746653a4f895a88bd6aacf'
+            'V10__publish_ai_read_region_hierarchy.sql': 'd5aeabda3015c9d5509bc8058171d1c267f02e953e746653a4f895a88bd6aacf',
+            'V11__add_building_register_ratio_evidence.sql': '11cec6b80a9e0b64c75484002c25ba3d5c6b85ccbce43f2f0d5f27d0d52bf34d',
+            'V12__grant_building_register_ratio_runtime_privileges.sql': 'ebb746c2ba4cb6da535679c8a2e24ad9871b0782753e7e476649bcdfd182f472',
+            'V13__add_building_register_profile_discovery.sql': 'fbf6681fe942ac5023cf450ebf7c12bce45dc9d92fe3fb6fd24b7cbb5172fb80',
+            'V14__allow_nationwide_building_register_profile_staging.sql': '4c50730addb3576cedfc0c045215b48339a041395c49809b3e58599a606a4817',
+            'V15__add_rtms_collection_execution_evidence.sql': '2baf11566f83941e2b234b34b0f5450f48ea8d9c0dbed9f1017ace07d523c421',
+            'V16__add_market_insight_snapshots.sql': '82152ecee8aa51d022735419fa757d56235362299518854455c0d548bc79837d',
+            'V17__grant_market_insight_runtime_privileges.sql': 'bc49e9edda0ea8e2381478b118b9462cd7627a8d0b98009bfb5271438d8c5a9e',
+            'V18__add_weekly_market_insight_lineage.sql': 'e745a7e08bb93e070fb65e78f8f2af03980c8705272dea42f37b169c98f02423',
+            'V19__add_rolling_market_insight_evidence.sql': 'e114da3398bf5714d105de0acd60c71909978ed631fd66f7ccf479b92775c332'
         ].each { fileName, expected ->
             def file = files.find { it.name == fileName }
             if (file == null || sha256(file) != expected) {

@@ -15,6 +15,45 @@ import org.junit.jupiter.api.Test;
 class JdbcRawTradeIngestRepositoryTest extends JdbcPostgresTestSupport {
 
     @Test
+    @DisplayName("raw save는 날짜 원문을 먼저 보존하고 유효한 yy.MM.dd만 구조화 날짜로 저장한다")
+    void savesRawAndParsedSourceDatesWithoutBlockingMalformedRows() {
+        JdbcRawTradeIngestRepository repository = new JdbcRawTradeIngestRepository(jdbcClient);
+
+        RawTradeIngestRecord valid = repository.save(RawTradeIngestRecord.received(
+                "RTMS",
+                "dated-source-key-1",
+                "11680",
+                "202607",
+                1,
+                "{\"rgstDate\":\"26.07.23\",\"cdealDay\":\"26.07.24\"}",
+                "dated-payload-hash-1",
+                null,
+                "26.07.23",
+                "26.07.24"));
+        RawTradeIngestRecord invalid = repository.save(RawTradeIngestRecord.received(
+                "RTMS",
+                "dated-source-key-2",
+                "11680",
+                "202607",
+                1,
+                "{\"rgstDate\":\"26.02.30\"}",
+                "dated-payload-hash-2",
+                null,
+                "26.02.30",
+                null));
+
+        assertThat(valid.registrationDateRaw()).isEqualTo("26.07.23");
+        assertThat(valid.registrationDate()).isEqualTo(java.time.LocalDate.parse("2026-07-23"));
+        assertThat(valid.cancellationDateRaw()).isEqualTo("26.07.24");
+        assertThat(valid.cancellationDate()).isEqualTo(java.time.LocalDate.parse("2026-07-24"));
+        assertThat(invalid.registrationDateRaw()).isEqualTo("26.02.30");
+        assertThat(invalid.registrationDate()).isNull();
+        assertThat(invalid.cancellationDateRaw()).isNull();
+        assertThat(invalid.cancellationDate()).isNull();
+        assertThat(rawCount()).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("raw save는 id를 반환하고 failed match는 reason과 함께 queryable하다")
     void savesRawAndFindsMatchFailuresByStatus() {
         JdbcRawTradeIngestRepository repository = new JdbcRawTradeIngestRepository(jdbcClient);

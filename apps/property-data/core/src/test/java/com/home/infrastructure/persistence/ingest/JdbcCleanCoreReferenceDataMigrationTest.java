@@ -19,7 +19,10 @@ class JdbcCleanCoreReferenceDataMigrationTest extends JdbcMigrationTestSupport {
 
         migrateToLatest();
 
-        assertThat(appliedMigrationVersions()).containsExactly("1", "2", "4", "5", "6", "7", "8", "9", "10");
+        assertThat(appliedMigrationVersions())
+                .containsExactly(
+                        "1", "2", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18",
+                        "19");
         assertThat(regclass("batch.BATCH_JOB_INSTANCE")).isEqualTo("batch.batch_job_instance");
         assertThat(count("SELECT count(*) FROM region WHERE region_type = 'si-do'"))
                 .isGreaterThanOrEqualTo(17);
@@ -69,13 +72,13 @@ class JdbcCleanCoreReferenceDataMigrationTest extends JdbcMigrationTestSupport {
     }
 
     @Test
-    @DisplayName("migration version 2 fresh baseline은 Java parity로 확정한 schema와 seed fingerprint를 유지한다")
+    @DisplayName("latest fresh baseline은 Java parity로 확정한 schema와 seed fingerprint를 유지한다")
     void sqlV2FreshBaselineMatchesGoldenFingerprint() {
         flyway(null).clean();
         flyway(null).migrate();
         jdbcClient = org.springframework.jdbc.core.simple.JdbcClient.create(dataSource);
 
-        assertThat(schemaFingerprint()).isEqualTo("16d2a6e4b96383e92c124b80fce9ae37");
+        assertThat(schemaFingerprint()).isEqualTo("b99991b03c974978209a9dd0e4097dc7");
         assertThat(seedFingerprint()).isEqualTo("4cc3b683cff740f5eb20dc09271f117d");
         assertThat(sequenceFingerprint()).isEqualTo("588869ab552608ed168a0b29266f5e91");
     }

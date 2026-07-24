@@ -3,7 +3,7 @@ import type { MapMarkersResult } from '../features/map/api/fetchMapMarkers';
 export type MarkerRequestState = 'loading' | 'ready' | 'empty' | 'error';
 export type DetailRequestState = 'idle' | 'loading' | 'ready' | 'error';
 export type PanelRequestState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
-export type SidebarMode = 'region' | 'search' | 'detail';
+export type SidebarMode = 'region' | 'search' | 'insight' | 'detail';
 export type MapDisplayMode = 'roadmap' | 'terrain' | 'hybrid';
 
 export type MapViewport = {

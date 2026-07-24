@@ -72,7 +72,7 @@ describe('App 단지 상세', () => {
     await flushAsyncState();
     await flushAsyncState();
 
-    expect(rootElement.querySelectorAll('.request-state-error')).toHaveLength(1);
+    expect(rootElement.querySelectorAll('.request-state-warning')).toHaveLength(1);
     const retry = [...rootElement.querySelectorAll<HTMLButtonElement>('button')]
       .find((button) => button.textContent === '단지 다시 불러오기') ?? null;
     expect(retry).not.toBeNull();

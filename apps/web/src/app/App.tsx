@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from
 import { MapApp, type MapAppProps } from './MapApp';
 import { AuthProvider } from '../features/auth/AuthProvider';
 import type { AuthClient } from '../features/auth/api/authClient';
+import { readInsightMetric } from '../features/insights/insightMetricConfig';
 import './App.css';
 
 export type AppProps = MapAppProps & {
@@ -44,8 +45,22 @@ function RoutedApp({
 
 function MapRoute({ mapProps }: { mapProps: MapAppProps }) {
   const location = useLocation();
-  if (location.pathname !== '/' && !isMyPagePath(location.pathname)) {
+  if (location.pathname !== '/' && location.pathname !== '/insights' && !isMyPagePath(location.pathname)) {
     return <Navigate replace to="/" />;
+  }
+  if (location.pathname === '/insights') {
+    const params = new URLSearchParams(location.search);
+    const metric = readInsightMetric(location.search);
+    const needsDefaultScope = !params.has('scope');
+    const needsMetricNormalization = params.get('metric') !== metric;
+    if (needsDefaultScope || needsMetricNormalization) {
+      params.set('metric', metric);
+      if (needsDefaultScope) {
+        params.set('scope', 'SIDO');
+        params.set('regionCode', '11');
+      }
+      return <Navigate replace to={`/insights?${params.toString()}`} />;
+    }
   }
   return <MapApp {...mapProps} />;
 }

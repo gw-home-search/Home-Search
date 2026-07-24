@@ -58,7 +58,7 @@ class BaselineRuntimeSmokeTest {
 
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
-        bootstrapAiReaderRole();
+        bootstrapDatabaseRoles();
         Flyway.configure()
                 .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
                 .locations(System.getProperty("propertyDataMigrationLocation"))
@@ -74,15 +74,15 @@ class BaselineRuntimeSmokeTest {
         registry.add("home.region.sync.one-shot.enabled", () -> "true");
     }
 
-    private static void bootstrapAiReaderRole() {
+    private static void bootstrapDatabaseRoles() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
         dataSource.setDriverClassName(POSTGRES.getDriverClassName());
         dataSource.setUrl(POSTGRES.getJdbcUrl());
         dataSource.setUsername(POSTGRES.getUsername());
         dataSource.setPassword(POSTGRES.getPassword());
-        JdbcClient.create(dataSource)
-                .sql("CREATE ROLE home_search_ai_reader NOLOGIN")
-                .update();
+        JdbcClient jdbc = JdbcClient.create(dataSource);
+        jdbc.sql("CREATE ROLE home_search_ai_reader NOLOGIN").update();
+        jdbc.sql("CREATE ROLE home_search_property_runtime NOLOGIN").update();
     }
 
     @Test

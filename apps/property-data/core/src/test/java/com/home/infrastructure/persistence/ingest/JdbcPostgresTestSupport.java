@@ -9,6 +9,9 @@ public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSuppo
     private static final PostgreSQLContainer<?> POSTGRES = newPostgisContainer();
     private static final Object MIGRATION_LOCK = new Object();
     private static final List<String> RESET_TABLES = List.of(
+            "public.market_insight_trade_item",
+            "public.market_insight_snapshot_execution",
+            "public.market_insight_snapshot",
             "reference.coordinate_snapshot_publish_checkpoint",
             "reference.coordinate_snapshot_publish_chunk_checkpoint",
             "reference.coordinate_snapshot_region_checkpoint",
@@ -31,8 +34,10 @@ public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSuppo
             "public.parcel",
             "public.building_footprint_snapshot",
             "public.odcloud_pnu_prefix_alias",
+            "public.rtms_collection_work_unit",
             "public.rtms_ingest_run",
             "public.raw_trade_ingest",
+            "public.rtms_collection_execution",
             "public.region");
     private static boolean migrated;
 
@@ -44,6 +49,7 @@ public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSuppo
     protected void resetDatabase() {
         initializeJdbc(POSTGRES);
         ensureAiReaderRole();
+        ensurePropertyRuntimeRole();
         migrateLatestOnce();
         truncateTables();
     }

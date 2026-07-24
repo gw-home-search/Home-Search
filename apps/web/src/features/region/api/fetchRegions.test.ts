@@ -14,6 +14,7 @@ describe('fetchRegions API 어댑터', () => {
         {
           id: 1,
           name: 'Seoul',
+          code: '11',
         },
       ]),
     );
@@ -23,6 +24,7 @@ describe('fetchRegions API 어댑터', () => {
       {
         id: 1,
         name: 'Seoul',
+        code: '11',
       },
     ]);
 
@@ -37,12 +39,14 @@ describe('fetchRegions API 어댑터', () => {
       jsonResponse({
         id: 1,
         name: 'Seoul',
+        code: '11',
         latitude: 37.5663,
         longitude: 126.978,
         children: [
           {
             id: 11,
             name: 'Gangnam-gu',
+            code: '11680',
           },
         ],
       }),
@@ -52,12 +56,14 @@ describe('fetchRegions API 어댑터', () => {
     await expect(fetchRegionDetail(1)).resolves.toEqual({
       id: 1,
       name: 'Seoul',
+      code: '11',
       latitude: 37.5663,
       longitude: 126.978,
       children: [
         {
           id: 11,
           name: 'Gangnam-gu',
+          code: '11680',
         },
       ],
     });

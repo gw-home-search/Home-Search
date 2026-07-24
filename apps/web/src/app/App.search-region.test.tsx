@@ -360,6 +360,7 @@ describe('App 검색과 지역', () => {
           {
             id: 1,
             name: 'Seoul',
+            code: '11',
           },
         ]),
       )
@@ -367,12 +368,14 @@ describe('App 검색과 지역', () => {
         jsonResponse({
           id: 1,
           name: 'Seoul',
+          code: '11',
           latitude: 37.5663,
           longitude: 126.978,
           children: [
             {
               id: 11,
               name: 'Gangnam-gu',
+              code: '11680',
             },
           ],
         }),
@@ -442,16 +445,17 @@ describe('App 검색과 지역', () => {
       }
 
       if (requestUrl === resolveApiUrl('/api/v1/region')) {
-        return Promise.resolve(jsonResponse([{ id: 1, name: 'Seoul' }]));
+        return Promise.resolve(jsonResponse([{ id: 1, name: 'Seoul', code: '11' }]));
       }
 
       if (requestUrl === resolveApiUrl('/api/v1/region/1')) {
         return Promise.resolve(jsonResponse({
           id: 1,
           name: 'Seoul',
+          code: '11',
           latitude: 37.5663,
           longitude: 126.978,
-          children: [{ id: 11, name: 'Gangnam-gu' }],
+          children: [{ id: 11, name: 'Gangnam-gu', code: '11680' }],
         }));
       }
 
@@ -463,9 +467,10 @@ describe('App 검색과 지역', () => {
         return Promise.resolve(jsonResponse({
           id: 11,
           name: 'Gangnam-gu',
+          code: '11680',
           latitude: 37.5172,
           longitude: 127.0473,
-          children: [{ id: 111, name: 'Apgujeong-dong' }],
+          children: [{ id: 111, name: 'Apgujeong-dong', code: '11680110' }],
         }));
       }
 
@@ -477,6 +482,7 @@ describe('App 검색과 지역', () => {
         return Promise.resolve(jsonResponse({
           id: 111,
           name: 'Apgujeong-dong',
+          code: '11680110',
           latitude: 37.5271,
           longitude: 127.0287,
           children: [],
@@ -630,7 +636,7 @@ describe('App 검색과 지역', () => {
       if (String(url) === resolveApiUrl('/api/v1/region')) {
         rootRegionRequests += 1;
         return rootRegionRequests === 1
-          ? Promise.resolve(jsonResponse([{ id: 1, name: 'Seoul' }]))
+          ? Promise.resolve(jsonResponse([{ id: 1, name: 'Seoul', code: '11' }]))
           : Promise.resolve(errorResponse(500));
       }
       return Promise.resolve(jsonResponse([]));
@@ -743,7 +749,7 @@ describe('App 검색과 지역', () => {
         ]));
       }
       if (String(url) === resolveApiUrl('/api/v1/region/1')) {
-        return Promise.resolve(jsonResponse({ id: 1, name: 'Seoul', latitude: 37.5663, longitude: 126.978, children: [{ id: 11, name: 'Gangnam-gu' }] }));
+        return Promise.resolve(jsonResponse({ id: 1, name: 'Seoul', code: '11', latitude: 37.5663, longitude: 126.978, children: [{ id: 11, name: 'Gangnam-gu', code: '11680' }] }));
       }
 
       return Promise.resolve(jsonResponse([]));
@@ -781,24 +787,26 @@ describe('App 검색과 지역', () => {
     const fetchMock = vi.fn((url: RequestInfo | URL) => {
       const requestUrl = String(url);
       if (requestUrl === resolveApiUrl('/api/v1/region')) {
-        return Promise.resolve(jsonResponse([{ id: 1, name: 'Seoul' }]));
+        return Promise.resolve(jsonResponse([{ id: 1, name: 'Seoul', code: '11' }]));
       }
       if (requestUrl === resolveApiUrl('/api/v1/region/1')) {
         return Promise.resolve(jsonResponse({
           id: 1,
           name: 'Seoul',
+          code: '11',
           latitude: 37.5663,
           longitude: 126.978,
-          children: [{ id: 11, name: 'Gangnam-gu' }],
+          children: [{ id: 11, name: 'Gangnam-gu', code: '11680' }],
         }));
       }
       if (requestUrl === resolveApiUrl('/api/v1/region/26')) {
         return Promise.resolve(jsonResponse({
           id: 26,
           name: 'Busan',
+          code: '26',
           latitude: 35.1796,
           longitude: 129.0756,
-          children: [{ id: 261, name: 'Haeundae-gu' }],
+          children: [{ id: 261, name: 'Haeundae-gu', code: '26350' }],
         }));
       }
       if (requestUrl === resolveApiUrl('/api/v1/map/regions')) {
@@ -882,7 +890,7 @@ describe('App 검색과 지역', () => {
             unitCntSum: 1200,
           },
         ]));
-      if (requestUrl === resolveApiUrl('/api/v1/region/1')) return Promise.resolve(jsonResponse({ id: 1, name: 'Seoul', latitude: 37.5663, longitude: 126.978, children: [{ id: 11, name: 'Gangnam-gu' }] }));
+      if (requestUrl === resolveApiUrl('/api/v1/region/1')) return Promise.resolve(jsonResponse({ id: 1, name: 'Seoul', code: '11', latitude: 37.5663, longitude: 126.978, children: [{ id: 11, name: 'Gangnam-gu', code: '11680' }] }));
       return Promise.resolve(jsonResponse([]));
     });
     const sdk = createFakeKakaoSdk({

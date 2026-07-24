@@ -129,6 +129,7 @@ export function loadKakaoMapSdk(appKey: string): Promise<KakaoMapsApi> {
     script.onload = () => {
       const maps = globalThis.kakao?.maps;
       if (!maps) {
+        script.remove();
         sdkLoadPromise = null;
         reject(new Error('Kakao map SDK did not expose kakao.maps'));
         return;
@@ -141,6 +142,7 @@ export function loadKakaoMapSdk(appKey: string): Promise<KakaoMapsApi> {
             return;
           }
 
+          script.remove();
           sdkLoadPromise = null;
           reject(new Error('Kakao map SDK did not expose map constructors'));
         });
@@ -152,10 +154,12 @@ export function loadKakaoMapSdk(appKey: string): Promise<KakaoMapsApi> {
         return;
       }
 
+      script.remove();
       sdkLoadPromise = null;
       reject(new Error('Kakao map SDK did not expose map constructors'));
     };
     script.onerror = () => {
+      script.remove();
       sdkLoadPromise = null;
       reject(new Error('Kakao map SDK failed to load'));
     };

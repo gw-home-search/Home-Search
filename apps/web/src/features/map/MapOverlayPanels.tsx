@@ -34,8 +34,8 @@ type MapOverlayPanelsProps = {
   selectedComplex: ComplexSelection | null;
   onComplexMarkerSelect: (marker: ComplexMapMarker) => void;
   onRegionMarkerSelect: (marker: RegionMapMarker) => void;
-  onRetryMarkers: () => void;
   onRetryMap: () => void;
+  onRetryMarkers: () => void;
   onResetFilters: () => void;
   suppressMarkerFeedback?: boolean;
 };
@@ -54,8 +54,8 @@ export function MapOverlayPanels({
   selectedComplex,
   onComplexMarkerSelect,
   onRegionMarkerSelect,
-  onRetryMarkers,
   onRetryMap,
+  onRetryMarkers,
   onResetFilters,
   suppressMarkerFeedback = false,
 }: MapOverlayPanelsProps) {

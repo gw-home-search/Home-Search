@@ -13,7 +13,18 @@ import org.springframework.context.annotation.Import;
 public class PropertyDataBatchApplication {
 
     private static final Set<String> SUPPORTED_JOB_NAMES = Set.of(
-            "rtmsDailyRefreshJob", "rtmsBackfillJob", "complexBuildingMetadataJob", "complexOdcMetadataGapFillJob");
+            "rtmsDailyRefreshJob",
+            "rtmsBackfillJob",
+            "complexBuildingMetadataJob",
+            "complexOdcMetadataGapFillJob",
+            "complexBuildingRegisterCollectJob",
+            "complexBuildingRatioProjectJob",
+            "complexBuildingRegisterProfileReplayJob",
+            "complexBuildingRegisterProfileCollectJob",
+            "complexBuildingRegisterProfileAnalyzeJob",
+            "marketInsightDailyJob",
+            "marketInsightRolling7dJob",
+            "legalDongCodeMappingImportJob");
 
     public static void main(String[] args) {
         String jobName = jobName();
@@ -22,7 +33,7 @@ public class PropertyDataBatchApplication {
             System.exit(2);
             return;
         }
-        if (!SUPPORTED_JOB_NAMES.contains(jobName)) {
+        if (!supportsJobName(jobName)) {
             System.err.println("Unknown batch job: " + jobName);
             System.exit(2);
             return;
@@ -40,6 +51,10 @@ public class PropertyDataBatchApplication {
             }
         }
         System.exit(exitCode);
+    }
+
+    static boolean supportsJobName(String jobName) {
+        return SUPPORTED_JOB_NAMES.contains(jobName);
     }
 
     private static String jobName() {

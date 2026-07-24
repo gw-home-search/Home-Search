@@ -155,7 +155,7 @@ Slice: S7 — 추천 기본 정책: 가격·철도·대규모점포
 지적사항: none — 자체 findings-first 리뷰에서 필수 조건 누락이 provider 오류로 평탄화되는 중간(Medium) 위험과 조건 충족 후보 0건을 observation fact 없이 supported로 처리하는 중간(Medium) 위험을 발견해 각각 observation 전 구조화 누락 안내와 recommendation scope fact로 수정 후 재검증
 검증 근거 확인: 최초 RED에서 recommendation domain module 부재와 web artifact adapter 미지원 확인; 누락 조건 오류와 verified-zero 근거에 대한 추가 RED 확인; recommendation policy/handler 10 passed; property candidate descendant·latest-three·20회 p95 200ms 미만 통합 검증 포함 property repository 14 passed; 관련 AI 회귀 61 passed; `TESTCONTAINERS_RYUK_DISABLED=true uv run pytest` 747 passed, coverage 90.14%; `./gradlew chatBffQualityCheck --no-daemon --stacktrace` Pass; `npm run lint` 0 errors(기존 warning 8); `npm run test` 249 passed; `npm run build` Pass; `ops/build-reference-docs.sh --check` Pass; `git diff --check` Pass
 검증 공백: none
-과설계 판정: 고정 v1 scorer와 recommendation 전용 typed artifact/handler만 추가; generic scoring framework·metric plugin·UI registry·신규 DB table·property/AI DB join 없음
+과설계 판정: 고정 scorer와 recommendation 전용 typed artifact/handler만 추가; generic scoring framework·metric plugin·UI registry·신규 DB table·property/AI DB join 없음
 코드 스멜: engine.py 1,145줄로 최초 기준 1,334줄 미만; ChatbotPanel.tsx 459줄 유지; RecommendationPolicy는 DB·HTTP·LLM 의존 없는 pure object이며 card renderer를 별도 component로 분리
 공통화 결정: S6의 CandidatePoint·RecentThreeTradeBasis만 실제 공통 domain object로 재사용하고 recommendation SQL·fact mapping·표현은 feature-local 유지
 UI 연결: 단지명·조건 충족도·최근 거래·3건 중앙값을 기본 표시하고 `<details>`에서 weight·points·직선거리를 공개; 가격 winner·투자 badge·HTML 렌더 없음

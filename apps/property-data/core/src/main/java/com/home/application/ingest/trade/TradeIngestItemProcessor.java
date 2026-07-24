@@ -2,6 +2,7 @@ package com.home.application.ingest.trade;
 
 import com.home.application.ingest.raw.RawReceiptService;
 import com.home.application.ingest.raw.RawTradeIngestRecord;
+import com.home.domain.ingest.run.ExecutionCorrelationId;
 import com.home.ingestcore.rtms.OpenApiTradeItem;
 import com.home.ingestcore.rtms.SourceKeyGenerator;
 import java.util.Objects;
@@ -24,6 +25,11 @@ public class TradeIngestItemProcessor {
     }
 
     public TradeIngestItemOutcome process(OpenApiTradeIngestBatch batch, OpenApiTradeItem item) {
+        return process(batch, item, null);
+    }
+
+    public TradeIngestItemOutcome process(
+            OpenApiTradeIngestBatch batch, OpenApiTradeItem item, ExecutionCorrelationId executionCorrelationId) {
         Objects.requireNonNull(batch, "batch is required");
         Objects.requireNonNull(item, "item is required");
         String sourceKey = sourceKeyGenerator.generate(batch.source(), item);
@@ -34,7 +40,10 @@ public class TradeIngestItemProcessor {
                 batch.dealYmd(),
                 batch.pageNo(),
                 item.payload(),
-                sourceKeyGenerator.hashPayload(item.payload())));
+                sourceKeyGenerator.hashPayload(item.payload()),
+                executionCorrelationId,
+                item.registrationDate(),
+                item.cancelDealDay()));
         return finalizer.finalizeReceived(raw, item);
     }
 }

@@ -126,3 +126,38 @@ Mobile is not the first project target, but the layout should not block it:
 - The same API contract works before and after UI/UX redesign.
 - Filter changes refresh complex markers.
 - Detail drawer clearly shows complex info and trade list.
+
+## Additive Map Insights Route
+
+- Public `/insights` renders the same `MapApp`, Kakao map, and filter bar as
+  `/`; it is a fourth rail mode rather than an independent page.
+- The flat rail navigation contains region plus five visible trade metrics. Metric
+  changes reuse the already loaded response for the current scope.
+- It supports nationwide/SIDO filtering and separately renders `FRESH`,
+  `STALE`, `UNAVAILABLE`, loading, empty, and error states. Map and insight
+  failures remain isolated from each other.
+- User copy says `최근 계약 · 직전 거래 비교`, shows
+  `최근 7일 · M.D–M.D` and `계약 M.D · 등록 M.D`, and never invents a
+  registration time from a date. An uncanceled fallback row says
+  `등록일 미제공 · 계약일 기준`.
+  The criteria disclosure says current contracts are limited to one calendar
+  month; rise/fall use the same complex, exact area, and a previous contract
+  within six calendar months. Record-high requires that recent previous
+  contract but displays its separate all-time historical maximum baseline.
+  Comparison rows show the applicable baseline date. Registration-date
+  fallback counts are not shown as a prominent quality message. The copy does
+  not expose `DAILY`, snapshot, work-unit, or collection internals.
+- Scope/region responses are cached with `fetchedAt`. Re-entering insights or
+  returning to a visible browser tab refreshes only when the cache is at least
+  five minutes old or the KST date changed. There is no polling; stale request
+  responses cannot overwrite the newly selected scope.
+- Trade rows open the existing map detail drawer. Closing detail restores the
+  `/insights` metric, scope, list scroll, and prior row focus.
+- `/insights` without a scope is replaced with Seoul SIDO scope before the first
+  request. The inline region chooser reuses the existing 3-column SIDO tile
+  anatomy and keeps nationwide available as an explicit scope.
+- On mobile, direct `/insights` access opens a 58dvh bottom sheet while keeping
+  at least 180px of usable map area below the filter bar.
+- `/my/insights` combines authenticated inbox and opt-in delivery settings.
+- External news strings are rendered as text. The web app never renders NAVER
+  title/description HTML.

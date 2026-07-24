@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { getUserFeedback } from './feedback/feedbackCatalog';
 import { RequestStateNotice } from './RequestStateNotice';
 
 describe('RequestStateNotice 요청 상태 안내', () => {
@@ -31,7 +32,7 @@ describe('RequestStateNotice 요청 상태 안내', () => {
           state="ready"
           loadingMessage="불러오는 중"
           emptyMessage="결과가 없습니다"
-          errorMessage="불러오지 못했어요"
+          feedback={getUserFeedback('COMPLEX_UNAVAILABLE')}
         />,
       );
     });
@@ -43,7 +44,7 @@ describe('RequestStateNotice 요청 상태 안내', () => {
           state="loading"
           loadingMessage="불러오는 중"
           emptyMessage="결과가 없습니다"
-          errorMessage="불러오지 못했어요"
+          feedback={getUserFeedback('COMPLEX_UNAVAILABLE')}
         />,
       );
     });
@@ -55,7 +56,7 @@ describe('RequestStateNotice 요청 상태 안내', () => {
     expect(testHost.textContent).toContain('불러오는 중');
   });
 
-  it('error는 사용자 문구와 복구 action, 닫힌 기술 정보를 표시한다', async () => {
+  it('error는 allowlist 사용자 문구와 복구 action만 표시한다', async () => {
     const onRetry = vi.fn();
     const testHost = document.createElement('div');
     host = testHost;
@@ -68,20 +69,19 @@ describe('RequestStateNotice 요청 상태 안내', () => {
           state="error"
           loadingMessage="불러오는 중"
           emptyMessage="결과가 없습니다"
-          errorMessage="단지 정보를 불러오지 못했어요"
-          secondaryMessage="지도 이동과 확대·축소는 계속 사용할 수 있습니다"
-          technicalError="Failed to fetch complex markers: 500 Invalid parameter format."
+          feedback={getUserFeedback('COMPLEX_UNAVAILABLE')}
           onRetry={onRetry}
         />,
       );
     });
 
     expect(testHost.textContent).toContain('단지 정보를 불러오지 못했어요');
+    expect(testHost.textContent).toContain('지도와 다른 단지는 계속 볼 수 있어요.');
+    expect(testHost.textContent).toContain('단지 다시 불러오기');
     expect(testHost.textContent).not.toContain('Failed to fetch');
-    const details = testHost.querySelector<HTMLDetailsElement>('details');
-    expect(details?.open).toBe(false);
-    expect(details?.textContent).toContain('HTTP 500');
-    expect(details?.textContent).toContain('Invalid parameter format.');
+    expect(testHost.textContent).not.toContain('HTTP 500');
+    expect(testHost.textContent).not.toContain('오류 정보');
+    expect(testHost.querySelector('details')).toBeNull();
 
     act(() => testHost.querySelector<HTMLButtonElement>('button')?.click());
     expect(onRetry).toHaveBeenCalledTimes(1);
@@ -98,7 +98,7 @@ describe('RequestStateNotice 요청 상태 안내', () => {
         state={state}
         loadingMessage="불러오는 중"
         emptyMessage="결과가 없습니다"
-        errorMessage="불러오지 못했어요"
+        feedback={getUserFeedback('COMPLEX_UNAVAILABLE')}
       />
     );
 
@@ -108,6 +108,6 @@ describe('RequestStateNotice 요청 상태 안내', () => {
 
     await act(async () => root?.render(notice('ready')));
     expect(testHost.querySelector('.request-state-notice')).toBeNull();
-    expect(testHost.querySelector('[aria-live="polite"]')?.textContent).toBe('불러오기를 완료했습니다');
+    expect(testHost.querySelector('[aria-live="polite"]')?.textContent).toBe('불러오기를 완료했어요');
   });
 });

@@ -144,12 +144,12 @@ describe('fetchParcelTrades API 어댑터', () => {
       ),
     );
 
-    await expect(fetchParcelTrades(1001)).rejects.toThrow(
-      'Invalid public API parcel trade response: trade item must be an object',
-    );
+    await expect(fetchParcelTrades(1001)).rejects.toMatchObject({
+      failure: { kind: 'invalid-response', operation: 'parcel-trades' },
+    });
   });
 
-  it('trade lookup 실패 시 public API ProblemDetail detail로 reject한다', async () => {
+  it('trade lookup 실패 시 ProblemDetail 원문 없이 구조화한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -159,9 +159,13 @@ describe('fetchParcelTrades API 어댑터', () => {
       ),
     );
 
-    await expect(fetchParcelTrades(1001)).rejects.toThrow(
-      'Failed to fetch parcel trades: 404 Parcel not found.',
-    );
+    await expect(fetchParcelTrades(1001)).rejects.toMatchObject({
+      failure: {
+        kind: 'not-found',
+        operation: 'parcel-trades',
+        status: 404,
+      },
+    });
   });
 });
 

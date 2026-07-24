@@ -1,5 +1,6 @@
-import { readProblemDetail } from '../../map/api/readProblemDetail';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
+import { readValidatedJson, requestFailureFromResponse } from '../../../shared/http/requestFailure';
+import { fetchWithTimeout } from '../../../shared/http/fetchWithTimeout';
 
 export type ComplexDetail = {
   parcelId: number;
@@ -37,7 +38,6 @@ export type PricePrediction = {
   basisTradeId: number | null;
   basisDealDate: string | null;
   generatedAt: string | null;
-  message: string | null;
 };
 
 type ComplexDetailResponse = {
@@ -74,7 +74,6 @@ type PricePredictionResponse = {
   basisTradeId?: number | string | null;
   basisDealDate?: string | null;
   generatedAt?: string | null;
-  message?: string | null;
 };
 
 const DETAIL_PATH = '/api/v1/detail';
@@ -85,46 +84,49 @@ export async function fetchComplexDetail(
   complexId?: number | null,
   signal?: AbortSignal,
 ): Promise<ComplexDetail> {
-  const response = await fetch(resolveApiUrl(scopedPath(`${DETAIL_PATH}/${parcelId}`, complexId)), {
+  const response = await fetchWithTimeout(resolveApiUrl(scopedPath(`${DETAIL_PATH}/${parcelId}`, complexId)), {
     method: 'GET',
     signal,
   });
 
   if (!response.ok) {
-    const detail = await readProblemDetail(response);
-    throw new Error(
-      `Failed to fetch complex detail: ${response.status}${detail ? ` ${detail}` : ''}`,
-    );
+    throw await requestFailureFromResponse(response, {
+      service: 'property-data',
+      operation: 'complex-detail',
+    });
   }
 
-  const payload: unknown = await response.json();
-  if (!isRecord(payload)) {
-    throw new Error('Invalid public API complex detail response: expected an object');
-  }
-
-  return normalizeComplexDetail(payload);
+  return readValidatedJson(response, {
+    service: 'property-data',
+    operation: 'complex-detail',
+  }, normalizeComplexDetailPayload);
 }
 
 export async function fetchComplexDetailByComplexId(
   complexId: number,
   signal?: AbortSignal,
 ): Promise<ComplexDetail> {
-  const response = await fetch(resolveApiUrl(`${COMPLEX_PATH}/${complexId}`), {
+  const response = await fetchWithTimeout(resolveApiUrl(`${COMPLEX_PATH}/${complexId}`), {
     method: 'GET', signal,
   });
 
   if (!response.ok) {
-    const detail = await readProblemDetail(response);
-    throw new Error(
-      `Failed to fetch complex detail: ${response.status}${detail ? ` ${detail}` : ''}`,
-    );
+    throw await requestFailureFromResponse(response, {
+      service: 'property-data',
+      operation: 'complex-detail',
+    });
   }
 
-  const payload: unknown = await response.json();
+  return readValidatedJson(response, {
+    service: 'property-data',
+    operation: 'complex-detail',
+  }, normalizeComplexDetailPayload);
+}
+
+function normalizeComplexDetailPayload(payload: unknown): ComplexDetail {
   if (!isRecord(payload)) {
     throw new Error('Invalid public API complex detail response: expected an object');
   }
-
   return normalizeComplexDetail(payload);
 }
 
@@ -176,7 +178,6 @@ function normalizePrediction(prediction: unknown): PricePrediction | null {
     basisTradeId: toNullableNumber(prediction.basisTradeId, 'prediction.basisTradeId'),
     basisDealDate: toNullableString(prediction.basisDealDate),
     generatedAt: toNullableString(prediction.generatedAt),
-    message: toNullableString(prediction.message),
   };
 }
 

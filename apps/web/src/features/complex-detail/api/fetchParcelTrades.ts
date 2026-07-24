@@ -1,5 +1,6 @@
-import { readProblemDetail } from '../../map/api/readProblemDetail';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
+import { readValidatedJson, requestFailureFromResponse } from '../../../shared/http/requestFailure';
+import { fetchWithTimeout } from '../../../shared/http/fetchWithTimeout';
 
 export type TradeItem = {
   tradeId: number;
@@ -53,24 +54,22 @@ export async function fetchParcelTrades(
   options: TradePageOptions = {},
   signal?: AbortSignal,
 ): Promise<ParcelTrades> {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     resolveApiUrl(`${TRADE_PATH}/${parcelId}${tradeQuery(complexId, options)}`),
     { method: 'GET', signal },
   );
 
   if (!response.ok) {
-    const detail = await readProblemDetail(response);
-    throw new Error(
-      `Failed to fetch parcel trades: ${response.status}${detail ? ` ${detail}` : ''}`,
-    );
+    throw await requestFailureFromResponse(response, {
+      service: 'property-data',
+      operation: 'parcel-trades',
+    });
   }
 
-  const payload: unknown = await response.json();
-  if (!isRecord(payload)) {
-    throw new Error('Invalid public API parcel trade response: expected an object');
-  }
-
-  return normalizeParcelTrades(payload);
+  return readValidatedJson(response, {
+    service: 'property-data',
+    operation: 'parcel-trades',
+  }, normalizeParcelTradesPayload);
 }
 
 export async function fetchComplexTrades(
@@ -78,23 +77,28 @@ export async function fetchComplexTrades(
   options: TradePageOptions = {},
   signal?: AbortSignal,
 ): Promise<ParcelTrades> {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     resolveApiUrl(`${COMPLEX_PATH}/${complexId}/trades${tradeQuery(null, options)}`),
     { method: 'GET', signal },
   );
 
   if (!response.ok) {
-    const detail = await readProblemDetail(response);
-    throw new Error(
-      `Failed to fetch parcel trades: ${response.status}${detail ? ` ${detail}` : ''}`,
-    );
+    throw await requestFailureFromResponse(response, {
+      service: 'property-data',
+      operation: 'complex-trades',
+    });
   }
 
-  const payload: unknown = await response.json();
+  return readValidatedJson(response, {
+    service: 'property-data',
+    operation: 'complex-trades',
+  }, normalizeParcelTradesPayload);
+}
+
+function normalizeParcelTradesPayload(payload: unknown): ParcelTrades {
   if (!isRecord(payload)) {
     throw new Error('Invalid public API parcel trade response: expected an object');
   }
-
   return normalizeParcelTrades(payload);
 }
 

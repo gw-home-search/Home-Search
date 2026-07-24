@@ -30,8 +30,8 @@ describe('App 지도 shell', () => {
     const mapSurface = rootElement.querySelector<HTMLElement>('[aria-label="지도 화면"]');
     const explorationPanel = rootElement.querySelector<HTMLElement>('#exploration-panel');
     const filterPanel = rootElement.querySelector<HTMLElement>('form[aria-label="마커 필터"]');
-    const markerAlert = Array.from(rootElement.querySelectorAll('[role="alert"]')).find((alert) =>
-      alert.textContent?.includes('단지 정보를 불러오지 못했어요'),
+    const markerAlert = Array.from(rootElement.querySelectorAll('[role="status"]')).find((alert) =>
+      alert.textContent?.includes('이 지역의 단지 정보를 새로 불러오지 못했어요'),
     );
 
     expect(mapWorkspace).not.toBeNull();
@@ -330,10 +330,9 @@ describe('App 지도 shell', () => {
     await flushAsyncState();
 
     expect(rootElement.querySelector('[aria-label="지도 화면"]')).not.toBeNull();
-    expect(rootElement.querySelector('[role="alert"]')?.textContent).toContain(
-      '단지 정보를 불러오지 못했어요',
-    );
-    expect(rootElement.textContent).toContain('지도 이동과 확대·축소는 계속 사용할 수 있습니다');
+    expect(Array.from(rootElement.querySelectorAll('[role="status"]')).some((notice) =>
+      notice.textContent?.includes('이 지역의 단지 정보를 새로 불러오지 못했어요'))).toBe(true);
+    expect(rootElement.textContent).toContain('지도 이동과 확대·축소는 계속 사용할 수 있어요.');
     expect(rootElement.querySelectorAll('[data-marker-id]')).toHaveLength(0);
 
     unmount(root);
@@ -371,12 +370,11 @@ describe('App 지도 shell', () => {
     await flushAsyncState();
     await flushAsyncState();
 
-    expect(rootElement.querySelector('[role="alert"]')?.textContent).toContain(
-      '단지 정보를 불러오지 못했어요',
-    );
+    expect(Array.from(rootElement.querySelectorAll('[role="status"]')).some((notice) =>
+      notice.textContent?.includes('이 지역의 단지 정보를 새로 불러오지 못했어요'))).toBe(true);
 
     const retryButton = rootElement.querySelector<HTMLButtonElement>(
-      'button[aria-label="마커 다시 불러오기"]',
+      'button[aria-label="단지 다시 불러오기"]',
     );
     expect(retryButton).not.toBeNull();
 
@@ -494,9 +492,8 @@ describe('App 지도 shell', () => {
     await flushAsyncState();
 
     expect(rootElement.querySelector('[aria-label="지도 화면"]')).not.toBeNull();
-    expect(rootElement.querySelector('[role="alert"]')?.textContent).toContain(
-      '지도를 불러오지 못했어요',
-    );
+    expect(Array.from(rootElement.querySelectorAll('[role="status"]')).some((notice) =>
+      notice.textContent?.includes('지도를 준비하지 못했어요'))).toBe(true);
 
     unmount(root);
   });

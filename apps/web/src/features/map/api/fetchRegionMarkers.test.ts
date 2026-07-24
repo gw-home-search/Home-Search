@@ -143,7 +143,7 @@ describe('fetchRegionMarkers API 어댑터', () => {
         neLng: 127.2,
         region: 'si-gun-gu',
       }),
-    ).rejects.toThrow('Invalid public API region marker response: expected an array');
+    ).rejects.toMatchObject({ failure: { kind: 'invalid-response', operation: 'map-region-markers' } });
   });
 
   it('marker coordinate가 invalid하면 clear contract error를 throw한다', async () => {
@@ -169,10 +169,10 @@ describe('fetchRegionMarkers API 어댑터', () => {
         neLng: 127.2,
         region: 'si-gun-gu',
       }),
-    ).rejects.toThrow('Invalid public API region marker response: lat must be a number');
+    ).rejects.toMatchObject({ failure: { kind: 'invalid-response', operation: 'map-region-markers' } });
   });
 
-  it('response가 ok가 아니면 clear marker fetch error로 reject한다', async () => {
+  it('response가 ok가 아니면 구조화된 marker failure로 reject한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(errorResponse(500)));
 
     await expect(
@@ -183,10 +183,16 @@ describe('fetchRegionMarkers API 어댑터', () => {
         neLng: 127.2,
         region: 'si-do',
       }),
-    ).rejects.toThrow('Failed to fetch region markers: 500');
+    ).rejects.toMatchObject({
+      failure: {
+        kind: 'service-unavailable',
+        operation: 'map-region-markers',
+        status: 500,
+      },
+    });
   });
 
-  it('region endpoint가 request를 reject하면 public API ProblemDetail detail을 보존한다', async () => {
+  it('region endpoint 실패는 ProblemDetail 원문 없이 안전한 code만 보존한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -209,7 +215,14 @@ describe('fetchRegionMarkers API 어댑터', () => {
         neLng: 127.2,
         region: 'si-do',
       }),
-    ).rejects.toThrow('Failed to fetch region markers: 400 Unsupported region.');
+    ).rejects.toMatchObject({
+      failure: {
+        kind: 'invalid-request',
+        operation: 'map-region-markers',
+        status: 400,
+        code: 'C401',
+      },
+    });
   });
 });
 

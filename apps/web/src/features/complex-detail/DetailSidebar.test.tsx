@@ -132,4 +132,177 @@ describe('DetailSidebar 모바일 탭', () => {
     expect(host.querySelector('[data-trade-cell="floor"] .trade-floor')?.textContent).toBe('12층');
     host.remove();
   });
+
+  it('상세 500의 서버 원문과 상태를 노출하지 않고 복구 action만 제공한다', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+
+    await act(async () => {
+      root?.render(
+        <DetailSidebar
+          complexDetail={null}
+          detailError={{
+            kind: 'service-unavailable',
+            service: 'property-data',
+            operation: 'complex-detail',
+            status: 500,
+            code: 'C500',
+          }}
+          detailState="error"
+          onBack={vi.fn()}
+          onComplexSelect={vi.fn()}
+          onLoadMoreTrades={vi.fn()}
+          onRetryDetail={vi.fn()}
+          parcelComplexes={[]}
+          parcelTrades={null}
+          selection={{ parcelId: 1001, complexId: 501 }}
+          tradeRows={[]}
+          tradeTrend={[]}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain('단지 정보를 불러오지 못했어요');
+    expect(host.textContent).toContain('단지 다시 불러오기');
+    expect(host.textContent).not.toContain('HTTP 500');
+    expect(host.textContent).not.toContain('Internal server error');
+    expect(host.textContent).not.toContain('오류 정보');
+    expect(host.textContent).not.toContain('상세 API 데이터 요약');
+    expect(host.textContent).toContain('선택한 단지');
+    expect(host.textContent).not.toContain('단지 501');
+    expect(host.querySelector('[aria-label="로그인하고 관심 단지 저장"]')).toBeNull();
+    expect(host.querySelector('.request-state-notice')?.classList).toContain('detail-request-state');
+    expect(host.querySelector('.data-status-list')).toBeNull();
+    expect(host.querySelector('details')).toBeNull();
+    host.remove();
+  });
+
+  it('추가 거래 실패 시 기존 거래를 유지하고 해당 목록에서만 복구 action을 제공한다', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+
+    await act(async () => {
+      root?.render(
+        <DetailSidebar
+          complexDetail={{
+            parcelId: 1001,
+            complexId: 501,
+            latitude: 37.5,
+            longitude: 127,
+            address: '서울시 테스트로',
+            displayName: '테스트아파트',
+            tradeName: '테스트아파트',
+            name: '테스트아파트',
+            dongCnt: 5,
+            unitCnt: 740,
+            platArea: null,
+            archArea: null,
+            totArea: null,
+            bcRat: null,
+            vlRat: null,
+            useDate: '2018-01-01',
+            prediction: null,
+          }}
+          detailError={null}
+          detailState="ready"
+          onBack={vi.fn()}
+          onComplexSelect={vi.fn()}
+          onRetryDetail={vi.fn()}
+          onLoadMoreTrades={vi.fn()}
+          parcelComplexes={[]}
+          parcelTrades={{
+            parcelId: 1001,
+            complexId: 501,
+            trades: [],
+            page: 0,
+            size: 25,
+            totalElements: 40,
+            totalPages: 2,
+          }}
+          tradeRows={[{
+            tradeId: 1,
+            dealDate: '2026-06-01',
+            exclArea: 84.9,
+            dealAmount: 125000,
+            aptDong: '101',
+            floor: 12,
+          }]}
+          tradeTrend={[]}
+          tradeMoreState="error"
+          selection={{ parcelId: 1001, complexId: 501 }}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain('12억 5,000만원');
+    expect(host.textContent).toContain('거래를 더 불러오지 못했어요');
+    expect(host.textContent).toContain('거래 이어서 불러오기');
+    expect(host.textContent).not.toContain('Internal server error');
+    host.remove();
+  });
+
+  it('AI 예상가 실패의 서버 message를 노출하지 않고 검토된 문구만 표시한다', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+
+    await act(async () => {
+      root?.render(
+        <DetailSidebar
+          complexDetail={{
+            parcelId: 1001,
+            complexId: 501,
+            latitude: 37.5,
+            longitude: 127,
+            address: '서울시 테스트로',
+            displayName: '테스트아파트',
+            tradeName: '테스트아파트',
+            name: '테스트아파트',
+            dongCnt: 5,
+            unitCnt: 740,
+            platArea: null,
+            archArea: null,
+            totArea: null,
+            bcRat: null,
+            vlRat: null,
+            useDate: '2018-01-01',
+            prediction: {
+              status: 'FAILED',
+              modelVersion: null,
+              predictedDealAmount: null,
+              predictedPricePerM2: null,
+              predictedPricePerPyeong: null,
+              intervalLow: null,
+              intervalHigh: null,
+              intervalBasis: null,
+              targetAreaM2: null,
+              targetFloor: null,
+              basisTradeId: null,
+              basisDealDate: null,
+              generatedAt: null,
+            },
+          }}
+          detailError={null}
+          detailState="ready"
+          onBack={vi.fn()}
+          onComplexSelect={vi.fn()}
+          onRetryDetail={vi.fn()}
+          onLoadMoreTrades={vi.fn()}
+          parcelComplexes={[]}
+          parcelTrades={null}
+          selection={{ parcelId: 1001, complexId: 501 }}
+          tradeRows={[]}
+          tradeTrend={[]}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain('AI 예상가를 준비하지 못했어요');
+    expect(host.textContent).toContain('최근 거래와 가격 흐름은 계속 확인할 수 있어요');
+    expect(host.textContent).not.toContain('Internal server error');
+    expect(host.textContent).not.toContain('model-worker-03');
+    host.remove();
+  });
 });

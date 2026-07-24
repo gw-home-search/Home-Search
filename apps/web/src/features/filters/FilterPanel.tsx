@@ -232,7 +232,7 @@ export function FilterPanel({
             <label className="filter-range-field">
               <span className="filter-range-label">최소</span>
               <span className="filter-number-field">
-                <input autoFocus aria-label={definition.minLabel} aria-invalid={validationError != null} inputMode="decimal" min="0" name="filterMin" step={definition.step} type="number" value={draftMin} onInput={(event) => { updateDraftMin(event.currentTarget.value); setValidationError(null); }} />
+                <input autoFocus aria-describedby={validationError ? `filter-error-${definition.key}` : undefined} aria-label={definition.minLabel} aria-invalid={validationError != null} inputMode="decimal" min="0" name="filterMin" step={definition.step} type="number" value={draftMin} onInput={(event) => { updateDraftMin(event.currentTarget.value); setValidationError(null); }} />
                 <span className="filter-number-field-unit">{definition.unit}</span>
               </span>
             </label>
@@ -240,12 +240,12 @@ export function FilterPanel({
             <label className="filter-range-field">
               <span className="filter-range-label">최대</span>
               <span className="filter-number-field">
-                <input aria-label={definition.maxLabel} aria-invalid={validationError != null} inputMode="decimal" min="0" name="filterMax" step={definition.step} type="number" value={draftMax} onInput={(event) => { updateDraftMax(event.currentTarget.value); setValidationError(null); }} />
+                <input aria-describedby={validationError ? `filter-error-${definition.key}` : undefined} aria-label={definition.maxLabel} aria-invalid={validationError != null} inputMode="decimal" min="0" name="filterMax" step={definition.step} type="number" value={draftMax} onInput={(event) => { updateDraftMax(event.currentTarget.value); setValidationError(null); }} />
                 <span className="filter-number-field-unit">{definition.unit}</span>
               </span>
             </label>
           </div>
-          {validationError ? <p className="filter-validation-error" role="alert">{validationError}</p> : null}
+          {validationError ? <p id={`filter-error-${definition.key}`} className="filter-validation-error" role="alert">{validationError}</p> : null}
           <div className="filter-popover-actions">
             <button type="button" aria-label={`${definition.label} 필터 초기화`} onClick={() => resetGroup(definition)}>이 필터 초기화</button>
             <button type="submit" aria-label={`${definition.label} 필터 적용`}>적용</button>

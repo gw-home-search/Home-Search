@@ -55,20 +55,24 @@ describe('fetchTradeTrend API 어댑터', () => {
   it('배열이 아닌 응답을 reject한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ month: '2025-12' })));
 
-    await expect(fetchParcelTradeTrend(1001)).rejects.toThrow(
-      'Invalid public API trade trend response: expected an array',
-    );
+    await expect(fetchParcelTradeTrend(1001)).rejects.toMatchObject({
+      failure: { kind: 'invalid-response', operation: 'trade-trend' },
+    });
   });
 
-  it('trend lookup 실패 시 public API ProblemDetail detail로 reject한다', async () => {
+  it('trend lookup 실패 시 ProblemDetail 원문 없이 구조화한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(errorResponse(404, { detail: 'Parcel not found.' })),
     );
 
-    await expect(fetchParcelTradeTrend(1001)).rejects.toThrow(
-      'Failed to fetch trade trend: 404 Parcel not found.',
-    );
+    await expect(fetchParcelTradeTrend(1001)).rejects.toMatchObject({
+      failure: {
+        kind: 'not-found',
+        operation: 'trade-trend',
+        status: 404,
+      },
+    });
   });
 });
 

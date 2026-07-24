@@ -10,6 +10,10 @@ import {
   type RegionSummary,
 } from '../api/fetchRegions';
 import { SEARCH_FOCUS_DELTA } from '../../search/hooks/useComplexSearch';
+import {
+  toRequestFailure,
+  type RequestFailure,
+} from '../../../shared/http/requestFailure';
 
 export function useRegionExplorer({
   focusMap,
@@ -24,7 +28,7 @@ export function useRegionExplorer({
   const [regionDetail, setRegionDetail] = useState<RegionDetail | null>(null);
   const [regionComplexes, setRegionComplexes] = useState<RegionComplexSummary[]>([]);
   const [regionState, setRegionState] = useState<PanelRequestState>('idle');
-  const [regionError, setRegionError] = useState<string | null>(null);
+  const [regionError, setRegionError] = useState<RequestFailure | null>(null);
   const [regionTrail, setRegionTrail] = useState<RegionTrailItem[]>([]);
   const regionRequestSeq = useRef(0);
   const initialRegionLoadStarted = useRef(false);
@@ -50,17 +54,15 @@ export function useRegionExplorer({
     regionRequestSeq.current = requestSeq;
     setRegionState('loading');
     setRegionError(null);
-    setRegionDetail(null);
-    setRegionComplexes([]);
-    setRegionTrail([]);
-
     fetchRootRegions()
       .then((nextRegions) => {
         if (requestSeq !== regionRequestSeq.current) {
           return;
         }
         setRootRegions(nextRegions);
+        setRegionDetail(null);
         setRegionComplexes([]);
+        setRegionTrail([]);
         setRegionState(nextRegions.length === 0 ? 'empty' : 'ready');
         regionPending.current = false;
       })
@@ -68,12 +70,11 @@ export function useRegionExplorer({
         if (requestSeq !== regionRequestSeq.current) {
           return;
         }
-        setRootRegions([]);
-        setRegionDetail(null);
-        setRegionComplexes([]);
-        setRegionTrail([]);
         setRegionState('error');
-        setRegionError(error instanceof Error ? error.message : '알 수 없는 지역 오류');
+        setRegionError(toRequestFailure(error, {
+          service: 'property-data',
+          operation: 'root-regions',
+        }));
         regionPending.current = false;
       });
   }
@@ -105,9 +106,6 @@ export function useRegionExplorer({
     const nextMapLevel = mapLevelOverride ?? regionFocusLevel(nextTrail.length);
     setRegionState('loading');
     setRegionError(null);
-    setRootRegions([]);
-    setRegionComplexes([]);
-
     fetchRegionDetail(region.id)
       .then(async (nextDetail) => {
         const nextComplexes = nextDetail.children.length === 0
@@ -136,10 +134,11 @@ export function useRegionExplorer({
         if (requestSeq !== regionRequestSeq.current) {
           return;
         }
-        setRegionDetail(null);
-        setRegionComplexes([]);
         setRegionState('error');
-        setRegionError(error instanceof Error ? error.message : '알 수 없는 지역 상세 오류');
+        setRegionError(toRequestFailure(error, {
+          service: 'property-data',
+          operation: 'region-detail',
+        }));
         regionPending.current = false;
       });
   }

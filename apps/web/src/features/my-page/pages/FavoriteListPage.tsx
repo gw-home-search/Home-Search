@@ -1,5 +1,6 @@
 import { FavoriteCollection } from '../components/FavoriteCollection';
 import { useFavoriteCollection } from '../hooks/useFavoriteCollection';
+import { getUserFeedback } from '../../../shared/feedback/feedbackCatalog';
 
 export function FavoriteListPage({
   onExplore,
@@ -26,7 +27,9 @@ export function FavoriteListPage({
       {favorites.hasMore ? (
         <div className="my-load-more">
           {favorites.loadMoreError ? (
-            <button onClick={favorites.retryLoadMore} type="button">다시 불러오기</button>
+            <button onClick={favorites.retryLoadMore} type="button">
+              {getUserFeedback('FAVORITES_MORE_UNAVAILABLE').actionLabel}
+            </button>
           ) : (
             <button disabled={favorites.loadingMore} onClick={favorites.loadMore} type="button">
               {favorites.loadingMore ? '불러오는 중' : '더 보기'}

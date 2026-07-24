@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
+import {
+  getUserFeedback,
+  type UserFeedbackDefinition,
+} from './feedback/feedbackCatalog';
+
 export type RequestNoticeState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 
 type RequestStateNoticeProps = {
   state: RequestNoticeState;
   loadingMessage: string;
   emptyMessage: string;
-  errorMessage: string;
-  secondaryMessage?: string;
-  technicalError?: string | null;
-  retryLabel?: string;
+  feedback?: UserFeedbackDefinition;
   retryAriaLabel?: string;
   retryDisabled?: boolean;
   onRetry?: () => void;
@@ -23,10 +25,7 @@ export function RequestStateNotice({
   state,
   loadingMessage,
   emptyMessage,
-  errorMessage,
-  secondaryMessage,
-  technicalError,
-  retryLabel = '다시 시도',
+  feedback = getUserFeedback('UNEXPECTED_FAILURE'),
   retryAriaLabel,
   retryDisabled = false,
   onRetry,
@@ -59,7 +58,7 @@ export function RequestStateNotice({
 
   if (state === 'ready') {
     return announceReady
-      ? <span className="sr-only" role="status" aria-live="polite">불러오기를 완료했습니다</span>
+      ? <span className="sr-only" role="status" aria-live="polite">불러오기를 완료했어요</span>
       : null;
   }
 
@@ -85,51 +84,27 @@ export function RequestStateNotice({
     );
   }
 
-  const technical = technicalErrorDetails(technicalError);
+  const role = feedback.announcement === 'alert'
+    ? 'alert'
+    : feedback.announcement === 'status' ? 'status' : undefined;
   return (
-    <div className={`request-state-notice request-state-error ${className}`.trim()} role="alert">
+    <div
+      aria-live={feedback.announcement === 'status' ? 'polite' : undefined}
+      className={`request-state-notice request-state-${feedback.tone} ${className}`.trim()}
+      role={role}
+    >
       <div className="request-state-copy">
-        <strong>{errorMessage}</strong>
-        {secondaryMessage ? <p>{secondaryMessage}</p> : null}
+        <strong>{feedback.title}</strong>
+        {feedback.description ? <p>{feedback.description}</p> : null}
       </div>
       <div className="request-state-actions">
-        {onRetry ? (
+        {onRetry && feedback.actionLabel ? (
           <button type="button" aria-label={retryAriaLabel} disabled={retryDisabled} onClick={onRetry}>
-            {retryDisabled ? '다시 불러오는 중' : retryLabel}
+            {retryDisabled ? '다시 불러오는 중' : feedback.actionLabel}
           </button>
         ) : null}
         {secondaryAction}
       </div>
-      {technical ? (
-        <details>
-          <summary>오류 정보</summary>
-          <dl>
-            {technical.status ? <div><dt>상태</dt><dd>HTTP {technical.status}</dd></div> : null}
-            {technical.detail ? <div><dt>상세</dt><dd>{technical.detail}</dd></div> : null}
-          </dl>
-        </details>
-      ) : null}
     </div>
   );
-}
-
-function technicalErrorDetails(error: string | null | undefined): {
-  status: string | null;
-  detail: string | null;
-} | null {
-  if (!error) {
-    return null;
-  }
-
-  const normalized = error.replace(/https?:\/\/\S+/giu, '[URL 숨김]').trim();
-  const statusMatch = normalized.match(/\b([45]\d{2})\b/u);
-  const status = statusMatch?.[1] ?? null;
-  const detail = statusMatch
-    ? normalized.slice((statusMatch.index ?? 0) + statusMatch[0].length).replace(/^\s*[:-]?\s*/u, '').trim()
-    : null;
-
-  if (!status && !detail) {
-    return null;
-  }
-  return { status, detail: detail || null };
 }

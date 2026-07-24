@@ -105,13 +105,14 @@ describe('fetchComplexDetail API 어댑터', () => {
           basisTradeId: 9001,
           basisDealDate: '2026-01-01',
           generatedAt: '2026-06-25T07:05:38Z',
-          message: null,
+          message: 'Internal server error. model-worker-03',
         },
       }),
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(fetchComplexDetail(1001, 501)).resolves.toMatchObject({
+    const detail = await fetchComplexDetail(1001, 501);
+    expect(detail).toMatchObject({
       prediction: {
         status: 'READY',
         modelVersion: 'deployment__F37_monthly_anchor_prev3_rolling_huber_010',
@@ -126,9 +127,9 @@ describe('fetchComplexDetail API 어댑터', () => {
         basisTradeId: 9001,
         basisDealDate: '2026-01-01',
         generatedAt: '2026-06-25T07:05:38Z',
-        message: null,
       },
     });
+    expect(detail.prediction).not.toHaveProperty('message');
   });
 
   it('complexId 단독 detail URL을 호출한다', async () => {
@@ -205,7 +206,7 @@ describe('fetchComplexDetail API 어댑터', () => {
     });
   });
 
-  it('detail lookup 실패 시 public API ProblemDetail detail로 reject한다', async () => {
+  it('detail lookup 실패 시 ProblemDetail 원문 없이 구조화한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -215,9 +216,13 @@ describe('fetchComplexDetail API 어댑터', () => {
       ),
     );
 
-    await expect(fetchComplexDetail(1001)).rejects.toThrow(
-      'Failed to fetch complex detail: 404 Parcel not found.',
-    );
+    await expect(fetchComplexDetail(1001)).rejects.toMatchObject({
+      failure: {
+        kind: 'not-found',
+        operation: 'complex-detail',
+        status: 404,
+      },
+    });
   });
 });
 

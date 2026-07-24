@@ -4,12 +4,13 @@ import { useAuth } from '../../auth/AuthProvider';
 import { createFavoriteClient, FavoriteClientError } from '../api/favoriteClient';
 import type { FavoriteState } from '../favoriteTypes';
 import { getCachedFavorite, setCachedFavorite, syncFavoriteOwner } from '../favoriteStore';
+import type { UserFeedbackId } from '../../../shared/feedback/feedbackCatalog';
 
 export function useFavoriteComplex(complexId: number | null | undefined) {
   const { authenticatedRequest, currentUser, openDialog, status } = useAuth();
   const client = useMemo(() => createFavoriteClient(authenticatedRequest), [authenticatedRequest]);
   const [favoriteState, setFavoriteState] = useState<FavoriteState>({ phase: 'auth-checking', favorite: null });
-  const [favoriteError, setFavoriteError] = useState<string | null>(null);
+  const [favoriteError, setFavoriteError] = useState<UserFeedbackId | null>(null);
   const [liveMessage, setLiveMessage] = useState('');
   const [retrySequence, setRetrySequence] = useState(0);
   const requestSequence = useRef(0);
@@ -70,7 +71,7 @@ export function useFavoriteComplex(complexId: number | null | undefined) {
         if (controller.signal.aborted || requestSequence.current !== nextSequence || selectionRef.current !== complexId) return;
         if (error instanceof FavoriteClientError && error.kind === 'session-expired') return;
         setFavoriteState({ phase: 'error', favorite: null });
-        setFavoriteError('관심 상태를 불러오지 못했습니다.');
+        setFavoriteError('FAVORITE_STATUS_UNAVAILABLE');
       });
     return () => controller.abort();
   }, [client, complexId, retrySequence, status]);
@@ -106,10 +107,8 @@ export function useFavoriteComplex(complexId: number | null | undefined) {
       failedMutation.current = action;
       setFavoriteState({ phase: 'error', favorite: currentFavorite });
       setFavoriteError(error instanceof FavoriteClientError && error.kind === 'limit'
-        ? '관심 단지는 최대 200개까지 저장할 수 있습니다.'
-        : action === 'save'
-          ? '관심 단지를 저장하지 못했습니다. 다시 시도해주세요.'
-          : '관심 단지를 해제하지 못했습니다. 다시 시도해주세요.');
+        ? 'FAVORITE_LIMIT_REACHED'
+        : action === 'save' ? 'FAVORITE_SAVE_FAILED' : 'FAVORITE_REMOVE_FAILED');
     }
   }, [client, favoriteState, openDialog, status]);
 

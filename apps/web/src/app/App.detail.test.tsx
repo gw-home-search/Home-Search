@@ -17,6 +17,178 @@ import {
 describe('App 단지 상세', () => {
   afterEach(resetAppTestState);
 
+  it('상세와 marker가 함께 실패하면 한 번만 안내하고 하나의 action으로 둘 다 복구한다', async () => {
+    window.history.replaceState({}, '', '/?complexId=501');
+    let markerCalls = 0;
+    let detailCalls = 0;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === resolveApiUrl('/api/v1/map/complexes')) {
+        markerCalls += 1;
+        return Promise.resolve(markerCalls === 1
+          ? errorResponse(500)
+          : jsonResponse([{
+              parcelId: 1001,
+              complexId: 501,
+              name: '복구 단지',
+              lat: 37.5,
+              lng: 127,
+              latestDealAmount: 125000,
+              unitCntSum: 740,
+            }]));
+      }
+      if (url === resolveApiUrl('/api/v1/complex/501')) {
+        detailCalls += 1;
+        return Promise.resolve(detailCalls === 1
+          ? errorResponse(500)
+          : jsonResponse({
+              parcelId: 1001,
+              complexId: 501,
+              latitude: 37.5,
+              longitude: 127,
+              address: '서울시 복구로',
+              name: '복구 단지',
+              unitCnt: 740,
+            }));
+      }
+      if (url.includes('/trades')) {
+        return Promise.resolve(jsonResponse({
+          parcelId: 1001,
+          complexId: 501,
+          content: [],
+          page: 0,
+          size: 25,
+          totalElements: 0,
+          totalPages: 0,
+        }));
+      }
+      if (url.includes('/trade-trend')) return Promise.resolve(jsonResponse([]));
+      if (url.endsWith('/complexes')) return Promise.resolve(jsonResponse([]));
+      return Promise.resolve(errorResponse(404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+    await flushAsyncState();
+    await flushAsyncState();
+
+    expect(rootElement.querySelectorAll('.request-state-error')).toHaveLength(1);
+    const retry = [...rootElement.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent === '단지 다시 불러오기') ?? null;
+    expect(retry).not.toBeNull();
+
+    await act(async () => retry?.click());
+    await flushAsyncState();
+    await flushAsyncState();
+
+    expect(detailCalls).toBe(2);
+    expect(markerCalls).toBe(2);
+    expect(rootElement.textContent).toContain('복구 단지');
+    unmount(root);
+  });
+
+  it('거래 다음 페이지 실패 시 기존 거래를 유지하고 같은 페이지를 다시 불러온다', async () => {
+    let nextPageCalls = 0;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === resolveApiUrl('/api/v1/map/complexes')) {
+        return Promise.resolve(jsonResponse([{
+          parcelId: 1001,
+          complexId: 501,
+          name: '거래 복구 단지',
+          lat: 37.5,
+          lng: 127,
+          latestDealAmount: 125000,
+          unitCntSum: 740,
+        }]));
+      }
+      if (url === resolveApiUrl('/api/v1/detail/1001?complexId=501')) {
+        return Promise.resolve(jsonResponse({
+          parcelId: 1001,
+          complexId: 501,
+          latitude: 37.5,
+          longitude: 127,
+          address: '서울시 거래로',
+          name: '거래 복구 단지',
+          unitCnt: 740,
+        }));
+      }
+      if (url === resolveApiUrl('/api/v1/trade/1001?complexId=501')) {
+        return Promise.resolve(jsonResponse({
+          parcelId: 1001,
+          complexId: 501,
+          content: [{
+            tradeId: 1,
+            dealDate: '2026-06-01',
+            exclArea: 84.9,
+            dealAmount: 125000,
+            aptDong: '101',
+            floor: 12,
+          }],
+          page: 0,
+          size: 25,
+          totalElements: 2,
+          totalPages: 2,
+        }));
+      }
+      if (url === resolveApiUrl('/api/v1/trade/1001?complexId=501&page=1&size=25')) {
+        nextPageCalls += 1;
+        return Promise.resolve(nextPageCalls === 1
+          ? errorResponse(503)
+          : jsonResponse({
+              parcelId: 1001,
+              complexId: 501,
+              content: [{
+                tradeId: 2,
+                dealDate: '2026-05-01',
+                exclArea: 84.9,
+                dealAmount: 120000,
+                aptDong: '102',
+                floor: 8,
+              }],
+              page: 1,
+              size: 25,
+              totalElements: 2,
+              totalPages: 2,
+            }));
+      }
+      if (url.includes('/trend')) return Promise.resolve(jsonResponse([]));
+      if (url.endsWith('/complexes')) return Promise.resolve(jsonResponse([]));
+      return Promise.resolve(errorResponse(404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+    await flushAsyncState();
+    await act(async () => {
+      rootElement.querySelector<HTMLButtonElement>(
+        'button[aria-label="필지 1001 단지 501 상세 열기"]',
+      )?.click();
+    });
+    await flushAsyncState();
+    await flushAsyncState();
+
+    await act(async () => {
+      [...rootElement.querySelectorAll<HTMLButtonElement>('button')]
+        .find((button) => button.textContent === '더보기')?.click();
+    });
+    await flushAsyncState();
+
+    expect(rootElement.textContent).toContain('12억 5,000만원');
+    expect(rootElement.textContent).toContain('거래를 더 불러오지 못했어요');
+
+    await act(async () => {
+      [...rootElement.querySelectorAll<HTMLButtonElement>('button')]
+        .find((button) => button.textContent === '거래 이어서 불러오기')?.click();
+    });
+    await flushAsyncState();
+
+    expect(nextPageCalls).toBe(2);
+    expect(rootElement.textContent).toContain('12억');
+    expect(rootElement.textContent).not.toContain('거래를 더 불러오지 못했어요');
+    unmount(root);
+  });
+
   it('새 단지 상세가 대기 중이면 이전 단지 identity를 표시하지 않는다', async () => {
     const secondDetail = deferred<Response>();
     const fetchMock = vi.fn((url: RequestInfo | URL) => {
@@ -526,7 +698,7 @@ describe('App 단지 상세', () => {
     expect(rootElement.querySelector('[aria-label="단지 상세 패널"]')).not.toBeNull();
     expect(rootElement.textContent).toContain('Sample complex name');
     expect(rootElement.textContent).toContain('Sample complex name');
-    expect(rootElement.textContent).toContain('시세를 불러오지 못했어요');
+    expect(rootElement.textContent).toContain('가격 흐름을 불러오지 못했어요');
     expect(rootElement.querySelector('[data-detail-section="trade-history"]')).not.toBeNull();
 
     unmount(root);

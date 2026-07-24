@@ -82,8 +82,33 @@
   .nearby-place-info-bar { right: 60px; bottom: 104px; left: 8px; width: auto; transform: none; }
   .map-surface[data-map-tool="distance"] .nearby-place-info-bar { bottom: 112px; }
   .nearby-place-marker { min-width: 44px; height: 44px; padding: 7px; }
-  .map-notices { top: var(--hs-map-space-2); right: 60px; left: var(--hs-map-space-2); max-width: none; }
-  .map-feedback { max-width: none; }
+  .map-notices { top: var(--hs-map-space-2); right: auto; left: var(--hs-map-space-2); width: min(320px, calc(100% - 68px)); max-width: 320px; }
+  .map-feedback {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+  .map-feedback .request-state-copy p {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .map-feedback .request-state-actions { margin-top: 0; }
+  .request-state-actions button { min-height: 44px; }
+  .feature-error-boundary[data-feature="exploration"],
+  .feature-error-boundary[data-feature="my-page"] {
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    border-top: 1px solid var(--hs-map-color-line);
+    border-right: 0;
+  }
 
   .exploration-panel,
   .exploration-panel[data-sidebar-mode="detail"] {

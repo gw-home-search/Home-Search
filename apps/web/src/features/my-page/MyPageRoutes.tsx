@@ -7,6 +7,7 @@ import { AUTH_RETURN_TO_KEY } from '../auth/authReturnPath';
 import { AccountPage } from './pages/AccountPage';
 import { FavoriteListPage } from './pages/FavoriteListPage';
 import { MyPageOverview } from './pages/MyPageOverview';
+import { getUserFeedback } from '../../shared/feedback/feedbackCatalog';
 
 export function MyPagePanel({
   hidden,
@@ -36,7 +37,7 @@ export function MyPagePanel({
       hidden={hidden}
     >
       <header className="my-page-toolbar">
-        <h1>마이페이지</h1>
+        <h2>마이페이지</h2>
         <button aria-label="마이페이지 닫기" onClick={onClose} type="button">
           <CloseIcon aria-hidden="true" />
         </button>
@@ -49,9 +50,11 @@ export function MyPagePanel({
       <div className="my-page-scroll">
         {auth.status === 'checking' ? <MyPageSkeleton /> : null}
         {auth.status === 'unavailable' ? (
-          <MyPageStatus title="마이페이지를 불러오지 못했어요">
-            <p>로그인 서비스 연결을 확인한 뒤 다시 시도해주세요.</p>
-            <button onClick={() => void auth.retry()} type="button">다시 시도</button>
+          <MyPageStatus title={getUserFeedback('AUTH_UNAVAILABLE').title}>
+            <p>{getUserFeedback('AUTH_UNAVAILABLE').description}</p>
+            <button onClick={() => void auth.retry()} type="button">
+              {getUserFeedback('AUTH_UNAVAILABLE').actionLabel}
+            </button>
           </MyPageStatus>
         ) : null}
         {auth.status === 'anonymous' ? (

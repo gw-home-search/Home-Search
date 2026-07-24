@@ -464,6 +464,54 @@ conversation's IndexedDB memory. The assistant can therefore compare “1위와
 2위” without asking the user to repeat names, while a new conversation has no
 candidate memory.
 
+## Controlled Error Experience
+
+User-visible request failures are selected only through the typed feedback
+catalog. Server ProblemDetail text, HTTP status, exception names, URLs, abort
+reasons, and JavaScript `Error.message` never become React display state.
+Adapters retain only the safe failure kind, service, operation, status, approved
+domain code, and numeric retry delay needed for control flow.
+
+Failures stay beside the task they affect. A marker refresh keeps existing
+markers and uses a compact map notice; detail, trade, trend, and nearby-place
+failures leave successful sibling data visible. Caller cancellation is silent.
+Region and marker failures caused by the same active navigation are announced
+once, while Kakao runtime and property-data failures remain distinct because
+their recovery actions differ.
+
+An initial authentication restore outage remains `unavailable` instead of
+being presented as an anonymous session. Public map reads stay independent,
+while My Page offers the authentication recovery action rather than asking the
+user to log in again. Initial region failure copy never claims prior region
+data exists; only a refresh failure with retained region rows uses that
+explanation.
+
+An unresolved detail request uses the human label `선택한 단지`; operational
+complex and parcel ids are never used as fallback headings. Favorite actions
+remain hidden until the selected complex detail has been verified. Detail
+feedback keeps a 16px gutter from the drawer edge, and map feedback is capped
+at 320px at every breakpoint so it does not compete with map controls.
+At mobile map heights the feedback title and recovery action share one compact
+row; its longer description remains available to assistive technology without
+consuming most of the 180px map surface.
+
+Error surfaces use the normal white surface and neutral border. Red is limited
+to the error title or status mark, not a full-width band. Recovery labels name
+the task (`단지 다시 불러오기`, `가격 흐름 다시 불러오기`) instead of the
+generic `다시 시도`. Blocking mutations and expired authentication use
+`role="alert"`; recoverable reads and partial refresh failures use a single
+polite status region. Feature error boundaries isolate exploration, map,
+my-page, and chatbot rendering so one failure cannot remove the remaining app
+surfaces.
+
+Public property reads use one 15-second browser timeout while preserving caller
+cancellation as a silent state. HTTP `408` and `504` are classified as timeout,
+not as generic service failure. Loading an additional trade page or refreshing
+an existing favorite list never clears rows that are already visible; recovery
+stays inside that list. The app root has a final safe reload boundary, while
+Roadview and other map tools use the same allowlisted feedback catalog instead
+of feature-local error strings.
+
 ## Verification
 
 Run `npm run test` and `npm run build`. For meaningful visual changes, inspect

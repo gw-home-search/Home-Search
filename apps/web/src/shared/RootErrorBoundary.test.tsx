@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { RootErrorBoundary } from './RootErrorBoundary';
 
-describe('RootErrorBoundary', () => {
+describe('앱 오류 경계', () => {
   let root: Root | null = null;
 
   afterEach(() => {

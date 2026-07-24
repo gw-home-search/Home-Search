@@ -66,12 +66,14 @@ describe('request failure 분류', () => {
     expect(failure.kind).toBe('timeout');
   });
 
-  it.each([408, 504])('HTTP %s는 재시도 가능한 timeout으로 분류한다', async (status) => {
-    const error = await requestFailureFromResponse(new Response(null, { status }), {
-      service: 'chatbot',
-      operation: 'chatbot-query',
-    });
+  for (const status of [408, 504]) {
+    it(`HTTP ${status}는 재시도 가능한 timeout으로 분류한다`, async () => {
+      const error = await requestFailureFromResponse(new Response(null, { status }), {
+        service: 'chatbot',
+        operation: 'chatbot-query',
+      });
 
-    expect(error.failure.kind).toBe('timeout');
-  });
+      expect(error.failure.kind).toBe('timeout');
+    });
+  }
 });

@@ -67,15 +67,17 @@ describe('사용자 feedback catalog', () => {
     expect(Object.keys(USER_FEEDBACK_CATALOG).sort()).toEqual([...EXPECTED_IDS].sort());
   });
 
-  it.each(EXPECTED_IDS)('%s 문구는 기술 정보를 포함하지 않는다', (id) => {
-    const feedback = getUserFeedback(id);
-    const visibleCopy = [feedback.title, feedback.description, feedback.actionLabel]
-      .filter(Boolean)
-      .join(' ');
+  for (const id of EXPECTED_IDS) {
+    it(`${id} 문구는 기술 정보를 포함하지 않는다`, () => {
+      const feedback = getUserFeedback(id);
+      const visibleCopy = [feedback.title, feedback.description, feedback.actionLabel]
+        .filter(Boolean)
+        .join(' ');
 
-    expect(feedback.title.trim().length).toBeGreaterThan(0);
-    for (const pattern of FORBIDDEN_COPY) {
-      expect(visibleCopy).not.toMatch(pattern);
-    }
-  });
+      expect(feedback.title.trim().length).toBeGreaterThan(0);
+      for (const pattern of FORBIDDEN_COPY) {
+        expect(visibleCopy).not.toMatch(pattern);
+      }
+    });
+  }
 });

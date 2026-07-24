@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { FeatureErrorBoundary } from './FeatureErrorBoundary';
 
-describe('FeatureErrorBoundary', () => {
+describe('기능 오류 경계', () => {
   let root: Root | null = null;
 
   afterEach(() => {

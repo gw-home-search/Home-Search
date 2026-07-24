@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchWithTimeout } from './fetchWithTimeout';
 
-describe('fetchWithTimeout', () => {
+describe('요청 제한시간 처리', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });

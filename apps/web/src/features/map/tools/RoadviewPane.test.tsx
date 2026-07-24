@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { RoadviewPane } from './RoadviewPane';
 
-describe('RoadviewPane', () => {
+describe('거리뷰 패널', () => {
   let root: Root | null = null;
 
   afterEach(() => {

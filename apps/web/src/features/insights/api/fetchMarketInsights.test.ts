@@ -3,10 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
 import { fetchMarketInsights } from './fetchMarketInsights';
 
-describe('fetchMarketInsights', () => {
+describe('fetchMarketInsights 공개 API', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('normalizes UNAVAILABLE empty sections from the weekly public endpoint', async () => {
+  it('주간 공개 endpoint의 UNAVAILABLE 빈 section을 정규화한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       snapshotId: null,
       periodStart: '2026-07-22',
@@ -41,7 +41,7 @@ describe('fetchMarketInsights', () => {
     expect(result.newTrades).toEqual([]);
   });
 
-  it('preserves exact two-decimal area, registration date, and quality evidence', async () => {
+  it('두 자리 면적과 등록일 및 품질 근거를 보존한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
       snapshotId: 'd0fb824c-938e-4cc8-a674-336262ef4206',
       periodStart: '2026-07-22',

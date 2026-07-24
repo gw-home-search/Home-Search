@@ -18,6 +18,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -115,6 +116,7 @@ class JdbcBuildingProfileAnalysisRepositoryTest extends JdbcMigrationTestSupport
     }
 
     @Test
+    @DisplayName("분석 근거 전체를 멱등하게 조회하고 추가한다")
     void readsAndAppendsAllAnalysisEvidenceIdempotently(@TempDir Path output) {
         BuildingProfileAnalysisCommand command =
                 new BuildingProfileAnalysisCommand(COLLECTION, PARSE, ANALYSIS, "PROFILE_V1", output);

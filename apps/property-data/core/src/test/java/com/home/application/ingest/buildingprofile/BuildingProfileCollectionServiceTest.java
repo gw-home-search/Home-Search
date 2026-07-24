@@ -19,12 +19,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class BuildingProfileCollectionServiceTest {
     private static final String PNU = "1168010300101400001";
 
     @Test
+    @DisplayName("총괄표제부와 표제부를 수집하고 계층 사유를 기록한다")
     void collectsRecapAndTitleAndRecordsExplicitHierarchyReasons() {
         var collector = mock(BuildingRegisterCollectionService.class);
         var repository = new FakeSampleRepository();
@@ -50,6 +52,7 @@ class BuildingProfileCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("구법정동과 신법정동 조회 근거를 독립적으로 보존한다")
     void preservesIndependentOldAndNewCodeLookupEvidence() {
         var collector = mock(BuildingRegisterCollectionService.class);
         var repository = new FakeSampleRepository();
@@ -76,6 +79,7 @@ class BuildingProfileCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("제공자 실패는 수집 완료로 표시하지 않고 기록한다")
     void recordsProviderFailureWithoutMarkingPnuCollected() {
         var collector = mock(BuildingRegisterCollectionService.class);
         var repository = new FakeSampleRepository();

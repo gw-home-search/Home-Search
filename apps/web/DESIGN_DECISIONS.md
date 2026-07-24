@@ -465,7 +465,7 @@ otherwise a compact `새 답변 보기` action preserves the reader's position.
 
 Successful observation notes such as scope and source method belong in report
 basis or Sources, not under `확인할 점`. Internal source abbreviations and policy
-identifiers never appear in visible prose. Legacy v1 artifacts remain readable,
+identifiers never appear in visible prose. Legacy artifacts remain readable,
 including narrow-panel table overflow contained inside the table surface.
 
 Recommendation follow-ups keep only ranked complex ids in the current

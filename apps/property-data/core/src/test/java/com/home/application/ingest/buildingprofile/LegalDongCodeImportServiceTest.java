@@ -6,12 +6,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class LegalDongCodeImportServiceTest {
     private static final LocalDate EFFECTIVE = LocalDate.of(2026, 7, 1);
 
     @Test
+    @DisplayName("검증된 법정동 코드 변경 매핑을 가져온다")
     void importsValidatedVersionedMappings() {
         CapturingRepository repository = new CapturingRepository();
         var command = command(List.of(mapping("2811010100", "2811010200")));
@@ -22,6 +24,7 @@ class LegalDongCodeImportServiceTest {
     }
 
     @Test
+    @DisplayName("중복 구코드와 다른 시행일을 거부한다")
     void rejectsDuplicateOldCodeAndMismatchedEffectiveDate() {
         var service =
                 new LegalDongCodeImportService(command -> command.mappings().size());

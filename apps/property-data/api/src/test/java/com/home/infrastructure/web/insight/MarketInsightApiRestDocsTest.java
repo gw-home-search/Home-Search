@@ -14,6 +14,7 @@ import com.home.application.insight.read.MarketInsightQueryService;
 import com.home.application.insight.read.MarketInsightReadResult;
 import com.home.domain.insight.MarketInsightScopeType;
 import java.time.LocalDate;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +38,7 @@ class MarketInsightApiRestDocsTest {
     private MarketInsightQueryService queryService;
 
     @Test
+    @DisplayName("일간 인사이트 미발행 응답을 문서화한다")
     void documentLatestUnavailable() throws Exception {
         LocalDate date = LocalDate.parse("2026-07-22");
         given(queryService.latest(MarketInsightScopeType.NATIONWIDE, null, date, 10))
@@ -128,6 +130,7 @@ class MarketInsightApiRestDocsTest {
     }
 
     @Test
+    @DisplayName("최근 7일 인사이트 미발행 응답을 문서화한다")
     void documentWeeklyUnavailable() throws Exception {
         LocalDate periodEnd = LocalDate.parse("2026-07-23");
         given(queryService.weekly(

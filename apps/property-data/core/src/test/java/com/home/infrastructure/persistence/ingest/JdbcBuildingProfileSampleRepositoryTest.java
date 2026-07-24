@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class JdbcBuildingProfileSampleRepositoryTest extends JdbcMigrationTestSupport {
@@ -41,6 +42,7 @@ class JdbcBuildingProfileSampleRepositoryTest extends JdbcMigrationTestSupport {
     }
 
     @Test
+    @DisplayName("표본과 재개·계층·코드 변경 근거를 고정해 저장한다")
     void freezesSampleAndPersistsResumeHierarchyAndCodeTransitionEvidence() {
         BuildingProfileCollectCommand command = new BuildingProfileCollectCommand(
                 COLLECTION,
@@ -112,6 +114,7 @@ class JdbcBuildingProfileSampleRepositoryTest extends JdbcMigrationTestSupport {
     }
 
     @Test
+    @DisplayName("표본 크기 없이 전국 모집단을 고정한다")
     void freezesNationwidePopulationWithoutRequiringSampleSize() {
         UUID collectionId = UUID.fromString("123e4567-e89b-12d3-a456-426614174231");
         BuildingProfileCollectCommand command = new BuildingProfileCollectCommand(

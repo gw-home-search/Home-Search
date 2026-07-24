@@ -10,6 +10,7 @@ public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSuppo
     private static final Object MIGRATION_LOCK = new Object();
     private static final List<String> RESET_TABLES = List.of(
             "public.market_insight_trade_item",
+            "public.market_insight_snapshot_execution",
             "public.market_insight_snapshot",
             "reference.coordinate_snapshot_publish_checkpoint",
             "reference.coordinate_snapshot_publish_chunk_checkpoint",

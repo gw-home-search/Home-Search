@@ -16,6 +16,7 @@ public record MarketInsightResponse(
         Instant dataCutoff,
         MarketInsightDataStatus dataStatus,
         ScopeResponse scope,
+        QualityResponse quality,
         List<MarketInsightTradeItemResponse> newTrades,
         List<MarketInsightTradeItemResponse> highestDeals,
         List<MarketInsightTradeItemResponse> recordHighs,
@@ -32,6 +33,12 @@ public record MarketInsightResponse(
                 result.dataCutoff(),
                 result.dataStatus(),
                 new ScopeResponse(result.scopeType(), result.regionCode()),
+                new QualityResponse(
+                        result.quality().missingRegistrationDateCount(),
+                        result.quality().invalidRegistrationDateCount(),
+                        result.quality().missingCancellationDateCount(),
+                        result.quality().invalidCancellationDateCount(),
+                        result.quality().excludedCount()),
                 items(result.newTrades()),
                 items(result.highestDeals()),
                 items(result.recordHighs()),
@@ -46,4 +53,11 @@ public record MarketInsightResponse(
     }
 
     public record ScopeResponse(MarketInsightScopeType type, String regionCode) {}
+
+    public record QualityResponse(
+            int missingRegistrationDateCount,
+            int invalidRegistrationDateCount,
+            int missingCancellationDateCount,
+            int invalidCancellationDateCount,
+            int excludedCount) {}
 }

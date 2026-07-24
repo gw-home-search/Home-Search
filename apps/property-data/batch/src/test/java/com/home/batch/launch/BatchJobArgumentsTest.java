@@ -28,6 +28,16 @@ class BatchJobArgumentsTest {
     }
 
     @Test
+    @DisplayName("rolling insight job은 daily와 같은 runDate 및 requestId 식별 계약을 사용한다")
+    void rollingInsightJobUsesOperationalRunDate() {
+        BatchJobArguments arguments = BatchJobArguments.from(
+                "marketInsightRolling7dJob", Map.of("requestId", "123e4567-e89b-12d3-a456-426614174011"), clock);
+
+        assertThat(arguments.jobParameters().getString("runDate")).isEqualTo("2026-07-07");
+        assertThat(arguments.jobParameters().getString("requestId")).isEqualTo("123e4567-e89b-12d3-a456-426614174011");
+    }
+
+    @Test
     @DisplayName("daily job은 canonical UUID requestId를 identifying parameter로 보존한다")
     void dailyJobKeepsRequiredCanonicalRequestId() {
         BatchJobArguments arguments = BatchJobArguments.from(
@@ -40,6 +50,22 @@ class BatchJobArgumentsTest {
         assertThat(arguments.jobParameters().getString("runDate")).isEqualTo("2026-07-10");
         assertThat(arguments.jobParameters().getString("requestId")).isEqualTo("123e4567-e89b-12d3-a456-426614174001");
         assertThat(arguments.jobParameters().getParameter("requestId").identifying())
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("daily job은 완료 처리된 JobInstance 복구용 restartAttempt를 식별자로 보존한다")
+    void dailyJobKeepsOptionalRestartAttempt() {
+        BatchJobArguments arguments = BatchJobArguments.from(
+                "rtmsDailyRefreshJob",
+                Map.of(
+                        "runDate", "2026-07-10",
+                        "requestId", "123e4567-e89b-12d3-a456-426614174009",
+                        "restartAttempt", "1"),
+                clock);
+
+        assertThat(arguments.jobParameters().getString("restartAttempt")).isEqualTo("1");
+        assertThat(arguments.jobParameters().getParameter("restartAttempt").identifying())
                 .isTrue();
     }
 

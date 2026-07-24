@@ -17,6 +17,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class BatchExecutionCorrelationGuard {
 
+    private static final String RESTART_ATTEMPT_PARAMETER = "restartAttempt";
+
     private final JdbcClient jdbcClient;
     private final DataSource dataSource;
 
@@ -84,6 +86,7 @@ public class BatchExecutionCorrelationGuard {
     private Map<String, String> identifyingParameters(JobParameters parameters) {
         Map<String, String> values = new LinkedHashMap<>();
         parameters.getIdentifyingParameters().stream()
+                .filter(parameter -> !RESTART_ATTEMPT_PARAMETER.equals(parameter.name()))
                 .sorted((left, right) -> left.name().compareTo(right.name()))
                 .forEach(parameter -> values.put(parameter.name(), stringValue(parameter)));
         return values;
@@ -112,6 +115,8 @@ public class BatchExecutionCorrelationGuard {
                 .query((resultSet, rowNumber) ->
                         Map.entry(resultSet.getString("PARAMETER_NAME"), resultSet.getString("PARAMETER_VALUE")))
                 .list()
+                .stream()
+                .filter(entry -> !RESTART_ATTEMPT_PARAMETER.equals(entry.getKey()))
                 .forEach(entry -> values.put(entry.getKey(), entry.getValue()));
         return values;
     }

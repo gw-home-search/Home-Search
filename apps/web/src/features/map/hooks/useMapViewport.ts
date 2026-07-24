@@ -15,6 +15,8 @@ const INITIAL_NATIONWIDE_BOUNDS: MapBoundsRequest = {
   neLng: 132,
 };
 
+export const NATIONWIDE_MAP_CENTER = { lat: 36.35, lng: 127.8 } as const;
+
 const INITIAL_DETAIL_BOUNDS: MapBoundsRequest = {
   swLat: 37.45,
   swLng: 126.85,
@@ -63,8 +65,18 @@ export function useMapViewport(initialMapLevel: number) {
     }));
   }, []);
 
+  const focusNationwide = useCallback(() => {
+    setViewport({ bounds: INITIAL_NATIONWIDE_BOUNDS, level: 12 });
+    setMapFocusTarget((current) => ({
+      ...NATIONWIDE_MAP_CENTER,
+      level: 12,
+      seq: (current?.seq ?? 0) + 1,
+    }));
+  }, []);
+
   return {
     focusMap,
+    focusNationwide,
     handleViewportChange,
     handleZoomIn,
     handleZoomOut,

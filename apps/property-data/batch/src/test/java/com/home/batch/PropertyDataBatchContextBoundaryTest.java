@@ -11,8 +11,10 @@ import com.home.application.ingest.metadata.OdcMetadataGapFillService;
 import com.home.application.ingest.normalization.NormalizedTradeRepository;
 import com.home.application.ingest.raw.RawTradeIngestRepository;
 import com.home.application.ingest.rtms.RtmsMonthlyRefreshUseCase;
+import com.home.application.insight.generation.MarketInsightWeeklyBuildService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.batch.core.job.SimpleJob;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -32,6 +34,7 @@ class PropertyDataBatchContextBoundaryTest {
                     "spring.batch.jdbc.table-prefix=BATCH_",
                     "spring.flyway.enabled=false",
                     "spring.main.lazy-initialization=true",
+                    "home.insight.trade.enabled=true",
                     "home.ingest.raw-reconcile.enabled=false",
                     "home.trade.partition.maintenance.enabled=false",
                     "home.test.non-batch.enabled=true");
@@ -47,6 +50,10 @@ class PropertyDataBatchContextBoundaryTest {
                 .isTrue();
         assertThat(PropertyDataBatchApplication.supportsJobName("legalDongCodeMappingImportJob"))
                 .isTrue();
+        assertThat(PropertyDataBatchApplication.supportsJobName("marketInsightRolling7dJob"))
+                .isTrue();
+        assertThat(PropertyDataBatchApplication.supportsJobName("marketInsightWeeklyJob"))
+                .isFalse();
     }
 
     @Test
@@ -64,6 +71,10 @@ class PropertyDataBatchContextBoundaryTest {
                     .hasBean("coordinatePreflightStep")
                     .hasBean("rtmsDailyMonthlyIngestStep")
                     .hasBean("regionUnitSyncStep")
+                    .doesNotHaveBean("marketInsightWeeklyJob")
+                    .hasBean("marketInsightRolling7dJob")
+                    .hasBean("marketInsightRolling7dStep")
+                    .hasSingleBean(MarketInsightWeeklyBuildService.class)
                     .hasSingleBean(ParcelCoordinateResolver.class)
                     .hasSingleBean(RtmsMonthlyRefreshUseCase.class)
                     .hasSingleBean(OdcComplexMetadataResolver.class)
@@ -71,6 +82,12 @@ class PropertyDataBatchContextBoundaryTest {
                     .hasSingleBean(NormalizedTradeRepository.class)
                     .hasSingleBean(PlatformTransactionManager.class)
                     .hasSingleBean(JobRepository.class);
+            assertThat(context.getBean("rtmsDailyRefreshJob", SimpleJob.class).getStepNames())
+                    .containsSubsequence(
+                            "monthlyIngestStep",
+                            "regionUnitSyncStep",
+                            "marketInsightDailyStep",
+                            "marketInsightRolling7dStep");
             assertThat(context).doesNotHaveBean("testOnlyNonBatchFeature");
             assertThat(context)
                     .doesNotHaveBean("mapUseCase")

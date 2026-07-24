@@ -54,6 +54,19 @@ class BatchExecutionCorrelationGuardTest {
     }
 
     @Test
+    @DisplayName("동일 requestId와 수집 계획은 restartAttempt가 달라도 복구 실행을 허용한다")
+    void allowsRecoveryAttemptForSameCollectionPlan() {
+        BatchExecutionCorrelationGuard guard = new BatchExecutionCorrelationGuard(jdbcClient);
+        JobParameters recoveryParameters = new JobParameters(Set.of(
+                new JobParameter<>("runDate", "2026-07-10", String.class, true),
+                new JobParameter<>("requestId", REQUEST_ID, String.class, true),
+                new JobParameter<>("restartAttempt", "1", String.class, true)));
+
+        assertThatCode(() -> guard.verify("rtmsDailyRefreshJob", recoveryParameters))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
     @DisplayName("같은 UUID를 다른 parameter set 또는 job에서 재사용하면 exit 2로 거부한다")
     void rejectsReuseAcrossDifferentParameterSetOrJob() {
         BatchExecutionCorrelationGuard guard = new BatchExecutionCorrelationGuard(jdbcClient);

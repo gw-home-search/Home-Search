@@ -604,11 +604,19 @@ snapshots without changing raw-first ingest or normalized trade identity.
 - `raw_trade_ingest.execution_correlation_id` is nullable for historical rows
   and required by the application for new production RTMS executions.
 - `market_insight_snapshot` stores period, scope, region, coverage counts,
-  cutoff, build status, and source execution.
+  cutoff, build status, and the daily source execution when applicable.
+- `market_insight_snapshot_execution` stores the seven exact DAILY execution
+  lineages for every weekly scope snapshot.
 - `market_insight_trade_item` stores at most 50 ranked items per metric and
   keeps internal trade/comparison/complex relations plus exact `excl_area`.
 
-Property migrations V15-V17 add this storage and grant
+One eligible nationwide execution publishes one nationwide snapshot plus one
+snapshot for every root `si-do` row in the same application transaction. Each
+scope independently ranks newly disclosed trades, highest deals, exact-area
+record highs, previous-distinct-date rises/falls, and cancellation corrections.
+An empty SIDO scope is still a published fresh snapshot with zero items.
+
+Property migrations V15-V19 add this storage and grant
 `home_search_property_runtime` only `SELECT`, `INSERT`, and `UPDATE` on the
 four insight evidence/snapshot tables. Runtime `DELETE` remains denied; data
 retention and cleanup stay under an explicit maintenance path.
@@ -618,3 +626,36 @@ planned work unit terminal and `COMPLETED`. A complete execution with zero new
 normalized trades still produces a fresh empty snapshot. Rejected builds do
 not replace the last published snapshot. Snapshot/item retention is 400 days;
 this retention never deletes raw ingest or normalized trade evidence.
+
+A rolling publication uses exactly the latest `DAILY/NATIONWIDE` execution for
+its `runDate`; it does not require or rebuild the prior six DAILY executions.
+V19 stores tolerant `rgstDate`/`cdealDay` raw and parsed evidence on
+`raw_trade_ingest`, adds `ROLLING_7D`, date-quality counters, and
+`SUPERSEDED` lineage. Source identities join through
+`trade_source_key_registry(source, source_key)`, so a current execution's
+`DUPLICATE` raw row can reuse its canonical trade while still participating in
+the current snapshot.
+
+For registration-based rolling metrics, a usable `registration_date` is the
+preferred window and ordering date. If it is missing or malformed, an
+uncanceled canonical trade uses `trade.deal_date` as the fallback. The
+registration quality counters then describe the unique in-window source
+identities included through that fallback, not rows dropped from the ranking.
+Canceled identities are excluded from all five registration-based metrics and
+remain available to the cancellation metric only when `cancellation_date` is
+usable.
+
+All five registration-based metrics require `trade.deal_date` in
+`period_end - 1 calendar month .. period_end`. Exact-area record/rise/fall
+metrics additionally require the immediately preceding deal date for the exact
+same `(complex_id, excl_area)` to be within six calendar months of the current
+deal. Multiple rows on that preceding date keep the deterministic median
+representative. The record-high baseline remains the all-time historical
+maximum, gated by the existence of that recent comparable previous deal.
+
+One transaction creates and publishes nationwide plus all 17 SIDO scopes.
+Re-invoking the same source execution is idempotent. A newer complete execution
+for the same `runDate` atomically changes the old 18 rows to `SUPERSEDED` and
+the replacements to `PUBLISHED`; a calculation or coverage failure leaves the
+prior `PUBLISHED` rows intact. Existing `WEEKLY`, `REJECTED`, and V18 lineage
+evidence is immutable historical evidence and is not rewritten.

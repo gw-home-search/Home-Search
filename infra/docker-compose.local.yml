@@ -324,6 +324,8 @@ services:
     depends_on:
       - api
     working_dir: /workspace/apps/web
+    env_file:
+      - ../apps/web/.env
     command:
       - sh
       - -c
@@ -334,14 +336,13 @@ services:
     environment:
       VITE_API_SERVER_IP: ${VITE_API_SERVER_IP:-http://localhost:8080}
       VITE_USER_API_SERVER_IP: ${VITE_USER_API_SERVER_IP:-http://localhost:8082}
-      VITE_KAKAO_MAP_APP_KEY: ${VITE_KAKAO_MAP_APP_KEY:-}
     ports:
       - "${HOME_SEARCH_WEB_PORT:-5173}:5173"
     volumes:
       - ../apps/web:/workspace/apps/web
       - home-search-web-node-modules:/workspace/apps/web/node_modules
     healthcheck:
-      test: [ "CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:5173/ || exit 1" ]
+      test: [ "CMD", "node", "-e", "require('http').get('http://127.0.0.1:5173/', response => process.exit(response.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))" ]
       interval: 10s
       timeout: 3s
       start_period: 30s

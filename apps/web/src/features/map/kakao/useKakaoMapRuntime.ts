@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { MapDisplayMode, MapFocusTarget, MapViewport } from '../../../app/mapAppTypes';
 import { clampMapLevel, MAX_MAP_LEVEL, MIN_MAP_LEVEL } from '../markerViewModel';
+import { NATIONWIDE_MAP_CENTER } from '../hooks/useMapViewport';
 import {
   loadKakaoMapSdk,
   type KakaoMap,
@@ -23,8 +24,6 @@ type UseKakaoMapRuntimeArgs = {
   onRuntimeStateChange: (state: KakaoMapRuntimeState) => void;
   onViewportChange: (viewport: MapViewport) => void;
 };
-
-const INITIAL_CENTER = { lat: 36.35, lng: 127.8 };
 
 export function useKakaoMapRuntime({
   activeTool,
@@ -62,7 +61,7 @@ export function useKakaoMapRuntime({
       .then((nextMaps) => {
         if (disposed) return;
         const nextMap = new nextMaps.Map(host, {
-          center: new nextMaps.LatLng(INITIAL_CENTER.lat, INITIAL_CENTER.lng),
+          center: new nextMaps.LatLng(NATIONWIDE_MAP_CENTER.lat, NATIONWIDE_MAP_CENTER.lng),
           level: clampMapLevel(initialLevel),
         });
         nextMap.setMinLevel?.(MIN_MAP_LEVEL);

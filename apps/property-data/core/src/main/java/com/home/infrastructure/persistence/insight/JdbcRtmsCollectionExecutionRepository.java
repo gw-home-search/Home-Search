@@ -120,9 +120,12 @@ public class JdbcRtmsCollectionExecutionRepository implements RtmsCollectionExec
         int updated = jdbcClient
                 .sql("""
                     UPDATE rtms_collection_work_unit
-                    SET state = 'RUNNING', started_at = COALESCE(started_at, :startedAt)
+                    SET state = 'RUNNING',
+                        rtms_ingest_run_id = NULL,
+                        started_at = COALESCE(started_at, :startedAt),
+                        completed_at = NULL
                     WHERE execution_id = :executionId AND lawd_cd = :lawdCd AND deal_ymd = :dealYmd
-                      AND state IN ('PLANNED', 'RUNNING')
+                      AND state IN ('PLANNED', 'RUNNING', 'PARTIAL', 'FAILED')
                     """)
                 .param("executionId", executionId.value())
                 .param("lawdCd", lawdCd)
@@ -134,8 +137,8 @@ public class JdbcRtmsCollectionExecutionRepository implements RtmsCollectionExec
         }
         jdbcClient.sql("""
                     UPDATE rtms_collection_execution
-                    SET state = 'RUNNING'
-                    WHERE execution_id = :executionId AND state IN ('PLANNED', 'RUNNING')
+                    SET state = 'RUNNING', completed_at = NULL, failure_reason = NULL
+                    WHERE execution_id = :executionId AND state IN ('PLANNED', 'RUNNING', 'PARTIAL', 'FAILED')
                     """).param("executionId", executionId.value()).update();
     }
 

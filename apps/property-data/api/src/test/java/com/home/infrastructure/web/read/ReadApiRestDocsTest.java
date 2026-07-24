@@ -196,10 +196,15 @@ class ReadApiRestDocsTest {
     @Test
     @DisplayName("GET /api/v1/region과 GET /api/v1/region/{regionId} REST Docs를 생성한다")
     void documentRegionNavigation() throws Exception {
-        given(regionNavigationService.getRootRegions()).willReturn(List.of(new RegionSummaryResult(1L, "Seoul")));
+        given(regionNavigationService.getRootRegions()).willReturn(List.of(new RegionSummaryResult(1L, "Seoul", "11")));
         given(regionNavigationService.getRegionDetail(1L))
                 .willReturn(new RegionDetailResult(
-                        1L, "Seoul", 37.5663, 126.9780, List.of(new RegionSummaryResult(11L, "Gangnam-gu"))));
+                        1L,
+                        "Seoul",
+                        "11",
+                        37.5663,
+                        126.9780,
+                        List.of(new RegionSummaryResult(11L, "Gangnam-gu", "11680"))));
 
         mockMvc.perform(get("/api/v1/region"))
                 .andExpect(status().isOk())
@@ -211,7 +216,10 @@ class ReadApiRestDocsTest {
                                         .description("Root region id."),
                                 fieldWithPath("[].name")
                                         .type(JsonFieldType.STRING)
-                                        .description("Root region name.")),
+                                        .description("Root region name."),
+                                fieldWithPath("[].code")
+                                        .type(JsonFieldType.STRING)
+                                        .description("Root SIDO code.")),
                         resource(builder()
                                 .tag("Read")
                                 .summary("Get root regions")
@@ -222,7 +230,10 @@ class ReadApiRestDocsTest {
                                                 .description("Root region id."),
                                         fieldWithPath("[].name")
                                                 .type(JsonFieldType.STRING)
-                                                .description("Root region name."))
+                                                .description("Root region name."),
+                                        fieldWithPath("[].code")
+                                                .type(JsonFieldType.STRING)
+                                                .description("Root SIDO code."))
                                 .build())));
 
         mockMvc.perform(get("/api/v1/region/{regionId}", 1L))
@@ -233,6 +244,7 @@ class ReadApiRestDocsTest {
                         responseFields(
                                 fieldWithPath("id").type(JsonFieldType.NUMBER).description("Region id."),
                                 fieldWithPath("name").type(JsonFieldType.STRING).description("Region name."),
+                                fieldWithPath("code").type(JsonFieldType.STRING).description("Region code."),
                                 fieldWithPath("latitude")
                                         .type(JsonFieldType.NUMBER)
                                         .optional()
@@ -249,7 +261,10 @@ class ReadApiRestDocsTest {
                                         .description("Child region id."),
                                 fieldWithPath("children[].name")
                                         .type(JsonFieldType.STRING)
-                                        .description("Child region name.")),
+                                        .description("Child region name."),
+                                fieldWithPath("children[].code")
+                                        .type(JsonFieldType.STRING)
+                                        .description("Child region code.")),
                         resource(builder()
                                 .tag("Read")
                                 .summary("Get region detail")
@@ -262,6 +277,9 @@ class ReadApiRestDocsTest {
                                         fieldWithPath("name")
                                                 .type(JsonFieldType.STRING)
                                                 .description("Region name."),
+                                        fieldWithPath("code")
+                                                .type(JsonFieldType.STRING)
+                                                .description("Region code."),
                                         fieldWithPath("latitude")
                                                 .type(JsonFieldType.NUMBER)
                                                 .optional()
@@ -278,7 +296,10 @@ class ReadApiRestDocsTest {
                                                 .description("Child region id."),
                                         fieldWithPath("children[].name")
                                                 .type(JsonFieldType.STRING)
-                                                .description("Child region name."))
+                                                .description("Child region name."),
+                                        fieldWithPath("children[].code")
+                                                .type(JsonFieldType.STRING)
+                                                .description("Child region code."))
                                 .build())));
     }
 

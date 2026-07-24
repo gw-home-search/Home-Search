@@ -12,7 +12,7 @@ import {
   SEARCH_FOCUS_DELTA,
   useComplexSearch,
 } from '../features/search/hooks/useComplexSearch';
-import type { MapUiCommand, RegionMapMarker, SidebarMode } from './mapAppTypes';
+import type { ComplexSelection, MapUiCommand, RegionMapMarker, SidebarMode } from './mapAppTypes';
 import { declutterComplexMarkers } from '../features/map/markerViewModel';
 import { AppHeader } from './AppHeader';
 import { useFavoriteComplex } from '../features/favorites/hooks/useFavoriteComplex';
@@ -20,6 +20,9 @@ import type { IndexedDbChatConversationStore } from '../features/chat/storage/ch
 import type { ChatAction } from '../features/chat/actionContract';
 import type { ChatUiContext } from '../features/chat/conversationContract';
 import { MyPagePanel } from '../features/my-page/MyPageRoutes';
+import { InsightRailContent } from '../features/insights/InsightRailContent';
+import { MapModeNavigation } from '../features/insights/MapModeNavigation';
+import { readInsightMetric } from '../features/insights/insightMetricConfig';
 
 export type MapAppProps = {
   initialMapLevel?: number;
@@ -37,7 +40,11 @@ export function MapApp({
   const location = useLocation();
   const navigate = useNavigate();
   const isMyPageRoute = isMyPagePath(location.pathname);
-  const [isExplorationOpen, setIsExplorationOpen] = useState(() => window.innerWidth > 720);
+  const isInsightsRoute = location.pathname === '/insights';
+  const insightMetric = readInsightMetric(location.search);
+  const [isExplorationOpen, setIsExplorationOpen] = useState(
+    () => window.innerWidth > 720 || isInsightsRoute,
+  );
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [mapUiCommand, setMapUiCommand] = useState<MapUiCommand | null>(null);
   const consumedMapActionIds = useRef(new Set<string>());
@@ -46,6 +53,7 @@ export function MapApp({
   const favoriteReturnFocusRef = useRef<HTMLElement | null>(null);
   const favoriteFallbackFocusRef = useRef<HTMLElement | null>(null);
   const favoriteFocusIdRef = useRef<number | null>(null);
+  const insightFocusIdRef = useRef<number | null>(null);
   const shouldRestoreFavoriteFocusRef = useRef(false);
   const previousPathnameRef = useRef<string | null>(null);
 
@@ -57,9 +65,13 @@ export function MapApp({
     window.addEventListener('resize', syncExplorationWithViewport);
     return () => window.removeEventListener('resize', syncExplorationWithViewport);
   }, [isChatOpen]);
+  useEffect(() => {
+    if (isInsightsRoute) setIsExplorationOpen(true);
+  }, [isInsightsRoute]);
   const viewport = useMapViewport(initialMapLevel);
   const markerData = useMapMarkers(viewport.viewport);
   const detail = useComplexDetail();
+  const selectInsightComplex = detail.selectComplex;
   const closeComplexDetail = detail.closeDetail;
   const selectFavoriteComplex = detail.selectComplex;
   useEffect(() => {
@@ -86,7 +98,7 @@ export function MapApp({
   });
   const handleMapRegionSelect = region.handleMapRegionSelect;
   const sidebarMode: SidebarMode = detail.selectedComplex == null
-    ? search.isSearchPanelActive ? 'search' : 'region'
+    ? search.isSearchPanelActive ? 'search' : isInsightsRoute ? 'insight' : 'region'
     : 'detail';
   const workspacePanelMode = detail.selectedComplex != null
     ? 'detail'
@@ -131,9 +143,12 @@ export function MapApp({
   const dismissMobileDetail = useCallback(() => {
     closeComplexDetail();
     if (isMyPageRoute) navigate('/');
-    setIsExplorationOpen(false);
-    queueMicrotask(() => explorationButtonRef.current?.focus());
-  }, [closeComplexDetail, isMyPageRoute, navigate]);
+    if (isInsightsRoute) setIsExplorationOpen(true);
+    else {
+      setIsExplorationOpen(false);
+      queueMicrotask(() => explorationButtonRef.current?.focus());
+    }
+  }, [closeComplexDetail, isInsightsRoute, isMyPageRoute, navigate]);
 
   const closeDetail = useCallback(() => {
     if (isMyPageRoute) shouldRestoreFavoriteFocusRef.current = true;
@@ -175,6 +190,28 @@ export function MapApp({
     favoriteFocusIdRef.current = null;
     focusMap(complex.latitude, complex.longitude, 4, SEARCH_FOCUS_DELTA);
   }, [detail.complexDetail, focusMap]);
+
+  useEffect(() => {
+    const focusId = insightFocusIdRef.current;
+    const complex = detail.complexDetail;
+    if (focusId == null) return;
+    if (detail.detailState === 'error' || detail.selectedComplex == null) {
+      insightFocusIdRef.current = null;
+      return;
+    }
+    if (
+      complex?.complexId !== focusId
+      || complex.latitude == null
+      || complex.longitude == null
+    ) return;
+    insightFocusIdRef.current = null;
+    focusMap(complex.latitude, complex.longitude, 4, SEARCH_FOCUS_DELTA);
+  }, [detail.complexDetail, detail.detailState, detail.selectedComplex, focusMap]);
+
+  const handleInsightSelect = useCallback((selection: ComplexSelection) => {
+    insightFocusIdRef.current = selection.complexId;
+    selectInsightComplex(selection);
+  }, [selectInsightComplex]);
 
   const closeMyPage = useCallback(() => {
     navigate('/');
@@ -237,7 +274,23 @@ export function MapApp({
           favoriteError={favorite.favoriteError}
           favoriteState={favorite.favoriteState}
           favoriteLiveMessage={favorite.liveMessage}
+          insightContent={(
+            <InsightRailContent
+              active={sidebarMode === 'insight'}
+              detailOpen={detail.selectedComplex != null}
+              onFocusNationwide={viewport.focusNationwide}
+              onFocusRegion={(latitude, longitude) => viewport.focusMap(latitude, longitude, 9, 0.2)}
+              onSelectComplex={handleInsightSelect}
+            />
+          )}
           isOpen={isWorkspacePanelOpen && (!isMyPageRoute || detail.selectedComplex != null)}
+          modeNavigation={(
+            <MapModeNavigation
+              activeMetric={sidebarMode === 'insight' ? insightMetric : null}
+              insightSearch={isInsightsRoute ? location.search : ''}
+              isRegionActive={sidebarMode === 'region'}
+            />
+          )}
           onCloseExploration={closeMobileExploration}
           onCloseDetail={closeDetail}
           onDismissDetail={dismissMobileDetail}

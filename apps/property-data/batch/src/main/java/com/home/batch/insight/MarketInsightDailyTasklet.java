@@ -1,5 +1,6 @@
 package com.home.batch.insight;
 
+import com.home.application.insight.generation.MarketInsightBuildResult;
 import com.home.application.insight.generation.MarketInsightDailyBuildService;
 import java.time.LocalDate;
 import org.springframework.batch.core.scope.context.ChunkContext;
@@ -18,7 +19,10 @@ final class MarketInsightDailyTasklet implements Tasklet {
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) {
         String runDate = contribution.getStepExecution().getJobParameters().getString("runDate");
-        buildService.build(LocalDate.parse(runDate));
+        MarketInsightBuildResult result = buildService.build(LocalDate.parse(runDate));
+        if (!result.published()) {
+            throw new IllegalStateException("daily market insight 발행 거부: " + result.rejectionReason());
+        }
         return RepeatStatus.FINISHED;
     }
 }

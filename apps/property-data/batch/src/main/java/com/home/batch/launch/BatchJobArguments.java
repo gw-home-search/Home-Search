@@ -21,6 +21,7 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
     private static final String DAILY_JOB = "rtmsDailyRefreshJob";
     private static final String BACKFILL_JOB = "rtmsBackfillJob";
     private static final String INSIGHT_DAILY_JOB = "marketInsightDailyJob";
+    private static final String INSIGHT_ROLLING_7D_JOB = "marketInsightRolling7dJob";
     private static final String BUILDING_METADATA_JOB = "complexBuildingMetadataJob";
     private static final String ODC_METADATA_GAP_FILL_JOB = "complexOdcMetadataGapFillJob";
     private static final String BUILDING_REGISTER_COLLECT_JOB = "complexBuildingRegisterCollectJob";
@@ -41,6 +42,7 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
         return switch (normalizedJobName) {
             case DAILY_JOB -> daily(normalizedJobName, params, clock);
             case INSIGHT_DAILY_JOB -> daily(normalizedJobName, params, clock);
+            case INSIGHT_ROLLING_7D_JOB -> daily(normalizedJobName, params, clock);
             case BACKFILL_JOB -> backfill(normalizedJobName, params);
             case BUILDING_METADATA_JOB -> buildingMetadata(normalizedJobName, params, clock);
             case ODC_METADATA_GAP_FILL_JOB -> odcMetadataGapFill(normalizedJobName, params, clock);
@@ -239,6 +241,11 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
         identifyingParameters.put("runDate", runDate);
         String requestId = canonicalRequestId(arguments.get("requestId"));
         identifyingParameters.put("requestId", requestId);
+        String restartAttempt = text(arguments.get("restartAttempt"));
+        if (restartAttempt != null) {
+            identifyingParameters.put(
+                    "restartAttempt", Integer.toString(positiveInt(restartAttempt, "restartAttempt")));
+        }
         return new BatchJobArguments(jobName, parameters(identifyingParameters));
     }
 

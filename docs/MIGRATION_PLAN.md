@@ -189,6 +189,22 @@ longer unapproved later-scope. They are an additive bounded expansion governed
 by `docs/adr/0002-market-insight-news-and-digest-boundary.md`. Existing map,
 search, detail, and trade work remains independent of this expansion.
 
+The approved daily trade slice is integrated into the existing map rail at
+`/insights`; it does not introduce a standalone marketing page or make map
+queries depend on insight snapshot state. Nationwide and each root SIDO are
+ranked independently from one complete DAILY execution.
+
+The public `/api/v1/insights/trades/weekly` URL now represents the latest
+completed-batch rolling seven-day window rather than a calendar week.
+`periodEnd` is the eligible DAILY run date and `periodStart` is six days
+earlier. Historical `WEEKLY`/`REJECTED` evidence remains immutable; deployment
+does not backfill prior rolling windows. A failed or incomplete newer batch
+leaves the last published window available as `STALE`.
+Registration-based sections prefer the RTMS registration date. When RTMS does
+not provide a usable registration date for an uncanceled trade, the contract
+date is used as the rolling-window fallback instead of dropping the trade.
+Canceled trades remain visible only in the cancellation section.
+
 ## Expansion Milestones
 
 The map/trade baseline is complete enough to begin isolated product services.

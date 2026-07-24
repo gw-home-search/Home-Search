@@ -617,7 +617,8 @@ Response:
 [
   {
     "id": 1,
-    "name": "Seoul"
+    "name": "Seoul",
+    "code": "11"
   }
 ]
 ```
@@ -626,6 +627,8 @@ Response fields:
 
 - `id`: root region id.
 - `name`: display name.
+- `code`: root SIDO administrative code as a string. This additive field is
+  used by the insight `SIDO` scope; existing `id` and `name` keep their meaning.
 
 Status:
 
@@ -653,12 +656,14 @@ Response:
 {
   "id": 1,
   "name": "Seoul",
+  "code": "11",
   "latitude": 37.5663,
   "longitude": 126.9780,
   "children": [
     {
       "id": 11,
-      "name": "Gangnam-gu"
+      "name": "Gangnam-gu",
+      "code": "11680"
     }
   ]
 }
@@ -668,6 +673,7 @@ Response fields:
 
 - `id`: region id.
 - `name`: display name.
+- `code`: administrative code as a string.
 - `latitude`: center latitude.
 - `longitude`: center longitude.
 - `children`: child region list.
@@ -676,6 +682,7 @@ Child response fields:
 
 - `id`
 - `name`
+- `code`
 
 Status:
 
@@ -1088,10 +1095,10 @@ These additive property-data endpoints are unauthenticated. Amounts are in
 and dates/timestamps use ISO-8601. Internal audit identifiers such as
 `complex_pk`, `apt_seq`, `source_key`, raw ids, and request ids are not public.
 
-Implementation status: `/api/v1/insights/trades/latest` is the first active
-slice. The weekly, trends, and news contracts below are approved follow-up
-slices and must not be treated as deployed until their producer tests and
-feature-flagged jobs are present.
+Implementation status: `/api/v1/insights/trades/latest` and
+`/api/v1/insights/trades/weekly` are active. The trends and news contracts below
+are approved follow-up slices and must not be treated as deployed until their
+producer tests and feature-flagged jobs are present.
 
 ### GET `/api/v1/insights/trades/latest`
 
@@ -1114,6 +1121,13 @@ Response sections are `newTrades`, `highestDeals`, `recordHighs`,
   "dataCutoff": "2026-07-22T06:30:00+09:00",
   "dataStatus": "FRESH",
   "scope": { "type": "NATIONWIDE", "regionCode": null },
+  "quality": {
+    "missingRegistrationDateCount": 0,
+    "invalidRegistrationDateCount": 0,
+    "missingCancellationDateCount": 0,
+    "invalidCancellationDateCount": 0,
+    "excludedCount": 0
+  },
   "newTrades": [{
     "rank": 1,
     "complexId": 501,
@@ -1125,11 +1139,17 @@ Response sections are `newTrades`, `highestDeals`, `recordHighs`,
     "dealAmount": 125000,
     "dealDate": "2026-07-01",
     "disclosedAt": "2026-07-22T03:14:15+09:00",
+    "registrationDate": null,
+    "cancellationDate": null,
     "previousAmount": null,
     "previousDealDate": null,
     "deltaAmount": null,
     "deltaRate": null,
-    "tradeStatus": "ACTIVE"
+    "currentCount": null,
+    "previousCount": null,
+    "comparisonSampleCount": null,
+    "tradeStatus": "ACTIVE",
+    "canceledAt": null
   }],
   "highestDeals": [],
   "recordHighs": [],
@@ -1141,11 +1161,44 @@ Response sections are `newTrades`, `highestDeals`, `recordHighs`,
 
 ### GET `/api/v1/insights/trades/weekly`
 
-Query parameters are `scope`, conditional `regionCode`, optional ISO Monday
-`weekStart`, and `limit` (`1..50`, default `10`). Sections are
-`highestDeals`, `recordHighs`, `previousRises`, `previousFalls`, `activity`,
-and `cancellations`. Common metadata and trade items use the latest response
-shape above.
+This stable URL returns the latest published rolling seven-day snapshot; it no
+longer represents a Monday-through-Sunday calendar week.
+
+Query parameters:
+
+- `scope`: `NATIONWIDE|SIDO`, default `NATIONWIDE`.
+- `regionCode`: required only for `SIDO`.
+- `limit`: default `10`, allowed `1..50`.
+- `weekStart`: removed. Supplying it returns `400` ProblemDetail.
+
+`periodEnd` is the successful source `DAILY/NATIONWIDE` execution `runDate` and
+`periodStart=periodEnd-6 days`. All six sections retain their existing names.
+Registration-based sections prefer `registrationDate` in that inclusive range.
+When an uncanceled trade has no usable registration date, `dealDate` is used as
+its inclusive-range and ordering fallback. Canceled trades are excluded from
+all five registration-based sections regardless of whether `registrationDate`
+is usable; `cancellations` continues to require `cancellationDate`.
+`disclosedAt` remains a compatibility observation timestamp and is not the
+ranking date.
+
+All five registration-based sections additionally require the current
+`dealDate` to be within the inclusive calendar-month range
+`periodEnd-1 month..periodEnd`. `newTrades` orders those eligible trades by the
+registration/fallback date, and `highestDeals` orders the same eligible set by
+amount. `recordHighs`, `previousRises`, and `previousFalls` compare only the
+same `complexId` and exact `exclArea`. Their immediately preceding deal date
+must be within six calendar months before the current `dealDate`; when that
+date contains multiple deals, the representative amount is the existing
+deterministic median. `recordHighs` still means a new all-time historical high,
+but the current trade must first pass that recent-previous-deal comparability
+gate.
+
+In a rolling response, `quality.missingRegistrationDateCount` and
+`quality.invalidRegistrationDateCount` count unique active source identities
+actually included through the contract-date fallback. Missing or malformed
+cancellation dates remain exclusions from `cancellations`, and
+`quality.excludedCount` is their sum. Date-quality evidence does not prevent a
+`FRESH` publication.
 
 ### GET `/api/v1/insights/trends`
 
@@ -1162,10 +1215,18 @@ or last-good cache. Titles/descriptions contain decoded text with provider
 
 Insight status rules:
 
-- `200` + `dataStatus=FRESH`: requested published snapshot is current.
-- `200` + `dataStatus=STALE`: only an older normal snapshot is available.
+- `200` + `dataStatus=FRESH`: the latest eligible DAILY execution and rolling
+  snapshot have the same `sourceExecutionId`.
+- `200` + `dataStatus=STALE`: a published rolling snapshot exists, but a newer
+  DAILY execution is running, failed, or not yet materialized.
 - `200` + `dataStatus=UNAVAILABLE`: no normal snapshot; every section is empty.
-- `400` ProblemDetail: invalid scope/region/date/week/limit only.
+- `400` ProblemDetail: invalid scope/region/date/limit, or removed
+  `weekStart` supplied to `/weekly`.
+
+For `scope=SIDO`, `regionCode` must match an existing root `si-do` region.
+`NATIONWIDE` with `regionCode`, `SIDO` without `regionCode`, and unknown root
+codes return `400` ProblemDetail. The endpoint reads only published snapshot
+rows; it never performs live aggregation over `trade` during a public request.
 
 ## Authenticated User APIs
 

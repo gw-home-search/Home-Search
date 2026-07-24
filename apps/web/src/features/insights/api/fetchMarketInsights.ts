@@ -15,12 +15,18 @@ export type InsightTradeItem = {
   exclArea: number;
   dealAmount: number;
   dealDate: string;
-  disclosedAt: string;
+  disclosedAt: string | null;
+  registrationDate: string | null;
+  cancellationDate: string | null;
   previousAmount: number | null;
   previousDealDate: string | null;
   deltaAmount: number | null;
   deltaRate: number | null;
+  currentCount: number | null;
+  previousCount: number | null;
+  comparisonSampleCount: number | null;
   tradeStatus: InsightTradeStatus;
+  canceledAt: string | null;
 };
 
 export type MarketInsights = {
@@ -31,6 +37,13 @@ export type MarketInsights = {
   dataCutoff: string | null;
   dataStatus: InsightDataStatus;
   scope: { type: InsightScopeType; regionCode: string | null };
+  quality: {
+    missingRegistrationDateCount: number;
+    invalidRegistrationDateCount: number;
+    missingCancellationDateCount: number;
+    invalidCancellationDateCount: number;
+    excludedCount: number;
+  };
   newTrades: InsightTradeItem[];
   highestDeals: InsightTradeItem[];
   recordHighs: InsightTradeItem[];
@@ -39,10 +52,9 @@ export type MarketInsights = {
   cancellations: InsightTradeItem[];
 };
 
-type InsightQuery = {
+export type InsightQuery = {
   scope?: InsightScopeType;
   regionCode?: string | null;
-  date?: string;
   limit?: number;
 };
 
@@ -57,10 +69,9 @@ export async function fetchMarketInsights(
   const params = new URLSearchParams();
   params.set('scope', query.scope ?? 'NATIONWIDE');
   if (query.regionCode) params.set('regionCode', query.regionCode);
-  if (query.date) params.set('date', query.date);
   params.set('limit', String(query.limit ?? 10));
   const response = await fetch(
-    resolveApiUrl(`/api/v1/insights/trades/latest?${params.toString()}`),
+    resolveApiUrl(`/api/v1/insights/trades/weekly?${params.toString()}`),
     { method: 'GET', signal },
   );
   if (!response.ok) {
@@ -73,6 +84,7 @@ export async function fetchMarketInsights(
 function normalizeInsights(value: unknown): MarketInsights {
   const source = record(value, 'response');
   const scope = record(source.scope, 'scope');
+  const quality = record(source.quality, 'quality');
   const dataStatus = enumValue(source.dataStatus, ['FRESH', 'STALE', 'UNAVAILABLE'], 'dataStatus');
   const scopeType = enumValue(scope.type, ['NATIONWIDE', 'SIDO'], 'scope.type');
   const result = {
@@ -83,6 +95,25 @@ function normalizeInsights(value: unknown): MarketInsights {
     dataCutoff: optionalString(source.dataCutoff, 'dataCutoff'),
     dataStatus,
     scope: { type: scopeType, regionCode: optionalString(scope.regionCode, 'scope.regionCode') },
+    quality: {
+      missingRegistrationDateCount: requiredNumber(
+        quality.missingRegistrationDateCount,
+        'quality.missingRegistrationDateCount',
+      ),
+      invalidRegistrationDateCount: requiredNumber(
+        quality.invalidRegistrationDateCount,
+        'quality.invalidRegistrationDateCount',
+      ),
+      missingCancellationDateCount: requiredNumber(
+        quality.missingCancellationDateCount,
+        'quality.missingCancellationDateCount',
+      ),
+      invalidCancellationDateCount: requiredNumber(
+        quality.invalidCancellationDateCount,
+        'quality.invalidCancellationDateCount',
+      ),
+      excludedCount: requiredNumber(quality.excludedCount, 'quality.excludedCount'),
+    },
   } as Omit<MarketInsights, typeof SECTIONS[number]> & Partial<MarketInsights>;
   for (const section of SECTIONS) {
     const items = source[section];
@@ -104,12 +135,18 @@ function normalizeItem(value: unknown): InsightTradeItem {
     exclArea: requiredNumber(item.exclArea, 'exclArea'),
     dealAmount: requiredNumber(item.dealAmount, 'dealAmount'),
     dealDate: requiredString(item.dealDate, 'dealDate'),
-    disclosedAt: requiredString(item.disclosedAt, 'disclosedAt'),
+    disclosedAt: optionalString(item.disclosedAt, 'disclosedAt'),
+    registrationDate: optionalString(item.registrationDate, 'registrationDate'),
+    cancellationDate: optionalString(item.cancellationDate, 'cancellationDate'),
     previousAmount: optionalNumber(item.previousAmount, 'previousAmount'),
     previousDealDate: optionalString(item.previousDealDate, 'previousDealDate'),
     deltaAmount: optionalNumber(item.deltaAmount, 'deltaAmount'),
     deltaRate: optionalNumber(item.deltaRate, 'deltaRate'),
+    currentCount: optionalNumber(item.currentCount, 'currentCount'),
+    previousCount: optionalNumber(item.previousCount, 'previousCount'),
+    comparisonSampleCount: optionalNumber(item.comparisonSampleCount, 'comparisonSampleCount'),
     tradeStatus: enumValue(item.tradeStatus, ['ACTIVE', 'CANCELED'], 'tradeStatus'),
+    canceledAt: optionalString(item.canceledAt, 'canceledAt'),
   };
 }
 

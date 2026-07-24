@@ -3,7 +3,10 @@ package com.home.domain.insight;
 public enum MarketInsightMetricType {
     DAILY_NEW_TRADE("오늘 새 공개 거래", "자격 있는 DAILY 실행에서 최초 정규화된 거래"),
     DAILY_HIGHEST_DEAL("오늘 최고 거래", "오늘 새 공개 거래 중 최고 거래금액"),
+    WEEKLY_NEW_TRADE("주간 신규 거래", "완결된 일곱 DAILY 실행에서 새로 공개된 거래"),
     WEEKLY_HIGHEST_DEAL("주간 최고 거래", "직전 월요일부터 일요일까지 공개된 최고 거래"),
+    ROLLING_7D_NEW_TRADE("최근 7일 신규 거래", "최신 완결 DAILY 실행에서 등록일을 우선하고 누락된 정상 거래는 계약일로 보완한 최근 7일 거래"),
+    ROLLING_7D_HIGHEST_DEAL("최근 7일 최고 거래", "등록일을 우선하고 누락된 정상 거래는 계약일로 보완한 최근 7일 거래 중 최고 거래금액"),
     AREA_RECORD_HIGH("면적형 신고가", "같은 단지와 exact 면적형의 과거 최고가를 엄격히 초과"),
     AREA_PREVIOUS_RISE("직전 거래 상승", "직전 distinct 계약일 median보다 상승"),
     AREA_PREVIOUS_FALL("직전 거래 하락", "직전 distinct 계약일 median보다 하락"),

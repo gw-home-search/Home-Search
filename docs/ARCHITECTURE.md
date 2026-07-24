@@ -205,7 +205,7 @@ existing service boundary:
 ```text
 RTMS batch -> collection execution/work-unit evidence -> insight snapshot
 NAVER API HUB -> property batch -> Redis current/last-good news cache
-property public API -> web /insights
+property public API -> web MapApp /insights rail mode
 property public API -> user batch -> user inbox / SES
 ```
 
@@ -214,6 +214,36 @@ JDBC snapshot adapters, the NAVER adapter, and news cache adapters. The `api`
 module owns only public insight/news HTTP DTOs and controllers. The `batch`
 module owns collection evidence lifecycle and insight/news job composition.
 Existing map/search/detail/trade packages must not import insight packages.
+The web composition root may coordinate the feature-local insight rail with
+the existing detail selection and map focus ports; map marker repositories and
+runtime hooks remain independent of insight storage and request state.
+
+The operational daily chain is:
+
+```text
+rtmsDailyRefreshJob
+  -> complete DAILY/NATIONWIDE collection evidence
+  -> daily insight step
+  -> rolling 7-day insight step
+  -> atomic nationwide + 17 SIDO publication
+```
+
+The rolling step uses only the latest execution whose `runDate` exactly
+matches the batch date. It derives `periodStart=runDate-6 days` from structured
+raw registration/cancellation dates and joins canonical trades by source
+identity. Registration-based sections prefer `registration_date`; an
+uncanceled trade without a usable registration date falls back to its
+canonical `trade.deal_date`. Cancellation sections continue to require
+`cancellation_date`, and canceled trades never enter the other five sections.
+Those five sections only admit current contracts within one calendar month of
+`runDate`. Exact-area record/rise/fall calculations require the immediately
+previous contract date for the same `(complex_id, excl_area)` to be within six
+calendar months of the current contract; record-high still compares against
+the all-time maximum after that comparability gate passes.
+The job does not schedule work in the API runtime and does
+not make map/search/detail repositories depend on snapshot state.
+A rejected daily insight result fails the batch step, so the rolling step never
+runs after an incomplete daily publication.
 
 User-service keeps subscription/inbox/delivery domain and persistence in
 `core`, authenticated subscription/inbox HTTP in `app`, and delivery execution

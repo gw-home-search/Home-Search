@@ -41,7 +41,9 @@ public class TradeIngestItemProcessor {
                 batch.pageNo(),
                 item.payload(),
                 sourceKeyGenerator.hashPayload(item.payload()),
-                executionCorrelationId));
+                executionCorrelationId,
+                item.registrationDate(),
+                item.cancelDealDay()));
         return finalizer.finalizeReceived(raw, item);
     }
 }

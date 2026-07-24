@@ -25,6 +25,16 @@ public class MarketInsightQueryService {
                 .orElseGet(() -> MarketInsightReadResult.unavailable(scopeType, regionCode, requestedDate));
     }
 
+    @Transactional(readOnly = true)
+    public MarketInsightReadResult weekly(
+            MarketInsightScopeType scopeType, String regionCode, LocalDate asOfDate, int limit) {
+        validate(scopeType, regionCode, asOfDate, limit);
+        return repository
+                .findLatestRolling7d(scopeType, regionCode, limit)
+                .map(MarketInsightReadResult::fromRolling)
+                .orElseGet(() -> MarketInsightReadResult.unavailableRolling(scopeType, regionCode, asOfDate));
+    }
+
     private void validate(MarketInsightScopeType scopeType, String regionCode, LocalDate requestedDate, int limit) {
         Objects.requireNonNull(scopeType, "scopeType is required");
         Objects.requireNonNull(requestedDate, "requestedDate is required");
@@ -34,6 +44,9 @@ public class MarketInsightQueryService {
         boolean hasRegion = regionCode != null && !regionCode.isBlank();
         if ((scopeType == MarketInsightScopeType.SIDO) != hasRegion) {
             throw new InvalidInsightQueryException("regionCode is required only for SIDO scope");
+        }
+        if (scopeType == MarketInsightScopeType.SIDO && !repository.existsRootSidoCode(regionCode)) {
+            throw new InvalidInsightQueryException("regionCode must identify an existing root SIDO");
         }
     }
 }

@@ -9,9 +9,12 @@ import com.home.infrastructure.external.rtms.RtmsIngestProperties;
 import com.home.infrastructure.ops.notification.OpsNotifier;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
+import org.springframework.batch.core.job.builder.SimpleJobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.step.builder.StepBuilder;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -41,13 +44,22 @@ class RtmsBatchJobConfiguration {
             Step coordinatePreflightStep,
             Step rtmsDailyMonthlyIngestStep,
             Step regionUnitSyncStep,
+            @Qualifier("marketInsightDailyStep") ObjectProvider<Step> marketInsightDailyStepProvider,
+            @Qualifier("marketInsightRolling7dStep") ObjectProvider<Step> marketInsightRolling7dStepProvider,
             RtmsBatchSummaryListener listener) {
-        return new JobBuilder("rtmsDailyRefreshJob", jobRepository)
+        Step marketInsightDailyStep = marketInsightDailyStepProvider.getIfAvailable();
+        Step marketInsightRolling7dStep = marketInsightRolling7dStepProvider.getIfAvailable();
+        if ((marketInsightDailyStep == null) != (marketInsightRolling7dStep == null)) {
+            throw new IllegalStateException("daily and rolling insight steps must be configured together");
+        }
+        SimpleJobBuilder builder = new JobBuilder("rtmsDailyRefreshJob", jobRepository)
                 .start(coordinatePreflightStep)
                 .next(rtmsDailyMonthlyIngestStep)
-                .next(regionUnitSyncStep)
-                .listener(listener)
-                .build();
+                .next(regionUnitSyncStep);
+        if (marketInsightDailyStep != null) {
+            builder.next(marketInsightDailyStep).next(marketInsightRolling7dStep);
+        }
+        return builder.listener(listener).build();
     }
 
     @Bean

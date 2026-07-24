@@ -35,8 +35,9 @@ Excluded from the property-data map/trade scope:
 - Top price or top volume 30-day aggregate tables.
 - Favorite and trade alarm workflows.
 - Mail target generation and mail sending batch.
-- Recommendation or insight features in property-data public APIs. Authenticated
-  chatbot features are owned by the later expansion milestone in
+- Recommendation features and analytical APIs outside the approved market
+  insight snapshot contract. Authenticated chatbot features are owned by
+  the later expansion milestone in
   `AI_SERVICE_PLAN.md`.
 - Query-heavy analytical optimizations unrelated to map display.
 
@@ -121,6 +122,8 @@ chatbot overlay에서만 연결된다. 두 서비스는
 18. [CHATBOT_API_CONTRACT.md](CHATBOT_API_CONTRACT.md)
 19. [ADR 0001](adr/0001-evidence-grounded-chatbot-and-browser-memory.md)
 20. [ADR 0002](adr/0002-market-insight-news-and-digest-boundary.md)
+21. [ADR 0003](adr/0003-rolling-seven-day-market-insight.md)
+22. [ADR 0004](adr/0004-rolling-registration-date-fallback.md)
 
 ## Non-Negotiable Decisions
 

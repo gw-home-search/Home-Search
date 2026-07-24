@@ -1,6 +1,7 @@
 package com.home.batch.insight;
 
 import com.home.application.insight.generation.MarketInsightDailyBuildService;
+import com.home.application.insight.generation.MarketInsightRolling7dBuildService;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
@@ -28,6 +29,14 @@ class MarketInsightBatchJobConfiguration {
 
     @Bean
     @Lazy
+    Job marketInsightRolling7dJob(JobRepository jobRepository, Step marketInsightRolling7dStep) {
+        return new JobBuilder("marketInsightRolling7dJob", jobRepository)
+                .start(marketInsightRolling7dStep)
+                .build();
+    }
+
+    @Bean
+    @Lazy
     Step marketInsightDailyStep(
             JobRepository jobRepository,
             PlatformTransactionManager transactionManager,
@@ -36,6 +45,20 @@ class MarketInsightBatchJobConfiguration {
         transactionAttribute.setPropagationBehavior(TransactionDefinition.PROPAGATION_NOT_SUPPORTED);
         return new StepBuilder("marketInsightDailyStep", jobRepository)
                 .tasklet(new MarketInsightDailyTasklet(buildService), transactionManager)
+                .transactionAttribute(transactionAttribute)
+                .build();
+    }
+
+    @Bean
+    @Lazy
+    Step marketInsightRolling7dStep(
+            JobRepository jobRepository,
+            PlatformTransactionManager transactionManager,
+            MarketInsightRolling7dBuildService buildService) {
+        DefaultTransactionAttribute transactionAttribute = new DefaultTransactionAttribute();
+        transactionAttribute.setPropagationBehavior(TransactionDefinition.PROPAGATION_NOT_SUPPORTED);
+        return new StepBuilder("marketInsightRolling7dStep", jobRepository)
+                .tasklet(new MarketInsightRolling7dTasklet(buildService), transactionManager)
                 .transactionAttribute(transactionAttribute)
                 .build();
     }

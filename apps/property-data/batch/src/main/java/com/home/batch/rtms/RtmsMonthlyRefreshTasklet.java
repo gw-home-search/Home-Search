@@ -90,7 +90,7 @@ public class RtmsMonthlyRefreshTasklet implements Tasklet {
             for (RtmsRefreshWorkUnit unit : workset) {
                 RtmsCollectionWorkUnitState existing =
                         collectionTracker.state(correlationId, unit.lawdCd(), unit.dealYmd());
-                if (existing.terminal()) {
+                if (existing.successful()) {
                     continue;
                 }
                 collectionTracker.markRunning(correlationId, unit.lawdCd(), unit.dealYmd());
@@ -106,6 +106,7 @@ public class RtmsMonthlyRefreshTasklet implements Tasklet {
         jobContext.put(RtmsBatchExecutionSummary.WARNINGS_CONTEXT_KEY, summary.hasWarnings());
         if (summary.hasWarnings()) {
             contribution.setExitStatus(COMPLETED_WITH_WARNINGS);
+            throw new IllegalStateException("RTMS workset is incomplete and must be restarted");
         }
         return RepeatStatus.FINISHED;
     }

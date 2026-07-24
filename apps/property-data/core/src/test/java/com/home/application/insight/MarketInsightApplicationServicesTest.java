@@ -15,16 +15,20 @@ import com.home.application.insight.collection.RtmsCollectionExecutionService;
 import com.home.application.insight.collection.RtmsCollectionWorkUnitPlan;
 import com.home.application.insight.generation.MarketInsightBuildRepository;
 import com.home.application.insight.generation.MarketInsightDailyBuildService;
+import com.home.application.insight.generation.MarketInsightRolling7dBuildService;
 import com.home.application.insight.generation.MarketInsightSourceExecution;
+import com.home.application.insight.generation.MarketInsightWeeklyBuildService;
 import com.home.application.insight.read.InvalidInsightQueryException;
 import com.home.application.insight.read.MarketInsightQueryService;
 import com.home.application.insight.read.MarketInsightReadRepository;
 import com.home.application.insight.read.MarketInsightSnapshotView;
 import com.home.application.insight.read.MarketInsightTradeItemView;
 import com.home.domain.ingest.run.ExecutionCorrelationId;
+import com.home.domain.insight.MarketInsightBuildStatus;
 import com.home.domain.insight.MarketInsightCoverage;
 import com.home.domain.insight.MarketInsightDataStatus;
 import com.home.domain.insight.MarketInsightMetricType;
+import com.home.domain.insight.MarketInsightPeriodType;
 import com.home.domain.insight.MarketInsightRejectionReason;
 import com.home.domain.insight.MarketInsightScopeType;
 import com.home.domain.insight.MarketInsightTradeStatus;
@@ -99,11 +103,73 @@ class MarketInsightApplicationServicesTest {
     }
 
     @Test
+    @DisplayName("weekly build는 ISO Monday의 완전한 7개 DAILY execution만 발행한다")
+    void weeklyBuildRequiresSevenCompleteDailyExecutions() {
+        LocalDate weekStart = LocalDate.parse("2026-07-13");
+        MarketInsightBuildRepository repository = mock(MarketInsightBuildRepository.class);
+        MarketInsightWeeklyBuildService service = new MarketInsightWeeklyBuildService(repository);
+        List<MarketInsightSourceExecution> sixDays = java.util.stream.IntStream.range(0, 6)
+                .mapToObj(day -> source(
+                        weekStart.plusDays(day),
+                        new MarketInsightCoverage(
+                                RtmsCollectionMode.DAILY, RtmsCollectionScopeType.NATIONWIDE, 1, 1, 0, 0)))
+                .toList();
+        UUID rejectedId = UUID.fromString("123e4567-e89b-12d3-a456-426614174084");
+        when(repository.findLatestDailyNationwideForWeek(weekStart)).thenReturn(sixDays);
+        when(repository.rejectWeeklyNationwide(
+                        eq(weekStart),
+                        eq(sixDays),
+                        eq(MarketInsightRejectionReason.INCOMPLETE_WORKSET),
+                        any(Instant.class)))
+                .thenReturn(rejectedId);
+
+        assertThat(service.build(weekStart).published()).isFalse();
+
+        List<MarketInsightSourceExecution> sevenDays = java.util.stream.IntStream.range(0, 7)
+                .mapToObj(day -> source(
+                        weekStart.plusDays(day),
+                        new MarketInsightCoverage(
+                                RtmsCollectionMode.DAILY, RtmsCollectionScopeType.NATIONWIDE, 1, 1, 0, 0)))
+                .toList();
+        UUID publishedId = UUID.fromString("123e4567-e89b-12d3-a456-426614174085");
+        when(repository.findLatestDailyNationwideForWeek(weekStart)).thenReturn(sevenDays);
+        when(repository.publishWeeklyNationwide(eq(weekStart), eq(sevenDays), any(Instant.class)))
+                .thenReturn(publishedId);
+
+        assertThat(service.build(weekStart).snapshotId()).isEqualTo(publishedId);
+        assertThatThrownBy(() -> service.build(LocalDate.parse("2026-07-14")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Monday");
+    }
+
+    @Test
+    @DisplayName("rolling 7일 build는 당일 최신 DAILY 실행 하나만으로 발행한다")
+    void rollingBuildUsesOneCompleteExecutionForRunDate() {
+        MarketInsightBuildRepository repository = mock(MarketInsightBuildRepository.class);
+        MarketInsightRolling7dBuildService service = new MarketInsightRolling7dBuildService(repository);
+        MarketInsightSourceExecution complete = source(
+                RUN_DATE,
+                new MarketInsightCoverage(RtmsCollectionMode.DAILY, RtmsCollectionScopeType.NATIONWIDE, 2, 2, 0, 0));
+        UUID publishedId = UUID.fromString("123e4567-e89b-12d3-a456-426614174086");
+        when(repository.findLatestDailyNationwide(RUN_DATE)).thenReturn(Optional.of(complete));
+        when(repository.publishRolling7dNationwide(eq(complete), any(Instant.class)))
+                .thenReturn(publishedId);
+
+        var result = service.build(RUN_DATE);
+
+        assertThat(result.published()).isTrue();
+        assertThat(result.snapshotId()).isEqualTo(publishedId);
+        verify(repository).publishRolling7dNationwide(eq(complete), any(Instant.class));
+    }
+
+    @Test
     @DisplayName("latest query는 FRESH, STALE, UNAVAILABLE과 입력 오류를 명확히 구분한다")
     void latestQueryDistinguishesDataStatusesAndValidatesScope() {
         MarketInsightReadRepository repository = mock(MarketInsightReadRepository.class);
         MarketInsightQueryService service = new MarketInsightQueryService(repository);
         MarketInsightSnapshotView snapshot = snapshot(RUN_DATE);
+        when(repository.existsRootSidoCode("11")).thenReturn(true);
+        when(repository.existsRootSidoCode("99")).thenReturn(false);
         when(repository.findLatestDaily(MarketInsightScopeType.NATIONWIDE, null, RUN_DATE, 10))
                 .thenReturn(Optional.of(snapshot));
 
@@ -136,9 +202,38 @@ class MarketInsightApplicationServicesTest {
                 .isInstanceOf(InvalidInsightQueryException.class);
         assertThatThrownBy(() -> service.latest(MarketInsightScopeType.SIDO, " ", RUN_DATE, 10))
                 .isInstanceOf(InvalidInsightQueryException.class);
+        assertThatThrownBy(() -> service.latest(MarketInsightScopeType.SIDO, "99", RUN_DATE, 10))
+                .isInstanceOf(InvalidInsightQueryException.class)
+                .hasMessageContaining("root SIDO");
         assertThatThrownBy(() -> service.latest(null, null, RUN_DATE, 10)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> service.latest(MarketInsightScopeType.NATIONWIDE, null, null, 10))
                 .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("rolling 조회는 최신 DAILY 실행과 source가 다르면 기간을 이동하지 않고 STALE을 반환한다")
+    void rollingQueryUsesSourceFreshnessInsteadOfWallClockDate() {
+        MarketInsightReadRepository repository = mock(MarketInsightReadRepository.class);
+        MarketInsightQueryService service = new MarketInsightQueryService(repository);
+        MarketInsightSnapshotView staleSnapshot = new MarketInsightSnapshotView(
+                UUID.fromString("123e4567-e89b-12d3-a456-426614174089"),
+                LocalDate.parse("2026-07-17"),
+                LocalDate.parse("2026-07-23"),
+                Instant.parse("2026-07-23T00:04:00Z"),
+                Instant.parse("2026-07-23T00:03:00Z"),
+                MarketInsightScopeType.NATIONWIDE,
+                null,
+                com.home.domain.insight.MarketInsightQuality.NONE,
+                false,
+                List.of());
+        when(repository.findLatestRolling7d(MarketInsightScopeType.NATIONWIDE, null, 10))
+                .thenReturn(Optional.of(staleSnapshot));
+
+        var result = service.weekly(MarketInsightScopeType.NATIONWIDE, null, LocalDate.parse("2026-07-24"), 10);
+
+        assertThat(result.dataStatus()).isEqualTo(MarketInsightDataStatus.STALE);
+        assertThat(result.periodStart()).isEqualTo(LocalDate.parse("2026-07-17"));
+        assertThat(result.periodEnd()).isEqualTo(LocalDate.parse("2026-07-23"));
     }
 
     @Test
@@ -194,6 +289,14 @@ class MarketInsightApplicationServicesTest {
                 .allSatisfy(title -> assertThat(title).isNotBlank());
         assertThat(Arrays.stream(MarketInsightScopeType.values()).map(MarketInsightScopeType::descriptionKo))
                 .allSatisfy(description -> assertThat(description).isNotBlank());
+        assertThat(Arrays.stream(MarketInsightDataStatus.values()).map(MarketInsightDataStatus::titleKo))
+                .allSatisfy(title -> assertThat(title).isNotBlank());
+        assertThat(Arrays.stream(MarketInsightTradeStatus.values()).map(MarketInsightTradeStatus::descriptionKo))
+                .allSatisfy(description -> assertThat(description).isNotBlank());
+        assertThat(Arrays.stream(MarketInsightPeriodType.values()).map(MarketInsightPeriodType::descriptionKo))
+                .allSatisfy(description -> assertThat(description).isNotBlank());
+        assertThat(Arrays.stream(MarketInsightBuildStatus.values()).map(MarketInsightBuildStatus::titleKo))
+                .allSatisfy(title -> assertThat(title).isNotBlank());
         assertThat(Arrays.stream(RtmsCollectionExecutionState.values()).map(RtmsCollectionExecutionState::titleKo))
                 .allSatisfy(title -> assertThat(title).isNotBlank());
         assertThat(Arrays.stream(RtmsCollectionExecutionState.values())
@@ -216,11 +319,20 @@ class MarketInsightApplicationServicesTest {
         assertThat(RtmsCollectionWorkUnitState.PLANNED.terminal()).isFalse();
         assertThat(RtmsCollectionWorkUnitState.COMPLETED.successful()).isTrue();
         assertThat(RtmsCollectionWorkUnitState.FAILED.successful()).isFalse();
+        assertThat(MarketInsightBuildStatus.BUILDING.canTransitionTo(MarketInsightBuildStatus.PUBLISHED))
+                .isTrue();
+        assertThat(MarketInsightBuildStatus.PUBLISHED.canTransitionTo(MarketInsightBuildStatus.SUPERSEDED))
+                .isTrue();
+        assertThat(MarketInsightBuildStatus.SUPERSEDED.canTransitionTo(MarketInsightBuildStatus.PUBLISHED))
+                .isFalse();
     }
 
     private static MarketInsightSourceExecution source(MarketInsightCoverage coverage) {
-        return new MarketInsightSourceExecution(
-                EXECUTION_ID, RUN_DATE, Instant.parse("2026-07-22T00:03:00Z"), coverage);
+        return source(RUN_DATE, coverage);
+    }
+
+    private static MarketInsightSourceExecution source(LocalDate runDate, MarketInsightCoverage coverage) {
+        return new MarketInsightSourceExecution(EXECUTION_ID, runDate, Instant.parse("2026-07-22T00:03:00Z"), coverage);
     }
 
     private static MarketInsightSnapshotView snapshot(LocalDate periodStart) {
@@ -262,6 +374,7 @@ class MarketInsightApplicationServicesTest {
                 2,
                 1,
                 3,
-                MarketInsightTradeStatus.ACTIVE);
+                MarketInsightTradeStatus.ACTIVE,
+                null);
     }
 }

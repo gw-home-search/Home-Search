@@ -22,6 +22,8 @@ import com.home.application.ingest.trade.TradeIngestFinalizer;
 import com.home.application.ingest.trade.TradeIngestItemProcessor;
 import com.home.application.insight.collection.RtmsCollectionExecutionService;
 import com.home.application.insight.generation.MarketInsightDailyBuildService;
+import com.home.application.insight.generation.MarketInsightRolling7dBuildService;
+import com.home.application.insight.generation.MarketInsightWeeklyBuildService;
 import com.home.application.region.RegionUnitCntSynchronizationService;
 import com.home.infrastructure.external.complex.ComplexMetadataClientConfiguration;
 import com.home.infrastructure.external.rtms.RtmsBatchOrchestrationConfiguration;
@@ -64,6 +66,8 @@ import org.springframework.stereotype.Repository;
                             TradeIngestItemProcessor.class,
                             RtmsCollectionExecutionService.class,
                             MarketInsightDailyBuildService.class,
+                            MarketInsightRolling7dBuildService.class,
+                            MarketInsightWeeklyBuildService.class,
                             RegionUnitCntSynchronizationService.class
                         }))
 @ComponentScan(

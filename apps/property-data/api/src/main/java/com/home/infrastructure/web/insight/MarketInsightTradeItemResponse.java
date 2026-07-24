@@ -17,6 +17,8 @@ public record MarketInsightTradeItemResponse(
         Long dealAmount,
         LocalDate dealDate,
         Instant disclosedAt,
+        LocalDate registrationDate,
+        LocalDate cancellationDate,
         Long previousAmount,
         LocalDate previousDealDate,
         Long deltaAmount,
@@ -24,7 +26,8 @@ public record MarketInsightTradeItemResponse(
         Integer currentCount,
         Integer previousCount,
         Integer comparisonSampleCount,
-        MarketInsightTradeStatus tradeStatus) {
+        MarketInsightTradeStatus tradeStatus,
+        Instant canceledAt) {
 
     static MarketInsightTradeItemResponse from(MarketInsightTradeItemView item) {
         return new MarketInsightTradeItemResponse(
@@ -38,6 +41,8 @@ public record MarketInsightTradeItemResponse(
                 item.dealAmount(),
                 item.dealDate(),
                 item.disclosedAt(),
+                item.registrationDate(),
+                item.cancellationDate(),
                 item.previousAmount(),
                 item.previousDealDate(),
                 item.deltaAmount(),
@@ -45,6 +50,7 @@ public record MarketInsightTradeItemResponse(
                 item.currentCount(),
                 item.previousCount(),
                 item.comparisonSampleCount(),
-                item.tradeStatus());
+                item.tradeStatus(),
+                item.canceledAt());
     }
 }

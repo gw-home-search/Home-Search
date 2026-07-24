@@ -61,7 +61,7 @@ home:
       daily:
         enabled: false
         lawd-cds: ""
-        lookback-months: 1
+        lookback-months: 2
         zone: Asia/Seoul
   trade:
     partition:

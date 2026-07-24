@@ -4,12 +4,13 @@ import com.home.application.read.RegionDetailResult;
 import java.util.List;
 
 public record RegionDetailResponse(
-        Long id, String name, Double latitude, Double longitude, List<RegionSummaryResponse> children) {
+        Long id, String name, String code, Double latitude, Double longitude, List<RegionSummaryResponse> children) {
 
     public static RegionDetailResponse from(RegionDetailResult result) {
         return new RegionDetailResponse(
                 result.id(),
                 result.name(),
+                result.code(),
                 result.latitude(),
                 result.longitude(),
                 result.children().stream().map(RegionSummaryResponse::from).toList());

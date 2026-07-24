@@ -44,7 +44,11 @@ public class JdbcRawTradeIngestRepository implements RawTradeIngestRepository {
 			    failure_reason,
 			    created_at,
 			    processed_at,
-			    execution_correlation_id
+			    execution_correlation_id,
+			    registration_date_raw,
+			    registration_date,
+			    cancellation_date_raw,
+			    cancellation_date
 			)
 			VALUES (
 			    :source,
@@ -58,7 +62,11 @@ public class JdbcRawTradeIngestRepository implements RawTradeIngestRepository {
 			    :failureReason,
 			    :createdAt,
 			    :processedAt,
-			    :executionCorrelationId
+			    :executionCorrelationId,
+			    :registrationDateRaw,
+			    :registrationDate,
+			    :cancellationDateRaw,
+			    :cancellationDate
 			)
 			RETURNING *
 			""")
@@ -78,6 +86,10 @@ public class JdbcRawTradeIngestRepository implements RawTradeIngestRepository {
                         record.executionCorrelationId() == null
                                 ? null
                                 : record.executionCorrelationId().value())
+                .param("registrationDateRaw", record.registrationDateRaw())
+                .param("registrationDate", record.registrationDate())
+                .param("cancellationDateRaw", record.cancellationDateRaw())
+                .param("cancellationDate", record.cancellationDate())
                 .query(this::mapRecord)
                 .single();
     }
@@ -201,7 +213,11 @@ public class JdbcRawTradeIngestRepository implements RawTradeIngestRepository {
                 resultSet.getString("failure_reason"),
                 instantOrNull(resultSet, "created_at"),
                 instantOrNull(resultSet, "processed_at"),
-                executionCorrelationId(resultSet));
+                executionCorrelationId(resultSet),
+                resultSet.getString("registration_date_raw"),
+                resultSet.getObject("registration_date", java.time.LocalDate.class),
+                resultSet.getString("cancellation_date_raw"),
+                resultSet.getObject("cancellation_date", java.time.LocalDate.class));
     }
 
     private RawTradeIngestFailureSummary mapFailureSummary(ResultSet resultSet, int rowNumber) throws SQLException {

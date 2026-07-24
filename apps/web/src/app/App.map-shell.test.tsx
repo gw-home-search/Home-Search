@@ -495,7 +495,7 @@ describe('App 지도 shell', () => {
 
     expect(rootElement.querySelector('[aria-label="지도 화면"]')).not.toBeNull();
     expect(rootElement.querySelector('[role="alert"]')?.textContent).toContain(
-      '지도를 불러오지 못했어요',
+      '지도를 잠시 불러오지 못했어요',
     );
 
     unmount(root);

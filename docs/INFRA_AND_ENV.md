@@ -102,12 +102,16 @@ Home Search backend collection and map display need:
 - `ODC_SERVICE_KEY` if complex reference enrichment is included in the current scope.
 - `VW_SERVICE_KEY` if GIS/building data calls are included in the current scope.
 - `FRONTEND_URL`
+- `VITE_KAKAO_MAP_APP_KEY` for the browser Kakao SDK. Local Compose reads this
+  browser-safe key from `apps/web/.env` only for the Web service; a blank value
+  stops the Web container without printing the value and does not block
+  backend-only Compose commands.
 - `HOME_MAP_MARKER_CACHE_ENABLED=true` when Redis-backed map marker caching is
   enabled.
 - `HOME_MAP_MARKER_CACHE_TTL`, for example `5m`, to bound stale marker data.
 - `SPRING_DATA_REDIS_HOST` and `SPRING_DATA_REDIS_PORT` when marker caching is
   enabled outside the local Docker network.
-- `HOME_INSIGHT_TRADE_ENABLED=false` for trade insight batch/API activation.
+- `HOME_INSIGHT_TRADE_ENABLED=false` for trade insight snapshot generation.
 - `HOME_NEWS_NAVER_ENABLED=false`, NAVER API HUB credentials, a provider-call
   budget, and Redis settings for news activation. Credentials are injected only
   into property Batch.
@@ -461,14 +465,42 @@ wrapper는 expected database와 최고 pending version을 확인하고 `latest`,
 Property-data deployment의 기본 경로는 fresh-only다.
 
 ```bash
-./ops/property-deployment-preflight.sh before 17
-./ops/property-flyway.sh migrate 17
-./ops/property-deployment-preflight.sh after 17
+./ops/property-deployment-preflight.sh before 19
+./ops/property-flyway.sh migrate 19
+./ops/property-deployment-preflight.sh after 19
 ./ops/property-flyway.sh validate
 ```
 
 V17 grants `home_search_property_runtime` the minimum insight-table privileges:
 `SELECT`, `INSERT`, and `UPDATE`. It intentionally does not grant `DELETE`.
+
+V18 adds weekly snapshot-to-execution lineage, allows the additive
+`WEEKLY_NEW_TRADE` metric, and grants the same non-delete privileges on the
+lineage table.
+
+V19 adds structured RTMS registration/cancellation dates, rolling seven-day
+period/item evidence, quality counters, and `SUPERSEDED` replacement lineage.
+Existing V15-V18 checksums remain unchanged. The DAILY RTMS lookback default is
+`2`, so the current trade month and previous two trade months are planned; the
+work-unit total is derived from the resolved region and month lists rather than
+a fixed count.
+
+For a credential-injected local end-to-end run, use
+`apps/property-data/ops/run-local-market-insight-e2e.sh`. The runner refuses a
+non-empty `HOME_INGEST_RTMS_DAILY_LAWD_CDS`, validates Flyway before provider
+work, verifies complete DAILY nationwide coverage, then requires 18 published
+`ROLLING_7D` scopes from the same source execution. The packaged
+`rtmsDailyRefreshJob` runs daily insight followed by rolling insight only after
+its ingest and region-sync steps succeed; a rejected daily insight result also
+fails the job before rolling publication. It writes only request ids and
+non-secret counts under ignored
+`tmp/market-insight-e2e/`. Recoverable provider failures are retried with the
+same RTMS request id and an increasing internal `restartAttempt`; completed work
+units are preserved and only incomplete units run again. The bounded attempt
+count defaults to 5 and can be set from 1 through 5 with
+`MARKET_INSIGHT_E2E_MAX_DAILY_ATTEMPTS`. `MARKET_INSIGHT_E2E_PSQL_DSN` must omit
+embedded passwords; the runner uses the separately injected `DB_PASSWORD` for
+`psql`.
 
 ### Completed local legacy V9 activation
 

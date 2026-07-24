@@ -25,7 +25,7 @@ describe('fetchMapMarkers API 어댑터', () => {
       expect.objectContaining({
         method: 'POST',
         body: expect.stringContaining('"unitMax":null'),
-        signal: controller.signal,
+        signal: expect.any(AbortSignal),
       }),
     );
   });
@@ -47,7 +47,7 @@ describe('fetchMapMarkers API 어댑터', () => {
       expect.objectContaining({
         method: 'POST',
         body: expect.stringContaining('"region":"si-do"'),
-        signal: controller.signal,
+        signal: expect.any(AbortSignal),
       }),
     );
   });

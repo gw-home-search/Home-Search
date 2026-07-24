@@ -18,6 +18,7 @@ import { NearbyPlaceInfoBar } from '../nearby-places/NearbyPlaceInfoBar';
 import type { NearbyPlaceCategory } from '../nearby-places/api/fetchNearbyPlaces';
 import { createMapNearbyPlaces } from '../nearby-places/mapNearbyPlaces';
 import { useViewportNearbyPlaces } from '../nearby-places/useViewportNearbyPlaces';
+import type { RequestFailure } from '../../shared/http/requestFailure';
 
 type ComplexMapMarker = Extract<MapMarkersResult, { kind: 'complex' }>['markers'][number];
 type RegionMapMarker = Extract<MapMarkersResult, { kind: 'region' }>['markers'][number];
@@ -27,7 +28,7 @@ type MapWorkspaceProps = {
   appKey: string;
   focusTarget: MapFocusTarget | null;
   initialLevel: number;
-  markerError: string | null;
+  markerError: RequestFailure | null;
   markerState: 'loading' | 'ready' | 'empty' | 'error';
   markers: MapMarkersResult | null;
   hiddenMarkerCount: number;
@@ -42,6 +43,7 @@ type MapWorkspaceProps = {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onUiCommandConsumed: (actionId: string) => void;
+  suppressMarkerFeedback?: boolean;
 };
 
 export function MapWorkspace({
@@ -64,9 +66,11 @@ export function MapWorkspace({
   onZoomIn,
   onZoomOut,
   onUiCommandConsumed,
+  suppressMarkerFeedback = false,
 }: MapWorkspaceProps) {
   const [mapRuntimeState, setMapRuntimeState] = useState<KakaoMapRuntimeState>('loading');
-  const [mapRuntimeError, setMapRuntimeError] = useState<string | null>(null);
+  const [mapRuntimeError, setMapRuntimeError] = useState<RequestFailure | null>(null);
+  const [mapRuntimeRetrySequence, setMapRuntimeRetrySequence] = useState(0);
   const [mapDisplayMode, setMapDisplayMode] = useState<MapDisplayMode>('roadmap');
   const toolToggleRef = useRef<HTMLButtonElement>(null);
   const mapTools = useMapToolState();
@@ -124,6 +128,7 @@ export function MapWorkspace({
         nearbyPlaces={visibleNearbyPlaces}
         roadviewInitialPoint={roadviewInitialPoint}
         roadviewState={mapTools.roadviewState}
+        runtimeRetrySequence={mapRuntimeRetrySequence}
         selectedComplex={selectedComplex}
         selectedNearbyPlaceId={selectedNearbyPlaceId}
         onDistanceLengthChange={mapTools.setDistanceLength}
@@ -188,6 +193,7 @@ export function MapWorkspace({
           mapRuntimeState={mapRuntimeState}
           markerError={markerError}
           markerState={markerState}
+          suppressMarkerFeedback={suppressMarkerFeedback}
           level={viewport.level}
           markers={markers}
           hiddenMarkerCount={hiddenMarkerCount}
@@ -195,6 +201,7 @@ export function MapWorkspace({
           onComplexMarkerSelect={onComplexMarkerSelect}
           onRegionMarkerSelect={onRegionMarkerSelect}
           onRetryMarkers={onRetryMarkers}
+          onRetryMap={() => setMapRuntimeRetrySequence((current) => current + 1)}
           onResetFilters={onFilterReset}
         />
       )}

@@ -31,6 +31,10 @@ import { RequestStateNotice } from '../../shared/RequestStateNotice';
 import { CheckIcon, ChevronRightIcon, CloseIcon, SearchIcon } from '../../shared/icons';
 import { ComplexList } from './ComplexList';
 import type { FavoriteState } from '../favorites/favoriteTypes';
+import type { RequestFailure } from '../../shared/http/requestFailure';
+import { feedbackForFailure } from '../../shared/feedback/feedbackForFailure';
+import type { UserFeedbackId } from '../../shared/feedback/feedbackCatalog';
+import { FeatureErrorBoundary } from '../../shared/FeatureErrorBoundary';
 
 type DetailRequestState = 'idle' | 'loading' | 'ready' | 'error';
 type PanelRequestState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
@@ -49,9 +53,9 @@ type RegionTrailItem = {
 type ExplorationPanelProps = {
   complexDetail: ComplexDetail | null;
   complexSuggestions: ComplexSuggestion[];
-  detailError: string | null;
+  detailError: RequestFailure | null;
   detailState: DetailRequestState;
-  favoriteError: string | null;
+  favoriteError: UserFeedbackId | null;
   favoriteLiveMessage: string;
   favoriteState: FavoriteState;
   isOpen: boolean;
@@ -59,20 +63,21 @@ type ExplorationPanelProps = {
   parcelTrades: ParcelTrades | null;
   regionComplexes: RegionComplexSummary[];
   regionDetail: RegionDetail | null;
-  regionError: string | null;
+  regionError: RequestFailure | null;
   regionState: PanelRequestState;
   regionTrail: RegionTrailItem[];
   rootRegions: RegionSummary[];
-  searchError: string | null;
+  searchError: RequestFailure | null;
   searchResults: ComplexSearchResult[];
   searchState: PanelRequestState;
   selectedComplex: ComplexSelection | null;
   sidebarMode: SidebarMode;
   tradeRows: TradeItem[];
-  tradeError: string | null;
+  tradeError: RequestFailure | null;
+  tradeMoreState: 'idle' | 'loading' | 'error';
   tradeState: DetailRequestState;
   tradeTrend: TradeTrendPoint[];
-  trendError: string | null;
+  trendError: RequestFailure | null;
   trendState: DetailRequestState;
   onCloseDetail: () => void;
   onDismissDetail: () => void;
@@ -121,6 +126,7 @@ export function ExplorationPanel({
   sidebarMode,
   tradeRows,
   tradeError,
+  tradeMoreState,
   tradeState,
   tradeTrend,
   trendError,
@@ -194,32 +200,35 @@ export function ExplorationPanel({
       </form>
 
       {selectedComplex == null ? null : (
-        <DetailSidebar
-          complexDetail={complexDetail}
-          detailError={detailError}
-          detailState={detailState}
-          favoriteError={favoriteError}
-          favoriteLiveMessage={favoriteLiveMessage}
-          favoriteState={favoriteState}
-          onBack={onCloseDetail}
-          onClose={onDismissDetail}
-          onComplexSelect={onComplexSelect}
-          onRetryDetail={onRetryDetail}
-          onRetryTrades={onRetryTrades}
-          onRetryTrend={onRetryTrend}
-          onFavoriteToggle={onFavoriteToggle}
-          onRetryFavorite={onRetryFavorite}
-          onLoadMoreTrades={onLoadMoreTrades}
-          parcelComplexes={parcelComplexes}
-          parcelTrades={parcelTrades}
-          tradeTrend={tradeTrend}
-          tradeRows={tradeRows}
-          tradeError={tradeError}
-          tradeState={tradeState}
-          trendError={trendError}
-          trendState={trendState}
-          selection={selectedComplex}
-        />
+        <FeatureErrorBoundary feature="complex-detail">
+          <DetailSidebar
+            complexDetail={complexDetail}
+            detailError={detailError}
+            detailState={detailState}
+            favoriteError={favoriteError}
+            favoriteLiveMessage={favoriteLiveMessage}
+            favoriteState={favoriteState}
+            onBack={onCloseDetail}
+            onClose={onDismissDetail}
+            onComplexSelect={onComplexSelect}
+            onRetryDetail={onRetryDetail}
+            onRetryTrades={onRetryTrades}
+            onRetryTrend={onRetryTrend}
+            onFavoriteToggle={onFavoriteToggle}
+            onRetryFavorite={onRetryFavorite}
+            onLoadMoreTrades={onLoadMoreTrades}
+            parcelComplexes={parcelComplexes}
+            parcelTrades={parcelTrades}
+            tradeTrend={tradeTrend}
+            tradeRows={tradeRows}
+            tradeError={tradeError}
+            tradeMoreState={tradeMoreState}
+            tradeState={tradeState}
+            trendError={trendError}
+            trendState={trendState}
+            selection={selectedComplex}
+          />
+        </FeatureErrorBoundary>
       )}
 
       <section
@@ -229,16 +238,17 @@ export function ExplorationPanel({
         data-api-flow="search"
         hidden={sidebarMode !== 'search'}
       >
-        <div className="panel-section-header">
-          <p>검색 결과</p>
-          {searchResults.length > 0 ? <span>{searchResults.length.toLocaleString()}개</span> : null}
-        </div>
+        {searchState !== 'error' ? (
+          <div className="panel-section-header">
+            <p>검색 결과</p>
+            {searchResults.length > 0 ? <span>{searchResults.length.toLocaleString()}개</span> : null}
+          </div>
+        ) : null}
         <RequestStateNotice
           state={searchState}
           loadingMessage="단지를 검색하는 중"
           emptyMessage="검색 결과가 없습니다"
-          errorMessage="검색 결과를 불러오지 못했어요"
-          technicalError={searchError}
+          feedback={feedbackForFailure(searchError, 'SEARCH_UNAVAILABLE')}
           onRetry={onRetrySearch}
         />
 
@@ -312,9 +322,16 @@ export function ExplorationPanel({
           state={regionState}
           loadingMessage="지역을 불러오는 중"
           emptyMessage="표시할 지역이 없습니다"
-          errorMessage="지역 정보를 불러오지 못했어요"
-          technicalError={regionError}
-          onRetry={onRetryRegion}
+          feedback={feedbackForFailure(
+            regionError,
+            rootRegions.length > 0 || regionDetail != null || regionTrail.length > 0
+              ? 'REGION_REFRESH_UNAVAILABLE'
+              : 'REGION_UNAVAILABLE',
+            {
+              notFoundId: 'REGION_NOT_FOUND',
+            },
+          )}
+          onRetry={regionError?.kind === 'not-found' ? onLoadRootRegions : onRetryRegion}
         />
 
         {rootRegions.length > 0 ? (

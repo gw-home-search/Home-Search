@@ -47,11 +47,17 @@ describe('fetchNearbyPlaces 주변 장소 요청', () => {
     expect(result.categories[0].places[0]).toMatchObject({ placeId: 'kakao:123456', distanceMeters: 72 });
   });
 
-  it('ProblemDetail을 사용자에게 노출할 수 있는 오류로 변환한다', async () => {
+  it('ProblemDetail 원문을 버리고 구조화된 오류로 변환한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
       detail: 'Nearby place provider unavailable.',
     }), { status: 503, headers: { 'Content-Type': 'application/problem+json' } })));
 
-    await expect(fetchNearbyPlaces(501)).rejects.toThrow('503 Nearby place provider unavailable.');
+    await expect(fetchNearbyPlaces(501)).rejects.toMatchObject({
+      failure: {
+        kind: 'service-unavailable',
+        operation: 'complex-nearby-places',
+        status: 503,
+      },
+    });
   });
 });

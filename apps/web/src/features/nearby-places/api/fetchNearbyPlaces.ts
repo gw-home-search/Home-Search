@@ -1,5 +1,6 @@
-import { readProblemDetail } from '../../map/api/readProblemDetail';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
+import { readValidatedJson, requestFailureFromResponse } from '../../../shared/http/requestFailure';
+import { fetchWithTimeout } from '../../../shared/http/fetchWithTimeout';
 
 export const NEARBY_PLACE_CATEGORIES = [
   'CAFE',
@@ -93,17 +94,21 @@ export async function fetchNearbyPlaces(
     categories: categories.join(','),
     limitPerCategory: String(limitPerCategory),
   });
-  const response = await fetch(resolveApiUrl(
+  const response = await fetchWithTimeout(resolveApiUrl(
     `/api/v1/complex/${encodeURIComponent(complexId)}/nearby-places?${query}`,
   ), { method: 'GET', signal: options.signal });
 
   if (!response.ok) {
-    const detail = await readProblemDetail(response);
-    throw new Error(`주변 상권 정보를 불러오지 못했습니다: ${response.status}${detail ? ` ${detail}` : ''}`);
+    throw await requestFailureFromResponse(response, {
+      service: 'property-data',
+      operation: 'complex-nearby-places',
+    });
   }
 
-  const payload: unknown = await response.json();
-  return normalizeNearbyPlaces(payload);
+  return readValidatedJson(response, {
+    service: 'property-data',
+    operation: 'complex-nearby-places',
+  }, normalizeNearbyPlaces);
 }
 
 function normalizeNearbyPlaces(value: unknown): NearbyPlaces {

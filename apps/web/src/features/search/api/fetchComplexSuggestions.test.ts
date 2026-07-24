@@ -44,7 +44,7 @@ describe('fetchComplexSuggestions API 어댑터', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('호출자가 전달한 AbortSignal을 fetch에 전달한다', async () => {
+  it('호출자 취소와 timeout을 함께 처리하는 AbortSignal을 fetch에 전달한다', async () => {
     const controller = new AbortController();
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
@@ -53,7 +53,7 @@ describe('fetchComplexSuggestions API 어댑터', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ signal: controller.signal }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 

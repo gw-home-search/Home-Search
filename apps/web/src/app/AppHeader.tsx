@@ -5,6 +5,7 @@ import { ChatbotPanel } from '../features/chat/ChatbotPanel';
 import type { IndexedDbChatConversationStore } from '../features/chat/storage/chatConversationStore';
 import type { ChatAction } from '../features/chat/actionContract';
 import type { ChatUiContext } from '../features/chat/conversationContract';
+import { FeatureErrorBoundary } from '../shared/FeatureErrorBoundary';
 
 type AppHeaderProps = {
   chatConversationStore?: IndexedDbChatConversationStore;
@@ -31,13 +32,17 @@ export function AppHeader({ chatConversationStore, chatUiContext, onChatOpenChan
         </span>
       </Link>
       <div className="app-header-actions">
-        <ChatbotPanel
-          onOpenChange={onChatOpenChange}
-          onUiAction={onUiAction}
-          store={chatConversationStore}
-          uiContext={chatUiContext}
-        />
-        <AccountControl />
+        <FeatureErrorBoundary feature="chatbot">
+          <ChatbotPanel
+            onOpenChange={onChatOpenChange}
+            onUiAction={onUiAction}
+            store={chatConversationStore}
+            uiContext={chatUiContext}
+          />
+        </FeatureErrorBoundary>
+        <FeatureErrorBoundary feature="account">
+          <AccountControl />
+        </FeatureErrorBoundary>
       </div>
     </header>
   );

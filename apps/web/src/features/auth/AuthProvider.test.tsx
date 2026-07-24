@@ -42,7 +42,7 @@ describe('AuthProvider와 AccountControl', () => {
     ({ root, host } = await renderAuth(client));
 
     expect(window.location.pathname).toBe('/');
-    expect(host.textContent).toContain('로그인을 완료하지 못했습니다. 다시 시도해주세요.');
+    expect(host.textContent).toContain('지금은 로그인을 연결하기 어려워요');
     expect(host.querySelector('dialog')?.hasAttribute('open')).toBe(true);
   });
 
@@ -85,16 +85,17 @@ describe('AuthProvider와 AccountControl', () => {
     await act(async () => Promise.resolve());
 
     expect(host.querySelector('[data-auth-probe]')?.textContent).toBe('anonymous');
-    expect(host.textContent).toContain('로그인이 만료되었습니다. 다시 로그인해주세요.');
+    expect(host.textContent).toContain('로그인이 만료되었어요');
     expect(host.querySelector('dialog')?.hasAttribute('open')).toBe(true);
   });
 
-  it('startup refresh 장애는 property map을 막지 않고 anonymous로 degrade한다', async () => {
+  it('startup refresh 장애는 public map과 분리하되 unavailable 상태를 보존한다', async () => {
     const client = authClient({ kind: 'unavailable' });
     ({ root, host } = await renderAuth(client));
 
     expect(host.querySelector<HTMLButtonElement>('.account-login-button')?.textContent).toBe('로그인');
-    expect(host.textContent).not.toContain('로그인 서비스를 불러오지 못했습니다.');
+    expect(host.querySelector('.account-control')?.getAttribute('data-auth-status')).toBe('unavailable');
+    expect(host.querySelector('dialog')?.hasAttribute('open')).toBe(false);
   });
 
   it('logout API 실패에도 memory 사용자 상태를 지운다', async () => {

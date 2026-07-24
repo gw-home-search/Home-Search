@@ -7,6 +7,10 @@ import {
   type KakaoMap,
   type KakaoMapsApi,
 } from './loadKakaoMapSdk';
+import {
+  toRequestFailure,
+  type RequestFailure,
+} from '../../../shared/http/requestFailure';
 
 export type KakaoMapRuntimeState = 'loading' | 'ready' | 'error';
 
@@ -18,7 +22,8 @@ type UseKakaoMapRuntimeArgs = {
   initialLevel: number;
   level: number;
   mapDisplayMode: MapDisplayMode;
-  onRuntimeErrorChange: (message: string | null) => void;
+  retrySequence: number;
+  onRuntimeErrorChange: (failure: RequestFailure | null) => void;
   onRuntimeStateChange: (state: KakaoMapRuntimeState) => void;
   onViewportChange: (viewport: MapViewport) => void;
 };
@@ -33,6 +38,7 @@ export function useKakaoMapRuntime({
   initialLevel,
   level,
   mapDisplayMode,
+  retrySequence,
   onRuntimeErrorChange,
   onRuntimeStateChange,
   onViewportChange,
@@ -83,7 +89,10 @@ export function useKakaoMapRuntime({
         setMaps(null);
         setRuntimeState('error');
         onRuntimeStateChange('error');
-        onRuntimeErrorChange(runtimeErrorMessage(error));
+        onRuntimeErrorChange(toRequestFailure(error, {
+          service: 'kakao-map',
+          operation: 'map-runtime',
+        }));
       });
 
     return () => {
@@ -92,7 +101,7 @@ export function useKakaoMapRuntime({
         loadedMaps?.event.removeListener?.(idleMap, 'idle', idleHandler);
       }
     };
-  }, [appKey, initialLevel, onRuntimeErrorChange, onRuntimeStateChange, onViewportChange]);
+  }, [appKey, initialLevel, onRuntimeErrorChange, onRuntimeStateChange, onViewportChange, retrySequence]);
 
   useEffect(() => {
     if (runtimeState !== 'ready' || !focusTarget || !map || !maps) return;
@@ -159,9 +168,4 @@ function viewportFromMap(map: KakaoMap): MapViewport {
     },
     level: map.getLevel(),
   };
-}
-
-function runtimeErrorMessage(error: unknown): string {
-  const detail = error instanceof Error ? ` ${error.message}` : '';
-  return `카카오 지도를 불러오지 못했습니다.${detail}`;
 }

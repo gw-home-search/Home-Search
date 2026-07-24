@@ -1,4 +1,6 @@
 import { RequestStateNotice } from '../../shared/RequestStateNotice';
+import { feedbackForFailure } from '../../shared/feedback/feedbackForFailure';
+import type { RequestFailure } from '../../shared/http/requestFailure';
 import type { ComplexSuggestion } from '../search/api/fetchComplexSuggestions';
 import type { ComplexSearchResult } from '../search/api/fetchComplexSearchResults';
 import { ComplexList } from './ComplexList';
@@ -20,17 +22,25 @@ export function SearchResultsSection({
   onResultSelect: (result: ComplexSearchResult) => void;
   onRetry: () => void;
   onSuggestionSelect: (suggestion: ComplexSuggestion) => void;
-  searchError: string | null;
+  searchError: RequestFailure | null;
   searchResults: ComplexSearchResult[];
   searchState: PanelRequestState;
 }) {
   return (
     <section id="exploration-panel-search" aria-label="검색 결과 패널" className="panel-section" data-api-flow="search" hidden={hidden}>
-      <div className="panel-section-header">
-        <p>검색 결과</p>
-        {searchResults.length > 0 ? <span>{searchResults.length.toLocaleString()}개</span> : null}
-      </div>
-      <RequestStateNotice state={searchState} loadingMessage="단지를 검색하는 중" emptyMessage="검색 결과가 없습니다" errorMessage="검색 결과를 불러오지 못했어요" technicalError={searchError} onRetry={onRetry} />
+      {searchState !== 'error' ? (
+        <div className="panel-section-header">
+          <p>검색 결과</p>
+          {searchResults.length > 0 ? <span>{searchResults.length.toLocaleString()}개</span> : null}
+        </div>
+      ) : null}
+      <RequestStateNotice
+        state={searchState}
+        loadingMessage="단지를 검색하는 중"
+        emptyMessage="검색 결과가 없습니다"
+        feedback={feedbackForFailure(searchError, 'SEARCH_UNAVAILABLE')}
+        onRetry={onRetry}
+      />
       {searchResults.length > 0 ? (
         <ComplexList ariaLabel="검색 결과" items={searchResults.map((result) => ({
           id: result.complexId,

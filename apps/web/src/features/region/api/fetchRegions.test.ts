@@ -88,12 +88,12 @@ describe('fetchRegions API 어댑터', () => {
       ),
     );
 
-    await expect(fetchRegionDetail(1)).rejects.toThrow(
-      'Invalid public API region detail response: children must be an array',
-    );
+    await expect(fetchRegionDetail(1)).rejects.toMatchObject({
+      failure: { kind: 'invalid-response', operation: 'region-detail' },
+    });
   });
 
-  it('region detail 실패 시 public API ProblemDetail detail을 보존한다', async () => {
+  it('region detail 실패 시 ProblemDetail 원문 없이 구조화한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -103,9 +103,13 @@ describe('fetchRegions API 어댑터', () => {
       ),
     );
 
-    await expect(fetchRegionDetail(1)).rejects.toThrow(
-      'Failed to fetch region detail: 404 Region not found.',
-    );
+    await expect(fetchRegionDetail(1)).rejects.toMatchObject({
+      failure: {
+        kind: 'not-found',
+        operation: 'region-detail',
+        status: 404,
+      },
+    });
   });
 
   it('regionId 아래 complex page를 가져온다', async () => {

@@ -78,7 +78,7 @@ describe('AccountControl 사용자 메뉴', () => {
     await act(async () => host!.querySelector<HTMLButtonElement>('.account-menu > button')?.click());
     expect(host.querySelector('.account-chip')).toBeNull();
     expect(host.textContent).toContain('로그인');
-    expect(host.textContent).toContain('로그아웃하지 못했습니다. 다시 시도해주세요.');
+    expect(host.querySelector('.auth-notice')?.textContent).toContain('로그아웃을 완료하지 못했어요');
   });
 });
 

@@ -23,6 +23,7 @@ import { MyPagePanel } from '../features/my-page/MyPageRoutes';
 import { InsightRailContent } from '../features/insights/InsightRailContent';
 import { MapModeNavigation } from '../features/insights/MapModeNavigation';
 import { readInsightMetric } from '../features/insights/insightMetricConfig';
+import { FeatureErrorBoundary } from '../shared/FeatureErrorBoundary';
 
 export type MapAppProps = {
   initialMapLevel?: number;
@@ -245,6 +246,23 @@ export function MapApp({
   const handleMapUiCommandConsumed = useCallback((actionId: string) => {
     setMapUiCommand((current) => current?.actionId === actionId ? null : current);
   }, []);
+  const retryRegionAndMarkers = useCallback(() => {
+    region.retryRegion();
+    if (markerData.markerState === 'error') markerData.retryMarkers();
+  }, [markerData, region]);
+  const retrySearchAndMarkers = useCallback(() => {
+    search.retrySearch();
+    if (markerData.markerState === 'error') markerData.retryMarkers();
+  }, [markerData, search]);
+  const retryDetailAndMarkers = useCallback(() => {
+    detail.retryDetail();
+    if (markerData.markerState === 'error') markerData.retryMarkers();
+  }, [detail, markerData]);
+  const suppressMarkerFeedback = markerData.markerState === 'error' && (
+    (detail.selectedComplex != null && detail.detailState === 'error')
+    || (sidebarMode === 'search' && search.searchState === 'error')
+    || (sidebarMode === 'region' && region.regionState === 'error')
+  );
 
   return (
     <main
@@ -266,7 +284,8 @@ export function MapApp({
         data-layout-region="map-workspace"
         data-sidebar-mode={workspacePanelMode}
       >
-        <ExplorationPanel
+        <FeatureErrorBoundary feature="exploration">
+          <ExplorationPanel
           complexDetail={detail.complexDetail}
           complexSuggestions={search.complexSuggestions}
           detailError={detail.detailError}
@@ -300,13 +319,13 @@ export function MapApp({
           onRegionComplexSelect={region.handleRegionComplexSelect}
           onRegionSelect={region.handleRegionSelect}
           onRegionTrailSelect={region.handleRegionTrailSelect}
-          onRetryDetail={detail.retryDetail}
+          onRetryDetail={retryDetailAndMarkers}
           onRetryTrades={detail.retryTrades}
           onRetryTrend={detail.retryTrend}
           onFavoriteToggle={favorite.onFavoriteToggle}
           onRetryFavorite={favorite.onRetryFavorite}
-          onRetryRegion={region.retryRegion}
-          onRetrySearch={search.retrySearch}
+          onRetryRegion={retryRegionAndMarkers}
+          onRetrySearch={retrySearchAndMarkers}
           onSearchInputChange={search.handleSearchInputChange}
           onSearchResultSelect={search.handleSearchResultSelect}
           onSearchSubmit={search.handleSearchSubmit}
@@ -327,31 +346,38 @@ export function MapApp({
           sidebarMode={sidebarMode}
           tradeRows={detail.tradeRows}
           tradeError={detail.tradeError}
+          tradeMoreState={detail.tradeMoreState}
           tradeState={detail.tradeState}
           tradeTrend={detail.tradeTrend}
           trendError={detail.trendError}
           trendState={detail.trendState}
-        />
+          />
+        </FeatureErrorBoundary>
 
         {isMyPageRoute ? (
-          <MyPagePanel
-            hidden={!isWorkspacePanelOpen || detail.selectedComplex != null}
-            onClose={closeMyPage}
-            onExplore={closeMyPage}
-            onFavoriteSelect={handleFavoriteSelect}
-          />
+          <FeatureErrorBoundary feature="my-page">
+            <MyPagePanel
+              hidden={!isWorkspacePanelOpen || detail.selectedComplex != null}
+              onClose={closeMyPage}
+              onExplore={closeMyPage}
+              onFavoriteSelect={handleFavoriteSelect}
+            />
+          </FeatureErrorBoundary>
         ) : null}
 
         <div className="map-column" data-layout-region="map-column">
-          <FilterPanel
-            activeFilterCount={markerData.activeFilterCount}
-            explorationButtonRef={explorationButtonRef}
-            filters={markerData.markerFilters}
-            onChange={markerData.setMarkerFilters}
-            onOpenExploration={openMobileExploration}
-            onReset={markerData.resetMarkerFilters}
-          />
-          <MapWorkspace
+          <FeatureErrorBoundary feature="filters">
+            <FilterPanel
+              activeFilterCount={markerData.activeFilterCount}
+              explorationButtonRef={explorationButtonRef}
+              filters={markerData.markerFilters}
+              onChange={markerData.setMarkerFilters}
+              onOpenExploration={openMobileExploration}
+              onReset={markerData.resetMarkerFilters}
+            />
+          </FeatureErrorBoundary>
+          <FeatureErrorBoundary feature="map">
+            <MapWorkspace
             appKey={kakaoMapAppKey}
             focusTarget={viewport.mapFocusTarget}
             initialLevel={initialMapLevel}
@@ -371,7 +397,9 @@ export function MapApp({
             onZoomIn={viewport.handleZoomIn}
             onZoomOut={viewport.handleZoomOut}
             onUiCommandConsumed={handleMapUiCommandConsumed}
-          />
+            suppressMarkerFeedback={suppressMarkerFeedback}
+            />
+          </FeatureErrorBoundary>
         </div>
       </div>
     </main>

@@ -9,6 +9,11 @@ import {
   fetchComplexSearchResults,
   type ComplexSearchResult,
 } from '../api/fetchComplexSearchResults';
+import {
+  isCancelledFailure,
+  toRequestFailure,
+  type RequestFailure,
+} from '../../../shared/http/requestFailure';
 
 const SEARCH_DEBOUNCE_MILLIS = 300;
 export const SEARCH_FOCUS_DELTA = 0.01;
@@ -23,7 +28,7 @@ export function useComplexSearch({
   const [searchResults, setSearchResults] = useState<ComplexSearchResult[]>([]);
   const [complexSuggestions, setComplexSuggestions] = useState<ComplexSuggestion[]>([]);
   const [searchState, setSearchState] = useState<PanelRequestState>('idle');
-  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<RequestFailure | null>(null);
   const searchRequestSeq = useRef(0);
   const suggestionRequestSeq = useRef(0);
   const searchDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -72,9 +77,13 @@ export function useComplexSearch({
         if (requestSeq !== searchRequestSeq.current) {
           return;
         }
-        setSearchResults([]);
+        const failure = toRequestFailure(error, {
+          service: 'property-data',
+          operation: 'complex-search',
+        }, controller.signal);
+        if (isCancelledFailure(failure)) return;
         setSearchState('error');
-        setSearchError(error instanceof Error ? error.message : '알 수 없는 검색 오류');
+        setSearchError(failure);
       });
   }
 

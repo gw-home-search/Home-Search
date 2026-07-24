@@ -21,6 +21,7 @@ import type {
   MapToolMode,
   RoadviewRuntimeState,
 } from './tools/mapToolTypes';
+import type { RequestFailure } from '../../shared/http/requestFailure';
 
 export type { KakaoMapRuntimeState } from './kakao/useKakaoMapRuntime';
 
@@ -38,7 +39,7 @@ type KakaoMapSurfaceProps = {
   nearbyPlaces: MapNearbyPlace[];
   roadviewInitialPoint: MapPoint | null;
   roadviewState: RoadviewRuntimeState;
-  retryNonce: number;
+  runtimeRetrySequence: number;
   selectedComplex: ComplexSelection | null;
   selectedNearbyPlaceId: string | null;
   onComplexMarkerSelect: (marker: ComplexMapMarker) => void;
@@ -47,7 +48,7 @@ type KakaoMapSurfaceProps = {
   onExitRoadview: () => void;
   onNearbyPlaceSelect: (placeId: string | null) => void;
   onRegionMarkerSelect: (marker: RegionMapMarker) => void;
-  onRuntimeErrorChange: (message: string | null) => void;
+  onRuntimeErrorChange: (failure: RequestFailure | null) => void;
   onRuntimeStateChange: (state: KakaoMapRuntimeState) => void;
   onRoadviewStateChange: (state: RoadviewRuntimeState) => void;
   onViewportChange: (viewport: MapViewport) => void;
@@ -67,7 +68,7 @@ export function KakaoMapSurface({
   nearbyPlaces,
   roadviewInitialPoint,
   roadviewState,
-  retryNonce,
+  runtimeRetrySequence,
   selectedComplex,
   selectedNearbyPlaceId,
   onComplexMarkerSelect,
@@ -90,7 +91,7 @@ export function KakaoMapSurface({
     initialLevel,
     level,
     mapDisplayMode,
-    retryNonce,
+    retrySequence: runtimeRetrySequence,
     onRuntimeErrorChange,
     onRuntimeStateChange,
     onViewportChange,

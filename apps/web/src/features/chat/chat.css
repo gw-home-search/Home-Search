@@ -389,14 +389,14 @@
 .chatbot-sending-mark { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 
 .chatbot-error {
-  margin: 0;
-  padding: 8px 18px;
-  border-top: 1px solid var(--hs-map-color-error-line);
-  background: var(--hs-map-color-error-soft);
-  color: var(--hs-map-color-error);
+  margin: 0 20px 8px;
+  padding: 9px 0 0;
+  border-top: 1px solid var(--hs-map-color-line);
+  background: transparent;
   font-size: 11px;
   line-height: 16px;
 }
+.chatbot-error .request-state-actions button { min-height: 36px; }
 
 .chatbot-form { display: grid; gap: 7px; padding: 10px 20px 13px; background: var(--hs-map-color-surface); }
 .chatbot-form-heading > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

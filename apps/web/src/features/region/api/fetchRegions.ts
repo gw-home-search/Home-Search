@@ -1,5 +1,6 @@
-import { readProblemDetail } from '../../map/api/readProblemDetail';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
+import { readValidatedJson, requestFailureFromResponse } from '../../../shared/http/requestFailure';
+import { fetchWithTimeout } from '../../../shared/http/fetchWithTimeout';
 
 export type RegionSummary = {
   id: number;
@@ -57,41 +58,40 @@ type RegionComplexPageOptions = {
 const REGION_PATH = '/api/v1/region';
 
 export async function fetchRootRegions(): Promise<RegionSummary[]> {
-  const response = await fetch(resolveApiUrl(REGION_PATH), {
+  const response = await fetchWithTimeout(resolveApiUrl(REGION_PATH), {
     method: 'GET',
   });
 
   if (!response.ok) {
-    const detail = await readProblemDetail(response);
-    throw new Error(`Failed to fetch root regions: ${response.status}${detail ? ` ${detail}` : ''}`);
+    throw await requestFailureFromResponse(response, {
+      service: 'property-data',
+      operation: 'root-regions',
+    });
   }
 
-  const payload: unknown = await response.json();
-  if (!Array.isArray(payload)) {
-    throw new Error('Invalid public API root region response: expected an array');
-  }
-
-  return payload.map((item) => normalizeRegionSummary(item as RegionSummaryResponse, 'root region'));
+  return readValidatedJson(response, {
+    service: 'property-data',
+    operation: 'root-regions',
+  }, normalizeRootRegions);
 }
 
 export async function fetchRegionDetail(regionId: number, signal?: AbortSignal): Promise<RegionDetail> {
-  const response = await fetch(resolveApiUrl(`${REGION_PATH}/${regionId}`), {
-    method: 'GET', signal,
+  const response = await fetchWithTimeout(resolveApiUrl(`${REGION_PATH}/${regionId}`), {
+    method: 'GET',
+    signal,
   });
 
   if (!response.ok) {
-    const detail = await readProblemDetail(response);
-    throw new Error(
-      `Failed to fetch region detail: ${response.status}${detail ? ` ${detail}` : ''}`,
-    );
+    throw await requestFailureFromResponse(response, {
+      service: 'property-data',
+      operation: 'region-detail',
+    });
   }
 
-  const payload: unknown = await response.json();
-  if (!isRecord(payload)) {
-    throw new Error('Invalid public API region detail response: expected an object');
-  }
-
-  return normalizeRegionDetail(payload);
+  return readValidatedJson(response, {
+    service: 'property-data',
+    operation: 'region-detail',
+  }, normalizeRegionDetailPayload);
 }
 
 export async function fetchRegionComplexes(
@@ -106,7 +106,7 @@ export async function fetchRegionComplexes(
     params.set('offset', String(options.offset));
   }
   const query = params.toString();
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     resolveApiUrl(`${REGION_PATH}/${regionId}/complexes${query ? `?${query}` : ''}`),
     {
       method: 'GET',
@@ -114,17 +114,36 @@ export async function fetchRegionComplexes(
   );
 
   if (!response.ok) {
-    const detail = await readProblemDetail(response);
-    throw new Error(
-      `Failed to fetch region complexes: ${response.status}${detail ? ` ${detail}` : ''}`,
-    );
+    throw await requestFailureFromResponse(response, {
+      service: 'property-data',
+      operation: 'region-complexes',
+    });
   }
 
-  const payload: unknown = await response.json();
+  return readValidatedJson(response, {
+    service: 'property-data',
+    operation: 'region-complexes',
+  }, normalizeRegionComplexes);
+}
+
+function normalizeRootRegions(payload: unknown): RegionSummary[] {
+  if (!Array.isArray(payload)) {
+    throw new Error('Invalid public API root region response: expected an array');
+  }
+  return payload.map((item) => normalizeRegionSummary(item as RegionSummaryResponse, 'root region'));
+}
+
+function normalizeRegionDetailPayload(payload: unknown): RegionDetail {
+  if (!isRecord(payload)) {
+    throw new Error('Invalid public API region detail response: expected an object');
+  }
+  return normalizeRegionDetail(payload);
+}
+
+function normalizeRegionComplexes(payload: unknown): RegionComplexSummary[] {
   if (!Array.isArray(payload)) {
     throw new Error('Invalid public API region complexes response: expected an array');
   }
-
   return payload.map((item) => normalizeRegionComplex(item as RegionComplexSummaryResponse));
 }
 

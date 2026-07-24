@@ -1,5 +1,7 @@
 import type { FavoriteCollectionItem } from '../hooks/useFavoriteCollection';
 import { useFavoriteCollection } from '../hooks/useFavoriteCollection';
+import { getUserFeedback } from '../../../shared/feedback/feedbackCatalog';
+import { RequestStateNotice } from '../../../shared/RequestStateNotice';
 
 export function FavoriteCollection({
   collection,
@@ -22,11 +24,13 @@ export function FavoriteCollection({
   if (state.phase === 'loading') return <FavoriteSkeleton compact={compact} />;
   if (state.phase === 'error') {
     return (
-      <div className="my-local-state" role="alert">
-        <strong>관심 단지를 불러오지 못했어요.</strong>
-        <p>잠시 후 다시 시도해주세요.</p>
-        <button onClick={collection.retry} type="button">다시 불러오기</button>
-      </div>
+      <RequestStateNotice
+        state="error"
+        loadingMessage=""
+        emptyMessage=""
+        feedback={getUserFeedback('FAVORITES_UNAVAILABLE')}
+        onRetry={collection.retry}
+      />
     );
   }
   if (state.items.length === 0) {
@@ -40,6 +44,15 @@ export function FavoriteCollection({
   }
   return (
     <>
+      {collection.refreshFeedback == null ? null : (
+        <RequestStateNotice
+          state="error"
+          loadingMessage=""
+          emptyMessage=""
+          feedback={getUserFeedback(collection.refreshFeedback)}
+          onRetry={collection.retry}
+        />
+      )}
       <ul className="favorite-collection" data-compact={compact || undefined}>
         {state.items.map((item) => (
           <FavoriteRow
@@ -93,7 +106,9 @@ function FavoriteRow({
       </button>
       <div className="favorite-row-actions">
         {item.detailPhase === 'error' ? (
-          <button className="favorite-retry" onClick={onRetry} type="button">정보 다시 불러오기</button>
+          <button className="favorite-retry" onClick={onRetry} type="button">
+            {getUserFeedback('FAVORITE_DETAIL_UNAVAILABLE').actionLabel}
+          </button>
         ) : null}
         <button
           aria-label={`${displayName} 관심 해제`}
@@ -106,7 +121,14 @@ function FavoriteRow({
           <span className="my-visually-hidden">{item.mutationPhase === 'removing' ? '해제 중' : '관심 해제'}</span>
         </button>
       </div>
-      {item.mutationError ? <p className="favorite-row-error" role="alert">{item.mutationError}</p> : null}
+      {item.mutationError ? (
+        <p className="favorite-row-error" role="alert">
+          {getUserFeedback(item.mutationError).title}
+          <button type="button" onClick={onRemove}>
+            {getUserFeedback(item.mutationError).actionLabel}
+          </button>
+        </p>
+      ) : null}
     </li>
   );
 }

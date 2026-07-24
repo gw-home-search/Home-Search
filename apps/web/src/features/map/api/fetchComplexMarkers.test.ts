@@ -174,7 +174,7 @@ describe('fetchComplexMarkers API 어댑터', () => {
         neLat: 37.7,
         neLng: 127.2,
       }),
-    ).rejects.toThrow('Invalid public API complex marker response: expected an array');
+    ).rejects.toMatchObject({ failure: { kind: 'invalid-response', operation: 'map-complex-markers' } });
   });
 
   it('marker에 숫자가 아닌 unit count가 있으면 clear contract error를 throw한다', async () => {
@@ -200,10 +200,10 @@ describe('fetchComplexMarkers API 어댑터', () => {
         neLat: 37.7,
         neLng: 127.2,
       }),
-    ).rejects.toThrow('Invalid public API complex marker response: unitCntSum must be a number');
+    ).rejects.toMatchObject({ failure: { kind: 'invalid-response', operation: 'map-complex-markers' } });
   });
 
-  it('marker endpoint가 request를 reject하면 public API ProblemDetail detail을 보존한다', async () => {
+  it('marker endpoint 실패는 ProblemDetail 원문 없이 구조화한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -225,7 +225,15 @@ describe('fetchComplexMarkers API 어댑터', () => {
         neLat: 37.7,
         neLng: 127.2,
       }),
-    ).rejects.toThrow('Failed to fetch complex markers: 400 Invalid parameter format.');
+    ).rejects.toMatchObject({
+      failure: {
+        kind: 'invalid-request',
+        service: 'property-data',
+        operation: 'map-complex-markers',
+        status: 400,
+        code: 'C401',
+      },
+    });
   });
 });
 

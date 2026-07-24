@@ -26,6 +26,11 @@ import {
   fetchParcelTradeTrend,
   type TradeTrendPoint,
 } from '../api/fetchTradeTrend';
+import {
+  isCancelledFailure,
+  toRequestFailure,
+  type RequestFailure,
+} from '../../../shared/http/requestFailure';
 
 const TRADE_PAGE_SIZE = 25;
 const PREDICTION_POLL_INTERVAL_MILLIS = 2000;
@@ -42,11 +47,12 @@ export function useComplexDetail() {
   const [tradeRows, setTradeRows] = useState<TradeItem[]>([]);
   const [parcelComplexes, setParcelComplexes] = useState<ParcelComplexSummary[]>([]);
   const [detailState, setDetailState] = useState<DetailRequestState>('idle');
-  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<RequestFailure | null>(null);
   const [tradeState, setTradeState] = useState<DetailRequestState>('idle');
-  const [tradeError, setTradeError] = useState<string | null>(null);
+  const [tradeError, setTradeError] = useState<RequestFailure | null>(null);
+  const [tradeMoreState, setTradeMoreState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [trendState, setTrendState] = useState<DetailRequestState>('idle');
-  const [trendError, setTrendError] = useState<string | null>(null);
+  const [trendError, setTrendError] = useState<RequestFailure | null>(null);
   const [detailRetrySeq, setDetailRetrySeq] = useState(0);
   const [tradeRetrySeq, setTradeRetrySeq] = useState(0);
   const [trendRetrySeq, setTrendRetrySeq] = useState(0);
@@ -55,6 +61,12 @@ export function useComplexDetail() {
   const parcelComplexRequestSeq = useRef(0);
   const predictionPoll = useRef({ key: '', attempts: 0 });
   const detailRequestPending = useRef(false);
+  const tradeMoreController = useRef<AbortController | null>(null);
+
+  useEffect(() => () => {
+    tradeMoreController.current?.abort();
+    tradeMoreController.current = null;
+  }, []);
 
   useEffect(() => {
     if (selectedComplex == null) {
@@ -96,9 +108,13 @@ export function useComplexDetail() {
         if (controller.signal.aborted || requestSeq !== detailRequestSeq.current) {
           return;
         }
-        setComplexDetail(null);
+        const failure = toRequestFailure(error, {
+          service: 'property-data',
+          operation: 'complex-detail',
+        }, controller.signal);
+        if (isCancelledFailure(failure)) return;
         setDetailState('error');
-        setDetailError(error instanceof Error ? error.message : '알 수 없는 상세 정보 오류');
+        setDetailError(failure);
         detailRequestPending.current = false;
       });
 
@@ -110,11 +126,14 @@ export function useComplexDetail() {
   useEffect(() => {
     tradePageRequestSeq.current += 1;
     if (selectedComplex == null) {
+      tradeMoreController.current?.abort();
+      tradeMoreController.current = null;
       setParcelTrades(null);
       setTradePage(0);
       setTradeRows([]);
       setTradeState('idle');
       setTradeError(null);
+      setTradeMoreState('idle');
       return undefined;
     }
     const requestSeq = tradePageRequestSeq.current;
@@ -131,13 +150,16 @@ export function useComplexDetail() {
       setTradePage(nextTrades.page);
       setTradeRows(nextTrades.trades);
       setTradeState('ready');
+      setTradeMoreState('idle');
     }).catch((error: unknown) => {
       if (controller.signal.aborted || requestSeq !== tradePageRequestSeq.current) return;
-      setParcelTrades(null);
-      setTradePage(0);
-      setTradeRows([]);
+      const failure = toRequestFailure(error, {
+        service: 'property-data',
+        operation: 'complex-trades',
+      }, controller.signal);
+      if (isCancelledFailure(failure)) return;
       setTradeState('error');
-      setTradeError(error instanceof Error ? error.message : '알 수 없는 거래 정보 오류');
+      setTradeError(failure);
     });
     return () => controller.abort();
   }, [selectedComplex, tradeRetrySeq]);
@@ -163,9 +185,13 @@ export function useComplexDetail() {
       setTrendState('ready');
     }).catch((error: unknown) => {
       if (controller.signal.aborted || requestSeq !== detailRequestSeq.current) return;
-      setTradeTrend([]);
+      const failure = toRequestFailure(error, {
+        service: 'property-data',
+        operation: 'trade-trend',
+      }, controller.signal);
+      if (isCancelledFailure(failure)) return;
       setTrendState('error');
-      setTrendError(error instanceof Error ? error.message : '알 수 없는 시세 정보 오류');
+      setTrendError(failure);
     });
     return () => controller.abort();
   }, [selectedComplex, trendRetrySeq]);
@@ -242,6 +268,8 @@ export function useComplexDetail() {
   }, [complexDetail?.prediction, detailState, selectedComplex]);
 
   const selectComplex = useCallback((selection: ComplexSelection) => {
+    tradeMoreController.current?.abort();
+    tradeMoreController.current = null;
     setComplexDetail(null);
     setParcelTrades(null);
     setTradeTrend([]);
@@ -250,6 +278,7 @@ export function useComplexDetail() {
     setParcelComplexes([]);
     setDetailError(null);
     setTradeError(null);
+    setTradeMoreState('idle');
     setTrendError(null);
     setDetailState('loading');
     setTradeState('loading');
@@ -276,31 +305,51 @@ export function useComplexDetail() {
   const retryTrend = useCallback(() => setTrendRetrySeq((current) => current + 1), []);
 
   function loadMoreTrades() {
-    if (selectedComplex == null) {
+    if (selectedComplex == null || tradeMoreState === 'loading') {
       return;
     }
 
+    tradeMoreController.current?.abort();
+    const controller = new AbortController();
+    tradeMoreController.current = controller;
     const nextPage = tradePage + 1;
     const requestSeq = tradePageRequestSeq.current + 1;
     tradePageRequestSeq.current = requestSeq;
     const request = selectedComplex.parcelId == null && selectedComplex.complexId != null
-      ? fetchComplexTrades(selectedComplex.complexId, { page: nextPage, size: TRADE_PAGE_SIZE })
+      ? fetchComplexTrades(
+        selectedComplex.complexId,
+        { page: nextPage, size: TRADE_PAGE_SIZE },
+        controller.signal,
+      )
       : fetchParcelTrades(
         requiredParcelId(selectedComplex),
         selectedComplex.complexId,
         { page: nextPage, size: TRADE_PAGE_SIZE },
+        controller.signal,
       );
 
+    setTradeMoreState('loading');
     request
       .then((next) => {
-        if (requestSeq !== tradePageRequestSeq.current) {
+        if (controller.signal.aborted || requestSeq !== tradePageRequestSeq.current) {
           return;
         }
         setTradePage(next.page);
         setTradeRows((current) => [...current, ...next.trades]);
+        setTradeMoreState('idle');
       })
-      .catch(() => {
-        // Keep the loaded rows rendered when a page fetch fails.
+      .catch((error: unknown) => {
+        if (controller.signal.aborted || requestSeq !== tradePageRequestSeq.current) return;
+        const failure = toRequestFailure(error, {
+          service: 'property-data',
+          operation: 'complex-trades-more',
+        }, controller.signal);
+        if (!isCancelledFailure(failure)) setTradeMoreState('error');
+      })
+      .finally(() => {
+        if (tradeMoreController.current === controller) {
+          tradeMoreController.current = null;
+        }
       });
   }
 
@@ -321,6 +370,7 @@ export function useComplexDetail() {
     selectedComplex,
     tradeRows,
     tradeError,
+    tradeMoreState,
     tradeState,
     tradeTrend,
     trendError,

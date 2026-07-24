@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 
 import { RequestStateNotice } from '../../shared/RequestStateNotice';
+import { feedbackForFailure } from '../../shared/feedback/feedbackForFailure';
+import type { RequestFailure } from '../../shared/http/requestFailure';
 import { ChevronRightIcon } from '../../shared/icons';
 import type { RegionComplexSummary, RegionDetail, RegionSummary } from '../region/api/fetchRegions';
 import { ComplexList } from './ComplexList';
@@ -31,7 +33,7 @@ export function RegionExplorerSection({
   onRetry: () => void;
   regionComplexes: RegionComplexSummary[];
   regionDetail: RegionDetail | null;
-  regionError: string | null;
+  regionError: RequestFailure | null;
   regionState: PanelRequestState;
   regionTrail: RegionTrailItem[];
   rootRegions: RegionSummary[];
@@ -54,7 +56,19 @@ export function RegionExplorerSection({
           </span>
         ))}
       </nav>
-      <RequestStateNotice state={regionState} loadingMessage="지역을 불러오는 중" emptyMessage="표시할 지역이 없습니다" errorMessage="지역 정보를 불러오지 못했어요" technicalError={regionError} onRetry={onRetry} />
+      <RequestStateNotice
+        state={regionState}
+        loadingMessage="지역을 불러오는 중"
+        emptyMessage="표시할 지역이 없습니다"
+        feedback={feedbackForFailure(
+          regionError,
+          rootRegions.length > 0 || regionDetail != null || regionTrail.length > 0
+            ? 'REGION_REFRESH_UNAVAILABLE'
+            : 'REGION_UNAVAILABLE',
+          { notFoundId: 'REGION_NOT_FOUND' },
+        )}
+        onRetry={regionError?.kind === 'not-found' ? onLoadRootRegions : onRetry}
+      />
       {rootRegions.length > 0 ? (
         <RegionChoiceGrid
           ariaLabel="지역 탐색"

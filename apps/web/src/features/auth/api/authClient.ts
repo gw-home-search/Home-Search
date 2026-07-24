@@ -46,12 +46,19 @@ export function createAuthClient(options: AuthClientOptions = {}): AuthClient {
     requestTimeoutMs = timeoutMs,
   ): Promise<Response> {
     const controller = new AbortController();
+    let timedOut = false;
     const abortFromCaller = () => controller.abort();
     if (init.signal?.aborted) controller.abort();
     else init.signal?.addEventListener('abort', abortFromCaller, { once: true });
-    const timeout = globalThis.setTimeout(() => controller.abort(), requestTimeoutMs);
+    const timeout = globalThis.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, requestTimeoutMs);
     try {
       return await fetchImplementation(`${requestBaseUrl}${path}`, { ...init, signal: controller.signal });
+    } catch (error) {
+      if (timedOut) throw new DOMException('Request timed out', 'TimeoutError');
+      throw error;
     } finally {
       globalThis.clearTimeout(timeout);
       init.signal?.removeEventListener('abort', abortFromCaller);

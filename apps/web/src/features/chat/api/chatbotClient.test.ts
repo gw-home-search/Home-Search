@@ -234,19 +234,34 @@ describe('챗봇 질문 client', () => {
       success: true,
       answer: 'unsupported',
     }), { status: 200 }));
-    await expect(queryChatbot(invalid, { question: '질문' })).rejects.toThrow('챗봇 응답을 확인하지 못했습니다.');
+    await expect(queryChatbot(invalid, { question: '질문' })).rejects.toMatchObject({
+      failure: { kind: 'invalid-response', service: 'chatbot' },
+    });
 
     const unavailable = vi.fn<AuthenticatedChatbotRequest>().mockResolvedValue(new Response('provider detail', { status: 503 }));
-    await expect(queryChatbot(unavailable, { question: '질문' })).rejects.toThrow('챗봇을 잠시 사용할 수 없습니다.');
+    await expect(queryChatbot(unavailable, { question: '질문' })).rejects.toMatchObject({
+      failure: { kind: 'service-unavailable', status: 503 },
+    });
   });
 
-  it('브라우저 abort 내부 문구를 사용자 안내로 변환한다', async () => {
+  it('브라우저 abort 내부 문구를 노출하지 않고 취소로 분류한다', async () => {
     const aborted = vi.fn<AuthenticatedChatbotRequest>().mockRejectedValue(
       new DOMException('signal is aborted without reason', 'AbortError'),
     );
 
-    await expect(queryChatbot(aborted, { question: '질문' }))
-      .rejects.toThrow('답변 생성 시간이 길어졌습니다. 잠시 후 다시 시도해주세요.');
+    await expect(queryChatbot(aborted, { question: '질문' })).rejects.toMatchObject({
+      failure: { kind: 'cancelled', service: 'chatbot' },
+    });
+  });
+
+  it('timeout은 caller 취소와 구분한다', async () => {
+    const timedOut = vi.fn<AuthenticatedChatbotRequest>().mockRejectedValue(
+      new DOMException('Request timed out', 'TimeoutError'),
+    );
+
+    await expect(queryChatbot(timedOut, { question: '질문' })).rejects.toMatchObject({
+      failure: { kind: 'timeout', service: 'chatbot' },
+    });
   });
 });
 

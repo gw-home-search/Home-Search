@@ -11,6 +11,7 @@ import {
   type AuthClient,
   unmount,
 } from '../../app/appTestHarness';
+import { setCachedFavorite } from '../favorites/favoriteStore';
 
 describe('마이페이지 사용자 흐름', () => {
   let root: Root | undefined;
@@ -79,6 +80,18 @@ describe('마이페이지 사용자 흐름', () => {
     expect(sdk.kakao.maps.Map).toHaveBeenCalledTimes(1);
   });
 
+  it('마이페이지 toolbar는 앱 제목과 경쟁하는 두 번째 h1을 만들지 않는다', async () => {
+    window.history.pushState({}, '', '/my');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+
+    const rendered = await renderApp({ authClient: authenticatedClient([], 0) });
+    root = rendered.root;
+    await flushAsyncState();
+
+    expect(rendered.rootElement.querySelectorAll('h1')).toHaveLength(1);
+    expect(rendered.rootElement.querySelector('.my-page-toolbar h2')?.textContent).toBe('마이페이지');
+  });
+
   it('계정 화면은 중복 안내와 로그아웃 action 없이 연결 정보만 보여준다', async () => {
     window.history.pushState({}, '', '/my/account');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
@@ -111,7 +124,7 @@ describe('마이페이지 사용자 흐름', () => {
 
     expect(rendered.rootElement.textContent).toContain('테스트 단지 501');
     expect(rendered.rootElement.textContent).toContain('단지 #502');
-    expect(rendered.rootElement.textContent).toContain('정보 다시 불러오기');
+    expect(rendered.rootElement.textContent).toContain('단지 정보 다시 확인');
     expect(rendered.rootElement.querySelector('button[aria-label="단지 #502 관심 해제"]')).not.toBeNull();
 
     const remove = rendered.rootElement.querySelector<HTMLButtonElement>('button[aria-label="테스트 단지 501 관심 해제"]');
@@ -158,6 +171,40 @@ describe('마이페이지 사용자 흐름', () => {
       expect.objectContaining({ method: 'GET' }),
       'user',
     );
+  });
+
+  it('관심 목록 새로고침 실패 시 기존 행을 유지하고 목록 안에 복구 action을 표시한다', async () => {
+    window.history.pushState({}, '', '/my/favorites');
+    const client = authenticatedClient([
+      { complexId: 501, savedAt: '2026-07-21T08:30:00Z' },
+    ], 1);
+    const baseRequest = client.authenticatedRequest;
+    let listCalls = 0;
+    client.authenticatedRequest = vi.fn(async (path, init, target) => {
+      if (path.startsWith('/api/v1/favorites?')) {
+        listCalls += 1;
+        if (listCalls > 1) return new Response(null, { status: 503 });
+      }
+      return baseRequest(path, init, target);
+    });
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const complexId = Number(String(input).split('/').pop());
+      return jsonResponse(complexDetail(complexId));
+    }));
+
+    const rendered = await renderApp({ authClient: client });
+    root = rendered.root;
+    await flushAsyncState();
+    await flushAsyncState();
+    expect(rendered.rootElement.textContent).toContain('테스트 단지 501');
+
+    act(() => setCachedFavorite(999, true));
+    await flushAsyncState();
+    await flushAsyncState();
+
+    expect(rendered.rootElement.textContent).toContain('테스트 단지 501');
+    expect(rendered.rootElement.textContent).toContain('관심 단지를 새로 확인하지 못했어요');
+    expect(rendered.rootElement.textContent).toContain('관심 단지 새로 확인');
   });
 
   it('첫 페이지의 관심 단지를 해제하면 뒤의 항목으로 목록을 채운다', async () => {
@@ -246,6 +293,20 @@ describe('마이페이지 사용자 흐름', () => {
       expect.objectContaining({ method: 'POST' }),
     );
     expect(window.sessionStorage.getItem('home-search:return-to')).toBe('/my');
+  });
+
+  it('인증 서비스 초기 장애는 비로그인으로 오인하지 않고 복구 안내를 제공한다', async () => {
+    window.history.pushState({}, '', '/my');
+    const client = unavailableClient();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([])));
+
+    const rendered = await renderApp({ authClient: client });
+    root = rendered.root;
+    await flushAsyncState();
+
+    expect(rendered.rootElement.textContent).toContain('지금은 로그인을 연결하기 어려워요');
+    expect(rendered.rootElement.textContent).not.toContain('로그인이 필요한 페이지예요');
+    expect(client.authenticatedRequest).not.toHaveBeenCalled();
   });
 });
 
@@ -342,6 +403,15 @@ function anonymousClient(): AuthClient {
     authorizationUrl: vi.fn((provider) => `http://localhost:8082/oauth2/authorization/${provider}`),
     logout: vi.fn().mockResolvedValue(undefined),
     restoreSession: vi.fn().mockResolvedValue({ kind: 'anonymous' }),
+  };
+}
+
+function unavailableClient(): AuthClient {
+  return {
+    authenticatedRequest: vi.fn().mockRejectedValue(new Error('Authentication unavailable')),
+    authorizationUrl: vi.fn((provider) => `http://localhost:8082/oauth2/authorization/${provider}`),
+    logout: vi.fn().mockResolvedValue(undefined),
+    restoreSession: vi.fn().mockResolvedValue({ kind: 'unavailable' }),
   };
 }
 

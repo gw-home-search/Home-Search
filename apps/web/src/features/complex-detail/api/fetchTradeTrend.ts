@@ -1,5 +1,6 @@
-import { readProblemDetail } from '../../map/api/readProblemDetail';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
+import { readValidatedJson, requestFailureFromResponse } from '../../../shared/http/requestFailure';
+import { fetchWithTimeout } from '../../../shared/http/fetchWithTimeout';
 
 export type TradeTrendPoint = {
   month: string;
@@ -37,20 +38,25 @@ export async function fetchComplexTradeTrend(
 }
 
 async function fetchTrend(path: string, signal?: AbortSignal): Promise<TradeTrendPoint[]> {
-  const response = await fetch(resolveApiUrl(path), { method: 'GET', signal });
+  const response = await fetchWithTimeout(resolveApiUrl(path), { method: 'GET', signal });
 
   if (!response.ok) {
-    const detail = await readProblemDetail(response);
-    throw new Error(
-      `Failed to fetch trade trend: ${response.status}${detail ? ` ${detail}` : ''}`,
-    );
+    throw await requestFailureFromResponse(response, {
+      service: 'property-data',
+      operation: 'trade-trend',
+    });
   }
 
-  const payload: unknown = await response.json();
+  return readValidatedJson(response, {
+    service: 'property-data',
+    operation: 'trade-trend',
+  }, normalizeTradeTrend);
+}
+
+function normalizeTradeTrend(payload: unknown): TradeTrendPoint[] {
   if (!Array.isArray(payload)) {
     throw new Error('Invalid public API trade trend response: expected an array');
   }
-
   return payload.map((point) => {
     if (!isRecord(point)) {
       throw new Error('Invalid public API trade trend response: point must be an object');

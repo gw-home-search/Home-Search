@@ -1,4 +1,8 @@
-import { readProblemDetail } from '../../map/api/readProblemDetail';
+import { fetchWithTimeout } from '../../../shared/http/fetchWithTimeout';
+import {
+  readValidatedJson,
+  requestFailureFromResponse,
+} from '../../../shared/http/requestFailure';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
 
 export type InsightDataStatus = 'FRESH' | 'STALE' | 'UNAVAILABLE';
@@ -70,15 +74,21 @@ export async function fetchMarketInsights(
   params.set('scope', query.scope ?? 'NATIONWIDE');
   if (query.regionCode) params.set('regionCode', query.regionCode);
   params.set('limit', String(query.limit ?? 10));
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     resolveApiUrl(`/api/v1/insights/trades/weekly?${params.toString()}`),
     { method: 'GET', signal },
   );
   if (!response.ok) {
-    const detail = await readProblemDetail(response);
-    throw new Error(`Failed to fetch market insights: ${response.status}${detail ? ` ${detail}` : ''}`);
+    throw await requestFailureFromResponse(response, {
+      service: 'property-data',
+      operation: 'market-insights',
+    });
   }
-  return normalizeInsights(await response.json());
+  return readValidatedJson(
+    response,
+    { service: 'property-data', operation: 'market-insights' },
+    normalizeInsights,
+  );
 }
 
 function normalizeInsights(value: unknown): MarketInsights {

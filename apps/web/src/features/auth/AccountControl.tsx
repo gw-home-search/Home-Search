@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ChevronDownIcon } from '../../shared/icons';
 import type { CurrentUser, OAuthProvider } from './authTypes';
 import { useAuth } from './AuthProvider';
+import { getUserFeedback } from '../../shared/feedback/feedbackCatalog';
 
 const PROVIDER_LABELS: Record<OAuthProvider, string> = {
   google: 'Google',
@@ -88,7 +89,11 @@ export function AccountControl() {
               >
                 {auth.isLoggingOut ? '로그아웃 중...' : '로그아웃'}
               </button>
-              {auth.dialogError != null ? <p className="account-menu-error" role="alert">{auth.dialogError}</p> : null}
+              {auth.dialogError != null ? (
+                <p className="account-menu-error" role="alert">
+                  {getUserFeedback(auth.dialogError).title}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </>

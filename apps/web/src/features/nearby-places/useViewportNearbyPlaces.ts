@@ -7,6 +7,7 @@ import {
   type ViewportNearbyPlaces,
 } from './api/fetchViewportNearbyPlaces';
 import { NEARBY_PLACE_CATEGORIES, type NearbyPlaceCategory } from './api/fetchNearbyPlaces';
+import type { UserFeedbackId } from '../../shared/feedback/feedbackCatalog';
 
 export type ViewportNearbyPlaceState = 'idle' | 'zoom-required' | 'loading' | 'ready' | 'partial' | 'empty' | 'error';
 
@@ -29,7 +30,7 @@ export function useViewportNearbyPlaces(
 ) {
   const [data, setData] = useState<ViewportNearbyPlaces[]>([]);
   const [state, setState] = useState<ViewportNearbyPlaceState>('idle');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<UserFeedbackId | null>(null);
   const [retrySeq, setRetrySeq] = useState(0);
   const dataRef = useRef<ViewportNearbyPlaces[]>([]);
   const cacheRef = useRef(new Map<string, CacheEntry>());
@@ -130,9 +131,7 @@ export function useViewportNearbyPlaces(
           updateData(dataRef, setData, nextData);
           if (failureCount > 0) {
             setState(nextData.length > 0 ? 'partial' : 'error');
-            setError(nextData.length > 0
-              ? '일부 주변시설 정보를 업데이트하지 못했습니다.'
-              : '주변시설 업데이트를 실패했습니다.');
+            setError(nextData.length > 0 ? 'NEARBY_PARTIAL' : 'NEARBY_UNAVAILABLE');
             return;
           }
           setState(hasPlaces(nextData) ? 'ready' : 'empty');

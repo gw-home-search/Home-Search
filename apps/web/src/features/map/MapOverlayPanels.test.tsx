@@ -3,6 +3,13 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MapOverlayPanels } from './MapOverlayPanels';
+import type { RequestFailure } from '../../shared/http/requestFailure';
+
+const mapRuntimeFailure: RequestFailure = {
+  kind: 'service-unavailable',
+  service: 'kakao-map',
+  operation: 'map-runtime',
+};
 
 describe('MapOverlayPanels 지도 오버레이', () => {
   let root: Root | null = null;
@@ -24,7 +31,7 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           activeFilterCount={0}
           bounds={{ swLat: 37.4, swLng: 126.9, neLat: 37.6, neLng: 127.1 }}
           cadastralEnabled={false}
-          mapRuntimeError="fallback"
+          mapRuntimeError={mapRuntimeFailure}
           mapRuntimeState="error"
           markerError={null}
           markerState="ready"
@@ -44,8 +51,8 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           selectedComplex={{ parcelId: 1001, complexId: 501 }}
           onComplexMarkerSelect={vi.fn()}
           onRegionMarkerSelect={vi.fn()}
-          onRetryMap={vi.fn()}
           onRetryMarkers={vi.fn()}
+          onRetryMap={vi.fn()}
           onResetFilters={vi.fn()}
         />,
       );
@@ -71,7 +78,7 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           activeFilterCount={0}
           bounds={{ swLat: 37.4, swLng: 126.9, neLat: 37.6, neLng: 127.1 }}
           cadastralEnabled={false}
-          mapRuntimeError="fallback"
+          mapRuntimeError={mapRuntimeFailure}
           mapRuntimeState="error"
           markerError={null}
           markerState="ready"
@@ -80,8 +87,8 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           selectedComplex={null}
           onComplexMarkerSelect={vi.fn()}
           onRegionMarkerSelect={vi.fn()}
-          onRetryMap={vi.fn()}
           onRetryMarkers={vi.fn()}
+          onRetryMap={vi.fn()}
           onResetFilters={vi.fn()}
         />,
       );
@@ -105,7 +112,7 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           bounds={{ swLat: 33, swLng: 124, neLat: 39, neLng: 132 }}
           cadastralEnabled={false}
           level={12}
-          mapRuntimeError="fallback"
+          mapRuntimeError={mapRuntimeFailure}
           mapRuntimeState="error"
           markerError={null}
           markerState="ready"
@@ -113,8 +120,8 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           selectedComplex={null}
           onComplexMarkerSelect={vi.fn()}
           onRegionMarkerSelect={vi.fn()}
-          onRetryMap={vi.fn()}
           onRetryMarkers={vi.fn()}
+          onRetryMap={vi.fn()}
           onResetFilters={vi.fn()}
         />,
       );
@@ -136,7 +143,7 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           activeFilterCount={0}
           bounds={{ swLat: 37.4, swLng: 126.9, neLat: 37.6, neLng: 127.1 }}
           cadastralEnabled={false}
-          mapRuntimeError="fallback"
+          mapRuntimeError={mapRuntimeFailure}
           mapRuntimeState="error"
           markerError={null}
           markerState="empty"
@@ -145,8 +152,8 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           selectedComplex={null}
           onComplexMarkerSelect={vi.fn()}
           onRegionMarkerSelect={vi.fn()}
-          onRetryMap={vi.fn()}
           onRetryMarkers={vi.fn()}
+          onRetryMap={vi.fn()}
           onResetFilters={vi.fn()}
         />,
       );
@@ -166,7 +173,7 @@ describe('MapOverlayPanels 지도 오버레이', () => {
           activeFilterCount={0}
           bounds={{ swLat: 37.4, swLng: 126.9, neLat: 37.6, neLng: 127.1 }}
           cadastralEnabled={false}
-          mapRuntimeError="technical detail"
+          mapRuntimeError={mapRuntimeFailure}
           mapRuntimeState="error"
           markerError={null}
           markerState="ready"
@@ -182,11 +189,11 @@ describe('MapOverlayPanels 지도 오버레이', () => {
       );
     });
 
-    expect(host.textContent).toContain('지도를 잠시 불러오지 못했어요');
-    expect(host.textContent).not.toContain('기본 지도 화면에서 탐색을 계속할 수 있습니다');
+    expect(host.textContent).toContain('지도를 준비하지 못했어요');
+    expect(host.textContent).not.toContain('technical detail');
 
     const retry = Array.from(host.querySelectorAll('button'))
-      .find((button) => button.textContent === '다시 시도');
+      .find((button) => button.textContent === '지도 다시 불러오기');
     expect(retry).toBeDefined();
     act(() => retry?.click());
     expect(onRetryMap).toHaveBeenCalledTimes(1);

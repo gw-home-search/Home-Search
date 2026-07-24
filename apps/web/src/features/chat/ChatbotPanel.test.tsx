@@ -137,11 +137,30 @@ describe('챗봇 패널', () => {
     await waitFor(() => textarea?.disabled === false);
     await change(textarea, '실패해도 남아야 하는 질문');
     await keyDown(textarea, { key: 'Enter' });
-    await waitFor(() => host?.textContent?.includes('챗봇 요청을 완료하지 못했습니다.') === true);
+    await waitFor(() => host?.textContent?.includes('지금은 답변을 준비하지 못했어요') === true);
 
     const [saved] = await store.list();
     expect(saved?.messages).toHaveLength(1);
     expect(saved?.messages[0]?.content).toBe('실패해도 남아야 하는 질문');
+  });
+
+  it('401은 인증 dialog에서 한 번만 안내하고 챗봇 안에 중복 오류를 만들지 않는다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-auth-expired');
+    const client = authenticatedClient();
+    client.authenticatedRequest = vi.fn().mockResolvedValue(new Response(null, { status: 401 }));
+    ({ root, host } = await renderPanel(client, store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    const textarea = host.querySelector<HTMLTextAreaElement>('#chatbot-question');
+    await waitFor(() => textarea?.disabled === false);
+    await change(textarea, '로그인 만료 중 질문');
+    await keyDown(textarea, { key: 'Enter' });
+    await waitFor(() => host?.textContent?.includes('로그인이 만료되었어요') === true);
+
+    expect(host.querySelector('.chatbot-error')).toBeNull();
+    expect(host.querySelectorAll('.auth-dialog')).toHaveLength(1);
+    expect(host.textContent?.match(/로그인이 만료되었어요/g)).toHaveLength(1);
   });
 
   it('제한된 인증 질문을 보내고 재마운트 후에도 실제 출처를 유지한다', async () => {

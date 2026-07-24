@@ -1,6 +1,7 @@
 import type { MapViewport } from '../../../app/mapAppTypes';
-import { readProblemDetail } from '../../map/api/readProblemDetail';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
+import { readValidatedJson, requestFailureFromResponse } from '../../../shared/http/requestFailure';
+import { fetchWithTimeout } from '../../../shared/http/fetchWithTimeout';
 import {
   NEARBY_PLACE_CATEGORIES,
   type NearbyPlace,
@@ -28,17 +29,22 @@ export async function fetchViewportNearbyPlaces(
   request: ViewportNearbyPlaceRequest,
   signal?: AbortSignal,
 ): Promise<ViewportNearbyPlaces> {
-  const response = await fetch(resolveApiUrl('/api/v1/map/nearby-places'), {
+  const response = await fetchWithTimeout(resolveApiUrl('/api/v1/map/nearby-places'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...request.bounds, level: request.level, category: request.category }),
     signal,
   });
   if (!response.ok) {
-    const detail = await readProblemDetail(response);
-    throw new Error(`주변 상권 정보를 불러오지 못했습니다: ${response.status}${detail ? ` ${detail}` : ''}`);
+    throw await requestFailureFromResponse(response, {
+      service: 'property-data',
+      operation: 'viewport-nearby-places',
+    });
   }
-  return normalize(await response.json(), request.category);
+  return readValidatedJson(response, {
+    service: 'property-data',
+    operation: 'viewport-nearby-places',
+  }, (value) => normalize(value, request.category));
 }
 
 function normalize(value: unknown, requestedCategory: NearbyPlaceCategory): ViewportNearbyPlaces {
@@ -137,8 +143,7 @@ function validatedPlaceUrl(value: unknown): string | null {
       || url.password !== ''
     ) throw invalid('place.placeUrl');
     return url.toString();
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith('Invalid viewport')) throw error;
+  } catch {
     throw invalid('place.placeUrl');
   }
 }

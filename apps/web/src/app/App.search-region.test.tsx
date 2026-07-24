@@ -106,6 +106,33 @@ describe('App 검색과 지역', () => {
     unmount(root);
   });
 
+  it('검색 실패는 결과 heading과 오류 제목을 중복해서 읽히지 않는다', async () => {
+    const fetchMock = vi.fn((url: RequestInfo | URL) => {
+      const requestUrl = String(url);
+      if (requestUrl === resolveApiUrl('/api/v1/search/complexes?q=Sample')) {
+        return Promise.resolve(errorResponse(500));
+      }
+      return Promise.resolve(jsonResponse([]));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp();
+    await flushAsyncState();
+
+    const searchInput = rootElement.querySelector<HTMLInputElement>('input[aria-label="단지 검색"]');
+    const searchForm = rootElement.querySelector<HTMLFormElement>('form[aria-label="단지 검색"]');
+    await act(async () => {
+      if (searchInput) searchInput.value = 'Sample';
+      submitForm(searchForm);
+    });
+    await flushAsyncState();
+
+    expect(rootElement.textContent?.match(/검색 결과/g)).toHaveLength(1);
+    expect(rootElement.textContent).toContain('입력한 검색어는 그대로 유지돼요.');
+
+    unmount(root);
+  });
+
   it('documented URL로 complex를 search하고 선택한 parcel detail을 연다', async () => {
     const fetchMock = vi
       .fn()
@@ -584,6 +611,54 @@ describe('App 검색과 지역', () => {
     unmount(root);
   });
 
+  it('지역 첫 로드 실패는 존재하지 않는 이전 데이터를 언급하지 않는다', async () => {
+    const fetchMock = vi.fn((url: RequestInfo | URL) => {
+      if (String(url) === resolveApiUrl('/api/v1/region')) {
+        return Promise.resolve(errorResponse(500));
+      }
+      return Promise.resolve(jsonResponse([]));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp({ initialRegionLoad: true });
+    await flushAsyncState();
+    await flushAsyncState();
+
+    expect(rootElement.textContent).toContain('지도와 검색은 계속 사용할 수 있어요.');
+    expect(rootElement.textContent).not.toContain('이전에 불러온 지역은 계속 볼 수 있어요.');
+
+    unmount(root);
+  });
+
+  it('기존 지역을 유지한 갱신 실패에서만 이전 지역 안내를 제공한다', async () => {
+    let rootRegionRequests = 0;
+    const fetchMock = vi.fn((url: RequestInfo | URL) => {
+      if (String(url) === resolveApiUrl('/api/v1/region')) {
+        rootRegionRequests += 1;
+        return rootRegionRequests === 1
+          ? Promise.resolve(jsonResponse([{ id: 1, name: 'Seoul', code: '11' }]))
+          : Promise.resolve(errorResponse(500));
+      }
+      return Promise.resolve(jsonResponse([]));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp({ initialRegionLoad: true });
+    await flushAsyncState();
+    await flushAsyncState();
+
+    await act(async () => {
+      rootElement.querySelector<HTMLButtonElement>('button[aria-label="지역 처음으로"]')?.click();
+    });
+    await flushAsyncState();
+    await flushAsyncState();
+
+    expect(rootElement.textContent).toContain('Seoul');
+    expect(rootElement.textContent).toContain('이전에 불러온 지역은 계속 볼 수 있어요.');
+
+    unmount(root);
+  });
+
   it('단지 검색 입력은 suggestion API를 사용하고 suggestion 선택으로 detail을 연다', async () => {
     const fetchMock = vi
       .fn()
@@ -699,7 +774,10 @@ describe('App 검색과 지역', () => {
     await flushAsyncState();
     await flushAsyncState();
 
-    expect(fetchMock).toHaveBeenCalledWith(resolveApiUrl('/api/v1/region/1'), { method: 'GET' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/region/1'),
+      expect.objectContaining({ method: 'GET', signal: expect.any(AbortSignal) }),
+    );
     expect(rootElement.querySelector('[aria-label="지역 단계"]')?.textContent).toContain('Seoul');
 
     unmount(root);
@@ -844,7 +922,10 @@ describe('App 검색과 지역', () => {
     await flushAsyncState();
     await flushAsyncState();
 
-    expect(fetchMock).toHaveBeenCalledWith(resolveApiUrl('/api/v1/region/1'), { method: 'GET' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/region/1'),
+      expect.objectContaining({ method: 'GET', signal: expect.any(AbortSignal) }),
+    );
     expect(rootElement.querySelector('[aria-label="지역 단계"]')?.textContent).toContain('Seoul');
     expect(sdk.map.setCenter).toHaveBeenCalled();
     expect(sdk.map.setLevel).toHaveBeenLastCalledWith(9);

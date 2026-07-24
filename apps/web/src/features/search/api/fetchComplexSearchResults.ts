@@ -1,5 +1,6 @@
-import { readProblemDetail } from '../../map/api/readProblemDetail';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
+import { readValidatedJson, requestFailureFromResponse } from '../../../shared/http/requestFailure';
+import { fetchWithTimeout } from '../../../shared/http/fetchWithTimeout';
 
 export type ComplexSearchResult = {
   complexId: number;
@@ -30,7 +31,7 @@ export async function fetchComplexSearchResults(
     return [];
   }
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     resolveApiUrl(`${SEARCH_COMPLEXES_PATH}?${new URLSearchParams({ q: trimmedQuery })}`),
     {
       method: 'GET',
@@ -39,13 +40,19 @@ export async function fetchComplexSearchResults(
   );
 
   if (!response.ok) {
-    const detail = await readProblemDetail(response);
-    throw new Error(
-      `Failed to fetch complex search results: ${response.status}${detail ? ` ${detail}` : ''}`,
-    );
+    throw await requestFailureFromResponse(response, {
+      service: 'property-data',
+      operation: 'complex-search',
+    });
   }
 
-  const payload: unknown = await response.json();
+  return readValidatedJson(response, {
+    service: 'property-data',
+    operation: 'complex-search',
+  }, normalizeComplexSearchResults);
+}
+
+function normalizeComplexSearchResults(payload: unknown): ComplexSearchResult[] {
   if (!Array.isArray(payload)) {
     throw new Error('Invalid public API complex search response: expected an array');
   }

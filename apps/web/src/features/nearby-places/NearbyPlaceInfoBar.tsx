@@ -1,8 +1,12 @@
 import type { NearbyPlace } from './api/fetchNearbyPlaces';
 import type { ViewportNearbyPlaceState } from './useViewportNearbyPlaces';
+import {
+  getUserFeedback,
+  type UserFeedbackId,
+} from '../../shared/feedback/feedbackCatalog';
 
 type Props = {
-  error: string | null;
+  error: UserFeedbackId | null;
   place: NearbyPlace | null;
   state: ViewportNearbyPlaceState;
   onRetry: () => void;
@@ -21,16 +25,15 @@ export function NearbyPlaceInfoBar({ error, place, state, onRetry }: Props) {
       </aside>
     );
   }
-  const message = state === 'partial'
-    ? (error ?? '일부 주변시설 정보를 업데이트하지 못했습니다.')
-    : state === 'error'
-      ? (error ?? '주변시설 업데이트를 실패했습니다.')
-      : null;
-  if (!message) return null;
+  const feedbackId = state === 'partial'
+    ? error ?? 'NEARBY_PARTIAL'
+    : state === 'error' ? error ?? 'NEARBY_UNAVAILABLE' : null;
+  if (feedbackId == null) return null;
+  const feedback = getUserFeedback(feedbackId);
   return (
     <aside aria-live="polite" className="nearby-place-info-bar nearby-place-info-status">
-      <span>{message}</span>
-      {state === 'error' || state === 'partial' ? <button type="button" onClick={onRetry}>다시 시도</button> : null}
+      <span><strong>{feedback.title}</strong>{feedback.description ? ` ${feedback.description}` : ''}</span>
+      {feedback.actionLabel ? <button type="button" onClick={onRetry}>{feedback.actionLabel}</button> : null}
     </aside>
   );
 }

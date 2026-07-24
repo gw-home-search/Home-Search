@@ -7,6 +7,11 @@ import {
   type MapMarkersResult,
 } from '../api/fetchMapMarkers';
 import { countActiveFilterGroups } from '../../filters/FilterPanel';
+import {
+  isCancelledFailure,
+  toRequestFailure,
+  type RequestFailure,
+} from '../../../shared/http/requestFailure';
 
 export const EMPTY_COMPLEX_MARKER_FILTERS: Required<ComplexMarkerFilters> = {
   pyeongMin: null,
@@ -25,7 +30,7 @@ export function useMapMarkers(viewport: MapViewport) {
   );
   const [markers, setMarkers] = useState<MapMarkersResult | null>(null);
   const [markerState, setMarkerState] = useState<MarkerRequestState>('loading');
-  const [markerError, setMarkerError] = useState<string | null>(null);
+  const [markerError, setMarkerError] = useState<RequestFailure | null>(null);
   const [markerRetrySeq, setMarkerRetrySeq] = useState(0);
   const markerRequestSeq = useRef(0);
   const markerRequestPending = useRef(true);
@@ -56,9 +61,13 @@ export function useMapMarkers(viewport: MapViewport) {
         if (controller.signal.aborted || ignore || requestSeq !== markerRequestSeq.current) {
           return;
         }
-        setMarkers(null);
+        const failure = toRequestFailure(error, {
+          service: 'property-data',
+          operation: 'map-markers',
+        }, controller.signal);
+        if (isCancelledFailure(failure)) return;
         setMarkerState('error');
-        setMarkerError(error instanceof Error ? error.message : '알 수 없는 마커 오류');
+        setMarkerError(failure);
         markerRequestPending.current = false;
       });
 

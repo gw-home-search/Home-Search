@@ -9,8 +9,15 @@ import { RequestStateNotice } from '../../shared/RequestStateNotice';
 import { BackIcon, CloseIcon, HelpIcon } from '../../shared/icons';
 import { FavoriteToggle } from '../favorites/FavoriteToggle';
 import type { FavoriteState } from '../favorites/favoriteTypes';
+import type { RequestFailure } from '../../shared/http/requestFailure';
+import { feedbackForFailure } from '../../shared/feedback/feedbackForFailure';
+import {
+  getUserFeedback,
+  type UserFeedbackId,
+} from '../../shared/feedback/feedbackCatalog';
 
 type DetailRequestState = 'idle' | 'loading' | 'ready' | 'error';
+type TradeMoreState = 'idle' | 'loading' | 'error';
 
 type ComplexSelection = {
   parcelId: number | null;
@@ -19,9 +26,9 @@ type ComplexSelection = {
 
 type DetailSidebarProps = {
   complexDetail: ComplexDetail | null;
-  detailError: string | null;
+  detailError: RequestFailure | null;
   detailState: DetailRequestState;
-  favoriteError?: string | null;
+  favoriteError?: UserFeedbackId | null;
   favoriteLiveMessage?: string;
   favoriteState?: FavoriteState;
   onBack: () => void;
@@ -37,9 +44,10 @@ type DetailSidebarProps = {
   parcelTrades: ParcelTrades | null;
   tradeTrend: TradeTrendPoint[];
   tradeRows: TradeItem[];
-  tradeError?: string | null;
+  tradeError?: RequestFailure | null;
+  tradeMoreState?: TradeMoreState;
   tradeState?: DetailRequestState;
-  trendError?: string | null;
+  trendError?: RequestFailure | null;
   trendState?: DetailRequestState;
   selection: ComplexSelection;
 };
@@ -70,10 +78,10 @@ export function DetailSidebar({
   tradeTrend,
   tradeRows,
   tradeError = null,
+  tradeMoreState = 'idle',
   tradeState = 'ready',
   trendError = null,
   trendState = 'ready',
-  selection,
 }: DetailSidebarProps) {
   const [mobileTab, setMobileTab] = useState<DetailMobileTab>('info');
   const tabRefs = useRef<Partial<Record<DetailMobileTab, HTMLButtonElement | null>>>({});
@@ -93,11 +101,13 @@ export function DetailSidebar({
           <BackIcon aria-hidden="true" />
         </button>
         <div className="detail-drawer-identity">
-          <p className="detail-drawer-address">{complexDetail ? formatAddress(complexDetail.address) : detailDrawerKicker(selection)}</p>
+          <p className="detail-drawer-address">{complexDetail ? formatAddress(complexDetail.address) : '선택한 단지'}</p>
           <h2>{complexDetail?.displayName ?? complexDetail?.name ?? '단지 상세'}</h2>
         </div>
         <div className="detail-header-actions">
-          <FavoriteToggle state={favoriteState} liveMessage={favoriteLiveMessage} onToggle={onFavoriteToggle} />
+          {detailState === 'ready' && complexDetail ? (
+            <FavoriteToggle state={favoriteState} liveMessage={favoriteLiveMessage} onToggle={onFavoriteToggle} />
+          ) : null}
           <button
             type="button"
             aria-label="상세 닫기"
@@ -110,9 +120,16 @@ export function DetailSidebar({
       </div>
 
       {favoriteError == null ? null : (
-        <div className="favorite-error-row" role="status">
-          <span>{favoriteError}</span>
-          {favoriteError.includes('최대 200개') ? null : <button type="button" onClick={onRetryFavorite}>다시 시도</button>}
+        <div
+          className="favorite-error-row"
+          role={getUserFeedback(favoriteError).announcement === 'alert' ? 'alert' : 'status'}
+        >
+          <span>{getUserFeedback(favoriteError).title}</span>
+          {getUserFeedback(favoriteError).actionLabel ? (
+            <button type="button" onClick={onRetryFavorite}>
+              {getUserFeedback(favoriteError).actionLabel}
+            </button>
+          ) : null}
         </div>
       )}
 
@@ -140,24 +157,15 @@ export function DetailSidebar({
         ))}
       </div>
 
-      {detailState === 'ready' ? null : <ul
-        aria-label="상세 API 데이터 요약"
-        className="data-status-list"
-        data-api-flow="detail"
-        data-detail-order="status"
-      >
-        <li><span>상세</span><strong>{detailStateLabel(detailState)}</strong></li>
-        <li><span>실거래</span><strong>{parcelTrades == null ? '대기' : `${parcelTrades.totalElements.toLocaleString()}건`}</strong></li>
-        <li><span>같은 필지</span><strong>대기</strong></li>
-      </ul>}
-
       <RequestStateNotice
+        className="detail-request-state"
         state={detailState}
         loadingMessage="단지 상세를 불러오는 중"
         emptyMessage="표시할 단지 상세가 없습니다"
-        errorMessage="단지 상세를 불러오지 못했어요"
-        technicalError={detailError}
-        onRetry={onRetryDetail}
+        feedback={feedbackForFailure(detailError, 'COMPLEX_UNAVAILABLE', {
+          notFoundId: 'COMPLEX_NOT_FOUND',
+        })}
+        onRetry={detailError?.kind === 'not-found' ? onBack : onRetryDetail}
       />
 
       {detailState === 'ready' && complexDetail ? (
@@ -228,8 +236,7 @@ export function DetailSidebar({
               state={trendState}
               loadingMessage="시세를 불러오는 중"
               emptyMessage="표시할 시세가 없습니다"
-              errorMessage="시세를 불러오지 못했어요"
-              technicalError={trendError}
+              feedback={feedbackForFailure(trendError, 'TREND_UNAVAILABLE')}
               onRetry={onRetryTrend}
             />
             {shouldRenderTradeChart && trendState === 'ready' && tradeTrend.length === 0 ? (
@@ -257,14 +264,14 @@ export function DetailSidebar({
               state={tradeState}
               loadingMessage="거래를 불러오는 중"
               emptyMessage="표시할 거래가 없습니다"
-              errorMessage="거래를 불러오지 못했어요"
-              technicalError={tradeError}
+              feedback={feedbackForFailure(tradeError, 'TRADES_UNAVAILABLE')}
               onRetry={onRetryTrades}
             />
             <TradeList
               rows={tradeRows}
               totalElements={parcelTrades?.totalElements ?? 0}
               onLoadMore={onLoadMoreTrades}
+              moreState={tradeMoreState}
             />
           </div>
         </>
@@ -318,15 +325,6 @@ function mediaQueryMatches(query: string): boolean {
     && window.matchMedia(query).matches;
 }
 
-function detailStateLabel(state: DetailRequestState): string {
-  switch (state) {
-    case 'idle': return '대기';
-    case 'loading': return '조회 중';
-    case 'ready': return '조회됨';
-    case 'error': return '오류';
-  }
-}
-
 function TradeChartFallback() {
   return (
     <section className="trade-chart trade-chart-fallback" aria-label="거래가 차트 불러오는 중">
@@ -334,16 +332,6 @@ function TradeChartFallback() {
       <div className="trade-chart-canvas" role="status" aria-live="polite">차트 불러오는 중</div>
     </section>
   );
-}
-
-function detailDrawerKicker(selection: ComplexSelection): string {
-  if (selection.parcelId == null) {
-    return `단지 ${selection.complexId}`;
-  }
-
-  return selection.complexId == null
-    ? `필지 ${selection.parcelId}`
-    : `단지 ${selection.complexId} / 필지 ${selection.parcelId}`;
 }
 
 function formatAddress(address: string | null): string {
@@ -427,9 +415,9 @@ function predictionStatusTitle(prediction: PricePrediction): string {
     case 'PENDING':
       return 'AI 예상가 계산 중';
     case 'FAILED':
-      return 'AI 예상가를 불러오지 못했습니다';
+      return getUserFeedback('PREDICTION_FAILED').title;
     case 'UNAVAILABLE':
-      return prediction.message ?? '예측에 필요한 최근 거래가 부족합니다';
+      return getUserFeedback('PREDICTION_UNAVAILABLE').title;
     case 'READY':
       return 'AI 예상 거래가';
   }
@@ -440,9 +428,9 @@ function predictionStatusMessage(prediction: PricePrediction): string {
     case 'PENDING':
       return '잠시 후 자동으로 갱신됩니다';
     case 'FAILED':
-      return prediction.message ?? '실거래 정보는 계속 확인할 수 있습니다';
+      return getUserFeedback('PREDICTION_FAILED').description ?? '';
     case 'UNAVAILABLE':
-      return prediction.message ?? '예측에 필요한 최근 거래가 부족합니다';
+      return getUserFeedback('PREDICTION_UNAVAILABLE').description ?? '';
     case 'READY':
       return '';
   }
@@ -513,10 +501,12 @@ function TradeList({
   rows,
   totalElements,
   onLoadMore,
+  moreState,
 }: {
   rows: TradeItem[];
   totalElements: number;
   onLoadMore: () => void;
+  moreState: TradeMoreState;
 }) {
   const hasMore = rows.length < totalElements;
   return (
@@ -566,14 +556,25 @@ function TradeList({
             </tbody>
           </table>
           {hasMore ? (
-            <button
-              type="button"
-              className="trade-load-more"
-              aria-label="거래 더 보기"
-              onClick={onLoadMore}
-            >
-              더보기
-            </button>
+            moreState === 'error' ? (
+              <RequestStateNotice
+                state="error"
+                loadingMessage=""
+                emptyMessage=""
+                feedback={getUserFeedback('TRADES_MORE_UNAVAILABLE')}
+                onRetry={onLoadMore}
+              />
+            ) : (
+              <button
+                type="button"
+                className="trade-load-more"
+                aria-label={moreState === 'loading' ? '거래 더 불러오는 중' : '거래 더 보기'}
+                disabled={moreState === 'loading'}
+                onClick={onLoadMore}
+              >
+                {moreState === 'loading' ? '불러오는 중' : '더보기'}
+              </button>
+            )
           ) : null}
         </>
       )}

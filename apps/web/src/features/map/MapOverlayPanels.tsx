@@ -7,6 +7,8 @@ import type {
   MapMarkersResult,
 } from './api/fetchMapMarkers';
 import type { KakaoMapRuntimeState } from './KakaoMapSurface';
+import type { RequestFailure } from '../../shared/http/requestFailure';
+import { feedbackForFailure } from '../../shared/feedback/feedbackForFailure';
 import { MapToolNotice } from './tools/MapToolNotice';
 import {
   createComplexMarkerViewModel,
@@ -22,9 +24,9 @@ type MapOverlayPanelsProps = {
   activeFilterCount: number;
   bounds: MapBoundsRequest;
   cadastralEnabled: boolean;
-  mapRuntimeError: string | null;
+  mapRuntimeError: RequestFailure | null;
   mapRuntimeState: KakaoMapRuntimeState;
-  markerError: string | null;
+  markerError: RequestFailure | null;
   markerState: MarkerRequestState;
   level: number;
   markers: MapMarkersResult | null;
@@ -33,7 +35,9 @@ type MapOverlayPanelsProps = {
   onComplexMarkerSelect: (marker: ComplexMapMarker) => void;
   onRegionMarkerSelect: (marker: RegionMapMarker) => void;
   onRetryMarkers: () => void;
+  onRetryMap: () => void;
   onResetFilters: () => void;
+  suppressMarkerFeedback?: boolean;
 };
 
 export function MapOverlayPanels({
@@ -51,7 +55,9 @@ export function MapOverlayPanels({
   onComplexMarkerSelect,
   onRegionMarkerSelect,
   onRetryMarkers,
+  onRetryMap,
   onResetFilters,
+  suppressMarkerFeedback = false,
 }: MapOverlayPanelsProps) {
   return (
     <>
@@ -69,32 +75,31 @@ export function MapOverlayPanels({
       <div className="map-notices">
         <MapToolNotice cadastralEnabled={cadastralEnabled} />
         {hiddenMarkerCount > 0 ? <p className="map-density-note" role="status">가까운 단지 {hiddenMarkerCount.toLocaleString()}개는 확대하면 표시됩니다</p> : null}
-        <RequestStateNotice
-          className="map-feedback"
-          state={markerState}
-          loadingMessage="이 지역의 단지를 불러오는 중"
-          emptyMessage={activeFilterCount > 0
-            ? '조건에 맞는 단지가 없습니다'
-            : '이 지도 영역에는 표시할 단지가 없습니다'}
-          errorMessage="단지 정보를 불러오지 못했어요"
-          secondaryMessage="지도 이동과 확대·축소는 계속 사용할 수 있습니다"
-          technicalError={markerError}
-          retryAriaLabel="마커 다시 불러오기"
-          onRetry={onRetryMarkers}
-          secondaryAction={activeFilterCount > 0 ? (
-            <button type="button" onClick={onResetFilters}>필터 전체 초기화</button>
-          ) : null}
-        />
+        {suppressMarkerFeedback && markerState === 'error' ? null : (
+          <RequestStateNotice
+            className="map-feedback"
+            state={markerState}
+            loadingMessage="이 지역의 단지를 불러오는 중"
+            emptyMessage={activeFilterCount > 0
+              ? '조건에 맞는 단지가 없습니다'
+              : '이 지도 영역에는 표시할 단지가 없습니다'}
+            feedback={feedbackForFailure(markerError, 'MAP_MARKERS_UNAVAILABLE')}
+            retryAriaLabel="단지 다시 불러오기"
+            onRetry={onRetryMarkers}
+            secondaryAction={activeFilterCount > 0 ? (
+              <button type="button" onClick={onResetFilters}>필터 전체 초기화</button>
+            ) : null}
+          />
+        )}
 
-        {mapRuntimeError && markerState !== 'error' ? (
+        {mapRuntimeError ? (
           <RequestStateNotice
             className="map-feedback"
             state="error"
             loadingMessage="지도를 불러오는 중"
             emptyMessage=""
-            errorMessage="지도를 불러오지 못했어요"
-            secondaryMessage="기본 지도 화면에서 탐색을 계속할 수 있습니다"
-            technicalError={mapRuntimeError}
+            feedback={feedbackForFailure(mapRuntimeError, 'MAP_RUNTIME_UNAVAILABLE')}
+            onRetry={onRetryMap}
           />
         ) : null}
       </div>

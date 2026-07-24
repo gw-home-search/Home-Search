@@ -15,6 +15,15 @@ import {
   type ChatMessage,
 } from './storage/chatConversationStore';
 import { useChatConversationWorkspace } from './useChatConversationWorkspace';
+import { RequestStateNotice } from '../../shared/RequestStateNotice';
+import {
+  getUserFeedback,
+  type UserFeedbackId,
+} from '../../shared/feedback/feedbackCatalog';
+import {
+  isCancelledFailure,
+  toRequestFailure,
+} from '../../shared/http/requestFailure';
 
 type ChatbotPanelProps = {
   onOpenChange?: (isOpen: boolean) => void;
@@ -40,7 +49,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [question, setQuestion] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'sending'>('idle');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<UserFeedbackId | null>(null);
   const [hasUnseenAnswer, setHasUnseenAnswer] = useState(false);
   const [executedActionIds, setExecutedActionIds] = useState<Set<string>>(
     () => new Set(),
@@ -103,7 +112,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
     try {
       await workspace.load(true);
     } catch {
-      setError('브라우저 대화 저장소를 열지 못했습니다.');
+      setError('CHAT_STORAGE_UNAVAILABLE');
     } finally {
       setStatus('idle');
     }
@@ -124,8 +133,8 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
     try {
       await workspace.deleteConversation(id);
     } catch {
-      setError('대화를 삭제하지 못했습니다.');
-      throw new Error('대화를 삭제하지 못했습니다.');
+      setError('CHAT_HISTORY_UPDATE_FAILED');
+      throw new Error('Chat history update failed');
     }
   }
 
@@ -134,8 +143,8 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
     try {
       await workspace.deleteAll();
     } catch {
-      setError('전체 대화를 삭제하지 못했습니다.');
-      throw new Error('전체 대화를 삭제하지 못했습니다.');
+      setError('CHAT_HISTORY_UPDATE_FAILED');
+      throw new Error('Chat history update failed');
     }
   }
 
@@ -150,7 +159,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
       anchor.click();
       URL.revokeObjectURL(url);
     } catch {
-      setError('대화를 내보내지 못했습니다.');
+      setError('CHAT_EXPORT_FAILED');
     }
   }
 
@@ -159,14 +168,14 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
     event.target.value = '';
     if (file == null) return;
     if (file.size > 10 * 1024 * 1024) {
-      setError('가져올 대화 파일은 10MB 이하여야 합니다.');
+      setError('CHAT_ARCHIVE_INVALID');
       return;
     }
     setError(null);
     try {
       await workspace.importArchive(await file.text());
     } catch {
-      setError('가져올 대화 파일을 확인해주세요.');
+      setError('CHAT_ARCHIVE_INVALID');
     }
   }
 
@@ -194,47 +203,81 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
     const requestSequence = ++requestSequenceRef.current;
     try {
       await workspace.save(pending, true);
-      const response = await queryChatbot(auth.authenticatedRequest, {
-        question: content,
-        conversationContext: buildConversationContext(selected.messages, selected.memory),
-        uiContext,
-      });
-      const answeredAt = new Date().toISOString();
-      const assistantMessageId = crypto.randomUUID();
-      if (followAnswerRef.current) answerToRevealRef.current = assistantMessageId;
-      else setHasUnseenAnswer(true);
-      const evidence: ChatEvidence = {
-        requestId: response.requestId,
-        citations: response.citations,
-        dataAsOf: response.dataAsOf,
-        limitations: response.limitations,
-        evidenceSummary: response.evidenceSummary,
-      };
-      await workspace.save({
-        ...pending,
-        ...(response.conversationMemoryPatch
-          ? { memory: response.conversationMemoryPatch }
-          : {}),
-        updatedAt: answeredAt,
-        messages: [...pending.messages, {
-          id: assistantMessageId,
-          role: 'assistant',
-          content: response.answer,
-          createdAt: answeredAt,
-          evidence,
-          artifacts: response.artifacts,
-          actions: response.actions,
-          ...(response.fragments.length === 0 ? {} : { fragments: response.fragments }),
-          ...(response.summary == null ? {} : { summary: response.summary }),
-          ...(response.conversationResolution == null
-            ? {}
-            : { resolution: response.conversationResolution }),
-          ...(response.report == null ? {} : { report: response.report }),
-        }],
-      }, false);
+      await generateAndStoreAnswer(pending, selected.messages);
     } catch (requestError) {
       if (requestSequence === requestSequenceRef.current) {
-        setError(requestError instanceof Error ? requestError.message : '챗봇 요청을 완료하지 못했습니다.');
+        const failure = toRequestFailure(requestError, {
+          service: 'chatbot',
+          operation: 'chatbot-query',
+        });
+        if (!isCancelledFailure(failure) && failure.kind !== 'authentication-required') {
+          setError(chatFeedbackId(failure.kind));
+        }
+      }
+    } finally {
+      if (requestSequence === requestSequenceRef.current) setStatus('idle');
+    }
+  }
+
+  async function generateAndStoreAnswer(
+    pending: ChatConversation,
+    contextMessages: ChatMessage[],
+  ) {
+    const response = await queryChatbot(auth.authenticatedRequest, {
+      question: pending.messages[pending.messages.length - 1]?.content ?? '',
+      conversationContext: buildConversationContext(contextMessages, pending.memory),
+      uiContext,
+    });
+    const answeredAt = new Date().toISOString();
+    const assistantMessageId = crypto.randomUUID();
+    if (followAnswerRef.current) answerToRevealRef.current = assistantMessageId;
+    else setHasUnseenAnswer(true);
+    const evidence: ChatEvidence = {
+      requestId: response.requestId,
+      citations: response.citations,
+      dataAsOf: response.dataAsOf,
+      limitations: response.limitations,
+      evidenceSummary: response.evidenceSummary,
+    };
+    await workspace.save({
+      ...pending,
+      ...(response.conversationMemoryPatch ? { memory: response.conversationMemoryPatch } : {}),
+      updatedAt: answeredAt,
+      messages: [...pending.messages, {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: response.answer,
+        createdAt: answeredAt,
+        evidence,
+        artifacts: response.artifacts,
+        actions: response.actions,
+        ...(response.fragments.length === 0 ? {} : { fragments: response.fragments }),
+        ...(response.summary == null ? {} : { summary: response.summary }),
+        ...(response.conversationResolution == null ? {} : { resolution: response.conversationResolution }),
+        ...(response.report == null ? {} : { report: response.report }),
+      }],
+    }, false);
+  }
+
+  async function retryLastQuestion() {
+    if (selected == null || status === 'sending') return;
+    const latest = selected.messages[selected.messages.length - 1];
+    if (latest?.role !== 'user') return;
+    setStatus('sending');
+    setError(null);
+    followAnswerRef.current = isNearBottom(messagesRef.current);
+    const requestSequence = ++requestSequenceRef.current;
+    try {
+      await generateAndStoreAnswer(selected, selected.messages.slice(0, -1));
+    } catch (requestError) {
+      if (requestSequence === requestSequenceRef.current) {
+        const failure = toRequestFailure(requestError, {
+          service: 'chatbot',
+          operation: 'chatbot-query',
+        });
+        if (!isCancelledFailure(failure) && failure.kind !== 'authentication-required') {
+          setError(chatFeedbackId(failure.kind));
+        }
       }
     } finally {
       if (requestSequence === requestSequenceRef.current) setStatus('idle');
@@ -405,7 +448,16 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
               </button>
             ) : null}
 
-            {error ? <p aria-live="assertive" className="chatbot-error">{error}</p> : null}
+            {error ? (
+              <RequestStateNotice
+                className="chatbot-error"
+                state="error"
+                loadingMessage=""
+                emptyMessage=""
+                feedback={getUserFeedback(error)}
+                onRetry={isRetryableChatFeedback(error) ? () => void retryLastQuestion() : undefined}
+              />
+            ) : null}
             <ChatComposer
               disabled={status === 'sending' || selected == null}
               isSending={status === 'sending'}
@@ -419,6 +471,21 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
       ) : null}
     </>
   );
+}
+
+function chatFeedbackId(kind: ReturnType<typeof toRequestFailure>['kind']): UserFeedbackId {
+  if (kind === 'authentication-required') return 'AUTH_EXPIRED';
+  if (kind === 'timeout') return 'CHAT_TIMEOUT';
+  if (kind === 'rate-limited') return 'CHAT_RATE_LIMITED';
+  if (kind === 'invalid-response') return 'CHAT_INVALID_RESPONSE';
+  return 'CHAT_UNAVAILABLE';
+}
+
+function isRetryableChatFeedback(id: UserFeedbackId): boolean {
+  return id === 'CHAT_TIMEOUT'
+    || id === 'CHAT_RATE_LIMITED'
+    || id === 'CHAT_UNAVAILABLE'
+    || id === 'CHAT_INVALID_RESPONSE';
 }
 
 function isNearBottom(element: HTMLElement | null): boolean {

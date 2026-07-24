@@ -52,11 +52,44 @@ describe('useMapMarkers 지도 요청 수명주기', () => {
     root = null;
     expect(secondSignal?.aborted).toBe(true);
   });
+
+  it('background refresh 실패 시 이미 표시한 marker를 유지한다', async () => {
+    const refresh = deferred<MapMarkersResult>();
+    fetchMapMarkersMock
+      .mockResolvedValueOnce({
+        kind: 'complex',
+        markers: [{
+          parcelId: 1001,
+          complexId: 501,
+          name: '유지할 단지',
+          lat: 37.5,
+          lng: 127,
+          latestDealAmount: null,
+          unitCntSum: null,
+        }],
+      })
+      .mockReturnValueOnce(refresh.promise);
+    ({ root, host } = await render(viewport(37.4)));
+    expect(host.dataset.count).toBe('1');
+
+    await act(async () => root?.render(<Harness viewport={viewport(37.5)} />));
+    await act(async () => refresh.reject(new TypeError('Failed to fetch')));
+
+    expect(host.dataset.state).toBe('error');
+    expect(host.dataset.count).toBe('1');
+    expect(host.textContent).not.toContain('Failed to fetch');
+  });
 });
 
 function Harness({ viewport: currentViewport }: { viewport: MapViewport }) {
-  const { markerState } = useMapMarkers(currentViewport);
-  return <div id="map-marker-harness" data-state={markerState} />;
+  const { markers, markerState } = useMapMarkers(currentViewport);
+  return (
+    <div
+      id="map-marker-harness"
+      data-count={markers?.markers.length ?? 0}
+      data-state={markerState}
+    />
+  );
 }
 
 async function render(currentViewport: MapViewport) {
@@ -84,8 +117,10 @@ function viewport(swLat: number): MapViewport {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((next) => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((next, fail) => {
     resolve = next;
+    reject = fail;
   });
-  return { promise, resolve };
+  return { promise, reject, resolve };
 }

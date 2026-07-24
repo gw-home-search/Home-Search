@@ -1,5 +1,6 @@
 import { resolveApiUrl } from './resolveApiUrl';
-import { readProblemDetail } from './readProblemDetail';
+import { readValidatedJson, requestFailureFromResponse } from '../../../shared/http/requestFailure';
+import { fetchWithTimeout } from '../../../shared/http/fetchWithTimeout';
 
 export type RegionLevel = 'si-do' | 'si-gun-gu' | 'eup-myeon-dong';
 
@@ -37,7 +38,7 @@ export async function fetchRegionMarkers(
   request: RegionMarkersRequest,
   signal?: AbortSignal,
 ): Promise<RegionMarker[]> {
-  const response = await fetch(resolveApiUrl(REGION_MARKERS_PATH), {
+  const response = await fetchWithTimeout(resolveApiUrl(REGION_MARKERS_PATH), {
     method: 'POST',
     signal,
     headers: {
@@ -47,13 +48,19 @@ export async function fetchRegionMarkers(
   });
 
   if (!response.ok) {
-    const detail = await readProblemDetail(response);
-    throw new Error(
-      `Failed to fetch region markers: ${response.status}${detail ? ` ${detail}` : ''}`,
-    );
+    throw await requestFailureFromResponse(response, {
+      service: 'property-data',
+      operation: 'map-region-markers',
+    });
   }
 
-  const payload: unknown = await response.json();
+  return readValidatedJson(response, {
+    service: 'property-data',
+    operation: 'map-region-markers',
+  }, normalizeRegionMarkers);
+}
+
+function normalizeRegionMarkers(payload: unknown): RegionMarker[] {
   if (!Array.isArray(payload)) {
     throw new Error('Invalid public API region marker response: expected an array');
   }

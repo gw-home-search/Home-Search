@@ -57,7 +57,9 @@ describe('viewport 주변시설 API 어댑터', () => {
 
     await expect(fetchViewportNearbyPlaces({
       bounds: response.bounds, level: 4, category: 'CAFE',
-    })).rejects.toThrow('Invalid viewport nearby-place API response: category');
+    })).rejects.toMatchObject({
+      failure: { kind: 'invalid-response', operation: 'viewport-nearby-places' },
+    });
 
     const overLimitResponse = {
       ...response,
@@ -82,6 +84,8 @@ describe('viewport 주변시설 API 어댑터', () => {
 
     await expect(fetchViewportNearbyPlaces({
       bounds: response.bounds, level: 4, category: 'CAFE',
-    })).rejects.toThrow('Invalid viewport nearby-place API response: category');
+    })).rejects.toMatchObject({
+      failure: { kind: 'invalid-response', operation: 'viewport-nearby-places' },
+    });
   });
 });

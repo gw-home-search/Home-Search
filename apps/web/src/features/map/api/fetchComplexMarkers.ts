@@ -1,5 +1,6 @@
 import { resolveApiUrl } from './resolveApiUrl';
-import { readProblemDetail } from './readProblemDetail';
+import { readValidatedJson, requestFailureFromResponse } from '../../../shared/http/requestFailure';
+import { fetchWithTimeout } from '../../../shared/http/fetchWithTimeout';
 
 export type ComplexMarkersRequest = {
   swLat: number;
@@ -39,7 +40,7 @@ export async function fetchComplexMarkers(
   request: ComplexMarkersRequest,
   signal?: AbortSignal,
 ): Promise<ComplexMarker[]> {
-  const response = await fetch(resolveApiUrl(COMPLEX_MARKERS_PATH), {
+  const response = await fetchWithTimeout(resolveApiUrl(COMPLEX_MARKERS_PATH), {
     method: 'POST',
     signal,
     headers: {
@@ -49,13 +50,19 @@ export async function fetchComplexMarkers(
   });
 
   if (!response.ok) {
-    const detail = await readProblemDetail(response);
-    throw new Error(
-      `Failed to fetch complex markers: ${response.status}${detail ? ` ${detail}` : ''}`,
-    );
+    throw await requestFailureFromResponse(response, {
+      service: 'property-data',
+      operation: 'map-complex-markers',
+    });
   }
 
-  const payload: unknown = await response.json();
+  return readValidatedJson(response, {
+    service: 'property-data',
+    operation: 'map-complex-markers',
+  }, normalizeComplexMarkers);
+}
+
+function normalizeComplexMarkers(payload: unknown): ComplexMarker[] {
   if (!Array.isArray(payload)) {
     throw new Error('Invalid public API complex marker response: expected an array');
   }

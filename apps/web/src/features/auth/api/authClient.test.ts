@@ -242,7 +242,7 @@ describe('authClient 인증 요청', () => {
       expect(chatbotSignal?.aborted).toBe(false);
 
       await vi.advanceTimersByTimeAsync(50);
-      await expect(result).resolves.toMatchObject({ name: 'AbortError' });
+      await expect(result).resolves.toMatchObject({ name: 'TimeoutError' });
       expect(chatbotSignal?.aborted).toBe(true);
     } finally {
       vi.useRealTimers();

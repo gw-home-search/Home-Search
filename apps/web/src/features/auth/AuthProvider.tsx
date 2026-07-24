@@ -3,13 +3,22 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { createAuthClient, type AuthClient, type AuthRestoreResult } from './api/authClient';
 import { AuthDialog } from './AuthDialog';
 import { AUTH_RETURN_TO_KEY, readSafeAuthReturnTo } from './authReturnPath';
-import { AUTH_MESSAGES, type AuthStatus, type CurrentUser, type OAuthProvider } from './authTypes';
+import {
+  AUTH_LOGIN_SUCCESS_MESSAGE,
+  type AuthStatus,
+  type CurrentUser,
+  type OAuthProvider,
+} from './authTypes';
+import {
+  getUserFeedback,
+  type UserFeedbackId,
+} from '../../shared/feedback/feedbackCatalog';
 
 type AuthContextValue = {
   authenticatedRequest(path: string, init?: RequestInit, target?: 'user' | 'public'): Promise<Response>;
   closeDialog(): void;
   currentUser: CurrentUser | null;
-  dialogError: string | null;
+  dialogError: UserFeedbackId | null;
   isDialogOpen: boolean;
   isLoggingOut: boolean;
   login(provider: OAuthProvider): void;
@@ -40,7 +49,7 @@ export function AuthProvider({
   const [status, setStatus] = useState<AuthStatus>('checking');
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [dialogError, setDialogError] = useState<string | null>(null);
+  const [dialogError, setDialogError] = useState<UserFeedbackId | null>(null);
   const [connectingProvider, setConnectingProvider] = useState<OAuthProvider | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -48,29 +57,24 @@ export function AuthProvider({
   const mountedRef = useRef(false);
   const restoreStartedRef = useRef(false);
 
-  const applyRestore = useCallback((result: AuthRestoreResult, callbackSuccess = false, degradeUnavailable = false) => {
+  const applyRestore = useCallback((result: AuthRestoreResult, callbackSuccess = false) => {
     if (result.kind === 'authenticated') {
       setStatus('authenticated');
       setCurrentUser(result.currentUser);
       setDialogError(null);
       setIsDialogOpen(false);
-      if (callbackSuccess) setNotice(AUTH_MESSAGES.loginSuccess);
+      if (callbackSuccess) setNotice(AUTH_LOGIN_SUCCESS_MESSAGE);
       return;
     }
     setCurrentUser(null);
     if (result.kind === 'unavailable') {
-      if (degradeUnavailable) {
-        setStatus('anonymous');
-        setDialogError(null);
-        return;
-      }
       setStatus('unavailable');
-      setDialogError(AUTH_MESSAGES.serviceUnavailable);
+      setDialogError('AUTH_UNAVAILABLE');
       return;
     }
     setStatus('anonymous');
     if (result.kind === 'expired') {
-      setDialogError(AUTH_MESSAGES.sessionExpired);
+      setDialogError('AUTH_EXPIRED');
       setIsDialogOpen(true);
     }
   }, []);
@@ -84,13 +88,13 @@ export function AuthProvider({
         window.sessionStorage.removeItem(AUTH_RETURN_TO_KEY);
         replaceRoute('/');
         setStatus('anonymous');
-        setDialogError(AUTH_MESSAGES.callbackFailure);
+        setDialogError('AUTH_UNAVAILABLE');
         setIsDialogOpen(true);
       } else {
         const callbackSuccess = callbackPath === '/auth/success';
         void authClient.restoreSession().then((result) => {
           if (!mountedRef.current) return;
-          applyRestore(result, callbackSuccess, true);
+          applyRestore(result, callbackSuccess);
           if (callbackSuccess) {
             const returnTo = readSafeAuthReturnTo();
             window.sessionStorage.removeItem(AUTH_RETURN_TO_KEY);
@@ -112,7 +116,7 @@ export function AuthProvider({
 
   const openDialog = useCallback((trigger?: HTMLElement) => {
     dialogTriggerRef.current = trigger ?? null;
-    setDialogError(status === 'unavailable' ? AUTH_MESSAGES.serviceUnavailable : null);
+    setDialogError(status === 'unavailable' ? 'AUTH_UNAVAILABLE' : null);
     setIsDialogOpen(true);
   }, [status]);
 
@@ -129,7 +133,7 @@ export function AuthProvider({
     } catch {
       setConnectingProvider(null);
       setStatus('unavailable');
-      setDialogError(AUTH_MESSAGES.serviceUnavailable);
+      setDialogError('AUTH_UNAVAILABLE');
     }
   }, [authClient, navigate]);
 
@@ -148,7 +152,8 @@ export function AuthProvider({
       setCurrentUser(null);
       setStatus('anonymous');
     } catch {
-      setDialogError(AUTH_MESSAGES.logoutFailure);
+      setDialogError('LOGOUT_FAILED');
+      setNotice(getUserFeedback('LOGOUT_FAILED').title);
     } finally {
       setCurrentUser(null);
       setStatus('anonymous');
@@ -165,7 +170,7 @@ export function AuthProvider({
     if (response.status === 401 && mountedRef.current) {
       setCurrentUser(null);
       setStatus('anonymous');
-      setDialogError(AUTH_MESSAGES.sessionExpired);
+      setDialogError('AUTH_EXPIRED');
       setIsDialogOpen(true);
     }
     return response;

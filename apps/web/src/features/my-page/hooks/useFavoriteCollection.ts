@@ -10,6 +10,7 @@ import {
   subscribeFavoriteStore,
   syncFavoriteOwner,
 } from '../../favorites/favoriteStore';
+import type { UserFeedbackId } from '../../../shared/feedback/feedbackCatalog';
 
 export type FavoriteCollectionItem = {
   complexId: number;
@@ -17,7 +18,7 @@ export type FavoriteCollectionItem = {
   detail: ComplexDetail | null;
   detailPhase: 'loading' | 'ready' | 'error';
   mutationPhase: 'idle' | 'removing';
-  mutationError: string | null;
+  mutationError: UserFeedbackId | null;
 };
 
 type FavoriteCollectionState =
@@ -39,9 +40,15 @@ export function useFavoriteCollection(size: number, incremental = false) {
   const [lastLoadedPage, setLastLoadedPage] = useState(-1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState(false);
+  const [refreshFeedback, setRefreshFeedback] = useState<UserFeedbackId | null>(null);
   const requestSequence = useRef(0);
+  const itemCount = useRef(0);
   const detailControllers = useRef(new Map<number, AbortController>());
   const mutationControllers = useRef(new Map<number, AbortController>());
+
+  useEffect(() => {
+    itemCount.current = state.items.length;
+  }, [state.items.length]);
 
   useEffect(() => {
     syncFavoriteOwner(status === 'authenticated' && currentUser != null ? currentUser.userId : null);
@@ -81,6 +88,7 @@ export function useFavoriteCollection(size: number, incremental = false) {
     const controller = new AbortController();
     const initialPage = requestedPage === 0;
     setLoadMoreError(false);
+    if (initialPage) setRefreshFeedback(null);
     if (initialPage) {
       setLastLoadedPage(-1);
       setState((current) => current.items.length > 0
@@ -112,15 +120,17 @@ export function useFavoriteCollection(size: number, incremental = false) {
         }));
         setLastLoadedPage(result.page);
         setLoadingMore(false);
+        setRefreshFeedback(null);
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted || requestSequence.current !== sequence) return;
         if (error instanceof FavoriteClientError && error.kind === 'session-expired') return;
         if (initialPage) {
-          setState((current) => current.items.length > 0
+          const preservesExistingItems = itemCount.current > 0;
+          setState((current) => preservesExistingItems
             ? { ...current, phase: 'ready' }
             : { phase: 'error', items: [], totalElements: 0, totalPages: 0 });
-          setLiveMessage('기존 관심 단지는 유지했어요. 최신 목록은 잠시 후 다시 확인해주세요.');
+          if (preservesExistingItems) setRefreshFeedback('FAVORITES_REFRESH_UNAVAILABLE');
         }
         else setLoadMoreError(true);
         setLoadingMore(false);
@@ -203,7 +213,7 @@ export function useFavoriteCollection(size: number, incremental = false) {
         items: updateItem(current.items, complexId, (item) => ({
           ...item,
           mutationPhase: 'idle',
-          mutationError: '관심 단지를 해제하지 못했습니다. 다시 시도해주세요.',
+          mutationError: 'FAVORITE_REMOVE_FAILED',
         })),
       }));
     } finally {
@@ -217,6 +227,7 @@ export function useFavoriteCollection(size: number, incremental = false) {
     loadingMore,
     loadMore,
     loadMoreError,
+    refreshFeedback,
     remove,
     retry,
     retryDetail,

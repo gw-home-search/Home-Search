@@ -1,5 +1,6 @@
-import { readProblemDetail } from '../../map/api/readProblemDetail';
 import { resolveApiUrl } from '../../map/api/resolveApiUrl';
+import { readValidatedJson, requestFailureFromResponse } from '../../../shared/http/requestFailure';
+import { fetchWithTimeout } from '../../../shared/http/fetchWithTimeout';
 
 export type ParcelComplexSummary = {
   complexId: number;
@@ -31,23 +32,28 @@ export async function fetchParcelComplexes(
   parcelId: number,
   signal?: AbortSignal,
 ): Promise<ParcelComplexSummary[]> {
-  const response = await fetch(resolveApiUrl(`${DETAIL_PATH}/${parcelId}/complexes`), {
+  const response = await fetchWithTimeout(resolveApiUrl(`${DETAIL_PATH}/${parcelId}/complexes`), {
     method: 'GET',
     signal,
   });
 
   if (!response.ok) {
-    const detail = await readProblemDetail(response);
-    throw new Error(
-      `Failed to fetch parcel complexes: ${response.status}${detail ? ` ${detail}` : ''}`,
-    );
+    throw await requestFailureFromResponse(response, {
+      service: 'property-data',
+      operation: 'parcel-complexes',
+    });
   }
 
-  const payload: unknown = await response.json();
+  return readValidatedJson(response, {
+    service: 'property-data',
+    operation: 'parcel-complexes',
+  }, normalizeParcelComplexes);
+}
+
+function normalizeParcelComplexes(payload: unknown): ParcelComplexSummary[] {
   if (!Array.isArray(payload)) {
     throw new Error('Invalid public API parcel complexes response: expected an array');
   }
-
   return payload.map((item) => normalizeParcelComplex(item as ParcelComplexSummaryResponse));
 }
 

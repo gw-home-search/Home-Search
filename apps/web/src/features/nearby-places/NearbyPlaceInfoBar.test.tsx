@@ -35,11 +35,11 @@ describe('주변시설 정보 바', () => {
     const onRetry = vi.fn();
 
     await act(async () => root?.render(
-      <NearbyPlaceInfoBar error="주변시설 업데이트를 실패했습니다." place={null} state="error" onRetry={onRetry} />,
+      <NearbyPlaceInfoBar error="NEARBY_UNAVAILABLE" place={null} state="error" onRetry={onRetry} />,
     ));
     await act(async () => host?.querySelector<HTMLButtonElement>('button')?.click());
 
-    expect(host?.textContent).toContain('주변시설 업데이트를 실패했습니다.');
+    expect(host?.textContent).toContain('주변시설을 불러오지 못했어요');
     expect(onRetry).toHaveBeenCalledOnce();
   });
 });

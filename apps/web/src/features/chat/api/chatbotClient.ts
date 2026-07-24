@@ -11,6 +11,12 @@ import {
   type ChatUiContext,
 } from '../conversationContract';
 import { readChatUiReport } from '../reportContract';
+import {
+  invalidResponseFailure,
+  requestFailureFromResponse,
+  toRequestFailure,
+  RequestFailureError,
+} from '../../../shared/http/requestFailure';
 
 type ChatbotWireResponse = Omit<ChatbotResponse, 'artifacts' | 'actions' | 'summary' | 'fragments' | 'report'> & {
   uiArtifacts?: unknown;
@@ -37,7 +43,13 @@ export async function queryChatbot(
   },
 ): Promise<ChatbotResponse> {
   const question = request.question.trim();
-  if (question.length === 0 || question.length > 2_000) throw new Error('질문을 확인해주세요.');
+  if (question.length === 0 || question.length > 2_000) {
+    throw new RequestFailureError({
+      kind: 'invalid-request',
+      service: 'client',
+      operation: 'chatbot-query',
+    });
+  }
   const conversationContext = request.conversationContext;
   const uiContext = normalizeUiContext(request.uiContext);
   const payload = {
@@ -56,15 +68,25 @@ export async function queryChatbot(
       body: JSON.stringify(payload),
     }, 'public');
   } catch (error) {
-    if (isRecord(error) && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
-      throw new Error('답변 생성 시간이 길어졌습니다. 잠시 후 다시 시도해주세요.');
-    }
-    throw new Error('챗봇 요청을 완료하지 못했습니다.');
+    throw new RequestFailureError(toRequestFailure(error, {
+      service: 'chatbot',
+      operation: 'chatbot-query',
+    }));
   }
-  if (!response.ok) throw new Error(errorMessage(response.status));
+  if (!response.ok) {
+    throw await requestFailureFromResponse(response, {
+      service: 'chatbot',
+      operation: 'chatbot-query',
+    });
+  }
   try {
     const body: unknown = await response.json();
-    if (!isChatbotResponse(body)) throw new Error();
+    if (!isChatbotResponse(body)) {
+      throw invalidResponseFailure({
+        service: 'chatbot',
+        operation: 'chatbot-query',
+      });
+    }
     const factIds = new Set(body.citations.flatMap((citation) => citation.factIds));
     const artifacts = readChatArtifacts(body.uiArtifacts, factIds);
     const actions = readChatActions(body.uiActions, factIds);
@@ -78,16 +100,13 @@ export async function queryChatbot(
       conversationResolution: readConversationResolution(body.conversationResolution),
       conversationMemoryPatch: readConversationMemory(body.conversationMemoryPatch),
     };
-  } catch {
-    throw new Error('챗봇 응답을 확인하지 못했습니다.');
+  } catch (error) {
+    if (error instanceof RequestFailureError) throw error;
+    throw invalidResponseFailure({
+      service: 'chatbot',
+      operation: 'chatbot-query',
+    });
   }
-}
-
-function errorMessage(status: number): string {
-  if (status === 401) return '로그인이 만료되었습니다.';
-  if (status === 429) return '요청이 많습니다. 잠시 후 다시 시도해주세요.';
-  if (status === 503 || status === 504) return '챗봇을 잠시 사용할 수 없습니다.';
-  return '챗봇 요청을 완료하지 못했습니다.';
 }
 
 function isChatbotResponse(value: unknown): value is ChatbotWireResponse {

@@ -48,7 +48,7 @@ describe('fetchComplexSearchResults API 어댑터', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('호출자가 전달한 AbortSignal을 fetch에 전달한다', async () => {
+  it('호출자 취소와 timeout을 함께 처리하는 AbortSignal을 fetch에 전달한다', async () => {
     const controller = new AbortController();
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);
@@ -57,7 +57,7 @@ describe('fetchComplexSearchResults API 어댑터', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ signal: controller.signal }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -122,9 +122,9 @@ describe('fetchComplexSearchResults API 어댑터', () => {
   it('invalid search response shape를 reject한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ results: [] })));
 
-    await expect(fetchComplexSearchResults('Sample')).rejects.toThrow(
-      'Invalid public API complex search response: expected an array',
-    );
+    await expect(fetchComplexSearchResults('Sample')).rejects.toMatchObject({
+      failure: { kind: 'invalid-response', operation: 'complex-search' },
+    });
   });
 
   it('계약에 없는 numeric response string을 reject한다', async () => {
@@ -132,12 +132,12 @@ describe('fetchComplexSearchResults API 어댑터', () => {
       { complexId: '501', complexName: 'Sample', parcelId: 1001 },
     ])));
 
-    await expect(fetchComplexSearchResults('Sample')).rejects.toThrow(
-      'complexId must be a number',
-    );
+    await expect(fetchComplexSearchResults('Sample')).rejects.toMatchObject({
+      failure: { kind: 'invalid-response', operation: 'complex-search' },
+    });
   });
 
-  it('search 실패 시 public API ProblemDetail detail을 보존한다', async () => {
+  it('search 실패 시 ProblemDetail 원문 없이 구조화한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -147,9 +147,13 @@ describe('fetchComplexSearchResults API 어댑터', () => {
       ),
     );
 
-    await expect(fetchComplexSearchResults('Sample')).rejects.toThrow(
-      'Failed to fetch complex search results: 400 Invalid query parameter.',
-    );
+    await expect(fetchComplexSearchResults('Sample')).rejects.toMatchObject({
+      failure: {
+        kind: 'invalid-request',
+        operation: 'complex-search',
+        status: 400,
+      },
+    });
   });
 });
 

@@ -3,10 +3,14 @@ import { useEffect, useRef } from 'react';
 import { CloseIcon } from '../../shared/icons';
 import { SocialProviderIcon } from './SocialProviderIcon';
 import type { OAuthProvider } from './authTypes';
+import {
+  getUserFeedback,
+  type UserFeedbackId,
+} from '../../shared/feedback/feedbackCatalog';
 
 type AuthDialogProps = {
   connectingProvider: OAuthProvider | null;
-  error: string | null;
+  error: UserFeedbackId | null;
   isOpen: boolean;
   onClose: () => void;
   onProviderSelect: (provider: OAuthProvider) => void;
@@ -78,12 +82,7 @@ export function AuthDialog({
           <p id="auth-dialog-auto-signup">처음 방문한 경우 계정이 자동으로 생성됩니다.</p>
         </div>
 
-        {error != null ? (
-          <div className="auth-dialog-error" role="alert">
-            <span>{error}</span>
-            <button onClick={onRetry} type="button">다시 시도</button>
-          </div>
-        ) : null}
+        {error != null ? <AuthFeedback feedbackId={error} onRetry={onRetry} /> : null}
 
         <div className="auth-provider-list">
           {PROVIDERS.map((provider, index) => (
@@ -105,5 +104,24 @@ export function AuthDialog({
         <p className="auth-dialog-security">소셜 계정의 비밀번호는 홈서치에 저장되지 않습니다.</p>
       </div>
     </dialog>
+  );
+}
+
+function AuthFeedback({
+  feedbackId,
+  onRetry,
+}: {
+  feedbackId: UserFeedbackId;
+  onRetry: () => void;
+}) {
+  const feedback = getUserFeedback(feedbackId);
+  return (
+    <div className="auth-dialog-error" role="alert">
+      <strong>{feedback.title}</strong>
+      {feedback.description ? <span>{feedback.description}</span> : null}
+      {feedback.actionLabel ? (
+        <button onClick={onRetry} type="button">{feedback.actionLabel}</button>
+      ) : null}
+    </div>
   );
 }

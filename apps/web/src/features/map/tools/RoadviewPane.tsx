@@ -1,6 +1,8 @@
 import { forwardRef } from 'react';
 
 import { BackIcon, CloseIcon } from '../../../shared/icons';
+import { RequestStateNotice } from '../../../shared/RequestStateNotice';
+import { getUserFeedback } from '../../../shared/feedback/feedbackCatalog';
 import type { RoadviewRuntimeState } from './mapToolTypes';
 
 type RoadviewPaneProps = {
@@ -24,6 +26,17 @@ export const RoadviewPane = forwardRef<HTMLDivElement, RoadviewPaneProps>(functi
           <CloseIcon aria-hidden="true" />
         </button>
       </header>
+      {state === 'error' ? (
+        <div className="roadview-feedback">
+          <RequestStateNotice
+            state="error"
+            loadingMessage=""
+            emptyMessage=""
+            feedback={getUserFeedback('ROADVIEW_UNAVAILABLE')}
+            onRetry={onClose}
+          />
+        </div>
+      ) : null}
       <div aria-label="카카오 거리뷰 화면" className="roadview-host" ref={ref} />
     </section>
   );
@@ -32,6 +45,6 @@ export const RoadviewPane = forwardRef<HTMLDivElement, RoadviewPaneProps>(functi
 function roadviewStateLabel(state: RoadviewRuntimeState): string {
   if (state === 'loading') return '불러오는 중';
   if (state === 'unavailable') return '이 위치 주변에는 거리뷰가 없습니다';
-  if (state === 'error') return '거리뷰를 불러오지 못했습니다';
+  if (state === 'error') return '';
   return '';
 }

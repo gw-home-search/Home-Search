@@ -705,6 +705,17 @@ therefore cannot corrupt an already-running JVM. Apply a newly built API JAR
 with `docker compose -f infra/docker-compose.local.yml up -d --no-deps
 --force-recreate api`; the copy occurs only when the container starts.
 
+Provider-enabled local Batch jobs use the scheduler-free `property-batch`
+tools profile. PostGIS and Redis must already be healthy, and the one-shot
+container must run with `--no-deps` so collection cannot recreate either
+dependency:
+
+```bash
+docker compose -f infra/docker-compose.local.yml --profile tools run --rm \
+  --no-deps -e SPRING_BATCH_JOB_NAME=marketNewsGeneralJob \
+  property-batch runDate=YYYY-MM-DD requestId=BOOTSTRAP:{canonical-uuid}
+```
+
 Marker response caching remains opt-in. To run the local API with Redis-backed
 marker caching enabled:
 

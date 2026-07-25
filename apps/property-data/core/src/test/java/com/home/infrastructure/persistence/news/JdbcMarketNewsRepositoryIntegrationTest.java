@@ -78,7 +78,7 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
     }
 
     @Test
-    @DisplayName("RUNNING execution 재개 조회는 기존 count와 unfinished work unit만 복원한다")
+    @DisplayName("RUNNING execution 재개 조회는 work unit 실제 count와 unfinished unit을 복원한다")
     void restoresResumableExecutionProgress() {
         jdbcClient
                 .sql("""
@@ -89,9 +89,20 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
                 .param("completedAt", GENERATED_AT.minusSeconds(5).atOffset(ZoneOffset.UTC))
                 .param("workUnitId", workUnitId(1))
                 .update();
+        jdbcClient
+                .sql("""
+                    UPDATE market_news_collection_work_unit
+                    SET state = 'TRUNCATED', cutoff_reached = false, completed_at = :completedAt
+                    WHERE work_unit_id = :workUnitId
+                    """)
+                .param("completedAt", GENERATED_AT.minusSeconds(4).atOffset(ZoneOffset.UTC))
+                .param("workUnitId", workUnitId(2))
+                .update();
         jdbcClient.sql("""
                     UPDATE market_news_collection_execution
-                    SET call_count = 3999, completed_work_unit_count = 1
+                    SET call_count = 3999,
+                        completed_work_unit_count = 0,
+                        truncated_work_unit_count = 0
                     WHERE execution_id = :executionId
                     """).param("executionId", EXECUTION_ID).update();
 
@@ -102,7 +113,8 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
         assertThat(resumable.consumedCallCount()).isEqualTo(3999);
         assertThat(resumable.plannedWorkUnitCount()).isEqualTo(6);
         assertThat(resumable.completedWorkUnitCount()).isEqualTo(1);
-        assertThat(resumable.workUnits()).extracting(unit -> unit.order()).containsExactly(2, 3, 4, 5, 6);
+        assertThat(resumable.truncatedWorkUnitCount()).isEqualTo(1);
+        assertThat(resumable.workUnits()).extracting(unit -> unit.order()).containsExactly(3, 4, 5, 6);
     }
 
     @Test
@@ -788,9 +800,11 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
                 .param("workUnitId", sidoUnits.getLast().workUnitId())
                 .update();
 
-        assertThat(collectionRepository.publishEligibleScopes(execution.executionId(), scheduledAt.plusSeconds(1))
-                        .stream()
-                        .filter(snapshot -> snapshot.scopeType() == MarketNewsScopeType.SIDO))
+        assertThat(
+                        collectionRepository
+                                .publishEligibleScopes(execution.executionId(), scheduledAt.plusSeconds(1))
+                                .stream()
+                                .filter(snapshot -> snapshot.scopeType() == MarketNewsScopeType.SIDO))
                 .singleElement()
                 .satisfies(snapshot -> assertThat(snapshot.regionCode()).isEqualTo("11"));
     }

@@ -72,14 +72,38 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
     public Optional<MarketNewsCollectionExecution> findResumableExecution(String requestId) {
         Optional<ResumableExecutionRow> execution = jdbcClient
                 .sql("""
-                    SELECT execution_id, request_id, execution_type, policy_version,
-                           scheduled_at, overlap_cutoff, call_budget, call_count,
-                           planned_work_unit_count, completed_work_unit_count,
-                           failed_work_unit_count, truncated_work_unit_count,
-                           skipped_budget_work_unit_count
-                    FROM market_news_collection_execution
-                    WHERE request_id = :requestId
-                      AND state IN ('PLANNED', 'RUNNING')
+                    SELECT execution.execution_id, execution.request_id,
+                           execution.execution_type, execution.policy_version,
+                           execution.scheduled_at, execution.overlap_cutoff,
+                           execution.call_budget, execution.call_count,
+                           execution.planned_work_unit_count,
+                           (
+                               SELECT count(*)
+                               FROM market_news_collection_work_unit unit
+                               WHERE unit.execution_id = execution.execution_id
+                                 AND unit.state = 'COMPLETED'
+                           ) AS completed_work_unit_count,
+                           (
+                               SELECT count(*)
+                               FROM market_news_collection_work_unit unit
+                               WHERE unit.execution_id = execution.execution_id
+                                 AND unit.state = 'FAILED'
+                           ) AS failed_work_unit_count,
+                           (
+                               SELECT count(*)
+                               FROM market_news_collection_work_unit unit
+                               WHERE unit.execution_id = execution.execution_id
+                                 AND unit.state = 'TRUNCATED'
+                           ) AS truncated_work_unit_count,
+                           (
+                               SELECT count(*)
+                               FROM market_news_collection_work_unit unit
+                               WHERE unit.execution_id = execution.execution_id
+                                 AND unit.state = 'SKIPPED_BUDGET'
+                           ) AS skipped_budget_work_unit_count
+                    FROM market_news_collection_execution execution
+                    WHERE execution.request_id = :requestId
+                      AND execution.state IN ('PLANNED', 'RUNNING')
                     """)
                 .param("requestId", requestId)
                 .query((rs, rowNum) -> new ResumableExecutionRow(
@@ -125,7 +149,14 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
 
         Map<String, String> sidoNames =
                 rootSidos().stream().collect(java.util.stream.Collectors.toMap(SidoRow::code, SidoRow::name));
-        Map<String, List<NewsComplexEvidence>> corpusBySido = new LinkedHashMap<>();
+        Map<String, List<NewsComplexEvidence>> corpusBySido =
+                unfinished.stream().anyMatch(unit -> unit.kind() == MarketNewsWorkUnitKind.SIDO)
+                        ? loadComplexCorpus(null).stream()
+                                .collect(java.util.stream.Collectors.groupingBy(
+                                        complex -> complex.region().sidoCode(),
+                                        LinkedHashMap::new,
+                                        java.util.stream.Collectors.toList()))
+                        : Map.of();
         Map<Long, NewsComplexEvidence> complexById =
                 unfinished.stream().anyMatch(unit -> unit.kind() == MarketNewsWorkUnitKind.MAJOR_COMPLEX)
                         ? loadComplexCorpus(null).stream()
@@ -167,7 +198,7 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
         List<NewsComplexEvidence> corpus =
                 switch (unit.kind()) {
                     case NATIONAL_CATEGORY -> List.of();
-                    case SIDO -> corpusBySido.computeIfAbsent(unit.regionCode(), this::loadComplexCorpus);
+                    case SIDO -> corpusBySido.getOrDefault(unit.regionCode(), List.of());
                     case MAJOR_COMPLEX -> List.of(focusComplex);
                 };
         return new MarketNewsWorkUnitSpec(
@@ -207,8 +238,13 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
                     null,
                     List.of()));
         }
+        Map<String, List<NewsComplexEvidence>> corpusBySido = loadComplexCorpus(null).stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        complex -> complex.region().sidoCode(),
+                        LinkedHashMap::new,
+                        java.util.stream.Collectors.toList()));
         for (SidoRow sido : rootSidos()) {
-            List<NewsComplexEvidence> corpus = loadComplexCorpus(sido.code());
+            List<NewsComplexEvidence> corpus = corpusBySido.getOrDefault(sido.code(), List.of());
             for (String query : policyRegistry.sido(sido.name())) {
                 specs.add(new MarketNewsWorkUnitSpec(
                         UUID.randomUUID(),

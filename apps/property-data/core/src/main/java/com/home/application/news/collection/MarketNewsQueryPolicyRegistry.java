@@ -19,9 +19,7 @@ public final class MarketNewsQueryPolicyRegistry {
 
     public List<String> sido(String sidoName) {
         String normalizedSidoName = requireText(sidoName);
-        return List.of(
-                normalizedSidoName + " 아파트 부동산",
-                normalizedSidoName + " 주택 분양");
+        return List.of(normalizedSidoName + " 아파트 부동산", normalizedSidoName + " 주택 분양");
     }
 
     public List<String> majorComplex(String sigunguName, String dongName, String complexName) {

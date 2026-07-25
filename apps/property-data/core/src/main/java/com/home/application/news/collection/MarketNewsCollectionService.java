@@ -140,6 +140,7 @@ public class MarketNewsCollectionService {
         int start = 1;
         Instant oldest = null;
         boolean cutoffReached = false;
+        MarketNewsRelationPolicy.IndexedCorpus relationIndex = relationPolicy.index(unit.matchingCorpus());
         try {
             while (start <= MAX_START && callsBeforeUnit + unitCalls.value < execution.callBudget()) {
                 NewsProviderPage page = callWithSingleRetry(
@@ -157,7 +158,7 @@ public class MarketNewsCollectionService {
                     }
                     NormalizedNewsItem item = normalized.item();
                     oldest = oldest == null || item.providedAt().isBefore(oldest) ? item.providedAt() : oldest;
-                    processNormalized(execution, unit, raw, item);
+                    processNormalized(execution, unit, relationIndex, raw, item);
                 }
                 if (page.items().isEmpty() || (oldest != null && !oldest.isAfter(execution.overlapCutoff()))) {
                     cutoffReached = true;
@@ -254,6 +255,7 @@ public class MarketNewsCollectionService {
     private void processNormalized(
             MarketNewsCollectionExecution execution,
             MarketNewsWorkUnitSpec unit,
+            MarketNewsRelationPolicy.IndexedCorpus relationIndex,
             NewsProviderItem raw,
             NormalizedNewsItem item) {
         Instant now = clock.instant();
@@ -277,7 +279,7 @@ public class MarketNewsCollectionService {
             matches.add(new MarketNewsRelationMatch(
                     MarketNewsRelationType.SAME_SIDO, unit.regionCode(), null, List.of(unit.regionName())));
         }
-        matches.addAll(relationPolicy.match(item.title(), item.description(), unit.matchingCorpus()));
+        matches.addAll(relationPolicy.match(item.title(), item.description(), relationIndex));
         if (unit.kind() == MarketNewsWorkUnitKind.MAJOR_COMPLEX
                 && matches.stream().noneMatch(match -> match.relationType() == MarketNewsRelationType.DIRECT_COMPLEX)) {
             repository.rejectRawItem(unit.workUnitId(), raw, NewsRejectionReason.COMPLEX_AMBIGUOUS);

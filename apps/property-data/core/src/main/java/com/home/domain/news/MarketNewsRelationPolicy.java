@@ -10,7 +10,10 @@ import java.util.Set;
 public final class MarketNewsRelationPolicy {
 
     public List<MarketNewsRelationMatch> match(String title, String description, List<NewsComplexEvidence> complexes) {
-        String text = normalize(title + " " + description);
+        return match(title, description, index(complexes));
+    }
+
+    public IndexedCorpus index(List<NewsComplexEvidence> complexes) {
         List<NewsComplexEvidence> ordered = complexes == null
                 ? List.of()
                 : complexes.stream()
@@ -18,17 +21,23 @@ public final class MarketNewsRelationPolicy {
                                 .reversed()
                                 .thenComparingLong(NewsComplexEvidence::complexId))
                         .toList();
+        return new IndexedCorpus(ordered.stream().map(this::indexComplex).toList());
+    }
+
+    public List<MarketNewsRelationMatch> match(String title, String description, IndexedCorpus corpus) {
+        String text = normalize(title + " " + description);
         List<MarketNewsRelationMatch> matches = new ArrayList<>();
         Set<String> regionRelations = new LinkedHashSet<>();
-        for (NewsComplexEvidence complex : ordered) {
+        for (IndexedComplex indexed : corpus.complexes) {
+            NewsComplexEvidence complex = indexed.evidence();
             NewsRegionEvidence region = complex.region();
             if (region == null) {
                 continue;
             }
-            String matchedName = matchingName(text, complex);
-            boolean sigungu = contains(text, region.sigunguName());
-            boolean dong = contains(text, region.dongName());
-            boolean sido = contains(text, region.sidoName());
+            String matchedName = matchingName(text, indexed);
+            boolean sigungu = containsNormalized(text, indexed.sigunguName());
+            boolean dong = containsNormalized(text, indexed.dongName());
+            boolean sido = containsNormalized(text, indexed.sidoName());
             if (matchedName != null && sigungu && (!requiresDong(complex, matchedName) || dong)) {
                 matches.add(new MarketNewsRelationMatch(
                         MarketNewsRelationType.DIRECT_COMPLEX,
@@ -54,13 +63,26 @@ public final class MarketNewsRelationPolicy {
         return List.copyOf(matches);
     }
 
+    private IndexedComplex indexComplex(NewsComplexEvidence complex) {
+        NewsRegionEvidence region = complex.region();
+        return new IndexedComplex(
+                complex,
+                names(complex).stream()
+                        .map(name -> new IndexedName(name, normalize(name)))
+                        .toList(),
+                normalize(region == null ? null : region.sidoName()),
+                normalize(region == null ? null : region.sigunguName()),
+                normalize(region == null ? null : region.dongName()));
+    }
+
     private boolean requiresDong(NewsComplexEvidence complex, String matchedName) {
         return complex.nationwideDuplicateName() || normalizedLength(matchedName) <= 4;
     }
 
-    private String matchingName(String text, NewsComplexEvidence complex) {
-        return names(complex).stream()
-                .filter(name -> contains(text, name))
+    private String matchingName(String text, IndexedComplex complex) {
+        return complex.names().stream()
+                .filter(name -> containsNormalized(text, name.normalized()))
+                .map(IndexedName::original)
                 .findFirst()
                 .orElse(null);
     }
@@ -84,8 +106,11 @@ public final class MarketNewsRelationPolicy {
         if (!hasText(token)) {
             return false;
         }
-        String normalizedToken = normalize(token);
-        return (" " + text + " ").contains(" " + normalizedToken + " ");
+        return containsNormalized(text, normalize(token));
+    }
+
+    private boolean containsNormalized(String text, String normalizedToken) {
+        return !normalizedToken.isBlank() && (" " + text + " ").contains(" " + normalizedToken + " ");
     }
 
     private int normalizedLength(String value) {
@@ -108,4 +133,22 @@ public final class MarketNewsRelationPolicy {
     private List<String> compactTokens(String... values) {
         return java.util.Arrays.stream(values).filter(this::hasText).distinct().toList();
     }
+
+    public static final class IndexedCorpus {
+
+        private final List<IndexedComplex> complexes;
+
+        private IndexedCorpus(List<IndexedComplex> complexes) {
+            this.complexes = List.copyOf(complexes);
+        }
+    }
+
+    private record IndexedComplex(
+            NewsComplexEvidence evidence,
+            List<IndexedName> names,
+            String sidoName,
+            String sigunguName,
+            String dongName) {}
+
+    private record IndexedName(String original, String normalized) {}
 }

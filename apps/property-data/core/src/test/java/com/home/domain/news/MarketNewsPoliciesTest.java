@@ -54,6 +54,24 @@ class MarketNewsPoliciesTest {
     }
 
     @Test
+    @DisplayName("시도 corpus index는 반복 기사에서도 기존 직접·지역 relation 결과를 유지한다")
+    void indexedCorpusKeepsRelationResults() {
+        NewsComplexEvidence complex = new NewsComplexEvidence(
+                501L,
+                "래미안테스트",
+                "래미안 테스트",
+                List.of("테스트래미안"),
+                new NewsRegionEvidence("11", "서울특별시", "11680", "강남구", "11680105", "삼성동"),
+                false);
+        var index = relationPolicy.index(List.of(complex));
+
+        assertThat(relationPolicy.match("강남구 삼성동 래미안테스트 재건축", "아파트 정비사업", index))
+                .isEqualTo(relationPolicy.match("강남구 삼성동 래미안테스트 재건축", "아파트 정비사업", List.of(complex)));
+        assertThat(relationPolicy.match("서울특별시 강남구 공급", "주택 분양", index))
+                .isEqualTo(relationPolicy.match("서울특별시 강남구 공급", "주택 분양", List.of(complex)));
+    }
+
+    @Test
     @DisplayName("카테고리 동점은 고정 enum 순서로 결정하고 부동산 allowlist 없는 기사는 제외한다")
     void categoryUsesDeterministicOrderAndAllowlist() {
         MarketNewsClassificationPolicy policy = new MarketNewsClassificationPolicy();

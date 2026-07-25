@@ -94,7 +94,8 @@ KNOWN_VERIFICATION_COMMANDS = {
             ["./gradlew", "userServiceQualityCheck"],
         ),
         "cd apps/property-data && ./gradlew test": ("apps/property-data", ["./gradlew", "test"]),
-        DIFF_CHECK: (".", ["git", "diff", "--check", "main...HEAD"]),
+        DIFF_CHECK: (".", ["git", "diff", "--check"]),
+        "git diff --check main...HEAD": (".", ["git", "diff", "--check", "main...HEAD"]),
         PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
         PR_CONTEXT_SELF_TEST: (".", ["python3", ".codex/harness/pr_context.py", "--self-test"]),
         WORKLOG_SYNC_SELF_TEST: (".", ["python3", ".codex/harness/worklog_sync.py", "--self-test"]),
@@ -115,7 +116,8 @@ KNOWN_VERIFICATION_COMMANDS = {
         WEB_TEST: ("apps/web", ["npm", "run", "test"]),
         WEB_BUILD: ("apps/web", ["npm", "run", "build"]),
         DOCKER_COMPOSE_LOCAL_CONFIG: (".", ["bash", "infra/test-compose-config.sh"]),
-        DIFF_CHECK: (".", ["git", "diff", "--check", "main...HEAD"]),
+        DIFF_CHECK: (".", ["git", "diff", "--check"]),
+        "git diff --check main...HEAD": (".", ["git", "diff", "--check", "main...HEAD"]),
         PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
         PR_CONTEXT_SELF_TEST: (".", ["python3", ".codex/harness/pr_context.py", "--self-test"]),
         WORKLOG_SYNC_SELF_TEST: (".", ["python3", ".codex/harness/worklog_sync.py", "--self-test"]),
@@ -1535,6 +1537,9 @@ def run_self_test() -> int:
         ".codex/harness/evidence/self-test.md" in gate_prompt,
         "{{VERIFICATION_EVIDENCE}}" not in gate_prompt,
         "{{TDD_EVIDENCE_PATH}}" not in gate_prompt,
+        KNOWN_VERIFICATION_COMMANDS["backend"][DIFF_CHECK][1] == ["git", "diff", "--check"],
+        KNOWN_VERIFICATION_COMMANDS["backend"]["git diff --check main...HEAD"][1]
+        == ["git", "diff", "--check", "main...HEAD"],
     ]
     if all(checks):
         print("self-test passed: home_flow")

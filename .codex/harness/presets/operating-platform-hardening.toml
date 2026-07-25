@@ -18,6 +18,7 @@ verification_commands = [
   ".codex/harness/home --self-test",
   "python3 .codex/harness/project_terms_check.py",
   "git diff --check",
+  "git diff --check main...HEAD",
 ]
 
 [targets.frontend]

@@ -1,14 +1,18 @@
 import { Link } from 'react-router-dom';
 
+import { NewsIcon } from '../../shared/icons';
+import { MARKET_NEWS_ENABLED } from '../news/newsFeature';
 import { INSIGHT_METRICS, REGION_MODE, type InsightMetric } from './insightMetricConfig';
 
 export function MapModeNavigation({
   activeMetric,
   insightSearch,
+  isNewsActive,
   isRegionActive,
 }: {
   activeMetric: InsightMetric | null;
   insightSearch: string;
+  isNewsActive: boolean;
   isRegionActive: boolean;
 }) {
   const scopeParams = new URLSearchParams(insightSearch);
@@ -40,6 +44,17 @@ export function MapModeNavigation({
           </Link>
         );
       })}
+      {MARKET_NEWS_ENABLED ? (
+        <Link
+          aria-current={isNewsActive ? 'page' : undefined}
+          aria-label="부동산 뉴스"
+          className="map-mode-news-link"
+          to={`/insights/news?scope=${scope}${scope === 'SIDO' && regionCode ? `&regionCode=${regionCode}` : ''}&category=ALL`}
+        >
+          <NewsIcon aria-hidden="true" />
+          <span>뉴스</span>
+        </Link>
+      ) : null}
     </nav>
   );
 }

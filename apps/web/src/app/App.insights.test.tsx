@@ -62,7 +62,7 @@ describe('App 지도 인사이트 통합', () => {
     expect(insightRequestCount(fetchMock)).toBe(1);
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes('scope=SIDO&regionCode=11&limit=20'))).toBe(true);
     expect(rootElement.querySelector('a[aria-label="취소 인사이트"]')).toBeNull();
-    expect(rootElement.querySelectorAll('nav[aria-label="지도 탐색 모드"] a')).toHaveLength(6);
+    expect(rootElement.querySelectorAll('nav[aria-label="지도 탐색 모드"] a')).toHaveLength(7);
     expect(rootElement.textContent).not.toContain('최근 7일 취소 거래');
 
     unmount(root);

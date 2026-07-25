@@ -14,6 +14,55 @@ describe('DetailSidebar 모바일 탭', () => {
     }
   });
 
+  it('뉴스 flag가 꺼져도 기존 시세 요약은 유지하고 뉴스 tab과 section만 숨긴다', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+
+    await act(async () => {
+      root?.render(
+        <DetailSidebar
+          complexDetail={{
+            parcelId: 1001,
+            complexId: 501,
+            latitude: 37.5,
+            longitude: 127,
+            address: '서울시 테스트로',
+            displayName: '테스트아파트',
+            tradeName: '테스트아파트',
+            name: '테스트아파트',
+            dongCnt: 5,
+            unitCnt: 740,
+            platArea: null,
+            archArea: null,
+            totArea: null,
+            bcRat: null,
+            vlRat: null,
+            useDate: '2018-01-01',
+            prediction: null,
+          }}
+          detailError={null}
+          detailState="ready"
+          newsEnabled={false}
+          onBack={vi.fn()}
+          onComplexSelect={vi.fn()}
+          onRetryDetail={vi.fn()}
+          onLoadMoreTrades={vi.fn()}
+          parcelComplexes={[]}
+          parcelTrades={null}
+          selection={{ parcelId: 1001, complexId: 501 }}
+          tradeRows={[]}
+          tradeTrend={[]}
+        />,
+      );
+    });
+
+    expect(host.querySelector('.detail-price-overview')).not.toBeNull();
+    expect(host.querySelector('#detail-tab-news')).toBeNull();
+    expect(host.querySelector('#detail-tabpanel-news')).toBeNull();
+    host.remove();
+  });
+
   it('정보·시세·거래 tab은 aria-selected와 활성 section을 하나씩 전환한다', async () => {
     const host = document.createElement('div');
     document.body.append(host);
@@ -102,7 +151,8 @@ describe('DetailSidebar 모바일 탭', () => {
     expect(document.activeElement).toBe(trendTab);
 
     act(() => trendTab?.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })));
-    expect(document.activeElement).toBe(tradeTab);
+    const newsTab = host.querySelector<HTMLButtonElement>('#detail-tab-news');
+    expect(document.activeElement).toBe(newsTab);
 
     act(() => tradeTab?.click());
 
@@ -114,7 +164,7 @@ describe('DetailSidebar 모바일 탭', () => {
 
     const orderedSections = Array.from(host.querySelectorAll<HTMLElement>('[data-detail-order]'))
       .map((section) => section.dataset.detailOrder);
-    expect(orderedSections).toEqual(['identity', 'summary', 'switcher', 'information', 'trend', 'trades']);
+    expect(orderedSections).toEqual(['identity', 'summary', 'switcher', 'information', 'news', 'trend', 'trades']);
     expect(host.querySelector('.data-status-list')).toBeNull();
     expect(host.querySelectorAll('.detail-key-stats .detail-metric')).toHaveLength(2);
     expect(host.querySelector('.detail-key-stats')?.textContent).toContain('740세대 · 5개동 · 2018년');

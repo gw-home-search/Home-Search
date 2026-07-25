@@ -290,6 +290,12 @@ badge, quality notice, or empty state. A legacy `metric=cancellation` deep link
 is replaced with the default new-trade view while keeping the selected scope
 and region.
 
+News is a separate editorial list below the trade modes. Its navigation uses a
+generic line newspaper icon, never a provider initial, logo, or provider brand
+color. The rail uses neutral Ink typography, thin row dividers, category and
+date metadata, and two-line headlines without thumbnails or nested cards. The
+map remains visible and the same anatomy becomes the docked mobile sheet.
+
 ## Filters
 
 Each chip is two-line label/summary: 92×46px desktop, 88×46px tablet, and

@@ -1051,11 +1051,28 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
                         "11",
                         504L,
                         List.of("Gangnam", "Gangnam-gu", "Sample-dong")));
+        collectionRepository.saveRelation(
+                geographicNameArticleId,
+                "NEWS_V1",
+                MarketNewsCategory.SUPPLY_SALE,
+                new MarketNewsRelationMatch(
+                        MarketNewsRelationType.SAME_DONG, "11680103", null, List.of("Gangnam-gu", "Sample-dong")));
         long geographicNameRelationId = jdbcClient
                 .sql("""
                     SELECT relation_id
                     FROM market_news_relation
                     WHERE article_id = :articleId
+                      AND relation_type = 'DIRECT_COMPLEX'
+                    """)
+                .param("articleId", geographicNameArticleId)
+                .query(Long.class)
+                .single();
+        long geographicNameDongRelationId = jdbcClient
+                .sql("""
+                    SELECT relation_id
+                    FROM market_news_relation
+                    WHERE article_id = :articleId
+                      AND relation_type = 'SAME_DONG'
                     """)
                 .param("articleId", geographicNameArticleId)
                 .query(Long.class)
@@ -1072,9 +1089,37 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
                 .param("articleId", geographicNameArticleId)
                 .param("relationId", geographicNameRelationId)
                 .update();
+        UUID geographicFallbackSnapshotId = UUID.fromString("123e4567-e89b-12d3-a456-426614174604");
+        jdbcClient
+                .sql("""
+                    INSERT INTO market_news_snapshot (
+                        snapshot_id, execution_id, policy_version, scope_type, region_code,
+                        build_status, generated_at, data_cutoff, item_count
+                    ) VALUES (
+                        :snapshotId, :executionId, 'NEWS_V1', 'NATIONWIDE', NULL,
+                        'PUBLISHED', :generatedAt, :dataCutoff, 1
+                    )
+                    """)
+                .param("snapshotId", geographicFallbackSnapshotId)
+                .param("executionId", EXECUTION_ID)
+                .param("generatedAt", GENERATED_AT.atOffset(ZoneOffset.UTC))
+                .param("dataCutoff", GENERATED_AT.minusSeconds(60).atOffset(ZoneOffset.UTC))
+                .update();
+        jdbcClient
+                .sql("""
+                    INSERT INTO market_news_snapshot_item (
+                        snapshot_id, article_id, relation_id, category, sort_rank, provider_rank
+                    ) VALUES (
+                        :snapshotId, :articleId, :relationId, 'SUPPLY_SALE', 1, 2
+                    )
+                    """)
+                .param("snapshotId", geographicFallbackSnapshotId)
+                .param("articleId", geographicNameArticleId)
+                .param("relationId", geographicNameDongRelationId)
+                .update();
 
         assertThat(repository.findComplexNews(504L, 5))
-                .as("행정구역 지명과 같은 단지명으로 만들어진 기존 direct relation도 공개하지 않는다")
+                .as("억제한 지명 direct article은 같은 동 fallback으로도 우회 공개하지 않는다")
                 .isEmpty();
 
         UUID replacementSnapshotId = UUID.fromString("123e4567-e89b-12d3-a456-426614174602");
@@ -1112,8 +1157,10 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
 
         assertThat(repository.findComplexNews(501L, 5))
                 .as("현재 snapshot 회수 후에도 직전 last-good 단지 뉴스를 유지한다")
-                .singleElement()
-                .satisfies(item -> assertThat(item.articleId()).isEqualTo(articleId));
+                .anySatisfy(item -> {
+                    assertThat(item.articleId()).isEqualTo(articleId);
+                    assertThat(item.relationType()).isEqualTo(MarketNewsRelationType.DIRECT_COMPLEX);
+                });
     }
 
     private void insertCompletedNationwideExecution(UUID executionId, Instant generatedAt) {

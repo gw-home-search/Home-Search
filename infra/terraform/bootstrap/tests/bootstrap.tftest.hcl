@@ -73,4 +73,63 @@ run "secure_remote_state_and_exact_oidc_trust" {
     ]
     error_message = "The staging deployment role must not update ECS services outside the Home Search staging cluster."
   }
+  assert {
+    condition = alltrue([
+      length(local.staging_ecs_task_role_names) == 40,
+      length(one([
+        for statement in jsondecode(aws_iam_role_policy.github_staging_deployment.policy).Statement : statement.Resource
+        if statement.Sid == "PassStagingEcsTaskRolesOnly"
+      ])) == 40,
+      contains(local.staging_ecs_task_role_names, "home-search-staging-user-insight-worker-execution"),
+      contains(local.staging_ecs_task_role_names, "home-search-staging-user-insight-worker-task"),
+      contains(local.staging_ecs_task_role_names, "home-search-staging-property-event-maintenance-execution"),
+      contains(local.staging_ecs_task_role_names, "home-search-staging-property-event-maintenance-task"),
+      alltrue([
+        for resource in one([
+          for statement in jsondecode(aws_iam_role_policy.github_staging_deployment.policy).Statement : statement.Resource
+          if statement.Sid == "PassStagingEcsTaskRolesOnly"
+        ]) : startswith(resource, "arn:aws:iam::123456789012:role/home-search-staging-") && !strcontains(resource, "*")
+      ]),
+    ])
+    error_message = "The deployment role may pass only the exact workload-specific staging execution and task roles."
+  }
+  assert {
+    condition = contains(
+      one([
+        for statement in jsondecode(aws_iam_role_policy.github_staging_deployment.policy).Statement : statement.Resource
+        if statement.Sid == "EnableReviewedStagingSchedules"
+      ]),
+      "arn:aws:scheduler:ap-northeast-2:123456789012:schedule/home-search-staging-property-event-retention/home-search-staging-property-event-retention",
+    )
+    error_message = "The deployment role must be able to enable the reviewed property event retention schedule."
+  }
+  assert {
+    condition = one([
+      for statement in jsondecode(aws_iam_role_policy.github_staging_deployment.policy).Statement : statement.Resource
+      if statement.Sid == "PassStagingSchedulerRoleOnly"
+      ]) == [
+      "arn:aws:iam::123456789012:role/home-search-staging-backup-scheduler",
+      "arn:aws:iam::123456789012:role/home-search-staging-market-news-scheduler",
+      "arn:aws:iam::123456789012:role/home-search-staging-property-event-relay-scheduler",
+      "arn:aws:iam::123456789012:role/home-search-staging-property-event-retention-scheduler",
+    ]
+    error_message = "The deployment role may pass only the reviewed staging scheduler roles to EventBridge Scheduler."
+  }
+  assert {
+    condition = alltrue([
+      length(local.staging_release_alarm_names) == 7,
+      one([
+        for statement in jsondecode(aws_iam_role_policy.github_staging_deployment.policy).Statement : statement.Resource
+        if statement.Sid == "ManageStagingReleaseAlarms"
+        ]) == [
+        for alarm_name in local.staging_release_alarm_names :
+        "arn:aws:cloudwatch:ap-northeast-2:123456789012:alarm:${alarm_name}"
+      ],
+      alltrue([
+        for alarm_name in local.staging_release_alarm_names :
+        startswith(alarm_name, "home-search-staging-") && endswith(alarm_name, "-running-task")
+      ]),
+    ])
+    error_message = "The deployment role may manage only exact staging ECS running-task alarms."
+  }
 }

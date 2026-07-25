@@ -21,7 +21,7 @@ run "private_encrypted_staging_foundation" {
     admin_certificate_arn  = "arn:aws:acm:ap-northeast-2:123456789012:certificate/22222222-2222-2222-2222-222222222222"
     image_digests = { for name in [
       "property-api", "property-batch", "property-flyway", "admin-api", "admin-migration", "admin-ops",
-      "user-api", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
+      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
     ] : name => "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   }
 
@@ -38,7 +38,7 @@ run "private_encrypted_staging_foundation" {
     error_message = "Public and admin ALBs must use separate security groups."
   }
   assert {
-    condition     = length(aws_security_group.task) == 7 && aws_security_group.database_primary.name != aws_security_group.database_coordinate.name
+    condition     = length(aws_security_group.task) == 11 && aws_security_group.database_primary.name != aws_security_group.database_coordinate.name
     error_message = "Workload identities and the two database network boundaries must remain separate."
   }
   assert {
@@ -81,13 +81,24 @@ run "private_encrypted_staging_foundation" {
     error_message = "Every workload log group must retain at least 30 days."
   }
   assert {
-    condition     = length(aws_secretsmanager_secret.container) == 6 && aws_kms_key.data.enable_key_rotation
-    error_message = "Secret containers and the rotating staging KMS key must be present."
+    condition = toset(keys(local.required_tags)) == toset([
+      "Project", "Environment", "Service", "Owner", "ManagedBy", "DataClass",
+    ])
+    error_message = "Every taggable staging resource must inherit the six required ownership and data-class tags."
   }
   assert {
-    condition = length(aws_ecs_service.service) == 0 && length(aws_ecs_task_definition.one_shot) == 11 && alltrue([
-      for schedule in aws_scheduler_schedule.database_backup : schedule.state == "DISABLED"
-    ])
+    condition     = length(aws_secretsmanager_secret.container) == 18 && aws_kms_key.data.enable_key_rotation
+    error_message = "External, transition, and workload-specific secret containers must use the rotating staging KMS key."
+  }
+  assert {
+    condition = (
+      length(aws_ecs_service.service) == 0 &&
+      length(aws_ecs_task_definition.one_shot) == 13 &&
+      alltrue([for schedule in aws_scheduler_schedule.database_backup : schedule.state == "DISABLED"]) &&
+      alltrue([for schedule in aws_scheduler_schedule.market_news : schedule.state == "DISABLED"]) &&
+      aws_scheduler_schedule.property_event_relay.state == "DISABLED" &&
+      aws_scheduler_schedule.property_event_retention.state == "DISABLED"
+    )
     error_message = "Initial apply must define bootstrap tasks without starting services against empty secrets."
   }
 }
@@ -102,7 +113,7 @@ run "reject_world_open_admin_ingress" {
     admin_certificate_arn  = "arn:aws:acm:ap-northeast-2:123456789012:certificate/22222222-2222-2222-2222-222222222222"
     image_digests = { for name in [
       "property-api", "property-batch", "property-flyway", "admin-api", "admin-migration", "admin-ops",
-      "user-api", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
+      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
     ] : name => "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   }
   expect_failures = [var.admin_allowed_cidrs]

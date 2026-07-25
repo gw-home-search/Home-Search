@@ -22,7 +22,7 @@ run "encrypted_scheduled_backup_and_restore_verification" {
     enable_backup_schedules = true
     image_digests = { for name in [
       "property-api", "property-batch", "property-flyway", "admin-api", "admin-migration", "admin-ops",
-      "user-api", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
+      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
     ] : name => "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   }
 
@@ -65,12 +65,86 @@ run "encrypted_scheduled_backup_and_restore_verification" {
   }
 
   assert {
-    condition     = aws_iam_role.backup_task.name != aws_iam_role.runtime_task.name && length(aws_cloudwatch_log_metric_filter.database_backup) == 7
+    condition = alltrue([
+      local.workload_task_role_names["backup"] != local.workload_task_role_names["property-api"],
+      local.workload_task_role_names["restore-verification"] != local.workload_task_role_names["backup"],
+      length(aws_iam_role_policy.backup_task) == 2,
+      contains(local.backup_task_permissions["backup"].object_actions, "s3:PutObject"),
+      !contains(local.backup_task_permissions["restore-verification"].object_actions, "s3:PutObject"),
+      local.backup_task_permissions["restore-verification"].kms_actions == ["kms:Decrypt"],
+      length(aws_cloudwatch_log_metric_filter.database_backup) == 7,
+    ])
     error_message = "Backup tasks require their scoped S3/KMS role and complete success/failure/age/checksum/duration metrics."
   }
 
   assert {
-    condition     = length(aws_cloudwatch_metric_alarm.schedule_target_error) == 2 && aws_cloudwatch_metric_alarm.backup_age.treat_missing_data == "breaching"
-    error_message = "Both schedules need target-error alarms and missing backup-age evidence must alarm."
+    condition = alltrue([
+      length(local.scheduler_assume_policies) == 4,
+      alltrue([
+        for group, policy in local.scheduler_assume_policies :
+        strcontains(policy, "\"aws:SourceAccount\"") &&
+        strcontains(policy, "\"aws:SourceArn\"") &&
+        strcontains(policy, "schedule-group/home-search-staging-${group}") &&
+        !strcontains(policy, "schedule-group/home-search-staging-*")
+      ]),
+      aws_iam_role.backup_scheduler.assume_role_policy == local.scheduler_assume_policies["database-backup"],
+      aws_iam_role.market_news_scheduler.assume_role_policy == local.scheduler_assume_policies["market-news"],
+      aws_iam_role.property_event_relay_scheduler.assume_role_policy == local.scheduler_assume_policies["property-event-relay"],
+      aws_iam_role.property_event_retention_scheduler.assume_role_policy == local.scheduler_assume_policies["property-event-retention"],
+    ])
+    error_message = "Each Scheduler role must trust only its exact account-scoped staging schedule group."
+  }
+
+  assert {
+    condition = alltrue([
+      length(aws_cloudwatch_metric_alarm.schedule_target_error) == 4,
+      alltrue([
+        for alarm in values(aws_cloudwatch_metric_alarm.schedule_target_error) :
+        length(keys(alarm.dimensions)) == 1 && contains(keys(alarm.dimensions), "ScheduleGroup")
+      ]),
+      aws_cloudwatch_metric_alarm.backup_age.threshold == 93600,
+      aws_cloudwatch_metric_alarm.backup_age.treat_missing_data == "breaching",
+    ])
+    error_message = "Scheduler alarms must use valid ScheduleGroup-only dimensions and the backup-age alarm must use the 26-hour threshold."
+  }
+
+  assert {
+    condition = alltrue(concat(
+      [
+        for alarm in values(aws_cloudwatch_metric_alarm.schedule_target_error) :
+        length(alarm.alarm_actions) > 0
+      ],
+      [
+        length(aws_cloudwatch_metric_alarm.checksum_mismatch.alarm_actions) > 0,
+        length(aws_cloudwatch_metric_alarm.backup_age.alarm_actions) > 0,
+        length(aws_cloudwatch_metric_alarm.scheduler_dlq_visible.alarm_actions) > 0,
+        length(aws_cloudwatch_metric_alarm.database_task_failure) == 2,
+        alltrue([
+          for alarm in values(aws_cloudwatch_metric_alarm.database_task_failure) :
+          length(alarm.alarm_actions) > 0
+        ]),
+      ],
+    ))
+    error_message = "Scheduler, checksum, DLQ, and backup-age alarms must have non-empty SNS actions."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_kms_key.operations.enable_key_rotation,
+      strcontains(aws_kms_key.operations.policy, "cloudwatch.amazonaws.com"),
+      strcontains(aws_kms_key.operations.policy, "kms:GenerateDataKey*"),
+      strcontains(aws_kms_key.operations.policy, "kms:Decrypt"),
+      strcontains(aws_sns_topic_policy.operations.policy, "cloudwatch.amazonaws.com"),
+      strcontains(aws_sns_topic_policy.operations.policy, "sns:Publish"),
+      strcontains(aws_sns_topic_policy.operations.policy, "aws:SourceArn"),
+      strcontains(aws_sns_topic_policy.operations.policy, "aws:SourceAccount"),
+      aws_sqs_queue.scheduler_failure.sqs_managed_sse_enabled,
+      aws_sqs_queue.scheduler_failure.message_retention_seconds == 1209600,
+      alltrue([
+        for schedule in values(aws_scheduler_schedule.database_backup) :
+        length(schedule.target[0].dead_letter_config) == 1
+      ]),
+    ])
+    error_message = "Every database schedule must send exhausted invocations to the encrypted 14-day Scheduler DLQ."
   }
 }

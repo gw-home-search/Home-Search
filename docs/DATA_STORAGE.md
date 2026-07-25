@@ -686,6 +686,11 @@ are stored on the review set. A missing minimum is durable
 `NEWS_V3` preserves the `NEWS_V2` matcher and rejection rules while adding a
 second SIDO and major-complex query template. This increases the candidate
 pool without weakening region or direct-complex evidence requirements.
+`NEWS_V4` rejects a direct-complex match when the matched complex token equals
+its SIDO, SIGUNGU, or DONG name after removing the administrative suffix.
+Public reads apply the same guard to older stored relations, so evidence such
+as a model-house address cannot keep a geographic-only complex name exposed as
+`DIRECT_COMPLEX`; raw and relation rows remain queryable.
 Once captured, a review set never switches to newer or withdrawn publication
 snapshots on retry. Snapshot/article/relation rows referenced by a review set
 are retained with the 180-day quality evidence and then removed child-first.

@@ -30,6 +30,12 @@ relation.
   matcher and rejection policy unchanged and adds one supplemental query per
   SIDO and per major complex. Each SIDO publishes only after both of its query
   work units finish, so extra volume cannot bypass scope atomicity.
+- A `NEWS_V3` spot review found a geographic-only complex name could become a
+  false direct relation when a different apartment article listed a model
+  house in the target DONG. `NEWS_V4` excludes matched complex tokens equal to
+  the target SIDO, SIGUNGU, or DONG after administrative-suffix removal. The
+  public reader mirrors this guard for existing relations without deleting
+  their evidence.
 - Every provider item is stored in `market_news_raw_item` before validation.
   Normalization strips markup, decodes entities, validates RFC 1123 time and an
   HTTP(S) URL without userinfo, then deduplicates by a separately calculated

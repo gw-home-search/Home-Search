@@ -154,7 +154,7 @@ Home Search backend collection and map display need:
   `MarketNewsWithdrawalReason`. It changes only the current pointer; PostgreSQL
   and Redis last-good evidence remain available as `STALE`.
 - `marketNewsQualitySampleJob --reviewSetId={canonical-uuid}
-  --policyVersion=NEWS_V3` stores a deterministic review set. Missing category,
+  --policyVersion=NEWS_V4` stores a deterministic review set. Missing category,
   SIDO, relation, challenge, or URL minima are recorded as
   `INSUFFICIENT_SAMPLE` rather than treated as a pass.
 - The initial 30-day collection uses

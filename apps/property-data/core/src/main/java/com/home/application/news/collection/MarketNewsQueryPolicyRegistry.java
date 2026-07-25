@@ -5,7 +5,7 @@ import java.util.List;
 
 public final class MarketNewsQueryPolicyRegistry {
 
-    public static final String POLICY_VERSION = "NEWS_V3";
+    public static final String POLICY_VERSION = "NEWS_V4";
 
     public List<NewsQueryTemplate> nationwide() {
         return List.of(

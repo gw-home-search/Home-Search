@@ -9,6 +9,10 @@ import java.util.Set;
 
 public final class MarketNewsRelationPolicy {
 
+    private static final List<String> ADMINISTRATIVE_SUFFIXES = List.of(
+            "특별자치도", "특별자치시", "특별시", "광역시", "-myeon", "-dong", "-gun", "-eup", "-do", "-si", "-gu", "-ri", "도", "시",
+            "군", "구", "동", "읍", "면", "리");
+
     public List<MarketNewsRelationMatch> match(String title, String description, List<NewsComplexEvidence> complexes) {
         return match(title, description, index(complexes));
     }
@@ -38,7 +42,10 @@ public final class MarketNewsRelationPolicy {
             boolean sigungu = containsNormalized(text, indexed.sigunguName());
             boolean dong = containsNormalized(text, indexed.dongName());
             boolean sido = containsNormalized(text, indexed.sidoName());
-            if (matchedName != null && sigungu && (!requiresDong(complex, matchedName) || dong)) {
+            if (matchedName != null
+                    && !indexed.geographicNames().contains(normalize(matchedName))
+                    && sigungu
+                    && (!requiresDong(complex, matchedName) || dong)) {
                 matches.add(new MarketNewsRelationMatch(
                         MarketNewsRelationType.DIRECT_COMPLEX,
                         region.sidoCode(),
@@ -72,7 +79,40 @@ public final class MarketNewsRelationPolicy {
                         .toList(),
                 normalize(region == null ? null : region.sidoName()),
                 normalize(region == null ? null : region.sigunguName()),
-                normalize(region == null ? null : region.dongName()));
+                normalize(region == null ? null : region.dongName()),
+                geographicNames(region));
+    }
+
+    private Set<String> geographicNames(NewsRegionEvidence region) {
+        if (region == null) {
+            return Set.of();
+        }
+        Set<String> names = new LinkedHashSet<>();
+        addGeographicName(names, region.sidoName());
+        addGeographicName(names, region.sigunguName());
+        addGeographicName(names, region.dongName());
+        return Set.copyOf(names);
+    }
+
+    private void addGeographicName(Set<String> names, String value) {
+        if (!hasText(value)) {
+            return;
+        }
+        names.add(normalize(value));
+        String stripped = stripAdministrativeSuffix(value);
+        if (hasText(stripped)) {
+            names.add(normalize(stripped));
+        }
+    }
+
+    private String stripAdministrativeSuffix(String value) {
+        String trimmed = value.trim();
+        for (String suffix : ADMINISTRATIVE_SUFFIXES) {
+            if (trimmed.endsWith(suffix) && trimmed.length() > suffix.length()) {
+                return trimmed.substring(0, trimmed.length() - suffix.length());
+            }
+        }
+        return trimmed;
     }
 
     private boolean requiresDong(NewsComplexEvidence complex, String matchedName) {
@@ -148,7 +188,8 @@ public final class MarketNewsRelationPolicy {
             List<IndexedName> names,
             String sidoName,
             String sigunguName,
-            String dongName) {}
+            String dongName,
+            Set<String> geographicNames) {}
 
     private record IndexedName(String original, String normalized) {}
 }

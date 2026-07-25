@@ -164,9 +164,52 @@ public class JdbcMarketNewsReadRepository implements MarketNewsReadRepository {
                     JOIN market_news_article article ON article.article_id = relation.article_id
                     JOIN market_news_snapshot_item item ON item.relation_id = relation.relation_id
                     JOIN readable_snapshot snapshot ON snapshot.snapshot_id = item.snapshot_id
+                    JOIN complex direct_target ON direct_target.id = relation.complex_id
+                    LEFT JOIN region direct_region0 ON direct_region0.id = direct_target.region_id
+                    LEFT JOIN region direct_region1 ON direct_region1.id = direct_region0.parent_id
+                    LEFT JOIN region direct_region2 ON direct_region2.id = direct_region1.parent_id
                     LEFT JOIN region ON region.code = relation.region_code
                     WHERE relation.complex_id = :complexId
                       AND relation.relation_type = 'DIRECT_COMPLEX'
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM (VALUES
+                              (direct_region0.name),
+                              (direct_region1.name),
+                              (direct_region2.name)
+                          ) geographic(name)
+                          WHERE geographic.name IS NOT NULL
+                            AND (
+                                regexp_replace(
+                                    lower(relation.matched_tokens[1]),
+                                    '[^0-9a-z가-힣]+',
+                                    '',
+                                    'g'
+                                ) = regexp_replace(
+                                    lower(geographic.name),
+                                    '[^0-9a-z가-힣]+',
+                                    '',
+                                    'g'
+                                )
+                                OR
+                                regexp_replace(
+                                    lower(relation.matched_tokens[1]),
+                                    '[^0-9a-z가-힣]+',
+                                    '',
+                                    'g'
+                                ) = regexp_replace(
+                                    lower(regexp_replace(
+                                        geographic.name,
+                                        '(특별자치도|특별자치시|특별시|광역시|-myeon|-dong|-gun|-eup|-do|-si|-gu|-ri|도|시|군|구|동|읍|면|리)$',
+                                        '',
+                                        'i'
+                                    )),
+                                    '[^0-9a-z가-힣]+',
+                                    '',
+                                    'g'
+                                )
+                            )
+                      )
                       AND article.provided_at >= :retentionCutoff
                     UNION ALL
                     SELECT article.article_id, relation.category, article.title,

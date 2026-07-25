@@ -722,14 +722,14 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
     }
 
     @Test
-    @DisplayName("NEWS_V3 general plan은 6개 전국 query와 root SIDO별 보충 query를 raw work unit으로 고정한다")
+    @DisplayName("NEWS_V4 general plan은 6개 전국 query와 root SIDO별 보충 query를 raw work unit으로 고정한다")
     void plansVersionedGeneralQueriesAndComplexCorpus() {
         Instant scheduledAt = GENERATED_AT.plusSeconds(60);
 
         var execution = collectionRepository.planGeneral(
                 "123e4567-e89b-12d3-a456-426614174600", scheduledAt, scheduledAt.minusSeconds(7200), 4000);
 
-        assertThat(execution.policyVersion()).isEqualTo("NEWS_V3");
+        assertThat(execution.policyVersion()).isEqualTo("NEWS_V4");
         assertThat(execution.workUnits()).hasSize(8);
         assertThat(execution.workUnits().stream().filter(unit -> unit.scopeType() == MarketNewsScopeType.NATIONWIDE))
                 .hasSize(6);
@@ -1020,6 +1020,62 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
             assertThat(item.articleId()).isEqualTo(articleId);
             assertThat(item.relationType()).isEqualTo(MarketNewsRelationType.DIRECT_COMPLEX);
         });
+
+        jdbcClient.sql("""
+                    INSERT INTO parcel (id, region_id, pnu, address, latitude, longitude)
+                    VALUES (1004, 111, '1168010300101410001', 'Gangnam model house address', 37.5124, 127.0457)
+                    """).update();
+        jdbcClient.sql("""
+                    INSERT INTO complex (
+                        id, parcel_id, region_id, complex_pk, apt_seq, name, unit_cnt
+                    ) VALUES (
+                        504, 1004, 111, 'COMPLEX-PK-504', 'APT-504', 'Gangnam', 300
+                    )
+                    """).update();
+        long geographicNameArticleId = collectionRepository.upsertArticle(
+                new NormalizedNewsItem(
+                        "Different Apartment subscription",
+                        "Gangnam project model house is at Seoul Gangnam-gu Sample-dong",
+                        "https://news.example.test/complex/geographic-name",
+                        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                        GENERATED_AT.minusSeconds(300),
+                        1,
+                        2),
+                GENERATED_AT);
+        collectionRepository.saveRelation(
+                geographicNameArticleId,
+                "NEWS_V1",
+                MarketNewsCategory.SUPPLY_SALE,
+                new MarketNewsRelationMatch(
+                        MarketNewsRelationType.DIRECT_COMPLEX,
+                        "11",
+                        504L,
+                        List.of("Gangnam", "Gangnam-gu", "Sample-dong")));
+        long geographicNameRelationId = jdbcClient
+                .sql("""
+                    SELECT relation_id
+                    FROM market_news_relation
+                    WHERE article_id = :articleId
+                    """)
+                .param("articleId", geographicNameArticleId)
+                .query(Long.class)
+                .single();
+        jdbcClient
+                .sql("""
+                    INSERT INTO market_news_snapshot_item (
+                        snapshot_id, article_id, relation_id, category, sort_rank, provider_rank
+                    ) VALUES (
+                        :snapshotId, :articleId, :relationId, 'SUPPLY_SALE', 2, 2
+                    )
+                    """)
+                .param("snapshotId", snapshotId)
+                .param("articleId", geographicNameArticleId)
+                .param("relationId", geographicNameRelationId)
+                .update();
+
+        assertThat(repository.findComplexNews(504L, 5))
+                .as("행정구역 지명과 같은 단지명으로 만들어진 기존 direct relation도 공개하지 않는다")
+                .isEmpty();
 
         UUID replacementSnapshotId = UUID.fromString("123e4567-e89b-12d3-a456-426614174602");
         jdbcClient

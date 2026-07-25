@@ -72,6 +72,22 @@ class MarketNewsPoliciesTest {
     }
 
     @Test
+    @DisplayName("시군구 지명과 동일한 단지명은 견본주택 주소가 있어도 직접 단지 relation을 만들지 않는다")
+    void geographicComplexNameDoesNotCreateDirectRelationFromModelHouseAddress() {
+        NewsComplexEvidence complex = new NewsComplexEvidence(
+                32852L,
+                "김포",
+                "김포",
+                List.of(),
+                new NewsRegionEvidence("41", "경기도", "41570", "김포시", "41570106", "사우동"),
+                false);
+
+        assertThat(relationPolicy.match(
+                        "호반써밋 풍무Ⅲ 1순위 청약 마감", "김포 풍무역세권 아파트의 견본주택은 경기도 김포시 사우동 547-8번지에 위치한다", List.of(complex)))
+                .noneMatch(match -> match.relationType() == MarketNewsRelationType.DIRECT_COMPLEX);
+    }
+
+    @Test
     @DisplayName("카테고리 동점은 고정 enum 순서로 결정하고 부동산 allowlist 없는 기사는 제외한다")
     void categoryUsesDeterministicOrderAndAllowlist() {
         MarketNewsClassificationPolicy policy = new MarketNewsClassificationPolicy();

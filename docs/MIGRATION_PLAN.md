@@ -194,6 +194,12 @@ The approved daily trade slice is integrated into the existing map rail at
 queries depend on insight snapshot state. Nationwide and each root SIDO are
 ranked independently from one complete DAILY execution.
 
+The approved news slice is integrated at `/insights/news` and
+`/api/v1/complex/{complexId}/news`. V20-V21 add raw-first provider evidence,
+versioned relations, atomic scope snapshots, weekly major-complex selection,
+quality labels, and runtime grants. Provider enablement and external schedules
+remain fail-closed until ADR 0006 credential/quality gates pass.
+
 The public `/api/v1/insights/trades/weekly` URL now represents the latest
 completed-batch rolling seven-day window rather than a calendar week.
 `periodEnd` is the eligible DAILY run date and `periodStart` is six days

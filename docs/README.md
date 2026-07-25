@@ -124,6 +124,16 @@ chatbot overlay에서만 연결된다. 두 서비스는
 20. [ADR 0002](adr/0002-market-insight-news-and-digest-boundary.md)
 21. [ADR 0003](adr/0003-rolling-seven-day-market-insight.md)
 22. [ADR 0004](adr/0004-rolling-registration-date-fallback.md)
+23. [ADR 0005](adr/0005-recent-comparable-trade-rankings.md)
+24. [ADR 0006](adr/0006-market-news-evidence-publication-and-quality.md)
+25. [OPERATING_PLATFORM_PLAN.md](OPERATING_PLATFORM_PLAN.md)
+26. [KAFKA_EVENT_ARCHITECTURE.md](KAFKA_EVENT_ARCHITECTURE.md)
+27. [TERRAFORM_ENVIRONMENT_DESIGN.md](TERRAFORM_ENVIRONMENT_DESIGN.md)
+28. [CD_AND_RELEASE_RUNBOOK.md](CD_AND_RELEASE_RUNBOOK.md)
+29. [DATA_MIGRATION_AND_DR_RUNBOOK.md](DATA_MIGRATION_AND_DR_RUNBOOK.md)
+30. [ADR 0007](adr/0007-kafka-first-asynchronous-state-and-http-exceptions.md)
+31. [ADR 0008](adr/0008-production-database-ownership-and-ai-read-retirement.md)
+32. [ADR 0009](adr/0009-immutable-digest-promotion-and-terraform-environment-isolation.md)
 
 ## Non-Negotiable Decisions
 

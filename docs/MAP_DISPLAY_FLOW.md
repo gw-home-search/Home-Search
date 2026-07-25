@@ -183,6 +183,24 @@ Kakao runtime ready -> category default []
 처리하며 기본 지도는 계속 사용할 수 있다. property marker는 숨기지 않고 기존
 선택·클릭 동작을 유지한다.
 
+## News Rail Flow
+
+```text
+/insights/news route
+  -> keep MapApp and current map viewport mounted
+  -> normalize scope/root SIDO/category URL state
+  -> read one published PostgreSQL snapshot page
+  -> render FRESH, STALE, UNAVAILABLE, empty, or isolated error state
+  -> cursor append without replacing existing rows on failure
+  -> external article opens in a new tab
+```
+
+Category or region changes abort the previous request and increment a sequence
+guard. Re-entry and `visibilitychange=visible` refresh only after a five-minute
+TTL or KST date change; there is no polling. Opening and closing complex detail
+does not recreate the map. Complex news uses a separate top-five snapshot read,
+so its failure does not affect detail, trade, or trend state.
+
 ## Acceptance Criteria
 
 - Moving or zooming the map triggers marker refresh.

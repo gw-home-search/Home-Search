@@ -659,3 +659,47 @@ for the same `runDate` atomically changes the old 18 rows to `SUPERSEDED` and
 the replacements to `PUBLISHED`; a calculation or coverage failure leaves the
 prior `PUBLISHED` rows intact. Existing `WEEKLY`, `REJECTED`, and V18 lineage
 evidence is immutable historical evidence and is not rewritten.
+
+## Additive Market News Storage
+
+V20 adds `market_news_collection_execution`,
+`market_news_collection_work_unit`, `market_news_raw_item`,
+`market_news_article`, `market_news_relation`, `market_news_snapshot`,
+`market_news_snapshot_item`, `market_news_major_complex_selection`, and
+`market_news_quality_label`. V21 grants the property runtime only the table and
+identity-sequence privileges required by the Batch/API adapters. V24 adds
+`market_news_quality_review_set`, binds quality labels to their review set,
+article, and relation with FKs, and grants only the new review-set table to the
+property runtime. V25 pins the exact publication snapshots used by each review
+set in `market_news_quality_review_snapshot`. V1-V23 remain unchanged.
+
+The grains are `(work_unit_id, provider_start, provider_rank)` for raw,
+`(provider, canonical_url_hash)` for article,
+`(article_id, policy_version, relation_type, region_code, complex_id)` for
+relation, `(snapshot_id, article_id)` for snapshot item, and
+`(review_set_id, article_id, relation_id)` for quality labels. Raw rows precede
+article creation. Rejected items retain a stable `NewsRejectionReason`.
+Quality sampling is deterministic for `(review_set_id, policy_version)`;
+category, 17-SIDO, relation, duplicate/short-name challenge, and URL coverage
+are stored on the review set. A missing minimum is durable
+`INSUFFICIENT_SAMPLE`, not an implicit pass.
+`NEWS_V3` preserves the `NEWS_V2` matcher and rejection rules while adding a
+second SIDO and major-complex query template. This increases the candidate
+pool without weakening region or direct-complex evidence requirements.
+Once captured, a review set never switches to newer or withdrawn publication
+snapshots on retry. Snapshot/article/relation rows referenced by a review set
+are retained with the 180-day quality evidence and then removed child-first.
+
+Snapshot transitions are `BUILDING -> PUBLISHED|REJECTED` and
+`PUBLISHED -> SUPERSEDED|WITHDRAWN`. Execution transitions are
+`PLANNED -> RUNNING -> COMPLETED|PARTIAL|FAILED`; work-unit transitions are
+`PLANNED -> RUNNING -> COMPLETED|TRUNCATED|FAILED|SKIPPED_BUDGET`.
+Before the current pointer changes, the automatic hard gate checks item count,
+canonical uniqueness, title/HTTP(S) URL validity, relation policy/category
+lineage, and the 30-day/future-time boundary. A failed build remains
+`REJECTED`. A reviewed publication can be moved to `WITHDRAWN` with a stable
+`MarketNewsWithdrawalReason`; the prior `SUPERSEDED` snapshot remains the
+queryable last-good result.
+Raw retention is seven days, normalized news 30 days, and execution/review
+evidence 180 days. Retention deletes children before parents and never removes
+the current published snapshot.

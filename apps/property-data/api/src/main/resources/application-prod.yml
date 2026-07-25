@@ -1,0 +1,45 @@
+spring:
+  datasource:
+    url: "${DB_JDBC_URL}"
+    username: "${DB_USERNAME}"
+    password: "${DB_PASSWORD}"
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: false
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+server:
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+home:
+  news:
+    public:
+      enabled: "${HOME_NEWS_PUBLIC_ENABLED:false}"
+  admin:
+    internal:
+      public-keys: "${HOME_ADMIN_INTERNAL_PUBLIC_KEYS}"
+  coordinate-source:
+    db:
+      jdbc-url: "${COORDINATE_SOURCE_DB_JDBC_URL}"
+      username: "${COORDINATE_SOURCE_DB_USERNAME}"
+      password: "${COORDINATE_SOURCE_DB_PASSWORD}"
+      connect-timeout-seconds: "${COORDINATE_SOURCE_DB_CONNECT_TIMEOUT_SECONDS:5}"
+      socket-timeout-seconds: "${COORDINATE_SOURCE_DB_SOCKET_TIMEOUT_SECONDS:10}"
+      lock-timeout-millis: "${COORDINATE_SOURCE_DB_LOCK_TIMEOUT_MILLIS:1000}"
+      statement-timeout-millis: "${COORDINATE_SOURCE_DB_STATEMENT_TIMEOUT_MILLIS:3000}"
+      read-only: "${COORDINATE_SOURCE_DB_READ_ONLY:true}"

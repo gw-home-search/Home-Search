@@ -31,6 +31,7 @@ class LocalRuntimeStackConfigurationTest {
         assertThat(LOCAL_COMPOSE).exists();
 
         String content = Files.readString(LOCAL_COMPOSE);
+        String apiService = content.substring(content.indexOf("\n  api:"), content.indexOf("\n  public-api-gateway:"));
         String webService = content.substring(content.indexOf("\n  web:"), content.indexOf("\n  admin-service:"));
         String operationalDbUrl = "DB_JDBC_URL: jdbc:postgresql://postgis:5432/${HOME_SEARCH_DB_NAME:-home_search}";
         String coordinateSourceDbUrl =
@@ -54,11 +55,26 @@ class LocalRuntimeStackConfigurationTest {
         assertThat(content)
                 .contains(
                         "HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY: ${HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY:-false}");
+        assertThat(content).contains("HOME_NEWS_PUBLIC_ENABLED: ${HOME_NEWS_PUBLIC_ENABLED:-false}");
+        assertThat(apiService).contains("NAVER_NEWS_API_KEY_ID: \"\"");
+        assertThat(apiService).contains("NAVER_NEWS_API_KEY: \"\"");
+        assertThat(apiService).contains("HOME_NEWS_NAVER_CLIENT_ID: \"\"");
+        assertThat(apiService).contains("HOME_NEWS_NAVER_CLIENT_SECRET: \"\"");
+        assertThat(apiService)
+                .contains(
+                        "cp /source/property-data-api.jar /app/property-data-api.jar && exec java -jar /app/property-data-api.jar");
+        assertThat(apiService)
+                .contains(
+                        "../apps/property-data/api/build/libs/property-data-api.jar:/source/property-data-api.jar:ro");
+        assertThat(apiService)
+                .doesNotContain(
+                        "../apps/property-data/api/build/libs/property-data-api.jar:/app/property-data-api.jar:ro");
         assertThat(content).doesNotContain("SPRING_FLYWAY_ENABLED");
         assertThat(content).doesNotContain("SPRING_FLYWAY_LOCATIONS");
         assertThat(content).doesNotContain("SPRING_FLYWAY_IGNORE_MIGRATION_PATTERNS");
         assertThat(content).doesNotContain("SPRING_FLYWAY_VALIDATE_ON_MIGRATE");
         assertThat(content).contains("VITE_API_SERVER_IP: ${VITE_API_SERVER_IP:-http://localhost:8080}");
+        assertThat(webService).contains("VITE_MARKET_NEWS_ENABLED: ${VITE_MARKET_NEWS_ENABLED:-false}");
         assertThat(webService).contains("env_file:\n      - ../apps/web/.env");
         assertThat(webService).doesNotContain("VITE_KAKAO_MAP_APP_KEY: ${VITE_KAKAO_MAP_APP_KEY:-}");
         assertThat(webService).contains("VITE_KAKAO_MAP_APP_KEY is required");
@@ -99,6 +115,26 @@ class LocalRuntimeStackConfigurationTest {
 
         assertThat(compose).contains("127.0.0.1:${HOME_SEARCH_REDIS_PORT:-16379}:6379");
         assertThat(compose).doesNotContain("- \"${HOME_SEARCH_REDIS_PORT:-16379}:6379\"");
+    }
+
+    @Test
+    @DisplayName("local one-shot property Batch만 provider credential env와 immutable JAR copy를 사용한다")
+    void localPropertyBatchIsOneShotAndKeepsProviderCredentialsOutOfApi() throws IOException {
+        String content = Files.readString(LOCAL_COMPOSE);
+        String batchService = content.substring(content.indexOf("\n  property-batch:"), content.indexOf("\n  api:"));
+        String apiService = content.substring(content.indexOf("\n  api:"), content.indexOf("\n  public-api-gateway:"));
+
+        assertThat(batchService).contains("profiles: [ \"tools\" ]");
+        assertThat(batchService).contains("- ../apps/property-data/.env");
+        assertThat(batchService)
+                .contains(
+                        "cp /source/property-data-batch.jar /app/property-data-batch.jar && exec java -jar /app/property-data-batch.jar");
+        assertThat(batchService)
+                .contains(
+                        "../apps/property-data/batch/build/libs/property-data-batch.jar:/source/property-data-batch.jar:ro");
+        assertThat(batchService).doesNotContain("restart:");
+        assertThat(apiService).contains("HOME_NEWS_NAVER_CLIENT_ID: \"\"");
+        assertThat(apiService).contains("HOME_NEWS_NAVER_CLIENT_SECRET: \"\"");
     }
 
     @Test

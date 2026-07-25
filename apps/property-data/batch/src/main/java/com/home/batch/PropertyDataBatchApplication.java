@@ -24,6 +24,15 @@ public class PropertyDataBatchApplication {
             "complexBuildingRegisterProfileAnalyzeJob",
             "marketInsightDailyJob",
             "marketInsightRolling7dJob",
+            "marketNewsGeneralJob",
+            "marketNewsMajorComplexJob",
+            "marketNewsMorningJob",
+            "marketNewsMajorSelectionJob",
+            "marketNewsRetentionJob",
+            "marketNewsWithdrawalJob",
+            "marketNewsQualitySampleJob",
+            "propertyEventRelayJob",
+            "propertyEventOutboxRetentionJob",
             "legalDongCodeMappingImportJob");
 
     public static void main(String[] args) {

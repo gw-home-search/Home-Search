@@ -195,6 +195,8 @@ tasks.register('verifyOpenApiSpec') {
             '/api/v1/trade/{parcelId}',
             '/api/v1/insights/trades/latest',
             '/api/v1/insights/trades/weekly',
+            '/api/v1/insights/news',
+            '/api/v1/complex/{complexId}/news',
             'complexId',
             'complexName',
             'parcelId',

@@ -23,6 +23,7 @@ public class JdbcMarketInsightBuildRepository implements MarketInsightBuildRepos
     private final JdbcCancellationInsightCalculator cancellationCalculator;
     private final JdbcWeeklyTradeInsightCalculator weeklyCalculator;
     private final JdbcRolling7dTradeInsightCalculator rollingCalculator;
+    private final JdbcInsightOutboxWriter outboxWriter;
 
     @Autowired
     public JdbcMarketInsightBuildRepository(
@@ -32,7 +33,8 @@ public class JdbcMarketInsightBuildRepository implements MarketInsightBuildRepos
             JdbcExactAreaInsightCalculator exactAreaCalculator,
             JdbcCancellationInsightCalculator cancellationCalculator,
             JdbcWeeklyTradeInsightCalculator weeklyCalculator,
-            JdbcRolling7dTradeInsightCalculator rollingCalculator) {
+            JdbcRolling7dTradeInsightCalculator rollingCalculator,
+            JdbcClient jdbcClient) {
         this.executionReader = Objects.requireNonNull(executionReader);
         this.snapshotWriter = Objects.requireNonNull(snapshotWriter);
         this.dailyCalculator = Objects.requireNonNull(dailyCalculator);
@@ -40,6 +42,7 @@ public class JdbcMarketInsightBuildRepository implements MarketInsightBuildRepos
         this.cancellationCalculator = Objects.requireNonNull(cancellationCalculator);
         this.weeklyCalculator = Objects.requireNonNull(weeklyCalculator);
         this.rollingCalculator = Objects.requireNonNull(rollingCalculator);
+        this.outboxWriter = new JdbcInsightOutboxWriter(Objects.requireNonNull(jdbcClient));
     }
 
     JdbcMarketInsightBuildRepository(JdbcClient jdbcClient) {
@@ -50,7 +53,8 @@ public class JdbcMarketInsightBuildRepository implements MarketInsightBuildRepos
                 new JdbcExactAreaInsightCalculator(jdbcClient),
                 new JdbcCancellationInsightCalculator(jdbcClient),
                 new JdbcWeeklyTradeInsightCalculator(jdbcClient),
-                new JdbcRolling7dTradeInsightCalculator(jdbcClient));
+                new JdbcRolling7dTradeInsightCalculator(jdbcClient),
+                jdbcClient);
     }
 
     @Override
@@ -70,6 +74,7 @@ public class JdbcMarketInsightBuildRepository implements MarketInsightBuildRepos
         exactAreaCalculator.insertItems(source.executionId());
         cancellationCalculator.insertItems(source.executionId());
         snapshotWriter.publish(snapshots);
+        outboxWriter.writePublished(source.executionId(), "DAILY", "DAILY", snapshots.scopeCount(), generatedAt);
         return snapshots.nationwideSnapshotId();
     }
 
@@ -95,6 +100,11 @@ public class JdbcMarketInsightBuildRepository implements MarketInsightBuildRepos
         var snapshots = snapshotWriter.createWeeklyScopes(weekStart, sources, generatedAt);
         weeklyCalculator.insertItems(weekStart);
         snapshotWriter.publishWeekly(snapshots);
+        outboxWriter.writeWeeklyPublished(
+                weekStart,
+                snapshots.nationwideSnapshotId(),
+                snapshots.snapshotIds().size(),
+                generatedAt);
         return snapshots.nationwideSnapshotId();
     }
 
@@ -118,6 +128,12 @@ public class JdbcMarketInsightBuildRepository implements MarketInsightBuildRepos
                 snapshotWriter.createRollingScopes(source, generatedAt);
         rollingCalculator.insertItems(source.executionId());
         snapshotWriter.supersedeAndPublishRolling(snapshots);
+        outboxWriter.writePublished(
+                source.executionId(),
+                "ROLLING_7D",
+                "ROLLING_7D",
+                snapshots.snapshotIds().size(),
+                generatedAt);
         return snapshots.nationwideSnapshotId();
     }
 

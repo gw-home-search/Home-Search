@@ -190,6 +190,14 @@ class JdbcMarketInsightRepositoryIntegrationTest extends JdbcPostgresTestSupport
                         .query(Long.class)
                         .single())
                 .isEqualTo(18L);
+        assertThat(jdbcClient.sql("""
+                            SELECT count(*)
+                            FROM event_outbox
+                            WHERE event_type = 'InsightPublished'
+                              AND payload ->> 'insightKind' = 'DAILY'
+                              AND (payload ->> 'dataCutoff')::timestamptz =
+                                  TIMESTAMPTZ '2026-07-22 00:03:00Z'
+                            """).query(Long.class).single()).isEqualTo(18L);
     }
 
     @Test
@@ -222,6 +230,14 @@ class JdbcMarketInsightRepositoryIntegrationTest extends JdbcPostgresTestSupport
                         .query(Long.class)
                         .single())
                 .isEqualTo(126L);
+        assertThat(jdbcClient.sql("""
+                            SELECT count(*)
+                            FROM event_outbox
+                            WHERE topic_name = 'property.insight-events.v1'
+                              AND event_type = 'InsightPublished'
+                              AND payload ->> 'insightKind' = 'WEEKLY'
+                              AND payload ->> 'scopeType' IN ('NATIONWIDE', 'SIDO')
+                            """).query(Long.class).single()).isEqualTo(18L);
     }
 
     @Test
@@ -251,6 +267,26 @@ class JdbcMarketInsightRepositoryIntegrationTest extends JdbcPostgresTestSupport
                             SELECT count(*) FROM market_insight_snapshot
                             WHERE period_type = 'ROLLING_7D' AND build_status = 'PUBLISHED'
                             """).query(Long.class).single()).isEqualTo(18L);
+        assertThat(jdbcClient.sql("""
+                            SELECT count(*)
+                            FROM event_outbox
+                            WHERE topic_name = 'property.insight-events.v1'
+                              AND event_type = 'InsightPublished'
+                              AND aggregate_version = 1
+                              AND jsonb_exists(payload, 'snapshotId')
+                              AND jsonb_exists(payload, 'insightKind')
+                              AND jsonb_exists(payload, 'scopeType')
+                              AND jsonb_exists(payload, 'regionCode')
+                              AND jsonb_exists(payload, 'dataCutoff')
+                            """).query(Long.class).single()).isEqualTo(18L);
+        assertThat(jdbcClient.sql("""
+                            SELECT count(*)
+                            FROM event_outbox
+                            WHERE jsonb_exists_any(payload, ARRAY[
+                                'sourceKey', 'email', 'accessToken', 'refreshToken',
+                                'prompt', 'answer', 'credential', 'password'
+                            ])
+                            """).query(Long.class).single()).isZero();
         assertThat(jdbcClient
                         .sql("""
                             SELECT count(*) FROM market_insight_trade_item
@@ -436,12 +472,58 @@ class JdbcMarketInsightRepositoryIntegrationTest extends JdbcPostgresTestSupport
                                 WHERE period_type = 'ROLLING_7D'
                                   AND build_status IN ('BUILDING', 'SUPERSEDED')
                                 """).query(Long.class).single()).isZero();
+            assertThat(jdbcClient.sql("""
+                                SELECT count(*) FROM event_outbox
+                                WHERE event_type = 'InsightPublished'
+                                """).query(Long.class).single()).isEqualTo(18L);
         } finally {
             jdbcClient
                     .sql("DROP TRIGGER IF EXISTS fail_rolling_publish_for_test ON market_insight_snapshot")
                     .update();
             jdbcClient
                     .sql("DROP FUNCTION IF EXISTS fail_rolling_publish_for_test()")
+                    .update();
+        }
+    }
+
+    @Test
+    @DisplayName("outbox 저장 실패는 DAILY snapshot 발행 전체를 rollback한다")
+    void outboxFailureRollsBackDailyPublication() {
+        MarketInsightSourceExecution source =
+                buildRepository.findLatestDailyNationwide(RUN_DATE).orElseThrow();
+        jdbcClient.sql("""
+                    CREATE FUNCTION fail_insight_outbox_for_test()
+                    RETURNS trigger LANGUAGE plpgsql AS $$
+                    BEGIN
+                        RAISE EXCEPTION 'forced insight outbox failure';
+                    END
+                    $$
+                    """).update();
+        jdbcClient.sql("""
+                    CREATE TRIGGER fail_insight_outbox_for_test
+                    BEFORE INSERT ON event_outbox
+                    FOR EACH ROW
+                    EXECUTE FUNCTION fail_insight_outbox_for_test()
+                    """).update();
+        try {
+            assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(status ->
+                            buildRepository.publishDailyNationwide(source, Instant.parse("2026-07-22T00:04:00Z"))))
+                    .hasMessageContaining("forced insight outbox failure");
+
+            assertThat(jdbcClient.sql("""
+                                SELECT count(*) FROM market_insight_snapshot
+                                WHERE period_type = 'DAILY'
+                                """).query(Long.class).single()).isZero();
+            assertThat(jdbcClient.sql("""
+                                SELECT count(*) FROM event_outbox
+                                WHERE event_type = 'InsightPublished'
+                                """).query(Long.class).single()).isZero();
+        } finally {
+            jdbcClient
+                    .sql("DROP TRIGGER IF EXISTS fail_insight_outbox_for_test ON event_outbox")
+                    .update();
+            jdbcClient
+                    .sql("DROP FUNCTION IF EXISTS fail_insight_outbox_for_test()")
                     .update();
         }
     }
@@ -587,10 +669,25 @@ class JdbcMarketInsightRepositoryIntegrationTest extends JdbcPostgresTestSupport
                 .isTrue();
         assertThat(hasTablePrivilege("market_insight_snapshot_execution", "SELECT,INSERT,UPDATE"))
                 .isTrue();
+        assertThat(hasTablePrivilege("event_outbox", "SELECT")).isTrue();
+        assertThat(hasTablePrivilege("event_outbox", "INSERT")).isFalse();
+        assertThat(hasTablePrivilege("event_outbox", "UPDATE")).isFalse();
+        assertThat(hasColumnPrivilege("event_outbox", "event_id", "INSERT")).isTrue();
+        assertThat(hasColumnPrivilege("event_outbox", "published_at", "INSERT")).isFalse();
+        assertThat(hasColumnPrivilege("event_outbox", "published_at", "UPDATE")).isTrue();
+        assertThat(hasColumnPrivilege("event_outbox", "payload", "UPDATE")).isFalse();
         assertThat(hasTablePrivilege("market_insight_snapshot", "DELETE")).isFalse();
         assertThat(hasTablePrivilege("market_insight_trade_item", "DELETE")).isFalse();
         assertThat(hasTablePrivilege("market_insight_snapshot_execution", "DELETE"))
                 .isFalse();
+        assertThat(hasTablePrivilege("event_outbox", "DELETE")).isFalse();
+        assertThat(jdbcClient.sql("""
+                            SELECT has_function_privilege(
+                                'home_search_property_runtime',
+                                'public.delete_published_property_event_outbox_before(timestamp with time zone, integer)',
+                                'EXECUTE'
+                            )
+                            """).query(Boolean.class).single()).isTrue();
     }
 
     private void seedRemainingSidoRegions() {
@@ -678,6 +775,17 @@ class JdbcMarketInsightRepositoryIntegrationTest extends JdbcPostgresTestSupport
                 .param("role", PROPERTY_RUNTIME_ROLE)
                 .param("table", table)
                 .param("privileges", privileges)
+                .query(Boolean.class)
+                .single();
+    }
+
+    private boolean hasColumnPrivilege(String table, String column, String privilege) {
+        return jdbcClient
+                .sql("SELECT has_column_privilege(:role, :table, :column, :privilege)")
+                .param("role", "home_search_property_runtime")
+                .param("table", table)
+                .param("column", column)
+                .param("privilege", privilege)
                 .query(Boolean.class)
                 .single();
     }

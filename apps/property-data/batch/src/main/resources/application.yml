@@ -11,6 +11,10 @@ spring:
     username: "${DB_USERNAME}"
     password: "${DB_PASSWORD}"
     driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: "${SPRING_DATA_REDIS_HOST:localhost}"
+      port: "${SPRING_DATA_REDIS_PORT:6379}"
   batch:
     job:
       enabled: false
@@ -33,6 +37,19 @@ apis:
     min-request-interval-millis: 200
 
 home:
+  news:
+    naver:
+      enabled: "${HOME_NEWS_NAVER_ENABLED:false}"
+      provider-mode: "${HOME_NEWS_NAVER_PROVIDER_MODE:API_HUB}"
+      client-id: "${HOME_NEWS_NAVER_CLIENT_ID:${NAVER_NEWS_API_KEY_ID:}}"
+      client-secret: "${HOME_NEWS_NAVER_CLIENT_SECRET:${NAVER_NEWS_API_KEY:}}"
+      base-url: "${HOME_NEWS_NAVER_BASE_URL:https://naverapihub.apigw.ntruss.com}"
+      path: "${HOME_NEWS_NAVER_PATH:/search/v1/news}"
+      daily-call-budget: "${HOME_NEWS_DAILY_CALL_BUDGET:4000}"
+      cache-enabled: "${HOME_NEWS_CACHE_ENABLED:true}"
+      cache-ttl: "${HOME_NEWS_CACHE_TTL:31d}"
+      connect-timeout: "${HOME_NEWS_CONNECT_TIMEOUT:2s}"
+      read-timeout: "${HOME_NEWS_READ_TIMEOUT:5s}"
   insight:
     trade:
       enabled: "${HOME_INSIGHT_TRADE_ENABLED:false}"

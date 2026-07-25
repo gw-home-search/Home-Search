@@ -597,14 +597,14 @@ User-service deployment는 fresh-only다.
 
 ```bash
 ./ops/user-deployment-preflight.sh before 6
-./ops/user-flyway.sh migrate 5
+./ops/user-flyway.sh migrate 6
 ./ops/user-deployment-preflight.sh after 6
 ./ops/user-flyway.sh validate
 ```
 
 preflight는 pinned PostgreSQL client의 read-only catalog probe로
 `current_database()`와 service relation/history를 확인한다. `before`는 empty
-database만, `after`는 migration versions 1 through 5가 각각 정확히 한 건의 `SQL`/`Success`이고
+database만, `after`는 migration versions 1 through 6이 각각 정확히 한 건의 `SQL`/`Success`이고
 `validate -outputType=json`이 성공한 경우만 허용한다. snapshot, JDBC,
 Baseline, Deleted, Out of Order, Missing, Ignored, duplicate, failed history는
 exit `2`로 중단하며 credential은 stdout/stderr/evidence에 기록하지 않는다.

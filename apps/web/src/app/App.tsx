@@ -5,6 +5,7 @@ import { MapApp, type MapAppProps } from './MapApp';
 import { AuthProvider } from '../features/auth/AuthProvider';
 import type { AuthClient } from '../features/auth/api/authClient';
 import { readInsightMetric } from '../features/insights/insightMetricConfig';
+import { MARKET_NEWS_ENABLED } from '../features/news/newsFeature';
 import './App.css';
 
 export type AppProps = MapAppProps & {
@@ -45,7 +46,15 @@ function RoutedApp({
 
 function MapRoute({ mapProps }: { mapProps: MapAppProps }) {
   const location = useLocation();
-  if (location.pathname !== '/' && location.pathname !== '/insights' && !isMyPagePath(location.pathname)) {
+  if (location.pathname === '/insights/news' && !MARKET_NEWS_ENABLED) {
+    return <Navigate replace to="/" />;
+  }
+  if (
+    location.pathname !== '/'
+    && location.pathname !== '/insights'
+    && location.pathname !== '/insights/news'
+    && !isMyPagePath(location.pathname)
+  ) {
     return <Navigate replace to="/" />;
   }
   if (location.pathname === '/insights') {
@@ -60,6 +69,32 @@ function MapRoute({ mapProps }: { mapProps: MapAppProps }) {
         params.set('regionCode', '11');
       }
       return <Navigate replace to={`/insights?${params.toString()}`} />;
+    }
+  }
+  if (location.pathname === '/insights/news') {
+    const params = new URLSearchParams(location.search);
+    const requestedScope = params.get('scope');
+    const scope = requestedScope === 'NATIONWIDE' ? 'NATIONWIDE' : 'SIDO';
+    const validCategories = new Set([
+      'ALL', 'POLICY', 'FINANCE_LOAN', 'SUPPLY_SALE', 'REDEVELOPMENT',
+      'TRANSACTION_PRICE', 'TRANSPORT_DEVELOPMENT',
+    ]);
+    const category = validCategories.has(params.get('category') ?? '') ? params.get('category')! : 'ALL';
+    const regionCode = params.get('regionCode');
+    const needsScopeNormalization = requestedScope !== 'NATIONWIDE' && requestedScope !== 'SIDO';
+    const needsRegionNormalization = scope === 'NATIONWIDE'
+      ? params.has('regionCode')
+      : regionCode == null || !/^[0-9]{2}$/u.test(regionCode);
+    if (
+      needsScopeNormalization
+      || !validCategories.has(params.get('category') ?? '')
+      || needsRegionNormalization
+    ) {
+      params.set('scope', scope);
+      params.set('category', category);
+      if (scope === 'SIDO' && needsRegionNormalization) params.set('regionCode', '11');
+      if (scope === 'NATIONWIDE') params.delete('regionCode');
+      return <Navigate replace to={`/insights/news?${params.toString()}`} />;
     }
   }
   return <MapApp {...mapProps} />;

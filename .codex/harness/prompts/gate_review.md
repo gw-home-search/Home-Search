@@ -13,6 +13,13 @@ Review only. Do not edit files.
 Skill routing:
 {{SKILL_ROUTING}}
 
+Executed verification evidence:
+{{VERIFICATION_EVIDENCE}}
+
+TDD evidence:
+- Read `{{TDD_EVIDENCE_PATH}}` when it exists.
+- If it does not exist, report that gap without inventing evidence.
+
 Check:
 - Scope stayed inside the target preset's allowed edit scope.
 - public API contract and data invariants were preserved.
@@ -25,6 +32,9 @@ Check:
 - Security surface (secrets, admin access, SQL, external input, output sinks)
   was reviewed via `$security-audit` and carries no new high/critical finding.
 - Explicit `--pr` may push only the generated `feat/*-integration` branch.
+- This gate runs before integration and PR body generation. Do not fail only
+  because a PR or PR body does not exist yet; validate the inputs that will
+  generate it.
 
 Output a short Korean-first gate review with these user-facing labels:
 - 상태: Pass|Partial|Fail

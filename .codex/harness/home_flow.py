@@ -94,7 +94,7 @@ KNOWN_VERIFICATION_COMMANDS = {
             ["./gradlew", "userServiceQualityCheck"],
         ),
         "cd apps/property-data && ./gradlew test": ("apps/property-data", ["./gradlew", "test"]),
-        DIFF_CHECK: (".", ["git", "diff", "--check"]),
+        DIFF_CHECK: (".", ["git", "diff", "--check", "main...HEAD"]),
         PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
         PR_CONTEXT_SELF_TEST: (".", ["python3", ".codex/harness/pr_context.py", "--self-test"]),
         WORKLOG_SYNC_SELF_TEST: (".", ["python3", ".codex/harness/worklog_sync.py", "--self-test"]),
@@ -115,7 +115,7 @@ KNOWN_VERIFICATION_COMMANDS = {
         WEB_TEST: ("apps/web", ["npm", "run", "test"]),
         WEB_BUILD: ("apps/web", ["npm", "run", "build"]),
         DOCKER_COMPOSE_LOCAL_CONFIG: (".", ["bash", "infra/test-compose-config.sh"]),
-        DIFF_CHECK: (".", ["git", "diff", "--check"]),
+        DIFF_CHECK: (".", ["git", "diff", "--check", "main...HEAD"]),
         PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
         PR_CONTEXT_SELF_TEST: (".", ["python3", ".codex/harness/pr_context.py", "--self-test"]),
         WORKLOG_SYNC_SELF_TEST: (".", ["python3", ".codex/harness/worklog_sync.py", "--self-test"]),
@@ -282,6 +282,24 @@ def target_config(args: argparse.Namespace, target: str) -> dict[str, Any]:
 def first_lines(text: str, limit: int = 3) -> str:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     return " | ".join(lines[:limit])
+
+
+def verification_evidence_text(verification: dict[str, Any]) -> str:
+    if not verification:
+        return "- `verification` = not run (실행된 검증 명령이 없음)"
+    lines = []
+    for command, result in verification.items():
+        raw_status = str(result.get("status", "skipped"))
+        status = {"pass": "pass", "fail": "fail"}.get(raw_status, "not run")
+        exit_code = result.get("exit_code")
+        if status == "pass":
+            reason = f"harness 실행 완료, exit={exit_code}"
+        elif status == "fail":
+            reason = f"harness 실행 실패, exit={exit_code}"
+        else:
+            reason = "dry-run 또는 명시적 skip"
+        lines.append(f"- `{command}` = {status} ({reason})")
+    return "\n".join(lines)
 
 
 def run_cmd(args: list[str], cwd: Path, *, dry_run: bool = False) -> dict[str, Any]:
@@ -494,6 +512,7 @@ def run_gate_review(
     worktree: Path,
     args: argparse.Namespace,
     names: dict[str, Any],
+    verification: dict[str, Any],
     *,
     dry_run: bool,
 ) -> dict[str, Any]:
@@ -508,6 +527,8 @@ def run_gate_review(
             "TARGET": target,
             "BRANCH_NAME": names["api_branch"] if target == "backend" else names["web_branch"],
             "SKILL_ROUTING": routing_text("gate", target),
+            "VERIFICATION_EVIDENCE": verification_evidence_text(verification),
+            "TDD_EVIDENCE_PATH": f".codex/harness/evidence/{names['work_id']}.md",
         },
     )
     command = [
@@ -666,7 +687,7 @@ def execute_target(
     if codex_result["status"] == "fail":
         raise RuntimeError(f"{target} codex exec failed: {codex_result['summary']}")
     verification = verify_target(target, worktree, args, dry_run=dry_run)
-    gate = run_gate_review(target, worktree, args, names, dry_run=dry_run)
+    gate = run_gate_review(target, worktree, args, names, verification, dry_run=dry_run)
     commit = None
     if args.commit and not args.no_commit:
         commit = commit_target(target, worktree, branch, names["work_id"], args, dry_run=dry_run)
@@ -1423,6 +1444,10 @@ def run_self_test() -> int:
             "TARGET": "backend",
             "BRANCH_NAME": "feat/api-self-test",
             "SKILL_ROUTING": routing_text("gate", "backend"),
+            "VERIFICATION_EVIDENCE": verification_evidence_text(
+                {"git diff --check": {"status": "pass", "exit_code": 0}}
+            ),
+            "TDD_EVIDENCE_PATH": ".codex/harness/evidence/self-test.md",
         },
     )
     invalid_branch_blocked = False
@@ -1506,6 +1531,10 @@ def run_self_test() -> int:
         "$api-contract [checkpoint]" in prompt,
         "{{SKILL_ROUTING}}" not in prompt,
         "Explicit `--pr` may push only the generated `feat/*-integration` branch." in gate_prompt,
+        "- `git diff --check` = pass (harness 실행 완료, exit=0)" in gate_prompt,
+        ".codex/harness/evidence/self-test.md" in gate_prompt,
+        "{{VERIFICATION_EVIDENCE}}" not in gate_prompt,
+        "{{TDD_EVIDENCE_PATH}}" not in gate_prompt,
     ]
     if all(checks):
         print("self-test passed: home_flow")

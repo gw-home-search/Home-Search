@@ -1,0 +1,18 @@
+{
+  "eventId": "88888888-8888-4888-8888-888888888888",
+  "eventType": "EmailSuppressed",
+  "schemaVersion": 1,
+  "occurredAt": "2026-07-24T03:07:00Z",
+  "producer": "user-service",
+  "aggregateType": "DeliverySuppression",
+  "aggregateId": "suppression-801",
+  "aggregateVersion": 1,
+  "correlationId": "ses-feedback-20260724",
+  "causationId": null,
+  "traceId": "trace-888",
+  "payload": {
+    "suppressionId": "88888888-aaaa-4888-8888-888888888888",
+    "userId": "user-42",
+    "reason": "COMPLAINT"
+  }
+}

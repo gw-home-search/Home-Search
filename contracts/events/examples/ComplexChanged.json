@@ -1,0 +1,19 @@
+{
+  "eventId": "33333333-3333-4333-8333-333333333333",
+  "eventType": "ComplexChanged",
+  "schemaVersion": 1,
+  "occurredAt": "2026-07-24T03:02:00Z",
+  "producer": "property-data",
+  "aggregateType": "Complex",
+  "aggregateId": "complex-501",
+  "aggregateVersion": 4,
+  "correlationId": "metadata-run-20260724",
+  "causationId": null,
+  "traceId": "trace-333",
+  "payload": {
+    "complexId": 501,
+    "parcelId": 1001,
+    "changeType": "DISPLAY_COORDINATE",
+    "markerSafe": true
+  }
+}

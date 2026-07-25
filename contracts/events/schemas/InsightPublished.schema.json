@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://home-search.internal/events/InsightPublished/v1",
+  "title": "InsightPublished v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "eventType", "schemaVersion", "occurredAt", "producer", "aggregateType", "aggregateId", "aggregateVersion", "correlationId", "causationId", "traceId", "payload"],
+  "properties": {
+    "eventId": {"type": "string", "format": "uuid"},
+    "eventType": {"type": "string", "const": "InsightPublished"},
+    "schemaVersion": {"type": "integer", "const": 1},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "producer": {"type": "string", "const": "property-data"},
+    "aggregateType": {"type": "string", "const": "InsightSnapshot"},
+    "aggregateId": {"type": "string", "pattern": "[A-Za-z0-9._:-]{1,128}", "maxLength": 128},
+    "aggregateVersion": {"type": "integer", "minimum": 1},
+    "correlationId": {"type": "string", "maxLength": 128},
+    "causationId": {"type": ["string", "null"], "maxLength": 128},
+    "traceId": {"type": "string", "pattern": "[A-Za-z0-9._:-]{1,128}", "maxLength": 128},
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshotId", "insightKind", "scopeType", "regionCode", "dataCutoff"],
+      "properties": {
+        "snapshotId": {"type": "string", "format": "uuid"},
+        "insightKind": {"type": "string", "enum": ["DAILY", "WEEKLY", "ROLLING_7D"]},
+        "scopeType": {"type": "string", "enum": ["NATIONWIDE", "SIDO"]},
+        "regionCode": {"type": ["string", "null"], "pattern": "[0-9]{2}"},
+        "dataCutoff": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

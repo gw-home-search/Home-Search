@@ -1,0 +1,20 @@
+{
+  "eventId": "44444444-4444-4444-8444-444444444444",
+  "eventType": "InsightPublished",
+  "schemaVersion": 1,
+  "occurredAt": "2026-07-24T03:03:00Z",
+  "producer": "property-data",
+  "aggregateType": "InsightSnapshot",
+  "aggregateId": "insight-20260724-nationwide",
+  "aggregateVersion": 1,
+  "correlationId": "rtms-run-20260724",
+  "causationId": null,
+  "traceId": "trace-444",
+  "payload": {
+    "snapshotId": "44444444-aaaa-4444-8444-444444444444",
+    "insightKind": "ROLLING_7D",
+    "scopeType": "NATIONWIDE",
+    "regionCode": null,
+    "dataCutoff": "2026-07-24T03:00:00Z"
+  }
+}

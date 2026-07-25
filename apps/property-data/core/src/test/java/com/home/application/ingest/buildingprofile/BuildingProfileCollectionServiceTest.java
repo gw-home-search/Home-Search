@@ -99,6 +99,7 @@ class BuildingProfileCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("전국 staging 수집은 기본개요 조회를 보류한다")
     void nationwideStagingDefersBasicOverviewCollection() {
         var collector = mock(BuildingRegisterCollectionService.class);
         var repository = new FakeSampleRepository();

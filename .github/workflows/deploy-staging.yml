@@ -12,6 +12,31 @@ on:
         required: true
         default: false
         type: boolean
+      enable_market_news_public:
+        description: "Expose the reviewed market news API and matching UI build"
+        required: true
+        default: false
+        type: boolean
+      enable_market_news_schedules:
+        description: "Run reviewed market news collection schedules"
+        required: true
+        default: false
+        type: boolean
+      enable_user_insights_public:
+        description: "Expose authenticated subscription and inbox APIs after staging E2E approval"
+        required: true
+        default: false
+        type: boolean
+      enable_property_event_relay_schedule:
+        description: "Keep the property outbox relay enabled after MSK topic and contract approval"
+        required: true
+        default: false
+        type: boolean
+      enable_property_event_retention_schedule:
+        description: "Keep published property outbox retention enabled after Flyway V26 approval"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   actions: read
@@ -29,7 +54,7 @@ jobs:
     timeout-minutes: 90
     environment: staging
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.release_tag }}
@@ -52,19 +77,19 @@ jobs:
           [[ -n "${manifest}" ]]
           cp "${manifest}" deployment-evidence/release-manifest.json
           jq -e --arg tag "${RELEASE_TAG}" --arg sha "${release_sha}" \
-            '.tag == $tag and .commit_sha == $sha and (.images | length == 14)' \
+            '.tag == $tag and .commit_sha == $sha and (.images | length == 15)' \
             deployment-evidence/release-manifest.json >/dev/null
           echo "RELEASE_SHA=${release_sha}" >>"${GITHUB_ENV}"
 
       - name: Configure short-lived AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6.1.2
+        uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with:
           role-to-assume: ${{ vars.AWS_STAGING_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
           mask-aws-account-id: true
           unset-current-credentials: true
 
-      - uses: hashicorp/setup-terraform@v4
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
         with:
           terraform_version: 1.15.8
           terraform_wrapper: false
@@ -77,12 +102,19 @@ jobs:
           PUBLIC_ORIGIN: ${{ vars.STAGING_PUBLIC_ORIGIN }}
           ADMIN_ORIGIN: ${{ vars.STAGING_ADMIN_ORIGIN }}
           ENABLE_ML: ${{ inputs.enable_ml }}
+          ENABLE_MARKET_NEWS_PUBLIC: ${{ inputs.enable_market_news_public }}
+          ENABLE_MARKET_NEWS_SCHEDULES: ${{ inputs.enable_market_news_schedules }}
+          ENABLE_USER_INSIGHTS_PUBLIC: ${{ inputs.enable_user_insights_public }}
+          ENABLE_PROPERTY_EVENT_RELAY_SCHEDULE: ${{ inputs.enable_property_event_relay_schedule }}
+          ENABLE_PROPERTY_EVENT_RETENTION_SCHEDULE: ${{ inputs.enable_property_event_retention_schedule }}
           STATE_BUCKET: ${{ vars.TERRAFORM_STATE_BUCKET }}
           STATE_KEY: ${{ vars.TERRAFORM_STAGING_STATE_KEY }}
           STATE_KMS_KEY_ARN: ${{ vars.TERRAFORM_STATE_KMS_KEY_ARN }}
         run: |
           set -Eeuo pipefail
           jq -e 'type == "array" and length > 0' <<<"${ADMIN_ALLOWED_CIDRS}" >/dev/null
+          manifest_news_enabled="$(jq -r '.build_flags.market_news_enabled' deployment-evidence/release-manifest.json)"
+          [[ "${manifest_news_enabled}" == "${ENABLE_MARKET_NEWS_PUBLIC}" ]]
           image_digests="$(jq '.images | map_values(.digest)' deployment-evidence/release-manifest.json)"
           jq -n \
             --argjson image_digests "${image_digests}" \
@@ -91,9 +123,19 @@ jobs:
             --arg admin_certificate_arn "${ADMIN_CERTIFICATE_ARN}" \
             --arg public_origin "${PUBLIC_ORIGIN}" --arg admin_origin "${ADMIN_ORIGIN}" \
             --argjson enable_ml "${ENABLE_ML}" \
+            --argjson enable_market_news_public "${ENABLE_MARKET_NEWS_PUBLIC}" \
+            --argjson enable_market_news_schedules "${ENABLE_MARKET_NEWS_SCHEDULES}" \
+            --argjson enable_user_insights_public "${ENABLE_USER_INSIGHTS_PUBLIC}" \
+            --argjson enable_property_event_relay_schedule "${ENABLE_PROPERTY_EVENT_RELAY_SCHEDULE}" \
+            --argjson enable_property_event_retention_schedule "${ENABLE_PROPERTY_EVENT_RETENTION_SCHEDULE}" \
             '{image_digests:$image_digests,admin_allowed_cidrs:$admin_allowed_cidrs,
               public_certificate_arn:$public_certificate_arn,admin_certificate_arn:$admin_certificate_arn,
               public_origin:$public_origin,admin_origin:$admin_origin,enable_ml:$enable_ml,
+              enable_market_news_public:$enable_market_news_public,
+              enable_market_news_schedules:$enable_market_news_schedules,
+              enable_user_insights_public:$enable_user_insights_public,
+              enable_property_event_relay_schedule:$enable_property_event_relay_schedule,
+              enable_property_event_retention_schedule:$enable_property_event_retention_schedule,
               enable_services:true,enable_backup_schedules:true}' \
             >infra/terraform/staging/deployment.auto.tfvars.json
           terraform -chdir=infra/terraform/staging init -input=false \
@@ -188,7 +230,7 @@ jobs:
 
       - name: Upload deployment and rollback evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: staging-deployment-${{ inputs.release_tag }}-${{ github.run_attempt }}
           path: deployment-evidence/

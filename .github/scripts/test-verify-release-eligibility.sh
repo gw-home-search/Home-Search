@@ -22,19 +22,28 @@ git init -b main "${tmp_dir}/repo" >/dev/null
   sha="$(git rev-parse HEAD)"
 
   checks=(
-    changes test-display-name-policy backend-test source-data-test frontend-test-build
+    changes test-display-name-policy event-contract-test backend-test source-data-test ai-service-test
+    chat-bff-test frontend-test-build
     infra-contract-test ml-image-test property-image-test platform-image-test edge-image-test
     image-manifest-test terraform-test admin-service-test admin-web-test-build user-service-test diff-check
   )
   printf '%s\n' "${checks[@]}" | jq -Rn \
     '{check_runs: [inputs | {name:.,status:"completed",conclusion:"success",completed_at:"2026-07-16T00:00:00Z"}]}' \
     >"${tmp_dir}/checks.json"
-  "${script}" v2.3.4 "${sha}" "${tmp_dir}/checks.json" >/dev/null
+  jq '(.check_runs[] | select(.name == "source-data-test" or .name == "ml-image-test")).conclusion = "skipped"' \
+    "${tmp_dir}/checks.json" >"${tmp_dir}/scoped-checks.json"
+  "${script}" v2.3.4 "${sha}" "${tmp_dir}/scoped-checks.json" >/dev/null
 
   jq '(.check_runs[] | select(.name == "terraform-test")).conclusion = "failure"' \
     "${tmp_dir}/checks.json" >"${tmp_dir}/failed.json"
   if "${script}" v2.3.4 "${sha}" "${tmp_dir}/failed.json" >/dev/null 2>&1; then
     echo '상태: Fail - 실패한 quality gate를 허용했습니다.' >&2
+    exit 1
+  fi
+  jq '(.check_runs[] | select(.name == "chat-bff-test")).conclusion = "failure"' \
+    "${tmp_dir}/checks.json" >"${tmp_dir}/chat-failed.json"
+  if "${script}" v2.3.4 "${sha}" "${tmp_dir}/chat-failed.json" >/dev/null 2>&1; then
+    echo '상태: Fail - 실패한 chat-bff quality gate를 허용했습니다.' >&2
     exit 1
   fi
   if "${script}" v2.3 "${sha}" "${tmp_dir}/checks.json" >/dev/null 2>&1; then

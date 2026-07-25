@@ -26,6 +26,10 @@ variable "KAKAO_MAP_APP_KEY" {
   default = "build-placeholder"
 }
 
+variable "MARKET_NEWS_ENABLED" {
+  default = "false"
+}
+
 group "default" {
   targets = [
     "property-api",
@@ -35,6 +39,7 @@ group "default" {
     "admin-migration",
     "admin-ops",
     "user-api",
+    "user-insight-worker",
     "user-flyway",
     "source-data-migration",
     "public-gateway",
@@ -115,6 +120,15 @@ target "user-api" {
   tags = ["${REGISTRY}/${IMAGE_PREFIX}/user-api:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/user-api:${VERSION}"]
 }
 
+target "user-insight-worker" {
+  inherits = ["_common"]
+  context = "."
+  dockerfile = "apps/user/service/Dockerfile"
+  target = "worker"
+  labels = { "org.opencontainers.image.title" = "home-search-user-insight-worker" }
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/user-insight-worker:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/user-insight-worker:${VERSION}"]
+}
+
 target "user-flyway" {
   inherits = ["_common"]
   context = "."
@@ -140,6 +154,7 @@ target "public-gateway" {
   args = {
     VITE_USER_API_SERVER_IP = "${PUBLIC_ORIGIN}"
     VITE_KAKAO_MAP_APP_KEY = "${KAKAO_MAP_APP_KEY}"
+    VITE_MARKET_NEWS_ENABLED = "${MARKET_NEWS_ENABLED}"
   }
   labels = { "org.opencontainers.image.title" = "home-search-public-gateway" }
   tags = ["${REGISTRY}/${IMAGE_PREFIX}/public-gateway:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/public-gateway:${VERSION}"]

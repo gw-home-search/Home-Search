@@ -96,17 +96,36 @@ public class JdbcBuildingProfileAnalysisRepository implements BuildingProfileAna
     }
 
     @Override
-    public List<BuildingProfileAnalysisRecord> records(UUID parseRunId) {
-        List<ValueRow> rows =
-                jdbc.sql("""
+    public List<BuildingProfileAnalysisRecord> recordsPage(UUID parseRunId, long afterRecordId, int limit) {
+        if (afterRecordId < 0) throw new IllegalArgumentException("afterRecordId must be non-negative");
+        if (limit <= 0 || limit > 5_000) throw new IllegalArgumentException("limit must be 1..5000");
+        List<ValueRow> rows = jdbc.sql("""
+                    WITH record_page AS MATERIALIZED (
+                        SELECT id
+                        FROM building_register_profile_record
+                        WHERE parse_run_id=:run AND id>:after
+                        ORDER BY id
+                        LIMIT :limit
+                    )
                     SELECT r.id,r.pnu,r.endpoint,r.mgm_bldrgst_pk,r.mgm_up_bldrgst_pk,r.regstr_kind_cd,
                            v.field_id,v.value_state,v.raw_value,v.text_value,v.decimal_value,v.integer_value,
                            v.date_value,v.boolean_value
-                    FROM building_register_profile_record r
-                    LEFT JOIN building_register_profile_value v ON v.profile_record_id=r.id
-                    WHERE r.parse_run_id=:run
+                    FROM record_page page
+                    JOIN building_register_profile_record r ON r.id=page.id
+                    LEFT JOIN LATERAL (
+                        SELECT value.field_id,value.value_state,value.raw_value,value.text_value,
+                               value.decimal_value,value.integer_value,value.date_value,value.boolean_value
+                        FROM building_register_profile_value value
+                        WHERE value.profile_record_id=r.id
+                        OFFSET 0
+                    ) v ON true
                     ORDER BY r.id,v.field_id
-                    """).param("run", parseRunId).query(this::valueRow).list();
+                    """)
+                .param("run", parseRunId)
+                .param("after", afterRecordId)
+                .param("limit", limit)
+                .query(this::valueRow)
+                .list();
         Map<Long, MutableRecord> records = new LinkedHashMap<>();
         for (ValueRow row : rows) {
             MutableRecord record = records.computeIfAbsent(

@@ -3,8 +3,10 @@ package com.home.application.ingest.buildingprofile;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.home.application.ingest.buildingregister.BuildingRegisterCollectCommand;
 import com.home.application.ingest.buildingregister.BuildingRegisterCollectionResult;
 import com.home.application.ingest.buildingregister.BuildingRegisterCollectionService;
 import com.home.application.ingest.buildingregister.BuildingRegisterCollectionStatus;
@@ -21,6 +23,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class BuildingProfileCollectionServiceTest {
     private static final String PNU = "1168010300101400001";
@@ -95,6 +98,25 @@ class BuildingProfileCollectionServiceTest {
         assertThat(repository.reasons).isEmpty();
     }
 
+    @Test
+    void nationwideStagingDefersBasicOverviewCollection() {
+        var collector = mock(BuildingRegisterCollectionService.class);
+        var repository = new FakeSampleRepository();
+        repository.targets = List.of(new BuildingProfileCollectTarget(PNU, 2));
+        when(collector.collect(any(), any()))
+                .thenReturn(result(
+                        BuildingRegisterCollectionStatus.COLLECTED,
+                        List.of(record(BuildingRegisterEndpoint.RECAP_TITLE, "R", null, "1", "1")),
+                        List.of(record(BuildingRegisterEndpoint.TITLE, "T", null, "3", "1"))));
+
+        new BuildingProfileCollectionService(collector, repository).collect(nationwideCommand(20));
+
+        ArgumentCaptor<BuildingRegisterCollectCommand> command =
+                ArgumentCaptor.forClass(BuildingRegisterCollectCommand.class);
+        verify(collector).collect(command.capture(), any());
+        assertThat(command.getValue().includeBasicOverview()).isFalse();
+    }
+
     private BuildingProfileCollectCommand command(int budget) {
         return new BuildingProfileCollectCommand(
                 UUID.randomUUID(),
@@ -102,6 +124,18 @@ class BuildingProfileCollectionServiceTest {
                 LocalDate.of(2026, 7, 21),
                 BuildingProfileTargetScope.VALIDATION_SAMPLE,
                 1,
+                "seed",
+                budget,
+                1);
+    }
+
+    private BuildingProfileCollectCommand nationwideCommand(int budget) {
+        return new BuildingProfileCollectCommand(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                LocalDate.of(2026, 7, 23),
+                BuildingProfileTargetScope.NATIONWIDE_STAGING,
+                null,
                 "seed",
                 budget,
                 1);

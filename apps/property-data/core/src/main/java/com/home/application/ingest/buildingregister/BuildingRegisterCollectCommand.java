@@ -12,7 +12,19 @@ public record BuildingRegisterCollectCommand(
         String pnu,
         int pnuComplexCount,
         BuildingRegisterCollectionStrategy strategy,
-        int maxRequests) {
+        int maxRequests,
+        boolean includeBasicOverview) {
+    public BuildingRegisterCollectCommand(
+            UUID collectionId,
+            UUID requestId,
+            LocalDate runDate,
+            String pnu,
+            int pnuComplexCount,
+            BuildingRegisterCollectionStrategy strategy,
+            int maxRequests) {
+        this(collectionId, requestId, runDate, pnu, pnuComplexCount, strategy, maxRequests, true);
+    }
+
     public BuildingRegisterCollectCommand {
         Objects.requireNonNull(collectionId, "collectionId");
         Objects.requireNonNull(requestId, "requestId");

@@ -67,17 +67,20 @@ public class BuildingRegisterCollectionService {
                     List.of(),
                     decision);
         }
-        boolean fetchBasicOverview = command.strategy() == BuildingRegisterCollectionStrategy.COMPARE_RECAP_TITLE
-                ? profilePolicy
-                        .decide(BuildingProfileHierarchyFacts.from(
-                                command.pnuComplexCount(), hierarchyRecords(recap.records(), titles.records())))
-                        .fetchBasicOverview()
-                : policy.shouldFetchBasicOverview(
-                        command.strategy(),
-                        recap.records().stream().map(this::domainRecord).toList(),
-                        titles.records().stream().map(this::domainRecord).toList(),
-                        command.pnuComplexCount(),
-                        decision.fallbackFields());
+        boolean fetchBasicOverview = command.includeBasicOverview()
+                && (command.strategy() == BuildingRegisterCollectionStrategy.COMPARE_RECAP_TITLE
+                        ? profilePolicy
+                                .decide(BuildingProfileHierarchyFacts.from(
+                                        command.pnuComplexCount(), hierarchyRecords(recap.records(), titles.records())))
+                                .fetchBasicOverview()
+                        : policy.shouldFetchBasicOverview(
+                                command.strategy(),
+                                recap.records().stream().map(this::domainRecord).toList(),
+                                titles.records().stream()
+                                        .map(this::domainRecord)
+                                        .toList(),
+                                command.pnuComplexCount(),
+                                decision.fallbackFields()));
         EndpointResult overview = fetchBasicOverview
                 ? collectEndpoint(command, BuildingRegisterEndpoint.BASIC_OVERVIEW, budget)
                 : EndpointResult.collected(List.of());

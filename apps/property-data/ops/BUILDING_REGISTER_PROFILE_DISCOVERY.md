@@ -68,13 +68,15 @@ ops/run-batch-jar.sh \
   parallelism=2
 ```
 
-총괄과 표제부는 항상 조회한다. 동일 PNU 복수 complex/root, 총괄 없는 복수 title, parent 누락·충돌, 신구대장 불명확, title 배정 불가가 있을 때만 BASIC을 조회하며 사유를 `building_register_profile_hierarchy_reason`에 남긴다.
+검증 표본에서는 총괄과 표제부를 항상 조회한다. 동일 PNU 복수 complex/root, 총괄 없는 복수 title, parent 누락·충돌, 신구대장 불명확, title 배정 불가가 있을 때만 BASIC을 조회하며 사유를 `building_register_profile_hierarchy_reason`에 남긴다.
 
 법정동코드 mapping 영향 PNU는 기존 PNU와 앞 10자리만 치환한 candidate PNU를 독립 조회한다. HTTP/provider/parse 실패는 코드 불일치로 판정하지 않는다. 관리번호 원문은 보고서 대신 DB 내부 hash 집합으로 비교한다.
 
 ## 4. 전국 staging 수집
 
 전국 수집은 `sampleSize`를 받지 않는다. 최초 실행 시 유효한 19자리 PNU 전체를 `NATIONWIDE_CENSUS`, weight `1`로 동결하며 이후 신규 complex가 생겨도 같은 `collectionId`의 대상은 바뀌지 않는다. 운영 `complex`와 기존 projection은 수정하지 않는다.
+
+전국 선저장 단계에서는 총괄표제부와 표제부만 수집하고 기본개요는 호출하지 않는다. 계층 사유는 총괄·표제부 evidence로 계속 기록하되, 계층이 불완전한 PNU를 운영 projection 대상으로 사용하지 않는다. 기본개요는 전국 총괄·표제부 수집 완료 후 해당 사유가 있는 PNU만 별도 backfill campaign으로 수집한다.
 
 ```bash
 ops/run-batch-jar.sh \

@@ -59,7 +59,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 @SpringBootTest(
         classes = UserServiceApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.MOCK,
-        properties = "spring.profiles.active=local")
+        properties = {"spring.profiles.active=local", "home.insights.enabled=true"})
 @AutoConfigureMockMvc
 class UserPersistenceConcurrencyTest {
     private static final PostgreSQLContainer<?> POSTGRES =
@@ -315,6 +315,57 @@ class UserPersistenceConcurrencyTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string(
                                 HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS, org.hamcrest.Matchers.containsString("PUT")));
+    }
+
+    @Test
+    void insightSubscriptionAndInboxRequireJwtAndUseOnlyItsUserId() throws Exception {
+        var user = login.login(
+                OAuthProvider.GOOGLE,
+                new OAuthProfile("insight-user", new UserProfile("인사이트 사용자", "insight@example.com", null)));
+        String accessToken = accessTokens.issue(user.userId());
+        String body = """
+                {
+                  "inAppEnabled": true,
+                  "emailEnabled": true,
+                  "dailyNewsEnabled": true,
+                  "weeklyTradeEnabled": true,
+                  "regionCodes": ["11", "41"]
+                }
+                """;
+
+        mockMvc.perform(get("/api/v1/insights/subscription"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+        mockMvc.perform(put("/api/v1/insights/subscription")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                        .contentType("application/json")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.emailEnabled").value(true))
+                .andExpect(jsonPath("$.regionCodes[0]").value("11"));
+        mockMvc.perform(get("/api/v1/insights/subscription").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inAppEnabled").value(true))
+                .andExpect(jsonPath("$.emailEnabled").value(true));
+        mockMvc.perform(get("/api/v1/insights/inbox").header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.totalElements").value(0));
+        mockMvc.perform(put("/api/v1/insights/subscription")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "inAppEnabled": true,
+                                  "emailEnabled": false,
+                                  "dailyNewsEnabled": true,
+                                  "weeklyTradeEnabled": true,
+                                  "regionCodes": null
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INSIGHT_SUBSCRIPTION"));
     }
 
     @Test

@@ -47,16 +47,16 @@ export USER_MIGRATOR_DB_PASSWORD="${PASSWORD}"
 export MIGRATION_DOCKER_NETWORK="${NETWORK}"
 export MIGRATION_EVIDENCE_FILE="${EVIDENCE_FILE}"
 
-"${SERVICE_ROOT}/ops/user-deployment-preflight.sh" before 5
-"${SERVICE_ROOT}/ops/user-flyway.sh" migrate 5 >/dev/null
-"${SERVICE_ROOT}/ops/user-deployment-preflight.sh" after 5
+"${SERVICE_ROOT}/ops/user-deployment-preflight.sh" before 6
+"${SERVICE_ROOT}/ops/user-flyway.sh" migrate 6 >/dev/null
+"${SERVICE_ROOT}/ops/user-deployment-preflight.sh" after 6
 "${SERVICE_ROOT}/ops/user-flyway.sh" validate >/dev/null
 
 history_rows="$(docker exec "${DATABASE_CONTAINER}" psql -U postgres -d home_search_user \
     -v ON_ERROR_STOP=1 -Atc \
     "SELECT COALESCE(version, '<null>') || '|' || type || '|' || CASE WHEN success THEN 't' ELSE 'f' END FROM users.flyway_schema_history ORDER BY installed_rank" \
     | sed '/^[[:space:]]*$/d')"
-expected_history=$'<null>|SCHEMA|t\n1|SQL|t\n2|SQL|t\n3|SQL|t\n4|SQL|t\n5|SQL|t'
+expected_history=$'<null>|SCHEMA|t\n1|SQL|t\n2|SQL|t\n3|SQL|t\n4|SQL|t\n5|SQL|t\n6|SQL|t'
 if [[ "${history_rows}" != "${expected_history}" ]]; then
     printf '예상하지 않은 user-service migration history: %s\n' "${history_rows}" >&2
     exit 1

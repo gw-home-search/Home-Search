@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: home-search-user-insight-worker
+  main:
+    web-application-type: none
+  datasource:
+    url: ${USER_DB_JDBC_URL}
+    username: ${USER_DB_USERNAME:home_search_user_runtime}
+    password: ${USER_DB_PASSWORD}
+  kafka:
+    bootstrap-servers: ${HOME_KAFKA_BOOTSTRAP_SERVERS}
+    consumer:
+      group-id: user-digest-v1
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        isolation.level: read_committed
+        max.partition.fetch.bytes: 1048576
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        max.request.size: 1048576
+    listener:
+      ack-mode: record
+      missing-topics-fatal: true
+    properties:
+      security.protocol: SASL_SSL
+      sasl.mechanism: AWS_MSK_IAM
+      sasl.jaas.config: software.amazon.msk.auth.iam.IAMLoginModule required;
+      sasl.client.callback.handler.class: software.amazon.msk.auth.iam.IAMClientCallbackHandler
+
+management:
+  endpoints:
+    enabled-by-default: false

@@ -150,8 +150,7 @@ class BuildingRegisterProfileAnalysisServiceTest {
     void recordsSourceMissingMatchesWhenPnuHasNoProfileRecords(@TempDir Path output) {
         FakeRepository repository = new FakeRepository();
         repository.complexes = List.of(
-                new BuildingProfileAnalysisComplex(501, PNU, 2),
-                new BuildingProfileAnalysisComplex(502, PNU, 2));
+                new BuildingProfileAnalysisComplex(501, PNU, 2), new BuildingProfileAnalysisComplex(502, PNU, 2));
         repository.weights = Map.of(PNU, 1.0d);
 
         BuildingProfileAnalysisSummary summary = new BuildingProfileAnalysisService(repository)
@@ -159,14 +158,11 @@ class BuildingRegisterProfileAnalysisServiceTest {
                         UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "PROFILE_V1", output));
 
         assertThat(summary.complexMatchCount()).isEqualTo(2);
-        assertThat(repository.matches)
-                .hasSize(2)
-                .allSatisfy(match -> {
-                    assertThat(match.status())
-                            .isEqualTo(com.home.domain.complex.buildingprofile.BuildingProfileAssignmentStatus
-                                    .SOURCE_MISSING);
-                    assertThat(match.projectable()).isFalse();
-                });
+        assertThat(repository.matches).hasSize(2).allSatisfy(match -> {
+            assertThat(match.status())
+                    .isEqualTo(com.home.domain.complex.buildingprofile.BuildingProfileAssignmentStatus.SOURCE_MISSING);
+            assertThat(match.projectable()).isFalse();
+        });
     }
 
     @Test
@@ -205,15 +201,33 @@ class BuildingRegisterProfileAnalysisServiceTest {
                 .analyze(new BuildingProfileAnalysisCommand(
                         UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "PROFILE_V1", output));
 
-        assertThat(weightedQuality(repository, BuildingProfileField.PLAT_AREA)
-                        .projectableComplexReadiness())
+        assertThat(weightedQuality(repository, BuildingProfileField.PLAT_AREA).projectableComplexReadiness())
                 .isEqualTo(0.1d);
         assertThat(weightedQuality(repository, BuildingProfileField.ARCH_AREA).buildingCoverage())
                 .isEqualTo(0.1d);
     }
 
-    private BuildingProfileFieldQualityEvidence weightedQuality(
-            FakeRepository repository, BuildingProfileField field) {
+    @Test
+    @DisplayName("전국 분석 record는 고정 크기 keyset page로 끝까지 읽는다")
+    void readsNationwideRecordsInBoundedKeysetPages(@TempDir Path output) {
+        FakeRepository repository = new FakeRepository();
+        List<BuildingProfileAnalysisRecord> records = new ArrayList<>();
+        records.add(record(1, BuildingRegisterEndpoint.RECAP_TITLE, "ROOT", null, 1, Map.of()));
+        java.util.stream.LongStream.rangeClosed(2, 5_001)
+                .mapToObj(id -> record(id, BuildingRegisterEndpoint.TITLE, "TITLE-" + id, "ROOT", 3, Map.of()))
+                .forEach(records::add);
+        repository.records = List.copyOf(records);
+        repository.complexes = List.of(new BuildingProfileAnalysisComplex(501, PNU, 1));
+        repository.weights = Map.of(PNU, 1.0d);
+
+        new BuildingProfileAnalysisService(repository)
+                .analyze(new BuildingProfileAnalysisCommand(
+                        UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "PROFILE_V1", output));
+
+        assertThat(repository.recordReadRequests).isEqualTo(2);
+    }
+
+    private BuildingProfileFieldQualityEvidence weightedQuality(FakeRepository repository, BuildingProfileField field) {
         return repository.quality.stream()
                 .filter(value -> value.field() == field)
                 .filter(value -> value.stratum().equals("WEIGHTED_NATIONAL"))
@@ -263,6 +277,7 @@ class BuildingRegisterProfileAnalysisServiceTest {
         List<BuildingProfileComplexMatchEvidence> matches = new ArrayList<>();
         List<BuildingProfileComparisonEvidence> comparisons = new ArrayList<>();
         List<BuildingProfileFieldQualityEvidence> quality = new ArrayList<>();
+        int recordReadRequests;
 
         @Override
         public boolean startOrLoad(BuildingProfileAnalysisCommand command) {
@@ -270,8 +285,12 @@ class BuildingRegisterProfileAnalysisServiceTest {
         }
 
         @Override
-        public List<BuildingProfileAnalysisRecord> records(UUID parseRunId) {
-            return records;
+        public List<BuildingProfileAnalysisRecord> recordsPage(UUID parseRunId, long afterRecordId, int limit) {
+            recordReadRequests++;
+            return records.stream()
+                    .filter(record -> record.recordId() > afterRecordId)
+                    .limit(limit)
+                    .toList();
         }
 
         @Override

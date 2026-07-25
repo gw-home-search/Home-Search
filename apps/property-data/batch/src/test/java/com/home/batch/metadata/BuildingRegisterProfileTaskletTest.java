@@ -45,8 +45,8 @@ class BuildingRegisterProfileTaskletTest {
                 ArgumentCaptor.forClass(BuildingProfileCollectCommand.class);
         verify(service).collect(command.capture());
         assertThat(command.getValue().sampleSize()).isEqualTo(1500);
-        assertThat(command.getValue().targetScope()).isEqualTo(
-                com.home.domain.complex.buildingprofile.BuildingProfileTargetScope.VALIDATION_SAMPLE);
+        assertThat(command.getValue().targetScope())
+                .isEqualTo(com.home.domain.complex.buildingprofile.BuildingProfileTargetScope.VALIDATION_SAMPLE);
         assertThat(command.getValue().parallelism()).isEqualTo(2);
 
         Map<String, Object> invalid = new java.util.HashMap<>(parameters);
@@ -105,8 +105,8 @@ class BuildingRegisterProfileTaskletTest {
         ArgumentCaptor<BuildingProfileCollectCommand> command =
                 ArgumentCaptor.forClass(BuildingProfileCollectCommand.class);
         verify(service).collect(command.capture());
-        assertThat(command.getValue().targetScope()).isEqualTo(
-                com.home.domain.complex.buildingprofile.BuildingProfileTargetScope.NATIONWIDE_STAGING);
+        assertThat(command.getValue().targetScope())
+                .isEqualTo(com.home.domain.complex.buildingprofile.BuildingProfileTargetScope.NATIONWIDE_STAGING);
         assertThat(command.getValue().sampleSize()).isNull();
         assertThat(command.getValue().parallelism()).isEqualTo(3);
     }

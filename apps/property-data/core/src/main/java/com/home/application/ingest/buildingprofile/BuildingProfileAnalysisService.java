@@ -35,6 +35,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class BuildingProfileAnalysisService {
     private static final String WEIGHTED_NATIONAL = "WEIGHTED_NATIONAL";
+    private static final int RECORD_PAGE_SIZE = 5_000;
     private final BuildingProfileAnalysisRepository repository;
     private final BuildingProfileQualityPolicy qualityPolicy = new BuildingProfileQualityPolicy();
     private final BuildingProfileRatioCalculator ratioCalculator = new BuildingProfileRatioCalculator();
@@ -45,7 +46,7 @@ public class BuildingProfileAnalysisService {
 
     public BuildingProfileAnalysisSummary analyze(BuildingProfileAnalysisCommand command) {
         boolean alreadyCompleted = repository.startOrLoad(command);
-        List<BuildingProfileAnalysisRecord> records = repository.records(command.parseRunId());
+        List<BuildingProfileAnalysisRecord> records = loadRecords(command.parseRunId());
         List<BuildingProfileAnalysisComplex> complexes = repository.complexes(command.collectionId());
         Map<String, List<BuildingProfileAnalysisComplex>> complexesByPnu =
                 complexes.stream().collect(Collectors.groupingBy(BuildingProfileAnalysisComplex::pnu));
@@ -97,6 +98,23 @@ public class BuildingProfileAnalysisService {
         repository.complete(command.analysisRunId(), manifest(reportFiles));
         return new BuildingProfileAnalysisSummary(
                 assignments.size(), matches.size(), comparisons.size(), quality.size(), reportFiles, alreadyCompleted);
+    }
+
+    private List<BuildingProfileAnalysisRecord> loadRecords(java.util.UUID parseRunId) {
+        List<BuildingProfileAnalysisRecord> records = new ArrayList<>();
+        long afterRecordId = 0;
+        while (true) {
+            List<BuildingProfileAnalysisRecord> page =
+                    repository.recordsPage(parseRunId, afterRecordId, RECORD_PAGE_SIZE);
+            if (page.isEmpty()) return List.copyOf(records);
+            long nextRecordId = page.getLast().recordId();
+            if (nextRecordId <= afterRecordId) {
+                throw new IllegalStateException("profile analysis record page did not advance");
+            }
+            records.addAll(page);
+            afterRecordId = nextRecordId;
+            if (page.size() < RECORD_PAGE_SIZE) return List.copyOf(records);
+        }
     }
 
     private void analyzePnu(
@@ -511,9 +529,8 @@ public class BuildingProfileAnalysisService {
         double totalBuildingWeight = eligible.stream()
                 .mapToDouble(record -> weights.getOrDefault(record.pnu(), 0.0d))
                 .sum();
-        double buildingCoverage = field.scope() == BuildingProfileScope.BUILDING
-                ? rate(validBuildingWeight, totalBuildingWeight)
-                : 0;
+        double buildingCoverage =
+                field.scope() == BuildingProfileScope.BUILDING ? rate(validBuildingWeight, totalBuildingWeight) : 0;
         var metrics = new BuildingProfileQualityMetrics(
                 field.scope(),
                 sourceCoverage,

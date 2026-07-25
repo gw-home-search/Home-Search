@@ -119,7 +119,7 @@ class JdbcBuildingProfileAnalysisRepositoryTest extends JdbcMigrationTestSupport
         BuildingProfileAnalysisCommand command =
                 new BuildingProfileAnalysisCommand(COLLECTION, PARSE, ANALYSIS, "PROFILE_V1", output);
         assertThat(repository.startOrLoad(command)).isFalse();
-        assertThat(repository.records(PARSE)).singleElement().satisfies(record -> {
+        assertThat(repository.recordsPage(PARSE, 0, 5_000)).singleElement().satisfies(record -> {
             assertThat(record.managementKey()).isEqualTo("ROOT");
             assertThat(record.value(BuildingProfileField.PLAT_AREA).decimalValue())
                     .isEqualByComparingTo("100");

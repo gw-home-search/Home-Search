@@ -71,13 +71,14 @@ public class BuildingRegisterCollectionService {
                 && (command.strategy() == BuildingRegisterCollectionStrategy.COMPARE_RECAP_TITLE
                         ? profilePolicy
                                 .decide(BuildingProfileHierarchyFacts.from(
-                                        command.pnuComplexCount(),
-                                        hierarchyRecords(recap.records(), titles.records())))
+                                        command.pnuComplexCount(), hierarchyRecords(recap.records(), titles.records())))
                                 .fetchBasicOverview()
                         : policy.shouldFetchBasicOverview(
                                 command.strategy(),
                                 recap.records().stream().map(this::domainRecord).toList(),
-                                titles.records().stream().map(this::domainRecord).toList(),
+                                titles.records().stream()
+                                        .map(this::domainRecord)
+                                        .toList(),
                                 command.pnuComplexCount(),
                                 decision.fallbackFields()));
         EndpointResult overview = fetchBasicOverview

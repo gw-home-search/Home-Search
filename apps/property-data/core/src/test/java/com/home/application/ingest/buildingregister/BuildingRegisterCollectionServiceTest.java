@@ -342,8 +342,7 @@ class BuildingRegisterCollectionServiceTest {
         fixture.client.respond(BuildingRegisterEndpoint.TITLE, page(title(), 1));
         fixture.client.respond(BuildingRegisterEndpoint.BASIC_OVERVIEW, page(basic(), 1));
 
-        BuildingRegisterCollectionResult result =
-                fixture.service.collect(profileCommandWithoutBasicOverview(2, 10));
+        BuildingRegisterCollectionResult result = fixture.service.collect(profileCommandWithoutBasicOverview(2, 10));
 
         assertThat(result.status()).isEqualTo(BuildingRegisterCollectionStatus.COLLECTED);
         assertThat(result.basicOverviewRecords()).isEmpty();

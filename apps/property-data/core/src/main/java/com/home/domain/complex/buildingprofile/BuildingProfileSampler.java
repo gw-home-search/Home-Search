@@ -29,7 +29,10 @@ public final class BuildingProfileSampler {
         BuildingProfileSampleStratum stratum = BuildingProfileSampleStratum.NATIONWIDE_CENSUS;
         List<BuildingProfileSampleEntry> entries = unique.values().stream()
                 .map(candidate -> new BuildingProfileSampleEntry(
-                        candidate.pnu(), stratum, rank(selectionSeed, stratum, candidate.pnu()), 1.0d,
+                        candidate.pnu(),
+                        stratum,
+                        rank(selectionSeed, stratum, candidate.pnu()),
+                        1.0d,
                         candidate.complexCount()))
                 .sorted(Comparator.comparingLong(BuildingProfileSampleEntry::seedRank)
                         .thenComparing(BuildingProfileSampleEntry::pnu))

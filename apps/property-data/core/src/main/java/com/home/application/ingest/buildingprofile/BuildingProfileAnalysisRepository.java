@@ -7,7 +7,7 @@ import java.util.UUID;
 public interface BuildingProfileAnalysisRepository {
     boolean startOrLoad(BuildingProfileAnalysisCommand command);
 
-    List<BuildingProfileAnalysisRecord> records(UUID parseRunId);
+    List<BuildingProfileAnalysisRecord> recordsPage(UUID parseRunId, long afterRecordId, int limit);
 
     List<BuildingProfileAnalysisComplex> complexes(UUID collectionId);
 

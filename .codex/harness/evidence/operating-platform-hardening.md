@@ -60,6 +60,12 @@
 - 예상 RED 실패: `Pass/none/none/Pass` 결정만 있으면 TDD·검증·리뷰 근거와 후속 행동이 비어 있어도 publish할 수 있었다.
 - 최소 GREEN: 필수 section label을 anchored·unique 방식으로 읽고 모두 non-empty일 때만 publish를 허용했다. 완전한 multiline fixture는 통과하고 누락 fixture는 차단하는 `home_flow` self-test가 통과했다.
 
+## Gate impact and risk propagation
+
+- 최초 RED: 계약·보안 영향과 주요 위험의 누락·중복·빈 값 fixture 및 PR body 전달 assertion을 추가한 뒤 `home_flow`와 `home_report` self-test가 각각 실패했다.
+- 예상 RED 실패: 결정 label만 있으면 세 설명 section이 없어도 publish할 수 있고, reviewer의 실제 영향·위험 문구가 PR body에서 빈 aggregate 기반 “영향 없음/없음”으로 대체될 수 있었다.
+- 최소 GREEN: `contract_impact`, `security_impact`, `main_risk`를 anchored·unique·non-empty 필수 section으로 검증하고 payload에서 PR body까지 보존한다. Pass PR은 blocking risk 없음과 reviewer의 잔여 위험을 구분하며 `home_flow`, `home_report`, `pr_lint`, project terms self-test가 통과했다.
+
 ## Gate output and verification completeness
 
 - 최초 RED: `python3 .codex/harness/home_flow.py --self-test`에 operating-platform preset의 `home_report` 검증과 gate prompt의 reviewer/contract 필수 라벨 assertion을 추가한 뒤 `self-test failed: home_flow`로 실패했다.

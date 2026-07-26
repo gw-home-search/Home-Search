@@ -294,11 +294,33 @@ def render_pr_body(payload: dict[str, Any]) -> str:
     tdd_evidence = nested(payload, "tdd_evidence", default={})
     gate_reviews = nested(payload, "gate_reviews", default={})
     gate_evidence = gate_reviews.get("backend") or gate_reviews.get("frontend") or {}
-    contract_text = "영향 없음" if not contract_risks else "영향 있음: " + "; ".join(str(item) for item in contract_risks)
     gate_main_risk = gate_evidence.get("main_risk")
+    gate_contract_impact = str(gate_evidence.get("contract_impact") or "").strip()
+    if contract_risks:
+        contract_parts = [str(item).strip() for item in contract_risks]
+        contract_parts.append(gate_contract_impact)
+        contract_text = "영향 있음: " + "; ".join(dict.fromkeys(part for part in contract_parts if part))
+    elif gate_contract_impact:
+        contract_text = f"영향 없음 — gate 검토: {gate_contract_impact}"
+    else:
+        contract_text = "영향 없음"
     gap_text = "; ".join(str(item) for item in verification_gaps) or gate_main_risk or "없음"
-    risk_text = "없음" if not residual_risks else "; ".join(str(item) for item in residual_risks)
-    security_text = "없음" if not security_risks else "있음: " + "; ".join(str(item) for item in security_risks)
+    risk_parts = [str(gate_main_risk or "").strip()]
+    risk_parts.extend(str(item).strip() for item in residual_risks)
+    risk_parts = list(dict.fromkeys(part for part in risk_parts if part))
+    if status == "Pass" and risk_parts:
+        risk_text = "없음 (blocking); 잔여 위험: " + "; ".join(risk_parts)
+    else:
+        risk_text = "; ".join(risk_parts) or "없음"
+    security_parts = ["있음: " + "; ".join(str(item).strip() for item in security_risks)] if security_risks else []
+    security_parts.append(str(gate_evidence.get("security_impact") or "").strip())
+    security_parts = list(dict.fromkeys(part for part in security_parts if part))
+    if security_risks:
+        security_text = "; ".join(security_parts)
+    elif security_parts:
+        security_text = "없음 (신규 finding); gate 검토: " + "; ".join(security_parts)
+    else:
+        security_text = "없음"
     security_findings = "listed" if security_risks else gate_evidence.get("security_findings") or "listed"
     reviewer_findings = gate_evidence.get("reviewer_findings") or "listed"
     contract_decision = gate_evidence.get("contract_decision") or "Partial"
@@ -589,6 +611,8 @@ def run_self_test() -> int:
                 "reviewer_findings": "none",
                 "security_findings": "none",
                 "contract_decision": "Pass",
+                "contract_impact": "public API URL과 response shape 변경 없음",
+                "security_impact": "신규 secret·권한 변경 없음",
                 "main_risk": "실제 AWS 검증은 후속 gate",
             }
         },
@@ -628,12 +652,13 @@ def run_self_test() -> int:
         "최초 RED: domain enum 부재 compile 실패" in pr_body,
         "reviewer: 지적사항 = none" in pr_body,
         "contract-reviewer: 게이트 결정 = Pass" in pr_body,
+        "public API URL과 response shape 변경 없음" in pr_body,
+        "신규 secret·권한 변경 없음" in pr_body,
         "reviewer: 지적사항 = listed" in missing_gate_body,
         "security-audit: 지적사항 = listed" in missing_gate_body,
         "contract-reviewer: 게이트 결정 = Partial" in missing_gate_body,
         "검증 공백: 실제 AWS 검증은 후속 gate" in pr_body,
         "검증:" in pr_body,
-        "영향 없음" in pr_body,
         "- [x] main merge 자동화 없음" in pr_body,
         "- [x] main push 없음" in pr_body,
         "- [x] integration branch만 push" in pr_body,
@@ -643,7 +668,8 @@ def run_self_test() -> int:
     if all(checks):
         print("self-test passed: home_report")
         return 0
-    print("self-test failed: home_report", file=sys.stderr)
+    failed_checks = [index for index, passed in enumerate(checks) if not passed]
+    print(f"self-test failed: home_report: checks={failed_checks}", file=sys.stderr)
     return 1
 
 

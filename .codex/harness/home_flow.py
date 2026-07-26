@@ -665,6 +665,7 @@ def parse_gate_review(text: str) -> dict[str, str]:
             r"^\s*contract-reviewer\s*:\s*게이트 결정\s*=\s*(Pass|Partial|Fail)\s*$",
             "Partial",
         ),
+        "contract_impact": _gate_value(text, "계약 영향"),
         "main_risk": _gate_value(text, "주요 위험"),
         "security_impact": _gate_value(text, "보안 영향"),
         "next_action": _gate_value(text, "다음 행동"),
@@ -678,6 +679,9 @@ def gate_allows_publish(evidence: dict[str, str]) -> bool:
         "minimum_green",
         "verification_review",
         "review",
+        "contract_impact",
+        "security_impact",
+        "main_risk",
         "next_action",
     )
     return (
@@ -1704,6 +1708,52 @@ security-audit: 지적사항 = none
 다음 행동:
 """
     )
+    parsed_missing_impact_gate = parse_gate_review(
+        """상태: Pass
+최초 RED: 실제 RED
+예상 RED 실패: 예상 실패
+최소 GREEN: 최소 구현
+검증: self-test 통과
+리뷰: 지적사항 없음
+reviewer: 지적사항 = none
+contract-reviewer: 게이트 결정 = Pass
+security-audit: 지적사항 = none
+다음 행동: integration branch 생성
+"""
+    )
+    parsed_duplicate_contract_impact_gate = parse_gate_review(
+        """상태: Pass
+최초 RED: 실제 RED
+예상 RED 실패: 예상 실패
+최소 GREEN: 최소 구현
+검증: self-test 통과
+리뷰: 지적사항 없음
+reviewer: 지적사항 = none
+계약 영향: public API 변경 없음
+계약 영향: public API 영향 재검토 필요
+contract-reviewer: 게이트 결정 = Pass
+보안 영향: 권한 변경 없음
+security-audit: 지적사항 = none
+주요 위험: 실제 배포 검증 미실시
+다음 행동: integration branch 생성
+"""
+    )
+    parsed_empty_security_impact_gate = parse_gate_review(
+        """상태: Pass
+최초 RED: 실제 RED
+예상 RED 실패: 예상 실패
+최소 GREEN: 최소 구현
+검증: self-test 통과
+리뷰: 지적사항 없음
+reviewer: 지적사항 = none
+계약 영향: public API 변경 없음
+contract-reviewer: 게이트 결정 = Pass
+보안 영향:
+security-audit: 지적사항 = none
+주요 위험: 실제 배포 검증 미실시
+다음 행동: integration branch 생성
+"""
+    )
     invalid_branch_blocked = False
     try:
         validate_integration_branch("feat/not-integration-branch")
@@ -1824,6 +1874,9 @@ security-audit: 지적사항 = none
         not gate_allows_publish(parsed_incomplete_gate),
         gate_allows_publish(parsed_complete_gate),
         not gate_allows_publish(parsed_empty_sections_gate),
+        not gate_allows_publish(parsed_missing_impact_gate),
+        not gate_allows_publish(parsed_duplicate_contract_impact_gate),
+        not gate_allows_publish(parsed_empty_security_impact_gate),
         HARNESS_REPORT_SELF_TEST
         in operating_platform_preset.get("targets", {}).get("backend", {}).get("verification_commands", []),
         HARNESS_PR_SELF_TEST

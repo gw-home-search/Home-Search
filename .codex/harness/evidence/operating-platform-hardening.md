@@ -36,6 +36,12 @@
 - 예상 RED 실패: gate 출력이 payload에서 유실돼 `Partial` 또는 `reviewer/security listed` 결과를 게시 전에 차단하지 못하고 PR body가 일반 문구를 생성했다.
 - 최소 GREEN: gate 상태·reviewer·security·contract 결정을 구조화하고 `Pass/none/none/Pass`만 게시 가능하게 했다. TDD 문서와 gate 검증 공백을 payload/PR body에 전달하며 `home_flow`, `home_report`, `pr_lint` self-test가 통과했다.
 
+## Gate output and verification completeness
+
+- 최초 RED: `python3 .codex/harness/home_flow.py --self-test`에 operating-platform preset의 `home_report` 검증과 gate prompt의 reviewer/contract 필수 라벨 assertion을 추가한 뒤 `self-test failed: home_flow`로 실패했다.
+- 예상 RED 실패: 변경된 `home_report.py`의 필수 self-test가 preset evidence에서 누락되고, 정상 reviewer가 문서화된 출력 형식만 따르면 publish 파서가 필수 결정을 찾지 못했다.
+- 최소 GREEN: backend preset에 `python3 .codex/harness/home_report.py --self-test`를 추가하고 gate prompt에 `reviewer`, `계약 영향`, `contract-reviewer` 라벨을 명시했다. `home_flow`, `home_report`, `pr_lint`, project terms 검증이 통과했다.
+
 ## 주요 동작 slice의 회귀 fixture
 
 - property news/outbox: `MarketNewsCollectionServiceTest`, `PropertyEventOutboxRelayServiceTest`, `JdbcPropertyEventOutboxRepositoryJdbcIntegrationTest`, `MarketNewsControllerContractTest`가 수집 예산, publish 실패 시 outbox 보존, 중복 relay, public response 계약을 검증한다.

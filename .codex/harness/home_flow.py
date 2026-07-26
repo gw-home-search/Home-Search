@@ -1472,8 +1472,10 @@ def build_parser() -> argparse.ArgumentParser:
 def run_self_test() -> int:
     try:
         resolved, _ = resolve_preset("map-contract-hardening")
+        _, operating_platform_preset = resolve_preset("operating-platform-hardening")
     except PresetError:
         resolved = ""
+        operating_platform_preset = {}
     parser = build_parser()
     pr_args = parser.parse_args(["run", "--work-id", "map-contract-hardening", "--pr", "--dry-run"])
     worklog_pr_args = parser.parse_args(["run", "--work-id", "self-test-fixture", "--pr", "--dry-run"])
@@ -1615,6 +1617,8 @@ contract-reviewer: 게이트 결정 = Pass
         "$api-contract [checkpoint]" in prompt,
         "{{SKILL_ROUTING}}" not in prompt,
         "Explicit `--pr` may push only the generated `feat/*-integration` branch." in gate_prompt,
+        "- reviewer: 지적사항 = none|listed" in gate_prompt,
+        "- contract-reviewer: 게이트 결정 = Pass|Partial|Fail" in gate_prompt,
         "- `git diff --check` = pass (harness 실행 완료, exit=0)" in gate_prompt,
         ".codex/harness/evidence/self-test.md" in gate_prompt,
         "{{VERIFICATION_EVIDENCE}}" not in gate_prompt,
@@ -1623,6 +1627,8 @@ contract-reviewer: 게이트 결정 = Pass
         parsed_partial_gate["reviewer_findings"] == "listed",
         parsed_partial_gate["first_red"] == "실제 RED",
         not gate_allows_publish(parsed_partial_gate),
+        HARNESS_REPORT_SELF_TEST
+        in operating_platform_preset.get("targets", {}).get("backend", {}).get("verification_commands", []),
         KNOWN_VERIFICATION_COMMANDS["backend"][DIFF_CHECK][1] == ["git", "diff", "--check"],
         KNOWN_VERIFICATION_COMMANDS["backend"]["git diff --check main...HEAD"][1]
         == ["git", "diff", "--check", "main...HEAD"],

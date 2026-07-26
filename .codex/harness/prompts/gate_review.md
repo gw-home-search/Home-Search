@@ -43,6 +43,9 @@ Output a short Korean-first gate review with these user-facing labels:
 - 최소 GREEN:
 - 검증:
 - 리뷰:
+- reviewer: 지적사항 = none|listed
+- 계약 영향:
+- contract-reviewer: 게이트 결정 = Pass|Partial|Fail
 - 보안 영향:
 - security-audit: 지적사항 = none|listed
 - 주요 위험:

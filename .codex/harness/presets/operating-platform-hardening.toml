@@ -15,6 +15,7 @@ verification_commands = [
   "python3 scripts/check-test-display-names.py",
   "python3 .codex/harness/pr_lint.py --self-test",
   "python3 .codex/harness/home_flow.py --self-test",
+  "python3 .codex/harness/home_report.py --self-test",
   ".codex/harness/home --self-test",
   "python3 .codex/harness/project_terms_check.py",
   "git diff --check",

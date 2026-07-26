@@ -3,10 +3,12 @@ package com.home.infrastructure.persistence.ingest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class JdbcBuildingProfileProjectionMigrationTest extends JdbcMigrationTestSupport {
     @Test
+    @DisplayName("정규화 profile과 archive manifest schema의 최소 권한을 생성한다")
     void createsVersionedNormalizedProfileAndArchiveManifestTables() {
         flyway(null).clean();
         flyway(null).migrate();

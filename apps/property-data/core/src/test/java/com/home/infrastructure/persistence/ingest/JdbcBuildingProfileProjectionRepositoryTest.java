@@ -8,6 +8,7 @@ import com.home.domain.complex.buildingprofile.BuildingProfileProjectionPolicy;
 import com.home.infrastructure.persistence.ingest.matching.JdbcBuildingProfileProjectionRepository;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class JdbcBuildingProfileProjectionRepositoryTest extends JdbcMigrationTestSupport {
@@ -131,6 +132,7 @@ class JdbcBuildingProfileProjectionRepositoryTest extends JdbcMigrationTestSuppo
     }
 
     @Test
+    @DisplayName("55개 필드를 complex 변경 없이 idempotent하게 projection한다")
     void projectsFiftyFiveFieldsIdempotentlyWithoutChangingComplex() {
         JdbcBuildingProfileProjectionRepository repository =
                 new JdbcBuildingProfileProjectionRepository(jdbcClient, transactionTemplate);

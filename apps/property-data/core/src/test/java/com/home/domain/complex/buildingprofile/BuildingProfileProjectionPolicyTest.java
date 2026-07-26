@@ -3,12 +3,14 @@ package com.home.domain.complex.buildingprofile;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class BuildingProfileProjectionPolicyTest {
     private final BuildingProfileProjectionPolicy policy = new BuildingProfileProjectionPolicy();
 
     @Test
+    @DisplayName("55개 정규화 필드와 전국 readiness 기준을 고정한다")
     void fixesFiftyFiveNormalizedFieldsAtNationwideReadinessThreshold() {
         assertThat(policy.minimumReadiness()).isEqualByComparingTo("0.4492986425");
         assertThat(policy.fields()).hasSize(55);
@@ -29,6 +31,7 @@ class BuildingProfileProjectionPolicyTest {
     }
 
     @Test
+    @DisplayName("관찰 전용 날짜와 품질별 projection 용도를 판정한다")
     void preservesRejectedDatesAsObservationOnly() {
         assertThat(policy.use(BuildingProfileField.STCNS_DAY, BuildingProfileQualityTier.REJECT_FOR_PROJECTION))
                 .isEqualTo(BuildingProfileProjectionUse.OBSERVATION_ONLY);

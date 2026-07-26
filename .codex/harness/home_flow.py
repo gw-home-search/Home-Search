@@ -601,9 +601,44 @@ def output_text(result: dict[str, Any]) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+GATE_OUTPUT_LABELS = (
+    "상태",
+    "최초 RED",
+    "예상 RED 실패",
+    "최소 GREEN",
+    "검증",
+    "리뷰",
+    "reviewer",
+    "계약 영향",
+    "contract-reviewer",
+    "보안 영향",
+    "security-audit",
+    "주요 위험",
+    "다음 행동",
+)
+
+
+def _is_gate_label_line(line: str) -> bool:
+    return any(re.match(rf"^[ \t]*{re.escape(label)}[ \t]*:", line) for label in GATE_OUTPUT_LABELS)
+
+
 def _gate_value(text: str, label: str) -> str:
-    match = re.search(rf"^\s*{re.escape(label)}\s*:\s*(.+?)\s*$", text, re.MULTILINE)
-    return match.group(1).strip() if match else ""
+    matches = list(
+        re.finditer(rf"^[ \t]*{re.escape(label)}[ \t]*:[ \t]*(.*?)[ \t]*$", text, re.MULTILINE)
+    )
+    if len(matches) != 1:
+        return ""
+    inline = matches[0].group(1).strip()
+    if inline:
+        return inline
+    for line in text[matches[0].end() :].splitlines():
+        value = line.strip()
+        if not value:
+            continue
+        if _is_gate_label_line(line):
+            return ""
+        return value
+    return ""
 
 
 def _unique_gate_choice(text: str, pattern: str, fallback: str) -> str:
@@ -617,6 +652,8 @@ def parse_gate_review(text: str) -> dict[str, str]:
         "first_red": _gate_value(text, "최초 RED"),
         "expected_red": _gate_value(text, "예상 RED 실패"),
         "minimum_green": _gate_value(text, "최소 GREEN"),
+        "verification_review": _gate_value(text, "검증"),
+        "review": _gate_value(text, "리뷰"),
         "reviewer_findings": _unique_gate_choice(
             text, r"^\s*reviewer\s*:\s*지적사항\s*=\s*(none|listed)\s*$", "listed"
         ),
@@ -630,15 +667,25 @@ def parse_gate_review(text: str) -> dict[str, str]:
         ),
         "main_risk": _gate_value(text, "주요 위험"),
         "security_impact": _gate_value(text, "보안 영향"),
+        "next_action": _gate_value(text, "다음 행동"),
     }
 
 
 def gate_allows_publish(evidence: dict[str, str]) -> bool:
+    required_sections = (
+        "first_red",
+        "expected_red",
+        "minimum_green",
+        "verification_review",
+        "review",
+        "next_action",
+    )
     return (
         evidence.get("status") == "Pass"
         and evidence.get("reviewer_findings") == "none"
         and evidence.get("security_findings") == "none"
         and evidence.get("contract_decision") == "Pass"
+        and all(str(evidence.get(key) or "").strip() for key in required_sections)
     )
 
 
@@ -1612,6 +1659,51 @@ security-audit: 지적사항 = none
 contract-reviewer: 게이트 결정 = Pass
 """
     )
+    parsed_incomplete_gate = parse_gate_review(
+        """상태: Pass
+reviewer: 지적사항 = none
+security-audit: 지적사항 = none
+contract-reviewer: 게이트 결정 = Pass
+"""
+    )
+    parsed_complete_gate = parse_gate_review(
+        """상태: Pass
+최초 RED:
+필수 section 누락 fixture가 publish gate를 통과했다.
+예상 RED 실패:
+의사결정 필드만 있으면 검증 근거 없이 publish 가능했다.
+최소 GREEN:
+필수 section을 유일하고 비어 있지 않게 검증한다.
+검증:
+self-test가 통과했다.
+리뷰:
+필수 section parser를 확인했다.
+reviewer: 지적사항 = none
+계약 영향:
+public API 변경 없음
+contract-reviewer: 게이트 결정 = Pass
+보안 영향:
+권한 변경 없음
+security-audit: 지적사항 = none
+주요 위험:
+실제 publish는 별도 dry-run으로 확인한다.
+다음 행동:
+integration branch를 생성한다.
+"""
+    )
+    parsed_empty_sections_gate = parse_gate_review(
+        """상태: Pass
+최초 RED:
+예상 RED 실패:
+최소 GREEN:
+검증:
+리뷰:
+reviewer: 지적사항 = none
+contract-reviewer: 게이트 결정 = Pass
+security-audit: 지적사항 = none
+다음 행동:
+"""
+    )
     invalid_branch_blocked = False
     try:
         validate_integration_branch("feat/not-integration-branch")
@@ -1729,6 +1821,9 @@ contract-reviewer: 게이트 결정 = Pass
         not gate_allows_publish(parsed_contradictory_gate),
         parsed_duplicate_status_gate["status"] == "Partial",
         not gate_allows_publish(parsed_duplicate_status_gate),
+        not gate_allows_publish(parsed_incomplete_gate),
+        gate_allows_publish(parsed_complete_gate),
+        not gate_allows_publish(parsed_empty_sections_gate),
         HARNESS_REPORT_SELF_TEST
         in operating_platform_preset.get("targets", {}).get("backend", {}).get("verification_commands", []),
         HARNESS_PR_SELF_TEST

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath;
 import static org.springframework.restdocs.payload.PayloadDocumentation.responseFields;
+import static org.springframework.restdocs.payload.PayloadDocumentation.subsectionWithPath;
 import static org.springframework.restdocs.request.RequestDocumentation.parameterWithName;
 import static org.springframework.restdocs.request.RequestDocumentation.pathParameters;
 import static org.springframework.restdocs.request.RequestDocumentation.queryParameters;
@@ -636,7 +637,11 @@ class ReadApiRestDocsTest {
             fieldWithPath("prediction.message")
                     .type(JsonFieldType.STRING)
                     .optional()
-                    .description("Non-sensitive prediction status message.")
+                    .description("Non-sensitive prediction status message."),
+            subsectionWithPath("buildingProfile")
+                    .type(JsonFieldType.VARIES)
+                    .optional()
+                    .description("Nullable versioned building-register profile grouped by ratios, households, parking, building, elevators, safety, dates, address, and energy.")
         };
     }
 

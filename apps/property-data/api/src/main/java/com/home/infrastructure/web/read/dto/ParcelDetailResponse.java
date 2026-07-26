@@ -21,7 +21,8 @@ public record ParcelDetailResponse(
         BigDecimal bcRat,
         BigDecimal vlRat,
         LocalDate useDate,
-        PricePredictionResponse prediction) {
+        PricePredictionResponse prediction,
+        BuildingProfileResponse buildingProfile) {
 
     public static ParcelDetailResponse from(ParcelDetailResult result, PricePredictionResponse prediction) {
         return new ParcelDetailResponse(
@@ -41,6 +42,7 @@ public record ParcelDetailResponse(
                 result.bcRat(),
                 result.vlRat(),
                 result.useDate(),
-                prediction);
+                prediction,
+                BuildingProfileResponse.from(result.buildingProfile()));
     }
 }

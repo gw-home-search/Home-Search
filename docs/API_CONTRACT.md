@@ -400,7 +400,11 @@ Request:
   "ageMin": null,
   "ageMax": null,
   "unitMin": null,
-  "unitMax": null
+  "unitMax": null,
+  "bcRatMin": null,
+  "bcRatMax": null,
+  "vlRatMin": null,
+  "vlRatMax": null
 }
 ```
 
@@ -418,6 +422,14 @@ Request fields:
 - `ageMax`: optional integer building age upper bound.
 - `unitMin`: optional integer household count lower bound.
 - `unitMax`: optional integer household count upper bound.
+- `bcRatMin`, `bcRatMax`: optional decimal building coverage ratio bounds in percentage points.
+- `vlRatMin`, `vlRatMax`: optional decimal floor area ratio bounds in percentage points.
+
+Ratio bounds are non-negative and each minimum must be less than or equal to
+its maximum. No arbitrary upper bound is imposed. Ratio filtering prefers a
+non-null direct `complex` value and otherwise uses the current publication's
+conflict-free PNU fallback; conflicted or missing values do not match an active
+ratio bound.
 
 Bounds policy:
 
@@ -803,6 +815,32 @@ Response:
     "basisDealDate": "2026-01-01",
     "generatedAt": "2026-06-25T07:05:38Z",
     "message": null
+  },
+  "buildingProfile": {
+    "ratios": {
+      "scope": "PARCEL",
+      "quality": "PNU_FALLBACK",
+      "buildingCoverageRate": 22.5,
+      "floorAreaRatio": 199.8,
+      "siteAreaM2": 12345.67,
+      "buildingAreaM2": 2345.67,
+      "totalFloorAreaM2": 98765.43,
+      "floorAreaRatioAreaM2": 24666.1
+    },
+    "households": {
+      "scope": "COMPLEX",
+      "quality": "VERIFIED",
+      "householdCount": 740,
+      "familyCount": 0,
+      "unitCount": 760
+    },
+    "parking": null,
+    "building": null,
+    "elevators": null,
+    "safety": null,
+    "dates": null,
+    "address": null,
+    "energy": null
   }
 }
 ```
@@ -839,6 +877,27 @@ Response fields:
   - `basisDealDate`
   - `generatedAt`
   - `message`: non-sensitive optional status message.
+- `buildingProfile`: nullable current building-register publication summary.
+  A missing publication or a complex with no meaningful profile returns `null`.
+  Each non-null section has `scope=COMPLEX|PARCEL` and
+  `quality=VERIFIED|PNU_FALLBACK|PARTIAL`; a section with no values is `null`.
+  - `ratios`: `buildingCoverageRate`, `floorAreaRatio`, `siteAreaM2`,
+    `buildingAreaM2`, `totalFloorAreaM2`, `floorAreaRatioAreaM2`.
+  - `households`: `householdCount`, `familyCount`, `unitCount`.
+  - `parking`: `totalCount`, `perHousehold`, and indoor/outdoor
+    mechanical/automatic count and area fields.
+  - `building`: main/attached building counts, maximum ground/underground
+    floors, maximum height, and structure/roof/primary-use string sets.
+  - `elevators`: ride-use and emergency-use counts.
+  - `safety`: `seismicDesignStatus=ALL_APPLIED|PARTIAL|NONE_APPLIED|UNKNOWN`
+    and seismic ability strings.
+  - `dates`: permit, construction-start, and use-approval dates.
+  - `address`: parcel and road address.
+  - `energy`: meaningful positive energy/certification ranges and non-blank
+    grade sets. Missing-equivalent numeric zero is not exposed here.
+
+Provider keys, management numbers, PNU, raw identifiers, `complex_pk`,
+`apt_seq`, `source`, and `source_key` are not part of `buildingProfile`.
 
 Status:
 

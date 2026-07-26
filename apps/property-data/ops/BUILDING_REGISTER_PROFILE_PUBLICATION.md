@@ -49,6 +49,17 @@
   - `PARTIAL` 최고층 direct 반영 차단: `Pass`
 - 지적사항: PNU fallback은 summary/API 후보로만 유지하고 direct complex ratio에는 쓰지 않는다.
 
+### Slice 3 — 상세 API 공개
+
+- 최초 RED: 두 상세 URL의 `buildingProfile` scope/quality/count 0 및 내부 식별자 비노출 assertion.
+- 예상 RED 실패: 기존 response에 `buildingProfile`이 없었다.
+- 최소 GREEN: 두 URL이 공유하는 `ParcelDetailResult`와 response mapper에 nullable section DTO를 추가했다.
+- 검증 근거 확인:
+  - `:api:apiContractTest`: `Pass`
+  - `:api:restDocsTest`: `Pass`
+  - 기존 최상위 필드와 URL 변경: `0건`
+  - management key, PNU, provider/raw 식별자 공개: `0건`
+
 ## 중단 조건
 
 - V33 checksum 또는 archive SHA 불일치

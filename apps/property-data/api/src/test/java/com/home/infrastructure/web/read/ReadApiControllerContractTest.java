@@ -333,7 +333,8 @@ class ReadApiControllerContractTest {
                         null,
                         null,
                         null,
-                        LocalDate.of(2020, 1, 1)));
+                        LocalDate.of(2020, 1, 1),
+                        profileSummary()));
 
         mockMvc.perform(get("/api/v1/detail/1001").param("complexId", "502"))
                 .andExpect(status().isOk())
@@ -510,7 +511,8 @@ class ReadApiControllerContractTest {
                         null,
                         null,
                         null,
-                        LocalDate.of(2020, 1, 1)));
+                        LocalDate.of(2020, 1, 1),
+                        profileSummary()));
 
         mockMvc.perform(get("/api/v1/complex/502"))
                 .andExpect(status().isOk())
@@ -522,7 +524,13 @@ class ReadApiControllerContractTest {
                 .andExpect(jsonPath("$.tradeName").value("Tower B"))
                 .andExpect(jsonPath("$.name").value("Sample Tower B"))
                 .andExpect(jsonPath("$.unitCnt").value(410))
+                .andExpect(jsonPath("$.buildingProfile.ratios.scope").value("PARCEL"))
+                .andExpect(jsonPath("$.buildingProfile.ratios.quality").value("PNU_FALLBACK"))
+                .andExpect(jsonPath("$.buildingProfile.ratios.buildingCoverageRate").value(72.30))
+                .andExpect(jsonPath("$.buildingProfile.households.familyCount").value(0))
                 .andExpect(jsonPath("$.complexPk").doesNotExist())
+                .andExpect(jsonPath("$.buildingProfile.managementKey").doesNotExist())
+                .andExpect(jsonPath("$.buildingProfile.pnu").doesNotExist())
                 .andExpect(jsonPath("$.aptSeq").doesNotExist())
                 .andExpect(jsonPath("$.sourceKey").doesNotExist());
     }
@@ -682,5 +690,25 @@ class ReadApiControllerContractTest {
                 .andExpect(jsonPath("$.detail").value("Resource not found."))
                 .andExpect(jsonPath("$.exception").value("ResourceNotFoundException"))
                 .andExpect(jsonPath("$.timestamp").value(matchesPattern(OFFSET_TIMESTAMP_PATTERN)));
+    }
+
+    private com.home.application.read.BuildingProfileSummaryResult profileSummary() {
+        return new com.home.application.read.BuildingProfileSummaryResult(
+                new com.home.application.read.BuildingProfileSummaryResult.Ratios(
+                        com.home.domain.complex.buildingprofile.BuildingProfilePublicScope.PARCEL,
+                        com.home.domain.complex.buildingprofile.BuildingProfilePublicQuality.PNU_FALLBACK,
+                        new BigDecimal("72.30"),
+                        new BigDecimal("238.40"),
+                        new BigDecimal("1000.00"),
+                        new BigDecimal("723.00"),
+                        new BigDecimal("2500.00"),
+                        new BigDecimal("2384.00")),
+                new com.home.application.read.BuildingProfileSummaryResult.Households(
+                        com.home.domain.complex.buildingprofile.BuildingProfilePublicScope.COMPLEX,
+                        com.home.domain.complex.buildingprofile.BuildingProfilePublicQuality.VERIFIED,
+                        410L,
+                        0L,
+                        420L),
+                null, null, null, null, null, null, null);
     }
 }

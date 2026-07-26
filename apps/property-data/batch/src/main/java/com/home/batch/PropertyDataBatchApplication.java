@@ -22,6 +22,7 @@ public class PropertyDataBatchApplication {
             "complexBuildingRegisterProfileReplayJob",
             "complexBuildingRegisterProfileCollectJob",
             "complexBuildingRegisterProfileAnalyzeJob",
+            "complexBuildingRegisterProfileProjectJob",
             "marketInsightDailyJob",
             "marketInsightRolling7dJob",
             "marketNewsGeneralJob",

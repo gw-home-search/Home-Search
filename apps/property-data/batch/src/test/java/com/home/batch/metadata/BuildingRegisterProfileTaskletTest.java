@@ -12,6 +12,9 @@ import com.home.application.ingest.buildingprofile.BuildingProfileAnalysisSummar
 import com.home.application.ingest.buildingprofile.BuildingProfileCollectCommand;
 import com.home.application.ingest.buildingprofile.BuildingProfileCollectSummary;
 import com.home.application.ingest.buildingprofile.BuildingProfileCollectionService;
+import com.home.application.ingest.buildingprofile.BuildingProfileProjectionCommand;
+import com.home.application.ingest.buildingprofile.BuildingProfileProjectionService;
+import com.home.application.ingest.buildingprofile.BuildingProfileProjectionSummary;
 import com.home.application.ingest.buildingprofile.BuildingProfileReplayCommand;
 import com.home.application.ingest.buildingprofile.BuildingProfileReplayService;
 import com.home.application.ingest.buildingprofile.BuildingProfileReplaySummary;
@@ -85,6 +88,18 @@ class BuildingRegisterProfileTaskletTest {
                                 "rulesVersion", "PROFILE_V1",
                                 "outputDirectory", "/tmp/home-search-profile-test")));
         verify(analyze).analyze(org.mockito.ArgumentMatchers.any(BuildingProfileAnalysisCommand.class));
+
+        BuildingProfileProjectionService project = mock(BuildingProfileProjectionService.class);
+        given(project.project(org.mockito.ArgumentMatchers.any(BuildingProfileProjectionCommand.class)))
+                .willReturn(new BuildingProfileProjectionSummary(55, 44_200, 38_310, 260_197, "a".repeat(64), false));
+        new BuildingProfileProjectTasklet(project, lock)
+                .execute(
+                        null,
+                        context(Map.of(
+                                "projectionRunId", "123e4567-e89b-12d3-a456-426614174215",
+                                "analysisRunId", "123e4567-e89b-12d3-a456-426614174212",
+                                "projectionVersion", "PROFILE_PROJECTION_V1")));
+        verify(project).project(org.mockito.ArgumentMatchers.any(BuildingProfileProjectionCommand.class));
     }
 
     @Test

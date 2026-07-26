@@ -3,6 +3,7 @@ package com.home.batch.metadata;
 import com.home.application.ingest.buildingmetadata.BuildingMetadataBatchService;
 import com.home.application.ingest.buildingprofile.BuildingProfileAnalysisService;
 import com.home.application.ingest.buildingprofile.BuildingProfileCollectionService;
+import com.home.application.ingest.buildingprofile.BuildingProfileProjectionService;
 import com.home.application.ingest.buildingprofile.BuildingProfileReplayService;
 import com.home.application.ingest.buildingprofile.LegalDongCodeImportService;
 import com.home.application.ingest.buildingregister.BuildingRatioProjectionService;
@@ -88,6 +89,15 @@ class BuildingMetadataBatchJobConfiguration {
             JobRepository repository, Step complexBuildingRegisterProfileAnalyzeStep) {
         return new JobBuilder("complexBuildingRegisterProfileAnalyzeJob", repository)
                 .start(complexBuildingRegisterProfileAnalyzeStep)
+                .build();
+    }
+
+    @Bean
+    @Lazy
+    Job complexBuildingRegisterProfileProjectJob(
+            JobRepository repository, Step complexBuildingRegisterProfileProjectStep) {
+        return new JobBuilder("complexBuildingRegisterProfileProjectJob", repository)
+                .start(complexBuildingRegisterProfileProjectStep)
                 .build();
     }
 
@@ -203,6 +213,20 @@ class BuildingMetadataBatchJobConfiguration {
                 repository,
                 transactionManager,
                 new BuildingProfileAnalyzeTasklet(service, executionLock));
+    }
+
+    @Bean
+    @Lazy
+    Step complexBuildingRegisterProfileProjectStep(
+            JobRepository repository,
+            PlatformTransactionManager transactionManager,
+            BuildingProfileProjectionService service,
+            BuildingMetadataExecutionLock executionLock) {
+        return step(
+                "complexBuildingRegisterProfileProjectStep",
+                repository,
+                transactionManager,
+                new BuildingProfileProjectTasklet(service, executionLock));
     }
 
     @Bean

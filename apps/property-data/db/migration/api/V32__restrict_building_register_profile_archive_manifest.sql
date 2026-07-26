@@ -1,0 +1,3 @@
+REVOKE ALL PRIVILEGES
+ON TABLE public.building_register_profile_archive_manifest
+FROM home_search_property_runtime;

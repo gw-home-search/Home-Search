@@ -18,6 +18,12 @@
 - 예상 RED 실패: canonical Markdown 끝에 불필요한 빈 줄이 포함됐다.
 - 최소 GREEN: EOF 공백만 제거하고 동일 diff 검사를 통과했다.
 
+## News collection resume safety
+
+- 최초 RED: 재개 cursor·누적 progress·raw payload 일치 계약을 테스트에 먼저 추가한 뒤 targeted `:core:test`가 존재하지 않는 progress API와 `MarketNewsWorkUnitSpec` 상태 때문에 compile 실패했다.
+- 예상 RED 실패: `RUNNING` unit이 저장된 `last_provider_start`를 무시하고 `start=1`부터 재호출하며, 같은 provider 위치의 변경된 payload가 기존 raw row의 article/rejection 결과를 바꿀 수 있었다.
+- 최소 GREEN: 마지막 성공 page와 누적 call/raw/oldest 상태를 page마다 저장·복원하고, 동일 raw payload만 link/reject하도록 제한했다. service unit test와 PostgreSQL resume/raw-match integration test가 통과했다.
+
 ## 주요 동작 slice의 회귀 fixture
 
 - property news/outbox: `MarketNewsCollectionServiceTest`, `PropertyEventOutboxRelayServiceTest`, `JdbcPropertyEventOutboxRepositoryJdbcIntegrationTest`, `MarketNewsControllerContractTest`가 수집 예산, publish 실패 시 outbox 보존, 중복 relay, public response 계약을 검증한다.

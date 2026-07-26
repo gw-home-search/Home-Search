@@ -138,9 +138,9 @@ public class MarketNewsCollectionService {
             MarketNewsCollectionExecution execution, MarketNewsWorkUnitSpec unit, int callsBeforeUnit) {
         repository.startWorkUnit(unit.workUnitId(), clock.instant());
         UnitCallCounter unitCalls = new UnitCallCounter();
-        int rawCount = 0;
-        int start = 1;
-        Instant oldest = null;
+        int rawCount = unit.collectedRawItemCount();
+        int start = unit.nextProviderStart();
+        Instant oldest = unit.oldestProvidedAt();
         boolean cutoffReached = false;
         MarketNewsRelationPolicy.IndexedCorpus relationIndex = relationPolicy.index(unit.matchingCorpus());
         try {
@@ -153,6 +153,7 @@ public class MarketNewsCollectionService {
                 rawCount += page.items().size();
                 repository.saveRawItems(unit.workUnitId(), page.items(), clock.instant());
                 for (NewsProviderItem raw : page.items()) {
+                    repository.requireRawItemMatch(unit.workUnitId(), raw);
                     Instant rawProvidedAt = normalizer.tryParseProvidedAt(raw).orElse(null);
                     if (rawProvidedAt != null && (oldest == null || rawProvidedAt.isBefore(oldest))) {
                         oldest = rawProvidedAt;
@@ -168,6 +169,8 @@ public class MarketNewsCollectionService {
                     }
                     processNormalized(execution, unit, relationIndex, raw, item);
                 }
+                repository.recordWorkUnitPageProgress(
+                        unit.workUnitId(), start, unit.collectedCallCount() + unitCalls.value, rawCount, oldest);
                 if (page.items().isEmpty() || (oldest != null && !oldest.isAfter(execution.overlapCutoff()))) {
                     cutoffReached = true;
                     break;
@@ -179,7 +182,7 @@ public class MarketNewsCollectionService {
             repository.finishWorkUnit(
                     unit.workUnitId(),
                     state,
-                    unitCalls.value,
+                    unit.collectedCallCount() + unitCalls.value,
                     rawCount,
                     oldest,
                     cutoffReached,
@@ -191,7 +194,7 @@ public class MarketNewsCollectionService {
             repository.finishWorkUnit(
                     unit.workUnitId(),
                     MarketNewsWorkUnitState.SKIPPED_BUDGET,
-                    unitCalls.value,
+                    unit.collectedCallCount() + unitCalls.value,
                     rawCount,
                     oldest,
                     false,
@@ -202,7 +205,7 @@ public class MarketNewsCollectionService {
             repository.finishWorkUnit(
                     unit.workUnitId(),
                     MarketNewsWorkUnitState.FAILED,
-                    unitCalls.value,
+                    unit.collectedCallCount() + unitCalls.value,
                     rawCount,
                     oldest,
                     false,
@@ -212,11 +215,22 @@ public class MarketNewsCollectionService {
                     MarketNewsWorkUnitState.FAILED,
                     unitCalls.value,
                     exception.type().name());
+        } catch (RawNewsPositionConflictException exception) {
+            repository.finishWorkUnit(
+                    unit.workUnitId(),
+                    MarketNewsWorkUnitState.FAILED,
+                    unit.collectedCallCount() + unitCalls.value,
+                    rawCount,
+                    oldest,
+                    false,
+                    "RAW_POSITION_CONFLICT",
+                    clock.instant());
+            return new UnitResult(MarketNewsWorkUnitState.FAILED, unitCalls.value, "RAW_POSITION_CONFLICT");
         } catch (RuntimeException exception) {
             repository.finishWorkUnit(
                     unit.workUnitId(),
                     MarketNewsWorkUnitState.FAILED,
-                    unitCalls.value,
+                    unit.collectedCallCount() + unitCalls.value,
                     rawCount,
                     oldest,
                     false,

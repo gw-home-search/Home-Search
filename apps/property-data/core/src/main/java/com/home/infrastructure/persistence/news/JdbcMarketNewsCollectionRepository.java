@@ -9,6 +9,7 @@ import com.home.application.news.collection.NewsCallBudgetExceededException;
 import com.home.application.news.collection.NewsProviderItem;
 import com.home.application.news.collection.NormalizedNewsItem;
 import com.home.application.news.collection.PublishedNewsSnapshot;
+import com.home.application.news.collection.RawNewsPositionConflictException;
 import com.home.domain.news.MarketNewsCategory;
 import com.home.domain.news.MarketNewsExecutionState;
 import com.home.domain.news.MarketNewsRelationMatch;
@@ -129,7 +130,9 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
         List<ResumableWorkUnitRow> unfinished = jdbcClient
                 .sql("""
                     SELECT work_unit_id, unit_order, scope_kind, scope_type,
-                           region_code, complex_id, category, query_text
+                           region_code, complex_id, category, query_text,
+                           last_provider_start, call_count, raw_item_count,
+                           oldest_provided_at
                     FROM market_news_collection_work_unit
                     WHERE execution_id = :executionId
                       AND state IN ('PLANNED', 'RUNNING')
@@ -144,7 +147,11 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
                         rs.getString("region_code"),
                         rs.getObject("complex_id", Long.class),
                         rs.getString("category") == null ? null : MarketNewsCategory.valueOf(rs.getString("category")),
-                        rs.getString("query_text")))
+                        rs.getString("query_text"),
+                        rs.getInt("last_provider_start"),
+                        rs.getInt("call_count"),
+                        rs.getInt("raw_item_count"),
+                        nullableInstant(rs, "oldest_provided_at")))
                 .list();
 
         Map<String, String> sidoNames =
@@ -211,7 +218,11 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
                 unit.category(),
                 unit.query(),
                 focusComplex,
-                corpus);
+                corpus,
+                unit.lastProviderStart() == 0 ? 1 : unit.lastProviderStart() + 100,
+                unit.callCount(),
+                unit.rawItemCount(),
+                unit.oldestProvidedAt());
     }
 
     @Override
@@ -426,6 +437,65 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
     }
 
     @Override
+    public void requireRawItemMatch(UUID workUnitId, NewsProviderItem rawItem) {
+        if (!rawItemMatches(workUnitId, rawItem)) {
+            throw new RawNewsPositionConflictException();
+        }
+    }
+
+    public boolean rawItemMatches(UUID workUnitId, NewsProviderItem rawItem) {
+        return jdbcClient
+                .sql("""
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM market_news_raw_item
+                        WHERE work_unit_id = :workUnitId
+                          AND provider_start = :providerStart
+                          AND provider_rank = :providerRank
+                          AND title_raw IS NOT DISTINCT FROM :title
+                          AND original_link_raw IS NOT DISTINCT FROM :originalLink
+                          AND link_raw IS NOT DISTINCT FROM :link
+                          AND description_raw IS NOT DISTINCT FROM :description
+                          AND pub_date_raw IS NOT DISTINCT FROM :pubDate
+                    )
+                    """)
+                .param("workUnitId", workUnitId)
+                .param("providerStart", rawItem.providerStart())
+                .param("providerRank", rawItem.providerRank())
+                .param("title", rawItem.title())
+                .param("originalLink", rawItem.originalLink())
+                .param("link", rawItem.link())
+                .param("description", rawItem.description())
+                .param("pubDate", rawItem.pubDate())
+                .query(Boolean.class)
+                .single();
+    }
+
+    @Override
+    public void recordWorkUnitPageProgress(
+            UUID workUnitId, int providerStart, int callCount, int rawItemCount, Instant oldestProvidedAt) {
+        int updated = jdbcClient
+                .sql("""
+                    UPDATE market_news_collection_work_unit
+                    SET last_provider_start = GREATEST(last_provider_start, :providerStart),
+                        call_count = GREATEST(call_count, :callCount),
+                        raw_item_count = GREATEST(raw_item_count, :rawItemCount),
+                        oldest_provided_at = :oldestProvidedAt
+                    WHERE work_unit_id = :workUnitId
+                      AND state = 'RUNNING'
+                    """)
+                .param("providerStart", providerStart)
+                .param("callCount", callCount)
+                .param("rawItemCount", rawItemCount)
+                .param("oldestProvidedAt", utc(oldestProvidedAt))
+                .param("workUnitId", workUnitId)
+                .update();
+        if (updated != 1) {
+            throw new IllegalStateException("수집 중인 뉴스 work unit progress를 저장할 수 없습니다");
+        }
+    }
+
+    @Override
     public long upsertArticle(NormalizedNewsItem item, Instant seenAt) {
         return jdbcClient
                 .sql("""
@@ -454,36 +524,62 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
 
     @Override
     public void linkRawItem(UUID workUnitId, NewsProviderItem rawItem, long articleId) {
-        jdbcClient
+        int updated = jdbcClient
                 .sql("""
                     UPDATE market_news_raw_item
                     SET article_id = :articleId, rejection_reason = NULL
                     WHERE work_unit_id = :workUnitId
                       AND provider_start = :providerStart
                       AND provider_rank = :providerRank
+                      AND title_raw IS NOT DISTINCT FROM :title
+                      AND original_link_raw IS NOT DISTINCT FROM :originalLink
+                      AND link_raw IS NOT DISTINCT FROM :link
+                      AND description_raw IS NOT DISTINCT FROM :description
+                      AND pub_date_raw IS NOT DISTINCT FROM :pubDate
                     """)
                 .param("articleId", articleId)
                 .param("workUnitId", workUnitId)
                 .param("providerStart", rawItem.providerStart())
                 .param("providerRank", rawItem.providerRank())
+                .param("title", rawItem.title())
+                .param("originalLink", rawItem.originalLink())
+                .param("link", rawItem.link())
+                .param("description", rawItem.description())
+                .param("pubDate", rawItem.pubDate())
                 .update();
+        if (updated != 1) {
+            throw new RawNewsPositionConflictException();
+        }
     }
 
     @Override
     public void rejectRawItem(UUID workUnitId, NewsProviderItem rawItem, NewsRejectionReason reason) {
-        jdbcClient
+        int updated = jdbcClient
                 .sql("""
                     UPDATE market_news_raw_item
                     SET rejection_reason = :reason, article_id = NULL
                     WHERE work_unit_id = :workUnitId
                       AND provider_start = :providerStart
                       AND provider_rank = :providerRank
+                      AND title_raw IS NOT DISTINCT FROM :title
+                      AND original_link_raw IS NOT DISTINCT FROM :originalLink
+                      AND link_raw IS NOT DISTINCT FROM :link
+                      AND description_raw IS NOT DISTINCT FROM :description
+                      AND pub_date_raw IS NOT DISTINCT FROM :pubDate
                     """)
                 .param("reason", reason.name())
                 .param("workUnitId", workUnitId)
                 .param("providerStart", rawItem.providerStart())
                 .param("providerRank", rawItem.providerRank())
+                .param("title", rawItem.title())
+                .param("originalLink", rawItem.originalLink())
+                .param("link", rawItem.link())
+                .param("description", rawItem.description())
+                .param("pubDate", rawItem.pubDate())
                 .update();
+        if (updated != 1) {
+            throw new RawNewsPositionConflictException();
+        }
     }
 
     @Override
@@ -528,7 +624,6 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
                         raw_item_count = :rawItemCount,
                         oldest_provided_at = :oldestProvidedAt,
                         cutoff_reached = :cutoffReached,
-                        last_provider_start = LEAST(1000, GREATEST(0, :lastProviderStart)),
                         failure_kind = :failureKind,
                         completed_at = :completedAt
                     WHERE work_unit_id = :workUnitId AND state = 'RUNNING'
@@ -538,7 +633,6 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
                 .param("rawItemCount", rawItemCount)
                 .param("oldestProvidedAt", utc(oldestProvidedAt))
                 .param("cutoffReached", cutoffReached)
-                .param("lastProviderStart", callCount == 0 ? 0 : 1 + ((callCount - 1) * 100))
                 .param("failureKind", failureKind)
                 .param("completedAt", utc(completedAt))
                 .param("workUnitId", workUnitId)
@@ -1221,5 +1315,9 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
             String regionCode,
             Long complexId,
             MarketNewsCategory category,
-            String query) {}
+            String query,
+            int lastProviderStart,
+            int callCount,
+            int rawItemCount,
+            Instant oldestProvidedAt) {}
 }

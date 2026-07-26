@@ -105,6 +105,18 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
                         truncated_work_unit_count = 0
                     WHERE execution_id = :executionId
                     """).param("executionId", EXECUTION_ID).update();
+        jdbcClient
+                .sql("""
+                    UPDATE market_news_collection_work_unit
+                    SET last_provider_start = 101,
+                        call_count = 2,
+                        raw_item_count = 4,
+                        oldest_provided_at = :oldestProvidedAt
+                    WHERE work_unit_id = :workUnitId
+                    """)
+                .param("oldestProvidedAt", GENERATED_AT.minusSeconds(60).atOffset(ZoneOffset.UTC))
+                .param("workUnitId", workUnitId(3))
+                .update();
 
         var resumable =
                 collectionRepository.findResumableExecution("NEWS-INTEGRATION").orElseThrow();
@@ -115,6 +127,36 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
         assertThat(resumable.completedWorkUnitCount()).isEqualTo(1);
         assertThat(resumable.truncatedWorkUnitCount()).isEqualTo(1);
         assertThat(resumable.workUnits()).extracting(unit -> unit.order()).containsExactly(3, 4, 5, 6);
+        assertThat(resumable.workUnits().getFirst().nextProviderStart()).isEqualTo(201);
+        assertThat(resumable.workUnits().getFirst().collectedCallCount()).isEqualTo(2);
+        assertThat(resumable.workUnits().getFirst().collectedRawItemCount()).isEqualTo(4);
+        assertThat(resumable.workUnits().getFirst().oldestProvidedAt()).isEqualTo(GENERATED_AT.minusSeconds(60));
+    }
+
+    @Test
+    @DisplayName("같은 provider 위치의 변경된 payload는 기존 raw evidence와 일치하지 않는다")
+    void rejectsChangedPayloadAtExistingProviderPosition() {
+        NewsProviderItem original = new NewsProviderItem(
+                "아파트 거래 가격",
+                "https://news.example.test/original",
+                null,
+                "서울 아파트 매매 거래",
+                "Fri, 24 Jul 2026 18:00:00 +0900",
+                1,
+                1);
+        NewsProviderItem changed = new NewsProviderItem(
+                "아파트 공급 정책",
+                "https://news.example.test/changed",
+                null,
+                "서울 아파트 공급",
+                "Fri, 24 Jul 2026 18:01:00 +0900",
+                1,
+                1);
+
+        collectionRepository.saveRawItems(workUnitId(1), List.of(original), GENERATED_AT);
+
+        assertThat(collectionRepository.rawItemMatches(workUnitId(1), original)).isTrue();
+        assertThat(collectionRepository.rawItemMatches(workUnitId(1), changed)).isFalse();
     }
 
     @Test

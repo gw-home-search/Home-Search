@@ -32,6 +32,11 @@ public interface MarketNewsCollectionRepository {
 
     void saveRawItems(UUID workUnitId, List<NewsProviderItem> items, Instant receivedAt);
 
+    void requireRawItemMatch(UUID workUnitId, NewsProviderItem rawItem);
+
+    void recordWorkUnitPageProgress(
+            UUID workUnitId, int providerStart, int callCount, int rawItemCount, Instant oldestProvidedAt);
+
     long upsertArticle(NormalizedNewsItem item, Instant seenAt);
 
     void linkRawItem(UUID workUnitId, NewsProviderItem rawItem, long articleId);

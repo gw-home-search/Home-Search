@@ -145,3 +145,39 @@ security-audit: 지적사항 = none
 - provider key, management key, PNU, raw body/식별자는 public DTO에 포함하지 않는다.
 - repair 로그에는 request URL, provider key, PNU, raw body를 기록하지 않는다.
 - provider client의 기존 2MiB response limit과 authentication/quota fatal stop을 유지한다.
+
+## 최종 리뷰 상태
+
+- 상태: `Partial`
+- reviewer: 지적사항 = `listed`
+- 높음(High): source profile EAV를 V34 typed publication/summary로 구성하고 portable export/import하는
+  실행 경로가 아직 없다. 따라서 schema, 정책, API/UI와 검증 함수는 구현됐지만 primary DB에 실제
+  publication을 적재·발행하지 않았다.
+- 높음(High): 기존 archive manifest는 `CLEANED`이고 기록된 `archive_uri` 파일이 없어 SHA-256 재검산,
+  신규 archive 작성, ARM restore 인수 검증을 완료할 수 없다.
+- 검증 공백: provider 인증·quota와 운영 UUID가 필요한 repair 실run, publication V2 전환,
+  direct 컬럼 전후 운영 snapshot 비교는 `not run`이다.
+- 잔여 위험: `buildingProfile`과 ratio fallback은 실제 `PUBLISHED` publication이 생기기 전까지 null 또는
+  기존 direct 값만 제공한다.
+- 다음 행동: 원본 archive 또는 동등한 portable export를 복구하고 source EAV→typed publication
+  builder/importer를 구현한 뒤 repair→parse/analyze→publication V2→archive/ARM restore 순으로 재개한다.
+- 삭제·`TRUNCATE`·`dropdb`·volume 제거: `0건`.
+
+### 최종 검증 근거
+
+- `./gradlew :core:persistenceTest --tests '*JdbcCleanCoreReferenceDataMigrationTest' --no-daemon --stacktrace` = pass
+  (V34/V35 migration 목록과 fresh schema fingerprint `9a0a688c12bed13792202cfa1bdee771` 확인)
+- `./gradlew :core:persistenceTest --tests '*JdbcMarketNewsRepositoryIntegrationTest' --no-daemon --stacktrace` = pass
+  (전체 gate의 최초 EOF 실패 class 단독 재현 실패, 2분 1초)
+- `./gradlew verifyPropertyFlywayFresh --no-daemon --stacktrace` = pass
+  (V1→V35, preflight `before target=35 EMPTY`와 `after target=35 READY`, Flyway validate)
+- `bash ops/test-property-deployment-preflight.sh` = pass
+  (V34/V35 catalog, history, target contract)
+- `./gradlew backendQualityCheck --no-daemon --stacktrace` = fail
+  (29분 실행 중 서로 다른 Testcontainers PostgreSQL 두 개가 같은 시점에 외부 `signal 9`로 종료,
+  `oom` event 없음; 이후 connection failure가 연쇄 발생)
+- `npm run lint && npm run test && npm run build` = pass
+  (lint 오류 0, 기존 warning 6, 69 files/385 tests, production build)
+- `.github/scripts/test-classify-changes.sh` = pass
+- `infra/postgres/verify-service-boundaries.sh` = pass
+- `git diff --check` = pass

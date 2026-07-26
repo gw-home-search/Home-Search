@@ -100,14 +100,14 @@ export PROPERTY_MIGRATOR_DB_PASSWORD="${PASSWORD}"
 export MIGRATION_DOCKER_NETWORK="${NETWORK}"
 export MIGRATION_EVIDENCE_FILE="${EVIDENCE_FILE}"
 
-"${SERVICE_ROOT}/ops/property-deployment-preflight.sh" before 33
-"${SERVICE_ROOT}/ops/property-flyway.sh" migrate 33 >/dev/null
-"${SERVICE_ROOT}/ops/property-deployment-preflight.sh" after 33
+"${SERVICE_ROOT}/ops/property-deployment-preflight.sh" before 35
+"${SERVICE_ROOT}/ops/property-flyway.sh" migrate 35 >/dev/null
+"${SERVICE_ROOT}/ops/property-deployment-preflight.sh" after 35
 "${SERVICE_ROOT}/ops/property-flyway.sh" validate >/dev/null
 installed_versions="$(docker exec "${DATABASE_CONTAINER}" psql -U home_search -d home_search \
     -v ON_ERROR_STOP=1 -Atc \
     "SELECT string_agg(version, ',' ORDER BY installed_rank) FROM flyway_schema_history WHERE version IS NOT NULL AND success")"
-if [[ "${installed_versions}" != '1,2,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33' ]]; then
+if [[ "${installed_versions}" != '1,2,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35' ]]; then
     printf '예상하지 않은 property-data migration history: %s\n' "${installed_versions}" >&2
     exit 1
 fi

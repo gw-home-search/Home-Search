@@ -9,11 +9,18 @@ allowed_scope = ".github/**, .codex/harness/**, AGENTS.md, apps/property-data/**
 forbidden_scope = "apps/web/**"
 verification_commands = [
   "bash infra/test-operating-platform-contracts.sh",
+  "docker compose -f infra/docker-compose.local.yml config",
   "cd apps/user/service && ./gradlew userServiceQualityCheck",
   "cd apps/property-data && ./gradlew backendQualityCheck",
+  "python3 scripts/check-test-display-names.py",
+  "python3 .codex/harness/pr_lint.py --self-test",
+  "python3 .codex/harness/home_pr.py --self-test",
   "python3 .codex/harness/home_flow.py --self-test",
+  "python3 .codex/harness/home_report.py --self-test",
+  ".codex/harness/home --self-test",
   "python3 .codex/harness/project_terms_check.py",
   "git diff --check",
+  "git diff --check main...HEAD",
 ]
 
 [targets.frontend]

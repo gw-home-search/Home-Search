@@ -3,6 +3,7 @@ package com.home.application.news.collection;
 import com.home.domain.news.MarketNewsCategory;
 import com.home.domain.news.MarketNewsClassificationPolicy;
 import com.home.domain.news.MarketNewsExecutionState;
+import com.home.domain.news.MarketNewsFailureKind;
 import com.home.domain.news.MarketNewsRelationMatch;
 import com.home.domain.news.MarketNewsRelationPolicy;
 import com.home.domain.news.MarketNewsRelationType;
@@ -87,13 +88,13 @@ public class MarketNewsCollectionService {
         int failed = execution.failedWorkUnitCount();
         int truncated = execution.truncatedWorkUnitCount();
         int skipped = execution.skippedBudgetWorkUnitCount();
-        boolean stopForQuota = false;
-        String executionFailure = null;
+        MarketNewsFailureKind executionFailure = execution.stoppingFailureKind();
+        boolean stopRemainingWork = executionFailure != null;
         for (MarketNewsWorkUnitSpec unit : execution.workUnits()) {
-            if (stopForQuota || calls >= execution.callBudget()) {
+            if (stopRemainingWork || calls >= execution.callBudget()) {
                 repository.markRemainingSkippedBudget(execution.executionId(), clock.instant());
-                if (!stopForQuota) {
-                    executionFailure = "DAILY_CALL_BUDGET";
+                if (!stopRemainingWork) {
+                    executionFailure = MarketNewsFailureKind.DAILY_CALL_BUDGET;
                 }
                 break;
             }
@@ -102,14 +103,12 @@ public class MarketNewsCollectionService {
             completed += result.state() == MarketNewsWorkUnitState.COMPLETED ? 1 : 0;
             failed += result.state() == MarketNewsWorkUnitState.FAILED ? 1 : 0;
             truncated += result.state() == MarketNewsWorkUnitState.TRUNCATED ? 1 : 0;
-            if ("DAILY_QUOTA".equals(result.failureKind())
-                    || "AUTHENTICATION".equals(result.failureKind())
-                    || "DAILY_CALL_BUDGET".equals(result.failureKind())) {
-                stopForQuota = true;
+            if (result.failureKind() != null && result.failureKind().stopsRemainingWork()) {
+                stopRemainingWork = true;
                 executionFailure = result.failureKind();
             }
         }
-        if (stopForQuota || calls >= execution.callBudget()) {
+        if (stopRemainingWork || calls >= execution.callBudget()) {
             skipped += Math.max(0, execution.plannedWorkUnitCount() - completed - failed - truncated - skipped);
         }
         boolean bootstrapHasCollectedRange =
@@ -126,7 +125,7 @@ public class MarketNewsCollectionService {
                 try {
                     publicationCache.publish(snapshot);
                 } catch (RuntimeException cacheFailure) {
-                    executionFailure = "CACHE_PUBLICATION";
+                    executionFailure = MarketNewsFailureKind.CACHE_PUBLICATION;
                 }
             }
         }
@@ -138,10 +137,9 @@ public class MarketNewsCollectionService {
             MarketNewsCollectionExecution execution, MarketNewsWorkUnitSpec unit, int callsBeforeUnit) {
         repository.startWorkUnit(unit.workUnitId(), clock.instant());
         UnitCallCounter unitCalls = new UnitCallCounter();
-        int rawCount = 0;
-        int start = 1;
-        Instant oldest = null;
-        boolean cutoffReached = false;
+        int rawCount = unit.collectedRawItemCount();
+        int start = unit.nextProviderStart();
+        Instant oldest = unit.oldestProvidedAt();
         MarketNewsRelationPolicy.IndexedCorpus relationIndex = relationPolicy.index(unit.matchingCorpus());
         try {
             while (start <= MAX_START && callsBeforeUnit + unitCalls.value < execution.callBudget()) {
@@ -153,6 +151,7 @@ public class MarketNewsCollectionService {
                 rawCount += page.items().size();
                 repository.saveRawItems(unit.workUnitId(), page.items(), clock.instant());
                 for (NewsProviderItem raw : page.items()) {
+                    repository.requireRawItemMatch(unit.workUnitId(), raw);
                     Instant rawProvidedAt = normalizer.tryParseProvidedAt(raw).orElse(null);
                     if (rawProvidedAt != null && (oldest == null || rawProvidedAt.isBefore(oldest))) {
                         oldest = rawProvidedAt;
@@ -169,60 +168,76 @@ public class MarketNewsCollectionService {
                     processNormalized(execution, unit, relationIndex, raw, item);
                 }
                 if (page.items().isEmpty() || (oldest != null && !oldest.isAfter(execution.overlapCutoff()))) {
-                    cutoffReached = true;
-                    break;
+                    repository.completeWorkUnitPage(
+                            unit.workUnitId(),
+                            start,
+                            unit.collectedCallCount() + unitCalls.value,
+                            rawCount,
+                            oldest,
+                            clock.instant());
+                    return new UnitResult(MarketNewsWorkUnitState.COMPLETED, unitCalls.value, null);
                 }
+                repository.recordWorkUnitPageProgress(
+                        unit.workUnitId(), start, unit.collectedCallCount() + unitCalls.value, rawCount, oldest);
                 start += DISPLAY;
             }
-            MarketNewsWorkUnitState state =
-                    cutoffReached ? MarketNewsWorkUnitState.COMPLETED : MarketNewsWorkUnitState.TRUNCATED;
             repository.finishWorkUnit(
                     unit.workUnitId(),
-                    state,
-                    unitCalls.value,
+                    MarketNewsWorkUnitState.TRUNCATED,
+                    unit.collectedCallCount() + unitCalls.value,
                     rawCount,
                     oldest,
-                    cutoffReached,
-                    state == MarketNewsWorkUnitState.TRUNCATED ? "CUTOFF_NOT_REACHED" : null,
+                    false,
+                    MarketNewsFailureKind.CUTOFF_NOT_REACHED,
                     clock.instant());
             return new UnitResult(
-                    state, unitCalls.value, state == MarketNewsWorkUnitState.TRUNCATED ? "CUTOFF_NOT_REACHED" : null);
+                    MarketNewsWorkUnitState.TRUNCATED, unitCalls.value, MarketNewsFailureKind.CUTOFF_NOT_REACHED);
         } catch (NewsCallBudgetExceededException exception) {
             repository.finishWorkUnit(
                     unit.workUnitId(),
                     MarketNewsWorkUnitState.SKIPPED_BUDGET,
-                    unitCalls.value,
+                    unit.collectedCallCount() + unitCalls.value,
                     rawCount,
                     oldest,
                     false,
-                    "DAILY_CALL_BUDGET",
+                    MarketNewsFailureKind.DAILY_CALL_BUDGET,
                     clock.instant());
-            return new UnitResult(MarketNewsWorkUnitState.SKIPPED_BUDGET, unitCalls.value, "DAILY_CALL_BUDGET");
+            return new UnitResult(
+                    MarketNewsWorkUnitState.SKIPPED_BUDGET, unitCalls.value, MarketNewsFailureKind.DAILY_CALL_BUDGET);
         } catch (NewsProviderCallException exception) {
             repository.finishWorkUnit(
                     unit.workUnitId(),
                     MarketNewsWorkUnitState.FAILED,
-                    unitCalls.value,
+                    unit.collectedCallCount() + unitCalls.value,
                     rawCount,
                     oldest,
                     false,
-                    exception.type().name(),
+                    failureKind(exception.type()),
+                    clock.instant());
+            return new UnitResult(MarketNewsWorkUnitState.FAILED, unitCalls.value, failureKind(exception.type()));
+        } catch (RawNewsPositionConflictException exception) {
+            repository.finishWorkUnit(
+                    unit.workUnitId(),
+                    MarketNewsWorkUnitState.FAILED,
+                    unit.collectedCallCount() + unitCalls.value,
+                    rawCount,
+                    oldest,
+                    false,
+                    MarketNewsFailureKind.RAW_POSITION_CONFLICT,
                     clock.instant());
             return new UnitResult(
-                    MarketNewsWorkUnitState.FAILED,
-                    unitCalls.value,
-                    exception.type().name());
+                    MarketNewsWorkUnitState.FAILED, unitCalls.value, MarketNewsFailureKind.RAW_POSITION_CONFLICT);
         } catch (RuntimeException exception) {
             repository.finishWorkUnit(
                     unit.workUnitId(),
                     MarketNewsWorkUnitState.FAILED,
-                    unitCalls.value,
+                    unit.collectedCallCount() + unitCalls.value,
                     rawCount,
                     oldest,
                     false,
-                    "INTERNAL",
+                    MarketNewsFailureKind.INTERNAL,
                     clock.instant());
-            return new UnitResult(MarketNewsWorkUnitState.FAILED, unitCalls.value, "INTERNAL");
+            return new UnitResult(MarketNewsWorkUnitState.FAILED, unitCalls.value, MarketNewsFailureKind.INTERNAL);
         }
     }
 
@@ -241,6 +256,15 @@ public class MarketNewsCollectionService {
             counter.value++;
             return provider.search(query);
         }
+    }
+
+    private MarketNewsFailureKind failureKind(NewsProviderFailureType type) {
+        return switch (type) {
+            case AUTHENTICATION -> MarketNewsFailureKind.AUTHENTICATION;
+            case DAILY_QUOTA -> MarketNewsFailureKind.DAILY_QUOTA;
+            case TRANSIENT -> MarketNewsFailureKind.TRANSIENT;
+            case INVALID_RESPONSE -> MarketNewsFailureKind.INVALID_RESPONSE;
+        };
     }
 
     private void waitBeforeRetry(NewsProviderCallException failure) {
@@ -309,7 +333,7 @@ public class MarketNewsCollectionService {
         return token != null && (item.title() + " " + item.description()).contains(token);
     }
 
-    private record UnitResult(MarketNewsWorkUnitState state, int callCount, String failureKind) {}
+    private record UnitResult(MarketNewsWorkUnitState state, int callCount, MarketNewsFailureKind failureKind) {}
 
     private static final class UnitCallCounter {
         private int value;

@@ -173,9 +173,11 @@ security-audit: 지적사항 = none
   (migration 1→35, preflight `before target=35 EMPTY`와 `after target=35 READY`, Flyway validate)
 - `bash ops/test-property-deployment-preflight.sh` = pass
   (V34/V35 catalog, history, target contract)
-- `./gradlew backendQualityCheck --no-daemon --stacktrace` = fail
-  (29분 실행 중 서로 다른 Testcontainers PostgreSQL 두 개가 같은 시점에 외부 `signal 9`로 종료,
-  `oom` event 없음; 이후 connection failure가 연쇄 발생)
+- `./gradlew backendQualityCheck --no-daemon --stacktrace` = pass
+  (35분 22초, 전체 persistence/API/batch test, JaCoCo line·instruction 90% gate,
+  migration 1→35 Flyway fresh, REST Docs/OpenAPI, packaged process smoke 포함)
+- `./gradlew :core:persistenceTest --tests '*JdbcReadCapabilityReadersTest.readsEveryPublishedBuildingProfileSection' --no-daemon --stacktrace` = pass
+  (`PUBLISHED` summary의 9개 공개 section, array/date, 유효한 count 0 mapper 경로 확인)
 - `npm run lint && npm run test && npm run build` = pass
   (lint 오류 0, 기존 warning 6, 69 files/385 tests, production build)
 - `.github/scripts/test-classify-changes.sh` = pass

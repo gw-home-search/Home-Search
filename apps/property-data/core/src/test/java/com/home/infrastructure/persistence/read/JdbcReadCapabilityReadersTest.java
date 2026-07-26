@@ -3,6 +3,7 @@ package com.home.infrastructure.persistence.read;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.groups.Tuple.tuple;
 
+import com.home.application.read.BuildingProfileSummaryResult;
 import com.home.application.read.ComplexSuggestionResult;
 import com.home.application.read.ComplexSummaryResult;
 import com.home.application.read.ParcelDetailResult;
@@ -11,6 +12,9 @@ import com.home.application.read.RegionSummaryResult;
 import com.home.application.read.SearchComplexResult;
 import com.home.application.read.TradeListResult;
 import com.home.application.read.TradeTrendPoint;
+import com.home.domain.complex.buildingprofile.BuildingProfilePublicQuality;
+import com.home.domain.complex.buildingprofile.BuildingProfilePublicScope;
+import com.home.domain.complex.buildingprofile.BuildingProfileSeismicDesignStatus;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
 import com.home.infrastructure.persistence.propertydetail.JdbcPropertyDetailReader;
 import com.home.infrastructure.persistence.regionnavigation.JdbcRegionNavigationReader;
@@ -24,6 +28,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class JdbcReadCapabilityReadersTest extends JdbcPostgresTestSupport {
+
+    private static final String PROFILE_PUBLICATION_ID = "10000000-0000-0000-0000-000000000005";
 
     @Test
     @DisplayName("search/region/detail/trade read API는 baseline core table로 backing된다")
@@ -65,6 +71,101 @@ class JdbcReadCapabilityReadersTest extends JdbcPostgresTestSupport {
             assertThat(tradeList.trades()).extracting("tradeId").containsExactly(9002L, 9001L);
             assertThat(tradeList.trades().get(0).dealAmount()).isEqualTo(130000L);
         });
+    }
+
+    @Test
+    @DisplayName("detail read API는 발행된 건축물 profile의 모든 공개 section을 typed 값으로 읽는다")
+    void readsEveryPublishedBuildingProfileSection() {
+        seedComplex();
+        seedPublishedBuildingProfile();
+        JdbcPropertyDetailReader repository = new JdbcPropertyDetailReader(jdbcClient);
+
+        assertThat(repository.findComplexDetail(501L))
+                .get()
+                .extracting(ParcelDetailResult::buildingProfile)
+                .satisfies(profile -> {
+                    assertThat(profile.ratios()).satisfies(ratios -> {
+                        assertThat(ratios.scope()).isEqualTo(BuildingProfilePublicScope.COMPLEX);
+                        assertThat(ratios.quality()).isEqualTo(BuildingProfilePublicQuality.VERIFIED);
+                        assertThat(ratios.buildingCoverageRate()).isEqualByComparingTo("27.5");
+                        assertThat(ratios.floorAreaRatio()).isEqualByComparingTo("210.4");
+                        assertThat(ratios.siteAreaM2()).isEqualByComparingTo("1000");
+                        assertThat(ratios.buildingAreaM2()).isEqualByComparingTo("275");
+                        assertThat(ratios.totalFloorAreaM2()).isEqualByComparingTo("2400");
+                        assertThat(ratios.floorAreaRatioAreaM2()).isEqualByComparingTo("2104");
+                    });
+                    assertThat(profile.households())
+                            .extracting(
+                                    BuildingProfileSummaryResult.Households::scope,
+                                    BuildingProfileSummaryResult.Households::quality,
+                                    BuildingProfileSummaryResult.Households::householdCount,
+                                    BuildingProfileSummaryResult.Households::familyCount,
+                                    BuildingProfileSummaryResult.Households::unitCount)
+                            .containsExactly(
+                                    BuildingProfilePublicScope.PARCEL,
+                                    BuildingProfilePublicQuality.PNU_FALLBACK,
+                                    740L,
+                                    12L,
+                                    760L);
+                    assertThat(profile.parking()).satisfies(parking -> {
+                        assertThat(parking.totalCount()).isEqualTo(0L);
+                        assertThat(parking.perHousehold()).isEqualByComparingTo("1.25");
+                        assertThat(parking.indoorMechanicalCount()).isEqualTo(1L);
+                        assertThat(parking.outdoorMechanicalCount()).isEqualTo(2L);
+                        assertThat(parking.indoorAutomaticCount()).isEqualTo(3L);
+                        assertThat(parking.outdoorAutomaticCount()).isEqualTo(4L);
+                        assertThat(parking.indoorMechanicalAreaM2()).isEqualByComparingTo("10.1");
+                        assertThat(parking.outdoorMechanicalAreaM2()).isEqualByComparingTo("20.2");
+                        assertThat(parking.indoorAutomaticAreaM2()).isEqualByComparingTo("30.3");
+                        assertThat(parking.outdoorAutomaticAreaM2()).isEqualByComparingTo("40.4");
+                    });
+                    assertThat(profile.building()).satisfies(building -> {
+                        assertThat(building.quality()).isEqualTo(BuildingProfilePublicQuality.PARTIAL);
+                        assertThat(building.mainBuildingCount()).isEqualTo(8L);
+                        assertThat(building.attachedBuildingCount()).isEqualTo(2L);
+                        assertThat(building.maxGroundFloorCount()).isEqualTo(25L);
+                        assertThat(building.maxUndergroundFloorCount()).isEqualTo(3L);
+                        assertThat(building.maxHeightM()).isEqualByComparingTo("82.4");
+                        assertThat(building.structures()).containsExactly("철근콘크리트");
+                        assertThat(building.roofs()).containsExactly("평지붕");
+                        assertThat(building.primaryUses()).containsExactly("공동주택", "근린생활시설");
+                    });
+                    assertThat(profile.elevators())
+                            .extracting(
+                                    BuildingProfileSummaryResult.Elevators::rideUseCount,
+                                    BuildingProfileSummaryResult.Elevators::emergencyUseCount)
+                            .containsExactly(12L, 4L);
+                    assertThat(profile.safety()).satisfies(safety -> {
+                        assertThat(safety.seismicDesignStatus())
+                                .isEqualTo(BuildingProfileSeismicDesignStatus.ALL_APPLIED);
+                        assertThat(safety.seismicAbilities()).containsExactly("VII-0.176g");
+                    });
+                    assertThat(profile.dates())
+                            .extracting(
+                                    BuildingProfileSummaryResult.Dates::permitDate,
+                                    BuildingProfileSummaryResult.Dates::constructionStartDate,
+                                    BuildingProfileSummaryResult.Dates::useApprovalDate)
+                            .containsExactly(
+                                    LocalDate.of(2010, 1, 2), LocalDate.of(2011, 3, 4), LocalDate.of(2015, 3, 20));
+                    assertThat(profile.address())
+                            .extracting(
+                                    BuildingProfileSummaryResult.Address::parcelAddress,
+                                    BuildingProfileSummaryResult.Address::roadAddress)
+                            .containsExactly("서울 표본구 1", "서울 표본구 표본로 2");
+                    assertThat(profile.energy()).satisfies(energy -> {
+                        assertThat(energy.efficiencyGrades()).containsExactly("1등급");
+                        assertThat(energy.savingRateMin()).isEqualByComparingTo("12.3");
+                        assertThat(energy.savingRateMax()).isEqualByComparingTo("18.7");
+                        assertThat(energy.epiMin()).isEqualByComparingTo("72.1");
+                        assertThat(energy.epiMax()).isEqualByComparingTo("80.9");
+                        assertThat(energy.greenGrades()).containsExactly("최우수");
+                        assertThat(energy.greenScoreMin()).isEqualByComparingTo("85");
+                        assertThat(energy.greenScoreMax()).isEqualByComparingTo("90");
+                        assertThat(energy.intelligentGrades()).containsExactly("1등급");
+                        assertThat(energy.intelligentScoreMin()).isEqualByComparingTo("88");
+                        assertThat(energy.intelligentScoreMax()).isEqualByComparingTo("93");
+                    });
+                });
     }
 
     @Test
@@ -638,6 +739,83 @@ class JdbcReadCapabilityReadersTest extends JdbcPostgresTestSupport {
 
         assertThat(repository.findParcelDetail(404L, null)).isEmpty();
         assertThat(repository.findTradeList(404L, null, 0, 25)).isEmpty();
+    }
+
+    private void seedPublishedBuildingProfile() {
+        jdbcClient.sql("""
+            INSERT INTO building_register_collection_campaign(
+              collection_id,mode,strategy,to_complex_id,status,purpose,target_scope,selection_seed,sample_size)
+            VALUES ('10000000-0000-0000-0000-000000000001','profile','COMPARE_RECAP_TITLE',501,
+              'CREATED','PROFILE_DISCOVERY','VALIDATION_SAMPLE','detail-profile-test',1)
+            """).update();
+        jdbcClient.sql("""
+            INSERT INTO building_register_profile_parse_run(
+              parse_run_id,source_collection_id,parser_version,status)
+            VALUES ('10000000-0000-0000-0000-000000000002',
+              '10000000-0000-0000-0000-000000000001','PROFILE_PUBLIC_TEST','RUNNING')
+            """).update();
+        jdbcClient.sql("""
+            INSERT INTO building_register_profile_analysis_run(
+              analysis_run_id,collection_id,parse_run_id,rules_version,status)
+            VALUES ('10000000-0000-0000-0000-000000000003',
+              '10000000-0000-0000-0000-000000000001',
+              '10000000-0000-0000-0000-000000000002','PROFILE_PUBLIC_TEST','RUNNING')
+            """).update();
+        jdbcClient.sql("""
+            INSERT INTO building_register_profile_projection_run(
+              projection_run_id,analysis_run_id,collection_id,parse_run_id,
+              projection_version,minimum_readiness,status)
+            VALUES ('10000000-0000-0000-0000-000000000004',
+              '10000000-0000-0000-0000-000000000003',
+              '10000000-0000-0000-0000-000000000001',
+              '10000000-0000-0000-0000-000000000002','PROFILE_PUBLIC_TEST',0.5,'RUNNING')
+            """).update();
+        jdbcClient.sql("""
+            INSERT INTO building_register_profile_publication(
+              publication_id,source_collection_id,source_parse_run_id,source_analysis_run_id,
+              source_projection_run_id,rules_version,parser_version,status,
+              expected_site_count,expected_building_count,expected_hierarchy_count,
+              expected_evidence_count,expected_summary_count,site_count,building_count,
+              hierarchy_count,evidence_count,summary_count,content_sha256,validated_at,published_at)
+            VALUES (CAST(:publicationId AS uuid),'10000000-0000-0000-0000-000000000001',
+              '10000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000003',
+              '10000000-0000-0000-0000-000000000004','PROFILE_PUBLIC_TEST','PROFILE_PUBLIC_TEST','PUBLISHED',
+              0,0,0,0,1,0,0,0,0,1,repeat('a',64),now(),now())
+            """).param("publicationId", PROFILE_PUBLICATION_ID).update();
+        jdbcClient.sql("""
+            INSERT INTO complex_building_register_profile_summary(
+              publication_id,complex_id,
+              ratio_scope,ratio_quality,building_coverage_rate,floor_area_ratio,site_area_m2,
+              building_area_m2,total_floor_area_m2,floor_area_ratio_area_m2,
+              household_scope,household_quality,household_count,family_count,unit_count,
+              parking_scope,parking_quality,total_parking_count,parking_per_household,
+              indoor_mechanical_count,indoor_mechanical_area_m2,outdoor_mechanical_count,
+              outdoor_mechanical_area_m2,indoor_automatic_count,indoor_automatic_area_m2,
+              outdoor_automatic_count,outdoor_automatic_area_m2,
+              building_scope,building_quality,main_building_count,attached_building_count,
+              max_ground_floor_count,max_underground_floor_count,max_height_m,
+              structure_names,roof_names,primary_use_names,
+              elevator_scope,elevator_quality,ride_elevator_count,emergency_elevator_count,
+              safety_scope,safety_quality,seismic_design_status,seismic_abilities,
+              date_scope,date_quality,permit_date,construction_start_date,use_approval_date,
+              address_scope,address_quality,parcel_address,road_address,
+              energy_scope,energy_quality,energy_efficiency_grades,energy_saving_rate_min,
+              energy_saving_rate_max,energy_epi_min,energy_epi_max,green_building_grades,
+              green_cert_score_min,green_cert_score_max,intelligent_building_grades,
+              intelligent_cert_score_min,intelligent_cert_score_max)
+            VALUES (CAST(:publicationId AS uuid),501,
+              'COMPLEX','VERIFIED',27.5,210.4,1000,275,2400,2104,
+              'PARCEL','PNU_FALLBACK',740,12,760,
+              'COMPLEX','VERIFIED',0,1.25,1,10.1,2,20.2,3,30.3,4,40.4,
+              'COMPLEX','PARTIAL',8,2,25,3,82.4,
+              ARRAY['철근콘크리트'],ARRAY['평지붕'],ARRAY['공동주택','근린생활시설'],
+              'COMPLEX','VERIFIED',12,4,
+              'COMPLEX','VERIFIED','ALL_APPLIED',ARRAY['VII-0.176g'],
+              'COMPLEX','VERIFIED',DATE '2010-01-02',DATE '2011-03-04',DATE '2015-03-20',
+              'PARCEL','PNU_FALLBACK','서울 표본구 1','서울 표본구 표본로 2',
+              'COMPLEX','PARTIAL',ARRAY['1등급'],12.3,18.7,72.1,80.9,ARRAY['최우수'],
+              85,90,ARRAY['1등급'],88,93)
+            """).param("publicationId", PROFILE_PUBLICATION_ID).update();
     }
 
     private boolean extensionExists(String extensionName) {

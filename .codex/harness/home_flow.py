@@ -1016,14 +1016,14 @@ def pr_title(args: argparse.Namespace, names: dict[str, Any]) -> str:
     return args.pr_title or default_pr_title(names["work_id"])
 
 
-def call_pr(
+def build_pr_command(
     args: argparse.Namespace,
     names: dict[str, Any],
     payload_path: Path,
     body_path: Path,
     *,
     dry_run: bool,
-) -> dict[str, Any]:
+) -> list[str]:
     command = [
         sys.executable,
         str(PR_SCRIPT),
@@ -1038,6 +1038,8 @@ def call_pr(
         "--payload-json",
         str(payload_path),
         "--draft",
+        "--main-worktree",
+        str(DEFAULT_MAIN),
     ]
     if dry_run:
         command.append("--dry-run")
@@ -1045,6 +1047,18 @@ def call_pr(
         command.append("--notion")
     if args.slack:
         command.append("--slack")
+    return command
+
+
+def call_pr(
+    args: argparse.Namespace,
+    names: dict[str, Any],
+    payload_path: Path,
+    body_path: Path,
+    *,
+    dry_run: bool,
+) -> dict[str, Any]:
+    command = build_pr_command(args, names, payload_path, body_path, dry_run=dry_run)
     result = run_cmd(command, DEFAULT_MAIN, dry_run=False)
     if dry_run and result.get("stdout"):
         print(str(result["stdout"]).rstrip())
@@ -1490,6 +1504,13 @@ def run_self_test() -> int:
         {"status": "pass", "exit_code": 0, "summary": "merged targets: backend, frontend", "verification": {}},
         "Pass",
     )
+    pr_publish_command = build_pr_command(
+        pr_args,
+        pr_names,
+        Path("/tmp/self-test-payload.json"),
+        Path("/tmp/self-test-pr-body.md"),
+        dry_run=True,
+    )
     body = render_pr_body(
         {
             "work_id": "self-test",
@@ -1589,6 +1610,7 @@ contract-reviewer: 게이트 결정 = Pass
         invalid_branch_blocked,
         pr_payload["commands"]["main_merge_command"] == "not suggested; review and merge through GitHub PR manually",
         pr_payload["commands"]["push_command_suggestion"] == "handled by --pr after integration succeeds",
+        pr_publish_command[-3:] == ["--main-worktree", str(DEFAULT_MAIN), "--dry-run"],
         pr_payload["next_action"].startswith("dry-run 결과와 PR lint preflight"),
         "llm-replan" in PLANNING_MODES,
         fixture_worklog_title == "[Test] 셀프테스트 픽스처 제목",
@@ -1628,6 +1650,8 @@ contract-reviewer: 게이트 결정 = Pass
         parsed_partial_gate["first_red"] == "실제 RED",
         not gate_allows_publish(parsed_partial_gate),
         HARNESS_REPORT_SELF_TEST
+        in operating_platform_preset.get("targets", {}).get("backend", {}).get("verification_commands", []),
+        HARNESS_PR_SELF_TEST
         in operating_platform_preset.get("targets", {}).get("backend", {}).get("verification_commands", []),
         KNOWN_VERIFICATION_COMMANDS["backend"][DIFF_CHECK][1] == ["git", "diff", "--check"],
         KNOWN_VERIFICATION_COMMANDS["backend"]["git diff --check main...HEAD"][1]

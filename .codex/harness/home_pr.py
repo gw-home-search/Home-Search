@@ -160,7 +160,7 @@ def update_payload(path: str | None, pr_url: str, *, dry_run: bool) -> None:
     payload_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def run_reporters(args: argparse.Namespace) -> None:
+def run_reporters(args: argparse.Namespace, main: Path) -> None:
     if not args.payload_json or not (args.notion or args.slack):
         if args.notion or args.slack:
             print("warning: payload JSON이 없어 Notion/Slack PR URL 반영을 건너뜁니다.", file=sys.stderr)
@@ -178,7 +178,7 @@ def run_reporters(args: argparse.Namespace) -> None:
         command.append("--notion")
     if args.slack:
         command.append("--slack")
-    result = run_cmd(command, DEFAULT_MAIN)
+    result = run_cmd(command, main)
     if result["status"] != "pass":
         print(f"warning: report notification failed: {result['summary']}", file=sys.stderr)
 
@@ -251,7 +251,7 @@ def create_pr(args: argparse.Namespace) -> int:
         return fail("gh pr create succeeded but returned no PR URL", 5)
     pr_url = output_lines[-1]
     update_payload(args.payload_json, pr_url, dry_run=False)
-    run_reporters(args)
+    run_reporters(args, main)
     print("상태: Pass")
     print(f"pr_url: {pr_url}")
     print("다음 행동: GitHub PR diff와 checks를 확인한 뒤 수동 merge를 결정하세요.")

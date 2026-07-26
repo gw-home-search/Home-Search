@@ -14,6 +14,7 @@ verification_commands = [
   "cd apps/property-data && ./gradlew backendQualityCheck",
   "python3 scripts/check-test-display-names.py",
   "python3 .codex/harness/pr_lint.py --self-test",
+  "python3 .codex/harness/home_pr.py --self-test",
   "python3 .codex/harness/home_flow.py --self-test",
   "python3 .codex/harness/home_report.py --self-test",
   ".codex/harness/home --self-test",

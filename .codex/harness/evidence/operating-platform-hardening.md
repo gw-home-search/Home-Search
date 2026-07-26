@@ -42,6 +42,12 @@
 - 예상 RED 실패: 변경된 `home_report.py`의 필수 self-test가 preset evidence에서 누락되고, 정상 reviewer가 문서화된 출력 형식만 따르면 publish 파서가 필수 결정을 찾지 못했다.
 - 최소 GREEN: backend preset에 `python3 .codex/harness/home_report.py --self-test`를 추가하고 gate prompt에 `reviewer`, `계약 영향`, `contract-reviewer` 라벨을 명시했다. `home_flow`, `home_report`, `pr_lint`, project terms 검증이 통과했다.
 
+## Isolated integration PR publication
+
+- 최초 RED: `python3 .codex/harness/home_flow.py --self-test`가 `build_pr_command` 부재 `NameError`로 실패했다. 실제 isolated integration 검증은 통과했지만 `home_pr.py`가 hard-coded checkout에서 branch를 찾아 게시 전에 차단된 실패도 재현 근거로 확인했다.
+- 예상 RED 실패: `home_flow.py`가 별도 `home_pr.py` 프로세스에 선택된 main worktree를 전달하지 않아, 검증한 integration branch와 게시 시 조회하는 repository가 달라졌다.
+- 최소 GREEN: PR command builder가 `--main-worktree`를 항상 전달하고 PR 후 reporter도 같은 resolved worktree를 사용하도록 했다. preset에 `home_pr` self-test를 포함했으며 `home_flow`, `home_pr`, `pr_lint` self-test와 `git diff --check`가 통과했다.
+
 ## 주요 동작 slice의 회귀 fixture
 
 - property news/outbox: `MarketNewsCollectionServiceTest`, `PropertyEventOutboxRelayServiceTest`, `JdbcPropertyEventOutboxRepositoryJdbcIntegrationTest`, `MarketNewsControllerContractTest`가 수집 예산, publish 실패 시 outbox 보존, 중복 relay, public response 계약을 검증한다.

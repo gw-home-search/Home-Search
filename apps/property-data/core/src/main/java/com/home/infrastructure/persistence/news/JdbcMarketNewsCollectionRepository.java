@@ -102,7 +102,18 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
                                FROM market_news_collection_work_unit unit
                                WHERE unit.execution_id = execution.execution_id
                                  AND unit.state = 'SKIPPED_BUDGET'
-                           ) AS skipped_budget_work_unit_count
+                           ) AS skipped_budget_work_unit_count,
+                           (
+                               SELECT unit.failure_kind
+                               FROM market_news_collection_work_unit unit
+                               WHERE unit.execution_id = execution.execution_id
+                                 AND unit.state IN ('FAILED', 'SKIPPED_BUDGET')
+                                 AND unit.failure_kind IN (
+                                     'AUTHENTICATION', 'DAILY_QUOTA', 'DAILY_CALL_BUDGET'
+                                 )
+                               ORDER BY unit.unit_order
+                               LIMIT 1
+                           ) AS stopping_failure_kind
                     FROM market_news_collection_execution execution
                     WHERE execution.request_id = :requestId
                       AND execution.state IN ('PLANNED', 'RUNNING')
@@ -121,7 +132,10 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
                         rs.getInt("completed_work_unit_count"),
                         rs.getInt("failed_work_unit_count"),
                         rs.getInt("truncated_work_unit_count"),
-                        rs.getInt("skipped_budget_work_unit_count")))
+                        rs.getInt("skipped_budget_work_unit_count"),
+                        rs.getString("stopping_failure_kind") == null
+                                ? null
+                                : MarketNewsFailureKind.valueOf(rs.getString("stopping_failure_kind"))))
                 .optional();
         if (execution.isEmpty()) {
             return Optional.empty();
@@ -191,6 +205,7 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
                 row.failedWorkUnitCount(),
                 row.truncatedWorkUnitCount(),
                 row.skippedBudgetWorkUnitCount(),
+                row.stoppingFailureKind(),
                 workUnits));
     }
 
@@ -378,6 +393,7 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
                 0,
                 0,
                 0,
+                null,
                 List.copyOf(specs));
     }
 
@@ -1340,7 +1356,8 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
             int completedWorkUnitCount,
             int failedWorkUnitCount,
             int truncatedWorkUnitCount,
-            int skippedBudgetWorkUnitCount) {}
+            int skippedBudgetWorkUnitCount,
+            MarketNewsFailureKind stoppingFailureKind) {}
 
     private record ResumableWorkUnitRow(
             UUID workUnitId,

@@ -163,6 +163,26 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
     }
 
     @Test
+    @DisplayName("재개 조회는 남은 work unit을 중단하는 durable failure를 복원한다")
+    void restoresStoppingFailureForResume() {
+        collectionRepository.finishWorkUnit(
+                workUnitId(1),
+                MarketNewsWorkUnitState.FAILED,
+                1,
+                0,
+                null,
+                false,
+                MarketNewsFailureKind.AUTHENTICATION,
+                GENERATED_AT);
+
+        var resumable =
+                collectionRepository.findResumableExecution("NEWS-INTEGRATION").orElseThrow();
+
+        assertThat(resumable.stoppingFailureKind()).isEqualTo(MarketNewsFailureKind.AUTHENTICATION);
+        assertThat(resumable.workUnits()).extracting(unit -> unit.order()).containsExactly(2, 3, 4, 5, 6);
+    }
+
+    @Test
     @DisplayName("같은 provider 위치의 변경된 payload는 기존 raw evidence와 일치하지 않는다")
     void rejectsChangedPayloadAtExistingProviderPosition() {
         NewsProviderItem original = new NewsProviderItem(

@@ -88,12 +88,12 @@ public class MarketNewsCollectionService {
         int failed = execution.failedWorkUnitCount();
         int truncated = execution.truncatedWorkUnitCount();
         int skipped = execution.skippedBudgetWorkUnitCount();
-        boolean stopForQuota = false;
-        MarketNewsFailureKind executionFailure = null;
+        MarketNewsFailureKind executionFailure = execution.stoppingFailureKind();
+        boolean stopRemainingWork = executionFailure != null;
         for (MarketNewsWorkUnitSpec unit : execution.workUnits()) {
-            if (stopForQuota || calls >= execution.callBudget()) {
+            if (stopRemainingWork || calls >= execution.callBudget()) {
                 repository.markRemainingSkippedBudget(execution.executionId(), clock.instant());
-                if (!stopForQuota) {
+                if (!stopRemainingWork) {
                     executionFailure = MarketNewsFailureKind.DAILY_CALL_BUDGET;
                 }
                 break;
@@ -104,11 +104,11 @@ public class MarketNewsCollectionService {
             failed += result.state() == MarketNewsWorkUnitState.FAILED ? 1 : 0;
             truncated += result.state() == MarketNewsWorkUnitState.TRUNCATED ? 1 : 0;
             if (result.failureKind() != null && result.failureKind().stopsRemainingWork()) {
-                stopForQuota = true;
+                stopRemainingWork = true;
                 executionFailure = result.failureKind();
             }
         }
-        if (stopForQuota || calls >= execution.callBudget()) {
+        if (stopRemainingWork || calls >= execution.callBudget()) {
             skipped += Math.max(0, execution.plannedWorkUnitCount() - completed - failed - truncated - skipped);
         }
         boolean bootstrapHasCollectedRange =

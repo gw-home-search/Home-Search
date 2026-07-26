@@ -83,6 +83,7 @@ class MarketNewsCollectionServiceTest {
                 0,
                 0,
                 0,
+                null,
                 List.of(resumedNationalUnit()));
         when(repository.findResumableExecution("NEWS-RECOVERY-1")).thenReturn(Optional.of(resumable));
         when(provider.search(any())).thenReturn(new NewsProviderPage(0, 201, 0, List.of()));
@@ -122,6 +123,7 @@ class MarketNewsCollectionServiceTest {
                 0,
                 0,
                 0,
+                null,
                 List.of(resumedNationalUnitAtLastPage()));
         when(repository.findResumableExecution("NEWS-RECOVERY-LAST-PAGE")).thenReturn(Optional.of(resumable));
         when(provider.search(any())).thenReturn(new NewsProviderPage(0, 901, 0, List.of()));
@@ -136,6 +138,55 @@ class MarketNewsCollectionServiceTest {
         verify(repository, never()).recordWorkUnitPageProgress(any(), anyInt(), anyInt(), anyInt(), any());
         verify(repository)
                 .completeWorkUnitPage(eq(WORK_UNIT_ID), eq(901), eq(10), eq(9), eq(NOW.minusSeconds(60)), any());
+    }
+
+    @Test
+    @DisplayName("중단 failure가 저장된 execution 재개는 provider를 다시 호출하지 않는다")
+    void resumesStoppingFailureWithoutProviderRecall() {
+        MarketNewsCollectionRepository repository = mock(MarketNewsCollectionRepository.class);
+        NewsProviderGateway provider = mock(NewsProviderGateway.class);
+        NewsItemNormalizationGateway normalizer = mock(NewsItemNormalizationGateway.class);
+        MarketNewsPublicationCache cache = mock(MarketNewsPublicationCache.class);
+        MarketNewsCollectionExecution resumable = new MarketNewsCollectionExecution(
+                EXECUTION_ID,
+                "NEWS-RECOVERY-AUTH",
+                "GENERAL",
+                "NEWS_V2",
+                NOW,
+                NOW.minusSeconds(2 * 60 * 60),
+                4000,
+                1,
+                2,
+                0,
+                1,
+                0,
+                0,
+                MarketNewsFailureKind.AUTHENTICATION,
+                List.of(new MarketNewsWorkUnitSpec(
+                        SECOND_WORK_UNIT_ID,
+                        2,
+                        MarketNewsWorkUnitKind.NATIONAL_CATEGORY,
+                        MarketNewsScopeType.NATIONWIDE,
+                        null,
+                        null,
+                        MarketNewsCategory.POLICY,
+                        "부동산 정책 아파트",
+                        null,
+                        List.of())));
+        when(repository.findResumableExecution("NEWS-RECOVERY-AUTH")).thenReturn(Optional.of(resumable));
+
+        MarketNewsCollectionResult result =
+                service(repository, provider, normalizer, cache).collectGeneral("NEWS-RECOVERY-AUTH", NOW, 4000);
+
+        assertThat(result.state()).isEqualTo(MarketNewsExecutionState.FAILED);
+        verify(repository).markRemainingSkippedBudget(eq(EXECUTION_ID), any());
+        verify(repository)
+                .finishExecution(
+                        eq(EXECUTION_ID),
+                        eq(MarketNewsExecutionState.FAILED),
+                        eq(MarketNewsFailureKind.AUTHENTICATION),
+                        any());
+        verifyNoInteractions(provider, normalizer, cache);
     }
 
     @Test
@@ -584,6 +635,7 @@ class MarketNewsCollectionServiceTest {
                 0,
                 0,
                 0,
+                null,
                 List.of(unit));
     }
 
@@ -602,6 +654,7 @@ class MarketNewsCollectionServiceTest {
                 0,
                 0,
                 0,
+                null,
                 units);
     }
 

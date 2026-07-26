@@ -1,5 +1,6 @@
 package com.home.application.news.collection;
 
+import com.home.domain.news.MarketNewsFailureKind;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -18,4 +19,5 @@ public record MarketNewsCollectionExecution(
         int failedWorkUnitCount,
         int truncatedWorkUnitCount,
         int skippedBudgetWorkUnitCount,
+        MarketNewsFailureKind stoppingFailureKind,
         List<MarketNewsWorkUnitSpec> workUnits) {}

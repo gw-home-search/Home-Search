@@ -53,11 +53,13 @@ class OdcloudIdentityExternalApiConfigurationTest {
     @Test
     @DisplayName("ODC coordinate identity verifier는 service key가 없으면 non-blocking trusting fallback으로 등록된다")
     void odcloudCoordinateIdentityVerifierFallsBackToTrustingWithoutServiceKey() {
-        contextRunner.run(context -> {
-            assertThat(context).hasSingleBean(ComplexCoordinateIdentityVerifier.class);
-            assertThat(context.getBean(ComplexCoordinateIdentityVerifier.class))
-                    .isNotInstanceOf(OdcloudComplexCoordinateIdentityVerifier.class);
-        });
+        contextRunner
+                .withPropertyValues("odc-service-key=", "odcloud.data.od-service-key=")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(ComplexCoordinateIdentityVerifier.class);
+                    assertThat(context.getBean(ComplexCoordinateIdentityVerifier.class))
+                            .isNotInstanceOf(OdcloudComplexCoordinateIdentityVerifier.class);
+                });
     }
 
     @Test

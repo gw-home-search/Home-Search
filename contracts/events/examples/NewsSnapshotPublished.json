@@ -1,0 +1,19 @@
+{
+  "eventId": "55555555-5555-4555-8555-555555555555",
+  "eventType": "NewsSnapshotPublished",
+  "schemaVersion": 1,
+  "occurredAt": "2026-07-24T03:04:00Z",
+  "producer": "property-data",
+  "aggregateType": "NewsSnapshot",
+  "aggregateId": "news-20260724-seoul",
+  "aggregateVersion": 2,
+  "correlationId": "news-run-20260724",
+  "causationId": null,
+  "traceId": "trace-555",
+  "payload": {
+    "snapshotId": "55555555-aaaa-4555-8555-555555555555",
+    "scopeType": "SIDO",
+    "regionCode": "11",
+    "dataCutoff": "2026-07-24T03:00:00Z"
+  }
+}

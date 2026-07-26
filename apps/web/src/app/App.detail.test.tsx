@@ -732,6 +732,7 @@ describe('App 단지 상세', () => {
         }),
       )
       .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse([]))
       .mockResolvedValueOnce(
         jsonResponse([
           {
@@ -775,6 +776,7 @@ describe('App 단지 상세', () => {
           totalPages: 0,
         }),
       )
+      .mockResolvedValueOnce(jsonResponse([]))
       .mockResolvedValueOnce(jsonResponse([]))
       .mockResolvedValueOnce(jsonResponse([]));
     vi.stubGlobal('fetch', fetchMock);

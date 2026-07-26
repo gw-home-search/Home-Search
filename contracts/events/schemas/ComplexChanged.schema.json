@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://home-search.internal/events/ComplexChanged/v1",
+  "title": "ComplexChanged v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "eventType", "schemaVersion", "occurredAt", "producer", "aggregateType", "aggregateId", "aggregateVersion", "correlationId", "causationId", "traceId", "payload"],
+  "properties": {
+    "eventId": {"type": "string", "format": "uuid"},
+    "eventType": {"type": "string", "const": "ComplexChanged"},
+    "schemaVersion": {"type": "integer", "const": 1},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "producer": {"type": "string", "const": "property-data"},
+    "aggregateType": {"type": "string", "const": "Complex"},
+    "aggregateId": {"type": "string", "pattern": "[A-Za-z0-9._:-]{1,128}", "maxLength": 128},
+    "aggregateVersion": {"type": "integer", "minimum": 1},
+    "correlationId": {"type": "string", "maxLength": 128},
+    "causationId": {"type": ["string", "null"], "maxLength": 128},
+    "traceId": {"type": "string", "pattern": "[A-Za-z0-9._:-]{1,128}", "maxLength": 128},
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["complexId", "parcelId", "changeType", "markerSafe"],
+      "properties": {
+        "complexId": {"type": "integer", "minimum": 1},
+        "parcelId": {"type": "integer", "minimum": 1},
+        "changeType": {"type": "string", "enum": ["IDENTITY", "DISPLAY_COORDINATE", "METADATA"]},
+        "markerSafe": {"type": "boolean"}
+      }
+    }
+  }
+}

@@ -28,8 +28,8 @@ detail, or trade contracts and must not enter their query path.
   evidence never qualifies as today's newly disclosed nationwide data.
 - `excl_area numeric(10,2)` is compared exactly. Contract dates use ISO-8601,
   amounts remain in 10,000 KRW, and areas remain square meters.
-- NAVER news and email remain disabled by default until provider terms,
-  credentials, and operational feedback controls are ready.
+- NAVER news and email remain disabled by default until credentials and
+  operational feedback controls are ready.
 
 ## Consequences
 
@@ -45,5 +45,6 @@ detail, or trade contracts and must not enter their query path.
 ## Stop conditions
 
 Stop before a public breaking change, cross-service database access, a lossy
-migration, reinterpretation of `complex_id`, provider enablement without terms
-review, or email enablement without bounce/complaint feedback and suppression.
+migration, reinterpretation of `complex_id`, provider enablement without valid
+credentials/quota/quality gates, or email enablement without bounce/complaint
+feedback and suppression.

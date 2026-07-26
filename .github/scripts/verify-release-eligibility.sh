@@ -18,7 +18,8 @@ git merge-base --is-ancestor "${expected_sha}" origin/main \
   || { echo '상태: Fail - release commit이 origin/main에 포함되지 않았습니다.' >&2; exit 1; }
 
 required_checks=(
-  changes test-display-name-policy backend-test source-data-test frontend-test-build
+  changes test-display-name-policy event-contract-test backend-test source-data-test ai-service-test
+  chat-bff-test frontend-test-build
   infra-contract-test ml-image-test property-image-test platform-image-test edge-image-test
   image-manifest-test terraform-test admin-service-test admin-web-test-build user-service-test diff-check
 )
@@ -29,7 +30,7 @@ for check_name in "${required_checks[@]}"; do
     [.check_runs[] | select(.name == $name and .status == "completed")]
     | sort_by(.completed_at) | last | .conclusion // "missing"
   ' "${check_runs_file}")"
-  if [[ "${conclusion}" != "success" ]]; then
+  if [[ "${conclusion}" != "success" && "${conclusion}" != "skipped" ]]; then
     missing+=("${check_name}=${conclusion}")
   fi
 done

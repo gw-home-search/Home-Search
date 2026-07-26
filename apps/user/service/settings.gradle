@@ -1,7 +1,7 @@
 pluginManagement { repositories { gradlePluginPortal(); mavenCentral() } }
 dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { mavenCentral() } }
 rootProject.name = 'home-search-user-service'
-include 'core', 'app'
+include 'core', 'app', 'worker'
 includeBuild('../../../libs/security-jwt-core') {
     dependencySubstitution { substitute module('com.home:security-jwt-core') using project(':') }
 }

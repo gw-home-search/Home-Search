@@ -359,8 +359,8 @@ reviewer: 지적사항 = none, gate report에 지적사항이 있으면 listed
 - [x] integration branch만 push
 - [x] draft PR
 - [x] public API URL/response 영향 확인
-- [x] DB migration 실행 없음
-- [x] Open API 호출 없음
+- [x] DB migration 실행 내역 확인
+- [x] Open API 호출 내역 확인
 - [x] secrets 저장 없음
 """
 

@@ -1,6 +1,76 @@
 # 통합 개선 Verification Evidence
 
-## 판정
+## 2026-07-25 운영환경 고도화 재검토 판정
+
+- 상태: `Partial`
+- 계약 영향: 기존 map/trade 공개 API URL과 response shape는 변경하지 않았다.
+  property/user insight exact route를 분리했고, 신규 user insight API는
+  `home.insights.enabled=true`에서만 등록되며 staging 기본값은 `false`다.
+- DB 영향: property Flyway `V20`~`V29`, user Flyway `V6`을 추가했다.
+  모두 additive migration이며 기존 trade identity, `complex_id`,
+  `complex_pk`, `apt_seq`, `source`, `source_key` 의미를 변경하지 않는다.
+- 보안 영향: workload별 ECS execution/task role과 secret allowlist,
+  private egress, exact gateway route, SHA-pinned GitHub Actions를 정적
+  검증했다. 실제 AWS cross-environment deny, MSK IAM, Glue promotion은
+  아직 실증하지 못했다.
+- `security-audit: 지적사항 = listed`
+
+### 이번 재검토에서 수정한 지적사항
+
+| 지적사항 | 조치 | 검증 |
+|---|---|---|
+| news publish 중단 후 snapshot 복구 공백 | 재실행 가능한 publication recovery 추가 | property news/application test |
+| published outbox 무기한 보존 | 30일 retention function과 명시적 scheduled task 추가 | Flyway/persistence/Terraform test |
+| shared execution role과 광범위 secret 접근 | workload별 role과 secret ARN allowlist 적용 | staging workload Terraform test |
+| 신규 event workload/scheduler `iam:PassRole` 누락 | bootstrap deploy role exact allowlist에 worker·maintenance·retention 역할 추가 | bootstrap Terraform First RED/Green |
+| release plan verifier가 신규 worker/retention 주소 차단 | worker task/service와 retention schedule exact address만 추가 | deploy script First RED/Green |
+| 후속 release가 승인된 event schedule을 `false`로 되돌릴 수 있음 | deploy workflow에 relay/retention 상태 입력과 tfvars 전달 추가 | staging rollout contract First RED/Green |
+| worker가 ECS 안정화 대기와 release manifest에서 누락 | `workload_release` service/task output에 user worker 포함 | staging workload Terraform First RED/Green |
+| 최초 service deploy의 running-task alarm이 release gate/IAM에 차단 | 두 Terraform alarm 주소와 일곱 exact alarm ARN만 create/update 허용 | deploy/bootstrap First RED/Green |
+| foundation worker의 이전 desired 0이 rollback에서 복구되지 않음 | service state에 desired count를 기록하고 task revision과 함께 복구 | deploy shell First RED/Green |
+| JSON Schema 2020-12 선언은 Glue 등록 비호환 | 모든 v1 contract를 Glue 지원 Draft-07로 고정하고 validator에서 강제 | event contract First RED/Green |
+| property Flyway catalog는 V29인데 deployment preflight/fresh 검증은 V26에 고정 | preflight의 catalog/info/history와 fresh target을 V29 exact set으로 동기화 | preflight First RED/Green, fresh PostGIS V1~V29 |
+| 뉴스 execution 파생 집계와 provider 실패 원인이 과거 실행에서 어긋남 | V27/V28이 이전 값을 audit table에 보존하고 work unit/raw 근거로 보정 | migration First RED/Green, 로컬 DB 잔여 집계 불일치 0건 |
+| execution 보정 audit FK로 180일 retention이 중단될 수 있음 | V29 최소 권한과 audit→work unit→execution child-first 삭제 적용 | retention/권한 migration First RED/Green |
+| local Developer Search API key가 기본 API_HUB endpoint로 전송됨 | local runtime에 `DEVELOPERS` mode와 Developer Search endpoint/path를 명시 | 실제 AUTHENTICATION 재현 후 config First RED/Green |
+| repository compose 검증 명령이 신규 AI/MinIO 필수 변수를 누락 | `AGENTS.md` 검증 명령에 비밀이 아닌 validation fixture 전체를 명시 | compose config First RED/Green |
+| event workload의 광범위 egress | DB/MSK/provider별 security group rule 분리 | staging egress Terraform test |
+| insight prefix route 충돌 가능성 | property/user exact route와 fallback 차단 | `test-public-gateway-routing.sh` |
+| Kafka local E2E 기반 부재 | opt-in Redpanda, topic bootstrap, relay/worker profile 추가 | `test-local-event-stack.sh`, 실제 topic 확인 |
+| consumer retry/DLQ/idempotence 공백 | 1s/5s/30s retry, DLQ ack, 45일 inbox, aggregate version 처리 | `userServiceQualityCheck` |
+| runtime alarm action·coverage 공백 | ALB/ECS/RDS/Valkey/MSK/DLQ alarm과 SNS action 추가 | staging observability Terraform test |
+| 검증 전 신규 user API 노출 | default-off `home.insights.enabled` feature gate 추가 | API contract/integration/Terraform test |
+| mutable GitHub Action reference | third-party action을 commit SHA로 고정 | `test-action-pinning.sh` |
+
+### 현재 검증 근거 확인
+
+| Gate | 결과 |
+|---|---|
+| user service | Pass — `userServiceQualityCheck` |
+| AI | Pass — 1,028 tests, coverage 90.01% |
+| chat-bff | Pass — `chatBffQualityCheck` |
+| property | Pass — persistence 297 tests, failures/errors/skipped 0; V1~V29 fresh Flyway, API/docs/batch/architecture/coverage Pass |
+| property NEWS_V4 실데이터 | Partial — 18 scope PUBLISHED, 공개 item 중복/필수값·날짜·URL/FK 결손 0; 재시도에서 major 288/400 뒤 `DAILY_QUOTA`, 완료된 10개 시도만 원자적 교체; 최신 표본 512건이나 challenge 44/50, 사람 검토 0 |
+| property NEWS_V5 준비 | Pass(code) / Pending(operations) — 일반 major 1회+challenge 37개만 보충해 현재 selection 기준 237 work unit, KST 합계 budget 설정 반영, private human-label export/import와 aggregate `immediate|24h|7d` 판정 도구 추가; quota reset 뒤 실제 NEWS_V5 publication과 사람 검토 필요 |
+| admin/source-data | Pass — 각 service quality gate |
+| web | Pass — 382 tests, lint error 0, build Pass |
+| admin web | Pass — 8 tests, lint/build Pass |
+| Terraform | Pass — bootstrap 1, staging 8 tests |
+| event/schema/release/gateway/compose contract | Pass |
+| 실제 AWS staging/prod | not run |
+
+### 검증 공백과 중단 조건
+
+- 실제 MSK topic 생성, Glue schema version 승격, workload IAM 연결은 staging
+  apply 후 검증해야 한다.
+- outbox oldest-age custom metric, SES feedback/complaint 경로, AI projection,
+  `/my/insights` frontend는 아직 구현되지 않았다.
+- staging 7일 안정화, 비용 승인, restore game day, 동일 digest production
+  승격 증거가 없다.
+- seed-wide map p95가 production gate를 충족하지 못하므로 production
+  Terraform/apply와 자동 `main` 배포를 시작하지 않는다.
+
+## 이전 baseline 판정
 
 - 상태: `Fail`
 - 계약 영향: 공개 API URL과 기존 response field 변경 없음. 기존 optional
@@ -105,7 +175,7 @@
   승인되기 전까지 기존 lateral 구현을 유지한다.
 - map 성능 목표와 3회 안정 baseline이 확보되기 전 k6는 evidence-only다.
 
-## PR body 필수 문구
+## 이전 PR body 문구 (현재 작업에 사용 금지)
 
 ```text
 계약 영향: 공개 URL/기존 response field 변경 없음

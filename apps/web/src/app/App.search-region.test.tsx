@@ -343,7 +343,7 @@ describe('App 검색과 지역', () => {
       resolveApiUrl('/api/v1/trade/3001?complexId=801'),
       expect.objectContaining({ method: 'GET' }),
     );
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
     expect(rootElement.querySelector('[aria-label="단지 상세 패널"]')).not.toBeNull();
     expect(rootElement.textContent).toContain('Coordinate Pending Complex');
     expect(rootElement.textContent).toContain('거래 내역이 없습니다');

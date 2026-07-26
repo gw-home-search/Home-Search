@@ -204,7 +204,8 @@ existing service boundary:
 
 ```text
 RTMS batch -> collection execution/work-unit evidence -> insight snapshot
-NAVER API HUB -> property batch -> Redis current/last-good news cache
+NAVER API HUB -> property batch -> PostgreSQL news evidence/snapshot
+                                      -> Redis current/last-good pointer
 property public API -> web MapApp /insights rail mode
 property public API -> user batch -> user inbox / SES
 ```
@@ -217,6 +218,16 @@ Existing map/search/detail/trade packages must not import insight packages.
 The web composition root may coordinate the feature-local insight rail with
 the existing detail selection and map focus ports; map marker repositories and
 runtime hooks remain independent of insight storage and request state.
+
+News collection uses the same run-and-exit Batch boundary but not the RTMS
+daily chain. The repository defines `marketNewsGeneralJob`,
+`marketNewsMajorComplexJob`, restartable `marketNewsMorningJob`,
+`marketNewsMajorSelectionJob`, `marketNewsRetentionJob`,
+`marketNewsQualitySampleJob`, and the operator-triggered
+`marketNewsWithdrawalJob`. Terraform owns fail-closed EventBridge Scheduler
+targets for three standalone general runs, the 06:30 general-to-major chain,
+Monday selection, and retention. Collection schedules and the public API have
+separate enable flags. The API runtime does not register any of these schedules.
 
 The operational daily chain is:
 

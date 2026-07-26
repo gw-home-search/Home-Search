@@ -8,6 +8,16 @@ variable "project_name" {
   default = "home-search"
 }
 
+variable "owner" {
+  description = "Accountable team or operator recorded on every taggable staging resource."
+  type        = string
+  default     = "home-search-platform"
+  validation {
+    condition     = trimspace(var.owner) != ""
+    error_message = "owner must be a non-empty team or operator identifier."
+  }
+}
+
 variable "vpc_cidr" {
   type    = string
   default = "10.42.0.0/16"
@@ -27,6 +37,16 @@ variable "admin_allowed_cidrs" {
 variable "rds_instance_class" {
   type    = string
   default = "db.t4g.micro"
+}
+
+variable "rds_connection_alarm_threshold" {
+  description = "Approved staging connection count approximating 80 percent of max_connections for the selected RDS class."
+  type        = number
+  default     = 70
+  validation {
+    condition     = var.rds_connection_alarm_threshold > 0
+    error_message = "rds_connection_alarm_threshold must be positive."
+  }
 }
 
 variable "redis_node_type" {
@@ -50,12 +70,12 @@ variable "image_digests" {
     condition = length(setsubtract(toset(keys(var.image_digests)), toset([
       "property-api", "property-batch", "property-flyway",
       "admin-api", "admin-migration", "admin-ops",
-      "user-api", "user-flyway", "source-data-migration",
+      "user-api", "user-insight-worker", "user-flyway", "source-data-migration",
       "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
       ]))) == 0 && length(setsubtract(toset([
       "property-api", "property-batch", "property-flyway",
       "admin-api", "admin-migration", "admin-ops",
-      "user-api", "user-flyway", "source-data-migration",
+      "user-api", "user-insight-worker", "user-flyway", "source-data-migration",
       "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
       ]), toset(keys(var.image_digests)))) == 0 && alltrue([
       for digest in values(var.image_digests) : can(regex("^sha256:[0-9a-f]{64}$", digest))
@@ -112,6 +132,36 @@ variable "enable_services" {
 
 variable "enable_backup_schedules" {
   description = "Enables backup schedules only after secret bootstrap, database migrations, and runtime grants succeed."
+  type        = bool
+  default     = false
+}
+
+variable "enable_property_event_relay_schedule" {
+  description = "Enables the five-minute property outbox relay only after MSK topics and the property database are ready."
+  type        = bool
+  default     = false
+}
+
+variable "enable_property_event_retention_schedule" {
+  description = "Enables the daily published outbox cleanup only after V26 and runtime grants are applied."
+  type        = bool
+  default     = false
+}
+
+variable "enable_market_news_schedules" {
+  description = "Enables market news collection schedules only after provider terms, credentials, migrations, and quality gates are ready."
+  type        = bool
+  default     = false
+}
+
+variable "enable_market_news_public" {
+  description = "Enables the public market news API independently from collection schedules after a reviewed publication exists."
+  type        = bool
+  default     = false
+}
+
+variable "enable_user_insights_public" {
+  description = "Exposes subscription and inbox controllers only after authenticated staging E2E approval."
   type        = bool
   default     = false
 }

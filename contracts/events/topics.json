@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "maxMessageBytes": 262144,
+  "mainRetentionHours": 336,
+  "dlqRetentionHours": 720,
+  "topics": [
+    {
+      "name": "property.trade-events.v1",
+      "partitions": 6,
+      "cleanupPolicy": "delete",
+      "autoDelete": false,
+      "events": [
+        {
+          "eventType": "TradeNormalized",
+          "schema": "schemas/TradeNormalized.schema.json"
+        },
+        {
+          "eventType": "TradeCanceled",
+          "schema": "schemas/TradeCanceled.schema.json"
+        }
+      ]
+    },
+    {
+      "name": "property.complex-events.v1",
+      "partitions": 6,
+      "cleanupPolicy": "delete",
+      "autoDelete": false,
+      "events": [
+        {
+          "eventType": "ComplexChanged",
+          "schema": "schemas/ComplexChanged.schema.json"
+        }
+      ]
+    },
+    {
+      "name": "property.insight-events.v1",
+      "partitions": 3,
+      "cleanupPolicy": "delete",
+      "autoDelete": false,
+      "events": [
+        {
+          "eventType": "InsightPublished",
+          "schema": "schemas/InsightPublished.schema.json"
+        },
+        {
+          "eventType": "NewsSnapshotPublished",
+          "schema": "schemas/NewsSnapshotPublished.schema.json"
+        }
+      ]
+    },
+    {
+      "name": "user.delivery-events.v1",
+      "partitions": 3,
+      "cleanupPolicy": "delete",
+      "autoDelete": false,
+      "events": [
+        {
+          "eventType": "InboxCreated",
+          "schema": "schemas/InboxCreated.schema.json"
+        },
+        {
+          "eventType": "EmailRequested",
+          "schema": "schemas/EmailRequested.schema.json"
+        },
+        {
+          "eventType": "EmailSuppressed",
+          "schema": "schemas/EmailSuppressed.schema.json"
+        }
+      ]
+    },
+    {
+      "name": "ai.dataset-events.v1",
+      "partitions": 3,
+      "cleanupPolicy": "delete",
+      "autoDelete": false,
+      "events": [
+        {
+          "eventType": "DatasetActivated",
+          "schema": "schemas/DatasetActivated.schema.json"
+        },
+        {
+          "eventType": "DatasetQuarantined",
+          "schema": "schemas/DatasetQuarantined.schema.json"
+        }
+      ]
+    }
+  ]
+}

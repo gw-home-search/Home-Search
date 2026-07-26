@@ -10,7 +10,7 @@ version = '0.0.1-SNAPSHOT'
 
 spotless {
     java {
-        target 'core/src/**/*.java', 'app/src/**/*.java'
+        target 'core/src/**/*.java', 'app/src/**/*.java', 'worker/src/**/*.java'
         palantirJavaFormat('2.96.0')
     }
 }
@@ -39,9 +39,10 @@ subprojects {
 
 evaluationDependsOn(':core')
 evaluationDependsOn(':app')
+evaluationDependsOn(':worker')
 
 tasks.register('userServiceTest') {
-    dependsOn ':core:test', ':app:test'
+    dependsOn ':core:test', ':app:test', ':worker:test'
 }
 tasks.register('userServiceLibraryTest') {
     dependsOn gradle.includedBuild('security-jwt-core').task(':test')
@@ -78,18 +79,21 @@ tasks.register('userServiceDependencyBoundaryCheck') {
 }
 
 tasks.register('userServiceCoverageCheck', JacocoCoverageVerification) {
-    dependsOn ':core:test', ':app:test'
+    dependsOn ':core:test', ':app:test', ':worker:test'
     executionData.from(
         project(':core').layout.buildDirectory.file('jacoco/test.exec'),
-        project(':app').layout.buildDirectory.file('jacoco/test.exec')
+        project(':app').layout.buildDirectory.file('jacoco/test.exec'),
+        project(':worker').layout.buildDirectory.file('jacoco/test.exec')
     )
     sourceDirectories.from(
         project(':core').sourceSets.main.allSource.srcDirs,
-        project(':app').sourceSets.main.allSource.srcDirs
+        project(':app').sourceSets.main.allSource.srcDirs,
+        project(':worker').sourceSets.main.allSource.srcDirs
     )
     classDirectories.from(
         project(':core').sourceSets.main.output.classesDirs,
-        project(':app').sourceSets.main.output.classesDirs
+        project(':app').sourceSets.main.output.classesDirs,
+        project(':worker').sourceSets.main.output.classesDirs
     )
     violationRules {
         rule {
@@ -102,18 +106,21 @@ tasks.register('userServiceCoverageCheck', JacocoCoverageVerification) {
 }
 
 tasks.register('userServiceCoverageReport', JacocoReport) {
-    dependsOn ':core:test', ':app:test'
+    dependsOn ':core:test', ':app:test', ':worker:test'
     executionData.from(
         project(':core').layout.buildDirectory.file('jacoco/test.exec'),
-        project(':app').layout.buildDirectory.file('jacoco/test.exec')
+        project(':app').layout.buildDirectory.file('jacoco/test.exec'),
+        project(':worker').layout.buildDirectory.file('jacoco/test.exec')
     )
     sourceDirectories.from(
         project(':core').sourceSets.main.allSource.srcDirs,
-        project(':app').sourceSets.main.allSource.srcDirs
+        project(':app').sourceSets.main.allSource.srcDirs,
+        project(':worker').sourceSets.main.allSource.srcDirs
     )
     classDirectories.from(
         project(':core').sourceSets.main.output.classesDirs,
-        project(':app').sourceSets.main.output.classesDirs
+        project(':app').sourceSets.main.output.classesDirs,
+        project(':worker').sourceSets.main.output.classesDirs
     )
     reports {
         xml.required = true
@@ -137,7 +144,8 @@ tasks.register('verifyUserMigrationCatalog') {
             'V2__create_user_identity.sql': '01c1cef8379f9993cee3269348a8beb411314427e4fc7561294c5aeb4e249196',
             'V3__create_refresh_state.sql': '6c88b4289eb8a6111c00296474df086aada21f0105789fcdaf5e9ade470d3355',
             'V4__create_oauth_session.sql': '98e936a2ec340306bf908a58a21319d43d63e891183f58a222c208f0d326c4d2',
-            'V5__create_favorite_complex.sql': '7b1bee6dc26efa0a57aba8873a5d3f391dca426f61684cd9f740bbbf1b94bcb6'
+            'V5__create_favorite_complex.sql': '7b1bee6dc26efa0a57aba8873a5d3f391dca426f61684cd9f740bbbf1b94bcb6',
+            'V6__create_insight_subscription_and_inbox.sql': 'cc4b83d864f80203894782e8074d091cf6ebf0e9c85a545726934d5c65ef48f9'
         ]
         if (files*.name != expectedCatalog.keySet().toList()) {
             throw new GradleException("User migration catalog must be exact: ${expectedCatalog.keySet()}")
@@ -233,5 +241,5 @@ tasks.register('userServiceQualityCheck') {
     dependsOn 'userServiceTest', 'userServiceLibraryTest', 'userServicePersistenceTest', 'userServiceApiContractTest',
         'userServiceDependencyBoundaryCheck', 'verifyUserMigrationCatalog',
         'verifyUserFlywayCliContract', 'verifyUserDeploymentPreflightContract',
-        'verifyUserFlywayFresh', 'userServiceCoverageCheck', ':app:bootJar'
+        'verifyUserFlywayFresh', 'userServiceCoverageCheck', ':app:bootJar', ':worker:bootJar'
 }

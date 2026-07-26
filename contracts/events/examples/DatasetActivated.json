@@ -1,0 +1,18 @@
+{
+  "eventId": "99999999-9999-4999-8999-999999999999",
+  "eventType": "DatasetActivated",
+  "schemaVersion": 1,
+  "occurredAt": "2026-07-24T03:08:00Z",
+  "producer": "ai-service",
+  "aggregateType": "DatasetVersion",
+  "aggregateId": "school-20260724",
+  "aggregateVersion": 3,
+  "correlationId": "dataset-run-20260724",
+  "causationId": null,
+  "traceId": "trace-999",
+  "payload": {
+    "datasetVersionId": "99999999-aaaa-4999-8999-999999999999",
+    "datasetType": "SCHOOL",
+    "checksumSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }
+}

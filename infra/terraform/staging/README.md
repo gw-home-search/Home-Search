@@ -3,6 +3,20 @@
 This root creates the two-AZ network, one staging NAT gateway, separate public
 and CIDR-restricted admin ALBs, private data services, immutable ECR
 repositories, log groups, secret containers, and the encrypted ML model EFS.
+It also creates a private two-AZ MSK Serverless cluster, an IAM-authenticated
+streaming security boundary, and the Glue registry only. Topic creation and
+Glue schema versions remain contract-pipeline responsibilities.
+The property relay role can write only the three governed property topics and
+has cluster-scoped `WriteDataIdempotently` because the Spring producer enables
+idempotence; it has no topic-create or consumer-group permission. Its Scheduler
+task uses a dedicated security group, and the MSK ingress rule does not trust
+the shared operations security group.
+A rotating customer-managed-KMS encrypted operations SNS topic, an SQS-managed
+SSE Scheduler failure DLQ, and non-empty alarm actions are created as staging
+foundation resources. The key policy permits CloudWatch alarm notification
+encryption only through regional SNS. A reviewed, confirmed subscription must
+be attached to the `streaming.operations_topic_arn` output before staging
+evidence collection.
 
 The primary RDS instance starts with `home_search`; the idempotent bootstrap
 task creates `home_search_admin` and `home_search_user` plus least-privilege
@@ -22,10 +36,12 @@ terraform -chdir=infra/terraform/staging plan \
 
 Never put secret values in `.tfvars`, `TF_VAR_*`, plan files, or Terraform
 outputs. Secret values are populated by the bootstrap ECS task added with the
-workload layer.
+workload layer. Each DB role has its own secret container; a workload execution
+role can materialize only the exact DB, provider, or signing-key containers
+declared by that workload. RDS master secrets remain bootstrap-only.
 
 The release variable file contains only certificate ARNs, HTTPS origins, and
-the 14 image digests from the immutable release manifest. Keep
+the 15 image digests from the immutable release manifest. Keep
 `enable_services=false` on the first apply. That creates the ECS cluster and
 task definitions without starting applications against empty secrets. Run and
 wait for the following one-shot task families in order:
@@ -37,6 +53,15 @@ wait for the following one-shot task families in order:
 4. `home-search-staging-runtime-grants`
 
 Only after every task exits with code 0 should a reviewed plan set
-`enable_services=true` and `enable_backup_schedules=true`. The optional ML service additionally requires
-`enable_ml=true` and a model artifact in the encrypted EFS `/model` mount; its
-entrypoint fails instead of serving without that artifact.
+`enable_services=true` and `enable_backup_schedules=true`. Set
+`enable_property_event_relay_schedule=true` only after the governed property
+topics have been created, the relay parser smoke has passed, and the operations
+topic subscription and Scheduler DLQ alarm path have been exercised. The
+market-news schedules are defined disabled by default. Set
+`enable_market_news_schedules=true` only after the provider secret, property
+Flyway V25, Redis connectivity, call budget, and deterministic quality sample
+are verified. Set `enable_market_news_public=true` separately only when a
+reviewed last-good publication is ready. The
+optional ML service additionally requires `enable_ml=true` and a model artifact
+in the encrypted EFS `/model` mount; its entrypoint fails instead of serving
+without that artifact.

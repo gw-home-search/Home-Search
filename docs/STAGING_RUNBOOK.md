@@ -16,7 +16,7 @@ restore rehearsal 절차를 소유한다. production cutover, DNS 전환, produc
 
 | 분류 | Workload | 운영 방식 |
 |---|---|---|
-| service | `property-api`, `user-api`, `admin-api`, `public-gateway`, `admin-gateway` | ECS service, private task subnet, circuit-breaker rollback |
+| service | `property-api`, `user-api`, `admin-api`, `public-gateway`, `admin-gateway`, `user-insight-worker` | ECS service, private task subnet, circuit-breaker rollback |
 | live-capable optional | `ml` | EFS `/model` artifact가 있을 때만 `enable_ml=true` |
 | maintenance | `property-batch`, `admin-ops` | 요청된 작업마다 ECS one-shot task |
 | bootstrap one-shot | `secret-bootstrap`, `database-bootstrap`, `runtime-grants` | 최초 생성 및 credential rotation 후 명시 실행 |
@@ -61,8 +61,12 @@ restore rehearsal 절차를 소유한다. production cutover, DNS 전환, produc
 실제 OAuth credential, public-data provider key, DB password, RSA private key는
 GitHub variable이나 Terraform 변수로 전달하지 않는다. Secrets Manager의
 `oauth-providers`, `public-data-providers` container에 승인된 operator가 값을
-직접 넣는다. DB password와 user/admin RSA key pair는 `secret-bootstrap` task가
-처음 한 번 생성하며 기존 secret version이 있으면 덮어쓰지 않는다.
+직접 넣는다. `secret-bootstrap` task는 DB role마다 별도 container
+(`property-runtime-db`, `coordinate-reader-db`, `admin-runtime-db`,
+`user-runtime-db`, 각 `*-migrator-db`, `coordinate-importer-db`,
+`property-ai-reader-db`, `backup-db`)와 user/admin RSA key pair를 처음 한 번
+생성하며 기존 secret version이 있으면 덮어쓰지 않는다. ECS execution role은
+자신의 container ARN만 읽고 RDS master secret은 bootstrap task role만 읽는다.
 
 ## 1. Terraform bootstrap
 
@@ -92,7 +96,7 @@ release workflow가 아직 이미지를 게시할 ECR repository를 필요로 �
 operator가 KMS/ECR registry target을 먼저 apply한다. 이 target-only plan의
 형식 검증을 위해 placeholder digest map을 전달할 수 있지만 task definition이나
 service에는 적용하지 않는다. ECR 생성 뒤 5절의 첫 image release를 게시하고,
-그 manifest의 실제 14개 digest로 foundation full plan을 만든다.
+그 manifest의 실제 15개 digest로 foundation full plan을 만든다.
 
 ```bash
 terraform -chdir=infra/terraform/staging init
@@ -108,7 +112,10 @@ terraform -chdir=infra/terraform/staging apply foundation.tfplan
 ```
 
 계획에서 public/admin ALB 분리, admin CIDR 제한, private RDS/Valkey, 별도
-coordinate-source RDS, ECR, secret container, EFS만 생성되는지 확인한다.
+coordinate-source RDS, ECR, secret container, EFS, private MSK Serverless,
+Glue registry, encrypted operations SNS topic, Scheduler failure DLQ가 생성되는지
+확인한다. Terraform은 topic과 Glue schema version을 생성하지 않으며 contract
+pipeline이 이를 승격한다.
 Terraform state와 plan 파일에 secret 값이 없어야 한다.
 
 ## 3. Secret과 DB bootstrap
@@ -147,8 +154,8 @@ artifact가 없거나 checksum이 다르면 ML entrypoint가 실패해야 한다
 ## 5. Image release
 
 1. release commit이 `main`에 포함됐는지 확인한다.
-2. 같은 commit에서 `ci`를 `workflow_dispatch`로 실행해 모든 conditional gate를
-   실제 `success`로 만든다.
+2. `main` push에서 실행된 `ci`가 변경 대상 gate를 `success`, 비대상 gate를
+   `skipped`로 완료했는지 확인한다.
 3. `vMAJOR.MINOR.PATCH` tag를 만든다.
 4. `Publish release images` workflow를 확인한다.
 
@@ -159,8 +166,24 @@ Critical finding이나 SHA/SemVer digest 불일치는 release 실패다.
 
 ## 6. Staging deploy와 migration
 
-`Deploy staging` workflow를 `release_tag`와 optional `enable_ml`로 실행한다.
+`Deploy staging` workflow를 `release_tag`, optional `enable_ml`,
+`enable_market_news_public`, `enable_market_news_schedules`,
+`enable_user_insights_public`, `enable_property_event_relay_schedule`,
+`enable_property_event_retention_schedule`로 실행한다. 한 번 승인해 활성화한
+schedule은 이후 release에서도 해당 입력을 `true`로 유지해야 하며, workflow가
+이를 Terraform tfvars에 명시적으로 기록한다.
+Release manifest의 `build_flags.market_news_enabled`와
+`enable_market_news_public`은 반드시 같아야 한다.
 `staging` Environment approval 전에 plan 범위와 release evidence를 검토한다.
+`property.trade-events.v1`, `property.complex-events.v1`,
+`property.insight-events.v1` topic과 contract 등록이 확인되기 전에는
+`enable_property_event_relay_schedule=false`를 유지한다. 확인 후 별도 reviewed
+plan에서 이를 `true`로 전환하면 provider/coordinate secret이 없는 private
+`property-event-relay` task가 5분마다
+`propertyEventRelayJob`을 실행한다.
+Property Flyway V26과 runtime grant를 확인한 뒤에는
+`enable_property_event_retention_schedule=true`로 전환하고, 이후 release에도
+같은 값을 유지한다.
 
 고정 순서:
 
@@ -181,8 +204,8 @@ Migration 실패 시 4번 이후는 실행되지 않는다. 자동 DB down migra
 
 Service 안정화나 smoke가 실패하면 workflow가
 `deployment-evidence/previous-release.json`의 이전 task definition ARN으로 각
-service를 되돌리고 stable 상태를 기다린다. `skip_destroy=true`이므로 이전
-revision은 rollback용으로 등록 상태를 유지한다.
+service를 되돌리고 이전 desired count도 함께 복구한 뒤 stable 상태를 기다린다.
+`skip_destroy=true`이므로 이전 revision은 rollback용으로 등록 상태를 유지한다.
 
 수동 rehearsal:
 
@@ -208,7 +231,12 @@ Restore verification은 dump checksum, migration checksum, Flyway success count,
 
 `BackupFailureCount`, `RestoreFailureCount`, `ChecksumMismatchCount`,
 `BackupAgeSeconds`, `RestoreDurationSeconds`, Scheduler `TargetErrorCount` alarm을
-확인한다. `BackupAgeSeconds`가 없거나 48시간을 넘으면 정상으로 간주하지 않는다.
+확인한다. `BackupAgeSeconds`가 없거나 26시간을 넘으면 정상으로 간주하지 않는다.
+모든 Scheduler는 retry 소진 시 SQS-managed SSE DLQ에 실패 payload를 14일
+보관한다. `ApproximateNumberOfMessagesVisible`이 1 이상이면 operations SNS
+alarm이 발생해야 한다. 실제 apply 후 `streaming.operations_topic_arn`에 승인된
+구독을 연결하고 확인(confirmed) 상태와 test alarm 수신을 evidence로 남긴다.
+구독이 없거나 미확인 상태이면 staging 실증을 시작하지 않는다.
 
 ## 9. 성능 evidence
 

@@ -48,6 +48,74 @@ services:
     networks:
       - home-search-local
 
+  redpanda:
+    image: redpandadata/redpanda:v25.1.5@sha256:95182a95a80f187a99cfe9fa03aaf18da0a3809a6741a229572f7ec33e795c13
+    container_name: home-search-redpanda
+    restart: unless-stopped
+    profiles: [ "events" ]
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "127.0.0.1:${HOME_SEARCH_KAFKA_PORT:-19092}:19092"
+    healthcheck:
+      test: [ "CMD-SHELL", "rpk cluster health --exit-when-healthy" ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    volumes:
+      - home-search-redpanda-data:/var/lib/redpanda/data
+    networks:
+      - home-search-local
+
+  event-topics:
+    image: redpandadata/redpanda:v25.1.5@sha256:95182a95a80f187a99cfe9fa03aaf18da0a3809a6741a229572f7ec33e795c13
+    container_name: home-search-event-topics
+    restart: "no"
+    profiles: [ "events" ]
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    entrypoint: [ "/bin/bash", "-ec" ]
+    command:
+      - |
+        ensure_topic() {
+          topic="$$1"
+          partitions="$$2"
+          retention_ms="$$3"
+          if ! rpk topic describe "$$topic" -X brokers=redpanda:9092 >/dev/null 2>&1; then
+            rpk topic create "$$topic" --partitions "$$partitions" --replicas 1 \
+              --topic-config "retention.ms=$$retention_ms" \
+              --topic-config max.message.bytes=262144 \
+              -X brokers=redpanda:9092
+          fi
+          rpk topic alter-config "$$topic" --no-confirm \
+            --set "retention.ms=$$retention_ms" \
+            --set max.message.bytes=262144 \
+            -X brokers=redpanda:9092
+        }
+        ensure_topic property.trade-events.v1 6 1209600000
+        ensure_topic property.complex-events.v1 6 1209600000
+        ensure_topic property.insight-events.v1 3 1209600000
+        ensure_topic user.delivery-events.v1 3 1209600000
+        ensure_topic ai.dataset-events.v1 3 1209600000
+        ensure_topic property.trade-events.v1.dlq 1 2592000000
+        ensure_topic property.complex-events.v1.dlq 1 2592000000
+        ensure_topic property.insight-events.v1.dlq 1 2592000000
+        ensure_topic user.delivery-events.v1.dlq 1 2592000000
+        ensure_topic ai.dataset-events.v1.dlq 1 2592000000
+    networks:
+      - home-search-local
+
   minio:
     image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
     container_name: home-search-ai-raw-minio
@@ -113,7 +181,7 @@ services:
   property-flyway:
     image: redgate/flyway:11.7.2
     platform: linux/amd64
-    profiles: [ "migration" ]
+    profiles: [ "migration", "events" ]
     depends_on:
       postgis:
         condition: service_healthy
@@ -131,7 +199,7 @@ services:
   user-flyway:
     image: redgate/flyway:12.4.0
     platform: linux/amd64
-    profiles: [ "migration" ]
+    profiles: [ "migration", "events" ]
     depends_on:
       postgis:
         condition: service_healthy
@@ -143,6 +211,59 @@ services:
     volumes:
       - ../apps/user/service/db/migration/user:/flyway/sql:ro
       - ../apps/user/service/db:/flyway/conf:ro
+    networks:
+      - home-search-local
+
+  property-event-relay:
+    build:
+      context: ..
+      dockerfile: apps/property-data/batch/Dockerfile
+    image: home-search-property-event-relay:local
+    container_name: home-search-property-event-relay
+    restart: "no"
+    profiles: [ "events" ]
+    depends_on:
+      postgis:
+        condition: service_healthy
+      property-flyway:
+        condition: service_completed_successfully
+      event-topics:
+        condition: service_completed_successfully
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_BATCH_JOB_NAME: propertyEventRelayJob
+      DB_JDBC_URL: jdbc:postgresql://postgis:5432/${HOME_SEARCH_DB_NAME:-home_search}
+      DB_USERNAME: ${PROPERTY_RUNTIME_DB_USERNAME:-home_search_property_runtime}
+      DB_PASSWORD: ${PROPERTY_RUNTIME_DB_PASSWORD:-property_runtime_local_password}
+      HOME_EVENTS_RELAY_ENABLED: "true"
+      HOME_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+    command: [ "schedulerExecutionId=local-event-relay" ]
+    networks:
+      - home-search-local
+
+  user-insight-worker:
+    build:
+      context: ..
+      dockerfile: apps/user/service/Dockerfile
+      target: worker
+    image: home-search-user-insight-worker:local
+    container_name: home-search-user-insight-worker
+    restart: unless-stopped
+    profiles: [ "events" ]
+    depends_on:
+      postgis:
+        condition: service_healthy
+      user-flyway:
+        condition: service_completed_successfully
+      event-topics:
+        condition: service_completed_successfully
+    environment:
+      USER_DB_JDBC_URL: jdbc:postgresql://postgis:5432/home_search_user
+      USER_DB_USERNAME: home_search_user_runtime
+      USER_DB_PASSWORD: ${USER_RUNTIME_DB_PASSWORD:?Set USER_RUNTIME_DB_PASSWORD}
+      HOME_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_PROPERTIES_SECURITY_PROTOCOL: PLAINTEXT
     networks:
       - home-search-local
 
@@ -168,6 +289,32 @@ services:
     networks:
       - home-search-local
 
+  property-batch:
+    image: eclipse-temurin:21-jdk
+    profiles: [ "tools" ]
+    working_dir: /app
+    entrypoint:
+      - "sh"
+      - "-c"
+      - "cp /source/property-data-batch.jar /app/property-data-batch.jar && exec java -jar /app/property-data-batch.jar \"$$@\""
+      - "--"
+    env_file:
+      - ../apps/property-data/ops/local-runtime.env.example
+      - ../apps/property-data/.env
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      DB_JDBC_URL: jdbc:postgresql://postgis:5432/${HOME_SEARCH_DB_NAME:-home_search}
+      DB_USERNAME: ${PROPERTY_RUNTIME_DB_USERNAME:-home_search_property_runtime}
+      DB_PASSWORD: ${PROPERTY_RUNTIME_DB_PASSWORD:-property_runtime_local_password}
+      HOME_NEWS_NAVER_ENABLED: "true"
+      HOME_NEWS_CACHE_ENABLED: "true"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+    volumes:
+      - ../apps/property-data/batch/build/libs/property-data-batch.jar:/source/property-data-batch.jar:ro
+    networks:
+      - home-search-local
+
   api:
     image: eclipse-temurin:21-jdk
     container_name: home-search-api
@@ -178,7 +325,10 @@ services:
       redis:
         condition: service_healthy
     working_dir: /app
-    command: [ "java", "-jar", "property-data-api.jar" ]
+    command:
+      - "sh"
+      - "-c"
+      - "cp /source/property-data-api.jar /app/property-data-api.jar && exec java -jar /app/property-data-api.jar"
     env_file:
       - ../apps/property-data/ops/local-runtime.env.example
       - ${HOME_SEARCH_API_ENV_FILE:-../apps/property-data/ops/local-runtime.override.env.example}
@@ -201,6 +351,11 @@ services:
       HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY: ${HOME_INGEST_RTMS_ALLOW_COORDINATE_PENDING_ONLY:-false}
       HOME_MAP_MARKER_CACHE_ENABLED: ${HOME_MAP_MARKER_CACHE_ENABLED:-false}
       HOME_MAP_MARKER_CACHE_TTL: ${HOME_MAP_MARKER_CACHE_TTL:-5m}
+      HOME_NEWS_PUBLIC_ENABLED: ${HOME_NEWS_PUBLIC_ENABLED:-false}
+      NAVER_NEWS_API_KEY_ID: ""
+      NAVER_NEWS_API_KEY: ""
+      HOME_NEWS_NAVER_CLIENT_ID: ""
+      HOME_NEWS_NAVER_CLIENT_SECRET: ""
       KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
       HOME_PLACE_KAKAO_ENABLED: ${HOME_PLACE_KAKAO_ENABLED:-false}
       HOME_PLACE_KAKAO_CACHE_ENABLED: ${HOME_PLACE_KAKAO_CACHE_ENABLED:-true}
@@ -225,7 +380,7 @@ services:
     expose:
       - "8080"
     volumes:
-      - ../apps/property-data/api/build/libs/property-data-api.jar:/app/property-data-api.jar:ro
+      - ../apps/property-data/api/build/libs/property-data-api.jar:/source/property-data-api.jar:ro
       - ../runtime-keys/admin-internal/public:/run/keys/admin-internal-public:ro
     networks:
       - home-search-local
@@ -336,6 +491,7 @@ services:
     environment:
       VITE_API_SERVER_IP: ${VITE_API_SERVER_IP:-http://localhost:8080}
       VITE_USER_API_SERVER_IP: ${VITE_USER_API_SERVER_IP:-http://localhost:8082}
+      VITE_MARKET_NEWS_ENABLED: ${VITE_MARKET_NEWS_ENABLED:-false}
     ports:
       - "${HOME_SEARCH_WEB_PORT:-5173}:5173"
     volumes:
@@ -429,6 +585,7 @@ services:
 
 volumes:
   home-search-postgis-data:
+  home-search-redpanda-data:
   home-search-ai-raw-data:
   home-search-gradle-cache:
   home-search-prometheus-data:

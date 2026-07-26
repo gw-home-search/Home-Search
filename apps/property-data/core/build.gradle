@@ -14,11 +14,13 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot'
     implementation 'org.springframework.boot:spring-boot-autoconfigure'
     implementation 'org.springframework.data:spring-data-redis'
+    implementation 'org.springframework.kafka:spring-kafka'
     implementation 'org.springframework:spring-context'
     implementation 'org.springframework:spring-jdbc'
     implementation 'org.springframework:spring-web'
 
     runtimeOnly 'org.postgresql:postgresql'
+    runtimeOnly 'software.amazon.msk:aws-msk-iam-auth:2.3.6'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-jackson-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-jdbc-test'

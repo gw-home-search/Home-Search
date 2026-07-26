@@ -87,6 +87,57 @@ locals {
   github_oidc_string_like = {
     "token.actions.githubusercontent.com:ref" = var.allowed_refs
   }
+  staging_ecs_task_role_names = toset([
+    "home-search-staging-task-execution",
+    "home-search-staging-admin-api-execution",
+    "home-search-staging-user-api-execution",
+    "home-search-staging-public-gateway-execution",
+    "home-search-staging-admin-gateway-execution",
+    "home-search-staging-ml-execution",
+    "home-search-staging-secret-bootstrap-execution",
+    "home-search-staging-database-bootstrap-execution",
+    "home-search-staging-runtime-grants-execution",
+    "home-search-staging-property-flyway-execution",
+    "home-search-staging-admin-migration-execution",
+    "home-search-staging-user-flyway-execution",
+    "home-search-staging-source-data-migration-execution",
+    "home-search-staging-property-batch-execution",
+    "home-search-staging-property-event-relay-execution",
+    "home-search-staging-property-event-maintenance-execution",
+    "home-search-staging-user-insight-worker-execution",
+    "home-search-staging-admin-ops-execution",
+    "home-search-staging-backup-execution",
+    "home-search-staging-restore-verification-execution",
+    "home-search-staging-runtime-task",
+    "home-search-staging-admin-api-task",
+    "home-search-staging-user-api-task",
+    "home-search-staging-public-gateway-task",
+    "home-search-staging-admin-gateway-task",
+    "home-search-staging-ml-task",
+    "home-search-staging-secret-bootstrap",
+    "home-search-staging-database-bootstrap",
+    "home-search-staging-runtime-grants-task",
+    "home-search-staging-property-flyway-task",
+    "home-search-staging-admin-migration-task",
+    "home-search-staging-user-flyway-task",
+    "home-search-staging-source-data-migration-task",
+    "home-search-staging-property-batch-task",
+    "home-search-staging-property-event-relay-task",
+    "home-search-staging-property-event-maintenance-task",
+    "home-search-staging-user-insight-worker-task",
+    "home-search-staging-admin-ops-task",
+    "home-search-staging-backup-task",
+    "home-search-staging-restore-verification-task",
+  ])
+  staging_release_alarm_names = toset([
+    "home-search-staging-admin-api-running-task",
+    "home-search-staging-admin-gateway-running-task",
+    "home-search-staging-ml-running-task",
+    "home-search-staging-property-api-running-task",
+    "home-search-staging-public-gateway-running-task",
+    "home-search-staging-user-api-running-task",
+    "home-search-staging-user-insight-worker-running-task",
+  ])
 }
 
 data "aws_iam_policy_document" "github_oidc_trust" {
@@ -173,6 +224,8 @@ resource "aws_iam_role_policy" "github_staging_deployment" {
           "ec2:Describe*", "ecr:Describe*", "ecr:GetLifecyclePolicy",
           "ecs:Describe*", "ecs:List*", "elasticache:Describe*",
           "elasticfilesystem:Describe*", "elasticloadbalancing:Describe*",
+          "glue:GetRegistry", "glue:GetTags", "glue:ListRegistries",
+          "kafka:DescribeClusterV2", "kafka:GetBootstrapBrokers", "kafka:ListTagsForResource",
           "kms:DescribeKey", "kms:ListAliases", "logs:Describe*", "rds:Describe*",
           "scheduler:GetSchedule", "scheduler:GetScheduleGroup", "scheduler:List*",
           "secretsmanager:DescribeSecret", "servicediscovery:Get*", "servicediscovery:List*",
@@ -209,31 +262,51 @@ resource "aws_iam_role_policy" "github_staging_deployment" {
         ]
       },
       {
-        Sid      = "EnableReviewedBackupSchedules"
-        Effect   = "Allow"
-        Action   = ["scheduler:UpdateSchedule"]
-        Resource = "arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule/home-search-staging-database-backup/*"
+        Sid    = "EnableReviewedStagingSchedules"
+        Effect = "Allow"
+        Action = ["scheduler:UpdateSchedule"]
+        Resource = [
+          "arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule/home-search-staging-database-backup/*",
+          "arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule/home-search-staging-market-news/*",
+          "arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule/home-search-staging-property-event-relay/home-search-staging-property-event-relay",
+          "arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule/home-search-staging-property-event-retention/home-search-staging-property-event-retention",
+        ]
+      },
+      {
+        Sid    = "ManageStagingReleaseAlarms"
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:PutMetricAlarm",
+          "cloudwatch:TagResource",
+          "cloudwatch:UntagResource",
+        ]
+        Resource = [
+          for alarm_name in local.staging_release_alarm_names :
+          "arn:aws:cloudwatch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alarm:${alarm_name}"
+        ]
       },
       {
         Sid    = "PassStagingEcsTaskRolesOnly"
         Effect = "Allow"
         Action = ["iam:PassRole"]
         Resource = [
-          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-task-execution",
-          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-runtime-task",
-          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-secret-bootstrap",
-          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-database-bootstrap",
-          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-backup-task",
+          for role_name in local.staging_ecs_task_role_names :
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${role_name}"
         ]
         Condition = {
           StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
         }
       },
       {
-        Sid      = "PassStagingSchedulerRoleOnly"
-        Effect   = "Allow"
-        Action   = ["iam:PassRole"]
-        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-backup-scheduler"
+        Sid    = "PassStagingSchedulerRoleOnly"
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        Resource = [
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-backup-scheduler",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-market-news-scheduler",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-property-event-relay-scheduler",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/home-search-staging-property-event-retention-scheduler",
+        ]
         Condition = {
           StringEquals = { "iam:PassedToService" = "scheduler.amazonaws.com" }
         }

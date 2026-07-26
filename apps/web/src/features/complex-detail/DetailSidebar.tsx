@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { Link } from 'react-router-dom';
 
 import type { ComplexDetail, PricePrediction } from './api/fetchComplexDetail';
 import type { ParcelComplexSummary } from './api/fetchParcelComplexes';
@@ -15,6 +16,9 @@ import {
   getUserFeedback,
   type UserFeedbackId,
 } from '../../shared/feedback/feedbackCatalog';
+import { NewsRows } from '../news/NewsRows';
+import { useComplexNews } from '../news/hooks/useComplexNews';
+import { MARKET_NEWS_ENABLED } from '../news/newsFeature';
 
 type DetailRequestState = 'idle' | 'loading' | 'ready' | 'error';
 type TradeMoreState = 'idle' | 'loading' | 'error';
@@ -50,12 +54,13 @@ type DetailSidebarProps = {
   trendError?: RequestFailure | null;
   trendState?: DetailRequestState;
   selection: ComplexSelection;
+  newsEnabled?: boolean;
 };
 
 const TradeTrendChart = lazy(() =>
   import('./TradeTrendChart').then((module) => ({ default: module.TradeTrendChart })));
 
-type DetailMobileTab = 'info' | 'trend' | 'trades';
+type DetailMobileTab = 'info' | 'trend' | 'trades' | 'news';
 
 export function DetailSidebar({
   complexDetail,
@@ -82,11 +87,16 @@ export function DetailSidebar({
   tradeState = 'ready',
   trendError = null,
   trendState = 'ready',
+  newsEnabled = MARKET_NEWS_ENABLED,
 }: DetailSidebarProps) {
   const [mobileTab, setMobileTab] = useState<DetailMobileTab>('info');
   const tabRefs = useRef<Partial<Record<DetailMobileTab, HTMLButtonElement | null>>>({});
   const isMobileLayout = useMediaQuery('(max-width: 720px)');
   const shouldRenderTradeChart = !isMobileLayout || mobileTab === 'trend';
+  const complexNews = useComplexNews(newsEnabled ? complexDetail?.complexId ?? null : null);
+  const detailTabs: DetailMobileTab[] = newsEnabled
+    ? ['info', 'trend', 'trades', 'news']
+    : ['info', 'trend', 'trades'];
 
   return (
     <section aria-label="단지 상세 패널" className="detail-sidebar" data-ui-layer="detail-sidebar">
@@ -133,11 +143,16 @@ export function DetailSidebar({
         </div>
       )}
 
-      <div className="detail-mobile-tabs" role="tablist" aria-label="상세 섹션">
+      <div
+        className={`detail-mobile-tabs${newsEnabled ? '' : ' detail-mobile-tabs--three'}`}
+        role="tablist"
+        aria-label="상세 섹션"
+      >
         {([
           ['info', '정보'],
           ['trend', '시세'],
           ['trades', parcelTrades == null ? '거래' : `거래 ${parcelTrades.totalElements.toLocaleString()}`],
+          ...(newsEnabled ? [['news', '뉴스'] as [DetailMobileTab, string]] : []),
         ] as Array<[DetailMobileTab, string]>).map(([tab, label]) => (
           <button
             ref={(element) => { tabRefs.current[tab] = element; }}
@@ -150,7 +165,7 @@ export function DetailSidebar({
             aria-selected={mobileTab === tab}
             tabIndex={mobileTab === tab ? 0 : -1}
             onClick={() => setMobileTab(tab)}
-            onKeyDown={(event) => moveDetailTabFocus(event, tab, setMobileTab, tabRefs.current)}
+            onKeyDown={(event) => moveDetailTabFocus(event, tab, setMobileTab, tabRefs.current, detailTabs)}
           >
             {label}
           </button>
@@ -231,6 +246,41 @@ export function DetailSidebar({
             </details>
           </section>
 
+          {newsEnabled ? <section
+            id="detail-tabpanel-news"
+            role="tabpanel"
+            aria-labelledby="detail-tab-news"
+            className="detail-related-news detail-tab-panel"
+            data-detail-order="news"
+            data-mobile-tab-panel="news"
+            data-mobile-tab-active={mobileTab === 'news' ? 'true' : 'false'}
+          >
+            <div className="detail-section-heading"><h3>관련 뉴스</h3></div>
+            {complexNews.state === 'loading' ? (
+              <p className="detail-news-state" role="status">관련 뉴스를 불러오는 중</p>
+            ) : null}
+            {complexNews.state === 'error' ? (
+              <div className="detail-news-state">
+                <p>관련 뉴스를 불러오지 못했어요</p>
+                <button type="button" onClick={complexNews.retry}>다시 시도</button>
+              </div>
+            ) : null}
+            {complexNews.state === 'ready' && complexNews.items.length === 0 ? (
+              <p className="detail-news-state">
+                최근 30일에 이 단지나 주변 지역을 직접 확인할 수 있는 뉴스가 없어요
+              </p>
+            ) : null}
+            {complexNews.items.length > 0 ? <NewsRows items={complexNews.items} showRelation /> : null}
+            {complexNews.items[0]?.region?.code ? (
+              <Link
+                className="detail-all-news-link"
+                to={`/insights/news?scope=SIDO&regionCode=${complexNews.items[0].region.code.slice(0, 2)}&category=ALL`}
+              >
+                이 지역 뉴스 모두 보기
+              </Link>
+            ) : null}
+          </section> : null}
+
           <div id="detail-tabpanel-trend" role="tabpanel" aria-labelledby="detail-tab-trend" className="detail-tab-panel" data-detail-order="trend" data-mobile-tab-panel="trend" data-mobile-tab-active={mobileTab === 'trend' ? 'true' : 'false'}>
             <RequestStateNotice
               state={trendState}
@@ -280,23 +330,22 @@ export function DetailSidebar({
   );
 }
 
-const DETAIL_TABS: DetailMobileTab[] = ['info', 'trend', 'trades'];
-
 function moveDetailTabFocus(
   event: KeyboardEvent<HTMLButtonElement>,
   current: DetailMobileTab,
   select: (tab: DetailMobileTab) => void,
   refs: Partial<Record<DetailMobileTab, HTMLButtonElement | null>>,
+  tabs: DetailMobileTab[],
 ) {
-  const currentIndex = DETAIL_TABS.indexOf(current);
+  const currentIndex = tabs.indexOf(current);
   let nextIndex: number | null = null;
-  if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % DETAIL_TABS.length;
-  if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + DETAIL_TABS.length) % DETAIL_TABS.length;
+  if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+  if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
   if (event.key === 'Home') nextIndex = 0;
-  if (event.key === 'End') nextIndex = DETAIL_TABS.length - 1;
+  if (event.key === 'End') nextIndex = tabs.length - 1;
   if (nextIndex == null) return;
   event.preventDefault();
-  const next = DETAIL_TABS[nextIndex];
+  const next = tabs[nextIndex];
   select(next);
   refs[next]?.focus();
 }

@@ -2,6 +2,8 @@ package com.home.user.web;
 
 import com.home.application.favorite.InvalidComplexIdException;
 import com.home.application.favorite.InvalidPaginationException;
+import com.home.application.insight.EmailConsentRequiredException;
+import com.home.application.insight.InvalidInsightSubscriptionException;
 import com.home.application.user.UserNotFoundException;
 import com.home.domain.user.favorite.FavoriteLimitReachedException;
 import com.home.domain.user.token.InvalidRefreshTokenException;
@@ -54,6 +56,26 @@ public class UserApiExceptionHandler {
                 "FavoriteLimitReachedException");
     }
 
+    @ExceptionHandler(InvalidInsightSubscriptionException.class)
+    ProblemDetail invalidInsightSubscription() {
+        return UserProblemDetails.create(
+                HttpStatus.BAD_REQUEST,
+                "잘못된 인사이트 구독 설정입니다",
+                "regionCodes must contain at most five distinct supported SIDO codes.",
+                "INVALID_INSIGHT_SUBSCRIPTION",
+                "InvalidInsightSubscriptionException");
+    }
+
+    @ExceptionHandler(EmailConsentRequiredException.class)
+    ProblemDetail emailConsentRequired() {
+        return UserProblemDetails.create(
+                HttpStatus.CONFLICT,
+                "이메일 수신 동의가 필요합니다",
+                "A current account email and explicit consent are required.",
+                "EMAIL_CONSENT_REQUIRED",
+                "EmailConsentRequiredException");
+    }
+
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     ProblemDetail invalidArgumentType(MethodArgumentTypeMismatchException exception) {
         return exception.getParameter().getParameterType() == long.class ? invalidComplex() : invalidPagination();
@@ -61,6 +83,9 @@ public class UserApiExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ProblemDetail invalidArgument(MethodArgumentNotValidException exception) {
+        if (exception.getParameter().getParameterType() == InsightController.SubscriptionRequest.class) {
+            return invalidInsightSubscription();
+        }
         return exception.getParameter().getParameterType() == long.class ? invalidComplex() : invalidPagination();
     }
 

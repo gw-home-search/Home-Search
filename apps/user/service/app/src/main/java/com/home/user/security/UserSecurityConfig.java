@@ -38,7 +38,12 @@ public class UserSecurityConfig {
                 .requestCache(c -> c.disable())
                 .sessionManagement(c -> c.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .cors(c -> {})
-                .csrf(c -> c.ignoringRequestMatchers("/auth/access", "/auth/logout", "/api/v1/favorites/**"))
+                .csrf(c -> c.ignoringRequestMatchers(
+                        "/auth/access",
+                        "/auth/logout",
+                        "/api/v1/favorites/**",
+                        "/api/v1/insights/subscription",
+                        "/api/v1/insights/inbox"))
                 .authorizeHttpRequests(a -> a.requestMatchers(HttpMethod.OPTIONS, "/**")
                         .permitAll()
                         .requestMatchers(
@@ -51,6 +56,8 @@ public class UserSecurityConfig {
                         .requestMatchers("/api/v1/users/me")
                         .authenticated()
                         .requestMatchers("/api/v1/favorites/**")
+                        .hasRole("USER")
+                        .requestMatchers("/api/v1/insights/subscription", "/api/v1/insights/inbox")
                         .hasRole("USER")
                         .anyRequest()
                         .denyAll())

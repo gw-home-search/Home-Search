@@ -133,9 +133,9 @@ public map/trade URL 또는 응답 변경, cross-database join, email 기반 ide
 - `ops/user-flyway.sh`는 `info`, `validate`, 숫자 target이 필수인 `migrate`만
   제공한다. legacy identity importer, `repair`, `clean`, `baseline`, `latest`는
   최종 운영 interface에 없다.
-- 신규 deployment는 `ops/user-deployment-preflight.sh before 5`가 history와
+- 신규 deployment는 `ops/user-deployment-preflight.sh before 6`가 history와
   service relation이 모두 없는 fresh DB만 허용한 뒤 migrate하고,
-`after 5`가 migration versions 1 through 5의 exact SQL/Success history와 Flyway validate 결과를
+`after 6`가 migration versions 1 through 6의 exact SQL/Success history와 Flyway validate 결과를
   확인해야 한다. JDBC, Baseline, Deleted, Out of Order, Missing, Ignored,
   duplicate, failed history는 자동 중단한다.
 - runtime OAuth/JWT/DB 값은 `USER_*`, `GOOGLE_OAUTH_*`, `KAKAO_OAUTH_*`, `NAVER_OAUTH_*`

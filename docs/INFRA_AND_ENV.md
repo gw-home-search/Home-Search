@@ -112,9 +112,73 @@ Home Search backend collection and map display need:
 - `SPRING_DATA_REDIS_HOST` and `SPRING_DATA_REDIS_PORT` when marker caching is
   enabled outside the local Docker network.
 - `HOME_INSIGHT_TRADE_ENABLED=false` for trade insight snapshot generation.
-- `HOME_NEWS_NAVER_ENABLED=false`, NAVER API HUB credentials, a provider-call
-  budget, and Redis settings for news activation. Credentials are injected only
-  into property Batch.
+- `HOME_NEWS_NAVER_ENABLED=false` remains the default.
+- `NAVER_NEWS_API_KEY_ID` and `NAVER_NEWS_API_KEY` are the existing local
+  names for a NAVER Search credential. Its product is selected explicitly by
+  provider mode. The values are injected only into property Batch and must
+  never be logged or supplied to API/Web.
+  `HOME_NEWS_NAVER_CLIENT_ID` and `HOME_NEWS_NAVER_CLIENT_SECRET` remain
+  explicit deployment aliases.
+- `HOME_NEWS_NAVER_PROVIDER_MODE=API_HUB` is the production default and uses
+  the API HUB endpoint and NCP API Gateway headers. The local acceptance runner
+  uses `DEVELOPERS` with `https://openapi.naver.com/v1/search/news.json` when
+  the existing `NAVER_NEWS_API_KEY_ID`/`NAVER_NEWS_API_KEY` pair is injected.
+- Production Property Batch calls NAVER API HUB at
+  `https://naverapihub.apigw.ntruss.com/search/v1/news` with the
+  `X-NCP-APIGW-API-KEY-ID` and `X-NCP-APIGW-API-KEY` headers. Legacy NAVER
+  Developers credentials and `openapi.naver.com` are not compatible with this
+  adapter.
+- `HOME_NEWS_PUBLIC_ENABLED=true` exposes the read-only API after publication
+  readiness; setting it to `false` disables both news controllers without
+  stopping collection.
+- `VITE_MARKET_NEWS_ENABLED=true` is the browser build-time rollback switch.
+  Setting it to `false` hides the news navigation/detail section and redirects
+  `/insights/news` to the map.
+  Release builds pass the reviewed `MARKET_NEWS_ENABLED` value into this flag,
+  record it as `build_flags.market_news_enabled`, and staging deployment rejects
+  a mismatch with `enable_market_news_public`.
+- `HOME_NEWS_DAILY_CALL_BUDGET=4000`, `HOME_NEWS_CACHE_ENABLED=true`,
+  `HOME_NEWS_CACHE_TTL=31d`, `HOME_NEWS_CONNECT_TIMEOUT=2s`, and
+  `HOME_NEWS_READ_TIMEOUT=5s` bound provider/cache behavior. The call budget is
+  enforced across all executions on the same KST date using the lowest budget
+  recorded that day, so operators can lower it without a code change.
+- Terraform defines fail-closed EventBridge Scheduler targets for
+  `marketNewsGeneralJob` at KST 00:30/12:30/18:30,
+  `marketNewsMorningJob` at 06:30, `marketNewsMajorSelectionJob` Monday 05:30,
+  and `marketNewsRetentionJob` at 20:30. `marketNewsMorningJob` runs general
+  collection and then major-complex collection as one restartable chain.
+  `enable_market_news_schedules=true` is set only after credentials, migration,
+  quota, and quality readiness checks pass. The API app has no news scheduler.
+- `enable_market_news_public` is independent from schedule enablement and maps
+  to `HOME_NEWS_PUBLIC_ENABLED`; collection can continue while the public
+  surface stays disabled.
+- A failed human quality review is applied with `marketNewsWithdrawalJob`
+  using `--snapshotId={canonical-uuid}` and one stable
+  `MarketNewsWithdrawalReason`. It changes only the current pointer; PostgreSQL
+  and Redis last-good evidence remain available as `STALE`.
+- `marketNewsQualitySampleJob --reviewSetId={canonical-uuid}
+  --policyVersion=NEWS_V5` stores a deterministic review set. Missing category,
+  SIDO, relation, challenge, or URL minima are recorded as
+  `INSUFFICIENT_SAMPLE` rather than treated as a pass.
+- `ops/market_news_quality_review.py export` writes the private title,
+  description, and URL worksheet only outside the repository with mode `0600`.
+  `import --dry-run` validates membership and input without saving labels;
+  `import` stores an identified human review. `report --checkpoint
+  immediate|24h|7d` writes aggregate-only evidence and returns nonzero for
+  insufficient samples, missing labels, elapsed-time gaps, insufficient normal
+  runs, or failed precision thresholds. The 24-hour and 7-day checks require at
+  least 4 and 28 healthy general collections respectively. Only `GENERAL`
+  executions in `COMPLETED` state with zero truncated, failed, and
+  budget-skipped work units count; bootstrap does not count.
+- The initial 30-day collection uses
+  `marketNewsGeneralJob --requestId=BOOTSTRAP:{canonical-uuid}`. Normal runs
+  keep the repository-wide canonical UUID request-id contract.
+- Local bootstrap acceptance uses
+  `apps/property-data/ops/run-local-market-news-e2e.sh`. It receives the NAVER
+  credential and database password only from the invoking process, runs major
+  selection/general bootstrap/major-complex/retention in order, and records
+  aggregate DB/Redis/API evidence without copying provider title, description,
+  or URL values into repository evidence files.
 
 Property-data receives neither admin database credentials nor an internal
 signing private key. It receives only the active/overlap internal JWT public
@@ -465,9 +529,9 @@ wrapper는 expected database와 최고 pending version을 확인하고 `latest`,
 Property-data deployment의 기본 경로는 fresh-only다.
 
 ```bash
-./ops/property-deployment-preflight.sh before 19
-./ops/property-flyway.sh migrate 19
-./ops/property-deployment-preflight.sh after 19
+./ops/property-deployment-preflight.sh before 21
+./ops/property-flyway.sh migrate 21
+./ops/property-deployment-preflight.sh after 21
 ./ops/property-flyway.sh validate
 ```
 
@@ -532,9 +596,9 @@ credential은 user-service runtime container에 전달하지 않는다.
 User-service deployment는 fresh-only다.
 
 ```bash
-./ops/user-deployment-preflight.sh before 5
+./ops/user-deployment-preflight.sh before 6
 ./ops/user-flyway.sh migrate 5
-./ops/user-deployment-preflight.sh after 5
+./ops/user-deployment-preflight.sh after 6
 ./ops/user-flyway.sh validate
 ```
 
@@ -646,6 +710,23 @@ HOME_MAP_MARKER_CACHE_ENABLED=false
 HOME_MAP_MARKER_CACHE_TTL=5m
 SPRING_DATA_REDIS_HOST=redis
 SPRING_DATA_REDIS_PORT=6379
+```
+
+The local API mounts the Gradle `bootJar` read-only under `/source` and copies
+it into the container filesystem before starting Java. Rebuilding the host JAR
+therefore cannot corrupt an already-running JVM. Apply a newly built API JAR
+with `docker compose -f infra/docker-compose.local.yml up -d --no-deps
+--force-recreate api`; the copy occurs only when the container starts.
+
+Provider-enabled local Batch jobs use the scheduler-free `property-batch`
+tools profile. PostGIS and Redis must already be healthy, and the one-shot
+container must run with `--no-deps` so collection cannot recreate either
+dependency:
+
+```bash
+docker compose -f infra/docker-compose.local.yml --profile tools run --rm \
+  --no-deps -e SPRING_BATCH_JOB_NAME=marketNewsGeneralJob \
+  property-batch runDate=YYYY-MM-DD requestId=BOOTSTRAP:{canonical-uuid}
 ```
 
 Marker response caching remains opt-in. To run the local API with Redis-backed

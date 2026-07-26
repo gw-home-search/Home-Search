@@ -5,6 +5,12 @@
 operation::market-insight-latest-unavailable[]
 
 operation::market-insight-weekly-unavailable[]
+
+== Market news
+
+operation::market-news-unavailable[]
+
+operation::complex-market-news[]
 :doctype: book
 :icons: font
 :source-highlighter: coderay

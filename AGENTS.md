@@ -221,7 +221,7 @@ Infra and repository gates:
 .github/scripts/test-classify-changes.sh
 infra/nginx/test-property-public.sh
 infra/postgres/verify-service-boundaries.sh
-HOME_SEARCH_DB_PASSWORD=compose-validation PROPERTY_MIGRATOR_DB_PASSWORD=compose-validation USER_RUNTIME_DB_PASSWORD=compose-validation USER_MIGRATOR_DB_PASSWORD=compose-validation docker compose -f infra/docker-compose.local.yml config --quiet
+infra/test-compose-config.sh
 ```
 
 ## When To Ask

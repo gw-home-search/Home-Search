@@ -71,14 +71,23 @@ resource "aws_s3_bucket_policy" "database_backup" {
   depends_on = [aws_s3_bucket_public_access_block.database_backup]
 }
 
-resource "aws_iam_role" "backup_task" {
-  name               = "${local.name}-backup-task"
-  assume_role_policy = local.ecs_task_assume_policy
+locals {
+  backup_task_permissions = {
+    backup = {
+      object_actions = ["s3:GetObject", "s3:PutObject"]
+      kms_actions    = ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"]
+    }
+    restore-verification = {
+      object_actions = ["s3:GetObject"]
+      kms_actions    = ["kms:Decrypt"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "backup_task" {
-  name = "encrypted-staging-backups"
-  role = aws_iam_role.backup_task.id
+  for_each = local.backup_task_permissions
+  name     = "encrypted-staging-backups"
+  role     = aws_iam_role.workload_task[each.key].id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -92,12 +101,12 @@ resource "aws_iam_role_policy" "backup_task" {
       },
       {
         Effect   = "Allow"
-        Action   = ["s3:GetObject", "s3:PutObject"]
+        Action   = each.value.object_actions
         Resource = ["${aws_s3_bucket.database_backup.arn}/staging/*"]
       },
       {
         Effect   = "Allow"
-        Action   = ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"]
+        Action   = each.value.kms_actions
         Resource = [aws_kms_key.database_backup.arn]
       },
     ]
@@ -105,17 +114,28 @@ resource "aws_iam_role_policy" "backup_task" {
 }
 
 locals {
-  scheduler_assume_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Action    = "sts:AssumeRole"
-      Principal = { Service = "scheduler.amazonaws.com" }
-      Condition = {
-        StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id }
-      }
-    }]
-  })
+  scheduler_group_names = toset([
+    "database-backup",
+    "market-news",
+    "property-event-relay",
+    "property-event-retention",
+  ])
+  scheduler_assume_policies = {
+    for group in local.scheduler_group_names : group => jsonencode({
+      Version = "2012-10-17"
+      Statement = [{
+        Effect    = "Allow"
+        Action    = "sts:AssumeRole"
+        Principal = { Service = "scheduler.amazonaws.com" }
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+            "aws:SourceArn"     = "arn:aws:scheduler:${var.aws_region}:${data.aws_caller_identity.current.account_id}:schedule-group/${local.name}-${group}"
+          }
+        }
+      }]
+    })
+  }
   backup_schedules = {
     daily-backup = {
       expression = "cron(30 3 * * ? *)"
@@ -130,7 +150,7 @@ locals {
 
 resource "aws_iam_role" "backup_scheduler" {
   name               = "${local.name}-backup-scheduler"
-  assume_role_policy = local.scheduler_assume_policy
+  assume_role_policy = local.scheduler_assume_policies["database-backup"]
 }
 
 resource "aws_iam_role_policy" "backup_scheduler" {
@@ -151,12 +171,22 @@ resource "aws_iam_role_policy" "backup_scheduler" {
         }
       },
       {
-        Effect   = "Allow"
-        Action   = ["iam:PassRole"]
-        Resource = [aws_iam_role.task_execution.arn, aws_iam_role.backup_task.arn]
+        Effect = "Allow"
+        Action = ["iam:PassRole"]
+        Resource = [
+          aws_iam_role.workload_execution["backup"].arn,
+          aws_iam_role.workload_execution["restore-verification"].arn,
+          aws_iam_role.workload_task["backup"].arn,
+          aws_iam_role.workload_task["restore-verification"].arn,
+        ]
         Condition = {
           StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" }
         }
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = [aws_sqs_queue.scheduler_failure.arn]
       },
     ]
   })
@@ -177,6 +207,9 @@ resource "aws_scheduler_schedule" "database_backup" {
   target {
     arn      = aws_ecs_cluster.this.arn
     role_arn = aws_iam_role.backup_scheduler.arn
+    dead_letter_config {
+      arn = aws_sqs_queue.scheduler_failure.arn
+    }
     ecs_parameters {
       task_definition_arn = aws_ecs_task_definition.one_shot[each.value.task].arn
       launch_type         = "FARGATE"
@@ -262,23 +295,6 @@ resource "aws_cloudwatch_log_metric_filter" "database_backup" {
   }
 }
 
-resource "aws_cloudwatch_metric_alarm" "schedule_target_error" {
-  for_each            = aws_scheduler_schedule.database_backup
-  alarm_name          = "${local.name}-${each.key}-target-errors"
-  namespace           = "AWS/Scheduler"
-  metric_name         = "TargetErrorCount"
-  statistic           = "Sum"
-  period              = 300
-  evaluation_periods  = 1
-  threshold           = 0
-  comparison_operator = "GreaterThanThreshold"
-  treat_missing_data  = "notBreaching"
-  dimensions = {
-    ScheduleGroup = aws_scheduler_schedule_group.database_backup.name
-    ScheduleName  = each.value.name
-  }
-}
-
 resource "aws_cloudwatch_metric_alarm" "checksum_mismatch" {
   alarm_name          = "${local.name}-backup-checksum-mismatch"
   namespace           = "HomeSearch/StagingBackup"
@@ -289,16 +305,18 @@ resource "aws_cloudwatch_metric_alarm" "checksum_mismatch" {
   threshold           = 0
   comparison_operator = "GreaterThanThreshold"
   treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.operations.arn]
 }
 
 resource "aws_cloudwatch_metric_alarm" "backup_age" {
-  alarm_name          = "${local.name}-backup-older-than-48h"
+  alarm_name          = "${local.name}-backup-older-than-26h"
   namespace           = "HomeSearch/StagingBackup"
   metric_name         = "BackupAgeSeconds"
   statistic           = "Maximum"
   period              = 300
   evaluation_periods  = 1
-  threshold           = 172800
+  threshold           = 93600
   comparison_operator = "GreaterThanThreshold"
   treat_missing_data  = "breaching"
+  alarm_actions       = [aws_sns_topic.operations.arn]
 }

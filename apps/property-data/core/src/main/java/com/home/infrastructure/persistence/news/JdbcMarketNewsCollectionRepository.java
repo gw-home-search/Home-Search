@@ -12,6 +12,7 @@ import com.home.application.news.collection.PublishedNewsSnapshot;
 import com.home.application.news.collection.RawNewsPositionConflictException;
 import com.home.domain.news.MarketNewsCategory;
 import com.home.domain.news.MarketNewsExecutionState;
+import com.home.domain.news.MarketNewsFailureKind;
 import com.home.domain.news.MarketNewsRelationMatch;
 import com.home.domain.news.MarketNewsScopeType;
 import com.home.domain.news.MarketNewsWorkUnitKind;
@@ -614,7 +615,7 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
             int rawItemCount,
             Instant oldestProvidedAt,
             boolean cutoffReached,
-            String failureKind,
+            MarketNewsFailureKind failureKind,
             Instant completedAt) {
         jdbcClient
                 .sql("""
@@ -633,7 +634,7 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
                 .param("rawItemCount", rawItemCount)
                 .param("oldestProvidedAt", utc(oldestProvidedAt))
                 .param("cutoffReached", cutoffReached)
-                .param("failureKind", failureKind)
+                .param("failureKind", failureKind == null ? null : failureKind.name())
                 .param("completedAt", utc(completedAt))
                 .param("workUnitId", workUnitId)
                 .update();
@@ -679,7 +680,7 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
 
     @Override
     public void finishExecution(
-            UUID executionId, MarketNewsExecutionState state, String failureKind, Instant completedAt) {
+            UUID executionId, MarketNewsExecutionState state, MarketNewsFailureKind failureKind, Instant completedAt) {
         jdbcClient
                 .sql("""
                     UPDATE market_news_collection_execution execution
@@ -743,7 +744,7 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
                       AND execution.state = 'RUNNING'
                     """)
                 .param("state", state.name())
-                .param("failureKind", failureKind)
+                .param("failureKind", failureKind == null ? null : failureKind.name())
                 .param("completedAt", utc(completedAt))
                 .param("executionId", executionId)
                 .update();

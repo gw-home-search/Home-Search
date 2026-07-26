@@ -2,6 +2,7 @@ package com.home.application.news.collection;
 
 import com.home.domain.news.MarketNewsCategory;
 import com.home.domain.news.MarketNewsExecutionState;
+import com.home.domain.news.MarketNewsFailureKind;
 import com.home.domain.news.MarketNewsRelationMatch;
 import com.home.domain.news.MarketNewsWorkUnitState;
 import com.home.domain.news.NewsRejectionReason;
@@ -53,12 +54,13 @@ public interface MarketNewsCollectionRepository {
             int rawItemCount,
             Instant oldestProvidedAt,
             boolean cutoffReached,
-            String failureKind,
+            MarketNewsFailureKind failureKind,
             Instant completedAt);
 
     void incrementExecutionCallCount(UUID executionId);
 
-    void finishExecution(UUID executionId, MarketNewsExecutionState state, String failureKind, Instant completedAt);
+    void finishExecution(
+            UUID executionId, MarketNewsExecutionState state, MarketNewsFailureKind failureKind, Instant completedAt);
 
     List<PublishedNewsSnapshot> publishEligibleScopes(UUID executionId, Instant generatedAt);
 

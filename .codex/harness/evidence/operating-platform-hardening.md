@@ -24,6 +24,12 @@
 - 예상 RED 실패: `RUNNING` unit이 저장된 `last_provider_start`를 무시하고 `start=1`부터 재호출하며, 같은 provider 위치의 변경된 payload가 기존 raw row의 article/rejection 결과를 바꿀 수 있었다.
 - 최소 GREEN: 마지막 성공 page와 누적 call/raw/oldest 상태를 page마다 저장·복원하고, 동일 raw payload만 link/reject하도록 제한했다. service unit test와 PostgreSQL resume/raw-match integration test가 통과했다.
 
+## News failure kind domain ownership
+
+- 최초 RED: `./gradlew :core:test --tests com.home.domain.news.MarketNewsFailureKindTest --no-daemon --stacktrace`가 `MarketNewsFailureKind`를 찾을 수 없어 `:core:compileTestJava`에서 실패했다.
+- 예상 RED 실패: 새 `RAW_POSITION_CONFLICT`를 포함한 영속 운영 실패 사유가 문자열로 전달돼 stable enum과 한국어 운영 metadata를 소유하지 않았다.
+- 최소 GREEN: 전체 뉴스 수집 실패 사유를 `MarketNewsFailureKind`로 타입화하고 `titleKo()`/`descriptionKo()` 및 남은 work unit 중단 predicate를 domain에 배치했다. domain/service targeted test와 `recordWorkUnitPageProgress()` 저장 후 재조회하는 PostgreSQL integration test가 통과했다.
+
 ## 주요 동작 slice의 회귀 fixture
 
 - property news/outbox: `MarketNewsCollectionServiceTest`, `PropertyEventOutboxRelayServiceTest`, `JdbcPropertyEventOutboxRepositoryJdbcIntegrationTest`, `MarketNewsControllerContractTest`가 수집 예산, publish 실패 시 outbox 보존, 중복 relay, public response 계약을 검증한다.

@@ -3,6 +3,7 @@ package com.home.application.news.collection;
 import com.home.domain.news.MarketNewsCategory;
 import com.home.domain.news.MarketNewsClassificationPolicy;
 import com.home.domain.news.MarketNewsExecutionState;
+import com.home.domain.news.MarketNewsFailureKind;
 import com.home.domain.news.MarketNewsRelationMatch;
 import com.home.domain.news.MarketNewsRelationPolicy;
 import com.home.domain.news.MarketNewsRelationType;
@@ -88,12 +89,12 @@ public class MarketNewsCollectionService {
         int truncated = execution.truncatedWorkUnitCount();
         int skipped = execution.skippedBudgetWorkUnitCount();
         boolean stopForQuota = false;
-        String executionFailure = null;
+        MarketNewsFailureKind executionFailure = null;
         for (MarketNewsWorkUnitSpec unit : execution.workUnits()) {
             if (stopForQuota || calls >= execution.callBudget()) {
                 repository.markRemainingSkippedBudget(execution.executionId(), clock.instant());
                 if (!stopForQuota) {
-                    executionFailure = "DAILY_CALL_BUDGET";
+                    executionFailure = MarketNewsFailureKind.DAILY_CALL_BUDGET;
                 }
                 break;
             }
@@ -102,9 +103,7 @@ public class MarketNewsCollectionService {
             completed += result.state() == MarketNewsWorkUnitState.COMPLETED ? 1 : 0;
             failed += result.state() == MarketNewsWorkUnitState.FAILED ? 1 : 0;
             truncated += result.state() == MarketNewsWorkUnitState.TRUNCATED ? 1 : 0;
-            if ("DAILY_QUOTA".equals(result.failureKind())
-                    || "AUTHENTICATION".equals(result.failureKind())
-                    || "DAILY_CALL_BUDGET".equals(result.failureKind())) {
+            if (result.failureKind() != null && result.failureKind().stopsRemainingWork()) {
                 stopForQuota = true;
                 executionFailure = result.failureKind();
             }
@@ -126,7 +125,7 @@ public class MarketNewsCollectionService {
                 try {
                     publicationCache.publish(snapshot);
                 } catch (RuntimeException cacheFailure) {
-                    executionFailure = "CACHE_PUBLICATION";
+                    executionFailure = MarketNewsFailureKind.CACHE_PUBLICATION;
                 }
             }
         }
@@ -186,10 +185,12 @@ public class MarketNewsCollectionService {
                     rawCount,
                     oldest,
                     cutoffReached,
-                    state == MarketNewsWorkUnitState.TRUNCATED ? "CUTOFF_NOT_REACHED" : null,
+                    state == MarketNewsWorkUnitState.TRUNCATED ? MarketNewsFailureKind.CUTOFF_NOT_REACHED : null,
                     clock.instant());
             return new UnitResult(
-                    state, unitCalls.value, state == MarketNewsWorkUnitState.TRUNCATED ? "CUTOFF_NOT_REACHED" : null);
+                    state,
+                    unitCalls.value,
+                    state == MarketNewsWorkUnitState.TRUNCATED ? MarketNewsFailureKind.CUTOFF_NOT_REACHED : null);
         } catch (NewsCallBudgetExceededException exception) {
             repository.finishWorkUnit(
                     unit.workUnitId(),
@@ -198,9 +199,10 @@ public class MarketNewsCollectionService {
                     rawCount,
                     oldest,
                     false,
-                    "DAILY_CALL_BUDGET",
+                    MarketNewsFailureKind.DAILY_CALL_BUDGET,
                     clock.instant());
-            return new UnitResult(MarketNewsWorkUnitState.SKIPPED_BUDGET, unitCalls.value, "DAILY_CALL_BUDGET");
+            return new UnitResult(
+                    MarketNewsWorkUnitState.SKIPPED_BUDGET, unitCalls.value, MarketNewsFailureKind.DAILY_CALL_BUDGET);
         } catch (NewsProviderCallException exception) {
             repository.finishWorkUnit(
                     unit.workUnitId(),
@@ -209,12 +211,9 @@ public class MarketNewsCollectionService {
                     rawCount,
                     oldest,
                     false,
-                    exception.type().name(),
+                    failureKind(exception.type()),
                     clock.instant());
-            return new UnitResult(
-                    MarketNewsWorkUnitState.FAILED,
-                    unitCalls.value,
-                    exception.type().name());
+            return new UnitResult(MarketNewsWorkUnitState.FAILED, unitCalls.value, failureKind(exception.type()));
         } catch (RawNewsPositionConflictException exception) {
             repository.finishWorkUnit(
                     unit.workUnitId(),
@@ -223,9 +222,10 @@ public class MarketNewsCollectionService {
                     rawCount,
                     oldest,
                     false,
-                    "RAW_POSITION_CONFLICT",
+                    MarketNewsFailureKind.RAW_POSITION_CONFLICT,
                     clock.instant());
-            return new UnitResult(MarketNewsWorkUnitState.FAILED, unitCalls.value, "RAW_POSITION_CONFLICT");
+            return new UnitResult(
+                    MarketNewsWorkUnitState.FAILED, unitCalls.value, MarketNewsFailureKind.RAW_POSITION_CONFLICT);
         } catch (RuntimeException exception) {
             repository.finishWorkUnit(
                     unit.workUnitId(),
@@ -234,9 +234,9 @@ public class MarketNewsCollectionService {
                     rawCount,
                     oldest,
                     false,
-                    "INTERNAL",
+                    MarketNewsFailureKind.INTERNAL,
                     clock.instant());
-            return new UnitResult(MarketNewsWorkUnitState.FAILED, unitCalls.value, "INTERNAL");
+            return new UnitResult(MarketNewsWorkUnitState.FAILED, unitCalls.value, MarketNewsFailureKind.INTERNAL);
         }
     }
 
@@ -255,6 +255,15 @@ public class MarketNewsCollectionService {
             counter.value++;
             return provider.search(query);
         }
+    }
+
+    private MarketNewsFailureKind failureKind(NewsProviderFailureType type) {
+        return switch (type) {
+            case AUTHENTICATION -> MarketNewsFailureKind.AUTHENTICATION;
+            case DAILY_QUOTA -> MarketNewsFailureKind.DAILY_QUOTA;
+            case TRANSIENT -> MarketNewsFailureKind.TRANSIENT;
+            case INVALID_RESPONSE -> MarketNewsFailureKind.INVALID_RESPONSE;
+        };
     }
 
     private void waitBeforeRetry(NewsProviderCallException failure) {
@@ -323,7 +332,7 @@ public class MarketNewsCollectionService {
         return token != null && (item.title() + " " + item.description()).contains(token);
     }
 
-    private record UnitResult(MarketNewsWorkUnitState state, int callCount, String failureKind) {}
+    private record UnitResult(MarketNewsWorkUnitState state, int callCount, MarketNewsFailureKind failureKind) {}
 
     private static final class UnitCallCounter {
         private int value;

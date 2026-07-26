@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.home.domain.news.MarketNewsCategory;
 import com.home.domain.news.MarketNewsClassificationPolicy;
 import com.home.domain.news.MarketNewsExecutionState;
+import com.home.domain.news.MarketNewsFailureKind;
 import com.home.domain.news.MarketNewsRelationPolicy;
 import com.home.domain.news.MarketNewsRelationType;
 import com.home.domain.news.MarketNewsScopeType;
@@ -174,7 +175,7 @@ class MarketNewsCollectionServiceTest {
                         eq(10),
                         any(),
                         eq(false),
-                        eq("CUTOFF_NOT_REACHED"),
+                        eq(MarketNewsFailureKind.CUTOFF_NOT_REACHED),
                         any());
         verify(repository, never()).publishEligibleScopes(any(), any());
         verifyNoInteractions(cache);
@@ -257,7 +258,7 @@ class MarketNewsCollectionServiceTest {
                         eq(0),
                         org.mockito.ArgumentMatchers.isNull(),
                         eq(false),
-                        eq("DAILY_CALL_BUDGET"),
+                        eq(MarketNewsFailureKind.DAILY_CALL_BUDGET),
                         any());
         verify(repository).markRemainingSkippedBudget(eq(EXECUTION_ID), any());
         verifyNoInteractions(provider, cache);
@@ -340,7 +341,7 @@ class MarketNewsCollectionServiceTest {
                         eq(1),
                         org.mockito.ArgumentMatchers.isNull(),
                         eq(false),
-                        eq("RAW_POSITION_CONFLICT"),
+                        eq(MarketNewsFailureKind.RAW_POSITION_CONFLICT),
                         any());
         verifyNoInteractions(normalizer, cache);
         verify(repository, never()).upsertArticle(any(), any());
@@ -384,7 +385,11 @@ class MarketNewsCollectionServiceTest {
         assertThat(result.state()).isEqualTo(MarketNewsExecutionState.FAILED);
         verify(repository).markRemainingSkippedBudget(eq(EXECUTION_ID), any());
         verify(repository)
-                .finishExecution(eq(EXECUTION_ID), eq(MarketNewsExecutionState.FAILED), eq("DAILY_QUOTA"), any());
+                .finishExecution(
+                        eq(EXECUTION_ID),
+                        eq(MarketNewsExecutionState.FAILED),
+                        eq(MarketNewsFailureKind.DAILY_QUOTA),
+                        any());
     }
 
     @Test
@@ -415,7 +420,10 @@ class MarketNewsCollectionServiceTest {
         assertThat(result.state()).isEqualTo(MarketNewsExecutionState.COMPLETED);
         verify(repository)
                 .finishExecution(
-                        eq(EXECUTION_ID), eq(MarketNewsExecutionState.COMPLETED), eq("CACHE_PUBLICATION"), any());
+                        eq(EXECUTION_ID),
+                        eq(MarketNewsExecutionState.COMPLETED),
+                        eq(MarketNewsFailureKind.CACHE_PUBLICATION),
+                        any());
     }
 
     @Test
@@ -509,7 +517,7 @@ class MarketNewsCollectionServiceTest {
                         eq(1),
                         org.mockito.ArgumentMatchers.isNull(),
                         eq(false),
-                        eq("INTERNAL"),
+                        eq(MarketNewsFailureKind.INTERNAL),
                         any());
     }
 

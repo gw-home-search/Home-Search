@@ -11,6 +11,7 @@ import com.home.application.news.selection.MajorNewsComplexSelectionService;
 import com.home.domain.news.MarketNewsCategory;
 import com.home.domain.news.MarketNewsDataStatus;
 import com.home.domain.news.MarketNewsExecutionState;
+import com.home.domain.news.MarketNewsFailureKind;
 import com.home.domain.news.MarketNewsRelationMatch;
 import com.home.domain.news.MarketNewsRelationType;
 import com.home.domain.news.MarketNewsScopeType;
@@ -105,18 +106,7 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
                         truncated_work_unit_count = 0
                     WHERE execution_id = :executionId
                     """).param("executionId", EXECUTION_ID).update();
-        jdbcClient
-                .sql("""
-                    UPDATE market_news_collection_work_unit
-                    SET last_provider_start = 101,
-                        call_count = 2,
-                        raw_item_count = 4,
-                        oldest_provided_at = :oldestProvidedAt
-                    WHERE work_unit_id = :workUnitId
-                    """)
-                .param("oldestProvidedAt", GENERATED_AT.minusSeconds(60).atOffset(ZoneOffset.UTC))
-                .param("workUnitId", workUnitId(3))
-                .update();
+        collectionRepository.recordWorkUnitPageProgress(workUnitId(3), 101, 2, 4, GENERATED_AT.minusSeconds(60));
 
         var resumable =
                 collectionRepository.findResumableExecution("NEWS-INTEGRATION").orElseThrow();
@@ -572,7 +562,7 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
                     order == 1 ? 1 : 0,
                     order == 1 ? GENERATED_AT.minusSeconds(600) : null,
                     false,
-                    "CUTOFF_NOT_REACHED",
+                    MarketNewsFailureKind.CUTOFF_NOT_REACHED,
                     GENERATED_AT.minusSeconds(10 - order));
         }
         collectionRepository.finishExecution(EXECUTION_ID, MarketNewsExecutionState.PARTIAL, null, GENERATED_AT);

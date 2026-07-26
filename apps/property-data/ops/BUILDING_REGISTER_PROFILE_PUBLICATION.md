@@ -75,6 +75,19 @@
 - 지적사항: fallback JOIN은 `scope=PARCEL`, `quality=PNU_FALLBACK`만 허용하며
   무필터 요청은 기존 trade-first SQL을 유지한다.
 
+### Slice 5 — 생활·안전·에너지 상세 UI
+
+- 최초 RED: nullable profile, valid count 0, fallback/partial badge, native `details`, energy zero 숨김.
+- 예상 RED 실패: adapter type과 전용 표시 컴포넌트가 없었다.
+- 최소 GREEN: `fetchComplexDetail`에서 한 번 정규화하고 101-line 전용 panel을 기존 sidebar에 조립했다.
+- 검증 근거 확인:
+  - detail adapter/panel target test: `Pass` (9 tests)
+  - web 전체 test: `Pass` (Slice 4와 함께 385 tests)
+  - web lint/build: `Pass`
+  - 추가 HTTP 요청 및 새 전역 상태: `0건`
+- 지적사항: 주·부속 건물, 주차 대수·면적, 층·높이, 승강기, 날짜·도로명주소를
+  생활정보에 두고 안전·에너지는 native `<details>`로 접었다.
+
 ## 중단 조건
 
 - V33 checksum 또는 archive SHA 불일치

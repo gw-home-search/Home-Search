@@ -49,6 +49,7 @@ describe('fetchComplexDetail API 어댑터', () => {
       vlRat: 199.8,
       useDate: '2015-03-20',
       prediction: null,
+      buildingProfile: null,
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -80,6 +81,27 @@ describe('fetchComplexDetail API 어댑터', () => {
       resolveApiUrl('/api/v1/detail/1001?complexId=502'),
       expect.objectContaining({ method: 'GET' }),
     );
+  });
+
+  it('buildingProfile을 UI model로 한 번만 normalize하고 valid zero를 보존한다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
+      parcelId: 1001,
+      complexId: 502,
+      name: 'Profile complex',
+      buildingProfile: {
+        households: { scope: 'COMPLEX', quality: 'VERIFIED', householdCount: 410, familyCount: 0, unitCount: 420 },
+        parking: { scope: 'PARCEL', quality: 'PNU_FALLBACK', totalCount: 0, perHousehold: 0 },
+        building: { scope: 'COMPLEX', quality: 'PARTIAL', maxGroundFloorCount: 28, structures: ['철근콘크리트'] },
+        energy: { scope: 'COMPLEX', quality: 'PARTIAL', efficiencyGrades: ['1등급'], savingRateMin: 0 },
+      },
+    })));
+
+    const detail = await fetchComplexDetailByComplexId(502);
+
+    expect(detail.buildingProfile?.households?.familyCount).toBe(0);
+    expect(detail.buildingProfile?.parking?.totalCount).toBe(0);
+    expect(detail.buildingProfile?.building?.structures).toEqual(['철근콘크리트']);
+    expect(detail.buildingProfile?.energy?.savingRateMin).toBeNull();
   });
 
   it('optional prediction READY 응답을 detail model로 normalize한다', async () => {

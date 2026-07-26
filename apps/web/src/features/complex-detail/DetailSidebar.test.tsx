@@ -40,6 +40,7 @@ describe('DetailSidebar 모바일 탭', () => {
             vlRat: null,
             useDate: '2018-01-01',
             prediction: null,
+            buildingProfile: null,
           }}
           detailError={null}
           detailState="ready"
@@ -89,6 +90,7 @@ describe('DetailSidebar 모바일 탭', () => {
             vlRat: null,
             useDate: '2018-01-01',
             prediction: null,
+            buildingProfile: null,
           }}
           detailError={null}
           detailState="ready"
@@ -254,6 +256,7 @@ describe('DetailSidebar 모바일 탭', () => {
             vlRat: null,
             useDate: '2018-01-01',
             prediction: null,
+            buildingProfile: null,
           }}
           detailError={null}
           detailState="ready"
@@ -333,6 +336,7 @@ describe('DetailSidebar 모바일 탭', () => {
               basisDealDate: null,
               generatedAt: null,
             },
+            buildingProfile: null,
           }}
           detailError={null}
           detailState="ready"

@@ -197,6 +197,16 @@
 .detail-additional-information { margin-top: 8px; border-top: 1px solid var(--hs-map-color-line); padding-top: 8px; }
 .detail-additional-information summary { min-height: 36px; color: var(--hs-map-color-muted); cursor: pointer; font-size: 12px; font-weight: 650; line-height: 36px; }
 .detail-additional-information[open] summary { color: var(--hs-map-color-ink-soft); }
+
+.building-profile-panel { margin-top: 8px; padding: 16px; background: var(--hs-map-color-surface); }
+.building-profile-panel h3 { margin: 0 0 10px; font-size: 14px; }
+.building-profile-panel dl { margin: 0; }
+.building-profile-row { display: grid; grid-template-columns: minmax(88px, .35fr) 1fr; gap: 12px; padding: 7px 0; }
+.building-profile-row dt { color: var(--hs-map-color-muted); font-size: 12px; }
+.building-profile-row dd { margin: 0; font-size: 13px; }
+.building-profile-badge { display: inline-flex; margin-left: 6px; border: 1px solid var(--hs-map-color-line); border-radius: 999px; padding: 1px 6px; font-size: 11px; }
+.building-profile-disclosure { margin-top: 8px; border-top: 1px solid var(--hs-map-color-line); padding-top: 8px; }
+.building-profile-disclosure summary { min-height: 36px; cursor: pointer; color: var(--hs-map-color-ink-soft); font-size: 13px; font-weight: 700; line-height: 36px; }
 .detail-information-row { display: grid; min-height: 36px; grid-template-columns: 94px minmax(0, 1fr); align-items: center; }
 .detail-information-row dt { margin: 0; color: var(--hs-map-color-muted); font-size: 12px; font-weight: 550; line-height: 18px; }
 .detail-information-row dd { margin: 0; color: var(--hs-map-color-ink); font-size: 13px; font-weight: 650; line-height: 19px; overflow-wrap: anywhere; }

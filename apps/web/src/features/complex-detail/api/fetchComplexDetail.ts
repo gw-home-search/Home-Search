@@ -20,6 +20,23 @@ export type ComplexDetail = {
   vlRat: number | null;
   useDate: string | null;
   prediction: PricePrediction | null;
+  buildingProfile: BuildingProfile | null;
+};
+
+export type BuildingProfileScope = 'COMPLEX' | 'PARCEL';
+export type BuildingProfileQuality = 'VERIFIED' | 'PNU_FALLBACK' | 'PARTIAL';
+export type BuildingProfileSeismicStatus = 'ALL_APPLIED' | 'PARTIAL' | 'NONE_APPLIED' | 'UNKNOWN';
+type ProfileSection = { scope: BuildingProfileScope; quality: BuildingProfileQuality };
+export type BuildingProfile = {
+  ratios: (ProfileSection & { buildingCoverageRate: number | null; floorAreaRatio: number | null; siteAreaM2: number | null; buildingAreaM2: number | null; totalFloorAreaM2: number | null; floorAreaRatioAreaM2: number | null }) | null;
+  households: (ProfileSection & { householdCount: number | null; familyCount: number | null; unitCount: number | null }) | null;
+  parking: (ProfileSection & { totalCount: number | null; perHousehold: number | null; indoorMechanicalCount: number | null; indoorMechanicalAreaM2: number | null; outdoorMechanicalCount: number | null; outdoorMechanicalAreaM2: number | null; indoorAutomaticCount: number | null; indoorAutomaticAreaM2: number | null; outdoorAutomaticCount: number | null; outdoorAutomaticAreaM2: number | null }) | null;
+  building: (ProfileSection & { mainBuildingCount: number | null; attachedBuildingCount: number | null; maxGroundFloorCount: number | null; maxUndergroundFloorCount: number | null; maxHeightM: number | null; structures: string[]; roofs: string[]; primaryUses: string[] }) | null;
+  elevators: (ProfileSection & { rideUseCount: number | null; emergencyUseCount: number | null }) | null;
+  safety: (ProfileSection & { seismicDesignStatus: BuildingProfileSeismicStatus | null; seismicAbilities: string[] }) | null;
+  dates: (ProfileSection & { permitDate: string | null; constructionStartDate: string | null; useApprovalDate: string | null }) | null;
+  address: (ProfileSection & { parcelAddress: string | null; roadAddress: string | null }) | null;
+  energy: (ProfileSection & { efficiencyGrades: string[]; savingRateMin: number | null; savingRateMax: number | null; epiMin: number | null; epiMax: number | null; greenGrades: string[]; greenScoreMin: number | null; greenScoreMax: number | null; intelligentGrades: string[]; intelligentScoreMin: number | null; intelligentScoreMax: number | null }) | null;
 };
 
 export type PricePredictionStatus = 'PENDING' | 'READY' | 'FAILED' | 'UNAVAILABLE';
@@ -58,6 +75,7 @@ type ComplexDetailResponse = {
   vlRat?: number | string | null;
   useDate?: string | null;
   prediction?: PricePredictionResponse | null;
+  buildingProfile?: unknown;
 };
 
 type PricePredictionResponse = {
@@ -149,7 +167,100 @@ function normalizeComplexDetail(detail: ComplexDetailResponse): ComplexDetail {
     vlRat: toNullableNumber(detail.vlRat, 'vlRat'),
     useDate: toNullableString(detail.useDate),
     prediction: normalizePrediction(detail.prediction),
+    buildingProfile: normalizeBuildingProfile(detail.buildingProfile),
   };
+}
+
+function normalizeBuildingProfile(value: unknown): BuildingProfile | null {
+  if (value == null) return null;
+  if (!isObjectRecord(value)) throw new Error('Invalid public API complex detail response: buildingProfile must be an object');
+  const ratios = profileSection(value.ratios, (section, meta) => ({ ...meta,
+    buildingCoverageRate: positiveNumber(section.buildingCoverageRate), floorAreaRatio: positiveNumber(section.floorAreaRatio),
+    siteAreaM2: positiveNumber(section.siteAreaM2), buildingAreaM2: positiveNumber(section.buildingAreaM2),
+    totalFloorAreaM2: positiveNumber(section.totalFloorAreaM2), floorAreaRatioAreaM2: positiveNumber(section.floorAreaRatioAreaM2),
+  }));
+  const households = profileSection(value.households, (section, meta) => ({ ...meta,
+    householdCount: nullableNumber(section.householdCount), familyCount: nullableNumber(section.familyCount),
+    unitCount: nullableNumber(section.unitCount),
+  }));
+  const parking = profileSection(value.parking, (section, meta) => ({ ...meta,
+    totalCount: nullableNumber(section.totalCount), perHousehold: positiveNumber(section.perHousehold),
+    indoorMechanicalCount: nullableNumber(section.indoorMechanicalCount), indoorMechanicalAreaM2: positiveNumber(section.indoorMechanicalAreaM2),
+    outdoorMechanicalCount: nullableNumber(section.outdoorMechanicalCount), outdoorMechanicalAreaM2: positiveNumber(section.outdoorMechanicalAreaM2),
+    indoorAutomaticCount: nullableNumber(section.indoorAutomaticCount), indoorAutomaticAreaM2: positiveNumber(section.indoorAutomaticAreaM2),
+    outdoorAutomaticCount: nullableNumber(section.outdoorAutomaticCount), outdoorAutomaticAreaM2: positiveNumber(section.outdoorAutomaticAreaM2),
+  }));
+  const building = profileSection(value.building, (section, meta) => ({ ...meta,
+    mainBuildingCount: nullableNumber(section.mainBuildingCount), attachedBuildingCount: nullableNumber(section.attachedBuildingCount),
+    maxGroundFloorCount: nullableNumber(section.maxGroundFloorCount), maxUndergroundFloorCount: nullableNumber(section.maxUndergroundFloorCount),
+    maxHeightM: positiveNumber(section.maxHeightM), structures: stringList(section.structures), roofs: stringList(section.roofs),
+    primaryUses: stringList(section.primaryUses),
+  }));
+  const elevators = profileSection(value.elevators, (section, meta) => ({ ...meta,
+    rideUseCount: nullableNumber(section.rideUseCount), emergencyUseCount: nullableNumber(section.emergencyUseCount),
+  }));
+  const safety = profileSection(value.safety, (section, meta) => ({ ...meta,
+    seismicDesignStatus: seismicStatus(section.seismicDesignStatus), seismicAbilities: stringList(section.seismicAbilities),
+  }));
+  const dates = profileSection(value.dates, (section, meta) => ({ ...meta,
+    permitDate: nullableString(section.permitDate), constructionStartDate: nullableString(section.constructionStartDate),
+    useApprovalDate: nullableString(section.useApprovalDate),
+  }));
+  const address = profileSection(value.address, (section, meta) => ({ ...meta,
+    parcelAddress: nullableString(section.parcelAddress), roadAddress: nullableString(section.roadAddress),
+  }));
+  const energy = profileSection(value.energy, (section, meta) => ({ ...meta,
+    efficiencyGrades: stringList(section.efficiencyGrades), savingRateMin: positiveNumber(section.savingRateMin),
+    savingRateMax: positiveNumber(section.savingRateMax), epiMin: positiveNumber(section.epiMin), epiMax: positiveNumber(section.epiMax),
+    greenGrades: stringList(section.greenGrades), greenScoreMin: positiveNumber(section.greenScoreMin),
+    greenScoreMax: positiveNumber(section.greenScoreMax), intelligentGrades: stringList(section.intelligentGrades),
+    intelligentScoreMin: positiveNumber(section.intelligentScoreMin), intelligentScoreMax: positiveNumber(section.intelligentScoreMax),
+  }));
+  return { ratios, households, parking, building, elevators, safety, dates, address, energy };
+}
+
+function profileSection<T>(
+  value: unknown,
+  map: (section: Record<string, unknown>, meta: ProfileSection) => T,
+): T | null {
+  if (value == null) return null;
+  if (!isObjectRecord(value)) throw new Error('Invalid public API complex detail response: profile section must be an object');
+  return map(value, { scope: profileScope(value.scope), quality: profileQuality(value.quality) });
+}
+
+function profileScope(value: unknown): BuildingProfileScope {
+  if (value === 'COMPLEX' || value === 'PARCEL') return value;
+  throw new Error('Invalid public API complex detail response: building profile scope is invalid');
+}
+
+function profileQuality(value: unknown): BuildingProfileQuality {
+  if (value === 'VERIFIED' || value === 'PNU_FALLBACK' || value === 'PARTIAL') return value;
+  throw new Error('Invalid public API complex detail response: building profile quality is invalid');
+}
+
+function nullableNumber(value: unknown): number | null {
+  return toNullableNumber(value, 'buildingProfile');
+}
+
+function positiveNumber(value: unknown): number | null {
+  const number = nullableNumber(value);
+  return number != null && number > 0 ? number : null;
+}
+
+function nullableString(value: unknown): string | null {
+  return toNullableString(value);
+}
+
+function stringList(value: unknown): string[] {
+  if (value == null) return [];
+  if (!Array.isArray(value)) throw new Error('Invalid public API complex detail response: profile set must be an array');
+  return value.flatMap((item) => typeof item === 'string' && item.trim() ? [item.trim()] : []);
+}
+
+function seismicStatus(value: unknown): BuildingProfileSeismicStatus | null {
+  if (value == null) return null;
+  if (value === 'ALL_APPLIED' || value === 'PARTIAL' || value === 'NONE_APPLIED' || value === 'UNKNOWN') return value;
+  throw new Error('Invalid public API complex detail response: seismic status is invalid');
 }
 
 function normalizePrediction(prediction: unknown): PricePrediction | null {

@@ -130,3 +130,18 @@
 - PNU conflict 임의 선택 필요
 - destructive DB/Docker 조작 또는 secret/env 변경 필요
 - 확정된 공개 API 의미 재변경 필요
+
+## 보안 영향
+
+보안 영향: 건축물대장 공개 read-only 필드와 내부 publication/repair 경로 추가
+
+security-audit: 지적사항 = none
+
+- SQL 숫자 필터는 named parameter만 사용한다.
+- runtime role은 publication child/evidence/summary에 `SELECT,INSERT`만 가지며
+  `UPDATE,DELETE,TRUNCATE`는 갖지 않는다.
+- 실제 row count와 SHA-256 형식을 검사하는 `SECURITY DEFINER` 함수만
+  `VALIDATED`/`PUBLISHED` 전환과 null-only backfill을 수행한다.
+- provider key, management key, PNU, raw body/식별자는 public DTO에 포함하지 않는다.
+- repair 로그에는 request URL, provider key, PNU, raw body를 기록하지 않는다.
+- provider client의 기존 2MiB response limit과 authentication/quota fatal stop을 유지한다.

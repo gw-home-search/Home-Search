@@ -63,9 +63,18 @@ class JdbcBuildingRegisterProfilePublicationMigrationTest extends JdbcMigrationT
                 "complex_building_register_profile_summary",
                 "building_register_profile_field_evidence");
         assertThat(writableTables).allSatisfy(table -> {
-            assertThat(hasTablePrivilege(table, "SELECT,INSERT,UPDATE")).isTrue();
+            assertThat(hasTablePrivilege(table, "SELECT,INSERT")).isTrue();
+            if (!"building_register_profile_repair_run".equals(table)) {
+                assertThat(hasTablePrivilege(table, "UPDATE")).isFalse();
+            }
             assertThat(hasTablePrivilege(table, "DELETE")).isFalse();
         });
+        assertThat(hasFunctionPrivilege("validate_building_register_profile(uuid,character varying)", "EXECUTE"))
+                .isTrue();
+        assertThat(hasFunctionPrivilege("publish_building_register_profile(uuid)", "EXECUTE"))
+                .isTrue();
+        assertThat(hasFunctionPrivilege(AI_READER_ROLE, "publish_building_register_profile(uuid)", "EXECUTE"))
+                .isFalse();
     }
 
     @Test
@@ -94,6 +103,38 @@ class JdbcBuildingRegisterProfilePublicationMigrationTest extends JdbcMigrationT
 
         assertThat(publicationStatus("00000000-0000-0000-0000-000000000101")).isEqualTo("SUPERSEDED");
         assertThat(publicationStatus("00000000-0000-0000-0000-000000000103")).isEqualTo("PUBLISHED");
+    }
+
+    @Test
+    @DisplayName("VALIDATED 전환은 metadata가 아니라 실제 publication table 행 수를 계산한다")
+    void validatesActualPublicationRowsBeforeStatusTransition() {
+        flyway(null).clean();
+        flyway(null).migrate();
+        seedPublicationLineage();
+        jdbcClient.sql("""
+                    INSERT INTO building_register_profile_publication(
+                      publication_id,source_collection_id,source_parse_run_id,source_analysis_run_id,
+                      source_projection_run_id,rules_version,parser_version,status,
+                      expected_site_count,expected_building_count,expected_hierarchy_count,
+                      expected_evidence_count,expected_summary_count)
+                    VALUES ('00000000-0000-0000-0000-000000000105',
+                      '00000000-0000-0000-0000-000000000001',
+                      '00000000-0000-0000-0000-000000000002',
+                      '00000000-0000-0000-0000-000000000003',
+                      '00000000-0000-0000-0000-000000000004','RULES_V5','PROFILE_V1','PREPARING',
+                      0,0,0,0,0)
+                    """).update();
+
+        jdbcClient.sql("""
+                    SELECT validate_building_register_profile(
+                      '00000000-0000-0000-0000-000000000105',repeat('b',64))
+                    """).query(Object.class).single();
+
+        assertThat(publicationStatus("00000000-0000-0000-0000-000000000105")).isEqualTo("VALIDATED");
+        assertThat(jdbcClient.sql("""
+                    SELECT content_sha256 FROM building_register_profile_publication
+                    WHERE publication_id='00000000-0000-0000-0000-000000000105'
+                    """).query(String.class).single()).isEqualTo("b".repeat(64));
     }
 
     @Test
@@ -268,6 +309,20 @@ class JdbcBuildingRegisterProfilePublicationMigrationTest extends JdbcMigrationT
                 .sql("SELECT has_table_privilege(:role,:table,:privileges)")
                 .param("role", PROPERTY_RUNTIME_ROLE)
                 .param("table", table)
+                .param("privileges", privileges)
+                .query(Boolean.class)
+                .single();
+    }
+
+    private boolean hasFunctionPrivilege(String function, String privileges) {
+        return hasFunctionPrivilege(PROPERTY_RUNTIME_ROLE, function, privileges);
+    }
+
+    private boolean hasFunctionPrivilege(String role, String function, String privileges) {
+        return jdbcClient
+                .sql("SELECT has_function_privilege(:role,:function,:privileges)")
+                .param("role", role)
+                .param("function", function)
                 .param("privileges", privileges)
                 .query(Boolean.class)
                 .single();

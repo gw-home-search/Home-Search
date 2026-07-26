@@ -283,6 +283,27 @@ CREATE INDEX ix_brpb_pnu ON public.building_register_profile_building(publicatio
 CREATE INDEX ix_brpfe_lookup ON public.building_register_profile_field_evidence(publication_id,scope,scope_key,field_id);
 CREATE INDEX ix_cbrps_ratio ON public.complex_building_register_profile_summary(publication_id,building_coverage_rate,floor_area_ratio);
 
+CREATE FUNCTION public.guard_building_register_profile_publication_write()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+    IF current_user='home_search_property_runtime' THEN
+        IF TG_OP='INSERT' AND NEW.status<>'PREPARING' THEN
+            RAISE EXCEPTION 'runtime publication insert must start PREPARING';
+        END IF;
+        IF TG_OP='UPDATE' THEN
+            RAISE EXCEPTION 'runtime publication updates require the validation or publication function';
+        END IF;
+    END IF;
+    RETURN NEW;
+END
+$function$;
+
+CREATE TRIGGER trg_brpp_guard_runtime_write
+BEFORE INSERT OR UPDATE ON public.building_register_profile_publication
+FOR EACH ROW EXECUTE FUNCTION public.guard_building_register_profile_publication_write();
+
 ALTER TABLE public.complex
     ADD COLUMN family_cnt bigint,
     ADD COLUMN ho_cnt bigint,
@@ -304,11 +325,62 @@ ALTER TABLE public.complex
 
 ALTER TABLE public.parcel ADD COLUMN road_address text;
 
+CREATE FUNCTION public.validate_building_register_profile(
+    target_publication_id uuid,
+    target_content_sha256 character varying)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path=pg_catalog,public
+AS $function$
+DECLARE candidate public.building_register_profile_publication%ROWTYPE;
+DECLARE actual_site_count integer;
+DECLARE actual_building_count integer;
+DECLARE actual_hierarchy_count integer;
+DECLARE actual_evidence_count integer;
+DECLARE actual_summary_count integer;
+BEGIN
+    IF target_content_sha256 IS NULL OR target_content_sha256 !~ '^[0-9a-f]{64}$' THEN
+        RAISE EXCEPTION 'content digest must be lowercase SHA-256';
+    END IF;
+    SELECT * INTO candidate FROM public.building_register_profile_publication
+    WHERE publication_id=target_publication_id FOR UPDATE;
+    IF NOT FOUND OR candidate.status<>'PREPARING' THEN
+        RAISE EXCEPTION 'publication must be PREPARING';
+    END IF;
+    SELECT count(*) INTO actual_site_count FROM public.building_register_profile_site
+    WHERE publication_id=target_publication_id;
+    SELECT count(*) INTO actual_building_count FROM public.building_register_profile_building
+    WHERE publication_id=target_publication_id;
+    SELECT count(*) INTO actual_hierarchy_count FROM public.building_register_profile_hierarchy
+    WHERE publication_id=target_publication_id;
+    SELECT count(*) INTO actual_evidence_count FROM public.building_register_profile_field_evidence
+    WHERE publication_id=target_publication_id;
+    SELECT count(*) INTO actual_summary_count FROM public.complex_building_register_profile_summary
+    WHERE publication_id=target_publication_id;
+    IF candidate.expected_site_count<>actual_site_count
+       OR candidate.expected_building_count<>actual_building_count
+       OR candidate.expected_hierarchy_count<>actual_hierarchy_count
+       OR candidate.expected_evidence_count<>actual_evidence_count
+       OR candidate.expected_summary_count<>actual_summary_count THEN
+        RAISE EXCEPTION 'publication row counts are incomplete';
+    END IF;
+    UPDATE public.building_register_profile_publication
+    SET status='VALIDATED',site_count=actual_site_count,building_count=actual_building_count,
+        hierarchy_count=actual_hierarchy_count,evidence_count=actual_evidence_count,
+        summary_count=actual_summary_count,content_sha256=target_content_sha256,validated_at=now()
+    WHERE publication_id=target_publication_id;
+END
+$function$;
+
 CREATE FUNCTION public.publish_building_register_profile(target_publication_id uuid)
 RETURNS void
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path=pg_catalog,public
 AS $function$
 DECLARE candidate public.building_register_profile_publication%ROWTYPE;
+DECLARE actual_counts integer[];
 BEGIN
     LOCK TABLE public.building_register_profile_publication IN EXCLUSIVE MODE;
     SELECT * INTO candidate
@@ -318,11 +390,20 @@ BEGIN
     IF NOT FOUND OR candidate.status <> 'VALIDATED' THEN
         RAISE EXCEPTION 'publication must be VALIDATED';
     END IF;
+    SELECT ARRAY[
+      (SELECT count(*)::integer FROM public.building_register_profile_site WHERE publication_id=target_publication_id),
+      (SELECT count(*)::integer FROM public.building_register_profile_building WHERE publication_id=target_publication_id),
+      (SELECT count(*)::integer FROM public.building_register_profile_hierarchy WHERE publication_id=target_publication_id),
+      (SELECT count(*)::integer FROM public.building_register_profile_field_evidence WHERE publication_id=target_publication_id),
+      (SELECT count(*)::integer FROM public.complex_building_register_profile_summary WHERE publication_id=target_publication_id)
+    ] INTO actual_counts;
     IF candidate.site_count <> candidate.expected_site_count
        OR candidate.building_count <> candidate.expected_building_count
        OR candidate.hierarchy_count <> candidate.expected_hierarchy_count
        OR candidate.evidence_count <> candidate.expected_evidence_count
-       OR candidate.summary_count <> candidate.expected_summary_count THEN
+       OR candidate.summary_count <> candidate.expected_summary_count
+       OR actual_counts<>ARRAY[candidate.site_count,candidate.building_count,candidate.hierarchy_count,
+                               candidate.evidence_count,candidate.summary_count] THEN
         RAISE EXCEPTION 'publication row counts are incomplete';
     END IF;
     UPDATE public.building_register_profile_publication
@@ -337,6 +418,8 @@ $function$;
 CREATE FUNCTION public.backfill_building_register_profile_operational_columns(target_publication_id uuid)
 RETURNS void
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path=pg_catalog,public
 AS $function$
 BEGIN
     IF NOT EXISTS (
@@ -349,7 +432,8 @@ BEGIN
     SET unit_cnt = CASE WHEN complex_row.unit_cnt IS NULL
                             AND summary.household_quality='VERIFIED'
                             AND summary.household_scope='COMPLEX'
-                            AND summary.household_count>0 THEN summary.household_count ELSE complex_row.unit_cnt END,
+                            AND summary.household_count BETWEEN 1 AND 2147483647
+                       THEN summary.household_count::integer ELSE complex_row.unit_cnt END,
         family_cnt = CASE WHEN complex_row.family_cnt IS NULL
                               AND summary.household_quality='VERIFIED'
                               AND summary.household_scope='COMPLEX' THEN summary.family_count ELSE complex_row.family_cnt END,

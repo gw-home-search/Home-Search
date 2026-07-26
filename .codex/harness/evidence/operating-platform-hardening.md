@@ -48,6 +48,12 @@
 - 예상 RED 실패: 부분 문자열 첫 일치와 낙관적 기본값 때문에 모순·중복·누락된 gate 결과가 `none/Pass`로 게시 조건을 우회할 수 있었다.
 - 최소 GREEN: 게시 결정 라벨을 anchored full-line으로 정확히 한 번만 허용하고 누락·중복은 `Partial/listed`로 처리했다. PR body도 gate evidence 누락 시 `reviewer/security=listed`, `contract=Partial`을 출력하며 관련 harness self-test가 통과했다.
 
+## Gate output freshness
+
+- 최초 RED: stale output 제거, missing output 차단, stale mtime 차단 fixture를 추가한 뒤 `home_flow --self-test`가 `prepare_gate_output` 부재 `NameError`로 실패했다.
+- 예상 RED 실패: gate subprocess가 output을 만들지 않아도 파싱을 건너뛰고, 고정 경로에 남은 이전 gate 파일을 현재 판정으로 재사용할 수 있었다.
+- 최소 GREEN: non-dry gate 실행 전에 기존 output을 제거하고 실행 후 새 regular file 존재, 실행 시작 이후 mtime, non-empty content를 모두 강제했다. missing/stale fixture와 전체 harness self-test가 통과했다.
+
 ## Gate output and verification completeness
 
 - 최초 RED: `python3 .codex/harness/home_flow.py --self-test`에 operating-platform preset의 `home_report` 검증과 gate prompt의 reviewer/contract 필수 라벨 assertion을 추가한 뒤 `self-test failed: home_flow`로 실패했다.

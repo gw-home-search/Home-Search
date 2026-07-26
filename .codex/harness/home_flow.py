@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import tomllib
 import tempfile
 from collections.abc import Iterable
@@ -520,6 +521,7 @@ def run_gate_review(
 ) -> dict[str, Any]:
     # Fixed name, overwritten per run: assumes one flow at a time (last run wins).
     output = REPORT_ROOT / f"{target}-gate.md"
+    gate_started_at = prepare_gate_output(output, dry_run=dry_run)
     prompt = render_prompt(
         "gate_review.md",
         {
@@ -547,8 +549,8 @@ def run_gate_review(
     result = run_cmd(command, DEFAULT_MAIN, dry_run=dry_run)
     if result["status"] == "fail":
         raise RuntimeError(f"{target} gate review failed: {result['summary']}")
-    if not dry_run and output.exists():
-        text = output.read_text(encoding="utf-8", errors="replace")
+    if not dry_run:
+        text = read_fresh_gate_output(output, gate_started_at)
         evidence = parse_gate_review(text)
         result["evidence"] = evidence
         if not gate_allows_publish(evidence):
@@ -559,6 +561,34 @@ def run_gate_review(
             )
     result["output_path"] = str(output)
     return result
+
+
+def prepare_gate_output(output: Path, *, dry_run: bool) -> int:
+    if dry_run:
+        return 0
+    if output.exists() or output.is_symlink():
+        try:
+            output.unlink()
+        except OSError as exc:
+            raise RuntimeError(f"gate review output을 초기화할 수 없습니다: {output}: {exc}") from exc
+    if output.exists() or output.is_symlink():
+        raise RuntimeError(f"gate review output이 초기화되지 않았습니다: {output}")
+    return time.time_ns()
+
+
+def read_fresh_gate_output(output: Path, started_at_ns: int) -> str:
+    if output.is_symlink() or not output.is_file():
+        raise RuntimeError(f"gate review output이 생성되지 않았거나 regular file이 아닙니다: {output}")
+    try:
+        stat = output.stat()
+        text = output.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        raise RuntimeError(f"gate review output을 읽을 수 없습니다: {output}: {exc}") from exc
+    if stat.st_mtime_ns < started_at_ns:
+        raise RuntimeError(f"gate review output이 현재 실행보다 오래됐습니다: {output}")
+    if not text.strip():
+        raise RuntimeError(f"gate review output이 비어 있습니다: {output}")
+    return text
 
 
 def output_text(result: dict[str, Any]) -> str:
@@ -1617,11 +1647,32 @@ contract-reviewer: 게이트 결정 = Pass
         prune_dry_kept = sorted(path.name for path in tmp_root.iterdir())
         prune_removed = prune_reports(root=tmp_root, statuses=prune_statuses)
         prune_remaining = sorted(path.name for path in tmp_root.iterdir())
+    with tempfile.TemporaryDirectory() as tmp_gate_output:
+        gate_output = Path(tmp_gate_output) / "backend-gate.md"
+        gate_output.write_text("stale", encoding="utf-8")
+        gate_started_at = prepare_gate_output(gate_output, dry_run=False)
+        stale_gate_removed = not gate_output.exists()
+        missing_gate_blocked = False
+        try:
+            read_fresh_gate_output(gate_output, gate_started_at)
+        except RuntimeError:
+            missing_gate_blocked = True
+        gate_output.write_text("상태: Pass", encoding="utf-8")
+        stale_timestamp = max(0, gate_started_at - 1)
+        os.utime(gate_output, ns=(stale_timestamp, stale_timestamp))
+        stale_gate_blocked = False
+        try:
+            read_fresh_gate_output(gate_output, gate_started_at)
+        except RuntimeError:
+            stale_gate_blocked = True
     checks = [
         sorted(prune_dry_removed) == ["done-item-pr-body.md", "done-item.json", "orphan-old.md"],
         len(prune_dry_kept) == 5,
         sorted(prune_removed) == ["done-item-pr-body.md", "done-item.json", "orphan-old.md"],
         prune_remaining == ["active-item.json", "orphan.md"],
+        stale_gate_removed,
+        missing_gate_blocked,
+        stale_gate_blocked,
         report_work_id("done-item-backend-gate.md", prune_statuses) == "done-item",
         report_work_id("unrelated.md", prune_statuses) is None,
         report_work_id(payload_path_for("Self Test").name, {"self-test": "done"}) == "self-test",

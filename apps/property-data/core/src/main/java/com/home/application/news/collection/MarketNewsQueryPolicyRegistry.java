@@ -5,7 +5,7 @@ import java.util.List;
 
 public final class MarketNewsQueryPolicyRegistry {
 
-    public static final String POLICY_VERSION = "NEWS_V4";
+    public static final String POLICY_VERSION = "NEWS_V5";
 
     public List<NewsQueryTemplate> nationwide() {
         return List.of(
@@ -22,10 +22,14 @@ public final class MarketNewsQueryPolicyRegistry {
         return List.of(normalizedSidoName + " 아파트 부동산", normalizedSidoName + " 주택 분양");
     }
 
-    public List<String> majorComplex(String sigunguName, String dongName, String complexName) {
+    public List<String> majorComplex(
+            String sigunguName, String dongName, String complexName, boolean qualityChallenge) {
         String strictLocationAndName =
                 String.join(" ", requireText(sigunguName), requireText(dongName), requireText(complexName));
-        return List.of(strictLocationAndName + " 아파트", strictLocationAndName);
+        if (qualityChallenge) {
+            return List.of(strictLocationAndName + " 아파트", strictLocationAndName);
+        }
+        return List.of(strictLocationAndName + " 아파트");
     }
 
     private String requireText(String value) {

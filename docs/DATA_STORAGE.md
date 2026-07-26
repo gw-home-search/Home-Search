@@ -671,7 +671,16 @@ identity-sequence privileges required by the Batch/API adapters. V24 adds
 `market_news_quality_review_set`, binds quality labels to their review set,
 article, and relation with FKs, and grants only the new review-set table to the
 property runtime. V25 pins the exact publication snapshots used by each review
-set in `market_news_quality_review_snapshot`. V1-V23 remain unchanged.
+set in `market_news_quality_review_snapshot`. V27 records and reconciles only
+terminal execution counts that can be derived without ambiguity from persisted
+work units and raw items. The correction table preserves both the prior and
+derived values; article and relation counts are not rewritten because later
+policy runs may legitimately share those rows. V28 preserves and corrects the
+historic execution failure cause when a provider `AUTHENTICATION` or
+`DAILY_QUOTA` work-unit failure was hidden by the remaining units' budget-skip
+summary. V29 grants the runtime only `SELECT` and `DELETE` on the two
+execution-correction audit tables so the 180-day retention transaction can
+delete that child evidence before its execution row. V1-V28 remain unchanged.
 
 The grains are `(work_unit_id, provider_start, provider_rank)` for raw,
 `(provider, canonical_url_hash)` for article,
@@ -691,9 +700,15 @@ its SIDO, SIGUNGU, or DONG name after removing the administrative suffix.
 Public reads apply the same guard to older stored relations, so evidence such
 as a model-house address cannot keep a geographic-only complex name exposed as
 `DIRECT_COMPLEX`; raw and relation rows remain queryable.
+`NEWS_V5` preserves that precision rule, limits the second major-complex query
+to duplicated or four-character-or-shorter name/alias challenges, and applies
+the configured KST daily call budget across executions.
 Once captured, a review set never switches to newer or withdrawn publication
 snapshots on retry. Snapshot/article/relation rows referenced by a review set
 are retained with the 180-day quality evidence and then removed child-first.
+Execution aggregate/failure correction rows follow the same 180-day execution
+cutoff and are deleted before work units and execution rows to preserve FK
+ordering.
 
 Snapshot transitions are `BUILDING -> PUBLISHED|REJECTED` and
 `PUBLISHED -> SUPERSEDED|WITHDRAWN`. Execution transitions are

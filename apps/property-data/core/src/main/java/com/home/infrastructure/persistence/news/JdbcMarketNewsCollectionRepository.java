@@ -271,12 +271,12 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
         if (selected.size() != 200) {
             throw new IllegalStateException("정상 발행된 주요 단지 200개 selection이 필요합니다");
         }
-        List<MarketNewsWorkUnitSpec> specs = new ArrayList<>(400);
+        List<MarketNewsWorkUnitSpec> specs = new ArrayList<>(250);
         int order = 1;
         for (NewsComplexEvidence complex : selected) {
             NewsRegionEvidence region = complex.region();
-            for (String query :
-                    policyRegistry.majorComplex(region.sigunguName(), region.dongName(), complex.canonicalName())) {
+            for (String query : policyRegistry.majorComplex(
+                    region.sigunguName(), region.dongName(), complex.canonicalName(), complex.isQualityChallenge())) {
                 specs.add(new MarketNewsWorkUnitSpec(
                         UUID.randomUUID(),
                         order++,
@@ -571,7 +571,12 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
                           FROM market_news_collection_execution other
                           WHERE (other.scheduled_at AT TIME ZONE 'Asia/Seoul')::date
                                 = (execution.scheduled_at AT TIME ZONE 'Asia/Seoul')::date
-                      ) < 4000
+                      ) < (
+                          SELECT COALESCE(min(other.call_budget), execution.call_budget)
+                          FROM market_news_collection_execution other
+                          WHERE (other.scheduled_at AT TIME ZONE 'Asia/Seoul')::date
+                                = (execution.scheduled_at AT TIME ZONE 'Asia/Seoul')::date
+                      )
                     """).param("executionId", executionId).update();
         if (updated != 1) {
             throw new NewsCallBudgetExceededException();

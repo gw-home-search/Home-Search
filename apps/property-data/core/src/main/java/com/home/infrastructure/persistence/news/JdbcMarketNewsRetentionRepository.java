@@ -127,6 +127,24 @@ public class JdbcMarketNewsRetentionRepository implements MarketNewsRetentionRep
                     """)
                 .param("cutoff", utc(now.minus(java.time.Duration.ofDays(180))))
                 .update();
+        int executionCorrections = jdbcClient
+                .sql("""
+                    DELETE FROM market_news_execution_aggregate_correction correction
+                    USING market_news_collection_execution execution
+                    WHERE execution.execution_id = correction.execution_id
+                      AND execution.completed_at < :cutoff
+                    """)
+                .param("cutoff", utc(now.minus(java.time.Duration.ofDays(180))))
+                .update();
+        executionCorrections += jdbcClient
+                .sql("""
+                    DELETE FROM market_news_execution_failure_correction correction
+                    USING market_news_collection_execution execution
+                    WHERE execution.execution_id = correction.execution_id
+                      AND execution.completed_at < :cutoff
+                    """)
+                .param("cutoff", utc(now.minus(java.time.Duration.ofDays(180))))
+                .update();
         int workUnits = jdbcClient
                 .sql("""
                     DELETE FROM market_news_collection_work_unit unit
@@ -153,7 +171,7 @@ public class JdbcMarketNewsRetentionRepository implements MarketNewsRetentionRep
                     """)
                 .param("cutoff", utc(now.minus(java.time.Duration.ofDays(180))))
                 .update();
-        return new MarketNewsRetentionResult(raw, normalized, workUnits + executions, quality);
+        return new MarketNewsRetentionResult(raw, normalized, executionCorrections + workUnits + executions, quality);
     }
 
     private static OffsetDateTime utc(Instant value) {

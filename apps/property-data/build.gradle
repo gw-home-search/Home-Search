@@ -273,7 +273,7 @@ tasks.register('verifyApiMigrationCatalog') {
             throw new GradleException("Duplicate API migration versions: ${duplicates.keySet().sort()}")
         }
         def versions = byVersion.keySet().findAll { it != null }.sort()
-        def expectedVersions = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
+        def expectedVersions = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
         if (versions != expectedVersions) {
             throw new GradleException("API migration versions must be exact: ${expectedVersions}; actual=${versions}")
         }
@@ -302,7 +302,10 @@ tasks.register('verifyApiMigrationCatalog') {
             'V23__grant_property_event_outbox_runtime_privileges.sql': '674d69734f1884e8c2fcb517aa6a69e68611b9d88411236c430deab472af2eff',
             'V24__add_market_news_quality_review_sets.sql': '335961d7a4e2b1e15220bb3cd63c8ad0a5b4bdd347a6f8380167c2ea15fcd491',
             'V25__pin_market_news_quality_review_snapshots.sql': '4852d29639b2e9120404b7f1cf7eb70b1e17377eaaecf073c0ec2ade95678e50',
-            'V26__add_property_event_outbox_retention_function.sql': '61461f8c7e04e427c51712a293c3319b3f59a987ebc3f88d975eaa01df80d975'
+            'V26__add_property_event_outbox_retention_function.sql': '61461f8c7e04e427c51712a293c3319b3f59a987ebc3f88d975eaa01df80d975',
+            'V27__reconcile_market_news_execution_aggregates.sql': '91c80fc0c508450b58c0318d885791d94667f75de58ac692633e8708dff9bf3f',
+            'V28__reconcile_market_news_execution_failure_causes.sql': 'ec5cc00073d5038abaa50bb839ec00f0b5e8bb077e9b7158294edfe22fb819fb',
+            'V29__grant_market_news_correction_retention_privileges.sql': 'f79b3e2817bddbaca263559067d694ea0a83c0a027ef07894184001768dcf2e0'
         ].each { fileName, expected ->
             def file = files.find { it.name == fileName }
             if (file == null || sha256(file) != expected) {
@@ -335,6 +338,12 @@ tasks.register('verifyPropertyFlywayFresh', Exec) {
     commandLine 'bash', 'ops/verify-property-flyway-fresh.sh'
 }
 
+tasks.register('verifyMarketNewsQualityReviewTool', Exec) {
+    description = 'Verify market-news human and temporal quality review operations.'
+    group = 'verification'
+    commandLine 'python3', 'ops/test_market_news_quality_review.py'
+}
+
 tasks.register('backendQualityCheck') {
     description = 'Run backend profile, contract, persistence, docs, coverage, and javadoc gates.'
     group = 'verification'
@@ -345,6 +354,7 @@ tasks.register('backendQualityCheck') {
     dependsOn tasks.named('verifyFlywayCliContract')
     dependsOn tasks.named('verifyPropertyDeploymentPreflightContract')
     dependsOn tasks.named('verifyPropertyFlywayFresh')
+    dependsOn tasks.named('verifyMarketNewsQualityReviewTool')
     dependsOn ':api:test'
     dependsOn ':api:apiContractTest'
     dependsOn ':api:restDocsTest'

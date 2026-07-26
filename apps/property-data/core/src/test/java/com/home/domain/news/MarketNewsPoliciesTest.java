@@ -32,6 +32,36 @@ class MarketNewsPoliciesTest {
     }
 
     @Test
+    @DisplayName("동명 또는 4자 이하 이름·alias를 가진 단지만 품질 challenge로 분류한다")
+    void identifiesComplexQualityChallenges() {
+        NewsComplexEvidence duplicate = new NewsComplexEvidence(
+                501L,
+                "래미안테스트",
+                null,
+                List.of(),
+                new NewsRegionEvidence("11", "서울특별시", "11680", "강남구", "11680105", "삼성동"),
+                true);
+        NewsComplexEvidence shortAlias = new NewsComplexEvidence(
+                502L,
+                "래미안테스트",
+                null,
+                List.of("현대"),
+                new NewsRegionEvidence("11", "서울특별시", "11680", "강남구", "11680105", "삼성동"),
+                false);
+        NewsComplexEvidence ordinary = new NewsComplexEvidence(
+                503L,
+                "래미안테스트",
+                null,
+                List.of("래미안 테스트"),
+                new NewsRegionEvidence("11", "서울특별시", "11680", "강남구", "11680105", "삼성동"),
+                false);
+
+        assertThat(duplicate.isQualityChallenge()).isTrue();
+        assertThat(shortAlias.isQualityChallenge()).isTrue();
+        assertThat(ordinary.isQualityChallenge()).isFalse();
+    }
+
+    @Test
     @DisplayName("query 출처 없이도 시군구+동 또는 시도+시군구 본문 근거만 지역 relation을 만든다")
     void regionRelationsRequireParentTokensInArticleText() {
         NewsComplexEvidence complex = new NewsComplexEvidence(

@@ -6,7 +6,7 @@
 - 계약 영향: 기존 map/trade 공개 API URL과 response shape는 변경하지 않았다.
   property/user insight exact route를 분리했고, 신규 user insight API는
   `home.insights.enabled=true`에서만 등록되며 staging 기본값은 `false`다.
-- DB 영향: property Flyway `V20`~`V26`, user Flyway `V6`을 추가했다.
+- DB 영향: property Flyway `V20`~`V29`, user Flyway `V6`을 추가했다.
   모두 additive migration이며 기존 trade identity, `complex_id`,
   `complex_pk`, `apt_seq`, `source`, `source_key` 의미를 변경하지 않는다.
 - 보안 영향: workload별 ECS execution/task role과 secret allowlist,
@@ -29,7 +29,10 @@
 | 최초 service deploy의 running-task alarm이 release gate/IAM에 차단 | 두 Terraform alarm 주소와 일곱 exact alarm ARN만 create/update 허용 | deploy/bootstrap First RED/Green |
 | foundation worker의 이전 desired 0이 rollback에서 복구되지 않음 | service state에 desired count를 기록하고 task revision과 함께 복구 | deploy shell First RED/Green |
 | JSON Schema 2020-12 선언은 Glue 등록 비호환 | 모든 v1 contract를 Glue 지원 Draft-07로 고정하고 validator에서 강제 | event contract First RED/Green |
-| property Flyway catalog는 V26인데 deployment preflight/fresh 검증은 V23에 고정 | preflight의 catalog/info/history와 fresh target을 V26 exact set으로 동기화 | preflight First RED/Green, fresh PostGIS V1~V26 |
+| property Flyway catalog는 V29인데 deployment preflight/fresh 검증은 V26에 고정 | preflight의 catalog/info/history와 fresh target을 V29 exact set으로 동기화 | preflight First RED/Green, fresh PostGIS V1~V29 |
+| 뉴스 execution 파생 집계와 provider 실패 원인이 과거 실행에서 어긋남 | V27/V28이 이전 값을 audit table에 보존하고 work unit/raw 근거로 보정 | migration First RED/Green, 로컬 DB 잔여 집계 불일치 0건 |
+| execution 보정 audit FK로 180일 retention이 중단될 수 있음 | V29 최소 권한과 audit→work unit→execution child-first 삭제 적용 | retention/권한 migration First RED/Green |
+| local Developer Search API key가 기본 API_HUB endpoint로 전송됨 | local runtime에 `DEVELOPERS` mode와 Developer Search endpoint/path를 명시 | 실제 AUTHENTICATION 재현 후 config First RED/Green |
 | repository compose 검증 명령이 신규 AI/MinIO 필수 변수를 누락 | `AGENTS.md` 검증 명령에 비밀이 아닌 validation fixture 전체를 명시 | compose config First RED/Green |
 | event workload의 광범위 egress | DB/MSK/provider별 security group rule 분리 | staging egress Terraform test |
 | insight prefix route 충돌 가능성 | property/user exact route와 fallback 차단 | `test-public-gateway-routing.sh` |
@@ -46,7 +49,9 @@
 | user service | Pass — `userServiceQualityCheck` |
 | AI | Pass — 1,028 tests, coverage 90.01% |
 | chat-bff | Pass — `chatBffQualityCheck` |
-| property | Pass — persistence 63 suites/292 tests, failures/errors/skipped 0; V1~V26 fresh Flyway, API/docs/batch/architecture/coverage Pass |
+| property | Pass — persistence 297 tests, failures/errors/skipped 0; V1~V29 fresh Flyway, API/docs/batch/architecture/coverage Pass |
+| property NEWS_V4 실데이터 | Partial — 18 scope PUBLISHED, 공개 item 중복/필수값·날짜·URL/FK 결손 0; 재시도에서 major 288/400 뒤 `DAILY_QUOTA`, 완료된 10개 시도만 원자적 교체; 최신 표본 512건이나 challenge 44/50, 사람 검토 0 |
+| property NEWS_V5 준비 | Pass(code) / Pending(operations) — 일반 major 1회+challenge 37개만 보충해 현재 selection 기준 237 work unit, KST 합계 budget 설정 반영, private human-label export/import와 aggregate `immediate|24h|7d` 판정 도구 추가; quota reset 뒤 실제 NEWS_V5 publication과 사람 검토 필요 |
 | admin/source-data | Pass — 각 service quality gate |
 | web | Pass — 382 tests, lint error 0, build Pass |
 | admin web | Pass — 8 tests, lint/build Pass |

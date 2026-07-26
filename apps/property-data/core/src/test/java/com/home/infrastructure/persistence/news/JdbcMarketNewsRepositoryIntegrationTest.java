@@ -547,11 +547,11 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
     }
 
     @Test
-    @DisplayName("NAVER 호출 budget은 execution별이 아니라 KST 날짜 전체에서 4,000회를 넘지 않는다")
+    @DisplayName("NAVER 호출 budget은 execution별이 아니라 KST 날짜 전체에서 설정값을 넘지 않는다")
     void enforcesDailyCallBudgetAcrossExecutions() {
         jdbcClient.sql("""
                     UPDATE market_news_collection_execution
-                    SET call_count = 3999
+                    SET call_count = 4
                     WHERE execution_id = :executionId
                     """).param("executionId", EXECUTION_ID).update();
         UUID secondExecutionId = UUID.fromString("123e4567-e89b-12d3-a456-426614174400");
@@ -563,7 +563,7 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
                         planned_work_unit_count, started_at
                     ) VALUES (
                         :executionId, 'NEWS-BUDGET-SECOND', 'MAJOR_COMPLEX', 'NEWS_V1',
-                        :scheduledAt, :cutoff, 'RUNNING', 4000, 0, 0, :startedAt
+                        :scheduledAt, :cutoff, 'RUNNING', 5, 0, 0, :startedAt
                     )
                     """)
                 .param("executionId", secondExecutionId)
@@ -586,7 +586,7 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
                         .param("scheduledAt", GENERATED_AT.atOffset(ZoneOffset.UTC))
                         .query(Long.class)
                         .single())
-                .isEqualTo(4000L);
+                .isEqualTo(5L);
     }
 
     @Test
@@ -722,14 +722,84 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
     }
 
     @Test
-    @DisplayName("NEWS_V4 general plan은 6개 전국 query와 root SIDO별 보충 query를 raw work unit으로 고정한다")
+    @DisplayName("retention은 180일 지난 execution 보정 근거를 먼저 지우고 execution을 정리한다")
+    void deletesExpiredExecutionCorrectionEvidenceBeforeExecution() {
+        Instant now = Instant.parse("2026-08-31T00:00:00Z");
+        UUID expiredExecutionId = UUID.fromString("123e4567-e89b-12d3-a456-426614174533");
+        jdbcClient
+                .sql("""
+                    INSERT INTO market_news_collection_execution (
+                        execution_id, request_id, execution_type, policy_version,
+                        scheduled_at, state, call_budget, planned_work_unit_count,
+                        started_at, completed_at, failure_kind
+                    ) VALUES (
+                        :executionId, 'NEWS-EXPIRED-CORRECTION', 'MAJOR_COMPLEX', 'NEWS_V3',
+                        :scheduledAt, 'FAILED', 4000, 0,
+                        :startedAt, :completedAt, 'DAILY_QUOTA'
+                    )
+                    """)
+                .param("executionId", expiredExecutionId)
+                .param("scheduledAt", now.minusSeconds(181L * 24 * 60 * 60).atOffset(ZoneOffset.UTC))
+                .param("startedAt", now.minusSeconds(181L * 24 * 60 * 60).atOffset(ZoneOffset.UTC))
+                .param("completedAt", now.minusSeconds(181L * 24 * 60 * 60).atOffset(ZoneOffset.UTC))
+                .update();
+        jdbcClient.sql("""
+                    INSERT INTO market_news_execution_aggregate_correction (
+                        execution_id, correction_reason,
+                        old_completed_count, new_completed_count,
+                        old_truncated_count, new_truncated_count,
+                        old_failed_count, new_failed_count,
+                        old_skipped_budget_count, new_skipped_budget_count,
+                        old_raw_item_count, new_raw_item_count
+                    ) VALUES (
+                        :executionId, 'DERIVED_WORK_UNIT_RECONCILIATION',
+                        1, 0, 0, 0, 0, 0, 0, 0, 1, 0
+                    )
+                    """).param("executionId", expiredExecutionId).update();
+        jdbcClient.sql("""
+                    INSERT INTO market_news_execution_failure_correction (
+                        execution_id, correction_reason, old_failure_kind, new_failure_kind
+                    ) VALUES (
+                        :executionId, 'PROVIDER_FAILURE_PRECEDENCE',
+                        'DAILY_CALL_BUDGET', 'DAILY_QUOTA'
+                    )
+                    """).param("executionId", expiredExecutionId).update();
+
+        new JdbcMarketNewsRetentionRepository(jdbcClient).deleteExpired(now);
+
+        assertThat(jdbcClient
+                        .sql("""
+                            SELECT count(*)
+                            FROM market_news_collection_execution
+                            WHERE execution_id = :executionId
+                            """)
+                        .param("executionId", expiredExecutionId)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(jdbcClient
+                        .sql("""
+                            SELECT
+                                (SELECT count(*) FROM market_news_execution_aggregate_correction
+                                 WHERE execution_id = :executionId)
+                              + (SELECT count(*) FROM market_news_execution_failure_correction
+                                 WHERE execution_id = :executionId)
+                            """)
+                        .param("executionId", expiredExecutionId)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("NEWS_V5 general plan은 6개 전국 query와 root SIDO별 보충 query를 raw work unit으로 고정한다")
     void plansVersionedGeneralQueriesAndComplexCorpus() {
         Instant scheduledAt = GENERATED_AT.plusSeconds(60);
 
         var execution = collectionRepository.planGeneral(
                 "123e4567-e89b-12d3-a456-426614174600", scheduledAt, scheduledAt.minusSeconds(7200), 4000);
 
-        assertThat(execution.policyVersion()).isEqualTo("NEWS_V4");
+        assertThat(execution.policyVersion()).isEqualTo("NEWS_V5");
         assertThat(execution.workUnits()).hasSize(8);
         assertThat(execution.workUnits().stream().filter(unit -> unit.scopeType() == MarketNewsScopeType.NATIONWIDE))
                 .hasSize(6);

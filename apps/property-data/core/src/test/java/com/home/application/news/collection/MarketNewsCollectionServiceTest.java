@@ -280,8 +280,8 @@ class MarketNewsCollectionServiceTest {
     }
 
     @Test
-    @DisplayName("정규화 거부 item만 있는 page도 다음 empty page에서 cutoff 완료로 종료한다")
-    void preservesNormalizationRejectionAndStopsOnEmptyPage() {
+    @DisplayName("정규화 거부 item도 원천 pubDate가 오래됐으면 현재 page에서 cutoff 완료로 종료한다")
+    void rejectedItemPubDateStopsAtCutoffWithoutAnotherPage() {
         MarketNewsCollectionRepository repository = mock(MarketNewsCollectionRepository.class);
         NewsProviderGateway provider = mock(NewsProviderGateway.class);
         MarketNewsPublicationCache cache = mock(MarketNewsPublicationCache.class);
@@ -297,7 +297,7 @@ class MarketNewsCollectionServiceTest {
         MarketNewsCollectionResult result = service(repository, provider, new NaverNewsItemNormalizer(), cache)
                 .collectGeneral("123e4567-e89b-12d3-a456-426614174309", NOW, 4000);
 
-        assertThat(result.callCount()).isEqualTo(2);
+        assertThat(result.callCount()).isEqualTo(1);
         verify(repository).rejectRawItem(WORK_UNIT_ID, unsafe, NewsRejectionReason.INVALID_URL);
     }
 
@@ -320,6 +320,26 @@ class MarketNewsCollectionServiceTest {
         verify(provider).search(any());
         verify(repository).markRemainingSkippedBudget(eq(EXECUTION_ID), any());
         verifyNoInteractions(cache);
+    }
+
+    @Test
+    @DisplayName("provider 일일 quota 실패는 남은 unit을 skip해도 execution 원인으로 보존한다")
+    void preservesDailyQuotaAsExecutionFailureWhenRemainingUnitsAreSkipped() {
+        MarketNewsCollectionRepository repository = mock(MarketNewsCollectionRepository.class);
+        NewsProviderGateway provider = mock(NewsProviderGateway.class);
+        MarketNewsPublicationCache cache = mock(MarketNewsPublicationCache.class);
+        when(repository.planGeneral(any(), any(), any(), anyInt()))
+                .thenReturn(execution(twoNationalUnits(), NOW.minusSeconds(2 * 60 * 60)));
+        when(provider.search(any()))
+                .thenThrow(new NewsProviderCallException(NewsProviderFailureType.DAILY_QUOTA, "quota", null, null));
+
+        MarketNewsCollectionResult result = service(repository, provider, new NaverNewsItemNormalizer(), cache)
+                .collectGeneral("123e4567-e89b-12d3-a456-426614174317", NOW, 4000);
+
+        assertThat(result.state()).isEqualTo(MarketNewsExecutionState.FAILED);
+        verify(repository).markRemainingSkippedBudget(eq(EXECUTION_ID), any());
+        verify(repository)
+                .finishExecution(eq(EXECUTION_ID), eq(MarketNewsExecutionState.FAILED), eq("DAILY_QUOTA"), any());
     }
 
     @Test

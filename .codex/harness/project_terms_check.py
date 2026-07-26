@@ -32,6 +32,7 @@ SKIP_DIRS = {
     "node_modules",
     "runtime-keys",
     "target",
+    "tmp",
 }
 
 BANNED_PATTERNS = [
@@ -77,6 +78,15 @@ ALLOW_PATTERNS = [
         r"\bhome-search:prediction:v[0-9]+\b",
         r"\b[a-z][A-Za-z0-9]*(?:[A-Za-z0-9-]*[A-Za-z0-9])?/v[0-9]+\b",
         r"\b[a-z0-9]+(?:-[a-z0-9]+)*-v[0-9]+(?:-[a-z0-9]+)*\b",
+        r"\b[a-z0-9]+(?:[.-][a-z0-9]+)*\.v[0-9]+(?:\.dlq)?\b",
+        r"/v[0-9]+/[A-Za-z0-9._/-]+\b",
+        r"\b[A-Za-z][A-Za-z0-9]*/v[0-9]+\b",
+        r"\bV[0-9]+(?:~|-|–)V?[0-9]+\b",
+        r"\b[A-Z][A-Za-z0-9]+ v[0-9]+\b",
+        r'''\bv[0-9]+ contract(?=\s|[가-힣]|["']|$)''',
+        r"\bmatch v[0-9]+\b",
+        r'''[!]?["']v[0-9]+["']\.equals\(parts\[[0-9]+\]\)''',
+        r'''["']v[0-9]+:''',
         r"\bv[0-9]+\.[0-9]+\b",
         r"v2/sdk\.js",
         r"kakao\.maps\.load",
@@ -338,6 +348,9 @@ def run_self_test() -> int:
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "uiSummary/v1"),
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "recommendation-policy-v1"),
         not scan_text(REPO_ROOT / "SELF_TEST.txt", "official v1.7 contract"),
+        not scan_text(REPO_ROOT / "SELF_TEST.txt", "property.insight-events.v1.dlq"),
+        not scan_text(REPO_ROOT / "SELF_TEST.txt", "HOME_NEWS_NAVER_PATH=/v1/search/news.json"),
+        not scan_text(REPO_ROOT / "docs/DATA_STORAGE.md", "Flyway V1~V29 fresh migration"),
         not scan_text(
             REPO_ROOT / "apps/ai/config/reference_sources.toml",
             'normalization_schema_version = "school-zone-v1"',
@@ -352,6 +365,7 @@ def run_self_test() -> int:
         should_skip(REPO_ROOT / ".worktrees/example/apps/ai/example.py"),
         should_skip(REPO_ROOT / "apps/ai/.venv/lib/python/site-packages/example.py"),
         should_skip(REPO_ROOT / "runtime-keys/admin-e2e/private.pem"),
+        should_skip(REPO_ROOT / "tmp/isolated-copy/example.java"),
         bool(bad_language),
         not good_language,
         not legacy_language,

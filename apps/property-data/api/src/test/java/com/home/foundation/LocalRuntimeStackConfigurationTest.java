@@ -16,6 +16,7 @@ class LocalRuntimeStackConfigurationTest {
     private static final Path LOCAL_PROMETHEUS = Path.of("..", "..", "..", "infra", "prometheus.local.yml");
 
     private static final Path LOCAL_COMPOSE = Path.of("..", "..", "..", "infra", "docker-compose.local.yml");
+    private static final Path LOCAL_PROPERTY_RUNTIME_ENV = Path.of("..", "ops", "local-runtime.env.example");
     private static final Path LOCAL_LOKI = Path.of("..", "..", "..", "infra", "loki.local.yml");
     private static final Path LOCAL_ALLOY = Path.of("..", "..", "..", "infra", "alloy.local.alloy");
     private static final Path GRAFANA_DATASOURCES =
@@ -125,6 +126,7 @@ class LocalRuntimeStackConfigurationTest {
         String apiService = content.substring(content.indexOf("\n  api:"), content.indexOf("\n  public-api-gateway:"));
 
         assertThat(batchService).contains("profiles: [ \"tools\" ]");
+        assertThat(batchService).doesNotContain("depends_on:");
         assertThat(batchService).contains("- ../apps/property-data/.env");
         assertThat(batchService)
                 .contains(
@@ -135,6 +137,20 @@ class LocalRuntimeStackConfigurationTest {
         assertThat(batchService).doesNotContain("restart:");
         assertThat(apiService).contains("HOME_NEWS_NAVER_CLIENT_ID: \"\"");
         assertThat(apiService).contains("HOME_NEWS_NAVER_CLIENT_SECRET: \"\"");
+    }
+
+    @Test
+    @DisplayName("local property runtime은 Developer Search API endpoint를 명시한다")
+    void localPropertyRuntimePinsDeveloperNewsProvider() throws IOException {
+        Properties properties = new Properties();
+        try (var reader = Files.newBufferedReader(LOCAL_PROPERTY_RUNTIME_ENV)) {
+            properties.load(reader);
+        }
+
+        assertThat(properties)
+                .containsEntry("HOME_NEWS_NAVER_PROVIDER_MODE", "DEVELOPERS")
+                .containsEntry("HOME_NEWS_NAVER_BASE_URL", "https://openapi.naver.com")
+                .containsEntry("HOME_NEWS_NAVER_PATH", "/v1/search/news.json");
     }
 
     @Test

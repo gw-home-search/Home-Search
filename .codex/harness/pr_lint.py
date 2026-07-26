@@ -72,8 +72,8 @@ CHECKLIST_ITEMS = [
     "integration branch만 push",
     "draft PR",
     "public API URL/response 영향 확인",
-    "DB migration 실행 없음",
-    "Open API 호출 없음",
+    "DB migration 실행 내역 확인",
+    "Open API 호출 내역 확인",
     "secrets 저장 없음",
 ]
 TITLE_TYPES = ("Feat", "Fix", "Chore", "Docs", "Test", "Refactor")
@@ -600,8 +600,8 @@ reviewer: 지적사항 = none
 - [{mark}] integration branch만 push
 - [{mark}] draft PR
 - [{mark}] public API URL/response 영향 확인
-- [{mark}] DB migration 실행 없음
-- [{mark}] Open API 호출 없음
+- [{mark}] DB migration 실행 내역 확인
+- [{mark}] Open API 호출 내역 확인
 - [{mark}] secrets 저장 없음
 """
 

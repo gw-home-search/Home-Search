@@ -15,6 +15,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -29,6 +30,18 @@ public final class NaverNewsItemNormalizer implements NewsItemNormalizationGatew
             return NewsNormalizationResult.accepted(normalize(raw));
         } catch (RejectedNewsItemException exception) {
             return NewsNormalizationResult.rejected(exception.reason());
+        }
+    }
+
+    @Override
+    public Optional<java.time.Instant> tryParseProvidedAt(NewsProviderItem raw) {
+        if (raw == null || raw.pubDate() == null || raw.pubDate().isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(parseProvidedAt(raw.pubDate()));
+        } catch (RejectedNewsItemException exception) {
+            return Optional.empty();
         }
     }
 
@@ -55,10 +68,18 @@ public final class NaverNewsItemNormalizer implements NewsItemNormalizationGatew
                     description,
                     firstNonBlank(raw.originalLink(), raw.link()).trim(),
                     sha256(canonicalUrl.toASCIIString()),
-                    ZonedDateTime.parse(raw.pubDate(), DateTimeFormatter.RFC_1123_DATE_TIME)
-                            .toInstant(),
+                    parseProvidedAt(raw.pubDate()),
                     raw.providerStart(),
                     raw.providerRank());
+        } catch (RejectedNewsItemException exception) {
+            throw exception;
+        }
+    }
+
+    private static java.time.Instant parseProvidedAt(String value) {
+        try {
+            return ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME)
+                    .toInstant();
         } catch (DateTimeParseException exception) {
             throw new RejectedNewsItemException(NewsRejectionReason.INVALID_PROVIDED_AT, "invalid pubDate", exception);
         }

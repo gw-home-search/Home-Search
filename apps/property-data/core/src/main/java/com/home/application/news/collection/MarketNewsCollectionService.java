@@ -92,7 +92,9 @@ public class MarketNewsCollectionService {
         for (MarketNewsWorkUnitSpec unit : execution.workUnits()) {
             if (stopForQuota || calls >= execution.callBudget()) {
                 repository.markRemainingSkippedBudget(execution.executionId(), clock.instant());
-                executionFailure = "DAILY_CALL_BUDGET";
+                if (!stopForQuota) {
+                    executionFailure = "DAILY_CALL_BUDGET";
+                }
                 break;
             }
             UnitResult result = collectUnit(execution, unit, calls);
@@ -151,13 +153,19 @@ public class MarketNewsCollectionService {
                 rawCount += page.items().size();
                 repository.saveRawItems(unit.workUnitId(), page.items(), clock.instant());
                 for (NewsProviderItem raw : page.items()) {
+                    Instant rawProvidedAt = normalizer.tryParseProvidedAt(raw).orElse(null);
+                    if (rawProvidedAt != null && (oldest == null || rawProvidedAt.isBefore(oldest))) {
+                        oldest = rawProvidedAt;
+                    }
                     var normalized = normalizer.tryNormalize(raw);
                     if (!normalized.accepted()) {
                         repository.rejectRawItem(unit.workUnitId(), raw, normalized.rejectionReason());
                         continue;
                     }
                     NormalizedNewsItem item = normalized.item();
-                    oldest = oldest == null || item.providedAt().isBefore(oldest) ? item.providedAt() : oldest;
+                    if (oldest == null || item.providedAt().isBefore(oldest)) {
+                        oldest = item.providedAt();
+                    }
                     processNormalized(execution, unit, relationIndex, raw, item);
                 }
                 if (page.items().isEmpty() || (oldest != null && !oldest.isAfter(execution.overlapCutoff()))) {

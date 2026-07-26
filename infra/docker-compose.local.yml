@@ -292,11 +292,6 @@ services:
   property-batch:
     image: eclipse-temurin:21-jdk
     profiles: [ "tools" ]
-    depends_on:
-      postgis:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     working_dir: /app
     entrypoint:
       - "sh"

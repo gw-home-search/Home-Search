@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { BuildingProfile } from './api/fetchComplexDetail';
 import { BuildingProfilePanel } from './BuildingProfilePanel';
 
-describe('BuildingProfilePanel', () => {
+describe('건축물 profile BuildingProfilePanel', () => {
   let host: HTMLDivElement | null = null;
 
   afterEach(() => {

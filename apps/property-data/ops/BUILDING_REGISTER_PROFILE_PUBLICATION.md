@@ -16,7 +16,7 @@
 - durable DB V33 Flyway checksum: `-2101973446`
 - source V33 Flyway checksum: `-2101973446`
 - `JdbcBuildingProfileRatioBackfillMigrationTest`: `Pass`
-- `verifyPropertyFlywayFresh`: `Pass` (V1→V33)
+- `verifyPropertyFlywayFresh`: `Pass` (migration 1→33)
 - 시작 시 사용 가능 공간: 약 `172 GiB`
 
 ## Slice 실행 근거
@@ -155,12 +155,12 @@ security-audit: 지적사항 = none
   publication을 적재·발행하지 않았다.
 - 높음(High): 기존 archive manifest는 `CLEANED`이고 기록된 `archive_uri` 파일이 없어 SHA-256 재검산,
   신규 archive 작성, ARM restore 인수 검증을 완료할 수 없다.
-- 검증 공백: provider 인증·quota와 운영 UUID가 필요한 repair 실run, publication V2 전환,
+- 검증 공백: provider 인증·quota와 운영 UUID가 필요한 repair 실run, 후속 publication 전환,
   direct 컬럼 전후 운영 snapshot 비교는 `not run`이다.
 - 잔여 위험: `buildingProfile`과 ratio fallback은 실제 `PUBLISHED` publication이 생기기 전까지 null 또는
   기존 direct 값만 제공한다.
 - 다음 행동: 원본 archive 또는 동등한 portable export를 복구하고 source EAV→typed publication
-  builder/importer를 구현한 뒤 repair→parse/analyze→publication V2→archive/ARM restore 순으로 재개한다.
+  builder/importer를 구현한 뒤 repair→parse/analyze→후속 publication→archive/ARM restore 순으로 재개한다.
 - 삭제·`TRUNCATE`·`dropdb`·volume 제거: `0건`.
 
 ### 최종 검증 근거
@@ -170,7 +170,7 @@ security-audit: 지적사항 = none
 - `./gradlew :core:persistenceTest --tests '*JdbcMarketNewsRepositoryIntegrationTest' --no-daemon --stacktrace` = pass
   (전체 gate의 최초 EOF 실패 class 단독 재현 실패, 2분 1초)
 - `./gradlew verifyPropertyFlywayFresh --no-daemon --stacktrace` = pass
-  (V1→V35, preflight `before target=35 EMPTY`와 `after target=35 READY`, Flyway validate)
+  (migration 1→35, preflight `before target=35 EMPTY`와 `after target=35 READY`, Flyway validate)
 - `bash ops/test-property-deployment-preflight.sh` = pass
   (V34/V35 catalog, history, target contract)
 - `./gradlew backendQualityCheck --no-daemon --stacktrace` = fail

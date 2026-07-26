@@ -434,7 +434,7 @@ class BatchJobArgumentsTest {
     }
 
     @Test
-    @DisplayName("profile repair job은 source lineage, 실행 UUID, V1 policy와 request budget을 고정한다")
+    @DisplayName("profile repair job은 source lineage, 실행 UUID, PROFILE_REPAIR_V1 policy와 request budget을 고정한다")
     void parsesBuildingProfileRepairArguments() {
         BatchJobArguments repair = BatchJobArguments.from(
                 "complexBuildingRegisterProfileRepairJob",

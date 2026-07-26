@@ -641,7 +641,8 @@ class ReadApiRestDocsTest {
             subsectionWithPath("buildingProfile")
                     .type(JsonFieldType.VARIES)
                     .optional()
-                    .description("Nullable versioned building-register profile grouped by ratios, households, parking, building, elevators, safety, dates, address, and energy.")
+                    .description(
+                            "Nullable versioned building-register profile grouped by ratios, households, parking, building, elevators, safety, dates, address, and energy.")
         };
     }
 

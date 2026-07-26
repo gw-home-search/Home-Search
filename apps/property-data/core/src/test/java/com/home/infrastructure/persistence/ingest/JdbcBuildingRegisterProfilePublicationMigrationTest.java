@@ -24,6 +24,7 @@ class JdbcBuildingRegisterProfilePublicationMigrationTest extends JdbcMigrationT
 
         assertThat(List.of(
                         "building_register_profile_publication",
+                        "building_register_profile_repair_run",
                         "building_register_profile_site",
                         "building_register_profile_building",
                         "building_register_profile_hierarchy",
@@ -31,9 +32,12 @@ class JdbcBuildingRegisterProfilePublicationMigrationTest extends JdbcMigrationT
                         "building_register_profile_field_evidence"))
                 .allMatch(table -> regclass(table) != null);
 
-        assertThat(columnCount("building_register_profile_site", BuildingProfileScope.SITE)).isEqualTo(35);
-        assertThat(columnCount("building_register_profile_building", BuildingProfileScope.BUILDING)).isEqualTo(39);
-        assertThat(columnCount("building_register_profile_hierarchy", BuildingProfileScope.HIERARCHY)).isEqualTo(9);
+        assertThat(columnCount("building_register_profile_site", BuildingProfileScope.SITE))
+                .isEqualTo(35);
+        assertThat(columnCount("building_register_profile_building", BuildingProfileScope.BUILDING))
+                .isEqualTo(39);
+        assertThat(columnCount("building_register_profile_hierarchy", BuildingProfileScope.HIERARCHY))
+                .isEqualTo(9);
         assertThat(jdbcClient.sql("""
                     SELECT indexdef
                     FROM pg_indexes
@@ -52,6 +56,7 @@ class JdbcBuildingRegisterProfilePublicationMigrationTest extends JdbcMigrationT
 
         List<String> writableTables = List.of(
                 "building_register_profile_publication",
+                "building_register_profile_repair_run",
                 "building_register_profile_site",
                 "building_register_profile_building",
                 "building_register_profile_hierarchy",
@@ -72,25 +77,23 @@ class JdbcBuildingRegisterProfilePublicationMigrationTest extends JdbcMigrationT
         insertPublication("00000000-0000-0000-0000-000000000101", "PUBLISHED", 0, 0, "RULES_V1");
         insertPublication("00000000-0000-0000-0000-000000000102", "VALIDATED", 1, 0, "RULES_V2");
 
-        assertThatThrownBy(() -> jdbcClient.sql(
-                                "SELECT publish_building_register_profile(CAST(:id AS uuid))")
+        assertThatThrownBy(() -> jdbcClient
+                        .sql("SELECT publish_building_register_profile(CAST(:id AS uuid))")
                         .param("id", "00000000-0000-0000-0000-000000000102")
                         .query(Object.class)
                         .single())
                 .hasMessageContaining("publication row counts are incomplete");
-        assertThat(publicationStatus("00000000-0000-0000-0000-000000000101"))
-                .isEqualTo("PUBLISHED");
+        assertThat(publicationStatus("00000000-0000-0000-0000-000000000101")).isEqualTo("PUBLISHED");
 
         insertPublication("00000000-0000-0000-0000-000000000103", "VALIDATED", 0, 0, "RULES_V3");
-        jdbcClient.sql("SELECT publish_building_register_profile(CAST(:id AS uuid))")
+        jdbcClient
+                .sql("SELECT publish_building_register_profile(CAST(:id AS uuid))")
                 .param("id", "00000000-0000-0000-0000-000000000103")
                 .query(Object.class)
                 .single();
 
-        assertThat(publicationStatus("00000000-0000-0000-0000-000000000101"))
-                .isEqualTo("SUPERSEDED");
-        assertThat(publicationStatus("00000000-0000-0000-0000-000000000103"))
-                .isEqualTo("PUBLISHED");
+        assertThat(publicationStatus("00000000-0000-0000-0000-000000000101")).isEqualTo("SUPERSEDED");
+        assertThat(publicationStatus("00000000-0000-0000-0000-000000000103")).isEqualTo("PUBLISHED");
     }
 
     @Test
@@ -126,25 +129,41 @@ class JdbcBuildingRegisterProfilePublicationMigrationTest extends JdbcMigrationT
                       'PARCEL','PNU_FALLBACK','sample road')
                     """).param("id", "00000000-0000-0000-0000-000000000104").update();
 
-        jdbcClient.sql("SELECT backfill_building_register_profile_operational_columns(CAST(:id AS uuid))")
+        jdbcClient
+                .sql("SELECT backfill_building_register_profile_operational_columns(CAST(:id AS uuid))")
                 .param("id", "00000000-0000-0000-0000-000000000104")
                 .query(Object.class)
                 .single();
 
-        assertThat(jdbcClient.sql("SELECT unit_cnt FROM complex WHERE id=99001").query(Integer.class).single())
+        assertThat(jdbcClient
+                        .sql("SELECT unit_cnt FROM complex WHERE id=99001")
+                        .query(Integer.class)
+                        .single())
                 .isEqualTo(999);
-        assertThat(jdbcClient.sql("SELECT bc_rat FROM complex WHERE id=99001")
-                        .query(java.math.BigDecimal.class).single())
+        assertThat(jdbcClient
+                        .sql("SELECT bc_rat FROM complex WHERE id=99001")
+                        .query(java.math.BigDecimal.class)
+                        .single())
                 .isEqualByComparingTo("20.00");
-        assertThat(jdbcClient.sql("SELECT family_cnt FROM complex WHERE id=99001").query(Long.class).single())
+        assertThat(jdbcClient
+                        .sql("SELECT family_cnt FROM complex WHERE id=99001")
+                        .query(Long.class)
+                        .single())
                 .isEqualTo(80L);
-        assertThat(jdbcClient.sql("SELECT ho_cnt FROM complex WHERE id=99001").query(Long.class).single())
+        assertThat(jdbcClient
+                        .sql("SELECT ho_cnt FROM complex WHERE id=99001")
+                        .query(Long.class)
+                        .single())
                 .isEqualTo(110L);
-        assertThat(jdbcClient.sql("SELECT max_grnd_flr_cnt FROM complex WHERE id=99001")
-                        .query(Long.class).optional())
+        assertThat(jdbcClient
+                        .sql("SELECT max_grnd_flr_cnt FROM complex WHERE id=99001")
+                        .query(Long.class)
+                        .optional())
                 .isEmpty();
-        assertThat(jdbcClient.sql("SELECT road_address FROM parcel WHERE id=99001")
-                        .query(String.class).single())
+        assertThat(jdbcClient
+                        .sql("SELECT road_address FROM parcel WHERE id=99001")
+                        .query(String.class)
+                        .single())
                 .isEqualTo("sample road");
     }
 
@@ -180,11 +199,10 @@ class JdbcBuildingRegisterProfilePublicationMigrationTest extends JdbcMigrationT
     }
 
     private void insertPublication(String id, String status, int expectedSummaryCount, int summaryCount, String rules) {
-        String lifecycleColumns = "PUBLISHED".equals(status)
-                ? "validated_at,published_at"
-                : "validated_at";
+        String lifecycleColumns = "PUBLISHED".equals(status) ? "validated_at,published_at" : "validated_at";
         String lifecycleValues = "PUBLISHED".equals(status) ? "now(),now()" : "now()";
-        jdbcClient.sql("""
+        jdbcClient
+                .sql("""
                     INSERT INTO building_register_profile_publication(
                       publication_id,source_collection_id,source_parse_run_id,source_analysis_run_id,
                       source_projection_run_id,rules_version,parser_version,status,
@@ -222,7 +240,8 @@ class JdbcBuildingRegisterProfilePublicationMigrationTest extends JdbcMigrationT
                 .filter(field -> field.scope() == scope)
                 .map(field -> field.name().toLowerCase(java.util.Locale.ROOT))
                 .toList();
-        return jdbcClient.sql("""
+        return jdbcClient
+                .sql("""
                     SELECT count(*)
                     FROM information_schema.columns
                     WHERE table_schema='public'
@@ -236,7 +255,8 @@ class JdbcBuildingRegisterProfilePublicationMigrationTest extends JdbcMigrationT
     }
 
     private String regclass(String name) {
-        return jdbcClient.sql("SELECT to_regclass(:name)::text")
+        return jdbcClient
+                .sql("SELECT to_regclass(:name)::text")
                 .param("name", name)
                 .query(String.class)
                 .optional()
@@ -244,7 +264,8 @@ class JdbcBuildingRegisterProfilePublicationMigrationTest extends JdbcMigrationT
     }
 
     private boolean hasTablePrivilege(String table, String privileges) {
-        return jdbcClient.sql("SELECT has_table_privilege(:role,:table,:privileges)")
+        return jdbcClient
+                .sql("SELECT has_table_privilege(:role,:table,:privileges)")
                 .param("role", PROPERTY_RUNTIME_ROLE)
                 .param("table", table)
                 .param("privileges", privileges)

@@ -15,6 +15,7 @@ public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSuppo
             "public.building_register_profile_building",
             "public.building_register_profile_site",
             "public.building_register_profile_publication",
+            "public.building_register_profile_repair_run",
             "public.building_register_profile_projection_run",
             "public.building_register_profile_analysis_run",
             "public.building_register_profile_parse_run",

@@ -215,10 +215,22 @@ class MapApiRestDocsTest {
                                         .type(JsonFieldType.NULL)
                                         .optional()
                                         .description("Maximum household count."),
-                                fieldWithPath("bcRatMin").type(JsonFieldType.VARIES).optional().description("Minimum building coverage ratio percentage point."),
-                                fieldWithPath("bcRatMax").type(JsonFieldType.VARIES).optional().description("Maximum building coverage ratio percentage point."),
-                                fieldWithPath("vlRatMin").type(JsonFieldType.VARIES).optional().description("Minimum floor area ratio percentage point."),
-                                fieldWithPath("vlRatMax").type(JsonFieldType.VARIES).optional().description("Maximum floor area ratio percentage point.")),
+                                fieldWithPath("bcRatMin")
+                                        .type(JsonFieldType.VARIES)
+                                        .optional()
+                                        .description("Minimum building coverage ratio percentage point."),
+                                fieldWithPath("bcRatMax")
+                                        .type(JsonFieldType.VARIES)
+                                        .optional()
+                                        .description("Maximum building coverage ratio percentage point."),
+                                fieldWithPath("vlRatMin")
+                                        .type(JsonFieldType.VARIES)
+                                        .optional()
+                                        .description("Minimum floor area ratio percentage point."),
+                                fieldWithPath("vlRatMax")
+                                        .type(JsonFieldType.VARIES)
+                                        .optional()
+                                        .description("Maximum floor area ratio percentage point.")),
                         responseFields(
                                 fieldWithPath("[].parcelId")
                                         .type(JsonFieldType.NUMBER)
@@ -294,10 +306,22 @@ class MapApiRestDocsTest {
                                                 .type(JsonFieldType.NULL)
                                                 .optional()
                                                 .description("Maximum household count."),
-                                        fieldWithPath("bcRatMin").type(JsonFieldType.VARIES).optional().description("Minimum building coverage ratio percentage point."),
-                                        fieldWithPath("bcRatMax").type(JsonFieldType.VARIES).optional().description("Maximum building coverage ratio percentage point."),
-                                        fieldWithPath("vlRatMin").type(JsonFieldType.VARIES).optional().description("Minimum floor area ratio percentage point."),
-                                        fieldWithPath("vlRatMax").type(JsonFieldType.VARIES).optional().description("Maximum floor area ratio percentage point."))
+                                        fieldWithPath("bcRatMin")
+                                                .type(JsonFieldType.VARIES)
+                                                .optional()
+                                                .description("Minimum building coverage ratio percentage point."),
+                                        fieldWithPath("bcRatMax")
+                                                .type(JsonFieldType.VARIES)
+                                                .optional()
+                                                .description("Maximum building coverage ratio percentage point."),
+                                        fieldWithPath("vlRatMin")
+                                                .type(JsonFieldType.VARIES)
+                                                .optional()
+                                                .description("Minimum floor area ratio percentage point."),
+                                        fieldWithPath("vlRatMax")
+                                                .type(JsonFieldType.VARIES)
+                                                .optional()
+                                                .description("Maximum floor area ratio percentage point."))
                                 .responseFields(
                                         fieldWithPath("[].parcelId")
                                                 .type(JsonFieldType.NUMBER)

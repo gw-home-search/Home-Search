@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 class JdbcBuildingRegisterEndpointSnapshotStoreTest extends JdbcMigrationTestSupport {
     private static final UUID COLLECTION_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174130");
+    private static final UUID REPAIR_COLLECTION_ID = UUID.fromString("123e4567-e89b-12d3-a456-426614174131");
     private static final String PNU = "1168010300101400001";
     private final LocalDate runDate = LocalDate.of(2026, 7, 20);
     private JdbcBuildingRegisterEndpointSnapshotStore store;
@@ -74,6 +75,56 @@ class JdbcBuildingRegisterEndpointSnapshotStoreTest extends JdbcMigrationTestSup
 
         assertThat(reused.id()).isEqualTo(completed.id());
         assertThat(restarted.id()).isEqualTo(incomplete.id());
+    }
+
+    @Test
+    @DisplayName("repair campaign은 source의 완료 EMPTY page를 raw body와 함께 복사해 재호출하지 않는다")
+    void clonesCompletedSourcePageForRepairResume() {
+        var source = store.open(COLLECTION_ID, PNU, BuildingRegisterEndpoint.BASIC_OVERVIEW, runDate, 100);
+        jdbcClient.sql("""
+                    INSERT INTO building_register_raw_page(
+                      endpoint_snapshot_id,request_id,page_no,attempt_no,status,response_body,
+                      body_sha256,byte_count,http_status,provider_status,finalized_at)
+                    VALUES (:snapshot,'123e4567-e89b-12d3-a456-426614174139',1,1,'EMPTY','{}',
+                      repeat('a',64),2,200,'00',now())
+                    """).param("snapshot", source.id()).update();
+        store.complete(source.id(), 0, BuildingRegisterCollectionStatus.COLLECTED);
+        jdbcClient.sql("""
+                    INSERT INTO building_register_collection_campaign(
+                      collection_id,mode,strategy,to_complex_id,status,purpose,target_scope,selection_seed,sample_size)
+                    VALUES (:id,'profile','COMPARE_RECAP_TITLE',1000,'COLLECTING','PROFILE_DISCOVERY',
+                      'NATIONWIDE_STAGING','repair-test',1)
+                    """).param("id", REPAIR_COLLECTION_ID).update();
+        jdbcClient
+                .sql("""
+                    INSERT INTO building_register_profile_repair_run(
+                      collection_id,source_collection_id,request_id,run_date,repair_policy_version,
+                      max_requests,parallelism,status,target_count)
+                    VALUES (:repair,:source,'123e4567-e89b-12d3-a456-426614174138',:run_date,
+                      'PROFILE_REPAIR_V1',100,1,'RUNNING',1)
+                    """)
+                .param("repair", REPAIR_COLLECTION_ID)
+                .param("source", COLLECTION_ID)
+                .param("run_date", runDate)
+                .update();
+
+        var cloned = store.open(
+                REPAIR_COLLECTION_ID, PNU, BuildingRegisterEndpoint.BASIC_OVERVIEW, runDate.plusDays(1), 100);
+
+        assertThat(cloned.id()).isNotEqualTo(source.id());
+        assertThat(store.completedPage(cloned.id(), 1)).hasValueSatisfying(page -> {
+            assertThat(page.totalCount()).isZero();
+            assertThat(page.records()).isEmpty();
+        });
+        assertThat(jdbcClient
+                        .sql("""
+                    SELECT response_body FROM building_register_raw_page
+                    WHERE endpoint_snapshot_id=:snapshot
+                    """)
+                        .param("snapshot", cloned.id())
+                        .query(String.class)
+                        .single())
+                .isEqualTo("{}");
     }
 
     private String status(long id) {

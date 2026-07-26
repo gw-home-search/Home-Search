@@ -432,4 +432,36 @@ class BatchJobArgumentsTest {
         assertThat(collect.jobParameters().getString("sampleSize")).isNull();
         assertThat(collect.jobParameters().getString("parallelism")).isEqualTo("3");
     }
+
+    @Test
+    @DisplayName("profile repair job은 source lineage, 실행 UUID, V1 policy와 request budget을 고정한다")
+    void parsesBuildingProfileRepairArguments() {
+        BatchJobArguments repair = BatchJobArguments.from(
+                "complexBuildingRegisterProfileRepairJob",
+                Map.of(
+                        "sourceCollectionId", "123e4567-e89b-12d3-a456-426614174020",
+                        "collectionId", "123e4567-e89b-12d3-a456-426614174030",
+                        "requestId", "123e4567-e89b-12d3-a456-426614174031",
+                        "runDate", "2026-07-27",
+                        "repairPolicyVersion", "PROFILE_REPAIR_V1",
+                        "maxRequests", "20000",
+                        "parallelism", "4"),
+                clock);
+
+        assertThat(repair.jobParameters().getString("repairPolicyVersion")).isEqualTo("PROFILE_REPAIR_V1");
+        assertThat(repair.jobParameters().getString("maxRequests")).isEqualTo("20000");
+        assertThat(repair.jobParameters().getString("parallelism")).isEqualTo("4");
+        assertThatThrownBy(() -> BatchJobArguments.from(
+                        "complexBuildingRegisterProfileRepairJob",
+                        Map.of(
+                                "sourceCollectionId", "123e4567-e89b-12d3-a456-426614174020",
+                                "collectionId", "123e4567-e89b-12d3-a456-426614174030",
+                                "requestId", "123e4567-e89b-12d3-a456-426614174031",
+                                "runDate", "2026-07-27",
+                                "repairPolicyVersion", "UNVERSIONED",
+                                "maxRequests", "20000",
+                                "parallelism", "5"),
+                        clock))
+                .isInstanceOf(BatchExitCodeException.class);
+    }
 }

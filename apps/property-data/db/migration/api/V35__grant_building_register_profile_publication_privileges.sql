@@ -1,6 +1,7 @@
 GRANT SELECT, INSERT, UPDATE
 ON TABLE
     public.building_register_profile_publication,
+    public.building_register_profile_repair_run,
     public.building_register_profile_site,
     public.building_register_profile_building,
     public.building_register_profile_hierarchy,
@@ -11,6 +12,7 @@ TO home_search_property_runtime;
 REVOKE DELETE, TRUNCATE
 ON TABLE
     public.building_register_profile_publication,
+    public.building_register_profile_repair_run,
     public.building_register_profile_site,
     public.building_register_profile_building,
     public.building_register_profile_hierarchy,

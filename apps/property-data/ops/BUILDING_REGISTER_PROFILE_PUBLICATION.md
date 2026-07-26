@@ -88,6 +88,23 @@
 - 지적사항: 주·부속 건물, 주차 대수·면적, 층·높이, 승강기, 날짜·도로명주소를
   생활정보에 두고 안전·에너지는 native `<details>`로 접었다.
 
+### Slice 6 — 실패·계층 gap 선별 재수집
+
+- 최초 RED: `BatchJobArgumentsTest.parsesBuildingProfileRepairArguments`
+- 예상 RED 실패: `complexBuildingRegisterProfileRepairJob`이 지원 job 목록과 인자 parser에 없었다.
+- 최소 GREEN: source의 latest provider/parse failure와 명시적 hierarchy reason만 새 campaign에
+  freeze하고, 완료 `PARSED|EMPTY` raw page는 body/record와 함께 복사해 provider 재호출을 막는다.
+- 검증 근거 확인:
+  - `BuildingProfileRepairServiceTest`: `Pass`
+  - `JdbcBuildingProfileRepairRepositoryTest`: `Pass`
+  - `JdbcBuildingRegisterEndpointSnapshotStoreTest.clonesCompletedSourcePageForRepairResume`: `Pass`
+  - repair batch arguments/tasklet/context boundary: `Pass`
+  - 동일 transient provider failure 3회 이후 추가 요청: `0건`
+  - BASIC 호출: `includeBasicOverview=true`이지만 domain hierarchy policy가 reason을 요구한다.
+  - advisory lock: 기존 `BuildingMetadataExecutionLock` 공유
+- 실제 run: `not run` (운영 UUID·provider 인증·당일 quota 확인 전)
+- 진행 조회: `psql -v collection_id=<UUID> -f ops/building-register-profile-repair-progress.sql`
+
 ## 중단 조건
 
 - V33 checksum 또는 archive SHA 불일치

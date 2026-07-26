@@ -3,8 +3,8 @@ package com.home.infrastructure.persistence.propertydetail;
 import com.home.application.propertydetail.ComplexCenter;
 import com.home.application.propertydetail.ComplexCenterReader;
 import com.home.application.propertydetail.PropertyDetailReader;
-import com.home.application.read.ComplexSummaryResult;
 import com.home.application.read.BuildingProfileSummaryResult;
+import com.home.application.read.ComplexSummaryResult;
 import com.home.application.read.ParcelDetailResult;
 import com.home.domain.complex.buildingprofile.BuildingProfilePublicQuality;
 import com.home.domain.complex.buildingprofile.BuildingProfilePublicScope;
@@ -203,7 +203,8 @@ public class JdbcPropertyDetailReader implements PropertyDetailReader, ComplexCe
     }
 
     private ParcelDetailResult withBuildingProfile(ParcelDetailResult detail) {
-        BuildingProfileSummaryResult profile = jdbcClient.sql("""
+        BuildingProfileSummaryResult profile = jdbcClient
+                .sql("""
                     SELECT summary.*
                     FROM complex_building_register_profile_summary summary
                     JOIN building_register_profile_publication publication
@@ -216,10 +217,23 @@ public class JdbcPropertyDetailReader implements PropertyDetailReader, ComplexCe
                 .optional()
                 .orElse(null);
         return new ParcelDetailResult(
-                detail.parcelId(), detail.complexId(), detail.latitude(), detail.longitude(), detail.address(),
-                detail.displayName(), detail.tradeName(), detail.name(), detail.dongCnt(), detail.unitCnt(),
-                detail.platArea(), detail.archArea(), detail.totArea(), detail.bcRat(), detail.vlRat(),
-                detail.useDate(), profile);
+                detail.parcelId(),
+                detail.complexId(),
+                detail.latitude(),
+                detail.longitude(),
+                detail.address(),
+                detail.displayName(),
+                detail.tradeName(),
+                detail.name(),
+                detail.dongCnt(),
+                detail.unitCnt(),
+                detail.platArea(),
+                detail.archArea(),
+                detail.totArea(),
+                detail.bcRat(),
+                detail.vlRat(),
+                detail.useDate(),
+                profile);
     }
 
     private BuildingProfileSummaryResult mapBuildingProfile(ResultSet rs, int rowNumber) throws SQLException {
@@ -233,12 +247,15 @@ public class JdbcPropertyDetailReader implements PropertyDetailReader, ComplexCe
                         rs.getBigDecimal("site_area_m2"), rs.getBigDecimal("building_area_m2"),
                         rs.getBigDecimal("total_floor_area_m2"), rs.getBigDecimal("floor_area_ratio_area_m2"))
                 : null;
-        BuildingProfileSummaryResult.Households households = hasAny(
-                        longOrNull(rs, "household_count"), longOrNull(rs, "family_count"), longOrNull(rs, "unit_count"))
-                ? new BuildingProfileSummaryResult.Households(
-                        scope(rs, "household_scope"), quality(rs, "household_quality"),
-                        longOrNull(rs, "household_count"), longOrNull(rs, "family_count"), longOrNull(rs, "unit_count"))
-                : null;
+        BuildingProfileSummaryResult.Households households =
+                hasAny(longOrNull(rs, "household_count"), longOrNull(rs, "family_count"), longOrNull(rs, "unit_count"))
+                        ? new BuildingProfileSummaryResult.Households(
+                                scope(rs, "household_scope"),
+                                quality(rs, "household_quality"),
+                                longOrNull(rs, "household_count"),
+                                longOrNull(rs, "family_count"),
+                                longOrNull(rs, "unit_count"))
+                        : null;
         BuildingProfileSummaryResult.Parking parking = hasAny(
                         longOrNull(rs, "total_parking_count"), rs.getBigDecimal("parking_per_household"),
                         longOrNull(rs, "indoor_mechanical_count"), rs.getBigDecimal("indoor_mechanical_area_m2"),
@@ -254,57 +271,82 @@ public class JdbcPropertyDetailReader implements PropertyDetailReader, ComplexCe
                         longOrNull(rs, "outdoor_automatic_count"), rs.getBigDecimal("outdoor_automatic_area_m2"))
                 : null;
         BuildingProfileSummaryResult.Building building = hasAny(
-                        longOrNull(rs, "main_building_count"), longOrNull(rs, "attached_building_count"),
-                        longOrNull(rs, "max_ground_floor_count"), longOrNull(rs, "max_underground_floor_count"),
-                        rs.getBigDecimal("max_height_m"), rs.getArray("structure_names"), rs.getArray("roof_names"),
+                        longOrNull(rs, "main_building_count"),
+                        longOrNull(rs, "attached_building_count"),
+                        longOrNull(rs, "max_ground_floor_count"),
+                        longOrNull(rs, "max_underground_floor_count"),
+                        rs.getBigDecimal("max_height_m"),
+                        rs.getArray("structure_names"),
+                        rs.getArray("roof_names"),
                         rs.getArray("primary_use_names"))
                 ? new BuildingProfileSummaryResult.Building(
-                        scope(rs, "building_scope"), quality(rs, "building_quality"),
-                        longOrNull(rs, "main_building_count"), longOrNull(rs, "attached_building_count"),
-                        longOrNull(rs, "max_ground_floor_count"), longOrNull(rs, "max_underground_floor_count"),
-                        rs.getBigDecimal("max_height_m"), strings(rs, "structure_names"), strings(rs, "roof_names"),
+                        scope(rs, "building_scope"),
+                        quality(rs, "building_quality"),
+                        longOrNull(rs, "main_building_count"),
+                        longOrNull(rs, "attached_building_count"),
+                        longOrNull(rs, "max_ground_floor_count"),
+                        longOrNull(rs, "max_underground_floor_count"),
+                        rs.getBigDecimal("max_height_m"),
+                        strings(rs, "structure_names"),
+                        strings(rs, "roof_names"),
                         strings(rs, "primary_use_names"))
                 : null;
-        BuildingProfileSummaryResult.Elevators elevators = hasAny(
-                        longOrNull(rs, "ride_elevator_count"), longOrNull(rs, "emergency_elevator_count"))
-                ? new BuildingProfileSummaryResult.Elevators(
-                        scope(rs, "elevator_scope"), quality(rs, "elevator_quality"),
-                        longOrNull(rs, "ride_elevator_count"), longOrNull(rs, "emergency_elevator_count"))
-                : null;
+        BuildingProfileSummaryResult.Elevators elevators =
+                hasAny(longOrNull(rs, "ride_elevator_count"), longOrNull(rs, "emergency_elevator_count"))
+                        ? new BuildingProfileSummaryResult.Elevators(
+                                scope(rs, "elevator_scope"), quality(rs, "elevator_quality"),
+                                longOrNull(rs, "ride_elevator_count"), longOrNull(rs, "emergency_elevator_count"))
+                        : null;
         String seismic = rs.getString("seismic_design_status");
         BuildingProfileSummaryResult.Safety safety = hasAny(seismic, rs.getArray("seismic_abilities"))
                 ? new BuildingProfileSummaryResult.Safety(
-                        scope(rs, "safety_scope"), quality(rs, "safety_quality"),
+                        scope(rs, "safety_scope"),
+                        quality(rs, "safety_quality"),
                         seismic == null ? null : BuildingProfileSeismicDesignStatus.valueOf(seismic),
                         strings(rs, "seismic_abilities"))
                 : null;
         BuildingProfileSummaryResult.Dates dates = hasAny(
-                        rs.getObject("permit_date"), rs.getObject("construction_start_date"), rs.getObject("use_approval_date"))
+                        rs.getObject("permit_date"),
+                        rs.getObject("construction_start_date"),
+                        rs.getObject("use_approval_date"))
                 ? new BuildingProfileSummaryResult.Dates(
-                        scope(rs, "date_scope"), quality(rs, "date_quality"),
+                        scope(rs, "date_scope"),
+                        quality(rs, "date_quality"),
                         rs.getObject("permit_date", LocalDate.class),
                         rs.getObject("construction_start_date", LocalDate.class),
                         rs.getObject("use_approval_date", LocalDate.class))
                 : null;
-        BuildingProfileSummaryResult.Address address = hasAny(rs.getString("parcel_address"), rs.getString("road_address"))
-                ? new BuildingProfileSummaryResult.Address(
-                        scope(rs, "address_scope"), quality(rs, "address_quality"),
-                        rs.getString("parcel_address"), rs.getString("road_address"))
-                : null;
+        BuildingProfileSummaryResult.Address address =
+                hasAny(rs.getString("parcel_address"), rs.getString("road_address"))
+                        ? new BuildingProfileSummaryResult.Address(
+                                scope(rs, "address_scope"), quality(rs, "address_quality"),
+                                rs.getString("parcel_address"), rs.getString("road_address"))
+                        : null;
         BuildingProfileSummaryResult.Energy energy = hasAny(
-                        rs.getArray("energy_efficiency_grades"), rs.getBigDecimal("energy_saving_rate_min"),
-                        rs.getBigDecimal("energy_saving_rate_max"), rs.getBigDecimal("energy_epi_min"),
-                        rs.getBigDecimal("energy_epi_max"), rs.getArray("green_building_grades"),
-                        rs.getBigDecimal("green_cert_score_min"), rs.getBigDecimal("green_cert_score_max"),
-                        rs.getArray("intelligent_building_grades"), rs.getBigDecimal("intelligent_cert_score_min"),
+                        rs.getArray("energy_efficiency_grades"),
+                        rs.getBigDecimal("energy_saving_rate_min"),
+                        rs.getBigDecimal("energy_saving_rate_max"),
+                        rs.getBigDecimal("energy_epi_min"),
+                        rs.getBigDecimal("energy_epi_max"),
+                        rs.getArray("green_building_grades"),
+                        rs.getBigDecimal("green_cert_score_min"),
+                        rs.getBigDecimal("green_cert_score_max"),
+                        rs.getArray("intelligent_building_grades"),
+                        rs.getBigDecimal("intelligent_cert_score_min"),
                         rs.getBigDecimal("intelligent_cert_score_max"))
                 ? new BuildingProfileSummaryResult.Energy(
-                        scope(rs, "energy_scope"), quality(rs, "energy_quality"),
-                        strings(rs, "energy_efficiency_grades"), rs.getBigDecimal("energy_saving_rate_min"),
-                        rs.getBigDecimal("energy_saving_rate_max"), rs.getBigDecimal("energy_epi_min"),
-                        rs.getBigDecimal("energy_epi_max"), strings(rs, "green_building_grades"),
-                        rs.getBigDecimal("green_cert_score_min"), rs.getBigDecimal("green_cert_score_max"),
-                        strings(rs, "intelligent_building_grades"), rs.getBigDecimal("intelligent_cert_score_min"),
+                        scope(rs, "energy_scope"),
+                        quality(rs, "energy_quality"),
+                        strings(rs, "energy_efficiency_grades"),
+                        rs.getBigDecimal("energy_saving_rate_min"),
+                        rs.getBigDecimal("energy_saving_rate_max"),
+                        rs.getBigDecimal("energy_epi_min"),
+                        rs.getBigDecimal("energy_epi_max"),
+                        strings(rs, "green_building_grades"),
+                        rs.getBigDecimal("green_cert_score_min"),
+                        rs.getBigDecimal("green_cert_score_max"),
+                        strings(rs, "intelligent_building_grades"),
+                        rs.getBigDecimal("intelligent_cert_score_min"),
                         rs.getBigDecimal("intelligent_cert_score_max"))
                 : null;
         return new BuildingProfileSummaryResult(

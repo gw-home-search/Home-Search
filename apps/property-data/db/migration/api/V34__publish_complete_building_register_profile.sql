@@ -1,3 +1,32 @@
+CREATE TABLE public.building_register_profile_repair_run (
+    collection_id uuid PRIMARY KEY REFERENCES public.building_register_collection_campaign(collection_id),
+    source_collection_id uuid NOT NULL REFERENCES public.building_register_collection_campaign(collection_id),
+    request_id uuid NOT NULL,
+    run_date date NOT NULL,
+    repair_policy_version character varying(80) NOT NULL,
+    max_requests integer NOT NULL,
+    parallelism integer NOT NULL,
+    status character varying(16) NOT NULL,
+    target_count integer DEFAULT 0 NOT NULL,
+    request_count integer DEFAULT 0 NOT NULL,
+    completed_count integer DEFAULT 0 NOT NULL,
+    failure_count integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    completed_at timestamp with time zone,
+    failure_reason text,
+    CONSTRAINT uq_brprr_inputs UNIQUE (source_collection_id,collection_id,repair_policy_version),
+    CONSTRAINT ck_brprr_policy CHECK (repair_policy_version='PROFILE_REPAIR_V1'),
+    CONSTRAINT ck_brprr_limits CHECK (max_requests>0 AND max_requests<=20000 AND parallelism BETWEEN 1 AND 4),
+    CONSTRAINT ck_brprr_counts CHECK (
+        target_count>=0 AND request_count>=0 AND completed_count>=0 AND failure_count>=0
+        AND completed_count<=target_count AND failure_count<=target_count),
+    CONSTRAINT ck_brprr_status CHECK (status IN ('RUNNING','COMPLETED','FAILED')),
+    CONSTRAINT ck_brprr_completion CHECK (
+        (status='RUNNING' AND completed_at IS NULL AND failure_reason IS NULL)
+        OR (status='COMPLETED' AND completed_at IS NOT NULL AND failure_reason IS NULL)
+        OR (status='FAILED' AND completed_at IS NULL AND failure_reason IS NOT NULL))
+);
+
 CREATE TABLE public.building_register_profile_publication (
     publication_id uuid PRIMARY KEY,
     source_collection_id uuid NOT NULL REFERENCES public.building_register_collection_campaign(collection_id),

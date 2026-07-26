@@ -18,7 +18,8 @@ public final class BuildingProfileEffectiveValuePolicy {
         }
         BigDecimal reference = values.getFirst();
         boolean agrees = values.stream()
-                .allMatch(value -> value.subtract(reference, MathContext.DECIMAL128).abs().compareTo(tolerance) <= 0);
+                .allMatch(value ->
+                        value.subtract(reference, MathContext.DECIMAL128).abs().compareTo(tolerance) <= 0);
         if (!agrees) {
             return missing(BuildingProfileConflictStatus.SOURCE_CONFLICT);
         }
@@ -35,8 +36,8 @@ public final class BuildingProfileEffectiveValuePolicy {
         if (expectedCount <= 0 || values.size() != expectedCount) {
             return missing(BuildingProfileConflictStatus.INCOMPLETE);
         }
-        BigDecimal sum = values.stream()
-                .reduce(BigDecimal.ZERO, (left, right) -> left.add(right, MathContext.DECIMAL128));
+        BigDecimal sum =
+                values.stream().reduce(BigDecimal.ZERO, (left, right) -> left.add(right, MathContext.DECIMAL128));
         return verified(sum);
     }
 

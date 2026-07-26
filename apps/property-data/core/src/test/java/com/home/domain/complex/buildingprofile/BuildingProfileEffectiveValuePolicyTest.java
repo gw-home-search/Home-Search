@@ -38,15 +38,15 @@ class BuildingProfileEffectiveValuePolicyTest {
     @DisplayName("SUM은 기대 contributor가 모두 유효할 때만 만든다")
     void requiresCompleteContributorsForSum() {
         assertThat(policy.completeSum(List.of(new BigDecimal("10")), 2).value()).isNull();
-        assertThat(policy.completeSum(List.of(new BigDecimal("10"), new BigDecimal("20")), 2).value())
+        assertThat(policy.completeSum(List.of(new BigDecimal("10"), new BigDecimal("20")), 2)
+                        .value())
                 .isEqualByComparingTo("30");
     }
 
     @Test
     @DisplayName("MAX는 일부 contributor만 있어도 PARTIAL 후보로 제공한다")
     void exposesPartialMaximumWithoutVerification() {
-        BuildingProfileDecimalDecision decision =
-                policy.maximum(List.of(new BigDecimal("21.5")), 2);
+        BuildingProfileDecimalDecision decision = policy.maximum(List.of(new BigDecimal("21.5")), 2);
 
         assertThat(decision.value()).isEqualByComparingTo("21.5");
         assertThat(decision.quality()).isEqualTo(BuildingProfilePublicQuality.PARTIAL);

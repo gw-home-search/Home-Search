@@ -40,8 +40,23 @@ public record ParcelDetailResult(
             BigDecimal vlRat,
             LocalDate useDate) {
         this(
-                parcelId, complexId, latitude, longitude, address, displayName, tradeName, name, dongCnt, unitCnt,
-                platArea, archArea, totArea, bcRat, vlRat, useDate, null);
+                parcelId,
+                complexId,
+                latitude,
+                longitude,
+                address,
+                displayName,
+                tradeName,
+                name,
+                dongCnt,
+                unitCnt,
+                platArea,
+                archArea,
+                totArea,
+                bcRat,
+                vlRat,
+                useDate,
+                null);
     }
 
     public ParcelDetailResult(
@@ -83,7 +98,22 @@ public record ParcelDetailResult(
             LocalDate useDate,
             BuildingProfileSummaryResult buildingProfile) {
         this(
-                parcelId, complexId, latitude, longitude, address, name, tradeName, name, dongCnt, unitCnt, platArea,
-                archArea, totArea, bcRat, vlRat, useDate, buildingProfile);
+                parcelId,
+                complexId,
+                latitude,
+                longitude,
+                address,
+                name,
+                tradeName,
+                name,
+                dongCnt,
+                unitCnt,
+                platArea,
+                archArea,
+                totArea,
+                bcRat,
+                vlRat,
+                useDate,
+                buildingProfile);
     }
 }

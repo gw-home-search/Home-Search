@@ -14,6 +14,13 @@ public enum BuildingProfileSourceMethod implements DescribedStoredValue {
         this.descriptionKo = descriptionKo;
     }
 
-    @Override public String titleKo() { return titleKo; }
-    @Override public String descriptionKo() { return descriptionKo; }
+    @Override
+    public String titleKo() {
+        return titleKo;
+    }
+
+    @Override
+    public String descriptionKo() {
+        return descriptionKo;
+    }
 }

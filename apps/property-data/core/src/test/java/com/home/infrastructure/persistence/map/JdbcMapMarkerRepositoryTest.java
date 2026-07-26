@@ -96,12 +96,17 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
     void ratioFilterPrefersDirectValueAndUsesPublishedFallback() {
         seedMapData();
         seedPublishedRatioFallback(501L, new BigDecimal("70.0"), new BigDecimal("240.0"));
-        jdbcClient.sql("UPDATE complex SET bc_rat=40.0, vl_rat=120.0 WHERE id=501").update();
+        jdbcClient
+                .sql("UPDATE complex SET bc_rat=40.0, vl_rat=120.0 WHERE id=501")
+                .update();
         JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
 
-        assertThat(repository.findComplexMarkers(ratioRequest("60.0", "80.0", "200.0", "260.0"))).isEmpty();
+        assertThat(repository.findComplexMarkers(ratioRequest("60.0", "80.0", "200.0", "260.0")))
+                .isEmpty();
 
-        jdbcClient.sql("UPDATE complex SET bc_rat=NULL, vl_rat=NULL WHERE id=501").update();
+        jdbcClient
+                .sql("UPDATE complex SET bc_rat=NULL, vl_rat=NULL WHERE id=501")
+                .update();
         assertThat(repository.findComplexMarkers(ratioRequest("60.0", "80.0", "200.0", "260.0")))
                 .hasSize(1);
     }
@@ -348,8 +353,22 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
     private ComplexMarkerQuery ratioRequest(String bcMin, String bcMax, String vlMin, String vlMax) {
         return new ComplexMarkerQuery(
-                37.45, 126.85, 37.70, 127.20, null, null, null, null, null, null, null, null,
-                new BigDecimal(bcMin), new BigDecimal(bcMax), new BigDecimal(vlMin), new BigDecimal(vlMax));
+                37.45,
+                126.85,
+                37.70,
+                127.20,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                new BigDecimal(bcMin),
+                new BigDecimal(bcMax),
+                new BigDecimal(vlMin),
+                new BigDecimal(vlMax));
     }
 
     private void seedPublishedRatioFallback(Long complexId, BigDecimal bcRat, BigDecimal vlRat) {
@@ -388,11 +407,16 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
                     '123e4567-e89b-12d3-a456-426614174303','PUBLIC_V1','PROFILE_V1','PUBLISHED',0,0,0,0,0,
                     repeat('a',64),now(),now())
             """).update();
-        jdbcClient.sql("""
+        jdbcClient
+                .sql("""
             INSERT INTO complex_building_register_profile_summary
               (publication_id,complex_id,ratio_scope,ratio_quality,building_coverage_rate,floor_area_ratio)
             VALUES ('123e4567-e89b-12d3-a456-426614174304',:complex,'PARCEL','PNU_FALLBACK',:bc,:vl)
-            """).param("complex", complexId).param("bc", bcRat).param("vl", vlRat).update();
+            """)
+                .param("complex", complexId)
+                .param("bc", bcRat)
+                .param("vl", vlRat)
+                .update();
     }
 
     private void seedRedevelopmentParcel() {

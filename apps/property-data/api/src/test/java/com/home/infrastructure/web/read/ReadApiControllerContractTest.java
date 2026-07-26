@@ -526,7 +526,8 @@ class ReadApiControllerContractTest {
                 .andExpect(jsonPath("$.unitCnt").value(410))
                 .andExpect(jsonPath("$.buildingProfile.ratios.scope").value("PARCEL"))
                 .andExpect(jsonPath("$.buildingProfile.ratios.quality").value("PNU_FALLBACK"))
-                .andExpect(jsonPath("$.buildingProfile.ratios.buildingCoverageRate").value(72.30))
+                .andExpect(jsonPath("$.buildingProfile.ratios.buildingCoverageRate")
+                        .value(72.30))
                 .andExpect(jsonPath("$.buildingProfile.households.familyCount").value(0))
                 .andExpect(jsonPath("$.complexPk").doesNotExist())
                 .andExpect(jsonPath("$.buildingProfile.managementKey").doesNotExist())
@@ -709,6 +710,12 @@ class ReadApiControllerContractTest {
                         410L,
                         0L,
                         420L),
-                null, null, null, null, null, null, null);
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 }

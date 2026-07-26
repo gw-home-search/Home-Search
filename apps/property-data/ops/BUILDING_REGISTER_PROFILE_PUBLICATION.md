@@ -105,6 +105,23 @@
 - 실제 run: `not run` (운영 UUID·provider 인증·당일 quota 확인 전)
 - 진행 조회: `psql -v collection_id=<UUID> -f ops/building-register-profile-repair-progress.sql`
 
+### Slice 7 — archive와 데이터 검증
+
+- read-only 확인 DB: `home-search-profile-analysis-postgis-arm64/home_search`
+- 확인 행 수: profile record `1,239,950`, value `28,149,028`, hierarchy reason `88,816`,
+  complex match `44,200`, parse page `118,971`, DB size `6,938,399,203 bytes`.
+- field identifier: `SITE=35`, `BUILDING=39`, `HIERARCHY=9` (`총 83`).
+- primary 기준: complex `44,217`, parcel `43,738`, projected complex `44,200`, building `19,859`.
+- ratio PNU coverage: BC `84.47656732%`, VL `84.63667345%`.
+- 기존 archive manifest:
+  - archive id: `031150dc-9801-4c89-86d7-1df0fbc559d5`
+  - recorded SHA-256: `5e7bf03df3304896cfe4ea77b07f14b39af654db6a25f1ee405a936be796402e`
+  - recorded bytes: `2,985,838,267`
+  - status: `CLEANED`
+- 검증 공백: manifest의 `archive_uri` 파일이 이미 존재하지 않아 SHA 재계산과 ARM restore를
+  실행할 수 없다. 이 작업에서는 archive, raw, temp DB를 삭제하거나 변경하지 않았다.
+- publication 검증 query: `psql -v publication_id=<UUID> -f ops/building-register-profile-publication-verify.sql`
+
 ## 중단 조건
 
 - V33 checksum 또는 archive SHA 불일치

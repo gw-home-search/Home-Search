@@ -124,6 +124,45 @@ class JdbcMarketNewsRepositoryIntegrationTest extends JdbcPostgresTestSupport {
     }
 
     @Test
+    @DisplayName("terminal page 완료는 cursor와 cutoff 상태를 한 row update로 보존한다")
+    void completesTerminalPageWithCursorAndState() {
+        record TerminalPageRow(
+                int providerStart,
+                int callCount,
+                int rawItemCount,
+                Instant oldestProvidedAt,
+                String state,
+                boolean cutoffReached) {}
+
+        collectionRepository.completeWorkUnitPage(
+                workUnitId(3), 901, 10, 9, GENERATED_AT.minusSeconds(60), GENERATED_AT);
+
+        TerminalPageRow terminal = jdbcClient
+                .sql("""
+                    SELECT last_provider_start, call_count, raw_item_count,
+                           oldest_provided_at, state, cutoff_reached
+                    FROM market_news_collection_work_unit
+                    WHERE work_unit_id = :workUnitId
+                    """)
+                .param("workUnitId", workUnitId(3))
+                .query((rs, rowNum) -> new TerminalPageRow(
+                        rs.getInt("last_provider_start"),
+                        rs.getInt("call_count"),
+                        rs.getInt("raw_item_count"),
+                        rs.getObject("oldest_provided_at", java.time.OffsetDateTime.class)
+                                .toInstant(),
+                        rs.getString("state"),
+                        rs.getBoolean("cutoff_reached")))
+                .single();
+        var resumable =
+                collectionRepository.findResumableExecution("NEWS-INTEGRATION").orElseThrow();
+
+        assertThat(terminal)
+                .isEqualTo(new TerminalPageRow(901, 10, 9, GENERATED_AT.minusSeconds(60), "COMPLETED", true));
+        assertThat(resumable.workUnits()).extracting(unit -> unit.order()).containsExactly(1, 2, 4, 5, 6);
+    }
+
+    @Test
     @DisplayName("같은 provider 위치의 변경된 payload는 기존 raw evidence와 일치하지 않는다")
     void rejectsChangedPayloadAtExistingProviderPosition() {
         NewsProviderItem original = new NewsProviderItem(

@@ -38,6 +38,14 @@ public interface MarketNewsCollectionRepository {
     void recordWorkUnitPageProgress(
             UUID workUnitId, int providerStart, int callCount, int rawItemCount, Instant oldestProvidedAt);
 
+    void completeWorkUnitPage(
+            UUID workUnitId,
+            int providerStart,
+            int callCount,
+            int rawItemCount,
+            Instant oldestProvidedAt,
+            Instant completedAt);
+
     long upsertArticle(NormalizedNewsItem item, Instant seenAt);
 
     void linkRawItem(UUID workUnitId, NewsProviderItem rawItem, long articleId);

@@ -140,7 +140,6 @@ public class MarketNewsCollectionService {
         int rawCount = unit.collectedRawItemCount();
         int start = unit.nextProviderStart();
         Instant oldest = unit.oldestProvidedAt();
-        boolean cutoffReached = false;
         MarketNewsRelationPolicy.IndexedCorpus relationIndex = relationPolicy.index(unit.matchingCorpus());
         try {
             while (start <= MAX_START && callsBeforeUnit + unitCalls.value < execution.callBudget()) {
@@ -168,29 +167,31 @@ public class MarketNewsCollectionService {
                     }
                     processNormalized(execution, unit, relationIndex, raw, item);
                 }
+                if (page.items().isEmpty() || (oldest != null && !oldest.isAfter(execution.overlapCutoff()))) {
+                    repository.completeWorkUnitPage(
+                            unit.workUnitId(),
+                            start,
+                            unit.collectedCallCount() + unitCalls.value,
+                            rawCount,
+                            oldest,
+                            clock.instant());
+                    return new UnitResult(MarketNewsWorkUnitState.COMPLETED, unitCalls.value, null);
+                }
                 repository.recordWorkUnitPageProgress(
                         unit.workUnitId(), start, unit.collectedCallCount() + unitCalls.value, rawCount, oldest);
-                if (page.items().isEmpty() || (oldest != null && !oldest.isAfter(execution.overlapCutoff()))) {
-                    cutoffReached = true;
-                    break;
-                }
                 start += DISPLAY;
             }
-            MarketNewsWorkUnitState state =
-                    cutoffReached ? MarketNewsWorkUnitState.COMPLETED : MarketNewsWorkUnitState.TRUNCATED;
             repository.finishWorkUnit(
                     unit.workUnitId(),
-                    state,
+                    MarketNewsWorkUnitState.TRUNCATED,
                     unit.collectedCallCount() + unitCalls.value,
                     rawCount,
                     oldest,
-                    cutoffReached,
-                    state == MarketNewsWorkUnitState.TRUNCATED ? MarketNewsFailureKind.CUTOFF_NOT_REACHED : null,
+                    false,
+                    MarketNewsFailureKind.CUTOFF_NOT_REACHED,
                     clock.instant());
             return new UnitResult(
-                    state,
-                    unitCalls.value,
-                    state == MarketNewsWorkUnitState.TRUNCATED ? MarketNewsFailureKind.CUTOFF_NOT_REACHED : null);
+                    MarketNewsWorkUnitState.TRUNCATED, unitCalls.value, MarketNewsFailureKind.CUTOFF_NOT_REACHED);
         } catch (NewsCallBudgetExceededException exception) {
             repository.finishWorkUnit(
                     unit.workUnitId(),

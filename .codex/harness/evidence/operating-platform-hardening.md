@@ -24,6 +24,12 @@
 - 예상 RED 실패: `RUNNING` unit이 저장된 `last_provider_start`를 무시하고 `start=1`부터 재호출하며, 같은 provider 위치의 변경된 payload가 기존 raw row의 article/rejection 결과를 바꿀 수 있었다.
 - 최소 GREEN: 마지막 성공 page와 누적 call/raw/oldest 상태를 page마다 저장·복원하고, 동일 raw payload만 link/reject하도록 제한했다. service unit test와 PostgreSQL resume/raw-match integration test가 통과했다.
 
+## News terminal page crash safety
+
+- 최초 RED: `./gradlew :core:test --tests com.home.application.news.collection.MarketNewsCollectionServiceTest.completesTerminalResumePageAtomically --no-daemon --stacktrace`가 `completeWorkUnitPage` 부재로 `:core:compileTestJava`에서 실패했다.
+- 예상 RED 실패: 재개한 마지막 `start=901` page에서 progress cursor를 먼저 저장하고 cutoff 완료 전 중단되면 다음 실행이 `start=1001`로 건너뛰어 정상 unit을 `TRUNCATED/CUTOFF_NOT_REACHED`로 오판했다.
+- 최소 GREEN: terminal page는 일반 progress 저장 없이 repository의 단일 `completeWorkUnitPage`로 cursor·count·cutoff·COMPLETED 상태를 한 SQL update에 저장한다. `MarketNewsCollectionServiceTest` 전체와 실제 PostgreSQL terminal row/resumable exclusion integration test가 통과했다.
+
 ## News failure kind domain ownership
 
 - 최초 RED: `./gradlew :core:test --tests com.home.domain.news.MarketNewsFailureKindTest --no-daemon --stacktrace`가 `MarketNewsFailureKind`를 찾을 수 없어 `:core:compileTestJava`에서 실패했다.

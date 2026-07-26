@@ -497,6 +497,40 @@ public class JdbcMarketNewsCollectionRepository implements MarketNewsCollectionR
     }
 
     @Override
+    public void completeWorkUnitPage(
+            UUID workUnitId,
+            int providerStart,
+            int callCount,
+            int rawItemCount,
+            Instant oldestProvidedAt,
+            Instant completedAt) {
+        int updated = jdbcClient
+                .sql("""
+                    UPDATE market_news_collection_work_unit
+                    SET last_provider_start = GREATEST(last_provider_start, :providerStart),
+                        call_count = GREATEST(call_count, :callCount),
+                        raw_item_count = GREATEST(raw_item_count, :rawItemCount),
+                        oldest_provided_at = :oldestProvidedAt,
+                        cutoff_reached = true,
+                        state = 'COMPLETED',
+                        failure_kind = NULL,
+                        completed_at = :completedAt
+                    WHERE work_unit_id = :workUnitId
+                      AND state = 'RUNNING'
+                    """)
+                .param("providerStart", providerStart)
+                .param("callCount", callCount)
+                .param("rawItemCount", rawItemCount)
+                .param("oldestProvidedAt", utc(oldestProvidedAt))
+                .param("completedAt", utc(completedAt))
+                .param("workUnitId", workUnitId)
+                .update();
+        if (updated != 1) {
+            throw new IllegalStateException("수집 중인 뉴스 work unit 완료 page를 저장할 수 없습니다");
+        }
+    }
+
+    @Override
     public long upsertArticle(NormalizedNewsItem item, Instant seenAt) {
         return jdbcClient
                 .sql("""

@@ -96,18 +96,46 @@ class MarketNewsCollectionServiceTest {
         assertThat(result.completedWorkUnits()).isEqualTo(2);
         verify(repository, never()).planGeneral(any(), any(), any(), anyInt());
         verify(provider).search(org.mockito.ArgumentMatchers.argThat(query -> query.start() == 201));
+        verify(repository, never()).recordWorkUnitPageProgress(any(), anyInt(), anyInt(), anyInt(), any());
         verify(repository)
-                .recordWorkUnitPageProgress(eq(WORK_UNIT_ID), eq(201), eq(3), eq(4), eq(NOW.minusSeconds(60)));
+                .completeWorkUnitPage(eq(WORK_UNIT_ID), eq(201), eq(3), eq(4), eq(NOW.minusSeconds(60)), any());
+    }
+
+    @Test
+    @DisplayName("마지막 provider page에서 cutoff를 만나면 cursor와 완료 상태를 원자 저장한다")
+    void completesTerminalResumePageAtomically() {
+        MarketNewsCollectionRepository repository = mock(MarketNewsCollectionRepository.class);
+        NewsProviderGateway provider = mock(NewsProviderGateway.class);
+        NewsItemNormalizationGateway normalizer = mock(NewsItemNormalizationGateway.class);
+        MarketNewsPublicationCache cache = mock(MarketNewsPublicationCache.class);
+        MarketNewsCollectionExecution resumable = new MarketNewsCollectionExecution(
+                EXECUTION_ID,
+                "NEWS-RECOVERY-LAST-PAGE",
+                "GENERAL",
+                "NEWS_V2",
+                NOW,
+                NOW.minusSeconds(2 * 60 * 60),
+                4000,
+                9,
+                1,
+                0,
+                0,
+                0,
+                0,
+                List.of(resumedNationalUnitAtLastPage()));
+        when(repository.findResumableExecution("NEWS-RECOVERY-LAST-PAGE")).thenReturn(Optional.of(resumable));
+        when(provider.search(any())).thenReturn(new NewsProviderPage(0, 901, 0, List.of()));
+        when(repository.publishEligibleScopes(EXECUTION_ID, NOW)).thenReturn(List.of());
+
+        MarketNewsCollectionResult result =
+                service(repository, provider, normalizer, cache).collectGeneral("NEWS-RECOVERY-LAST-PAGE", NOW, 4000);
+
+        assertThat(result.state()).isEqualTo(MarketNewsExecutionState.COMPLETED);
+        assertThat(result.callCount()).isEqualTo(10);
+        verify(provider).search(org.mockito.ArgumentMatchers.argThat(query -> query.start() == 901));
+        verify(repository, never()).recordWorkUnitPageProgress(any(), anyInt(), anyInt(), anyInt(), any());
         verify(repository)
-                .finishWorkUnit(
-                        eq(WORK_UNIT_ID),
-                        eq(MarketNewsWorkUnitState.COMPLETED),
-                        eq(3),
-                        eq(4),
-                        eq(NOW.minusSeconds(60)),
-                        eq(true),
-                        org.mockito.ArgumentMatchers.isNull(),
-                        any());
+                .completeWorkUnitPage(eq(WORK_UNIT_ID), eq(901), eq(10), eq(9), eq(NOW.minusSeconds(60)), any());
     }
 
     @Test
@@ -606,6 +634,24 @@ class MarketNewsCollectionServiceTest {
                 201,
                 2,
                 4,
+                NOW.minusSeconds(60));
+    }
+
+    private static MarketNewsWorkUnitSpec resumedNationalUnitAtLastPage() {
+        return new MarketNewsWorkUnitSpec(
+                WORK_UNIT_ID,
+                1,
+                MarketNewsWorkUnitKind.NATIONAL_CATEGORY,
+                MarketNewsScopeType.NATIONWIDE,
+                null,
+                null,
+                MarketNewsCategory.TRANSACTION_PRICE,
+                "아파트 매매 거래 가격",
+                null,
+                List.of(),
+                901,
+                9,
+                9,
                 NOW.minusSeconds(60));
     }
 

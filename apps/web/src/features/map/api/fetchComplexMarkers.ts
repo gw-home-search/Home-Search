@@ -15,6 +15,10 @@ export type ComplexMarkersRequest = {
   ageMax?: number | null;
   unitMin?: number | null;
   unitMax?: number | null;
+  bcRatMin?: number | null;
+  bcRatMax?: number | null;
+  vlRatMin?: number | null;
+  vlRatMax?: number | null;
 };
 
 export type ComplexMarker = {

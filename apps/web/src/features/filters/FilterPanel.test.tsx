@@ -14,6 +14,10 @@ const EMPTY_FILTERS: Required<ComplexMarkerFilters> = {
   ageMax: null,
   unitMin: null,
   unitMax: null,
+  bcRatMin: null,
+  bcRatMax: null,
+  vlRatMin: null,
+  vlRatMax: null,
 };
 
 describe('FilterPanel 필터 동작', () => {
@@ -140,6 +144,32 @@ describe('FilterPanel 필터 동작', () => {
     });
     act(() => testHost.querySelector<HTMLButtonElement>('button[aria-label="마커 필터 초기화"]')?.click());
     expect(onChange).toHaveBeenLastCalledWith(EMPTY_FILTERS);
+  });
+
+  it('건폐율과 용적률은 percentage point 소수 범위를 적용한다', async () => {
+    const testHost = document.createElement('div');
+    host = testHost;
+    document.body.append(testHost);
+    root = createRoot(testHost);
+    const onChange = vi.fn();
+
+    await act(async () => {
+      root?.render(
+        <FilterPanel activeFilterCount={0} filters={EMPTY_FILTERS} onChange={onChange} onReset={vi.fn()} />,
+      );
+    });
+
+    act(() => testHost.querySelector<HTMLButtonElement>('button[aria-label="건폐율 필터 열기"]')?.click());
+    act(() => {
+      setInputValue(testHost.querySelector('input[aria-label="최소 건폐율"]'), '55.5');
+      setInputValue(testHost.querySelector('input[aria-label="최대 건폐율"]'), '72.3');
+      testHost.querySelector<HTMLButtonElement>('button[aria-label="건폐율 필터 적용"]')?.click();
+    });
+    expect(onChange).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, bcRatMin: 55.5, bcRatMax: 72.3 });
+
+    act(() => testHost.querySelector<HTMLButtonElement>('button[aria-label="용적률 필터 열기"]')?.click());
+    expect(testHost.querySelector<HTMLInputElement>('input[aria-label="최대 용적률 슬라이더"]')?.max)
+      .toBe('1000');
   });
 
   it('group 요약은 표시하고 적용 count 문구는 렌더링하지 않는다', async () => {

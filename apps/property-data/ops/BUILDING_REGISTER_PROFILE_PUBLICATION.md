@@ -60,6 +60,21 @@
   - 기존 최상위 필드와 URL 변경: `0건`
   - management key, PNU, provider/raw 식별자 공개: `0건`
 
+### Slice 4 — 건폐율·용적률 지도 필터
+
+- 최초 RED: decimal range 전달/역전 400, direct 우선/PNU fallback persistence, filter chip test.
+- 예상 RED 실패: request DTO, SQL parameter, cache key, frontend definition이 없었다.
+- 최소 GREEN: 기존 shape-filter SQL 하나를 확장하고 cache prefix를 `schema-b`로 올렸다.
+- 검증 근거 확인:
+  - `JdbcMapMarkerRepositoryTest`: `Pass` (18 tests)
+  - `MapControllerContractTest`: `Pass`
+  - `MapApiRestDocsTest`: `Pass`
+  - web 전체 test: `Pass` (69 files, 385 tests)
+  - web lint: `Pass` (오류 0, 기존 warning 6)
+  - web build: `Pass`
+- 지적사항: fallback JOIN은 `scope=PARCEL`, `quality=PNU_FALLBACK`만 허용하며
+  무필터 요청은 기존 trade-first SQL을 유지한다.
+
 ## 중단 조건
 
 - V33 checksum 또는 archive SHA 불일치

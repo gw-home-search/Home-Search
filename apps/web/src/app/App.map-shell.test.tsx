@@ -592,6 +592,10 @@ describe('App 지도 shell', () => {
           ageMax: null,
           unitMin: null,
           unitMax: null,
+          bcRatMin: null,
+          bcRatMax: null,
+          vlRatMin: null,
+          vlRatMax: null,
         }),
       }),
     );

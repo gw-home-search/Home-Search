@@ -6,6 +6,7 @@ import static org.assertj.core.groups.Tuple.tuple;
 import com.home.application.map.ComplexMarkerQuery;
 import com.home.application.map.ComplexMarkerResult;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -88,6 +89,21 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
                         ComplexMarkerResult::latestDealAmount,
                         ComplexMarkerResult::unitCntSum)
                 .containsExactly(tuple(1001L, null, "Sample Apartment B", 125000L, 860L));
+    }
+
+    @Test
+    @DisplayName("ratio filter는 direct complex 값을 우선하고 없을 때 PNU fallback을 사용한다")
+    void ratioFilterPrefersDirectValueAndUsesPublishedFallback() {
+        seedMapData();
+        seedPublishedRatioFallback(501L, new BigDecimal("70.0"), new BigDecimal("240.0"));
+        jdbcClient.sql("UPDATE complex SET bc_rat=40.0, vl_rat=120.0 WHERE id=501").update();
+        JdbcMapMarkerRepository repository = new JdbcMapMarkerRepository(jdbcClient);
+
+        assertThat(repository.findComplexMarkers(ratioRequest("60.0", "80.0", "200.0", "260.0"))).isEmpty();
+
+        jdbcClient.sql("UPDATE complex SET bc_rat=NULL, vl_rat=NULL WHERE id=501").update();
+        assertThat(repository.findComplexMarkers(ratioRequest("60.0", "80.0", "200.0", "260.0")))
+                .hasSize(1);
     }
 
     @Test
@@ -328,6 +344,55 @@ class JdbcMapMarkerRepositoryTest extends JdbcPostgresTestSupport {
 
     private ComplexMarkerQuery combinedFilterRequest() {
         return new ComplexMarkerQuery(37.45, 126.85, 37.70, 127.20, 25, 26, 12.0, 13.0, 10, 30, 800L, 900L);
+    }
+
+    private ComplexMarkerQuery ratioRequest(String bcMin, String bcMax, String vlMin, String vlMax) {
+        return new ComplexMarkerQuery(
+                37.45, 126.85, 37.70, 127.20, null, null, null, null, null, null, null, null,
+                new BigDecimal(bcMin), new BigDecimal(bcMax), new BigDecimal(vlMin), new BigDecimal(vlMax));
+    }
+
+    private void seedPublishedRatioFallback(Long complexId, BigDecimal bcRat, BigDecimal vlRat) {
+        jdbcClient.sql("""
+            INSERT INTO building_register_collection_campaign
+              (collection_id,mode,strategy,to_complex_id,status,purpose,target_scope,selection_seed,sample_size)
+            VALUES ('123e4567-e89b-12d3-a456-426614174300','profile','COMPARE_RECAP_TITLE',1000,'COLLECTING',
+                    'PROFILE_DISCOVERY','NATIONWIDE_STAGING','map-ratio',1)
+            """).update();
+        jdbcClient.sql("""
+            INSERT INTO building_register_profile_parse_run
+              (parse_run_id,source_collection_id,parser_version,status)
+            VALUES ('123e4567-e89b-12d3-a456-426614174301','123e4567-e89b-12d3-a456-426614174300','PROFILE_V1','RUNNING')
+            """).update();
+        jdbcClient.sql("""
+            INSERT INTO building_register_profile_analysis_run
+              (analysis_run_id,collection_id,parse_run_id,rules_version,status)
+            VALUES ('123e4567-e89b-12d3-a456-426614174302','123e4567-e89b-12d3-a456-426614174300',
+                    '123e4567-e89b-12d3-a456-426614174301','RULES_V1','RUNNING')
+            """).update();
+        jdbcClient.sql("""
+            INSERT INTO building_register_profile_projection_run
+              (projection_run_id,analysis_run_id,collection_id,parse_run_id,projection_version,minimum_readiness,status)
+            VALUES ('123e4567-e89b-12d3-a456-426614174303','123e4567-e89b-12d3-a456-426614174302',
+                    '123e4567-e89b-12d3-a456-426614174300','123e4567-e89b-12d3-a456-426614174301',
+                    'PROJECTION_V1',0.5,'RUNNING')
+            """).update();
+        jdbcClient.sql("""
+            INSERT INTO building_register_profile_publication
+              (publication_id,source_collection_id,source_parse_run_id,source_analysis_run_id,source_projection_run_id,
+               rules_version,parser_version,status,expected_site_count,expected_building_count,
+               expected_hierarchy_count,expected_evidence_count,expected_summary_count,
+               content_sha256,validated_at,published_at)
+            VALUES ('123e4567-e89b-12d3-a456-426614174304','123e4567-e89b-12d3-a456-426614174300',
+                    '123e4567-e89b-12d3-a456-426614174301','123e4567-e89b-12d3-a456-426614174302',
+                    '123e4567-e89b-12d3-a456-426614174303','PUBLIC_V1','PROFILE_V1','PUBLISHED',0,0,0,0,0,
+                    repeat('a',64),now(),now())
+            """).update();
+        jdbcClient.sql("""
+            INSERT INTO complex_building_register_profile_summary
+              (publication_id,complex_id,ratio_scope,ratio_quality,building_coverage_rate,floor_area_ratio)
+            VALUES ('123e4567-e89b-12d3-a456-426614174304',:complex,'PARCEL','PNU_FALLBACK',:bc,:vl)
+            """).param("complex", complexId).param("bc", bcRat).param("vl", vlRat).update();
     }
 
     private void seedRedevelopmentParcel() {

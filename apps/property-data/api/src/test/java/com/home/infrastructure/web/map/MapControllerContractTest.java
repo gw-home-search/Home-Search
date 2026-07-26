@@ -373,6 +373,14 @@ class MapControllerContractTest {
 				"unitMin": 900,
 				"unitMax": 100
 				"""),
+                Arguments.of("건폐율 최소값이 최대값보다 크다", """
+				"bcRatMin": 70.1,
+				"bcRatMax": 70.0
+				"""),
+                Arguments.of("용적률 최소값이 최대값보다 크다", """
+				"vlRatMin": 250.1,
+				"vlRatMax": 250.0
+				"""),
                 Arguments.of("pyeong이 음수다", """
 				"pyeongMin": -1
 				"""),
@@ -384,6 +392,12 @@ class MapControllerContractTest {
 				"""),
                 Arguments.of("unit count가 음수다", """
 				"unitMin": -1
+				"""),
+                Arguments.of("건폐율이 음수다", """
+				"bcRatMin": -0.1
+				"""),
+                Arguments.of("용적률이 음수다", """
+				"vlRatMin": -0.1
 				"""));
     }
 

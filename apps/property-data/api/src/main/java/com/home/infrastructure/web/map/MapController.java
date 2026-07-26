@@ -56,7 +56,11 @@ public class MapController {
                 request.ageMin(),
                 request.ageMax(),
                 request.unitMin(),
-                request.unitMax());
+                request.unitMax(),
+                request.bcRatMin(),
+                request.bcRatMax(),
+                request.vlRatMin(),
+                request.vlRatMax());
     }
 
     private static RegionMarkerQuery toQuery(RegionMarkersRequest request) {

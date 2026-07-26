@@ -10,7 +10,7 @@ import {
 import { RefreshIcon, SearchIcon } from '../../shared/icons';
 import type { ComplexMarkerFilters } from '../map/api/fetchMapMarkers';
 
-type FilterKey = 'unit' | 'pyeong' | 'price' | 'age';
+type FilterKey = 'unit' | 'pyeong' | 'price' | 'age' | 'bcRat' | 'vlRat';
 type CompleteFilters = Required<ComplexMarkerFilters>;
 
 type FilterPanelProps = {
@@ -39,6 +39,8 @@ const FILTERS: FilterDefinition[] = [
   { key: 'pyeong', label: '평형', minName: 'pyeongMin', maxName: 'pyeongMax', minLabel: '최소 평형', maxLabel: '최대 평형', unit: '평', ceiling: 120, step: 1 },
   { key: 'price', label: '가격', minName: 'priceEokMin', maxName: 'priceEokMax', minLabel: '최소 가격 억', maxLabel: '최대 가격 억', unit: '억', ceiling: 80, step: 0.1 },
   { key: 'age', label: '입주년차', minName: 'ageMin', maxName: 'ageMax', minLabel: '최소 연식', maxLabel: '최대 연식', unit: '년', ceiling: 40, step: 1 },
+  { key: 'bcRat', label: '건폐율', minName: 'bcRatMin', maxName: 'bcRatMax', minLabel: '최소 건폐율', maxLabel: '최대 건폐율', unit: '%', ceiling: 100, step: 0.1 },
+  { key: 'vlRat', label: '용적률', minName: 'vlRatMin', maxName: 'vlRatMax', minLabel: '최소 용적률', maxLabel: '최대 용적률', unit: '%', ceiling: 1000, step: 0.1 },
 ];
 
 export function FilterPanel({

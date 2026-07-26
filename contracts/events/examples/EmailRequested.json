@@ -1,0 +1,19 @@
+{
+  "eventId": "77777777-7777-4777-8777-777777777777",
+  "eventType": "EmailRequested",
+  "schemaVersion": 1,
+  "occurredAt": "2026-07-24T03:06:00Z",
+  "producer": "user-service",
+  "aggregateType": "Delivery",
+  "aggregateId": "delivery-701",
+  "aggregateVersion": 1,
+  "correlationId": "digest-20260724",
+  "causationId": "66666666-6666-4666-8666-666666666666",
+  "traceId": "trace-777",
+  "payload": {
+    "deliveryId": "77777777-aaaa-4777-8777-777777777777",
+    "userId": "user-42",
+    "digestId": "66666666-bbbb-4666-8666-666666666666",
+    "consentVersion": 3
+  }
+}

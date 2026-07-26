@@ -1,0 +1,39 @@
+spring:
+  main:
+    web-application-type: none
+  batch:
+    job:
+      enabled: false
+  flyway:
+    enabled: false
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  kafka:
+    bootstrap-servers: "${HOME_KAFKA_BOOTSTRAP_SERVERS:}"
+    properties:
+      security.protocol: SASL_SSL
+      sasl.mechanism: AWS_MSK_IAM
+      sasl.jaas.config: "software.amazon.msk.auth.iam.IAMLoginModule required;"
+      sasl.client.callback.handler.class: software.amazon.msk.auth.iam.IAMClientCallbackHandler
+      reconnect.backoff.ms: 1000
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        enable.idempotence: true
+
+home:
+  events:
+    relay:
+      enabled: "${HOME_EVENTS_RELAY_ENABLED:false}"
+  news:
+    naver:
+      enabled: "${HOME_NEWS_NAVER_ENABLED:false}"
+  insight:
+    trade:
+      enabled: "${HOME_INSIGHT_TRADE_ENABLED:false}"
+  ingest:
+    rtms:
+      daily:
+        enabled: "${HOME_INGEST_RTMS_DAILY_ENABLED:false}"

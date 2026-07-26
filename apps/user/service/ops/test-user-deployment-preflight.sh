@@ -41,10 +41,10 @@ FAKE_DOCKER
 chmod +x "${TEST_ROOT}/bin/docker"
 : > "${TEST_ROOT}/docker.log"
 
-readonly PENDING_INFO='{"migrations":[{"version":"1","type":"SQL","state":"Pending"},{"version":"2","type":"SQL","state":"Pending"},{"version":"3","type":"SQL","state":"Pending"},{"version":"4","type":"SQL","state":"Pending"},{"version":"5","type":"SQL","state":"Pending"}]}'
-readonly SUCCESS_INFO='{"migrations":[{"version":"1","type":"SQL","state":"Success"},{"version":"2","type":"SQL","state":"Success"},{"version":"3","type":"SQL","state":"Success"},{"version":"4","type":"SQL","state":"Success"},{"version":"5","type":"SQL","state":"Success"}]}'
-readonly REPEATABLE_INFO='{"migrations":[{"version":"1","type":"SQL","state":"Pending"},{"version":"2","type":"SQL","state":"Pending"},{"version":"3","type":"SQL","state":"Pending"},{"version":"4","type":"SQL","state":"Pending"},{"version":"5","type":"SQL","state":"Pending"},{"category":"Repeatable","version":null,"type":"SQL","state":"Pending"}]}'
-readonly SUCCESS_HISTORY=$'<null>|SCHEMA|t\n1|SQL|t\n2|SQL|t\n3|SQL|t\n4|SQL|t\n5|SQL|t\n'
+readonly PENDING_INFO='{"migrations":[{"version":"1","type":"SQL","state":"Pending"},{"version":"2","type":"SQL","state":"Pending"},{"version":"3","type":"SQL","state":"Pending"},{"version":"4","type":"SQL","state":"Pending"},{"version":"5","type":"SQL","state":"Pending"},{"version":"6","type":"SQL","state":"Pending"}]}'
+readonly SUCCESS_INFO='{"migrations":[{"version":"1","type":"SQL","state":"Success"},{"version":"2","type":"SQL","state":"Success"},{"version":"3","type":"SQL","state":"Success"},{"version":"4","type":"SQL","state":"Success"},{"version":"5","type":"SQL","state":"Success"},{"version":"6","type":"SQL","state":"Success"}]}'
+readonly REPEATABLE_INFO='{"migrations":[{"version":"1","type":"SQL","state":"Pending"},{"version":"2","type":"SQL","state":"Pending"},{"version":"3","type":"SQL","state":"Pending"},{"version":"4","type":"SQL","state":"Pending"},{"version":"5","type":"SQL","state":"Pending"},{"version":"6","type":"SQL","state":"Pending"},{"category":"Repeatable","version":null,"type":"SQL","state":"Pending"}]}'
+readonly SUCCESS_HISTORY=$'<null>|SCHEMA|t\n1|SQL|t\n2|SQL|t\n3|SQL|t\n4|SQL|t\n5|SQL|t\n6|SQL|t\n'
 
 invoke() {
     env \
@@ -76,7 +76,7 @@ expect_exit() {
 }
 
 bash -n "${PREFLIGHT}"
-expect_exit 2 env -u USER_MIGRATOR_DB_PASSWORD "${PREFLIGHT}" before 5
+expect_exit 2 env -u USER_MIGRATOR_DB_PASSWORD "${PREFLIGHT}" before 6
 expect_exit 2 invoke "${PREFLIGHT}" before not-a-number
 expect_exit 2 env \
     PATH="${TEST_ROOT}/bin:${PATH}" \
@@ -84,30 +84,30 @@ expect_exit 2 env \
     USER_MIGRATOR_JDBC_URL=jdbc:postgresql://postgis:5432/wrong_database \
     USER_MIGRATOR_DB_USERNAME=migrator \
     USER_MIGRATOR_DB_PASSWORD=sentinel-value \
-    "${PREFLIGHT}" before 5
+    "${PREFLIGHT}" before 6
 : > "${TEST_ROOT}/docker.log"
 expect_exit 2 invoke env USER_MIGRATOR_JDBC_URL='jdbc:postgresql://migrator:authority-sentinel@postgis:5432/home_search_user' \
-    "${PREFLIGHT}" before 5
+    "${PREFLIGHT}" before 6
 [[ ! -s "${TEST_ROOT}/docker.log" ]]
 expect_exit 2 invoke env USER_MIGRATOR_JDBC_URL='jdbc:postgresql://postgis:5432/home_search_user?Password=query-sentinel' \
-    "${PREFLIGHT}" before 5
+    "${PREFLIGHT}" before 6
 [[ ! -s "${TEST_ROOT}/docker.log" ]]
 ! grep -Fq authority-sentinel "${TEST_ROOT}/stdout" "${TEST_ROOT}/stderr" "${TEST_ROOT}/docker.log"
 ! grep -Fq query-sentinel "${TEST_ROOT}/stdout" "${TEST_ROOT}/stderr" "${TEST_ROOT}/docker.log"
 
 expect_exit 2 invoke env FAKE_CURRENT_DATABASE=wrong_database FAKE_INFO_JSON="${PENDING_INFO}" \
-    "${PREFLIGHT}" before 5
+    "${PREFLIGHT}" before 6
 expect_exit 1 invoke env FAKE_DB_FAILURE=true FAKE_INFO_JSON="${PENDING_INFO}" \
-    "${PREFLIGHT}" before 5
-expect_exit 2 invoke env FAKE_INFO_JSON='{"migrations":[{"version":"6","type":"SQL","state":"Pending"}]}' \
-    "${PREFLIGHT}" before 5
+    "${PREFLIGHT}" before 6
+expect_exit 2 invoke env FAKE_INFO_JSON='{"migrations":[{"version":"7","type":"SQL","state":"Pending"}]}' \
+    "${PREFLIGHT}" before 6
 expect_exit 2 invoke env FAKE_INFO_JSON="${REPEATABLE_INFO}" \
-    "${PREFLIGHT}" before 5
+    "${PREFLIGHT}" before 6
 expect_exit 2 invoke env FAKE_RELATION_COUNT=1 FAKE_INFO_JSON="${PENDING_INFO}" \
-    "${PREFLIGHT}" before 5
+    "${PREFLIGHT}" before 6
 
-before_output="$(invoke env FAKE_INFO_JSON="${PENDING_INFO}" "${PREFLIGHT}" before 5)"
-if [[ "${before_output}" != 'service=user-service phase=before target=5 state=EMPTY' ]]; then
+before_output="$(invoke env FAKE_INFO_JSON="${PENDING_INFO}" "${PREFLIGHT}" before 6)"
+if [[ "${before_output}" != 'service=user-service phase=before target=6 state=EMPTY' ]]; then
     printf 'unexpected before success output: %s\n' "${before_output}" >&2
     exit 1
 fi
@@ -117,36 +117,36 @@ after_output="$(invoke env \
     FAKE_RELATION_COUNT=5 \
     FAKE_INFO_JSON="${SUCCESS_INFO}" \
     FAKE_HISTORY_ROWS="${SUCCESS_HISTORY}" \
-    "${PREFLIGHT}" after 5)"
-if [[ "${after_output}" != 'service=user-service phase=after target=5 state=READY' ]]; then
+    "${PREFLIGHT}" after 6)"
+if [[ "${after_output}" != 'service=user-service phase=after target=6 state=READY' ]]; then
     printf 'unexpected after success output: %s\n' "${after_output}" >&2
     exit 1
 fi
 
 expect_exit 2 invoke env FAKE_HISTORY_PRESENT=true FAKE_INFO_JSON='{"migrations":[{"version":"2","type":"JDBC","state":"Success"}]}' \
-    FAKE_HISTORY_ROWS=$'2|JDBC|t\n' "${PREFLIGHT}" after 5
+    FAKE_HISTORY_ROWS=$'2|JDBC|t\n' "${PREFLIGHT}" after 6
 expect_exit 2 invoke env FAKE_HISTORY_PRESENT=true FAKE_INFO_JSON='{"migrations":[{"version":"2","type":"SQL","state":"Deleted"}]}' \
-    FAKE_HISTORY_ROWS="${SUCCESS_HISTORY}" "${PREFLIGHT}" after 5
+    FAKE_HISTORY_ROWS="${SUCCESS_HISTORY}" "${PREFLIGHT}" after 6
 expect_exit 2 invoke env FAKE_HISTORY_PRESENT=true FAKE_INFO_JSON='{"migrations":[{"version":"2","type":"SQL","state":"Out of Order"}]}' \
-    FAKE_HISTORY_ROWS="${SUCCESS_HISTORY}" "${PREFLIGHT}" after 5
+    FAKE_HISTORY_ROWS="${SUCCESS_HISTORY}" "${PREFLIGHT}" after 6
 expect_exit 2 invoke env FAKE_HISTORY_PRESENT=true FAKE_INFO_JSON='{"migrations":[{"version":"1","type":"BASELINE","state":"Success"}]}' \
-    FAKE_HISTORY_ROWS=$'1|BASELINE|t\n' "${PREFLIGHT}" after 5
+    FAKE_HISTORY_ROWS=$'1|BASELINE|t\n' "${PREFLIGHT}" after 6
 expect_exit 2 invoke env FAKE_HISTORY_PRESENT=true FAKE_INFO_JSON="${SUCCESS_INFO}" \
-    FAKE_HISTORY_ROWS="${SUCCESS_HISTORY}"$'<null>|JDBC|t\n' "${PREFLIGHT}" after 5
+    FAKE_HISTORY_ROWS="${SUCCESS_HISTORY}"$'<null>|JDBC|t\n' "${PREFLIGHT}" after 6
 expect_exit 2 invoke env FAKE_HISTORY_PRESENT=true FAKE_INFO_JSON='{"migrations":[{"version":"2","type":"SQL","state":"Success"},{"version":"2","type":"SQL","state":"Success"}]}' \
-    FAKE_HISTORY_ROWS=$'2|SQL|t\n2|SQL|t\n' "${PREFLIGHT}" after 5
+    FAKE_HISTORY_ROWS=$'2|SQL|t\n2|SQL|t\n' "${PREFLIGHT}" after 6
 expect_exit 2 invoke env FAKE_HISTORY_PRESENT=true FAKE_INFO_JSON='{"migrations":[{"version":"2","type":"SQL","state":"Missing"}]}' \
-    FAKE_HISTORY_ROWS="${SUCCESS_HISTORY}" "${PREFLIGHT}" after 5
+    FAKE_HISTORY_ROWS="${SUCCESS_HISTORY}" "${PREFLIGHT}" after 6
 expect_exit 2 invoke env FAKE_HISTORY_PRESENT=true FAKE_INFO_JSON='{"migrations":[{"version":"2","type":"SQL","state":"Ignored"}]}' \
-    FAKE_HISTORY_ROWS="${SUCCESS_HISTORY}" "${PREFLIGHT}" after 5
+    FAKE_HISTORY_ROWS="${SUCCESS_HISTORY}" "${PREFLIGHT}" after 6
 expect_exit 2 invoke env FAKE_HISTORY_PRESENT=true FAKE_INFO_JSON="${SUCCESS_INFO}" \
-    FAKE_HISTORY_ROWS=$'1|SQL|t\n2|SQL|f\n3|SQL|t\n4|SQL|t\n5|SQL|t\n' "${PREFLIGHT}" after 5
+    FAKE_HISTORY_ROWS=$'1|SQL|t\n2|SQL|f\n3|SQL|t\n4|SQL|t\n5|SQL|t\n6|SQL|t\n' "${PREFLIGHT}" after 6
 expect_exit 2 invoke env \
     FAKE_HISTORY_PRESENT=true \
     FAKE_INFO_JSON="${SUCCESS_INFO}" \
     FAKE_HISTORY_ROWS="${SUCCESS_HISTORY}" \
     FAKE_VALIDATE_JSON='{"validationSuccessful":false,"invalidMigrations":[{"version":"2"}]}' \
-    "${PREFLIGHT}" after 5
+    "${PREFLIGHT}" after 6
 
 if grep -Fq 'sentinel-value' "${TEST_ROOT}/docker.log"; then
     printf 'credential leaked into docker arguments\n' >&2

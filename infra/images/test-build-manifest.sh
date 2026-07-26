@@ -17,13 +17,14 @@ VERSION=1.2.3 \
 SOURCE_URL=https://github.com/acme/home-search \
 PUBLIC_ORIGIN=https://staging.example.test \
 KAKAO_MAP_APP_KEY=public-test-key \
+MARKET_NEWS_ENABLED=true \
   docker buildx bake --print >"${tmp_dir}/bake.json"
 
 jq -e '
   (.group.default.targets | sort) == ([
     "property-api", "property-batch", "property-flyway",
     "admin-api", "admin-migration", "admin-ops",
-    "user-api", "user-flyway", "source-data-migration",
+    "user-api", "user-insight-worker", "user-flyway", "source-data-migration",
     "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml"
   ] | sort) and
   ([.target[] | .labels["org.opencontainers.image.revision"]] | all(. == "0123456789abcdef")) and
@@ -34,7 +35,8 @@ jq -e '
   (.target["property-flyway"].platforms == ["linux/amd64"]) and
   (.target["user-flyway"].platforms == ["linux/amd64"]) and
   (.target.ml.context == "apps/ml") and
-  (.target["public-gateway"].args.VITE_USER_API_SERVER_IP == "https://staging.example.test")
+  (.target["public-gateway"].args.VITE_USER_API_SERVER_IP == "https://staging.example.test") and
+  (.target["public-gateway"].args.VITE_MARKET_NEWS_ENABLED == "true")
 ' "${tmp_dir}/bake.json" >/dev/null
 
 docker build --tag "${backup_image}" --file infra/backup/Dockerfile .

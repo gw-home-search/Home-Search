@@ -22,7 +22,7 @@ import { SearchToolbar } from './SearchToolbar';
 
 type DetailRequestState = 'idle' | 'loading' | 'ready' | 'error';
 type PanelRequestState = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
-type SidebarMode = 'region' | 'search' | 'insight' | 'detail';
+type SidebarMode = 'region' | 'search' | 'insight' | 'news' | 'detail';
 type ComplexSelection = { parcelId: number | null; complexId: number | null };
 type RegionTrailItem = { id: number; name: string };
 
@@ -35,6 +35,7 @@ type ExplorationPanelProps = {
   favoriteLiveMessage: string;
   favoriteState: FavoriteState;
   insightContent: ReactNode;
+  newsContent: ReactNode;
   isOpen: boolean;
   modeNavigation: ReactNode;
   parcelComplexes: ParcelComplexSummary[];
@@ -158,6 +159,7 @@ export function ExplorationPanel(props: ExplorationPanelProps) {
         rootRegions={props.rootRegions}
       />
       {props.insightContent}
+      {props.newsContent}
     </section>
   );
 }

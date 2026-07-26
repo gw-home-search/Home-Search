@@ -161,3 +161,21 @@ Mobile is not the first project target, but the layout should not block it:
 - `/my/insights` combines authenticated inbox and opt-in delivery settings.
 - External news strings are rendered as text. The web app never renders NAVER
   title/description HTML.
+
+## News Rail And Complex Detail
+
+- `/insights/news` keeps `MapApp`, the active map viewport, search, and region
+  state. Only the rail/mobile sheet content changes.
+- News is separated from the five trade metrics in `MapModeNavigation`.
+  Scope, root SIDO, and category are URL state; pagination cursor is not.
+- `VITE_MARKET_NEWS_ENABLED=false` is the rollback path: it removes the news
+  navigation and detail tab and redirects direct news-hub entry to the map.
+- Seven text category tabs support arrow, Home, and End keys. Rows are a
+  divider list with category, two-line visual title, region, provider date, and
+  an external-link cue. The full title remains the accessible link name.
+- Links use `target="_blank"` and `rel="noopener noreferrer"`. No external
+  HTML, description, thumbnail, AI summary, inferred publisher, or internal
+  exclusion count is rendered.
+- Detail adds a fourth mobile tab, `뉴스`, and a desktop `관련 뉴스` section
+  after basic information. Its independent request may fail without blocking
+  information, prices, trades, or charts.

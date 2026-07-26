@@ -10,9 +10,12 @@ while IFS= read -r service_arn; do
   service="$(aws ecs describe-services --cluster "${cluster}" --services "${service_arn}" --query 'services[0]' --output json)"
   name="$(jq -r '.serviceName' <<<"${service}")"
   task_definition="$(jq -r '.taskDefinition' <<<"${service}")"
+  desired_count="$(jq -r '.desiredCount' <<<"${service}")"
   task="$(aws ecs describe-task-definition --task-definition "${task_definition}" --query 'taskDefinition' --output json)"
-  map="$(jq --arg name "${name}" --arg task_definition "${task_definition}" --argjson images "$(jq '[.containerDefinitions[] | {name,image}]' <<<"${task}")" \
-    '. + {($name):{task_definition:$task_definition,images:$images}}' <<<"${map}")"
+  map="$(jq --arg name "${name}" --arg task_definition "${task_definition}" \
+    --argjson desired_count "${desired_count}" \
+    --argjson images "$(jq '[.containerDefinitions[] | {name,image}]' <<<"${task}")" \
+    '. + {($name):{task_definition:$task_definition,desired_count:$desired_count,images:$images}}' <<<"${map}")"
 done < <(jq -r '.[]' <<<"${service_arns}")
 jq -n --arg cluster "${cluster}" --arg captured_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson services "${map}" \
   '{format_version:1,cluster:$cluster,captured_at:$captured_at,services:$services}' >"${output}"

@@ -1,0 +1,20 @@
+{
+  "eventId": "66666666-6666-4666-8666-666666666666",
+  "eventType": "InboxCreated",
+  "schemaVersion": 1,
+  "occurredAt": "2026-07-24T03:05:00Z",
+  "producer": "user-service",
+  "aggregateType": "Inbox",
+  "aggregateId": "inbox-601",
+  "aggregateVersion": 1,
+  "correlationId": "digest-20260724",
+  "causationId": null,
+  "traceId": "trace-666",
+  "payload": {
+    "inboxId": "66666666-aaaa-4666-8666-666666666666",
+    "userId": "user-42",
+    "digestId": "66666666-bbbb-4666-8666-666666666666",
+    "deepLink": "/insights?scope=SIDO&regionCode=11",
+    "expiresAt": "2026-10-22T03:05:00Z"
+  }
+}

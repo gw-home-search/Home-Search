@@ -1,8 +1,10 @@
 package com.home.batch.launch;
 
 import com.home.domain.ingest.run.ExecutionCorrelationId;
+import com.home.domain.news.MarketNewsWithdrawalReason;
 import com.home.ingestcore.rtms.RtmsDealMonth;
 import com.home.ingestcore.rtms.RtmsLawdCode;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -12,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import org.springframework.batch.core.job.parameters.JobParameter;
 import org.springframework.batch.core.job.parameters.JobParameters;
 import org.springframework.boot.ApplicationArguments;
@@ -43,6 +46,15 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
             case DAILY_JOB -> daily(normalizedJobName, params, clock);
             case INSIGHT_DAILY_JOB -> daily(normalizedJobName, params, clock);
             case INSIGHT_ROLLING_7D_JOB -> daily(normalizedJobName, params, clock);
+            case "marketNewsGeneralJob" -> newsGeneral(normalizedJobName, params, clock);
+            case "marketNewsMorningJob" -> scheduledNews(normalizedJobName, params, clock);
+            case "marketNewsMajorComplexJob", "marketNewsMajorSelectionJob", "marketNewsRetentionJob" ->
+                newsDaily(normalizedJobName, params, clock);
+            case "marketNewsWithdrawalJob" -> newsWithdrawal(normalizedJobName, params);
+            case "marketNewsQualitySampleJob" -> newsQualitySample(normalizedJobName, params);
+            case "propertyEventRelayJob" -> propertyEventRelay(normalizedJobName, params, clock);
+            case "propertyEventOutboxRetentionJob" ->
+                scheduledPropertyEventJob(normalizedJobName, params, clock, "property-event-outbox-retention");
             case BACKFILL_JOB -> backfill(normalizedJobName, params);
             case BUILDING_METADATA_JOB -> buildingMetadata(normalizedJobName, params, clock);
             case ODC_METADATA_GAP_FILL_JOB -> odcMetadataGapFill(normalizedJobName, params, clock);
@@ -227,6 +239,87 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
     }
 
     private static BatchJobArguments daily(String jobName, Map<String, String> arguments, Clock clock) {
+        return daily(jobName, arguments, clock, canonicalRequestId(arguments.get("requestId")));
+    }
+
+    private static BatchJobArguments newsGeneral(String jobName, Map<String, String> arguments, Clock clock) {
+        if (text(arguments.get("schedulerExecutionId")) != null) {
+            return scheduledNews(jobName, arguments, clock);
+        }
+        String requestId = requireText(arguments.get("requestId"), "requestId is required");
+        if (requestId.startsWith("BOOTSTRAP:")) {
+            requestId = "BOOTSTRAP:" + canonicalRequestId(requestId.substring("BOOTSTRAP:".length()));
+        } else {
+            requestId = canonicalRequestId(requestId);
+        }
+        return daily(jobName, arguments, clock, requestId);
+    }
+
+    private static BatchJobArguments newsDaily(String jobName, Map<String, String> arguments, Clock clock) {
+        if (text(arguments.get("schedulerExecutionId")) != null) {
+            return scheduledNews(jobName, arguments, clock);
+        }
+        return daily(jobName, arguments, clock);
+    }
+
+    private static BatchJobArguments scheduledNews(String jobName, Map<String, String> arguments, Clock clock) {
+        String schedulerExecutionId =
+                requireText(arguments.get("schedulerExecutionId"), "schedulerExecutionId is required");
+        if (schedulerExecutionId.length() > 128 || !schedulerExecutionId.matches("[A-Za-z0-9_-]+")) {
+            throw invalid("schedulerExecutionId must use 1-128 URL-safe identifier characters");
+        }
+        String requestId = UUID.nameUUIDFromBytes(
+                        ("market-news:" + jobName + ":" + schedulerExecutionId).getBytes(StandardCharsets.UTF_8))
+                .toString();
+        return daily(jobName, arguments, clock, requestId);
+    }
+
+    private static BatchJobArguments newsWithdrawal(String jobName, Map<String, String> arguments) {
+        String reason = requireText(arguments.get("reason"), "reason is required");
+        try {
+            MarketNewsWithdrawalReason.valueOf(reason);
+        } catch (IllegalArgumentException exception) {
+            throw invalid("reason must be a supported market news withdrawal reason");
+        }
+        return new BatchJobArguments(
+                jobName,
+                parameters(Map.of(
+                        "snapshotId", canonicalUuid(arguments.get("snapshotId"), "snapshotId"), "reason", reason)));
+    }
+
+    private static BatchJobArguments newsQualitySample(String jobName, Map<String, String> arguments) {
+        String policyVersion = requireText(arguments.get("policyVersion"), "policyVersion is required");
+        if (!policyVersion.matches("NEWS_V[1-9][0-9]*")) {
+            throw invalid("policyVersion must be a versioned NEWS policy");
+        }
+        return new BatchJobArguments(
+                jobName,
+                parameters(Map.of(
+                        "reviewSetId",
+                        canonicalUuid(arguments.get("reviewSetId"), "reviewSetId"),
+                        "policyVersion",
+                        policyVersion)));
+    }
+
+    private static BatchJobArguments propertyEventRelay(String jobName, Map<String, String> arguments, Clock clock) {
+        return scheduledPropertyEventJob(jobName, arguments, clock, "property-event-relay");
+    }
+
+    private static BatchJobArguments scheduledPropertyEventJob(
+            String jobName, Map<String, String> arguments, Clock clock, String identityPrefix) {
+        String schedulerExecutionId =
+                requireText(arguments.get("schedulerExecutionId"), "schedulerExecutionId is required");
+        if (schedulerExecutionId.length() > 128 || !schedulerExecutionId.matches("[A-Za-z0-9_-]+")) {
+            throw invalid("schedulerExecutionId must use 1-128 URL-safe identifier characters");
+        }
+        String requestId = UUID.nameUUIDFromBytes(
+                        (identityPrefix + ":" + schedulerExecutionId).getBytes(StandardCharsets.UTF_8))
+                .toString();
+        return daily(jobName, arguments, clock, requestId);
+    }
+
+    private static BatchJobArguments daily(
+            String jobName, Map<String, String> arguments, Clock clock, String requestId) {
         Clock safeClock = clock == null ? Clock.system(KST) : clock;
         String runDate = text(arguments.get("runDate"));
         if (runDate == null) {
@@ -239,7 +332,6 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
         }
         Map<String, String> identifyingParameters = new LinkedHashMap<>();
         identifyingParameters.put("runDate", runDate);
-        String requestId = canonicalRequestId(arguments.get("requestId"));
         identifyingParameters.put("requestId", requestId);
         String restartAttempt = text(arguments.get("restartAttempt"));
         if (restartAttempt != null) {

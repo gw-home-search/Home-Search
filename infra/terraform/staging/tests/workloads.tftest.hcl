@@ -22,14 +22,14 @@ run "digest_pinned_private_rollback_capable_workloads" {
     enable_services        = true
     image_digests = { for name in [
       "property-api", "property-batch", "property-flyway", "admin-api", "admin-migration", "admin-ops",
-      "user-api", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
+      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
     ] : name => "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   }
 
   assert {
     condition = alltrue([
       for digest in values(var.image_digests) : can(regex("^sha256:[0-9a-f]{64}$", digest))
-    ]) && length(var.image_digests) == 14
+    ]) && length(var.image_digests) == 15
     error_message = "Every service and one-shot task image must be immutable and digest pinned."
   }
 
@@ -52,8 +52,9 @@ run "digest_pinned_private_rollback_capable_workloads" {
   assert {
     condition = length(setsubtract(toset(keys(aws_ecs_task_definition.one_shot)), toset([
       "secret-bootstrap", "database-bootstrap", "property-flyway", "admin-migration",
-      "user-flyway", "source-data-migration", "runtime-grants", "property-batch", "admin-ops", "backup", "restore-verification",
-    ]))) == 0 && length(keys(aws_ecs_task_definition.one_shot)) == 11
+      "user-flyway", "source-data-migration", "runtime-grants", "property-batch",
+      "property-event-relay", "property-event-maintenance", "admin-ops", "backup", "restore-verification",
+    ]))) == 0 && length(keys(aws_ecs_task_definition.one_shot)) == 13
     error_message = "Bootstrap, migrations, batch, ops, and backup must remain one-shot task definitions."
   }
 
@@ -67,8 +68,8 @@ run "digest_pinned_private_rollback_capable_workloads" {
 
   assert {
     condition = alltrue([
-      aws_iam_role.secret_bootstrap_task.name != aws_iam_role.runtime_task.name,
-      aws_iam_role.database_bootstrap_task.name != aws_iam_role.runtime_task.name,
+      local.workload_task_role_names["secret-bootstrap"] != local.workload_task_role_names["property-api"],
+      local.workload_task_role_names["database-bootstrap"] != local.workload_task_role_names["property-api"],
       local.one_shot_specs["secret-bootstrap"].command == ["secret-bootstrap"],
       local.one_shot_specs["database-bootstrap"].command == ["db-bootstrap"],
     ])
@@ -81,5 +82,130 @@ run "digest_pinned_private_rollback_capable_workloads" {
       [for task in aws_ecs_task_definition.one_shot : task.skip_destroy],
     ))
     error_message = "Previous task revisions must remain registered for deployment rollback."
+  }
+
+  assert {
+    condition = alltrue([
+      one([
+        for item in local.service_specs["property-api"].environment :
+        item.value if item.name == "SPRING_PROFILES_ACTIVE"
+      ]) == "staging",
+      one([
+        for item in local.one_shot_specs["property-batch"].environment :
+        item.value if item.name == "SPRING_PROFILES_ACTIVE"
+      ]) == "staging",
+    ])
+    error_message = "Staging property workloads must fail fast through the staging Spring profile."
+  }
+
+  assert {
+    condition = alltrue([
+      length(local.workload_execution_role_names) == length(local.workload_names),
+      length(distinct(values(local.workload_execution_role_names))) == length(local.workload_names),
+      length(local.workload_task_role_names) == length(local.workload_names),
+      length(distinct(values(local.workload_task_role_names))) == length(local.workload_names),
+      toset(keys(local.workload_execution_secret_names)) == local.workload_names,
+      local.runtime_grants_secret_names == toset([
+        "property-migrator-db", "admin-migrator-db", "user-migrator-db",
+      ]),
+    ])
+    error_message = "Every service and one-shot workload must own distinct execution and task roles."
+  }
+
+  assert {
+    condition = alltrue([
+      local.workload_execution_secret_names["property-api"] == ["property-runtime-db", "coordinate-reader-db", "admin-internal-jwt-public"],
+      local.workload_execution_secret_names["admin-api"] == ["admin-runtime-db", "admin-internal-jwt"],
+      local.workload_execution_secret_names["user-api"] == ["user-runtime-db", "oauth-providers", "user-jwt"],
+      local.workload_execution_secret_names["property-batch"] == ["property-runtime-db", "coordinate-reader-db", "public-data-providers"],
+      local.workload_execution_secret_names["property-event-relay"] == ["property-runtime-db"],
+      local.workload_execution_secret_names["property-event-maintenance"] == ["property-runtime-db"],
+      alltrue(flatten([
+        for secret_names in values(local.workload_execution_secret_names) : [
+          for secret_name in secret_names : !contains(["database-runtime", "database-bootstrap"], secret_name)
+        ]
+      ])),
+      length(local.workload_execution_secret_names["public-gateway"]) == 0,
+      length(local.workload_execution_secret_names["admin-gateway"]) == 0,
+      length(local.workload_execution_secret_names["ml"]) == 0,
+      alltrue(flatten([
+        for secret_names in values(local.workload_execution_secret_names) : [
+          for secret_name in secret_names : contains(local.secret_containers, secret_name)
+        ]
+      ])),
+    ])
+    error_message = "Execution roles may read only the workload's declared container secrets and never an RDS master secret."
+  }
+
+  assert {
+    condition = alltrue([
+      one([
+        for secret in local.one_shot_specs["property-batch"].secrets :
+        secret.name if secret.name == "APT_SERVICE_KEY"
+      ]) == "APT_SERVICE_KEY",
+      one([
+        for secret in local.one_shot_specs["property-batch"].secrets :
+        secret.name if secret.name == "NAVER_NEWS_API_KEY_ID"
+      ]) == "NAVER_NEWS_API_KEY_ID",
+      one([
+        for secret in local.one_shot_specs["property-batch"].secrets :
+        secret.name if secret.name == "NAVER_NEWS_API_KEY"
+      ]) == "NAVER_NEWS_API_KEY",
+    ])
+    error_message = "The staging property batch must materialize approved provider credentials from its scoped secret."
+  }
+
+  assert {
+    condition = (
+      [for secret in local.one_shot_specs["property-event-relay"].secrets : secret.name]
+      == ["DB_PASSWORD"]
+      && !contains(
+        [for item in local.one_shot_specs["property-batch"].environment : item.name],
+        "HOME_KAFKA_BOOTSTRAP_SERVERS"
+      )
+    )
+    error_message = "The event relay must not inherit coordinate or external-provider secrets from the general property batch."
+  }
+
+  assert {
+    condition = alltrue([
+      [for secret in local.one_shot_specs["property-event-maintenance"].secrets : secret.name] == ["DB_PASSWORD"],
+      one([
+        for item in local.one_shot_specs["property-event-maintenance"].environment :
+        item.value if item.name == "HOME_EVENTS_RETENTION_ENABLED"
+      ]) == "true",
+      !contains(
+        [for item in local.one_shot_specs["property-event-maintenance"].environment : item.name],
+        "HOME_KAFKA_BOOTSTRAP_SERVERS"
+      ),
+    ])
+    error_message = "Outbox retention must receive only the property DB secret and no Kafka endpoint."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_ecs_service.user_insight_worker.desired_count == 1,
+      !aws_ecs_service.user_insight_worker.network_configuration[0].assign_public_ip,
+      aws_ecs_service.user_insight_worker.deployment_circuit_breaker[0].enable,
+      aws_ecs_service.user_insight_worker.deployment_circuit_breaker[0].rollback,
+      local.workload_execution_secret_names["user-insight-worker"] == ["user-runtime-db"],
+      one([
+        for item in local.service_specs["user-api"].environment :
+        item.value if item.name == "HOME_INSIGHTS_ENABLED"
+      ]) == "false",
+      contains(
+        [for item in local.user_insight_worker_spec.environment : item.name],
+        "HOME_KAFKA_BOOTSTRAP_SERVERS",
+      ),
+      one([
+        for item in local.user_insight_worker_spec.environment :
+        item.value if item.name == "HOME_INSIGHT_RETENTION_ENABLED"
+      ]) == "true",
+      [for secret in local.user_insight_worker_spec.secrets : secret.name] == ["USER_DB_PASSWORD"],
+      aws_ecs_task_definition.user_insight_worker.skip_destroy,
+      contains(output.workload_release.service_names, "user-insight-worker"),
+      contains(keys(output.workload_release.service_task_arns), "user-insight-worker"),
+    ])
+    error_message = "The user insight consumer must be a private rollback-capable service with only its DB secret and MSK endpoint."
   }
 }

@@ -24,6 +24,7 @@ import { InsightRailContent } from '../features/insights/InsightRailContent';
 import { MapModeNavigation } from '../features/insights/MapModeNavigation';
 import { readInsightMetric } from '../features/insights/insightMetricConfig';
 import { FeatureErrorBoundary } from '../shared/FeatureErrorBoundary';
+import { NewsRailContent } from '../features/news/NewsRailContent';
 
 export type MapAppProps = {
   initialMapLevel?: number;
@@ -42,9 +43,10 @@ export function MapApp({
   const navigate = useNavigate();
   const isMyPageRoute = isMyPagePath(location.pathname);
   const isInsightsRoute = location.pathname === '/insights';
+  const isNewsRoute = location.pathname === '/insights/news';
   const insightMetric = readInsightMetric(location.search);
   const [isExplorationOpen, setIsExplorationOpen] = useState(
-    () => window.innerWidth > 720 || isInsightsRoute,
+    () => window.innerWidth > 720 || isInsightsRoute || isNewsRoute,
   );
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [mapUiCommand, setMapUiCommand] = useState<MapUiCommand | null>(null);
@@ -67,8 +69,8 @@ export function MapApp({
     return () => window.removeEventListener('resize', syncExplorationWithViewport);
   }, [isChatOpen]);
   useEffect(() => {
-    if (isInsightsRoute) setIsExplorationOpen(true);
-  }, [isInsightsRoute]);
+    if (isInsightsRoute || isNewsRoute) setIsExplorationOpen(true);
+  }, [isInsightsRoute, isNewsRoute]);
   const viewport = useMapViewport(initialMapLevel);
   const markerData = useMapMarkers(viewport.viewport);
   const detail = useComplexDetail();
@@ -99,7 +101,7 @@ export function MapApp({
   });
   const handleMapRegionSelect = region.handleMapRegionSelect;
   const sidebarMode: SidebarMode = detail.selectedComplex == null
-    ? search.isSearchPanelActive ? 'search' : isInsightsRoute ? 'insight' : 'region'
+    ? search.isSearchPanelActive ? 'search' : isNewsRoute ? 'news' : isInsightsRoute ? 'insight' : 'region'
     : 'detail';
   const workspacePanelMode = detail.selectedComplex != null
     ? 'detail'
@@ -302,11 +304,13 @@ export function MapApp({
               onSelectComplex={handleInsightSelect}
             />
           )}
+          newsContent={<NewsRailContent active={sidebarMode === 'news'} />}
           isOpen={isWorkspacePanelOpen && (!isMyPageRoute || detail.selectedComplex != null)}
           modeNavigation={(
             <MapModeNavigation
               activeMetric={sidebarMode === 'insight' ? insightMetric : null}
-              insightSearch={isInsightsRoute ? location.search : ''}
+              insightSearch={isInsightsRoute || isNewsRoute ? location.search : ''}
+              isNewsActive={sidebarMode === 'news'}
               isRegionActive={sidebarMode === 'region'}
             />
           )}

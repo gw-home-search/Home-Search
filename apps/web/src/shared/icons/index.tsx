@@ -77,6 +77,15 @@ export function NewTradeIcon(props: IconProps) {
   return <svg {...sharedProps} {...props}><path d="M6 3h9l3 3v15H6z" /><path d="M14 3v4h4M9 13h6M12 10v6" /></svg>;
 }
 
+export function NewsIcon(props: IconProps) {
+  return (
+    <svg {...sharedProps} {...props}>
+      <path d="M5 4h12a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2V4Z" />
+      <path d="M5 17H3V7h2M9 8h6M9 12h6M9 16h4" />
+    </svg>
+  );
+}
+
 export function HighestDealIcon(props: IconProps) {
   return <svg {...sharedProps} {...props}><path d="M4 19 9 14l3 3 8-10" /><path d="M15 7h5v5" /></svg>;
 }

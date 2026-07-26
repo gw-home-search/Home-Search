@@ -1208,12 +1208,45 @@ selects a month whose end plus 30 days is after `dataCutoff`.
 
 ### GET `/api/v1/insights/news`
 
-Returns the six fixed news categories in provider order from the Redis current
-or last-good cache. Titles/descriptions contain decoded text with provider
-`<b>` tags removed. Article URLs are verified `http` or `https` URLs and prefer
-`originallink`; no inferred publisher or popularity score is returned.
+Returns the latest published recent-30-day news snapshot. It reads PostgreSQL
+snapshot rows only; Redis contains current/last-good pointers and is not a
+provider fallback. The request never calls NAVER or aggregates trades.
 
-Insight status rules:
+Query parameters:
+
+- `scope`: `NATIONWIDE|SIDO`, default `NATIONWIDE`.
+- `regionCode`: required root SIDO code only for `SIDO`.
+- `category`: `ALL|POLICY|FINANCE_LOAN|SUPPLY_SALE|REDEVELOPMENT|TRANSACTION_PRICE|TRANSPORT_DEVELOPMENT`,
+  default `ALL`.
+- `cursor`: opaque keyset cursor; clients must not parse or persist it in the URL.
+- `limit`: default `20`, allowed `1..50`.
+
+The response contains only `snapshotId`, `generatedAt`, `dataCutoff`,
+`dataStatus`, `scope`, `category`, `items`, and `nextCursor`. Each item contains
+`articleId`, `category`, sanitized `title`, ISO-8601 `providedAt`, verified
+HTTP(S) `url`, and an optional `region`. Description, raw title, query,
+rejection reason, inferred publisher, popularity, and internal quality counts
+are not public.
+
+`FRESH` means the publication is no older than eight hours and no newer
+collection is incomplete. `STALE` returns the last-good items when that is not
+true. `UNAVAILABLE` returns `200` with empty items when no normal publication
+exists.
+
+### GET `/api/v1/complex/{complexId}/news`
+
+Returns at most five published items ordered by
+`DIRECT_COMPLEX`, `SAME_DONG`, `SAME_SIGUNGU`, provider time, provider rank,
+and article id. Items add `relationType` with one of those three values. A
+missing complex returns the common `404` ProblemDetail; a valid complex with no
+related news returns `200` and an empty array. This endpoint has no `limit`
+query parameter.
+
+Titles contain decoded text with provider markup removed. Public URLs prefer
+the provider `originallink`, are restricted to HTTP(S) without userinfo, and
+are never fetched by Home Search.
+
+Trade insight status rules:
 
 - `200` + `dataStatus=FRESH`: the latest eligible DAILY execution and rolling
   snapshot have the same `sourceExecutionId`.
@@ -1324,12 +1357,31 @@ Invalid values return `400` with code `INVALID_COMPLEX_ID`. Favorite rows store
 only `userId`, opaque `complexId`, and `savedAt`; user-service does not join or
 foreign-key the property-data database.
 
+The following authenticated insight routes are registered only when
+`home.insights.enabled=true`. The flag remains false until staging
+subscription/inbox/Kafka E2E evidence is approved; disabled deployments return
+`404` without changing another route.
+
 ### GET `/api/v1/insights/subscription`
 
 Returns the verified user's current opt-in settings. Missing persisted settings
 are represented as all-disabled with an empty `regionCodes` list.
 
+Response `200`:
+
+```json
+{
+  "inAppEnabled": true,
+  "emailEnabled": false,
+  "dailyNewsEnabled": true,
+  "weeklyTradeEnabled": true,
+  "regionCodes": ["11", "41"]
+}
+```
+
 ### PUT `/api/v1/insights/subscription`
+
+Request and response `200`:
 
 ```json
 {
@@ -1344,6 +1396,9 @@ are represented as all-disabled with an empty `regionCodes` list.
 The list may contain at most five distinct supported SIDO codes. Email can be
 enabled only when the current account has an email and explicit consent is
 recorded. A later OAuth email change disables email until renewed consent.
+Invalid or duplicate region codes return `400` with
+`INVALID_INSIGHT_SUBSCRIPTION`. Enabling email without a current account email
+returns `409` with `EMAIL_CONSENT_REQUIRED`.
 
 ### GET `/api/v1/insights/inbox?page=0&size=20`
 
@@ -1351,6 +1406,32 @@ Returns an authenticated page envelope ordered newest first. Inbox items keep
 digest identity, title, creation/expiry time, a property snapshot identifier,
 and the current `/insights` deep link; they do not retain provider news article
 descriptions for 90 days.
+
+Response `200`:
+
+```json
+{
+  "content": [
+    {
+      "inboxId": "66666666-aaaa-4666-8666-666666666666",
+      "digestId": "77777777-aaaa-4777-8777-777777777777",
+      "title": "주간 거래 인사이트",
+      "propertySnapshotId": "44444444-aaaa-4444-8444-444444444444",
+      "deepLink": "/insights?scope=SIDO&regionCode=11",
+      "createdAt": "2026-07-25T03:00:00Z",
+      "expiresAt": "2026-10-23T03:00:00Z"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+`page` must be non-negative and `size` must be between 1 and 100. All three
+routes require a valid user JWT and otherwise return `401`. The response never
+contains account email or provider payload.
 
 ## Admin APIs
 

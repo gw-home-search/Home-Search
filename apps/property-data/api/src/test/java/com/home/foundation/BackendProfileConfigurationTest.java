@@ -3,16 +3,14 @@ package com.home.foundation;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
-import java.nio.file.Path;
+import java.util.List;
 import java.util.Properties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
-import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.ClassPathResource;
 
 class BackendProfileConfigurationTest {
-
-    private static final Path RESOURCES = Path.of("src/main/resources");
 
     @Test
     @DisplayName("base profile은 database auto-configuration과 actuator exposure를 profile scope로 유지한다")
@@ -23,6 +21,7 @@ class BackendProfileConfigurationTest {
         assertThat(properties.getProperty("spring.flyway.enabled")).isEqualTo("false");
         assertThat(properties.getProperty("spring.flyway.locations")).isNull();
         assertThat(properties.getProperty("spring.profiles.default")).isEqualTo("local");
+        assertThat(properties.getProperty("home.news.public.enabled")).isEqualTo("${HOME_NEWS_PUBLIC_ENABLED:false}");
         assertThat(properties.getProperty("management.endpoints.web.exposure.include"))
                 .isNull();
         assertThat(properties.getProperty("management.prometheus.metrics.export.enabled"))
@@ -74,11 +73,37 @@ class BackendProfileConfigurationTest {
                 .isEqualTo("true");
     }
 
-    private Properties load(String fileName) throws IOException {
-        Path path = RESOURCES.resolve(fileName);
-        assertThat(path).exists();
+    @Test
+    @DisplayName("staging과 prod profile은 필수 DB 연결과 production-safe 기본값을 유지한다")
+    void runtimeProfilesRequireDatabaseCredentialsAndKeepOptionalFeaturesDisabled() {
+        assertThat(List.of("staging", "prod")).allSatisfy(profile -> {
+            Properties properties = load("application-" + profile + ".yml");
+
+            assertThat(properties.getProperty("spring.datasource.url")).isEqualTo("${DB_JDBC_URL}");
+            assertThat(properties.getProperty("spring.datasource.username")).isEqualTo("${DB_USERNAME}");
+            assertThat(properties.getProperty("spring.datasource.password")).isEqualTo("${DB_PASSWORD}");
+            assertThat(properties.getProperty("spring.flyway.enabled")).isEqualTo("false");
+            assertThat(properties.getProperty("server.shutdown")).isEqualTo("graceful");
+            assertThat(properties.getProperty("home.news.public.enabled"))
+                    .isEqualTo("${HOME_NEWS_PUBLIC_ENABLED:false}");
+            assertThat(properties.getProperty("home.admin.internal.public-keys"))
+                    .isEqualTo("${HOME_ADMIN_INTERNAL_PUBLIC_KEYS}");
+            assertThat(properties.getProperty("home.coordinate-source.db.jdbc-url"))
+                    .isEqualTo("${COORDINATE_SOURCE_DB_JDBC_URL}");
+            assertThat(properties.getProperty("home.coordinate-source.db.username"))
+                    .isEqualTo("${COORDINATE_SOURCE_DB_USERNAME}");
+            assertThat(properties.getProperty("home.coordinate-source.db.password"))
+                    .isEqualTo("${COORDINATE_SOURCE_DB_PASSWORD}");
+            assertThat(properties.getProperty("home.coordinate-source.db.read-only"))
+                    .isEqualTo("${COORDINATE_SOURCE_DB_READ_ONLY:true}");
+            assertThat(properties.getProperty("management.endpoints.web.exposure.include"))
+                    .isEqualTo("health,prometheus");
+        });
+    }
+
+    private Properties load(String fileName) {
         YamlPropertiesFactoryBean factory = new YamlPropertiesFactoryBean();
-        factory.setResources(new FileSystemResource(path));
+        factory.setResources(new ClassPathResource(fileName));
         return factory.getObject();
     }
 }

@@ -38,6 +38,114 @@ class BatchJobArgumentsTest {
     }
 
     @Test
+    @DisplayName("property event relay job은 AWS scheduler execution id를 canonical UUID로 변환한다")
+    void propertyEventRelayUsesSchedulerExecutionIdentity() {
+        BatchJobArguments arguments = BatchJobArguments.from(
+                "propertyEventRelayJob", Map.of("schedulerExecutionId", "d32c5kddcf5bb8c3"), clock);
+
+        assertThat(arguments.jobParameters().getString("runDate")).isEqualTo("2026-07-07");
+        assertThat(arguments.jobParameters().getString("requestId")).isEqualTo("7df393d7-5fc1-3097-b6ab-0bbb88e3fa27");
+    }
+
+    @Test
+    @DisplayName("property event relay job은 누락되거나 안전하지 않은 scheduler execution id를 거부한다")
+    void propertyEventRelayRejectsInvalidSchedulerExecutionIdentity() {
+        assertThatThrownBy(() -> BatchJobArguments.from("propertyEventRelayJob", Map.of(), clock))
+                .isInstanceOf(BatchExitCodeException.class)
+                .extracting("exitCode")
+                .isEqualTo(2);
+        assertThatThrownBy(() -> BatchJobArguments.from(
+                        "propertyEventRelayJob", Map.of("schedulerExecutionId", "../unsafe"), clock))
+                .isInstanceOf(BatchExitCodeException.class)
+                .hasMessageContaining("schedulerExecutionId");
+    }
+
+    @Test
+    @DisplayName("outbox retention job도 scheduler execution id에서 독립적인 canonical UUID를 만든다")
+    void propertyEventOutboxRetentionUsesSchedulerExecutionIdentity() {
+        BatchJobArguments arguments = BatchJobArguments.from(
+                "propertyEventOutboxRetentionJob", Map.of("schedulerExecutionId", "d32c5kddcf5bb8c3"), clock);
+
+        assertThat(arguments.jobParameters().getString("runDate")).isEqualTo("2026-07-07");
+        assertThat(arguments.jobParameters().getString("requestId"))
+                .isNotEqualTo(BatchJobArguments.from(
+                                "propertyEventRelayJob", Map.of("schedulerExecutionId", "d32c5kddcf5bb8c3"), clock)
+                        .jobParameters()
+                        .getString("requestId"));
+    }
+
+    @Test
+    @DisplayName("뉴스 최초 수집은 BOOTSTRAP 접두어와 canonical UUID를 식별자로 보존한다")
+    void marketNewsGeneralAcceptsBootstrapRequestId() {
+        BatchJobArguments arguments = BatchJobArguments.from(
+                "marketNewsGeneralJob", Map.of("requestId", "BOOTSTRAP:123e4567-e89b-12d3-a456-426614174012"), clock);
+
+        assertThat(arguments.jobParameters().getString("requestId"))
+                .isEqualTo("BOOTSTRAP:123e4567-e89b-12d3-a456-426614174012");
+        assertThat(arguments.jobParameters().getString("runDate")).isEqualTo("2026-07-07");
+    }
+
+    @Test
+    @DisplayName("뉴스 회수 job은 snapshot UUID와 안정적인 품질 실패 사유만 허용한다")
+    void marketNewsWithdrawalValidatesSnapshotAndReason() {
+        BatchJobArguments arguments = BatchJobArguments.from(
+                "marketNewsWithdrawalJob",
+                Map.of(
+                        "snapshotId", "123e4567-e89b-12d3-a456-426614174013",
+                        "reason", "RELATION_ACCURACY_BELOW_THRESHOLD"),
+                clock);
+
+        assertThat(arguments.jobParameters().getString("snapshotId")).isEqualTo("123e4567-e89b-12d3-a456-426614174013");
+        assertThat(arguments.jobParameters().getString("reason")).isEqualTo("RELATION_ACCURACY_BELOW_THRESHOLD");
+        assertThatThrownBy(() -> BatchJobArguments.from(
+                        "marketNewsWithdrawalJob",
+                        Map.of(
+                                "snapshotId", "123e4567-e89b-12d3-a456-426614174013",
+                                "reason", "FREE_TEXT"),
+                        clock))
+                .isInstanceOf(BatchExitCodeException.class)
+                .hasMessageContaining("supported market news withdrawal reason");
+    }
+
+    @Test
+    @DisplayName("뉴스 품질 표본 job은 review set UUID와 versioned policy만 허용한다")
+    void marketNewsQualitySampleValidatesReviewSetAndPolicyVersion() {
+        BatchJobArguments arguments = BatchJobArguments.from(
+                "marketNewsQualitySampleJob",
+                Map.of(
+                        "reviewSetId", "123e4567-e89b-12d3-a456-426614174014",
+                        "policyVersion", "NEWS_V2"),
+                clock);
+
+        assertThat(arguments.jobParameters().getString("reviewSetId"))
+                .isEqualTo("123e4567-e89b-12d3-a456-426614174014");
+        assertThat(arguments.jobParameters().getString("policyVersion")).isEqualTo("NEWS_V2");
+        assertThatThrownBy(() -> BatchJobArguments.from(
+                        "marketNewsQualitySampleJob",
+                        Map.of(
+                                "reviewSetId", "123e4567-e89b-12d3-a456-426614174014",
+                                "policyVersion", "../NEWS"),
+                        clock))
+                .isInstanceOf(BatchExitCodeException.class)
+                .hasMessageContaining("policyVersion");
+    }
+
+    @Test
+    @DisplayName("뉴스 운영 schedule은 execution id를 job별 canonical requestId로 변환한다")
+    void marketNewsSchedulesUseNamespacedExecutionIdentity() {
+        BatchJobArguments morning = BatchJobArguments.from(
+                "marketNewsMorningJob", Map.of("schedulerExecutionId", "schedule-run-20260725"), clock);
+        BatchJobArguments retention = BatchJobArguments.from(
+                "marketNewsRetentionJob", Map.of("schedulerExecutionId", "schedule-run-20260725"), clock);
+
+        assertThat(morning.jobParameters().getString("requestId"))
+                .matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+        assertThat(retention.jobParameters().getString("requestId"))
+                .isNotEqualTo(morning.jobParameters().getString("requestId"));
+        assertThat(morning.jobParameters().getString("runDate")).isEqualTo("2026-07-07");
+    }
+
+    @Test
     @DisplayName("daily job은 canonical UUID requestId를 identifying parameter로 보존한다")
     void dailyJobKeepsRequiredCanonicalRequestId() {
         BatchJobArguments arguments = BatchJobArguments.from(

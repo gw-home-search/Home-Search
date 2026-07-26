@@ -1,0 +1,33 @@
+id = "operating-platform-hardening"
+description = "Home Search operating platform, Kafka contracts, workload isolation, and staging release hardening."
+aliases = ["operating-platform-hardening", "msa-db-kafka-gates"]
+slice_patterns = ["operating-platform", "msa-db-kafka"]
+
+[targets.backend]
+prompt = "backend_execute.md"
+allowed_scope = ".github/**, .codex/harness/**, AGENTS.md, apps/property-data/**, apps/user/**, contracts/**, docker-bake.hcl, docs/**, infra/**"
+forbidden_scope = "apps/web/**"
+verification_commands = [
+  "bash infra/test-operating-platform-contracts.sh",
+  "cd apps/user/service && ./gradlew userServiceQualityCheck",
+  "cd apps/property-data && ./gradlew backendQualityCheck",
+  "python3 .codex/harness/home_flow.py --self-test",
+  "python3 .codex/harness/project_terms_check.py",
+  "git diff --check",
+]
+
+[targets.frontend]
+prompt = "frontend_execute.md"
+allowed_scope = "apps/web/**"
+forbidden_scope = "apps/property-data/**, apps/user/**, infra/**"
+verification_commands = [
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+]
+
+[safety]
+allow_main_merge = false
+allow_push = false
+allow_open_api_call = false
+allow_db_migration_run = false

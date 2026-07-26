@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 120
     environment: release
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
 
@@ -36,7 +36,7 @@ jobs:
           .github/scripts/verify-release-eligibility.sh "${GITHUB_REF_NAME}" "${GITHUB_SHA}" check-runs.json
 
       - name: Configure short-lived AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6.1.2
+        uses: aws-actions/configure-aws-credentials@acca2b1b2070338fb9fd1ca27ecee81d687e58e5 # v6.1.2
         with:
           role-to-assume: ${{ vars.AWS_RELEASE_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
@@ -53,9 +53,8 @@ jobs:
           aws ecr get-login-password | docker login --username AWS --password-stdin "${registry}" >/dev/null
           echo "registry=${registry}" >>"${GITHUB_OUTPUT}"
 
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4.1.0
-
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
       - name: Build and publish SHA and SemVer images
         env:
           REGISTRY: ${{ steps.registry.outputs.registry }}
@@ -65,6 +64,7 @@ jobs:
           SOURCE_URL: https://github.com/${{ github.repository }}
           PUBLIC_ORIGIN: ${{ vars.STAGING_PUBLIC_ORIGIN }}
           KAKAO_MAP_APP_KEY: ${{ vars.KAKAO_MAP_APP_KEY }}
+          MARKET_NEWS_ENABLED: ${{ vars.MARKET_NEWS_ENABLED || 'false' }}
         run: |
           set -Eeuo pipefail
           VERSION="${VERSION#v}"
@@ -77,10 +77,15 @@ jobs:
       - name: Record immutable release manifest
         env:
           REGISTRY: ${{ steps.registry.outputs.registry }}
+          MARKET_NEWS_ENABLED: ${{ vars.MARKET_NEWS_ENABLED || 'false' }}
         run: |
+          .github/scripts/test-event-contracts.sh
           mkdir -p release-evidence/sbom release-evidence/vulnerability
           infra/release/create-release-manifest.sh \
             "${GITHUB_REF_NAME}" "${GITHUB_SHA}" "${REGISTRY}" release-evidence/release-manifest.json
+          .github/scripts/augment-release-manifest.sh \
+            release-evidence/release-manifest.json "${GITHUB_WORKSPACE}" linux/amd64 "${GITHUB_RUN_ID}" \
+            "${MARKET_NEWS_ENABLED}"
 
       - name: Install checksum-pinned SBOM and scanner tools
         run: |
@@ -110,11 +115,17 @@ jobs:
           done < <(jq -r '.images | to_entries[] | [.key,.value.uri] | @tsv' release-evidence/release-manifest.json)
           jq -n --argjson passed "$((1 - scan_failed))" \
             '{scanner:"grype",critical_gate_passed:($passed == 1)}' >release-evidence/vulnerability/summary.json
+          if [[ "${scan_failed}" -eq 0 ]]; then
+            .github/scripts/finalize-release-evidence.sh \
+              release-evidence/release-manifest.json \
+              release-evidence/sbom \
+              release-evidence/vulnerability
+          fi
           exit "${scan_failed}"
 
       - name: Upload release manifest, SBOM, and vulnerability evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-evidence-${{ github.ref_name }}
           path: release-evidence/

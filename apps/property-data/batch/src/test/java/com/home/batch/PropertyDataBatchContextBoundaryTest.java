@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.mock;
 
 import com.home.application.coordinate.lookup.ParcelCoordinateResolver;
+import com.home.application.event.PropertyEventOutboxRelayService;
+import com.home.application.event.PropertyEventOutboxRetentionService;
 import com.home.application.ingest.metadata.OdcComplexMetadataResolver;
 import com.home.application.ingest.metadata.OdcMetadataGapFillRepository;
 import com.home.application.ingest.metadata.OdcMetadataGapFillService;
@@ -54,6 +56,47 @@ class PropertyDataBatchContextBoundaryTest {
                 .isTrue();
         assertThat(PropertyDataBatchApplication.supportsJobName("marketInsightWeeklyJob"))
                 .isFalse();
+        assertThat(PropertyDataBatchApplication.supportsJobName("propertyEventRelayJob"))
+                .isTrue();
+        assertThat(PropertyDataBatchApplication.supportsJobName("propertyEventOutboxRetentionJob"))
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("property event relay는 명시적 opt-in일 때만 job과 service를 등록한다")
+    void propertyEventRelayRequiresExplicitOptIn() {
+        contextRunner.run(context -> assertThat(context)
+                .doesNotHaveBean("propertyEventRelayJob")
+                .doesNotHaveBean("propertyEventRelayStep")
+                .doesNotHaveBean("propertyEventOutboxRelayService"));
+
+        contextRunner
+                .withPropertyValues("home.events.relay.enabled=true", "spring.kafka.bootstrap-servers=127.0.0.1:9092")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context)
+                            .hasBean("propertyEventRelayJob")
+                            .hasBean("propertyEventRelayStep")
+                            .hasSingleBean(PropertyEventOutboxRelayService.class);
+                });
+    }
+
+    @Test
+    @DisplayName("property event outbox retention은 relay와 독립된 명시적 opt-in으로 등록한다")
+    void propertyEventOutboxRetentionRequiresExplicitOptIn() {
+        contextRunner.run(context -> assertThat(context)
+                .doesNotHaveBean("propertyEventOutboxRetentionJob")
+                .doesNotHaveBean("propertyEventOutboxRetentionStep")
+                .doesNotHaveBean("propertyEventOutboxRetentionService"));
+
+        contextRunner.withPropertyValues("home.events.retention.enabled=true").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context)
+                    .hasBean("propertyEventOutboxRetentionJob")
+                    .hasBean("propertyEventOutboxRetentionStep")
+                    .hasSingleBean(PropertyEventOutboxRetentionService.class)
+                    .doesNotHaveBean("propertyEventOutboxRelayService");
+        });
     }
 
     @Test

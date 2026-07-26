@@ -32,6 +32,9 @@ management:
       enabled: false
 
 home:
+  news:
+    public:
+      enabled: ${HOME_NEWS_PUBLIC_ENABLED:false}
   region:
     sync:
       one-shot:

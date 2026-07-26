@@ -1,0 +1,18 @@
+{
+  "eventId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "eventType": "DatasetQuarantined",
+  "schemaVersion": 1,
+  "occurredAt": "2026-07-24T03:09:00Z",
+  "producer": "ai-service",
+  "aggregateType": "DatasetVersion",
+  "aggregateId": "rail-20260724",
+  "aggregateVersion": 2,
+  "correlationId": "dataset-run-20260724",
+  "causationId": null,
+  "traceId": "trace-aaa",
+  "payload": {
+    "datasetVersionId": "aaaaaaaa-bbbb-4aaa-8aaa-aaaaaaaaaaaa",
+    "datasetType": "RAIL",
+    "reasonCode": "CHECKSUM_MISMATCH"
+  }
+}

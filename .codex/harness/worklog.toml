@@ -508,3 +508,48 @@ risk_notes = [
   "가장 큰 collision risk는 frontend가 search/marker selection에서 complexId를 잃어 backend scoped read와 화면 표시가 어긋나는 것이다.",
   "final runtime smoke는 local environment availability에 따라 Partial evidence가 가능하지만 deterministic backend/frontend tests는 통과해야 한다.",
 ]
+
+[[items]]
+id = "operating-platform-hardening"
+title_ko = "운영환경 MSA Kafka 기반 고도화"
+pr_type = "Feat"
+pr_title_ko = "운영환경 MSA Kafka 기반과 staging release 경계 고도화"
+description_ko = "기존 공개 API를 유지하면서 workload별 IAM과 secret, Kafka outbox/inbox 계약, exact gateway route, staging Terraform과 immutable release/rollback 근거를 추가한다."
+status = "done"
+priority = 270
+targets = "both"
+preset = "operating-platform-hardening"
+acceptance_criteria = [
+  "기존 map/trade 공개 API URL과 response shape를 변경하지 않는다.",
+  "property/user insight route를 exact path로 분리하고 신규 user insight API는 staging 기본값 false feature gate를 유지한다.",
+  "workload별 execution/task role과 secret ARN allowlist를 Terraform test로 고정한다.",
+  "Kafka JSON Schema, topic manifest, outbox/inbox retry/DLQ/retention 계약을 저장소와 release manifest에 고정한다.",
+  "동일 image digest 승격, migration-before-service, desired count rollback과 신규 workload/alarm allowlist를 검증한다.",
+  "실제 AWS apply, production foundation, data cutover는 p95와 staging 7일 및 비용 승인 전 실행하지 않는다.",
+]
+first_red_candidates = [
+  "gateway prefix route 충돌 fixture",
+  "cross-secret IAM allowlist Terraform fixture",
+  "event duplicate/retry/DLQ fixture",
+  "release plan과 rollback state shell fixture",
+  "Glue 비호환 schema dialect fixture",
+]
+verification_commands = [
+  "bash infra/test-operating-platform-contracts.sh",
+  "cd apps/property-data && ./gradlew backendQualityCheck",
+  "cd apps/user/service && ./gradlew userServiceQualityCheck",
+  "cd apps/web && npm run test",
+  "cd apps/web && npm run build",
+  "git diff --check",
+]
+stop_conditions = [
+  "public API URL, field, unit 또는 ProblemDetail shape 변경이 필요하면 중단한다.",
+  "Terraform plan에 예상하지 않은 DB, MSK, KMS, S3 destroy가 있으면 중단한다.",
+  "production 월비용, p95, staging 7일 gate가 없으면 AWS production apply를 실행하지 않는다.",
+  "event에 PII, raw provider payload 또는 secret이 포함되면 중단한다.",
+]
+risk_notes = [
+  "실제 AWS MSK/Glue/IAM 연결과 staging apply는 아직 실행하지 않았다.",
+  "map seed-wide p95는 production 목표 2초를 충족하지 못해 staging 실측 전 위험으로 유지한다.",
+  "AI projection, SES feedback, outbox oldest-age custom metric과 production Terraform root는 후속 slice다.",
+]

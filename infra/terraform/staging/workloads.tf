@@ -22,7 +22,7 @@ locals {
       cpu    = 512
       memory = 1024
       environment = [
-        { name = "SPRING_PROFILES_ACTIVE", value = "local" },
+        { name = "SPRING_PROFILES_ACTIVE", value = "staging" },
         { name = "SERVER_PORT", value = "8080" },
         { name = "DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.primary.address}:5432/home_search?sslmode=require" },
         { name = "DB_USERNAME", value = "home_search_property_runtime" },
@@ -32,6 +32,7 @@ locals {
         { name = "SPRING_DATA_REDIS_HOST", value = aws_elasticache_replication_group.this.primary_endpoint_address },
         { name = "SPRING_DATA_REDIS_PORT", value = "6379" },
         { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "true" },
+        { name = "HOME_NEWS_PUBLIC_ENABLED", value = tostring(var.enable_market_news_public) },
         { name = "HOME_PREDICTION_ENABLED", value = tostring(var.enable_ml) },
         { name = "HOME_PREDICTION_CLIENT_BASE_URL", value = "http://ml.${local.namespace_name}:8001" },
         { name = "HOME_ADMIN_INTERNAL_ENABLED", value = "true" },
@@ -42,11 +43,11 @@ locals {
         { name = "FRONTEND_URL", value = var.public_origin },
       ]
       secrets = [
-        { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["database-runtime"].arn}:property_runtime::" },
-        { name = "COORDINATE_SOURCE_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["database-runtime"].arn}:coordinate_reader::" },
+        { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["property-runtime-db"].arn}:password::" },
+        { name = "COORDINATE_SOURCE_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["coordinate-reader-db"].arn}:password::" },
       ]
       key_secrets = [
-        { name = "PUBLIC_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["admin-internal-jwt"].arn}:public_key_pem::" },
+        { name = "PUBLIC_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["admin-internal-jwt-public"].arn}:public_key_pem::" },
       ]
       mount_points = [{ sourceVolume = "keys", containerPath = "/run/keys", readOnly = true }]
       health       = ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/8080' || exit 1"]
@@ -70,7 +71,7 @@ locals {
         { name = "PROPERTY_DATA_INTERNAL_BASE_URL", value = "http://property-api.${local.namespace_name}:8080" },
       ]
       secrets = [
-        { name = "ADMIN_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["database-runtime"].arn}:admin_runtime::" },
+        { name = "ADMIN_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["admin-runtime-db"].arn}:password::" },
       ]
       key_secrets = [
         { name = "PRIVATE_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["admin-internal-jwt"].arn}:private_key_pem::" },
@@ -95,9 +96,10 @@ locals {
         { name = "USER_JWT_ACTIVE_KID", value = "staging-1" },
         { name = "USER_JWT_PRIVATE_KEY_PATH", value = "/run/keys/private.pem" },
         { name = "USER_JWT_ACTIVE_PUBLIC_KEY_PATH", value = "/run/keys/public.pem" },
+        { name = "HOME_INSIGHTS_ENABLED", value = tostring(var.enable_user_insights_public) },
       ]
       secrets = [
-        { name = "USER_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["database-runtime"].arn}:user_runtime::" },
+        { name = "USER_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["user-runtime-db"].arn}:password::" },
         { name = "GOOGLE_OAUTH_CLIENT_ID", valueFrom = "${aws_secretsmanager_secret.container["oauth-providers"].arn}:google_client_id::" },
         { name = "GOOGLE_OAUTH_CLIENT_SECRET", valueFrom = "${aws_secretsmanager_secret.container["oauth-providers"].arn}:google_client_secret::" },
         { name = "KAKAO_OAUTH_CLIENT_ID", valueFrom = "${aws_secretsmanager_secret.container["oauth-providers"].arn}:kakao_client_id::" },
@@ -156,6 +158,18 @@ locals {
       mount_points = [{ sourceVolume = "model", containerPath = "/model", readOnly = true }]
       health       = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)\" || exit 1"]
     }
+  }
+  user_insight_worker_spec = {
+    image = "user-insight-worker"
+    environment = [
+      { name = "USER_DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.primary.address}:5432/home_search_user?sslmode=require" },
+      { name = "USER_DB_USERNAME", value = "home_search_user_runtime" },
+      { name = "HOME_KAFKA_BOOTSTRAP_SERVERS", value = aws_msk_serverless_cluster.events.bootstrap_brokers_sasl_iam },
+      { name = "HOME_INSIGHT_RETENTION_ENABLED", value = "true" },
+    ]
+    secrets = [
+      { name = "USER_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["user-runtime-db"].arn}:password::" },
+    ]
   }
 }
 
@@ -251,8 +265,8 @@ resource "aws_ecs_task_definition" "service" {
   memory                   = tostring(each.value.memory)
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  execution_role_arn       = aws_iam_role.task_execution.arn
-  task_role_arn            = aws_iam_role.runtime_task.arn
+  execution_role_arn       = aws_iam_role.workload_execution[each.key].arn
+  task_role_arn            = aws_iam_role.workload_task[each.key].arn
   skip_destroy             = true
   runtime_platform {
     cpu_architecture        = "X86_64"
@@ -352,112 +366,218 @@ resource "aws_ecs_service" "service" {
   depends_on = [aws_lb_listener.public_https, aws_lb_listener.admin_https]
 }
 
+resource "aws_ecs_task_definition" "user_insight_worker" {
+  family                   = "${local.name}-user-insight-worker"
+  cpu                      = "512"
+  memory                   = "1024"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  execution_role_arn       = aws_iam_role.workload_execution["user-insight-worker"].arn
+  task_role_arn            = aws_iam_role.workload_task["user-insight-worker"].arn
+  skip_destroy             = true
+  runtime_platform {
+    cpu_architecture        = "X86_64"
+    operating_system_family = "LINUX"
+  }
+  container_definitions = jsonencode([{
+    name                   = "user-insight-worker"
+    image                  = local.image_references[local.user_insight_worker_spec.image]
+    essential              = true
+    environment            = local.user_insight_worker_spec.environment
+    secrets                = local.user_insight_worker_spec.secrets
+    user                   = "10001:10001"
+    readonlyRootFilesystem = false
+    stopTimeout            = 120
+    logConfiguration       = local.awslogs["user-insight-worker"]
+  }])
+}
+
+resource "aws_ecs_service" "user_insight_worker" {
+  name                               = "user-insight-worker"
+  cluster                            = aws_ecs_cluster.this.id
+  task_definition                    = aws_ecs_task_definition.user_insight_worker.arn
+  desired_count                      = var.enable_services ? 1 : 0
+  launch_type                        = "FARGATE"
+  platform_version                   = "LATEST"
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
+  enable_execute_command             = false
+  wait_for_steady_state              = true
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+  network_configuration {
+    subnets          = values(aws_subnet.application)[*].id
+    security_groups  = [aws_security_group.task["user-insight-worker"].id]
+    assign_public_ip = false
+  }
+}
+
 locals {
   one_shot_specs = {
     secret-bootstrap = {
       image   = "ops-bootstrap"
-      role    = aws_iam_role.secret_bootstrap_task.arn
+      role    = aws_iam_role.workload_task["secret-bootstrap"].arn
       command = ["secret-bootstrap"]
       environment = [
-        { name = "DATABASE_RUNTIME_SECRET_ARN", value = aws_secretsmanager_secret.container["database-runtime"].arn },
-        { name = "DATABASE_BOOTSTRAP_SECRET_ARN", value = aws_secretsmanager_secret.container["database-bootstrap"].arn },
+        { name = "PROPERTY_RUNTIME_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["property-runtime-db"].arn },
+        { name = "PROPERTY_AI_READER_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["property-ai-reader-db"].arn },
+        { name = "ADMIN_RUNTIME_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["admin-runtime-db"].arn },
+        { name = "USER_RUNTIME_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["user-runtime-db"].arn },
+        { name = "COORDINATE_READER_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["coordinate-reader-db"].arn },
+        { name = "PROPERTY_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["property-migrator-db"].arn },
+        { name = "ADMIN_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["admin-migrator-db"].arn },
+        { name = "USER_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["user-migrator-db"].arn },
+        { name = "COORDINATE_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["coordinate-migrator-db"].arn },
+        { name = "COORDINATE_IMPORTER_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["coordinate-importer-db"].arn },
+        { name = "BACKUP_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["backup-db"].arn },
         { name = "USER_JWT_SECRET_ARN", value = aws_secretsmanager_secret.container["user-jwt"].arn },
         { name = "ADMIN_JWT_SECRET_ARN", value = aws_secretsmanager_secret.container["admin-internal-jwt"].arn },
+        { name = "ADMIN_JWT_PUBLIC_SECRET_ARN", value = aws_secretsmanager_secret.container["admin-internal-jwt-public"].arn },
       ]
       secrets = []
     }
     database-bootstrap = {
       image   = "ops-bootstrap"
-      role    = aws_iam_role.database_bootstrap_task.arn
+      role    = aws_iam_role.workload_task["database-bootstrap"].arn
       command = ["db-bootstrap"]
       environment = [
         { name = "PRIMARY_RDS_SECRET_ARN", value = aws_db_instance.primary.master_user_secret[0].secret_arn },
         { name = "COORDINATE_RDS_SECRET_ARN", value = aws_db_instance.coordinate_source.master_user_secret[0].secret_arn },
-        { name = "DATABASE_RUNTIME_SECRET_ARN", value = aws_secretsmanager_secret.container["database-runtime"].arn },
-        { name = "DATABASE_BOOTSTRAP_SECRET_ARN", value = aws_secretsmanager_secret.container["database-bootstrap"].arn },
+        { name = "PROPERTY_RUNTIME_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["property-runtime-db"].arn },
+        { name = "PROPERTY_AI_READER_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["property-ai-reader-db"].arn },
+        { name = "ADMIN_RUNTIME_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["admin-runtime-db"].arn },
+        { name = "USER_RUNTIME_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["user-runtime-db"].arn },
+        { name = "COORDINATE_READER_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["coordinate-reader-db"].arn },
+        { name = "PROPERTY_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["property-migrator-db"].arn },
+        { name = "ADMIN_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["admin-migrator-db"].arn },
+        { name = "USER_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["user-migrator-db"].arn },
+        { name = "COORDINATE_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["coordinate-migrator-db"].arn },
+        { name = "COORDINATE_IMPORTER_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["coordinate-importer-db"].arn },
+        { name = "BACKUP_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["backup-db"].arn },
       ]
       secrets = []
     }
     runtime-grants = {
       image   = "ops-bootstrap"
-      role    = aws_iam_role.database_bootstrap_task.arn
+      role    = aws_iam_role.workload_task["runtime-grants"].arn
       command = ["runtime-grants"]
       environment = [
-        { name = "PRIMARY_RDS_SECRET_ARN", value = aws_db_instance.primary.master_user_secret[0].secret_arn },
-        { name = "DATABASE_BOOTSTRAP_SECRET_ARN", value = aws_secretsmanager_secret.container["database-bootstrap"].arn },
+        { name = "PRIMARY_DB_HOST", value = aws_db_instance.primary.address },
+        { name = "PRIMARY_DB_PORT", value = tostring(aws_db_instance.primary.port) },
+        { name = "PROPERTY_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["property-migrator-db"].arn },
+        { name = "ADMIN_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["admin-migrator-db"].arn },
+        { name = "USER_MIGRATOR_DB_SECRET_ARN", value = aws_secretsmanager_secret.container["user-migrator-db"].arn },
       ]
       secrets = []
     }
     property-flyway = {
       image   = "property-flyway"
-      role    = aws_iam_role.runtime_task.arn
+      role    = aws_iam_role.workload_task["property-flyway"].arn
       command = ["migrate"]
       environment = [
         { name = "FLYWAY_URL", value = "jdbc:postgresql://${aws_db_instance.primary.address}:5432/home_search?sslmode=require" },
         { name = "FLYWAY_USER", value = "home_search_property_migrator" },
       ]
-      secrets = [{ name = "FLYWAY_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["database-bootstrap"].arn}:property_migrator::" }]
+      secrets = [{ name = "FLYWAY_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["property-migrator-db"].arn}:password::" }]
     }
     admin-migration = {
       image   = "admin-migration"
-      role    = aws_iam_role.runtime_task.arn
+      role    = aws_iam_role.workload_task["admin-migration"].arn
       command = []
       environment = [
         { name = "ADMIN_MIGRATION_DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.primary.address}:5432/home_search_admin?sslmode=require" },
         { name = "ADMIN_MIGRATION_DB_USERNAME", value = "home_search_admin_migrator" },
       ]
-      secrets = [{ name = "ADMIN_MIGRATION_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["database-bootstrap"].arn}:admin_migrator::" }]
+      secrets = [{ name = "ADMIN_MIGRATION_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["admin-migrator-db"].arn}:password::" }]
     }
     user-flyway = {
       image   = "user-flyway"
-      role    = aws_iam_role.runtime_task.arn
+      role    = aws_iam_role.workload_task["user-flyway"].arn
       command = ["migrate"]
       environment = [
         { name = "FLYWAY_URL", value = "jdbc:postgresql://${aws_db_instance.primary.address}:5432/home_search_user?sslmode=require" },
         { name = "FLYWAY_USER", value = "home_search_user_migrator" },
       ]
-      secrets = [{ name = "FLYWAY_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["database-bootstrap"].arn}:user_migrator::" }]
+      secrets = [{ name = "FLYWAY_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["user-migrator-db"].arn}:password::" }]
     }
     source-data-migration = {
       image   = "source-data-migration"
-      role    = aws_iam_role.runtime_task.arn
+      role    = aws_iam_role.workload_task["source-data-migration"].arn
       command = []
       environment = [
         { name = "SOURCE_DATA_DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.coordinate_source.address}:5432/home_search_coordinate_source?sslmode=require" },
         { name = "SOURCE_DATA_DB_USERNAME", value = "home_search_coordinate_migrator" },
       ]
-      secrets = [{ name = "SOURCE_DATA_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["database-bootstrap"].arn}:coordinate_migrator::" }]
+      secrets = [{ name = "SOURCE_DATA_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["coordinate-migrator-db"].arn}:password::" }]
     }
     property-batch = {
       image   = "property-batch"
-      role    = aws_iam_role.runtime_task.arn
+      role    = aws_iam_role.workload_task["property-batch"].arn
       command = []
       environment = [
-        { name = "SPRING_PROFILES_ACTIVE", value = "local" },
+        { name = "SPRING_PROFILES_ACTIVE", value = "staging" },
         { name = "DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.primary.address}:5432/home_search?sslmode=require" },
         { name = "DB_USERNAME", value = "home_search_property_runtime" },
         { name = "COORDINATE_SOURCE_DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.coordinate_source.address}:5432/home_search_coordinate_source?sslmode=require" },
         { name = "COORDINATE_SOURCE_DB_USERNAME", value = "home_search_coordinate_reader" },
         { name = "COORDINATE_SOURCE_DB_READ_ONLY", value = "true" },
+        { name = "SPRING_DATA_REDIS_HOST", value = aws_elasticache_replication_group.this.primary_endpoint_address },
+        { name = "SPRING_DATA_REDIS_PORT", value = "6379" },
+        { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "true" },
       ]
       secrets = [
-        { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["database-runtime"].arn}:property_runtime::" },
-        { name = "COORDINATE_SOURCE_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["database-runtime"].arn}:coordinate_reader::" },
+        { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["property-runtime-db"].arn}:password::" },
+        { name = "COORDINATE_SOURCE_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["coordinate-reader-db"].arn}:password::" },
+        { name = "APT_SERVICE_KEY", valueFrom = "${aws_secretsmanager_secret.container["public-data-providers"].arn}:apt_service_key::" },
+        { name = "NAVER_NEWS_API_KEY_ID", valueFrom = "${aws_secretsmanager_secret.container["public-data-providers"].arn}:naver_news_api_key_id::" },
+        { name = "NAVER_NEWS_API_KEY", valueFrom = "${aws_secretsmanager_secret.container["public-data-providers"].arn}:naver_news_api_key::" },
+      ]
+    }
+    property-event-relay = {
+      image   = "property-batch"
+      role    = aws_iam_role.workload_task["property-event-relay"].arn
+      command = []
+      environment = [
+        { name = "SPRING_PROFILES_ACTIVE", value = "staging" },
+        { name = "DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.primary.address}:5432/home_search?sslmode=require" },
+        { name = "DB_USERNAME", value = "home_search_property_runtime" },
+        { name = "HOME_KAFKA_BOOTSTRAP_SERVERS", value = aws_msk_serverless_cluster.events.bootstrap_brokers_sasl_iam },
+        { name = "HOME_EVENTS_RELAY_ENABLED", value = "true" },
+      ]
+      secrets = [
+        { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["property-runtime-db"].arn}:password::" },
+      ]
+    }
+    property-event-maintenance = {
+      image   = "property-batch"
+      role    = aws_iam_role.workload_task["property-event-maintenance"].arn
+      command = []
+      environment = [
+        { name = "SPRING_PROFILES_ACTIVE", value = "staging" },
+        { name = "DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.primary.address}:5432/home_search?sslmode=require" },
+        { name = "DB_USERNAME", value = "home_search_property_runtime" },
+        { name = "HOME_EVENTS_RETENTION_ENABLED", value = "true" },
+      ]
+      secrets = [
+        { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["property-runtime-db"].arn}:password::" },
       ]
     }
     admin-ops = {
       image   = "admin-ops"
-      role    = aws_iam_role.runtime_task.arn
+      role    = aws_iam_role.workload_task["admin-ops"].arn
       command = []
       environment = [
         { name = "ADMIN_DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.primary.address}:5432/home_search_admin?sslmode=require" },
         { name = "ADMIN_DB_USERNAME", value = "home_search_admin_runtime" },
       ]
-      secrets = [{ name = "ADMIN_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["database-runtime"].arn}:admin_runtime::" }]
+      secrets = [{ name = "ADMIN_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["admin-runtime-db"].arn}:password::" }]
     }
     backup = {
       image   = "backup"
-      role    = aws_iam_role.backup_task.arn
+      role    = aws_iam_role.workload_task["backup"].arn
       command = ["--backup-all", "/backup"]
       environment = [
         { name = "HOME_BACKUP_PGHOST", value = aws_db_instance.primary.address },
@@ -465,11 +585,11 @@ locals {
         { name = "HOME_BACKUP_PGUSER", value = "home_search_backup" },
         { name = "HOME_BACKUP_S3_URI", value = "s3://${aws_s3_bucket.database_backup.id}/staging" },
       ]
-      secrets = [{ name = "HOME_BACKUP_PGPASSWORD", valueFrom = "${aws_secretsmanager_secret.container["database-bootstrap"].arn}:backup::" }]
+      secrets = [{ name = "HOME_BACKUP_PGPASSWORD", valueFrom = "${aws_secretsmanager_secret.container["backup-db"].arn}:password::" }]
     }
     restore-verification = {
       image       = "backup"
-      role        = aws_iam_role.backup_task.arn
+      role        = aws_iam_role.workload_task["restore-verification"].arn
       command     = ["--verify-latest-s3", "s3://${aws_s3_bucket.database_backup.id}/staging"]
       environment = []
       secrets     = []
@@ -484,7 +604,7 @@ resource "aws_ecs_task_definition" "one_shot" {
   memory                   = "1024"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  execution_role_arn       = aws_iam_role.task_execution.arn
+  execution_role_arn       = aws_iam_role.workload_execution[each.key].arn
   task_role_arn            = each.value.role
   skip_destroy             = true
   runtime_platform {

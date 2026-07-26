@@ -30,6 +30,12 @@
 - 예상 RED 실패: 새 `RAW_POSITION_CONFLICT`를 포함한 영속 운영 실패 사유가 문자열로 전달돼 stable enum과 한국어 운영 metadata를 소유하지 않았다.
 - 최소 GREEN: 전체 뉴스 수집 실패 사유를 `MarketNewsFailureKind`로 타입화하고 `titleKo()`/`descriptionKo()` 및 남은 work unit 중단 predicate를 domain에 배치했다. domain/service targeted test와 `recordWorkUnitPageProgress()` 저장 후 재조회하는 PostgreSQL integration test가 통과했다.
 
+## Gate evidence propagation
+
+- 최초 RED: `python3 .codex/harness/home_flow.py --self-test`가 `parse_gate_review` 부재 `NameError`로 실패했고, `python3 .codex/harness/home_report.py --self-test`가 실제 gate/TDD 문구를 찾지 못해 실패했다.
+- 예상 RED 실패: gate 출력이 payload에서 유실돼 `Partial` 또는 `reviewer/security listed` 결과를 게시 전에 차단하지 못하고 PR body가 일반 문구를 생성했다.
+- 최소 GREEN: gate 상태·reviewer·security·contract 결정을 구조화하고 `Pass/none/none/Pass`만 게시 가능하게 했다. TDD 문서와 gate 검증 공백을 payload/PR body에 전달하며 `home_flow`, `home_report`, `pr_lint` self-test가 통과했다.
+
 ## 주요 동작 slice의 회귀 fixture
 
 - property news/outbox: `MarketNewsCollectionServiceTest`, `PropertyEventOutboxRelayServiceTest`, `JdbcPropertyEventOutboxRepositoryJdbcIntegrationTest`, `MarketNewsControllerContractTest`가 수집 예산, publish 실패 시 outbox 보존, 중복 relay, public response 계약을 검증한다.

@@ -549,8 +549,14 @@ def run_gate_review(
         raise RuntimeError(f"{target} gate review failed: {result['summary']}")
     if not dry_run and output.exists():
         text = output.read_text(encoding="utf-8", errors="replace")
-        if re.search(r"상태:\s*Fail", text):
-            raise RuntimeError(f"{target} gate review returned Fail")
+        evidence = parse_gate_review(text)
+        result["evidence"] = evidence
+        if not gate_allows_publish(evidence):
+            raise RuntimeError(
+                f"{target} gate review is not publishable: "
+                f"status={evidence['status']}, reviewer={evidence['reviewer_findings']}, "
+                f"security={evidence['security_findings']}, contract={evidence['contract_decision']}"
+            )
     result["output_path"] = str(output)
     return result
 
@@ -563,6 +569,57 @@ def output_text(result: dict[str, Any]) -> str:
     if not path.exists():
         return ""
     return path.read_text(encoding="utf-8", errors="replace")
+
+
+def _gate_value(text: str, label: str) -> str:
+    match = re.search(rf"^\s*{re.escape(label)}\s*:\s*(.+?)\s*$", text, re.MULTILINE)
+    return match.group(1).strip() if match else ""
+
+
+def parse_gate_review(text: str) -> dict[str, str]:
+    status_match = re.search(r"^\s*상태\s*:\s*(Pass|Partial|Fail)\s*$", text, re.MULTILINE)
+    reviewer_match = re.search(r"reviewer\s*:\s*지적사항\s*=\s*(none|listed)", text)
+    security_match = re.search(r"security-audit\s*:\s*지적사항\s*=\s*(none|listed)", text)
+    contract_match = re.search(r"contract-reviewer\s*:\s*게이트 결정\s*=\s*(Pass|Partial|Fail)", text)
+    return {
+        "status": status_match.group(1) if status_match else "Partial",
+        "first_red": _gate_value(text, "최초 RED"),
+        "expected_red": _gate_value(text, "예상 RED 실패"),
+        "minimum_green": _gate_value(text, "최소 GREEN"),
+        "reviewer_findings": reviewer_match.group(1) if reviewer_match else "listed",
+        "security_findings": security_match.group(1) if security_match else "listed",
+        "contract_decision": contract_match.group(1) if contract_match else "Partial",
+        "main_risk": _gate_value(text, "주요 위험"),
+        "security_impact": _gate_value(text, "보안 영향"),
+    }
+
+
+def gate_allows_publish(evidence: dict[str, str]) -> bool:
+    return (
+        evidence.get("status") == "Pass"
+        and evidence.get("reviewer_findings") == "none"
+        and evidence.get("security_findings") == "none"
+        and evidence.get("contract_decision") == "Pass"
+    )
+
+
+def tdd_evidence_payload(work_id: str) -> dict[str, str]:
+    path = DEFAULT_MAIN / ".codex" / "harness" / "evidence" / f"{work_id}.md"
+    if not path.exists():
+        return {"first_red": "", "expected_red": "", "minimum_green": ""}
+    text = path.read_text(encoding="utf-8", errors="replace")
+    labels = {
+        "first_red": "최초 RED",
+        "expected_red": "예상 RED 실패",
+        "minimum_green": "최소 GREEN",
+    }
+    return {
+        key: " | ".join(
+            match.group(1).strip()
+            for match in re.finditer(rf"^\s*-\s*{re.escape(label)}\s*:\s*(.+)$", text, re.MULTILINE)
+        )
+        for key, label in labels.items()
+    }
 
 
 def evidence_text(results: dict[str, Any]) -> str:
@@ -697,7 +754,7 @@ def execute_target(
         "status": "pass",
         "codex": {k: codex_result.get(k) for k in ("status", "exit_code", "summary", "output_path")},
         "verification": verification,
-        "gate": {k: gate.get(k) for k in ("status", "exit_code", "summary", "output_path")},
+        "gate": {k: gate.get(k) for k in ("status", "exit_code", "summary", "output_path", "evidence")},
         "commit": commit,
     }
 
@@ -1092,6 +1149,17 @@ def build_payload(
         integration_files = expected_changed_files_for_targets(targets, args)
         changed_files_kind = "expected"
     required_evidence = required_evidence_payload(integration_files)
+    gate_reviews = {
+        target: target_result.get("gate", {}).get("evidence", {})
+        for target, target_result in results.items()
+        if isinstance(target_result, dict) and target_result.get("gate", {}).get("evidence")
+    }
+    tdd_evidence = tdd_evidence_payload(names["work_id"])
+    verification_gaps = [
+        str(evidence.get("main_risk"))
+        for evidence in gate_reviews.values()
+        if evidence.get("main_risk") and str(evidence.get("main_risk")).lower() not in {"none", "없음"}
+    ]
     if targets:
         skill_routing = {
             "execute": routing_payload("execute", targets),
@@ -1151,6 +1219,9 @@ def build_payload(
         "lint_policy": "feasibility" if args.dry_run and (args.push or args.pr) else "strict" if (args.push or args.pr) else "not applicable",
         "skill_routing": skill_routing,
         "gate_review": f"{'/'.join(targets)} gate review completed" if results else "planning-only; not run",
+        "gate_reviews": gate_reviews,
+        "tdd_evidence": tdd_evidence,
+        "verification_gaps": verification_gaps,
         "contract_risks": [],
         "residual_risks": [] if not risk else [risk],
         "security_risks": [],
@@ -1452,6 +1523,17 @@ def run_self_test() -> int:
             "TDD_EVIDENCE_PATH": ".codex/harness/evidence/self-test.md",
         },
     )
+    parsed_partial_gate = parse_gate_review(
+        """상태: Partial
+최초 RED: 실제 RED
+예상 RED 실패: 예상 실패
+최소 GREEN: 최소 구현
+reviewer: 지적사항 = listed
+security-audit: 지적사항 = none
+contract-reviewer: 게이트 결정 = Pass
+주요 위험: cursor 검증 공백
+"""
+    )
     invalid_branch_blocked = False
     try:
         validate_integration_branch("feat/not-integration-branch")
@@ -1537,6 +1619,10 @@ def run_self_test() -> int:
         ".codex/harness/evidence/self-test.md" in gate_prompt,
         "{{VERIFICATION_EVIDENCE}}" not in gate_prompt,
         "{{TDD_EVIDENCE_PATH}}" not in gate_prompt,
+        parsed_partial_gate["status"] == "Partial",
+        parsed_partial_gate["reviewer_findings"] == "listed",
+        parsed_partial_gate["first_red"] == "실제 RED",
+        not gate_allows_publish(parsed_partial_gate),
         KNOWN_VERIFICATION_COMMANDS["backend"][DIFF_CHECK][1] == ["git", "diff", "--check"],
         KNOWN_VERIFICATION_COMMANDS["backend"]["git diff --check main...HEAD"][1]
         == ["git", "diff", "--check", "main...HEAD"],

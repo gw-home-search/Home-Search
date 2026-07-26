@@ -289,11 +289,22 @@ def render_pr_body(payload: dict[str, Any]) -> str:
     verification = nested(payload, "verification", default={})
     contract_risks = as_list(payload.get("contract_risks"))
     residual_risks = as_list(payload.get("residual_risks"))
+    verification_gaps = as_list(payload.get("verification_gaps"))
     security_risks = as_list(payload.get("security_risks"))
+    tdd_evidence = nested(payload, "tdd_evidence", default={})
+    gate_reviews = nested(payload, "gate_reviews", default={})
+    gate_evidence = gate_reviews.get("backend") or gate_reviews.get("frontend") or {}
     contract_text = "영향 없음" if not contract_risks else "영향 있음: " + "; ".join(str(item) for item in contract_risks)
+    gate_main_risk = gate_evidence.get("main_risk")
+    gap_text = "; ".join(str(item) for item in verification_gaps) or gate_main_risk or "없음"
     risk_text = "없음" if not residual_risks else "; ".join(str(item) for item in residual_risks)
     security_text = "없음" if not security_risks else "있음: " + "; ".join(str(item) for item in security_risks)
-    security_findings = "none" if not security_risks else "listed"
+    security_findings = "listed" if security_risks else gate_evidence.get("security_findings") or "none"
+    reviewer_findings = gate_evidence.get("reviewer_findings") or "none"
+    contract_decision = gate_evidence.get("contract_decision") or "Pass"
+    first_red = tdd_evidence.get("first_red") or gate_evidence.get("first_red") or "확인된 RED 근거 없음"
+    expected_red = tdd_evidence.get("expected_red") or gate_evidence.get("expected_red") or "확인된 RED 근거 없음"
+    minimum_green = tdd_evidence.get("minimum_green") or gate_evidence.get("minimum_green") or "확인된 GREEN 근거 없음"
     next_action = payload.get("next_action") or "GitHub PR diff와 checks를 확인한 뒤 수동 merge 결정"
     report_link = links.get("markdown_report") or "생성 안 됨"
     lines = "\n".join(verification_line(command, verification) for command in pr_body_commands(payload))
@@ -322,9 +333,9 @@ def render_pr_body(payload: dict[str, Any]) -> str:
 {render_skill_routing(payload)}
 ## TDD 근거
 
-최초 RED: PR lint와 harness self-test fixture로 제목, body, evidence 누락을 먼저 차단
-예상 RED 실패: pr-lint 또는 harness self-test가 title/body/evidence mismatch를 출력
-최소 GREEN: strict PR body 생성, PR lint 통과, integration branch push와 draft PR command 준비
+최초 RED: {first_red}
+예상 RED 실패: {expected_red}
+최소 GREEN: {minimum_green}
 
 ## 검증
 
@@ -336,17 +347,21 @@ def render_pr_body(payload: dict[str, Any]) -> str:
 
 {contract_text}
 
-contract-reviewer: contract risk 없으면 not needed, 있으면 필요
+contract-reviewer: 게이트 결정 = {contract_decision}
 
 ## 보안 영향
 
 보안 영향: {security_text}
-security-audit: 지적사항 = {security_findings}, 보안 audit에서 지적사항이 나오면 listed
+security-audit: 지적사항 = {security_findings}
 
 ## 주요 위험
 
 주요 위험: {risk_text}
-reviewer: 지적사항 = none, gate report에 지적사항이 있으면 listed
+reviewer: 지적사항 = {reviewer_findings}
+
+## 검증 공백
+
+검증 공백: {gap_text}
 
 ## 다음 행동
 
@@ -564,6 +579,19 @@ def run_self_test() -> int:
             HARNESS_REPORT_SELF_TEST: {"status": "pass", "exit_code": 0},
             SKILL_ROUTING_SELF_TEST: {"status": "pass", "exit_code": 0},
         },
+        "tdd_evidence": {
+            "first_red": "domain enum 부재 compile 실패",
+            "expected_red": "문자열 영속 사유가 domain 규칙을 위반",
+            "minimum_green": "typed enum과 adapter integration test",
+        },
+        "gate_reviews": {
+            "backend": {
+                "reviewer_findings": "none",
+                "security_findings": "none",
+                "contract_decision": "Pass",
+                "main_risk": "실제 AWS 검증은 후속 gate",
+            }
+        },
     }
     rendered = render_report(payload)
     pr_body = render_pr_body(payload)
@@ -596,6 +624,10 @@ def run_self_test() -> int:
         "## 요약" in pr_body,
         "`self-test` work item의 변경 범위" in pr_body,
         "최초 RED:" in pr_body,
+        "최초 RED: domain enum 부재 compile 실패" in pr_body,
+        "reviewer: 지적사항 = none" in pr_body,
+        "contract-reviewer: 게이트 결정 = Pass" in pr_body,
+        "검증 공백: 실제 AWS 검증은 후속 gate" in pr_body,
         "검증:" in pr_body,
         "영향 없음" in pr_body,
         "- [x] main merge 자동화 없음" in pr_body,

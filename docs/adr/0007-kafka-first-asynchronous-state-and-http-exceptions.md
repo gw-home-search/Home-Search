@@ -33,4 +33,3 @@ and replay. Kafka is not a replacement for synchronous request/response.
 Disable producer relay by feature flag while preserving outbox rows. Existing
 HTTP paths remain available. Topic, schema version, outbox, inbox, and DLQ data
 are not deleted during rollback.
-

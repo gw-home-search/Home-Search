@@ -127,4 +127,3 @@ Target DB에 down migration을 실행하거나 source를 삭제하지 않는다.
 
 Backup age 26시간 초과, checksum mismatch, 목표 RPO/RTO 실패는 production
 승격 차단 evidence다.
-

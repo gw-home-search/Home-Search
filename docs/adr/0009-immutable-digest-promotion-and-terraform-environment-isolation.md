@@ -32,4 +32,3 @@ migration and schema/topic deletion remain forbidden.
 
 Existing staging resources move into modules only with explicit address
 mapping, `moved` blocks, and a reviewed plan showing `0 to destroy`.
-

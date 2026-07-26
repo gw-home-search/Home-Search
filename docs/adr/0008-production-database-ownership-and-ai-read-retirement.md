@@ -32,4 +32,3 @@ independent of the property database.
 
 Do not remove `ai_read`, reinterpret identifiers, or cut over a database when
 projection parity, reconciliation, restore, or rollback evidence is incomplete.
-

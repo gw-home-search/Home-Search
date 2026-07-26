@@ -299,9 +299,9 @@ def render_pr_body(payload: dict[str, Any]) -> str:
     gap_text = "; ".join(str(item) for item in verification_gaps) or gate_main_risk or "없음"
     risk_text = "없음" if not residual_risks else "; ".join(str(item) for item in residual_risks)
     security_text = "없음" if not security_risks else "있음: " + "; ".join(str(item) for item in security_risks)
-    security_findings = "listed" if security_risks else gate_evidence.get("security_findings") or "none"
-    reviewer_findings = gate_evidence.get("reviewer_findings") or "none"
-    contract_decision = gate_evidence.get("contract_decision") or "Pass"
+    security_findings = "listed" if security_risks else gate_evidence.get("security_findings") or "listed"
+    reviewer_findings = gate_evidence.get("reviewer_findings") or "listed"
+    contract_decision = gate_evidence.get("contract_decision") or "Partial"
     first_red = tdd_evidence.get("first_red") or gate_evidence.get("first_red") or "확인된 RED 근거 없음"
     expected_red = tdd_evidence.get("expected_red") or gate_evidence.get("expected_red") or "확인된 RED 근거 없음"
     minimum_green = tdd_evidence.get("minimum_green") or gate_evidence.get("minimum_green") or "확인된 GREEN 근거 없음"
@@ -595,6 +595,7 @@ def run_self_test() -> int:
     }
     rendered = render_report(payload)
     pr_body = render_pr_body(payload)
+    missing_gate_body = render_pr_body({**payload, "gate_reviews": {}})
     security_listed_body = render_pr_body({**payload, "security_risks": ["unescaped news title reaches Slack sink"]})
     linted_pr_body = lint_pr(
         PrInput(
@@ -627,6 +628,9 @@ def run_self_test() -> int:
         "최초 RED: domain enum 부재 compile 실패" in pr_body,
         "reviewer: 지적사항 = none" in pr_body,
         "contract-reviewer: 게이트 결정 = Pass" in pr_body,
+        "reviewer: 지적사항 = listed" in missing_gate_body,
+        "security-audit: 지적사항 = listed" in missing_gate_body,
+        "contract-reviewer: 게이트 결정 = Partial" in missing_gate_body,
         "검증 공백: 실제 AWS 검증은 후속 gate" in pr_body,
         "검증:" in pr_body,
         "영향 없음" in pr_body,

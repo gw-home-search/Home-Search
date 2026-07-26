@@ -42,6 +42,12 @@
 - 예상 RED 실패: gate 출력이 payload에서 유실돼 `Partial` 또는 `reviewer/security listed` 결과를 게시 전에 차단하지 못하고 PR body가 일반 문구를 생성했다.
 - 최소 GREEN: gate 상태·reviewer·security·contract 결정을 구조화하고 `Pass/none/none/Pass`만 게시 가능하게 했다. TDD 문서와 gate 검증 공백을 payload/PR body에 전달하며 `home_flow`, `home_report`, `pr_lint` self-test가 통과했다.
 
+## Gate evidence uniqueness
+
+- 최초 RED: 설명 문장 속 `reviewer: 지적사항 = none`과 최종 `listed` 라벨이 함께 있는 fixture에서 `home_flow --self-test`가 실패했고, gate evidence 없는 payload를 fail-closed로 요구한 `home_report --self-test`도 실패했다. 실제 gate 오류 메시지가 최종 `listed` 대신 앞선 `none`을 파싱해 재현됐다.
+- 예상 RED 실패: 부분 문자열 첫 일치와 낙관적 기본값 때문에 모순·중복·누락된 gate 결과가 `none/Pass`로 게시 조건을 우회할 수 있었다.
+- 최소 GREEN: 게시 결정 라벨을 anchored full-line으로 정확히 한 번만 허용하고 누락·중복은 `Partial/listed`로 처리했다. PR body도 gate evidence 누락 시 `reviewer/security=listed`, `contract=Partial`을 출력하며 관련 harness self-test가 통과했다.
+
 ## Gate output and verification completeness
 
 - 최초 RED: `python3 .codex/harness/home_flow.py --self-test`에 operating-platform preset의 `home_report` 검증과 gate prompt의 reviewer/contract 필수 라벨 assertion을 추가한 뒤 `self-test failed: home_flow`로 실패했다.

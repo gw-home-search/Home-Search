@@ -576,19 +576,28 @@ def _gate_value(text: str, label: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def _unique_gate_choice(text: str, pattern: str, fallback: str) -> str:
+    matches = re.findall(pattern, text, re.MULTILINE)
+    return matches[0] if len(matches) == 1 else fallback
+
+
 def parse_gate_review(text: str) -> dict[str, str]:
-    status_match = re.search(r"^\s*상태\s*:\s*(Pass|Partial|Fail)\s*$", text, re.MULTILINE)
-    reviewer_match = re.search(r"reviewer\s*:\s*지적사항\s*=\s*(none|listed)", text)
-    security_match = re.search(r"security-audit\s*:\s*지적사항\s*=\s*(none|listed)", text)
-    contract_match = re.search(r"contract-reviewer\s*:\s*게이트 결정\s*=\s*(Pass|Partial|Fail)", text)
     return {
-        "status": status_match.group(1) if status_match else "Partial",
+        "status": _unique_gate_choice(text, r"^\s*상태\s*:\s*(Pass|Partial|Fail)\s*$", "Partial"),
         "first_red": _gate_value(text, "최초 RED"),
         "expected_red": _gate_value(text, "예상 RED 실패"),
         "minimum_green": _gate_value(text, "최소 GREEN"),
-        "reviewer_findings": reviewer_match.group(1) if reviewer_match else "listed",
-        "security_findings": security_match.group(1) if security_match else "listed",
-        "contract_decision": contract_match.group(1) if contract_match else "Partial",
+        "reviewer_findings": _unique_gate_choice(
+            text, r"^\s*reviewer\s*:\s*지적사항\s*=\s*(none|listed)\s*$", "listed"
+        ),
+        "security_findings": _unique_gate_choice(
+            text, r"^\s*security-audit\s*:\s*지적사항\s*=\s*(none|listed)\s*$", "listed"
+        ),
+        "contract_decision": _unique_gate_choice(
+            text,
+            r"^\s*contract-reviewer\s*:\s*게이트 결정\s*=\s*(Pass|Partial|Fail)\s*$",
+            "Partial",
+        ),
         "main_risk": _gate_value(text, "주요 위험"),
         "security_impact": _gate_value(text, "보안 영향"),
     }
@@ -1557,6 +1566,22 @@ contract-reviewer: 게이트 결정 = Pass
 주요 위험: cursor 검증 공백
 """
     )
+    parsed_contradictory_gate = parse_gate_review(
+        """상태: Pass
+리뷰: 설명에 reviewer: 지적사항 = none 문자열이 포함됨
+reviewer: 지적사항 = listed
+security-audit: 지적사항 = none
+contract-reviewer: 게이트 결정 = Pass
+"""
+    )
+    parsed_duplicate_status_gate = parse_gate_review(
+        """상태: Pass
+상태: Fail
+reviewer: 지적사항 = none
+security-audit: 지적사항 = none
+contract-reviewer: 게이트 결정 = Pass
+"""
+    )
     invalid_branch_blocked = False
     try:
         validate_integration_branch("feat/not-integration-branch")
@@ -1649,6 +1674,10 @@ contract-reviewer: 게이트 결정 = Pass
         parsed_partial_gate["reviewer_findings"] == "listed",
         parsed_partial_gate["first_red"] == "실제 RED",
         not gate_allows_publish(parsed_partial_gate),
+        parsed_contradictory_gate["reviewer_findings"] == "listed",
+        not gate_allows_publish(parsed_contradictory_gate),
+        parsed_duplicate_status_gate["status"] == "Partial",
+        not gate_allows_publish(parsed_duplicate_status_gate),
         HARNESS_REPORT_SELF_TEST
         in operating_platform_preset.get("targets", {}).get("backend", {}).get("verification_commands", []),
         HARNESS_PR_SELF_TEST

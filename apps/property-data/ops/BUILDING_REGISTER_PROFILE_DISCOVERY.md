@@ -1,15 +1,15 @@
 # 건축물대장 Profile discovery runbook
 
-이 절차는 운영 projection 전에 총괄표제부·표제부의 전체 문서화 필드를 versioned typed staging으로 보존하고 품질을 측정한다. `complex`, 기존 ratio candidate/projection, 공개 API는 변경하지 않는다.
+이 절차는 총괄표제부·표제부의 전체 문서화 필드를 versioned typed staging으로 보존하고 품질을 측정한 뒤, 검토된 55개 필드를 별도 정규화 테이블로 projection한다. `complex`, 기존 ratio candidate/projection, 공개 API는 변경하지 않는다.
 
 ## 안전 원칙
 
-- DB와 Docker volume, 기존 campaign/raw/evidence를 삭제하거나 초기화하지 않는다.
+- DB와 Docker volume을 삭제하거나 초기화하지 않는다. 상세 profile evidence 정리는 archive의 SHA-256·행 수·ARM 복원이 모두 검증된 뒤에만 승인된 cleanup 절차로 수행한다.
 - `complexBuildingRegisterCollectJob`, `complexBuildingMetadataJob`, profile collect/replay/analyze/import job을 동시에 실행하지 않는다. 모든 job은 같은 PostgreSQL advisory lock을 사용한다.
 - replay와 analyze는 외부 API를 호출하지 않는다.
 - collect만 `BLD_SERVICE_KEY`를 사용하며 키·keyed URL·raw body를 로그나 보고서에 남기지 않는다.
 - 소유자정보·전유부 endpoint는 이 job의 endpoint 목록에 없다.
-- V14 적용 전 `./gradlew verifyPropertyFlywayFresh --no-daemon --stacktrace`를 통과해야 한다.
+- 새 migration 적용 전 `./gradlew verifyPropertyFlywayFresh --no-daemon --stacktrace`를 통과해야 한다.
 - 출력 directory는 Git worktree 밖의 untracked 절대 경로를 사용한다.
 
 ## 1. 법정동코드 mapping import
@@ -68,13 +68,15 @@ ops/run-batch-jar.sh \
   parallelism=2
 ```
 
-총괄과 표제부는 항상 조회한다. 동일 PNU 복수 complex/root, 총괄 없는 복수 title, parent 누락·충돌, 신구대장 불명확, title 배정 불가가 있을 때만 BASIC을 조회하며 사유를 `building_register_profile_hierarchy_reason`에 남긴다.
+검증 표본에서는 총괄과 표제부를 항상 조회한다. 동일 PNU 복수 complex/root, 총괄 없는 복수 title, parent 누락·충돌, 신구대장 불명확, title 배정 불가가 있을 때만 BASIC을 조회하며 사유를 `building_register_profile_hierarchy_reason`에 남긴다.
 
 법정동코드 mapping 영향 PNU는 기존 PNU와 앞 10자리만 치환한 candidate PNU를 독립 조회한다. HTTP/provider/parse 실패는 코드 불일치로 판정하지 않는다. 관리번호 원문은 보고서 대신 DB 내부 hash 집합으로 비교한다.
 
 ## 4. 전국 staging 수집
 
 전국 수집은 `sampleSize`를 받지 않는다. 최초 실행 시 유효한 19자리 PNU 전체를 `NATIONWIDE_CENSUS`, weight `1`로 동결하며 이후 신규 complex가 생겨도 같은 `collectionId`의 대상은 바뀌지 않는다. 운영 `complex`와 기존 projection은 수정하지 않는다.
+
+전국 선저장 단계에서는 총괄표제부와 표제부만 수집하고 기본개요는 호출하지 않는다. 계층 사유는 총괄·표제부 evidence로 계속 기록하되, 계층이 불완전한 PNU를 운영 projection 대상으로 사용하지 않는다. 기본개요는 전국 총괄·표제부 수집 완료 후 해당 사유가 있는 PNU만 별도 backfill campaign으로 수집한다.
 
 ```bash
 ops/run-batch-jar.sh \
@@ -160,4 +162,64 @@ WHERE analysis_run_id=:'analysis_run_id'::uuid
 ORDER BY field_id;
 ```
 
-운영 schema projection, staging archive/정리, 새 공개 API 필드 추가는 전국 수집 완료와 최대 30건 수동 대조를 검토한 뒤 별도 실행한다.
+## 8. 55개 필드 정규화 projection
+
+완료된 전국 analysis를 입력으로 사용한다. projection은 `complex`를 수정하지 않으며 실행 전후 전체 `complex` 행의 SHA-256이 같지 않으면 transaction 전체를 실패시킨다. 동일 `projectionRunId` 재실행은 완료 결과를 그대로 반환한다.
+
+```bash
+export SPRING_BATCH_JOB_NAME=complexBuildingRegisterProfileProjectJob
+
+ops/run-batch-jar.sh \
+  projectionRunId=<projection-uuid> \
+  analysisRunId=<completed-analysis-uuid> \
+  projectionVersion=PROFILE_PROJECTION_V1
+```
+
+저장 위치:
+
+- `complex_building_register_profile`: 전체 complex 1행씩, site 값·projectable 상태·원천 근거
+- `complex_building_register_building`: 단일 scope에 안전하게 배정된 title별 building 값
+- `building_register_profile_projected_quality`: 55개 필드의 compact 품질 판정
+- `building_register_profile_projection_run`: 입력 run, 행 수, 실행 전후 `complex` SHA-256
+
+## 9. Archive와 ARM 복원 검증
+
+archive는 Git worktree 밖의 절대 경로에 보관한다. `PROPERTY_DB_PASSWORD`는 shell 환경에만 설정하며 파일이나 명령 인자에 기록하지 않는다. `archive`는 PostgreSQL custom-format 전체 DB dump와 SHA-256·byte count manifest를 만들고, `restore-verify`는 별도 ARM DB에 복원해 상세 evidence와 projection 행 수를 정확히 센다.
+
+```bash
+export PROFILE_COLLECTION_ID=<nationwide-collection-uuid>
+export PROFILE_PARSE_RUN_ID=<completed-parse-uuid>
+export PROFILE_ANALYSIS_RUN_ID=<completed-analysis-uuid>
+export PROFILE_PROJECTION_RUN_ID=<completed-projection-uuid>
+export PROFILE_ARCHIVE_ID=<archive-uuid>
+export PROFILE_ARCHIVE_DIRECTORY=<untracked-absolute-directory>
+
+ops/building-register-profile-archive.sh archive
+ops/building-register-profile-archive.sh verify
+ops/building-register-profile-archive.sh restore-verify
+```
+
+복원 검증이 끝나면 manifest는 `RESTORE_VERIFIED`가 되고 archive 시점의 정확한 행 수가 `row_counts`에 남는다. 검증용 임시 DB만 제거하며 archive 파일과 Docker volume은 제거하지 않는다.
+
+## 10. 상세 staging 정리와 공간 회수
+
+`cleanup`은 manifest가 `RESTORE_VERIFIED`이고 모든 profile campaign과 parse/analysis run이 terminal 상태일 때만 실행된다. 상세 EAV·비교·assignment·schema observation을 비우고 `PROFILE_DISCOVERY` raw body만 `NULL` 처리한다. campaign, sample, parse/analysis run, compact field quality, 정규화 projection, archive manifest는 유지하며 기존 ratio campaign raw body는 보존한다.
+
+```bash
+ops/building-register-profile-archive.sh cleanup
+```
+
+정리 후에는 다음을 다시 확인한다.
+
+```sql
+SELECT status,eligible_field_count,complex_count,projectable_complex_count,building_count,
+       complex_checksum_before,complex_checksum_after
+FROM building_register_profile_projection_run
+WHERE projection_run_id=:'projection_run_id'::uuid;
+
+SELECT status,row_counts,archive_sha256,archive_byte_count,restore_verified_at,cleaned_at
+FROM building_register_profile_archive_manifest
+WHERE archive_id=:'archive_id'::uuid;
+```
+
+새 공개 API 필드 추가와 기존 운영 column 반영은 compact 품질 결과와 수동 대조를 검토한 뒤 별도 승인으로 진행한다.

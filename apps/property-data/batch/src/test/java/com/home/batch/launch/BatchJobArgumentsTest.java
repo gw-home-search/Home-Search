@@ -354,7 +354,7 @@ class BatchJobArgumentsTest {
     }
 
     @Test
-    @DisplayName("building profile 운영 job 4종의 identifying parameter를 허용하고 보존한다")
+    @DisplayName("building profile 운영 job 5종의 identifying parameter를 허용하고 보존한다")
     void parsesBuildingProfileJobArguments() {
         BatchJobArguments replay = BatchJobArguments.from(
                 "complexBuildingRegisterProfileReplayJob",
@@ -394,6 +394,13 @@ class BatchJobArgumentsTest {
                         "effectiveDate", "2026-07-01",
                         "sourceFile", "/tmp/legal-dong.csv"),
                 clock);
+        BatchJobArguments project = BatchJobArguments.from(
+                "complexBuildingRegisterProfileProjectJob",
+                Map.of(
+                        "projectionRunId", "123e4567-e89b-12d3-a456-426614174027",
+                        "analysisRunId", "123e4567-e89b-12d3-a456-426614174025",
+                        "projectionVersion", "PROFILE_PROJECTION_V1"),
+                clock);
 
         assertThat(replay.jobParameters().getString("parserVersion")).isEqualTo("PROFILE_V1");
         assertThat(replay.jobParameters().getString("maxPages")).isEqualTo("100");
@@ -401,6 +408,7 @@ class BatchJobArgumentsTest {
         assertThat(collect.jobParameters().getString("parallelism")).isEqualTo("2");
         assertThat(analyze.jobParameters().getString("outputDirectory")).isEqualTo("/tmp/profile-report");
         assertThat(legalImport.jobParameters().getString("effectiveDate")).isEqualTo("2026-07-01");
+        assertThat(project.jobParameters().getString("projectionVersion")).isEqualTo("PROFILE_PROJECTION_V1");
     }
 
     @Test

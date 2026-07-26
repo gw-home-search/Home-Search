@@ -50,6 +50,8 @@ class PropertyDataBatchContextBoundaryTest {
                 .isTrue();
         assertThat(PropertyDataBatchApplication.supportsJobName("complexBuildingRegisterProfileAnalyzeJob"))
                 .isTrue();
+        assertThat(PropertyDataBatchApplication.supportsJobName("complexBuildingRegisterProfileProjectJob"))
+                .isTrue();
         assertThat(PropertyDataBatchApplication.supportsJobName("legalDongCodeMappingImportJob"))
                 .isTrue();
         assertThat(PropertyDataBatchApplication.supportsJobName("marketInsightRolling7dJob"))

@@ -32,6 +32,7 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
     private static final String BUILDING_PROFILE_REPLAY_JOB = "complexBuildingRegisterProfileReplayJob";
     private static final String BUILDING_PROFILE_COLLECT_JOB = "complexBuildingRegisterProfileCollectJob";
     private static final String BUILDING_PROFILE_ANALYZE_JOB = "complexBuildingRegisterProfileAnalyzeJob";
+    private static final String BUILDING_PROFILE_PROJECT_JOB = "complexBuildingRegisterProfileProjectJob";
     private static final String LEGAL_DONG_CODE_IMPORT_JOB = "legalDongCodeMappingImportJob";
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
@@ -63,6 +64,7 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
             case BUILDING_PROFILE_REPLAY_JOB -> buildingProfileReplay(normalizedJobName, params);
             case BUILDING_PROFILE_COLLECT_JOB -> buildingProfileCollect(normalizedJobName, params, clock);
             case BUILDING_PROFILE_ANALYZE_JOB -> buildingProfileAnalyze(normalizedJobName, params);
+            case BUILDING_PROFILE_PROJECT_JOB -> buildingProfileProject(normalizedJobName, params);
             case LEGAL_DONG_CODE_IMPORT_JOB -> legalDongCodeImport(normalizedJobName, params);
             default -> throw invalid("Unsupported SPRING_BATCH_JOB_NAME: " + normalizedJobName);
         };
@@ -116,6 +118,16 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
                         "rulesVersion", requireText(arguments.get("rulesVersion"), "rulesVersion is required"),
                         "outputDirectory",
                                 requireText(arguments.get("outputDirectory"), "outputDirectory is required"))));
+    }
+
+    private static BatchJobArguments buildingProfileProject(String jobName, Map<String, String> arguments) {
+        return new BatchJobArguments(
+                jobName,
+                parameters(Map.of(
+                        "projectionRunId", canonicalUuid(arguments.get("projectionRunId"), "projectionRunId"),
+                        "analysisRunId", canonicalUuid(arguments.get("analysisRunId"), "analysisRunId"),
+                        "projectionVersion",
+                                requireText(arguments.get("projectionVersion"), "projectionVersion is required"))));
     }
 
     private static BatchJobArguments legalDongCodeImport(String jobName, Map<String, String> arguments) {

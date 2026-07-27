@@ -89,6 +89,22 @@ describe('AuthProvider와 AccountControl', () => {
     expect(host.querySelector('dialog')?.hasAttribute('open')).toBe(true);
   });
 
+  it('인증 서비스 장애 rejection은 기존 사용자 표시를 유지하고 만료 dialog를 열지 않는다', async () => {
+    const client = authClient({
+      kind: 'authenticated',
+      currentUser: { userId: 17, provider: 'google', displayName: '홍길동', profileImage: null },
+    });
+    client.authenticatedRequest = vi.fn().mockRejectedValue(new Error('Authentication unavailable'));
+    host = document.createElement('div'); document.body.append(host); root = createRoot(host);
+    await act(async () => root?.render(<AuthProvider client={client}><ExpiryProbe /></AuthProvider>));
+    await act(async () => Promise.resolve());
+    await act(async () => host?.querySelector<HTMLButtonElement>('button')?.click());
+    await act(async () => Promise.resolve());
+
+    expect(host.querySelector('[data-auth-probe]')?.textContent).toBe('authenticated');
+    expect(host.querySelector('dialog')?.hasAttribute('open')).toBe(false);
+  });
+
   it('startup refresh 장애는 public map과 분리하되 unavailable 상태를 보존한다', async () => {
     const client = authClient({ kind: 'unavailable' });
     ({ root, host } = await renderAuth(client));
@@ -117,7 +133,7 @@ describe('AuthProvider와 AccountControl', () => {
 
 function ExpiryProbe() {
   const auth = useAuth();
-  return <><span data-auth-probe>{auth.status}</span><button type="button" onClick={() => void auth.authenticatedRequest('/api/v1/favorites/501')}>관심 조회</button></>;
+  return <><span data-auth-probe>{auth.status}</span><button type="button" onClick={() => void auth.authenticatedRequest('/api/v1/favorites/501').catch(() => undefined)}>관심 조회</button></>;
 }
 
 function LogoutProbe() {

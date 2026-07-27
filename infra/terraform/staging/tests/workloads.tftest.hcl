@@ -100,6 +100,28 @@ run "digest_pinned_private_rollback_capable_workloads" {
 
   assert {
     condition = alltrue([
+      one([
+        for item in local.service_specs["user-api"].environment :
+        item.value if item.name == "USER_OAUTH_SUCCESS_REDIRECT"
+      ]) == "${var.public_origin}/auth/success",
+      one([
+        for item in local.service_specs["user-api"].environment :
+        item.value if item.name == "USER_OAUTH_FAILURE_REDIRECT"
+      ]) == "${var.public_origin}/auth/failure",
+      strcontains(
+        file("${path.module}/../../../apps/web/src/app/App.tsx"),
+        "path=\"/auth/success\"",
+      ),
+      strcontains(
+        file("${path.module}/../../../apps/web/src/app/App.tsx"),
+        "path=\"/auth/failure\"",
+      ),
+    ])
+    error_message = "Staging OAuth redirects must match the frontend success and failure callback routes."
+  }
+
+  assert {
+    condition = alltrue([
       length(local.workload_execution_role_names) == length(local.workload_names),
       length(distinct(values(local.workload_execution_role_names))) == length(local.workload_names),
       length(local.workload_task_role_names) == length(local.workload_names),

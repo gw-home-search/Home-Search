@@ -1,4 +1,4 @@
-FROM postgres:17-bookworm
+FROM postgres:17-bookworm@sha256:4f736ae292687621d4dbe0d499ffd024a36bd2ee7d8ca6f2ccd4c800f047b394
 
 USER root
 RUN apt-get update \

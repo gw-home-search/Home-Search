@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim AS build
+FROM node:22-bookworm-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3 AS build
 
 WORKDIR /workspace
 COPY apps/admin/web/package.json apps/admin/web/package-lock.json ./
@@ -6,7 +6,7 @@ RUN --mount=type=cache,id=home-search-admin-web-npm,target=/root/.npm npm ci
 COPY apps/admin/web .
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0
 
 ENV ADMIN_API_HOST=admin-api \
     ADMIN_API_PORT=8081 \

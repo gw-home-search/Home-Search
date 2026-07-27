@@ -11,6 +11,7 @@ bash .github/scripts/test-staging-news-release-contract.sh
 bash infra/deploy/test-deploy-scripts.sh
 bash infra/nginx/test-public-gateway-routing.sh
 bash infra/test-local-event-stack.sh
+bash infra/images/test-base-image-pinning.sh
 bash infra/release/test-create-release-manifest.sh
 bash .github/scripts/test-classify-changes.sh
 bash infra/nginx/test-property-public.sh

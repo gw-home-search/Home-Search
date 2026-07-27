@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk AS build
+FROM eclipse-temurin:21-jdk@sha256:da9d3a4f7650db39b918fc5a2c3da76556fb8cc8e5f3767cdea0bb409286951a AS build
 
 WORKDIR /workspace
 COPY apps/chat-bff apps/chat-bff
@@ -11,7 +11,7 @@ RUN --mount=type=cache,id=home-search-gradle,target=/root/.gradle \
     && chmod +x gradlew \
     && ./gradlew bootJar --no-daemon
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jre@sha256:273396ed5998598ed1091e8d72711c2d36980a0e65103859c55a4e977a41ffd3
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends curl \

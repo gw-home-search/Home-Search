@@ -47,6 +47,8 @@ group "default" {
     "backup",
     "ops-bootstrap",
     "ml",
+    "ai",
+    "chat-bff",
   ]
 }
 
@@ -190,4 +192,20 @@ target "ml" {
   dockerfile = "Dockerfile"
   labels = { "org.opencontainers.image.title" = "home-search-ml" }
   tags = ["${REGISTRY}/${IMAGE_PREFIX}/ml:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/ml:${VERSION}"]
+}
+
+target "ai" {
+  inherits = ["_common"]
+  context = "apps/ai"
+  dockerfile = "Dockerfile"
+  labels = { "org.opencontainers.image.title" = "home-search-ai" }
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/ai:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/ai:${VERSION}"]
+}
+
+target "chat-bff" {
+  inherits = ["_common"]
+  context = "."
+  dockerfile = "apps/chat-bff/Dockerfile"
+  labels = { "org.opencontainers.image.title" = "home-search-chat-bff" }
+  tags = ["${REGISTRY}/${IMAGE_PREFIX}/chat-bff:${GIT_SHA}", "${REGISTRY}/${IMAGE_PREFIX}/chat-bff:${VERSION}"]
 }

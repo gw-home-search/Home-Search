@@ -32,7 +32,11 @@ git init -b main "${tmp_dir}/repo" >/dev/null
     >"${tmp_dir}/checks.json"
   jq '(.check_runs[] | select(.name == "source-data-test" or .name == "ml-image-test")).conclusion = "skipped"' \
     "${tmp_dir}/checks.json" >"${tmp_dir}/scoped-checks.json"
-  "${script}" v2.3.4 "${sha}" "${tmp_dir}/scoped-checks.json" >/dev/null
+  if "${script}" v2.3.4 "${sha}" "${tmp_dir}/scoped-checks.json" >/dev/null 2>&1; then
+    echo '상태: Fail - skipped quality gate를 release에 허용했습니다.' >&2
+    exit 1
+  fi
+  "${script}" v2.3.4 "${sha}" "${tmp_dir}/checks.json" >/dev/null
 
   jq '(.check_runs[] | select(.name == "terraform-test")).conclusion = "failure"' \
     "${tmp_dir}/checks.json" >"${tmp_dir}/failed.json"

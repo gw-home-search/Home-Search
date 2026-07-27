@@ -16,8 +16,10 @@ PATH="${tmp_dir}/bin:${PATH}" "${root}/infra/release/create-release-manifest.sh"
   "${tmp_dir}/manifest.json"
 jq -e '
   .tag == "v2.3.4" and .commit_sha == "0123456789abcdef0123456789abcdef01234567" and
-  (.images | length == 15) and (.images["property-api"].repository == "home-search/property-api") and
+  (.images | length == 17) and (.images["property-api"].repository == "home-search/property-api") and
   (.images["user-insight-worker"].repository == "home-search/user-insight-worker") and
+  (.images["chat-bff"].repository == "home-search/chat-bff") and
+  (.images.ai.repository == "home-search/ai") and
   (.images.ml.uri | endswith("@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 ' "${tmp_dir}/manifest.json" >/dev/null
-echo '상태: Pass - 15개 image digest release manifest 생성을 확인했습니다.'
+echo '상태: Pass - 17개 image digest release manifest 생성을 확인했습니다.'

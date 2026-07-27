@@ -26,13 +26,13 @@ locals {
     "property-api", "property-batch", "property-flyway",
     "admin-api", "admin-migration", "admin-ops",
     "user-api", "user-insight-worker", "user-flyway", "source-data-migration",
-    "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
+    "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff",
   ])
   service_log_names = toset([
     "property-api", "property-batch", "property-event-relay", "property-event-maintenance", "property-flyway",
     "admin-api", "admin-migration", "admin-ops",
     "user-api", "user-insight-worker", "user-flyway", "source-data-migration",
-    "public-gateway", "admin-gateway", "backup", "restore-verification", "ml",
+    "public-gateway", "admin-gateway", "backup", "restore-verification", "ml", "ai", "chat-bff",
     "secret-bootstrap", "database-bootstrap", "runtime-grants",
   ])
   secret_containers = toset([

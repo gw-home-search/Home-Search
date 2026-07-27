@@ -48,7 +48,7 @@ run "runtime_alarms_have_actions_and_owned_dimensions" {
     enable_services        = true
     image_digests = { for name in [
       "property-api", "property-batch", "property-flyway", "admin-api", "admin-migration", "admin-ops",
-      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
+      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff",
     ] : name => "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   }
 

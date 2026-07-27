@@ -89,7 +89,7 @@ jobs:
     name: backend-test
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.backend_changed == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.backend_changed == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
@@ -117,7 +117,7 @@ jobs:
     name: source-data-test
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.source_data_changed == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.source_data_changed == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
@@ -133,7 +133,7 @@ jobs:
     name: ai-service-test
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.ai_changed == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.ai_changed == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -155,7 +155,7 @@ jobs:
     name: chat-bff-test
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.chat_bff_changed == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.chat_bff_changed == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
@@ -171,7 +171,7 @@ jobs:
     name: frontend-test-build
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.frontend_changed == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.frontend_changed == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -196,7 +196,7 @@ jobs:
     name: infra-contract-test
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.infra_changed == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.infra_changed == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Verify public gateway rate-limit contract
@@ -219,7 +219,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: changes
-    if: needs.changes.outputs.ml_changed == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.ml_changed == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Build exact-lock ML image
@@ -254,7 +254,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: changes
-    if: needs.changes.outputs.backend_changed == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.backend_changed == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
@@ -287,7 +287,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: changes
-    if: needs.changes.outputs.frontend_changed == 'true' || needs.changes.outputs.admin_web_changed == 'true' || needs.changes.outputs.infra_changed == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.frontend_changed == 'true' || needs.changes.outputs.admin_web_changed == 'true' || needs.changes.outputs.infra_changed == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Verify public and admin gateway image boundaries
@@ -298,7 +298,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: changes
-    if: needs.changes.outputs.backend_changed == 'true' || needs.changes.outputs.frontend_changed == 'true' || needs.changes.outputs.admin_service_changed == 'true' || needs.changes.outputs.admin_web_changed == 'true' || needs.changes.outputs.user_service_changed == 'true' || needs.changes.outputs.source_data_changed == 'true' || needs.changes.outputs.ml_changed == 'true' || needs.changes.outputs.infra_changed == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.backend_changed == 'true' || needs.changes.outputs.frontend_changed == 'true' || needs.changes.outputs.admin_service_changed == 'true' || needs.changes.outputs.admin_web_changed == 'true' || needs.changes.outputs.user_service_changed == 'true' || needs.changes.outputs.source_data_changed == 'true' || needs.changes.outputs.ml_changed == 'true' || needs.changes.outputs.infra_changed == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Verify reproducible multi-image manifest
@@ -309,7 +309,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: changes
-    if: needs.changes.outputs.infra_changed == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.infra_changed == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
@@ -330,7 +330,7 @@ jobs:
     name: admin-service-test
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.admin_service_changed == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.admin_service_changed == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
@@ -346,7 +346,7 @@ jobs:
     name: admin-web-test-build
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.admin_web_changed == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.admin_web_changed == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -371,7 +371,7 @@ jobs:
     name: user-service-test
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.user_service_changed == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.user_service_changed == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4

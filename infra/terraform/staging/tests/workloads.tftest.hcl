@@ -22,14 +22,14 @@ run "digest_pinned_private_rollback_capable_workloads" {
     enable_services        = true
     image_digests = { for name in [
       "property-api", "property-batch", "property-flyway", "admin-api", "admin-migration", "admin-ops",
-      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml",
+      "user-api", "user-insight-worker", "user-flyway", "source-data-migration", "public-gateway", "admin-gateway", "backup", "ops-bootstrap", "ml", "ai", "chat-bff",
     ] : name => "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
   }
 
   assert {
     condition = alltrue([
       for digest in values(var.image_digests) : can(regex("^sha256:[0-9a-f]{64}$", digest))
-    ]) && length(var.image_digests) == 15
+    ]) && length(var.image_digests) == 17
     error_message = "Every service and one-shot task image must be immutable and digest pinned."
   }
 

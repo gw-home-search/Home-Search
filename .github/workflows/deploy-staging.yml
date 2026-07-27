@@ -77,7 +77,7 @@ jobs:
           [[ -n "${manifest}" ]]
           cp "${manifest}" deployment-evidence/release-manifest.json
           jq -e --arg tag "${RELEASE_TAG}" --arg sha "${release_sha}" \
-            '.tag == $tag and .commit_sha == $sha and (.images | length == 15)' \
+            '.tag == $tag and .commit_sha == $sha and (.images | length == 17)' \
             deployment-evidence/release-manifest.json >/dev/null
           echo "RELEASE_SHA=${release_sha}" >>"${GITHUB_ENV}"
 

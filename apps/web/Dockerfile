@@ -21,7 +21,9 @@ ENV PROPERTY_API_HOST=property-api \
     PROPERTY_API_PORT=8080 \
     USER_API_HOST=user-api \
     USER_API_PORT=8082 \
-    NGINX_ENVSUBST_FILTER='^(PROPERTY_API_HOST|PROPERTY_API_PORT|USER_API_HOST|USER_API_PORT)$'
+    CHAT_BFF_HOST=chat-bff \
+    CHAT_BFF_PORT=8083 \
+    NGINX_ENVSUBST_FILTER='^(PROPERTY_API_HOST|PROPERTY_API_PORT|USER_API_HOST|USER_API_PORT|CHAT_BFF_HOST|CHAT_BFF_PORT)$'
 
 COPY --from=build /workspace/dist /usr/share/nginx/html
 COPY infra/nginx/public-gateway.conf.template /etc/nginx/templates/default.conf.template

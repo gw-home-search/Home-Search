@@ -38,7 +38,7 @@ run "private_encrypted_staging_foundation" {
     error_message = "Public and admin ALBs must use separate security groups."
   }
   assert {
-    condition     = length(aws_security_group.task) == 11 && aws_security_group.database_primary.name != aws_security_group.database_coordinate.name
+    condition     = length(aws_security_group.task) == 13 && aws_security_group.database_primary.name != aws_security_group.database_coordinate.name
     error_message = "Workload identities and the two database network boundaries must remain separate."
   }
   assert {
@@ -88,7 +88,7 @@ run "private_encrypted_staging_foundation" {
   }
   assert {
     condition = (
-      length(aws_secretsmanager_secret.container) == 19
+      length(aws_secretsmanager_secret.container) == 21
       && contains(keys(aws_secretsmanager_secret.container), "kakao-local-provider")
       && aws_kms_key.data.enable_key_rotation
     )

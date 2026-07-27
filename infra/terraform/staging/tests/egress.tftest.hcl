@@ -48,12 +48,12 @@ run "workload_egress_is_private_and_allowlisted" {
 
   assert {
     condition = toset(keys(aws_vpc_security_group_egress_rule.external_https)) == toset([
-      "property-batch", "user",
+      "property-batch", "user", "ai",
       ]) && alltrue([
       for rule in aws_vpc_security_group_egress_rule.external_https :
       rule.from_port == 443 && rule.to_port == 443 && rule.cidr_ipv4 == "0.0.0.0/0"
     ])
-    error_message = "Only provider batch and OAuth user workloads may use NAT HTTPS egress."
+    error_message = "Only provider batch, OAuth user, and AI provider workloads may use NAT HTTPS egress."
   }
 
   assert {

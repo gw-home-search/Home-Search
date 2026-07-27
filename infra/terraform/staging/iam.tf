@@ -8,7 +8,7 @@ locals {
     }]
   })
   workload_names = toset([
-    "property-api", "admin-api", "user-api", "user-insight-worker", "public-gateway", "admin-gateway", "ml",
+    "property-api", "admin-api", "user-api", "user-insight-worker", "public-gateway", "admin-gateway", "ml", "ai", "chat-bff",
     "secret-bootstrap", "database-bootstrap", "runtime-grants", "property-flyway",
     "admin-migration", "user-flyway", "source-data-migration", "property-batch",
     "property-event-relay", "property-event-maintenance",
@@ -44,6 +44,8 @@ locals {
     public-gateway             = []
     admin-gateway              = []
     ml                         = []
+    ai                         = ["ai-runtime", "openai-provider", "user-jwt"]
+    chat-bff                   = ["user-jwt"]
     secret-bootstrap           = []
     database-bootstrap         = []
     runtime-grants             = []

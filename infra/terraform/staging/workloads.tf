@@ -127,6 +127,8 @@ locals {
         { name = "PROPERTY_API_PORT", value = "8080" },
         { name = "USER_API_HOST", value = "user-api.${local.namespace_name}" },
         { name = "USER_API_PORT", value = "8082" },
+        { name = "CHAT_BFF_HOST", value = "chat-bff.${local.namespace_name}" },
+        { name = "CHAT_BFF_PORT", value = "8083" },
       ]
       secrets      = []
       key_secrets  = []
@@ -159,6 +161,63 @@ locals {
       key_secrets  = []
       mount_points = [{ sourceVolume = "model", containerPath = "/model", readOnly = true }]
       health       = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)\" || exit 1"]
+    }
+    ai = {
+      image         = "ai"
+      port          = 8000
+      sg            = "ai"
+      cpu           = 1024
+      memory        = 2048
+      readonly_root = true
+      stop_timeout  = 120
+      environment = [
+        { name = "HOME_AI_JWT_PUBLIC_KEY_PATHS", value = "{\"staging-1\":\"/run/keys/public.pem\"}" },
+        { name = "HOME_AI_OPENAI_TIMEOUT_SECONDS", value = "30" },
+        { name = "HOME_AI_QUERY_TIMEOUT_SECONDS", value = "60" },
+        { name = "HOME_AI_DEPLOYMENT_TIER", value = "staging" },
+        { name = "HOME_AI_SUPERVISOR_GRAPH_MODE", value = "active" },
+        { name = "HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT", value = "100" },
+        { name = "HOME_AI_AGENTIC_ORCHESTRATION_ENABLED", value = "true" },
+        { name = "HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED", value = "false" },
+        { name = "HOME_AI_ENABLED_PROPERTY_CAPABILITIES", value = "complex_identity,recent_trade_lookup,price_trend,recommendation,comparison" },
+        { name = "HOME_AI_ENABLED_REFERENCE_CAPABILITIES", value = "academy_lookup,rail_station_lookup,school_location,retail_location" },
+      ]
+      secrets = [
+        { name = "HOME_AI_PROPERTY_DSN", valueFrom = "${aws_secretsmanager_secret.container["ai-runtime"].arn}:property_dsn::" },
+        { name = "HOME_AI_REFERENCE_DSN", valueFrom = "${aws_secretsmanager_secret.container["ai-runtime"].arn}:reference_dsn::" },
+        { name = "HOME_AI_OPENAI_API_KEY", valueFrom = "${aws_secretsmanager_secret.container["openai-provider"].arn}:api_key::" },
+        { name = "HOME_AI_OPENAI_PRIMARY_MODEL", valueFrom = "${aws_secretsmanager_secret.container["openai-provider"].arn}:primary_model::" },
+        { name = "HOME_AI_OPENAI_SECONDARY_MODEL", valueFrom = "${aws_secretsmanager_secret.container["openai-provider"].arn}:secondary_model::" },
+      ]
+      key_secrets = [
+        { name = "PUBLIC_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["user-jwt"].arn}:public_key_pem::" },
+      ]
+      mount_points = [{ sourceVolume = "keys", containerPath = "/run/keys", readOnly = true }]
+      health       = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\" || exit 1"]
+    }
+    chat-bff = {
+      image         = "chat-bff"
+      port          = 8083
+      sg            = "chat-bff"
+      cpu           = 512
+      memory        = 1024
+      readonly_root = true
+      stop_timeout  = 120
+      environment = [
+        { name = "SERVER_PORT", value = "8083" },
+        { name = "HOME_CHAT_BFF_AI_BASE_URL", value = "http://ai.${local.namespace_name}:8000" },
+        { name = "HOME_CHAT_BFF_AI_TIMEOUT", value = "60s" },
+        { name = "HOME_CHAT_BFF_JWT_PUBLIC_KEY_PATHS", value = "staging-1=/run/keys/public.pem" },
+        { name = "SPRING_DATA_REDIS_HOST", value = aws_elasticache_replication_group.this.primary_endpoint_address },
+        { name = "SPRING_DATA_REDIS_PORT", value = "6379" },
+        { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "true" },
+      ]
+      secrets = []
+      key_secrets = [
+        { name = "PUBLIC_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["user-jwt"].arn}:public_key_pem::" },
+      ]
+      mount_points = [{ sourceVolume = "keys", containerPath = "/run/keys", readOnly = true }]
+      health       = ["CMD-SHELL", "curl --fail --silent --max-time 3 http://127.0.0.1:8083/actuator/health/readiness >/dev/null || exit 1"]
     }
   }
   user_insight_worker_spec = {
@@ -310,7 +369,8 @@ resource "aws_ecs_task_definition" "service" {
         retries     = 3
         startPeriod = 30
       }
-      readonlyRootFilesystem = false
+      readonlyRootFilesystem = try(each.value.readonly_root, false)
+      stopTimeout            = try(each.value.stop_timeout, 120)
       user                   = "10001:10001"
       logConfiguration       = local.awslogs[each.key]
     }],

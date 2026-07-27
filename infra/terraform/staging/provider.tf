@@ -36,7 +36,7 @@ locals {
     "secret-bootstrap", "database-bootstrap", "runtime-grants",
   ])
   secret_containers = toset([
-    "database-runtime", "database-bootstrap", "oauth-providers",
+    "database-runtime", "database-bootstrap", "oauth-providers", "ai-runtime", "openai-provider",
     "user-jwt", "admin-internal-jwt", "admin-internal-jwt-public", "public-data-providers", "kakao-local-provider",
     "property-runtime-db", "property-ai-reader-db", "admin-runtime-db",
     "user-runtime-db", "coordinate-reader-db", "property-migrator-db",
@@ -45,6 +45,6 @@ locals {
   ])
   task_security_group_names = toset([
     "public-gateway", "admin-gateway", "property", "property-event-relay",
-    "property-event-maintenance", "property-batch", "admin", "user", "user-insight-worker", "ops", "ml",
+    "property-event-maintenance", "property-batch", "admin", "user", "user-insight-worker", "ops", "ml", "ai", "chat-bff",
   ])
 }

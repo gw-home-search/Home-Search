@@ -20,6 +20,7 @@ jobs:
           set -Eeuo pipefail
           [[ "${RELEASE_TAG}" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ ]]
           release_sha="$(git rev-list -n 1 "${RELEASE_TAG}")"
+          [[ "${release_sha}" == "${GITHUB_SHA}" ]]
           run_id="$(gh run list --workflow release-images.yml --branch "${RELEASE_TAG}" --json databaseId,conclusion,headSha --jq ".[] | select(.conclusion == \"success\" and .headSha == \"${release_sha}\") | .databaseId" | head -n1)"
           [[ -n "${run_id}" ]]
           gh run download "${run_id}" --pattern "release-evidence-${RELEASE_TAG}" --dir release-evidence

@@ -6,15 +6,15 @@ mock_provider "aws" {
 run "two_az_private_production_foundation" {
   command = plan
   variables {
-    owner           = "platform"
-    client_vpn_cidr = "10.90.0.0/22"
-    operator_group_id = "operators"
+    owner                             = "platform"
+    client_vpn_cidr                   = "10.90.0.0/22"
+    operator_group_id                 = "operators"
     client_vpn_server_certificate_arn = "arn:aws:acm:ap-northeast-2:123456789012:certificate/server"
-    client_vpn_saml_provider_arn = "arn:aws:iam::123456789012:saml-provider/operators"
-    public_certificate_arn = "arn:aws:acm:ap-northeast-2:123456789012:certificate/public"
-    monthly_budget_usd        = 5000
-    budget_notification_emails = ["ops@example.invalid"]
-    alarm_topic_arn = "arn:aws:sns:ap-northeast-2:123456789012:alarms"
+    client_vpn_saml_provider_arn      = "arn:aws:iam::123456789012:saml-provider/operators"
+    public_certificate_arn            = "arn:aws:acm:ap-northeast-2:123456789012:certificate/public"
+    monthly_budget_usd                = 5000
+    budget_notification_emails        = ["ops@example.invalid"]
+    alarm_topic_arn                   = "arn:aws:sns:ap-northeast-2:123456789012:alarms"
   }
   assert {
     condition     = length(aws_nat_gateway.this) == 2 && length(aws_subnet.application) == 2

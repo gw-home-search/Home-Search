@@ -21,7 +21,8 @@ def build_agentic_response(
             "policyVersion": "agentic-recommendation-v1",
             "basis": {
                 "selectionMode": "AGENTIC", "scopeType": "ADMIN_REGION",
-                "scopeLabel": scope_label, "requestedCount": requested_count,
+                "scopeLabel": result.scope_label or scope_label,
+                "requestedCount": requested_count,
                 "criteriaOrder": [], "defaultPolicy": "BALANCED_V1",
             },
             "rows": [

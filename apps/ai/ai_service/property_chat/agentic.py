@@ -4,7 +4,7 @@ import asyncio
 import json
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
 MAX_TOOL_ROUNDS = 4
@@ -138,7 +138,9 @@ class AgentTurn:
 class ToolEvidence:
     payload: Mapping[str, object]
     candidate_ids: frozenset[int] = frozenset()
+    candidate_names: Mapping[int, str] = field(default_factory=dict)
     fact_ids: frozenset[str] = frozenset()
+    scope_label: str | None = None
 
 
 @dataclass(frozen=True)
@@ -149,6 +151,7 @@ class AgentRunResult:
     tool_rounds: int
     tool_calls: int
     web_used: bool = False
+    scope_label: str | None = None
 
 
 class AgentModel(Protocol):
@@ -202,7 +205,10 @@ class BoundedAgentOrchestrator:
     ) -> AgentRunResult | None:
         transcript: list[Mapping[str, object]] = []
         candidate_ids: set[int] = set()
+        candidate_names: dict[int, str] = {}
         fact_ids: set[str] = set()
+        allowed_numbers = set(_number_tokens(question))
+        scope_label: str | None = None
         total_bytes = 0
         call_count = 0
         for round_number in range(1, MAX_TOOL_ROUNDS + 1):
@@ -217,7 +223,9 @@ class BoundedAgentOrchestrator:
                 try:
                     _validate_decision(
                         turn.decision, candidate_ids=candidate_ids,
-                        fact_ids=fact_ids, requested_count=requested_count,
+                        candidate_names=candidate_names, fact_ids=fact_ids,
+                        allowed_numbers=allowed_numbers,
+                        requested_count=requested_count,
                     )
                 except AgentGroundingError as error:
                     if not allow_repair:
@@ -231,17 +239,19 @@ class BoundedAgentOrchestrator:
                             return None
                         _validate_decision(
                             repaired.decision, candidate_ids=candidate_ids,
-                            fact_ids=fact_ids, requested_count=requested_count,
+                            candidate_names=candidate_names, fact_ids=fact_ids,
+                            allowed_numbers=allowed_numbers,
+                            requested_count=requested_count,
                         )
                     except Exception:
                         return None
                     return AgentRunResult(
                         repaired.decision, "repair", "supported", round_number - 1,
-                        call_count,
+                        call_count, False, scope_label,
                     )
                 return AgentRunResult(
                     turn.decision, success_route, "supported", round_number - 1,
-                    call_count,
+                    call_count, False, scope_label,
                 )
             calls = turn.tool_calls
             if call_count + len(calls) > MAX_TOOL_CALLS:
@@ -265,7 +275,15 @@ class BoundedAgentOrchestrator:
                 if total_bytes > MAX_TOTAL_TOOL_OUTPUT_BYTES:
                     return None
                 candidate_ids.update(evidence.candidate_ids)
+                for complex_id, name in evidence.candidate_names.items():
+                    existing_name = candidate_names.get(complex_id)
+                    if existing_name is not None and existing_name != name:
+                        return None
+                    candidate_names[complex_id] = name
                 fact_ids.update(evidence.fact_ids)
+                allowed_numbers.update(_number_tokens(encoded.decode()))
+                if evidence.scope_label is not None:
+                    scope_label = evidence.scope_label
                 outputs.append({
                     "type": "function_call_output", "call_id": call.call_id,
                     "output": encoded.decode(),
@@ -323,8 +341,9 @@ def _validate_tool_call(call: AgentToolCall, candidate_ids: set[int]) -> None:
 
 
 def _validate_decision(
-    decision: AgentDecision, *, candidate_ids: set[int], fact_ids: set[str],
-    requested_count: int,
+    decision: AgentDecision, *, candidate_ids: set[int],
+    candidate_names: Mapping[int, str], fact_ids: set[str],
+    allowed_numbers: set[str], requested_count: int,
 ) -> None:
     if not _bounded_text(decision.answer, 20_000):
         raise AgentGroundingError("answer is invalid")
@@ -335,6 +354,7 @@ def _validate_decision(
         raise AgentGroundingError("duplicate candidate id")
     if not set(selected).issubset(candidate_ids):
         raise AgentGroundingError("candidate is outside the verified pool")
+    factual_texts = [decision.answer]
     referenced = set(decision.fact_ids)
     for row in decision.rows:
         if row.role not in {
@@ -342,6 +362,9 @@ def _validate_decision(
             "LIFESTYLE",
         } or not _bounded_text(row.complex_name, 100) or not _bounded_text(row.summary, 2_000):
             raise AgentGroundingError("recommendation row is invalid")
+        if candidate_names.get(row.complex_id) != row.complex_name:
+            raise AgentGroundingError("candidate name does not match verified identity")
+        factual_texts.append(row.summary)
         row_facts = set(row.fact_ids)
         if not row_facts:
             raise AgentGroundingError("recommendation row lacks facts")
@@ -350,8 +373,16 @@ def _validate_decision(
             if not _bounded_text(text, 2_000) or not claim_fact_ids:
                 raise AgentGroundingError("factual recommendation text lacks facts")
             referenced.update(claim_fact_ids)
+            factual_texts.append(text)
     if not referenced.issubset(fact_ids):
         raise AgentGroundingError("unknown fact id")
+    if any(_FORBIDDEN_CLAIM_PATTERN.search(text) for text in factual_texts):
+        raise AgentGroundingError("forbidden property claim")
+    stated_numbers = {
+        number for text in factual_texts for number in _number_tokens(text)
+    }
+    if not stated_numbers.issubset(allowed_numbers):
+        raise AgentGroundingError("unobserved numeric claim")
 
 
 def _positive_int(value: object) -> bool:
@@ -364,3 +395,13 @@ def _bounded_int(value: object, minimum: int, maximum: int) -> bool:
 
 def _bounded_text(value: object, maximum: int) -> bool:
     return isinstance(value, str) and 1 <= len(value.strip()) <= maximum
+
+
+def _number_tokens(value: str) -> tuple[str, ...]:
+    return tuple(match.replace(",", "") for match in re.findall(r"(?<![\w])\d[\d,]*(?:\.\d+)?", value))
+
+
+_FORBIDDEN_CLAIM_PATTERN = re.compile(
+    r"(무조건|최고|투자\s*추천|투자수익|수익률|미래\s*가격|"
+    r"학교\s*품질|통근\s*시간|통근시간)"
+)

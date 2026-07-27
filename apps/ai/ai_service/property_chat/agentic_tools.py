@@ -78,6 +78,7 @@ class PropertyAgentTools:
         return ToolEvidence(
             payload={"matches": [_complex_payload(record) for record in records]},
             candidate_ids=frozenset(record.complex_id for record in records),
+            candidate_names={record.complex_id: record.display_name for record in records},
             fact_ids=frozenset(facts),
         )
 
@@ -142,7 +143,9 @@ class PropertyAgentTools:
                 "candidates": [_complex_payload(record) for record in selected],
             },
             candidate_ids=frozenset(record.complex_id for record in selected),
+            candidate_names={record.complex_id: record.display_name for record in selected},
             fact_ids=fact_ids,
+            scope_label=scope.scope_label,
         )
 
     def _profile(self, complex_id: int) -> ToolEvidence:
@@ -152,6 +155,7 @@ class PropertyAgentTools:
             payload={"complexId": complex_id, "profile": profile, "factId": fact_id}
             if profile is not None else {"complexId": complex_id, "profile": None},
             candidate_ids=frozenset({complex_id}),
+            candidate_names=_candidate_name(self._repository, complex_id),
             fact_ids=frozenset({fact_id}) if profile is not None else frozenset(),
         )
 
@@ -170,6 +174,7 @@ class PropertyAgentTools:
                 for trade in trades
             ]},
             candidate_ids=frozenset({complex_id}), fact_ids=fact_ids,
+            candidate_names=_candidate_name(self._repository, complex_id),
         )
 
     def _price_trend(self, complex_id: int) -> ToolEvidence:
@@ -191,6 +196,7 @@ class PropertyAgentTools:
                 for record in records
             ]},
             candidate_ids=frozenset({complex_id}), fact_ids=fact_ids,
+            candidate_names=_candidate_name(self._repository, complex_id),
         )
 
     async def _candidate_evidence(self, complex_ids: tuple[int, ...]) -> ToolEvidence:
@@ -204,6 +210,10 @@ class PropertyAgentTools:
         return ToolEvidence(
             payload={"candidates": [payload for payload, _ids in results]},
             candidate_ids=frozenset(complex_ids), fact_ids=fact_ids,
+            candidate_names={
+                int(payload["complexId"]): str(payload["complexName"])
+                for payload, _ids in results
+            },
         )
 
     def _candidate_bundle(self, complex_id: int) -> tuple[dict[str, object], frozenset[str]]:
@@ -233,3 +243,12 @@ def _complex_payload(record: ComplexRecord) -> dict[str, object]:
         "dataUpdatedAt": record.data_updated_at.isoformat(),
         "factId": _complex_fact_id(record.complex_id),
     }
+
+
+def _candidate_name(
+    repository: AgenticPropertyRepository, complex_id: int,
+) -> dict[int, str]:
+    record = repository.find_complex_by_id(complex_id)
+    if record is None:
+        raise ValueError("candidate no longer exists")
+    return {complex_id: record.display_name}

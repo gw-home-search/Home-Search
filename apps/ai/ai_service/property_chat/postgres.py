@@ -154,6 +154,35 @@ class PostgresPropertyFactRepository:
             ).fetchall()
         return [_complex_record(row) for row in rows]
 
+    def complex_profile(self, complex_id: int) -> dict[str, object] | None:
+        if isinstance(complex_id, bool) or not isinstance(complex_id, int) or complex_id <= 0:
+            raise ValueError("complex id must be positive")
+        with self._pool.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT ratio_scope, ratio_quality, building_coverage_rate,
+                       floor_area_ratio, household_scope, household_quality,
+                       household_count, family_count, unit_count,
+                       parking_scope, parking_quality, total_parking_count,
+                       parking_per_household, building_scope, building_quality,
+                       main_building_count, max_ground_floor_count,
+                       max_underground_floor_count, max_height_m,
+                       elevator_scope, elevator_quality, ride_elevator_count,
+                       emergency_elevator_count, safety_scope, safety_quality,
+                       seismic_design_status, date_scope, date_quality,
+                       permit_date, construction_start_date, use_approval_date,
+                       address_scope, address_quality, parcel_address, road_address,
+                       energy_scope, energy_quality, energy_efficiency_grades,
+                       data_updated_at
+                FROM ai_read.complex_profile_fact
+                WHERE complex_id = %s
+                """,
+                (complex_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {key: _profile_value(value) for key, value in dict(row).items()}
+
     def find_complexes_batch(
         self,
         names: tuple[str, ...],
@@ -765,6 +794,16 @@ def _optional_decimal(value: float | None) -> Decimal | None:
 
 def _optional_float(value: Decimal | None) -> float | None:
     return float(value) if value is not None else None
+
+
+def _profile_value(value: object) -> object:
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (date,)):
+        return value.isoformat()
+    if hasattr(value, "isoformat"):
+        return value.isoformat()  # type: ignore[union-attr]
+    return value
 
 
 def _validate_trade_query(

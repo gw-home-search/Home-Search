@@ -229,4 +229,24 @@ tasks.register('apiDocsCheck') {
     dependsOn tasks.named('restDocsTest')
     dependsOn tasks.named('asciidoctor')
     dependsOn tasks.named('verifyOpenApiSpec')
+    dependsOn tasks.named('verifyPublicApiDocumentation')
+}
+
+tasks.register('verifyPublicApiDocumentation', Exec) {
+    description = 'Verify canonical, OpenAPI, and Asciidoc public operation sets are equal.'
+    group = 'verification'
+    dependsOn tasks.named('openapi3')
+
+    def operationManifest = layout.projectDirectory.file('src/docs/public-api-operations.json')
+    def openApiSpec = layout.buildDirectory.file('api-spec/openapi3.yaml')
+    def asciidocIndex = layout.projectDirectory.file('src/docs/asciidoc/index.adoc')
+    def canonicalContract = rootProject.layout.projectDirectory.file('../../docs/API_CONTRACT.md')
+    inputs.files(operationManifest, openApiSpec, asciidocIndex, canonicalContract)
+
+    commandLine 'python3',
+        layout.projectDirectory.file('scripts/verify-public-api-docs.py').asFile,
+        operationManifest.asFile,
+        openApiSpec.get().asFile,
+        asciidocIndex.asFile,
+        canonicalContract.asFile
 }

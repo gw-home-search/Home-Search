@@ -21,6 +21,13 @@ run "two_az_private_production_foundation" {
     error_message = "Each AZ requires its own NAT and private application subnet."
   }
   assert {
+    condition = (
+      aws_route.public_internet.destination_cidr_block == "0.0.0.0/0"
+      && length(aws_route_table_association.public) == 2
+    )
+    error_message = "Public subnets hosting NAT gateways must have an Internet Gateway default route."
+  }
+  assert {
     condition     = length(aws_vpc_endpoint.interface) == 7 && length(aws_grafana_workspace.this.network_access_control[0].vpce_ids) == 1
     error_message = "AWS APIs must use private endpoints and Grafana must accept only its workspace endpoint."
   }
@@ -43,5 +50,12 @@ run "two_az_private_production_foundation" {
   assert {
     condition     = aws_ec2_client_vpn_endpoint.operator.split_tunnel && aws_ec2_client_vpn_authorization_rule.operator.access_group_id == "operators"
     error_message = "Client VPN must use split tunnel and operator group authorization."
+  }
+  assert {
+    condition = (
+      aws_vpc_security_group_egress_rule.operator_https.cidr_ipv4 == "10.40.0.0/16"
+      && aws_vpc_security_group_egress_rule.operator_https.from_port == 443
+    )
+    error_message = "The Client VPN security group must permit bounded HTTPS access to private operator services."
   }
 }

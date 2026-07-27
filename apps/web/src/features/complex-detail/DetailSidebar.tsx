@@ -274,6 +274,7 @@ export function DetailSidebar({
             {complexNews.items[0]?.region?.code ? (
               <Link
                 className="detail-all-news-link"
+                onClick={onBack}
                 to={`/insights/news?scope=SIDO&regionCode=${complexNews.items[0].region.code.slice(0, 2)}&category=ALL`}
               >
                 이 지역 뉴스 모두 보기

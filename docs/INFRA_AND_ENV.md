@@ -398,7 +398,7 @@ uses no checkpointer/store and its state, question, entity, tool arguments, and
 answer are not metric labels or log fields.
 The chatbot overlay enables `HOME_AI_AGENTIC_ORCHESTRATION_ENABLED` and
 `HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED` independently by default. Set either to
-the exact value `false` to return recommendations to the v1 maintenance path or
+the exact value `false` to return recommendations to the deterministic maintenance path or
 to remove the official web tool without a migration rollback. Agent execution
 reserves the final eight seconds of the total query budget for final generation
 and grounding validation. Runtime metrics contain route/repair/secondary/fallback,

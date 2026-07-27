@@ -216,7 +216,7 @@ class ChatbotResponseValidatorTest {
                 {"success":true,"status":"success","answer":"검증된 답변",
                 "citations":[{"citationId":"citation-1","sourceId":"source-1",
                 "sourceName":"공공 데이터","sourceUrl":"https://example.com/data",
-                "evidenceGrade":"A","datasetVersion":"v1","dataAsOf":"2026-07-27",
+                "evidenceGrade":"A","datasetVersion":"dataset-1","dataAsOf":"2026-07-27",
                 "observedAt":"2026-07-27T12:00:00+09:00","factIds":["fact-1"]}],
                 "dataAsOf":"2026-07-27","limitations":["공개 데이터 기준"],
                 "evidenceSummary":{"status":"supported","capabilities":["recent_trade_lookup"],

@@ -25,7 +25,7 @@ suffix·오타·복수 단지 식별 및 종합 평가를 충분히 다루지 �
 6. primary, 동일 facts repair 1회, secondary 순으로 시도한다. 모두 실패하거나 60초 hard
    timeout에 도달한 경우에만 결정형 presenter를 `PARTIAL` 최소 fallback으로 사용한다.
 7. 기존 endpoint와 top-level 응답은 유지한다. 신규 응답은 additive
-   `recommendationTable/v2`를 사용하고 v1 artifact와 browser archive는 계속 지원한다.
+   `recommendationTable/v2`를 사용하고 legacy artifact와 browser archive는 계속 지원한다.
 8. SSE `status`는 제한된 진행 상태만 전달하며 grounding 완료 전 `answer_delta`를 보내지 않는다.
 9. 질문, 답변, context, tool argument/result, 웹 검색어와 원문은 DB·일반 로그·trace에 저장하지 않는다.
 
@@ -42,10 +42,10 @@ suffix·오타·복수 단지 식별 및 종합 평가를 충분히 다루지 �
 
 ADR 0001의 근거 검증·browser-only memory 결정은 유지한다. 기존 문서의 “LLM은 추천
 후보·순서를 변경하지 않는다”는 문장만 신규 Agentic v2 경로에서 부분 대체한다.
-`recommendationTable/v1`, `recommendationCards/v1`, v1 archive 재생과 maintenance
+`recommendationTable/v1`, `recommendationCards/v1`, legacy archive 재생과 maintenance
 fallback에는 기존 결정형 정책이 계속 적용된다.
 
 ## Rollback
 
-두 rollout flag를 `false`로 바꾸면 migration rollback 없이 기존 v1/결정형 경로로
+두 rollout flag를 `false`로 바꾸면 migration rollback 없이 기존 결정형 경로로
 복귀한다. migration은 additive view와 SELECT grant이므로 삭제하지 않는다.

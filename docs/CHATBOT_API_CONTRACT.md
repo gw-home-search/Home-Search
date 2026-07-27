@@ -198,8 +198,43 @@ legacy `success`와 `status` 의미는 유지한다.
 
 `partial`과 `unavailable`도 처리된 사용자 질문 결과이므로 HTTP `200`이다.
 `unavailable`이면 legacy 실행 상태는 `success=false`, `status=failed`이고, 검증된
-데이터 부족 안내를 `answer`로 반환한다. 인증, validation, rate limit,
-내부·provider 장애는 ProblemDetail 또는 SSE `error`다.
+데이터 부족 안내를 `answer`로 반환한다. validation, authentication, rate limit처럼
+admission 이전에 거부된 요청은 기존 ProblemDetail을 유지한다. admission 이후의
+provider, timeout, malformed upstream, graph invariant 오류는 비노출 safe final로
+변환하며 JSON은 HTTP `200`, SSE는 검증 완료 `answer_delta`와 정확히 한 번의 `final`로
+끝난다. client abort, 연결 단절, 프로세스 강제 종료까지 애플리케이션이 `final`을
+보장한다고 주장하지 않는다.
+
+### `terminalOutcome/v1`
+
+`terminalOutcome`은 optional additive field다. 새 AI 응답은 항상 제공하지만 Web은
+legacy omission과 unknown/malformed object를 무시하고 `answer`를 계속 표시한다.
+
+```json
+{
+  "terminalOutcome": {
+    "version": 1,
+    "status": "ANSWERED",
+    "reason": "COMPLETED",
+    "retryable": false
+  }
+}
+```
+
+| `status` | `reason` | 기본 `retryable` |
+|---|---|---|
+| `ANSWERED` | `COMPLETED` | `false` |
+| `PARTIAL` | `PARTIAL_EVIDENCE` | transient 누락일 때만 `true` |
+| `CLARIFICATION` | `AMBIGUOUS_ENTITY` | `false` |
+| `UNAVAILABLE` | `INSUFFICIENT_EVIDENCE` | `false` |
+| `UNAVAILABLE` | `OUT_OF_SCOPE` | `false` |
+| `UNAVAILABLE` | `TEMPORARY_FAILURE` | `true` |
+
+기존 필드 mapping은 `ANSWERED`가 `success=true/status=success`, `PARTIAL`이
+`success=true/status=partial_success`, `CLARIFICATION|UNAVAILABLE`이
+`success=false/status=failed`다. safe final의 canonical fixture는
+`docs/fixtures/chatbot-safe-final-v1.json`이며 질문, context, 단지명, provider명,
+내부 오류 문자열을 포함하지 않는다.
 
 ### 복합 질문 fragment
 
@@ -651,7 +686,9 @@ event: final
 data: {"requestId":"...","response":{...JSON 응답과 동일한 객체...}}
 ```
 
-허용 event는 `status`, `artifacts`, `answer_delta`, `final`, `error`다.
+허용 event는 `status`, `artifacts`, `answer_delta`, `final`, `error`다. admission 이후
+복구 가능한 runtime failure에는 `error`를 보내지 않는다. `error`는 legacy 및
+예외 호환을 위한 parser seam으로만 남긴다.
 
 `status.stage`는 `interpreting_question`, `checking_candidates`,
 `comparing_evidence`, `checking_official_sources`, `validating_answer`만 허용한다.
@@ -664,8 +701,8 @@ data: {"requestId":"...","response":{...JSON 응답과 동일한 객체...}}
 5. 정상 stream은 `final` 한 번으로 끝난다.
 6. stream 실패 후 클라이언트가 JSON endpoint를 자동 호출하면 안 된다.
 
-HTTP response가 시작되기 전 오류는 아래 ProblemDetail을 반환한다. 시작된 뒤 오류는
-다음 event로 종료하며 `final`을 보내지 않는다.
+admission 이전 오류는 아래 ProblemDetail을 반환한다. admission 이후 runtime 오류는
+위 safe final 정책을 적용한다. 아래 `error` event는 legacy 호환용이다.
 
 ```text
 event: error

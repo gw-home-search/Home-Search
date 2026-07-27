@@ -580,7 +580,7 @@ def test_configured_engine_statically_composes_academy_registry_repository(
         )
     )
 
-    assert response == {"success": True}
+    assert response["success"] is True
     if repository_available:
         assert captured["academy_registry_repository"] is academy_repository
 
@@ -632,7 +632,7 @@ def test_configured_engine_statically_composes_academy_location_repository(
         )
     )
 
-    assert response == {"success": True}
+    assert response["success"] is True
     if repository_available:
         assert captured["academy_location_repository"] is location_repository
 
@@ -684,7 +684,7 @@ def test_configured_engine_statically_composes_rail_station_repository(
         )
     )
 
-    assert response == {"success": True}
+    assert response["success"] is True
     if repository_available:
         assert captured["rail_station_repository"] is rail_repository
 
@@ -736,7 +736,7 @@ def test_configured_engine_statically_composes_childcare_repository(
         )
     )
 
-    assert response == {"success": True}
+    assert response["success"] is True
     if repository_available:
         assert captured["childcare_repository"] is childcare_repository
 
@@ -788,7 +788,7 @@ def test_configured_engine_statically_composes_point_facility_repository(
         )
     )
 
-    assert response == {"success": True}
+    assert response["success"] is True
     if repository_available:
         assert captured["point_facility_repository"] is facility_repository
 
@@ -1025,7 +1025,7 @@ def test_criteria_recommendation_activation_uses_only_approved_reference_sources
         request_id="request-criteria-activation",
     ))
 
-    assert response == {"success": True}
+    assert response["success"] is True
     assert captured["enabled_capabilities"] == frozenset({
         "complex_identity", "recent_trade_lookup", "price_trend", "recommendation",
     })
@@ -1091,7 +1091,7 @@ def test_school_activation_composes_only_the_approved_cumulative_sources(
         request_id="request-school-activation",
     ))
 
-    assert response == {"success": True}
+    assert response["success"] is True
     assert captured["enabled_reference_capabilities"] == frozenset({
         "academy_lookup", "rail_station_lookup", "school_location",
     })
@@ -1145,7 +1145,7 @@ def test_retail_activation_enables_shopping_and_budget_without_childcare(
         request_id="request-budget-activation",
     ))
 
-    assert response == {"success": True}
+    assert response["success"] is True
     assert captured["point_facility_repository"] is retail_repository
     assert captured["enabled_recommendation_modes"] == frozenset({"CRITERIA", "BUDGET"})
     assert captured["childcare_repository"] is None

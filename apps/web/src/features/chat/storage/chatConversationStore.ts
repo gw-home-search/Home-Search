@@ -1,4 +1,9 @@
-import type { ChatCitation, ChatEvidence } from '../chatTypes';
+import {
+  readChatTerminalOutcome,
+  type ChatCitation,
+  type ChatEvidence,
+  type ChatTerminalOutcome,
+} from '../chatTypes';
 import { readChatArtifacts, type ChatArtifact } from '../artifactContract';
 import { readChatActions, type ChatAction } from '../actionContract';
 import { readChatUiSummary, type ChatUiSummary } from '../summaryContract';
@@ -25,6 +30,7 @@ export type ChatMessage = {
   fragments?: ChatFragment[];
   resolution?: ChatConversationResolution;
   report?: ChatUiReport;
+  terminalOutcome?: ChatTerminalOutcome;
 };
 
 export type ChatConversation = {
@@ -269,6 +275,10 @@ function validateMessage(candidate: unknown): ChatMessage {
       candidate.report, factIds, message.artifacts ?? [], message.actions ?? [],
     );
     if (report != null) message.report = report;
+  }
+  if (candidate.terminalOutcome !== undefined) {
+    const outcome = readChatTerminalOutcome(candidate.terminalOutcome);
+    if (outcome != null) message.terminalOutcome = outcome;
   }
   return message;
 }

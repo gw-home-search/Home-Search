@@ -35,6 +35,32 @@ export type ChatEvidence = {
   evidenceSummary: ChatEvidenceSummary;
 };
 
+export type ChatTerminalOutcome = {
+  version: 1;
+  status: 'ANSWERED' | 'PARTIAL' | 'CLARIFICATION' | 'UNAVAILABLE';
+  reason: 'COMPLETED' | 'PARTIAL_EVIDENCE' | 'AMBIGUOUS_ENTITY'
+    | 'INSUFFICIENT_EVIDENCE' | 'OUT_OF_SCOPE' | 'TEMPORARY_FAILURE';
+  retryable: boolean;
+};
+
+export function readChatTerminalOutcome(value: unknown): ChatTerminalOutcome | null {
+  if (typeof value !== 'object' || value == null || Array.isArray(value)) return null;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.version !== 1 || typeof candidate.retryable !== 'boolean') return null;
+  const reasonsByStatus: Record<string, readonly string[]> = {
+    ANSWERED: ['COMPLETED'],
+    PARTIAL: ['PARTIAL_EVIDENCE'],
+    CLARIFICATION: ['AMBIGUOUS_ENTITY'],
+    UNAVAILABLE: ['INSUFFICIENT_EVIDENCE', 'OUT_OF_SCOPE', 'TEMPORARY_FAILURE'],
+  };
+  const reasons = reasonsByStatus[String(candidate.status)];
+  if (reasons == null || !reasons.includes(String(candidate.reason))) return null;
+  if (candidate.reason === 'TEMPORARY_FAILURE') {
+    if (!candidate.retryable) return null;
+  } else if (candidate.reason !== 'PARTIAL_EVIDENCE' && candidate.retryable) return null;
+  return candidate as ChatTerminalOutcome;
+}
+
 export type ChatbotResponse = ChatEvidence & {
   success: boolean;
   status: 'success' | 'partial_success' | 'failed';
@@ -46,4 +72,5 @@ export type ChatbotResponse = ChatEvidence & {
   conversationResolution: ChatConversationResolution | null;
   conversationMemoryPatch: ConversationMemory | null;
   report: ChatUiReport | null;
+  terminalOutcome: ChatTerminalOutcome | null;
 };

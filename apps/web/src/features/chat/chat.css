@@ -113,6 +113,20 @@
   cursor: pointer;
 }
 
+.chatbot-assistant-retry {
+  margin-top: 10px;
+  border: 1px solid var(--hs-map-color-line-strong);
+  border-radius: 8px;
+  padding: 7px 11px;
+  background: var(--hs-map-color-surface);
+  color: var(--hs-map-color-brand);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chatbot-assistant-retry:disabled { cursor: default; opacity: .55; }
+
 .chatbot-close:hover,
 .chatbot-toolbar-actions > button:hover:not(:disabled),
 .chatbot-history-trigger:hover { background: transparent; color: var(--hs-map-color-ink); }

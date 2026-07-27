@@ -194,6 +194,14 @@ ai-service -> ai_read views (SELECT only)
 ai-service -> home_search_ai reference/quality/RAG data
 ```
 
+The optional ai-service supervisor graph decomposes one admitted question into
+at most four allowlisted goals. The server, not the LLM, owns dependency edges,
+wave limits, ordering, and duplicate-result invariants. Light goals run at most
+two at a time; recommendation and comparison are isolated. Only an explicit
+recommendation-to-comparison follow-up reference can create a dependency. The
+graph is compiled without a checkpointer or store and keeps the legacy engine
+as the default and rollback path.
+
 The implementation order is user-service first, evidence-grounded chatbot
 capabilities second, then image/ECR CI and AWS deployment preparation.
 

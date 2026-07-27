@@ -7,9 +7,25 @@ from ai_service.property_chat.answer_first_eval import (
     AnswerFirstGoldenCase,
     grade_answer_first_response,
     grade_agentic_selection_stability,
+    compare_rollout_responses,
     load_answer_first_catalog,
     AnswerFirstEvalError,
 )
+
+
+def rollout_response(capability: str = "recent_trade_lookup") -> dict[str, object]:
+    return {
+        "conversationResolution": {
+            "version": 1,
+            "answerMode": "COMPLETE",
+            "goals": [{"capability": capability, "status": "answered"}],
+        },
+        "terminalOutcome": {
+            "version": 1, "status": "ANSWERED", "reason": "COMPLETED", "retryable": False,
+        },
+        "citations": [{"factIds": ["fact-1"]}],
+        "fragments": [{"factIds": ["fact-1"]}],
+    }
 
 
 def _catalog_path() -> Path:
@@ -26,6 +42,17 @@ def test_answer_first_catalog_has_the_approved_agentic_120_case_distribution() -
         category: sum(case.category == category for case in cases)
         for category in answer_first_eval.EXPECTED_CATEGORY_COUNTS
     } == answer_first_eval.EXPECTED_CATEGORY_COUNTS
+
+
+def test_rollout_comparator_uses_only_contract_metadata_and_closure() -> None:
+    legacy = rollout_response()
+    assert compare_rollout_responses(legacy, rollout_response()) == ()
+
+    graph = rollout_response("comparison")
+    graph["fragments"] = [{"factIds": ["hallucinated-fact"]}]
+    assert compare_rollout_responses(legacy, graph) == (
+        "GOAL_SET_MISMATCH", "FACT_CITATION_CLOSURE_FAILED",
+    )
 
 
 def test_answer_first_grader_accepts_grounded_best_effort_result() -> None:

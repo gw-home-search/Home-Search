@@ -259,31 +259,7 @@ class GroundedChatbotEngine:
             else None
         )
         try:
-            try:
-                planned = await self._language_model.plan_query(request)
-            except ChatbotProviderUnavailable:
-                if not self._answer_first_enabled:
-                    raise
-                planned = DeterministicQueryRouter(today=self._today()).plan(request)
-                if planned is None:
-                    raise
-            if self._dependent_workflow_enabled:
-                planned = await self._apply_dependent_context(request, planned)
-            if self._answer_first_enabled and self._property_overview_enabled:
-                planned = await self._apply_overview_context(request, planned)
-            bundle = (
-                planned if isinstance(planned, QueryPlanBundle)
-                else QueryPlanBundle((planned,))
-            )
-            plans = tuple(
-                _verify_plan(
-                    _apply_answer_first_defaults(plan, self._today())
-                    if self._answer_first_enabled else plan,
-                    request.question,
-                    semantic_goal_planner_enabled=self._semantic_goal_planner_enabled,
-                )
-                for plan in bundle.fragments
-            )
+            plans = await self.plan_goals(request)
             documents = tuple(await asyncio.gather(*(
                 self._execute_fragment(
                     plan, request, request_id, polish_deadline=polish_deadline
@@ -320,6 +296,52 @@ class GroundedChatbotEngine:
             raise
         except Exception as exception:
             raise ChatbotProviderUnavailable() from exception
+
+    async def plan_goals(self, request: ChatbotQueryRequest) -> tuple[QueryPlan, ...]:
+        try:
+            planned = await self._language_model.plan_query(request)
+        except ChatbotProviderUnavailable:
+            if not self._answer_first_enabled:
+                raise
+            planned = DeterministicQueryRouter(today=self._today()).plan(request)
+            if planned is None:
+                raise
+        if self._dependent_workflow_enabled:
+            planned = await self._apply_dependent_context(request, planned)
+        if self._answer_first_enabled and self._property_overview_enabled:
+            planned = await self._apply_overview_context(request, planned)
+        bundle = (
+            planned if isinstance(planned, QueryPlanBundle)
+            else QueryPlanBundle((planned,))
+        )
+        return tuple(
+            _verify_plan(
+                _apply_answer_first_defaults(plan, self._today())
+                if self._answer_first_enabled else plan,
+                request.question,
+                semantic_goal_planner_enabled=self._semantic_goal_planner_enabled,
+            )
+            for plan in bundle.fragments
+        )
+
+    async def execute_goal(
+        self,
+        plan: QueryPlan,
+        request: ChatbotQueryRequest,
+        request_id: str,
+        *,
+        polish_deadline: float | None,
+        deterministic_draft: bool,
+        resolved_complexes: tuple[ComplexRecord, ...] | None = None,
+    ) -> AnswerDocument:
+        return await self._execute_fragment(
+            plan,
+            request,
+            request_id,
+            polish_deadline=polish_deadline,
+            deterministic_draft=deterministic_draft,
+            resolved_complexes=resolved_complexes,
+        )
 
     async def _apply_dependent_context(
         self,
@@ -412,6 +434,8 @@ class GroundedChatbotEngine:
         request_id: str,
         *,
         polish_deadline: float | None,
+        deterministic_draft: bool = False,
+        resolved_complexes: tuple[ComplexRecord, ...] | None = None,
     ) -> AnswerDocument:
         try:
             if (
@@ -431,7 +455,9 @@ class GroundedChatbotEngine:
                     async with asyncio.timeout(_fragment_timeout_seconds(plan.capability)):
                         result = await plan_handler.observe(plan)
                 else:
-                    result = await self._observe(plan)
+                    result = await self._observe(
+                        plan, resolved_complexes=resolved_complexes
+                    )
             else:
                 result = CapabilityResult(
                     [],
@@ -463,6 +489,13 @@ class GroundedChatbotEngine:
                 raise RecommendationExecutionError(
                     "RECOMMENDATION_TEXT_PRESENTATION_FAILED"
                 ) from exception
+        elif deterministic_draft:
+            draft = DeterministicAnswerPresenter().present(
+                plan=plan,
+                facts=result.facts,
+                limitations=result.limitations,
+                readiness=result.readiness,
+            )
         else:
             try:
                 if polish_deadline is None:
@@ -580,12 +613,21 @@ class GroundedChatbotEngine:
                 ) from exception
             raise
 
-    async def _observe(self, plan: QueryPlan) -> CapabilityResult:
-        complexes = await asyncio.to_thread(
-            self._repository.find_complexes,
-            plan.complex_name,
-            plan.region_name,
-            6,
+    async def _observe(
+        self,
+        plan: QueryPlan,
+        *,
+        resolved_complexes: tuple[ComplexRecord, ...] | None = None,
+    ) -> CapabilityResult:
+        complexes = (
+            resolved_complexes
+            if resolved_complexes is not None
+            else await asyncio.to_thread(
+                self._repository.find_complexes,
+                plan.complex_name,
+                plan.region_name,
+                6,
+            )
         )
         if not complexes:
             return CapabilityResult(

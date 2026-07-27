@@ -1,0 +1,38 @@
+{
+  "success": false,
+  "status": "failed",
+  "fragments": [],
+  "result": {},
+  "message": "",
+  "executionSummary": { "total": 0, "succeeded": 0, "failed": 0 },
+  "answer": "일시적인 문제로 답변을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+  "resolvedQuestion": "",
+  "conversationResolution": {
+    "version": 1,
+    "answerMode": "NO_RESULT",
+    "goals": [],
+    "assumptions": [],
+    "omissions": []
+  },
+  "conversationMemoryPatch": null,
+  "uiActions": [],
+  "uiArtifacts": [],
+  "uiSummary": null,
+  "uiReport": null,
+  "requestId": "00000000-0000-0000-0000-000000000000",
+  "citations": [],
+  "dataAsOf": null,
+  "limitations": [],
+  "evidenceSummary": {
+    "status": "unavailable",
+    "capabilities": [],
+    "factCount": 0,
+    "citationCount": 0
+  },
+  "terminalOutcome": {
+    "version": 1,
+    "status": "UNAVAILABLE",
+    "reason": "TEMPORARY_FAILURE",
+    "retryable": true
+  }
+}

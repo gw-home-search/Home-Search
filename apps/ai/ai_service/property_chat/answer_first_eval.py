@@ -34,6 +34,15 @@ class AnswerFirstEvalError(ValueError):
 
 
 @dataclass(frozen=True)
+class RolloutFingerprint:
+    goals: tuple[str, ...]
+    answer_mode: str
+    terminal_status: str
+    terminal_reason: str
+    fact_citation_closed: bool
+
+
+@dataclass(frozen=True)
 class AnswerFirstGoldenCase:
     case_id: str
     category: str
@@ -124,6 +133,64 @@ def grade_agentic_selection_stability(
         return ("SELECTION_RUNS_INVALID",)
     shared = set(top_three_runs[0]).intersection(*top_three_runs[1:])
     return () if len(shared) >= 2 else ("TOP_THREE_OVERLAP_BELOW_TWO",)
+
+
+def rollout_fingerprint(response: dict[str, object]) -> RolloutFingerprint:
+    resolution = response.get("conversationResolution")
+    goals: tuple[str, ...] = ()
+    answer_mode = "UNKNOWN"
+    if isinstance(resolution, dict):
+        answer_mode = str(resolution.get("answerMode", "UNKNOWN"))
+        raw_goals = resolution.get("goals")
+        if isinstance(raw_goals, list):
+            goals = tuple(
+                str(goal["capability"])
+                for goal in raw_goals
+                if isinstance(goal, dict) and isinstance(goal.get("capability"), str)
+            )
+    terminal = response.get("terminalOutcome")
+    terminal_status = str(terminal.get("status", "MISSING")) if isinstance(terminal, dict) else "MISSING"
+    terminal_reason = str(terminal.get("reason", "MISSING")) if isinstance(terminal, dict) else "MISSING"
+    citations = response.get("citations")
+    citation_fact_ids = {
+        fact_id
+        for citation in citations if isinstance(citations, list) and isinstance(citation, dict)
+        for fact_id in citation.get("factIds", [])
+        if isinstance(fact_id, str)
+    } if isinstance(citations, list) else set()
+    fragments = response.get("fragments", [])
+    closed = isinstance(fragments, list) and all(
+        isinstance(fragment, dict)
+        and isinstance(fragment.get("factIds", []), list)
+        and set(fragment.get("factIds", [])).issubset(citation_fact_ids)
+        for fragment in fragments
+    )
+    return RolloutFingerprint(
+        goals=goals,
+        answer_mode=answer_mode,
+        terminal_status=terminal_status,
+        terminal_reason=terminal_reason,
+        fact_citation_closed=closed,
+    )
+
+
+def compare_rollout_responses(
+    legacy: dict[str, object], graph: dict[str, object],
+) -> tuple[str, ...]:
+    left = rollout_fingerprint(legacy)
+    right = rollout_fingerprint(graph)
+    failures: list[str] = []
+    if left.goals != right.goals:
+        failures.append("GOAL_SET_MISMATCH")
+    if left.answer_mode != right.answer_mode:
+        failures.append("ANSWER_MODE_MISMATCH")
+    if (left.terminal_status, left.terminal_reason) != (
+        right.terminal_status, right.terminal_reason
+    ):
+        failures.append("TERMINAL_OUTCOME_MISMATCH")
+    if not left.fact_citation_closed or not right.fact_citation_closed:
+        failures.append("FACT_CITATION_CLOSURE_FAILED")
+    return tuple(failures)
 
 
 def _parse_case(value: object) -> AnswerFirstGoldenCase:

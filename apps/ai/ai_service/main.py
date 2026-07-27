@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from typing import Any
 from uuid import UUID, uuid4
@@ -10,11 +12,34 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .auth import AuthenticatedUser, AuthenticationRequired, require_authenticated_user
-from .chat import ChatbotEngine, ChatbotProviderUnavailable, get_chatbot_engine
+from .chat import (
+    ChatbotEngine,
+    ChatbotProviderUnavailable,
+    get_chatbot_engine,
+    get_supervisor_graph_canary_percent,
+    get_supervisor_graph_mode,
+)
 from .models import ChatbotQueryRequest
+from .terminal_response import safe_final_response, with_terminal_outcome
 
 
-app = FastAPI(title="Home Search AI", docs_url=None, redoc_url=None, openapi_url=None)
+_LOGGER = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    get_supervisor_graph_mode()
+    get_supervisor_graph_canary_percent()
+    yield
+
+
+app = FastAPI(
+    title="Home Search AI",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+    lifespan=_lifespan,
+)
 
 
 @app.middleware("http")
@@ -82,7 +107,17 @@ async def query(
     user: AuthenticatedUser = Depends(require_authenticated_user),
     engine: ChatbotEngine = Depends(get_chatbot_engine),
 ) -> dict[str, object]:
-    return await engine.query(request=payload, user=user, request_id=request.state.request_id)
+    try:
+        response = await engine.query(
+            request=payload, user=user, request_id=request.state.request_id
+        )
+        return with_terminal_outcome(response)
+    except Exception:
+        _LOGGER.warning(
+            "ai_safe_final",
+            extra={"terminal_status": "UNAVAILABLE", "terminal_reason": "TEMPORARY_FAILURE"},
+        )
+        return safe_final_response(request.state.request_id)
 
 
 @app.post("/api/v1/chatbot/query/stream")
@@ -97,7 +132,9 @@ async def stream(
             yield _status_sse(request.state.request_id, "QUESTION_INTERPRETATION", "질문 해석")
             yield _status_sse(request.state.request_id, "CANDIDATE_CHECK", "후보 확인")
             yield _status_sse(request.state.request_id, "EVIDENCE_COMPARISON", "근거 비교")
-            response = await engine.query(request=payload, user=user, request_id=request.state.request_id)
+            response = with_terminal_outcome(await engine.query(
+                request=payload, user=user, request_id=request.state.request_id
+            ))
             execution = response.get("agentExecution")
             if isinstance(execution, dict) and execution.get("webUsed") is True:
                 yield _status_sse(
@@ -105,24 +142,13 @@ async def stream(
                 )
             yield _status_sse(request.state.request_id, "ANSWER_VALIDATION", "답변 검증")
             yield _sse("final", {"requestId": request.state.request_id, "response": response})
-        except ChatbotProviderUnavailable:
-            yield _sse(
-                "error",
-                {
-                    "requestId": request.state.request_id,
-                    "code": "CHATBOT_PROVIDER_UNAVAILABLE",
-                    "message": "답변을 생성하지 못했습니다.",
-                },
-            )
         except Exception:
-            yield _sse(
-                "error",
-                {
-                    "requestId": request.state.request_id,
-                    "code": "CHATBOT_PROVIDER_UNAVAILABLE",
-                    "message": "답변을 생성하지 못했습니다.",
-                },
+            _LOGGER.warning(
+                "ai_safe_final",
+                extra={"terminal_status": "UNAVAILABLE", "terminal_reason": "TEMPORARY_FAILURE"},
             )
+            response = safe_final_response(request.state.request_id)
+            yield _sse("final", {"requestId": request.state.request_id, "response": response})
 
     return StreamingResponse(
         events(),

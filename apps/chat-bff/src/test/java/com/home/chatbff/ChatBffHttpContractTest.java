@@ -145,7 +145,7 @@ class ChatBffHttpContractTest {
     }
 
     @Test
-    @DisplayName("BFF timeout은 질문 원문을 노출하지 않는 504 ProblemDetail로 변환한다")
+    @DisplayName("admission 이후 BFF timeout은 질문 원문 없는 HTTP 200 safe final로 변환한다")
     void queryMapsTimeout() {
         when(aiClient.query(any(), anyString(), anyString(), any())).thenReturn(Mono.never());
 
@@ -156,16 +156,18 @@ class ChatBffHttpContractTest {
                 .bodyValue("{\"question\":\"잠실엘스 최근 거래 알려줘\"}")
                 .exchange()
                 .expectStatus()
-                .isEqualTo(504)
+                .isOk()
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo("CHATBOT_TIMEOUT")
-                .jsonPath("$.detail")
-                .value(detail -> assertThat(detail.toString()).doesNotContain("잠실엘스"));
+                .jsonPath("$.terminalOutcome.reason")
+                .isEqualTo("TEMPORARY_FAILURE")
+                .jsonPath("$.terminalOutcome.retryable")
+                .isEqualTo(true)
+                .jsonPath("$.answer")
+                .value(answer -> assertThat(answer.toString()).doesNotContain("잠실엘스"));
     }
 
     @Test
-    @DisplayName("AI provider 오류는 503 ProblemDetail로 변환한다")
+    @DisplayName("admission 이후 AI provider 오류는 HTTP 200 safe final로 변환한다")
     void queryMapsProviderFailure() {
         when(aiClient.query(any(), anyString(), anyString(), any()))
                 .thenReturn(Mono.error(new ChatbotProviderUnavailableException()));
@@ -177,14 +179,14 @@ class ChatBffHttpContractTest {
                 .bodyValue("{\"question\":\"잠실엘스 최근 거래 알려줘\"}")
                 .exchange()
                 .expectStatus()
-                .isEqualTo(503)
+                .isOk()
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo("CHATBOT_PROVIDER_UNAVAILABLE");
+                .jsonPath("$.terminalOutcome.reason")
+                .isEqualTo("TEMPORARY_FAILURE");
     }
 
     @Test
-    @DisplayName("예상하지 못한 AI client 오류도 원문을 숨긴 503으로 변환한다")
+    @DisplayName("예상하지 못한 AI client 오류도 원문을 숨긴 safe final로 변환한다")
     void queryMapsUnexpectedFailure() {
         when(aiClient.query(any(), anyString(), anyString(), any()))
                 .thenReturn(Mono.error(new IllegalStateException("internal provider detail")));
@@ -196,17 +198,17 @@ class ChatBffHttpContractTest {
                 .bodyValue("{\"question\":\"잠실엘스 최근 거래 알려줘\"}")
                 .exchange()
                 .expectStatus()
-                .isEqualTo(503)
+                .isOk()
                 .expectBody()
-                .jsonPath("$.code")
-                .isEqualTo("CHATBOT_PROVIDER_UNAVAILABLE")
-                .jsonPath("$.detail")
-                .value(detail -> assertThat(detail.toString()).doesNotContain("internal provider detail"));
+                .jsonPath("$.terminalOutcome.reason")
+                .isEqualTo("TEMPORARY_FAILURE")
+                .consumeWith(result -> assertThat(new String(result.getResponseBodyContent()))
+                        .doesNotContain("internal provider detail"));
     }
 
     @Test
-    @DisplayName("시작된 SSE의 AI 오류는 final 없이 명시적인 error event로 종료한다")
-    void streamMapsProviderFailureToErrorEvent() {
+    @DisplayName("시작된 SSE의 AI 오류는 answer_delta와 safe final 한 번으로 종료한다")
+    void streamMapsProviderFailureToSafeFinal() {
         when(aiClient.stream(any(), anyString(), anyString(), any()))
                 .thenReturn(Flux.error(new ChatbotProviderUnavailableException()));
 
@@ -226,8 +228,9 @@ class ChatBffHttpContractTest {
 
         String events = new String(body, java.nio.charset.StandardCharsets.UTF_8);
         assertThat(events)
-                .contains("event:error", "CHATBOT_PROVIDER_UNAVAILABLE")
-                .doesNotContain("event:final");
+                .contains("event:answer_delta", "event:final", "TEMPORARY_FAILURE")
+                .doesNotContain("event:error", "잠실엘스");
+        assertThat(events.split("event:final", -1)).hasSize(2);
     }
 
     @Test
@@ -282,8 +285,8 @@ class ChatBffHttpContractTest {
     }
 
     @Test
-    @DisplayName("시작된 SSE의 timeout은 final 없이 CHATBOT_TIMEOUT error event로 종료한다")
-    void streamMapsTimeoutToErrorEvent() {
+    @DisplayName("시작된 SSE의 timeout은 safe final 한 번으로 종료한다")
+    void streamMapsTimeoutToSafeFinal() {
         when(aiClient.stream(any(), anyString(), anyString(), any())).thenReturn(Flux.never());
 
         byte[] body = client.post()
@@ -299,12 +302,14 @@ class ChatBffHttpContractTest {
                 .getResponseBody();
 
         String events = new String(body, java.nio.charset.StandardCharsets.UTF_8);
-        assertThat(events).contains("event:error", "CHATBOT_TIMEOUT").doesNotContain("event:final");
+        assertThat(events)
+                .contains("event:answer_delta", "event:final", "TEMPORARY_FAILURE")
+                .doesNotContain("event:error", "잠실엘스");
     }
 
     @Test
-    @DisplayName("예상하지 못한 생성 오류도 final 없이 비노출 error event로 종료한다")
-    void streamMapsUnexpectedFailureToErrorEvent() {
+    @DisplayName("예상하지 못한 생성 오류도 비노출 safe final로 종료한다")
+    void streamMapsUnexpectedFailureToSafeFinal() {
         when(aiClient.stream(any(), anyString(), anyString(), any()))
                 .thenReturn(Flux.error(new IllegalStateException("internal provider detail")));
 
@@ -322,8 +327,8 @@ class ChatBffHttpContractTest {
 
         String events = new String(body, java.nio.charset.StandardCharsets.UTF_8);
         assertThat(events)
-                .contains("event:error", "CHATBOT_PROVIDER_UNAVAILABLE")
-                .doesNotContain("event:final", "internal provider detail");
+                .contains("event:final", "TEMPORARY_FAILURE")
+                .doesNotContain("event:error", "internal provider detail", "잠실엘스");
     }
 
     @Test

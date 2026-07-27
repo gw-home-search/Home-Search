@@ -126,7 +126,7 @@ def test_chatbot_query_rejects_missing_token_with_problem_detail() -> None:
     assert "question" not in response.json()
 
 
-def test_query_maps_provider_failure_to_non_disclosing_problem_detail() -> None:
+def test_query_maps_provider_failure_to_non_disclosing_safe_final() -> None:
     app.dependency_overrides[get_authenticator] = AcceptingAuthenticator
 
     response = TestClient(app).post(
@@ -135,9 +135,10 @@ def test_query_maps_provider_failure_to_non_disclosing_problem_detail() -> None:
         json={"question": "잠실엘스 최근 거래 알려줘"},
     )
 
-    assert response.status_code == 503
-    assert response.json()["code"] == "CHATBOT_PROVIDER_UNAVAILABLE"
-    assert "provider" not in response.json()["detail"].lower()
+    assert response.status_code == 200
+    assert response.json()["terminalOutcome"]["reason"] == "TEMPORARY_FAILURE"
+    assert "provider" not in response.text.lower()
+    assert "잠실엘스" not in response.text
 
 
 def test_query_echoes_valid_request_id_after_successful_engine_call() -> None:
@@ -153,7 +154,16 @@ def test_query_echoes_valid_request_id_after_successful_engine_call() -> None:
 
     assert response.status_code == 200
     assert response.headers["X-Request-Id"] == request_id
-    assert response.json() == {"answer": "최근 거래 알려줘", "requestId": request_id}
+    assert response.json() == {
+        "answer": "최근 거래 알려줘",
+        "requestId": request_id,
+        "terminalOutcome": {
+            "version": 1,
+            "status": "UNAVAILABLE",
+            "reason": "INSUFFICIENT_EVIDENCE",
+            "retryable": False,
+        },
+    }
 
 
 def test_query_accepts_bounded_ui_context_and_versioned_memory() -> None:
@@ -397,14 +407,20 @@ def test_unexpected_generation_error_is_non_disclosing_for_json_and_sse() -> Non
         json={"question": "최근 거래"},
     )
 
-    assert json_response.status_code == 503
-    assert json_response.json()["code"] == "CHATBOT_PROVIDER_UNAVAILABLE"
+    assert json_response.status_code == 200
+    assert json_response.json()["terminalOutcome"] == {
+        "version": 1,
+        "status": "UNAVAILABLE",
+        "reason": "TEMPORARY_FAILURE",
+        "retryable": True,
+    }
     assert "internal provider detail" not in json_response.text
-    assert "event: error" in stream_response.text
-    assert "event: final" not in stream_response.text
+    assert "event: error" not in stream_response.text
+    assert stream_response.text.count("event: final") == 1
+    assert "internal provider detail" not in stream_response.text
 
 
-def test_stream_emits_explicit_error_event_without_final_after_start() -> None:
+def test_stream_emits_safe_final_after_admitted_provider_failure() -> None:
     app.dependency_overrides[get_authenticator] = AcceptingAuthenticator
     app.dependency_overrides[get_chatbot_engine] = UnavailableEngine
 
@@ -416,9 +432,9 @@ def test_stream_emits_explicit_error_event_without_final_after_start() -> None:
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
-    assert "event: error" in response.text
-    assert '"code":"CHATBOT_PROVIDER_UNAVAILABLE"' in response.text
-    assert "event: final" not in response.text
+    assert "event: error" not in response.text
+    assert response.text.count("event: final") == 1
+    assert '"reason":"TEMPORARY_FAILURE"' in response.text
 
 
 def test_blank_question_uses_documented_400_error() -> None:

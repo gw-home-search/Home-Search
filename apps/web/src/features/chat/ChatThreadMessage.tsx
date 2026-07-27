@@ -9,6 +9,8 @@ type ChatThreadMessageProps = {
   message: ChatMessage;
   messageRef?: Ref<HTMLElement>;
   onUiAction?: (action: ChatAction) => void;
+  onRetry?: () => void;
+  retrying?: boolean;
 };
 
 export function ChatThreadMessage({
@@ -16,6 +18,8 @@ export function ChatThreadMessage({
   message,
   messageRef,
   onUiAction,
+  onRetry,
+  retrying = false,
 }: ChatThreadMessageProps) {
   const isUser = message.role === 'user';
   return (
@@ -33,6 +37,16 @@ export function ChatThreadMessage({
           onUiAction={onUiAction}
         />
       )}
+      {!isUser && onRetry ? (
+        <button
+          className="chatbot-assistant-retry"
+          disabled={retrying}
+          onClick={onRetry}
+          type="button"
+        >
+          {retrying ? '다시 시도 중' : '다시 시도'}
+        </button>
+      ) : null}
     </article>
   );
 }

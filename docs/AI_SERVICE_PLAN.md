@@ -79,7 +79,7 @@ AI는 두 DB에 별도 pool을 사용하고 DB 간 SQL join을 하지 않는다.
 - 서버 구조화 로그에는 answer mode, goal 상태별 개수, 소요시간만 남기며 질문,
   대화 context, UI context는 기록하지 않는다.
 
-기존 v1 추천 후보 필터와 점수는 A/B 데이터와 사용자의 명시 조건으로 결정론적으로
+기존 추천 후보 필터와 점수는 A/B 데이터와 사용자의 명시 조건으로 결정론적으로
 계산한다. 신규 Agentic v2 경로에서는 서버가 hard filter와 bounded 후보군을 만들고
 AI가 검증 후보 안에서 최종 후보·순서·설명을 선택한다. 서버는 선택 ID, 수치·단위,
 `factIds`, citation과 금지 주장을 검증하며 AI가 점수나 사실을 만들게 하지 않는다.
@@ -90,7 +90,7 @@ AI가 검증 후보 안에서 최종 후보·순서·설명을 선택한다. 서
 - 최대 4 tool round, 12 function call, 후보 40개, shortlist 10개, 최종 5개로 제한한다.
 - 조건 없는 추천은 `BALANCED_V1`로 즉시 실행한다.
 - primary → 동일 facts repair 1회 → secondary → `PARTIAL` 최소 fallback 순서다.
-- Agentic loop는 `live-capable`, v1 archive는 `live-capable archive compatibility`,
+- Agentic loop는 `live-capable`, legacy archive는 `live-capable archive compatibility`,
   결정형 presenter는 `maintenance fallback`으로 분류한다.
 - 공식 웹 D등급은 최신성 또는 내부 근거 공백이 있을 때만 선택적으로 사용한다.
 

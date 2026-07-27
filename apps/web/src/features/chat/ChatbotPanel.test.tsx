@@ -145,6 +145,128 @@ describe('챗봇 패널', () => {
     expect(saved?.messages[0]?.content).toBe('실패해도 남아야 하는 질문');
   });
 
+  it('retryable assistant를 같은 위치에서 재실행해 교체하고 user message를 중복하지 않는다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-safe-final-retry');
+    const client = authenticatedClient();
+    const safe = await (await client.authenticatedRequest('/api/v1/chatbot/query', {}, 'public')).json();
+    safe.success = false;
+    safe.status = 'failed';
+    safe.answer = '일시적인 문제로 답변을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+    safe.citations = [];
+    safe.dataAsOf = null;
+    safe.limitations = [];
+    safe.evidenceSummary = { status: 'unavailable', capabilities: [], factCount: 0, citationCount: 0 };
+    safe.uiArtifacts = [];
+    safe.terminalOutcome = {
+      version: 1, status: 'UNAVAILABLE', reason: 'TEMPORARY_FAILURE', retryable: true,
+    };
+    const success = await (await authenticatedClient().authenticatedRequest(
+      '/api/v1/chatbot/query', {}, 'public',
+    )).json();
+    client.authenticatedRequest = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(safe)))
+      .mockResolvedValueOnce(new Response(JSON.stringify(success)));
+    ({ root, host } = await renderPanel(client, store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await change(host.querySelector<HTMLTextAreaElement>('#chatbot-question'), '재시도할 질문');
+    await keyDown(host.querySelector<HTMLTextAreaElement>('#chatbot-question'), { key: 'Enter' });
+    await waitFor(() => buttonByText(host!, '다시 시도') != null);
+    const before = await store.list();
+    const assistantId = before[0]?.messages[1]?.id;
+
+    await click(buttonByText(host!, '다시 시도'));
+    await waitFor(() => host?.textContent?.includes('근거가 확인된 답변입니다.') === true);
+
+    const [saved] = await store.list();
+    expect(saved?.messages.map(({ role }) => role)).toEqual(['user', 'assistant']);
+    expect(saved?.messages[1]?.id).toBe(assistantId);
+    expect(saved?.messages[1]?.terminalOutcome).toBeUndefined();
+    const retryBody = JSON.parse(String(vi.mocked(client.authenticatedRequest).mock.calls[1]?.[1]?.body));
+    expect(retryBody.question).toBe('재시도할 질문');
+    expect(retryBody.conversationContext).toBeUndefined();
+  });
+
+  it('retryable assistant 재시도 요청 자체가 실패하면 기존 safe assistant를 보존한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-safe-final-preserve');
+    await store.save({
+      id: 'retry-conversation',
+      title: '재시도 질문',
+      createdAt: '2026-07-27T10:00:00.000Z',
+      updatedAt: '2026-07-27T10:00:01.000Z',
+      messages: [{
+        id: 'retry-user', role: 'user', content: '재시도 질문', createdAt: '2026-07-27T10:00:00.000Z',
+      }, {
+        id: 'retry-assistant', role: 'assistant', content: '기존 safe final',
+        createdAt: '2026-07-27T10:00:01.000Z',
+        terminalOutcome: {
+          version: 1, status: 'UNAVAILABLE', reason: 'TEMPORARY_FAILURE', retryable: true,
+        },
+      }],
+    });
+    const client = authenticatedClient();
+    client.authenticatedRequest = vi.fn().mockRejectedValue(new Error('network failed'));
+    ({ root, host } = await renderPanel(client, store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(() => buttonByText(host!, '다시 시도') != null);
+    await click(buttonByText(host!, '다시 시도'));
+    await waitFor(() => host?.textContent?.includes('지금은 답변을 준비하지 못했어요') === true);
+
+    const [saved] = await store.list();
+    expect(saved?.messages).toHaveLength(2);
+    expect(saved?.messages[1]?.id).toBe('retry-assistant');
+    expect(saved?.messages[1]?.content).toBe('기존 safe final');
+    expect(buttonByText(host!, '다시 시도')).not.toBeNull();
+  });
+
+  it('오래된 retryable assistant를 누르면 해당 turn만 교체한다', async () => {
+    const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-targeted-retry');
+    const retryable = {
+      version: 1 as const,
+      status: 'UNAVAILABLE' as const,
+      reason: 'TEMPORARY_FAILURE' as const,
+      retryable: true,
+    };
+    await store.save({
+      id: 'targeted-retry-conversation',
+      title: '첫 질문',
+      createdAt: '2026-07-27T10:00:00.000Z',
+      updatedAt: '2026-07-27T10:03:00.000Z',
+      messages: [
+        { id: 'user-1', role: 'user', content: '첫 질문', createdAt: '2026-07-27T10:00:00.000Z' },
+        { id: 'assistant-1', role: 'assistant', content: '첫 safe final', createdAt: '2026-07-27T10:01:00.000Z', terminalOutcome: retryable },
+        { id: 'user-2', role: 'user', content: '둘째 질문', createdAt: '2026-07-27T10:02:00.000Z' },
+        { id: 'assistant-2', role: 'assistant', content: '둘째 safe final', createdAt: '2026-07-27T10:03:00.000Z', terminalOutcome: retryable },
+      ],
+    });
+    const client = authenticatedClient();
+    client.authenticatedRequest = vi.fn().mockResolvedValue(
+      await authenticatedClient().authenticatedRequest('/api/v1/chatbot/query', {}, 'public'),
+    );
+    ({ root, host } = await renderPanel(client, store));
+
+    await waitFor(() => host?.querySelector<HTMLButtonElement>('.chatbot-launcher')?.disabled === false);
+    await click(host.querySelector<HTMLButtonElement>('.chatbot-launcher'));
+    await waitFor(() => host?.querySelectorAll('.chatbot-assistant-retry').length === 2);
+    const retryButtons = host.querySelectorAll<HTMLButtonElement>('.chatbot-assistant-retry');
+    await click(retryButtons[0]);
+    await waitFor(async () => (await store.get('targeted-retry-conversation'))?.messages[1]?.content === '근거가 확인된 답변입니다.');
+
+    const saved = await store.get('targeted-retry-conversation');
+    expect(saved?.messages).toHaveLength(4);
+    expect(saved?.messages[1]?.id).toBe('assistant-1');
+    expect(saved?.messages[1]?.terminalOutcome).toBeUndefined();
+    expect(saved?.messages[3]?.id).toBe('assistant-2');
+    expect(saved?.messages[3]?.content).toBe('둘째 safe final');
+    const retryBody = JSON.parse(String(vi.mocked(client.authenticatedRequest).mock.calls[0]?.[1]?.body));
+    expect(retryBody.question).toBe('첫 질문');
+    expect(retryBody.conversationContext).toBeUndefined();
+    expect(saved?.messages.filter(({ role }) => role === 'user')).toHaveLength(2);
+  });
+
   it('401은 인증 dialog에서 한 번만 안내하고 챗봇 안에 중복 오류를 만들지 않는다', async () => {
     const store = new IndexedDbChatConversationStore(new IDBFactory(), 'chat-panel-auth-expired');
     const client = authenticatedClient();

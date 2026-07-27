@@ -1,7 +1,10 @@
 import type { ConversationContext } from '../storage/chatConversationStore';
 import { readChatArtifacts } from '../artifactContract';
 import { readChatActions } from '../actionContract';
-import type { ChatbotResponse, ChatCitation, ChatEvidenceSummary } from '../chatTypes';
+import type {
+  ChatbotResponse, ChatCitation, ChatEvidenceSummary,
+} from '../chatTypes';
+import { readChatTerminalOutcome } from '../chatTypes';
 import { readChatUiSummary } from '../summaryContract';
 import { readChatFragments } from '../fragmentContract';
 import {
@@ -114,6 +117,7 @@ export async function queryChatbot(
       report: readChatUiReport(body.uiReport, factIds, artifacts, actions),
       conversationResolution: readConversationResolution(body.conversationResolution),
       conversationMemoryPatch: readConversationMemory(body.conversationMemoryPatch),
+      terminalOutcome: readChatTerminalOutcome(body.terminalOutcome),
     };
   } catch (error) {
     if (error instanceof RequestFailureError) throw error;

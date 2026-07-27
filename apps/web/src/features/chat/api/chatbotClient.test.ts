@@ -1,9 +1,42 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 
 import { queryChatbot, type AuthenticatedChatbotRequest } from './chatbotClient';
 import { readConversationMemory } from '../conversationContract';
 
 describe('챗봇 질문 client', () => {
+  it('공용 safe-final fixture의 terminalOutcome을 파싱한다', async () => {
+    const fixture = JSON.parse(readFileSync(
+      `${process.cwd()}/../../docs/fixtures/chatbot-safe-final-v1.json`, 'utf8',
+    ));
+    const response = await queryChatbot(
+      vi.fn().mockResolvedValue(new Response(JSON.stringify(fixture))),
+      { question: '일시 장애 질문' },
+    );
+
+    expect(response.terminalOutcome).toEqual({
+      version: 1, status: 'UNAVAILABLE', reason: 'TEMPORARY_FAILURE', retryable: true,
+    });
+    expect(response.answer).toBe(fixture.answer);
+
+    fixture.terminalOutcome = { version: 2, status: 'BROKEN', reason: 'UNKNOWN', retryable: true };
+    const legacyCompatible = await queryChatbot(
+      vi.fn().mockResolvedValue(new Response(JSON.stringify(fixture))),
+      { question: '알 수 없는 outcome 질문' },
+    );
+    expect(legacyCompatible.terminalOutcome).toBeNull();
+    expect(legacyCompatible.answer).toBe(fixture.answer);
+
+    fixture.terminalOutcome = {
+      version: 1, status: 'ANSWERED', reason: 'TEMPORARY_FAILURE', retryable: true,
+    };
+    const invalidCombination = await queryChatbot(
+      vi.fn().mockResolvedValue(new Response(JSON.stringify(fixture))),
+      { question: '잘못 조합된 outcome 질문' },
+    );
+    expect(invalidCombination.terminalOutcome).toBeNull();
+  });
+
   it('추천 후보 순서를 보존하는 conversation memory v2를 검증한다', () => {
     expect(readConversationMemory({
       version: 2,

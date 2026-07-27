@@ -27,6 +27,11 @@ Runtime variables:
 - `HOME_AI_OPENAI_SECONDARY_MODEL`
 - `HOME_AI_OPENAI_TIMEOUT_SECONDS` (optional, default `30`, allowed `1..30`)
 - `HOME_AI_QUERY_TIMEOUT_SECONDS` (optional, default `45`, allowed `1..60`)
+- `HOME_AI_DEPLOYMENT_TIER` (`local|offline|staging|production`; supervisor graph
+  mode가 `off`가 아닐 때 필수)
+- `HOME_AI_SUPERVISOR_GRAPH_MODE` (`off|shadow|canary|active`, default `off`)
+- `HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT` (integer `0..100`, default `0`;
+  `shadow`는 staging/offline에서만 허용되고 실제 실행 비율은 최대 5%)
 - `HOME_AI_AGENTIC_ORCHESTRATION_ENABLED` (overlay default `true`; exact `false` rolls back)
 - `HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED` (overlay default `true`; exact `false` disables web)
 - `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison`
@@ -53,6 +58,13 @@ official registry and never claim a verified zero. Childcare/kindergarten execut
 remains inactive until its separate readiness gates pass.
 Golden verification uses its own explicit candidate set and does not widen the
 runtime allowlist.
+
+The supervisor graph reuses only the currently enabled capability handlers.
+It does not persist graph state, configure a checkpointer/store, expose node or
+tool arguments, or add framework-level retries. Production canary routing uses
+the authenticated subject and fixed `supervisor-graph-v1` policy in a stable
+SHA-256 bucket, so each admitted request runs either legacy or graph, never
+both. Production `shadow` configuration fails closed.
 
 Local retail coordinate enrichment is a bounded, idempotent one-shot step:
 

@@ -3,13 +3,13 @@ package com.home.chatbff.web;
 import com.home.chatbff.ai.ChatbotAiStreamEvent;
 import com.home.chatbff.ai.ChatbotGateway;
 import com.home.chatbff.ai.ChatbotProviderUnavailableException;
-import com.home.chatbff.ai.ChatbotTimeoutException;
 import com.home.chatbff.auth.VerifiedChatUser;
 import jakarta.validation.Valid;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
@@ -37,10 +37,18 @@ final class ChatbotController {
 
     private final ChatbotGateway gateway;
     private final ObjectMapper objectMapper;
+    private final SafeFinalResponseFactory safeFinalResponseFactory;
+    private final ChatbotResponseValidator responseValidator;
 
-    ChatbotController(ChatbotGateway gateway, ObjectMapper objectMapper) {
+    ChatbotController(
+            ChatbotGateway gateway,
+            ObjectMapper objectMapper,
+            SafeFinalResponseFactory safeFinalResponseFactory,
+            ChatbotResponseValidator responseValidator) {
         this.gateway = gateway;
         this.objectMapper = objectMapper;
+        this.safeFinalResponseFactory = safeFinalResponseFactory;
+        this.responseValidator = responseValidator;
     }
 
     @GetMapping("/health")
@@ -55,7 +63,10 @@ final class ChatbotController {
             ServerWebExchange exchange) {
         String requestId = RequestIdWebFilter.required(exchange);
         return gateway.query(request, authorization, requestId, authenticatedUser(exchange))
-                .map(response -> withRequestId(response, requestId));
+                .map(response -> validated(response, requestId))
+                .onErrorResume(
+                        RuntimeException.class,
+                        ignored -> Mono.just(safeFinalResponseFactory.create(requestId, "json_runtime")));
     }
 
     @PostMapping(value = "/api/v1/chatbot/query/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -64,22 +75,22 @@ final class ChatbotController {
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
             ServerWebExchange exchange) {
         String requestId = RequestIdWebFilter.required(exchange);
+        AtomicBoolean finalSeen = new AtomicBoolean(false);
         return gateway.stream(request, authorization, requestId, authenticatedUser(exchange))
                 .takeUntil(upstream ->
                         upstream.event().equals("final") || upstream.event().equals("error"))
-                .concatMap(upstream -> publicEvents(requestId, upstream))
-                .onErrorResume(
-                        ChatbotProviderUnavailableException.class,
-                        ignored -> Flux.just(errorEvent(requestId, "CHATBOT_PROVIDER_UNAVAILABLE", "답변을 생성하지 못했습니다.")))
-                .onErrorResume(
-                        ChatbotTimeoutException.class,
-                        ignored -> Flux.just(errorEvent(requestId, "CHATBOT_TIMEOUT", "답변 생성 시간이 초과되었습니다.")))
+                .concatMap(upstream -> publicEvents(requestId, upstream, finalSeen))
+                .concatWith(Flux.defer(() -> finalSeen.get()
+                        ? Flux.empty()
+                        : successEvents(requestId, safeFinalResponseFactory.create(requestId, "missing_final"))))
                 .onErrorResume(
                         RuntimeException.class,
-                        ignored -> Flux.just(errorEvent(requestId, "CHATBOT_PROVIDER_UNAVAILABLE", "답변을 생성하지 못했습니다.")));
+                        ignored ->
+                                successEvents(requestId, safeFinalResponseFactory.create(requestId, "stream_runtime")));
     }
 
-    private Flux<ServerSentEvent<JsonNode>> publicEvents(String requestId, ChatbotAiStreamEvent upstream) {
+    private Flux<ServerSentEvent<JsonNode>> publicEvents(
+            String requestId, ChatbotAiStreamEvent upstream, AtomicBoolean finalSeen) {
         if (upstream.event().equals("status")) {
             JsonNode code = upstream.data().get("code");
             if (code == null || !code.isTextual() || !STATUS_CODES.contains(code.asText())) {
@@ -92,7 +103,9 @@ final class ChatbotController {
             return Flux.just(event("status", data));
         }
         if (upstream.event().equals("final")) {
-            return successEvents(requestId, withRequestId(upstream.data(), requestId));
+            JsonNode response = validated(upstream.data(), requestId);
+            finalSeen.set(true);
+            return successEvents(requestId, response);
         }
         if (upstream.event().equals("error")) {
             return Flux.error(new ChatbotProviderUnavailableException());
@@ -122,6 +135,13 @@ final class ChatbotController {
         return response;
     }
 
+    private JsonNode validated(JsonNode response, String requestId) {
+        if (!responseValidator.isValid(response)) {
+            throw new ChatbotProviderUnavailableException();
+        }
+        return withRequestId(response, requestId);
+    }
+
     private ObjectNode finalData(String requestId, JsonNode response) {
         ObjectNode data = objectMapper.createObjectNode();
         data.put("requestId", requestId);
@@ -148,14 +168,6 @@ final class ChatbotController {
         }
         events.add(event("final", finalData(requestId, response)));
         return Flux.fromIterable(events);
-    }
-
-    private ServerSentEvent<JsonNode> errorEvent(String requestId, String code, String message) {
-        ObjectNode data = objectMapper.createObjectNode();
-        data.put("requestId", requestId);
-        data.put("code", code);
-        data.put("message", message);
-        return event("error", data);
     }
 
     private ServerSentEvent<JsonNode> event(String name, JsonNode data) {

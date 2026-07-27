@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import math
@@ -12,6 +13,7 @@ from typing import Protocol, cast
 
 from .auth import AuthenticatedUser
 from .models import ChatbotQueryRequest
+from .terminal_response import unavailable_response, with_terminal_outcome
 from .property_chat.models import PropertyCapability, QueryCapability, ReferenceCapability
 
 _LOGGER = logging.getLogger(__name__)
@@ -110,6 +112,11 @@ class ChatbotEngine(Protocol):
         user: AuthenticatedUser,
         request_id: str,
     ) -> dict[str, object]: ...
+
+
+class _SupervisorGraphMetrics:
+    def increment(self, name: str, labels: dict[str, str | int | bool]) -> None:
+        _LOGGER.info(name, extra={"event": name, **labels})
 
 
 @lru_cache
@@ -310,8 +317,60 @@ def get_official_web_search_enabled() -> bool:
     return _boolean_flag("HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED", False)
 
 
+@lru_cache
+def get_supervisor_graph_mode() -> str:
+    mode = os.getenv("HOME_AI_SUPERVISOR_GRAPH_MODE", "off").strip().lower()
+    if mode not in {"off", "shadow", "canary", "active"}:
+        raise ValueError("HOME_AI_SUPERVISOR_GRAPH_MODE must be off|shadow|canary|active")
+    if mode == "off":
+        return mode
+    deployment_tier = os.getenv("HOME_AI_DEPLOYMENT_TIER", "").strip().lower()
+    if deployment_tier not in {"local", "offline", "staging", "production"}:
+        raise ValueError(
+            "HOME_AI_DEPLOYMENT_TIER must be local|offline|staging|production "
+            "when supervisor graph mode is enabled"
+        )
+    if mode == "shadow" and deployment_tier not in {"offline", "staging"}:
+        raise ValueError("supervisor graph shadow mode is limited to offline or staging")
+    return mode
+
+
+@lru_cache
+def get_supervisor_graph_canary_percent() -> int:
+    raw = os.getenv("HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT", "0").strip()
+    try:
+        percent = int(raw)
+    except ValueError as exception:
+        raise ValueError("supervisor graph canary percent must be an integer") from exception
+    if not 0 <= percent <= 100:
+        raise ValueError("supervisor graph canary percent must be within 0..100")
+    return percent
+
+
+def _supervisor_graph_bucket(user_id: int) -> int:
+    digest = hashlib.sha256(f"{user_id}:supervisor-graph-v1".encode()).digest()
+    return int.from_bytes(digest[:8], "big") % 100
+
+
+def _select_supervisor_graph(mode: str, percent: int, user_id: int) -> bool:
+    if mode == "active":
+        return True
+    if mode in {"canary", "shadow"}:
+        effective_percent = min(percent, 5) if mode == "shadow" else percent
+        return _supervisor_graph_bucket(user_id) < effective_percent
+    return False
+
+
 def _agentic_request(question: str) -> bool:
     return re.search(r"(추천|어때|어떄|괜찮아|살기\s*어)", question) is not None
+
+
+def _out_of_scope_request(question: str) -> bool:
+    return re.search(
+        r"(?:법률\s*(?:판단|상담)|소송|세금\s*(?:상담|신고)|가격\s*예측|"
+        r"시세\s*예측|즐겨찾기|알람|메일\s*(?:발송|구독)|순위\s*매겨)",
+        question,
+    ) is not None
 
 
 def _requested_candidate_count(question: str) -> int:
@@ -398,12 +457,33 @@ class ConfiguredChatbotEngine:
         timeout_seconds = get_query_timeout_seconds()
         if timeout_seconds is None:
             raise ChatbotProviderUnavailable()
+        if _out_of_scope_request(request.question):
+            return unavailable_response(
+                request_id,
+                answer=(
+                    "현재는 단지 정보, 실거래, 가격 흐름과 승인된 주변 시설 조회만 지원합니다. "
+                    "확인할 단지와 실거래 기간을 질문해 주세요."
+                ),
+                reason="OUT_OF_SCOPE",
+            )
         started_at = time.monotonic()
         try:
             async with asyncio.timeout(timeout_seconds):
                 repository = await asyncio.to_thread(get_property_fact_repository)
+                try:
+                    supervisor_mode = get_supervisor_graph_mode()
+                    supervisor_percent = get_supervisor_graph_canary_percent()
+                except ValueError as exception:
+                    raise ChatbotProviderUnavailable() from exception
+                graph_selected = _select_supervisor_graph(
+                    supervisor_mode, supervisor_percent, user.user_id
+                )
                 minimal_fallback = False
-                if get_agentic_orchestration_enabled() and _agentic_request(request.question):
+                if (
+                    not graph_selected
+                    and get_agentic_orchestration_enabled()
+                    and _agentic_request(request.question)
+                ):
                     from .property_chat.agentic import BoundedAgentOrchestrator
                     from .property_chat.agentic_response import build_agentic_response
                     from .property_chat.agentic_tools import PropertyAgentTools
@@ -530,11 +610,29 @@ class ConfiguredChatbotEngine:
                     dependent_workflow_enabled=get_dependent_workflow_enabled(),
                     polish_budget_seconds=max(timeout_seconds - 5, 0),
                 )
-                response = _apply_presentation_rollbacks(await engine.query(
-                    request=request,
-                    user=user,
-                    request_id=request_id,
-                ))
+                async def graph_query() -> dict[str, object]:
+                    from .property_chat.supervisor_execution import GroundedGoalExecutor
+                    from .property_chat.supervisor_graph import SupervisorGraphEngine
+
+                    return await SupervisorGraphEngine(
+                        planner=engine,
+                        executor=GroundedGoalExecutor(engine, repository),
+                        timeout_seconds=timeout_seconds,
+                        metrics=_SupervisorGraphMetrics(),
+                    ).query(request=request, request_id=request_id)
+
+                if graph_selected and supervisor_mode != "shadow":
+                    response = await graph_query()
+                else:
+                    response = await engine.query(
+                        request=request,
+                        user=user,
+                        request_id=request_id,
+                    )
+                    if graph_selected and supervisor_mode == "shadow":
+                        shadow_task = asyncio.create_task(graph_query())
+                        shadow_task.add_done_callback(_consume_shadow_result)
+                response = with_terminal_outcome(_apply_presentation_rollbacks(response))
                 if minimal_fallback:
                     response = _mark_minimal_agent_fallback(response)
                 _LOGGER.info(
@@ -549,6 +647,21 @@ class ConfiguredChatbotEngine:
                 return response
         except TimeoutError as exception:
             raise ChatbotProviderUnavailable() from exception
+
+
+def _consume_shadow_result(task: asyncio.Task[dict[str, object]]) -> None:
+    try:
+        response = task.result()
+    except Exception:
+        _LOGGER.warning("supervisor_graph_shadow_failed")
+        return
+    outcome = response.get("terminalOutcome")
+    status = outcome.get("status") if isinstance(outcome, dict) else "UNKNOWN"
+    reason = outcome.get("reason") if isinstance(outcome, dict) else "UNKNOWN"
+    _LOGGER.info(
+        "supervisor_graph_shadow_completed",
+        extra={"terminal_status": status, "terminal_reason": reason},
+    )
 
 
 def _mark_minimal_agent_fallback(response: dict[str, object]) -> dict[str, object]:
@@ -603,6 +716,13 @@ def _answer_outcome_metric(
         "unavailable_goal_count": statuses.count("unavailable"),
         "elapsed_milliseconds": max(elapsed_milliseconds, 0),
     }
+    terminal = response.get("terminalOutcome")
+    if isinstance(terminal, dict):
+        metric.update({
+            "terminal_status": terminal.get("status", "UNKNOWN"),
+            "terminal_reason": terminal.get("reason", "UNKNOWN"),
+            "terminal_retryable": terminal.get("retryable") is True,
+        })
     execution = response.get("agentExecution")
     if isinstance(execution, dict):
         route = execution.get("route")

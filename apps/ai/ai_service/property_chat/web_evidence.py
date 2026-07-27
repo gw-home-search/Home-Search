@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from enum import Enum
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
 
 
 class WebEvidenceMode(Enum):
@@ -45,6 +45,9 @@ def validate_official_source_url(url: str) -> bool:
     ):
         return False
     host = parsed.hostname.lower().rstrip(".")
+    sensitive_keys = {"token", "key", "api_key", "apikey", "secret", "auth", "password"}
+    if any(key.casefold() in sensitive_keys for key, _value in parse_qsl(parsed.query)):
+        return False
     return any(host == domain or host.endswith(f".{domain}") for domain in OFFICIAL_WEB_DOMAINS)
 
 

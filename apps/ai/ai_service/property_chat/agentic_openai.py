@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from typing import Any
 
 from .agentic import (
@@ -10,7 +12,9 @@ from .agentic import (
     AgentRecommendationRow,
     AgentToolCall,
     AgentTurn,
+    WebCitation,
 )
+from .web_evidence import contains_prompt_injection, validate_official_source_url
 from .openai_responses import (
     OpenAIResponsesError,
     OpenAIResponsesSettings,
@@ -26,13 +30,17 @@ class OpenAIResponsesAgentModel:
 
     def __init__(
         self, *, settings: OpenAIResponsesSettings, requester: Requester | None = None,
-        web_search_enabled: bool = False,
+        web_search_enabled: bool = False, web_search_required: bool = False,
     ) -> None:
         self._settings = settings
         self._requester = requester or _url_request
         self._previous_response_id: str | None = None
         self._transcript_length = 0
         self._web_search_enabled = web_search_enabled
+        if web_search_required and not web_search_enabled:
+            raise ValueError("required web search must be enabled")
+        self._web_search_required = web_search_required
+        self._web_search_calls = 0
 
     async def respond(
         self, *, question: str, transcript: Sequence[Mapping[str, object]],
@@ -58,7 +66,7 @@ class OpenAIResponsesAgentModel:
         provider_tools = list(tools)
         if self._web_search_enabled and tools:
             provider_tools.append({
-                "type": "web_search_preview",
+                "type": "web_search",
                 "search_context_size": "medium",
                 "user_location": {"type": "approximate", "country": "KR"},
                 "filters": {"allowed_domains": [
@@ -78,7 +86,11 @@ class OpenAIResponsesAgentModel:
         }
         if provider_tools:
             body["tools"] = provider_tools
-            body["tool_choice"] = "auto"
+            body["tool_choice"] = (
+                {"type": "web_search"}
+                if self._web_search_required and self._web_search_calls == 0
+                else "auto"
+            )
             body["parallel_tool_calls"] = True
         if self._previous_response_id is not None:
             body["previous_response_id"] = self._previous_response_id
@@ -95,6 +107,7 @@ class OpenAIResponsesAgentModel:
             raise OpenAIResponsesError()
         calls: list[AgentToolCall] = []
         texts: list[str] = []
+        web_citations: list[WebCitation] = []
         for item in output:
             if not isinstance(item, dict):
                 raise OpenAIResponsesError()
@@ -107,6 +120,12 @@ class OpenAIResponsesAgentModel:
                     ))
                 except Exception:
                     raise OpenAIResponsesError() from None
+            elif item.get("type") == "web_search_call":
+                if not self._web_search_enabled:
+                    raise OpenAIResponsesError()
+                self._web_search_calls += 1
+                if self._web_search_calls > 2:
+                    raise OpenAIResponsesError()
             elif item.get("type") == "message":
                 content = item.get("content")
                 if not isinstance(content, list):
@@ -118,11 +137,42 @@ class OpenAIResponsesAgentModel:
                         text = part.get("text")
                         if isinstance(text, str) and text:
                             texts.append(text)
+                        annotations = part.get("annotations", [])
+                        if not isinstance(annotations, list):
+                            raise OpenAIResponsesError()
+                        for annotation in annotations:
+                            if not isinstance(annotation, dict) or annotation.get("type") != "url_citation":
+                                continue
+                            url = annotation.get("url")
+                            title = annotation.get("title")
+                            if (
+                                not isinstance(url, str)
+                                or not isinstance(title, str)
+                                or not 1 <= len(title.strip()) <= 500
+                                or title != title.strip()
+                                or not validate_official_source_url(url)
+                            ):
+                                raise OpenAIResponsesError()
+                            web_citations.append(WebCitation(
+                                fact_id="web:" + hashlib.sha256(url.encode()).hexdigest()[:32],
+                                title=title, url=url,
+                            ))
         if calls and not texts:
             return AgentTurn(tool_calls=tuple(calls))
         if len(texts) == 1 and not calls:
             try:
-                return AgentTurn(decision=_parse_decision(_json_loads(texts[0])))
+                decision = _parse_decision(_json_loads(texts[0]))
+                if self._web_search_required and self._web_search_calls == 0:
+                    raise OpenAIResponsesError()
+                if self._web_search_calls and not web_citations:
+                    raise OpenAIResponsesError()
+                if contains_prompt_injection(decision.answer):
+                    raise OpenAIResponsesError()
+                return AgentTurn(decision=replace(
+                    decision, web_citations=tuple(dict.fromkeys(web_citations)),
+                ))
+            except OpenAIResponsesError:
+                raise
             except Exception:
                 raise OpenAIResponsesError() from None
         raise OpenAIResponsesError()

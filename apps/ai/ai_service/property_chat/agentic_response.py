@@ -49,6 +49,10 @@ def build_agentic_response(
         {"factId": fact_id, "sourceType": "INTERNAL_VERIFIED_FACT",
          "sourceName": "Home Search 검증 read model", "sourceUrl": None}
         for fact_id in dict.fromkeys(decision.fact_ids)
+    ] + [
+        {"factId": citation.fact_id, "sourceType": "OFFICIAL_WEB",
+         "sourceName": citation.title, "sourceUrl": citation.url}
+        for citation in decision.web_citations
     ]
     success = result.route != "minimal_fallback"
     return {
@@ -68,7 +72,8 @@ def build_agentic_response(
         "limitations": list(decision.limitations),
         "evidenceSummary": {
             "status": result.readiness, "capabilities": ["recommendation"],
-            "factCount": len(set(decision.fact_ids)), "citationCount": len(citations),
+            "factCount": len(set(decision.fact_ids)) + len(decision.web_citations),
+            "citationCount": len(citations),
         },
         "agentExecution": {
             "policyVersion": "agentic-recommendation-v1", "route": result.route,

@@ -9,6 +9,7 @@ from ai_service.property_chat.agentic import (
     AgentDecision,
     AgentRecommendationRow,
     AgentRunResult,
+    WebCitation,
 )
 
 
@@ -31,9 +32,13 @@ def test_successful_agent_path_does_not_construct_legacy_presenters(
                     metrics={}, fact_ids=("complex:20",),
                 ),),
                 fact_ids=("complex:20",), limitations=("예산·면적 미지정",),
+                web_citations=(WebCitation(
+                    fact_id="web:0123456789abcdef0123456789abcdef",
+                    title="공식 공고", url="https://www.reb.or.kr/notice?id=1",
+                ),),
             ),
             route="primary", readiness="supported", tool_rounds=2, tool_calls=3,
-            scope_label="송파구",
+            scope_label="송파구", web_used=True,
         )
 
     monkeypatch.setattr(
@@ -57,3 +62,4 @@ def test_successful_agent_path_does_not_construct_legacy_presenters(
     artifact = response["uiArtifacts"][0]
     assert artifact["version"] == 2
     assert artifact["rows"][0]["complexId"] == 20
+    assert response["citations"][-1]["sourceUrl"] == "https://www.reb.or.kr/notice?id=1"

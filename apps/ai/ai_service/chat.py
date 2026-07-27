@@ -340,17 +340,18 @@ def _agent_models(question: str) -> tuple[object, object]:
             get_official_web_search_enabled()
             and web_mode is not WebEvidenceMode.DISABLED
         )
+        web_required = web_enabled and web_mode is WebEvidenceMode.REQUIRED
         primary = OpenAIResponsesAgentModel(
             settings=OpenAIResponsesSettings(
                 api_key=api_key, model=primary_model, timeout_seconds=timeout_seconds,
             ),
-            web_search_enabled=web_enabled,
+            web_search_enabled=web_enabled, web_search_required=web_required,
         )
         secondary = OpenAIResponsesAgentModel(
             settings=OpenAIResponsesSettings(
                 api_key=api_key, model=secondary_model, timeout_seconds=timeout_seconds,
             ),
-            web_search_enabled=web_enabled,
+            web_search_enabled=web_enabled, web_search_required=web_required,
         )
     except (TypeError, ValueError) as exception:
         raise ChatbotProviderUnavailable() from exception

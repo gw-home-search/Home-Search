@@ -20,3 +20,4 @@ def test_only_credential_free_https_allowlist_urls_are_accepted() -> None:
     assert not validate_official_source_url("http://www.reb.or.kr/r-one")
     assert not validate_official_source_url("https://evil.example/news")
     assert not validate_official_source_url("https://user:secret@www.reb.or.kr/r-one")
+    assert not validate_official_source_url("https://www.reb.or.kr/r-one?token=secret")

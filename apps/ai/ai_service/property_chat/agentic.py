@@ -117,11 +117,19 @@ class AgentRecommendationRow:
 
 
 @dataclass(frozen=True)
+class WebCitation:
+    fact_id: str
+    title: str
+    url: str
+
+
+@dataclass(frozen=True)
 class AgentDecision:
     answer: str
     rows: tuple[AgentRecommendationRow, ...]
     fact_ids: tuple[str, ...]
     limitations: tuple[str, ...] = ()
+    web_citations: tuple[WebCitation, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -247,11 +255,11 @@ class BoundedAgentOrchestrator:
                         return None
                     return AgentRunResult(
                         repaired.decision, "repair", "supported", round_number - 1,
-                        call_count, False, scope_label,
+                        call_count, bool(repaired.decision.web_citations), scope_label,
                     )
                 return AgentRunResult(
                     turn.decision, success_route, "supported", round_number - 1,
-                    call_count, False, scope_label,
+                    call_count, bool(turn.decision.web_citations), scope_label,
                 )
             calls = turn.tool_calls
             if call_count + len(calls) > MAX_TOOL_CALLS:
@@ -376,6 +384,18 @@ def _validate_decision(
             factual_texts.append(text)
     if not referenced.issubset(fact_ids):
         raise AgentGroundingError("unknown fact id")
+    from .web_evidence import validate_official_source_url
+    if (
+        len({citation.fact_id for citation in decision.web_citations})
+        != len(decision.web_citations)
+        or any(
+            not re.fullmatch(r"web:[a-f0-9]{32}", citation.fact_id)
+            or not _bounded_text(citation.title, 500)
+            or not validate_official_source_url(citation.url)
+            for citation in decision.web_citations
+        )
+    ):
+        raise AgentGroundingError("invalid official web citation")
     if any(_FORBIDDEN_CLAIM_PATTERN.search(text) for text in factual_texts):
         raise AgentGroundingError("forbidden property claim")
     stated_numbers = {

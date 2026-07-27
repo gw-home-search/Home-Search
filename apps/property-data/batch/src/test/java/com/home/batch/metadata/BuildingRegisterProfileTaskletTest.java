@@ -15,6 +15,9 @@ import com.home.application.ingest.buildingprofile.BuildingProfileCollectionServ
 import com.home.application.ingest.buildingprofile.BuildingProfileProjectionCommand;
 import com.home.application.ingest.buildingprofile.BuildingProfileProjectionService;
 import com.home.application.ingest.buildingprofile.BuildingProfileProjectionSummary;
+import com.home.application.ingest.buildingprofile.BuildingProfilePublicationCommand;
+import com.home.application.ingest.buildingprofile.BuildingProfilePublicationService;
+import com.home.application.ingest.buildingprofile.BuildingProfilePublicationSummary;
 import com.home.application.ingest.buildingprofile.BuildingProfileRepairCommand;
 import com.home.application.ingest.buildingprofile.BuildingProfileRepairService;
 import com.home.application.ingest.buildingprofile.BuildingProfileRepairSummary;
@@ -24,6 +27,7 @@ import com.home.application.ingest.buildingprofile.BuildingProfileReplaySummary;
 import com.home.application.ingest.buildingprofile.LegalDongCodeImportCommand;
 import com.home.application.ingest.buildingprofile.LegalDongCodeImportService;
 import com.home.application.ingest.buildingregister.BuildingRegisterDailyRequestUsage;
+import com.home.domain.complex.buildingprofile.BuildingProfilePublicationStatus;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -103,6 +107,32 @@ class BuildingRegisterProfileTaskletTest {
                                 "analysisRunId", "123e4567-e89b-12d3-a456-426614174212",
                                 "projectionVersion", "PROFILE_PROJECTION_V1")));
         verify(project).project(org.mockito.ArgumentMatchers.any(BuildingProfileProjectionCommand.class));
+    }
+
+    @Test
+    void publicationUsesFrozenInputsAndSharedLock() throws Exception {
+        BuildingProfilePublicationService service = mock(BuildingProfilePublicationService.class);
+        given(service.publish(org.mockito.ArgumentMatchers.any(BuildingProfilePublicationCommand.class)))
+                .willReturn(new BuildingProfilePublicationSummary(
+                        1, 2, 3, 249, 1, "a".repeat(64), BuildingProfilePublicationStatus.PUBLISHED, false));
+        BuildingProfilePublicationTasklet tasklet = new BuildingProfilePublicationTasklet(service, lock());
+
+        tasklet.execute(
+                null,
+                context(Map.of(
+                        "publicationId", "123e4567-e89b-12d3-a456-426614174216",
+                        "projectionRunId", "123e4567-e89b-12d3-a456-426614174215",
+                        "rulesVersion", "PROFILE_PUBLICATION_V1",
+                        "publish", "true",
+                        "backfill", "true")));
+
+        ArgumentCaptor<BuildingProfilePublicationCommand> command =
+                ArgumentCaptor.forClass(BuildingProfilePublicationCommand.class);
+        verify(service).publish(command.capture());
+        assertThat(command.getValue().publicationId())
+                .isEqualTo(java.util.UUID.fromString("123e4567-e89b-12d3-a456-426614174216"));
+        assertThat(command.getValue().publish()).isTrue();
+        assertThat(command.getValue().backfill()).isTrue();
     }
 
     @Test

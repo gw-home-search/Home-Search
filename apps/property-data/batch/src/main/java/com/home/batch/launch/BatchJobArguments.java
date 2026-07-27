@@ -33,6 +33,7 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
     private static final String BUILDING_PROFILE_COLLECT_JOB = "complexBuildingRegisterProfileCollectJob";
     private static final String BUILDING_PROFILE_ANALYZE_JOB = "complexBuildingRegisterProfileAnalyzeJob";
     private static final String BUILDING_PROFILE_PROJECT_JOB = "complexBuildingRegisterProfileProjectJob";
+    private static final String BUILDING_PROFILE_PUBLICATION_JOB = "complexBuildingRegisterProfilePublicationJob";
     private static final String BUILDING_PROFILE_REPAIR_JOB = "complexBuildingRegisterProfileRepairJob";
     private static final String LEGAL_DONG_CODE_IMPORT_JOB = "legalDongCodeMappingImportJob";
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -66,6 +67,7 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
             case BUILDING_PROFILE_COLLECT_JOB -> buildingProfileCollect(normalizedJobName, params, clock);
             case BUILDING_PROFILE_ANALYZE_JOB -> buildingProfileAnalyze(normalizedJobName, params);
             case BUILDING_PROFILE_PROJECT_JOB -> buildingProfileProject(normalizedJobName, params);
+            case BUILDING_PROFILE_PUBLICATION_JOB -> buildingProfilePublication(normalizedJobName, params);
             case BUILDING_PROFILE_REPAIR_JOB -> buildingProfileRepair(normalizedJobName, params, clock);
             case LEGAL_DONG_CODE_IMPORT_JOB -> legalDongCodeImport(normalizedJobName, params);
             default -> throw invalid("Unsupported SPRING_BATCH_JOB_NAME: " + normalizedJobName);
@@ -130,6 +132,28 @@ public record BatchJobArguments(String jobName, JobParameters jobParameters) {
                         "analysisRunId", canonicalUuid(arguments.get("analysisRunId"), "analysisRunId"),
                         "projectionVersion",
                                 requireText(arguments.get("projectionVersion"), "projectionVersion is required"))));
+    }
+
+    private static BatchJobArguments buildingProfilePublication(String jobName, Map<String, String> arguments) {
+        boolean publish = requiredBoolean(arguments.get("publish"), "publish");
+        boolean backfill = requiredBoolean(arguments.get("backfill"), "backfill");
+        if (backfill && !publish) throw invalid("backfill requires publish=true");
+        return new BatchJobArguments(
+                jobName,
+                parameters(Map.of(
+                        "publicationId", canonicalUuid(arguments.get("publicationId"), "publicationId"),
+                        "projectionRunId", canonicalUuid(arguments.get("projectionRunId"), "projectionRunId"),
+                        "rulesVersion", requireText(arguments.get("rulesVersion"), "rulesVersion is required"),
+                        "publish", Boolean.toString(publish),
+                        "backfill", Boolean.toString(backfill))));
+    }
+
+    private static boolean requiredBoolean(String value, String name) {
+        String normalized = requireText(value, name + " is required");
+        if (!"true".equals(normalized) && !"false".equals(normalized)) {
+            throw invalid(name + " must be true or false");
+        }
+        return Boolean.parseBoolean(normalized);
     }
 
     private static BatchJobArguments buildingProfileRepair(String jobName, Map<String, String> arguments, Clock clock) {

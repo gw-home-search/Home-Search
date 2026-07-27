@@ -4,6 +4,7 @@ import com.home.application.ingest.buildingmetadata.BuildingMetadataBatchService
 import com.home.application.ingest.buildingprofile.BuildingProfileAnalysisService;
 import com.home.application.ingest.buildingprofile.BuildingProfileCollectionService;
 import com.home.application.ingest.buildingprofile.BuildingProfileProjectionService;
+import com.home.application.ingest.buildingprofile.BuildingProfilePublicationService;
 import com.home.application.ingest.buildingprofile.BuildingProfileRepairService;
 import com.home.application.ingest.buildingprofile.BuildingProfileReplayService;
 import com.home.application.ingest.buildingprofile.LegalDongCodeImportService;
@@ -99,6 +100,15 @@ class BuildingMetadataBatchJobConfiguration {
             JobRepository repository, Step complexBuildingRegisterProfileProjectStep) {
         return new JobBuilder("complexBuildingRegisterProfileProjectJob", repository)
                 .start(complexBuildingRegisterProfileProjectStep)
+                .build();
+    }
+
+    @Bean
+    @Lazy
+    Job complexBuildingRegisterProfilePublicationJob(
+            JobRepository repository, Step complexBuildingRegisterProfilePublicationStep) {
+        return new JobBuilder("complexBuildingRegisterProfilePublicationJob", repository)
+                .start(complexBuildingRegisterProfilePublicationStep)
                 .build();
     }
 
@@ -237,6 +247,20 @@ class BuildingMetadataBatchJobConfiguration {
                 repository,
                 transactionManager,
                 new BuildingProfileProjectTasklet(service, executionLock));
+    }
+
+    @Bean
+    @Lazy
+    Step complexBuildingRegisterProfilePublicationStep(
+            JobRepository repository,
+            PlatformTransactionManager transactionManager,
+            BuildingProfilePublicationService service,
+            BuildingMetadataExecutionLock executionLock) {
+        return step(
+                "complexBuildingRegisterProfilePublicationStep",
+                repository,
+                transactionManager,
+                new BuildingProfilePublicationTasklet(service, executionLock));
     }
 
     @Bean

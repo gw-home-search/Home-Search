@@ -434,6 +434,38 @@ class BatchJobArgumentsTest {
     }
 
     @Test
+    @DisplayName("profile publication job은 frozen publication 입력과 publish/backfill 결정을 보존한다")
+    void parsesBuildingProfilePublicationArguments() {
+        BatchJobArguments publication = BatchJobArguments.from(
+                "complexBuildingRegisterProfilePublicationJob",
+                Map.of(
+                        "publicationId", "123e4567-e89b-12d3-a456-426614174029",
+                        "projectionRunId", "123e4567-e89b-12d3-a456-426614174027",
+                        "rulesVersion", "PROFILE_PUBLICATION_V1",
+                        "publish", "true",
+                        "backfill", "true"),
+                clock);
+
+        assertThat(publication.jobParameters().getString("publicationId"))
+                .isEqualTo("123e4567-e89b-12d3-a456-426614174029");
+        assertThat(publication.jobParameters().getString("rulesVersion")).isEqualTo("PROFILE_PUBLICATION_V1");
+        assertThat(publication.jobParameters().getString("publish")).isEqualTo("true");
+        assertThat(publication.jobParameters().getString("backfill")).isEqualTo("true");
+
+        assertThatThrownBy(() -> BatchJobArguments.from(
+                        "complexBuildingRegisterProfilePublicationJob",
+                        Map.of(
+                                "publicationId", "123e4567-e89b-12d3-a456-426614174029",
+                                "projectionRunId", "123e4567-e89b-12d3-a456-426614174027",
+                                "rulesVersion", "PROFILE_PUBLICATION_V1",
+                                "publish", "false",
+                                "backfill", "true"),
+                        clock))
+                .isInstanceOf(BatchExitCodeException.class)
+                .hasMessageContaining("backfill");
+    }
+
+    @Test
     @DisplayName("profile repair job은 source lineage, 실행 UUID, PROFILE_REPAIR_V1 policy와 request budget을 고정한다")
     void parsesBuildingProfileRepairArguments() {
         BatchJobArguments repair = BatchJobArguments.from(

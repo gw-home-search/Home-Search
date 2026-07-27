@@ -326,6 +326,8 @@ export function MapApp({
           onRetryDetail={retryDetailAndMarkers}
           onRetryTrades={detail.retryTrades}
           onRetryTrend={detail.retryTrend}
+          onRetryTradeAreas={detail.retryTradeAreas}
+          onExclAreaChange={detail.selectExclArea}
           onFavoriteToggle={favorite.onFavoriteToggle}
           onRetryFavorite={favorite.onRetryFavorite}
           onRetryRegion={retryRegionAndMarkers}
@@ -353,6 +355,10 @@ export function MapApp({
           tradeMoreState={detail.tradeMoreState}
           tradeState={detail.tradeState}
           tradeTrend={detail.tradeTrend}
+          tradeAreas={detail.tradeAreas}
+          selectedExclArea={detail.selectedExclArea}
+          areaError={detail.areaError}
+          areaState={detail.areaState}
           trendError={detail.trendError}
           trendState={detail.trendState}
           />

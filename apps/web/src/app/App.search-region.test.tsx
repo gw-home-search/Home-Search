@@ -134,11 +134,10 @@ describe('App 검색과 지역', () => {
   });
 
   it('documented URL로 complex를 search하고 선택한 parcel detail을 연다', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse([]))
-      .mockResolvedValueOnce(
-        jsonResponse([
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === resolveApiUrl('/api/v1/search/complexes?q=Sample')) {
+        return Promise.resolve(jsonResponse([
           {
             complexId: 501,
             complexName: 'Sample Apartment',
@@ -147,11 +146,10 @@ describe('App 검색과 지역', () => {
             longitude: 127.0456,
             address: 'Sample address',
           },
-        ]),
-      )
-      .mockResolvedValueOnce(jsonResponse([]))
-      .mockResolvedValueOnce(
-        jsonResponse({
+        ]));
+      }
+      if (url === resolveApiUrl('/api/v1/detail/1001?complexId=501')) {
+        return Promise.resolve(jsonResponse({
           parcelId: 1001,
           complexId: 501,
           latitude: 37.5123,
@@ -159,10 +157,17 @@ describe('App 검색과 지역', () => {
           address: 'Sample address',
           tradeName: 'Sample trade name',
           name: 'Sample complex name',
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
+        }));
+      }
+      if (url === resolveApiUrl('/api/v1/complex/501/trade-areas')) {
+        return Promise.resolve(jsonResponse({
+          complexId: 501,
+          defaultExclArea: 84.94,
+          areas: [{ exclArea: 84.94, tradeCount: 1, latestDealDate: '2026-07-16' }],
+        }));
+      }
+      if (url === resolveApiUrl('/api/v1/complex/501/trades?exclArea=84.94')) {
+        return Promise.resolve(jsonResponse({
           parcelId: 1001,
           complexId: 501,
           content: [],
@@ -170,10 +175,10 @@ describe('App 검색과 지역', () => {
           size: 20,
           totalElements: 0,
           totalPages: 0,
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse([
+        }));
+      }
+      if (url === resolveApiUrl('/api/v1/detail/1001/complexes')) {
+        return Promise.resolve(jsonResponse([
           {
             complexId: 501,
             complexName: 'Sample Apartment',
@@ -182,8 +187,10 @@ describe('App 검색과 지역', () => {
             longitude: 127.0456,
             address: 'Sample address',
           },
-        ]),
-      );
+        ]));
+      }
+      return Promise.resolve(jsonResponse([]));
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
@@ -234,10 +241,10 @@ describe('App 검색과 지역', () => {
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/trade/1001?complexId=501'),
+      resolveApiUrl('/api/v1/complex/501/trades?exclArea=84.94'),
       expect.objectContaining({ method: 'GET' }),
     );
-    expect(fetchMock).toHaveBeenLastCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       resolveApiUrl('/api/v1/detail/1001/complexes'),
       expect.objectContaining({ method: 'GET' }),
     );
@@ -255,11 +262,10 @@ describe('App 검색과 지역', () => {
   });
 
   it('좌표 대기 search result도 complexId scope를 유지하고 detail/trade sidebar를 연다', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse([]))
-      .mockResolvedValueOnce(
-        jsonResponse([
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === resolveApiUrl('/api/v1/search/complexes?q=pending')) {
+        return Promise.resolve(jsonResponse([
           {
             complexId: 801,
             complexName: 'Coordinate Pending Complex',
@@ -268,10 +274,10 @@ describe('App 검색과 지역', () => {
             longitude: null,
             address: 'Coordinate pending address',
           },
-        ]),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
+        ]));
+      }
+      if (url === resolveApiUrl('/api/v1/detail/3001?complexId=801')) {
+        return Promise.resolve(jsonResponse({
           parcelId: 3001,
           complexId: 801,
           latitude: null,
@@ -279,10 +285,17 @@ describe('App 검색과 지역', () => {
           address: 'Coordinate pending address',
           tradeName: 'Coordinate Pending Trade',
           name: 'Coordinate Pending Complex',
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
+        }));
+      }
+      if (url === resolveApiUrl('/api/v1/complex/801/trade-areas')) {
+        return Promise.resolve(jsonResponse({
+          complexId: 801,
+          defaultExclArea: 84.94,
+          areas: [{ exclArea: 84.94, tradeCount: 1, latestDealDate: '2026-07-16' }],
+        }));
+      }
+      if (url === resolveApiUrl('/api/v1/complex/801/trades?exclArea=84.94')) {
+        return Promise.resolve(jsonResponse({
           parcelId: 3001,
           complexId: 801,
           content: [],
@@ -290,11 +303,10 @@ describe('App 검색과 지역', () => {
           size: 20,
           totalElements: 0,
           totalPages: 0,
-        }),
-      )
-      .mockResolvedValueOnce(jsonResponse([]))
-      .mockResolvedValueOnce(
-        jsonResponse([
+        }));
+      }
+      if (url === resolveApiUrl('/api/v1/detail/3001/complexes')) {
+        return Promise.resolve(jsonResponse([
           {
             complexId: 801,
             complexName: 'Coordinate Pending Complex',
@@ -303,8 +315,10 @@ describe('App 검색과 지역', () => {
             longitude: null,
             address: 'Coordinate pending address',
           },
-        ]),
-      );
+        ]));
+      }
+      return Promise.resolve(jsonResponse([]));
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     const { root, rootElement } = await renderApp();
@@ -340,10 +354,13 @@ describe('App 검색과 지역', () => {
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/trade/3001?complexId=801'),
+      resolveApiUrl('/api/v1/complex/801/trades?exclArea=84.94'),
       expect.objectContaining({ method: 'GET' }),
     );
-    expect(fetchMock).toHaveBeenCalledTimes(7);
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/complex/801/trade-areas'),
+      expect.objectContaining({ method: 'GET' }),
+    );
     expect(rootElement.querySelector('[aria-label="단지 상세 패널"]')).not.toBeNull();
     expect(rootElement.textContent).toContain('Coordinate Pending Complex');
     expect(rootElement.textContent).toContain('거래 내역이 없습니다');

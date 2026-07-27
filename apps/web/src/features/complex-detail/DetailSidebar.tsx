@@ -5,6 +5,7 @@ import type { ComplexDetail, PricePrediction } from './api/fetchComplexDetail';
 import type { ParcelComplexSummary } from './api/fetchParcelComplexes';
 import type { ParcelTrades, TradeItem } from './api/fetchParcelTrades';
 import type { TradeTrendPoint } from './api/fetchTradeTrend';
+import type { TradeAreas } from './api/fetchTradeAreas';
 import type { RegionComplexSummary } from '../region/api/fetchRegions';
 import { RequestStateNotice } from '../../shared/RequestStateNotice';
 import { BackIcon, CloseIcon, HelpIcon } from '../../shared/icons';
@@ -20,6 +21,11 @@ import { NewsRows } from '../news/NewsRows';
 import { useComplexNews } from '../news/hooks/useComplexNews';
 import { MARKET_NEWS_ENABLED } from '../news/newsFeature';
 import { BuildingProfilePanel } from './BuildingProfilePanel';
+import {
+  formatAmount,
+  formatApproxPyeong,
+  formatExactArea,
+} from './formatDetailValue';
 
 type DetailRequestState = 'idle' | 'loading' | 'ready' | 'error';
 type TradeMoreState = 'idle' | 'loading' | 'error';
@@ -48,6 +54,10 @@ type DetailSidebarProps = {
   parcelComplexes: ParcelComplexSummary[];
   parcelTrades: ParcelTrades | null;
   tradeTrend: TradeTrendPoint[];
+  tradeAreas?: TradeAreas | null;
+  selectedExclArea?: number | null;
+  areaError?: RequestFailure | null;
+  areaState?: DetailRequestState;
   tradeRows: TradeItem[];
   tradeError?: RequestFailure | null;
   tradeMoreState?: TradeMoreState;
@@ -56,6 +66,8 @@ type DetailSidebarProps = {
   trendState?: DetailRequestState;
   selection: ComplexSelection;
   newsEnabled?: boolean;
+  onExclAreaChange?: (exclArea: number) => void;
+  onRetryTradeAreas?: () => void;
 };
 
 const TradeTrendChart = lazy(() =>
@@ -82,6 +94,10 @@ export function DetailSidebar({
   parcelComplexes,
   parcelTrades,
   tradeTrend,
+  tradeAreas = null,
+  selectedExclArea = null,
+  areaError = null,
+  areaState = 'ready',
   tradeRows,
   tradeError = null,
   tradeMoreState = 'idle',
@@ -89,6 +105,8 @@ export function DetailSidebar({
   trendError = null,
   trendState = 'ready',
   newsEnabled = MARKET_NEWS_ENABLED,
+  onExclAreaChange = () => undefined,
+  onRetryTradeAreas = () => undefined,
 }: DetailSidebarProps) {
   const [mobileTab, setMobileTab] = useState<DetailMobileTab>('info');
   const tabRefs = useRef<Partial<Record<DetailMobileTab, HTMLButtonElement | null>>>({});
@@ -186,68 +204,91 @@ export function DetailSidebar({
 
       {detailState === 'ready' && complexDetail ? (
         <>
-          <section
-            className="detail-price-overview detail-tab-panel"
-            data-detail-order="summary"
+          <div
+            id="detail-tabpanel-trend"
+            role="tabpanel"
+            aria-labelledby="detail-tab-trend"
+            className="detail-tab-panel detail-trend-panel"
             data-mobile-tab-panel="trend"
             data-mobile-tab-active={mobileTab === 'trend' ? 'true' : 'false'}
+            hidden={isMobileLayout && mobileTab !== 'trend'}
           >
-            <dl className="detail-key-stats">
-              <div className="detail-metric"><dt>최근 거래</dt><dd>{latestTradeAmountLabel(parcelTrades?.trades ?? [])}</dd></div>
-              <div className="detail-metric"><dt>단지 규모</dt><dd>{complexScaleLabel(complexDetail)}</dd></div>
-            </dl>
-            <PricePredictionPanel prediction={complexDetail.prediction} />
-          </section>
+            <section className="detail-price-overview" data-detail-order="summary">
+              <AreaSelector
+                areas={tradeAreas}
+                error={areaError}
+                selectedExclArea={selectedExclArea}
+                state={areaState}
+                onChange={onExclAreaChange}
+                onRetry={onRetryTradeAreas}
+              />
+              <dl className="detail-key-stats">
+                <div className="detail-metric"><dt>최근 거래</dt><dd>{latestTradeAmountLabel(parcelTrades?.trades ?? [])}</dd></div>
+                <div className="detail-metric"><dt>단지 규모</dt><dd>{complexScaleLabel(complexDetail)}</dd></div>
+              </dl>
+              <PricePredictionPanel prediction={complexDetail.prediction} />
+            </section>
+            <RequestStateNotice
+              state={trendState}
+              loadingMessage="시세를 불러오는 중"
+              emptyMessage="표시할 시세가 없습니다"
+              feedback={feedbackForFailure(trendError, 'TREND_UNAVAILABLE')}
+              onRetry={onRetryTrend}
+            />
+            {shouldRenderTradeChart && trendState === 'ready' && tradeTrend.length === 0 ? (
+              <section className="trade-chart" aria-label="거래가 차트" data-detail-order="trend" data-detail-section="trade-chart">
+                <div className="trade-section-header">
+                  <div><h3>{selectedExclArea == null ? '실거래가 흐름' : `${formatExactArea(selectedExclArea)} 실거래가 흐름`}</h3>
+                    <p className="trade-chart-description">선택 전용면적의 월별 평균 거래금액</p></div>
+                </div>
+                <p className="trade-chart-empty">표시할 거래가 없습니다</p>
+              </section>
+            ) : null}
+            {shouldRenderTradeChart && trendState === 'ready' && tradeTrend.length > 0 ? (
+              <Suspense fallback={<TradeChartFallback selectedExclArea={selectedExclArea} />}>
+                <TradeTrendChart trend={tradeTrend} selectedExclArea={selectedExclArea} />
+              </Suspense>
+            ) : null}
+          </div>
 
-          <section
-            aria-label="같은 필지 단지 선택"
-            className="detail-complex-switcher detail-tab-panel"
-            data-detail-order="switcher"
-            data-mobile-tab-panel="info"
-            data-mobile-tab-active={mobileTab === 'info' ? 'true' : 'false'}
-            hidden={parcelComplexes.length <= 1}
-          >
-            <div className="detail-section-heading"><h3>같은 필지 단지</h3><span>{parcelComplexes.length.toLocaleString()}개</span></div>
-            <ul>
-              {parcelComplexes.map((complex) => (
-                <li key={complex.complexId}>
-                  <button type="button" aria-label={`같은 필지 단지 선택 ${complex.complexName}`} aria-current={complex.complexId === complexDetail.complexId ? 'true' : undefined} onClick={() => onComplexSelect(complex)}>
-                    <span>{complex.complexName}</span><span>{complexSummaryMeta(complex)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section
+          <div
             id="detail-tabpanel-info"
             role="tabpanel"
             aria-labelledby="detail-tab-info"
-            className="detail-basic-information detail-tab-panel"
-            data-detail-order="information"
+            className="detail-tab-panel detail-info-panel"
             data-mobile-tab-panel="info"
             data-mobile-tab-active={mobileTab === 'info' ? 'true' : 'false'}
+            hidden={isMobileLayout && mobileTab !== 'info'}
           >
-            <h3>단지 기본정보</h3>
-            <dl>
-              {detailInformationRow('주소', formatAddress(complexDetail.address), 'address')}
-              {detailInformationRow('사용승인일', complexDetail.useDate)}
-              {detailInformationRow('세대수', formatNumber(complexDetail.unitCnt, '세대'), 'unitCnt')}
-              {detailInformationRow('동수', formatNumber(complexDetail.dongCnt, '개동'))}
-            </dl>
-            <details className="detail-additional-information">
-              <summary>추가 정보</summary>
+            <section
+              aria-label="같은 필지 단지 선택"
+              className="detail-complex-switcher"
+              data-detail-order="switcher"
+              hidden={parcelComplexes.length <= 1}
+            >
+              <div className="detail-section-heading"><h3>같은 필지 단지</h3><span>{parcelComplexes.length.toLocaleString()}개</span></div>
+              <ul>
+                {parcelComplexes.map((complex) => (
+                  <li key={complex.complexId}>
+                    <button type="button" aria-label={`같은 필지 단지 선택 ${complex.complexName}`} aria-current={complex.complexId === complexDetail.complexId ? 'true' : undefined} onClick={() => onComplexSelect(complex)}>
+                      <span>{complex.complexName}</span><span>{complexSummaryMeta(complex)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+            <section className="detail-basic-information" data-detail-order="information">
+              <h3>단지 기본정보</h3>
               <dl>
-                {detailInformationRow('거래명', complexDetail.tradeName)}
-                {detailInformationRow('단지명', complexDetail.name)}
-                {detailInformationRow('면적', areaSummary(complexDetail))}
-                {detailInformationRow('건폐율', formatNumber(complexDetail.bcRat, '%'))}
-                {detailInformationRow('용적률', formatNumber(complexDetail.vlRat, '%'))}
+                {detailInformationRow('주소', formatAddress(complexDetail.address), 'address')}
+                {detailInformationRow('사용승인일', complexDetail.useDate)}
+                {detailInformationRow('세대수', formatNumber(complexDetail.unitCnt, '세대'), 'unitCnt')}
+                {detailInformationRow('동수', formatNumber(complexDetail.dongCnt, '개동'))}
               </dl>
-            </details>
-          </section>
-
-          <BuildingProfilePanel profile={complexDetail.buildingProfile} />
+              <NameInformation detail={complexDetail} />
+            </section>
+            <BuildingProfilePanel detail={complexDetail} profile={complexDetail.buildingProfile} />
+          </div>
 
           {newsEnabled ? <section
             id="detail-tabpanel-news"
@@ -257,6 +298,7 @@ export function DetailSidebar({
             data-detail-order="news"
             data-mobile-tab-panel="news"
             data-mobile-tab-active={mobileTab === 'news' ? 'true' : 'false'}
+            hidden={isMobileLayout && mobileTab !== 'news'}
           >
             <div className="detail-section-heading"><h3>관련 뉴스</h3></div>
             {complexNews.state === 'loading' ? (
@@ -285,26 +327,6 @@ export function DetailSidebar({
             ) : null}
           </section> : null}
 
-          <div id="detail-tabpanel-trend" role="tabpanel" aria-labelledby="detail-tab-trend" className="detail-tab-panel" data-detail-order="trend" data-mobile-tab-panel="trend" data-mobile-tab-active={mobileTab === 'trend' ? 'true' : 'false'}>
-            <RequestStateNotice
-              state={trendState}
-              loadingMessage="시세를 불러오는 중"
-              emptyMessage="표시할 시세가 없습니다"
-              feedback={feedbackForFailure(trendError, 'TREND_UNAVAILABLE')}
-              onRetry={onRetryTrend}
-            />
-            {shouldRenderTradeChart && trendState === 'ready' && tradeTrend.length === 0 ? (
-              <section className="trade-chart" aria-label="거래가 차트" data-detail-section="trade-chart">
-                <div className="trade-section-header"><h3>실거래가 흐름</h3></div>
-                <p className="trade-chart-empty">표시할 거래가 없습니다</p>
-              </section>
-            ) : null}
-            {shouldRenderTradeChart && trendState === 'ready' && tradeTrend.length > 0 ? (
-              <Suspense fallback={<TradeChartFallback />}>
-                <TradeTrendChart trend={tradeTrend} />
-              </Suspense>
-            ) : null}
-          </div>
           <div
             id="detail-tabpanel-trades"
             role="tabpanel"
@@ -313,20 +335,36 @@ export function DetailSidebar({
             data-detail-order="trades"
             data-mobile-tab-panel="trades"
             data-mobile-tab-active={mobileTab === 'trades' ? 'true' : 'false'}
+            hidden={isMobileLayout && mobileTab !== 'trades'}
           >
-            <RequestStateNotice
-              state={tradeState}
-              loadingMessage="거래를 불러오는 중"
-              emptyMessage="표시할 거래가 없습니다"
-              feedback={feedbackForFailure(tradeError, 'TRADES_UNAVAILABLE')}
-              onRetry={onRetryTrades}
-            />
-            <TradeList
-              rows={tradeRows}
-              totalElements={parcelTrades?.totalElements ?? 0}
-              onLoadMore={onLoadMoreTrades}
-              moreState={tradeMoreState}
-            />
+            {areaState !== 'ready' ? (
+              <RequestStateNotice
+                state={areaState}
+                loadingMessage="거래 면적을 불러오는 중"
+                emptyMessage="거래 가능한 전용면적이 없습니다"
+                feedback={feedbackForFailure(areaError, 'TRADES_UNAVAILABLE')}
+                onRetry={onRetryTradeAreas}
+              />
+            ) : (
+              <>
+                <RequestStateNotice
+                  state={tradeState}
+                  loadingMessage="거래를 불러오는 중"
+                  emptyMessage="표시할 거래가 없습니다"
+                  feedback={feedbackForFailure(tradeError, 'TRADES_UNAVAILABLE')}
+                  onRetry={onRetryTrades}
+                />
+                {tradeState === 'ready' ? (
+                  <TradeList
+                    rows={tradeRows}
+                    selectedExclArea={selectedExclArea}
+                    totalElements={parcelTrades?.totalElements ?? 0}
+                    onLoadMore={onLoadMoreTrades}
+                    moreState={tradeMoreState}
+                  />
+                ) : null}
+              </>
+            )}
           </div>
         </>
       ) : null}
@@ -378,10 +416,10 @@ function mediaQueryMatches(query: string): boolean {
     && window.matchMedia(query).matches;
 }
 
-function TradeChartFallback() {
+function TradeChartFallback({ selectedExclArea }: { selectedExclArea: number | null }) {
   return (
     <section className="trade-chart trade-chart-fallback" aria-label="거래가 차트 불러오는 중">
-      <div className="trade-section-header"><h3>실거래가 흐름</h3></div>
+      <div className="trade-section-header"><h3>{selectedExclArea == null ? '실거래가 흐름' : `${formatExactArea(selectedExclArea)} 실거래가 흐름`}</h3></div>
       <div className="trade-chart-canvas" role="status" aria-live="polite">차트 불러오는 중</div>
     </section>
   );
@@ -400,13 +438,74 @@ function detailInformationRow(label: string, value: string | null, field?: strin
   );
 }
 
-function areaSummary(detail: ComplexDetail): string | null {
-  const values = [
-    detail.platArea == null ? null : `대지 ${formatArea(detail.platArea)}`,
-    detail.archArea == null ? null : `건축 ${formatArea(detail.archArea)}`,
-    detail.totArea == null ? null : `연면적 ${formatArea(detail.totArea)}`,
-  ].filter((value): value is string => value != null);
-  return values.length === 0 ? null : values.join(' · ');
+function AreaSelector({
+  areas,
+  error,
+  selectedExclArea,
+  state,
+  onChange,
+  onRetry,
+}: {
+  areas: TradeAreas | null;
+  error: RequestFailure | null;
+  selectedExclArea: number | null;
+  state: DetailRequestState;
+  onChange: (exclArea: number) => void;
+  onRetry: () => void;
+}) {
+  if (state === 'loading') {
+    return <p className="trade-area-state" role="status">전용면적을 불러오는 중</p>;
+  }
+  if (state === 'error') {
+    return (
+      <RequestStateNotice
+        state="error"
+        loadingMessage=""
+        emptyMessage=""
+        feedback={feedbackForFailure(error, 'TRADES_UNAVAILABLE')}
+        onRetry={onRetry}
+      />
+    );
+  }
+  if (areas == null || areas.areas.length === 0 || selectedExclArea == null) {
+    return <p className="trade-area-state">거래 가능한 전용면적이 없습니다</p>;
+  }
+  return (
+    <div className="trade-area-selector">
+      <label htmlFor="detail-excl-area">전용면적</label>
+      <select
+        id="detail-excl-area"
+        value={String(selectedExclArea)}
+        onChange={(event) => onChange(Number(event.currentTarget.value))}
+      >
+        {areas.areas.map((area) => (
+          <option key={area.exclArea} value={area.exclArea}>
+            {formatExactArea(area.exclArea)} · {formatApproxPyeong(area.exclArea)} · {area.tradeCount.toLocaleString('ko-KR')}건
+          </option>
+        ))}
+      </select>
+      <p>평 표시는 전용면적을 단순 환산한 참고값입니다.</p>
+    </div>
+  );
+}
+
+function NameInformation({ detail }: { detail: ComplexDetail }) {
+  const representativeName = detail.displayName ?? detail.name;
+  const names = [
+    detail.tradeName == null || detail.tradeName === representativeName
+      ? null
+      : { label: '거래명', value: detail.tradeName },
+    detail.name === representativeName || detail.name === detail.tradeName
+      ? null
+      : { label: '단지명', value: detail.name },
+  ].filter((value): value is { label: string; value: string } => value != null);
+  if (names.length === 0) return null;
+  return (
+    <details className="detail-additional-information">
+      <summary>명칭 정보</summary>
+      <dl>{names.map((name) => detailInformationRow(name.label, name.value))}</dl>
+    </details>
+  );
 }
 
 function PricePredictionPanel({ prediction }: { prediction: PricePrediction | null }) {
@@ -506,11 +605,8 @@ function formatArea(value: number): string {
 
 function areaLabels(value: number): { squareMeters: string; pyeong: string } {
   return {
-    squareMeters: `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}㎡`,
-    pyeong: `${(value / 3.305785).toLocaleString(undefined, {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    })}평`,
+    squareMeters: formatExactArea(value),
+    pyeong: formatApproxPyeong(value),
   };
 }
 
@@ -553,11 +649,13 @@ function complexScaleLabel(detail: ComplexDetail): string {
 function TradeList({
   rows,
   totalElements,
+  selectedExclArea,
   onLoadMore,
   moreState,
 }: {
   rows: TradeItem[];
   totalElements: number;
+  selectedExclArea: number | null;
   onLoadMore: () => void;
   moreState: TradeMoreState;
 }) {
@@ -565,7 +663,7 @@ function TradeList({
   return (
     <section className="trade-list" aria-label="거래 목록" data-detail-section="trade-history">
       <div className="trade-section-header">
-        <h3>거래 내역</h3>
+        <h3>{selectedExclArea == null ? '거래 내역' : `${formatExactArea(selectedExclArea)} 거래 내역`}</h3>
         {totalElements > 0 ? (
           <p>{rows.length.toLocaleString()} / {totalElements.toLocaleString()}건</p>
         ) : null}
@@ -575,7 +673,11 @@ function TradeList({
       ) : (
         <>
           <table>
-            <caption className="sr-only">선택한 단지 또는 필지의 실거래 목록</caption>
+            <caption className="sr-only">
+              {selectedExclArea == null
+                ? '선택한 단지의 실거래 목록'
+                : `${formatExactArea(selectedExclArea)} 선택 전용면적의 실거래 목록`}
+            </caption>
             <thead>
               <tr>
                 <th scope="col">일자</th>
@@ -633,22 +735,6 @@ function TradeList({
       )}
     </section>
   );
-}
-
-function formatAmount(amount: number | null): string {
-  if (amount == null) {
-    return '최근 거래 없음';
-  }
-
-  if (amount < 10000) {
-    return `${amount.toLocaleString()}만원`;
-  }
-
-  const eok = Math.floor(amount / 10000);
-  const man = amount % 10000;
-  return man === 0
-    ? `${eok.toLocaleString()}억`
-    : `${eok.toLocaleString()}억 ${man.toLocaleString()}만원`;
 }
 
 function compareTradesNewestFirst(first: TradeItem, second: TradeItem): number {

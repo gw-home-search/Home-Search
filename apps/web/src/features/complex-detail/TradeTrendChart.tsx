@@ -9,18 +9,33 @@ import {
 } from 'recharts';
 
 import type { TradeTrendPoint } from './api/fetchTradeTrend';
+import { formatAmount, formatEokAxis, formatExactArea } from './formatDetailValue';
 
 type TradeTrendRange = 'all' | '3y';
 const TREND_LINE_FALLBACK = '#0e7490';
 
-export function TradeTrendChart({ trend }: { trend: TradeTrendPoint[] }) {
+export function TradeTrendChart({
+  trend,
+  selectedExclArea = null,
+}: {
+  trend: TradeTrendPoint[];
+  selectedExclArea?: number | null;
+}) {
   const [range, setRange] = useState<TradeTrendRange>('all');
   const points = useMemo(() => filterTrendByRange(trend, range), [trend, range]);
 
   return (
-    <section className="trade-chart" aria-label="거래가 차트" data-detail-section="trade-chart">
+    <section
+      className="trade-chart"
+      aria-label={selectedExclArea == null ? '거래가 차트' : `${formatExactArea(selectedExclArea)} 거래가 차트`}
+      data-detail-order="trend"
+      data-detail-section="trade-chart"
+    >
       <div className="trade-section-header">
-        <h3>실거래가 흐름</h3>
+        <div>
+          <h3>{selectedExclArea == null ? '실거래가 흐름' : `${formatExactArea(selectedExclArea)} 실거래가 흐름`}</h3>
+          <p className="trade-chart-description">선택 전용면적의 월별 평균 거래금액</p>
+        </div>
         <div className="trade-range-toggle" role="group" aria-label="기간 선택">
           <button
             type="button"
@@ -54,7 +69,7 @@ export function TradeTrendChart({ trend }: { trend: TradeTrendPoint[] }) {
                 tickMargin={6}
                 minTickGap={24}
               />
-              <YAxis tickFormatter={formatTrendAxis} tick={{ fontSize: 10 }} width={44} />
+              <YAxis tickFormatter={formatEokAxis} tick={{ fontSize: 10 }} width={44} />
               <Tooltip content={<TrendTooltip />} />
               <Line
                 type="monotone"
@@ -68,6 +83,15 @@ export function TradeTrendChart({ trend }: { trend: TradeTrendPoint[] }) {
           </ResponsiveContainer>
         </div>
       )}
+      <table className="sr-only">
+        <caption>{selectedExclArea == null ? '월별 실거래가 요약' : `${formatExactArea(selectedExclArea)} 월별 실거래가 요약`}</caption>
+        <thead><tr><th>월</th><th>평균</th><th>최저</th><th>최고</th><th>거래 건수</th></tr></thead>
+        <tbody>{points.map((point) => <tr key={point.month}>
+          <td>{point.month}</td><td>{formatAmount(point.avgAmount)}</td>
+          <td>{formatAmount(point.minAmount)}</td><td>{formatAmount(point.maxAmount)}</td>
+          <td>{point.count.toLocaleString('ko-KR')}건</td>
+        </tr>)}</tbody>
+      </table>
     </section>
   );
 }
@@ -86,8 +110,9 @@ function TrendTooltip({
   return (
     <div className="trade-chart-tooltip">
       <span className="trade-chart-tooltip-month">{formatTrendMonth(point.month)}</span>
-      <strong>{formatAmount(point.avgAmount)}</strong>
-      <span className="trade-chart-tooltip-count">{point.count.toLocaleString()}건</span>
+      <strong>평균 {formatAmount(point.avgAmount)}</strong>
+      <span>최저 {formatAmount(point.minAmount)} ~ 최고 {formatAmount(point.maxAmount)}</span>
+      <span className="trade-chart-tooltip-count">거래 {point.count.toLocaleString('ko-KR')}건</span>
     </div>
   );
 }
@@ -107,10 +132,6 @@ function formatTrendMonth(month: string): string {
   return year && monthPart ? `${year.slice(2)}-${monthPart}` : month;
 }
 
-function formatTrendAxis(value: number): string {
-  return `${(value / 10000).toFixed(1)}억`;
-}
-
 function trendLineColor(): string {
   if (typeof window === 'undefined') {
     return TREND_LINE_FALLBACK;
@@ -121,13 +142,4 @@ function trendLineColor(): string {
     .getPropertyValue('--hs-map-color-trend')
     .trim();
   return resolved.length > 0 ? resolved : TREND_LINE_FALLBACK;
-}
-
-function formatAmount(amount: number): string {
-  if (amount < 10000) {
-    return `${amount.toLocaleString()}만원`;
-  }
-  const eok = Math.floor(amount / 10000);
-  const man = amount % 10000;
-  return man === 0 ? `${eok.toLocaleString()}억` : `${eok.toLocaleString()}억 ${man.toLocaleString()}만원`;
 }

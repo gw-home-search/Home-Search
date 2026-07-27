@@ -17,15 +17,17 @@ import {
 } from '../api/fetchParcelComplexes';
 import {
   fetchComplexTrades,
-  fetchParcelTrades,
   type ParcelTrades,
   type TradeItem,
 } from '../api/fetchParcelTrades';
 import {
   fetchComplexTradeTrend,
-  fetchParcelTradeTrend,
   type TradeTrendPoint,
 } from '../api/fetchTradeTrend';
+import {
+  fetchTradeAreas,
+  type TradeAreas,
+} from '../api/fetchTradeAreas';
 import {
   isCancelledFailure,
   toRequestFailure,
@@ -42,6 +44,8 @@ export function useComplexDetail() {
   );
   const [complexDetail, setComplexDetail] = useState<ComplexDetail | null>(null);
   const [parcelTrades, setParcelTrades] = useState<ParcelTrades | null>(null);
+  const [tradeAreas, setTradeAreas] = useState<TradeAreas | null>(null);
+  const [selectedExclArea, setSelectedExclArea] = useState<number | null>(null);
   const [tradeTrend, setTradeTrend] = useState<TradeTrendPoint[]>([]);
   const [tradePage, setTradePage] = useState(0);
   const [tradeRows, setTradeRows] = useState<TradeItem[]>([]);
@@ -53,12 +57,17 @@ export function useComplexDetail() {
   const [tradeMoreState, setTradeMoreState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [trendState, setTrendState] = useState<DetailRequestState>('idle');
   const [trendError, setTrendError] = useState<RequestFailure | null>(null);
+  const [areaState, setAreaState] = useState<DetailRequestState>('idle');
+  const [areaError, setAreaError] = useState<RequestFailure | null>(null);
   const [detailRetrySeq, setDetailRetrySeq] = useState(0);
   const [tradeRetrySeq, setTradeRetrySeq] = useState(0);
   const [trendRetrySeq, setTrendRetrySeq] = useState(0);
+  const [areaRetrySeq, setAreaRetrySeq] = useState(0);
   const detailRequestSeq = useRef(0);
   const tradePageRequestSeq = useRef(0);
+  const trendRequestSeq = useRef(0);
   const parcelComplexRequestSeq = useRef(0);
+  const areaRequestSeq = useRef(0);
   const predictionPoll = useRef({ key: '', attempts: 0 });
   const detailRequestPending = useRef(false);
   const tradeMoreController = useRef<AbortController | null>(null);
@@ -73,12 +82,16 @@ export function useComplexDetail() {
       detailRequestPending.current = false;
       setComplexDetail(null);
       setParcelTrades(null);
+      setTradeAreas(null);
+      setSelectedExclArea(null);
       setTradeTrend([]);
       setTradePage(0);
       setTradeRows([]);
       setParcelComplexes([]);
       setDetailState('idle');
       setDetailError(null);
+      setAreaState('idle');
+      setAreaError(null);
       return undefined;
     }
 
@@ -124,26 +137,82 @@ export function useComplexDetail() {
   }, [selectedComplex, detailRetrySeq]);
 
   useEffect(() => {
+    areaRequestSeq.current += 1;
     tradePageRequestSeq.current += 1;
-    if (selectedComplex == null) {
+    trendRequestSeq.current += 1;
+    tradeMoreController.current?.abort();
+    tradeMoreController.current = null;
+    setTradeAreas(null);
+    setSelectedExclArea(null);
+    setParcelTrades(null);
+    setTradeRows([]);
+    setTradeTrend([]);
+    setTradePage(0);
+    setTradeState('idle');
+    setTradeError(null);
+    setTradeMoreState('idle');
+    setTrendState('idle');
+    setTrendError(null);
+
+    if (detailState !== 'ready' || complexDetail?.complexId == null) {
+      setAreaState('idle');
+      setAreaError(null);
+      return undefined;
+    }
+
+    const complexId = complexDetail.complexId;
+    const requestSeq = areaRequestSeq.current;
+    const controller = new AbortController();
+    setAreaState('loading');
+    setAreaError(null);
+
+    fetchTradeAreas(complexId, controller.signal)
+      .then((nextAreas) => {
+        if (controller.signal.aborted || requestSeq !== areaRequestSeq.current) return;
+        setTradeAreas(nextAreas);
+        setSelectedExclArea(nextAreas.defaultExclArea);
+        setAreaState('ready');
+        if (nextAreas.defaultExclArea == null) {
+          setTradeState('ready');
+          setTrendState('ready');
+        }
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted || requestSeq !== areaRequestSeq.current) return;
+        const failure = toRequestFailure(error, {
+          service: 'property-data',
+          operation: 'trade-areas',
+        }, controller.signal);
+        if (isCancelledFailure(failure)) return;
+        setAreaState('error');
+        setAreaError(failure);
+      });
+
+    return () => controller.abort();
+  }, [complexDetail?.complexId, detailState, areaRetrySeq]);
+
+  useEffect(() => {
+    tradePageRequestSeq.current += 1;
+    if (complexDetail?.complexId == null || areaState !== 'ready' || selectedExclArea == null) {
       tradeMoreController.current?.abort();
       tradeMoreController.current = null;
       setParcelTrades(null);
       setTradePage(0);
       setTradeRows([]);
-      setTradeState('idle');
+      setTradeState(areaState === 'ready' ? 'ready' : 'idle');
       setTradeError(null);
       setTradeMoreState('idle');
       return undefined;
     }
     const requestSeq = tradePageRequestSeq.current;
     const controller = new AbortController();
-    const isComplexScoped = selectedComplex.parcelId == null && selectedComplex.complexId != null;
     setTradeState('loading');
     setTradeError(null);
-    const request = isComplexScoped
-      ? fetchComplexTrades(selectedComplex.complexId as number, {}, controller.signal)
-      : fetchParcelTrades(requiredParcelId(selectedComplex), selectedComplex.complexId, {}, controller.signal);
+    const request = fetchComplexTrades(
+      complexDetail.complexId,
+      { exclArea: selectedExclArea },
+      controller.signal,
+    );
     request.then((nextTrades) => {
       if (controller.signal.aborted || requestSeq !== tradePageRequestSeq.current) return;
       setParcelTrades(nextTrades);
@@ -162,29 +231,31 @@ export function useComplexDetail() {
       setTradeError(failure);
     });
     return () => controller.abort();
-  }, [selectedComplex, tradeRetrySeq]);
+  }, [areaState, complexDetail?.complexId, selectedExclArea, tradeRetrySeq]);
 
   useEffect(() => {
-    if (selectedComplex == null) {
+    trendRequestSeq.current += 1;
+    if (complexDetail?.complexId == null || areaState !== 'ready' || selectedExclArea == null) {
       setTradeTrend([]);
-      setTrendState('idle');
+      setTrendState(areaState === 'ready' ? 'ready' : 'idle');
       setTrendError(null);
       return undefined;
     }
     const controller = new AbortController();
-    const requestSeq = detailRequestSeq.current;
-    const isComplexScoped = selectedComplex.parcelId == null && selectedComplex.complexId != null;
+    const requestSeq = trendRequestSeq.current;
     setTrendState('loading');
     setTrendError(null);
-    const request = isComplexScoped
-      ? fetchComplexTradeTrend(selectedComplex.complexId as number, controller.signal)
-      : fetchParcelTradeTrend(requiredParcelId(selectedComplex), selectedComplex.complexId, controller.signal);
+    const request = fetchComplexTradeTrend(
+      complexDetail.complexId,
+      selectedExclArea,
+      controller.signal,
+    );
     request.then((nextTrend) => {
-      if (controller.signal.aborted || requestSeq !== detailRequestSeq.current) return;
+      if (controller.signal.aborted || requestSeq !== trendRequestSeq.current) return;
       setTradeTrend(nextTrend);
       setTrendState('ready');
     }).catch((error: unknown) => {
-      if (controller.signal.aborted || requestSeq !== detailRequestSeq.current) return;
+      if (controller.signal.aborted || requestSeq !== trendRequestSeq.current) return;
       const failure = toRequestFailure(error, {
         service: 'property-data',
         operation: 'trade-trend',
@@ -194,7 +265,7 @@ export function useComplexDetail() {
       setTrendError(failure);
     });
     return () => controller.abort();
-  }, [selectedComplex, trendRetrySeq]);
+  }, [areaState, complexDetail?.complexId, selectedExclArea, trendRetrySeq]);
 
   useEffect(() => {
     if (complexDetail == null || detailState !== 'ready') {
@@ -272,6 +343,8 @@ export function useComplexDetail() {
     tradeMoreController.current = null;
     setComplexDetail(null);
     setParcelTrades(null);
+    setTradeAreas(null);
+    setSelectedExclArea(null);
     setTradeTrend([]);
     setTradePage(0);
     setTradeRows([]);
@@ -280,9 +353,11 @@ export function useComplexDetail() {
     setTradeError(null);
     setTradeMoreState('idle');
     setTrendError(null);
+    setAreaError(null);
     setDetailState('loading');
-    setTradeState('loading');
-    setTrendState('loading');
+    setTradeState('idle');
+    setTrendState('idle');
+    setAreaState('idle');
     setSelectedComplex(selection);
   }, []);
 
@@ -303,9 +378,24 @@ export function useComplexDetail() {
   }, []);
   const retryTrades = useCallback(() => setTradeRetrySeq((current) => current + 1), []);
   const retryTrend = useCallback(() => setTrendRetrySeq((current) => current + 1), []);
+  const retryTradeAreas = useCallback(() => setAreaRetrySeq((current) => current + 1), []);
+  const selectExclArea = useCallback((exclArea: number) => {
+    tradeMoreController.current?.abort();
+    tradeMoreController.current = null;
+    setParcelTrades(null);
+    setTradeRows([]);
+    setTradeTrend([]);
+    setTradePage(0);
+    setTradeMoreState('idle');
+    setSelectedExclArea(exclArea);
+  }, []);
 
   function loadMoreTrades() {
-    if (selectedComplex == null || tradeMoreState === 'loading') {
+    if (
+      complexDetail?.complexId == null
+      || selectedExclArea == null
+      || tradeMoreState === 'loading'
+    ) {
       return;
     }
 
@@ -315,18 +405,11 @@ export function useComplexDetail() {
     const nextPage = tradePage + 1;
     const requestSeq = tradePageRequestSeq.current + 1;
     tradePageRequestSeq.current = requestSeq;
-    const request = selectedComplex.parcelId == null && selectedComplex.complexId != null
-      ? fetchComplexTrades(
-        selectedComplex.complexId,
-        { page: nextPage, size: TRADE_PAGE_SIZE },
-        controller.signal,
-      )
-      : fetchParcelTrades(
-        requiredParcelId(selectedComplex),
-        selectedComplex.complexId,
-        { page: nextPage, size: TRADE_PAGE_SIZE },
-        controller.signal,
-      );
+    const request = fetchComplexTrades(
+      complexDetail.complexId,
+      { page: nextPage, size: TRADE_PAGE_SIZE, exclArea: selectedExclArea },
+      controller.signal,
+    );
 
     setTradeMoreState('loading');
     request
@@ -354,6 +437,8 @@ export function useComplexDetail() {
   }
 
   return {
+    areaError,
+    areaState,
     closeDetail,
     complexDetail,
     detailError,
@@ -364,10 +449,14 @@ export function useComplexDetail() {
     retryDetail,
     retryTrades,
     retryTrend,
+    retryTradeAreas,
     selectComplex,
     selectComplexMarker,
     selectComplexSummary,
     selectedComplex,
+    selectedExclArea,
+    selectExclArea,
+    tradeAreas,
     tradeRows,
     tradeError,
     tradeMoreState,

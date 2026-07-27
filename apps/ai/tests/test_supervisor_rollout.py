@@ -36,10 +36,19 @@ def test_supervisor_graph_canary_is_stable_per_authenticated_subject() -> None:
 
 def test_invalid_rollout_and_production_shadow_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME_AI_SUPERVISOR_GRAPH_MODE", "shadow")
-    monkeypatch.setenv("HOME_ENVIRONMENT", "production")
+    monkeypatch.delenv("HOME_AI_DEPLOYMENT_TIER", raising=False)
     clear_settings()
     with pytest.raises(ValueError):
         get_supervisor_graph_mode()
+
+    monkeypatch.setenv("HOME_AI_DEPLOYMENT_TIER", "production")
+    clear_settings()
+    with pytest.raises(ValueError):
+        get_supervisor_graph_mode()
+
+    monkeypatch.setenv("HOME_AI_DEPLOYMENT_TIER", "staging")
+    clear_settings()
+    assert get_supervisor_graph_mode() == "shadow"
 
     monkeypatch.setenv("HOME_AI_SUPERVISOR_GRAPH_MODE", "canary")
     monkeypatch.setenv("HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT", "101")

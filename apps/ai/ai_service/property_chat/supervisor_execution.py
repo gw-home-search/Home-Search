@@ -13,6 +13,22 @@ from .models import QueryPlan
 from .supervisor import GoalExecutionResult, GoalSpec, ResolvedEntity
 
 
+_CAPABILITY_INTENT_PATTERNS: dict[str, re.Pattern[str]] = {
+    "complex_identity": re.compile(r"(?:단지\s*정보|위치|주소|어디)"),
+    "recent_trade_lookup": re.compile(r"(?:실거래|최근\s*거래|거래\s*내역)"),
+    "price_trend": re.compile(r"(?:가격\s*(?:흐름|추이)|월별|거래량)"),
+    "comparison": re.compile(r"(?:비교|차이|대비)"),
+    "recommendation": re.compile(r"추천"),
+    "school_location": re.compile(r"(?:초등학교|중학교|고등학교|주변\s*학교|학교\s*위치)"),
+    "academy_lookup": re.compile(r"(?:학원\s*위치|가까운\s*학원|교습소)"),
+    "academy_registry_summary": re.compile(r"(?:학원\s*(?:수|현황|등록))"),
+    "rail_station_lookup": re.compile(r"(?:지하철|가까운\s*역|역세권|철도)"),
+    "retail_location": re.compile(r"(?:대형마트|백화점|쇼핑센터|복합몰)"),
+    "childcare_lookup": re.compile(r"(?:어린이집|유치원)"),
+    "kakao_place_search": re.compile(r"(?:카카오\s*장소|장소\s*검색)"),
+}
+
+
 class GroundedEnginePort(Protocol):
     async def execute_goal(
         self,
@@ -61,14 +77,14 @@ class GroundedGoalExecutor:
                 retryable=True,
             )
         status = (
-            "CLARIFICATION"
+            "UNAVAILABLE"
+            if document.readiness == "unavailable"
+            else "CLARIFICATION"
             if self._resolution_states.get(
                 (goal.plan.complex_name, goal.plan.region_name)
             ) == "AMBIGUOUS"
             else
-            "UNAVAILABLE"
-            if document.readiness == "unavailable"
-            else "PARTIAL"
+            "PARTIAL"
             if document.readiness == "partial"
             else "SUCCESS"
         )
@@ -161,19 +177,28 @@ class GroundedGoalExecutor:
 
 
 def goal_specs(plans: Sequence[QueryPlan], question: str) -> tuple[GoalSpec, ...]:
+    normalized_question = re.sub(r"\s+", " ", question)
     entity_reference = next((
         reference
         for reference in ("추천한 후보", "그 후보", "1위와 2위")
-        if reference in re.sub(r"\s+", " ", question)
+        if reference in normalized_question
     ), None)
     return tuple(
         GoalSpec.from_plan(
             goal_id=f"goal-{index}",
             plan=plan,
-            appearance_order=index - 1,
+            appearance_order=_appearance_order(
+                normalized_question, plan.capability, index - 1
+            ),
             entity_reference=(
                 entity_reference if plan.capability == "comparison" else None
             ),
         )
         for index, plan in enumerate(plans, start=1)
     )
+
+
+def _appearance_order(question: str, capability: str, fallback_order: int) -> int:
+    pattern = _CAPABILITY_INTENT_PATTERNS.get(capability)
+    match = pattern.search(question) if pattern is not None else None
+    return match.start() if match is not None else len(question) + fallback_order

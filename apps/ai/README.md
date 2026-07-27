@@ -27,6 +27,8 @@ Runtime variables:
 - `HOME_AI_OPENAI_SECONDARY_MODEL`
 - `HOME_AI_OPENAI_TIMEOUT_SECONDS` (optional, default `30`, allowed `1..30`)
 - `HOME_AI_QUERY_TIMEOUT_SECONDS` (optional, default `45`, allowed `1..60`)
+- `HOME_AI_DEPLOYMENT_TIER` (`local|offline|staging|production`; supervisor graph
+  mode가 `off`가 아닐 때 필수)
 - `HOME_AI_SUPERVISOR_GRAPH_MODE` (`off|shadow|canary|active`, default `off`)
 - `HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT` (integer `0..100`, default `0`;
   `shadow`는 staging/offline에서만 허용되고 실제 실행 비율은 최대 5%)

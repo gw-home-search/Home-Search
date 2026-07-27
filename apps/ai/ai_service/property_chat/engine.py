@@ -298,6 +298,28 @@ class GroundedChatbotEngine:
             raise ChatbotProviderUnavailable() from exception
 
     async def plan_goals(self, request: ChatbotQueryRequest) -> tuple[QueryPlan, ...]:
+        return await self._plan_goals(
+            request,
+            apply_dependent_context=True,
+            preserve_same_turn_recommendation=False,
+        )
+
+    async def plan_supervisor_goals(
+        self, request: ChatbotQueryRequest,
+    ) -> tuple[QueryPlan, ...]:
+        return await self._plan_goals(
+            request,
+            apply_dependent_context=True,
+            preserve_same_turn_recommendation=True,
+        )
+
+    async def _plan_goals(
+        self,
+        request: ChatbotQueryRequest,
+        *,
+        apply_dependent_context: bool,
+        preserve_same_turn_recommendation: bool,
+    ) -> tuple[QueryPlan, ...]:
         try:
             planned = await self._language_model.plan_query(request)
         except ChatbotProviderUnavailable:
@@ -306,7 +328,22 @@ class GroundedChatbotEngine:
             planned = DeterministicQueryRouter(today=self._today()).plan(request)
             if planned is None:
                 raise
-        if self._dependent_workflow_enabled:
+        has_same_turn_recommendation = (
+            planned.capability == "recommendation"
+            if isinstance(planned, QueryPlan)
+            else any(
+                fragment.capability == "recommendation"
+                for fragment in planned.fragments
+            )
+        )
+        if (
+            self._dependent_workflow_enabled
+            and apply_dependent_context
+            and not (
+                preserve_same_turn_recommendation
+                and has_same_turn_recommendation
+            )
+        ):
             planned = await self._apply_dependent_context(request, planned)
         if self._answer_first_enabled and self._property_overview_enabled:
             planned = await self._apply_overview_context(request, planned)

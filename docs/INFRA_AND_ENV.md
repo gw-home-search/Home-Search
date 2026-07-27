@@ -387,10 +387,12 @@ optional `HOME_AI_OPENAI_TIMEOUT_SECONDS` in the range `1..30` with default `30`
 flow to `1..60s`; invalid values fail closed. Answer-first execution reserves
 the final five seconds of this budget for deterministic response assembly and
 grounding validation.
+`HOME_AI_DEPLOYMENT_TIER=local|offline|staging|production` is required whenever
+the supervisor graph mode is not `off`; a missing or unknown tier fails closed.
 `HOME_AI_SUPERVISOR_GRAPH_MODE=off|shadow|canary|active` defaults to `off`.
 `HOME_AI_SUPERVISOR_GRAPH_CANARY_PERCENT` accepts `0..100` and defaults to `0`.
-`shadow` is limited to offline/staging and capped at 5%; production `shadow`
-fails closed. Production `canary` hashes the authenticated subject with fixed
+`shadow` requires an explicit `offline` or `staging` tier and is capped at 5%;
+`local`, missing-tier, and production `shadow` fail closed. Production `canary` hashes the authenticated subject with fixed
 policy `supervisor-graph-v1` so a request runs exactly one engine. The graph
 uses no checkpointer/store and its state, question, entity, tool arguments, and
 answer are not metric labels or log fields.

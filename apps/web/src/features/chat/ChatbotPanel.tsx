@@ -56,6 +56,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
     () => new Set(),
   );
   const requestSequenceRef = useRef(0);
+  const failedRetryAssistantIdRef = useRef<string | undefined>(undefined);
   const { conversations, selected, selectedId } = workspace;
   const latestMessage = selected?.messages[selected.messages.length - 1];
 
@@ -198,6 +199,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
     };
     setQuestion('');
     setStatus('sending');
+    failedRetryAssistantIdRef.current = undefined;
     setProgressMessage('질문 해석');
     setError(null);
     followAnswerRef.current = isNearBottom(messagesRef.current);
@@ -234,8 +236,13 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
     }, (_code, message) => setProgressMessage(message));
     const answeredAt = new Date().toISOString();
     const assistantMessageId = replaceAssistantId ?? crypto.randomUUID();
-    if (followAnswerRef.current) answerToRevealRef.current = assistantMessageId;
-    else setHasUnseenAnswer(true);
+    const latestPendingMessage = pending.messages[pending.messages.length - 1];
+    const replacingLatestAssistant = replaceAssistantId == null
+      || latestPendingMessage?.id === replaceAssistantId;
+    if (replacingLatestAssistant) {
+      if (followAnswerRef.current) answerToRevealRef.current = assistantMessageId;
+      else setHasUnseenAnswer(true);
+    }
     const evidence: ChatEvidence = {
       requestId: response.requestId,
       citations: response.citations,
@@ -259,7 +266,9 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
     };
     await workspace.save({
       ...pending,
-      ...(response.conversationMemoryPatch ? { memory: response.conversationMemoryPatch } : {}),
+      ...(replacingLatestAssistant && response.conversationMemoryPatch
+        ? { memory: response.conversationMemoryPatch }
+        : {}),
       updatedAt: answeredAt,
       messages: replaceAssistantId == null
         ? [...pending.messages, assistantMessage]
@@ -268,12 +277,19 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
     }, false);
   }
 
-  async function retryLastQuestion() {
+  async function retryQuestion(assistantId?: string) {
     if (selected == null || status === 'sending') return;
     const latest = selected.messages[selected.messages.length - 1];
-    const targetIndex = latest?.role === 'assistant' && latest.terminalOutcome?.retryable
-      ? selected.messages.length - 1
-      : -1;
+    const targetIndex = assistantId == null
+      ? latest?.role === 'assistant' && latest.terminalOutcome?.retryable
+        ? selected.messages.length - 1
+        : -1
+      : selected.messages.findIndex((message) =>
+        message.id === assistantId
+        && message.role === 'assistant'
+        && message.terminalOutcome?.retryable === true);
+    const targetAssistant = targetIndex >= 0 ? selected.messages[targetIndex] : undefined;
+    if (assistantId != null && targetAssistant == null) return;
     const targetQuestion = targetIndex > 0 ? selected.messages[targetIndex - 1] : latest;
     if (targetQuestion?.role !== 'user') return;
     setStatus('sending');
@@ -281,13 +297,15 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
     setError(null);
     followAnswerRef.current = isNearBottom(messagesRef.current);
     const requestSequence = ++requestSequenceRef.current;
+    failedRetryAssistantIdRef.current = assistantId;
     try {
       await generateAndStoreAnswer(
         selected,
         selected.messages.slice(0, targetIndex > 0 ? targetIndex - 1 : -1),
         targetQuestion.content,
-        targetIndex > 0 ? latest?.id : undefined,
+        targetIndex > 0 ? targetAssistant?.id : undefined,
       );
+      failedRetryAssistantIdRef.current = undefined;
     } catch (requestError) {
       if (requestSequence === requestSequenceRef.current) {
         const failure = toRequestFailure(requestError, {
@@ -426,7 +444,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
                   messageRef={message.id === latestMessage?.id ? latestTurnRef : undefined}
                   onUiAction={executeUiAction}
                   onRetry={message.role === 'assistant' && message.terminalOutcome?.retryable
-                    ? () => void retryLastQuestion()
+                    ? () => void retryQuestion(message.id)
                     : undefined}
                   retrying={status === 'sending'}
                 />
@@ -478,7 +496,9 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
                 loadingMessage=""
                 emptyMessage=""
                 feedback={getUserFeedback(error)}
-                onRetry={isRetryableChatFeedback(error) ? () => void retryLastQuestion() : undefined}
+                onRetry={isRetryableChatFeedback(error)
+                  ? () => void retryQuestion(failedRetryAssistantIdRef.current)
+                  : undefined}
               />
             ) : null}
             <ChatComposer

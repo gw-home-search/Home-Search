@@ -129,6 +129,21 @@ def test_executor_resolves_shared_entities_once_with_all_states() -> None:
     assert tuple(record.complex_id for record in engine.calls[-1][-1]["resolved_complexes"]) == (3, 4)
 
 
+def test_executor_prioritizes_unavailable_readiness_over_ambiguous_entity() -> None:
+    executor = GroundedGoalExecutor(Engine(Document("unavailable")), Repository())  # type: ignore[arg-type]
+    goal = spec("g1", QueryPlan("complex_identity", "모호"))
+    asyncio.run(executor.resolve_entities((goal,)))
+
+    result = asyncio.run(executor.execute(
+        goal,
+        ChatbotQueryRequest(question="모호 단지 정보"),
+        "request-1",
+        deadline=100.0,
+    ))
+
+    assert result.status == "UNAVAILABLE"
+
+
 def test_dependent_comparison_uses_only_verified_recommendation_ids() -> None:
     executor = GroundedGoalExecutor(Engine(Document("supported")), Repository())  # type: ignore[arg-type]
     comparison = spec(
@@ -164,6 +179,18 @@ def test_goal_specs_keep_order_and_only_mark_explicit_comparison_reference() -> 
     assert [goal.goal_id for goal in goals] == ["goal-1", "goal-2"]
     assert goals[0].entity_reference is None
     assert goals[1].entity_reference == "추천한 후보"
+
+
+def test_goal_specs_restore_question_appearance_order_after_bundle_canonicalization() -> None:
+    goals = goal_specs((
+        QueryPlan("comparison", "A", complex_names=("A", "B")),
+        QueryPlan("recommendation", "송파구", region_name="송파구", limit=2),
+        QueryPlan("rail_station_lookup", "A"),
+    ), "송파구 후보를 추천하고 그 후보를 비교한 다음 가까운 역도 알려줘")
+
+    appearance = {goal.capability: goal.appearance_order for goal in goals}
+    assert appearance["recommendation"] < appearance["comparison"]
+    assert appearance["comparison"] < appearance["rail_station_lookup"]
 
 
 def test_executor_fail_closed_branches_leave_goal_unchanged() -> None:

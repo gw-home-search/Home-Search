@@ -10,11 +10,14 @@ from ai_service.property_chat.answer_first_eval import (
     compare_rollout_responses,
     load_answer_first_catalog,
     AnswerFirstEvalError,
+    evaluate_rollout_catalog,
+    rollout_fingerprint,
 )
 
 
 def rollout_response(capability: str = "recent_trade_lookup") -> dict[str, object]:
     return {
+        "answer": "검증된 답변입니다.",
         "conversationResolution": {
             "version": 1,
             "answerMode": "COMPLETE",
@@ -25,6 +28,10 @@ def rollout_response(capability: str = "recent_trade_lookup") -> dict[str, objec
         },
         "citations": [{"factIds": ["fact-1"]}],
         "fragments": [{"factIds": ["fact-1"]}],
+        "evidenceSummary": {
+            "status": "supported", "capabilities": [capability],
+            "factCount": 1, "citationCount": 1,
+        },
     }
 
 
@@ -53,6 +60,66 @@ def test_rollout_comparator_uses_only_contract_metadata_and_closure() -> None:
     assert compare_rollout_responses(legacy, graph) == (
         "GOAL_SET_MISMATCH", "FACT_CITATION_CLOSURE_FAILED",
     )
+
+
+def test_rollout_closure_rejects_fact_count_without_citations_for_single_response() -> None:
+    response = rollout_response()
+    response["citations"] = []
+    response["fragments"] = []
+    response["evidenceSummary"] = {
+        "status": "supported", "capabilities": ["recent_trade_lookup"],
+        "factCount": 1, "citationCount": 0,
+    }
+
+    assert rollout_fingerprint(response).fact_citation_closed is False
+
+
+def test_rollout_evaluator_executes_both_engines_for_all_120_cases() -> None:
+    cases = load_answer_first_catalog(_catalog_path())
+    legacy_calls: list[str] = []
+    graph_calls: list[str] = []
+
+    async def legacy(case: AnswerFirstGoldenCase) -> dict[str, object]:
+        legacy_calls.append(case.case_id)
+        return rollout_response()
+
+    async def graph(case: AnswerFirstGoldenCase) -> dict[str, object]:
+        graph_calls.append(case.case_id)
+        return rollout_response()
+
+    import asyncio
+    results = asyncio.run(evaluate_rollout_catalog(cases, legacy, graph))
+
+    assert len(results) == 120
+    assert legacy_calls == [case.case_id for case in cases]
+    assert graph_calls == [case.case_id for case in cases]
+    assert all(result.failures == () for result in results)
+    assert not hasattr(results[0], "legacy_response")
+    assert not hasattr(results[0], "graph_response")
+
+
+def test_rollout_evaluator_continues_after_runner_failure_without_storing_error() -> None:
+    cases = load_answer_first_catalog(_catalog_path())
+    legacy_calls: list[str] = []
+    graph_calls: list[str] = []
+
+    async def legacy(case: AnswerFirstGoldenCase) -> dict[str, object]:
+        legacy_calls.append(case.case_id)
+        if case == cases[0]:
+            raise RuntimeError("must-not-leak")
+        return rollout_response()
+
+    async def graph(case: AnswerFirstGoldenCase) -> dict[str, object]:
+        graph_calls.append(case.case_id)
+        return rollout_response()
+
+    import asyncio
+    results = asyncio.run(evaluate_rollout_catalog(cases, legacy, graph))
+
+    assert len(legacy_calls) == 120
+    assert len(graph_calls) == 120
+    assert results[0].failures == ("LEGACY_RUNNER_FAILED",)
+    assert "must-not-leak" not in repr(results)
 
 
 def test_answer_first_grader_accepts_grounded_best_effort_result() -> None:

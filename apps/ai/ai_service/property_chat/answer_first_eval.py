@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Awaitable, Callable
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -40,6 +41,12 @@ class RolloutFingerprint:
     terminal_status: str
     terminal_reason: str
     fact_citation_closed: bool
+
+
+@dataclass(frozen=True)
+class RolloutEvaluationResult:
+    case_id: str
+    failures: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -152,18 +159,37 @@ def rollout_fingerprint(response: dict[str, object]) -> RolloutFingerprint:
     terminal_status = str(terminal.get("status", "MISSING")) if isinstance(terminal, dict) else "MISSING"
     terminal_reason = str(terminal.get("reason", "MISSING")) if isinstance(terminal, dict) else "MISSING"
     citations = response.get("citations")
+    citations_valid = isinstance(citations, list) and all(
+        isinstance(citation, dict)
+        and isinstance(citation.get("factIds"), list)
+        and all(isinstance(fact_id, str) and fact_id for fact_id in citation["factIds"])
+        for citation in citations
+    )
     citation_fact_ids = {
         fact_id
-        for citation in citations if isinstance(citations, list) and isinstance(citation, dict)
+        for citation in citations if citations_valid and isinstance(citation, dict)
         for fact_id in citation.get("factIds", [])
         if isinstance(fact_id, str)
     } if isinstance(citations, list) else set()
     fragments = response.get("fragments", [])
-    closed = isinstance(fragments, list) and all(
+    evidence = response.get("evidenceSummary")
+    fact_count = evidence.get("factCount") if isinstance(evidence, dict) else None
+    citation_count = evidence.get("citationCount") if isinstance(evidence, dict) else None
+    closed = (
+        citations_valid
+        and isinstance(evidence, dict)
+        and isinstance(fact_count, int)
+        and not isinstance(fact_count, bool)
+        and fact_count >= 0
+        and citation_count == len(citations)
+        and fact_count == len(citation_fact_ids)
+        and isinstance(fragments, list)
+        and all(
         isinstance(fragment, dict)
         and isinstance(fragment.get("factIds", []), list)
         and set(fragment.get("factIds", [])).issubset(citation_fact_ids)
         for fragment in fragments
+        )
     )
     return RolloutFingerprint(
         goals=goals,
@@ -190,6 +216,58 @@ def compare_rollout_responses(
         failures.append("TERMINAL_OUTCOME_MISMATCH")
     if not left.fact_citation_closed or not right.fact_citation_closed:
         failures.append("FACT_CITATION_CLOSURE_FAILED")
+    return tuple(failures)
+
+
+async def evaluate_rollout_catalog(
+    cases: tuple[AnswerFirstGoldenCase, ...],
+    legacy_runner: Callable[[AnswerFirstGoldenCase], Awaitable[dict[str, object]]],
+    graph_runner: Callable[[AnswerFirstGoldenCase], Awaitable[dict[str, object]]],
+) -> tuple[RolloutEvaluationResult, ...]:
+    expected_size = sum(EXPECTED_CATEGORY_COUNTS.values())
+    if (
+        len(cases) != expected_size
+        or len({case.case_id for case in cases}) != expected_size
+        or Counter(case.category for case in cases) != Counter(EXPECTED_CATEGORY_COUNTS)
+    ):
+        raise AnswerFirstEvalError("CATALOG_SIZE_INVALID")
+    results: list[RolloutEvaluationResult] = []
+    for case in cases:
+        failures: list[str] = []
+        legacy: dict[str, object] | None = None
+        graph: dict[str, object] | None = None
+        try:
+            legacy = await legacy_runner(case)
+        except Exception:
+            failures.append("LEGACY_RUNNER_FAILED")
+        try:
+            graph = await graph_runner(case)
+        except Exception:
+            failures.append("GRAPH_RUNNER_FAILED")
+        if legacy is not None:
+            failures.extend(_rollout_response_failures("LEGACY", legacy))
+        if graph is not None:
+            failures.extend(_rollout_response_failures("GRAPH", graph))
+        if legacy is not None and graph is not None:
+            failures.extend(compare_rollout_responses(legacy, graph))
+        results.append(RolloutEvaluationResult(case.case_id, tuple(dict.fromkeys(failures))))
+    return tuple(results)
+
+
+def _rollout_response_failures(
+    prefix: str, response: dict[str, object],
+) -> tuple[str, ...]:
+    fingerprint = rollout_fingerprint(response)
+    failures: list[str] = []
+    answer = response.get("answer")
+    if not isinstance(answer, str) or not answer.strip():
+        failures.append(f"{prefix}_ANSWER_EMPTY")
+    if fingerprint.answer_mode == "UNKNOWN":
+        failures.append(f"{prefix}_ANSWER_MODE_MISSING")
+    if fingerprint.terminal_status == "MISSING" or fingerprint.terminal_reason == "MISSING":
+        failures.append(f"{prefix}_TERMINAL_OUTCOME_MISSING")
+    if not fingerprint.fact_citation_closed:
+        failures.append(f"{prefix}_FACT_CITATION_CLOSURE_FAILED")
     return tuple(failures)
 
 

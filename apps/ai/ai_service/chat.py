@@ -322,9 +322,16 @@ def get_supervisor_graph_mode() -> str:
     mode = os.getenv("HOME_AI_SUPERVISOR_GRAPH_MODE", "off").strip().lower()
     if mode not in {"off", "shadow", "canary", "active"}:
         raise ValueError("HOME_AI_SUPERVISOR_GRAPH_MODE must be off|shadow|canary|active")
-    environment = os.getenv("HOME_ENVIRONMENT", "local").strip().lower()
-    if mode == "shadow" and environment in {"prod", "production"}:
-        raise ValueError("supervisor graph shadow mode is forbidden in production")
+    if mode == "off":
+        return mode
+    deployment_tier = os.getenv("HOME_AI_DEPLOYMENT_TIER", "").strip().lower()
+    if deployment_tier not in {"local", "offline", "staging", "production"}:
+        raise ValueError(
+            "HOME_AI_DEPLOYMENT_TIER must be local|offline|staging|production "
+            "when supervisor graph mode is enabled"
+        )
+    if mode == "shadow" and deployment_tier not in {"offline", "staging"}:
+        raise ValueError("supervisor graph shadow mode is limited to offline or staging")
     return mode
 
 

@@ -4,6 +4,7 @@ import asyncio
 import copy
 import re
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Protocol, TypedDict
 
@@ -35,7 +36,9 @@ from .supervisor_execution import GroundedGoalExecutor, goal_specs
 
 
 class GoalPlanner(Protocol):
-    async def plan_goals(self, request: ChatbotQueryRequest) -> tuple[QueryPlan, ...]: ...
+    async def plan_supervisor_goals(
+        self, request: ChatbotQueryRequest,
+    ) -> tuple[QueryPlan, ...]: ...
 
 
 class MetricsSink(Protocol):
@@ -145,7 +148,7 @@ class SupervisorGraphEngine:
 async def _supervise(
     state: SupervisorState, runtime: Runtime[RuntimeContext],
 ) -> dict[str, object]:
-    plans = await runtime.context.planner.plan_goals(state["request"])
+    plans = await runtime.context.planner.plan_supervisor_goals(state["request"])
     goals = goal_specs(plans, state["request"].question)
     return {"plan": SupervisorPlan(goals), "goals": goals}
 
@@ -254,16 +257,18 @@ def _compose_canonical(
         response = CompoundAnswerDocument(
             state["request"], runtime.context.request_id, tuple(documents)
         ).to_public_dict()
-    if documents and all(result.status == "CLARIFICATION" for result in ordered):
-        response = dict(response)
-        response["success"] = False
-        response["status"] = "failed"
-        resolution = response.get("conversationResolution")
-        if isinstance(resolution, dict):
-            response["conversationResolution"] = {**resolution, "answerMode": "NO_RESULT"}
-        response["conversationMemoryPatch"] = None
-        response["terminalOutcome"] = terminal_outcome(
-            "CLARIFICATION", "AMBIGUOUS_ENTITY"
+    if all(result.status == "UNAVAILABLE" for result in ordered):
+        if any(result.retryable for result in ordered):
+            response = safe_final_response(runtime.context.request_id)
+        else:
+            response = _failed_response(
+                response,
+                terminal_outcome("UNAVAILABLE", "INSUFFICIENT_EVIDENCE"),
+            )
+    elif documents and all(result.status == "CLARIFICATION" for result in ordered):
+        response = _failed_response(
+            response,
+            terminal_outcome("CLARIFICATION", "AMBIGUOUS_ENTITY"),
         )
     elif any(result.status != "SUCCESS" for result in ordered) and documents:
         response = dict(response)
@@ -276,6 +281,20 @@ def _compose_canonical(
     else:
         response = with_terminal_outcome(response)
     return {"canonical_response": response}
+
+
+def _failed_response(
+    response: dict[str, object], outcome: dict[str, object],
+) -> dict[str, object]:
+    failed = dict(response)
+    failed["success"] = False
+    failed["status"] = "failed"
+    resolution = failed.get("conversationResolution")
+    if isinstance(resolution, dict):
+        failed["conversationResolution"] = {**resolution, "answerMode": "NO_RESULT"}
+    failed["conversationMemoryPatch"] = None
+    failed["terminalOutcome"] = outcome
+    return failed
 
 
 async def _polish_once(
@@ -341,9 +360,13 @@ def _valid_polish(
     candidate_metadata = {key: value for key, value in candidate.items() if key != "answer"}
     if canonical_metadata != candidate_metadata:
         return False
-    canonical_numbers = set(re.findall(r"(?<![A-Za-z])\d+(?:[.,]\d+)?", canonical_answer))
-    candidate_numbers = set(re.findall(r"(?<![A-Za-z])\d+(?:[.,]\d+)?", candidate_answer))
-    return candidate_numbers.issubset(canonical_numbers)
+    canonical_tokens = Counter(
+        token.casefold() for token in re.findall(r"[0-9A-Za-z가-힣]+", canonical_answer)
+    )
+    candidate_tokens = Counter(
+        token.casefold() for token in re.findall(r"[0-9A-Za-z가-힣]+", candidate_answer)
+    )
+    return not (candidate_tokens - canonical_tokens)
 
 
 def _insufficient_evidence_response(

@@ -8,6 +8,7 @@ import pytest
 from ai_service.auth import AuthenticatedUser
 from ai_service.chat import ChatbotProviderUnavailable
 from ai_service.models import ChatbotQueryRequest
+from ai_service.models import ConversationContext, ConversationMemory
 from ai_service.property_chat.answer_document import CompoundAnswerDocument
 from ai_service.property_chat.engine import (
     GroundedChatbotEngine,
@@ -39,6 +40,23 @@ class PropertyRepository:
 
     def latest_trade_date(self):
         return date(2026, 7, 20)
+
+    def find_complex_by_id(self, complex_id):
+        names = {501: "잠실엘스", 502: "헬리오시티"}
+        name = names.get(complex_id)
+        if name is None:
+            return None
+        return ComplexRecord(
+            complex_id=complex_id,
+            display_name=name,
+            region_code="11710",
+            region_name="송파구",
+            address=f"서울 송파구 {name}",
+            latitude=37.5,
+            longitude=127.1,
+            marker_safe=True,
+            data_updated_at=datetime(2026, 7, 20, tzinfo=UTC),
+        )
 
 
 class PartiallyFailingPropertyRepository(PropertyRepository):
@@ -107,6 +125,67 @@ def test_query_plan_bundle_merges_compatible_lists_and_rejects_conflicts() -> No
             QueryPlan("complex_identity", "잠실엘스"),
             QueryPlan("complex_identity", "헬리오시티"),
         ))
+
+
+def test_supervisor_planning_preserves_same_turn_recommendation_and_comparison() -> None:
+    plans = (
+        QueryPlan(
+            "recommendation", "강남구", region_name="강남구", limit=2,
+            recommendation_mode="CRITERIA", minimum_unit_count=500,
+        ),
+        QueryPlan(
+            "comparison", "새 추천 후보", complex_names=("새 후보 1", "새 후보 2"),
+        ),
+    )
+    engine = GroundedChatbotEngine(
+        repository=PropertyRepository(),
+        language_model=CompoundLanguageModel(plans),
+        enabled_capabilities=frozenset({"recommendation", "comparison"}),
+        dependent_workflow_enabled=True,
+    )
+    request = ChatbotQueryRequest(
+        question="강남구에서 새로 추천하고 그 후보들을 비교해줘",
+        conversationContext=ConversationContext(
+            memory=ConversationMemory(
+                version=2,
+                complexIds=[501, 502],
+                regionCode="11710",
+                scopeKind="RECOMMENDATION",
+            ),
+        ),
+    )
+
+    planned = asyncio.run(engine.plan_supervisor_goals(request))
+
+    assert {plan.capability for plan in planned} == {"recommendation", "comparison"}
+
+
+def test_supervisor_planning_still_resolves_pure_prior_recommendation_reference() -> None:
+    engine = GroundedChatbotEngine(
+        repository=PropertyRepository(),
+        language_model=CompoundLanguageModel((QueryPlan(
+            "comparison", "이전 추천", complex_names=("이전 1", "이전 2"),
+        ),)),
+        enabled_capabilities=frozenset({"comparison"}),
+        dependent_workflow_enabled=True,
+    )
+    request = ChatbotQueryRequest(
+        question="방금 추천한 1위와 2위를 비교해줘",
+        conversationContext=ConversationContext(
+            memory=ConversationMemory(
+                version=2,
+                complexIds=[501, 502],
+                regionCode="11710",
+                scopeKind="RECOMMENDATION",
+            ),
+        ),
+    )
+
+    planned = asyncio.run(engine.plan_supervisor_goals(request))
+
+    assert len(planned) == 1
+    assert planned[0].capability == "comparison"
+    assert planned[0].complex_names == ("잠실엘스", "헬리오시티")
 
 
 def test_compound_query_aggregates_grounded_artifact_and_map_action() -> None:

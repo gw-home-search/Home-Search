@@ -24,7 +24,9 @@ class Planner:
     def __init__(self, plans: tuple[QueryPlan, ...]) -> None:
         self.plans = plans
 
-    async def plan_goals(self, _request: ChatbotQueryRequest) -> tuple[QueryPlan, ...]:
+    async def plan_supervisor_goals(
+        self, _request: ChatbotQueryRequest,
+    ) -> tuple[QueryPlan, ...]:
         return self.plans
 
 
@@ -73,10 +75,45 @@ class HallucinatingPolisher:
         return {**canonical_response, "answer": "검증되지 않은 가격은 999억원입니다."}
 
 
+class QualitativeHallucinatingPolisher:
+    async def polish(self, canonical_response: dict[str, object]) -> dict[str, object]:
+        return {**canonical_response, "answer": "goal-1 답변이며 역세권입니다."}
+
+
 class UnavailableExecutor(Executor):
     async def execute(self, goal: object, *_args: object, **_kwargs: object):
         self.started.append(goal.goal_id)
         return GoalExecutionResult.unavailable(goal.goal_id, "근거가 준비되지 않았습니다.", retryable=False)
+
+
+class DocumentUnavailableExecutor(Executor):
+    async def execute(
+        self,
+        goal: object,
+        request: ChatbotQueryRequest,
+        request_id: str,
+        *,
+        deadline: float,
+    ) -> GoalExecutionResult:
+        del deadline
+        self.started.append(goal.goal_id)
+        document = AnswerDocument(
+            request=request,
+            request_id=request_id,
+            plan=goal.plan,
+            sections=(AnswerSection("필요한 근거가 준비되지 않았습니다.", ()),),
+            used_facts=(),
+            limitations=("현재 확인 가능한 근거가 없습니다.",),
+            readiness="unavailable",
+            recoverable=False,
+        )
+        return GoalExecutionResult(
+            goal_id=goal.goal_id,
+            status="UNAVAILABLE",
+            document=document,
+            limitations=document.limitations,
+            retryable=False,
+        )
 
 
 class FailingPolisher:
@@ -226,6 +263,22 @@ def test_graph_rejects_polish_with_unverified_number_and_uses_canonical_answer()
     assert "999" not in response["answer"]
 
 
+def test_graph_rejects_polish_with_new_qualitative_claim() -> None:
+    engine = SupervisorGraphEngine(
+        planner=Planner((QueryPlan("complex_identity", "잠실엘스"),)),
+        executor=Executor(),  # type: ignore[arg-type]
+        timeout_seconds=10,
+        polisher=QualitativeHallucinatingPolisher(),
+    )
+
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(question="잠실엘스 정보를 알려줘"),
+        request_id="request-1",
+    ))
+
+    assert response["answer"] == "goal-1 답변"
+
+
 def test_graph_returns_insufficient_evidence_and_skips_dependent_goal_after_failure() -> None:
     executor = UnavailableExecutor()
     engine = SupervisorGraphEngine(
@@ -245,6 +298,29 @@ def test_graph_returns_insufficient_evidence_and_skips_dependent_goal_after_fail
     assert executor.started == ["goal-1"]
     assert response["terminalOutcome"]["reason"] == "INSUFFICIENT_EVIDENCE"
     assert response["terminalOutcome"]["retryable"] is False
+
+
+def test_graph_keeps_document_backed_unavailable_result_failed() -> None:
+    engine = SupervisorGraphEngine(
+        planner=Planner((QueryPlan("complex_identity", "잠실엘스"),)),
+        executor=DocumentUnavailableExecutor(),  # type: ignore[arg-type]
+        timeout_seconds=10,
+    )
+
+    response = asyncio.run(engine.query(
+        request=ChatbotQueryRequest(question="잠실엘스 정보를 알려줘"),
+        request_id="request-1",
+    ))
+
+    assert response["success"] is False
+    assert response["status"] == "failed"
+    assert response["conversationResolution"]["answerMode"] == "NO_RESULT"
+    assert response["terminalOutcome"] == {
+        "version": 1,
+        "status": "UNAVAILABLE",
+        "reason": "INSUFFICIENT_EVIDENCE",
+        "retryable": False,
+    }
 
 
 def test_graph_skips_comparison_without_verified_recommendation_ids() -> None:

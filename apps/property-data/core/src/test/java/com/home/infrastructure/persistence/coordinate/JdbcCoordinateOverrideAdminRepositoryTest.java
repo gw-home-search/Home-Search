@@ -7,7 +7,6 @@ import com.home.application.coordinate.override.CoordinateOverrideApprovalComman
 import com.home.application.coordinate.override.InvalidCoordinateOverrideException;
 import com.home.domain.coordinate.CoordinatePendingReason;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
-import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -121,7 +120,7 @@ class JdbcCoordinateOverrideAdminRepositoryTest extends JdbcPostgresTestSupport 
 
         assertThat(result.pnu()).isEqualTo("1168010300101400001");
         assertThat(result.parcelUpdated()).isTrue();
-        assertThat(new JdbcMapMarkerRepository(jdbcClient).findComplexMarkers(bounds()))
+        assertThat(mapMarkerRepository().findComplexMarkers(bounds()))
                 .singleElement()
                 .satisfies(marker -> {
                     assertThat(marker.parcelId()).isEqualTo(1001L);

@@ -3,6 +3,7 @@ package com.home.batch.rtms;
 import com.home.application.ingest.rtms.RtmsCoordinateSourcePreflight;
 import com.home.application.ingest.rtms.RtmsMonthlyRefreshUseCase;
 import com.home.application.insight.collection.RtmsCollectionExecutionTracker;
+import com.home.application.map.MapMarkerProjectionRefreshService;
 import com.home.application.region.RegionSiGunGuCodeReader;
 import com.home.application.region.RegionUnitCntSynchronizationService;
 import com.home.infrastructure.external.rtms.RtmsIngestProperties;
@@ -44,6 +45,7 @@ class RtmsBatchJobConfiguration {
             Step coordinatePreflightStep,
             Step rtmsDailyMonthlyIngestStep,
             Step regionUnitSyncStep,
+            Step mapMarkerProjectionStep,
             @Qualifier("marketInsightDailyStep") ObjectProvider<Step> marketInsightDailyStepProvider,
             @Qualifier("marketInsightRolling7dStep") ObjectProvider<Step> marketInsightRolling7dStepProvider,
             RtmsBatchSummaryListener listener) {
@@ -55,7 +57,8 @@ class RtmsBatchJobConfiguration {
         SimpleJobBuilder builder = new JobBuilder("rtmsDailyRefreshJob", jobRepository)
                 .start(coordinatePreflightStep)
                 .next(rtmsDailyMonthlyIngestStep)
-                .next(regionUnitSyncStep);
+                .next(regionUnitSyncStep)
+                .next(mapMarkerProjectionStep);
         if (marketInsightDailyStep != null) {
             builder.next(marketInsightDailyStep).next(marketInsightRolling7dStep);
         }
@@ -64,10 +67,30 @@ class RtmsBatchJobConfiguration {
 
     @Bean
     @Lazy
+    Job mapMarkerProjectionJob(
+            JobRepository jobRepository,
+            Step regionUnitSyncStep,
+            Step mapMarkerProjectionStep,
+            RtmsBatchSummaryListener listener) {
+        return new JobBuilder("mapMarkerProjectionJob", jobRepository)
+                .start(regionUnitSyncStep)
+                .next(mapMarkerProjectionStep)
+                .listener(listener)
+                .build();
+    }
+
+    @Bean
+    @Lazy
     Job rtmsBackfillJob(
-            JobRepository jobRepository, Step rtmsBackfillMonthlyIngestStep, RtmsBatchSummaryListener listener) {
+            JobRepository jobRepository,
+            Step rtmsBackfillMonthlyIngestStep,
+            Step regionUnitSyncStep,
+            Step mapMarkerProjectionStep,
+            RtmsBatchSummaryListener listener) {
         return new JobBuilder("rtmsBackfillJob", jobRepository)
                 .start(rtmsBackfillMonthlyIngestStep)
+                .next(regionUnitSyncStep)
+                .next(mapMarkerProjectionStep)
                 .listener(listener)
                 .build();
     }
@@ -133,6 +156,19 @@ class RtmsBatchJobConfiguration {
                 jobRepository,
                 transactionManager,
                 new RtmsRegionUnitSyncTasklet(synchronizationService));
+    }
+
+    @Bean
+    @Lazy
+    Step mapMarkerProjectionStep(
+            JobRepository jobRepository,
+            PlatformTransactionManager transactionManager,
+            MapMarkerProjectionRefreshService refreshService) {
+        return taskletStep(
+                "mapMarkerProjectionStep",
+                jobRepository,
+                transactionManager,
+                new RtmsMapMarkerProjectionTasklet(refreshService));
     }
 
     private static Step taskletStep(

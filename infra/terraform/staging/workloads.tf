@@ -598,6 +598,27 @@ locals {
         { name = "NAVER_NEWS_API_KEY", valueFrom = "${aws_secretsmanager_secret.container["public-data-providers"].arn}:naver_news_api_key::" },
       ]
     }
+    map-marker-projection = {
+      image   = "property-batch"
+      role    = aws_iam_role.workload_task["map-marker-projection"].arn
+      command = []
+      environment = [
+        { name = "SPRING_PROFILES_ACTIVE", value = "staging" },
+        { name = "SPRING_BATCH_JOB_NAME", value = "mapMarkerProjectionJob" },
+        { name = "DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.primary.address}:5432/home_search?sslmode=require" },
+        { name = "DB_USERNAME", value = "home_search_property_runtime" },
+        { name = "COORDINATE_SOURCE_DB_JDBC_URL", value = "jdbc:postgresql://${aws_db_instance.coordinate_source.address}:5432/home_search_coordinate_source?sslmode=require" },
+        { name = "COORDINATE_SOURCE_DB_USERNAME", value = "home_search_coordinate_reader" },
+        { name = "COORDINATE_SOURCE_DB_READ_ONLY", value = "true" },
+        { name = "SPRING_DATA_REDIS_HOST", value = aws_elasticache_replication_group.this.primary_endpoint_address },
+        { name = "SPRING_DATA_REDIS_PORT", value = "6379" },
+        { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "true" },
+      ]
+      secrets = [
+        { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["property-runtime-db"].arn}:password::" },
+        { name = "COORDINATE_SOURCE_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["coordinate-reader-db"].arn}:password::" },
+      ]
+    }
     property-event-relay = {
       image   = "property-batch"
       role    = aws_iam_role.workload_task["property-event-relay"].arn

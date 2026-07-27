@@ -428,6 +428,36 @@ This stored aggregate preserves the existing region marker household-count
 field, type, and `NULL` meaning; it is not a trade count, parcel count, or
 current-generation-only metric.
 
+### Versioned Map Marker Read Model
+
+V38 adds an immutable, generation-scoped read model without changing public
+map fields or identifier meaning:
+
+- `map_marker_generation` stores lifecycle, source watermark, complex/region
+  row counts, and the deterministic SHA-256 marker hash.
+- `map_complex_marker_projection` stores marker identity, display coordinates,
+  latest trade fields, household count, building age, and the same-complex
+  ratio members required by public filters.
+- `map_region_marker_projection` stores region-level coordinates and household
+  counts.
+- `map_marker_active_generation` is a singleton pointer. Its trigger accepts
+  only `VALIDATED` candidates, retires the previous active generation, and
+  performs the switch in one transaction.
+
+Lifecycle values are `BUILDING`, `VALIDATED`, `ACTIVE`, `RETIRED`, and
+`FAILED`. Their durable meaning belongs to `domain/map`; database checks and
+the activation trigger enforce the same transition boundary. Projection rows
+reference their generation with cascade cleanup, while the active pointer uses
+a restrictive reference so the served generation cannot be deleted.
+
+The RTMS daily and backfill jobs run region synchronization before projection
+refresh. Complex projection creation is one SQL statement and therefore one
+source snapshot; validation and activation are separate transactions, so a
+failed candidate never makes partial rows public. Only the active and immediate
+rollback generations are retained during normal cleanup. V39 grants the
+property runtime explicit privileges for these tables, the identity sequence,
+and the activation function; it does not expand the AI reader boundary.
+
 ## Complex Metadata Enrichment
 
 `complex` rows keep identity data on the ingest path. Optional complex

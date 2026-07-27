@@ -97,7 +97,7 @@ run "private_encrypted_staging_foundation" {
   assert {
     condition = (
       length(aws_ecs_service.service) == 0 &&
-      length(aws_ecs_task_definition.one_shot) == 13 &&
+      length(aws_ecs_task_definition.one_shot) == 14 &&
       alltrue([for schedule in aws_scheduler_schedule.database_backup : schedule.state == "DISABLED"]) &&
       alltrue([for schedule in aws_scheduler_schedule.market_news : schedule.state == "DISABLED"]) &&
       aws_scheduler_schedule.property_event_relay.state == "DISABLED" &&

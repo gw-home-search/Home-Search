@@ -15,7 +15,7 @@ class JdbcRegionMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("bounds query는 요청한 region level의 canonical region marker를 반환한다")
     void boundsQueryReturnsRegionMarkersForRequestedLevel() {
         seedRegionMarkers();
-        JdbcRegionMarkerRepository repository = new JdbcRegionMarkerRepository(jdbcClient);
+        JdbcRegionMarkerRepository repository = regionMarkerRepository();
 
         var markers = repository.findRegionMarkers(request("si-gun-gu"));
 
@@ -34,7 +34,7 @@ class JdbcRegionMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("bounds query는 다른 region level과 marker coordinate가 없는 region을 제외한다")
     void boundsQueryExcludesOtherLevelsAndNullCoordinates() {
         seedRegionMarkers();
-        JdbcRegionMarkerRepository repository = new JdbcRegionMarkerRepository(jdbcClient);
+        JdbcRegionMarkerRepository repository = regionMarkerRepository();
 
         var markers = repository.findRegionMarkers(request("eup-myeon-dong"));
 
@@ -47,7 +47,7 @@ class JdbcRegionMarkerRepositoryTest extends JdbcPostgresTestSupport {
     @DisplayName("bounds query는 하위 complex 세대수 metadata가 없어 region 세대수 합계가 없으면 marker를 반환하지 않는다")
     void boundsQueryExcludesRegionMarkerWhenUnitCountSumIsMissing() {
         seedRegionMarkersWithMissingUnitCounts();
-        JdbcRegionMarkerRepository repository = new JdbcRegionMarkerRepository(jdbcClient);
+        JdbcRegionMarkerRepository repository = regionMarkerRepository();
 
         var markers = repository.findRegionMarkers(request("si-gun-gu"));
 

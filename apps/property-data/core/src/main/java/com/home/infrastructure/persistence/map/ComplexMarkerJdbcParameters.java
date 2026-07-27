@@ -67,6 +67,18 @@ record ComplexMarkerJdbcParameters(
                 .param("vlRatMax", vlRatMax);
     }
 
+    JdbcClient.StatementSpec bindProjection(JdbcClient.StatementSpec statement) {
+        return bindCommon(statement)
+                .param("unitMin", unitMin)
+                .param("unitMax", unitMax)
+                .param("ageMin", ageMin)
+                .param("ageMax", ageMax)
+                .param("bcRatMin", bcRatMin)
+                .param("bcRatMax", bcRatMax)
+                .param("vlRatMin", vlRatMin)
+                .param("vlRatMax", vlRatMax);
+    }
+
     private JdbcClient.StatementSpec bindCommon(JdbcClient.StatementSpec statement) {
         return statement
                 .param("swLat", swLat)

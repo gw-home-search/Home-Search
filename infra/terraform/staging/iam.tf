@@ -10,7 +10,7 @@ locals {
   workload_names = toset([
     "property-api", "admin-api", "user-api", "user-insight-worker", "public-gateway", "admin-gateway", "ml", "ai", "chat-bff",
     "secret-bootstrap", "database-bootstrap", "runtime-grants", "property-flyway",
-    "admin-migration", "user-flyway", "source-data-migration", "property-batch",
+    "admin-migration", "user-flyway", "source-data-migration", "property-batch", "map-marker-projection",
     "property-event-relay", "property-event-maintenance",
     "admin-ops", "backup", "restore-verification",
   ])
@@ -54,6 +54,7 @@ locals {
     user-flyway                = ["user-migrator-db"]
     source-data-migration      = ["coordinate-migrator-db"]
     property-batch             = ["property-runtime-db", "coordinate-reader-db", "public-data-providers"]
+    map-marker-projection      = ["property-runtime-db", "coordinate-reader-db"]
     property-event-relay       = ["property-runtime-db"]
     property-event-maintenance = ["property-runtime-db"]
     admin-ops                  = ["admin-runtime-db"]

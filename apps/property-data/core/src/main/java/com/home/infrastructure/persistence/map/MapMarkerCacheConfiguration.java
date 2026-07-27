@@ -24,6 +24,6 @@ class MapMarkerCacheConfiguration {
             MeterRegistry meterRegistry,
             MapMarkerCacheProperties properties) {
         return new RedisCachingComplexMarkerRepository(
-                delegate, redisTemplate, objectMapper, properties.ttl(), meterRegistry);
+                delegate, redisTemplate, objectMapper, properties.ttl(), meterRegistry, delegate::activeGenerationId);
     }
 }

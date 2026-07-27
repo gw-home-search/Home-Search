@@ -33,7 +33,7 @@ locals {
     "admin-api", "admin-migration", "admin-ops",
     "user-api", "user-insight-worker", "user-flyway", "source-data-migration",
     "public-gateway", "admin-gateway", "backup", "restore-verification", "ml", "ai", "chat-bff",
-    "secret-bootstrap", "database-bootstrap", "runtime-grants",
+    "secret-bootstrap", "database-bootstrap", "runtime-grants", "map-marker-projection",
   ])
   secret_containers = toset([
     "database-runtime", "database-bootstrap", "oauth-providers", "ai-runtime", "openai-provider",

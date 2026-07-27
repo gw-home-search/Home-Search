@@ -27,6 +27,7 @@ import com.home.application.insight.collection.RtmsCollectionExecutionService;
 import com.home.application.insight.generation.MarketInsightDailyBuildService;
 import com.home.application.insight.generation.MarketInsightRolling7dBuildService;
 import com.home.application.insight.generation.MarketInsightWeeklyBuildService;
+import com.home.application.map.MapMarkerProjectionRefreshService;
 import com.home.application.region.RegionUnitCntSynchronizationService;
 import com.home.infrastructure.event.PropertyEventRelayConfiguration;
 import com.home.infrastructure.external.complex.ComplexMetadataClientConfiguration;
@@ -76,12 +77,14 @@ import org.springframework.stereotype.Repository;
                             MarketInsightDailyBuildService.class,
                             MarketInsightRolling7dBuildService.class,
                             MarketInsightWeeklyBuildService.class,
+                            MapMarkerProjectionRefreshService.class,
                             RegionUnitCntSynchronizationService.class
                         }))
 @ComponentScan(
         basePackages = {
             "com.home.infrastructure.persistence.ingest",
             "com.home.infrastructure.persistence.insight",
+            "com.home.infrastructure.persistence.map",
             "com.home.infrastructure.persistence.news",
             "com.home.infrastructure.persistence.region"
         },

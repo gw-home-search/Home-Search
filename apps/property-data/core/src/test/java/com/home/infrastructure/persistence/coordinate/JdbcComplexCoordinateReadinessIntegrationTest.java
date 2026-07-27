@@ -17,7 +17,6 @@ import com.home.domain.complex.relation.ComplexRelationClassifier;
 import com.home.domain.coordinate.CoordinateIdentityBlockingPolicy;
 import com.home.infrastructure.persistence.complex.JdbcComplexRelationRepository;
 import com.home.infrastructure.persistence.ingest.JdbcPostgresTestSupport;
-import com.home.infrastructure.persistence.map.JdbcMapMarkerRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -66,7 +65,7 @@ class JdbcComplexCoordinateReadinessIntegrationTest extends JdbcPostgresTestSupp
                         tuple(602L, "BUILDING_FOOTPRINT", 90, bd("37.5020000"), bd("127.0020000")),
                         tuple(701L, "PARCEL_FALLBACK", 40, bd("37.5125000"), bd("127.0458000")),
                         tuple(702L, "PARCEL_FALLBACK", 40, bd("37.5125000"), bd("127.0458000")));
-        assertThat(new JdbcMapMarkerRepository(jdbcClient).findComplexMarkers(bounds()))
+        assertThat(mapMarkerRepository().findComplexMarkers(bounds()))
                 .extracting(ComplexMarkerResult::parcelId, ComplexMarkerResult::lat, ComplexMarkerResult::lng)
                 .contains(tuple(1002L, 37.5020, 127.0020), tuple(1003L, 37.5125, 127.0458));
 

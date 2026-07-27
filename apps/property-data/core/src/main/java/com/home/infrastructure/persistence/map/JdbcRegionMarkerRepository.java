@@ -24,20 +24,20 @@ public class JdbcRegionMarkerRepository implements RegionMarkerRepository {
         return jdbcClient
                 .sql("""
 			SELECT
-			    r.id,
-			    r.name,
-			    r.center_lat AS lat,
-			    r.center_lng AS lng,
+			    marker.region_id AS id,
+			    marker.region_name AS name,
+			    marker.lat,
+			    marker.lng,
 			    NULL::double precision AS trend,
-			    r.unit_cnt_sum
-			FROM region r
-			WHERE r.region_type = :region
-			  AND r.unit_cnt_sum IS NOT NULL
-			  AND r.center_lat IS NOT NULL
-			  AND r.center_lng IS NOT NULL
-			  AND r.center_lat BETWEEN :swLat AND :neLat
-			  AND r.center_lng BETWEEN :swLng AND :neLng
-			ORDER BY r.id
+			    marker.unit_cnt_sum
+			FROM map_marker_active_generation active
+			JOIN map_region_marker_projection marker
+			  ON marker.generation_id = active.generation_id
+			WHERE active.singleton_id = 1
+			  AND marker.region_type = :region
+			  AND marker.lat BETWEEN :swLat AND :neLat
+			  AND marker.lng BETWEEN :swLng AND :neLng
+			ORDER BY marker.region_id
 			""")
                 .param("region", query.region())
                 .param("swLat", query.swLat())

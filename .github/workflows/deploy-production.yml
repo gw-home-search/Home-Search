@@ -88,7 +88,7 @@ jobs:
         env: { ECS_CLUSTER: "${{ vars.PRODUCTION_ECS_CLUSTER }}", PRIVATE_SUBNETS: "${{ vars.PRODUCTION_PRIVATE_SUBNETS }}", OPS_SECURITY_GROUP: "${{ vars.PRODUCTION_OPS_SECURITY_GROUP }}" }
         run: |
           set -Eeuo pipefail
-          for task in property-flyway admin-migration user-flyway source-data-migration; do
+          for task in property-flyway admin-migration user-flyway source-data-migration runtime-grants map-marker-projection; do
             infra/deploy/run-ecs-task.sh "${ECS_CLUSTER}" "${task}" "${PRIVATE_SUBNETS}" "${OPS_SECURITY_GROUP}"
           done
           echo '상태: migration-before-service 완료' | tee deployment-evidence/deploy-order.txt

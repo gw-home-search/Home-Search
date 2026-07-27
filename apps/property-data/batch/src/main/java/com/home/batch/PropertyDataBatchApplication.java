@@ -15,6 +15,7 @@ public class PropertyDataBatchApplication {
     private static final Set<String> SUPPORTED_JOB_NAMES = Set.of(
             "rtmsDailyRefreshJob",
             "rtmsBackfillJob",
+            "mapMarkerProjectionJob",
             "complexBuildingMetadataJob",
             "complexOdcMetadataGapFillJob",
             "complexBuildingRegisterCollectJob",

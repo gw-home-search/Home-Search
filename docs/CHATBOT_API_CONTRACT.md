@@ -11,8 +11,9 @@
 - 두 endpoint 모두 user-service access token이 필요하다.
 - JSON과 SSE는 하나의 use case를 실행하고 동일한 최종 response 의미를 가진다.
 - 모든 성공 답변은 서버 grounding 검증을 통과하며 검증된 fact 밖의 사실은 포함할 수
-  없다. LLM은 typed plan과 일부 capability의 문장 초안에만 사용하고, 추천 text
-  fallback은 서버 presenter가 결정적으로 조립한다.
+  없다. legacy v1은 typed plan과 일부 capability 문장 초안만 LLM에 맡긴다. 신규 v2는
+  bounded 후보 안에서 AI가 최종 후보·순서·설명을 선택하고 서버가 grounding을 검증한다.
+  결정형 presenter는 primary·repair·secondary가 모두 실패한 최소 fallback에만 사용한다.
 
 ## 인증과 공통 헤더
 
@@ -408,6 +409,44 @@ LLM이 artifact의 값, 점수, 순서 또는 `factIds`를 만들지 않는다. 
 - `CHILDCARE`는 source·타입 구현을 보존하지만 이 version의 active metric, 점수, 표,
   runtime allowlist에서 제외한다. 유치원은 별도 공식 source 승인 전 포함하지 않는다.
 
+#### `recommendationTable/v2`
+
+`recommendationTable/v2`는 Agentic 선택을 위한 additive artifact다. 기존 v1과 archive는
+그대로 유지하며 모르는 client는 이 artifact를 무시하고 `answer`와 `citations`를 표시한다.
+
+```json
+{
+  "type": "recommendationTable",
+  "version": 2,
+  "policyVersion": "agentic-recommendation-v1",
+  "basis": {
+    "selectionMode": "AGENTIC",
+    "scopeType": "ADMIN_REGION",
+    "scopeLabel": "송파구",
+    "requestedCount": 3,
+    "criteriaOrder": [],
+    "defaultPolicy": "BALANCED_V1"
+  },
+  "rows": [{
+    "order": 1,
+    "complexId": 12416,
+    "complexName": "헬리오시티",
+    "role": "BALANCED",
+    "summary": "검증 근거를 이용한 AI 선택 이유",
+    "strengths": [{"text": "...", "factIds": ["..."]}],
+    "tradeoffs": [{"text": "...", "factIds": ["..."]}],
+    "metrics": {},
+    "factIds": ["..."]
+  }]
+}
+```
+
+- `role`은 `BALANCED|TRADE_ACTIVITY|SCALE|NEWER|TRANSIT|EDUCATION|LIFESTYLE`다.
+- row는 unique `complexId` 1..5개이고 `order`는 1부터 연속된다.
+- `summary`, `strengths`, `tradeoffs`의 사실 문장은 실제 observation의 `factIds`를 가진다.
+- 서버가 만든 후보군 밖 ID, hard constraint 위반, 존재하지 않는 `factId`는 거부한다.
+- 조건 없는 추천은 `defaultPolicy=BALANCED_V1`이고 예산·면적 미지정을 답변에 표시한다.
+
 #### `recommendationCards/v1`
 
 ```json
@@ -600,7 +639,7 @@ optional additive 계약이다. Web은 검증에 실패하거나 알 수 없는 
 
 ```text
 event: status
-data: {"requestId":"...","stage":"validating_evidence"}
+data: {"requestId":"...","stage":"interpreting_question"}
 
 event: artifacts
 data: {"requestId":"...","uiActions":[],"uiArtifacts":[]}
@@ -613,6 +652,10 @@ data: {"requestId":"...","response":{...JSON 응답과 동일한 객체...}}
 ```
 
 허용 event는 `status`, `artifacts`, `answer_delta`, `final`, `error`다.
+
+`status.stage`는 `interpreting_question`, `checking_candidates`,
+`comparing_evidence`, `checking_official_sources`, `validating_answer`만 허용한다.
+질문, 단지명, tool argument, 검색어는 status에 포함하지 않는다.
 
 1. 서버는 도구 실행, LLM 생성, fact/citation 검증을 모두 완료한다.
 2. 검증 완료 전에는 `answer_delta`와 `artifacts`를 보내지 않는다.

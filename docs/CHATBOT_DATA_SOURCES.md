@@ -6,6 +6,12 @@
 `home_search.ai_read` SELECT-only view로 읽으며 `home_search`에 쓰지 않는다.
 브라우저 대화, 사용자 질문, LLM 답변은 어떤 서버 DB에도 저장하지 않는다.
 
+공식 웹 검색은 dataset 게시 파이프라인을 대체하지 않는 D등급 보충 근거다. 허용 host는
+`go.kr` 하위 domain, `reb.or.kr`, `railportal.kr`, `korail.com`,
+`seoulmetro.co.kr`, `applyhome.co.kr`이며 HTTPS URL만 허용한다. 검색어, raw 페이지,
+tool argument/result와 답변은 저장하지 않는다. 웹 근거는 A등급 내부 단지·실거래 사실을
+덮어쓸 수 없고 citation URL이 없는 주장은 사용할 수 없다.
+
 이 카탈로그의 `등급 후보`는 출처 유형을 뜻한다. 품질 검사를 통과한 active
 snapshot 또는 검증된 실시간 응답에만 실제 근거 등급을 부여한다.
 

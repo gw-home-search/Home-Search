@@ -42,13 +42,42 @@ describe('건축물 profile BuildingProfilePanel', () => {
     expect(host.textContent).toContain('0가구');
     expect(host.textContent).toContain('0대');
     expect(host.textContent).toContain('120.5㎡');
-    expect(host.textContent).toContain('주 건물 4동');
+    expect(host.textContent).toContain('건축물대장 주건물4동');
     expect(host.textContent).toContain('평지붕');
     expect(host.textContent).toContain('테헤란로 1');
     expect(host.textContent).toContain('대지 기준');
     expect(host.textContent).toContain('확인된 동 기준');
-    expect(host.querySelector('details summary')?.textContent).toContain('안전·에너지');
+    expect(Array.from(host.querySelectorAll('details > summary')).map((summary) => summary.textContent))
+      .toEqual(['주차 상세', '안전', '에너지·인증']);
     expect(host.textContent).toContain('1등급');
+    act(() => root.unmount());
+  });
+
+  it('단지 직접 면적을 우선하고 누락된 ratio만 대지 fallback badge로 표시한다', () => {
+    host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    const profile: BuildingProfile = {
+      ratios: { scope: 'PARCEL', quality: 'PNU_FALLBACK', siteAreaM2: 20409.9,
+        buildingAreaM2: 4119.66, totalFloorAreaM2: 62044.22, floorAreaRatioAreaM2: 42616.89,
+        buildingCoverageRate: 20.18, floorAreaRatio: 208.8 },
+      households: null, parking: null, building: null, elevators: null, safety: null,
+      dates: null, address: null, energy: null,
+    };
+    act(() => root.render(<BuildingProfilePanel profile={profile} detail={{
+      parcelId: 1, complexId: 2, latitude: null, longitude: null, address: null,
+      tradeName: '단지', name: '단지', dongCnt: 5, unitCnt: 100,
+      platArea: 21000, archArea: null, totArea: null, bcRat: 21, vlRat: null,
+      useDate: null, prediction: null, buildingProfile: profile,
+    }} />));
+
+    expect(host.textContent).toContain('대지면적21,000㎡');
+    expect(host.textContent).not.toContain('20,409.9㎡');
+    expect(host.textContent).toContain('건축면적4,119.66㎡대지 기준');
+    expect(host.textContent).toContain('용적률 산정 연면적42,616.89㎡대지 기준');
+    expect(host.textContent).toContain('건폐율21%');
+    expect(host.textContent).toContain('용적률208.8%대지 기준');
+    expect(host.textContent).not.toContain('평');
     act(() => root.unmount());
   });
 });

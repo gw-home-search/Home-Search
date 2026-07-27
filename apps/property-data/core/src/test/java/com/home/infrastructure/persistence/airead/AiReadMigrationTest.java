@@ -49,15 +49,30 @@ class AiReadMigrationTest extends JdbcMigrationTestSupport {
                 WHERE complex_id IN (990011, 990012, 990013)
                 """).query(Long.class).single()).isZero();
 
-        assertThat(jdbcClient.sql("""
+        assertThat(jdbcClient
+                        .sql("""
                 SELECT has_table_privilege(:role, 'ai_read.complex_search_fact', 'SELECT')
-                """).param("role", AI_READER_ROLE).query(Boolean.class).single()).isTrue();
-        assertThat(jdbcClient.sql("""
+                """)
+                        .param("role", AI_READER_ROLE)
+                        .query(Boolean.class)
+                        .single())
+                .isTrue();
+        assertThat(jdbcClient
+                        .sql("""
                 SELECT has_table_privilege(:role, 'ai_read.complex_profile_fact', 'SELECT')
-                """).param("role", AI_READER_ROLE).query(Boolean.class).single()).isTrue();
-        assertThat(jdbcClient.sql("""
+                """)
+                        .param("role", AI_READER_ROLE)
+                        .query(Boolean.class)
+                        .single())
+                .isTrue();
+        assertThat(jdbcClient
+                        .sql("""
                 SELECT has_table_privilege(:role, 'ai_read.complex_search_fact', 'UPDATE')
-                """).param("role", AI_READER_ROLE).query(Boolean.class).single()).isFalse();
+                """)
+                        .param("role", AI_READER_ROLE)
+                        .query(Boolean.class)
+                        .single())
+                .isFalse();
         assertThatThrownBy(() -> reader.sql("SELECT count(*) FROM public.complex_name_alias")
                         .query(Long.class)
                         .single())
@@ -200,7 +215,8 @@ class AiReadMigrationTest extends JdbcMigrationTestSupport {
     }
 
     private void seedAgenticSearchFacts() {
-        Long regionId = jdbcClient.sql("SELECT id FROM region WHERE code = '11200108'")
+        Long regionId = jdbcClient
+                .sql("SELECT id FROM region WHERE code = '11200108'")
                 .query(Long.class)
                 .single();
         jdbcClient.sql("""

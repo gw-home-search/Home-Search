@@ -27,6 +27,8 @@ Runtime variables:
 - `HOME_AI_OPENAI_SECONDARY_MODEL`
 - `HOME_AI_OPENAI_TIMEOUT_SECONDS` (optional, default `30`, allowed `1..30`)
 - `HOME_AI_QUERY_TIMEOUT_SECONDS` (optional, default `45`, allowed `1..60`)
+- `HOME_AI_AGENTIC_ORCHESTRATION_ENABLED` (overlay default `true`; exact `false` rolls back)
+- `HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED` (overlay default `true`; exact `false` disables web)
 - `HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison`
 - `HOME_AI_REFERENCE_DSN` (separate `home_search_ai_runtime` read-only pool)
 - `HOME_AI_ENABLED_REFERENCE_CAPABILITIES` (blank by default; only the exact

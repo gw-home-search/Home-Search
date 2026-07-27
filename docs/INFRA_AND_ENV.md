@@ -387,6 +387,15 @@ optional `HOME_AI_OPENAI_TIMEOUT_SECONDS` in the range `1..30` with default `30`
 flow to `1..60s`; invalid values fail closed. Answer-first execution reserves
 the final five seconds of this budget for deterministic response assembly and
 grounding validation.
+The chatbot overlay enables `HOME_AI_AGENTIC_ORCHESTRATION_ENABLED` and
+`HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED` independently by default. Set either to
+the exact value `false` to return recommendations to the v1 maintenance path or
+to remove the official web tool without a migration rollback. Agent execution
+reserves the final eight seconds of the total query budget for final generation
+and grounding validation. Runtime metrics contain route/repair/secondary/fallback,
+bounded tool and web counts, latency, token usage, response byte counts, and a
+grounding rejection category; they never contain the question, answer, context,
+tool arguments, tool results, or web query.
 `HOME_AI_ANSWER_FIRST_ORCHESTRATION_ENABLED` and
 `HOME_AI_PROPERTY_OVERVIEW_ENABLED`, `HOME_AI_SEMANTIC_GOAL_PLANNER_ENABLED`,
 `HOME_AI_DEPENDENT_WORKFLOW_ENABLED`, `HOME_AI_DECISION_REPORT_ENABLED`, and

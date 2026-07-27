@@ -7,6 +7,8 @@ HOME_AI_OPENAI_PRIMARY_MODEL=replace-with-approved-primary-model-id
 HOME_AI_OPENAI_SECONDARY_MODEL=replace-with-approved-secondary-model-id
 HOME_AI_OPENAI_TIMEOUT_SECONDS=30
 HOME_AI_QUERY_TIMEOUT_SECONDS=60
+HOME_AI_AGENTIC_ORCHESTRATION_ENABLED=true
+HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED=true
 HOME_AI_ENABLED_PROPERTY_CAPABILITIES=complex_identity,recent_trade_lookup,price_trend,recommendation,comparison
 # Approved local reference activation. Use a blank value to roll back.
 HOME_AI_ENABLED_REFERENCE_CAPABILITIES=academy_lookup,rail_station_lookup,school_location,retail_location

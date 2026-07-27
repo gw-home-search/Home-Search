@@ -12,6 +12,9 @@ from ai_service.property_chat.agentic import (
     AgentTurn,
     BoundedAgentOrchestrator,
     ToolEvidence,
+    WebCitation,
+    _validate_decision,
+    _validate_tool_call,
 )
 
 
@@ -203,3 +206,176 @@ def test_candidate_name_must_match_the_verified_identity() -> None:
     ).run(question="송파 아파트 추천", requested_count=1))
 
     assert result.route == "repair"
+
+
+@pytest.mark.parametrize("turn", [AgentTurn, lambda: AgentTurn(
+    tool_calls=(AgentToolCall("id", "search_complexes", {}),),
+    decision=_decision(10),
+)])
+def test_agent_turn_requires_exactly_one_output_kind(turn) -> None:
+    with pytest.raises(ValueError, match="either tools"):
+        turn()
+
+
+@pytest.mark.parametrize("count", [0, 6])
+def test_requested_count_is_bounded(count: int) -> None:
+    with pytest.raises(ValueError, match="requested count"):
+        asyncio.run(BoundedAgentOrchestrator(
+            primary=ScriptedModel([]), secondary=ScriptedModel([]), tools=RecordingTools(),
+        ).run(question="추천", requested_count=count))
+
+
+@pytest.mark.parametrize("call,candidates", [
+    (AgentToolCall("bad id!", "search_complexes", {"query": "잠실", "limit": 3}), set()),
+    (AgentToolCall("id", "unknown", {}), set()),
+    (AgentToolCall("id", "get_complex_profile", {"complexId": True}), set()),
+    (AgentToolCall("id", "get_recent_trades", {"complexId": 2}), {1}),
+    (AgentToolCall("id", "get_candidate_evidence", {"bad": [1]}), {1}),
+    (AgentToolCall("id", "get_reference_evidence", {"complexIds": [1, 1]}), {1}),
+    (AgentToolCall("id", "search_complexes", {"query": "", "limit": 0}), set()),
+    (AgentToolCall("id", "get_region_candidate_pool", {"regionName": "", "limit": 3}), set()),
+    (AgentToolCall("id", "get_region_candidate_pool", {
+        "regionName": "송파구", "limit": 3, "minimumUnitCount": 0,
+    }), set()),
+    (AgentToolCall("id", "get_region_candidate_pool", {
+        "regionName": "송파구", "limit": 3, "maximumBudgetTenThousandKrw": 0,
+    }), set()),
+    (AgentToolCall("id", "get_region_candidate_pool", {
+        "regionName": "송파구", "limit": 3, "exclusiveAreaSquareMeters": True,
+    }), set()),
+    (AgentToolCall("id", "get_region_candidate_pool", {
+        "regionName": "송파구", "limit": 3, "maximumBudgetTenThousandKrw": 100_000,
+    }), set()),
+])
+def test_tool_arguments_fail_closed(call: AgentToolCall, candidates: set[int]) -> None:
+    with pytest.raises(ValueError):
+        _validate_tool_call(call, candidates)
+
+
+def test_valid_tool_argument_variants_are_accepted() -> None:
+    _validate_tool_call(AgentToolCall(
+        "pool", "get_region_candidate_pool", {
+            "regionName": "송파구", "limit": 3, "minimumUnitCount": 500,
+            "maximumBudgetTenThousandKrw": 150_000, "exclusiveAreaSquareMeters": 84.0,
+        },
+    ), set())
+    _validate_tool_call(AgentToolCall(
+        "batch", "get_candidate_evidence", {"complexIds": [1, 2]},
+    ), {1, 2})
+
+
+def _validate_for_test(decision: AgentDecision) -> None:
+    _validate_decision(
+        decision, candidate_ids={10}, candidate_names={10: "10단지"},
+        fact_ids={"complex:10"}, allowed_numbers=set(), requested_count=1,
+    )
+
+
+@pytest.mark.parametrize("decision", [
+    AgentDecision(" ", _decision(10).rows, ("complex:10",)),
+    AgentDecision("답변", (), ("complex:10",)),
+    AgentDecision("답변", (AgentRecommendationRow(
+        10, "10단지", "INVALID", "요약", (("강점", ("complex:10",)),),
+        (("한계", ("complex:10",)),), {}, ("complex:10",),
+    ),), ("complex:10",)),
+    AgentDecision("답변", (AgentRecommendationRow(
+        10, "10단지", "BALANCED", "요약", (("강점", ("complex:10",)),),
+        (("한계", ("complex:10",)),), {}, (),
+    ),), ("complex:10",)),
+    AgentDecision("답변", (AgentRecommendationRow(
+        10, "10단지", "BALANCED", "요약", (("", ()),),
+        (("한계", ("complex:10",)),), {}, ("complex:10",),
+    ),), ("complex:10",)),
+    AgentDecision("답변", _decision(10).rows, ("complex:10",), web_citations=(
+        WebCitation("web:bad", "공식", "https://www.reb.or.kr/notice"),
+    )),
+])
+def test_decision_shape_and_web_citations_fail_closed(decision: AgentDecision) -> None:
+    with pytest.raises(ValueError):
+        _validate_for_test(decision)
+
+
+class FixedTools:
+    def __init__(self, result: ToolEvidence | Exception) -> None:
+        self.result = result
+
+    async def execute(self, _name: str, _arguments: Mapping[str, object]) -> ToolEvidence:
+        if isinstance(self.result, Exception):
+            raise self.result
+        return self.result
+
+
+def _search_call(index: int = 1) -> AgentToolCall:
+    return AgentToolCall(f"search-{index}", "search_complexes", {"query": "잠실", "limit": 3})
+
+
+def test_secondary_invalid_decision_and_failed_repair_fall_through() -> None:
+    evidence = ToolEvidence(
+        payload={"complexId": 10}, candidate_ids=frozenset({10}),
+        candidate_names={10: "10단지"}, fact_ids=frozenset({"complex:10"}),
+    )
+    result = asyncio.run(BoundedAgentOrchestrator(
+        primary=ScriptedModel([AgentTurn(tool_calls=(_search_call(),)),
+                               AgentTurn(decision=_decision(99)),
+                               AgentTurn(tool_calls=(_search_call(2),))]),
+        secondary=ScriptedModel([AgentTurn(tool_calls=(_search_call(),)),
+                                 AgentTurn(decision=_decision(99))]),
+        tools=FixedTools(evidence),
+    ).run(question="추천", requested_count=1))
+    assert result.route == "minimal_fallback"
+
+
+@pytest.mark.parametrize("tool_result", [
+    RuntimeError("read failed"),
+    ToolEvidence(payload={"value": "x" * (32 * 1024)}),
+])
+def test_tool_failure_or_oversized_output_uses_secondary_fallback(tool_result) -> None:
+    result = asyncio.run(BoundedAgentOrchestrator(
+        primary=ScriptedModel([AgentTurn(tool_calls=(_search_call(),))]),
+        secondary=ScriptedModel([RuntimeError("secondary")]),
+        tools=FixedTools(tool_result),
+    ).run(question="추천", requested_count=1))
+    assert result.route == "minimal_fallback"
+
+
+def test_call_count_total_bytes_and_conflicting_identity_are_bounded() -> None:
+    many_calls = tuple(_search_call(index) for index in range(13))
+    large = ToolEvidence(payload={"value": "x" * 32_700})
+    conflict_model = ScriptedModel([
+        AgentTurn(tool_calls=(_search_call(1),)), AgentTurn(tool_calls=(_search_call(2),)),
+    ])
+
+    for model, tools in (
+        (ScriptedModel([AgentTurn(tool_calls=many_calls)]), FixedTools(ToolEvidence(payload={}))),
+        (ScriptedModel([AgentTurn(tool_calls=tuple(_search_call(i) for i in range(1, 6)))]), FixedTools(large)),
+    ):
+        result = asyncio.run(BoundedAgentOrchestrator(
+            primary=model, secondary=ScriptedModel([RuntimeError("secondary")]), tools=tools,
+        ).run(question="추천", requested_count=1))
+        assert result.route == "minimal_fallback"
+
+    class ConflictingTools:
+        calls = 0
+
+        async def execute(self, _name, _arguments):
+            self.calls += 1
+            return ToolEvidence(
+                payload={"ok": True}, candidate_ids=frozenset({10}),
+                candidate_names={10: "가단지" if self.calls == 1 else "나단지"},
+                scope_label="송파구",
+            )
+
+    result = asyncio.run(BoundedAgentOrchestrator(
+        primary=conflict_model, secondary=ScriptedModel([RuntimeError("secondary")]),
+        tools=ConflictingTools(),
+    ).run(question="추천", requested_count=1))
+    assert result.route == "minimal_fallback"
+
+
+def test_four_tool_rounds_without_decision_end_in_fallback() -> None:
+    result = asyncio.run(BoundedAgentOrchestrator(
+        primary=ScriptedModel([AgentTurn(tool_calls=(_search_call(i),)) for i in range(1, 5)]),
+        secondary=ScriptedModel([RuntimeError("secondary")]),
+        tools=FixedTools(ToolEvidence(payload={}, scope_label="송파구")),
+    ).run(question="추천", requested_count=1))
+    assert result.route == "minimal_fallback"

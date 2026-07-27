@@ -29,6 +29,7 @@ class SequenceRequester:
 def _provider(output: list[dict[str, object]], response_id: str) -> bytes:
     return json.dumps({
         "id": response_id, "status": "completed", "output": output,
+        "usage": {"input_tokens": 12, "output_tokens": 7},
     }, ensure_ascii=False).encode()
 
 
@@ -88,6 +89,9 @@ def test_responses_agent_continues_function_loop_without_storage() -> None:
     assert second_body["input"] == [
         {"type": "function_call_output", "call_id": "pool-1", "output": "{}"}
     ]
+    assert model.operational_metrics()["input_tokens"] == 24
+    assert model.operational_metrics()["output_tokens"] == 14
+    assert model.operational_metrics()["provider_response_bytes"] > 0
 
 
 def test_official_web_tool_is_exposed_only_when_enabled() -> None:
@@ -200,4 +204,98 @@ def test_web_search_rejects_missing_unsafe_or_injected_citations(
         asyncio.run(model.respond(
             question="최신 공고", transcript=(), tools=TOOL_CATALOG,
             repair_error=None,
+        ))
+
+
+def test_required_web_cannot_be_configured_without_web_tool() -> None:
+    with pytest.raises(ValueError, match="required web"):
+        OpenAIResponsesAgentModel(
+            settings=OpenAIResponsesSettings(api_key="key", model="model"),
+            web_search_required=True,
+        )
+
+
+@pytest.mark.parametrize("root", [
+    {"id": "id", "status": "in_progress", "output": []},
+    {"id": "", "status": "completed", "output": []},
+    {"id": "id", "status": "completed", "output": {}},
+    {"id": "id", "status": "completed", "output": ["bad"]},
+    {"id": "id", "status": "completed", "output": [{
+        "type": "function_call", "call_id": "call", "name": "search_complexes",
+        "arguments": "not-json",
+    }]},
+    {"id": "id", "status": "completed", "output": [{
+        "type": "message", "content": [{"type": "refusal", "refusal": "no"}],
+    }]},
+    {"id": "id", "status": "completed", "output": [{
+        "type": "message", "content": {},
+    }]},
+])
+def test_malformed_provider_responses_fail_closed(root: dict[str, object]) -> None:
+    requester = SequenceRequester([json.dumps(root).encode()])
+    model = OpenAIResponsesAgentModel(
+        settings=OpenAIResponsesSettings(api_key="key", model="model"), requester=requester,
+    )
+    with pytest.raises(OpenAIResponsesError):
+        asyncio.run(model.respond(
+            question="추천", transcript=(), tools=TOOL_CATALOG, repair_error=None,
+        ))
+
+
+def test_web_call_is_rejected_when_not_exposed_and_after_two_uses() -> None:
+    web_output = [{"type": "web_search_call", "id": "web", "status": "completed"}]
+    disabled = OpenAIResponsesAgentModel(
+        settings=OpenAIResponsesSettings(api_key="key", model="model"),
+        requester=SequenceRequester([_provider(web_output, "id")]),
+    )
+    with pytest.raises(OpenAIResponsesError):
+        asyncio.run(disabled.respond(
+            question="최신", transcript=(), tools=TOOL_CATALOG, repair_error=None,
+        ))
+
+    requester = SequenceRequester([
+        _provider(web_output, "one"), _provider(web_output, "two"), _provider(web_output, "three"),
+    ])
+    enabled = OpenAIResponsesAgentModel(
+        settings=OpenAIResponsesSettings(api_key="key", model="model"),
+        requester=requester, web_search_enabled=True,
+    )
+    for _index in range(2):
+        with pytest.raises(OpenAIResponsesError):
+            asyncio.run(enabled.respond(
+                question="최신", transcript=(), tools=TOOL_CATALOG, repair_error=None,
+            ))
+    with pytest.raises(OpenAIResponsesError):
+        asyncio.run(enabled.respond(
+            question="최신", transcript=(), tools=TOOL_CATALOG, repair_error=None,
+        ))
+
+
+@pytest.mark.parametrize("failure,code", [
+    (TimeoutError(), "PROVIDER_TIMEOUT"),
+    (OSError(), "PROVIDER_TRANSPORT_FAILED"),
+])
+def test_transport_failures_are_normalized(failure: Exception, code: str) -> None:
+    def requester(*_args):
+        raise failure
+
+    model = OpenAIResponsesAgentModel(
+        settings=OpenAIResponsesSettings(api_key="key", model="model"), requester=requester,
+    )
+    with pytest.raises(OpenAIResponsesError) as raised:
+        asyncio.run(model.respond(
+            question="추천", transcript=(), tools=TOOL_CATALOG, repair_error=None,
+        ))
+    assert raised.value.reason_code == code
+
+
+@pytest.mark.parametrize("response", [b"not-json", b"x" * (1024 * 1024 + 1)])
+def test_provider_payload_is_valid_json_within_byte_limit(response: bytes) -> None:
+    model = OpenAIResponsesAgentModel(
+        settings=OpenAIResponsesSettings(api_key="key", model="model"),
+        requester=SequenceRequester([response]),
+    )
+    with pytest.raises(OpenAIResponsesError):
+        asyncio.run(model.respond(
+            question="추천", transcript=(), tools=TOOL_CATALOG, repair_error=None,
         ))

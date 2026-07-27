@@ -236,6 +236,8 @@ ai_openai_primary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_PRIMARY
 ai_openai_secondary_model="$(required_value "$ai_vars_file" HOME_AI_OPENAI_SECONDARY_MODEL)"
 ai_openai_timeout_seconds="$(optional_value "$ai_vars_file" HOME_AI_OPENAI_TIMEOUT_SECONDS 30)"
 ai_query_timeout_seconds="$(optional_value "$ai_vars_file" HOME_AI_QUERY_TIMEOUT_SECONDS 45)"
+ai_agentic_orchestration_enabled="$(optional_value "$ai_vars_file" HOME_AI_AGENTIC_ORCHESTRATION_ENABLED true)"
+ai_official_web_search_enabled="$(optional_value "$ai_vars_file" HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED true)"
 if [[ "$using_default_runtime_files" == "true" ]]; then
     ai_enabled_property_capabilities="$(optional_value "$ai_vars_file" HOME_AI_ENABLED_PROPERTY_CAPABILITIES complex_identity,recent_trade_lookup,price_trend,recommendation,comparison)"
 else
@@ -380,6 +382,8 @@ case "$ai_enabled_reference_capabilities" in
     "" | academy_lookup | academy_lookup,rail_station_lookup | academy_lookup,rail_station_lookup,school_location | academy_lookup,rail_station_lookup,school_location,retail_location) ;;
     *) reject "HOME_AI_ENABLED_REFERENCE_CAPABILITIES는 승인된 reference 조합만 허용합니다." ;;
 esac
+case "$ai_agentic_orchestration_enabled" in true | false) ;; *) reject "HOME_AI_AGENTIC_ORCHESTRATION_ENABLED는 true 또는 false여야 합니다." ;; esac
+case "$ai_official_web_search_enabled" in true | false) ;; *) reject "HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED는 true 또는 false여야 합니다." ;; esac
 
 export HOME_SEARCH_DB_PASSWORD="$home_search_db_password"
 export PROPERTY_RUNTIME_DB_PASSWORD="$property_runtime_db_password"
@@ -403,6 +407,8 @@ export HOME_AI_OPENAI_PRIMARY_MODEL="$ai_openai_primary_model"
 export HOME_AI_OPENAI_SECONDARY_MODEL="$ai_openai_secondary_model"
 export HOME_AI_OPENAI_TIMEOUT_SECONDS="$ai_openai_timeout_seconds"
 export HOME_AI_QUERY_TIMEOUT_SECONDS="$ai_query_timeout_seconds"
+export HOME_AI_AGENTIC_ORCHESTRATION_ENABLED="$ai_agentic_orchestration_enabled"
+export HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED="$ai_official_web_search_enabled"
 export HOME_AI_ENABLED_PROPERTY_CAPABILITIES="$ai_enabled_property_capabilities"
 export HOME_AI_REFERENCE_DSN="$ai_reference_dsn"
 export HOME_AI_ENABLED_REFERENCE_CAPABILITIES="$ai_enabled_reference_capabilities"

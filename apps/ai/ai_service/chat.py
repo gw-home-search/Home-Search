@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import math
 import os
@@ -427,16 +428,14 @@ class ConfiguredChatbotEngine:
                             )
                             _LOGGER.info(
                                 "chatbot_agent_completed",
-                                extra={
-                                    "event": "chatbot_agent_completed",
-                                    "route": agent_result.route,
-                                    "tool_rounds": agent_result.tool_rounds,
-                                    "tool_calls": agent_result.tool_calls,
-                                    "web_used": agent_result.web_used,
-                                    "elapsed_milliseconds": round(
+                                extra=_agent_outcome_metric(
+                                    agent_result=agent_result,
+                                    models=(primary, secondary),
+                                    response=response,
+                                    elapsed_milliseconds=round(
                                         (time.monotonic() - started_at) * 1000
                                     ),
-                                },
+                                ),
                             )
                             return _apply_presentation_rollbacks(response)
                         minimal_fallback = True
@@ -595,7 +594,7 @@ def _answer_outcome_metric(
                 and (status := goal.get("status"))
                 in {"answered", "degraded", "unavailable"}
             ]
-    return {
+    metric: dict[str, object] = {
         "event": "chatbot_answer_completed",
         "answer_mode": answer_mode,
         "goal_count": len(statuses),
@@ -603,6 +602,61 @@ def _answer_outcome_metric(
         "degraded_goal_count": statuses.count("degraded"),
         "unavailable_goal_count": statuses.count("unavailable"),
         "elapsed_milliseconds": max(elapsed_milliseconds, 0),
+    }
+    execution = response.get("agentExecution")
+    if isinstance(execution, dict):
+        route = execution.get("route")
+        metric.update({
+            "agent_success": route in {"primary", "repair", "secondary"},
+            "repair_used": route == "repair",
+            "secondary_used": route == "secondary",
+            "minimal_fallback_used": route == "minimal_fallback",
+            "tool_rounds": execution.get("toolRounds", 0),
+            "tool_calls": execution.get("toolCalls", 0),
+            "web_used": execution.get("webUsed") is True,
+            "grounding_rejection_category": (
+                "ALL_GENERATION_PATHS_FAILED" if route == "minimal_fallback" else "NONE"
+            ),
+        })
+    return metric
+
+
+def _agent_outcome_metric(
+    *, agent_result: object, models: tuple[object, object],
+    response: dict[str, object], elapsed_milliseconds: int,
+) -> dict[str, object]:
+    route = getattr(agent_result, "route", "minimal_fallback")
+    totals = {
+        "provider_latency_milliseconds": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "provider_response_bytes": 0,
+    }
+    for model in models:
+        metrics_reader = getattr(model, "operational_metrics", None)
+        metrics = metrics_reader() if callable(metrics_reader) else {}
+        if not isinstance(metrics, dict):
+            continue
+        for key in totals:
+            value = metrics.get(key)
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                totals[key] += value
+    return {
+        "event": "chatbot_agent_completed",
+        "agent_success": route in {"primary", "repair", "secondary"},
+        "repair_used": route == "repair",
+        "secondary_used": route == "secondary",
+        "minimal_fallback_used": route == "minimal_fallback",
+        "route": route,
+        "tool_rounds": getattr(agent_result, "tool_rounds", 0),
+        "tool_calls": getattr(agent_result, "tool_calls", 0),
+        "web_used": getattr(agent_result, "web_used", False) is True,
+        "grounding_rejection_category": (
+            "GROUNDING_REPAIRED" if route == "repair" else "NONE"
+        ),
+        "elapsed_milliseconds": max(elapsed_milliseconds, 0),
+        "response_bytes": len(json.dumps(response, ensure_ascii=False).encode()),
+        **totals,
     }
 
 

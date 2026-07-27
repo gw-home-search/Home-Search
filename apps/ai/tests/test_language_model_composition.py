@@ -9,6 +9,7 @@ from ai_service.auth import AuthenticatedUser
 from ai_service.chat import (
     _apply_presentation_rollbacks,
     _answer_outcome_metric,
+    _agent_outcome_metric,
     ConfiguredChatbotEngine,
     ChatbotProviderUnavailable,
     get_enabled_property_capabilities,
@@ -22,10 +23,12 @@ from ai_service.chat import (
     get_query_timeout_seconds,
     get_answer_first_enabled,
     get_answer_first_fallback_capabilities,
+    get_agentic_orchestration_enabled,
     get_dependent_workflow_enabled,
     get_artifact_v2_enabled,
     get_decision_report_enabled,
     get_property_overview_enabled,
+    get_official_web_search_enabled,
     get_semantic_goal_planner_enabled,
     get_school_fact_repository,
 )
@@ -173,6 +176,23 @@ def test_answer_first_flags_default_on_and_can_be_rolled_back(
     assert get_artifact_v2_enabled() is False
 
 
+def test_agentic_and_official_web_flags_are_independent_and_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HOME_AI_AGENTIC_ORCHESTRATION_ENABLED", raising=False)
+    monkeypatch.delenv("HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED", raising=False)
+    assert get_agentic_orchestration_enabled() is False
+    assert get_official_web_search_enabled() is False
+
+    monkeypatch.setenv("HOME_AI_AGENTIC_ORCHESTRATION_ENABLED", "true")
+    monkeypatch.setenv("HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED", "false")
+    assert get_agentic_orchestration_enabled() is True
+    assert get_official_web_search_enabled() is False
+
+    monkeypatch.setenv("HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED", "yes")
+    assert get_official_web_search_enabled() is False
+
+
 def test_presentation_rollbacks_keep_legacy_answer_and_remove_new_artifacts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -257,6 +277,35 @@ def test_answer_outcome_metric_contains_no_question_or_context() -> None:
         "elapsed_milliseconds": 125,
     }
     assert "잠실엘스" not in str(metric)
+
+
+def test_agent_outcome_metric_contains_only_bounded_operational_values() -> None:
+    class Result:
+        route = "repair"
+        tool_rounds = 2
+        tool_calls = 4
+        web_used = True
+
+    class Model:
+        def operational_metrics(self) -> dict[str, int]:
+            return {
+                "provider_latency_milliseconds": 120,
+                "input_tokens": 30,
+                "output_tokens": 10,
+                "provider_response_bytes": 900,
+            }
+
+    metric = _agent_outcome_metric(
+        agent_result=Result(), models=(Model(), Model()),
+        response={"answer": "저장하지 않는 답변"}, elapsed_milliseconds=400,
+    )
+
+    assert metric["agent_success"] is True
+    assert metric["repair_used"] is True
+    assert metric["secondary_used"] is False
+    assert metric["input_tokens"] == 60
+    assert metric["response_bytes"] > 0
+    assert "저장하지 않는 답변" not in str(metric)
 
 
 @pytest.mark.parametrize(

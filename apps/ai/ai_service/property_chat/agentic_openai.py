@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import Any
@@ -41,6 +42,18 @@ class OpenAIResponsesAgentModel:
             raise ValueError("required web search must be enabled")
         self._web_search_required = web_search_required
         self._web_search_calls = 0
+        self._provider_latency_milliseconds = 0
+        self._input_tokens = 0
+        self._output_tokens = 0
+        self._response_bytes = 0
+
+    def operational_metrics(self) -> Mapping[str, int]:
+        return {
+            "provider_latency_milliseconds": self._provider_latency_milliseconds,
+            "input_tokens": self._input_tokens,
+            "output_tokens": self._output_tokens,
+            "provider_response_bytes": self._response_bytes,
+        }
 
     async def respond(
         self, *, question: str, transcript: Sequence[Mapping[str, object]],
@@ -178,6 +191,7 @@ class OpenAIResponsesAgentModel:
         raise OpenAIResponsesError()
 
     async def _request(self, body: Mapping[str, object]) -> object:
+        started_at = time.monotonic()
         try:
             request_body = json.dumps(
                 body, ensure_ascii=False, separators=(",", ":")
@@ -194,10 +208,24 @@ class OpenAIResponsesAgentModel:
             raise OpenAIResponsesError("PROVIDER_TIMEOUT") from None
         except Exception:
             raise OpenAIResponsesError("PROVIDER_TRANSPORT_FAILED") from None
+        finally:
+            self._provider_latency_milliseconds += round(
+                (time.monotonic() - started_at) * 1000
+            )
         if not isinstance(raw, bytes) or len(raw) > self._settings.max_response_bytes:
             raise OpenAIResponsesError("PROVIDER_RESPONSE_TOO_LARGE")
+        self._response_bytes += len(raw)
         try:
-            return _json_loads(raw.decode())
+            result = _json_loads(raw.decode())
+            if isinstance(result, dict) and isinstance(result.get("usage"), dict):
+                usage = result["usage"]
+                input_tokens = usage.get("input_tokens")
+                output_tokens = usage.get("output_tokens")
+                if isinstance(input_tokens, int) and not isinstance(input_tokens, bool):
+                    self._input_tokens += max(input_tokens, 0)
+                if isinstance(output_tokens, int) and not isinstance(output_tokens, bool):
+                    self._output_tokens += max(output_tokens, 0)
+            return result
         except Exception:
             raise OpenAIResponsesError() from None
 

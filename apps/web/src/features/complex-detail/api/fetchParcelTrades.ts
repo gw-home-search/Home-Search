@@ -24,6 +24,7 @@ export type ParcelTrades = {
 export type TradePageOptions = {
   page?: number;
   size?: number;
+  exclArea?: number;
 };
 
 type ParcelTradesResponse = {
@@ -78,7 +79,7 @@ export async function fetchComplexTrades(
   signal?: AbortSignal,
 ): Promise<ParcelTrades> {
   const response = await fetchWithTimeout(
-    resolveApiUrl(`${COMPLEX_PATH}/${complexId}/trades${tradeQuery(null, options)}`),
+    resolveApiUrl(`${COMPLEX_PATH}/${complexId}/trades${tradeQuery(null, options, true)}`),
     { method: 'GET', signal },
   );
 
@@ -124,7 +125,11 @@ function normalizeParcelTrades(payload: ParcelTradesResponse): ParcelTrades {
   };
 }
 
-function tradeQuery(complexId: number | null | undefined, options: TradePageOptions): string {
+function tradeQuery(
+  complexId: number | null | undefined,
+  options: TradePageOptions,
+  includeExclArea = false,
+): string {
   const params = new URLSearchParams();
   if (complexId != null) {
     params.set('complexId', String(complexId));
@@ -134,6 +139,9 @@ function tradeQuery(complexId: number | null | undefined, options: TradePageOpti
   }
   if (options.size != null) {
     params.set('size', String(options.size));
+  }
+  if (includeExclArea && options.exclArea != null) {
+    params.set('exclArea', String(options.exclArea));
   }
   const query = params.toString();
   return query.length > 0 ? `?${query}` : '';

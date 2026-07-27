@@ -2,8 +2,10 @@ package com.home.application.tradehistory;
 
 import com.home.application.read.InvalidReadRequestException;
 import com.home.application.read.ResourceNotFoundException;
+import com.home.application.read.TradeAreasResult;
 import com.home.application.read.TradeListResult;
 import com.home.application.read.TradeTrendPoint;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
@@ -31,9 +33,21 @@ public class TradeHistoryService {
 
     @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public TradeListResult getComplexTradeList(Long complexId, Integer requestedPage, Integer requestedSize) {
+        return getComplexTradeList(complexId, null, requestedPage, requestedSize);
+    }
+
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public TradeListResult getComplexTradeList(
+            Long complexId, BigDecimal exclArea, Integer requestedPage, Integer requestedSize) {
         int page = normalizePage(requestedPage);
         int size = normalizeSize(requestedSize);
-        return reader.findComplexTradeList(complexId, page, size)
+        return reader.findComplexTradeList(complexId, exclArea, page, size)
+                .orElseThrow(() -> new ResourceNotFoundException("complex trade parent not found: " + complexId));
+    }
+
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public TradeAreasResult getTradeAreas(Long complexId) {
+        return reader.findTradeAreas(complexId)
                 .orElseThrow(() -> new ResourceNotFoundException("complex trade parent not found: " + complexId));
     }
 
@@ -45,7 +59,12 @@ public class TradeHistoryService {
 
     @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public List<TradeTrendPoint> getComplexTradeTrend(Long complexId) {
-        return reader.findComplexTradeTrend(complexId)
+        return getComplexTradeTrend(complexId, null);
+    }
+
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public List<TradeTrendPoint> getComplexTradeTrend(Long complexId, BigDecimal exclArea) {
+        return reader.findComplexTradeTrend(complexId, exclArea)
                 .orElseThrow(() -> new ResourceNotFoundException("complex trade parent not found: " + complexId));
     }
 

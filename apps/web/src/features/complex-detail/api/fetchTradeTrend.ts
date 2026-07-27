@@ -32,9 +32,11 @@ export async function fetchParcelTradeTrend(
 
 export async function fetchComplexTradeTrend(
   complexId: number,
+  exclArea?: number,
   signal?: AbortSignal,
 ): Promise<TradeTrendPoint[]> {
-  return fetchTrend(`${COMPLEX_PATH}/${complexId}/trade-trend`, signal);
+  const query = exclArea == null ? '' : `?exclArea=${encodeURIComponent(exclArea)}`;
+  return fetchTrend(`${COMPLEX_PATH}/${complexId}/trade-trend${query}`, signal);
 }
 
 async function fetchTrend(path: string, signal?: AbortSignal): Promise<TradeTrendPoint[]> {

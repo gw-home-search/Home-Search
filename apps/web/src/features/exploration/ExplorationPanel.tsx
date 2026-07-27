@@ -8,6 +8,7 @@ import type { ComplexDetail } from '../complex-detail/api/fetchComplexDetail';
 import type { ParcelComplexSummary } from '../complex-detail/api/fetchParcelComplexes';
 import type { ParcelTrades, TradeItem } from '../complex-detail/api/fetchParcelTrades';
 import type { TradeTrendPoint } from '../complex-detail/api/fetchTradeTrend';
+import type { TradeAreas } from '../complex-detail/api/fetchTradeAreas';
 import type { FavoriteState } from '../favorites/favoriteTypes';
 import type {
   RegionComplexSummary,
@@ -56,6 +57,10 @@ type ExplorationPanelProps = {
   tradeMoreState: 'idle' | 'loading' | 'error';
   tradeState: DetailRequestState;
   tradeTrend: TradeTrendPoint[];
+  tradeAreas: TradeAreas | null;
+  selectedExclArea: number | null;
+  areaError: RequestFailure | null;
+  areaState: DetailRequestState;
   trendError: RequestFailure | null;
   trendState: DetailRequestState;
   onCloseDetail: () => void;
@@ -70,6 +75,8 @@ type ExplorationPanelProps = {
   onRetryDetail: () => void;
   onRetryTrades: () => void;
   onRetryTrend: () => void;
+  onRetryTradeAreas: () => void;
+  onExclAreaChange: (exclArea: number) => void;
   onFavoriteToggle: (trigger?: HTMLElement) => void;
   onRetryFavorite: () => void;
   onRetryRegion: () => void;
@@ -124,12 +131,18 @@ export function ExplorationPanel(props: ExplorationPanelProps) {
             parcelComplexes={props.parcelComplexes}
             parcelTrades={props.parcelTrades}
             tradeTrend={props.tradeTrend}
+            tradeAreas={props.tradeAreas}
+            selectedExclArea={props.selectedExclArea}
+            areaError={props.areaError}
+            areaState={props.areaState}
             tradeRows={props.tradeRows}
             tradeError={props.tradeError}
             tradeMoreState={props.tradeMoreState}
             tradeState={props.tradeState}
             trendError={props.trendError}
             trendState={props.trendState}
+            onRetryTradeAreas={props.onRetryTradeAreas}
+            onExclAreaChange={props.onExclAreaChange}
             selection={props.selectedComplex}
           />
         </FeatureErrorBoundary>

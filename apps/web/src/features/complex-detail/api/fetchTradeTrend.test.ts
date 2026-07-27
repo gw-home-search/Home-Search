@@ -52,6 +52,18 @@ describe('fetchTradeTrend API 어댑터', () => {
     );
   });
 
+  it('complexId 단독 trade-trend URL에 exact exclArea를 전달한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchComplexTradeTrend(502, 84.94)).resolves.toEqual([]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/complex/502/trade-trend?exclArea=84.94'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
   it('배열이 아닌 응답을 reject한다', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ month: '2025-12' })));
 

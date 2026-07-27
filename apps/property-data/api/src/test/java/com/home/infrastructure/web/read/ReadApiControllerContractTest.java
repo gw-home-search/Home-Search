@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.matchesPattern;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -21,6 +22,8 @@ import com.home.application.read.RegionDetailResult;
 import com.home.application.read.RegionSummaryResult;
 import com.home.application.read.ResourceNotFoundException;
 import com.home.application.read.SearchComplexResult;
+import com.home.application.read.TradeAreaResult;
+import com.home.application.read.TradeAreasResult;
 import com.home.application.read.TradeListResult;
 import com.home.application.read.TradeResult;
 import com.home.application.read.TradeTrendPoint;
@@ -539,7 +542,7 @@ class ReadApiControllerContractTest {
     @Test
     @DisplayName("GET /api/v1/complex/{complexId}/trades는 complexId 단독 trade list를 반환한다")
     void complexTradeListByComplexIdReturnsCanonicalTrades() throws Exception {
-        given(tradeHistoryService.getComplexTradeList(eq(502L), isNull(), isNull()))
+        given(tradeHistoryService.getComplexTradeList(eq(502L), isNull(), isNull(), isNull()))
                 .willReturn(new TradeListResult(
                         1001L,
                         502L,
@@ -555,6 +558,104 @@ class ReadApiControllerContractTest {
                 .andExpect(jsonPath("$.content[0].complexPk").doesNotExist())
                 .andExpect(jsonPath("$.content[0].aptSeq").doesNotExist())
                 .andExpect(jsonPath("$.content[0].sourceKey").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/complex/{complexId}/trade-areas는 exact 전용면적 선택 계약을 반환한다")
+    void tradeAreasReturnsCanonicalContract() throws Exception {
+        given(tradeHistoryService.getTradeAreas(502L))
+                .willReturn(new TradeAreasResult(
+                        502L,
+                        new BigDecimal("84.94"),
+                        List.of(new TradeAreaResult(new BigDecimal("59.93"), 8L, LocalDate.of(2026, 6, 1)))));
+
+        mockMvc.perform(get("/api/v1/complex/502/trade-areas"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.complexId").value(502))
+                .andExpect(jsonPath("$.defaultExclArea").value(84.94))
+                .andExpect(jsonPath("$.areas[0].exclArea").value(59.93))
+                .andExpect(jsonPath("$.areas[0].tradeCount").value(8))
+                .andExpect(jsonPath("$.areas[0].latestDealDate").value("2026-06-01"))
+                .andExpect(jsonPath("$.complexPk").doesNotExist())
+                .andExpect(jsonPath("$.areas[0].sourceKey").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("complex trade list와 trend는 optional exact exclArea를 전달한다")
+    void complexTradesAndTrendAcceptExactExclArea() throws Exception {
+        BigDecimal exclArea = new BigDecimal("84.94");
+        given(tradeHistoryService.getComplexTradeList(502L, exclArea, 0, 25))
+                .willReturn(new TradeListResult(
+                        1001L,
+                        502L,
+                        List.of(new TradeResult(9101L, LocalDate.of(2026, 7, 16), exclArea, 88000L, "201", 9)),
+                        0,
+                        25,
+                        1));
+        given(tradeHistoryService.getComplexTradeTrend(502L, exclArea))
+                .willReturn(List.of(new TradeTrendPoint("2026-07", 88000L, 1, 88000L, 88000L)));
+
+        mockMvc.perform(get("/api/v1/complex/502/trades")
+                        .param("exclArea", "84.94")
+                        .param("page", "0")
+                        .param("size", "25"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].exclArea").value(84.94))
+                .andExpect(jsonPath("$.totalElements").value(1));
+        mockMvc.perform(get("/api/v1/complex/502/trade-trend").param("exclArea", "84.94"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].avgAmount").value(88000));
+
+        verify(tradeHistoryService).getComplexTradeList(502L, exclArea, 0, 25);
+        verify(tradeHistoryService).getComplexTradeTrend(502L, exclArea);
+    }
+
+    @Test
+    @DisplayName("complex trade exact exclArea 범위 위반은 canonical ProblemDetail 400을 반환한다")
+    void invalidExactExclAreaReturnsProblemDetail400() throws Exception {
+        for (String invalid : List.of("0", "-1", "84.941", "123456789.12", "not-a-number")) {
+            mockMvc.perform(get("/api/v1/complex/502/trades").param("exclArea", invalid))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.detail").value("Invalid parameter format."))
+                    .andExpect(jsonPath("$.exception").value("MapApiException"));
+            mockMvc.perform(get("/api/v1/complex/502/trade-trend").param("exclArea", invalid))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Test
+    @DisplayName("complex trade exact exclArea는 계약 경계값을 허용한다")
+    void exactExclAreaAcceptsContractBoundaryValues() throws Exception {
+        for (String valid : List.of("0.01", "99999999.99")) {
+            BigDecimal exclArea = new BigDecimal(valid);
+            given(tradeHistoryService.getComplexTradeList(502L, exclArea, 0, 25))
+                    .willReturn(new TradeListResult(1001L, 502L, List.of(), 0, 25, 0));
+
+            mockMvc.perform(get("/api/v1/complex/502/trades")
+                            .param("exclArea", valid)
+                            .param("page", "0")
+                            .param("size", "25"))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    @DisplayName("trade-areas는 유효 무거래 단지의 빈 선택지를 반환하고 없는 단지는 404다")
+    void tradeAreasDistinguishesEmptyComplexFromMissingComplex() throws Exception {
+        given(tradeHistoryService.getTradeAreas(502L)).willReturn(new TradeAreasResult(502L, null, List.of()));
+        given(tradeHistoryService.getTradeAreas(404L))
+                .willThrow(new ResourceNotFoundException("complex trade parent not found: 404"));
+
+        mockMvc.perform(get("/api/v1/complex/502/trade-areas"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.defaultExclArea").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.areas").isEmpty());
+        mockMvc.perform(get("/api/v1/complex/404/trade-areas"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(404));
     }
 
     @Test
@@ -578,7 +679,7 @@ class ReadApiControllerContractTest {
     @Test
     @DisplayName("GET /api/v1/complex/{complexId}/trade-trend는 complexId 단독 월별 추세를 반환한다")
     void complexTradeTrendReturnsMonthlySeries() throws Exception {
-        given(tradeHistoryService.getComplexTradeTrend(502L))
+        given(tradeHistoryService.getComplexTradeTrend(502L, null))
                 .willReturn(List.of(new TradeTrendPoint("2025-12", 90000L, 1, 90000L, 90000L)));
 
         mockMvc.perform(get("/api/v1/complex/502/trade-trend"))

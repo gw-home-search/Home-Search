@@ -1068,6 +1068,10 @@ Request:
 - Optional query parameter `page`: zero-based page index. Defaults to `0`.
 - Optional query parameter `size`: page size. Defaults to `25` and is
   server-capped at `100`.
+- Optional query parameter `exclArea`: exact exclusive area in square meters.
+  It accepts values from `0.01` through 8 integer digits with at most 2
+  fractional digits. When omitted, the endpoint preserves the existing
+  all-area behavior.
 
 Response:
 
@@ -1079,7 +1083,8 @@ Status:
 
 - `200`: successful lookup. If the complex exists but has no active trades,
   return an empty `content` list with `totalElements` `0`.
-- `400`: `page` is negative or `size` is less than `1`.
+- `400`: `page` is negative, `size` is less than `1`, or `exclArea` is outside
+  the documented decimal range.
 - `404`: complex id does not exist.
 - `500`: unexpected server error.
 
@@ -1087,7 +1092,62 @@ Migration notes:
 
 - The query path must use normalized `trade.complex_id` and exclude
   soft-deleted rows where `deleted_at IS NOT NULL`.
+- When `exclArea` is provided, `content`, `totalElements`, and `totalPages`
+  are all scoped by exact `NUMERIC` equality to the requested exclusive area.
 - This endpoint must not expose audit/source fields.
+
+### GET `/api/v1/complex/{complexId}/trade-areas`
+
+Purpose:
+
+- Return exact exclusive-area choices for the selected complex and identify
+  the area of its newest eligible trade.
+- Used to keep the detail price summary, monthly trend, and trade list on one
+  exact stored area without treating exclusive area as supply-area "pyeong".
+
+Response:
+
+```json
+{
+  "complexId": 26643,
+  "defaultExclArea": 84.94,
+  "areas": [
+    {
+      "exclArea": 84.94,
+      "tradeCount": 242,
+      "latestDealDate": "2026-07-16"
+    }
+  ]
+}
+```
+
+Response fields:
+
+- `complexId`: requested complex id.
+- `defaultExclArea`: exact exclusive area of the newest eligible trade,
+  ordered by `dealDate` descending and then `tradeId` descending; nullable
+  when no eligible trade exists.
+- `areas`: exact exclusive-area aggregates ordered by `exclArea` ascending.
+- `areas[].exclArea`: stored exclusive area in square meters.
+- `areas[].tradeCount`: active normalized trade count for the exact area.
+- `areas[].latestDealDate`: newest `dealDate` for the exact area as
+  `YYYY-MM-DD`.
+
+Eligibility and status:
+
+- Only normalized trades with `deleted_at IS NULL` and `excl_area > 0` are
+  eligible.
+- `200`: successful lookup. A valid complex with no eligible trades returns
+  `defaultExclArea: null` and `areas: []`.
+- `404`: complex id does not exist.
+- `500`: unexpected server error.
+
+Migration notes:
+
+- `defaultExclArea` is a JSON number, not a formatted string. UI consumers own
+  the two-decimal display policy.
+- The response must not expose `complex_pk`, `apt_seq`, `source`,
+  `source_key`, raw ids, or other audit identifiers.
 
 ### GET `/api/v1/trade/{parcelId}/trend`
 
@@ -1136,6 +1196,12 @@ Purpose:
 - Return the same monthly-average trend shape as `/api/v1/trade/{parcelId}/trend`,
   but addressed directly by `complexId`.
 
+Request:
+
+- Optional query parameter `exclArea`: exact exclusive area in square meters,
+  with the same decimal range and omission behavior as
+  `GET /api/v1/complex/{complexId}/trades`.
+
 Response:
 
 - Same array body shape as `GET /api/v1/trade/{parcelId}/trend`.
@@ -1144,8 +1210,16 @@ Status:
 
 - `200`: ordered oldest month first; empty array when the complex has no active
   trades.
+- `400`: `exclArea` is outside the documented decimal range.
 - `404`: complex id does not exist.
 - `500`: unexpected server error.
+
+Migration notes:
+
+- When `exclArea` is provided, each monthly `avgAmount`, `minAmount`,
+  `maxAmount`, and `count` is computed only from trades with exact `NUMERIC`
+  equality to that exclusive area. Omitting it preserves the existing
+  all-area aggregation.
 
 ## Public Market Insight APIs
 

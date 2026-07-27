@@ -145,6 +145,9 @@
   }
   .detail-mobile-tabs button { min-height: 44px; border: 0; border-bottom: 2px solid transparent; background: var(--hs-map-color-surface); color: var(--hs-map-color-muted); cursor: pointer; font-size: 12px; font-weight: 700; white-space: nowrap; }
   .detail-mobile-tabs button[aria-selected="true"] { border-bottom-color: var(--hs-map-color-action); color: var(--hs-map-color-action); }
+  .detail-tab-panel,
+  .detail-tab-panel[data-mobile-tab-panel] { display: block; order: 4; }
+  .detail-tab-panel[hidden] { display: none; }
   .detail-tab-panel[data-mobile-tab-active="false"] { display: none; }
   .detail-complex-switcher,
   .detail-price-overview,
@@ -158,8 +161,11 @@
   .filter-chip { width: 84px; }
   .filter-popover { right: 8px; left: 8px !important; }
   .region-grid-list button > span { -webkit-line-clamp: 2; }
-  .trade-list { overflow-x: auto; }
-  .trade-list table { min-width: 350px; }
+  .trade-list { overflow-x: visible; }
+  .trade-list table { min-width: 0; font-size: 11px; }
+  .trade-list th,
+  .trade-list td { padding-right: 2px; padding-left: 2px; }
+  .trade-amount-label { white-space: normal; }
 }
 
 @media (max-width: 720px) and (max-height: 700px) and (orientation: portrait) {

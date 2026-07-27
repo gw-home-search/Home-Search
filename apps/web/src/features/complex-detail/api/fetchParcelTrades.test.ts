@@ -133,6 +133,18 @@ describe('fetchParcelTrades API 어댑터', () => {
     );
   });
 
+  it('complexId 단독 trade URL에 exact exclArea를 전달하고 parcel URL에는 전달하지 않는다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(emptyTradePage(1001, 502)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchComplexTrades(502, { page: 1, size: 5, exclArea: 84.94 });
+    await fetchParcelTrades(1001, 502, { exclArea: 84.94 });
+
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    expect(urls[0]).toBe(resolveApiUrl('/api/v1/complex/502/trades?page=1&size=5&exclArea=84.94'));
+    expect(urls[1]).toBe(resolveApiUrl('/api/v1/trade/1001?complexId=502'));
+  });
+
   it('invalid trade item object를 reject한다', async () => {
     vi.stubGlobal(
       'fetch',

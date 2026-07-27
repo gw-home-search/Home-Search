@@ -62,6 +62,7 @@ describe('App 단지 상세', () => {
           totalPages: 0,
         }));
       }
+      if (url.endsWith('/trade-areas')) return Promise.resolve(jsonResponse(tradeAreasResponse(501, 84.9)));
       if (url.includes('/trade-trend')) return Promise.resolve(jsonResponse([]));
       if (url.endsWith('/complexes')) return Promise.resolve(jsonResponse([]));
       return Promise.resolve(errorResponse(404));
@@ -113,7 +114,10 @@ describe('App 단지 상세', () => {
           unitCnt: 740,
         }));
       }
-      if (url === resolveApiUrl('/api/v1/trade/1001?complexId=501')) {
+      if (url === resolveApiUrl('/api/v1/complex/501/trade-areas')) {
+        return Promise.resolve(jsonResponse(tradeAreasResponse(501, 84.9, 2)));
+      }
+      if (url === resolveApiUrl('/api/v1/complex/501/trades?exclArea=84.9')) {
         return Promise.resolve(jsonResponse({
           parcelId: 1001,
           complexId: 501,
@@ -131,7 +135,7 @@ describe('App 단지 상세', () => {
           totalPages: 2,
         }));
       }
-      if (url === resolveApiUrl('/api/v1/trade/1001?complexId=501&page=1&size=25')) {
+      if (url === resolveApiUrl('/api/v1/complex/501/trades?page=1&size=25&exclArea=84.9')) {
         nextPageCalls += 1;
         return Promise.resolve(nextPageCalls === 1
           ? errorResponse(503)
@@ -152,7 +156,9 @@ describe('App 단지 상세', () => {
               totalPages: 2,
             }));
       }
-      if (url.includes('/trend')) return Promise.resolve(jsonResponse([]));
+      if (url === resolveApiUrl('/api/v1/complex/501/trade-trend?exclArea=84.9')) {
+        return Promise.resolve(jsonResponse([]));
+      }
       if (url.endsWith('/complexes')) return Promise.resolve(jsonResponse([]));
       return Promise.resolve(errorResponse(404));
     });
@@ -207,10 +213,13 @@ describe('App 단지 상세', () => {
           name: '이전 단지 이름',
         }));
       }
+      if (requestUrl === resolveApiUrl('/api/v1/complex/501/trade-areas')) {
+        return Promise.resolve(jsonResponse(tradeAreasResponse(501, 84.9)));
+      }
       if (requestUrl === resolveApiUrl('/api/v1/detail/1002?complexId=502')) {
         return secondDetail.promise;
       }
-      if (requestUrl.includes('/api/v1/trade/') || requestUrl.includes('/trend')) {
+      if (requestUrl.includes('/api/v1/complex/') && (requestUrl.includes('/trades') || requestUrl.includes('/trade-trend'))) {
         return Promise.resolve(jsonResponse(requestUrl.includes('/trend') ? [] : {
           parcelId: 1001,
           complexId: 501,
@@ -248,6 +257,143 @@ describe('App 단지 상세', () => {
     unmount(root);
   });
 
+  it('상세의 확정 complexId로 면적을 먼저 고르고 선택·더보기에 exact area를 유지한다', async () => {
+    const areasDeferred = deferred<Response>();
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === resolveApiUrl('/api/v1/map/complexes')) return Promise.resolve(jsonResponse([{
+        parcelId: 1001, complexId: 501, lat: 37.5, lng: 127,
+        latestDealAmount: 88000, unitCntSum: 740,
+      }]));
+      if (url === resolveApiUrl('/api/v1/detail/1001?complexId=501')) return Promise.resolve(jsonResponse({
+        parcelId: 1001, complexId: 501, address: '면적 테스트로', name: '면적 테스트 단지', unitCnt: 740,
+      }));
+      if (url === resolveApiUrl('/api/v1/complex/501/trade-areas')) return areasDeferred.promise;
+      if (url === resolveApiUrl('/api/v1/detail/1001/complexes')) return Promise.resolve(jsonResponse([]));
+      if (url === resolveApiUrl('/api/v1/complex/501/trades?exclArea=84.94')) {
+        return Promise.resolve(jsonResponse(tradePage(501, 84.94, 1, 1)));
+      }
+      if (url === resolveApiUrl('/api/v1/complex/501/trades?exclArea=97.9')) {
+        return Promise.resolve(jsonResponse(tradePage(501, 97.9, 2, 2)));
+      }
+      if (url === resolveApiUrl('/api/v1/complex/501/trades?page=1&size=25&exclArea=97.9')) {
+        return Promise.resolve(jsonResponse({ ...tradePage(501, 97.9, 2, 2), page: 1,
+          content: [{ tradeId: 3, dealDate: '2026-05-01', exclArea: 97.9,
+            dealAmount: 87000, aptDong: null, floor: 8 }] }));
+      }
+      if (url.includes('/trade-trend?exclArea=')) return Promise.resolve(jsonResponse([]));
+      return Promise.resolve(errorResponse(404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+    await flushAsyncState();
+    await act(async () => rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="필지 1001 단지 501 상세 열기"]',
+    )?.click());
+    await flushAsyncState();
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).some((url) => url.includes('/trades?'))).toBe(false);
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).some((url) => url.includes('/trade-trend?'))).toBe(false);
+
+    areasDeferred.resolve(jsonResponse({ complexId: 501, defaultExclArea: 84.94, areas: [
+      { exclArea: 84.94, tradeCount: 1, latestDealDate: '2026-07-16' },
+      { exclArea: 97.9, tradeCount: 2, latestDealDate: '2026-06-01' },
+    ] }));
+    await flushAsyncState();
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/complex/501/trades?exclArea=84.94'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+
+    const selector = rootElement.querySelector<HTMLSelectElement>('#detail-excl-area');
+    await act(async () => {
+      if (selector) {
+        selector.value = '97.9';
+        selector.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+    await flushAsyncState();
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/complex/501/trades?exclArea=97.9'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(rootElement.textContent).toContain('97.90㎡ 거래 내역');
+
+    await act(async () => [...rootElement.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent === '더보기')?.click());
+    await flushAsyncState();
+    expect(fetchMock).toHaveBeenCalledWith(
+      resolveApiUrl('/api/v1/complex/501/trades?page=1&size=25&exclArea=97.9'),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    unmount(root);
+  });
+
+  it('면적 변경은 이전 거래·추이 요청을 중단하고 늦은 응답을 반영하지 않는다', async () => {
+    const oldTrades = deferred<Response>();
+    const oldTrend = deferred<Response>();
+    let oldTradeSignal: AbortSignal | undefined;
+    let oldTrendSignal: AbortSignal | undefined;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === resolveApiUrl('/api/v1/map/complexes')) return Promise.resolve(jsonResponse([{
+        parcelId: 1001, complexId: 501, lat: 37.5, lng: 127, latestDealAmount: 88000, unitCntSum: 740,
+      }]));
+      if (url === resolveApiUrl('/api/v1/detail/1001?complexId=501')) return Promise.resolve(jsonResponse({
+        parcelId: 1001, complexId: 501, address: '중단 테스트로', name: '중단 테스트 단지', unitCnt: 740,
+      }));
+      if (url === resolveApiUrl('/api/v1/complex/501/trade-areas')) return Promise.resolve(jsonResponse({
+        complexId: 501, defaultExclArea: 84.94, areas: [
+          { exclArea: 84.94, tradeCount: 1, latestDealDate: '2026-07-16' },
+          { exclArea: 97.9, tradeCount: 1, latestDealDate: '2026-06-01' },
+        ],
+      }));
+      if (url === resolveApiUrl('/api/v1/detail/1001/complexes')) return Promise.resolve(jsonResponse([]));
+      if (url === resolveApiUrl('/api/v1/complex/501/trades?exclArea=84.94')) {
+        oldTradeSignal = init?.signal ?? undefined;
+        return oldTrades.promise;
+      }
+      if (url === resolveApiUrl('/api/v1/complex/501/trade-trend?exclArea=84.94')) {
+        oldTrendSignal = init?.signal ?? undefined;
+        return oldTrend.promise;
+      }
+      if (url === resolveApiUrl('/api/v1/complex/501/trades?exclArea=97.9')) {
+        return Promise.resolve(jsonResponse(tradePage(501, 97.9, 1, 1)));
+      }
+      if (url === resolveApiUrl('/api/v1/complex/501/trade-trend?exclArea=97.9')) {
+        return Promise.resolve(jsonResponse([]));
+      }
+      return Promise.resolve(errorResponse(404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
+    await flushAsyncState();
+    await act(async () => rootElement.querySelector<HTMLButtonElement>(
+      'button[aria-label="필지 1001 단지 501 상세 열기"]',
+    )?.click());
+    await flushAsyncState();
+    const selector = rootElement.querySelector<HTMLSelectElement>('#detail-excl-area');
+    await act(async () => {
+      if (selector) {
+        selector.value = '97.9';
+        selector.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+    await flushAsyncState();
+    expect(oldTradeSignal?.aborted).toBe(true);
+    expect(oldTrendSignal?.aborted).toBe(true);
+
+    oldTrades.resolve(jsonResponse(tradePage(501, 84.94, 1, 1)));
+    oldTrend.resolve(jsonResponse([{ month: '2026-07', avgAmount: 999999,
+      count: 1, minAmount: 999999, maxAmount: 999999 }]));
+    await flushAsyncState();
+    expect(rootElement.textContent).toContain('97.90㎡ 거래 내역');
+    expect(rootElement.textContent).not.toContain('99억 9,999만원');
+    unmount(root);
+  });
+
   it('단지 선택은 왼쪽 sidebar를 상세 모드로 바꾸고 뒤로가기로 지역 탐색에 복귀한다', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
     const fetchMock = vi.fn((url: RequestInfo | URL) => {
@@ -278,8 +424,11 @@ describe('App 단지 상세', () => {
           unitCnt: 740,
         }));
       }
+      if (requestUrl === resolveApiUrl('/api/v1/complex/501/trade-areas')) {
+        return Promise.resolve(jsonResponse(tradeAreasResponse(501, 84.9)));
+      }
 
-      if (requestUrl === resolveApiUrl('/api/v1/trade/1001?complexId=501')) {
+      if (requestUrl === resolveApiUrl('/api/v1/complex/501/trades?exclArea=84.9')) {
         return Promise.resolve(jsonResponse({
           parcelId: 1001,
           complexId: 501,
@@ -350,22 +499,13 @@ describe('App 단지 상세', () => {
   });
 
   it('complex marker에서 detail sidebar를 열고 documented detail/trade data를 load한다', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse([
-          {
-            parcelId: 1001,
-            complexId: 501,
-            lat: 37.5123,
-            lng: 127.0456,
-            latestDealAmount: 125000,
-            unitCntSum: 740,
-          },
-        ]),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === resolveApiUrl('/api/v1/map/complexes')) return Promise.resolve(jsonResponse([{
+        parcelId: 1001, complexId: 501, lat: 37.5123, lng: 127.0456,
+        latestDealAmount: 125000, unitCntSum: 740,
+      }]));
+      if (url === resolveApiUrl('/api/v1/detail/1001?complexId=501')) return Promise.resolve(jsonResponse({
           parcelId: 1001,
           complexId: 501,
           latitude: 37.5123,
@@ -376,10 +516,11 @@ describe('App 단지 상세', () => {
           dongCnt: 8,
           unitCnt: 740,
           useDate: '2015-03-20',
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
+        }));
+      if (url === resolveApiUrl('/api/v1/complex/501/trade-areas')) {
+        return Promise.resolve(jsonResponse(tradeAreasResponse(501, 84.93, 2)));
+      }
+      if (url === resolveApiUrl('/api/v1/complex/501/trades?exclArea=84.93')) return Promise.resolve(jsonResponse({
           parcelId: 1001,
           complexId: 501,
           content: [
@@ -404,16 +545,12 @@ describe('App 단지 상세', () => {
           size: 20,
           totalElements: 2,
           totalPages: 1,
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse([
+        }));
+      if (url === resolveApiUrl('/api/v1/complex/501/trade-trend?exclArea=84.93')) return Promise.resolve(jsonResponse([
           { month: '2025-10', avgAmount: 118000, count: 1, minAmount: 118000, maxAmount: 118000 },
           { month: '2025-12', avgAmount: 125000, count: 1, minAmount: 125000, maxAmount: 125000 },
-        ]),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse([
+        ]));
+      if (url === resolveApiUrl('/api/v1/detail/1001/complexes')) return Promise.resolve(jsonResponse([
           {
             complexId: 501,
             complexName: 'Sample complex name',
@@ -423,8 +560,9 @@ describe('App 단지 상세', () => {
             address: 'Sample address',
             unitCnt: 740,
           },
-        ]),
-      );
+        ]));
+      return Promise.resolve(errorResponse(404));
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     const { root, rootElement } = await renderApp({ initialMapLevel: 4 });
@@ -446,7 +584,7 @@ describe('App 단지 상세', () => {
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/trade/1001?complexId=501'),
+      resolveApiUrl('/api/v1/complex/501/trades?exclArea=84.93'),
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
@@ -462,7 +600,7 @@ describe('App 단지 상세', () => {
     expect(rootElement.textContent).toContain('2025-12-01');
     expect(rootElement.textContent).toContain('12억 5,000만원');
     const chartSection = rootElement.querySelector<HTMLElement>(
-      '[aria-label="거래가 차트"]',
+      '[aria-label="84.93㎡ 거래가 차트"]',
     );
 
     expect(chartSection).not.toBeNull();
@@ -485,7 +623,7 @@ describe('App 단지 상세', () => {
     let detailCalls = 0;
     let tradeCalls = 0;
     const detailUrl = resolveApiUrl('/api/v1/detail/1001?complexId=501');
-    const tradeUrl = resolveApiUrl('/api/v1/trade/1001?complexId=501');
+    const tradeUrl = resolveApiUrl('/api/v1/complex/501/trades?exclArea=84.69');
     const fetchMock = vi.fn((url: RequestInfo | URL) => {
       const requestUrl = String(url);
 
@@ -561,7 +699,11 @@ describe('App 단지 상세', () => {
         }));
       }
 
-      if (requestUrl === resolveApiUrl('/api/v1/trade/1001/trend?complexId=501')) {
+      if (requestUrl === resolveApiUrl('/api/v1/complex/501/trade-areas')) {
+        return Promise.resolve(jsonResponse(tradeAreasResponse(501, 84.69)));
+      }
+
+      if (requestUrl === resolveApiUrl('/api/v1/complex/501/trade-trend?exclArea=84.69')) {
         return Promise.resolve(jsonResponse([]));
       }
 
@@ -611,22 +753,13 @@ describe('App 단지 상세', () => {
   });
 
   it('Kakao CustomOverlay complex marker에서 detail sidebar를 연다', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse([
-          {
-            parcelId: 1001,
-            complexId: 501,
-            lat: 37.5123,
-            lng: 127.0456,
-            latestDealAmount: 125000,
-            unitCntSum: 740,
-          },
-        ]),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === resolveApiUrl('/api/v1/map/complexes')) return Promise.resolve(jsonResponse([{
+        parcelId: 1001, complexId: 501, lat: 37.5123, lng: 127.0456,
+        latestDealAmount: 125000, unitCntSum: 740,
+      }]));
+      if (url === resolveApiUrl('/api/v1/detail/1001?complexId=501')) return Promise.resolve(jsonResponse({
           parcelId: 1001,
           complexId: 501,
           latitude: 37.5123,
@@ -636,10 +769,11 @@ describe('App 단지 상세', () => {
           name: 'Sample complex name',
           dongCnt: 8,
           unitCnt: 740,
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
+        }));
+      if (url === resolveApiUrl('/api/v1/complex/501/trade-areas')) {
+        return Promise.resolve(jsonResponse(tradeAreasResponse(501, 84.93)));
+      }
+      if (url === resolveApiUrl('/api/v1/complex/501/trades?exclArea=84.93')) return Promise.resolve(jsonResponse({
           parcelId: 1001,
           complexId: 501,
           content: [],
@@ -647,10 +781,11 @@ describe('App 단지 상세', () => {
           size: 20,
           totalElements: 0,
           totalPages: 0,
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse([
+        }));
+      if (url === resolveApiUrl('/api/v1/complex/501/trade-trend?exclArea=84.93')) {
+        return Promise.resolve(jsonResponse([]));
+      }
+      if (url === resolveApiUrl('/api/v1/detail/1001/complexes')) return Promise.resolve(jsonResponse([
           {
             complexId: 501,
             complexName: 'Sample complex name',
@@ -659,8 +794,9 @@ describe('App 단지 상세', () => {
             longitude: 127.0456,
             address: 'Sample address',
           },
-        ]),
-      );
+        ]));
+      return Promise.resolve(errorResponse(404));
+    });
     const sdk = createFakeKakaoSdk({
       bounds: {
         swLat: 37.45,
@@ -692,13 +828,13 @@ describe('App 단지 상세', () => {
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/trade/1001?complexId=501'),
+      resolveApiUrl('/api/v1/complex/501/trades?exclArea=84.93'),
       expect.objectContaining({ method: 'GET' }),
     );
     expect(rootElement.querySelector('[aria-label="단지 상세 패널"]')).not.toBeNull();
     expect(rootElement.textContent).toContain('Sample complex name');
     expect(rootElement.textContent).toContain('Sample complex name');
-    expect(rootElement.textContent).toContain('가격 흐름을 불러오지 못했어요');
+    expect(rootElement.textContent).toContain('표시할 거래가 없습니다');
     expect(rootElement.querySelector('[data-detail-section="trade-history"]')).not.toBeNull();
 
     unmount(root);
@@ -706,11 +842,10 @@ describe('App 단지 상세', () => {
 
   it('complexId query parameter로 direct detail/trade를 열고 같은 parcel complex를 전환한다', async () => {
     window.history.pushState({}, '', '/?complexId=502');
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse([]))
-      .mockResolvedValueOnce(
-        jsonResponse({
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === resolveApiUrl('/api/v1/map/regions')) return Promise.resolve(jsonResponse([]));
+      if (url === resolveApiUrl('/api/v1/complex/502')) return Promise.resolve(jsonResponse({
           parcelId: 1001,
           complexId: 502,
           latitude: 37.6123,
@@ -718,10 +853,11 @@ describe('App 단지 상세', () => {
           address: 'Sample address',
           tradeName: 'Tower B',
           name: 'Sample Tower B',
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
+        }));
+      if (url === resolveApiUrl('/api/v1/complex/502/trade-areas')) {
+        return Promise.resolve(jsonResponse(tradeAreasResponse(502, 84.94)));
+      }
+      if (url === resolveApiUrl('/api/v1/complex/502/trades?exclArea=84.94')) return Promise.resolve(jsonResponse({
           parcelId: 1001,
           complexId: 502,
           content: [],
@@ -729,12 +865,11 @@ describe('App 단지 상세', () => {
           size: 20,
           totalElements: 0,
           totalPages: 0,
-        }),
-      )
-      .mockResolvedValueOnce(jsonResponse([]))
-      .mockResolvedValueOnce(jsonResponse([]))
-      .mockResolvedValueOnce(
-        jsonResponse([
+        }));
+      if (url === resolveApiUrl('/api/v1/complex/502/trade-trend?exclArea=84.94')) {
+        return Promise.resolve(jsonResponse([]));
+      }
+      if (url === resolveApiUrl('/api/v1/detail/1001/complexes')) return Promise.resolve(jsonResponse([
           {
             complexId: 501,
             complexName: 'Tower A',
@@ -753,20 +888,19 @@ describe('App 단지 상세', () => {
             address: 'Sample address',
             unitCnt: 410,
           },
-        ]),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
+        ]));
+      if (url === resolveApiUrl('/api/v1/detail/1001?complexId=501')) return Promise.resolve(jsonResponse({
           parcelId: 1001,
           complexId: 501,
           latitude: 37.5123,
           longitude: 127.0456,
           address: 'Sample address',
           name: 'Sample Tower A',
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
+        }));
+      if (url === resolveApiUrl('/api/v1/complex/501/trade-areas')) {
+        return Promise.resolve(jsonResponse(tradeAreasResponse(501, 59.93)));
+      }
+      if (url === resolveApiUrl('/api/v1/complex/501/trades?exclArea=59.93')) return Promise.resolve(jsonResponse({
           parcelId: 1001,
           complexId: 501,
           content: [],
@@ -774,11 +908,12 @@ describe('App 단지 상세', () => {
           size: 20,
           totalElements: 0,
           totalPages: 0,
-        }),
-      )
-      .mockResolvedValueOnce(jsonResponse([]))
-      .mockResolvedValueOnce(jsonResponse([]))
-      .mockResolvedValueOnce(jsonResponse([]));
+        }));
+      if (url === resolveApiUrl('/api/v1/complex/501/trade-trend?exclArea=59.93')) {
+        return Promise.resolve(jsonResponse([]));
+      }
+      return Promise.resolve(errorResponse(404));
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     const { root, rootElement } = await renderApp();
@@ -790,7 +925,7 @@ describe('App 단지 상세', () => {
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/complex/502/trades'),
+      resolveApiUrl('/api/v1/complex/502/trades?exclArea=84.94'),
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
@@ -813,7 +948,7 @@ describe('App 단지 상세', () => {
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/trade/1001?complexId=501'),
+      resolveApiUrl('/api/v1/complex/501/trades?exclArea=59.93'),
       expect.objectContaining({ method: 'GET' }),
     );
     expect(rootElement.textContent).toContain('Sample Tower A');
@@ -823,11 +958,10 @@ describe('App 단지 상세', () => {
 
   it('null address direct detail도 실제 API 데이터 요약과 거래 내역을 표시한다', async () => {
     window.history.pushState({}, '', '/?complexId=4368');
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse([]))
-      .mockResolvedValueOnce(
-        jsonResponse({
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === resolveApiUrl('/api/v1/map/regions')) return Promise.resolve(jsonResponse([]));
+      if (url === resolveApiUrl('/api/v1/complex/4368')) return Promise.resolve(jsonResponse({
           parcelId: 4669,
           complexId: 4368,
           latitude: 37.5681,
@@ -838,10 +972,11 @@ describe('App 단지 상세', () => {
           dongCnt: 1,
           unitCnt: 206,
           useDate: '2023-02-15',
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
+        }));
+      if (url === resolveApiUrl('/api/v1/complex/4368/trade-areas')) {
+        return Promise.resolve(jsonResponse(tradeAreasResponse(4368, 59.98)));
+      }
+      if (url === resolveApiUrl('/api/v1/complex/4368/trades?exclArea=59.98')) return Promise.resolve(jsonResponse({
           parcelId: 4669,
           complexId: 4368,
           content: [
@@ -858,15 +993,11 @@ describe('App 단지 상세', () => {
           size: 20,
           totalElements: 1,
           totalPages: 1,
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse([
+        }));
+      if (url === resolveApiUrl('/api/v1/complex/4368/trade-trend?exclArea=59.98')) return Promise.resolve(jsonResponse([
           { month: '2026-05', avgAmount: 154000, count: 1, minAmount: 154000, maxAmount: 154000 },
-        ]),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse([
+        ]));
+      if (url === resolveApiUrl('/api/v1/detail/4669/complexes')) return Promise.resolve(jsonResponse([
           {
             complexId: 4368,
             complexName: '힐스테이트세운센트럴1단지',
@@ -876,8 +1007,9 @@ describe('App 단지 상세', () => {
             address: null,
             unitCnt: 206,
           },
-        ]),
-      );
+        ]));
+      return Promise.resolve(errorResponse(404));
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     const { root, rootElement } = await renderApp();
@@ -889,7 +1021,7 @@ describe('App 단지 상세', () => {
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      resolveApiUrl('/api/v1/complex/4368/trades'),
+      resolveApiUrl('/api/v1/complex/4368/trades?exclArea=59.98'),
       expect.objectContaining({ method: 'GET' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
@@ -904,3 +1036,24 @@ describe('App 단지 상세', () => {
     unmount(root);
   });
 });
+
+function tradeAreasResponse(complexId: number, exclArea: number, tradeCount = 1) {
+  return {
+    complexId,
+    defaultExclArea: exclArea,
+    areas: [{ exclArea, tradeCount, latestDealDate: '2026-07-16' }],
+  };
+}
+
+function tradePage(complexId: number, exclArea: number, totalElements: number, totalPages: number) {
+  return {
+    parcelId: 1001,
+    complexId,
+    content: [{ tradeId: 2, dealDate: '2026-06-01', exclArea,
+      dealAmount: 88000, aptDong: null, floor: 10 }],
+    page: 0,
+    size: 25,
+    totalElements,
+    totalPages,
+  };
+}

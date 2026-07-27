@@ -12,6 +12,8 @@ describe('DetailSidebar 모바일 탭', () => {
       act(() => root?.unmount());
       root = null;
     }
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it('뉴스 flag가 꺼져도 기존 시세 요약은 유지하고 뉴스 tab과 section만 숨긴다', async () => {
@@ -144,7 +146,7 @@ describe('DetailSidebar 모바일 탭', () => {
     expect(infoTab?.tabIndex).toBe(0);
     expect(host.querySelector('#detail-tabpanel-info')?.getAttribute('role')).toBe('tabpanel');
     expect(host.querySelector('#detail-tabpanel-info')?.getAttribute('aria-labelledby')).toBe('detail-tab-info');
-    expect(host.querySelectorAll('[data-mobile-tab-panel="info"][data-mobile-tab-active="true"]')).toHaveLength(2);
+    expect(host.querySelectorAll('[data-mobile-tab-panel="info"][data-mobile-tab-active="true"]')).toHaveLength(1);
 
     act(() => infoTab?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
     const trendTab = host.querySelector<HTMLButtonElement>('#detail-tab-trend');
@@ -166,7 +168,7 @@ describe('DetailSidebar 모바일 탭', () => {
 
     const orderedSections = Array.from(host.querySelectorAll<HTMLElement>('[data-detail-order]'))
       .map((section) => section.dataset.detailOrder);
-    expect(orderedSections).toEqual(['identity', 'summary', 'switcher', 'information', 'news', 'trend', 'trades']);
+    expect(orderedSections).toEqual(['identity', 'summary', 'switcher', 'information', 'news', 'trades']);
     expect(host.querySelector('.data-status-list')).toBeNull();
     expect(host.querySelectorAll('.detail-key-stats .detail-metric')).toHaveLength(2);
     expect(host.querySelector('.detail-key-stats')?.textContent).toContain('740세대 · 5개동 · 2018년');
@@ -174,9 +176,11 @@ describe('DetailSidebar 모바일 탭', () => {
     expect(host.querySelector('[data-detail-field="address"]')?.textContent).toContain('서울시 테스트로');
     expect(host.querySelector('[data-detail-field="unitCnt"]')?.textContent).toContain('740');
     expect(host.querySelector('details.detail-additional-information')?.hasAttribute('open')).toBe(false);
-    expect(host.querySelector('details.detail-additional-information')?.textContent).toContain('면적');
-    expect(host.querySelector('details.detail-additional-information')?.textContent).toContain('단지명테스트아파트');
-    expect(host.querySelector('[data-trade-cell="area"]')?.textContent).toBe('84.9㎡25.7평');
+    expect(host.querySelector('details.detail-additional-information')?.textContent)
+      .toContain('명칭 정보거래명테스트아파트');
+    expect(host.querySelector('details.detail-additional-information')?.textContent)
+      .not.toContain('단지명');
+    expect(host.querySelector('[data-trade-cell="area"]')?.textContent).toBe('84.90㎡약 25.7평');
     expect(host.querySelector('[data-trade-cell="amount"] .trade-amount-label')?.textContent)
       .toBe('12억 5,000만원');
     expect(host.querySelector('[data-trade-cell="amount"]')?.children).toHaveLength(1);
@@ -227,6 +231,89 @@ describe('DetailSidebar 모바일 탭', () => {
     expect(host.querySelector('.request-state-notice')?.classList).toContain('detail-request-state');
     expect(host.querySelector('.data-status-list')).toBeNull();
     expect(host.querySelector('details')).toBeNull();
+    host.remove();
+  });
+
+  it('모바일은 tab마다 하나의 tabpanel만 노출하고 profile과 exact 면적 선택을 올바르게 연결한다', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    const host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+    const onExclAreaChange = vi.fn();
+    const onRetryTradeAreas = vi.fn();
+    const ratios = { scope: 'PARCEL' as const, quality: 'PNU_FALLBACK' as const,
+      siteAreaM2: 20409.9, buildingAreaM2: 4119.66, totalFloorAreaM2: 62044.22,
+      floorAreaRatioAreaM2: 42616.89, buildingCoverageRate: 20.18, floorAreaRatio: 208.8 };
+    const detail = { parcelId: 1001, complexId: 501, latitude: 37.5, longitude: 127,
+      address: '서울시 테스트로', displayName: '테스트아파트', tradeName: '테스트아파트',
+      name: '테스트아파트', dongCnt: 5, unitCnt: 740, platArea: null, archArea: null,
+      totArea: null, bcRat: null, vlRat: null, useDate: '2018-01-01', prediction: null,
+      buildingProfile: { ratios, households: null, parking: null, building: null,
+        elevators: null, safety: null, dates: null, address: null, energy: null } };
+    const tradeAreas = { complexId: 501, defaultExclArea: 84.94, areas: [
+      { exclArea: 84.94, tradeCount: 242, latestDealDate: '2026-07-16' },
+      { exclArea: 97.9, tradeCount: 10, latestDealDate: '2026-06-01' },
+    ] };
+
+    await act(async () => root?.render(<DetailSidebar
+      complexDetail={detail}
+      detailError={null} detailState="ready" onBack={vi.fn()} onComplexSelect={vi.fn()}
+      onRetryDetail={vi.fn()} onLoadMoreTrades={vi.fn()} parcelComplexes={[]}
+      parcelTrades={null} selection={{ parcelId: 1001, complexId: 501 }} tradeRows={[]}
+      tradeTrend={[]} tradeAreas={tradeAreas} selectedExclArea={84.94}
+      onExclAreaChange={onExclAreaChange} onRetryTradeAreas={onRetryTradeAreas}
+    />));
+
+    expect(host.querySelectorAll('[role="tabpanel"]:not([hidden])')).toHaveLength(1);
+    expect(host.querySelector('#detail-tabpanel-info')?.textContent).toContain('면적·밀도');
+    const trendTab = host.querySelector<HTMLButtonElement>('#detail-tab-trend');
+    act(() => trendTab?.click());
+    expect(host.querySelectorAll('[role="tabpanel"]:not([hidden])')).toHaveLength(1);
+    expect(host.querySelector('#detail-tabpanel-info')?.hasAttribute('hidden')).toBe(true);
+    const selector = host.querySelector<HTMLSelectElement>('#detail-excl-area');
+    expect(host.querySelector('label[for="detail-excl-area"]')?.textContent).toBe('전용면적');
+    expect(Array.from(selector?.options ?? []).map((option) => option.textContent)).toEqual([
+      '84.94㎡ · 약 25.7평 · 242건',
+      '97.90㎡ · 약 29.6평 · 10건',
+    ]);
+    act(() => {
+      if (selector) {
+        selector.value = '97.9';
+        selector.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+    expect(onExclAreaChange).toHaveBeenCalledWith(97.9);
+
+    await act(async () => root?.render(<DetailSidebar
+      complexDetail={detail} detailError={null} detailState="ready" onBack={vi.fn()}
+      onComplexSelect={vi.fn()} onRetryDetail={vi.fn()} onLoadMoreTrades={vi.fn()}
+      parcelComplexes={[]} parcelTrades={null} selection={{ parcelId: 1001, complexId: 501 }}
+      tradeRows={[]} tradeTrend={[]} tradeAreas={null} selectedExclArea={null}
+      areaState="error" areaError={{ kind: 'service-unavailable', service: 'property-data',
+        operation: 'trade-areas', status: 503, code: 'C503' }}
+      onRetryTradeAreas={onRetryTradeAreas}
+    />));
+    act(() => host.querySelector<HTMLButtonElement>('#detail-tab-trades')?.click());
+    expect(host.querySelector('#detail-tabpanel-trades')?.textContent).toContain('최근 거래를 불러오지 못했어요');
+    expect(host.querySelector('#detail-tabpanel-trades .trade-list')).toBeNull();
+    act(() => host.querySelector<HTMLButtonElement>('#detail-tabpanel-trades button')?.click());
+    expect(onRetryTradeAreas).toHaveBeenCalledTimes(1);
+
+    vi.useFakeTimers();
+    await act(async () => root?.render(<DetailSidebar
+        complexDetail={detail} detailError={null} detailState="ready" onBack={vi.fn()}
+        onComplexSelect={vi.fn()} onRetryDetail={vi.fn()} onLoadMoreTrades={vi.fn()}
+        parcelComplexes={[]} parcelTrades={null} selection={{ parcelId: 1001, complexId: 501 }}
+        tradeRows={[]} tradeTrend={[]} tradeAreas={null} selectedExclArea={null}
+        areaState="loading" onRetryTradeAreas={onRetryTradeAreas}
+      />));
+    act(() => vi.advanceTimersByTime(151));
+    expect(host.querySelector('#detail-tabpanel-trades')?.textContent).toContain('거래 면적을 불러오는 중');
+    expect(host.querySelector('#detail-tabpanel-trades .trade-list')).toBeNull();
     host.remove();
   });
 

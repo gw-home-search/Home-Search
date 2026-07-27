@@ -11,6 +11,8 @@ import com.home.application.search.ComplexSearchReader;
 import com.home.application.search.ComplexSearchService;
 import com.home.application.tradehistory.TradeHistoryReader;
 import com.home.application.tradehistory.TradeHistoryService;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -30,8 +32,17 @@ class ReadCapabilityServicesTest {
                 TradeHistoryService.class, "getTradeList", Long.class, Long.class, Integer.class, Integer.class);
         assertRepeatableRead(
                 TradeHistoryService.class, "getComplexTradeList", Long.class, Integer.class, Integer.class);
+        assertRepeatableRead(
+                TradeHistoryService.class,
+                "getComplexTradeList",
+                Long.class,
+                BigDecimal.class,
+                Integer.class,
+                Integer.class);
+        assertRepeatableRead(TradeHistoryService.class, "getTradeAreas", Long.class);
         assertRepeatableRead(TradeHistoryService.class, "getTradeTrend", Long.class, Long.class);
         assertRepeatableRead(TradeHistoryService.class, "getComplexTradeTrend", Long.class);
+        assertRepeatableRead(TradeHistoryService.class, "getComplexTradeTrend", Long.class, BigDecimal.class);
         assertThat(RegionNavigationService.class.getMethod("getRootRegions").getAnnotation(Transactional.class))
                 .isNull();
     }
@@ -147,6 +158,12 @@ class ReadCapabilityServicesTest {
                 .extracting(TradeTrendPoint::month)
                 .isEqualTo("2024-11");
         assertThat(service.getComplexTradeTrend(501L)).hasSize(1);
+        assertThat(service.getComplexTradeList(501L, new BigDecimal("84.94"), 0, 25)
+                        .complexId())
+                .isEqualTo(501L);
+        assertThat(readers.exclArea).isEqualByComparingTo("84.94");
+        assertThat(service.getComplexTradeTrend(501L, new BigDecimal("84.94"))).hasSize(1);
+        assertThat(service.getTradeAreas(501L).defaultExclArea()).isEqualByComparingTo("84.94");
 
         assertThatThrownBy(() -> service.getTradeList(1001L, null, -1, 10))
                 .isInstanceOf(InvalidReadRequestException.class)
@@ -168,6 +185,9 @@ class ReadCapabilityServicesTest {
         assertThatThrownBy(() -> service.getComplexTradeTrend(404L))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("complex trade parent not found");
+        assertThatThrownBy(() -> service.getTradeAreas(404L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("complex trade parent not found");
     }
 
     private static class CapturingReaders
@@ -180,6 +200,7 @@ class ReadCapabilityServicesTest {
         private int regionComplexOffset;
         private int tradePage;
         private int tradeSize;
+        private BigDecimal exclArea;
 
         @Override
         public List<SearchComplexResult> searchComplexes(String query) {
@@ -248,6 +269,23 @@ class ReadCapabilityServicesTest {
         }
 
         @Override
+        public Optional<TradeListResult> findComplexTradeList(
+                Long complexId, BigDecimal requestedExclArea, int page, int size) {
+            exclArea = requestedExclArea;
+            return findComplexTradeList(complexId, page, size);
+        }
+
+        @Override
+        public Optional<TradeAreasResult> findTradeAreas(Long complexId) {
+            return Long.valueOf(404L).equals(complexId)
+                    ? Optional.empty()
+                    : Optional.of(new TradeAreasResult(
+                            complexId,
+                            new BigDecimal("84.94"),
+                            List.of(new TradeAreaResult(new BigDecimal("84.94"), 2L, LocalDate.of(2026, 7, 16)))));
+        }
+
+        @Override
         public Optional<List<TradeTrendPoint>> findTradeTrend(Long parcelId, Long complexId) {
             return Long.valueOf(404L).equals(parcelId) ? Optional.empty() : Optional.of(List.of(trend()));
         }
@@ -255,6 +293,12 @@ class ReadCapabilityServicesTest {
         @Override
         public Optional<List<TradeTrendPoint>> findComplexTradeTrend(Long complexId) {
             return Long.valueOf(404L).equals(complexId) ? Optional.empty() : Optional.of(List.of(trend()));
+        }
+
+        @Override
+        public Optional<List<TradeTrendPoint>> findComplexTradeTrend(Long complexId, BigDecimal requestedExclArea) {
+            exclArea = requestedExclArea;
+            return findComplexTradeTrend(complexId);
         }
 
         private ParcelDetailResult detail(Long complexId) {

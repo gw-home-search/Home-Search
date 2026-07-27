@@ -10,6 +10,7 @@ import com.home.application.read.ParcelDetailResult;
 import com.home.application.read.RegionDetailResult;
 import com.home.application.read.RegionSummaryResult;
 import com.home.application.read.SearchComplexResult;
+import com.home.application.read.TradeAreasResult;
 import com.home.application.read.TradeListResult;
 import com.home.application.read.TradeTrendPoint;
 import com.home.domain.complex.buildingprofile.BuildingProfilePublicQuality;
@@ -186,6 +187,77 @@ class JdbcReadCapabilityReadersTest extends JdbcPostgresTestSupport {
             assertThat(tradeList.totalElements()).isEqualTo(2L);
             assertThat(tradeList.trades()).extracting("tradeId").containsExactly(9001L);
         });
+    }
+
+    @Test
+    @DisplayName("trade area와 exact filter는 active positive NUMERIC 면적만 같은 기준으로 조회한다")
+    void tradeAreasAndExactFilterUseActivePositiveNumericRows() {
+        seedPropertyExplorationData();
+        jdbcClient.sql("""
+			INSERT INTO raw_trade_ingest (
+			    id, source, source_key, lawd_cd, deal_ymd, page_no, payload, payload_hash, status, processed_at
+			) VALUES
+			    (90003, 'RTMS', 'area-59', '11680', '202606', 1, '{}', 'area-hash-59', 'NORMALIZED', now()),
+			    (90004, 'RTMS', 'area-97', '11680', '202606', 1, '{}', 'area-hash-97', 'NORMALIZED', now()),
+			    (90005, 'RTMS', 'area-deleted', '11680', '202607', 1, '{}', 'area-hash-deleted', 'NORMALIZED', now()),
+			    (90006, 'RTMS', 'area-zero', '11680', '202607', 1, '{}', 'area-hash-zero', 'NORMALIZED', now())
+			""").update();
+        jdbcClient.sql("""
+			INSERT INTO trade (
+			    id, complex_id, deal_date, deal_amount, floor, excl_area, apt_dong,
+			    source, source_key, complex_pk, apt_seq, raw_ingest_id, deleted_at
+			) VALUES
+			    (9003, 501, DATE '2026-06-01', 90000, 7, 59.93, '101',
+			     'RTMS', 'area-59', 'COMPLEX-PK-501', 'APT-501', 90003, NULL),
+			    (9004, 501, DATE '2026-06-01', 150000, 18, 97.90, '101',
+			     'RTMS', 'area-97', 'COMPLEX-PK-501', 'APT-501', 90004, NULL),
+			    (9005, 501, DATE '2026-07-01', 200000, 20, 120.00, '101',
+			     'RTMS', 'area-deleted', 'COMPLEX-PK-501', 'APT-501', 90005, now()),
+			    (9006, 501, DATE '2026-07-02', 1, 1, 0.00, '101',
+			     'RTMS', 'area-zero', 'COMPLEX-PK-501', 'APT-501', 90006, NULL)
+			""").update();
+        ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
+
+        assertThat(repository.findTradeAreas(501L)).hasValueSatisfying(result -> {
+            assertThat(result.defaultExclArea()).isEqualByComparingTo("97.90");
+            assertThat(result.areas())
+                    .extracting("exclArea", "tradeCount", "latestDealDate")
+                    .containsExactly(
+                            tuple(new BigDecimal("59.93"), 1L, LocalDate.of(2026, 6, 1)),
+                            tuple(new BigDecimal("84.93"), 2L, LocalDate.of(2025, 12, 15)),
+                            tuple(new BigDecimal("97.90"), 1L, LocalDate.of(2026, 6, 1)));
+        });
+        assertThat(repository.findComplexTradeList(501L, new BigDecimal("84.93"), 0, 1))
+                .hasValueSatisfying(result -> {
+                    assertThat(result.totalElements()).isEqualTo(2);
+                    assertThat(result.trades()).extracting("tradeId").containsExactly(9002L);
+                });
+        assertThat(repository.findComplexTradeList(501L, new BigDecimal("84.94"), 0, 25))
+                .hasValueSatisfying(result -> {
+                    assertThat(result.totalElements()).isZero();
+                    assertThat(result.trades()).isEmpty();
+                });
+        assertThat(repository.findComplexTradeTrend(501L, new BigDecimal("59.93")))
+                .hasValueSatisfying(trend -> assertThat(trend).singleElement().satisfies(point -> {
+                    assertThat(point.month()).isEqualTo("2026-06");
+                    assertThat(point.avgAmount()).isEqualTo(90000L);
+                    assertThat(point.count()).isEqualTo(1);
+                }));
+        assertThat(repository.findComplexTradeList(501L, 0, 25))
+                .hasValueSatisfying(result -> assertThat(result.totalElements()).isEqualTo(5));
+    }
+
+    @Test
+    @DisplayName("trade area는 유효 무거래 단지와 없는 단지를 구분한다")
+    void tradeAreasDistinguishEmptyComplexFromMissingComplex() {
+        seedComplex();
+        ReadCapabilityReaders repository = new ReadCapabilityReaders(jdbcClient);
+
+        assertThat(repository.findTradeAreas(501L)).hasValueSatisfying(result -> {
+            assertThat(result.defaultExclArea()).isNull();
+            assertThat(result.areas()).isEmpty();
+        });
+        assertThat(repository.findTradeAreas(999L)).isEmpty();
     }
 
     @Test
@@ -990,6 +1062,23 @@ class JdbcReadCapabilityReadersTest extends JdbcPostgresTestSupport {
 
         private Optional<List<TradeTrendPoint>> findComplexTradeTrend(Long complexId) {
             return tradeReader.findComplexTradeTrend(complexId);
+        }
+
+        private Optional<TradeAreasResult> findTradeAreas(Long complexId) {
+            return tradeReader.findTradeAreas(complexId);
+        }
+
+        private Optional<TradeListResult> findComplexTradeList(
+                Long complexId, BigDecimal exclArea, int page, int size) {
+            return tradeReader.findComplexTradeList(complexId, exclArea, page, size);
+        }
+
+        private Optional<TradeListResult> findComplexTradeList(Long complexId, int page, int size) {
+            return tradeReader.findComplexTradeList(complexId, page, size);
+        }
+
+        private Optional<List<TradeTrendPoint>> findComplexTradeTrend(Long complexId, BigDecimal exclArea) {
+            return tradeReader.findComplexTradeTrend(complexId, exclArea);
         }
     }
 }

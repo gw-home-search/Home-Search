@@ -22,6 +22,8 @@ import com.home.application.read.ParcelDetailResult;
 import com.home.application.read.RegionDetailResult;
 import com.home.application.read.RegionSummaryResult;
 import com.home.application.read.SearchComplexResult;
+import com.home.application.read.TradeAreaResult;
+import com.home.application.read.TradeAreasResult;
 import com.home.application.read.TradeListResult;
 import com.home.application.read.TradeResult;
 import com.home.application.read.TradeTrendPoint;
@@ -458,7 +460,7 @@ class ReadApiRestDocsTest {
                         null,
                         null,
                         LocalDate.of(2020, 1, 1)));
-        given(tradeHistoryService.getComplexTradeList(502L, null, null))
+        given(tradeHistoryService.getComplexTradeList(502L, new BigDecimal("59.93"), null, null))
                 .willReturn(new TradeListResult(
                         1001L,
                         502L,
@@ -479,7 +481,7 @@ class ReadApiRestDocsTest {
                                 .responseFields(detailFields())
                                 .build())));
 
-        mockMvc.perform(get("/api/v1/complex/{complexId}/trades", 502L))
+        mockMvc.perform(get("/api/v1/complex/{complexId}/trades", 502L).param("exclArea", "59.93"))
                 .andExpect(status().isOk())
                 .andDo(document(
                         "read-complex-trades-success",
@@ -497,11 +499,35 @@ class ReadApiRestDocsTest {
     }
 
     @Test
+    @DisplayName("GET /api/v1/complex/{complexId}/trade-areas REST Docs를 생성한다")
+    void documentTradeAreas() throws Exception {
+        given(tradeHistoryService.getTradeAreas(502L))
+                .willReturn(new TradeAreasResult(
+                        502L,
+                        new BigDecimal("84.94"),
+                        List.of(new TradeAreaResult(new BigDecimal("84.94"), 242L, LocalDate.of(2026, 7, 16)))));
+
+        mockMvc.perform(get("/api/v1/complex/{complexId}/trade-areas", 502L))
+                .andExpect(status().isOk())
+                .andDo(document(
+                        "read-complex-trade-areas-success",
+                        pathParameters(parameterWithName("complexId").description("Complex id.")),
+                        responseFields(tradeAreaFields()),
+                        resource(builder()
+                                .tag("Read")
+                                .summary("Get exact trade areas")
+                                .description("Returns exact active trade-area choices and the newest default area.")
+                                .pathParameters(parameterWithName("complexId").description("Complex id."))
+                                .responseFields(tradeAreaFields())
+                                .build())));
+    }
+
+    @Test
     @DisplayName("GET /api/v1/trade/{parcelId}/trend와 GET /api/v1/complex/{complexId}/trade-trend REST Docs를 생성한다")
     void documentTradeTrend() throws Exception {
         given(tradeHistoryService.getTradeTrend(1001L, 501L))
                 .willReturn(List.of(new TradeTrendPoint("2025-12", 127500L, 2, 125000L, 130000L)));
-        given(tradeHistoryService.getComplexTradeTrend(502L))
+        given(tradeHistoryService.getComplexTradeTrend(502L, new BigDecimal("59.93")))
                 .willReturn(List.of(new TradeTrendPoint("2025-12", 90000L, 1, 90000L, 90000L)));
 
         mockMvc.perform(get("/api/v1/trade/{parcelId}/trend", 1001L).param("complexId", "501"))
@@ -524,11 +550,14 @@ class ReadApiRestDocsTest {
                                 .responseFields(tradeTrendFields())
                                 .build())));
 
-        mockMvc.perform(get("/api/v1/complex/{complexId}/trade-trend", 502L))
+        mockMvc.perform(get("/api/v1/complex/{complexId}/trade-trend", 502L).param("exclArea", "59.93"))
                 .andExpect(status().isOk())
                 .andDo(document(
                         "read-complex-trade-trend-success",
                         pathParameters(parameterWithName("complexId").description("Complex id.")),
+                        queryParameters(parameterWithName("exclArea")
+                                .optional()
+                                .description("Optional exact exclusive area in square meters.")),
                         responseFields(tradeTrendFields()),
                         resource(builder()
                                 .tag("Read")
@@ -536,6 +565,9 @@ class ReadApiRestDocsTest {
                                 .description(
                                         "Returns monthly average trade price series (oldest first) for one complex id.")
                                 .pathParameters(parameterWithName("complexId").description("Complex id."))
+                                .queryParameters(parameterWithName("exclArea")
+                                        .optional()
+                                        .description("Optional exact exclusive area in square meters."))
                                 .responseFields(tradeTrendFields())
                                 .build())));
     }
@@ -694,10 +726,29 @@ class ReadApiRestDocsTest {
         };
     }
 
+    private static org.springframework.restdocs.payload.FieldDescriptor[] tradeAreaFields() {
+        return new org.springframework.restdocs.payload.FieldDescriptor[] {
+            fieldWithPath("complexId").type(JsonFieldType.NUMBER).description("Complex id."),
+            fieldWithPath("defaultExclArea")
+                    .type(JsonFieldType.NUMBER)
+                    .optional()
+                    .description("Exact area of the newest eligible trade in square meters."),
+            fieldWithPath("areas").type(JsonFieldType.ARRAY).description("Exact areas ordered ascending."),
+            fieldWithPath("areas[].exclArea")
+                    .type(JsonFieldType.NUMBER)
+                    .description("Exact exclusive area in square meters."),
+            fieldWithPath("areas[].tradeCount").type(JsonFieldType.NUMBER).description("Active trade count."),
+            fieldWithPath("areas[].latestDealDate")
+                    .type(JsonFieldType.STRING)
+                    .description("Newest deal date for the exact area (YYYY-MM-DD).")
+        };
+    }
+
     private static org.springframework.restdocs.request.ParameterDescriptor[] tradePageQueryParameters() {
         return new org.springframework.restdocs.request.ParameterDescriptor[] {
             parameterWithName("page").optional().description("Zero-based page index. Default 0."),
-            parameterWithName("size").optional().description("Page size. Default 25, max 100.")
+            parameterWithName("size").optional().description("Page size. Default 25, max 100."),
+            parameterWithName("exclArea").optional().description("Optional exact exclusive area in square meters.")
         };
     }
 

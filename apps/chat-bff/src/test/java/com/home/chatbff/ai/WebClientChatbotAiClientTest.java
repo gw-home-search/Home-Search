@@ -93,6 +93,44 @@ class WebClientChatbotAiClientTest {
     }
 
     @Test
+    @DisplayName("AI SSE의 제한된 status와 final 응답을 순서대로 전달한다")
+    void forwardsUpstreamStreamEvents() {
+        AtomicReference<String> path = new AtomicReference<>();
+        server = HttpServer.create()
+                .host("127.0.0.1")
+                .port(0)
+                .handle((request, response) -> {
+                    path.set(request.uri());
+                    return response.header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_EVENT_STREAM_VALUE)
+                            .sendString(Mono.just("""
+                                    event: status
+                                    data: {"requestId":"request-1","code":"CANDIDATE_CHECK","message":"후보 확인"}
+
+                                    event: final
+                                    data: {"requestId":"request-1","response":{"answer":"완료"}}
+
+                                    """));
+                })
+                .bindNow();
+        var client = client(URI.create("http://127.0.0.1:" + server.port()));
+
+        var events = client.stream(
+                        new ChatbotQueryRequest("추천", null),
+                        "Bearer user-token",
+                        "request-1",
+                        new VerifiedChatUser(42L))
+                .collectList()
+                .block(Duration.ofSeconds(3));
+
+        assertThat(path).hasValue("/api/v1/chatbot/query/stream");
+        assertThat(events).hasSize(2);
+        assertThat(events.get(0).event()).isEqualTo("status");
+        assertThat(events.get(0).data().path("code").asText()).isEqualTo("CANDIDATE_CHECK");
+        assertThat(events.get(1).event()).isEqualTo("final");
+        assertThat(events.get(1).data().path("answer").asText()).isEqualTo("완료");
+    }
+
+    @Test
     @DisplayName("AI 5xx와 연결 실패는 provider unavailable로 통일한다")
     void mapsHttpAndConnectionErrors() {
         server = HttpServer.create()

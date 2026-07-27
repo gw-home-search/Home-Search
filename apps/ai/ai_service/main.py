@@ -94,7 +94,16 @@ async def stream(
 ) -> StreamingResponse:
     async def events() -> AsyncIterator[bytes]:
         try:
+            yield _status_sse(request.state.request_id, "QUESTION_INTERPRETATION", "질문 해석")
+            yield _status_sse(request.state.request_id, "CANDIDATE_CHECK", "후보 확인")
+            yield _status_sse(request.state.request_id, "EVIDENCE_COMPARISON", "근거 비교")
             response = await engine.query(request=payload, user=user, request_id=request.state.request_id)
+            execution = response.get("agentExecution")
+            if isinstance(execution, dict) and execution.get("webUsed") is True:
+                yield _status_sse(
+                    request.state.request_id, "OFFICIAL_SOURCE_CHECK", "공식 자료 확인"
+                )
+            yield _status_sse(request.state.request_id, "ANSWER_VALIDATION", "답변 검증")
             yield _sse("final", {"requestId": request.state.request_id, "response": response})
         except ChatbotProviderUnavailable:
             yield _sse(
@@ -120,6 +129,10 @@ async def stream(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+def _status_sse(request_id: str, code: str, message: str) -> bytes:
+    return _sse("status", {"requestId": request_id, "code": code, "message": message})
 
 
 def _problem(request: Request, status: int, title: str, detail: str, code: str) -> JSONResponse:

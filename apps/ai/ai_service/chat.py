@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import math
 import os
+import re
 import time
 from functools import lru_cache
 from typing import Protocol, cast
@@ -300,6 +302,63 @@ def get_artifact_v2_enabled() -> bool:
     return _boolean_flag("HOME_AI_ARTIFACT_V2_ENABLED", True)
 
 
+def get_agentic_orchestration_enabled() -> bool:
+    return _boolean_flag("HOME_AI_AGENTIC_ORCHESTRATION_ENABLED", False)
+
+
+def get_official_web_search_enabled() -> bool:
+    return _boolean_flag("HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED", False)
+
+
+def _agentic_request(question: str) -> bool:
+    return re.search(r"(추천|어때|어떄|괜찮아|살기\s*어)", question) is not None
+
+
+def _requested_candidate_count(question: str) -> int:
+    match = re.search(r"(?<!\d)([1-5])\s*(?:개|곳|단지)", question)
+    return int(match.group(1)) if match else 3
+
+
+def _scope_label(question: str) -> str:
+    match = re.search(r"([가-힣]{1,20}(?:시|군|구))", question)
+    return match.group(1) if match else "질문에서 확인한 범위"
+
+
+def _agent_models(question: str) -> tuple[object, object]:
+    from .property_chat.agentic_openai import OpenAIResponsesAgentModel
+    from .property_chat.openai_responses import OpenAIResponsesSettings
+    from .property_chat.web_evidence import WebEvidenceMode, WebEvidencePolicy
+
+    api_key = os.getenv("HOME_AI_OPENAI_API_KEY", "").strip()
+    primary_model = os.getenv("HOME_AI_OPENAI_PRIMARY_MODEL", "").strip()
+    secondary_model = os.getenv("HOME_AI_OPENAI_SECONDARY_MODEL", "").strip()
+    if not api_key or not primary_model or not secondary_model:
+        raise ChatbotProviderUnavailable()
+    try:
+        timeout_seconds = float(os.getenv("HOME_AI_OPENAI_TIMEOUT_SECONDS", "8"))
+        web_mode = WebEvidencePolicy().classify(question, internal_axis_count=0)
+        web_enabled = (
+            get_official_web_search_enabled()
+            and web_mode is not WebEvidenceMode.DISABLED
+        )
+        web_required = web_enabled and web_mode is WebEvidenceMode.REQUIRED
+        primary = OpenAIResponsesAgentModel(
+            settings=OpenAIResponsesSettings(
+                api_key=api_key, model=primary_model, timeout_seconds=timeout_seconds,
+            ),
+            web_search_enabled=web_enabled, web_search_required=web_required,
+        )
+        secondary = OpenAIResponsesAgentModel(
+            settings=OpenAIResponsesSettings(
+                api_key=api_key, model=secondary_model, timeout_seconds=timeout_seconds,
+            ),
+            web_search_enabled=web_enabled, web_search_required=web_required,
+        )
+    except (TypeError, ValueError) as exception:
+        raise ChatbotProviderUnavailable() from exception
+    return primary, secondary
+
+
 def get_answer_first_fallback_capabilities() -> frozenset[QueryCapability]:
     raw_value = os.getenv("HOME_AI_ANSWER_FIRST_FALLBACK_CAPABILITIES")
     if raw_value is None:
@@ -343,6 +402,45 @@ class ConfiguredChatbotEngine:
         try:
             async with asyncio.timeout(timeout_seconds):
                 repository = await asyncio.to_thread(get_property_fact_repository)
+                minimal_fallback = False
+                if get_agentic_orchestration_enabled() and _agentic_request(request.question):
+                    from .property_chat.agentic import BoundedAgentOrchestrator
+                    from .property_chat.agentic_response import build_agentic_response
+                    from .property_chat.agentic_tools import PropertyAgentTools
+
+                    try:
+                        primary, secondary = _agent_models(request.question)
+                        requested_count = _requested_candidate_count(request.question)
+                        async with asyncio.timeout(max(timeout_seconds - 8, 1)):
+                            agent_result = await BoundedAgentOrchestrator(
+                                primary=primary,  # type: ignore[arg-type]
+                                secondary=secondary,  # type: ignore[arg-type]
+                                tools=PropertyAgentTools(repository),  # type: ignore[arg-type]
+                            ).run(
+                                question=request.question,
+                                requested_count=requested_count,
+                            )
+                        if agent_result.route != "minimal_fallback":
+                            response = build_agentic_response(
+                                request=request, request_id=request_id,
+                                result=agent_result, requested_count=requested_count,
+                                scope_label=_scope_label(request.question),
+                            )
+                            _LOGGER.info(
+                                "chatbot_agent_completed",
+                                extra=_agent_outcome_metric(
+                                    agent_result=agent_result,
+                                    models=(primary, secondary),
+                                    response=response,
+                                    elapsed_milliseconds=round(
+                                        (time.monotonic() - started_at) * 1000
+                                    ),
+                                ),
+                            )
+                            return _apply_presentation_rollbacks(response)
+                        minimal_fallback = True
+                    except (ChatbotProviderUnavailable, TimeoutError):
+                        minimal_fallback = True
                 language_model = await asyncio.to_thread(get_grounded_language_model)
                 enabled_reference_capabilities = get_enabled_reference_capabilities()
                 school_repository = None
@@ -437,6 +535,8 @@ class ConfiguredChatbotEngine:
                     user=user,
                     request_id=request_id,
                 ))
+                if minimal_fallback:
+                    response = _mark_minimal_agent_fallback(response)
                 _LOGGER.info(
                     "chatbot_answer_completed",
                     extra=_answer_outcome_metric(
@@ -449,6 +549,30 @@ class ConfiguredChatbotEngine:
                 return response
         except TimeoutError as exception:
             raise ChatbotProviderUnavailable() from exception
+
+
+def _mark_minimal_agent_fallback(response: dict[str, object]) -> dict[str, object]:
+    result = dict(response)
+    existing_answer = result.get("answer")
+    result["answer"] = (
+        "AI 비교 분석을 완료하지 못해 확인 가능한 후보만 표시합니다. "
+        + (existing_answer if isinstance(existing_answer, str) else "")
+    ).strip()
+    result["status"] = "partial_success"
+    limitations = result.get("limitations")
+    result["limitations"] = [
+        *(limitations if isinstance(limitations, list) else []),
+        "생성 경로가 모두 실패해 maintenance fallback을 사용했습니다.",
+    ]
+    evidence = result.get("evidenceSummary")
+    if isinstance(evidence, dict):
+        result["evidenceSummary"] = {**evidence, "status": "partial"}
+    result["agentExecution"] = {
+        "policyVersion": "agentic-recommendation-v1",
+        "route": "minimal_fallback", "toolRounds": 0, "toolCalls": 0,
+        "webUsed": False,
+    }
+    return result
 
 
 def _answer_outcome_metric(
@@ -470,7 +594,7 @@ def _answer_outcome_metric(
                 and (status := goal.get("status"))
                 in {"answered", "degraded", "unavailable"}
             ]
-    return {
+    metric: dict[str, object] = {
         "event": "chatbot_answer_completed",
         "answer_mode": answer_mode,
         "goal_count": len(statuses),
@@ -478,6 +602,61 @@ def _answer_outcome_metric(
         "degraded_goal_count": statuses.count("degraded"),
         "unavailable_goal_count": statuses.count("unavailable"),
         "elapsed_milliseconds": max(elapsed_milliseconds, 0),
+    }
+    execution = response.get("agentExecution")
+    if isinstance(execution, dict):
+        route = execution.get("route")
+        metric.update({
+            "agent_success": route in {"primary", "repair", "secondary"},
+            "repair_used": route == "repair",
+            "secondary_used": route == "secondary",
+            "minimal_fallback_used": route == "minimal_fallback",
+            "tool_rounds": execution.get("toolRounds", 0),
+            "tool_calls": execution.get("toolCalls", 0),
+            "web_used": execution.get("webUsed") is True,
+            "grounding_rejection_category": (
+                "ALL_GENERATION_PATHS_FAILED" if route == "minimal_fallback" else "NONE"
+            ),
+        })
+    return metric
+
+
+def _agent_outcome_metric(
+    *, agent_result: object, models: tuple[object, object],
+    response: dict[str, object], elapsed_milliseconds: int,
+) -> dict[str, object]:
+    route = getattr(agent_result, "route", "minimal_fallback")
+    totals = {
+        "provider_latency_milliseconds": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "provider_response_bytes": 0,
+    }
+    for model in models:
+        metrics_reader = getattr(model, "operational_metrics", None)
+        metrics = metrics_reader() if callable(metrics_reader) else {}
+        if not isinstance(metrics, dict):
+            continue
+        for key in totals:
+            value = metrics.get(key)
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                totals[key] += value
+    return {
+        "event": "chatbot_agent_completed",
+        "agent_success": route in {"primary", "repair", "secondary"},
+        "repair_used": route == "repair",
+        "secondary_used": route == "secondary",
+        "minimal_fallback_used": route == "minimal_fallback",
+        "route": route,
+        "tool_rounds": getattr(agent_result, "tool_rounds", 0),
+        "tool_calls": getattr(agent_result, "tool_calls", 0),
+        "web_used": getattr(agent_result, "web_used", False) is True,
+        "grounding_rejection_category": (
+            "GROUNDING_REPAIRED" if route == "repair" else "NONE"
+        ),
+        "elapsed_milliseconds": max(elapsed_milliseconds, 0),
+        "response_bytes": len(json.dumps(response, ensure_ascii=False).encode()),
+        **totals,
     }
 
 

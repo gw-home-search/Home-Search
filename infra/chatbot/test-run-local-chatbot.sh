@@ -92,6 +92,8 @@ grep -Fq -- '- bash' <<<"$bff_compose_section"
 grep -Fq -- '- -ec' <<<"$bff_compose_section"
 grep -Fq 'HOME_CHAT_BFF_AI_TIMEOUT: ${HOME_CHAT_BFF_AI_TIMEOUT:-70s}' <<<"$bff_compose_section"
 grep -Fq 'HOME_AI_QUERY_TIMEOUT_SECONDS: ${HOME_AI_QUERY_TIMEOUT_SECONDS:-45}' "$chatbot_compose"
+grep -Fq 'HOME_AI_AGENTIC_ORCHESTRATION_ENABLED: ${HOME_AI_AGENTIC_ORCHESTRATION_ENABLED:-true}' "$chatbot_compose"
+grep -Fq 'HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED: ${HOME_AI_OFFICIAL_WEB_SEARCH_ENABLED:-true}' "$chatbot_compose"
 grep -Fq 'HOME_AI_REFERENCE_DSN: ${HOME_AI_REFERENCE_DSN:?Set HOME_AI_REFERENCE_DSN}' "$chatbot_compose"
 grep -Fq 'HOME_AI_ENABLED_REFERENCE_CAPABILITIES: ${HOME_AI_ENABLED_REFERENCE_CAPABILITIES:-}' "$chatbot_compose"
 

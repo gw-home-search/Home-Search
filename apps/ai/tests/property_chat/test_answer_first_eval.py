@@ -6,6 +6,7 @@ from ai_service.property_chat import answer_first_eval
 from ai_service.property_chat.answer_first_eval import (
     AnswerFirstGoldenCase,
     grade_answer_first_response,
+    grade_agentic_selection_stability,
     load_answer_first_catalog,
     AnswerFirstEvalError,
 )
@@ -17,10 +18,10 @@ def _catalog_path() -> Path:
     )
 
 
-def test_answer_first_catalog_has_the_approved_eighty_case_distribution() -> None:
+def test_answer_first_catalog_has_the_approved_agentic_120_case_distribution() -> None:
     cases = load_answer_first_catalog(_catalog_path())
 
-    assert len(cases) == 80
+    assert len(cases) == 120
     assert {
         category: sum(case.category == category for case in cases)
         for category in answer_first_eval.EXPECTED_CATEGORY_COUNTS
@@ -46,6 +47,57 @@ def test_answer_first_grader_accepts_grounded_best_effort_result() -> None:
     }
 
     assert grade_answer_first_response(case, response) == ()
+
+
+def test_agentic_selection_stability_requires_two_shared_candidates_across_five_runs() -> None:
+    assert grade_agentic_selection_stability((
+        (10, 20, 30), (20, 10, 40), (10, 50, 20), (20, 60, 10), (10, 20, 70),
+    )) == ()
+    assert grade_agentic_selection_stability((
+        (10, 20, 30), (10, 40, 50), (10, 60, 70), (10, 80, 90), (10, 11, 12),
+    )) == ("TOP_THREE_OVERLAP_BELOW_TWO",)
+    assert grade_agentic_selection_stability(((1, 1, 2),)) == (
+        "SELECTION_RUNS_INVALID",
+    )
+
+
+@pytest.mark.parametrize("values", [
+    ("BAD_ID", "exact_simple", "질문", ("COMPLETE",)),
+    ("valid-id", "unknown", "질문", ("COMPLETE",)),
+    ("valid-id", "exact_simple", " ", ("COMPLETE",)),
+    ("valid-id", "exact_simple", "질문", ()),
+])
+def test_answer_first_case_metadata_fails_closed(values) -> None:
+    with pytest.raises(AnswerFirstEvalError):
+        AnswerFirstGoldenCase(*values, True)
+
+
+def test_catalog_rejects_missing_corrupt_and_wrong_distribution(tmp_path) -> None:
+    with pytest.raises(AnswerFirstEvalError):
+        load_answer_first_catalog(tmp_path / "missing.json")
+    corrupt = tmp_path / "corrupt.json"
+    corrupt.write_text("not-json", encoding="utf-8")
+    with pytest.raises(AnswerFirstEvalError):
+        load_answer_first_catalog(corrupt)
+
+    import json
+    root = json.loads(_catalog_path().read_text(encoding="utf-8"))
+    root["cases"][0]["category"] = "missing_conditions"
+    distribution = tmp_path / "distribution.json"
+    distribution.write_text(json.dumps(root, ensure_ascii=False), encoding="utf-8")
+    with pytest.raises(AnswerFirstEvalError, match="CATEGORY_COVERAGE_INVALID"):
+        load_answer_first_catalog(distribution)
+
+
+def test_grader_reports_missing_goals_and_invalid_fact_count() -> None:
+    case = AnswerFirstGoldenCase(
+        "missing-goals", "exact_simple", "질문", ("COMPLETE",), True,
+    )
+    assert grade_answer_first_response(case, {
+        "answer": "확인했습니다.",
+        "conversationResolution": {"version": 1, "answerMode": "COMPLETE", "goals": []},
+        "evidenceSummary": {"factCount": "one"},
+    }) == ("GOALS_MISSING", "VERIFIED_FACT_MISSING")
 
 
 def test_answer_first_grader_rejects_retry_only_copy_without_facts() -> None:

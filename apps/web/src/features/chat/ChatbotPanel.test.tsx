@@ -74,6 +74,7 @@ describe('챗봇 패널', () => {
 
     await act(async () => completeRequest?.(successfulResponse));
     await waitFor(() => host?.textContent?.includes('근거가 확인된 답변입니다.') === true);
+    expect(host.querySelector('.chatbot-pending')).toBeNull();
   });
 
   it('하단에서 질문한 경우 답변이 도착하면 마지막 답변까지 따라간다', async () => {
@@ -186,7 +187,7 @@ describe('챗봇 패널', () => {
     expect(host.querySelector('.chatbot-fact-list')?.textContent).toContain('확인된 단지 정보');
     expect(host.querySelector('.chatbot-fact-list')?.textContent).toContain('잠실엘스');
     expect(client.authenticatedRequest).toHaveBeenCalledWith(
-      '/api/v1/chatbot/query',
+      '/api/v1/chatbot/query/stream',
       expect.any(Object),
       'public',
     );

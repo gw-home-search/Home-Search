@@ -273,7 +273,7 @@ tasks.register('verifyApiMigrationCatalog') {
             throw new GradleException("Duplicate API migration versions: ${duplicates.keySet().sort()}")
         }
         def versions = byVersion.keySet().findAll { it != null }.sort()
-        def expectedVersions = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35]
+        def expectedVersions = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37]
         if (versions != expectedVersions) {
             throw new GradleException("API migration versions must be exact: ${expectedVersions}; actual=${versions}")
         }
@@ -311,7 +311,9 @@ tasks.register('verifyApiMigrationCatalog') {
             'V32__restrict_building_register_profile_archive_manifest.sql': 'bd81a42f6679cc91d9d70f93ea4cc10d722850732027c1f7dbecd11f213d5763',
             'V33__add_profile_ratio_backfill_lineage.sql': '4f471e2eec520add71b060229fdf3baa1b27b2698b12157b56fa931342158bec',
             'V34__publish_complete_building_register_profile.sql': 'a083702418af27c6f67fe8573c944fb8296fc08cb1e998578d7f12b61c79e32d',
-            'V35__grant_building_register_profile_publication_privileges.sql': 'ff041a0758275790bf55202fead281f310ca6bfd3404f68347643f54a897543d'
+            'V35__grant_building_register_profile_publication_privileges.sql': 'ff041a0758275790bf55202fead281f310ca6bfd3404f68347643f54a897543d',
+            'V36__publish_ai_complex_search_and_profile_facts.sql': '8a5e5e47c5c982f9487dd51ba4d4af4712363d11f97f369c416099b19177eae1',
+            'V37__grant_ai_complex_search_and_profile_fact_privileges.sql': '2b194ab52813166993340920606c75f47c3ecede66047f8dc7a56bbf4ec5bca7'
         ].each { fileName, expected ->
             def file = files.find { it.name == fileName }
             if (file == null || sha256(file) != expected) {

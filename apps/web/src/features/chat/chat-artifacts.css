@@ -223,6 +223,50 @@
   background: color-mix(in srgb, var(--hs-map-color-action) 3%, transparent);
 }
 
+.chatbot-agent-recommendation-list {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chatbot-agent-recommendation-list > li {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--hs-map-color-line);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.chatbot-agent-recommendation-list p,
+.chatbot-agent-recommendation-list ul {
+  margin: 0;
+}
+
+.chatbot-agent-recommendation-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chatbot-agent-recommendation-heading > span {
+  color: var(--hs-map-color-action);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.chatbot-agent-recommendation-reasons {
+  display: grid;
+  gap: 8px;
+  color: var(--hs-map-color-ink-soft);
+  font-size: 12px;
+}
+
+.chatbot-agent-recommendation-reasons ul {
+  padding-left: 18px;
+}
+
 .chatbot-decision-report {
   display: grid;
   gap: 18px;

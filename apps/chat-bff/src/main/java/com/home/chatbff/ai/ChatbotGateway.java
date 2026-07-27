@@ -4,6 +4,7 @@ import com.home.chatbff.auth.VerifiedChatUser;
 import com.home.chatbff.web.ChatbotQueryRequest;
 import java.util.concurrent.TimeoutException;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import tools.jackson.databind.JsonNode;
 
@@ -20,6 +21,17 @@ public class ChatbotGateway {
     public Mono<JsonNode> query(
             ChatbotQueryRequest request, String authorization, String requestId, VerifiedChatUser authenticatedUser) {
         return client.query(request, authorization, requestId, authenticatedUser)
+                .timeout(properties.timeout())
+                .onErrorMap(TimeoutException.class, ignored -> new ChatbotTimeoutException())
+                .onErrorMap(
+                        exception -> !(exception instanceof ChatbotTimeoutException)
+                                && !(exception instanceof ChatbotProviderUnavailableException),
+                        ignored -> new ChatbotProviderUnavailableException());
+    }
+
+    public Flux<ChatbotAiStreamEvent> stream(
+            ChatbotQueryRequest request, String authorization, String requestId, VerifiedChatUser authenticatedUser) {
+        return client.stream(request, authorization, requestId, authenticatedUser)
                 .timeout(properties.timeout())
                 .onErrorMap(TimeoutException.class, ignored -> new ChatbotTimeoutException())
                 .onErrorMap(

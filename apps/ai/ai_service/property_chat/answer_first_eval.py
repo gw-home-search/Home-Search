@@ -18,6 +18,14 @@ EXPECTED_CATEGORY_COUNTS = {
     "provider_failure": 8,
     "ambiguous_typo": 6,
     "broad_overview": 6,
+    "entity_natural_language": 5,
+    "multi_complex_ambiguity": 5,
+    "balanced_recommendation": 5,
+    "explicit_recommendation": 5,
+    "complex_overview": 5,
+    "web_policy": 5,
+    "provider_route": 5,
+    "stability_ui": 5,
 }
 
 
@@ -56,7 +64,8 @@ def load_answer_first_catalog(path: Path) -> tuple[AnswerFirstGoldenCase, ...]:
         if root.get("version") != 1 or not isinstance(raw_cases, list):
             raise AnswerFirstEvalError("CATALOG_INVALID")
         cases = tuple(_parse_case(value) for value in raw_cases)
-        if len(cases) != 80 or len({case.case_id for case in cases}) != 80:
+        expected_size = sum(EXPECTED_CATEGORY_COUNTS.values())
+        if len(cases) != expected_size or len({case.case_id for case in cases}) != expected_size:
             raise AnswerFirstEvalError("CATALOG_SIZE_INVALID")
         if Counter(case.category for case in cases) != Counter(
             EXPECTED_CATEGORY_COUNTS
@@ -103,6 +112,18 @@ def grade_answer_first_response(
     ):
         failures.append("VERIFIED_FACT_MISSING")
     return tuple(failures)
+
+
+def grade_agentic_selection_stability(
+    top_three_runs: tuple[tuple[int, ...], ...],
+) -> tuple[str, ...]:
+    if len(top_three_runs) != 5 or any(
+        len(run) != 3 or len(set(run)) != 3 or any(value <= 0 for value in run)
+        for run in top_three_runs
+    ):
+        return ("SELECTION_RUNS_INVALID",)
+    shared = set(top_three_runs[0]).intersection(*top_three_runs[1:])
+    return () if len(shared) >= 2 else ("TOP_THREE_OVERLAP_BELOW_TWO",)
 
 
 def _parse_case(value: object) -> AnswerFirstGoldenCase:

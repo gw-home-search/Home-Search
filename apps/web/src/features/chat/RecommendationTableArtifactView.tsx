@@ -9,6 +9,7 @@ export function RecommendationTableArtifactView({
 }: {
   artifact: RecommendationTableArtifact;
 }) {
+  if (artifact.version === 2) return <AgentRecommendationTable artifact={artifact} />;
   return (
     <section className="chatbot-recommendation-table">
       <h4>{artifact.title}</h4>
@@ -45,6 +46,49 @@ export function RecommendationTableArtifactView({
       </p>
     </section>
   );
+}
+
+function AgentRecommendationTable({
+  artifact,
+}: {
+  artifact: Extract<RecommendationTableArtifact, { version: 2 }>;
+}) {
+  return (
+    <section className="chatbot-recommendation-table chatbot-agent-recommendations">
+      <h4>{artifact.title}</h4>
+      <p className="chatbot-comparison-basis">
+        적용 기준 · {artifact.basis.scopeLabel} · 균형 비교(BALANCED_V1)
+      </p>
+      <ol className="chatbot-agent-recommendation-list">
+        {artifact.rows.map((row) => (
+          <li key={row.complexId}>
+            <div className="chatbot-agent-recommendation-heading">
+              <strong>{row.order}. {row.complexName}</strong>
+              <span>{roleLabel(row.role)}</span>
+            </div>
+            <p>{row.summary}</p>
+            <div className="chatbot-agent-recommendation-reasons">
+              <div>
+                <strong>강점</strong>
+                <ul>{row.strengths.map((item) => <li key={item.factIds.join(':')}>{item.text}</li>)}</ul>
+              </div>
+              <div>
+                <strong>tradeoff</strong>
+                <ul>{row.tradeoffs.map((item) => <li key={item.factIds.join(':')}>{item.text}</li>)}</ul>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function roleLabel(role: Extract<RecommendationTableArtifact, { version: 2 }>['rows'][number]['role']) {
+  return {
+    BALANCED: '균형', TRADE_ACTIVITY: '거래 활동', SCALE: '규모', NEWER: '연식',
+    TRANSIT: '교통', EDUCATION: '교육', LIFESTYLE: '생활 인프라',
+  }[role];
 }
 
 function metricLabel(key: RecommendationMetricKey): string {

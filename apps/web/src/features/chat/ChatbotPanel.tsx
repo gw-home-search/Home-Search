@@ -49,6 +49,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [question, setQuestion] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'sending'>('idle');
+  const [progressMessage, setProgressMessage] = useState('질문 해석');
   const [error, setError] = useState<UserFeedbackId | null>(null);
   const [hasUnseenAnswer, setHasUnseenAnswer] = useState(false);
   const [executedActionIds, setExecutedActionIds] = useState<Set<string>>(
@@ -197,6 +198,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
     };
     setQuestion('');
     setStatus('sending');
+    setProgressMessage('질문 해석');
     setError(null);
     followAnswerRef.current = isNearBottom(messagesRef.current);
     questionToRevealRef.current = userMessage.id;
@@ -227,7 +229,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
       question: pending.messages[pending.messages.length - 1]?.content ?? '',
       conversationContext: buildConversationContext(contextMessages, pending.memory),
       uiContext,
-    });
+    }, (_code, message) => setProgressMessage(message));
     const answeredAt = new Date().toISOString();
     const assistantMessageId = crypto.randomUUID();
     if (followAnswerRef.current) answerToRevealRef.current = assistantMessageId;
@@ -264,6 +266,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
     const latest = selected.messages[selected.messages.length - 1];
     if (latest?.role !== 'user') return;
     setStatus('sending');
+    setProgressMessage('질문 해석');
     setError(null);
     followAnswerRef.current = isNearBottom(messagesRef.current);
     const requestSequence = ++requestSequenceRef.current;
@@ -432,7 +435,7 @@ export function ChatbotPanel({ onOpenChange, onUiAction, store, uiContext }: Cha
                   </div>
                 </div>
               )}
-              {status === 'sending' ? <ChatPendingMessage /> : null}
+              {status === 'sending' ? <ChatPendingMessage message={progressMessage} /> : null}
             </div>
 
             {hasUnseenAnswer ? (

@@ -92,40 +92,96 @@ class PostgresPropertyFactRepository:
             raise ValueError("complex name is outside the supported range")
         if not 1 <= limit <= 6:
             raise ValueError("complex lookup limit is outside the supported range")
-        name_pattern = f"%{_escape_like(normalized_name)}%"
+        search_tokens = _complex_search_tokens(normalized_name)
+        if not search_tokens:
+            return []
+        requires_literal_name_match = "%" in normalized_name or "_" in normalized_name
+        literal_name_pattern = f"%{_escape_like(normalized_name)}%"
         region_pattern = (
             f"%{_escape_like(region_name.strip())}%" if region_name is not None else None
         )
         with self._pool.connection() as connection:
             rows = connection.execute(
                 """
-                SELECT complex_id, display_name, region_code, region_name, address,
-                       latitude, longitude, marker_safe, data_updated_at,
-                       unit_count, use_date
-                FROM ai_read.complex_fact
-                WHERE (
-                    display_name ILIKE %s ESCAPE '\\'
-                    OR name ILIKE %s ESCAPE '\\'
-                    OR trade_name ILIKE %s ESCAPE '\\'
+                SELECT search.complex_id, search.display_name, search.region_code,
+                       search.region_name, search.address, base.latitude, base.longitude,
+                       search.marker_safe, search.data_updated_at,
+                       search.unit_count, search.use_date
+                FROM ai_read.complex_search_fact search
+                JOIN ai_read.complex_fact base ON base.complex_id = search.complex_id
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM unnest(%s::text[]) token(value)
+                    WHERE search.search_document NOT LIKE ('%%' || token.value || '%%')
                 )
-                  AND (%s::text IS NULL OR region_name ILIKE %s ESCAPE '\\')
+                  AND (
+                      %s::boolean = false
+                      OR search.display_name ILIKE %s ESCAPE '\\'
+                      OR search.canonical_name ILIKE %s ESCAPE '\\'
+                      OR search.trade_name ILIKE %s ESCAPE '\\'
+                  )
+                  AND (%s::text IS NULL OR search.region_name ILIKE %s ESCAPE '\\'
+                       OR search.address ILIKE %s ESCAPE '\\')
                 ORDER BY
-                    CASE WHEN lower(display_name) = lower(%s) THEN 0 ELSE 1 END,
-                    display_name,
-                    complex_id
+                    CASE
+                        WHEN lower(search.display_name) = lower(%s)
+                          OR lower(search.canonical_name) = lower(%s)
+                          OR lower(search.trade_name) = lower(%s) THEN 0
+                        WHEN search.canonical_search_name = %s THEN 1
+                        WHEN %s = ANY(search.alias_search_names) THEN 2
+                        ELSE 3
+                    END,
+                    search.display_name,
+                    search.complex_id
                 LIMIT %s
                 """,
                 (
-                    name_pattern,
-                    name_pattern,
-                    name_pattern,
+                    list(search_tokens),
+                    requires_literal_name_match,
+                    literal_name_pattern,
+                    literal_name_pattern,
+                    literal_name_pattern,
+                    region_pattern,
                     region_pattern,
                     region_pattern,
                     normalized_name,
+                    normalized_name,
+                    normalized_name,
+                    "".join(search_tokens),
+                    "".join(search_tokens),
                     limit,
                 ),
             ).fetchall()
         return [_complex_record(row) for row in rows]
+
+    def complex_profile(self, complex_id: int) -> dict[str, object] | None:
+        if isinstance(complex_id, bool) or not isinstance(complex_id, int) or complex_id <= 0:
+            raise ValueError("complex id must be positive")
+        with self._pool.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT ratio_scope, ratio_quality, building_coverage_rate,
+                       floor_area_ratio, household_scope, household_quality,
+                       household_count, family_count, unit_count,
+                       parking_scope, parking_quality, total_parking_count,
+                       parking_per_household, building_scope, building_quality,
+                       main_building_count, max_ground_floor_count,
+                       max_underground_floor_count, max_height_m,
+                       elevator_scope, elevator_quality, ride_elevator_count,
+                       emergency_elevator_count, safety_scope, safety_quality,
+                       seismic_design_status, date_scope, date_quality,
+                       permit_date, construction_start_date, use_approval_date,
+                       address_scope, address_quality, parcel_address, road_address,
+                       energy_scope, energy_quality, energy_efficiency_grades,
+                       data_updated_at
+                FROM ai_read.complex_profile_fact
+                WHERE complex_id = %s
+                """,
+                (complex_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {key: _profile_value(value) for key, value in dict(row).items()}
 
     def find_complexes_batch(
         self,
@@ -700,6 +756,22 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+_COMPLEX_SEARCH_STOP_WORDS = frozenset({
+    "아파트", "apt", "어때", "어떄", "어떤가요", "괜찮아", "괜찮나요", "살기",
+})
+
+
+def _complex_search_tokens(value: str) -> tuple[str, ...]:
+    tokens: list[str] = []
+    for raw_token in re.findall(r"[0-9A-Za-z가-힣]+", value.lower()):
+        token = re.sub(r"(?:아파트|apt)$", "", raw_token).strip()
+        if not token or token in _COMPLEX_SEARCH_STOP_WORDS:
+            continue
+        if token not in tokens:
+            tokens.append(token)
+    return tuple(tokens[:8])
+
+
 def _complex_record(row: dict[str, object]) -> ComplexRecord:
     return ComplexRecord(
         complex_id=int(row["complex_id"]),
@@ -722,6 +794,16 @@ def _optional_decimal(value: float | None) -> Decimal | None:
 
 def _optional_float(value: Decimal | None) -> float | None:
     return float(value) if value is not None else None
+
+
+def _profile_value(value: object) -> object:
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (date,)):
+        return value.isoformat()
+    if hasattr(value, "isoformat"):
+        return value.isoformat()  # type: ignore[union-attr]
+    return value
 
 
 def _validate_trade_query(

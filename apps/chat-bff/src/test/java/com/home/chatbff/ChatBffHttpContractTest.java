@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.home.chatbff.ai.ChatbotAiClient;
+import com.home.chatbff.ai.ChatbotAiStreamEvent;
 import com.home.chatbff.ai.ChatbotProviderUnavailableException;
 import com.home.chatbff.auth.ChatUserAuthenticator;
 import com.home.chatbff.auth.VerifiedChatUser;
@@ -28,6 +29,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -205,8 +207,8 @@ class ChatBffHttpContractTest {
     @Test
     @DisplayName("시작된 SSE의 AI 오류는 final 없이 명시적인 error event로 종료한다")
     void streamMapsProviderFailureToErrorEvent() {
-        when(aiClient.query(any(), anyString(), anyString(), any()))
-                .thenReturn(Mono.error(new ChatbotProviderUnavailableException()));
+        when(aiClient.stream(any(), anyString(), anyString(), any()))
+                .thenReturn(Flux.error(new ChatbotProviderUnavailableException()));
 
         byte[] body = client.post()
                 .uri("/api/v1/chatbot/query/stream")
@@ -234,7 +236,12 @@ class ChatBffHttpContractTest {
         String answer = "검증된 실거래 답변🙂".repeat(40);
         var response = objectMapper.createObjectNode();
         response.put("answer", answer);
-        when(aiClient.query(any(), anyString(), anyString(), any())).thenReturn(Mono.just(response));
+        var status = objectMapper.createObjectNode();
+        status.put("code", "EVIDENCE_COMPARISON");
+        status.put("message", "질문 원문을 포함하면 안 됨: 잠실엘스");
+        when(aiClient.stream(any(), anyString(), anyString(), any()))
+                .thenReturn(Flux.just(
+                        new ChatbotAiStreamEvent("status", status), new ChatbotAiStreamEvent("final", response)));
 
         byte[] body = client.post()
                 .uri("/api/v1/chatbot/query/stream")
@@ -271,13 +278,13 @@ class ChatBffHttpContractTest {
         assertThat(deltaCount).isGreaterThan(1);
         assertThat(combinedDeltas.toString()).isEqualTo(answer);
         assertThat(finalCount).isEqualTo(1);
-        assertThat(events).doesNotContain("event:error");
+        assertThat(events).contains("event:status", "근거 비교").doesNotContain("event:error", "잠실엘스");
     }
 
     @Test
     @DisplayName("시작된 SSE의 timeout은 final 없이 CHATBOT_TIMEOUT error event로 종료한다")
     void streamMapsTimeoutToErrorEvent() {
-        when(aiClient.query(any(), anyString(), anyString(), any())).thenReturn(Mono.never());
+        when(aiClient.stream(any(), anyString(), anyString(), any())).thenReturn(Flux.never());
 
         byte[] body = client.post()
                 .uri("/api/v1/chatbot/query/stream")
@@ -298,8 +305,8 @@ class ChatBffHttpContractTest {
     @Test
     @DisplayName("예상하지 못한 생성 오류도 final 없이 비노출 error event로 종료한다")
     void streamMapsUnexpectedFailureToErrorEvent() {
-        when(aiClient.query(any(), anyString(), anyString(), any()))
-                .thenReturn(Mono.error(new IllegalStateException("internal provider detail")));
+        when(aiClient.stream(any(), anyString(), anyString(), any()))
+                .thenReturn(Flux.error(new IllegalStateException("internal provider detail")));
 
         byte[] body = client.post()
                 .uri("/api/v1/chatbot/query/stream")

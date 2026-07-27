@@ -69,6 +69,10 @@ describe('App 필터', () => {
           ageMax: null,
           unitMin: null,
           unitMax: null,
+          bcRatMin: null,
+          bcRatMax: null,
+          vlRatMin: null,
+          vlRatMax: null,
         }),
       }),
     );
@@ -87,6 +91,8 @@ describe('App 필터', () => {
     await applyFilterRange(rootElement, '가격', '8.5', '15');
     await applyFilterRange(rootElement, '입주년차', '5', '25');
     await applyFilterRange(rootElement, '세대수', '300', '1200');
+    await applyFilterRange(rootElement, '건폐율', '55.5', '72.3');
+    await applyFilterRange(rootElement, '용적률', '180.1', '250.6');
 
     expect(fetchMock).toHaveBeenLastCalledWith(
       resolveApiUrl('/api/v1/map/complexes'),
@@ -105,6 +111,10 @@ describe('App 필터', () => {
           ageMax: 25,
           unitMin: 300,
           unitMax: 1200,
+          bcRatMin: 55.5,
+          bcRatMax: 72.3,
+          vlRatMin: 180.1,
+          vlRatMax: 250.6,
         }),
       }),
     );

@@ -61,7 +61,7 @@ export async function waitForMillis(ms: number): Promise<void> {
 
 export async function applyFilterRange(
   rootElement: HTMLElement,
-  label: '세대수' | '평형' | '가격' | '입주년차',
+  label: '세대수' | '평형' | '가격' | '입주년차' | '건폐율' | '용적률',
   min: string,
   max: string,
 ): Promise<void> {

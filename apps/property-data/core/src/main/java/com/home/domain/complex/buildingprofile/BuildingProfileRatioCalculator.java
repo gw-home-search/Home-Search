@@ -43,6 +43,22 @@ public final class BuildingProfileRatioCalculator {
         return calculateSingle(consensusPlatArea, titles, completeTitleSet, false);
     }
 
+    public BuildingProfileCalculatedRatios calculateFromCompleteTotals(
+            BigDecimal consensusPlatArea, BigDecimal architecturalArea, BigDecimal floorRatioEstimateArea) {
+        if (consensusPlatArea == null
+                || consensusPlatArea.signum() <= 0
+                || architecturalArea == null
+                || architecturalArea.signum() <= 0
+                || floorRatioEstimateArea == null
+                || floorRatioEstimateArea.signum() <= 0) {
+            return new BuildingProfileCalculatedRatios(null, null, false);
+        }
+        return new BuildingProfileCalculatedRatios(
+                architecturalArea.multiply(ONE_HUNDRED).divide(consensusPlatArea, MathContext.DECIMAL128),
+                floorRatioEstimateArea.multiply(ONE_HUNDRED).divide(consensusPlatArea, MathContext.DECIMAL128),
+                true);
+    }
+
     private BigDecimal calculateSingle(
             BigDecimal consensusPlatArea,
             List<BuildingProfileAreaContribution> titles,

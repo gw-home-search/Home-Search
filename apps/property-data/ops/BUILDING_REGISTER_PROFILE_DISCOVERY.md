@@ -1,6 +1,6 @@
 # 건축물대장 Profile discovery runbook
 
-이 절차는 총괄표제부·표제부의 전체 문서화 필드를 versioned typed staging으로 보존하고 품질을 측정한 뒤, 검토된 55개 필드를 별도 정규화 테이블로 projection한다. `complex`, 기존 ratio candidate/projection, 공개 API는 변경하지 않는다.
+이 절차는 총괄표제부·표제부의 전체 문서화 필드를 versioned typed staging으로 보존하고 품질을 측정한 뒤, 검토된 55개 필드를 별도 정규화 테이블로 projection한다. 55개 필드 projection은 `complex`와 기존 ratio candidate/projection을 변경하지 않는다. 별도 승인된 건폐율·용적률 backfill만 11절의 제한된 절차로 `complex`의 NULL 값을 채우며 공개 API는 변경하지 않는다.
 
 ## 안전 원칙
 
@@ -223,3 +223,48 @@ WHERE archive_id=:'archive_id'::uuid;
 ```
 
 새 공개 API 필드 추가와 기존 운영 column 반영은 compact 품질 결과와 수동 대조를 검토한 뒤 별도 승인으로 진행한다.
+
+## 11. 승인된 건폐율·용적률 NULL backfill
+
+전국 profile의 상세 comparison은 cleanup 뒤 archive에만 있으므로, 검증된 archive를 격리 DB에 복원한 상태에서 후보를 만든다. 다음 조건을 모두 만족하는 단일 scope만 허용한다.
+
+- complex match가 `RESOLVED`, `projectable=true`이다.
+- 총괄 직접값과 완전한 title contributor 재계산값이 모두 양수다.
+- comparison이 `MATCH|WITHIN_TOLERANCE`이고 차이가 `0.01` percentage point 이하다.
+- contributor 수가 기대 contributor 수와 같고 1개 이상이다.
+- `complex_id`와 현재 parcel PNU가 archive 후보의 identity와 일치한다.
+
+후보 CSV에는 PNU가 있으므로 worktree 밖의 접근 제한된 절대 경로를 사용한다. 파일은 mode `0600`으로 만들며 import 성공 직후 삭제한다. import는 SHA-256·행 수·analysis/archive/import lineage를 DB에 남긴다.
+
+```bash
+export PROFILE_COLLECTION_ID=<completed-nationwide-collection-uuid>
+export PROFILE_ANALYSIS_RUN_ID=<completed-analysis-uuid>
+export PROFILE_ARCHIVE_ID=<cleaned-archive-uuid>
+export PROFILE_RATIO_IMPORT_ID=<new-import-uuid>
+export PROFILE_RATIO_WORK_DIRECTORY=<untracked-absolute-directory>
+# TCP 접속을 사용할 때만 host/port/user/password를 shell 환경에 추가한다.
+export PROPERTY_DB_HOST=127.0.0.1
+export PROPERTY_DB_PORT=<local-postgres-port>
+export PROPERTY_DB_USER=home_search_property_migrator
+export PROPERTY_DB_PASSWORD=<migrator-password>
+
+ops/building-register-profile-ratio-backfill.sh export
+ops/building-register-profile-ratio-backfill.sh import
+```
+
+import 뒤에는 기존 idempotent ratio projection job을 사용한다. 이 job은 각 complex row를 잠그고 `bc_rat`와 `vl_rat`가 NULL일 때만 값을 적용한다. 기존 값이 같으면 `ALREADY_EQUAL`, 다르면 `SKIPPED_EXISTING_CONFLICT`로 증거만 남기며 덮어쓰지 않는다.
+
+```bash
+export SPRING_BATCH_JOB_NAME=complexBuildingRatioProjectJob
+
+ops/run-batch-jar.sh \
+  collectionId=<same-nationwide-collection-uuid> \
+  requestId=<new-projection-request-uuid> \
+  runDate=<yyyy-MM-dd> \
+  maxTargets=<candidate-field-count-plus-source-missing-margin>
+
+export PROFILE_RATIO_REQUEST_ID=<same-projection-request-uuid>
+ops/building-register-profile-ratio-backfill.sh verify
+```
+
+`verify`는 모든 imported candidate에 projection 결과가 존재하는지, `APPLIED` 값이 현재 complex 값과 같은지, 기존 값 충돌 건이 `previous_value` 그대로인지 검사한다. `SOURCE_MISSING`은 field 후보가 없는 match의 반대쪽 ratio에서만 생길 수 있다. 전유부·shared scope·불완전 hierarchy·비교 conflict는 후보에 포함하지 않으며 `totArea`를 용적률 계산에 사용하지 않는다.

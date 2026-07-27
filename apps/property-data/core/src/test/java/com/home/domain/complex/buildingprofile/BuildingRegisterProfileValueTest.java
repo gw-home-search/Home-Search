@@ -54,6 +54,16 @@ class BuildingRegisterProfileValueTest {
     }
 
     @Test
+    @DisplayName("완전 집계 총계 재계산도 DECIMAL128과 vlRatEstmTotArea 의미를 유지한다")
+    void recalculatesRatiosFromCompleteTotals() {
+        BuildingProfileCalculatedRatios ratios = calculator.calculateFromCompleteTotals(
+                new BigDecimal("200"), new BigDecimal("1000"), new BigDecimal("100"));
+
+        assertThat(ratios.buildingCoverageRatio()).isEqualByComparingTo("500.0");
+        assertThat(ratios.floorAreaRatio()).isEqualByComparingTo("50.0");
+    }
+
+    @Test
     @DisplayName("기대 표제부가 불완전하면 SUM 후보를 만들지 않는다")
     void doesNotCreateSumsForIncompleteTitleSet() {
         BuildingProfileCalculatedRatios ratios = calculator.calculate(

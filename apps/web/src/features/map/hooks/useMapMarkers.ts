@@ -22,6 +22,10 @@ export const EMPTY_COMPLEX_MARKER_FILTERS: Required<ComplexMarkerFilters> = {
   ageMax: null,
   unitMin: null,
   unitMax: null,
+  bcRatMin: null,
+  bcRatMax: null,
+  vlRatMin: null,
+  vlRatMax: null,
 };
 
 export function useMapMarkers(viewport: MapViewport) {

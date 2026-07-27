@@ -4,6 +4,8 @@ import com.home.application.ingest.buildingmetadata.BuildingMetadataBatchService
 import com.home.application.ingest.buildingprofile.BuildingProfileAnalysisService;
 import com.home.application.ingest.buildingprofile.BuildingProfileCollectionService;
 import com.home.application.ingest.buildingprofile.BuildingProfileProjectionService;
+import com.home.application.ingest.buildingprofile.BuildingProfilePublicationService;
+import com.home.application.ingest.buildingprofile.BuildingProfileRepairService;
 import com.home.application.ingest.buildingprofile.BuildingProfileReplayService;
 import com.home.application.ingest.buildingprofile.LegalDongCodeImportService;
 import com.home.application.ingest.buildingregister.BuildingRatioProjectionService;
@@ -98,6 +100,24 @@ class BuildingMetadataBatchJobConfiguration {
             JobRepository repository, Step complexBuildingRegisterProfileProjectStep) {
         return new JobBuilder("complexBuildingRegisterProfileProjectJob", repository)
                 .start(complexBuildingRegisterProfileProjectStep)
+                .build();
+    }
+
+    @Bean
+    @Lazy
+    Job complexBuildingRegisterProfilePublicationJob(
+            JobRepository repository, Step complexBuildingRegisterProfilePublicationStep) {
+        return new JobBuilder("complexBuildingRegisterProfilePublicationJob", repository)
+                .start(complexBuildingRegisterProfilePublicationStep)
+                .build();
+    }
+
+    @Bean
+    @Lazy
+    Job complexBuildingRegisterProfileRepairJob(
+            JobRepository repository, Step complexBuildingRegisterProfileRepairStep) {
+        return new JobBuilder("complexBuildingRegisterProfileRepairJob", repository)
+                .start(complexBuildingRegisterProfileRepairStep)
                 .build();
     }
 
@@ -227,6 +247,36 @@ class BuildingMetadataBatchJobConfiguration {
                 repository,
                 transactionManager,
                 new BuildingProfileProjectTasklet(service, executionLock));
+    }
+
+    @Bean
+    @Lazy
+    Step complexBuildingRegisterProfilePublicationStep(
+            JobRepository repository,
+            PlatformTransactionManager transactionManager,
+            BuildingProfilePublicationService service,
+            BuildingMetadataExecutionLock executionLock) {
+        return step(
+                "complexBuildingRegisterProfilePublicationStep",
+                repository,
+                transactionManager,
+                new BuildingProfilePublicationTasklet(service, executionLock));
+    }
+
+    @Bean
+    @Lazy
+    Step complexBuildingRegisterProfileRepairStep(
+            JobRepository repository,
+            PlatformTransactionManager transactionManager,
+            BuildingProfileRepairService service,
+            BuildingMetadataExecutionLock executionLock,
+            BuildingRegisterDailyRequestUsage requestUsage,
+            ComplexMetadataProperties properties) {
+        return step(
+                "complexBuildingRegisterProfileRepairStep",
+                repository,
+                transactionManager,
+                new BuildingProfileRepairTasklet(service, executionLock, requestUsage, properties.dailyRequestQuota()));
     }
 
     @Bean

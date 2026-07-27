@@ -19,7 +19,45 @@ public record ParcelDetailResult(
         BigDecimal totArea,
         BigDecimal bcRat,
         BigDecimal vlRat,
-        LocalDate useDate) {
+        LocalDate useDate,
+        BuildingProfileSummaryResult buildingProfile) {
+
+    public ParcelDetailResult(
+            Long parcelId,
+            Long complexId,
+            Double latitude,
+            Double longitude,
+            String address,
+            String displayName,
+            String tradeName,
+            String name,
+            Integer dongCnt,
+            Integer unitCnt,
+            BigDecimal platArea,
+            BigDecimal archArea,
+            BigDecimal totArea,
+            BigDecimal bcRat,
+            BigDecimal vlRat,
+            LocalDate useDate) {
+        this(
+                parcelId,
+                complexId,
+                latitude,
+                longitude,
+                address,
+                displayName,
+                tradeName,
+                name,
+                dongCnt,
+                unitCnt,
+                platArea,
+                archArea,
+                totArea,
+                bcRat,
+                vlRat,
+                useDate,
+                null);
+    }
 
     public ParcelDetailResult(
             Long parcelId,
@@ -39,6 +77,43 @@ public record ParcelDetailResult(
             LocalDate useDate) {
         this(
                 parcelId, complexId, latitude, longitude, address, name, tradeName, name, dongCnt, unitCnt, platArea,
-                archArea, totArea, bcRat, vlRat, useDate);
+                archArea, totArea, bcRat, vlRat, useDate, null);
+    }
+
+    public ParcelDetailResult(
+            Long parcelId,
+            Long complexId,
+            Double latitude,
+            Double longitude,
+            String address,
+            String tradeName,
+            String name,
+            Integer dongCnt,
+            Integer unitCnt,
+            BigDecimal platArea,
+            BigDecimal archArea,
+            BigDecimal totArea,
+            BigDecimal bcRat,
+            BigDecimal vlRat,
+            LocalDate useDate,
+            BuildingProfileSummaryResult buildingProfile) {
+        this(
+                parcelId,
+                complexId,
+                latitude,
+                longitude,
+                address,
+                name,
+                tradeName,
+                name,
+                dongCnt,
+                unitCnt,
+                platArea,
+                archArea,
+                totArea,
+                bcRat,
+                vlRat,
+                useDate,
+                buildingProfile);
     }
 }

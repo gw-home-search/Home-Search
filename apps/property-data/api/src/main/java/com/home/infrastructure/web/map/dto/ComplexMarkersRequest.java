@@ -5,6 +5,7 @@ import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
+import java.math.BigDecimal;
 
 public record ComplexMarkersRequest(
         @DecimalMin("-90.0") @DecimalMax("90.0") @NotNull Double swLat,
@@ -18,7 +19,11 @@ public record ComplexMarkersRequest(
         @PositiveOrZero Integer ageMin,
         @PositiveOrZero Integer ageMax,
         @PositiveOrZero Long unitMin,
-        @PositiveOrZero Long unitMax) {
+        @PositiveOrZero Long unitMax,
+        @DecimalMin("0.0") BigDecimal bcRatMin,
+        @DecimalMin("0.0") BigDecimal bcRatMax,
+        @DecimalMin("0.0") BigDecimal vlRatMin,
+        @DecimalMin("0.0") BigDecimal vlRatMax) {
 
     private static final double MAX_LATITUDE_SPAN_DEGREES = 1.0;
     private static final double MAX_LONGITUDE_SPAN_DEGREES = 1.5;
@@ -61,5 +66,15 @@ public record ComplexMarkersRequest(
     @AssertTrue
     public boolean isUnitRangeOrdered() {
         return unitMin == null || unitMax == null || unitMin <= unitMax;
+    }
+
+    @AssertTrue
+    public boolean isBuildingCoverageRangeOrdered() {
+        return bcRatMin == null || bcRatMax == null || bcRatMin.compareTo(bcRatMax) <= 0;
+    }
+
+    @AssertTrue
+    public boolean isFloorAreaRatioRangeOrdered() {
+        return vlRatMin == null || vlRatMax == null || vlRatMin.compareTo(vlRatMax) <= 0;
     }
 }

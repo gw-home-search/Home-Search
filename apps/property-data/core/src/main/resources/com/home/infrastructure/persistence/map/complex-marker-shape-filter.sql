@@ -37,7 +37,13 @@ complex_base AS (
         COALESCE(display_coordinate.latitude, p.latitude) AS lat,
         COALESCE(display_coordinate.longitude, p.longitude) AS lng,
         display_coordinate.coordinate_source,
-        display_coordinate.confidence
+        display_coordinate.confidence,
+        (
+            (CAST(:bcRatMin AS NUMERIC) IS NULL OR COALESCE(c.bc_rat, profile.building_coverage_rate) >= :bcRatMin)
+            AND (CAST(:bcRatMax AS NUMERIC) IS NULL OR COALESCE(c.bc_rat, profile.building_coverage_rate) <= :bcRatMax)
+            AND (CAST(:vlRatMin AS NUMERIC) IS NULL OR COALESCE(c.vl_rat, profile.floor_area_ratio) >= :vlRatMin)
+            AND (CAST(:vlRatMax AS NUMERIC) IS NULL OR COALESCE(c.vl_rat, profile.floor_area_ratio) <= :vlRatMax)
+        ) AS ratio_match
     FROM bounded_parcel p
     JOIN complex c ON c.parcel_id = p.id
     LEFT JOIN complex_display_coordinate display_coordinate
@@ -48,6 +54,13 @@ complex_base AS (
     )
     LEFT JOIN complex_coordinate_case coordinate_case
       ON coordinate_case.parcel_id = p.id
+    LEFT JOIN building_register_profile_publication publication
+      ON publication.status='PUBLISHED'
+    LEFT JOIN complex_building_register_profile_summary profile
+      ON profile.publication_id=publication.publication_id
+     AND profile.complex_id=c.id
+     AND profile.ratio_scope='PARCEL'
+     AND profile.ratio_quality='PNU_FALLBACK'
     GROUP BY
         p.id,
         p.geom,
@@ -63,7 +76,11 @@ complex_base AS (
         display_coordinate.latitude,
         display_coordinate.longitude,
         display_coordinate.coordinate_source,
-        display_coordinate.confidence
+        display_coordinate.confidence,
+        c.bc_rat,
+        c.vl_rat,
+        profile.building_coverage_rate,
+        profile.floor_area_ratio
 ),
 parcel_flags AS (
     SELECT
@@ -139,6 +156,7 @@ split_complex_marker AS (
             WHEN base.use_date IS NULL THEN NULL
             ELSE EXTRACT(YEAR FROM age(CURRENT_DATE, base.use_date))
         END AS building_age,
+        base.ratio_match,
         base.parcel_geom
     FROM complex_base base
     JOIN parcel_flags flags ON flags.parcel_id = base.parcel_id
@@ -220,6 +238,7 @@ parcel_marker AS (
                 ELSE EXTRACT(YEAR FROM age(CURRENT_DATE, base.use_date))
             END
         ) AS building_age,
+		        bool_or(base.ratio_match) AS ratio_match,
 			        base.parcel_geom
     FROM parcel_marker_base base
     JOIN representative_coordinate
@@ -242,6 +261,7 @@ marker_candidates AS (
         split_complex_marker.lng,
         split_complex_marker.unit_cnt_sum,
         split_complex_marker.building_age,
+        split_complex_marker.ratio_match,
         split_complex_marker.parcel_geom
     FROM split_complex_marker
     UNION ALL
@@ -253,6 +273,7 @@ marker_candidates AS (
         parcel_marker.lng,
         parcel_marker.unit_cnt_sum,
         parcel_marker.building_age,
+        parcel_marker.ratio_match,
         parcel_marker.parcel_geom
     FROM parcel_marker
 ),
@@ -266,6 +287,7 @@ filtered_markers AS (
       AND (CAST(:unitMax AS BIGINT) IS NULL OR unit_cnt_sum <= :unitMax)
       AND (CAST(:ageMin AS INTEGER) IS NULL OR building_age >= :ageMin)
       AND (CAST(:ageMax AS INTEGER) IS NULL OR building_age <= :ageMax)
+      AND ratio_match
 ),
 markers_with_trade AS (
     SELECT

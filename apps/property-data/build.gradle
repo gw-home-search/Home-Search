@@ -273,7 +273,7 @@ tasks.register('verifyApiMigrationCatalog') {
             throw new GradleException("Duplicate API migration versions: ${duplicates.keySet().sort()}")
         }
         def versions = byVersion.keySet().findAll { it != null }.sort()
-        def expectedVersions = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]
+        def expectedVersions = [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35]
         if (versions != expectedVersions) {
             throw new GradleException("API migration versions must be exact: ${expectedVersions}; actual=${versions}")
         }
@@ -308,7 +308,10 @@ tasks.register('verifyApiMigrationCatalog') {
             'V29__grant_market_news_correction_retention_privileges.sql': 'f79b3e2817bddbaca263559067d694ea0a83c0a027ef07894184001768dcf2e0',
             'V30__project_building_register_profile.sql': 'e6c9f3f6946e3a294552660a422465b8d9dea0d7b8cce8d0991da3fbfee0a8aa',
             'V31__grant_building_register_profile_projection_privileges.sql': '61b3dcad82d26011e57f1c4b06776974a9551ebd01aa36cb9ce6f0f72168a626',
-            'V32__restrict_building_register_profile_archive_manifest.sql': 'bd81a42f6679cc91d9d70f93ea4cc10d722850732027c1f7dbecd11f213d5763'
+            'V32__restrict_building_register_profile_archive_manifest.sql': 'bd81a42f6679cc91d9d70f93ea4cc10d722850732027c1f7dbecd11f213d5763',
+            'V33__add_profile_ratio_backfill_lineage.sql': '4f471e2eec520add71b060229fdf3baa1b27b2698b12157b56fa931342158bec',
+            'V34__publish_complete_building_register_profile.sql': 'a083702418af27c6f67fe8573c944fb8296fc08cb1e998578d7f12b61c79e32d',
+            'V35__grant_building_register_profile_publication_privileges.sql': 'ff041a0758275790bf55202fead281f310ca6bfd3404f68347643f54a897543d'
         ].each { fileName, expected ->
             def file = files.find { it.name == fileName }
             if (file == null || sha256(file) != expected) {
@@ -335,6 +338,12 @@ tasks.register('verifyPropertyDeploymentPreflightContract', Exec) {
     commandLine 'bash', 'ops/test-property-deployment-preflight.sh'
 }
 
+tasks.register('verifyBuildingProfileRatioBackfillContract', Exec) {
+    description = 'Verify building profile ratio backfill resume and secret-handling policy.'
+    group = 'verification'
+    commandLine 'bash', 'ops/test-building-register-profile-ratio-backfill.sh'
+}
+
 tasks.register('verifyPropertyFlywayFresh', Exec) {
     description = 'Migrate and validate a fresh PostGIS database with the pinned external Flyway CLI.'
     group = 'verification'
@@ -356,6 +365,7 @@ tasks.register('backendQualityCheck') {
     dependsOn tasks.named('verifyApiMigrationCatalog')
     dependsOn tasks.named('verifyFlywayCliContract')
     dependsOn tasks.named('verifyPropertyDeploymentPreflightContract')
+    dependsOn tasks.named('verifyBuildingProfileRatioBackfillContract')
     dependsOn tasks.named('verifyPropertyFlywayFresh')
     dependsOn tasks.named('verifyMarketNewsQualityReviewTool')
     dependsOn ':api:test'

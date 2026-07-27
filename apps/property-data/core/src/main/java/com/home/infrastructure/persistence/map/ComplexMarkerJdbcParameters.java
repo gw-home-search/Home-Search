@@ -19,6 +19,10 @@ record ComplexMarkerJdbcParameters(
         BigDecimal areaMax,
         Integer ageMin,
         Integer ageMax,
+        BigDecimal bcRatMin,
+        BigDecimal bcRatMax,
+        BigDecimal vlRatMin,
+        BigDecimal vlRatMax,
         Integer trustedBuildingCoordinateConfidence,
         String buildingFootprintSource) {
 
@@ -39,6 +43,10 @@ record ComplexMarkerJdbcParameters(
                 pyeongToSquareMeters(query.pyeongMax()),
                 query.ageMin(),
                 query.ageMax(),
+                query.bcRatMin(),
+                query.bcRatMax(),
+                query.vlRatMin(),
+                query.vlRatMax(),
                 CoordinateDisplayPolicy.TRUSTED_BUILDING_FOOTPRINT_CONFIDENCE,
                 CoordinateSource.BUILDING_FOOTPRINT.storedValue());
     }
@@ -52,7 +60,11 @@ record ComplexMarkerJdbcParameters(
                 .param("unitMin", unitMin)
                 .param("unitMax", unitMax)
                 .param("ageMin", ageMin)
-                .param("ageMax", ageMax);
+                .param("ageMax", ageMax)
+                .param("bcRatMin", bcRatMin)
+                .param("bcRatMax", bcRatMax)
+                .param("vlRatMin", vlRatMin)
+                .param("vlRatMax", vlRatMax);
     }
 
     private JdbcClient.StatementSpec bindCommon(JdbcClient.StatementSpec statement) {

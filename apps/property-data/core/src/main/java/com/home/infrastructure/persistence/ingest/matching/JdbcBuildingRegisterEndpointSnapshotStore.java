@@ -68,6 +68,9 @@ public class JdbcBuildingRegisterEndpointSnapshotStore implements BuildingRegist
                 .query(this::snapshot)
                 .optional();
         if (resumable.isPresent()) return resumable.get();
+        BuildingRegisterEndpointSnapshot cloned =
+                cloneCompletedRepairSnapshot(collectionId, pnu, endpoint, runDate, pageSize);
+        if (cloned != null) return cloned;
         int attempt = jdbc.sql("""
                     SELECT COALESCE(max(attempt_no),0)+1
                     FROM building_register_endpoint_snapshot
@@ -93,6 +96,89 @@ public class JdbcBuildingRegisterEndpointSnapshotStore implements BuildingRegist
                 .param("attempt", attempt)
                 .query(this::snapshot)
                 .single();
+    }
+
+    private BuildingRegisterEndpointSnapshot cloneCompletedRepairSnapshot(
+            UUID collectionId, String pnu, BuildingRegisterEndpoint endpoint, LocalDate runDate, int pageSize) {
+        SourceSnapshot source = jdbc.sql("""
+                    SELECT source_snapshot.id,source_snapshot.status,source_snapshot.total_count
+                    FROM building_register_profile_repair_run repair
+                    JOIN LATERAL (
+                      SELECT id,status,total_count
+                      FROM building_register_endpoint_snapshot
+                      WHERE collection_id=repair.source_collection_id
+                        AND pnu=:pnu AND endpoint=:endpoint AND page_size=:page_size
+                      ORDER BY run_date DESC,attempt_no DESC,id DESC LIMIT 1
+                    ) source_snapshot ON true
+                    WHERE repair.collection_id=:collection
+                    """)
+                .param("collection", collectionId)
+                .param("pnu", pnu)
+                .param("endpoint", endpoint.name())
+                .param("page_size", pageSize)
+                .query((rs, rowNum) -> new SourceSnapshot(
+                        rs.getLong("id"), rs.getString("status"), rs.getObject("total_count", Integer.class)))
+                .optional()
+                .orElse(null);
+        if (source == null || !("PARSED".equals(source.status()) || "EMPTY".equals(source.status()))) {
+            return null;
+        }
+        long targetSnapshotId = jdbc.sql("""
+                    INSERT INTO building_register_endpoint_snapshot(
+                      collection_id,pnu,endpoint,run_date,page_size,attempt_no,status,total_count,completed_at)
+                    VALUES (:collection,:pnu,:endpoint,:run_date,:page_size,1,:status,:total,now())
+                    RETURNING id
+                    """)
+                .param("collection", collectionId)
+                .param("pnu", pnu)
+                .param("endpoint", endpoint.name())
+                .param("run_date", runDate)
+                .param("page_size", pageSize)
+                .param("status", source.status())
+                .param("total", source.totalCount())
+                .query(Long.class)
+                .single();
+        List<Long> sourceRawPages =
+                jdbc.sql("""
+                    SELECT id FROM building_register_raw_page
+                    WHERE endpoint_snapshot_id=:snapshot AND status IN ('PARSED','EMPTY')
+                    ORDER BY page_no
+                    """).param("snapshot", source.id()).query(Long.class).list();
+        if (sourceRawPages.isEmpty()) {
+            throw new IllegalStateException("completed source endpoint has no finalized raw page");
+        }
+        for (Long sourceRawPageId : sourceRawPages) {
+            long targetRawPageId = jdbc.sql("""
+                        INSERT INTO building_register_raw_page(
+                          endpoint_snapshot_id,request_id,page_no,attempt_no,status,response_body,
+                          body_sha256,byte_count,http_status,provider_status,finalized_at)
+                        SELECT :target,request_id,page_no,1,status,response_body,
+                               body_sha256,byte_count,http_status,provider_status,now()
+                        FROM building_register_raw_page WHERE id=:source
+                        RETURNING id
+                        """)
+                    .param("target", targetSnapshotId)
+                    .param("source", sourceRawPageId)
+                    .query(Long.class)
+                    .single();
+            jdbc.sql("""
+                        INSERT INTO building_register_record_snapshot(
+                          raw_page_id,item_index,pnu,endpoint,mgm_bldrgst_pk,mgm_up_bldrgst_pk,
+                          regstr_gb_cd,regstr_kind_cd,new_old_regstr_gb_cd,main_atch_gb_cd,bld_nm,dong_nm,
+                          main_purps_cd,plat_area,arch_area,tot_area,vl_rat_estm_tot_area,bc_rat,vl_rat,
+                          main_bld_cnt,atch_bld_cnt,hhld_cnt,use_apr_day,crtn_day)
+                        SELECT :target,item_index,pnu,endpoint,mgm_bldrgst_pk,mgm_up_bldrgst_pk,
+                               regstr_gb_cd,regstr_kind_cd,new_old_regstr_gb_cd,main_atch_gb_cd,bld_nm,dong_nm,
+                               main_purps_cd,plat_area,arch_area,tot_area,vl_rat_estm_tot_area,bc_rat,vl_rat,
+                               main_bld_cnt,atch_bld_cnt,hhld_cnt,use_apr_day,crtn_day
+                        FROM building_register_record_snapshot WHERE raw_page_id=:source
+                        ORDER BY item_index
+                        """)
+                    .param("target", targetRawPageId)
+                    .param("source", sourceRawPageId)
+                    .update();
+        }
+        return new BuildingRegisterEndpointSnapshot(targetSnapshotId, endpoint, pageSize, 1);
     }
 
     @Override
@@ -220,4 +306,6 @@ public class JdbcBuildingRegisterEndpointSnapshotStore implements BuildingRegist
     }
 
     private record RawPage(long id, int totalCount) {}
+
+    private record SourceSnapshot(long id, String status, Integer totalCount) {}
 }

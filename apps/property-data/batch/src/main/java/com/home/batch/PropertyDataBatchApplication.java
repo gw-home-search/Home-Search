@@ -23,6 +23,8 @@ public class PropertyDataBatchApplication {
             "complexBuildingRegisterProfileCollectJob",
             "complexBuildingRegisterProfileAnalyzeJob",
             "complexBuildingRegisterProfileProjectJob",
+            "complexBuildingRegisterProfilePublicationJob",
+            "complexBuildingRegisterProfileRepairJob",
             "marketInsightDailyJob",
             "marketInsightRolling7dJob",
             "marketNewsGeneralJob",

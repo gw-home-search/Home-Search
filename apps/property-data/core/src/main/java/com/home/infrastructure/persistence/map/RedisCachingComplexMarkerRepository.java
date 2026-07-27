@@ -18,7 +18,7 @@ import tools.jackson.databind.ObjectMapper;
 final class RedisCachingComplexMarkerRepository implements ComplexMarkerRepository {
 
     private static final Logger log = LoggerFactory.getLogger(RedisCachingComplexMarkerRepository.class);
-    private static final String CACHE_KEY_PREFIX = "home-search:map:complex:schema-a";
+    private static final String CACHE_KEY_PREFIX = "home-search:map:complex:schema-b";
     static final String CACHE_REQUEST_METRIC_NAME = "home.search.map.marker.cache.requests";
     private static final TypeReference<List<ComplexMarkerResult>> MARKER_LIST_TYPE = new TypeReference<>() {};
 
@@ -115,7 +115,11 @@ final class RedisCachingComplexMarkerRepository implements ComplexMarkerReposito
                 "ageMin=" + canonicalValue(query.ageMin()),
                 "ageMax=" + canonicalValue(query.ageMax()),
                 "unitMin=" + canonicalValue(query.unitMin()),
-                "unitMax=" + canonicalValue(query.unitMax()));
+                "unitMax=" + canonicalValue(query.unitMax()),
+                "bcRatMin=" + canonicalValue(query.bcRatMin()),
+                "bcRatMax=" + canonicalValue(query.bcRatMax()),
+                "vlRatMin=" + canonicalValue(query.vlRatMin()),
+                "vlRatMax=" + canonicalValue(query.vlRatMax()));
     }
 
     private static String canonicalDouble(Double value) {

@@ -8,6 +8,8 @@ import com.home.application.ingest.buildingmetadata.BuildingMetadataBatchService
 import com.home.application.ingest.buildingprofile.BuildingProfileAnalysisService;
 import com.home.application.ingest.buildingprofile.BuildingProfileCollectionService;
 import com.home.application.ingest.buildingprofile.BuildingProfileProjectionService;
+import com.home.application.ingest.buildingprofile.BuildingProfilePublicationService;
+import com.home.application.ingest.buildingprofile.BuildingProfileRepairService;
 import com.home.application.ingest.buildingprofile.BuildingProfileReplayService;
 import com.home.application.ingest.buildingprofile.LegalDongCodeImportService;
 import com.home.application.ingest.buildingregister.BuildingRatioProjectionService;
@@ -56,6 +58,8 @@ import org.springframework.stereotype.Repository;
                             BuildingProfileCollectionService.class,
                             BuildingProfileAnalysisService.class,
                             BuildingProfileProjectionService.class,
+                            BuildingProfilePublicationService.class,
+                            BuildingProfileRepairService.class,
                             LegalDongCodeImportService.class,
                             BuildingRegisterCampaignService.class,
                             BuildingRegisterCollectionService.class,

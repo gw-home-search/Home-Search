@@ -432,4 +432,68 @@ class BatchJobArgumentsTest {
         assertThat(collect.jobParameters().getString("sampleSize")).isNull();
         assertThat(collect.jobParameters().getString("parallelism")).isEqualTo("3");
     }
+
+    @Test
+    @DisplayName("profile publication job은 frozen publication 입력과 publish/backfill 결정을 보존한다")
+    void parsesBuildingProfilePublicationArguments() {
+        BatchJobArguments publication = BatchJobArguments.from(
+                "complexBuildingRegisterProfilePublicationJob",
+                Map.of(
+                        "publicationId", "123e4567-e89b-12d3-a456-426614174029",
+                        "projectionRunId", "123e4567-e89b-12d3-a456-426614174027",
+                        "rulesVersion", "PROFILE_PUBLICATION_V1",
+                        "publish", "true",
+                        "backfill", "true"),
+                clock);
+
+        assertThat(publication.jobParameters().getString("publicationId"))
+                .isEqualTo("123e4567-e89b-12d3-a456-426614174029");
+        assertThat(publication.jobParameters().getString("rulesVersion")).isEqualTo("PROFILE_PUBLICATION_V1");
+        assertThat(publication.jobParameters().getString("publish")).isEqualTo("true");
+        assertThat(publication.jobParameters().getString("backfill")).isEqualTo("true");
+
+        assertThatThrownBy(() -> BatchJobArguments.from(
+                        "complexBuildingRegisterProfilePublicationJob",
+                        Map.of(
+                                "publicationId", "123e4567-e89b-12d3-a456-426614174029",
+                                "projectionRunId", "123e4567-e89b-12d3-a456-426614174027",
+                                "rulesVersion", "PROFILE_PUBLICATION_V1",
+                                "publish", "false",
+                                "backfill", "true"),
+                        clock))
+                .isInstanceOf(BatchExitCodeException.class)
+                .hasMessageContaining("backfill");
+    }
+
+    @Test
+    @DisplayName("profile repair job은 source lineage, 실행 UUID, PROFILE_REPAIR_V1 policy와 request budget을 고정한다")
+    void parsesBuildingProfileRepairArguments() {
+        BatchJobArguments repair = BatchJobArguments.from(
+                "complexBuildingRegisterProfileRepairJob",
+                Map.of(
+                        "sourceCollectionId", "123e4567-e89b-12d3-a456-426614174020",
+                        "collectionId", "123e4567-e89b-12d3-a456-426614174030",
+                        "requestId", "123e4567-e89b-12d3-a456-426614174031",
+                        "runDate", "2026-07-27",
+                        "repairPolicyVersion", "PROFILE_REPAIR_V1",
+                        "maxRequests", "20000",
+                        "parallelism", "4"),
+                clock);
+
+        assertThat(repair.jobParameters().getString("repairPolicyVersion")).isEqualTo("PROFILE_REPAIR_V1");
+        assertThat(repair.jobParameters().getString("maxRequests")).isEqualTo("20000");
+        assertThat(repair.jobParameters().getString("parallelism")).isEqualTo("4");
+        assertThatThrownBy(() -> BatchJobArguments.from(
+                        "complexBuildingRegisterProfileRepairJob",
+                        Map.of(
+                                "sourceCollectionId", "123e4567-e89b-12d3-a456-426614174020",
+                                "collectionId", "123e4567-e89b-12d3-a456-426614174030",
+                                "requestId", "123e4567-e89b-12d3-a456-426614174031",
+                                "runDate", "2026-07-27",
+                                "repairPolicyVersion", "UNVERSIONED",
+                                "maxRequests", "20000",
+                                "parallelism", "5"),
+                        clock))
+                .isInstanceOf(BatchExitCodeException.class);
+    }
 }

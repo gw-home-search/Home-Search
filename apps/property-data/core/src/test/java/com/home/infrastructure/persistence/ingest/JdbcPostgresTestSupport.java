@@ -9,6 +9,17 @@ public abstract class JdbcPostgresTestSupport extends JdbcPostgresContainerSuppo
     private static final PostgreSQLContainer<?> POSTGRES = newPostgisContainer();
     private static final Object MIGRATION_LOCK = new Object();
     private static final List<String> RESET_TABLES = List.of(
+            "public.complex_building_register_profile_summary",
+            "public.building_register_profile_field_evidence",
+            "public.building_register_profile_hierarchy",
+            "public.building_register_profile_building",
+            "public.building_register_profile_site",
+            "public.building_register_profile_publication",
+            "public.building_register_profile_repair_run",
+            "public.building_register_profile_projection_run",
+            "public.building_register_profile_analysis_run",
+            "public.building_register_profile_parse_run",
+            "public.building_register_collection_campaign",
             "public.event_outbox",
             "public.market_news_execution_failure_correction",
             "public.market_news_execution_aggregate_correction",

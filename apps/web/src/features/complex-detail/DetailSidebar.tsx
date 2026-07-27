@@ -19,6 +19,7 @@ import {
 import { NewsRows } from '../news/NewsRows';
 import { useComplexNews } from '../news/hooks/useComplexNews';
 import { MARKET_NEWS_ENABLED } from '../news/newsFeature';
+import { BuildingProfilePanel } from './BuildingProfilePanel';
 
 type DetailRequestState = 'idle' | 'loading' | 'ready' | 'error';
 type TradeMoreState = 'idle' | 'loading' | 'error';
@@ -245,6 +246,8 @@ export function DetailSidebar({
               </dl>
             </details>
           </section>
+
+          <BuildingProfilePanel profile={complexDetail.buildingProfile} />
 
           {newsEnabled ? <section
             id="detail-tabpanel-news"

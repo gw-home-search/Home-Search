@@ -47,6 +47,13 @@ public class JdbcMapMarkerRepository implements ComplexMarkerRepository {
     }
 
     private boolean hasMarkerShapeFilter(ComplexMarkerQuery query) {
-        return query.unitMin() != null || query.unitMax() != null || query.ageMin() != null || query.ageMax() != null;
+        return query.unitMin() != null
+                || query.unitMax() != null
+                || query.ageMin() != null
+                || query.ageMax() != null
+                || query.bcRatMin() != null
+                || query.bcRatMax() != null
+                || query.vlRatMin() != null
+                || query.vlRatMax() != null;
     }
 }

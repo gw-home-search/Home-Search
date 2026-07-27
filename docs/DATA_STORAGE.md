@@ -1,5 +1,29 @@
 # Data Storage Strategy
 
+## Building-register profile publication
+
+V34 stores the 83 provider fields without replacing the raw/profile discovery
+evidence introduced earlier:
+
+- `building_register_profile_publication` owns source campaign/parse/analysis/
+  projection lineage, parser/rules versions, row counts, digest, and immutable
+  publication history.
+- `building_register_profile_site`, `building_register_profile_building`, and
+  `building_register_profile_hierarchy` preserve the 35 SITE, 39 BUILDING, and
+  9 HIERARCHY typed fields respectively.
+- `building_register_profile_field_evidence` preserves typed values plus
+  `ABSENT|NULL|BLANK|ZERO|POSITIVE|VALID|INVALID`, source/aggregation method,
+  public scope/quality, and conflict state.
+- `complex_building_register_profile_summary` is the read model for public
+  detail and ratio-filter queries. Only one publication can be `PUBLISHED`;
+  prior rows remain `SUPERSEDED`.
+
+Publication switches only from a row-count-complete `VALIDATED` candidate in
+one database transaction. A failed switch leaves the existing `PUBLISHED` row
+unchanged. Direct `complex`/`parcel` enrichment is null-only: existing non-null
+operational values are never overwritten. Direct ratio columns use verified
+complex values; conflict-free PNU fallback remains distinguishable in the
+summary and is not written into direct ratio columns.
 
 ## Goal
 

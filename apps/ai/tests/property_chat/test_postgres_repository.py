@@ -7,7 +7,24 @@ from time import perf_counter
 
 import pytest
 
-from ai_service.property_chat.postgres import PostgresPropertyFactRepository
+from ai_service.property_chat.postgres import (
+    PostgresPropertyFactRepository,
+    _complex_search_tokens,
+)
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    (
+        ("신동 래미안아파트", ("신동", "래미안")),
+        ("반포자이 아파트 어떄", ("반포자이",)),
+        ("A_타워", ("a", "타워")),
+    ),
+)
+def test_complex_search_tokens_remove_common_suffix_and_question_fillers(
+    query: str, expected: tuple[str, ...]
+) -> None:
+    assert _complex_search_tokens(query) == expected
 
 
 def test_property_pool_checks_connection_health_before_checkout(

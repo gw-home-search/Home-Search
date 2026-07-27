@@ -92,36 +92,63 @@ class PostgresPropertyFactRepository:
             raise ValueError("complex name is outside the supported range")
         if not 1 <= limit <= 6:
             raise ValueError("complex lookup limit is outside the supported range")
-        name_pattern = f"%{_escape_like(normalized_name)}%"
+        search_tokens = _complex_search_tokens(normalized_name)
+        if not search_tokens:
+            return []
+        requires_literal_name_match = "%" in normalized_name or "_" in normalized_name
+        literal_name_pattern = f"%{_escape_like(normalized_name)}%"
         region_pattern = (
             f"%{_escape_like(region_name.strip())}%" if region_name is not None else None
         )
         with self._pool.connection() as connection:
             rows = connection.execute(
                 """
-                SELECT complex_id, display_name, region_code, region_name, address,
-                       latitude, longitude, marker_safe, data_updated_at,
-                       unit_count, use_date
-                FROM ai_read.complex_fact
-                WHERE (
-                    display_name ILIKE %s ESCAPE '\\'
-                    OR name ILIKE %s ESCAPE '\\'
-                    OR trade_name ILIKE %s ESCAPE '\\'
+                SELECT search.complex_id, search.display_name, search.region_code,
+                       search.region_name, search.address, base.latitude, base.longitude,
+                       search.marker_safe, search.data_updated_at,
+                       search.unit_count, search.use_date
+                FROM ai_read.complex_search_fact search
+                JOIN ai_read.complex_fact base ON base.complex_id = search.complex_id
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM unnest(%s::text[]) token(value)
+                    WHERE search.search_document NOT LIKE ('%%' || token.value || '%%')
                 )
-                  AND (%s::text IS NULL OR region_name ILIKE %s ESCAPE '\\')
+                  AND (
+                      %s::boolean = false
+                      OR search.display_name ILIKE %s ESCAPE '\\'
+                      OR search.canonical_name ILIKE %s ESCAPE '\\'
+                      OR search.trade_name ILIKE %s ESCAPE '\\'
+                  )
+                  AND (%s::text IS NULL OR search.region_name ILIKE %s ESCAPE '\\'
+                       OR search.address ILIKE %s ESCAPE '\\')
                 ORDER BY
-                    CASE WHEN lower(display_name) = lower(%s) THEN 0 ELSE 1 END,
-                    display_name,
-                    complex_id
+                    CASE
+                        WHEN lower(search.display_name) = lower(%s)
+                          OR lower(search.canonical_name) = lower(%s)
+                          OR lower(search.trade_name) = lower(%s) THEN 0
+                        WHEN search.canonical_search_name = %s THEN 1
+                        WHEN %s = ANY(search.alias_search_names) THEN 2
+                        ELSE 3
+                    END,
+                    search.display_name,
+                    search.complex_id
                 LIMIT %s
                 """,
                 (
-                    name_pattern,
-                    name_pattern,
-                    name_pattern,
+                    list(search_tokens),
+                    requires_literal_name_match,
+                    literal_name_pattern,
+                    literal_name_pattern,
+                    literal_name_pattern,
+                    region_pattern,
                     region_pattern,
                     region_pattern,
                     normalized_name,
+                    normalized_name,
+                    normalized_name,
+                    "".join(search_tokens),
+                    "".join(search_tokens),
                     limit,
                 ),
             ).fetchall()
@@ -698,6 +725,22 @@ class PostgresPropertyFactRepository:
 
 def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+_COMPLEX_SEARCH_STOP_WORDS = frozenset({
+    "아파트", "apt", "어때", "어떄", "어떤가요", "괜찮아", "괜찮나요", "살기",
+})
+
+
+def _complex_search_tokens(value: str) -> tuple[str, ...]:
+    tokens: list[str] = []
+    for raw_token in re.findall(r"[0-9A-Za-z가-힣]+", value.lower()):
+        token = re.sub(r"(?:아파트|apt)$", "", raw_token).strip()
+        if not token or token in _COMPLEX_SEARCH_STOP_WORDS:
+            continue
+        if token not in tokens:
+            tokens.append(token)
+    return tuple(tokens[:8])
 
 
 def _complex_record(row: dict[str, object]) -> ComplexRecord:

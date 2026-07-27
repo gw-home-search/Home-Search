@@ -37,7 +37,7 @@ public class JdbcInsightInboxRepository implements InsightInboxRepository {
                     """)
                 .param("userId", userId)
                 .param("limit", size)
-                .param("offset", Math.multiplyExact(page, size))
+                .param("offset", Math.multiplyFull(page, size))
                 .query((resultSet, rowNumber) -> new InsightInboxItem(
                         resultSet.getObject("inbox_id", UUID.class),
                         userId,

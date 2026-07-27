@@ -37,7 +37,7 @@ locals {
   ])
   secret_containers = toset([
     "database-runtime", "database-bootstrap", "oauth-providers",
-    "user-jwt", "admin-internal-jwt", "admin-internal-jwt-public", "public-data-providers",
+    "user-jwt", "admin-internal-jwt", "admin-internal-jwt-public", "public-data-providers", "kakao-local-provider",
     "property-runtime-db", "property-ai-reader-db", "admin-runtime-db",
     "user-runtime-db", "coordinate-reader-db", "property-migrator-db",
     "admin-migrator-db", "user-migrator-db", "coordinate-migrator-db",

@@ -42,6 +42,7 @@ class LocalRuntimeStackConfigurationTest {
         assertThat(content).contains(operationalDbUrl);
         assertThat(content).contains("env_file:");
         assertThat(content).contains("- ../apps/property-data/ops/local-runtime.env.example");
+        assertThat(content).contains("- ${HOME_SEARCH_PROPERTY_LOCAL_ENV_FILE:-../apps/property-data/.env}");
         assertThat(content)
                 .contains(
                         "- ${HOME_SEARCH_API_ENV_FILE:-../apps/property-data/ops/local-runtime.override.env.example}");
@@ -76,7 +77,8 @@ class LocalRuntimeStackConfigurationTest {
         assertThat(content).doesNotContain("SPRING_FLYWAY_VALIDATE_ON_MIGRATE");
         assertThat(content).contains("VITE_API_SERVER_IP: ${VITE_API_SERVER_IP:-http://localhost:8080}");
         assertThat(webService).contains("VITE_MARKET_NEWS_ENABLED: ${VITE_MARKET_NEWS_ENABLED:-false}");
-        assertThat(webService).contains("env_file:\n      - ../apps/web/.env");
+        assertThat(webService).contains("env_file:\n      - ${HOME_SEARCH_WEB_LOCAL_ENV_FILE:-../apps/web/.env}");
+        assertThat(content).contains("- ${HOME_SEARCH_USER_LOCAL_ENV_FILE:-../apps/user/service/.env}");
         assertThat(webService).doesNotContain("VITE_KAKAO_MAP_APP_KEY: ${VITE_KAKAO_MAP_APP_KEY:-}");
         assertThat(webService).contains("VITE_KAKAO_MAP_APP_KEY is required");
         assertThat(content).contains("http://127.0.0.1:5173/");
@@ -127,7 +129,7 @@ class LocalRuntimeStackConfigurationTest {
 
         assertThat(batchService).contains("profiles: [ \"tools\" ]");
         assertThat(batchService).doesNotContain("depends_on:");
-        assertThat(batchService).contains("- ../apps/property-data/.env");
+        assertThat(batchService).contains("- ${HOME_SEARCH_PROPERTY_LOCAL_ENV_FILE:-../apps/property-data/.env}");
         assertThat(batchService)
                 .contains(
                         "cp /source/property-data-batch.jar /app/property-data-batch.jar && exec java -jar /app/property-data-batch.jar");

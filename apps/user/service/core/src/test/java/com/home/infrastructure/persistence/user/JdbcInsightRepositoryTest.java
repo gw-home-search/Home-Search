@@ -134,6 +134,23 @@ class JdbcInsightRepositoryTest {
         }
     }
 
+    @Test
+    @DisplayName("유효한 큰 page는 offset overflow 없이 빈 inbox page를 반환한다")
+    void returnsEmptyInboxForLargeValidPage() throws Exception {
+        try (var postgres = new PostgreSQLContainer<>("postgres:16-alpine")) {
+            postgres.start();
+            String url = prepareDatabase(postgres);
+            var runtime = new DriverManagerDataSource(url, "home_search_user_runtime", "runtime-test-only");
+            var jdbc = JdbcClient.create(runtime);
+            long userId = insertUser(url);
+
+            var page = new JdbcInsightInboxRepository(jdbc).list(userId, Integer.MAX_VALUE, 100);
+
+            assertThat(page.content()).isEmpty();
+            assertThat(page.totalElements()).isZero();
+        }
+    }
+
     private static PublishedInsightEvent event(String eventId, long aggregateVersion) {
         return new PublishedInsightEvent(
                 UUID.fromString(eventId),

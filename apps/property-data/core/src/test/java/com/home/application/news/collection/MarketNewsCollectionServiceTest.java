@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.home.domain.news.MarketNewsCategory;
 import com.home.domain.news.MarketNewsClassificationPolicy;
 import com.home.domain.news.MarketNewsExecutionState;
+import com.home.domain.news.MarketNewsFailureKind;
 import com.home.domain.news.MarketNewsRelationPolicy;
 import com.home.domain.news.MarketNewsRelationType;
 import com.home.domain.news.MarketNewsScopeType;
@@ -82,9 +83,10 @@ class MarketNewsCollectionServiceTest {
                 0,
                 0,
                 0,
-                List.of(nationalUnit()));
+                null,
+                List.of(resumedNationalUnit()));
         when(repository.findResumableExecution("NEWS-RECOVERY-1")).thenReturn(Optional.of(resumable));
-        when(provider.search(any())).thenReturn(new NewsProviderPage(0, 1, 0, List.of()));
+        when(provider.search(any())).thenReturn(new NewsProviderPage(0, 201, 0, List.of()));
         when(repository.publishEligibleScopes(EXECUTION_ID, NOW)).thenReturn(List.of());
 
         MarketNewsCollectionResult result =
@@ -94,7 +96,97 @@ class MarketNewsCollectionServiceTest {
         assertThat(result.callCount()).isEqualTo(4000);
         assertThat(result.completedWorkUnits()).isEqualTo(2);
         verify(repository, never()).planGeneral(any(), any(), any(), anyInt());
-        verify(provider).search(any());
+        verify(provider).search(org.mockito.ArgumentMatchers.argThat(query -> query.start() == 201));
+        verify(repository, never()).recordWorkUnitPageProgress(any(), anyInt(), anyInt(), anyInt(), any());
+        verify(repository)
+                .completeWorkUnitPage(eq(WORK_UNIT_ID), eq(201), eq(3), eq(4), eq(NOW.minusSeconds(60)), any());
+    }
+
+    @Test
+    @DisplayName("마지막 provider page에서 cutoff를 만나면 cursor와 완료 상태를 원자 저장한다")
+    void completesTerminalResumePageAtomically() {
+        MarketNewsCollectionRepository repository = mock(MarketNewsCollectionRepository.class);
+        NewsProviderGateway provider = mock(NewsProviderGateway.class);
+        NewsItemNormalizationGateway normalizer = mock(NewsItemNormalizationGateway.class);
+        MarketNewsPublicationCache cache = mock(MarketNewsPublicationCache.class);
+        MarketNewsCollectionExecution resumable = new MarketNewsCollectionExecution(
+                EXECUTION_ID,
+                "NEWS-RECOVERY-LAST-PAGE",
+                "GENERAL",
+                "NEWS_V2",
+                NOW,
+                NOW.minusSeconds(2 * 60 * 60),
+                4000,
+                9,
+                1,
+                0,
+                0,
+                0,
+                0,
+                null,
+                List.of(resumedNationalUnitAtLastPage()));
+        when(repository.findResumableExecution("NEWS-RECOVERY-LAST-PAGE")).thenReturn(Optional.of(resumable));
+        when(provider.search(any())).thenReturn(new NewsProviderPage(0, 901, 0, List.of()));
+        when(repository.publishEligibleScopes(EXECUTION_ID, NOW)).thenReturn(List.of());
+
+        MarketNewsCollectionResult result =
+                service(repository, provider, normalizer, cache).collectGeneral("NEWS-RECOVERY-LAST-PAGE", NOW, 4000);
+
+        assertThat(result.state()).isEqualTo(MarketNewsExecutionState.COMPLETED);
+        assertThat(result.callCount()).isEqualTo(10);
+        verify(provider).search(org.mockito.ArgumentMatchers.argThat(query -> query.start() == 901));
+        verify(repository, never()).recordWorkUnitPageProgress(any(), anyInt(), anyInt(), anyInt(), any());
+        verify(repository)
+                .completeWorkUnitPage(eq(WORK_UNIT_ID), eq(901), eq(10), eq(9), eq(NOW.minusSeconds(60)), any());
+    }
+
+    @Test
+    @DisplayName("중단 failure가 저장된 execution 재개는 provider를 다시 호출하지 않는다")
+    void resumesStoppingFailureWithoutProviderRecall() {
+        MarketNewsCollectionRepository repository = mock(MarketNewsCollectionRepository.class);
+        NewsProviderGateway provider = mock(NewsProviderGateway.class);
+        NewsItemNormalizationGateway normalizer = mock(NewsItemNormalizationGateway.class);
+        MarketNewsPublicationCache cache = mock(MarketNewsPublicationCache.class);
+        MarketNewsCollectionExecution resumable = new MarketNewsCollectionExecution(
+                EXECUTION_ID,
+                "NEWS-RECOVERY-AUTH",
+                "GENERAL",
+                "NEWS_V2",
+                NOW,
+                NOW.minusSeconds(2 * 60 * 60),
+                4000,
+                1,
+                2,
+                0,
+                1,
+                0,
+                0,
+                MarketNewsFailureKind.AUTHENTICATION,
+                List.of(new MarketNewsWorkUnitSpec(
+                        SECOND_WORK_UNIT_ID,
+                        2,
+                        MarketNewsWorkUnitKind.NATIONAL_CATEGORY,
+                        MarketNewsScopeType.NATIONWIDE,
+                        null,
+                        null,
+                        MarketNewsCategory.POLICY,
+                        "부동산 정책 아파트",
+                        null,
+                        List.of())));
+        when(repository.findResumableExecution("NEWS-RECOVERY-AUTH")).thenReturn(Optional.of(resumable));
+
+        MarketNewsCollectionResult result =
+                service(repository, provider, normalizer, cache).collectGeneral("NEWS-RECOVERY-AUTH", NOW, 4000);
+
+        assertThat(result.state()).isEqualTo(MarketNewsExecutionState.FAILED);
+        verify(repository).markRemainingSkippedBudget(eq(EXECUTION_ID), any());
+        verify(repository)
+                .finishExecution(
+                        eq(EXECUTION_ID),
+                        eq(MarketNewsExecutionState.FAILED),
+                        eq(MarketNewsFailureKind.AUTHENTICATION),
+                        any());
+        verifyNoInteractions(provider, normalizer, cache);
     }
 
     @Test
@@ -162,7 +254,7 @@ class MarketNewsCollectionServiceTest {
                         eq(10),
                         any(),
                         eq(false),
-                        eq("CUTOFF_NOT_REACHED"),
+                        eq(MarketNewsFailureKind.CUTOFF_NOT_REACHED),
                         any());
         verify(repository, never()).publishEligibleScopes(any(), any());
         verifyNoInteractions(cache);
@@ -245,7 +337,7 @@ class MarketNewsCollectionServiceTest {
                         eq(0),
                         org.mockito.ArgumentMatchers.isNull(),
                         eq(false),
-                        eq("DAILY_CALL_BUDGET"),
+                        eq(MarketNewsFailureKind.DAILY_CALL_BUDGET),
                         any());
         verify(repository).markRemainingSkippedBudget(eq(EXECUTION_ID), any());
         verifyNoInteractions(provider, cache);
@@ -302,6 +394,39 @@ class MarketNewsCollectionServiceTest {
     }
 
     @Test
+    @DisplayName("재개된 provider 위치의 payload가 바뀌면 기존 raw evidence를 덮지 않고 unit을 실패시킨다")
+    void failsUnitWhenProviderPositionPayloadChanged() {
+        MarketNewsCollectionRepository repository = mock(MarketNewsCollectionRepository.class);
+        NewsProviderGateway provider = mock(NewsProviderGateway.class);
+        NewsItemNormalizationGateway normalizer = mock(NewsItemNormalizationGateway.class);
+        MarketNewsPublicationCache cache = mock(MarketNewsPublicationCache.class);
+        NewsProviderItem changed = raw(1, NOW.minusSeconds(60));
+        when(repository.planGeneral(any(), any(), any(), anyInt()))
+                .thenReturn(execution(nationalUnit(), NOW.minusSeconds(2 * 60 * 60)));
+        when(provider.search(any())).thenReturn(new NewsProviderPage(1, 1, 1, List.of(changed)));
+        org.mockito.Mockito.doThrow(new RawNewsPositionConflictException())
+                .when(repository)
+                .requireRawItemMatch(WORK_UNIT_ID, changed);
+
+        MarketNewsCollectionResult result =
+                service(repository, provider, normalizer, cache).collectGeneral("NEWS-RAW-CONFLICT", NOW, 4000);
+
+        assertThat(result.state()).isEqualTo(MarketNewsExecutionState.FAILED);
+        verify(repository)
+                .finishWorkUnit(
+                        eq(WORK_UNIT_ID),
+                        eq(MarketNewsWorkUnitState.FAILED),
+                        eq(1),
+                        eq(1),
+                        org.mockito.ArgumentMatchers.isNull(),
+                        eq(false),
+                        eq(MarketNewsFailureKind.RAW_POSITION_CONFLICT),
+                        any());
+        verifyNoInteractions(normalizer, cache);
+        verify(repository, never()).upsertArticle(any(), any());
+    }
+
+    @Test
     @DisplayName("인증 실패는 재시도하지 않고 execution을 실패시킨다")
     void doesNotRetryAuthenticationFailure() {
         MarketNewsCollectionRepository repository = mock(MarketNewsCollectionRepository.class);
@@ -339,7 +464,11 @@ class MarketNewsCollectionServiceTest {
         assertThat(result.state()).isEqualTo(MarketNewsExecutionState.FAILED);
         verify(repository).markRemainingSkippedBudget(eq(EXECUTION_ID), any());
         verify(repository)
-                .finishExecution(eq(EXECUTION_ID), eq(MarketNewsExecutionState.FAILED), eq("DAILY_QUOTA"), any());
+                .finishExecution(
+                        eq(EXECUTION_ID),
+                        eq(MarketNewsExecutionState.FAILED),
+                        eq(MarketNewsFailureKind.DAILY_QUOTA),
+                        any());
     }
 
     @Test
@@ -370,7 +499,10 @@ class MarketNewsCollectionServiceTest {
         assertThat(result.state()).isEqualTo(MarketNewsExecutionState.COMPLETED);
         verify(repository)
                 .finishExecution(
-                        eq(EXECUTION_ID), eq(MarketNewsExecutionState.COMPLETED), eq("CACHE_PUBLICATION"), any());
+                        eq(EXECUTION_ID),
+                        eq(MarketNewsExecutionState.COMPLETED),
+                        eq(MarketNewsFailureKind.CACHE_PUBLICATION),
+                        any());
     }
 
     @Test
@@ -464,7 +596,7 @@ class MarketNewsCollectionServiceTest {
                         eq(1),
                         org.mockito.ArgumentMatchers.isNull(),
                         eq(false),
-                        eq("INTERNAL"),
+                        eq(MarketNewsFailureKind.INTERNAL),
                         any());
     }
 
@@ -503,6 +635,7 @@ class MarketNewsCollectionServiceTest {
                 0,
                 0,
                 0,
+                null,
                 List.of(unit));
     }
 
@@ -521,6 +654,7 @@ class MarketNewsCollectionServiceTest {
                 0,
                 0,
                 0,
+                null,
                 units);
     }
 
@@ -536,6 +670,42 @@ class MarketNewsCollectionServiceTest {
                 "아파트 매매 거래 가격",
                 null,
                 List.of());
+    }
+
+    private static MarketNewsWorkUnitSpec resumedNationalUnit() {
+        return new MarketNewsWorkUnitSpec(
+                WORK_UNIT_ID,
+                1,
+                MarketNewsWorkUnitKind.NATIONAL_CATEGORY,
+                MarketNewsScopeType.NATIONWIDE,
+                null,
+                null,
+                MarketNewsCategory.TRANSACTION_PRICE,
+                "아파트 매매 거래 가격",
+                null,
+                List.of(),
+                201,
+                2,
+                4,
+                NOW.minusSeconds(60));
+    }
+
+    private static MarketNewsWorkUnitSpec resumedNationalUnitAtLastPage() {
+        return new MarketNewsWorkUnitSpec(
+                WORK_UNIT_ID,
+                1,
+                MarketNewsWorkUnitKind.NATIONAL_CATEGORY,
+                MarketNewsScopeType.NATIONWIDE,
+                null,
+                null,
+                MarketNewsCategory.TRANSACTION_PRICE,
+                "아파트 매매 거래 가격",
+                null,
+                List.of(),
+                901,
+                9,
+                9,
+                NOW.minusSeconds(60));
     }
 
     private static List<MarketNewsWorkUnitSpec> twoNationalUnits() {

@@ -2,6 +2,7 @@ package com.home.application.news.collection;
 
 import com.home.domain.news.MarketNewsCategory;
 import com.home.domain.news.MarketNewsExecutionState;
+import com.home.domain.news.MarketNewsFailureKind;
 import com.home.domain.news.MarketNewsRelationMatch;
 import com.home.domain.news.MarketNewsWorkUnitState;
 import com.home.domain.news.NewsRejectionReason;
@@ -32,6 +33,19 @@ public interface MarketNewsCollectionRepository {
 
     void saveRawItems(UUID workUnitId, List<NewsProviderItem> items, Instant receivedAt);
 
+    void requireRawItemMatch(UUID workUnitId, NewsProviderItem rawItem);
+
+    void recordWorkUnitPageProgress(
+            UUID workUnitId, int providerStart, int callCount, int rawItemCount, Instant oldestProvidedAt);
+
+    void completeWorkUnitPage(
+            UUID workUnitId,
+            int providerStart,
+            int callCount,
+            int rawItemCount,
+            Instant oldestProvidedAt,
+            Instant completedAt);
+
     long upsertArticle(NormalizedNewsItem item, Instant seenAt);
 
     void linkRawItem(UUID workUnitId, NewsProviderItem rawItem, long articleId);
@@ -48,12 +62,13 @@ public interface MarketNewsCollectionRepository {
             int rawItemCount,
             Instant oldestProvidedAt,
             boolean cutoffReached,
-            String failureKind,
+            MarketNewsFailureKind failureKind,
             Instant completedAt);
 
     void incrementExecutionCallCount(UUID executionId);
 
-    void finishExecution(UUID executionId, MarketNewsExecutionState state, String failureKind, Instant completedAt);
+    void finishExecution(
+            UUID executionId, MarketNewsExecutionState state, MarketNewsFailureKind failureKind, Instant completedAt);
 
     List<PublishedNewsSnapshot> publishEligibleScopes(UUID executionId, Instant generatedAt);
 

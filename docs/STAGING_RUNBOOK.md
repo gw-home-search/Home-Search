@@ -61,7 +61,11 @@ restore rehearsal 절차를 소유한다. production cutover, DNS 전환, produc
 실제 OAuth credential, public-data provider key, DB password, RSA private key는
 GitHub variable이나 Terraform 변수로 전달하지 않는다. Secrets Manager의
 `oauth-providers`, `public-data-providers` container에 승인된 operator가 값을
-직접 넣는다. `secret-bootstrap` task는 DB role마다 별도 container
+직접 넣는다. 주변시설용 Kakao REST API key는 별도
+`kakao-local-provider` container의 `rest_api_key` JSON field로 넣는다.
+staging `property-api`만 이 container ARN을 읽고 해당 field를
+`KAKAO_REST_API_KEY`로 materialize한다.
+`secret-bootstrap` task는 DB role마다 별도 container
 (`property-runtime-db`, `coordinate-reader-db`, `admin-runtime-db`,
 `user-runtime-db`, 각 `*-migrator-db`, `coordinate-importer-db`,
 `property-ai-reader-db`, `backup-db`)와 user/admin RSA key pair를 처음 한 번

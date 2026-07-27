@@ -114,7 +114,7 @@ run "digest_pinned_private_rollback_capable_workloads" {
 
   assert {
     condition = alltrue([
-      local.workload_execution_secret_names["property-api"] == ["property-runtime-db", "coordinate-reader-db", "admin-internal-jwt-public"],
+      local.workload_execution_secret_names["property-api"] == ["property-runtime-db", "coordinate-reader-db", "admin-internal-jwt-public", "kakao-local-provider"],
       local.workload_execution_secret_names["admin-api"] == ["admin-runtime-db", "admin-internal-jwt"],
       local.workload_execution_secret_names["user-api"] == ["user-runtime-db", "oauth-providers", "user-jwt"],
       local.workload_execution_secret_names["property-batch"] == ["property-runtime-db", "coordinate-reader-db", "public-data-providers"],
@@ -135,6 +135,22 @@ run "digest_pinned_private_rollback_capable_workloads" {
       ])),
     ])
     error_message = "Execution roles may read only the workload's declared container secrets and never an RDS master secret."
+  }
+
+  assert {
+    condition = alltrue([
+      one([
+        for item in local.service_specs["property-api"].environment :
+        item.value if item.name == "HOME_PLACE_KAKAO_ENABLED"
+      ]) == "true",
+      one([
+        for secret in local.service_specs["property-api"].secrets :
+        secret.name if secret.name == "KAKAO_REST_API_KEY"
+      ]) == "KAKAO_REST_API_KEY",
+      length(local.service_specs["property-api"].secrets) == 3,
+      !contains(local.workload_execution_secret_names["property-api"], "public-data-providers"),
+    ])
+    error_message = "The staging property API must enable Kakao Local and materialize only its server-side REST API key."
   }
 
   assert {

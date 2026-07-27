@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import tomllib
 import tempfile
 from collections.abc import Iterable
@@ -95,6 +96,7 @@ KNOWN_VERIFICATION_COMMANDS = {
         ),
         "cd apps/property-data && ./gradlew test": ("apps/property-data", ["./gradlew", "test"]),
         DIFF_CHECK: (".", ["git", "diff", "--check"]),
+        "git diff --check main...HEAD": (".", ["git", "diff", "--check", "main...HEAD"]),
         PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
         PR_CONTEXT_SELF_TEST: (".", ["python3", ".codex/harness/pr_context.py", "--self-test"]),
         WORKLOG_SYNC_SELF_TEST: (".", ["python3", ".codex/harness/worklog_sync.py", "--self-test"]),
@@ -116,6 +118,7 @@ KNOWN_VERIFICATION_COMMANDS = {
         WEB_BUILD: ("apps/web", ["npm", "run", "build"]),
         DOCKER_COMPOSE_LOCAL_CONFIG: (".", ["bash", "infra/test-compose-config.sh"]),
         DIFF_CHECK: (".", ["git", "diff", "--check"]),
+        "git diff --check main...HEAD": (".", ["git", "diff", "--check", "main...HEAD"]),
         PR_LINT_SELF_TEST: (".", ["python3", ".codex/harness/pr_lint.py", "--self-test"]),
         PR_CONTEXT_SELF_TEST: (".", ["python3", ".codex/harness/pr_context.py", "--self-test"]),
         WORKLOG_SYNC_SELF_TEST: (".", ["python3", ".codex/harness/worklog_sync.py", "--self-test"]),
@@ -282,6 +285,24 @@ def target_config(args: argparse.Namespace, target: str) -> dict[str, Any]:
 def first_lines(text: str, limit: int = 3) -> str:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     return " | ".join(lines[:limit])
+
+
+def verification_evidence_text(verification: dict[str, Any]) -> str:
+    if not verification:
+        return "- `verification` = not run (실행된 검증 명령이 없음)"
+    lines = []
+    for command, result in verification.items():
+        raw_status = str(result.get("status", "skipped"))
+        status = {"pass": "pass", "fail": "fail"}.get(raw_status, "not run")
+        exit_code = result.get("exit_code")
+        if status == "pass":
+            reason = f"harness 실행 완료, exit={exit_code}"
+        elif status == "fail":
+            reason = f"harness 실행 실패, exit={exit_code}"
+        else:
+            reason = "dry-run 또는 명시적 skip"
+        lines.append(f"- `{command}` = {status} ({reason})")
+    return "\n".join(lines)
 
 
 def run_cmd(args: list[str], cwd: Path, *, dry_run: bool = False) -> dict[str, Any]:
@@ -494,11 +515,13 @@ def run_gate_review(
     worktree: Path,
     args: argparse.Namespace,
     names: dict[str, Any],
+    verification: dict[str, Any],
     *,
     dry_run: bool,
 ) -> dict[str, Any]:
     # Fixed name, overwritten per run: assumes one flow at a time (last run wins).
     output = REPORT_ROOT / f"{target}-gate.md"
+    gate_started_at = prepare_gate_output(output, dry_run=dry_run)
     prompt = render_prompt(
         "gate_review.md",
         {
@@ -508,6 +531,8 @@ def run_gate_review(
             "TARGET": target,
             "BRANCH_NAME": names["api_branch"] if target == "backend" else names["web_branch"],
             "SKILL_ROUTING": routing_text("gate", target),
+            "VERIFICATION_EVIDENCE": verification_evidence_text(verification),
+            "TDD_EVIDENCE_PATH": f".codex/harness/evidence/{names['work_id']}.md",
         },
     )
     command = [
@@ -524,12 +549,46 @@ def run_gate_review(
     result = run_cmd(command, DEFAULT_MAIN, dry_run=dry_run)
     if result["status"] == "fail":
         raise RuntimeError(f"{target} gate review failed: {result['summary']}")
-    if not dry_run and output.exists():
-        text = output.read_text(encoding="utf-8", errors="replace")
-        if re.search(r"상태:\s*Fail", text):
-            raise RuntimeError(f"{target} gate review returned Fail")
+    if not dry_run:
+        text = read_fresh_gate_output(output, gate_started_at)
+        evidence = parse_gate_review(text)
+        result["evidence"] = evidence
+        if not gate_allows_publish(evidence):
+            raise RuntimeError(
+                f"{target} gate review is not publishable: "
+                f"status={evidence['status']}, reviewer={evidence['reviewer_findings']}, "
+                f"security={evidence['security_findings']}, contract={evidence['contract_decision']}"
+            )
     result["output_path"] = str(output)
     return result
+
+
+def prepare_gate_output(output: Path, *, dry_run: bool) -> int:
+    if dry_run:
+        return 0
+    if output.exists() or output.is_symlink():
+        try:
+            output.unlink()
+        except OSError as exc:
+            raise RuntimeError(f"gate review output을 초기화할 수 없습니다: {output}: {exc}") from exc
+    if output.exists() or output.is_symlink():
+        raise RuntimeError(f"gate review output이 초기화되지 않았습니다: {output}")
+    return time.time_ns()
+
+
+def read_fresh_gate_output(output: Path, started_at_ns: int) -> str:
+    if output.is_symlink() or not output.is_file():
+        raise RuntimeError(f"gate review output이 생성되지 않았거나 regular file이 아닙니다: {output}")
+    try:
+        stat = output.stat()
+        text = output.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        raise RuntimeError(f"gate review output을 읽을 수 없습니다: {output}: {exc}") from exc
+    if stat.st_mtime_ns < started_at_ns:
+        raise RuntimeError(f"gate review output이 현재 실행보다 오래됐습니다: {output}")
+    if not text.strip():
+        raise RuntimeError(f"gate review output이 비어 있습니다: {output}")
+    return text
 
 
 def output_text(result: dict[str, Any]) -> str:
@@ -540,6 +599,117 @@ def output_text(result: dict[str, Any]) -> str:
     if not path.exists():
         return ""
     return path.read_text(encoding="utf-8", errors="replace")
+
+
+GATE_OUTPUT_LABELS = (
+    "상태",
+    "최초 RED",
+    "예상 RED 실패",
+    "최소 GREEN",
+    "검증",
+    "리뷰",
+    "reviewer",
+    "계약 영향",
+    "contract-reviewer",
+    "보안 영향",
+    "security-audit",
+    "주요 위험",
+    "다음 행동",
+)
+
+
+def _is_gate_label_line(line: str) -> bool:
+    return any(re.match(rf"^[ \t]*{re.escape(label)}[ \t]*:", line) for label in GATE_OUTPUT_LABELS)
+
+
+def _gate_value(text: str, label: str) -> str:
+    matches = list(
+        re.finditer(rf"^[ \t]*{re.escape(label)}[ \t]*:[ \t]*(.*?)[ \t]*$", text, re.MULTILINE)
+    )
+    if len(matches) != 1:
+        return ""
+    inline = matches[0].group(1).strip()
+    if inline:
+        return inline
+    for line in text[matches[0].end() :].splitlines():
+        value = line.strip()
+        if not value:
+            continue
+        if _is_gate_label_line(line):
+            return ""
+        return value
+    return ""
+
+
+def _unique_gate_choice(text: str, pattern: str, fallback: str) -> str:
+    matches = re.findall(pattern, text, re.MULTILINE)
+    return matches[0] if len(matches) == 1 else fallback
+
+
+def parse_gate_review(text: str) -> dict[str, str]:
+    return {
+        "status": _unique_gate_choice(text, r"^\s*상태\s*:\s*(Pass|Partial|Fail)\s*$", "Partial"),
+        "first_red": _gate_value(text, "최초 RED"),
+        "expected_red": _gate_value(text, "예상 RED 실패"),
+        "minimum_green": _gate_value(text, "최소 GREEN"),
+        "verification_review": _gate_value(text, "검증"),
+        "review": _gate_value(text, "리뷰"),
+        "reviewer_findings": _unique_gate_choice(
+            text, r"^\s*reviewer\s*:\s*지적사항\s*=\s*(none|listed)\s*$", "listed"
+        ),
+        "security_findings": _unique_gate_choice(
+            text, r"^\s*security-audit\s*:\s*지적사항\s*=\s*(none|listed)\s*$", "listed"
+        ),
+        "contract_decision": _unique_gate_choice(
+            text,
+            r"^\s*contract-reviewer\s*:\s*게이트 결정\s*=\s*(Pass|Partial|Fail)\s*$",
+            "Partial",
+        ),
+        "contract_impact": _gate_value(text, "계약 영향"),
+        "main_risk": _gate_value(text, "주요 위험"),
+        "security_impact": _gate_value(text, "보안 영향"),
+        "next_action": _gate_value(text, "다음 행동"),
+    }
+
+
+def gate_allows_publish(evidence: dict[str, str]) -> bool:
+    required_sections = (
+        "first_red",
+        "expected_red",
+        "minimum_green",
+        "verification_review",
+        "review",
+        "contract_impact",
+        "security_impact",
+        "main_risk",
+        "next_action",
+    )
+    return (
+        evidence.get("status") == "Pass"
+        and evidence.get("reviewer_findings") == "none"
+        and evidence.get("security_findings") == "none"
+        and evidence.get("contract_decision") == "Pass"
+        and all(str(evidence.get(key) or "").strip() for key in required_sections)
+    )
+
+
+def tdd_evidence_payload(work_id: str) -> dict[str, str]:
+    path = DEFAULT_MAIN / ".codex" / "harness" / "evidence" / f"{work_id}.md"
+    if not path.exists():
+        return {"first_red": "", "expected_red": "", "minimum_green": ""}
+    text = path.read_text(encoding="utf-8", errors="replace")
+    labels = {
+        "first_red": "최초 RED",
+        "expected_red": "예상 RED 실패",
+        "minimum_green": "최소 GREEN",
+    }
+    return {
+        key: " | ".join(
+            match.group(1).strip()
+            for match in re.finditer(rf"^\s*-\s*{re.escape(label)}\s*:\s*(.+)$", text, re.MULTILINE)
+        )
+        for key, label in labels.items()
+    }
 
 
 def evidence_text(results: dict[str, Any]) -> str:
@@ -666,7 +836,7 @@ def execute_target(
     if codex_result["status"] == "fail":
         raise RuntimeError(f"{target} codex exec failed: {codex_result['summary']}")
     verification = verify_target(target, worktree, args, dry_run=dry_run)
-    gate = run_gate_review(target, worktree, args, names, dry_run=dry_run)
+    gate = run_gate_review(target, worktree, args, names, verification, dry_run=dry_run)
     commit = None
     if args.commit and not args.no_commit:
         commit = commit_target(target, worktree, branch, names["work_id"], args, dry_run=dry_run)
@@ -674,7 +844,7 @@ def execute_target(
         "status": "pass",
         "codex": {k: codex_result.get(k) for k in ("status", "exit_code", "summary", "output_path")},
         "verification": verification,
-        "gate": {k: gate.get(k) for k in ("status", "exit_code", "summary", "output_path")},
+        "gate": {k: gate.get(k) for k in ("status", "exit_code", "summary", "output_path", "evidence")},
         "commit": commit,
     }
 
@@ -936,14 +1106,14 @@ def pr_title(args: argparse.Namespace, names: dict[str, Any]) -> str:
     return args.pr_title or default_pr_title(names["work_id"])
 
 
-def call_pr(
+def build_pr_command(
     args: argparse.Namespace,
     names: dict[str, Any],
     payload_path: Path,
     body_path: Path,
     *,
     dry_run: bool,
-) -> dict[str, Any]:
+) -> list[str]:
     command = [
         sys.executable,
         str(PR_SCRIPT),
@@ -958,6 +1128,8 @@ def call_pr(
         "--payload-json",
         str(payload_path),
         "--draft",
+        "--main-worktree",
+        str(DEFAULT_MAIN),
     ]
     if dry_run:
         command.append("--dry-run")
@@ -965,6 +1137,18 @@ def call_pr(
         command.append("--notion")
     if args.slack:
         command.append("--slack")
+    return command
+
+
+def call_pr(
+    args: argparse.Namespace,
+    names: dict[str, Any],
+    payload_path: Path,
+    body_path: Path,
+    *,
+    dry_run: bool,
+) -> dict[str, Any]:
+    command = build_pr_command(args, names, payload_path, body_path, dry_run=dry_run)
     result = run_cmd(command, DEFAULT_MAIN, dry_run=False)
     if dry_run and result.get("stdout"):
         print(str(result["stdout"]).rstrip())
@@ -1069,6 +1253,17 @@ def build_payload(
         integration_files = expected_changed_files_for_targets(targets, args)
         changed_files_kind = "expected"
     required_evidence = required_evidence_payload(integration_files)
+    gate_reviews = {
+        target: target_result.get("gate", {}).get("evidence", {})
+        for target, target_result in results.items()
+        if isinstance(target_result, dict) and target_result.get("gate", {}).get("evidence")
+    }
+    tdd_evidence = tdd_evidence_payload(names["work_id"])
+    verification_gaps = [
+        str(evidence.get("main_risk"))
+        for evidence in gate_reviews.values()
+        if evidence.get("main_risk") and str(evidence.get("main_risk")).lower() not in {"none", "없음"}
+    ]
     if targets:
         skill_routing = {
             "execute": routing_payload("execute", targets),
@@ -1128,6 +1323,9 @@ def build_payload(
         "lint_policy": "feasibility" if args.dry_run and (args.push or args.pr) else "strict" if (args.push or args.pr) else "not applicable",
         "skill_routing": skill_routing,
         "gate_review": f"{'/'.join(targets)} gate review completed" if results else "planning-only; not run",
+        "gate_reviews": gate_reviews,
+        "tdd_evidence": tdd_evidence,
+        "verification_gaps": verification_gaps,
         "contract_risks": [],
         "residual_risks": [] if not risk else [risk],
         "security_risks": [],
@@ -1378,8 +1576,10 @@ def build_parser() -> argparse.ArgumentParser:
 def run_self_test() -> int:
     try:
         resolved, _ = resolve_preset("map-contract-hardening")
+        _, operating_platform_preset = resolve_preset("operating-platform-hardening")
     except PresetError:
         resolved = ""
+        operating_platform_preset = {}
     parser = build_parser()
     pr_args = parser.parse_args(["run", "--work-id", "map-contract-hardening", "--pr", "--dry-run"])
     worklog_pr_args = parser.parse_args(["run", "--work-id", "self-test-fixture", "--pr", "--dry-run"])
@@ -1393,6 +1593,13 @@ def run_self_test() -> int:
         {},
         {"status": "pass", "exit_code": 0, "summary": "merged targets: backend, frontend", "verification": {}},
         "Pass",
+    )
+    pr_publish_command = build_pr_command(
+        pr_args,
+        pr_names,
+        Path("/tmp/self-test-payload.json"),
+        Path("/tmp/self-test-pr-body.md"),
+        dry_run=True,
     )
     body = render_pr_body(
         {
@@ -1423,7 +1630,129 @@ def run_self_test() -> int:
             "TARGET": "backend",
             "BRANCH_NAME": "feat/api-self-test",
             "SKILL_ROUTING": routing_text("gate", "backend"),
+            "VERIFICATION_EVIDENCE": verification_evidence_text(
+                {"git diff --check": {"status": "pass", "exit_code": 0}}
+            ),
+            "TDD_EVIDENCE_PATH": ".codex/harness/evidence/self-test.md",
         },
+    )
+    parsed_partial_gate = parse_gate_review(
+        """상태: Partial
+최초 RED: 실제 RED
+예상 RED 실패: 예상 실패
+최소 GREEN: 최소 구현
+reviewer: 지적사항 = listed
+security-audit: 지적사항 = none
+contract-reviewer: 게이트 결정 = Pass
+주요 위험: cursor 검증 공백
+"""
+    )
+    parsed_contradictory_gate = parse_gate_review(
+        """상태: Pass
+리뷰: 설명에 reviewer: 지적사항 = none 문자열이 포함됨
+reviewer: 지적사항 = listed
+security-audit: 지적사항 = none
+contract-reviewer: 게이트 결정 = Pass
+"""
+    )
+    parsed_duplicate_status_gate = parse_gate_review(
+        """상태: Pass
+상태: Fail
+reviewer: 지적사항 = none
+security-audit: 지적사항 = none
+contract-reviewer: 게이트 결정 = Pass
+"""
+    )
+    parsed_incomplete_gate = parse_gate_review(
+        """상태: Pass
+reviewer: 지적사항 = none
+security-audit: 지적사항 = none
+contract-reviewer: 게이트 결정 = Pass
+"""
+    )
+    parsed_complete_gate = parse_gate_review(
+        """상태: Pass
+최초 RED:
+필수 section 누락 fixture가 publish gate를 통과했다.
+예상 RED 실패:
+의사결정 필드만 있으면 검증 근거 없이 publish 가능했다.
+최소 GREEN:
+필수 section을 유일하고 비어 있지 않게 검증한다.
+검증:
+self-test가 통과했다.
+리뷰:
+필수 section parser를 확인했다.
+reviewer: 지적사항 = none
+계약 영향:
+public API 변경 없음
+contract-reviewer: 게이트 결정 = Pass
+보안 영향:
+권한 변경 없음
+security-audit: 지적사항 = none
+주요 위험:
+실제 publish는 별도 dry-run으로 확인한다.
+다음 행동:
+integration branch를 생성한다.
+"""
+    )
+    parsed_empty_sections_gate = parse_gate_review(
+        """상태: Pass
+최초 RED:
+예상 RED 실패:
+최소 GREEN:
+검증:
+리뷰:
+reviewer: 지적사항 = none
+contract-reviewer: 게이트 결정 = Pass
+security-audit: 지적사항 = none
+다음 행동:
+"""
+    )
+    parsed_missing_impact_gate = parse_gate_review(
+        """상태: Pass
+최초 RED: 실제 RED
+예상 RED 실패: 예상 실패
+최소 GREEN: 최소 구현
+검증: self-test 통과
+리뷰: 지적사항 없음
+reviewer: 지적사항 = none
+contract-reviewer: 게이트 결정 = Pass
+security-audit: 지적사항 = none
+다음 행동: integration branch 생성
+"""
+    )
+    parsed_duplicate_contract_impact_gate = parse_gate_review(
+        """상태: Pass
+최초 RED: 실제 RED
+예상 RED 실패: 예상 실패
+최소 GREEN: 최소 구현
+검증: self-test 통과
+리뷰: 지적사항 없음
+reviewer: 지적사항 = none
+계약 영향: public API 변경 없음
+계약 영향: public API 영향 재검토 필요
+contract-reviewer: 게이트 결정 = Pass
+보안 영향: 권한 변경 없음
+security-audit: 지적사항 = none
+주요 위험: 실제 배포 검증 미실시
+다음 행동: integration branch 생성
+"""
+    )
+    parsed_empty_security_impact_gate = parse_gate_review(
+        """상태: Pass
+최초 RED: 실제 RED
+예상 RED 실패: 예상 실패
+최소 GREEN: 최소 구현
+검증: self-test 통과
+리뷰: 지적사항 없음
+reviewer: 지적사항 = none
+계약 영향: public API 변경 없음
+contract-reviewer: 게이트 결정 = Pass
+보안 영향:
+security-audit: 지적사항 = none
+주요 위험: 실제 배포 검증 미실시
+다음 행동: integration branch 생성
+"""
     )
     invalid_branch_blocked = False
     try:
@@ -1460,11 +1789,32 @@ def run_self_test() -> int:
         prune_dry_kept = sorted(path.name for path in tmp_root.iterdir())
         prune_removed = prune_reports(root=tmp_root, statuses=prune_statuses)
         prune_remaining = sorted(path.name for path in tmp_root.iterdir())
+    with tempfile.TemporaryDirectory() as tmp_gate_output:
+        gate_output = Path(tmp_gate_output) / "backend-gate.md"
+        gate_output.write_text("stale", encoding="utf-8")
+        gate_started_at = prepare_gate_output(gate_output, dry_run=False)
+        stale_gate_removed = not gate_output.exists()
+        missing_gate_blocked = False
+        try:
+            read_fresh_gate_output(gate_output, gate_started_at)
+        except RuntimeError:
+            missing_gate_blocked = True
+        gate_output.write_text("상태: Pass", encoding="utf-8")
+        stale_timestamp = max(0, gate_started_at - 1)
+        os.utime(gate_output, ns=(stale_timestamp, stale_timestamp))
+        stale_gate_blocked = False
+        try:
+            read_fresh_gate_output(gate_output, gate_started_at)
+        except RuntimeError:
+            stale_gate_blocked = True
     checks = [
         sorted(prune_dry_removed) == ["done-item-pr-body.md", "done-item.json", "orphan-old.md"],
         len(prune_dry_kept) == 5,
         sorted(prune_removed) == ["done-item-pr-body.md", "done-item.json", "orphan-old.md"],
         prune_remaining == ["active-item.json", "orphan.md"],
+        stale_gate_removed,
+        missing_gate_blocked,
+        stale_gate_blocked,
         report_work_id("done-item-backend-gate.md", prune_statuses) == "done-item",
         report_work_id("unrelated.md", prune_statuses) is None,
         report_work_id(payload_path_for("Self Test").name, {"self-test": "done"}) == "self-test",
@@ -1478,6 +1828,7 @@ def run_self_test() -> int:
         invalid_branch_blocked,
         pr_payload["commands"]["main_merge_command"] == "not suggested; review and merge through GitHub PR manually",
         pr_payload["commands"]["push_command_suggestion"] == "handled by --pr after integration succeeds",
+        pr_publish_command[-3:] == ["--main-worktree", str(DEFAULT_MAIN), "--dry-run"],
         pr_payload["next_action"].startswith("dry-run 결과와 PR lint preflight"),
         "llm-replan" in PLANNING_MODES,
         fixture_worklog_title == "[Test] 셀프테스트 픽스처 제목",
@@ -1506,6 +1857,33 @@ def run_self_test() -> int:
         "$api-contract [checkpoint]" in prompt,
         "{{SKILL_ROUTING}}" not in prompt,
         "Explicit `--pr` may push only the generated `feat/*-integration` branch." in gate_prompt,
+        "- reviewer: 지적사항 = none|listed" in gate_prompt,
+        "- contract-reviewer: 게이트 결정 = Pass|Partial|Fail" in gate_prompt,
+        "- `git diff --check` = pass (harness 실행 완료, exit=0)" in gate_prompt,
+        ".codex/harness/evidence/self-test.md" in gate_prompt,
+        "{{VERIFICATION_EVIDENCE}}" not in gate_prompt,
+        "{{TDD_EVIDENCE_PATH}}" not in gate_prompt,
+        parsed_partial_gate["status"] == "Partial",
+        parsed_partial_gate["reviewer_findings"] == "listed",
+        parsed_partial_gate["first_red"] == "실제 RED",
+        not gate_allows_publish(parsed_partial_gate),
+        parsed_contradictory_gate["reviewer_findings"] == "listed",
+        not gate_allows_publish(parsed_contradictory_gate),
+        parsed_duplicate_status_gate["status"] == "Partial",
+        not gate_allows_publish(parsed_duplicate_status_gate),
+        not gate_allows_publish(parsed_incomplete_gate),
+        gate_allows_publish(parsed_complete_gate),
+        not gate_allows_publish(parsed_empty_sections_gate),
+        not gate_allows_publish(parsed_missing_impact_gate),
+        not gate_allows_publish(parsed_duplicate_contract_impact_gate),
+        not gate_allows_publish(parsed_empty_security_impact_gate),
+        HARNESS_REPORT_SELF_TEST
+        in operating_platform_preset.get("targets", {}).get("backend", {}).get("verification_commands", []),
+        HARNESS_PR_SELF_TEST
+        in operating_platform_preset.get("targets", {}).get("backend", {}).get("verification_commands", []),
+        KNOWN_VERIFICATION_COMMANDS["backend"][DIFF_CHECK][1] == ["git", "diff", "--check"],
+        KNOWN_VERIFICATION_COMMANDS["backend"]["git diff --check main...HEAD"][1]
+        == ["git", "diff", "--check", "main...HEAD"],
     ]
     if all(checks):
         print("self-test passed: home_flow")

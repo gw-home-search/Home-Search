@@ -597,14 +597,14 @@ User-service deployment는 fresh-only다.
 
 ```bash
 ./ops/user-deployment-preflight.sh before 6
-./ops/user-flyway.sh migrate 5
+./ops/user-flyway.sh migrate 6
 ./ops/user-deployment-preflight.sh after 6
 ./ops/user-flyway.sh validate
 ```
 
 preflight는 pinned PostgreSQL client의 read-only catalog probe로
 `current_database()`와 service relation/history를 확인한다. `before`는 empty
-database만, `after`는 migration versions 1 through 5가 각각 정확히 한 건의 `SQL`/`Success`이고
+database만, `after`는 migration versions 1 through 6이 각각 정확히 한 건의 `SQL`/`Success`이고
 `validate -outputType=json`이 성공한 경우만 허용한다. snapshot, JDBC,
 Baseline, Deleted, Out of Order, Missing, Ignored, duplicate, failed history는
 exit `2`로 중단하며 credential은 stdout/stderr/evidence에 기록하지 않는다.
@@ -782,6 +782,15 @@ HOME_PLACE_KAKAO_DAILY_REQUEST_BUDGET=10000
 HOME_PLACE_KAKAO_CONNECT_TIMEOUT=1s
 HOME_PLACE_KAKAO_READ_TIMEOUT=2s
 HOME_PLACE_KAKAO_EXECUTOR_THREADS=4
+```
+
+Local compose에서 주변시설을 사용할 때는 저장소 루트의 gitignored `.env`에
+다음 두 값만 실제 credential로 설정하고 `docker compose --env-file .env`로
+실행한다. 실제 key를 tracked example, `VITE_*`, image, log에 넣지 않는다.
+
+```text
+HOME_PLACE_KAKAO_ENABLED=true
+KAKAO_REST_API_KEY=<Kakao REST API key>
 ```
 
 The feature is disabled by default. Enabling it requires a Kakao app with Local

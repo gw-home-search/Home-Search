@@ -87,7 +87,11 @@ run "private_encrypted_staging_foundation" {
     error_message = "Every taggable staging resource must inherit the six required ownership and data-class tags."
   }
   assert {
-    condition     = length(aws_secretsmanager_secret.container) == 18 && aws_kms_key.data.enable_key_rotation
+    condition = (
+      length(aws_secretsmanager_secret.container) == 19
+      && contains(keys(aws_secretsmanager_secret.container), "kakao-local-provider")
+      && aws_kms_key.data.enable_key_rotation
+    )
     error_message = "External, transition, and workload-specific secret containers must use the rotating staging KMS key."
   }
   assert {

@@ -784,6 +784,15 @@ HOME_PLACE_KAKAO_READ_TIMEOUT=2s
 HOME_PLACE_KAKAO_EXECUTOR_THREADS=4
 ```
 
+Local compose에서 주변시설을 사용할 때는 저장소 루트의 gitignored `.env`에
+다음 두 값만 실제 credential로 설정하고 `docker compose --env-file .env`로
+실행한다. 실제 key를 tracked example, `VITE_*`, image, log에 넣지 않는다.
+
+```text
+HOME_PLACE_KAKAO_ENABLED=true
+KAKAO_REST_API_KEY=<Kakao REST API key>
+```
+
 The feature is disabled by default. Enabling it requires a Kakao app with Local
 API use enabled, Redis connectivity, and a deployment-time daily budget below
 the provider quota. The shared executor uses four workers by default (bounded

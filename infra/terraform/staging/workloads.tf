@@ -32,6 +32,7 @@ locals {
         { name = "SPRING_DATA_REDIS_HOST", value = aws_elasticache_replication_group.this.primary_endpoint_address },
         { name = "SPRING_DATA_REDIS_PORT", value = "6379" },
         { name = "SPRING_DATA_REDIS_SSL_ENABLED", value = "true" },
+        { name = "HOME_PLACE_KAKAO_ENABLED", value = "true" },
         { name = "HOME_NEWS_PUBLIC_ENABLED", value = tostring(var.enable_market_news_public) },
         { name = "HOME_PREDICTION_ENABLED", value = tostring(var.enable_ml) },
         { name = "HOME_PREDICTION_CLIENT_BASE_URL", value = "http://ml.${local.namespace_name}:8001" },
@@ -45,6 +46,7 @@ locals {
       secrets = [
         { name = "DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["property-runtime-db"].arn}:password::" },
         { name = "COORDINATE_SOURCE_DB_PASSWORD", valueFrom = "${aws_secretsmanager_secret.container["coordinate-reader-db"].arn}:password::" },
+        { name = "KAKAO_REST_API_KEY", valueFrom = "${aws_secretsmanager_secret.container["kakao-local-provider"].arn}:rest_api_key::" },
       ]
       key_secrets = [
         { name = "PUBLIC_KEY_PEM", valueFrom = "${aws_secretsmanager_secret.container["admin-internal-jwt-public"].arn}:public_key_pem::" },

@@ -37,7 +37,7 @@ locals {
     "property-migrator-db", "admin-migrator-db", "user-migrator-db",
   ])
   workload_execution_secret_names = {
-    property-api               = ["property-runtime-db", "coordinate-reader-db", "admin-internal-jwt-public"]
+    property-api               = ["property-runtime-db", "coordinate-reader-db", "admin-internal-jwt-public", "kakao-local-provider"]
     admin-api                  = ["admin-runtime-db", "admin-internal-jwt"]
     user-api                   = ["user-runtime-db", "oauth-providers", "user-jwt"]
     user-insight-worker        = ["user-runtime-db"]

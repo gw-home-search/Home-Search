@@ -61,6 +61,13 @@ critical_gate_passed="$(
   ' "$vulnerability_dir/summary.json"
 )"
 [[ "$critical_gate_passed" == "true" ]]
+policy_gate_passed="$(
+  jq -er '
+    .policy_gate_passed
+    | select(type == "boolean")
+  ' "$vulnerability_dir/summary.json"
+)"
+[[ "$policy_gate_passed" == "true" ]]
 
 tmp="$(mktemp)"
 cleanup() { unlink "$tmp" 2>/dev/null || true; }
@@ -70,15 +77,18 @@ jq \
   --arg sbom_set_sha256 "$sbom_set_sha256" \
   --arg vulnerability_set_sha256 "$vulnerability_set_sha256" \
   --argjson critical_gate_passed "$critical_gate_passed" \
+  --argjson policy_gate_passed "$policy_gate_passed" \
   '.sbom_set_sha256 = $sbom_set_sha256
    | .vulnerability_set_sha256 = $vulnerability_set_sha256
-   | .vulnerability_critical_gate_passed = $critical_gate_passed' \
+   | .vulnerability_critical_gate_passed = $critical_gate_passed
+   | .vulnerability_policy_gate_passed = $policy_gate_passed' \
   "$manifest" >"$tmp"
 
 jq -e '
   (.sbom_set_sha256 | test("^[0-9a-f]{64}$")) and
   (.vulnerability_set_sha256 | test("^[0-9a-f]{64}$")) and
-  .vulnerability_critical_gate_passed == true
+  .vulnerability_critical_gate_passed == true and
+  .vulnerability_policy_gate_passed == true
 ' "$tmp" >/dev/null
 
 mv "$tmp" "$manifest"

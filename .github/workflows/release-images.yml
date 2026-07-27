@@ -113,8 +113,11 @@ jobs:
               scan_failed=1
             fi
           done < <(jq -r '.images | to_entries[] | [.key,.value.uri] | @tsv' release-evidence/release-manifest.json)
-          jq -n --argjson passed "$((1 - scan_failed))" \
-            '{scanner:"grype",critical_gate_passed:($passed == 1)}' >release-evidence/vulnerability/summary.json
+          if ! infra/release/verify-vulnerability-policy.sh \
+            release-evidence/vulnerability \
+            infra/release/vulnerability-exceptions.json; then
+            scan_failed=1
+          fi
           if [[ "${scan_failed}" -eq 0 ]]; then
             .github/scripts/finalize-release-evidence.sh \
               release-evidence/release-manifest.json \

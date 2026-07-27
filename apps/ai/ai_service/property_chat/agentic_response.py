@@ -45,14 +45,19 @@ def build_agentic_response(
         }
     artifacts = [artifact] if artifact is not None else []
     selected_ids = [row.complex_id for row in decision.rows]
+    today = date.today().isoformat()
     citations = [
-        {"factId": fact_id, "sourceType": "INTERNAL_VERIFIED_FACT",
-         "sourceName": "Home Search 검증 read model", "sourceUrl": None}
-        for fact_id in dict.fromkeys(decision.fact_ids)
+        {"citationId": f"citation-{index}", "sourceId": "property.ai_read",
+         "sourceName": "Home Search 검증 read model", "sourceUrl": None,
+         "evidenceGrade": "A", "datasetVersion": "agentic-recommendation-v1",
+         "dataAsOf": today, "observedAt": None, "factIds": [fact_id]}
+        for index, fact_id in enumerate(dict.fromkeys(decision.fact_ids), 1)
     ] + [
-        {"factId": citation.fact_id, "sourceType": "OFFICIAL_WEB",
-         "sourceName": citation.title, "sourceUrl": citation.url}
-        for citation in decision.web_citations
+        {"citationId": f"citation-web-{index}", "sourceId": "official.web",
+         "sourceName": citation.title, "sourceUrl": citation.url,
+         "evidenceGrade": "D", "datasetVersion": None, "dataAsOf": today,
+         "observedAt": None, "factIds": [citation.fact_id]}
+        for index, citation in enumerate(decision.web_citations, 1)
     ]
     success = result.route != "minimal_fallback"
     return {
@@ -68,7 +73,7 @@ def build_agentic_response(
             "version": 2, "complexIds": selected_ids, "scopeKind": "RECOMMENDATION",
         } if 2 <= len(selected_ids) <= 5 else None),
         "uiActions": [], "uiArtifacts": artifacts, "uiSummary": None, "uiReport": None,
-        "requestId": request_id, "citations": citations, "dataAsOf": date.today().isoformat(),
+        "requestId": request_id, "citations": citations, "dataAsOf": today,
         "limitations": list(decision.limitations),
         "evidenceSummary": {
             "status": result.readiness, "capabilities": ["recommendation"],

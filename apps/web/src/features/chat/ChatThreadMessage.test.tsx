@@ -20,10 +20,11 @@ describe('챗봇 메시지 레이아웃', () => {
   });
 
   it('답변 생성 중에는 평평한 상태 문구만 제공한다', () => {
-    const html = renderToStaticMarkup(<ChatPendingMessage />);
+    const html = renderToStaticMarkup(<ChatPendingMessage message="근거 비교" />);
 
     expect(html).toContain('aria-live="polite"');
-    expect(html).toContain('데이터를 확인하고 있어요');
+    expect(html).toContain('role="status"');
+    expect(html).toContain('근거 비교');
     expect(html).not.toContain('avatar');
   });
 });

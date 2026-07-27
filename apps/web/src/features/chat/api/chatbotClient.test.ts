@@ -140,9 +140,9 @@ describe('챗봇 질문 client', () => {
       },
     });
 
-    expect(authenticatedRequest).toHaveBeenCalledWith('/api/v1/chatbot/query', expect.objectContaining({
+    expect(authenticatedRequest).toHaveBeenCalledWith('/api/v1/chatbot/query/stream', expect.objectContaining({
       method: 'POST',
-      headers: expect.objectContaining({ Accept: 'application/json', 'Content-Type': 'application/json' }),
+      headers: expect.objectContaining({ Accept: 'text/event-stream', 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         question: '잠실엘스 최근 거래',
         uiContext: {
@@ -185,6 +185,39 @@ describe('챗봇 질문 client', () => {
     });
     expect(response.report?.primaryArtifactId).toBe('artifact-1');
     expect(response.report?.actionIds).toEqual(['action-1']);
+  });
+
+  it('SSE status를 제한된 문구로 전달하고 validated final만 응답으로 사용한다', async () => {
+    const finalJson = await responseWithSummary(null).text();
+    const stream = [
+      'event: status',
+      'data: {"requestId":"request-1","code":"QUESTION_INTERPRETATION","message":"원문 포함"}',
+      '',
+      'event: answer_delta',
+      'data: {"requestId":"request-1","delta":"검증 전이면 무시"}',
+      '',
+      'event: status',
+      'data: {"requestId":"request-1","code":"ANSWER_VALIDATION","message":"원문 포함"}',
+      '',
+      'event: final',
+      `data: {"requestId":"request-1","response":${finalJson}}`,
+      '',
+      '',
+    ].join('\n');
+    const authenticatedRequest = vi.fn<AuthenticatedChatbotRequest>().mockResolvedValue(
+      new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } }),
+    );
+    const statuses: string[] = [];
+
+    const response = await queryChatbot(
+      authenticatedRequest,
+      { question: '송파 아파트 추천' },
+      (_code, message) => statuses.push(message),
+    );
+
+    expect(statuses).toEqual(['질문 해석', '답변 검증']);
+    expect(response.answer).toBe('text fallback');
+    expect(response.answer).not.toContain('검증 전이면 무시');
   });
 
   it('유효하지 않은 선택 단지는 버리고 유효한 viewport만 보낸다', async () => {

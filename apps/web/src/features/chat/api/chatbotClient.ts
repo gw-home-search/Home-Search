@@ -34,6 +34,17 @@ export type AuthenticatedChatbotRequest = (
   target?: 'user' | 'public',
 ) => Promise<Response>;
 
+export type ChatbotProgressCode = 'QUESTION_INTERPRETATION' | 'CANDIDATE_CHECK'
+  | 'EVIDENCE_COMPARISON' | 'OFFICIAL_SOURCE_CHECK' | 'ANSWER_VALIDATION';
+
+export const CHATBOT_PROGRESS_MESSAGES: Record<ChatbotProgressCode, string> = {
+  QUESTION_INTERPRETATION: '질문 해석',
+  CANDIDATE_CHECK: '후보 확인',
+  EVIDENCE_COMPARISON: '근거 비교',
+  OFFICIAL_SOURCE_CHECK: '공식 자료 확인',
+  ANSWER_VALIDATION: '답변 검증',
+};
+
 export async function queryChatbot(
   authenticatedRequest: AuthenticatedChatbotRequest,
   request: {
@@ -41,6 +52,7 @@ export async function queryChatbot(
     conversationContext?: ConversationContext;
     uiContext?: ChatUiContext;
   },
+  onStatus?: (code: ChatbotProgressCode, message: string) => void,
 ): Promise<ChatbotResponse> {
   const question = request.question.trim();
   if (question.length === 0 || question.length > 2_000) {
@@ -62,9 +74,9 @@ export async function queryChatbot(
   };
   let response: Response;
   try {
-    response = await authenticatedRequest('/api/v1/chatbot/query', {
+    response = await authenticatedRequest('/api/v1/chatbot/query/stream', {
       method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      headers: { Accept: 'text/event-stream', 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }, 'public');
   } catch (error) {
@@ -80,7 +92,10 @@ export async function queryChatbot(
     });
   }
   try {
-    const body: unknown = await response.json();
+    const body: unknown = response.headers.get('Content-Type')?.toLowerCase()
+      .includes('text/event-stream')
+      ? await readSseFinal(response, onStatus)
+      : await response.json();
     if (!isChatbotResponse(body)) {
       throw invalidResponseFailure({
         service: 'chatbot',
@@ -107,6 +122,79 @@ export async function queryChatbot(
       operation: 'chatbot-query',
     });
   }
+}
+
+async function readSseFinal(
+  response: Response,
+  onStatus?: (code: ChatbotProgressCode, message: string) => void,
+): Promise<unknown> {
+  if (response.body == null) throw invalidResponseFailure({
+    service: 'chatbot', operation: 'chatbot-query',
+  });
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finalResponse: unknown;
+  let finalCount = 0;
+
+  function consume(block: string) {
+    let event = '';
+    const dataLines: string[] = [];
+    for (const rawLine of block.split(/\r?\n/u)) {
+      if (rawLine.startsWith('event:')) event = rawLine.slice(6).trim();
+      else if (rawLine.startsWith('data:')) dataLines.push(rawLine.slice(5).trimStart());
+    }
+    if (event === '' || dataLines.length === 0) return;
+    let data: unknown;
+    try {
+      data = JSON.parse(dataLines.join('\n'));
+    } catch {
+      throw invalidResponseFailure({ service: 'chatbot', operation: 'chatbot-query' });
+    }
+    if (!isRecord(data)) throw invalidResponseFailure({
+      service: 'chatbot', operation: 'chatbot-query',
+    });
+    if (event === 'status') {
+      if (!isChatbotProgressCode(data.code)) throw invalidResponseFailure({
+        service: 'chatbot', operation: 'chatbot-query',
+      });
+      onStatus?.(data.code, CHATBOT_PROGRESS_MESSAGES[data.code]);
+      return;
+    }
+    if (event === 'answer_delta') return;
+    if (event === 'error') {
+      const code = typeof data.code === 'string' ? data.code : undefined;
+      throw new RequestFailureError({
+        kind: code === 'CHATBOT_TIMEOUT' ? 'timeout' : 'service-unavailable',
+        service: 'chatbot', operation: 'chatbot-query', ...(code ? { code } : {}),
+      });
+    }
+    if (event === 'final') {
+      finalCount += 1;
+      if (finalCount !== 1 || !('response' in data)) throw invalidResponseFailure({
+        service: 'chatbot', operation: 'chatbot-query',
+      });
+      finalResponse = data.response;
+    }
+  }
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const blocks = buffer.split(/\r?\n\r?\n/u);
+    buffer = blocks.pop() ?? '';
+    blocks.forEach(consume);
+    if (done) break;
+  }
+  if (buffer.trim()) consume(buffer);
+  if (finalCount !== 1) throw invalidResponseFailure({
+    service: 'chatbot', operation: 'chatbot-query',
+  });
+  return finalResponse;
+}
+
+function isChatbotProgressCode(value: unknown): value is ChatbotProgressCode {
+  return typeof value === 'string' && value in CHATBOT_PROGRESS_MESSAGES;
 }
 
 function isChatbotResponse(value: unknown): value is ChatbotWireResponse {

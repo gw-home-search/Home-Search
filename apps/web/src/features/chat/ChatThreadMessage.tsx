@@ -37,11 +37,11 @@ export function ChatThreadMessage({
   );
 }
 
-export function ChatPendingMessage() {
+export function ChatPendingMessage({ message = '질문 해석' }: { message?: string }) {
   return (
     <div aria-live="polite" className="chatbot-pending" role="status">
       <span aria-hidden="true" />
-      데이터를 확인하고 있어요
+      {message}
     </div>
   );
 }

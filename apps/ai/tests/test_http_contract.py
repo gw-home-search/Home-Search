@@ -304,6 +304,12 @@ def test_stream_emits_only_validated_final_event_after_success() -> None:
     )
 
     assert response.status_code == 200
+    assert response.text.count("event: status") == 4
+    assert '"code":"QUESTION_INTERPRETATION"' in response.text
+    assert '"code":"CANDIDATE_CHECK"' in response.text
+    assert '"code":"EVIDENCE_COMPARISON"' in response.text
+    assert '"code":"ANSWER_VALIDATION"' in response.text
+    assert "event: answer_delta" not in response.text
     assert "event: final" in response.text
     assert '"answer":"최근 거래 알려줘"' in response.text
     assert "event: error" not in response.text
@@ -324,11 +330,11 @@ def test_disabled_capability_has_same_unavailable_meaning_in_json_and_sse() -> N
         json=payload,
     )
 
-    final_data = next(
+    final_data = [
         json.loads(line.removeprefix("data: "))
         for line in stream_response.text.splitlines()
         if line.startswith("data: ")
-    )
+    ][-1]
     assert json_response.status_code == 200
     assert stream_response.status_code == 200
     assert "event: final" in stream_response.text
@@ -356,11 +362,11 @@ def test_compound_fragment_set_is_identical_in_json_and_sse_final() -> None:
     stream_response = client.post(
         "/api/v1/chatbot/query/stream", headers=headers, json=payload,
     )
-    final_data = next(
+    final_data = [
         json.loads(line.removeprefix("data: "))
         for line in stream_response.text.splitlines()
         if line.startswith("data: ")
-    )
+    ][-1]
 
     assert final_data["response"] == json_response.json()
     assert [fragment["status"] for fragment in json_response.json()["fragments"]] == [

@@ -1,5 +1,6 @@
 package com.home.chatbff.web;
 
+import com.home.chatbff.ai.ChatbotAiStreamEvent;
 import com.home.chatbff.ai.ChatbotGateway;
 import com.home.chatbff.ai.ChatbotProviderUnavailableException;
 import com.home.chatbff.ai.ChatbotTimeoutException;
@@ -8,6 +9,7 @@ import jakarta.validation.Valid;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
@@ -26,6 +28,12 @@ import tools.jackson.databind.node.ObjectNode;
 @RestController
 final class ChatbotController {
     private static final int ANSWER_DELTA_CODE_POINTS = 128;
+    private static final Set<String> STATUS_CODES = Set.of(
+            "QUESTION_INTERPRETATION",
+            "CANDIDATE_CHECK",
+            "EVIDENCE_COMPARISON",
+            "OFFICIAL_SOURCE_CHECK",
+            "ANSWER_VALIDATION");
 
     private final ChatbotGateway gateway;
     private final ObjectMapper objectMapper;
@@ -56,9 +64,10 @@ final class ChatbotController {
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
             ServerWebExchange exchange) {
         String requestId = RequestIdWebFilter.required(exchange);
-        return gateway.query(request, authorization, requestId, authenticatedUser(exchange))
-                .map(response -> withRequestId(response, requestId))
-                .flatMapMany(response -> successEvents(requestId, response))
+        return gateway.stream(request, authorization, requestId, authenticatedUser(exchange))
+                .takeUntil(upstream ->
+                        upstream.event().equals("final") || upstream.event().equals("error"))
+                .concatMap(upstream -> publicEvents(requestId, upstream))
                 .onErrorResume(
                         ChatbotProviderUnavailableException.class,
                         ignored -> Flux.just(errorEvent(requestId, "CHATBOT_PROVIDER_UNAVAILABLE", "답변을 생성하지 못했습니다.")))
@@ -68,6 +77,38 @@ final class ChatbotController {
                 .onErrorResume(
                         RuntimeException.class,
                         ignored -> Flux.just(errorEvent(requestId, "CHATBOT_PROVIDER_UNAVAILABLE", "답변을 생성하지 못했습니다.")));
+    }
+
+    private Flux<ServerSentEvent<JsonNode>> publicEvents(String requestId, ChatbotAiStreamEvent upstream) {
+        if (upstream.event().equals("status")) {
+            JsonNode code = upstream.data().get("code");
+            if (code == null || !code.isTextual() || !STATUS_CODES.contains(code.asText())) {
+                return Flux.error(new ChatbotProviderUnavailableException());
+            }
+            ObjectNode data = objectMapper.createObjectNode();
+            data.put("requestId", requestId);
+            data.put("code", code.asText());
+            data.put("message", statusMessage(code.asText()));
+            return Flux.just(event("status", data));
+        }
+        if (upstream.event().equals("final")) {
+            return successEvents(requestId, withRequestId(upstream.data(), requestId));
+        }
+        if (upstream.event().equals("error")) {
+            return Flux.error(new ChatbotProviderUnavailableException());
+        }
+        return Flux.empty();
+    }
+
+    private String statusMessage(String code) {
+        return switch (code) {
+            case "QUESTION_INTERPRETATION" -> "질문 해석";
+            case "CANDIDATE_CHECK" -> "후보 확인";
+            case "EVIDENCE_COMPARISON" -> "근거 비교";
+            case "OFFICIAL_SOURCE_CHECK" -> "공식 자료 확인";
+            case "ANSWER_VALIDATION" -> "답변 검증";
+            default -> throw new IllegalArgumentException("unsupported status code");
+        };
     }
 
     private VerifiedChatUser authenticatedUser(ServerWebExchange exchange) {

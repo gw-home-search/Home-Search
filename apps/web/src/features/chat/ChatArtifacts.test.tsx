@@ -241,6 +241,64 @@ describe('조건 추천표 artifact UI', () => {
       [base], new Set(['complex-503', 'childcare-503']),
     )).toEqual([]);
   });
+
+  it('v2는 후보·강점·tradeoff를 한 흐름에서 한 번씩 표시한다', () => {
+    const wire = {
+      type: 'recommendationTable', version: 2, artifactId: 'agentic-v2',
+      title: 'AI 근거 비교 후보', policyVersion: 'agentic-recommendation-v1',
+      basis: {
+        selectionMode: 'AGENTIC', scopeType: 'ADMIN_REGION', scopeLabel: '송파구',
+        requestedCount: 2, criteriaOrder: [], defaultPolicy: 'BALANCED_V1',
+      },
+      rows: [{
+        order: 1, complexId: 20, complexName: '나단지', role: 'BALANCED',
+        summary: '거래와 규모를 함께 비교했습니다.',
+        strengths: [{ text: '규모가 확인됩니다.', factIds: ['complex-20'] }],
+        tradeoffs: [{ text: '예산 적합성은 추가 확인이 필요합니다.', factIds: ['complex-20'] }],
+        metrics: {}, factIds: ['complex-20'],
+      }, {
+        order: 2, complexId: 10, complexName: '가단지', role: 'NEWER',
+        summary: '사용승인일을 함께 확인했습니다.',
+        strengths: [{ text: '상대적으로 최근 사용승인입니다.', factIds: ['complex-10'] }],
+        tradeoffs: [{ text: '최근 거래는 추가 확인이 필요합니다.', factIds: ['complex-10'] }],
+        metrics: {}, factIds: ['complex-10'],
+      }],
+    };
+
+    const parsed = readChatArtifacts([wire], new Set(['complex-20', 'complex-10']));
+    const html = renderToStaticMarkup(<ChatArtifacts artifacts={parsed} />);
+
+    expect(parsed).toHaveLength(1);
+    expect(html.match(/1\. 나단지/g)).toHaveLength(1);
+    expect(html.match(/2\. 가단지/g)).toHaveLength(1);
+    expect(html.match(/규모가 확인됩니다\./g)).toHaveLength(1);
+    expect(html).toContain('적용 기준 · 송파구 · 균형 비교(BALANCED_V1)');
+    expect(html).not.toContain('조건 기반 후보');
+    expect(html).not.toContain('먼저 볼 후보');
+  });
+
+  it('v2에 unknown field나 알 수 없는 factId가 있으면 text answer용으로 무시한다', () => {
+    const base = {
+      type: 'recommendationTable', version: 2, artifactId: 'agentic-invalid',
+      title: 'AI 근거 비교 후보', policyVersion: 'agentic-recommendation-v1',
+      basis: {
+        selectionMode: 'AGENTIC', scopeType: 'ADMIN_REGION', scopeLabel: '송파구',
+        requestedCount: 1, criteriaOrder: [], defaultPolicy: 'BALANCED_V1',
+      },
+      rows: [{
+        order: 1, complexId: 20, complexName: '나단지', role: 'BALANCED',
+        summary: '검증 근거 비교',
+        strengths: [{ text: '확인된 강점', factIds: ['unknown-fact'] }],
+        tradeoffs: [{ text: '확인된 tradeoff', factIds: ['complex-20'] }],
+        metrics: {}, factIds: ['complex-20'],
+      }],
+    };
+
+    expect(readChatArtifacts([base], new Set(['complex-20']))).toEqual([]);
+    expect(readChatArtifacts(
+      [{ ...base, unexpected: true }], new Set(['complex-20', 'unknown-fact']),
+    )).toEqual([]);
+  });
 });
 
 describe('후보 상세 artifact UI', () => {

@@ -116,7 +116,7 @@ export type RecommendationTableMetric = {
   factIds: string[];
 };
 
-export type RecommendationTableArtifact = {
+export type RecommendationTableArtifactV1 = {
   type: 'recommendationTable';
   version: 1;
   artifactId: string;
@@ -138,6 +138,39 @@ export type RecommendationTableArtifact = {
     factIds: string[];
   }>;
 };
+
+export type AgentRecommendationRole = 'BALANCED' | 'TRADE_ACTIVITY' | 'SCALE'
+  | 'NEWER' | 'TRANSIT' | 'EDUCATION' | 'LIFESTYLE';
+
+export type RecommendationTableArtifactV2 = {
+  type: 'recommendationTable';
+  version: 2;
+  artifactId: string;
+  title: string;
+  policyVersion: 'agentic-recommendation-v1';
+  basis: {
+    selectionMode: 'AGENTIC';
+    scopeType: 'ADMIN_REGION';
+    scopeLabel: string;
+    requestedCount: number;
+    criteriaOrder: Array<'TRADE_ACTIVITY' | 'SCALE' | 'NEWER' | 'TRANSIT' | 'EDUCATION' | 'LIFESTYLE'>;
+    defaultPolicy: 'BALANCED_V1';
+  };
+  rows: Array<{
+    order: number;
+    complexId: number;
+    complexName: string;
+    role: AgentRecommendationRole;
+    summary: string;
+    strengths: Array<{ text: string; factIds: string[] }>;
+    tradeoffs: Array<{ text: string; factIds: string[] }>;
+    metrics: Record<string, never>;
+    factIds: string[];
+  }>;
+};
+
+export type RecommendationTableArtifact = RecommendationTableArtifactV1
+  | RecommendationTableArtifactV2;
 
 export type CandidateProfileArtifact = {
   type: 'candidateProfile';
@@ -260,6 +293,18 @@ function readRecommendationTableArtifact(
   value: unknown,
   allowedFactIds: ReadonlySet<string>,
 ): RecommendationTableArtifact | null {
+  if (!isRecord(value) || value.type !== 'recommendationTable') return null;
+  return value.version === 1
+    ? readRecommendationTableArtifactV1(value, allowedFactIds)
+    : value.version === 2
+      ? readRecommendationTableArtifactV2(value, allowedFactIds)
+      : null;
+}
+
+function readRecommendationTableArtifactV1(
+  value: unknown,
+  allowedFactIds: ReadonlySet<string>,
+): RecommendationTableArtifactV1 | null {
   if (!isRecord(value)
     || !hasExactKeys(value, [
       'type', 'version', 'artifactId', 'title', 'policyVersion', 'basis', 'rows',
@@ -338,6 +383,112 @@ function readRecommendationTableArtifact(
     },
     rows,
   };
+}
+
+function readRecommendationTableArtifactV2(
+  value: unknown,
+  allowedFactIds: ReadonlySet<string>,
+): RecommendationTableArtifactV2 | null {
+  if (!isRecord(value)
+    || !hasExactKeys(value, [
+      'type', 'version', 'artifactId', 'title', 'policyVersion', 'basis', 'rows',
+    ])
+    || value.type !== 'recommendationTable'
+    || value.version !== 2
+    || !isIdentifier(value.artifactId)
+    || !isDisplayText(value.title, 100)
+    || value.policyVersion !== 'agentic-recommendation-v1'
+    || !isRecord(value.basis)
+    || !hasExactKeys(value.basis, [
+      'selectionMode', 'scopeType', 'scopeLabel', 'requestedCount',
+      'criteriaOrder', 'defaultPolicy',
+    ])
+    || value.basis.selectionMode !== 'AGENTIC'
+    || value.basis.scopeType !== 'ADMIN_REGION'
+    || !isDisplayText(value.basis.scopeLabel, 100)
+    || !isIntegerInRange(value.basis.requestedCount, 1, 5)
+    || !Array.isArray(value.basis.criteriaOrder)
+    || value.basis.criteriaOrder.length > 6
+    || !value.basis.criteriaOrder.every(isAgentCriterion)
+    || new Set(value.basis.criteriaOrder).size !== value.basis.criteriaOrder.length
+    || value.basis.defaultPolicy !== 'BALANCED_V1'
+    || !Array.isArray(value.rows)
+    || value.rows.length === 0
+    || value.rows.length > value.basis.requestedCount) return null;
+  const rows = value.rows.flatMap((row) => {
+    if (!isRecord(row)
+      || !hasExactKeys(row, [
+        'order', 'complexId', 'complexName', 'role', 'summary', 'strengths',
+        'tradeoffs', 'metrics', 'factIds',
+      ])
+      || !isIntegerInRange(row.order, 1, 5)
+      || !isIntegerInRange(row.complexId, 1, Number.MAX_SAFE_INTEGER)
+      || !isDisplayText(row.complexName, 100)
+      || !isAgentRole(row.role)
+      || !isDisplayText(row.summary, 2_000)
+      || !Array.isArray(row.strengths)
+      || row.strengths.length === 0
+      || row.strengths.length > 5
+      || !Array.isArray(row.tradeoffs)
+      || row.tradeoffs.length === 0
+      || row.tradeoffs.length > 5
+      || !isRecord(row.metrics)
+      || Object.keys(row.metrics).length !== 0
+      || !isFactIds(row.factIds, allowedFactIds, false)) return [];
+    const rowFactIds = new Set(row.factIds);
+    const strengths = readAgentFactTexts(row.strengths, allowedFactIds, rowFactIds);
+    const tradeoffs = readAgentFactTexts(row.tradeoffs, allowedFactIds, rowFactIds);
+    if (strengths == null || tradeoffs == null) return [];
+    return [{
+      order: row.order, complexId: row.complexId,
+      complexName: row.complexName.trim(), role: row.role,
+      summary: row.summary.trim(), strengths, tradeoffs,
+      metrics: {} as Record<string, never>, factIds: row.factIds,
+    }];
+  });
+  if (rows.length !== value.rows.length
+    || rows.some((row, index) => row.order !== index + 1)
+    || new Set(rows.map(({ complexId }) => complexId)).size !== rows.length) return null;
+  return {
+    type: 'recommendationTable', version: 2, artifactId: value.artifactId,
+    title: value.title.trim(), policyVersion: 'agentic-recommendation-v1',
+    basis: {
+      selectionMode: 'AGENTIC', scopeType: 'ADMIN_REGION',
+      scopeLabel: value.basis.scopeLabel.trim(), requestedCount: value.basis.requestedCount,
+      criteriaOrder: value.basis.criteriaOrder as RecommendationTableArtifactV2['basis']['criteriaOrder'],
+      defaultPolicy: 'BALANCED_V1',
+    },
+    rows,
+  };
+}
+
+function readAgentFactTexts(
+  values: unknown[],
+  allowedFactIds: ReadonlySet<string>,
+  rowFactIds: ReadonlySet<string>,
+): Array<{ text: string; factIds: string[] }> | null {
+  const parsed = values.flatMap((item) => {
+    if (!isRecord(item)
+      || !hasExactKeys(item, ['text', 'factIds'])
+      || !isDisplayText(item.text, 2_000)
+      || !isFactIds(item.factIds, allowedFactIds, false)
+      || !item.factIds.every((factId) => rowFactIds.has(factId))) return [];
+    return [{ text: item.text.trim(), factIds: item.factIds }];
+  });
+  return parsed.length === values.length ? parsed : null;
+}
+
+function isAgentRole(value: unknown): value is AgentRecommendationRole {
+  return value === 'BALANCED' || value === 'TRADE_ACTIVITY' || value === 'SCALE'
+    || value === 'NEWER' || value === 'TRANSIT' || value === 'EDUCATION'
+    || value === 'LIFESTYLE';
+}
+
+function isAgentCriterion(
+  value: unknown,
+): value is RecommendationTableArtifactV2['basis']['criteriaOrder'][number] {
+  return value === 'TRADE_ACTIVITY' || value === 'SCALE' || value === 'NEWER'
+    || value === 'TRANSIT' || value === 'EDUCATION' || value === 'LIFESTYLE';
 }
 
 function readRecommendationTableMetric(

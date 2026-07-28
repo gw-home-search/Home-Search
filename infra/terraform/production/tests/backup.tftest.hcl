@@ -1,0 +1,59 @@
+mock_provider "aws" {
+  mock_data "aws_availability_zones" { defaults = { names = ["ap-northeast-2a", "ap-northeast-2c"] } }
+  mock_data "aws_caller_identity" { defaults = { account_id = "123456789012" } }
+}
+
+mock_provider "aws" { alias = "backup" }
+
+run "five_database_backup_and_restore_testing" {
+  command = plan
+  variables {
+    owner                             = "platform"
+    client_vpn_cidr                   = "10.90.0.0/22"
+    operator_group_id                 = "operators"
+    client_vpn_server_certificate_arn = "arn:aws:acm:ap-northeast-2:123456789012:certificate/server"
+    client_vpn_saml_provider_arn      = "arn:aws:iam::123456789012:saml-provider/operators"
+    public_certificate_arn            = "arn:aws:acm:ap-northeast-2:123456789012:certificate/public"
+    monthly_budget_usd                = 5000
+    budget_notification_emails        = ["ops@example.invalid"]
+    alarm_topic_arn                   = "arn:aws:sns:ap-northeast-2:123456789012:alarms"
+  }
+
+  assert {
+    condition     = length(local.database_backup_resources) == 5
+    error_message = "All five production databases must be selected for AWS Backup."
+  }
+
+  assert {
+    condition = (
+      aws_backup_plan.database.name == "home-search-production-database"
+      && local.database_backup_retention.daily == 35
+      && local.database_backup_retention.monthly == 365
+    )
+    error_message = "Database backups must retain daily recovery points for 35 days and monthly recovery points for 12 months."
+  }
+
+  assert {
+    condition     = alltrue([for rule in aws_backup_plan.database.rule : length(rule.copy_action) == 1])
+    error_message = "Every database backup tier must copy an encrypted recovery point to Tokyo."
+  }
+
+  assert {
+    condition = (
+      aws_backup_restore_testing_plan.monthly.schedule_expression_timezone == "Asia/Seoul"
+      && aws_backup_restore_testing_selection.database.protected_resource_type == "RDS"
+      && aws_backup_restore_testing_selection.database.validation_window_hours >= 24
+      && contains(keys(aws_backup_restore_testing_selection.database.restore_metadata_overrides), "vpcSecurityGroupIds")
+      && contains(keys(aws_backup_restore_testing_selection.database.restore_metadata_overrides), "dbSubnetGroupName")
+    )
+    error_message = "A monthly RDS restore test with an explicit validation window is mandatory."
+  }
+
+  assert {
+    condition = (
+      strcontains(aws_iam_role_policy_attachment.backup_backup.policy_arn, "AWSBackupServiceRolePolicyForBackup")
+      && strcontains(aws_iam_role_policy_attachment.backup_restore.policy_arn, "AWSBackupServiceRolePolicyForRestores")
+    )
+    error_message = "The AWS Backup role needs the managed backup and restore service policies."
+  }
+}

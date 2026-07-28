@@ -13,6 +13,13 @@ that boundary. The customer-managed Grafana role is limited to read-only AMP,
 CloudWatch, and CloudWatch Logs queries; the workspace network boundary remains
 the VPN-only `grafana-workspace` endpoint.
 
+AWS Backup selects all five service databases. The primary Region keeps daily
+PITR recovery points for 35 days and monthly snapshots for 12 months; both
+tiers create KMS-encrypted copies in `ap-northeast-1`. A monthly restore test
+restores the latest RDS recovery point into the private data subnet and leaves
+a 24-hour validation window. Application checksum reconciliation remains a
+deployment evidence step after AWS Backup reports the restore job complete.
+
 Validation:
 
 ```bash

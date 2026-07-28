@@ -1,7 +1,9 @@
-fastapi>=0.103,<0.104
-pydantic>=1.10,<2
-typing_extensions>=4.4,<4.6
-uvicorn[standard]>=0.22,<0.30
-numpy>=1.24,<2
-tensorflow>=2.15,<2.16
-h5py>=3.8,<4
+fastapi>=0.140,<0.141
+pydantic>=2.13,<3
+typing_extensions>=4.15,<5
+uvicorn[standard]>=0.51,<0.52
+numpy>=2.2,<2.3
+tensorflow>=2.21,<2.22
+h5py>=3.14,<3.15
+setuptools>=80
+wheel>=0.46.2,<1

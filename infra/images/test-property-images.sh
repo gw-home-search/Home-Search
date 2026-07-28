@@ -27,7 +27,7 @@ assert_user "${flyway_image}"
 
 [[ "$(docker inspect --format '{{json .Config.Healthcheck.Test}}' "${api_image}")" != 'null' ]]
 docker run --rm --entrypoint sh "${api_image}" -c \
-  'command -v timeout >/dev/null && command -v bash >/dev/null'
+  'command -v sh >/dev/null && command -v wget >/dev/null'
 
 [[ "$(docker inspect --format '{{json .Config.Entrypoint}}' "${api_image}")" == '["java","-jar","/app/application.jar"]' ]]
 [[ "$(docker inspect --format '{{json .Config.Entrypoint}}' "${batch_image}")" == '["java","-jar","/app/application.jar"]' ]]
@@ -56,6 +56,7 @@ docker run --rm --entrypoint sh "${api_image}" -c \
 docker run --rm --entrypoint sh "${batch_image}" -c \
   'test -f /app/application.jar && test ! -e /flyway/sql && test "$(find /app -maxdepth 1 -type f | wc -l)" -eq 1'
 docker run --rm --entrypoint sh "${flyway_image}" -c \
-  'test -d /flyway/sql && test -f /flyway/conf/flyway.conf && test ! -e /app/application.jar'
+  'test -d /flyway/sql && test -f /flyway/conf/flyway.conf && test ! -e /app/application.jar && test ! -e /flyway/lib/aad && test ! -e /flyway/lib/opentelemetry && test ! -e /flyway/lib/oracle_wallet && test ! -e /flyway/lib/sqlfluff'
+docker run --rm "${flyway_image}" -v >/dev/null
 
 echo '상태: Pass - property API, batch, Flyway image의 command, JAR 경계, non-root를 확인했습니다.'

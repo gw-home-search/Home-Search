@@ -8,6 +8,7 @@ plugins {
 
 group = 'com.home'
 version = '0.0.1-SNAPSHOT'
+ext['netty.version'] = '4.2.16.Final'
 
 java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
 

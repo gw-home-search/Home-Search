@@ -11,6 +11,9 @@ group = 'com.home'
 version = '0.0.1-SNAPSHOT'
 description = 'Home Search property-data service'
 
+ext['netty.version'] = '4.2.16.Final'
+ext['postgresql.version'] = '42.7.12'
+
 spotless {
     java {
         target 'core/src/**/*.java', 'api/src/**/*.java', 'batch/src/**/*.java'

@@ -608,8 +608,10 @@ USER_MIGRATOR_DB_PASSWORD=... \
 
 `user-flyway.sh`는 `info`, `validate`, 숫자 target이 필수인 `migrate`만
 제공하고 `latest`, `clean`, `repair`, `baseline`, 임의 option을 거부한다.
-`redgate/flyway:12.4.0`과 read-only SQL/conf mount를 사용하며 migrator
-credential은 user-service runtime container에 전달하지 않는다.
+release migrator image는 pinned `redgate/flyway:13.0-alpine`에서 Flyway CLI를
+가져온 뒤 Corretto 21 Alpine runtime에 PostgreSQL driver와
+`info`/`migrate`/`validate` 필수 모듈만 남긴다. SQL/conf는 read-only로 다루며
+migrator credential은 user-service runtime container에 전달하지 않는다.
 
 User-service deployment는 fresh-only다.
 
@@ -632,6 +634,19 @@ exit `2`로 중단하며 credential은 stdout/stderr/evidence에 기록하지 �
 적용 직전 checksum과 Git diff를 증거로 고정하고, 적용 뒤에는 파일을 수정하지
 않으며 다음 version으로 변경한다. fresh PostgreSQL 검증은 `persistenceTest`와
 pinned Docker CLI smoke가 담당한다.
+
+## Release Image Security
+
+release runtime base는 digest로 고정한다. Java workload는 Corretto 21 Alpine,
+public/admin gateway는 Chainguard Nginx, AI는 Chainguard Python, ML·backup·bootstrap은
+Wolfi를 사용한다. release Grype gate는 Critical을 허용하지 않으며 High는
+`infra/release/vulnerability-exceptions.json`에 owner, ticket, 만료일이 모두 있는
+경우에만 한시적으로 허용한다.
+
+PG17 restore runtime의 `CVE-2026-8087` 예외는 issue `#265`로 추적하며
+2026-08-11에 만료된다. Production PostgreSQL 17.10과 다른 major의 PostGIS로
+우회하지 않고, PG17-compatible package/source build와 restore reconciliation을
+완료한 뒤 예외를 제거한다.
 
 ## Monitoring
 

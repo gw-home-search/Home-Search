@@ -53,6 +53,62 @@ if grep -Fq 'docker/setup-qemu-action@' "${release_workflow}"; then
   exit 1
 fi
 
+corretto_runtime='amazoncorretto:21-alpine@sha256:58c1d555f4ff3be0cfe90d3b4d1762bde080b57afbb71d48657b9d22748cad5b'
+for dockerfile in \
+  apps/property-data/api/Dockerfile \
+  apps/property-data/batch/Dockerfile \
+  apps/admin/service/Dockerfile \
+  apps/user/service/Dockerfile \
+  apps/source-data/Dockerfile \
+  apps/chat-bff/Dockerfile; do
+  if ! grep -Fq "FROM ${corretto_runtime}" "${dockerfile}"; then
+    echo "상태: Fail - ${dockerfile}의 Java runtime base가 검증된 digest로 고정되지 않았습니다." >&2
+    exit 1
+  fi
+done
+
+for dockerfile in apps/web/Dockerfile apps/admin/web/Dockerfile; do
+  grep -Fq 'cgr.dev/chainguard/nginx:latest-dev@sha256:22ee56150b99f1d1955637a96f1b0b9a9a6c047bbc48fe5e5b9004155f0e9087' \
+    "${dockerfile}" || {
+    echo "상태: Fail - ${dockerfile}의 gateway runtime base가 검증된 Chainguard digest가 아닙니다." >&2
+    exit 1
+  }
+done
+grep -Fq 'cgr.dev/chainguard/python:latest-dev@sha256:3be081f6cae8f1678609f6ae00b1dfebd6819c3ce75b7c574663af84afe99cc4' \
+  apps/ai/Dockerfile || {
+  echo '상태: Fail - AI runtime base가 검증된 Chainguard digest로 고정되지 않았습니다.' >&2
+  exit 1
+}
+for dockerfile in apps/ml/Dockerfile infra/backup/Dockerfile infra/bootstrap/Dockerfile; do
+  grep -Fq 'cgr.dev/chainguard/wolfi-base:latest@sha256:003627df3c1e1bba0c4116afcddb314aca9594ee2328c7e876a8081a6c988b2e' \
+    "${dockerfile}" || {
+    echo "상태: Fail - ${dockerfile}의 runtime base가 검증된 Wolfi digest가 아닙니다." >&2
+    exit 1
+  }
+done
+
+for dockerfile in apps/property-data/db/Dockerfile apps/user/service/Dockerfile; do
+  grep -Fq 'redgate/flyway:13.0-alpine@sha256:6a67d90135c8ef73299a7486da54b88f285426eea4ea1947372ffbc7b52a327b' \
+    "${dockerfile}" || {
+    echo "상태: Fail - ${dockerfile}의 Flyway source가 검증된 13.0 digest가 아닙니다." >&2
+    exit 1
+  }
+  grep -Fq '/flyway/lib/rgcompare' "${dockerfile}" || {
+    echo "상태: Fail - ${dockerfile}가 사용하지 않는 Flyway comparison runtime을 제거하지 않습니다." >&2
+    exit 1
+  }
+  grep -Fq '/flyway/drivers' "${dockerfile}" || {
+    echo "상태: Fail - ${dockerfile}가 PostgreSQL 외 Flyway driver를 제거하지 않습니다." >&2
+    exit 1
+  }
+done
+
+if rg -q 'eclipse-temurin:21-(?:jdk|jre)@|nginxinc/nginx-unprivileged:1[.]27-alpine@|python:3[.](?:10|14)-slim@|postgres:17-bookworm@|redgate/flyway:(?:11[.]7[.]2|12[.]4[.]0)@' \
+  apps infra/backup infra/bootstrap; then
+  echo '상태: Fail - release Dockerfile에 차단된 취약 base digest가 남아 있습니다.' >&2
+  exit 1
+fi
+
 prepare_evidence_line="$(grep -nF 'name: Prepare release failure evidence' "${release_workflow}" | cut -d: -f1)"
 build_images_line="$(grep -nF 'name: Build and publish SHA and SemVer images' "${release_workflow}" | cut -d: -f1)"
 if [[ -z "${prepare_evidence_line}" || -z "${build_images_line}" || "${prepare_evidence_line}" -ge "${build_images_line}" ]]; then
@@ -65,7 +121,7 @@ docker build --tag "${backup_image}" --file infra/backup/Dockerfile .
 [[ "$(docker inspect --format '{{json .Config.Entrypoint}}' "${backup_image}")" == '["/usr/local/bin/home-search-db-backup"]' ]]
 [[ "$(docker inspect --format '{{json .Config.Cmd}}' "${backup_image}")" == '["--backup-all","/backup"]' ]]
 docker run --rm --entrypoint bash "${backup_image}" -c \
-  'command -v pg_dump >/dev/null && command -v pg_restore >/dev/null && command -v initdb >/dev/null && command -v aws >/dev/null && command -v zstd >/dev/null && test -f /usr/lib/postgresql/17/lib/postgis-3.so && test -d "${HOME_BACKUP_REPO_ROOT}/apps/property-data/db/migration/api" && test -d "${HOME_BACKUP_REPO_ROOT}/apps/ai/ai_service/datasets/migrations" && test -d "${HOME_BACKUP_REPO_ROOT}/apps/source-data/src/main/resources/db/migration/coordinate-source" && test -f "${HOME_BACKUP_REPO_ROOT}/infra/migration/data-only-allowlist.json" && test ! -e /model'
+  'command -v pg_dump >/dev/null && command -v pg_restore >/dev/null && command -v initdb >/dev/null && command -v aws >/dev/null && command -v zstd >/dev/null && test -f /usr/lib/postgresql17/postgis-3.so && test -d "${HOME_BACKUP_REPO_ROOT}/apps/property-data/db/migration/api" && test -d "${HOME_BACKUP_REPO_ROOT}/apps/ai/ai_service/datasets/migrations" && test -d "${HOME_BACKUP_REPO_ROOT}/apps/source-data/src/main/resources/db/migration/coordinate-source" && test -f "${HOME_BACKUP_REPO_ROOT}/infra/migration/data-only-allowlist.json" && test ! -e /model'
 docker run --rm "${backup_image}" --data-validate-catalog /opt/home-search/infra/migration/data-only-allowlist.json
 
 docker build --tag "${bootstrap_image}" --file infra/bootstrap/Dockerfile .

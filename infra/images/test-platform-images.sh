@@ -28,7 +28,7 @@ done
 for image in "${admin_api}" "${user_api}"; do
   [[ "$(docker inspect --format '{{json .Config.Healthcheck.Test}}' "${image}")" != 'null' ]]
   docker run --rm --entrypoint sh "${image}" -c \
-    'command -v timeout >/dev/null && command -v bash >/dev/null'
+    'command -v sh >/dev/null && command -v wget >/dev/null'
 done
 for image in "${admin_api}" "${admin_migration}" "${admin_ops}" "${user_api}" "${user_worker}" "${source_migration}"; do
   [[ "$(docker inspect --format '{{json .Config.Entrypoint}}' "${image}")" == '["java","-jar","/app/application.jar"]' ]]
@@ -79,7 +79,8 @@ for image in "${admin_api}" "${admin_migration}" "${admin_ops}" "${user_api}" "$
     'test -f /app/application.jar && test ! -e /flyway/sql && test "$(find /app -maxdepth 1 -type f | wc -l)" -eq 1'
 done
 docker run --rm --entrypoint sh "${user_flyway}" -c \
-  'test -d /flyway/sql && test -f /flyway/conf/flyway.conf && test ! -e /app/application.jar'
+  'test -d /flyway/sql && test -f /flyway/conf/flyway.conf && test ! -e /app/application.jar && test ! -e /flyway/lib/aad && test ! -e /flyway/lib/opentelemetry && test ! -e /flyway/lib/oracle_wallet && test ! -e /flyway/lib/sqlfluff'
+docker run --rm "${user_flyway}" -v >/dev/null
 
 [[ "$(docker inspect --format '{{json .Config.Cmd}}' "${user_flyway}")" == '["migrate"]' ]]
 echo '상태: Pass - admin/user/source-data image의 artifact, entrypoint, non-root 경계를 확인했습니다.'

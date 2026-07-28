@@ -1,12 +1,11 @@
-FROM postgres:17-bookworm@sha256:4f736ae292687621d4dbe0d499ffd024a36bd2ee7d8ca6f2ccd4c800f047b394
+FROM cgr.dev/chainguard/wolfi-base:latest@sha256:003627df3c1e1bba0c4116afcddb314aca9594ee2328c7e876a8081a6c988b2e
 
 USER root
-RUN apt-get update \
-    && apt-get install --yes --no-install-recommends awscli ca-certificates jq postgresql-17-postgis-3 python3 zstd \
-    && find /var/lib/apt/lists -mindepth 1 -delete \
-    && groupadd --gid 10001 home-search \
-    && useradd --uid 10001 --gid 10001 --no-create-home \
-        --home-dir /nonexistent --shell /usr/sbin/nologin home-search \
+RUN apk add --no-cache \
+        aws-cli-2 bash ca-certificates jq postgis postgresql-17 postgresql-17-client \
+        python-3.14 zstd \
+    && addgroup -S -g 10001 home-search \
+    && adduser -S -D -H -u 10001 -G home-search -s /sbin/nologin home-search \
     && mkdir -p /backup \
     && chown 10001:10001 /backup
 

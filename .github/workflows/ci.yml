@@ -232,7 +232,9 @@ jobs:
       - name: Build exact-lock ML image
         run: docker build --tag home-search-ml:ci apps/ml
       - name: Verify installed dependency graph
-        run: docker run --rm --entrypoint python home-search-ml:ci -m pip check
+        run: >-
+          docker run --rm --entrypoint uv home-search-ml:ci
+          pip check --python /app/.venv/bin/python
       - name: Verify runtime imports without loading a model
         run: >-
           docker run --rm --entrypoint python home-search-ml:ci -c

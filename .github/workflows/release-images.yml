@@ -25,6 +25,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Prepare release failure evidence
+        run: |
+          set -Eeuo pipefail
+          mkdir -p release-evidence
+          jq -n \
+            --arg release_tag "${GITHUB_REF_NAME}" \
+            --arg commit_sha "${GITHUB_SHA}" \
+            --arg workflow_run_id "${GITHUB_RUN_ID}" \
+            '{
+              format_version: 1,
+              release_tag: $release_tag,
+              commit_sha: $commit_sha,
+              workflow_run_id: $workflow_run_id
+            }' >release-evidence/release-context.json
+
       - name: Verify main tag and successful quality gates
         env:
           GH_TOKEN: ${{ github.token }}
@@ -53,7 +68,6 @@ jobs:
           aws ecr get-login-password | docker login --username AWS --password-stdin "${registry}" >/dev/null
           echo "registry=${registry}" >>"${GITHUB_OUTPUT}"
 
-      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
       - name: Build and publish SHA and SemVer images
         env:

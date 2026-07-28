@@ -16,6 +16,11 @@ Mutable tag를 deployment identity로 사용하지 않는다.
 News UI flag와 staging `enable_market_news_public` 값은 일치해야 하며, 불일치한
 manifest는 deploy workflow가 apply 전에 차단한다.
 
+현재 staging과 production ECS task의 `runtime_platform.cpu_architecture`는
+`X86_64`다. 따라서 release Bake target은 모두 `linux/amd64`로 build하며,
+architecture를 변경할 때는 ECS task definition, Bake target, release manifest
+gate를 같은 변경에서 함께 갱신한다.
+
 ## Pipeline 분리
 
 | Pipeline | 권한 | 동작 |

@@ -53,7 +53,7 @@ group "default" {
 }
 
 target "_common" {
-  platforms = ["linux/amd64", "linux/arm64"]
+  platforms = ["linux/amd64"]
   labels = {
     "org.opencontainers.image.source" = "${SOURCE_URL}"
     "org.opencontainers.image.revision" = "${GIT_SHA}"

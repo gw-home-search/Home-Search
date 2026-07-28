@@ -74,7 +74,7 @@ class BackendProfileConfigurationTest {
     }
 
     @Test
-    @DisplayName("staging과 prod profile은 필수 DB 연결과 production-safe 기본값을 유지한다")
+    @DisplayName("staging과 prod profile은 coordinate source 없이 기동 가능한 production-safe 기본값을 유지한다")
     void runtimeProfilesRequireDatabaseCredentialsAndKeepOptionalFeaturesDisabled() {
         assertThat(List.of("staging", "prod")).allSatisfy(profile -> {
             Properties properties = load("application-" + profile + ".yml");
@@ -89,11 +89,11 @@ class BackendProfileConfigurationTest {
             assertThat(properties.getProperty("home.admin.internal.public-keys"))
                     .isEqualTo("${HOME_ADMIN_INTERNAL_PUBLIC_KEYS}");
             assertThat(properties.getProperty("home.coordinate-source.db.jdbc-url"))
-                    .isEqualTo("${COORDINATE_SOURCE_DB_JDBC_URL}");
+                    .isEqualTo("${COORDINATE_SOURCE_DB_JDBC_URL:}");
             assertThat(properties.getProperty("home.coordinate-source.db.username"))
-                    .isEqualTo("${COORDINATE_SOURCE_DB_USERNAME}");
+                    .isEqualTo("${COORDINATE_SOURCE_DB_USERNAME:}");
             assertThat(properties.getProperty("home.coordinate-source.db.password"))
-                    .isEqualTo("${COORDINATE_SOURCE_DB_PASSWORD}");
+                    .isEqualTo("${COORDINATE_SOURCE_DB_PASSWORD:}");
             assertThat(properties.getProperty("home.coordinate-source.db.read-only"))
                     .isEqualTo("${COORDINATE_SOURCE_DB_READ_ONLY:true}");
             assertThat(properties.getProperty("management.endpoints.web.exposure.include"))

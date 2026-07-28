@@ -308,7 +308,7 @@ def run_self_test() -> int:
         ).ok
     )
     checks.append(
-        not lint_pr(
+        lint_pr(
             PrInput(
                 title="[Feat] 지도 계약 강화",
                 body=valid_body(),

@@ -8,6 +8,13 @@ artifact and cannot delete protected staging foundation resources. Neither role
 can read bootstrap or production state objects. It does not
 create a DynamoDB lock table; all backends use S3 native `use_lockfile`.
 
+The foundation apply role keeps foundation/IAM controls in an inline policy and
+attaches a separate customer-managed policy for the staging backup bucket,
+secret containers, and tag-scoped KMS data operations. Terraform tests enforce
+the AWS 10,240-character aggregate inline limit and 6,144-character managed
+policy limit. The attachment is created before the inline policy is reduced so
+an update does not introduce a temporary permission gap.
+
 Initial creation intentionally starts with local state:
 
 ```bash

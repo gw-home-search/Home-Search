@@ -144,8 +144,9 @@ resource "aws_iam_role_policy" "github_staging_foundation_state" {
 }
 
 resource "aws_iam_role_policy" "github_staging_foundation_apply" {
-  name = "staging-reviewed-foundation-apply"
-  role = aws_iam_role.github_staging_foundation_apply.id
+  name       = "staging-reviewed-foundation-apply"
+  role       = aws_iam_role.github_staging_foundation_apply.id
+  depends_on = [aws_iam_role_policy_attachment.github_staging_foundation_data_access]
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -153,6 +154,42 @@ resource "aws_iam_role_policy" "github_staging_foundation_apply" {
         Sid    = "ManageStagingFoundation", Effect = "Allow"
         Action = local.staging_foundation_apply_actions, Resource = "*"
       },
+      {
+        Sid    = "ManageStagingWorkloadRoles", Effect = "Allow"
+        Action = ["iam:CreateRole", "iam:Get*", "iam:List*", "iam:PassRole", "iam:PutRolePolicy", "iam:TagRole", "iam:UntagRole", "iam:UpdateAssumeRolePolicy"]
+        Resource = [
+          for role_name in local.staging_foundation_workload_role_names :
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${role_name}"
+        ]
+      },
+      {
+        Sid = "AttachApprovedEcsExecutionPolicy", Effect = "Allow", Action = ["iam:AttachRolePolicy"]
+        Resource = [
+          for role_name in local.staging_ecs_task_role_names :
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${role_name}"
+        ]
+        Condition = {
+          ArnEquals = { "iam:PolicyARN" = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy" }
+        }
+      },
+      {
+        Sid       = "CreateRequiredServiceLinkedRoles", Effect = "Allow", Action = ["iam:CreateServiceLinkedRole"], Resource = "*"
+        Condition = { StringLike = { "iam:AWSServiceName" = ["*.amazonaws.com"] } }
+      },
+      {
+        Sid    = "DenyStagingFoundationDestruction", Effect = "Deny"
+        Action = local.staging_foundation_explicit_deny_actions, Resource = "*"
+      },
+    ]
+  })
+}
+
+resource "aws_iam_policy" "github_staging_foundation_data_access" {
+  name        = "home-search-staging-foundation-data-access"
+  description = "Staging foundation backup, secret container, and tagged KMS data access"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
       {
         Sid    = "UseStagingDataKeys", Effect = "Allow"
         Action = local.staging_foundation_kms_data_actions
@@ -187,32 +224,16 @@ resource "aws_iam_role_policy" "github_staging_foundation_apply" {
           "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:home-search-staging/*",
         ]
       },
-      {
-        Sid    = "ManageStagingWorkloadRoles", Effect = "Allow"
-        Action = ["iam:CreateRole", "iam:Get*", "iam:List*", "iam:PassRole", "iam:PutRolePolicy", "iam:TagRole", "iam:UntagRole", "iam:UpdateAssumeRolePolicy"]
-        Resource = [
-          for role_name in local.staging_foundation_workload_role_names :
-          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${role_name}"
-        ]
-      },
-      {
-        Sid = "AttachApprovedEcsExecutionPolicy", Effect = "Allow", Action = ["iam:AttachRolePolicy"]
-        Resource = [
-          for role_name in local.staging_ecs_task_role_names :
-          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${role_name}"
-        ]
-        Condition = {
-          ArnEquals = { "iam:PolicyARN" = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy" }
-        }
-      },
-      {
-        Sid       = "CreateRequiredServiceLinkedRoles", Effect = "Allow", Action = ["iam:CreateServiceLinkedRole"], Resource = "*"
-        Condition = { StringLike = { "iam:AWSServiceName" = ["*.amazonaws.com"] } }
-      },
-      {
-        Sid    = "DenyStagingFoundationDestruction", Effect = "Deny"
-        Action = local.staging_foundation_explicit_deny_actions, Resource = "*"
-      },
     ]
   })
+  tags = {
+    Project     = "home-search"
+    Environment = "staging"
+    ManagedBy   = "terraform"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "github_staging_foundation_data_access" {
+  role       = aws_iam_role.github_staging_foundation_apply.name
+  policy_arn = aws_iam_policy.github_staging_foundation_data_access.arn
 }

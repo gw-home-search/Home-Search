@@ -1,7 +1,11 @@
 # Terraform bootstrap
 
 This stack creates only the encrypted/versioned S3 state bucket, its KMS key,
-the GitHub OIDC provider, and the exact staging workflow trust role. It does not
+the GitHub OIDC provider, the exact staging workload deploy role, and separate
+staging foundation plan/apply roles. The plan role has metadata-only reads plus
+the exact staging state object and lock. The apply role consumes a reviewed plan
+artifact and cannot delete protected staging foundation resources. Neither role
+can read bootstrap or production state objects. It does not
 create a DynamoDB lock table; all backends use S3 native `use_lockfile`.
 
 Initial creation intentionally starts with local state:

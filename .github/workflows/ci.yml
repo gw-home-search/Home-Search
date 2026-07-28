@@ -332,6 +332,8 @@ jobs:
           terraform_wrapper: false
       - name: Verify Terraform roots
         run: |
+          .github/scripts/test-staging-foundation-contract.sh
+          .github/scripts/test-staging-foundation-plan-verifier.sh
           terraform fmt -check -recursive infra/terraform
           terraform -chdir=infra/terraform/bootstrap init -backend=false -input=false
           terraform -chdir=infra/terraform/bootstrap validate

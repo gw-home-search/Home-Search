@@ -94,6 +94,8 @@ locals {
     "home-search-staging-public-gateway-execution",
     "home-search-staging-admin-gateway-execution",
     "home-search-staging-ml-execution",
+    "home-search-staging-ai-execution",
+    "home-search-staging-chat-bff-execution",
     "home-search-staging-secret-bootstrap-execution",
     "home-search-staging-database-bootstrap-execution",
     "home-search-staging-runtime-grants-execution",
@@ -102,6 +104,7 @@ locals {
     "home-search-staging-user-flyway-execution",
     "home-search-staging-source-data-migration-execution",
     "home-search-staging-property-batch-execution",
+    "home-search-staging-map-marker-projection-execution",
     "home-search-staging-property-event-relay-execution",
     "home-search-staging-property-event-maintenance-execution",
     "home-search-staging-user-insight-worker-execution",
@@ -114,6 +117,8 @@ locals {
     "home-search-staging-public-gateway-task",
     "home-search-staging-admin-gateway-task",
     "home-search-staging-ml-task",
+    "home-search-staging-ai-task",
+    "home-search-staging-chat-bff-task",
     "home-search-staging-secret-bootstrap",
     "home-search-staging-database-bootstrap",
     "home-search-staging-runtime-grants-task",
@@ -122,6 +127,7 @@ locals {
     "home-search-staging-user-flyway-task",
     "home-search-staging-source-data-migration-task",
     "home-search-staging-property-batch-task",
+    "home-search-staging-map-marker-projection-task",
     "home-search-staging-property-event-relay-task",
     "home-search-staging-property-event-maintenance-task",
     "home-search-staging-user-insight-worker-task",
@@ -132,6 +138,8 @@ locals {
   staging_release_alarm_names = toset([
     "home-search-staging-admin-api-running-task",
     "home-search-staging-admin-gateway-running-task",
+    "home-search-staging-ai-running-task",
+    "home-search-staging-chat-bff-running-task",
     "home-search-staging-ml-running-task",
     "home-search-staging-property-api-running-task",
     "home-search-staging-public-gateway-running-task",
@@ -182,18 +190,18 @@ data "aws_iam_policy_document" "terraform_state_access" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["${var.state_prefix}/*"]
+      values   = ["${var.staging_state_key}*"]
     }
   }
   statement {
     sid       = "ReadWriteState"
     actions   = ["s3:GetObject", "s3:PutObject"]
-    resources = ["${aws_s3_bucket.terraform_state.arn}/${var.state_prefix}/*"]
+    resources = ["${aws_s3_bucket.terraform_state.arn}/${var.staging_state_key}"]
   }
   statement {
     sid       = "ManageNativeLockfile"
     actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-    resources = ["${aws_s3_bucket.terraform_state.arn}/${var.state_prefix}/*.tflock"]
+    resources = ["${aws_s3_bucket.terraform_state.arn}/${var.staging_state_key}.tflock"]
   }
   statement {
     sid = "UseStateKmsKey"
@@ -225,10 +233,12 @@ resource "aws_iam_role_policy" "github_staging_deployment" {
           "ecs:Describe*", "ecs:List*", "elasticache:Describe*",
           "elasticfilesystem:Describe*", "elasticloadbalancing:Describe*",
           "glue:GetRegistry", "glue:GetTags", "glue:ListRegistries",
+          "iam:GetPolicy", "iam:GetPolicyVersion", "iam:ListRoleTags",
           "kafka:DescribeClusterV2", "kafka:GetBootstrapBrokers", "kafka:ListTagsForResource",
           "kms:DescribeKey", "kms:ListAliases", "logs:Describe*", "rds:Describe*",
           "scheduler:GetSchedule", "scheduler:GetScheduleGroup", "scheduler:List*",
-          "secretsmanager:DescribeSecret", "servicediscovery:Get*", "servicediscovery:List*",
+          "secretsmanager:DescribeSecret", "secretsmanager:GetResourcePolicy",
+          "servicediscovery:Get*", "servicediscovery:List*",
           "tag:GetResources",
         ]
         Resource = "*"
